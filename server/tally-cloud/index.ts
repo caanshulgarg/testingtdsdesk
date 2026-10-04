@@ -74,9 +74,11 @@
 //    LASTVCHID; an alreadySent refusal (this computer sent it before) is an acceptance kept locked, never released nor
 //    rewritten as being checked; a 'failed' update carrying an entry sent with no answer from Tally is stored done
 //    FinCom Bridge 2.2.0 (migration 45, docs/recorder-bulk-posting.md 3): the job's last update may carry window {a0, a1,
-//    vouchersCreated, mastersCreated} (Tally's ALTVCHID before and after the job, the counts of Tally's replies): kept per
-//    book by tally_post_window_save(firm, job, device, a0, a1, vch, mst), so the gap check counts FinCom's own postings.
-//    Each a whole number 0..10^15 (below) and a1 not below a0, else ignored with a log line; never fails the update
+//    vouchersCreated, mastersCreated, guid} (Tally's ALTVCHID before and after the job, the counts of Tally's replies, the
+//    company GUID of the company check): kept per book by tally_post_window_save(firm, job, device, a0, a1, vch, mst, guid),
+//    so the gap check counts FinCom's own postings. Each a whole number 0..10^15 (below) and a1 not below a0, else ignored
+//    with a log line; saved only after the update's own checks (never for a cancelled, late or settled update); never fails
+//    the update. With an acceptance, the job's short lines held before it are re-run (tally_recorder_short_held / _retry)
 //   Phase 2, the Tally change recorder (migration 44; without it both answer 503 {notReady}):
 //   {kind:"recorder_lines", company, lines:[{line_id, event, saved_at, pc, user, company_guid, object_guid, master_id,
 //    alter_id, vch_type, vch_no, vch_date, xml?, ledgers?, save_ms, name?, from?, to?}]} -> {ok, results:[{line_id, state,
@@ -91,8 +93,9 @@
 //                                                       to saving. tally_recorder_apply(firm, book, device, lines)
 //    migration 45 (docs/recorder-bulk-posting.md 4): a SHORT line, FinCom's own entry (the add-on writes only company_guid,
 //    object_guid, master_id, alter_id, fid (or narration carrying "TDSDesk:<id>"), event, saved_at; no xml): the posted XML
-//    of its FinCom id is fetched (tally_post_xml_for(firm, book, fids): the live, accepted posting of this firm for this
-//    book) and read with parse.js, the line's GUID and AlterID overriding, into the line's vouchers / lines as a full body
+//    of its FinCom id is fetched for a created / imported line only (tally_post_xml_for(firm, book, fids): the live,
+//    accepted posting of this firm for this book; a short 'altered' line is a person's change: no body, held there) and read
+//    with parse.js, the line's GUID and AlterID overriding, into the line's vouchers / lines as a full body
 //    (short: true). The database matches it to the posting (tally_post_ids.matched_*) and builds the entry once by GUID; a
 //    FinCom id matching no posting is held there. Without 45 the fetch is skipped (the line is held for want of a body)
 //   the beat's companies may carry altvchid, altmstid, recorderSeen, recorderLastAt (at: the check's time): each company with
@@ -711,8 +714,11 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
   console.log("tally-ingest ledger_list", book, JSON.stringify({ ...out, notes: notes.slice(0, 5) }));
   return reply(200, out);
 }
-// Migration 45: the posting window of a job's last posts_update, {a0, a1, vouchersCreated, mastersCreated}: whole numbers
-// 0..10^15 (below), a1 not below a0; anything else ignored with a log line. Never fails the update (a cloud without 45: skipped)
+// Migration 45: the posting window of a job's last posts_update, {a0, a1, vouchersCreated, mastersCreated, guid}: whole numbers
+// 0..10^15 (below), a1 not below a0; anything else ignored with a log line. guid: the company GUID the bridge read in its
+// company check (the review's M1: the gap check counts a window only for the book's own company GUID). Saved only after the
+// update's own checks passed (the review's L8: never for a cancelled job, a late or a settled update). Never fails the
+// update (a cloud without 45: skipped)
 const WIN_MAX = 1e15;
 const winNum = (v: unknown) => typeof v === "number" && Number.isInteger(v) && v >= 0 && v < WIN_MAX ? v : typeof v === "string" && /^\d{1,15}$/.test(v) && Number(v) < WIN_MAX ? Number(v) : null;
 async function postWindow(firm: string, dev: any, job: string, w: any) {
@@ -722,7 +728,8 @@ async function postWindow(firm: string, dev: any, job: string, w: any) {
     return;
   }
   try {
-    const { data, error } = await db.rpc("tally_post_window_save", { p_firm: firm, p_job: job, p_device: dev.id, p_a0: a0, p_a1: a1, p_vch: vch, p_mst: mst });
+    const guid = typeof w.guid === "string" ? w.guid.trim().slice(0, 100) : typeof w.companyGuid === "string" ? w.companyGuid.trim().slice(0, 100) : "";
+    const { data, error } = await db.rpc("tally_post_window_save", { p_firm: firm, p_job: job, p_device: dev.id, p_a0: a0, p_a1: a1, p_vch: vch, p_mst: mst, p_guid: guid || null });
     if (error) { if (!/could not find|does not exist|schema cache|no such function/i.test(String(error.message || ""))) console.log("tally-ingest posts_update: posting window", job, String(error.message || "").slice(0, 200)); return; }
     if ((data as any)?.ok === false) console.log("tally-ingest posts_update: posting window not kept", job, String((data as any)?.error || "").slice(0, 200));
   } catch (e) { console.log("tally-ingest posts_update: posting window", job, (e as Error).message); }
@@ -801,8 +808,11 @@ function withIds(xml: string, guid: string, alter: number | null) {
   const out = xml.slice(0, open.index) + head + body;
   return out.indexOf("</VOUCHER>") >= 0 ? out : "";
 }
+// The review's H2: only a short line of FinCom's own CREATION (created / imported) is built from the posting; a short 'altered'
+// line is a person's change in Tally after the posting, so the posted XML is not its content: no body, the database holds it
+// ('changed in Tally after posting') and the gap check counts it as not received until a full line or a Day Book brings it
 async function shortBodies(firm: string, book: string, send: Record<string, any>[]) {
-  const want = send.filter((l) => l.short === true && l.fid && l.object_guid && ["created", "altered", "imported"].includes(String(l.event)));
+  const want = send.filter((l) => l.short === true && l.fid && l.object_guid && ["created", "imported"].includes(String(l.event)));
   if (!want.length) return;
   const { data, error } = await db.rpc("tally_post_xml_for", { p_firm: firm, p_book: book, p_fids: [...new Set(want.map((l) => String(l.fid)))].slice(0, 1000) });
   if (error) { if (!/could not find|does not exist|schema cache|no such function/i.test(String(error.message || ""))) console.log("tally-ingest recorder_lines: posted XML", book, String(error.message || "").slice(0, 200)); return; }
@@ -819,6 +829,28 @@ async function shortBodies(firm: string, book: string, send: Record<string, any>
     l.lines = dayLines(r).filter((x: any) => Array.isArray(x) && x[0] === og);
   }
   if (unread) console.log("tally-ingest recorder_lines: posted XML not readable for " + unread + " short line(s)", book);
+}
+// The review's M6: a short line that reached the cloud before its posting's acceptance was held 'FinCom id <id> matches no
+// posting of this firm'. After posts_update stamps the acceptance: tally_recorder_short_held(firm, job) gives those lines (the
+// stored line, its row and book), their bodies are built from the posted XML as for any short line, and
+// tally_recorder_short_retry(firm, book, lines) re-runs the same rows. Never fails the update (a cloud without it: skipped)
+async function retryHeldShort(firm: string, job: string) {
+  try {
+    const { data, error } = await db.rpc("tally_recorder_short_held", { p_firm: firm, p_job: job });
+    if (error) { if (!/could not find|does not exist|schema cache|no such function/i.test(String(error.message || ""))) console.log("tally-ingest posts_update: held short lines", job, String(error.message || "").slice(0, 200)); return; }
+    const byBook = new Map<string, Record<string, any>[]>();
+    for (const x of (((data as any)?.lines || []) as any[])) {
+      if (!x || typeof x.book !== "string" || !x.line || typeof x.line !== "object") continue;
+      const l = { ...x.line, row: x.row, short: true };
+      byBook.set(x.book, [...(byBook.get(x.book) || []), l]);
+    }
+    for (const [book, lines] of byBook) {
+      await shortBodies(firm, book, lines);
+      const { data: r, error: e2 } = await db.rpc("tally_recorder_short_retry", { p_firm: firm, p_book: book, p_lines: lines.map((l) => ({ row: l.row, line_id: l.line_id, vouchers: l.vouchers || [], lines: l.lines || [] })) });
+      if (e2) console.log("tally-ingest posts_update: held short lines", job, String(e2.message || "").slice(0, 200));
+      else console.log("tally-ingest posts_update: held short lines retried", book, JSON.stringify({ applied: (r as any)?.applied, held: (r as any)?.held, skipped: (r as any)?.skipped }));
+    }
+  } catch (e) { console.log("tally-ingest posts_update: held short lines", job, (e as Error).message); }
 }
 // the bridge's starting point (the owner's change of 04-Oct: reading is prospective): kept once per book and company GUID
 async function startPoint(dev: any, firm: string, book: string, body: any) {
@@ -1392,8 +1424,6 @@ Deno.serve(async (req) => {
           cur = q.data;
         }
         if (!cur) return reply(200, { ok: false, gone: true, error: "This posting is no longer in FinCom." });
-        // migration 45: the posting window (Tally's change numbers before and after the job), whatever the job's state: a fact of Tally
-        if (body.window !== undefined && body.window !== null) await postWindow(firm, dev, id, body.window);
         if (cur.status === "cancelled") return reply(200, { ok: false, cancelled: true, error: "This posting was cancelled in FinCom." });
         // round 7 (F4, H1): an update never goes back in time. The bridge numbers its updates per posting (seq): a lower
         // one is late and ignored. A posting finished (done or failed, nothing being checked) takes no bridge update at
@@ -1516,6 +1546,11 @@ Deno.serve(async (req) => {
         if (error && "seq" in row && /seq/.test(error.message)) { delete row.seq; ({ error } = await db.from("tally_post_jobs").update(row).eq("id", id).eq("device_id", dev.id).neq("status", "cancelled")); }
         if (error && items && /items/.test(error.message)) { delete row.items; ({ error } = await db.from("tally_post_jobs").update(row).eq("id", id).eq("device_id", dev.id).neq("status", "cancelled")); }
         if (error) throw new Error(error.message);
+        // migration 45: the posting window (Tally's change numbers before and after the job), saved only now: after the update's
+        // own checks (not cancelled, not late, not settled) and its row stored (the review's L8)
+        if (body.window !== undefined && body.window !== null) await postWindow(firm, dev, id, body.window);
+        // migration 45 (the review's M6): short lines held before this acceptance reached the cloud are applied now
+        if (accepted.size) await retryHeldShort(firm, id);
         // migration 37 (item 7): an entry refused or not found in Tally releases its id (tally_post_id_release: job, id,
         // why), per entry, so Post again is offered for it alone. On the states after the guard above: never an unknown
         // entry, never one Tally accepted. Before migration 37 the function is missing: skipped

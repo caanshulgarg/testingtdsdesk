@@ -16,12 +16,28 @@ Reported from the two sends:
 - the rise in Tally's change number (ALTVCHID) per posting.
 
 ## 2. A short line for FinCom's own entries
-Design: when the entry's narration carries "TDSDesk:<id>", the add-on writes only:
+Design: when the entry's narration carries "TDSDesk:<id>" AND the event is an import event (Import Object / After Import
+Object: FinCom's posting through Tally's port), the add-on writes only:
 - the company GUID;
 - the voucher GUID, MasterID and AlterID;
 - the FinCom id;
+- the voucher's date and voucher type (the add-on reads both already, section 7);
 - the event and the time.
 It does not write the ledger lines, bill allocations, GST details or inventory.
+
+Never a short line on a screen save (Form Accept: created or altered by a person), even when the narration carries
+"TDSDesk:" (review of migration 45, M5). Two reasons:
+- A person who duplicates a posted voucher in Tally copies its narration, tag included. A short line for the duplicate
+  would take FinCom's posting first, and the copy would hold the posting's content under the duplicate's GUID.
+- A person who changes a posted voucher (amount, ledger, date) makes an `altered` event. Its content is the person's, not
+  the posting's.
+A screen save always writes the full line. Which event Tally fires for port imports is decided by the trial (section 1);
+until it is known, the add-on writes no short lines at all. The cloud already refuses the second case on its own: it
+builds an entry from the posting only for a short `created` / `imported` line of an entry the copy does not hold. A short
+`altered` line, or one for an entry the copy holds, is matched and held "changed in Tally after posting: the next full
+line or Day Book upload applies it", and its AlterID counts as not received. The first case needs this rule in the
+add-on. Once the short line carries the date and voucher type, tally-ingest also builds from the posting only when both
+agree with the posted XML (a later change, with its own test).
 
 Is it possible in TDL? Yes, as a condition on the narration (a substring test on $Narration) choosing between two line
 builders in the one writer function. The FinCom id is the text after "TDSDesk:" up to the first space. The exact string
@@ -51,16 +67,29 @@ Design: FinCom's postings are accounted from their own record.
   - The company check before each posting job already reads FinComCompany. The bridge keeps its ALTVCHID as a0.
   - After the job ends, the bridge sends one more FinComCompany read, a1. That is one light request per job, never
     during a posting.
-  - It sends both with the job's last posts_update, together with the counts from Tally's replies: vouchers created
-    and masters created.
-  - The cloud stores the window per book: a0, a1, created vouchers and created masters.
+  - It sends both with the job's last posts_update, together with the counts from Tally's replies (vouchers created
+    and masters created) and the company GUID it read in the company check: window {a0, a1, vouchersCreated,
+    mastersCreated, guid}.
+  - The cloud stores the window per book: a0, a1, created vouchers, created masters and the company GUID. It refuses
+    more created than the job's payload held, any window of a cancelled job, and a different window for a finished job
+    (the first one is kept). tally-ingest saves it only after the update's own checks pass (not cancelled, not late,
+    not settled).
 - (b) The cloud (migration 45) subtracts the accounted changes. A window counts as fully accounted when
-  a1 - a0 = created vouchers + created masters, so nobody else changed anything while it ran.
+  a1 - a0 = created vouchers, so nobody else changed anything while it ran. Masters are not credited against ALTVCHID
+  (the voucher change number): ledgers a posting made are named "of which up to k may be FinCom's own new ledgers".
   - Missing = ALTVCHID - baseline - (the accounted changes of the windows above the baseline).
-  - A window that does not fully account leaves "up to (a1 - a0 - created) changes not received during the posting
-    of <time>". That is a real possible gap, still an upper bound.
+  - Only a window of the book's own company GUID counts. Its part between max(a0, baseline) and min(a1, ALTVCHID)
+    counts, at most the vouchers created, and at most that part less the window's changes that were not FinCom's
+    vouchers (only what must be FinCom's is credited). Another GUID's window is named and not counted.
+  - A window that does not fully account leaves "up to (a1 - a0 - created vouchers) changes not received during the
+    posting of <time>". That is a real possible gap, still an upper bound.
 - (c) Fallback when no window was sent (2.1.x bridges, or a1 not read): the vouchers created by FinCom's postings
-  accepted after the last match, and not yet matched by a recorder line, are subtracted.
+  accepted after the newest thing that set the baseline (by the cloud's clock: the last match, the last recorder line
+  that raised it, the day read that brought the highest AlterID, else the starting point), not yet matched by a recorder
+  line and not in the copy (even marked deleted), are subtracted. The cloud knows when an acceptance arrived, not when
+  Tally made the entries, so a seconds-wide window remains (at most one request, 50 entries): a batch made just before
+  a person's change but reported just after that person's line arrived is still subtracted. It closes with the window
+  of (a), or with the bridge sending each batch's posts_update before any line read after that batch (2.2.0).
   - The result stays an upper bound for vouchers.
   - Ledgers FinCom created in the posting can leave a small remainder. It is named in the flag as "of which up to
     k may be FinCom's own new ledgers".
@@ -89,7 +118,16 @@ book, is applied as follows:
   - a Day Book upload;
   - the same line from a second PC.
   It never makes a second entry.
-- A short line whose FinCom id matches nothing is held with its words: never a new entry, never a guess.
+- A short line whose FinCom id matches nothing is held with its words: never a new entry, never a guess. When its
+  posting's acceptance reaches the cloud later (the uploader sends lines between posting requests, section 5),
+  posts_update re-runs that held line: built from the posted XML, applied once on the same row, the posting matched.
+- Only a short `created` / `imported` line of an entry the copy does not hold is built from the posting (section 2).
+
+Realtime (Sync activity): each recorder line makes an INSERT and an UPDATE (its state), so a posting of 2,000 sends about
+4,000 changes, each checked against RLS for every subscribed browser. Today the app subscribes per firm
+(src/js/54-live-sync.js: `filter: "firm_id=eq.<firm>"`). Not changed with migration 45 (review L5, left for the app):
+subscribe with a `book_id=eq.<book>` filter for the open book, or later move Sync activity to a Broadcast from a trigger,
+before bulk postings run with the add-on loaded.
 Test (cloud): 500 posted entries (a job of 500, accepted, with payload XML), 500 short lines.
 - Expected: 500 matched, 500 entries in the copy, 0 held, 0 duplicate.
 - The same 500 lines again: 500 duplicate, still 500 entries.

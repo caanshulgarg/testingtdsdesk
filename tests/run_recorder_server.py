@@ -17,6 +17,9 @@ payload XML, 500 SHORT lines (company_guid, object_guid, master_id, alter_id, fi
 posted XML (tally_post_xml_for), reads it with parse.js with the line's GUID and AlterID -> 500 applied, 500 matched, 500 entries
 with their lines, 0 held; again -> 500 duplicate; the day book of that day (kind days) -> still 500, versions kept, the trial
 balance unchanged; a short line whose FinCom id (here in its narration) matches nothing -> held.
+The review of 45 (docs/reviews/migration-45-review.md): M1 the window's company GUID (window.guid) kept; H2 a short 'altered'
+line never built from the posting (no XML fetched), held, the copy unchanged; L8 a cancelled job's or a late update's window
+never saved; M6 a short line held before its posting's acceptance is applied once by posts_update's acceptance.
 Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno)."""
 import os, sys, json, time, hashlib, subprocess, urllib.request, shutil, threading
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -72,7 +75,7 @@ try:
     real = FS.rpc
     name_is_array = [False]
     def rpc(name, a):
-        if name in ("tally_recorder_apply", "tally_start_point", "tally_recorder_gap_check", "tally_post_window_save", "tally_post_xml_for", "tally_post_id_accept_reply", "tally_post_id_accept"):
+        if name in ("tally_recorder_apply", "tally_start_point", "tally_recorder_gap_check", "tally_post_window_save", "tally_post_xml_for", "tally_post_id_accept_reply", "tally_post_id_accept", "tally_recorder_short_held", "tally_recorder_short_retry"):
             FS.ARGS.setdefault(name, []).append(a)
             name_is_array[0] = name == "tally_post_xml_for"
             try: return json.loads(db.one("select public.%s(%s)::text" % (name, ", ".join("%s => %s" % (k, lit(v)) for k, v in a.items()))))
@@ -228,15 +231,20 @@ try:
     # 3. the posting window
     c, r = call({"kind": "beat", "version": "2.2.0", "bridge": GA, "tally": True, "open": ["ZZ TWO"], "companies": [{"name": "ZZ TWO", "open": True, "altvchid": 1000, "at": "2026-10-04T11:00:00+05:30"}]})
     ok(c == 200 and ((r.get("recorder") or {}).get("ZZ TWO") or {}).get("startRecorded") is True, "45-3. ZZ TWO's starting point 1000 from the beat (%s)" % r.get("recorder"))
+    db.sql("update tally_sync_cursor set start_guid = 'cg-2' where book_id = %s" % q(B2))     # ZZ TWO's company GUID (a read or start_point gives it)
+    def one_(sql):
+        try: return db.one(sql)
+        except RuntimeError as e: return "ERROR " + str(e)[:120]
     J3 = "00000003-0000-0000-0000-000000000003"
     fids3 = ["W%03d" % i for i in range(100)]
     post_job(J3, "ZZ TWO", fids3, "running")
     upd = lambda jid, results, **kw: call(dict({"kind": "posts_update", "id": jid, "status": "done", "done": len(results), "message": "Posted", "results": results, "bridge": GA}, **kw))
     res3 = [{"id": f, "ok": True, "byReply": True, "created": 1, "vchId": str(5000 + i), "batchN": 50, "kind": "voucher"} for i, f in enumerate(fids3)]
-    c, r = upd(J3, res3, window={"a0": 1000, "a1": 1100, "vouchersCreated": 100, "mastersCreated": 0})
+    c, r = upd(J3, res3, window={"a0": 1000, "a1": 1100, "vouchersCreated": 100, "mastersCreated": 0, "guid": "cg-2"})
     wrow = (db.rows("select book_id, device_id, a0, a1, created_vch, created_mst from tally_post_windows where job_id = %s" % q(J3)) or [{}])[0]
     ok(c == 200 and r.get("ok") is True and wrow == {"book_id": B2, "device_id": DA, "a0": "1000", "a1": "1100", "created_vch": "100", "created_mst": "0"}, "45-3. posts_update's window stored per book (%s, %s)" % (r, wrow))
     ok(db.one("select count(*) from tally_post_ids where job_id = %s and accepted_at is not null" % q(J3)) == "100", "45-3. the 100 accepted (tally_post_id_accept_reply)")
+    ok(one_("select company_guid from tally_post_windows where job_id = %s" % q(J3)) == "cg-2", "M1. the window keeps the company GUID the bridge read (window.guid) (%s)" % one_("select company_guid from tally_post_windows where job_id = %s" % q(J3)))
     c, r = call({"kind": "beat", "version": "2.2.0", "bridge": GA, "tally": True, "open": ["ZZ TWO"], "companies": [{"name": "ZZ TWO", "open": True, "altvchid": 1100, "at": "2026-10-04T11:30:00+05:30"}]})
     cur2 = (db.rows("select gap::text as gap, last_match_at from tally_sync_cursor where book_id = %s" % q(B2)) or [{}])[0]
     ok(c == 200 and ((r.get("recorder") or {}).get("ZZ TWO") or {}).get("gap") is None and ((r.get("recorder") or {}).get("ZZ TWO") or {}).get("missing") == 0 and not cur2.get("gap") and str(cur2.get("last_match_at")).startswith("2026-10-04 06:00"),
@@ -274,6 +282,40 @@ try:
     ok(st(r) == {"nar1": "held"} and "FinCom id NOSUCH9 matches no posting of this firm" in str((r.get("results") or [{}])[0].get("why")) and vrow("gz-1") == {}, "45-4. a short line whose FinCom id (in its narration) matches nothing: held with words, no entry (%s)" % r.get("results"))
     c, r = rec6([{"line_id": "bad1", "event": "created", "object_guid": "gz-2", "alter_id": 3002, "fid": "bad id with spaces"}])
     ok(st(r) == {"bad1": "held"} and vrow("gz-2") == {}, "45-4. a FinCom id outside the bounds is no FinCom id: no body, held (%s)" % r.get("results"))
+    # ---- the database review of 45 (docs/reviews/migration-45-review.md)
+    # H2 (G10): a short 'altered' line is never built from FinCom's posted XML; held, the copy unchanged, shown by the gap check
+    nx = len(FS.ARGS.get("tally_post_xml_for", []))
+    c, r = rec6([{"line_id": "alt0", "event": "altered", "saved_at": "2026-10-04T12:30:00+05:30", "company_guid": "cg-6", "object_guid": "gs-0", "master_id": "9000", "alter_id": 2600, "fid": fids4[0]}])
+    res = (r.get("results") or [{}])[0]
+    ok(st(r) == {"alt0": "held"} and "changed in Tally after posting" in str(res.get("why")) and len(FS.ARGS.get("tally_post_xml_for", [])) == nx and db.one("select alter_id from tally_vouchers where book_id = %s and guid = 'gs-0'" % q(B3)) == "2001"
+       and db.one("select count(*) from tally_voucher_versions where book_id = %s and alter_id = 2600" % q(B3)) == "0",
+       "H2. a short 'altered' line of a posted entry: no body from the posting (no XML fetched), held 'changed in Tally after posting', the copy at 2001 (%s; xml calls %d -> %d; copy %s)" % (res, nx, len(FS.ARGS.get("tally_post_xml_for", [])), db.one("select alter_id from tally_vouchers where book_id = %s and guid = 'gs-0'" % q(B3))))
+    # L8: the window is saved only after the update's own checks: a cancelled job's, a late (lower seq) update's never
+    J8 = "00000008-0000-0000-0000-000000000008"
+    post_job(J8, "ZZ TWO", ["WC1"], "cancelled")
+    db.sql("update tally_post_jobs set status = 'cancelled' where id = %s" % q(J8))
+    nw, ns = db.one("select count(*) from tally_post_windows"), len(FS.ARGS.get("tally_post_window_save", []))
+    c, r = upd(J8, [{"id": "WC1", "ok": True, "byReply": True, "created": 1}], window={"a0": 1200, "a1": 1201, "vouchersCreated": 1, "mastersCreated": 0, "guid": "cg-2"})
+    ok(r.get("cancelled") is True and db.one("select count(*) from tally_post_windows") == nw and len(FS.ARGS.get("tally_post_window_save", [])) == ns, "L8. a cancelled job's update with a window: answered cancelled, no window saved (%s)" % r)
+    J9 = "00000009-0000-0000-0000-000000000009"
+    post_job(J9, "ZZ TWO", ["WD1"], "running")
+    next(x for x in FS.T["tally_post_jobs"] if x["id"] == J9)["seq"] = 5
+    c, r = upd(J9, [{"id": "WD1", "ok": True, "byReply": True, "created": 1}], seq=3, window={"a0": 1300, "a1": 1301, "vouchersCreated": 1, "mastersCreated": 0, "guid": "cg-2"})
+    ok(r.get("stale") is True and db.one("select count(*) from tally_post_windows where job_id = %s" % q(J9)) == "0", "L8. a late update (seq 3 after 5) with a window: stale, no window saved (%s)" % r)
+    # M6: a short line that arrives before its posting's acceptance is held; the acceptance (posts_update) applies it once
+    B7 = "14444444-1111-1111-1111-111111111111"
+    db.sql("insert into tally_books (book_id, firm_id, client_id, company, from_date, open_as_on) values (%s, %s, 'c1', 'ZZ SEVEN', '2026-04-01', '2026-03-31')" % (q(B7), q(FIRM)))
+    FS.T["tally_companies"].append({"firm_id": FIRM, "company": "ZZ SEVEN", "client_id": "c1", "book_id": B7})
+    J7 = "00000007-0000-0000-0000-000000000007"
+    post_job(J7, "ZZ SEVEN", ["R1", "R2"], "running")
+    c, r = call({"kind": "recorder_lines", "company": "ZZ SEVEN", "version": "2.2.0", "bridge": GA, "lines": [{"line_id": "r1", "event": "created", "saved_at": "2026-10-04T12:40:00+05:30", "company_guid": "cg-7", "object_guid": "gr-1", "master_id": "71", "alter_id": 7001, "fid": "R1", "vch_date": "20260814"}]})
+    held = st(r) == {"r1": "held"} and "matches no posting of this firm" in str((r.get("results") or [{}])[0].get("why"))
+    c, r = upd(J7, [{"id": "R1", "ok": True, "byReply": True, "created": 1, "vchId": "7101", "batchN": 2, "kind": "voucher"}, {"id": "R2", "ok": True, "byReply": True, "created": 1, "vchId": "7102", "batchN": 2, "kind": "voucher"}])
+    lr = (db.rows("select state, count(*) over () as n from tally_recorder_lines where book_id = %s and line_id = 'r1'" % q(B7)) or [{}])[0]
+    v7 = (db.rows("select origin, fincom_id, alter_id, (select count(*) from tally_lines l where l.book_id = v.book_id and l.guid = v.guid) as nl from tally_vouchers v where book_id = %s and guid = 'gr-1'" % q(B7)) or [{}])[0]
+    ok(held and c == 200 and r.get("ok") is True and lr == {"state": "applied", "n": "1"} and v7 == {"origin": "fincom", "fincom_id": "R1", "alter_id": "7001", "nl": "2"}
+       and db.one("select matched_guid from tally_post_ids where job_id = %s and fincom_id = 'R1'" % q(J7)) == "gr-1",
+       "M6. a short line before its posting's acceptance: held; posts_update's acceptance retries it: the same line applied once, the entry built from the posted XML, the posting matched (%s; %s; %s)" % (held, lr, v7))
 finally:
     if fn: fn.terminate()
     db.stop()
