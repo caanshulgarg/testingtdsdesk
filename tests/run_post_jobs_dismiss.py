@@ -34,7 +34,7 @@ SETUP = """() => {
     Object.assign({}, base, {id: "j-nothing", status: "failed", message: "Tally did not show ZZ TEST", created_at: t(5), updated_at: t(4.9), entry_ids: ["b2"], results: []}),
     Object.assign({}, base, {id: "j-left", status: "cancelled", message: "Cancelled", created_at: t(6), updated_at: t(5.9), entry_ids: ["b3", "b2"], n: 2, results: []}),
     Object.assign({}, base, {id: "j-old", status: "done", done: 1, message: "1 of 1 sent to Tally", created_at: t(240), updated_at: t(240), entry_ids: ["b9"], results: [{id: "b9", ok: true}]}),
-    Object.assign({}, base, {id: "j-hid", status: "failed", message: "Ledger missing", created_at: t(30), updated_at: t(30), entry_ids: ["b8"], results: [], dismissed_at: t(20), dismissed_by: "u-1", dismiss_note: "Dismissed"}),
+    Object.assign({}, base, {id: "j-hid", status: "failed", message: "Tally did not show ZZ TEST for two minutes. Open it in TallyPrime and post again.", created_at: t(30), updated_at: t(30), entry_ids: ["b8"], results: [], dismissed_at: t(20), dismissed_by: "u-1", dismiss_note: "Dismissed"}),
     Object.assign({}, base, {id: "j-oldfail", status: "failed", message: "Old failure, never dealt with", created_at: t(480), updated_at: t(480), entry_ids: ["b7"], results: []})];
   window.__reads = 0; window.__rpc = [];
   TCloud.on = () => true; TCloud.has = () => true;
@@ -62,44 +62,32 @@ with sync_playwright() as p:
     _hs = lambda jid: E("(id) => { const r = document.querySelector('#app [data-post-history] [data-job=\"' + id + '\"]'); return r ? r.getAttribute('data-hist-state') + ' | ' + r.textContent.replace(/\\s+/g, ' ') : ''; }", jid)
     ok(pg.get_attribute('#app [data-post-tab][aria-selected="true"]', "data-post-tab") == "errors", "postings still failed: the Errors tab opens by itself")
     ok("entry_ids" in E("window.__url") and "dismissed_at" in E("window.__url"), "the list reads the entries' ids and the dismissing (migration-26)")
-    # only the postings still failed, with something left to send, need attention: Retry and Dismiss each
-    rows = E("Array.from(document.querySelectorAll('#app [data-post-attention] [data-job]')).map(r => r.getAttribute('data-job'))")
-    ok(sorted(rows) == ["j-left", "j-oldfail"], "only the postings still failed need attention (%s)" % rows)
-    l1 = st("j-left")
-    ok("cancelled" in l1 and "1 of 2 still to send" in l1 and pg.locator('#app [data-post-attention] [data-job="j-left"] [data-retry]').count() == 1 and pg.locator('#app [data-post-attention] [data-job="j-left"] [data-dismiss]').count() == 1,
-       "a cancelled posting with one of two entries still to send: Retry and Dismiss (%s)" % l1[:120])
-    ok("Old failure, never dealt with" in st("j-oldfail"), "an older failure never dealt with stays until someone decides")
-    # History: the Posted tab, with its count (no longer folded away)
-    go_tab("posted")
-    sm = pg.locator('#app [data-post-tab="posted"] [data-tab-n]')
-    ok(sm.inner_text() == "4" and pg.locator("#app [data-post-history] [data-job]").count() == 4, "Posted (4): the four listed (%s)" % sm.inner_text())
-    late = E("tallyHm(window.__jobs[0].updated_at)")
-    h1 = hs("j-late")
-    ok(h1.startswith("posted |") and ("Posted " + late + " (second try)") in h1 and "Tally did not answer" not in pg.inner_text("#app [data-post-history]") and hs("j-fail1") == "",
-       "a failed posting finished by a later one: one line 'Posted %s (second try)', without the old error (%s)" % (late, h1[:90]))
+    # the owner's spec of 04-Oct-2026: one row an entry, in one tab. Dismiss is gone (Hide and Remove instead), so a failed
+    # posting dismissed by hand (j-hid) is still under Errors; a stopped posting whose entry went in another way is not
+    ent = lambda t: (go_tab(t), E("(t) => Array.from(document.querySelectorAll('#app [data-post-panel=\"' + t + '\"] [data-entry-row]')).map(r => r.getAttribute('data-row-key'))", t))[1]
+    errs = ent("errors")
+    ok(sorted(errs) == ["j-hid:b8", "j-oldfail:b7"], "only the entries still not posted are under Errors, one row each (%s)" % errs)
+    ok("Tally said: Old failure, never dealt with" in st("j-oldfail") and pg.locator('#app [data-post-attention] [data-job="j-oldfail"] [data-retry]').count() == 0,
+       "an older failure never dealt with stays until someone decides, with Tally's words; words FinCom does not know: no Post again until read (%s)" % st("j-oldfail")[:160])
+    ok("The company is not open in Tally" in st("j-hid") and pg.locator('#app [data-post-attention] [data-job="j-hid"] [data-retry]').count() == 1, "a posting dismissed by hand before: still under Errors (Hide or Remove take it off the list), with Post again")
+    ok(pg.locator("#app [data-dismiss]").count() == 0, "no Dismiss on the page")
+    posted = ent("posted")
+    ok(sorted(posted) == ["j-late:b1", "j-old:b9", "local:b2"] and pg.inner_text('#app [data-post-tab="posted"] [data-tab-n]') == "3", "Posted (3): b1 (put in by the later posting), b2 (in Tally another way), b9 (%s)" % posted)
+    ok("Tally did not answer" not in pg.inner_text("#app [data-post-history]") and pg.locator('#app [data-job="j-fail1"]').count() == 0 and pg.locator('#app [data-job="j-nothing"]').count() == 0 and pg.locator('#app [data-job="j-left"]').count() == 0,
+       "a failed posting finished by a later one, and ones whose entries are in Tally another way or back in review: no row")
     ok(["tally_post_dismiss", {"p_id": "j-fail1", "p_auto": True}] in E("window.__rpc") and not any(r[1].get("p_id") != "j-fail1" and r[1].get("p_auto") for r in E("window.__rpc")),
        "and FinCom dismisses it by itself (only that one; the server checks every entry again)")
-    ok(hs("j-nothing").startswith("nothing |") and "put in Tally another way" in hs("j-nothing"), "a failed posting whose entries are all in Tally another way: History, nothing to do (%s)" % hs("j-nothing")[:100])
-    ok(hs("j-old").startswith("posted |") and hs("j-hid").startswith("failed |") and "dismissed by Anshul" in hs("j-hid"), "older postings and one dismissed by hand (who) are in History")
-    go_tab("posted")
-    ok(pg.locator("#app [data-post-history] [data-dismiss]").count() == 0 and pg.locator('#app [data-job="j-late"] [data-dismiss]').count() == 0, "a successful posting never has Dismiss, and nothing in History does")
     ok(pg.locator('#app button:has-text("Refresh")').count() == 0, "no Refresh button")
-    # Retry and Dismiss
+    # Post again: the same posting again under its id
     go_tab("errors")
-    pg.click('#app [data-post-attention] [data-job="j-left"] [data-retry]'); pg.wait_for_timeout(500)
-    ok(any(r[0] == "tally_post_enqueue" and r[1]["p_id"] == "j-left" for r in E("window.__rpc")), "Retry queues the same posting again under its id")
-    pg.click('#app [data-post-attention] [data-job="j-left"] [data-dismiss]'); pg.wait_for_timeout(800)
-    ok(["tally_post_dismiss", {"p_id": "j-left", "p_auto": False}] in E("window.__rpc") and st("j-left") == "" and pg.inner_text('#app [data-post-tab="posted"] [data-tab-n]') == "5" and hs("j-left") != "",
-       "Dismiss asks the server to dismiss it; it leaves Needs your attention for History (5)")
-    go_tab("posted")
-    pg.click('#app [data-post-history] [data-job="j-hid"] [data-undismiss]'); pg.wait_for_timeout(500)
-    ok(["tally_post_undismiss", {"p_id": "j-hid"}] in E("window.__rpc"), "a dismissed posting can be put back under Needs your attention")
+    pg.click('#app [data-post-attention] [data-job="j-hid"] [data-retry]'); pg.wait_for_timeout(500)
+    ok(any(r[0] == "tally_post_enqueue" and r[1]["p_id"] == "j-hid" for r in E("window.__rpc")), "Post again (Retry) queues the same posting again under its id")
     # live: a change to a posting reads the list again by itself
     E("() => { window.__jobs.find(x => x.id === 'j-oldfail').status = 'done'; window.__jobs.find(x => x.id === 'j-oldfail').results = [{id: 'b7', ok: true}]; }")
     before = E("window.__reads")
     E("() => { Live.postsTopic = 'realtime:fincom-posts-x'; Live.got({topic: 'realtime:fincom-posts-x', event: 'postgres_changes', payload: {data: {record: {id: 'j-oldfail'}}}}); }")
     pg.wait_for_timeout(1500)
-    ok(E("window.__reads") > before and st("j-oldfail") == "" and hs("j-oldfail").startswith("posted"), "a change from the live connection reads the list again: the posting done now leaves Needs your attention for History")
+    ok(E("window.__reads") > before and st("j-oldfail") == "" and "j-oldfail:b7" in ent("posted"), "a change from the live connection reads the list again: the posting done now leaves Errors for Posted")
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails))

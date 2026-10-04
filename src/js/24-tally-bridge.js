@@ -1286,6 +1286,11 @@ function billPosted(cid, e, x, tname, now, o){
   // round 15 (B1): bridge 2.1.8 says Tally's exact voucher id (one voucher a request) or the batch's last id: kept here
   const mk = typeof postTallyMark === "function" ? postTallyMark(x, {company: x.company || tname, at: now, by: o.by || postMyName()}) : null;
   if (mk) Object.assign(e.tally, mk);
+  // the owner's spec of 04-Oct (B): Tally's reply kept on the bill, so the Post page says it in one sentence wherever the
+  // posting came from (postReplySentence, src/js/62); a result without counts keeps nothing
+  const rep = {};
+  ["created", "altered", "ignored", "exceptions", "errors", "lastVchId"].forEach(k => { if (x[k] != null && x[k] !== "") rep[k] = x[k]; });
+  if (Object.keys(rep).length){ rep.ok = true; if (x.message) rep.message = String(x.message).slice(0, 300); e.tally.reply = rep; }
 }
 // already in Tally (bridge 2.1.4 checks Tally for the same party, bill no., date and amount at every posting): marked as
 // in Tally with Tally's voucher, as a verified posting is, and said "Already in Tally"

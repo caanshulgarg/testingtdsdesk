@@ -296,6 +296,9 @@ function postRefusedAlone(b){ const need = new Set(b.jobs.map(j => j.id)); retur
 // the counts: from the bills when they are here, else from the client's stats (kept by refreshStats with postBucket)
 function postCounts(cid){
   const b = postBills(cid);
+  // the owner's spec of 04-Oct (src/js/62): Errors counts the entries in statuses 6 to 9, one each, less the rows this
+  // person hid and the rows removed from the list (postTabRows)
+  if (b && typeof postTabRows === "function") return {ready: b.ready.length, attention: postTabRows(cid, "errors").shown.length};
   if (b) return {ready: b.ready.length, attention: b.attention.length + b.jobs.length + b.unknown.length + (b.review || []).length + postRefusedAlone(b).length};
   const st = (S.companies[cid] || {}).stats || {};
   return {ready: num(st.ready != null ? st.ready : st.waiting), attention: num(st.attention)};
@@ -327,7 +330,7 @@ function postPostedEntries(cid, j){
 }
 // the three tab counts: To post and Errors are postCounts (the step bar's badges, the chip, the dashboard), Posted the
 // postings listed under it
-function postTabCounts(cid){ const c = postCounts(cid); return {topost: c.ready, posted: postPostedRows(cid).length, errors: c.attention + (postRefusedFor(cid) ? 1 : 0)}; }
+function postTabCounts(cid){ const c = postCounts(cid); return {topost: c.ready, posted: typeof postTabRows === "function" && S.data[cid] && S.data[cid].loaded ? postTabRows(cid, "posted").shown.length : postPostedRows(cid).length, errors: c.attention + (postRefusedFor(cid) ? 1 : 0)}; }
 // a bill's ledgers on one line, the party first; a Round Off of nothing is left out
 function postLedgerLine(e){
   const ls = (e.snapshot ? e.snapshot.lines : []).filter(l => l.ledger && !((l.role === "roundoff" || /^round\s*(ed\s*)?off\b/i.test(l.ledger)) && Math.abs(num(l.amt)) < 0.005));
@@ -547,22 +550,25 @@ const PostIds = {
       const q = cols => "tally_post_ids?select=" + cols + "&job_id=in.(" + key + ")";
       // round 15 (B5, B1): matched_at / matched_vch ("Matched with Tally", nothing writes it yet) and Tally's ids as the
       // cloud keeps them (reply_vch, batch_end, batch_n), from migration 43; an older cloud is read as before
-      const base = "job_id,fincom_id,entry_id,live", tries = [base + ",released_at,released_why,matched_at,matched_vch,reply_vch,batch_end,batch_n", base + ",released_at,released_why", base];
+      // the owner's spec of 04-Oct (src/js/62, postStatus): each row kept too, with the acceptance (accepted_at,
+      // accepted_vch: migration 36b) and who released it (released_by)
+      const base = "job_id,fincom_id,entry_id,live", tries = [base + ",released_at,released_why,released_by,accepted_at,accepted_vch,matched_at,matched_vch,reply_vch,batch_end,batch_n", base + ",released_at,released_why,matched_at,matched_vch,reply_vch,batch_end,batch_n", base + ",released_at,released_why", base];
       let rows;
       for (let i = 0; ; i++){
         try { rows = await TCloud.restAll(q(tries[i])); break; }
-        catch (e){ if (i >= tries.length - 1 || !/released_at|released_why|matched_at|matched_vch|reply_vch|batch_end|batch_n|42703/i.test(String(e && e.message))) throw e; }
+        catch (e){ if (i >= tries.length - 1 || !/released_at|released_why|released_by|accepted_at|accepted_vch|matched_at|matched_vch|reply_vch|batch_end|batch_n|42703/i.test(String(e && e.message))) throw e; }
       }
-      const held = new Map(), matched = new Map(), ids = new Map();
+      const held = new Map(), matched = new Map(), ids = new Map(), byRow = new Map();
       [].concat(rows || []).forEach(r => { const h = !!r.live && !r.released_at, ks = [r.fincom_id, r.entry_id].filter(Boolean).map(String);
+        ks.forEach(k => byRow.set(r.job_id + "|" + k, r));
         ks.forEach(k => held.set(k, held.get(k) || h));
         if (r.matched_at) ks.forEach(k => matched.set(k, {at: r.matched_at, vch: r.matched_vch == null ? "" : String(r.matched_vch)}));
         if (r.reply_vch != null || r.batch_end != null) ks.forEach(k => { if (!ids.has(k)) ids.set(k, r.reply_vch != null ? {vch: r.reply_vch} : {batchEnd: r.batch_end, batchN: num(r.batch_n)}); }); });
-      const sig = JSON.stringify([[...held.entries()].sort(), [...matched.entries()].sort(), [...ids.entries()].sort()]);
+      const sig = JSON.stringify([[...held.entries()].sort(), [...matched.entries()].sort(), [...ids.entries()].sort(), [...byRow.entries()].map(([k, r]) => [k, r.live, r.released_at, r.accepted_vch]).sort()]);
       const changed = !s || s.sig !== sig;
-      this.by[cid] = {at: Date.now(), key, held, matched, ids, sig}; this.readable = true;
+      this.by[cid] = {at: Date.now(), key, held, matched, ids, rows: byRow, sig}; this.readable = true;
       if (changed) render();
-    } catch (e){ this.readable = false; this.by[cid] = {at: Date.now(), key, held: null, sig: ""}; render(); }
+    } catch (e){ this.readable = false; this.by[cid] = {at: Date.now(), key, held: null, rows: null, sig: ""}; render(); }
     finally { delete this.busy[cid]; }
   }
 };
@@ -808,24 +814,74 @@ const PostOwner = {
     if (typeof PostIds === "object") PostIds.load(cid, true);
     render();
   },
-  async markPosted(cid, e, job){
-    const no = (e.x && e.x.invoiceNo) || e.id;
-    const a = await askConfirm({title: "Mark " + no + " as posted in Tally?", ok: "Mark posted",
-      body: "<p>You saw this entry in Tally. FinCom records it as posted, with who marked it and when; nothing is sent to Tally.</p>" +
-        '<div class="bk-form one"><label><span>Voucher no. in Tally</span><input id="markVch" maxlength="60" placeholder="As in the Day Book"></label>' +
+  // E (the owner's spec of 04-Oct): the Tally id is Tally's own number, digits only; one the same as the bill number is
+  // warned about (asked again), not refused. Without a posting of the cloud (a bill posted straight to a bridge) the mark
+  // is kept on the bill here (markLocal). A bill FinCom's copy of Tally did not show is cleared of that once marked.
+  idCheck(v){ return !v ? "Type Tally's id for this entry, as Tally shows it." : /^\d+$/.test(v) ? "" : "The Tally id is digits only (for example 26301)."; },
+  async sameAsBill(e, v){
+    const no = String((e && e.x && e.x.invoiceNo) || "").trim();
+    if (!no || no !== v) return true;
+    const a = await askConfirm({title: "The Tally id is the same as the bill number", ok: "Use " + v + " anyway",
+      body: "<p>" + esc("You typed " + v + ", which is the bill number. Tally's id is the number Tally gives the entry (for example 26301). Use " + v + " anyway?") + "</p>"});
+    return !!(a && (a === true || a.ok));
+  },
+  async askId(e, title, ok, pre, intro){
+    const a = await askConfirm({title, ok,
+      body: "<p>" + intro + "</p>" +
+        '<div class="bk-form one"><label><span>Tally id</span><input id="markVch" maxlength="20" inputmode="numeric" placeholder="Digits only, as Tally shows it" value="' + esc(pre || "") + '"></label>' +
         '<label><span>Note (optional)</span><input id="markNote" maxlength="300" placeholder="Where you saw it"></label></div>',
       read: () => ({vch: ((document.getElementById("markVch") || {}).value || "").trim(), note: ((document.getElementById("markNote") || {}).value || "").trim()}),
-      validate: d => d && d.vch ? "" : "Give the voucher number as Tally shows it."});
-    if (!a || !a.ok) return;
-    await this.call(cid, "tally_post_job_mark_posted", {p_job: job.id, p_id: String(e.id), p_vch: a.data.vch, p_note: a.data.note}, no + " is marked posted.");
+      validate: d => this.idCheck(d && d.vch)});
+    if (!a || !a.ok) return null;
+    if (!(await this.sameAsBill(e, a.data.vch))) return null;
+    return a.data;
   },
+  clearGone(cid, e){ if (e && e.x && e.goneFromTally){ delete e.goneFromTally; e.postVerified = true; Store.saveEntry(cid, e); refreshStats(cid); } },
+  async markPosted(cid, e, job){
+    const no = (e.x && e.x.invoiceNo) || e.id;
+    if (!job) return this.markLocal(cid, e);
+    const d = await this.askId(e, "Mark " + no + " as posted in Tally?", "Mark posted", "", "You saw this entry in Tally. FinCom records it as posted, with who marked it and when; nothing is sent to Tally.");
+    if (!d) return;
+    await this.call(cid, "tally_post_job_mark_posted", {p_job: job.id, p_id: String(e.id), p_vch: d.vch, p_note: d.note}, no + " is marked posted.");
+    this.clearGone(cid, e);
+  },
+  // a bill posted straight to a bridge (no posting of the cloud names it): the mark is kept on the bill
+  async markLocal(cid, e){
+    const no = (e.x && e.x.invoiceNo) || e.id;
+    const d = await this.askId(e, "Mark " + no + " as posted in Tally?", "Mark posted", (e.tally && (e.tally.vch || e.tally.masterId)) || "", "You saw this entry in Tally. FinCom records it as posted on this bill, with who marked it and when; nothing is sent to Tally.");
+    if (!d) return;
+    const now = new Date().toISOString(), me = (S.account && S.account.me) || {};
+    e.exportedAt = e.exportedAt || now; e.postVerified = true; e.postedVia = e.postedVia || "bridge"; delete e.goneFromTally;
+    e.tally = Object.assign({}, e.tally || {}, {vch: d.vch, byOwner: postMyName() || me.name || "an owner", byOwnerId: me.user_id || "", byOwnerAt: now, byOwnerNote: d.note || "", company: (e.tally && e.tally.company) || postCompanyName(S.companies[cid] || CO())});
+    Store.saveEntry(cid, e); refreshStats(cid); toast(no + " is marked posted."); render();
+  },
+  // F (Jitin & Co. 4861): an owner typed the bill number as the Tally id; the correction is recorded the same way as a mark
+  // (tally_post_job_mark_posted: a new row in tally_post_marks, the result's voucher, the id's accepted_vch)
+  async correctId(cid, e, job, suggest, was){
+    const no = (e.x && e.x.invoiceNo) || e.id;
+    const d = await this.askId(e, "Correct the Tally id of " + no, "Correct the Tally id", suggest || "", "The Tally id kept for this entry" + (was ? " (" + esc(was) + ")" : "") + " is not Tally's own id. Type the id Tally shows for it; FinCom keeps the correction with who made it and when. Nothing is sent to Tally.");
+    if (!d) return;
+    const note = ("Correction: the Tally id is " + d.vch + (was ? ", not " + was : "") + (d.note ? " (" + d.note + ")" : "")).slice(0, 300);
+    if (!job){
+      const me = (S.account && S.account.me) || {};
+      e.tally = Object.assign({}, e.tally || {}, {vch: d.vch, corrected: {from: was || "", by: postMyName() || me.name || "", byId: me.user_id || "", at: new Date().toISOString()}});
+      Store.saveEntry(cid, e); toast("The Tally id of " + no + " is now " + d.vch + "."); render(); return;
+    }
+    await this.call(cid, "tally_post_job_mark_posted", {p_job: job.id, p_id: String(e.id), p_vch: d.vch, p_note: note}, "The Tally id of " + no + " is now " + d.vch + ".");
+  },
+  // E: "This entry is not in Tally (undo the posted mark)", owners only, a reason required
   async release(cid, e, job){
     const no = (e.x && e.x.invoiceNo) || e.id;
-    const a = await askConfirm({title: no + " is not in Tally: release it?", ok: "Release it", danger: true,
-      body: "<p>You looked in Tally and this entry is not there. FinCom frees its id so it can be posted again; the reason is kept with the entry. Nothing is sent to Tally now.</p>" +
+    const a = await askConfirm({title: no + " is not in Tally: undo the posted mark?", ok: "Undo the posted mark", danger: true,
+      body: "<p>You looked in Tally and this entry is not there. FinCom undoes its posted mark and frees its id so it can be posted again; the reason is kept with the entry. Nothing is sent to Tally now.</p>" +
         '<div class="bk-form one"><label><span>Why (what you saw in Tally)</span><input id="releaseWhy" maxlength="500" placeholder="Not in the Day Book of …"></label></div>',
       read: () => ({why: ((document.getElementById("releaseWhy") || {}).value || "").trim()}), validate: d => d && d.why ? "" : "Say what you saw in Tally."});
     if (!a || !a.ok) return;
+    if (!job){
+      e.postUndo = {why: a.data.why, at: new Date().toISOString(), by: postMyName()};
+      e.exportedAt = null; e.postVerified = false; e.postByReply = false; e.postUnconfirmed = null; e.postError = ""; e.postCheckFailed = null; delete e.goneFromTally;
+      Store.saveEntry(cid, e); refreshStats(cid); toast(no + ": the posted mark is undone; it can be posted again."); render(); return;
+    }
     await this.call(cid, "tally_post_id_release_owner", {p_job: job.id, p_id: String(e.id), p_why: a.data.why}, no + " is released; it can be posted again.");
   }
 };

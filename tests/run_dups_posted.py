@@ -159,14 +159,14 @@ with sync_playwright() as p:
     E("() => { S.view = 'company'; S.tab = 'export'; render(); }"); pg.wait_for_timeout(1000)
     if not pg.locator("#app [data-post-attention]").count():
         E("() => { goStep('post'); }"); pg.wait_for_timeout(1000)
-    j = pg.inner_text('#app [data-post-attention] [data-job="aebb6c15"]') if pg.locator('#app [data-post-attention] [data-job="aebb6c15"]').count() else ""
-    ok("failed" in j and "two minutes" in j and pg.locator('#app [data-post-attention] [data-job="e9bd8ae0"]').count() == 0, "10. the failed posting (aebb6c15) needs attention on Post to Tally, with what happened (%s)" % j[:120].replace("\n", " "))
-    # second pass of 02-Oct-2026: one line a posting (its entries are not listed again: a bill appears once on the page)
-    ok(E("Array.from(document.querySelectorAll('#app [data-post-page] [data-bill-row]')).map(r => r.getAttribute('data-bill-row')).sort().join()") == "orig,p90",
+    # the owner's spec of 04-Oct: one row an entry. The failed posting aebb6c15 held p90 alone, and p90 was put in a Tally
+    # file after it: p90 is listed once, as in a Tally file (not under the failed posting, and no Retry of it: that would
+    # send it a second time)
+    ok(pg.locator('#app [data-post-attention] [data-job="aebb6c15"]').count() == 0 and pg.locator('#app [data-post-attention] [data-job="e9bd8ae0"]').count() == 0,
+       "10. the failed posting (aebb6c15) whose bill went into a Tally file after it: not a row of its own")
+    ok(E("Array.from(document.querySelectorAll('#app [data-post-panel=\"errors\"] [data-bill-row]')).map(r => r.getAttribute('data-bill-row')).sort().join()") == "orig,p90",
        "3 (posting fixes). each bill not confirmed in Tally once, as a row of its own")
-    E("() => { window.__rpc = []; TCloud.rpc = async (fn, a) => { window.__rpc.push([fn, a]); return {ok: true, id: a.p_id, retry: true}; }; }")
-    pg.click('#app [data-job="aebb6c15"] button:has-text("Retry")'); pg.wait_for_timeout(600)
-    ok(E("window.__rpc") == [["tally_post_enqueue", {"p_id": "aebb6c15", "p_client": cid, "p_payload": {}}]], "Retry queues the same posting again under its id")
+    ok(pg.locator('#app [data-bill-row="p90"] [data-retry], #app [data-bill-row="p90"] [data-post-again]').count() == 0, "10. and no Retry or Post again for it")
     # second pass of 02-Oct-2026 (item 3): FA/ELEC/013 is not offered to be posted again on the cloud copy's word: Tally is
     # read afresh first, and here there is no Tally to read (no bridge, no Tally computer heard from)
     pg.wait_for_timeout(600)

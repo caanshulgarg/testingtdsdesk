@@ -37,13 +37,13 @@ with sync_playwright() as p:
     # second pass of 02-Oct-2026: a bill using a ledger Tally lacks needs attention (one line each, with the choice of
     # Tally's ledger), and is not in Ready to post
     led = pg.locator('#app [data-post-attention] li[data-attn-kind="ledger"]')
-    ok(led.count() == 2 and "Ledger “Professional Charges” is not in Tally" in led.first.inner_text() and pg.locator('#app select[aria-label="Tally ledger for Professional Charges"]').count() == 2
+    ok(led.count() == 2 and "The ledger “Professional Charges” is not in Tally" in led.first.inner_text() and pg.locator('#app select[aria-label="Tally ledger for Professional Charges"]').count() == 2
        and pg.locator(T).count() == 0 and pg.locator("#app [data-post-main]").count() == 0 and pg.inner_text('#app [data-post-tab="topost"] [data-tab-n]') == "0", "a ledger not in Tally: its bills need attention, with a choice of Tally's ledgers, and are not ready")
     led.first.locator("select").select_option("Legal and Professional Charges"); pg.wait_for_timeout(200)
     led.first.locator('button:has-text("Replace")').click(); pg.wait_for_timeout(500)
     # the bills' TDS ledger is not in Tally either: said next, on the same lines
     led = pg.locator('#app [data-post-attention] li[data-attn-kind="ledger"]')
-    ok(led.count() == 2 and "Ledger “TDS Payable - Professional” is not in Tally" in led.first.inner_text(), "then the next ledger Tally lacks, on the same two lines")
+    ok(led.count() == 2 and "The ledger “TDS Payable - Professional” is not in Tally" in led.first.inner_text(), "then the next ledger Tally lacks, on the same two lines")
     led.first.locator("select").select_option("TDS Payable"); pg.wait_for_timeout(200)
     led.first.locator('button:has-text("Replace")').click(); pg.wait_for_timeout(500)
     ok(pg.evaluate("Object.values(D().entries).filter(e => e.status === 'approved').every(e => e.snapshot.lines.some(l => l.ledger === 'Legal and Professional Charges'))") and pg.locator(T + " tbody tr").count() == 2,
