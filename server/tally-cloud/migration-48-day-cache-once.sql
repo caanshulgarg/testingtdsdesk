@@ -1,9 +1,12 @@
 -- Migration 48 (04-Oct-2026, round 20 part c; docs/cloud-recorder-plan.md 1, "the database fix"). Runs AFTER 47 (fresh
 -- database: ... -> 46 -> 47 -> 48; staging: after 47). Functions created or replaced (one new 4-argument form; three with the
--- same arguments); no table, column, row or grant removed; safe to run twice.
--- IT CONTAINS "delete from": the text of tally_ingest_entries (44's, carried here byte for byte but the rebuild switch) replaces
--- a re-sent entry's lines and bills ("delete from tally_bills ... / delete from tally_lines ... where guid = any(sent)") and
--- tally_ledger_day_rebuild (44's, unchanged, not in this file) clears the days it rebuilds. Nothing runs at migration time. So
+-- same arguments; round 21: tally_recorder_archive_trim and its pg_cron job); no table, column or row removed (one grant taken
+-- back: review L10); safe to run twice.
+-- IT CONTAINS "delete from": the text of tally_ingest_entries (44's, carried here byte for byte but the rebuild switch and
+-- round 21's caller check) replaces a re-sent entry's lines and bills ("delete from tally_bills ... / delete from tally_lines
+-- ... where guid = any(sent)"), tally_ledger_day_rebuild (44's, unchanged, not in this file) clears the days it rebuilds, and
+-- round 21's tally_recorder_archive_trim removes the queue's archive and settled pending rows older than 90 days (pg_cron,
+-- daily). Nothing runs at migration time. So
 -- this file is POSTED WHOLE FOR THE OWNER to run in the SQL Editor (the rule: a file with "delete from" is the owner's to run).
 --
 --   THE DAY CACHE REBUILT ONCE PER CALL. tally_recorder_apply rebuilt the ledger-day cache (tally_ledger_day) once per LINE:
@@ -24,8 +27,16 @@
 --   total) and the md5 of the full tally_ledger_day (every row: book, ledger, day, amount, dr, cr, n; ordered) are IDENTICAL
 --   old (47) against new (48) for three sends: a single entry, 500 lines on one day, a send spanning 30 days
 --   (tests/run_migration48.py, which fails otherwise; the numbers are in its output).
---   Every function: security definer, search_path = public, pg_temp; tally_ingest_entries (both) and tally_recorder_apply the
---   service role's (revoked from public, anon, authenticated); tally_recorder_line granted to nobody.
+--   ROUND 21 (docs/reviews/migration-47-48-review.md): M8 tally_recorder_line carries 47's ledger_altered rule (renamed only
+--   above the ledger's AlterID seen, never merged); L6 the apply and the 4-argument entry path pass a caller without a JWT
+--   only for the owner's own logins (47's tally_service_or_owner); L9 the apply trims the event before its ledger test; L10
+--   the 4-argument tally_ingest_entries is granted to nobody (only the 3-argument form and tally_recorder_line, both run as
+--   the owner, reach it, so no caller can skip the rebuild); M6 tally_recorder_archive_trim (pg_cron daily,
+--   'tally-recorder-archive-trim'): the queue's archive (pgmq.a_tally_recorder: full voucher bodies) and the settled rows of
+--   tally_recorder_pending kept 90 days. These two "delete from" statements are the only ones besides 44's entry path.
+--   Every function: security definer, search_path = public, pg_temp; tally_ingest_entries (3 arguments) and
+--   tally_recorder_apply the service role's (revoked from public, anon, authenticated); the 4-argument form,
+--   tally_recorder_line and the trim granted to nobody (pg_cron runs the trim as the owner).
 
 begin;
 set local lock_timeout = '10s';     -- never queue long behind a session holding a table here (a timeout rolls the whole file back: run it again)
@@ -35,7 +46,7 @@ create or replace function public.tally_ingest_entries(p_book uuid, p_vouchers j
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
 declare f uuid; sent text[]; touched date[]; lk date;
 begin
-  if auth.role() <> 'service_role' and coalesce(current_setting('fincom.recorder_release', true), '') !~ '^[0-9]+$' then raise exception 'not allowed' using errcode = '42501'; end if;
+  if not tally_service_or_owner() and coalesce(current_setting('fincom.recorder_release', true), '') !~ '^[0-9]+$' then raise exception 'not allowed' using errcode = '42501'; end if;
   perform pg_advisory_xact_lock(hashtext(p_book::text));
   select firm_id into f from tally_books where book_id = p_book;
   if f is null then raise exception 'no such book'; end if;
@@ -95,8 +106,8 @@ begin
   if coalesce(p_rebuild, true) then perform tally_ledger_day_rebuild(p_book, touched); end if;
   return jsonb_build_object('ok', true, 'touched', to_jsonb(touched), 'sent', coalesce(array_length(sent, 1), 0), 'rebuilt', coalesce(p_rebuild, true));
 end $function$;
-revoke all on function public.tally_ingest_entries(uuid, jsonb, jsonb, boolean) from public, anon, authenticated;
-grant execute on function public.tally_ingest_entries(uuid, jsonb, jsonb, boolean) to service_role;
+-- review L10: nobody's (the 3-argument form and tally_recorder_line call it as the owner); a second run takes back an earlier grant
+revoke all on function public.tally_ingest_entries(uuid, jsonb, jsonb, boolean) from public, anon, authenticated, service_role;
 
 -- 44's 3-argument form: the same behaviour (rebuild), through the 4-argument one
 create or replace function public.tally_ingest_entries(p_book uuid, p_vouchers jsonb, p_lines jsonb)
@@ -116,7 +127,7 @@ declare b tally_books%rowtype; rid bigint := p_row; ev text := left(btrim(coales
   vd date := tally_d8(replace(coalesce(p_line->>'vch_date', ''), '-', ''));
   sa timestamptz; pl jsonb; pltxt text; bd jsonb; stt text; wy text; t text; res jsonb; vs jsonb; lk date;
   c_found boolean := false; c_alter bigint; c_day date; c_del timestamptz; c_fid text;
-  frm text; dst text; l_name text; l_del timestamptz;
+  frm text; dst text; l_name text; l_del timestamptz; l_alt bigint;
   -- 45: the FinCom id of a short line (fid, else "TDSDesk:<id>" in the narration it carries) and its posting
   lf text := coalesce(case when coalesce(p_line->>'fid', '') ~ '^[A-Za-z0-9._-]{1,80}$' then p_line->>'fid' end,
                       substring(coalesce(p_line->>'narration', '') from 'TDSDesk:([A-Za-z0-9._-]{1,80})'));
@@ -245,21 +256,35 @@ begin
           elsif res->>'note' = 'already named so' then stt := 'applied'; wy := 'already named so';
           else stt := 'held'; wy := coalesce(res->>'note', 'not renamed');
           end if;
+          -- round 21 (review M8): the ledger's AlterID seen, so an older ledger_altered never undoes this rename
+          if stt = 'applied' and alt is not null and og is not null then
+            update tally_ledgers set alter_id = greatest(coalesce(alter_id, 0), alt) where book_id = p_book and tally_guid = og and deleted_at is null;
+          end if;
         exception when others then stt := 'held'; wy := left('rename not made: ' || sqlerrm, 300);
         end;
       end if;
     elsif stt is null and ev = 'ledger_altered' and og is not null and left(btrim(coalesce(p_line->>'name', '')), 300) <> ''
           and exists (select 1 from tally_ledgers l where l.book_id = p_book and l.tally_guid = og and l.deleted_at is null and l.name <> left(btrim(p_line->>'name'), 300)) then
-      -- 47: a ledger_altered line whose GUID the copy holds (live) under another name is a rename: tally_ledger_rename, as ledger_renamed
-      select l.name into frm from tally_ledgers l where l.book_id = p_book and l.tally_guid = og and l.deleted_at is null order by l.name limit 1;
+      -- 47: a ledger_altered line whose GUID the copy holds (live) under another name is a rename: tally_ledger_rename, as
+      -- ledger_renamed. Round 21 (review M8): only with an AlterID above the last one seen for that ledger (an older line
+      -- arriving late never undoes a newer rename: 'stale'), and never a merge (a name another ledger holds is left to the
+      -- next ledger list); a line without an AlterID is held for the ledger list
+      select l.name, l.alter_id into frm, l_alt from tally_ledgers l where l.book_id = p_book and l.tally_guid = og and l.deleted_at is null order by l.name limit 1;
       dst := left(btrim(p_line->>'name'), 300);
-      if coalesce(current_setting('fincom.recorder_release', true), '') ~ '^[0-9]+$' then stt := 'held'; wy := 'a rename is applied by the bridge (tally_ledger_rename), not by a release: the next ledger list makes it';
+      if alt is null then stt := 'held'; wy := 'a ledger change without its AlterID: the next ledger list applies it';
+      elsif l_alt is not null and alt <= l_alt then stt := 'stale'; wy := format('ledger AlterID %s is not above the %s seen: an older change, not applied', alt, l_alt);
+      elsif exists (select 1 from tally_ledgers l where l.book_id = p_book and l.name = dst) then
+        stt := 'held'; wy := format('a ledger named %s is in the copy already: a merge is left to the next ledger list', dst);
+      elsif coalesce(current_setting('fincom.recorder_release', true), '') ~ '^[0-9]+$' then stt := 'held'; wy := 'a rename is applied by the bridge (tally_ledger_rename), not by a release: the next ledger list makes it';
       else
         begin
           res := tally_ledger_rename(p_book, og, frm, dst);
           if coalesce((res->>'renamed')::boolean, false) or coalesce((res->>'merged')::boolean, false) then stt := 'applied'; wy := res->>'note';
           elsif res->>'note' = 'already named so' then stt := 'applied'; wy := 'already named so';
           else stt := 'held'; wy := coalesce(res->>'note', 'not renamed');
+          end if;
+          if stt = 'applied' then
+            update tally_ledgers set alter_id = greatest(coalesce(alter_id, 0), alt) where book_id = p_book and tally_guid = og and deleted_at is null;
           end if;
         exception when others then stt := 'held'; wy := left('rename not made: ' || sqlerrm, 300);
         end;
@@ -298,7 +323,7 @@ create or replace function public.tally_recorder_apply(p_firm uuid, p_book uuid,
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
 declare x jsonb; res jsonb := '[]'::jsonb; one jsonb; mx bigint; pend date[] := '{}';
 begin
-  if auth.role() <> 'service_role' then raise exception 'not allowed' using errcode = '42501'; end if;
+  if not tally_service_or_owner() then raise exception 'not allowed' using errcode = '42501'; end if;
   if not exists (select 1 from tally_books where book_id = p_book and firm_id = p_firm) then raise exception 'no such book'; end if;
   if p_device is not null and not exists (select 1 from tally_devices d where d.id = p_device and d.firm_id = p_firm) then raise exception 'not a computer of this firm'; end if;
   if jsonb_typeof(p_lines) is distinct from 'array' then raise exception 'the lines must be a list'; end if;
@@ -312,7 +337,7 @@ begin
       continue;
     end if;
     -- a ledger line reads the balances (a rename's trial-balance check, the guard): the days collected so far are rebuilt first
-    if left(coalesce(x->>'event', ''), 7) = 'ledger_' and cardinality(pend) > 0 then
+    if left(btrim(coalesce(x->>'event', '')), 7) = 'ledger_' and cardinality(pend) > 0 then     -- review L9: trimmed, as the line trims it
       perform tally_ledger_day_rebuild(p_book, array(select distinct d from unnest(pend) d));
       pend := '{}';
     end if;
@@ -345,5 +370,19 @@ begin
 end $function$;
 revoke all on function public.tally_recorder_apply(uuid, uuid, uuid, jsonb) from public, anon, authenticated;
 grant execute on function public.tally_recorder_apply(uuid, uuid, uuid, jsonb) to service_role;
+
+-- ---------------------------------------------------------------- review M6: the recorder queue's retention (90 days)
+create or replace function public.tally_recorder_archive_trim()
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
+declare a int; p int;
+begin
+  delete from pgmq.a_tally_recorder where archived_at < now() - interval '90 days';
+  get diagnostics a = row_count;
+  delete from tally_recorder_pending where state <> 'pending' and done_at < now() - interval '90 days';
+  get diagnostics p = row_count;
+  return jsonb_build_object('ok', true, 'archive', a, 'pending', p);
+end $function$;
+revoke all on function public.tally_recorder_archive_trim() from public, anon, authenticated, service_role;
+select cron.schedule('tally-recorder-archive-trim', '17 21 * * *', 'select public.tally_recorder_archive_trim()');     -- 02:47 IST, daily
 
 commit;

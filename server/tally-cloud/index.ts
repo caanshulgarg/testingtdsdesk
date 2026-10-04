@@ -868,6 +868,11 @@ async function postWindow(firm: string, dev: any, job: string, w: any) {
 // read with parse.js into the days path's shape: [{guid, alter, type, no, party, narr, cancel, opt, gstin, pos, ref,
 // refDate, cmp, fid, day}] and [[guid, ledger, amount, hsn, rate, bills]]), then tally_recorder_apply stores every line
 // and applies it once (the same change from two computers: 'duplicate'). A line with no GUID is held there, never a new row
+// review 47/48 L5: a database error's own text goes to the function's log only; the caller gets plain words
+function dbFail(where: string, error: any, words: string) {
+  console.error("tally-ingest " + where + ":", String(error?.code || ""), String(error?.message || error || "").slice(0, 500));
+  return new Error(words);
+}
 const RECORDER_EVENTS = new Set(["created", "altered", "deleted", "cancelled", "imported", "ledger_created", "ledger_altered", "ledger_renamed", "ledger_deleted"]);
 const MAX_RECORDER_LINES = 500, MAX_RECORDER_XML = 2 * 1024 * 1024, QUEUE_OVER = 50;
 const notReady44 = (e: any) => !!e && /tally_recorder_apply|tally_start_point|could not find|does not exist|schema cache/i.test(String(e.message || ""));
@@ -915,24 +920,27 @@ async function recorderLines(dev: any, firm: string, book: string, body: any) {
   if (send.length) await shortBodies(firm, book, send);
   // round 20 (migration 47): more than 50 FULL lines (an entry body read from the add-on's XML; short lines' bodies built from
   // the posting do not count) go on the queue as ONE message and are answered {queued: n} at once; the database's drain
-  // (tally_recorder_drain, pg_cron every 30 s) applies them in order and Sync activity shows each line's state. 50 or fewer,
-  // or short lines only: applied directly as before. A cloud without 47: applied directly (said in the log)
+  // (pg_cron every 30 s) applies them in order and Sync activity shows each line's state. Round 21 (review 47/48 H1): ONE
+  // call, tally_recorder_send(..., queue), which also queues a small request while the book has a queued message not applied
+  // yet (a later request never overtakes it: per book in order); else it applies them at once as before. A cloud without
+  // 47: tally_recorder_apply directly (said in the log)
   const full = send.filter((l: any) => Array.isArray(l.vouchers) && l.short !== true).length;
-  if (full > QUEUE_OVER) {
-    const { data, error } = await db.rpc("tally_recorder_enqueue", { p_firm: firm, p_book: book, p_device: dev.id, p_lines: send });
-    if (!error) {
+  if (send.length) {
+    let data: any = null, error: any = null, via = "send";
+    ({ data, error } = await db.rpc("tally_recorder_send", { p_firm: firm, p_book: book, p_device: dev.id, p_lines: send, p_queue: full > QUEUE_OVER }));
+    if (error && /tally_recorder_send|could not find|does not exist|schema cache/i.test(String(error.message || ""))) {
+      console.log("tally-ingest recorder_lines: no queue in this cloud (migration 47): " + send.length + " lines applied directly", book);
+      via = "apply";
+      ({ data, error } = await db.rpc("tally_recorder_apply", { p_firm: firm, p_book: book, p_device: dev.id, p_lines: send }));
+    }
+    if (error && notReady44(error)) return reply(503, { ok: false, notReady: true, error: "The cloud does not take recorder lines yet (migration 44)." });
+    if (error) throw dbFail("recorder_lines " + via, error, "The cloud could not store these recorder lines just now; send them again.");
+    if (data && typeof data.queued === "number") {
       send.forEach((l: any, k: number) => { results[at[k]] = { line_id: String(l.line_id ?? ""), state: "queued", why: null }; });
       const failed = results.filter((r) => r?.state === "failed").length;
-      console.log("tally-ingest recorder_lines queued", book, JSON.stringify({ n: send.length, full, failed, msg: (data as any)?.msg ?? null }));
-      return reply(200, { ok: true, queued: send.length, failed, msg: (data as any)?.msg ?? null, results });
+      console.log("tally-ingest recorder_lines queued", book, JSON.stringify({ n: send.length, full, failed, msg: data.msg ?? null, behind: data.behind ?? 0 }));
+      return reply(200, { ok: true, queued: send.length, failed, msg: data.msg ?? null, ...(data.behind ? { behind: data.behind } : {}), results });
     }
-    if (!/tally_recorder_enqueue|could not find|does not exist|schema cache/i.test(String(error.message || ""))) throw new Error(error.message);
-    console.log("tally-ingest recorder_lines: no queue in this cloud (migration 47): " + send.length + " lines applied directly", book);
-  }
-  if (send.length) {
-    const { data, error } = await db.rpc("tally_recorder_apply", { p_firm: firm, p_book: book, p_device: dev.id, p_lines: send });
-    if (error && notReady44(error)) return reply(503, { ok: false, notReady: true, error: "The cloud does not take recorder lines yet (migration 44)." });
-    if (error) throw new Error(error.message);
     ((data as any)?.results || []).forEach((r: any, k: number) => { if (k < at.length) results[at[k]] = { line_id: String(r?.line_id ?? send[k].line_id ?? ""), state: String(r?.state || "failed"), why: r?.why ?? null }; });
   }
   const out: Record<string, unknown> = { ok: true, results };
@@ -1197,6 +1205,9 @@ async function jobStep(job: string, units: number, bad: unknown[], failed?: stri
   const { error } = await db.rpc("tally_job_step", { p_job: job, p_done: units, p_bad: bad || [], p_failed: failed || null });
   if (error) console.error("tally-ingest job step", job, error.message);
 }
+// review 47/48 M4, M5, L2: a piece that can never succeed (another file, an entry too large, a Storage that ignores Range):
+// the job stops at once with these words, no 5 tries
+class Fatal extends Error {}
 async function workPiece(m: any) {
   const job = String(m?.job || ""), firm = String(m?.firm || ""), book = String(m?.book || "");
   if (!job || !firm || !book) return;
@@ -1229,22 +1240,47 @@ async function workPiece(m: any) {
 // Each piece logs the time of its own work (decoding, cutting, building and packing; not the waits for Storage or the queue).
 const UPLOAD_BUCKET = "tally-uploads", UPLOAD_MAX = 2 * 1024 * 1024 * 1024;
 const PIECE = Math.max(65536, Math.min(16 * 1024 * 1024, Math.floor(Number(Deno.env.get("TALLY_UPLOAD_PIECE")) || 4 * 1024 * 1024)));
-const MAX_CARRY = 24 * 1024 * 1024;           // characters a piece's message may carry (an open day, a cut voucher)
+const MAX_CARRY = 6 * 1024 * 1024;            // characters a piece's message may carry (an open day, a cut voucher; review M5: was 24 M)
+// review M5: the cut voucher carried into the next piece; an entry longer than this stops the job with words
+const MAX_TAIL = Math.max(65536, Math.floor(Number(Deno.env.get("TALLY_UPLOAD_MAX_TAIL")) || 2 * 1024 * 1024));
 const addDay = (d: string, n: number) => new Date(Date.UTC(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8) + n)).toISOString().slice(0, 10).replace(/-/g, "");
 const realDay = (d: unknown) => isDay(d) && addDay(d as string, 0) === d;
 function periodDays(from: string, to: string) { const out: string[] = []; for (let d = from; d <= to && out.length <= 4000; d = addDay(d, 1)) out.push(d); return out; }
 function bytesB64(u: Uint8Array) { let s = ""; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode(...u.subarray(i, i + 0x8000)); return btoa(s); }
-// [from, to] of a stored upload (Supabase Storage answers a Range with 206 and Content-Range "bytes a-b/size"); null: not there
+// [from, to] of a stored upload (Supabase Storage answers a Range with 206 and Content-Range "bytes a-b/size"); null: not there.
+// Review M4: never the whole object into memory. A server that ignores the Range (200: a proxy, a CDN, another backend):
+// from the start only, at most the bytes asked are read from the stream and the rest cancelled; from further on it cannot be
+// read in pieces at all (Fatal, with words). Review L5: Storage's own error text goes to the log only
 async function storageRange(path: string, from: number, to: number): Promise<{ bytes: Uint8Array; size: number } | null> {
   const r = await fetch(URL.replace(/\/+$/, "") + "/storage/v1/object/authenticated/" + UPLOAD_BUCKET + "/" + path.split("/").map(encodeURIComponent).join("/"),
     { headers: { apikey: SERVICE, Authorization: "Bearer " + SERVICE, Range: "bytes=" + from + "-" + to } });
   const total = (h: string | null) => Number(((h || "").match(/\/(\d+)\s*$/) || [])[1] || 0);
   if (r.status === 404 || r.status === 400) { await r.body?.cancel(); return null; }
   if (r.status === 416) { await r.body?.cancel(); return { bytes: new Uint8Array(0), size: total(r.headers.get("content-range")) }; }
-  if (!r.ok) throw new Error("storage: " + r.status + " " + (await r.text()).slice(0, 200));
-  const all = new Uint8Array(await r.arrayBuffer());
-  if (r.status === 206) return { bytes: all, size: total(r.headers.get("content-range")) || from + all.length };
-  return { bytes: all.subarray(from, to + 1), size: all.length };          // a server that ignored the Range: the whole object
+  if (!r.ok) {
+    console.error("tally-ingest storage", r.status, path, (await r.text().catch(() => "")).slice(0, 300));
+    throw new Error("FinCom's storage answered " + r.status + " for the uploaded Day Book; it is tried again.");
+  }
+  const want = to - from + 1;
+  if (r.status === 206) {
+    const all = new Uint8Array(await r.arrayBuffer());
+    return { bytes: all.length > want ? all.subarray(0, want) : all, size: total(r.headers.get("content-range")) || from + all.length };
+  }
+  const size = Number(r.headers.get("content-length") || 0);
+  if (from > 0 || !r.body || !size) {
+    await r.body?.cancel();
+    throw new Fatal("FinCom's storage did not answer the byte range asked (it sent the whole file), so the Day Book cannot be read in pieces: tell FinCom's support.");
+  }
+  const out = new Uint8Array(Math.min(want, size)), rd = r.body.getReader();
+  let got = 0;
+  while (got < out.length) {
+    const { done, value } = await rd.read();
+    if (done || !value) break;
+    const k = Math.min(value.length, out.length - got);
+    out.set(value.subarray(0, k), got); got += k;
+  }
+  await rd.cancel().catch(() => {});
+  return { bytes: out.subarray(0, got), size };
 }
 // the bytes of whole characters only (a range end inside a character moves back to its start)
 function wholeChars(b: Uint8Array, enc: string) {
@@ -1265,6 +1301,8 @@ async function uploadPiece(job: string, firm: string, book: string, u: any) {
   const timed = async <T>(p: PromiseLike<T>): Promise<T> => { const t = performance.now(); try { return await p; } finally { wait += performance.now() - t; } };
   const rf = String(u?.range?.from || ""), rt = String(u?.range?.to || ""), path = String(u?.path || ""), late = u?.pass === "late";
   if (!path || !realDay(rf) || !realDay(rt)) throw new Error("the upload's piece is incomplete (path, period)");
+  // review L2: only the job's own file, '<firm>/<job>.xml' (the path upload_new issued), is ever read
+  if (path !== firm + "/" + job + ".xml") throw new Fatal("This upload's piece names another file than its job's; it is not read.");
   const from = Math.max(0, Math.floor(Number(u.from) || 0)), size0 = Math.floor(Number(u.size) || 0);
   const end = late ? Math.min(Math.floor(Number(u.end) || 0), size0) : size0;
   const got = from < end ? await timed(storageRange(path, from, Math.min(end, from + PIECE) - 1)) : { bytes: new Uint8Array(0), size: size0 };
@@ -1311,28 +1349,25 @@ async function uploadPiece(job: string, firm: string, book: string, u: any) {
     for (const d of emit) seen.add(d);
     if (isLast) for (const d of periodDays(rf, rt)) if (!seen.has(d)) { files.push({ day: d, vs: [] }); seen.add(d); }
   }
+  if (tail.length > MAX_TAIL) throw new Fatal("An entry in the Day Book (near byte " + tailAt + ") is larger than FinCom reads (" + Math.round(tail.length / 1024) + " K characters, at most " + Math.round(MAX_TAIL / 1024) + " K): check that entry in Tally, then upload again.");
   let carry = tail.length; for (const d in pend) for (const v of pend[d]) carry += v.length;
-  if (carry > MAX_CARRY) throw new Error("A day of the Day Book is larger than FinCom reads in one piece (" + Math.round(carry / 1048576) + " M characters).");
+  if (carry > MAX_CARRY) throw new Fatal("A day of the Day Book is larger than FinCom reads in one piece (" + Math.round(carry / 1048576) + " M characters): upload a shorter period.");
   // a file not in date order: the late days are read again whole after this (a second pass over the ranges their vouchers
-  // were in); the job's total grows by them first, so the job is not done before they are
+  // were in); the job's total grows by them in the same step that queues the last piece's work, so the job is not done
+  // before they are. Review M3: this piece's day files and its next piece are handed over in ONE call (tally_upload_advance,
+  // migration 47), queued only while the job's cursor is this piece's own ('main:<from>' / 'late:<from>'), and the cursor
+  // moved to the next piece's in the same transaction: a piece run again (killed before its message was archived) queues
+  // nothing twice and raises the total once
   const lt = !late && isLast ? [...lateDays].sort() : [];
-  if (lt.length) {
-    const { data: jr } = await timed(db.from("tally_jobs").select("total").eq("id", job).single());
-    await timed(db.from("tally_jobs").update({ total: Number((jr as any)?.total || 0) + lt.length, updated_at: new Date().toISOString() }).eq("id", job));
-  }
+  const msgs: Record<string, unknown>[] = [];
   let batch: { day: string; gz: string }[] = [], bsize = 0, queued = 0;
-  const flush = async () => {
-    if (!batch.length) return;
-    const { error } = await timed(db.rpc("tally_work_send", { p_msg: { job, firm, book, days: batch } }));
-    if (error) throw new Error(error.message);
-    queued += batch.length; batch = []; bsize = 0;
-  };
+  const flush = () => { if (batch.length) { msgs.push({ job, firm, book, days: batch }); queued += batch.length; batch = []; bsize = 0; } };
   for (const f of files) {
     const gz = bytesB64(await gzipBytes(new TextEncoder().encode(dayXml(f.vs))));
-    if (batch.length && (bsize + gz.length > 4e6 || batch.length >= 31)) await flush();
+    if (batch.length && (bsize + gz.length > 4e6 || batch.length >= 31)) flush();
     batch.push({ day: f.day, gz }); bsize += gz.length;
   }
-  await flush();
+  flush();
   let next: Record<string, unknown> | null = null;
   if (!isLast) next = { ...u, from: nextFrom, enc, tail, tailAt, pend, seen: [...seen], late: [...lateDays].sort(), ext, top };
   else if (lt.length) {
@@ -1340,7 +1375,11 @@ async function uploadPiece(job: string, firm: string, book: string, u: any) {
     next = { path, size: size0, range: { from: rf, to: rt }, enc, pass: "late", from: a, end: b, only: lt, pend: {}, tail: "", tailAt: a };
     console.log("tally-ingest upload not in date order: " + lt.length + " day(s) read again whole", job, lt.slice(0, 10).join(","));
   }
-  if (next) { const { error } = await timed(db.rpc("tally_work_send", { p_msg: { job, firm, book, upload: next } })); if (error) throw new Error(error.message); }
+  if (next) msgs.push({ job, firm, book, upload: next });
+  const at = (late ? "late:" : "main:") + from, nextAt = next ? ((next.pass === "late" ? "late:" : "main:") + next.from) : "end";
+  const { data: adv, error: advErr } = await timed(db.rpc("tally_upload_advance", { p_job: job, p_at: at, p_next: nextAt, p_msgs: msgs, p_late: lt.length }));
+  if (advErr) throw dbFail("upload piece " + job, advErr, "The upload's next part could not be queued just now; it is tried again.");
+  if ((adv as any)?.moved === false) { console.log("tally-ingest upload piece", job, at, "ran again: its work was queued already (" + (adv as any)?.at + ")"); return; }
   await timed(jobStep(job, 0, []));
   console.log("tally-ingest upload piece", job, "from", from, cut, "bytes", "work", (performance.now() - t0 - wait).toFixed(1), "ms", "vouchers", n, "days", queued, late ? "late pass" : "", isLast ? "last" : "");
 }
@@ -1355,7 +1394,8 @@ async function work(budgetMs: number) {
     catch (e) {
       const why = String((e as Error)?.message || e).slice(0, 300);
       console.error("tally-ingest work", x.msg_id, x.read_ct, why);
-      if (x.read_ct >= TRIES) { await db.rpc("tally_work_done", { p_msg: x.msg_id }); if (x.message?.job) await jobStep(String(x.message.job), 0, [{ error: why }], "Stopped after " + TRIES + " tries: " + why); }
+      const fatal = e instanceof Fatal;
+      if (fatal || x.read_ct >= TRIES) { await db.rpc("tally_work_done", { p_msg: x.msg_id }); if (x.message?.job) await jobStep(String(x.message.job), 0, [{ error: why }], fatal ? why : "Stopped after " + TRIES + " tries: " + why); }
     }
   }
   return n;
@@ -1390,16 +1430,17 @@ async function queueJob(firm: string, client: string, book: string, user: string
     if (size > UPLOAD_MAX) return reply(413, { ok: false, error: "The file is larger than 2 GB; export the Day Book in two parts." });
     const id = crypto.randomUUID(), path = `${firm}/${id}.xml`, total = periodDays(from, to).length;
     const { error } = await db.from("tally_jobs").insert({ id, firm_id: firm, client_id: client, book_id: book, kind: "upload", total, created_by: user, message: name, upload: { path, from, to, size, name } });
-    if (error && /check constraint|tally_jobs_kind|upload|column|schema cache/i.test(String(error.message || ""))) {
+    // review L4: only the errors that mean 'no kind upload here' (the kind check, the upload column missing); any other is a 500
+    if (error && (["42703", "PGRST204"].includes(String((error as any).code || "")) || /tally_jobs_kind_check/.test(String(error.message || "")))) {
       console.log("tally-ingest upload_new: the cloud does not take uploads yet (migration 47)", String(error.message || "").slice(0, 160));
       return reply(400, { ok: false, error: "unknown kind: this cloud does not take Day Book uploads yet (migration 47)" });
     }
-    if (error) throw new Error(error.message);
+    if (error) throw dbFail("upload_new", error, "The upload could not be started just now; try again.");
     return reply(200, { ok: true, job: id, path, bucket: UPLOAD_BUCKET, days: total });
   }
   // upload_done: the file is in Storage; the job sealed and its first piece queued (once: a second call changes nothing)
   if (body.kind === "upload_done") {
-    const { data: j } = await db.from("tally_jobs").select("id, firm_id, client_id, kind, sealed, total, upload").eq("id", String(body.job || "")).maybeSingle();
+    const { data: j } = await db.from("tally_jobs").select("id, firm_id, client_id, book_id, kind, sealed, total, upload").eq("id", String(body.job || "")).maybeSingle();
     const up = (j as any)?.upload;
     if (!j || j.firm_id !== firm || j.client_id !== client || j.kind !== "upload" || !up || typeof up.path !== "string") return reply(404, { ok: false, error: "No such upload for this client." });
     if (body.path !== undefined && String(body.path) !== up.path) return reply(409, { ok: false, error: "That is not this upload's file." });
@@ -1407,9 +1448,19 @@ async function queueJob(firm: string, client: string, book: string, user: string
     const head = await storageRange(up.path, 0, 0);
     if (!head || !head.size) return reply(404, { ok: false, error: "The Day Book is not in FinCom's storage yet: finish the upload first." });
     if (Number(up.size) && head.size !== Number(up.size)) return reply(409, { ok: false, error: "The stored file is " + head.size + " bytes, not the " + up.size + " the upload began with: upload it again." });
-    await db.from("tally_jobs").update({ sealed: true, status: "running", updated_at: new Date().toISOString() }).eq("id", j.id);
-    const { error } = await db.rpc("tally_work_send", { p_msg: { job: j.id, firm, book, upload: { path: up.path, size: head.size, from: 0, range: { from: up.from, to: up.to } } } });
-    if (error) throw new Error(error.message);
+    // review M2: one conditional update (where not sealed, returning): only the call that sealed it queues the split. Review
+    // M3: the job's cursor starts at the first piece ('main:0'). Review L3: the job's own book, never the company linked now
+    const { data: won, error: se } = await db.from("tally_jobs").update({ sealed: true, status: "running", updated_at: new Date().toISOString(), upload: { ...up, at: "main:0" } })
+      .eq("id", j.id).eq("sealed", false).select("id");
+    if (se) throw dbFail("upload_done", se, "The upload could not be started just now; try again.");
+    if (!Array.isArray(won) || !won.length) return reply(200, { ok: true, job: j.id, already: true });
+    const jb = String((j as any).book_id || book);
+    if (jb !== book) console.log("tally-ingest upload_done: the company is linked to another book now; the job's book kept", j.id, jb, book);
+    const { error } = await db.rpc("tally_work_send", { p_msg: { job: j.id, firm, book: jb, upload: { path: up.path, size: head.size, from: 0, range: { from: up.from, to: up.to } } } });
+    if (error) {
+      await db.from("tally_jobs").update({ sealed: false, status: "queued" }).eq("id", j.id);
+      throw dbFail("upload_done", error, "The upload could not be queued just now; try again.");
+    }
     console.log("tally-ingest upload_done: the split queued", j.id, up.path, head.size, "bytes", up.from + "-" + up.to);
     later(work(110000));
     return reply(200, { ok: true, job: j.id, queued: true, size: head.size, days: j.total });

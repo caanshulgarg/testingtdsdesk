@@ -188,13 +188,15 @@ try:
     low = body.lower()
     code = "\n".join(l for l in low.split("\n") if not l.strip().startswith("--"))
     rest = re.sub(r"delete from tally_(bills|lines) \w where \w\.book_id = p_book and \w\.guid = any\(sent\);", "", code)
+    # round 21 (review 47/48 M6): the queue archive's retention, 90 days, is 48's (47 removes no row)
+    rest = re.sub(r"delete from pgmq\.a_tally_recorder where archived_at < now\(\) - interval '90 days';", "", rest)
+    rest = re.sub(r"delete from tally_recorder_pending where state <> 'pending' and done_at < now\(\) - interval '90 days';", "", rest)
     ok("delete from" in code and "delete from" not in rest and not re.search(r"\b(drop|truncate)\s+(table|view|function|trigger|policy|column|constraint|index)\b", low),
-       "the text holds 'delete from' (the entry path's re-send of an entry's lines and bills, 44's text; the owner runs it) and nothing else that removes or drops")
+       "the text holds 'delete from' (the entry path's re-send of an entry's lines and bills, 44's text; the queue archive's 90-day retention, review M6; the owner runs it) and nothing else that removes or drops")
     ok(re.search(r"^begin;\s*\nset local lock_timeout = '10s';", body, re.M) is not None and body.rstrip().endswith("commit;"), "begin; set local lock_timeout = '10s'; ... commit;")
     bodies = re.findall(r"create or replace function public\.(\w+)\((.*?)\)\s*returns.*?\$function\$(.*?)\$function\$", body, re.S)
     sig = lambda args: ", ".join(re.sub(r"^\s*p_\w+\s+", "", a).strip() for a in args.split(",")) if args.strip() else ""
-    ok(sorted((n, sig(a)) for n, a, _ in bodies) == sorted([("tally_ingest_entries", "uuid, jsonb, jsonb, boolean"), ("tally_ingest_entries", "uuid, jsonb, jsonb"), ("tally_recorder_line", "uuid, uuid, jsonb, bigint"), ("tally_recorder_apply", "uuid, uuid, jsonb")])
-       or sorted((n, sig(a)) for n, a, _ in bodies) == sorted([("tally_ingest_entries", "uuid, jsonb, jsonb, boolean"), ("tally_ingest_entries", "uuid, jsonb, jsonb"), ("tally_recorder_line", "uuid, uuid, jsonb, bigint"), ("tally_recorder_apply", "uuid, uuid, uuid, jsonb")]),
+    ok(sorted((n, sig(a)) for n, a, _ in bodies) == sorted([("tally_ingest_entries", "uuid, jsonb, jsonb, boolean"), ("tally_ingest_entries", "uuid, jsonb, jsonb"), ("tally_recorder_line", "uuid, uuid, jsonb, bigint"), ("tally_recorder_apply", "uuid, uuid, uuid, jsonb"), ("tally_recorder_archive_trim", "")]),
        "the functions in the file: tally_ingest_entries (4 and 3 arguments), tally_recorder_line, tally_recorder_apply (%s)" % [(n, sig(a)) for n, a, _ in bodies])
     for name, args, src in bodies:
         rp = "public.%s(%s)" % (name, sig(args))
@@ -205,8 +207,21 @@ try:
     ok("tally_ingest_entries(p_book, p_vouchers, p_lines, true)" in three, "the 3-argument tally_ingest_entries calls the 4-argument one with true (rebuild)")
     pv = lambda who, sg: new.jn("select has_function_privilege('%s', 'public.%s', 'execute')" % (who, sg))
     gr = {sg: (pv("anon", sg), pv("authenticated", sg), pv("service_role", sg)) for sg in ("tally_ingest_entries(uuid, jsonb, jsonb, boolean)", "tally_ingest_entries(uuid, jsonb, jsonb)", "tally_recorder_apply(uuid, uuid, uuid, jsonb)", "tally_recorder_line(uuid, uuid, jsonb, bigint)")}
-    ok(gr == {"tally_ingest_entries(uuid, jsonb, jsonb, boolean)": ("f", "f", "t"), "tally_ingest_entries(uuid, jsonb, jsonb)": ("f", "f", "t"), "tally_recorder_apply(uuid, uuid, uuid, jsonb)": ("f", "f", "t"), "tally_recorder_line(uuid, uuid, jsonb, bigint)": ("f", "f", "f")},
-       "grants: the entry path and the apply the service role's; the line nobody's (%s)" % gr)
+    ok(gr == {"tally_ingest_entries(uuid, jsonb, jsonb, boolean)": ("f", "f", "f"), "tally_ingest_entries(uuid, jsonb, jsonb)": ("f", "f", "t"), "tally_recorder_apply(uuid, uuid, uuid, jsonb)": ("f", "f", "t"), "tally_recorder_line(uuid, uuid, jsonb, bigint)": ("f", "f", "f")},
+       "grants: the 3-argument entry path and the apply the service role's; the 4-argument form (review L10: only the 3-argument form and the line reach it) and the line nobody's (%s)" % gr)
+    # ---------------------------------------------------------------- round 21 (docs/reviews/migration-47-48-review.md)
+    apsrc = new.jn("select prosrc from pg_proc where oid = 'public.tally_recorder_apply(uuid, uuid, uuid, jsonb)'::regprocedure") or ""
+    ensrc = new.jn("select prosrc from pg_proc where oid = 'public.tally_ingest_entries(uuid, jsonb, jsonb, boolean)'::regprocedure") or ""
+    ok("left(btrim(coalesce(x->>'event', '')), 7) = 'ledger_'" in apsrc, "L9. tally_recorder_apply trims the event before its ledger test, as tally_recorder_line does")
+    ok("tally_service_or_owner()" in apsrc and "tally_service_or_owner()" in ensrc and "auth.role() <> 'service_role'" not in apsrc + ensrc, "L6. the apply and the entry path: no JWT passes only for the owner's own logins (47's tally_service_or_owner)")
+    trim_cron = new.jn("select command from cron.job where jobname = 'tally-recorder-archive-trim'")
+    new.db.sql("""insert into pgmq.a_tally_recorder (msg_id, read_ct, enqueued_at, archived_at, vt, message) values (900001, 1, now() - interval '100 days', now() - interval '100 days', now(), '{}'), (900002, 1, now(), now(), now(), '{}');
+                  insert into tally_recorder_pending (msg_id, book_id, state, done_at) values (900001, %s, 'done', now() - interval '100 days'), (900002, %s, 'done', now()), (900003, %s, 'pending', null);""" % (q(B), q(B), q(B)))
+    tr = new.j("select tally_recorder_archive_trim()::text")
+    left_ = (new.jn("select string_agg(msg_id::text, ',' order by msg_id) from pgmq.a_tally_recorder where msg_id >= 900001"), new.jn("select string_agg(msg_id::text, ',' order by msg_id) from tally_recorder_pending where msg_id >= 900001"))
+    ok(trim_cron == "select public.tally_recorder_archive_trim()" and tr.get("archive") == 1 and tr.get("pending") == 1 and left_ == ("900002", "900002,900003"),
+       "M6. the queue archive and the settled pending rows kept 90 days (pg_cron daily); a pending row never removed (%s; %s; %s)" % (trim_cron, tr, left_))
+    new.db.sql("delete from pgmq.a_tally_recorder where msg_id >= 900001; delete from tally_recorder_pending where msg_id >= 900001;")
     good, out = new.as_user(OWNER, "select tally_ingest_entries(%s, '[]'::jsonb, '[]'::jsonb, false)::text" % q(B))
     ok(not good, "the 4-argument form refused to a signed-in owner")
     # ---------------------------------------------------------------- the three sends
@@ -266,7 +281,7 @@ try:
         if i == 150:
             s3.append({"line_id": "s3-%03d" % i, "event": "ledger_renamed", "object_guid": ren_guid, "from": ren_from, "to": ren_from + " (renamed)", "saved_at": "2026-10-04T11:00:00+05:30"}); continue
         if i == 151:
-            s3.append({"line_id": "s3-%03d" % i, "event": "ledger_altered", "object_guid": guids[alt_from], "name": alt_from + " NEW", "saved_at": "2026-10-04T11:00:00+05:30"}); continue
+            s3.append({"line_id": "s3-%03d" % i, "event": "ledger_altered", "object_guid": guids[alt_from], "name": alt_from + " NEW", "alter_id": 5, "saved_at": "2026-10-04T11:00:00+05:30"}); continue
         if i == 152:
             s3.append({"line_id": "s3-%03d" % i, "event": "ledger_created", "object_guid": "g-brand-new", "name": "Brand New Ledger", "saved_at": "2026-10-04T11:00:00+05:30"}); continue
         lg = [(ren_from + " (renamed)" if (i > 150 and n == ren_from) else (alt_from + " NEW" if (i > 151 and n == alt_from) else n), a) for n, a in legs_for(i + 11, usable)]
@@ -282,6 +297,9 @@ try:
     stt = lambda r: {k: sum(1 for x in r["results"] if x["state"] == k) for k in ("applied", "held", "duplicate", "stale", "failed")}
     ok(stt(ra)["applied"] >= 200 and stt(ra)["stale"] >= 20 and next(x for x in ra["results"] if x["line_id"] == "s3-150")["state"] == "applied" and next(x for x in ra["results"] if x["line_id"] == "s3-151")["state"] == "applied",
        "send 3: %s; the rename lines applied" % stt(ra))
+    st8 = [((sd.apply([{"line_id": "m8-1", "event": "ledger_altered", "object_guid": guids[alt_from], "name": alt_from, "alter_id": 3, "saved_at": "2026-10-04T11:05:00+05:30"}])[0].get("results") or [{}])[0].get("state")) for sd in sides]
+    ok(st8 == ["stale", "stale"] and all(sd.db.one("select count(*) from tally_ledgers where book_id = %s and name = %s" % (q(B), q(alt_from + " NEW"))) == "1" for sd in sides),
+       "M8. an older ledger_altered (AlterID 3, after the rename at 5) arriving late: stale on both, the rename kept (%s)" % st8)
     print("== a held line released by the owner (the line called without the once-per-call setting)")
     for s in sides:
         s.as_user(OWNER, "select tally_month_lock('c1', '2025-12-01', 'closing')::text")

@@ -129,3 +129,12 @@ marking by members only; recorder_source the owner's only; the bucket's policies
 twice and a third time; no "delete from"), `run_migration48.py` (the owner's condition, two databases old / new; the numbers
 printed), `run_upload_split.py` (tally-ingest's upload kinds and byte-range split against the browser's split), and
 `run_migration_order.py` with 47 and 48 in both orders.
+Round 21 (docs/reviews/migration-47-48-review.md, all of H1 and M1-M8 fixed): `run_migration47.py` runs on the REAL pgmq
+1.5.1 when it can be installed (its plain-SQL text from GitHub, made an extension of pg_stand; else the stand-in, said in
+the first line; `PGMQ_STUB=1` forces it) and checks the book's order through `tally_recorder_send`, a failed send's lines,
+alert and gap, the pg_cron procedure `tally_recorder_drain_run` under a statement timeout and a lock wait, the queue's
+tables closed, the exact kind CHECK swap (and its refusal), the ledger rename's AlterID, `tally_upload_advance`, and L5-L8;
+`run_migration48.py` also the 90-day archive retention (48 holds it: 47 removes no row), L6, L9, L10 and the rename rule
+on both databases; `run_recorder_server.py` H1 through tally-ingest; `run_upload_split.py` M2-M5 and L2-L5. pg_cron's
+'tally-recorder-drain' now runs `call public.tally_recorder_drain_run(15000)`; 48 adds 'tally-recorder-archive-trim'
+(`17 21 * * *` UTC, 02:47 IST). Order unchanged: 47 after 46, 48 after 47.

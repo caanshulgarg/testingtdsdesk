@@ -24,7 +24,7 @@ Checks:
   5. Storage: bucket 'tally-uploads' private, 2 GB limit; members insert / read under '<firm id>/' only; no update or delete.
   6. tally_jobs takes kind 'upload' (and still refuses an unknown kind); tally_jobs.upload jsonb (path, period, size, name).
 RED (before 47): the file is missing, every check fails."""
-import os, re, sys, json, hashlib, subprocess
+import os, re, sys, json, hashlib, subprocess, time
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import pg_stand
 SQLDIR = os.path.join(HERE, "..", "server", "tally-cloud")
@@ -38,6 +38,7 @@ M47 = os.environ.get("M47_FILE") or os.path.join(SQLDIR, "migration-47-recorder-
 # The Supabase pieces migration 47 leans on, made plain for pg_stand (staging has the real ones: pgmq 1.5.1, pg_cron 1.6.4,
 # Storage). Shared: run_migration48.py, run_migration_order.py and run_recorder_server.py read this text.
 SCHEMA47 = r"""
+-- pgmq stand-in {
 create schema if not exists pgmq;
 create table if not exists pgmq.meta (queue_name text primary key, created_at timestamptz not null default now());
 do $$ begin if not exists (select 1 from pg_type t join pg_namespace n on n.oid = t.typnamespace where n.nspname = 'pgmq' and t.typname = 'message_record') then
@@ -65,6 +66,11 @@ begin
   execute format('with a as (delete from pgmq.%I where msg_id = $1 returning *) insert into pgmq.%I (msg_id, read_ct, enqueued_at, vt, message) select msg_id, read_ct, enqueued_at, vt, message from a', 'q_' || queue_name, 'a_' || queue_name) using msg_id;
   get diagnostics n = row_count; return n > 0;
 end $$;
+create or replace function pgmq.set_vt(queue_name text, msg_id bigint, vt integer) returns setof pgmq.message_record language plpgsql as $$
+begin
+  return query execute format('update pgmq.%I m set vt = clock_timestamp() + make_interval(secs => $2) where m.msg_id = $1 returning m.msg_id, m.read_ct, m.enqueued_at, m.vt, m.message', 'q_' || queue_name) using msg_id, vt;
+end $$;
+-- } pgmq stand-in
 create schema if not exists cron;
 create table if not exists cron.job (jobid bigserial primary key, jobname text unique, schedule text not null, command text not null);
 create or replace function cron.schedule(job_name text, schedule text, command text) returns bigint language sql as $$
@@ -116,6 +122,33 @@ def entry(lid, event, guid, alter, day, amt=10, ledger="Sales"):
 def gone(lid, guid, alter, day):
     return {"line_id": lid, "event": "deleted", "saved_at": "2026-10-04T10:00:00+05:30", "pc": "NWS144", "object_guid": guid, "alter_id": alter, "vch_date": day}
 
+# Round 21 (docs/reviews/migration-47-48-review.md): THE REAL pgmq for the queue. pgmq 1.5.1 (staging's) is plain SQL
+# (pgmq-extension/sql/pgmq.sql, no C), so it is installed as an extension of pg_stand's PostgreSQL when its text is at hand:
+# PGMQ_SQL (a file), else fetched once from GitHub (through the proxy, curl) into $TMPDIR. Without it (no network, a read-only
+# share directory, or PGMQ_STUB=1) the stand-in in SCHEMA47 is used. The output says which.
+PGMQ_VERSION = "1.5.1"
+def real_pgmq():
+    if os.environ.get("PGMQ_STUB"): return None
+    try:
+        share = subprocess.run([pg_stand.BIN + "/pg_config", "--sharedir"], capture_output=True, text=True).stdout.strip() or "/usr/share/postgresql/16"
+        ext = os.path.join(share, "extension")
+        ctl, sqlf = os.path.join(ext, "pgmq.control"), os.path.join(ext, "pgmq--%s.sql" % PGMQ_VERSION)
+        if not (os.path.exists(ctl) and os.path.exists(sqlf)):
+            src = os.environ.get("PGMQ_SQL") or os.path.join(os.environ.get("TMPDIR", "/tmp"), "pgmq-%s.sql" % PGMQ_VERSION)
+            if not os.path.exists(src):
+                url = "https://raw.githubusercontent.com/pgmq/pgmq/v%s/pgmq-extension/sql/pgmq.sql" % PGMQ_VERSION
+                r = subprocess.run(["curl", "-sSfL", "--max-time", "60", "-o", src + ".part", url], capture_output=True, text=True)
+                if r.returncode: print("  (the real pgmq could not be fetched: %s)" % r.stderr.strip()[-200:]); return None
+                os.replace(src + ".part", src)
+            text = open(src).read()
+            if "CREATE FUNCTION pgmq.read(" not in text or re.search(r"(?i)\blanguage\s+c\b", text): print("  (the pgmq text is not the plain-SQL 1.5.1)"); return None
+            open(sqlf, "w").write(text)
+            open(ctl, "w").write("comment = 'A lightweight message queue (pgmq %s, plain SQL)'\ndefault_version = '%s'\nschema = 'pgmq'\nrelocatable = false\nsuperuser = false\n" % (PGMQ_VERSION, PGMQ_VERSION))
+        return "the real pgmq %s (extension files in %s)" % (PGMQ_VERSION, ext)
+    except Exception as e:
+        print("  (the real pgmq not installed: %s)" % e); return None
+PGMQ = real_pgmq()
+print("== the queue: %s" % (PGMQ or "the pgmq stand-in (SCHEMA47)"))
 db = pg_stand.start(30481)      # below the ephemeral range (32768-60999)
 def psql_file(path):
     if not os.path.exists(path): return subprocess.CompletedProcess([], 1, "", "no such file: " + path)
@@ -141,7 +174,19 @@ def table_hashes():
 apply = lambda lines, book=B1, dev=D1: j("select tally_recorder_apply(%s, %s, %s, %s)::text" % (q(F), q(book), q(dev), js(lines)))
 try:
     db.sql(part(os.path.join(HERE, "run_migration33.py"), "SCHEMA")); db.sql(part(os.path.join(HERE, "run_migration35.py"), "SCHEMA")); db.sql(part(os.path.join(HERE, "run_migration37.py"), "SCHEMA_X"))
-    db.sql(SCHEMA47)
+    if PGMQ:
+        db.sql(re.sub(r"-- pgmq stand-in \{.*?-- \} pgmq stand-in\n", "", SCHEMA47, flags=re.S))
+        db.sql("create extension if not exists pgmq;")          # as Supabase has it once Queues is on (staging: pgmq 1.5.1)
+        ok(db.one("select extversion from pg_extension where extname = 'pgmq'") == PGMQ_VERSION, "the real pgmq %s is the queue here" % PGMQ_VERSION)
+    else:
+        db.sql(SCHEMA47)
+    # Supabase's defaults (review M6, L8): the API roles get every table made in public and in pgmq (Queues exposed)
+    db.sql("""grant usage on schema pgmq to anon, authenticated;
+      alter default privileges in schema pgmq grant all on tables to anon, authenticated; alter default privileges in schema pgmq grant all on sequences to anon, authenticated;
+      alter default privileges in schema public grant all on tables to anon, authenticated; alter default privileges in schema public grant all on sequences to anon, authenticated;""")
+    db.sql("select pgmq.create('tally_work') where not exists (select 1 from pgmq.list_queues() where queue_name = 'tally_work');")    # migration 13's queue
+    # review M7: another CHECK that names kind (it must survive 47's swap untouched)
+    db.sql("alter table public.tally_jobs add constraint tally_jobs_reparse_book check (kind <> 'reparse' or book_id is not null);")
     db.sql("""insert into firms values (%(F)s, 'Firm'), (%(F2)s, 'Other') on conflict do nothing;
       insert into members values (%(O)s, %(F)s, 'Owner', 'owner', true), (%(S)s, %(F)s, 'Staff', 'staff', true), (%(T)s, %(F2)s, 'Them', 'owner', true), (%(G)s, %(F)s, 'Former', 'staff', false);
       insert into tally_books (book_id, firm_id, client_id, company, from_date, open_as_on) values (%(B1)s, %(F)s, 'c1', 'ZZ CO', '2026-04-01', '2026-03-31'), (%(B2)s, %(F)s, 'c2', 'ZZ TWO', '2026-04-01', '2026-03-31'), (%(B9)s, %(F2)s, 'c9', 'THEIR CO', '2026-04-01', '2026-03-31');
@@ -186,7 +231,19 @@ try:
     bodies = re.findall(r"create or replace function public\.(\w+)\((.*?)\)\s*returns.*?\$function\$(.*?)\$function\$", body, re.S)
     names = sorted(n for n, _, _ in bodies)
     ok(names == sorted(["tally_recorder_enqueue", "tally_recorder_drain", "tally_alert_working_now", "tally_alert_scan_gaps", "tally_alert_scan_silent", "tally_alert_daily_summary", "tally_alert_read",
-                        "tally_device_recorder_source", "tally_recorder_line"]), "the functions in the file (%s)" % names)
+                        "tally_device_recorder_source", "tally_recorder_line",
+                        # round 21 (review 47/48): H1 send / order / failure, M1 take / settle / fail, L5 words, L6 who, M3 the upload's cursor, the gap check with lost lines
+                        "tally_recorder_send", "tally_recorder_take", "tally_recorder_settle", "tally_recorder_fail", "tally_recorder_why", "tally_service_or_owner", "tally_try_uuid",
+                        "tally_recorder_gap_check", "tally_upload_advance"]), "the functions in the file (%s)" % names)
+    # review M1: the pg_cron drain is a PROCEDURE (it commits after each read and each message): PostgreSQL forbids COMMIT in a
+    # security definer procedure or one with SET, so it is security invoker without SET, every name schema-qualified, and
+    # executable by nobody but its owner (pg_cron runs it as the owner)
+    procs = re.findall(r"create or replace procedure public\.(\w+)\((.*?)\)\s*language plpgsql as \$procedure\$(.*?)\$procedure\$", body, re.S)
+    prow = (db.rows("select md5(prosrc) as m, prosecdef, coalesce(array_to_string(proconfig, ','), '') as conf, prokind from pg_proc where proname = 'tally_recorder_drain_run' and pronamespace = 'public'::regnamespace") or [{}])[0]
+    psrc = procs[0][2] if procs else ""
+    ok(len(procs) == 1 and procs[0][0] == "tally_recorder_drain_run" and prow.get("m") == hashlib.md5(psrc.encode()).hexdigest() and prow.get("prokind") == "p" and prow.get("prosecdef") == "f" and prow.get("conf") == ""
+       and not re.search(r"(?<![.\w])(tally_\w+|pgmq)\s*[.(]", re.sub(r"public\.tally_\w+|--[^\n]*", "", psrc)),
+       "the procedure tally_recorder_drain_run: md5(prosrc) = %s; security invoker, no SET (COMMIT needs both), every name public.-qualified (%s)" % (hashlib.md5(psrc.encode()).hexdigest(), {k: prow.get(k) for k in ("prokind", "prosecdef", "conf")}))
     for name, args, src in bodies:
         rows = db.rows("select md5(prosrc) as m, prosecdef, coalesce(array_to_string(proconfig, ','), '') as conf from pg_proc where proname = %s and pronamespace = 'public'::regnamespace" % q(name))
         file_md5 = hashlib.md5(src.encode()).hexdigest()
@@ -195,10 +252,16 @@ try:
     priv = lambda who, sig: jn("select has_function_privilege('%s', 'public.%s', 'execute')" % (who, sig))
     grants = {sig: (priv("anon", sig), priv("authenticated", sig), priv("service_role", sig)) for sig in (
         "tally_recorder_enqueue(uuid, uuid, uuid, jsonb)", "tally_recorder_drain(integer)", "tally_alert_scan_gaps()", "tally_alert_scan_silent()", "tally_alert_daily_summary()",
-        "tally_alert_working_now(timestamptz)", "tally_alert_read(bigint)", "tally_device_recorder_source(uuid, text)", "tally_recorder_line(uuid, uuid, jsonb, bigint)")}
+        "tally_alert_working_now(timestamptz)", "tally_alert_read(bigint)", "tally_device_recorder_source(uuid, text)", "tally_recorder_line(uuid, uuid, jsonb, bigint)",
+        "tally_recorder_send(uuid, uuid, uuid, jsonb, boolean)", "tally_upload_advance(uuid, text, text, jsonb, integer)", "tally_recorder_gap_check(uuid, uuid, bigint, timestamptz)",
+        "tally_recorder_take(integer)", "tally_recorder_settle(bigint, jsonb)", "tally_recorder_fail(bigint, jsonb, integer, text)", "tally_recorder_why(text, text)", "tally_service_or_owner()", "tally_try_uuid(text)",
+        "tally_recorder_drain_run(integer)")}
     ok(grants == {"tally_recorder_enqueue(uuid, uuid, uuid, jsonb)": ("f", "f", "t"), "tally_recorder_drain(integer)": ("f", "f", "t"), "tally_alert_scan_gaps()": ("f", "f", "f"),
                   "tally_alert_scan_silent()": ("f", "f", "f"), "tally_alert_daily_summary()": ("f", "f", "f"), "tally_alert_working_now(timestamptz)": ("f", "f", "f"),
-                  "tally_alert_read(bigint)": ("f", "t", "f"), "tally_device_recorder_source(uuid, text)": ("f", "t", "f"), "tally_recorder_line(uuid, uuid, jsonb, bigint)": ("f", "f", "f")},
+                  "tally_alert_read(bigint)": ("f", "t", "f"), "tally_device_recorder_source(uuid, text)": ("f", "t", "f"), "tally_recorder_line(uuid, uuid, jsonb, bigint)": ("f", "f", "f"),
+                  "tally_recorder_send(uuid, uuid, uuid, jsonb, boolean)": ("f", "f", "t"), "tally_upload_advance(uuid, text, text, jsonb, integer)": ("f", "f", "t"), "tally_recorder_gap_check(uuid, uuid, bigint, timestamptz)": ("f", "f", "t"),
+                  "tally_recorder_take(integer)": ("f", "f", "f"), "tally_recorder_settle(bigint, jsonb)": ("f", "f", "f"), "tally_recorder_fail(bigint, jsonb, integer, text)": ("f", "f", "f"), "tally_recorder_why(text, text)": ("f", "f", "f"),
+                  "tally_service_or_owner()": ("f", "f", "f"), "tally_try_uuid(text)": ("f", "f", "f"), "tally_recorder_drain_run(integer)": ("f", "f", "f")},
        "grants: the queue the service role's; the alert jobs and the line nobody's (pg_cron runs them as the owner); the read and the owner's switch authenticated (checks inside); anon nothing (%s)" % grants)
     # ---------------------------------------------------------------- 1. the queue
     print("== 1. the recorder queue")
@@ -251,11 +314,11 @@ try:
     good, out = as_user(OWNER, "insert into tally_recorder_failures (firm_id, msg_id, tries, why) values (%s, 99, 1, 'x') returning id" % q(F))
     ok(not good, "nobody writes tally_recorder_failures directly (%s)" % out[-80:])
     cron = {x["jobname"]: (x["schedule"], x["command"]) for x in db.rows("select jobname, schedule, command from cron.job")}
-    ok(cron.get("tally-recorder-drain", ("", ""))[0] == "30 seconds" and "tally_recorder_drain(" in cron.get("tally-recorder-drain", ("", ""))[1] and "http" not in cron.get("tally-recorder-drain", ("", ""))[1],
-       "cron tally-recorder-drain every 30 seconds, the SQL directly (no HTTP) (%s)" % (cron.get("tally-recorder-drain"),))
+    ok(cron.get("tally-recorder-drain", ("", ""))[0] == "30 seconds" and cron.get("tally-recorder-drain", ("", ""))[1] == "call public.tally_recorder_drain_run(15000)",
+       "cron tally-recorder-drain every 30 seconds: call public.tally_recorder_drain_run(15000), the SQL directly (no HTTP), committing per message (review M1) (%s)" % (cron.get("tally-recorder-drain"),))
     # ---------------------------------------------------------------- 4. ledger_altered with a known GUID under another name
     print("== 4. ledger_altered -> rename")
-    r = apply([entry("n0", "created", "nv", 40, "2026-05-12", 7, ledger="Rent"), {"line_id": "n1", "event": "ledger_altered", "object_guid": "g-rent", "name": "Rent Paid", "saved_at": "2026-10-04T10:00:00+05:30"}])
+    r = apply([entry("n0", "created", "nv", 40, "2026-05-12", 7, ledger="Rent"), {"line_id": "n1", "event": "ledger_altered", "object_guid": "g-rent", "name": "Rent Paid", "alter_id": 3, "saved_at": "2026-10-04T10:00:00+05:30"}])
     st = {x["line_id"]: (x["state"], x.get("why")) for x in r.get("results") or []}
     ok(st.get("n1", ("",))[0] == "applied" and db.one("select count(*) from tally_ledgers where book_id = %s and name = 'Rent Paid' and tally_guid = 'g-rent' and renamed_at is not null" % q(B1)) == "1"
        and db.one("select count(*) from tally_lines where book_id = %s and ledger = 'Rent Paid'" % q(B1)) == "2" and db.one("select count(*) from tally_lines where book_id = %s and ledger = 'Rent'" % q(B1)) == "0",
@@ -298,21 +361,21 @@ try:
     h0 = table_hashes()
     ok(len(h0) > 30, "the hash covers every table of every schema (%d tables)" % len(h0))
     r = j("select tally_alert_scan_gaps()::text"); h1 = table_hashes()
-    ga = (db.rows("select firm_id, client_id, book_id, device_id, day = (now() at time zone 'Asia/Kolkata')::date as today, words, data->>'missing' as missing, read_at from tally_alerts where kind = 'gap'") or [{}])
+    ga = (db.rows("select firm_id, client_id, book_id, device_id, day = (now() at time zone 'Asia/Kolkata')::date as today, words, data->>'missing' as missing, read_at from tally_alerts where kind = 'gap' and device_id is null") or [{}])
     ok(r.get("ok") is True and len(ga) == 1 and ga[0].get("book_id") == B1 and ga[0].get("client_id") == "c1" and ga[0].get("today") == "t" and ga[0].get("missing") == "7" and "ZZ CO" in ga[0].get("words", "") and "up to 7 changes not received" in ga[0].get("words", ""),
        "scan_gaps: one 'gap' alert for ZZ CO today, its words and the gap (%s)" % ga)
     ok(others(h1) == others(h0) and h1["public.tally_alerts"] != h0["public.tally_alerts"], "scan_gaps wrote tally_alerts only: every other table identical (%s)" % [k for k in h1 if h1[k] != h0.get(k)])
     j("select tally_alert_scan_gaps()::text"); h2 = table_hashes()
-    ok(db.one("select count(*) from tally_alerts where kind = 'gap'") == "1" and h2 == h1, "scan_gaps again, the same gap: still one alert, nothing changed at all")
+    ok(db.one("select count(*) from tally_alerts where kind = 'gap' and device_id is null") == "1" and h2 == h1, "scan_gaps again, the same gap: still one alert, nothing changed at all")
     j("select tally_recorder_gap_check(%s, %s, 52, now())::text" % (q(B1), q(D1)))
-    good, out = as_user(STAFF, "select tally_alert_read(id)::text from tally_alerts where kind = 'gap'")
-    ok(good and db.one("select read_by from tally_alerts where kind = 'gap'") == STAFF, "a member (staff) marks the gap alert read (%s)" % out)
+    good, out = as_user(STAFF, "select tally_alert_read(id)::text from tally_alerts where kind = 'gap' and device_id is null")
+    ok(good and db.one("select read_by from tally_alerts where kind = 'gap' and device_id is null") == STAFF, "a member (staff) marks the gap alert read (%s)" % out)
     j("select tally_alert_scan_gaps()::text")
-    ga = (db.rows("select data->>'missing' as missing, words, read_at from tally_alerts where kind = 'gap'") or [{}])
+    ga = (db.rows("select data->>'missing' as missing, words, read_at from tally_alerts where kind = 'gap' and device_id is null") or [{}])
     ok(len(ga) == 1 and ga[0].get("missing") == "12" and "up to 12" in ga[0].get("words", "") and not ga[0].get("read_at"), "the gap grew (12): the same row updated, unread again (%s)" % ga)
-    db.sql("update tally_alerts set day = day - 1 where kind = 'gap'")       # yesterday's alert
+    db.sql("update tally_alerts set day = day - 1 where kind = 'gap' and device_id is null")       # yesterday's alert
     j("select tally_alert_scan_gaps()::text")
-    ok(db.one("select count(*) from tally_alerts where kind = 'gap'") == "2", "a new day: a new gap alert (one per book and day)")
+    ok(db.one("select count(*) from tally_alerts where kind = 'gap' and device_id is null") == "2", "a new day: a new gap alert (one per book and day)")
     h0 = table_hashes()
     db.sql("create or replace function public.tally_alert_working_now(p_at timestamptz) returns boolean language sql as $$ select false $$")     # outside hours (the stand-in)
     r = j("select tally_alert_scan_silent()::text")
@@ -340,7 +403,7 @@ try:
     ok(jn("insert into tally_alerts (firm_id, kind, day, words) values (%s, 'news', current_date, 'x')" % q(F)).startswith("ERROR"), "kind is gap, silent or summary only")
     # read marking and RLS
     good, out = as_user(STAFF, "select count(*) from tally_alerts"); good2, out2 = as_user(OTHER, "select string_agg(kind, ',' order by kind) from tally_alerts")
-    ok(good and out == "3" and good2 and out2 == "silent,summary", "RLS: each firm reads its own alerts (%s / %s)" % (out, out2))
+    ok(good and out == "4" and good2 and out2 == "silent,summary", "RLS: each firm reads its own alerts (2 gap, 1 failed queued send, 1 summary) (%s / %s)" % (out, out2))
     aid = db.one("select id from tally_alerts where kind = 'summary' and firm_id = %s" % q(F))
     good, out = as_user(OTHER, "select tally_alert_read(%s)::text" % aid)
     ok(not good and "not an alert of your firm" in out and not db.one("select read_at from tally_alerts where id = %s" % aid), "another firm's member cannot mark it read (%s)" % out.strip().splitlines()[0][-90:])
@@ -376,12 +439,161 @@ try:
     ok(not jn("insert into tally_jobs (firm_id, client_id, kind) values (%s, 'c1', 'upload') returning kind" % q(F)).startswith("ERROR"), "tally_jobs takes kind 'upload'")
     ok(not jn("insert into tally_jobs (firm_id, client_id, kind) values (%s, 'c1', 'daybook') returning kind" % q(F)).startswith("ERROR"), "and still daybook")
     ok(jn("insert into tally_jobs (firm_id, client_id, kind) values (%s, 'c1', 'bogus') returning kind" % q(F)).startswith("ERROR"), "and still refuses an unknown kind")
-    ok(db.one("select count(*) from pg_constraint where conrelid = 'public.tally_jobs'::regclass and contype = 'c' and pg_get_constraintdef(oid) like '%kind%'") == "1", "one CHECK on kind (swapped, not stacked)")
+    kd = {x["conname"]: x["d"] for x in db.rows("select conname, pg_get_constraintdef(oid) as d from pg_constraint where conrelid = 'public.tally_jobs'::regclass and contype = 'c' and pg_get_constraintdef(oid) like '%kind%'")}
+    ok(kd == {"tally_jobs_kind_check": "CHECK ((kind = ANY (ARRAY['daybook'::text, 'reparse'::text, 'upload'::text])))", "tally_jobs_reparse_book": "CHECK (((kind <> 'reparse'::text) OR (book_id IS NOT NULL)))"},
+       "M7. the kind list swapped by its exact old text (not stacked); the other CHECK that names kind left as it was (%s)" % kd)
     col = (db.rows("select data_type, is_nullable from information_schema.columns where table_name = 'tally_jobs' and column_name = 'upload'") or [{}])[0]
     ok(col == {"data_type": "jsonb", "is_nullable": "YES"} and db.one("select count(*) from tally_jobs where upload is not null") == "0", "tally_jobs.upload jsonb (the stored file's path, period, size, name), empty on every old job (%s)" % col)
     r = psql_file(M47)
-    ok(r.returncode == 0 and db.one("select count(*) from tally_alerts") == "5" and rs(D1).startswith("alterid/") and db.one("select count(*) from tally_jobs where kind = 'upload'") == "1",
+    ok(r.returncode == 0 and db.one("select count(*) from tally_alerts") == "6" and rs(D1).startswith("alterid/") and db.one("select count(*) from tally_jobs where kind = 'upload'") == "1",
        "migration-47 a third time over used tables: the alerts, the owner's choice and the upload job kept (%s)" % (r.stderr or "").strip()[-200:])
+
+    # ================================================================ round 21: docs/reviews/migration-47-48-review.md
+    print("== review 47/48: H1 (per book in order; a failed queued send never silent)")
+    sendq = lambda lines, queue, book=B2: j("select tally_recorder_send(%s, %s, %s, %s, %s)::text" % (q(F), q(book), q(D1), js(lines), "true" if queue else "false"))
+    lstate = lambda pre, book=B2: [(x["line_id"], x["state"]) for x in db.rows("select line_id, state from tally_recorder_lines where book_id = %s and line_id like %s order by id" % (q(book), q(pre + "%")))]
+    pend = lambda book=B2: db.one("select count(*) from tally_recorder_pending where book_id = %s and state = 'pending'" % q(book))
+    def vt0(): db.sql("update pgmq.q_tally_recorder set vt = now() - interval '1 second'")
+    j("select tally_start_point(%s, %s, 'cg-2', 1000, 1, %s, 'go-1')::text" % (q(F), q(B2), q(D1)))
+    # a failure only for the first message: its line h00 cannot be stored (an internal error with raw text that must not reach the firm)
+    db.sql("""create or replace function public.test_boom() returns trigger language plpgsql as $$ begin
+                if new.line_id = 'h00' and new.state = 'received' then raise exception 'boom (test) internal detail xyz' using errcode = 'XX001'; end if; return new; end $$;
+              create trigger test_boom before insert on public.tally_recorder_lines for each row execute function public.test_boom();""")
+    big = [entry("h%02d" % i, "created", "hv%02d" % i, 1001 + i, "2026-06-01", 10 + i) for i in range(60)]
+    small = [entry("h%02d" % i, "created", "hv%02d" % i, 1001 + i, "2026-06-02", 5) for i in range(60, 63)]
+    s1 = sendq(big, True)
+    ok(s1.get("ok") is True and s1.get("queued") == 60 and s1.get("behind") == 0 and pend() == "1", "H1. tally_recorder_send(queue): 60 lines queued, the book has 1 message pending (%s)" % {k: s1.get(k) for k in ("queued", "behind", "_error")})
+    s2 = sendq(small, False)
+    ok(s2.get("queued") == 3 and s2.get("behind") == 1 and lstate("h") == [] and pend() == "2",
+       "H1. 3 lines for the same book while a message is pending: queued behind it, not applied directly (%s)" % {k: s2.get(k) for k in ("queued", "behind", "applied", "_error")})
+    s3 = sendq([entry("o1", "created", "ov1", 60, "2026-06-03", 1)], False, B1)
+    ok(s3.get("applied") == 1 and not s3.get("queued"), "H1. another book is not held back: applied directly (%s)" % {k: s3.get(k) for k in ("applied", "queued", "_error")})
+    runs = []
+    for i in range(5):
+        runs.append(j("select tally_recorder_drain(5000)::text")); vt0()
+    ok([(x.get("done"), x.get("retried"), x.get("waiting")) for x in runs[:4]] == [(0, 1, 1)] * 4 and (runs[4].get("failed"), runs[4].get("done")) == (1, 1),
+       "H1. the failing message tried 4 times, the one behind it waits its turn (not a try); the 5th failure archives it and the next applies in the same run (%s)" % [{k: x.get(k) for k in ("done", "retried", "waiting", "failed")} for x in runs])
+    order = lstate("h")
+    ok(order == [("h%02d" % i, "failed") for i in range(60)] + [("h%02d" % i, "applied") for i in range(60, 63)],
+       "H1. the failed send's 60 lines written as 'failed' rows (Sync activity shows them), then the 3 behind applied, in that order (%s ... %s)" % (order[:2], order[-4:]))
+    hw = db.one("select held_why from tally_recorder_lines where line_id = 'h05' and book_id = %s" % q(B2)) or ""
+    ok(hw.startswith("queued send failed after 5 tries") and "an internal error (code XX001)" in hw and "xyz" not in hw, "H1/L5. their words: plain, the raw error kept out (%s)" % hw)
+    fw = db.one("select why from tally_recorder_failures where book_id = %s" % q(B2)) or ""
+    ok("stopped after 5 tries" in fw and "XX001" in fw and "xyz" not in fw and "boom" not in fw, "L5. tally_recorder_failures.why: plain words, no raw error text (%s)" % fw)
+    al = (db.rows("select words, data::text as data, read_at from tally_alerts where kind = 'gap' and book_id = %s and device_id = %s" % (q(B2), q(D1))) or [{}])[0]
+    ok("ZZ TWO" in (al.get("words") or "") and "60 changes" in (al.get("words") or "") and "not applied" in (al.get("words") or "") and not al.get("read_at"),
+       "H1. a 'gap' alert for the book the same minute (the computer named), unread (%s)" % al.get("words"))
+    g = j("select tally_recorder_gap_check(%s, %s, 1063, now())::text" % (q(B2), q(D1)))
+    ok(g.get("missing") == 60 and "queued send" in str((g.get("gap") or {}).get("words")), "H1. the gap check is not fooled: Tally at 1063, the recorder's highest 1063, yet up to 60 not received (the failed send) (%s)" % {k: g.get(k) for k in ("missing", "_error")})
+    db.sql("drop trigger test_boom on public.tally_recorder_lines")
+    s4 = sendq(big, False)
+    g = j("select tally_recorder_gap_check(%s, %s, 1063, now())::text" % (q(B2), q(D1)))
+    ok(s4.get("applied") == 60 and g.get("missing") is None and g.get("matched") is True, "H1. the same 60 sent again (nothing pending: applied directly): the gap closes (%s; %s)" % ({k: s4.get(k) for k in ("applied", "queued")}, {k: g.get(k) for k in ("missing", "matched")}))
+    ok(db.one("select relrowsecurity from pg_class where oid = 'public.tally_recorder_pending'::regclass") == "t" and as_user(STAFF, "select count(*) from tally_recorder_pending")[0] is False,
+       "H1. tally_recorder_pending: RLS on, the firm's members read nothing")
+
+    print("== M1: the try counted before the apply; a stuck message fails by itself and is counted")
+    holder = subprocess.Popen(["runuser", "-u", "postgres", "--", pg_stand.BIN + "/psql", "-h", "127.0.0.1", "-p", str(db.port), "-U", "postgres", "-d", "postgres", "-q"],
+                              stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True)
+    holder.stdin.write("select pg_advisory_lock(hashtext(%s));\nselect pg_sleep(300);\n" % q(B2)); holder.stdin.flush()
+    for _ in range(50):
+        if db.one("select count(*) from pg_locks where locktype = 'advisory' and granted") != "0": break
+        time.sleep(0.1)
+    db.sql("select tally_recorder_enqueue(%s, %s, %s, %s)" % (q(F), q(B1), q(D1), js([entry("ma", "created", "mav", 70, "2026-06-04", 2)])))
+    db.sql("select tally_recorder_enqueue(%s, %s, %s, %s)" % (q(F), q(B2), q(D1), js([entry("ms", "created", "msv", 1070, "2026-06-04", 3)])))
+    sid = db.one("select max(msg_id) from tally_recorder_pending where book_id = %s" % q(B2))
+    def cron_run(stmt):
+        try: db.sql(stmt); return "ok"
+        except RuntimeError as e: return "ERROR " + str(e)[-160:]
+    outs, el = [], []
+    for i in range(5):
+        t0 = time.time(); outs.append(cron_run("set statement_timeout = '2s';\ncall public.tally_recorder_drain_run(15000);")); el.append(round(time.time() - t0, 1)); vt0()
+    tr = (db.rows("select tries, state, why from tally_recorder_pending where msg_id = %s" % (sid or 0)) or [{}])[0]
+    fr = (db.rows("select tries, why from tally_recorder_failures where msg_id = %s" % (sid or 0)) or [{}])[0]
+    ok(outs == ["ok"] * 5 and lstate("ma", B1) == [("ma", "applied")], "M1. pg_cron's call under a 2 s statement timeout: no error; the message before the stuck one applied and kept (%s %s)" % (outs, lstate("ma", B1)))
+    ok(tr.get("tries") == "5" and tr.get("state") == "failed" and fr.get("tries") == "5" and "did not finish in time" in (fr.get("why") or "") and all(x < 4 for x in el)
+       and db.one("select count(*) from pgmq.q_tally_recorder where msg_id = %s" % (sid or 0)) == "0" and lstate("ms") == [("ms", "failed")],
+       "M1. a message cancelled on every try: each try counted (committed before the apply), the 5th archives it with words, its line 'failed' (%s; %s; %s s a run)" % (tr, fr.get("why"), el))
+    db.sql("select tally_recorder_enqueue(%s, %s, %s, %s)" % (q(F), q(B1), q(D1), js([entry("mc", "created", "mcv", 71, "2026-06-04", 2)])))
+    db.sql("select tally_recorder_enqueue(%s, %s, %s, %s)" % (q(F), q(B2), q(D1), js([entry("ml", "created", "mlv", 1071, "2026-06-04", 4)])))
+    lid = db.one("select max(msg_id) from tally_recorder_pending where book_id = %s" % q(B2))
+    t0 = time.time(); o = cron_run("call public.tally_recorder_drain_run(3000);"); took = time.time() - t0
+    tl = (db.rows("select tries, state, why from tally_recorder_pending where msg_id = %s" % (lid or 0)) or [{}])[0]
+    ok(o == "ok" and took < 5 and lstate("mc", B1) == [("mc", "applied")] and tl.get("tries") == "1" and tl.get("state") == "pending" and "busy" in (tl.get("why") or ""),
+       "M1. a message waiting on a lock (no statement timeout): its own lock timeout within the 3 s budget, counted (1 try, 'busy'), the other book's applied (%.1f s; %s)" % (took, tl))
+    db.sql("select pg_terminate_backend(pid) from pg_locks where locktype = 'advisory' and granted and pid <> pg_backend_pid()")
+    holder.kill(); holder.wait()
+    time.sleep(0.5); vt0()
+    o = cron_run("call public.tally_recorder_drain_run(5000);")
+    ok(o == "ok" and lstate("ml") == [("ml", "applied")] and pend() == "0", "M1. the lock free: the next run applies it (%s)" % lstate("ml"))
+
+    print("== M6: the queue's tables closed to the API roles")
+    pv = {(r_, t_): jn("select has_table_privilege('%s', 'pgmq.%s', 'select') or has_table_privilege('%s', 'pgmq.%s', 'insert') or has_table_privilege('%s', 'pgmq.%s', 'delete')" % ((r_, t_) * 3))
+          for r_ in ("anon", "authenticated") for t_ in ("q_tally_recorder", "a_tally_recorder")}
+    good, out = as_user(STAFF, "select count(*) from pgmq.a_tally_recorder")
+    ok(set(pv.values()) == {"f"} and not good and db.one("select bool_and(relrowsecurity) from pg_class where oid in ('pgmq.q_tally_recorder'::regclass, 'pgmq.a_tally_recorder'::regclass)") == "t",
+       "M6. pgmq.q_tally_recorder / a_tally_recorder: no privilege for anon or authenticated (under Supabase's default grants), RLS on; a member's select refused (%s; %s)" % (pv, out.strip().splitlines()[0][-80:] if out else out))
+
+    print("== M8: a ledger renamed by ledger_altered only above the AlterID seen; never merged by it")
+    led = lambda lid_, name, alt: apply([dict({"line_id": lid_, "event": "ledger_altered", "object_guid": "g-capital", "name": name, "saved_at": "2026-10-04T10:00:00+05:30"}, **({"alter_id": alt} if alt is not None else {}))])
+    st1 = (led("m81", "Capital A/c", 20).get("results") or [{}])[0]
+    st2 = (led("m82", "Capital", 15).get("results") or [{}])[0]
+    st3 = (led("m83", "Cash", 30).get("results") or [{}])[0]
+    st4 = (led("m84", "Capital B", None).get("results") or [{}])[0]
+    cap = (db.rows("select name, alter_id from tally_ledgers where book_id = %s and tally_guid = 'g-capital'" % q(B1)) or [{}])[0]
+    ok(st1.get("state") == "applied" and st2.get("state") == "stale" and "not above" in str(st2.get("why")) and st3.get("state") == "held" and "merge" in str(st3.get("why"))
+       and st4.get("state") == "held" and "AlterID" in str(st4.get("why")) and cap == {"name": "Capital A/c", "alter_id": "20"}
+       and db.one("select count(*) from tally_ledgers where book_id = %s and name = 'Cash' and deleted_at is null" % q(B1)) == "1",
+       "M8. renamed at AlterID 20; an older 15 stale (not undone); a name another ledger holds held (no merge); no AlterID held (%s)" % [(x.get("state"), x.get("why")) for x in (st1, st2, st3, st4)] + " %s" % cap)
+
+    print("== M3: an upload piece's work queued once (tally_upload_advance)")
+    J = db.one("insert into tally_jobs (firm_id, client_id, book_id, kind, sealed, total, status, upload) values (%s, 'c1', %s, 'upload', true, 10, 'running', '{\"path\": \"x\", \"at\": \"main:0\"}') returning id" % (q(F), q(B1)))
+    nwork = lambda: db.one("select count(*) from pgmq.q_tally_work where message->>'job' = %s" % q(J))
+    msgs = [{"job": J, "firm": F, "book": B1, "days": [{"day": "20260401", "gz": ""}]}, {"job": J, "firm": F, "book": B1, "upload": {"from": 100}}]
+    adv = lambda at, nxt, ms, late: j("select tally_upload_advance(%s, %s, %s, %s, %d)::text" % (q(J), q(at), q(nxt), js(ms), late))
+    a1, a2 = adv("main:0", "main:100", msgs, 0), adv("main:0", "main:100", msgs, 0)
+    ok(a1.get("moved") is True and a2.get("moved") is False and nwork() == "2" and db.one("select upload->>'at' from tally_jobs where id = %s" % q(J)) == "main:100",
+       "M3. a piece run twice: its days and next piece queued once, the cursor moved once (%s / %s; %s queued)" % (a1, a2, nwork()))
+    a3, a4 = adv("main:100", "end", msgs[:1], 3), adv("main:100", "end", msgs[:1], 3)
+    ok(a3.get("moved") is True and a4.get("moved") is False and db.one("select total from tally_jobs where id = %s" % q(J)) == "13", "M3. the late days added to the total once (13) (%s / %s)" % (a3, a4))
+    ok(as_user(OWNER, "select tally_upload_advance(%s, 'end', 'x', '[]'::jsonb, 0)::text" % q(J))[0] is False, "M3. tally_upload_advance refused to a signed-in owner")
+
+    print("== L6: no JWT is not enough: only the owner's own logins pass")
+    db.sql("do $$ begin if not exists (select 1 from pg_roles where rolname = 'l6_login') then create role l6_login login; end if; end $$; grant usage on schema auth, public to l6_login; grant execute on function public.tally_recorder_drain(integer) to l6_login;")
+    db.sql("alter function auth.role() rename to role_stand; create function auth.role() returns text language sql stable as $$ select null::text $$; grant execute on function auth.role() to public;")
+    r6 = subprocess.run(["runuser", "-u", "postgres", "--", pg_stand.BIN + "/psql", "-h", "127.0.0.1", "-p", str(db.port), "-U", "l6_login", "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-q", "-c", "select public.tally_recorder_drain(1000)"],
+                        capture_output=True, text=True)
+    as_cron = cron_run("select public.tally_recorder_drain(1000);")
+    db.sql("drop function auth.role(); alter function auth.role_stand() rename to role; revoke execute on function public.tally_recorder_drain(integer) from l6_login;")
+    ok(r6.returncode != 0 and "not allowed" in r6.stderr and as_cron == "ok", "L6. another login with EXECUTE and no JWT (auth.role() null): 'not allowed'; the owner's login (pg_cron) still runs it (%s; %s)" % (r6.stderr.strip()[-80:], as_cron))
+
+    print("== L7: one firm's bad data never stops an alert job for the others")
+    silent_def = db.one("select pg_get_functiondef('public.tally_recorder_silent(uuid)'::regprocedure)")
+    db.sql("""create or replace function public.tally_recorder_silent(p_firm uuid) returns jsonb language sql security definer set search_path = public, pg_temp as $$
+      select case when p_firm = %s then '{"silent": [{"device": "not-a-uuid", "name": "BAD"}]}'::jsonb else jsonb_build_object('silent', jsonb_build_array(jsonb_build_object('device', %s, 'name', 'NWS145', 'workingHours', 3))) end $$""" % (q(F2), q(D2)))
+    db.sql("create or replace function public.tally_alert_working_now(p_at timestamptz) returns boolean language sql as $$ select true $$")
+    db.sql("delete from tally_alerts where kind = 'silent'")
+    r7 = j("select tally_alert_scan_silent()::text")
+    db.sql(silent_def)
+    ok(r7.get("ok") is True and r7.get("firmsFailed") == 1 and db.one("select count(*) from tally_alerts where kind = 'silent' and device_id = %s" % q(D2)) == "1",
+       "L7. scan_silent: the other firm's bad answer counted (firmsFailed 1), this firm's alert written (%s)" % r7)
+    db.sql("insert into tally_sync_cursor (book_id, firm_id) values (%s, %s) on conflict do nothing; update tally_sync_cursor set gap = '{\"missing\": 3, \"words\": \"up to 3\"}' where book_id = %s;" % (q(B9), q(F2), q(B9)))
+    db.sql("""create or replace function public.test_alert_boom() returns trigger language plpgsql as $$ begin if new.firm_id = %s then raise exception 'bad row (test)'; end if; return new; end $$;
+              create trigger test_alert_boom before insert or update on public.tally_alerts for each row execute function public.test_alert_boom();""" % q(F2))
+    r7 = j("select tally_alert_scan_gaps()::text")
+    db.sql("drop trigger test_alert_boom on public.tally_alerts; update tally_sync_cursor set gap = null where book_id = %s;" % q(B9))
+    ok(r7.get("ok") is True and r7.get("firmsFailed") == 1, "L7. scan_gaps: one firm's unwritable alert counted, the job goes on (%s)" % r7)
+
+    print("== L8: authenticated holds SELECT only on the new tables")
+    gr8 = sorted(set(x["p"] for x in db.rows("select privilege_type as p from information_schema.role_table_grants where grantee = 'authenticated' and table_schema = 'public' and table_name in ('tally_alerts', 'tally_recorder_failures')")))
+    gr8b = db.one("select count(*) from information_schema.role_table_grants where grantee in ('anon', 'authenticated') and table_name = 'tally_recorder_pending'")
+    ok(gr8 == ["SELECT"] and gr8b == "0", "L8. under Supabase's default grants: tally_alerts / tally_recorder_failures SELECT only (revoke all, so PG17's MAINTAIN too); tally_recorder_pending nothing (%s; %s)" % (gr8, gr8b))
+
+    print("== M7: a kind CHECK that is not migration 13's is never swapped blindly")
+    db.sql("delete from tally_jobs where kind = 'upload'; alter table public.tally_jobs drop constraint tally_jobs_kind_check, add constraint tally_jobs_kind_check check (kind in ('daybook', 'reparse', 'manual'));")
+    r = psql_file(M47)
+    kd = db.one("select pg_get_constraintdef(oid) from pg_constraint where conname = 'tally_jobs_kind_check'")
+    ok(r.returncode != 0 and "by hand" in r.stderr and "manual" in kd and "upload" not in kd, "M7. a hand-widened kind CHECK (daybook, reparse, manual): 47 stops with words, nothing changed (%s; %s)" % ((r.stderr or "").strip().splitlines()[-1][-160:] if r.stderr else "", kd))
 finally:
     db.stop()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); sys.exit(1 if fails else 0)

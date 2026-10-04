@@ -19,6 +19,15 @@ BCAST = []            # the Realtime broadcasts sent (POST /realtime/v1/api/broa
 ARGS = {}             # function -> the arguments of each call (the names sent to the ingest functions, migration-23)
 SECRETS = {}          # Vault: name -> value (gsp_secret_put / gsp_secret_get, migration-16)
 CRON_KEY = "cron-key-" + "d" * 32
+# round 21 (docs/reviews/migration-47-48-review.md): hooks for the upload worker's failure cases
+LOCK = threading.Lock()   # a PATCH and tally_upload_advance are atomic, as one SQL statement / transaction is
+HEAD_DELAY = [0.0]        # seconds a Range bytes=0-0 GET waits before answering (two upload_done calls then overlap)
+IGNORE_RANGE = [False]    # Storage answers 200 with the whole object, ignoring Range
+SENT = []                 # (bucket/path, bytes written) of each 200 whole-object answer (stops when the client hangs up)
+STORAGE_FAIL = {}         # {status, body, n}: the next n Storage GETs answer this
+FAIL_INSERT = {}          # table -> {message, code}: a POST answers this PostgREST error
+FAIL_DONE = {"upload": 0} # the next n tally_work_done of an upload piece fail
+FAIL_DAY = {}             # day -> n: the next n calls queuing a day file of that day fail (tally_work_send / tally_upload_advance)
 PK = {"gst_sessions": ["firm_id", "gstin"], "gst_returns": ["firm_id", "gstin", "form", "period"], "gst_einv_accounts": ["firm_id", "gstin"], "gst_einvoices": ["firm_id", "gstin", "doc_key"]}
 ids = itertools.count(1)
 def now(): return time.time()
@@ -46,7 +55,21 @@ def rpc(fn, a):
         d = a["p_day"].replace("-", "")
         if FAIL.get(d, 0) > 0: FAIL[d] -= 1; raise RuntimeError("the database is busy (test)")
         DAYS.append((a["p_book"], d, a["p_n"])); return {"ok": True}
-    if fn == "tally_work_send": m = next(ids); QUEUE.append({"msg_id": m, "vt": 0, "read_ct": 0, "message": a["p_msg"], "archived": False}); return m
+    if fn == "tally_work_send":
+        fail_day([a["p_msg"]])
+        m = next(ids); QUEUE.append({"msg_id": m, "vt": 0, "read_ct": 0, "message": a["p_msg"], "archived": False}); return m
+    if fn == "tally_upload_advance":          # migration 47 (review M3): the piece's messages queued once, the cursor moved, in one go
+        with LOCK:
+            j = next((x for x in T["tally_jobs"] if x["id"] == a["p_job"] and x.get("kind") == "upload"), None)
+            if not j: raise RuntimeError("no such upload")
+            up = j.get("upload") or {}
+            if "at" in up and up["at"] != a["p_at"]: return {"ok": True, "moved": False, "at": up["at"]}
+            msgs = a.get("p_msgs") or []
+            if any(not isinstance(m_, dict) or m_.get("job") != a["p_job"] for m_ in msgs): raise RuntimeError("a piece of another job")
+            fail_day(msgs)
+            for m_ in msgs: QUEUE.append({"msg_id": next(ids), "vt": 0, "read_ct": 0, "message": m_, "archived": False})
+            j["upload"] = dict(up, at=a.get("p_next") or "end"); j["total"] = j.get("total", 0) + max(0, a.get("p_late") or 0)
+            return {"ok": True, "moved": True, "sent": len(msgs)}
     if fn == "tally_work_read":
         out = []
         for q in QUEUE:
@@ -54,6 +77,9 @@ def rpc(fn, a):
             if not q["archived"] and q["vt"] <= now(): q["vt"] = now() + a["p_vt"]; q["read_ct"] += 1; out.append({"msg_id": q["msg_id"], "read_ct": q["read_ct"], "message": q["message"]})
         return out
     if fn == "tally_work_done":
+        q0 = next((q for q in QUEUE if q["msg_id"] == a["p_msg"]), None)
+        if q0 and isinstance((q0["message"] or {}).get("upload"), dict) and FAIL_DONE["upload"] > 0:
+            FAIL_DONE["upload"] -= 1; raise RuntimeError("the database is busy (test)")
         for q in QUEUE:
             if q["msg_id"] == a["p_msg"]: q["archived"] = True
         return True
@@ -75,6 +101,10 @@ def rpc(fn, a):
             if j["device_id"] == a["p_device"] and j["status"] == "waiting": j["status"] = "taken"; return [j]
         return []
     raise RuntimeError("no such function " + fn)
+def fail_day(msgs):
+    for m_ in msgs:
+        for d in ((m_ or {}).get("days") or []):
+            if FAIL_DAY.get(d.get("day"), 0) > 0: FAIL_DAY[d["day"]] -= 1; raise RuntimeError("the database is busy (test)")
 class H(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def send(self, code, obj=None, headers=None, raw=None):
@@ -107,6 +137,8 @@ class H(http.server.BaseHTTPRequestHandler):
                     return self.send(200, None if method == "HEAD" else hit, {"Content-Range": "*/%d" % len(hit)})
                 if single: return self.send(200, hit[0]) if len(hit) == 1 else self.send(406, {"message": "not one row"})
                 return self.send(200, hit)
+            if method == "POST" and t in FAIL_INSERT:
+                return self.send(400, dict(FAIL_INSERT[t], details=None, hint=None))
             if method == "POST":
                 data = json.loads(raw); data = data if isinstance(data, list) else [data]; out = []
                 keys = (q.get("on_conflict") or [""])[0].split(",") if q.get("on_conflict") else PK.get(t)
@@ -121,9 +153,12 @@ class H(http.server.BaseHTTPRequestHandler):
                     return self.send(201, out[0] if single else out)
                 return self.send(201)
             if method == "PATCH":
-                d = json.loads(raw)
-                for r in rows:
-                    if match(r, q): r.update(d)
+                d = json.loads(raw); hit = []
+                with LOCK:                                   # one UPDATE ... WHERE ... RETURNING: atomic
+                    for r in rows:
+                        if match(r, q): r.update(d); hit.append(r)
+                if "return=representation" in (self.headers.get("Prefer") or ""):
+                    return self.send(200, hit[0] if single and hit else hit)
                 return self.send(204)
         if path == "/realtime/v1/api/broadcast":                      # the firm's broadcast channel (index.ts broadcast()): the messages kept for the tests
             try: BCAST.append(json.loads(raw or b"{}"))
@@ -138,6 +173,16 @@ class H(http.server.BaseHTTPRequestHandler):
             if method == "POST" or method == "PUT": FILES[key] = raw; return self.send(200, {"Key": key})
             if method == "GET":
                 if key not in FILES: return self.send(404, {"message": "not found"})
+                if STORAGE_FAIL.get("n", 0) > 0:
+                    STORAGE_FAIL["n"] -= 1; return self.send(STORAGE_FAIL["status"], raw=STORAGE_FAIL["body"].encode(), headers={"Content-Type": "text/plain"})
+                if (self.headers.get("Range") or "").strip() == "bytes=0-0" and HEAD_DELAY[0]: time.sleep(HEAD_DELAY[0])
+                if IGNORE_RANGE[0] and self.headers.get("Range"):     # a proxy or backend that ignores Range: the whole object, 200
+                    data = FILES[key]; RANGES.append((key, 0, len(data) - 1)); n = 0
+                    self.send_response(200); self.send_header("Content-Type", "application/octet-stream"); self.send_header("Content-Length", str(len(data))); self.end_headers()
+                    try:
+                        for i in range(0, len(data), 65536): self.wfile.write(data[i:i + 65536]); n += len(data[i:i + 65536])
+                    except (BrokenPipeError, ConnectionResetError, OSError): pass
+                    SENT.append((key, n)); self.close_connection = True; return
                 rg = re.match(r"bytes=(\d+)-(\d*)$", (self.headers.get("Range") or "").strip())
                 if rg:                                                    # a byte range (tally-ingest's upload worker, round 20)
                     data = FILES[key]; a = int(rg.group(1)); b = int(rg.group(2)) if rg.group(2) else len(data) - 1

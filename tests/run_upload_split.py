@@ -154,11 +154,11 @@ def rpc(name, a):
     return real_rpc(name, a)
 FS.rpc = rpc
 fn = None; log = []
-def start_fn(piece):
+def start_fn(piece, **extra):
     global fn, log
     if fn: fn.terminate(); fn.wait()
     log = []
-    env = dict(os.environ, SUPABASE_URL="http://127.0.0.1:%d" % FS.PORT, SUPABASE_SERVICE_ROLE_KEY=FS.SERVICE, SUPABASE_ANON_KEY="anon-key", TALLY_WORK_VT="3", TALLY_UPLOAD_PIECE=str(piece))
+    env = dict(os.environ, SUPABASE_URL="http://127.0.0.1:%d" % FS.PORT, SUPABASE_SERVICE_ROLE_KEY=FS.SERVICE, SUPABASE_ANON_KEY="anon-key", TALLY_WORK_VT="3", TALLY_UPLOAD_PIECE=str(piece), **extra)
     fn = subprocess.Popen([DENO, "run", "--allow-net", "--allow-env", "--allow-read", os.path.join(SQLDIR, "index.ts")], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     lg = log
     threading.Thread(target=lambda: [lg.append(l) for l in fn.stdout], daemon=True).start()
@@ -282,6 +282,85 @@ try:
     got = same_as_browser("B out of date order", p, job, allow_again=True)
     again = sorted(d for d, v in got.items() if len(v) > 1)
     ok(again and jrow(job).get("total") == 365 + len(again) and jrow(job).get("done") == jrow(job).get("total"), "B out of date order: the days met again (%s) read again whole; the job counts them (%s of %s)" % (again, jrow(job).get("done"), jrow(job).get("total")))
+    # ---------------------------------------------------------------- (D) round 21: docs/reviews/migration-47-48-review.md M2-M5, L2-L5
+    print("== D. review 47/48: the upload worker's failure cases")
+    firsts = lambda job: [x for x in FS.QUEUE if (x["message"] or {}).get("job") == job and isinstance((x["message"] or {}).get("upload"), dict) and not (x["message"]["upload"].get("from") or 0)]
+    small = encode(make_book(2 * 1024 * 1024, seed=21, tag="d"), "utf-8", False)
+    # M2: two upload_done at once (a double click, a retry after a timeout): the split queued once
+    c, r = call({"kind": "upload_new", "client": CID, "name": "m2.xml", "size": len(small), "from": "20260401", "to": "20270331"})
+    jm2 = r.get("job"); FS.FILES["tally-uploads/" + str(r.get("path"))] = small
+    FS.HEAD_DELAY[0] = 0.6; outs = []
+    th = [threading.Thread(target=lambda: outs.append(call({"kind": "upload_done", "client": CID, "job": jm2, "path": r.get("path")}))) for _ in range(2)]
+    [t.start() for t in th]; [t.join() for t in th]; FS.HEAD_DELAY[0] = 0.0
+    ok(sorted(o[0] for o in outs) == [200, 200] and len(firsts(jm2)) == 1 and sum(1 for o in outs if o[1].get("already")) == 1,
+       "M2. two upload_done at once: one seals and queues the split, the other is answered 'already' (%d first pieces; %s)" % (len(firsts(jm2)), [o[1] for o in outs]))
+    ok(work_until_done(jm2, 120) and jrow(jm2).get("status") == "done" and jrow(jm2).get("done") == jrow(jm2).get("total") == 365, "M2. the job done once: %s of %s days" % (jrow(jm2).get("done"), jrow(jm2).get("total")))
+    # M3 (A): a piece killed after queuing its work, before its message was archived: run again, it queues nothing twice
+    FS.FAIL_DONE["upload"] = 2
+    c, r, c2, r2, jm3, path = upload("m3.xml", small)
+    ok(work_until_done(jm3, 120) and jrow(jm3).get("status") == "done" and jrow(jm3).get("done") == jrow(jm3).get("total") == 365 and FS.FAIL_DONE["upload"] == 0,
+       "M3. two pieces whose archive failed (seen again after their time): the job done, %s of %s days" % (jrow(jm3).get("done"), jrow(jm3).get("total")))
+    pM3 = os.path.join(TMP, "m3.xml"); open(pM3, "wb").write(small)
+    same_as_browser("M3 (pieces run twice)", pM3, jm3)
+    # M3 (B): the last piece of a file out of date order fails after its total was raised: the late days counted once
+    sh = encode(make_book(2 * 1024 * 1024, seed=23, shuffle=True, tag="e"), "utf-16le", True)
+    FS.FAIL_DAY["20270331"] = 1
+    c, r, c2, r2, jm3b, path = upload("m3b.xml", sh)
+    pM3b = os.path.join(TMP, "m3b.xml"); open(pM3b, "wb").write(sh)
+    got = server_days(jm3b) if work_until_done(jm3b, 90) else {}
+    again = sorted(d for d, v in server_days(jm3b).items() if len(v) > 1)
+    ok(jrow(jm3b).get("status") == "done" and again and jrow(jm3b).get("total") == 365 + len(again) and jrow(jm3b).get("done") == jrow(jm3b).get("total"),
+       "M3. a late pass whose last piece failed once and ran again: the total raised once (%s of %s; %d days read again)" % (jrow(jm3b).get("done"), jrow(jm3b).get("total"), len(again)))
+    # M4: a Storage path that ignores Range never puts the whole file into memory
+    big = encode(make_book(60 * 1024 * 1024, seed=24, tag="f"), "utf-8", False)
+    FS.IGNORE_RANGE[0] = True; n_s = len(FS.SENT)
+    c, r, c2, r2, jm4, path = upload("m4.xml", big)
+    head = [n for k_, n in FS.SENT[n_s:] if k_ == "tally-uploads/" + str(path)][:1]
+    ok(c2 == 200 and head and head[0] < len(big) // 2, "M4. upload_done against a Storage that ignores Range: answered from the first bytes, the rest not read (%s of %d bytes sent) (%s)" % (head, len(big), c2))
+    work_until_done(jm4, 60); FS.IGNORE_RANGE[0] = False
+    ok(jrow(jm4).get("status") == "failed" and "byte range" in (jrow(jm4).get("message") or "") and all(n < len(big) // 2 for k_, n in FS.SENT[n_s:]),
+       "M4. its pieces: never the whole object, the job stopped at once with words (%s; %s)" % (jrow(jm4).get("message"), [n for _, n in FS.SENT[n_s:]][:6]))
+    # M5: one entry longer than the carried tail's cap: the job stops with words, no memory growth
+    ok(start_fn(PIECE_B, TALLY_UPLOAD_MAX_TAIL="200000") is not None, "the cloud function again, the carried tail capped at 200,000 characters")
+    tb = make_book(2 * 1024 * 1024, seed=25, tag="g"); k_ = tb.index("<NARRATION>", len(tb) // 2) + len("<NARRATION>")
+    huge = encode(tb[:k_] + "x" * 1500000 + tb[k_:], "utf-8", False)
+    c, r, c2, r2, jm5, path = upload("m5.xml", huge)
+    t0 = time.time()
+    stopped = until(lambda: (call({"kind": "work"}, tok=None, headers={"x-fincom-work": FS.WORK_KEY}) and False) or "larger than" in (jrow(jm5).get("message") or ""), 30, 0.3)
+    ok(stopped and "larger than" in (jrow(jm5).get("message") or "") and time.time() - t0 < 30,
+       "M5. an entry of 1.5 M characters over the 200,000 cap: the job stopped at once with words (%s, %.0f s)" % (jrow(jm5).get("message"), time.time() - t0))
+    work_until_done(jm5, 20)            # the day files queued before it are read (migration 13's tally_job_step then shows 'running' again: noted in the review)
+    ok(start_fn(PIECE_B) is not None, "the cloud function again, pieces of 1,000,003 bytes")
+    # L2: a piece naming another file than its job's is not read
+    c, r = call({"kind": "upload_new", "client": CID, "name": "l2.xml", "size": len(small), "from": "20260401", "to": "20270331"})
+    jl2 = r.get("job"); FS.FILES["tally-uploads/%s/other.xml" % FIRM] = small; n_r = len(FS.RANGES)
+    rpc("tally_work_send", {"p_msg": {"job": jl2, "firm": FIRM, "book": BOOK, "upload": {"path": FIRM + "/other.xml", "size": len(small), "from": 0, "range": {"from": "20260401", "to": "20270331"}}}})
+    work_until_done(jl2, 30)
+    ok(jrow(jl2).get("status") == "failed" and not [x for x in FS.RANGES[n_r:] if x[0].endswith("/other.xml")], "L2. a piece whose path is not '<firm>/<job>.xml': not read, the job stopped with words (%s)" % jrow(jl2).get("message"))
+    # L3: the job's book, not the client's company linked now
+    c, r = call({"kind": "upload_new", "client": CID, "name": "l3.xml", "size": len(small), "from": "20260401", "to": "20270331"})
+    jl3 = r.get("job"); FS.FILES["tally-uploads/" + str(r.get("path"))] = small
+    co_ = next(x for x in FS.T["tally_companies"] if x["client_id"] == CID); co_["book_id"] = "b-relinked"
+    c2, r2 = call({"kind": "upload_done", "client": CID, "job": jl3, "path": r.get("path")})
+    co_["book_id"] = BOOK
+    ok(c2 == 200 and [x["message"].get("book") for x in firsts(jl3)] == [BOOK], "L3. the company re-linked between upload_new and upload_done: the split reads into the job's book (%s)" % [x["message"].get("book") for x in firsts(jl3)])
+    work_until_done(jl3, 120)
+    # L4: only the real 'no kind upload' errors are 'unknown kind'
+    FS.FAIL_INSERT["tally_jobs"] = {"message": 'null value in column "created_by" of relation "tally_jobs" violates not-null constraint', "code": "23502"}
+    c4, r4 = call({"kind": "upload_new", "client": CID, "name": "l4.xml", "size": 10, "from": "20260401", "to": "20270331"})
+    FS.FAIL_INSERT["tally_jobs"] = {"message": 'new row for relation "tally_jobs" violates check constraint "tally_jobs_kind_check"', "code": "23514"}
+    c5, r5 = call({"kind": "upload_new", "client": CID, "name": "l4.xml", "size": 10, "from": "20260401", "to": "20270331"})
+    FS.FAIL_INSERT.clear()
+    ok(c4 == 500 and "unknown kind" not in str(r4.get("error")) and "created_by" not in str(r4.get("error")) and c5 == 400 and "unknown kind" in str(r5.get("error")),
+       "L4. a not-null error is a 500 with plain words, not 'unknown kind'; the kind check's own error is (%s %s / %s %s)" % (c4, r4.get("error"), c5, r5.get("error")))
+    # L5: Storage's own error text stays in the log
+    c, r = call({"kind": "upload_new", "client": CID, "name": "l5.xml", "size": len(small), "from": "20260401", "to": "20270331"})
+    FS.FILES["tally-uploads/" + str(r.get("path"))] = small
+    FS.STORAGE_FAIL.update({"status": 500, "body": "secret-detail-xyz from the backend", "n": 1})
+    c2, r2 = call({"kind": "upload_done", "client": CID, "job": r.get("job"), "path": r.get("path")})
+    FS.STORAGE_FAIL.clear()
+    ok(c2 == 500 and "secret-detail" not in json.dumps(r2) and r2.get("error"), "L5. Storage answering 500 with its own text: the person reads plain words (%s)" % r2.get("error"))
+
     # ---------------------------------------------------------------- (C) the same file twice through the real day path
     print("== C. the same file twice, through tally_ingest_day on a throwaway PostgreSQL")
     db.sql(part(os.path.join(HERE, "run_migration33.py"), "SCHEMA")); db.sql(part(os.path.join(HERE, "run_migration35.py"), "SCHEMA")); db.sql(part(os.path.join(HERE, "run_migration37.py"), "SCHEMA_X"))

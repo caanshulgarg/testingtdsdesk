@@ -18,6 +18,48 @@ The tests use a **stub** of pgmq (`tests/run_migration47.py:42-65`), so the real
 
 ---
 
+## Status after round 21 (04-Oct-2026, not committed)
+
+Fixed test-first: each red is saved as `c21.<n>.red` in the session's `scratchpad/tdd` folder; 1 = run_migration47, 2 =
+run_recorder_server, 3 = run_upload_split, 4 = run_migration48, 5 = run_migration_order (the old 47/48 cannot run the new
+compared texts). **`run_migration47.py` now runs on the real pgmq 1.5.1.** Its plain-SQL `pgmq.sql` is fetched from GitHub
+and installed as an extension of pg_stand. When that is not possible it falls back to the stand-in, and the first line of
+the output says which was used. The stand-in run passes too (`PGMQ_STUB=1`). The other suites keep the stand-in, which now
+has `pgmq.set_vt`.
+
+| Finding | Status | Where | Test (name in the output) |
+|---|---|---|---|
+| H1 | **Fixed** | 47: `tally_recorder_pending` (written by enqueue, marked by the drain; partial index on `(book_id, msg_id) where state = 'pending'`); `tally_recorder_send` (queues while the book has a pending message, else applies; one lock per book); the drain takes a book's messages in order (a later one waits; waiting is not a try); on the final failure: lines into `tally_recorder_lines` as `failed` with words, a `gap` alert at once, the gap check counts them (`lost`); index.ts: one call, `tally_recorder_send` | run_migration47 "H1. ..." (8 checks); run_recorder_server "R21-H1. ..." (4 checks, through tally-ingest) |
+| M1 | **Fixed** | 47: `tally_recorder_take` counts the try on `tally_recorder_pending`; pg_cron calls the procedure `tally_recorder_drain_run`, which COMMITs after each read and after each message. Each message runs in its own subtransaction with its own `lock_timeout`, inside the budget. A cancel (57014) is caught, counted and ends the run. On the 5th try the message is archived with words. The visibility time is 60 s, longer than the 25 s cap | run_migration47 "M1. ..." (a 2 s statement timeout on 5 runs: counted 1..5, archived "did not finish in time", the message before it kept; a lock wait fails by itself in 3.0 s, counted "busy") |
+| M2 | **Fixed** | index.ts upload_done: one conditional `update ... eq(sealed, false) ... select`; only the winner queues | run_upload_split "M2. ..." |
+| M3 | **Fixed** | 47 `tally_upload_advance`: a piece's day files and next piece are queued in one transaction, keyed by the job's cursor (`upload->>'at'`). The late days are added to the total in the same step. index.ts sends everything through it | run_migration47 "M3. ..."; run_upload_split "M3. ..." (archive failed twice: each day once; late pass failed once: total raised once) |
+| M4 | **Fixed** | index.ts `storageRange`: on a 200, reads from the start only, at most the bytes asked, then cancels; from further on it stops the job (Fatal) with words | run_upload_split "M4. ..." (1.2 MB of 41.7 MB sent; the job stopped with words) |
+| M5 | **Fixed** | index.ts: the carried tail is capped (`TALLY_UPLOAD_MAX_TAIL`, default 2 M characters) and `MAX_CARRY` lowered 24 M -> 6 M; either stops the job at once with words (Fatal) | run_upload_split "M5. ..." |
+| M6 | **Fixed** | 47: `revoke all` on `pgmq.q_/a_tally_recorder` (and the msg_id sequence) from public, anon, authenticated, and RLS on (owner only). Retention is in **48**, because 47 holds no `delete from`: `tally_recorder_archive_trim` (pg_cron daily, 90 days) | run_migration47 "M6. ..." (under Supabase-like default grants in pgmq); run_migration48 "M6. ..." |
+| M7 | **Fixed** | 47: swaps only the CHECK whose text is exactly migration 13's; otherwise stops the file with words; another CHECK naming kind is left untouched | run_migration47 "M7. ..." (2 checks; the red showed the old `limit 1` replacing the wrong constraint) |
+| M8 | **Fixed** | 47 and 48 `tally_recorder_line`: a rename by `ledger_altered` needs an AlterID above `tally_ledgers.alter_id` (added), else `stale`; never a merge (held); no AlterID: held. Applied renames (`ledger_renamed` too) stamp it | run_migration47 "M8. ..."; run_migration48 "M8. ..." |
+| L1 | Left | Not in this round's scope (storage hygiene only, not confidentiality). Cheap follow-up: `alter policy tally_uploads_add ... with check (name ~ ...)` plus `allowed_mime_types` | |
+| L2 | **Fixed** | index.ts: only `<firm>/<job>.xml` is read; anything else stops the job with words | run_upload_split "L2. ..." |
+| L3 | **Fixed** | index.ts upload_done: the job's `book_id` (logged when the link moved) | run_upload_split "L3. ..." |
+| L4 | **Fixed** | index.ts upload_new: "unknown kind" only for `42703`, `PGRST204` or `tally_jobs_kind_check`; anything else is a 500 with plain words | run_upload_split "L4. ..." |
+| L5 | **Fixed** (new code) | 47 `tally_recorder_why`: plain words for the failure row, the lines and the alert; the raw error goes to the server log (`raise log`). index.ts `dbFail`: the raw text goes to the function log; Storage's body is never in a message. The older top-level `error.message` pattern (1548/1971) is left as it was | run_migration47 "L5. ..." / "H1/L5. ..."; run_upload_split "L5. ..." |
+| L6 | **Fixed** | 47 `tally_service_or_owner()`: the service role's JWT, or no JWT only for session_user `postgres` / `supabase_admin` (inside a definer function current_user is always the owner). Used by 47's service functions, 47's gap check, and 48's apply and 4-argument entry path | run_migration47 "L6. ..."; run_migration48 "L6. ..." |
+| L7 | **Fixed** | 47: each alert job runs each firm in its own block (logged, counted as `firmsFailed`) | run_migration47 "L7. ..." (silent, gaps) |
+| L8 | **Fixed** | 47: `revoke all` then `grant select`. On PG17 `all` includes MAINTAIN, so no version check is needed (pg_stand is PG16, which has no MAINTAIN, so no red is possible there) | run_migration47 "L8. ..." |
+| L9 | **Fixed** | 48 apply: `left(btrim(...), 7)` | run_migration48 "L9. ..." |
+| L10 | **Fixed** | 48: the 4-argument form is granted to nobody. Only the 3-argument form and `tally_recorder_line` (both run as the owner) reach it | run_migration48 "grants: ..." |
+
+The owner's condition still holds (run_migration48, old 47 against new 47+48, md5 of the full `tally_ledger_day`):
+send 1 `c222adcd1347c4443c51076936f68873` (208 rows), send 2 `cd3bc3f97bdf2ee176676dd5ff984b38` (128 rows, 19.32 s ->
+3.55 s), send 3 queued `27582c4067cb94c89384b0093c90c159` (346 rows), held line released
+`24ccc41b7dc5666c92daf075acdee6ea` (352 rows). Every trial balance totals 0.00, and old and new are identical.
+
+New, not fixed (migration 13's text): `tally_job_step` sets a **failed** job back to `running` when day pieces queued
+before the failure finish afterwards (the message keeps the words). This affects the 5-tries stop and the new immediate
+stops alike. Fix: `status = case when status = 'failed' then 'failed' ...` in a later migration.
+
+---
+
 ## High
 
 ### H1. A failed queued send is lost silently, because a later direct send has already raised the gap check's baseline

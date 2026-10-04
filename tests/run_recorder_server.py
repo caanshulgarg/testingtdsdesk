@@ -94,7 +94,7 @@ try:
     real = FS.rpc
     name_is_array = [False]
     def rpc(name, a):
-        if name in ("tally_recorder_apply", "tally_start_point", "tally_recorder_gap_check", "tally_post_window_save", "tally_post_xml_for", "tally_post_id_accept_reply", "tally_post_id_accept", "tally_recorder_short_held", "tally_recorder_short_retry", "tally_recorder_enqueue"):
+        if name in ("tally_recorder_apply", "tally_start_point", "tally_recorder_gap_check", "tally_post_window_save", "tally_post_xml_for", "tally_post_id_accept_reply", "tally_post_id_accept", "tally_recorder_short_held", "tally_recorder_short_retry", "tally_recorder_enqueue", "tally_recorder_send"):
             FS.ARGS.setdefault(name, []).append(a)
             name_is_array[0] = name == "tally_post_xml_for"
             try: return json.loads(db.one("select public.%s(%s)::text" % (name, ", ".join("%s => %s" % (k, lit(v)) for k, v in a.items()))))
@@ -494,7 +494,8 @@ try:
     # ---------------------------------------------------------------- round 20 (migration 47): the recorder queue; the beat's recorderSource
     BQ = "1a0aaaaa-2222-2222-2222-222222222222"; newbook(BQ, "ZZ QUEUE")
     recq = lambda lines, key=KA: call({"kind": "recorder_lines", "company": "ZZ QUEUE", "version": "2.2.0", "bridge": GA, "lines": lines}, key)
-    nq = lambda: len(FS.ARGS.get("tally_recorder_enqueue", []))
+    queued_calls = lambda: [a for a in FS.ARGS.get("tally_recorder_send", []) if a.get("p_queue")] + FS.ARGS.get("tally_recorder_enqueue", [])
+    nq = lambda: len(queued_calls())
     qst = lambda prefix: [(x["line_id"], x["state"]) for x in db.rows("select line_id, state from tally_recorder_lines where book_id = %s and line_id like %s order by id" % (q(BQ), q(prefix + "%")))]
     vq = lambda g: (db.rows("select alter_id, deleted_at from tally_vouchers where book_id = %s and guid = %s" % (q(BQ), q(g))) or [{}])[0]
     n0 = nq()
@@ -508,7 +509,7 @@ try:
     res = {x.get("line_id"): x.get("state") for x in r.get("results") or []}
     ok(c == 200 and r.get("ok") is True and r.get("queued") == 61 and r.get("failed") == 1 and nq() == n0 + 1 and qst("Q") == [] and res.get("Q00") == "queued" and res.get("Qbad") == "failed",
        "20. 61 full lines (and a bad one): one message on the queue, answered {queued: 61} at once (%.2f s), the bad line failed, nothing applied yet (%s)" % (took, {k: r.get(k) for k in ("queued", "failed", "applied")}))
-    sent = (FS.ARGS.get("tally_recorder_enqueue") or [{}])[-1]
+    sent = (queued_calls() or [{}])[-1]
     ok(sent.get("p_book") == BQ and sent.get("p_device") == DA and len(sent.get("p_lines") or []) == 61 and (sent["p_lines"][0].get("vouchers") or [{}])[0].get("guid") == "qq-0" and "xml" not in sent["p_lines"][0]
        and (sent["p_lines"][0].get("lines") or [[None]])[0][0] == "qq-0", "20. the message holds the cleaned lines with their bodies read (parse.js), not the XML")
     d = json.loads(db.one("select tally_recorder_drain(20000)::text"))
@@ -518,7 +519,7 @@ try:
     ok(db.one("select count(*) from pgmq.a_tally_recorder") == "1" and db.one("select count(*) from pgmq.q_tally_recorder") == "0", "20. the message archived")
     real20 = FS.rpc
     def no47(name, a):
-        if name == "tally_recorder_enqueue": raise RuntimeError("Could not find the function public.tally_recorder_enqueue(p_book, p_device, p_firm, p_lines) in the schema cache")
+        if name in ("tally_recorder_enqueue", "tally_recorder_send"): raise RuntimeError("Could not find the function public.%s(p_book, p_device, p_firm, p_lines) in the schema cache" % name)
         return real20(name, a)
     FS.rpc = no47; n_log = len(log)
     c, r = recq([line("F%02d" % i, "created", "qf-%d" % i, 5000 + i, amt=1) for i in range(55)])
@@ -551,6 +552,30 @@ try:
             d = json.loads(db.one("select tally_recorder_drain(20000)::text")); ok(d.get("done") == 1, "20. ... and the drain applies it (%s)" % d)
     else:
         print("  (20: tests/fixtures/recorder-lines-2.2.0.json not there yet: the bridge's own body is not fed)")
+
+    # ---------------------------------------------------------------- round 21 (docs/reviews/migration-47-48-review.md H1): a book's order through tally-ingest
+    BO = "1a2aaaaa-2222-2222-2222-222222222222"; newbook(BO, "ZZ ORDER")
+    reco = lambda lines: call({"kind": "recorder_lines", "company": "ZZ ORDER", "version": "2.2.0", "bridge": GA, "lines": lines}, KA)
+    ostate = lambda: [(x["line_id"], x["state"]) for x in db.rows("select line_id, state from tally_recorder_lines where book_id = %s order by id" % q(BO))]
+    b10(KA, [co("ZZ ORDER", "cg-o", 7999)])                      # the starting point
+    db.sql("""create or replace function public.test_boom() returns trigger language plpgsql as $$ begin
+                if new.line_id = 'O00' and new.state = 'received' then raise exception 'boom (test)' using errcode = 'XX001'; end if; return new; end $$;
+              create trigger test_boom before insert on public.tally_recorder_lines for each row execute function public.test_boom();""")
+    c1, r1 = reco([line("O%02d" % i, "created", "qo-%d" % i, 8000 + i, amt=1 + i) for i in range(61)])
+    c2, r2 = reco([line("O%02d" % i, "created", "qo-%d" % i, 8000 + i, amt=1) for i in range(61, 64)])
+    ok(c1 == 200 and r1.get("queued") == 61 and c2 == 200 and r2.get("queued") == 3 and ostate() == [],
+       "R21-H1. 61 full lines queued; then 3 lines of the same company while that message is pending: queued behind it, never applied before it (%s / %s)" % ({k: r1.get(k) for k in ("queued", "applied")}, {k: r2.get(k) for k in ("queued", "applied")}))
+    for i in range(5):
+        db.one("select tally_recorder_drain(5000)::text"); db.sql("update pgmq.q_tally_recorder set vt = now() - interval '1 second'")
+    db.sql("drop trigger test_boom on public.tally_recorder_lines")
+    os_ = ostate()
+    ok(os_ == [("O%02d" % i, "failed") for i in range(61)] + [("O%02d" % i, "applied") for i in range(61, 64)],
+       "R21-H1. the queued message fails 5 times: its 61 lines 'failed' with words, then the 3 behind applied (%s ... %s)" % (os_[:1], os_[-4:]))
+    c, r = b10(KA, [co("ZZ ORDER", "cg-o", 8063)])
+    ans = (r.get("recorder") or {}).get("ZZ ORDER") or {}
+    ok(c == 200 and ans.get("missing") == 61 and "queued send" in str((ans.get("gap") or {}).get("words")), "R21-H1. the beat says 8063 (the recorder's highest too): still up to 61 not received, never a silent match (%s)" % {k: ans.get(k) for k in ("missing",)})
+    ok(db.one("select count(*) from tally_alerts where kind = 'gap' and book_id = %s and device_id = %s and words like '%%61 changes%%not applied%%'" % (q(BO), q(DA))) == "1",
+       "R21-H1. a 'gap' alert for ZZ ORDER from PC-A the moment the send failed")
 finally:
     if fn: fn.terminate()
     db.stop()
