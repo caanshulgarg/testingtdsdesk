@@ -58,5 +58,6 @@
  "57-ledger-check.js",
  "59-post-preview.js",
  "58-ledgers.js",
- "60-choices.js"
+ "60-choices.js",
+ "61-recorder.js"
 ]

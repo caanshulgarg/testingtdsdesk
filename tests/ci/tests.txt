@@ -102,6 +102,8 @@ run_react_settings.py                 120
 run_react_txn_dash.py                 120
 run_read_failures.py                  120
 run_receivable_buckets.js             120
+run_recorder_gap.py                   120
+run_recorder_pcs.py                   120
 run_regress.js                        120
 run_review_0110.py                    120
 run_review_fixes.py                   120
@@ -116,12 +118,14 @@ run_staging_ui.py                     120
 run_status_light.py                   180
 run_supinv.py                         120
 run_support_ui.py                     120  TDSDESK_SITE=../app/dist-test
+run_sync_activity.py                  120
 run_tally_computers.py                120
 run_tally_events.py                   120
 run_tally_line_stop.py                120  TDSDESK_SITE=../app/dist-test
 run_tally_states.py                   120
 run_tcloud_ui.py                      120  TDSDESK_SITE=../app/dist-test
 run_tds_accuracy.py                   120
+run_tieout.py                         120
 run_trash_server.py                   120
 run_vendorrecon_e2e.py                120  TDSDESK_SITE=../app/dist-test
 run_migration37.py                    180

@@ -151,7 +151,8 @@ with sync_playwright() as p:
         {id: 'b3785b05', client_id: S.coId, company: 'GARG SHEKHAR & COMPANY', status: 'done', done: 1, n: 1, message: '1 of 1 sent to Tally', created_at: '2026-10-01T10:41:19Z', updated_at: '2026-10-01T10:41:34Z', created_by: 'u-1',
          results: [{id: 'emupeho9q2sijk', ok: true, verified: true, kind: 'voucher', guid: 'g-66b6', vchNumber: 'FA/ELEC/013', vchType: 'Journal', masterId: '26294'}]}];
       Cloud.st.members = [{user_id: 'u-1', name: 'Anshul'}]; CloudJobs.list = null; CloudJobs.at = 0; S.tab = 'done'; S.step = 'done'; render(); }""")
-    E("() => { S.view = 'home'; S.homeTab = 'tally'; render(); }"); pg.wait_for_timeout(1200)
+    # phase 2: the Tally page's Everything sent is a tab of its own (Computers, Sync activity, Everything sent)
+    E("() => { S.view = 'home'; S.homeTab = 'tally'; S.tallyTab = 'sent'; render(); }"); pg.wait_for_timeout(1200)
     log = pg.inner_text("#app")
     ok("FA/ELEC/013" in log and "FA/2026-27/081" in log and "2 entries for" in log and "from the cloud queue" in log and "Anshul" in log,
        "9. Everything sent to Tally lists the queue's postings (FA/ELEC/013 on 01-Oct, FA/2026-27/081), by whom")

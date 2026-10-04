@@ -17,6 +17,7 @@ import Reports from "./books/Reports.jsx";
 import Lookup from "./books/Lookup.jsx";
 import Letters from "./books/Letters.jsx";
 import AuditTab from "./books/Audit.jsx";
+import Tieout from "./books/Tieout.jsx";
 import HelpButton from "../parts/HelpButton.jsx";
 import { Notices } from "../parts/Ai.jsx";
 import { LedgerBanner, GstDriftNote, SyncNote, JobsNote } from "../parts/Notes.jsx";
@@ -211,9 +212,10 @@ export default function Books() {
   }
   const pending = n ? LedMaster.pending(b).length : 0;
   const tabs = [["import", "From Tally", n || null], ["ledgers", "Tally ledgers", n ? (pending ? pending + " to confirm" : "✓") : null], ["tds", "TDS", n ? TDS.rows().length : ((b.salary || []).length || null)],
-    ["gst", "GST", null]];
+    ["gst", "GST", null], ["tieout", "Tie-out", null]];
   let body;
   if (tab === "import") body = <FromTally b={b} />;
+  else if (tab === "tieout") body = <Tieout b={b} />;
   else if (srv && tab === "gst") body = <><ServerGst b={b} />{n ? <Gst /> : null}</>;
   else if (srv && tab === "tds") body = <><ServerTds b={b} />{n ? <Tds b={b} /> : null}</>;
   else if (!n && tab === "gst") body = <Gst />;

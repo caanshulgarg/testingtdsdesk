@@ -17,7 +17,7 @@ with sync_playwright() as p:
       return openCompany(c.id).then(() => { S.tab = "books"; S.booksTab = "tds"; S.step = null; render(); }); }""")
     pg.wait_for_timeout(1500)
     app = lambda: pg.inner_text("#app")
-    ok(pg.locator('#app nav[aria-label="Books"] button').count() == 4, "TDS & GST has four tabs (MIS, Accounts and Audit have their own pages)")
+    ok(pg.locator('#app nav[aria-label="Books"] button').count() == 5, "TDS & GST has five tabs, the fifth Tie-out (phase 2, H54; MIS, Accounts and Audit have their own pages)")
     ok("TDS is worked out from the day book" in app() and pg.locator('#app button:has-text("Read the books from Tally")').count() == 1 and pg.locator('#app button:has-text("Import salary for 24Q")').count() == 1,
        "no day book and no salary: the TDS tab says what to bring in, with a button for each")
     for t, say in [["Tally ledgers", "The Tally ledgers come from the client's books"]]:

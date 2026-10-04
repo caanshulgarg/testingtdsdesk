@@ -5,7 +5,8 @@
 // (src/js/49). The work is Bridge and TCloud; boxes and choices go through bridgeSet, bridgeLink, bridgePin, tcLink
 // (src/js/24, 49), buttons through doAct (bridgeTest, bridgeConnect, bridgeOff, bridgeSetupFile, bridgeDiag, bridgeReadTest).
 import TallyPill from "../parts/TallyPill.jsx";
-import TallyLine from "../parts/TallyLine.jsx";
+import TallyLine, { GapLine } from "../parts/TallyLine.jsx";
+import SyncActivity from "./TallySync.jsx";
 import { TallyStates, TallyHistory } from "../parts/TallyStates.jsx";
 import { PostLog } from "./Done.jsx";
 import CommitBox from "../parts/CommitBox.jsx";
@@ -190,6 +191,25 @@ function PostSettings({ r, owner }) {
     </span>}
   </span>;
 }
+// phase 2 (F36, N102): is Tally's change recorder working on this computer, per company open there (the bridge's
+// heartbeat: info.bridges[id].recorder, FinCom Bridge 2.1.9 on). Nothing for a computer whose bridges report no recorder
+function RecorderLine({ r }) {
+  const rc = Rec.recOf(r.device);
+  if (!rc) return null;
+  const off = Rec.notRecording(r.device), open = Rec.openOf(r.device).filter((co) => rc[co]);
+  if (!off.length && !open.length) return null;
+  return <div className="row" data-recorder="" style={{ alignItems: "center", gap: 8, flexWrap: "wrap", marginLeft: 16 }}>
+    {off.length > 0 && <span className="tag bad" data-recorder-off="">{"Tally changes are not being recorded on " + r.computer}</span>}
+    {open.map((co) => { const x = rc[co]; return <span key={co} className={"note" + (x.seen ? "" : " bad")} data-recorder-co={co}>{co + ": " + (x.seen ? "recording" + (x.lastAt ? " \u00b7 last line " + tallyHm(x.lastAt) : "") : "not recording")}</span>; })}
+  </div>;
+}
+// J64: the computers whose Tally was open today with no recorder line for a working day (tally_recorder_silent)
+function Silent() {
+  const rows = TCloud.on() ? Rec.silentOf() : [];
+  if (!rows.length) return null;
+  return <div className="pane" style={{ padding: "8px 16px" }}>{rows.map((x) => { const d = Rec.devOf(x.device), pc = (d && ((d.info || {}).computer)) || x.name || "a computer";
+    return <p key={x.device || x.name} className="bk-alert warn" data-recorder-silent="" style={{ margin: "4px 0" }}>{"Silent today: " + pc + " (Tally open since " + (x.tallyOpenAt ? tallyHm(x.tallyOpenAt) : "today") + ", " + (x.lastLineAt ? "no recorder line since " + tallyHm(x.lastLineAt) : "no recorder line") + ")"}</p>; })}</div>;
+}
 function BridgeLines({ rows, latest }) {
   const [open, setOpen] = useState(false);
   const owner = S.account && S.account.me && S.account.me.role === "owner";
@@ -220,6 +240,8 @@ function BridgeLines({ rows, latest }) {
             : <button className="btn small" data-read-stop={r.device.id} onClick={() => TCloud.readStop(r)}>Stop reading on this computer</button>)}
           {owner && latest && !piloting && vnum(latest) > vnum(r.version) && <button className="btn small" data-release-pilot={r.device.id} onClick={() => TCloud.releasePilot(latest, r)}>{"Try version " + latest + " on this computer"}</button>}
         </div>}
+        {live && Rec.notResponding(r) && <div className="row" style={{ marginLeft: 16 }}><span className="tag bad" data-not-responding="">{Rec.notResponding(r)}</span></div>}
+        {live && <RecorderLine r={r} />}
         {live && <div className="row" style={{ alignItems: "center", gap: 8, flexWrap: "wrap", marginLeft: 16 }}><PostSettings r={r} owner={owner} /></div>}
         {live && <Baselines r={r} owner={owner} />}
       </div>; })}
@@ -461,6 +483,7 @@ export function CloudBooks() {
 
 // the Tally page in the sidebar (02-Oct-2026): FinCom Bridge's card until a bridge is heard from, then one line a
 // computer with Details; then everything sent to Tally. #/tally/bridge-1.15: the hidden fallback
+const TALLY_TABS = [["computers", "Computers"], ["activity", "Sync activity"], ["sent", "Everything sent"]];
 export default function TallyHome() {
   const m = useSetup();
   if (S.tallyOld) return <><section className="today"><h2>Tally</h2></section><OldBridge /></>;
@@ -469,12 +492,18 @@ export default function TallyHome() {
   // the card while a computer has no FinCom Bridge (none heard from yet, or only an older bridge); else folded away
   const devs = new Set(rows.map((r) => r.device.id)), withNew = new Set(rows.filter((r) => r.go && !r.old).map((r) => r.device.id));
   const needCard = !devs.size || [...devs].some((d) => !withNew.has(d));
+  // phase 2 (H49-H51): Computers (as before), Sync activity (the recorder's lines), Everything sent (the post log)
+  const tab = TALLY_TABS.some(([id]) => id === S.tallyTab) ? S.tallyTab : "computers";
   return <><section className="today"><h2>Tally</h2></section>
-    {rows.length > 0 && <BridgeLines rows={rows} latest={latest} />}
-    <ClientLines />
-    {needCard ? <BridgeDownload m={m} /> : <DetailsCard m={m} />}
-    {!TCloud.on() && <BridgeSettings />}
-    <PostLog /></>;
+    <nav className="sbar" aria-label="Tally">{TALLY_TABS.map(([id, label]) =>
+      <button key={id} data-tally-tab={id} aria-selected={tab === id} onClick={() => { S.tallyTab = id; if (id === "activity") Rec.act.at = 0; render(); }}>{label}</button>)}</nav>
+    {tab === "activity" ? <SyncActivity />
+      : tab === "sent" ? <PostLog />
+      : <><Silent />
+        {rows.length > 0 && <BridgeLines rows={rows} latest={latest} />}
+        <ClientLines />
+        {needCard ? <BridgeDownload m={m} /> : <DetailsCard m={m} />}
+        {!TCloud.on() && <BridgeSettings />}</>}</>;
 }
 // FinCom Bridge 2.1.3 reads Tally only after an event: one line a client whose Tally company a computer keeps, from
 // that computer's heartbeat ("Tally open on NWS144 · last read 15:34", closed, offline, not answering, paused), each with
@@ -482,13 +511,14 @@ export default function TallyHome() {
 function ClientLines() {
   if (typeof tallyLine !== "function") return null;
   const cos = Object.values(S.companies || {}).filter((c) => !c.deleted).sort((a, c) => (c.id === S.coId) - (a.id === S.coId) || a.name.localeCompare(c.name));
-  const rows = cos.map((co) => [co, tallyLine(co)]).filter(([, l]) => l);
+  const rows = cos.map((co) => [co, tallyLine(co)]).filter(([co, l]) => l || Rec.gapFor(co.id).length);
   if (!rows.length) return null;
   return <div className="pane" data-client-lines="">
     <h3 style={{ marginTop: 0 }}>Clients’ Tally</h3>
     <p className="note" style={{ margin: "0 0 8px" }}>The bridge reads Tally only when needed: when a client is opened here, on Update now, for a posting, and in its nightly catch-up. Entries made in Tally show here after the next of these.</p>
-    {rows.map(([co]) => <div key={co.id} className="row" data-client-line={co.id} style={{ alignItems: "center", gap: 8, flexWrap: "wrap", margin: "2px 0" }}>
-      <b>{co.name}</b><span className="note">·</span><TallyLine co={co} /></div>)}
+    {rows.map(([co]) => <div key={co.id} data-client-line={co.id} style={{ margin: "2px 0" }}>
+      <div className="row" style={{ alignItems: "center", gap: 8, flexWrap: "wrap" }}><b>{co.name}</b><span className="note">·</span><TallyLine co={co} /></div>
+      <GapLine cid={co.id} /></div>)}
   </div>;
 }
 

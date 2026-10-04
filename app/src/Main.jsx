@@ -8,6 +8,7 @@ import Guard from "./Guard.jsx";
 import Legacy from "./parts/Legacy.jsx";
 import SignIn from "./screens/SignIn.jsx";
 import SCREENS from "./screens/index.js";
+import { RecorderNotes } from "./parts/TallyLine.jsx";
 
 const { Working, Books, Txn, Dash, DocqPanel, PostStep, DoneStep, ClientSetup, Collect, Sales, VendorRecon, ReviewTable, Invoices, Bank, Parties, Export,
   Help, Today, InboxAll, TallyHome, FirmSettings, Clients, Drawer, BankBar, SalesBar, ActionBar } = SCREENS;
@@ -74,6 +75,7 @@ export default function Main({ v }) {
   const company = S.view === "company" && CO();
   return <>
     <SelfTestBanner /><Banners />
+    {company && <Guard name="the Tally recorder notes" v={v} quiet><RecorderNotes cid={company.id} /></Guard>}
     {company && <Guard name="the reading cards" v={v} quiet><Working /></Guard>}
     <Guard name="this screen" v={v} key={S.view + ":" + (company ? S.tab : S.homeTab)}><Screen /></Guard>
     {drawerEntry() && <Guard name="the bill drawer" v={v}><Drawer /></Guard>}
