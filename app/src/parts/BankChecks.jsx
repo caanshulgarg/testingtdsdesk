@@ -130,6 +130,8 @@ export function DupFind() {
   const amt = (v) => money(d.amountOf(v));
   const Tbl = ({ list, withWant }) => <div className="tblwrap" style={{ marginTop: 6, maxHeight: 260, overflow: "auto" }}><table className="data"><thead><tr><th>{withWant ? "In Tally on" : "Date"}</th>{withWant && <th>Should be</th>}<th>Type</th><th>Voucher</th><th>Party</th><th className="n">Amount</th></tr></thead><tbody>
     {list.slice(0, 400).map((v, i) => <tr key={i}><td>{fmtDate(tallyToIso(v.date))}</td>{withWant && <td>{fmtDate(v.wantDate)}</td>}<td>{v.type || ""}</td><td>{v.number || ""}</td><td>{v.party || ""}</td><td className="n">{amt(v)}</td></tr>)}</tbody></table></div>;
+  // round 18: the bridge's copy did not hold these dates and Tally was not asked: not checked, never "All clear"
+  if (d.notChecked) return <div className="bigwarn" style={{ borderColor: "var(--warn, #b7791f)" }}><b>Not checked.</b>{" " + d.notChecked + " "}<Btn act="dupClose" className="linkbtn">Close</Btn></div>;
   const bad = d.extra.length || d.wrongDate.length || d.strangers.length;
   if (!bad) return <div className="bigwarn" style={{ borderColor: "var(--ledger)" }}><b>All clear.</b>{" " + d.tagged + " entries posted by FinCom were checked in " + d.company + " (" + fmtDate(d.from) + " to " + fmtDate(d.to) + "): each is there once, on its statement date. "}<Btn act="dupClose" className="linkbtn">Close</Btn></div>;
   return <div className="bigwarn" style={{ borderColor: "var(--stop)" }}>
@@ -169,6 +171,7 @@ export function PostReport({ rep }) {
     <button className="btn small primary" onClick={() => goChooseTallyCompany()}>Choose the Tally company</button>{" "}<Btn act={rep.dismiss} className="linkbtn">Dismiss</Btn></div>;
   const verified = rep.checking ? 0 : (rep.posted || 0) - (rep.unread || 0);
   const bits = [rep.checking ? (rep.posted || 0) + " in Tally" + (rep.company ? " (" + rep.company + ")" : "") + ", not yet read back: FinCom reads them back by itself…" : verified + " in Tally (verified)" + (rep.company ? " · " + rep.company : "")];
+  if (rep.checkNote) bits.push(rep.checkNote);
   if (rep.unread) bits.push(rep.unread + " in Tally, not yet read back (Tally did not answer the check; use ‘Mark lines already in Tally’ later)");
   if (rep.optional) bits.push(rep.optional + " as Optional vouchers (Tally: Display More Reports → Exception Reports → Optional Vouchers)");
   if (rep.skipped) bits.push(rep.skipped + " already in Tally (not posted again)");

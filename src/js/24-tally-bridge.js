@@ -258,6 +258,11 @@ function ledgerLinesUrl(company, ledger, from, to){
   const light = bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3");
   return (light ? "/ledgerlines" : "/vouchers") + "?company=" + encodeURIComponent(company) + "&from=" + isoToTally(from) + "&to=" + isoToTally(to) + "&ledger=" + encodeURIComponent(ledger) + Bridge.pinQ();
 }
+// round 18 (owner, 04-Oct-2026: reading is prospective only): bridge 2.1.9 answers /ledgerlines from its copy, and for dates
+// the copy does not hold it says so (readDays false, a note) without asking Tally. That answer is "not checked", never
+// "not in Tally": nothing is marked gone, read as the bank book, or taken as a finished check from it
+function copyNotCovered(j){ return !!(j && j.readDays === false); }
+const COPY_NOT_COVERED = "Tally could not be checked for these dates (reading entries from Tally is off on this computer and its copy does not hold them; history comes from the Day Book upload). FinCom's own records were checked.";
 function bridgeVer(v){ return String(v || "").split(".").map(x => String(num(x)).padStart(3, "0")).join("."); }
 // a posting handed to the bridge before this page was reloaded or closed: say how it ended (the bridge finishes it on its own)
 async function bridgeLeftover(){
@@ -403,6 +408,7 @@ async function syncBankBookFromTally(silent, win){
   try {
     const from = win ? win.from : addDays(st.from || b.rows[0].date, -20), to = win ? win.to : addDays(st.to || b.rows[b.rows.length - 1].date, 20);
     const j = win && win.pre ? win.pre : await tallyCall(co, ledgerLinesUrl(tallyCoName(co), ledger, from, to), null, 300000);
+    if (copyNotCovered(j)){ if (!silent) toast(COPY_NOT_COVERED); return 0; }
     const entries = [];
     [].concat(j.vouchers || []).forEach(v => {
       if (/^yes$/i.test(v.cancelled || "")) return;
@@ -675,6 +681,7 @@ async function scanStatementInTally(opts){
   const light = !byLedger && bridgeVer(Bridge.st.version) >= bridgeVer("1.12.1");
   if (opts.pre){ from = opts.from; to = opts.to; }
   const j = opts.pre || await tallyCall(co, light ? "/tags?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(from) + "&to=" + isoToTally(to) + Bridge.pinQ() : ledgerLinesUrl(tname, ledger, from, to), null, 600000);
+  if (copyNotCovered(j)) return {at: Date.now(), total: 0, tagged: 0, extra: [], wrongDate: [], strangers: [], badOnly: [], company: tname, amountOf: () => 0, from, to, notChecked: COPY_NOT_COVERED};
   const vs = [].concat(j.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || ""));
   const rowByTag = new Map(b.rows.map(r => [fpHash(r.fp || r.id), r]));
   const groups = new Map();
@@ -729,7 +736,7 @@ async function findTallyDuplicates(){
   try { S.dupFind = await scanStatementInTally(); }
   catch (e){ b.busy = ""; toast("Could not read Tally: " + e.message); render(); return; }
   b.busy = "";
-  if (S.dupFind && !S.dupFind.extra.length && !S.dupFind.wrongDate.length) lsSet(wideCheckKey(), String(Date.now()));
+  if (S.dupFind && !S.dupFind.notChecked && !S.dupFind.extra.length && !S.dupFind.wrongDate.length) lsSet(wideCheckKey(), String(Date.now()));
   render();
 }
 async function removeTallyDuplicates(which){
@@ -952,6 +959,7 @@ async function postBankToTally(ids){
   if (Bridge.st.allowImport === false){ toast("Posting is switched off in the bridge settings (AllowImport)."); return; }
   const acc = (co.bankAccounts || []).find(a => a.id === st.acctId);
   const heavy = b.checkBeforePost === true;
+  let checkNote = "";
   b.busy = heavy ? "Loading ledgers and this bank ledger from Tally\u2026" : "Checking the ledgers\u2026"; render();
   const readyBefore = new Set(b.rows.filter(r => r.state === "ready").map(r => r.id));
   const inTallyBefore = b.rows.filter(r => r.state === "intally").length;
@@ -984,6 +992,8 @@ async function postBankToTally(ids){
         pre = await tallyCall(co, ledgerLinesUrl(tname, acc.ledger, from, to), null, 600000);
         b.tallyLook = {sid: st.id, at: Date.now(), data: pre};
       }
+      if (copyNotCovered(pre)){ checkNote = COPY_NOT_COVERED; b.tallyLook = null; }
+      else {
       const g = markedGone(pre, from, to);
       if (g.ids.length){ g.sid = st.id; g.ledger = acc.ledger; g.company = tname; b.gone = g; }
       await syncBankBookFromTally(true, {from, to, rows: toCheck, pre});
@@ -997,6 +1007,7 @@ async function postBankToTally(ids){
           render(); return;
         }
         lsSet(wideCheckKey(), String(Date.now()));
+      }
       }
     } catch (e){
       b.busy = ""; b.tallyLook = null; render();
@@ -1102,7 +1113,7 @@ async function postBankToTally(ids){
     });
     learnRows(posted, "sent");
     saveBank({rows: true, newLed: true, posted: true});
-    b.postReport = {at: Date.now(), posted: ok, skipped, movedBack, failed, dismiss: "bankReportOk", company: tname, optional: optionalN, noPreCheck: !heavy, checking: !!j.checking};
+    b.postReport = {at: Date.now(), posted: ok, skipped, movedBack, failed, dismiss: "bankReportOk", company: tname, optional: optionalN, noPreCheck: !heavy, checking: !!j.checking, checkNote};
     toast(ok + " posted to Tally" + (skipped ? ", " + skipped + " were already there" : "") + (failed.length ? ", " + failed.length + " not posted" : "") + ".");
     if (!failed.length && !b.rows.some(r => r.state === "ready")) b.filter = "done";
     b.afterPost = !j.checking && !j.viaCloud;
@@ -1179,10 +1190,17 @@ async function postBillsToTally(opts){
   try {
     const dates = todo.map(e => e.x.invoiceDate).filter(Boolean).sort();
     const now = new Date().toISOString();
-    let dup = [];
+    let dup = [], checkNote = "";
     if (dates.length){
       const vt = co.voucherType || "Journal";
-      const j0 = await tallyCall(co, "/vouchers?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(addDays(dates[0], -5)) + "&to=" + isoToTally(addDays(dates[dates.length - 1], 5)) + "&types=" + encodeURIComponent([vt, "Purchase", "Journal"].join(",")) + Bridge.pinQ());
+      // round 18 (owner, 04-Oct-2026: reading is prospective only): bridge 2.1.9 refuses reading entries from Tally. Then
+      // this check is not possible and the posting goes on: FinCom's own checks stand (its records, the cloud's id lock)
+      let j0;
+      try { j0 = await tallyCall(co, "/vouchers?company=" + encodeURIComponent(tname) + "&from=" + isoToTally(addDays(dates[0], -5)) + "&to=" + isoToTally(addDays(dates[dates.length - 1], 5)) + "&types=" + encodeURIComponent([vt, "Purchase", "Journal"].join(",")) + Bridge.pinQ());
+      } catch (e){
+        if (!/Reading entries from Tally is off/i.test(String((e && e.message) || e))) throw e;
+        j0 = {vouchers: []}; checkNote = "Bills already in Tally could not be checked (reading entries from Tally is off on this computer); FinCom's own records were checked.";
+      }
       const vs0 = [].concat(j0.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || ""));
       const seen = new Set(vs0.map(v => norm(v.reference) + "|" + norm(v.party)).concat(vs0.flatMap(v => [].concat(v.entries || []).flatMap(en => [].concat(en.bills || []).map(bl => norm(bl.name) + "|" + norm(en.ledger))))));
       const marks = vs0.map(v => String(v.narration || "")).join("\n");
@@ -1240,7 +1258,7 @@ async function postBillsToTally(opts){
         Store.saveEntry(co.id, e);
       });
     }
-    S.billPost = {done: true, ok, bad: failed.length, dup: dup.length, failed, optional: optionalN, unverified, altered, byReply: byReplyN, checkFailed, masters: masterWords, company: tname,
+    S.billPost = {done: true, ok, bad: failed.length, dup: dup.length, failed, optional: optionalN, unverified, altered, byReply: byReplyN, checkFailed, masters: masterWords, company: tname, checkNote,
       reply: replyWords};
     toast(ok + " posted to " + tname + (altered ? " (" + altered + " altered in Tally)" : "") + (optionalN ? " (" + optionalN + " as Optional vouchers)" : "") + (dup.length ? ", " + dup.length + " already there" : "") + (checkFailed ? ", " + checkFailed + " not posted: Tally could not be checked first" : "") + (failed.length ? ", " + failed.length + " not posted" : "") + ".");
   } catch (e){

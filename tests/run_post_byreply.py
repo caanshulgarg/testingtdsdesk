@@ -196,10 +196,44 @@ with sync_playwright() as p:
     ok(E("window.__cpRun || []") == ["s1-0"], "(e) the bank line went through Bridge.post to the cloud (%s)" % E("window.__cpRun || []"))
     ok(r0["st"] == "sent" and r0["by"] and r0["vch"] == "26320" and r0["err"] == "" and not r0["chk"] and r0["posted"] == 1 and not r0["failed"],
        "(e) a byReply ok result: the line is sent, r.tally.vch 26320, no postError, nothing failed (%s)" % r0)
+    # round 18 (owner, 04-Oct-2026: reading is prospective only): bridge 2.1.9 refuses /vouchers with ReadDays off. The
+    # posting's pre-check for bills already in Tally then says "check not possible" and the posting goes on (FinCom's own
+    # checks stand: its records and the id lock); it never fails the posting
+    E("""() => { window.__mk("f1", "Alpha Consultants", "F/1", 1500); window.__tcOld = window.tallyCall; window.__postedIds = [];
+      window.tallyCall = async (co, path) => { if (/^\/vouchers/.test(path)) throw new Error("Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload)."); return window.__tcOld(co, path); };
+      window.__bpOld = Bridge.post; Bridge.post = async (p) => { window.__postedIds = p.vouchers.map(v => v.id);
+        return {ok: true, company: p.company, results: p.vouchers.map(v => ({id: v.id, ok: true, byReply: true, verified: false, vchId: "26400", batchN: 1, batchEnd: "26400", state: "posted", created: 1}))}; }; }""")
+    E("() => postBillsToTally(['f1'])"); pg.wait_for_timeout(1200)
+    rf = E("(() => ({ids: window.__postedIds, err: (S.billPost && S.billPost.error) || '', exp: !!D().entries.f1.exportedAt, note: (S.billPost && S.billPost.checkNote) || ''}))()")
+    E("() => { window.tallyCall = window.__tcOld; Bridge.post = window.__bpOld; }")
+    ok(rf["ids"] == ["f1"] and not rf["err"] and rf["exp"], "(f) with reading off on the bridge, the pre-check is skipped and the bill is posted (%s)" % rf)
+    ok("could not be checked" in rf["note"], "(f) and the result says the check against Tally could not be made (%s)" % rf["note"])
     # round 17 (follow-up): the line posted by Tally's reply is done (not left on Ready), and the bank balance check does
     # not count it as "sent by the bridge, not read back" (the part that waits for a read after the posting stays)
     rt = E("(() => { const r = B().rows.find(x => x.id === 's1-0'); const q = Object.assign({}, r, {sentAt: ''}); return {tab: bankTabOf(r), nrb: bankNotReadBack([q], S.coId).length}; })()")
     ok(rt["tab"] == "done" and rt["nrb"] == 0, "(e) the line posted by Tally's reply is under Done, and not counted as not read back (%s)" % rt)
+    # round 18 (owner, 04-Oct-2026: reading is prospective only): bridge 2.1.9's /ledgerlines answers from its copy; for dates
+    # the copy does not hold it says so (readDays false, a note, no entries). That is "not checked", never "not in Tally":
+    # (g1) the bank pre-check marks no posted line as gone, posts the ready line and says the check was not made;
+    # (g2) the double-entry check does not say "All clear" and is not remembered as done; (g3) reading the bank book
+    # from Tally keeps the bank book it had
+    E("""() => { const b = B(); b.rows.push({id: "s1-2", fp: "q2", date: "2026-07-04", narr: "NEFT DR OFFICE RENT SEP", debit: 1300, credit: 0, ledger: "Office Rent", state: "ready", userSet: true, balOk: true, dec: {name: "Office Rent"}});
+      b.gone = null; b.tallyLook = null; lsDel(wideCheckKey()); window.__cpRun = []; b.books[curStmt().acctId] = {entries: [{date: "2026-07-03", debit: 1200, credit: 0}], file: "kept", importedAt: "2026-10-01T00:00:00Z"};
+      window.__paths = []; window.tallyCall = async (co, path) => (window.__paths.push(path), /^\/(ledgerlines|vouchers)/.test(path)) ? {ok: true, via: "copy", vouchers: [], readDays: false,
+        note: "the copy here does not cover 20260619-20261004 for this ledger (no day file); reading entries from Tally is off on this computer, history comes from the Day Book upload"} : {vouchers: []}; }""")
+    E("() => postBankToTally(['s1-2'])"); pg.wait_for_timeout(1500)
+    g1 = E("(() => { const b = B(), r = b.rows.find(x => x.id === 's1-2'), r1 = b.rows.find(x => x.id === 's1-1'), rep = b.postReport || {}; return {gone: b.gone ? b.gone.ids : null, st: r.state, s1: r1.state, sent: window.__cpRun, note: rep.checkNote || '', wide: !!lsGet(wideCheckKey()), dup: !!S.dupFind}; })()")
+    ok(not g1["gone"] and g1["s1"] == "sent", "(g1) a copy that does not cover the dates marks no posted line as no longer in Tally (%s)" % g1)
+    ok(g1["sent"] == ["s1-2"] and g1["st"] == "sent" and not g1["dup"], "(g1) the ready line is posted (%s)" % g1)
+    ok("could not be checked" in g1["note"] and not g1["wide"], "(g1) the report says Tally could not be checked, and the once-per-statement check is not taken as done (%s)" % g1)
+    E("() => { S.view = 'company'; S.tab = 'bank'; render(); }"); pg.wait_for_timeout(300)
+    E("() => findTallyDuplicates()"); pg.wait_for_timeout(800)
+    g2 = E("(() => ({nc: (S.dupFind && S.dupFind.notChecked) || '', wide: !!lsGet(wideCheckKey()), txt: (document.querySelector('#app') || document.body).innerText}))()")
+    ok(g2["nc"] and not g2["wide"], "(g2) the double-entry check says it was not made, and is not remembered as done (%s)" % {k: g2[k] for k in ("nc", "wide")})
+    ok("All clear" not in g2["txt"] and "not checked" in g2["txt"].lower(), "(g2) the screen does not say All clear; it says not checked")
+    E("() => { S.dupFind = null; }")
+    g3 = E("(async () => { const n = await syncBankBookFromTally(true); const bk = B().books[curStmt().acctId]; return {n, file: bk && bk.file, len: bk && bk.entries.length}; })()")
+    ok(g3["file"] == "kept" and g3["len"] == 1, "(g3) reading the bank book from Tally keeps the bank book it had (%s)" % g3)
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); raise SystemExit(1 if fails else 0)

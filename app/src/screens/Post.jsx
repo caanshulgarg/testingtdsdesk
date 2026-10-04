@@ -53,6 +53,8 @@ function RunLine({ co }) {
       {(() => { const rep = bp.byReply || 0, ver = (bp.ok || 0) - (bp.altered || 0) - rep;
         return [ver || !rep ? ver + " in Tally (verified)" : "", rep ? rep + " in Tally (Tally's reply)" : ""].filter(Boolean).join(" · "); })()}{bp.altered ? " · " + bp.altered + " altered in Tally" : ""}{bp.dup ? " · " + bp.dup + " already in Tally (not posted again)" : ""}
       {bp.checkFailed ? " · " + bp.checkFailed + " not posted: Tally could not be checked first" : ""}
+      {/* round 18: reading entries from Tally is off on the bridge (prospective only): the pre-check could not be made */}
+      {bp.checkNote ? " · " + bp.checkNote : ""}
       {failed.length ? " · " + failed.length + " failed and went back to To review (" + failed.map((f) => f.no + ": " + f.msg).join("; ") + ")" : ""}
       {(bp.masters || []).length > 0 && <span data-post-masters="">{" · Ledgers: " + bp.masters.map((m) => m.name + ": " + m.word).join(", ")}</span>}
       {bp.optional > 0 && <span>{" · " + bp.optional + " went in as Optional vouchers. " + OPTIONAL_HELP}</span>}
