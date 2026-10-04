@@ -128,3 +128,5 @@ run_migration37.py                    180
 run_parse_fincom_id.js                120
 run_migration43.py                    180
 run_enqueue_held_id.py                180
+run_migration44.py                    120
+run_recorder_server.py                120

@@ -73,6 +73,24 @@
 //    an array (at most 5 texts of 200); an entry of a batch (batchN > 1) is stamped with vchId alone, never the request's
 //    LASTVCHID; an alreadySent refusal (this computer sent it before) is an acceptance kept locked, never released nor
 //    rewritten as being checked; a 'failed' update carrying an entry sent with no answer from Tally is stored done
+//   Phase 2, the Tally change recorder (migration 44; without it both answer 503 {notReady}):
+//   {kind:"recorder_lines", company, lines:[{line_id, event, saved_at, pc, user, company_guid, object_guid, master_id,
+//    alter_id, vch_type, vch_no, vch_date, xml?, ledgers?, save_ms, name?, from?, to?}]} -> {ok, results:[{line_id, state,
+//                                                       why}], applied, held, duplicate, stale, failed}: the add-on's lines
+//                                                       (at most 500 a call; the bridge marks a line sent only on this answer).
+//                                                       event: created|altered|deleted|cancelled|imported|ledger_created|
+//                                                       ledger_altered|ledger_renamed|ledger_deleted (another: failed here, not
+//                                                       stored); xml: the whole <VOUCHER ...>...</VOUCHER> when the add-on can
+//                                                       give it, read with parse.js (parseDay) into the days path's vouchers
+//                                                       and lines; vch_date yyyymmdd (or yyyy-mm-dd); ledgers [{name, guid}];
+//                                                       name (ledger_*), from / to (ledger_renamed); save_ms the delay added
+//                                                       to saving. tally_recorder_apply(firm, book, device, lines)
+//   the beat's companies may carry altvchid, altmstid, recorderSeen, recorderLastAt (at: the check's time): each company with
+//   altvchid is checked (tally_recorder_gap_check) and the answer carries recorder:{company: {gap, missing, needsBaseline?,
+//   startRecorded?}}; recorderSeen kept per bridge in info.bridges[id].recorder = {company: {seen, lastAt}}
+//   {kind:"start_point", company, guid?, altvchid, altmstid, at} -> {set, startVoucher, startMaster, guid, at, state}: the
+//                                                       bridge's starting point (reading is prospective), kept once per book
+//                                                       and company GUID on tally_sync_cursor (tally_start_point)
 //   {kind:"make_main", bridge}                        -> this bridge (FinCom Bridge 2.x, its menu) is the main one: only it posts
 //   every call of FinCom Bridge 2.x carries bridge:{id, computer, user, mode, runMode, version} (bridgeOf); the beat's
 //   answer says makeMain (made the main one on FinCom's Tally page) or notMain (another bridge posts on this computer)
@@ -178,7 +196,39 @@ function bridgeOf(dev: any, body: any, shadow: boolean) {
     // 2.1.6 (round 11): the companies this bridge posts to (PostOnly); [] when any; absent on an older bridge
     ...(Array.isArray(body?.postOnly) ? { postOnly: cleanPostOnly(body.postOnly) } : {}),
     // 2.1.8 (round 15, migration 43): the posting settings this bridge applied (batch sizes, when), absent on an older bridge
-    ...postSettingsApplied(body) } };
+    ...postSettingsApplied(body),
+    // phase 2 (migration 44): per company, whether this PC holds the recorder's file and its last line ({company: {seen,
+    // lastAt}}), for the app's banner "Tally changes are not being recorded on <PC>"; absent on a bridge that does not say
+    ...recorderOf(body) } };
+}
+// phase 2: the companies of a beat that say recorderSeen (a boolean): {company: {seen, lastAt}}, at most 50
+function recorderOf(body: any) {
+  const out: Record<string, { seen: boolean; lastAt: string }> = {};
+  for (const c of (Array.isArray(body?.companies) ? body.companies : []).slice(0, 50) as any[]) {
+    const name = typeof c?.name === "string" ? c.name.slice(0, 200) : "";
+    if (name && typeof c?.recorderSeen === "boolean") out[name] = { seen: c.recorderSeen, lastAt: typeof c.recorderLastAt === "string" ? c.recorderLastAt.slice(0, 40) : "" };
+  }
+  return Object.keys(out).length ? { recorder: out } : {};
+}
+// phase 2: Tally's highest change numbers per company as the beat says them (FinComCompany's ALTVCHID / ALTMSTID)
+const altOf = (v: unknown) => v === null || v === undefined || v === "" || typeof v === "boolean" || !Number.isFinite(Number(v)) || Number(v) < 0 || Number(v) >= 1e15 ? null : Math.floor(Number(v));
+// each company that carries altvchid: tally_recorder_gap_check(book, device, altvchid, at) (migration 44): compared with what
+// every PC's recorder lines (and the day books read) reached; the answer per company {gap, missing (UP TO: an upper
+// bound on the changes not received), needsBaseline, startRecorded}. Never fails the beat (a cloud without 44: nothing said)
+async function recorderGaps(dev: any, firm: string, companies: any[]) {
+  const out: Record<string, unknown> = {};
+  for (const c of companies.filter((c) => c.altvchid !== undefined && c.altvchid !== null).slice(0, 20)) {
+    try {
+      const book = await bookFor(firm, c.name);
+      if (!book) continue;
+      const at = Date.parse(c.at || "");
+      const { data, error } = await db.rpc("tally_recorder_gap_check", { p_book: book, p_device: dev.id, p_altvchid: c.altvchid, p_at: isNaN(at) ? new Date().toISOString() : new Date(at).toISOString() });
+      if (error) { if (!/could not find|does not exist|schema cache|no such function/i.test(String(error.message || ""))) console.log("tally-ingest beat: gap check", c.name, String(error.message || "").slice(0, 200)); continue; }
+      const d = data as any;
+      out[c.name] = { gap: d?.gap ?? null, missing: d?.missing ?? 0, ...(d?.needsBaseline ? { needsBaseline: true } : {}), ...(d?.startRecorded ? { startRecorded: true } : {}) };
+    } catch (e) { console.log("tally-ingest beat: gap check", c.name, (e as Error).message); }
+  }
+  return out;
 }
 // 2.1.8: the owner's per-computer posting settings as the bridge applied them, said in its beat: postBatchBills /
 // postBatchBank (1..500, or null when not a number), settingsAt (a string, cut to 40); nothing kept when none is sent
@@ -649,6 +699,69 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
   console.log("tally-ingest ledger_list", book, JSON.stringify({ ...out, notes: notes.slice(0, 5) }));
   return reply(200, out);
 }
+// Phase 2 (migration 44): the recorder's lines. Each line is cleaned (strings cut, known events only, the voucher's XML
+// read with parse.js into the days path's shape: [{guid, alter, type, no, party, narr, cancel, opt, gstin, pos, ref,
+// refDate, cmp, fid, day}] and [[guid, ledger, amount, hsn, rate, bills]]), then tally_recorder_apply stores every line
+// and applies it once (the same change from two computers: 'duplicate'). A line with no GUID is held there, never a new row
+const RECORDER_EVENTS = new Set(["created", "altered", "deleted", "cancelled", "imported", "ledger_created", "ledger_altered", "ledger_renamed", "ledger_deleted"]);
+const MAX_RECORDER_LINES = 500, MAX_RECORDER_XML = 2 * 1024 * 1024;
+const notReady44 = (e: any) => !!e && /tally_recorder_apply|tally_start_point|could not find|does not exist|schema cache/i.test(String(e.message || ""));
+function cleanRecorderLine(x: any, me: { id: string }): { line?: Record<string, unknown>; bad?: string } {
+  const s = (v: unknown, n: number) => typeof v === "string" || typeof v === "number" ? String(v).trim().slice(0, n) : "";
+  const event = s(x?.event, 40);
+  if (!RECORDER_EVENTS.has(event)) return { bad: "unknown event: " + (event || "(none)") };
+  const alterN = Number(x?.alter_id), alter = x?.alter_id !== null && x?.alter_id !== "" && Number.isInteger(alterN) && alterN >= 0 && alterN < 1e15 ? alterN : null;
+  const d8 = s(x?.vch_date, 10).replace(/-/g, ""), day = isDay(d8) ? iso(d8) : null;
+  const at = Date.parse(s(x?.saved_at, 40)), ms = Number(x?.save_ms);
+  const ledgers = (Array.isArray(x?.ledgers) ? x.ledgers : []).slice(0, 50).map((l: any) => Array.isArray(l) ? { guid: s(l[0], 100), name: cleanName(s(l[1], 300)) } : { guid: s(l?.guid, 100), name: cleanName(s(l?.name, 300)) }).filter((l: any) => l.guid || l.name);
+  const line: Record<string, unknown> = { line_id: s(x?.line_id, 80), event, saved_at: isNaN(at) ? null : new Date(at).toISOString(), pc: s(x?.pc, 60), user: s(x?.user, 60),
+    company_guid: s(x?.company_guid, 100), bridge: me.id, object_guid: s(x?.object_guid, 100) || null, master_id: s(x?.master_id, 40), alter_id: alter,
+    vch_type: s(x?.vch_type, 60), vch_no: s(x?.vch_no, 60), vch_date: day, ledgers, save_ms: Number.isFinite(ms) && ms >= 0 && ms < 3.6e6 ? Math.round(ms * 1000) / 1000 : null };
+  if (event.startsWith("ledger_")) { line.name = cleanName(s(x?.name, 300)) || null; line.from = cleanName(s(x?.from, 300)) || null; line.to = cleanName(s(x?.to, 300)) || null; }
+  const xml = typeof x?.xml === "string" ? x.xml : "";
+  line.payload = { ...line, xmlBytes: xml.length || undefined };
+  if (xml && ["created", "altered", "imported"].includes(event)) {
+    if (xml.length > MAX_RECORDER_XML) return { bad: "the entry's XML is larger than FinCom takes (" + xml.length + " characters)" };
+    const r = parseDay(xml);
+    // the days path's shape, each voucher with its own date (Tally's, from the XML)
+    line.vouchers = r.vouchers.map((v: any) => ({ ...dayVouchers({ vouchers: [v] })[0], day: isDay(v.date) ? iso(v.date) : day }));
+    line.lines = dayLines(r);
+  }
+  return { line };
+}
+async function recorderLines(dev: any, firm: string, book: string, body: any) {
+  const me = bridgeOf(dev, body, false);
+  const company = String(body.company || "").slice(0, 200);
+  const given = (Array.isArray(body.lines) ? body.lines : []).slice(0, MAX_RECORDER_LINES);
+  const results: { line_id: string; state: string; why: string | null }[] = new Array(given.length);
+  const send: Record<string, unknown>[] = [], at: number[] = [];
+  given.forEach((x: any, i: number) => {
+    const c = cleanRecorderLine(x, me);
+    if (c.bad) results[i] = { line_id: String(x?.line_id ?? "").slice(0, 80), state: "failed", why: c.bad };
+    else { send.push({ ...c.line, company }); at.push(i); }
+  });
+  if (send.length) {
+    const { data, error } = await db.rpc("tally_recorder_apply", { p_firm: firm, p_book: book, p_device: dev.id, p_lines: send });
+    if (error && notReady44(error)) return reply(503, { ok: false, notReady: true, error: "The cloud does not take recorder lines yet (migration 44)." });
+    if (error) throw new Error(error.message);
+    ((data as any)?.results || []).forEach((r: any, k: number) => { if (k < at.length) results[at[k]] = { line_id: String(r?.line_id ?? send[k].line_id ?? ""), state: String(r?.state || "failed"), why: r?.why ?? null }; });
+  }
+  const out: Record<string, unknown> = { ok: true, results };
+  for (const k of ["applied", "held", "duplicate", "stale", "failed"]) out[k] = results.filter((r) => r?.state === k).length;
+  if (out.held || out.failed) console.log("tally-ingest recorder_lines", book, JSON.stringify({ n: results.length, held: out.held, failed: out.failed, why: results.filter((r) => r && r.state !== "applied" && r.state !== "duplicate").slice(0, 3).map((r) => r.why) }));
+  return reply(200, out);
+}
+// the bridge's starting point (the owner's change of 04-Oct: reading is prospective): kept once per book and company GUID
+async function startPoint(dev: any, firm: string, book: string, body: any) {
+  const n = (v: unknown) => v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) || Number(v) < 0 ? null : Math.floor(Number(v));
+  const altvch = n(body.altvchid), altmst = n(body.altmstid);
+  if (altvch === null) return reply(400, { ok: false, error: "altvchid (Tally's highest voucher AlterID) is needed" });
+  const { data, error } = await db.rpc("tally_start_point", { p_firm: firm, p_book: book, p_guid: String(body.guid || body.company_guid || "").slice(0, 100) || null,
+    p_altvch: altvch, p_altmst: altmst, p_device: dev.id, p_bridge: bridgeOf(dev, body, false).id });
+  if (error && notReady44(error)) return reply(503, { ok: false, notReady: true, error: "The cloud does not keep a starting point yet (migration 44)." });
+  if (error) throw new Error(error.message);
+  return reply(200, data);
+}
 // a few days of the day book (each gzipped), into a book: stored, and read into entries, lines and ready totals
 async function ingestDays(firm: string, book: string, daysIn: unknown) {
   const r = await ingestDaysRaw(firm, book, daysIn);
@@ -1061,7 +1174,10 @@ Deno.serve(async (req) => {
           ports: (Array.isArray(b.ports) ? b.ports : []).slice(0, 20).map((p: any) => ({ port: Math.max(0, Math.min(65535, Math.floor(Number(p?.port) || 0))), ok: !!p?.ok, skipped: !!p?.skipped,
             n: Math.max(0, Math.min(1000, Math.floor(Number(p?.n) || 0))), error: s(p?.error, 120) })),
           companies: (Array.isArray(b.companies) ? b.companies : []).slice(0, 200).map((c: any) => ({ name: s(c?.name, 200), open: !!c?.open, at: s(c?.at, 30), phase: s(c?.phase, 12),
-            waiting: Math.max(0, Math.min(1e6, Math.floor(Number(c?.waiting) || 0))), lastRead: s(c?.lastRead, 30) })),
+            waiting: Math.max(0, Math.min(1e6, Math.floor(Number(c?.waiting) || 0))), lastRead: s(c?.lastRead, 30),
+            // phase 2 (migration 44): Tally's highest change numbers and the recorder's state, when the bridge says them
+            ...(altOf(c?.altvchid) !== null ? { altvchid: altOf(c?.altvchid), altmstid: altOf(c?.altmstid) } : {}),
+            ...(typeof c?.recorderSeen === "boolean" ? { recorderSeen: c.recorderSeen, recorderLastAt: s(c?.recorderLastAt, 40) } : {}) })),
           // go-bridge: Tally open / busy (open, slow to answer) / closed, and how often the beat comes (2.0: 30 s; 1.15.0: 60 s)
           tallyState: ["open", "busy", "closed"].includes(b.tallyState) ? b.tallyState : (b.tally ? "open" : "closed"), busySince: s(b.busySince, 30),
           every: Math.max(10, Math.min(600, Math.floor(Number(b.every) || 60))), version: s(body.version, 40),
@@ -1118,7 +1234,9 @@ Deno.serve(async (req) => {
         const { data: lastJob } = await db.from("tally_post_jobs").select("updated_at").eq("device_id", dev.id).order("updated_at", { ascending: false }).limit(1);
         const activityAt = [prevInfo.activityAt, want, lastJob && lastJob[0] && lastJob[0].updated_at].filter((x) => x && !isNaN(Date.parse(String(x))))
           .map((x) => new Date(String(x)).toISOString()).sort().pop() || "";
-        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, settings, ...(mayPost(dev, me.id) ? {} : { notMain: true }), ...ctl.out });
+        // phase 2 (migration 44): a PC without the add-on - the change numbers compared with the recorder's lines
+        const recorder = await recorderGaps(dev, firm, beat.companies);
+        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, settings, ...(Object.keys(recorder).length ? { recorder } : {}), ...(mayPost(dev, me.id) ? {} : { notMain: true }), ...ctl.out });
       }
       case "make_main": return await makeMain(dev, bridgeOf(dev, body, false).id);
       case "posts_take": {
@@ -1394,6 +1512,11 @@ Deno.serve(async (req) => {
         const { error } = await db.rpc("tally_ingest_state", { p_book: book, p_state: st });
         if (error) throw new Error(error.message);
         return reply(200, { ok: true });
+      }
+      case "recorder_lines": case "start_point": {
+        const book = await bookFor(firm, String(body.company || ""));
+        if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
+        return body.kind === "recorder_lines" ? await recorderLines(dev, firm, book, body) : await startPoint(dev, firm, book, body);
       }
       case "support": return await supportPack(firm, dev, body);
       case "lease_take": case "lease_release": case "read_guard": return await bridgeSafety(dev, firm, body);
