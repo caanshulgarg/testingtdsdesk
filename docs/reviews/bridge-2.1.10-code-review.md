@@ -449,4 +449,9 @@ Verdict:
 - The release-check range for the build is the one below. A change to .github/ alone does not move it, but any Go
   change does.
 
-Range: 9e390bf..d42c3dc
+
+R1 / S8 applied in 32ef196 exactly as proposed above (.github/workflows/bridge-windows.yml only: the install check names
+FinComRecorderAnyCompany.tdl and that no FinComRecorderTrial.tdl is made on a fresh install); no bridge code changed after d42c3dc.
+R2-R5 (Low) are left for 2.2.0.
+
+Range: 9e390bf..32ef196

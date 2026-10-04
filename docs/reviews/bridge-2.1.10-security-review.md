@@ -247,4 +247,9 @@ Verdict:
 - S9 to S11 may wait.
 - The code review's R5 (GSTIN or PAN cached empty for 6 h) is not a security issue.
 
-Range: 9e390bf..d42c3dc
+
+R1 / S8 applied in 32ef196 exactly as proposed above (.github/workflows/bridge-windows.yml only: the install check names
+FinComRecorderAnyCompany.tdl and that no FinComRecorderTrial.tdl is made on a fresh install); no bridge code changed after d42c3dc.
+R2-R5 (Low) are left for 2.2.0.
+
+Range: 9e390bf..32ef196
