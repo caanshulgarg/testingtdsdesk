@@ -345,16 +345,35 @@ func lightCheckYield(company string) func() bool {
 }
 
 // round 21 (2.1.10): the light check's own log: one line per check (recorded, unchanged, or skipped and why). A skip
-// for the same reason is said once per company and reason every 10 minutes (the heartbeat turns every 30 s)
+// for the same reason is said once per company and reason every 10 minutes (the heartbeat turns every 30 s). Round 22
+// (the 2.1.10 code review's Low 6): the reason is compared by its class (its words without digits: an error's own
+// seconds or "next at hh:mm:ss" make no new line), the line keeps the full words, and a key older than an hour is
+// dropped; "unchanged" is said at most once an hour per company (lcUnchanged)
 var (
-	lcMu      sync.Mutex
-	lcSkipped = map[string]time.Time{} // company|why -> when said
+	lcMu        sync.Mutex
+	lcSkipped   = map[string]time.Time{} // company|class of why -> when said
+	lcUnchanged = map[string]time.Time{} // company -> when "unchanged" was last said
 )
 
+// a skip reason's class: its words without digits
+func skipClass(why string) string {
+	return strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' {
+			return -1
+		}
+		return r
+	}, why)
+}
+
 func lightSkip(company, why string) {
-	k := companyKey(company) + "|" + why
+	k := companyKey(company) + "|" + skipClass(why)
 	now := nowFn()
 	lcMu.Lock()
+	for key, at := range lcSkipped {
+		if now.Sub(at) >= time.Hour {
+			delete(lcSkipped, key)
+		}
+	}
 	last, had := lcSkipped[k]
 	if had && now.Sub(last) < 10*time.Minute && !now.Before(last) {
 		lcMu.Unlock()
@@ -392,10 +411,14 @@ func lightCheckBlocked() string {
 
 // round 21 (2.1.10): the company list the bridge holds, asked afresh with the light company-list request
 // (TDSDeskCompanies, on the allow-list) when it is older than 10 minutes, or was never asked, and Tally is open: a
-// company opened since is seen. As a background read: a posting goes first (the list held stays then)
+// company opened since is seen. A company not seen before also gets the light, undated company-info request
+// (TDSDeskCompanyInfo: its GSTIN and PAN, once; on the allow-list). As a background read: a posting goes first (the list
+// held stays then). Round 22 (the 2.1.10 code review's Low 7): the list is marked fresh only when Tally gave it afresh;
+// when it gave way or did not answer, its age stays as it was, so it is asked again at the next turn
 func lightCompanyList(sessions []M) []M {
 	shared := filepath.Join(syncDir(), "open-companies.json")
-	if t, ok := mtime(shared); ok && nowFn().Sub(t) < 10*time.Minute {
+	before, had := mtime(shared)
+	if had && nowFn().Sub(before) < 10*time.Minute {
 		return sessions
 	}
 	open := false
@@ -407,8 +430,16 @@ func lightCompanyList(sessions []M) []M {
 	if !open {
 		return sessions
 	}
-	fresh := openCompaniesWith(&TC{copier: true, yield: func() bool { return postingGoing() || importsInFlight.Load() > 0 }}, true)
-	_ = os.Chtimes(shared, nowFn(), nowFn()) // its age by the bridge's clock
+	fresh, ok := openCompaniesAsk(&TC{copier: true, yield: func() bool { return postingGoing() || importsInFlight.Load() > 0 }}, true)
+	switch {
+	case ok:
+		_ = os.Chtimes(shared, nowFn(), nowFn()) // its age by the bridge's clock
+	case had:
+		_ = os.Chtimes(shared, before, before) // not given afresh: as old as it was
+	default:
+		old := nowFn().Add(-time.Hour)
+		_ = os.Chtimes(shared, old, old)
+	}
 	return fresh
 }
 
@@ -527,6 +558,16 @@ func lightLogResult(name string, had bool) {
 	case !had:
 		writeLog(fmt.Sprintf("Light check of %s: starting point recorded (ALTVCHID=%d, ALTMSTID=%d)", name, sp, m))
 	default:
+		// round 22 (Low 6): at most once an hour per company
+		k, now := companyKey(name), nowFn()
+		lcMu.Lock()
+		last, said := lcUnchanged[k]
+		if said && now.Sub(last) < time.Hour && !now.Before(last) {
+			lcMu.Unlock()
+			return
+		}
+		lcUnchanged[k] = now
+		lcMu.Unlock()
 		writeLog(fmt.Sprintf("Light check of %s: unchanged starting point ALTVCHID=%d; now ALTVCHID=%d, ALTMSTID=%d", name, sp, v, m))
 	}
 }

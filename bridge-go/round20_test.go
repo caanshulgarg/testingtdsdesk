@@ -71,7 +71,7 @@ func TestRecorderReadRefusedWhenParentIsLink(t *testing.T) {
 	if _, err := recorderLockHolding(zz); err == nil {
 		t.Fatal("a file was locked through a linked FinCom")
 	}
-	code, res := callLocal(t, "POST", "/tray/recorder-send", "", "{}")
+	code, res := callLocal(t, "POST", "/tray/recorder-send", "", `{"confirm":true}`)
 	if code != 200 || toInt(res["files"]) != 0 {
 		t.Fatalf("send results through a linked FinCom: %d %v", code, res)
 	}

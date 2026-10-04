@@ -136,8 +136,9 @@ func bridgeFor(t *testing.T, s *standIn, extra string) string {
 	// forget what an earlier test left in memory
 	nowFn = time.Now
 	coMu.Lock()
-	coCache, coInfo = nil, nil
+	coCache = nil
 	coMu.Unlock()
+	resetCoInfo()
 	coolMu.Lock()
 	tallyCool = map[int]cool{}
 	coolMu.Unlock()
@@ -160,7 +161,7 @@ func bridgeFor(t *testing.T, s *standIn, extra string) string {
 	pausedB, tallyStandInClosed, turnFirst, nightAt = false, false, true, time.Time{}
 	setTrialTools(false) // round 21: off until FinCom's answer says on (a test switches them on with trialOn)
 	lcMu.Lock()
-	lcSkipped = map[string]time.Time{}
+	lcSkipped, lcUnchanged = map[string]time.Time{}, map[string]time.Time{}
 	lcMu.Unlock()
 	resetSilence()
 	resetSelfWatch()

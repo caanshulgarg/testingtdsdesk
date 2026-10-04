@@ -250,20 +250,9 @@ func recorderSummary(read map[string][]byte) string {
 	return b.String()
 }
 
-// "Recorder trial: send results"
-func recorderSendResults() (M, error) {
-	if !cloudOn() {
-		return nil, errors.New("This computer is not connected to FinCom, so the results cannot be sent. The files are in " + recorderDirFn() + ".")
-	}
-	recorderWatchOnce()
-	var buf bytes.Buffer
-	z := zip.NewWriter(&buf)
-	add := func(name string, data []byte) {
-		if w, err := z.Create(name); err == nil {
-			_, _ = w.Write(data)
-		}
-	}
-	files, lines := 0, 0
+// the recorder files "send results" would send: each file's end (bounded as below), in file-name order
+func recorderReadAll() ([]string, map[string][]byte) {
+	var order []string
 	read := map[string][]byte{}
 	total := 0
 	for _, f := range recorderFiles() {
@@ -280,6 +269,81 @@ func recorderSendResults() (M, error) {
 		}
 		total += len(raw)
 		read[f] = raw
+		order = append(order, f)
+	}
+	return order, read
+}
+
+// round 22 (the 2.1.10 reviews' Medium 3 / S3): since 2.1.10 the recorder lines may be any company's books, so "send
+// results" asks first. The preview reads the same files the send would and names, in file order, each company named
+// in their lines (cname=) with its count of lines, and says what a line holds; it sends nothing. The tray shows
+// "confirm" in a yes/no and sends only on Yes (POST {confirm:true}); a send without the confirm is refused
+const recorderLineHolds = "Each line holds what Tally saved: the voucher's narration, number and date, the party and ledger names, master names and their groups, and the Tally user name."
+
+func recorderSendPreview() (M, error) {
+	if !cloudOn() {
+		return nil, errors.New("This computer is not connected to FinCom, so the results cannot be sent. The files are in " + recorderDirFn() + ".")
+	}
+	order, read := recorderReadAll()
+	var names []string
+	count := map[string]int{}
+	noName := 0
+	for _, f := range order {
+		for _, l := range parseRecorderText(decodeRecorderText(read[f])) {
+			n := strings.TrimSpace(l.CName)
+			if n == "" {
+				noName++
+				continue
+			}
+			if count[n] == 0 {
+				names = append(names, n)
+			}
+			count[n]++
+		}
+	}
+	var parts []string
+	for _, n := range names {
+		parts = append(parts, n+" ("+plural(count[n], "line")+")")
+	}
+	if noName > 0 {
+		parts = append(parts, "no company named ("+plural(noName, "line")+")")
+	}
+	what := "no recorder line"
+	if len(parts) > 0 {
+		what = strings.Join(parts, ", ")
+	}
+	if names == nil {
+		names = []string{}
+	}
+	conf := fmt.Sprintf("Send the recorder trial results to FinCom support?\n\nThe %d recorder file(s) in %s hold the lines of: %s.\n\n%s\n\nAlso sent: Tally's tdlerror.log, tally.imp and tally.ini, the change numbers the bridge noted and the last 500 lines of its log.",
+		len(order), recorderDirFn(), what, recorderLineHolds)
+	return M{"ok": true, "files": len(order), "companies": names, "confirm": conf}, nil
+}
+
+func plural(n int, w string) string {
+	if n == 1 {
+		return "1 " + w
+	}
+	return fmt.Sprintf("%d %ss", n, w)
+}
+
+// "Recorder trial: send results" (after the tray's yes/no on recorderSendPreview)
+func recorderSendResults() (M, error) {
+	if !cloudOn() {
+		return nil, errors.New("This computer is not connected to FinCom, so the results cannot be sent. The files are in " + recorderDirFn() + ".")
+	}
+	recorderWatchOnce()
+	var buf bytes.Buffer
+	z := zip.NewWriter(&buf)
+	add := func(name string, data []byte) {
+		if w, err := z.Create(name); err == nil {
+			_, _ = w.Write(data)
+		}
+	}
+	files, lines := 0, 0
+	order, read := recorderReadAll()
+	for _, f := range order {
+		raw := read[f]
 		files++
 		for _, l := range strings.Split(strings.ReplaceAll(decodeRecorderText(raw), "\r\n", "\n"), "\n") {
 			if strings.TrimSpace(l) != "" {

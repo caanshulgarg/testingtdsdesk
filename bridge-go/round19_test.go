@@ -230,7 +230,7 @@ func TestChangeNumbersNotWrittenInRecorderFolder(t *testing.T) {
 		t.Fatalf("the bridge's own file: %v %q", res["file"], readText(own))
 	}
 	_ = os.Remove(filepath.Join(rec, "changenumbers.txt"))
-	if code, res := callLocal(t, "POST", "/tray/recorder-send", "", "{}"); code != 200 || res["ok"] != true {
+	if code, res := callLocal(t, "POST", "/tray/recorder-send", "", `{"confirm":true}`); code != 200 || res["ok"] != true {
 		t.Fatalf("send results: %d %v", code, res)
 	}
 	got := r19Pack(t, c)
@@ -291,7 +291,7 @@ func TestRecorderSendSkipsLinksAndBoundsSize(t *testing.T) {
 	for i := 0; i < 200; i++ {
 		_ = os.WriteFile(filepath.Join(rec, fmt.Sprintf("f%03d.txt", i)), []byte(r18Line1+"\r\n"), 0o644)
 	}
-	code, res := callLocal(t, "POST", "/tray/recorder-send", "", "{}")
+	code, res := callLocal(t, "POST", "/tray/recorder-send", "", `{"confirm":true}`)
 	if code != 200 || res["ok"] != true {
 		t.Fatalf("send results: %d %v", code, res)
 	}
@@ -323,7 +323,7 @@ func TestRecorderSendSkipsLinksAndBoundsSize(t *testing.T) {
 	lnk := filepath.Join(t.TempDir(), "recorder")
 	_ = os.Symlink(other, lnk)
 	recorderDirFn = func() string { return lnk }
-	if code, res := callLocal(t, "POST", "/tray/recorder-send", "", "{}"); code != 200 || toInt(res["files"]) != 0 {
+	if code, res := callLocal(t, "POST", "/tray/recorder-send", "", `{"confirm":true}`); code != 200 || toInt(res["files"]) != 0 {
 		t.Fatalf("a recorder folder that is a link: %d %v", code, res)
 	}
 	// Tally's files: only from Program Files
@@ -466,6 +466,7 @@ func TestRecorderFolderLinkRefused(t *testing.T) {
 		t.Skip("no symlinks here: " + err.Error())
 	}
 	_ = os.Symlink(victim, filepath.Join(fc, "addon", "FinComRecorderTrial.tdl"))
+	_ = os.Symlink(victim, filepath.Join(fc, "addon", "FinComRecorderAnyCompany.tdl")) // round 22: the new name too
 	var calls [][]string
 	oldI := icaclsFn
 	icaclsFn = func(args ...string) (string, error) { calls = append(calls, args); return "processed", nil }
@@ -489,8 +490,12 @@ func TestRecorderFolderLinkRefused(t *testing.T) {
 	if readText(victim) != "victim" {
 		t.Fatal("the .tdl was written through a link")
 	}
-	if b, _ := os.ReadFile(filepath.Join(fc, "addon", "FinComRecorderTrial.tdl")); len(b) == 0 {
+	if b, _ := os.ReadFile(filepath.Join(fc, "addon", "FinComRecorderAnyCompany.tdl")); len(b) == 0 {
 		t.Fatal("the add-on .tdl is not in addon")
+	}
+	// round 22: a link at the 2.1.9 name is replaced by the 2.1.9 text (ZZ TEST only), not followed
+	if b, _ := os.ReadFile(filepath.Join(fc, "addon", "FinComRecorderTrial.tdl")); !bytes.Equal(b, legacyAddon219) {
+		t.Fatal("the 2.1.9 name does not hold the 2.1.9 text")
 	}
 	if len(calls) == 0 {
 		t.Fatal("no permissions set for all users")
@@ -649,7 +654,7 @@ func TestRecorderBenchTrialTagged(t *testing.T) {
 		t.Fatalf("the preview (for the yes/no): %d %v", code, r)
 	}
 	n0 := r19Count(f)
-	if code, r := callLocal(t, "POST", "/tray/recorder-bench", "", `{"company":"ZZ TEST"}`); code != 200 || r["ok"] != true {
+	if code, r := callLocal(t, "POST", "/tray/recorder-bench", "", `{"company":"ZZ TEST","confirm":true}`); code != 200 || r["ok"] != true {
 		t.Fatalf("start: %d %v", code, r)
 	}
 	var s M

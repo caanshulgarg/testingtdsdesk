@@ -14,6 +14,16 @@ in Tally while the add-on is loaded. Unload it (PART 4) as soon as the script is
 you work in any other company.
 You only use Tally's own menus, FinCom and the FinCom tray icon. You do not open or edit any file.
 
+What is recorded, and who can read it
+-------------------------------------
+Each line the add-on writes holds what Tally saved: the voucher's narration, number and date, the
+party and ledger names, master names and their groups, and the Tally user name, for whichever
+company is open. The lines go into C:\ProgramData\FinCom\recorder, one file per company. That
+folder is readable by every Windows user on this PC (every user who signs in to this computer
+can read every company's lines there). "Recorder trial: send results" asks first: its yes/no
+names the companies whose lines will be sent (and how many lines each) and says what a line
+holds; nothing is sent unless you answer Yes. Answer No if it names a company you did not test on.
+
 PLEASE READ - what the trial leaves in the company you test on
 ----------------------------------------------------------------
 The trial adds test entries to the company you test on: about 1,200 (PART 3B) + 100 (PART 3C)
@@ -32,8 +42,14 @@ Before you start
    only; it is off for every computer until you switch it on). Within half a minute the FinCom
    tray icon shows the trial items ("Test reading from Tally" and the four "Recorder trial: ..."
    items). Switch it off again when the trial is over: the items disappear.
-- Bridge 2.1.10 must be installed on this PC (its installer puts the add-on at
-  C:\ProgramData\FinCom\addon\FinComRecorderTrial.tdl).
+- BEFORE INSTALLING 2.1.10, unload any FinComRecorderTrial.tdl (PART 4) - then load the new file
+  by its new path. Bridge 2.1.9 put its add-on (for one test company only) at
+  C:\ProgramData\FinCom\addon\FinComRecorderTrial.tdl. Bridge 2.1.10 does not change that file;
+  it puts the any-company add-on under a NEW name:
+  C:\ProgramData\FinCom\addon\FinComRecorderAnyCompany.tdl
+  In Tally: F1 (Help) > TDLs & Add-Ons > F4 (Manage Local TDLs): if FinComRecorderTrial.tdl is
+  listed, clear that line (PART 4, step 2) before installing. Load only the new file (PART 1).
+- Bridge 2.1.10 must be installed on this PC.
 - Leave the antivirus exactly as it is (real-time scanning ON). We want the real delay.
 - Close every company except the company you test on before starting. Open only that company,
   and keep only that company open until PART 4 (unload) is done.
@@ -49,7 +65,8 @@ PART 1  -  LOAD THE ADD-ON IN TALLYPRIME
 3. Press F4  (Manage Local TDLs)  -  shown at the right side of the screen.
 4. Set  "Load selected TDL files on startup"  to  Yes.
 5. In  "List of TDL files to preload on startup"  go to the first empty line and type exactly:
-       C:\ProgramData\FinCom\addon\FinComRecorderTrial.tdl
+       C:\ProgramData\FinCom\addon\FinComRecorderAnyCompany.tdl
+   (the new path; the 2.1.9 file FinComRecorderTrial.tdl must not be in the list any more.)
    Press Enter, then accept the screen (Ctrl+A, or answer Yes to "Accept?").
 6. Back on the TDLs & Add-Ons screen, the file is listed. Its status must say  Loaded.
    - If it says anything else (for example an error), stop here and use the tray:
@@ -197,8 +214,9 @@ PART 4  -  UNLOAD THE ADD-ON (when the script is done, before you work in any ot
            or if PART 1 showed an error)
 ----------------------------------------------------------------------------------------
 1. F1 (Help) > TDLs & Add-Ons > F4 (Manage Local TDLs).
-2. Either: go to the line  C:\ProgramData\FinCom\addon\FinComRecorderTrial.tdl  and clear it
-   (remove the line: Alt+R or blank it out), or set "Load selected TDL files on startup" to No
+2. Either: go to the line  C:\ProgramData\FinCom\addon\FinComRecorderAnyCompany.tdl  (and any
+   line with the 2.1.9 file  C:\ProgramData\FinCom\addon\FinComRecorderTrial.tdl) and clear
+   it (remove the line: Alt+R or blank it out), or set "Load selected TDL files on startup" to No
    (this turns off every TDL in the list - use it only if this was the only one).
 3. Accept the screen. The file should no longer show as Loaded.
    If it still shows, close TallyPrime and open it again.

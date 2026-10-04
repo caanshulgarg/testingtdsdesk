@@ -668,10 +668,26 @@ func (t *tray) command(id int, st M) {
 	case 19, 20:
 		// round 18: the recorder trial (recorder.go); a person's choice in the tray only
 		title, path := "FinCom Bridge - Recorder trial", "/tray/recorder-note"
+		var r M
 		if id == 20 {
-			path = "/tray/recorder-send"
+			// round 22 (the 2.1.10 reviews' Medium 3 / S3): a yes/no first, in the bridge's words: the companies whose
+			// recorder lines would be sent and what a line holds; sent only on Yes
+			pv := trayCall("POST", "/tray/recorder-send", M{"preview": true})
+			if pv == nil || pv["ok"] != true {
+				why := "The bridge is not answering."
+				if pv != nil {
+					why = str(pv["error"])
+				}
+				msgBox(title, why, mbIconWarning)
+				return
+			}
+			if !yesNo(title, str(pv["confirm"])) {
+				return
+			}
+			r = trayCall("POST", "/tray/recorder-send", M{"confirm": true})
+		} else {
+			r = trayCall("POST", path, M{})
 		}
-		r := trayCall("POST", path, M{})
 		switch {
 		case r == nil:
 			msgBox(title, "The bridge is not answering.", mbIconWarning)
@@ -712,7 +728,7 @@ func (t *tray) command(id int, st M) {
 		if !yesNo(title, str(pv["confirm"])+"\n\n(50 journals of 2 lines and 50 of 50 lines, narration \"TRIAL FinCom bench <n>\", on the ledgers TRIAL Bench Dr and TRIAL Bench Cr; each save is timed.)") {
 			return
 		}
-		r := trayCall("POST", "/tray/recorder-bench", M{"company": company})
+		r := trayCall("POST", "/tray/recorder-bench", M{"company": company, "confirm": true}) // round 22: the bridge starts only with it
 		if r == nil || r["ok"] != true {
 			why := "The bridge is not answering."
 			if r != nil {

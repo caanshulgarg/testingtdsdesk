@@ -638,6 +638,11 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 				}
 				return M{"ok": true, "company": co, "confirm": benchConfirmText(co)}, nil
 			}
+			// round 22 (the 2.1.10 code review's Low 8 / S6): the bridge starts it only with the tray's confirm, sent after
+			// the yes/no naming the company
+			if o["confirm"] != true {
+				return M{"ok": false, "error": "The bridge asks first: choose Recorder trial: time saving in the FinCom tray icon, which names the company. Nothing was started."}, nil
+			}
 			return startBench(co), nil
 		}
 		res, err := recorderLockHolding(str(o["company"]))
@@ -661,7 +666,17 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		var res M
 		var err error
 		if path == "/tray/recorder-send" {
-			res, err = recorderSendResults()
+			// round 22 (the 2.1.10 reviews' Medium 3 / S3): the preview names the companies whose lines would go and
+			// sends nothing; the send goes only with the tray's confirm (after its yes/no)
+			o, _ := bodyObj(body)
+			switch {
+			case truthy(o["preview"]):
+				res, err = recorderSendPreview()
+			case o["confirm"] == true:
+				res, err = recorderSendResults()
+			default:
+				err = errors.New("The bridge asks first: choose Recorder trial: send results in the FinCom tray icon, which names the companies whose lines would be sent. Nothing was sent.")
+			}
 		} else {
 			res, err = recorderNoteChangeNumbers()
 		}

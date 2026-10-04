@@ -100,6 +100,9 @@ func recorderLockHolding(company string) (M, error) {
 var (
 	benchMu   sync.Mutex
 	benchLast M
+	// round 22 (the 2.1.10 code review's Low 5): true while the time saving runs; postingGoing counts it, so the light
+	// check (and its company-list refresh) does not go between the imports it times
+	benchRunning atomic.Bool
 )
 
 // for the tray's yes/no: the company it would run on, or why not
@@ -130,7 +133,9 @@ func startBench(company string) M {
 		return M{"ok": false, "error": "Time saving is already running; wait for its message box."}
 	}
 	benchLast = M{"ok": true, "state": "running", "company": company, "at": nowS()}
+	benchRunning.Store(true) // round 22: a posting going (postingGoing) until it ends
 	go func() {
+		defer benchRunning.Store(false)
 		r, err := runBench(company)
 		benchMu.Lock()
 		defer benchMu.Unlock()
@@ -291,8 +296,13 @@ func trialTools() bool      { return trialToolsOn.Load() }
 
 const trialOffWords = "Trial tools are switched off for this computer in FinCom (Tally page, owner)"
 
-// FinCom's answer to the heartbeat: trialTools true switches them on; false, absent or anything else, off
+// FinCom's answer to the heartbeat: trialTools true switches them on; false, absent or anything else, off. Round 22
+// (the 2.1.10 reviews' Medium 1 / S1): nil (no answer) is off too; see trialToolsOff
 func applyTrialTools(j M) {
+	if j == nil {
+		trialToolsOff("no answer from FinCom")
+		return
+	}
 	on := j["trialTools"] == true
 	if trialToolsOn.Swap(on) != on {
 		if on {
@@ -300,6 +310,16 @@ func applyTrialTools(j M) {
 		} else {
 			writeLog("Trial tools switched off for this computer in FinCom: the tray hides the trial items")
 		}
+	}
+}
+
+// round 22 (the 2.1.10 reviews' Medium 1 / S1): the tools are on only while FinCom's latest answer says so. Every
+// heartbeat that does not bring a 200 answer with JSON (FinCom not reached, an error answer, a revoked key), the cloud
+// link turned off or changed, and a bridge not connected at all turn them off at once (said once in the log); the next
+// answer with trialTools: true turns them on again
+func trialToolsOff(why string) {
+	if trialToolsOn.Swap(false) {
+		writeLog("Trial tools switched off (" + why + "): the tray hides the trial items until FinCom's answer says on")
 	}
 }
 

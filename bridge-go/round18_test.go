@@ -495,7 +495,7 @@ func TestTrialSendResultsPersonOnly(t *testing.T) {
 	if c.count("support") != sup0 {
 		t.Fatal("a refused request sent something")
 	}
-	code, res := callLocal(t, "POST", "/tray/recorder-send", "", "{}")
+	code, res := callLocal(t, "POST", "/tray/recorder-send", "", `{"confirm":true}`)
 	if code != 200 || res["ok"] != true || toInt(res["files"]) != 2 || toInt(res["lines"]) != 4 {
 		t.Fatalf("from the tray: %d %v", code, res)
 	}

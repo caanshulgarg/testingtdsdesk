@@ -1,4 +1,8 @@
-;; FinComRecorderTrial.tdl  -  FinCom recorder TRIAL add-on (owner's section B, items 10-12, 99, 101, 102)
+;; FinComRecorderAnyCompany.tdl  -  FinCom recorder TRIAL add-on (owner's section B, items 10-12, 99, 101, 102)
+;;
+;; Bridge 2.1.10 ships this any-company add-on under this NEW file name, so a Tally that still loads the 2.1.9
+;; file FinComRecorderTrial.tdl (one named test company only) is not widened by the install: that file is never given this gate.
+;; Unload FinComRecorderTrial.tdl first (docs/recorder-trial-sheet.txt PART 4), then load this file by its own path.
 ;;
 ;; Purpose: for the company current in Tally (whichever company is loaded), append one line per
 ;; Tally event to

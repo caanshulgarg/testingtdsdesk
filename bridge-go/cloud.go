@@ -563,6 +563,13 @@ func invokeCloudPush() int {
 
 // from FinCom: connect this computer (the key made in FinCom) or disconnect it
 func setCloudLink(o M) (M, error) {
+	// round 22 (the 2.1.10 reviews' Medium 1 / S1): unlinked or linked anew, the trial tools are off until the (new)
+	// cloud's answer says on
+	if truthy(o["off"]) {
+		trialToolsOff("this computer was disconnected from FinCom")
+	} else {
+		trialToolsOff("the link to FinCom's cloud is being changed")
+	}
 	if truthy(o["off"]) {
 		setCfg("CloudKey", "")
 		setCfg("CloudKeyGo", "")
@@ -660,6 +667,8 @@ func beatLoop() {
 			if cloudOn() {
 				beatOnce()
 				claimMainOnce()
+			} else {
+				trialToolsOff("this computer is not connected to FinCom") // round 22 (S1)
 			}
 		}()
 		select {
@@ -679,6 +688,10 @@ func beatOnce() {
 	// on first sight in this run and at most every 10 minutes while it stays open (startpoint.go); nothing else is read
 	startLightCheck(sessions)
 	r := invokeCloud(beatBody(tally, tstate, tsince, open, ports, cos), 10)
+	if r.code != 200 || r.json == nil {
+		// round 22 (the 2.1.10 reviews' Medium 1 / S1): no current "on" from FinCom: the trial tools are off at once
+		trialToolsOff("FinCom's answer to the heartbeat did not come: " + or(r.err, fmt.Sprint("HTTP ", r.code)))
+	}
 	if r.code == 200 && r.json != nil {
 		applyTrialTools(r.json) // round 21: the owner's "Trial tools on this computer" (absent: off)
 		if testMode() && !truthy(r.json["shadow"]) {

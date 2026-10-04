@@ -19,6 +19,7 @@
 package main
 
 import (
+	"bytes"
 	"embed"
 	"fmt"
 	"os"
@@ -31,6 +32,17 @@ import (
 
 //go:embed addon/*.tdl
 var addonFiles embed.FS
+
+// round 22 (the 2.1.10 reviews' Medium 2 / S2): the add-on that writes for any company ships as
+// FinComRecorderAnyCompany.tdl (addon/*.tdl). The 2.1.9 file name, FinComRecorderTrial.tdl, may still be in a Tally's
+// Local TDL list (loaded at every start), so it is never given the any-company gate: an existing file holding exactly
+// the 2.1.9 text (ZZ TEST only) is left as it is, byte for byte; anything else at that name (a pre-release 2.1.10 copy
+// with the any-company gate, a link) is replaced by the 2.1.9 text, written without following a link; where there is
+// none, none is made. The 2.1.9 text is kept apart, outside addon/*.tdl
+const legacyAddonName = "FinComRecorderTrial.tdl"
+
+//go:embed addon/legacy/FinComRecorderTrial-2.1.9.tdl
+var legacyAddon219 []byte
 
 const (
 	sidSystem = "*S-1-5-18"
@@ -132,8 +144,29 @@ func prepareFinComFolders(base string, allUsers bool) ([]string, error) {
 		}
 		say("the add-on " + e.Name() + " written in " + add)
 	}
+	keepLegacyAddon(add, say)
 	say(fmt.Sprintf("the recorder folder %s and the add-on folder %s are ready (%s)", rec, add, map[bool]string{true: "all users: Users may add files to the recorder folder only", false: "just for this user"}[allUsers]))
 	return lines, nil
+}
+
+// the 2.1.9 add-on file: left when it holds the 2.1.9 text, put back to it when it holds anything else, never made
+func keepLegacyAddon(add string, say func(string)) {
+	old := filepath.Join(add, legacyAddonName)
+	fi, err := os.Lstat(old)
+	if err != nil {
+		return
+	}
+	if fi.Mode().IsRegular() {
+		if b, err := os.ReadFile(old); err == nil && bytes.Equal(b, legacyAddon219) {
+			say("the 2.1.9 add-on " + old + " is left as it is (ZZ TEST only); the any-company add-on is " + filepath.Join(add, "FinComRecorderAnyCompany.tdl"))
+			return
+		}
+	}
+	if err := writeFresh(old, legacyAddon219); err != nil {
+		say("the 2.1.9 add-on " + old + " could not be put back to its 2.1.9 text (ZZ TEST only): " + err.Error())
+		return
+	}
+	say("the 2.1.9 add-on " + old + " did not hold its 2.1.9 text: put back to it (ZZ TEST only)")
 }
 
 // a folder that is a plain folder made by this step or by an administrator: anything else at its path moved aside first

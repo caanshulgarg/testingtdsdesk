@@ -710,7 +710,7 @@ func waitLease(company string, setStatus func(string, string), pause func(time.D
 // part-way (interrupted) or waiting for Tally is not one: the light check is never held back by it. The postings
 // themselves still go by activeJobs
 func postingGoing() bool {
-	if importsInFlight.Load() > 0 || postTaking.Load() {
+	if importsInFlight.Load() > 0 || postTaking.Load() || benchRunning.Load() { // round 22: the time saving too
 		return true
 	}
 	jobsMu.Lock()

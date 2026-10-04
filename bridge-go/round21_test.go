@@ -456,7 +456,7 @@ func TestRecorderBenchAnyCompany(t *testing.T) {
 		t.Fatalf("the yes/no: %q", benchConfirmText(gsc))
 	}
 	n0 := r19Count(f)
-	if code, r := callLocal(t, "POST", "/tray/recorder-bench", "", `{}`); code != 200 || r["ok"] != true || str(r["company"]) != gsc {
+	if code, r := callLocal(t, "POST", "/tray/recorder-bench", "", `{"confirm":true}`); code != 200 || r["ok"] != true || str(r["company"]) != gsc {
 		t.Fatalf("start: %d %v", code, r)
 	}
 	var s M
@@ -525,7 +525,7 @@ func TestRecorderLockAnyCompanyWords(t *testing.T) {
 
 // --- B3: the add-on writes for whichever company is open: FCRIsTrial is "a company is current"; every other rule kept
 func TestAddonAnyCompany(t *testing.T) {
-	tdl := readText(filepath.Join("addon", "FinComRecorderTrial.tdl"))
+	tdl := readText(filepath.Join("addon", "FinComRecorderAnyCompany.tdl"))
 	if strings.Contains(tdl, "ZZ TEST") || strings.Contains(tdl, "ZZ ") {
 		t.Fatal("the add-on still names ZZ TEST")
 	}

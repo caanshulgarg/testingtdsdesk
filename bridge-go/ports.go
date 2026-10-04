@@ -301,8 +301,22 @@ var (
 
 func coInfoFile() string { return filepath.Join(syncDir(), "company-info.json") }
 
+// round 22 (the 2.1.10 reviews' Medium 4 / S4): coInfo (and its file) only under coInfoMu: the company list is asked
+// from /status, Test connection, the keeper, note change numbers and the light check's own goroutine at once, and a
+// map read and written together ends the process. The lock is never held while Tally is asked (look up, let go, ask,
+// take it again, store); a stored entry is never changed afterwards, so callers may read it without the lock
+var coInfoMu sync.Mutex
+
+// for the tests: forget what is held in memory
+func resetCoInfo() {
+	coInfoMu.Lock()
+	coInfo = nil
+	coInfoMu.Unlock()
+}
+
 // a company's GSTIN and PAN: asked once, when it is first seen, and remembered
 func getCoInfo(tc *TC, name string, port int) M {
+	coInfoMu.Lock()
 	if coInfo == nil {
 		coInfo = readObjFile(coInfoFile())
 		if coInfo == nil {
@@ -312,9 +326,11 @@ func getCoInfo(tc *TC, name string, port int) M {
 	if x := obj(coInfo[name]); x != nil {
 		at, _ := parseTime(str(x["at"]))
 		if str(x["gstin"]) != "" || str(x["pan"]) != "" || time.Since(at) < 6*time.Hour {
+			coInfoMu.Unlock()
 			return x
 		}
 	}
+	coInfoMu.Unlock()
 	g, pan := "", ""
 	if raw, err := invokeTally(tc, port, coInfoRequest(name), 15); err == nil {
 		if c := xmlDoc(raw).All("COMPANY"); len(c) > 0 {
@@ -326,6 +342,11 @@ func getCoInfo(tc *TC, name string, port int) M {
 		}
 	}
 	x := M{"gstin": g, "pan": pan, "at": nowS()}
+	coInfoMu.Lock()
+	defer coInfoMu.Unlock()
+	if coInfo == nil { // forgotten meanwhile (a test)
+		coInfo = M{}
+	}
 	coInfo[name] = x
 	_ = saveFile(coInfoFile(), jsonText(coInfo))
 	return x
@@ -348,6 +369,13 @@ func copySessions(l []M) []M {
 func openCompanies(fresh bool) []M { return openCompaniesWith(fin, fresh) }
 
 func openCompaniesWith(tc *TC, fresh bool) []M {
+	l, _ := openCompaniesAsk(tc, fresh)
+	return l
+}
+
+// round 22 (the 2.1.10 code review's Low 7): also whether Tally was asked and every Tally that is open and not skipped
+// gave its list afresh (false: a list held from before stands for one, or one did not answer, or nothing was asked)
+func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 	cacheSec := toInt(cfg("StatusCacheSec"))
 	if cacheSec < 30 {
 		cacheSec = 30
@@ -356,7 +384,7 @@ func openCompaniesWith(tc *TC, fresh bool) []M {
 	if !fresh && coCache != nil && time.Since(coCacheAt).Seconds() < float64(cacheSec) {
 		c := copySessions(coCache)
 		coMu.Unlock()
-		return c
+		return c, false
 	}
 	coMu.Unlock()
 	shared := filepath.Join(syncDir(), "open-companies.json")
@@ -366,12 +394,13 @@ func openCompaniesWith(tc *TC, fresh bool) []M {
 				coMu.Lock()
 				coCache, coCacheAt = l, t
 				coMu.Unlock()
-				return copySessions(l)
+				return copySessions(l), false
 			}
 		}
 	}
 	mode, plan := portPlan()
 	sessions := []M{}
+	allFresh := true
 	for _, pp := range plan {
 		e := M{"port": toInt(pp["port"]), "ok": false, "companies": []any{}, "error": "", "mine": pp["mine"], "session": pp["session"], "program": pp["program"], "user": pp["user"], "skipped": false}
 		if cfgB("OnlyMySession") && pp["mine"] == false {
@@ -391,6 +420,9 @@ func openCompaniesWith(tc *TC, fresh bool) []M {
 			continue
 		}
 		raw, err := invokeTally(tc, toInt(pp["port"]), companiesRequest(), 8)
+		if err != nil {
+			allFresh = false
+		}
 		if err != nil && (errors.Is(err, errPreempted) || errors.Is(err, errBackoff)) && prevCompanies(toInt(pp["port"])) != nil {
 			// a background read stopped or held back: the companies named last time stand, nothing new is known
 			e["ok"], e["companies"], e["tallyState"] = true, prevCompanies(toInt(pp["port"])), "open"
@@ -421,7 +453,7 @@ func openCompaniesWith(tc *TC, fresh bool) []M {
 	coCache, coCacheAt = sessions, time.Now()
 	coMu.Unlock()
 	_ = saveFile(shared, jsonText(sessions))
-	return copySessions(sessions)
+	return copySessions(sessions), allFresh
 }
 
 // the companies a Tally named the last time it answered

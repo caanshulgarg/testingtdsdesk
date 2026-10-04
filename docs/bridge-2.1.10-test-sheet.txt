@@ -17,10 +17,13 @@ What is new in 2.1.10 (over 2.1.9)
         A stop of reading (from FinCom, or the bridge's own) still stops it, and a posting still goes first;
       - a posting that stopped part-way (interrupted) or that waits for Tally no longer holds the check back; only a
         posting actually going does;
-      - the list of open companies is asked afresh (the small company-list request) when it is older than 10 minutes,
-        so a company opened later is seen;
+      - the list of open companies is asked afresh (the small company-list request; for a company not seen before
+        also the small company-info request, its GSTIN and PAN, once) when it is older than 10 minutes, so a company
+        opened later is seen. When Tally does not give the list (busy, or a posting went first), it is asked again at
+        the next turn;
       - each check writes one line in the log: "Light check of <company>: starting point recorded (...)",
-        "... unchanged starting point ...", or "... skipped: <why>";
+        "... unchanged starting point ..." (at most once an hour per company), or "... skipped: <why>" (once per
+        company and kind of reason every 10 minutes);
       - the heartbeat lists every company open in Tally (not only the kept ones) with its GUID and change numbers, in
         the shape FinCom's cloud reads.
   - Trial tools for any company (the owner's decision of 04-Oct-2026): no company-name check anywhere.
@@ -33,9 +36,18 @@ What is new in 2.1.10 (over 2.1.9)
         add 100 test entries (and 2 ledgers if missing) to <company>. Continue?"; its journals' narration is
         "TRIAL FinCom bench <n>" and its two ledgers are "TRIAL Bench Dr" (Indirect Expenses) and "TRIAL Bench Cr"
         (Sundry Creditors).
-      - The trial add-on (FinComRecorderTrial.tdl) writes for whichever company is open in Tally while it is loaded.
+      - The trial add-on writes for whichever company is open in Tally while it is loaded. It ships under a NEW file
+        name, C:\ProgramData\FinCom\addon\FinComRecorderAnyCompany.tdl. The 2.1.9 file FinComRecorderTrial.tdl is
+        not changed by the install (so a Tally that still loads it is not widened), but it must be unloaded (step 0).
         So: only the company you test on is open in Tally while the add-on is loaded; unload it before working in any
-        other company.
+        other company. The bridge does not check that only one company is open: that is up to you.
+      - What the add-on records: each line holds the voucher's narration, number and date, the party and ledger
+        names, master names and their groups, and the Tally user name. The recorder folder
+        C:\ProgramData\FinCom\recorder is readable by every Windows user on this PC.
+      - "Recorder trial: send results" asks first: its yes/no names the companies whose recorder lines will be sent
+        (and how many lines each) and says what a line holds; nothing is sent unless you answer Yes.
+      - The trial tools turn off at once when FinCom's answer to the heartbeat does not come (FinCom not reached, the
+        computer's key revoked, the cloud link turned off or changed); they come back with FinCom's next answer.
   - Posting is unchanged.
 
 PLEASE READ - what the trial leaves in the company you test on
@@ -47,6 +59,10 @@ PLEASE READ - what the trial leaves in the company you test on
   Multi-user (a second PC on the same data, PART 3 of the trial sheet): not tested yet (the owner, 04-Oct).
 
 0. BEFORE THE INSTALL
+   Before installing 2.1.10, unload any FinComRecorderTrial.tdl (PART 4) - then load the new file by its new path
+   (C:\ProgramData\FinCom\addon\FinComRecorderAnyCompany.tdl, PART 1) only when the trial starts. PART 1 and PART 4
+   are in the trial sheet, docs/recorder-trial-sheet.txt. In TallyPrime: F1 (Help) > TDLs & Add-Ons > F4 (Manage Local TDLs): if FinComRecorderTrial.tdl is
+   listed, clear that line and accept; it must no longer show as Loaded.
    On FinCom's Tally page, this computer (NWS144): switch "Trial tools on this computer" ON (owner only).
    TallyPrime open with the company you test on, and only that company.
 
@@ -67,8 +83,8 @@ PLEASE READ - what the trial leaves in the company you test on
        "TRIAL gap 1" and "TRIAL gap 2").
    You should see: within about 10 minutes, the client in FinCom shows "up to 2 changes not received" (the bridge does
        not read old entries; FinCom sees that 2 changes happened that it has not received). The log shows a line
-       "Light check of <company>: unchanged starting point ALTVCHID=...; now ALTVCHID=..., ALTMSTID=..." every 10
-       minutes or so.
+       "Light check of <company>: unchanged starting point ALTVCHID=...; now ALTVCHID=..., ALTMSTID=..." at most once
+       an hour (the check itself still runs every 10 minutes or so).
    If nothing comes: "Show log" > the lines starting "Light check": each says what happened or why it was skipped.
 
 3. TEST READING FROM TALLY (once)
@@ -80,13 +96,16 @@ PLEASE READ - what the trial leaves in the company you test on
 4. THE RECORDER TRIAL
    The steps in Tally (loading the add-on, the exact Tally menu words, the entries to make, delete and cancel, each
    with TRIAL at the start of its narration): see the trial sheet, docs/recorder-trial-sheet.txt. The add-on file is
-       C:\ProgramData\FinCom\addon\FinComRecorderTrial.tdl
+       C:\ProgramData\FinCom\addon\FinComRecorderAnyCompany.tdl
+   (the new path; the 2.1.9 FinComRecorderTrial.tdl stays unloaded.)
    Around the steps of the trial sheet:
    a. Before a delete and before a cancel: tray > "Recorder trial: note change numbers". You should see a box with
       "<company>: ALTVCHID=..., ALTMSTID=..., at <time>".
    b. After the delete and after the cancel: press it again.
-   c. At the end: tray > "Recorder trial: send results". You should see "Sent to FinCom support: N lines in K files
-      (reference ...)".
+   c. At the end: tray > "Recorder trial: send results". A yes/no first names the companies whose recorder lines
+      will be sent (and how many lines each) and says what a line holds (narration, number and date, party and ledger
+      names, master names, Tally user name): check it names only the company you test on, then Yes. You should see
+      "Sent to FinCom support: N lines in K files (reference ...)".
 
 4b. CAN THE ADD-ON HANG OR SLOW TALLY
    The three short tests of PART 3C of the trial sheet (time saving with and without the add-on, the file locked for
