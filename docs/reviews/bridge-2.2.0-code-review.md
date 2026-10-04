@@ -861,4 +861,116 @@ spellings passing the round 3 guard))
   names both); neither asks a computed figure. Not run on a real Tally: whether NATIVEMETHOD or the report gives the
   numbers is what the owner's read test will show.
 
-Range: bdfe261..2a62c54
+## Round 5 (2a62c54..184cb61)
+
+Reviewed: 04-Oct-2026, by the reviewer in the Claude Code session. I read git diff 2a62c54 184cb61 -- bridge-go/
+docs/tally-allowlist.md from a clean worktree of 184cb61. It covers the R4-1 fix (datedRefused by request id) and the
+owner's finding: FinComCompany's FETCH of ALTVCHID/ALTMSTID came back empty on NWS144. The fix adds form a
+(NATIVEMETHOD) and form b (the FinComCompanyNumbers report), keeps the form per company, and never records a 0
+starting point.
+
+Checks (clean worktree of 184cb61):
+- `go vet ./...` and `GOOS=windows go vet ./...`: clean.
+- `go test -count=1 ./...`: ok (451 s). The tree stayed clean, and tests/fixtures/beat-2.1.10.json was not rewritten.
+- One throwaway test (zz_scratch_r5_test.go, in a second worktree) confirmed R5-1 and R5-2. It was deleted with the
+  worktree; nothing was added to the repo.
+
+### Round 4 finding: is the "Fixed" claim true?
+
+| # | Claim | Verdict | Notes |
+|---|---|---|---|
+| R4-1 M | Fixed | Confirmed for the dated ids; the guard's other two classes do not hold (R5-1, R5-2) | Every allowed id is classified in requestClass (tally.go:298). With ReadDays off, the dated ids are refused by id, so spelling no longer matters: a mixed-case `<svFromDate>` TDSDeskKeepList for April 2019 and a lower-cased Day Book are refused. An unclassified id is refused (fail closed). Import is passed: tallyRequestID gives "Import" only for the fixed importHead prefix, whose TALLYREQUEST is Import Data, so it cannot read. requestDated now lower-cases and decodes. But two classes still decide by content: "keepAbove" by an exact rebuild with any AlterID (R5-1), and "undated" by looking for date markers (R5-2). |
+
+### The change-number forms against the owner's rules
+
+- Small, one company: form a is the existing FinComCompany collection (NAME, GUID plus two NATIVEMETHODs, filtered
+  `$Name = "<company>"`). Form b repeats one line over FinComCNCos, a Company collection filtered by the same `$Name`.
+  Holds as built; R5-2 covers what the guard admits under that id.
+- 15 s: both forms use keepNum("CompanyCheckSec", 15). This is a local setting; a larger value is the owner's own.
+- Never during an import; yields to postings: both forms go with the caller's TC. The light check yields
+  (lightCheckYield: posting, lease, importsInFlight), and the other callers (posting, jobs, keep, trial, measure,
+  recorder note) are the ones that sent FinComCompany before. Form b goes only when form a listed the company without
+  numbers, never after an error. After form b answers, only form b is sent for that company. When neither form gives
+  numbers, each check sends two small requests.
+- No computed figure: $Name, $Guid, $AltVchId and $AltMstId are reads of the company object's stored values and
+  counters. The only `$$` is $$SysName:XML. TestNoComputedFigure is unchanged in this range (no new exemption). It looks
+  only at `$$` functions and balance names with a period, so a single-`$` FIELD SET such as `$ClosingBalance` would not
+  be caught (test limit, already there; see R5-2).
+- 0 / empty never becomes a starting point: setCompanyAlts returns false when both numbers are 0 or empty, and nothing
+  is noted. noteStartPoint returns before the file and before spPending when altV <= 0; only spLatest (the beat's
+  latest numbers) keeps the 0. TestChangeNumbersZeroNotRecorded and TestChangeNumbersEmptyAnswer cover both.
+
+### Findings, round 5 (by severity)
+
+R5-1. MEDIUM (owner's rule: never a full read with ReadDays off; the same class as R2-2, and here with a code path that
+sends it). The keepAbove class admits TDSDeskKeepList above any AlterID, 0 included, and the measuring tool can send
+"above 0".
+- Where:
+  - tally.go:331-334 and :344-351: keepAboveExact rebuilds keepListAboveRequest(company, N) for any N and any
+    company, with no check against the starting point.
+  - measure.go:237-259: step a reads ALTVCHID with companyCheckRequest only (form a, no form b), and step a2 sends
+    keepListAboveRequest(company, spAfter) with spAfter = that ALTVCHID when no starting point is recorded. measureOne
+    uses fin (not a person TC).
+- Scenario:
+  - This is the owner's NWS144 case: form a's numbers come back empty, and no starting point is recorded yet (the
+    owner's finding is that none ever was). FinCom support runs Measure Tally.
+  - Step a gives altV = 0, so step a2 sends TDSDeskKeepList "$AlterID > 0" with no dates.
+  - With ReadDays off it passes datedRefused. Tally answers GUID, MasterID, AlterID and date for every entry of its
+    current period.
+- Confirmed: TestScratchR5Guard. With no starting point, keepListAboveRequest(ZZ TEST, 0) and
+  keepListAboveRequest("Any Other Co", 0) each passed checkAllowed and datedRefused.
+- Fix:
+  - In keepAboveExact, also require a starting point for the company and N >= it (no starting point: refuse), as
+    sliceExact does. Source B always asks at or above the starting point; the read test's measurement is a person TC.
+  - In measure.go, read the numbers through companyCheck (forms a and b), and skip a2 ("no starting point and no
+    change numbers: not asked") when there is no starting point and altV <= 0.
+- Test: extend TestGuardByRequestID: above 0, above the starting point - 1, and a company with no starting point are
+  each refused with ReadDays off; above the starting point passes. Add a measure test with cnMode "none" and no
+  starting point: no TDSDeskKeepList is sent.
+
+R5-2. MEDIUM (owner's rules: never a full read with ReadDays off, no computed figure; form b must not be able to become
+anything wider; the same class as R2-2, R3-1 and R4-1). The "undated" ids are judged by the absence of date markers,
+not by their shape. So form b's report and the other undated ids can carry a Voucher read or a computed field.
+- Where:
+  - tally.go:335-338: undated passes when !requestDated(x).
+  - allowlist.go:95-123: checkAllowed checks the id, `<COLLECTION NAME>` and `<REPORTNAME>` only, not `<REPORT
+    NAME>`, `<FIELD>` SETs or a collection's TYPE.
+- Confirmed (ReadDays off, fin; each passed checkAllowed and datedRefused):
+  - companyNumbersRequest with FinComCNCos made `<TYPE>Voucher</TYPE>`, its filter dropped, and its fields SET to
+    `$Amount` and `$Narration`: every entry's amount and narration for Tally's current period;
+  - companyNumbersRequest with a FIELD SET to `$ClosingBalance` (a computed figure);
+  - a FinComCompany collection of TYPE Voucher with GUID, DATE, AMOUNT, NARRATION and no filter;
+  - a TDSDeskCompanies Voucher collection filtered `$EffectiveDate >= "1-Apr-2019"` (a period with no marker
+    requestDated knows).
+- No builder sends these today. As before, the guard is the rule's enforcement and does not stop a wrong caller. The
+  coordinator asked whether form b's report can be turned into anything wider: as far as the bridge's guard is
+  concerned, it can.
+- Fix (either):
+  - Pin by exact rebuild, as for the exceptions: cnReportID == companyNumbersRequest(co); FinComCompany ==
+    companyCheckRequest(co); FinComFree == companyCheckRequest(""); the other undated ids by their builders (each takes
+    a company and at most a MasterID range or a name).
+  - Or at least: for undated ids that are not measure-only, refuse any `<TYPE>Voucher` (lower-cased, decoded) and any
+    `<REPORT`/`<FIELD` other than cnReportID's exact request.
+- Test: TestUndatedPinned. The four constructed requests above are refused with ReadDays off; every allowListSamples
+  undated request still passes.
+
+R5-3. LOW. "Recorder trial: note change numbers" writes a number the check did not give.
+- Where: recorder.go:427. After companyCheck returns without error but with no numbers (neither form gave any), the
+  line says `ALTVCHID=<companyAlter(name)>`. That is 0, or a value cached from an earlier check, stamped with the time
+  now.
+- Fix: write "ALTVCHID not given" when this check gave no numbers (have setCompanyAlts' result returned by
+  companyCheck).
+
+R5-4. LOW (by design, noted). A company with no entries yet (ALTVCHID 0) gets no starting point until a check sees its
+first entry. That entry, and any others before that check, are then at or below the starting point and are not
+followed; the Day Book upload covers them.
+
+Verdict, round 5:
+- No High.
+- Two Medium: R5-1 (a full heads read the measuring tool can actually send on the owner's NWS144 case) and R5-2 (the
+  undated class, form b included, is not pinned to its shape). They block the build.
+- R4-1's spelling bypass is confirmed closed for the dated ids. The change-number forms meet the owner's rules as
+  built, and 0 or empty never becomes a starting point.
+- R5-3 and R5-4 are Low.
+
+Range: bdfe261..184cb61

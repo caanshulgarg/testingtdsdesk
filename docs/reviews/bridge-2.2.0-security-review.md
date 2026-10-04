@@ -421,4 +421,55 @@ Verdict, round 4:
   names both); neither asks a computed figure. Not run on a real Tally: whether NATIVEMETHOD or the report gives the
   numbers is what the owner's read test will show.
 
-Range: bdfe261..2a62c54
+## Round 5 (2a62c54..184cb61)
+
+Reviewed: 04-Oct-2026. I read git diff 2a62c54 184cb61 -- bridge-go/ docs/tally-allowlist.md from a clean worktree of
+184cb61, alongside round 5 of the code review (bridge-2.2.0-code-review.md, "Round 5"), which has the details.
+- go vet (Linux, Windows): clean.
+- go test -count=1 ./...: ok. The tree stayed clean; the beat fixture was not rewritten.
+- One throwaway test confirmed R5-S1 and R5-S2. It was deleted and the worktree removed.
+
+### Round 4 finding: is the "Fixed" claim true?
+
+| # | Claim | Verdict | Notes |
+|---|---|---|---|
+| R4-S1 M | Fixed with R4-1 | Confirmed for the dated ids; see R5-S1 and R5-S2 | The dated ids are refused by id with ReadDays off, whatever the spelling. Unclassified ids are refused. Import has a fixed Import Data head and cannot read. The keepAbove and undated classes still decide by content. |
+
+What holds in the new code:
+- Form a and form b ask one company by `$Name`, 15 s each, with the caller's TC (the light check yields to postings,
+  leases and imports). Form b goes only after form a listed the company without numbers.
+- No computed figure as built: $AltVchId and $AltMstId are the company's stored counters; the only `$$` is
+  $$SysName.
+- 0 or empty is never recorded as a starting point; the form kept (sync\change-number-forms.json) holds a letter, no
+  data.
+- Nothing new leaves the computer: the log keeps answer heads (tags only) and the numbers.
+
+### Findings, round 5
+
+- R5-S1 (MEDIUM, never a full read with ReadDays off; code review R5-1). TDSDeskKeepList passes as "keepAbove" with
+  any AlterID, 0 included, and the measuring tool sends "above 0".
+  - It does so when step a's FinComCompany (form a only) gives no numbers and no starting point is recorded: the
+    owner's NWS144 case.
+  - That reads every entry's GUID, MasterID, AlterID and date in Tally's current period.
+  - Confirmed with a throwaway test.
+  - Fix: N >= the company's starting point (none: refuse) in keepAboveExact; the measuring tool uses both forms and
+    skips a2 without a starting point.
+
+- R5-S2 (MEDIUM, never a full read and no computed figure; form b must not widen; code review R5-2). Undated ids pass
+  on the absence of date markers, and checkAllowed does not look at a request's REPORT, FIELD SETs or collection TYPE.
+  - Confirmed with ReadDays off: FinComCompanyNumbers turned into a Voucher report of $Amount and $Narration, or with
+    a `$ClosingBalance` field; FinComCompany as an unfiltered Voucher collection; TDSDeskCompanies with a period
+    filtered on `$EffectiveDate`. Each passed.
+  - No builder sends these. As in rounds 2 to 4, the guard does not stop a wrong caller.
+  - Fix: pin the undated ids (form b and FinComCompany first) by exact rebuild, or refuse a Voucher type, REPORT or
+    FIELD under them.
+
+- Code review R5-3 (the change-number note can write a cached or 0 number) and R5-4 (a company with no entries gets
+  its starting point at its first seen entry) are Low with no security edge.
+
+Verdict, round 5:
+- No High.
+- R5-S1 and R5-S2 are Medium and block the build. R5-S1 has a path in today's code (the measuring tool).
+- R4-S1 is confirmed for the dated ids; the change-number forms meet the owner's rules as built.
+
+Range: bdfe261..184cb61
