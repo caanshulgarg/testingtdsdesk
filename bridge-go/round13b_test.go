@@ -29,6 +29,7 @@ func TestEmptiedDayConfirmedByCollection(t *testing.T) {
 	f := newStandTally(t) // no voucher: the Day Book and FinComTag both answer whole envelopes with none
 	c := newStandCloud(t)
 	standBridge(t, f, c.cfg())
+	oldDaysOn() // the owner's rule of 04-Oct-2026 turns reading old days off (ReadDays); the round's day logic is still tested here
 	r12State(td)
 	dir := syncFolder(zz)
 	writeDayFile(dir, td, r12Voucher(td), false)
@@ -77,6 +78,7 @@ func TestEmptiedDayNotConfirmedWhenCollectionListsEntries(t *testing.T) {
 	f.behave = emptyDayBook()
 	f.mu.Unlock()
 	standBridge(t, f, c.cfg())
+	oldDaysOn() // the owner's rule of 04-Oct-2026 turns reading old days off (ReadDays); the round's day logic is still tested here
 	r12State(td)
 	dir := syncFolder(zz)
 	text := r12Voucher(td)

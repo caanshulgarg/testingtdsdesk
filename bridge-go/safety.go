@@ -150,10 +150,15 @@ func companyCheck(tc *TC, company string, port int) (string, error) {
 }
 
 func setCompanyAlts(company string, c *Node) {
+	v, m := toI64(re(`\D`).ReplaceAllString(nt(c, "ALTVCHID"), "")), toI64(re(`\D`).ReplaceAllString(nt(c, "ALTMSTID"), ""))
 	altMu.Lock()
-	companyAlts[companyKey(company)] = toI64(re(`\D`).ReplaceAllString(nt(c, "ALTVCHID"), ""))
-	companyAltsM[companyKey(company)] = toI64(re(`\D`).ReplaceAllString(nt(c, "ALTMSTID"), ""))
+	companyAlts[companyKey(company)] = v
+	companyAltsM[companyKey(company)] = m
 	altMu.Unlock()
+	// round 18: the company's starting point (once), and its latest numbers for the heartbeat (startpoint.go)
+	if strings.TrimSpace(nt(c, "ALTVCHID")) != "" || strings.TrimSpace(nt(c, "ALTMSTID")) != "" {
+		noteStartPoint(company, strings.TrimSpace(html.UnescapeString(nt(c, "GUID"))), v, m)
+	}
 }
 
 // the company check's answer to the small check after a timeout: its highest AlterIDs are noted too
@@ -250,7 +255,7 @@ func hasTag(narration, tag string) bool {
 }
 
 func tagCheckRequest(company, date string) string {
-	return fcCollection(tagCheckID, company, "<SVFROMDATE>"+date+"</SVFROMDATE><SVTODATE>"+date+"</SVTODATE>", "Voucher",
+	return fcCollection(tagCheckID, company, periodVars(date, date), "Voucher",
 		"GUID, MASTERID, ALTERID, DATE, VOUCHERTYPENAME, VOUCHERNUMBER, NARRATION, ISOPTIONAL, ISCANCELLED", "")
 }
 
@@ -263,7 +268,7 @@ func masterCheckRequest(company, a, z string, master string) string {
 	if m == "" {
 		m = "0"
 	}
-	return fcCollection(masterCheckID, company, "<SVFROMDATE>"+a+"</SVFROMDATE><SVTODATE>"+z+"</SVTODATE>", "Voucher",
+	return fcCollection(masterCheckID, company, periodVars(a, z), "Voucher",
 		"GUID, MASTERID, ALTERID, DATE, VOUCHERTYPENAME, VOUCHERNUMBER, NARRATION, ISOPTIONAL, ISCANCELLED", "$MasterID = "+m)
 }
 
@@ -465,6 +470,13 @@ func leaseTake(company string) (bool, string) {
 	leases[company] = time.Now().Add(time.Duration(leaseSec()) * time.Second)
 	leaseMu.Unlock()
 	return true, ""
+}
+
+// this bridge holds the company's lease now (a posting or a read of its own is going)
+func leaseHeldHere(company string) bool {
+	leaseMu.Lock()
+	defer leaseMu.Unlock()
+	return time.Until(leases[company]) > 0
 }
 
 func leaseRelease(company string) {

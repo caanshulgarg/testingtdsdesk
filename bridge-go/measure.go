@@ -219,6 +219,21 @@ func runMeasure(o measureOpts) (M, error) {
 		return measureReport(o, company, port, items, started)
 	}
 
+	// a2. round 18 (the owner's rule of 04-Oct-2026, measurement only): the entries above the company's starting point,
+	// the AlterID filter alone with NO dates (TDSDeskKeepList); the time says whether Tally answers it without looking
+	// at every entry of its books (only NWS144 can say; a stand-in cannot)
+	spAfter, had := startPointOf(company)
+	spHow := "the starting point"
+	if !had {
+		spAfter, spHow = altV, "the current ALTVCHID (no starting point recorded yet)"
+	}
+	it, _ = measureOne(port, "a2", fmt.Sprintf("entries with AlterID above %s %d, no dates (TDSDeskKeepList)", spHow, spAfter),
+		keepListAboveRequest(company, spAfter), "VOUCHER")
+	add(it)
+	if stopped(it) {
+		return measureReport(o, company, port, items, started)
+	}
+
 	// b. AlterID above (highest - 500), the whole year
 	after := altV - 500
 	if after < 0 {
@@ -752,7 +767,7 @@ func bridgeCall(method, path string, body any, timeout time.Duration) M {
 
 // the measuring tool's requests (measure-only on the allow-list)
 func measurePeriod(a, z string) string {
-	return "<SVFROMDATE>" + a + "</SVFROMDATE><SVTODATE>" + z + "</SVTODATE>"
+	return periodVars(a, z)
 }
 func measureReqB(company, a, z string, after int64) string {
 	return fcCollection("FinComMeasureB", company, measurePeriod(a, z), "Voucher", measureVchFetch, fmt.Sprintf("$AlterID > %d", after))

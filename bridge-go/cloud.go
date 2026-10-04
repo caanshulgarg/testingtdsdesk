@@ -688,6 +688,9 @@ func beatOnce() {
 		}
 	}
 	tstate, tsince := tallyOverall(sessions)
+	// round 18 (the owner's addition of 04-Oct-2026): each company seen open gets the light FinComCompany request, once
+	// on first sight in this run and at most every 10 minutes while it stays open (startpoint.go); nothing else is read
+	go lightCheckOpen(sessions)
 	cos := []any{}
 	for _, d := range keptDirs() {
 		st := readKeepState(d)
@@ -784,7 +787,10 @@ func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
 		"lastRead": lastReadAt(), "events": true, "computer": computerName(), "allowlist": allowListBeat(),
 		"postOnly": toAny(postOnlyList()), // round 11: the companies this computer may post to (empty: any)
 		// round 15: the batch sizes applied (the file's, or FinCom's), and when FinCom last set them
-		"postBatchBills": postBatchBills(), "postBatchBank": postBatchBank(), "settingsAt": cfgS("SettingsAt")}
+		"postBatchBills": postBatchBills(), "postBatchBank": postBatchBank(), "settingsAt": cfgS("SettingsAt"),
+		// round 18 (prospective only): each company's starting point, and its latest FinComCompany numbers; whether old
+		// days are read at all (off by the owner's rule of 04-Oct-2026)
+		"startPoint": startPointBeat(), "changeNumbers": changeNumbersBeat(), "readDays": readDaysOn()}
 }
 
 // --- the posting queue (build 199): postings queued in FinCom on any computer, taken one at a time

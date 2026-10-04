@@ -4,7 +4,8 @@
 // there, so the bridge gathers the evidence itself: for one day (the newest the copy holds an entry for), the Day Book
 // with yyyymmdd dates, the Day Book with d-MMM-yyyy dates and the FinComTag collection, one after the other, each with
 // its count, size, time and head (tags only) in the log. Nothing is written: no day file, no mark, no cloud queue, no
-// state; nothing goes to the cloud.
+// state; nothing goes to the cloud. Round 18 (2.1.9): the full matrix on an anchor day (runReadTest); it still changes
+// nothing.
 package main
 
 import (
@@ -78,8 +79,68 @@ func readTestDay(company string) string {
 	return today()
 }
 
-// the three requests, one at a time, through the same gate as FinCom's reads (one request to Tally at a time); each
-// answer counted and its head logged, nothing kept. Run by startReadTest (one at a time); callable directly too
+// round 18 (2.1.9): the anchor day: the newest date among the entries FinComTag lists (FinComTag with any date answers
+// Tally's current period on NWS144; on a Tally that applies the date it lists today's); else the newest day of the copy
+// that holds an entry, else today. days: how many entries FinComTag listed on each date
+func readTestAnchor(port int, company string) (string, map[string]int) {
+	days := map[string]int{}
+	anchor := ""
+	if raw, err := invokeTally(fin, port, tagCheckRequest(company, today()), 60); err == nil {
+		for _, v := range reVoucher.FindAllString(raw, -1) {
+			if d := group(`<DATE>(\d{8})</DATE>`, v, 1); d != "" {
+				days[d]++
+				if d > anchor {
+					anchor = d
+				}
+			}
+		}
+	}
+	if anchor == "" {
+		return readTestDay(company), map[string]int{}
+	}
+	return anchor, days
+}
+
+var reVoucher = re(`<VOUCHER\b[\s\S]*?</VOUCHER>`)
+
+// a day FinComTag's list shows with no entry, inside the list's span, the nearest before the anchor ("" when none): a
+// form that answers it with entries ignores the period
+func readTestEmptyDay(anchor string, days map[string]int) string {
+	first := anchor
+	for d := range days {
+		if d < first {
+			first = d
+		}
+	}
+	for d := addDays(anchor, -1); d >= first; d = addDays(d, -1) {
+		if days[d] == 0 {
+			return d
+		}
+	}
+	return ""
+}
+
+// every voucher of a Day Book answer is dated d (and there is at least one)
+func onlyDay(raw, d string) bool {
+	vs := reVoucher.FindAllString(raw, -1)
+	if len(vs) == 0 {
+		return false
+	}
+	for _, v := range vs {
+		if group(`<DATE>(\d{8})</DATE>`, v, 1) != d {
+			return false
+		}
+	}
+	return true
+}
+
+// the read test, one request at a time, through the same gate as FinCom's reads (one request to Tally at a time); each
+// answer counted and its head logged, nothing kept. Round 18 (2.1.9): the full matrix on the anchor day: the Day Book in
+// the four date forms (each that answers the day with only that day's entries is asked an empty day too), FinComTag,
+// FinComCompany (the change numbers), one measurement of the entries above the starting point with no dates, and
+// FinComCompany sent as UTF-16 and as UTF-8 (when TallyRequestUTF16 is off). It logs which form answered the anchor day
+// with exactly its entries and CHANGES NOTHING: no form is switched, no file written, nothing goes to the cloud (the
+// owner's rule of 04-Oct-2026). Run by startReadTest (one at a time); callable directly too
 func runReadTest(company string) (M, error) {
 	if company == "" {
 		company = trayMeasureCompany()
@@ -94,27 +155,100 @@ func runReadTest(company string) (M, error) {
 	if err != nil {
 		return nil, err
 	}
-	d := readTestDay(company)
-	type probe struct{ label, x string }
-	probes := []probe{
-		{"Day Book, dates yyyymmdd", dayBookRequest(company, d, d)},
-		{"Day Book, dates d-MMM-yyyy", dayBookRequestDMY(company, d, d)},
-		{"FinComTag (the posting read-back's request)", tagCheckRequest(company, d)},
-	}
+	d, days := readTestAnchor(port, company)
+	empty := readTestEmptyDay(d, days)
+	pre := "Test reading from Tally: " + company + ", " + d + ": "
 	results := []any{}
-	for _, p := range probes {
+	ask := func(label, x string, tc *TC) (M, string) {
 		t0 := time.Now()
-		raw, err := invokeTally(fin, port, p.x, 60)
+		raw, err := invokeTally(tc, port, x, 60)
 		sec := time.Since(t0).Seconds()
-		pre := "Test reading from Tally: " + company + ", " + d + ": " + p.label + ": "
 		if err != nil {
-			writeLog(pre + "not answered (" + err.Error() + ")")
-			results = append(results, M{"label": p.label, "vouchers": 0, "bytes": 0, "seconds": sec, "head": "", "error": err.Error()})
-			continue
+			writeLog(pre + label + ": not answered (" + err.Error() + ")")
+			m := M{"label": label, "vouchers": 0, "bytes": 0, "seconds": sec, "head": "", "error": err.Error()}
+			results = append(results, m)
+			return m, ""
 		}
 		n, head := countVouchers(raw), answerHead(raw)
-		writeLog(fmt.Sprintf("%s%d vouchers, %d bytes, %.1f s; head: %s", pre, n, len(raw), sec, head))
-		results = append(results, M{"label": p.label, "vouchers": n, "bytes": len(raw), "seconds": sec, "head": head, "error": ""})
+		writeLog(fmt.Sprintf("%s%s: %d vouchers, %d bytes, %.1f s; head: %s", pre, label, n, len(raw), sec, head))
+		m := M{"label": label, "vouchers": n, "bytes": len(raw), "seconds": sec, "head": head, "error": ""}
+		results = append(results, m)
+		return m, raw
 	}
-	return M{"ok": true, "company": company, "day": d, "results": results}, nil
+	passed := ""
+	for _, form := range dateForms {
+		m, raw := ask("Day Book, dates "+form, dayBookRequestForm(company, form, d, d), fin)
+		ok := raw != "" && dayBookIncomplete(raw) == "" && onlyDay(raw, d)
+		if ok && empty != "" {
+			// the same form for a day the list shows empty: it must answer none (the period applied, not ignored)
+			raw2, err := invokeTally(fin, port, dayBookRequestForm(company, form, empty, empty), 60)
+			n2 := countVouchers(raw2)
+			ok = err == nil && dayBookIncomplete(raw2) == "" && n2 == 0
+			m["emptyDay"], m["emptyDayVouchers"] = empty, n2
+			writeLog(fmt.Sprintf("%sDay Book, dates %s, the empty day %s: %d vouchers%s", pre, form, empty, n2, map[bool]string{true: "", false: " (or not answered in full)"}[ok]))
+		}
+		m["passed"] = ok
+		writeLog(fmt.Sprintf("%sDay Book, dates %s answers the day with exactly its entries: %s", pre, form, map[bool]string{true: "yes", false: "no"}[ok]))
+		if ok && passed == "" {
+			passed = form
+			m["entries"] = countVouchers(raw)
+		}
+	}
+	if passed != "" {
+		n := 0
+		for _, x := range results {
+			if str(obj(x)["label"]) == "Day Book, dates "+passed {
+				n = toInt(obj(x)["vouchers"])
+			}
+		}
+		writeLog(fmt.Sprintf("%sDates on this Tally: %s (anchor %s, %d entries)", pre, passed, d, n))
+	} else {
+		passed = "none"
+		writeLog(fmt.Sprintf("%sDates on this Tally: none of the %d forms answered %s with exactly its entries", pre, len(dateForms), d))
+	}
+	ask("FinComTag (the posting read-back's request)", tagCheckRequest(company, d), fin)
+	// the change numbers, read here without being kept (the starting point is not touched by the test)
+	cm, craw := ask("FinComCompany (change numbers)", companyCheckRequest(company), fin)
+	altV, altM := int64(-1), int64(-1)
+	for _, c := range xmlDoc(craw).All("COMPANY") {
+		if n := nameOf(c); n == "" || sameCompany(n, company) {
+			altV, altM = toI64(re(`\D`).ReplaceAllString(nt(c, "ALTVCHID"), "")), toI64(re(`\D`).ReplaceAllString(nt(c, "ALTMSTID"), ""))
+			cm["altvchid"], cm["altmstid"] = altV, altM
+			writeLog(fmt.Sprintf("%schange numbers ALTVCHID=%d, ALTMSTID=%d", pre, altV, altM))
+			break
+		}
+	}
+	// measurement only: the entries above the starting point, the AlterID filter alone, no dates
+	after, how := startPointOf(company)
+	label := fmt.Sprintf("Entries above the starting point (TDSDeskKeepList, AlterID above %d, no dates)", after)
+	if !how {
+		after = maxI64(0, altV)
+		label = fmt.Sprintf("Entries above the starting point (TDSDeskKeepList, AlterID above %d, the current ALTVCHID: no starting point recorded yet, no dates)", after)
+	}
+	ask(label, keepListAboveRequest(company, after), fin)
+	// item 89: FinComCompany sent once as UTF-16 and once as UTF-8 (when the bridge sends UTF-8)
+	if !cfgB("TallyRequestUTF16") {
+		const lb = "FinComCompany sent as UTF-16 and as UTF-8"
+		a, e1 := invokeTally(&TC{enc: "utf-16"}, port, companyCheckRequest(company), 60)
+		b, e2 := invokeTally(&TC{enc: "utf-8"}, port, companyCheckRequest(company), 60)
+		m := M{"label": lb, "bytes16": len(a), "bytes8": len(b), "same": e1 == nil && e2 == nil && a == b, "error": ""}
+		switch {
+		case e1 != nil || e2 != nil:
+			m["error"] = fmt.Sprint(e1, " / ", e2)
+			writeLog(fmt.Sprintf("%s%s: not answered (UTF-16: %v; UTF-8: %v)", pre, lb, e1, e2))
+		case a == b:
+			writeLog(fmt.Sprintf("%s%s: the same answer (%d bytes)", pre, lb, len(a)))
+		default:
+			writeLog(fmt.Sprintf("%s%s: different answers (%d and %d bytes)", pre, lb, len(a), len(b)))
+		}
+		results = append(results, m)
+	}
+	return M{"ok": true, "company": company, "day": d, "emptyDay": empty, "passed": passed, "results": results}, nil
+}
+
+func maxI64(a, b int64) int64 {
+	if a > b {
+		return a
+	}
+	return b
 }

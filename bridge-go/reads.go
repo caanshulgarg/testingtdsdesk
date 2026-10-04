@@ -85,8 +85,13 @@ func voucherType(v *Node) string {
 }
 
 func dayBookRequest(company, from, to string) string {
+	return dayBookRequestForm(company, formPlain, from, to)
+}
+
+// round 18: the Day Book with its dates in one of the four forms (dates.go); only the read test asks for another form
+func dayBookRequestForm(company, form, from, to string) string {
 	return "<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Day Book</REPORTNAME>" +
-		"<STATICVARIABLES><SVCURRENTCOMPANY>" + esc(company) + "</SVCURRENTCOMPANY><SVFROMDATE>" + from + "</SVFROMDATE><SVTODATE>" + to + "</SVTODATE>" +
+		"<STATICVARIABLES><SVCURRENTCOMPANY>" + esc(company) + "</SVCURRENTCOMPANY>" + dateVars(form, from, to) +
 		"<SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><EXPLODEFLAG>Yes</EXPLODEFLAG></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>"
 }
 
@@ -94,7 +99,7 @@ func dayBookRequest(company, from, to string) string {
 // screens show; the "Test reading from Tally" tray item sends it beside the yyyymmdd form to show which one a Tally
 // that answers the Day Book empty takes. The same REPORTNAME, so it is the allow-list's "Day Book" row
 func dayBookRequestDMY(company, from, to string) string {
-	return dayBookRequest(company, tallyDMY(from), tallyDMY(to))
+	return dayBookRequestForm(company, formDMY, from, to)
 }
 
 // a yyyymmdd date as d-MMM-yyyy (no leading zero on the day, the English 3-letter month); anything else as given
@@ -192,7 +197,7 @@ func getVouchers(company, from, to, ledger, types string, pref int) (M, error) {
 func vchHeadsRequest(company, from, to string) string {
 	return "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TDSDeskVchHeads</ID></HEADER>" +
 		"<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>" + esc(company) + "</SVCURRENTCOMPANY>" +
-		"<SVFROMDATE>" + from + "</SVFROMDATE><SVTODATE>" + to + "</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE>" +
+		periodVars(from, to) + "</STATICVARIABLES><TDL><TDLMESSAGE>" +
 		`<COLLECTION NAME="TDSDeskVchHeads" ISMODIFY="No"><TYPE>Voucher</TYPE><FETCH>DATE,VOUCHERTYPENAME,VOUCHERNUMBER,REFERENCE,PARTYLEDGERNAME,NARRATION,MASTERID,GUID,ALTERID,ISOPTIONAL,ISCANCELLED</FETCH></COLLECTION>` +
 		"</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>"
 }
@@ -466,6 +471,11 @@ func getLedgerLines(co, ledger, from, to string, pin int) (M, error) {
 			a[i] = x
 		}
 		return M{"ok": true, "via": "copy", "vouchers": a}, nil
+	} else if !readDaysOn() {
+		// round 18 (the owner's decision of 04-Oct-2026): ReadDays off: from the copy only, never Tally; the answer
+		// says the copy does not cover the period
+		return M{"ok": true, "via": "copy", "vouchers": []any{}, "readDays": false,
+			"note": "the copy here does not cover " + from + "-" + to + " for this ledger (" + err.Error() + "); reading entries from Tally is off on this computer, history comes from the Day Book upload"}, nil
 	}
 	port, err := findCompanyPort(co, pin)
 	if err != nil {

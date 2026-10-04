@@ -63,6 +63,7 @@ func TestEmptyDayAnsweredInFull(t *testing.T) {
 	f.add(td, "Party X", "1", "sale", "-100.00")
 	f.add(td, "Party X", "2", "sale", "-200.00")
 	standBridge(t, f, c.cfg())
+	oldDaysOn() // the owner's rule of 04-Oct-2026 turns reading old days off (ReadDays); the round's day logic is still tested here
 	from := td[:6] + "01"
 	liveFrom(from)
 	runNow(t, "now")
@@ -100,6 +101,7 @@ func TestTimedOutDayNotEmpty(t *testing.T) {
 		return 0
 	}
 	standBridge(t, f, c.cfg()+`,"TallyMaxSec":1,"TallyProbeEverySec":1`)
+	oldDaysOn() // the owner's rule of 04-Oct-2026 turns reading old days off (ReadDays); the round's day logic is still tested here
 	liveFrom(td)
 	k := &keepRun{tc: &TC{copier: true, readSec: 1}, kind: "now", force: true, told: map[string]bool{}, id: "r10-timeout", alter: map[string]int64{}}
 	if err := r10Round(t, k, f.port); err == nil || !strings.Contains(err.Error(), "timed out") {
@@ -152,6 +154,7 @@ func TestCutAnswerNotEmpty(t *testing.T) {
 		return false
 	}
 	standBridge(t, f, c.cfg()+`,"TallyMaxSec":2`)
+	oldDaysOn() // the owner's rule of 04-Oct-2026 turns reading old days off (ReadDays); the round's day logic is still tested here
 	liveFrom(td[:6] + "01")
 	k := &keepRun{tc: &TC{copier: true, readSec: 2}, kind: "now", force: true, told: map[string]bool{}, id: "r10-cut", alter: map[string]int64{}}
 	if err := r10Round(t, k, f.port); err == nil || !strings.Contains(err.Error(), "not complete") {
@@ -213,6 +216,7 @@ func TestSelfStopDayNotEmpty(t *testing.T) {
 		return 0
 	}
 	standBridge(t, f, c.cfg()+`,"SelfStopSec":1,"TallyMaxSec":5`)
+	oldDaysOn() // the owner's rule of 04-Oct-2026 turns reading old days off (ReadDays); the round's day logic is still tested here
 	liveFrom(td)
 	k := &keepRun{tc: &TC{copier: true, readSec: 5}, kind: "now", force: true, told: map[string]bool{}, id: "r10-selfstop", alter: map[string]int64{}}
 	err := r10Round(t, k, f.port)

@@ -139,6 +139,32 @@ type kentry struct {
 	date  string
 }
 
+// round 18: whether the Day Book rounds read old days at all (the owner's rule of 04-Oct-2026: off). Only the settings
+// file on this computer sets it (applyCloudSettings never does)
+func readDaysOn() bool { return cfgB("ReadDays") }
+
+// round 18 (the owner's decision of 04-Oct-2026): FinCom's direct reads of entries (/daybook, /vouchers, /keepcheck)
+// are refused with these words while ReadDays is off; nothing is sent to Tally
+const readsOffWords = "Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload)."
+
+func readsOffErr() error {
+	if readDaysOn() {
+		return nil
+	}
+	return &httpErr{409, M{"ok": false, "error": readsOffWords, "readDays": false}}
+}
+
+// round 18, measurement only (the read test and the measuring tool): the entries above an AlterID with NO period at all
+// (no SVFROMDATE/SVTODATE), as GUID, AlterID and date; the same collection as the copy's check
+func keepListAboveRequest(company string, after int64) string {
+	return "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TDSDeskKeepList</ID></HEADER>" +
+		"<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>" + esc(company) + "</SVCURRENTCOMPANY>" +
+		"</STATICVARIABLES><TDL><TDLMESSAGE>" +
+		`<COLLECTION NAME="TDSDeskKeepList" ISMODIFY="No"><TYPE>Voucher</TYPE><FETCH>GUID,ALTERID,DATE</FETCH><FILTERS>TDSDeskKeepNew</FILTERS></COLLECTION>` +
+		fmt.Sprintf(`<SYSTEM TYPE="Formulae" NAME="TDSDeskKeepNew">$AlterID &gt; %d</SYSTEM>`, after) +
+		"</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>"
+}
+
 func keepListRequest(company, from, to string, after int64) string {
 	flt, sys := "", ""
 	if after > 0 {
@@ -147,7 +173,7 @@ func keepListRequest(company, from, to string, after int64) string {
 	}
 	return "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TDSDeskKeepList</ID></HEADER>" +
 		"<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>" + esc(company) + "</SVCURRENTCOMPANY>" +
-		"<SVFROMDATE>" + from + "</SVFROMDATE><SVTODATE>" + to + "</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE>" +
+		periodVars(from, to) + "</STATICVARIABLES><TDL><TDLMESSAGE>" +
 		`<COLLECTION NAME="TDSDeskKeepList" ISMODIFY="No"><TYPE>Voucher</TYPE><FETCH>GUID,ALTERID,DATE</FETCH>` + flt + "</COLLECTION>" + sys +
 		"</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>"
 }
@@ -820,6 +846,19 @@ func (k *keepRun) step(company string, port int, booksFrom string) error {
 		return nil // the time of this turn is up: the next turn goes on from the last chunk saved
 	}
 	if k.kind == "ledgers" {
+		k.caughtUp = true
+		return nil
+	}
+	// round 18 (the owner's rule of 04-Oct-2026): reading is prospective only. The bridge never reads earlier entries
+	// from Tally in normal running (reading old months is what risks hanging Tally): with ReadDays off (the default; it
+	// is never set from the cloud) the round is the company check (FinComCompany) and the ledger list above, and no day
+	// is read or sent. FY 2026-27's history comes from the owner's Day Book upload
+	if !readDaysOn() {
+		if nk := "nodays:" + company + ":" + k.id; !k.told[nk] {
+			k.told[nk] = true
+			writeLog(fmt.Sprintf("Keeping %s: Reading old entries is off (prospective only); FinComCompany ALTVCHID=%d ALTMSTID=%d", company, companyAlter(company), companyAlterM(company)))
+		}
+		save()
 		k.caughtUp = true
 		return nil
 	}

@@ -254,6 +254,9 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 	case "/ledgervouchers":
 		return getLedgerVouchers(co, qs.Get("ledger"), qs.Get("from"), qs.Get("to"), qint(qs, "port"))
 	case "/vouchers":
+		if err := readsOffErr(); err != nil {
+			return nil, err
+		}
 		return getVouchers(co, qs.Get("from"), qs.Get("to"), qs.Get("ledger"), qs.Get("types"), qint(qs, "port"))
 	case "/unpost":
 		if why := readOnlyWhy(); why != "" {
@@ -330,6 +333,9 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		}
 		return M{"ok": true, "file": logFile(), "lines": lines}, nil
 	case "/daybook":
+		if err := readsOffErr(); err != nil {
+			return nil, err
+		}
 		setFinComReading()
 		x, err := getDayBookXML(fin, co, qs.Get("from"), qs.Get("to"), qint(qs, "port"))
 		if err != nil {
@@ -442,6 +448,9 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		// 2.1.5: from the copy kept here (opening the day before from, closing on to); Tally is not asked for a balance
 		return heldLedgerBalance(co, qs.Get("ledger"), qs.Get("from"), qs.Get("to"), qs.Get("only") == "close")
 	case "/tags":
+		if err := readsOffErr(); err != nil {
+			return nil, err
+		}
 		port, err := findCompanyPort(co, qint(qs, "port"))
 		if err != nil {
 			return nil, err
@@ -583,6 +592,27 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 			return startReadTest(str(o["company"])), nil
 		}
 		return readTestStatus(), nil
+	case "/tray/recorder-send", "/tray/recorder-note":
+		// round 18 (2.1.9): the recorder trial's two tray items (recorder.go). Started by a person only, as Test reading
+		// from Tally is: a web page, FinCom's own included, is refused
+		if r.Header.Get("Origin") != "" || r.Header.Get("Sec-Fetch-Site") != "" || r.Header.Get("Sec-Fetch-Mode") != "" || r.Header.Get("Sec-Fetch-Dest") != "" {
+			writeLog("Refused a recorder trial request from a web page (" + path + ", " + r.Header.Get("Origin") + ").")
+			return nil, &httpErr{403, M{"ok": false, "error": "The recorder trial is run from the FinCom Bridge tray icon only, never from a web page."}}
+		}
+		if err := needPost(r, "Use POST."); err != nil {
+			return nil, err
+		}
+		var res M
+		var err error
+		if path == "/tray/recorder-send" {
+			res, err = recorderSendResults()
+		} else {
+			res, err = recorderNoteChangeNumbers()
+		}
+		if err != nil {
+			return M{"ok": false, "error": err.Error()}, nil
+		}
+		return res, nil
 	case "/companyguid":
 		// a company whose Tally GUID changed (restored, re-created): confirmed on this computer, its new GUID is held
 		if err := needPost(r, "Use POST."); err != nil {
@@ -597,6 +627,9 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		}
 		return acceptCompanyGUID(str(o["company"]))
 	case "/keepcheck":
+		if err := readsOffErr(); err != nil {
+			return nil, err
+		}
 		return testKeepMonth(co, qs.Get("ym"), qint(qs, "port"))
 	// --- the tray icon's own questions
 	case "/tray/status":

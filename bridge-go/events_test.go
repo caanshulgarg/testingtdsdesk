@@ -292,6 +292,7 @@ func TestBackoffSendsNothing(t *testing.T) {
 		return 0
 	}
 	bridgeFor(t, s, `,"TallyMaxSec":1,"KeepBackoffSec":300,"KeepRunMin":1`)
+	oldDaysOn() // the owner's rule of 04-Oct-2026 turns reading old days off (ReadDays); the round's day logic is still tested here
 	liveCopy(t)
 	wakeUpdate("")
 	waitIdle(t)

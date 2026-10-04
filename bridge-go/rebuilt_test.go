@@ -54,6 +54,10 @@ type standTally struct {
 	importAltered bool                     // an Import answers ALTERED n (CREATED 0): this Tally altered an entry it had
 	importSkip    func(x string) bool      // round 7: a voucher of a batch this Tally refuses (counted in ERRORS, not made)
 	storeParty    func(p string) string    // round 7: the party as this Tally keeps it (nil: as sent)
+	// round 18 (2.1.9): how this Tally applies the period of a request (nil: plain yyyymmdd SVFROMDATE/SVTODATE only);
+	// the Content-Type of every request (the stand decodes a body sent as UTF-16 by its Content-Type)
+	dates  func(id, body string) (from, to string)
+	ctypes []string
 }
 
 // a ledger master of the stand-in Tally (its stored fields only)
@@ -150,6 +154,10 @@ func newStandTally(t *testing.T) *standTally {
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
 		body := string(b)
+		ct := r.Header.Get("Content-Type")
+		if strings.Contains(strings.ToLower(ct), "utf-16") {
+			body = textFromBytes(b) // round 18: decoded per Content-Type (UTF-16LE, its BOM first)
+		}
 		id := group(`<ID>([^<]+)</ID>`, body, 1)
 		if id == "" {
 			id = group(`<REPORTNAME>([^<]+)</REPORTNAME>`, body, 1)
@@ -160,6 +168,7 @@ func newStandTally(t *testing.T) *standTally {
 		f.mu.Lock()
 		f.reqs = append(f.reqs, id)
 		f.bodies = append(f.bodies, body)
+		f.ctypes = append(f.ctypes, ct)
 		f.inflight++
 		if f.inflight > f.maxFlight {
 			f.maxFlight = f.inflight
@@ -191,6 +200,12 @@ func newStandTally(t *testing.T) *standTally {
 			coName = zz
 		}
 		from, to := group(`<SVFROMDATE>(\d{8})</SVFROMDATE>`, body, 1), group(`<SVTODATE>(\d{8})</SVTODATE>`, body, 1)
+		f.mu.Lock()
+		dh := f.dates
+		f.mu.Unlock()
+		if dh != nil {
+			from, to = dh(id, body)
+		}
 		inDates := func(v *tVch) bool { return from == "" || (v.date >= from && v.date <= to) }
 		var o strings.Builder
 		o.WriteString("<ENVELOPE><BODY><DATA><COLLECTION>")
@@ -228,7 +243,7 @@ func newStandTally(t *testing.T) *standTally {
 			f.mu.Unlock()
 			_, _ = w.Write([]byte(o.String()))
 			return
-		case "FinComTag", dupCheckID, "TDSDeskVchHeads", "FinComMeasureC", "FinComMeasureD", "FinComMeasureYear", "FinComSnapshot", "FinComMeasureB", "FinComMeasureE":
+		case "FinComTag", dupCheckID, "TDSDeskVchHeads", "TDSDeskKeepList", "FinComMeasureC", "FinComMeasureD", "FinComMeasureYear", "FinComSnapshot", "FinComMeasureB", "FinComMeasureE":
 			var above, eq int64 = -1, -1
 			if m := reAltAbove.FindStringSubmatch(body); m != nil {
 				if m[1] == "=" {
@@ -443,6 +458,7 @@ func TestUpdateNowReadsMonthSlicesOnly(t *testing.T) {
 		f.add(d, "Party X", "", "sale", "-100.00")
 	}
 	standBridge(t, f, "")
+	oldDaysOn() // the owner's rule of 04-Oct-2026 turns reading old days off (ReadDays); the round's day logic is still tested here
 	liveFrom(from)
 	runNow(t, "now")
 	var slices []string
@@ -854,6 +870,7 @@ func TestNoBalanceAsked(t *testing.T) {
 		f.add(td, "Party X", fmt.Sprint(i), "sale", "-3.00")
 	}
 	standBridge(t, f, "")
+	oldDaysOn() // the owner's rule of 04-Oct-2026 turns reading old days off (ReadDays); the round's day logic is still tested here
 	liveFrom(td)
 	runNow(t, "now")
 	wakeOpen(zz, "opened")
@@ -909,6 +926,7 @@ func TestNoLedgerCollectionAsked(t *testing.T) {
 	f := newStandTally(t)
 	f.add(td, fgParty, "S-0", "sale | TDSDesk:old1", "-12.00")
 	standBridge(t, f, "")
+	oldDaysOn() // the owner's rule of 04-Oct-2026 turns reading old days off (ReadDays); the round's day logic is still tested here
 	liveFrom(td)
 	runNow(t, "now") // the copy here holds today's entries
 	// a posting naming its ledger, checked first (a resumed or queued posting): what reached Tally is looked for

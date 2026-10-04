@@ -116,6 +116,7 @@ func TestDayFileWrittenElsewhereDropsFullMark(t *testing.T) {
 	f := newStandTally(t)
 	c := newStandCloud(t)
 	standBridge(t, f, c.cfg())
+	oldDaysOn() // the owner's rule of 04-Oct-2026 turns reading old days off (ReadDays); the round's day logic is still tested here
 	liveFrom(td)
 	runNow(t, "now") // an empty day read in full
 	dir := syncFolder(zz)

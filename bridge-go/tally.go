@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/xml"
 	"errors"
@@ -264,7 +265,36 @@ func collectionRequest(id, typ, fetch, company, extra string) string {
 // request comes, and the read goes on from where it was afterwards
 type TC struct {
 	copier  bool
-	readSec int // the copier: no read of the day book may hold Tally longer than this
+	readSec int    // the copier: no read of the day book may hold Tally longer than this
+	enc     string // round 18: "utf-16" or "utf-8" for this request whatever TallyRequestUTF16 says ("": as the setting says)
+}
+
+// round 18 (item 89, evaluation only): the request body as Tally gets it. TallyRequestUTF16 (default off): UTF-16LE
+// with its BOM, Content-Type text/xml;charset=utf-16; else UTF-8 as before
+func tallyBody(x string, wide bool) ([]byte, string) {
+	if !wide {
+		return []byte(x), "text/xml;charset=utf-8"
+	}
+	u := utf16.Encode([]rune(x))
+	b := make([]byte, 2, 2+2*len(u))
+	b[0], b[1] = 0xFF, 0xFE
+	for _, c := range u {
+		b = append(b, byte(c), byte(c>>8))
+	}
+	return b, "text/xml;charset=utf-16"
+}
+
+type encKey struct{}
+
+// the encoding of one request: the request's own (TC.enc, the read test's probe), else the setting
+func wantUTF16(ctx context.Context) bool {
+	switch e, _ := ctx.Value(encKey{}).(string); e {
+	case "utf-16":
+		return true
+	case "utf-8":
+		return false
+	}
+	return cfgB("TallyRequestUTF16")
 }
 
 var fin = &TC{}
@@ -323,8 +353,9 @@ func tallyRaw(ctx context.Context, port int, x string, timeoutSec int) (string, 
 		host = "127.0.0.1"
 	}
 	cl := &http.Client{Timeout: time.Duration(timeoutSec) * time.Second, Transport: &http.Transport{DisableKeepAlives: true, Proxy: nil}}
-	req, _ := http.NewRequestWithContext(ctx, "POST", fmt.Sprintf("http://%s:%d", host, port), strings.NewReader(x))
-	req.Header.Set("Content-Type", "text/xml;charset=utf-8")
+	body, ctype := tallyBody(x, wantUTF16(ctx))
+	req, _ := http.NewRequestWithContext(ctx, "POST", fmt.Sprintf("http://%s:%d", host, port), bytes.NewReader(body))
+	req.Header.Set("Content-Type", ctype)
 	tallySent.Add(1)
 	tallySentAt.Store(time.Now().Unix())
 	resp, err := cl.Do(req)
@@ -637,6 +668,9 @@ func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	if tc.enc != "" {
+		ctx = context.WithValue(ctx, encKey{}, tc.enc)
+	}
 	unlock, err := enterTallyLock(tc, port, cancel, isPostingRequest(x))
 	if err != nil {
 		return "", err
@@ -818,8 +852,7 @@ func addTallyUse(tc *TC, port int, sec float64, x, fail string) {
 		quiet = true // a quiet retry while Tally is busy
 	}
 	if !quiet && (fail != "" || sec >= float64(keepNum("KeepSlowSec", 3))) {
-		f := group(`<SVFROMDATE>(\d{8})</SVFROMDATE>`, x, 1)
-		to := group(`<SVTODATE>(\d{8})</SVTODATE>`, x, 1)
+		f, to := requestFrom(x)
 		span := ""
 		if f != "" {
 			span = " " + f

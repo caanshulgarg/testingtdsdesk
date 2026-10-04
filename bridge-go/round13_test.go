@@ -76,16 +76,19 @@ func TestReadTestThreeRequestsLogged(t *testing.T) {
 	if str(res["company"]) != zz || str(res["day"]) != d {
 		t.Fatalf("company/day: %v", res)
 	}
+	// round 18 (2.1.9): the matrix: the Day Book in the four date forms, FinComTag, FinComCompany, the entries above the
+	// starting point (no dates) and FinComCompany as UTF-16 and as UTF-8; the first three labels and counts as before
 	results := arr(res["results"])
-	if len(results) != 3 {
+	if len(results) != 8 {
 		t.Fatalf("results: %v", results)
 	}
-	labels := []string{"Day Book, dates yyyymmdd", "Day Book, dates d-MMM-yyyy", "FinComTag (the posting read-back's request)"}
-	want := []int{0, 0, 3}
-	for i, x := range results {
-		m := obj(x)
-		if str(m["label"]) != labels[i] {
-			t.Fatalf("result %d label %q, want %q", i, str(m["label"]), labels[i])
+	labels := []string{"Day Book, dates yyyymmdd", "Day Book, dates d-MMM-yyyy", "Day Book, dates yyyymmdd TYPE=Date", "Day Book, dates d-MMM-yyyy TYPE=Date",
+		"FinComTag (the posting read-back's request)"}
+	want := []int{0, 0, 0, 0, 3}
+	for i, lb := range labels {
+		m := obj(results[i])
+		if str(m["label"]) != lb {
+			t.Fatalf("result %d label %q, want %q", i, str(m["label"]), lb)
 		}
 		if str(m["error"]) != "" {
 			t.Fatalf("result %d not answered: %v", i, m)
@@ -97,8 +100,11 @@ func TestReadTestThreeRequestsLogged(t *testing.T) {
 			t.Fatalf("result %d: no bytes or no head: %v", i, m)
 		}
 	}
-	// the requests reached the stand: two Day Book exports (one per date form) and one FinComTag collection
-	if f.n("Day Book") != 2 || f.n("FinComTag") != 1 {
+	if str(res["passed"]) != "none" {
+		t.Fatalf("no form answered the day (the Day Book is empty here): %v", res["passed"])
+	}
+	// the requests reached the stand: four Day Book exports (one per date form); FinComTag for the anchor and the probe
+	if f.n("Day Book") != 4 || f.n("FinComTag") != 2 {
 		t.Fatalf("requests sent: %v", f.ids())
 	}
 	dmy := 0
@@ -126,7 +132,7 @@ func TestReadTestThreeRequestsLogged(t *testing.T) {
 		if strings.ContainsAny(head, "0123456789=\"") {
 			t.Fatalf("the head carries a value: %s", head)
 		}
-		if i == 2 && !strings.Contains(head, "<VOUCHER>") {
+		if i == 4 && !strings.Contains(head, "<VOUCHER>") {
 			t.Fatalf("the FinComTag head shows no voucher tag: %s", head)
 		}
 	}

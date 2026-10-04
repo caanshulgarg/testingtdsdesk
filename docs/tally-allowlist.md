@@ -28,9 +28,11 @@ without a period) is a stored field, not a computed one.
 The size test (`bridge-go/size_test.go`) uses a cost per row returned (`tallyPerRowMs` in `allowlist.go`): a
 conservative guess until the phase 1 measurement replaces it.
 
-First table: not yet measured; allowed for 2.1.8 only by the owner's decision of 2026-10-03 ("GO for 2.1.8"; open for every computer; the owner decides per build); this line is replaced per build by the owner's decision, and removed once the table carries times.
+First table: re-measured on 2026-10-04 on the stand; not yet measured on NWS144; allowed for 2.1.9 only by the owner's decision of 2026-10-04 (phase 2 go-ahead); this line is replaced per build by the owner's decision, and removed once the table carries times.
 
 (re-measured on 2026-10-03: no times yet; the table's rows and shapes are unchanged since the 2.1.6 build; only the owner's decision line above changed for 2.1.7, and again for 2.1.8: no request shape changed; the duplicate check against Tally left the posting path, its request stays on the list for Check Tally)
+
+(2.1.9, 04-Oct-2026: every dated request now renders its dates through one function, `dateVars` in `bridge-go/dates.go`, with the same yyyymmdd text as before, so no shape changed and the table is unchanged. The person-started "Test reading from Tally" also sends the Day Book with the dates as d-MMM-yyyy and with TYPE="Date" (still the "Day Book" id), and TDSDeskKeepList with its AlterID filter and no dates (the entries above the company's starting point, measurement only; the measuring tool sends the same as its item a2). The light FinComCompany request now also goes once when a company is first seen open in a run and at most every 10 minutes while it stays open. Reading old days is off in normal running (ReadDays, the owner's rule of 04-Oct-2026).)
 
 <!-- allowlist:begin -->
 | id | purpose | shape | worst case (s) | measured on | used by |

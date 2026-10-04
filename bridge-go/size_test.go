@@ -33,6 +33,7 @@ type simReq struct {
 	simMs    float64
 	ledgers  int // ledger rows asked
 	spanDays int // the period asked, in days (0: none)
+	scanned  int // round 18: the vouchers the fake Tally had to look at to answer (a filter with no period: all of them)
 }
 
 type bigTally struct {
@@ -118,6 +119,12 @@ func (b *bigTally) handle(w http.ResponseWriter, r *http.Request, id, body strin
 		for i := 1; i <= 40; i++ {
 			fmt.Fprintf(&out, `<GROUP NAME="Big Group %02d"><GUID>big-grp-%d</GUID><MASTERID> %d</MASTERID><PARENT></PARENT></GROUP>`, i, i, i)
 		}
+	case from == "" && to == "" && strings.Contains(body, "$AlterID &gt;"):
+		// round 18: entries above an AlterID with no period at all: the fake has to look at every voucher of the books;
+		// only those above the AlterID come back (the AlterIDs run past the masters', up to ALTVCHID)
+		after := toI64(group(`\$AlterID &gt; (\d+)`, body, 1))
+		sr.scanned = bigVouchers
+		sr.rows = int(maxI64(0, minI64(int64(bigVouchers), int64(bigLedgers+bigVouchers)-after)))
 	default: // vouchers: a collection of Voucher or the Day Book
 		sr.rows = b.vouchersIn(from, to)
 		if strings.Contains(body, "$PartyLedgerName") {
@@ -137,8 +144,8 @@ func (b *bigTally) handle(w http.ResponseWriter, r *http.Request, id, body strin
 	return true
 }
 
-func maxI64(a, b int64) int64 {
-	if a > b {
+func minI64(a, b int64) int64 {
+	if a < b {
 		return a
 	}
 	return b
@@ -157,6 +164,7 @@ func TestSizeBigCompany(t *testing.T) {
 	f := newStandTally(t)
 	f.behave = big.handle
 	standBridge(t, f, `,"KeepBudgetSec":600`)
+	oldDaysOn() // the owner's rule of 04-Oct-2026 turns old-day reading off (ReadDays); the sizes of those reads are still tested here
 	liveFrom(bigFrom)
 	td := today()
 

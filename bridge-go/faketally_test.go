@@ -153,6 +153,7 @@ func Test02Oct900sRead(t *testing.T) {
 	f := newStandTally(t)
 	f.add(td, fgParty, "X-1", "sale", "-1.00")
 	standBridge(t, f, "")
+	oldDaysOn() // the owner's rule of 04-Oct-2026 turns reading old days off (ReadDays); the round's day logic is still tested here
 	if m := tallyMaxSec(); m > 20 {
 		t.Fatalf("a request may hold Tally %d s by default (20 at most)", m)
 	}
@@ -311,6 +312,7 @@ func Test02OctPostingDuringRead(t *testing.T) {
 		return d
 	}
 	standBridge(t, f, "")
+	oldDaysOn() // the owner's rule of 04-Oct-2026 turns reading old days off (ReadDays); the round's day logic is still tested here
 	liveFrom(td)
 	if !startKeepRun(runReq{kind: "now", why: "test"}) {
 		t.Fatal("no run started")

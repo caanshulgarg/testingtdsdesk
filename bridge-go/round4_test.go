@@ -25,6 +25,7 @@ func TestReadGuardAlterEveryRound(t *testing.T) {
 	c := newStandCloud(t)
 	f.add(td, "Party X", "1", "sale", "-100.00")
 	standBridge(t, f, c.cfg())
+	oldDaysOn() // the owner's rule of 04-Oct-2026 turns reading old days off (ReadDays); the round's day logic is still tested here
 	liveFrom(td[:6] + "01")
 	k := &keepRun{tc: &TC{copier: true}, kind: "now", force: true, told: map[string]bool{}, id: "round-1", alter: map[string]int64{}}
 	round := func() {

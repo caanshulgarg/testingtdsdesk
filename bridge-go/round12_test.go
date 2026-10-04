@@ -38,6 +38,7 @@ func TestZeroEntriesSliceOnNonEmptyCopyNotKept(t *testing.T) {
 	f := newStandTally(t) // no voucher: every Day Book answer is a whole envelope with none
 	c := newStandCloud(t)
 	standBridge(t, f, c.cfg())
+	oldDaysOn() // the owner's rule of 04-Oct-2026 turns reading old days off (ReadDays); the round's day logic is still tested here
 	r12State(td)
 	dir := syncFolder(zz)
 	text := r12Voucher(td)
@@ -82,6 +83,7 @@ func TestZeroEntriesOnEmptyCopyKept(t *testing.T) {
 	f := newStandTally(t)
 	c := newStandCloud(t)
 	standBridge(t, f, c.cfg())
+	oldDaysOn() // the owner's rule of 04-Oct-2026 turns reading old days off (ReadDays); the round's day logic is still tested here
 	r12State(td)
 	dir := syncFolder(zz)
 	if err := r10Round(t, r12Keeper("r12-empty"), f.port); err != nil {
@@ -115,6 +117,7 @@ func TestZeroRoundNoReadGuardAndTrouble(t *testing.T) {
 	f := newStandTally(t)
 	c := newStandCloud(t)
 	standBridge(t, f, c.cfg())
+	oldDaysOn() // the owner's rule of 04-Oct-2026 turns reading old days off (ReadDays); the round's day logic is still tested here
 	r12State(td)
 	dir := syncFolder(zz)
 	old := "20250115"

@@ -437,6 +437,8 @@ func (t *tray) menu() {
 	add(11, "Test connection", mfString)
 	add(16, "Measure Tally (for FinCom support)", mfString)
 	add(18, "Test reading from Tally", mfString)
+	add(19, "Recorder trial: note change numbers", mfString)
+	add(20, "Recorder trial: send results", mfString)
 	add(5, "Show log", mfString)
 	switch {
 	case st != nil && truthy(st["testMode"]) && truthy(st["switching"]):
@@ -645,8 +647,27 @@ func (t *tray) command(id int, st M) {
 			}
 			lines = append(lines, fmt.Sprintf("%s: %d vouchers, %d bytes, %.1f s", str(m["label"]), toInt(m["vouchers"]), toInt(m["bytes"]), num(m["seconds"])))
 		}
+		// round 18: which date form answered the anchor day with exactly its entries (nothing is changed by the test)
+		lines = append(lines, "", "Dates on this Tally: "+str(r["passed"])+" (the form that answered "+str(r["day"])+" with exactly its entries; nothing was changed)")
 		lines = append(lines, "", "The full lines, with the answer heads, are in Show log. Send that log to FinCom.")
 		msgBox("FinCom Bridge - Test reading from Tally", str(r["company"])+", "+str(r["day"])+"\n\n"+strings.Join(lines, "\n"), mbIconInfo)
+	case 19, 20:
+		// round 18: the recorder trial (recorder.go); a person's choice in the tray only
+		title, path := "FinCom Bridge - Recorder trial", "/tray/recorder-note"
+		if id == 20 {
+			path = "/tray/recorder-send"
+		}
+		r := trayCall("POST", path, M{})
+		switch {
+		case r == nil:
+			msgBox(title, "The bridge is not answering.", mbIconWarning)
+		case r["ok"] != true:
+			msgBox(title, str(r["error"]), mbIconWarning)
+		case id == 19:
+			msgBox(title, "Noted in "+str(r["file"])+":\n\n"+strings.Join(strs(r["lines"]), "\n"), mbIconInfo)
+		default:
+			msgBox(title, fmt.Sprintf("Sent to FinCom support: %d lines in %d files (reference %s).", toInt(r["lines"]), toInt(r["files"]), or(str(r["ref"]), "-")), mbIconInfo)
+		}
 	case 12:
 		if !yesNo("FinCom Bridge", "Make FinCom Bridge "+BridgeVersion+" the main bridge on this computer? Bridge 1.15.0 is stopped and no longer starts; FinCom Bridge then reads and posts. Its pairing, settings and copy are kept.") {
 			return

@@ -362,6 +362,7 @@ func runBridge(console bool) int {
 	}
 	go updateLoop()
 	go beatLoop()
+	go recorderWatchLoop() // round 18: the recorder trial's folder watch (file times only; Tally is not asked)
 	for !stopping() {
 		loopAt.Store(time.Now().Unix())
 		sleepOrStop(100 * time.Millisecond)
