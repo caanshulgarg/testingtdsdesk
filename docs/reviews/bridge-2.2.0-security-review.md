@@ -522,4 +522,40 @@ Verdict, round 6:
 - R6-1 HIGH: Fixed (TestRealPostingShapesPass, TestPostingRuleAndPinAgree, TestPostShapesCurrent). R6-2: Fixed
   (TestPinRefusalWords). R6-3: Fixed (TestDupCheckPartyNoQuote). Details in the code review's round 6 status.
 
-Range: bdfe261..e5e54c0
+## Round 7 (e5e54c0..328b187)
+
+Reviewed: 04-Oct-2026. I read git diff e5e54c0 328b187 -- bridge-go/ tests/gen_post_shapes.js
+tests/fixtures/post-shapes/ from a clean worktree of 328b187, alongside round 7 of the code review
+(bridge-2.2.0-code-review.md, "Round 7"), which has the details.
+- go vet (Linux, Windows): clean.
+- go test -count=1 ./...: ok. The tree stayed clean.
+- A throwaway test checked 26 Import requests; it was deleted and the worktree removed.
+
+### Round 6 findings: is each "Fixed" claim true?
+
+| # | Claim | Verdict | Notes |
+|---|---|---|---|
+| R6-S1 H | Fixed with R6-1 | Confirmed | FinCom's real shapes, generated from the app's builders, go through the real posting path. The pin admits each object only by the posting rule, or as removeTallyVoucher's deletion. |
+| R6-S2 L | Fixed with R6-3 | Confirmed | No quote in the duplicate check's party. |
+
+What holds:
+- The Import pin still refuses: an Export head, a second TALLYMESSAGE, request markup (also with spaces), CDATA,
+  DOCTYPE, processing instructions, COMPANY/STOCKITEM objects, a date-less voucher that is not a deletion shape, and
+  a widened deletion shape.
+- A refused request reaches nothing (checkAllowed runs before the send). It forgets only the notes it made itself,
+  after sentBeforeRefusal had refused anything already on the record. So it cannot free a FinCom id Tally may hold.
+- Nothing new leaves the computer.
+
+### Findings, round 7
+
+- R7-S1 (LOW; code review R7-1). A VOUCHERTYPE Alter can carry another field in an attributed or lower-case tag, past
+  the "numbering only" rule. It writes a master's setting and reads nothing, needs a wrong poster, and FinCom's
+  builder does not do it.
+- R7-S2 (LOW; code review R7-2). A date-less deletion may use any TAGNAME. That is no wider than a dated deletion,
+  which the posting rule has allowed since 2.1.
+- Code review R7-3 (regenerate the post shapes when the uncommitted src/js work is committed) is process only.
+
+Verdict, round 7:
+- No High and no Medium. The build may go from 328b187.
+
+Range: bdfe261..328b187

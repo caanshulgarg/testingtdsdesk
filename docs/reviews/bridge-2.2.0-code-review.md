@@ -1123,4 +1123,87 @@ Verdict, round 6:
   <why>; nothing was sent to Tally".
 - R6-3 LOW, Fixed (TestDupCheckPartyNoQuote): the duplicate check's party name has no quote, as the other builders.
 
-Range: bdfe261..e5e54c0
+## Round 7 (e5e54c0..328b187)
+
+Reviewed: 04-Oct-2026, by the reviewer in the Claude Code session. I read git diff e5e54c0 328b187 -- bridge-go/
+tests/gen_post_shapes.js tests/fixtures/post-shapes/ from a clean worktree of 328b187. The diff covers:
+- the Import pin now uses the posting rule (cannotSend) per object, with white space allowed;
+- deletionShape, for removeTallyVoucher's date-less deletions;
+- pinRefusedError and its words;
+- the job's new "refused" branch;
+- no quote in the duplicate check's party;
+- the real posting shapes, generated from the app's own builders in src/js.
+
+Checks (clean worktree of 328b187):
+- `go vet ./...` and `GOOS=windows go vet ./...`: clean.
+- `go test -count=1 ./...`: ok (452 s), TestRealPostingShapesPass, TestPostShapesCurrent and
+  TestPostingRuleAndPinAgree included. The tree stayed clean; the beat fixture was not rewritten.
+- One throwaway test (zz_scratch_r7_test.go, in a second worktree) checked 26 Import requests against checkAllowed. It
+  was deleted with the worktree; nothing was added to the repo.
+
+### Round 6 findings: is each "Fixed" claim true?
+
+| # | Claim | Verdict | Notes |
+|---|---|---|---|
+| R6-1 H | Fixed | Confirmed | importRebuild trims white space before each object and at the end, takes VOUCHER, LEDGER, GROUP and VOUCHERTYPE, and admits an object only if cannotSend accepts it (or it is one of removeTallyVoucher's deletions). The eight shapes written by FinCom's own builders (purchase bill, journal, debit note, sales invoice, a three-line bank batch, a new ledger, a new customer, the voucher-type numbering) go through the real posting path to the stand (TestRealPostingShapesPass). TestPostShapesCurrent fails when the builders' source changes. In my run, vouchers ending `\n`, a GROUP and a date-less delete by MasterID all passed. |
+| R6-2 L | Fixed | Confirmed | pinRefusedError: "FinCom Bridge refused to send this (it is not a request FinCom builds) …; nothing was sent to Tally", used for every id. |
+| R6-3 L | Fixed | Confirmed | dupCheckRequest strips `"` from the party, as the other builders do. |
+
+### The Import pin under attack (each refused by checkAllowed unless said)
+
+- Export Data in place of Import Data: not "Import" any more and not on the list.
+- A second TALLYMESSAGE.
+- `<TDL>` between objects or inside one; `< TDL >` with spaces.
+- CDATA; a DOCTYPE before or inside an object; a processing instruction.
+- A comment hiding a `</VOUCHER>`: the remainder does not start an object.
+- COMPANY and STOCKITEM objects; a lower-case `<voucher>`.
+- A voucher with no date that is not a deletion shape; a VOUCHERTYPE Create.
+- Deletion shapes widened: a NARRATION inside, another attribute (OBJVIEW), or ACTION="Alter".
+- Passed, harmless: `&lt;TDL&gt;` as text in a narration.
+- Passed, see R7-1 and R7-2: a VOUCHERTYPE Alter carrying another field in an attributed or lower-case tag, and a
+  date-less deletion keyed by any TAGNAME.
+
+### The job's new "refused" branch and the FinCom id
+
+A pin refusal cannot free a FinCom id that Tally may hold:
+- Before any send, both posting routes refuse an entry already on the record (post.go:503 and jobs.go:549,
+  sentBeforeRefusal).
+- sendImport notes the entry as sent before the send. On any error that is not a no-answer, it removes only those
+  notes (acceptedForgetMany, as since 2.1.8 F2), and a pin refusal is such an error.
+- So the notes forgotten are the ones this refused request made, for entries that were not on the record before it.
+  Nothing reached Tally, because checkAllowed runs before anything is sent.
+- The change only turns "wait and send the same refused bytes again" into "failed, with the words". Since the bytes
+  are the same, waiting could never succeed.
+
+### Findings, round 7 (by severity)
+
+R7-1. LOW (needs a deliberately wrong poster; it is the posting rule, not a read; FinCom's builder never sends it).
+cannotSend's voucher-type check counts only plain upper-case tags, so a VOUCHERTYPE Alter can change other fields.
+- Where: post.go:128-135. `<([A-Z.]+)>` misses `<PARENT TYPE="String">` and `<parent>`, so a VOUCHERTYPE Alter with
+  NAME plus another field in either spelling counts as "numbering only". The pin now uses this rule, so it admits it.
+- Why Low: it alters a voucher type's settings, which a LEDGER or GROUP Alter can already do to those masters; it
+  reads nothing. FinCom's builder (24-tally-bridge.js:1329) sends NAME, NUMBERINGMETHOD and PREVENTDUPLICATES only.
+- Fix: take every opening tag inside (`<([^/!?\s>]+)`) and require exactly NAME, NUMBERINGMETHOD and
+  PREVENTDUPLICATES, with no attributes.
+
+R7-2. LOW (bounded by the posting rule). deletionShape admits any TAGNAME and TAGVALUE, but removeTallyVoucher uses
+only REMOTEID, TAGNAME="MASTERID" and TAGNAME="Voucher Number".
+- Where: post.go:567.
+- Why Low: a dated VOUCHER with ACTION="Delete" and any TAGNAME already passes the posting rule (as in 2.1.10), so the
+  date-less shape reaches nothing more.
+- Fix: TAGNAME only "MASTERID" or "Voucher Number".
+
+R7-3. LOW (process). TestPostShapesCurrent hashes the builders in src/js. The main working tree now holds other
+helpers' uncommitted changes to src/js (24-tally-bridge.js, ORDER.json, and others). When those are committed, run
+`node tests/gen_post_shapes.js` and commit the shapes with them, or the bridge's test fails. The build was made from a
+clean worktree of the release commit, which these changes do not touch.
+
+Verdict, round 7:
+- No High and no Medium.
+- R6-1, R6-2 and R6-3 are confirmed fixed. FinCom's real postings go; the Import pin still refuses Export heads, a
+  second TALLYMESSAGE, request markup, CDATA, DOCTYPE, processing instructions and the object types the posting rule
+  refuses.
+- The refused-job branch cannot free a FinCom id Tally may hold.
+- R7-1, R7-2 and R7-3 are Low and may wait. Release from 328b187.
+
+Range: bdfe261..328b187
