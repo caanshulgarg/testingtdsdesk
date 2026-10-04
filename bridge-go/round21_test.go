@@ -563,9 +563,13 @@ func TestVersionAndSheets2110(t *testing.T) {
 		}
 	}
 	sheet := strings.Join(strings.Fields(readText("../docs/bridge-2.1.10-test-sheet.txt")), " ")
-	for _, s := range []string{"2.1.10", "starting point", "up to 2 changes not received", "(filled in when the setup is built"} {
+	for _, s := range []string{"2.1.10", "starting point", "up to 2 changes not received"} {
 		if !strings.Contains(sheet, s) {
 			t.Fatalf("the 2.1.10 test sheet does not say %q", s)
 		}
+	}
+	// the fingerprint: the placeholder before the build, the setup's SHA-256 after it (the build fills it in)
+	if !strings.Contains(sheet, "(filled in when the setup is built") && !regexp.MustCompile(`Fingerprint: SHA-256 [0-9a-f]{64} \(FinComBridge-Setup-2\.1\.10\.exe`).MatchString(sheet) {
+		t.Fatal("the 2.1.10 test sheet has neither the fingerprint placeholder nor the setup's SHA-256")
 	}
 }
