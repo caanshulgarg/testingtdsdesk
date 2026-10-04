@@ -1001,4 +1001,105 @@ without a rebuild, the examples passing))
 - R5-4 LOW, Left by design: a company with no entries yet gets its starting point at the first check that sees one;
   the entries up to then are the Day Book upload's (prospective only).
 
-Range: bdfe261..184cb61
+## Round 6 (184cb61..e5e54c0)
+
+Reviewed: 04-Oct-2026, by the reviewer in the Claude Code session. I read git diff 184cb61 e5e54c0 -- bridge-go/ (the
+new pinned.go and pinned_test.go; checkAllowed now requires pinnedToBuilder; keepAboveExact needs the starting point;
+measure.go and readtest.go skip the list without one; companyCheckNumbers and "not given") from a clean worktree of
+e5e54c0. Where FinCom's posting XML matters I read src/js at e5e54c0.
+
+Checks (clean worktree of e5e54c0):
+- `go vet ./...` and `GOOS=windows go vet ./...`: clean.
+- `go test -count=1 ./...`: ok (454 s). The tree stayed clean; the beat fixture was not rewritten.
+- Three throwaway tests (zz_scratch_r6*_test.go, in a second worktree) confirmed R6-1 and checked the round 5 fixes and
+  the pin attacks below. They were deleted with the worktree; nothing was added to the repo.
+
+### Round 5 findings: is each "Fixed" claim true?
+
+| # | Claim | Verdict | Notes |
+|---|---|---|---|
+| R5-1 M | Fixed | Confirmed | keepAboveExact needs a starting point and N >= it, and datedRefused applies it to every undated TDSDeskKeepList whoever asks, a person TC included. "Above 0" with no starting point is refused for fin and for the read test. measure.go asks form a, then form b, and skips a2 without a starting point; the read test does the same. |
+| R5-2 M | Fixed | Confirmed | checkAllowed refuses any request that is not byte-identical to its id's builder rebuilt from its own parameters. The round 5 constructions are all refused: form b as a Voucher report with $Amount, FinComCompany as a Voucher collection, TDSDeskCompanies with an $EffectiveDate period. |
+| R5-3 L | Fixed | Confirmed | companyCheckNumbers returns `given`; the note says "not given" otherwise. |
+
+### The pin under attack (pinned.go)
+
+A parse-and-rebuild pin can only admit what some builder makes from some parameters. So the questions are what the
+parameters can carry and whether the builders bound them.
+- Markup through a name: esc escapes & < > " ', and pinCo / pinQuoted unescape what they take, so a name round-trips
+  as text. A company named `A</SVCURRENTCOMPANY><SVFROMDATE>…` stays text inside SVCURRENTCOMPANY and the filter;
+  requestDated, which decodes first, even refuses it with ReadDays off. Holds.
+- TDL inside a name (R6-3): dupCheckRequest puts esc(party) inside `"…"` in a Formulae, and Tally decodes `&#34;`, so
+  a party `X" OR … OR $Name = "Y` changes the filter. The pin admits it, because the builder makes it. It stays within
+  that one date, which dupCheckRequest(company, date, "") reads whole anyway. The other names in formulas strip `"`
+  (companyCheckRequest, coInfoRequest, measureLedFilter).
+- Values outside their bounds: the pin does not bound values; the value checks do.
+  - A body fetch with 51 MasterIDs passes the pin but voucherByMasterExact refuses it, always (by id).
+  - The keep list above an AlterID needs the starting point.
+  - The slice is bounded by sliceExact.
+  - A Day Book of 2015-2026 passes the pin and is refused with ReadDays off by id. With a person TC or ReadDays on, the
+    month limit is the caller's (reads.go:498), not the guard's.
+  - A body fetch for a day in 2019 passes (one day, by MasterID; accepted in round 2).
+  - A ledger list with no upper end passes (masters, stored fields).
+  - None of these is new, and none needs a wrong caller to stay safe beyond what the builders already do.
+- An id with several builders: Day Book (dateForms), TDSDeskKeepList (dated and above), FinComSlice and
+  FinComDatesProbe (collForms). Each admits only its own builders' outputs, and each is then held by its value check.
+- Import:
+  - The fixed head, one of the two reports, one TALLYMESSAGE, and only VOUCHER/LEDGER objects with no request markup.
+  - Markup in CDATA is refused (the `<TDL` text is seen).
+  - Escaped markup in an attribute is plain text and harmless.
+  - A second TALLYMESSAGE is refused, and Import Data changed to Export Data is "not on the list".
+  - A Delete action goes, as postings may delete.
+  - The pin itself holds, but it refuses what FinCom actually posts (R6-1).
+
+### Findings, round 6 (by severity)
+
+R6-1. HIGH (regression: FinCom's postings refused). The Import pin rejects the objects FinCom sends, so posting from
+FinCom stops working with 2.2.0.
+- Where: pinned.go:146 and :169-186 (importRebuild). Each object must start exactly with `<VOUCHER` or `<LEDGER` and
+  be followed straight away by the next one, or by the end of the TALLYMESSAGE.
+- What FinCom sends:
+  - Every voucher it builds ends `</VOUCHER>\n`, and every ledger `</LEDGER>\n`: src/js/22-written-rules.js:886
+    and :895, 25-sales.js:265 and :274, 01-documents-in-the-firm-account.js:4124, app/legacy/live.js:4443 and :12353.
+    The bridge does not trim the item's xml (post.go:519, jobs.go:189). After the first object `in` is "\n", and
+    reImportObj fails.
+  - "Set automatic voucher numbering" posts `<VOUCHERTYPE … ACTION="Alter">…</VOUCHERTYPE>\n` as a master
+    (src/js/24-tally-bridge.js:1329). cannotSend allows that, and GROUP masters too (post.go:142); importRebuild allows
+    neither.
+- Confirmed: TestScratchR6Import, through invokeImport on the stand.
+  - A plain ledger and a plain voucher went (the shapes the tests use).
+  - A voucher with a trailing newline (FinCom's shape), a ledger with a trailing newline, a GROUP and the VOUCHERTYPE
+    numbering alter were each "not sent": "Tally did not answer: The request Import is not on the bridge's allow-list
+    … (it is not exactly as the bridge builds it)".
+  - Nothing reaches Tally, and the result is notSent, so no entry is posted twice. But every posting from FinCom
+    fails, under a message that blames Tally.
+- Why the tests missed it: finVoucher and the master fixtures have no whitespace, and no test posts a GROUP or a
+  VOUCHERTYPE.
+- Fix:
+  - In importRebuild, skip whitespace (spaces, tabs, CR, LF) before each object and at the end.
+  - Allow the objects cannotSend allows: VOUCHER, LEDGER, GROUP, and VOUCHERTYPE. Or better, call cannotSend's rule
+    for each object, so the two cannot drift apart.
+  - The rebuild stays byte-identical, since the body is taken as it is.
+  - Say "refused by the bridge" rather than "Tally did not answer" for a notAllowedError (post.go:532).
+- Test: TestImportPinTakesFinComShapes. Post through invokeImport, on the stand, FinCom's own shapes: a voucher and a
+  ledger with `\n` after each and between two vouchers in one request, a GROUP, and the VOUCHERTYPE alter from
+  24-tally-bridge.js. Each is sent. A body with `<TDL>` between two vouchers, or a COMPANY object, is still refused.
+
+R6-2. LOW. The refusal of an Import is reported as "Tally did not answer: …".
+- Where: post.go:532.
+- Effect: the owner looks at Tally instead of the bridge. Fixed with R6-1's wording.
+
+R6-3. LOW (needs a deliberately wrong party name, and is bounded by the builder). dupCheckRequest escapes the party
+name, but Tally decodes `&#34;` inside the Formulae, so a `"` in the name can add TDL to the filter. The pin admits it
+because the builder makes it. The read stays inside the one date that dupCheckRequest(company, date, "") reads anyway,
+and FETCH is fixed, so nothing wider or computed comes back.
+- Fix: strip `"` from the party as the other builders do (dupcheck.go:188).
+
+Verdict, round 6:
+- One High: R6-1. Every FinCom posting is refused by the new Import pin: a trailing newline after each object, and
+  GROUP / VOUCHERTYPE masters not admitted. It blocks the build.
+- R5-1, R5-2 and R5-3 are confirmed fixed. The pin itself could not be fooled: no different request rebuilt
+  identical, and every value out of bounds is held by the value checks or refused by id with ReadDays off.
+- R6-2 and R6-3 are Low.
+
+Range: bdfe261..e5e54c0

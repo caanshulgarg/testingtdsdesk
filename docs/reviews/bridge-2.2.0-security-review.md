@@ -479,4 +479,41 @@ Verdict, round 5:
   (TestEveryIdPinned). R5-3 LOW: Fixed (TestNoteChangeNumbersNotGiven). R5-4 LOW: Left by design. Details in the code
   review's round 5 status.
 
-Range: bdfe261..184cb61
+## Round 6 (184cb61..e5e54c0)
+
+Reviewed: 04-Oct-2026. I read git diff 184cb61 e5e54c0 -- bridge-go/ from a clean worktree of e5e54c0, alongside round
+6 of the code review (bridge-2.2.0-code-review.md, "Round 6"), which has the details.
+- go vet (Linux, Windows): clean.
+- go test -count=1 ./...: ok. The tree stayed clean.
+- Throwaway tests checked the round 5 fixes and the pin attacks and confirmed R6-1. They were deleted and the worktree
+  removed.
+
+### Round 5 findings: is each "Fixed" claim true?
+
+| # | Claim | Verdict | Notes |
+|---|---|---|---|
+| R5-S1 M | Fixed with R5-1 | Confirmed | The keep list above an AlterID needs the starting point, for every caller; the measuring tool and the read test skip it without one. |
+| R5-S2 M | Fixed with R5-2 | Confirmed | Every id is pinned to its builder by a byte-identical rebuild. Form b widened, FinComCompany as a Voucher collection, and TDSDeskCompanies with an $EffectiveDate period are all refused. |
+
+What holds:
+- No different request rebuilds identical. Names round-trip through esc and unescape as text.
+- Values out of bounds are held by the value checks (51 MasterIDs refused by voucherByMasterExact; keep list and slice
+  by the starting point), or refused by id with ReadDays off.
+- Import: CDATA markup, a second TALLYMESSAGE, or a changed head is refused. Escaped text in an attribute is harmless.
+
+### Findings, round 6
+
+- R6-S1 (HIGH, availability; code review R6-1). The Import pin refuses FinCom's real postings: each object FinCom
+  builds ends with a newline, and GROUP and VOUCHERTYPE masters are not admitted. Nothing is sent and nothing is
+  posted twice, but no FinCom posting goes through, under a message that blames Tally. Fix: allow whitespace between
+  objects and the object kinds cannotSend allows.
+- R6-S2 (LOW; code review R6-3). A `"` in a party name can add TDL to the duplicate check's filter. The pin admits it
+  because the builder makes it, but it stays within one date, which the builder already reads whole. Fix: strip `"` as
+  the other builders do.
+- Code review R6-2 (the refusal worded as "Tally did not answer") is Low.
+
+Verdict, round 6:
+- R6-S1 is High and blocks the build.
+- The pinning holds as a security control. R5-S1 and R5-S2 are confirmed.
+
+Range: bdfe261..e5e54c0
