@@ -4345,14 +4345,20 @@ function vchNoFor(e, co){
   return String(e.vchNo || e.x.invoiceNo || "").trim().slice(0, 60);
 }
 function initialsOf(name){ return String(name || "").replace(/[^A-Za-z ]/g, " ").split(/\s+/).filter(w => w.length > 2 && !/^(pvt|ltd|private|limited|and|the|co|llp)$/i.test(w)).map(w => w[0].toUpperCase()).join("").slice(0, 4) || "X"; }
-// the REMOTEID a voucher carries ("" = none): the test box on, the client posting to ZZ TEST (confirmed), the typed
-// value or the entry's FinCom id
+// the REMOTEID a voucher carries ("" = none): the test box on, the client's posting company confirmed (any company
+// linked in FinCom: round 19, the owner's decision of 04-Oct, no company-name check), the typed value or the entry's
+// FinCom id
 function remoteIdFor(e, co){
   if (!co || co.postRemoteId !== true || !e || !e.id) return "";
   const ch = typeof choiceGet === "function" ? choiceGet(co, "postTo") : {value: co.postTo, state: "confirmed"};
   const to = String((ch && ch.value) || "").trim();
-  if (!/^zz test\b/i.test(to) || (ch && ch.state && ch.state !== "confirmed")) return "";
+  if (!to || (ch && ch.state && ch.state !== "confirmed")) return "";
   return String(co.postRemoteIdFixed || "").trim().slice(0, 80) || String(e.id);
+}
+// round 19: the second-send test (a typed REMOTEID in place of each bill's own id) adds a test entry: the posting asks
+// first (postTrialConfirm, src/js/59) and the voucher's narration starts "TRIAL | "
+function remoteIdTrial(co){
+  return !!(co && String(co.postRemoteIdFixed || "").trim() && remoteIdFor({id: "x"}, co));
 }
 function voucherXml(e, co){
   const note = e.noteKind === "credit";                 // a supplier's credit note: a Debit Note in Tally, every line reversed
@@ -4360,7 +4366,8 @@ function voucherXml(e, co){
   // round 14c (owner item 4, a test): "Send a FinCom reference id (REMOTEID) with each voucher" on the Post page puts the
   // entry's FinCom id (the same as the TDSDesk:<id> tag) as REMOTEID on the voucher; off (the default), nothing changes
   // entry's FinCom id as REMOTEID, or the value typed in "REMOTEID to send instead" (the second-send test: the first
-  // bill's id typed on a Duplicate of it); only for a client whose confirmed posting company is ZZ TEST (never real books)
+  // bill's id typed on a Duplicate of it; then the narration starts "TRIAL | "); only for a client whose posting company
+  // is confirmed
   const ridVal = remoteIdFor(e, co);
   const rid = ridVal ? ' REMOTEID="' + xesc(ridVal) + '"' : "";
   let x = '<VOUCHER VCHTYPE="' + vt + '" ACTION="Create" OBJVIEW="Accounting Voucher View"' + rid + '>\n';
@@ -4370,7 +4377,8 @@ function voucherXml(e, co){
   if (vno) x += "<VOUCHERNUMBER>" + xesc(vno) + "</VOUCHERNUMBER>\n";
   x += "<REFERENCE>" + xesc(e.x.invoiceNo) + "</REFERENCE>\n<REFERENCEDATE>" + d + "</REFERENCEDATE>\n";
   x += "<PARTYLEDGERNAME>" + xesc(tallyLedgerName(e.partyLedger)) + "</PARTYLEDGERNAME>\n";
-  x += "<NARRATION>" + xesc((e.narration || narrationFor(e)) + " | TDSDesk:" + e.id) + "</NARRATION>\n";
+  const nar0 = e.narration || narrationFor(e), nar = remoteIdTrial(co) && !/^TRIAL \| /.test(nar0) ? "TRIAL | " + nar0 : nar0;
+  x += "<NARRATION>" + xesc(nar + " | TDSDesk:" + e.id) + "</NARRATION>\n";
   x += "<PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW>\n<ISINVOICE>No</ISINVOICE>\n";
   x += "<ISOPTIONAL>" + (co.createOptional ? "Yes" : "No") + "</ISOPTIONAL>\n";
   s.lines.forEach(l => {
@@ -14879,6 +14887,12 @@ async function postBillsToTally(opts){
     postStopped(why, co.id);
     if (!list.length){ S.billPost = {notAllowed: plainMsg(why), company: ""}; toast(why); refreshStats(co.id); render(); return; }
   }
+  // round 19: the second-send test (a typed REMOTEID) adds test entries: asked once, naming the company, unless Post
+  // asked already (postAllToTally: opts.trialOk); No: nothing sent, the bills stay waiting
+  if (!opts.trialOk && typeof remoteIdTrial === "function" && remoteIdTrial(co) && typeof postTrialConfirm === "function"){
+    S.billPost = null; render();
+    if (!(await postTrialConfirm(co, list.length))){ toast("Nothing sent: the test posting was cancelled."); render(); return; }
+  }
   const failed = [];
   const blocked = list.filter(e => e.snapshot.lines.some(l => !exactLedger(l.ledger)));
   blocked.forEach(e => { const l = e.snapshot.lines.find(x => !exactLedger(x.ledger)); e.postError = "Ledger “" + (l.ledger || "(none)") + "” is not in Tally"; unapply(e, co.id); e.postFailedAt = new Date().toISOString(); Store.saveEntry(co.id, e); failed.push({id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, msg: e.postError}); });
@@ -18274,6 +18288,8 @@ function doAct(act, t){
     case "billCheck": checkBillsInTally(); break;
     case "billCheckWaiting": checkBillsInTally(true); break;
     case "bridgeReadTest": {
+      // round 19, guard (a): the trial tools are an owner's only (staff never see them)
+      if (typeof postOwner === "function" && !postOwner()){ toast("Only an owner of the firm runs the reading test."); break; }
       const co = CO(), o = co && Bridge.openFor(co);
       const name = o ? o.name : (Bridge.st.open[0] && Bridge.st.open[0].name);
       if (!name){ toast("Open a company in Tally first."); break; }
@@ -20543,7 +20559,7 @@ const GUIDE = {
     "inbox": {area: "Documents", t: "Inbox", what: "Each client has an address and a drop link; documents sent there wait in the Inbox until you sort them.",
       steps: ["Share the client's drop link or address.", "Open Inbox, check each document's client and kind, and send it on to Purchase, Bank or Sales."]},
     "tally": {area: "Tally", t: "Connecting Tally", what: "FinCom talks to Tally through FinCom Bridge, a small Windows program on the computer with TallyPrime. It uses Tally's own port (9000 by default).",
-      steps: ["On the computer with TallyPrime, open FinCom's Tally page and press Download FinCom Bridge.", "Run the downloaded FinComBridge-Setup file. If Windows says “Windows protected your PC”, press More info → Run anyway. It installs just for you, without an administrator; it replaces any older bridge, keeps the pairing, and becomes the main bridge.", "The FinCom icon near the clock shows the bridge's status. Right-click it for Open FinCom, Test connection and Show log.", "In Tally: F1 → Settings → Connectivity → TallyPrime acts as: Both, port 9000.", "Open the company in Tally.", "Click the Tally chip at the top of FinCom and check it says connected.", "Post a test entry to a ZZ TEST company first."],
+      steps: ["On the computer with TallyPrime, open FinCom's Tally page and press Download FinCom Bridge.", "Run the downloaded FinComBridge-Setup file. If Windows says “Windows protected your PC”, press More info → Run anyway. It installs just for you, without an administrator; it replaces any older bridge, keeps the pairing, and becomes the main bridge.", "The FinCom icon near the clock shows the bridge's status. Right-click it for Open FinCom, Test connection and Show log.", "In Tally: F1 → Settings → Connectivity → TallyPrime acts as: Both, port 9000.", "Open the company in Tally.", "Click the Tally chip at the top of FinCom and check it says connected.", "Post one entry first and check it in Tally."],
       watch: ["Tally must be open with the right company when posting.", "If FinCom says the bridge is not answering, check the FinCom Bridge icon near the clock (right-click → Test connection).", "Everything sent to Tally is listed under Tally: everything sent."]},
     "gstapi": {area: "GST", t: "Fetching from the GST portal (GST API)", what: "With the firm account, 2B can be fetched straight from the GST portal after an OTP sent to the taxpayer.",
       steps: ["On gst.gov.in the taxpayer allows API access: My Profile → Manage API Access.", "Client setup → GST: type the GST portal username for the GSTIN.", "TDS & GST → GST → 2B: Send OTP, type the OTP, Connect, then Fetch 2B."],
@@ -22698,6 +22714,13 @@ const TCloud = {
         if (noPS(m)){ p.noPostSettings = true; return read(",main_bridge").catch(e2 => { if (/main_bridge/.test(String(e2 && e2.message))){ p.noMain = true; return read(""); } throw e2; }); }
         if (/main_bridge/.test(m)){ p.noMain = true; return read(PS).then(r => { p.noPostSettings = false; return r; }).catch(e2 => { if (noPS(String(e2 && e2.message))){ p.noPostSettings = true; return read(""); } throw e2; }); }
         throw e; });
+      // round 19: "Trial tools on this computer" (migration 46: tally_devices.trial_tools), read apart so a cloud without
+      // the column (42703) keeps the rest of the page; the line then says it is not available yet
+      try {
+        const tt = [].concat(await Cloud.api("tally_devices?select=id,trial_tools") || []), by = new Map(tt.map(x => [x.id, x.trial_tools]));
+        (p.devices || []).forEach(d => { if (by.has(d.id)) d.trial_tools = by.get(d.id) === true; });
+        p.noTrialTools = false;
+      } catch (e){ p.noTrialTools = /trial_tools|42703/.test(String(e && e.message)); }
       p.companies = await this.restAll("tally_companies?select=company,client_id,device_id,gstin,last_seen,linked_at&order=company.asc");
       // migration-35: the stops and resumes from FinCom with who and when (round 4, item 24: the latest 300 rows; the
       // standing stops and the latest resume a computer are taken out here), and the bridge versions on trial, approved
@@ -22806,8 +22829,9 @@ const TCloud = {
       toast(done);
     } catch (e){
       const m = String((e && e.message) || e), missing = /PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(m);
-      const mig = {tally_release_withdraw: 37, tally_baseline_clear: 37, tally_device_post_settings: 43}[fn] || 35;
+      const mig = {tally_release_withdraw: 37, tally_baseline_clear: 37, tally_device_post_settings: 43, tally_device_trial_tools: 46}[fn] || 35;
       p.ctl = {err: missing && fn === "tally_device_post_settings" ? "Posting settings are not available until migration 43 runs."
+        : missing && fn === "tally_device_trial_tools" ? "Trial tools on this computer: not available until migration 46 runs."
         : missing ? "FinCom\u2019s cloud is not ready for this yet (migration " + mig + " is not applied)."
         : m.replace(/^ERROR:\s*/i, "").replace(/^./, c => c.toUpperCase())};
     }
@@ -22837,6 +22861,12 @@ const TCloud = {
     await this.control("tally_device_post_settings", {p_device: dev.id, p_post_only: touched ? names : null, p_bills: Math.floor(num(v.bills)), p_bank: Math.floor(num(v.bank))},
       "Saved for " + (dev.name || "the computer") + "; the bridge applies it within a minute.");
     return "";
+  },
+  // round 19: an owner switches the trial tools of one computer on or off -> tally_device_trial_tools(p_device, p_on)
+  // (migration 46; owner only there too); the bridge applies it at its next heartbeat (within 30 seconds)
+  async trialTools(dev, on){
+    await this.control("tally_device_trial_tools", {p_device: dev.id, p_on: !!on},
+      "Trial tools " + (on ? "on" : "off") + " for " + (dev.name || "the computer") + "; the bridge applies it within 30 seconds.");
   },
   async readStop(r){
     const all = !r, where = all ? "every computer" : r.computer;
@@ -26273,25 +26303,40 @@ function postTimingWords(j){
   if (!k && !s) return "";
   return k + (k === 1 ? " request, " : " requests, ") + (Math.round(s * 10) / 10) + " s";
 }
-// T: test bills on ZZ TEST (the owner's timing). Only for a client whose confirmed postTo company begins with "ZZ TEST"
+// T: test bills (the owner's timing). Round 19 (the owner's decision, 04-Oct): any company linked in FinCom, no
+// company-name check; only a client whose posting company (postTo) is confirmed, and an owner (postTestCopies)
 function postTestCopiesOk(co){
-  return !!co && typeof choiceState === "function" && choiceState(co, "postTo") === "confirmed" && String(co.postTo || "").toUpperCase().startsWith("ZZ TEST");
+  return !!co && typeof choiceState === "function" && choiceState(co, "postTo") === "confirmed" && !!String(co.postTo || "").trim();
+}
+// round 19, guard (b): anything that adds test entries asks once, naming the company; true on yes
+async function postTrialConfirm(co, n){
+  const company = String((co && co.postTo) || "").trim() || postCompanyName(co);
+  const a = await askConfirm({title: "Add test entries?", ok: "Continue",
+    body: "<p>" + esc("This will add " + n + (n === 1 ? " test entry" : " test entries") + " to " + company + ". Continue?") + "</p>" +
+      "<p>Their narration starts with TRIAL.</p>"});
+  return !!(a && a.ok);
 }
 // N copies of a ready bill: new ids, invoice numbers "<no>-T1".."-TN", the same amounts, ledgers and date, x.testCopy
-// true, ready to post. {ok, ids} or {ok: false, error}
-function postTestCopies(cid, id, n){
+// true, narration "TRIAL | ...", ready to post, after the owner says yes to "This will add N test entries to <company>.
+// Continue?". {ok, ids} or {ok: false, error} (cancelled: {ok: false, cancelled: true})
+async function postTestCopies(cid, id, n){
   const co = S.companies[cid], d = S.data[cid], src = d && d.entries && d.entries[id];
   if (!postOwner()) return {ok: false, error: "Only an owner of the firm makes test copies."};
-  if (!co || !postTestCopiesOk(co)) return {ok: false, error: "Test copies are made only for a client posting to ZZ TEST."};
+  if (!co || !postTestCopiesOk(co)) return {ok: false, error: "Test copies are made only for a client whose posting company is confirmed (Client setup \u2192 Tally)."};
   if (!src) return {ok: false, error: "Choose a bill first."};
   n = Math.floor(num(n));
   if (!(n >= 1 && n <= 100)) return {ok: false, error: "Choose a number from 1 to 100."};
   if (src.status !== "approved" || src.exportedAt || src.postUnconfirmed) return {ok: false, error: "Choose a bill that is ready to post."};
+  if (!(await postTrialConfirm(co, n))) return {ok: false, cancelled: true, error: "Nothing made."};
+  if (!d.entries[id] || S.companies[cid] !== co) return {ok: false, error: "Choose a bill first."};
   const now = new Date().toISOString(), no = src.x.invoiceNo || "T", ids = [];
   for (let i = 1; i <= n; i++){
     const e = JSON.parse(JSON.stringify(src));
     e.id = uid("e"); e.createdAt = now; e.approvedAt = now; e.fileName = "Test copy " + i + " of " + no; e.notDuplicate = true;
     e.x.invoiceNo = no + "-T" + i; e.x.testCopy = true;
+    // TRIAL in the narration (voucherXml adds " | TDSDesk:<id>" after it)
+    const nar = e.narration || narrationFor(e);
+    e.narration = /^TRIAL \| /.test(nar) ? nar : "TRIAL | " + nar;
     ["exportedAt", "postUnconfirmed", "postCheckFailed", "postError", "postNote", "postAlreadyMsg", "tally", "tallyVchNo", "tallyCheck", "postVerified", "postByReply", "postAltered", "postedVia", "postedInto", "postedOptional", "goneFromTally", "postFailedAt", "paidBy", "vchNo", "docPath", "dupOf"].forEach(k => { delete e[k]; });
     d.entries[e.id] = e; Store.saveEntry(cid, e); ids.push(e.id);
   }
@@ -26452,10 +26497,13 @@ async function postAllToTally(only){
     const all = postRows(co), rows = list.map(e => all.find(r => r.kind === "bill" && r.id === e.id) || {kind: "bill", id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, e});
     if (!rows.length){ toast("Nothing is waiting to be posted."); return; }
     S.postStop = null; S.postNote = null;
+    // round 19: the second-send test (a typed REMOTEID) adds test entries: asked once, naming the company, before the preview
+    const trial = typeof remoteIdTrial === "function" && remoteIdTrial(co);
+    if (trial && !(await postTrialConfirm(co, rows.length))) return;
     if (!(await postPreview(co, rows))) return;
     rows.forEach(r => { if (r.e.postCheckFailed){ r.e.postCheckFailed = null; Store.saveEntry(co.id, r.e); } });
     S.billPost = null;
-    await postBillsToTally({ids: rows.map(r => r.id)});
+    await postBillsToTally(trial ? {ids: rows.map(r => r.id), trialOk: true} : {ids: rows.map(r => r.id)});
     // back with nothing on the page (a toast only: Tally not connected, no company open, no entry waiting): kept as a row
     if (!S.billPost && !S.postStop) postRefusedShow(co.id, {name: "Not sent", message: said[said.length - 1] || "The posting stopped before anything was sent."});
   } catch (err){
