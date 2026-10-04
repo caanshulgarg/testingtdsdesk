@@ -89,6 +89,30 @@ try:
     ok(dev["info"]["beat"].get("postOnly") == [] and dev["info"]["bridges"][GO["id"]].get("postOnly") == [], "11b. [] when the computer posts to any company")
     c, r = call({"kind": "beat", "version": "2.1.5", "bridge": main, "tally": True})
     ok(dev["info"]["beat"].get("postOnly") is None, "11b. an older bridge without the field: none kept (not an empty list)")
+    # round 19: a 2.1.9 beat carries the change numbers top-level only (startPoint / changeNumbers by company; companies[]
+    # without them). On a cloud without migration 44 (the stand-in has no tally_start_point / tally_recorder_gap_check) the
+    # beat still answers 200; each missing function is said ONCE in the log with the company (console.error), not every beat
+    n_log = len(log)
+    b19 = {"kind": "beat", "version": "2.1.9", "bridge": dict(main, version="2.1.9"), "tally": True, "paused": True, "companies": [],
+           "startPoint": {"ZZ CO": {"altvchid": 50, "altmstid": 3, "at": "2026-10-04T15:40:00", "guid": "cg-1"}},
+           "changeNumbers": {"ZZ CO": {"altvchid": 52, "altmstid": 3, "at": "2026-10-04T15:45:00", "recorderSeen": True, "recorderLastAt": "2026-10-04T15:44:00"}}}
+    c1, r1 = call(b19); c2, r2 = call(b19); time.sleep(0.5)
+    said = lambda fn: [l.strip() for l in log[n_log:] if fn in l]
+    ok(c1 == 200 and c2 == 200 and r1.get("ok") is True and r2.get("ok") is True, "19. a 2.1.9 beat with startPoint / changeNumbers on a cloud without 44: answered 200 (%s %s)" % (c1, c2))
+    ok(len(F.ARGS.get("tally_start_point", [])) >= 1 and F.ARGS["tally_start_point"][0].get("p_guid") == "cg-1" and F.ARGS["tally_start_point"][0].get("p_altvch") == 50
+       and any(a.get("p_altvchid") == 52 for a in F.ARGS.get("tally_recorder_gap_check", [])), "19. the top-level shape is read: tally_start_point (GUID cg-1, 50) and the gap check (52) are tried (%s)" % F.ARGS.get("tally_start_point"))
+    ok(len(said("tally_start_point")) == 1 and "ZZ CO" in said("tally_start_point")[0] and len(said("tally_recorder_gap_check")) == 1 and "ZZ CO" in said("tally_recorder_gap_check")[0],
+       "19. each missing function said once in the log, with the company, never silently (%s)" % (said("tally_start_point") + said("tally_recorder_gap_check")))
+    ok(dev["info"]["bridges"][GO["id"]].get("recorder") == {"ZZ CO": {"seen": True, "lastAt": "2026-10-04T15:44:00"}}, "19. recorderOf reads changeNumbers' recorderSeen (%s)" % dev["info"]["bridges"][GO["id"]].get("recorder"))
+    # round 19 (migration 46): the beat answer carries trialTools from tally_devices.trial_tools; no column (a cloud without 46): false
+    ok(r1.get("trialTools") is False and "trial_tools" not in dev, "46. no trial_tools column: the beat answers trialTools false (%s)" % r1.get("trialTools"))
+    dev["trial_tools"] = True
+    c, r = call({"kind": "beat", "version": "2.1.10", "bridge": dict(main, version="2.1.10"), "tally": True})
+    ok(c == 200 and r.get("trialTools") is True, "46. the owner's switch on: trialTools true (%s)" % r.get("trialTools"))
+    dev["trial_tools"] = False
+    c, r = call({"kind": "beat", "version": "2.1.10", "bridge": dict(main, version="2.1.10"), "tally": True})
+    ok(c == 200 and r.get("trialTools") is False, "46. off: trialTools false (%s)" % r.get("trialTools"))
+    dev.pop("trial_tools", None)
     c, r = call({"kind": "posts_take", "version": "2.1.0", "bridge": main})
     ok(c == 200, "and may take it (%s)" % c)
     # the bridge's menu: Switch to main bridge (a second Go install takes over)

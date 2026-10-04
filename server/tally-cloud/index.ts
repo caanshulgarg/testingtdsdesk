@@ -101,6 +101,14 @@
 //   the beat's companies may carry altvchid, altmstid, recorderSeen, recorderLastAt (at: the check's time): each company with
 //   altvchid is checked (tally_recorder_gap_check) and the answer carries recorder:{company: {gap, missing, needsBaseline?,
 //   startRecorded?}}; recorderSeen kept per bridge in info.bridges[id].recorder = {company: {seen, lastAt}}
+//   round 19: the beat's change numbers are read in BOTH shapes (beatChanges): FinCom Bridge 2.1.9 sends them top-level only,
+//   startPoint {company: {altvchid, altmstid, at, guid}} and changeNumbers {company: {altvchid, altmstid, at, recorderSeen,
+//   recorderLastAt}}; 2.1.10 also in companies[] {name, ..., guid, altvchid, altmstid, recorderSeen}. companies[] first, else the
+//   top-level fields by name. A company with a GUID and an altvchid gets tally_start_point (once per cold start; the database
+//   keeps it once) before the gap check. A zoneless time from the bridge is IST. A failed call is logged with the company and
+//   the error (console.error); a function the database lacks is said once per cold start. The beat's answer carries
+//   trialTools: true / false (tally_devices.trial_tools, migration 46: the owner's switch "Trial tools on this computer";
+//   false without the column)
 //   {kind:"start_point", company, guid?, altvchid, altmstid, at} -> {set, startVoucher, startMaster, guid, at, state}: the
 //                                                       bridge's starting point (reading is prospective), kept once per book
 //                                                       and company GUID on tally_sync_cursor (tally_start_point)
@@ -214,34 +222,140 @@ function bridgeOf(dev: any, body: any, shadow: boolean) {
     // lastAt}}), for the app's banner "Tally changes are not being recorded on <PC>"; absent on a bridge that does not say
     ...recorderOf(body) } };
 }
-// phase 2: the companies of a beat that say recorderSeen (a boolean): {company: {seen, lastAt}}, at most 50
+// phase 2: the companies of a beat that say recorderSeen (a boolean): {company: {seen, lastAt}}, at most 50. Round 19: read
+// from either shape of the beat (beatChanges: companies[] first, else the top-level changeNumbers of bridge 2.1.9)
 function recorderOf(body: any) {
   const out: Record<string, { seen: boolean; lastAt: string }> = {};
-  for (const c of (Array.isArray(body?.companies) ? body.companies : []).slice(0, 50) as any[]) {
-    const name = typeof c?.name === "string" ? c.name.slice(0, 200) : "";
-    if (name && typeof c?.recorderSeen === "boolean") out[name] = { seen: c.recorderSeen, lastAt: typeof c.recorderLastAt === "string" ? c.recorderLastAt.slice(0, 40) : "" };
-  }
+  for (const c of beatChanges(body)) if (typeof c.recorderSeen === "boolean") out[c.name] = { seen: c.recorderSeen, lastAt: c.recorderLastAt };
   return Object.keys(out).length ? { recorder: out } : {};
 }
 // phase 2: Tally's highest change numbers per company as the beat says them (FinComCompany's ALTVCHID / ALTMSTID). 0 or
 // less is unknown (the bridge sends 0 for a value it could not read), never a number: 0 would read as a rewind or set a
 // starting point of 0 (review M2); 10^15 or more is past Tally's range
 const altOf = (v: unknown) => v === null || v === undefined || v === "" || typeof v === "boolean" || !Number.isFinite(Number(v)) || Number(v) <= 0 || Number(v) >= 1e15 ? null : Math.floor(Number(v));
-// each company that carries altvchid: tally_recorder_gap_check(book, device, altvchid, at) (migration 44): compared with what
-// every PC's recorder lines (and the day books read) reached; the answer per company {gap, missing (UP TO: an upper
-// bound on the changes not received), needsBaseline, startRecorded}. Never fails the beat (a cloud without 44: nothing said)
-async function recorderGaps(dev: any, firm: string, companies: any[]) {
+// round 19: the bridge's times carry no zone (FinCom Bridge writes Windows' local time, IST, "2006-01-02T15:04:05"): only that
+// exact form is read as +05:30, never as the cloud's UTC; an ISO time with its zone (Z or +hh:mm) as it says; any other form
+// is not read: now (review 46 L3). A time more than 5 minutes ahead of the server's now (a PC clock ahead) is taken as now,
+// so a last match is never stamped in the future (review 46 M2)
+function atOf(v: unknown) {
+  const t = typeof v === "string" ? v.trim().slice(0, 40) : "";
+  const ms = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d$/.test(t) ? Date.parse(t + "+05:30")
+    : /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d{1,9})?(Z|[+-]\d\d:\d\d)$/i.test(t) ? Date.parse(t) : NaN;
+  return isNaN(ms) || ms > Date.now() + 300000 ? new Date().toISOString() : new Date(ms).toISOString();
+}
+// round 19: a beat's change numbers per company, in both shapes. FinCom Bridge 2.1.9 sends them top-level only
+// (bridge-go/cloud.go beatBody): startPoint {company: {altvchid, altmstid, at, guid, otherGuids?}} and changeNumbers {company:
+// {altvchid, altmstid, at, recorderSeen, recorderLastAt}}, its companies[] without them (only the kept companies there). 2.1.10
+// also puts {guid, altvchid, altmstid, recorderSeen} in companies[] for every open company. companies[] is read first, else the
+// top-level fields by the company's name; the GUID from companies[], else startPoint's, else changeNumbers'. start: the
+// bridge's own starting point (startPoint) when it is of that GUID. at: the check's time, changeNumbers' only (2.1.10's
+// companies[].at is the company's last update, never the check's: review 46 L2; none: now). At most 50 companies; names cut to 200
+type BeatChange = { name: string; altvchid: number | null; altmstid: number | null; at: string; guid: string; recorderSeen?: boolean; recorderLastAt: string; start: { altvchid: number; altmstid: number | null } | null };
+function beatChanges(body: any): BeatChange[] {
+  const o = (x: any) => x && typeof x === "object" && !Array.isArray(x) ? x : null;
+  const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
+  const cn = o(body?.changeNumbers) || {}, sp = o(body?.startPoint) || {};
+  const list = new Map<string, any>();
+  for (const c of (Array.isArray(body?.companies) ? body.companies : []).slice(0, 200) as any[]) {
+    const name = s(c?.name, 200);
+    if (name && !list.has(name)) list.set(name, o(c) || {});
+  }
+  const names = [...new Set([...list.keys(), ...Object.keys(cn).slice(0, 50), ...Object.keys(sp).slice(0, 50)].map((n) => n.slice(0, 200)).filter(Boolean))];
+  const out: BeatChange[] = [];
+  for (const name of names) {
+    if (out.length >= 50) break;
+    const c = list.get(name) || {}, n = o(cn[name]) || {}, p = o(sp[name]);
+    const fromList = altOf(c.altvchid) !== null, cur = fromList ? c : n;
+    const guid = s(c.guid, 100).trim() || s(p?.guid, 100).trim() || s(n.guid, 100).trim();
+    const seenFrom = typeof c.recorderSeen === "boolean" ? c : typeof n.recorderSeen === "boolean" ? n : null;
+    const pAlt = p ? altOf(p.altvchid) : null, pGuid = p ? s(p.guid, 100).trim() : "";
+    const altvchid = altOf(cur.altvchid);
+    if (altvchid === null && pAlt === null && !seenFrom) continue;
+    out.push({ name, altvchid, altmstid: altvchid === null ? null : altOf(cur.altmstid), at: s(n.at, 40), guid,
+      ...(seenFrom ? { recorderSeen: seenFrom.recorderSeen as boolean } : {}), recorderLastAt: seenFrom ? s(seenFrom.recorderLastAt, 40) : "",
+      start: pAlt !== null && (!guid || !pGuid || pGuid === guid) ? { altvchid: pAlt, altmstid: altOf(p.altmstid) } : null });
+  }
+  return out;
+}
+// round 19: a failed RPC of the beat is said with words (the company and the error), never swallowed; a function the
+// database does not have (a cloud without migration 44) is said once per cold start, not every beat
+const missingSaid = new Set<string>();
+const missingFn = (m: string) => /could not find the function|function .* does not exist|schema cache|no such function/i.test(m);
+function beatFail(fn: string, company: string, e: unknown) {
+  const m = String((e as any)?.message ?? e ?? "").slice(0, 300);
+  if (missingFn(m)) {
+    if (missingSaid.has(fn)) return;
+    missingSaid.add(fn);
+    console.error(`tally-ingest beat: ${fn} is not in the database (migration 44 not run?), first for ${company}: ${m}. Said once until tally-ingest restarts`);
+    return;
+  }
+  console.error(`tally-ingest beat: ${fn} failed for ${company}: ${m}`);
+}
+// round 19: the starting points asked in this run (book and company GUID): tally_start_point keeps it once in the database
+// anyway, so it is called once per company per 5 minutes, not every beat (it takes the cursor's lock and writes). Review 46 H1
+// (migration 46): its answer says whether the GUID is another company than the book's (otherCompany: needs_baseline, the
+// point kept); bookGuid keeps the book's company GUID it answered. A company of another GUID gets no gap check (its numbers
+// are not this book's), said once in the log. Asked again after 5 minutes so that the owner's baseline clear (the next call
+// records afresh, migration 46) is seen
+const startDone = new Map<string, { other: boolean; t: number }>();
+const bookGuid = new Map<string, string>();
+const otherSaid = new Set<string>();
+// review 46 M1: the book of a company, per firm and company, for 5 minutes (not linked: 1 minute). tally_book_for writes
+// tally_books (in the Realtime publication) at every call; a client unlinked or relinked is seen by the beat within that time
+const bookMemo = new Map<string, { book: string | null; t: number }>();
+async function bookForBeat(firm: string, name: string) {
+  const k = firm + "|" + name, m = bookMemo.get(k);
+  if (m && Date.now() - m.t < (m.book ? 300000 : 60000)) return m.book;
+  const book = await bookFor(firm, name);
+  if (bookMemo.size > 5000) bookMemo.clear();
+  bookMemo.set(k, { book, t: Date.now() });
+  return book;
+}
+// each company of the beat (either shape) with a GUID and an ALTVCHID: tally_start_point(firm, book, GUID, the bridge's starting
+// numbers, else the numbers now) once per 5 minutes (migration 44, 46: kept once per book; another GUID never moves it and is
+// answered {needsBaseline, otherCompany} without a gap check), then tally_recorder_gap_check(book,
+// device, altvchid, at) (migration 44, 45): compared with what every PC's recorder lines (and the day books read) reached; the
+// answer per company {gap, missing (UP TO: an upper bound on the changes not received), needsBaseline, startRecorded}. A company
+// without a GUID gets the gap check alone (it records a starting point without the GUID). Never fails the beat
+async function recorderGaps(dev: any, firm: string, bridge: string, changes: BeatChange[]) {
   const out: Record<string, unknown> = {};
-  for (const c of companies.filter((c) => c.altvchid !== undefined && c.altvchid !== null).slice(0, 20)) {
+  for (const c of changes.filter((c) => c.altvchid !== null || (c.start && c.guid)).slice(0, 20)) {
+    let book: string | null = null;
+    try { book = await bookForBeat(firm, c.name); } catch (e) { beatFail("tally_book_for", c.name, e); continue; }
+    if (!book) continue;
+    let started = false;
+    const sAlt = c.start ? c.start.altvchid : c.altvchid, sMst = c.start ? c.start.altmstid : c.altmstid, key = book + "|" + c.guid;
+    const sd = startDone.get(key);
+    if (c.guid && sAlt !== null && !(sd && Date.now() - sd.t < 300000)) {
+      try {
+        const { data, error } = await db.rpc("tally_start_point", { p_firm: firm, p_book: book, p_guid: c.guid, p_altvch: sAlt, p_altmst: sMst, p_device: dev.id, p_bridge: bridge });
+        if (error) beatFail("tally_start_point", c.name, error);
+        else {
+          const d = data as any;
+          if (startDone.size > 5000) startDone.clear();
+          startDone.set(key, { other: d?.otherCompany === true, t: Date.now() }); started = d?.set === true;
+          if (typeof d?.bookGuid === "string" && d.bookGuid) { if (bookGuid.size > 5000) bookGuid.clear(); bookGuid.set(book, d.bookGuid); }
+          if (started) console.log("tally-ingest beat: starting point recorded", c.name, JSON.stringify({ guid: c.guid, startVoucher: (data as any)?.startVoucher, startMaster: (data as any)?.startMaster }));
+        }
+      } catch (e) { beatFail("tally_start_point", c.name, e); }
+    }
+    const bg = bookGuid.get(book);
+    if (c.guid && (startDone.get(key)?.other === true || (bg && bg !== c.guid))) {
+      if (!otherSaid.has(key)) {
+        if (otherSaid.size > 5000) otherSaid.clear();
+        otherSaid.add(key);
+        console.log(`tally-ingest beat: ${c.name}: Tally company GUID ${c.guid} is another company than the book's (${bg || "not known"}): needs_baseline, the starting point kept, no gap check for it (said once)`);
+      }
+      out[c.name] = { gap: null, missing: 0, needsBaseline: true, otherCompany: true };
+      continue;
+    }
+    if (c.altvchid === null) { if (started) out[c.name] = { gap: null, missing: 0, startRecorded: true }; continue; }
     try {
-      const book = await bookFor(firm, c.name);
-      if (!book) continue;
-      const at = Date.parse(c.at || "");
-      const { data, error } = await db.rpc("tally_recorder_gap_check", { p_book: book, p_device: dev.id, p_altvchid: c.altvchid, p_at: isNaN(at) ? new Date().toISOString() : new Date(at).toISOString() });
-      if (error) { if (!/could not find|does not exist|schema cache|no such function/i.test(String(error.message || ""))) console.log("tally-ingest beat: gap check", c.name, String(error.message || "").slice(0, 200)); continue; }
+      const { data, error } = await db.rpc("tally_recorder_gap_check", { p_book: book, p_device: dev.id, p_altvchid: c.altvchid, p_at: atOf(c.at) });
+      if (error) { beatFail("tally_recorder_gap_check", c.name, error); continue; }
       const d = data as any;
-      out[c.name] = { gap: d?.gap ?? null, missing: d?.missing ?? 0, ...(d?.needsBaseline ? { needsBaseline: true } : {}), ...(d?.startRecorded ? { startRecorded: true } : {}) };
-    } catch (e) { console.log("tally-ingest beat: gap check", c.name, (e as Error).message); }
+      out[c.name] = { gap: d?.gap ?? null, missing: d?.missing ?? 0, ...(d?.needsBaseline ? { needsBaseline: true } : {}), ...(d?.startRecorded || started ? { startRecorded: true } : {}) };
+    } catch (e) { beatFail("tally_recorder_gap_check", c.name, e); }
   }
   return out;
 }
@@ -1348,9 +1462,14 @@ Deno.serve(async (req) => {
         const { data: lastJob } = await db.from("tally_post_jobs").select("updated_at").eq("device_id", dev.id).order("updated_at", { ascending: false }).limit(1);
         const activityAt = [prevInfo.activityAt, want, lastJob && lastJob[0] && lastJob[0].updated_at].filter((x) => x && !isNaN(Date.parse(String(x))))
           .map((x) => new Date(String(x)).toISOString()).sort().pop() || "";
-        // phase 2 (migration 44): a PC without the add-on - the change numbers compared with the recorder's lines
-        const recorder = await recorderGaps(dev, firm, beat.companies);
-        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, settings, ...(Object.keys(recorder).length ? { recorder } : {}), ...(mayPost(dev, me.id) ? {} : { notMain: true }), ...ctl.out });
+        // phase 2 (migration 44): a PC without the add-on - the change numbers compared with the recorder's lines. Round 19: read
+        // from both shapes of the beat (companies[] first, else the top-level startPoint / changeNumbers of 2.1.9), the
+        // starting point recorded first (tally_start_point, once)
+        const recorder = await recorderGaps(dev, firm, me.id, beatChanges(b));
+        // round 19 (migration 46): the owner's switch "Trial tools on this computer" (tally_devices.trial_tools); a cloud
+        // without the column answers false
+        const trialTools = (dev as any).trial_tools === true;
+        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, settings, trialTools, ...(Object.keys(recorder).length ? { recorder } : {}), ...(mayPost(dev, me.id) ? {} : { notMain: true }), ...ctl.out });
       }
       case "make_main": return await makeMain(dev, bridgeOf(dev, body, false).id);
       case "posts_take": {

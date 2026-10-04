@@ -20,6 +20,17 @@ balance unchanged; a short line whose FinCom id (here in its narration) matches 
 The review of 45 (docs/reviews/migration-45-review.md): M1 the window's company GUID (window.guid) kept; H2 a short 'altered'
 line never built from the posting (no XML fetched), held, the copy unchanged; L8 a cancelled job's or a late update's window
 never saved; M6 a short line held before its posting's acceptance is applied once by posts_update's acceptance.
+Round 19 (the beat's two shapes): a 2.1.9 beat (startPoint / changeNumbers top-level only, companies []) records the starting
+point with its GUID (tally_start_point once, not every beat) and the banner's recorderSeen; the next beat 2 higher with no
+recorder line -> 'up to 2 changes not received since <the bridge's IST time>'; FinCom's posting with a window still subtracted;
+a 2.1.10 beat (companies[] with guid / altvchid, read first) the same; a failed gap check logged with the company and the
+error; the bridge's own beat (tests/fixtures/beat-2.1.10.json, when bridge-go has written it) records a starting point per
+open company with a GUID.
+Review 46 (docs/reviews/migration-46-review.md, Fixed; 46 now in the order): H1 two PCs with a same-named company of
+different GUIDs, beats alternating: the starting point never moves, needs_baseline, the other company answered otherCompany
+with no gap check (logged once), no false gap on the real company; a start without a GUID then a GUID: stamped, not moved, the
+gap kept. M1 tally_book_for once per company in the window over 10 beats. M2 a check time ahead of now taken as now (a restore
+then flagged). L2 the check's time from changeNumbers.at only. L3 only the bridge's exact zone-less form read as IST.
 Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno)."""
 import os, sys, json, time, hashlib, subprocess, urllib.request, shutil, threading
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -32,7 +43,7 @@ SQLDIR = os.path.join(HERE, "..", "server", "tally-cloud")
 FILES = [os.path.join(SQLDIR, f) for f in ("migration-32-sync-safety.sql", "migration-33-ledger-lists.sql", "migration-35-bridge-control.sql")] + \
         [os.path.join(HERE, "fixtures", "migration-34-as-run-on-staging.sql")] + \
         [os.path.join(SQLDIR, f) for f in ("migration-36b-post-acceptance.sql", "migration-37-follow-ups.sql", "migration-36-ledger-rename.sql", "migration-38-post-followups.sql", "migration-39-rename-map-empty-day.sql",
-                                           "migration-40-states-carried.sql", "migration-41-day-counts.sql", "migration-42-empty-day-second-read.sql", "migration-43-posting-reply.sql", "migration-44-recorder.sql", "migration-45-bulk-posting.sql")]
+                                           "migration-40-states-carried.sql", "migration-41-day-counts.sql", "migration-42-empty-day-second-read.sql", "migration-43-posting-reply.sql", "migration-44-recorder.sql", "migration-45-bulk-posting.sql", "migration-46-trial-tools.sql")]
 fails = []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
@@ -158,7 +169,8 @@ try:
     # ---- the gap: PC A's lines reach 50 (start 40); PC B says 53 without the add-on
     c, r = rec([line("L12", "created", "v6", 50, amt=5)])
     beat = lambda key, bridge, alt, seen, at: call({"kind": "beat", "version": "2.2.0", "bridge": bridge, "tally": True, "open": ["ZZ CO"],
-                                                    "companies": [{"name": "ZZ CO", "open": True, "altvchid": alt, "altmstid": 9, "at": at, "recorderSeen": seen, "recorderLastAt": "2026-10-04T10:00:00+05:30" if seen else ""}]}, key)
+                                                    "companies": [{"name": "ZZ CO", "open": True, "altvchid": alt, "altmstid": 9, "at": at, "recorderSeen": seen, "recorderLastAt": "2026-10-04T10:00:00+05:30" if seen else ""}],
+                                                    "changeNumbers": {"ZZ CO": {"altvchid": alt, "at": at}}}, key)     # review 46 L2: the check's time from changeNumbers.at only
     cur = lambda: (db.rows("select gap::text as gap, last_match_at, state, recorder_max_alter from tally_sync_cursor where book_id = %s" % q(BOOK)) or [{}])[0]
     c, r = beat(KA, GA, 50, True, "2026-10-04T10:00:00+05:30")
     ok(c == 200 and not cur().get("gap") and cur().get("last_match_at"), "PC A's beat (50, the add-on there): no gap, the match noted (%s)" % cur())
@@ -245,7 +257,7 @@ try:
     ok(c == 200 and r.get("ok") is True and wrow == {"book_id": B2, "device_id": DA, "a0": "1000", "a1": "1100", "created_vch": "100", "created_mst": "0"}, "45-3. posts_update's window stored per book (%s, %s)" % (r, wrow))
     ok(db.one("select count(*) from tally_post_ids where job_id = %s and accepted_at is not null" % q(J3)) == "100", "45-3. the 100 accepted (tally_post_id_accept_reply)")
     ok(one_("select company_guid from tally_post_windows where job_id = %s" % q(J3)) == "cg-2", "M1. the window keeps the company GUID the bridge read (window.guid) (%s)" % one_("select company_guid from tally_post_windows where job_id = %s" % q(J3)))
-    c, r = call({"kind": "beat", "version": "2.2.0", "bridge": GA, "tally": True, "open": ["ZZ TWO"], "companies": [{"name": "ZZ TWO", "open": True, "altvchid": 1100, "at": "2026-10-04T11:30:00+05:30"}]})
+    c, r = call({"kind": "beat", "version": "2.2.0", "bridge": GA, "tally": True, "open": ["ZZ TWO"], "companies": [{"name": "ZZ TWO", "open": True, "altvchid": 1100}], "changeNumbers": {"ZZ TWO": {"altvchid": 1100, "at": "2026-10-04T11:30:00+05:30"}}})
     cur2 = (db.rows("select gap::text as gap, last_match_at from tally_sync_cursor where book_id = %s" % q(B2)) or [{}])[0]
     ok(c == 200 and ((r.get("recorder") or {}).get("ZZ TWO") or {}).get("gap") is None and ((r.get("recorder") or {}).get("ZZ TWO") or {}).get("missing") == 0 and not cur2.get("gap") and str(cur2.get("last_match_at")).startswith("2026-10-04 06:00"),
        "45-3. posting 100 with no recorder line, the beat says 1100: no gap flag, last_match_at set (%s; %s)" % (r.get("recorder"), cur2))
@@ -316,6 +328,161 @@ try:
     ok(held and c == 200 and r.get("ok") is True and lr == {"state": "applied", "n": "1"} and v7 == {"origin": "fincom", "fincom_id": "R1", "alter_id": "7001", "nl": "2"}
        and db.one("select matched_guid from tally_post_ids where job_id = %s and fincom_id = 'R1'" % q(J7)) == "gr-1",
        "M6. a short line before its posting's acceptance: held; posts_update's acceptance retries it: the same line applied once, the entry built from the posted XML, the posting matched (%s; %s; %s)" % (held, lr, v7))
+
+    # ---------------------------------------------------------------- round 19: the beat's change numbers in both shapes
+    # 2.1.9 sends them top-level only: startPoint {company: {altvchid, altmstid, at, guid}} and changeNumbers {company:
+    # {altvchid, altmstid, at, recorderSeen, recorderLastAt}}, its companies[] without them (bridge-go/cloud.go beatBody); 2.1.10
+    # also puts {guid, altvchid, altmstid, recorderSeen} in companies[] for every open company. The bridge's times carry no zone
+    # (Windows local time, IST): read as +05:30
+    B9, B10 = "19999999-2222-2222-2222-222222222222", "1aaaaaaa-2222-2222-2222-222222222222"
+    db.sql("insert into tally_books (book_id, firm_id, client_id, company, from_date, open_as_on) values (%s, %s, 'c1', 'ZZ NINE', '2026-04-01', '2026-03-31'), (%s, %s, 'c1', 'ZZ TEN', '2026-04-01', '2026-03-31')" % (q(B9), q(FIRM), q(B10), q(FIRM)))
+    FS.T["tally_companies"] += [{"firm_id": FIRM, "company": "ZZ NINE", "client_id": "c1", "book_id": B9}, {"firm_id": FIRM, "company": "ZZ TEN", "client_id": "c1", "book_id": B10}]
+    G9, G10 = dict(GA, version="2.1.9"), dict(GA, version="2.1.10")
+    cur19 = lambda b: (db.rows("select start_at is not null as started, start_guid, last_voucher_alterid as sv, gap::text as gap, last_match_at from tally_sync_cursor where book_id = %s" % q(b)) or [{}])[0]
+    nsp = lambda b: len([a for a in FS.ARGS.get("tally_start_point", []) if a.get("p_book") == b])
+    recA = lambda bridge: (((next(d for d in FS.T["tally_devices"] if d["id"] == DA).get("info") or {}).get("bridges") or {}).get(bridge["id"]) or {}).get("recorder") or {}
+    def beat9(alt, at):
+        return call({"kind": "beat", "version": "2.1.9", "bridge": G9, "tally": True, "tallyState": "open", "open": ["ZZ NINE"], "paused": True, "companies": [],
+                     "startPoint": {"ZZ NINE": {"altvchid": 200, "altmstid": 30, "at": "2026-10-04T15:40:00", "guid": "cg-9"}},
+                     "changeNumbers": {"ZZ NINE": {"altvchid": alt, "altmstid": 30, "at": at, "recorderSeen": False, "recorderLastAt": ""}}})
+    c, r = beat9(200, "2026-10-04T15:40:00")
+    k = cur19(B9)
+    ok(c == 200 and k.get("started") == "t" and k.get("start_guid") == "cg-9" and k.get("sv") == "200" and not k.get("gap") and nsp(B9) == 1,
+       "19-1. a 2.1.9 beat (startPoint / changeNumbers top-level, companies []): the starting point recorded (200, GUID cg-9), no gap (%s; start_point calls %d)" % (k, nsp(B9)))
+    ok(recA(G9).get("ZZ NINE") == {"seen": False, "lastAt": ""}, "19-1. recorderOf reads changeNumbers' recorderSeen (the banner) (%s)" % recA(G9))
+    c, r = beat9(202, "2026-10-04T15:50:00")
+    g = json.loads(cur19(B9).get("gap") or "{}")
+    ok(c == 200 and g.get("missing") == 2 and "up to 2 changes not received since 04-Oct-2026 15:40" in str(g.get("words")) and ((r.get("recorder") or {}).get("ZZ NINE") or {}).get("missing") == 2,
+       "19-2. the next 2.1.9 beat says 202, no recorder line: 'up to 2 changes not received since 04-Oct-2026 15:40' (the bridge's time read as IST) (%s)" % g.get("words"))
+    ok(nsp(B9) == 1, "19-2. tally_start_point called once, not every beat (%d calls)" % nsp(B9))
+    # 45's behaviour kept: FinCom's posting of 10 (window 202..212 in this book's company GUID) is subtracted
+    J19 = "00000019-0000-0000-0000-000000000019"
+    fids19 = ["N%02d" % i for i in range(10)]
+    post_job(J19, "ZZ NINE", fids19, "running")
+    c, r = upd(J19, [{"id": f, "ok": True, "byReply": True, "created": 1, "vchId": str(9100 + i), "batchN": 10, "kind": "voucher"} for i, f in enumerate(fids19)], window={"a0": 202, "a1": 212, "vouchersCreated": 10, "mastersCreated": 0, "guid": "cg-9"})
+    c, r = beat9(212, "2026-10-04T16:00:00")
+    g = json.loads(cur19(B9).get("gap") or "{}")
+    ok(c == 200 and g.get("missing") == 2 and g.get("accounted") == 10 and "up to 2 changes not received since 04-Oct-2026 15:40" in str(g.get("words")),
+       "19-3. FinCom's posting of 10 (window 202..212) subtracted: still up to 2, accounted 10 (%s)" % {k_: g.get(k_) for k_ in ("missing", "accounted", "words")})
+    # 2.1.10: companies[] carries the numbers (read first); the top-level fields too, for compatibility
+    def beat10(alt, at, top=True, seen=False):
+        b = {"kind": "beat", "version": "2.1.10", "bridge": G10, "tally": True, "tallyState": "open", "open": ["ZZ TEN"], "paused": True,
+             "companies": [{"name": "ZZ TEN", "open": True, "at": at, "phase": "", "waiting": 0, "lastRead": "", "guid": "cg-10", "altvchid": alt, "altmstid": 4, "recorderSeen": seen}]}
+        if top: b.update({"startPoint": {"ZZ TEN": {"altvchid": 300, "altmstid": 4, "at": "2026-10-04T15:40:00", "guid": "cg-10"}},
+                          "changeNumbers": {"ZZ TEN": {"altvchid": alt, "altmstid": 4, "at": at, "recorderSeen": not seen, "recorderLastAt": ""}}})
+        return call(b)
+    c, r = beat10(300, "2026-10-04T15:40:00")
+    k = cur19(B10)
+    ok(c == 200 and k.get("started") == "t" and k.get("start_guid") == "cg-10" and k.get("sv") == "300" and not k.get("gap") and nsp(B10) == 1,
+       "19-4. a 2.1.10 beat (companies[] with guid / altvchid): the starting point recorded (300, GUID cg-10) (%s)" % k)
+    ok(recA(G10).get("ZZ TEN") == {"seen": False, "lastAt": ""}, "19-4. recorderOf: companies[] first (seen false there, true top-level) (%s)" % recA(G10))
+    c, r = beat10(302, "2026-10-04T15:55:00", top=False)
+    g = json.loads(cur19(B10).get("gap") or "{}")
+    ok(c == 200 and g.get("missing") == 2 and "up to 2 changes not received since 04-Oct-2026 15:40" in str(g.get("words")) and nsp(B10) == 1,
+       "19-5. the next 2.1.10 beat (companies[] only) says 302: 'up to 2 changes not received since ...'; start_point not called again (%s)" % g.get("words"))
+    # a failed call is logged with words (the company and the error), never swallowed
+    real19 = FS.rpc
+    def busy(name, a):
+        if name == "tally_recorder_gap_check": raise RuntimeError("the database is busy (test)")
+        return real19(name, a)
+    FS.rpc = busy
+    n_log = len(log)
+    c, r = beat10(302, "2026-10-04T16:05:00", top=False)
+    time.sleep(0.5); FS.rpc = real19
+    said = [l.strip() for l in log[n_log:] if "tally_recorder_gap_check" in l]
+    ok(c == 200 and len(said) == 1 and "ZZ TEN" in said[0] and "busy" in said[0], "19-6. a failed gap check: the beat answered, one log line with the company and the error (%s)" % said)
+    # the bridge's own beat (bridge-go writes tests/fixtures/beat-2.1.10.json): fed as it is, each company linked to a book
+    FIX = os.path.join(HERE, "fixtures", "beat-2.1.10.json")
+    if os.path.exists(FIX):
+        fb = json.load(open(FIX)); fb["kind"] = "beat"; fb.pop("shadow", None)
+        fb["bridge"] = dict(fb.get("bridge") or {}, id=GA["id"]) if isinstance(fb.get("bridge"), dict) else G10
+        want = [x for x in (fb.get("companies") or []) if isinstance(x, dict) and x.get("guid") and (x.get("altvchid") or 0) > 0]
+        for i, x in enumerate(want):
+            bid = "1bbbbbbb-2222-2222-2222-%012d" % i
+            db.sql("insert into tally_books (book_id, firm_id, client_id, company, from_date, open_as_on) values (%s, %s, 'c1', %s, '2026-04-01', '2026-03-31') on conflict do nothing" % (q(bid), q(FIRM), q(x["name"])))
+            FS.T["tally_companies"].append({"firm_id": FIRM, "company": x["name"], "client_id": "c1", "book_id": bid})
+        c, r = call(fb)
+        got = [(x["name"], cur19("1bbbbbbb-2222-2222-2222-%012d" % i)) for i, x in enumerate(want)]
+        ok(c == 200 and want and all(k_.get("started") == "t" and k_.get("start_guid") == x["guid"] for (_, k_), x in zip(got, want)),
+           "19-7. the bridge's real 2.1.10 beat (tests/fixtures/beat-2.1.10.json): a starting point for each open company with a GUID (%s)" % got)
+    else:
+        print("  (19-7: tests/fixtures/beat-2.1.10.json not there yet: the bridge's own beat is not fed)")
+
+    # ---------------------------------------------------------------- review 46 (docs/reviews/migration-46-review.md, Fixed)
+    def newbook(bid, name):
+        db.sql("insert into tally_books (book_id, firm_id, client_id, company, from_date, open_as_on) values (%s, %s, 'c1', %s, '2026-04-01', '2026-03-31')" % (q(bid), q(FIRM), q(name)))
+        FS.T["tally_companies"].append({"firm_id": FIRM, "company": name, "client_id": "c1", "book_id": bid})
+    def b10(key, cos, extra=None, bridge=None):
+        b = {"kind": "beat", "version": "2.1.10", "bridge": bridge or (G10 if key == KA else dict(GB, version="2.1.10")), "tally": True, "tallyState": "open", "open": [x["name"] for x in cos], "paused": True, "companies": cos}
+        if extra: b.update(extra)
+        return call(b, key)
+    co = lambda name, guid, alt, **kw: dict({"name": name, "open": True, "at": "", "guid": guid, "altvchid": alt, "altmstid": 1}, **kw)
+    curR = lambda b: (db.rows("select company_guid, start_guid, last_voucher_alterid as sv, start_at, state, gap->>'missing' as missing, last_match_at, abs(extract(epoch from last_match_at - now())) < 120 as match_now from tally_sync_cursor where book_id = %s" % q(b)) or [{}])[0]
+    ngc = lambda b, dv=None: len([a for a in FS.ARGS.get("tally_recorder_gap_check", []) if a.get("p_book") == b and (dv is None or a.get("p_device") == dv)])
+    # H1: two PCs with a same-named company of different GUIDs, beats alternating
+    BF = "1fffffff-2222-2222-2222-222222222222"; newbook(BF, "ZZ FORGE")
+    n_log = len(log)
+    c, r = b10(KA, [co("ZZ FORGE", "cg-A", 1000)]); k0 = curR(BF)
+    seen = []
+    for key, g_, v_ in ((KB, "cg-B", 40), (KA, "cg-A", 1003), (KB, "cg-B", 41), (KA, "cg-A", 1003), (KB, "cg-B", 42)):
+        c, r = b10(key, [co("ZZ FORGE", g_, v_)]); seen.append((key, (r.get("recorder") or {}).get("ZZ FORGE")))
+    k = curR(BF)
+    ok(k.get("sv") == "1000" and k.get("start_guid") == "cg-A" and k.get("start_at") == k0.get("start_at") and k.get("state") == "needs_baseline",
+       "R46-H1. PC-A cg-A 1000, PC-B same name cg-B 40..42, beats alternating: the starting point never moves (1000, cg-A), needs_baseline (%s)" % k)
+    ansB = [a for key, a in seen if key == KB]; ansA = [a for key, a in seen if key == KA]
+    ok(all(a and a.get("otherCompany") is True and a.get("needsBaseline") is True and a.get("missing") == 0 and a.get("gap") is None for a in ansB) and ngc(BF, DB_) == 0,
+       "R46-H1. PC-B's answers: otherCompany, needsBaseline, no gap check made for the other company (%s; gap checks from PC-B %d)" % (ansB, ngc(BF, DB_)))
+    ok(all(a and a.get("missing") == 3 for a in ansA) and k.get("missing") == "3", "R46-H1. PC-A's 1003 against its own 1000: up to 3, no false gap (%s)" % ansA)
+    time.sleep(0.3)
+    said = [l.strip() for l in log[n_log:] if "another company" in l and "ZZ FORGE" in l]
+    ok(len(said) == 1 and "cg-B" in said[0], "R46-H1. the other company logged once, not every beat (%s)" % said)
+    # H1: a start recorded without a GUID, then a GUID: stamped, not moved, the open gap kept
+    BN = "1f0fffff-2222-2222-2222-222222222222"; newbook(BN, "ZZ NOGUID")
+    b10(KA, [co("ZZ NOGUID", "", 500)]); c, r = b10(KA, [co("ZZ NOGUID", "", 520)]); k0 = curR(BN)
+    c, r = b10(KA, [co("ZZ NOGUID", "cg-N", 520)]); k = curR(BN)
+    ok(k0.get("start_guid") in (None, "") and k0.get("missing") == "20" and k.get("sv") == "500" and k.get("start_guid") == "cg-N" and k.get("start_at") == k0.get("start_at")
+       and ((r.get("recorder") or {}).get("ZZ NOGUID") or {}).get("missing") == 20 and k.get("state") == "ok",
+       "R46-H1. a start recorded without a GUID (500, up to 20), then the GUID cg-N: stamped, not moved, still up to 20 (%s)" % k)
+    # M1: tally_book_for once per company within the window (5 min linked, 1 min unlinked), not every beat
+    BM1, BM2 = "1e1eeeee-2222-2222-2222-222222222222", "1e2eeeee-2222-2222-2222-222222222222"; newbook(BM1, "ZZ MEMO 1"); newbook(BM2, "ZZ MEMO 2")
+    BOOKFOR = []
+    realM = FS.rpc
+    def countbf(name, a):
+        if name == "tally_book_for": BOOKFOR.append(a.get("p_company"))
+        return realM(name, a)
+    FS.rpc = countbf
+    for i in range(10):
+        b10(KA, [co("ZZ MEMO 1", "cg-m1", 700 + i), co("ZZ MEMO 2", "cg-m2", 800), co("ZZ MEMO UNLINKED", "cg-mu", 900)])
+    FS.rpc = realM
+    per = {n: BOOKFOR.count(n) for n in ("ZZ MEMO 1", "ZZ MEMO 2", "ZZ MEMO UNLINKED")}
+    ok(per == {"ZZ MEMO 1": 1, "ZZ MEMO 2": 1, "ZZ MEMO UNLINKED": 1} and ngc(BM1) == 10, "R46-M1. 10 beats: one tally_book_for per company (linked and not), the gap check every beat (%s; gap checks %d)" % (per, ngc(BM1)))
+    # M2: a check time more than 5 minutes ahead of the server's now is taken as now; a restore below the match is then flagged
+    BK = "1d1ddddd-2222-2222-2222-222222222222"; newbook(BK, "ZZ CLK")
+    cn = lambda alt, at: {"changeNumbers": {"ZZ CLK": {"altvchid": alt, "at": at}}}
+    b10(KA, [co("ZZ CLK", "cg-K", 10)], cn(10, "2026-10-04T09:00:00"))
+    db.sql("update tally_sync_cursor set recorder_max_alter = 12, recorder_last_at = now() where book_id = %s" % q(BK))
+    c, r = b10(KA, [co("ZZ CLK", "cg-K", 12)], cn(12, "2027-10-04T16:00:00")); k = curR(BK)
+    ok(k.get("match_now") == "t", "R46-M2. a check time a year ahead (the PC's clock) is taken as now: last_match_at %s" % k.get("last_match_at"))
+    c, r = b10(KA, [co("ZZ CLK", "cg-K", 11)], cn(11, ""))
+    ok(((r.get("recorder") or {}).get("ZZ CLK") or {}).get("needsBaseline") is True and curR(BK).get("state") == "needs_baseline",
+       "R46-M2. then a restore to 11 (below the match of 12): needs_baseline, not 'behind' (%s)" % (r.get("recorder") or {}).get("ZZ CLK"))
+    # L2: the check's time from changeNumbers.at only, never companies[].at (the company's last update)
+    BT = "1ddddddd-2222-2222-2222-222222222222"; newbook(BT, "ZZ AT")
+    b10(KA, [co("ZZ AT", "cg-T", 10, at="2026-09-01T09:00:00")]); b10(KA, [co("ZZ AT", "cg-T", 10, at="2026-09-01T09:00:00")])
+    k = curR(BT)
+    ok(k.get("match_now") == "t", "R46-L2. companies[].at (01-Sep, the last update) is not the check's time: last_match_at now (%s)" % k.get("last_match_at"))
+    # L3: only the bridge's exact 2006-01-02T15:04:05 gets +05:30; another zone-less form is not read (now)
+    BL = "1dcddddd-2222-2222-2222-222222222222"; newbook(BL, "ZZ FORM")
+    cl = lambda alt, at: {"changeNumbers": {"ZZ FORM": {"altvchid": alt, "at": at}}}
+    b10(KA, [co("ZZ FORM", "cg-F", 10)], cl(10, "2026-10-04T09:00:00"))
+    ok(db.one("select to_char(last_match_at at time zone 'UTC', 'YYYY-MM-DD HH24:MI') from tally_sync_cursor where book_id = %s" % q(BL)) == "2026-10-04 03:30",
+       "R46-L3. the bridge's form 2026-10-04T09:00:00 read as IST (03:30 UTC)")
+    for form in ("2026-10-04 09:00:00", "2026-10-04", "04-10-2026 09:00", "2026-10-04T09:00", "2026-10-04T09:00:00.123"):
+        db.sql("update tally_sync_cursor set last_match_at = '2026-01-01' where book_id = %s" % q(BL))
+        b10(KA, [co("ZZ FORM", "cg-F", 10)], cl(10, form))
+        ok(curR(BL).get("match_now") == "t", "R46-L3. a zone-less time in another form (%r): not read, taken as now (%s)" % (form, curR(BL).get("last_match_at")))
+    b10(KA, [co("ZZ FORM", "cg-F", 10)], cl(10, "2026-10-04T09:00:00+05:30"))
+    ok(db.one("select to_char(last_match_at at time zone 'UTC', 'YYYY-MM-DD HH24:MI') from tally_sync_cursor where book_id = %s" % q(BL)) == "2026-10-04 03:30", "R46-L3. a time with its zone read as it says")
 finally:
     if fn: fn.terminate()
     db.stop()
