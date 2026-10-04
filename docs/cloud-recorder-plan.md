@@ -28,6 +28,12 @@ Recommendation:
 - **Small requests stay direct:** 50 lines or fewer, or short lines only.
 - **The database fix:** rebuild the day cache once per call for all the days touched, not once per line. That takes about
   40 % off and removes the slow one-day case.
+  - **The owner's condition (04-Oct):** this changes how the totals behind every report are produced, so its report gives,
+    for the test book, before and after the change, the trial balance and the hash of the full tally_ledger_day content
+    (every row: ledger, day, amount, dr, cr, n, sorted). It does so for three sends: a single entry, 500 lines on one day,
+    and a send spanning 30 days.
+  - All of them must be identical between the old way (once per line) and the new way (once per send). The test fails
+    otherwise.
 
 ## 2. Scheduled jobs
 - **What staging already has:** Supabase Pro, with pg_cron 1.6.4, pg_net 0.20.4, pgmq 1.5.1 and Vault, all in use. Five
@@ -38,6 +44,11 @@ Recommendation:
 - **Where results go:** each job writes a row to a stored-alerts table, which the app shows and marks as read.
 - **Outside services:** e-mail or WhatsApp delivery needs a provider and its key, which we don't have. It is in-app first.
 - Nothing is needed from the owner except running the migration.
+- **The rule (owner, 04-Oct):** each scheduled job reads, and writes alert rows only. None calls Tally or a bridge; none
+  changes an entry, a line, a ledger, a cursor or a posting.
+  - Test: run every job on the test database and compare a hash of every other table before and after. Only the
+    alerts table may differ.
+  - The jobs' functions get no grant to write elsewhere.
 
 ## 3. Large Day Book uploads
 - **Today:** the browser splits the file into days and hands it over in pieces of 4 MB or less. The page must stay open
