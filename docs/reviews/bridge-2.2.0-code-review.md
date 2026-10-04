@@ -1206,4 +1206,9 @@ Verdict, round 7:
 - The refused-job branch cannot free a FinCom id Tally may hold.
 - R7-1, R7-2 and R7-3 are Low and may wait. Release from 328b187.
 
-Range: bdfe261..328b187
+
+## Round 8 (328b187..0bec498)
+
+One test-only change, reviewed by Claude: TestRecorderVersion220Sheets (bridge-go/recorder_live_test.go) accepts either the fingerprint placeholder or `Fingerprint: SHA-256 <64 hex> (FinComBridge-Setup-2.2.0.exe`, exactly as TestVersionAndSheets2110 does for 2.1.10. No program code changed. Checked: passes with the placeholder and with the built fingerprint written in. Findings: none.
+
+Range: bdfe261..0bec498
