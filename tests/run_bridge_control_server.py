@@ -110,10 +110,11 @@ try:
     ok(dev1["info"]["beat"].get("reqs") is None and dev1["info"]["beat"].get("readStopped") is None, "timings that are not an object, a stop by someone unknown: not kept")
 
     # 3. Stop reading from FinCom: this computer, then all of the firm's
-    F.T["tally_read_stops"].append({"id": 1, "firm_id": FIRM, "device_id": D1, "action": "stop", "reason": "Tally hung on 02-Oct", "stopped_by": "u-1", "stopped_at": iso(-60), "cleared_by": None, "cleared_at": None})
+    t_stop = iso(-60)     # once: two calls of iso() a second apart gave two different times (CI, 04-Oct)
+    F.T["tally_read_stops"].append({"id": 1, "firm_id": FIRM, "device_id": D1, "action": "stop", "reason": "Tally hung on 02-Oct", "stopped_by": "u-1", "stopped_at": t_stop, "cleared_by": None, "cleared_at": None})
     SENT.clear()
     c, r = beat(K1, GO1, reqs=REQS)
-    ok(c == 200 and r.get("readStop") == {"by": "fincom", "reason": "Tally hung on 02-Oct", "at": iso(-60)}, "NWS144 stopped from FinCom: readStop in its answer (%s)" % r.get("readStop"))
+    ok(c == 200 and r.get("readStop") == {"by": "fincom", "reason": "Tally hung on 02-Oct", "at": t_stop}, "NWS144 stopped from FinCom: readStop in its answer (%s)" % r.get("readStop"))
     ok(dev1["info"].get("readStop", {}).get("by") == "fincom", "and in the device's info for the app (%s)" % dev1["info"].get("readStop"))
     got = [m["payload"]["beat"] for s in SENT for m in s.get("messages", []) if m["payload"].get("device") == D1]
     ok(got and (got[-1].get("readStop") or {}).get("by") == "fincom", "the stop goes out on the firm's broadcast")
