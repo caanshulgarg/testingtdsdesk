@@ -68,6 +68,9 @@ TEST READING FROM TALLY (after the steps above)
        year";
      - the line "Entries above the starting point (TDSDeskKeepList ...): ... s";
      - the lines starting "Tally program:" and "Edit Log probe";
+     - the lines with "FinComCompany (change numbers)" and "FinComCompanyNumbers", and the line "Company <name>: change
+       numbers read with form a/b: ALTVCHID=..." or "Company <name>: Tally gave no change numbers with form a or b
+       (answer head: ...)" (on 2.1.10 Tally gave no change numbers, so no starting point was recorded);
    and say whether Tally froze or showed any message while the test ran.
 
 

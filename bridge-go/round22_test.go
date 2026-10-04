@@ -377,6 +377,7 @@ func TestLightSkipOncePerClass(t *testing.T) {
 	}
 	// unchanged: once in the first hour, again after it
 	nowFn = time.Now
+	f.add(td, fgParty, "UC-0", "sale", "-1.00") // 2.2.0: a starting point is never 0 (the owner's finding)
 	sessions := openCompaniesWith(fin, true)
 	lightCheckOpen(sessions)
 	for _, m := range []int{11, 22, 33, 44} {

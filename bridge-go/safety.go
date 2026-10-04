@@ -135,30 +135,121 @@ func companyAlterM(company string) int64 {
 // the company-level check: its GUID (and its highest AlterIDs), one tiny request naming the company. "" when Tally
 // does not list it that way (nothing to compare)
 func companyCheck(tc *TC, company string, port int) (string, error) {
-	raw, err := invokeTally(tc, port, companyCheckRequest(company), 15)
-	if err != nil {
-		return "", err
+	// 2.2.0 (the owner's finding): the change numbers by the form kept for the company (a: NATIVEMETHOD; b: the report);
+	// form a answering the company without numbers: form b once. Each request 15 s at most (CompanyCheckSec)
+	sec := keepNum("CompanyCheckSec", 15)
+	forms := []string{"a", "b"}
+	if cnFormFor(company) == "b" {
+		forms = []string{"b"}
 	}
-	for _, c := range xmlDoc(raw).All("COMPANY") {
-		if n := nameOf(c); n != "" && !sameCompany(n, company) {
-			continue
+	guid, heads := "", []string{}
+	listed := false
+	for _, form := range forms {
+		x := companyCheckRequest(company)
+		if form == "b" {
+			x = companyNumbersRequest(company)
 		}
-		setCompanyAlts(company, c)
-		return strings.TrimSpace(nt(c, "GUID")), nil
+		raw, err := invokeTally(tc, port, x, sec)
+		if err != nil {
+			if !listed {
+				return guid, err
+			}
+			break
+		}
+		heads = append(heads, answerHead(raw))
+		found := false
+		for _, c := range xmlDoc(raw).All("COMPANY") {
+			if n := nameOf(c); n != "" && !sameCompany(n, company) {
+				continue
+			}
+			found, listed = true, true
+			if g := strings.TrimSpace(nt(c, "GUID")); g != "" {
+				guid = g
+			}
+			if setCompanyAlts(company, c) {
+				cnFormSay(company, form)
+				return guid, nil
+			}
+			break
+		}
+		if !found && form == "a" {
+			return "", nil // Tally does not list it that way: nothing to compare
+		}
 	}
-	return "", nil
+	cnFormMiss(company, heads)
+	return guid, nil
 }
 
-func setCompanyAlts(company string, c *Node) {
-	v, m := toI64(re(`\D`).ReplaceAllString(nt(c, "ALTVCHID"), "")), toI64(re(`\D`).ReplaceAllString(nt(c, "ALTMSTID"), ""))
+// --- the form that gave the change numbers, kept per company (sync\change-number-forms.json)
+var (
+	cnMu   sync.Mutex
+	cnSaid = map[string]string{} // companyKey -> what was said last in this run: the form, or "none|<time>"
+)
+
+func cnFormsFile() string { return sp("change-number-forms.json") }
+
+func cnFormFor(company string) string {
+	cnMu.Lock()
+	defer cnMu.Unlock()
+	return str(obj(readObjFile(cnFormsFile())[companyKey(company)])["form"])
+}
+
+func cnFormSay(company, form string) {
+	cnMu.Lock()
+	all := readObjFile(cnFormsFile())
+	if all == nil {
+		all = M{}
+	}
+	k := companyKey(company)
+	if str(obj(all[k])["form"]) != form {
+		all[k] = M{"company": company, "form": form, "at": nowS()}
+		_ = saveFile(cnFormsFile(), jsonText(all))
+	}
+	said := cnSaid[k] == form
+	cnSaid[k] = form
+	cnMu.Unlock()
+	if !said {
+		writeLog(fmt.Sprintf("Company %s: change numbers read with form %s: ALTVCHID=%d, ALTMSTID=%d", company, form, companyAlter(company), companyAlterM(company)))
+	}
+}
+
+// neither form gave numbers: said with the answers' heads (tags only), once in 10 minutes per company
+func cnFormMiss(company string, heads []string) {
+	cnMu.Lock()
+	k := companyKey(company)
+	if last := cnSaid[k]; strings.HasPrefix(last, "none|") {
+		if t, err := time.Parse(time.RFC3339, strings.TrimPrefix(last, "none|")); err == nil && nowFn().Sub(t) < 10*time.Minute {
+			cnMu.Unlock()
+			return
+		}
+	}
+	cnSaid[k] = "none|" + nowFn().Format(time.RFC3339)
+	cnMu.Unlock()
+	writeLog("Company " + company + ": Tally gave no change numbers with form a or b (answer head: " + cut(strings.Join(heads, " / "), 400) + ")")
+}
+
+// the change numbers of a COMPANY element: noted; true when they are numbers above 0. Never 0 or empty as a starting
+// point (the owner's finding: the real Tally answered empty tags)
+func setCompanyAlts(company string, c *Node) bool {
+	v, m := toI64(re(`\D`).ReplaceAllString(cnTag(c, "ALTVCHID"), "")), toI64(re(`\D`).ReplaceAllString(cnTag(c, "ALTMSTID"), ""))
+	if v <= 0 && m <= 0 {
+		return false
+	}
 	altMu.Lock()
 	companyAlts[companyKey(company)] = v
 	companyAltsM[companyKey(company)] = m
 	altMu.Unlock()
-	// round 18: the company's starting point (once), and its latest numbers for the heartbeat (startpoint.go)
-	if strings.TrimSpace(nt(c, "ALTVCHID")) != "" || strings.TrimSpace(nt(c, "ALTMSTID")) != "" {
-		noteStartPoint(company, strings.TrimSpace(html.UnescapeString(nt(c, "GUID"))), v, m)
+	// round 18: the company's starting point (once, never at 0), and its latest numbers for the heartbeat (startpoint.go)
+	noteStartPoint(company, strings.TrimSpace(html.UnescapeString(nt(c, "GUID"))), v, m)
+	return true
+}
+
+// a change number's tag, in the spellings Tally may use (ALTVCHID, ALTVCHID.LIST)
+func cnTag(c *Node, tag string) string {
+	if v := strings.TrimSpace(nt(c, tag)); v != "" {
+		return v
 	}
+	return strings.TrimSpace(nt(c, tag+".LIST"))
 }
 
 // the company check's answer to the small check after a timeout: its highest AlterIDs are noted too

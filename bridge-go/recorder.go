@@ -419,22 +419,14 @@ func recorderNoteChangeNumbers() (M, error) {
 		port := toInt(s["port"])
 		for _, c := range sessCompanies(s) {
 			name := str(c["name"])
-			raw, err := invokeTally(fin, port, companyCheckRequest(name), 15)
-			if err != nil {
+			// 2.2.0: the company check with its two forms (safety.go companyCheck: NATIVEMETHOD, then the report)
+			if _, err := companyCheck(fin, name, port); err != nil {
 				missed = append(missed, name+": "+err.Error())
 				continue
 			}
-			noteCompanyAlts(name, raw)
-			for _, x := range xmlDoc(raw).All("COMPANY") {
-				if n := nameOf(x); n != "" && !sameCompany(n, name) {
-					continue
-				}
-				v, m := re(`\D`).ReplaceAllString(nt(x, "ALTVCHID"), ""), re(`\D`).ReplaceAllString(nt(x, "ALTMSTID"), "")
-				line := fmt.Sprintf("%s: ALTVCHID=%s, ALTMSTID=%s, at %s", name, v, m, time.Now().Format("2006-01-02 15:04:05"))
-				b.WriteString(line + "\r\n")
-				noted = append(noted, line)
-				break
-			}
+			line := fmt.Sprintf("%s: ALTVCHID=%d, ALTMSTID=%d, at %s", name, companyAlter(name), companyAlterM(name), time.Now().Format("2006-01-02 15:04:05"))
+			b.WriteString(line + "\r\n")
+			noted = append(noted, line)
 		}
 	}
 	if len(noted) == 0 {

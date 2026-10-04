@@ -290,10 +290,27 @@ type TC struct {
 // exactly what voucherByMasterRequest builds for one day and 1 to 50 MasterIDs (recorder_live.go). Never a day's list
 //
 // Round 3 R3-1: the two exceptions are checked by their id, always (whatever ReadDays says, whatever date form they use):
-// a FinComVoucherByMaster or FinComSlice that is not exactly as built, with its values in bounds, never goes. And a
-// request with its dates only in a TDL filter ($Date compared, $$IsBetween, a $$Date literal) is dated too
+// a FinComVoucherByMaster or FinComSlice that is not exactly as built, with its values in bounds, never goes.
+// Round 4 R4-1: with ReadDays off the guard decides by the request's id, not by how its dates are spelt: an id that
+// reads by date is refused; TDSDeskKeepList goes only exactly as keepListAboveRequest builds it (its undated form); an
+// undated id goes unless it carries dates in any spelling (a normalised copy, lower-cased with character references
+// decoded, is looked at too). Import is a posting, not a read
+var requestClass = map[string]string{
+	"Day Book": "dated", "TDSDeskVchHeads": "dated", dupCheckID: "dated", tagCheckID: "dated", masterCheckID: "dated",
+	"FinComMeasureB": "dated", "FinComMeasureC": "dated", "FinComMeasureYear": "dated", "FinComMeasureD": "dated",
+	"FinComMeasureE": "dated", "FinComSnapshot": "dated", datesProbeID: "dated",
+	vchByMasterID: "exception", sliceID: "exception",
+	"TDSDeskKeepList":  "keepAbove",
+	"Import":           "import",
+	"TDSDeskCompanies": "undated", "TDSDeskCompanyInfo": "undated", "FinComCompany": "undated", "FinComFree": "undated",
+	ledListID: "undated", grpListID: "undated", "TDSDeskLedgers": "undated", "TDSDeskGroups": "undated", "TDSDeskNames": "undated",
+	"TDSDeskGroupNames": "undated", "FinComMeasureNames": "undated", "FinComMeasureLedF": "undated", "FinComMeasureLedO": "undated",
+	editLogProbeID: "undated", cnReportID: "undated",
+}
+
 func datedRefused(tc *TC, x string) error {
-	switch tallyRequestID(x) {
+	id := tallyRequestID(x)
+	switch id {
 	case vchByMasterID:
 		if voucherByMasterExact(x) {
 			return nil
@@ -305,17 +322,42 @@ func datedRefused(tc *TC, x string) error {
 		}
 		return readsOffErr()
 	}
-	if tc.person || readDaysOn() || !requestDated(x) {
+	if tc.person || readDaysOn() {
 		return nil
 	}
-	return readsOffErr()
+	switch requestClass[id] {
+	case "import":
+		return nil
+	case "keepAbove":
+		if keepAboveExact(x) {
+			return nil
+		}
+	case "undated":
+		if !requestDated(x) {
+			return nil
+		}
+	}
+	return readsOffErr() // dated, or not classified
 }
 
-var reFilterDate = regexp.MustCompile(`\$Date\b|\$\$IsBetween|\$\$Date:`)
+// TDSDeskKeepList exactly as keepListAboveRequest builds it, rebuilt from its company and AlterID
+func keepAboveExact(x string) bool {
+	m := regexp.MustCompile(`\$AlterID &gt; (\d+)`).FindStringSubmatch(x)
+	if m == nil {
+		return false
+	}
+	co := html.UnescapeString(group(`<SVCURRENTCOMPANY>([^<]*)</SVCURRENTCOMPANY>`, x, 1))
+	return x == keepListAboveRequest(co, toI64(m[1]))
+}
 
-// a request carries a period: SVFROMDATE / SVTODATE, or dates in a TDL filter
+var reFilterDate = regexp.MustCompile(`\$date\b|\$\$isbetween|\$\$date:|<svfromdate|<svtodate`)
+
+// a request carries a period, in any spelling: SVFROMDATE / SVTODATE, or dates in a TDL filter; looked for in a
+// normalised copy (lower-cased, XML character references decoded, the company's name left out)
 func requestDated(x string) bool {
-	return strings.Contains(x, "<SVFROMDATE") || strings.Contains(x, "<SVTODATE") || reFilterDate.MatchString(x)
+	y := regexp.MustCompile(`(?is)<SVCURRENTCOMPANY>[^<]*</SVCURRENTCOMPANY>`).ReplaceAllString(x, "")
+	n := strings.ToLower(html.UnescapeString(y))
+	return reFilterDate.MatchString(n) || reFilterDate.MatchString(strings.ToLower(y))
 }
 
 // round 18 (item 89, evaluation only): the request body as Tally gets it. TallyRequestUTF16 (default off): UTF-16LE
@@ -999,7 +1041,30 @@ func companyCheckRequest(company string) string {
 	if company == "" {
 		return collectionRequest("FinComFree", "Company", "NAME,GUID", "", "")
 	}
-	return fcCollection("FinComCompany", company, "", "Company", "NAME, GUID, ALTVCHID, ALTMSTID", `$Name = "`+strings.ReplaceAll(company, `"`, "")+`"`)
+	// 2.2.0 (the owner's finding on NWS144): AltVchId and AltMstId are Company methods, not stored fields; a FETCH of them
+	// gave the company with empty tags. They are asked as NATIVEMETHODs (form a); the report form b is in safety.go
+	return fcCollection("FinComCompany", company, "", "Company", "NAME, GUID</FETCH><NATIVEMETHOD>AltVchId</NATIVEMETHOD><NATIVEMETHOD>AltMstId</NATIVEMETHOD><FETCH>NAME", `$Name = "`+strings.ReplaceAll(company, `"`, "")+`"`)
+}
+
+// form b: a small report over the one company (by $Name), two fields SET to $AltVchId and $AltMstId (method reads of
+// the company object; no $$ function but the export format), with its name and GUID
+const cnReportID = "FinComCompanyNumbers"
+
+func companyNumbersRequest(company string) string {
+	co := esc(company)
+	return "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>" + cnReportID + "</ID></HEADER>" +
+		"<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>" + co + "</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE>" +
+		`<REPORT NAME="` + cnReportID + `" ISMODIFY="No"><FORMS>FinComCNForm</FORMS></REPORT>` +
+		`<FORM NAME="FinComCNForm" ISMODIFY="No"><PARTS>FinComCNPart</PARTS><XMLTAG>FINCOMNUMBERS</XMLTAG></FORM>` +
+		`<PART NAME="FinComCNPart" ISMODIFY="No"><LINES>FinComCNLine</LINES><REPEAT>FinComCNLine : FinComCNCos</REPEAT><SCROLLED>Vertical</SCROLLED></PART>` +
+		`<LINE NAME="FinComCNLine" ISMODIFY="No"><FIELDS>FinComCNName, FinComCNGuid, FinComCNVch, FinComCNMst</FIELDS><XMLTAG>COMPANY</XMLTAG></LINE>` +
+		`<FIELD NAME="FinComCNName" ISMODIFY="No"><SET>$Name</SET><XMLTAG>NAME</XMLTAG></FIELD>` +
+		`<FIELD NAME="FinComCNGuid" ISMODIFY="No"><SET>$Guid</SET><XMLTAG>GUID</XMLTAG></FIELD>` +
+		`<FIELD NAME="FinComCNVch" ISMODIFY="No"><SET>$AltVchId</SET><XMLTAG>ALTVCHID</XMLTAG></FIELD>` +
+		`<FIELD NAME="FinComCNMst" ISMODIFY="No"><SET>$AltMstId</SET><XMLTAG>ALTMSTID</XMLTAG></FIELD>` +
+		`<COLLECTION NAME="FinComCNCos" ISMODIFY="No"><TYPE>Company</TYPE><FILTERS>FinComCNOnly</FILTERS></COLLECTION>` +
+		`<SYSTEM TYPE="Formulae" NAME="FinComCNOnly">` + esc(`$Name = "`+strings.ReplaceAll(company, `"`, "")+`"`) + `</SYSTEM>` +
+		"</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>"
 }
 
 func freeProbe(ctx context.Context, port int, company string) (string, error) {

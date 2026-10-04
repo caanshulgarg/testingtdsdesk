@@ -74,6 +74,9 @@ func noteStartPoint(company, guid string, altV, altM int64) {
 	if guid != "" {
 		spGUID[company] = guid
 	}
+	if altV <= 0 {
+		return // 2.2.0 (the owner's finding): never 0 or empty as a starting point; the latest numbers are noted
+	}
 	all, ok := readStartPoints()
 	if !ok {
 		// round 20 (Low 2): the first numbers seen are kept for the run (later, higher ones never replace them)

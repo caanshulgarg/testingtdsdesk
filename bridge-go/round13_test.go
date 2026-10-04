@@ -80,7 +80,7 @@ func TestReadTestThreeRequestsLogged(t *testing.T) {
 	// round 18 (2.1.9): the matrix: the Day Book in the four date forms, FinComTag, FinComCompany, the entries above the
 	// starting point (no dates) and FinComCompany as UTF-16 and as UTF-8; the first three labels and counts as before
 	results := arr(res["results"])
-	if len(results) != 8 {
+	if len(results) != 9 { // 2.2.0: the change numbers' report form (form b) too
 		t.Fatalf("results: %v", results)
 	}
 	labels := []string{"Day Book, dates yyyymmdd", "Day Book, dates d-MMM-yyyy", "Day Book, dates yyyymmdd TYPE=Date", "Day Book, dates d-MMM-yyyy TYPE=Date",

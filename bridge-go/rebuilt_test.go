@@ -61,6 +61,7 @@ type standTally struct {
 	// 2.2.0: the Voucher collections of the date-form probe and source C: svIgnored, SVFROMDATE/SVTODATE are ignored
 	// (Tally's current period: every entry); filterDates, a TDL filter on $Date with $$Date literals is applied
 	svIgnored, filterDates bool
+	cnMode                 string // how the change numbers are given (the company check above)
 }
 
 // a ledger master of the stand-in Tally (its stored fields only)
@@ -214,8 +215,26 @@ func newStandTally(t *testing.T) *standTally {
 		o.WriteString("<ENVELOPE><BODY><DATA><COLLECTION>")
 		f.mu.Lock()
 		switch id {
-		case "TDSDeskCompanies", "FinComFree", "FinComCompany":
-			fmt.Fprintf(&o, `<COMPANY NAME="%s"><NAME>%s</NAME><GUID>%s</GUID><STARTINGFROM>20260401</STARTINGFROM><ALTVCHID>%d</ALTVCHID><ALTMSTID>%d</ALTMSTID></COMPANY>`, esc(coName), esc(coName), f.guid, f.alter, f.altMst())
+		case "TDSDeskCompanies", "FinComFree", "FinComCompany", cnReportID:
+			// 2.2.0 (the owner's finding on NWS144): how this Tally gives the change numbers. cnMode "": to the company
+			// check (by NATIVEMETHOD) and the report alike; "none": never (empty tags, as the real Tally answered the
+			// FETCH); "native": only to the NATIVEMETHOD form; "report": only to the report form; "zero": 0
+			v, m := fmt.Sprint(f.alter), fmt.Sprint(f.altMst())
+			native := strings.Contains(body, "<NATIVEMETHOD>AltVchId</NATIVEMETHOD>")
+			switch {
+			case f.cnMode == "none", f.cnMode == "native" && !native, f.cnMode == "report" && id != cnReportID, id == "FinComCompany" && !native:
+				v, m = "", ""
+			case f.cnMode == "zero":
+				v, m = "0", "0"
+			}
+			if id == cnReportID {
+				o.Reset()
+				fmt.Fprintf(&o, `<ENVELOPE><FINCOMNUMBERS><COMPANY><NAME>%s</NAME><GUID>%s</GUID><ALTVCHID>%s</ALTVCHID><ALTMSTID>%s</ALTMSTID></COMPANY></FINCOMNUMBERS></ENVELOPE>`, esc(coName), f.guid, v, m)
+				f.mu.Unlock()
+				_, _ = w.Write([]byte(o.String()))
+				return
+			}
+			fmt.Fprintf(&o, `<COMPANY NAME="%s"><NAME>%s</NAME><GUID>%s</GUID><STARTINGFROM>20260401</STARTINGFROM><ALTVCHID>%s</ALTVCHID><ALTMSTID>%s</ALTMSTID></COMPANY>`, esc(coName), esc(coName), f.guid, v, m)
 		case "FinComLedgers":
 			var after, upto int64 = 0, -1
 			if m := reMidRange.FindStringSubmatch(body); m != nil {

@@ -233,6 +233,8 @@ func runReadTest(company string) (M, error) {
 			break
 		}
 	}
+	// 2.2.0 (the owner's finding): the change numbers' report form too, its head in the log as every answer's
+	ask("FinComCompanyNumbers (change numbers, form b: the report)", companyNumbersRequest(company), readTestTC)
 	// measurement only: the entries above the starting point, the AlterID filter alone, no dates
 	after, how := startPointOf(company)
 	label := fmt.Sprintf("Entries above the starting point (TDSDeskKeepList, AlterID above %d, no dates)", after)

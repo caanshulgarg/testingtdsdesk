@@ -69,6 +69,9 @@ func driveEveryRequest(t *testing.T) *standTally {
 	// 2.2.0: the recorder's body fetch (the entries just changed, by MasterID, the line's own date)
 	_, err = fetchVouchersByMaster(&TC{copier: true}, zz, f.port, td, []string{"1"})
 	must("body fetch", err)
+	// 2.2.0: the change numbers' report form (form b; the company check sends it when form a gives no numbers)
+	_, err = invokeTally(fin, f.port, companyNumbersRequest(zz), 15)
+	must("change numbers, form b", err)
 	// 2.2.0: source C's month slice, the read test's date-form probe and Edit Log probe
 	// (round 3 R3-1: a slice goes only as built, with the form kept and an AlterID from the starting point on)
 	saveDateForm(zz, formPlain, td[:6], 1)

@@ -159,6 +159,7 @@ func TestLightCheckRefreshesOldCompanyList(t *testing.T) {
 		t.Fatal("the company-list request is not on the allow-list")
 	}
 	f := r21Stand(t, "")
+	f.add(today(), fgParty, "RF-1", "sale", "-1.00") // 2.2.0: a starting point is never 0 (the owner's finding)
 	_ = openCompaniesWith(fin, true)
 	n0 := f.n("")
 	lightCheckOpen(openCompaniesCached())

@@ -28,7 +28,7 @@ without a period) is a stored field, not a computed one.
 The size test (`bridge-go/size_test.go`) uses a cost per row returned (`tallyPerRowMs` in `allowlist.go`): a
 conservative guess until the phase 1 measurement replaces it.
 
-First table: re-measured on 2026-10-04 on the stand; not yet measured on NWS144; allowed for 2.2.0 only by the owner's decision of 2026-10-04 (the live recorder, plan round 20: one new request, FinComVoucherByMaster, the body of the entries just changed by MasterID with the line's own date as the period, the one dated request allowed with ReadDays off and only exactly as built; the undated TDSDeskKeepList above an AlterID also fetches MASTERID; FinComSlice, source C's one month above an AlterID in the kept date form, off by default and the second dated exception; the read test's measure-only FinComDatesProbe and FinComEditLogProbe); this line is replaced per build by the owner's decision, and removed once the table carries times.
+First table: re-measured on 2026-10-04 on the stand; not yet measured on NWS144; allowed for 2.2.0 only by the owner's decision of 2026-10-04 (the live recorder, plan round 20: one new request, FinComVoucherByMaster, the body of the entries just changed by MasterID with the line's own date as the period, the one dated request allowed with ReadDays off and only exactly as built; the undated TDSDeskKeepList above an AlterID also fetches MASTERID; FinComSlice, source C's one month above an AlterID in the kept date form, off by default and the second dated exception; the read test's measure-only FinComDatesProbe and FinComEditLogProbe; FinComCompany asks AltVchId and AltMstId as NATIVEMETHODs, the owner's finding of empty change numbers on NWS144, and FinComCompanyNumbers, a report over the one company, is its second form); this line is replaced per build by the owner's decision, and removed once the table carries times.
 
 (re-measured on 2026-10-03: no times yet; the table's rows and shapes are unchanged since the 2.1.6 build; only the owner's decision line above changed for 2.1.7, and again for 2.1.8: no request shape changed; the duplicate check against Tally left the posting path, its request stays on the list for Check Tally)
 
@@ -39,7 +39,8 @@ First table: re-measured on 2026-10-04 on the stand; not yet measured on NWS144;
 |---|---|---|---|---|---|
 | Day Book | the day book of one company for one month at most (Update now, the nightly run, a FinCom read) | fbbe1dd6e139 | not yet measured | - | bridge |
 | FinComByMaster | the posting read-back by Tally's voucher id (LASTVCHID): one month's entries filtered to that one MasterID, heads and narration only | 3a3e60c1e890 | not yet measured | - | bridge |
-| FinComCompany | the company check: one company's name, GUID and highest AlterIDs (also the small check after a timeout) | 0aae177f8654 | not yet measured | - | bridge |
+| FinComCompany | the company check: one company's name, GUID and highest AlterIDs (also the small check after a timeout) | f3e3710802ed | not yet measured | - | bridge |
+| FinComCompanyNumbers | the company's change numbers (2.2.0, form b): a report over the one company, its name, GUID, AltVchId and AltMstId | 62084b69e34d | not yet measured | - | bridge |
 | FinComDatesProbe | measure (the read test): one past-year month's entries as GUID, MasterID, AlterID and date, in each date form | f441cc0d993a | not yet measured | - | measure-only |
 | FinComEditLogProbe | measure (the read test): one entry by MasterID with its edit-log sub-collection (candidate names) | 5bc0e4c16b77 | not yet measured | - | measure-only |
 | FinComFree | the small check after a timeout when no company is named: the companies' names and GUIDs | fc989c00dda9 | not yet measured | - | bridge |
@@ -69,4 +70,4 @@ First table: re-measured on 2026-10-04 on the stand; not yet measured on NWS144;
 | TDSDeskVchHeads | voucher heads (Optional ones too) of one company for one month at most, no ledger lines | 53fc675a1641 | not yet measured | - | bridge |
 <!-- allowlist:end -->
 
-Table hash (SHA-256): d8f1bd06dcdd44c5135ebccd3f547bb9218c63742a95b151d22743df6f5a8859
+Table hash (SHA-256): 60f112b02d74a18ec2e2e54f8476d3eab755961444e2774686708aac9505fd10

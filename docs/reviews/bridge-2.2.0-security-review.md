@@ -398,4 +398,27 @@ Verdict, round 4:
 - R4-S1 is Medium by the rule used in rounds 2 and 3 and blocks the build, unless the owner accepts it as Low.
 - R3-S1's two exceptions, R3-2 and R3-3 are confirmed fixed.
 
+
+### Status after the round 4 fix
+
+- R4-1 MEDIUM: Fixed (TestGuardByRequestID); details in the code review's round 4 status.
+
+
+### The owner's finding on NWS144 (empty change numbers), built with round 4 (tests first: tdd/b225.1.red, b225.2.red)
+
+- Cause, as understood: FinComCompany asked ALTVCHID and ALTMSTID in a collection's FETCH. They are Company methods
+  (AltVchId, AltMstId), not stored fields, so the export gave the company (name and GUID, stored fields) with empty
+  tags; 2.1.10 skipped ("Tally gave no change numbers") and no starting point was recorded.
+- Built (cnforms_test.go: TestChangeNumbersEmptyAnswer, TestChangeNumbersZeroNotRecorded, TestChangeNumbersNativeMethod,
+  TestChangeNumbersReportForm, TestChangeNumbersBounded): form a, FinComCompany with NAME and GUID fetched and AltVchId /
+  AltMstId as NATIVEMETHODs; form b, FinComCompanyNumbers, a report over the one company ($Name filter) whose fields SET
+  $Name, $Guid, $AltVchId, $AltMstId. Form a answering the company without numbers: form b once; the form that gives
+  numbers is kept per company (sync\change-number-forms.json) and used from then on. One log line: "Company X: change
+  numbers read with form a|b: ALTVCHID=…, ALTMSTID=…", or "Company X: Tally gave no change numbers with form a or b
+  (answer head: …)" (tags only, at most every 10 minutes). Never 0 or empty as a starting point (the latest numbers are
+  still noted). Each request 15 s at most (CompanyCheckSec), one at a time, yields to postings, never during an import.
+  The read test asks form b too. Both forms are on the allow-list (FinComCompany's shape changed; the 2.2.0 decision line
+  names both); neither asks a computed figure. Not run on a real Tally: whether NATIVEMETHOD or the report gives the
+  numbers is what the owner's read test will show.
+
 Range: bdfe261..2a62c54
