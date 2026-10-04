@@ -672,42 +672,15 @@ func beatLoop() {
 }
 
 func beatOnce() {
-	open, ports := []any{}, []any{}
 	sessions := openCompaniesCached()
-	tally := false
-	for _, s := range sessions {
-		ports = append(ports, M{"port": toInt(s["port"]), "ok": s["ok"] == true, "skipped": s["skipped"] == true, "n": len(sessCompanies(s)), "error": cut(str(s["error"]), 120), "state": str(s["tallyState"])})
-		if s["skipped"] == true {
-			continue
-		}
-		if s["ok"] == true {
-			tally = true
-			for _, c := range sessCompanies(s) {
-				open = append(open, str(c["name"]))
-			}
-		}
-	}
+	open, ports, tally, cos := beatParts(sessions)
 	tstate, tsince := tallyOverall(sessions)
 	// round 18 (the owner's addition of 04-Oct-2026): each company seen open gets the light FinComCompany request, once
 	// on first sight in this run and at most every 10 minutes while it stays open (startpoint.go); nothing else is read
-	go lightCheckOpen(sessions)
-	cos := []any{}
-	for _, d := range keptDirs() {
-		st := readKeepState(d)
-		if st == nil || str(st["company"]) == "" {
-			continue
-		}
-		isOpen := false
-		for _, o := range open {
-			if o == str(st["company"]) {
-				isOpen = true
-			}
-		}
-		cos = append(cos, M{"name": str(st["company"]), "open": isOpen, "at": str(st["at"]), "phase": str(st["phase"]), "waiting": len(cloudQueue(d)), "lastRead": str(st["readAt"]),
-			"guid": heldGUID(str(st["company"]))})
-	}
+	startLightCheck(sessions)
 	r := invokeCloud(beatBody(tally, tstate, tsince, open, ports, cos), 10)
 	if r.code == 200 && r.json != nil {
+		applyTrialTools(r.json) // round 21: the owner's "Trial tools on this computer" (absent: off)
 		if testMode() && !truthy(r.json["shadow"]) {
 			if shadowOK.Swap(false) || beatMissedSince().IsZero() {
 				writeLog("Test mode: FinCom's cloud does not keep a test bridge apart yet, so nothing is sent to it (only the heartbeat)")
@@ -777,6 +750,115 @@ func beatOnce() {
 		writeLog("Heartbeat: FinCom could not be reached (" + r.err + "); tried again every " + fmt.Sprint(beatEvery()) + " s, nothing is lost")
 	}
 }
+
+// round 21 (2.1.10): one light check at a time (the heartbeat turns every 30 s; a check waiting on a slow Tally is not
+// joined by another); lightWG lets a stop (and a test) wait for the one going
+var (
+	lightBusy atomic.Bool
+	lightWG   sync.WaitGroup
+)
+
+func startLightCheck(sessions []M) {
+	if !lightBusy.CompareAndSwap(false, true) {
+		return
+	}
+	lightWG.Add(1)
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				writeLog(fmt.Sprint("Light check: ", r))
+			}
+			lightBusy.Store(false)
+			lightWG.Done()
+		}()
+		lightCheckOpen(sessions)
+	}()
+}
+
+// the heartbeat's open companies, ports, whether Tally is open, and its companies[]
+func beatParts(sessions []M) (open, ports []any, tally bool, cos []any) {
+	open, ports = []any{}, []any{}
+	for _, s := range sessions {
+		ports = append(ports, M{"port": toInt(s["port"]), "ok": s["ok"] == true, "skipped": s["skipped"] == true, "n": len(sessCompanies(s)), "error": cut(str(s["error"]), 120), "state": str(s["tallyState"])})
+		if s["skipped"] == true {
+			continue
+		}
+		if s["ok"] == true {
+			tally = true
+			for _, c := range sessCompanies(s) {
+				open = append(open, str(c["name"]))
+			}
+		}
+	}
+	return open, ports, tally, beatCompanies(sessions, open)
+}
+
+// round 21 (2.1.10): the heartbeat's companies[]: every company open in Tally (kept or not), then each kept company
+// not open now. Each with {name, open, at, phase, waiting, lastRead} (the kept copy's; empty when not kept), its guid,
+// altvchid and altmstid from its last light check in this run (null when not known), and recorderSeen (the add-on's
+// holding file written in the last 7 days). FinCom's cloud reads the starting point and the gap from these
+func beatCompanies(sessions []M, open []any) []any {
+	kept := map[string]string{} // companyKey -> its kept folder
+	var keptNames []string
+	for _, d := range keptDirs() {
+		if st := readKeepState(d); st != nil && str(st["company"]) != "" {
+			k := companyKey(str(st["company"]))
+			if _, had := kept[k]; !had {
+				kept[k] = d
+				keptNames = append(keptNames, str(st["company"]))
+			}
+		}
+	}
+	guidOf := map[string]string{}
+	for _, s := range sessions {
+		for _, c := range sessCompanies(s) {
+			if g := str(c["guid"]); g != "" {
+				guidOf[companyKey(str(c["name"]))] = g
+			}
+		}
+	}
+	row := func(name string, isOpen bool) M {
+		e := M{"name": name, "open": isOpen, "at": "", "phase": "", "waiting": 0, "lastRead": "", "altvchid": nil, "altmstid": nil}
+		if d := kept[companyKey(name)]; d != "" {
+			if st := readKeepState(d); st != nil {
+				e["at"], e["phase"], e["waiting"], e["lastRead"] = str(st["at"]), str(st["phase"]), len(cloudQueue(d)), str(st["readAt"])
+			}
+		}
+		cur, latestGUID := latestNumbers(name)
+		g := heldGUID(name)
+		if g == "" {
+			g = latestGUID
+		}
+		if g == "" {
+			g = guidOf[companyKey(name)]
+		}
+		e["guid"] = g
+		if cur != nil {
+			e["altvchid"], e["altmstid"] = toI64(cur["altvchid"]), toI64(cur["altmstid"])
+		}
+		seen, _ := recorderHolding(name, g)
+		e["recorderSeen"] = seen
+		return e
+	}
+	cos := []any{}
+	done := map[string]bool{}
+	for _, o := range open {
+		name := str(o)
+		if name == "" || done[companyKey(name)] {
+			continue
+		}
+		done[companyKey(name)] = true
+		cos = append(cos, row(name, true))
+	}
+	for _, name := range keptNames {
+		if !done[companyKey(name)] {
+			done[companyKey(name)] = true
+			cos = append(cos, row(name, false))
+		}
+	}
+	return cos
+}
+
 func beatMissedSince() time.Time { _, f := beatTimes(); return f }
 
 // the heartbeat (2.1.3): also whether background reading is paused, since when Tally has not answered, the hour of the
@@ -790,7 +872,9 @@ func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
 		"postBatchBills": postBatchBills(), "postBatchBank": postBatchBank(), "settingsAt": cfgS("SettingsAt"),
 		// round 18 (prospective only): each company's starting point, and its latest FinComCompany numbers; whether old
 		// days are read at all (off by the owner's rule of 04-Oct-2026)
-		"startPoint": startPointBeat(), "changeNumbers": changeNumbersBeat(), "readDays": readDaysOn()}
+		"startPoint": startPointBeat(), "changeNumbers": changeNumbersBeat(), "readDays": readDaysOn(),
+		// round 21 (2.1.10): whether the owner's trial tools are on here (as FinCom's last answer said)
+		"trialTools": trialTools()}
 }
 
 // --- the posting queue (build 199): postings queued in FinCom on any computer, taken one at a time

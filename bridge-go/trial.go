@@ -1,17 +1,23 @@
 // Round 19 (2.1.9, the owner's question of 04-Oct-2026: "can the add-on hang or slow Tally"): two more tray items of
-// the recorder trial, for a person only (as the other trial items: a web page, FinCom's own included, is refused):
-//   - "Recorder trial: lock the holding file for 30 s": ZZ TEST's holding file in the recorder folder (<GUID>.txt, the
-//     GUID the bridge holds for ZZ TEST) opened with share mode 0 for exactly 30 s, then let go (a timer; released at
-//     once when the bridge stops). Meanwhile the owner saves a voucher in ZZ TEST and sees whether Tally waits, shows a
-//     message, or writes to failed.txt. This is the only time the bridge holds a holding file, and only on the owner's
-//     click; it never writes to it.
-//   - "Recorder trial: time saving (ZZ TEST)": through the import request (importEnvelope) and invokeTally, the two
-//     bench ledgers made when missing ("ZZ Bench Dr" under Indirect Expenses, "ZZ Bench Cr" under Sundry Creditors),
-//     then 50 small journals (2 lines) and 50 journals of 50 lines (49 debits on ZZ Bench Dr, one credit), one per
-//     request, narration "FinCom bench <n>", dated today. Per kind: the median and 90th percentile of the milliseconds
-//     per request and the total, in the log and the tray's box. Run with the add-on loaded and again without it. Nothing
-//     is noted as a posting (no read-back, nothing for the cloud); no FinCom tag; ZZ TEST only; allowed with ReadDays off
-//     (it reads no entries, only the ledger list to see whether the bench ledgers exist).
+// the recorder trial, for a person only (as the other trial items: a web page, FinCom's own included, is refused).
+// Round 21 (2.1.10, the owner's decision of 04-Oct-2026): no company-name check anywhere; they work on the company asked
+// for, the one open in Tally (the trial runs on the company the owner tests on, linked to a FinCom client); owner only
+// (FinCom's "Trial tools on this computer" switch, below); anything that adds entries asks first, naming the company,
+// and marks them TRIAL:
+//   - "Recorder trial: lock the holding file for 30 s": the open company's holding file in the recorder folder
+//     (<GUID>.txt, the GUID the bridge holds for it) opened with share mode 0 for exactly 30 s, then let go (a timer;
+//     released at once when the bridge stops). Meanwhile the owner saves a voucher in that company and sees whether
+//     Tally waits, shows a message, or writes to failed.txt. This is the only time the bridge holds a holding file, and
+//     only on the owner's click; it never writes to it.
+//   - "Recorder trial: time saving": after the yes/no "This will add 100 test entries (and 2 ledgers if missing) to
+//     <company>. Continue?", through the import request (importEnvelope) and invokeTally, the two bench ledgers made
+//     when missing ("TRIAL Bench Dr" under Indirect Expenses, "TRIAL Bench Cr" under Sundry Creditors), then 50 small
+//     journals (2 lines) and 50 journals of 50 lines (49 debits on TRIAL Bench Dr, one credit), one per request,
+//     narration "TRIAL FinCom bench <n>", dated today. Per kind: the median and 90th percentile of the milliseconds
+//     per request and the total, in the log and the tray's box. Run with the add-on loaded and again without it.
+//     Nothing is noted as a posting (no read-back, nothing for the cloud); no FinCom tag; PostOnly (the owner's
+//     per-computer setting) still applies; allowed with ReadDays off (it reads no entries, only the ledger list to see
+//     whether the bench ledgers exist).
 package main
 
 import (
@@ -22,10 +28,9 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
-
-const benchCompany = "ZZ TEST"
 
 // --- the lock
 var (
@@ -37,23 +42,23 @@ var (
 // the lock taken (answers once it is held, or with why not); it lets go by itself after recorderLockFor
 func recorderLockHolding(company string) (M, error) {
 	if company == "" {
-		company = benchCompany
+		company = trayMeasureCompany()
 	}
-	if company != benchCompany {
-		return nil, errors.New("The holding file is locked for " + benchCompany + " only.")
+	if company == "" {
+		return nil, errors.New("No company is open in Tally: open the company you test on, then try again.")
 	}
 	// round 20 (the re-review's Medium 1): the recorder folder and C:\ProgramData\FinCom checked first
 	dir, ok := recorderDirChecked()
 	if !ok {
 		return nil, errors.New("The recorder folder " + recorderDirFn() + " is not there or is not safe to use (see the log): nothing is locked.")
 	}
-	guid := heldGUID(benchCompany)
+	guid := heldGUID(company)
 	if !plainFileName(guid) {
-		return nil, errors.New("The bridge does not hold " + benchCompany + "'s Tally GUID yet: open " + benchCompany + " in Tally, wait a minute, then try again.")
+		return nil, errors.New("The bridge does not hold " + company + "'s Tally GUID yet: open " + company + " in Tally, wait a minute, then try again.")
 	}
 	p := filepath.Join(dir, guid+".txt")
 	if fi, err := os.Lstat(p); err != nil || !fi.Mode().IsRegular() || isReparse(p, fi) {
-		return nil, errors.New("No holding file for " + benchCompany + " (" + p + "): load the add-on and save one voucher in " + benchCompany + " first.")
+		return nil, errors.New("No holding file for " + company + " (" + p + "): load the add-on and save one voucher in " + company + " first.")
 	}
 	recLockMu.Lock()
 	if recLockBusy {
@@ -99,16 +104,23 @@ var (
 
 // for the tray's yes/no: the company it would run on, or why not
 func benchCheck(company string) error {
-	if company != benchCompany {
-		return errors.New("Time saving runs on " + benchCompany + " only.")
+	open := trayMeasureCompany()
+	if company == "" {
+		company = open
 	}
-	if open := trayMeasureCompany(); open != benchCompany {
-		return errors.New("Open " + benchCompany + " in Tally first (the company open now: " + or(open, "none") + ").")
+	if company == "" {
+		return errors.New("No company is open in Tally: open the company you test on, then try again.")
 	}
-	return postingAllowedFor(benchCompany)
+	if open == "" || !sameCompany(open, company) {
+		return errors.New("Open " + company + " in Tally first (the company open now: " + or(open, "none") + ").")
+	}
+	return postingAllowedFor(company)
 }
 
 func startBench(company string) M {
+	if company == "" {
+		company = trayMeasureCompany()
+	}
 	if err := benchCheck(company); err != nil {
 		return M{"ok": false, "error": err.Error()}
 	}
@@ -146,7 +158,7 @@ func benchStatus() M {
 // refused while ReadDays is off
 var benchTC = &TC{bench: true}
 
-const benchDr, benchCr = "ZZ Bench Dr", "ZZ Bench Cr"
+const benchDr, benchCr = "TRIAL Bench Dr", "TRIAL Bench Cr"
 
 func benchLine(ledger string, debit bool, amt string) string {
 	if debit {
@@ -155,17 +167,18 @@ func benchLine(ledger string, debit bool, amt string) string {
 	return "<ALLLEDGERENTRIES.LIST><LEDGERNAME>" + esc(ledger) + "</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>" + amt + "</AMOUNT></ALLLEDGERENTRIES.LIST>"
 }
 
-// one journal: debits lines of 1.00 on ZZ Bench Dr and one credit of the total on ZZ Bench Cr
-func benchVoucher(n, debits int, date string) string {
+// one journal: debits lines of 1.00 on TRIAL Bench Dr and one credit of the total on TRIAL Bench Cr, narration
+// "TRIAL FinCom bench <n>", in the company asked for
+func benchVoucher(company string, n, debits int, date string) string {
 	var b strings.Builder
 	b.WriteString(`<VOUCHER VCHTYPE="Journal" ACTION="Create" OBJVIEW="Accounting Voucher View"><DATE>` + date + `</DATE><EFFECTIVEDATE>` + date + `</EFFECTIVEDATE>`)
-	b.WriteString(fmt.Sprintf(`<VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><NARRATION>FinCom bench %d</NARRATION><ISOPTIONAL>No</ISOPTIONAL>`, n))
+	b.WriteString(fmt.Sprintf(`<VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><NARRATION>TRIAL FinCom bench %d</NARRATION><ISOPTIONAL>No</ISOPTIONAL>`, n))
 	for i := 0; i < debits; i++ {
 		b.WriteString(benchLine(benchDr, true, "1.00"))
 	}
 	b.WriteString(benchLine(benchCr, false, fmt.Sprintf("%d.00", debits)))
 	b.WriteString("</VOUCHER>")
-	return importEnvelope("Vouchers", benchCompany, `<TALLYMESSAGE xmlns:UDF="TallyUDF">`+b.String()+"</TALLYMESSAGE>")
+	return importEnvelope("Vouchers", company, `<TALLYMESSAGE xmlns:UDF="TallyUDF">`+b.String()+"</TALLYMESSAGE>")
 }
 
 // the median, 90th percentile and total of the times (ms)
@@ -246,7 +259,7 @@ func runBench(company string) (M, error) {
 		failed := 0
 		for i := 0; i < 50; i++ {
 			t0 := time.Now()
-			raw, err := invokeTally(benchTC, port, benchVoucher(k.from+i, k.debits, td), 0)
+			raw, err := invokeTally(benchTC, port, benchVoucher(company, k.from+i, k.debits, td), 0)
 			ms = append(ms, time.Since(t0).Milliseconds())
 			if err != nil {
 				return nil, fmt.Errorf("Tally did not answer request %d of the %s: %s (the run stopped there)", i+1, k.what, tallyTrouble(err.Error()))
@@ -264,4 +277,40 @@ func runBench(company string) (M, error) {
 	}
 	out["lines"] = lines
 	return out, nil
+}
+
+// --- round 21 (2.1.10, the owner's decision of 04-Oct-2026): the trial tools are the owner's, switched on per computer
+// on FinCom's Tally page ("Trial tools on this computer", off by default). FinCom's answer to every heartbeat carries
+// trialTools (absent: off), applied at once (the heartbeat turns every 30 s) and kept in memory only: after a restart
+// they are off until the next answer. While off, the tray shows none of the five trial items and their /tray/ routes
+// answer 403 with trialOffWords
+var trialToolsOn atomic.Bool
+
+func setTrialTools(on bool) { trialToolsOn.Store(on) }
+func trialTools() bool      { return trialToolsOn.Load() }
+
+const trialOffWords = "Trial tools are switched off for this computer in FinCom (Tally page, owner)"
+
+// FinCom's answer to the heartbeat: trialTools true switches them on; false, absent or anything else, off
+func applyTrialTools(j M) {
+	on := j["trialTools"] == true
+	if trialToolsOn.Swap(on) != on {
+		if on {
+			writeLog("Trial tools switched on for this computer in FinCom: the tray shows the trial items")
+		} else {
+			writeLog("Trial tools switched off for this computer in FinCom: the tray hides the trial items")
+		}
+	}
+}
+
+func trialToolsErr() error {
+	if trialTools() {
+		return nil
+	}
+	return &httpErr{403, M{"ok": false, "error": trialOffWords}}
+}
+
+// the time saving's yes/no, naming the company (the tray shows the bridge's words)
+func benchConfirmText(company string) string {
+	return "This will add 100 test entries (and 2 ledgers if missing) to " + company + ". Continue?"
 }

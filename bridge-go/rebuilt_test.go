@@ -212,7 +212,7 @@ func newStandTally(t *testing.T) *standTally {
 		f.mu.Lock()
 		switch id {
 		case "TDSDeskCompanies", "FinComFree", "FinComCompany":
-			fmt.Fprintf(&o, `<COMPANY NAME="%s"><NAME>%s</NAME><GUID>%s</GUID><STARTINGFROM>20260401</STARTINGFROM><ALTVCHID>%d</ALTVCHID><ALTMSTID>%d</ALTMSTID></COMPANY>`, coName, coName, f.guid, f.alter, f.altMst())
+			fmt.Fprintf(&o, `<COMPANY NAME="%s"><NAME>%s</NAME><GUID>%s</GUID><STARTINGFROM>20260401</STARTINGFROM><ALTVCHID>%d</ALTVCHID><ALTMSTID>%d</ALTMSTID></COMPANY>`, esc(coName), esc(coName), f.guid, f.alter, f.altMst())
 		case "FinComLedgers":
 			var after, upto int64 = 0, -1
 			if m := reMidRange.FindStringSubmatch(body); m != nil {

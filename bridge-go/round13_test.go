@@ -48,6 +48,7 @@ func TestReadTestThreeRequestsLogged(t *testing.T) {
 	f.behave = emptyDayBook()
 	f.mu.Unlock()
 	standBridge(t, f, c.cfg()+`,"Key":"tray-test-key"`)
+	trialOn(t) // round 21 (2.1.10): the owner's trial tools switched on for this computer in FinCom
 	dir := syncFolder(zz)
 	text := r12Voucher(d)
 	writeDayFile(dir, d, text, false)
@@ -158,6 +159,7 @@ func TestReadTestThreeRequestsLogged(t *testing.T) {
 func TestReadTestNotFromWebPage(t *testing.T) {
 	f := newStandTally(t)
 	standBridge(t, f, `,"Key":"tray-test-key"`)
+	trialOn(t) // round 21 (2.1.10): the owner's trial tools switched on for this computer in FinCom
 	readTestMu.Lock()
 	readTestLast = nil
 	readTestMu.Unlock()

@@ -53,6 +53,7 @@ func TestRecorderReadRefusedWhenParentIsLink(t *testing.T) {
 	f := newStandTally(t)
 	c := newStandCloud(t)
 	standBridge(t, f, c.cfg()+`,"Key":"tray-test-key"`)
+	trialOn(t)                   // round 21 (2.1.10): the owner's trial tools switched on for this computer in FinCom
 	_ = findCompanyPortQuiet(zz) // ZZ TEST's GUID co-guid-1 held
 	if fs := recorderFiles(); len(fs) != 0 {
 		t.Fatalf("recorder files listed through a linked FinCom: %v", fs)
@@ -317,7 +318,7 @@ func TestChangeNumbersAppendNoFollow(t *testing.T) {
 }
 
 // --- Low 4: the bench is not a person's request: a dated request through benchTC is refused with ReadDays off; the
-// sheets say the bench journals are test entries in ZZ TEST, which stays linked (the posting tests need the link)
+// sheets say the bench journals are test entries in the company tested on, which stays linked to its FinCom client
 func TestBenchNotPerson(t *testing.T) {
 	f := newStandTally(t)
 	standBridge(t, f, `,"ReadDays":false`)
@@ -327,10 +328,12 @@ func TestBenchNotPerson(t *testing.T) {
 	if datedRefused(benchTC, "<SVFROMDATE>20260401</SVFROMDATE>") == nil {
 		t.Fatal("a dated request through benchTC passes with ReadDays off")
 	}
-	for _, f := range []string{"../docs/bridge-2.1.9-test-sheet.txt", "../docs/recorder-trial-sheet.txt"} {
+	// round 21 (2.1.10): the sheets name no company: the company tested on stays linked to its FinCom client, and the
+	// bench's journals are TRIAL test entries in it
+	for _, f := range []string{"../docs/bridge-2.1.10-test-sheet.txt", "../docs/recorder-trial-sheet.txt"} {
 		txt := strings.Join(strings.Fields(readText(f)), " ")
-		if !strings.Contains(txt, "ZZ TEST stays linked to its FinCom client") || !strings.Contains(txt, "test entries in ZZ TEST") || strings.Contains(txt, "must not be linked") {
-			t.Fatalf("%s: the bench's wording on the ZZ TEST link is not the agreed one", f)
+		if !strings.Contains(txt, "the company you test on (it must be linked to a FinCom client)") || !strings.Contains(txt, "test entries in the company you test on") || strings.Contains(txt, "must not be linked") {
+			t.Fatalf("%s: the bench's wording on the company's link is not the agreed one", f)
 		}
 	}
 }

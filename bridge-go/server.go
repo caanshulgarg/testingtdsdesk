@@ -598,6 +598,10 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 			writeLog("Refused a read test request from a web page (" + path + ", " + r.Header.Get("Origin") + ").")
 			return nil, &httpErr{403, M{"ok": false, "error": "Test reading from Tally is started from the FinCom Bridge tray icon only, never from a web page."}}
 		}
+		// round 21 (2.1.10): owner only, while FinCom's "Trial tools on this computer" is on
+		if err := trialToolsErr(); err != nil {
+			return nil, err
+		}
 		// 13b: as the measuring tool: POST starts it in the bridge and answers at once, GET says how far (the tray polls)
 		if r.Method == "POST" {
 			o, _ := bodyObj(body)
@@ -609,11 +613,15 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		}
 		return readTestStatus(), nil
 	case "/tray/recorder-lock", "/tray/recorder-bench":
-		// round 19 (the owner's question, "can the add-on hang Tally"): the lock of ZZ TEST's holding file for 30 s and
-		// the time saving on ZZ TEST (trial.go). Started by a person only, as the other trial items
+		// round 19 (the owner's question, "can the add-on hang Tally"): the lock of the open company's holding file for
+		// 30 s and the time saving (trial.go; round 21: any company, the one open in Tally). Started by a person only, as
+		// the other trial items
 		if r.Header.Get("Origin") != "" || r.Header.Get("Sec-Fetch-Site") != "" || r.Header.Get("Sec-Fetch-Mode") != "" || r.Header.Get("Sec-Fetch-Dest") != "" {
 			writeLog("Refused a recorder trial request from a web page (" + path + ", " + r.Header.Get("Origin") + ").")
 			return nil, &httpErr{403, M{"ok": false, "error": "The recorder trial is run from the FinCom Bridge tray icon only, never from a web page."}}
+		}
+		if err := trialToolsErr(); err != nil { // round 21: owner only (FinCom's switch for this computer)
+			return nil, err
 		}
 		if path == "/tray/recorder-bench" && r.Method != "POST" {
 			return benchStatus(), nil
@@ -628,9 +636,9 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 				if err := benchCheck(co); err != nil {
 					return M{"ok": false, "error": err.Error()}, nil
 				}
-				return M{"ok": true, "company": co}, nil
+				return M{"ok": true, "company": co, "confirm": benchConfirmText(co)}, nil
 			}
-			return startBench(str(o["company"])), nil
+			return startBench(co), nil
 		}
 		res, err := recorderLockHolding(str(o["company"]))
 		if err != nil {
@@ -643,6 +651,9 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		if r.Header.Get("Origin") != "" || r.Header.Get("Sec-Fetch-Site") != "" || r.Header.Get("Sec-Fetch-Mode") != "" || r.Header.Get("Sec-Fetch-Dest") != "" {
 			writeLog("Refused a recorder trial request from a web page (" + path + ", " + r.Header.Get("Origin") + ").")
 			return nil, &httpErr{403, M{"ok": false, "error": "The recorder trial is run from the FinCom Bridge tray icon only, never from a web page."}}
+		}
+		if err := trialToolsErr(); err != nil { // round 21: owner only (FinCom's switch for this computer)
+			return nil, err
 		}
 		if err := needPost(r, "Use POST."); err != nil {
 			return nil, err

@@ -24,6 +24,9 @@ var (
 	// round 20 (the re-review's Low 2): companyKey|guid -> the numbers first seen while start-point.json could not be
 	// read (this run); written, never replaced by later numbers, once the file can be read again
 	spPending = map[string]M{}
+	// round 21: companyKey -> how many FinComCompany answers with numbers this run (a light check sees whether its own
+	// answer gave numbers)
+	spSeq = map[string]int{}
 )
 
 func startPointFile() string { return sp("start-point.json") }
@@ -66,7 +69,8 @@ func noteStartPoint(company, guid string, altV, altM int64) {
 	spMu.Lock()
 	defer spMu.Unlock()
 	spFresh()
-	spLatest[company] = M{"altvchid": altV, "altmstid": altM, "at": nowS()}
+	spLatest[company] = M{"altvchid": altV, "altmstid": altM, "at": spNow()}
+	spSeq[companyKey(company)]++
 	if guid != "" {
 		spGUID[company] = guid
 	}
@@ -74,7 +78,7 @@ func noteStartPoint(company, guid string, altV, altM int64) {
 	if !ok {
 		// round 20 (Low 2): the first numbers seen are kept for the run (later, higher ones never replace them)
 		if k := companyKey(company) + "|" + guid; spPending[k] == nil {
-			spPending[k] = M{"company": company, "guid": guid, "altvchid": altV, "altmstid": altM, "at": nowS()}
+			spPending[k] = M{"company": company, "guid": guid, "altvchid": altV, "altmstid": altM, "at": spNow()}
 		}
 		if spBadLogged != startPointFile() {
 			spBadLogged = startPointFile()
@@ -106,7 +110,7 @@ func noteStartPoint(company, guid string, altV, altM int64) {
 		return // an answer without a GUID never adds a second entry
 	}
 	k := companyKey(company) + "|" + guid
-	all[k] = M{"company": company, "guid": guid, "altvchid": altV, "altmstid": altM, "at": nowS()}
+	all[k] = M{"company": company, "guid": guid, "altvchid": altV, "altmstid": altM, "at": spNow()}
 	if err := saveFile(startPointFile(), jsonText(all)); err != nil {
 		writeLog(fmt.Sprintf("Company %s: its starting point could not be written to %s: %s", company, startPointFile(), err.Error()))
 		return
@@ -264,7 +268,7 @@ func startPointBeat() M {
 func spFresh() {
 	if spLatestD != syncDir() {
 		spLatest, spGUID, spChecked, spLatestD = map[string]M{}, map[string]string{}, map[string]time.Time{}, syncDir()
-		spPending = map[string]M{}
+		spPending, spSeq = map[string]M{}, map[string]int{}
 	}
 }
 
@@ -333,18 +337,107 @@ func recorderHolding(company, guid string) (bool, string) {
 }
 
 // round 19 (review finding 8): asked again right after the light check took the Tally lock (it may have waited behind
-// a read): a posting job started, this bridge took the company's lease, or an import is going: it gives way
+// a read): a posting going, this bridge took the company's lease, or an import is going: it gives way. Round 21
+// (2.1.10): a posting going (postingGoing), not any job of the last 12 hours: an interrupted or waiting job never
+// holds the light check back
 func lightCheckYield(company string) func() bool {
-	return func() bool { return len(activeJobs()) > 0 || leaseHeldHere(company) || importsInFlight.Load() > 0 }
+	return func() bool { return postingGoing() || leaseHeldHere(company) || importsInFlight.Load() > 0 }
+}
+
+// round 21 (2.1.10): the light check's own log: one line per check (recorded, unchanged, or skipped and why). A skip
+// for the same reason is said once per company and reason every 10 minutes (the heartbeat turns every 30 s)
+var (
+	lcMu      sync.Mutex
+	lcSkipped = map[string]time.Time{} // company|why -> when said
+)
+
+func lightSkip(company, why string) {
+	k := companyKey(company) + "|" + why
+	now := nowFn()
+	lcMu.Lock()
+	last, had := lcSkipped[k]
+	if had && now.Sub(last) < 10*time.Minute && !now.Before(last) {
+		lcMu.Unlock()
+		return
+	}
+	lcSkipped[k] = now
+	lcMu.Unlock()
+	if company == "" {
+		writeLog("Light check: skipped: " + why)
+		return
+	}
+	writeLog("Light check of " + company + ": skipped: " + why)
+}
+
+// why the light check cannot go now ("" : it may). Round 21 (2.1.10): "Pause background reading" does not hold it
+// back: the pause was for the old heavy reads (the Day Book rounds), all off now, and this is the only read left
+func lightCheckBlocked() string {
+	if st := readStop(); st != nil {
+		why := "reading is stopped"
+		if str(st["by"]) == "fincom" {
+			why += " from FinCom"
+		} else {
+			why += " by the bridge itself"
+		}
+		if r := str(st["reason"]); r != "" {
+			why += " (" + cutRunes(r, 80) + ")"
+		}
+		return why
+	}
+	if postingGoing() {
+		return "a posting is going (the check goes after it)"
+	}
+	return ""
+}
+
+// round 21 (2.1.10): the company list the bridge holds, asked afresh with the light company-list request
+// (TDSDeskCompanies, on the allow-list) when it is older than 10 minutes, or was never asked, and Tally is open: a
+// company opened since is seen. As a background read: a posting goes first (the list held stays then)
+func lightCompanyList(sessions []M) []M {
+	shared := filepath.Join(syncDir(), "open-companies.json")
+	if t, ok := mtime(shared); ok && nowFn().Sub(t) < 10*time.Minute {
+		return sessions
+	}
+	open := false
+	for _, s := range sessions {
+		if s["skipped"] != true && s["ok"] == true {
+			open = true
+		}
+	}
+	if !open {
+		return sessions
+	}
+	fresh := openCompaniesWith(&TC{copier: true, yield: func() bool { return postingGoing() || importsInFlight.Load() > 0 }}, true)
+	_ = os.Chtimes(shared, nowFn(), nowFn()) // its age by the bridge's clock
+	return fresh
 }
 
 // the owner's addition of 04-Oct-2026: a company seen open in Tally for the first time in this run, and at most every
 // 10 minutes while it stays open, gets the light FinComCompany request (its GUID and change numbers; nothing else is
-// asked). As a background read: a posting goes first. The sessions are the company list the bridge already holds
+// asked). As a background read: a posting goes first. The sessions are the company list the bridge already holds,
+// asked afresh when it is older than 10 minutes (round 21). Round 21 (2.1.10): it runs while background reading is
+// paused; it stops for a stop of reading (FinCom's, or the bridge's own) and for a posting going; each check says in
+// the log what it found
 func lightCheckOpen(sessions []M) {
-	if readStopped() || paused() || len(activeJobs()) > 0 {
+	if why := lightCheckBlocked(); why != "" {
+		names := 0
+		for _, s := range sessions {
+			if s["skipped"] == true || s["ok"] != true {
+				continue
+			}
+			for _, c := range sessCompanies(s) {
+				if name := str(c["name"]); name != "" && lightDue(name) {
+					lightSkip(name, why)
+					names++
+				}
+			}
+		}
+		if names == 0 {
+			lightSkip("", why)
+		}
 		return
 	}
+	sessions = lightCompanyList(sessions)
 	for _, s := range sessions {
 		if s["skipped"] == true || s["ok"] != true {
 			continue
@@ -352,42 +445,113 @@ func lightCheckOpen(sessions []M) {
 		port := toInt(s["port"])
 		for _, c := range sessCompanies(s) {
 			name := str(c["name"])
-			if name == "" {
+			if name == "" || !lightDue(name) {
 				continue
 			}
-			// a posting goes first (the owner, 04-Oct-2026): while a posting job is going, or while this bridge holds the
+			// a posting goes first (the owner, 04-Oct-2026): while a posting is going, or while this bridge holds the
 			// company's lease (a posting holds it), nothing is sent and the company is not marked, so the check goes at
 			// the next turn after the posting (the same rule as the copier's, keep.go)
-			if len(activeJobs()) > 0 {
+			if why := lightCheckBlocked(); why != "" {
+				lightSkip(name, why)
 				return
 			}
 			if leaseHeldHere(name) {
+				lightSkip(name, "this bridge holds the company for a posting (the check goes after it)")
 				continue
 			}
-			now := nowFn()
-			spMu.Lock()
-			spFresh()
-			last, had := spChecked[name]
-			due := !had || now.Sub(last) >= 10*time.Minute
-			if due {
-				spChecked[name] = now
-			}
-			spMu.Unlock()
+			now, due := lightMark(name)
 			if !due {
 				continue
 			}
+			_, had := startPointOf(name)
+			seq := spSeqOf(name)
 			if _, err := companyCheck(&TC{copier: true, yield: lightCheckYield(name)}, name, port); err != nil {
+				// not marked: it goes again at the next turn
+				spMu.Lock()
+				if spChecked[name].Equal(now) {
+					delete(spChecked, name)
+				}
+				spMu.Unlock()
 				if gaveWay(err) {
-					// stopped for a posting (or held back): not marked, it goes again at the next turn
-					spMu.Lock()
-					if spChecked[name].Equal(now) {
-						delete(spChecked, name)
-					}
-					spMu.Unlock()
+					lightSkip(name, "it gave way to a posting (the check goes after it)")
 					continue
 				}
-				writeLog("Light check of " + name + ": " + err.Error())
+				lightSkip(name, "Tally did not answer ("+cutRunes(err.Error(), 160)+")")
+				continue
 			}
+			if spSeqOf(name) == seq {
+				lightSkip(name, "Tally gave no change numbers for it")
+				continue
+			}
+			lightLogResult(name, had)
 		}
 	}
 }
+
+// due: not checked in this run, or the last check 10 minutes ago or more
+func lightDue(name string) bool {
+	now := nowFn()
+	spMu.Lock()
+	defer spMu.Unlock()
+	spFresh()
+	last, had := spChecked[name]
+	return !had || now.Sub(last) >= 10*time.Minute
+}
+
+// due, and then marked as checked at the time returned (unmarked by that time when the check does not go)
+func lightMark(name string) (time.Time, bool) {
+	now := nowFn()
+	spMu.Lock()
+	defer spMu.Unlock()
+	spFresh()
+	last, had := spChecked[name]
+	if had && now.Sub(last) < 10*time.Minute {
+		return now, false
+	}
+	spChecked[name] = now
+	return now, true
+}
+
+// the check's one line: the starting point recorded now, or unchanged with the latest numbers
+func lightLogResult(name string, had bool) {
+	cur, _ := latestNumbers(name)
+	if cur == nil {
+		lightSkip(name, "Tally gave no change numbers for it")
+		return
+	}
+	v, m := toI64(cur["altvchid"]), toI64(cur["altmstid"])
+	sp, ok := startPointOf(name)
+	switch {
+	case !ok:
+		writeLog(fmt.Sprintf("Light check of %s: no starting point recorded (start-point.json could not be written; see above); now ALTVCHID=%d, ALTMSTID=%d", name, v, m))
+	case !had:
+		writeLog(fmt.Sprintf("Light check of %s: starting point recorded (ALTVCHID=%d, ALTMSTID=%d)", name, sp, m))
+	default:
+		writeLog(fmt.Sprintf("Light check of %s: unchanged starting point ALTVCHID=%d; now ALTVCHID=%d, ALTMSTID=%d", name, sp, v, m))
+	}
+}
+
+// the latest FinComCompany numbers of a company in this run ({altvchid, altmstid, at}) and the GUID that answer gave;
+// nil when it was not checked in this run
+func latestNumbers(company string) (M, string) {
+	spMu.Lock()
+	defer spMu.Unlock()
+	spFresh()
+	ck := companyKey(company)
+	for c, v := range spLatest {
+		if companyKey(c) == ck {
+			return v, spGUID[c]
+		}
+	}
+	return nil, ""
+}
+
+func spSeqOf(company string) int {
+	spMu.Lock()
+	defer spMu.Unlock()
+	spFresh()
+	return spSeq[companyKey(company)]
+}
+
+// the time the starting points and the latest numbers carry (the bridge's clock, so a test can fix it)
+func spNow() string { return nowFn().Format("2006-01-02T15:04:05") }

@@ -1,0 +1,87 @@
+{
+  "allowlist": {
+    "hash": "b8dae6491978cebd405f98223cdff4d97451f4388c7bdf56089bb0e7941e643c",
+    "measured": false
+  },
+  "busySince": "",
+  "changeNumbers": {
+    "GARG SHEKHAR & COMPANY": {
+      "altmstid": 3,
+      "altvchid": 3,
+      "at": "2026-10-04T18:30:00",
+      "recorderLastAt": "",
+      "recorderSeen": false
+    }
+  },
+  "companies": [
+    {
+      "altmstid": 3,
+      "altvchid": 3,
+      "at": "",
+      "guid": "co-guid-1",
+      "lastRead": "",
+      "name": "GARG SHEKHAR & COMPANY",
+      "open": true,
+      "phase": "",
+      "recorderSeen": false,
+      "waiting": 0
+    }
+  ],
+  "computer": "TEST-PC",
+  "dailyAt": "02:00",
+  "events": true,
+  "every": 30,
+  "kind": "beat",
+  "lastRead": "",
+  "lastRun": "",
+  "nightlyAt": "02:00",
+  "notAnsweringSince": "",
+  "open": [
+    "GARG SHEKHAR & COMPANY"
+  ],
+  "paused": true,
+  "ports": [
+    {
+      "error": "",
+      "n": 1,
+      "ok": true,
+      "port": 9000,
+      "skipped": false,
+      "state": "open"
+    }
+  ],
+  "postBatchBank": 50,
+  "postBatchBills": 10,
+  "postOnly": [],
+  "readDays": false,
+  "readStopped": null,
+  "reqs": {
+    "day": "2026-10-04",
+    "last": {
+      "at": "2026-10-04T18:30:00",
+      "kind": "FinComCompany",
+      "ms": 0
+    },
+    "longest": {
+      "at": "2026-10-04T18:30:00",
+      "kind": "FinComCompany",
+      "ms": 0
+    },
+    "n": 3,
+    "over20": 0
+  },
+  "settingsAt": "",
+  "startPoint": {
+    "GARG SHEKHAR & COMPANY": {
+      "altmstid": 3,
+      "altvchid": 3,
+      "at": "2026-10-04T18:30:00",
+      "guid": "co-guid-1"
+    }
+  },
+  "tally": true,
+  "tallyState": "open",
+  "trialTools": false,
+  "updating": false,
+  "version": "2.1.10"
+}

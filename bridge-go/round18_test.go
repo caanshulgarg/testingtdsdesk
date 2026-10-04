@@ -470,6 +470,7 @@ func TestTrialSendResultsPersonOnly(t *testing.T) {
 	f := newStandTally(t)
 	c := newStandCloud(t)
 	standBridge(t, f, c.cfg()+`,"Key":"tray-test-key"`)
+	trialOn(t) // round 21 (2.1.10): the owner's trial tools switched on for this computer in FinCom
 	writeLog("a line of the bridge's log")
 	rf := filepath.Join(rec, "co-guid-1.txt")
 	_ = os.WriteFile(rf, utf16leBOM(r18Line1+"\r\n"), 0o644)
@@ -555,6 +556,7 @@ func TestChangeNumbersNoted(t *testing.T) {
 	f := newStandTally(t)
 	f.add(td, fgParty, "C-1", "sale", "-1.00")
 	standBridge(t, f, `,"Key":"tray-test-key"`)
+	trialOn(t) // round 21 (2.1.10): the owner's trial tools switched on for this computer in FinCom
 	if code, _ := callLocal(t, "POST", "/tray/recorder-note", "https://app.fincom.live", "{}"); code != 403 {
 		t.Fatalf("from a web page: %d", code)
 	}
@@ -603,7 +605,7 @@ func TestInstallerRecorderAndAddonFolders(t *testing.T) {
 	if es, _ := addonFiles.ReadDir("addon"); len(es) == 0 {
 		t.Error("no .tdl built into the exe")
 	}
-	if BridgeVersion != "2.1.9" {
+	if BridgeVersion != "2.1.10" {
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 }
@@ -633,7 +635,9 @@ func TestOpenCompanyLightCheckOnce(t *testing.T) {
 	nowFn = func() time.Time { return start.Add(11 * time.Minute) }
 	lightCheckOpen(sessions)
 	nowFn = time.Now
-	if got := f.ids()[n0:]; len(got) != 2 || got[1] != "FinComCompany" {
+	// round 21 (2.1.10): the company list, 11 minutes old by then, is asked afresh first (the light company-list
+	// request), then FinComCompany
+	if got := f.ids()[n0:]; len(got) < 3 || got[1] != "TDSDeskCompanies" || got[len(got)-1] != "FinComCompany" || r21Count(got, "FinComCompany") != 2 {
 		t.Fatalf("after 10 minutes: %v", got)
 	}
 	for _, id := range f.ids() {

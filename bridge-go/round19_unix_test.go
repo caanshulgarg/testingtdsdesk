@@ -3,8 +3,9 @@
 package main
 
 // Round 19, the owner's question B: "Recorder trial: lock the holding file for 30 s" (on Windows share mode 0; here an
-// exclusive flock stands in for it): ZZ TEST's holding file, found by the GUID the bridge holds for ZZ TEST; held for its
-// time, then let go; another company refused; a web page refused
+// exclusive flock stands in for it): the company's holding file, found by the GUID the bridge holds for it; held for its
+// time, then let go; a company with no GUID held refused; a web page refused. Round 21 (2.1.10): any company (ZZ TEST
+// here is just the company open)
 
 import (
 	"os"
@@ -32,6 +33,7 @@ func TestRecorderLockHoldingFile(t *testing.T) {
 	rec, _ := r18RecorderDirs(t)
 	f := newStandTally(t)
 	standBridge(t, f, `,"Key":"tray-test-key"`)
+	trialOn(t) // round 21 (2.1.10): the owner's trial tools switched on for this computer in FinCom
 	old := recorderLockFor
 	recorderLockFor = 400 * time.Millisecond
 	t.Cleanup(func() { recorderLockFor = old })

@@ -149,3 +149,19 @@ func sameProgramPath(saved, exe string, env func(string) string) bool {
 	}
 	return saved != "" && norm(saved) == norm(exe)
 }
+
+type trayItem struct {
+	id   int
+	text string
+}
+
+// round 21 (2.1.10): the five trial items of the tray menu, shown only while FinCom's "Trial tools on this computer"
+// (the owner's switch on the Tally page) is on; none of them names a company (each works on the company open in Tally
+// and names it in its yes/no or its answer)
+func trayTrialItems(st M) []trayItem {
+	if st == nil || st["trialTools"] != true {
+		return nil
+	}
+	return []trayItem{{18, "Test reading from Tally"}, {19, "Recorder trial: note change numbers"}, {20, "Recorder trial: send results"},
+		{21, "Recorder trial: lock the holding file for 30 s"}, {22, "Recorder trial: time saving"}}
+}

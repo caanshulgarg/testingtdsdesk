@@ -1,6 +1,7 @@
 ;; FinComRecorderTrial.tdl  -  FinCom recorder TRIAL add-on (owner's section B, items 10-12, 99, 101, 102)
 ;;
-;; Purpose: on the test company ZZ TEST only, append one line per Tally event to
+;; Purpose: for the company current in Tally (whichever company is loaded), append one line per
+;; Tally event to
 ;;     C:\ProgramData\FinCom\recorder\<company GUID>.txt
 ;; so the bridge can show which events Tally fires and roughly how long the add-on adds to a save.
 ;;
@@ -8,7 +9,10 @@
 ;;   - silent: no menus, no keys, no buttons, no Message / Log / Query actions, no pop-ups;
 ;;   - never blocks a save, delete, cancel or import: every function returns Yes, and the form
 ;;     events always run Tally's own Form Accept;
-;;   - acts only when the current company is "ZZ TEST" (TDL "=" on strings ignores case);
+;;   - acts whenever a company is current (FCRIsTrial below); bridge 2.1.10, the owner's decision of
+;;     04-Oct-2026: no company-name check. So: load the add-on only while the company you test on
+;;     (linked to a FinCom client) is the only company open, and unload it before working in any
+;;     other company (docs/recorder-trial-sheet.txt);
 ;;   - no network, no AI, nothing but a local file append.
 ;;
 ;; NOT RUN ON A REAL TALLY. Written from the TDL reference; see docs/recorder-trial-review.md
@@ -25,9 +29,9 @@
 ;; parameter of OPEN FILE below. Change "Unicode" to "ASCII" there to get 8-bit text instead
 ;; (non-English narration would then be lost).
 
-;; ---------------------------------------------------------------- the ZZ TEST gate
+;; ---------------------------------------------------------------- the gate: a company is current
 [System: Formula]
-    FCRIsTrial  : ##SVCurrentCompany = "ZZ TEST"
+    FCRIsTrial  : NOT $$IsEmpty:##SVCurrentCompany
     FCRFolder   : "C:\ProgramData\FinCom\recorder\"
 
 ;; ---------------------------------------------------------------- system events

@@ -1,0 +1,106 @@
+FINCOM BRIDGE 2.1.10 - TEST SHEET (NWS144, staging)
+
+File:        FinComBridge-Setup-2.1.10.exe
+Fingerprint: (filled in when the setup is built; compare with the .sha256 file next to the setup)
+Link:        https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.1.10.exe
+(2.1.9 is installed on NWS144. Install 2.1.10 over it; the installer replaces the program and keeps the pairing, the
+ settings and the copy.)
+
+In this sheet, "the company you test on" is the one company you choose for the trial: the company you test on (it
+must be linked to a FinCom client). The sheet names no company.
+
+What is new in 2.1.10 (over 2.1.9)
+  - The missing starting point (what you saw on 2.1.9: background reading Paused since 03-Oct, the company open, no
+    starting point, no "changes not received" flag):
+      - the light company check (FinComCompany: the company's name, GUID and change numbers) now runs while background
+        reading is paused. The pause was for the old heavy reads, which are all off now; it stays as you set it.
+        A stop of reading (from FinCom, or the bridge's own) still stops it, and a posting still goes first;
+      - a posting that stopped part-way (interrupted) or that waits for Tally no longer holds the check back; only a
+        posting actually going does;
+      - the list of open companies is asked afresh (the small company-list request) when it is older than 10 minutes,
+        so a company opened later is seen;
+      - each check writes one line in the log: "Light check of <company>: starting point recorded (...)",
+        "... unchanged starting point ...", or "... skipped: <why>";
+      - the heartbeat lists every company open in Tally (not only the kept ones) with its GUID and change numbers, in
+        the shape FinCom's cloud reads.
+  - Trial tools for any company (the owner's decision of 04-Oct-2026): no company-name check anywhere.
+      - Owner only: FinCom's Tally page has "Trial tools on this computer" (off by default, per computer). While it is
+        off the tray shows none of the five trial items ("Test reading from Tally", "Recorder trial: note change
+        numbers", "Recorder trial: send results", "Recorder trial: lock the holding file for 30 s", "Recorder trial:
+        time saving"), and the bridge refuses them with "Trial tools are switched off for this computer in FinCom
+        (Tally page, owner)". The switch reaches the bridge within half a minute.
+      - The tools work on the company open in Tally and name it. "Recorder trial: time saving" asks first: "This will
+        add 100 test entries (and 2 ledgers if missing) to <company>. Continue?"; its journals' narration is
+        "TRIAL FinCom bench <n>" and its two ledgers are "TRIAL Bench Dr" (Indirect Expenses) and "TRIAL Bench Cr"
+        (Sundry Creditors).
+      - The trial add-on (FinComRecorderTrial.tdl) writes for whichever company is open in Tally while it is loaded.
+        So: only the company you test on is open in Tally while the add-on is loaded; unload it before working in any
+        other company.
+  - Posting is unchanged.
+
+PLEASE READ - what the trial leaves in the company you test on
+  The trial adds test entries to the company you test on: about 1,200 (PART 3B of the trial sheet) + 100 (PART 3C)
+  + the entries you make by hand in the script, all marked TRIAL. They reach FinCom's copy of the client (and its
+  figures) once the recorder is live or a Day Book of that company is uploaded. Cancelling them in Tally afterwards is
+  the owner's choice. "Make N test copies of this bill", the REMOTEID second send and "time saving" add TRIAL entries
+  and ask first, naming the company. In every entry you make by hand, type TRIAL at the start of every narration.
+  Multi-user (a second PC on the same data, PART 3 of the trial sheet): not tested yet (the owner, 04-Oct).
+
+0. BEFORE THE INSTALL
+   On FinCom's Tally page, this computer (NWS144): switch "Trial tools on this computer" ON (owner only).
+   TallyPrime open with the company you test on, and only that company.
+
+1. DOWNLOAD AND INSTALL OVER 2.1.9
+   Do: open the Link, check the fingerprint if you can (PowerShell: Get-FileHash <file>). Double-click the setup;
+       "Windows protected your PC" > More info > Run anyway; "Just for me" (as 2.1.9); Next.
+   You should see: "FinCom Bridge 2.1.10 is installed and running", "Main bridge: reading and posting".
+   Check: right-click the FinCom icon near the clock: the five trial items are there (Trial tools is on). Switch
+       "Trial tools on this computer" off in FinCom for a minute: the items are gone from the menu; switch it on
+       again.
+
+2. THE STARTING POINT (the fault seen on 2.1.9)
+   With the company you test on open in Tally (background reading may stay Paused):
+   Do: wait about a minute after the install.
+   You should see: FinCom's Tally page shows a starting point for the company you test on. In "Show log":
+       "Light check of <company>: starting point recorded (ALTVCHID=..., ALTMSTID=...)".
+   Then: make 2 entries in Tally in that company (for example two Payments of Rs 1; narration starting TRIAL, e.g.
+       "TRIAL gap 1" and "TRIAL gap 2").
+   You should see: within about 10 minutes, the client in FinCom shows "up to 2 changes not received" (the bridge does
+       not read old entries; FinCom sees that 2 changes happened that it has not received). The log shows a line
+       "Light check of <company>: unchanged starting point ALTVCHID=...; now ALTVCHID=..., ALTMSTID=..." every 10
+       minutes or so.
+   If nothing comes: "Show log" > the lines starting "Light check": each says what happened or why it was skipped.
+
+3. TEST READING FROM TALLY (once)
+   Do: right-click the FinCom icon > "Test reading from Tally". A box asks "Test reading from Tally on the company
+       <name>?": check it names the company you test on, then Yes. Wait for its message box (a few minutes at most).
+   You should see: as in 2.1.9 (the day, one line per request, then "Dates on this Tally: ...").
+   This test only reads and writes to the log. It changes nothing.
+
+4. THE RECORDER TRIAL
+   The steps in Tally (loading the add-on, the exact Tally menu words, the entries to make, delete and cancel, each
+   with TRIAL at the start of its narration): see the trial sheet, docs/recorder-trial-sheet.txt. The add-on file is
+       C:\ProgramData\FinCom\addon\FinComRecorderTrial.tdl
+   Around the steps of the trial sheet:
+   a. Before a delete and before a cancel: tray > "Recorder trial: note change numbers". You should see a box with
+      "<company>: ALTVCHID=..., ALTMSTID=..., at <time>".
+   b. After the delete and after the cancel: press it again.
+   c. At the end: tray > "Recorder trial: send results". You should see "Sent to FinCom support: N lines in K files
+      (reference ...)".
+
+4b. CAN THE ADD-ON HANG OR SLOW TALLY
+   The three short tests of PART 3C of the trial sheet (time saving with and without the add-on, the file locked for
+   30 s while you save, the add-on unloaded without closing Tally).
+   The company you test on stays linked to its FinCom client. The 100 journals of "time saving" are test entries in
+   the company you test on (narration "TRIAL FinCom bench <n>", no FinCom tag). The yes/no names the company first:
+   check it. Afterwards the client may show "up to 100 changes not received": that is these journals and is expected.
+
+5. UNLOAD THE ADD-ON
+   When the script is done, and before you work in any other company: PART 4 of the trial sheet. Then switch "Trial
+   tools on this computer" off on FinCom's Tally page.
+
+6. A POSTING (unchanged)
+   Do: post one bill from FinCom to the client linked to the company you test on, as in 2.1.9.
+   You should see: posted by Tally's reply, as before.
+
+If anything is not as written: tray > "Send install log to FinCom", and note the step number.

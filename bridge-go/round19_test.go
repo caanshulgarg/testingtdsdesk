@@ -212,6 +212,7 @@ func TestChangeNumbersNotWrittenInRecorderFolder(t *testing.T) {
 	f.add(td, fgParty, "CN-1", "sale", "-1.00")
 	c := newStandCloud(t)
 	standBridge(t, f, c.cfg()+`,"Key":"tray-test-key"`)
+	trialOn(t) // round 21 (2.1.10): the owner's trial tools switched on for this computer in FinCom
 	outside := filepath.Join(t.TempDir(), "victim.txt")
 	_ = os.WriteFile(outside, []byte("not to be touched\n"), 0o644)
 	if err := os.Symlink(outside, filepath.Join(rec, "changenumbers.txt")); err != nil {
@@ -275,6 +276,7 @@ func TestRecorderSendSkipsLinksAndBoundsSize(t *testing.T) {
 	f := newStandTally(t)
 	c := newStandCloud(t)
 	standBridge(t, f, c.cfg()+`,"Key":"tray-test-key"`)
+	trialOn(t) // round 21 (2.1.10): the owner's trial tools switched on for this computer in FinCom
 	secret := filepath.Join(t.TempDir(), "secret.txt")
 	_ = os.WriteFile(secret, []byte("SECRET OF ANOTHER USER"), 0o644)
 	if err := os.Symlink(secret, filepath.Join(rec, "a-link.txt")); err != nil {
@@ -625,13 +627,15 @@ func TestReadSharedBounds(t *testing.T) {
 	}
 }
 
-// --- the owner's question, C: "Recorder trial: time saving (ZZ TEST)": through the import request and invokeTally, the
-// two bench ledgers made when missing, then 50 small journals (2 lines) and 50 journals of 50 lines, one per request,
-// narration "FinCom bench <n>" (no FinCom tag); the median, 90th percentile and total per kind; nothing kept for the
-// cloud; ZZ TEST only, with ReadDays off too; person-only
-func TestRecorderBenchZZTest(t *testing.T) {
+// --- the owner's question, C: "Recorder trial: time saving": through the import request and invokeTally, the two
+// bench ledgers made when missing, then 50 small journals (2 lines) and 50 journals of 50 lines, one per request,
+// narration "TRIAL FinCom bench <n>" (no FinCom tag); the median, 90th percentile and total per kind; nothing kept for
+// the cloud; with ReadDays off too; person-only. Round 21 (2.1.10): any company (here ZZ TEST is just the company open;
+// TestRecorderBenchAnyCompany runs it on another), the company asked for must be the one open, owner only
+func TestRecorderBenchTrialTagged(t *testing.T) {
 	f := newStandTally(t)
 	standBridge(t, f, `,"Key":"tray-test-key","ReadDays":false`)
+	trialOn(t) // round 21 (2.1.10): the owner's trial tools switched on for this computer in FinCom
 	_ = findCompanyPortQuiet(zz)
 	for _, origin := range []string{"https://app.fincom.live"} {
 		if code, _ := callLocal(t, "POST", "/tray/recorder-bench", origin, `{"company":"ZZ TEST"}`); code != 403 {
@@ -670,7 +674,7 @@ func TestRecorderBenchZZTest(t *testing.T) {
 			masters++
 			continue
 		}
-		if strings.Contains(b, "TDSDesk:") || !strings.Contains(b, "<NARRATION>FinCom bench ") || strings.Count(b, "<VOUCHER ") != 1 {
+		if strings.Contains(b, "TDSDesk:") || !strings.Contains(b, "<NARRATION>TRIAL FinCom bench ") || strings.Count(b, "<VOUCHER ") != 1 {
 			t.Errorf("a bench voucher's shape: %s", cut(b, 300))
 		}
 		switch strings.Count(b, "<ALLLEDGERENTRIES.LIST>") {
@@ -721,6 +725,7 @@ func TestRecorderBenchZZTest(t *testing.T) {
 func TestReadTestPreviewNamesCompany(t *testing.T) {
 	f := newStandTally(t)
 	standBridge(t, f, `,"Key":"tray-test-key"`)
+	trialOn(t) // round 21 (2.1.10): the owner's trial tools switched on for this computer in FinCom
 	_ = findCompanyPortQuiet(zz)
 	_ = openCompaniesWith(fin, true)
 	n0 := r19Count(f)

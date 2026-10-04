@@ -28,7 +28,7 @@ without a period) is a stored field, not a computed one.
 The size test (`bridge-go/size_test.go`) uses a cost per row returned (`tallyPerRowMs` in `allowlist.go`): a
 conservative guess until the phase 1 measurement replaces it.
 
-First table: re-measured on 2026-10-04 on the stand; not yet measured on NWS144; allowed for 2.1.9 only by the owner's decision of 2026-10-04 (phase 2 go-ahead); this line is replaced per build by the owner's decision, and removed once the table carries times.
+First table: re-measured on 2026-10-04 on the stand; not yet measured on NWS144; allowed for 2.1.10 only by the owner's decision of 2026-10-04 (trial tools for any company; the light check while paused; no request shape changed); this line is replaced per build by the owner's decision, and removed once the table carries times.
 
 (re-measured on 2026-10-03: no times yet; the table's rows and shapes are unchanged since the 2.1.6 build; only the owner's decision line above changed for 2.1.7, and again for 2.1.8: no request shape changed; the duplicate check against Tally left the posting path, its request stays on the list for Check Tally)
 

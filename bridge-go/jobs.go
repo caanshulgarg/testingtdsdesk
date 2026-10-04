@@ -704,3 +704,35 @@ func waitLease(company string, setStatus func(string, string), pause func(time.D
 		}
 	}
 }
+
+// round 21 (2.1.10): a posting actually going on this bridge: a job whose worker is alive and is starting or sending
+// (queued, running), an import request in flight, or a posting being taken from FinCom's queue. A job stopped
+// part-way (interrupted) or waiting for Tally is not one: the light check is never held back by it. The postings
+// themselves still go by activeJobs
+func postingGoing() bool {
+	if importsInFlight.Load() > 0 || postTaking.Load() {
+		return true
+	}
+	jobsMu.Lock()
+	var ids []string
+	for id, alive := range jobsRunning {
+		if alive {
+			ids = append(ids, id)
+		}
+	}
+	jobsMu.Unlock()
+	for _, id := range ids {
+		dir, err := jobDir(id)
+		if err != nil {
+			continue
+		}
+		p := readProgress(dir)
+		if p == nil {
+			return true // just started: its progress not written yet
+		}
+		if st := str(p["status"]); st == "queued" || st == "running" {
+			return true
+		}
+	}
+	return false
+}

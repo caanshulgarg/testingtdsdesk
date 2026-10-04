@@ -158,6 +158,10 @@ func bridgeFor(t *testing.T, s *standIn, extra string) string {
 	wantAt = time.Time{}
 	wantMu.Unlock()
 	pausedB, tallyStandInClosed, turnFirst, nightAt = false, false, true, time.Time{}
+	setTrialTools(false) // round 21: off until FinCom's answer says on (a test switches them on with trialOn)
+	lcMu.Lock()
+	lcSkipped = map[string]time.Time{}
+	lcMu.Unlock()
 	resetSilence()
 	resetSelfWatch()
 	forgetTallyOpen()
@@ -177,6 +181,7 @@ func liveCopy(t *testing.T) {
 }
 
 func waitIdle(t *testing.T) {
+	lightWG.Wait() // round 21: a light check the heartbeat started ends before the test's folder goes
 	for i := 0; i < 600 && keepRunning(); i++ {
 		time.Sleep(100 * time.Millisecond)
 	}

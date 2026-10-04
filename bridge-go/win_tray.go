@@ -436,11 +436,10 @@ func (t *tray) menu() {
 	add(2, "Open FinCom", mfString)
 	add(11, "Test connection", mfString)
 	add(16, "Measure Tally (for FinCom support)", mfString)
-	add(18, "Test reading from Tally", mfString)
-	add(19, "Recorder trial: note change numbers", mfString)
-	add(20, "Recorder trial: send results", mfString)
-	add(21, "Recorder trial: lock the holding file for 30 s", mfString)
-	add(22, "Recorder trial: time saving (ZZ TEST)", mfString)
+	// round 21 (2.1.10): the five trial items only while the owner's "Trial tools on this computer" is on in FinCom
+	for _, it := range trayTrialItems(st) {
+		add(it.id, it.text, mfString)
+	}
 	add(5, "Show log", mfString)
 	switch {
 	case st != nil && truthy(st["testMode"]) && truthy(st["switching"]):
@@ -684,21 +683,23 @@ func (t *tray) command(id int, st M) {
 			msgBox(title, fmt.Sprintf("Sent to FinCom support: %d lines in %d files (reference %s).", toInt(r["lines"]), toInt(r["files"]), or(str(r["ref"]), "-")), mbIconInfo)
 		}
 	case 21:
-		// round 19: ZZ TEST's holding file held (share mode 0) for 30 s: save a voucher in ZZ TEST meanwhile
+		// round 19: the open company's holding file held (share mode 0) for 30 s: save a voucher in it meanwhile (round
+		// 21: any company, the one open in Tally; the bridge names it)
 		title := "FinCom Bridge - Recorder trial"
-		r := trayCall("POST", "/tray/recorder-lock", M{"company": "ZZ TEST"})
+		r := trayCall("POST", "/tray/recorder-lock", M{})
 		switch {
 		case r == nil:
 			msgBox(title, "The bridge is not answering.", mbIconWarning)
 		case r["ok"] != true:
 			msgBox(title, str(r["error"]), mbIconWarning)
 		default:
-			msgBox(title, "The holding file "+str(r["file"])+" is locked for 30 seconds from now.\n\nSave one voucher in ZZ TEST now and note whether the save waited, whether a message appeared. After the 30 seconds, choose Recorder trial: send results.", mbIconInfo)
+			msgBox(title, "The holding file "+str(r["file"])+" is locked for 30 seconds from now.\n\nSave one voucher (narration starting TRIAL) in the company open in Tally now and note whether the save waited, whether a message appeared. After the 30 seconds, choose Recorder trial: send results.", mbIconInfo)
 		}
 	case 22:
-		// round 19: the time saving on ZZ TEST: 100 journals posted one per request, timed
+		// round 19: the time saving: 100 journals posted one per request, timed (round 21: on the company open in Tally,
+		// named in the yes/no; narration and ledgers marked TRIAL)
 		title := "FinCom Bridge - Recorder trial: time saving"
-		pv := trayCall("POST", "/tray/recorder-bench", M{"preview": true, "company": "ZZ TEST"})
+		pv := trayCall("POST", "/tray/recorder-bench", M{"preview": true})
 		if pv == nil || pv["ok"] != true {
 			why := "The bridge is not answering."
 			if pv != nil {
@@ -707,10 +708,11 @@ func (t *tray) command(id int, st M) {
 			msgBox(title, why, mbIconWarning)
 			return
 		}
-		if !yesNo(title, "Post 100 test journals to ZZ TEST (50 of 2 lines, 50 of 50 lines, on the ledgers ZZ Bench Dr and ZZ Bench Cr, made if missing) and time each save? Only ZZ TEST is touched.") {
+		company := str(pv["company"])
+		if !yesNo(title, str(pv["confirm"])+"\n\n(50 journals of 2 lines and 50 of 50 lines, narration \"TRIAL FinCom bench <n>\", on the ledgers TRIAL Bench Dr and TRIAL Bench Cr; each save is timed.)") {
 			return
 		}
-		r := trayCall("POST", "/tray/recorder-bench", M{"company": "ZZ TEST"})
+		r := trayCall("POST", "/tray/recorder-bench", M{"company": company})
 		if r == nil || r["ok"] != true {
 			why := "The bridge is not answering."
 			if r != nil {
@@ -719,7 +721,7 @@ func (t *tray) command(id int, st M) {
 			msgBox(title, why, mbIconWarning)
 			return
 		}
-		t.balloon("FinCom Bridge", "Time saving on ZZ TEST: 100 journals, one at a time. The result opens when it is done.", false)
+		t.balloon("FinCom Bridge", "Time saving on "+company+": 100 TRIAL journals, one at a time. The result opens when it is done.", false)
 		for i := 0; i < 900; i++ {
 			time.Sleep(2 * time.Second)
 			s := trayCall("GET", "/tray/recorder-bench", nil)
@@ -727,7 +729,7 @@ func (t *tray) command(id int, st M) {
 				continue
 			}
 			if str(s["state"]) == "done" {
-				msgBox(title, "ZZ TEST, per save (milliseconds):\n\n"+strings.Join(strs(s["lines"]), "\n")+"\n\nThe same lines are in Show log.", mbIconInfo)
+				msgBox(title, company+", per save (milliseconds):\n\n"+strings.Join(strs(s["lines"]), "\n")+"\n\nThe same lines are in Show log.", mbIconInfo)
 				return
 			}
 			if str(s["state"]) == "failed" {
