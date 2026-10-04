@@ -346,7 +346,8 @@ jobs:
           Check ($ping -ne $null) 'the bridge answers on 127.0.0.1:9100 within 60 s'
           Check ($ping.version -eq $env:BRIDGE_VERSION -and $ping.runMode -eq 'service') "it is FinCom Bridge $env:BRIDGE_VERSION as a service ($($ping | ConvertTo-Json -Compress))"
           # round 19 (S2): the recorder trial's folders made by the exe's install step, Users without Modify on the folder
-          Check (Test-Path "$env:ProgramData\FinCom\addon\FinComRecorderTrial.tdl") 'the add-on is in ProgramData\FinCom\addon'
+          Check (Test-Path "$env:ProgramData\FinCom\addon\FinComRecorderAnyCompany.tdl") 'the add-on (any company, 2.1.10) is in ProgramData\FinCom\addon'
+          Check (-not (Test-Path "$env:ProgramData\FinCom\addon\FinComRecorderTrial.tdl")) 'no old FinComRecorderTrial.tdl is made on a fresh install'
           $acl = (& icacls.exe "$env:ProgramData\FinCom\recorder") -join "`n"
           Write-Host $acl
           Check (($acl -notmatch '\(OI\)\(CI\)\(M\)') -and ($acl -match '\(OI\)\(IO\)\(M\)')) 'Users may add and change files in the recorder folder, not delete the folder'
