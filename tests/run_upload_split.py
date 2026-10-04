@@ -311,7 +311,11 @@ try:
     again = sorted(d for d, v in server_days(jm3b).items() if len(v) > 1)
     ok(jrow(jm3b).get("status") == "done" and again and jrow(jm3b).get("total") == 365 + len(again) and jrow(jm3b).get("done") == jrow(jm3b).get("total"),
        "M3. a late pass whose last piece failed once and ran again: the total raised once (%s of %s; %d days read again)" % (jrow(jm3b).get("done"), jrow(jm3b).get("total"), len(again)))
-    # M4: a Storage path that ignores Range never puts the whole file into memory
+    # M4: a Storage path that ignores Range never puts the whole file into memory. FS.SENT counts the bytes the stand-in WROTE
+    # to the socket before the function hung up, not what the function read: the kernel's send and receive buffers (and
+    # Deno's own read-ahead) take a few MB more than the code keeps (storageRange copies at most the bytes asked and cancels
+    # the body), and how many varies by machine (CI: 5.3 MB written for a 4 MB piece, 2.5 MB for the 1-byte head). So the
+    # bound is "far from the whole object" (under half of a 40 MB file), not the piece's exact length
     big = encode(make_book(60 * 1024 * 1024, seed=24, tag="f"), "utf-8", False)
     FS.IGNORE_RANGE[0] = True; n_s = len(FS.SENT)
     c, r, c2, r2, jm4, path = upload("m4.xml", big)
@@ -319,7 +323,7 @@ try:
     ok(c2 == 200 and head and head[0] < len(big) // 2, "M4. upload_done against a Storage that ignores Range: answered from the first bytes, the rest not read (%s of %d bytes sent) (%s)" % (head, len(big), c2))
     work_until_done(jm4, 60); FS.IGNORE_RANGE[0] = False
     ok(jrow(jm4).get("status") == "failed" and "byte range" in (jrow(jm4).get("message") or "") and all(n < len(big) // 2 for k_, n in FS.SENT[n_s:]),
-       "M4. its pieces: never the whole object, the job stopped at once with words (%s; %s)" % (jrow(jm4).get("message"), [n for _, n in FS.SENT[n_s:]][:6]))
+       "M4. its pieces: never the whole object, the job stopped at once with words (%s: %s; %s)" % (jrow(jm4).get("status"), jrow(jm4).get("message"), [n for _, n in FS.SENT[n_s:]][:6]))
     # M5: one entry longer than the carried tail's cap: the job stops with words, no memory growth
     ok(start_fn(PIECE_B, TALLY_UPLOAD_MAX_TAIL="200000") is not None, "the cloud function again, the carried tail capped at 200,000 characters")
     tb = make_book(2 * 1024 * 1024, seed=25, tag="g"); k_ = tb.index("<NARRATION>", len(tb) // 2) + len("<NARRATION>")

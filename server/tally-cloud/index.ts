@@ -1201,9 +1201,19 @@ async function ingestLedgers(book: string, body: any, firm?: string, from?: List
 const VT = Number(Deno.env.get("TALLY_WORK_VT") || 240), TRIES = 5;      // seconds a piece is hidden while worked on (tests: shorter)
 // deno-lint-ignore no-explicit-any
 const later = (p: Promise<unknown>) => { const er = (globalThis as any).EdgeRuntime; if (er && typeof er.waitUntil === "function") er.waitUntil(p); else p.catch(() => {}); };
+// A stopped job stays stopped: tally_job_step (migration 13) sets the status from done/total on every step, so a piece that
+// was already running when another piece stopped the job (a Fatal, or 5 tries) would turn "failed" back into "running" and the
+// job would never end. The stop leaves its own entry in bad (no day); a later step that finds it puts "failed" back.
 async function jobStep(job: string, units: number, bad: unknown[], failed?: string) {
   const { error } = await db.rpc("tally_job_step", { p_job: job, p_done: units, p_bad: bad || [], p_failed: failed || null });
-  if (error) console.error("tally-ingest job step", job, error.message);
+  if (error) { console.error("tally-ingest job step", job, error.message); return; }
+  if (failed) return;
+  const { data: j } = await db.from("tally_jobs").select("status, bad").eq("id", job).maybeSingle();
+  // deno-lint-ignore no-explicit-any
+  if (j && j.status !== "failed" && Array.isArray(j.bad) && j.bad.some((b: any) => b && typeof b === "object" && !b.day && b.error)) {
+    const { error: e2 } = await db.from("tally_jobs").update({ status: "failed" }).eq("id", job).neq("status", "failed");
+    if (e2) console.error("tally-ingest job step (kept stopped)", job, e2.message);
+  }
 }
 // review 47/48 M4, M5, L2: a piece that can never succeed (another file, an entry too large, a Storage that ignores Range):
 // the job stops at once with these words, no 5 tries
