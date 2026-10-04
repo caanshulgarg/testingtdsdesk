@@ -90,9 +90,12 @@
 --      REPLACE of any of them must carry the SET.) And the '%' fix: tally_device_post_settings' two batch-size RAISE texts
 --      read '(% given)' (PL/pgSQL's placeholder is %; 43 had '%s', read "(600s given)"); the function otherwise as 43.
 --   9. A PC WITHOUT THE ADD-ON (the owner, 04-Oct). tally_sync_cursor.recorder_max_alter / recorder_last_at: the highest
---      AlterID any PC's recorder line carried for the book (entry events with an AlterID; tally_recorder_apply, never
---      lowered); gap jsonb / gap_at / last_match_at. tally_recorder_gap_check(p_book, p_device, p_altvchid, p_at) (service
---      role; tally-ingest's beat, per company that carries altvchid): no starting point yet -> this number is it, no gap;
+--      AlterID any PC's recorder line carried for the book (entry events with an AlterID below 10^15, from lines that
+--      ended applied, duplicate or stale - never a held or failed one - or a held line an owner's release applied;
+--      tally_recorder_apply, never lowered); gap jsonb / gap_at / last_match_at. tally_recorder_gap_check(p_book, p_device,
+--      p_altvchid, p_at) (service role; tally-ingest's beat, per company that carries altvchid): an ALTVCHID of 0 or less
+--      is unknown -> {unknown: true}, the cursor untouched (never a starting point, never a rewind; tally_start_point
+--      refuses it too); no starting point yet -> this number is it, no gap;
 --      below the starting point -> needs_baseline as today (a restore), never a gap; else baseline = greatest(the starting
 --      point, recorder_max_alter, the highest AlterID a day book read brought (tally_days.alter_max: an uploaded day closes
 --      the gap too)); above it -> gap {tally_altvchid, recorder_max, day_max, start_point, missing (an UPPER bound: each
@@ -446,7 +449,7 @@ create or replace function public.tally_recorder_line(p_book uuid, p_device uuid
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
 declare b tally_books%rowtype; rid bigint := p_row; ev text := left(btrim(coalesce(p_line->>'event', '')), 40);
   og text := nullif(left(btrim(coalesce(p_line->>'object_guid', '')), 100), '');
-  alt bigint := case when coalesce(p_line->>'alter_id', '') ~ '^[0-9]{1,18}$' then (p_line->>'alter_id')::bigint end;
+  alt bigint := case when coalesce(p_line->>'alter_id', '') ~ '^[0-9]{1,15}$' then (p_line->>'alter_id')::bigint end;     -- below 10^15 (review L9)
   vd date := tally_d8(replace(coalesce(p_line->>'vch_date', ''), '-', ''));
   sa timestamptz; pl jsonb; pltxt text; bd jsonb; stt text; wy text; t text; res jsonb; vs jsonb; lk date;
   c_found boolean := false; c_alter bigint; c_day date; c_del timestamptz; c_fid text;
@@ -459,8 +462,10 @@ begin
     begin sa := (p_line->>'saved_at')::timestamptz; exception when others then sa := null; end;
     pl := coalesce(p_line->'payload', p_line - 'vouchers' - 'lines'); pltxt := pl::text;
     if length(pltxt) > 8000 then pl := jsonb_build_object('cut', true, 'bytes', length(pltxt), 'head', left(pltxt, 8000)); end if;
-    bd := jsonb_strip_nulls(jsonb_build_object('vouchers', case when jsonb_typeof(p_line->'vouchers') = 'array' then p_line->'vouchers' end,
-            'lines', case when jsonb_typeof(p_line->'lines') = 'array' then p_line->'lines' end,
+    -- the body: the line's own voucher (its GUID) and that voucher's lines alone, never the rest of the add-on's XML (review L1)
+    bd := jsonb_strip_nulls(jsonb_build_object(
+            'vouchers', (select jsonb_agg(x) from jsonb_array_elements(case when jsonb_typeof(p_line->'vouchers') = 'array' then p_line->'vouchers' else '[]'::jsonb end) x where og is not null and x->>'guid' = og),
+            'lines', (select jsonb_agg(x) from jsonb_array_elements(case when jsonb_typeof(p_line->'lines') = 'array' then p_line->'lines' else '[]'::jsonb end) x where og is not null and x->>0 = og),
             'name', left(p_line->>'name', 300), 'from', left(p_line->>'from', 300), 'to', left(p_line->>'to', 300)));
     insert into tally_recorder_lines (firm_id, client_id, book_id, device_id, bridge, pc, tally_user, company_guid, company, line_id, event, object_guid, master_id, alter_id,
                                       vch_type, vch_no, vch_date, saved_at, state, ledgers, payload, body, save_ms)
@@ -479,7 +484,13 @@ begin
     -- the same change already here: another arrival applied or held (owner items 26, 102)
     if stt is null and og is not null then
       select 'line ' || r.id || ' (' || r.state || coalesce(', from ' || nullif(r.pc, ''), '') || ')' into t from tally_recorder_lines r
-       where r.book_id = p_book and r.object_guid = og and r.alter_id is not distinct from alt and r.event = ev and r.state in ('applied', 'held') and r.id <> rid order by r.id limit 1;
+       where r.book_id = p_book and r.object_guid = og and r.alter_id is not distinct from alt and r.event = ev and r.id <> rid
+         -- a held arrival is the original only when a release can apply it (review M1): an entry line with its body, a
+         -- delete / cancel held for a locked month; a held line without a body never swallows the same change sent with one
+         and (r.state = 'applied' or (r.state = 'held' and case when ev in ('created', 'altered', 'imported') then coalesce(r.body ? 'vouchers', false)
+                                                                when ev in ('deleted', 'cancelled') then coalesce(r.held_why, '') like 'month locked%'
+                                                                else true end))
+       order by r.id limit 1;
       if t is not null then stt := 'duplicate'; wy := 'the same change already came as ' || t; end if;
     end if;
     if stt is null and ev in ('created', 'altered', 'imported', 'deleted', 'cancelled') then
@@ -575,10 +586,13 @@ begin
     end if;
     one := tally_recorder_line(p_book, p_device, x, null);
     res := res || jsonb_build_array(one - 'id');
+    -- 9. the highest change number received from every PC's lines (entry events with an AlterID, below 10^15), never
+    -- lowered; only from a line that ended applied, duplicate or stale: a held or failed line never raises it (review L2)
+    if one->>'state' in ('applied', 'duplicate', 'stale') and x->>'event' in ('created', 'altered', 'deleted', 'cancelled', 'imported')
+       and coalesce(x->>'object_guid', '') <> '' and coalesce(x->>'alter_id', '') ~ '^[0-9]{1,15}$' then
+      mx := greatest(mx, (x->>'alter_id')::bigint);
+    end if;
   end loop;
-  -- 9. the highest change number received from every PC's lines (entry events with an AlterID), never lowered
-  select max(case when coalesce(e->>'alter_id', '') ~ '^[0-9]{1,18}$' then (e->>'alter_id')::bigint end) into mx from jsonb_array_elements(p_lines) e
-   where jsonb_typeof(e) = 'object' and e->>'event' in ('created', 'altered', 'deleted', 'cancelled', 'imported') and coalesce(e->>'object_guid', '') <> '';
   if mx is not null then
     insert into tally_sync_cursor (book_id, firm_id) values (p_book, p_firm) on conflict (book_id) do nothing;
     update tally_sync_cursor set recorder_max_alter = greatest(coalesce(recorder_max_alter, 0), mx), recorder_last_at = now(), updated_at = now() where book_id = p_book;
@@ -637,7 +651,7 @@ begin
   select * into r from tally_recorder_lines where id = p_line and firm_id = f;
   if r.id is null then raise exception 'not a line of your firm'; end if;
   if r.state <> 'held' then raise exception 'line % is %, not held', p_line, r.state; end if;
-  if r.event in ('ledger_created', 'ledger_altered', 'ledger_renamed') then
+  if r.event in ('ledger_created', 'ledger_altered', 'ledger_renamed', 'ledger_deleted') then     -- every ledger line (review L4)
     return jsonb_build_object('ok', false, 'id', p_line, 'line_id', r.line_id, 'state', 'held', 'why', 'a ledger line is applied by the bridge''s next ledger list, not by a release');
   end if;
   perform pg_advisory_xact_lock(hashtext(r.book_id::text));
@@ -645,7 +659,15 @@ begin
   one := tally_recorder_line(r.book_id, r.device_id, jsonb_build_object('line_id', r.line_id, 'event', r.event, 'object_guid', r.object_guid, 'alter_id', r.alter_id,
            'vch_date', r.vch_date, 'vch_no', r.vch_no, 'pc', r.pc, 'bridge', r.bridge) || coalesce(r.body, '{}'::jsonb), p_line);
   perform set_config('fincom.recorder_release', '', true);
-  update tally_recorder_lines set released_at = now(), released_by = auth.uid() where id = p_line;
+  -- stamped released only when the release applied it; one that stays held (its month still locked) is not (review L3)
+  if one->>'state' = 'applied' then
+    update tally_recorder_lines set released_at = now(), released_by = auth.uid() where id = p_line;
+    -- applied now: its AlterID counts for the gap check as any applied line's (review L2)
+    if r.alter_id is not null and r.alter_id < 1000000000000000 and r.event in ('created', 'altered', 'deleted', 'cancelled', 'imported') then
+      insert into tally_sync_cursor (book_id, firm_id) values (r.book_id, f) on conflict (book_id) do nothing;
+      update tally_sync_cursor set recorder_max_alter = greatest(coalesce(recorder_max_alter, 0), r.alter_id), recorder_last_at = now(), updated_at = now() where book_id = r.book_id;
+    end if;
+  end if;
   return jsonb_build_object('ok', true) || one;
 end $function$;
 revoke all on function public.tally_month_lock(text, date, text), public.tally_month_unlock(text, date, text), public.tally_recorder_release_held(bigint) from public, anon;
@@ -710,7 +732,10 @@ returns jsonb language plpgsql security definer set search_path = public, pg_tem
 declare g text := nullif(left(btrim(coalesce(p_guid, '')), 100), ''); c tally_sync_cursor%rowtype; done boolean := false;
 begin
   if auth.role() <> 'service_role' then raise exception 'not allowed' using errcode = '42501'; end if;
-  if p_altvch is null or p_altvch < 0 or (p_altmst is not null and p_altmst < 0) then raise exception 'the starting point needs the highest voucher AlterID (0 or more)'; end if;
+  -- ALTVCHID 0 or less is unknown (an unread value), never a starting point; 10^15 or more is past Tally's range (review M2, L9)
+  if p_altvch is null or p_altvch <= 0 or p_altvch >= 1000000000000000 or (p_altmst is not null and (p_altmst < 0 or p_altmst >= 1000000000000000)) then
+    raise exception 'the starting point needs the highest voucher AlterID (more than 0, below 10^15)';
+  end if;
   -- the GUID as today: another company GUID marks the book needs_baseline (tally_sync_guard, migration 32)
   perform tally_sync_guard(p_firm, p_book, g, null, null, p_device, p_bridge);
   perform pg_advisory_xact_lock(hashtext('cursor' || p_book::text));
@@ -737,7 +762,9 @@ begin
   if auth.role() <> 'service_role' then raise exception 'not allowed' using errcode = '42501'; end if;
   select firm_id into f from tally_books where book_id = p_book;
   if f is null then raise exception 'no such book'; end if;
-  if p_altvchid is null or p_altvchid < 0 then raise exception 'the check needs Tally''s highest voucher AlterID'; end if;
+  if p_altvchid is null or p_altvchid >= 1000000000000000 then raise exception 'the check needs Tally''s highest voucher AlterID'; end if;
+  -- 0 or less is unknown (the bridge read no ALTVCHID): never a starting point, never a rewind; the cursor untouched (review M2)
+  if p_altvchid <= 0 then return jsonb_build_object('ok', true, 'gap', null, 'unknown', true); end if;
   perform pg_advisory_xact_lock(hashtext('cursor' || p_book::text));
   insert into tally_sync_cursor (book_id, firm_id) values (p_book, f) on conflict (book_id) do nothing;
   select * into c from tally_sync_cursor where book_id = p_book;
@@ -802,7 +829,7 @@ begin
 end $function$;
 revoke all on function public.tally_recorder_silent(uuid) from public, anon;
 grant execute on function public.tally_recorder_silent(uuid) to authenticated, service_role;
-revoke all on function public.tally_working_hours(timestamptz, timestamptz) from public, anon;
+revoke all on function public.tally_working_hours(timestamptz, timestamptz) from public, anon, authenticated;     -- review L6: internal (tally_recorder_silent, a definer, calls it)
 
 -- ---------------------------------------------------------------- 8. fixed search_path (their text unchanged) and the '%' fix
 alter function public.tally_fincom_id(jsonb) set search_path = public, pg_temp;

@@ -210,8 +210,10 @@ function recorderOf(body: any) {
   }
   return Object.keys(out).length ? { recorder: out } : {};
 }
-// phase 2: Tally's highest change numbers per company as the beat says them (FinComCompany's ALTVCHID / ALTMSTID)
-const altOf = (v: unknown) => v === null || v === undefined || v === "" || typeof v === "boolean" || !Number.isFinite(Number(v)) || Number(v) < 0 || Number(v) >= 1e15 ? null : Math.floor(Number(v));
+// phase 2: Tally's highest change numbers per company as the beat says them (FinComCompany's ALTVCHID / ALTMSTID). 0 or
+// less is unknown (the bridge sends 0 for a value it could not read), never a number: 0 would read as a rewind or set a
+// starting point of 0 (review M2); 10^15 or more is past Tally's range
+const altOf = (v: unknown) => v === null || v === undefined || v === "" || typeof v === "boolean" || !Number.isFinite(Number(v)) || Number(v) <= 0 || Number(v) >= 1e15 ? null : Math.floor(Number(v));
 // each company that carries altvchid: tally_recorder_gap_check(book, device, altvchid, at) (migration 44): compared with what
 // every PC's recorder lines (and the day books read) reached; the answer per company {gap, missing (UP TO: an upper
 // bound on the changes not received), needsBaseline, startRecorded}. Never fails the beat (a cloud without 44: nothing said)
@@ -723,9 +725,11 @@ function cleanRecorderLine(x: any, me: { id: string }): { line?: Record<string, 
   if (xml && ["created", "altered", "imported"].includes(event)) {
     if (xml.length > MAX_RECORDER_XML) return { bad: "the entry's XML is larger than FinCom takes (" + xml.length + " characters)" };
     const r = parseDay(xml);
-    // the days path's shape, each voucher with its own date (Tally's, from the XML)
-    line.vouchers = r.vouchers.map((v: any) => ({ ...dayVouchers({ vouchers: [v] })[0], day: isDay(v.date) ? iso(v.date) : day }));
-    line.lines = dayLines(r);
+    // the days path's shape, each voucher with its own date (Tally's, from the XML); the line's own voucher (its GUID) and
+    // that voucher's lines alone: the rest of the add-on's XML is never stored with the line (review L1)
+    const og = line.object_guid as string | null;
+    line.vouchers = og ? r.vouchers.filter((v: any) => v?.guid === og).map((v: any) => ({ ...dayVouchers({ vouchers: [v] })[0], day: isDay(v.date) ? iso(v.date) : day })) : [];
+    line.lines = og ? dayLines(r).filter((l: any) => Array.isArray(l) && l[0] === og) : [];
   }
   return { line };
 }
@@ -753,9 +757,9 @@ async function recorderLines(dev: any, firm: string, book: string, body: any) {
 }
 // the bridge's starting point (the owner's change of 04-Oct: reading is prospective): kept once per book and company GUID
 async function startPoint(dev: any, firm: string, book: string, body: any) {
-  const n = (v: unknown) => v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) || Number(v) < 0 ? null : Math.floor(Number(v));
-  const altvch = n(body.altvchid), altmst = n(body.altmstid);
-  if (altvch === null) return reply(400, { ok: false, error: "altvchid (Tally's highest voucher AlterID) is needed" });
+  // altOf: 0 or less is unknown, never a starting point (review M2); 10^15 or more is past Tally's range (review L9)
+  const altvch = altOf(body.altvchid), altmst = altOf(body.altmstid);
+  if (altvch === null) return reply(400, { ok: false, error: "altvchid (Tally's highest voucher AlterID, more than 0) is needed" });
   const { data, error } = await db.rpc("tally_start_point", { p_firm: firm, p_book: book, p_guid: String(body.guid || body.company_guid || "").slice(0, 100) || null,
     p_altvch: altvch, p_altmst: altmst, p_device: dev.id, p_bridge: bridgeOf(dev, body, false).id });
   if (error && notReady44(error)) return reply(503, { ok: false, notReady: true, error: "The cloud does not keep a starting point yet (migration 44)." });
@@ -765,13 +769,24 @@ async function startPoint(dev: any, firm: string, book: string, body: any) {
 // a few days of the day book (each gzipped), into a book: stored, and read into entries, lines and ready totals
 async function ingestDays(firm: string, book: string, daysIn: unknown) {
   const r = await ingestDaysRaw(firm, book, daysIn);
-  return r.error ? reply(400, { ok: false, error: r.error }) : reply(200, { ok: true, done: r.done, bad: r.bad });
+  return r.error ? reply(400, { ok: false, error: r.error }) : reply(200, { ok: true, done: r.done, bad: r.bad, ...(r.locked.length ? { locked: r.locked } : {}) });
 }
-async function ingestDaysRaw(firm: string, book: string, daysIn: unknown): Promise<{ done: string[]; bad: { day: string; error: string }[]; error?: string }> {
+// migration 44 (review M3): a day of a month the owner locked is refused by tally_ingest_day (nothing stored, nothing
+// marked). It is answered under `locked` [{day, why}], never under `done`, and logged as kept, not applied: the file stays
+// in the bucket and a re-read after the unlock applies it. It also goes in `bad` (locked: true, with the words) so a bridge
+// that knows only done / bad drops it with a log line instead of sending it again for ever
+type LockedDay = { day: string; why: string };
+function lockedDay(dayAns: any, day: string, book: string, locked: LockedDay[], bad: { day: string; error: string; locked?: boolean }[]) {
+  const why = String(dayAns?.refused || "month locked").slice(0, 300);
+  console.log("tally-ingest day of a locked month kept, not applied (held until the owner unlocks it and the day is read again): " + why, book, day);
+  locked.push({ day, why });
+  bad.push({ day, error: why, locked: true });
+}
+async function ingestDaysRaw(firm: string, book: string, daysIn: unknown): Promise<{ done: string[]; bad: { day: string; error: string; locked?: boolean }[]; locked: LockedDay[]; error?: string }> {
   const days = (Array.isArray(daysIn) ? daysIn : []).slice(0, 62);
-  const done: string[] = [];
+  const done: string[] = [], locked: LockedDay[] = [];
   let unzipped = 0;
-  const bad: { day: string; error: string }[] = [];
+  const bad: { day: string; error: string; locked?: boolean }[] = [];
   for (const d of days as any[]) {
     if (!isDay(d?.day) || (typeof d?.gz !== "string" && typeof d?.b64 !== "string")) continue;
     // a day sent as text (b64, the bridge from 1.14.0) is packed here; one sent packed (gz) is opened to be read
@@ -790,7 +805,7 @@ async function ingestDaysRaw(firm: string, book: string, daysIn: unknown): Promi
     unzipped += z.size;
     const r = parseDay(z.text);
     // every entry of a day is dated that day; anything else means the file is not what it says
-    if (r.dates.some((x: string) => x !== d.day)) return { done, bad, error: "The day book for " + d.day + " has entries of other dates (" + r.dates.filter((x: string) => x !== d.day).slice(0, 3).join(", ") + ")." };
+    if (r.dates.some((x: string) => x !== d.day)) return { done, bad, locked, error: "The day book for " + d.day + " has entries of other dates (" + r.dates.filter((x: string) => x !== d.day).slice(0, 3).join(", ") + ")." };
     const path = `${firm}/${book}/${d.day.slice(0, 6)}/${d.day}.xml.gz`;
     const up = await db.storage.from("tally-days").upload(path, gz, { upsert: true, contentType: "application/gzip" });
     if (up.error) throw new Error("storage: " + up.error.message);
@@ -805,12 +820,13 @@ async function ingestDaysRaw(firm: string, book: string, daysIn: unknown): Promi
     let { data: dayAns, error } = d.empty === true ? await db.rpc("tally_ingest_day", { ...dayArgs, p_empty: true }) : await db.rpc("tally_ingest_day", dayArgs);
     if (error && d.empty === true && /p_empty|tally_ingest_day.*(schema cache|does not exist)/i.test(String(error.message || ""))) ({ data: dayAns, error } = await db.rpc("tally_ingest_day", dayArgs));   // only "no such 8-argument function", never any other error
     if (error) throw new Error(error.message);
+    if ((dayAns as any)?.locked === true) { lockedDay(dayAns, d.day, book, locked, bad); continue; }
     if ((dayAns as any)?.empty) console.log("tally-ingest day empty (the bridge vouched for it): " + String((dayAns as any).marked || 0) + " marked deleted", book, d.day);
     // migration 38 (item 9): a short read (no entries, or fewer than the bridge counted) upserted what came and marked nothing; said in the log
     if ((dayAns as any)?.refused) console.log("tally-ingest day " + String((dayAns as any).refused) + ": nothing marked deleted", book, String((dayAns as any).day || ""));
     done.push(d.day);
   }
-  return { done, bad };
+  return { done, bad, locked };
 }
 // the day books already kept in the bucket, read again with today's parser: one month a call (a year is 12 calls), so
 // no call runs long. Nothing is asked of the computer with Tally; the files are the ones it sent
@@ -828,10 +844,10 @@ async function reparseMonthRaw(firm: string, book: string, monthIn: unknown) {
   if (e1) throw new Error("storage: " + e1.message);
   const all = (months || []).map((m: any) => String(m.name)).filter((m: string) => /^\d{6}$/.test(m)).sort();
   const month = /^\d{6}$/.test(String(monthIn || "")) ? String(monthIn) : all[0];
-  if (!month) return { done: [] as string[], bad: [] as { day: string; error: string }[], next: null, months: 0 };
+  if (!month) return { done: [] as string[], bad: [] as { day: string; error: string; locked?: boolean }[], locked: [] as LockedDay[], next: null, months: 0 };
   const { data: files, error: e2 } = await db.storage.from("tally-days").list(`${base}/${month}`, { limit: 100, sortBy: { column: "name", order: "asc" } });
   if (e2) throw new Error("storage: " + e2.message);
-  const done: string[] = [], bad: { day: string; error: string }[] = [];
+  const done: string[] = [], bad: { day: string; error: string; locked?: boolean }[] = [], locked: LockedDay[] = [];
   for (const f of files || []) {
     const day = String(f.name).slice(0, 8);
     if (!isDay(day) || !/\.xml\.gz$/.test(f.name)) continue;
@@ -845,12 +861,13 @@ async function reparseMonthRaw(firm: string, book: string, monthIn: unknown) {
     const { data: dayAns, error } = await db.rpc("tally_ingest_day", { p_book: book, p_day: iso(day),
       p_vouchers: dayVouchers(r), p_lines: dayLines(r), p_n: r.n, p_alter: r.alterMax, p_bytes: gz.length });
     if (error) throw new Error(error.message);
+    if ((dayAns as any)?.locked === true) { lockedDay(dayAns, day, book, locked, bad); continue; }
     // migration 38 (item 9): a short read (no entries, or fewer than the bridge counted) upserted what came and marked nothing; said in the log
     if ((dayAns as any)?.refused) console.log("tally-ingest day " + String((dayAns as any).refused) + ": nothing marked deleted", book, String((dayAns as any).day || ""));
     done.push(day);
   }
   const next = all.find((m: string) => m > month) || null;
-  return { month, done, bad, next, months: all.length };
+  return { month, done, bad, ...(locked.length ? { locked } : {}), next, months: all.length };
 }
 // review of 01-Oct-2026: each ledger's group and Tally's groups, kept without touching openings or entries; each ledger's
 // chain up to its primary group is worked out here. A ledger not in the copy yet is added with a nil opening

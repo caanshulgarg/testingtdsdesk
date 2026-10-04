@@ -159,6 +159,45 @@ try:
     ok(not cur().get("gap") and str(cur().get("last_match_at")).startswith("2026-10-04 04:50") and (r.get("recorder") or {}).get("ZZ CO", {}).get("gap") is None, "A's lines up to 53 arrive: the next check clears the gap (%s)" % cur())
     c, r = beat(KB, GB, 30, False, "2026-10-04T10:30:00+05:30")
     ok(cur().get("state") == "needs_baseline" and not cur().get("gap"), "a number below the starting point (a restore): needs_baseline, never a gap (%s)" % cur().get("state"))
+    # ---- the database review's fixes (docs/reviews/migration-44-review.md)
+    # M2: ALTVCHID 0 is unknown: no gap check at all, nothing on the cursor; start_point refuses it (400, no RPC)
+    db.sql("update tally_sync_cursor set state = 'ok', state_why = null where book_id = %s" % q(BOOK))
+    n_gap, n_sp, c0 = len(FS.ARGS.get("tally_recorder_gap_check", [])), len(FS.ARGS.get("tally_start_point", [])), cur()
+    c, r = beat(KB, GB, 0, False, "2026-10-04T10:40:00+05:30")
+    ok(c == 200 and len(FS.ARGS.get("tally_recorder_gap_check", [])) == n_gap and cur() == c0 and "ZZ CO" not in (r.get("recorder") or {}), "R-M2. a beat with altvchid 0: no gap check, the cursor unchanged (state %s)" % cur().get("state"))
+    c, r = call({"kind": "start_point", "company": "ZZ CO", "guid": "cg-1", "altvchid": 0, "bridge": GA})
+    ok(c == 400 and len(FS.ARGS.get("tally_start_point", [])) == n_sp, "R-M2. start_point with altvchid 0: refused 400, never a starting point (%s)" % c)
+    # L9: a start_point number past Tally's range is a 400, never a 500
+    c, r = call({"kind": "start_point", "company": "ZZ CO", "guid": "cg-1", "altvchid": 1e30, "bridge": GA})
+    ok(c == 400 and len(FS.ARGS.get("tally_start_point", [])) == n_sp, "R-L9. start_point with altvchid 1e30: refused 400 (%s)" % c)
+    # L1: an add-on XML with two vouchers: the line's body keeps its own voucher alone
+    x2 = line("L15", "created", "v8", 60, amt=8)
+    x2["xml"] = x2["xml"] + xml("v9-other", 61, "20260510", 9)
+    c, r = rec([x2])
+    b = (db.rows("select jsonb_array_length(body->'vouchers') as nv, body->'vouchers'->0->>'guid' as g, body->'lines'::text as lines from tally_recorder_lines where line_id = 'L15'") or [{}])[0]
+    ok(st(r) == {"L15": "applied"} and b.get("nv") == "1" and b.get("g") == "v8" and "v9-other" not in str(b.get("lines")) and vrow("v9-other") == {}, "R-L1. a 2-voucher XML: the body stores 1 voucher (its own) (%s)" % b)
+    # M3: a day of a locked month is answered 'locked' (not done), logged as held; after the unlock it applies once
+    import base64
+    db.sql("insert into tally_month_locks (firm_id, client_id, book_id, month, locked_by) values (%s, 'c1', %s, '2026-07-01', %s)" % (q(FIRM), q(BOOK), q(OWNER)))
+    real_rpc = FS.rpc
+    def rpc2(name, a):
+        if name == "tally_ingest_day":
+            FS.ARGS.setdefault(name, []).append(a)
+            return json.loads(db.one("select public.tally_ingest_day(%s)::text" % ", ".join("%s => %s" % (k, lit(v)) for k, v in a.items())))
+        return real_rpc(name, a)
+    FS.rpc = rpc2
+    day = {"day": "20260702", "b64": base64.b64encode(xml("dy1", 62, "20260702", 11).encode()).decode()}
+    c, r = call({"kind": "days", "company": "ZZ CO", "days": [day]})
+    lk = r.get("locked") or []
+    ok(c == 200 and r.get("done") == [] and [x.get("day") for x in lk] == ["20260702"] and "month locked" in str(lk[0].get("why") if lk else "") and vrow("dy1") == {},
+       "R-M3. a day of a locked month: answered under locked, not done; nothing stored (%s)" % {k: r.get(k) for k in ("done", "locked", "bad")})
+    ok(any(b.get("day") == "20260702" and b.get("locked") is True for b in r.get("bad") or []), "R-M3. and in bad (locked: true), so a bridge that knows only done / bad drops it with the words, never resending it for ever")
+    time.sleep(0.5)
+    dl = [l for l in log if "20260702" in l or "2026-07-02" in l]
+    ok(any("locked month" in l for l in dl) and not any("nothing marked deleted" in l for l in dl), "R-M3. logged as a day of a locked month kept, not 'nothing marked deleted' (%s)" % [l.strip()[:160] for l in dl])
+    db.sql("update tally_month_locks set unlocked_at = now() where month = '2026-07-01'")
+    c, r = call({"kind": "days", "company": "ZZ CO", "days": [day]})
+    ok(c == 200 and r.get("done") == ["20260702"] and not r.get("locked") and vrow("dy1").get("day") == "2026-07-02" and db.one("select count(*) from tally_vouchers where guid = 'dy1'") == "1", "R-M3. after the unlock the day sent again applies once (%s)" % {k: r.get(k) for k in ("done", "locked")})
 finally:
     if fn: fn.terminate()
     db.stop()

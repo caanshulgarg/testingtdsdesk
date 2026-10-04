@@ -347,6 +347,63 @@ try:
     good, out = as_user(OTHER, "select tally_recorder_silent(%s)::text" % q(F))
     ok(not good, "J64. another firm cannot ask (%s)" % out[-60:])
     ok(jn("select round(tally_working_hours('2026-10-03 08:00+05:30', '2026-10-05 10:30+05:30'), 2)") == "11.50", "J64. working hours Mon-Sat 09:00-19:00 IST: Sat 10 h + Sun 0 + Mon 1.5 h = 11.5 (%s)" % jn("select tally_working_hours('2026-10-03 08:00+05:30', '2026-10-05 10:30+05:30')"))
+    # ---------------------------------------------------------------- R. the database review's fixes (docs/reviews/migration-44-review.md)
+    B4, B5 = "14444444-1111-1111-1111-111111111111", "15555555-1111-1111-1111-111111111111"
+    db.sql("insert into tally_books (book_id, firm_id, client_id, company, from_date, open_as_on) values (%s, %s, 'c4', 'ZZ FOUR', '2026-04-01', '2026-03-31'), (%s, %s, 'c5', 'ZZ FIVE', '2026-04-01', '2026-03-31') on conflict do nothing" % (q(B4), q(F), q(B5), q(F)))
+    db.sql("insert into clients (id, firm_id, name, data) values ('c4', %s, 'ZZ4', '{}') on conflict do nothing" % q(F))
+    apply4 = lambda lines, dev=D1: apply(lines, dev=dev, book=B4)
+    cur4 = lambda b=B4: (db.rows("select last_voucher_alterid, recorder_max_alter, gap::text as gap, state, start_at from tally_sync_cursor where book_id = %s" % q(b)) or [{}])[0]
+    lrow4 = lambda lid: (db.rows("select id, state, held_why, alter_id, released_at, coalesce(jsonb_array_length(body->'vouchers'), -1) as nv, coalesce(jsonb_array_length(body->'lines'), -1) as nl, body->'lines' as lines from tally_recorder_lines where book_id = %s and line_id = %s order by id desc limit 1" % (q(B4), q(lid))) or [{}])[0]
+    j("select tally_ingest_day(%s, '2026-05-20', %s, %s, 1, 5, 100)::text" % (q(B4), js([V("m1", 5, "2026-05-20")]), js([L("m1", "Sales", 50), L("m1", "Cash", -50)])))
+    # M1: a held line without a body does not make the same change with a body a duplicate
+    r = apply4([RL("M1a", "altered", "m1", 7, "2026-05-20")])
+    ok(st(r) == {"M1a": "held"} and "no entry body" in why(r, "M1a"), "R-M1. a line without the entry's body: held (%s)" % st(r))
+    r = apply4([entry("M1b", "altered", "m1", 7, "2026-05-20", 70)], dev=D2)
+    ok(st(r) == {"M1b": "applied"} and vrow("m1", B4).get("alter_id") == "7" and lrow4("M1b").get("nv") == "1" and db.one("select count(*) from tally_recorder_lines where book_id = %s and object_guid = 'm1' and alter_id = 7 and state = 'applied'" % q(B4)) == "1",
+       "R-M1. the same change then sent with its body (another PC): applied, not duplicate; the body kept; one applied row (%s: %s)" % (st(r), why(r, "M1b")))
+    r = apply4([entry("M1c", "altered", "m1", 8, "2026-05-20", 80)]); r2 = apply4([RL("M1d", "altered", "m1", 8, "2026-05-20")], dev=D2)
+    ok(st(r) == {"M1c": "applied"} and st(r2) == {"M1d": "duplicate"}, "R-M1. the reverse order (body first, then without): the second is duplicate (%s %s)" % (st(r), st(r2)))
+    # L1: the stored body keeps only the line's own voucher and its lines
+    r = apply4([RL("L1a", "created", "m2", 2, "2026-05-21", [V("m2", 2, "2026-05-21"), V("zz-other", 2, "2026-05-21")], [L("m2", "Sales", 21), L("m2", "Cash", -21), L("zz-other", "Sales", 9), L("zz-other", "Cash", -9)])])
+    lr = lrow4("L1a")
+    ok(st(r) == {"L1a": "applied"} and lr.get("nv") == "1" and lr.get("nl") == "2" and "zz-other" not in str(lr.get("lines")) and vrow("zz-other", B4) == {}, "R-L1. a line carrying two vouchers stores one in body (its own, with its 2 lines) (%s)" % {k: lr.get(k) for k in ("nv", "nl")})
+    # L2 / L9: a held, failed or out-of-bounds AlterID never raises recorder_max_alter
+    mx0 = cur4().get("recorder_max_alter")
+    r = apply4([RL("L2a", "created", "m-huge", 999999999999, "2026-05-22"), RL("L2b", "exploded", "m-bad", 999999999998, "2026-05-22")])
+    ok(st(r) == {"L2a": "held", "L2b": "failed"} and mx0 == "8" and cur4().get("recorder_max_alter") == mx0, "R-L2. a held line with AlterID 999999999999 (and a failed one): recorder_max_alter stays %s (%s)" % (mx0, cur4().get("recorder_max_alter")))
+    r = apply4([RL("L9a", "created", "m-big", 10 ** 16, "2026-05-22")])
+    ok(not lrow4("L9a").get("alter_id") and cur4().get("recorder_max_alter") == mx0, "R-L9. an AlterID of 10^16 (past Tally's range): stored as unknown, not the cursor's (%s)" % lrow4("L9a").get("alter_id"))
+    # L3: a release refused because the month is still locked is not stamped released
+    good, out = as_user(OWNER, "select tally_month_lock('c4', '2026-06-01', 'tied')::text")
+    r = apply4([entry("L3a", "created", "m3", 1000, "2026-06-03", 3)])
+    hid = lrow4("L3a").get("id")
+    ok(good and st(r) == {"L3a": "held"} and cur4().get("recorder_max_alter") == mx0, "R-L3. a line of a locked month: held, recorder_max_alter not raised by it (%s)" % st(r))
+    good, out = as_user(OWNER, "select tally_recorder_release_held(%s)::text" % hid); r = json.loads(out) if good else {}
+    ok(good and r.get("state") == "held" and not lrow4("L3a").get("released_at"), "R-L3. a release while the month is locked: still held, released_at NOT set (%s)" % lrow4("L3a").get("released_at"))
+    as_user(OWNER, "select tally_month_unlock('c4', '2026-06-01', 'x')::text")
+    good, out = as_user(OWNER, "select tally_recorder_release_held(%s)::text" % hid); r = json.loads(out) if good else {}
+    ok(good and r.get("state") == "applied" and lrow4("L3a").get("released_at") and cur4().get("recorder_max_alter") == "1000", "R-L3. after the unlock the release applies it: released_at set, recorder_max_alter raised to its AlterID (%s)" % (r or out[-80:]))
+    # L4: a ledger_deleted line is the ledger list's, as the header says (not releasable)
+    lid18 = db.one("select id from tally_recorder_lines where line_id = 'L18' and state = 'held'")
+    good, out = as_user(OWNER, "select tally_recorder_release_held(%s)::text" % lid18); r = json.loads(out) if good else {}
+    ok(good and r.get("ok") is False and r.get("state") == "held" and "ledger list" in str(r.get("why")) and db.one("select state from tally_recorder_lines where id = %s" % lid18) == "held", "R-L4. a held ledger_deleted line: not released (the ledger list's) (%s)" % (r or out[-80:]))
+    # M2: ALTVCHID 0 (or less) is unknown: never a starting point, never a rewind
+    j("select tally_start_point(%s, %s, 'cg-4', 40, 1, %s, 'go-1')::text" % (q(F), q(B4), q(D1)))
+    c0 = cur4(); r = j("select tally_recorder_gap_check(%s, %s, 0, now())::text" % (q(B4), q(D2))); c1 = cur4()
+    ok(r.get("ok") is True and r.get("gap") is None and r.get("unknown") is True and not r.get("needsBaseline") and c1.get("state") == "ok" and c1 == c0, "R-M2. a check with ALTVCHID 0 after a starting point: unknown, state ok, the cursor unchanged (%s; %s)" % (r, c1.get("state")))
+    r = j("select tally_recorder_gap_check(%s, %s, 0, now())::text" % (q(B5), q(D1)))
+    ok(r.get("unknown") is True and not r.get("startRecorded") and not cur4(B5).get("start_at"), "R-M2. a check with ALTVCHID 0 and no starting point: none recorded (%s)" % r)
+    r = j("select tally_start_point(%s, %s, 'cg-5', 0, 0, %s, 'go-1')::text" % (q(F), q(B5), q(D1)))
+    ok("_error" in r and not cur4(B5).get("start_at"), "R-M2. tally_start_point with ALTVCHID 0: refused, no starting point (%s)" % str(r)[-80:])
+    r = j("select tally_start_point(%s, %s, 'cg-5', 1000000000000000, 0, %s, 'go-1')::text" % (q(F), q(B5), q(D1)))
+    ok("_error" in r and not cur4(B5).get("start_at"), "R-L9. tally_start_point with ALTVCHID 10^15: refused (%s)" % str(r)[-80:])
+    # L6: tally_working_hours is nobody's to call directly, also under Supabase's default privileges
+    if not SKIP44:
+        db.sql("grant execute on function public.tally_working_hours(timestamptz, timestamptz) to authenticated")
+        r6 = psql_file(M44)
+        good, out = as_user(OWNER, "select count(*) from jsonb_array_elements(tally_recorder_silent(%s)->'silent')" % q(F))
+        ok(r6.returncode == 0 and jn("select has_function_privilege('authenticated', 'tally_working_hours(timestamptz, timestamptz)', 'execute')") == "f" and good,
+           "R-L6. tally_working_hours revoked from authenticated (Supabase's default grant simulated); tally_recorder_silent still answers (%s)" % (out[-60:] if not good else out))
     # ---------------------------------------------------------------- 7. search_path, the % fix
     src_after = sigs()
     for s in AUDIT:
