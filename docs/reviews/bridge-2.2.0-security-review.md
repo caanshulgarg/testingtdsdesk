@@ -196,4 +196,104 @@ Verdict:
 - S8 (LOW): Fixed with code review 17 ("noguid", never a name in a path).
 - S9 (LOW): Fixed with code review 14.
 
-Range: bdfe261..3fbc965
+
+## Round 2 (3fbc965..0b43d34)
+
+Reviewed: 04-Oct-2026. I read git diff 3fbc965 0b43d34 -- bridge-go/ docs/tally-allowlist.md from a clean worktree of
+0b43d34, alongside round 2 of the code review (bridge-2.2.0-code-review.md, "Round 2"), which has the details and the
+tests.
+- go vet (Linux, Windows): clean.
+- go test -count=1 ./...: ok.
+- Two throwaway tests confirmed R2-S2 and R2-S3. They were deleted and the worktree removed.
+
+### Round 1 findings: is each "Fixed" claim true?
+
+| Finding | Claim | Verdict | Notes |
+|---|---|---|---|
+| S1 H | Fixed | Confirmed | An empty recorder_lines call (`lines: []`, company name and GUID only) goes before any body is asked or any line sent. The cloud answers 409 notLinked from bookFor before it reads lines. Not linked: skipped for an hour, nothing fetched or sent. The cap is per company. |
+| S2 M | Fixed | Not fixed for failed.txt | Fixed for daily files. failed.txt skips the file-name check, and "the file the add-on meant" comes from the line's own `file=`, so the cross-company narration forgery works again whenever a line lands in failed.txt (R2-S3, confirmed). |
+| S3 H | Fixed | Confirmed for the update path; the setup path is weaker (R2-S4) | SHA-256 recorded at applyUpdate while the program ran; checked at the preview, with the signature when RequireSignedUpdates is on; the rollback is set up as an update (old.exe, update-pending.json), so it can be recovered. |
+| S4 M | Fixed in the bridge | Confirmed | The beat carries autoUpdate and rolledBack; autoUpdateOn clears NoAutoUpdate, logged. The cloud side and hiding the tray item are still open. |
+| S5 M | Fixed | Confirmed | Only a present, valid value counts; the source in force is persisted; the off state is persisted per method. |
+| S6 M | Fixed | Confirmed | Files up to 31 days old and failed.txt are read; a file is opened only when it grew. |
+| S7 L | Fixed in words | Confirmed (the sheet) | |
+| S8 L | Fixed | Confirmed | "noguid"; never a name in a path. |
+| S9 L | Fixed | Confirmed | |
+
+What holds in the new code:
+- Nothing new leaves the computer:
+  - The probes log only counts, times and tag names. The Edit Log probe logs the first 300 characters of tag names,
+    never values.
+  - tallyProgram reads the size and date of tally.exe.
+  - The beat adds file names (recorderFiles, at most 50 company-GUID-based names), autoUpdate and rolledBack.
+  - There is no new outbound host and no AI.
+- The rollback still cannot be started from a web page (server.go unchanged), still needs the key, POST and confirm,
+  and is now verified and recoverable.
+- The add-on: no name check, append only, never a name in a path.
+- Every new Tally request has a timer and a time limit, and the 2 s switch-off covers B, C and the body fetch. It is
+  persisted and lifted only by an owner's different, valid value. A timeout counts as slow.
+
+### Findings, round 2
+
+- R2-S1 (MEDIUM, owner's rule 1 and prospective-only; code review R2-1). Source C starts at the starting point, has no
+  span bound and a 60 s limit. It can turn the first switch into a read of everything changed since linking, with bodies
+  after. Fix as for B: start at max(start point, highest add-on AlterID, ALTVCHID at the switch), skip a span above 500,
+  and use a 5 s limit.
+
+- R2-S2 (MEDIUM, owner's rule: the dated exceptions cannot be widened; code review R2-2). FinComSlice's guard accepts a
+  full month of any year.
+  - sliceExact rebuilds the request from the request's own month and AlterID, so `$AlterID > 0` for April 2019 (or
+    for 2099-12) passes datedRefused with ReadDays off. That is every entry of that month, as GUID, MasterID, AlterID
+    and date.
+  - Confirmed with a throwaway test.
+  - Today only liveSourceC builds the request, with safe values. But the guard is the rule's enforcement, and it would
+    not stop a wrong caller.
+  - Fix: N >= the company's starting point (no starting point means refuse), and the month between liveEarliestMonth and
+    the current month.
+
+- R2-S3 (MEDIUM, integrity; round 1's S2 reopened; code review R2-3). Forged lines through failed.txt.
+  - A Tally user's narration in company A, once that line goes to failed.txt (the daily file could not be opened),
+    yields a separate "deleted" or "altered" line for company B, sent into B's book. The held check passes because the
+    forged cname B maps to B's GUID.
+  - A plain line written into failed.txt is taken for any company without even the file-name check.
+  - Confirmed: both forged lines were queued for "Other Co". The real line carrying the narration was lost.
+  - Fix:
+    - in failed.txt, take and split only `FCR1|ev=write_failed|` lines;
+    - require the unwrapped line's cguid to equal the held GUID of its cname (refuse when there is none).
+
+- R2-S4 (MEDIUM, owner's rule 6 integrity; code review R2-4). The setup's previous copy.
+  - The setup deletes the kept, verified previous program before an unchecked copy.
+  - It labels the copy with the registry Version, which automatic updates never update.
+  - It hashes whatever the copy produced, so a truncated copy is recorded as good.
+  - Effects:
+    - a mislabelled rollback (the same program, "back to 2.2.0") that also turns updates off;
+    - a good kept copy lost to a reinstall;
+    - or a non-starting program put in place with no undo, because undoFailedUpdate runs in the started program.
+  - Not an elevation: the service install's folder is Program Files.
+  - Fix:
+    - copy to a temporary name and check it;
+    - compare the SHA-256 with setup-old.exe (kept until the install step), and with the new exe to detect "the same
+      version";
+    - replace the kept pair only when all of that holds.
+
+- R2-S5 (LOW, rule 7 / contract; code review R2-5). The bridge now reads "both" as the add-on plus slices, while the
+  cloud (migration 47, index.ts) still means add-on plus alterid and cannot send "slices". The owner's choice in FinCom
+  does not do what its words say. Fix: change the cloud and the bridge together.
+
+- R2-S6 (LOW; code review R2-8). There is a gap between the rollback's hash check and its rename. It matters only for
+  the per-user install, where the user can run anything anyway. Fix: move the file first, then hash it.
+
+- R2-S7 (LOW; code review R2-12). TestNoComputedFigure exempts $$Date and $$IsBetween by name only. Nothing computed
+  passes today. Fix: exempt only the literal and comparison shapes inside the request's Formulae.
+
+- Code review R2-6, R2-7, R2-9, R2-10 and R2-11 are Low with no security edge (the probe's 7 forms; a rollback leaving
+  a newer build as "previous"; spacing not saved after a failure; source C's long walk back; the form keyed by Tally's
+  path).
+
+Verdict, round 2:
+- No High.
+- R2-S1 to R2-S4 are Medium owner's-rule findings and block the build; each is a few lines.
+- R2-S5 should go with the cloud's next deploy.
+- The rest may wait.
+
+Range: bdfe261..0b43d34

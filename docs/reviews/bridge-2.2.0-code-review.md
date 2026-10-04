@@ -401,4 +401,230 @@ Verdict:
 18. LOW, Fixed (TestRecorderLinesFixture): the bridge identity in the fixture is fixed; the test compares and fails on
     a difference; it writes only with FINCOM_WRITE_FIXTURES=1.
 
-Range: bdfe261..3fbc965
+
+## Round 2 (3fbc965..0b43d34)
+
+Reviewed: 04-Oct-2026, by the reviewer in the Claude Code session. I read git diff 3fbc965 0b43d34 -- bridge-go/
+docs/tally-allowlist.md (22 files: the review fixes, and the new recorder_probes.go with the date-form and Edit Log
+probes and source C's month slices, the rollback set up as an update, the setup keeping the previous program, the second
+ReadDays-off exception FinComSlice, and TestNoComputedFigure allowing $$Date and $$IsBetween). I read the code from a
+clean worktree of 0b43d34, not the working tree. Where the cloud matters I read server/tally-cloud/index.ts and
+migration-47 at 0b43d34.
+
+Checks (clean worktree of 0b43d34):
+- `go vet ./...` and `GOOS=windows go vet ./...`: clean.
+- `go test -count=1 ./...`: ok (393 s). The tree stayed clean (the fixture is no longer rewritten).
+- Two throwaway tests (zz_scratch_r2_test.go) confirmed R2-2 and R2-3. The file was deleted and the worktree removed;
+  nothing was added to the repo.
+
+### Round 1 findings: is each "Fixed" claim true?
+
+| # | Claim | Verdict | Notes |
+|---|---|---|---|
+| 1 H | Fixed | Confirmed | liveUploadStep (recorder_live.go:1482) sends an empty recorder_lines call before any body is asked or any line sent; the cloud runs bookFor before it looks at lines, so `lines: []` gets 409 notLinked or 200. A 409 drops the queue and skips for an hour (liveNotLinked :1471, liveEmit). The cap is per GUID (RecorderQueueMax 5,000). |
+| 2 H | Fixed | Confirmed for the update path; see R2-4 for the setup path | rollbackPreview checks the SHA-256 recorded at the update (update-pending.json, written by applyUpdate while the program was running) and the signature under RequireSignedUpdates. rollBackBridge sets old.exe and update-pending.json {from, rollback}, so undoFailedUpdate can undo it. Lows R2-7 and R2-8 remain. |
+| 3 M | Fixed | Not fixed for failed.txt | Fixed for daily files: own-file check, held GUID, no fetch at or below the start point, body checked by GUID and ALTERID. In failed.txt the file-name check is skipped (recorder_live.go:683), and the `file=` it compares against is taken from the line itself (:563-570, :665-676). See R2-3 (confirmed). |
+| 4 M | Fixed | Confirmed | jobWindow calls liveAfterWindow (jobs.go:781). A clean window moves B and C past it, and liveInWindow skips its AlterIDs. |
+| 5 M | Fixed | Confirmed for source B; source C repeats the problem | B starts at max(start point, highest add-on AlterID), skips a rise above 500, and has a 5 s limit (:1028). Source C has none of these (R2-1). |
+| 6 M | Fixed | Confirmed | Only a present, valid value counts. The owner's value is kept in sync\recorder-source.json. Off states store recorderSource() and are persisted in recorder-offsets.json "off". |
+| 7 M | Fixed | Confirmed | Files up to 31 days old with unread bytes are read, failed.txt is read, and a file is opened only when it grew. (failed.txt opens the hole in R2-3.) |
+| 8 M | Fixed | Confirmed | Any `<x>-<anything>.txt` is read, recorderFiles is in the beat, and the sheet step exists. |
+| 9 L | Fixed in part | Confirmed (in part) | The 3 retries for a passing reason are there. There is still no log line for an empty vchDate. |
+| 10 L | Fixed | Confirmed | pending is keyed by CGUID. |
+| 11 L | Fixed | Confirmed | liveNarrMax 4,000. |
+| 12 L | Fixed | Confirmed | left() gives the time remaining, at least 2 s. |
+| 13 L | Left | Left | |
+| 14 L | Fixed | Confirmed | busyLog false; "held" logged once in 10 min. |
+| 15 L | Left | Left | |
+| 16 L | Fixed in part | Confirmed (in part) | No window after a noAnswer note (jobs.go:761). a0 is still read before the writer lock. |
+| 17 L | Fixed | Confirmed | "noguid" (FinComRecorder.tdl:94). |
+| 18 L | Fixed | Confirmed | The fixed identity; writes only with FINCOM_WRITE_FIXTURES=1. A full run left the tree clean. |
+
+What holds in the new code (checked, no finding):
+- Every new request has a timer and a time limit: FinComSlice 60 s (see R2-1), the probes 60 s, and the body fetch at
+  most the time left of its 20 s. invokeTally calls `timed` on every outcome except a preemption (tally.go:741), and a
+  timeout counts as "took 60 s". So the 2 s switch-off fires for B, C and the body fetch, is saved in
+  recorder-offsets.json "off", and comes back only on an owner's different, valid value (liveOnAgain).
+- Source C asks only when ALTVCHID rose above `seen` and no round is open. It asks one month at a time, at least 60 s
+  apart, never while postingGoing or importsInFlight, and it yields to both. Each request is filtered by
+  `$AlterID > seen` (seen starts at the starting point). An answer dated outside the month is not used.
+- FinComSlice passes the dated guard only as an exact rebuild of sliceRequest, in the form kept for that company (see
+  R2-2 for which values it admits). FinComVoucherByMaster's guard is unchanged.
+- The probes are measure-only and run from the person-started read test (readTestTC, person:true). The Edit Log probe
+  logs tag names only (first 300 characters), never content. tallyProgram reads file metadata only.
+- The add-on: still no company-name check, one append per event, no Message, Query or loop, and failed.txt tried once.
+  "noguid" replaces the name in the path.
+- /tray/rollback is unchanged: refused from a web page, needs the key and POST, and confirm:true after a preview.
+
+### Findings, round 2 (by severity)
+
+R2-1. MEDIUM (rule 1, bounded and timed; the same as round 1's M5, for source C). Source C's first round runs from the
+starting point with no limit on the span, and its request has a 60 s limit.
+- Where: recorder_probes.go:381-389 (a new C state starts at `seen = startPointOf`, not at max(start point, highest
+  add-on AlterID, ALTVCHID at the switch)), :406-407 (round target v from that seen, no RecorderBMaxSpan check), and :415
+  (invokeTally(..., 60)).
+- Scenario:
+  - The owner switches a company linked months ago to "both" (which is now add-on plus slices, see R2-5).
+  - The first FinComSlice asks for this month's entries altered since the starting point, then the month before, and so
+    on. Each answer can hold thousands of entries.
+  - Tally can work up to 60 s on one request, longer than the bridge waits, before the 2 s rule turns C off.
+  - Everything found is queued as "altered"/"created" with no fid, and the uploader then asks Tally for every body,
+    50 per request, per date. That comes close to reading back everything changed since the starting point.
+- Fix (as for B):
+  - Start a new C state at max(starting point, live.high[key], the current ALTVCHID when the owner switched).
+  - When target - from > RecorderBMaxSpan (500), ask nothing. Set seen = target and log "too many changes for Source C
+    (N); the gap check and Day Book cover them".
+  - Use keepNum("RecorderBTimeoutSec", 5) for the slice.
+- Test: TestSourceCBounded. A first switch with 2,000 changes since the starting point asks no FinComSlice and sets seen
+  to the current number. A span of 600 asks nothing; a span of 10 asks. The request carries a 5 s limit.
+
+R2-2. MEDIUM (owner's rule: the dated exceptions cannot be widened; "never a full read"). The FinComSlice guard checks the
+request's shape, not its values. It passes a full month's list for any month, the bridge's form included.
+- Where: recorder_probes.go:101-113 (sliceExact) with tally.go:297.
+- Scenario. sliceExact rebuilds sliceRequest(co, form, month from SVFROMDATE, N from the filter) and compares bytes, so
+  any month and any N rebuild exactly:
+  - `sliceRequest(zz, form, "201904", 0)` passes with ReadDays off. That is every entry of April 2019 (GUID, MasterID,
+    AlterID, date).
+  - A future month passes too.
+  - The bridge itself only ever sends N >= the starting point and months from the current one back to
+    liveEarliestMonth. The guard is meant as the last line if another code path builds this request wrongly, and here it
+    does not hold that line.
+  - Confirmed: TestScratchSliceGuardWiden. With a kept form, "full month 2019-04 above 0" and "future month 2099-12"
+    both passed datedRefused(fin, ...).
+- Fix. In sliceExact also require:
+  - N >= startPointOf(co) (false when there is no starting point);
+  - liveEarliestMonth(co) <= month <= the current month (nowFn).
+  For FinComVoucherByMaster the same idea is optional: a date within the last 31 days or the copy's range.
+- Test: extend TestSourceCDatedGuardException with "AlterID 0", "below the starting point", "a month before the
+  earliest" and "next month": each refused.
+
+R2-3. MEDIUM (round 1's M3/S2, reopened through failed.txt). In failed.txt a line naming any company is taken, and a
+forged line inside a narration splits out there.
+- Where:
+  - recorder_live.go:683: the own-file check is skipped for failed.txt.
+  - :563-570 (liveOwnFile) and :665-676 (the write_failed unwrapping): the "file the add-on meant" is the `file=` field
+    of the line being checked, so it always agrees with itself.
+  - liveStarts (:550) uses the same field to decide whether an "FCR1|" physical line in failed.txt starts a new line.
+- Scenario:
+  - (a) A Tally user in company A types the round-1 narration (a line break, then
+    `FCR1|ev=after_delete|...|cguid=<B>|cname=B|guid=<B's voucher>|...|file=<B>-x.txt|t1=x`).
+  - If A's daily file cannot be opened at that save, the add-on writes the line to failed.txt as write_failed.
+  - The forged physical line starts a new logical line: its own file= names B, and its t0 is not earlier. liveTake then
+    queues "deleted" for B's voucher, into B's book. The held check passes because cname B's held GUID is B.
+  - (b) A plain FCR1 line of any company appended to failed.txt is taken as well. This is the same as planting a file
+    (the accepted S2 residual), but without even a file-name check.
+- Confirmed: TestScratchFailedTxtForged. A plain line and a narration-embedded line, both naming "Other Co", were queued
+  as `deleted company="Other Co" cguid="OTHER-GUID"` (victim-guid, victim-2). The real write_failed line of ZZ TEST that
+  carried the narration was lost: its t1 went to the forged line.
+- Fix:
+  - In failed.txt, take only `FCR1|ev=write_failed|` lines.
+  - Only such a line may start a new logical line there (liveStarts for failed.txt: next must start with
+    `FCR1|ev=write_failed|`).
+  - Check the unwrapped line's cguid against the held GUID of its cname. Drop it when the company has no held GUID, or
+    when the held GUID differs.
+- Test: TestFailedTxtForgedDropped. Both confirmed cases are not queued, and the real write_failed line with the
+  narration is queued once with the whole narration.
+
+R2-4. MEDIUM (owner's rule: the setup's copy of the previous program never overwrites a good kept copy with a bad one).
+The setup deletes the kept program first, copies without checking, and labels the copy with a version the registry
+may not hold any more.
+- Where:
+  - installer/FinComBridge.nsi:376-380: Delete previous.exe and previous-version.json, then an unchecked CopyFiles.
+  - update.go:343-356 (notePreviousFromSetup): it hashes whatever the copy produced; when the version is the same it
+    deletes the copy.
+  - win_service.go:412-413 and win_user.go:419-420: `was` is the registry Version, which only an install writes. An
+    automatic update (applyUpdate) never updates it.
+- Scenarios:
+  - (a) A stale label. Setup 2.2.0, then automatic update to 2.2.1 (the registry still says 2.2.0, and previous.exe is
+    a verified 2.2.0). Then the owner runs the 2.2.1 setup to repair.
+    - The setup deletes the good 2.2.0 copy and copies 2.2.1.
+    - notePreviousFromSetup sees "2.2.0" != "2.2.1" and records the 2.2.1 copy as "2.2.0".
+    - The tray offers "Roll back from 2.2.1 to 2.2.0". It puts 2.2.1 back and sets NoAutoUpdate.
+  - (b) A same-version reinstall whose registry is current deletes the kept 2.1.10 (or whatever the update kept). Its
+    rollback is gone.
+  - (c) A partial copy (disk full, antivirus) is hashed and recorded as good. A program that cannot start never runs
+    undoFailedUpdate, so the rollback leaves the bridge down: round 1's H2 again, by the setup path.
+- Fix:
+  - In NSIS, copy to FinComBridge.previous.new, and check the error flag and the size against FinComBridge.exe.
+  - Keep FinComBridge.setup-old.exe until the install step instead of deleting it at :388.
+  - In notePreviousFromSetup:
+    - accept previous.new only when its SHA-256 equals setup-old.exe's;
+    - treat it as "the same version" when that SHA-256 equals the new FinComBridge.exe's (do not trust the registry);
+    - only then replace previous.exe and previous-version.json;
+    - otherwise keep the existing pair untouched.
+  - Better still, read the version from the replaced program itself (its file version resource, or
+    `setup-old.exe version`).
+  - Also write the registry Version after an update has run well (updateHealth).
+- Test: TestSetupKeepsGoodPrevious.
+  - A kept, verified previous plus a setup of the same bytes: the pair is unchanged.
+  - A truncated copy: refused, and the old pair kept.
+  - A stale registry version with identical bytes: no copy recorded.
+
+R2-5. LOW (contract). "both" changed meaning, and the cloud was not changed with it.
+- Where: recorder_live.go:353-356 (sourceHas: "both" is now the add-on plus slices, and no longer includes alterid) and
+  :167 (validSource adds "slices").
+- At 0b43d34 the cloud's migration 47 check and index.ts:1727 still allow only addon, alterid and both, and they
+  describe both as "addon + alterid".
+- Effect:
+  - An owner who picks "both" in FinCom, meaning add-on and Tally's change list, gets source C instead of B.
+  - "slices" alone can never arrive from the cloud.
+  - Source C is still off unless the read test kept a form.
+- Fix: add 'slices' to the migration-47 check, to tally_device_recorder_source and to index.ts. Write in both places
+  what "both" means.
+
+R2-6. LOW. The read test's collection forms send 7 requests, each up to 60 s, with no early stop.
+- Where: recorder_probes.go:190-212.
+- A form that Tally answers while ignoring SVFROMDATE/SVTODATE returns the current period's GUID, MasterID, AlterID
+  and date for every entry: a year's heads. It is measure-only and person-started, but the 2 s spirit applies.
+- Fix: after an answer over 2 s, or one with more than 4 x the month's entries, log it and skip the remaining
+  SV-variable forms. The filter forms carry their own bound.
+
+R2-7. LOW. After rolling back to a 2.2.0-or-later build, that build's updateHealth keeps the newer build it was rolled
+back from as "the previous version".
+- Where: win_service.go:129-132 with update.go:266.
+- rollBackBridge's update-pending.json carries rollback:true, but keepPreviousVersion ignores it.
+- Effect: the tray then offers "Roll back ... to 2.2.1", which is the version just left, while NoAutoUpdate is on.
+- Fix: when pending.rollback is true, do not keep old.exe as previous; remove it and say so in the log.
+
+R2-8. LOW. The rollback checks the hash of the file at one moment and moves the file at another.
+- Where: update.go:284-324. rollbackPreview hashes previous.exe, and rollBackBridge renames it later by path.
+- This matters only for the per-user install, whose folder the user can write.
+- Fix: rename previous.exe to a private name first, hash that file, and move it into place only if it matches.
+
+R2-9. LOW. The 60 s spacing is not saved when a request fails.
+- Where: recorder_probes.go:411 and recorder_live.go:1024. lastAsk is set in memory before the request, and
+  liveSaveOffsets runs only after a success or a switch-off.
+- Effect: a restart within 60 s of a timeout asks again at once.
+- Fix: call liveSaveOffsets right after setting lastAsk.
+
+R2-10. LOW. Source C's round rarely ends early.
+- Where: recorder_probes.go:437-458.
+- ALTVCHID rises on every alteration and deletion, but `found` counts only distinct latest AlterIDs. Most rounds
+  therefore walk back to liveEarliestMonth, which is the copy's earliest month (often years back), not the starting
+  point's earliest month. That means one request a minute for many minutes after each change.
+- Fix: bound the walk to the month of the starting point's date (or 12 months), and log when the rise is not
+  accounted for.
+
+R2-11. LOW. The kept date form is keyed by tallyProgram().
+- Where: recorder_probes.go:118-139.
+- The key is "not known" when tally.exe is outside Program Files (C:\TallyPrime is common), or when the service cannot
+  see its path. When the key changes, the form is silently "none" and source C stops (it logs once). sliceExact also
+  lists processes on every FinComSlice.
+- Fix: key by company only, and record the program as data. Re-run the probe when the program changes.
+
+R2-12. LOW (no computed figures). TestNoComputedFigure exempts $$Date and $$IsBetween by name, in any position and with
+any argument.
+- Where: allowlist_test.go:197-201.
+- Nothing computed slips through today: $$Date:$$X is still caught on $$X, and closing/opening balances are caught by
+  name. But `$$Date:@@F`, or $$IsBetween over any field, would pass unseen.
+- Fix: exempt only the exact shapes `$$Date:&#34;d-MMM-yyyy&#34;` and
+  `$$IsBetween:$Date:$$Date:&#34;…&#34;:$$Date:&#34;…&#34;` (strip those, then run the $$ check), and only inside a
+  `<SYSTEM TYPE="Formulae">`.
+
+Verdict, round 2:
+- No High.
+- Four Medium: R2-1, R2-2, R2-3 and R2-4. Each is an owner's rule (bounded requests; exceptions not widened; forged
+  lines; no bad kept copy), and each fix is small. They block the build.
+- R2-5 to R2-12 are Low. R2-5 should go with the cloud's next deploy, before anyone is offered "both".
+
+Range: bdfe261..0b43d34
