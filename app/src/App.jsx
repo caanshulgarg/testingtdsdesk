@@ -8,6 +8,7 @@ import Side from "./Side.jsx";
 import TopBar from "./TopBar.jsx";
 import Switcher from "./Switcher.jsx";
 import FirmSetup from "./parts/FirmSetup.jsx";
+import WhyNotes from "./parts/WhyNotes.jsx";
 import SCREENS from "./screens/index.js";
 import Main from "./Main.jsx";
 
@@ -36,6 +37,7 @@ export default function App() {
       <Guard name="the top bar" v={v} quiet><TopBar /></Guard>
       <Guard name="the client switcher" v={v} quiet><Switcher /></Guard>
       <Guard name="the firm's details" v={v} quiet><FirmSetup /></Guard>
+      <WhyNotes />
       {islands().map(({ key, name, host, props }) => {
         const Screen = SCREENS[name];
         return Screen ? createPortal(<Guard name={name} v={v}><Screen {...props} /></Guard>, host, key) : null;

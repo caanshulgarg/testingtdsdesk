@@ -3,6 +3,7 @@
 // (Rec.fincom, src/js/61: the helpers the books screens already use) and the difference of each. Save -> tally_tieout_save;
 // the owner's Tick / Untick ("Tied out by <name> on <date>") and Lock month / Unlock (tally_month_lock / unlock). A
 // ticked month is read-only for staff. Without migration 44: "not available until migration 44 runs".
+import Msg from "../../parts/Msg.jsx";
 import { useState, useEffect } from "react";
 
 const money = (v) => v == null ? "" : INR.format(r2(v));
@@ -58,7 +59,7 @@ export default function Tieout({ b }) {
       <button className="linkbtn note" data-sync-open="" onClick={() => Rec.openActivity(cid)}>Sync activity of this client</button></div>
     <p className="note">For each month, type five figures from Tally as at the month’s end (Balance Sheet and Trial Balance in Tally) beside FinCom’s own from its copy of the books. A difference shows at once. Save keeps them with FinCom’s figures of the moment; the owner ticks a month that ties out and may lock it, so a later change in Tally to that month waits for approval.</p>
     {no44 && <p className="bk-warn" data-not-ready="">{"Tie-out: " + REC_NOT44 + ". FinCom’s figures are shown; nothing can be saved yet."}</p>}
-    {t.err && <p className="bk-warn">{t.err}</p>}
+    {t.err && <p className="bk-warn"><Msg text={t.err} /></p>}
     {!months.length ? <p className="note">No months yet: the copy of the books has no period. Read the books from Tally first.</p>
       : <div className="bk-tablewrap"><table className="bk-table" data-tieout-table="">
         <thead><tr><th>Month</th>{Rec.FIGS.map(([k, name]) => <th key={k} className="n">{name}</th>)}<th></th></tr></thead>

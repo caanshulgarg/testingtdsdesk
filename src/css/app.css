@@ -9,6 +9,10 @@
     --shade:15 23 42;
     --ledger:var(--brand); --ledger-soft:var(--brand-tint); --flag:var(--warn); --flag-soft:var(--warn-soft); --stop:var(--bad); --stop-soft:var(--bad-soft);
     --stamp:var(--info); --stamp-soft:var(--info-soft); --focus:var(--brand); --ink-soft:var(--muted);
+  /* One colour per meaning (owner's spec K8, 04-Oct-2026), for every page and the Post to Tally page alike:
+     green done, amber needs attention, red failed, grey waiting; each with a soft background */
+    --st-done:var(--ok); --st-done-soft:var(--ok-soft); --st-attention:var(--warn); --st-attention-soft:var(--warn-soft);
+    --st-failed:var(--bad); --st-failed-soft:var(--bad-soft); --st-waiting:var(--muted); --st-waiting-soft:var(--rule-soft);
   --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
   --serif:"IBM Plex Serif",Georgia,"Times New Roman",serif;
 }
@@ -485,6 +489,23 @@ th.n .colh{flex-direction:row-reverse}
 .dotled{width:8px;height:8px;border-radius:5px;background:var(--rule-strong);display:inline-block}
 .tallychip.live .dotled,.dotled.live{background:var(--ok)}
 .tallychip.off .dotled,.dotled.off{background:var(--warn)}
+/* the top bar's one Tally sign (spec H): a green or a red dot and two words; the detail on hover (and in the panel on a click) */
+.tsign-wrap{position:relative;display:inline-flex}
+.tsign{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--rule);background:var(--sheet);border-radius:16px;padding:6px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+.tsign.on{color:var(--st-done);border-color:var(--st-done);background:var(--st-done-soft)}
+.tsign.off{color:var(--st-failed);border-color:var(--st-failed);background:var(--st-failed-soft)}
+.tsign-dot{width:9px;height:9px;border-radius:50%;display:inline-block;background:var(--st-waiting)}
+.tsign.on .tsign-dot{background:var(--st-done)}.tsign.off .tsign-dot{background:var(--st-failed)}
+.tsign-pop{display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:60;width:330px;background:var(--sheet);border:1px solid var(--rule);border-radius:10px;box-shadow:0 12px 32px rgb(var(--shade) / .18);padding:10px 12px;font-size:13px;font-weight:400;color:var(--ink);white-space:normal}
+.tsign-wrap:hover .tsign-pop,.tsign-wrap:focus-within .tsign-pop{display:block}
+.tdetail{margin:0;display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 10px}
+.tdetail dt{color:var(--muted)}.tdetail dd{margin:0}
+.tdetail .why{color:var(--st-failed);font-weight:600}
+.tsave{font-size:12.5px;font-weight:600;white-space:nowrap;color:var(--st-waiting)}
+.tsave.bad{color:var(--st-failed);white-space:normal;max-width:300px;border:0;background:none;padding:0;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;text-align:left}
+.treview{border:0;background:none;padding:0;font:inherit;font-size:13px;font-weight:600;color:var(--st-attention);text-decoration:underline;cursor:pointer;white-space:nowrap}
+/* a disabled button says why beside it, in plain sight (spec K3; added by app/src/parts/WhyNotes.jsx from its title) */
+.why-note{font-size:12px;color:var(--muted);margin:0 6px;white-space:normal}
 .firmbtn{display:flex;flex-direction:column;align-items:flex-start;border:1px solid var(--rule);background:var(--paper);border-radius:10px;padding:6px 12px;font:inherit;cursor:pointer;color:var(--ink);max-width:260px}
 .firmbtn b{font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:230px}
 .firmbtn small{font-size:11.5px;color:var(--muted)}
@@ -1253,3 +1274,9 @@ ol.post-import li{display:list-item;margin:3px 0;overflow-wrap:anywhere}
 .post-tab.on .sbar-n{background:var(--ledger);color:var(--sheet)}
 .post-tab.bad .sbar-n{background:var(--warn-soft);color:var(--warn)}
 .post-attn-in{flex:1 1 100%;margin:4px 0 0 14px}
+/* a toast with raw words behind "details" (spec K4) */
+.toast{flex-wrap:wrap}
+.toast .toast-details{color:inherit;text-decoration:underline;background:none;border:0;padding:0;font:inherit;font-size:13px;cursor:pointer}
+.toast .toast-raw{flex-basis:100%;font-size:12px;opacity:.8;user-select:text;word-break:break-word}
+.about-line{margin:24px 0 0;font-size:11.5px;color:var(--muted);text-align:right}
+.msg-details{display:inline}.msg-details summary{display:inline;cursor:pointer;color:var(--brand);text-decoration:underline;font-size:12.5px}.msg-details[open] span{display:block;font-size:12px;color:var(--muted);word-break:break-word}

@@ -26,8 +26,9 @@ function useCapture(id) {
 export function SavedLine({ id, cid, dirty, empty }) {
   const rec = Drafts.savedRec(id, cid);
   if (dirty) return <span className="cfm-state unsaved" data-cfm-state="unsaved">Not saved yet</span>;
-  if (rec) return <span className="cfm-state saved" data-cfm-state="saved">{"Saved · " + fmtDateTime(rec.at) + " · " + (rec.by || "this computer")}</span>;
-  return <span className="cfm-state" data-cfm-state="none">{empty || "No changes"}</span>;
+  // data-why: the reason a disabled Save is disabled, already in sight (app/src/parts/WhyNotes.jsx adds nothing more)
+  if (rec) return <span className="cfm-state saved" data-cfm-state="saved" data-why="">{"Saved · " + fmtDateTime(rec.at) + " · " + (rec.by || "this computer")}</span>;
+  return <span className="cfm-state" data-cfm-state="none" data-why="">{empty || "No changes"}</span>;
 }
 
 export function ConfirmFooter({ id, cid, label, saveText = "Save", empty }) {
@@ -36,7 +37,7 @@ export function ConfirmFooter({ id, cid, label, saveText = "Save", empty }) {
     <SavedLine id={id} cid={cid} dirty={dirty} empty={empty} />
     <span className="cfm-btns">
       {dirty && <button type="button" className="btn small" data-cfm="discard" onClick={() => Drafts.discard(id)}>Don’t save</button>}
-      <button type="button" className="btn small primary" data-cfm="save" disabled={!dirty && !ready} onClick={() => { if (Drafts.save(id)) toast((label || "Settings") + ": saved."); }}>{saveText}</button>
+      <button type="button" className={"btn small" + (dirty || ready ? " primary" : "")} data-cfm="save" disabled={!dirty && !ready} title={!dirty && !ready ? "Nothing to save: change something first" : undefined} onClick={() => { if (Drafts.save(id)) toast((label || "Settings") + ": saved."); }}>{saveText}</button>
     </span>
   </div>;
 }
@@ -88,7 +89,7 @@ export function BankLedger({ co, acc, compact }) {
       <div className="note">{where}{c.value && c.state === "guessed" && !c.gone ? (c.old ? " · Saved before: " + c.value + ". Confirm it, or choose another." : " · FinCom’s guess: " + c.value + (c.why ? " (" + c.why + ")" : "") + ". Confirm it, or choose another.") : ""}</div></div>
     {listed ? <span className="row" style={{ gap: 8, alignItems: "center" }}>
       <select aria-label="Tally ledger for this bank account" key={sel} onChange={(ev) => choose(ev.target.value)} dangerouslySetInnerHTML={{ __html: ledgerOptions(sel, BANK_GROUPS) }} />
-      <button type="button" className="btn small primary" data-bank-ledger-confirm="" disabled={!sel} onClick={confirm}>Confirm</button>
+      <button type="button" className="btn small primary" data-bank-ledger-confirm="" disabled={!sel} title={!sel ? "Choose the Tally ledger first" : undefined} onClick={confirm}>Confirm</button>
       {changing && <button type="button" className="btn small" onClick={() => { delete Drafts.picks[pid]; delete Drafts.secs[pid]; setChanging(false); }}>Cancel</button>}
       {sel && pick !== undefined && <span className="cfm-state unsaved" data-cfm-state="unsaved">Not saved yet</span>}
     </span> : <span className="note">{B() && B().ledgersLoading ? "Loading the ledger list…" : "Import the ledger list first."}</span>}

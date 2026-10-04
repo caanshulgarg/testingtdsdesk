@@ -5,6 +5,7 @@
 //
 // State: S.fsFy (the year), S.fsRun (the statements worked out), S.fsTab (st, map), S.fsQ (the ledger search), S.fsPage
 // (the page of the Mapping tab).
+import Msg from "../../parts/Msg.jsx";
 import { useEffect } from "react";
 import Legacy from "../../parts/Legacy.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
@@ -59,9 +60,9 @@ function Mapping({ c, d }) {
   const PER = 50, pages = Math.max(1, Math.ceil(shown.length / PER)), pg = Math.min(Math.max(0, num(S.fsPage) || 0), pages - 1), page = shown.slice(pg * PER, pg * PER + PER);
   const go = (n) => setAndShow("fsPage", n);
   const pager = pages > 1 && <div className="row" data-fs-pager="" style={{ gap: 8, alignItems: "center", margin: "8px 0" }}>
-    <button className="btn small" disabled={pg === 0} onClick={() => go(pg - 1)}>Previous</button>
+    <button className="btn small" disabled={pg === 0} title={pg === 0 ? "This is the first page" : undefined} onClick={() => go(pg - 1)}>Previous</button>
     <span className="note">{"Ledgers " + (pg * PER + 1) + "–" + Math.min(shown.length, pg * PER + PER) + " of " + shown.length + " · page " + (pg + 1) + " of " + pages}</span>
-    <button className="btn small" disabled={pg >= pages - 1} onClick={() => go(pg + 1)}>Next</button></div>;
+    <button className="btn small" disabled={pg >= pages - 1} title={pg >= pages - 1 ? "This is the last page" : undefined} onClick={() => go(pg + 1)}>Next</button></div>;
   return <Confirm id="books:fs-map" label="Mapping" stores={["books:fs"]}>
     <div className="revfilter"><input type="search" id="fsq" aria-label="Find a ledger" data-fk="fsq" value={S.fsQ || ""} placeholder="Find a ledger" style={{ width: 260 }} onChange={(ev) => { S.fsPage = 0; setAndShow("fsQ", ev.target.value, true); }} />
       <span className="note">{shown.length + " ledgers · "}<b>{Object.keys(c.map || {}).length}</b> placed by hand</span></div>
@@ -90,7 +91,7 @@ export default function Accounts({ b }) {
   if (!fy) return <div className="bk-none">Bring in the day book first.</div>;
   let body;
   if (!d) body = <div className="bk-none">Working out the statements for {fy + "-" + String(num(fy) + 1).slice(2)}…</div>;
-  else if (d.error) body = <div className="bk-alert">The balances are needed: {d.error}.</div>;
+  else if (d.error) body = <div className="bk-alert">The balances are needed: <Msg text={d.error} /></div>;
   else if (tab === "map") body = <Mapping c={c} d={d} />;
   else body = <section className="dash-card fs-doc" style={{ marginTop: 10 }}>{Math.abs(d.diff) >= 1 ? null : <p className="note" style={{ color: "var(--ok)" }}>The balance sheet tallies.</p>}
     <Legacy html={FS.html(d).replace(/<table>/g, '<div class="bk-tablewrap"><table class="bk-table">').replace(/<\/table>/g, "</table></div>")} /></section>;

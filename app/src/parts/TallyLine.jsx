@@ -3,6 +3,7 @@
 //   TallyLine: "Tally open on NWS144 · last read 15:34" / "Tally is closed on NWS144" / "NWS144 is offline" /
 //              "Tally is not answering on NWS144 since 12:28" / "Background reading paused on NWS144" · Update now
 //   BooksAsOf: "Books as of 15:34 · Update now", wherever the client's books figures are shown
+import Msg from "./Msg.jsx";
 
 export default function TallyLine({ co, update = true }) {
   if (!co || typeof tallyLine !== "function") return null;
@@ -62,7 +63,7 @@ export function RecorderNotes({ cid }) {
     {alerts.map((x) => <p key={x.id} className="bk-alert warn" data-client-alert={String(x.id)} style={{ margin: "4px 0" }}>
       {Rec.alertKind(x.kind) + ": " + (x.words || "") + (x.at ? " (" + fmtDateTime(x.at) + ")" : "") + " "}
       {can && <button className="linkbtn" data-alert-read="" disabled={!!(msg && msg.busy)} onClick={() => Rec.alertRead(x)}>Mark read</button>}</p>)}
-    {msg && msg.err && alerts.length > 0 && <p className="bk-alert bad" data-alerts-msg="" style={{ margin: "4px 0" }}>{msg.err}</p>}
+    {msg && msg.err && alerts.length > 0 && <p className="bk-alert bad" data-alerts-msg="" style={{ margin: "4px 0" }}><Msg text={msg.err} /></p>}
     <GapLine cid={cid} />
     <button className="linkbtn note" data-sync-open="" onClick={() => Rec.openActivity(cid)}>See this client’s sync activity</button>
   </div>;

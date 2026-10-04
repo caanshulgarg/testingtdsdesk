@@ -1,6 +1,7 @@
 // A purchase bill: what was read from it, GST, the TDS decision and the draft entry for Tally. Editable while it is a
 // draft. Was viewDetail() and its helpers (field, docWarnHtml, itemsHtml, partyHistHtml, ytdSourceHtml,
 // rereadButtons, viewGst) in src/js/19, 01 and 27. Every change goes through billSet…/billGst/… in src/js/27.
+import Msg from "../parts/Msg.jsx";
 import { useEffect } from "react";
 import ReadBadge from "../parts/ReadBadge.jsx";
 import BillDoc from "../parts/BillDoc.jsx";
@@ -205,7 +206,7 @@ function LedStatus() {
   return <div className="ledstat" data-led-status="">
     {st.busy ? "Reading the ledgers… " : ""}{st.n ? st.n.toLocaleString("en-IN") + " ledgers from Tally" + (st.at ? " · " + Ledgers.when(st.at) : "") : "No ledger list from Tally yet"}
     {" · "}<button className="linkbtn" disabled={st.busy} onClick={() => Ledgers.refresh(S.coId)}>Refresh</button>
-    {st.err && !st.busy ? <span className="bad"> · {st.err}</span> : null}</div>;
+    {st.err && !st.busy ? <span className="bad"> · <Msg text={st.err} /></span> : null}</div>;
 }
 const TAX_ROLES = ["gst", "rcm-in", "rcm-out", "tds"];
 // a ledger on the draft entry: typed or searched (the client's Tally ledgers, data-ac), checked against Tally, with why

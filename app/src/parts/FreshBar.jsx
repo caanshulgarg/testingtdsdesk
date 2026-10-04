@@ -2,13 +2,14 @@
 // or the cloud's copy; with the buttons to switch keeping in step on, bring in today's entries or check against Tally,
 // and the result of that check. Was LK.freshBar (src/js/44); the work is LK (keepOn, bringToday, keepCheck).
 // 2.1.3: first "Books as of 15:34 · Update now" (parts/TallyLine.jsx): Tally cannot send its changes by itself.
+import Msg from "./Msg.jsx";
 import { BooksAsOf } from "./TallyLine.jsx";
 
 const hhmm = (s2) => fmtTime(s2);
 const Btn = ({ onClick, className = "btn small", children }) => <button className={className} onClick={onClick}>{children}</button>;
 
 function Check({ c }) {
-  if (c.error) return <p className="note bad">The check could not run: {c.error}</p>;
+  if (c.error) return <p className="note bad">The check could not run: <Msg text={c.error} /></p>;
   const odd = c.missing || c.differ || c.extra;
   return <p className={"note " + (odd || !c.listMatchesDayBook ? "bad" : "ok")}>{"Checked " + FC.monthLabel(c.ym) + " against Tally: Tally has " + c.tally + " entries, the copy " + c.copy + (odd ? " (" + c.missing + " missing, " + c.differ + " changed, " + c.extra + " no longer in Tally; the bridge puts these right on its next turn)" : ", all the same") + ". The light list "}
     {c.listMatchesDayBook ? "matches" : <b>does not match</b>}{" the day book for the first days (" + c.list + " and " + c.dayBook + " entries)" + (c.listMatchesDayBook ? "." : ": please tell us, so the bridge can be adjusted for your Tally.")}</p>;

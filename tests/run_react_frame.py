@@ -44,7 +44,7 @@ with sync_playwright() as p:
     pg.click('#side .side-link:has-text("Purchase")'); pg.wait_for_timeout(800)
     # review of 02-Oct-2026 (a98430e): one row of tabs, the three steps and then Duplicates and Deleted
     tabs = pg.evaluate("Array.from(document.querySelectorAll('#cobar .sbar button')).map(b => b.firstChild.textContent.trim())")
-    ok("Purchase bills" in top() and tabs[:3] == ["To review", "Post to Tally", "In Tally"] and tabs[3:5] == ["Duplicates", "Deleted"], "Purchase: its title and the status tabs (%s)" % ", ".join(tabs))
+    ok("Purchase" in top() and tabs[:3] == ["To review", "Post to Tally", "In Tally"] and tabs[3:5] == ["Duplicates", "Deleted"], "Purchase: its title and the status tabs (%s)" % ", ".join(tabs))
     pg.click('#cobar .sbar button:has-text("Post to Tally")'); pg.wait_for_timeout(800)
     ok(pg.evaluate("S.tab") == "export" and pg.get_attribute('#cobar .sbar button:has-text("Post to Tally")', "aria-selected") == "true", "a status tab switches the step")
     pg.click('#side .side-link:has-text("Client setup")'); pg.wait_for_timeout(800)

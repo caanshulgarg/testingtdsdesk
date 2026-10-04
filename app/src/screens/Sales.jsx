@@ -300,16 +300,16 @@ export default function Sales() {
       : <div className="bk-setup"><div><b>Tally ledgers are needed for Sales vouchers</b><div className="note">{Bridge.on() ? "Open " + Bridge.tallyName(co) + " in TallyPrime, or import the ledger list." : "Import the ledger list (Tally: Display More Reports → List of Accounts → Export), or connect FinCom Bridge."}</div></div>
         <button className="btn small" onClick={() => salesAct("ledPick")}>Import ledger list</button></div>)}
     <div className="bk-head">
-      <div className="bk-id"><h2 className="bk-title">Sales</h2><div className="bk-sub">{all.length} invoice{all.length === 1 ? "" : "s"}{all.length ? " · " + fmtDate(dates[0]) + " to " + fmtDate(dates[dates.length - 1]) : ""}</div></div>
+      {/* the page is named in the top bar (one heading, spec I); here only what it holds */}
+      <div className="bk-id"><div className="bk-sub">{all.length} invoice{all.length === 1 ? "" : "s"}{all.length ? " · " + fmtDate(dates[0]) + " to " + fmtDate(dates[dates.length - 1]) : ""}</div></div>
       <dl className="bk-figs">
         <div><dt>Taxable</dt><dd>{money(sum("taxable"))}</dd></div>
         <div><dt>GST</dt><dd>{money(r2(sum("cgst") + sum("sgst") + sum("igst") + sum("cess")))}</dd></div>
         <div><dt>Invoice value</dt><dd>{money(sum("total"))}</dd></div>
       </dl>
       <div className="bk-actions">
-        <button className="btn small" onClick={() => salesAct("salesPick")}>Upload invoices</button>
         <button className="btn small" title="Amazon MTR, Flipkart or Shopify sales report" onClick={() => doAct("marketPick")}>Marketplace report</button>
-        <button className="btn small primary" onClick={() => salesAct("salesNew")}>Create invoice</button>
+        <button className="btn small" onClick={() => salesAct("salesNew")}>Create invoice</button>
         <button className="btn small" onClick={() => salesAct("salesSettings")}>Settings</button>
         <details className="bk-menu"><summary className="btn small">More</summary><div className="bk-menu-list">
           {bridgeLive(co) && <><button onClick={() => salesAct("salesSync")}>Refresh from Tally</button><button onClick={() => salesAct("salesFile")}>Create Tally file instead</button></>}
@@ -321,9 +321,8 @@ export default function Sales() {
   if (!s.list.length) return <>
     <div className="bk sl">{head}
       <div className="bk-empty" id="salesDrop" tabIndex={0} role="button" onClick={() => salesAct("salesPick")} onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); salesAct("salesPick"); } }}>
-        <div className="bk-empty-ic">⤒</div><h2>Add sales invoices</h2>
-        <p className="note">Upload the invoices you issued (PDF or photo) to turn them into Sales vouchers, or create a new GST invoice here: it is printed and posted in one go.</p>
-        <span className="btn primary">Choose files</span>
+        <div className="bk-empty-ic">⤒</div><h2>No sales invoices yet</h2>
+        <p className="note">Drop the invoices you issued (PDF or photo) here, or use <b>Upload invoices</b> at the top right, to turn them into Sales vouchers. To make a new GST invoice, use <b>Create invoice</b>: it is printed and posted in one go.</p>
       </div>
     </div>
     {s.showSettings && <SettingsPanel />}
@@ -343,6 +342,10 @@ export default function Sales() {
             <th className="n">Taxable</th><th className="n">GST</th><ColHead t="sales" k="val" label="Total" cls="n" /><ColHead t="sales" k="led" label="Customer ledger" cls="lg" /><th className="ac"></th>
           </tr></thead>
           <tbody>{list.map((v) => <Row key={v.id} v={v} sel={s.sel.has(v.id)} />)}</tbody>
+          {/* the count and the totals at the foot (spec K6) */}
+          {list.length > 0 && <tfoot data-list-foot=""><tr><td></td><td colSpan={3}><b>{list.length + (list.length === 1 ? " invoice" : " invoices")}</b>{list.length !== s.list.length ? " of " + s.list.length : ""}</td>
+            <td className="n"><b>{money(r2(list.reduce((a, v) => a + num(v.x.taxable), 0)))}</b></td><td className="n"><b>{money(r2(list.reduce((a, v) => a + num(v.x.cgst) + num(v.x.sgst) + num(v.x.igst) + num(v.x.cess), 0)))}</b></td>
+            <td className="n"><b>{money(r2(list.reduce((a, v) => a + num(v.x.total), 0)))}</b></td><td></td><td></td></tr></tfoot>}
         </table>
         {!list.length && (salesColOn() ? <NoMatch t="sales" /> : <div className="bk-none">{EMPTY[s.filter]}</div>)}
       </div>

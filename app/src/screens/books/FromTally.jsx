@@ -98,7 +98,8 @@ function Files({ b }) {
       <div className="row" style={{ gap: 8, margin: "10px 0", flexWrap: "wrap", alignItems: "center" }}>
         <label className="note">From <input type="date" aria-label="Day book from" value={S.dbFrom || ""} onChange={(ev) => setAndShow("dbFrom", ev.target.value)} /></label>
         <label className="note">to <input type="date" aria-label="Day book to" value={S.dbTo || ""} onChange={(ev) => setAndShow("dbTo", ev.target.value)} /></label>
-        <Act act="booksPick" className="btn primary">Choose the day book XML{S.dbFrom || S.dbTo ? " for these dates" : ""}</Act><span className="note">(no dates: the whole file)</span>
+        {/* one Upload (spec I): the file is chosen with Upload Day Book at the top right; these dates limit it */}
+        <span className="note" data-daybook-dates="">{S.dbFrom || S.dbTo ? "Then Upload Day Book (top right) brings in these dates only." : "No dates: Upload Day Book (top right) brings in the whole file."}</span>
       </div>
       <Parts b={b} />
       <p className="note" style={{ marginTop: 10 }}><b>Opening balances:</b> in Tally, <b>Display More Reports → Trial Balance</b>, show the ledgers (<b>Alt+F5</b>, detailed), set the date to the day <b>before</b> the first date above, then <b>Ctrl+E</b> as XML. The closing balances there are the opening balances here, so Tally is not asked for them.</p>

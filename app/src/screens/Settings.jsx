@@ -69,7 +69,7 @@ const Card = ({ title, note, danger, children }) => (
 function FirmDetails() {
   const setAddr = (v) => { S.firm.firmAddress = v; later("firm", () => Store.saveFirm(), 600); FinComReact.redraw(); };
   const pick = (ev) => { const f = ev.target.files && ev.target.files[0]; if (f) firmLogoRead(f).then((logo) => { S.firm.firmLogo = logo; Store.saveFirm(); render(); }, (e) => toast(e.message)); };
-  return <Card title="Firm details" note="Shown at the top of every page, and on reports, letters and MIS packs prepared for clients.">
+  return <Card title="Name, address and logo" note="Shown at the top of every page, and on reports, letters and MIS packs prepared for clients.">
     <div className="grid"><label className="f"><span>Firm name</span>
       <input type="text" value={S.firm.firmName || ""} onChange={(ev) => { firmSetName(ev.target.value); FinComReact.redraw(); }} /></label>
       <label className="f wide"><span>Address</span><textarea rows={2} value={S.firm.firmAddress || ""} onChange={(ev) => setAddr(ev.target.value)} /></label>
@@ -127,7 +127,9 @@ export function FirmSettings() {
     ai: () => <AiSettings />,
     platform: () => <Platform />,
   }[cur];
-  return <Layout label="Settings" groups={groups} current={cur} pick={pick} scope="firm" cid="">{body()}</Layout>;
+  // the one place for the build stamp (owner's spec K1): a small About line at the foot of Settings
+  return <><Layout label="Settings" groups={groups} current={cur} pick={pick} scope="firm" cid="">{body()}</Layout>
+    <p className="note about-line" data-about="">{"About FinCom: this version was built on " + String(__REACT_BUILD__).replace(/^React · /, "")}</p></>;
 }
 
 /* ---------------------------------------------------------------- for one client */

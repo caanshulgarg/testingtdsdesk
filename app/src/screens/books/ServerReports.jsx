@@ -2,6 +2,7 @@
 // copy (TCloud.report; migration-14: tally_mis, tally_tds_summary, tally_gst_summary). Shown while this computer does
 // not have the books in yet (a new computer, or one still bringing them in): the figures come in a moment, not after
 // every entry is downloaded. With the books in, the full MIS, TDS and GST screens take over as before.
+import Msg from "../../parts/Msg.jsx";
 const m = (v) => INR.format(r2(v || 0));
 const d8 = (iso) => String(iso || "").replace(/-/g, "");
 const Tile = ({ l, v, sub }) => <div className="dtile"><span>{l}</span><b>{v}</b><small>{sub || ""}</small></div>;
@@ -13,7 +14,7 @@ function period(cid) {
 }
 function Wait({ x, what }) {
   if (x.missing) return <p className="note">The server cannot work out {what} yet (its database is being updated). It shows here once the books are in on this computer.</p>;
-  if (x.err) return <p className="note bad">Could not ask the server for {what}: {x.err}</p>;
+  if (x.err) return <p className="note bad">Could not ask the server for {what}: <Msg text={x.err} /></p>;
   return <p className="note" data-srv-wait>Asking the server for {what}…</p>;
 }
 const Src = ({ x }) => <p className="note" style={{ margin: "6px 0 0" }} data-srv-src>Worked out by the server from the copy of the books in FinCom’s cloud{x.ms != null ? " in " + (x.ms / 1000).toFixed(1) + " s" : ""}; the full MIS with every detail follows when the books are in on this computer.</p>;

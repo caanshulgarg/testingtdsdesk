@@ -93,7 +93,7 @@ with sync_playwright() as p:
     pg.evaluate("""() => { Bridge.refresh = () => Promise.resolve(); window.startBridgePolling = () => {}; window.bridgeTick = () => {}; Bridge.setCfg({key: '', port: 0, follow: false});
       const cid = S.coId; Bridge.st = {state: 'ok', version: '1.14.3', at: Date.now(), mode: 'auto', tallyUp: true, sessions: [{port: 9000, ok: true, mine: true, companies: [{name: 'ACME LTD'}]}, {port: 9001, ok: true, mine: false, companies: []}], open: []};
       S.view = 'home'; S.homeTab = 'tally'; render(); }"""); pg.wait_for_timeout(400)
-    ok("Connect this browser to FinCom Bridge" in pg.inner_text("#app") and "Tally" in pg.inner_text("#app h2"), "the Tally page, with the steps to connect this browser")
+    ok("Connect this browser to FinCom Bridge" in pg.inner_text("#app") and "Tally" in pg.inner_text("#cobar h2"), "the Tally page, with the steps to connect this browser")
     k = pg.locator('input[aria-label="Bridge key"]'); k.fill("abc123"); k.press("Tab"); pg.wait_for_timeout(300)
     ok(pg.evaluate("Bridge.cfg().key") == "abc123" and "Check connection" in pg.inner_text("#app"), "the key typed is kept")
     pg.check('label:has-text("Follow the company open in Tally") input'); pg.wait_for_timeout(200)

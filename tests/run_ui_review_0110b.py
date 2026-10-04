@@ -117,7 +117,8 @@ with sync_playwright() as p:
     ok(pg.evaluate("(cid) => S.data[cid].entries[window.__old].status", cid) == "approved", "13. restored as it was (approved, already in Tally), not to be posted again")
     # 15. the sidebar's dates say what they are
     sv = pg.inner_text("#side [data-side-date]")
-    ok(sv.startswith("Today ") and "Build " in sv and sv.count("-20") == 2, "15. sidebar: " + sv.replace("\n", " / ")[:80])
+    # owner's spec K1 (04-Oct-2026): the build stamp is in Settings' About line, not the sidebar
+    ok(sv.startswith("Today ") and "Build " not in sv and sv.count("-20") == 1, "15. sidebar: " + sv.replace("\n", " / ")[:80])
     # 14. one date format
     ok(pg.evaluate("shortDate('2026-08-05')") == "05-Aug-2026", "14. lists show 05-Aug-2026, not 05 Aug")
     # 17. build.json and no-cache

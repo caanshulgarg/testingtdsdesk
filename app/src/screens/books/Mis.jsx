@@ -99,7 +99,7 @@ function LedgerEntries({ b, r }) {
   return <Card top title={<>{S.misLed + " "}<button className="linkbtn" onClick={() => setAndShow("misLed", "")}>close</button></>}>
     <Table head={<><th className="dt">Date</th><th>Voucher</th><th>Party</th><th className="n">Debit</th><th className="n">Credit</th><th>Narration</th></>}>
       {vs.slice(0, gfN(300)).map((v, i) => { const a = v.ent.filter((e) => e.l === S.misLed).reduce((s, e) => s + e.a, 0);
-        return <tr key={v.date + ":" + v.no + ":" + i}><td>{d(v.date)}</td><td>{v.no}<div className="nr">{v.type}</div></td><td>{v.party || ""}</td><td className="n">{a < 0 ? m(-a) : ""}</td><td className="n">{a > 0 ? m(a) : ""}</td><td>{v.narr || ""}</td></tr>; })}
+        return <tr key={v.date + ":" + v.no + ":" + i}><td>{d(v.date)}</td><td>{v.no}<div className="nr">{v.type}</div></td><td>{v.party || ""}</td><td className="n">{a < 0 ? m(-a) : ""}</td><td className="n">{a > 0 ? m(a) : ""}</td><td>{shownNarr(v.narr)}</td></tr>; })}
     </Table>
     {vs.length > 300 && <p className="note">The first 300 of {vs.length}.</p>}
   </Card>;

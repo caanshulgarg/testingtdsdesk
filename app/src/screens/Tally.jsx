@@ -4,6 +4,7 @@
 // viewBridgeSettings, bridgeSetupSteps, bridgeDownHelp, viewBridgeDiagnosis and viewReadTest (src/js/24), and TCloud.view
 // (src/js/49). The work is Bridge and TCloud; boxes and choices go through bridgeSet, bridgeLink, bridgePin, tcLink
 // (src/js/24, 49), buttons through doAct (bridgeTest, bridgeConnect, bridgeOff, bridgeSetupFile, bridgeDiag, bridgeReadTest).
+import Msg from "../parts/Msg.jsx";
 import TallyPill from "../parts/TallyPill.jsx";
 import TallyLine, { GapLine } from "../parts/TallyLine.jsx";
 import SyncActivity from "./TallySync.jsx";
@@ -21,7 +22,7 @@ function ReadTest() {
   return <div data-read-test="" style={{ marginTop: 10, borderTop: "1px solid var(--rule-soft)", paddingTop: 10 }}>
     <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}><b>Test reading entries</b><Act act="bridgeReadTest" disabled={!!r.busy}>{r.busy ? "Testing…" : "Run test"}</Act></div>
     <p className="note" style={{ margin: "4px 0" }}>Checks how FinCom can read entries from the company open in Tally (nothing is written). If posts are “not confirmed”, run this and send the result.</p>
-    {r.error && <p className="bk-warn">{r.error}</p>}
+    {r.error && <p className="bk-warn"><Msg text={r.error} /></p>}
     {r.tests && <><table className="data"><tbody>{r.tests.map((t, i) => <tr key={i}><td>{t.name}</td><td>{t.ok ? <><span className="tag ok">works</span>{" " + num(t.count) + " found" + (t.optional ? " (" + num(t.optional) + " Optional)" : "")}</> : <><span className="tag bad">failed</span>{" " + (t.error || "")}</>}</td><td className="n">{num(t.ms) + " ms"}</td></tr>)}</tbody></table>
       <p className="note" style={{ margin: "4px 0 0" }}>{(r.company || "") + " · port " + r.port + " · " + fmtDate(tallyDate(r.from)) + " to " + fmtDate(tallyDate(r.to))}</p></>}
   </div>;
@@ -31,7 +32,7 @@ function Diagnosis() {
   const d = Bridge.diag;
   const head = <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}><h3 style={{ margin: 0 }}>Check my Tally</h3><Act act="bridgeDiag">{d ? "Check again" : "Check now"}</Act></div>;
   if (!d) return <div className="bdiag">{head}<p className="note" style={{ margin: "6px 0 0" }}>Finds your TallyPrime on this server and explains anything that stops the connection.</p><ReadTest /></div>;
-  if (d.error) return <div className="bdiag">{head}<p className="bk-warn">{d.error}</p></div>;
+  if (d.error) return <div className="bdiag">{head}<p className="bk-warn"><Msg text={d.error} /></p></div>;
   return <div className="bdiag">{head}
     <p className="note" style={{ margin: "6px 0" }}>Bridge running as <b>{d.user || ""}</b>{" (Windows session " + d.mySession + ")."}</p>
     {(d.findings || []).map((f, i) => <div key={i} className={"bd-f " + f.level}><b>{(f.level === "ok" ? "✔ " : "⚠ ") + f.text}</b>{f.fix && <div className="bd-fix">{"What to do: " + f.fix}</div>}</div>)}
@@ -228,7 +229,7 @@ function Alerts() {
   const coName = (cid) => (cid && S.companies && S.companies[cid] && S.companies[cid].name) || "";
   return <div className="pane" data-alerts="" style={{ padding: "8px 16px" }}>
     <h3 style={{ margin: "0 0 6px" }}>{"Alerts" + (unread ? " (" + unread + " unread)" : "")}</h3>
-    {msg && msg.err && <p className="bk-alert bad" data-alerts-msg="" style={{ margin: "4px 0" }}>{msg.err}</p>}
+    {msg && msg.err && <p className="bk-alert bad" data-alerts-msg="" style={{ margin: "4px 0" }}><Msg text={msg.err} /></p>}
     {rows.map((x) => <div key={x.id} className="row" data-alert={String(x.id)} data-alert-unread={x.read_at ? undefined : ""} data-alert-kind={x.kind}
       style={{ alignItems: "center", gap: 8, flexWrap: "wrap", margin: "2px 0", opacity: x.read_at ? 0.7 : 1 }}>
       <span className={"tag " + (x.read_at ? "no" : x.kind === "summary" ? "ok" : "warn")}>{Rec.alertKind(x.kind)}</span>
@@ -301,7 +302,7 @@ function BridgeLines({ rows, latest }) {
       {allStopped ? <button className="btn small primary" data-read-resume-all="" onClick={() => TCloud.readResume(null)}>Resume reading on all computers</button>
         : <button className="btn small" data-read-stop-all="" onClick={() => TCloud.readStop(null)}>Stop reading on all computers</button>}
     </div>}
-    {ctl.err && <p className="bk-alert bad" data-control-err="" style={{ margin: "6px 0" }}>{ctl.err}</p>}
+    {ctl.err && <p className="bk-alert bad" data-control-err="" style={{ margin: "6px 0" }}><Msg text={ctl.err} /></p>}
     {ctl.ok && <p className="note" data-control-ok="" style={{ margin: "6px 0" }}>{ctl.ok}</p>}
     <a href="#" className="note" data-bridge-details="" onClick={(ev) => { ev.preventDefault(); setOpen(!open); }}>{open ? "Hide details" : "Details"}</a>
     {open && <div data-bridge-more="" style={{ marginTop: 10 }}><BridgesHeard /><BridgeSettings /></div>}
@@ -321,7 +322,7 @@ export function BridgesHeard() {
     <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}><h3 style={{ margin: 0 }}>Every bridge FinCom has heard from</h3>
       <button className="btn small" onClick={() => TCloud.refreshPane()}>Refresh</button></div>
     <p className="note" style={{ margin: "6px 0 10px" }}>Every bridge on the firm’s computers, from its last heartbeat. Only the <b>main</b> bridge posts to Tally; a bridge in <b>test mode</b> reads only.</p>
-    {p.err && <p className="note bad">{p.err}</p>}
+    {p.err && <p className="note bad"><Msg text={p.err} /></p>}
     {rows.length ? <div className="tblwrap"><table className="data"><thead><tr><th>Computer</th><th>Windows user</th><th>Bridge</th><th>Mode</th><th>Last seen</th><th>Tally</th><th>Companies open</th><th></th></tr></thead><tbody>
       {rows.map((r, i) => <tr key={r.device.id + ":" + (r.id || "old") + ":" + i} data-bridge-row={r.id || "old"}>
         <td>{r.computer}<div className="nr">{r.device.name}</div></td>
@@ -388,7 +389,7 @@ function BlockedHelp() {
     {TCloud.on() ? <label className="btn small" data-install-log="" style={{ cursor: "pointer" }}>Send an install log…
       <input type="file" accept=".log,.txt,text/plain" style={{ display: "none" }} onChange={(ev) => { const f = ev.target.files && ev.target.files[0]; ev.target.value = ""; TCloud.sendInstallLog(f); }} /></label>
       : <p className="note">Sign in to the firm account to send an install log.</p>}
-    {ls && (ls.busy ? <p className="note">Sending…</p> : ls.err ? <p className="bk-warn">{ls.err}</p> : <p className="note ok" data-install-log-sent="">{"Sent " + ls.name + " to FinCom support (reference " + ls.ref + ")."}</p>)}
+    {ls && (ls.busy ? <p className="note">Sending…</p> : ls.err ? <p className="bk-warn"><Msg text={ls.err} /></p> : <p className="note ok" data-install-log-sent="">{"Sent " + ls.name + " to FinCom support (reference " + ls.ref + ")."}</p>)}
   </div>;
 }
 
@@ -408,7 +409,7 @@ function SetupSteps() {
   return <div className="setupcard"><h3 style={{ margin: "0 0 6px" }}>Connect this browser to FinCom Bridge</h3><ol className="setup">
     <Step n={1} done={connected} title="FinCom Bridge on the Tally computer">Download it from the card on this page and run it there. No admin rights needed.</Step>
     <Step n={2} done={connected && st.tallyUp} title="Open TallyPrime and your company">In TallyPrime: F1 Help → Settings → Connectivity → <b>TallyPrime acts as: Both</b>. Each user's Tally needs its own port (9000, 9001, …).</Step>
-    <Step n={3} done={connected} title="Press Connect here">Press <Act act="bridgeConnect" className="btn small primary">Connect</Act> and type the 6-digit code: right-click the FinCom icon near the clock → <b>Connect FinCom on this computer…</b>. No other web page can connect.</Step>
+    <Step n={3} done={connected} title="Press Connect here">Press <Act act="bridgeConnect" className="btn small">Connect</Act> and type the 6-digit code: right-click the FinCom icon near the clock → <b>Connect FinCom on this computer…</b>. No other web page can connect.</Step>
   </ol></div>;
 }
 
@@ -453,7 +454,7 @@ function BridgeLog() {
     <div className="row" style={{ gap: 8, alignItems: "center" }}><button className="linkbtn" data-act="bridgeLog" onClick={load} disabled={!!(lg && lg.busy)}>{lg && lg.lines ? "Show bridge log again" : "Show bridge log"}</button>
       {lg && lg.lines && <><button className="btn small" onClick={copy}>Copy</button><button className="linkbtn" onClick={() => setLg(null)}>Hide</button></>}</div>
     {lg && lg.busy && <p className="note">Reading the log…</p>}
-    {lg && lg.error && <p className="bk-warn">{lg.error}</p>}
+    {lg && lg.error && <p className="bk-warn"><Msg text={lg.error} /></p>}
     {lg && lg.lines && <><p className="note" style={{ margin: "6px 0 4px" }}>{"The last " + lg.lines.length + " lines of " + (lg.file || "tds-bridge.log") + ", newest at the bottom."}</p>
       <pre className="bridge-log-text" style={{ maxHeight: 320, overflow: "auto", fontSize: 12, whiteSpace: "pre-wrap", wordBreak: "break-word", background: "var(--bg-soft, rgba(127,127,127,.08))", padding: 8, borderRadius: 6, margin: 0 }}>{text || "(the log is empty)"}</pre></>}
   </div>;
@@ -498,7 +499,7 @@ export function CloudBooks() {
   const dv = (p.devices || []).filter((d) => !d.revoked), cl = p.companies || [];
   return <>
     <div className="pane"><h2>Books in FinCom’s cloud <TallyPill /></h2><p className="note" style={{ margin: "0 0 12px" }}>The bridge on each connected computer sends the books of the Tally companies it keeps in step. Then Look up, Reports and the books open on any computer or phone, even with Tally closed, and a trial balance or ledger for any date comes back in a moment. Kept in India, for your firm only.</p>
-      {p.err && <p className="note bad">{p.err}</p>}{p.busy && <p className="note">{p.busy}</p>}
+      {p.err && <p className="note bad"><Msg text={p.err} /></p>}{p.busy && <p className="note">{p.busy}</p>}
       <p className="note">The computer with Tally and the bridge sends by itself once someone signs in to FinCom there. Nothing to press.</p>
       {TCloud.autoErr && <p className="note bad">{"Last try: " + TCloud.autoErr}</p>}<div className="row"><button className="btn small" onClick={() => TCloud.refreshPane()}>Refresh</button></div></div>
     <div className="pane"><h3 style={{ marginTop: 0 }}>Computers that send</h3>{dv.length ? <div className="tblwrap"><table className="data"><thead><tr><th>Computer</th><th>Last heard from</th><th>Bridge</th><th></th></tr></thead><tbody>
@@ -522,7 +523,7 @@ export function CloudBooks() {
                     return r ? <span className={"note" + (r.err ? " bad" : "")} data-rp={cid}>{" · " + (r.err ? "Could not read again: " + r.err + (r.n ? " (" + r.n + " days done)" : "") : r.busy ? "reading again… " + r.n + " days so far" : "read again: " + Number(r.n || 0).toLocaleString("en-IN") + " day" + (Number(r.n) === 1 ? "" : "s") + " of " + Number(r.months || 0) + " month" + (Number(r.months) === 1 ? "" : "s") + ", " + fmtTime(r.at) + (r.bad ? ", " + r.bad + " could not be read" : "") + (r.host ? " (cloud " + r.host + ")" : ""))}</span> : null; })()}</>}
                 <div className="row" style={{ gap: 8, marginTop: 6, flexWrap: "wrap", alignItems: "center" }}>
                   <button className="btn small" onClick={() => TCloud.sendLedgers(cid)} title="The Tally computer reads every ledger and group now and sends them (FinCom Bridge on that computer; Tally open there)">Send ledgers and groups now</button>
-                  {(() => { const g = (p.gs || {})[cid]; return g ? (g.err ? <span className="note bad">{g.err}</span> : g.none ? <span className="note">No books in the cloud yet.</span>
+                  {(() => { const g = (p.gs || {})[cid]; return g ? (g.err ? <span className="note bad"><Msg text={g.err} /></span> : g.none ? <span className="note">No books in the cloud yet.</span>
                     : <span className="note">{"In the cloud: " + g.groups + " groups · " + g.grouped + " of " + g.ledgers + " ledgers with a group" + (g.pl ? " (and Profit & Loss A/c, which has no group in Tally)" : "")} <button className="linkbtn" onClick={() => TCloud.groupStatus(cid)}>check again</button></span>)
                     : <button className="linkbtn" onClick={() => TCloud.groupStatus(cid)}>What is in the cloud?</button>; })()}
                 </div></> : "Linked to a client that is not on this computer."}</div>
@@ -537,7 +538,8 @@ export function CloudBooks() {
 const TALLY_TABS = [["computers", "Computers"], ["activity", "Sync activity"], ["sent", "Everything sent"]];
 export default function TallyHome() {
   const m = useSetup();
-  if (S.tallyOld) return <><section className="today"><h2>Tally</h2></section><OldBridge /></>;
+  // the page is named in the top bar (one heading, spec I)
+  if (S.tallyOld) return <OldBridge />;
   paneFresh();
   const rows = TCloud.on() ? TCloud.bridgesHeard() : [], latest = m && m.setup ? m.setup.version : "";
   // the card while a computer has no FinCom Bridge (none heard from yet, or only an older bridge); else folded away
@@ -545,7 +547,7 @@ export default function TallyHome() {
   const needCard = !devs.size || [...devs].some((d) => !withNew.has(d));
   // phase 2 (H49-H51): Computers (as before), Sync activity (the recorder's lines), Everything sent (the post log)
   const tab = TALLY_TABS.some(([id]) => id === S.tallyTab) ? S.tallyTab : "computers";
-  return <><section className="today"><h2>Tally</h2></section>
+  return <>
     <nav className="sbar" aria-label="Tally">{TALLY_TABS.map(([id, label]) =>
       <button key={id} data-tally-tab={id} aria-selected={tab === id} onClick={() => { S.tallyTab = id; if (id === "activity") Rec.act.at = 0; render(); }}>{label}</button>)}</nav>
     {tab === "activity" ? <SyncActivity />

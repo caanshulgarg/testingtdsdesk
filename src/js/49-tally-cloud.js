@@ -1410,6 +1410,82 @@ function tallyStatus(co){
   const light = co && typeof TLight === "object" ? TLight.st.by[co.id] : null;
   return out({state: "ok", level: "ok", label: "Connected & in sync", say: "Tally is connected" + (local ? " on this computer" : " (" + devs.length + " computer" + (devs.length === 1 ? "" : "s") + " sending)") + " and nothing waits to be sent." + (light ? " " + light.say : "")});
 }
+// The top bar's one Tally sign (owner's spec H, 04-Oct-2026): exactly two states. Connected = FinCom Bridge on a computer
+// of this firm is online (its heartbeat recent: online, or one beat late) AND Tally is open there with THIS client's
+// company (for the firm's own pages: with any company). Anything else is disconnected, with the reason and the fix:
+//   bridge (not running / not heard from), internet (the bridge here runs but cannot reach FinCom), tally (TallyPrime
+//   closed), nocompany (Tally open, no company), othercompany (a different company is open).
+// From what the app already reads: the heartbeats (TLight.st.devs, info.beat: tallyState, open), the client's link
+// (TLight.st.cos), and this computer's bridge (Bridge.st, and its beat.missedSince). A computer whose heartbeats stopped
+// cannot say why from afar: unless this computer is the one (then its bridge says), the reason names both causes.
+// {on, code, computer, company, at ("04-Oct-2026 14:05 IST"), reason, fix, words}
+function tallyIst(t){
+  const ms = typeof t === "number" ? t : Date.parse(String(t || ""));
+  if (!ms) return "";
+  const p = {};
+  try { new Intl.DateTimeFormat("en-GB", {timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false}).formatToParts(ms).forEach(q => { p[q.type] = q.value; }); }
+  catch (e){ return fmtDateTime(ms); }
+  return p.day + "-" + String(p.month).replace(/^Sept$/, "Sep") + "-" + p.year + " " + (p.hour === "24" ? "00" : p.hour) + ":" + p.minute + " IST";
+}
+function tallySign(co){
+  if (typeof TLight === "object") TLight.refresh();
+  const now = Date.now(), st = (typeof TLight === "object" && TLight.st) || {};
+  const devs = (st.devs || []).filter(d => d && !d.revoked);
+  const link = co ? (st.cos || []).find(c => c.client_id === co.id) : null;
+  const want = co ? (link && link.company) || co.tallyName || co.name : "";
+  const same = n => !!co && (norm(n) === norm(want) || norm(n) === norm(co.tallyName || "") || norm(n) === norm(co.name));
+  const localOn = typeof Bridge === "object" && Bridge.on(), localUp = localOn && Bridge.up(), lst = (typeof Bridge === "object" && Bridge.st) || {};
+  // each computer: its name, whether its heartbeat is recent, Tally's state, the companies open, the last contact
+  const pcs = devs.map(d => {
+    const info = d.info || {}, beat = info.beat || {}, ds = devState(d, now);
+    const open = [].concat(beat.open || []).concat(...Object.values(info.bridges || {}).map(b => [].concat(b.open || []))).map(String).filter(Boolean);
+    const at = Date.parse(beat.at || d.last_seen || 0) || 0;
+    return {id: d.id, computer: info.computer || beat.computer || d.name || "the Tally computer", recent: ds.bridge === "online" || ds.bridge === "reconnecting",
+      tally: ds.tally, open: Array.from(new Set(open)), at};
+  });
+  // this computer's bridge, answering here
+  if (localUp){
+    const o = (lst.open || []).map(x => x.name), name = lst.computer || "this computer";
+    const mine = pcs.find(x => norm(x.computer) === norm(name));
+    // its heartbeats not reaching FinCom (no internet there): not recent, whatever it sees in Tally
+    const noNet = !!(lst.beat && lst.beat.on !== false && lst.beat.missedSince);
+    const me = {id: mine ? mine.id : "local", computer: name, recent: !noNet, local: true, tally: lst.tallyState || (lst.tallyUp ? "open" : "closed"), open: o, at: (typeof Bridge === "object" && Bridge.okAt) || lst.at || now,
+      noNet};
+    // the last contact: with FinCom's cloud when the bridge here cannot reach it, else the latest of the two
+    if (mine) pcs.splice(pcs.indexOf(mine), 1, Object.assign({}, mine, me, {at: noNet ? mine.at : Math.max(mine.at, me.at)})); else pcs.push(noNet ? Object.assign(me, {at: Date.parse(lst.beat.last || 0) || 0}) : me);
+  }
+  const isOpen = x => x.tally === "open" || x.tally === "busy";
+  const has = x => co ? x.open.some(same) : x.open.length > 0;
+  const good = pcs.find(x => x.recent && isOpen(x) && has(x) && (!link || !link.device_id || x.id === link.device_id || x.local)) || pcs.find(x => x.recent && isOpen(x) && has(x));
+  const out = (o) => Object.assign({computer: "", company: co ? want : "", at: "", reason: "", fix: ""}, o);
+  if (good){
+    const company = co ? good.open.find(same) : good.open.join(", ");
+    return out({on: true, code: "ok", computer: good.computer, company, at: tallyIst(good.at), words: "Tally connected"});
+  }
+  // the computer that matters: the one linked to this client, else the one heard from last
+  const pick = (link && link.device_id && pcs.find(x => x.id === link.device_id)) || pcs.slice().sort((a, b) => (b.recent - a.recent) || (b.at - a.at))[0];
+  const off = (code, reason, fix, x) => out({on: false, code, computer: x ? x.computer : "", at: x && x.at ? tallyIst(x.at) : "", reason, fix, words: "Tally disconnected"});
+  const coName = co ? want : "the client's company";
+  if (!pick){
+    if (localOn && !localUp) return off("bridge", "FinCom Bridge is not running on this computer.", "Start FinCom Bridge (its icon near the clock, or from the Start menu), then keep TallyPrime open.", {computer: "this computer"});
+    return off("bridge", "FinCom Bridge is not running on any computer of the firm.", "Start FinCom Bridge on the computer with TallyPrime, or install it from the Tally page.", null);
+  }
+  if (!pick.recent){
+    if (pick.local && pick.noNet) return off("internet", pick.computer + " has no internet: FinCom Bridge is running there but cannot reach FinCom since " + tallyIst(lst.beat.missedSince) + ".", "Check the internet connection on " + pick.computer + ". Nothing is lost: FinCom Bridge sends everything when it is back.", pick);
+    if (localOn && !localUp && localIsPick(pick)) return off("bridge", "FinCom Bridge is not running on " + pick.computer + " (this computer).", "Start FinCom Bridge on this computer (its icon near the clock, or from the Start menu).", pick);
+    return off("bridge", "FinCom Bridge on " + pick.computer + " is not running or cannot reach FinCom: no word from it since " + (pick.at ? tallyIst(pick.at) : "it was set up") + ".",
+      "On " + pick.computer + ": start FinCom Bridge (its icon near the clock) and check that the computer is on and has internet.", pick);
+  }
+  if (!isOpen(pick)) return off("tally", "TallyPrime is closed on " + pick.computer + ".", "Open TallyPrime on " + pick.computer + (co ? " and open " + coName + " in it." : "."), pick);
+  if (!pick.open.length) return off("nocompany", "TallyPrime is open on " + pick.computer + ", but no company is open in it.", "Open " + coName + " in TallyPrime on " + pick.computer + ".", pick);
+  return off("othercompany", "A different company is open in Tally on " + pick.computer + ": " + pick.open.slice(0, 3).join(", ") + ".", "Open " + coName + " in TallyPrime on " + pick.computer + " (the other company can stay open)." + (co && !link ? " If it is open under another name, link it in Client setup → Tally." : ""), pick);
+}
+function localIsPick(x){ return !!(x && (x.local || (typeof Bridge === "object" && Bridge.st && Bridge.st.computer && norm(Bridge.st.computer) === norm(x.computer)))); }
+// the same, in words for the hover and the panel: "Tally connected · OFFICE-PC · TESTING AAD · last contact …"
+function tallySignWords(s){
+  return "Tally: " + (s.on ? "connected" : "disconnected") + (s.computer ? " — computer: " + s.computer : "") + (s.company ? " — company: " + s.company : "") +
+    (s.at ? " — last contact: " + s.at : "") + (s.on ? "" : " — why: " + s.reason + " — what to do: " + s.fix);
+}
 // the computers' connection history for the last 24 hours (tally_devices.info.history, kept by tally-ingest from the
 // heartbeats), newest first, with a gap going on now shown as "offline since"
 function tallyHistory(){

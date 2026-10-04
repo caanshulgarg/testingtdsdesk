@@ -54,7 +54,7 @@ with sync_playwright() as p:
     # connecting with an access period
     SERVER["sessions"] = []; pg.evaluate("GSTAPI.seen = {}; GSTAPI.sess = {'" + G + "': {sentAt: Date.now()}}"); draw(); pg.wait_for_timeout(600); draw()
     pg.fill('input[aria-label="OTP"]', "575757"); pg.select_option('select[aria-label="API access period"]', "7"); draw()
-    pg.click("button:has-text('Connect')"); pg.wait_for_timeout(800)
+    pg.click("#app button:has-text('Connect')"); pg.wait_for_timeout(800)
     ok(any(c.get("action") == "auth" and c.get("days") == 7 for c in calls) and pg.evaluate("GSTAPI.sess['" + G + "'].accessDays") == 7, "Connect sends the access period chosen (7 days) and keeps its end")
     # filed against FinCom's working, month by month
     pg.evaluate("""() => { GSTR.one = () => ({b2b: [{taxable: 1000, igst: 180, cgst: 0, sgst: 0, cess: 0}], b2cl: [], b2c: [], cdnr: [{taxable: 100, igst: 18, cgst: 0, sgst: 0, cess: 0, note: 'credit'}], exp: []});

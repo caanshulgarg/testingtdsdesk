@@ -1,5 +1,6 @@
 // Step 4 of a client, "Done": what has gone to Tally. Was viewDoneStep() (src/js/02) and viewPostLog() (src/js/18).
 // The post log is also shown in Settings → Posted to Tally and on the Tally home page, for all clients.
+import Msg from "../parts/Msg.jsx";
 
 // every entry sent to Tally (or taken back), newest first: S.firm.postLog, kept in the firm's settings
 export function PostLog() {
@@ -21,7 +22,7 @@ export function PostLog() {
         </div>
       </div>
       <p className="note" style={{ margin: "6px 0 10px" }}>{mine.length} entr{mine.length === 1 ? "y" : "ies"}{all ? " across every client" : " for " + co.name}. Kept so you can prove what was posted, by whom, and when.</p>
-      {CloudJobs.err && <p className="note bad">{"The postings in FinCom’s cloud could not be read: " + CloudJobs.err}</p>}
+      {CloudJobs.err && <p className="note bad">The postings in FinCom’s cloud could not be read: <Msg text={CloudJobs.err} /></p>}
       {!mine.length ? <p className="note">{CloudJobs.busy ? "Reading the postings…" : "Nothing yet."}</p> : (
         <div className="tblwrap"><table className="data">
           <thead><tr><th>When</th><th>What</th><th>Client</th><th>Reference</th><th className="n">Amount</th><th>Voucher in Tally</th><th>By</th></tr></thead>

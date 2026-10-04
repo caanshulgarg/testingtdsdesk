@@ -2,6 +2,7 @@
 // an authenticator app). Was viewSignIn (src/js/27), viewSignUp (src/js/27) and viewTwoStep (src/js/43). Buttons are
 // doAct cases (cloudSignIn, cloudSignUp, showSignUp, showSignIn, useOffline) and mfaAction (src/js/43); the boxes keep
 // their data-cloud and id, which those read, and the buttons their data-act (the old tests press them by it); and what is typed is kept in S.cloudForm (cloudForm).
+import Msg from "../parts/Msg.jsx";
 import { useEffect, useRef } from "react";
 
 const Act = ({ act, className = "btn primary", children, disabled }) => <button className={className} data-act={act} disabled={disabled} onClick={() => doAct(act)}>{children}</button>;
@@ -12,7 +13,7 @@ const Field = ({ label, k, type = "text", fk, auto, first }) => {
   return <label className="f" style={first ? undefined : { marginTop: 8 }}><span>{label}</span><input ref={ref} type={type} data-cloud={k} data-fk={fk} aria-label={label} autoComplete={auto}
     defaultValue={f[k] || (k === "email" ? c.email || "" : "")} onChange={(ev) => cloudForm(k, ev.target.value)} /></label>;
 };
-const Err = () => Cloud.st.error ? <p className="bk-warn" style={{ marginTop: 10 }}>{Cloud.st.error}</p> : null;
+const Err = () => Cloud.st.error ? <p className="bk-warn" style={{ marginTop: 10 }}><Msg text={Cloud.st.error} /></p> : null;
 // "Keep me signed in" (section D, 03-Oct-2026): ticked, the session is kept on this computer (localStorage) until you sign
 // out; unticked, in this tab only (sessionStorage), gone when the browser closes. Read by Cloud.signIn (src/js/43).
 // Nothing signs you out by itself either way.
@@ -53,7 +54,7 @@ function SetPassword() {
     <label className="f"><span>New password (10 characters or more, letters and digits)</span><input type="password" id="spw1" aria-label="New password" autoComplete="new-password" autoFocus /></label>
     <label className="f" style={{ marginTop: 8 }}><span>Repeat it</span><input type="password" id="spw2" aria-label="Repeat the new password" autoComplete="new-password" onKeyDown={(ev) => { if (ev.key === "Enter") { ev.preventDefault(); setPasswordGo(); } }} /></label>
     <div className="row" style={{ marginTop: 12 }}><button className="btn primary" data-act="setPasswordGo" disabled={!!busy} onClick={() => setPasswordGo()}>{busy ? "Saving…" : "Save and continue"}</button></div>
-    {f.error && <p className="bk-warn" style={{ marginTop: 10 }}>{f.error}</p>}</Box>;
+    {f.error && <p className="bk-warn" style={{ marginTop: 10 }}><Msg text={f.error} /></p>}</Box>;
 }
 
 export default function SignIn() {

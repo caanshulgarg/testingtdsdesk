@@ -165,7 +165,7 @@ with sync_playwright() as p:
     ok(pg.evaluate("CO().bankAccounts.find(a => a.id === 'a2').ledger") == "HDFC Bank" and "Which Tally ledger" not in app() and "Tally ledger: HDFC Bank" in app(), "chosen and confirmed: kept, and the question goes")
     # no statement yet
     pg.evaluate("B().stmts = []; B().cur = null; render()"); pg.wait_for_timeout(300)
-    ok("Upload a bank statement" in app() and pg.locator("#bankDrop").count() == 1 and pg.locator("#app .actionbar").count() == 0, "no statement: the upload box, and no bar")
+    ok("No bank statement yet" in app() and pg.locator("#bankDrop").count() == 1 and pg.locator("#app .actionbar").count() == 0, "no statement: the upload box, and no bar")
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     br.close()
 srv.shutdown()

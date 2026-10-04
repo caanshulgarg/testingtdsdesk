@@ -4,11 +4,13 @@
 // with the bank and sales tables.
 import { useRef } from "react";
 import ColHead from "../parts/ColHead.jsx";
+import Msg from "../parts/Msg.jsx";
 import BillDetail from "./Bill.jsx";
 import { ChipBar } from "../parts/ChipBar.jsx";
 import UploadResult from "../parts/UploadResult.jsx";
 
 const needsLook = (r) => notReadYet(r.e) || (r.c.missing || []).length || r.c.flags.some((f) => f.lvl === "hi") || r.e.confirmType;
+const NO_TALLY = "Needs Tally open with this client's company and FinCom Bridge running (see the Tally sign at the top)";
 const RuleOptions = () => rules().map((r) => <option key={r.id} value={r.id}>{r.label}</option>);
 
 
@@ -21,16 +23,16 @@ function Row({ e, c, sel }) {
     <tr className={[sel && "picked", miss && "needs", S.drawerOpen && S.selected === e.id && "open"].filter(Boolean).join(" ")}>
       <td className="ck"><input type="checkbox" checked={sel} aria-label={"Select " + (e.x.vendorName || e.fileName || "bill")} onChange={(ev) => revPick(e.id, ev.target.checked)} /></td>
       <td className="dt">{e.x.invoiceDate ? shortDate(e.x.invoiceDate) : "—"}</td>
+      <td>{e.x.invoiceNo || "—"}</td>
       <td className="pt">
         <button className="linkbtn pn" onClick={() => revOpen(e.id)}>{e.x.vendorName || e.fileName || "—"}</button>
         <div className="nr">{e.x.vendorGstin || e.x.vendorPan || "no GSTIN or PAN"}</div>
         <div className={"nr " + (ledOk ? "led-ok" : "led-bad")}>{led ? "→ " + led + (ledOk ? " ✓" : " · not in Tally") : "→ no ledger yet"}</div>
-        {e.postFailedAt && e.postError && <div className="nr bad">Tally refused: {e.postError}</div>}
+        {e.postFailedAt && e.postError && <div className="nr bad">Tally refused: <Msg text={e.postError} /></div>}
         {/* the reading service could not read it (review of 02-Oct-2026): why, and Retry; Type it in is the bill itself */}
         {notReadYet(e) && <div className="nr bad" data-notread="">{S.reading[e.id] ? "Reading again…" : <>Not read yet: {e.notRead.reason} <button className="linkbtn" onClick={() => retryNotRead(e.id)}>Retry</button></>}</div>}
         {e.noteKind && <div className="nr"><span className="tag">{e.noteKind === "credit" ? "Credit note → Debit Note in Tally" : "Debit note"}</span></div>}
       </td>
-      <td>{e.x.invoiceNo || "—"}</td>
       <td className="n">{money(num(e.x.total))}</td>
       <td><select value={e.natureId || ""} aria-label="Payment type" onChange={(ev) => revNature(e.id, ev.target.value)}><RuleOptions /></select></td>
       <td className="ck"><input type="checkbox" aria-label="Book TDS" checked={c.tdsWould > 0 && !c.skip} disabled={!!(c.rule && c.rule.basis === "never")}
@@ -73,7 +75,7 @@ export function ReviewTable() {
         <div className="bk-actions"><button className="btn small" onClick={() => doAct("revList")}>One at a time</button></div>
       </div>
       <UploadResult />
-      {!rows.length && !all.length ? <div className="bk-none" style={{ background: "var(--sheet)", border: "1px solid var(--rule)", borderRadius: 10 }}>Nothing waiting. Upload bills above.</div> : <>
+      {!rows.length && !all.length ? <div className="bk-none" style={{ background: "var(--sheet)", border: "1px solid var(--rule)", borderRadius: 10 }}>Nothing to review. Use <b>Upload bills</b> at the top right to add this client’s bills.</div> : <>
         <div className="revfilter">
           <input type="search" value={S.revQuery || ""} placeholder="Filter by supplier, bill no., GSTIN, ledger, payment type or amount" aria-label="Filter the bills"
             onChange={(ev) => { S.revQuery = ev.target.value; render(); }} />
@@ -83,10 +85,14 @@ export function ReviewTable() {
         <div className="bk-tablewrap"><table className="bk-table revtbl">
           <thead><tr>
             <th className="ck"><input type="checkbox" aria-label="Select all shown" checked={!!nSel && nSel === rows.length} onChange={(ev) => revPickAll(ev.target.checked)} /></th>
-            <ColHead t="rev" k="date" label="Date" cls="dt" /><ColHead t="rev" k="sup" label="Supplier" /><ColHead t="rev" k="no" label="Bill no." /><ColHead t="rev" k="val" label="Value" cls="n" />
+            <ColHead t="rev" k="date" label="Date" cls="dt" /><ColHead t="rev" k="no" label="Bill no." /><ColHead t="rev" k="sup" label="Supplier" /><ColHead t="rev" k="val" label="Value" cls="n" />
             <ColHead t="rev" k="nature" label="Payment type" /><ColHead t="rev" k="tds" label="TDS" cls="ck" /><th className="n">TDS</th><ColHead t="rev" k="look" label="This year vs limit" /><th className="ac"></th>
           </tr></thead>
           <tbody>{rows.map((r) => <Row key={r.e.id} e={r.e} c={r.c} sel={sel.has(r.e.id)} />)}</tbody>
+          {/* the count and the totals at the foot (spec K6) */}
+          {rows.length > 0 && <tfoot data-list-foot=""><tr><td></td><td colSpan={3}><b>{rows.length + (rows.length === 1 ? " bill" : " bills")}</b>{rows.length !== all.length ? " of " + all.length : ""}</td>
+            <td className="n"><b>{money(r2(rows.reduce((a, r) => a + num(r.e.x.total), 0)))}</b></td><td></td><td></td>
+            <td className="n"><b>{money(r2(rows.reduce((a, r) => a + num(r.c.tds), 0)))}</b></td><td></td><td></td></tr></tfoot>}
         </table></div>
         {!rows.length && <p className="empty">No bill matches the filter.</p>}
       </>}
@@ -106,8 +112,9 @@ function ReviewBar() {
       <div className="ab-right">
         <button className="btn" onClick={() => doAct("revTdsOn")}>Book TDS</button>
         <button className="btn" onClick={() => doAct("revTdsOff")}>Do not book TDS</button>
-        <button className="btn" disabled={!live} onClick={() => doAct("revCheckTally")}>Check year in Tally</button>
-        <button className="btn danger" onClick={() => doAct("revDelete")}>Delete {picked.length}</button>
+        {/* the destructive one away from the primary (spec K2) */}
+        <button className="btn danger" style={{ marginRight: 18 }} onClick={() => doAct("revDelete")}>Delete {picked.length}</button>
+        <button className="btn" disabled={!live} title={!live ? NO_TALLY : undefined} onClick={() => doAct("revCheckTally")}>Check year in Tally</button>
         <button className="btn primary" onClick={() => doAct("revApprove")}>Approve {picked.length}</button>
       </div>
     </div>
@@ -117,8 +124,8 @@ function ReviewBar() {
       <div className="ab-left"><span className="bk-stat"><b>{rows.length}</b> to review</span><span className="bk-stat"><b>{ready.length}</b> ready to approve</span>
         {!ready.length && noneReady(rows) && <div className="none-ready" data-none-ready="">{noneReady(rows)}</div>}</div>
       <div className="ab-right">
-        <button className="btn" disabled={!live} onClick={() => doAct("revCheckTallyAll")}>Check the year in Tally for all</button>
-        <button className="btn primary" disabled={!ready.length} onClick={() => doAct("revApproveAll")}>Approve all that are ready ({ready.length})</button>
+        <button className="btn" disabled={!live} title={!live ? NO_TALLY : undefined} onClick={() => doAct("revCheckTallyAll")}>Check the year in Tally for all</button>
+        <button className="btn primary" disabled={!ready.length} title={!ready.length ? (noneReady(rows) || "No bill is ready to approve yet") : undefined} onClick={() => doAct("revApproveAll")}>Approve all that are ready ({ready.length})</button>
       </div>
     </div>
   );

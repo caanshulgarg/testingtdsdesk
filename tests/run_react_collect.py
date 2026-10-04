@@ -18,7 +18,7 @@ with sync_playwright() as p:
       c.stats = {}; window.__calls = []; return c.id; }""")
     pg.evaluate("(cid) => openCompany(cid).then(() => goStep('collect', 'bills'))", cid); pg.wait_for_timeout(1200)
     app = lambda: pg.inner_text("#app")
-    ok("Upload for ZZ Epsilon Mills" in app() and "Nothing waiting in the inbox for ZZ Epsilon Mills" in app(), "Collect: the upload box, and nothing in the inbox")
+    ok("Drop ZZ Epsilon Mills’s bills here" in app() and "Nothing waiting in the inbox for ZZ Epsilon Mills" in app(), "Collect: the upload box, and nothing in the inbox")
     ok(pg.locator("#app .rcheck .tag").count() >= 3 and "PDF text" in pg.inner_text("#app .rcheck"), "the reading check's tags")
     # the PDF option is remembered
     pg.click('#app label:has-text("A PDF holds many bills") input'); pg.wait_for_timeout(200)

@@ -39,7 +39,7 @@ function Confirm() {
   return <>{form}
     <div className="dash-tiles" style={{ marginTop: 12 }}><Tile l="Parties" v={rows.length} sub={B.src} /><Tile l="Sent" v={sent} sub="for this date" /><Tile l="Agreed" v={agreed} sub="confirmed by the party" /><Tile l="Differences" v={diff} sub="to reconcile" cls={diff ? "warn" : ""} /></div>
     {!rows.length ? <div className="bk-none">No party with a balance matches. Change the choices above.</div> : <>
-      <div className="row ltr-bar"><button className="btn primary" disabled={!picked.length} onClick={() => ltrAct("print")}>{"Print or PDF the letters (" + picked.length + ")"}</button>
+      <div className="row ltr-bar"><button className="btn primary" disabled={!picked.length} title={!picked.length ? "Tick at least one party in the list first" : undefined} onClick={() => ltrAct("print")}>{"Print or PDF the letters (" + picked.length + ")"}</button>
         <button className="btn" onClick={() => ltrAct("selall")}>{picked.length === rows.length ? "Untick all" : "Tick all " + rows.length}</button><button className="btn" onClick={() => ltrAct("excel")}>Excel of the list</button></div>
       <div className="bk-tablewrap"><table className="bk-table lk-t ltr-t"><thead><tr><th className="ck"></th><th>Party</th><th className="n">Balance</th><th>Email</th><th>Phone</th><th>Sent</th><th>Reply</th><th className="ac"></th></tr></thead><tbody>
         {rows.map((r, i) => <tr key={r.l + ":" + i} data-key={r.l}><td className="ck"><input type="checkbox" checked={!!x.sel[r.l]} aria-label={"Tick " + r.l} onChange={(ev) => ltrSel(r.l, ev.target.checked)} /></td>

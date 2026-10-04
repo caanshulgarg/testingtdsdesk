@@ -143,6 +143,9 @@ run_recorder_source_switch.py         120  TDSDESK_SITE=../app/dist-test
 run_migration47.py                    120
 run_migration48.py                    180
 run_upload_split.py                   180
+run_tally_sign.py                     180  TDSDESK_SITE=../app/dist-test
+run_single_upload.py                  180  TDSDESK_SITE=../app/dist-test
+run_ui_standards.py                   300  TDSDESK_SITE=../app/dist-test
 run_post_reasons.py                   120
 run_post_layout.py                    120  TDSDESK_SITE=../app/dist-test
 run_post_rows_fix.py                  120  TDSDESK_SITE=../app/dist-test

@@ -8,6 +8,7 @@
 //
 // The checks over a statement are parts/BankChecks.jsx; the rules tab and the settings panel parts/BankSettings.jsx.
 // The column filters' chips are parts/ChipBar.jsx.
+import Msg from "../parts/Msg.jsx";
 import { useRef } from "react";
 import { BankSettings, RulesPanel } from "../parts/BankSettings.jsx";
 import { PostReport, FixBanner, BankBalance, Recon, Gone, DupFind, BankFocus } from "../parts/BankChecks.jsx";
@@ -159,7 +160,7 @@ function Found() {
 
 function LastFail({ f }) {
   return (
-    <div className="bk-alert bad"><b>{f.file} was not read.</b> {f.msg}
+    <div className="bk-alert bad"><b>{f.file} was not read.</b> <Msg text={f.msg} />
       <div className="row" style={{ gap: 8, marginTop: 8 }}><span className="note">Read it again:</span>
         <button className="btn small" onClick={() => bankAct("bankRetryFree")}>Try again</button>
         <button className="btn small" disabled={!googleReady()} title={googleReady() ? undefined : "Google OCR is not set up"} onClick={() => bankAct("bankRetryGoogle")}>With Google OCR</button>
@@ -179,7 +180,7 @@ function LedgerSetup({ co }) {
   if (B().ledgersLoading || (typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id))) return <div className="bk-setup"><div><b>Loading ledgers from FinCom’s cloud copy of the books…</b><div className="note">The ledgers of {(TCloud.book(co.id) || {}).company || co.name}, as the Tally computer last sent them.</div></div></div>;
   if (bridgeLive(co)) return <div className="bk-setup"><div><b>Loading ledgers from Tally…</b><div className="note">{Bridge.openFor(co).name} is open in Tally.</div></div></div>;
   if (live()) return <div className="bk-setup"><div><b>Open {Bridge.tallyName(co)} in TallyPrime</b><div className="note">Its ledgers load automatically once it is open. Or import the ledger list from a file.</div></div><button className="btn small" onClick={() => bankAct("ledPick")}>Import from file</button></div>;
-  return <div className="bk-setup"><div><b>Import the Tally ledger list for {co.name}</b><div className="note">Suggestions only use ledgers that exist in Tally. In Tally: Display More Reports → List of Accounts → Export (Excel or XML). With FinCom Bridge this happens automatically.</div></div><button className="btn primary small" onClick={() => bankAct("ledPick")}>Import ledger list</button></div>;
+  return <div className="bk-setup"><div><b>Import the Tally ledger list for {co.name}</b><div className="note">Suggestions only use ledgers that exist in Tally. In Tally: Display More Reports → List of Accounts → Export (Excel or XML). With FinCom Bridge this happens automatically.</div></div><button className="btn small" onClick={() => bankAct("ledPick")}>Import ledger list</button></div>;
 }
 
 // the deleted statements (soft deletes, kept on the server and in this browser), read once for the Restore item
@@ -248,9 +249,8 @@ export default function Bank() {
     <div className="bk">
       {top}
       <div className="bk-empty" id="bankDrop" tabIndex={0} role="button" onClick={() => bankAct("bankPick")} onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); bankAct("bankPick"); } }}>
-        <div className="bk-empty-ic">⤒</div><h2>Upload a bank statement</h2>
-        <p className="note">Excel or CSV from net banking works best. E-statement PDFs, scanned PDFs and photos are also read. Every entry is checked against the running balance.</p>
-        <span className="btn primary">Choose files</span>
+        <div className="bk-empty-ic">⤒</div><h2>No bank statement yet</h2>
+        <p className="note">Drop a statement here, or use <b>Upload statement</b> at the top right. Excel or CSV from net banking works best; e-statement PDFs, scanned PDFs and photos are also read. Every entry is checked against the running balance.</p>
       </div>
       <div className="row" style={{ justifyContent: "flex-end", marginTop: 10, gap: 8 }}><button className="btn small" onClick={() => bankAct("bankSettings")}>Settings</button><RestoreMenu /></div>
     </div>

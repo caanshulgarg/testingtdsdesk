@@ -66,7 +66,7 @@ function FindingBody({ f, st }) {
       <p><b>Suggested entries</b>{miss.length > 0 && <> <span className="note">— to create in Tally first: {miss.join(", ")}</span></>}</p>
       <Table head={<><th className="dt">Date</th><th>Ledger</th><th className="n">Debit</th><th className="n">Credit</th></>}>
         {f.je.slice(0, 30).flatMap((j, ji) => j.lines.map((l, k) => <tr key={ji + ":" + k}><td>{k ? "" : d(j.date)}</td><td>{(l.cr ? "\u2003To " : "") + l.l}</td><td className="n">{l.dr ? m(l.dr) : ""}</td><td className="n">{l.cr ? m(l.cr) : ""}</td></tr>)
-          .concat([<tr key={ji + ":n"}><td></td><td colSpan={3} className="note">({j.narr})</td></tr>]))}
+          .concat([<tr key={ji + ":n"}><td></td><td colSpan={3} className="note">({shownNarr(j.narr)})</td></tr>]))}
       </Table>
       {f.je.length > 30 && <p className="note">{f.je.length - 30} more in the Excel.</p>}
       <p className="note">Mark it “Entry to pass” and these go into the Tally file.</p>

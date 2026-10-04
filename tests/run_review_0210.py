@@ -124,7 +124,8 @@ with sync_playwright() as p:
     ok("for the year 2025-26" in pg.inner_text("#app") and "the year so far" not in pg.inner_text("#app .rpt-overview"), "16. a closed year says 'for the year', not 'the year so far'")
     ok(E("(() => { const r = MIS.run('20250401', '20260331'); return r.dpo; })()") is None, "16. no 'days of purchases' for a client with no purchases of goods")
     sv = pg.inner_text("#side [data-side-date]")
-    ok("Build of" not in sv and sv.count("-2026") == 2, "16. sidebar: today and one build date (%s)" % sv.replace("\n", " / "))
+    # owner's spec K1 (04-Oct-2026): the build date moved to Settings' About line
+    ok("Build of" not in sv and sv.count("-2026") == 1, "16. sidebar: today only, the build date in Settings (%s)" % sv.replace("\n", " / "))
 
     # 17. the firm's name from the firm account; never asked when it is there; never emptied by a sync
     E("() => { S.account = {firm: {name: 'Garg Shekhar& Company'}, me: {role: 'owner'}}; Cloud.on = () => true; S.firm.firmName = ''; }")

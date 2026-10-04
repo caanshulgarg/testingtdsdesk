@@ -9,7 +9,7 @@ import NoBooks from "../../parts/NoBooks.jsx";
 import FreshBar from "../../parts/FreshBar.jsx";
 import { BusyCard } from "../../parts/Reading.jsx";
 
-const m = (v) => INR0.format(r2(v || 0));
+const m = (v) => INR.format(r2(v || 0));   // two decimals everywhere (spec K5)
 const pct = (a, c) => c ? (Math.round(a / c * 1000) / 10) + "%" : "—";
 
 // a figure that opens its report
@@ -70,7 +70,7 @@ function AreaDash({ id, d }) {
       {t.length > 0 && <Bars labels={t.map((x) => FC.shortMonth(x.ym))} series={[{ name: "Deducted", cls: "c5", values: t.map((x) => x.ded) }, { name: "Deposited", cls: "c2", values: t.map((x) => x.dep) }]} label="TDS by month" />}</>;
   }
   if (id === "audit") {
-    if (!d.au) return <div className="fc-empty small"><p className="note">The audit has not been run for this client yet.</p><button className="btn small primary" onClick={() => RPT.open("au-find")}>Run the audit</button></div>;
+    if (!d.au) return <div className="fc-empty small"><p className="note">The audit has not been run for this client yet.</p><button className="btn small" onClick={() => RPT.open("au-find")}>Run the audit</button></div>;
     // a kept run that no longer fits the books: none of its figures, only Run again (review of 02-Oct-2026)
     if (Audit.stale(d.au)) return <div className="fc-empty small" data-rpt-audit-stale=""><p className="note">{"The last audit run (" + FC.span(d.au.from, d.au.to) + ") no longer fits the books, so its findings are not shown."}</p><button className="btn small primary" onClick={() => RPT.open("au-find")}>Run again</button></div>;
     const high = d.open.filter((f) => f.sev === "high");
@@ -87,7 +87,7 @@ export default function Reports({ b }) {
   useEffect(() => { if (LK.live()) setTimeout(() => LK.autoFresh(), 0); });
   const d = have ? RPT.data() : null;
   const head = <>
-    <section className="dash-card rpt-head"><div className="rpt-top-row"><div><h3>Reports</h3><p className="note" style={{ margin: 0 }}>{"Every report for " + CO().name + " in one place. Click a figure or a report to open it."}</p></div>
+    <section className="dash-card rpt-head"><div className="rpt-top-row"><div><p className="note" style={{ margin: 0 }}>{"Every report for " + CO().name + " in one place. Click a figure or a report to open it."}</p></div>
       <input type="search" id="rptQ" data-fk="rptQ" value={S.rptQ || ""} placeholder="Find a report: ageing, 3B, cash, ratios…" aria-label="Find a report" onChange={(ev) => setAndShow("rptQ", ev.target.value, true)} />
       {have && <select aria-label="Year" value={RPT.range().fy} onChange={(ev) => setAndShow("rptFy", ev.target.value)}>{RPT.fys().map((y) => <option key={y} value={y}>{FC.fyLabel(y)}</option>)}</select>}</div></section>
     {LK.fr().busy && <BusyCard title="Bringing the books up to date…" detail={LK.fr().busy} done={0} total={0} />}

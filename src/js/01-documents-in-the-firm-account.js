@@ -352,8 +352,13 @@ function r2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
 const INR = new Intl.NumberFormat("en-IN", {minimumFractionDigits:2, maximumFractionDigits:2});
 const INR0 = new Intl.NumberFormat("en-IN", {maximumFractionDigits:0});
 // a negative amount reads "-₹1,234.00" (the minus before the rupee sign; colour scheme of 02-Oct-2026), shown in red by negAmounts
+// a Tally narration as shown on the screen: without FinCom's matching mark (" | TDSDesk:<id>", kept in Tally so FinCom can
+// find its own entries; never shown, owner's spec K1)
+function shownNarr(s){ return String(s == null ? "" : s).replace(/\s*\|?\s*TDSDesk:[A-Za-z0-9]+/gi, "").trim(); }
 function money(n){ const v = num(n); return (v < 0 ? "-₹" : "₹") + INR.format(Math.abs(v)); }
-function money0(n){ const v = num(n), t = INR0.format(Math.abs(v)); return (v < 0 && t !== "0" ? "-₹" : "₹") + t; }
+// one amount format on the screen (owner's spec K5, 04-Oct-2026): Indian grouping, two decimals, ₹1,25,000.00; money0 was
+// whole rupees and is kept by name for its many callers
+function money0(n){ const v = num(n), t = INR.format(Math.abs(v)); return (v < 0 && t !== "0.00" ? "-₹" : "₹") + t; }
 // every amount on screen that is negative is shown in red (a figure cell, a tile's number): after each change to the page
 const negAmounts = {
   re: /^\s*[-−]\s*₹/,
@@ -392,7 +397,7 @@ function moneyShort(v){
   const down = (x) => (Math.floor(x * 100 + 1e-9) / 100).toFixed(2);
   if (a >= 1e7) return sg + "\u20b9" + down(a / 1e7) + " Cr";
   if (a >= 1e5) return sg + "\u20b9" + down(a / 1e5) + " L";
-  return sg + "\u20b9" + Math.round(a).toLocaleString("en-IN");
+  return sg + "\u20b9" + INR.format(a);
 }
 function fmtDate(d){
   if (!d && d !== 0) return "—";
@@ -432,11 +437,59 @@ function toastWire(t){
   const end = ev => { if (y0 == null) return; const d = ev.clientY - y0; y0 = null; t.style.opacity = ""; if (d > 40) toastHide(); else { t.style.transform = ""; toastTimer = setTimeout(toastHide, 2000); } };
   t.addEventListener("pointerup", end); t.addEventListener("pointercancel", end);
 }
+// Messages in plain words (owner's spec K4, 04-Oct-2026): what happened, why, what to do. The common raw words of the
+// database, the network, the browser and Tally are said in plain English; anything else that reads as raw (codes,
+// program words) becomes a plain sentence with the raw words kept for a "details" link. A message already in plain
+// words gives null and is shown as it is. {text, details}
+const PLAIN_ERRORS = [
+  [/Failed to fetch|NetworkError|Load failed|network ?error|ERR_INTERNET|ERR_NETWORK|net::/i, () => "Could not reach FinCom: this computer seems to have no internet. Check the connection; your work is kept here and sent when it is back."],
+  [/JWT expired|invalid JWT|\bjwt\b|not authenticated|refresh token|session (has )?expired|(error|status|HTTP) 401|Unauthorized/i, () => "You have been signed out. Sign in again (Settings → Sign-in and people); nothing typed here is lost."],
+  [/duplicate key value|violates unique constraint|23505/i, () => "This is already saved (the same entry is there), so nothing new was added."],
+  [/row-level security|permission denied|42501|(error|status|HTTP) 403|Forbidden/i, () => "Your role in the firm does not allow this. Ask the firm’s owner to do it, or to change your role."],
+  [/violates foreign key|23503/i, () => "This refers to something that has been removed (a client or an entry). Reload the page and try again."],
+  [/violates (not-null|check) constraint|2350[24]|invalid input syntax|22P02/i, () => "A value is missing or not in the expected form, so it was not saved. Check the entry and save again."],
+  [/PGRST\d+|relation .* does not exist|column .* does not exist|schema cache|42P01|42703/i, () => "FinCom’s server could not do this right now (it may be being updated). Try again in a few minutes; if it keeps happening, tell support."],
+  [/bridge answered with error|bridge_key|X-Bridge-Key/i, () => "FinCom Bridge on the Tally computer could not do this. Try again; if it keeps happening, restart FinCom Bridge (its icon near the clock)."],
+  [/timed? ?out\b|AbortError|did not answer in time|(error|status|HTTP) 504/i, () => "The answer took too long. Try again; if it keeps happening, the computer or FinCom’s server may be busy."],
+  [/(error|status|HTTP) 50[0-3]|Internal Server Error|Bad Gateway|Service Unavailable|answered with error/i, () => "FinCom’s server had a problem with this. Try again in a minute; if it keeps happening, tell support."],
+  [/QuotaExceeded|quota/i, () => "This browser’s storage is full, so the work could not be kept here. Sign in to the firm account, or clear old browser data."],
+  [/Could not find Ledger ['"‘“]?([^'"’”]+)['"’”]?/i, (m) => "Tally does not have the ledger “" + m[1].trim().replace(/[.!]+$/, "") + "”. Create it in Tally (or choose another ledger here), then post again."],
+  [/totals? do(es)? not match|Voucher totals/i, () => "Tally refused the entry: its debit and credit totals differ. Check the amounts, then post again."],
+  [/Company ['"]?(.+?)['"]? (is )?not (open|loaded|found)|No company (is )?open/i, () => "The company is not open in Tally. Open it in TallyPrime, then try again."],
+  [/LINEERROR|<LINEERROR>|ERRORS>\s*[1-9]/i, () => "Tally refused the entry. Open it under Post to Tally → Errors to see which line, correct it and post again."],
+  [/TypeError|ReferenceError|SyntaxError|RangeError|is not a function|is not defined|Cannot read propert|\bundefined\b|null is not|\bNaN\b/, () => "Something went wrong on this page. Reload the page and try again; if it happens again, tell support."],
+];
+function plainError(e){
+  const raw = String(e && e.message ? e.message : e == null ? "" : e).trim();
+  if (!raw) return null;
+  for (const [re, say] of PLAIN_ERRORS){ const m = raw.match(re); if (m) return {text: say(m), details: raw}; }
+  // raw-looking words not mapped: codes, braces, program words
+  if (/[{}<>]|\b(error|exception|errno|stack|status) ?(code)?[:=]?\s*\d+|_[a-z]+_|\b[a-z]+_[a-z_]+\b/i.test(raw)) return {text: "That did not work, and FinCom could not tell why in plain words. Try again; if it happens again, tell support.", details: raw};
+  return null;
+}
+// a message with raw words in it: the plain words, then "details" for the raw ones (the prefix before a ":" is kept)
+function plainMessage(s){
+  const str = String(s == null ? "" : s), i = str.indexOf(": ");
+  const head = i > 0 && i < 60 && !plainError(str.slice(0, i)) ? str.slice(0, i) : "";
+  const p = plainError(head ? str.slice(i + 2) : str);
+  if (!p) return null;
+  return {text: (head ? head.replace(/[.:]+$/, "") + ". " : "") + p.text, details: p.details};
+}
+// the plain words alone, for a message built into a sentence
+function plainText(s){ const p = plainMessage(s); return p ? p.text.replace(/\.$/, "") : String(s == null ? "" : s); }
 function toast(msg){
   const t = document.getElementById("toast"); if (!t) return;
-  const s = msg == null ? "" : String(msg);
+  let s = msg == null ? "" : String(msg);
   toastWire(t);
-  t.textContent = s; t.dataset.tone = toastTone(s);
+  const plain = toastTone(s) === "stop" || /error|fail|could not|cannot/i.test(s) ? plainMessage(s) : null;
+  if (plain){
+    s = plain.text;
+    t.textContent = s + " ";
+    const more = document.createElement("button"); more.className = "linkbtn toast-details"; more.type = "button"; more.textContent = "details";
+    more.addEventListener("click", ev => { ev.stopPropagation(); clearTimeout(toastTimer); const d = document.createElement("div"); d.className = "toast-raw"; d.textContent = plain.details; more.replaceWith(d); });
+    t.appendChild(more);
+  } else t.textContent = s;
+  t.dataset.tone = plain ? "stop" : toastTone(s);
   clearTimeout(toastTimer);
   t.classList.remove("hidden", "out", "in"); t.style.transform = ""; void t.offsetWidth; t.classList.add("in");
   toastTimer = setTimeout(toastHide, Math.min(9000, 4000 + s.length * 35));

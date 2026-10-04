@@ -19,7 +19,7 @@ with sync_playwright() as p:
     pg.wait_for_timeout(800)
     app = lambda: pg.inner_text("#app")
     bar = lambda: pg.inner_text("#app .actionbar")
-    ok("Add sales invoices" in app() and pg.locator("#salesDrop").count() == 1 and pg.locator("#app .actionbar").count() == 0, "no invoices: the upload box, no bar")
+    ok("No sales invoices yet" in app() and pg.locator("#salesDrop").count() == 1 and pg.locator("#app .actionbar").count() == 0, "no invoices: the upload box, no bar")
     # an invoice created here
     pg.click('#app button:has-text("Create invoice")'); pg.wait_for_timeout(500)
     ok("New sales invoice" in app() and "invoice total" in bar(), "Create invoice: the form, and its own bar")

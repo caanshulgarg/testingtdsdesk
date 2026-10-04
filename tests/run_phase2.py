@@ -90,7 +90,8 @@ with sync_playwright() as p:
     ok("₹49.99 Cr credit" in pg.inner_text("header.top .firmbtn") and "₹49,99,99,912.00" in (pg.get_attribute("header.top .firmbtn", "title") or ""), "32. the credit shows with ₹ (" + pg.inner_text("header.top .firmbtn").replace("\n", " ") + ")")
     # 27 and 26. the page's main button; the header at 1024 px
     pg.evaluate("() => goClient('books:letters')"); pg.wait_for_timeout(700)
-    ok("New confirmation" in top() and "Upload bills" not in top() and "+ Upload" in top(), "27. Letters: New confirmation, and + Upload in the top bar")
+    # owner's spec I (04-Oct-2026): one Upload, only on the pages that upload; no "+ Upload" elsewhere
+    ok("New confirmation" in top() and "Upload bills" not in top() and "+ Upload" not in top(), "27. Letters: New confirmation, and no Upload in the top bar")
     pg.evaluate("() => goClient('books:reports')"); pg.wait_for_timeout(700)
     ok("Refresh books" in top() and "Upload bills" not in top(), "27. Reports: Refresh books")
     pg.evaluate("() => goClient('bank')"); pg.wait_for_timeout(900)
@@ -113,9 +114,11 @@ with sync_playwright() as p:
     ok(w["scroll"] == "scroll" and w["bar"] >= 8 and w["inside"] and w["lastSeen"], "30. at 1,050 px: a scroll bar that always shows, the table inside the window, the last column reachable (" + str(w) + ")")
     pg.set_viewport_size({"width": 1400, "height": 900})
     # 31 (recheck). the sidebar's foot in the same date format
+    # owner's spec K1 (04-Oct-2026): the build stamp moved from the sidebar to the About line in Settings
     foot = pg.inner_text("#side .side-ver")
-    ok(re.search(r"\d{2}-[A-Z][a-z]{2}-\d{4}\n", foot + "\n") and re.search(r"\d{2}-[A-Z][a-z]{2}-\d{4} \d{2}:\d{2}", foot) and "Sept" not in foot and " am" not in foot and " pm" not in foot,
-       "31. the sidebar foot reads 30-Sep-2026 and 01-Oct-2026 00:04 (" + foot.replace("\n", " / ") + ")")
+    pg.evaluate("() => goSettings(null)"); pg.wait_for_timeout(500); about = pg.inner_text("[data-about]"); pg.evaluate("() => { S.view = 'company'; goClient('txn'); }"); pg.wait_for_timeout(600)
+    ok(re.search(r"\d{2}-[A-Z][a-z]{2}-\d{4}\n", foot + "\n") and re.search(r"\d{2}-[A-Z][a-z]{2}-\d{4} \d{2}:\d{2}", about) and "Sept" not in foot + about and " am" not in foot + about and " pm" not in foot + about,
+       "31. the sidebar foot reads 30-Sep-2026, the About line 01-Oct-2026 00:04 (" + foot.replace("\n", " / ") + " | " + about + ")")
     # 30. Transactions: Excel, columns, the first columns kept
     ok(pg.locator('#app button:text-is("Excel")').count() == 1 and pg.locator("#app .txntbl th.stick1").count() == 1, "30. Transactions: Excel export and the first columns kept in view")
     pg.click('#app .colpick summary'); pg.click('#app .colpick label:has-text("Voucher") input'); pg.wait_for_timeout(300)

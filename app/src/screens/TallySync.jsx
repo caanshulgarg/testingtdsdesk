@@ -2,6 +2,7 @@
 // received it (tally_recorder_lines; Rec in src/js/61), newest first, 200 at most, for the firm or one client. A strip of
 // the lines waiting over 2 minutes with why; filters Waiting, Mismatch (the ledger check, F37-40: none yet), Today; an
 // owner's Apply now on a held line (tally_recorder_release_held). New lines come in live (Live.joinRecorder, src/js/54).
+import Msg from "../parts/Msg.jsx";
 import { useState } from "react";
 
 const FILTERS = [["all", "All"], ["waiting", "Waiting"], ["mismatch", "Mismatch"], ["today", "Today"]];
@@ -30,7 +31,7 @@ export default function SyncActivity() {
     </div>}
     <nav className="sbar" aria-label="Sync activity filter">{FILTERS.map(([id, label]) =>
       <button key={id} data-sync-filter={id} aria-selected={f === id} onClick={() => setF(id)}>{label}</button>)}</nav>
-    {a.err && <p className="bk-warn">{a.err}</p>}
+    {a.err && <p className="bk-warn"><Msg text={a.err} /></p>}
     {msg && <p className={msg.err ? "bk-alert bad" : "note"} data-sync-msg="" style={{ margin: "6px 0" }}>{msg.busy ? "Applying…" : msg.err || msg.ok}</p>}
     {a.rows === null || a.rows === undefined ? <p className="note">Reading…</p>
       : !rows.length ? <p className="note" data-sync-empty="">{f === "mismatch" ? "No mismatch: the ledger check of each line comes later." : f === "waiting" ? "Nothing waiting." : f === "today" ? "No line today yet." : "No line from Tally yet."}</p>

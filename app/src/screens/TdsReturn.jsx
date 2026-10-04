@@ -240,7 +240,7 @@ function NrInfo({ party }) {
     <input type="text" defaultValue={i[k] || ""} aria-label={label + ": " + party} style={{ width: w }} onBlur={(ev) => tdsNrSet(party, k, ev.target.value)} /></label>;
   return <tr data-nr={party}><td>{party}</td><td colSpan={2}>
     {f("country", "Country code", 60)}{f("nature", "Nature code", 60)}{f("ack15ca", "15CA acknowledgement")}{f("tin", "Tax ID in the country")}
-    {f("email", "E-mail", 180)}{f("phone", "Phone")}{f("address", "Address", 260)}
+    {f("email", "Email", 180)}{f("phone", "Phone")}{f("address", "Address", 260)}
     <label className="nr"><input type="checkbox" defaultChecked={!!i.dtaa} onChange={(ev) => tdsNrSet(party, "dtaa", ev.target.checked)} /> Treaty (DTAA) rate</label>{" "}
     <label className="nr"><input type="checkbox" defaultChecked={!!i.trc} onChange={(ev) => tdsNrSet(party, "trc", ev.target.checked)} /> Tax residency certificate and Form 10F on file</label>
   </td></tr>;

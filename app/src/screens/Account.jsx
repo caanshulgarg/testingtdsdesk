@@ -5,6 +5,7 @@
 // through doAct (cloudSignIn, cloudSync, cloudPassword, addPerson, backupNow…), which read the boxes by their id or
 // data-cloud as before, and acctPerson, acctBackup, acctDropOff, adminAct, adminPlan, cloudAuto, signOutAll, docsKeep,
 // docYearsSet (src/js/27, 19, 43).
+import Msg from "../parts/Msg.jsx";
 
 import { KeepBox } from "./SignIn.jsx";
 
@@ -47,11 +48,11 @@ export function FirmAccount() {
       <label className="f"><span>Password</span><input type="password" data-cloud="password" data-fk="cloudpw" aria-label="Password" defaultValue={form.password || ""} autoComplete="current-password" onChange={(ev) => cloudForm("password", ev.target.value)} /></label></div>
     <KeepBox />
     <div className="row" style={{ marginTop: 10 }}><Act act="cloudSignIn" className="btn small primary">Sign in</Act></div>
-    {st.error && <p className="bk-warn" style={{ marginTop: 10 }}>{st.error}</p>}</div>;
+    {st.error && <p className="bk-warn" style={{ marginTop: 10 }}><Msg text={st.error} /></p>}</div>;
   const pending = st.pending, aal2 = Cloud.aal() === "aal2", mi = st.mfaInfo || {}, a = S.account, owner = !!(a && ((a.me || {}).role === "owner" || a.superadmin === true));
   return <div className="pane"><h2>Firm account (shared data)</h2>
     <p className="note" style={{ margin: "0 0 8px" }}>Signed in as <b>{st.email}</b>{(st.role ? " (" + st.role + ")" : "") + (st.lastSync ? " · last sync " + fmtTime(st.lastSync) : "") + (pending ? " · " + pending + " change" + (pending > 1 ? "s" : "") + " waiting to be sent" : " · everything is sent")}</p>
-    {st.error && <p className="bk-warn">{st.error}</p>}
+    {st.error && <p className="bk-warn"><Msg text={st.error} /></p>}
     <label className="chk"><input type="checkbox" checked={c.auto !== false} onChange={(ev) => cloudAuto(ev.target.checked)} /> Keep in sync automatically (every 45 seconds)</label>
     <div className="row" style={{ marginTop: 10 }}><Act act="cloudSync" className="btn small primary" disabled={!!st.busy}>{st.busy ? "Syncing…" : "Sync now"}</Act><Act act="cloudSignOut">Sign out</Act>
       {owner && <button className="btn small" title="Every computer and phone signed in to your account is signed out" onClick={() => signOutAll()}>Sign out of all devices</button>}</div>

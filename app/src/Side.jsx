@@ -84,7 +84,8 @@ export default function Side() {
       <Item icon="help" label="Help" on={home && S.homeTab === "help"} count={typeof SUP === "object" ? SUP.counts() : 0} onClick={() => navHome("help")} />
       <div className="side-grow" />
       {/* review of 01-Oct-2026: the date here was the build's, read as today's; now each says what it is */}
-      <div className="side-ver" data-side-date=""><span>Today {fmtDate(new Date())}</span><br /><small title={APP_VERSION}>{"Build " + String(__REACT_BUILD__).replace(/^React · /, "")}</small></div>
+      {/* the build stamp moved to the About line in Settings (owner's spec K1, 04-Oct-2026) */}
+      <div className="side-ver" data-side-date=""><span>Today {fmtDate(new Date())}</span></div>
     </>
   );
 }

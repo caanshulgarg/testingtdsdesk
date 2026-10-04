@@ -1955,6 +1955,8 @@ document.addEventListener("keydown", ev => {
   if (!ctrl && !ev.altKey && !inField && (k === "j" || k === "k") && S.view === "company" && S.tab === "invoices" && !S.reviewTable){
     ev.preventDefault(); billStep(k === "j" ? 1 : -1); return;
   }
+  // Esc closes the Tally panel or the firm's menu first (they are small windows); only then it leaves the client
+  if (k === "Escape" && (S.tallyPanel || S.firmMenu)){ S.tallyPanel = false; S.firmMenu = false; render(); return; }
   if (k === "Escape" && !inField && S.view === "company"){ goHome(); return; }
   if ((k === "Enter" || k === " ") && ev.target.id === "drop"){ ev.preventDefault(); pickFiles("company"); }
 });
