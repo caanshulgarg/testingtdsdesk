@@ -622,7 +622,16 @@ func jobWorker(dir string) {
 		}
 		var res []M
 		var note M
+		var pinErr *pinRefusedError
 		switch {
+		case errors.As(o.err, &pinErr):
+			// round 6: the bridge refused the request itself (not a request FinCom builds): nothing reached Tally; its
+			// entries fail with the words, never waited on
+			for _, it := range r.items {
+				res = append(res, M{"id": it["id"], "kind": r.kind, "ok": false, "refused": true, "state": "failed", "message": o.err.Error()})
+			}
+			note = M{"n": len(r.items), "kind": r.kind, "seconds": 0, "refused": true, "created": 0, "altered": 0, "exceptions": 0, "ignored": 0, "errors": 0, "lastVchId": ""}
+			writeLog(fmt.Sprintf("Posting job %s: request %d of %d (%s) refused by the bridge: %s", jobID, i+1, K, what, o.err.Error()))
 		case o.err != nil && !tallyNoAnswer(o.err):
 			// nothing reached Tally (refused here, Tally not reachable, or held after a timeout): the same request goes
 			// again after a wait; nothing is recorded

@@ -143,12 +143,15 @@ var requestRebuild = map[string]func(x string) []string{
 var importReports = []string{"Vouchers", "All Masters"}
 
 var (
-	reImportObj   = regexp.MustCompile(`^<(VOUCHER|LEDGER)\b[^>]*>`)
-	reImportNever = regexp.MustCompile(`(?i)<\s*/?\s*(TDL|TDLMESSAGE|COLLECTION|REPORT|FORM|PART|LINE|FIELD|SYSTEM|TALLYMESSAGE|ENVELOPE|HEADER|BODY|DESC|STATICVARIABLES|IMPORTDATA|EXPORTDATA|REQUESTDESC|REQUESTDATA|TALLYREQUEST)\b`)
+	reImportObj   = regexp.MustCompile(`^<(VOUCHER|LEDGER|GROUP|VOUCHERTYPE)\b[^>]*>`)
+	reImportNever = regexp.MustCompile(`(?i)<\s*/?\s*(TDL|TDLMESSAGE|COLLECTION|REPORT|FORM|PART|LINE|FIELD|SYSTEM|TALLYMESSAGE|ENVELOPE|HEADER|BODY|DESC|STATICVARIABLES|IMPORTDATA|EXPORTDATA|REQUESTDESC|REQUESTDATA|TALLYREQUEST)\b|<!\[CDATA\[|<!DOCTYPE|<\?`)
 )
 
-// an Import as importEnvelope builds it: the request itself when its report is one of the two, its body is one
-// TALLYMESSAGE (or none) holding VOUCHER and LEDGER objects only, and nothing in them is a request's own markup
+// an Import as importEnvelope builds it: the request itself when its report is one of the two and its body is one
+// TALLYMESSAGE (or none) holding objects the posting rule accepts (post.go cannotSend, the one source of truth: VOUCHER
+// with a date, LEDGER, GROUP, a VOUCHERTYPE's numbering), with white space before, after and between them, none
+// carrying a request's own markup, CDATA, a DOCTYPE or a processing instruction (round 6 R6-1: FinCom's own XML ends
+// each object with a line break)
 func importRebuild(x string) []string {
 	if !strings.HasPrefix(x, importHead) {
 		return nil
@@ -171,7 +174,11 @@ func importRebuild(x string) []string {
 			return nil
 		}
 		in := body[len(open) : len(body)-len(close)]
-		for in != "" {
+		for {
+			in = strings.TrimLeft(in, " \t\r\n")
+			if in == "" {
+				break
+			}
 			m := reImportObj.FindStringSubmatch(in)
 			if m == nil {
 				return nil
@@ -181,7 +188,7 @@ func importRebuild(x string) []string {
 				return nil
 			}
 			obj := in[:end+len("</"+m[1]+">")]
-			if reImportNever.MatchString(obj) {
+			if reImportNever.MatchString(obj) || (cannotSend(obj) != "" && !deletionShape(obj)) {
 				return nil
 			}
 			in = in[len(obj):]

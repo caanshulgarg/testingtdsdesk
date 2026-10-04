@@ -516,4 +516,10 @@ Verdict, round 6:
 - R6-S1 is High and blocks the build.
 - The pinning holds as a security control. R5-S1 and R5-S2 are confirmed.
 
+
+### Status after the round 6 fixes
+
+- R6-1 HIGH: Fixed (TestRealPostingShapesPass, TestPostingRuleAndPinAgree, TestPostShapesCurrent). R6-2: Fixed
+  (TestPinRefusalWords). R6-3: Fixed (TestDupCheckPartyNoQuote). Details in the code review's round 6 status.
+
 Range: bdfe261..e5e54c0

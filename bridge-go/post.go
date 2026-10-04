@@ -560,6 +560,19 @@ func invokeImport(p M) (M, error) {
 	return M{"ok": true, "company": company, "port": port, "results": out}, nil
 }
 
+// round 6: a deletion as removeTallyVoucher builds it: one VOUCHER with ACTION="Delete", identified by REMOTEID,
+// TAGNAME/TAGVALUE or DATE, holding only its date, type and number (the pin, pinned.go, takes these beside the posting
+// rule's objects)
+var (
+	reDeleteHead  = regexp.MustCompile(`^<VOUCHER(?: (?:REMOTEID|TAGNAME|TAGVALUE|DATE|VCHTYPE)="[^"<>]*")* ACTION="Delete">`)
+	reDeleteInner = regexp.MustCompile(`^(?:<DATE>[^<]*</DATE>)?<VOUCHERTYPENAME>[^<]*</VOUCHERTYPENAME>(?:<VOUCHERNUMBER>[^<]*</VOUCHERNUMBER>)?$`)
+)
+
+func deletionShape(x string) bool {
+	h := reDeleteHead.FindString(x)
+	return h != "" && strings.HasSuffix(x, "</VOUCHER>") && reDeleteInner.MatchString(x[len(h):len(x)-len("</VOUCHER>")])
+}
+
 // delete one voucher from Tally, trying each way Tally identifies a voucher, and saying what Tally answered
 func removeTallyVoucher(port int, company, guid, masterID, vtype, vdate, vnum string) (M, error) {
 	var d time.Time

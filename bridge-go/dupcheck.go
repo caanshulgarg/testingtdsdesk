@@ -185,7 +185,8 @@ func dupCheckRequest(company, date, party string) string {
 	filter, formula := "", ""
 	if party != "" {
 		filter = "<FILTERS>TDSDeskDupParty</FILTERS>"
-		formula = `<SYSTEM TYPE="Formulae" NAME="TDSDeskDupParty">$PartyLedgerName = "` + esc(party) + `"</SYSTEM>`
+		// round 6 R6-3: no quote in the name, as the other builders (a quote would end the TDL string)
+		formula = `<SYSTEM TYPE="Formulae" NAME="TDSDeskDupParty">$PartyLedgerName = "` + esc(strings.ReplaceAll(party, `"`, "")) + `"</SYSTEM>`
 	}
 	return "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>" + dupCheckID + "</ID></HEADER>" +
 		"<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>" + esc(company) + "</SVCURRENTCOMPANY>" +

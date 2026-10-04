@@ -102,11 +102,11 @@ func checkAllowed(x string) error {
 	if a.measureOnly && measuring.Load() == 0 {
 		return &notAllowedError{id, "measure-only, and the measuring tool is not running"}
 	}
-	// round 5 of the 2.2.0 reviews: the request must be exactly what the bridge's builder makes for this id (pinned.go)
-	if !pinnedToBuilder(id, x) {
-		return &notAllowedError{id, "it is not exactly as the bridge builds it"}
-	}
+
 	if id == "Import" {
+		if !pinnedToBuilder(id, x) {
+			return &pinRefusedError{id}
+		}
 		return nil
 	}
 	// a collection request carries only its own collection (and its listed helpers): the id is what goes
@@ -125,7 +125,22 @@ func checkAllowed(x string) error {
 			return &notAllowedError{id, "it carries another id, " + m[1]}
 		}
 	}
+	// round 5 of the 2.2.0 reviews: the request must be exactly what the bridge's builder makes for this id (pinned.go);
+	// round 6 R6-2: the words name the bridge
+	if !pinnedToBuilder(id, x) {
+		return &pinRefusedError{id}
+	}
 	return nil
+}
+
+type pinRefusedError struct{ id string }
+
+func (e *pinRefusedError) Error() string {
+	why := "the " + or(e.id, "request") + " request differs from what the bridge builds"
+	if e.id == "Import" {
+		why = "the posting holds something other than vouchers, ledgers, groups or a voucher type's numbering, as FinCom sends them"
+	}
+	return "FinCom Bridge refused to send this (it is not a request FinCom builds): " + why + "; nothing was sent to Tally"
 }
 
 // each id's request as its builder makes it, with fixed inputs: its shape is fingerprinted in the table

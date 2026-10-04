@@ -1102,4 +1102,25 @@ Verdict, round 6:
   identical, and every value out of bounds is held by the value checks or refused by id with ReadDays off.
 - R6-2 and R6-3 are Low.
 
+
+### Status after the round 6 fixes (by the builder; tests first: tdd/b227.1.red, where the real purchase bill was refused)
+
+- R6-1 HIGH, Fixed (TestRealPostingShapesPass, TestPostingRuleAndPinAgree, TestPostShapesCurrent): the Import check
+  calls the posting rule (post.go cannotSend, one source of truth: VOUCHER with a date, LEDGER, GROUP, a VOUCHERTYPE's
+  numbering) for each object, with white space before, after and between objects, beside the deletions
+  removeTallyVoucher builds (deletionShape: ACTION="Delete", its identity, date, type and number only); it still
+  refuses another report, a second TALLYMESSAGE, TDL / COLLECTION / REPORT / SYSTEM / ENVELOPE markup, CDATA, a DOCTYPE
+  and processing instructions. tests/gen_post_shapes.js loads the app's own builders from src/js (voucherXml for a
+  purchase bill, a journal and a debit note; salesVoucherXml with its lines given; bankVoucherXml for a payment, a
+  receipt and a payment with TDS; ledgerMasterXml; customerMasterXml; the VOUCHERTYPE numbering builder inside
+  setAutoNumbering) and writes tests/fixtures/post-shapes/*.xml with MANIFEST.json (the SHA-256 of the builders' source
+  text); TestRealPostingShapesPass sends each through the posting rule, planImports and sendImport to the stand Tally;
+  TestPostShapesCurrent fails with "regenerate post-shapes" when the builders' source changed. Left: the app builds no
+  GROUP master and no Alter of an existing ledger, so those two have no real shape; TestPostingRuleAndPinAgree covers
+  them. A request the bridge refuses in a posting job now fails its entries with the words (before, the job would wait
+  as if Tally were not reachable).
+- R6-2 LOW, Fixed (TestPinRefusalWords): "FinCom Bridge refused to send this (it is not a request FinCom builds):
+  <why>; nothing was sent to Tally".
+- R6-3 LOW, Fixed (TestDupCheckPartyNoQuote): the duplicate check's party name has no quote, as the other builders.
+
 Range: bdfe261..e5e54c0
