@@ -121,15 +121,28 @@ func TestReadTestEditLogProbe(t *testing.T) {
 func sliceReady(t *testing.T, earliestBack int) (*standTally, []M) {
 	t.Helper()
 	_, f, _ := liveBridge(t, "")
-	applyRecorderSource(M{"recorderSource": "slices"})
+	setCfg("RecorderSlices", true) // round 2 R2-5: month slices by the setting only (the cloud cannot send them yet)
 	saveDateForm(zz, formPlain, "202508", 3)
-	dir := syncFolder(zz)
-	d := nowFn().AddDate(0, -earliestBack, 0).Format("200601") + "05"
-	writeDayFile(dir, d, "<ENVELOPE></ENVELOPE>", true)
 	f.add(today(), fgParty, "SC-1", "one", "-1.00")
 	sessions := openCompaniesWith(fin, true)
-	lightCheckOpen(sessions) // the starting point (nothing above it)
+	lightCheckOpen(sessions) // the starting point (nothing above it), source C's state from it
+	backdateStartPoint(t, earliestBack)
 	return f, sessions
+}
+
+// the starting point recorded months back (the slices walk back to its month, round 2 R2-10)
+func backdateStartPoint(t *testing.T, months int) {
+	t.Helper()
+	all := readObjFile(sp("start-point.json"))
+	for k, v := range all {
+		e := obj(v)
+		e["at"] = nowFn().AddDate(0, -months, 0).Format("2006-01-02T15:04:05")
+		all[k] = e
+	}
+	_ = saveFile(sp("start-point.json"), jsonText(all))
+	spMu.Lock()
+	spLatestD = ""
+	spMu.Unlock()
 }
 
 func sliceMonths(f *standTally) []string {
@@ -201,7 +214,7 @@ func TestSourceCGoesBackToEarliest(t *testing.T) {
 	}
 	// nowFn moved by about 6 minutes: the same months
 	if got := strings.Join(sliceMonths(f), ","); got != strings.Join(want, ",") {
-		t.Fatalf("months asked: %s (want %s: back to the copy's earliest month, then stop)", got, strings.Join(want, ","))
+		t.Fatalf("months asked: %s (want %s: back to the starting point's month, then stop)", got, strings.Join(want, ","))
 	}
 }
 
@@ -224,8 +237,7 @@ func TestSourceCOffAfterSlowAnswer(t *testing.T) {
 	if st := obj(obj(beatBody(true, "open", "", nil, nil, nil)["recorderSourceC"])[zz]); st["off"] != true || num(st["seconds"]) < 2.4 {
 		t.Fatalf("the beat: %v", st)
 	}
-	liveResetState() // a restart
-	applyRecorderSource(M{"recorderSource": "slices"})
+	liveResetState() // a restart (the setting stays)
 	laterBy(t, 10*time.Minute)
 	f.mu.Lock()
 	f.add(today(), fgParty, "SC-6", "this month", "-1.00")
@@ -245,7 +257,7 @@ func TestSourceCOffAfterSlowAnswer(t *testing.T) {
 
 func TestSourceCNeedsCalibratedForm(t *testing.T) {
 	_, f, _ := liveBridge(t, "")
-	applyRecorderSource(M{"recorderSource": "slices"})
+	setCfg("RecorderSlices", true)
 	f.add(today(), fgParty, "NC-1", "one", "-1.00")
 	sessions := openCompaniesWith(fin, true)
 	lightCheckOpen(sessions)
@@ -259,8 +271,8 @@ func TestSourceCNeedsCalibratedForm(t *testing.T) {
 	if f.n(sliceID) != 0 || logLines("Source C: no dated collection form has passed the read test for "+zz) != 1 {
 		t.Fatalf("asked without a calibrated form: %v", f.ids())
 	}
-	// the add-on alone (the owner's choice): never
-	applyRecorderSource(M{"recorderSource": "addon"})
+	// the setting off (the default): never
+	setCfg("RecorderSlices", false)
 	saveDateForm(zz, formPlain, "202508", 3)
 	f.mu.Lock()
 	f.add(today(), fgParty, "NC-3", "three", "-1.00")
@@ -275,15 +287,21 @@ func TestSourceCNeedsCalibratedForm(t *testing.T) {
 	if !sourceHas("addon") || sourceHas("slices") || recorderSource() != "addon" {
 		t.Fatal("the default")
 	}
+	// round 2 R2-5: "both" is what the cloud means, the add-on and Tally's change list; the cloud cannot send "slices"
 	applyRecorderSource(M{"recorderSource": "both"})
-	if !sourceHas("addon") || !sourceHas("slices") || sourceHas("alterid") {
-		t.Fatal("both is the add-on and the slices")
+	if !sourceHas("addon") || sourceHas("slices") || !sourceHas("alterid") {
+		t.Fatal("both is the add-on and Tally's change list")
+	}
+	applyRecorderSource(M{"recorderSource": "slices"})
+	if recorderSource() != "both" {
+		t.Fatalf("the cloud set slices: %s", recorderSource())
 	}
 }
 
 func TestSourceCDatedGuardException(t *testing.T) {
 	f := newStandTally(t)
 	standBridge(t, f, "")
+	noteStartPoint(zz, "co-guid-1", 5, 3) // round 2 R2-2: the guard checks values against the starting point
 	ym := nowFn().Format("200601")
 	if datedRefused(fin, sliceRequest(zz, formPlain, ym, 5)) == nil {
 		t.Fatal("a slice passes without a calibrated form")
@@ -299,6 +317,13 @@ func TestSourceCDatedGuardException(t *testing.T) {
 		"two months":      strings.Replace(ok, ">"+tallyDMY(monthEnd(ym))+"<", ">"+tallyDMY(monthEnd(nextYm(ym)))+"<", 1),
 		"no AlterID":      strings.Replace(ok, "$AlterID &gt; 5", "$AlterID &gt; -1", 1),
 		"another id":      strings.ReplaceAll(ok, sliceID, "FinComMeasureC"),
+		// round 2 R2-2, the two proved bypasses and their kin
+		"2019-04 above 0":           sliceRequest(zz, formDMYT, "201904", 0),
+		"2099-12":                   sliceRequest(zz, formDMYT, "209912", 5),
+		"AlterID 0":                 sliceRequest(zz, formDMYT, ym, 0),
+		"below the starting point":  sliceRequest(zz, formDMYT, ym, 4),
+		"before the starting point": sliceRequest(zz, formDMYT, nowFn().AddDate(0, -1, 0).Format("200601"), 5),
+		"next month":                sliceRequest(zz, formDMYT, nextYm(ym), 5),
 	}
 	for name, x := range bad {
 		if datedRefused(fin, x) == nil {
@@ -346,30 +371,23 @@ func TestBodyFetchOffAfterSlowAnswer(t *testing.T) {
 	}
 }
 
-// --- the rollback after an install by the setup (not only after an automatic update): the setup copies the program it
-// replaces to FinComBridge.previous.exe; the install step names its version (the registry's Version before it)
+// --- the rollback after an install by the setup: round 2 R2-4 replaced this test's checks with TestSetupKeepsGoodPrevious
+// (review220b_test.go): the copy goes to a temporary name, is verified, and is labelled by the replaced program itself
 func TestRecorderRollbackAfterSetup(t *testing.T) {
-	nsi := readText("installer/FinComBridge.nsi")
-	i, j := strings.Index(nsi, `CopyFiles /SILENT "$INSTDIR\FinComBridge.exe" "$INSTDIR\FinComBridge.previous.exe"`), strings.Index(nsi, `Rename "$INSTDIR\FinComBridge.exe" "$INSTDIR\FinComBridge.setup-old.exe"`)
-	if i < 0 || j < 0 || i > j {
-		t.Fatal("the setup does not keep the program it replaces before replacing it")
-	}
 	for _, f := range []string{"win_service.go", "win_user.go"} {
 		if !strings.Contains(readText(f), "notePreviousFromSetup(") {
-			t.Fatalf("%s: the install step does not name the previous version", f)
+			t.Fatalf("%s: the install step does not take the setup's copy", f)
 		}
 	}
+	oldV := exeVersionFn
+	exeVersionFn = func(string) string { return "2.1.10" }
+	defer func() { exeVersionFn = oldV }()
 	dir := t.TempDir()
-	prev := previousExe(dir)
-	_ = os.WriteFile(prev, []byte("2.1.10"), 0o755)
-	notePreviousFromSetup(dir, "2.1.10")
-	if str(readObjFile(filepath.Join(dir, "previous-version.json"))["version"]) != "2.1.10" || !exists(prev) {
-		t.Fatal("the previous version is not named")
-	}
-	// the same version installed again: not a previous version
-	_ = os.Remove(filepath.Join(dir, "previous-version.json"))
-	notePreviousFromSetup(dir, BridgeVersion)
-	if exists(prev) {
-		t.Fatal("the same version kept as the previous one")
+	_ = os.WriteFile(filepath.Join(dir, "FinComBridge.exe"), []byte("new"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "FinComBridge.setup-old.exe"), []byte("2.1.10"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "FinComBridge.previous.new"), []byte("2.1.10"), 0o755)
+	notePreviousFromSetup(dir)
+	if str(readObjFile(filepath.Join(dir, "previous-version.json"))["version"]) != "2.1.10" || readText(previousExe(dir)) != "2.1.10" {
+		t.Fatal("the previous version is not kept and named")
 	}
 }

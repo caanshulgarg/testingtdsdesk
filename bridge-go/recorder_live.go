@@ -317,9 +317,11 @@ func liveSaveOffsets() {
 }
 
 // --- the source
-// addon (the default), alterid (source B), slices (source C), both (the add-on and the slices: the owner, 04-Oct)
+// addon (the default), alterid (source B, Tally's change list), both (the add-on and Tally's change list: what the
+// cloud means, round 2 R2-5). Month slices (source C) are the setting RecorderSlices alone (default off): the cloud
+// cannot send them yet
 func validSource(s string) bool {
-	return s == "addon" || s == "alterid" || s == "slices" || s == "both"
+	return s == "addon" || s == "alterid" || s == "both"
 }
 
 func liveSourceFile() string { return sp("recorder-source.json") }
@@ -351,8 +353,11 @@ func recorderSource() string {
 }
 
 func sourceHas(s string) bool {
+	if s == "slices" {
+		return cfgB("RecorderSlices")
+	}
 	r := recorderSource()
-	return r == s || (r == "both" && (s == "addon" || s == "slices"))
+	return r == s || (r == "both" && (s == "addon" || s == "alterid"))
 }
 
 // the beat's answer: recorderSource (the owner's per-computer choice in FinCom). Review M6: only a present, valid value
@@ -517,7 +522,7 @@ func liveReadFile(path string, posting bool) int {
 	if off > st.off {
 		st.off = off // past the byte order mark
 	}
-	lines, upto := liveLogical(b, off, enc == "utf16", liveStarts(name))
+	lines, upto := liveLogical(b, off, enc == "utf16", liveStarts(name), strings.EqualFold(name, "failed.txt"))
 	if upto > st.off {
 		st.off = upto
 	}
@@ -548,7 +553,17 @@ func liveQueueCap() int { return keepNum("RecorderQueueMax", 5000) }
 // narration over several lines): only a line of the file's own company (its GUID starts the file name; failed.txt:
 // the file the add-on meant) whose t0 is not before the open line's. Anything else is the narration's text
 func liveStarts(name string) func(open, next string) bool {
+	if strings.EqualFold(name, "failed.txt") {
+		// round 2 R2-3: in failed.txt only a write_failed line starts a line, and never inside one still open (the add-on
+		// writes each whole); a plain "FCR1|" line there is not taken
+		return func(open, next string) bool {
+			return open == "" && strings.HasPrefix(next, "FCR1|ev=write_failed|")
+		}
+	}
 	return func(open, next string) bool {
+		if open == "" {
+			return true // nothing open: a line of its own (its company is checked when it is taken)
+		}
 		g := group(`\|cguid=([^|]*)\|`, next, 1)
 		if !liveOwnFile(name, next, g) {
 			return false
@@ -600,7 +615,10 @@ var reLiveDone = regexp.MustCompile(`\|t1=[^|\n]*(\|src=[A-Za-z]+)?\s*$`)
 // the complete logical lines in bytes read from off: physical lines end with a line feed (a partial last one waits); a
 // line not starting "FCR1|" continues the one before (a narration over several lines); the last logical line is
 // complete when it ends with its t1 (and src). upto: the offset up to which the lines are taken
-func liveLogical(b []byte, off int64, wide bool, starts func(open, next string) bool) ([]liveLogicalLine, int64) {
+// single: (failed.txt, round 2 R2-3) a line over several physical lines (a narration with line breaks) is never taken as
+// complete before the file's end: a narration could hold a whole forged line with its t1, followed by another. A genuine
+// failed line after such a one is then read as its narration (failed.txt is rare; a lost line there beats a forged one)
+func liveLogical(b []byte, off int64, wide bool, starts func(open, next string) bool, single bool) ([]liveLogicalLine, int64) {
 	var phys []liveLogicalLine
 	start := 0
 	step := 1
@@ -628,14 +646,31 @@ func liveLogical(b []byte, off int64, wide bool, starts func(open, next string) 
 	upto := off
 	var cur *liveLogicalLine
 	for _, p := range phys {
-		if strings.HasPrefix(p.text, "FCR1|") && (cur == nil || reLiveDone.MatchString(cur.text) || starts == nil || starts(cur.text, p.text)) {
-			if cur != nil {
-				out = append(out, *cur)
-				upto = cur.end
+		if strings.HasPrefix(p.text, "FCR1|") {
+			done := cur == nil || (reLiveDone.MatchString(cur.text) && !(single && strings.Contains(cur.text, "\n")))
+			open := "" // "" : nothing open (no line, or the last one complete)
+			if !done {
+				open = cur.text
 			}
-			c := p
-			cur = &c
-			continue
+			if starts == nil || starts(open, p.text) {
+				if cur != nil {
+					out = append(out, *cur)
+					upto = cur.end
+				}
+				c := p
+				cur = &c
+				continue
+			}
+			if done {
+				// not a line of its own and nothing open to continue: passed over (failed.txt: a plain line)
+				if cur != nil {
+					out = append(out, *cur)
+					upto = cur.end
+					cur = nil
+				}
+				upto = p.end
+				continue
+			}
 		}
 		if cur != nil {
 			if p.text != "" {
@@ -670,8 +705,10 @@ func liveTake(file string, gen int, ll liveLogicalLine, posting bool, held map[s
 			return 0
 		}
 		text = text[i+len("|was="):]
-		if !strings.HasPrefix(meant, onlyField(text, "cguid")+"-") {
-			liveForeign(file, onlyField(text, "cguid"))
+		g := onlyField(text, "cguid")
+		// round 2 R2-3: the inner line's GUID must be the GUID held for its company (none held: not taken)
+		if !strings.HasPrefix(meant, g+"-") || g == "" || heldGUID(strings.TrimSpace(onlyField(text, "cname"))) != g {
+			liveForeign(file, g)
 			return 0
 		}
 	}
@@ -1023,6 +1060,7 @@ func liveSourceB(company string, port int) (int, error) {
 	}
 	st.lastAsk = nowFn()
 	live.mu.Unlock()
+	liveSaveOffsets() // round 2 R2-9: the spacing holds across a restart after a failure
 	took := -1.0
 	tc := &TC{copier: true, yield: func() bool { return postingGoing() || importsInFlight.Load() > 0 }, timed: func(sec float64) { took = sec }}
 	raw, err := invokeTally(tc, port, keepListAboveRequest(company, above), keepNum("RecorderBTimeoutSec", 5)) // review M5: 5 s

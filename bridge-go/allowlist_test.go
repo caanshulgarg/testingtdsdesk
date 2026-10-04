@@ -194,9 +194,14 @@ func computedFigure(x string) string {
 			return m
 		}
 	}
-	for _, m := range reDollar.FindAllStringSubmatch(x, -1) {
-		// 2.2.0 (the owner's date forms): $$Date (a date literal) and $$IsBetween (a comparison) compute no figure
-		if m[1] != "SysName" && m[1] != "Date" && m[1] != "IsBetween" {
+	// 2.2.0 (the owner's date forms; round 2 R2-12): inside a request's Formulae only, the exact shapes of a date literal
+	// ($$Date:"d-MMM-yyyy") and of the period comparison ($$IsBetween:$Date:<literal>:<literal>) compute no figure; they
+	// are taken out before the $$ check, and any other use of $$Date or $$IsBetween is caught
+	lit := `\$\$Date:&#34;\d{1,2}-[A-Z][a-z]{2}-\d{4}&#34;`
+	shapes := regexp.MustCompile(`\$\$IsBetween:\$Date:` + lit + `:` + lit + `|` + lit)
+	y := regexp.MustCompile(`(?s)<SYSTEM TYPE="Formulae"[^>]*>.*?</SYSTEM>`).ReplaceAllStringFunc(x, func(b string) string { return shapes.ReplaceAllString(b, "") })
+	for _, m := range reDollar.FindAllStringSubmatch(y, -1) {
+		if m[1] != "SysName" {
 			return m[0]
 		}
 	}

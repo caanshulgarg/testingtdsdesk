@@ -627,4 +627,41 @@ Verdict, round 2:
   lines; no bad kept copy), and each fix is small. They block the build.
 - R2-5 to R2-12 are Low. R2-5 should go with the cloud's next deploy, before anyone is offered "both".
 
+
+### Status after the round 2 fixes (by the builder; tests first, red runs tdd/b222.1.red (compile) and b222.2.red)
+
+- R2-1 MEDIUM, Fixed (TestSourceCBounded, TestSourceCStartsAtSwitch): a new source C state starts at max(starting
+  point, the add-on's highest AlterID, ALTVCHID at the switch); a rise above 500 is not asked ("too many changes for
+  Source C (N); the gap check and Day Book cover them"); the request's limit is 5 s; the walk back stops at the starting
+  point's month (also R2-10).
+- R2-2 MEDIUM, Fixed (TestSourceCDatedGuardException: "2019-04 above 0", "2099-12", "AlterID 0", "below the starting
+  point", "before the starting point", "next month" refused): sliceExact also requires a starting point, the AlterID at
+  or above it, and the month between the starting point's month and the current month.
+- R2-3 MEDIUM, Fixed (TestFailedTxtForgedDropped, TestLiveOldAndFailedLines): in failed.txt only a write_failed line
+  starts a line, never inside one still open, and never after a line that ran over several physical lines (a narration
+  can hold a whole forged line with its t1; a genuine failed line after such a one is then read as its narration: a lost
+  line there rather than a forged one); a plain FCR1 line there is passed over; the unwrapped line is taken only when its
+  GUID is the GUID held for its company name (none held: not taken). Left (as round 1's S2 residual): a whole
+  write_failed line written into failed.txt by someone with write access to the folder, naming a held company, is
+  indistinguishable from the add-on's.
+- R2-4 MEDIUM, Fixed (TestSetupKeepsGoodPrevious, source inspection of the NSIS order): the setup copies the program
+  to FinComBridge.previous.new before replacing it, deletes no kept pair, and keeps FinComBridge.setup-old.exe for the
+  install step; notePreviousFromSetup takes the copy only when its SHA-256 equals setup-old.exe's, it is not the program
+  now installed (a reinstall keeps the kept pair), and the replaced program's own version answers ("FinComBridge.exe
+  version", 10 s; the registry Version is no longer used); only then the pair is replaced; both temporary files go.
+- R2-5 LOW, Fixed in the bridge (TestSourceCNeedsCalibratedForm): "both" is the add-on and Tally's change list, as the
+  cloud means; month slices are the setting RecorderSlices only (default off); a "slices" value from the cloud is
+  ignored. The cloud's text is unchanged (it already says add-on + alterid).
+- R2-6 LOW, Fixed (TestReadTestFormsStopEarly): after an answer over 4 times the month's entries or over 2 s, the
+  remaining static-variable forms are not tried; the filter forms still are.
+- R2-7 LOW, Fixed (TestRollbackNotKeptAsPrevious): after a rollback the version rolled back from is not kept.
+- R2-8 LOW, Fixed (TestRollbackVerifiesKeptVersion): the kept program is moved to a private name, hashed there, and put
+  in place only if it matches (moved back otherwise).
+- R2-9 LOW, Fixed (TestSourceBSpacingSavedOnFailure): the spacing is saved right after it is set, for B and C.
+- R2-10 LOW, Fixed with R2-1.
+- R2-11 LOW, Fixed: the kept form is keyed by company; the Tally program is recorded with it as data; the guard no
+  longer lists processes. Left: re-running the probe when the program changes (the owner runs the read test).
+- R2-12 LOW, Fixed (TestNoComputedFigureShapes): only the exact literal and comparison shapes inside a Formulae block
+  are taken out before the $$ check.
+
 Range: bdfe261..0b43d34

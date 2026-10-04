@@ -7,6 +7,7 @@
 package main
 
 import (
+	"context"
 	"crypto"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -18,7 +19,9 @@ import (
 	"math/big"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -264,7 +267,14 @@ func fileSHA256(f string) string {
 // after an update ran well (updateHealth): FinComBridge.old.exe kept as FinComBridge.previous.exe, with the SHA-256 the
 // update recorded while that program was the running one (update-pending.json, review H2)
 func keepPreviousVersion(dir, from string) {
-	sum := str(readObjFile(filepath.Join(dir, "update-pending.json"))["sha256"])
+	pend := readObjFile(filepath.Join(dir, "update-pending.json"))
+	sum := str(pend["sha256"])
+	if truthy(pend["rollback"]) {
+		// round 2 R2-7: after a rollback the program left is the newer one: not kept as "the previous version"
+		_ = os.Remove(filepath.Join(dir, "FinComBridge.old.exe"))
+		writeLog("Rollback: the version rolled back from (" + or(from, "not known") + ") is not kept as the previous version")
+		return
+	}
 	old := filepath.Join(dir, "FinComBridge.old.exe")
 	if !exists(old) {
 		return
@@ -315,14 +325,27 @@ func rollBackBridge() (M, error) {
 	// review H2: set up as an update: the running program goes aside as FinComBridge.old.exe with update-pending.json,
 	// so a previous version that does not start is undone by undoFailedUpdate (three starts) and this one comes back;
 	// a copy stays as FinComBridge.rolledback.exe
+	// round 2 R2-8: the kept program is moved to a private name first, hashed there, and put in place only if it matches
+	pv0 := readObjFile(filepath.Join(dir, "previous-version.json"))
+	chk := filepath.Join(dir, "FinComBridge.rollback-check.exe")
+	_ = os.Remove(chk)
+	if err := os.Rename(previousExe(dir), chk); err != nil {
+		return nil, errors.New("The kept previous version could not be taken: " + err.Error())
+	}
+	if fileSHA256(chk) != str(pv0["sha256"]) {
+		_ = os.Rename(chk, previousExe(dir))
+		return nil, errors.New("The kept previous version has changed since it was kept, so it is not put back. Nothing was changed.")
+	}
 	old := filepath.Join(dir, "FinComBridge.old.exe")
 	cur := fileSHA256(exe)
 	_ = os.Remove(old)
 	if err := os.Rename(exe, old); err != nil {
+		_ = os.Rename(chk, previousExe(dir))
 		return nil, errors.New("The program could not be moved aside: " + err.Error())
 	}
-	if err := os.Rename(previousExe(dir), exe); err != nil {
+	if err := os.Rename(chk, exe); err != nil {
 		_ = os.Rename(old, exe)
+		_ = os.Rename(chk, previousExe(dir))
 		return nil, errors.New("The previous version could not be put back: " + err.Error())
 	}
 	if b, err := os.ReadFile(old); err == nil {
@@ -337,23 +360,55 @@ func rollBackBridge() (M, error) {
 	return M{"ok": true, "version": str(pv["version"])}, nil
 }
 
-// 2.2.0: after an install by the setup over an earlier version, the program it replaced (the setup copied it to
-// FinComBridge.previous.exe) is named by the version the registry held before this install; the same version installed
-// again is not a previous version (the copy is removed)
-func notePreviousFromSetup(dir, oldVersion string) {
-	prev := previousExe(dir)
-	if !exists(prev) {
-		return
+// 2.2.0, round 2 R2-4: the setup's copy of the program it replaced. The setup copies FinComBridge.exe to
+// FinComBridge.previous.new and keeps the replaced program as FinComBridge.setup-old.exe; the install step (this) takes
+// the copy only when its SHA-256 equals the replaced program's (a whole copy), the replaced program is not the one now
+// installed (a reinstall of the same program keeps the kept pair), and the replaced program's own version can be read
+// (it is asked: "FinComBridge.exe version"; the registry is not trusted). Only then the kept pair (previous.exe and
+// previous-version.json) is replaced; otherwise it stays as it was. Both temporary files go either way
+var exeVersionFn = func(path string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	c := exec.CommandContext(ctx, path, "version")
+	hideWindow(c)
+	out, err := c.Output()
+	if err != nil {
+		return ""
 	}
-	if oldVersion != "" && oldVersion != BridgeVersion {
-		// review H2: its SHA-256 now, while it is the copy of the program that ran until this install
-		_ = saveFile(filepath.Join(dir, "previous-version.json"), jsonText(M{"version": oldVersion, "at": nowS(), "by": "setup", "sha256": fileSHA256(prev)}))
-		return
-	}
-	// the same version installed again, or no version known: not a previous version
-	_ = os.Remove(prev)
-	_ = os.Remove(filepath.Join(dir, "previous-version.json"))
+	return strings.TrimSpace(string(out))
 }
+
+var reBridgeVersion = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
+
+func notePreviousFromSetup(dir string) {
+	nw, old, cur := filepath.Join(dir, "FinComBridge.previous.new"), filepath.Join(dir, "FinComBridge.setup-old.exe"), filepath.Join(dir, "FinComBridge.exe")
+	defer func() { _ = os.Remove(nw); _ = os.Remove(old) }()
+	if !exists(nw) {
+		return
+	}
+	h := fileSHA256(nw)
+	switch {
+	case h == "" || h != fileSHA256(old):
+		installLogFn("Install: the copy of the program replaced is not whole (its fingerprint differs); the version kept for a rollback is left as it was")
+		return
+	case h == fileSHA256(cur):
+		return // the same program installed again: the kept pair stays
+	}
+	v := exeVersionFn(old)
+	if !reBridgeVersion.MatchString(v) || v == BridgeVersion {
+		installLogFn("Install: the version of the program replaced could not be read (" + or(v, "no answer") + "); the version kept for a rollback is left as it was")
+		return
+	}
+	if err := os.Rename(nw, previousExe(dir)); err != nil {
+		installLogFn("Install: the program replaced could not be kept for a rollback: " + err.Error())
+		return
+	}
+	_ = saveFile(filepath.Join(dir, "previous-version.json"), jsonText(M{"version": v, "at": nowS(), "by": "setup", "sha256": h}))
+	installLogFn("Install: FinCom Bridge " + v + " is kept for \"Roll back to the previous version\"")
+}
+
+// the install log (win_service.go installLog) where there is one; the bridge's log otherwise
+var installLogFn = func(s string) { writeLog(s) }
 
 // --- review S4: whether automatic updates are on, and the last rollback, go in the beat; FinCom's answer (the owner's
 // action, autoUpdateOn: true, top-level or in release) turns them on again

@@ -296,4 +296,16 @@ Verdict, round 2:
 - R2-S5 should go with the cloud's next deploy.
 - The rest may wait.
 
+
+### Status after the round 2 fixes (by the builder; details in the code review's round 2 status)
+
+- R2-S1 MEDIUM: Fixed with R2-1 (TestSourceCBounded, TestSourceCStartsAtSwitch).
+- R2-S2 MEDIUM: Fixed with R2-2 (TestSourceCDatedGuardException: both proved bypasses refused).
+- R2-S3 MEDIUM: Fixed with R2-3 (TestFailedTxtForgedDropped). Left: a whole write_failed line planted in failed.txt by
+  someone who can write the folder, for a held company (the round 1 S2 residual, the folder ACL by design).
+- R2-S4 MEDIUM: Fixed with R2-4 (TestSetupKeepsGoodPrevious).
+- R2-S5 LOW: Fixed in the bridge with R2-5.
+- R2-S6 LOW: Fixed with R2-8.
+- R2-S7 LOW: Fixed with R2-12.
+
 Range: bdfe261..0b43d34

@@ -373,11 +373,12 @@ Function PutFiles
   ; the program, if a bridge did not stop: moved aside (Windows allows that for a running program) so the new one fits
   Delete "$INSTDIR\FinComBridge.setup-old.exe"
   ${If} ${FileExists} "$INSTDIR\FinComBridge.exe"
-    ; 2.2.0: the program being replaced is kept for "Roll back to the previous version" (the install step names its
-    ; version, update.go notePreviousFromSetup); a failed copy only means no rollback
-    Delete "$INSTDIR\FinComBridge.previous.exe"
-    Delete "$INSTDIR\previous-version.json"
-    CopyFiles /SILENT "$INSTDIR\FinComBridge.exe" "$INSTDIR\FinComBridge.previous.exe"
+    ; 2.2.0 (round 2 R2-4): the program being replaced is copied to a temporary name; the install step keeps it for "Roll
+    ; back to the previous version" only when it is whole (its SHA-256 equals the replaced program's, kept below as
+    ; setup-old.exe) and its own version can be read (update.go notePreviousFromSetup). The kept pair is never deleted
+    ; here; a failed copy only means the kept pair stays as it was
+    Delete "$INSTDIR\FinComBridge.previous.new"
+    CopyFiles /SILENT "$INSTDIR\FinComBridge.exe" "$INSTDIR\FinComBridge.previous.new"
     ClearErrors
     Rename "$INSTDIR\FinComBridge.exe" "$INSTDIR\FinComBridge.setup-old.exe"
     ${If} ${Errors}
@@ -385,7 +386,7 @@ Function PutFiles
       StrCpy $WhatToDo "Right-click the FinCom icon near the clock and choose Quit (or restart the computer), then run the setup again."
       Return
     ${EndIf}
-    Delete "$INSTDIR\FinComBridge.setup-old.exe"
+    ; kept until the install step has compared the copy with it (it removes both)
   ${EndIf}
   SetOutPath "$INSTDIR"
   SetOverwrite try
@@ -724,6 +725,9 @@ Section "Uninstall"
   Delete "$INSTDIR\FinComBridge.failed.exe"
   Delete "$INSTDIR\FinComBridge.previous.exe"
   Delete "$INSTDIR\FinComBridge.rolledback.exe"
+  Delete "$INSTDIR\FinComBridge.previous.new"
+  Delete "$INSTDIR\FinComBridge.setup-old.exe"
+  Delete "$INSTDIR\FinComBridge.rollback-check.exe"
   Delete "$INSTDIR\previous-version.json"
   Delete "$INSTDIR\FinComBridge.setup-old.exe"
   Delete "$INSTDIR\update-pending.json"

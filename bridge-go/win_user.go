@@ -416,8 +416,8 @@ func installUserCmd(args []string) int {
 	_ = k.SetStringValue("Owner", o.name)
 	_ = k.SetStringValue("OwnerSid", o.sid)
 	_ = k.SetStringValue("Mode", mode)
-	was, _, _ := k.GetStringValue("Version")
-	notePreviousFromSetup(filepath.Dir(exe), was) // 2.2.0: the program the setup replaced, for the rollback
+	installLogFn = installLog
+	notePreviousFromSetup(filepath.Dir(exe)) // round 2 R2-4: the setup's copy, verified
 	_ = k.SetStringValue("Version", BridgeVersion)
 	_ = k.SetStringValue("InstallDir", filepath.Dir(exe))
 	_ = k.SetStringValue("RunMode", "user")

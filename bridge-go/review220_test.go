@@ -182,8 +182,13 @@ func TestRollbackVerifiesKeptVersion(t *testing.T) {
 	}
 	// a kept version from the setup gets its hash at the install
 	d2 := t.TempDir()
-	_ = os.WriteFile(previousExe(d2), old, 0o755)
-	notePreviousFromSetup(d2, "2.1.10")
+	oldV := exeVersionFn
+	exeVersionFn = func(string) string { return "2.1.10" }
+	defer func() { exeVersionFn = oldV }()
+	_ = os.WriteFile(filepath.Join(d2, "FinComBridge.exe"), []byte("new 2.2.0"), 0o755)
+	_ = os.WriteFile(filepath.Join(d2, "FinComBridge.setup-old.exe"), old, 0o755)
+	_ = os.WriteFile(filepath.Join(d2, "FinComBridge.previous.new"), old, 0o755)
+	notePreviousFromSetup(d2)
 	if str(readObjFile(filepath.Join(d2, "previous-version.json"))["sha256"]) != hex.EncodeToString(h[:]) {
 		t.Fatal("the setup's kept version has no SHA-256")
 	}
@@ -361,6 +366,7 @@ func TestSourceBNeverBackWithoutOwner(t *testing.T) {
 // --- M7 / S6: older files with unread lines, and failed.txt, are read; a file whose size did not change is not opened
 func TestLiveOldAndFailedLines(t *testing.T) {
 	rec, _, c := liveBridge(t, "")
+	noteCompanyGUID(zz, b220CoGUID) // round 2 R2-3: a failed.txt line is taken only for the company's held GUID
 	old := liveFilePath(rec, nowFn().AddDate(0, 0, -9).Format("20060102"))
 	liveAppend(t, old, vchLine("after_delete", "g-old", "1", "1", "nine days"))
 	inner := vchLine("after_cancel", "g-f", "2", "2", "via failed")

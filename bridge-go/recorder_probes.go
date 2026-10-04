@@ -105,11 +105,21 @@ func sliceExact(x string) bool {
 	co := html.UnescapeString(group(`<SVCURRENTCOMPANY>([^<]*)</SVCURRENTCOMPANY>`, x, 1))
 	form := dateFormFor(co)
 	m := regexp.MustCompile(`\$AlterID &gt; (\d+)`).FindStringSubmatch(x)
+	// the month: from SVFROMDATE, or (the filter forms) from the first $$Date literal
 	from := normDate(html.UnescapeString(group(`<SVFROMDATE[^>]*>([^<]*)</SVFROMDATE>`, x, 1)))
+	if from == "" {
+		from = normDate(html.UnescapeString(group(`\$\$Date:&#34;([^&]*)&#34;`, x, 1)))
+	}
 	if form == "" || m == nil || len(from) != 8 {
 		return false
 	}
-	return x == sliceRequest(co, form, from[:6], toI64(m[1]))
+	// round 2 R2-2: the values too: an AlterID at or above the starting point, a month from the starting point's to now
+	sp, ok := startPointOf(co)
+	ym, first := from[:6], startPointMonth(co)
+	if !ok || toI64(m[1]) < sp || first == "" || ym < first || ym > nowFn().Format("200601") {
+		return false
+	}
+	return x == sliceRequest(co, form, ym, toI64(m[1]))
 }
 
 // --- the kept form, per company and Tally program
@@ -133,9 +143,26 @@ func tallyProgram() (string, string) {
 	return "not known", ""
 }
 
-func dateFormKey(company string) string {
-	id, _ := tallyProgram()
-	return companyKey(company) + "|" + id
+// round 2 R2-11: kept per company (the Tally program is recorded with it, as data)
+func dateFormKey(company string) string { return companyKey(company) }
+
+// the month (yyyymm) the company's starting point was recorded in ("" : none)
+func startPointMonth(company string) string {
+	held := heldGUID(company)
+	spMu.Lock()
+	defer spMu.Unlock()
+	spFresh()
+	all, _ := readStartPoints()
+	all = spWithPending(all)
+	e, _ := startPointPick(startPointsOf(all, company), held, spGUID[company])
+	if e == nil {
+		return ""
+	}
+	at := strings.ReplaceAll(str(e["at"]), "-", "")
+	if len(at) < 6 {
+		return ""
+	}
+	return at[:6]
 }
 
 func saveDateForm(company, form, month string, n int) {
@@ -143,7 +170,8 @@ func saveDateForm(company, form, month string, n int) {
 	if all == nil {
 		all = M{}
 	}
-	all[dateFormKey(company)] = M{"company": company, "form": form, "month": month, "entries": n, "at": nowS()}
+	prog, _ := tallyProgram()
+	all[dateFormKey(company)] = M{"company": company, "form": form, "month": month, "entries": n, "at": nowS(), "program": prog}
 	if err := saveFile(dateFormsFile(), jsonText(all)); err != nil {
 		writeLog("Dates (collection): " + dateFormsFile() + " could not be written: " + err.Error())
 	}
@@ -187,7 +215,12 @@ func readTestCollectionForms(port int, company string) {
 	dir, _ := companyDir(company)
 	want := copyVouchers(dir, ym+"01", monthEnd(ym))
 	kept := ""
+	svStop := false
 	for _, form := range collForms {
+		filterForm := strings.HasPrefix(form, "TDL filter")
+		if svStop && !filterForm {
+			continue
+		}
 		t0 := time.Now()
 		raw, err := invokeTally(readTestTC, port, datesProbeRequest(company, form, ym+"01", monthEnd(ym)), 60)
 		sec := time.Since(t0).Seconds()
@@ -209,6 +242,13 @@ func readTestCollectionForms(port int, company string) {
 			what = "not answered (" + cutRunes(err.Error(), 120) + ")"
 		}
 		writeLog(fmt.Sprintf("Dates (collection) form %s: %s for %s-%s, %.1f s, applied: %s", form, what, ym[:4], ym[4:], sec, map[bool]string{true: "yes", false: "no"}[applied]))
+		// round 2 R2-6: an answer that ignores the period (over 4 times the month's entries) or takes over 2 s: the other
+		// forms with the dates in the static variables are not tried (the filter forms bound themselves)
+		if !filterForm && !svStop && err == nil && (n > 4*maxI(want, 1) || sec > liveLimitSec()) {
+			svStop = true
+			writeLog(fmt.Sprintf("Dates (collection): the form %s gave %d entries for %s-%s (more than 4 times its %d) or took %.1f s: the other forms with dates in the static variables are not tried",
+				form, n, ym[:4], ym[4:], want, sec))
+		}
 	}
 	if kept == "" {
 		writeLog(fmt.Sprintf("Dates (collection): no form answered %s-%s with exactly its %d entries; source C stays unusable on this Tally", ym[:4], ym[4:], want))
@@ -336,16 +376,14 @@ type liveRound struct {
 	found        map[int64]bool
 }
 
-// the oldest month source C goes back to: the copy's earliest day's month (this month when the copy holds none), never
-// before the books' start
+// the oldest month source C goes back to: the starting point's month (round 2 R2-10; this month when it is not known),
+// never before the books' start
 func liveEarliestMonth(company string) string {
-	e := nowFn().Format("200601")
+	e := startPointMonth(company)
+	if now := nowFn().Format("200601"); e == "" || e > now {
+		e = now
+	}
 	if dir, err := companyDir(company); err == nil {
-		for _, f := range dayFiles(dir, "") {
-			if d := strings.TrimSuffix(filepath.Base(f), ".xml"); isTallyDate(d) && d[:6] < e {
-				e = d[:6]
-			}
-		}
 		if b := str(readKeepState(dir)["booksFrom"]); isTallyDate(b) && b[:6] > e {
 			e = b[:6]
 		}
@@ -385,7 +423,16 @@ func liveSourceC(company string, port int) (int, error) {
 			live.mu.Unlock()
 			return 0, nil
 		}
-		st = &liveCSt{company: company, guid: guid, seen: sp}
+		// round 2 R2-1: from the switch on: the starting point, the highest AlterID the add-on gave, or ALTVCHID now,
+		// whichever is highest (what changed before the switch is the gap check's)
+		seen := sp
+		if h := live.high[key]; h > seen {
+			seen = h
+		}
+		if v > seen {
+			seen = v
+		}
+		st = &liveCSt{company: company, guid: guid, seen: seen}
 		live.c[key] = st
 	}
 	if st.round == nil {
@@ -403,6 +450,14 @@ func liveSourceC(company string, port int) (int, error) {
 		live.mu.Unlock()
 		return 0, nil
 	}
+	if span := v - st.seen; st.round == nil && span > int64(keepNum("RecorderBMaxSpan", 500)) {
+		// round 2 R2-1: too many to ask for, month by month; left to the gap check and the Day Book
+		st.seen = v
+		live.mu.Unlock()
+		writeLog(fmt.Sprintf("Recorder (month slices) for %s: too many changes for Source C (%d); the gap check and Day Book cover them", company, span))
+		liveSaveOffsets()
+		return 0, nil
+	}
 	if st.round == nil {
 		st.round = &liveRound{target: v, from: st.seen, ym: nowFn().Format("200601"), earliest: liveEarliestMonth(company), found: map[int64]bool{}}
 	}
@@ -410,9 +465,10 @@ func liveSourceC(company string, port int) (int, error) {
 	ym, from := r.ym, r.from
 	st.lastAsk = nowFn()
 	live.mu.Unlock()
+	liveSaveOffsets() // round 2 R2-9
 	took := -1.0
 	tc := &TC{copier: true, yield: func() bool { return postingGoing() || importsInFlight.Load() > 0 }, timed: func(sec float64) { took = sec }}
-	raw, err := invokeTally(tc, port, sliceRequest(company, form, ym, from), 60)
+	raw, err := invokeTally(tc, port, sliceRequest(company, form, ym, from), keepNum("RecorderBTimeoutSec", 5)) // R2-1: 5 s
 	if took > liveLimitSec() {
 		liveTurnOff("C", key, company, took)
 	}
