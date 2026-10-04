@@ -7,7 +7,7 @@ reload goes on from there; a progress bar; then upload_done {job, path}, once. T
 365 days read". A cloud without upload_new (400 'unknown kind', or 404): the old hand-over (job_new, stage_days).
 A fake TUS server and tally-ingest on port 9342.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_upload_storage.py"""
-import json, os, threading, functools, http.server, base64, hashlib, socket, time, re
+import json, os, threading, functools, http.server, base64, hashlib, socket, time, re, gzip
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -25,7 +25,7 @@ ST = {}
 LOCK = threading.Lock()
 def reset(mode=""):
     with LOCK:
-        ST.clear(); ST.update({"mode": mode, "ingest": [], "creates": [], "patches": [], "heads": [], "uploads": {}, "delay": 0.0, "cut_done": False, "n": 0})
+        ST.clear(); ST.update({"mode": mode, "ingest": [], "creates": [], "patches": [], "heads": [], "uploads": {}, "delay": 0.0, "cut_done": False, "n": 0, "staged": {}})
 reset()
 class Fake(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.0"         # one request a connection: a cut connection is never reused
@@ -64,7 +64,12 @@ class Fake(http.server.BaseHTTPRequestHandler):
                 return self.out(200, {"ok": True, "job": "job-1", "path": "f-1/%s/job-1.xml" % body.get("client")})
             if k == "upload_done": return self.out(200, {"ok": True, "queued": True})
             if k == "job_new": return self.out(200, {"ok": True, "job": "old-job-1"})
-            if k == "stage_days": return self.out(200, {"ok": True, "queued": len(body.get("days") or [])})
+            if k == "stage_days":
+                # each day as staged: its vouchers, read back from the gzip the page sent
+                for d in body.get("days") or []:
+                    xml = gzip.decompress(base64.b64decode(d.get("gz") or "")).decode("utf-8")
+                    with LOCK: ST["staged"][d.get("day")] = re.findall(r"<VOUCHER\b[\s\S]*?</VOUCHER>", xml)
+                return self.out(200, {"ok": True, "queued": len(body.get("days") or [])})
             return self.out(400, {"ok": False, "error": "unknown kind"})
         if self.path == "/storage/v1/upload/resumable":
             self.rfile.read(n)
@@ -240,6 +245,35 @@ with sync_playwright() as p:
            "%s: upload_new, then job_new and stage_days; nothing to Storage (%s)" % (mode, kinds[:4]))
         stage = [x for x in s["ingest"] if x["body"]["kind"] == "stage_days"]
         ok(sum(x["days"] for x in stage) == 365 and stage[-1]["body"].get("last") is True, "%s: every day of the period staged, the last part marked (%d)" % (mode, sum(x["days"] for x in stage)))
+    # ---- 4. the old hand-over, a UTF-16LE Day Book (Tally's usual export, with its byte-order mark): the same days and
+    # vouchers staged as the same content in UTF-8 (Blob.text() read it as UTF-8 only: no voucher found, every day empty)
+    E("""() => {
+      const v = (d, n, t) => "<VOUCHER><DATE>" + d + "</DATE><VOUCHERTYPENAME>" + t + "</VOUCHERTYPENAME><NARRATION>" + n + "</NARRATION></VOUCHER>\\r\\n";
+      const text = "<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><DATA>" +
+        v("20260401", "Opening sale – ₹ 1,180 to Śrī Traders", "Sales") + v("20260401", "Rent April", "Payment") +
+        v("20260415", "TDS 194C ₹ 2,000", "Journal") + v("20261231", "Year-end café bill", "Purchase") +
+        v("20270331", "Close", "Journal") + v("20250331", "outside the period", "Sales") +
+        "</DATA></BODY></ENVELOPE>";
+      const u16 = new Uint8Array(2 + text.length * 2); u16[0] = 0xFF; u16[1] = 0xFE;
+      for (let i = 0; i < text.length; i++){ const c = text.charCodeAt(i); u16[2 + 2 * i] = c & 255; u16[3 + 2 * i] = c >> 8; }
+      window.__f8 = new File([text], "DayBook.xml", {type: "text/xml"});
+      window.__f16 = new File([u16], "DayBook.xml", {type: "text/xml"});
+    }""")
+    got = {}
+    for enc in ("f8", "f16"):
+        reset("unknown400")
+        E(START.replace("window.__file", "window.__" + enc))
+        for _ in range(150):
+            if E("window.__res || window.__err"): break
+            pg.wait_for_timeout(200)
+        s = state()
+        got[enc] = {d: vs for d, vs in s["staged"].items() if vs}
+        ok(E("window.__err") is None and (E("window.__res") or {}).get("job") == "old-job-1" and len(s["staged"]) == 365,
+           "%s: handed over the old way, 365 days staged (%s / %s, %d)" % (enc, E("window.__err"), E("window.__res"), len(s["staged"])))
+    ok(sorted(got["f8"]) == ["20260401", "20260415", "20261231", "20270331"] and sum(len(x) for x in got["f8"].values()) == 5,
+       "UTF-8: the vouchers of 4 days staged, 5 vouchers (%s)" % {d: len(x) for d, x in got["f8"].items()})
+    ok(got["f16"] == got["f8"], "UTF-16LE with its BOM: the same days and the same vouchers staged as in UTF-8 (UTF-16LE %s, UTF-8 %s)"
+       % ({d: len(x) for d, x in got["f16"].items()}, {d: len(x) for d, x in got["f8"].items()}))
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()
 srv.shutdown(); fake.shutdown()

@@ -734,7 +734,8 @@ const TCloudUp = {
       const up = await this.storageUp(src instanceof Blob ? src : new Blob([String(src)], {type: "text/xml"}), range, onStep, who, name);
       if (up) return up;
     }
-    const text = typeof src === "string" ? src : await src.text();
+    // a Tally export is often UTF-16LE: decoded by its byte-order mark (Blob.text() is UTF-8 only)
+    const text = typeof src === "string" ? src : (await Books.decoder(src)).decode(new Uint8Array(await src.arrayBuffer()));
     const {all, byDay} = this.split(text, range);
     let job;
     try { job = (await this.post({kind: "job_new", total: all.length, name: String(name || "").slice(0, 120)}, who)).job; }
