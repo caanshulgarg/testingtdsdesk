@@ -1182,6 +1182,12 @@ async function postBillsToTally(opts){
     postStopped(why, co.id);
     if (!list.length){ S.billPost = {notAllowed: plainMsg(why), company: ""}; toast(why); refreshStats(co.id); render(); return; }
   }
+  // round 19: the second-send test (a typed REMOTEID) adds test entries: asked once, naming the company, unless Post
+  // asked already (postAllToTally: opts.trialOk); No: nothing sent, the bills stay waiting
+  if (!opts.trialOk && typeof remoteIdTrial === "function" && remoteIdTrial(co) && typeof postTrialConfirm === "function"){
+    S.billPost = null; render();
+    if (!(await postTrialConfirm(co, list.length))){ toast("Nothing sent: the test posting was cancelled."); render(); return; }
+  }
   const failed = [];
   const blocked = list.filter(e => e.snapshot.lines.some(l => !exactLedger(l.ledger)));
   blocked.forEach(e => { const l = e.snapshot.lines.find(x => !exactLedger(x.ledger)); e.postError = "Ledger “" + (l.ledger || "(none)") + "” is not in Tally"; unapply(e, co.id); e.postFailedAt = new Date().toISOString(); Store.saveEntry(co.id, e); failed.push({id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, msg: e.postError}); });

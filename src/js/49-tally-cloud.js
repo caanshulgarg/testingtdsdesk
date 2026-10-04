@@ -330,6 +330,13 @@ const TCloud = {
         if (noPS(m)){ p.noPostSettings = true; return read(",main_bridge").catch(e2 => { if (/main_bridge/.test(String(e2 && e2.message))){ p.noMain = true; return read(""); } throw e2; }); }
         if (/main_bridge/.test(m)){ p.noMain = true; return read(PS).then(r => { p.noPostSettings = false; return r; }).catch(e2 => { if (noPS(String(e2 && e2.message))){ p.noPostSettings = true; return read(""); } throw e2; }); }
         throw e; });
+      // round 19: "Trial tools on this computer" (migration 46: tally_devices.trial_tools), read apart so a cloud without
+      // the column (42703) keeps the rest of the page; the line then says it is not available yet
+      try {
+        const tt = [].concat(await Cloud.api("tally_devices?select=id,trial_tools") || []), by = new Map(tt.map(x => [x.id, x.trial_tools]));
+        (p.devices || []).forEach(d => { if (by.has(d.id)) d.trial_tools = by.get(d.id) === true; });
+        p.noTrialTools = false;
+      } catch (e){ p.noTrialTools = /trial_tools|42703/.test(String(e && e.message)); }
       p.companies = await this.restAll("tally_companies?select=company,client_id,device_id,gstin,last_seen,linked_at&order=company.asc");
       // migration-35: the stops and resumes from FinCom with who and when (round 4, item 24: the latest 300 rows; the
       // standing stops and the latest resume a computer are taken out here), and the bridge versions on trial, approved
@@ -438,8 +445,9 @@ const TCloud = {
       toast(done);
     } catch (e){
       const m = String((e && e.message) || e), missing = /PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(m);
-      const mig = {tally_release_withdraw: 37, tally_baseline_clear: 37, tally_device_post_settings: 43}[fn] || 35;
+      const mig = {tally_release_withdraw: 37, tally_baseline_clear: 37, tally_device_post_settings: 43, tally_device_trial_tools: 46}[fn] || 35;
       p.ctl = {err: missing && fn === "tally_device_post_settings" ? "Posting settings are not available until migration 43 runs."
+        : missing && fn === "tally_device_trial_tools" ? "Trial tools on this computer: not available until migration 46 runs."
         : missing ? "FinCom\u2019s cloud is not ready for this yet (migration " + mig + " is not applied)."
         : m.replace(/^ERROR:\s*/i, "").replace(/^./, c => c.toUpperCase())};
     }
@@ -469,6 +477,12 @@ const TCloud = {
     await this.control("tally_device_post_settings", {p_device: dev.id, p_post_only: touched ? names : null, p_bills: Math.floor(num(v.bills)), p_bank: Math.floor(num(v.bank))},
       "Saved for " + (dev.name || "the computer") + "; the bridge applies it within a minute.");
     return "";
+  },
+  // round 19: an owner switches the trial tools of one computer on or off -> tally_device_trial_tools(p_device, p_on)
+  // (migration 46; owner only there too); the bridge applies it at its next heartbeat (within 30 seconds)
+  async trialTools(dev, on){
+    await this.control("tally_device_trial_tools", {p_device: dev.id, p_on: !!on},
+      "Trial tools " + (on ? "on" : "off") + " for " + (dev.name || "the computer") + "; the bridge applies it within 30 seconds.");
   },
   async readStop(r){
     const all = !r, where = all ? "every computer" : r.computer;

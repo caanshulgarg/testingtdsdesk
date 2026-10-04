@@ -396,18 +396,38 @@ with sync_playwright() as p:
     xml_off = E("voucherXml(D().entries['r2'], CO())")
     ok("REMOTEID" not in xml_off and "TDSDesk:r2" in xml_off, "C7. off: no REMOTEID in the voucher XML (the TDSDesk tag as before)")
     pg.click(RB); pg.wait_for_timeout(400)
-    xml_real = E("voucherXml(D().entries['r2'], CO())")
-    ok(pg.is_checked(RB) and xml_real == xml_off and "does not post to ZZ TEST" in txt("#app [data-remoteid-note]"),
-       "C7. on, but the client posts to GARG SHEKHAR: no REMOTEID, and the note says so")
-    E("() => { window.__pt2 = CO().choices.postTo; choiceConfirm(CO(), 'postTo', 'ZZ TEST'); render(); }"); pg.wait_for_timeout(300)
+    # round 19 (the owner's decision, 04-Oct): any company linked in FinCom; the client here posts to GARG SHEKHAR & COMPANY
     xml_on = E("voucherXml(D().entries['r2'], CO())")
-    ok(E("CO().postRemoteId === true") and re.search(r'<VOUCHER [^>]*REMOTEID="r2"[^>]*>', xml_on) is not None and xml_on.replace(' REMOTEID="r2"', "") == xml_off,
-       "C7. on, posting to ZZ TEST: the VOUCHER tag carries REMOTEID=\"r2\" and nothing else changes (%s)" % xml_on[:100])
+    ok(pg.is_checked(RB) and E("CO().postRemoteId === true") and re.search(r'<VOUCHER [^>]*REMOTEID="r2"[^>]*>', xml_on) is not None and xml_on.replace(' REMOTEID="r2"', "") == xml_off,
+       "C7. on, posting to GARG SHEKHAR & COMPANY: the VOUCHER tag carries REMOTEID=\"r2\" and nothing else changes (%s)" % xml_on[:100])
+    nt = txt("#app [data-remoteid-note]")
+    ok("ZZ TEST" not in nt and "does not post" not in nt, "C7. the note names no company rule (%s)" % nt)
     pg.fill('#app [data-remoteid-fixed] input', "r1"); pg.wait_for_timeout(400)
     xml_fx = E("voucherXml(D().entries['r2'], CO())")
-    ok(E("CO().postRemoteIdFixed === 'r1'") and ' REMOTEID="r1"' in xml_fx and "TDSDesk:r2" in xml_fx, "C7. a typed REMOTEID (the second-send test) replaces the id; the TDSDesk tag stays the bill's own")
+    nar = lambda x: x[x.find("<NARRATION>") + 11:x.find("</NARRATION>")]
+    ok(E("CO().postRemoteIdFixed === 'r1'") and ' REMOTEID="r1"' in xml_fx and nar(xml_fx).endswith(" | TDSDesk:r2"), "C7. a typed REMOTEID (the second-send test) replaces the id; the TDSDesk tag stays the bill's own (%s)" % nar(xml_fx))
+    ok(nar(xml_fx).startswith("TRIAL | ") and nar(xml_fx) == "TRIAL | " + nar(xml_off), "C7. the second send's narration starts 'TRIAL | ' (%s)" % nar(xml_fx))
+    ok(not nar(xml_on).startswith("TRIAL"), "C7. without the typed value no TRIAL in the narration (%s)" % nar(xml_on)[:60])
+    # the second send asks once, naming the company, before the posting (Post: before the preview; postAllToTally)
+    E("""() => { window.__pv0 = window.postPreview; window.__pb0 = window.postBillsToTally; window.__pv = 0; window.__pb = null;
+      window.postPreview = async () => { window.__pv++; return true; }; window.postBillsToTally = async (o) => { window.__pb = JSON.parse(JSON.stringify(o || {})); };
+      S.postRefused = null; postAllToTally({kind: 'bill', id: 'r2'}); }"""); pg.wait_for_timeout(500)
+    cb = pg.inner_text("#confirmBox").replace("\n", " ") if pg.locator("#confirmBox .cbx").count() else ""
+    ok("This will add 1 test entry to GARG SHEKHAR & COMPANY. Continue?" in cb, "C7. Post with the typed REMOTEID asks 'This will add 1 test entry to GARG SHEKHAR & COMPANY. Continue?' (%s)" % cb[:160])
+    pg.click('#confirmBox [data-cbx="no"]'); pg.wait_for_timeout(500)
+    ok(E("window.__pv") == 0 and E("window.__pb") is None and E("S.postRefused") is None, "C7. Cancel: no preview, nothing posted, no error row")
+    E("() => { postAllToTally({kind: 'bill', id: 'r2'}); }"); pg.wait_for_timeout(500); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(600)
+    pb = E("window.__pb") or {}
+    ok(E("window.__pv") == 1 and pb.get("ids") == ["r2"] and pb.get("trialOk") is True and pg.locator("#confirmBox .cbx").count() == 0, "C7. Yes: the preview, then the posting, not asked again (%s)" % pb)
+    E("() => { window.postPreview = window.__pv0; window.postBillsToTally = window.__pb0; }")
+    # the posting itself (from anywhere else: Post approved bills, Retry) asks too
+    E("() => { window.__pbDone = false; postBillsToTally({ids: ['r2']}).then(() => { window.__pbDone = true; }); }"); pg.wait_for_timeout(1500)
+    cb = pg.inner_text("#confirmBox").replace("\n", " ") if pg.locator("#confirmBox .cbx").count() else ""
+    ok("This will add 1 test entry to GARG SHEKHAR & COMPANY. Continue?" in cb, "C7. postBillsToTally asks too when not asked before (%s)" % cb[:160])
+    if cb: pg.click('#confirmBox [data-cbx="no"]'); pg.wait_for_timeout(600)
+    ok(E("window.__pbDone") and not E("D().entries.r2.exportedAt") and not (E("S.billPost") or {}).get("busy"), "C7. Cancel there: nothing sent, not left busy")
+    E("() => { S.postRefused = null; render(); }"); tab("topost")
     pg.fill('#app [data-remoteid-fixed] input', ""); pg.wait_for_timeout(300)
-    E("() => { CO().choices.postTo = window.__pt2; render(); }"); pg.wait_for_timeout(300)
     pg.click(RB); pg.wait_for_timeout(400)
     ok(not pg.is_checked(RB) and E("voucherXml(D().entries['r2'], CO())") == xml_off, "C7. off again: the XML as before")
     E("() => { S.account = {me: {role: 'staff'}, firm: {name: 'Firm'}}; render(); }"); pg.wait_for_timeout(300); tab("topost")

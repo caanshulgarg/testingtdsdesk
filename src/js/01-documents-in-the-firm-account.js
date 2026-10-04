@@ -4026,14 +4026,20 @@ function vchNoFor(e, co){
   return String(e.vchNo || e.x.invoiceNo || "").trim().slice(0, 60);
 }
 function initialsOf(name){ return String(name || "").replace(/[^A-Za-z ]/g, " ").split(/\s+/).filter(w => w.length > 2 && !/^(pvt|ltd|private|limited|and|the|co|llp)$/i.test(w)).map(w => w[0].toUpperCase()).join("").slice(0, 4) || "X"; }
-// the REMOTEID a voucher carries ("" = none): the test box on, the client posting to ZZ TEST (confirmed), the typed
-// value or the entry's FinCom id
+// the REMOTEID a voucher carries ("" = none): the test box on, the client's posting company confirmed (any company
+// linked in FinCom: round 19, the owner's decision of 04-Oct, no company-name check), the typed value or the entry's
+// FinCom id
 function remoteIdFor(e, co){
   if (!co || co.postRemoteId !== true || !e || !e.id) return "";
   const ch = typeof choiceGet === "function" ? choiceGet(co, "postTo") : {value: co.postTo, state: "confirmed"};
   const to = String((ch && ch.value) || "").trim();
-  if (!/^zz test\b/i.test(to) || (ch && ch.state && ch.state !== "confirmed")) return "";
+  if (!to || (ch && ch.state && ch.state !== "confirmed")) return "";
   return String(co.postRemoteIdFixed || "").trim().slice(0, 80) || String(e.id);
+}
+// round 19: the second-send test (a typed REMOTEID in place of each bill's own id) adds a test entry: the posting asks
+// first (postTrialConfirm, src/js/59) and the voucher's narration starts "TRIAL | "
+function remoteIdTrial(co){
+  return !!(co && String(co.postRemoteIdFixed || "").trim() && remoteIdFor({id: "x"}, co));
 }
 function voucherXml(e, co){
   const note = e.noteKind === "credit";                 // a supplier's credit note: a Debit Note in Tally, every line reversed
@@ -4041,7 +4047,8 @@ function voucherXml(e, co){
   // round 14c (owner item 4, a test): "Send a FinCom reference id (REMOTEID) with each voucher" on the Post page puts the
   // entry's FinCom id (the same as the TDSDesk:<id> tag) as REMOTEID on the voucher; off (the default), nothing changes
   // entry's FinCom id as REMOTEID, or the value typed in "REMOTEID to send instead" (the second-send test: the first
-  // bill's id typed on a Duplicate of it); only for a client whose confirmed posting company is ZZ TEST (never real books)
+  // bill's id typed on a Duplicate of it; then the narration starts "TRIAL | "); only for a client whose posting company
+  // is confirmed
   const ridVal = remoteIdFor(e, co);
   const rid = ridVal ? ' REMOTEID="' + xesc(ridVal) + '"' : "";
   let x = '<VOUCHER VCHTYPE="' + vt + '" ACTION="Create" OBJVIEW="Accounting Voucher View"' + rid + '>\n';
@@ -4051,7 +4058,8 @@ function voucherXml(e, co){
   if (vno) x += "<VOUCHERNUMBER>" + xesc(vno) + "</VOUCHERNUMBER>\n";
   x += "<REFERENCE>" + xesc(e.x.invoiceNo) + "</REFERENCE>\n<REFERENCEDATE>" + d + "</REFERENCEDATE>\n";
   x += "<PARTYLEDGERNAME>" + xesc(tallyLedgerName(e.partyLedger)) + "</PARTYLEDGERNAME>\n";
-  x += "<NARRATION>" + xesc((e.narration || narrationFor(e)) + " | TDSDesk:" + e.id) + "</NARRATION>\n";
+  const nar0 = e.narration || narrationFor(e), nar = remoteIdTrial(co) && !/^TRIAL \| /.test(nar0) ? "TRIAL | " + nar0 : nar0;
+  x += "<NARRATION>" + xesc(nar + " | TDSDesk:" + e.id) + "</NARRATION>\n";
   x += "<PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW>\n<ISINVOICE>No</ISINVOICE>\n";
   x += "<ISOPTIONAL>" + (co.createOptional ? "Yes" : "No") + "</ISOPTIONAL>\n";
   s.lines.forEach(l => {

@@ -14,10 +14,11 @@ import { useState, useEffect } from "react";
 
 const Act = ({ act, className = "btn small", children, disabled }) => <button className={className} disabled={disabled} onClick={() => doAct(act)}>{children}</button>;
 
+// round 19, guard (a): a trial tool, the owner's only (postOwner, src/js/59); staff do not see it
 function ReadTest() {
-  if (!Bridge.up()) return null;
+  if (!Bridge.up() || !(typeof postOwner === "function" && postOwner())) return null;
   const r = S.readTest || {};
-  return <div style={{ marginTop: 10, borderTop: "1px solid var(--rule-soft)", paddingTop: 10 }}>
+  return <div data-read-test="" style={{ marginTop: 10, borderTop: "1px solid var(--rule-soft)", paddingTop: 10 }}>
     <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}><b>Test reading entries</b><Act act="bridgeReadTest" disabled={!!r.busy}>{r.busy ? "Testing…" : "Run test"}</Act></div>
     <p className="note" style={{ margin: "4px 0" }}>Checks how FinCom can read entries from the company open in Tally (nothing is written). If posts are “not confirmed”, run this and send the result.</p>
     {r.error && <p className="bk-warn">{r.error}</p>}
@@ -146,7 +147,7 @@ function Baselines({ r, owner }) {
       : <><span className="tag ok">{company}</span><span className="note" data-baseline-cleared="">{"Cleared by " + who(cur.cleared_by) + " at " + tallyHm(cur.cleared_at) + ": " + (cur.cleared_note || "no note")}</span></>}
   </div>)}</div>;
 }
-// FinCom Bridge 2.1.6 posts only to the companies in its PostOnly setting (the pilot installer sets ["ZZ TEST"]); its
+// FinCom Bridge 2.1.6 posts only to the companies in its PostOnly setting (the owner's own setting per computer); its
 // heartbeat carries postOnly ([] when unrestricted) and tally-ingest keeps it on the bridge entry (info.bridges[id].postOnly)
 // and on the device record (info.beat.postOnly). The bridge entry first, then the beat; empty or absent: nothing to say.
 function postOnlyOf(r) {
@@ -189,6 +190,19 @@ function PostSettings({ r, owner }) {
       <button className="btn small" data-ps-cancel="" onClick={() => setEdit(false)}>Cancel</button>
       {why && <span className="bk-warn" data-ps-why="">{why}</span>}
     </span>}
+  </span>;
+}
+// round 19 (the owner's decision, 04-Oct): "Trial tools on this computer", per computer, default off. The state is
+// tally_devices.trial_tools (migration 46; TCloud.refreshPane reads it apart, p.noTrialTools when the column is missing);
+// an owner's switch -> TCloud.trialTools -> tally_device_trial_tools(p_device, p_on); the bridge shows its tray's trial
+// items only while it is on. Staff see the state only
+function TrialTools({ r, owner }) {
+  const d = r.device || {}, p = TCloud.pane;
+  if (p.noTrialTools) return <span className="note" data-trial-tools="" data-not-ready="">Trial tools on this computer: not available until migration 46 runs</span>;
+  const on = d.trial_tools === true;
+  return <span className="note" data-trial-tools="" data-trial-on={on ? "" : undefined}>
+    {"Trial tools on this computer: " + (on ? "on" : "off")}
+    {owner && <> <button className="btn small" data-trial-tools-switch="" disabled={!!(p.ctl && p.ctl.busy)} onClick={() => TCloud.trialTools(d, !on)}>{on ? "Switch off" : "Switch on"}</button></>}
   </span>;
 }
 // phase 2 (F36, N102): is Tally's change recorder working on this computer, per company open there (the bridge's
@@ -243,6 +257,7 @@ function BridgeLines({ rows, latest }) {
         {live && Rec.notResponding(r) && <div className="row" style={{ marginLeft: 16 }}><span className="tag bad" data-not-responding="">{Rec.notResponding(r)}</span></div>}
         {live && <RecorderLine r={r} />}
         {live && <div className="row" style={{ alignItems: "center", gap: 8, flexWrap: "wrap", marginLeft: 16 }}><PostSettings r={r} owner={owner} /></div>}
+        {live && <div className="row" style={{ alignItems: "center", gap: 8, flexWrap: "wrap", marginLeft: 16 }}><TrialTools r={r} owner={owner} /></div>}
         {live && <Baselines r={r} owner={owner} />}
       </div>; })}
     <Release rows={rows} latest={latest} owner={owner} />

@@ -115,37 +115,38 @@ function RemoteIdBox({ co }) {
     {"Send a FinCom reference id (REMOTEID) with each voucher (test)"}
   </label>
   {co.postRemoteId === true && <span className="note" data-remoteid-note="" style={{ display: "block", marginTop: 4 }}>
-    {"Works only for a client posting to ZZ TEST (confirmed in Client setup → Tally); on any other client the box does nothing. "}
-    {typeof remoteIdFor === "function" && remoteIdFor({ id: "x" }, co) === "" ? "This client does not post to ZZ TEST: no REMOTEID is sent." : ""}
+    {"Works once the client's posting company is confirmed (Client setup → Tally). "}
+    {typeof remoteIdFor === "function" && remoteIdFor({ id: "x" }, co) === "" ? "The posting company is not confirmed yet: no REMOTEID is sent." : ""}
   </span>}
   {co.postRemoteId === true && <label className="note" data-remoteid-fixed="" style={{ display: "block", marginTop: 4 }}>
-    {"REMOTEID to send instead of the FinCom id (the second-send test: type the first bill's id here, post its Duplicate): "}
+    {"REMOTEID to send instead of the FinCom id (the second-send test: type the first bill's id here, post its Duplicate; Post asks first, and the narration starts TRIAL): "}
     <input type="text" value={co.postRemoteIdFixed || ""} placeholder="empty = each bill's own id" style={{ width: 220 }}
       onChange={(ev) => { co.postRemoteIdFixed = ev.target.value.trim().slice(0, 80); Store.saveCompany(co); render(); }} />
   </label>}
   </>;
 }
 
-// round 15 (T): test bills for the owner's timing (NWS144): "Make N test copies of this bill", owners only, and only when
-// the client's confirmed postTo company begins with "ZZ TEST" (postTestCopiesOk / postTestCopies, src/js/59). Never on
-// any other client
+// round 15 (T): test bills for the owner's timing (NWS144): "Make N test copies of this bill", owners only, for a client
+// whose posting company is confirmed (round 19, the owner's decision of 04-Oct: any company linked in FinCom; postTestCopiesOk
+// / postTestCopies, src/js/59). It asks "This will add N test entries to <company>. Continue?"; the copies' narration
+// starts "TRIAL | "
 function TestCopies({ co, bills }) {
   const [pick, setPick] = useState(""), [n, setN] = useState(10), [note, setNote] = useState("");
   if (!(typeof postOwner === "function" && postOwner() && typeof postTestCopiesOk === "function" && postTestCopiesOk(co))) return null;
   const ready = bills.ready || [], id = pick && ready.some((e) => e.id === pick) ? pick : (ready[0] || {}).id || "";
-  const make = () => {
-    const r = postTestCopies(co.id, id, n);
+  const make = async () => {
+    const r = await postTestCopies(co.id, id, n);
     setNote(r.ok ? "Made " + r.ids.length + " test copies; they are in Ready to post." : r.error || "Not made.");
   };
   return <section className="post-sec" data-test-copies="">
-    <h3>Test bills on ZZ TEST</h3>
+    <h3>Test bills</h3>
     <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
       <select data-tc-bill="" aria-label="Bill to copy" value={id} onChange={(ev) => setPick(ev.target.value)}>
         {ready.map((e) => <option key={e.id} value={e.id}>{(e.x.invoiceNo || e.id) + " · " + (e.x.vendorName || "") + " · " + money(num(e.x.total))}</option>)}
       </select>
       <input type="number" data-tc-n="" aria-label="How many copies" min="1" max="100" value={n} style={{ width: 70 }} onChange={(ev) => setN(ev.target.value)} />
       <button className="btn small" data-tc-make="" disabled={!id} onClick={make}>{"Make " + (num(n) || 0) + " test copies of this bill"}</button>
-      <span className="note">1 to 100: new bills numbered “&lt;no&gt;-T1” onwards, the same amounts, ledgers and date, marked test copy.</span>
+      <span className="note">1 to 100: new bills numbered “&lt;no&gt;-T1” onwards, the same amounts, ledgers and date, marked test copy, narration starting TRIAL; asks first.</span>
     </div>
     {note && <p className="note" data-tc-note="" style={{ margin: "6px 0 0" }}>{note}</p>}
   </section>;

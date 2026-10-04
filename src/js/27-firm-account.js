@@ -1840,6 +1840,8 @@ function doAct(act, t){
     case "billCheck": checkBillsInTally(); break;
     case "billCheckWaiting": checkBillsInTally(true); break;
     case "bridgeReadTest": {
+      // round 19, guard (a): the trial tools are an owner's only (staff never see them)
+      if (typeof postOwner === "function" && !postOwner()){ toast("Only an owner of the firm runs the reading test."); break; }
       const co = CO(), o = co && Bridge.openFor(co);
       const name = o ? o.name : (Bridge.st.open[0] && Bridge.st.open[0].name);
       if (!name){ toast("Open a company in Tally first."); break; }

@@ -737,25 +737,40 @@ function postTimingWords(j){
   if (!k && !s) return "";
   return k + (k === 1 ? " request, " : " requests, ") + (Math.round(s * 10) / 10) + " s";
 }
-// T: test bills on ZZ TEST (the owner's timing). Only for a client whose confirmed postTo company begins with "ZZ TEST"
+// T: test bills (the owner's timing). Round 19 (the owner's decision, 04-Oct): any company linked in FinCom, no
+// company-name check; only a client whose posting company (postTo) is confirmed, and an owner (postTestCopies)
 function postTestCopiesOk(co){
-  return !!co && typeof choiceState === "function" && choiceState(co, "postTo") === "confirmed" && String(co.postTo || "").toUpperCase().startsWith("ZZ TEST");
+  return !!co && typeof choiceState === "function" && choiceState(co, "postTo") === "confirmed" && !!String(co.postTo || "").trim();
+}
+// round 19, guard (b): anything that adds test entries asks once, naming the company; true on yes
+async function postTrialConfirm(co, n){
+  const company = String((co && co.postTo) || "").trim() || postCompanyName(co);
+  const a = await askConfirm({title: "Add test entries?", ok: "Continue",
+    body: "<p>" + esc("This will add " + n + (n === 1 ? " test entry" : " test entries") + " to " + company + ". Continue?") + "</p>" +
+      "<p>Their narration starts with TRIAL.</p>"});
+  return !!(a && a.ok);
 }
 // N copies of a ready bill: new ids, invoice numbers "<no>-T1".."-TN", the same amounts, ledgers and date, x.testCopy
-// true, ready to post. {ok, ids} or {ok: false, error}
-function postTestCopies(cid, id, n){
+// true, narration "TRIAL | ...", ready to post, after the owner says yes to "This will add N test entries to <company>.
+// Continue?". {ok, ids} or {ok: false, error} (cancelled: {ok: false, cancelled: true})
+async function postTestCopies(cid, id, n){
   const co = S.companies[cid], d = S.data[cid], src = d && d.entries && d.entries[id];
   if (!postOwner()) return {ok: false, error: "Only an owner of the firm makes test copies."};
-  if (!co || !postTestCopiesOk(co)) return {ok: false, error: "Test copies are made only for a client posting to ZZ TEST."};
+  if (!co || !postTestCopiesOk(co)) return {ok: false, error: "Test copies are made only for a client whose posting company is confirmed (Client setup \u2192 Tally)."};
   if (!src) return {ok: false, error: "Choose a bill first."};
   n = Math.floor(num(n));
   if (!(n >= 1 && n <= 100)) return {ok: false, error: "Choose a number from 1 to 100."};
   if (src.status !== "approved" || src.exportedAt || src.postUnconfirmed) return {ok: false, error: "Choose a bill that is ready to post."};
+  if (!(await postTrialConfirm(co, n))) return {ok: false, cancelled: true, error: "Nothing made."};
+  if (!d.entries[id] || S.companies[cid] !== co) return {ok: false, error: "Choose a bill first."};
   const now = new Date().toISOString(), no = src.x.invoiceNo || "T", ids = [];
   for (let i = 1; i <= n; i++){
     const e = JSON.parse(JSON.stringify(src));
     e.id = uid("e"); e.createdAt = now; e.approvedAt = now; e.fileName = "Test copy " + i + " of " + no; e.notDuplicate = true;
     e.x.invoiceNo = no + "-T" + i; e.x.testCopy = true;
+    // TRIAL in the narration (voucherXml adds " | TDSDesk:<id>" after it)
+    const nar = e.narration || narrationFor(e);
+    e.narration = /^TRIAL \| /.test(nar) ? nar : "TRIAL | " + nar;
     ["exportedAt", "postUnconfirmed", "postCheckFailed", "postError", "postNote", "postAlreadyMsg", "tally", "tallyVchNo", "tallyCheck", "postVerified", "postByReply", "postAltered", "postedVia", "postedInto", "postedOptional", "goneFromTally", "postFailedAt", "paidBy", "vchNo", "docPath", "dupOf"].forEach(k => { delete e[k]; });
     d.entries[e.id] = e; Store.saveEntry(cid, e); ids.push(e.id);
   }
@@ -916,10 +931,13 @@ async function postAllToTally(only){
     const all = postRows(co), rows = list.map(e => all.find(r => r.kind === "bill" && r.id === e.id) || {kind: "bill", id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, e});
     if (!rows.length){ toast("Nothing is waiting to be posted."); return; }
     S.postStop = null; S.postNote = null;
+    // round 19: the second-send test (a typed REMOTEID) adds test entries: asked once, naming the company, before the preview
+    const trial = typeof remoteIdTrial === "function" && remoteIdTrial(co);
+    if (trial && !(await postTrialConfirm(co, rows.length))) return;
     if (!(await postPreview(co, rows))) return;
     rows.forEach(r => { if (r.e.postCheckFailed){ r.e.postCheckFailed = null; Store.saveEntry(co.id, r.e); } });
     S.billPost = null;
-    await postBillsToTally({ids: rows.map(r => r.id)});
+    await postBillsToTally(trial ? {ids: rows.map(r => r.id), trialOk: true} : {ids: rows.map(r => r.id)});
     // back with nothing on the page (a toast only: Tally not connected, no company open, no entry waiting): kept as a row
     if (!S.billPost && !S.postStop) postRefusedShow(co.id, {name: "Not sent", message: said[said.length - 1] || "The posting stopped before anything was sent."});
   } catch (err){
