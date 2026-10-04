@@ -1111,7 +1111,7 @@ Object.assign(TCloud, {
 function bankNotReadBack(rows, cid){
   const a = booksAsOf(cid), at = a ? Date.parse(a.at) : 0;
   return (rows || []).filter(r => r.state === "sent" && !r.postedOptional &&
-    (r.checking || (r.postedVia === "bridge" && r.postVerified !== true) || (r.sentAt && (!at || Date.parse(r.sentAt) > at))));
+    (r.checking || (r.postedVia === "bridge" && r.postVerified !== true && r.postByReply !== true) || (r.sentAt && (!at || Date.parse(r.sentAt) > at))));
 }
 // Update now for a client: the bridge here when it has the company open, else the client's Tally computer through
 // FinCom's cloud (the bridge reads at once, also while its background reading is paused)

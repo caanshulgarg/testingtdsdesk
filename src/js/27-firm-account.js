@@ -139,14 +139,21 @@ function cloudSnapshot(){
   return out;
 }
 function cloudKey(r){ return r.kind + "|" + (r.client_id || "") + "|" + r.id; }
+// The last copy of each record this computer and the server agreed on (sent from here, or taken from the server), kept
+// in memory as JSON: the base cloudApplyNow merges against when a copy comes in over a change made here and not yet
+// sent (owner, 04-Oct-2026). Clients keep theirs in BankDB (ClientBase).
+const CloudBase = new Map();
+const CLOUD_BASE_SEED = new Set(["entry", "party", "unsorted", "sales", "firm"]);
+function cloudBaseSet(k, json){ if (!/^(client|inbox)\|/.test(k)) CloudBase.set(k, json); }
 // changes since the last sync (and anything deleted here)
 function cloudChanges(){
   const marks = Cloud.marks(), snap = cloudSnapshot(), now = [], seen = {};
   snap.forEach(r => {
-    const k = cloudKey(r), h = fpHash(JSON.stringify(r.data));
+    const k = cloudKey(r), json = JSON.stringify(r.data), h = fpHash(json);
     seen[k] = h;
-    if (marks[k] !== h) now.push(Object.assign({}, r, {hash: h}));
+    if (marks[k] !== h) now.push(Object.assign({}, r, {hash: h, json}));
     else if (r.kind === "client") ClientBase.seed(r.id, r.data);   // in step with the server: that copy is its base
+    else if (CLOUD_BASE_SEED.has(r.kind) && !CloudBase.has(k)) CloudBase.set(k, json);
   });
   // Nothing is ever deleted because it is missing here: a reload with empty storage, a client not loaded yet or a bank
   // not open all look like absence. A record is sent as deleted only when the user removed it (Cloud.delete), and the
@@ -201,7 +208,7 @@ async function cloudPush(){
     const del = part.filter(r => r.deleted), up = part.filter(r => !r.deleted);
     if (up.length) await sendBatch("records", up.map(r => ({firm_id: Cloud.st.firm, kind: r.kind, id: r.id, client_id: r.client_id || "", data: r.data, deleted: false})));
     for (const r of del) await cloudMarkDeleted("records?firm_id=eq." + Cloud.st.firm + "&kind=eq." + encodeURIComponent(r.kind) + "&id=eq." + encodeURIComponent(r.id), r.why);
-    part.forEach(r => { marks[cloudKey(r)] = r.hash; });
+    part.forEach(r => { marks[cloudKey(r)] = r.hash; if (!r.deleted && r.json) cloudBaseSet(cloudKey(r), r.json); });
     Cloud.setMarks(marks); cloudDelsSent(part);
   }
   return changes.length;
@@ -330,15 +337,46 @@ async function cloudApplyNow(rows){
   rows = [].concat(rows || []).filter(cloudRowOk);
   rows.forEach(r => { if (r.data) cleanIds(r.data, 0); });
   const touchedBank = new Set(), touchedSales = new Set();
-  const mine = new Map(); try { cloudSnapshot().forEach(r => mine.set(cloudKey(r), stableStr(r.data))); } catch (e){}
-  for (const r of rows){
+  const mine = new Map(), mineData = new Map();
+  try { cloudSnapshot().forEach(r => { const k = cloudKey(r); mine.set(k, stableStr(r.data)); mineData.set(k, r.data); }); } catch (e){}
+  // a sales list or bank statement with a save waiting here: written first, so the reload below does not lose it
+  // (each helper looked up by name: the node tests load cloudApplyNow with only the functions they name)
+  if (typeof cloudFlushListsBefore === "function") await cloudFlushListsBefore(rows);
+  const baseSet = (k, json) => { if (typeof cloudBaseSet === "function") cloudBaseSet(k, json); };
+  const baseGet = k => typeof CloudBase === "object" ? CloudBase.get(k) : undefined;
+  const waiting = key => typeof pendingEdit === "function" && pendingEdit(key);
+  const keepMark = new Map(), inPlace = new Set();
+  let sendAfter = false;
+  for (let r of rows){
     const k = cloudKey(r);
     if (!r.deleted && mine.has(k) && mine.get(k) === stableStr(r.data)){   // this computer's own save coming back
       marks[k] = fpHash(JSON.stringify(r.data));
-      if (r.kind === "client") await ClientBase.set(r.id, r.data);
+      if (r.kind === "client") await ClientBase.set(r.id, r.data); else baseSet(k, JSON.stringify(r.data));
       continue;
     }
+    // A copy from the server is not laid over a change made here and not yet sent (owner, 04-Oct-2026: on a bill, the
+    // copy of the save before the last keystroke came back, replaced the invoice number here and became the sync mark,
+    // so the full number was never sent). A change is not yet sent here when its save is still waiting (pendingEdit) or
+    // the record here is no longer what was last sent or taken (its mark). Then the copy is merged as the client setup
+    // is (merge3, against the last copy both had): what was changed here stays, what was changed only there comes in,
+    // and the mark is kept, so the result is sent at the next push. The same item changed on both computers: the
+    // later push wins, as everywhere else. Nothing changed here: the copy is taken as before. Removals still come in.
+    if (!r.deleted && r.kind !== "client" && r.kind !== "inbox" && mineData.has(k)){
+      const here = mineData.get(k), was = marks[k];
+      const unsent = (r.kind === "entry" && waiting("e" + r.id)) || (!!was && was !== "gone" && was !== fpHash(JSON.stringify(here)));
+      if (unsent){
+        const base = baseGet(k);
+        // no base kept (a change made before this page was opened): what is here is kept whole
+        const data = base !== undefined && plainObj(here) && plainObj(r.data) ? merge3(JSON.parse(base), here, r.data) : here;
+        baseSet(k, JSON.stringify(r.data));
+        sendAfter = true;
+        if (stableStr(data) === mine.get(k)) continue;              // nothing of theirs to take: the row is left, the mark kept
+        keepMark.set(k, was); inPlace.add(k);
+        r = Object.assign({}, r, {data: clone(data)});
+      }
+    }
     const markWas = marks[k];
+    if (!r.deleted && r.kind !== "client") baseSet(k, JSON.stringify(r.data));
     if (r.kind !== "inbox") marks[k] = r.deleted ? "gone" : fpHash(JSON.stringify(r.data));   // inbox records are office automation's, never tracked for deletion
     const cid = r.client_id;
     if (r.kind === "firm"){ if (!r.deleted){ S.firm = firmMerge(S.firm, r.data); Store.saveFirm(); } }
@@ -359,6 +397,8 @@ async function cloudApplyNow(rows){
       const bag = r.kind === "entry" ? S.data[cid].entries : S.data[cid].parties;
       if (r.deleted){ if (r.kind === "entry" && bag[r.id] && bag[r.id].fileHash) unregisterHash(cid, bag[r.id].fileHash); delete bag[r.id]; Store.put("companies/" + cid + "/" + (r.kind === "entry" ? "entries/" : "parties/") + r.id, null); }
       // a supplier's ledger confirmed here and newer is kept over an older or guessed one coming in (src/js/60)
+      // a bill merged over a change typed here: the same object is updated, so the save still waiting for it saves the merge
+      else if (r.kind === "entry" && inPlace.has(k) && bag[r.id]){ const t = bag[r.id]; Object.keys(t).forEach(x => delete t[x]); Object.assign(t, clone(r.data)); Store.saveEntry(cid, t); }
       else { bag[r.id] = r.kind === "party" && typeof partyKeepChoice === "function" ? partyKeepChoice(bag[r.id], clone(r.data)) : clone(r.data); if (r.kind === "entry") Store.saveEntry(cid, bag[r.id]); else Store.saveParty(cid, bag[r.id]); }
     }
     else if (r.kind === "unsorted"){ if (r.deleted) delete S.inbox[r.id]; else { S.inbox[r.id] = clone(r.data); Store.saveInbox(S.inbox[r.id]); } }
@@ -367,7 +407,10 @@ async function cloudApplyNow(rows){
     else if (r.kind === "bank_stmt" || r.kind === "bank_rows"){ await cloudApplyBankPart(r); touchedBank.add(cid); }
     else if (r.kind === "sales" || r.kind === "sales_cfg"){ await cloudApplySales(r); touchedSales.add(cid); }
   }
+  keepMark.forEach((was, k) => { marks[k] = was; });
   Cloud.setMarks(marks);
+  // what was kept here goes to the server once this copy is in (cloudSoon does nothing while it is being applied)
+  if (sendAfter) setTimeout(() => { try { if (typeof cloudSoon === "function") cloudSoon(); } catch (e){} }, 50);
   // reload what is open on screen
   if (S.bank && touchedBank.has(S.bank.cid)){
     const o = S.bank, keep = {filter: o.filter, grouped: o.grouped, q: o.q, f: o.f, from: o.from, to: o.to, limit: o.limit, sel: o.sel, sticky: o.sticky, cur: o.cur};
@@ -384,6 +427,19 @@ async function cloudApplyNow(rows){
     if (S.sales && S.sales.cid === o.cid) Object.assign(S.sales, {filter: keep.filter, q: keep.q, openId: keep.openId, view: keep.view, sel: new Set([...keep.sel].filter(id => S.sales.list.some(v => v.id === id)))});
   }
   Object.keys(S.companies).forEach(id => { try { refreshStats(id); } catch (e){} });
+}
+async function cloudFlushListsBefore(rows){
+  try {
+    const s = S.sales, b = S.bank;
+    if (s && typeof salesSaveTimer !== "undefined" && salesSaveTimer && rows.some(r => /^sales/.test(r.kind) && r.client_id === s.cid)){
+      clearTimeout(salesSaveTimer); salesSaveTimer = null; await BankDB.set("sales:" + s.cid, s.list);
+    }
+    if (b && b.cur && typeof bankSaveTimer !== "undefined" && bankSaveTimer && rows.some(r => /^bank_/.test(r.kind) && r.client_id === b.cid)){
+      clearTimeout(bankSaveTimer); bankSaveTimer = null; await BankDB.set("stmt:" + b.cid + ":" + b.cur, b.rows);
+      const st = b.stmts.find(x => x.id === b.cur);
+      if (st && typeof countStates === "function"){ st.counts = countStates(b.rows); await BankDB.set("stmts:" + b.cid, b.stmts); }
+    }
+  } catch (e){}
 }
 async function cloudApplyBankMeta(cid, r){
   if (r.deleted) return;
@@ -653,6 +709,13 @@ async function openCompany(cid){
   render(); window.scrollTo(0, 0);
   // FinCom Bridge 2.1.3: the client's Tally computer brings in what changed in Tally since its last read (one light update)
   try { if (typeof TWake === "object") TWake.open(cid); } catch (e){}
+  // round 17 (04-Oct-2026): a posting FinCom's cloud finished by Tally's reply while this client was not open is marked
+  // on its bills and bank lines now (postReconcile, src/js/59: reads the finished postings, sends nothing to Tally)
+  setTimeout(() => { try {
+    if (typeof postReconcile !== "function" || typeof CloudJobs !== "object") return;
+    if (CloudJobs.list) { if (postReconcile(cid) && S.coId === cid) render(); }
+    else if (typeof CloudJobs.load === "function") Promise.resolve(CloudJobs.load()).then(() => render(), () => {});
+  } catch (e){} }, 0);
   // 02-Oct-2026: the Tally company this client may post to, set by itself when it is clear (one linked, same GSTIN)
   setTimeout(() => { try { if (typeof autoPostTo === "function") autoPostTo(S.companies[cid]).catch(() => {}); } catch (e){} }, 0);
   // the client's ledger list, read on opening the client (from the cloud copy when linked, else the bridge); then the
@@ -664,8 +727,36 @@ function goHome(){ closeSwitcher(); S.view = "home"; S.arm = null; render(); }
 /* ------------------------------------------------------------------ */
 /* Events                                                              */
 /* ------------------------------------------------------------------ */
-const timers = {};
-function later(key, fn, ms){ clearTimeout(timers[key]); timers[key] = setTimeout(fn, ms); }
+const timers = {}, laterFns = {};
+function later(key, fn, ms){
+  clearTimeout(timers[key]); laterFns[key] = fn;
+  timers[key] = setTimeout(() => { delete timers[key]; delete laterFns[key]; fn(); }, ms);
+}
+// a bill's typed change waits a moment before it is saved (billSaveLater): pendingEdit("e" + id) says one is waiting
+// (cloudApplyNow then keeps it over a copy coming in), flushBillSaves() makes every waiting save now (leaving the page,
+// the tab hidden, signing out), so a change typed in the last moment is never lost or left unsent
+const billSaveKeys = new Set();
+function pendingEdit(key){ return !!laterFns[key]; }
+function billSaveLater(e, cid){ const key = "e" + e.id; billSaveKeys.add(key); later(key, () => { billSaveKeys.delete(key); Store.saveEntry(cid, e); }, 600); }
+function flushBillSaves(){
+  let n = 0;
+  [...billSaveKeys].forEach(key => {
+    billSaveKeys.delete(key);
+    const fn = laterFns[key]; if (!fn) return;
+    clearTimeout(timers[key]); delete timers[key]; delete laterFns[key];
+    try { fn(); n++; } catch (e){}
+  });
+  return n;
+}
+// leaving the page or hiding the tab: the waiting bill saves are made, and sent to the firm account straight away
+function flushBillSavesAndSend(){
+  if (!flushBillSaves()) return;
+  try { if (typeof Cloud === "object" && Cloud.on() && Cloud.st.firm && !Cloud.st.mfa && Cloud.cfg().auto !== false && typeof cloudPushNow === "function") cloudPushNow(); } catch (e){}
+}
+if (typeof window === "object" && typeof document === "object" && window.addEventListener){
+  window.addEventListener("pagehide", flushBillSavesAndSend);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushBillSavesAndSend(); });
+}
 function curEntry(){ return S.view === "company" && S.selected ? D().entries[S.selected] : null; }
 
 /* ---------- editing a draft bill: called by the bill screen (React: app/src/screens/Bill.jsx) ---------- */
@@ -678,7 +769,7 @@ function billSetX(e, key, value){
   e.x[key] = /vendorGstin|vendorPan|buyerGstin/.test(key) ? String(value).toUpperCase() : value;
   if (e.uncertain) e.uncertain = e.uncertain.filter(k => k !== key);
   if (key === "invoiceDate"){ Store.saveEntry(cid, e); render(); return; }
-  later("e" + e.id, () => Store.saveEntry(cid, e), 600);
+  billSaveLater(e, cid);
   later("r", render, 350);
   if (window.FinComReact) FinComReact.redraw();
 }
@@ -690,7 +781,7 @@ function billSetText(e, key, value){
   // a ledger a person typed or picked is theirs: not changed by itself afterwards (empty: picked by itself again)
   if (key === "partyLedger"){ e.partyUserSet = !!String(value).trim(); e.partyAuto = !e.partyUserSet; e.partyFrom = ""; }
   if (key === "expenseLedger"){ e.expenseUserSet = !!String(value).trim(); e.expenseAuto = !e.expenseUserSet; e.expenseFrom = ""; }
-  later("e" + e.id, () => Store.saveEntry(cid, e), 600); later("r", render, 350);
+  billSaveLater(e, cid); later("r", render, 350);
   if (window.FinComReact) FinComReact.redraw();
 }
 // a GST or TDS ledger chosen on the bill (key "gst:cgst", "rcm-in:sgst", "tds"): checked by compute against the line's
@@ -700,7 +791,7 @@ function billSetTaxLed(e, key, value){
   const cid = S.coId;
   e.taxLed = Object.assign({}, e.taxLed || {});
   if (String(value || "").trim()) e.taxLed[key] = value; else delete e.taxLed[key];
-  later("e" + e.id, () => Store.saveEntry(cid, e), 600); later("r", render, 350);
+  billSaveLater(e, cid); later("r", render, 350);
   if (window.FinComReact) FinComReact.redraw();
 }
 // a choice on the bill: the payment type, why TDS is not booked, earlier bills' TDS, a ledger picked from a list
@@ -1289,6 +1380,7 @@ function doAct(act, t){
       break;
     }
     case "signOutNow": {
+      flushBillSaves();                                         // a bill change typed a moment ago: saved and counted as not sent yet
       const pend = Cloud.on() ? cloudChanges().changes.length : 0;
       askConfirm({title: "Sign out of FinCom?", ok: "Sign out", body: '<p class="note">You will need your email, password' + (Cloud.st.firm ? " and, if set up, the code from your phone" : "") + ' to come back in. Work already synced stays in your firm account.</p>',
         check: pend ? "" : "Also remove this firm\u2019s work from this computer (for a shared or office computer)"}).then(a => {
@@ -1368,6 +1460,7 @@ function doAct(act, t){
       break;
     }
     case "cloudSignOut": {
+      flushBillSaves();
       askConfirm({title: "Sign out of the firm account?", ok: "Sign out", body: "This computer keeps its own copy of everything. Changes made after signing out are not shared until you sign in again."}).then(a => {
         if (!a) return;
         signOutHere("Signed out.");

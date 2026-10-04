@@ -964,7 +964,8 @@ function tabStates(tab){ return tab === "ready" ? ["ready"] : tab === "done" ? [
 // under Post to Tally, marked so, and is not posted again by "Post all"
 // A line whose voucher is no longer among Tally's entries in FinCom's cloud copy (TallyProof.checkBank: 182 HDFC lines
 // posted on 27-Sep were deleted in Tally afterwards) is not in Tally either: it goes back under Post to Tally, marked so
-function bankMatched(r){ return !r.goneFromTally && (r.state === "intally" || (r.state === "sent" && !!(r.tally && (r.tally.guid || r.tally.masterId || r.tally.number)) && !r.checking)); }
+// round 17: a line posted by Tally's reply (FinCom Bridge 2.1.8, no read-back) is matched: Tally said it created it
+function bankMatched(r){ return !r.goneFromTally && (r.state === "intally" || (r.state === "sent" && (!!(r.tally && (r.tally.guid || r.tally.masterId || r.tally.number)) || r.postByReply === true) && !r.checking)); }
 function bankTabOf(r){
   if (r.state === "attention" || r.state === "suggested") return "review";
   if (r.state === "ready" || ((r.state === "sent" || r.state === "intally") && !bankMatched(r))) return "ready";

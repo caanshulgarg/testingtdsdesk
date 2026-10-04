@@ -98,6 +98,12 @@ with sync_playwright() as p:
     line = pg.inner_text("#app [data-posted-line]").replace("\n", " ")
     ok(line.startswith("Posted to Tally, batch ending Tally id 1300") and "voucher id" not in line and "1296" not in line and "· ZZ TEST ·" in line and "IST" in line,
        "B1. a batch: 'Posted to Tally, batch ending Tally id 1300 · …', no id inferred for the bill (%s)" % line)
+    # round 17a (owner, 04-Oct-2026): a bill FinCom Bridge 2.1.8 posted by Tally's reply (postByReply, never read back):
+    # stamped "Sent to Tally", in Tally (billInTally, "In Tally"), with the batch's mark
+    pg.evaluate("() => { const e = D().entries[S.selected]; e.postVerified = false; e.postByReply = true; render(); }"); pg.wait_for_timeout(400)
+    st = pg.evaluate("(() => { const e = D().entries[S.selected]; return [billInTally(e), tallyStateOf(e)[1]]; })()")
+    ok("Sent to Tally" in pg.inner_text("#app .stampmark") and st == [True, "In Tally"] and pg.inner_text("#app [data-posted-line]").startswith("Posted to Tally, batch ending Tally id 1300"),
+       "17a. posted by Tally's reply: 'Sent to Tally', billInTally, 'In Tally', the batch's mark (%s)" % st)
     ok("Matched with Tally" not in pg.inner_text("#app .detail"), "B5. not matched: the words are nowhere")
     pg.evaluate("""() => { PostIds.readable = true; PostIds.by[S.coId] = {at: Date.now(), key: "x", held: new Map(), matched: new Map([[S.selected, {at: "2026-10-03T09:00:00Z", vch: "1300"}]]), sig: "m"}; render(); }"""); pg.wait_for_timeout(400)
     ok(pg.locator("#app [data-posted-line] [data-matched]").count() == 1 and "Matched with Tally" in pg.inner_text("#app [data-posted-line]"), "B5. tally_post_ids.matched_at on it: 'Matched with Tally' beside the line")

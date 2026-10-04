@@ -662,7 +662,7 @@ function bankRowAct(a, id){
     const row = bankRow(id);
     if (row) unpostFromTally("bank", row, B().cid).then(ok => {
       if (!ok) return;
-      row.state = row.ledger ? "ready" : "attention"; row.sentAt = ""; row.postVerified = false; row.tally = null;
+      row.state = row.ledger ? "ready" : "attention"; row.sentAt = ""; row.postVerified = false; row.postByReply = false; row.tally = null;
       if (B().postedTags) delete B().postedTags[fpHash(row.fp || row.id)];
       saveBank({rows: true, posted: true}); render();
     });

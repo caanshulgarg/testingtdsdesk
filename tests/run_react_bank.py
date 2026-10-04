@@ -146,6 +146,12 @@ with sync_playwright() as p:
        "B1. a bank line with vchId: 'Posted to Tally: voucher id 777 · ZZ TEST · 03-Oct-2026 14:05 IST · by Anshul' (%s)" % t5[-150:])
     ok("Posted to Tally, batch ending Tally id 900" in t13 and "voucher id" not in t13 and "14:10 IST" in t13, "B1. a line of a batch: 'Posted to Tally, batch ending Tally id 900', no inferred id (%s)" % t13[-150:])
     ok("Posted to Tally" not in t21 and "In Tally" in t21 and pg.locator('#app tr:has-text("UTR100021") [data-posted-line]').count() == 0, "B1. an older posted line shows as before (%s)" % t21[-100:])
+    # round 17a (owner, 04-Oct-2026): a line FinCom Bridge 2.1.8 posted by Tally's reply (it never reads back) with no id from
+    # Tally: posted, never "not found in Tally yet"; round 17: bankMatched (src/js/22) takes postByReply, so it is under Done
+    pg.evaluate("""() => { const r5 = B().rows.find(r => r.id === "r5"); window.__r5 = JSON.stringify(r5); r5.tally = {guid: ""}; r5.postByReply = true; r5.postVerified = false; r5.checking = false; r5.state = "sent"; B().filter = "done"; render(); }""")
+    pg.wait_for_timeout(400); t5 = row("UTR100005")
+    ok(("Posted to Tally (Tally's reply)" in t5 or "In Tally" in t5) and "not found in Tally" not in t5, "17a. a line posted by Tally's reply, no id: under Done as posted ('In Tally'), never 'not found in Tally yet' (%s)" % t5[-120:])
+    pg.evaluate("() => { const b = B(), i = b.rows.findIndex(r => r.id === 'r5'); b.rows[i] = JSON.parse(window.__r5); b.filter = 'done'; render(); }"); pg.wait_for_timeout(300)
     # a second statement, and a bank account with no Tally ledger yet
     pg.evaluate("""() => { const b = B(); b.stmts.push({id: "s2", acctId: "a2", bank: "HDFC", acct: "9911", from: "2026-05-01", to: "2026-05-31", opening: 0, closing: 0});
       CO().bankAccounts.push({id: "a2", bank: "HDFC", last4: "9911", ledger: ""}); render(); }""")

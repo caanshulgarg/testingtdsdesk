@@ -49,7 +49,9 @@ function RunLine({ co }) {
     {bp.error && <p className="bk-alert bad" style={{ margin: "0 0 8px" }}>{bp.error}</p>}
     {bp.cancelled && <p className="note" style={{ margin: "0 0 8px" }}>{bp.cancelled}</p>}
     {bp.done && !bp.notAllowed && <p className={"note" + (failed.length ? " bad" : "")} data-post-result="" style={{ margin: "0 0 8px" }}>
-      {(bp.ok || 0) - (bp.altered || 0) + " in Tally (verified)"}{bp.altered ? " · " + bp.altered + " altered in Tally" : ""}{bp.dup ? " · " + bp.dup + " already in Tally (not posted again)" : ""}
+      {/* round 17a: an entry FinCom Bridge 2.1.8 posted by Tally's reply (it does not read back) counts as in Tally, said so */}
+      {(() => { const rep = bp.byReply || 0, ver = (bp.ok || 0) - (bp.altered || 0) - rep;
+        return [ver || !rep ? ver + " in Tally (verified)" : "", rep ? rep + " in Tally (Tally's reply)" : ""].filter(Boolean).join(" · "); })()}{bp.altered ? " · " + bp.altered + " altered in Tally" : ""}{bp.dup ? " · " + bp.dup + " already in Tally (not posted again)" : ""}
       {bp.checkFailed ? " · " + bp.checkFailed + " not posted: Tally could not be checked first" : ""}
       {failed.length ? " · " + failed.length + " failed and went back to To review (" + failed.map((f) => f.no + ": " + f.msg).join("; ") + ")" : ""}
       {(bp.masters || []).length > 0 && <span data-post-masters="">{" · Ledgers: " + bp.masters.map((m) => m.name + ": " + m.word).join(", ")}</span>}
@@ -359,6 +361,8 @@ export function PostStep() {
   // a bill sent and not confirmed is read afresh before it is called missing (PostCheck, src/js/59); the cloud copy's
   // check (TallyProof) and the company found by itself as before
   setTimeout(() => {
+    // round 17a: what a finished posting of FinCom's cloud put in Tally is marked here when the client's page is opened
+    if (typeof postReconcile === "function") postReconcile(co.id);
     if (typeof PostIds === "object") PostIds.load(co.id);
     TallyProof.check(co.id).catch(() => {});
     if (!co.postTo) autoPostTo(co).catch(() => {});

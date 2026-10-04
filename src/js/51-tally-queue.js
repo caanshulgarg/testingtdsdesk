@@ -136,6 +136,8 @@ const CloudJobs = {
     } catch (e){ this.err = (e && e.message) || String(e); this.at = Date.now(); }
     this.busy = false;
     this.autoDismiss();
+    // round 17a: the entries a finished posting put in Tally, marked on each client loaded here (never sent again)
+    if (this.list && typeof postReconcile === "function") [...new Set(this.list.map(j => j.client_id))].forEach(cid => { if (S.data[cid] && S.data[cid].loaded) { try { postReconcile(cid); } catch (e){ console.error(e); } } });
     // without the live connection, a posting still going is looked at again soon
     clearTimeout(this.soonT);
     if ((this.list || []).some(j => ["waiting", "taken", "running"].includes(j.status) || j.checking) && !(typeof Live === "object" && Live.postsLive))
@@ -371,6 +373,6 @@ const TallyProof = {
 // the bank lines no longer in Tally: back to "ready", to be posted again (Tally is checked for FinCom's tag first)
 function bankRepostGone(){
   const b = B(), gone = b.rows.filter(r => r.goneFromTally);
-  gone.forEach(r => { r.state = "ready"; r.tally = null; r.postVerified = false; r.postedVia = ""; r.sentAt = ""; r.tallyRef = ""; r.tallyHow = ""; delete r.goneFromTally; });
+  gone.forEach(r => { r.state = "ready"; r.tally = null; r.postVerified = false; r.postByReply = false; r.postedVia = ""; r.sentAt = ""; r.tallyRef = ""; r.tallyHow = ""; delete r.goneFromTally; });
   saveBank({rows: true}); toast(gone.length + " line" + (gone.length === 1 ? " is" : "s are") + " ready to post again."); render();
 }

@@ -9,8 +9,9 @@ function vchTypeOf(e, co){
 }
 // in Tally: posted and confirmed there (or found there already), and not since missing from Tally's own entries in
 // FinCom's cloud copy (review of 02-Oct-2026: FA/ELEC/013 posted on 29-Sep was deleted in Tally and still counted).
-// A bill in a Tally file that no one has confirmed is not counted.
-function billInTally(e){ return !!(e && e.exportedAt && (e.postVerified === true || e.postNote === "Already in Tally") && !e.goneFromTally); }
+// A bill in a Tally file that no one has confirmed is not counted. Round 17a (owner, 04-Oct-2026): a bill FinCom Bridge
+// 2.1.8 posted by Tally's reply (it never reads back: postByReply) is in Tally too.
+function billInTally(e){ return !!(e && e.exportedAt && (e.postVerified === true || e.postByReply === true || e.postNote === "Already in Tally") && !e.goneFromTally); }
 function tallyStateOf(e){
   if (e.goneFromTally) return ["bad", "Not in Tally any more (deleted there?)"];
   if (e.exportedAt) return billInTally(e) ? ["ok", "In Tally"] : ["sent", e.postedVia === "bridge" ? "In Tally, not confirmed" : "In a Tally file, not confirmed"];

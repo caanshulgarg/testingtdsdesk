@@ -544,7 +544,7 @@ async function reconPost(){
   const ids = R.missing.filter(id => { const r = b.rows.find(x => x.id === id); return r && ["ready", "sent", "intally"].includes(r.state) && r.ledger && exactLedger(r.ledger); });
   if (!ids.length) return;
   // lines marked as posted that Tally does not have: posted afresh
-  b.rows.forEach(r => { if (ids.includes(r.id) && ["sent", "intally"].includes(r.state)){ if (b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)]; r.state = "ready"; r.tally = null; r.postVerified = false; r.checking = false; r.tallyHow = ""; r.tallyRef = ""; delete r.tallyIdx; } });
+  b.rows.forEach(r => { if (ids.includes(r.id) && ["sent", "intally"].includes(r.state)){ if (b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)]; r.state = "ready"; r.tally = null; r.postVerified = false; r.postByReply = false; r.checking = false; r.tallyHow = ""; r.tallyRef = ""; delete r.tallyIdx; } });
   b.tallyLook = null; lsDel(wideCheckKey());
   saveBank({rows: true, posted: true});
   await postBankToTally(ids);
@@ -576,7 +576,7 @@ async function reconDelete(which){
   if (which === "replace"){
     // the statement lines go in again with their own amount, only where the old entry really went
     const ids = R.differ.filter(d => gone.has(d.ti)).map(d => d.rowId);
-    b.rows.forEach(r => { if (ids.includes(r.id)){ if (b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)]; r.state = r.ledger && exactLedger(r.ledger) ? "ready" : "attention"; r.tally = null; r.postVerified = false; r.tallyHow = ""; r.tallyRef = ""; delete r.tallyIdx; } });
+    b.rows.forEach(r => { if (ids.includes(r.id)){ if (b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)]; r.state = r.ledger && exactLedger(r.ledger) ? "ready" : "attention"; r.tally = null; r.postVerified = false; r.postByReply = false; r.tallyHow = ""; r.tallyRef = ""; delete r.tallyIdx; } });
     lsDel(wideCheckKey()); saveBank({rows: true, posted: true});
     await postBankToTally(ids.filter(id => (b.rows.find(r => r.id === id) || {}).state === "ready"));
   }
@@ -640,7 +640,7 @@ function goneBack(){
     n++;
     if (b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)];
     r.state = r.ledger && exactLedger(r.ledger) ? "ready" : "attention";
-    r.tally = null; r.postVerified = false; r.checking = false; r.postError = ""; r.postedVia = ""; r.sentAt = ""; delete r.tallyIdx; r.tallyHow = ""; r.tallyRef = "";
+    r.tally = null; r.postVerified = false; r.postByReply = false; r.checking = false; r.postError = ""; r.postedVia = ""; r.sentAt = ""; delete r.tallyIdx; r.tallyHow = ""; r.tallyRef = "";
   });
   b.gone = null; b.focus = null; b.filter = "ready"; b.tallyLook = null;
   lsDel(wideCheckKey());
@@ -769,6 +769,23 @@ async function removeTallyDuplicates(which){
   render();
 }
 
+// a bank line Tally has (or is reading back: pendingCheck): sent, with Tally's voucher. Round 17a: Tally's reply (bridge
+// 2.1.8, byReply) is posted, said so (r.postByReply); o: {by, quiet} for a line marked afterwards from FinCom's cloud
+// (postReconcile, src/js/59): who pressed Post there, and no second record in this browser's posting log
+function bankPosted(cid, r, x, tname, now, o){
+  o = o || {};
+  const b = B(), who = o.by || (Cloud.st && Cloud.st.email) || "";
+  r.state = "sent"; r.sentAt = now; r.postedVia = "bridge"; r.postError = ""; r.postedOptional = !!x.optional; r.postVerified = x.verified === true; r.checking = !!x.pendingCheck;
+  r.postByReply = x.verified !== true && x.byReply === true;
+  if (b && b.cid === cid){ b.postedTags = b.postedTags || {}; b.postedTags[fpHash(r.fp || r.id)] = now; }
+  if (!o.quiet) logPosting({what: "bank", id: r.id, action: "posted", co: cid, ref: String(r.narr || "").slice(0, 40), party: r.ledger, amount: num(r.debit || r.credit), tally: {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", company: tname}, by: who});
+  r.tally = {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", at: now, by: who, company: tname};
+  // round 15 (B1): Tally's voucher id, or the batch's last id, from bridge 2.1.8
+  const mk = typeof postTallyMark === "function" ? postTallyMark(x, {company: tname, at: now, by: o.by || postMyName()}) : null;
+  if (mk) Object.assign(r.tally, mk);
+  if (r.billId && D(cid).entries[r.billId]){ const e = D(cid).entries[r.billId]; e.paidBy = r.id; Store.saveEntry(cid, e); }
+  markSalesReceived(r);
+}
 /* ---------- after a posting: the bridge's read-back arrives in the background ---------- */
 async function bankAfterCheck(cid, sid, chk, tname){
   const b = B(), here = b && b.cid === cid && b.cur === sid;
@@ -780,8 +797,8 @@ async function bankAfterCheck(cid, sid, chk, tname){
     if (!r.checking) return;
     const x = byId.get(r.id);
     r.checking = false;
-    if (x && x.ok && x.verified === true){
-      confirmed++; r.postVerified = true;
+    if (x && postTaken(x)){
+      confirmed++; r.postVerified = x.verified === true; r.postByReply = x.verified !== true && x.byReply === true; r.postError = "";
       r.tally = Object.assign({}, r.tally || {}, {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", number: x.vchNumber || ""});
     } else if (x && !x.ok){
       // Tally said it made it, but it is not there: not counted as posted, and not sent again without a look
@@ -930,6 +947,8 @@ async function postBankToTally(ids){
   if (!st) return;
   const tname = await ensureTallyCompany(co);
   if (!tname) return;
+  // round 17a: a line a finished posting of FinCom's cloud already put in Tally is marked first, so it is not sent again
+  if (typeof postReconcile === "function") postReconcile(b.cid);
   if (Bridge.st.allowImport === false){ toast("Posting is switched off in the bridge settings (AllowImport)."); return; }
   const acc = (co.bankAccounts || []).find(a => a.id === st.acctId);
   const heavy = b.checkBeforePost === true;
@@ -1068,21 +1087,14 @@ async function postBankToTally(ids){
       // bridge 2.1.4: the same voucher found in Tally just before posting: in Tally (with that voucher), not failed. A
       // check that could not be made leaves the line ready, with the bridge's one line (below, as any refusal)
       const x0 = byId.get(r.id), x = postAlready(x0) ? Object.assign({}, x0, {ok: true, verified: true, vchNumber: x0.vchNumber || x0.vchNo || ""}) : x0;
-      if (x && x.ok && x.verified !== true && !x.pendingCheck){
+      // round 17a: Tally's reply (bridge 2.1.8, byReply) is posted, not "not yet read back" (postTaken, src/js/59)
+      if (x && x.ok && !postTaken(x) && !x.pendingCheck){
         b.postedTags = b.postedTags || {}; b.postedTags[fpHash(r.fp || r.id)] = "unconfirmed:" + now;
         r.postError = "In Tally, not yet read back: Tally took it, but FinCom has not found it in Tally since, so it is not counted as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : "");
         failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: "In Tally, not yet read back \u2014 look in Tally before posting again"});
       } else if (x && x.ok){
-        ok++; r.state = "sent"; r.sentAt = now; r.postedVia = "bridge"; r.postError = ""; r.postedOptional = !!x.optional; r.postVerified = x.verified === true; r.checking = !!x.pendingCheck; posted.push(r);
-        b.postedTags = b.postedTags || {}; b.postedTags[fpHash(r.fp || r.id)] = now;
-        logPosting({what: "bank", id: r.id, action: "posted", co: b.cid, ref: r.narr.slice(0, 40), party: r.ledger, amount: num(r.debit || r.credit), tally: {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", company: tname}, by: (Cloud.st && Cloud.st.email) || ""});
-        r.tally = {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", at: now, by: (Cloud.st && Cloud.st.email) || "", company: tname};
-        // round 15 (B1): Tally's voucher id, or the batch's last id, from bridge 2.1.8
-        const mk = typeof postTallyMark === "function" ? postTallyMark(x, {company: tname, at: now, by: postMyName()}) : null;
-        if (mk) Object.assign(r.tally, mk);
+        ok++; bankPosted(b.cid, r, x, tname, now); posted.push(r);
         if (x.optional) optionalN++;
-        if (r.billId && D(b.cid).entries[r.billId]){ const e = D(b.cid).entries[r.billId]; e.paidBy = r.id; Store.saveEntry(b.cid, e); }
-        markSalesReceived(r);
       } else {
         r.postError = plainMsg(x && x.message) || "Tally did not confirm this entry.";
         failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: r.postError});
@@ -1138,10 +1150,16 @@ async function postBillsToTally(opts){
   const tname = await ensureTallyCompany(co);
   if (!tname) return;
   if (!S.bank || S.bank.cid !== co.id) await loadBank(co.id);
+  // round 17a: a bill a finished posting of FinCom's cloud already put in Tally is marked first, so it is not sent again
+  if (typeof postReconcile === "function") postReconcile(co.id);
   S.billPost = {busy: "Loading ledgers from Tally…"}; render();
   await syncLedgersFromTally(true);
   autoMapCompanyLedgers(co);
-  let list = Object.values(D().entries).filter(e => e.status === "approved" && !e.exportedAt && (!opts.ids || opts.ids.includes(e.id))).sort(byDate);
+  // round 17a: never a bill the newest posting of FinCom's cloud put in Tally, holds for review, is still sending, or is
+  // looking for (each is settled there, not sent again from here)
+  const jobSt = typeof postJobStates === "function" ? postJobStates(co.id) : new Map();
+  let list = Object.values(D().entries).filter(e => e.status === "approved" && !e.exportedAt && (!opts.ids || opts.ids.includes(e.id))
+    && !((st => st === "posted" ? !e.postedVia : ["review", "unknown", "sending"].includes(st))((jobSt.get(String(e.id)) || {}).st))).sort(byDate);
   if (!list.length){ S.billPost = null; toast("No approved entries are waiting."); render(); return; }
   canonicalizeBills(list);
   // review 21c: a bill whose GST, TDS or expense ledger comes from a Client setup choice that is only guessed waits,
@@ -1172,7 +1190,7 @@ async function postBillsToTally(opts){
       dup.forEach(e => { e.exportedAt = now; e.postNote = "Already in Tally"; Store.saveEntry(co.id, e); });
       todo = todo.filter(e => !dup.includes(e));
     }
-    let ok = 0, optionalN = 0, unverified = 0, altered = 0, checkFailed = 0, replyWords = "";
+    let ok = 0, optionalN = 0, unverified = 0, altered = 0, checkFailed = 0, byReplyN = 0, replyWords = "";
     const masterWords = [];
     if (todo.length){
       const used = new Set(todo.flatMap(e => e.snapshot.lines.map(l => String(l.ledger).toLowerCase())));
@@ -1209,7 +1227,8 @@ async function postBillsToTally(opts){
         if (postAlready(x)){ billAlready(co.id, e, x, tname, now); dup.push(e); }
         // bridge 2.1.4 could not check Tally first: nothing was posted; the bill stays waiting, with that one line
         else if (postCheckFail(x)){ e.postCheckFailed = {at: now, message: plainMsg(x.message) || "Could not check Tally, not posted. Try again."}; e.postError = ""; checkFailed++; }
-        else if (x && x.ok && (x.verified === true || postAltered(x))){ ok++; if (postAltered(x)) altered++; billPosted(co.id, e, x, tname, now); if (x.optional) optionalN++; }
+        // round 17a: Tally's reply (bridge 2.1.8, byReply) counts as posted, as a read back does (postTaken, src/js/59)
+        else if (x && postTaken(x)){ ok++; if (postAltered(x)) altered++; else if (x.verified !== true && x.byReply === true) byReplyN++; billPosted(co.id, e, x, tname, now); if (x.optional) optionalN++; }
         else if (x && x.ok){ unverified++; e.postUnconfirmed = {at: now, company: x.company || tname, optional: /Optional/.test(x.verifyNote || ''), pending: !!x.pendingCheck};
           e.postError = (/Optional/.test(x.verifyNote || '') && x.message) ? plainMsg(x.message) : x.pendingCheck ? "In Tally, not yet read back: FinCom reads it back from Tally by itself in a moment." : "In Tally, not yet read back: Tally took it, but FinCom has not found it in Tally since, so it is not counted as posted. Look in Tally (Day Book, and Display More Reports → Exception Reports → Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : "");
           failed.push({id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, msg: "In Tally, not yet read back", unread: true}); }
@@ -1221,7 +1240,7 @@ async function postBillsToTally(opts){
         Store.saveEntry(co.id, e);
       });
     }
-    S.billPost = {done: true, ok, bad: failed.length, dup: dup.length, failed, optional: optionalN, unverified, altered, checkFailed, masters: masterWords, company: tname,
+    S.billPost = {done: true, ok, bad: failed.length, dup: dup.length, failed, optional: optionalN, unverified, altered, byReply: byReplyN, checkFailed, masters: masterWords, company: tname,
       reply: replyWords};
     toast(ok + " posted to " + tname + (altered ? " (" + altered + " altered in Tally)" : "") + (optionalN ? " (" + optionalN + " as Optional vouchers)" : "") + (dup.length ? ", " + dup.length + " already there" : "") + (checkFailed ? ", " + checkFailed + " not posted: Tally could not be checked first" : "") + (failed.length ? ", " + failed.length + " not posted" : "") + ".");
   } catch (e){
@@ -1230,13 +1249,18 @@ async function postBillsToTally(opts){
   }
   refreshStats(co.id); render();
 }
-// a bill Tally has: marked as posted, with Tally's voucher
-function billPosted(cid, e, x, tname, now){
-  logPosting({what: "bill", id: e.id, action: postAltered(x) ? "altered" : "posted", co: cid, ref: e.x.invoiceNo, party: e.x.vendorName, amount: num(e.x.total), tally: {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", company: x.company || tname}, by: (Cloud.st && Cloud.st.email) || ""});
+// a bill Tally has: marked as posted, with Tally's voucher. o (round 17a): {by, quiet} for a posting marked afterwards from
+// FinCom's cloud (postReconcile): who pressed Post there, and no second record in this browser's posting log
+function billPosted(cid, e, x, tname, now, o){
+  o = o || {};
+  const who = o.by || (Cloud.st && Cloud.st.email) || "";
+  if (!o.quiet) logPosting({what: "bill", id: e.id, action: postAltered(x) ? "altered" : "posted", co: cid, ref: e.x.invoiceNo, party: e.x.vendorName, amount: num(e.x.total), tally: {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", company: x.company || tname}, by: who});
   e.exportedAt = now; e.postError = ""; e.postUnconfirmed = null; e.postCheckFailed = null; e.postedVia = "bridge"; e.postedInto = x.company || tname; e.postedOptional = !!x.optional; e.postVerified = x.verified === true; e.postAltered = postAltered(x); e.tallyVchNo = x.vchNumber || "";
-  e.tally = {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", at: now, by: (Cloud.st && Cloud.st.email) || "", company: x.company || tname};
+  // round 17a: posted by Tally's reply (bridge 2.1.8 does not read back): in Tally (billInTally), said so
+  e.postByReply = x.verified !== true && x.byReply === true;
+  e.tally = {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", at: now, by: who, company: x.company || tname};
   // round 15 (B1): bridge 2.1.8 says Tally's exact voucher id (one voucher a request) or the batch's last id: kept here
-  const mk = typeof postTallyMark === "function" ? postTallyMark(x, {company: x.company || tname, at: now, by: postMyName()}) : null;
+  const mk = typeof postTallyMark === "function" ? postTallyMark(x, {company: x.company || tname, at: now, by: o.by || postMyName()}) : null;
   if (mk) Object.assign(e.tally, mk);
 }
 // already in Tally (bridge 2.1.4 checks Tally for the same party, bill no., date and amount at every posting): marked as
@@ -1255,7 +1279,7 @@ function billsAfterCheck(cid, chk, tname){
     const e = d.entries[x.id];
     if (!e || e.exportedAt || !e.postUnconfirmed) return;
     if (postAlready(x)){ billAlready(cid, e, x, tname, now); n++; }
-    else if (x.ok && (x.verified === true || postAltered(x))){ billPosted(cid, e, x, tname, now); n++; }
+    else if (postTaken(x)){ billPosted(cid, e, x, tname, now); n++; }
     else { e.postUnconfirmed = Object.assign({}, e.postUnconfirmed, {pending: false}); e.postError = x.ok ? "In Tally, not yet read back: Tally took it, but FinCom did not find it in Tally afterwards. Look in Tally before posting it again." : "Failed: " + (plainMsg(x.message) || "not found in Tally"); }
     Store.saveEntry(cid, e);
   });
