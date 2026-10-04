@@ -4579,8 +4579,9 @@ function vchTypeOf(e, co){
 }
 // in Tally: posted and confirmed there (or found there already), and not since missing from Tally's own entries in
 // FinCom's cloud copy (review of 02-Oct-2026: FA/ELEC/013 posted on 29-Sep was deleted in Tally and still counted).
-// A bill in a Tally file that no one has confirmed is not counted.
-function billInTally(e){ return !!(e && e.exportedAt && (e.postVerified === true || e.postNote === "Already in Tally") && !e.goneFromTally); }
+// A bill in a Tally file that no one has confirmed is not counted. Round 17a (owner, 04-Oct-2026): a bill FinCom Bridge
+// 2.1.8 posted by Tally's reply (it never reads back: postByReply) is in Tally too.
+function billInTally(e){ return !!(e && e.exportedAt && (e.postVerified === true || e.postByReply === true || e.postNote === "Already in Tally") && !e.goneFromTally); }
 function tallyStateOf(e){
   if (e.goneFromTally) return ["bad", "Not in Tally any more (deleted there?)"];
   if (e.exportedAt) return billInTally(e) ? ["ok", "In Tally"] : ["sent", e.postedVia === "bridge" ? "In Tally, not confirmed" : "In a Tally file, not confirmed"];
@@ -12371,7 +12372,8 @@ function tabStates(tab){ return tab === "ready" ? ["ready"] : tab === "done" ? [
 // under Post to Tally, marked so, and is not posted again by "Post all"
 // A line whose voucher is no longer among Tally's entries in FinCom's cloud copy (TallyProof.checkBank: 182 HDFC lines
 // posted on 27-Sep were deleted in Tally afterwards) is not in Tally either: it goes back under Post to Tally, marked so
-function bankMatched(r){ return !r.goneFromTally && (r.state === "intally" || (r.state === "sent" && !!(r.tally && (r.tally.guid || r.tally.masterId || r.tally.number)) && !r.checking)); }
+// round 17: a line posted by Tally's reply (FinCom Bridge 2.1.8, no read-back) is matched: Tally said it created it
+function bankMatched(r){ return !r.goneFromTally && (r.state === "intally" || (r.state === "sent" && (!!(r.tally && (r.tally.guid || r.tally.masterId || r.tally.number)) || r.postByReply === true) && !r.checking)); }
 function bankTabOf(r){
   if (r.state === "attention" || r.state === "suggested") return "review";
   if (r.state === "ready" || ((r.state === "sent" || r.state === "intally") && !bankMatched(r))) return "ready";
@@ -13070,7 +13072,7 @@ function bankRowAct(a, id){
     const row = bankRow(id);
     if (row) unpostFromTally("bank", row, B().cid).then(ok => {
       if (!ok) return;
-      row.state = row.ledger ? "ready" : "attention"; row.sentAt = ""; row.postVerified = false; row.tally = null;
+      row.state = row.ledger ? "ready" : "attention"; row.sentAt = ""; row.postVerified = false; row.postByReply = false; row.tally = null;
       if (B().postedTags) delete B().postedTags[fpHash(row.fp || row.id)];
       saveBank({rows: true, posted: true}); render();
     });
@@ -14239,7 +14241,7 @@ async function reconPost(){
   const ids = R.missing.filter(id => { const r = b.rows.find(x => x.id === id); return r && ["ready", "sent", "intally"].includes(r.state) && r.ledger && exactLedger(r.ledger); });
   if (!ids.length) return;
   // lines marked as posted that Tally does not have: posted afresh
-  b.rows.forEach(r => { if (ids.includes(r.id) && ["sent", "intally"].includes(r.state)){ if (b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)]; r.state = "ready"; r.tally = null; r.postVerified = false; r.checking = false; r.tallyHow = ""; r.tallyRef = ""; delete r.tallyIdx; } });
+  b.rows.forEach(r => { if (ids.includes(r.id) && ["sent", "intally"].includes(r.state)){ if (b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)]; r.state = "ready"; r.tally = null; r.postVerified = false; r.postByReply = false; r.checking = false; r.tallyHow = ""; r.tallyRef = ""; delete r.tallyIdx; } });
   b.tallyLook = null; lsDel(wideCheckKey());
   saveBank({rows: true, posted: true});
   await postBankToTally(ids);
@@ -14271,7 +14273,7 @@ async function reconDelete(which){
   if (which === "replace"){
     // the statement lines go in again with their own amount, only where the old entry really went
     const ids = R.differ.filter(d => gone.has(d.ti)).map(d => d.rowId);
-    b.rows.forEach(r => { if (ids.includes(r.id)){ if (b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)]; r.state = r.ledger && exactLedger(r.ledger) ? "ready" : "attention"; r.tally = null; r.postVerified = false; r.tallyHow = ""; r.tallyRef = ""; delete r.tallyIdx; } });
+    b.rows.forEach(r => { if (ids.includes(r.id)){ if (b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)]; r.state = r.ledger && exactLedger(r.ledger) ? "ready" : "attention"; r.tally = null; r.postVerified = false; r.postByReply = false; r.tallyHow = ""; r.tallyRef = ""; delete r.tallyIdx; } });
     lsDel(wideCheckKey()); saveBank({rows: true, posted: true});
     await postBankToTally(ids.filter(id => (b.rows.find(r => r.id === id) || {}).state === "ready"));
   }
@@ -14335,7 +14337,7 @@ function goneBack(){
     n++;
     if (b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)];
     r.state = r.ledger && exactLedger(r.ledger) ? "ready" : "attention";
-    r.tally = null; r.postVerified = false; r.checking = false; r.postError = ""; r.postedVia = ""; r.sentAt = ""; delete r.tallyIdx; r.tallyHow = ""; r.tallyRef = "";
+    r.tally = null; r.postVerified = false; r.postByReply = false; r.checking = false; r.postError = ""; r.postedVia = ""; r.sentAt = ""; delete r.tallyIdx; r.tallyHow = ""; r.tallyRef = "";
   });
   b.gone = null; b.focus = null; b.filter = "ready"; b.tallyLook = null;
   lsDel(wideCheckKey());
@@ -14464,6 +14466,23 @@ async function removeTallyDuplicates(which){
   render();
 }
 
+// a bank line Tally has (or is reading back: pendingCheck): sent, with Tally's voucher. Round 17a: Tally's reply (bridge
+// 2.1.8, byReply) is posted, said so (r.postByReply); o: {by, quiet} for a line marked afterwards from FinCom's cloud
+// (postReconcile, src/js/59): who pressed Post there, and no second record in this browser's posting log
+function bankPosted(cid, r, x, tname, now, o){
+  o = o || {};
+  const b = B(), who = o.by || (Cloud.st && Cloud.st.email) || "";
+  r.state = "sent"; r.sentAt = now; r.postedVia = "bridge"; r.postError = ""; r.postedOptional = !!x.optional; r.postVerified = x.verified === true; r.checking = !!x.pendingCheck;
+  r.postByReply = x.verified !== true && x.byReply === true;
+  if (b && b.cid === cid){ b.postedTags = b.postedTags || {}; b.postedTags[fpHash(r.fp || r.id)] = now; }
+  if (!o.quiet) logPosting({what: "bank", id: r.id, action: "posted", co: cid, ref: String(r.narr || "").slice(0, 40), party: r.ledger, amount: num(r.debit || r.credit), tally: {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", company: tname}, by: who});
+  r.tally = {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", at: now, by: who, company: tname};
+  // round 15 (B1): Tally's voucher id, or the batch's last id, from bridge 2.1.8
+  const mk = typeof postTallyMark === "function" ? postTallyMark(x, {company: tname, at: now, by: o.by || postMyName()}) : null;
+  if (mk) Object.assign(r.tally, mk);
+  if (r.billId && D(cid).entries[r.billId]){ const e = D(cid).entries[r.billId]; e.paidBy = r.id; Store.saveEntry(cid, e); }
+  markSalesReceived(r);
+}
 /* ---------- after a posting: the bridge's read-back arrives in the background ---------- */
 async function bankAfterCheck(cid, sid, chk, tname){
   const b = B(), here = b && b.cid === cid && b.cur === sid;
@@ -14475,8 +14494,8 @@ async function bankAfterCheck(cid, sid, chk, tname){
     if (!r.checking) return;
     const x = byId.get(r.id);
     r.checking = false;
-    if (x && x.ok && x.verified === true){
-      confirmed++; r.postVerified = true;
+    if (x && postTaken(x)){
+      confirmed++; r.postVerified = x.verified === true; r.postByReply = x.verified !== true && x.byReply === true; r.postError = "";
       r.tally = Object.assign({}, r.tally || {}, {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", number: x.vchNumber || ""});
     } else if (x && !x.ok){
       // Tally said it made it, but it is not there: not counted as posted, and not sent again without a look
@@ -14625,6 +14644,8 @@ async function postBankToTally(ids){
   if (!st) return;
   const tname = await ensureTallyCompany(co);
   if (!tname) return;
+  // round 17a: a line a finished posting of FinCom's cloud already put in Tally is marked first, so it is not sent again
+  if (typeof postReconcile === "function") postReconcile(b.cid);
   if (Bridge.st.allowImport === false){ toast("Posting is switched off in the bridge settings (AllowImport)."); return; }
   const acc = (co.bankAccounts || []).find(a => a.id === st.acctId);
   const heavy = b.checkBeforePost === true;
@@ -14763,21 +14784,14 @@ async function postBankToTally(ids){
       // bridge 2.1.4: the same voucher found in Tally just before posting: in Tally (with that voucher), not failed. A
       // check that could not be made leaves the line ready, with the bridge's one line (below, as any refusal)
       const x0 = byId.get(r.id), x = postAlready(x0) ? Object.assign({}, x0, {ok: true, verified: true, vchNumber: x0.vchNumber || x0.vchNo || ""}) : x0;
-      if (x && x.ok && x.verified !== true && !x.pendingCheck){
+      // round 17a: Tally's reply (bridge 2.1.8, byReply) is posted, not "not yet read back" (postTaken, src/js/59)
+      if (x && x.ok && !postTaken(x) && !x.pendingCheck){
         b.postedTags = b.postedTags || {}; b.postedTags[fpHash(r.fp || r.id)] = "unconfirmed:" + now;
         r.postError = "In Tally, not yet read back: Tally took it, but FinCom has not found it in Tally since, so it is not counted as posted. Look in Tally (Day Book, and Display More Reports \u2192 Exception Reports \u2192 Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : "");
         failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: "In Tally, not yet read back \u2014 look in Tally before posting again"});
       } else if (x && x.ok){
-        ok++; r.state = "sent"; r.sentAt = now; r.postedVia = "bridge"; r.postError = ""; r.postedOptional = !!x.optional; r.postVerified = x.verified === true; r.checking = !!x.pendingCheck; posted.push(r);
-        b.postedTags = b.postedTags || {}; b.postedTags[fpHash(r.fp || r.id)] = now;
-        logPosting({what: "bank", id: r.id, action: "posted", co: b.cid, ref: r.narr.slice(0, 40), party: r.ledger, amount: num(r.debit || r.credit), tally: {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", company: tname}, by: (Cloud.st && Cloud.st.email) || ""});
-        r.tally = {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", at: now, by: (Cloud.st && Cloud.st.email) || "", company: tname};
-        // round 15 (B1): Tally's voucher id, or the batch's last id, from bridge 2.1.8
-        const mk = typeof postTallyMark === "function" ? postTallyMark(x, {company: tname, at: now, by: postMyName()}) : null;
-        if (mk) Object.assign(r.tally, mk);
+        ok++; bankPosted(b.cid, r, x, tname, now); posted.push(r);
         if (x.optional) optionalN++;
-        if (r.billId && D(b.cid).entries[r.billId]){ const e = D(b.cid).entries[r.billId]; e.paidBy = r.id; Store.saveEntry(b.cid, e); }
-        markSalesReceived(r);
       } else {
         r.postError = plainMsg(x && x.message) || "Tally did not confirm this entry.";
         failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: r.postError});
@@ -14833,10 +14847,16 @@ async function postBillsToTally(opts){
   const tname = await ensureTallyCompany(co);
   if (!tname) return;
   if (!S.bank || S.bank.cid !== co.id) await loadBank(co.id);
+  // round 17a: a bill a finished posting of FinCom's cloud already put in Tally is marked first, so it is not sent again
+  if (typeof postReconcile === "function") postReconcile(co.id);
   S.billPost = {busy: "Loading ledgers from Tally…"}; render();
   await syncLedgersFromTally(true);
   autoMapCompanyLedgers(co);
-  let list = Object.values(D().entries).filter(e => e.status === "approved" && !e.exportedAt && (!opts.ids || opts.ids.includes(e.id))).sort(byDate);
+  // round 17a: never a bill the newest posting of FinCom's cloud put in Tally, holds for review, is still sending, or is
+  // looking for (each is settled there, not sent again from here)
+  const jobSt = typeof postJobStates === "function" ? postJobStates(co.id) : new Map();
+  let list = Object.values(D().entries).filter(e => e.status === "approved" && !e.exportedAt && (!opts.ids || opts.ids.includes(e.id))
+    && !((st => st === "posted" ? !e.postedVia : ["review", "unknown", "sending"].includes(st))((jobSt.get(String(e.id)) || {}).st))).sort(byDate);
   if (!list.length){ S.billPost = null; toast("No approved entries are waiting."); render(); return; }
   canonicalizeBills(list);
   // review 21c: a bill whose GST, TDS or expense ledger comes from a Client setup choice that is only guessed waits,
@@ -14867,7 +14887,7 @@ async function postBillsToTally(opts){
       dup.forEach(e => { e.exportedAt = now; e.postNote = "Already in Tally"; Store.saveEntry(co.id, e); });
       todo = todo.filter(e => !dup.includes(e));
     }
-    let ok = 0, optionalN = 0, unverified = 0, altered = 0, checkFailed = 0, replyWords = "";
+    let ok = 0, optionalN = 0, unverified = 0, altered = 0, checkFailed = 0, byReplyN = 0, replyWords = "";
     const masterWords = [];
     if (todo.length){
       const used = new Set(todo.flatMap(e => e.snapshot.lines.map(l => String(l.ledger).toLowerCase())));
@@ -14904,7 +14924,8 @@ async function postBillsToTally(opts){
         if (postAlready(x)){ billAlready(co.id, e, x, tname, now); dup.push(e); }
         // bridge 2.1.4 could not check Tally first: nothing was posted; the bill stays waiting, with that one line
         else if (postCheckFail(x)){ e.postCheckFailed = {at: now, message: plainMsg(x.message) || "Could not check Tally, not posted. Try again."}; e.postError = ""; checkFailed++; }
-        else if (x && x.ok && (x.verified === true || postAltered(x))){ ok++; if (postAltered(x)) altered++; billPosted(co.id, e, x, tname, now); if (x.optional) optionalN++; }
+        // round 17a: Tally's reply (bridge 2.1.8, byReply) counts as posted, as a read back does (postTaken, src/js/59)
+        else if (x && postTaken(x)){ ok++; if (postAltered(x)) altered++; else if (x.verified !== true && x.byReply === true) byReplyN++; billPosted(co.id, e, x, tname, now); if (x.optional) optionalN++; }
         else if (x && x.ok){ unverified++; e.postUnconfirmed = {at: now, company: x.company || tname, optional: /Optional/.test(x.verifyNote || ''), pending: !!x.pendingCheck};
           e.postError = (/Optional/.test(x.verifyNote || '') && x.message) ? plainMsg(x.message) : x.pendingCheck ? "In Tally, not yet read back: FinCom reads it back from Tally by itself in a moment." : "In Tally, not yet read back: Tally took it, but FinCom has not found it in Tally since, so it is not counted as posted. Look in Tally (Day Book, and Display More Reports → Exception Reports → Optional Vouchers). If it is not there, post it again." + (x.verifyNote ? " [" + x.verifyNote + "]" : "");
           failed.push({id: e.id, no: e.x.invoiceNo, party: e.x.vendorName, msg: "In Tally, not yet read back", unread: true}); }
@@ -14916,7 +14937,7 @@ async function postBillsToTally(opts){
         Store.saveEntry(co.id, e);
       });
     }
-    S.billPost = {done: true, ok, bad: failed.length, dup: dup.length, failed, optional: optionalN, unverified, altered, checkFailed, masters: masterWords, company: tname,
+    S.billPost = {done: true, ok, bad: failed.length, dup: dup.length, failed, optional: optionalN, unverified, altered, byReply: byReplyN, checkFailed, masters: masterWords, company: tname,
       reply: replyWords};
     toast(ok + " posted to " + tname + (altered ? " (" + altered + " altered in Tally)" : "") + (optionalN ? " (" + optionalN + " as Optional vouchers)" : "") + (dup.length ? ", " + dup.length + " already there" : "") + (checkFailed ? ", " + checkFailed + " not posted: Tally could not be checked first" : "") + (failed.length ? ", " + failed.length + " not posted" : "") + ".");
   } catch (e){
@@ -14925,13 +14946,18 @@ async function postBillsToTally(opts){
   }
   refreshStats(co.id); render();
 }
-// a bill Tally has: marked as posted, with Tally's voucher
-function billPosted(cid, e, x, tname, now){
-  logPosting({what: "bill", id: e.id, action: postAltered(x) ? "altered" : "posted", co: cid, ref: e.x.invoiceNo, party: e.x.vendorName, amount: num(e.x.total), tally: {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", company: x.company || tname}, by: (Cloud.st && Cloud.st.email) || ""});
+// a bill Tally has: marked as posted, with Tally's voucher. o (round 17a): {by, quiet} for a posting marked afterwards from
+// FinCom's cloud (postReconcile): who pressed Post there, and no second record in this browser's posting log
+function billPosted(cid, e, x, tname, now, o){
+  o = o || {};
+  const who = o.by || (Cloud.st && Cloud.st.email) || "";
+  if (!o.quiet) logPosting({what: "bill", id: e.id, action: postAltered(x) ? "altered" : "posted", co: cid, ref: e.x.invoiceNo, party: e.x.vendorName, amount: num(e.x.total), tally: {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", company: x.company || tname}, by: who});
   e.exportedAt = now; e.postError = ""; e.postUnconfirmed = null; e.postCheckFailed = null; e.postedVia = "bridge"; e.postedInto = x.company || tname; e.postedOptional = !!x.optional; e.postVerified = x.verified === true; e.postAltered = postAltered(x); e.tallyVchNo = x.vchNumber || "";
-  e.tally = {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", at: now, by: (Cloud.st && Cloud.st.email) || "", company: x.company || tname};
+  // round 17a: posted by Tally's reply (bridge 2.1.8 does not read back): in Tally (billInTally), said so
+  e.postByReply = x.verified !== true && x.byReply === true;
+  e.tally = {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", at: now, by: who, company: x.company || tname};
   // round 15 (B1): bridge 2.1.8 says Tally's exact voucher id (one voucher a request) or the batch's last id: kept here
-  const mk = typeof postTallyMark === "function" ? postTallyMark(x, {company: x.company || tname, at: now, by: postMyName()}) : null;
+  const mk = typeof postTallyMark === "function" ? postTallyMark(x, {company: x.company || tname, at: now, by: o.by || postMyName()}) : null;
   if (mk) Object.assign(e.tally, mk);
 }
 // already in Tally (bridge 2.1.4 checks Tally for the same party, bill no., date and amount at every posting): marked as
@@ -14950,7 +14976,7 @@ function billsAfterCheck(cid, chk, tname){
     const e = d.entries[x.id];
     if (!e || e.exportedAt || !e.postUnconfirmed) return;
     if (postAlready(x)){ billAlready(cid, e, x, tname, now); n++; }
-    else if (x.ok && (x.verified === true || postAltered(x))){ billPosted(cid, e, x, tname, now); n++; }
+    else if (postTaken(x)){ billPosted(cid, e, x, tname, now); n++; }
     else { e.postUnconfirmed = Object.assign({}, e.postUnconfirmed, {pending: false}); e.postError = x.ok ? "In Tally, not yet read back: Tally took it, but FinCom did not find it in Tally afterwards. Look in Tally before posting it again." : "Failed: " + (plainMsg(x.message) || "not found in Tally"); }
     Store.saveEntry(cid, e);
   });
@@ -16529,14 +16555,21 @@ function cloudSnapshot(){
   return out;
 }
 function cloudKey(r){ return r.kind + "|" + (r.client_id || "") + "|" + r.id; }
+// The last copy of each record this computer and the server agreed on (sent from here, or taken from the server), kept
+// in memory as JSON: the base cloudApplyNow merges against when a copy comes in over a change made here and not yet
+// sent (owner, 04-Oct-2026). Clients keep theirs in BankDB (ClientBase).
+const CloudBase = new Map();
+const CLOUD_BASE_SEED = new Set(["entry", "party", "unsorted", "sales", "firm"]);
+function cloudBaseSet(k, json){ if (!/^(client|inbox)\|/.test(k)) CloudBase.set(k, json); }
 // changes since the last sync (and anything deleted here)
 function cloudChanges(){
   const marks = Cloud.marks(), snap = cloudSnapshot(), now = [], seen = {};
   snap.forEach(r => {
-    const k = cloudKey(r), h = fpHash(JSON.stringify(r.data));
+    const k = cloudKey(r), json = JSON.stringify(r.data), h = fpHash(json);
     seen[k] = h;
-    if (marks[k] !== h) now.push(Object.assign({}, r, {hash: h}));
+    if (marks[k] !== h) now.push(Object.assign({}, r, {hash: h, json}));
     else if (r.kind === "client") ClientBase.seed(r.id, r.data);   // in step with the server: that copy is its base
+    else if (CLOUD_BASE_SEED.has(r.kind) && !CloudBase.has(k)) CloudBase.set(k, json);
   });
   // Nothing is ever deleted because it is missing here: a reload with empty storage, a client not loaded yet or a bank
   // not open all look like absence. A record is sent as deleted only when the user removed it (Cloud.delete), and the
@@ -16591,7 +16624,7 @@ async function cloudPush(){
     const del = part.filter(r => r.deleted), up = part.filter(r => !r.deleted);
     if (up.length) await sendBatch("records", up.map(r => ({firm_id: Cloud.st.firm, kind: r.kind, id: r.id, client_id: r.client_id || "", data: r.data, deleted: false})));
     for (const r of del) await cloudMarkDeleted("records?firm_id=eq." + Cloud.st.firm + "&kind=eq." + encodeURIComponent(r.kind) + "&id=eq." + encodeURIComponent(r.id), r.why);
-    part.forEach(r => { marks[cloudKey(r)] = r.hash; });
+    part.forEach(r => { marks[cloudKey(r)] = r.hash; if (!r.deleted && r.json) cloudBaseSet(cloudKey(r), r.json); });
     Cloud.setMarks(marks); cloudDelsSent(part);
   }
   return changes.length;
@@ -16720,15 +16753,46 @@ async function cloudApplyNow(rows){
   rows = [].concat(rows || []).filter(cloudRowOk);
   rows.forEach(r => { if (r.data) cleanIds(r.data, 0); });
   const touchedBank = new Set(), touchedSales = new Set();
-  const mine = new Map(); try { cloudSnapshot().forEach(r => mine.set(cloudKey(r), stableStr(r.data))); } catch (e){}
-  for (const r of rows){
+  const mine = new Map(), mineData = new Map();
+  try { cloudSnapshot().forEach(r => { const k = cloudKey(r); mine.set(k, stableStr(r.data)); mineData.set(k, r.data); }); } catch (e){}
+  // a sales list or bank statement with a save waiting here: written first, so the reload below does not lose it
+  // (each helper looked up by name: the node tests load cloudApplyNow with only the functions they name)
+  if (typeof cloudFlushListsBefore === "function") await cloudFlushListsBefore(rows);
+  const baseSet = (k, json) => { if (typeof cloudBaseSet === "function") cloudBaseSet(k, json); };
+  const baseGet = k => typeof CloudBase === "object" ? CloudBase.get(k) : undefined;
+  const waiting = key => typeof pendingEdit === "function" && pendingEdit(key);
+  const keepMark = new Map(), inPlace = new Set();
+  let sendAfter = false;
+  for (let r of rows){
     const k = cloudKey(r);
     if (!r.deleted && mine.has(k) && mine.get(k) === stableStr(r.data)){   // this computer's own save coming back
       marks[k] = fpHash(JSON.stringify(r.data));
-      if (r.kind === "client") await ClientBase.set(r.id, r.data);
+      if (r.kind === "client") await ClientBase.set(r.id, r.data); else baseSet(k, JSON.stringify(r.data));
       continue;
     }
+    // A copy from the server is not laid over a change made here and not yet sent (owner, 04-Oct-2026: on a bill, the
+    // copy of the save before the last keystroke came back, replaced the invoice number here and became the sync mark,
+    // so the full number was never sent). A change is not yet sent here when its save is still waiting (pendingEdit) or
+    // the record here is no longer what was last sent or taken (its mark). Then the copy is merged as the client setup
+    // is (merge3, against the last copy both had): what was changed here stays, what was changed only there comes in,
+    // and the mark is kept, so the result is sent at the next push. The same item changed on both computers: the
+    // later push wins, as everywhere else. Nothing changed here: the copy is taken as before. Removals still come in.
+    if (!r.deleted && r.kind !== "client" && r.kind !== "inbox" && mineData.has(k)){
+      const here = mineData.get(k), was = marks[k];
+      const unsent = (r.kind === "entry" && waiting("e" + r.id)) || (!!was && was !== "gone" && was !== fpHash(JSON.stringify(here)));
+      if (unsent){
+        const base = baseGet(k);
+        // no base kept (a change made before this page was opened): what is here is kept whole
+        const data = base !== undefined && plainObj(here) && plainObj(r.data) ? merge3(JSON.parse(base), here, r.data) : here;
+        baseSet(k, JSON.stringify(r.data));
+        sendAfter = true;
+        if (stableStr(data) === mine.get(k)) continue;              // nothing of theirs to take: the row is left, the mark kept
+        keepMark.set(k, was); inPlace.add(k);
+        r = Object.assign({}, r, {data: clone(data)});
+      }
+    }
     const markWas = marks[k];
+    if (!r.deleted && r.kind !== "client") baseSet(k, JSON.stringify(r.data));
     if (r.kind !== "inbox") marks[k] = r.deleted ? "gone" : fpHash(JSON.stringify(r.data));   // inbox records are office automation's, never tracked for deletion
     const cid = r.client_id;
     if (r.kind === "firm"){ if (!r.deleted){ S.firm = firmMerge(S.firm, r.data); Store.saveFirm(); } }
@@ -16749,6 +16813,8 @@ async function cloudApplyNow(rows){
       const bag = r.kind === "entry" ? S.data[cid].entries : S.data[cid].parties;
       if (r.deleted){ if (r.kind === "entry" && bag[r.id] && bag[r.id].fileHash) unregisterHash(cid, bag[r.id].fileHash); delete bag[r.id]; Store.put("companies/" + cid + "/" + (r.kind === "entry" ? "entries/" : "parties/") + r.id, null); }
       // a supplier's ledger confirmed here and newer is kept over an older or guessed one coming in (src/js/60)
+      // a bill merged over a change typed here: the same object is updated, so the save still waiting for it saves the merge
+      else if (r.kind === "entry" && inPlace.has(k) && bag[r.id]){ const t = bag[r.id]; Object.keys(t).forEach(x => delete t[x]); Object.assign(t, clone(r.data)); Store.saveEntry(cid, t); }
       else { bag[r.id] = r.kind === "party" && typeof partyKeepChoice === "function" ? partyKeepChoice(bag[r.id], clone(r.data)) : clone(r.data); if (r.kind === "entry") Store.saveEntry(cid, bag[r.id]); else Store.saveParty(cid, bag[r.id]); }
     }
     else if (r.kind === "unsorted"){ if (r.deleted) delete S.inbox[r.id]; else { S.inbox[r.id] = clone(r.data); Store.saveInbox(S.inbox[r.id]); } }
@@ -16757,7 +16823,10 @@ async function cloudApplyNow(rows){
     else if (r.kind === "bank_stmt" || r.kind === "bank_rows"){ await cloudApplyBankPart(r); touchedBank.add(cid); }
     else if (r.kind === "sales" || r.kind === "sales_cfg"){ await cloudApplySales(r); touchedSales.add(cid); }
   }
+  keepMark.forEach((was, k) => { marks[k] = was; });
   Cloud.setMarks(marks);
+  // what was kept here goes to the server once this copy is in (cloudSoon does nothing while it is being applied)
+  if (sendAfter) setTimeout(() => { try { if (typeof cloudSoon === "function") cloudSoon(); } catch (e){} }, 50);
   // reload what is open on screen
   if (S.bank && touchedBank.has(S.bank.cid)){
     const o = S.bank, keep = {filter: o.filter, grouped: o.grouped, q: o.q, f: o.f, from: o.from, to: o.to, limit: o.limit, sel: o.sel, sticky: o.sticky, cur: o.cur};
@@ -16774,6 +16843,19 @@ async function cloudApplyNow(rows){
     if (S.sales && S.sales.cid === o.cid) Object.assign(S.sales, {filter: keep.filter, q: keep.q, openId: keep.openId, view: keep.view, sel: new Set([...keep.sel].filter(id => S.sales.list.some(v => v.id === id)))});
   }
   Object.keys(S.companies).forEach(id => { try { refreshStats(id); } catch (e){} });
+}
+async function cloudFlushListsBefore(rows){
+  try {
+    const s = S.sales, b = S.bank;
+    if (s && typeof salesSaveTimer !== "undefined" && salesSaveTimer && rows.some(r => /^sales/.test(r.kind) && r.client_id === s.cid)){
+      clearTimeout(salesSaveTimer); salesSaveTimer = null; await BankDB.set("sales:" + s.cid, s.list);
+    }
+    if (b && b.cur && typeof bankSaveTimer !== "undefined" && bankSaveTimer && rows.some(r => /^bank_/.test(r.kind) && r.client_id === b.cid)){
+      clearTimeout(bankSaveTimer); bankSaveTimer = null; await BankDB.set("stmt:" + b.cid + ":" + b.cur, b.rows);
+      const st = b.stmts.find(x => x.id === b.cur);
+      if (st && typeof countStates === "function"){ st.counts = countStates(b.rows); await BankDB.set("stmts:" + b.cid, b.stmts); }
+    }
+  } catch (e){}
 }
 async function cloudApplyBankMeta(cid, r){
   if (r.deleted) return;
@@ -17043,6 +17125,13 @@ async function openCompany(cid){
   render(); window.scrollTo(0, 0);
   // FinCom Bridge 2.1.3: the client's Tally computer brings in what changed in Tally since its last read (one light update)
   try { if (typeof TWake === "object") TWake.open(cid); } catch (e){}
+  // round 17 (04-Oct-2026): a posting FinCom's cloud finished by Tally's reply while this client was not open is marked
+  // on its bills and bank lines now (postReconcile, src/js/59: reads the finished postings, sends nothing to Tally)
+  setTimeout(() => { try {
+    if (typeof postReconcile !== "function" || typeof CloudJobs !== "object") return;
+    if (CloudJobs.list) { if (postReconcile(cid) && S.coId === cid) render(); }
+    else if (typeof CloudJobs.load === "function") Promise.resolve(CloudJobs.load()).then(() => render(), () => {});
+  } catch (e){} }, 0);
   // 02-Oct-2026: the Tally company this client may post to, set by itself when it is clear (one linked, same GSTIN)
   setTimeout(() => { try { if (typeof autoPostTo === "function") autoPostTo(S.companies[cid]).catch(() => {}); } catch (e){} }, 0);
   // the client's ledger list, read on opening the client (from the cloud copy when linked, else the bridge); then the
@@ -17054,8 +17143,36 @@ function goHome(){ closeSwitcher(); S.view = "home"; S.arm = null; render(); }
 /* ------------------------------------------------------------------ */
 /* Events                                                              */
 /* ------------------------------------------------------------------ */
-const timers = {};
-function later(key, fn, ms){ clearTimeout(timers[key]); timers[key] = setTimeout(fn, ms); }
+const timers = {}, laterFns = {};
+function later(key, fn, ms){
+  clearTimeout(timers[key]); laterFns[key] = fn;
+  timers[key] = setTimeout(() => { delete timers[key]; delete laterFns[key]; fn(); }, ms);
+}
+// a bill's typed change waits a moment before it is saved (billSaveLater): pendingEdit("e" + id) says one is waiting
+// (cloudApplyNow then keeps it over a copy coming in), flushBillSaves() makes every waiting save now (leaving the page,
+// the tab hidden, signing out), so a change typed in the last moment is never lost or left unsent
+const billSaveKeys = new Set();
+function pendingEdit(key){ return !!laterFns[key]; }
+function billSaveLater(e, cid){ const key = "e" + e.id; billSaveKeys.add(key); later(key, () => { billSaveKeys.delete(key); Store.saveEntry(cid, e); }, 600); }
+function flushBillSaves(){
+  let n = 0;
+  [...billSaveKeys].forEach(key => {
+    billSaveKeys.delete(key);
+    const fn = laterFns[key]; if (!fn) return;
+    clearTimeout(timers[key]); delete timers[key]; delete laterFns[key];
+    try { fn(); n++; } catch (e){}
+  });
+  return n;
+}
+// leaving the page or hiding the tab: the waiting bill saves are made, and sent to the firm account straight away
+function flushBillSavesAndSend(){
+  if (!flushBillSaves()) return;
+  try { if (typeof Cloud === "object" && Cloud.on() && Cloud.st.firm && !Cloud.st.mfa && Cloud.cfg().auto !== false && typeof cloudPushNow === "function") cloudPushNow(); } catch (e){}
+}
+if (typeof window === "object" && typeof document === "object" && window.addEventListener){
+  window.addEventListener("pagehide", flushBillSavesAndSend);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushBillSavesAndSend(); });
+}
 function curEntry(){ return S.view === "company" && S.selected ? D().entries[S.selected] : null; }
 
 /* ---------- editing a draft bill: called by the bill screen (React: app/src/screens/Bill.jsx) ---------- */
@@ -17068,7 +17185,7 @@ function billSetX(e, key, value){
   e.x[key] = /vendorGstin|vendorPan|buyerGstin/.test(key) ? String(value).toUpperCase() : value;
   if (e.uncertain) e.uncertain = e.uncertain.filter(k => k !== key);
   if (key === "invoiceDate"){ Store.saveEntry(cid, e); render(); return; }
-  later("e" + e.id, () => Store.saveEntry(cid, e), 600);
+  billSaveLater(e, cid);
   later("r", render, 350);
   if (window.FinComReact) FinComReact.redraw();
 }
@@ -17080,7 +17197,7 @@ function billSetText(e, key, value){
   // a ledger a person typed or picked is theirs: not changed by itself afterwards (empty: picked by itself again)
   if (key === "partyLedger"){ e.partyUserSet = !!String(value).trim(); e.partyAuto = !e.partyUserSet; e.partyFrom = ""; }
   if (key === "expenseLedger"){ e.expenseUserSet = !!String(value).trim(); e.expenseAuto = !e.expenseUserSet; e.expenseFrom = ""; }
-  later("e" + e.id, () => Store.saveEntry(cid, e), 600); later("r", render, 350);
+  billSaveLater(e, cid); later("r", render, 350);
   if (window.FinComReact) FinComReact.redraw();
 }
 // a GST or TDS ledger chosen on the bill (key "gst:cgst", "rcm-in:sgst", "tds"): checked by compute against the line's
@@ -17090,7 +17207,7 @@ function billSetTaxLed(e, key, value){
   const cid = S.coId;
   e.taxLed = Object.assign({}, e.taxLed || {});
   if (String(value || "").trim()) e.taxLed[key] = value; else delete e.taxLed[key];
-  later("e" + e.id, () => Store.saveEntry(cid, e), 600); later("r", render, 350);
+  billSaveLater(e, cid); later("r", render, 350);
   if (window.FinComReact) FinComReact.redraw();
 }
 // a choice on the bill: the payment type, why TDS is not booked, earlier bills' TDS, a ledger picked from a list
@@ -17679,6 +17796,7 @@ function doAct(act, t){
       break;
     }
     case "signOutNow": {
+      flushBillSaves();                                         // a bill change typed a moment ago: saved and counted as not sent yet
       const pend = Cloud.on() ? cloudChanges().changes.length : 0;
       askConfirm({title: "Sign out of FinCom?", ok: "Sign out", body: '<p class="note">You will need your email, password' + (Cloud.st.firm ? " and, if set up, the code from your phone" : "") + ' to come back in. Work already synced stays in your firm account.</p>',
         check: pend ? "" : "Also remove this firm\u2019s work from this computer (for a shared or office computer)"}).then(a => {
@@ -17758,6 +17876,7 @@ function doAct(act, t){
       break;
     }
     case "cloudSignOut": {
+      flushBillSaves();
       askConfirm({title: "Sign out of the firm account?", ok: "Sign out", body: "This computer keeps its own copy of everything. Changes made after signing out are not shared until you sign in again."}).then(a => {
         if (!a) return;
         signOutHere("Signed out.");
@@ -23342,7 +23461,7 @@ Object.assign(TCloud, {
 function bankNotReadBack(rows, cid){
   const a = booksAsOf(cid), at = a ? Date.parse(a.at) : 0;
   return (rows || []).filter(r => r.state === "sent" && !r.postedOptional &&
-    (r.checking || (r.postedVia === "bridge" && r.postVerified !== true) || (r.sentAt && (!at || Date.parse(r.sentAt) > at))));
+    (r.checking || (r.postedVia === "bridge" && r.postVerified !== true && r.postByReply !== true) || (r.sentAt && (!at || Date.parse(r.sentAt) > at))));
 }
 // Update now for a client: the bridge here when it has the company open, else the client's Tally computer through
 // FinCom's cloud (the bridge reads at once, also while its background reading is paused)
@@ -23665,6 +23784,8 @@ const CloudJobs = {
     } catch (e){ this.err = (e && e.message) || String(e); this.at = Date.now(); }
     this.busy = false;
     this.autoDismiss();
+    // round 17a: the entries a finished posting put in Tally, marked on each client loaded here (never sent again)
+    if (this.list && typeof postReconcile === "function") [...new Set(this.list.map(j => j.client_id))].forEach(cid => { if (S.data[cid] && S.data[cid].loaded) { try { postReconcile(cid); } catch (e){ console.error(e); } } });
     // without the live connection, a posting still going is looked at again soon
     clearTimeout(this.soonT);
     if ((this.list || []).some(j => ["waiting", "taken", "running"].includes(j.status) || j.checking) && !(typeof Live === "object" && Live.postsLive))
@@ -23900,7 +24021,7 @@ const TallyProof = {
 // the bank lines no longer in Tally: back to "ready", to be posted again (Tally is checked for FinCom's tag first)
 function bankRepostGone(){
   const b = B(), gone = b.rows.filter(r => r.goneFromTally);
-  gone.forEach(r => { r.state = "ready"; r.tally = null; r.postVerified = false; r.postedVia = ""; r.sentAt = ""; r.tallyRef = ""; r.tallyHow = ""; delete r.goneFromTally; });
+  gone.forEach(r => { r.state = "ready"; r.tally = null; r.postVerified = false; r.postByReply = false; r.postedVia = ""; r.sentAt = ""; r.tallyRef = ""; r.tallyHow = ""; delete r.goneFromTally; });
   saveBank({rows: true}); toast(gone.length + " line" + (gone.length === 1 ? " is" : "s are") + " ready to post again."); render();
 }
 /* ================================================================== */
@@ -25474,6 +25595,10 @@ function postAltered(x){
 // cloud that does not pass the two flags on yet (tally-ingest before 02-Oct-2026)
 // A posting the bridge found its own earlier one of in Tally (FinCom's tag; a resumed or queued job) answers ok with
 // alreadyThere: in Tally too. "Waiting for Tally: Tally is busy …" before the check could run: nothing was posted either
+// round 17a (owner, 04-Oct-2026): one rule for "Tally has it" in every path. FinCom Bridge 2.1.8 posts by Tally's reply
+// and never reads back: {ok: true, byReply: true, verified: false, vchId | batchEnd + batchN}. Such a result is posted
+// (not "In Tally, not yet read back"), as a result read back (verified) or one Tally altered
+function postTaken(x){ return !!x && x.ok === true && (x.verified === true || x.byReply === true || postAltered(x)); }
 function postAlready(x){ return !!x && (x.already === true || (x.ok === true && x.alreadyThere === true) || (!x.ok && /^Already in Tally \(voucher no\./i.test(String(x.message || "")))); }
 function postCheckFail(x){ return !!x && !x.ok && !postAlready(x) && (x.checkFailed === true || /^(Could not check Tally|Waiting for Tally)\b/i.test(String(x.message || ""))); }
 function postWord(x){
@@ -25484,6 +25609,7 @@ function postWord(x){
   if (x.existed) return "Already in Tally (not sent again)";
   if (postAltered(x)) return "Altered in Tally";
   if (x.verified === true) return "In Tally (verified)";
+  if (x.byReply === true) return "Posted to Tally (Tally's reply)";
   return "In Tally, not yet read back";
 }
 
@@ -25566,7 +25692,7 @@ const PostRecord = {
     const id = out.recId || (out.job && uuidOk(out.job.id) ? out.job.id : CloudPost.uuid());
     out.recId = id;
     const vids = [].concat(payload.vouchers || []).map(v => v.id), res = [].concat(out.results || []).map(r => this.clean(r));
-    const vres = res.filter(r => vids.includes(r.id)), okN = vres.filter(r => r.ok || postAlready(r)).length, unread = vres.filter(r => r.ok && r.verified !== true && !postAltered(r)).length;
+    const vres = res.filter(r => vids.includes(r.id)), okN = vres.filter(r => r.ok || postAlready(r)).length, unread = vres.filter(r => r.ok && !postTaken(r)).length;
     const status = vres.length && okN === vids.length ? "done" : (!vids.length && res.every(r => r.ok) ? "done" : "failed");
     const how = "sent straight to FinCom Bridge" + (Bridge.st.version ? " " + Bridge.st.version : "") + (Bridge.st.computer ? " on " + Bridge.st.computer : " on this computer");
     const message = (vids.length ? okN + " of " + vids.length + " in Tally" + (unread ? " (" + unread + " not yet read back)" : "") : res.length + " ledger" + (res.length === 1 ? "" : "s")) + ", " + how;
@@ -25900,7 +26026,7 @@ const PostCheck = {
     }
     if (Date.parse(r.readAt || 0) <= this.postedAt(e)){ const t = "Not posted again: the read of Tally (" + tallyHm(r.readAt) + ") is older than the posting."; postNote(co.id, t, "bad"); toast(t); render(); return false; }
     // not in Tally at a read made just now: waiting again, and posted (the bridge checks Tally once more as it posts)
-    e.exportedAt = null; e.postNote = ""; e.postVerified = false; e.tallyCheck = null; e.postUnconfirmed = null; e.postError = ""; e.postCheckFailed = null; delete e.goneFromTally;
+    e.exportedAt = null; e.postNote = ""; e.postVerified = false; e.postByReply = false; e.tallyCheck = null; e.postUnconfirmed = null; e.postError = ""; e.postCheckFailed = null; delete e.goneFromTally;
     Store.saveEntry(co.id, e); refreshStats(co.id);
     await postAllToTally({kind: "bill", id: e.id});
     return true;
@@ -26036,6 +26162,50 @@ function postMarkFromJob(j, id){
   return k ? Object.assign({company: j.company || "", at: j.updated_at || j.created_at || "", by}, k) : null;
 }
 function postMarkFor(cid, id, e){ return postMarkOf(e) || postMarkFromJob(typeof postJobOf === "function" ? postJobOf(cid, id) : null, id); }
+// round 17a (owner, 04-Oct-2026): a posting of FinCom's cloud that finished while this page was not waiting for it (on
+// another computer, the page closed or reloaded, a Live update) left its entries unmarked here, so they read as never
+// posted. Each result Tally took (postTaken: read back, Tally's reply, altered) in the newest posting naming the entry is
+// written onto the bill (billPosted) or the open statement's bank line (bankPosted) as the page would have done, with the
+// job's company, when it was sent (sentAt, else the job's time) and who pressed Post (created_by). Never queues, never
+// calls the bridge, sends nothing to Tally. Left alone: an entry already marked, not approved (deleted, back in review),
+// released by an owner (not in Tally), or once marked here and taken back out of Tally since (postedVia kept). A stale
+// "not yet read back" on it is cleared. Not while this page is itself waiting on a posting (it marks those). Returns the
+// number marked; one toast when it marked any.
+function postReconcile(cid, quiet){
+  if (typeof CloudJobs !== "object" || !cid || !CloudJobs.list) return 0;
+  if ((S.billPost && S.billPost.busy) || (S.bank && S.bank.cid === cid && S.bank.busy)) return 0;
+  const d = S.data[cid], b = S.bank && S.bank.cid === cid && !S.bank.loading ? S.bank : null;
+  const pid = typeof PostIds === "object" ? PostIds.by[cid] : null;
+  const released = id => !!(pid && pid.held && pid.held.has(id) && !pid.held.get(id));
+  let bills = 0, lines = 0;
+  postJobStates(cid).forEach((v, id) => {
+    const j = v.job;
+    if (v.st !== "posted" || !j || !["done", "failed"].includes(j.status)) return;
+    const x = [].concat(j.results || []).find(r => r && String(r.id) === id);
+    if (!postTaken(x) || released(id)) return;
+    const at = x.sentAt || j.updated_at || j.created_at || new Date().toISOString(), by = j.created_by ? memberName(j.created_by) : "";
+    const e = d && d.loaded && d.entries ? d.entries[id] : null;
+    if (e){
+      if (e.status !== "approved" || billInTally(e) || e.goneFromTally) return;
+      if (e.postedVia && !(e.exportedAt && e.postVerified !== true && e.postByReply !== true)) return;
+      billPosted(cid, e, x, j.company || "", at, {by, quiet: true});
+      Store.saveEntry(cid, e); bills++;
+      return;
+    }
+    const r = b ? b.rows.find(q => String(q.id) === id) : null;
+    if (!r || r.goneFromTally || r.postVerified === true || r.postByReply === true) return;
+    if (!((r.state === "ready" && !r.postedVia) || (r.state === "sent" && !r.checking))) return;
+    if (typeof bankPosted === "function"){ bankPosted(cid, r, x, j.company || "", at, {by, quiet: true}); lines++; }
+  });
+  const n = bills + lines;
+  if (lines) saveBank({rows: true, posted: true});
+  if (bills) refreshStats(cid);
+  if (n){
+    if (!quiet) toast(n + (n === 1 ? " posting" : " postings") + " marked from Tally's reply" + (cid !== S.coId && S.companies[cid] ? " (" + S.companies[cid].name + ")" : "") + ".");
+    render();
+  }
+  return n;
+}
 // the name for "by <name>" when the result comes through this browser: the member's name, else the e-mail
 function postMyName(){
   const st = (typeof Cloud === "object" && Cloud.st) || {}, me = (st.members || []).find(m => m.email && m.email === st.email);
@@ -26089,7 +26259,7 @@ function postTestCopies(cid, id, n){
     const e = JSON.parse(JSON.stringify(src));
     e.id = uid("e"); e.createdAt = now; e.approvedAt = now; e.fileName = "Test copy " + i + " of " + no; e.notDuplicate = true;
     e.x.invoiceNo = no + "-T" + i; e.x.testCopy = true;
-    ["exportedAt", "postUnconfirmed", "postCheckFailed", "postError", "postNote", "postAlreadyMsg", "tally", "tallyVchNo", "tallyCheck", "postVerified", "postAltered", "postedVia", "postedInto", "postedOptional", "goneFromTally", "postFailedAt", "paidBy", "vchNo", "docPath", "dupOf"].forEach(k => { delete e[k]; });
+    ["exportedAt", "postUnconfirmed", "postCheckFailed", "postError", "postNote", "postAlreadyMsg", "tally", "tallyVchNo", "tallyCheck", "postVerified", "postByReply", "postAltered", "postedVia", "postedInto", "postedOptional", "goneFromTally", "postFailedAt", "paidBy", "vchNo", "docPath", "dupOf"].forEach(k => { delete e[k]; });
     d.entries[e.id] = e; Store.saveEntry(cid, e); ids.push(e.id);
   }
   refreshStats(cid); render();
@@ -26161,7 +26331,7 @@ function postRows(co){
   const stOf = (id, fallback) => {
     for (const j of live){
       const it = [].concat(j.items || []).find(x => x.id === id);
-      if (it) return it.state === "waiting" ? ["Waiting for Tally", "warn"] : it.state === "sending" ? ["Sending", "warn"] : it.state === "sent" ? ["In Tally, not yet read back", "warn"] : it.state === "in_tally" ? ["In Tally (verified)", "ok"] : ["Failed: " + (it.reason || "Tally refused it"), "bad"];
+      if (it) return it.state === "waiting" ? ["Waiting for Tally", "warn"] : it.state === "sending" ? ["Sending", "warn"] : it.state === "sent" ? ["In Tally, not yet read back", "warn"] : it.state === "in_tally" ? ["In Tally (verified)", "ok"] : it.state === "posted" ? ["Posted to Tally (Tally's reply)", "ok"] : ["Failed: " + (it.reason || "Tally refused it"), "bad"];
       if ((CloudJobs.idsOf(j) || []).includes(id)) return [j.status === "waiting" ? "Waiting for Tally" : "Sending", "warn"];
     }
     return fallback;
