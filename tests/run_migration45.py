@@ -437,9 +437,17 @@ insert into tally_post_ids (firm_id, client_id, fincom_id, job_id, entry_id, liv
 alter table tally_post_ids enable trigger user;
 analyze tally_post_ids; analyze tally_post_jobs;""" % {"F": q(F), "D": q(D1), "C": q(CO["PERF"])})
         t0 = _t.time(); n = jn("set statement_timeout = '20s'; select jsonb_array_length(tally_post_xml_for(%s, %s, array(select 'NOSUCH-' || g from generate_series(1, 500) g))->'posts')" % (q(F), q(PB))); t1 = _t.time() - t0
-        ok(n == "0" and t1 < 2, "M4. tally_post_xml_for with 500 unknown ids over %s ids: %.2f s (under 2 s) (%s)" % (db.one("select count(*) from tally_post_ids"), t1, str(n)[:120]))
+        # the time bound is generous (CI runners are slower: 4.1 s there against 0.3 s here; without the indexes it was 167 s); what
+        # proves the indexes is the plan of each spelling's lookup below (CI, 04-Oct)
+        ok(n == "0" and t1 < 15, "M4. tally_post_xml_for with 500 unknown ids over %s ids: %.2f s (under 15 s; 167 s without the indexes) (%s)" % (db.one("select count(*) from tally_post_ids"), t1, str(n)[:120]))
+        plans = {k: jn("explain select 1 from tally_post_ids p where p.firm_id = %s and p.live and %s" % (q(F), w)) for k, w in (
+            ("entry", "p.entry_id = 'NOSUCH-1'"),
+            ("fid_an", "regexp_replace(p.fincom_id, '[^A-Za-z0-9]', '', 'g') = 'NOSUCH1'"),
+            ("entry_an", "regexp_replace(coalesce(p.entry_id, ''), '[^A-Za-z0-9]', '', 'g') = 'NOSUCH1'"))}
+        ok(all("Index" in v and "Seq Scan on tally_post_ids" not in v for v in plans.values()),
+           "M4. each spelling's lookup over 200,000 ids goes through an index, never a scan of the table (%s)" % {k: v.split("\n")[0][:90] for k, v in plans.items()})
         t0 = _t.time(); n = jn("set statement_timeout = '20s'; select (tally_recorder_apply(%s, %s, %s, %s)->>'held')" % (q(F), q(PB), q(D1), js([short("pf%d" % i, "gpf-%d" % i, 9001 + i, "NOSUCH.%d" % i, body=False) for i in range(500)]))); t1 = _t.time() - t0
-        ok(n == "500" and t1 < 5, "M4. tally_recorder_apply with 500 unmatched short lines: %.2f s (under 5 s), 500 held (%s)" % (t1, str(n)[:120]))
+        ok(n == "500" and t1 < 15, "M4. tally_recorder_apply with 500 unmatched short lines: %.2f s (under 15 s), 500 held (%s)" % (t1, str(n)[:120]))
         live = lambda fid: jn("select coalesce(string_agg(post_fid, ','), '-') from tally_post_live_for(%s, %s, %s)" % (q(F), q(PB), q(fid)))
         sp = {f: live(f) for f in ("P8-3", "P8_3", "e8.3", "e8-3", "P83", "P8-4", "NOSUCH", "P9-3", "--")}
         ok(sp == {"P8-3": "P8-3", "P8_3": "P8-3", "e8.3": "P8-3", "e8-3": "P8-3", "P83": "P8-3", "P8-4": "P8-4", "NOSUCH": "-", "P9-3": "-", "--": "-"},
