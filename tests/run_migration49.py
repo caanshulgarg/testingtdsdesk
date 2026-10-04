@@ -15,7 +15,11 @@ Checked:
     an owner;
   SAFETY: md5 of tally_post_jobs, tally_post_ids and tally_post_marks unchanged by every call; after its Posted row is
     removed, the same bill posted again is refused by tally_post_enqueue (its FinCom id is taken), nothing queued.
-RED (before 49): the file is missing."""
+Review of 49 (docs/reviews/migration-49-review.md), each a check: M1 a removal is void once its posting is going on again or
+was started again (Retry: attempts changed), and remove locks the postings it checks; M2 a member restores only their own
+removal; L1 the entry must be in the posting, local: keys strict and at most 50; L2 a strict uuid; L3 the table select-only,
+the key check revoked from service_role; L5 one row a flag (no new row each cycle).
+RED (before 49): the file is missing; (before the review's fixes) M1, M2, L1, L2, L3, L5 fail."""
 import os, sys, json, re, hashlib, subprocess
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import pg_stand
@@ -72,6 +76,8 @@ try:
       insert into tally_devices (id, firm_id, name, key_hash, version) values (%(D1)s, %(F)s, 'NWS144', 'h1', '2.1.8');
       create table if not exists clients (id text, firm_id uuid, name text, data jsonb, deleted boolean default false, tally_name text, gstin text, primary key (firm_id, id));
       insert into clients (id, firm_id, name, data) values ('c1', %(F)s, 'Testing AAD', '{"postTo": "ZZ CO"}');""" % {"F": q(F), "F2": q(F2), "O": q(OWNER), "S": q(STAFF), "S2": q(STAFF2), "X": q(OTHER), "D1": q(D1)})
+    # Supabase's default privileges: every new function executable by service_role (L3: the key check is revoked from it)
+    db.sql("do $$ begin if not exists (select 1 from pg_roles where rolname = 'service_role') then create role service_role; end if; end $$; alter default privileges in schema public grant execute on functions to service_role;")
     for path in FILES:
         r = psql_text(open(path).read())
         if r.returncode: ok(False, "%s runs %s" % (os.path.basename(path), (r.stderr or "").strip()[-300:])); raise SystemExit("cannot go on")
@@ -100,7 +106,7 @@ try:
     ok(int(db.one("select count(*) from pg_policies where tablename = 'tally_post_row_flags'")) == 1, "49 twice: one policy, as it was")
     h0 = db.one(HASH)
     # ---- the functions
-    FN = ["tally_post_row_keys", "tally_post_row_hide", "tally_post_row_remove", "tally_post_row_restore"]
+    FN = ["tally_post_row_keys", "tally_post_row_hide", "tally_post_row_remove", "tally_post_row_restore", "tally_post_row_flags_now"]
     for fn in FN:
         r = db.rows("select p.prosecdef::text sd, array_to_string(p.proconfig, ',') cfg, md5(p.prosrc) m, p.prosrc src, has_function_privilege('authenticated', p.oid, 'execute')::text au, has_function_privilege('anon', p.oid, 'execute')::text an, "
                     "has_function_privilege('public', p.oid, 'execute')::text pu from pg_proc p where p.proname = %s" % q(fn))
@@ -114,6 +120,12 @@ try:
     K1, K2, K3, K4, K9, KL = J(1) + ":B1", J(2) + ":B2", J(3) + ":B3", J(4) + ":B4", J(9) + ":Z9", "local:emuqip07ppksjl"
     arr = lambda ks: "array[%s]::text[]" % ",".join(q(k) for k in ks)
     call = lambda uid, s: as_user(uid, "select %s::text" % s)
+    # ---- L3: the table select-only for members; the key check by nobody, service_role included
+    tp = {pr: db.one("select has_table_privilege('authenticated', 'public.tally_post_row_flags', '%s')::text" % pr) for pr in ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER")}
+    ok(tp == {"SELECT": "true", "INSERT": "false", "UPDATE": "false", "DELETE": "false", "TRUNCATE": "false", "REFERENCES": "false", "TRIGGER": "false"}, "L3. authenticated has select on the table and nothing else (%s)" % tp)
+    ok(db.one("select has_function_privilege('service_role', 'public.tally_post_row_keys(text[])', 'execute')::text") == "false"
+       and db.one("select has_function_privilege('service_role', 'public.tally_post_row_hide(text[], boolean)', 'execute')::text") == "true",
+       "L3. the key check is revoked from service_role too (Supabase's default privileges give it the others)")
     # ---- RLS: no direct writes
     for stmt in ("insert into tally_post_row_flags (firm_id, row_key, kind, user_id) values (%s, %s, 'remove', %s)" % (q(F), q(K1), q(STAFF)),
                  "update tally_post_row_flags set why = 'x'", "delete " + "from tally_post_row_flags"):
@@ -146,17 +158,38 @@ try:
     ok(not good and "not a posting of your firm" in err, "remove: a row of another firm's posting is refused (%s)" % err.strip()[-90:])
     good, err = call(OWNER, "tally_post_row_hide(%s, true)" % arr(["x"]))
     ok(not good and "not a row of this list" in err, "a key that is not a row is refused (%s)" % err.strip()[-90:])
+    # L1: the entry part must be an entry of that posting; local: keys strict, at most 50 a call
+    good, err = call(STAFF, "tally_post_row_hide(%s, true)" % arr([J(1) + ":NOPE"]))
+    ok(not good and "not an entry of that posting" in err, "L1. a key naming an entry the posting does not have is refused (%s)" % err.strip()[-90:])
+    good, err = call(STAFF, "tally_post_row_hide(%s, true)" % arr(["local:emu q;x"]))
+    ok(not good and "not a row of this list" in err, "L1. a local: key outside the strict pattern is refused (%s)" % err.strip()[-90:])
+    good, err = call(OWNER, "tally_post_row_hide(%s, true)" % arr(["local:b%d" % i for i in range(51)]))
+    ok(not good and "at most 50" in err, "L1. at most 50 local: keys in one call (%s)" % err.strip()[-90:])
+    # L2: a malformed posting id gets the function's own words, not PostgreSQL's
+    for bad in ("-" * 36 + ":B1", "0" * 36 + ":B1"):
+        good, err = call(OWNER, "tally_post_row_hide(%s, true)" % arr([bad]))
+        ok(not good and "not a row of this list" in err and "22P02" not in err and "invalid input syntax" not in err, "L2. a malformed posting id (%s…): 'not a row of this list' (%s)" % (bad[:8], err.strip()[-80:]))
     good, err = as_user(STAFF, "select tally_post_row_keys(%s)::text" % arr([K1]))
     ok(not good and "permission denied" in err, "the key check is not callable on its own")
     # ---- restore
     good, err = call(STAFF, "tally_post_row_restore(%s)" % arr([K2, KL]))
     ok(not good and "only an owner" in err, "restore: more than one by a staff member is refused (%s)" % err.strip()[-90:])
-    good, out = call(STAFF, "tally_post_row_restore(%s)" % arr([KL]))
-    ok(good and json.loads(out)["n"] == 1, "restore: one row by a staff member (%s)" % out)
+    # M2: a member restores only a removal they made; an owner any
+    good, err = call(STAFF, "tally_post_row_restore(%s)" % arr([KL]))
+    ok(not good and "only an owner, or the member who removed it" in err and int(db.one("select count(*) from tally_post_row_flags where row_key = %s and kind = 'remove' and restored_at is null" % q(KL))) == 1,
+       "M2. a staff member cannot restore a row an owner removed (%s)" % err.strip()[-100:])
+    good, out = call(STAFF, "tally_post_row_restore(%s)" % arr([K1]))
+    ok(good and json.loads(out)["n"] == 1, "M2. a staff member restores a row they removed themselves (%s)" % out)
     good, out = call(OWNER, "tally_post_row_restore(%s)" % arr([K2]))
-    ok(good and json.loads(out)["n"] == 1 and int(db.one("select count(*) from tally_post_row_flags where kind = 'remove' and restored_at is null")) == 1, "restore: by an owner; K1 alone stays removed (%s)" % out)
-    good, out = call(OWNER, "tally_post_row_remove(%s, 'again')" % arr([KL]))
-    ok(good and json.loads(out)["n"] == 1, "a restored row can be removed again (%s)" % out)
+    ok(good and json.loads(out)["n"] == 1 and int(db.one("select count(*) from tally_post_row_flags where kind = 'remove' and restored_at is null")) == 1, "restore: by an owner (any row); KL alone stays removed (%s)" % out)
+    nf = nflags()
+    good, out = call(STAFF, "tally_post_row_remove(%s, 'again')" % arr([K1]))
+    ok(good and json.loads(out)["n"] == 1 and nflags() == nf, "L5. a restored row removed again takes up its own row: no new row (%d)" % nflags())
+    for i in range(3):
+        call(STAFF, "tally_post_row_hide(%s, true)" % arr([K2])); call(STAFF, "tally_post_row_hide(%s, false)" % arr([K2]))
+    ok(nflags() == nf and int(db.one("select count(*) from tally_post_row_flags where row_key = %s and kind = 'hide' and user_id = %s" % (q(K2), q(STAFF)))) == 1, "L5. hide / show again three times: still one row (%d)" % nflags())
+    call(STAFF, "tally_post_row_hide(%s, true)" % arr([K2]))
+    ok(int(db.one("select count(*) from tally_post_row_flags where row_key = %s and kind = 'hide' and restored_at is null" % q(K2))) == 1, "L5. hidden again: in force")
     # ---- SAFETY: nothing of the postings changed, and the removed bill cannot be posted again
     ok(db.one(HASH) == h0, "SAFETY: md5 of tally_post_jobs, tally_post_ids and tally_post_marks unchanged by every call (%s)" % h0)
     x = db.rows("select live::text, accepted_at is not null as acc, released_at from tally_post_ids where job_id = %s and fincom_id = 'B1'" % q(J(1)))[0]
@@ -165,6 +198,22 @@ try:
     good, out = as_user(OWNER, "select tally_post_enqueue(%s::uuid, 'c1', %s::jsonb)::text" % (q(J(5)), q(json.dumps({"vouchers": [vch("B1")]}))))
     refused = (not good and "its FinCom id is taken" in out) or (good and json.loads(out).get("ok") is False)
     ok(refused and int(db.one("select count(*) from tally_post_jobs")) == njobs, "SAFETY: the bill whose Posted row was removed, posted again: tally_post_enqueue refuses it (its FinCom id is taken), nothing queued (%s)" % out.strip()[-140:])
+    # ---- M1: a removed row whose posting is started again (Retry: same job id) is not left hidden under Removed
+    rs = db.one("select prosrc from pg_proc where proname = 'tally_post_row_remove'")
+    ok(re.search(r"for share", rs or ""), "M1. tally_post_row_remove locks the postings it checks (for share), so a Retry cannot slip between the check and the write")
+    good, out = call(OWNER, "tally_post_row_remove(%s, 'refused, seen')" % arr([K2]))
+    att0 = db.one("select job_attempts::text || '/' || job_status from tally_post_row_flags where row_key = %s and kind = 'remove'" % q(K2))
+    now = lambda uid: {r["row_key"]: r["void"] for r in db.rows("set role authenticated; select row_key, void::text from tally_post_row_flags_now() where kind = 'remove'", uid)}
+    ok(good and now(STAFF).get(K2) == "false" and att0.endswith("/failed"), "M1. the failed row J2:B2 removed, the posting's attempts and status kept on the flag (%s), in force (%s)" % (att0, now(STAFF)))
+    good, out = as_user(OWNER, "select tally_post_enqueue(%s::uuid, 'c1', '{}'::jsonb)::text" % q(J(2)))
+    ok(good and json.loads(out).get("retry") is True and db.one("select status from tally_post_jobs where id = %s" % q(J(2))) == "waiting", "M1. Retry of that posting (same job id): waiting again (%s)" % out)
+    ok(now(STAFF).get(K2) == "true" and now(OWNER).get(K2) == "true", "M1. the removal is void while the posting waits: the row is listed where its state puts it (%s)" % now(STAFF))
+    db.sql("update tally_post_jobs set status = 'failed', message = 'Failed again' where id = %s" % q(J(2)))
+    ok(now(STAFF).get(K2) == "true", "M1. failed again after the Retry: still void (attempts changed since the removal), back under Errors")
+    good, out = call(OWNER, "tally_post_row_remove(%s, 'seen again')" % arr([K2]))
+    ok(good and json.loads(out)["n"] == 1 and now(STAFF).get(K2) == "false" and int(db.one("select count(*) from tally_post_row_flags where row_key = %s and kind = 'remove'" % q(K2))) == 1,
+       "M1. removed again: in force, on the same row (%s)" % out)
+    ok(not as_user(OTHER, "select count(*)::text from tally_post_row_flags_now()")[1] or as_user(OTHER, "select count(*)::text from tally_post_row_flags_now()")[1] == "0", "tally_post_row_flags_now: another firm sees none")
     print("\n  md5 of each function body of migration 49 (pg_proc.prosrc):")
     for fn in FN: print("    %-24s %s" % (fn, db.one("select md5(prosrc) from pg_proc where proname = %s" % q(fn))))
 finally:

@@ -488,16 +488,18 @@ function postEntryRows(cid){
 // hide: Set of row keys hidden by this user; removed: Map row key -> {by, at, why}
 const PostFlags = {
   ok: null, at: 0, busy: false, hide: new Set(), removed: new Map(), err: "",
-  missing(m){ return /tally_post_row_flags|tally_post_row_(?:hide|remove|restore)|PGRST20[0-9]|42P01|42883|does not exist|schema cache|Could not find|\b404\b/i.test(String(m || "")); },
+  // review L6: only a missing function or table (migration 49 not installed) turns the buttons off; any other error
+  // (permission denied, …) is said in its own words
+  missing(m){ return /\b(42883|42P01|PGRST202|PGRST205)\b/.test(String(m || "")); },
   async load(force){
     if (this.busy || typeof TCloud !== "object" || !TCloud.on() || this.ok === false) return;
     if (!force && Date.now() - this.at < 60000) return;
     this.busy = true;
     try {
-      const rows = await TCloud.restAll("tally_post_row_flags?select=row_key,kind,user_id,at,why&restored_at=is.null");
+      const rows = await TCloud.restAll("tally_post_row_flags?select=row_key,kind,user_id,at,why,job_attempts&restored_at=is.null");
       const me = (S.account && S.account.me && S.account.me.user_id) || "";
       const hide = new Set(), removed = new Map();
-      [].concat(rows || []).forEach(x => { if (!x) return; if (x.kind === "remove") removed.set(x.row_key, {by: x.user_id, at: x.at, why: x.why || ""}); else if (x.kind === "hide" && (!me || !x.user_id || x.user_id === me)) hide.add(x.row_key); });
+      [].concat(rows || []).forEach(x => { if (!x) return; if (x.kind === "remove") removed.set(x.row_key, {by: x.user_id, at: x.at, why: x.why || "", attempts: x.job_attempts == null ? null : num(x.job_attempts)}); else if (x.kind === "hide" && (!me || !x.user_id || x.user_id === me)) hide.add(x.row_key); });
       const sig = JSON.stringify([[...hide].sort(), [...removed.keys()].sort()]), changed = sig !== this.sig;
       this.hide = hide; this.removed = removed; this.sig = sig; this.ok = true; this.at = Date.now();
       if (changed && typeof render === "function") render();
@@ -509,10 +511,22 @@ const PostFlags = {
   },
   isHidden(k){ return this.hide.has(k); },
   isRemoved(k){ return this.removed.has(k); },
-  async call(fn, args, done){
+  // review M1: a removal is void once the row's posting is going on again or was started again since (Retry under the same
+  // job id: its attempts changed); the row is then listed where its state puts it
+  removedNow(x){
+    const f = x && this.removed.get(x.key);
+    if (!f) return null;
+    if (postRowRemoveBlock(x)) return null;
+    if (x.job && f.attempts != null && num(x.job.attempts) !== f.attempts) return null;
+    return f;
+  },
+  // review M2: an owner restores any removal; another member only their own
+  mayRestore(k){ const f = this.removed.get(k), me = (S.account && S.account.me) || {}; return !!f && (me.role === "owner" || (!!me.user_id && f.by === me.user_id)); },
+  async call(fn, args, done, more){
     try {
       const r = await TCloud.rpc(fn, args);
       if (r && r.ok === false) throw new Error(r.error || "It was not done.");
+      if (more) return true;
       if (done) toast(done);
       await this.load(true);
       return true;
@@ -524,22 +538,37 @@ const PostFlags = {
       return false;
     }
   },
-  hideRows(keys, on){ return this.call("tally_post_row_hide", {p_keys: keys, p_on: on !== false}, on === false ? null : keys.length + (keys.length === 1 ? " row hidden" : " rows hidden") + " (for you only). Show hidden brings them back."); },
-  removeRows(keys, why){ return this.call("tally_post_row_remove", {p_keys: keys, p_why: why || ""}, keys.length + (keys.length === 1 ? " row moved" : " rows moved") + " to Removed. The entries in Tally are not affected."); },
-  restoreRows(keys){ return this.call("tally_post_row_restore", {p_keys: keys}, keys.length + (keys.length === 1 ? " row restored." : " rows restored.")); }
+  // review L4: the cloud takes at most 500 rows a call: sent in batches of 500, the list read once at the end
+  BATCH: 500,
+  async batches(fn, keys, args, done){
+    let ok = true;
+    for (let i = 0; i < keys.length && ok; i += this.BATCH){
+      const part = keys.slice(i, i + this.BATCH), last = i + this.BATCH >= keys.length;
+      ok = await this.call(fn, Object.assign({p_keys: part}, args || {}), last ? done : null, !last);
+    }
+    return ok;
+  },
+  hideRows(keys, on){ return this.batches("tally_post_row_hide", keys, {p_on: on !== false}, on === false ? null : keys.length + (keys.length === 1 ? " row hidden" : " rows hidden") + " (for you only). Show hidden brings them back."); },
+  removeRows(keys, why){ return this.batches("tally_post_row_remove", keys, {p_why: why || ""}, keys.length + (keys.length === 1 ? " row moved" : " rows moved") + " to Removed. The entries in Tally are not affected."); },
+  restoreRows(keys){ return this.batches("tally_post_row_restore", keys, null, keys.length + (keys.length === 1 ? " row restored." : " rows restored.")); }
 };
 // a row that may not be removed: its posting is still going on (removing never cancels a posting)
 function postRowRemoveBlock(x){
   const j = x && x.job;
   if (j && (["waiting", "taken", "running"].includes(j.status) || j.checking)) return "Cannot be removed: its posting is still going on. Wait for it to finish (or cancel it on To post).";
   if (x && x.st && (x.st.code === 4 || x.st.code === 5)) return "Cannot be removed: it is being posted.";
+  // review L1: a bill posted straight to a bridge (no posting in the cloud): the queue here
+  const e = x && !j && x.e && x.e.x ? x.e : null;
+  if (e && ((e.postUnconfirmed && e.postUnconfirmed.pending) || (S.billPost && S.billPost.busy) || (typeof postSending === "function" && x.e && postSending(S.coId).has(String(e.id)))))
+    return "Cannot be removed: it is being posted.";
   return "";
 }
 // the rows of a tab as the person sees them: {shown, hidden, removed} (search applied by the page)
 function postTabRows(cid, tab){
   const all = postEntryRows(cid) || [];
   const mine = all.filter(x => x.st.tab === tab);
-  return {shown: mine.filter(x => !PostFlags.isHidden(x.key) && !PostFlags.isRemoved(x.key)), hidden: mine.filter(x => PostFlags.isHidden(x.key) && !PostFlags.isRemoved(x.key)), removed: mine.filter(x => PostFlags.isRemoved(x.key))};
+  const gone = x => !!PostFlags.removedNow(x);
+  return {shown: mine.filter(x => !PostFlags.isHidden(x.key) && !gone(x)), hidden: mine.filter(x => PostFlags.isHidden(x.key) && !gone(x)), removed: mine.filter(gone)};
 }
 // G. search: bill no., party, amount, Tally id (and FinCom's id)
 function postRowHit(x, q){

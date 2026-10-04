@@ -34,6 +34,8 @@ No High findings.
 
 ### M1. A removed row can become a live posting again, and it stays hidden in "Removed"
 
+**Fixed** (p24): the flag keeps the posting's `job_attempts` and `job_status` when it is removed. A removal is void while the posting is waiting, taken, running or checking, or once its attempts have changed (a Retry). This is applied by `tally_post_row_flags_now()` on the server and by `PostFlags.removedNow` in `postTabRows` in the app. `tally_post_row_remove` locks the postings it checks (`for share`). A void removal is taken up again on the same row. Tests: run_migration49.py "M1." (remove the failed J2:B2, Retry the same job id: void while it waits and after it fails again; removed again on the same row) and run_post_hide_remove.py "M1." (remove the cancelled 30-Sep row, Retry: it is under To post, then back under Errors, never in Removed).
+
 - **Where:** `migration-49-post-row-flags.sql:101-106`. The live check runs only when the row is removed.
   `src/js/62-post-reasons.js:542` hides every row that has a remove flag in force, whatever its job's status is now.
 - **Scenario:** Retry (`tally_post_enqueue` with the same id, `migration-36b-post-acceptance.sql:370-377`; also
@@ -57,6 +59,8 @@ No High findings.
 
 ### M2. "Owner only for Remove all" holds per call only; any member can restore any removed row
 
+**Fixed** (p24): a non-owner restores only a removal they made themselves; an owner restores any. The app shows Restore only where it is allowed (`PostFlags.mayRestore`). Tests: run_migration49.py "M2." and run_post_hide_remove.py "M2.".
+
 - **Where:** `migration-49-post-row-flags.sql:99-100` and `:122-123`. The gate is `cardinality(ks) > 1`.
 - **What it does:** Any active member may remove **one** row per call and restore **one** row per call. Only the
   number of keys in one call is limited to owners.
@@ -73,6 +77,8 @@ No High findings.
 
 ### L1. The entry part of a key, and `local:` keys, are never checked
 
+**Fixed** (p24): a job key's entry must be in the posting (payload vouchers, results, items or entry_ids). `local:` keys must match `^local:[A-Za-z0-9_-]{1,64}$`, at most 50 per call. In the app, `postRowRemoveBlock` checks the local queue (`postUnconfirmed.pending`, a posting from this page, `postSending`). Tests: run_migration49.py "L1." and run_post_hide_remove.py "L1.".
+
 - **Where:** `:63-67`.
 - **Scenario:** `"<own job uuid>:anything"` and `"local:anything"` are accepted. This keeps the firm boundary: the
   job must be the caller's firm's, and `firm_id` always comes from `my_firm()`, never from the key. So **another
@@ -85,6 +91,8 @@ No High findings.
 
 ### L2. Postgres internal error text for a malformed job id
 
+**Fixed** (p24): strict uuid pattern; a malformed id gets 'not a row of this list'. Test: run_migration49.py "L2." (36 hyphens, 36 zeros).
+
 - **Where:** `:65`.
 - **Scenario:** `'^[0-9a-fA-F-]{36}$'` accepts 36 hyphens, or 36 hex digits with no hyphens. Then `j::uuid` raises
   `invalid input syntax for type uuid: "..."` (22P02) instead of the function's own words. That is minor information
@@ -92,6 +100,8 @@ No High findings.
 - **Fix:** Use the strict pattern `'^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$'`.
 
 ### L3. Grants left over under Supabase default privileges
+
+**Fixed** (p24): `revoke all on the table from public, anon, authenticated; grant select to authenticated`. The key check is revoked from service_role as well, when that role exists. Test: run_migration49.py "L3." (the table privileges, and service_role under default privileges like Supabase's).
 
 - **Where:** `:46-48`, `:72`.
 - **Table:** Only insert, update, delete and truncate are revoked from `authenticated`, so it keeps `REFERENCES`,
@@ -104,12 +114,16 @@ No High findings.
 
 ### L4. "Hide all" / "Remove all" over 500 rows fail as a whole
 
+**Fixed** (p24): Hide all, Remove all and Restore all are sent in batches of 500, and the list is read once at the end. Test: run_post_hide_remove.py "L4." (1200 rows in 500/500/200).
+
 - **Where:** `:59`. The callers are `Post.jsx:380-382` and `62-post-reasons.js:527-529`.
 - **Scenario:** The Posted tab easily lists more than 500 rows. "Hide all", "Remove all" and "Restore all" send them
   in one call, so the call is refused with "at most 500 rows at a time" and nothing happens.
 - **Fix:** Batch in chunks of 500 on the client.
 
 ### L5. The table grows without bound
+
+**Fixed** (p24): one row per flag. The unique indexes are now `(firm, row, user) where kind = 'hide'` and `(firm, row) where kind = 'remove'`. Hide, remove and restore update that row (restored_at set or cleared) instead of adding rows. There is no "delete from". Test: run_migration49.py "L5." (removed again and three hide/show cycles: no new row).
 
 - **Where:** `:79-86`, `:107-111`, `:124-125`.
 - **Scenario:** Every hide/show or remove/restore cycle adds a row, because restored rows are kept. Unchecked
@@ -118,6 +132,8 @@ No High findings.
   this add-only file.
 
 ### L6. The client turns the feature off on unrelated errors
+
+**Fixed** (p24): only 42883, 42P01, PGRST202 or PGRST205 (a missing function or table) turn the buttons off. Any other error is shown in its own words. Test: run_post_hide_remove.py "L6.".
 
 - **Where:** `src/js/62-post-reasons.js:491` and `:521`.
 - **Scenario:** `missing()` matches any message that names `tally_post_row_hide|remove|restore` or contains "does not
@@ -149,3 +165,21 @@ No High findings.
 | Unique indexes with restore and re-remove | **Pass** | The partial indexes leave a row once `restored_at` is stamped; re-remove inserts a new row and the history is kept; ON CONFLICT names the index predicate exactly; a duplicate key in one call counts once |
 | Error text leaks internals | **Pass** (minor) | Messages echo the key the caller sent (at most 80 characters); an existing and a missing other-firm job give the same answer (no oracle); malformed uuid gives a 22P02 (L2) |
 | Callers (`Post.jsx`, `62-post-reasons.js`) | **Pass** (with notes) | Keys match the server format; the client's block mirrors the server's live check; L4 and L6 |
+
+## After the fixes (p24, 04-Oct-2026)
+
+All findings are fixed in `migration-49-post-row-flags.sql` (not yet run on staging), `src/js/62-post-reasons.js` and
+`app/src/screens/Post.jsx`. It adds one function, `tally_post_row_flags_now()`. Two columns, `job_attempts` and `job_status`, are added to the new table.
+
+Tests: run_migration49.py (red with the 5a07103 file, green now), run_post_hide_remove.py (red on the build before the fix, green
+now), run_post_tabs.py, run_post_rows_fix.py, run_post_layout.py, run_post_reasons.py and `node tests/run_regress.js` all pass.
+
+md5 of each function body (pg_proc.prosrc = the file's text between the `$function$` marks):
+
+| Function | md5 |
+|---|---|
+| `tally_post_row_keys` | `2f42d410bc5430599b15de7e72daee77` |
+| `tally_post_row_hide` | `f0a7ea246db26b359db7ad725c83d6d2` |
+| `tally_post_row_remove` | `a194932e2b74d47154d06a9e0478454e` |
+| `tally_post_row_restore` | `92460317c96f9093ec85e6135a10580f` |
+| `tally_post_row_flags_now` | `ef30d9c5bbb827d9de60741b6596dd73` |

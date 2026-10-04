@@ -338,7 +338,7 @@ function EntryRow({ co, x, tab, canPost, flags, picked, pick, view }) {
           {x.kind === "bank" && <button className="linkbtn" data-open-bill="" onClick={() => txnGo("bank", x.id)}>Open the bank line</button>}
           {view !== "removed" && view !== "hidden" && <MoreMenu co={co} x={x} />}
           {flags && view === "hidden" && <button className="linkbtn" data-row-unhide="" onClick={() => PostFlags.hideRows([x.key], false)}>Show again</button>}
-          {flags && view === "removed" && <button className="linkbtn" data-row-restore="" onClick={() => PostFlags.restoreRows([x.key])}>Restore</button>}
+          {flags && view === "removed" && PostFlags.mayRestore(x.key) && <button className="linkbtn" data-row-restore="" onClick={() => PostFlags.restoreRows([x.key])}>Restore</button>}
           {flags && !view && <button className="linkbtn" data-row-hide="" onClick={() => PostFlags.hideRows([x.key], true)}>Hide</button>}
           {flags && !view && (block ? <span className="note" data-remove-why=""><button className="linkbtn" data-row-remove="" disabled title={block}>Remove</button>{" " + block}</span>
             : <button className="linkbtn" data-row-remove="" onClick={() => postRemoveAsk(co, [x])}>Remove</button>)}

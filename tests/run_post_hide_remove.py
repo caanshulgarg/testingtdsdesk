@@ -40,8 +40,13 @@ SERVER = r"""() => {
         if (a.p_on && !f) F.push({row_key: k, kind: "hide", user_id: me(), at: now}); if (!a.p_on && f) f.restored_at = now; }); return {ok: true}; }
     if (fn === "tally_post_row_remove"){ if (a.p_keys.length > 1 && !owner()) throw new Error("only an owner of the firm can remove more than one row at a time");
       const bad = a.p_keys.find(live); if (bad) throw new Error("this row cannot be removed: its posting is still going on (" + bad + ")");
-      a.p_keys.forEach(k => { if (!F.find(x => x.kind === "remove" && x.row_key === k && !x.restored_at)) F.push({row_key: k, kind: "remove", user_id: me(), at: now, why: a.p_why || null}); }); return {ok: true}; }
-    if (fn === "tally_post_row_restore"){ F.filter(x => x.kind === "remove" && a.p_keys.includes(x.row_key) && !x.restored_at).forEach(x => { x.restored_at = now; }); return {ok: true}; }
+      a.p_keys.forEach(k => { const j = window.__fx.jobs.find(x => x.id === k.split(":")[0]), att = j ? (j.attempts || 0) : null, f = F.find(x => x.kind === "remove" && x.row_key === k);
+        if (!f) F.push({row_key: k, kind: "remove", user_id: me(), at: now, why: a.p_why || null, job_attempts: att});
+        else if (f.restored_at || f.job_attempts !== att) Object.assign(f, {user_id: me(), at: now, why: a.p_why || null, restored_at: null, job_attempts: att}); }); return {ok: true}; }
+    if (fn === "tally_post_row_restore"){ if (a.p_keys.length > 1 && !owner()) throw new Error("only an owner of the firm can restore more than one row at a time");
+      const rs = F.filter(x => x.kind === "remove" && a.p_keys.includes(x.row_key) && !x.restored_at);
+      if (!owner() && rs.some(x => x.user_id !== me())) throw new Error("only an owner, or the member who removed it, can restore this row");
+      rs.forEach(x => { x.restored_at = now; }); return {ok: true}; }
     return undefined;
   };
 }"""
@@ -138,6 +143,52 @@ with sync_playwright() as p:
     calls = rpc()
     ok(len(calls) == 1 and calls[0][0] == "tally_post_row_remove" and KL not in calls[0][1]["p_keys"] and len(calls[0][1]["p_keys"]) == len(ek) - 1, "J. SAFETY: tally_post_row_remove without the live row; no tally_post_cancel, nothing else (%s)" % [c[0] for c in calls])
     ok(keys("errors") == [KL] and cnt("errors") == 1 and E("window.__fx.jobs.find(j => j.id === '%s').status" % LIVE) == "running", "J. the live row stays, its posting still running; the Errors count is 1 (%s)" % keys("errors"))
+    # ---- review M1: a removed row whose posting is started again (Retry, the same job id) comes back where its state puts it
+    KC = rf.J["cancel"] + ":zz-test-1"
+    E("(k) => PostFlags.restoreRows([k])", KC); pg.wait_for_timeout(800); tab("errors")
+    E("() => { window.__rpc = []; }")
+    ok(KC in keys("errors"), "M1. the cancelled posting's row is under Errors (restored from the Remove all above)")
+    pg.click('#app [data-post-panel="errors"] [data-row-key="%s"] [data-row-remove]' % KC); pg.wait_for_timeout(400); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(900)
+    ok(KC not in keys("errors") and E("PostFlags.removed.get('%s').attempts" % KC) == 0, "M1. removed: off Errors, the posting's attempts kept on the flag (0)")
+    E("""(k) => { const j = window.__fx.jobs.find(x => x.id === k.split(':')[0]); j.status = 'waiting'; j.attempts = 1; j.message = 'Retry: waiting for the Tally computer'; j.items = [{id: 'zz-test-1', state: 'waiting'}]; CloudJobs.load(true); }""", KC); pg.wait_for_timeout(1500)
+    tab("topost")
+    ok(KC in keys("topost") and E("postTabRows(S.coId, 'errors').removed.concat(postTabRows(S.coId, 'posted').removed).map(x => x.key)").count(KC) == 0, "M1. Retry: the row is under To post (waiting), not hidden in Removed (%s)" % keys("topost"))
+    E("""(k) => { const j = window.__fx.jobs.find(x => x.id === k.split(':')[0]); j.status = 'failed'; j.message = 'Tally did not show GARG SHEKHAR & COMPANY for two minutes. Open it in TallyPrime and post again.'; j.items = [{id: 'zz-test-1', state: 'failed'}]; CloudJobs.load(true); }""", KC); pg.wait_for_timeout(1500)
+    tab("errors")
+    ok(KC in keys("errors"), "M1. failed again after the Retry: back under Errors, not in Removed (the removal was before the Retry)")
+    # ---- review M2: a staff member restores only what they removed
+    tab("posted"); KP, KS = keys("posted")[:2]
+    pg.click('#app [data-post-panel="posted"] [data-row-key="%s"] [data-row-remove]' % KP); pg.wait_for_timeout(400); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(900)
+    E("() => { S.account = {me: {role: 'staff', user_id: '871ad9b4-dec0-47ab-a22f-9184aa7e5694', name: 'Ankit Garg'}, firm: {name: 'Firm'}}; render(); }"); pg.wait_for_timeout(400); tab("posted")
+    pg.click('#app [data-post-panel="posted"] [data-show-removed]'); pg.wait_for_timeout(300)
+    RP = '#app [data-post-panel="posted"] [data-row-key="%s"]' % KP
+    ok(pg.locator(RP).count() == 1 and pg.locator(RP + " [data-row-restore]").count() == 0, "M2. a staff member: no Restore on a row an owner removed")
+    E("() => { window.__rpc = []; return PostFlags.restoreRows(['%s']); }" % KP); pg.wait_for_timeout(600)
+    ok(E("PostFlags.removed.has('%s')" % KP) and [c for c in rpc() if c[0] == "tally_post_row_restore"], "M2. and the cloud refuses it if asked: still removed")
+    pg.click('#app [data-post-panel="posted"] [data-show-removed]'); pg.wait_for_timeout(300)
+    pg.click('#app [data-post-panel="posted"] [data-row-key="%s"] [data-row-remove]' % KS); pg.wait_for_timeout(400); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(900)
+    pg.click('#app [data-post-panel="posted"] [data-show-removed]'); pg.wait_for_timeout(300)
+    ok(pg.locator('#app [data-post-panel="posted"] [data-row-key="%s"] [data-row-restore]' % KS).count() == 1, "M2. a staff member restores a row they removed themselves")
+    pg.click('#app [data-post-panel="posted"] [data-show-removed]'); pg.wait_for_timeout(300)
+    E("() => { S.account = {me: {role: 'owner', user_id: window.__fx.OWNER, name: 'Anshul garg'}, firm: {name: 'Firm'}}; render(); }"); pg.wait_for_timeout(400)
+    # ---- review L1: a bill posted straight to a bridge, being posted from here: Remove is off
+    E("() => { D().entries.emuqip07ppksjl.postUnconfirmed = {pending: true, at: new Date().toISOString()}; render(); }"); pg.wait_for_timeout(400); tab("errors")
+    RK = '#app [data-post-panel="errors"] [data-row-key="local:emuqip07ppksjl"]'
+    ok(pg.locator(RK + " [data-row-remove]").count() == 1 and pg.locator(RK + " [data-row-remove]").is_disabled() and "being posted" in txt(RK + " [data-remove-why]"), "L1. a local row being posted from here: Remove is off and says why")
+    E("() => { D().entries.emuqip07ppksjl.postUnconfirmed = null; render(); }")
+    # ---- review L4: more than 500 rows go in batches of 500
+    E("() => { window.__rpc = []; return PostFlags.hideRows(Array.from({length: 1200}, (_, i) => 'local:x' + i), true); }"); pg.wait_for_timeout(800)
+    sizes = [len(c[1]["p_keys"]) for c in rpc() if c[0] == "tally_post_row_hide"]
+    ok(sizes == [500, 500, 200], "L4. 1200 rows hidden in three calls of 500, 500, 200 (%s)" % sizes)
+    E("() => { window.__flags.filter(f => /^local:x/.test(f.row_key)).forEach(f => { f.restored_at = new Date().toISOString(); }); PostFlags.load(true); }"); pg.wait_for_timeout(500)
+    # ---- review L6: a permission error is said in its words, the buttons stay
+    E("""() => { window.__toasts = []; const t0 = window.toast; window.toast = m => { window.__toasts.push(String(m)); return t0(m); };
+      window.__hook0 = window.__rpcHook; window.__rpcHook = async (fn, a) => { if (fn === 'tally_post_row_hide') throw new Error('permission denied for function tally_post_row_hide (42501)'); return window.__hook0(fn, a); };
+      return PostFlags.hideRows(['%s'], true); }""" % KP); pg.wait_for_timeout(600)
+    ok(E("PostFlags.ok") is True and any("permission denied for function tally_post_row_hide" in t for t in E("window.__toasts")) and pg.locator("#app [data-row-hide]").count() > 0,
+       "L6. 'permission denied' is said in its own words; Hide and Remove stay (%s)" % E("window.__toasts"))
+    E("""() => { window.__rpcHook = async (fn, a) => { if (fn === 'tally_post_row_hide') throw new Error('Could not find the function public.tally_post_row_hide(p_keys, p_on) in the schema cache (PGRST202)'); return window.__hook0(fn, a); }; return PostFlags.hideRows(['%s'], true); }""" % KP); pg.wait_for_timeout(600)
+    ok(E("PostFlags.ok") is False, "L6. a missing function (PGRST202): migration 49 not installed, the buttons go")
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); raise SystemExit(1 if fails else 0)
