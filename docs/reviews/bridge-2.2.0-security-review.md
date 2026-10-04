@@ -308,4 +308,53 @@ Verdict, round 2:
 - R2-S6 LOW: Fixed with R2-8.
 - R2-S7 LOW: Fixed with R2-12.
 
-Range: bdfe261..0b43d34
+## Round 3 (0b43d34..41edc65)
+
+Reviewed: 04-Oct-2026. I read git diff 0b43d34 41edc65 -- bridge-go/ from a clean worktree of 41edc65, alongside round
+3 of the code review (bridge-2.2.0-code-review.md, "Round 3"), which has the details.
+- go vet (Linux, Windows): clean.
+- go test -count=1 ./...: ok (the run appends to a tracked bridge-go/tds-bridge.log; code review R3-2).
+- One throwaway test confirmed R3-S1. It was deleted and the worktree removed.
+
+### Round 2 findings: is each "Fixed" claim true?
+
+| # | Claim | Verdict | Notes |
+|---|---|---|---|
+| R2-S1 M | Fixed with R2-1 | Confirmed | Source C starts at max(starting point, the add-on's highest AlterID, ALTVCHID at the switch); a span above 500 is not asked; the slice's limit is 5 s; the walk back stops at the starting point's month. |
+| R2-S2 M | Fixed with R2-2 | Not fixed for the filter-only form | sliceExact now checks the values, but datedRefused never calls it for a request without SVFROMDATE/SVTODATE. When the kept form is collFilterOnly, "2019-04 above 0", "2099-12" and "AlterID 0" all pass the dated guard with ReadDays off (R3-S1, confirmed). |
+| R2-S3 M | Fixed with R2-3 | Confirmed | failed.txt: only write_failed lines start, never inside an open one, a multi-line one waits for the file's end, a plain FCR1 line is passed over, and the inner cguid must equal the held GUID of its cname. The planted-line residual (folder ACL by design) stands. |
+| R2-S4 M | Fixed with R2-4 | Confirmed | Copy to previous.new, verified against setup-old.exe's SHA-256, "same program" by the installed exe's SHA-256, the version from the replaced program itself (10 s), the kept pair replaced only then. Not an elevation: the program asked for its version is the one Program Files held (the service install), or the user's own (per user). |
+| R2-S5 L | Fixed in the bridge | Confirmed | "both" = add-on + source B, as the cloud means; month slices only by the local setting RecorderSlices. |
+| R2-S6 L | Fixed with R2-8 | Confirmed | Renamed to rollback-check.exe, hashed there, put back on any mismatch or failure. The name is in the same folder, which only matters for the per-user install's own user. |
+| R2-S7 L | Fixed with R2-12 | Confirmed | Only the exact literal and comparison shapes inside Formulae are exempt. |
+
+What holds in the new code:
+- Nothing new leaves the computer; no new outbound host. The install step's log lines name versions and say whether
+  the copy was whole, nothing else.
+- The rollback still cannot be started from a web page and still needs the key, POST and confirm.
+- The setup never deletes a kept, verified pair, and a truncated or mislabelled copy is not recorded.
+
+### Findings, round 3
+
+- R3-S1 (MEDIUM, owner's rule: the dated exceptions cannot be widened; code review R3-1). The FinComSlice guard does
+  not run for the collFilterOnly form.
+  - datedRefused (tally.go:294) passes any request without `<SVFROMDATE`/`<SVTODATE` before it reaches sliceExact, and
+    formCollection's collFilterOnly carries the period only in a `$Date` filter.
+  - With collFilterOnly kept, a slice for April 2019 above AlterID 0, for 2099-12, or for this month above 0 passes
+    with ReadDays off: every entry of that month, as GUID, MasterID, AlterID and date. Any request with its period only
+    in a filter passes the same way.
+  - Confirmed with a throwaway test.
+  - Today only liveSourceC builds the slice, with safe values; as with R2-S2, the guard is the rule's enforcement and
+    would not stop a wrong caller.
+  - Fix: route every FinComSlice through sliceExact whatever its static variables, and treat a `$Date`/`$$IsBetween`
+    filter as dated (or drop collFilterOnly).
+
+- Code review R3-2 (a test-written log committed in bridge-go/) and R3-3 (a misleading install log line) are Low with
+  no security edge.
+
+Verdict, round 3:
+- No High.
+- R3-S1 is Medium (R2-S2 left open for one kept form) and blocks the build.
+- R2-S1, R2-S3 and R2-S4 are confirmed fixed; the round 2 Lows are confirmed.
+
+Range: bdfe261..41edc65

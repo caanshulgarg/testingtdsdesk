@@ -664,4 +664,92 @@ Verdict, round 2:
 - R2-12 LOW, Fixed (TestNoComputedFigureShapes): only the exact literal and comparison shapes inside a Formulae block
   are taken out before the $$ check.
 
-Range: bdfe261..0b43d34
+## Round 3 (0b43d34..41edc65)
+
+Reviewed: 04-Oct-2026, by the reviewer in the Claude Code session. I read git diff 0b43d34 41edc65 -- bridge-go/ (11
+files: recorder_live.go, recorder_probes.go, update.go, win_service.go, win_user.go, installer/FinComBridge.nsi,
+allowlist_test.go, the tests, and a new tracked bridge-go/tds-bridge.log) from a clean worktree of 41edc65.
+
+Checks (clean worktree of 41edc65):
+- `go vet ./...` and `GOOS=windows go vet ./...`: clean.
+- `go test -count=1 ./...`: ok (423 s). The tree did not stay clean: the run appended 4 lines to the tracked
+  bridge-go/tds-bridge.log (R3-2).
+- One throwaway test (zz_scratch_r3_test.go, in a second worktree) confirmed R3-1. It was deleted with the worktree;
+  nothing was added to the repo.
+
+### Round 2 findings: is each "Fixed" claim true?
+
+| # | Claim | Verdict | Notes |
+|---|---|---|---|
+| R2-1 M | Fixed | Confirmed | A new C state starts at max(starting point, live.high[key], ALTVCHID now) (recorder_probes.go:426-436), so nothing before the switch is asked. A rise above RecorderBMaxSpan (500) asks nothing, sets seen = v, logs "too many changes for Source C (N)…" and saves (:453-460). The slice has keepNum("RecorderBTimeoutSec", 5) (:471). The walk back stops at the starting point's month (liveEarliestMonth, R2-10). |
+| R2-2 M | Fixed | Not fixed for the filter-only form | sliceExact now needs a starting point, N >= it, and the month between the starting point's month and now (:116-122). For the static-variable forms (and collFilterGE/collFilterBtw, which also carry SVFROMDATE) all six named bypasses are refused. But datedRefused (tally.go:294) returns nil before sliceExact for any request without `<SVFROMDATE`/`<SVTODATE`, and collFilterOnly carries none: the new `$$Date` fallback in sliceExact is never reached. See R3-1 (confirmed). |
+| R2-3 M | Fixed | Confirmed | In failed.txt only `FCR1|ev=write_failed|` starts a line, and only when nothing is open (liveStarts :556-562); a plain FCR1 line there is passed over (liveLogical :664-673); a line over several physical lines is never complete before the file's end (`single`, :650). The unwrapped line is taken only when its cguid starts the outer file= and equals heldGUID(its cname) (liveTake :708-713). The add-on writes `file=` before `|was=` (FinComRecorder.tdl:126), so the outer file= is the first match. The accepted residual (a whole write_failed line planted by someone who can write the folder, for a held company) is as stated. |
+| R2-4 M | Fixed | Confirmed (code); the `version` call wants a Windows check | The setup copies to FinComBridge.previous.new before the rename, deletes no kept pair, and keeps setup-old.exe (FinComBridge.nsi:374-390). notePreviousFromSetup (update.go:383-408) takes the copy only when its SHA-256 equals setup-old.exe's, it is not the program now installed, and `setup-old.exe version` answers a version that is not BridgeVersion; the registry is no longer read (win_service.go:412, win_user.go:419). Both temporary files go (defer). 2.1.10 answers `version` with fmt.Println(BridgeVersion) after attachConsole, which keeps an inherited stdout handle; Windows CI should show "Install: FinCom Bridge 2.1.10 is kept …" in the install log of a 2.1.10 -> 2.2.0 setup. |
+| R2-5 L | Fixed in the bridge | Confirmed | validSource is addon/alterid/both; sourceHas: "both" = addon + alterid (source B), "slices" only from the setting RecorderSlices (default off, local config only). |
+| R2-6 L | Fixed | Confirmed | svStop after an answer over 4 x the month's entries or over liveLimitSec(); the filter forms are still tried. |
+| R2-7 L | Fixed | Confirmed | keepPreviousVersion: update-pending.json rollback:true removes old.exe and logs; nothing is kept as previous. |
+| R2-8 L | Fixed | Confirmed | previous.exe is renamed to FinComBridge.rollback-check.exe, hashed there, and renamed back on a mismatch or on either later failure. The name is in the same folder (not private from the per-user install's own user, who can run anything anyway). The RequireSignedUpdates check is still on previous.exe at the preview; the same SHA-256 means the same bytes. |
+| R2-9 L | Fixed | Confirmed | liveSaveOffsets right after lastAsk, in B (:1063) and C (:468). |
+| R2-10 L | Fixed with R2-1 | Confirmed | liveEarliestMonth is the starting point's month (or this month), never before booksFrom. An entry dated before that month and altered later is not found by C; the gap check covers it (prospective by design). |
+| R2-11 L | Fixed | Confirmed | Kept per company; the program is recorded as data; sliceExact no longer lists processes. |
+| R2-12 L | Fixed | Confirmed | Only `$$Date:"d-MMM-yyyy"` and `$$IsBetween:$Date:<lit>:<lit>`, inside `<SYSTEM TYPE="Formulae">`, are taken out before the $$ check. |
+
+What holds in the new code (checked, no finding):
+- Lock order: startPointMonth takes guidMu then spMu, as startPointOf does; it runs under live.mu only where
+  startPointOf already did (liveSourceC), and from sliceExact after live.mu is released. No spMu holder takes live.mu.
+- liveStarts for daily files: `open == ""` returns true, which is what the old `cur == nil || done` short-cut did.
+- The rollback's error paths put previous.exe back; the success path is unchanged (old.exe, update-pending.json
+  rollback:true, NoAutoUpdate).
+- The uninstaller removes previous.new, setup-old.exe and rollback-check.exe.
+
+### Findings, round 3 (by severity)
+
+R3-1. MEDIUM (owner's rule: the dated exceptions cannot be widened; R2-2 not fixed for one kept form). When the read
+test keeps collFilterOnly, the FinComSlice guard does not run at all.
+- Where: tally.go:294-296 (datedRefused returns nil when the request has no `<SVFROMDATE` and no `<SVTODATE`) with
+  recorder_probes.go:61-62 and :68-70 (formCollection: collFilterOnly puts the period only in the filter, with no static
+  variables) and :108-112 (sliceExact's new `$$Date` fallback, unreachable for that form).
+- Scenario:
+  - On a Tally where the six earlier forms do not answer the month exactly, the read test keeps collFilterOnly (it is
+    in collForms and dateFormFor returns it).
+  - Any FinComSlice in that form then passes datedRefused with ReadDays off, whatever its month and AlterID:
+    sliceRequest(zz, collFilterOnly, "201904", 0), "209912", and "AlterID 0" for this month (a full month's list of
+    GUID, MasterID, AlterID and date).
+  - More widely, any request whose period is only in a `$Date` / `$$IsBetween` filter is not seen as dated by the
+    guard.
+  - Today only liveSourceC builds the slice, with safe values, so this is the same exposure R2-2 was rated for: the
+    guard is the rule's enforcement and would not stop a wrong caller.
+- Confirmed: TestScratchR3SliceFilterOnly. With collFilterOnly kept and a starting point of 5: "2019-04 above 0",
+  "2099-12" and "AlterID 0 now" each gave sliceExact=false but datedRefused=nil. A FinComAnything collection with only
+  `$Date >= $$Date:"1-Apr-2019" AND $Date <= $$Date:"31-Mar-2026"` also gave datedRefused=nil.
+- Fix:
+  - In datedRefused, before the SVFROMDATE test: when tallyRequestID(x) == sliceID, pass only if sliceExact(x)
+    (otherwise readsOffErr()).
+  - Treat a request as dated also when its Formulae hold `$Date` or `$$IsBetween` (not only SVFROMDATE/SVTODATE), so
+    the exceptions stay the only way through.
+  - Or: drop collFilterOnly from collForms (the two other filter forms carry SVFROMDATE).
+- Test: extend TestSourceCDatedGuardException to run its "bad" table for each of collForms (collFilterOnly included),
+  and add a non-slice request with the period only in a `$Date` filter: each refused with ReadDays off.
+
+R3-2. LOW (test hygiene; round 1's L18 again). The test run writes into the source tree, and the result was committed.
+- Where: update.go:411 (installLogFn defaults to writeLog) with config.go:267 (logFile is Home/tds-bridge.log; Home
+  is "" in TestRollbackVerifiesKeptVersion and TestSetupKeepsGoodPrevious, so the package folder).
+- Effect: 41edc65 adds bridge-go/tds-bridge.log (12 lines of test output). Each `go test ./...` appends 4 more lines,
+  so the tree is not clean after a test run, and a release commit carries a stray log.
+- Fix: in those tests set installLogFn to a capture (or Home to t.TempDir()); git rm bridge-go/tds-bridge.log; add it
+  to .gitignore.
+
+R3-3. LOW (wording). notePreviousFromSetup says "the version of the program replaced could not be read (2.2.0)" when
+the replaced program answers the same version as the new one but with other bytes (a rebuilt 2.2.0).
+- Where: update.go:398-399.
+- Fix: say "the program replaced is this same version (2.2.0); the version kept for a rollback is left as it was".
+
+Verdict, round 3:
+- No High.
+- One Medium: R3-1 (R2-2 is fixed for every form but collFilterOnly). It blocks the build; the fix is a few lines in
+  datedRefused.
+- R2-1, R2-3 and R2-4 are confirmed fixed, and all eight Lows of round 2 are confirmed.
+- R3-2 should go with the R3-1 fix (the stray log is in bridge-go/, so it is not a docs-only change).
+- R3-3 may wait.
+
+Range: bdfe261..41edc65
