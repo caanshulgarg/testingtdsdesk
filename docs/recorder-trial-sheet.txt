@@ -80,6 +80,48 @@ On the second PC (bridge 2.1.9 installed there too, add-on loaded there as in PA
  d. On NWS144: Tray icon > "Recorder trial: send results" again.
 
 
+PART 3B  -  BULK POSTING WITH THE ADD-ON (owner, 04-Oct-2026), on ZZ TEST only
+-------------------------------------------------------------------------------
+Why: FinCom will post up to 2,000 entries at a time. This measures what the add-on costs a bulk
+posting, and whether Tally tells the add-on about entries that arrive through its port.
+
+Before you start
+ - Only ZZ TEST open in Tally. Posting from FinCom to the ZZ TEST client only.
+ - On FinCom's Tally page, this computer's Posting settings, "bills per request": set 50 (the trial uses 50 per
+   request, as a bulk posting would). Put it back to 10 afterwards.
+ - Pick one approved test bill of the ZZ TEST client. On the Post page use
+   "Make N test copies of this bill".
+
+Round A - add-on LOADED (as after PART 1)
+ A1. Tray icon > "Recorder trial: note change numbers".
+ A2. Make 100 test copies. Post them (Post on the Ready list). Wait until the page says
+     "Posted 100 of 100". Do nothing else in Tally meanwhile.
+ A3. Tray icon > "Recorder trial: note change numbers".
+ A4. Make 500 test copies. Post them. Wait for "Posted 500 of 500".
+ A5. Tray icon > "Recorder trial: note change numbers".
+ A6. Tray icon > "Recorder trial: send results".
+
+Round B - add-on OFF
+ B1. Do PART 4 (unload the add-on). Check it no longer shows as Loaded.
+ B2. Repeat A1 to A5 (100, then 500) exactly as above.
+ B3. Tray icon > "Recorder trial: send results".
+
+Afterwards: in ZZ TEST you will have 1,200 test entries. Leave them; we will say whether to delete
+them (they are test entries in a test company; nothing in a real company is touched).
+
+What we report back to you from the two sends (nothing else is needed from you):
+ - the import time of each posting (100 and 500, with and without the add-on), from the bridge's
+   own timing of every request;
+ - the delay the add-on adds per entry = (time with - time without) / number of entries;
+ - how many lines the add-on wrote in each posting, and of which events;
+ - whether the import events fire for entries that arrive through Tally's port: if the file has no
+   import line for a posted entry, they do not, and the design's case "imports not seen" applies;
+ - the change numbers before and after each posting (from the "note change numbers" lines), so the
+   rise in Tally's change number per posting is known.
+Tally's own clock in the add-on counts whole seconds only, so the per-entry delay comes from the
+bridge's request timings (milliseconds), not from the add-on's lines.
+
+
 PART 4  -  UNLOAD THE ADD-ON (when we say the trial is over, or if PART 1 showed an error)
 ----------------------------------------------------------------------------------------
 1. F1 (Help) > TDLs & Add-Ons > F4 (Manage Local TDLs).
