@@ -420,6 +420,8 @@ func installUserCmd(args []string) int {
 	_ = k.SetStringValue("InstallDir", filepath.Dir(exe))
 	_ = k.SetStringValue("RunMode", "user")
 	k.Close()
+	// round 19 (S2): the recorder trial's folders, links refused (folders.go); their permissions as Windows gives them
+	installFinComFolders(false, installLog)
 	// started when this user signs in (HKCU Run needs no administrator, and runs in the user's own session with the tray)
 	rk, _, err := registry.CreateKey(registry.CURRENT_USER, runKey, registry.SET_VALUE)
 	if err == nil {

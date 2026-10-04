@@ -47,14 +47,11 @@ func lastLines(t string, n int) string {
 	return strings.Join(l, "\r\n")
 }
 
-// the end of a file, at most max bytes
+// the end of a file, at most max bytes: round 19 (S3), a regular file only (no link followed), only its end read
 func fileTail(f string, max int64) string {
-	b, err := os.ReadFile(f)
+	b, err := readTail(f, max, false)
 	if err != nil {
 		return ""
-	}
-	if int64(len(b)) > max {
-		b = b[int64(len(b))-max:]
 	}
 	return string(b)
 }

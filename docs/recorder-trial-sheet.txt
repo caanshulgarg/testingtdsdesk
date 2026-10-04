@@ -122,6 +122,45 @@ Tally's own clock in the add-on counts whole seconds only, so the per-entry dela
 bridge's request timings (milliseconds), not from the add-on's lines.
 
 
+PART 3C  -  CAN THE ADD-ON HANG OR SLOW TALLY (owner, 04-Oct-2026), on ZZ TEST only
+----------------------------------------------------------------------------------
+Why: to see, on your own Tally, whether the add-on ever makes a save wait, and whether turning it
+off is instant and safe. Only ZZ TEST is touched. Three short tests, in this order.
+
+Before you start
+ - Only ZZ TEST open in Tally. Bridge 2.1.9 running (FinCom icon near the clock).
+
+Test 1 - the time a save takes, with and without the add-on
+ 1a. The add-on loaded (as after PART 1).
+ 1b. Tray icon > "Recorder trial: time saving (ZZ TEST)". It asks you a yes/no naming ZZ TEST:
+     Yes. It posts 100 small test journals to ZZ TEST (it makes two ledgers, "ZZ Bench Dr" and
+     "ZZ Bench Cr", the first time), one at a time, and times each save. Wait for its box (a few
+     minutes). Write down the two lines it shows (milliseconds per save).
+ 1c. Do PART 4 (unload the add-on). Check it no longer shows as Loaded.
+ 1d. Tray icon > "Recorder trial: time saving (ZZ TEST)" again: Yes. Write down the two lines.
+ 1e. Load the add-on again (PART 1) for test 2.
+
+Test 2 - the add-on's file held by another program
+ 2a. The add-on loaded. Save one voucher in ZZ TEST first if you have not yet today (so its file
+     exists).
+ 2b. Tray icon > "Recorder trial: lock the holding file for 30 s". A box says the file is locked for
+     30 seconds from now. Close the box.
+ 2c. Within those 30 seconds: in ZZ TEST create a Payment of Rs 1 and save it (Ctrl+A).
+     Write down: did the save wait? Did any message appear (its words)? Did the entry save?
+ 2d. After the 30 seconds: Tray icon > "Recorder trial: send results".
+
+Test 3 - the off switch, without closing Tally
+ 3a. Do PART 4 (unload the add-on) WITHOUT closing Tally. Write down the time.
+ 3b. In ZZ TEST save one voucher (a Payment of Rs 1).
+ 3c. From FinCom, post one test bill to the ZZ TEST client, as usual. It should say posted.
+ 3d. Tray icon > "Recorder trial: send results".
+ We check that no line was written after the time in 3a, and that the posting went through.
+
+What to send us: the lines you wrote down in tests 1 and 2, the time from 3a, and the tray
+messages after each "send results". The test journals stay in ZZ TEST (narration "FinCom bench");
+we will say whether to delete them.
+
+
 PART 4  -  UNLOAD THE ADD-ON (when we say the trial is over, or if PART 1 showed an error)
 ----------------------------------------------------------------------------------------
 1. F1 (Help) > TDLs & Add-Ons > F4 (Manage Local TDLs).

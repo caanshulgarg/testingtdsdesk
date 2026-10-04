@@ -267,6 +267,27 @@ type TC struct {
 	copier  bool
 	readSec int    // the copier: no read of the day book may hold Tally longer than this
 	enc     string // round 18: "utf-16" or "utf-8" for this request whatever TallyRequestUTF16 says ("": as the setting says)
+	// round 19 (review finding 1): a request a person started (the tray's read test, the measuring tool with ReadDays on
+	// or --old-days typed at the console): the only requests carrying a period that go while ReadDays is off
+	person bool
+	// round 19: the recorder trial's time saving (trial.go): its imports are not noted as postings (no read-back, nothing
+	// for the cloud)
+	bench bool
+	// round 19 (review finding 8): a background read asks this right after it took the Tally lock; true: it gives the
+	// lock back and backs off (a posting job started, or the company's lease was taken, while it waited)
+	yield func() bool
+}
+
+// round 19 (review finding 1, the owner's rule "reading is prospective only", by any route): a request carrying a period
+// (SVFROMDATE / SVTODATE, any date form) goes to Tally only when ReadDays is on or a person started it
+func datedRefused(tc *TC, x string) error {
+	if tc.person || readDaysOn() {
+		return nil
+	}
+	if !strings.Contains(x, "<SVFROMDATE") && !strings.Contains(x, "<SVTODATE") {
+		return nil
+	}
+	return readsOffErr()
 }
 
 // round 18 (item 89, evaluation only): the request body as Tally gets it. TallyRequestUTF16 (default off): UTF-16LE
@@ -655,6 +676,10 @@ func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 		writeLog(fmt.Sprintf("Tally %d: refused: %s", port, err.Error()))
 		return "", err
 	}
+	if err := datedRefused(tc, x); err != nil {
+		writeLog(fmt.Sprintf("Tally %d: %s refused before sending: it carries a period and reading old entries is off (ReadDays)", port, tallyRequestID(x)))
+		return "", err
+	}
 	// plan items 10-11: while reading is stopped on this computer only what a posting needs goes (selfwatch.go)
 	if err := readStopRefuses(x); err != nil {
 		return "", err
@@ -676,6 +701,10 @@ func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 		return "", err
 	}
 	if tc.copier && !bgBackoffUntil(port).IsZero() {
+		unlock()
+		return "", errBackoff
+	}
+	if tc.yield != nil && tc.yield() {
 		unlock()
 		return "", errBackoff
 	}
@@ -716,7 +745,7 @@ func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 		}
 		clearTallyStuck(port)
 		// something was posted to Tally: the posted entries go into the copy (and the cloud) once the posting is done
-		if !tc.copier && isImportRequest(x) {
+		if !tc.copier && !tc.bench && isImportRequest(x) {
 			afterPosting(html.UnescapeString(group(`<SVCURRENTCOMPANY>([^<]*)</SVCURRENTCOMPANY>`, x, 1)))
 			// a ledger master posted (a new ledger): its list is read once the posting is done (events.go)
 			if re(`<LEDGER\b`).MatchString(x) {

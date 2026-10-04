@@ -399,27 +399,9 @@ Function PutFiles
     ${Log} "The uninstaller could not be written in $INSTDIR (the install goes on)"
   ${EndIf}
   ${Log} "Files written in $INSTDIR"
-  ; 2.1.9 (round 18): the recorder trial's folder, writable by Users (Tally runs as the desk user and its add-on writes
-  ; there), and the add-on folder with the .tdl files of bridge-go\addon (none: nothing copied). Loaded in Tally by hand:
-  ; see docs/recorder-trial-sheet.txt
-  Push $R1
-  Push $R2
-  ReadEnvStr $R1 "ProgramData"
-  ${If} $R1 == ""
-    StrCpy $R1 "C:\ProgramData"
-  ${EndIf}
-  CreateDirectory "$R1\FinCom\recorder"
-  CreateDirectory "$R1\FinCom\addon"
-  nsExec::Exec 'icacls "$R1\FinCom\recorder" /grant *S-1-5-32-545:(OI)(CI)M'
-  Pop $R2
-  ${Log} "Recorder folder $R1\FinCom\recorder (Users may write: icacls $R2)"
-  SetOutPath "$R1\FinCom\addon"
-  SetOverwrite on
-  File /nonfatal "..\addon\*.tdl"
-  SetOutPath "$INSTDIR"
-  ${Log} "Add-on folder $R1\FinCom\addon"
-  Pop $R2
-  Pop $R1
+  ; 2.1.9 (round 19, the security review's S2): the recorder trial's folders (C:\ProgramData\FinCom, recorder and
+  ; addon) and the add-on's .tdl are made by "FinComBridge.exe install" (folders.go), which refuses a link or junction
+  ; there and sets their permissions itself; the setup script no longer makes them nor copies into them
 FunctionEnd
 
 ; FinComBridge.exe install, and its result: $Failed, $Why and $WhatToDo (install-result.txt: line 1 and line 2)

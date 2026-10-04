@@ -138,6 +138,7 @@ func TestTagFoundAnywhere(t *testing.T) {
 	f.add(td, "Party X", "2", "note: TDSDesk:q22 in the middle", "-100.00")
 	f.add(td, "Party X", "3", "at the end TDSDesk:q333", "-100.00")
 	standBridge(t, f, "")
+	oldDaysOn() // round 19: ReadDays on: invokeTally refuses every dated request with it off; this test is about the dated logic
 	for narr, want := range map[string]string{"TDSDesk:q1 | rent": "TDSDesk:q1", "x TDSDesk:q2 y": "TDSDesk:q2", "end TDSDesk:q3": "TDSDesk:q3", "no tag": ""} {
 		k := keyOfVoucher(xmlDoc("<VOUCHER><DATE>" + td + "</DATE><NARRATION>" + narr + "</NARRATION></VOUCHER>").All("VOUCHER")[0])
 		if k.tag != want {
@@ -192,6 +193,7 @@ func TestMeasureStopsAtFirstHang(t *testing.T) {
 		return 0
 	}
 	standBridge(t, f, `,"TallyMaxSec":1,"TallyProbeEverySec":1`)
+	oldDaysOn() // round 19: ReadDays on: invokeTally refuses every dated request with it off; this test is about the dated logic
 	r, err := runMeasure(measureOpts{company: zz, ledgers: "1-2"})
 	if err != nil {
 		t.Fatal(err)
@@ -250,6 +252,7 @@ func TestMeasureWaitsForCheckAfterHang(t *testing.T) {
 		return 0
 	}
 	standBridge(t, f, `,"TallyMaxSec":1,"TallyProbeEverySec":1`)
+	oldDaysOn() // round 19: ReadDays on: invokeTally refuses every dated request with it off; this test is about the dated logic
 	r, err := runMeasure(measureOpts{company: zz})
 	if err != nil {
 		t.Fatal(err)

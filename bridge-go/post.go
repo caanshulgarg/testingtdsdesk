@@ -9,6 +9,7 @@ import (
 	"html"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -428,7 +429,13 @@ func sentBeforeRefusal(id any, xml string) M {
 // company's GUID is checked once (unless the caller did); each voucher is checked against this computer's record; the
 // reply decides (sendImport). Tally not answering a request: its entries are unknown (recorded as sent); Tally not
 // reached at all: nothing was sent, said so
+// round 19 (review finding 8): imports going now (a browser /import is not a job and takes no lease); the light check
+// gives way to them
+var importsInFlight atomic.Int64
+
 func invokeImport(p M) (M, error) {
+	importsInFlight.Add(1)
+	defer importsInFlight.Add(-1)
 	company, job := str(p["company"]), str(p["job"])
 	if err := postingAllowedFor(company); err != nil {
 		return nil, err

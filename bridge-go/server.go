@@ -88,7 +88,15 @@ type httpErr struct {
 	body   any
 }
 
-func (e *httpErr) Error() string { return fmt.Sprint(e.body) }
+func (e *httpErr) Error() string {
+	// round 19: an error the bridge gives itself (the reads-off refusal of invokeTally) reads as its words
+	if m, ok := e.body.(M); ok {
+		if s, ok := m["error"].(string); ok && s != "" {
+			return s
+		}
+	}
+	return fmt.Sprint(e.body)
+}
 
 func qint(q url.Values, k string) int { return toInt(q.Get(k)) }
 
@@ -248,6 +256,10 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 	case "/diagnose":
 		return diagnosis(), nil
 	case "/readtest":
+		// round 19 (review finding 1): the older reading test reads the last 30 days: refused with ReadDays off
+		if err := readsOffErr(); err != nil {
+			return nil, err
+		}
 		return readTest(co, qint(qs, "port"))
 	case "/ledgers":
 		return getLedgers(co, qint(qs, "port"))
@@ -589,9 +601,42 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		// 13b: as the measuring tool: POST starts it in the bridge and answers at once, GET says how far (the tray polls)
 		if r.Method == "POST" {
 			o, _ := bodyObj(body)
+			// round 19 (review finding 13): the tray asks a yes/no naming the company first; the preview starts nothing
+			if truthy(o["preview"]) {
+				return readTestPreview(str(o["company"])), nil
+			}
 			return startReadTest(str(o["company"])), nil
 		}
 		return readTestStatus(), nil
+	case "/tray/recorder-lock", "/tray/recorder-bench":
+		// round 19 (the owner's question, "can the add-on hang Tally"): the lock of ZZ TEST's holding file for 30 s and
+		// the time saving on ZZ TEST (trial.go). Started by a person only, as the other trial items
+		if r.Header.Get("Origin") != "" || r.Header.Get("Sec-Fetch-Site") != "" || r.Header.Get("Sec-Fetch-Mode") != "" || r.Header.Get("Sec-Fetch-Dest") != "" {
+			writeLog("Refused a recorder trial request from a web page (" + path + ", " + r.Header.Get("Origin") + ").")
+			return nil, &httpErr{403, M{"ok": false, "error": "The recorder trial is run from the FinCom Bridge tray icon only, never from a web page."}}
+		}
+		if path == "/tray/recorder-bench" && r.Method != "POST" {
+			return benchStatus(), nil
+		}
+		if err := needPost(r, "Use POST."); err != nil {
+			return nil, err
+		}
+		o, _ := bodyObj(body)
+		if path == "/tray/recorder-bench" {
+			co := or(str(o["company"]), trayMeasureCompany())
+			if truthy(o["preview"]) {
+				if err := benchCheck(co); err != nil {
+					return M{"ok": false, "error": err.Error()}, nil
+				}
+				return M{"ok": true, "company": co}, nil
+			}
+			return startBench(str(o["company"])), nil
+		}
+		res, err := recorderLockHolding(str(o["company"]))
+		if err != nil {
+			return M{"ok": false, "error": err.Error()}, nil
+		}
+		return res, nil
 	case "/tray/recorder-send", "/tray/recorder-note":
 		// round 18 (2.1.9): the recorder trial's two tray items (recorder.go). Started by a person only, as Test reading
 		// from Tally is: a web page, FinCom's own included, is refused

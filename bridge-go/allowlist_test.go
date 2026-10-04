@@ -25,6 +25,7 @@ func driveEveryRequest(t *testing.T) *standTally {
 	}
 	f.addLed("Ledger A", "Sundry Debtors", "0.00")
 	standBridge(t, f, "")
+	oldDaysOn() // round 19: ReadDays on: every builder is driven, the dated ones too (refused with it off)
 	liveFrom(td)
 	must := func(what string, err error) {
 		t.Helper()
@@ -133,6 +134,7 @@ func TestEveryRequestOnList(t *testing.T) {
 func TestUnknownRequestRefused(t *testing.T) {
 	f := newStandTally(t)
 	standBridge(t, f, "")
+	oldDaysOn() // round 19: ReadDays on: invokeTally refuses every dated request with it off; this test is about the dated logic
 	n0, s0 := f.n(""), tallySent.Load()
 	bad := map[string]string{
 		"unknown id":        collectionRequest("FinComEvil", "Ledger", "NAME", zz, ""),

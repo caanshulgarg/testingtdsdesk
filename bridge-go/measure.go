@@ -4,6 +4,12 @@
 //	FinComBridge.exe measure --company "<name>" [--out file] [--ledgers 696 | --ledgers 696-699]
 //	FinComBridge.exe measure --company "<name>" --snapshot <label> [--month yyyymm]
 //	FinComBridge.exe measure --compare <label1> <label2>
+//	... --old-days   (round 19) the dated items b-e and the snapshot with ReadDays off: typed at the console, with the
+//	                 bridge stopped (the running bridge's /measure never takes it, nor the tray)
+//
+// Round 19 (2.1.9, the code review's finding 7; the owner's rule of 04-Oct-2026 names only the read test as the
+// exception): with ReadDays off the tool runs its undated items only (a, a2, the ledger items f); b, c, c0, d, e and the
+// snapshot carry a period and go only with ReadDays on or --old-days.
 //
 // One request at a time, each with its own cap (TallyMaxSec, 20 s), through the bridge's own queue (a posting still goes first).
 // Round 4 (03-Oct-2026): the run STOPS at the first request that does not answer in that time: nothing more is sent but
@@ -45,6 +51,9 @@ type measureOpts struct {
 	ledgers  string // "696-699"
 	snapshot string
 	month    string // yyyymm, for d and the snapshot (default: this month)
+	// round 19 (review finding 7): --old-days typed by a person at the console: the dated items (b, c, c0, d, e, the
+	// snapshot) run with ReadDays off. Set only by measureArgs (the console), never from /measure or the tray
+	oldDays bool
 }
 
 type mItem struct {
@@ -109,9 +118,12 @@ func measureLedgerRange(spec string) (int, int) {
 
 // one request, its time, size and how many of a kind came back
 func measureOne(port int, key, what, x, count string) (*mItem, string) {
+	return measureOneTC(fin, port, key, what, x, count)
+}
+func measureOneTC(tc *TC, port int, key, what, x, count string) (*mItem, string) {
 	it := &mItem{key: key, what: what, requestSent: true}
 	t0 := time.Now()
-	raw, err := invokeTally(fin, port, x, tallyMaxSec())
+	raw, err := invokeTally(tc, port, x, tallyMaxSec())
 	it.ms = time.Since(t0).Milliseconds()
 	it.bytes = len(raw)
 	if err != nil {
@@ -150,6 +162,22 @@ func measureWaitFree(port int, company string, maxWait time.Duration) (bool, int
 // the measuring tool is started by a person: the tray item or the measure command typed in a console reach the running
 // bridge's web server (server.go refuses a web page); the bridge itself, the service included, never starts one
 func measureAllowed() error { return readsAllowed() }
+
+// round 19 (review finding 7, the owner's rule of 04-Oct-2026: only the read test is named as the exception): the
+// measuring tool's dated items go only with ReadDays on, or with --old-days typed by a person at the console (o.oldDays,
+// never set from /measure or the tray); nil when they may not
+func measureDatedTC(o measureOpts) *TC {
+	if o.oldDays {
+		return &TC{person: true}
+	}
+	if readDaysOn() {
+		return fin
+	}
+	return nil
+}
+
+const measureNoOldDays = "the dated items (b, c, d, e and the snapshot) are not run: reading old entries is off on this computer (ReadDays). " +
+	"A person may run them at the console with the bridge stopped: FinComBridge.exe measure --company \"<name>\" --old-days"
 
 func fyBounds(t time.Time) (string, string) {
 	a := fyStart(t)
@@ -234,12 +262,20 @@ func runMeasure(o measureOpts) (M, error) {
 		return measureReport(o, company, port, items, started)
 	}
 
+	dtc := measureDatedTC(o)
+	if dtc == nil {
+		add(&mItem{key: "b..e", what: "not run", note: measureNoOldDays})
+		writeLog("Measure Tally: " + company + ": " + measureNoOldDays)
+		return measureLedgerItems(o, company, port, &items, add, started, stopped)
+	}
+	mOne := func(key, what, x, count string) (*mItem, string) { return measureOneTC(dtc, port, key, what, x, count) }
+
 	// b. AlterID above (highest - 500), the whole year
 	after := altV - 500
 	if after < 0 {
 		after = 0
 	}
-	it, raw = measureOne(port, "b", fmt.Sprintf("entries with AlterID above %d over the year %s-%s (every field FinCom needs)", after, fyA, fyZ),
+	it, raw = mOne("b", fmt.Sprintf("entries with AlterID above %d over the year %s-%s (every field FinCom needs)", after, fyA, fyZ),
 		measureReqB(company, fyA, fyZ, after), "VOUCHER")
 	if it.n > 0 {
 		it.note = fmt.Sprintf("%d bytes an entry on average", it.bytes/it.n)
@@ -251,7 +287,7 @@ func runMeasure(o measureOpts) (M, error) {
 
 	// c. the same, one month: this month, and the busiest month of the year
 	cReq := func(key, a, z string) *mItem {
-		it, _ := measureOne(port, key, fmt.Sprintf("entries with AlterID above %d, %s-%s only", after, a, z),
+		it, _ := mOne(key, fmt.Sprintf("entries with AlterID above %d, %s-%s only", after, a, z),
 			measureReqC(company, a, z, after), "VOUCHER")
 		add(it)
 		return it
@@ -275,7 +311,7 @@ func runMeasure(o measureOpts) (M, error) {
 		how = "from the bridge's copy"
 	}
 	if busy == "" {
-		it, raw := measureOne(port, "c0", "the year's entries, dates only (to find the busiest month)",
+		it, raw := mOne("c0", "the year's entries, dates only (to find the busiest month)",
 			measureReqYear(company, fyA, fyZ), "VOUCHER")
 		by := map[string]int{}
 		for _, v := range xmlDoc(raw).All("VOUCHER") {
@@ -308,7 +344,7 @@ func runMeasure(o measureOpts) (M, error) {
 	}
 
 	// d. the GUID list only, one month
-	it, _ = measureOne(port, "d", "the list of GUIDs only, "+mA+"-"+mZ,
+	it, _ = mOne("d", "the list of GUIDs only, "+mA+"-"+mZ,
 		measureReqD(company, mA, mZ), "VOUCHER")
 	add(it)
 	if stopped(it) {
@@ -316,7 +352,7 @@ func runMeasure(o measureOpts) (M, error) {
 	}
 
 	// e. one entry with every field
-	it, raw = measureOne(port, "e", fmt.Sprintf("one entry (AlterID %d) with every field FinCom needs", altV),
+	it, raw = mOne("e", fmt.Sprintf("one entry (AlterID %d) with every field FinCom needs", altV),
 		measureReqE(company, fyA, addDays(td, 366), altV), "VOUCHER")
 	if vs := reVchBlock.FindAllString(raw, -1); len(vs) > 0 {
 		v := vs[0]
@@ -345,6 +381,13 @@ func runMeasure(o measureOpts) (M, error) {
 		return measureReport(o, company, port, items, started)
 	}
 
+	return measureLedgerItems(o, company, port, &items, add, started, stopped)
+}
+
+// f. the ledger items (no period): run whatever ReadDays says
+func measureLedgerItems(o measureOpts, company string, port int, itemsP *[]*mItem, add func(*mItem), started time.Time, stopped func(*mItem) bool) (M, error) {
+	var it *mItem
+	var raw string
 	// f. the hanging-ledger check (round 4: the run ends at the first hang, the check waited for; one ledger a run)
 	a, b := measureLedgerRange(o.ledgers)
 	it, raw = measureOne(port, "f0", "every ledger's name (to number them in name order)", measureReqNames(company), "LEDGER")
@@ -358,7 +401,7 @@ func runMeasure(o measureOpts) (M, error) {
 	it.note = fmt.Sprintf("%d ledgers", len(names))
 	add(it)
 	if stopped(it) {
-		return measureReport(o, company, port, items, started)
+		return measureReport(o, company, port, *itemsP, started)
 	}
 	if a == 0 {
 		add(&mItem{key: "f696..", what: "the per-ledger items (ledgers 696-699: fields, then the stored opening) are not run by default",
@@ -370,7 +413,7 @@ func runMeasure(o measureOpts) (M, error) {
 		pi, _ := measureOne(port, fmt.Sprintf("f%d-check", i), "the company check", companyCheckRequest(company), "COMPANY")
 		add(pi)
 		if stopped(pi) {
-			return measureReport(o, company, port, items, started)
+			return measureReport(o, company, port, *itemsP, started)
 		}
 		fi, fraw := measureOne(port, fmt.Sprintf("f%d-fields", i), fmt.Sprintf("ledger %d %q: its master's fields (no opening)", i, n),
 			measureReqLedF(company, n), "LEDGER")
@@ -381,7 +424,7 @@ func runMeasure(o measureOpts) (M, error) {
 		}
 		add(fi)
 		if stopped(fi) {
-			return measureReport(o, company, port, items, started)
+			return measureReport(o, company, port, *itemsP, started)
 		}
 		oi, oraw := measureOne(port, fmt.Sprintf("f%d-opening", i), fmt.Sprintf("ledger %d %q: the opening its master stores (the field only, no period)", i, n),
 			measureReqLedO(company, n), "LEDGER")
@@ -390,10 +433,10 @@ func runMeasure(o measureOpts) (M, error) {
 		}
 		add(oi)
 		if stopped(oi) {
-			return measureReport(o, company, port, items, started)
+			return measureReport(o, company, port, *itemsP, started)
 		}
 	}
-	return measureReport(o, company, port, items, started)
+	return measureReport(o, company, port, *itemsP, started)
 }
 
 func or(a, b string) string {
@@ -455,6 +498,10 @@ func measureSnapshot(o measureOpts) (M, error) {
 	if err := measureAllowed(); err != nil {
 		return nil, err
 	}
+	dtc := measureDatedTC(o)
+	if dtc == nil {
+		return nil, errors.New("Snapshot not taken: " + measureNoOldDays)
+	}
 	measuring.Add(1)
 	defer measuring.Add(-1)
 	port, err := findCompanyPort(o.company, 0)
@@ -477,7 +524,7 @@ func measureSnapshot(o measureOpts) (M, error) {
 			guid, alt = nt(c, "GUID"), toI64(re(`\D`).ReplaceAllString(nt(c, "ALTVCHID"), ""))
 		}
 	}
-	raw, err = invokeTally(fin, port, snapshotRequest(o.company, a, z), tallyMaxSec())
+	raw, err = invokeTally(dtc, port, snapshotRequest(o.company, a, z), tallyMaxSec())
 	if err != nil {
 		return nil, err
 	}
@@ -606,8 +653,8 @@ func trayMeasureCompany() string {
 	return ""
 }
 
-// FinComBridge.exe measure ...: through the running bridge when it answers, else here
-func measureCmd(args []string) int {
+// the console's words: the options and --compare's two labels
+func measureArgsCmp(args []string) (measureOpts, []string) {
 	var o measureOpts
 	var cmp []string
 	for i := 0; i < len(args); i++ {
@@ -631,8 +678,17 @@ func measureCmd(args []string) int {
 			o.month = next()
 		case "compare":
 			cmp = append(cmp, next(), next())
+		case "old-days":
+			o.oldDays = true
 		}
 	}
+	return o, cmp
+}
+func measureArgs(args []string) measureOpts { o, _ := measureArgsCmp(args); return o }
+
+// FinComBridge.exe measure ...: through the running bridge when it answers, else here
+func measureCmd(args []string) int {
+	o, cmp := measureArgsCmp(args)
 	loadConfigRO()
 	logEcho = false
 	if len(cmp) == 2 {
@@ -697,6 +753,11 @@ func consoleMeasure(o measureOpts, bridge string, post func() M, status func() M
 	}
 	if bridge == "busy" {
 		fmt.Fprintln(&out, "Not measured: the bridge on this computer is busy (it listens on its port but did not answer in 3 s). Nothing is measured from this console while a bridge runs: its reads and postings go one at a time through that bridge. Try again in a minute.")
+		return 1, out.String()
+	}
+	if bridge == "up" && o.oldDays {
+		// round 19 (review finding 7): --old-days never goes through the bridge's web server (/measure never takes it)
+		fmt.Fprintln(&out, "Not measured: --old-days is measured only from this console with the bridge stopped (the running bridge never takes it). Quit the bridge (tray icon: Quit, or stop the FinCom Bridge service), then run the command again; or run it without --old-days.")
 		return 1, out.String()
 	}
 	if bridge == "up" {

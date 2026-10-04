@@ -71,6 +71,24 @@ jobs:
           path: bridge-go/dist/
           if-no-files-found: error
 
+  # round 19 (2.1.9): the Go tests that need real Windows (the recorder holding file's share modes, the trial's lock,
+  # a junction refused by the install step): every test whose name holds Windows or Shared
+  go-tests-windows:
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: windows-2022
+    defaults:
+      run:
+        working-directory: bridge-go
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: bridge-go/go.mod
+          cache-dependency-path: bridge-go/go.sum
+      - name: Go tests on Windows (share modes, the lock, a junction refused)
+        run: go test -count=1 -run 'Windows|Shared' ./...
+
   test:
     needs: build
     strategy:
@@ -327,6 +345,11 @@ jobs:
           $ping = Wait-Bridge 60
           Check ($ping -ne $null) 'the bridge answers on 127.0.0.1:9100 within 60 s'
           Check ($ping.version -eq $env:BRIDGE_VERSION -and $ping.runMode -eq 'service') "it is FinCom Bridge $env:BRIDGE_VERSION as a service ($($ping | ConvertTo-Json -Compress))"
+          # round 19 (S2): the recorder trial's folders made by the exe's install step, Users without Modify on the folder
+          Check (Test-Path "$env:ProgramData\FinCom\addon\FinComRecorderTrial.tdl") 'the add-on is in ProgramData\FinCom\addon'
+          $acl = (& icacls.exe "$env:ProgramData\FinCom\recorder") -join "`n"
+          Write-Host $acl
+          Check (($acl -notmatch '\(OI\)\(CI\)\(M\)') -and ($acl -match '\(OI\)\(IO\)\(M\)')) 'Users may add and change files in the recorder folder, not delete the folder'
 
       - name: As administrator, uninstall (/S)
         run: |

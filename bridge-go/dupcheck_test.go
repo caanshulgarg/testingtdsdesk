@@ -204,6 +204,7 @@ func TestDupReadForCheckTally(t *testing.T) {
 	f.add(fgDate, fgParty, "13", "Electricity", "-"+fgAmt)
 	f.add(fgDate, "Someone", "14", "Rent", "-1.00")
 	standBridge(t, f, "")
+	oldDaysOn() // round 19: ReadDays on: invokeTally refuses every dated request with it off; this test is about the dated logic
 	there, err := vouchersOnDate(f.port, zz, fgDate, fgParty)
 	if err != nil || len(there) != 2 { // the stand does not filter by party; the rule does
 		t.Fatalf("the read: %v %v", there, err)

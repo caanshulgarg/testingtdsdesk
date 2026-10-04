@@ -20,6 +20,9 @@ import (
 // 13b: as the measuring tool (measure.go startMeasure): the tray's POST starts the test in the bridge and is answered at
 // once; its GET says how far it is; the tray polls (the three requests, each up to 60 s plus the wait for Tally behind a
 // copier or posting request, can outlast one tray call)
+// round 19 (review finding 1): the read test is a person's (the tray item): the one exception to ReadDays off
+var readTestTC = &TC{person: true}
+
 var (
 	readTestMu   sync.Mutex
 	readTestLast M
@@ -54,6 +57,17 @@ func startReadTest(company string) M {
 	return M{"ok": true, "started": true, "company": company, "day": d}
 }
 
+// POST /tray/readtest {preview: true}: the company the test would read (the tray names it in a yes/no); nothing is sent
+func readTestPreview(company string) M {
+	if company == "" {
+		company = trayMeasureCompany()
+	}
+	if company == "" {
+		return M{"ok": false, "error": "No company is open in Tally: open the company to test, then try again."}
+	}
+	return M{"ok": true, "company": company, "day": readTestDay(company)}
+}
+
 // GET /tray/readtest: {state: none | running | done | failed, ...the result when done, error when failed}
 func readTestStatus() M {
 	readTestMu.Lock()
@@ -85,7 +99,7 @@ func readTestDay(company string) string {
 func readTestAnchor(port int, company string) (string, map[string]int) {
 	days := map[string]int{}
 	anchor := ""
-	if raw, err := invokeTally(fin, port, tagCheckRequest(company, today()), 60); err == nil {
+	if raw, err := invokeTally(readTestTC, port, tagCheckRequest(company, today()), 60); err == nil {
 		for _, v := range reVoucher.FindAllString(raw, -1) {
 			if d := group(`<DATE>(\d{8})</DATE>`, v, 1); d != "" {
 				days[d]++
@@ -177,11 +191,11 @@ func runReadTest(company string) (M, error) {
 	}
 	passed := ""
 	for _, form := range dateForms {
-		m, raw := ask("Day Book, dates "+form, dayBookRequestForm(company, form, d, d), fin)
+		m, raw := ask("Day Book, dates "+form, dayBookRequestForm(company, form, d, d), readTestTC)
 		ok := raw != "" && dayBookIncomplete(raw) == "" && onlyDay(raw, d)
 		if ok && empty != "" {
 			// the same form for a day the list shows empty: it must answer none (the period applied, not ignored)
-			raw2, err := invokeTally(fin, port, dayBookRequestForm(company, form, empty, empty), 60)
+			raw2, err := invokeTally(readTestTC, port, dayBookRequestForm(company, form, empty, empty), 60)
 			n2 := countVouchers(raw2)
 			ok = err == nil && dayBookIncomplete(raw2) == "" && n2 == 0
 			m["emptyDay"], m["emptyDayVouchers"] = empty, n2
@@ -206,9 +220,9 @@ func runReadTest(company string) (M, error) {
 		passed = "none"
 		writeLog(fmt.Sprintf("%sDates on this Tally: none of the %d forms answered %s with exactly its entries", pre, len(dateForms), d))
 	}
-	ask("FinComTag (the posting read-back's request)", tagCheckRequest(company, d), fin)
+	ask("FinComTag (the posting read-back's request)", tagCheckRequest(company, d), readTestTC)
 	// the change numbers, read here without being kept (the starting point is not touched by the test)
-	cm, craw := ask("FinComCompany (change numbers)", companyCheckRequest(company), fin)
+	cm, craw := ask("FinComCompany (change numbers)", companyCheckRequest(company), readTestTC)
 	altV, altM := int64(-1), int64(-1)
 	for _, c := range xmlDoc(craw).All("COMPANY") {
 		if n := nameOf(c); n == "" || sameCompany(n, company) {
@@ -225,12 +239,12 @@ func runReadTest(company string) (M, error) {
 		after = maxI64(0, altV)
 		label = fmt.Sprintf("Entries above the starting point (TDSDeskKeepList, AlterID above %d, the current ALTVCHID: no starting point recorded yet, no dates)", after)
 	}
-	ask(label, keepListAboveRequest(company, after), fin)
+	ask(label, keepListAboveRequest(company, after), readTestTC)
 	// item 89: FinComCompany sent once as UTF-16 and once as UTF-8 (when the bridge sends UTF-8)
 	if !cfgB("TallyRequestUTF16") {
 		const lb = "FinComCompany sent as UTF-16 and as UTF-8"
-		a, e1 := invokeTally(&TC{enc: "utf-16"}, port, companyCheckRequest(company), 60)
-		b, e2 := invokeTally(&TC{enc: "utf-8"}, port, companyCheckRequest(company), 60)
+		a, e1 := invokeTally(&TC{enc: "utf-16", person: true}, port, companyCheckRequest(company), 60)
+		b, e2 := invokeTally(&TC{enc: "utf-8", person: true}, port, companyCheckRequest(company), 60)
 		m := M{"label": lb, "bytes16": len(a), "bytes8": len(b), "same": e1 == nil && e2 == nil && a == b, "error": ""}
 		switch {
 		case e1 != nil || e2 != nil:

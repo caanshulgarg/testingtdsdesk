@@ -256,7 +256,7 @@ func TestStartPointRecordedOnce(t *testing.T) {
 	if _, err := companyCheck(fin, zz, f.port); err != nil {
 		t.Fatal(err)
 	}
-	e := obj(readObjFile(sp("start-point.json"))[companyKey(zz)])
+	e := obj(readObjFile(sp("start-point.json"))[companyKey(zz)+"|co-guid-1"]) // round 19: one entry per company and GUID
 	if e == nil || toI64(e["altvchid"]) != 2 || toI64(e["altmstid"]) != 3 || str(e["at"]) == "" || str(e["guid"]) != "co-guid-1" {
 		t.Fatalf("start-point.json: %v", readObjFile(sp("start-point.json")))
 	}
@@ -264,7 +264,7 @@ func TestStartPointRecordedOnce(t *testing.T) {
 	if _, err := companyCheck(fin, zz, f.port); err != nil {
 		t.Fatal(err)
 	}
-	if e2 := obj(readObjFile(sp("start-point.json"))[companyKey(zz)]); toI64(e2["altvchid"]) != 2 || str(e2["at"]) != str(e["at"]) {
+	if e2 := obj(readObjFile(sp("start-point.json"))[companyKey(zz)+"|co-guid-1"]); toI64(e2["altvchid"]) != 2 || str(e2["at"]) != str(e["at"]) {
 		t.Fatalf("the starting point moved: %v", e2)
 	}
 	b := beatBody(true, "open", "", nil, nil, nil)
@@ -275,16 +275,20 @@ func TestStartPointRecordedOnce(t *testing.T) {
 	if toI64(cur["altvchid"]) != 3 || str(cur["at"]) == "" {
 		t.Fatalf("beat changeNumbers: %v", b["changeNumbers"])
 	}
-	// the company's GUID changes (a restored company): recorded anew, and said
+	// the company's GUID changes (a restored company): round 19, the new GUID gets its own entry, the first is kept
 	f.mu.Lock()
 	f.guid = "co-guid-2"
 	f.mu.Unlock()
 	_, _ = companyCheck(fin, zz, f.port)
-	if e3 := obj(readObjFile(sp("start-point.json"))[companyKey(zz)]); toI64(e3["altvchid"]) != 3 || str(e3["guid"]) != "co-guid-2" {
-		t.Fatalf("after a GUID change: %v", e3)
+	all := readObjFile(sp("start-point.json"))
+	if e3 := obj(all[companyKey(zz)+"|co-guid-2"]); toI64(e3["altvchid"]) != 3 || str(e3["guid"]) != "co-guid-2" {
+		t.Fatalf("after a GUID change: %v", all)
 	}
-	if logLines("its starting point is recorded anew") != 1 {
-		t.Fatal("the new starting point is not in the log")
+	if e4 := obj(all[companyKey(zz)+"|co-guid-1"]); toI64(e4["altvchid"]) != 2 {
+		t.Fatalf("the first GUID's starting point moved: %v", all)
+	}
+	if logLines("its own starting point is recorded") != 1 {
+		t.Fatal("the new GUID's starting point is not in the log")
 	}
 }
 
@@ -380,6 +384,7 @@ func TestUTF16Option(t *testing.T) {
 	for i, on := range []bool{true, false} {
 		f := newStandTally(t)
 		standBridge(t, f, fmt.Sprintf(`,"TallyRequestUTF16":%v`, on))
+		oldDaysOn() // round 19: ReadDays on: invokeTally refuses every dated request with it off; this test is about the dated logic
 		narr := "Rent — किराया ₹1,500"
 		id := fmt.Sprint("u", i)
 		x := strings.Replace(finVoucher(id, fgParty, "U-"+id, td, "5.00"), "<NARRATION>Electricity", "<NARRATION>"+narr, 1)
@@ -553,7 +558,7 @@ func TestChangeNumbersNoted(t *testing.T) {
 	if code, _ := callLocal(t, "POST", "/tray/recorder-note", "https://app.fincom.live", "{}"); code != 403 {
 		t.Fatalf("from a web page: %d", code)
 	}
-	if exists(filepath.Join(rec, "changenumbers.txt")) {
+	if exists(filepath.Join(rec, "changenumbers.txt")) || exists(changeNumbersFile()) {
 		t.Fatal("written for a web page")
 	}
 	for i := 0; i < 2; i++ {
@@ -563,14 +568,20 @@ func TestChangeNumbersNoted(t *testing.T) {
 		}
 		f.add(td, fgParty, "C-2", "sale", "-2.00")
 	}
-	lines := strings.Split(strings.TrimSpace(readText(filepath.Join(rec, "changenumbers.txt"))), "\n")
+	// round 19 (S1): in the bridge's own sync folder, never in the recorder folder
+	if exists(filepath.Join(rec, "changenumbers.txt")) {
+		t.Fatal("written in the recorder folder")
+	}
+	lines := strings.Split(strings.TrimSpace(readText(changeNumbersFile())), "\n")
 	if len(lines) != 2 || !strings.HasPrefix(lines[0], "ZZ TEST: ALTVCHID=1, ALTMSTID=3, at ") || !strings.HasPrefix(lines[1], "ZZ TEST: ALTVCHID=2, ALTMSTID=3, at ") {
-		t.Fatalf("changenumbers.txt:\n%s", strings.Join(lines, "\n"))
+		t.Fatalf("recorder-changenumbers.txt:\n%s", strings.Join(lines, "\n"))
 	}
 }
 
 // --- 8. the installer: the recorder folder (writable by Users) and the add-on folder with the .tdl files
 func TestInstallerRecorderAndAddonFolders(t *testing.T) {
+	// round 19 (S2): the setup script no longer makes the folders nor sets their permissions (an icacls without /L on a
+	// path a user could have made a junction); the exe's install step does, for all users and for one user
 	nsi := readText(filepath.Join("installer", "FinComBridge.nsi"))
 	a := strings.Index(nsi, "Function PutFiles")
 	z := strings.Index(nsi[a:], "FunctionEnd")
@@ -578,17 +589,19 @@ func TestInstallerRecorderAndAddonFolders(t *testing.T) {
 		t.Fatal("no PutFiles")
 	}
 	put := nsi[a : a+z]
-	for _, s := range []string{
-		`ReadEnvStr $R1 "ProgramData"`,
-		`CreateDirectory "$R1\FinCom\recorder"`,
-		`CreateDirectory "$R1\FinCom\addon"`,
-		`nsExec::Exec 'icacls "$R1\FinCom\recorder" /grant *S-1-5-32-545:(OI)(CI)M'`,
-		`SetOutPath "$R1\FinCom\addon"`,
-		`File /nonfatal "..\addon\*.tdl"`,
-	} {
-		if !strings.Contains(put, s) {
-			t.Errorf("PutFiles lacks %s", s)
+	for _, s := range []string{`CreateDirectory "$R1\FinCom\recorder"`, `CreateDirectory "$R1\FinCom\addon"`, "icacls", `SetOutPath "$R1\FinCom\addon"`, `File /nonfatal "..\addon\*.tdl"`} {
+		if strings.Contains(put, s) {
+			t.Errorf("PutFiles still has %s", s)
 		}
+	}
+	if !strings.Contains(put, `"FinComBridge.exe install" (folders.go)`) {
+		t.Error("PutFiles does not name the exe's install step")
+	}
+	if !strings.Contains(readText("win_service.go"), "installFinComFolders(true, installLog)") || !strings.Contains(readText("win_user.go"), "installFinComFolders(false, installLog)") {
+		t.Error("the install steps do not make the folders")
+	}
+	if es, _ := addonFiles.ReadDir("addon"); len(es) == 0 {
+		t.Error("no .tdl built into the exe")
 	}
 	if BridgeVersion != "2.1.9" {
 		t.Fatalf("BridgeVersion %s", BridgeVersion)

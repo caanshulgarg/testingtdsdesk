@@ -103,6 +103,7 @@ func TestFakeTallyBehaviours(t *testing.T) {
 		var l fakeLog
 		f.behave = silentFor(isID("TDSDeskNames"), &l)
 		standBridge(t, f, `,"TallyMaxSec":1`)
+		oldDaysOn() // round 19: ReadDays on: invokeTally refuses every dated request with it off; this test is about the dated logic
 		t0 := time.Now()
 		if _, err := getLedgerNames(fin, zz, f.port); err == nil || !isBusyErr(err) {
 			t.Fatalf("a silent Tally: %v", err)
@@ -115,6 +116,7 @@ func TestFakeTallyBehaviours(t *testing.T) {
 		f := newStandTally(t)
 		f.behave = midSave(func(id string) bool { return id == "Day Book" })
 		standBridge(t, f, `,"TallyMaxSec":1`)
+		oldDaysOn() // round 19: ReadDays on: invokeTally refuses every dated request with it off; this test is about the dated logic
 		t0 := time.Now()
 		if _, err := getDayBookXML(fin, zz, td, td, f.port); err == nil || !isBusyErr(err) {
 			t.Fatalf("half an answer: %v", err)
@@ -130,6 +132,7 @@ func TestFakeTallyBehaviours(t *testing.T) {
 		f := newStandTally(t)
 		f.coName = "SOME OTHER CO"
 		standBridge(t, f, "")
+		oldDaysOn() // round 19: ReadDays on: invokeTally refuses every dated request with it off; this test is about the dated logic
 		res, err := invokeImport(M{"company": zz, "vouchers": []any{M{"id": "w1", "xml": finVoucher("w1", fgParty, "W-1", td, "1.00")}}})
 		if err == nil || !strings.Contains(err.Error(), "is not open in Tally") || f.n("Import") != 0 {
 			t.Fatalf("posted with another company open: %v %v", res, err)
@@ -138,6 +141,7 @@ func TestFakeTallyBehaviours(t *testing.T) {
 	t.Run("wrong company GUID", func(t *testing.T) {
 		f := newStandTally(t)
 		standBridge(t, f, "")
+		oldDaysOn() // round 19: ReadDays on: invokeTally refuses every dated request with it off; this test is about the dated logic
 		noteCompanyGUID(zz, "co-guid-held")
 		r := postOne(t, "w2", finVoucher("w2", fgParty, "W-2", td, "1.00"))
 		if r["ok"] == true || r["guidMismatch"] != true || f.n("Import") != 0 {
@@ -233,6 +237,7 @@ func Test02OctStackedRetries(t *testing.T) {
 	var l fakeLog
 	f.behave = silentFor(isID("Day Book"), &l)
 	standBridge(t, f, `,"TallyMaxSec":1,"TallyProbeSec":1`)
+	oldDaysOn() // round 19: ReadDays on: invokeTally refuses every dated request with it off; this test is about the dated logic
 	liveFrom(td)
 	var wg sync.WaitGroup
 	wg.Add(1)

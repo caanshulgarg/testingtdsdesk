@@ -816,6 +816,7 @@ func TestMeasureTool(t *testing.T) {
 		return 0
 	}
 	dir := standBridge(t, f, `,"TallyMaxSec":1,"TallyProbeEverySec":1`)
+	oldDaysOn() // round 19: ReadDays on: invokeTally refuses every dated request with it off; this test is about the dated logic
 	sort.Strings(f.ledgers)
 	r, err := runMeasure(measureOpts{company: zz, ledgers: "8-9"})
 	if err != nil {
@@ -974,6 +975,7 @@ func TestPostedTagFoundByDate(t *testing.T) {
 	f.add(d2, fgParty, "T-2", "Electricity | TDSDesk:t2", "-6.00")
 	f.add("20260703", fgParty, "T-X", "other | TDSDesk:tx", "-7.00")
 	standBridge(t, f, "")
+	oldDaysOn() // round 19: ReadDays on: invokeTally refuses every dated request with it off; this test is about the dated logic
 	items := []M{{"id": "t1", "xml": finVoucher("t1", fgParty, "T-1", d1, "5.00")}, {"id": "t2", "xml": finVoucher("t2", fgParty, "T-2", d2, "6.00")},
 		{"id": "t3", "xml": finVoucher("t3", fgParty, "T-3", d2, "9.00")}}
 	n0 := f.n("")

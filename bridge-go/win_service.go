@@ -405,6 +405,8 @@ func installCmd(args []string) int {
 		_ = k.SetStringValue("Version", BridgeVersion)
 		k.Close()
 	}
+	// round 19 (S2): the recorder trial's folders, links refused, their permissions set here (folders.go)
+	installFinComFolders(true, installLog)
 	if err := createService(exe, cfgPath); err != nil {
 		return installFailed(7, "The Windows service could not be made ("+err.Error()+").", "Run the setup again as an administrator; if it fails again, send the install log to FinCom.")
 	}

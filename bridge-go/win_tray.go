@@ -439,6 +439,8 @@ func (t *tray) menu() {
 	add(18, "Test reading from Tally", mfString)
 	add(19, "Recorder trial: note change numbers", mfString)
 	add(20, "Recorder trial: send results", mfString)
+	add(21, "Recorder trial: lock the holding file for 30 s", mfString)
+	add(22, "Recorder trial: time saving (ZZ TEST)", mfString)
 	add(5, "Show log", mfString)
 	switch {
 	case st != nil && truthy(st["testMode"]) && truthy(st["switching"]):
@@ -608,7 +610,20 @@ func (t *tray) command(id int, st M) {
 	case 18:
 		// round 13: three requests for one day, one after the other (up to 60 s each, plus the wait for Tally behind a
 		// copier or posting request); 13b: started in the bridge and polled, as Measure Tally is
-		r := trayCall("POST", "/tray/readtest", M{})
+		// round 19 (review finding 13): a yes/no naming the company first (it may be real books)
+		pv := trayCall("POST", "/tray/readtest", M{"preview": true})
+		if pv == nil {
+			msgBox("FinCom Bridge - Test reading from Tally", "The bridge is not answering.", mbIconWarning)
+			return
+		}
+		if pv["ok"] != true {
+			msgBox("FinCom Bridge - Test reading from Tally", str(pv["error"]), mbIconWarning)
+			return
+		}
+		if !yesNo("FinCom Bridge - Test reading from Tally", "Test reading from Tally on the company "+str(pv["company"])+"?\n\nThe test asks Tally for one day's entries in four date forms, a few small requests, one at a time (up to a few minutes). It changes nothing in Tally or in FinCom.") {
+			return
+		}
+		r := trayCall("POST", "/tray/readtest", M{"company": str(pv["company"])})
 		if r == nil {
 			msgBox("FinCom Bridge - Test reading from Tally", "The bridge is not answering.", mbIconWarning)
 			return
@@ -667,6 +682,58 @@ func (t *tray) command(id int, st M) {
 			msgBox(title, "Noted in "+str(r["file"])+":\n\n"+strings.Join(strs(r["lines"]), "\n"), mbIconInfo)
 		default:
 			msgBox(title, fmt.Sprintf("Sent to FinCom support: %d lines in %d files (reference %s).", toInt(r["lines"]), toInt(r["files"]), or(str(r["ref"]), "-")), mbIconInfo)
+		}
+	case 21:
+		// round 19: ZZ TEST's holding file held (share mode 0) for 30 s: save a voucher in ZZ TEST meanwhile
+		title := "FinCom Bridge - Recorder trial"
+		r := trayCall("POST", "/tray/recorder-lock", M{"company": "ZZ TEST"})
+		switch {
+		case r == nil:
+			msgBox(title, "The bridge is not answering.", mbIconWarning)
+		case r["ok"] != true:
+			msgBox(title, str(r["error"]), mbIconWarning)
+		default:
+			msgBox(title, "The holding file "+str(r["file"])+" is locked for 30 seconds from now.\n\nSave one voucher in ZZ TEST now and note whether the save waited, whether a message appeared. After the 30 seconds, choose Recorder trial: send results.", mbIconInfo)
+		}
+	case 22:
+		// round 19: the time saving on ZZ TEST: 100 journals posted one per request, timed
+		title := "FinCom Bridge - Recorder trial: time saving"
+		pv := trayCall("POST", "/tray/recorder-bench", M{"preview": true, "company": "ZZ TEST"})
+		if pv == nil || pv["ok"] != true {
+			why := "The bridge is not answering."
+			if pv != nil {
+				why = str(pv["error"])
+			}
+			msgBox(title, why, mbIconWarning)
+			return
+		}
+		if !yesNo(title, "Post 100 test journals to ZZ TEST (50 of 2 lines, 50 of 50 lines, on the ledgers ZZ Bench Dr and ZZ Bench Cr, made if missing) and time each save? Only ZZ TEST is touched.") {
+			return
+		}
+		r := trayCall("POST", "/tray/recorder-bench", M{"company": "ZZ TEST"})
+		if r == nil || r["ok"] != true {
+			why := "The bridge is not answering."
+			if r != nil {
+				why = str(r["error"])
+			}
+			msgBox(title, why, mbIconWarning)
+			return
+		}
+		t.balloon("FinCom Bridge", "Time saving on ZZ TEST: 100 journals, one at a time. The result opens when it is done.", false)
+		for i := 0; i < 900; i++ {
+			time.Sleep(2 * time.Second)
+			s := trayCall("GET", "/tray/recorder-bench", nil)
+			if s == nil {
+				continue
+			}
+			if str(s["state"]) == "done" {
+				msgBox(title, "ZZ TEST, per save (milliseconds):\n\n"+strings.Join(strs(s["lines"]), "\n")+"\n\nThe same lines are in Show log.", mbIconInfo)
+				return
+			}
+			if str(s["state"]) == "failed" {
+				msgBox(title, "Stopped: "+str(s["error"]), mbIconWarning)
+				return
+			}
 		}
 	case 12:
 		if !yesNo("FinCom Bridge", "Make FinCom Bridge "+BridgeVersion+" the main bridge on this computer? Bridge 1.15.0 is stopped and no longer starts; FinCom Bridge then reads and posts. Its pairing, settings and copy are kept.") {
