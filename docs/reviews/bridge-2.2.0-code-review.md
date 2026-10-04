@@ -765,4 +765,68 @@ Verdict, round 3:
   is there.
 - R3-3 LOW, Fixed (TestSetupSameVersionOtherBytes): another build of the same version is said so in the install log.
 
-Range: bdfe261..41edc65
+## Round 4 (41edc65..2a62c54)
+
+Reviewed: 04-Oct-2026, by the reviewer in the Claude Code session. I read git diff 41edc65 2a62c54 -- bridge-go/
+.gitignore (tally.go, update.go, .gitignore, the tests, the new review220c_test.go, and bridge-go/tds-bridge.log
+removed) from a clean worktree of 2a62c54.
+
+Checks (clean worktree of 2a62c54):
+- `go vet ./...` and `GOOS=windows go vet ./...`: clean.
+- `go test -count=1 ./...`: ok (423 s). The tree stayed clean (no tds-bridge.log).
+- One throwaway test (zz_scratch_r4_test.go, in a second worktree) confirmed R4-1. It was deleted with the worktree;
+  nothing was added to the repo.
+
+### Round 3 findings: is each "Fixed" claim true?
+
+| # | Claim | Verdict | Notes |
+|---|---|---|---|
+| R3-1 M | Fixed | Confirmed for the two exceptions; the "dated" test can still be dodged (R4-1) | datedRefused (tally.go:296-306) now sends every FinComVoucherByMaster and FinComSlice through voucherByMasterExact / sliceExact by id, whatever ReadDays, the person flag or the date form. All the round 2 and round 3 slice bypasses are refused in every form (TestSliceGuardEveryForm), collFilterOnly included. A request whose period is only in a filter is now dated (requestDated, :317), but only in the exact spelling `$Date`, `$$IsBetween`, `$$Date:`, `<SVFROMDATE`, `<SVTODATE`. |
+| R3-2 L | Fixed | Confirmed | The two tests capture installLogFn; bridge-go/tds-bridge.log is removed and in .gitignore; a full run leaves the tree clean. TestNoLogInPackageFolder catches a log only if it is there when that test runs (a later test could still write one; .gitignore keeps it out of a commit). |
+| R3-3 L | Fixed | Confirmed | v == BridgeVersion now logs "the same version … another build of it: it is not kept"; an unreadable answer keeps the old wording. |
+
+What holds in the new code (checked, no finding):
+- Checking the two exceptions always is stricter, never looser. With ReadDays on, only the exact body fetch and slice
+  go. Their builders are the only callers (fetchVouchersByMasterIn, liveSourceC), so nothing the bridge sends today is
+  newly refused. driveEveryRequest now sends the slice as liveSourceC would.
+- The read test's probe has its own id (datesProbeID, measure-only), so the slice's stricter check does not touch it.
+- Every request still passes checkAllowed (the id and its collection names) before datedRefused.
+
+### Findings, round 4 (by severity)
+
+R4-1. MEDIUM (owner's rule: with ReadDays off no dated read goes except the two exceptions; the same class as R2-2 and
+R3-1). requestDated looks for one exact spelling of each date marker, but Tally reads TDL with any letter case and XML
+with character references decoded. An allow-listed request with its period spelled any other way is not seen as dated.
+- Where: tally.go:314-318 (reFilterDate is case-sensitive; strings.Contains for `<SVFROMDATE` / `<SVTODATE`; no
+  html.UnescapeString first), with allowlist.go:95-123 (checkAllowed checks the id and the collection names, not the
+  filter or the static variables).
+- Constructed (ReadDays off, a non-person TC; each passed checkAllowed and datedRefused, while the request as built was
+  refused):
+  - keepListRequest(ZZ TEST, 1-Apr-2019 .. 30-Apr-2019) with the tags spelled `<svFromDate>` / `<svToDate>`. Mixed
+    case is the usual spelling in Tally's own XML samples.
+  - A TDSDeskKeepList collection filtered `$date >= $$date:"1-Apr-2019" AND $date <= $$date:"30-Apr-2019"`.
+  - The same with `$DATE` / `$$DATE`.
+  - The same with `$$isbetween:...`.
+  - The same filter written `&#36;Date &gt;= &#36;&#36;Date:&#34;1-Apr-2019&#34;` (character references Tally decodes).
+- None of the bridge's builders spells a date this way today, so, as with R2-2 and R3-1, this is the guard failing a
+  wrong caller rather than a path in use. A deny-list of spellings will always be one spelling short: a named formula,
+  `##SVFromDate`, `$$YearOfDate:$Date` and so on.
+- Fix (either):
+  - Minimal: run requestDated on `strings.ToLower(html.UnescapeString(x))` with lower-case markers (`<svfromdate`,
+    `<svtodate`, `$date`, `$$date`, `$$isbetween`, `svfromdate`, `svtodate` anywhere, including `##` variables), so case
+    and character references cannot hide them.
+  - Better, matching what the two exceptions already do: with ReadDays off and no person, a request whose id is one of
+    the dated ids (Day Book, TDSDeskVchHeads, TDSDeskKeepList, dupCheckID, tagCheckID, masterCheckID, the measure ids)
+    is refused by id, without looking for markers. Then the content cannot talk its way out.
+- Test: TestDatedGuardSpellings. Each of the five constructed requests above is refused with ReadDays off. Also, for
+  every id in allowListSamples whose sample is dated, a lower-cased copy and a character-reference copy are refused.
+
+Verdict, round 4:
+- No High.
+- One Medium: R4-1. R3-1's fix closed the two exceptions (they are now exact by id in every form), but the "is it
+  dated" test that guards every other id can be dodged by spelling. It blocks the build by the rule used in rounds 2
+  and 3. The owner may instead accept it as Low, since no code path spells a date this way. If so, say it here and
+  release from 2a62c54 plus docs.
+- R3-2 and R3-3 are confirmed fixed.
+
+Range: bdfe261..2a62c54

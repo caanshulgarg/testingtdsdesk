@@ -364,4 +364,38 @@ Verdict, round 3:
 - R3-2 LOW: Fixed (TestNoLogInPackageFolder).
 - R3-3 LOW: Fixed (TestSetupSameVersionOtherBytes).
 
-Range: bdfe261..41edc65
+## Round 4 (41edc65..2a62c54)
+
+Reviewed: 04-Oct-2026. I read git diff 41edc65 2a62c54 -- bridge-go/ .gitignore from a clean worktree of 2a62c54,
+alongside round 4 of the code review (bridge-2.2.0-code-review.md, "Round 4"), which has the details.
+- go vet (Linux, Windows): clean.
+- go test -count=1 ./...: ok, and the tree stayed clean.
+- One throwaway test confirmed R4-S1. It was deleted and the worktree removed.
+
+### Round 3 findings: is each "Fixed" claim true?
+
+| # | Claim | Verdict | Notes |
+|---|---|---|---|
+| R3-S1 M | Fixed with R3-1 | Confirmed for FinComSlice and FinComVoucherByMaster; see R4-S1 for the other ids | Both exceptions are checked by id in every date form, whatever ReadDays and the person flag say; only the exact request with in-bound values goes. A period only in a filter now counts as dated, but only in one spelling. |
+| R3-2 / R3-3 L | Fixed | Confirmed | No test-written log; the same-version wording. |
+
+### Findings, round 4
+
+- R4-S1 (MEDIUM, owner's rule: no dated read with ReadDays off except the two exceptions; code review R4-1). The
+  dated test can be dodged by spelling.
+  - requestDated (tally.go:314-318) matches `<SVFROMDATE`, `<SVTODATE`, `$Date`, `$$Date:` and `$$IsBetween`
+    exactly, before any decoding. Tally reads TDL in any case and decodes character references.
+  - Constructed with ReadDays off: an allow-listed TDSDeskKeepList request for April 2019 with `<svFromDate>` /
+    `<svToDate>`, or filtered with `$date`, `$DATE`, `$$isbetween`, or `&#36;Date`. Each passed checkAllowed and
+    datedRefused; the same request in the normal spelling was refused.
+  - No builder spells it so today. As with R2-S2 and R3-S1, the guard is the rule's enforcement and would not stop a
+    wrong caller.
+  - Fix: refuse the dated ids by id when ReadDays is off (as the two exceptions now are), or at least match on the
+    lower-cased, unescaped request.
+
+Verdict, round 4:
+- No High.
+- R4-S1 is Medium by the rule used in rounds 2 and 3 and blocks the build, unless the owner accepts it as Low.
+- R3-S1's two exceptions, R3-2 and R3-3 are confirmed fixed.
+
+Range: bdfe261..2a62c54
