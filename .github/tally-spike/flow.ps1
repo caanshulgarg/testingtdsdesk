@@ -41,7 +41,7 @@ function Start-Tally($phase) {
 Write-Ini $false $null
 Start-Tally 'A'
 Keys 'a' 4 'A-2-after-a'
-Keys 't' 6 'A-3-after-t-educational'
+Keys 't' 10 'A-3-after-t-educational'
 ListCo 'A' | Out-Null
 
 # ---- B: company by XML import
@@ -56,15 +56,17 @@ $have = ListCo 'B'
 
 # ---- C: company by keyboard
 if (-not $have) {
-  Keys '%k' 3 'C-1-alt-k'
-  Keys 'c' 4 'C-2-create'
-  Keys $co 2 'C-3-name'
-  Keys '^a' 6 'C-4-ctrl-a'
+  # EDU mode opens "Select Company" with "Create Company" highlighted
+  Keys '{ENTER}' 5 'C-1-enter-create-company'
+  Keys $co 2 'C-2-name'
+  Keys '^a' 8 'C-3-ctrl-a'
   $have = ListCo 'C'
-  if (-not $have) { Keys '^a' 6 'C-5-ctrl-a-again'; $have = ListCo 'C1' }
-  if (-not $have) { Keys 'y' 6 'C-6-y'; $have = ListCo 'C2' }
-  if (-not $have) { Keys '{ENTER}' 6 'C-7-enter'; $have = ListCo 'C3' }
-  Shot 'C-8-end'
+  $n = 4
+  foreach ($k in @('y', '^a', '{ENTER}', 'y', '{ESC}', 'y')) {
+    if ($have) { break }
+    Keys $k 6 ("C-{0}-{1}" -f $n, ($k -replace '[^a-zA-Z]', '')); $have = ListCo "C$n"; $n++
+  }
+  Shot 'C-9-end'
 }
 Write-Host "== data folder"; Get-ChildItem $data -Recurse -Depth 1 | Select-Object FullName, Length | Format-Table -AutoSize | Out-String -Width 200 | Write-Host
 $folder = Get-ChildItem $data -Directory | Where-Object { $_.Name -match '^\d+$' } | Select-Object -First 1
@@ -74,7 +76,7 @@ Write-Host "company created: $have; company folder: $($folder.Name)"
 Write-Ini $true $folder.Name
 Start-Tally 'D'
 Keys 'a' 4 'D-2-after-a'
-Shot 'D-2b'
+Keys 't' 10 'D-2b-after-t'
 ListCo 'D' | Out-Null
 $tdlQ = '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Function</TYPE><ID>$$NumItems</ID></HEADER><BODY><DESC><FUNCPARAMLIST><PARAM>Ledger</PARAM></FUNCPARAMLIST></DESC></BODY></ENVELOPE>'
 Post 'D-func' $tdlQ | Out-Null
