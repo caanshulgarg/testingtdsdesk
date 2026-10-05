@@ -18,6 +18,7 @@ $fc = 'C:\fcspike'; New-Item -ItemType Directory -Force $fc, "$fc\tmp", "$fc\u2d
 & icacls.exe $rec /grant '*S-1-5-32-545:(OI)(CI)M' /Q | Out-Null
 $resultsFile = Join-Path $out 'results.txt'; Set-Content $resultsFile -Value @() -Encoding UTF8
 $script:fails = 0
+function Say($m) { Write-Host "[$(Get-Date -Format HH:mm:ss)] $m" }
 function Result($step, [bool]$ok, $evidence) {
   $l = '{0} {1}: {2}' -f $(if ($ok) { 'PASS' } else { 'FAIL' }), $step, $evidence
   Write-Host "######## $l"; Add-Content -Path $resultsFile -Value $l -Encoding UTF8
@@ -80,6 +81,7 @@ function Write-TallyIni($path, $data, [int]$port, $tdl, $load) {
 }
 
 # ---- the bridge built from the ref
+Say '---- the bridge built from the ref'
 $setupSrc = Get-ChildItem $env:BRIDGE_DIST -Filter 'FinComBridge-Setup-*.exe' | Select-Object -First 1
 Get-Content (Join-Path $env:BRIDGE_DIST 'bridge-source.txt') | Write-Host
 Write-Host "setup: $($setupSrc.Name) $($setupSrc.Length) bytes SHA256 $((Get-FileHash $setupSrc.FullName).Hash)"
@@ -88,9 +90,10 @@ $tdl = "$fc\FinComRecorder.tdl"; Copy-Item (Join-Path $env:BRIDGE_DIST 'FinComRe
 & icacls.exe $fc /grant '*S-1-5-32-545:(OI)(CI)M' /T /Q | Out-Null
 
 # ---- the second Windows user (not an administrator)
+Say '---- the second Windows user (not an administrator)'
 $u2 = 'fcuser2'
 $chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'; $rng = [Security.Cryptography.RandomNumberGenerator]::Create(); $b = New-Object byte[] 20; $rng.GetBytes($b)
-$pw = (-join ($b | ForEach-Object { $chars[$_ % $chars.Length] })) + 'Aa1!'; Write-Host "::add-mask::$pw"
+$pw = (-join ($b | ForEach-Object { $chars[$_ % $chars.Length] })) + 'Aa1!'  # never printed
 $sec = ConvertTo-SecureString $pw -AsPlainText -Force
 New-LocalUser -Name $u2 -Password $sec -PasswordNeverExpires -AccountNeverExpires -Description 'FinCom round 4 user 2' | Out-Null
 try { Add-LocalGroupMember -Group (Get-LocalGroup -SID 'S-1-5-32-545').Name -Member $u2 } catch {}
@@ -112,15 +115,19 @@ function AsU2([string]$file, [string[]]$argv, [int]$waitMs = 300000) {
 function PsAsU2([string]$script, [string[]]$more = @()) { AsU2 'powershell.exe' (@('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$script`"") + $more) }
 
 # ---- the stub cloud
+Say '---- the stub cloud'
 $stubLog = Join-Path $out 'stub-requests.jsonl'
 $py = (Get-Command python).Source
 $stub = Start-Process -FilePath $py -ArgumentList "`"$PSScriptRoot\stub.py`" 8787 `"$stubLog`"" -PassThru -WindowStyle Hidden
 Start-Sleep 3
 
 # ---- user 1's Tally (9000) with the add-on; a copy of the program for user 2 first (its own tally.ini and port)
+Say '---- user 1''s Tally (9000) with the add-on; a copy of the program for user 2 first (its own tally.ini and port)'
 Get-Process tally -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep 2
 $t2dir = "$fc\tally2"
-& robocopy.exe $dir $t2dir /E /NFL /NDL /NJH /NJS /NP | Out-Null
+Get-Process | Where-Object { $_.Path -like "$dir\*" } | ForEach-Object { Write-Host "  still running from the Tally folder: $($_.Name) $($_.Id)" }
+& robocopy.exe $dir $t2dir /E /R:0 /W:0 /XD logs /NFL /NDL /NJH /NP | Select-Object -Last 8 | ForEach-Object { Write-Host "  robocopy: $_" }
+Write-Host "[$(Get-Date -Format HH:mm:ss)] copy for user 2: robocopy $LASTEXITCODE, tally.exe there: $(Test-Path "$t2dir\tally.exe")"
 & icacls.exe $t2dir /grant '*S-1-5-32-545:(OI)(CI)M' /T /Q | Out-Null
 Remove-Item "$rec\*" -Force -ErrorAction SilentlyContinue
 Write-TallyIni (Join-Path $dir 'tally.ini') $data1 9000 $tdl 100000
@@ -130,6 +137,7 @@ KeysTo 9000 'a' 4; KeysTo 9000 't' 10 '00-tally1'
 AddLedger 9000 $co1
 
 # ---- user 2's own Tally (9001), run as fcuser2: a company made by keys, then started again with it and the add-on
+Say '---- user 2''s own Tally (9001), run as fcuser2: a company made by keys, then started again with it and the add-on'
 $tally2 = $false
 Write-TallyIni "$t2dir\tally.ini" "$fc\u2data" 9001 $null $null
 $t2 = AsU2 "$t2dir\tally.exe" @() 0; $script:tallyPids[9001] = $t2.Id
@@ -155,6 +163,7 @@ if ($up2) {
 Write-Host "== user 2's own Tally with its company and the add-on: $tally2"
 
 # ---- the bridges, each installed by its own Windows user with the real setup, just for me; the settings seeded first
+Say '---- the bridges, each installed by its own Windows user with the real setup, just for me; the settings seeded first'
 # (FinCom's address = the stub, a made-up computer key, the user's own Tally port), as the setup keeps them
 function SeedJson($key, [int]$tport) { (@{ CloudUrl = 'http://127.0.0.1:8787/'; CloudKey = "plain:$key"; TallyPorts = @($tport); FallbackPorts = @($tport) } | ConvertTo-Json -Compress) }
 $h1 = Join-Path $env:LOCALAPPDATA 'TDS Desk Bridge'; New-Item -ItemType Directory -Force $h1 | Out-Null
@@ -218,6 +227,7 @@ function Mark { (StubReqs).Count }
 function PrintNew($from) { (StubLines $from) | ForEach-Object { Write-Host "  $(Ev $_)" } }
 
 # ---- 6a: both bridges run at once, on their own ports, as their own users
+Say '---- 6a: both bridges run at once, on their own ports, as their own users'
 $procs = Get-CimInstance Win32_Process -Filter "Name='FinComBridge.exe'" | ForEach-Object { [pscustomobject]@{ pid = $_.ProcessId; user = (Invoke-CimMethod -InputObject $_ -MethodName GetOwner).User; cmd = $_.CommandLine } }
 $procs | ForEach-Object { Write-Host "  process $($_.pid) as $($_.user): $($_.cmd)" }
 $lis = Get-NetTCPConnection -State Listen -LocalPort 9100..9119 -ErrorAction SilentlyContinue | ForEach-Object { $pp = $_.OwningProcess; [pscustomobject]@{ port = $_.LocalPort; pid = $pp; user = ($procs | Where-Object pid -eq $pp).user } }
@@ -226,6 +236,7 @@ $l1 = $lis | Where-Object { $_.port -eq $B[1].port -and $_.user -eq 'runneradmin
 Result '6a two bridges at once' ([bool]$l1 -and [bool]$l2 -and $B[1].port -ne $B[2].port -and $B[1].id -ne $B[2].id) ("bridge 1 runneradmin on {0} (pid {1}, {2}); bridge 2 {3} on {4} (pid {5}, {6})" -f $B[1].port, $l1.pid, $B[1].id, $u2, $B[2].port, $l2.pid, $B[2].id)
 
 # ---- 6b: the /ping proof: HMAC-SHA256(bridge key, nonce || bridge id || port), only to the bridge's own Windows user
+Say '---- 6b: the /ping proof: HMAC-SHA256(bridge key, nonce || bridge id || port), only to the bridge''s own Windows user'
 function Hmac($key, $msg) { $h = [Security.Cryptography.HMACSHA256]::new([Text.Encoding]::UTF8.GetBytes($key)); (($h.ComputeHash([Text.Encoding]::UTF8.GetBytes($msg)) | ForEach-Object { $_.ToString('x2') }) -join '') }
 function Expect($n, $nonce) { Hmac $B[$n].key ($nonce + $B[$n].id + $B[$n].port) }
 function Ping($port, $nonce) { try { Invoke-RestMethod "http://127.0.0.1:$port/ping?n=$nonce" -TimeoutSec 10 } catch { $null } }
@@ -262,6 +273,7 @@ Snap 'start'
 Start-Sleep 30
 
 # ---- steps 1-5 on user 1's Tally (9000), as round 3
+Say '---- steps 1-5 on user 1''s Tally (9000), as round 3'
 function DayBook($n) { KeysTo 9000 '%g' 3; KeysTo 9000 'Day Book' 2; KeysTo 9000 '{ENTER}' 4; KeysTo 9000 '{F2}' 3; KeysTo 9000 '2-10-2026{ENTER}' 4 "$n-daybook" }
 $before = Vouchers 9000 $co1
 $m = Mark
@@ -317,6 +329,7 @@ $x = @($hit | Where-Object bid -eq $B[1].id)[0]
 Result '5 delete' ([bool]$del -and [bool]$x -and $x.guid -and $x.guid -eq $del.guid) ("Tally deleted mid {0} guid {1}; {2}" -f $del.mid, $del.guid, (Ev $x))
 
 # ---- 6d: user 2's own Tally event (a Receipt on 9001), recorded by user 2's bridge
+Say '---- 6d: user 2''s own Tally event (a Receipt on 9001), recorded by user 2''s bridge'
 if ($tally2) {
   $b2 = Vouchers 9001 $co2
   KeysTo 9001 'v' 4 '30-u2-vouchers'; KeysTo 9001 '{F6}' 3; KeysTo 9001 '{F2}' 3; KeysTo 9001 '2-10-2026{ENTER}' 3
@@ -333,6 +346,7 @@ if ($tally2) {
 Start-Sleep 20; Snap 'end'
 
 # ---- 6c: the beats, 6e: every recorder line attributed to the user whose Tally made it
+Say '---- 6c: the beats, 6e: every recorder line attributed to the user whose Tally made it'
 $reqs = StubReqs
 foreach ($n in 1, 2) {
   $bt = @($reqs | Where-Object { $_.kind -eq 'beat' -and $_.body.bridge.id -eq $B[$n].id })
@@ -349,10 +363,12 @@ $n1l = @($all | Where-Object bid -eq $B[1].id).Count; $n2l = @($all | Where-Obje
 Result '6e attribution' ($wrong.Count -eq 0 -and $n1l -gt 0) ("{0} line(s) from bridge 1 (runneradmin, {1}), {2} from bridge 2 ({3}, {4}); misattributed: {5}{6}" -f $n1l, $co1, $n2l, $u2, $co2, $wrong.Count, $(if ($wrong.Count) { ' e.g. ' + (Ev $wrong[0]) } else { '' }))
 
 # ---- step 6 as one line
+Say '---- step 6 as one line'
 $r6 = @(Get-Content $resultsFile | Where-Object { $_ -match '^(PASS|FAIL) 6[a-e] ' })
 Result '6 two Windows users' (@($r6 | Where-Object { $_ -like 'FAIL*' }).Count -eq 0 -and $r6.Count -eq 5) (($r6 | ForEach-Object { ($_ -split ':')[0] }) -join '; ')
 
 # ---- what is kept: the bridges' logs, install logs, settings without their keys
+Say '---- what is kept: the bridges'' logs, install logs, settings without their keys'
 foreach ($n in 1, 2) {
   $hh = if ($n -eq 1) { $h1 } else { $h2 }; $ib = if ($n -eq 1) { "$env:LOCALAPPDATA\FinCom Bridge" } else { "$prof2\AppData\Local\FinCom Bridge" }
   Copy-Item $B[$n].log (Join-Path $out "bridge$n-full.log") -ErrorAction SilentlyContinue
