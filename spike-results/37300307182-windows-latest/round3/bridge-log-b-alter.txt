@@ -1,4 +1,0 @@
-2026-10-05 11:07:56  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line da2b33c7…): asking Tally by MasterID
-2026-10-05 11:08:00  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line da2b33c7…): asking Tally by type and number (Tally gave no voucher with MasterID 2 on 02-Oct-2026)
-2026-10-05 11:08:00  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
-2026-10-05 11:08:00  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line da2b33c7…): held: Tally gave no voucher with MasterID 2 on 02-Oct-2026; asked by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (sent without its body and GUID; FinCom holds the line until it is resolved)
