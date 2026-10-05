@@ -299,6 +299,12 @@ var methodNames = map[string][2]string{
 
 func liveLimitSec() float64 { return float64(keepNum("RecorderLimitMs", 2000)) / 1000 }
 
+// 2.2.2 (the owner's condition b): a recorder background read: it gives way to a posting, is told its time (the 2 s
+// switch-off) and is stopped HARD at RecorderLimitMs (2000): the bridge stops waiting for Tally then (tally.go)
+func recorderTC(timed func(sec float64)) *TC {
+	return &TC{copier: true, yield: func() bool { return postingGoing() || importsInFlight.Load() > 0 }, timed: timed, limitMs: keepNum("RecorderLimitMs", 2000)}
+}
+
 // under live.mu
 func liveIsOffLocked(method, key string) bool { return live.off[method+"|"+key] != nil }
 
@@ -467,7 +473,7 @@ func liveSourceC(company string, port int) (int, error) {
 	live.mu.Unlock()
 	liveSaveOffsets() // round 2 R2-9
 	took := -1.0
-	tc := &TC{copier: true, yield: func() bool { return postingGoing() || importsInFlight.Load() > 0 }, timed: func(sec float64) { took = sec }}
+	tc := recorderTC(func(sec float64) { took = sec })
 	raw, err := invokeTally(tc, port, sliceRequest(company, form, ym, from), keepNum("RecorderBTimeoutSec", 5)) // R2-1: 5 s
 	if took > liveLimitSec() {
 		liveTurnOff("C", key, company, took)

@@ -39,7 +39,8 @@ func TestSourceCBounded(t *testing.T) {
 	_, _ = companyCheck(fin, zz, f.port)
 	laterBy(t, 2*time.Minute)
 	_, _ = liveSourceC(zz, f.port)
-	if logLines("Source C off: Tally took 5.") != 1 {
+	// 2.2.2: the hard stop at 2 s comes before the request's own limit of 5 s
+	if logLines("Source C off: Tally took 2.0 s") != 1 {
 		t.Fatalf("the request's limit: %s", readText(logFile()))
 	}
 }

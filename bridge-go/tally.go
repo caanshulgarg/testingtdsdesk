@@ -280,6 +280,10 @@ type TC struct {
 	// 2.2.0 (the owner's rule for the recorder's source B): told the wall time from the send to the full answer (or
 	// the failure), the wait for Tally's lock not counted
 	timed func(seconds float64)
+	// 2.2.2 (the owner's condition b): a HARD stop for the recorder's background reads (the entry fetch by MasterID and by
+	// number, source B, source C, the held resolver): the bridge stops waiting after this many milliseconds (a context
+	// deadline from the send). Never for a posting (Import), a person's read or the light company check (they never set it)
+	limitMs int
 }
 
 // round 19 (review finding 1, the owner's rule "reading is prospective only", by any route): a request carrying a period
@@ -417,6 +421,8 @@ var (
 	errBackoff = errors.New("Tally is left alone for now after it did not answer; nothing was sent")
 	// the connection closed before Tally's whole answer came (a message box mid-save, Tally closing)
 	errClosed = errors.New("The underlying connection was closed: An unexpected error occurred on a receive.")
+	// 2.2.2: a recorder read stopped at its hard limit (TC.limitMs)
+	errRecorderStop = errors.New("Tally took longer than the recorder's limit; the bridge stopped waiting")
 )
 
 // Tally took this very request and did not answer it (timed out, or the answer stopped part way): only this counts as
@@ -811,10 +817,22 @@ func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 			return praw, nil
 		}
 	}
+	rctx, stopAt := ctx, time.Duration(0)
+	if tc.limitMs > 0 && tc.copier && !tc.person && !isImportRequest(x) && !isPostingRequest(x) {
+		stopAt = time.Duration(tc.limitMs) * time.Millisecond
+		var stop context.CancelFunc
+		rctx, stop = context.WithTimeout(ctx, stopAt)
+		defer stop()
+	}
 	t0 := time.Now()
 	setInflight(port, true)
-	r, err := tallyRaw(ctx, port, x, timeoutSec)
+	r, err := tallyRaw(rctx, port, x, timeoutSec)
 	setInflight(port, false)
+	if stopAt > 0 && err != nil && ctx.Err() == nil && errors.Is(rctx.Err(), context.DeadlineExceeded) {
+		// the hard stop: not Tally hanging (no busy spell, no small check before the next request); the caller's 2 s rule
+		// (tc.timed) switches the read off
+		err = fmt.Errorf("%w (%g s)", errRecorderStop, stopAt.Seconds())
+	}
 	if tc.timed != nil && !errors.Is(err, errPreempted) {
 		tc.timed(time.Since(t0).Seconds())
 	}
