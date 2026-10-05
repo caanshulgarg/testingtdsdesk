@@ -33,6 +33,7 @@ function Rec($step) {
 $vlistXml = '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCV</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCV" ISMODIFY="No"><TYPE>Voucher</TYPE><FETCH>GUID, MASTERID, ALTERID, DATE, VOUCHERTYPENAME, VOUCHERNUMBER, ISCANCELLED, NARRATION, AMOUNT</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>'
 function VList($step) {
   $x = Post "vouchers-$step" $vlistXml "vouchers-$step.xml"
+  if (-not $x) { Write-Host "   (no answer: is Tally still running? $([bool](Get-Process tally -ErrorAction SilentlyContinue)))"; return }
   [regex]::Matches($x, '(?s)<VOUCHER [^>]*>.*?</VOUCHER>') | ForEach-Object {
     $v = $_.Value
     $f = 'MASTERID', 'ALTERID', 'VOUCHERNUMBER', 'DATE', 'VOUCHERTYPENAME', 'ISCANCELLED', 'GUID' | ForEach-Object { $m = [regex]::Match($v, "<$_[^>]*>([^<]*)</$_>"); "$_=$($m.Groups[1].Value)" }
@@ -62,6 +63,10 @@ function Receipt($no, $amt) {
   $id = [regex]::Match($x, '<LASTVCHID>(\d+)</LASTVCHID>').Groups[1].Value
   Write-Host "Receipt $no -> LASTVCHID $id"; return [int]$id
 }
+# Receipt numbering is Automatic by default, and the import then ignores VOUCHERNUMBER (round 2 got 1 and 2):
+# let the number through with "Automatic (Manual Override)"
+Post 'vouchertype Receipt numbering' ('<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>All Masters</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>' + $co + '</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA><TALLYMESSAGE xmlns:UDF="TallyUDF"><VOUCHERTYPE NAME="Receipt" ACTION="Alter"><NAME.LIST><NAME>Receipt</NAME></NAME.LIST><NUMBERINGMETHOD>Automatic (Manual Override)</NUMBERINGMETHOD></VOUCHERTYPE></TALLYMESSAGE></REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>') | Out-Null
+Post 'vouchertype Receipt now' ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCVT</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCVT" ISMODIFY="No"><TYPE>VoucherType</TYPE><FETCH>Name, NumberingMethod</FETCH><FILTERS>FCVTR</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="FCVTR">$Name = "Receipt"</SYSTEM></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') | Out-Null
 $mid212 = Receipt 212 '500.00'
 $mid213 = Receipt 213 '600.00'
 VList 'after-import'
@@ -73,9 +78,10 @@ foreach ($a in $FetchAsks) {
   $m = $mid212 + $a.mid
   $xml = $a.xml -replace '__MID__', "$m"
   $t = Post "fetch $($a.n)" $xml "fetch-$($a.n).xml"
-  $n = ([regex]::Matches($t, '<VOUCHER[ >]')).Count
+  $raw = ([regex]::Matches($t, '<VOUCHER[ >]')).Count
+  $n = ([regex]::Matches($t, '<VOUCHER [^>]*>')).Count
   $ids = ([regex]::Matches($t, '<(MASTERID|VOUCHERNUMBER|DATE|VOUCHERTYPENAME)[^>]*>[^<]*') | ForEach-Object { $_.Value }) -join ' '
-  Write-Host "FETCH $($a.n). $($a.what) [MasterID asked: $m] -> vouchers: $n   $ids"
+  Write-Host "FETCH $($a.n). $($a.what) [MasterID asked: $m] -> vouchers: $n (the diagnostic script's own count: $raw, which also counts CMPINFO's <VOUCHER> tag)   $ids"
 }
 
 # ---- 3. on screen
@@ -90,11 +96,15 @@ Keys '700{ENTER}' 3 '07-amount'
 Keys '^a' 5 '08-saved'
 Rec 'a-create'
 VList 'a'
-# (b) alter it: Esc to the Gateway, Day Book (K), F2 date, Enter on the voucher, change the amount
-Keys '{ESC}' 3 '09-esc'
-Keys 'k' 4 '10-daybook'
-Keys '{F2}' 3 ''
-Keys '2-10-2026{ENTER}' 4 '11-daybook-date'
+# (b) alter it: Go To (Alt+G) Day Book, F2 date, last row, Enter, change the amount
+function DayBook($n) {
+  Keys '%g' 3 "$n-goto"
+  Keys 'Day Book' 2 ''
+  Keys '{ENTER}' 4 "$n-daybook"
+  Keys '{F2}' 3 ''
+  Keys '2-10-2026{ENTER}' 4 "$n-daybook-2oct"
+}
+DayBook '09'
 Keys '{END}' 2 '12-last-row'
 Keys '{ENTER}' 4 '13-open'
 Keys '{ENTER}{ENTER}' 2 '14-to-amount'
@@ -102,19 +112,20 @@ Keys '800{ENTER}' 2 '15-new-amount'
 Keys '^a' 5 '16-altered'
 Rec 'b-alter'
 VList 'b'
-# (c) duplicate (Alt+2) the selected voucher and save
+# (c) duplicate (Alt+2) the last voucher of the day and save
+Keys '{END}' 2 '17a-row'
 Keys '%2' 4 '17-duplicate'
 Keys '^a' 5 '18-dup-saved'
 Rec 'c-duplicate'
 VList 'c'
-# (d) cancel one (Alt+X)
-Keys '{ESC}' 2 '19-back'
+# (d) cancel the first voucher of the day (Alt+X)
+Keys '{HOME}' 2 '19-first-row'
 Keys '%x' 3 '20-cancel'
 Keys 'y' 4 '21-cancel-yes'
 Rec 'd-cancel'
 VList 'd'
-# (e) delete one (Alt+D)
-Keys '{HOME}' 2 ''
+# (e) delete the last voucher of the day (Alt+D)
+Keys '{END}' 2 '22a-last-row'
 Keys '%d' 3 '22-delete'
 Keys 'y' 4 '23-delete-yes'
 Rec 'e-delete'
