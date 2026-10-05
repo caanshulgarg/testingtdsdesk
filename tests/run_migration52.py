@@ -18,6 +18,12 @@ PostgreSQL (pg_stand, port 30520; never a real database), built 32 -> ... -> 50 
 THE DECISION ON 52: (a) a genuine alteration in Tally to another date and number (the body Tally's own under the line's GUID,
   naming what the line names) is applied, both days' cache right; (b) 2.2.0's September-under-October line (the body the
   source's content) stays held; (c) a body whose own GUID is not the line's: held.
+THE REVIEW OF 52: H (S1) a FinCom short line whose body (built from the posting) has the posted number while Tally numbered it
+  otherwise: applied, "FinCom posting ... matched" as in 51; M1 (S2) an intermediate altered line without a body that changed
+  the number, held, is replaced by the later applied line of the same GUID (and a Day Book bringing a newer version makes it
+  'stale'); M2 (S3) a late old line (AlterID below the copy's) 'stale' as in 51; M3 (S4) a delete carrying the entry's newer
+  number / date while the copy is behind (its AlterID above the copy's) applied as in 51, held when not above; M4 (S5) a true
+  duplicate whose entry was renumbered later stays 'duplicate' under the correction; L1 (S6) types compared in any case.
 RED: before the file exists it stops at the first check; with an empty file the checks of the rule fail."""
 import os, re, sys, json, hashlib, subprocess
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -124,7 +130,12 @@ try:
     LT = jl("late7", "created", G(0x6347), "25415", 51987, "FA/ELEC/030", "2026-10-01")  # received on 06-Oct: beyond the correction
     got = states(apply([L5, L7, T1, T2, U1, LT]))
     ok([s for s, _ in got] == ["duplicate"] * 6, "51: lines 5 and 7 (and the others) 'duplicate' against September's journals (%s)" % [s for s, _ in got])
+    # review M4 (S5): a true duplicate before 52, its entry renumbered later (a Day Book at a higher AlterID)
+    day("2026-09-15", [JV(G(0x7005), 100, "E1", "2026-09-15", "P5")], LN(G(0x7005), "P5", 50))
+    ok(states(apply([jl("s5", "altered", G(0x7005), "28677", 100, "E1", "2026-09-15")]))[0][0] == "duplicate", "S5 before 52: a true duplicate")
+    day("2026-09-15", [JV(G(0x7005), 150, "E2", "2026-09-15", "P5")], LN(G(0x7005), "P5", 50))
     db.sql("update tally_recorder_lines set received_at = '2026-10-05 08:00:00+05:30'; update tally_recorder_lines set received_at = '2026-10-06 09:00:00+05:30' where line_id = 'late7'")
+    s5pre = row("s5")
     pre = {k: row(k) for k in ("l5", "l7", "t1", "t2", "u1", "late7")}
     books_ok("before 52")
     print("== migration 52")
@@ -158,11 +169,12 @@ try:
     ok((now["u1"]["state"], now["u1"]["why"]) == ("held", WU), "an unnumbered line of another date: held (%s)" % now["u1"]["why"])
     ok(all(now[k]["bm"] == pre[k]["bm"] and now[k]["pm"] == pre[k]["pm"] and now[k]["rel"] == "" for k in pre), "body and payload unchanged; released_at untouched")
     ok(all(now[k]["state"] == "duplicate" and now[k]["xm"] == pre[k]["xm"] for k in ("t1", "t2", "late7")), "the true duplicate, the empty-number one of the same type and date, and the row received on 06-Oct stay 'duplicate', untouched")
+    ok(row("s5")["state"] == "duplicate" and row("s5")["xm"] == s5pre["xm"], "M4 (S5): a true duplicate whose entry was renumbered later (AlterID 150 above the line's 100) stays 'duplicate', untouched (%s)" % (sw("s5"),))
     ok(db.one("select count(*) from tally_recorder_lines where held_why like 'the add-on named entry %'") == "3", "exactly three rows changed (lines 5, 7 and the unnumbered one)")
     books_ok("after 52")
     print("== the rule on new lines")
     got = states(apply([jl("n1", "created", G(0x6345), "25413", 51985, "FA/2026-27/141", "2026-10-02"),
-                        jl("n-del", "deleted", G(0x6346), "25414", 52005, "FA/ELEC/025", "2026-10-01"),
+                        jl("n-del", "deleted", G(0x6346), "25414", 51986, "FA/ELEC/025", "2026-10-01"),     # its AlterID not above the copy's
                         jl("n-ph", "created", PH, "25415", 0, "FA/ELEC/026", "2026-10-01"),
                         dict(jl("n-body", "altered", G(0x6346), "25414", 51999, "FA/ELEC/024", "2026-10-01"), **jbody(G(0x6346), 51999, "FA/ELEC/019", "2026-09-01", "Asset B", 250)),     # 2.2.0: September's content, the line says October
                         dict(jl("n-body2", "altered", G(0x6347), "25415", 51999, "FA/ELEC/020", "2026-09-01"), **jbody(G(0x6347), 51999, "FA/ELEC/032", "2026-10-01", "Asset C", 350))]))
@@ -214,6 +226,31 @@ try:
        and db.one("select amount from tally_lines where book_id = %s and guid = %s and ledger = 'Asset J'" % (q(B), q(G(25800)))) == "1100",
        "altered later in Tally, a full altered line with its body: applied as an alteration (AlterID 52101, the new amount), never 'duplicate' or 'short' (%s)" % got)
     books_ok("FinCom posting altered")
+    print("== the review of 52")
+    J = "00000052-0000-0000-0000-0000000000a1"
+    db.sql("insert into tally_post_jobs (id, firm_id, client_id, company, device_id, payload, n, status, results, taken_at) values (%s, %s, 'c1', 'GARG SHEKHAR & COMPANY', %s, '{\"vouchers\": []}', 1, 'done', '[]', now());"
+           "insert into tally_post_ids (firm_id, client_id, fincom_id, job_id, entry_id, live, accepted_at) values (%s, 'c1', 'FC-S1', %s, 'eS1', true, now())" % (q(J), q(F), q(D1), q(F), q(J)))
+    got = states(apply([dict(jl("s1", "created", G(0x7001), "28673", 200, "TALLY/9", "2026-10-04", fid="FC-S1", short=True), **jbody(G(0x7001), 200, "FC/1", "2026-10-04", "P1", 10, fid="FC-S1", narr="TDSDesk:FC-S1"))]))
+    ok(got == [("applied", "FinCom posting FC-S1 matched")] and vch(G(0x7001)).get("alter_id") == "200", "H (S1): a short line, Tally's number TALLY/9, the posted body's FC/1: applied, matched, as in 51 (%s)" % got)
+    day("2026-09-10", [JV(G(0x7002), 100, "N1", "2026-09-10", "P2")], LN(G(0x7002), "P2", 20))
+    got = states(apply([jl("a1", "altered", G(0x7002), "28674", 110, "N2", "2026-09-10")]))
+    ok(got[0][0] == "held", "M1 (S2): an intermediate altered line without a body, N1 -> N2 (AlterID 110 above the copy's 100): held (%s)" % got)
+    got = states(apply([dict(jl("a2", "altered", G(0x7002), "28674", 120, "N3", "2026-09-10"), **jbody(G(0x7002), 120, "N3", "2026-09-10", "P2", 25))]))
+    ok(got[0][0] == "applied" and sw("a1") == ("replaced", REPLACED % row("a2")["id"]), "M1 (S2): the later line of that GUID applied (N3, AlterID 120): the intermediate one 'replaced' (%s)" % (sw("a1"),))
+    day("2026-09-11", [JV(G(0x7008), 100, "Q1", "2026-09-11", "P8")], LN(G(0x7008), "P8", 80))
+    apply([jl("a3", "altered", G(0x7008), "28680", 110, "Q2", "2026-09-11")])
+    day("2026-09-11", [JV(G(0x7008), 120, "Q3", "2026-09-11", "P8")], LN(G(0x7008), "P8", 85))
+    ok(sw("a3")[0] == "stale", "M1: such a line when a Day Book brings a newer version (AlterID 120): 'stale' (%s)" % (sw("a3"),))
+    day("2026-09-12", [JV(G(0x7003), 130, "M2", "2026-09-12", "P3")], LN(G(0x7003), "P3", 30))
+    got = states(apply([jl("s3", "altered", G(0x7003), "28675", 120, "M1", "2026-09-12")]))
+    ok(got == [("stale", "AlterID 120 is older than the 130 held")], "M2 (S3): a late old line (AlterID 120 below the copy's 130, another number): 'stale' as in 51 (%s)" % got)
+    day("2026-09-13", [JV(G(0x7004), 100, "D1", "2026-09-13", "P4")], LN(G(0x7004), "P4", 40))
+    got = states(apply([jl("s4", "deleted", G(0x7004), "28676", 140, "D2", "2026-09-14")]))
+    ok(got[0][0] == "applied" and vch(G(0x7004)).get("deleted") == "t", "M3 (S4): a delete carrying the entry's newer number and date (AlterID 140 above the copy's 100): applied as in 51 (%s)" % got)
+    day("2026-09-16", [JV(G(0x7006), 100, "C1", "2026-09-16", "P6")], LN(G(0x7006), "P6", 60))
+    got = states(apply([jl("s6", "altered", G(0x7006), "28678", 100, "C1", "2026-09-16", vch_type="journal ")]))
+    ok(got[0][0] == "duplicate", "L1 (S6): type 'journal ' against 'Journal': the same entry, 'duplicate' (%s)" % got)
+    books_ok("the review of 52")
     print("\n  md5(prosrc) of 52's functions (after applying on the stand):")
     for k, v in md5s.items(): print("    %-60s %s" % (k, v))
 finally:

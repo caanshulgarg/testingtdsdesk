@@ -29,6 +29,11 @@
 --      same text the function gives when the row runs again, so it is not rewritten); body, payload, released_at untouched. On
 --      staging: lines 5 and 7. A true duplicate (same type, date, number) and an empty-number line against an empty-number entry
 --      of the same type and date keep 'duplicate'.
+--   REVIEW of 52: H a FinCom short line's number (its body built from the posting) is not compared; M1 / M2 the copy is compared
+--   only when not newer than the line (a late old line 'stale' as in 51), and a held intermediate change of an entry is replaced
+--   by its later version; M3 a delete / cancel above the copy's AlterID is applied as in 51 (50's held-delete loop is 51's text
+--   again); M4 the correction only while the entry is live and not newer than the row; L1 types in any case; L2 numbers cut to
+--   60 on both sides.
 --   Function replaced: tally_recorder_line (51's), same arguments, security definer, search_path = public, pg_temp, granted to
 --   nobody. Nothing else is touched. Tested on pg_stand only: tests/run_migration52.py.
 
@@ -63,7 +68,7 @@ declare b tally_books%rowtype; rid bigint := p_row; ev text := left(btrim(coales
   -- 52: the entry the line names (type, number, date) against the copy's entry at its GUID (cx_*) and the entry sent with it (b_*);
   -- the entry an applied line brought (a_*)
   lw text; cx_found boolean := false; cx_t text; cx_n text; cx_d date; bv jsonb; b_t text; b_n text; b_d date; dif_c boolean := false; dif_b boolean := false;
-  a_t text; a_n text; a_d date;
+  a_t text; a_n text; a_d date; cx_a bigint; sh boolean := false;
 begin
   select * into b from tally_books where book_id = p_book;
   if b.book_id is null then raise exception 'no such book'; end if;
@@ -92,16 +97,24 @@ begin
   -- duplicating another carries the source's GUID, MasterID and AlterID, all consistent with each other
   lw := concat_ws(' ', lt, lno, 'of ' || to_char(vd, 'DD-Mon-YYYY'));
   if og is not null and not ph and ev in ('created', 'altered', 'imported', 'deleted', 'cancelled') then
-    select true, nullif(btrim(v.vtype), ''), nullif(btrim(v.vno), ''), v.day into cx_found, cx_t, cx_n, cx_d from tally_vouchers v where v.book_id = p_book and v.guid = og;
+    select true, nullif(btrim(v.vtype), ''), nullif(left(btrim(v.vno), 60), ''), v.day, coalesce(v.alter_id, 0) into cx_found, cx_t, cx_n, cx_d, cx_a from tally_vouchers v where v.book_id = p_book and v.guid = og;
     cx_found := coalesce(cx_found, false);
     -- the decision on 52: a line WITH a body (Tally's entry under the line's own GUID, naming what the line names) is the
-    -- alteration of that GUID, whatever date or number the copy had; only a line without one is checked against the copy
-    dif_c := cx_found and not hb and ((lt is not null and cx_t is not null and lt <> cx_t) or (vd is not null and cx_d is not null and vd <> cx_d) or (lno is not null and cx_n is not null and lno <> cx_n));
+    -- alteration of that GUID, whatever date or number the copy had; only a line without one is checked against the copy.
+    -- Review of 52 (M1, M2, M3): only when the copy is not newer than the line (a late old line is 'stale' as in 51; an
+    -- intermediate change is replaced by the later one); a delete / cancel only when its AlterID is not above the copy's (one
+    -- above carries the entry's newer number / date: applied as in 51). L1: types in any case; L2: numbers cut as stored (60)
+    dif_c := cx_found and not hb
+             and case when ev in ('deleted', 'cancelled') then alt is null or alt <= cx_a else alt is null or alt >= cx_a end
+             and ((lt is not null and cx_t is not null and lower(lt) <> lower(cx_t)) or (vd is not null and cx_d is not null and vd <> cx_d) or (lno is not null and cx_n is not null and lno <> cx_n));
   end if;
   if hb then
     select x into bv from jsonb_array_elements(p_line->'vouchers') x where x->>'guid' = og limit 1;
-    b_t := nullif(btrim(coalesce(bv->>'type', '')), ''); b_n := nullif(btrim(coalesce(bv->>'no', '')), ''); b_d := tally_d8(replace(coalesce(bv->>'day', ''), '-', ''));
-    dif_b := (lt is not null and b_t is not null and lt <> b_t) or (vd is not null and b_d is not null and vd <> b_d) or (lno is not null and b_n is not null and lno <> b_n);
+    b_t := nullif(btrim(coalesce(bv->>'type', '')), ''); b_n := nullif(left(btrim(coalesce(bv->>'no', '')), 60), ''); b_d := tally_d8(replace(coalesce(bv->>'day', ''), '-', ''));
+    -- review of 52 (H): a FinCom short line's body is built from the posting, with the POSTED number, while Tally numbers the
+    -- entry itself: its number is not compared (type and date are)
+    sh := coalesce(lf, nullif(rp->>'fid', '')) is not null and 'true' in (lower(coalesce(p_line->>'short', '')), lower(coalesce(rp->>'short', '')));
+    dif_b := (lt is not null and b_t is not null and lower(lt) <> lower(b_t)) or (vd is not null and b_d is not null and vd <> b_d) or (not sh and lno is not null and b_n is not null and lno <> b_n);
   end if;
   -- 50 (review M1): the company's GUID prefix (the placeholder's, else the line's company GUID; never guessed) and, for a line
   -- without its entry's real GUID, the GUID its MasterID makes: "<company GUID>-<MasterID in 8 hex digits>"
@@ -324,9 +337,9 @@ begin
     -- after the line came, or a later line of that entry applied
     if stt = 'held' and ev in ('created', 'altered', 'imported') and (og is null or ph) and not mm then     -- 51: never for a line whose ids did not belong together
       if dg is not null then
-        select v.guid, coalesce(v.alter_id, 0), v.day, nullif(btrim(v.vtype), ''), nullif(btrim(v.vno), '') into d_hit, d_alt, d_day, cx_t, cx_n from tally_vouchers v where v.book_id = p_book and v.guid = dg and v.deleted_at is null;
+        select v.guid, coalesce(v.alter_id, 0), v.day, nullif(btrim(v.vtype), ''), nullif(left(btrim(v.vno), 60), '') into d_hit, d_alt, d_day, cx_t, cx_n from tally_vouchers v where v.book_id = p_book and v.guid = dg and v.deleted_at is null;
         -- 52: the entry its MasterID makes is another entry (type, date or number differ): never a duplicate of it
-        if d_hit is not null and ((lt is not null and cx_t is not null and lt <> cx_t) or (vd is not null and d_day is not null and vd <> d_day) or (lno is not null and cx_n is not null and lno <> cx_n)) then
+        if d_hit is not null and ((lt is not null and cx_t is not null and lower(lt) <> lower(cx_t)) or (vd is not null and d_day is not null and vd <> d_day) or (lno is not null and cx_n is not null and lno <> cx_n)) then
           wy := format('the add-on named entry %s, but GUID %s is %s in the copy; held until FinCom Bridge sends this entry as Tally gives it', lw, d_hit,
                        concat_ws(' ', cx_t, cx_n, 'of ' || to_char(d_day, 'DD-Mon-YYYY'))) || coalesce('; ' || hw, '');
           d_hit := null;
@@ -345,7 +358,7 @@ begin
     end if;
     if stt = 'applied' and ev in ('created', 'altered', 'imported') and og is not null and not ph then
       -- 52: the entry this line brought
-      a_t := coalesce(nullif(btrim(coalesce(vs->0->>'type', '')), ''), lt); a_n := coalesce(nullif(btrim(coalesce(vs->0->>'no', '')), ''), lno);
+      a_t := coalesce(nullif(btrim(coalesce(vs->0->>'type', '')), ''), lt); a_n := coalesce(nullif(left(btrim(coalesce(vs->0->>'no', '')), 60), ''), lno);
       a_d := coalesce(tally_d8(replace(coalesce(vs->0->>'day', ''), '-', '')), vd);
       -- 50: a line that entered its entry replaces the held lines it stands for: the same GUID at an AlterID not above its own;
       -- the placeholder / no GUID by the GUID its MasterID makes; with no MasterID, the same type, number and date under the same
@@ -362,7 +375,10 @@ begin
                               and (case when coalesce(r.master_id, '') ~ '^[0-9]{1,10}$' then r.master_id::bigint else 0 end) between 1 and 4294967295
                               and lower(right(r.object_guid, 8)) <> lpad(to_hex(case when coalesce(r.master_id, '') ~ '^[0-9]{1,10}$' then r.master_id::bigint else 0 end), 8, '0'), false)
          -- 52: by GUID or MasterID only a held line naming this same entry (type, date, number where both have one)
-         and ((not ((nullif(btrim(r.vch_type), '') is not null and a_t is not null and btrim(r.vch_type) <> a_t) or (r.vch_date is not null and a_d is not null and r.vch_date <> a_d) or (nullif(btrim(r.vch_no), '') is not null and a_n is not null and btrim(r.vch_no) <> a_n)) and ((r.object_guid = og and coalesce(r.alter_id, 0) <= coalesce(alt, 0))
+         -- review of 52 (M1): except a held intermediate change of this entry (its AlterID above the copy's before this line and
+         -- below this line's): the later version replaces it
+         and ((not (((nullif(btrim(r.vch_type), '') is not null and a_t is not null and lower(btrim(r.vch_type)) <> lower(a_t)) or (r.vch_date is not null and a_d is not null and r.vch_date <> a_d) or (nullif(btrim(r.vch_no), '') is not null and a_n is not null and left(btrim(r.vch_no), 60) <> a_n)) and not (coalesce(r.alter_id, 0) > coalesce(c_alter, 0) and coalesce(r.alter_id, 0) < coalesce(alt, 0)))
+               and ((r.object_guid = og and coalesce(r.alter_id, 0) <= coalesce(alt, 0))
            or ((r.object_guid is null or r.object_guid ~ '-0{8}$')
                and case when (case when coalesce(r.master_id, '') ~ '^[0-9]{1,10}$' then r.master_id::bigint else 0 end) between 1 and 4294967295
                         then coalesce(substring(r.object_guid from '^(.+)-0{8}$'), nullif(r.company_guid, '')) || '-' || lpad(to_hex(r.master_id::bigint), 8, '0') = og
@@ -374,26 +390,24 @@ begin
            -- 52: a numbered held line whose stored GUID is another entry in the copy (another type, date or number): by its own type,
            -- number and date under the same company, when this entry is the ONE live entry of the company that fits (50's rule)
            or (r.object_guid is not null and r.object_guid !~ '-0{8}$' and r.object_guid <> og and nullif(btrim(r.vch_no), '') is not null
-               and btrim(r.vch_type) = a_t and btrim(r.vch_no) = a_n and r.vch_date = a_d
+               and lower(btrim(r.vch_type)) = lower(a_t) and left(btrim(r.vch_no), 60) = a_n and r.vch_date = a_d
                and exists (select 1 from tally_vouchers c where c.book_id = p_book and c.guid = r.object_guid
-                            and ((nullif(btrim(c.vtype), '') is not null and btrim(c.vtype) <> btrim(r.vch_type)) or (c.day is not null and c.day <> r.vch_date)
-                                 or (nullif(btrim(c.vno), '') is not null and btrim(c.vno) <> btrim(r.vch_no))))
+                            and ((nullif(btrim(c.vtype), '') is not null and lower(btrim(c.vtype)) <> lower(btrim(r.vch_type))) or (c.day is not null and c.day <> r.vch_date)
+                                 or (nullif(btrim(c.vno), '') is not null and left(btrim(c.vno), 60) <> left(btrim(r.vch_no), 60))))
                and lower(coalesce(nullif(r.company_guid, ''), substring(r.object_guid from '^(.+)-[0-9A-Fa-f]{8}$'))) = lower(substring(og from '^(.+)-[0-9A-Fa-f]{8}$'))
-               and (select count(*) from tally_vouchers v where v.book_id = p_book and v.day = a_d and v.vtype = a_t and v.vno = a_n
+               and (select count(*) from tally_vouchers v where v.book_id = p_book and v.day = a_d and lower(btrim(v.vtype)) = lower(a_t) and left(btrim(v.vno), 60) = a_n
                       and v.deleted_at is null and v.guid like substring(og from '^(.+)-[0-9A-Fa-f]{8}$') || '-%' and v.guid !~ '-0{8}$') = 1)
            -- 52: an unnumbered one (no number to find it by): besides its ":resolved" line, only by the GUID its MasterID makes under its
            -- company, naming this same entry
            or (r.object_guid is not null and r.object_guid !~ '-0{8}$' and nullif(btrim(r.vch_no), '') is null and nullif(r.company_guid, '') is not null
                and (case when coalesce(r.master_id, '') ~ '^[0-9]{1,10}$' then r.master_id::bigint else 0 end) between 1 and 4294967295
                and lower(r.company_guid) || '-' || lpad(to_hex(case when coalesce(r.master_id, '') ~ '^[0-9]{1,10}$' then r.master_id::bigint else 0 end), 8, '0') = lower(og)
-               and not ((nullif(btrim(r.vch_type), '') is not null and a_t is not null and btrim(r.vch_type) <> a_t) or (r.vch_date is not null and a_d is not null and r.vch_date <> a_d) or (nullif(btrim(r.vch_no), '') is not null and a_n is not null and btrim(r.vch_no) <> a_n))))));
+               and not ((nullif(btrim(r.vch_type), '') is not null and a_t is not null and lower(btrim(r.vch_type)) <> lower(a_t)) or (r.vch_date is not null and a_d is not null and r.vch_date <> a_d) or (nullif(btrim(r.vch_no), '') is not null and a_n is not null and left(btrim(r.vch_no), 60) <> a_n))))));
       -- 50 (review H1): the entry is in the copy now: a delete or cancel of it held "not in FinCom's copy yet" at a higher AlterID
       -- (it came first, from another computer) is applied with it, so the entry is never live while Tally has it gone
       for hd in select r.id, r.event, r.alter_id, r.pc from tally_recorder_lines r
                  where r.book_id = p_book and r.state = 'held' and r.object_guid = og and r.event in ('deleted', 'cancelled')
-                   and r.alter_id > coalesce(alt, 0) and coalesce(r.held_why, '') not like 'month locked%'
-                   and not ((nullif(btrim(r.vch_type), '') is not null and a_t is not null and btrim(r.vch_type) <> a_t) or (r.vch_date is not null and a_d is not null and r.vch_date <> a_d) or (nullif(btrim(r.vch_no), '') is not null and a_n is not null and btrim(r.vch_no) <> a_n))     -- 52: never a delete / cancel naming another entry
-                 order by r.alter_id, r.id loop
+                   and r.alter_id > coalesce(alt, 0) and coalesce(r.held_why, '') not like 'month locked%' order by r.alter_id, r.id loop
         res2 := tally_ingest_delete(p_book, og, hd.alter_id, hd.event = 'cancelled', 'recorder ' || coalesce(hd.pc, ''));
         twin := null;
         select a.id into twin from tally_recorder_lines a where a.book_id = p_book and a.object_guid = og and a.alter_id = hd.alter_id and a.event = hd.event and a.state = 'applied' order by a.id limit 1;
@@ -443,13 +457,16 @@ update public.tally_recorder_lines r set state = 'held',
        held_why = format('the add-on named entry %s, but GUID %s is %s in the copy; held until FinCom Bridge sends this entry as Tally gives it',
                          concat_ws(' ', nullif(left(btrim(coalesce(r.payload->>'vch_type', '')), 60), ''), nullif(left(btrim(coalesce(r.payload->>'vch_no', '')), 60), ''),
                                    'of ' || to_char(tally_d8(replace(coalesce(r.payload->>'vch_date', ''), '-', '')), 'DD-Mon-YYYY')),
-                         v.guid, concat_ws(' ', nullif(btrim(v.vtype), ''), nullif(btrim(v.vno), ''), 'of ' || to_char(v.day, 'DD-Mon-YYYY')))
+                         v.guid, concat_ws(' ', nullif(btrim(v.vtype), ''), nullif(left(btrim(v.vno), 60), ''), 'of ' || to_char(v.day, 'DD-Mon-YYYY')))
   from public.tally_vouchers v
  where v.book_id = r.book_id and v.guid = r.object_guid
    and r.state = 'duplicate' and r.event in ('created', 'altered', 'imported') and jsonb_typeof(r.payload) = 'object' and r.object_guid !~ '-0{8}$'
    and r.received_at < timestamptz '2026-10-06 00:00:00+05:30'     -- bounded to the rows marked on or before 05-Oct-2026 (India time)
-   and ((nullif(btrim(coalesce(r.payload->>'vch_type', '')), '') is not null and nullif(btrim(v.vtype), '') is not null and btrim(r.payload->>'vch_type') <> btrim(v.vtype))
+   -- review of 52 (M4): only while the copy's entry is live and not newer than the line (a true duplicate whose entry changed later
+   -- is not a wrong verdict)
+   and v.deleted_at is null and coalesce(r.alter_id, 0) >= coalesce(v.alter_id, 0)
+   and ((nullif(btrim(coalesce(r.payload->>'vch_type', '')), '') is not null and nullif(btrim(v.vtype), '') is not null and lower(btrim(r.payload->>'vch_type')) <> lower(btrim(v.vtype)))
         or (tally_d8(replace(coalesce(r.payload->>'vch_date', ''), '-', '')) is not null and v.day is not null and tally_d8(replace(coalesce(r.payload->>'vch_date', ''), '-', '')) <> v.day)
-        or (nullif(btrim(coalesce(r.payload->>'vch_no', '')), '') is not null and nullif(btrim(v.vno), '') is not null and btrim(r.payload->>'vch_no') <> btrim(v.vno)));
+        or (nullif(btrim(coalesce(r.payload->>'vch_no', '')), '') is not null and nullif(btrim(v.vno), '') is not null and left(btrim(r.payload->>'vch_no'), 60) <> left(btrim(v.vno), 60)));
 
 commit;
