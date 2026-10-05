@@ -1,6 +1,6 @@
 {
   "allowlist": {
-    "hash": "60f112b02d74a18ec2e2e54f8476d3eab755961444e2774686708aac9505fd10",
+    "hash": "532723d2ee79370d813f5cab2e2a17380f7381d46f7076eef4a3cc52e1d8b1dc",
     "measured": false
   },
   "autoUpdate": true,
@@ -91,5 +91,5 @@
   "tallyState": "open",
   "trialTools": false,
   "updating": false,
-  "version": "2.2.0"
+  "version": "2.2.1"
 }

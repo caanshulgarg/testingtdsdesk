@@ -547,7 +547,7 @@ func TestAddonAnyCompany(t *testing.T) {
 
 // --- C, D: the version, and the sheets name no company
 func TestVersionAndSheets2110(t *testing.T) {
-	if BridgeVersion != "2.2.0" { // 2.2.0 (round 20 of the plan): the live recorder
+	if BridgeVersion != "2.2.1" { // 2.2.1 (the NWS144 result): a new entry arrives as created
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	for _, f := range []string{"../docs/bridge-2.1.10-test-sheet.txt", "../docs/recorder-trial-sheet.txt"} {

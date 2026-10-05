@@ -5,7 +5,7 @@
     "mode": "main",
     "runMode": "service",
     "user": "owner",
-    "version": "2.2.0"
+    "version": "2.2.1"
   },
   "company": "ZZ TEST",
   "company_guid": "co-guid-1",
@@ -31,6 +31,7 @@
       "narration": "Rent for October",
       "object_guid": "c1d2e3f4-0001",
       "pc": "NWS144",
+      "received_at": "2026-10-04T10:20:00+05:30",
       "save_ms": 1000,
       "saved_at": "2026-10-04T10:15:03+05:30",
       "source": "addon",
@@ -51,6 +52,7 @@
       "narration": "TDSDesk:abc123 | TDS on rent",
       "object_guid": "c1d2e3f4-0002",
       "pc": "NWS144",
+      "received_at": "2026-10-04T10:20:00+05:30",
       "save_ms": 1000,
       "saved_at": "2026-10-04T10:15:03+05:30",
       "source": "addon",
@@ -71,6 +73,7 @@
       "narration": "old sale",
       "object_guid": "c1d2e3f4-0003",
       "pc": "NWS144",
+      "received_at": "2026-10-04T10:20:00+05:30",
       "save_ms": 1000,
       "saved_at": "2026-10-04T10:15:03+05:30",
       "source": "addon",
@@ -93,6 +96,7 @@
       "object_guid": "led-1",
       "parent": "Sundry Creditors",
       "pc": "NWS144",
+      "received_at": "2026-10-04T10:20:00+05:30",
       "save_ms": 1000,
       "saved_at": "2026-10-04T10:15:03+05:30",
       "source": "addon",
@@ -103,5 +107,5 @@
       "xml": "<LEDGER NAME=\"Landlord B\" RESERVEDNAME=\"\"><GUID>led-1</GUID><MASTERID> 1</MASTERID><ALTERID> 1</ALTERID><PARENT>Sundry Creditors</PARENT><OPENINGBALANCE>0.00</OPENINGBALANCE><PARTYGSTIN></PARTYGSTIN><INCOMETAXNUMBER></INCOMETAXNUMBER><LEDSTATENAME></LEDSTATENAME></LEDGER>"
     }
   ],
-  "version": "2.2.0"
+  "version": "2.2.1"
 }

@@ -299,7 +299,7 @@ var requestClass = map[string]string{
 	"Day Book": "dated", "TDSDeskVchHeads": "dated", dupCheckID: "dated", tagCheckID: "dated", masterCheckID: "dated",
 	"FinComMeasureB": "dated", "FinComMeasureC": "dated", "FinComMeasureYear": "dated", "FinComMeasureD": "dated",
 	"FinComMeasureE": "dated", "FinComSnapshot": "dated", datesProbeID: "dated",
-	vchByMasterID: "exception", sliceID: "exception",
+	vchByMasterID: "exception", sliceID: "exception", vchByNumberID: "exception",
 	"TDSDeskKeepList":  "keepAbove",
 	"Import":           "import",
 	"TDSDeskCompanies": "undated", "TDSDeskCompanyInfo": "undated", "FinComCompany": "undated", "FinComFree": "undated",
@@ -313,6 +313,12 @@ func datedRefused(tc *TC, x string) error {
 	switch id {
 	case vchByMasterID:
 		if voucherByMasterExact(x) {
+			return nil
+		}
+		return readsOffErr()
+	case vchByNumberID:
+		// 2.2.1: a new entry by its type and number, one day, exactly as built, its values checked (recorder_resolve.go)
+		if voucherByNumberExact(x) {
 			return nil
 		}
 		return readsOffErr()

@@ -1,0 +1,61 @@
+FINCOM BRIDGE 2.2.1 - TEST SHEET (NWS144, staging)
+
+File:        FinComBridge-Setup-2.2.1.exe
+Fingerprint: (filled in when the setup is built; compare with the .sha256 file next to the setup)
+Link:        https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.2.1.exe
+
+What 2.2.1 changes: a NEW entry you save in Tally now reaches FinCom as Created, with Tally's own GUID and the whole
+entry, and goes into the books. (2.2.0 sent it as Altered, without the entry.) Receipts 191 and 192 of 05-Oct-2026,
+which 2.2.0 sent that way, are sent again by 2.2.1 by itself as Created; you do not enter them again.
+
+Keep the add-on loaded as it is (C:\ProgramData\FinCom\addon\FinComRecorder.tdl). 2.2.1 does not change the add-on.
+
+In every entry you make for this sheet, start the narration with TRIAL.
+
+Save time: TDL gives the time to the minute only; save time is measured by the owner with a stopwatch. FinCom shows
+Tally's minute as the save time, and the second the bridge read the line as the time received.
+
+
+INSTALL (over 2.2.0)
+   Open the Link. Double-click the setup; if Windows warns: More info > Run anyway; "Just for me" (as before); Next.
+   You should see: "FinCom Bridge 2.2.1 is installed and running". The setup keeps 2.2.0, so you can go back to it
+   (HOW TO ROLL BACK, below).
+   Within a minute, FinCom's Tally page shows version 2.2.1 for this computer.
+
+
+CHECK 1 - RECEIPTS 191 AND 192 (no action in Tally)
+   Wait two minutes after installing.
+   You should see: FinCom > Tally page > Sync activity shows Receipts 191 and 192 (05-Oct-2026) as Created, and both
+   are in the books (Look up and the ledger show them). You did not enter them again. They show once each.
+
+CHECK 2 - A NEW ENTRY ARRIVES AS CREATED AND ENTERS THE BOOKS
+   In Tally make one new entry (for example a Receipt of Rs 1, narration "TRIAL new 1") and save it. Note its number.
+   You should see: within half a minute, Sync activity shows it as Created (not Altered), and it is in the books.
+
+CHECK 3 - ALTER IT: CHANGE THE AMOUNT
+   Open the entry from CHECK 2 in Tally, change its amount to Rs 2 and save.
+   You should see: within half a minute, Sync activity shows it as Altered, with the new amount (Rs 2).
+
+CHECK 4 - DELETE ONE
+   Open another TRIAL entry in Tally and delete it (Alt+D, Yes).
+   You should see: within half a minute, Sync activity shows it as Deleted.
+
+CHECK 5 - CANCEL ONE
+   Open another TRIAL entry in Tally and cancel it (Alt+X, Yes).
+   You should see: within half a minute, Sync activity shows it as Cancelled.
+
+CHECK 6 - LOOK UP AND THE LEDGER
+   In FinCom open Look up and the ledger of the party of CHECK 2.
+   You should see: the new entry of CHECK 2 is there, with its changed amount (Rs 2) from CHECK 3; the deleted entry
+   of CHECK 4 is gone; the cancelled entry of CHECK 5 shows as cancelled.
+
+If any check does not show what it says: note the check, the entry's type and number and the time, and tell FinCom.
+The bridge's log (right-click the FinCom icon > Show log) says why a line went without its entry.
+
+
+HOW TO ROLL BACK (go back to 2.2.0)
+   1. Right-click the FinCom icon near the clock > "Roll back to the previous version".
+   2. A question names the version it goes back to (2.2.0). Answer Yes.
+   3. The icon goes away for a few seconds and comes back.
+   You should see: within a minute, FinCom's Tally page shows version 2.2.0 for this computer. Automatic updates stay
+   off on this computer until FinCom turns them on again.

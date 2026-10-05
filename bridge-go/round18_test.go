@@ -605,7 +605,7 @@ func TestInstallerRecorderAndAddonFolders(t *testing.T) {
 	if es, _ := addonFiles.ReadDir("addon"); len(es) == 0 {
 		t.Error("no .tdl built into the exe")
 	}
-	if BridgeVersion != "2.2.0" { // 2.2.0 (round 20 of the plan): the live recorder
+	if BridgeVersion != "2.2.1" { // 2.2.1 (the NWS144 result): a new entry arrives as created
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 }

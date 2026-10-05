@@ -1,4 +1,4 @@
-;; FinComRecorder.tdl  -  FinCom recorder, the LIVE add-on (bridge 2.2.0, plan round 20 a)
+;; FinComRecorder.tdl  -  FinCom recorder, the LIVE add-on (bridge 2.2.0, plan round 20 a; notes for 2.2.1)
 ;;
 ;; Written next to the trial file FinComRecorderAnyCompany.tdl by the bridge's install step, in
 ;;     C:\ProgramData\FinCom\addon\FinComRecorder.tdl
@@ -31,6 +31,21 @@
 ;;   LAST "|t1=", and joins any line that does not start with "FCR1|" onto the line before it.
 ;; File character set: UNICODE as Tally writes it (UTF-16 little-endian), the 5th parameter of
 ;; OPEN FILE below.
+;;
+;; Bridge 2.2.1 (the owner's real-Tally result on NWS144, 05-Oct-2026). This file is unchanged in 2.2.1; what the
+;; lines it writes were found to hold:
+;;   - Times. t0, tw and t1 come from $$MachineTime, which gives hours and minutes:
+;;     TDL gives the time to the minute only; save time is measured by the owner with a stopwatch.
+;;     (t0 and t1 are both taken inside this one function, so t1 - t0 was never the save's time: save_ms was 0 on
+;;     every line.) The bridge sends Tally's minute as saved_at and its own clock, to the second, as received_at when
+;;     it first reads the line.
+;;   - Created or altered. At Form Accept, before the save, Tally gives a NEW entry the GUID "<company GUID>-00000000",
+;;     MasterID 0 and AlterID 0 (after the save: its MasterID, AlterID still 0); an entry altered carries its own
+;;     numbers. The bridge takes these values as Tally's own create/alter state. Candidates for an explicit flag
+;;     ($$InCreateMode, $$InAlterMode, a form's create/alter mode) were not added: none is confirmed on a real Tally,
+;;     and a function Tally does not know stops the whole add-on from loading. Fallback (in force): the values above.
+;;   - A Tally GUID is the company's GUID, "-", and the MasterID as 8 hex digits (Receipt 189: MasterID 26305 =
+;;     66c1). The bridge rebuilds it from the MasterID, or finds the entry by its type and number on its date.
 ;;
 ;; The date in the file name: $$MachineDate (the construct the trial already uses) formatted with
 ;; Tally's "UniversalDate" format, which gives yyyymmdd (candidate). If a Tally gives anything else,

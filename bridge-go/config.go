@@ -109,6 +109,18 @@ func keepNum(k string, def int) int {
 	return def
 }
 
+// a number setting that may be 0 (2.2.1: the recorder's waits); def when it is not set or below 0
+func keepNumZero(k string, def int) int {
+	v := cfg(k)
+	if v == nil || strings.TrimSpace(str(v)) == "" {
+		return def
+	}
+	if n := toInt(v); n >= 0 {
+		return n
+	}
+	return def
+}
+
 func newBridgeKey() string {
 	chars := "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
 	b := make([]byte, 24)

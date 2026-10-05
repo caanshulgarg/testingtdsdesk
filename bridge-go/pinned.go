@@ -98,6 +98,11 @@ var requestRebuild = map[string]func(x string) []string{
 		}
 		return voucherByMasterRequest(pinCo(x), a, ids)
 	}),
+	vchByNumberID: pinOne(func(x string) string {
+		a, _ := pinDates(x)
+		no := html.UnescapeString(group(`\$VoucherNumber = &#34;(.*?)&#34; AND`, x, 1))
+		return voucherByNumberRequest(pinCo(x), a, pinQuoted(x, "$VoucherTypeName"), no)
+	}),
 	sliceID: func(x string) []string {
 		a, _ := pinDates(x)
 		if len(a) != 8 {

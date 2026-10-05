@@ -289,6 +289,14 @@ func newStandTally(t *testing.T) *standTally {
 					o.WriteString(v.xml())
 				}
 			}
+		case vchByNumberID: // 2.2.1: a new entry by its type and number (one day)
+			no := html.UnescapeString(group(`\$VoucherNumber = &#34;(.*?)&#34; AND`, body, 1))
+			typ := pinQuoted(body, "$VoucherTypeName")
+			for _, v := range f.vch {
+				if inDates(v) && v.no == no && v.typ == typ {
+					o.WriteString(v.xml())
+				}
+			}
 		case datesProbeID, sliceID:
 			a, z := from, to
 			if f.svIgnored {

@@ -48,6 +48,7 @@ import (
 const (
 	liveAddonName  = "FinComRecorder.tdl"    // the live add-on (addon/), written beside the trial's by the install step
 	vchByMasterID  = "FinComVoucherByMaster" // the body fetch's request id (allowlist.go)
+	vchByNumberID  = "FinComVoucherByNumber" // 2.2.1: a new entry's body by its type and number on its date (allowlist.go)
 	liveMaxIDs     = 50                      // MasterIDs per body fetch
 	liveMaxLines   = 500                     // lines per recorder_lines call (the cloud's MAX_RECORDER_LINES)
 	liveMaxBytes   = 1 << 20                 // bytes per recorder_lines call
@@ -74,6 +75,11 @@ type change struct {
 	bKey      string    // source B: its company key
 	alterN    int64     // source B: its AlterID
 	tries     int       // body fetches that did not go for a passing reason (review Low 9: 3 at most)
+	// 2.2.1: a new entry Tally wrote before its save (MasterID 0): found by its type and number on its date
+	byNumber bool
+	askAfter time.Time // not asked before (the bridge's clock: a few seconds after the line, then 10 s apart)
+	numTries int       // asks that found nothing (3 at most)
+	also     []string  // the line ids of the same entry's other line (pre and post of one save) sent with this one
 }
 
 func (c *change) key() string { return c.company + "|" + c.companyGuid }
@@ -83,7 +89,13 @@ func (c *change) isLedger() bool { return strings.HasPrefix(c.event, "ledger_") 
 // the body is asked of Tally: created, altered or imported entries that are not FinCom's own (their body is FinCom's
 // posted XML, in the cloud), and ledgers created or altered; each needs its MasterID
 func (c *change) needsBody() bool {
-	if c.masterId == "" || c.bodyTried {
+	if c.bodyTried {
+		return false
+	}
+	if c.byNumber {
+		return c.vchDate != "" && c.fid == ""
+	}
+	if c.masterId == "" {
 		return false
 	}
 	switch c.event {
@@ -153,6 +165,8 @@ type liveState struct {
 	touched  map[string]map[string]bool
 	lastPost time.Time
 	logged   map[string]bool
+	created  map[string][2]string // 2.2.1: a created entry's save key -> the line id sent and the GUID it went with (this run)
+	scanned  bool                 // 2.2.1: the lines sent with a placeholder looked for (recorder_resolve.go), this run
 }
 
 var (
@@ -190,6 +204,7 @@ func liveFresh() {
 	live.c, live.off = map[string]*liveCSt{}, map[string]*liveOffSt{}
 	live.links, live.qcount, live.high, live.windows, live.busyAt = map[string]*liveLinkSt{}, map[string]int{}, map[string]int64{}, map[string][][2]int64{}, map[string]time.Time{}
 	live.touched, live.logged, live.gapSet, live.lastPost = map[string]map[string]bool{}, map[string]bool{}, false, time.Time{}
+	live.created, live.scanned = map[string][2]string{}, false
 	o := readObjFile(liveOffsetsFile())
 	for k, v := range obj(o["files"]) {
 		e := obj(v)
@@ -452,6 +467,7 @@ func liveReadOnce() int {
 	if !sourceHas("addon") {
 		return 0
 	}
+	liveRescanOnce() // 2.2.1: once, before anything new is read
 	posting := postingGoing()
 	files := liveFiles()
 	n := 0
@@ -773,8 +789,14 @@ func liveSingle(l recLine) (recLine, string) {
 	master := strings.EqualFold(l.Obj, "Master")
 	switch l.Ev {
 	case "voucher_accept_post":
+		if liveIsNew(l) {
+			return l, "created"
+		}
 		return l, "altered"
 	case "ledger_accept_post":
+		if liveIsNew(l) {
+			return l, "ledger_created"
+		}
 		return l, "ledger_altered"
 	case "after_import_object":
 		if master {
@@ -792,7 +814,20 @@ func liveSingle(l recLine) (recLine, string) {
 	return l, "" // before_*, start/end_import, write_failed, anything else: dropped
 }
 
-// a pair: the second half's values, the first half's where the second has none; the event from the first half's GUID
+// 2.2.1 (the owner's NWS144 result, 05-Oct-2026): Tally's own state at the save decides created or altered, not whether a
+// GUID is there. Before the save of a NEW entry Tally gives the GUID "<company GUID>-00000000", MasterID 0 and AlterID 0
+// (and after it, a MasterID with AlterID 0); an entry altered has its own numbers. TDL gives no create/alter flag the
+// add-on can be sure of on a real Tally (addon/FinComRecorder.tdl): these values are that flag
+func livePlaceholder(g string) bool { return strings.HasSuffix(strings.TrimSpace(g), "-00000000") }
+
+func liveZero(s string) bool { s = strings.TrimSpace(s); return s != "" && toI64(onlyDigits(s)) == 0 }
+
+func liveIsNew(l recLine) bool {
+	return strings.TrimSpace(l.GUID) == "" || livePlaceholder(l.GUID) || liveZero(l.MID) || liveZero(l.AID)
+}
+
+// a pair: the second half's values, the first half's where the second has none; the event from the first half's state
+// (a new entry or not: liveIsNew)
 func liveMerge(pre, post recLine) (recLine, string) {
 	m := post
 	for _, f := range []struct{ a, b *string }{{&m.GUID, &pre.GUID}, {&m.MID, &pre.MID}, {&m.AID, &pre.AID}, {&m.VType, &pre.VType}, {&m.VNo, &pre.VNo},
@@ -802,7 +837,7 @@ func liveMerge(pre, post recLine) (recLine, string) {
 		}
 	}
 	m.T0 = pre.T0
-	fresh := strings.TrimSpace(pre.GUID) == ""
+	fresh := liveIsNew(pre)
 	switch pre.Ev {
 	case "voucher_accept_pre":
 		if fresh {
@@ -839,9 +874,11 @@ func liveFlush(p *livePending, posting bool) int {
 		}
 		return liveEmit(l, ev, file, gen, p.start, p.start, p.end, posting)
 	case strings.TrimSpace(l.GUID) != "":
-		ev := "altered"
+		// 2.2.1: a new entry's pre alone (Tally wrote no post: Receipt 191 on NWS144) is a created entry, found by its type
+		// and number
+		ev := map[bool]string{true: "created", false: "altered"}[liveIsNew(l)]
 		if l.Ev == "ledger_accept_pre" {
-			ev = "ledger_altered"
+			ev = "ledger_" + ev
 		}
 		return liveEmit(l, ev, file, gen, p.start, p.start, p.end, posting)
 	}
@@ -910,6 +947,25 @@ func liveEmit(l recLine, ev, file string, gen int, start, lineStart, end int64, 
 			c.fid = m[1]
 		}
 	}
+	// 2.2.1: a placeholder GUID is never sent: rebuilt from the MasterID (a Tally GUID is the company's GUID and the
+	// MasterID as 8 hex digits), or left empty and the entry found by its type and number; MasterID / AlterID 0 are not
+	// numbers
+	if liveZero(c.masterId) {
+		c.masterId = ""
+	}
+	if liveZero(c.alterId) {
+		c.alterId = ""
+	}
+	if livePlaceholder(c.guid) {
+		c.guid = ""
+		if mid := toI64(c.masterId); mid > 0 && c.companyGuid != "" {
+			c.guid = fmt.Sprintf("%s-%08x", c.companyGuid, mid)
+		}
+	}
+	if c.event == "created" && !c.isLedger() && c.masterId == "" && c.fid == "" {
+		c.byNumber = true
+		c.askAfter = time.Now().Add(time.Duration(keepNumZero("RecorderNumberWaitMs", 3000)) * time.Millisecond)
+	}
 	t0, t1 := liveTime(l.T0), liveTime(l.T1)
 	at := t1
 	if at.IsZero() {
@@ -919,7 +975,9 @@ func liveEmit(l recLine, ev, file string, gen int, start, lineStart, end int64, 
 		at = c.readAt.In(liveZone)
 	}
 	c.at = at.Format(time.RFC3339)
-	if !t0.IsZero() && !t1.IsZero() && !t1.Before(t0) {
+	// 2.2.1: the add-on's times are to the minute ($$MachineTime): t1 - t0 is then no time at all (it was 0 on every
+	// NWS144 line), and is sent only when both carry seconds
+	if !t0.IsZero() && !t1.IsZero() && !t1.Before(t0) && reLiveSecs.MatchString(l.T0) && reLiveSecs.MatchString(l.T1) {
 		c.saveMs = float64(t1.Sub(t0).Milliseconds())
 	}
 	if posting {
@@ -928,8 +986,62 @@ func liveEmit(l recLine, ev, file string, gen int, start, lineStart, end int64, 
 			liveTouch(c.company, c.name)
 		}
 	}
+	if liveSameSave(c) {
+		return 1
+	}
 	liveQueueAdd(c)
 	return 1
+}
+
+var reLiveSecs = regexp.MustCompile(`\d:\d\d:\d\d`)
+
+// the key of a created entry's save: company, type, number, date and the minute of the save
+func (c *change) saveKey() string {
+	return c.key() + "|" + c.vchType + "|" + c.vchNo + "|" + c.vchDate + "|" + cut(c.at, 16)
+}
+
+// 2.2.1 (under live.mu): a new entry's pre and post taken apart (another line between them, or the pre alone after its
+// wait) are one created line: the one waiting takes the MasterID the other has; one already sent with its GUID takes
+// the other in; one sent without its GUID is followed by this one as its resolution (line id + ":resolved"). true: c
+// is not queued on its own
+func liveSameSave(c *change) bool {
+	if c.event != "created" || c.isLedger() || c.vchNo == "" {
+		return false
+	}
+	k := c.saveKey()
+	for _, q := range live.queue {
+		if q.event != "created" || q.isLedger() || q.lineId == c.lineId || q.saveKey() != k || strings.HasSuffix(q.lineId, ":resolved") {
+			continue
+		}
+		if c.masterId != "" && q.masterId == "" && q.xml == "" {
+			q.masterId, q.guid, q.byNumber, q.bodyTried, q.tries = c.masterId, c.guid, false, false, 0
+			if c.alterId != "" {
+				q.alterId = c.alterId
+			}
+		}
+		q.also = append(q.also, c.lineId)
+		live.queued[c.lineId] = true
+		return true
+	}
+	s, had := live.created[k]
+	if !had {
+		return false
+	}
+	if s[1] != "" {
+		live.sent[c.lineId] = true
+		liveSaveSent([]string{c.lineId})
+		return true
+	}
+	id := s[0] + ":resolved"
+	if live.sent[id] || live.queued[id] {
+		live.sent[c.lineId] = true
+		liveSaveSent([]string{c.lineId})
+		return true
+	}
+	c.also = append(c.also, c.lineId)
+	live.queued[c.lineId] = true
+	c.lineId = id
+	return false
 }
 
 // the company GUID a line names; "" when the add-on had none ("name-..." from the trial, "noguid" from the live add-on)
@@ -1214,6 +1326,22 @@ func voucherByMasterExact(x string) bool {
 	return x == voucherByMasterRequest(co, a, ids)
 }
 
+// FinComVoucherByNumber (2.2.1, the owner's NWS144 result): a new entry Tally wrote before its save (MasterID 0, GUID
+// "<company GUID>-00000000") found after the save by its type and number on its own date: one day, the body fetch's
+// fields (GUID, MASTERID and ALTERID among them). "" when the type or number cannot go in a TDL string (a quote, a
+// control character, empty or longer than 100)
+func voucherByNumberRequest(company, date, typ, no string) string {
+	if !liveNumberText(typ) || !liveNumberText(no) || len(normDate(date)) != 8 {
+		return ""
+	}
+	return fcCollection(vchByNumberID, company, periodVars(date, date), "Voucher", liveFetchField,
+		`$VoucherNumber = "`+no+`" AND $VoucherTypeName = "`+typ+`"`)
+}
+
+func liveNumberText(s string) bool {
+	return s == strings.TrimSpace(s) && s != "" && len([]rune(s)) <= 100 && !strings.ContainsAny(s, "\"\x00\r\n\t") && !re(`[\x00-\x1f]`).MatchString(s)
+}
+
 func liveBodySec() int { return keepNum("RecorderBodySec", 20) }
 
 // the vouchers Tally gives for these MasterIDs on that date: MasterID -> the voucher's XML (<VOUCHER ...>...</VOUCHER>)
@@ -1377,6 +1505,9 @@ func liveFetchBodies(need []*change, sp int64) {
 					continue
 				}
 				c.xml, c.bodyTried = x, true
+				if toI64(c.alterId) <= 0 {
+					c.alterId = onlyDigits(group(`<ALTERID>\s*(\d+)`, x, 1)) // 2.2.1: a new entry's AlterID is 0 on its line
+				}
 				if c.guid == "" {
 					c.guid = strings.TrimSpace(html.UnescapeString(group(`<GUID>([^<]*)</GUID>`, x, 1)))
 				}
@@ -1443,8 +1574,8 @@ var importGaps atomic.Int64 // grows after every import request (post.go): a gap
 // one line as the cloud's recorder_lines takes it (index.ts)
 func (c *change) wire() M {
 	var alter any
-	if a := onlyDigits(c.alterId); a != "" {
-		alter = toI64(a)
+	if a := toI64(onlyDigits(c.alterId)); a > 0 {
+		alter = a
 	}
 	ls := []any{}
 	for _, n := range c.ledgers {
@@ -1453,6 +1584,9 @@ func (c *change) wire() M {
 	m := M{"line_id": c.lineId, "event": c.event, "object_guid": c.guid, "master_id": c.masterId, "alter_id": alter, "vch_type": c.vchType, "vch_no": c.vchNo,
 		"vch_date": c.vchDate, "saved_at": c.at, "pc": liveComputerFn(), "user": c.user, "company_guid": c.companyGuid, "ledgers": ls, "narration": c.narr,
 		"fid": c.fid, "xml": c.xml, "source": c.source}
+	if !c.readAt.IsZero() {
+		m["received_at"] = c.readAt.In(liveZone).Format(time.RFC3339) // 2.2.1: the bridge's own clock when it read the line
+	}
 	if c.saveMs >= 0 {
 		m["save_ms"] = c.saveMs
 	}
@@ -1475,6 +1609,7 @@ func liveRecorderLinesBody(company, guid string, group []*change) M {
 func liveUploadOnce() int {
 	liveUpMu.Lock()
 	defer liveUpMu.Unlock()
+	liveResolveTurn() // 2.2.1: lines sent held, resolved once Tally gives their entry
 	for i := 0; i < 8; i++ {
 		n, again := liveUploadStep()
 		if !again {
@@ -1588,7 +1723,7 @@ func liveUploadStep() (int, bool) {
 		group = append(group, c)
 		size += s
 	}
-	var need []*change
+	var need, byNumber []*change
 	bodiesOff := liveIsOffLocked("bodies", key)
 	for _, c := range group {
 		if c.needsBody() {
@@ -1596,10 +1731,20 @@ func liveUploadStep() (int, bool) {
 				c.bodyTried = true // the body fetch is off for this company (the 2 s rule): the line goes without
 				continue
 			}
+			if c.byNumber {
+				if !time.Now().Before(c.askAfter) {
+					byNumber = append(byNumber, c)
+				}
+				continue
+			}
 			need = append(need, c)
 		}
 	}
 	live.mu.Unlock()
+	if len(byNumber) > 0 && !posting {
+		sp, _ := startPointOf(byNumber[0].company)
+		liveFetchByNumber(byNumber, sp)
+	}
 	if len(need) > 0 && !posting {
 		// review M3: nothing is asked for an entry whose AlterID is not above the company's starting point
 		sp, _ := startPointOf(need[0].company)
@@ -1617,8 +1762,10 @@ func liveUploadStep() (int, bool) {
 	}
 	// a change whose body is still to be asked holds the group there (the order is kept)
 	live.mu.Lock()
+	due := false // the one holding it is to be asked again now (by its type and number, no wait set)
 	for i, c := range group {
 		if c.needsBody() {
+			due = c.byNumber && !time.Now().Before(c.askAfter) && !posting && !postingGoing()
 			group = group[:i]
 			break
 		}
@@ -1634,7 +1781,7 @@ func liveUploadStep() (int, bool) {
 	body := liveRecorderLinesBody(company, guid, group)
 	live.mu.Unlock()
 	if len(group) == 0 || importsInFlight.Load() > 0 {
-		return 0, false
+		return 0, due && len(group) == 0
 	}
 	if liveSendHook != nil {
 		liveSendHook()
@@ -1671,12 +1818,24 @@ func liveUploadStep() (int, bool) {
 	}
 	sentIDs := make([]string, 0, len(group))
 	gone := map[*change]bool{}
+	var held []*change
 	for _, c := range group {
 		gone[c] = true
 		live.sent[c.lineId] = true
 		delete(live.queued, c.lineId)
 		live.qcount[c.companyGuid]--
 		sentIDs = append(sentIDs, c.lineId)
+		for _, a := range c.also {
+			live.sent[a] = true
+			delete(live.queued, a)
+			sentIDs = append(sentIDs, a)
+		}
+		if c.event == "created" && !c.isLedger() && c.vchNo != "" {
+			live.created[c.saveKey()] = [2]string{c.lineId, c.guid}
+			if c.xml == "" && c.fid == "" && !strings.HasSuffix(c.lineId, ":resolved") {
+				held = append(held, c) // 2.2.1: sent held (no body, no GUID): resolved later (recorder_resolve.go)
+			}
+		}
 	}
 	q := live.queue[:0]
 	for _, c := range live.queue {
@@ -1697,6 +1856,7 @@ func liveUploadStep() (int, bool) {
 	live.mu.Unlock()
 	liveSaveSent(sentIDs)
 	liveSaveOffsets()
+	liveHeldAdd(held)
 	return len(group), false
 }
 
