@@ -346,12 +346,12 @@ function StubLines([int]$from = 0) {
     foreach ($x in @($o.body.lines)) {
       if (-not $x) { continue }
       $l += [pscustomobject]@{ i = $i; at = $o.at; bid = $o.body.bridge.id; buser = $o.body.bridge.user; bport = $o.body.bridge.port; device = $o.device; company = $o.body.company
-        ev = $x.event; guid = "$($x.object_guid)"; mid = $x.master_id; aid = $x.alter_id; xml = "$($x.xml)"; lineGuid = $x.lineGuid; ids = $x.idsMismatch; vch = "$($x.vch_type)/$($x.vch_no)/$($x.vch_date)" }
+        ev = $x.event; guid = "$($x.object_guid)"; mid = $x.master_id; aid = $x.alter_id; xml = "$($x.xml)"; lineGuid = $x.lineGuid; ids = $x.idsMismatch; held = "$($x.heldWhy)"; vch = "$($x.vch_type)/$($x.vch_no)/$($x.vch_date)" }
     }
   }
   return , $l
 }
-function Ev($x) { if (-not $x) { return '(no line)' }; 'stub {0} recorder_lines event={1} guid={2} mid={3} aid={4} vch={5} user={6} bridge={7} port={8} company={9} body={10}{11}' -f $x.at, $x.ev, $(if ($x.guid) { $x.guid } else { "''" }), $x.mid, $x.aid, $x.vch, $x.buser, $x.bid, $x.bport, $x.company, $(if ($x.xml) { "yes($($x.xml.Length) chars)" } else { 'none' }), $(if ($x.ids) { " idsMismatch lineGuid=$($x.lineGuid)" } else { '' }) }
+function Ev($x) { if (-not $x) { return '(no line)' }; 'stub {0} recorder_lines event={1} guid={2} mid={3} aid={4} vch={5} user={6} bridge={7} port={8} company={9} body={10}{11}' -f $x.at, $x.ev, $(if ($x.guid) { $x.guid } else { "''" }), $x.mid, $x.aid, $x.vch, $x.buser, $x.bid, $x.bport, $x.company, $(if ($x.xml) { "yes($($x.xml.Length) chars)" } else { 'none' }), ("$(if ($x.ids) { " idsMismatch lineGuid=$($x.lineGuid)" })$(if ($x.held) { " heldWhy=$($x.held)" })") }
 function WaitLine([int]$from, [scriptblock]$pred, $sec = 150) {
   $until = (Get-Date).AddSeconds($sec)
   while ((Get-Date) -lt $until) { $m = @((StubLines $from) | Where-Object $pred); if ($m.Count) { Start-Sleep 5; return , @((StubLines $from) | Where-Object $pred) }; Start-Sleep 5 }
@@ -364,7 +364,7 @@ function PrintNew($from) { (StubLines $from) | ForEach-Object { Write-Host "  $(
 Say '---- 6a: both bridges run at once, on their own ports, as their own users'
 $procs = Get-CimInstance Win32_Process -Filter "Name='FinComBridge.exe'" | ForEach-Object { [pscustomobject]@{ pid = $_.ProcessId; user = (Invoke-CimMethod -InputObject $_ -MethodName GetOwner).User; session = $_.SessionId; cmd = $_.CommandLine } }
 $procs | ForEach-Object { Write-Host "  process $($_.pid) as $($_.user) in session $($_.session): $($_.cmd)" }
-$lis = Get-NetTCPConnection -State Listen -LocalPort (9100..9119) -ErrorAction SilentlyContinue | ForEach-Object { $pp = $_.OwningProcess; [pscustomobject]@{ port = $_.LocalPort; pid = $pp; user = ($procs | Where-Object pid -eq $pp).user } }
+$lis = Get-NetTCPConnection -State Listen -LocalPort (9100..9199) -ErrorAction SilentlyContinue | ForEach-Object { $pp = $_.OwningProcess; [pscustomobject]@{ port = $_.LocalPort; pid = $pp; user = ($procs | Where-Object pid -eq $pp).user } }
 $lis | ForEach-Object { Write-Host "  listening 127.0.0.1:$($_.port) pid $($_.pid) user $($_.user)" }
 Get-Process tally -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  Tally pid $($_.Id) session $($_.SessionId) owner $((Invoke-CimMethod -InputObject (Get-CimInstance Win32_Process -Filter "ProcessId=$($_.Id)") -MethodName GetOwner).User)" }
 $l1 = $lis | Where-Object { $_.port -eq $B[1].port -and $_.user -eq 'runneradmin' }; $l2 = $lis | Where-Object { $_.port -eq $B[2].port -and $_.user -eq $u2 }
@@ -375,18 +375,22 @@ Result '6a two bridges at once' ([bool]$l1 -and [bool]$l2 -and $B[1].port -ne $B
 Say '---- 6b: the /ping proof: HMAC-SHA256(bridge key, nonce || bridge id || port), only to the bridge''s own Windows user'
 function Hmac($key, $msg) { $h = [Security.Cryptography.HMACSHA256]::new([Text.Encoding]::UTF8.GetBytes($key)); (($h.ComputeHash([Text.Encoding]::UTF8.GetBytes($msg)) | ForEach-Object { $_.ToString('x2') }) -join '') }
 function Expect($n, $nonce) { Hmac $B[$n].key ($nonce + $B[$n].id + $B[$n].port) }
-function Ping($port, $nonce) { try { Invoke-RestMethod "http://127.0.0.1:$port/ping?n=$nonce" -TimeoutSec 10 } catch { $null } }
+# as FinCom's page asks (its Origin; since 246ffef the proof goes only to an allowed Origin or the key's holder)
+function Ping($port, $nonce, $origin = 'https://app.fincom.live') { $h = @{}; if ($origin) { $h.Origin = $origin }; try { Invoke-RestMethod "http://127.0.0.1:$port/ping?n=$nonce" -Headers $h -TimeoutSec 10 } catch { $null } }
 function Code($url) { try { (Invoke-WebRequest $url -UseBasicParsing -TimeoutSec 10).StatusCode } catch { [int]$_.Exception.Response.StatusCode } }
 $n1 = ([guid]::NewGuid().ToString('N')); $n2 = ([guid]::NewGuid().ToString('N'))
 $pa = Ping $B[1].port $n1    # runneradmin asks its own bridge
 $pb = Ping $B[2].port $n1    # runneradmin asks user 2's bridge
+$pn = Ping $B[1].port ([guid]::NewGuid().ToString('N')) ''   # no Origin (a page after DNS rebinding sends none)
+Write-Host "runneradmin -> own bridge, no Origin: $($pn | ConvertTo-Json -Compress)"
+Add-Content -Path $resultsFile -Encoding UTF8 -Value ("INFO /ping with a nonce but no Origin (own bridge): proof {0}" -f $(if ($pn.proof) { 'given' } else { 'not given' }))
 $sa = Code "http://127.0.0.1:$($B[1].port)/status"; $sb = Code "http://127.0.0.1:$($B[2].port)/status"
 Write-Host "runneradmin -> own bridge: $($pa | ConvertTo-Json -Compress)"
 Write-Host "runneradmin -> user 2's bridge: $($pb | ConvertTo-Json -Compress)"
 # the same asked by user 2 (a script run as fcuser2)
 Set-Content "$fc\ping2.ps1" -Encoding UTF8 -Value @'
 param($p1, $p2, $nonce)
-function Ping($port) { try { Invoke-RestMethod "http://127.0.0.1:$port/ping?n=$nonce" -TimeoutSec 10 } catch { @{ error = "$_" } } }
+function Ping($port) { try { Invoke-RestMethod "http://127.0.0.1:$port/ping?n=$nonce" -Headers @{ Origin = 'https://app.fincom.live' } -TimeoutSec 10 } catch { @{ error = "$_" } } }
 function Code($url) { try { (Invoke-WebRequest $url -UseBasicParsing -TimeoutSec 10).StatusCode } catch { [int]$_.Exception.Response.StatusCode } }
 @{ who = [Security.Principal.WindowsIdentity]::GetCurrent().Name; session = (Get-Process -Id $PID).SessionId; own = (Ping $p2); other = (Ping $p1); ownStatus = (Code "http://127.0.0.1:$p2/status"); otherStatus = (Code "http://127.0.0.1:$p1/status") } | ConvertTo-Json -Depth 5 | Set-Content C:\fcspike\ping2.json
 '@
