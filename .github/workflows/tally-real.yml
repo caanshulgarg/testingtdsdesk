@@ -18,7 +18,7 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        os: [windows-latest, windows-2022]
+        os: [windows-2022]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     env:
@@ -54,10 +54,12 @@ jobs:
         run: |
           Get-Process tally -ErrorAction SilentlyContinue | Stop-Process -Force
           git config user.name "tally-spike"; git config user.email "tally-spike@users.noreply.github.com"
+          Select-String -Path $env:LOG -Pattern 'Caption|Windows Server|appeared|port 9000 answers|company created|import-voucher|^    FCR1' | Select-Object -First 9 | ForEach-Object { $m = $_.Line; if ($m.Length -gt 300) { $m = $m.Substring(0, 300) }; Write-Host "::notice::$m" }
+          git status --short | Select-Object -First 20
           git add spike-results
           git commit -q -m "spike results ${{ github.run_id }} ${{ matrix.os }}`n`nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`nClaude-Session: https://claude.ai/code/session_01LprHoXx2ACgDW2AjxNH8wN"
           for ($i = 0; $i -lt 5; $i++) {
-            git pull -q --rebase origin tally-real-spike
+            git pull -q --rebase --autostash origin tally-real-spike
             git push -q origin HEAD:refs/heads/tally-real-spike
             if ($LASTEXITCODE -eq 0) { break }; Start-Sleep 5
           }
