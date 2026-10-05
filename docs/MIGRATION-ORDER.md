@@ -17,8 +17,8 @@ revoked; `begin; ... commit;`; safe to run twice) and is shown to the owner befo
 
 ## The two valid orders (both end with the same function texts: `tests/run_migration_order.py` asserts it)
 
-- staging: 32 → 33 → 35 → 34 (first) → 36b → 37 → 36 → 38 → 39 (applied 03-Oct, **except 39's tally_ingest_day part**: both forms are still 38's) → 40 → 41 (run 03-Oct, evening; its 8-argument `tally_ingest_day` superseded 39's) → 42 → 43 (run 04-Oct) → 44 (run 04-Oct) → 45 (run 04-Oct) → **46** → **47** → **48** (run by the owner) → **49**
-- a fresh database: 32 → 33 → 35 → 34 (reviewed) → 36 → 36b → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49
+- staging: 32 → 33 → 35 → 34 (first) → 36b → 37 → 36 → 38 → 39 (applied 03-Oct, **except 39's tally_ingest_day part**: both forms are still 38's) → 40 → 41 (run 03-Oct, evening; its 8-argument `tally_ingest_day` superseded 39's) → 42 → 43 (run 04-Oct) → 44 (run 04-Oct) → 45 (run 04-Oct) → **46** → **47** → **48** (run by the owner) → **49** → **50** (run by the owner)
+- a fresh database: 32 → 33 → 35 → 34 (reviewed) → 36 → 36b → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50
 
 | # | File | What it adds |
 |---|---|---|
@@ -48,6 +48,7 @@ Run on staging (corrected 04-Oct-2026, evening):
   (tally_recorder_lines, tally_month_locks, tally_tieouts).
 - tally-ingest **v33** deployed on 04-Oct-2026 from commit `2aa42bd` (v31 was the deploy after 43).
 - 46: written 04-Oct-2026 (round 19), not yet run on staging. It runs after 45; tally-ingest does not depend on it (without
+- **50: run on staging by the owner on 05-Oct-2026 (~10:00 IST; Claude's tool timed out on the whole file, so the owner ran it in the SQL Editor; Claude had applied part 50b and the state CHECK, both identical text). All five function md5s checked by Claude: tally_recorder_line 8ac8ea2d, tally_ingest_delete 09ec611a, tally_recorder_apply 25f02b91, tally_recorder_release_day b44bd07e, tally_days_recorder_release 4248dcfb; two statement triggers on tally_days, two held indexes, state CHECK with 'replaced'; the four held lines carry the new words; 4,016 live entries, ledger-day total 0.00.** migration-50-parts/ holds the same text in four pasteable parts.
 - **49: run on staging by Claude on 05-Oct-2026 (~00:55 IST) from 80ec84c (no "delete from"); its five function md5s matched the file
   (tally_post_row_keys 2f42d410, _hide f0a7ea24, _remove a194932e, _restore 92460317, _flags_now ef30d9c5).** Runs after 48.
 - **47: run on staging by Claude on 04-Oct-2026 (~19:45 IST) from d41237f; all 19 function md5s matched the file; cron jobs listed;
