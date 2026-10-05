@@ -118,7 +118,7 @@ def run_order(label, ORDER):
            and db.one("select has_function_privilege('authenticated', 'public.tally_ingest_entries(uuid, jsonb, jsonb, boolean)', 'execute')") == "f",
            "48: tally_ingest_entries with and without the rebuild (the 3-argument one calls it with true), the apply rebuilding once per call (in force in this order)")
         ok("'replaced'::text" in db.one("select pg_get_constraintdef(oid) from pg_constraint where conrelid = 'public.tally_recorder_lines'::regclass and contype = 'c' and pg_get_constraintdef(oid) like '%state%'")
-           and db.one("select count(*) from pg_trigger where tgrelid = 'public.tally_days'::regclass and tgname = 'tally_days_recorder_release' and not tgisinternal") == "1"
+           and db.one("select count(*) from pg_trigger where tgrelid = 'public.tally_days'::regclass and tgname like 'tally_days_recorder_release_%' and not tgisinternal and (tgtype & 1) = 0") == "2"
            and "replaced by line" in fdef("tally_recorder_line") and "day read" not in fdef("tally_recorder_line") and "day read" not in fdef("tally_ingest_delete")
            and "tally_recorder_line(" in fdef("tally_recorder_release_day") and db.one("select count(*) from tally_post_row_flags") == "0",
            "49 and 50: the post row flags; the state 'replaced', the day release on tally_days, no 'day read' in the held words (in force in this order)")

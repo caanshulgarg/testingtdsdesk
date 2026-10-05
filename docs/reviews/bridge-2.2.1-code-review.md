@@ -106,4 +106,9 @@ Verdict:
 - The new dated exception holds: one exact day, type and number, pinned, within its bounds. Placeholders are never
   sent, an alteration stays altered, and each resolution goes once.
 
-Range: 6fb6cc9..8185245
+
+## Round 2 (8185245..2d9cc08)
+
+The Medium is fixed in 2d9cc08: in liveEmit a placeholder GUID is rebuilt from the MasterID only when the line is not a ledger (`!c.isLedger()`); a new ledger's GUID stays empty until its body fetch gives Tally's own. Test TestPlaceholderGUIDRebuiltForVouchersOnly (bridge-go/review221_test.go): red on 8185245 (the ledger went as `<co>-000001f4`), green after; the voucher case still rebuilds `-000066c8`. Reviewed by Claude: the change is one condition; no other code changed. The Lows stay as written (the resolver's retries are bounded to 7 days; to be capped at about 20 tries in a later version).
+
+Range: 6fb6cc9..2d9cc08

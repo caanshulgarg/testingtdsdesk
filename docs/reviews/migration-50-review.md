@@ -187,3 +187,75 @@ lines have AlterIDs at or below the replacing line's, and that line raises the v
 - The trial balance and the ledger-day cache stayed equal to a fresh computation in every suite step.
 - No recursion: nothing the trigger calls writes `tally_days`.
 - Grants and definer settings are as 44 and 48 had them.
+
+## Fixed (05-Oct-2026, before 50 ran anywhere)
+
+The file was changed test-first. The reds are in the session scratchpad (`tdd/r51.1.red`: 23 checks failing on the
+reviewed file). Each finding is now a check in `tests/run_migration50.py`, built from the scenarios above, and all of
+them pass. File md5 after the fixes: `aba6aba619b5952e54a5c4d231a90a14`.
+
+| Function | md5 after the fixes |
+|---|---|
+| `tally_recorder_line(uuid, uuid, jsonb, bigint)` | `9bc527da5e6ad1bbc0cd9566b1da549f` |
+| `tally_ingest_delete(uuid, text, bigint, boolean, text)` | `a43aa5450e7ddedcc2f2ee4453eaa42b` (unchanged) |
+| `tally_recorder_apply(uuid, uuid, uuid, jsonb)` | `97a585277a7f4da9b105575e4c7fb9bf` (new in 50: 48's text, one condition added, for L4) |
+| `tally_recorder_release_day(uuid, date)` | `cc892ff720a5edfa1a1ba5b02b61a004` |
+| `tally_days_recorder_release()` | `c54362f5ed2d515d9f73fda2b6022e03` |
+
+- **H1: Fixed.**
+  - "Nothing to delete" now needs the stored day to be complete: `tally_days.n` must equal the live entries the copy
+    holds for that day. A short read, an empty file nobody vouched for and a capped read all fail this.
+  - It also needs `tally_days.alter_max` to be at or above the delete's AlterID. A re-parsed old file fails this.
+  - Otherwise the delete stays held with "not in FinCom's copy yet" words. Checks: E2a, E2b and E3 are held; a complete,
+    newer Day Book still gives "nothing to delete".
+  - A delete applied for a GUID makes any later entry line of that GUID with a lower AlterID 'stale'. The late create
+    from another computer is 'stale', and the entry is not in the copy.
+  - Beyond the review: when a create brings the entry into the copy, a delete or cancel held "not in the copy" at a
+    higher AlterID is applied with it. Check E3: the late create (64205) is applied, the held delete (64210) is applied
+    with it, and Receipt 611 is deleted, never live.
+- **M1: Fixed.**
+  - A placeholder or GUID-less line with `master_id > 0` matches only the GUID its MasterID makes: the company prefix,
+    then `-`, then `lpad(to_hex(master_id), 8, '0')`.
+  - With MasterID 0, it matches by type, number and date only when the company prefix is known (never null to null)
+    and exactly one live entry of that company fits. This applies to both 'replaced' and 'duplicate'.
+  - An 'altered' placeholder is 'duplicate' only when the copy shows the change. That means an AlterID above the
+    line's, or a Day Book of that day stored after the line arrived, or a later line of that entry applied.
+  - This goes beyond the literal "copy newer than the line's AlterID", because placeholders carry AlterID 0.
+  - Checks E1a, MasterID 37000/37001, E1e, E1d and E1c all pass. Staging's line 4 (MasterID 26312, i.e. `...66c8`) is
+    still released.
+- **M2: Fixed.**
+  - The day release runs only the held lines that the stored day can release:
+    - lines whose GUID is one of the day's entries (a bodiless entry line only when the day's version is not older
+      than it);
+    - placeholder or GUID-less lines whose MasterID makes one of those GUIDs, or whose type and number match one,
+      dated that day;
+    - deletes and cancels dated that day.
+  - They are found through `(book_id, object_guid)` and two new partial indexes on the held lines:
+    `(book_id, vch_date)` and `(book_id, master_id)`.
+  - All candidates run, oldest first. There is no 500 window. Check E4: the 601st line is applied on the first store.
+  - A line whose state and words do not change is not rewritten. The check reads xmin before and after.
+  - pg_stand now has `tally_vouchers (book_id, day)`, as staging does (checked with SELECT). Statistics are analyzed,
+    as autovacuum would do on staging.
+  - Timings on pg_stand, per store:
+
+    | Run | With the triggers | Without |
+    |---|---|---|
+    | One day, 20 entries, 3,000 held lines | 23-24 ms | 16-18 ms |
+    | 365 days, 3,000 held lines, the same days stored again | 33.7 ms a day | 22.9 ms a day |
+    | 365 days, 3,000 held lines, first store | 46.0 ms a day | not measured |
+
+    The year is measured with `M50_PERF=1`.
+- **L1: Fixed.** The trigger catches `query_canceled` as well as other errors, logs it, undoes the release's work and
+  keeps the day. Check: a statement timeout while the release waits on a locked line. The day is stored, the line is
+  left held, and the next store releases it.
+- **L2: Fixed.** A re-run that ends 'failed' is put back to 'held'. Its words are kept, and the error is added once as
+  "(a try to apply it by itself met an error: ...)". It is not piled up on a second try.
+- **L3: Fixed.** Held deletes and cancels with no GUID, both new and the rows 48 held, say "no entry GUID on the line:
+  FinCom cannot tell which entry was deleted, so this line is never applied by itself; uploading the Day Book for
+  <date> brings that day up to date".
+- **L4: Fixed.** `tally_recorder_apply` (48's text plus one condition) never counts a `-00000000` GUID's AlterID.
+  `release_day` has the same guard.
+- **L5: Fixed.** Each candidate is locked (`for update`) and skipped unless it is still 'held'.
+- **L6: Fixed.** There are two statement-level triggers, after insert and after update, with the transition table
+  `new_days`. They run one release per (book, day) in the statement. Check: one UPDATE of two days releases both days'
+  held deletes.
