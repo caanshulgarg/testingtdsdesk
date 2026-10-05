@@ -1182,7 +1182,7 @@ func TestRecorderLogsKept30Days(t *testing.T) {
 
 // --- 8. the version, the sheets and the allow-list decision line
 func TestRecorderVersion220Sheets(t *testing.T) {
-	if BridgeVersion != "2.2.4" { // 2.2.4 (Tally's typed fields read); the 2.2.0 sheet stays as it was
+	if BridgeVersion != "2.3.0" { // 2.3.0 (one bridge per Windows user); the 2.2.0 sheet stays as it was
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	sheet := strings.Join(strings.Fields(readText("../docs/bridge-2.2.0-test-sheet.txt")), " ")
