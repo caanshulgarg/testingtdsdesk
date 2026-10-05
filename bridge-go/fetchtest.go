@@ -111,7 +111,7 @@ var reFetchTestVch = regexp.MustCompile(`<VOUCHER(\s[^>]*)?>([\s\S]*?)</VOUCHER>
 func fetchTestVouchers(raw string) []string {
 	var o []string
 	for _, m := range reFetchTestVch.FindAllStringSubmatch(raw, -1) {
-		if strings.TrimSpace(m[1]) != "" || strings.Contains(m[2], "<MASTERID>") {
+		if strings.TrimSpace(m[1]) != "" || tagNum(m[2], "MASTERID") != "" {
 			o = append(o, m[0])
 		}
 	}
@@ -131,7 +131,7 @@ func fetchTestIDs(raw string) string {
 		}
 		var f []string
 		for _, k := range []string{"MASTERID", "VOUCHERNUMBER", "DATE", "VOUCHERTYPENAME"} {
-			f = append(f, k+"="+strings.TrimSpace(html.UnescapeString(group(`<`+k+`>([^<]*)</`+k+`>`, v, 1))))
+			f = append(f, k+"="+tagValue(v, k))
 		}
 		o = append(o, strings.Join(f, " "))
 	}
@@ -245,7 +245,7 @@ func runFetchTest(o fetchTestOpts, ask func() string) (M, error) {
 		parts = append(parts, fmt.Sprintf("%s %s %d ms", l, vouchersWord(n), ms))
 		results = append(results, M{"form": l, "what": what, "ms": ms, "vouchers": n, "bytes": len(raw), "error": ""})
 		for _, v := range fetchTestVouchers(raw) {
-			if m := onlyDigits(group(`<MASTERID>([^<]*)</MASTERID>`, v, 1)); m != "" && m != "0" {
+			if m := onlyDigits(tagNum(v, "MASTERID")); m != "" && m != "0" {
 				return m
 			}
 		}

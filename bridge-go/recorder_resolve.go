@@ -122,9 +122,7 @@ func fetchVoucherByNumber(tc *TC, company string, port int, date, typ, no string
 	}
 	var out []string
 	for _, m := range reVchBlock.FindAllString(raw, -1) {
-		if strings.TrimSpace(html.UnescapeString(group(`<VOUCHERTYPENAME>([^<]*)</VOUCHERTYPENAME>`, m, 1))) == typ &&
-			strings.TrimSpace(html.UnescapeString(group(`<VOUCHERNUMBER>([^<]*)</VOUCHERNUMBER>`, m, 1))) == no &&
-			normDate(group(`<DATE>([^<]*)</DATE>`, m, 1)) == normDate(date) {
+		if tagValue(m, "VOUCHERTYPENAME") == typ && tagValue(m, "VOUCHERNUMBER") == no && normDate(tagValue(m, "DATE")) == normDate(date) {
 			out = append(out, cleanXML(m))
 		}
 	}
@@ -184,11 +182,8 @@ func liveVoucherWrong(x, who string, w liveWant) (string, string) {
 	if strings.TrimSpace(x) == "" {
 		return "Tally gave no " + who + " on " + liveDay(w.date), wrongRetry
 	}
-	field := func(tag string) string {
-		return strings.TrimSpace(html.UnescapeString(group(`<`+tag+`>([^<]*)</`+tag+`>`, x, 1)))
-	}
-	g, typ, no, date := field("GUID"), field("VOUCHERTYPENAME"), field("VOUCHERNUMBER"), normDate(field("DATE"))
-	mid, alter := toI64(group(`<MASTERID>\s*(\d+)`, x, 1)), toI64(group(`<ALTERID>\s*(\d+)`, x, 1))
+	g, typ, no, date := tagValue(x, "GUID"), tagValue(x, "VOUCHERTYPENAME"), tagValue(x, "VOUCHERNUMBER"), normDate(tagValue(x, "DATE"))
+	mid, alter := toI64(tagNum(x, "MASTERID")), toI64(tagNum(x, "ALTERID"))
 	cg := w.cguid
 	held := heldGUID(w.company)
 	if cg == "" {
@@ -265,17 +260,17 @@ func liveOneByNumber(tc *TC, company string, port int, w liveWant, sec int) (str
 // under live.mu: a change takes the entry's GUID, numbers and body
 func liveTakeBody(c *change, x string) {
 	c.xml, c.bodyTried, c.byNumber = x, true, false
-	c.guid = strings.TrimSpace(html.UnescapeString(group(`<GUID>([^<]*)</GUID>`, x, 1)))
-	c.masterId = onlyDigits(group(`<MASTERID>\s*(\d+)`, x, 1))
-	c.alterId = onlyDigits(group(`<ALTERID>\s*(\d+)`, x, 1))
+	c.guid = tagValue(x, "GUID")
+	c.masterId = onlyDigits(tagNum(x, "MASTERID"))
+	c.alterId = onlyDigits(tagNum(x, "ALTERID"))
 	if c.narr == "" {
-		c.narr = html.UnescapeString(group(`<NARRATION>([^<]*)</NARRATION>`, x, 1))
+		c.narr = html.UnescapeString(tagRaw(x, "NARRATION"))
 	}
 	if c.vchType == "" {
-		c.vchType = strings.TrimSpace(html.UnescapeString(group(`<VOUCHERTYPENAME>([^<]*)</VOUCHERTYPENAME>`, x, 1)))
+		c.vchType = tagValue(x, "VOUCHERTYPENAME")
 	}
 	if c.vchNo == "" {
-		c.vchNo = strings.TrimSpace(html.UnescapeString(group(`<VOUCHERNUMBER>([^<]*)</VOUCHERNUMBER>`, x, 1)))
+		c.vchNo = tagValue(x, "VOUCHERNUMBER")
 	}
 	c.heldWhy = ""
 	liveDecide(c, "taken: Tally's GUID "+c.guid+", AlterID "+c.alterId)

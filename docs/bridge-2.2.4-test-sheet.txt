@@ -1,0 +1,68 @@
+FINCOM BRIDGE 2.2.4 - TEST SHEET (NWS144, staging)
+
+File:        FinComBridge-Setup-2.2.4.exe
+Fingerprint: SHA-256 51dde37da28f1117fcc6c0046039143deb5095acdbdc2e19496f4b04cd0311bb (FinComBridge-Setup-2.2.4.exe; compare with the .sha256 file next to the setup)
+Link:        https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.2.4.exe
+
+What 2.2.4 changes: one thing. Your TallyPrime 7.1 answers with typed fields (for example <MASTERID TYPE="Number">),
+and a count of the company's vouchers and ledgers at the top of every answer. 2.2.3 did not read the typed fields, so
+the entry fetch found nothing. 2.2.4 reads Tally's answers with or without those attributes, and never takes the
+count at the top as an entry. No request to Tally changed.
+
+Keep the add-on loaded as it is (C:\ProgramData\FinCom\addon\FinComRecorder.tdl). 2.2.4 does not change the add-on.
+
+In every entry you make for this sheet, start the narration with TRIAL.
+
+
+INSTALL (over 2.2.3)
+   Open the Link. Double-click the setup; if Windows warns: More info > Run anyway; "Just for me" (as before); Next.
+   You should see: "FinCom Bridge 2.2.4 is installed and running". The setup keeps 2.2.3, so you can go back to it
+   (HOW TO ROLL BACK, below).
+   Within a minute, FinCom's Tally page shows version 2.2.4 for this computer.
+
+
+CHECK 1 - RECEIPTS 192 AND 212 ENTER BY THEMSELVES (no action in Tally)
+   Wait two minutes after installing. Keep GARG SHEKHAR open in Tally.
+   You should see: Receipt 192 and Receipt 212 of 05-Oct-2026 are in the books (Look up and the ledger show them).
+   Sync activity shows the two receipts as Created, once each. Lines 4 and 17 show as 'replaced'.
+   If not, send: the time, what Sync activity shows for them, and the lines of Show log that start with "Recorder:"
+   and name Receipt 192 or Receipt 212.
+
+CHECK 2 - A NEW ENTRY
+   In Tally make one new entry: a Receipt of Rs 1, narration "TRIAL new 224". Save it. Note its number.
+   You should see: within half a minute, Sync activity shows it as Created, and it is in the books.
+   If not, send: its type and number, the time you saved it, and the Show log lines starting "Recorder:" that name it.
+
+CHECK 3 - ALTER IT: CHANGE THE AMOUNT
+   Open the entry from CHECK 2 in Tally, change its amount to Rs 2 and save.
+   You should see: within half a minute, Sync activity shows it as Altered, and the books show Rs 2.
+   If not, send: its type and number, the time, and the Show log lines starting "Recorder:" that name it.
+
+CHECK 4 - DUPLICATE AN ENTRY (Alt+2)
+   Open a TRIAL entry in Tally and press Alt+2 (Duplicate). Change the date and the amount, then save.
+   You should see: within half a minute, Sync activity shows a NEW entry as Created, with the new date and amount, and
+   it is in the books. The entry you duplicated from is unchanged in the books (not altered, not replaced).
+   If not, send: the type and number of both entries (the new one and the one you duplicated from), the time, and the
+   Show log lines starting "Recorder:" that name either of them.
+
+CHECK 5 - TEST FETCHING AN ENTRY AGAIN
+   ("Trial tools on this computer" must be on for NWS144 on the Tally page, as for 2.2.3.)
+   Right-click the FinCom icon near the clock > "Test fetching an entry". Accept Receipt, 212 and 05-Oct-2026 (OK on
+   each), answer Yes, and wait for the result box.
+   You should see: forms A to F now show the voucher (for example "A 1 voucher ... · B 1 voucher ... · F 1 voucher ...
+   · C 1 voucher ..."), not "0 vouchers".
+   If not, send: the text of the result box, and every line of Show log that starts with "Test fetching an entry:".
+
+How to send the log lines: right-click the FinCom icon near the clock > Show log. Each line starting "Recorder:" says
+what the bridge decided for one entry: asking Tally, taken, held (with the reason), or not asked (with the reason).
+Each line starting "Test fetching an entry:" is one step of CHECK 5.
+
+When CHECK 5 is done, the owner may switch "Trial tools on this computer" off again on the Tally page.
+
+
+HOW TO ROLL BACK (go back to 2.2.3)
+   1. Right-click the FinCom icon near the clock > "Roll back to the previous version".
+   2. A question names the version it goes back to (2.2.3). Answer Yes.
+   3. The icon goes away for a few seconds and comes back.
+   You should see: within a minute, FinCom's Tally page shows version 2.2.3 for this computer. Automatic updates stay
+   off on this computer until FinCom turns them on again.

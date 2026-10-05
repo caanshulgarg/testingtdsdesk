@@ -612,7 +612,7 @@ func TestLiveBodyFetch(t *testing.T) {
 		t.Fatalf("sent: %v", sent)
 	}
 	x := str(sent[0]["xml"])
-	if !strings.HasPrefix(x, "<VOUCHER ") || !strings.HasSuffix(x, "</VOUCHER>") || !strings.Contains(x, "<GUID>"+v.guid+"</GUID>") || !strings.Contains(x, "<ALLLEDGERENTRIES.LIST><LEDGERNAME>Party A</LEDGERNAME>") {
+	if !strings.HasPrefix(x, "<VOUCHER ") || !strings.HasSuffix(x, "</VOUCHER>") || !strings.Contains(x, "<GUID>"+v.guid+"</GUID>") || !strings.Contains(x, "<ALLLEDGERENTRIES.LIST>") || tagValue(x[strings.Index(x, "<ALLLEDGERENTRIES.LIST>"):], "LEDGERNAME") != "Party A" {
 		t.Fatalf("the voucher sent: %s", x)
 	}
 	if lg := fmt.Sprint(sent[0]["ledgers"]); !strings.Contains(lg, "Party A") || !strings.Contains(lg, "Sales") {
@@ -749,6 +749,9 @@ func TestUploaderGroupsAndMarkSent(t *testing.T) {
 
 // --- 4b. the request body, as the cloud's tests read it (tests/fixtures/recorder-lines-2.2.0.json)
 func TestRecorderLinesFixture(t *testing.T) {
+	if standTyped.Load() {
+		t.Skip("the fixture is the request the plain stand Tally's answers make, byte for byte")
+	}
 	rec, f, c := liveBridge(t, "")
 	oldPC, oldZone := liveComputerFn, liveZone
 	liveComputerFn, liveZone = func() string { return "NWS144" }, time.FixedZone("IST", 19800)
@@ -1162,7 +1165,7 @@ func TestRecorderLogsKept30Days(t *testing.T) {
 
 // --- 8. the version, the sheets and the allow-list decision line
 func TestRecorderVersion220Sheets(t *testing.T) {
-	if BridgeVersion != "2.2.3" { // 2.2.3 (the tray's Test fetching an entry); the 2.2.0 sheet stays as it was
+	if BridgeVersion != "2.2.4" { // 2.2.4 (Tally's typed fields read); the 2.2.0 sheet stays as it was
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	sheet := strings.Join(strings.Fields(readText("../docs/bridge-2.2.0-test-sheet.txt")), " ")
@@ -1188,9 +1191,9 @@ func TestRecorderVersion220Sheets(t *testing.T) {
 		t.Error("the 2.2.0 test sheet has neither the fingerprint placeholder nor the setup's SHA-256")
 	}
 	al := readText("../docs/tally-allowlist.md")
-	if !regexp.MustCompile(`not yet measured[^;]*; allowed for 2\.2\.3 only by the owner's decision of \d{4}-\d{2}-\d{2}`).MatchString(al) || !strings.Contains(al, vchByMasterID) ||
+	if !regexp.MustCompile(`not yet measured[^;]*; allowed for 2\.2\.4 only by the owner's decision of \d{4}-\d{2}-\d{2}`).MatchString(al) || !strings.Contains(al, vchByMasterID) ||
 		!strings.Contains(al, vchByNumberID) {
-		t.Fatal("docs/tally-allowlist.md: no decision line for 2.2.3, or no FinComVoucherByMaster / FinComVoucherByNumber row")
+		t.Fatal("docs/tally-allowlist.md: no decision line for 2.2.4, or no FinComVoucherByMaster / FinComVoucherByNumber row")
 	}
 }
 

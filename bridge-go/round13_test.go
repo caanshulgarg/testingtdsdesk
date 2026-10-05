@@ -126,7 +126,7 @@ func TestReadTestThreeRequestsLogged(t *testing.T) {
 			t.Fatalf("log lines for %q: %d, want 1\n%s", lb, len(lines), strings.Join(lines, "\n"))
 		}
 		l := lines[0]
-		if !strings.Contains(l, lb+": "+itoa(want[i])+" vouchers, ") || !strings.Contains(l, " bytes, ") || !strings.Contains(l, " s; head: <ENVELOPE><BODY>") {
+		if !strings.Contains(l, lb+": "+itoa(want[i])+" vouchers, ") || !strings.Contains(l, " bytes, ") || !strings.Contains(l, " s; head: <ENVELOPE>") {
 			t.Fatalf("the log line is not the agreed one: %s", l)
 		}
 		head := l[strings.Index(l, "; head: ")+len("; head: "):]

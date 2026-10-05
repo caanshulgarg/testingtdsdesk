@@ -112,7 +112,7 @@ type Node struct {
 
 func xmlDoc(text string) *Node {
 	root := &Node{Name: "#document"}
-	d := xml.NewDecoder(strings.NewReader(cleanXML(text)))
+	d := xml.NewDecoder(strings.NewReader(cleanXML(dropCmpInfo(text)))) // never a CMPINFO counter as an object (tallyxml.go)
 	d.Strict = false
 	d.AutoClose = xml.HTMLAutoClose
 	d.Entity = xml.HTMLEntity
@@ -1174,7 +1174,7 @@ func freeProbe(ctx context.Context, port int, company string) (string, error) {
 	if err == nil {
 		clearProbe(port)
 		if company != "" {
-			noteCompanyGUID(company, group(`<GUID[^>]*>([^<]*)</GUID>`, raw, 1))
+			noteCompanyGUID(company, tagRaw(raw, "GUID"))
 			noteCompanyAlts(company, raw)
 		}
 		writeLog(fmt.Sprintf("Tally %d answered the small check; requests go again", port))

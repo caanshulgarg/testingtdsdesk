@@ -17,9 +17,9 @@ var reTag = regexp.MustCompile(`TDSDesk:[A-Za-z0-9._-]+`)
 
 // what Tally answered to an import
 func readImportResult(text string) M {
-	n := func(tag string) int { return toInt(group(`<`+tag+`>\s*(-?\d+)\s*</`+tag+`>`, text, 1)) }
+	n := func(tag string) int { return toInt(group(tagOpenRe(tag)+`\s*(-?\d+)\s*</`+tag+`\s*>`, text, 1)) }
 	var errs []string
-	for _, m := range re(`<LINEERROR>([\s\S]*?)</LINEERROR>`).FindAllStringSubmatch(text, -1) {
+	for _, m := range re(tagOpenRe("LINEERROR")+`([\s\S]*?)</LINEERROR\s*>`).FindAllStringSubmatch(text, -1) {
 		errs = append(errs, html.UnescapeString(html.UnescapeString(strings.TrimSpace(m[1]))))
 	}
 	created, altered, errors_, exceptions, ignored := n("CREATED"), n("ALTERED"), n("ERRORS"), n("EXCEPTIONS"), n("IGNORED")
@@ -35,7 +35,7 @@ func readImportResult(text string) M {
 			msg = "Tally did not create it."
 		}
 	}
-	return M{"ok": ok, "created": created, "altered": altered, "errors": errors_, "exceptions": exceptions, "ignored": ignored, "message": msg, "lastVchId": group(`<LASTVCHID>\s*(\d+)\s*</LASTVCHID>`, text, 1),
+	return M{"ok": ok, "created": created, "altered": altered, "errors": errors_, "exceptions": exceptions, "ignored": ignored, "message": msg, "lastVchId": group(tagOpenRe("LASTVCHID")+`\s*(\d+)\s*</LASTVCHID\s*>`, text, 1),
 		"lineErrors": toAny(errs)} // round 15: the LINEERROR texts themselves
 }
 
@@ -108,7 +108,7 @@ func isBankItem(it M) bool {
 		return true
 	}
 	x := str(it["xml"])
-	vt := group(`<VOUCHERTYPENAME>([^<]*)</VOUCHERTYPENAME>`, x, 1)
+	vt := tagRaw(x, "VOUCHERTYPENAME")
 	if strings.TrimSpace(vt) == "" {
 		vt = group(`VCHTYPE="([^"]*)"`, x, 1)
 	}
@@ -135,7 +135,7 @@ func cannotSend(x string) string {
 		vtOnly = strings.Contains(x, `ACTION="Alter"`) && len(tags) > 0 && !other
 	}
 	// a voucher without a proper date never reaches Tally (Tally answers "Voucher date is missing" but may still make it)
-	if re(`^\s*<VOUCHER\b`).MatchString(x) && !re(`<DATE>(19|20)\d\d(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])</DATE>`).MatchString(x) {
+	if re(`^\s*<VOUCHER\b`).MatchString(x) && !re(tagOpenRe("DATE")+`(19|20)\d\d(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])</DATE\s*>`).MatchString(x) {
 		return "The entry has no valid date, so it was not sent to Tally."
 	}
 	if !re(`^\s*<(VOUCHER|LEDGER|GROUP)\b`).MatchString(x) && !vtOnly {
@@ -265,11 +265,11 @@ func round3(f float64) float64 { return float64(int64(f*1000+0.5)) / 1000 }
 
 // the voucher's date (yyyymmdd) and type, from the XML sent
 func voucherDateType(x string) (string, string) {
-	vt := strings.TrimSpace(group(`<VOUCHERTYPENAME>([^<]*)</VOUCHERTYPENAME>`, x, 1))
+	vt := strings.TrimSpace(tagRaw(x, "VOUCHERTYPENAME"))
 	if vt == "" {
 		vt = strings.TrimSpace(group(`VCHTYPE="([^"]*)"`, x, 1))
 	}
-	return group(`<DATE>(\d{8})</DATE>`, x, 1), html.UnescapeString(vt)
+	return tagDate(x, "DATE"), html.UnescapeString(vt)
 }
 
 // what one import request came to
@@ -604,7 +604,7 @@ func removeTallyVoucher(port int, company, guid, masterID, vtype, vdate, vnum st
 		}
 		res := readImportResult(raw)
 		writeLog("  delete by " + t.name + ": " + cut(flat(raw), 300))
-		if dl := group(`<DELETED>\s*(\d+)\s*</DELETED>`, raw, 1); dl != "" && toInt(dl) > 0 {
+		if dl := tagNum(raw, "DELETED"); dl != "" && toInt(dl) > 0 {
 			return M{"ok": true, "how": t.name, "message": ""}, nil
 		}
 		if m := str(res["message"]); m != "" && !strings.Contains(m, "did not create") && !contains(said, m) {
@@ -626,7 +626,7 @@ func findPostedTags(port int, company string, items []M, ledger string) map[stri
 	found := map[string]M{}
 	var dates []string
 	for _, it := range items {
-		if d := group(`<DATE>(\d{8})</DATE>`, str(it["xml"]), 1); d != "" {
+		if d := tagDate(str(it["xml"]), "DATE"); d != "" {
 			dates = append(dates, d)
 		}
 	}

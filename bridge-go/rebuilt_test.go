@@ -19,6 +19,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -129,7 +130,50 @@ func (f *standTally) noBalance(t *testing.T) {
 	}
 }
 
+// the stand Tally answers as a real TallyPrime 7.1 does (run 37301813638, 05-Oct-2026) when standTyped is set: its typed
+// fields with their TYPE attribute and numbers padded (<MASTERID TYPE="Number"> 2</MASTERID>, <DATE TYPE="Date">...),
+// the voucher's other attributes, line breaks between the tags, and a CMPINFO block of counters (<COMPANY>0</COMPANY>,
+// <VOUCHER>n</VOUCHER> ...) ahead of a collection's data. STAND_TALLY_TYPED=1 sets it for every test of the run (CI
+// runs the whole suite both ways: .github/workflows/ci.yml, bridge-linux and bridge-linux-typed)
+var standTyped, standTypedBase atomic.Bool
+
+func init() {
+	if os.Getenv("STAND_TALLY_TYPED") == "1" {
+		standTypedBase.Store(true)
+		standTyped.Store(true)
+	}
+}
+
+// a field as this stand Tally writes it: <TAG TYPE="typ">value</TAG> when it answers typed, else <TAG>value</TAG>
+func standField(tag, typ, value string) string {
+	if standTyped.Load() && typ != "" {
+		if typ == "Number" {
+			value = " " + strings.TrimSpace(value)
+		}
+		return "<" + tag + ` TYPE="` + typ + `">` + value + "</" + tag + ">"
+	}
+	return "<" + tag + ">" + value + "</" + tag + ">"
+}
+
+// the head of a collection's answer: a real Tally's, its counters included, when typed
+func standCollectionHead(ledgers, vouchers int) string {
+	if !standTyped.Load() {
+		return "<ENVELOPE><BODY><DATA><COLLECTION>"
+	}
+	var b strings.Builder
+	b.WriteString("<ENVELOPE>\r\n <HEADER>\r\n  <VERSION>1</VERSION>\r\n  <STATUS>1</STATUS>\r\n </HEADER>\r\n <BODY>\r\n  <DESC>\r\n   <CMPINFO>\r\n")
+	for _, c := range [][2]any{{"COMPANY", 0}, {"GROUP", 0}, {"LEDGER", ledgers}, {"COSTCATEGORY", 0}, {"VOUCHERTYPE", 2}, {"CURRENCY", 4},
+		{"TAXUNIT", 6}, {"VOUCHERNUMBERSERIES", 6}, {"VOUCHER", vouchers}} {
+		fmt.Fprintf(&b, "    <%s>%v</%s>\r\n", c[0], c[1], c[0])
+	}
+	b.WriteString("   </CMPINFO>\r\n  </DESC>\r\n  <DATA>\r\n   <COLLECTION ISCMPDEPTYPE=\"Yes\" CMPLOCUS=\"4\" CMPDEPTYPE=\"64\">")
+	return b.String()
+}
+
 func (v *tVch) xml() string {
+	if standTyped.Load() {
+		return v.xmlTyped()
+	}
 	var b strings.Builder
 	fmt.Fprintf(&b, `<VOUCHER REMOTEID="%s" VCHTYPE="%s"><DATE>%s</DATE><GUID>%s</GUID><MASTERID>%s</MASTERID><ALTERID> %d</ALTERID><VOUCHERTYPENAME>%s</VOUCHERTYPENAME>`+
 		`<VOUCHERNUMBER>%s</VOUCHERNUMBER><PARTYLEDGERNAME>%s</PARTYLEDGERNAME><NARRATION>%s</NARRATION><ISOPTIONAL>No</ISOPTIONAL><ISCANCELLED>No</ISCANCELLED>`,
@@ -138,6 +182,25 @@ func (v *tVch) xml() string {
 		fmt.Fprintf(&b, `<ALLLEDGERENTRIES.LIST><LEDGERNAME>%s</LEDGERNAME><AMOUNT>%s</AMOUNT></ALLLEDGERENTRIES.LIST>`, esc(l[0]), l[1])
 	}
 	b.WriteString("</VOUCHER>")
+	return b.String()
+}
+
+// the voucher as a real TallyPrime 7.1 writes it (fetch-C.xml of the spike's round 2)
+func (v *tVch) xmlTyped() string {
+	var b strings.Builder
+	nl := "\r\n     "
+	fmt.Fprintf(&b, `<VOUCHER REMOTEID="%s" VCHKEY="%s-0000b4d8:00000008" VCHTYPE="%s" OBJVIEW="Accounting Voucher View">`, v.guid, v.guid, v.typ)
+	for _, f := range []string{standField("DATE", "Date", v.date), "<GUID>" + v.guid + "</GUID>", standField("NARRATION", "String", esc(v.narr)), "<REQUESTORRULE/>",
+		"<VOUCHERTYPENAME>" + v.typ + "</VOUCHERTYPENAME>", standField("PARTYLEDGERNAME", "String", esc(v.party)), "<VOUCHERNUMBER>" + v.no + "</VOUCHERNUMBER>",
+		standField("ISOPTIONAL", "Logical", "No"), standField("EFFECTIVEDATE", "Date", v.date), standField("ISCANCELLED", "Logical", "No"),
+		standField("ALTERID", "Number", fmt.Sprint(v.alter)), standField("MASTERID", "Number", v.master), standField("VOUCHERKEY", "Number", "198839805935624")} {
+		b.WriteString(nl + f)
+	}
+	for _, l := range v.lines {
+		b.WriteString(nl + "<ALLLEDGERENTRIES.LIST>" + nl + " " + standField("LEDGERNAME", "String", esc(l[0])) + nl + " " + standField("ISDEEMEDPOSITIVE", "Logical", "No") +
+			nl + " " + standField("AMOUNT", "Amount", l[1]) + nl + " <BILLALLOCATIONS.LIST>      </BILLALLOCATIONS.LIST>" + nl + "</ALLLEDGERENTRIES.LIST>")
+	}
+	b.WriteString("\r\n    </VOUCHER>\r\n    ")
 	return b.String()
 }
 
@@ -212,8 +275,8 @@ func newStandTally(t *testing.T) *standTally {
 		}
 		inDates := func(v *tVch) bool { return from == "" || (v.date >= from && v.date <= to) }
 		var o strings.Builder
-		o.WriteString("<ENVELOPE><BODY><DATA><COLLECTION>")
 		f.mu.Lock()
+		o.WriteString(standCollectionHead(len(f.led), len(f.vch)))
 		switch id {
 		case "TDSDeskCompanies", "FinComFree", "FinComCompany", cnReportID:
 			// 2.2.0 (the owner's finding on NWS144): how this Tally gives the change numbers. cnMode "": to the company
@@ -234,7 +297,8 @@ func newStandTally(t *testing.T) *standTally {
 				_, _ = w.Write([]byte(o.String()))
 				return
 			}
-			fmt.Fprintf(&o, `<COMPANY NAME="%s"><NAME>%s</NAME><GUID>%s</GUID><STARTINGFROM>20260401</STARTINGFROM><ALTVCHID>%s</ALTVCHID><ALTMSTID>%s</ALTMSTID></COMPANY>`, esc(coName), esc(coName), f.guid, v, m)
+			fmt.Fprintf(&o, `<COMPANY NAME="%s" RESERVEDNAME="">%s%s%s%s%s</COMPANY>`, esc(coName), standField("NAME", "String", esc(coName)), standField("GUID", "String", f.guid),
+				standField("STARTINGFROM", "Date", "20260401"), standField("ALTVCHID", "Number", v), standField("ALTMSTID", "Number", m))
 		case "FinComLedgers":
 			var after, upto int64 = 0, -1
 			if m := reMidRange.FindStringSubmatch(body); m != nil {
@@ -245,8 +309,9 @@ func newStandTally(t *testing.T) *standTally {
 			}
 			for _, l := range f.led {
 				if l.mid > after && (upto < 0 || l.mid <= upto) {
-					fmt.Fprintf(&o, `<LEDGER NAME="%s" RESERVEDNAME=""><GUID>%s</GUID><MASTERID> %d</MASTERID><ALTERID> %d</ALTERID><PARENT>%s</PARENT><OPENINGBALANCE>%s</OPENINGBALANCE>`+
-						`<PARTYGSTIN>%s</PARTYGSTIN><INCOMETAXNUMBER>%s</INCOMETAXNUMBER><LEDSTATENAME>%s</LEDSTATENAME></LEDGER>`, esc(l.name), l.guid, l.mid, l.alter, esc(l.parent), l.open, l.gstin, l.pan, esc(l.state))
+					fmt.Fprintf(&o, `<LEDGER NAME="%s" RESERVEDNAME="">%s%s%s%s%s%s%s%s</LEDGER>`, esc(l.name), standField("GUID", "String", l.guid),
+						standField("MASTERID", "Number", fmt.Sprintf(" %d", l.mid)), standField("ALTERID", "Number", fmt.Sprintf(" %d", l.alter)), standField("PARENT", "String", esc(l.parent)),
+						standField("OPENINGBALANCE", "Amount", l.open), standField("PARTYGSTIN", "String", l.gstin), standField("INCOMETAXNUMBER", "String", l.pan), standField("LEDSTATENAME", "String", esc(l.state)))
 				}
 			}
 		case "FinComGroups":

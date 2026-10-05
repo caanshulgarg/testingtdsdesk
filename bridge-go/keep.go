@@ -11,6 +11,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -187,10 +188,10 @@ func keepList(tc *TC, company string, port int, from, to string, after int64) ([
 		return nil, err
 	}
 	var out []kentry
-	for _, m := range re(`<VOUCHER\b[\s\S]*?</VOUCHER>`).FindAllString(raw, -1) {
-		g := strings.TrimSpace(group(`<GUID>([^<]*)</GUID>`, m, 1))
-		a := group(`<ALTERID>\s*(\d+)`, m, 1)
-		d := group(`<DATE>(\d{8})</DATE>`, m, 1)
+	for _, m := range reVchBlock.FindAllString(raw, -1) {
+		g := strings.TrimSpace(tagRaw(m, "GUID"))
+		a := tagNum(m, "ALTERID")
+		d := tagDate(m, "DATE")
 		if g != "" && d != "" && d >= from && d <= to { // a Tally that ignores the period is cut here
 			out = append(out, kentry{g, toI64(a), d})
 		}
@@ -220,8 +221,8 @@ func saveKeepDays(dir, from, to, x string) int {
 // cloud (an Update now that reads the year again sends only what changed, deleted entries included)
 func saveKeepDaysChanged(dir, from, to, x string, full bool) (int, int) {
 	by := map[string]*strings.Builder{}
-	for _, m := range re(`<VOUCHER\b[\s\S]*?</VOUCHER>`).FindAllString(x, -1) {
-		d := group(`<DATE>(\d{8})</DATE>`, m, 1)
+	for _, m := range reVchBlock.FindAllString(x, -1) {
+		d := tagDate(m, "DATE")
 		if d == "" {
 			continue
 		}
@@ -264,7 +265,8 @@ func saveKeepDaysChanged(dir, from, to, x string, full bool) (int, int) {
 	return n, len(written)
 }
 
-func countVouchers(t string) int { return len(re(`<VOUCHER\b`).FindAllStringIndex(t, -1)) }
+// the vouchers a text shows: their opening tags (a voucher cut short counts; CMPINFO's counter <VOUCHER>n</VOUCHER> does not)
+func countVouchers(t string) int { return len(reVchOpen.FindAllStringIndex(t, -1)) }
 
 // round 12 (03-Oct-2026): how many vouchers the copy holds for the days from..to (the day files, days/<d>.xml; the
 // posting read-back writes those too)
@@ -289,8 +291,9 @@ func copyVouchersAll(dir string) int {
 
 // the head of a Tally answer for the log: its first 200 characters with the tags only (attributes and every value
 // between tags dropped, so no figure or name is logged) and runs of white space collapsed to one space
+// (CMPINFO's counters dropped first: a real Tally's would fill the 200 characters before its data)
 func answerHead(x string) string {
-	t := re(`<([/?!]?[\w.:-]*)[^>]*>`).ReplaceAllString(x, "<$1>")
+	t := re(`<([/?!]?[\w.:-]*)[^>]*>`).ReplaceAllString(dropCmpInfo(x), "<$1>")
 	t = re(`>[^<]*<`).ReplaceAllString(t, "><")
 	if i := strings.Index(t, "<"); i >= 0 {
 		t = t[i:]
@@ -313,10 +316,10 @@ func dayBookIncomplete(x string) string {
 	if !re(`(?i)</ENVELOPE>\s*$`).MatchString(t) {
 		return "the envelope is not closed: the answer stopped part-way"
 	}
-	if re(`(?i)<LINEERROR>`).MatchString(t) {
-		return "Tally: " + cut(flat(group(`(?i)<LINEERROR>([\s\S]*?)</LINEERROR>`, t, 1)), 160)
+	if re(`(?i)<LINEERROR[\s>]`).MatchString(t) {
+		return "Tally: " + cut(flat(group(`(?i)<LINEERROR(?:\s[^>]*)?>([\s\S]*?)</LINEERROR>`, t, 1)), 160)
 	}
-	if a, b := countVouchers(t), len(xmlDoc(t).All("VOUCHER")); a != b {
+	if a, b := countVouchers(t), len(vchNodes(xmlDoc(t))); a != b {
 		return fmt.Sprintf("the text shows %d vouchers but %d could be decoded", a, b)
 	}
 	return ""
@@ -436,9 +439,9 @@ func importKeepSeed(company, from, to, x string) (M, error) {
 // one day's entries as numbers only, one line each: guid, change number
 func indexText(t string) string {
 	var b strings.Builder
-	for _, m := range re(`<VOUCHER\b[\s\S]*?</VOUCHER>`).FindAllString(t, -1) {
-		g := strings.TrimSpace(group(`<GUID>([^<]*)</GUID>`, m, 1))
-		a := group(`<ALTERID>\s*(\d+)`, m, 1)
+	for _, m := range reVchBlock.FindAllString(t, -1) {
+		g := strings.TrimSpace(tagRaw(m, "GUID"))
+		a := tagNum(m, "ALTERID")
 		if g != "" {
 			b.WriteString(g + "\t" + a + "\n")
 		}
@@ -634,7 +637,9 @@ func renameKeepLedger(dir string, st M, old, nw string) int {
 		t2 := t
 		for _, o := range olds {
 			for _, tag := range []string{"LEDGERNAME", "PARTYLEDGERNAME"} {
-				t2 = strings.ReplaceAll(t2, "<"+tag+">"+o+"</"+tag+">", "<"+tag+">"+nn+"</"+tag+">")
+				// the field as Tally writes it, with or without its TYPE attribute (real TallyPrime 7.1)
+				r := re(`(` + tagOpenRe(tag) + `)` + regexp.QuoteMeta(o) + `(</` + tag + `\s*>)`)
+				t2 = r.ReplaceAllStringFunc(t2, func(m string) string { sm := r.FindStringSubmatch(m); return sm[1] + nn + sm[2] })
 			}
 		}
 		if t2 != t {
@@ -694,10 +699,10 @@ func useKeepPosted(dir string, st M) int {
 			open = `<VOUCHER VCHTYPE="` + esc(str(e["type"])) + `"` + strings.TrimPrefix(open, "<VOUCHER")
 		}
 		rest := x[len(re(`^<VOUCHER\b[^>]*>`).FindString(x)):]
-		rest = re(`<GUID>[^<]*</GUID>`).ReplaceAllString(rest, "")
-		rest = re(`<ALTERID>[^<]*</ALTERID>`).ReplaceAllString(rest, "")
-		rest = re(`<VOUCHERNUMBER>[^<]*</VOUCHERNUMBER>`).ReplaceAllString(rest, "")
-		if loc := re(`<DATE>[^<]*</DATE>`).FindStringIndex(rest); loc != nil {
+		rest = re(tagRe("GUID")).ReplaceAllString(rest, "")
+		rest = re(tagRe("ALTERID")).ReplaceAllString(rest, "")
+		rest = re(tagRe("VOUCHERNUMBER")).ReplaceAllString(rest, "")
+		if loc := re(tagRe("DATE")).FindStringIndex(rest); loc != nil {
 			rest = rest[:loc[0]] + "<DATE>" + str(e["date"]) + "</DATE>" + rest[loc[1]:]
 		}
 		v := open + "<GUID>" + esc(str(e["guid"])) + "</GUID><ALTERID> " + fmt.Sprint(toI64(e["alter"])) + "</ALTERID>"
@@ -1442,8 +1447,8 @@ func testKeepMonth(company, ym string, pref int) (M, error) {
 		return nil, err
 	}
 	dbG := map[string]bool{}
-	for _, m := range re(`<VOUCHER\b[\s\S]*?</VOUCHER>`).FindAllString(dbx, -1) {
-		if g := strings.TrimSpace(group(`<GUID>([^<]*)</GUID>`, m, 1)); g != "" {
+	for _, m := range reVchBlock.FindAllString(dbx, -1) {
+		if g := strings.TrimSpace(tagRaw(m, "GUID")); g != "" {
 			dbG[g] = true
 		}
 	}

@@ -198,7 +198,7 @@ func dupCheckRequest(company, date, party string) string {
 
 // an answer the check can trust: Tally's envelope, without an error line
 func goodDupAnswer(raw string) bool {
-	return re(`(?i)<ENVELOPE[\s>]`).MatchString(raw) && !re(`(?i)<LINEERROR>`).MatchString(raw)
+	return re(`(?i)<ENVELOPE[\s>]`).MatchString(raw) && !re(`(?i)<LINEERROR[\s>]`).MatchString(raw)
 }
 
 // the vouchers in Tally on that date (for that party), as keys; an error when Tally did not answer properly
