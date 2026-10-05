@@ -956,7 +956,11 @@ function cleanRecorderLine(x: any, me: { id: string }): { line?: Record<string, 
   // migration 45: a short line (FinCom's own entry): its FinCom id as fid, or the text after "TDSDesk:" in the narration it
   // carries (the rule of parse.js); an id outside [A-Za-z0-9._-]{1,80} is none
   const fidRaw = s(x?.fid, 120), narr = s(x?.narration, 1000);
-  const fid = /^[A-Za-z0-9._-]{1,80}$/.test(fidRaw) ? fidRaw : ((narr.match(/TDSDesk:([A-Za-z0-9._-]{1,80})/) || [])[1] || "");
+  // FinCom Bridge 2.2.2 (second review L-C): lineFid, a FinCom id the line carries that is NOT the entry's (a voucher copied
+  // from one FinCom posted): kept as it is, and then no fid is ever taken from the narration's "TDSDesk:<id>"
+  const lineFidRaw = s(x?.lineFid, 120), lineFid = /^[A-Za-z0-9._-]{1,80}$/.test(lineFidRaw) ? lineFidRaw : "";
+  const fid = /^[A-Za-z0-9._-]{1,80}$/.test(fidRaw) ? fidRaw : (lineFid ? "" : ((narr.match(/TDSDesk:([A-Za-z0-9._-]{1,80})/) || [])[1] || ""));
+  if (lineFid) line.lineFid = lineFid;
   if (fid && !event.startsWith("ledger_")) { line.fid = fid; if (!xml) line.short = true; }
   // bridge 2.2.2 (migration 51): the add-on's ids did not belong together (idsMismatch, the add-on's GUID as lineGuid, for
   // information only), and the bridge's plain reason when the line goes without the entry's body (heldWhy)
@@ -971,6 +975,8 @@ function cleanRecorderLine(x: any, me: { id: string }): { line?: Record<string, 
     // that voucher's lines alone: the rest of the add-on's XML is never stored with the line (review L1)
     const og = line.object_guid as string | null;
     line.vouchers = og ? r.vouchers.filter((v: any) => v?.guid === og).map((v: any) => ({ ...dayVouchers({ vouchers: [v] })[0], day: isDay(v.date) ? iso(v.date) : day })) : [];
+    // 2.2.2 (second review L-C): a copied FinCom id (lineFid) is not the entry's, from the body's narration either
+    if (lineFid && !fid) line.vouchers = (line.vouchers as any[]).map((v: any) => ({ ...v, fid: null }));
     line.lines = og ? dayLines(r).filter((l: any) => Array.isArray(l) && l[0] === og) : [];
   }
   return { line };
