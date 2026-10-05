@@ -1016,6 +1016,7 @@ async function recorderLines(dev: any, firm: string, book: string, body: any) {
     else { send.push({ ...c.line, company }); at.push(i); }
   });
   if (send.length) await shortBodies(firm, book, send);
+  const found = send.length ? await guidsFromRecord(book, send) : new Map<string, string>();     // bridge 2.3.0: cancel/delete GUID
   // round 20 (migration 47): more than 50 FULL lines (an entry body read from the add-on's XML; short lines' bodies built from
   // the posting do not count) go on the queue as ONE message and are answered {queued: n} at once; the database's drain
   // (pg_cron every 30 s) applies them in order and Sync activity shows each line's state. Round 21 (review 47/48 H1): ONE
@@ -1034,17 +1035,76 @@ async function recorderLines(dev: any, firm: string, book: string, body: any) {
     if (error && notReady44(error)) return reply(503, { ok: false, notReady: true, error: "The cloud does not take recorder lines yet (migration 44)." });
     if (error) throw dbFail("recorder_lines " + via, error, "The cloud could not store these recorder lines just now; send them again.");
     if (data && typeof data.queued === "number") {
-      send.forEach((l: any, k: number) => { results[at[k]] = { line_id: String(l.line_id ?? ""), state: "queued", why: null }; });
+      send.forEach((l: any, k: number) => { results[at[k]] = { line_id: String(l.line_id ?? ""), state: "queued", why: null, ...(found.has(String(l.line_id ?? "")) ? { guid: found.get(String(l.line_id ?? "")) } : {}) }; });
       const failed = results.filter((r) => r?.state === "failed").length;
       console.log("tally-ingest recorder_lines queued", book, JSON.stringify({ n: send.length, full, failed, msg: data.msg ?? null, behind: data.behind ?? 0 }));
       return reply(200, { ok: true, queued: send.length, failed, msg: data.msg ?? null, ...(data.behind ? { behind: data.behind } : {}), results });
     }
-    ((data as any)?.results || []).forEach((r: any, k: number) => { if (k < at.length) results[at[k]] = { line_id: String(r?.line_id ?? send[k].line_id ?? ""), state: String(r?.state || "failed"), why: r?.why ?? null }; });
+    ((data as any)?.results || []).forEach((r: any, k: number) => {
+      if (k >= at.length) return;
+      const lid = String(r?.line_id ?? send[k].line_id ?? "");
+      results[at[k]] = { line_id: lid, state: String(r?.state || "failed"), why: r?.why ?? null, ...(found.has(lid) ? { guid: found.get(lid) } : {}) };
+    });
   }
   const out: Record<string, unknown> = { ok: true, results };
   for (const k of ["applied", "held", "duplicate", "stale", "failed"]) out[k] = results.filter((r) => r?.state === k).length;
   if (out.held || out.failed) console.log("tally-ingest recorder_lines", book, JSON.stringify({ n: results.length, held: out.held, failed: out.failed, why: results.filter((r) => r && r.state !== "applied" && r.state !== "duplicate").slice(0, 3).map((r) => r.why) }));
   return reply(200, out);
+}
+// FinCom Bridge 2.3.0 (cancel/delete GUID): a real TallyPrime 7.1 writes no GUID on a voucher's delete or cancel line (the
+// add-on's Before/After Delete / Cancel Object), and the bridge sends one only when Tally (a cancel, asked by its MasterID) or
+// its own record gave it. For such a line without a GUID, FinCom's own record: the book's recorder lines under the same
+// company GUID and MasterID that ended applied or duplicate and came WITH Tally's entry under their GUID (body.vouchers
+// holding it): never a placeholder (...-00000000), never a line whose ids did not belong together (idsMismatch), never the
+// GUID a MasterID makes on its own (an entry that came by import or sync keeps another GUID). Exactly one GUID found: the line
+// goes on with it (the bridge's heldWhy dropped; payload.guidFrom), and the answer's result carries guid. Else the line goes
+// as sent: the database holds it with words. No migration: tally_recorder_lines is read through the API. Never fails the call
+async function guidsFromRecord(book: string, send: Record<string, any>[]) {
+  const found = new Map<string, string>();
+  const want = send.filter((l) => (l.event === "deleted" || l.event === "cancelled") && !l.object_guid && /^[0-9]{1,10}$/.test(String(l.master_id || "")) && Number(l.master_id) > 0 && l.company_guid);
+  if (!want.length) return found;
+  try {
+    const mids = [...new Set(want.map((l) => String(l.master_id)))].slice(0, 500);
+    const { data, error } = await db.from("tally_recorder_lines").select("id, object_guid, master_id, company_guid, state, event, body, payload")
+      .eq("book_id", book).in("master_id", mids).in("state", ["applied", "duplicate"]).in("event", ["created", "altered", "imported"]).order("id", { ascending: false }).limit(2000);
+    if (error || !Array.isArray(data)) { console.log("tally-ingest recorder_lines: cancel/delete GUID: FinCom's record not read", book, String(error?.message || "").slice(0, 200)); return found; }
+    for (const l of want) {
+      const gs = new Map<string, number | string>();
+      // the lines BEFORE it in this same call that carry Tally's entry under their GUID (an alteration and its delete sent
+      // together): as the stored ones
+      for (const e of send) {
+        if (e === l) break;
+        const g = String(e.object_guid || "");
+        if (!["created", "altered", "imported"].includes(String(e.event)) || String(e.master_id || "") !== String(l.master_id)) continue;
+        if (String(e.company_guid || "").toLowerCase() !== String(l.company_guid).toLowerCase() || !g || /-0{8}$/.test(g) || e.idsMismatch === true) continue;
+        if (Array.isArray(e.vouchers) && e.vouchers.some((v: any) => v?.guid === g) && !gs.has(g)) gs.set(g, "sent with it (" + String(e.line_id || "") + ")");
+      }
+      for (const r of data as any[]) {
+        const g = String(r?.object_guid || "");
+        if (String(r?.master_id || "") !== String(l.master_id) || String(r?.company_guid || "").toLowerCase() !== String(l.company_guid).toLowerCase()) continue;
+        if (!g || /-0{8}$/.test(g) || r?.payload?.idsMismatch === true || String(r?.payload?.idsMismatch || "").toLowerCase() === "true") continue;
+        if (!(Array.isArray(r?.body?.vouchers) && r.body.vouchers.some((v: any) => v?.guid === g))) continue;     // Tally's entry came with it
+        if (!gs.has(g)) gs.set(g, Number(r.id));
+      }
+      const lid = String(l.line_id || ""), verb = l.event === "deleted" ? "delete" : "cancel";
+      if (gs.size !== 1) {
+        console.log("tally-ingest recorder_lines: cancel/delete GUID: line " + lid + ", " + verb + " of mid " + l.master_id + ": " + (gs.size ? gs.size + " different GUIDs in FinCom's record: not told" : "not in FinCom's record") + "; held", book);
+        continue;
+      }
+      const [g, rid] = [...gs.entries()][0];
+      const made = String(l.company_guid) + "-" + Number(l.master_id).toString(16).padStart(8, "0");
+      l.object_guid = g; delete l.heldWhy;
+      const src = typeof rid === "number" ? "recorder line " + rid : "the line " + rid.replace(/^sent with it \(|\)$/g, "") + " sent with it";
+      const pl = { ...(l.payload || {}), object_guid: g, guidFrom: "FinCom's copy: " + src };
+      delete (pl as any).heldWhy; l.payload = pl;
+      found.set(lid, g);
+      console.log("tally-ingest recorder_lines: cancel/delete GUID: line " + lid + ", " + verb + " of mid " + l.master_id + ": GUID from FinCom's record (" + src + "): " + g +
+        (g.toLowerCase() === made.toLowerCase() ? "; the GUID its MasterID makes agrees" : "; not the GUID its MasterID makes"), book);
+    }
+  } catch (e) {
+    console.log("tally-ingest recorder_lines: cancel/delete GUID: FinCom's record not read", book, String((e as Error)?.message || e).slice(0, 200));
+  }
+  return found;
 }
 // migration 45: the short lines' entries from FinCom's own posted XML (tally_post_xml_for: the live, accepted posting of
 // each FinCom id for this firm and book), read with parse.js as a day book is, the line's GUID and AlterID overriding (the

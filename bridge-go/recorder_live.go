@@ -94,6 +94,11 @@ type change struct {
 	// FinCom's own import coming back (its FinCom id, a GUID Tally made for its MasterID): not fetched (decided once, when
 	// the line is read)
 	exempt bool
+	// 2.3.0 (cancel/delete GUID, recorder_guids.go): a cancel whose GUID is asked of Tally by its MasterID (guidFetch); a
+	// delete / cancel sent without a GUID for FinCom's own record to tell (guidCloud); a delete (or a cancel Tally cannot be
+	// asked for) whose GUID is looked up in the bridge's record when it is sent, after the lines before it took Tally's
+	// entry (guidLate)
+	guidFetch, guidCloud, guidLate bool
 }
 
 func (c *change) key() string { return c.company + "|" + c.companyGuid }
@@ -108,6 +113,9 @@ func (c *change) needsBody() bool {
 	}
 	if c.byNumber {
 		return c.vchDate != ""
+	}
+	if c.guidFetch {
+		return c.masterId != "" && c.vchDate != ""
 	}
 	if c.masterId == "" {
 		return false
@@ -199,6 +207,7 @@ func liveResetState() {
 	live.dir, live.srcDir = "", ""
 	live.mu.Unlock()
 	liveSrc.Store("")
+	liveMidReset()
 }
 
 func liveResetBackoff() {
@@ -1124,6 +1133,17 @@ func liveEmit(l recLine, ev, file string, gen int, start, lineStart, end int64, 
 			liveDecide(c, "not asked: "+c.heldWhy)
 		}
 	}
+	// 2.3.0 (cancel/delete GUID): a voucher's delete / cancel without Tally's GUID (a real TallyPrime 7.1 gives none on
+	// these events): never the GUID its MasterID makes; a cancel is asked of Tally by its MasterID, a delete (the entry is
+	// gone) takes the bridge's own record, else FinCom's (recorder_guids.go)
+	if c.guidOwn() && (c.guid == "" || livePlaceholder(c.guid)) {
+		c.guid, c.alterId = "", ""
+		if c.event == "cancelled" && c.masterId != "" && c.vchDate != "" {
+			c.guidFetch = true
+		} else {
+			c.guidLate = true
+		}
+	}
 	if livePlaceholder(c.guid) {
 		c.guid = ""
 		// a voucher only: the rule is proven for vouchers (NWS144); a new ledger's GUID stays empty until Tally gives it
@@ -1622,6 +1642,10 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 	failed := func(cs []*change, why string) {
 		live.mu.Lock()
 		for _, c := range cs {
+			if c.guidFetch {
+				liveGuidFallback(c, why)
+				continue
+			}
 			c.bodyTried = true
 			if c.heldWhy == "" {
 				c.heldWhy = "the entry was not read from Tally: " + cutRunes(why, 160)
@@ -1658,6 +1682,12 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 		}
 		if !spOK {
 			// security L6: no starting point recorded: nothing of the company's entries is asked or taken
+			if c.guidFetch {
+				live.mu.Lock()
+				liveGuidFallback(c, "no starting point recorded for this company")
+				live.mu.Unlock()
+				continue
+			}
 			liveDecide(c, "not asked: no starting point recorded for this company")
 			live.mu.Lock()
 			c.bodyTried, c.heldWhy = true, "the company's starting point is not recorded yet, so its entries are not taken from Tally"
@@ -1717,7 +1747,15 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 			for _, c := range part {
 				x := got[c.masterId]
 				if why, kind := liveVoucherWrong(x, "voucher with MasterID "+c.masterId, liveWantOf(c, sp, spOK)); why != "" {
+					if c.guidFetch {
+						liveGuidFallback(c, why) // a cancel: never asked by its number (the record, else FinCom's)
+						continue
+					}
 					missing = append(missing, miss{c, why, kind})
+					continue
+				}
+				if c.guidFetch {
+					liveTakeGUID(c, x)
 					continue
 				}
 				liveTakeBody(c, x)
@@ -1864,7 +1902,8 @@ func liveRecorderLinesBody(company, guid string, group []*change) M {
 func liveUploadOnce() int {
 	liveUpMu.Lock()
 	defer liveUpMu.Unlock()
-	liveResolveTurn() // 2.2.1: lines sent held, resolved once Tally gives their entry
+	defer liveMidSave() // 2.3.0: the record of Tally's GUIDs, when Tally gave any this turn
+	liveResolveTurn()   // 2.2.1: lines sent held, resolved once Tally gives their entry
 	for i := 0; i < 8; i++ {
 		n, again := liveUploadStep()
 		if !again {
@@ -1984,6 +2023,10 @@ func liveUploadStep() (int, bool) {
 		if c.needsBody() {
 			if bodiesOff {
 				c.bodyTried = true // the body fetch is off for this company (the 2 s rule): the line goes without
+				if c.guidFetch {
+					liveGuidFallback(c, "the body fetch is off for this company (Tally took longer than the 2 s limit)")
+					continue
+				}
 				if !c.isLedger() {
 					c.heldWhy = "the entry fetch is off for this company (Tally took longer than the 2 s limit)"
 					why := "Tally took longer than the 2 s limit"
@@ -2029,6 +2072,17 @@ func liveUploadStep() (int, bool) {
 			due = c.byNumber && !time.Now().Before(c.askAfter) && !posting && !postingGoing()
 			group = group[:i]
 			break
+		}
+	}
+	// 2.3.0: a delete's GUID from the bridge's record, now that the lines before it in the group took Tally's entry
+	for _, c := range group {
+		if c.guidLate {
+			c.guidLate = false
+			why := ""
+			if c.event == "cancelled" {
+				why = "the line has no MasterID or no date"
+			}
+			liveGuidFallback(c, why)
 		}
 	}
 	company, guid := "", ""
@@ -2129,6 +2183,7 @@ func liveUploadStep() (int, bool) {
 	liveSaveIds(bodied, ".body.txt")
 	liveSaveOffsets()
 	liveHeldAdd(held)
+	liveGuidAnswers(group, arr(r.json["results"])) // 2.3.0: what FinCom's record said of a delete / cancel sent without a GUID
 	return len(group), false
 }
 

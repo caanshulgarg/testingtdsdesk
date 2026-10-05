@@ -274,6 +274,8 @@ func liveTakeBody(c *change, x string) {
 	}
 	c.heldWhy = ""
 	liveDecide(c, "taken: Tally's GUID "+c.guid+", AlterID "+c.alterId)
+	// 2.3.0 (cancel/delete GUID): Tally's GUID of this MasterID kept for a later delete of the entry
+	liveMidNote(c.companyGuid, c.masterId, c.guid, tagValue(x, "VOUCHERTYPENAME"), tagValue(x, "VOUCHERNUMBER"), normDate(tagValue(x, "DATE")))
 	c.ledgers = voucherLedgerNames(x)
 	if c.during {
 		for _, n := range c.ledgers {
