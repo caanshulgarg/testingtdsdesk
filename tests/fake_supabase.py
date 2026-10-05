@@ -28,6 +28,7 @@ STORAGE_FAIL = {}         # {status, body, n}: the next n Storage GETs answer th
 FAIL_INSERT = {}          # table -> {message, code}: a POST answers this PostgREST error
 FAIL_DONE = {"upload": 0} # the next n tally_work_done of an upload piece fail
 FAIL_DAY = {}             # day -> n: the next n calls queuing a day file of that day fail (tally_work_send / tally_upload_advance)
+NO_FN = set()             # functions this database does not have yet (an older cloud): PostgREST's 404 PGRST202
 PK = {"gst_sessions": ["firm_id", "gstin"], "gst_returns": ["firm_id", "gstin", "form", "period"], "gst_einv_accounts": ["firm_id", "gstin"], "gst_einvoices": ["firm_id", "gstin", "doc_key"]}
 ids = itertools.count(1)
 def now(): return time.time()
@@ -96,6 +97,13 @@ def rpc(fn, a):
         SECRETS[a["p_name"]] = a["p_value"]; return "sec-" + a["p_name"]
     if fn == "gsp_secret_get": return SECRETS.get(a["p_name"]) if a["p_name"].startswith("gsp:") else None
     if fn == "gst_cron_ok": return a.get("k") == CRON_KEY
+    if fn == "tally_post_take_for":     # migration 54: the oldest waiting posting of the computer for this bridge (or none named, when main)
+        if any(p.get("device_id") == a["p_device"] and p.get("bridge_id") == a["p_bridge"] and p.get("changes_only") for p in T.get("tally_bridge_prefs", [])): return []
+        if not any(a["p_bridge"] in ((d.get("info") or {}).get("bridges") or {}) for d in T["tally_devices"] if d["id"] == a["p_device"]): return []
+        for j in sorted(T["tally_post_jobs"], key=lambda j: j.get("created_at") or ""):
+            if j["device_id"] == a["p_device"] and j["status"] == "waiting" and (j.get("target_bridge") == a["p_bridge"] or (j.get("target_bridge") is None and a.get("p_main"))):
+                j["status"] = "taken"; return [j]
+        return []
     if fn == "tally_post_take":
         for j in T["tally_post_jobs"]:
             if j["device_id"] == a["p_device"] and j["status"] == "waiting": j["status"] = "taken"; return [j]
@@ -124,6 +132,8 @@ class H(http.server.BaseHTTPRequestHandler):
         if path == "/auth/v1/user":
             w = self.who(); return self.send(200, w) if isinstance(w, dict) else self.send(401, {"msg": "bad token"})
         if path.startswith("/rest/v1/rpc/"):
+            if path.rsplit("/", 1)[1] in NO_FN:
+                return self.send(404, {"code": "PGRST202", "message": "Could not find the function public.%s in the schema cache" % path.rsplit("/", 1)[1], "details": None, "hint": None})
             try: return self.send(200, rpc(path.rsplit("/", 1)[1], json.loads(raw or b"{}")))
             except Exception as e: return self.send(400, {"message": str(e), "code": "P0001"})
         if path.startswith("/rest/v1/"):

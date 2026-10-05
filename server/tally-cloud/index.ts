@@ -225,8 +225,12 @@ function bridgeOf(dev: any, body: any, shadow: boolean) {
   const b = body?.bridge && typeof body.bridge === "object" ? body.bridge : null;
   const id = b && /^go-[0-9a-f]{6,32}$/.test(String(b.id || "")) ? String(b.id) : "v1";
   const hello = (dev?.info && typeof dev.info === "object") ? dev.info : {};
+  const port = (v: unknown) => { const n = Math.floor(Number(v)); return n > 0 && n <= 65535 ? n : null; };
   return { id, entry: { at: new Date().toISOString(), version: s(body?.version, 40) || s(b?.version, 40),
-    computer: s(b?.computer, 60) || (id === "v1" ? s(hello.computer, 60) : ""), user: s(b?.user, 60) || (id === "v1" ? s(hello.user, 60) : ""),
+    computer: s(b?.computer, 60) || (id === "v1" ? s(hello.computer, 60) : ""), user: s(b?.user, 60) || s(body?.windowsUser, 60) || (id === "v1" ? s(hello.user, 60) : ""),
+    // FinCom Bridge 2.3.0 (one bridge per Windows user on a shared server): its own local port, its Tally's port and data
+    // folder (tally.ini's Data), for the Tally page's "<PC> · <Windows user>" line; null / "" when not said
+    port: port(body?.bridgePort ?? b?.port), tallyPort: port(body?.tallyPort), dataFolder: s(body?.dataFolder, 260),
     mode: shadow ? "test" : "main", runMode: ["user", "service", "window"].includes(b?.runMode) ? b.runMode : "",
     tally: !!body?.tally, tallyState: ["open", "busy", "closed"].includes(body?.tallyState) ? body.tallyState : (body?.tally ? "open" : "closed"),
     open: (Array.isArray(body?.open) ? body.open : []).slice(0, 50).map((x: unknown) => s(x, 200)),
@@ -468,6 +472,25 @@ function bridgesWith(info: any, id: string, entry: any) {
 }
 // may this bridge post? Only the main one; with none chosen, any bridge not in test mode (as before)
 function mayPost(dev: any, id: string) { return !dev?.main_bridge || dev.main_bridge === id; }
+// migration 54 (FinCom Bridge 2.3.0): the owner's "Changes only" for a bridge (tally_bridge_prefs): it reads Tally's changes
+// and is never given a posting. False on a cloud without the table
+const CHANGES_ONLY = "This bridge is set to changes only in FinCom (Tally page): it reads Tally's changes and never posts.";
+async function changesOnly(dev: any, id: string) {
+  const { data, error } = await db.from("tally_bridge_prefs").select("changes_only").eq("device_id", dev.id).eq("bridge_id", id).maybeSingle();
+  return !error && data?.changes_only === true;
+}
+// the waiting postings this bridge may take: those naming it (tally_post_jobs.target_bridge), and those naming none when it
+// is the computer's main bridge; a cloud without migration 54 (no column): every waiting posting of the computer, when main
+async function postsFor(dev: any, id: string, main: boolean) {
+  const { data, error } = await db.from("tally_post_jobs").select("id, target_bridge").eq("device_id", dev.id).eq("status", "waiting");
+  if (error) {
+    if (!main) return 0;
+    const { count } = await db.from("tally_post_jobs").select("id", { count: "exact", head: true }).eq("device_id", dev.id).eq("status", "waiting");
+    return count || 0;
+  }
+  return (data || []).filter((j: any) => j.target_bridge === id || (!j.target_bridge && main)).length;
+}
+
 
 // FinCom Bridge 2.1.5's self-watch in its beat (plan item 10): the last request, the longest today (kind and
 // milliseconds), how many took over 20 s and how many there were; and whether it stopped reading (by itself, or told to
@@ -1756,9 +1779,14 @@ Deno.serve(async (req) => {
           // FinCom Bridge 2.1.6 (round 11): the companies this computer posts to (PostOnly); [] when any; absent on an older bridge
           ...(Array.isArray(b.postOnly) ? { postOnly: cleanPostOnly(b.postOnly) } : {}),
           // FinCom Bridge 2.1.8 (round 15, migration 43): the posting settings it applied (postBatchBills, postBatchBank, settingsAt)
-          ...postSettingsApplied(b) };
+          ...postSettingsApplied(b),
+          // FinCom Bridge 2.3.0: the Windows user it works for, its own local port, its Tally's port and data folder
+          windowsUser: s(b.windowsUser, 60), bridgePort: Math.max(0, Math.min(65535, Math.floor(Number(b.bridgePort) || 0))), tallyPort: Math.max(0, Math.min(65535, Math.floor(Number(b.tallyPort) || 0))), dataFolder: s(b.dataFolder, 260) };
         const prevInfo = ((dev as any).info && typeof (dev as any).info === "object") ? (dev as any).info : {};
         const me = bridgeOf(dev, body, false);
+        // migration 54: switched to changes only by an owner (said on the bridge's line and to the bridge)
+        const co = await changesOnly(dev, me.id);
+        if (co) (me.entry as any).changesOnly = true;
         // migration-35: Stop reading from FinCom, Resume, the version it may install (and the pilot's evidence)
         const ctl = await bridgeControl(dev, firm, me, prevInfo);
         const info = { ...prevInfo, ...ctl.info, beat, history: beatHistory(prevInfo, beat), bridges: bridgesWith(prevInfo, me.id, me.entry) };
@@ -1784,8 +1812,8 @@ Deno.serve(async (req) => {
         // set. On a cloud without the columns every field is null; the beat never fails for them
         const settings = { postOnly: Array.isArray((dev as any).post_only) ? (dev as any).post_only : null, postBatchBills: cleanBatch((dev as any).post_batch_bills), postBatchBank: cleanBatch((dev as any).post_batch_bank),
           at: typeof (dev as any).post_settings_at === "string" ? (dev as any).post_settings_at : null };
-        const { count: waiting } = await db.from("tally_post_jobs").select("id", { count: "exact", head: true }).eq("device_id", dev.id).eq("status", "waiting");
-        const posts = mayPost(dev, me.id) ? waiting : 0;
+        // migration 54: only the postings this bridge may take (for it, or naming none when it is the main bridge); none when changes only
+        const posts = co ? 0 : await postsFor(dev, me.id, mayPost(dev, me.id));
         // fast-sync (bridge 1.15.0): the computer's own Realtime channel, where the database wakes it the moment a
         // posting is queued or an update asked for (migration-13); the heartbeat stays the fallback
         const tok = (dev as any).wake_token;
@@ -1812,12 +1840,16 @@ Deno.serve(async (req) => {
         const rs = (dev as any).recorder_source, recorderSource = rs === "addon" || rs === "alterid" || rs === "both" ? rs : null;
         // FinCom Bridge 2.2.2: the lines held without their entry, asked of Tally again by the bridge (left out when none)
         const heldLines = await heldLinesFor(dev, firm);
-        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(heldLines ? { heldLines } : {}), ...(mayPost(dev, me.id) ? {} : { notMain: true }), ...ctl.out });
+        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(heldLines ? { heldLines } : {}), ...(co ? { notMain: true, changesOnly: true, error: CHANGES_ONLY } : mayPost(dev, me.id) ? {} : { notMain: true }), ...ctl.out });
       }
       case "make_main": return await makeMain(dev, bridgeOf(dev, body, false).id);
       case "posts_take": {
-        if (!mayPost(dev, bridgeOf(dev, body, false).id)) return reply(403, { ok: false, notMain: true, error: "Another bridge is the main bridge on this computer now (chosen in FinCom); this one reads only and does not post." });
-        const { data, error } = await db.rpc("tally_post_take", { p_device: dev.id });
+        const meT = bridgeOf(dev, body, false).id;
+        if (!mayPost(dev, meT)) return reply(403, { ok: false, notMain: true, error: "Another bridge is the main bridge on this computer now (chosen in FinCom); this one reads only and does not post." });
+        if (await changesOnly(dev, meT)) return reply(403, { ok: false, notMain: true, changesOnly: true, error: CHANGES_ONLY });
+        // migration 54: only a posting naming this bridge, or naming none (it is the main bridge); an older cloud: as before
+        let { data, error } = await db.rpc("tally_post_take_for", { p_device: dev.id, p_bridge: meT, p_main: true });
+        if (error && (error.code === "PGRST202" || missingFn(String(error.message || "")))) ({ data, error } = await db.rpc("tally_post_take", { p_device: dev.id }));
         if (error) throw new Error(error.message);
         const j = (data || [])[0];
         // round 7 (F2): the ids of this posting an owner released (Not in Tally) travel with it, so the bridge sends them
@@ -1830,7 +1862,14 @@ Deno.serve(async (req) => {
         return reply(200, { ok: true, job: j ? { id: j.id, company: j.company, payload: j.payload, released } : null });
       }
       case "posts_update": {
-        if (!mayPost(dev, bridgeOf(dev, body, false).id)) return reply(403, { ok: false, notMain: true, error: "Another bridge is the main bridge on this computer now (chosen in FinCom); this one reads only and does not post." });
+        const meU = bridgeOf(dev, body, false).id;
+        if (!mayPost(dev, meU)) return reply(403, { ok: false, notMain: true, error: "Another bridge is the main bridge on this computer now (chosen in FinCom); this one reads only and does not post." });
+        // migration 54: a posting for another bridge is never reported by this one (a cloud without the column: as before).
+        // A bridge switched to changes only still reports a posting it took before the switch
+        {
+          const { data: tj, error: te } = await db.from("tally_post_jobs").select("target_bridge").eq("id", String(body.id || "")).eq("device_id", dev.id).maybeSingle();
+          if (!te && tj?.target_bridge && tj.target_bridge !== meU) return reply(403, { ok: false, error: "This posting is for another bridge on this computer; this one does not report it." });
+        }
         const st = ["taken", "running", "done", "failed"].includes(body.status) ? body.status : "running";
         const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
         const int = (v: unknown, max: number) => Math.max(0, Math.min(max, Math.floor(Number(v)) || 0));
