@@ -306,6 +306,17 @@ func waitAnswer(cfgPath string, mine bool, by string) int {
 	return installFailed(4, reason, todo)
 }
 
+// review M3 of 2.3.0: the Windows user the installed service works for (its record in HKLM: OwnerSid); "" when none
+func serviceOwnerSid() string {
+	k, err := registry.OpenKey(registry.LOCAL_MACHINE, regKey, registry.QUERY_VALUE|registry.WOW64_64KEY)
+	if err != nil {
+		return ""
+	}
+	defer k.Close()
+	sid, _, _ := k.GetStringValue("OwnerSid")
+	return sid
+}
+
 // the owner recorded at the last install (for all users): the install run by the service itself (Switch to main bridge)
 // has no one signed in to its session, so the bridge keeps working for the same Windows user
 func recordedOwner() (ownerInfo, bool) {

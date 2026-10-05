@@ -15,9 +15,10 @@ const Bridge = {
   // anything, so a bridge is never taken on its word (the owner's condition of 05-Oct-2026): before the bridge key, a
   // pairing code or a computer key goes to a listener, it proves itself. FinCom sends a fresh random nonce to /ping?n=;
   // the bridge answers HMAC-SHA256(bridge key, nonce || bridge id || port), which FinCom checks with the key it holds;
-  // not paired yet: HMAC-SHA256(pairing code, nonce), given only while the bridge's pairing window is open. A proof is
-  // kept per address for 5 minutes and done again after the bridge is looked for anew; an old proof (another nonce) never
-  // passes. A bridge that cannot prove itself (older than 2.3.0, or not a FinCom Bridge) is never sent a secret.
+  // not paired yet: HMAC-SHA256(pairing code, nonce || bridge id || port), given only while the bridge's pairing window is open. Review M2
+  // of 2.3.0: a proof is never kept: the bridge proves itself again immediately before EVERY request that carries a secret
+  // (each call carries the key; posting, /cloudlink; /pair goes only after its own pairProof), so a program that takes the
+  // port after the bridge restarts gets nothing; an old proof (another nonce) never passes. A bridge that cannot prove itself (older than 2.3.0, or not a FinCom Bridge) is never sent a secret.
   PORTS: Array.from({length: 20}, (_, i) => 9100 + i),
   proven: {},              // address -> when it proved itself with the key held
   localUrl(u){ const m = String(u || "").match(/^http:\/\/(127\.0\.0\.1|localhost):(\d+)\/*$/); return !!m && this.PORTS.includes(+m[2]); },
@@ -28,7 +29,7 @@ const Bridge = {
     return Array.from(new Uint8Array(await crypto.subtle.sign("HMAC", k, enc.encode(msg))), x => x.toString(16).padStart(2, "0")).join("");
   },
   // /ping?n= at an address (nothing secret is sent), with whether it proved itself: key -> proven (the key's proof, bound
-  // to its id and this port); code -> pairProven (the pairing code's proof)
+  // to its id and this port); code -> pairProven (the pairing code's proof, bound to its id and this port as well)
   async probeUrl(base, ms, key, code){
     const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), ms || 1500), n = this.nonce(), port = this.urlPort(base);
     try {
@@ -37,7 +38,8 @@ const Bridge = {
       if (!j || j.ok === false) return null;
       const o = Object.assign({port, url: base.replace(/\/+$/, "")}, j, {proven: false, pairProven: false});
       if (key && typeof j.proof === "string" && typeof j.bridgeId === "string" && Number(j.port) === port) o.proven = j.proof === await this.hmac(key, n + j.bridgeId + port);
-      if (code && typeof j.pairProof === "string") o.pairProven = j.pairProof === await this.hmac(String(code).trim(), n);
+      // review M1 of 2.3.0: the pairing code's proof is bound to the bridge's id and this port too
+      if (code && typeof j.pairProof === "string" && typeof j.bridgeId === "string" && Number(j.port) === port) o.pairProven = j.pairProof === await this.hmac(String(code).trim(), n + j.bridgeId + port);
       return o;
     } catch (e){ return null; } finally { clearTimeout(t); }
   },
@@ -64,10 +66,10 @@ const Bridge = {
     this.setCfg({url: f.url, bridgeId: f.bridgeId || this.cfg().bridgeId || ""});
     return true;
   },
-  // before anything secret goes to the bridge's address: proved there within the last 5 minutes, or now
+  // before anything secret goes to the bridge's address: proved there now, with a fresh nonce (review M2 of 2.3.0: no
+  // proof is kept for later; this.proven only says when it last proved itself)
   async ensureProven(){
     const c = this.cfg(), u = c.url.replace(/\/+$/, "");
-    if (this.proven[u] && Date.now() - this.proven[u] < 300000) return true;
     const o = c.key ? await this.probeUrl(u, 4000, c.key) : null;
     if (o && o.proven){ this.proven[u] = Date.now(); if (o.bridgeId && o.bridgeId !== c.bridgeId) this.setCfg({bridgeId: o.bridgeId}); return true; }
     delete this.proven[u];

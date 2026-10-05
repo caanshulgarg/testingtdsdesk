@@ -990,6 +990,9 @@ function cleanRecorderLine(x: any, me: { id: string }): { line?: Record<string, 
   if (x?.idsMismatch === true) line.idsMismatch = true;
   const lg = s(x?.lineGuid, 100); if (lg) line.lineGuid = lg;
   const hw = s(x?.heldWhy, 300); if (hw) line.heldWhy = hw;
+  // bridge 2.3.0 review H1: a cancel / delete the bridge's own Tally does not show happened there (guidHeld): kept held,
+  // never resolved from FinCom's record (guidsFromRecord)
+  if (x?.guidHeld === true && (event === "deleted" || event === "cancelled")) line.guidHeld = true;
   line.payload = { ...line, xmlBytes: xml.length || undefined };
   if (xml && ["created", "altered", "imported"].includes(event)) {
     if (xml.length > MAX_RECORDER_XML) return { bad: "the entry's XML is larger than FinCom takes (" + xml.length + " characters)" };
@@ -1016,7 +1019,7 @@ async function recorderLines(dev: any, firm: string, book: string, body: any) {
     else { send.push({ ...c.line, company }); at.push(i); }
   });
   if (send.length) await shortBodies(firm, book, send);
-  const found = send.length ? await guidsFromRecord(book, send) : new Map<string, string>();     // bridge 2.3.0: cancel/delete GUID
+  const found = send.length ? await guidsFromRecord(book, send, String(dev?.id || ""), me.id) : new Map<string, string>();     // bridge 2.3.0: cancel/delete GUID
   // round 20 (migration 47): more than 50 FULL lines (an entry body read from the add-on's XML; short lines' bodies built from
   // the posting do not count) go on the queue as ONE message and are answered {queued: n} at once; the database's drain
   // (pg_cron every 30 s) applies them in order and Sync activity shows each line's state. Round 21 (review 47/48 H1): ONE
@@ -1059,14 +1062,18 @@ async function recorderLines(dev: any, firm: string, book: string, body: any) {
 // GUID a MasterID makes on its own (an entry that came by import or sync keeps another GUID). Exactly one GUID found: the line
 // goes on with it (the bridge's heldWhy dropped; payload.guidFrom), and the answer's result carries guid. Else the line goes
 // as sent: the database holds it with words. No migration: tally_recorder_lines is read through the API. Never fails the call
-async function guidsFromRecord(book: string, send: Record<string, any>[]) {
+// Review H1 (2.3.0): every Windows user's Tally on a computer writes into one shared recorder folder, so another user's
+// bridge reads a line made in a copy of the company in that user's Tally. FinCom's record is therefore only the earlier
+// lines sent by the SAME computer key (device_id) and the SAME bridge (its id, the column bridge) as this call; a line the
+// bridge held because its own Tally does not show the cancel / delete (guidHeld) is never resolved here
+async function guidsFromRecord(book: string, send: Record<string, any>[], device: string, bridge: string) {
   const found = new Map<string, string>();
-  const want = send.filter((l) => (l.event === "deleted" || l.event === "cancelled") && !l.object_guid && /^[0-9]{1,10}$/.test(String(l.master_id || "")) && Number(l.master_id) > 0 && l.company_guid);
-  if (!want.length) return found;
+  const want = send.filter((l) => (l.event === "deleted" || l.event === "cancelled") && !l.object_guid && l.guidHeld !== true && /^[0-9]{1,10}$/.test(String(l.master_id || "")) && Number(l.master_id) > 0 && l.company_guid);
+  if (!want.length || !device || !bridge) return found;
   try {
     const mids = [...new Set(want.map((l) => String(l.master_id)))].slice(0, 500);
-    const { data, error } = await db.from("tally_recorder_lines").select("id, object_guid, master_id, company_guid, state, event, body, payload")
-      .eq("book_id", book).in("master_id", mids).in("state", ["applied", "duplicate"]).in("event", ["created", "altered", "imported"]).order("id", { ascending: false }).limit(2000);
+    const { data, error } = await db.from("tally_recorder_lines").select("id, object_guid, master_id, company_guid, state, event, body, payload, device_id, bridge")
+      .eq("book_id", book).eq("device_id", device).eq("bridge", bridge).in("master_id", mids).in("state", ["applied", "duplicate"]).in("event", ["created", "altered", "imported"]).order("id", { ascending: false }).limit(2000);
     if (error || !Array.isArray(data)) { console.log("tally-ingest recorder_lines: cancel/delete GUID: FinCom's record not read", book, String(error?.message || "").slice(0, 200)); return found; }
     for (const l of want) {
       const gs = new Map<string, number | string>();
@@ -1081,6 +1088,7 @@ async function guidsFromRecord(book: string, send: Record<string, any>[]) {
       }
       for (const r of data as any[]) {
         const g = String(r?.object_guid || "");
+        if (String(r?.device_id || "") !== device || String(r?.bridge || "") !== bridge) continue;     // review H1: this computer key's and this bridge's only
         if (String(r?.master_id || "") !== String(l.master_id) || String(r?.company_guid || "").toLowerCase() !== String(l.company_guid).toLowerCase()) continue;
         if (!g || /-0{8}$/.test(g) || r?.payload?.idsMismatch === true || String(r?.payload?.idsMismatch || "").toLowerCase() === "true") continue;
         if (!(Array.isArray(r?.body?.vouchers) && r.body.vouchers.some((v: any) => v?.guid === g))) continue;     // Tally's entry came with it

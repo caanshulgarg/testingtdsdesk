@@ -314,6 +314,19 @@ func runBridge(console bool) int {
 	if testMode() {
 		seedFromOldCopy()
 	}
+	// review M3 of 2.3.0: one bridge per settings (the service and a "Just for me" bridge of the same Windows user share
+	// them): a second one refuses to start, says so in its log and the tray's message, and is not started again
+	release, err := takeInstanceLock()
+	if err != nil {
+		msg := err.Error()
+		if console {
+			fmt.Println(msg)
+		}
+		writeLog(msg)
+		_ = saveFile(startFailedFile(), msg)
+		return exitTwice
+	}
+	defer release()
 	// 2.3.0: the first free port of 9100..9119 (the remembered one first); none: said once, and the bridge stops
 	ln, err := bindAndRemember(listenLocal, ownBridgeOn)
 	if err != nil {

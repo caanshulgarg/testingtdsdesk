@@ -357,7 +357,8 @@ func TestLiveOnlyNewest7Days(t *testing.T) {
 	liveAppend(t, filepath.Join(rec, b220CoGUID+".txt"), vchLine("after_delete", "g-trial", "3", "3", ""))
 	liveReadOnce()
 	q := liveQueue()
-	if len(q) != 1 || q[0].guid != b220CoGUID+"-00000002" {
+	// review H1 of 2.3.0: a delete's own GUID is kept aside (guidKeep) until this Tally shows the voucher gone
+	if len(q) != 1 || q[0].guidKeep != b220CoGUID+"-00000002" || q[0].masterId != "2" {
 		t.Fatalf("read: %+v", q)
 	}
 }

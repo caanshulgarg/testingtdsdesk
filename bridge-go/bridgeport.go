@@ -23,7 +23,7 @@ const (
 )
 
 // restartAfter: whether the supervisor starts the bridge again after it ended with this code
-func restartAfter(code int) bool { return code != exitNoPort }
+func restartAfter(code int) bool { return code != exitNoPort && code != exitTwice }
 
 // the ports tried, in order: the remembered one first (when it is a port), then 9100..9119
 func bridgePortOrder(remembered int) []int {

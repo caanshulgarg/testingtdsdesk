@@ -406,6 +406,11 @@ func installUserCmd(args []string) int {
 	if err != nil {
 		return installFailed(2, "This Windows user's folders could not be found ("+err.Error()+").", "Sign in to Windows as the person who uses Tally and run the setup again.")
 	}
+	// review M3 of 2.3.0: the Windows service already works for this same Windows user (its record in HKLM names the same
+	// OwnerSid): refused (no administrator's rights here to stop the service; nothing that runs is changed)
+	if why := perUserBlockedByService(serviceOwnerSid(), o.sid); why != "" {
+		return installFailed(8, why, "Keep using the FinCom Bridge service (its icon near the clock), or ask the administrator to uninstall it first; then run this setup again.")
+	}
 	installLog(fmt.Sprintf("Install (just for this user, no service): FinCom Bridge %s for %s (%s), %s mode, folder %s", BridgeVersion, o.name, o.sid, mode, o.home))
 	_ = os.MkdirAll(o.home, 0o755)
 	stopUser()

@@ -90,7 +90,7 @@ func TestFailedTxtForgedDropped(t *testing.T) {
 	liveAppend(t, filepath.Join(rec, "failed.txt"), forged, wf(real))
 	liveReadOnce()
 	q := liveQueue()
-	if len(q) != 1 || q[0].guid != "g-1" || q[0].event != "cancelled" || !strings.Contains(q[0].narr, "first line\nFCR1|ev=after_delete") {
+	if len(q) != 1 || q[0].masterId != "1" || q[0].event != "cancelled" || !strings.Contains(q[0].narr, "first line\nFCR1|ev=after_delete") {
 		t.Fatalf("queued: %+v", q)
 	}
 	// a write_failed line whose inner GUID is not the held GUID of its company: dropped
