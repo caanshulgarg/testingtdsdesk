@@ -191,6 +191,8 @@ try:
     db.sql("insert into tally_post_jobs (id, firm_id, client_id, company, device_id, payload, n, status) values (%s, %s, 'c1', 'ZZ CO', %s, %s, 1, 'running')" % (q(J(4)), q(F), q(D1), q(json.dumps({"vouchers": [vch("K4")]}))))
     r = rpcj(STAFF, "select tally_post_settle_ask(%s::uuid, 'K4', 'not there')::text" % q(J(4)))
     ok("_error" in r or r.get("ok") is False, "B10. a posting still being sent cannot be asked about (%s)" % r)
+    r = rpcj(STAFF, "select tally_post_settle_ask(%s::uuid, 'K1', 'deleted in Tally by hand')::text" % q(J(1)))
+    ok(r.get("ok") is True and r.get("state") == "waiting" and idrow(1, "K1")["live"] == "true", "B11. an entry marked posted (deleted in Tally by hand since) is asked about the same way: a check, nothing released (%s)" % r)
 
     # ---------------------------------------------------------------- D. the lease: purpose, want to post, yield
     take = lambda holder, purpose, dev="null": svc("select tally_lease_take(%s, %s, %s, %s, 120, %s, %s)::text" % (q(F), q(BOOK), q(holder), dev if dev == "null" else q(dev) + "::uuid", q(json.dumps({"computer": "PC-" + holder[-1]})), "null" if purpose is None else q(purpose)))

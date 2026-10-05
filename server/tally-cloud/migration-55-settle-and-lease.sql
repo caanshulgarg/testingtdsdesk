@@ -183,7 +183,7 @@ grant execute on function public.tally_post_id_release_owner(uuid, text, text) t
 -- 2. "Not in Tally - post again": a check for the posting's bridge; nothing released, nothing sent
 create or replace function public.tally_post_settle_ask(p_job uuid, p_id text, p_why text)
 returns jsonb language plpgsql security definer set search_path to 'public', 'pg_temp' as $function$
-declare f uuid := my_firm(); why text := left(btrim(coalesce(p_why, '')), 500); j tally_post_jobs%rowtype; eid text; had record; nid bigint; st text;
+declare f uuid := my_firm(); why text := left(btrim(coalesce(p_why, '')), 500); j tally_post_jobs%rowtype; eid text; had record; nid bigint;
 begin
   if f is null or not can_write() then raise exception 'only a member of the firm who may post can ask for this' using errcode = '42501'; end if;
   if why = '' then raise exception 'give a reason: what you saw in Tally (kept with the entry, with your name)'; end if;
@@ -194,8 +194,8 @@ begin
   if j.status in ('waiting', 'taken', 'running') and not coalesce(j.checking, false) then
     return jsonb_build_object('ok', false, 'error', 'This posting is still being sent to Tally; wait for it to finish, then settle the entry.');
   end if;
-  select i->>'state' into st from jsonb_array_elements(coalesce(j.items, '[]'::jsonb)) i where i->>'id' = eid limit 1;
-  if st = 'in_tally' then return jsonb_build_object('ok', false, 'error', 'This entry is marked posted in Tally already; nothing is sent again.'); end if;
+  -- an entry marked posted (deleted in Tally by hand since) is asked about the same way: found, it stays posted; not
+  -- there, it is released and sent again
   select * into had from tally_post_checks k where k.job_id = p_job and k.entry_id = eid and k.state = 'waiting' limit 1;
   if had.id is not null then
     return jsonb_build_object('ok', true, 'check', had.id, 'state', 'waiting', 'again', true, 'company', j.company);

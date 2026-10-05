@@ -529,28 +529,59 @@ func tagsOnDate(port int, company, date string) ([]vchKey, error) {
 }
 
 // --- the lease on a company, held in FinCom's cloud
+// Decision D (05-Oct-2026, migration 55): the lease says what it is for, "post" or "read". A posting that finds the lease
+// held by another bridge's read records its "want to post" in the cloud; the reading bridge sees it when it renews (at
+// its next request boundary: leaseYieldNow, before each background request, never cutting one) and yields: the cloud
+// hands the lease to the posting bridge, and reading resumes after. A posting never yields; two postings serialize.
 var (
-	leaseMu sync.Mutex
-	leases  = map[string]time.Time{} // company -> until (held by this bridge)
+	leaseMu    sync.Mutex
+	leases     = map[string]time.Time{} // company -> until (held by this bridge)
+	leasePurp  = map[string]string{}    // company -> "post" | "read": what this bridge holds it for
+	leaseAsked = map[string]time.Time{} // company -> the last time the cloud was asked about it
 )
 
 func leaseSec() int { return keepNum("LeaseSec", 120) }
 
-// take or renew the lease on a company: true to go on; false and who holds it when another bridge does. A cloud that
-// does not keep leases (migration-32 not applied), a company not linked, or no cloud: no lease, as before
+// how often a reading bridge asks the cloud whether a posting wants the company: at every request boundary (0, the
+// default: the reader yields within one request); LeaseWantSec spaces the asks out
+func leaseWantEvery() time.Duration {
+	return time.Duration(keepNumZero("LeaseWantSec", 0)) * time.Second
+}
+
+// what the cloud said about the lease when this bridge did not get it
+type leaseHeld struct {
+	who     string // "PC-2 go-…, until 15:00"
+	purpose string // what the other bridge holds it for: "post", "read" or "" (an older bridge, or not said)
+	wanted  bool   // this posting's want is recorded: the reader gives way at its next request
+}
+
+// take or renew the lease on a company (a read): true to go on; false and who holds it when another bridge does
 func leaseTake(company string) (bool, string) {
+	ok, h := leaseTakeFor(company, "read")
+	return ok, h.who
+}
+
+// take or renew the lease for a purpose ("post" or "read"). A cloud that does not keep leases (migration-32 not
+// applied), a company not linked, or no cloud: no lease, as before. A lease held here for a posting covers a read too
+func leaseTakeFor(company, purpose string) (bool, leaseHeld) {
 	if !cloudOn() || company == "" {
-		return true, ""
+		return true, leaseHeld{}
 	}
 	leaseMu.Lock()
-	u := leases[company]
+	u, p := leases[company], leasePurp[company]
 	leaseMu.Unlock()
-	if time.Until(u) > time.Duration(leaseSec()/2)*time.Second {
-		return true, ""
+	if time.Until(u) > time.Duration(leaseSec()/2)*time.Second && (p == purpose || p == "post") {
+		return true, leaseHeld{}
 	}
-	r := invokeCloud(M{"kind": "lease_take", "company": company, "ttl": leaseSec()}, 15)
+	if p == "post" && purpose == "read" && time.Until(u) > 0 {
+		purpose = "post" // renewed for what it is held for
+	}
+	r := invokeCloud(M{"kind": "lease_take", "company": company, "ttl": leaseSec(), "purpose": purpose}, 15)
+	leaseMu.Lock()
+	leaseAsked[company] = time.Now()
+	leaseMu.Unlock()
 	if r.code != 200 || r.json == nil || r.json["lease"] == nil && r.json["held"] == nil {
-		return true, "" // no lease kept there: as before
+		return true, leaseHeld{} // no lease kept there: as before
 	}
 	if truthy(r.json["held"]) {
 		h := obj(r.json["holder"])
@@ -561,12 +592,54 @@ func leaseTake(company string) (bool, string) {
 		if t := str(h["until"]); t != "" {
 			who += ", until " + t
 		}
-		return false, who
+		if truthy(r.json["yield"]) {
+			// this bridge's read gave way: the cloud handed the lease to the posting bridge
+			leaseMu.Lock()
+			delete(leases, company)
+			delete(leasePurp, company)
+			leaseMu.Unlock()
+		}
+		return false, leaseHeld{who: who, purpose: str(r.json["purpose"]), wanted: truthy(r.json["wanted"])}
 	}
 	leaseMu.Lock()
 	leases[company] = time.Now().Add(time.Duration(leaseSec()) * time.Second)
+	leasePurp[company] = purpose
 	leaseMu.Unlock()
-	return true, ""
+	return true, leaseHeld{}
+}
+
+// a background read is about to send a request for this company: when this bridge holds its lease for a READ, the cloud
+// is asked (at most every LeaseWantSec) whether another bridge wants to post; if so this read yields here, between two
+// requests (the one at Tally was never cut), the lease goes to the posting bridge, and the read resumes after
+func leaseYieldNow(company string) bool {
+	if company == "" || !cloudOn() {
+		return false
+	}
+	leaseMu.Lock()
+	u, held := leases[company]
+	p, last := leasePurp[company], leaseAsked[company]
+	leaseMu.Unlock()
+	if !held || time.Until(u) <= 0 || p != "read" || time.Since(last) < leaseWantEvery() {
+		return false
+	}
+	r := invokeCloud(M{"kind": "lease_take", "company": company, "ttl": leaseSec(), "purpose": "read"}, 15)
+	leaseMu.Lock()
+	defer leaseMu.Unlock()
+	leaseAsked[company] = time.Now()
+	if r.code != 200 || r.json == nil {
+		return false
+	}
+	if truthy(r.json["yield"]) || truthy(r.json["held"]) {
+		h := obj(r.json["holder"])
+		delete(leases, company)
+		delete(leasePurp, company)
+		writeLog("Keeping " + company + ": another FinCom Bridge (" + strings.TrimSpace(str(h["computer"])+" "+str(h["bridge"])) + ") wants to post to it: this bridge gives way to a posting at its next request (none was cut); reading resumes after")
+		return true
+	}
+	if r.json["lease"] != nil {
+		leases[company] = time.Now().Add(time.Duration(leaseSec()) * time.Second)
+	}
+	return false
 }
 
 // this bridge holds the company's lease now (a posting or a read of its own is going)
@@ -580,6 +653,7 @@ func leaseRelease(company string) {
 	leaseMu.Lock()
 	_, had := leases[company]
 	delete(leases, company)
+	delete(leasePurp, company)
 	leaseMu.Unlock()
 	if had && cloudOn() {
 		invokeCloud(M{"kind": "lease_release", "company": company}, 15)

@@ -954,6 +954,15 @@ func cloudPostTake() {
 	if readOnlyWhy() != "" { // only the one bridge that posts takes postings
 		return
 	}
+	// decision B (migration 55): the checks "Not in Tally - post again" asks of this bridge come with posts_take; each is
+	// looked in Tally (postcheck.go) after the postings are taken; one found not there is handed back: taken again here
+	if checks := cloudPostTakeJobs(); len(checks) > 0 && runPostChecks(checks) {
+		cloudPostTakeJobs()
+	}
+}
+
+// the postings waiting for this bridge, taken (five at most a turn); the checks the first answer carried
+func cloudPostTakeJobs() (checks []any) {
 	cpMu.Lock()
 	defer cpMu.Unlock()
 	cp := getCloudPosts()
@@ -962,6 +971,9 @@ func cloudPostTake() {
 		if r.code == 403 && r.json != nil && truthy(r.json["notMain"]) {
 			noteNotMain(r.err, false)
 			return
+		}
+		if i == 0 && r.code == 200 && r.json != nil {
+			checks = arr(r.json["checks"])
 		}
 		if r.code != 200 || r.json == nil || obj(r.json["job"]) == nil {
 			return
@@ -979,6 +991,7 @@ func cloudPostTake() {
 		saveCloudPosts()
 		writeLog(fmt.Sprintf("Posting from FinCom's queue: %v item(s) for %s (job %s)", v["total"], str(j["company"]), id))
 	}
+	return
 }
 
 // the job's status as FinCom's queue knows it (taken, running, done, failed): a posting waiting for Tally is "taken",

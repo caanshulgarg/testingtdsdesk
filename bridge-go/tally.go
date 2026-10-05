@@ -823,6 +823,13 @@ func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 	if err := probeHold(port); err != nil {
 		return "", err
 	}
+	// decision D (05-Oct-2026): a background read of a company whose lease this bridge holds for reading gives way, here
+	// at the request boundary (before the next request, never cutting one), when another bridge wants to post to it
+	if tc.copier && !tc.light && !isImportRequest(x) {
+		if co := html.UnescapeString(group(`<SVCURRENTCOMPANY>([^<]*)</SVCURRENTCOMPANY>`, x, 1)); co != "" && leaseYieldNow(co) {
+			return "", errPreempted
+		}
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	if tc.enc != "" {
