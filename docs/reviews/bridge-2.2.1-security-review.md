@@ -47,4 +47,14 @@ Verdict:
 
 The Medium is fixed in 2d9cc08: in liveEmit a placeholder GUID is rebuilt from the MasterID only when the line is not a ledger (`!c.isLedger()`); a new ledger's GUID stays empty until its body fetch gives Tally's own. Test TestPlaceholderGUIDRebuiltForVouchersOnly (bridge-go/review221_test.go): red on 8185245 (the ledger went as `<co>-000001f4`), green after; the voucher case still rebuilds `-000066c8`. Reviewed by Claude: the change is one condition; no other code changed. The Lows stay as written (the resolver's retries are bounded to 7 days; to be capped at about 20 tries in a later version).
 
-Range: 6fb6cc9..2d9cc08
+## Round 3 (2d9cc08..7046501)
+
+Checked 05-Oct-2026. `git diff --stat 2d9cc08 7046501 -- bridge-go/` is empty: no bridge-go/ file changed after the
+reviewed fix, so the bridge code that ships is the code reviewed in rounds 1 and 2. The files changed in the range are:
+- server/tally-cloud/migration-50-recorder-held.sql, tests/run_migration50.py and tests/run_migration_order.py: the
+  cloud's migration 50 and its tests;
+- docs/reviews/migration-50-review.md and these two notes.
+
+None of them is a bridge source or goes into the installer. Migration 50 is reviewed in its own note.
+
+Range: 6fb6cc9..7046501
