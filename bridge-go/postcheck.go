@@ -5,11 +5,11 @@
 //	found     the voucher with the entry's type and number on its date (FinComVoucherByNumber), or with Tally's own id
 //	          from its reply (FinComVoucherByMaster), carries the entry's FinCom id (TDSDesk:<id>) in its narration: the
 //	          cloud marks it posted with the voucher found; nothing is sent;
-//	notfound  Tally answered for that exact company (its GUID the one held) and has no such voucher: the cloud releases
-//	          the id and hands the posting back, and that entry alone is sent once. Review H1: FinCom's voucher types number
-//	          automatically, so Tally may have numbered the entry itself; an empty answer by number is "not found" only
-//	          when the posting's result proves Tally kept the number FinCom sent. An empty answer by Tally's id is never
-//	          "not found": FinComVoucherByMaster asks one day only (as approved), and the entry may have been redated;
+//	notseen   Tally answered for that exact company (its GUID the one held) and has no such voucher ON THAT DAY. Both
+//	          reads are one-day reads (Tally may also have numbered the entry itself: Automatic numbering), so this is
+//	          never "not found": the cloud releases nothing and nothing is sent. The owner's rule ("a duplicate entry must
+//	          never be possible from this button"): a person looks in Tally and presses "I looked in Tally: not there -
+//	          post again" (a reason required); only then is that entry alone handed back and sent once;
 //	unable    anything else, in plain words: Tally not asked (the company not open, busy, the 2-second stop), the voucher
 //	          there but with another FinCom id or none (a person must look), no number and no Tally id to ask by, a date
 //	          the read rules do not allow (before the starting point, or more than 3 days back by number). Nothing is
@@ -142,12 +142,14 @@ func checkPostedEntry(c M) M {
 		}
 		return unable(fmt.Sprintf("In %s, %s is there but carries %s, not %s: a person must look in Tally; use Mark posted if it is this entry, post again only if it is not", name, by, carries, tag))
 	}
-	notThere := func(by, how string) M {
-		rep["result"] = "notfound"
-		rep["words"] = cut(fmt.Sprintf("Looked in %s for %s (%s): not there", name, by, how), 480)
+	// the owner's rule ("a duplicate entry must never be possible from this button"): both reads are one-day reads, so an
+	// empty answer is never "not found": notseen (Tally answered for that exact company, no such voucher on that day). The
+	// cloud releases nothing on it; a person looks in Tally and confirms "not there" (the only path to send again)
+	notSeen := func(what string) M {
+		rep["result"] = "notseen"
+		rep["words"] = cut(fmt.Sprintf("Tally has no voucher %s on %s in %s. FinCom cannot see other dates, so a person must confirm: look in Tally (Day Book, or search the narration %s); if it is not there, press 'I looked in Tally: not there – post again' (reason required).", what, ddmmyyyy(date), name, tag), 480)
 		return rep
 	}
-	renumbered := "FinCom cannot be sure: Tally may have numbered this entry itself. Look in Tally for the narration " + tag + "; use Mark posted if it is there, or post again only after checking."
 	busy := func(err error) M {
 		return unable("Tally is busy or did not answer within " + fmt.Sprint(checkMs()/1000) + " s (" + tallyTrouble(err.Error()) + "); looked in again by itself")
 	}
@@ -161,15 +163,11 @@ func checkPostedEntry(c M) M {
 		if r := tagged(vs, byNumberWords); r != nil {
 			return r
 		}
-		// empty by number: "not found" only when the posting's result proves Tally kept the number FinCom sent
-		if len(vs) == 0 && checkNumberKept(c, entry, no) {
-			return notThere(byNumberWords, "FinComVoucherByNumber; Tally kept the number FinCom sent")
-		}
 		if mid == "" {
 			if len(vs) > 0 {
 				return other(vs[0], byNumberWords)
 			}
-			return unable(renumbered)
+			return notSeen(vtype + " " + no)
 		}
 	}
 	// Tally's own id from its reply: the one voucher with that id
@@ -184,36 +182,13 @@ func checkPostedEntry(c M) M {
 		}
 		return other(v, byID) // anything else Tally gave is dropped
 	}
-	// the owner's rule for the by-id read: FinComVoucherByMaster asks ONE day (the entry's date as its period, as approved;
-	// the allow-list unchanged), so an empty answer by id proves nothing: the entry may have been redated in Tally. Never
-	// "not found" from it; a person looks
-	return unable(fmt.Sprintf("FinCom cannot be sure: Tally has no voucher with its id %s on %s, but FinCom asks Tally by id for that one day only, and the entry may have been moved to another date in Tally. Look in Tally for the narration %s; use Mark posted if it is there, or post again only after checking.", mid, ddmmyyyy(date), tag))
-}
-
-// review H1: the number Tally gave the entry, as the posting's result recorded it (read from Tally: the cloud's
-// vchNumber, or this computer's record of the job), is the very number FinCom sent: Tally kept it
-func checkNumberKept(c M, entry, sent string) bool {
-	sent = strings.TrimSpace(sent)
-	if sent == "" {
-		return false
+	// FinComVoucherByMaster asks ONE day (the entry's date as its period, as approved; the allow-list unchanged): the entry
+	// may have been redated in Tally
+	what := "with Tally's id " + mid
+	if byNumberWords != "" {
+		what = vtype + " " + no + " / Tally's id " + mid
 	}
-	if v := strings.TrimSpace(str(c["vchNumber"])); v != "" {
-		return v == sent
-	}
-	dir, err := jobDir(str(c["job"]))
-	if err != nil {
-		return false
-	}
-	p := readObjFile(filepath.Join(dir, "progress.json"))
-	for _, x := range arr(p["results"]) {
-		r := obj(x)
-		if r == nil || str(r["id"]) != entry {
-			continue
-		}
-		v := strings.TrimSpace(or(str(r["vchNumber"]), str(r["vchNo"])))
-		return v != "" && v == sent
-	}
-	return false
+	return notSeen(what)
 }
 
 // review M4: at most this many checks a turn (each may ask Tally for one voucher)

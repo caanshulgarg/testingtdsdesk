@@ -57,6 +57,9 @@ try:
     c, r = call({"kind": "post_check", "version": "2.3.0", "bridge": ME, "check": 1, "result": "found", "company": "ZZ CO", "vch": "26301", "master": "9911"})
     a = F.ARGS["tally_post_check_report"][-1]
     ok(c == 200 and a.get("p_vch") == "26301" and a.get("p_master") == "9911", "B3. found: the voucher number and Tally's id passed on (%s)" % a)
+    c, r = call({"kind": "post_check", "version": "2.3.0", "bridge": ME, "check": 1, "result": "notseen", "company": "ZZ CO", "words": "Tally has no voucher Purchase B-1 on 05-07-2026 in ZZ CO"})
+    a = F.ARGS["tally_post_check_report"][-1]
+    ok(c == 200 and a.get("p_result") == "notseen" and "B-1" in a.get("p_words", ""), "owner's rule. notseen (Tally answered, nothing that day) goes to the database, which never releases on it (%s %s)" % (c, a))
     n = len(F.ARGS["tally_post_check_report"])
     c, r = call({"kind": "post_check", "version": "2.3.0", "bridge": ME, "check": 1, "result": "posted"})
     ok(c == 400 and len(F.ARGS["tally_post_check_report"]) == n, "B3. a result other than found / notfound / unable is refused (%s %s)" % (c, r.get("error")))

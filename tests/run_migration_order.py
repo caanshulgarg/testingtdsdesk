@@ -145,11 +145,11 @@ def run_order(label, ORDER):
            and "target_bridge = p_bridge" in fdef("tally_post_take_for") and "tally_post_enqueue_core(p_id, p_client, p_payload, tdev, t)" in fdef("tally_post_enqueue_to") and "tally_post_enqueue_to(p_id, p_client, p_payload, null, null)" in fdef("tally_post_enqueue", "uuid, text, jsonb")
            and db.one("select has_function_privilege('authenticated', 'public.tally_post_take_for(uuid, text, boolean)', 'execute')") == "f",
            "54: tally_post_jobs.target_bridge; tally_post_enqueue_to and the 3-argument tally_post_enqueue go through tally_post_enqueue_core; tally_post_take_for for the service role only (in force in this order)")
-        ok("can_write()" in fdef("tally_post_job_mark_posted") and "tally_post_checks" in fdef("tally_post_id_release_owner") and "tally_post_release_core(" in fdef("tally_post_check_report")
+        ok("can_write()" in fdef("tally_post_job_mark_posted") and "tally_post_checks" in fdef("tally_post_id_release_owner") and "tally_post_release_core(" not in fdef("tally_post_check_report") and "tally_post_release_core(" in fdef("tally_post_check_confirm")
            and "want_post_by" in fdef("tally_lease_take", "uuid, uuid, text, uuid, integer, jsonb, text") and "null::text" in fdef("tally_lease_take", "uuid, uuid, text, uuid, integer, jsonb")
            and db.one("select count(*) from information_schema.columns where table_name = 'tally_company_lease' and column_name in ('purpose', 'want_post_by')") == "2"
            and db.one("select has_function_privilege('authenticated', 'public.tally_post_check_report(bigint, uuid, text, boolean, text, text, text, text, text)', 'execute')") == "f",
-           "55: any member who may write settles (mark posted; release only after the bridge's 'not found'); the lease's purpose and want to post (in force in this order)")
+           "55: any member who may write settles (mark posted; the bridge's report never releases: only a member's confirm after the bridge's 'not seen'); the lease's purpose and want to post (in force in this order)")
         ok("tally_ledger_carry_choices" in fdef("tally_ledger_rename") and db.one("select count(*) from information_schema.columns where table_name = 'tally_ledgers' and column_name = 'needs_confirm'") == "1", "39: the rename carries the choices; tally_ledgers.needs_confirm")
         ok(db.one("select string_agg(confdeltype::text, '') from pg_constraint where conrelid = 'public.tally_post_marks'::regclass and contype = 'f'") == "rr", "38: tally_post_marks' foreign keys restrict (no cascade)")
         for fn in ("tally_tb", "tally_period", "tally_balances_on"): ok("d.merged_into is null" in fdef(fn), "%s hides the twins" % fn)

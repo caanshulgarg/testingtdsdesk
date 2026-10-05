@@ -13,28 +13,35 @@
 --       (by its type, number and date; else by Tally's id from its reply) and looks for the entry's FinCom id,
 --       TDSDesk:<id>, in its narration, then reports (tally_post_check_report, the service role: tally-ingest):
 --         found     -> the entry is marked posted with the voucher found (in the asker's name); nothing is sent again;
---         notfound  -> ONLY when the company it looked in is the posting's own company and the bridge is the posting's
---                      bridge: the id is released (tally_post_release_core, 36b's release text, in the asker's name) and
---                      the posting waits to be sent again (once; the resend guard of 36b still applies);
+--         notseen   -> Tally answered for the posting's own company and has no such voucher ON THAT DAY (both reads are
+--                      one-day reads: a redated entry is not seen). The owner's rule ("a duplicate entry must never be
+--                      possible from this button"): the report NEVER releases and nothing is sent. The row asks a person to
+--                      look in Tally; "I looked in Tally: not there - post again" (tally_post_check_confirm, a reason
+--                      required) is the ONLY path to release and send again;
 --         unable    -> Tally could not be asked (the bridge offline, Tally busy or closed, the company not open, the 2-second
 --                      stop), or the voucher is there with another FinCom id or none (a person must look), or the entry
 --                      cannot be asked for (no number and no Tally id, a date the read rules do not allow): the check
 --                      keeps waiting with the bridge's words and is asked again by itself; never released, never sent.
---    3. tally_post_id_release_owner(job, id, why): for any member who may write, and refused unless the posting's bridge
---       has reported "checked, not found" for that entry (the release itself is then already done: said, not repeated).
+--    3. tally_post_id_release_owner(job, id, why): for any member who may write, and refused unless the entry's check was
+--       confirmed (below; the release itself is then already done: said, not repeated).
+--    5. tally_post_check_confirm(job, id, why): any member who may write, a reason required, the name and time kept; only
+--       when the LATEST check of that entry is "notseen" from the posting's own bridge (as tally_post_check_bridge_ok),
+--       not superseded or withdrawn, and no posted mark of the entry is newer than the check. Then: released in the
+--       member's name (tally_post_release_core) and the posting waits again for that bridge, naming that entry alone
+--       (resend_only); the check says confirmed.
 --    4. tally_post_checks_for(device, bridge, main): the waiting checks a bridge may answer (the service role), with
 --       Tally's own voucher id from its reply when the result has one (for an entry with no voucher number).
 --    The final review of 2.3.0 (05-Oct-2026):
---    M1. A check, and the re-send after "not found", go ONLY to the bridge that took the posting (tally_post_jobs.taken_by,
+--    M1. A check, and the re-send after a confirmed "not seen", go ONLY to the bridge that took the posting (tally_post_jobs.taken_by,
 --        54: tally_post_take_for records it), else the bridge it names (target_bridge), else (an older posting) the key's
 --        main bridge (tally_bridge_takes_unnamed); never another Windows user's bridge on a shared key. tally_post_checks_for
---        and tally_post_check_report enforce it (tally_post_check_bridge_ok). On "not found" the posting waits again for
+--        and tally_post_check_report enforce it (tally_post_check_bridge_ok). On the confirm the posting waits again for
 --        that bridge (target_bridge) naming only the released entries (resend_only, 54): the bridge sends those alone.
 --    M2. Mark posted closes a waiting check of that entry (state superseded, the row kept); a check never releases an entry
 --        marked posted after it was asked, nor one that is not waiting. The member who asked, or an owner, withdraws a
 --        waiting check (tally_post_check_withdraw: state withdrawn; who, when and why kept).
 --    M4. A check is handed out at most 10 unable tries or 24 hours: then "given up" in plain words (look in Tally; Mark
---        posted, or post again only after checking); never released without "not found". Handed out fairly: the one
+--        posted, or post again only after checking); never released by itself. Handed out fairly: the one
 --        tried longest ago (or never) first.
 -- D. Two bridges, one company: the lease (tally_company_lease, 32/37) marks its purpose ('post' or 'read'). A posting
 --    that finds the lease held by another bridge's READ records "want to post" (want_post_*); the reader sees it on its
@@ -59,7 +66,7 @@ create table if not exists public.tally_post_checks (
   asked_by        uuid not null,
   asked_at        timestamptz not null default now(),
   why             text not null,
-  state           text not null default 'waiting',      -- waiting | found | notfound | refused | superseded | withdrawn | given_up
+  state           text not null default 'waiting',      -- waiting | found | notseen | confirmed | refused | superseded | withdrawn | given_up
   tries           integer not null default 0,
   last_try_at     timestamptz,
   last_words      text,
@@ -74,7 +81,11 @@ create table if not exists public.tally_post_checks (
   withdrawn_by    uuid,                                 -- final review M2: withdrawn by the asker or an owner
   withdrawn_at    timestamptz,
   withdrawn_why   text,
-  given_up_at     timestamptz                           -- final review M4: 10 unable tries or 24 hours
+  given_up_at     timestamptz,                          -- final review M4: 10 unable tries or 24 hours
+  checked_device  uuid,                                 -- the computer key the reporting bridge used
+  confirmed_by    uuid,                                 -- "I looked in Tally: not there - post again": who, when, why
+  confirmed_at    timestamptz,
+  confirmed_why   text
 );
 create unique index if not exists tally_post_checks_waiting on public.tally_post_checks (job_id, entry_id) where state = 'waiting';
 create index if not exists tally_post_checks_job on public.tally_post_checks (job_id, asked_at);
@@ -125,10 +136,10 @@ begin
     raise exception 'the entry % is live in another posting; cancel that posting first, then mark this one', p_id;
   end;
   insert into tally_post_marks (firm_id, job_id, entry_id, action, vch, note, by_user) values (p_firm, p_job, eid, 'posted', vch, nullif(note, ''), p_user);
-  -- final review M2: a check of this entry still waiting is closed (kept): it can never release the entry later
+  -- final review M2: a check of this entry still waiting, or "not seen", is closed (kept): it can never release it later
   update tally_post_checks set state = 'superseded', superseded_at = now(), checked_at = now(),
          words = left('Marked posted by ' || who || ' on ' || to_char(now() at time zone 'Asia/Kolkata', 'DD-Mon-YYYY HH24:MI') || ' IST (voucher ' || vch || ') before the FinCom Bridge looked; this check is closed', 500)
-   where job_id = p_job and entry_id = eid and state = 'waiting';
+   where job_id = p_job and entry_id = eid and state in ('waiting', 'notseen');
   update tally_post_jobs set results = res, items = its, status = o->>'status', checking = (o->>'checking')::boolean, done = greatest(done, (o->>'posted')::int),
          message = case when o->>'status' = 'done' and not (o->>'checking')::boolean then left('Marked posted by ' || who || case when note <> '' then ': ' || note else '' end, 500)
                         when o->>'status' <> j.status or (o->>'checking')::boolean <> coalesce(j.checking, false) then 'Settled by the mark of ' || eid || ' (' || who || '); ' || case when (o->>'checking')::boolean then 'another entry is still being checked' else 'the rest did not go through' end
@@ -186,16 +197,16 @@ end $function$;
 revoke all on function public.tally_post_job_mark_posted(uuid, text, text, text) from public, anon;
 grant execute on function public.tally_post_job_mark_posted(uuid, text, text, text) to authenticated;
 
--- 3. a release by hand: only after the posting's bridge looked in Tally and reported "not found" (then it is done already)
+-- 3. a release by hand: only after the entry's "not seen" check was confirmed by a member (then it is done already)
 create or replace function public.tally_post_id_release_owner(p_job uuid, p_id text, p_why text)
 returns jsonb language plpgsql security definer set search_path to 'public', 'pg_temp' as $function$
 declare f uuid := my_firm(); why text := left(btrim(coalesce(p_why, '')), 500); c record; d record;
 begin
   if f is null or not can_write() then raise exception 'only a member of the firm who may post can release an entry' using errcode = '42501'; end if;
   if why = '' then raise exception 'say why: what you saw in Tally (kept with the entry)'; end if;
-  select * into c from tally_post_checks k where k.firm_id = f and k.job_id = p_job and k.state = 'notfound' and tally_post_id_match(k.entry_id, k.entry_id, p_id) order by k.id desc limit 1;
+  select * into c from tally_post_checks k where k.firm_id = f and k.job_id = p_job and k.state = 'confirmed' and tally_post_id_match(k.entry_id, k.entry_id, p_id) order by k.id desc limit 1;
   if c.id is null then
-    raise exception 'Not released: Tally has not been checked for this entry. Press "Not in Tally - post again": the bridge looks in Tally first, and FinCom frees the entry only when the bridge reports it is not there.' using errcode = '42501';
+    raise exception 'Not released: Tally has not been checked for this entry. Press "Not in Tally - post again": the bridge looks in Tally first, and FinCom frees the entry only when a member confirms, after the bridge did not see it, that it is not in Tally.' using errcode = '42501';
   end if;
   select i.live, i.released_at into d from tally_post_ids i where i.job_id = p_job and tally_post_id_match(i.fincom_id, i.entry_id, p_id) limit 1;
   if d.released_at is not null and not coalesce(d.live, false) then
@@ -290,11 +301,7 @@ begin
              'vchId', (select coalesce(nullif(regexp_replace(coalesce(r2->>'vchId', ''), '\D', '', 'g'), ''),
                                        case when coalesce(nullif(regexp_replace(coalesce(r2->>'batchN', ''), '\D', '', 'g'), ''), '1')::bigint <= 1
                                             then nullif(regexp_replace(coalesce(r2->>'lastVchId', ''), '\D', '', 'g'), '') end)
-                         from jsonb_array_elements(coalesce(j.results, '[]'::jsonb)) r2 where r2->>'id' = c.entry_id limit 1),
-             -- review H1: the voucher number Tally gave the entry, as the posting's result recorded it from Tally (never a
-             -- person's mark): the bridge takes an empty answer by number as "not there" only when it is the number sent
-             'vchNumber', (select coalesce(nullif(btrim(r2->>'vchNumber'), ''), nullif(btrim(r2->>'vchNo'), ''))
-                             from jsonb_array_elements(coalesce(j.results, '[]'::jsonb)) r2 where r2->>'id' = c.entry_id and not tally_post_bool(r2->>'byOwner') limit 1)) o
+                         from jsonb_array_elements(coalesce(j.results, '[]'::jsonb)) r2 where r2->>'id' = c.entry_id limit 1)) o
       from tally_post_checks c join tally_post_jobs j on j.id = c.job_id
      where c.state = 'waiting' and tally_post_check_bridge_ok(j.id, p_device, p_bridge, p_main)
      order by c.last_try_at nulls first, c.id limit 20) x;
@@ -327,7 +334,7 @@ grant execute on function public.tally_post_check_withdraw(bigint, text) to auth
 create or replace function public.tally_post_check_report(p_check bigint, p_device uuid, p_bridge text, p_main boolean, p_company text, p_result text, p_vch text, p_master text, p_words text)
 returns jsonb language plpgsql security definer set search_path to 'public', 'pg_temp' as $function$
 declare c tally_post_checks%rowtype; j tally_post_jobs%rowtype; res text := lower(btrim(coalesce(p_result, ''))); v_words text := left(btrim(coalesce(p_words, '')), 500);
-        v text; r jsonb; v_resent boolean := false; said text;
+        v text; r jsonb; said text;
 begin
   select * into c from tally_post_checks where id = p_check for update;
   if not found then return jsonb_build_object('ok', false, 'error', 'no such check'); end if;
@@ -346,7 +353,9 @@ begin
     end if;
     return jsonb_build_object('ok', true, 'state', 'waiting');
   end if;
-  if res not in ('found', 'notfound') then return jsonb_build_object('ok', false, 'error', 'found, notfound or unable'); end if;
+  -- an older word for "not seen" is taken as it: no report ever releases
+  if res = 'notfound' then res := 'notseen'; end if;
+  if res not in ('found', 'notseen') then return jsonb_build_object('ok', false, 'error', 'found, notseen or unable'); end if;
   -- that exact company: what the bridge looked in is the posting's own company
   if lower(tally_nm(coalesce(p_company, ''))) <> lower(tally_nm(j.company)) then
     update tally_post_checks set tries = tries + 1, last_try_at = now(), last_words = left('The bridge looked in ' || coalesce(nullif(p_company, ''), 'another company') || ', not in ' || j.company || '; asked again', 500) where id = c.id;
@@ -358,31 +367,63 @@ begin
     begin
       r := tally_post_mark_core(c.firm_id, c.asked_by, c.job_id, c.entry_id, v, left('Found in ' || j.company || ' by the FinCom Bridge''s check (' || c.why || ')', 300));
     exception when others then
-      update tally_post_checks set state = 'refused', checked_at = now(), checked_bridge = p_bridge, checked_company = p_company, words = left(sqlerrm, 500) where id = c.id;
+      update tally_post_checks set state = 'refused', checked_at = now(), checked_bridge = p_bridge, checked_device = p_device, checked_company = p_company, words = left(sqlerrm, 500) where id = c.id;
       return jsonb_build_object('ok', false, 'state', 'refused', 'error', sqlerrm);
     end;
-    update tally_post_checks set state = 'found', checked_at = now(), checked_bridge = p_bridge, checked_company = p_company, found_vch = nullif(btrim(coalesce(p_vch, '')), ''),
+    update tally_post_checks set state = 'found', checked_at = now(), checked_bridge = p_bridge, checked_device = p_device, checked_company = p_company, found_vch = nullif(btrim(coalesce(p_vch, '')), ''),
            found_master = nullif(btrim(coalesce(p_master, '')), ''), words = nullif(v_words, ''), resent = false where id = c.id;
     return jsonb_build_object('ok', true, 'state', 'found', 'vch', v, 'job', c.job_id, 'entry', c.entry_id);
   end if;
-  -- final review M2: an entry marked posted after this check was asked is never released by it
+  -- final review M2: an entry marked posted after this check was asked: closed
   if exists (select 1 from tally_post_marks m where m.job_id = c.job_id and m.entry_id = c.entry_id and m.action = 'posted' and m.at > c.asked_at) then
-    update tally_post_checks set state = 'superseded', superseded_at = now(), checked_at = now(), checked_bridge = p_bridge, checked_company = p_company,
-           words = left('Not released: the entry was marked posted after this check was asked. ' || coalesce(nullif(v_words, ''), ''), 500) where id = c.id;
-    return jsonb_build_object('ok', false, 'state', 'superseded', 'error', 'Not released: the entry was marked posted after this check was asked.');
+    update tally_post_checks set state = 'superseded', superseded_at = now(), checked_at = now(), checked_bridge = p_bridge, checked_device = p_device, checked_company = p_company,
+           words = left('The entry was marked posted after this check was asked. ' || coalesce(nullif(v_words, ''), ''), 500) where id = c.id;
+    return jsonb_build_object('ok', false, 'state', 'superseded', 'error', 'The entry was marked posted after this check was asked.');
   end if;
-  -- checked, not found: released in the asker's name, then the posting waits to be sent again (once), for THIS bridge
-  -- (the one that took it), naming only the released entries (final review M1: resend_only; the bridge sends those alone)
-  r := tally_post_release_core(c.firm_id, c.asked_by, c.job_id, c.entry_id,
-         left(c.why || ' (the FinCom Bridge looked in ' || j.company || ' on ' || to_char(now() at time zone 'Asia/Kolkata', 'DD-Mon-YYYY HH24:MI') || ' IST: not there)', 500));
-  select * into j from tally_post_jobs where id = c.job_id;
-  update tally_post_jobs set resend_only = case when coalesce(resend_only, '[]'::jsonb) @> jsonb_build_array(c.entry_id) then resend_only else coalesce(resend_only, '[]'::jsonb) || jsonb_build_array(c.entry_id) end,
-         target_bridge = case when p_bridge ~ '^go-[0-9a-f]{6,32}$' then p_bridge else target_bridge end, device_id = p_device
-   where id = c.job_id;
+  -- not seen on that day: NEVER released here, nothing sent (the owner's rule); a person looks in Tally and confirms
+  said := 'Tally has no such voucher on that day in ' || j.company || '. FinCom cannot see other dates, so a person must confirm: look in Tally (Day Book, or search the narration TDSDesk:' || c.entry_id
+          || '); if it is not there, press ''I looked in Tally: not there - post again'' (reason required).';
+  update tally_post_checks set state = 'notseen', checked_at = now(), checked_bridge = p_bridge, checked_device = p_device, checked_company = p_company,
+         words = left(coalesce(nullif(v_words, ''), said), 500), resent = false where id = c.id;
+  return jsonb_build_object('ok', true, 'state', 'notseen', 'job', c.job_id, 'entry', c.entry_id, 'words', left(coalesce(nullif(v_words, ''), said), 500));
+end $function$;
+revoke all on function public.tally_post_check_report(bigint, uuid, text, boolean, text, text, text, text, text) from public, anon, authenticated;
+grant execute on function public.tally_post_check_report(bigint, uuid, text, boolean, text, text, text, text, text) to service_role;
+
+-- 5. "I looked in Tally: not there - post again": the ONLY path to release and send again (the owner's rule: a duplicate
+-- entry must never be possible from this button). Any member who may write, a reason required, the name and time kept;
+-- only when the latest check of that entry is "notseen" from the posting's own bridge, and no posted mark of the entry is
+-- newer than the check. Released in the member's name; the posting waits again for that bridge, that entry alone
+create or replace function public.tally_post_check_confirm(p_job uuid, p_id text, p_why text)
+returns jsonb language plpgsql security definer set search_path to 'public', 'pg_temp' as $function$
+declare f uuid := my_firm(); v_why text := left(btrim(coalesce(p_why, '')), 500); j tally_post_jobs%rowtype; c tally_post_checks%rowtype; eid text; r jsonb; v_resent boolean := false; said text;
+begin
+  if f is null or not can_write() then raise exception 'only a member of the firm who may post can confirm this' using errcode = '42501'; end if;
+  if v_why = '' then raise exception 'give a reason: where you looked in Tally (kept with your name and the time)'; end if;
+  select * into j from tally_post_jobs where id = p_job and firm_id = f for update;
+  if not found then raise exception 'this posting is not in your firm (or not found)'; end if;
+  select v->>'id' into eid from jsonb_array_elements(coalesce(j.payload->'vouchers', '[]'::jsonb)) v where tally_post_id_match(tally_fincom_id(v), v->>'id', p_id) limit 1;
+  if eid is null then raise exception 'the entry % is not in this posting', p_id; end if;
+  select * into c from tally_post_checks k where k.job_id = p_job and k.entry_id = eid order by k.id desc limit 1 for update;
+  if c.id is null or c.state <> 'notseen' then
+    return jsonb_build_object('ok', false, 'state', coalesce(c.state, ''), 'error', 'Not sent again: the FinCom Bridge has not reported this entry as not seen in Tally (or that check was closed). Press "Not in Tally - post again" first: the bridge looks in Tally.');
+  end if;
+  if not tally_post_check_bridge_ok(p_job, c.checked_device, c.checked_bridge, true) then
+    return jsonb_build_object('ok', false, 'error', 'Not sent again: the check was not answered by the bridge that posts this posting.');
+  end if;
+  if exists (select 1 from tally_post_marks m where m.job_id = p_job and m.entry_id = eid and m.action = 'posted' and m.at > c.asked_at) then
+    return jsonb_build_object('ok', false, 'error', 'Not sent again: the entry was marked posted after the check was asked.');
+  end if;
+  r := tally_post_release_core(f, auth.uid(), p_job, eid,
+         left(v_why || ' (the FinCom Bridge did not see it in ' || j.company || ' on ' || to_char(c.checked_at at time zone 'Asia/Kolkata', 'DD-Mon-YYYY HH24:MI') || ' IST; confirmed by ' || tally_member_name(f, auth.uid()) || ')', 500));
+  select * into j from tally_post_jobs where id = p_job;
+  update tally_post_jobs set resend_only = case when coalesce(resend_only, '[]'::jsonb) @> jsonb_build_array(eid) then resend_only else coalesce(resend_only, '[]'::jsonb) || jsonb_build_array(eid) end,
+         target_bridge = case when c.checked_bridge ~ '^go-[0-9a-f]{6,32}$' then c.checked_bridge else target_bridge end, device_id = coalesce(c.checked_device, device_id)
+   where id = p_job;
   if j.status in ('failed', 'done') and not coalesce(j.checking, false) then
     begin
-      update tally_post_jobs set status = 'waiting', message = 'Not in Tally (the FinCom Bridge looked): sent again', taken_at = null, updated_at = now(),
-             attempts = coalesce(attempts, 0) + 1 where id = c.job_id;
+      update tally_post_jobs set status = 'waiting', message = 'Not in Tally (looked by ' || tally_member_name(f, auth.uid()) || '): sent again', taken_at = null, updated_at = now(),
+             attempts = coalesce(attempts, 0) + 1 where id = p_job;
       v_resent := true;
     exception when others then
       said := sqlerrm;
@@ -390,12 +431,11 @@ begin
   else
     said := 'released; it is sent again when the posting''s other entries are settled';
   end if;
-  update tally_post_checks set state = 'notfound', checked_at = now(), checked_bridge = p_bridge, checked_company = p_company, words = left(coalesce(nullif(v_words, ''), '') || case when said is not null then ' ' || said else '' end, 500),
-         resent = v_resent where id = c.id;
-  return jsonb_build_object('ok', true, 'state', 'notfound', 'resent', v_resent, 'job', c.job_id, 'entry', c.entry_id, 'words', said);
+  update tally_post_checks set state = 'confirmed', confirmed_by = auth.uid(), confirmed_at = now(), confirmed_why = v_why, resent = v_resent where id = c.id;
+  return jsonb_build_object('ok', true, 'state', 'confirmed', 'resent', v_resent, 'job', p_job, 'entry', eid, 'check', c.id, 'words', said);
 end $function$;
-revoke all on function public.tally_post_check_report(bigint, uuid, text, boolean, text, text, text, text, text) from public, anon, authenticated;
-grant execute on function public.tally_post_check_report(bigint, uuid, text, boolean, text, text, text, text, text) to service_role;
+revoke all on function public.tally_post_check_confirm(uuid, text, text) from public, anon;
+grant execute on function public.tally_post_check_confirm(uuid, text, text) to authenticated;
 
 -- ---------------------------------------------------------------- D. the lease: its purpose, and "want to post"
 alter table public.tally_company_lease add column if not exists purpose text;             -- 'post' | 'read'; null: an older bridge

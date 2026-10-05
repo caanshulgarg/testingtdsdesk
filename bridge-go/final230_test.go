@@ -1,10 +1,9 @@
 // The final review of 2.3.0 (05-Oct-2026), on the stand-in Tally and a stand-in cloud.
 //
-// H1. "Not in Tally - post again": FinCom sets its voucher types to Automatic numbering, so Tally may have numbered the
+// H1. "Not in Tally - post again": both reads are one-day reads and FinCom's voucher types number automatically, so an
 //
-//	entry itself. An empty answer to the by-number read is never "not found" by itself: only when Tally's own id from
-//	its reply is known and the by-id read has no such voucher either (and none carries TDSDesk:<id>), or when the
-//	posting's result proves Tally kept the number FinCom sent. Otherwise "unable", in words.
+//	empty answer from Tally is never "not found": "notseen" (the owner's rule: a duplicate entry must never be possible
+//	from this button); a person confirms "not there" before anything is sent again.
 //
 // M1. The re-send after "not found" sends ONLY the released entries the cloud names (resendOnly), with the job's local
 //
@@ -22,7 +21,7 @@ import (
 	"time"
 )
 
-const renumberWords = "FinCom cannot be sure: Tally may have numbered this entry itself"
+const renumberWords = "FinCom cannot see other dates, so a person must confirm"
 
 // H1: number B-90 sent; Tally keeps the entry as B-91 (its own numbering). Without Tally's id: unable (never not found);
 // with it: found through the id
@@ -38,7 +37,7 @@ func TestCheckRenumberedNeverNotFound(t *testing.T) {
 	c.mu.Unlock()
 	cloudPostTake()
 	r := lastReport(t, c)
-	if str(r["result"]) != "unable" || !strings.Contains(str(r["words"]), renumberWords) || !strings.Contains(str(r["words"]), "TDSDesk:k11") || !strings.Contains(str(r["words"]), "Mark posted") {
+	if str(r["result"]) != "notseen" || !strings.Contains(str(r["words"]), renumberWords) || !strings.Contains(str(r["words"]), "TDSDesk:k11") || !strings.Contains(str(r["words"]), "I looked in Tally: not there") {
 		t.Fatalf("renumbered, no Tally id: %v", r)
 	}
 	ck := checkFor("42", "job-k11", "k11", zz, x)
@@ -71,7 +70,7 @@ func TestCheckIdKnownAbsentNotFound(t *testing.T) {
 	c.checks = []M{ck}
 	c.mu.Unlock()
 	cloudPostTake()
-	if r := lastReport(t, c); str(r["result"]) != "unable" || !strings.Contains(str(r["words"]), "TDSDesk:k12") {
+	if r := lastReport(t, c); str(r["result"]) != "notseen" || !strings.Contains(str(r["words"]), "TDSDesk:k12") {
 		t.Fatalf("id known, absent on that day: %v", r)
 	}
 	if f.n(vchByNumberID) != 1 || f.n(vchByMasterID) != 1 || f.n("Import") != 0 {
@@ -95,8 +94,8 @@ func TestCheckNumberKeptProven(t *testing.T) {
 	c.checks = []M{ck}
 	c.mu.Unlock()
 	cloudPostTake()
-	if r := lastReport(t, c); str(r["result"]) != "notfound" {
-		t.Fatalf("the number kept, proven: %v", r)
+	if r := lastReport(t, c); str(r["result"]) != "notseen" {
+		t.Fatalf("the number kept, proven (still one day only): %v", r)
 	}
 	ck2 := checkFor("45", "job-k13", "k13", zz, x)
 	ck2["vchNumber"] = "B-94"
@@ -104,7 +103,7 @@ func TestCheckNumberKeptProven(t *testing.T) {
 	c.checks = []M{ck2}
 	c.mu.Unlock()
 	cloudPostTake()
-	if r := lastReport(t, c); str(r["result"]) != "unable" || !strings.Contains(str(r["words"]), renumberWords) {
+	if r := lastReport(t, c); str(r["result"]) != "notseen" || !strings.Contains(str(r["words"]), renumberWords) {
 		t.Fatalf("another number: %v", r)
 	}
 }
@@ -277,7 +276,7 @@ func TestCheckRedatedNeverNotFound(t *testing.T) {
 		c.checks = []M{ck}
 		c.mu.Unlock()
 		cloudPostTake()
-		if r := lastReport(t, c); str(r["result"]) == "notfound" || (str(r["result"]) != "unable" && str(r["result"]) != "found") {
+		if r := lastReport(t, c); str(r["result"]) == "notfound" || (str(r["result"]) != "notseen" && str(r["result"]) != "found") {
 			t.Fatalf("redated (number %q): %v", no, r)
 		}
 	}

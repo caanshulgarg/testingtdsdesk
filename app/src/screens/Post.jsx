@@ -274,7 +274,9 @@ function RowActs({ co, x, canPost }) {
     if (settle && bill) {
       out.push(<button key="m" className="btn small" data-mark-posted="" onClick={() => PostOwner.markPosted(co.id, e, job)}>It is in Tally: mark posted (Tally id)</button>);
       const freed = !!(x.ids && (!x.ids.live || x.ids.released_at));
-      if (job && !freed && !st.check) out.push(<button key="rl" className="btn small" data-release-owner="" data-repost-check="" onClick={() => PostOwner.release(co.id, e, job)}>Not in Tally – post again</button>);
+      if (job && !freed && !st.check && !st.notSeen) out.push(<button key="rl" className="btn small" data-release-owner="" data-repost-check="" onClick={() => PostOwner.release(co.id, e, job)}>Not in Tally – post again</button>);
+      // the owner's rule: after the bridge did not see it on its day, a person confirms "not there" (the only way it is sent again)
+      if (job && !freed && st.notSeen) out.push(<button key="cn" className="btn small" data-confirm-notseen="" onClick={() => PostOwner.confirmNotSeen(co.id, e, job)}>I looked in Tally: not there – post again</button>);
     }
     if (bill && job && st.check) out.push(<span key="ck" className="note" data-check-waiting="">The FinCom Bridge looks in Tally first; nothing is sent until it finds the entry is not there.</span>);
     // the final review of 2.3.0 (M2): the member who asked, or an owner, withdraws a waiting check

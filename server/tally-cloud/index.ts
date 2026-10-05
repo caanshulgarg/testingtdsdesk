@@ -2040,13 +2040,16 @@ Deno.serve(async (req) => {
       }
       case "post_check": {
         // migration 55 (decision B): the bridge looked in Tally for an entry of an uncertain posting ("Not in Tally - post
-        // again"): found (the voucher found), notfound (in that company) or unable (Tally not asked). The database decides:
-        // the release and the re-send only on "notfound" from the posting's own bridge for its own company
+        // again"): found (the voucher found), notseen (not in that company on that day) or unable (Tally not asked). The
+        // database decides; it never releases on a report (a member confirms "not there" after looking)
         const meCB = bridgeOf(dev, body, false), meC = meCB.id;
         if (!mayPost(dev, meC, (meCB.entry as any).user)) return reply(403, { ok: false, notMain: true, error: "Another bridge of the same Windows user is the main bridge on this computer now (chosen in FinCom); this one reads only and does not post." });
         if (await changesOnly(dev, meC)) return reply(403, { ok: false, notMain: true, changesOnly: true, error: CHANGES_ONLY });
         const result = String(body.result || "");
-        if (!["found", "notfound", "unable"].includes(result)) return reply(400, { ok: false, error: "The check's result is found, notfound or unable." });
+        // the owner's rule (a duplicate entry must never be possible from this button): notseen (Tally answered for that
+        // company and has no such voucher on that day) never releases; only a member's confirm does (the database).
+        // "notfound" (an earlier word) is taken as notseen
+        if (!["found", "notseen", "notfound", "unable"].includes(result)) return reply(400, { ok: false, error: "The check's result is found, notseen or unable." });
         const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
         // final review M1: the database answers only the bridge that took the posting (or is named in it); p_main (the
         // key's main bridge) counts only for a posting with no record of its bridge
