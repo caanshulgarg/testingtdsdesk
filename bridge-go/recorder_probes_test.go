@@ -345,6 +345,8 @@ func TestSourceCDatedGuardException(t *testing.T) {
 func TestBodyFetchOffAfterSlowAnswer(t *testing.T) {
 	rec, f, c := liveBridge(t, `,"RecorderBodySec":5`)
 	td := today()
+	f.alter = 10
+	noteStartPoint(zz, b220CoGUID, 5, 1) // 2.2.2: nothing is taken without a starting point
 	v := f.add(td, "Party S", "PS-1", "slow", "-1.00")
 	f.mu.Lock()
 	f.slow = func(id, body string) time.Duration {

@@ -112,7 +112,6 @@ func fetchVoucherByNumber(tc *TC, company string, port int, date, typ, no string
 	if x == "" {
 		return nil, errors.New("its type or number cannot be asked of Tally (a quote or a line break in it)")
 	}
-	liveNumberAsk(company, date, typ, no)
 	raw, err := invokeTally(tc, port, x, sec)
 	if err != nil {
 		return nil, err
@@ -132,14 +131,17 @@ func fetchVoucherByNumber(tc *TC, company string, port int, date, typ, no string
 }
 
 // 2.2.2 (the owner's rule, NWS144 05-Oct-2026): what the line says of its entry, to check Tally's voucher against.
-// The line's GUID and AlterID are not in it: they are never trusted
+// The line's GUID and AlterID are never trusted: its MasterID is the one asked, and its AlterID before the save
+// (lineAlter) is only a lower bound for Tally's
 type liveWant struct {
-	company, cguid, typ, no, date string
-	sp                            int64 // the company's starting point (0: not known)
+	company, cguid, typ, no, date, mid string
+	sp                                 int64 // the company's starting point
+	spOK                               bool  // a starting point is recorded (security L6: else nothing is taken)
+	lineAlter                          int64
 }
 
-func liveWantOf(c *change, sp int64) liveWant {
-	return liveWant{company: c.company, cguid: c.companyGuid, typ: c.vchType, no: c.vchNo, date: c.vchDate, sp: sp}
+func liveWantOf(c *change, sp int64, spOK bool) liveWant {
+	return liveWant{company: c.company, cguid: c.companyGuid, typ: c.vchType, no: c.vchNo, date: c.vchDate, mid: c.masterId, sp: sp, spOK: spOK, lineAlter: c.lineAlter}
 }
 
 // a yyyymmdd date as the owner reads it (05-Oct-2026)
@@ -157,13 +159,29 @@ func aOr(w string) string {
 	return "a " + w
 }
 
-// Tally's voucher is the line's entry only when its GUID is under the line's company GUID and ends in its own MASTERID in
-// hex, its type and date are the line's (its number too, when the line has one), and its ALTERID (Tally's, never the
-// line's) is above the starting point. "" : it is; else the plain words of what did not match. who: "voucher with
-// MasterID 25683"
-func liveVoucherWrong(x, who string, w liveWant) string {
+// what a refusal means for asking again: "retry" (Tally may give it later), "final" (another voucher, or one below the
+// starting point: no ask can change it), "nosave" (the voucher with that MasterID was not saved after the line: the
+// line is about another entry, found by its number if it has one)
+const (
+	wrongRetry  = "retry"
+	wrongFinal  = "final"
+	wrongNoSave = "nosave"
+)
+
+// Tally's voucher is the line's entry only when (the owner's rule, with the coordinator's correction of 05-Oct-2026):
+//   - its GUID is the line company's GUID and its own MASTERID in hex; or a GUID with ANOTHER prefix (an entry that came
+//     by Tally synchronisation or an XML import keeps its original GUID: Tally answers within the company, so it is
+//     this company's) when its MASTERID is the MasterID asked; a GUID with the company's prefix and another suffix is
+//     never Tally's own: refused;
+//   - its ALTERID (Tally's, never the line's) is above the starting point, checked first after the GUIDs (security M1:
+//     nothing of a voucher below it is named), and above the line's AlterID before the save (review H2);
+//   - its type and date are the line's, its number too when the line has one.
+//
+// "" : it is; else plain words (never Tally's GUID) and what they mean for asking again. who: "voucher with MasterID
+// 25683"
+func liveVoucherWrong(x, who string, w liveWant) (string, string) {
 	if strings.TrimSpace(x) == "" {
-		return "Tally gave no " + who + " on " + liveDay(w.date)
+		return "Tally gave no " + who + " on " + liveDay(w.date), wrongRetry
 	}
 	field := func(tag string) string {
 		return strings.TrimSpace(html.UnescapeString(group(`<`+tag+`>([^<]*)</`+tag+`>`, x, 1)))
@@ -171,47 +189,76 @@ func liveVoucherWrong(x, who string, w liveWant) string {
 	g, typ, no, date := field("GUID"), field("VOUCHERTYPENAME"), field("VOUCHERNUMBER"), normDate(field("DATE"))
 	mid, alter := toI64(group(`<MASTERID>\s*(\d+)`, x, 1)), toI64(group(`<ALTERID>\s*(\d+)`, x, 1))
 	cg := w.cguid
+	held := heldGUID(w.company)
 	if cg == "" {
-		cg = heldGUID(w.company)
+		cg = held
 	}
 	lineType := or(w.typ, "entry")
+	own := cg != "" && strings.HasPrefix(strings.ToLower(g), strings.ToLower(cg)+"-")
 	switch {
 	case g == "" || livePlaceholder(g):
-		return "Tally's " + who + " came without its GUID"
+		return "Tally's " + who + " came without its GUID", wrongRetry
 	case cg == "":
-		return "the company's GUID is not known here, so Tally's " + who + " cannot be checked"
-	case !strings.HasPrefix(g, cg+"-"):
-		return "Tally's " + who + " belongs to another company (its GUID " + g + ")"
-	case mid <= 0 || guidMaster(g) != mid:
-		return fmt.Sprintf("Tally's %s has the GUID %s, which is not its MasterID %d", who, g, mid)
+		return "the company's GUID is not known here, so Tally's " + who + " cannot be checked", wrongRetry
+	case held != "" && !strings.EqualFold(cg, held):
+		return "the line's company GUID is not the one held for this company", wrongFinal
+	case !w.spOK:
+		return "the company's starting point is not recorded yet, so its entries are not taken from Tally", wrongRetry
+	case alter <= w.sp:
+		return "Tally's voucher with that MasterID is not a change after the starting point", wrongFinal
+	case own && (mid <= 0 || guidHexIs(g[len(cg)+1:], mid) == false):
+		return "Tally's voucher with that MasterID has a GUID that is not its MasterID, so it cannot be Tally's own", wrongFinal
+	case !own && w.mid != "" && mid != toI64(w.mid):
+		return "Tally's voucher came with another MasterID than the one asked", wrongFinal
+	case w.lineAlter > 0 && alter <= w.lineAlter:
+		return "Tally's " + who + " was not saved after this line (its AlterID is still the line's): no save of it happened here", wrongNoSave
 	case (w.typ != "" && typ != w.typ) || date != w.date:
-		return fmt.Sprintf("Tally's %s is %s of %s, not this %s of %s", who, aOr(or(typ, "voucher")), liveDay(date), lineType, liveDay(w.date))
+		return fmt.Sprintf("Tally's %s is %s of %s, not this %s of %s", who, aOr(or(typ, "voucher")), liveDay(date), lineType, liveDay(w.date)), wrongFinal
 	case w.no != "" && no != w.no:
-		return fmt.Sprintf("Tally's %s is %s %s, not this %s %s", who, typ, or(no, "(no number)"), lineType, w.no)
-	case w.sp > 0 && alter <= w.sp:
-		return fmt.Sprintf("Tally's %s is not above the starting point (its AlterID %d, the starting point %d)", who, alter, w.sp)
+		return fmt.Sprintf("Tally's %s is %s %s, not this %s %s", who, typ, or(no, "(no number)"), lineType, w.no), wrongFinal
 	}
-	return ""
+	return "", ""
 }
 
-// the one entry with the line's type and number on its date, checked as above: its XML, or why not ("" XML and "" why
-// never together)
-func liveOneByNumber(tc *TC, company string, port int, w liveWant, sec int) (string, string, error) {
+// the hex digits s are exactly the number n
+func guidHexIs(s string, n int64) bool {
+	if s == "" || len(s) > 15 {
+		return false
+	}
+	v, ok := int64(0), true
+	for _, r := range strings.ToLower(s) {
+		switch {
+		case r >= '0' && r <= '9':
+			v = v*16 + int64(r-'0')
+		case r >= 'a' && r <= 'f':
+			v = v*16 + int64(r-'a'+10)
+		default:
+			ok = false
+		}
+	}
+	return ok && v == n
+}
+
+// the one entry with the line's type and number on its date, checked as above: its XML, or why not and what that
+// means. The line asking is registered first (security L5: the guard's "a line the bridge is asking for")
+func liveOneByNumber(tc *TC, company string, port int, w liveWant, sec int) (string, string, string, error) {
+	liveNumberAsk(company, w.date, w.typ, w.no)
 	got, err := fetchVoucherByNumber(tc, company, port, w.date, w.typ, w.no, sec)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	switch len(got) {
 	case 0:
-		return "", fmt.Sprintf("Tally gave no %s %s of %s", w.typ, w.no, liveDay(w.date)), nil
+		return "", fmt.Sprintf("Tally gave no %s %s of %s", w.typ, w.no, liveDay(w.date)), wrongRetry, nil
 	case 1:
 	default:
-		return "", fmt.Sprintf("%d entries with that type and number on that date", len(got)), nil
+		return "", fmt.Sprintf("%d entries with that type and number on that date", len(got)), wrongRetry, nil
 	}
-	if why := liveVoucherWrong(got[0], fmt.Sprintf("voucher %s %s", w.typ, w.no), w); why != "" {
-		return "", why, nil
+	w.mid = "" // found by number: its MasterID is Tally's own
+	if why, kind := liveVoucherWrong(got[0], fmt.Sprintf("voucher %s %s", w.typ, w.no), w); why != "" {
+		return "", why, kind, nil
 	}
-	return got[0], "", nil
+	return got[0], "", "", nil
 }
 
 // under live.mu: a change takes the entry's GUID, numbers and body
@@ -239,19 +286,22 @@ func liveTakeBody(c *change, x string) {
 }
 
 // a line that goes without its entry, and why (sent as heldWhy; FinCom holds it; the held list asks again)
-func liveNumberHeld(c *change, why string) {
+func liveNumberHeld(c *change, why string) { liveHeldAs(c, why, false) }
+
+// final: no further ask can change why (not asked again by the held list)
+func liveHeldAs(c *change, why string, final bool) {
+	why = liveCapWhy(why)
 	live.mu.Lock()
 	c.bodyTried, c.heldWhy = true, why
+	c.heldFinal = c.heldFinal || final
 	live.mu.Unlock()
 	writeLog(fmt.Sprintf("Recorder: %s of %s in %s: %s; sent without its body and GUID (FinCom holds the line until it is resolved)",
 		or(strings.TrimSpace(c.vchType+" "+c.vchNo), "an entry"), c.vchDate, c.company, cutRunes(why, 200)))
 }
 
-func liveHeldWhy(c *change, why string) { liveNumberHeld(c, why) }
-
 // the new entries of one company (MasterID 0 on their line) by type and number, as a background read like the body
 // fetch: it gives way to a posting, the 2 s rule turns it off for the company, 20 s in all
-func liveFetchByNumber(cs []*change, sp int64) {
+func liveFetchByNumber(cs []*change, sp int64, spOK bool) {
 	if len(cs) == 0 {
 		return
 	}
@@ -287,7 +337,7 @@ func liveFetchByNumber(cs []*change, sp int64) {
 			continue
 		}
 		left := maxI(2, int(time.Until(deadline).Seconds()+0.999))
-		x, why, err := liveOneByNumber(tc, company, port, liveWantOf(c, sp), left)
+		x, why, kind, err := liveOneByNumber(tc, company, port, liveWantOf(c, sp, spOK), left)
 		if gaveWay(err) {
 			return
 		}
@@ -300,7 +350,7 @@ func liveFetchByNumber(cs []*change, sp int64) {
 		case err == nil && !strings.HasPrefix(why, "Tally gave no "):
 			// two entries, or another entry than the line's: held at once
 			live.mu.Unlock()
-			liveNumberHeld(c, why)
+			liveHeldAs(c, why, kind == wrongFinal)
 			continue
 		}
 		c.numTries++
@@ -323,6 +373,11 @@ type heldLine struct {
 	ID, Company, CGUID, Type, No, Date, MID, At, Added, Last string
 	Tries                                                    int
 	Ev, Why                                                  string // 2.2.2: the event the line went as ("" : created); why it stays held
+	// 2.2.2 review: the line's flag and GUID (kept on its :resolved line), its FinCom id not the entry's, its AlterID before
+	// the save (a lower bound for Tally's), and held for a reason no ask can change (never asked again)
+	LineGuid, LineFid string
+	Mismatch, Final   bool
+	LineAlter         int64
 }
 
 var heldMu sync.Mutex
@@ -338,7 +393,8 @@ func liveHeldLoad() (M, map[string]heldLine) {
 	for id, v := range obj(all["items"]) {
 		e := obj(v)
 		items[id] = heldLine{ID: id, Company: str(e["company"]), CGUID: str(e["companyGuid"]), Type: str(e["type"]), No: str(e["no"]), Date: str(e["date"]),
-			MID: str(e["masterId"]), At: str(e["savedAt"]), Added: str(e["added"]), Last: str(e["last"]), Tries: toInt(e["tries"]), Ev: str(e["event"]), Why: str(e["why"])}
+			MID: str(e["masterId"]), At: str(e["savedAt"]), Added: str(e["added"]), Last: str(e["last"]), Tries: toInt(e["tries"]), Ev: str(e["event"]), Why: str(e["why"]),
+			LineGuid: str(e["lineGuid"]), LineFid: str(e["lineFid"]), Mismatch: truthy(e["idsMismatch"]), Final: truthy(e["final"]), LineAlter: toI64(e["lineAlter"])}
 	}
 	return all, items
 }
@@ -347,7 +403,8 @@ func liveHeldSave(all M, items map[string]heldLine) {
 	o := M{}
 	for id, h := range items {
 		o[id] = M{"company": h.Company, "companyGuid": h.CGUID, "type": h.Type, "no": h.No, "date": h.Date, "masterId": h.MID, "savedAt": h.At,
-			"added": h.Added, "last": h.Last, "tries": h.Tries, "event": h.Ev, "why": h.Why}
+			"added": h.Added, "last": h.Last, "tries": h.Tries, "event": h.Ev, "why": liveCapWhy(h.Why), "lineGuid": h.LineGuid, "lineFid": h.LineFid,
+			"idsMismatch": h.Mismatch, "final": h.Final, "lineAlter": h.LineAlter}
 	}
 	all["items"] = o
 	if err := saveFile(liveHeldFile(), jsonText(all)); err != nil {
@@ -365,10 +422,46 @@ func liveHeldAdd(cs []*change) {
 	all, items := liveHeldLoad()
 	now := nowFn().Format(time.RFC3339)
 	for _, c := range cs {
-		items[c.lineId] = heldLine{ID: c.lineId, Company: c.company, CGUID: c.companyGuid, Type: c.vchType, No: c.vchNo, Date: c.vchDate, MID: c.masterId,
-			At: c.at, Added: now, Last: now, Ev: c.event, Why: c.heldWhy}
+		mid := c.masterId
+		if strings.Contains(c.heldWhy, "was not saved after this line") {
+			mid = "" // review H2: the voucher with that MasterID is not this line's entry: asked by its number only
+		}
+		items[c.lineId] = heldLine{ID: c.lineId, Company: c.company, CGUID: c.companyGuid, Type: c.vchType, No: c.vchNo, Date: c.vchDate, MID: mid,
+			At: c.at, Added: now, Last: now, Ev: c.event, Why: c.heldWhy, LineGuid: c.lineGuid, LineFid: c.lineFid, Mismatch: c.idsMismatch,
+			Final: c.heldFinal || (mid == "" && c.vchNo == ""), LineAlter: c.lineAlter}
 	}
+	liveHeldCap(items)
 	liveHeldSave(all, items)
+}
+
+// security L3: the held list is bounded: 500 lines a company, 2,000 in all; the oldest go first (said in the log)
+func liveHeldCap(items map[string]heldLine) {
+	type it struct{ id, co, added string }
+	var all []it
+	for id, h := range items {
+		all = append(all, it{id, h.Company + "|" + h.CGUID, h.Added})
+	}
+	sort.Slice(all, func(i, j int) bool {
+		if all[i].added != all[j].added {
+			return all[i].added > all[j].added
+		}
+		return all[i].id > all[j].id
+	}) // newest first
+	per := map[string]int{}
+	n, dropped := 0, 0
+	for _, x := range all {
+		per[x.co]++
+		n++
+		if per[x.co] > keepNum("RecorderHeldMaxCompany", 500) || n > keepNum("RecorderHeldMax", 2000) {
+			delete(items, x.id)
+			dropped++
+			n--
+			per[x.co]--
+		}
+	}
+	if dropped > 0 {
+		writeLog(fmt.Sprintf("Recorder: the held list is full: the %d oldest line(s) left it (FinCom still holds them; the Day Book upload settles them)", dropped))
+	}
 }
 
 // --- the first run: the lines 2.2.0 sent with a placeholder GUID, from the add-on's files of the last 7 days (read only)
@@ -388,7 +481,9 @@ func liveRescanOnce() {
 	if str(all["scannedVersion"]) == BridgeVersion {
 		return
 	}
-	found := liveRescanFiles()
+	// review M1: 2.2.1 scanned already (its time is kept): its placeholder lines whose post had a MasterID went with their
+	// body then; only a line with no MasterID, a GUID of another entry, or read while the body fetch was off is asked
+	found := liveRescanFiles(str(all["scanned"]) != "")
 	now := nowFn().Format(time.RFC3339)
 	for _, h := range found {
 		if _, had := items[h.ID]; !had {
@@ -403,7 +498,7 @@ func liveRescanOnce() {
 	}
 }
 
-func liveRescanFiles() []heldLine {
+func liveRescanFiles(scannedBefore bool) []heldLine {
 	var out []heldLine
 	cutDay := nowFn().AddDate(0, 0, -7).Format("20060102")
 	type pend struct {
@@ -425,12 +520,14 @@ func liveRescanFiles() []heldLine {
 		}
 	}
 	live.mu.Unlock()
-	// 2.2.2: a voucher line an earlier bridge sent without its entry: a placeholder GUID or MasterID 0 (2.2.0), a GUID that
-	// is not its MasterID's (a duplicated voucher: 2.2.0 / 2.2.1 refused Tally's body for it), or read while the body fetch
-	// was off. A line whose GUID and MasterID agree went with its body (the bridge kept no note of a body that failed
-	// for another reason: the Day Book upload settles those)
+	// 2.2.2: a voucher line (saved in a form, whatever FinCom id its narration carries: review H1) an earlier bridge sent
+	// without its entry: one with no MasterID (a new entry's pre alone); a GUID of another entry than its MasterID's (a
+	// duplicated voucher: 2.2.0 / 2.2.1 refused Tally's body for it); one read while the body fetch was off; and, when
+	// no bridge scanned before (coming from 2.2.0, which sent every new entry with its placeholder GUID and no body), a
+	// placeholder GUID. Never a line this bridge sent WITH its body (kept in sync\recorder-sent\*.body.txt, review M1).
+	// Other bodies that failed (a timeout, the 20 s) left no note: the Day Book upload settles those
 	consider := func(name string, gen int, m recLine, ev string, lineStart int64) {
-		if !strings.EqualFold(m.Obj, "Voucher") || !strings.HasPrefix(m.Ev, "voucher_accept_") || (ev != "created" && ev != "altered") || reLiveFid.MatchString(m.Narr) {
+		if !strings.EqualFold(m.Obj, "Voucher") || !strings.HasPrefix(m.Ev, "voucher_accept_") || (ev != "created" && ev != "altered") {
 			return
 		}
 		at := liveTime(m.T1)
@@ -438,12 +535,13 @@ func liveRescanFiles() []heldLine {
 			at = liveTime(m.T0)
 		}
 		off, wasOff := offSince[strings.TrimSpace(m.CName)+"|"+liveGUID(strings.TrimSpace(m.CGUID))]
-		if !(livePlaceholder(m.GUID) || liveZero(m.MID) || liveIdsMismatch(m.GUID, m.MID) || (wasOff && !at.IsZero() && !at.Before(off))) {
+		mismatch := liveIdsMismatch(m.GUID, m.CGUID, m.MID) || liveIdsMismatch(m.PreGUID, m.CGUID, m.MID)
+		if !((livePlaceholder(m.GUID) && !scannedBefore) || toI64(onlyDigits(m.MID)) <= 0 || mismatch || (wasOff && !at.IsZero() && !at.Before(off))) {
 			return
 		}
 		id := liveLineID(name, fmt.Sprint(gen), fmt.Sprint(lineStart))
 		live.mu.Lock()
-		was := live.sent[id] && !live.sent[id+":resolved"]
+		was := live.sent[id] && !live.sent[id+":resolved"] && !live.bodied[id]
 		live.mu.Unlock()
 		if !was {
 			return
@@ -452,8 +550,15 @@ func liveRescanFiles() []heldLine {
 		if toI64(mid) <= 0 {
 			mid = ""
 		}
-		out = append(out, heldLine{ID: id, Company: strings.TrimSpace(m.CName), CGUID: liveGUID(strings.TrimSpace(m.CGUID)), Type: strings.TrimSpace(m.VType),
-			No: strings.TrimSpace(m.VNo), Date: normDate(m.VDate), MID: mid, At: at.Format(time.RFC3339), Ev: ev})
+		lg := ""
+		if liveIdsMismatch(m.GUID, m.CGUID, m.MID) {
+			lg = m.GUID
+		} else if mismatch {
+			lg = m.PreGUID
+		}
+		out = append(out, heldLine{ID: id, Company: strings.TrimSpace(m.CName), CGUID: liveGUID(strings.TrimSpace(m.CGUID)), Type: cutRunes(strings.TrimSpace(m.VType), 200),
+			No: cutRunes(strings.TrimSpace(m.VNo), 200), Date: normDate(m.VDate), MID: mid, At: at.Format(time.RFC3339), Ev: ev, Mismatch: mismatch,
+			LineGuid: cut(cleanGUID(lg), 80), LineAlter: toI64(onlyDigits(m.PreAID))})
 	}
 	for _, path := range liveFiles() {
 		name := filepath.Base(path)
@@ -499,7 +604,7 @@ func liveRescanFiles() []heldLine {
 						consider(name, gen, m, ev, ll.start)
 						continue
 					}
-					consider(p.name, p.gen, p.l, rescanAloneEv(p.l), p.start)
+					consider(p.name, p.gen, rescanAlone(p.l), rescanAloneEv(p.l), p.start)
 				}
 				if _, first := livePair[l.Ev]; first {
 					pending[l.CGUID] = &pend{l, name, gen, ll.start}
@@ -516,9 +621,15 @@ func liveRescanFiles() []heldLine {
 	}
 	for k, p := range pending {
 		delete(pending, k)
-		consider(p.name, p.gen, p.l, rescanAloneEv(p.l), p.start)
+		consider(p.name, p.gen, rescanAlone(p.l), rescanAloneEv(p.l), p.start)
 	}
 	return out
+}
+
+// a first half alone: its AlterID is the one before the save
+func rescanAlone(l recLine) recLine {
+	l.PreAID = l.AID
+	return l
 }
 
 // a first half alone, as liveFlush maps it: a voucher's pre is created or altered
@@ -526,22 +637,25 @@ func rescanAloneEv(l recLine) string {
 	if l.Ev != "voucher_accept_pre" || strings.TrimSpace(l.GUID) == "" {
 		return ""
 	}
-	if liveIsNew(l) || liveIdsMismatch(l.GUID, l.MID) {
+	l.PreAID = l.AID
+	if liveIsNew(l) || liveOtherEntry(l.GUID, l.CGUID, l.MID) {
 		return "created"
 	}
 	return "altered"
 }
 
 // --- the resolver (one turn of the uploader): each held line, asked again every RecorderResolveSec (10 minutes) for 7
-// days: one entry found, a created line goes with its real GUID and body (line id + ":resolved"), once
+// days, 20 times at most (a try counts only when Tally answered: review M2): one entry found, a line goes with its real
+// GUID and body (line id + ":resolved"), once. Security L3: Tally is asked outside the held list's lock (a snapshot,
+// the asks, then the answers merged), 20 s at most a turn
 func liveResolveTurn() {
 	if !cloudOn() || postingGoing() || importsInFlight.Load() > 0 {
 		return
 	}
 	heldMu.Lock()
-	defer heldMu.Unlock()
 	all, items := liveHeldLoad()
 	if len(items) == 0 {
+		heldMu.Unlock()
 		return
 	}
 	changed := false
@@ -552,7 +666,7 @@ func liveResolveTurn() {
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)
-	asked := 0
+	var ask []heldLine
 	for _, id := range ids {
 		h := items[id]
 		rid := id + ":resolved"
@@ -568,7 +682,7 @@ func liveResolveTurn() {
 			changed = true
 			continue
 		}
-		if waiting || off || asked >= 10 {
+		if waiting || off || h.Final || len(ask) >= 10 {
 			continue
 		}
 		// 2.2.2 (the owner's condition a): asked again 20 times at most, then left held with plain words
@@ -584,19 +698,40 @@ func liveResolveTurn() {
 		if last, err := time.Parse(time.RFC3339, h.Last); err == nil && now.Sub(last) < wait {
 			continue
 		}
-		asked++
-		h.Last, h.Tries = now.Format(time.RFC3339), h.Tries+1
+		h.Last = now.Format(time.RFC3339) // spaced whatever the answer
 		items[id] = h
 		changed = true
-		x, why := liveResolveOne(h)
-		if gaveWay(why) {
+		ask = append(ask, h)
+	}
+	if changed {
+		liveHeldSave(all, items)
+	}
+	heldMu.Unlock()
+	// the asks, outside the lock
+	type res struct {
+		id, x           string
+		answered, final bool
+	}
+	var got []res
+	deadline := time.Now().Add(time.Duration(keepNum("RecorderResolveTurnSec", 20)) * time.Second)
+	for _, h := range ask {
+		if time.Now().After(deadline) {
 			break
 		}
+		x, answered, final, err := liveResolveOne(h)
+		if gaveWay(err) {
+			break
+		}
+		got = append(got, res{h.ID, x, answered, final})
 		if x == "" {
 			continue
 		}
+		rid := h.ID + ":resolved"
 		c := &change{company: h.Company, companyGuid: h.CGUID, event: or(h.Ev, "created"), vchType: h.Type, vchNo: h.No, vchDate: h.Date, source: "addon", lineId: rid,
-			at: h.At, saveMs: -1, readAt: nowFn()}
+			at: h.At, saveMs: -1, readAt: nowFn(), idsMismatch: h.Mismatch, lineGuid: h.LineGuid, lineFid: h.LineFid}
+		if !h.Mismatch && h.MID == "" && h.Ev == "altered" {
+			c.event = "created" // review H2: found by its number, the save was a new entry's
+		}
 		live.mu.Lock()
 		liveFresh()
 		liveTakeBody(c, x)
@@ -606,9 +741,27 @@ func liveResolveTurn() {
 		live.mu.Unlock()
 		writeLog(fmt.Sprintf("Recorder: %s %s of %s in %s resolved: sent as %s with its GUID %s and body", h.Type, h.No, h.Date, h.Company, c.event, c.guid))
 	}
-	if changed {
-		liveHeldSave(all, items)
+	if len(got) == 0 {
+		return
 	}
+	// the answers merged into the list as it is now
+	heldMu.Lock()
+	defer heldMu.Unlock()
+	all, items = liveHeldLoad()
+	for _, r := range got {
+		h, had := items[r.id]
+		if !had {
+			continue
+		}
+		if r.answered {
+			h.Tries++
+		}
+		if r.final {
+			h.Final = true
+		}
+		items[r.id] = h
+	}
+	liveHeldSave(all, items)
 }
 
 const (
@@ -616,11 +769,11 @@ const (
 	liveHeldGiveUp   = "Tally did not give this entry after 20 tries; upload that day's Day Book to settle it"
 )
 
-// one held line's entry asked of Tally: by MasterID when the line had it, else (or when Tally's voucher with that
-// MasterID is not the line's) by type, number and date; checked as the body fetch checks it (liveVoucherWrong). ""
-// when not found
-func liveResolveOne(h heldLine) (string, error) {
-	sp, _ := startPointOf(h.Company)
+// one held line's entry asked of Tally: by MasterID when the line had it, else (or when Tally gave nothing with that
+// MasterID) by type, number and date; checked as the body fetch checks it (liveVoucherWrong). Security L3: when the
+// MasterID gave another real voucher, nothing is asked by number (final). answered: Tally answered a request (a try)
+func liveResolveOne(h heldLine) (x string, answered, final bool, err error) {
+	sp, spOK := startPointOf(h.Company)
 	key := h.Company + "|" + h.CGUID
 	tc := recorderTC(func(sec float64) {
 		if sec > liveLimitSec() {
@@ -629,21 +782,29 @@ func liveResolveOne(h heldLine) (string, error) {
 	})
 	port, err := findCompanyPort(h.Company, 0)
 	if err != nil {
-		return "", err
+		return "", false, false, err
 	}
-	w := liveWant{company: h.Company, cguid: h.CGUID, typ: h.Type, no: h.No, date: h.Date, sp: sp}
+	w := liveWant{company: h.Company, cguid: h.CGUID, typ: h.Type, no: h.No, date: h.Date, mid: h.MID, sp: sp, spOK: spOK, lineAlter: h.LineAlter}
 	if h.MID != "" {
 		m, err := fetchVouchersByMasterIn(tc, h.Company, port, h.Date, []string{h.MID}, liveBodySec())
 		if err != nil {
-			return "", err
+			return "", false, false, err
 		}
-		if liveVoucherWrong(m[h.MID], "voucher with MasterID "+h.MID, w) == "" {
-			return m[h.MID], nil
+		why, kind := liveVoucherWrong(m[h.MID], "voucher with MasterID "+h.MID, w)
+		if why == "" {
+			return m[h.MID], true, false, nil
 		}
+		if kind == wrongFinal {
+			return "", true, true, nil
+		}
+		answered = true
 	}
 	if h.No == "" || !liveNumberText(h.No) || !liveNumberText(h.Type) {
-		return "", nil
+		return "", answered, h.MID == "", nil
 	}
-	x, _, err := liveOneByNumber(tc, h.Company, port, w, liveBodySec())
-	return x, err
+	x, _, kind, err := liveOneByNumber(tc, h.Company, port, w, liveBodySec())
+	if err != nil {
+		return "", answered, false, err
+	}
+	return x, true, kind == wrongFinal, nil
 }

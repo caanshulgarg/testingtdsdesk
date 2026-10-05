@@ -534,6 +534,11 @@ func TestLiveDatedGuardException(t *testing.T) {
 		t.Fatal("ReadDays is on by default")
 	}
 	ok := voucherByMasterRequest(zz, "20261004", []string{"5", "9"})
+	// 2.2.2 security review: only for a company whose starting point is recorded
+	if datedRefused(fin, ok) == nil {
+		t.Fatal("the body fetch passes for a company with no starting point")
+	}
+	noteStartPoint(zz, b220CoGUID, 1, 1)
 	if datedRefused(fin, ok) != nil {
 		t.Fatal("the body fetch is refused with ReadDays off")
 	}
@@ -575,6 +580,8 @@ func TestLiveDatedGuardException(t *testing.T) {
 func TestLiveBodyFetch(t *testing.T) {
 	rec, f, c := liveBridge(t, `,"RecorderBodySec":2`)
 	td := today()
+	f.alter = 10
+	noteStartPoint(zz, b220CoGUID, 5, 1) // 2.2.2: nothing is taken without a starting point
 	v := f.add(td, "Party A", "PA-1", "rent", "-12.00")
 	p := liveFilePath(rec, "")
 	liveAppend(t, p,
@@ -751,6 +758,7 @@ func TestRecorderLinesFixture(t *testing.T) {
 	f.mu.Lock()
 	f.vch = append(f.vch, v)
 	f.mu.Unlock()
+	noteStartPoint(zz, b220CoGUID, 9000, 1) // 2.2.2: nothing is taken without a starting point
 	l := f.addLed("Landlord B", "Sundry Creditors", "0.00")
 	liveAppend(t, liveFilePath(rec, "20261004"),
 		liveLine("voucher_accept_pre", "Voucher", "", "", "", "Payment", "17", "4-Oct-2026", "", "", "Rent for October"),

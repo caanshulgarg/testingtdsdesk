@@ -135,6 +135,10 @@ func TestNWS144AlteredAndOneCreated(t *testing.T) {
 		return "FCR1|ev=" + ev + "|t0=5-Oct-2026 " + tm + "|tw=5-Oct-2026 " + tm + "|cguid=" + nwsGUID + "|cname=" + nwsCo + "|user=owner|obj=Voucher|guid=" + guid +
 			"|mid=" + mid + "|aid=" + aid + "|vtype=Receipt|vno=" + no + "|vdate=5-Oct-2026|name=|parent=|narr=" + narr + "|t1=5-Oct-2026 " + tm + "|src=live"
 	}
+	// 2.2.2 review H2: after the save Tally's AlterID is above the line's before it (54391): 54395
+	f.mu.Lock()
+	f.vch[1].alter = 54395
+	f.mu.Unlock()
 	liveAppend(t, p, l("voucher_accept_pre", "07:20", g191, "26311", "54391", "191", "Received from customer"),
 		l("voucher_accept_post", "07:20", g191, "26311", "54395", "191", "Received from customer"))
 	readAndUploadAll(t)

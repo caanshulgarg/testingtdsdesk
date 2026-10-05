@@ -20,6 +20,9 @@ import (
 type recLine struct {
 	Ev, T0, Tw, CGUID, CName, User, Obj, GUID, MID, AID, VType, VNo, VDate, Name, Parent, Narr, T1 string
 	Src                                                                                            string // 2.2.0: "live" from the live add-on (FinComRecorder.tdl writes "|src=live" after t1); "" from the trial's
+	// 2.2.2 (the bridge's own, never on a line): a pair's first half's GUID and AlterID (the AlterID before the save: a
+	// lower bound for Tally's; the GUID flagged when it is another entry's)
+	PreGUID, PreAID string
 }
 
 var recKeys = []string{"ev", "t0", "tw", "cguid", "cname", "user", "obj", "guid", "mid", "aid", "vtype", "vno", "vdate", "name", "parent"}
