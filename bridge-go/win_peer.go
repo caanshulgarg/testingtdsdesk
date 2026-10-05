@@ -93,3 +93,20 @@ func platOwnSIDs() []string {
 	}
 	return own
 }
+
+// review M1: the Windows user of the process listening on 127.0.0.1:port
+func platListenerUser(port int) (string, bool, error) {
+	rows, err := tcpTable()
+	if err != nil {
+		return "", true, err
+	}
+	pid := listenerPidFrom(rows, port)
+	if pid == 0 {
+		return "", true, fmt.Errorf("no program listens on port %d", port)
+	}
+	sid, err := processSID(pid)
+	if errors.Is(err, windows.ERROR_ACCESS_DENIED) {
+		return "", true, nil // a process this bridge may not open is another user's
+	}
+	return sid, true, err
+}

@@ -50,3 +50,23 @@ func TestWindowsPeerUserIsOwn(t *testing.T) {
 		t.Fatal("a connection that does not exist was found")
 	}
 }
+
+// review M1, on real Windows: the process listening on a port is found in the TCP table's LISTEN rows, with its user
+func TestWindowsListenerUserIsOwn(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	_, sp, _ := net.SplitHostPort(ln.Addr().String())
+	port, _ := strconv.Atoi(sp)
+	sid, checked, err := platListenerUser(port)
+	me, _ := windows.GetCurrentProcessToken().GetTokenUser()
+	if err != nil || !checked || sid != me.User.Sid.String() {
+		t.Fatalf("listener user: %q %v %v (own %s)", sid, checked, err, me.User.Sid.String())
+	}
+	ln.Close()
+	if _, _, err := platListenerUser(port); err == nil {
+		t.Fatal("a port nobody listens on was found")
+	}
+}

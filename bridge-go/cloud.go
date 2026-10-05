@@ -721,6 +721,16 @@ func beatOnce() {
 		}
 		// another bridge is the main one on this computer: this one reads only (said once in the log)
 		if !testMode() {
+			// L2: FinCom's "Changes only" for this bridge, kept in the settings until FinCom answers without it
+			if on := truthy(r.json["changesOnly"]); on != cfgB("ChangesOnly") {
+				setCfg("ChangesOnly", on)
+				saveConfig()
+				if on {
+					writeLog("FinCom: " + changesOnlyText + " Kept in the settings.")
+				} else {
+					writeLog("FinCom: changes only is off; this bridge may post again")
+				}
+			}
 			if truthy(r.json["notMain"]) {
 				noteNotMain(str(r.json["error"]), true)
 			} else {

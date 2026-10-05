@@ -7,6 +7,9 @@
 package main
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"net"
 	"net/http"
 	"strconv"
@@ -81,4 +84,29 @@ func fromOwnUser(r *http.Request) (bool, string) {
 	local, remote := connPorts(r)
 	peer, checked, err := peerUserOf(local, remote)
 	return ownUserDecision(checked, peer, err, ownSIDsOf())
+}
+
+// review M1: the process LISTENING on 127.0.0.1:port (or 0.0.0.0:port): MIB_TCP_STATE_LISTEN rows; 0 when none
+func listenerPidFrom(rows []tcpRow, port int) int {
+	const loopback, listen = 0x0100007f, 2
+	for _, r := range rows {
+		if r.State == listen && (r.LocalAddr == loopback || r.LocalAddr == 0) && netPort(r.LocalPort) == port {
+			return int(r.Pid)
+		}
+	}
+	return 0
+}
+
+// the Windows user of the program listening on a port (platform; a stand-in in the tests); checked false when not Windows
+var listenerUserOf = platListenerUser
+
+// review M1: the bridge proves itself to FinCom: HMAC-SHA256(secret, nonce) in hex. A nonce is 16 to 128 letters,
+// digits, "-" or "_"; anything else gets no proof
+func proofFor(secret, nonce string) string {
+	if secret == "" || !re(`^[A-Za-z0-9_-]{16,128}$`).MatchString(nonce) {
+		return ""
+	}
+	m := hmac.New(sha256.New, []byte(secret))
+	m.Write([]byte(nonce))
+	return hex.EncodeToString(m.Sum(nil))
 }

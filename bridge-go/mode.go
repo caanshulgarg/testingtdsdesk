@@ -22,6 +22,8 @@ import (
 	"time"
 )
 
+const changesOnlyText = "This bridge is set to changes only in FinCom (Tally page): it reads Tally's changes and never posts."
+
 func testMode() bool { return strings.EqualFold(cfgS("Mode"), "test") }
 
 // How this program was started, for the tray and the log: "service" (a Windows service for all users, started by
@@ -75,6 +77,10 @@ var (
 func readOnlyWhy() string {
 	if testMode() {
 		return "This FinCom Bridge is the test install beside bridge 1.15.0: it reads Tally but never posts. Postings go through bridge 1.15.0."
+	}
+	// L2: set to changes only in FinCom (kept in the settings: a restart or FinCom out of reach never posts again)
+	if cfgB("ChangesOnly") {
+		return changesOnlyText
 	}
 	if why := notMainNow(); why != "" {
 		return why

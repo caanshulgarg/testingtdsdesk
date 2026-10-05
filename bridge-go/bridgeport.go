@@ -85,15 +85,24 @@ func bindReason(err error) string {
 // the real bind: this computer only
 var listenLocal = func(p int) (net.Listener, error) { return net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", p)) }
 
-// a taken port answers as this Windows user's own FinCom Bridge (its /ping: impl go, yours)
+// a taken port is this Windows user's own FinCom Bridge: Windows says the process listening there is this user's (its
+// token's SID, from the TCP table's LISTEN row; review M1: never the listener's own word, which another user's program
+// could fake), and it answers as a FinCom Bridge. Not Windows, or Windows cannot tell: not this user's
 var ownBridgeOnTest func(int) bool
 
 func ownBridgeOn(p int) bool {
 	if ownBridgeOnTest != nil {
 		return ownBridgeOnTest(p)
 	}
+	sid, checked, err := listenerUserOf(p)
+	if !checked || err != nil {
+		return false
+	}
+	if ok, _ := ownUserDecision(true, sid, nil, ownSIDsOf()); !ok {
+		return false
+	}
 	o := pingLocal(p, 2*time.Second)
-	return o != nil && o["yours"] == true
+	return o != nil && str(o["impl"]) == "go"
 }
 
 // bindAndRemember: the port bound is kept in this user's settings, so the next start (and the tray, the supervisor and

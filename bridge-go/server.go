@@ -120,6 +120,19 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		p := M{"ok": true, "bridge": "FinCom Tally Bridge", "version": BridgeVersion, "impl": "go", "testMode": testMode(), "runMode": runMode, "pid": os.Getpid(), "loopSec": loopSec(), "yours": mine}
 		if mine {
 			p["bridgeId"], p["port"] = "go-"+instanceID(), toInt(cfg("Port"))
+			// review M1: the proof FinCom checks before it uses this bridge (its key), or pairs with it (the code shown now)
+			if n := qs.Get("n"); n != "" {
+				if pr := proofFor(cfgS("Key"), n); pr != "" {
+					p["proof"] = pr
+				}
+				pairMu.Lock()
+				if time.Now().Before(pairUntil) {
+					if pr := proofFor(pairCode, n); pr != "" {
+						p["pairProof"] = pr
+					}
+				}
+				pairMu.Unlock()
+			}
 		}
 		sendJSON(w, 200, p, origin)
 		return
