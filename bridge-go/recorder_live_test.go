@@ -612,7 +612,7 @@ func TestLiveBodyFetch(t *testing.T) {
 		t.Fatalf("sent: %v", sent)
 	}
 	x := str(sent[0]["xml"])
-	if !strings.HasPrefix(x, "<VOUCHER ") || !strings.HasSuffix(x, "</VOUCHER>") || !strings.Contains(x, "<GUID>"+v.guid+"</GUID>") || !strings.Contains(x, "<ALLLEDGERENTRIES.LIST><LEDGERNAME>Party A</LEDGERNAME>") {
+	if !strings.HasPrefix(x, "<VOUCHER ") || !strings.HasSuffix(x, "</VOUCHER>") || !strings.Contains(x, "<GUID>"+v.guid+"</GUID>") || !strings.Contains(x, "<ALLLEDGERENTRIES.LIST>") || tagValue(x[strings.Index(x, "<ALLLEDGERENTRIES.LIST>"):], "LEDGERNAME") != "Party A" {
 		t.Fatalf("the voucher sent: %s", x)
 	}
 	if lg := fmt.Sprint(sent[0]["ledgers"]); !strings.Contains(lg, "Party A") || !strings.Contains(lg, "Sales") {
@@ -749,6 +749,9 @@ func TestUploaderGroupsAndMarkSent(t *testing.T) {
 
 // --- 4b. the request body, as the cloud's tests read it (tests/fixtures/recorder-lines-2.2.0.json)
 func TestRecorderLinesFixture(t *testing.T) {
+	if standTyped.Load() {
+		t.Skip("the fixture is the request the plain stand Tally's answers make, byte for byte")
+	}
 	rec, f, c := liveBridge(t, "")
 	oldPC, oldZone := liveComputerFn, liveZone
 	liveComputerFn, liveZone = func() string { return "NWS144" }, time.FixedZone("IST", 19800)
