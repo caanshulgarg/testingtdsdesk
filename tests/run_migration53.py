@@ -43,6 +43,7 @@ def part(path, name):
     i = s.index('"""', i) + 3; return s[i:s.index('"""', i)]
 F, OWNER = "99999999-9999-9999-9999-999999999999", "55555555-5555-5555-5555-555555555555"
 B, B2, D1 = "f79e4bc3-871d-4482-874d-71c5fb2a1b33", "f79e4bc3-871d-4482-874d-000000000053", "58d73e82-57f3-4f72-9f3d-14cc93a5b2b1"
+B3 = "f79e4bc3-871d-4482-874d-0000000053a3"                                                   # review M1: a book of its own (its settled lines count)
 CG = "7c5fd9b3-7235-4cbb-b4cd-1124be599189"                                                   # GARG SHEKHAR & COMPANY's company GUID
 FG = "0d8a1c2e-1111-2222-3333-444455556666"                                                   # another company's GUID (an entry synced or imported from it)
 PH = CG + "-00000000"
@@ -108,16 +109,18 @@ try:
     db.sql("create index if not exists tally_vouchers_day on tally_vouchers (book_id, day)")
     db.sql("""insert into firms values (%(F)s, 'Garg Shekhar & Company') on conflict do nothing; insert into members values (%(O)s, %(F)s, 'Owner', 'owner', true);
       insert into tally_books (book_id, firm_id, client_id, company, from_date, open_as_on) values (%(B)s, %(F)s, 'c1', 'GARG SHEKHAR & COMPANY', '2025-04-01', '2025-03-31'),
-                                                                                                  (%(B2)s, %(F)s, 'c2', 'GARG SHEKHAR & COMPANY', '2025-04-01', '2025-03-31');
+                                                                                                  (%(B2)s, %(F)s, 'c2', 'GARG SHEKHAR & COMPANY', '2025-04-01', '2025-03-31'),
+                                                                                                  (%(B3)s, %(F)s, 'c3', 'GARG SHEKHAR & COMPANY', '2025-04-01', '2025-03-31');
       insert into tally_devices (id, firm_id, name, key_hash, version) values (%(D)s, %(F)s, 'NWS144', 'h1', '2.2.2');
       create table if not exists clients (id text, firm_id uuid, name text, data jsonb, deleted boolean default false, tally_name text, gstin text, primary key (firm_id, id));
-      insert into clients (id, firm_id, name, data) values ('c1', %(F)s, 'GARG SHEKHAR & COMPANY', '{"choices": {}}'), ('c2', %(F)s, 'GARG SHEKHAR & COMPANY (2)', '{"choices": {}}');""" % {"F": q(F), "O": q(OWNER), "B": q(B), "B2": q(B2), "D": q(D1)})
+      insert into clients (id, firm_id, name, data) values ('c1', %(F)s, 'GARG SHEKHAR & COMPANY', '{"choices": {}}'), ('c2', %(F)s, 'GARG SHEKHAR & COMPANY (2)', '{"choices": {}}'), ('c3', %(F)s, 'GARG SHEKHAR & COMPANY (3)', '{"choices": {}}');""" % {"F": q(F), "O": q(OWNER), "B": q(B), "B2": q(B2), "B3": q(B3), "D": q(D1)})
     for path in FILES:
         r = psql_text(open(path).read())
         if r.returncode: ok(False, "%s runs: %s" % (os.path.basename(path), r.stderr[-300:])); raise SystemExit("cannot go on")
     # book B has a starting point; book B2 none recorded
     db.sql("insert into tally_sync_cursor (book_id, firm_id, last_voucher_alterid, start_at, start_guid) values (%s, %s, %d, '2026-10-04 10:00+05:30', %s);"
-           "insert into tally_sync_cursor (book_id, firm_id) values (%s, %s)" % (q(B), q(F), START, q(CG), q(B2), q(F)))
+           "insert into tally_sync_cursor (book_id, firm_id) values (%s, %s);"
+           "insert into tally_sync_cursor (book_id, firm_id, last_voucher_alterid, start_at, start_guid) values (%s, %s, %d, '2026-10-04 10:00+05:30', %s)" % (q(B), q(F), START, q(CG), q(B2), q(F), q(B3), q(F), START, q(CG)))
     print("== before 53 (52's functions): the copy as on staging, then the lines")
     # the copy: 05-Oct-2026 from a Day Book (stored before the lines came, as on staging)
     D5 = [V(G(0x66c6), 54391, "191", "2026-10-05", "Party 191"),
@@ -166,6 +169,19 @@ try:
     ok(rmax() == "51986", "52: recorder_max_alter raised to 51986 (%s)" % rmax())
     db.sql("update tally_recorder_lines set state = 'held', held_why = 'put back to held by a correction' where line_id = 'p-reheld'")
     db.sql("update tally_sync_cursor set recorder_max_alter = 999 where book_id = %s" % q(B2))
+    # review M1 (book B3): Receipt 401 altered in Tally with its body, applied at 54650 (received 13:00); altered AGAIN, the add-on
+    # failed: a placeholder altered line (13:30) - the copy holds the OLDER version (54650, not above the settled line's 54650)
+    day("2026-10-04", [V(G(0x6800), 54500, "401", "2026-10-04", "P401"), V(G(0x6801), 54510, "402", "2026-10-04", "P402")], LN(G(0x6800), "P401", 40) + LN(G(0x6801), "P402", 41), book=B3)
+    got = states(apply([dict(sline("m1-body", "altered", G(0x6800), str(0x6800), 54650, "401", "2026-10-04"), **body(G(0x6800), 54650, "401", "2026-10-04", "P401", 45))], book=B3))
+    ok(got and got[0][0] == "applied", "M1: the first alteration of Receipt 401, with its body: applied at 54650 (%s)" % (got,))
+    got = states(apply([sline("m1-ph", "altered", PH, "0", 0, "401", "2026-10-04")], book=B3))
+    ok(got and got[0][0] == "held", "M1 under 52: the second alteration's placeholder line held (%s)" % (got,))
+    db.sql("update tally_recorder_lines set received_at = '2026-10-05 13:00:00+05:30' where line_id = 'm1-body'; update tally_recorder_lines set received_at = '2026-10-05 13:30:00+05:30' where line_id = 'm1-ph';"
+           "update tally_recorder_lines set received_at = '2026-10-05 07:55:00+05:30' where line_id = '1'")
+    # and Receipt 402: a placeholder altered line received BEFORE any settled line of B3 (07:00): the rule as for line 1
+    apply([sline("m1-first", "altered", PH, "0", 0, "402", "2026-10-04")], book=B3)
+    db.sql("update tally_recorder_lines set received_at = '2026-10-05 07:00:00+05:30' where line_id = 'm1-first'")
+    m1pre = row("m1-ph", B3)
     pre = {k: row(k) for k in ("1", "4", "17", "x-two", "x-start", "x-unnumbered", "x-late", "x-mismatch", "x-case", "x-deleted", "x-master", "x-short")}
     books_ok("before 53")
     print("== migration 53")
@@ -209,9 +225,11 @@ try:
                  ("x-unnumbered", "an unnumbered line"), ("x-late", "a line received on 06-Oct (beyond the correction)"), ("x-mismatch", "a line whose ids did not belong together (idsMismatch)"),
                  ("x-deleted", "the entry deleted"), ("x-master", "a MasterID making another GUID than the entry's"), ("x-short", "FinCom's short line")):
         ok(now[k]["state"] == "held" and now[k]["xm"] == pre[k]["xm"], "%s: stays held, untouched (%s)" % (w, sw(k)))
-    ok(db.one("select count(*) from tally_recorder_lines where held_why like 'the copy holds % already (GUID %, AlterID %, from a Day Book or another line)'") == "2", "exactly two rows changed (line 1 and the one of another case)")
+    ok(db.one("select count(*) from tally_recorder_lines where held_why like 'the copy holds % already (GUID %, AlterID %, from a Day Book or another line)'") == "3", "exactly three rows changed (line 1, the one of another case, and review M1's line received before any settled line)")
     ok(all(now[k]["pm"] == pre[k]["pm"] for k in pre), "payloads unchanged")
     ok(sw("b2-1", B2)[0] == "held", "the book without a starting point: line 1's twin stays held (%s)" % (sw("b2-1", B2),))
+    ok(sw("m1-ph", B3)[0] == "held" and row("m1-ph", B3)["xm"] == m1pre["xm"], "review M1: an altered placeholder line whose entry the copy holds only at the AlterID of a settled line received before it (54650): stays held, untouched (%s)" % (sw("m1-ph", B3),))
+    ok(sw("m1-first", B3) == ("duplicate", W53 % ("Receipt", "402", "04-Oct-2026", G(0x6801), 54510)), "review M1: one received before any settled line of its book: 'duplicate' (%s)" % (sw("m1-first", B3),))
     print("== 1. the rule on new lines (the function)")
     got = states(apply([dict(L1, line_id="1-again"), dict(X2, line_id="x-two-again"), dict(X3, line_id="x-start-again"), dict(X4, line_id="x-unnumbered-again"), dict(X9, line_id="x-master-again"), X11]))
     ok(got[0] == ("duplicate", W1), "line 1 sent again: 'duplicate' at once (%s)" % (got[0],))
@@ -219,6 +237,12 @@ try:
     ok(got[5][0] == "held", "a placeholder line WITH a body: not this rule (held as 52: never an entry under the placeholder) (%s)" % (got[5],))
     got = states(apply([dict(L1, line_id="b2-1-again")], book=B2))
     ok(got[0][0] == "held", "no starting point recorded: held (%s)" % (got,))
+    got = states(apply([sline("m1-again", "altered", PH, "0", 0, "401", "2026-10-04")], book=B3))
+    ok(got[0][0] == "held", "review M1, the function: the second alteration's placeholder line sent again: held (the copy is not above the settled 54650) (%s)" % (got,))
+    got = states(apply([sline("m1-created", "created", PH, "0", 0, "401", "2026-10-04")], book=B3))
+    ok(got[0][0] == "duplicate", "review M1: 'created' unchanged (%s)" % (got,))
+    day("2026-10-04", [V(G(0x6800), 54700, "401", "2026-10-04", "P401"), V(G(0x6801), 54510, "402", "2026-10-04", "P402")], LN(G(0x6800), "P401", 47) + LN(G(0x6801), "P402", 41), book=B3)
+    ok(sw("m1-ph", B3)[0] == "duplicate" and sw("m1-again", B3)[0] == "duplicate", "review M1: a Day Book bringing Receipt 401 at 54700 (above 54650): the held placeholder lines 'duplicate' (%s, %s)" % (sw("m1-ph", B3), sw("m1-again", B3)))
     print("== 1. the release path: a Day Book stored later")
     ok(sw("17")[0] == "held", "line 17 held before its Day Book")
     got = states(apply([sline("x-later", "altered", PH, "0", 0, " 301", "2026-10-06", vch_type="RECEIPT")]))

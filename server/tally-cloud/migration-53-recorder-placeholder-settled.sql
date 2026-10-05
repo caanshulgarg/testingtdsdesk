@@ -15,7 +15,11 @@
 --      is above the book's starting point (tally_sync_cursor.last_voucher_alterid, recorded at start_at by tally_start_point or
 --      the first gap check, 44 / 46 / 47). No starting point recorded: never. Never an unnumbered line; never a line whose ids
 --      did not belong together (idsMismatch, 51); never a line carrying a FinCom id (fid / "TDSDesk:" narration: its posting's
---      own rules, 45); never when the line's MasterID makes another GUID than that entry's. Applied in tally_recorder_line, so
+--      own rules, 45); never when the line's MasterID makes another GUID than that entry's. REVIEW M1: an 'altered' line only
+--      when that entry's AlterID is also ABOVE the highest AlterID of any line of the same book that settled (applied /
+--      duplicate / stale) and was received before this line (none: as now); else the copy may hold an older version (an
+--      alteration applied with its body, then altered again with a placeholder line). 'created' / 'imported' unchanged.
+--      Applied in tally_recorder_line, so
 --      new lines and held lines run again (the owner's release, a Day Book day stored: tally_recorder_release_day) get it.
 --      tally_recorder_release_day (50's text but the lines marked "53") finds such a line by its type in any case and its number
 --      trimmed (as the line compares them), so a Day Book stored later holding the entry settles it.
@@ -87,6 +91,8 @@ declare b tally_books%rowtype; rid bigint := p_row; ev text := left(btrim(coales
   a_t text; a_n text; a_d date; cx_a bigint; sh boolean := false;
   -- 53: the book's starting point; the one live entry of the line's type, number and date (s_*); a FinCom id on the line or its row
   sp bigint; s_n int; s_g text; s_a bigint; s_t text; s_no text; s_d date; fc boolean;
+  -- 53 (review M1): an altered line: the highest AlterID of the book's lines settled before it came
+  s_m bigint;
 begin
   select * into b from tally_books where book_id = p_book;
   if b.book_id is null then raise exception 'no such book'; end if;
@@ -392,7 +398,15 @@ begin
            and lower(v.guid) like lower(pref) || '-%' and v.guid !~ '-0{8}$';     -- 53
         if s_n = 1 then     -- 53
           select coalesce(v.alter_id, 0), btrim(v.vtype), left(btrim(v.vno), 60), v.day into s_a, s_t, s_no, s_d from tally_vouchers v where v.book_id = p_book and v.guid = s_g;     -- 53
-          if s_a > sp and (dg is null or lower(dg) = lower(s_g)) then     -- 53
+          -- 53 (review M1): an 'altered' line only when the entry is ABOVE the highest AlterID of any line of the book that settled
+          -- (applied / duplicate / stale) and came before this one: else the copy may hold an older version of the entry (an
+          -- alteration applied with its body, then altered again with the add-on's placeholder line). None such: as for created
+          if ev = 'altered' then     -- 53
+            select max(z.alter_id) into s_m from tally_recorder_lines z     -- 53
+             where z.book_id = p_book and z.state in ('applied', 'duplicate', 'stale') and z.received_at < r_at and z.id <> rid     -- 53
+               and z.event in ('created', 'altered', 'deleted', 'cancelled', 'imported') and z.alter_id < 1000000000000000;     -- 53
+          end if;     -- 53
+          if s_a > sp and (dg is null or lower(dg) = lower(s_g)) and (ev <> 'altered' or s_m is null or s_a > s_m) then     -- 53
             stt := 'duplicate'; wy := format('the copy holds %s %s of %s already (GUID %s, AlterID %s, from a Day Book or another line)', s_t, s_no, to_char(s_d, 'DD-Mon-YYYY'), s_g, s_a);     -- 53
           end if;     -- 53
         end if;     -- 53
@@ -732,7 +746,12 @@ update public.tally_recorder_lines r set state = 'duplicate',
    -- a MasterID, when the line has one, makes that entry's GUID
    and case when (case when coalesce(btrim(r.master_id), '') ~ '^[0-9]{1,10}$' then btrim(r.master_id)::bigint else 0 end) between 1 and 4294967295
             then lower(v.guid) = lower(coalesce(substring(r.object_guid from '^(.+)-0{8}$'), btrim(r.company_guid)) || '-' || lpad(to_hex(btrim(r.master_id)::bigint), 8, '0'))
-            else true end;
+            else true end
+   -- review M1: an 'altered' line only when the entry is above the highest AlterID of the book's lines settled before it came
+   and (r.event <> 'altered'
+        or coalesce(v.alter_id, 0) > coalesce((select max(z.alter_id) from public.tally_recorder_lines z
+                                                where z.book_id = r.book_id and z.state in ('applied', 'duplicate', 'stale') and z.received_at < r.received_at and z.id <> r.id
+                                                  and z.event in ('created', 'altered', 'deleted', 'cancelled', 'imported') and z.alter_id < 1000000000000000), -1));
 
 -- ---------------------------------------------------------------- 2. recorder_max_alter recomputed from the settled lines whose ids belong together
 update public.tally_sync_cursor c set recorder_max_alter = s.mx
