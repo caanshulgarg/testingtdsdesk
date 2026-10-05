@@ -145,3 +145,7 @@ tables closed, the exact kind CHECK swap (and its refusal), the ledger rename's 
 on both databases; `run_recorder_server.py` H1 through tally-ingest; `run_upload_split.py` M2-M5 and L2-L5. pg_cron's
 'tally-recorder-drain' now runs `call public.tally_recorder_drain_run(15000)`; 48 adds 'tally-recorder-archive-trim'
 (`17 21 * * *` UTC, 02:47 IST). Order unchanged: 47 after 46, 48 after 47.
+FinCom Bridge 2.3.0 (05-Oct-2026): `migration-54-post-target-bridge.sql` runs after 53 in both orders (add-only, one
+transaction, safe twice): `tally_post_jobs.target_bridge`, `tally_bridge_prefs` (changes only, per bridge),
+`tally_member_bridges` (the member's bridge), `tally_post_enqueue_to` and `tally_post_take_for`. Tested by
+`run_migration54.py` and `run_migration_order.py` (54 in both orders). tally-ingest works without it (the old hand-out).
