@@ -126,6 +126,19 @@ expect "red 10: 2.1.7 with a line without the owner's decision words" 1 "owner's
 setup; withver 2.1.6; unmeasured "First table: not yet measured; allowed for 2.1.6 only; allowed for 2.1.5 only; re-measured on 2026-10-02 (no times)"
 expect "red 11: an exception naming two versions" 1 "names more than one version"
 
+# the owner's standing decision of 06-Oct-2026: "allowed for <version> by the owner's standing decision of <date>" counts too
+setup; withver 2.3.0; unmeasured "First table: not yet measured; allowed for 2.3.0 by the owner's standing decision of 2026-10-06: no request on the list and no request shape changed.
+re-measured on 2026-10-02 (no times)"
+expect "green 4: the standing-decision line for this version passes check 4" 0 "allowed for 2.3.0"
+
+setup; withver 2.3.1; unmeasured "First table: not yet measured; allowed for 2.3.0 by the owner's standing decision of 2026-10-06: no request on the list and no request shape changed.
+re-measured on 2026-10-02 (no times)"
+expect "red 12: a standing-decision line naming another version" 1 "not 2.3.1"
+
+setup; withver 2.3.0; unmeasured "First table: not yet measured; allowed for 2.3.0 by the owner's standing decision of 2026-10-06; allowed for 2.2.4 only by the owner's decision of 2026-10-05.
+re-measured on 2026-10-02 (no times)"
+expect "red 13: a standing line and an older decision line together name two versions" 1 "names more than one version"
+
 setup; printf '# Tally allow-list\n\nre-measured on 2026-10-02\n| id | purpose | worst case (s) | measured on |\n|---|---|---|---|\nledgers | ledger list | 4 | 2026-09-30\n' >"$R/docs/tally-allowlist.md"; g add -A; g commit -qm "no rows"
 expect "red 9: no row of the allow-list table can be parsed" 1 "no rows parsed"
 
