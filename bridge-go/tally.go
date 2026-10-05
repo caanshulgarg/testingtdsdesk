@@ -425,6 +425,11 @@ var (
 	errRecorderStop = errors.New("Tally took longer than the recorder's limit; the bridge stopped waiting")
 )
 
+// 2.2.2: the context values of one request: the recorder's hard stop (a time.Duration from the send), and where the send
+// time is noted (*time.Time)
+type stopKey struct{}
+type sentKey struct{}
+
 // Tally took this very request and did not answer it (timed out, or the answer stopped part way): only this counts as
 // Tally hanging on a request. A request refused or held here (nothing sent), or stopped for FinCom's, does not
 func tallyNoAnswer(err error) bool { return errors.Is(err, errTimeout) || errors.Is(err, errClosed) }
@@ -466,14 +471,28 @@ func tallyRaw(ctx context.Context, port int, x string, timeoutSec int) (string, 
 	if host == "" {
 		host = "127.0.0.1"
 	}
+	parent := ctx
+	if d, _ := ctx.Value(stopKey{}).(time.Duration); d > 0 {
+		var stop context.CancelFunc
+		ctx, stop = context.WithTimeout(ctx, d)
+		defer stop()
+	}
+	// a deliberate stop (the caller's deadline): not Tally's silence, never noted as such
+	stoppedHere := func() bool { return parent.Err() == nil && errors.Is(ctx.Err(), context.DeadlineExceeded) }
 	cl := &http.Client{Timeout: time.Duration(timeoutSec) * time.Second, Transport: &http.Transport{DisableKeepAlives: true, Proxy: nil}}
 	body, ctype := tallyBody(x, wantUTF16(ctx))
 	req, _ := http.NewRequestWithContext(ctx, "POST", fmt.Sprintf("http://%s:%d", host, port), bytes.NewReader(body))
 	req.Header.Set("Content-Type", ctype)
 	tallySent.Add(1)
 	tallySentAt.Store(time.Now().Unix())
+	if at, _ := ctx.Value(sentKey{}).(*time.Time); at != nil {
+		*at = time.Now()
+	}
 	resp, err := cl.Do(req)
 	if err != nil {
+		if stoppedHere() {
+			return "", fmt.Errorf("%w (%g s)", errRecorderStop, ctx.Value(stopKey{}).(time.Duration).Seconds())
+		}
 		if errors.Is(ctx.Err(), context.Canceled) {
 			return "", errPreempted
 		}
@@ -484,6 +503,9 @@ func tallyRaw(ctx context.Context, port int, x string, timeoutSec int) (string, 
 	defer resp.Body.Close()
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
+		if stoppedHere() {
+			return "", fmt.Errorf("%w (%g s)", errRecorderStop, ctx.Value(stopKey{}).(time.Duration).Seconds())
+		}
 		if errors.Is(ctx.Err(), context.Canceled) {
 			return "", errPreempted
 		}
@@ -669,6 +691,15 @@ var (
 	bgBack = map[int]keepBack{}
 )
 
+// 2.2.2 review (M3): after the recorder's hard stop the background reads (not a person's) leave Tally alone a while
+var stopHold = map[int]time.Time{}
+
+func stopHeld(port int) bool {
+	bgMu.Lock()
+	defer bgMu.Unlock()
+	return nowFn().Before(stopHold[port])
+}
+
 func bgBackoffUntil(port int) time.Time {
 	bgMu.Lock()
 	defer bgMu.Unlock()
@@ -780,6 +811,9 @@ func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 	if tc.copier && !bgBackoffUntil(port).IsZero() {
 		return "", errBackoff
 	}
+	if tc.copier && !tc.person && stopHeld(port) {
+		return "", errBackoff // 2.2.2: a recorder read was stopped at its limit: Tally is still on it
+	}
 	// after a request that did not answer, nothing goes before the "is it free?" check may be sent (once a minute)
 	if err := probeHold(port); err != nil {
 		return "", err
@@ -817,24 +851,36 @@ func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 			return praw, nil
 		}
 	}
-	rctx, stopAt := ctx, time.Duration(0)
+	// 2.2.2: the recorder's hard stop, counted from the send itself (after any gentle wait: tallyRaw starts it)
+	stopAt := time.Duration(0)
 	if tc.limitMs > 0 && tc.copier && !tc.person && !isImportRequest(x) && !isPostingRequest(x) {
 		stopAt = time.Duration(tc.limitMs) * time.Millisecond
-		var stop context.CancelFunc
-		rctx, stop = context.WithTimeout(ctx, stopAt)
-		defer stop()
+		ctx = context.WithValue(ctx, stopKey{}, stopAt)
 	}
+	sentAt := new(time.Time)
+	ctx = context.WithValue(ctx, sentKey{}, sentAt)
 	t0 := time.Now()
 	setInflight(port, true)
-	r, err := tallyRaw(rctx, port, x, timeoutSec)
+	r, err := tallyRaw(ctx, port, x, timeoutSec)
 	setInflight(port, false)
-	if stopAt > 0 && err != nil && ctx.Err() == nil && errors.Is(rctx.Err(), context.DeadlineExceeded) {
-		// the hard stop: not Tally hanging (no busy spell, no small check before the next request); the caller's 2 s rule
-		// (tc.timed) switches the read off
-		err = fmt.Errorf("%w (%g s)", errRecorderStop, stopAt.Seconds())
+	took := time.Since(t0)
+	if !sentAt.IsZero() {
+		took = time.Since(*sentAt) // the time Tally had the request (a gentle wait is not Tally's)
+	}
+	stopped := errors.Is(err, errRecorderStop)
+	if stopped {
+		// the hard stop: Tally is still working on the request. The background reads leave it alone for a while
+		// (RecorderStopCoolSec, 30 s: nothing more is sent into it); FinCom's postings and a person's reads are not held,
+		// and it is not Tally's silence (selfwatch) nor a busy spell
+		if took <= stopAt {
+			took = stopAt + time.Millisecond // the caller's 2 s rule always sees a stop as over the limit
+		}
+		bgMu.Lock()
+		stopHold[port] = nowFn().Add(time.Duration(keepNum("RecorderStopCoolSec", 30)) * time.Second)
+		bgMu.Unlock()
 	}
 	if tc.timed != nil && !errors.Is(err, errPreempted) {
-		tc.timed(time.Since(t0).Seconds())
+		tc.timed(took.Seconds())
 	}
 	fail := ""
 	if errors.Is(err, errPreempted) {

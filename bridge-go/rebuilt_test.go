@@ -521,6 +521,9 @@ func standBridge(t *testing.T, f *standTally, extra string) string {
 	probeMu.Lock()
 	probes = map[int]*probeState{}
 	probeMu.Unlock()
+	bgMu.Lock()
+	stopHold = map[int]time.Time{}
+	bgMu.Unlock()
 	leaseMu.Lock()
 	leases = map[string]time.Time{}
 	leaseMu.Unlock()
