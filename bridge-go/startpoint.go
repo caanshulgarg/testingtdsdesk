@@ -350,7 +350,7 @@ func recorderHolding(company, guid string) (bool, string) {
 }
 
 var (
-	reLiveFileAnyCase = regexp.MustCompile(`(?i)^(.+)-(\d{8}|\d{4}-\d{2}-\d{2})\.txt$`)
+	reLiveFileAnyCase = regexp.MustCompile(`(?i)^(.+)-(\d{8}|\d{4}-\d{2}-\d{2}|\d{1,2}-[a-z]{3}-\d{2})\.txt$`) // 2.2.2: d-Mon-yy too
 	dailyMu           sync.Mutex
 	dailyAt           time.Time
 	dailyDirMod       time.Time

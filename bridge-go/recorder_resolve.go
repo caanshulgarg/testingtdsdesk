@@ -611,11 +611,11 @@ func liveRescanFiles(scannedBefore bool) []heldLine {
 		if strings.EqualFold(name, "failed.txt") {
 			continue
 		}
-		day := ""
-		if g := reLiveFile.FindStringSubmatch(name); g != nil {
-			day = strings.ReplaceAll(g[2], "-", "")
-		} else if fi, err := os.Lstat(path); err == nil {
-			day = fi.ModTime().Format("20060102")
+		day := liveFileDay(name)
+		if day == "" {
+			if fi, err := os.Lstat(path); err == nil {
+				day = fi.ModTime().Format("20060102")
+			}
 		}
 		if day < cutDay {
 			continue

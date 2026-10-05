@@ -451,11 +451,12 @@ func applyRecorderSource(j M) {
 }
 
 // --- source A: the daily files
-var reLiveFile = regexp.MustCompile(`^(.+)-(\d{8}|\d{4}-\d{2}-\d{2})\.txt$`)
+// 2.2.2: on real TallyPrime 7.1 the add-on's @@FCRDay gives "5-Oct-26": <GUID>-5-Oct-26.txt (d-Mon-yy) is read too
+var reLiveFile = regexp.MustCompile(`^(.+)-(\d{8}|\d{4}-\d{2}-\d{2}|\d{1,2}-[A-Za-z]{3}-\d{2})\.txt$`)
 
 // the add-on's files to read, oldest first: (review M8) every .txt with a "-" in its name (the date part in any form:
 // a line is taken only when its company GUID starts the name, so the trial's <GUID>.txt gives nothing), dated by its
-// name (yyyymmdd or yyyy-mm-dd) or else by its last write; those of the last 7 days, and (review M7) those of the
+// name (yyyymmdd, yyyy-mm-dd or, 2.2.2, d-Mon-yy as TallyPrime 7.1 writes it) or else by its last write; those of the last 7 days, and (review M7) those of the
 // last 31 days with bytes not read yet; and failed.txt, where the add-on puts a line it could not write. None when the
 // recorder folder fails its check (recorder.go)
 func liveFiles() []string {
@@ -484,8 +485,8 @@ func liveFiles() []string {
 			continue
 		}
 		day := fi.ModTime().Format("20060102")
-		if g := reLiveFile.FindStringSubmatch(n); g != nil {
-			day = strings.ReplaceAll(g[2], "-", "")
+		if d := liveFileDay(n); d != "" {
+			day = d
 		}
 		if day > to || day < oldest || (day < from && !liveUnread(n, fi.Size())) {
 			continue
@@ -2237,4 +2238,12 @@ func recorderLiveLoop() {
 		}()
 		sleepOrStop(250 * time.Millisecond)
 	}
+}
+
+// the day a daily file's name gives (yyyymmdd; "" when its name carries none): yyyymmdd, yyyy-mm-dd or d-Mon-yy
+func liveFileDay(name string) string {
+	if g := reLiveFile.FindStringSubmatch(name); g != nil {
+		return normDate(g[2])
+	}
+	return ""
 }
