@@ -172,6 +172,8 @@ function LedgerPick({ name, role }) {
 const held = (id, cid) => typeof postIdReleased === "function" && postIdReleased(id, cid) === false;
 const Wait = () => <span className="note" data-post-wait="">Waiting for the bridge to confirm it is not in Tally</span>;
 const isOwner = () => typeof postOwner === "function" && postOwner();
+// decision B (05-Oct-2026): any member of the firm who may post (owner or staff) settles an uncertain posting
+const canSettle = () => typeof postCanSettle === "function" ? postCanSettle() : isOwner();
 
 // ---------- the owner's spec of 04-Oct-2026: one fixed layout per entry (bill or bank line), the same in every tab.
 // Line 1: status · bill no. · party · amount · bill date · voucher type. Line 2 (sent or posted): when (IST), by whom,
@@ -253,7 +255,7 @@ function RawReply({ x }) {
 }
 // the buttons of a row (line 3, and the More menu of a posted row)
 function RowActs({ co, x, canPost }) {
-  const { st, job, e } = x, a = st.action, owner = isOwner(), out = [];
+  const { st, job, e } = x, a = st.action, owner = isOwner(), settle = canSettle(), out = [];
   const bill = x.kind === "bill" && e;
   const localOnly = !job && bill;
   if (a && a.kind === "postAgain" && canPost) {
@@ -267,18 +269,21 @@ function RowActs({ co, x, canPost }) {
   if (a && a.kind === "restore" && bill && e.status === "deleted") out.push(<button key="rs" className="btn small" data-restore="" onClick={() => billRestore(e.id)}>Restore the bill</button>);
   if (a && a.kind === "ledger" && x.miss && x.miss.length) out.push(<LedgerPick key="l" name={x.miss[0].ledger} role={x.miss[0].role} />);
   if (a && a.kind === "settle") {
-    if (owner && bill) {
+    // decision B (05-Oct-2026): any member who may post settles it; "Not in Tally - post again" lets the FinCom Bridge
+    // look in Tally first (nothing is sent until it finds the entry is not there); while it looks, the row says so
+    if (settle && bill) {
       out.push(<button key="m" className="btn small" data-mark-posted="" onClick={() => PostOwner.markPosted(co.id, e, job)}>It is in Tally: mark posted (Tally id)</button>);
       const freed = !!(x.ids && (!x.ids.live || x.ids.released_at));
-      if (job && !freed) out.push(<button key="rl" className="btn small" data-release-owner="" onClick={() => PostOwner.release(co.id, e, job)}>It is not in Tally: release and post again</button>);
+      if (job && !freed && !st.check) out.push(<button key="rl" className="btn small" data-release-owner="" data-repost-check="" onClick={() => PostOwner.release(co.id, e, job)}>Not in Tally – post again</button>);
     }
+    if (bill && job && st.check) out.push(<span key="ck" className="note" data-check-waiting="">The FinCom Bridge looks in Tally first; nothing is sent until it finds the entry is not there.</span>);
     if (bill && !job && canPost && !held(e.id, co.id) && st.check === "notfound") out.push(<button key="pa" className="btn small primary" data-post-again="" onClick={() => PostCheck.repost(co, e)}>It is not in Tally: post again</button>);
     if (bill && !job && st.check !== "checking") out.push(<button key="cn" className="btn small" data-check-now="" onClick={() => PostCheck.run(co, e, true)}>Check now</button>);
-    if (bill && job && !owner) out.push(<span key="o" className="note" data-owner-settles="">An owner settles this here.</span>);
+    if (bill && job && !settle) out.push(<span key="o" className="note" data-owner-settles="">A member of the firm who may post settles this here.</span>);
     // a released id (the bridge or an owner said it is not in Tally): Post again is back
     if (bill && job && x.ids && (!x.ids.live || x.ids.released_at) && !st.accepted && !st.checking && canPost && !e.exportedAt) out.push(<button key="pa2" className="btn small primary" data-post-again="" onClick={() => postAllToTally({ kind: "bill", id: e.id })}>Post again</button>);
   }
-  if (a && a.kind === "correctId" && owner && (bill || job)) out.push(<button key="ci" className="btn small" data-correct-id="" onClick={() => PostOwner.correctId(co.id, e || { id: x.id, x: {} }, job, st.id && st.id.vch, st.id && st.id.typed)}>Correct the Tally id</button>);
+  if (a && a.kind === "correctId" && settle && (bill || job)) out.push(<button key="ci" className="btn small" data-correct-id="" onClick={() => PostOwner.correctId(co.id, e || { id: x.id, x: {} }, job, st.id && st.id.vch, st.id && st.id.typed)}>Correct the Tally id</button>);
   // a failed posting of the cloud whose Post again is refused (a deleted bill, an accepted entry), said on the row
   const rw = job && typeof postRetryWhy === "function" ? postRetryWhy(job) : "";
   if (rw && [6, 7, 8].includes(st.code)) out.push(<span key="rw" className="bk-warn" data-retry-why="">{rw}</span>);
@@ -289,13 +294,13 @@ function RowActs({ co, x, canPost }) {
 // the More menu of a posted row (owners): undo the posted mark, correct the Tally id
 function MoreMenu({ co, x }) {
   const { st, job, e } = x;
-  if (!isOwner() || ![1, 2, 3, 10].includes(st.code)) return null;
+  if (!canSettle() || ![1, 2, 3, 10].includes(st.code)) return null;
   const stub = e || { id: x.id, x: {} };
   const close = (fn) => (ev) => { const d = ev.currentTarget.closest("details"); if (d) d.open = false; fn(); };
   const canRelease = job ? (x.ids ? !!x.ids.live && !x.ids.released_at : typeof postIdReleased === "function" && postIdReleased(x.id, co.id) === false) : x.kind === "bill";
   if (!canRelease && !(job || x.kind === "bill")) return null;
   return <details className="pe-more" data-row-more=""><summary className="linkbtn">More</summary><div className="pe-more-list">
-    {canRelease && <button data-release-owner="" onClick={close(() => PostOwner.release(co.id, stub, job))}>This entry is not in Tally (undo the posted mark)</button>}
+    {canRelease && <button data-release-owner="" data-repost-check={job ? "" : undefined} onClick={close(() => PostOwner.release(co.id, stub, job))}>{job ? "Not in Tally – post again" : "This entry is not in Tally (undo the posted mark)"}</button>}
     {(job || x.kind === "bill") && <button data-correct-id="" onClick={close(() => PostOwner.correctId(co.id, stub, job, st.id && st.id.vch, st.id && (st.id.typed || st.id.vch)))}>Correct the Tally id</button>}
   </div></details>;
 }
@@ -445,6 +450,7 @@ export function PostStep() {
   setTimeout(() => {
     // the owner's spec of 04-Oct: who marked what (tally_post_marks) and the rows hidden or removed (migration 49)
     if (typeof PostMarks === "object") PostMarks.load(co.id);
+    if (typeof PostChecks === "object") PostChecks.load(co.id);
     if (typeof PostFlags === "object") PostFlags.load();
     // round 17a: what a finished posting of FinCom's cloud put in Tally is marked here when the client's page is opened
     if (typeof postReconcile === "function") postReconcile(co.id);

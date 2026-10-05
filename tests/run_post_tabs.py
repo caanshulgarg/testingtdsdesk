@@ -296,10 +296,13 @@ with sync_playwright() as p:
     # why); both ask for the text first. A staff member sees the words only. A cloud without migration 36b says so.
     N5 = '#app [data-post-panel="errors"] [data-bill-row="n5"]'
     E("() => { S.account = {me: {role: 'staff'}, firm: {name: 'Firm'}}; render(); }"); pg.wait_for_timeout(400); tab("errors")
-    ok("Needs review" in txt(N5) and ACTS(N5) == 0 and "An owner settles this here." in txt(N5), "S3. a staff member: the words only, no button")
+    ok("Needs review" in txt(N5) and pg.locator(N5 + " [data-mark-posted]").count() == 1 and pg.locator(N5 + " [data-repost-check]").count() == 1 and "settles this here" not in txt(N5),
+       "S3. a staff member (the owner's decision B of 05-Oct): the two buttons too (%s)" % txt(N5)[-160:])
+    E("() => { S.account = {me: {role: 'viewer'}, firm: {name: 'Firm'}}; render(); }"); pg.wait_for_timeout(400); tab("errors")
+    ok("Needs review" in txt(N5) and ACTS(N5) == 0 and "A member of the firm who may post settles this here." in txt(N5), "S3. a viewer: the words only, no button")
     E("() => { S.account = {me: {role: 'owner'}, firm: {name: 'Firm'}}; render(); }"); pg.wait_for_timeout(400); tab("errors")
-    ok(pg.locator(N5 + " [data-mark-posted]").count() == 1 and pg.locator(N5 + " [data-release-owner]").count() == 1 and txt(N5 + " [data-mark-posted]") == "It is in Tally: mark posted (Tally id)" and txt(N5 + " [data-release-owner]") == "It is not in Tally: release and post again",
-       "S3. an owner: 'It is in Tally: mark posted (Tally id)' and 'It is not in Tally: release and post again' (%s)" % txt(N5)[-160:])
+    ok(pg.locator(N5 + " [data-mark-posted]").count() == 1 and pg.locator(N5 + " [data-release-owner]").count() == 1 and txt(N5 + " [data-mark-posted]") == "It is in Tally: mark posted (Tally id)" and txt(N5 + " [data-release-owner]") == "Not in Tally – post again",
+       "S3. an owner: 'It is in Tally: mark posted (Tally id)' and 'Not in Tally – post again' (%s)" % txt(N5)[-160:])
     E("() => { window.__rpc = []; window.__toasts = []; }")
     pg.click(N5 + " [data-mark-posted]"); pg.wait_for_timeout(400)
     ok(pg.locator("#confirmBox input#markVch").count() == 1, "S3. Mark posted asks for the Tally id first")
@@ -310,18 +313,18 @@ with sync_playwright() as p:
     pg.click(N5 + " [data-release-owner]"); pg.wait_for_timeout(400)
     ok(pg.locator("#confirmBox input#releaseWhy").count() == 1, "S3. release asks why first")
     pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(300)
-    ok(pg.locator("#confirmBox input#releaseWhy").count() == 1 and pg.locator("#confirmBox .cbx-err").count() == 1 and not [c for c in E("window.__rpc") if c[0] == "tally_post_id_release_owner"], "S3. no reason: not sent, the box says so")
+    ok(pg.locator("#confirmBox input#releaseWhy").count() == 1 and pg.locator("#confirmBox .cbx-err").count() == 1 and not [c for c in E("window.__rpc") if c[0] in ("tally_post_id_release_owner", "tally_post_settle_ask")], "S3. no reason: not sent, the box says so")
     pg.fill("#confirmBox input#releaseWhy", "not in Tally on 03-Oct"); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(800)
-    calls = [c for c in E("window.__rpc") if c[0] == "tally_post_id_release_owner"]
-    ok(calls == [["tally_post_id_release_owner", {"p_job": "jK", "p_id": "n5", "p_why": "not in Tally on 03-Oct"}]], "S3. tally_post_id_release_owner(job, id, why) (%s)" % calls)
-    E("() => { window.__rpc0 = TCloud.rpc; TCloud.rpc = async (fn, a) => { if (/tally_post_id_release_owner|tally_post_job_mark_posted/.test(fn)) throw new Error('Could not find the function public.' + fn + ' in the schema cache (PGRST202)'); return window.__rpc0(fn, a); }; window.__toasts = []; }")
+    calls = [c for c in E("window.__rpc") if c[0] in ("tally_post_id_release_owner", "tally_post_settle_ask")]
+    ok(calls == [["tally_post_settle_ask", {"p_job": "jK", "p_id": "n5", "p_why": "not in Tally on 03-Oct"}]], "S3. decision B: tally_post_settle_ask(job, id, why): the bridge looks in Tally first; nothing released here (%s)" % calls)
+    E("() => { window.__rpc0 = TCloud.rpc; TCloud.rpc = async (fn, a) => { if (/tally_post_id_release_owner|tally_post_job_mark_posted|tally_post_settle_ask/.test(fn)) throw new Error('Could not find the function public.' + fn + ' in the schema cache (PGRST202)'); return window.__rpc0(fn, a); }; window.__toasts = []; }")
     pg.click(N5 + " [data-release-owner]"); pg.wait_for_timeout(300); pg.fill("#confirmBox input#releaseWhy", "x"); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(800)
-    ok(any("not ready for this yet (migration 36b)" in t for t in E("window.__toasts")), "S3. a cloud without migration 36b: 'FinCom's cloud is not ready for this yet (migration 36b)' (%s)" % E("window.__toasts")[-2:])
+    ok(any("not ready for this yet (migration 55)" in t for t in E("window.__toasts")), "S3. a cloud without migration 55: 'FinCom's cloud is not ready for this yet (migration 55)' (%s)" % E("window.__toasts")[-2:])
     E("() => { TCloud.rpc = window.__rpc0; }")
     # F11 (round 7): the buttons are for owners alone (the cloud accepts only an active owner), not a superadmin who is not
     # one; Mark posted needs the voucher number
-    E("() => { S.account = {superadmin: true, me: {role: 'staff'}, firm: {name: 'Firm'}}; render(); }"); pg.wait_for_timeout(400); tab("errors")
-    ok(pg.locator(N5 + " [data-mark-posted]").count() == 0, "F11. a superadmin who is not an owner of the firm: no buttons")
+    E("() => { S.account = {superadmin: true, me: {}, firm: {name: 'Firm'}}; render(); }"); pg.wait_for_timeout(400); tab("errors")
+    ok(pg.locator(N5 + " [data-mark-posted]").count() == 0, "F11. a superadmin who is not a member of the firm who may post: no buttons")
     E("() => { S.account = {me: {role: 'owner'}, firm: {name: 'Firm'}}; window.__rpc = []; render(); }"); pg.wait_for_timeout(400); tab("errors")
     pg.click(N5 + " [data-mark-posted]"); pg.wait_for_timeout(300); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(300)
     ok(pg.locator("#confirmBox input#markVch").count() == 1 and pg.locator("#confirmBox .cbx-err").count() == 1 and not [c for c in E("window.__rpc") if c[0] == "tally_post_job_mark_posted"], "F11. Mark posted without the voucher number: not sent, the box says so")
@@ -345,13 +348,13 @@ with sync_playwright() as p:
     ok(pg.locator(FA + " [data-mark-posted]").count() == 1 and pg.locator(FA + " [data-release-owner]").count() == 1, "C6. the owner's two buttons are there too")
     ok("fa" not in entries_posted(), "C6. and it is not under Posted as well (one tab)"); tab("errors")
     E("() => { window.__rpc = []; }"); pg.click(FA + " [data-release-owner]"); pg.wait_for_timeout(300); pg.fill("#confirmBox input#releaseWhy", "not in the Day Book"); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(800)
-    calls = [c for c in E("window.__rpc") if c[0] == "tally_post_id_release_owner"]
-    ok(calls == [["tally_post_id_release_owner", {"p_job": "jF", "p_id": "fa", "p_why": "not in the Day Book"}]], "C6. release names the posting that holds the id (jF) (%s)" % calls)
+    calls = [c for c in E("window.__rpc") if c[0] in ("tally_post_id_release_owner", "tally_post_settle_ask")]
+    ok(calls == [["tally_post_settle_ask", {"p_job": "jF", "p_id": "fa", "p_why": "not in the Day Book"}]], "C6. the check names the posting that holds the id (jF) (%s)" % calls)
     E("""() => { const r = window.__postIds.find(x => x.fincom_id === "fa"); r.live = false; r.released_at = new Date().toISOString(); r.released_by = "owner"; r.released_why = "not in the Day Book"; PostIds.load(S.coId, true); }"""); pg.wait_for_timeout(800)
-    ok(pg.locator(FA + " [data-post-again]").count() == 1 and pg.locator(FA + " [data-release-owner]").count() == 0 and "An owner said it is not in Tally (not in the Day Book)" in txt(FA), "C6. released: Post again is back, the owner's buttons go (%s)" % txt(FA)[-160:])
-    E("() => { S.account = {me: {role: 'staff'}, firm: {name: 'Firm'}}; const r = window.__postIds.find(x => x.fincom_id === 'fa'); r.live = true; r.released_at = null; r.released_by = null; PostIds.load(S.coId, true); }"); pg.wait_for_timeout(800)
+    ok(pg.locator(FA + " [data-post-again]").count() == 1 and pg.locator(FA + " [data-release-owner]").count() == 0 and "Marked not in Tally (not in the Day Book)" in txt(FA), "C6. released: Post again is back, the owner's buttons go (%s)" % txt(FA)[-160:])
+    E("() => { S.account = {me: {role: 'viewer'}, firm: {name: 'Firm'}}; const r = window.__postIds.find(x => x.fincom_id === 'fa'); r.live = true; r.released_at = null; r.released_by = null; PostIds.load(S.coId, true); }"); pg.wait_for_timeout(800)
     fa = txt(FA)
-    ok("An owner settles this here." in fa and pg.locator(FA + " button[data-release-owner], " + FA + " button[data-mark-posted], " + FA + " [data-post-again]").count() == 0, "C6. a staff member: the words, no button (%s)" % fa[-120:])
+    ok("A member of the firm who may post settles this here." in fa and pg.locator(FA + " button[data-release-owner], " + FA + " button[data-mark-posted], " + FA + " [data-post-again]").count() == 0, "C6. a viewer: the words, no button (%s)" % fa[-120:])
     # ---- round 11 (owner item 6), as the owner's spec of 04-Oct words it (E): an entry posted and verified, deleted in
     # Tally by hand since. On the POSTED tab an owner finds "This entry is not in Tally (undo the posted mark)" under the
     # row's More menu (a reason required) -> tally_post_id_release_owner(job, id, why); staff see nothing extra. Released,
@@ -367,22 +370,22 @@ with sync_playwright() as p:
     tab("posted")
     ok(pg.locator(JF).count() == 1 and pg.locator(JF + "[data-posted-entry='p6']").count() == 1 and "Tally id 26290" in txt(JF), "P6. Posted: the entry p6 of the finished posting jP6, with its Tally id (%s)" % txt(JF)[:200])
     ok(pg.locator(JF + " [data-release-owner]").count() == 0 and pg.locator("#app [data-post-panel='posted'] button[data-release-owner], #app [data-post-panel='posted'] button[data-mark-posted]").count() == 0,
-       "P6. a staff member: nothing extra on Posted")
+       "P6. a viewer: nothing extra on Posted")
     E("() => { S.account = {me: {role: 'owner'}, firm: {name: 'Firm'}}; window.__rpc = []; render(); }"); pg.wait_for_timeout(400); tab("posted")
-    ok(pg.locator(JF + " [data-row-more] [data-release-owner]").count() == 1 and pg.locator(JF + " [data-release-owner]").text_content() == "This entry is not in Tally (undo the posted mark)" and pg.locator(JF + " [data-mark-posted]").count() == 0 and pg.locator(JF + " .acts [data-release-owner]").count() == 0,
-       "E. an owner: 'This entry is not in Tally (undo the posted mark)' under the row's More menu, not a button on the row (%s)" % txt(JF)[-160:])
+    ok(pg.locator(JF + " [data-row-more] [data-release-owner]").count() == 1 and pg.locator(JF + " [data-release-owner]").text_content() == "Not in Tally – post again" and pg.locator(JF + " [data-mark-posted]").count() == 0 and pg.locator(JF + " .acts [data-release-owner]").count() == 0,
+       "E. an owner: 'Not in Tally – post again' (decision B: the bridge looks first) under the row's More menu, not a button on the row (%s)" % txt(JF)[-160:])
     pg.click(JF + " [data-row-more] summary"); pg.wait_for_timeout(200); pg.click(JF + " [data-row-more] [data-release-owner]"); pg.wait_for_timeout(400)
     ok(pg.locator("#confirmBox input#releaseWhy").count() == 1, "P6. it asks why first")
     pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(300)
-    ok(pg.locator("#confirmBox input#releaseWhy").count() == 1 and pg.locator("#confirmBox .cbx-err").count() == 1 and not [c for c in E("window.__rpc") if c[0] == "tally_post_id_release_owner"], "P6. no reason: not sent, the box says so")
+    ok(pg.locator("#confirmBox input#releaseWhy").count() == 1 and pg.locator("#confirmBox .cbx-err").count() == 1 and not [c for c in E("window.__rpc") if c[0] in ("tally_post_id_release_owner", "tally_post_settle_ask")], "P6. no reason: not sent, the box says so")
     pg.fill("#confirmBox input#releaseWhy", "deleted in Tally by hand"); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(800)
-    calls = [c for c in E("window.__rpc") if c[0] == "tally_post_id_release_owner"]
-    ok(calls == [["tally_post_id_release_owner", {"p_job": "jP6", "p_id": "p6", "p_why": "deleted in Tally by hand"}]], "P6. tally_post_id_release_owner(job, id, why) from Posted (%s)" % calls)
+    calls = [c for c in E("window.__rpc") if c[0] in ("tally_post_id_release_owner", "tally_post_settle_ask")]
+    ok(calls == [["tally_post_settle_ask", {"p_job": "jP6", "p_id": "p6", "p_why": "deleted in Tally by hand"}]], "P6. tally_post_settle_ask(job, id, why) from Posted (%s)" % calls)
     E("""() => { const r = window.__postIds.find(x => x.fincom_id === "p6"); r.live = false; r.released_at = new Date().toISOString(); r.released_by = "owner"; r.released_why = "deleted in Tally by hand"; PostIds.load(S.coId, true); }"""); pg.wait_for_timeout(800); tab("posted")
     ok(pg.locator(JF).count() == 0 and "p6" not in entries_posted(), "P6. released: the entry leaves Posted (%s)" % entries_posted())
     tab("errors")
     P6E = '#app [data-post-panel="errors"] [data-bill-row="p6"]'
-    ok(pg.locator(P6E + " [data-post-again]").count() == 1 and pg.locator(P6E + " [data-release-owner]").count() == 0 and "An owner said it is not in Tally (deleted in Tally by hand)" in txt(P6E), "P6. and is under Errors with Post again (%s)" % txt(P6E)[-160:])
+    ok(pg.locator(P6E + " [data-post-again]").count() == 1 and pg.locator(P6E + " [data-release-owner]").count() == 0 and "Marked not in Tally (deleted in Tally by hand)" in txt(P6E), "P6. and is under Errors with Post again (%s)" % txt(P6E)[-160:])
     tab("posted")
     ok(pg.locator("#app [data-post-panel='posted'] [data-job='jC'][data-posted-entry='old2']").count() == 1 and pg.locator("#app [data-post-panel='posted'] [data-job='jC'] [data-release-owner], #app [data-post-panel='posted'] [data-job='jC'][data-post-released]").count() == 0,
        "P6. an older posting whose id the cloud never held (jC, old2): the entry listed, nothing to release, not called released")
@@ -515,8 +518,8 @@ with sync_playwright() as p:
     ok(pg.locator(N2 + " [data-mark-posted]").count() == 1 and pg.locator(N2 + " [data-release-owner]").count() == 1 and pg.locator(N2 + " [data-retry], " + N2 + " [data-post-again], " + N2 + " [data-retry-bill]").count() == 0,
        "B2. the owner's Mark posted / Not in Tally — release, and no Retry or Post again while accepted is true")
     ok(badge("errors") == E("postCounts(S.coId).attention") and "pn2" in bills_in("errors") and "pn2" not in bills_in("topost") and "pn2" not in entries_posted(), "B2. pn2 is counted under Errors, on no other tab")
-    E("() => { S.account = {me: {role: 'staff'}, firm: {name: 'Firm'}}; render(); }"); pg.wait_for_timeout(300); tab("errors")
-    ok(pg.locator(N2).count() == 1 and ACTS(N2) == 0, "B2. a staff member: the words, no button")
+    E("() => { S.account = {me: {role: 'viewer'}, firm: {name: 'Firm'}}; render(); }"); pg.wait_for_timeout(300); tab("errors")
+    ok(pg.locator(N2).count() == 1 and ACTS(N2) == 0, "B2. a viewer: the words, no button (decision B: staff who may post settle it too)")
     tab("posted")
     ok(pg.locator('#app [data-post-panel="posted"] [data-job-timing]').count() == 0, "B4. a staff member: no timing")
     E("() => { S.account = {me: {role: 'owner'}, firm: {name: 'Firm'}}; render(); }"); pg.wait_for_timeout(300); tab("posted")

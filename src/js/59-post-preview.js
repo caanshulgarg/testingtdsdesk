@@ -791,6 +791,11 @@ async function postTestCopies(cid, id, n){
 // refuses anyone but an owner, and the page shows the buttons to owners only. A cloud without 36b says so.
 // owners of the firm alone (the cloud accepts only an active member with role owner; a superadmin who is not one is refused there)
 function postOwner(){ return !!(S.account && ((S.account.me || {}).role === "owner")); }
+// the owner's decision B (05-Oct-2026, migration 55): any member of the firm who may post (owner or staff: the cloud's
+// can_write) settles a posting whose result is uncertain: "Mark posted" (a Tally id) and "Not in Tally - post again"
+// (the FinCom Bridge looks in Tally first; nothing is sent until it finds the entry is not there). A reason is required;
+// the name and time are kept. A superadmin who is not a member, or a viewer, does not
+function postCanSettle(){ const r = S.account && (S.account.me || {}).role; return r === "owner" || r === "staff"; }
 // the posting of FinCom's cloud that holds the entry: the newest naming it (by entry_ids, results or items)
 function postJobOf(cid, id){
   const js = postJobStates(cid).get(String(id));
@@ -800,7 +805,7 @@ function postJobOf(cid, id){
     .find(j => (CloudJobs.idsOf(j) || []).includes(String(id)) || [].concat(j.results || [], j.items || []).some(x => x && String(x.id) === String(id))) || null;
 }
 const PostOwner = {
-  notReady(m){ return /tally_post_job_mark_posted|tally_post_id_release_owner|PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(String(m || "")); },
+  notReady(m){ return /tally_post_job_mark_posted|tally_post_id_release_owner|tally_post_settle_ask|PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(String(m || "")); },
   async call(cid, fn, args, done){
     try {
       const r = await TCloud.rpc(fn, args);
@@ -808,8 +813,10 @@ const PostOwner = {
       toast(done);
     } catch (e){
       const m = String((e && e.message) || e);
-      toast(this.notReady(m) ? "FinCom\u2019s cloud is not ready for this yet (migration 36b)." : m.replace(/^ERROR:\s*/i, ""));
+      toast(this.notReady(m) ? "FinCom\u2019s cloud is not ready for this yet (migration " + (fn === "tally_post_settle_ask" ? "55" : "36b") + ")." : m.replace(/^ERROR:\s*/i, ""));
     }
+    if (typeof PostChecks === "object") PostChecks.load(cid, true);
+    if (typeof PostMarks === "object") PostMarks.load(cid, true);
     if (typeof CloudJobs === "object") await CloudJobs.load(true);
     if (typeof PostIds === "object") PostIds.load(cid, true);
     render();
@@ -825,13 +832,15 @@ const PostOwner = {
       body: "<p>" + esc("You typed " + v + ", which is the bill number. Tally's id is the number Tally gives the entry (for example 26301). Use " + v + " anyway?") + "</p>"});
     return !!(a && (a === true || a.ok));
   },
-  async askId(e, title, ok, pre, intro){
+  // why: a reason is required (Mark posted, decision B); a correction carries its own ("Correction: the Tally id is ...")
+  async askId(e, title, ok, pre, intro, why){
+    why = why !== false;
     const a = await askConfirm({title, ok,
       body: "<p>" + intro + "</p>" +
         '<div class="bk-form one"><label><span>Tally id</span><input id="markVch" maxlength="20" inputmode="numeric" placeholder="Digits only, as Tally shows it" value="' + esc(pre || "") + '"></label>' +
-        '<label><span>Note (optional)</span><input id="markNote" maxlength="300" placeholder="Where you saw it"></label></div>',
+        '<label><span>' + (why ? "Reason (kept with your name)" : "Note (optional)") + '</span><input id="markNote" maxlength="300" placeholder="Where you saw it in Tally"></label></div>',
       read: () => ({vch: ((document.getElementById("markVch") || {}).value || "").trim(), note: ((document.getElementById("markNote") || {}).value || "").trim()}),
-      validate: d => this.idCheck(d && d.vch)});
+      validate: d => this.idCheck(d && d.vch) || (!why || (d && d.note) ? "" : "Say where you saw it in Tally (kept with your name and the time).")});
     if (!a || !a.ok) return null;
     if (!(await this.sameAsBill(e, a.data.vch))) return null;
     return a.data;
@@ -859,7 +868,7 @@ const PostOwner = {
   // (tally_post_job_mark_posted: a new row in tally_post_marks, the result's voucher, the id's accepted_vch)
   async correctId(cid, e, job, suggest, was){
     const no = (e.x && e.x.invoiceNo) || e.id;
-    const d = await this.askId(e, "Correct the Tally id of " + no, "Correct the Tally id", suggest || "", "The Tally id kept for this entry" + (was ? " (" + esc(was) + ")" : "") + " is not Tally's own id. Type the id Tally shows for it; FinCom keeps the correction with who made it and when. Nothing is sent to Tally.");
+    const d = await this.askId(e, "Correct the Tally id of " + no, "Correct the Tally id", suggest || "", "The Tally id kept for this entry" + (was ? " (" + esc(was) + ")" : "") + " is not Tally's own id. Type the id Tally shows for it; FinCom keeps the correction with who made it and when. Nothing is sent to Tally.", false);
     if (!d) return;
     const note = ("Correction: the Tally id is " + d.vch + (was ? ", not " + was : "") + (d.note ? " (" + d.note + ")" : "")).slice(0, 300);
     if (!job){
@@ -869,20 +878,25 @@ const PostOwner = {
     }
     await this.call(cid, "tally_post_job_mark_posted", {p_job: job.id, p_id: String(e.id), p_vch: d.vch, p_note: note}, "The Tally id of " + no + " is now " + d.vch + ".");
   },
-  // E: "This entry is not in Tally (undo the posted mark)", owners only, a reason required
+  // decision B (05-Oct-2026): "Not in Tally - post again", any member who may post, a reason required. With a posting of
+  // FinCom's cloud: tally_post_settle_ask (migration 55): the FinCom Bridge looks in that company in Tally first; found:
+  // marked posted with the voucher found; not there: released and sent again, once; Tally not reachable: it waits and
+  // looks again by itself. Nothing is sent from here. Without one (a bill posted straight to a bridge): undone here
   async release(cid, e, job){
     const no = (e.x && e.x.invoiceNo) || e.id;
-    const a = await askConfirm({title: no + " is not in Tally: undo the posted mark?", ok: "Undo the posted mark", danger: true,
-      body: "<p>You looked in Tally and this entry is not there. FinCom undoes its posted mark and frees its id so it can be posted again; the reason is kept with the entry. Nothing is sent to Tally now.</p>" +
-        '<div class="bk-form one"><label><span>Why (what you saw in Tally)</span><input id="releaseWhy" maxlength="500" placeholder="Not in the Day Book of …"></label></div>',
+    const co = (job && job.company) || "the company";
+    const a = await askConfirm({title: no + ": not in Tally, post it again?", ok: "Not in Tally \u2013 post again", danger: true,
+      body: "<p>" + (job ? "Before anything is sent, the FinCom Bridge looks in " + esc(co) + " in Tally for this entry. If it is there, it is marked posted with Tally\u2019s id; if it is not, it is sent again, once. If Tally cannot be asked now, it waits and looks again by itself. Your name, the time and the reason are kept."
+          : "You looked in Tally and this entry is not there. FinCom undoes its posted mark so it can be posted again; the reason is kept with the entry. Nothing is sent to Tally now.") + "</p>" +
+        '<div class="bk-form one"><label><span>Reason (what you saw in Tally)</span><input id="releaseWhy" maxlength="500" placeholder="Not in the Day Book of …"></label></div>',
       read: () => ({why: ((document.getElementById("releaseWhy") || {}).value || "").trim()}), validate: d => d && d.why ? "" : "Say what you saw in Tally."});
     if (!a || !a.ok) return;
+    if (job) return this.call(cid, "tally_post_settle_ask", {p_job: job.id, p_id: String(e.id), p_why: a.data.why}, "The FinCom Bridge looks in " + co + " in Tally first; " + no + " is sent again only if it is not there.");
     if (!job){
       e.postUndo = {why: a.data.why, at: new Date().toISOString(), by: postMyName()};
       e.exportedAt = null; e.postVerified = false; e.postByReply = false; e.postUnconfirmed = null; e.postError = ""; e.postCheckFailed = null; delete e.goneFromTally;
       Store.saveEntry(cid, e); refreshStats(cid); toast(no + ": the posted mark is undone; it can be posted again."); render(); return;
     }
-    await this.call(cid, "tally_post_id_release_owner", {p_job: job.id, p_id: String(e.id), p_why: a.data.why}, no + " is released; it can be posted again.");
   }
 };
 // one line on the page after a check or a posting ("Already in Tally (voucher no. …)"): S.postNote
