@@ -4,6 +4,7 @@
     "measured": false
   },
   "autoUpdate": true,
+  "bridgePort": 9100,
   "busySince": "",
   "changeNumbers": {
     "GARG SHEKHAR & COMPANY": {
@@ -30,6 +31,7 @@
   ],
   "computer": "TEST-PC",
   "dailyAt": "02:00",
+  "dataFolder": "",
   "events": true,
   "every": 30,
   "kind": "beat",
@@ -88,8 +90,10 @@
     }
   },
   "tally": true,
+  "tallyPort": 40793,
   "tallyState": "open",
   "trialTools": false,
   "updating": false,
-  "version": "2.2.3"
+  "version": "2.2.3",
+  "windowsUser": ""
 }
