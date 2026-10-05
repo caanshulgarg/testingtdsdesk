@@ -628,6 +628,22 @@ async function supportPack(firm: string, dev: any, body: any) {
   console.log("tally-ingest support pack", path, String(body.note || "").slice(0, 200));
   return reply(200, { ok: true, path });
 }
+// final review M3: {kind: "own_key", oldKey, bridge}: the bridge, given a new computer key by its member's FinCom page,
+// moves its identity from the old key (shared with another Windows user's bridge) to the new one. The old key must be a
+// key of the same firm, not removed, that FinCom knows; the database checks the rest (tally_bridge_own_key_move: the id
+// bound to the old key under that Windows user, the new key made by a member within 15 minutes, nothing else on it)
+async function ownKey(dev: any, firm: string, body: any) {
+  const me = body?.bridge && typeof body.bridge === "object" ? body.bridge : {};
+  const bid = String(me.id || ""), oldKey = String(body.oldKey || "").trim();
+  if (!/^go-[0-9a-f]{6,32}$/.test(bid)) return reply(400, { ok: false, error: "Not a FinCom Bridge id." });
+  if (!/^fcd_[0-9a-f]{48}$/.test(oldKey)) return reply(400, { ok: false, error: "The old computer key is missing." });
+  const { data: old } = await db.from("tally_devices").select("id, firm_id, revoked").eq("key_hash", await sha256(oldKey)).maybeSingle();
+  if (!old || old.revoked || old.firm_id !== firm || old.id === dev.id) return reply(403, { ok: false, error: "Not moved: the old computer key is not a key of this firm that FinCom knows." });
+  const { data, error } = await db.rpc("tally_bridge_own_key_move", { p_bridge: bid, p_from: old.id, p_to: dev.id, p_user: String(me.user || "").slice(0, 120) });
+  if (error) return (error.code === "PGRST202" || missingFn(String(error.message || ""))) ? reply(409, { ok: false, error: "FinCom's cloud is not ready for this yet (migration 54)." }) : reply(500, { ok: false, error: error.message });
+  console.log("tally-ingest: own_key", bid, old.id, "->", dev.id, JSON.stringify(data));
+  return reply(data && (data as any).ok === false ? 409 : 200, data);
+}
 // a bridge makes itself the main one (its menu: Switch to main bridge): from now on the others on this key do not post
 async function makeMain(dev: any, id: string) {
   if (id === "v1") return reply(400, { ok: false, error: "Only FinCom Bridge 2.x can be made the main bridge from its menu." });
@@ -1860,6 +1876,12 @@ Deno.serve(async (req) => {
   let body: any;
   try { body = JSON.parse(await readBody(req)); } catch (e) { return (e as Error).message === "too large" ? reply(413, { ok: false, error: "Too much in one go; send fewer days at a time." }) : reply(400, { ok: false, error: "Bad request" }); }
   const firm = dev.firm_id as string;
+  // final review M3 (migration 54): the bridge moves itself to its new computer key. This call comes with the NEW key; its
+  // body holds the OLD key the bridge id is bound to: only a program holding both keys can ask (a member alone cannot move
+  // a bridge, and no owner is needed for one's own). Answered before the id is bound to the new key
+  if (body?.kind === "own_key") {
+    try { return await ownKey(dev, firm, body); } catch (e) { console.error("tally-ingest own_key", (e as Error).message); return reply(500, { ok: false, error: (e as Error).message }); }
+  }
   // migration 54 (review M3): a bridge id ("go-…", which the bridge reports itself) belongs to the first computer key that
   // reported it (tally_bridge_ids); another key naming it (an id copied from another Windows user's settings) is refused,
   // and nothing it says is kept. A cloud without the function: as before
@@ -1958,7 +1980,8 @@ Deno.serve(async (req) => {
         const may = mayPost(dev, me.id, (me.entry as any).user);
         if (co || !may) await rescuePosts(dev);
         // migration 55: a check waiting for this bridge counts as work too (the bridge then asks posts_take, which carries it)
-        const posts = co ? 0 : await postsFor(dev, me.id, may && isMain(dev, me.id)) + (await checksFor(dev, me.id, may)).length;
+        // (final review M1: the checks of the postings this bridge took or is named in; with no record, only the key's main bridge)
+        const posts = co ? 0 : await postsFor(dev, me.id, may && isMain(dev, me.id)) + (may ? (await checksFor(dev, me.id, isMain(dev, me.id))).length : 0);
         // fast-sync (bridge 1.15.0): the computer's own Realtime channel, where the database wakes it the moment a
         // posting is queued or an update asked for (migration-13); the heartbeat stays the fallback
         const tok = (dev as any).wake_token;
@@ -2003,13 +2026,17 @@ Deno.serve(async (req) => {
         // round 7 (F2): the ids of this posting an owner released (Not in Tally) travel with it, so the bridge sends them
         // once and does not mark them accepted from its memory of a first send; none on a cloud without migration 36b
         let released: unknown[] = [];
+        // final review M1 / L2 (migrations 54, 55): handed back after this bridge's "not found": the entries to send again,
+        // and only those (resend_only); the bridge sends nothing else of the posting
+        const resendOnly = j && Array.isArray(j.resend_only) ? j.resend_only.filter((x: unknown) => typeof x === "string" && x).slice(0, 5000) : [];
         if (j) {
           const { data: rel, error: relErr } = await db.from("tally_post_ids").select("entry_id, fincom_id, released_at, released_by, released_why").eq("job_id", j.id).eq("released_by", "owner");
           if (!relErr) released = (rel || []).filter((r: any) => r.released_at).map((r: any) => ({ id: r.entry_id || r.fincom_id, at: r.released_at, by: r.released_by, why: r.released_why }));
         }
-        // migration 55 (decision B): the checks waiting for this bridge travel with it ([] on a cloud without 55)
-        const checks = await checksFor(dev, meT, true);
-        return reply(200, { ok: true, job: j ? { id: j.id, company: j.company, payload: j.payload, released } : null, ...(checks.length ? { checks } : {}) });
+        // migration 55 (decision B): the checks waiting for this bridge travel with it ([] on a cloud without 55). Final review
+        // M1: only those of the postings it took (or is named in); a posting with no record, only for the key's main bridge
+        const checks = await checksFor(dev, meT, main);
+        return reply(200, { ok: true, job: j ? { id: j.id, company: j.company, payload: j.payload, released, ...(resendOnly.length ? { resendOnly } : {}) } : null, ...(checks.length ? { checks } : {}) });
       }
       case "post_check": {
         // migration 55 (decision B): the bridge looked in Tally for an entry of an uncertain posting ("Not in Tally - post
@@ -2021,7 +2048,9 @@ Deno.serve(async (req) => {
         const result = String(body.result || "");
         if (!["found", "notfound", "unable"].includes(result)) return reply(400, { ok: false, error: "The check's result is found, notfound or unable." });
         const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
-        const { data, error } = await db.rpc("tally_post_check_report", { p_check: Math.max(0, Math.floor(Number(body.check) || 0)), p_device: dev.id, p_bridge: meC, p_main: true,
+        // final review M1: the database answers only the bridge that took the posting (or is named in it); p_main (the
+        // key's main bridge) counts only for a posting with no record of its bridge
+        const { data, error } = await db.rpc("tally_post_check_report", { p_check: Math.max(0, Math.floor(Number(body.check) || 0)), p_device: dev.id, p_bridge: meC, p_main: isMain(dev, meC),
           p_company: s(body.company, 200), p_result: result, p_vch: s(body.vch, 60), p_master: s(body.master, 30), p_words: s(body.words, 500) });
         if (error) return (error.code === "PGRST202" || missingFn(String(error.message || ""))) ? reply(409, { ok: false, error: "FinCom's cloud is not ready for this yet (migration 55)." }) : reply(500, { ok: false, error: error.message });
         return reply(200, data);
@@ -2160,7 +2189,17 @@ Deno.serve(async (req) => {
           for (const x of theirs) if (!mine.some((m) => fid(m.id) === fid(x.id))) out.push(x);
           return out;
         };
-        const mergedResults = merge(results as any[], ownerOf(cur.results)), mergedItems = items ? merge(items as any[], ownerOf(cur.items)) : null;
+        let mergedResults = merge(results as any[], ownerOf(cur.results)), mergedItems = items ? merge(items as any[], ownerOf(cur.items)) : null;
+        // final review M1 / L2: a posting handed back to send only some entries again (resend_only): the bridge reports those;
+        // every other entry's result stands as it was (never rewritten as missing)
+        {
+          const { data: ro, error: roErr } = await db.from("tally_post_jobs").select("resend_only").eq("id", id).eq("device_id", dev.id).maybeSingle();
+          if (!roErr && Array.isArray(ro?.resend_only) && ro.resend_only.length) {
+            const keepOld = (mine: any[], old: any[]) => mine.concat((Array.isArray(old) ? old : []).filter((x) => x && x.id && !mine.some((m) => fid(m.id) === fid(x.id))));
+            mergedResults = keepOld(mergedResults, cur.results);
+            if (mergedItems) mergedItems = keepOld(mergedItems, cur.items);
+          }
+        }
         let stale = false;
         // the review of 2.1.8 (finding 2, the cloud half): a 'failed' update that carries an entry sent with no answer from Tally
         // (outcomeUnknown, or sent / state sent, not ok) is stored done: the posting never goes to 'failed' while an entry may be

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -156,6 +157,40 @@ func newPostJob(pl M) (M, error) {
 			k := str(r["id"])
 			return releaseFor(arr(pl["released"]), acceptedKey(k, byItem[k]), k, or2(acceptedInfo(acceptedKey(k, byItem[k])), M{})) != nil
 		}
+		// review M1 / L2: the cloud names the entries to send again (resendOnly, after the bridge's "not found"): only
+		// those go, in a done or a failed job alike; every other entry keeps its result and is never sent
+		only := resendOnlyOf(pl)
+		if len(only) > 0 && (st == "done" || st == "failed" || st == "cancelled") && !jobAlive(id) {
+			var kept []any
+			keep := map[string]bool{}
+			for _, r := range rs {
+				if k := str(r["id"]); !only[k] {
+					kept = append(kept, r)
+					keep[k] = true
+				}
+			}
+			if kept == nil {
+				kept = []any{}
+			}
+			if pay := readObjFile(filepath.Join(dir, "payload.json")); pay != nil {
+				var its []any
+				for _, x := range arr(pay["items"]) {
+					if o := obj(x); o != nil && (keep[str(o["id"])] || only[str(o["id"])]) {
+						its = append(its, o)
+					}
+				}
+				if its == nil {
+					its = []any{}
+				}
+				pay["items"] = its
+				_ = saveFile(filepath.Join(dir, "payload.json"), jsonText(pay))
+			}
+			_ = os.Remove(filepath.Join(dir, "cancel"))
+			v["results"], v["done"], v["resumed"], v["status"], v["message"], v["finishedAt"] = kept, len(kept), true, "queued", "Sending again only what FinCom released", ""
+			startJob(id, dir, v)
+			writeLog(fmt.Sprintf("Posting job %s: only %d released entr%s sent again (%d kept, never sent again)", id, len(only), map[bool]string{true: "y", false: "ies"}[len(only) == 1], len(kept)))
+			return jobView(dir), nil
+		}
 		doneRelease := false
 		if st == "done" && !jobAlive(id) {
 			for _, r := range rs {
@@ -204,8 +239,16 @@ func newPostJob(pl M) (M, error) {
 			items = append(items, M{"id": str(o["id"]), "kind": "master", "xml": str(o["xml"])})
 		}
 	}
+	// review M1 / L2: handed back with resendOnly and no record of the job here: only those entries, no masters
+	only := resendOnlyOf(pl)
+	if len(only) > 0 {
+		items = []any{}
+	}
 	for _, v := range arr(pl["vouchers"]) {
 		if o := obj(v); o != nil {
+			if len(only) > 0 && !only[str(o["id"])] {
+				continue
+			}
 			// every voucher carries its FinCom id ("TDSDesk:<id>" first in its narration): FinCom's, else the entry's id
 			x, _ := stampFinComID(str(o["xml"]), str(o["id"]))
 			it := M{"id": str(o["id"]), "kind": "voucher", "xml": x}
@@ -226,6 +269,20 @@ func newPostJob(pl M) (M, error) {
 	startJob(id, dir, p)
 	writeLog(fmt.Sprintf("Posting job %s: %d item(s) for %s", id, len(items), p["company"]))
 	return p, nil
+}
+
+// the entries the cloud asks to be sent again, by id (resendOnly); none: nil
+func resendOnlyOf(pl M) map[string]bool {
+	var out map[string]bool
+	for _, x := range arr(pl["resendOnly"]) {
+		if k := strings.TrimSpace(str(x)); k != "" {
+			if out == nil {
+				out = map[string]bool{}
+			}
+			out[k] = true
+		}
+	}
+	return out
 }
 
 func startJob(id, dir string, p M) {

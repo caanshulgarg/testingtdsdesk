@@ -63,15 +63,18 @@
 --      b. the poster's own bridge not heard from for 3 minutes: queued all the same, with a note ("waits for your FinCom
 --         Bridge on <PC · user>"); the bridge takes it when it is back.
 --      c. tally_member_bridge_link: any member who may write links HIMSELF (p_user = the caller) to a bridge FinCom has heard
---         from, unless it posts for another member already; an owner links anyone, as before.
+--         from, unless it posts for another member already, on a computer key that member made (the final review's M3:
+--         tally_devices.created_by; their FinCom makes that key when they pair their own bridge); an owner links anyone.
 --      d. the main-bridge rule (tally_devices.main_bridge) holds only among the bridges of ONE Windows user
 --         (info.bridges[id].user, case ignored): on a computer key shared by several Windows users (1.15.0's settings
 --         carried over), another user's main bridge stops nobody. Moving a posting (tally_post_reroute, tally_post_rescue)
 --         never crosses Windows users: no bridge of the same user that may post, the posting fails in plain words.
 --         A posting naming no bridge (older ones) is still taken only by the computer's main bridge, as before, and is
---         never moved. tally_bridge_own_key(p_bridge, p_to): a member's bridge on such a shared key moves to a NEW computer
---         key that member made for it (TCloud.auto); the old binding kept with who, when and why; its postings and links go
---         with it (the same bridge, the same Windows user's Tally).
+--         never moved. A bridge on such a shared key moves to a NEW computer key made for it (TCloud.auto): the final
+--         review's M3: the bridge moves ITSELF (tally_bridge_own_key_move, the service role: tally-ingest, for a call made
+--         with the new key holding the old key in its body: only a program holding both keys can ask), no owner needed;
+--         an owner may move one (tally_bridge_own_key); a member alone may not. The old binding kept with who, when and
+--         why; its postings and links go with it (the same bridge, the same Windows user's Tally).
 --      e. tally_device_create: no limit of 50 computer keys a firm (one key for each Windows user's bridge); otherwise
 --         migration.sql's text.
 --      f. tally_want_update (Update now): wakes every computer key (not removed) whose bridges have the client's company open,
@@ -86,6 +89,8 @@
 --      tally_bridge_release_log (who, when, why); rows kept, never removed.
 --  11. (item C) "Apply now" on a held change line (tally_recorder_release_held): any member who may write (can_write()),
 --      not only an owner; migration 53's text otherwise; the same checks as for any line; who and when kept.
+--  12. The final review of 2.3.0 (M1): tally_post_jobs.taken_by, the bridge that took a posting (tally_post_take_for), and
+--      resend_only, the entries to send again after its "not found" (migration 55); a person's Retry clears resend_only.
 --   tally_post_take stays as it is (an older cloud function).
 --   Tested on pg_stand only: tests/run_migration54.py.
 
@@ -94,6 +99,11 @@ set local lock_timeout = '10s';     -- never queue long behind a session holding
 
 -- ---------------------------------------------------------------- 1. the bridge a posting is for
 alter table public.tally_post_jobs add column if not exists target_bridge text;
+-- final review M1: the bridge that TOOK the posting (tally_post_take_for); migration 55 hands its checks and the re-send
+-- after "not found" to that bridge only. resend_only: the entries to send again after the bridge's "not found" (55), and
+-- only those; a person's Retry clears it
+alter table public.tally_post_jobs add column if not exists taken_by text;
+alter table public.tally_post_jobs add column if not exists resend_only jsonb;
 
 -- ---------------------------------------------------------------- 2. changes only, per bridge
 create table if not exists public.tally_bridge_prefs (
@@ -487,8 +497,9 @@ revoke all on function public.tally_bridge_changes_only(uuid, text, boolean) fro
 grant execute on function public.tally_bridge_changes_only(uuid, text, boolean) to authenticated;
 
 -- the bridge a member posts through: an owner links anyone; (9c) any member who may write links HIMSELF (p_user = the
--- caller), to a bridge FinCom has heard from that does not post for another member already (TCloud.auto does it after
--- pairing, for this browser's own proven bridge). Who and when are kept (set_by, set_at)
+-- caller), to a bridge FinCom has heard from that does not post for another member already and (final review M3) is on a
+-- computer key that member made (TCloud.auto does it after pairing, for this browser's own proven bridge, whose key the
+-- member's page made). Who and when are kept (set_by, set_at)
 create or replace function public.tally_member_bridge_link(p_user uuid, p_device uuid, p_bridge text)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
 declare f uuid := my_firm(); b text := nullif(left(btrim(coalesce(p_bridge, '')), 40), '');
@@ -499,6 +510,10 @@ begin
       then raise exception 'only an owner of the firm can link another member to a bridge; you can link yourself to your own' using errcode = '42501'; end if;
     if b is not null and exists (select 1 from tally_member_bridges mb where mb.firm_id = f and mb.device_id = p_device and mb.bridge_id = b and mb.user_id <> auth.uid())
       then raise exception 'that bridge posts for another member already; ask the firm''s owner' using errcode = '42501'; end if;
+    -- final review M3: a bridge FinCom has heard from proves nothing of whose it is; a member's own is one on a computer
+    -- key that member made (their FinCom makes one when they pair their own bridge: tally_device_create keeps created_by)
+    if b is not null and not exists (select 1 from tally_devices d where d.id = p_device and d.firm_id = f and d.created_by = auth.uid())
+      then raise exception 'you can link yourself only to a bridge on a computer key you made (FinCom makes one when you connect your own FinCom Bridge); for another bridge, ask the firm''s owner' using errcode = '42501'; end if;
   end if;
   if not exists (select 1 from members m where m.user_id = p_user and m.firm_id = f) then raise exception 'not a member of this firm'; end if;
   if b is not null and not exists (select 1 from tally_devices d where d.id = p_device and d.firm_id = f and not coalesce(d.revoked, false) and d.info -> 'bridges' ? b)
@@ -544,7 +559,7 @@ begin
       rr := tally_post_reroute(p_id, false);
       if rr ->> 'state' = 'stranded' then return jsonb_build_object('ok', false, 'company', j.company, 'error', 'Not queued again for ' || j.company || ': ' || (rr ->> 'words')); end if;
       update tally_post_jobs set status = 'waiting', message = 'Retry: waiting for the Tally computer', taken_at = null, updated_at = now(),
-             attempts = coalesce(attempts, 0) + 1 where id = p_id;
+             attempts = coalesce(attempts, 0) + 1, resend_only = null where id = p_id;     -- final review M1: a person's Retry is a whole Retry
       return jsonb_build_object('ok', true, 'id', p_id, 'company', j.company, 'retry', true);
     end if;
     -- still waiting for a bridge that can no longer post: moved, or failed in plain words (review M-B)
@@ -709,7 +724,8 @@ grant execute on function public.tally_post_enqueue(uuid, text, jsonb) to authen
 -- ---------------------------------------------------------------- 5. the hand-out, per bridge
 create or replace function public.tally_post_take_for(p_device uuid, p_bridge text, p_main boolean)
 returns setof public.tally_post_jobs language sql security definer set search_path = public, pg_temp as $function$
-  update tally_post_jobs set status = 'taken', taken_at = now(), updated_at = now(), seq = null, message = 'Taken by the Tally computer'
+  update tally_post_jobs set status = 'taken', taken_at = now(), updated_at = now(), seq = null, message = 'Taken by the Tally computer',
+         taken_by = case when p_bridge ~ '^go-[0-9a-f]{6,32}$' then p_bridge else taken_by end   -- final review M1: the bridge that took it
    where id = (select j.id from tally_post_jobs j
                 where j.device_id = p_device and j.status = 'waiting'
                   and (j.target_bridge = p_bridge or (j.target_bridge is null and coalesce(p_main, false)))
@@ -736,16 +752,40 @@ end $function$;
 revoke all on function public.tally_device_create(text) from public, anon;
 grant execute on function public.tally_device_create(text) to authenticated;
 
--- 9d: a member's bridge on a computer key shared with another Windows user whose bridge is the main one there (1.15.0's
--- settings carried over) moves to a NEW key that member made for it (TCloud.auto): the member must be linked to that
--- bridge on the shared key (9c), the new key made by them within 15 minutes with nothing reported on it yet. The old
--- binding is kept with who, when and why (never removed); a new one binds the id to the new key; the bridge's waiting and
--- running postings and the members' links to it go with it (the same bridge, the same Windows user's Tally)
+-- 9d: a bridge on a computer key shared with another Windows user whose bridge is the main one there (1.15.0's settings
+-- carried over) moves to a NEW key made for it (TCloud.auto). Final review M3: a member alone can no longer move a bridge
+-- (a link, or an id FinCom has heard from, proves nothing of whose bridge it is). The bridge moves ITSELF: the member's
+-- FinCom page makes a new key and hands it to the member's own proven bridge; the bridge, holding both keys, asks
+-- tally-ingest with the new key, the old one in its body (tally_bridge_own_key_move below, the service role). No owner is
+-- needed. An owner may still move a bridge with tally_bridge_own_key (onto a new key the owner made). The old binding is
+-- kept with who, when and why (never removed); a new one binds the id to the new key; the bridge's waiting and running
+-- postings and the members' links to it go with it (the same bridge, the same Windows user's Tally). Internal
+create or replace function public.tally_bridge_own_key_do(p_firm uuid, p_bridge text, p_from uuid, p_to uuid, p_by uuid, p_why text)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
+declare nj int; nl int;
+begin
+  update tally_bridge_ids set reset_at = now(), reset_by = p_by, reset_why = left(p_why, 300)
+   where firm_id = p_firm and bridge_id = p_bridge and reset_at is null;
+  insert into tally_bridge_ids (bridge_id, device_id, firm_id) values (p_bridge, p_to, p_firm) on conflict do nothing;
+  update tally_post_jobs set device_id = p_to, updated_at = now()
+   where firm_id = p_firm and device_id = p_from and (target_bridge = p_bridge or taken_by = p_bridge) and status in ('waiting', 'taken', 'running');
+  get diagnostics nj = row_count;
+  update tally_member_bridges set device_id = p_to where firm_id = p_firm and device_id = p_from and bridge_id = p_bridge;
+  get diagnostics nl = row_count;
+  update tally_bridge_alerts set cleared_at = now() where firm_id = p_firm and bridge_id = p_bridge and cleared_at is null;
+  raise log 'tally_bridge_own_key: bridge % moved from % to % (%)', p_bridge, p_from, p_to, p_why;
+  return jsonb_build_object('ok', true, 'moved', true, 'bridge', p_bridge, 'from', p_from, 'to', p_to, 'postings', nj, 'links', nl);
+end $function$;
+revoke all on function public.tally_bridge_own_key_do(uuid, text, uuid, uuid, uuid, text) from public, anon, authenticated;
+
+-- an owner moves a bridge to a NEW computer key the owner made (within 15 minutes, nothing reported on it yet)
 create or replace function public.tally_bridge_own_key(p_bridge text, p_to uuid)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
-declare f uuid := my_firm(); b text := left(btrim(coalesce(p_bridge, '')), 40); frm uuid; d record; tn text; nj int; nl int;
+declare f uuid := my_firm(); b text := left(btrim(coalesce(p_bridge, '')), 40); frm uuid; tn text;
 begin
   if f is null or not can_write() then raise exception 'not allowed' using errcode = '42501'; end if;
+  if not exists (select 1 from members m where m.user_id = auth.uid() and m.firm_id = f and m.role = 'owner' and coalesce(m.active, true))
+    then raise exception 'FinCom Bridge moves itself to its new computer key (it holds both keys); a member cannot move a bridge, an owner can' using errcode = '42501'; end if;
   if b !~ '^go-[0-9a-f]{6,32}$' then raise exception 'not a bridge id'; end if;
   select x.name into tn from tally_devices x where x.id = p_to and x.firm_id = f and not coalesce(x.revoked, false) and x.created_by = auth.uid()
      and x.created_at > now() - interval '15 minutes'
@@ -753,27 +793,47 @@ begin
   if not found then raise exception 'not a new computer key of yours' using errcode = '42501'; end if;
   perform pg_advisory_xact_lock(hashtext('tally_bridge_ids:' || f::text || ':' || b));
   select i.device_id into frm from tally_bridge_ids i where i.firm_id = f and i.bridge_id = b and i.reset_at is null;
-  if frm is null then return jsonb_build_object('ok', true, 'moved', false, 'bridge', b); end if;   -- not bound yet: the new key binds it when the bridge reports
-  if frm = p_to then return jsonb_build_object('ok', true, 'moved', false, 'bridge', b); end if;
-  if not exists (select 1 from tally_member_bridges mb where mb.firm_id = f and mb.user_id = auth.uid() and mb.device_id = frm and mb.bridge_id = b)
-    then raise exception 'you are not linked to that bridge; link yourself to it first' using errcode = '42501'; end if;
-  select x.id, x.main_bridge into d from tally_devices x where x.id = frm;
-  if nullif(d.main_bridge, '') is null or d.main_bridge = b or tally_bridge_user(frm, d.main_bridge) is null or tally_bridge_user(frm, b) is null
-     or tally_bridge_user(frm, d.main_bridge) = tally_bridge_user(frm, b)
-    then raise exception 'that bridge''s computer key is not shared with another Windows user''s main bridge; it keeps its key'; end if;
-  update tally_bridge_ids set reset_at = now(), reset_by = auth.uid(), reset_why = left('moved to its own computer key (' || coalesce(tn, '') || ') by its member', 300)
-   where firm_id = f and bridge_id = b and reset_at is null;
-  insert into tally_bridge_ids (bridge_id, device_id, firm_id) values (b, p_to, f) on conflict do nothing;
-  update tally_post_jobs set device_id = p_to, updated_at = now() where firm_id = f and device_id = frm and target_bridge = b and status in ('waiting', 'taken', 'running');
-  get diagnostics nj = row_count;
-  update tally_member_bridges set device_id = p_to where firm_id = f and device_id = frm and bridge_id = b;
-  get diagnostics nl = row_count;
-  update tally_bridge_alerts set cleared_at = now() where firm_id = f and bridge_id = b and cleared_at is null;
-  raise log 'tally_bridge_own_key: bridge % moved from % to % by %', b, frm, p_to, auth.uid();
-  return jsonb_build_object('ok', true, 'moved', true, 'bridge', b, 'from', frm, 'to', p_to, 'postings', nj, 'links', nl);
+  if frm is null or frm = p_to then return jsonb_build_object('ok', true, 'moved', false, 'bridge', b); end if;   -- not bound yet: the new key binds it when the bridge reports
+  return tally_bridge_own_key_do(f, b, frm, p_to, auth.uid(), 'moved to its own computer key (' || coalesce(tn, '') || ') by an owner');
 end $function$;
 revoke all on function public.tally_bridge_own_key(text, uuid) from public, anon;
 grant execute on function public.tally_bridge_own_key(text, uuid) to authenticated;
+
+-- final review M3: the bridge moves itself. tally-ingest calls this (the service role) only for a call made with the NEW
+-- key whose body held the OLD key the id is bound to: only a program holding both keys can ask. p_user: the Windows user
+-- the bridge reports, which must be the one FinCom has for it on the old key. The new key: of the same firm, made by an
+-- active member of it within 15 minutes, nothing reported on it but this bridge. The key's maker is linked to the bridge
+-- when they have no link yet, or a link to this bridge (their own: their page made the key and handed it to their own
+-- proven bridge)
+create or replace function public.tally_bridge_own_key_move(p_bridge text, p_from uuid, p_to uuid, p_user text)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
+declare b text := left(btrim(coalesce(p_bridge, '')), 40); f uuid; t record; frm uuid; r jsonb;
+begin
+  if b !~ '^go-[0-9a-f]{6,32}$' then return jsonb_build_object('ok', false, 'error', 'Not moved: not a bridge id.'); end if;
+  select d.firm_id into f from tally_devices d where d.id = p_from and not coalesce(d.revoked, false);
+  select d.id, d.name, d.created_by into t from tally_devices d where d.id = p_to and not coalesce(d.revoked, false) and d.firm_id = f
+     and d.created_at > now() - interval '15 minutes'
+     and exists (select 1 from members m where m.user_id = d.created_by and m.firm_id = d.firm_id and coalesce(m.active, true))
+     and not exists (select 1 from jsonb_object_keys(case when jsonb_typeof(d.info -> 'bridges') = 'object' then d.info -> 'bridges' else '{}'::jsonb end) k where k <> b);
+  if f is null or t.id is null or p_from = p_to then
+    return jsonb_build_object('ok', false, 'error', 'Not moved: the new computer key is not a new key of this firm made by one of its members (within 15 minutes, nothing reported on it yet).');
+  end if;
+  perform pg_advisory_xact_lock(hashtext('tally_bridge_ids:' || f::text || ':' || b));
+  select i.device_id into frm from tally_bridge_ids i where i.firm_id = f and i.bridge_id = b and i.reset_at is null;
+  if frm = p_to then return jsonb_build_object('ok', true, 'moved', false, 'bridge', b); end if;
+  if frm is distinct from p_from then
+    return jsonb_build_object('ok', false, 'moved', false, 'bridge', b, 'error', 'Not moved: that bridge is not bound to the old computer key given.');
+  end if;
+  if tally_bridge_user(p_from, b) is null or tally_bridge_user(p_from, b) = '' or tally_bridge_user(p_from, b) <> lower(btrim(coalesce(p_user, '')))
+    then return jsonb_build_object('ok', false, 'moved', false, 'bridge', b, 'error', 'Not moved: FinCom knows that bridge on the old key as another Windows user''s.'); end if;
+  r := tally_bridge_own_key_do(f, b, p_from, p_to, t.created_by, 'moved to its own computer key (' || coalesce(t.name, '') || ') by the bridge itself');
+  insert into tally_member_bridges (firm_id, user_id, device_id, bridge_id, set_by, set_at) values (f, t.created_by, p_to, b, t.created_by, now())
+    on conflict (firm_id, user_id) do update set device_id = excluded.device_id, bridge_id = excluded.bridge_id, set_by = excluded.set_by, set_at = excluded.set_at
+    where tally_member_bridges.bridge_id is null or tally_member_bridges.bridge_id = excluded.bridge_id;
+  return r;
+end $function$;
+revoke all on function public.tally_bridge_own_key_move(text, uuid, uuid, text) from public, anon, authenticated;
+grant execute on function public.tally_bridge_own_key_move(text, uuid, uuid, text) to service_role;
 
 -- 9f: Update now (migration-4's tally_want_update): wakes the company's own computer as before, every computer key (not
 -- removed) whose bridges have the client's company open, and the caller's own keys. Nothing when the client has no Tally

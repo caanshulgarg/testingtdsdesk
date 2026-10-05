@@ -488,13 +488,17 @@ const TCloud = {
     if (linked && (this.hasOpen(linked, company) || !own.length)) return linked.id;
     if (own.length) return own[0].id;
     const loc = this.localRow(), me = this.me();
-    if (loc && t.some(r => r.id === loc.id) && this.hasOpen(loc, company) && !this.linkedTo(loc).some(u => u !== me)) return loc.id;
+    // final review M3: this browser's own proven bridge counts as the member's only on a computer key the member made (an
+    // owner may post through any); on another's key it first gets a key of its own (autoOwn)
+    if (loc && t.some(r => r.id === loc.id) && this.hasOpen(loc, company) && !this.linkedTo(loc).some(u => u !== me) && this.mayLinkSelf(loc)) return loc.id;
     return "";
   },
+  // final review M3: a member links HIMSELF only to a bridge on a computer key he made (migration 54); an owner links anyone
+  mayLinkSelf(r){ return !!(r && r.device && ((typeof postOwner === "function" && postOwner()) || r.device.created_by === this.me())); },
   // a posting through this browser's own bridge, not yet linked to the member: linked first (so the cloud knows it is theirs)
   async linkIfLocal(target){
     const loc = this.localRow(), me = this.me();
-    if (!loc || loc.id !== target || !me || this.isOwn(loc)) return;
+    if (!loc || loc.id !== target || !me || this.isOwn(loc) || !this.mayLinkSelf(loc)) return;
     await this.rpc("tally_member_bridge_link", {p_user: me, p_device: loc.device.id, p_bridge: loc.id});
     this.pane.links = (this.pane.links || []).filter(x => x.user_id !== me).concat([{user_id: me, device_id: loc.device.id, bridge_id: loc.id}]);
   },
@@ -793,10 +797,12 @@ const TCloud = {
     finally { this.autoBusy = false; }
   },
   // after pairing (TCloud.auto): #4 the member is linked to this browser's own proven bridge when they are linked to none
-  // (or to one FinCom no longer hears from), unless it posts for another member; #7 when that bridge reports through a
-  // computer key whose main bridge is ANOTHER Windows user's (1.15.0's settings carried over), a fresh key is made for this
-  // user, the bridge's identity moves to it (tally_bridge_own_key: its postings and links go with it) and the bridge is
-  // given the new key. true when a new key was handed over. An older cloud without migration 54: nothing done
+  // (or to one FinCom no longer hears from), unless it posts for another member. Final review M3: a member's own bridge is
+  // one on a computer key that member made; when this browser's bridge reports through a key another member made (1.15.0's
+  // settings carried over), or one whose main bridge is ANOTHER Windows user's (#7), a fresh key is made for this user and
+  // handed to the bridge, which moves its identity to it itself (it holds both keys: tally-ingest's own_key; its postings
+  // and links go with it); no owner, no member move. The member is linked on the next pass. true when a new key was handed
+  // over. An older cloud without migration 54: nothing done
   async autoOwn(){
     const me = this.me(), id = (Bridge.cfg() || {}).bridgeId || "";
     if (!me || !/^go-[0-9a-f]{6,32}$/.test(id)) return false;
@@ -808,16 +814,19 @@ const TCloud = {
       const links = [].concat(await Cloud.api("tally_member_bridges?select=user_id,device_id,bridge_id") || []);
       const mine = links.find(l => l.user_id === me && l.bridge_id), taken = links.some(l => l.user_id !== me && l.bridge_id === id && l.device_id === d.id);
       if (taken) return false;
-      const link = async () => { await this.rpc("tally_member_bridge_link", {p_user: me, p_device: d.id, p_bridge: id}); this.pane.links = links.filter(l => l.user_id !== me).concat([{user_id: me, device_id: d.id, bridge_id: id}]); };
-      if (d.main_bridge && d.main_bridge !== id && bs[d.main_bridge] && u(bs[d.main_bridge]) !== u(bs[id])){
-        if (!mine || mine.bridge_id !== id || mine.device_id !== d.id) await link();
+      const shared = d.main_bridge && d.main_bridge !== id && bs[d.main_bridge] && u(bs[d.main_bridge]) !== u(bs[id]);
+      if (shared || !this.mayLinkSelf({device: d})){
+        this.autoAt = Date.now() + 30 * 60000;                               // one key at a time (no pile of keys if the move is refused)
         const k = await this.rpc("tally_device_create", {p_name: String([Bridge.st.computer || bs[id].computer || "Office computer", Bridge.st.user || bs[id].user || ""].filter(Boolean).join(" \u00b7 ")).slice(0, 80)});
-        await this.rpc("tally_bridge_own_key", {p_bridge: id, p_to: k.id});
         await Bridge.call("/cloudlink", {url: this.ingestUrl(), key: k.key}, 60000);
+        this.autoAt = Date.now() + 60000;
         return true;
       }
       const heard = mine && devs.some(x => x.id === mine.device_id && x.info && x.info.bridges && x.info.bridges[mine.bridge_id]);
-      if (!mine || !heard) await link();
+      if (!mine || !heard){
+        await this.rpc("tally_member_bridge_link", {p_user: me, p_device: d.id, p_bridge: id});
+        this.pane.links = links.filter(l => l.user_id !== me).concat([{user_id: me, device_id: d.id, bridge_id: id}]);
+      }
     } catch (e){ this.autoErr = (e && e.message) || String(e); }
     return false;
   },

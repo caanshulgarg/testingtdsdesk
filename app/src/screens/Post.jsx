@@ -277,6 +277,9 @@ function RowActs({ co, x, canPost }) {
       if (job && !freed && !st.check) out.push(<button key="rl" className="btn small" data-release-owner="" data-repost-check="" onClick={() => PostOwner.release(co.id, e, job)}>Not in Tally – post again</button>);
     }
     if (bill && job && st.check) out.push(<span key="ck" className="note" data-check-waiting="">The FinCom Bridge looks in Tally first; nothing is sent until it finds the entry is not there.</span>);
+    // the final review of 2.3.0 (M2): the member who asked, or an owner, withdraws a waiting check
+    const me = (S.account && S.account.me && S.account.me.user_id) || "";
+    if (bill && job && st.check && typeof st.check === "object" && st.check.id && settle && (owner || (me && st.check.asked_by === me))) out.push(<button key="wd" className="btn small" data-withdraw-check="" onClick={() => PostOwner.withdrawCheck(co.id, st.check)}>Withdraw the check</button>);
     if (bill && !job && canPost && !held(e.id, co.id) && st.check === "notfound") out.push(<button key="pa" className="btn small primary" data-post-again="" onClick={() => PostCheck.repost(co, e)}>It is not in Tally: post again</button>);
     if (bill && !job && st.check !== "checking") out.push(<button key="cn" className="btn small" data-check-now="" onClick={() => PostCheck.run(co, e, true)}>Check now</button>);
     if (bill && job && !settle) out.push(<span key="o" className="note" data-owner-settles="">A member of the firm who may post settles this here.</span>);

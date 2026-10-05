@@ -280,8 +280,8 @@ function MemberLink({ r, owner }) {
   const members = (Cloud.st && Cloud.st.members) || [], name = (uid) => { const m = members.find((x) => x.user_id === uid); return m ? (m.name || m.email || uid) : uid; };
   const linked = TCloud.linkedTo(r), others = members.filter((m) => m.active !== false && !linked.includes(m.user_id));
   const me = TCloud.me(), role = S.account && S.account.me ? S.account.me.role : "";
-  const loc = typeof Bridge === "object" && Bridge.cfg ? (Bridge.cfg() || {}).bridgeId : "";
-  const self = !owner && !!me && ["owner", "staff"].includes(role) && !linked.length && !r.changesOnly && (r.device.created_by === me || (!!loc && loc === r.id));
+  // final review M3: a member links himself only to a bridge on a computer key he made (his own bridge's key)
+  const self = !owner && !!me && ["owner", "staff"].includes(role) && !linked.length && !r.changesOnly && r.device.created_by === me;
   if (!owner && !linked.length && !self) return null;
   return <span className="note" data-member-link="">
     {"Posts for: " + (linked.length ? linked.map(name).join(", ") : "nobody linked yet")}

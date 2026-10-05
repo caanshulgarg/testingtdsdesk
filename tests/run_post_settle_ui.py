@@ -114,6 +114,26 @@ with sync_playwright() as p:
        "4. the row: checking Tally first, the bridge's words, asked by Anshul, when and why (%s)" % n5[-320:])
     ok(pg.locator(N5 + " [data-repost-check]").count() == 0 and pg.locator(N5 + " [data-mark-posted]").count() == 1 and pg.locator(N5 + " [data-check-waiting]").count() == 1,
        "4. while it waits: no second 'post again', Mark posted stays")
+    # final review M2: the member who asked (or an owner) withdraws a waiting check; others do not see the button
+    ok(pg.locator(N5 + " [data-withdraw-check]").count() == 0, "final M2. Ravi (staff) does not withdraw Anshul's check")
+    E("() => { window.__checks[0].asked_by = 'u-2'; }"); reload_all(); tab("errors")
+    ok(pg.locator(N5 + " [data-withdraw-check]").count() == 1 and txt(N5 + " [data-withdraw-check]") == "Withdraw the check", "final M2. the asker sees 'Withdraw the check' (%s)" % txt(N5)[-200:])
+    E("() => { window.__rpc = []; }")
+    pg.click(N5 + " [data-withdraw-check]"); pg.wait_for_timeout(400)
+    pg.fill("#confirmBox input#withdrawWhy", "found it in Tally myself"); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(800)
+    calls = [c for c in E("window.__rpc") if c[0].startswith("tally_post")]
+    ok(calls == [["tally_post_check_withdraw", {"p_check": 41, "p_why": "found it in Tally myself"}]], "final M2. tally_post_check_withdraw(check, why) and nothing else (%s)" % calls)
+    E("() => { Object.assign(window.__checks[0], {state: 'withdrawn', withdrawn_by: 'u-2', withdrawn_at: window.__t(2), withdrawn_why: 'found it in Tally myself'}); }"); reload_all(); tab("errors")
+    n5 = txt(N5)
+    ok("The check was withdrawn by you on" in n5 and pg.locator(N5 + " [data-repost-check]").count() == 1 and pg.locator(N5 + " [data-withdraw-check]").count() == 0,
+       "final M2. withdrawn: the row says by whom and when; 'Not in Tally – post again' is offered again (%s)" % n5[-260:])
+    # final review M4: given up after 10 tries or 24 hours: plain words; the person looks in Tally
+    E("""() => { Object.assign(window.__checks[0], {state: 'given_up', given_up_at: window.__t(1), words: 'FinCom stopped looking in Tally for this entry by itself, after 10 tries (the FinCom Bridge said last: FinCom cannot be sure: Tally may have numbered this entry itself). Look in Tally for the narration TDSDesk:n5 in GARG SHEKHAR & COMPANY: use Mark posted if it is there, or press Not in Tally - post again only after checking. Nothing was released or sent.'}); }""")
+    reload_all(); tab("errors")
+    n5 = txt(N5)
+    ok("FinCom stopped looking in Tally for this entry by itself, after 10 tries" in n5 and "TDSDesk:n5" in n5 and pg.locator(N5 + " [data-mark-posted]").count() == 1 and pg.locator(N5 + " [data-repost-check]").count() == 1,
+       "final M4. given up: the row says so in plain words; Mark posted and 'Not in Tally – post again' are offered (%s)" % n5[-320:])
+    E("() => { window.__checks[0].state = 'waiting'; }")
     # 5. marked posted: by whom and when
     E("""() => { const j = window.__jobs[0]; j.status = 'done'; j.results = [{id: 'n5', ok: true, verified: true, vchNumber: '26298', byOwner: true, by: 'Anshul', byOwnerAt: window.__t(1)}]; j.items = [{id: 'n5', state: 'in_tally', byOwner: true, by: 'Anshul'}];
       window.__checks[0].state = 'found'; window.__marks = [{job_id: 'jK', entry_id: 'n5', action: 'posted', vch: '26298', note: 'Found in GARG SHEKHAR & COMPANY by the FinCom Bridge', by_user: 'u-1', at: window.__t(1)}]; }""")

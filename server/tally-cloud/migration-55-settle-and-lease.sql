@@ -24,6 +24,18 @@
 --       has reported "checked, not found" for that entry (the release itself is then already done: said, not repeated).
 --    4. tally_post_checks_for(device, bridge, main): the waiting checks a bridge may answer (the service role), with
 --       Tally's own voucher id from its reply when the result has one (for an entry with no voucher number).
+--    The final review of 2.3.0 (05-Oct-2026):
+--    M1. A check, and the re-send after "not found", go ONLY to the bridge that took the posting (tally_post_jobs.taken_by,
+--        54: tally_post_take_for records it), else the bridge it names (target_bridge), else (an older posting) the key's
+--        main bridge (tally_bridge_takes_unnamed); never another Windows user's bridge on a shared key. tally_post_checks_for
+--        and tally_post_check_report enforce it (tally_post_check_bridge_ok). On "not found" the posting waits again for
+--        that bridge (target_bridge) naming only the released entries (resend_only, 54): the bridge sends those alone.
+--    M2. Mark posted closes a waiting check of that entry (state superseded, the row kept); a check never releases an entry
+--        marked posted after it was asked, nor one that is not waiting. The member who asked, or an owner, withdraws a
+--        waiting check (tally_post_check_withdraw: state withdrawn; who, when and why kept).
+--    M4. A check is handed out at most 10 unable tries or 24 hours: then "given up" in plain words (look in Tally; Mark
+--        posted, or post again only after checking); never released without "not found". Handed out fairly: the one
+--        tried longest ago (or never) first.
 -- D. Two bridges, one company: the lease (tally_company_lease, 32/37) marks its purpose ('post' or 'read'). A posting
 --    that finds the lease held by another bridge's READ records "want to post" (want_post_*); the reader sees it on its
 --    renewal (between two requests, never cutting one) and yields: the lease is handed to the posting bridge at once. A
@@ -47,7 +59,7 @@ create table if not exists public.tally_post_checks (
   asked_by        uuid not null,
   asked_at        timestamptz not null default now(),
   why             text not null,
-  state           text not null default 'waiting',      -- waiting | found | notfound | refused
+  state           text not null default 'waiting',      -- waiting | found | notfound | refused | superseded | withdrawn | given_up
   tries           integer not null default 0,
   last_try_at     timestamptz,
   last_words      text,
@@ -57,7 +69,12 @@ create table if not exists public.tally_post_checks (
   found_vch       text,
   found_master    text,
   words           text,
-  resent          boolean
+  resent          boolean,
+  superseded_at   timestamptz,                          -- final review M2: closed by a Mark posted
+  withdrawn_by    uuid,                                 -- final review M2: withdrawn by the asker or an owner
+  withdrawn_at    timestamptz,
+  withdrawn_why   text,
+  given_up_at     timestamptz                           -- final review M4: 10 unable tries or 24 hours
 );
 create unique index if not exists tally_post_checks_waiting on public.tally_post_checks (job_id, entry_id) where state = 'waiting';
 create index if not exists tally_post_checks_job on public.tally_post_checks (job_id, asked_at);
@@ -108,6 +125,10 @@ begin
     raise exception 'the entry % is live in another posting; cancel that posting first, then mark this one', p_id;
   end;
   insert into tally_post_marks (firm_id, job_id, entry_id, action, vch, note, by_user) values (p_firm, p_job, eid, 'posted', vch, nullif(note, ''), p_user);
+  -- final review M2: a check of this entry still waiting is closed (kept): it can never release the entry later
+  update tally_post_checks set state = 'superseded', superseded_at = now(), checked_at = now(),
+         words = left('Marked posted by ' || who || ' on ' || to_char(now() at time zone 'Asia/Kolkata', 'DD-Mon-YYYY HH24:MI') || ' IST (voucher ' || vch || ') before the FinCom Bridge looked; this check is closed', 500)
+   where job_id = p_job and entry_id = eid and state = 'waiting';
   update tally_post_jobs set results = res, items = its, status = o->>'status', checking = (o->>'checking')::boolean, done = greatest(done, (o->>'posted')::int),
          message = case when o->>'status' = 'done' and not (o->>'checking')::boolean then left('Marked posted by ' || who || case when note <> '' then ': ' || note else '' end, 500)
                         when o->>'status' <> j.status or (o->>'checking')::boolean <> coalesce(j.checking, false) then 'Settled by the mark of ' || eid || ' (' || who || '); ' || case when (o->>'checking')::boolean then 'another entry is still being checked' else 'the rest did not go through' end
@@ -202,6 +223,10 @@ begin
   -- an entry marked posted (deleted in Tally by hand since) is asked about the same way: found, it stays posted; not
   -- there, it is released and sent again
   select * into had from tally_post_checks k where k.job_id = p_job and k.entry_id = eid and k.state = 'waiting' limit 1;
+  if had.id is not null and (had.tries >= 10 or had.asked_at < now() - interval '24 hours') then
+    perform tally_post_check_give_up(had.id);     -- final review M4: asked anew after the old one was given up
+    had := null;
+  end if;
   if had.id is not null then
     return jsonb_build_object('ok', true, 'check', had.id, 'state', 'waiting', 'again', true, 'company', j.company);
   end if;
@@ -214,25 +239,89 @@ end $function$;
 revoke all on function public.tally_post_settle_ask(uuid, text, text) from public, anon;
 grant execute on function public.tally_post_settle_ask(uuid, text, text) to authenticated;
 
--- 4. the checks a bridge may answer: those of its computer's postings that name it (or name none, when it is the main one)
+-- final review M1: may this bridge (p_bridge, reporting through the key p_device) answer the checks of a posting? Only the
+-- bridge that TOOK it (taken_by; through the key it is bound to now: 54's move to its own key keeps it), else the bridge it
+-- names (target_bridge, on its key), else (a posting with no record: older) the key's main bridge. Never another Windows
+-- user's bridge on a shared key. p_main: tally-ingest's word that it is the key's main bridge, checked here too
+-- (tally_bridge_takes_unnamed). Internal: granted to nobody
+create or replace function public.tally_post_check_bridge_ok(p_job uuid, p_device uuid, p_bridge text, p_main boolean)
+returns boolean language sql stable security definer set search_path = public, pg_temp as $function$
+  select exists (select 1 from tally_post_jobs j where j.id = p_job and p_device is not null and coalesce(p_bridge, '') <> '' and
+           case when j.taken_by is not null then j.taken_by = p_bridge and (j.device_id = p_device or tally_bridge_device(j.firm_id, p_bridge) is not distinct from p_device)
+                when j.target_bridge is not null then j.target_bridge = p_bridge and j.device_id = p_device
+                else j.device_id = p_device and coalesce(p_main, false) and tally_bridge_takes_unnamed(p_device, p_bridge) end)
+$function$;
+revoke all on function public.tally_post_check_bridge_ok(uuid, uuid, text, boolean) from public, anon, authenticated;
+
+-- final review M4: a check given up (10 unable tries, or 24 hours): closed in plain words, kept; never released. Internal
+create or replace function public.tally_post_check_give_up(p_check bigint)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
+declare c tally_post_checks%rowtype; w text;
+begin
+  select * into c from tally_post_checks where id = p_check and state = 'waiting' for update;
+  if not found then return jsonb_build_object('ok', true, 'already', true); end if;
+  w := 'FinCom stopped looking in Tally for this entry by itself, '
+    || case when c.tries >= 10 then 'after ' || c.tries || ' tries' else 'after 24 hours' end
+    || coalesce(' (the FinCom Bridge said last: ' || nullif(btrim(c.last_words), '') || ')', '')
+    || '. Look in Tally for the narration TDSDesk:' || c.entry_id || ' in ' || c.company
+    || ': use Mark posted if it is there, or press Not in Tally - post again only after checking. Nothing was released or sent.';
+  update tally_post_checks set state = 'given_up', given_up_at = now(), checked_at = now(), words = left(w, 500) where id = c.id;
+  return jsonb_build_object('ok', true, 'state', 'given_up', 'words', left(w, 500));
+end $function$;
+revoke all on function public.tally_post_check_give_up(bigint) from public, anon, authenticated;
+
+-- 4. the checks a bridge may answer (final review M1: those of the postings it took, or names, or, with no record, the
+-- key's main bridge), at most 20, the one tried longest ago (or never) first (M4); a check tried 10 times or waiting for
+-- 24 hours is given up first, in words, and not handed out
 create or replace function public.tally_post_checks_for(p_device uuid, p_bridge text, p_main boolean)
-returns jsonb language sql stable security definer set search_path to 'public', 'pg_temp' as $function$
-  select coalesce(jsonb_agg(x.o order by x.id), '[]'::jsonb) from (
-    select c.id, jsonb_build_object('check', c.id, 'job', c.job_id, 'entry', c.entry_id, 'company', j.company, 'why', c.why, 'askedAt', c.asked_at, 'tries', c.tries,
+returns jsonb language plpgsql security definer set search_path to 'public', 'pg_temp' as $function$
+declare r record; o jsonb;
+begin
+  for r in select c.id from tally_post_checks c join tally_post_jobs j on j.id = c.job_id
+            where c.state = 'waiting' and (c.tries >= 10 or c.asked_at < now() - interval '24 hours')
+              and tally_post_check_bridge_ok(j.id, p_device, p_bridge, p_main) loop
+    perform tally_post_check_give_up(r.id);
+  end loop;
+  select coalesce(jsonb_agg(x.o order by x.lt nulls first, x.id), '[]'::jsonb) into o from (
+    select c.id, c.last_try_at as lt, jsonb_build_object('check', c.id, 'job', c.job_id, 'entry', c.entry_id, 'company', j.company, 'why', c.why, 'askedAt', c.asked_at, 'tries', c.tries,
              'xml', (select v->>'xml' from jsonb_array_elements(coalesce(j.payload->'vouchers', '[]'::jsonb)) v where v->>'id' = c.entry_id limit 1),
              -- Tally's own voucher id for the entry from its reply (vchId; LASTVCHID only when the request held this one
-             -- entry): the bridge asks Tally for that one voucher when the entry has no number (FinComVoucherByMaster)
-             'vchId', (select coalesce(nullif(regexp_replace(coalesce(r->>'vchId', ''), '\D', '', 'g'), ''),
-                                       case when coalesce(nullif(regexp_replace(coalesce(r->>'batchN', ''), '\D', '', 'g'), ''), '1')::bigint <= 1
-                                            then nullif(regexp_replace(coalesce(r->>'lastVchId', ''), '\D', '', 'g'), '') end)
-                         from jsonb_array_elements(coalesce(j.results, '[]'::jsonb)) r where r->>'id' = c.entry_id limit 1)) o
+             -- entry): the bridge asks Tally for that one voucher (FinComVoucherByMaster)
+             'vchId', (select coalesce(nullif(regexp_replace(coalesce(r2->>'vchId', ''), '\D', '', 'g'), ''),
+                                       case when coalesce(nullif(regexp_replace(coalesce(r2->>'batchN', ''), '\D', '', 'g'), ''), '1')::bigint <= 1
+                                            then nullif(regexp_replace(coalesce(r2->>'lastVchId', ''), '\D', '', 'g'), '') end)
+                         from jsonb_array_elements(coalesce(j.results, '[]'::jsonb)) r2 where r2->>'id' = c.entry_id limit 1),
+             -- review H1: the voucher number Tally gave the entry, as the posting's result recorded it from Tally (never a
+             -- person's mark): the bridge takes an empty answer by number as "not there" only when it is the number sent
+             'vchNumber', (select coalesce(nullif(btrim(r2->>'vchNumber'), ''), nullif(btrim(r2->>'vchNo'), ''))
+                             from jsonb_array_elements(coalesce(j.results, '[]'::jsonb)) r2 where r2->>'id' = c.entry_id and not tally_post_bool(r2->>'byOwner') limit 1)) o
       from tally_post_checks c join tally_post_jobs j on j.id = c.job_id
-     where c.state = 'waiting' and j.device_id = p_device
-       and (j.target_bridge = p_bridge or (j.target_bridge is null and coalesce(p_main, false)))
-     order by c.id limit 20) x
-$function$;
+     where c.state = 'waiting' and tally_post_check_bridge_ok(j.id, p_device, p_bridge, p_main)
+     order by c.last_try_at nulls first, c.id limit 20) x;
+  return o;
+end $function$;
 revoke all on function public.tally_post_checks_for(uuid, text, boolean) from public, anon, authenticated;
 grant execute on function public.tally_post_checks_for(uuid, text, boolean) to service_role;
+
+-- final review M2: the member who asked, or an owner, withdraws a waiting check (who, when and why kept; the row kept)
+create or replace function public.tally_post_check_withdraw(p_check bigint, p_why text)
+returns jsonb language plpgsql security definer set search_path to 'public', 'pg_temp' as $function$
+declare f uuid := my_firm(); c tally_post_checks%rowtype; who text; v_why text := left(btrim(coalesce(p_why, '')), 300);
+begin
+  if f is null or not can_write() then raise exception 'only a member of the firm who may post can withdraw a check' using errcode = '42501'; end if;
+  select * into c from tally_post_checks where id = p_check and firm_id = f for update;
+  if not found then raise exception 'no such check in your firm'; end if;
+  if c.asked_by is distinct from auth.uid() and not exists (select 1 from members m where m.user_id = auth.uid() and m.firm_id = f and m.role = 'owner' and coalesce(m.active, true))
+    then raise exception 'only the member who asked for this check, or an owner, can withdraw it' using errcode = '42501'; end if;
+  if c.state <> 'waiting' then return jsonb_build_object('ok', true, 'check', c.id, 'state', c.state, 'already', true); end if;
+  who := tally_member_name(f, auth.uid());
+  update tally_post_checks set state = 'withdrawn', withdrawn_by = auth.uid(), withdrawn_at = now(), withdrawn_why = nullif(v_why, ''), checked_at = now(),
+         words = left('Withdrawn by ' || who || ' on ' || to_char(now() at time zone 'Asia/Kolkata', 'DD-Mon-YYYY HH24:MI') || ' IST' || case when v_why <> '' then ' (' || v_why || ')' else '' end || '; nothing was released or sent', 500)
+   where id = c.id;
+  return jsonb_build_object('ok', true, 'check', c.id, 'state', 'withdrawn', 'by', who);
+end $function$;
+revoke all on function public.tally_post_check_withdraw(bigint, text) from public, anon;
+grant execute on function public.tally_post_check_withdraw(bigint, text) to authenticated;
 
 -- 2. the bridge's answer
 create or replace function public.tally_post_check_report(p_check bigint, p_device uuid, p_bridge text, p_main boolean, p_company text, p_result text, p_vch text, p_master text, p_words text)
@@ -242,13 +331,19 @@ declare c tally_post_checks%rowtype; j tally_post_jobs%rowtype; res text := lowe
 begin
   select * into c from tally_post_checks where id = p_check for update;
   if not found then return jsonb_build_object('ok', false, 'error', 'no such check'); end if;
+  -- only a waiting check is answered (M2: never one superseded by a Mark posted, withdrawn or given up)
   if c.state <> 'waiting' then return jsonb_build_object('ok', true, 'state', c.state, 'already', true); end if;
   select * into j from tally_post_jobs where id = c.job_id for update;
-  if j.device_id is distinct from p_device or not (coalesce(j.target_bridge = p_bridge, false) or (j.target_bridge is null and coalesce(p_main, false))) then
+  -- final review M1: only the bridge that took the posting (else the one it names, else the key's main bridge)
+  if not tally_post_check_bridge_ok(c.job_id, p_device, p_bridge, p_main) then
     return jsonb_build_object('ok', false, 'error', 'This check is for the bridge that posts this posting, not this one.');
   end if;
   if res = 'unable' then
     update tally_post_checks set tries = tries + 1, last_try_at = now(), last_words = coalesce(nullif(v_words, ''), 'Tally could not be asked just now; it is asked again by itself') where id = c.id;
+    -- final review M4: 10 unable tries, or 24 hours: given up in words; never released
+    if c.tries + 1 >= 10 or c.asked_at < now() - interval '24 hours' then
+      return tally_post_check_give_up(c.id);
+    end if;
     return jsonb_build_object('ok', true, 'state', 'waiting');
   end if;
   if res not in ('found', 'notfound') then return jsonb_build_object('ok', false, 'error', 'found, notfound or unable'); end if;
@@ -270,10 +365,20 @@ begin
            found_master = nullif(btrim(coalesce(p_master, '')), ''), words = nullif(v_words, ''), resent = false where id = c.id;
     return jsonb_build_object('ok', true, 'state', 'found', 'vch', v, 'job', c.job_id, 'entry', c.entry_id);
   end if;
-  -- checked, not found: released in the asker's name, then the posting waits to be sent again (once)
+  -- final review M2: an entry marked posted after this check was asked is never released by it
+  if exists (select 1 from tally_post_marks m where m.job_id = c.job_id and m.entry_id = c.entry_id and m.action = 'posted' and m.at > c.asked_at) then
+    update tally_post_checks set state = 'superseded', superseded_at = now(), checked_at = now(), checked_bridge = p_bridge, checked_company = p_company,
+           words = left('Not released: the entry was marked posted after this check was asked. ' || coalesce(nullif(v_words, ''), ''), 500) where id = c.id;
+    return jsonb_build_object('ok', false, 'state', 'superseded', 'error', 'Not released: the entry was marked posted after this check was asked.');
+  end if;
+  -- checked, not found: released in the asker's name, then the posting waits to be sent again (once), for THIS bridge
+  -- (the one that took it), naming only the released entries (final review M1: resend_only; the bridge sends those alone)
   r := tally_post_release_core(c.firm_id, c.asked_by, c.job_id, c.entry_id,
          left(c.why || ' (the FinCom Bridge looked in ' || j.company || ' on ' || to_char(now() at time zone 'Asia/Kolkata', 'DD-Mon-YYYY HH24:MI') || ' IST: not there)', 500));
   select * into j from tally_post_jobs where id = c.job_id;
+  update tally_post_jobs set resend_only = case when coalesce(resend_only, '[]'::jsonb) @> jsonb_build_array(c.entry_id) then resend_only else coalesce(resend_only, '[]'::jsonb) || jsonb_build_array(c.entry_id) end,
+         target_bridge = case when p_bridge ~ '^go-[0-9a-f]{6,32}$' then p_bridge else target_bridge end, device_id = p_device
+   where id = c.job_id;
   if j.status in ('failed', 'done') and not coalesce(j.checking, false) then
     begin
       update tally_post_jobs set status = 'waiting', message = 'Not in Tally (the FinCom Bridge looked): sent again', taken_at = null, updated_at = now(),

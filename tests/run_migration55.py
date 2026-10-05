@@ -38,6 +38,7 @@ def part(path, name):
     i = s.index('"""', i) + 3; return s[i:s.index('"""', i)]
 F, OWNER, STAFF, VIEWER = "99999999-9999-9999-9999-999999999999", "55555555-5555-5555-5555-555555555555", "66666666-6666-6666-6666-666666666666", "77777777-7777-7777-7777-777777777777"
 D1, D2 = "d1000000-0000-0000-0000-000000000001", "d2000000-0000-0000-0000-000000000002"
+STAFF3 = "33333333-3333-3333-3333-333333333333"   # Durgesh, staff: not the asker
 B1, B2 = "go-aaaa000001", "go-bbbb000002"
 BOOK = "b0000000-0000-0000-0000-000000000055"
 J = lambda n: "%08d-0000-0000-0000-000000005555" % n
@@ -194,6 +195,86 @@ try:
     ok("_error" in r or r.get("ok") is False, "B10. a posting still being sent cannot be asked about (%s)" % r)
     r = rpcj(STAFF, "select tally_post_settle_ask(%s::uuid, 'K1', 'deleted in Tally by hand')::text" % q(J(1)))
     ok(r.get("ok") is True and r.get("state") == "waiting" and idrow(1, "K1")["live"] == "true", "B11. an entry marked posted (deleted in Tally by hand since) is asked about the same way: a check, nothing released (%s)" % r)
+
+    # ---------------------------------------------------------------- the final review of 2.3.0
+    B5 = "go-eeee000005"   # meena's bridge reporting through anshul's key D1 (1.15.0's settings carried over): another Windows user
+    db.sql("update tally_devices set info = jsonb_set(info, '{bridges,%s}', %s::jsonb) where id = %s" % (B5, q(json.dumps({"at": NOW, "computer": "NW144", "user": "meena", "mode": "main", "open": ["ZZ CO"]})), q(D1)))
+    def taken_job(n, i, by, target=None):
+        accepted_job(n, i)
+        db.sql("update tally_post_jobs set taken_by = %s, target_bridge = %s where id = %s" % ("null" if by is None else q(by), "null" if target is None else q(target), q(J(n))))
+    listed = lambda dev, b, main=True: [x.get("check") for x in svc("select tally_post_checks_for(%s::uuid, %s, %s)::text" % (q(dev), q(b), "true" if main else "false"))]
+    ckstate = lambda ck: db.rows("select state, tries::text, coalesce(words, '') as words, coalesce(last_words, '') as lw from tally_post_checks where id = %s" % ck)[0]
+    # M1: the check and the re-send go only to the bridge that TOOK the posting
+    taken_job(10, "K10", B1)
+    ck10 = rpcj(STAFF, "select tally_post_settle_ask(%s::uuid, 'K10', 'not in the Day Book')::text" % q(J(10))).get("check")
+    ok(ck10 in listed(D1, B1) and ck10 not in listed(D1, B5), "final M1. the check goes to the bridge that took the posting (anshul's), not to another Windows user's bridge on the same key (%s | %s)" % (listed(D1, B1), listed(D1, B5)))
+    r = rep(ck10, "notfound", bridge=B5)
+    ok((r.get("ok") is False or "_error" in r) and idrow(10, "K10")["live"] == "true" and ckstate(ck10)["state"] == "waiting", "final M1. that other bridge cannot answer it (%s)" % r)
+    r = rep(ck10, "notfound", bridge=B1, words="FinComVoucherByMaster 26298 of 05-Jul-2026: not there")
+    jj = db.rows("select status, coalesce(target_bridge, '-') as t, coalesce(resend_only::text, '-') as ro from tally_post_jobs where id = %s" % q(J(10)))[0]
+    ok(r.get("state") == "notfound" and r.get("resent") is True and jj == {"status": "waiting", "t": B1, "ro": '["K10"]'},
+       "final M1. checked, not found by the taking bridge: waits again FOR THAT BRIDGE, naming only the released entry (%s | %s)" % (r, jj))
+    ok([x["id"] for x in db.rows("select id::text from tally_post_take_for(%s::uuid, %s, true)" % (q(D1), q(B5)))] == [] and jrow(10)["status"] == "waiting", "final M1. another Windows user's bridge on the same key does not take the re-send")
+    got = []
+    for _ in range(5): got += db.rows("select id::text, coalesce(resend_only::text, '-') as ro from tally_post_take_for(%s::uuid, %s, true)" % (q(D1), q(B1)))
+    ok({"id": J(10), "ro": '["K10"]'} in got, "final M1. the taking bridge takes it, with the one entry to send (%s)" % got)
+    # a posting with no record of who took it (older): only the key's main bridge
+    taken_job(11, "K11", None)
+    ck11 = rpcj(STAFF, "select tally_post_settle_ask(%s::uuid, 'K11', 'not there')::text" % q(J(11))).get("check")
+    db.sql("update tally_devices set main_bridge = %s where id = %s" % (q(B1), q(D1)))
+    ok(ck11 in listed(D1, B1) and ck11 not in listed(D1, B5, True), "final M1. no record: only the key's main bridge lists it, even if told it is main (%s)" % listed(D1, B5, True))
+    r = rep(ck11, "notfound", bridge=B5, main=True)
+    ok((r.get("ok") is False or "_error" in r) and ckstate(ck11)["state"] == "waiting", "final M1. ... and only it may answer (%s)" % r)
+    db.sql("update tally_devices set main_bridge = null where id = %s" % q(D1))
+    # M2: Mark posted supersedes a waiting check; a check never releases an entry marked posted after it was asked
+    taken_job(12, "K12", B1)
+    ck12 = rpcj(STAFF, "select tally_post_settle_ask(%s::uuid, 'K12', 'not in the Day Book')::text" % q(J(12))).get("check")
+    rpcj(OWNER, "select tally_post_job_mark_posted(%s::uuid, 'K12', '26310', 'found it in the Day Book')::text" % q(J(12)))
+    ok(ckstate(ck12)["state"] == "superseded", "final M2. Mark posted: the waiting check is superseded (the row kept) (%s)" % ckstate(ck12))
+    r = rep(ck12, "notfound", bridge=B1)
+    ok(idrow(12, "K12")["live"] == "true" and jrow(12)["status"] == "done" and ckstate(ck12)["state"] == "superseded", "final M2. a late 'not found' for it releases nothing (%s)" % r)
+    taken_job(13, "K13", B1)
+    ck13 = rpcj(STAFF, "select tally_post_settle_ask(%s::uuid, 'K13', 'not in the Day Book')::text" % q(J(13))).get("check")
+    db.sql("insert into tally_post_marks (firm_id, job_id, entry_id, action, vch, note, by_user, at) values (%s, %s, 'K13', 'posted', '26311', 'marked', %s, now() + interval '1 second')" % (q(F), q(J(13)), q(OWNER)))
+    r = rep(ck13, "notfound", bridge=B1)
+    ok((r.get("ok") is False or "_error" in r) and idrow(13, "K13")["live"] == "true" and jrow(13)["status"] == "done", "final M2. a posted mark newer than the check: never released (%s)" % r)
+    # withdraw: the asker or an owner
+    taken_job(14, "K14", B1)
+    ck14 = rpcj(STAFF, "select tally_post_settle_ask(%s::uuid, 'K14', 'not there')::text" % q(J(14))).get("check")
+    r = rpcj(VIEWER, "select tally_post_check_withdraw(%s, 'changed my mind')::text" % ck14)
+    ok("_error" in r and ckstate(ck14)["state"] == "waiting", "final M2. a viewer cannot withdraw a check (%s)" % str(r)[-160:])
+    db.sql("insert into members values (%s, %s, 'Durgesh', 'staff', true) on conflict do nothing" % (q(STAFF3), q(F)))
+    r = rpcj(STAFF3, "select tally_post_check_withdraw(%s, 'not mine')::text" % ck14)
+    ok("_error" in r and ckstate(ck14)["state"] == "waiting", "final M2. another staff member (not the asker) cannot (%s)" % str(r)[-160:])
+    r = rpcj(STAFF, "select tally_post_check_withdraw(%s, 'found it myself')::text" % ck14)
+    w14 = db.rows("select state, withdrawn_by::text as by, withdrawn_at is not null as at, coalesce(withdrawn_why, '') as why from tally_post_checks where id = %s" % ck14)[0]
+    ok(r.get("ok") is True and w14 == {"state": "withdrawn", "by": STAFF, "at": "t", "why": "found it myself"}, "final M2. the asker withdraws it: who, when and why kept (%s | %s)" % (r, w14))
+    r = rep(ck14, "notfound", bridge=B1)
+    ok(idrow(14, "K14")["live"] == "true" and jrow(14)["status"] == "done" and ck14 not in listed(D1, B1), "final M2. a withdrawn check is never handed out nor releases (%s)" % r)
+    taken_job(15, "K15", B1)
+    ck15 = rpcj(STAFF, "select tally_post_settle_ask(%s::uuid, 'K15', 'not there')::text" % q(J(15))).get("check")
+    r = rpcj(OWNER, "select tally_post_check_withdraw(%s, 'asked by mistake')::text" % ck15)
+    ok(r.get("ok") is True and ckstate(ck15)["state"] == "withdrawn", "final M2. an owner withdraws anyone's (%s)" % r)
+    # M4: given up after 10 unable tries, or 24 hours; handed out fairly (last tried last)
+    taken_job(16, "K16", B1); taken_job(17, "K17", B1); taken_job(18, "K18", B1)
+    ck16 = rpcj(STAFF, "select tally_post_settle_ask(%s::uuid, 'K16', 'not there')::text" % q(J(16))).get("check")
+    ck17 = rpcj(STAFF, "select tally_post_settle_ask(%s::uuid, 'K17', 'not there')::text" % q(J(17))).get("check")
+    ck18 = rpcj(STAFF, "select tally_post_settle_ask(%s::uuid, 'K18', 'not there')::text" % q(J(18))).get("check")
+    for _ in range(9): rep(ck16, "unable", bridge=B1, words="Tally may have numbered this entry itself")
+    l = listed(D1, B1)
+    ok(l.index(ck17) < l.index(ck16) and l.index(ck18) < l.index(ck16), "final M4. a check never tried comes before one tried (fair: last tried last) (%s)" % l)
+    r = rep(ck16, "unable", bridge=B1, words="Tally may have numbered this entry itself")
+    st16 = ckstate(ck16)
+    ok(r.get("state") == "given_up" and st16["state"] == "given_up" and st16["tries"] == "10" and "Mark posted" in st16["words"] and "look" in st16["words"].lower() and ck16 not in listed(D1, B1) and idrow(16, "K16")["live"] == "true",
+       "final M4. after 10 unable tries: given up, in plain words; no longer handed out; never released (%s | %s)" % (r, st16))
+    db.sql("update tally_post_checks set asked_at = now() - interval '25 hours' where id = %s" % ck17)
+    l = listed(D1, B1)
+    st17 = ckstate(ck17)
+    ok(ck17 not in l and st17["state"] == "given_up" and "24 hours" in st17["words"] and idrow(17, "K17")["live"] == "true", "final M4. waiting for 24 hours: given up the same way (%s | %s)" % (l, st17))
+    r = rep(ck16, "notfound", bridge=B1)
+    ok(idrow(16, "K16")["live"] == "true" and ckstate(ck16)["state"] == "given_up", "final M4. a given-up check releases nothing later (%s)" % r)
+    again = rpcj(STAFF, "select tally_post_settle_ask(%s::uuid, 'K16', 'asked again after looking')::text" % q(J(16)))
+    ok(again.get("ok") is True and again.get("check") not in (None, ck16), "final M4. a member may ask again: a new check (%s)" % again)
 
     # ---------------------------------------------------------------- D. the lease: purpose, want to post, yield
     take = lambda holder, purpose, dev="null": svc("select tally_lease_take(%s, %s, %s, %s, 120, %s, %s)::text" % (q(F), q(BOOK), q(holder), dev if dev == "null" else q(dev) + "::uuid", q(json.dumps({"computer": "PC-" + holder[-1]})), "null" if purpose is None else q(purpose)))

@@ -63,6 +63,9 @@ def rpcj(uid, stmt):
     if not good: return {"_error": out[-300:]}
     try: return json.loads(out)
     except (TypeError, ValueError): return {"_error": out}
+def svc(stmt):
+    try: return json.loads(db.one(stmt))
+    except RuntimeError as e: return {"_error": str(e)[-400:], "ok": False}
 DEV_OF = {}   # bridge -> its computer, as the Tally page passes it (review M3: the device is passed and checked)
 def enq(uid, n, target=None, ids=None, client="c1", device=None):
     d = None if device == "none" else device if device is not None else DEV_OF.get(target)
@@ -151,6 +154,9 @@ try:
     ok("_error" in r and "another member" in r["_error"], "#4. Ravi cannot link himself to Meena's bridge (it posts for another member already) (%s)" % r)
     r = rpcj(STAFF3, LINK(STAFF3, D2, "go-ffff00000f"))
     ok("_error" in r, "#4. a self-link to a bridge not heard from on that computer is refused too")
+    r = rpcj(STAFF, LINK(STAFF, D1, B4))
+    ok("_error" in r and "computer key you made" in r["_error"] and db.one("select coalesce(bridge_id, '-') from tally_member_bridges where user_id = %s" % q(STAFF)) == B2,
+       "final M3. Ravi cannot link himself to a bridge on a computer key he did not make (anshul's B4, linked to nobody) (%s)" % str(r.get("_error", r))[-200:])
     good, out = as_user(STAFF, "select bridge_id from tally_member_bridges where user_id = %s" % q(STAFF))
     ok(good and out == B2, "3. members read the links (%s)" % out)
     # 4. queueing with a target
@@ -184,9 +190,13 @@ try:
     ok(r.get("ok") is True and r.get("again") is True and jrow(4)["t"] == B2, "4. the same posting again: as before (again), its target kept (%s)" % r)
     # 5. the hand-out
     ok(take(D2, B2, False) == [J(2)], "5. Ravi's bridge (not main) takes the posting for it, the oldest first")
+    ok(db.one("select coalesce(taken_by, '-') from tally_post_jobs where id = %s" % q(J(2))) == B2, "final M1. the bridge that took it is recorded (taken_by)")
     ok(take(D2, B2, False) == [J(4)] and take(D2, B2, False) == [], "5. then the owner's posting for it; nothing else")
     ok(take(D1, B4, False) == [], "5. another bridge on anshul's computer (not main) takes nothing with no target")
     ok(take(D1, B1, True) == [J(1)], "5. anshul's main bridge takes the older posting (no target), as today")
+    ok(db.one("select coalesce(taken_by, '-') from tally_post_jobs where id = %s" % q(J(1))) == B1, "final M1. taken_by: the main bridge that took the posting naming none")
+    col = db.rows("select column_name, data_type from information_schema.columns where table_name = 'tally_post_jobs' and column_name in ('taken_by', 'resend_only') order by 1")
+    ok(col == [{"column_name": "resend_only", "data_type": "jsonb"}, {"column_name": "taken_by", "data_type": "text"}], "final M1. tally_post_jobs.taken_by (text) and resend_only (jsonb) (%s)" % col)
     db.sql("insert into tally_post_jobs (id, firm_id, client_id, company, device_id, payload, n, status, target_bridge) values (%s, %s, 'c1', 'ZZ CO', %s, '{\"vouchers\": []}', 0, 'waiting', %s)" % (q(J(20)), q(F), q(D3), q(B3)))
     ok(take(D3, B3, True) == [] and jrow(20)["status"] == "waiting", "5. a changes-only bridge takes no posting, even one for it")
     ok(take(D1, B2, True) == [], "5. a bridge never takes another computer's postings")
@@ -211,9 +221,10 @@ try:
     ok(r.get("again") is True and jrow(30) == {"t": "null", "d": D1, "status": "waiting"}, "M2. Ravi queueing the owner's waiting posting again: it stays where it was, no target (%s | %s)" % (r, jrow(30)))
     r = enq(OWNER, 31, target=B1)
     ok(r.get("ok") is True and jrow(31)["t"] == B1, "M2. the owner's posting for his own bridge (%s)" % jrow(31))
-    db.sql("update tally_post_jobs set status = 'failed' where id = %s" % q(J(31)))
+    db.sql("update tally_post_jobs set status = 'failed', resend_only = '[\"V31\"]' where id = %s" % q(J(31)))
     r = enq(STAFF, 31)
     ok(r.get("retry") is True and jrow(31) == {"t": B1, "d": D1, "status": "waiting"}, "M2. Ravi's Retry of the owner's failed posting: waits again for the owner's bridge, not Ravi's (%s | %s)" % (r, jrow(31)))
+    ok(db.one("select coalesce(resend_only::text, '-') from tally_post_jobs where id = %s" % q(J(31))) == "-", "final M1. a person's Retry is a whole Retry again: resend_only cleared")
     # ---- review M3: a bridge id belongs to the computer that reported it first; a copied id never moves a posting
 
     db.sql("update tally_devices set info = jsonb_set(info, '{bridges,%s}', '{\"at\": \"2026-10-06T10:00:00Z\", \"computer\": \"NW144\", \"user\": \"ravi\", \"mode\": \"main\", \"open\": [\"ZZ CO\"]}'::jsonb) where id = %s" % (B1, q(D2)))
@@ -362,7 +373,9 @@ try:
     r = enq(STAFF3, 70)
     ok(r.get("ok") is False and "FinCom has not heard from a FinCom Bridge of yours" in r.get("error", "") and not jrow(70), "#3. Durgesh, with no bridge of his own known yet: refused in plain words, never routed into someone else's Tally (%s)" % r.get("error"))
     r = rpcj(STAFF3, LINK(STAFF3, D4, B7))
-    ok(r.get("ok") is True, "#4. Durgesh links himself to his bridge on the shared key (%s)" % r)
+    ok("_error" in r and "computer key you made" in r["_error"], "final M3. Durgesh cannot link himself to a bridge on the shared key (made by another member): the key proves nothing of whose bridge it is (%s)" % str(r.get("_error", r))[-200:])
+    r = rpcj(OWNER, LINK(STAFF3, D4, B7))
+    ok(r.get("ok") is True, "#4. the owner links Durgesh to his bridge on the shared key (%s)" % r)
     r = enq(STAFF3, 70)
     ok(r.get("ok") is True and jrow(70) == {"t": B7, "d": D4, "status": "waiting"}, "#7. Durgesh's posting goes to his own bridge on the shared key (%s | %s)" % (r, jrow(70)))
     r = enq(STAFF3, 71, target=B6)
@@ -388,6 +401,16 @@ try:
     ok("_error" in r and live(B6, F) == D4, "#7. nor a bridge he is not linked to (anshul's, on the same key) (%s)" % r)
     db.sql("update tally_devices set main_bridge = %s where id = %s" % (q(B6), q(D4)))
     r = rpcj(STAFF3, "select tally_bridge_own_key(%s, %s::uuid)::text" % (q(B7), q(D5)))
+    ok("_error" in r and "moves itself" in r["_error"] and live(B7, F) == D4, "final M3. a member alone cannot move a bridge, even his own linked one: the bridge moves itself (proof: it holds both keys) (%s)" % str(r.get("_error", r))[-200:])
+    mv = lambda b, frm, to, u: svc("select tally_bridge_own_key_move(%s, %s::uuid, %s::uuid, %s)::text" % (q(b), q(frm), q(to), q(u)))
+    ok(db.one("select has_function_privilege('authenticated', 'public.tally_bridge_own_key_move(text, uuid, uuid, text)', 'execute')") == "f", "final M3. tally_bridge_own_key_move: the service role only (tally-ingest, after the bridge proved both keys)")
+    r = mv(B6, D4, D5, "durgesh")
+    ok(r.get("ok") is False and live(B6, F) == D4, "final M3. the bridge's Windows user must be the one that bridge reports (anshul's B6 claimed as durgesh's): refused (%s)" % r)
+    rk = rpcj(STAFF, "select tally_device_create('NW144 · ravi 2')::text"); D6 = rk.get("id", "")
+    db.sql("update tally_devices set created_at = now() - interval '20 minutes' where id = %s" % q(D6))
+    r = mv(B7, D4, D6, "durgesh")
+    ok(r.get("ok") is False and live(B7, F) == D4, "final M3. only onto a NEW key (made within 15 minutes) (%s)" % r)
+    r = mv(B7, D4, D5, "durgesh")
     hist = db.rows("select device_id::text as d, (reset_at is not null)::text as reset, coalesce(reset_why, '') as why from tally_bridge_ids where bridge_id = %s and firm_id = %s order by id" % (q(B7), q(F)))
     ok(r.get("ok") is True and r.get("moved") is True and live(B7, F) == D5 and len(hist) == 2 and hist[0]["reset"] == "true" and "own computer key" in hist[0]["why"],
        "#7. Durgesh's bridge moves to his own new key: the old binding kept as history, with why (%s | %s)" % (r, hist))
@@ -395,8 +418,12 @@ try:
        "#7. its waiting posting and Durgesh's link go with it (the same bridge, the same Tally) (%s)" % jrow(72))
     db.sql("update tally_devices set info = jsonb_set(info, '{bridges}', jsonb_build_object(%s, %s::jsonb)) where id = %s" % (q(B7), q(json.dumps({"at": NOW, "computer": "NW144", "user": "durgesh", "mode": "main", "open": ["ZZ CO"]})), q(D5)))
     ok(bind(D5, B7).get("own") is True, "#7. the bridge reporting through its new key is its own there")
-    r = rpcj(STAFF3, "select tally_bridge_own_key(%s, %s::uuid)::text" % (q(B9), q(D5)))
-    ok("_error" in r, "#7. only onto a NEW key with nothing reported on it yet (%s)" % r)
+    r = rpcj(STAFF3, LINK(STAFF3, D5, B7))
+    ok(r.get("ok") is True, "final M3. on the key he made, Durgesh links himself to his own bridge, no owner (%s)" % r)
+    r = mv(B9, D4, D5, "durgesh")
+    ok(r.get("ok") is False and live(B9, F) == D4, "#7. only onto a NEW key with nothing reported on it yet (%s)" % r)
+    r = rpcj(OWNER, "select tally_bridge_own_key(%s, %s::uuid)::text" % (q(B9), q(D5)))
+    ok("_error" in r, "#7. an owner too: only onto a NEW key (%s)" % str(r.get("_error", r))[-160:])
     # ---- #14: Update now wakes every computer key with the company open, and the caller's own
     db.sql("update tally_devices set want_update_at = null")
     opened((D3,), [])

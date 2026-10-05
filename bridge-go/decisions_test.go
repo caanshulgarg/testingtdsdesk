@@ -292,13 +292,25 @@ func TestSettleCheckNotFoundSentOnce(t *testing.T) {
 		t.Fatalf("the first send: %v %v (%d imports)", p["status"], p["message"], f.n("Import"))
 	}
 	time.Sleep(1100 * time.Millisecond) // the probe may go again
-	// "Not in Tally - post again": the cloud's check; on "not found" it releases the id and hands the posting back
+	// review H1: no answer came, so neither Tally's id nor the number it gave is known: Tally may have numbered the entry
+	// itself, and an empty answer by number proves nothing: unable, nothing sent
 	c.mu.Lock()
-	c.checks = []M{checkFor("9", "job-k2-000001", "k2", zz, x)}
+	c.checks = []M{checkFor("8", "job-k2-000001", "k2", zz, x)}
+	c.mu.Unlock()
+	cloudPostTake()
+	if r := lastReport(t, c); str(r["result"]) != "unable" || !strings.Contains(str(r["words"]), "Tally may have numbered this entry itself") || f.n("Import") != 1 {
+		t.Fatalf("no id, no number proven: %v (%d imports)", r, f.n("Import"))
+	}
+	// "Not in Tally - post again" with Tally's id known (here: one that names no voucher): on "not found" the cloud
+	// releases the id and hands the posting back, naming the entry to send again
+	ck := checkFor("9", "job-k2-000001", "k2", zz, x)
+	ck["vchId"] = "999"
+	c.mu.Lock()
+	c.checks = []M{ck}
 	c.checkReply = func(b M) M {
 		if str(b["result"]) == "notfound" {
 			c.checks = nil
-			c.takeJobs = []M{{"id": "job-k2-000001", "company": zz, "payload": pay, "released": []any{M{"id": "k2", "at": time.Now().UTC().Format(time.RFC3339), "by": "owner", "why": "not in the Day Book (checked by the bridge)"}}}}
+			c.takeJobs = []M{{"id": "job-k2-000001", "company": zz, "payload": pay, "released": []any{M{"id": "k2", "at": time.Now().UTC().Format(time.RFC3339), "by": "owner", "why": "not in the Day Book (checked by the bridge)"}}, "resendOnly": []any{"k2"}}}
 			return M{"ok": true, "state": "notfound", "resent": true}
 		}
 		return M{"ok": true, "state": str(b["result"])}
@@ -398,8 +410,12 @@ func TestSettleCheckSilentWaits(t *testing.T) {
 	c.checks = []M{checkFor("11", "job-k3", "k3", zz, x)}
 	c.mu.Unlock()
 	cloudPostTake()
-	if r := lastReport(t, c); str(r["result"]) != "notfound" || toInt(r["check"]) != 11 {
+	// (review H1: no Tally id and no number proven: unable in words, never "not found")
+	if r := lastReport(t, c); str(r["result"]) != "unable" || toInt(r["check"]) != 11 || !strings.Contains(str(r["words"]), "Tally may have numbered this entry itself") {
 		t.Fatalf("asked again: %v", r)
+	}
+	if f.n(vchByNumberID) < 2 {
+		t.Fatalf("not asked again: %v", f.ids())
 	}
 	if f.n("Import") != 0 {
 		t.Fatal("sent to Tally")

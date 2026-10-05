@@ -142,6 +142,7 @@ def rpc(fn, a):
         if "p_purpose" in a and LEASE7_MISSING[0]: raise LookupError("PGRST202")
         return {"ok": True, "held": False, "purpose": a.get("p_purpose") or "", "lease": {"until": "2026-10-05T12:00:00Z", "ttl": a.get("p_ttl")}}
     if fn == "tally_lease_release": return {"ok": True, "released": True}
+    if fn == "tally_bridge_own_key_move": return {"ok": True, "moved": True, "bridge": a.get("p_bridge"), "from": a.get("p_from"), "to": a.get("p_to")}   # migration 54 (final review M3; the SQL: run_migration54.py)
     if fn == "tally_post_take":
         for j in T["tally_post_jobs"]:
             if j["device_id"] == a["p_device"] and j["status"] == "waiting": j["status"] = "taken"; return [j]
