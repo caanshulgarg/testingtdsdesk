@@ -160,7 +160,8 @@ if ($rdp) {
 # C:\fcspike\task.ps1, which runs the script named in task-in.json and writes its output and a done mark
 Set-Content "$fc\task.ps1" -Encoding UTF8 -Value @'
 $in = Get-Content C:\fcspike\task-in.json -Raw | ConvertFrom-Json
-try { & $in.script @($in.argv) *>&1 | Out-File C:\fcspike\task-out.txt -Encoding utf8 } catch { "ERROR $_" | Out-File C:\fcspike\task-out.txt -Append -Encoding utf8 }
+$a = @($in.argv | ForEach-Object { [string]$_ })
+try { & $in.script @a *>&1 | Out-File C:\fcspike\task-out.txt -Encoding utf8 } catch { "ERROR $_" | Out-File C:\fcspike\task-out.txt -Append -Encoding utf8 }
 "done" | Set-Content C:\fcspike\task-done.txt
 '@
 if ($rdp) {
