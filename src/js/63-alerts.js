@@ -217,6 +217,15 @@ const AlertHub = {
         else if (beat.notAnsweringSince) out.push(Object.assign(base, {sev: "warn", text: "Tally is not answering on one computer since " + this.when(beat.notAnsweringSince) + ".", fix: "Close any open window or report in Tally on that computer (the details say which)."}));
         else if (quiet || rowsD.length) out.push(Object.assign(base, {sev: "info", text: "No change recorded today on one computer, though Tally was open there.", fix: "Nothing to do if nobody worked in Tally there today."}));
       });
+      // ---- the owner's condition (Fix 2c): a computer key refused a bridge id: one alert per (id, computer), owners only
+      if (S.account && S.account.me && S.account.me.role === "owner"){
+        const tp = TCloud.pane || {};
+        if (!tp.bridgeAlertsAt || Date.now() - tp.bridgeAlertsAt > 300000){ tp.bridgeAlertsAt = Date.now(); TCloud.loadBridgeAlerts().then(() => render()).catch(() => {}); }
+        (tp.bridgeAlerts || []).filter(x => !x.read_at).forEach(x => out.push({key: "bridgeid:" + x.id, sev: "bad", cid: "", selfClear: false, at: x.last_at || x.at,
+          text: [x.tried_computer, x.tried_user].filter(Boolean).join(" \u00b7 ") + " tried to use bridge " + x.bridge_id + ", which belongs to another computer; FinCom refused it.",
+          fix: "Ask that Windows user to install FinCom Bridge again (it makes an id of its own), or release this bridge's identity on the Tally page.",
+          details: x.words || "", act: {label: "Mark read", run: () => TCloud.bridgeAlertRead(x)}}));
+      }
       // ---- what cannot clear itself: the daily summary, until read
       unread.filter(x => x.kind === "summary").forEach(x => out.push({key: "alert:" + x.id, sev: "info", cid: x.client_id || "", text: x.words || "The day's summary.", fix: "", details: x.at ? "At " + fmtDateTime(x.at) : "", at: x.at, selfClear: false, alert: x}));
     }

@@ -272,6 +272,7 @@ function MemberLink({ r, owner }) {
   return <span className="note" data-member-link="">
     {"Posts for: " + (linked.length ? linked.map(name).join(", ") : "nobody linked yet")}
     {owner && linked.map((uid) => <button key={uid} className="linkbtn" data-member-unlink={uid} onClick={() => TCloud.linkMember(uid, null)}>{" (unlink " + name(uid) + ")"}</button>)}
+    {owner && <> <button className="linkbtn" data-release-identity={r.id} onClick={() => TCloud.releaseIdentity(r)}>Release this bridge's identity</button></>}
     {owner && !r.changesOnly && others.length > 0 && <> <select data-member-link-pick="" aria-label={"Link a member to " + TCloud.bridgeWords(r)} value="" disabled={!!(p.ctl && p.ctl.busy)}
       onChange={(ev) => ev.target.value && TCloud.linkMember(ev.target.value, r)}>
       <option value="">Link a member…</option>{others.map((m) => <option key={m.user_id} value={m.user_id}>{m.name || m.email || m.user_id}</option>)}</select></>}
@@ -317,6 +318,8 @@ function BridgeLines({ rows, latest }) {
         {live && <div className="row" style={{ alignItems: "center", gap: 8, flexWrap: "wrap", marginLeft: 16 }}><RecorderSource r={r} owner={owner} /></div>}
         {live && <Baselines r={r} owner={owner} />}
       </div>; })}
+    {(p.devices || []).filter((d) => !d.revoked && d.info && d.info.idRefused).map((d) => <p key={"refused-" + d.id} className="bk-alert bad" data-id-refused={d.id} style={{ margin: "4px 0" }}>
+      <b>{d.name}</b>{": " + d.info.idRefused.words}</p>)}
     <Release rows={rows} latest={latest} owner={owner} />
     {owner && TCloud.on() && <div className="row" style={{ gap: 8, margin: "6px 0 2px" }}>
       {allStopped ? <button className="btn small primary" data-read-resume-all="" onClick={() => TCloud.readResume(null)}>Resume reading on all computers</button>

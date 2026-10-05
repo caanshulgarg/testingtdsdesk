@@ -166,6 +166,7 @@ const TallyRead = {
     return out;
   },
   async raw(path, ms){
+    if (!(await Bridge.ensureProven())) throw new Error("FinCom Bridge on this computer did not prove itself, so nothing was sent to it. Connect it again from the Tally page.");
     const c = Bridge.cfg(), ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), ms || 900000);
     try {
       const r = await fetch(c.url.replace(/\/+$/, "") + path, {headers: {"X-Bridge-Key": c.key}, signal: ctl.signal, cache: "no-store"});

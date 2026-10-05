@@ -365,6 +365,7 @@ const TCloud = {
         p.links = [].concat(await Cloud.api("tally_member_bridges?select=user_id,device_id,bridge_id") || []);
         p.noTarget = false;
       } catch (e){ p.prefs = []; p.links = []; p.noTarget = true; }
+      await this.loadBridgeAlerts();
       p.companies = await this.restAll("tally_companies?select=company,client_id,device_id,gstin,last_seen,linked_at&order=company.asc");
       // migration-35: the stops and resumes from FinCom with who and when (round 4, item 24: the latest 300 rows; the
       // standing stops and the latest resume a computer are taken out here), and the bridge versions on trial, approved
@@ -463,6 +464,27 @@ const TCloud = {
     await this.control("tally_bridge_changes_only", {p_device: r.device.id, p_bridge: r.id, p_on: !!on},
       (on ? "Changes only: " : "Posting allowed again: ") + this.bridgeWords(r) + ".");
   },
+  // the owner's condition (Fix 2): a computer key refused a bridge id: ONE alert per (id, computer) for the owners, until
+  // read or until the identity is released (tally_bridge_alerts, migration 54); none on an older cloud
+  async loadBridgeAlerts(){
+    const p = this.pane;
+    p.bridgeAlertsAt = Date.now();
+    try { p.bridgeAlerts = [].concat(await Cloud.api("tally_bridge_alerts?select=id,bridge_id,device_id,tried_computer,tried_user,words,at,last_at,read_at&cleared_at=is.null&order=at.desc&limit=50") || []); }
+    catch (e){ p.bridgeAlerts = []; }
+  },
+  async bridgeAlertRead(x){
+    try { await this.rpc("tally_bridge_alert_read", {p_id: x.id}); x.read_at = new Date().toISOString(); } catch (e){ toast((e && e.message) || String(e)); }
+    render();
+  },
+  // Fix 2b: an owner releases a bridge's identity: the next computer that reports the id gets it (kept with who, when, why)
+  async releaseIdentity(r){
+    const a = await askConfirm({title: "Release the identity of " + this.bridgeWords(r) + "?", ok: "Release it",
+      body: "<p>FinCom keeps bridge " + esc(r.id) + " tied to the computer key that reported it first. Released, the next computer that reports this id gets it. Who released it, when and why are kept.</p>" +
+        '<div class="bk-form one"><label><span>Why (kept with the release)</span><input id="releaseWhy" maxlength="300" placeholder="e.g. the computer was set up again"></label></div>',
+      read: () => ({why: ((document.getElementById("releaseWhy") || {}).value || "").trim()}), validate: d => d && d.why ? "" : "Say why the identity is released."});
+    if (!a || !a.ok) return;
+    await this.control("tally_bridge_reset", {p_bridge: r.id, p_why: a.data.why}, "The identity of " + this.bridgeWords(r) + " is released; the next computer that reports it gets it.");
+  },
   // an owner links a member to the bridge they post through (r null: unlinked) -> tally_member_bridge_link
   async linkMember(uid, r){
     const m = ((typeof Cloud === "object" && Cloud.st.members) || []).find(x => x.user_id === uid), who = (m && (m.name || m.email)) || "The member";
@@ -526,7 +548,7 @@ const TCloud = {
       toast(done);
     } catch (e){
       const m = String((e && e.message) || e), missing = /PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(m);
-      const mig = {tally_bridge_changes_only: 54, tally_member_bridge_link: 54, tally_release_withdraw: 37, tally_baseline_clear: 37, tally_device_post_settings: 43, tally_device_trial_tools: 46, tally_device_recorder_source: 47}[fn] || 35;
+      const mig = {tally_bridge_changes_only: 54, tally_member_bridge_link: 54, tally_bridge_reset: 54, tally_release_withdraw: 37, tally_baseline_clear: 37, tally_device_post_settings: 43, tally_device_trial_tools: 46, tally_device_recorder_source: 47}[fn] || 35;
       p.ctl = {err: missing && fn === "tally_device_post_settings" ? "Posting settings are not available until migration 43 runs."
         : missing && fn === "tally_device_trial_tools" ? "Trial tools on this computer: not available until migration 46 runs."
         : missing && fn === "tally_device_recorder_source" ? "Changes come from: not available until migration 47 runs."
@@ -658,6 +680,8 @@ const TCloud = {
     if (this.autoBusy || !this.on() || !Bridge.on() || !Bridge.up() || Date.now() < this.autoAt) return;
     this.autoBusy = true; this.autoAt = Date.now() + 60000;
     try {
+      // the owner's condition: a computer key is made, and handed over, only for a bridge that proved itself
+      if (!(await Bridge.ensureProven())) return;
       const s = await Bridge.call("/cloudlink", null, 15000);
       if (!s.connected || s.url !== this.ingestUrl()){
         this.autoAt = Date.now() + 30 * 60000;

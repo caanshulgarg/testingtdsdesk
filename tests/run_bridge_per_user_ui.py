@@ -8,6 +8,10 @@ anshul, ravi and meena each run their own Tally in their own Windows session; ea
      posting is queued for the one picked.
   3. Changes only: such a bridge is never offered on the Post screen, and a member linked to it posts through the main
      bridge as before (no target).
+  4. The owner's conditions (Fix 2, Fix 3): "Release this bridge's identity" (owners: tally_bridge_reset with why); a
+     computer key refused a bridge id shows FinCom's words on its own line; the owner's bell has ONE alert naming the
+     computer and Windows user that tried (Mark read: tally_bridge_alert_read); the cloud's nobody-can-post words reach
+     the person posting as they are; the target goes with its computer (p_device).
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_bridge_per_user_ui.py"""
 import json, os, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -31,10 +35,10 @@ DA, DR, DM = "d0000000-0000-4000-8000-0000000000a1", "d0000000-0000-4000-8000-00
 BA, BR, BM = "go-aaaa000001", "go-bbbb000002", "go-cccc000003"
 DEVS = [dev(DA, "anshul", 9000, "C:\\Users\\Public\\TallyPrime\\data", BA), dev(DR, "ravi", 9001, "D:\\TallyData\\Ravi", BR), dev(DM, "meena", 9002, "D:\\TallyData\\Meena", BM)]
 MEMBERS = [{"user_id": OWNER, "name": "Anshul", "role": "owner", "active": True}, {"user_id": RAVI, "name": "Ravi", "role": "staff", "active": True}, {"user_id": MEENA, "name": "Meena", "role": "staff", "active": True}]
-SETUP = """([devs, prefs, links, members, role, me]) => {
+SETUP = """([devs, prefs, links, members, role, me, balerts]) => {
   const now = Date.now(), ago = m => new Date(now - m * 60000).toISOString();
   const fix = (o) => JSON.parse(JSON.stringify(o), (k, v) => typeof v === "string" && v.startsWith("ago:") ? ago(Number(v.slice(4))) : v);
-  window.__devs = fix(devs); window.__prefs = prefs; window.__links = links; window.__calls = [];
+  window.__devs = fix(devs); window.__prefs = prefs; window.__links = links; window.__balerts = balerts || []; window.__calls = [];
   Cloud.on = () => true; Cloud.st.firm = "f-1"; Cloud.st.members = members;
   Cloud.sess = () => ({user_id: me, access_token: "t"});
   TCloud.on = () => true;
@@ -43,6 +47,7 @@ SETUP = """([devs, prefs, links, members, role, me]) => {
     if (/^tally_devices/.test(path)) return copy(window.__devs);
     if (/^tally_bridge_prefs/.test(path)) return copy(window.__prefs);
     if (/^tally_member_bridges/.test(path)) return copy(window.__links);
+    if (/^tally_bridge_alerts/.test(path)) return copy(window.__balerts);
     if (/^tally_companies/.test(path)) return [{company: "ZZ CO", client_id: "c-zz", device_id: devs[0].id, gstin: "", last_seen: ago(1)}];
     return [];
   };
@@ -72,6 +77,7 @@ CONFIRM = """async ([pick]) => {
   window.__calls = [];
   try { await CloudPost.run("c-zz", {company: "ZZ CO", vouchers: [{id: "b1", xml: "<VOUCHER/>"}]}); } catch (e){ out.err = String(e && e.message || e); }
   out.enq = window.__calls.filter(c => c[0].startsWith("tally_post_enqueue")).map(c => [c[0], c[1].p_target || null]);
+  out.dev = (window.__calls.find(c => c[0] === "tally_post_enqueue_to") || [null, {}])[1].p_device || null;
   return out;
 }"""
 with sync_playwright() as p:
@@ -81,8 +87,8 @@ with sync_playwright() as p:
     pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
     E = lambda js, *a: pg.evaluate(js, *a)
     txt = lambda sel: pg.inner_text(sel).replace("\n", " ").strip() if pg.locator(sel).count() else ""
-    def tally_page(prefs, links, role, me):
-        E(SETUP, [DEVS, prefs, links, MEMBERS, role, me]); pg.wait_for_timeout(500)
+    def tally_page(prefs, links, role, me, balerts=None, devs=None):
+        E(SETUP, [devs or DEVS, prefs, links, MEMBERS, role, me, balerts or []]); pg.wait_for_timeout(500)
         pg.locator('#side button[aria-label="Tally"]').first.click(); pg.wait_for_timeout(1500)
     # ---- 1. the Tally page, as the owner
     tally_page([{"device_id": DM, "bridge_id": BM, "changes_only": True}], [{"user_id": RAVI, "device_id": DR, "bridge_id": BR}, {"user_id": MEENA, "device_id": DM, "bridge_id": BM}], "owner", OWNER)
@@ -109,7 +115,7 @@ with sync_playwright() as p:
     ok(r["words"] == "NW144 · anshul · ZZ CO · C:\\Users\\Public\\TallyPrime\\data", "2. the confirm step names computer · Windows user · company · data folder (%s)" % r["words"])
     ok(r["options"] is not None and BM not in r["options"] and set(r["options"]) == {BA, BR}, "3. the owner's picker offers the bridges that may post, never meena's (changes only) (%s)" % r["options"])
     ok(r.get("after") == "NW144 · ravi · ZZ CO · D:\\TallyData\\Ravi" and r.get("targetAfter") == BR, "2. picking ravi's bridge names it (%s)" % r.get("after"))
-    ok(r["posted"] is True and r["enq"] == [["tally_post_enqueue_to", BR]], "2. the posting is queued for ravi's bridge (%s %s)" % (r["enq"], r.get("err", "")))
+    ok(r["posted"] is True and r["enq"] == [["tally_post_enqueue_to", BR]] and r.get("dev") == DR, "2. the posting is queued for ravi's bridge, named with its computer (%s %s %s)" % (r["enq"], r.get("dev"), r.get("err", "")))
     # as Ravi (staff, linked to his own bridge): his bridge named, no picker, queued for it
     tally_page([{"device_id": DM, "bridge_id": BM, "changes_only": True}], [{"user_id": RAVI, "device_id": DR, "bridge_id": BR}, {"user_id": MEENA, "device_id": DM, "bridge_id": BM}], "staff", RAVI)
     ok(pg.locator("#app [data-changes-only-switch]").count() == 0 and pg.locator("#app [data-member-link-pick]").count() == 0 and "Changes only: never posts" in txt('#app [data-computer="%s"]' % DM),
@@ -120,6 +126,31 @@ with sync_playwright() as p:
     tally_page([{"device_id": DM, "bridge_id": BM, "changes_only": True}], [{"user_id": RAVI, "device_id": DR, "bridge_id": BR}, {"user_id": MEENA, "device_id": DM, "bridge_id": BM}], "staff", MEENA)
     r = E(CONFIRM, [None])
     ok("meena" not in r["words"] and r["enq"] == [["tally_post_enqueue", None]], "3. Meena's bridge is changes only: not offered, her posting goes as before (%s | %s)" % (r["words"], r["enq"]))
+    # ---- 4. the owner's conditions: release, the refused key's line, the bell, the cloud's words
+    import copy as _c
+    devs2 = _c.deepcopy(DEVS)
+    W = "This computer key cannot use bridge %s: it belongs to NW144 · anshul. Ask the firm's owner." % BA
+    devs2.append({"id": "d0000000-0000-4000-8000-0000000000a9", "name": "NW144 · durgesh", "revoked": False, "last_seen": "ago:0.2", "version": "2.3.0", "main_bridge": None, "created_at": "2026-10-02T00:00:00Z",
+                  "info": {"idRefused": {"bridge": BA, "words": W, "at": "ago:0.2"}}})
+    BAL = [{"id": 7, "bridge_id": BA, "device_id": "d0000000-0000-4000-8000-0000000000a9", "tried_computer": "NW144", "tried_user": "durgesh", "words": W, "at": "ago:0.2", "last_at": "ago:0.2", "read_at": None}]
+    tally_page([], [], "owner", OWNER, BAL, devs2)
+    ok(W in txt('#app [data-id-refused="d0000000-0000-4000-8000-0000000000a9"]'), "4. the refused computer key's own line shows FinCom's words (%s)" % txt('#app [data-id-refused]')[:160])
+    pg.click('#app [data-computer="%s"] [data-release-identity="%s"]' % (DA, BA)); pg.wait_for_timeout(300)
+    pg.fill("#releaseWhy", "durgesh copied the settings"); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(600)
+    c = [x for x in E("window.__calls") if x[0] == "tally_bridge_reset"]
+    ok(c and c[-1][1] == {"p_bridge": BA, "p_why": "durgesh copied the settings"}, "4. the owner releases the bridge's identity, with why (%s)" % c)
+    E("render()"); pg.wait_for_timeout(300)
+    bell = E("AlertHub.list().filter(x => x.key.startsWith('bridgeid:')).map(x => x.text)")
+    ok(bell == ["NW144 · durgesh tried to use bridge %s, which belongs to another computer; FinCom refused it." % BA], "4. ONE bell alert for the owner naming the computer and Windows user that tried (%s)" % bell)
+    E("AlertHub.list().find(x => x.key.startsWith('bridgeid:')).act.run()"); pg.wait_for_timeout(400)
+    ok([x for x in E("window.__calls") if x[0] == "tally_bridge_alert_read"] == [["tally_bridge_alert_read", {"p_id": 7}]], "4. Mark read: tally_bridge_alert_read")
+    tally_page([], [], "staff", RAVI, BAL, devs2)
+    ok(pg.locator("#app [data-release-identity]").count() == 0 and E("AlertHub.list().filter(x => x.key.startsWith('bridgeid:')).length") == 0, "4. staff: no release button, no such alert")
+    # the cloud's words when nobody can post reach the person as they are
+    WN = "Nobody can post into ZZ CO just now: the only computer that has it open (NW144 · meena) is set to Changes only. Open the company in Tally on a computer that may post (NW144 · anshul), or ask the owner to switch Changes only off for that bridge."
+    E("""(w) => { TCloud.rpc = async (fn, a) => { window.__calls.push([fn, a]); return fn.startsWith("tally_post_enqueue") ? {ok: false, error: w} : {ok: true}; }; }""", WN)
+    msg = E("CloudPost.run('c-zz', {company: 'ZZ CO', vouchers: [{id: 'b2', xml: '<VOUCHER/>'}]}).then(() => '', e => e.message || String(e))")
+    ok(msg == WN, "4. the nobody-can-post words reach the person posting as they are (%s)" % msg[:120])
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0][:300]))
     br.close()
 print("all passed" if not fails else str(len(fails)) + " FAILED")
