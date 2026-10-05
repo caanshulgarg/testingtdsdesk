@@ -1,0 +1,139 @@
+origin/tax-accuracy: e89ba52 A held recorder line: the books never say "in step with Tally"; "N entries received from Tally are not yet in these books"
+bridge: 9431040 bytes, SHA256 C6F3C2F001EED26740FAEA9CDFD3096147FC6430478DD940A0DF70CCE100E952; add-on: 9609 bytes
+python: C:\hostedtoolcache\windows\Python\3.12.10\x64\python.exe
+stub answers
+[keys] sent 'a' to tally 'TallyPrime:9000'
+[keys] sent 't' to tally 'TallyPrime:9000'
+[shot] r3-00-gateway (1024x768)
+ledger Spike Income: <RESPONSE>
+ <CREATED>1</CREATED>
+ <ALTERED>0</ALTERED>
+ <DELETED>0</DELETED>
+ <LASTVCHID>0</LASTVCHID>
+ <LASTMID>0</LASTMID>
+ <COMBINED>0</COMBINED>
+ <IGNORED>0</IGNORED>
+ <ERRORS>0</ERRORS>
+ <CANCELLED>0</CANCELLED>
+ <EXCEPTIONS>0</EXCEPTIONS>
+</RESPONSE>
+
+bridge pid 8468
+===== after step 'start' (bridge running: True)
+  log: 2026-10-05 11:20:11  FinCom Bridge 2.2.2 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs in a window
+  log: 2026-10-05 11:20:11  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+  log: 2026-10-05 11:20:11  Recorder: re-scan of the add-on's files for 2.2.2: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+  log: 2026-10-05 11:20:11  Check:  - 
+  log: 2026-10-05 11:20:14  Company FinCom Spike Co: its Tally GUID adb30d9f-44e4-4626-a95d-6709206de32a is held from now on
+  log: 2026-10-05 11:20:15  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=1, ALTMSTID=211 (reading is prospective only: the bridge follows what changes after this)
+  log: 2026-10-05 11:20:15  Company FinCom Spike Co: change numbers read with form b: ALTVCHID=1, ALTMSTID=211
+  log: 2026-10-05 11:20:15  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=1, ALTMSTID=211)
+  cloud: 11:19:36 ping
+  cloud: 11:20:14 beat
+[keys] sent 'v' to tally 'TallyPrime:9000'
+[shot] r3-01-vouchers (1024x768)
+[keys] sent '{F6}' to tally 'TallyPrime:9000'
+[keys] sent '{F2}' to tally 'TallyPrime:9000'
+[keys] sent '2-10-2026{ENTER}' to tally 'TallyPrime:9000'
+[keys] sent 'Cash{ENTER}' to tally 'TallyPrime:9000'
+[keys] sent 'Spike Income{ENTER}' to tally 'TallyPrime:9000'
+[shot] r3-02-particular (1024x768)
+[keys] sent '700{ENTER}' to tally 'TallyPrime:9000'
+[keys] sent '^a' to tally 'TallyPrime:9000'
+[shot] r3-03-created (1024x768)
+===== after step 'a-create' (bridge running: True)
+  log: 2026-10-05 11:20:55  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 7dee9353…): asking Tally by MasterID
+  log: 2026-10-05 11:20:59  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 7dee9353…): asking Tally by type and number (Tally gave no voucher with MasterID 2 on 02-Oct-2026)
+  log: 2026-10-05 11:20:59  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+  log: 2026-10-05 11:20:59  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 7dee9353…): held: Tally gave no voucher with MasterID 2 on 02-Oct-2026; asked by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (sent without its body and GUID; FinCom holds the line until it is resolved)
+  cloud: 11:20:44 beat
+  cloud: 11:20:55 recorder_lines company=FinCom Spike Co lines=0
+  cloud: 11:20:59 recorder_lines company=FinCom Spike Co lines=1
+    LINE event=created object_guid= master_id=2 alter_id= vch=Receipt/1/20261002 xml=False heldWhy=Tally gave no voucher with MasterID 2 on 02-Oct-2026; asked by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). idsMismatch= lineGuid=
+  cloud: 11:21:11 companies
+  cloud: 11:21:14 beat
+[keys] sent '%g' to tally 'TallyPrime:9000'
+[keys] sent 'Day Book' to tally 'TallyPrime:9000'
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[keys] sent '{F2}' to tally 'TallyPrime:9000'
+[keys] sent '2-10-2026{ENTER}' to tally 'TallyPrime:9000'
+[shot] r3-04-daybook (1024x768)
+[keys] sent '{END}' to tally 'TallyPrime:9000'
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r3-05-open (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r3-06-at-amount (1024x768)
+[keys] sent '800{ENTER}' to tally 'TallyPrime:9000'
+[keys] sent '^a' to tally 'TallyPrime:9000'
+[shot] r3-07-altered (1024x768)
+===== after step 'b-alter' (bridge running: True)
+  log: 2026-10-05 11:22:20  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line fda7421a…): asking Tally by MasterID
+  log: 2026-10-05 11:22:25  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line fda7421a…): asking Tally by type and number (Tally gave no voucher with MasterID 2 on 02-Oct-2026)
+  log: 2026-10-05 11:22:25  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+  log: 2026-10-05 11:22:25  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line fda7421a…): held: Tally gave no voucher with MasterID 2 on 02-Oct-2026; asked by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (sent without its body and GUID; FinCom holds the line until it is resolved)
+  cloud: 11:21:44 beat
+  cloud: 11:22:14 beat
+  cloud: 11:22:25 recorder_lines company=FinCom Spike Co lines=1
+    LINE event=altered object_guid= master_id=2 alter_id= vch=Receipt/1/20261002 xml=False heldWhy=Tally gave no voucher with MasterID 2 on 02-Oct-2026; asked by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). idsMismatch= lineGuid=
+  cloud: 11:22:44 beat
+[keys] sent '%g' to tally 'TallyPrime:9000'
+[keys] sent 'Day Book' to tally 'TallyPrime:9000'
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[keys] sent '{F2}' to tally 'TallyPrime:9000'
+[keys] sent '2-10-2026{ENTER}' to tally 'TallyPrime:9000'
+[shot] r3-07b-daybook (1024x768)
+[keys] sent '{END}' to tally 'TallyPrime:9000'
+[keys] sent '%2' to tally 'TallyPrime:9000'
+[shot] r3-08-duplicate (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r3-09-dup-at-amount (1024x768)
+[keys] sent '900{ENTER}' to tally 'TallyPrime:9000'
+[shot] r3-09b-dup-amount (1024x768)
+[keys] sent '^a' to tally 'TallyPrime:9000'
+[shot] r3-10-dup-saved (1024x768)
+===== after step 'c-duplicate' (bridge running: True)
+  log: 2026-10-05 11:23:42  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 3, line 5ad559cb…): asking Tally by MasterID
+  log: 2026-10-05 11:23:47  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 3, line 5ad559cb…): asking Tally by type and number (Tally gave no voucher with MasterID 3 on 02-Oct-2026)
+  log: 2026-10-05 11:23:47  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+  log: 2026-10-05 11:23:47  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 3, line 5ad559cb…): held: Tally gave no voucher with MasterID 3 on 02-Oct-2026; asked by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (sent without its body and GUID; FinCom holds the line until it is resolved)
+  cloud: 11:23:14 beat
+  cloud: 11:23:44 beat
+  cloud: 11:23:47 recorder_lines company=FinCom Spike Co lines=1
+    LINE event=created object_guid= master_id=3 alter_id= vch=Receipt/2/20261002 xml=False heldWhy=Tally gave no voucher with MasterID 3 on 02-Oct-2026; asked by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). idsMismatch=True lineGuid=adb30d9f-44e4-4626-a95d-6709206de32a-00000002
+  cloud: 11:24:14 beat
+[keys] sent '%g' to tally 'TallyPrime:9000'
+[keys] sent 'Day Book' to tally 'TallyPrime:9000'
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[keys] sent '{F2}' to tally 'TallyPrime:9000'
+[keys] sent '2-10-2026{ENTER}' to tally 'TallyPrime:9000'
+[shot] r3-10b-daybook (1024x768)
+[keys] sent '{HOME}' to tally 'TallyPrime:9000'
+[keys] sent '%x' to tally 'TallyPrime:9000'
+[keys] sent 'y' to tally 'TallyPrime:9000'
+[shot] r3-11-cancelled (1024x768)
+===== after step 'd-cancel' (bridge running: True)
+  cloud: 11:24:44 beat
+  cloud: 11:24:54 recorder_lines company=FinCom Spike Co lines=1
+    LINE event=cancelled object_guid= master_id=2 alter_id= vch=Receipt/1/20261002 xml=False heldWhy= idsMismatch= lineGuid=
+  cloud: 11:25:14 beat
+[keys] sent '%g' to tally 'TallyPrime:9000'
+[keys] sent 'Day Book' to tally 'TallyPrime:9000'
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[keys] sent '{F2}' to tally 'TallyPrime:9000'
+[keys] sent '2-10-2026{ENTER}' to tally 'TallyPrime:9000'
+[shot] r3-11b-daybook (1024x768)
+[keys] sent '{END}' to tally 'TallyPrime:9000'
+[keys] sent '%d' to tally 'TallyPrime:9000'
+[keys] sent 'y' to tally 'TallyPrime:9000'
+[shot] r3-12-deleted (1024x768)
+===== after step 'e-delete' (bridge running: True)
+  cloud: 11:25:44 beat
+  cloud: 11:26:06 recorder_lines company=FinCom Spike Co lines=1
+    LINE event=deleted object_guid= master_id=3 alter_id= vch=Receipt/2/20261002 xml=False heldWhy= idsMismatch= lineGuid=
+  cloud: 11:26:11 companies
+  cloud: 11:26:14 beat
+  cloud: 11:26:44 beat
+== round 3 end
