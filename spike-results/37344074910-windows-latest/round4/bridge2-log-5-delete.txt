@@ -1,0 +1,2 @@
+2026-10-05 17:04:07  Recorder: FinCom Spike Co: delete of mid 3: GUID not known to the bridge; FinCom's record is asked
+2026-10-05 17:04:07  Recorder: FinCom Spike Co: delete of mid 3: FinCom answered applied without a GUID

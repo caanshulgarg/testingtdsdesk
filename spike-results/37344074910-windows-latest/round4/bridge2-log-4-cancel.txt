@@ -1,0 +1,3 @@
+2026-10-05 17:03:31  Recorder: FinCom Spike Co: cancel of mid 2: GUID not known to the bridge (Tally not asked: Company 'FinCom Spike Co' is not open in Tally. Open it in TallyPrime on this computer and try again.); FinCom's record is asked
+2026-10-05 17:03:31  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (Company 'FinCom Spike Co' is not open in Tally. Open it in TallyPrime on this computer and try again.); sent without it (FinCom holds the line until a body comes)
+2026-10-05 17:03:31  Recorder: FinCom Spike Co: cancel of mid 2: FinCom answered applied without a GUID
