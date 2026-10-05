@@ -52,8 +52,8 @@ jobs:
       - name: Round 3 (the real bridge against this Tally, a local stub cloud)
         continue-on-error: true
         env:
-          BRIDGE_REF: 97f6bd8
-          BRIDGE_VER: 2.2.3
+          BRIDGE_REF: 9076c77
+          BRIDGE_VER: 2.2.4
         run: |
           & .github/tally-spike/flow3.ps1 *>&1 | Tee-Object -FilePath "$env:RES\round3.log" -Append; exit 0
       - name: Commit results back to the branch
