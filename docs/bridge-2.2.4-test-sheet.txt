@@ -1,7 +1,7 @@
 FINCOM BRIDGE 2.2.4 - TEST SHEET (NWS144, staging)
 
 File:        FinComBridge-Setup-2.2.4.exe
-Fingerprint: (filled in when the setup is built; compare with the .sha256 file next to the setup)
+Fingerprint: SHA-256 51dde37da28f1117fcc6c0046039143deb5095acdbdc2e19496f4b04cd0311bb (FinComBridge-Setup-2.2.4.exe; compare with the .sha256 file next to the setup)
 Link:        https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.2.4.exe
 
 What 2.2.4 changes: one thing. Your TallyPrime 7.1 answers with typed fields (for example <MASTERID TYPE="Number">),
