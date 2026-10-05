@@ -4,6 +4,7 @@
 // 2.1.3: first "Books as of 15:34 · Update now" (parts/TallyLine.jsx): Tally cannot send its changes by itself.
 import Msg from "./Msg.jsx";
 import { BooksAsOf } from "./TallyLine.jsx";
+import HeldBooks from "./HeldBooks.jsx";
 
 const hhmm = (s2) => fmtTime(s2);
 const Btn = ({ onClick, className = "btn small", children }) => <button className={className} onClick={onClick}>{children}</button>;
@@ -24,18 +25,20 @@ function CloudBar({ cid }) {
     {st.trouble && st.trouble.at && <>{" "}<span className="note">{"Tally did not answer at " + fmtTime(st.trouble.at) + "; the bridge carries on by itself."}</span></>}</>;
 }
 
-export default function FreshBar({ b }) {
+// held: show the held lines' warning here (Look up leaves it to its answer, which shows it once one is on the page)
+export default function FreshBar({ b, held = true }) {
   const f = LK.fr(), live = LK.live(), meta = (b && b.meta) || {}, have = (b.vouchers || []).length > 0, sch = f.sch || {}, today = Audit.today(), m = f.man || {}, kp = f.keep || {};
   if (!have && !live && !meta.keep && !TCloud.has(S.coId)) return null;
   const chk = f.check ? <Check c={f.check} /> : null;
   // the cloud's copy: what this page shows when it is the source
-  if (TCloud.has(S.coId) && ((meta.cloud && !m.keep) || !live)) return <div className="lk-fresh"><span className="note"><BooksAsOf cid={S.coId} />{" "}<CloudBar cid={S.coId} /> Totals come from this copy, so Tally is never held up.</span>{chk}</div>;
+  const hb = held && <HeldBooks cid={S.coId} where="fresh" />, hd = typeof booksHeld === "function" && !!booksHeld(S.coId);
+  if (TCloud.has(S.coId) && ((meta.cloud && !m.keep) || !live)) return <>{hb}<div className="lk-fresh"><span className="note"><BooksAsOf cid={S.coId} />{" "}<CloudBar cid={S.coId} /> Totals come from this copy, so Tally is never held up.</span>{chk}</div></>;
   let upTo, btns = null;
   if (m.keep) {
     const seenMin = m.seen ? (Date.now() - Date.parse(m.seen)) / 60000 : 999;
     if (m.phase === "open") upTo = "The bridge is reading the opening balances, a few ledgers at a time.";
     else if (m.phase === "first") { const pct = Math.max(0, Math.min(99, Math.round(Audit.days(m.from, m.doneTo || m.from) / Math.max(1, Audit.days(m.from, today)) * 100))); upTo = <>The bridge is copying this company from Tally a few days at a time: up to <b>{FC.when(m.doneTo)}</b>{" (" + pct + "%). It carries on whenever the company is open in Tally."}</>; }
-    else { const f = booksFresh(b, S.coId); upTo = <span data-fresh="" className={f.skipped.length ? "bad" : ""}>{f.text}{f.skipped.length ? " Figures touching those days may be out; the bridge tries them again at the next update." : ""}{seenMin < 5 ? " In step with Tally now." : ""}</span>; }
+    else { const f = booksFresh(b, S.coId); upTo = <span data-fresh="" className={f.skipped.length ? "bad" : ""}>{f.text}{f.skipped.length ? " Figures touching those days may be out; the bridge tries them again at the next update." : ""}{seenMin < 5 && !hd ? " In step with Tally now." : ""}</span>; }
     upTo = <>{upTo}
       {m.trouble && m.trouble.at && <>{" "}<span className="note">{"Tally did not answer at " + hhmm(m.trouble.at) + "; the bridge leaves it alone for a while and tries again at the next update."}</span></>}</>;
     btns = live ? <Btn onClick={() => LK.keepCheck()}>Check against Tally</Btn> : null;
@@ -48,5 +51,5 @@ export default function FreshBar({ b }) {
       if (kp.on) upTo = <>{upTo} The bridge reads it when this client is opened, on Update now, and in the nightly catch-up.</>;
     } else btns = <span className="note">Connect FinCom Bridge to keep this up to date.</span>;
   }
-  return <div className="lk-fresh"><span className="note"><BooksAsOf cid={S.coId} />{" "}{upTo} Totals come from this copy, so Tally is never held up.</span>{btns}{chk}</div>;
+  return <>{hb}<div className="lk-fresh"><span className="note"><BooksAsOf cid={S.coId} />{" "}{upTo} Totals come from this copy, so Tally is never held up.</span>{btns}{chk}</div></>;
 }

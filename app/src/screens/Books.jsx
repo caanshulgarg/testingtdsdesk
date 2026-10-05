@@ -22,6 +22,7 @@ import HelpButton from "../parts/HelpButton.jsx";
 import { Notices } from "../parts/Ai.jsx";
 import { LedgerBanner, GstDriftNote, SyncNote, JobsNote } from "../parts/Notes.jsx";
 import { BooksAsOf } from "../parts/TallyLine.jsx";
+import HeldBooks from "../parts/HeldBooks.jsx";
 import Loading from "../parts/Loading.jsx";
 import { AlertLine } from "../parts/Bell.jsx";
 
@@ -163,13 +164,14 @@ function lastEntryDate(b) {
 // how up to date the books are, on every tab but From Tally, and Update now (a job for the bridge: nobody waits on Tally)
 function FreshLine({ b }) {
   const m = b.meta || {};
-  if (!(b.vouchers || []).length || !m.to) return null;
+  if (!(b.vouchers || []).length || !m.to) return <HeldBooks cid={S.coId} where="books" />;
   // build 197: from any computer: on the Tally computer through its bridge, elsewhere through the cloud
   const can = (typeof Bridge === "object" && Bridge.on() && Bridge.up()) || (typeof TCloud === "object" && S.coId && TCloud.has(S.coId));
   // one sentence on every page (booksFresh, src/js/49): the last entry, how far it was checked with Tally, days not read
   const f = booksFresh(b, S.coId), asOf = (typeof booksAsOf === "function" && booksAsOf(S.coId)) || (typeof booksYearNote === "function" && booksYearNote(S.coId));
   // 2.1.3: "Books as of 15:34 · Update now" first: Tally cannot send its changes, so old figures are never shown as now
   return <>
+    <HeldBooks cid={S.coId} where="books" />
     {asOf && <p className="note" style={{ margin: "0 0 4px" }} data-books-asof-line=""><BooksAsOf cid={S.coId} /></p>}
     <p className="note" style={{ margin: "0 0 10px" }} data-fresh="">{f.text}
     {b.openMs != null && <span className="nr" data-opentime>{" Opened in " + (b.openMs / 1000).toFixed(1) + " s" + (b.readyMs != null ? ", every entry in " + (b.readyMs / 1000).toFixed(1) + " s" : "") + "."}</span>}
@@ -213,7 +215,7 @@ function BooksPage() {
   if (tab === "mis" || tab === "fs" || tab === "audit") {
     // the page's title is in the top bar
     return <>
-      {n > 0 ? <FreshLine b={b} /> : <p className="note" style={{ margin: "0 0 10px" }} data-books-asof-line=""><BooksAsOf cid={co.id} /></p>}
+      {n > 0 ? <FreshLine b={b} /> : <><HeldBooks cid={co.id} where="books" /><p className="note" style={{ margin: "0 0 10px" }} data-books-asof-line=""><BooksAsOf cid={co.id} /></p></>}
       <JobsNote cid={co.id} />
       {busy}
       {tab === "mis" && srv ? <ServerMis b={b} /> : !n ? (b.busy ? null : <EmptyTab tab={tab} />) : tab === "mis" ? <MisTab b={b} /> : tab === "audit" ? <AuditTab b={b} /> : <Accounts b={b} />}

@@ -496,7 +496,7 @@ function misPackHtml(r){
 async function misExcel(r){
   await ensureXlsx();
   const wb = XLSX.utils.book_new(), add = (n, rows) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), n.slice(0, 31)), months = r.pl.months;
-  const pl = [["Head", "Ledger"].concat(months.map(GSTR.label)).concat(["Period"])];
+  const pl = heldSheetRows(S.coId).concat([["Head", "Ledger"].concat(months.map(GSTR.label)).concat(["Period"])]);
   MIS.HEADS.forEach(([k, l]) => { const H = r.pl.heads[k]; if (!H) return; pl.push([l, ""].concat(months.map(mm => H.m[mm] || 0)).concat([H.t])); H.led.forEach(x => pl.push(["", x.l].concat(months.map(mm => x.m[mm] || 0)).concat([x.t]))); });
   [["Gross profit", r.pl.gross], ["Profit before tax", r.pl.pbt], ["Profit after tax", r.pl.pat]].forEach(([l, x]) => pl.push([l, ""].concat(months.map(mm => x.m[mm] || 0)).concat([x.t])));
   add("Profit and loss", pl);

@@ -9,6 +9,7 @@ import { Fragment, useEffect } from "react";
 import Bars from "../../parts/Bars.jsx";
 import NoBooks from "../../parts/NoBooks.jsx";
 import FreshBar from "../../parts/FreshBar.jsx";
+import HeldBooks from "../../parts/HeldBooks.jsx";
 import { BusyCard } from "../../parts/Reading.jsx";
 import { ListRows } from "../../parts/ListTable.jsx";
 
@@ -102,7 +103,10 @@ function Result({ r, x }) {
       {r.src === "cloud" && <button className="linkbtn" onClick={() => lkAct("fresh")}>Work it out again</button>}</h3>
       <div className="row" style={{ gap: 6 }}><button className="btn small" onClick={() => lkAct("print")}>Print or PDF</button><button className="btn small" onClick={() => lkAct("excel")}>Excel</button><button className="btn small" onClick={() => lkAct("clear")}>Close</button></div></div>
     {r.line && <p className="note" data-copy-line="">{r.line}</p>}
-    {r.empty ? <div className="bk-none" data-copy-none="">{r.none + "."}</div> : <>{r.note && <p className="note">{r.note}</p>}
+    {/* the owner's finding of 05-Oct-2026: never "in step with Tally" while a line of these books is held; the held
+        lines said here instead, a ledger's own with it (LK.noteOf, HeldBooks) */}
+    <HeldBooks cid={S.coId} where="answer" led={LK.heldLed(r)[0]} to={LK.heldLed(r)[1]} />
+    {r.empty ? <div className="bk-none" data-copy-none="">{r.none + "."}</div> : <>{LK.noteOf(r) && <p className="note" data-lk-note="">{LK.noteOf(r)}</p>}
     <Body r={r} x={x} /></>}
   </section>;
 }
@@ -141,7 +145,7 @@ export default function Lookup({ b }) {
         <button className={"btn" + (needBooks ? "" : " primary")} onClick={() => lkAsk(x.ask || "")}>Look up</button></div>
       {x.heard && <p className="note lk-heard">Understood as: <b>{x.heard}</b>. Change anything below.</p>}
       <div className="lk-kinds" role="tablist" aria-label="What to look up">{LK.KINDS.map(([k, l]) => <button key={k} role="tab" aria-selected={x.kind === k} onClick={() => lkKind(k)}>{l}</button>)}</div>
-      <FreshBar b={b} />
+      <FreshBar b={b} held={!x.res} />
       <div className="lk-form"><Form x={x} /></div>
       {["ledger", "group", "monthly", "find"].includes(x.kind) && <div className="lk-presets">{FC.PRESETS.map(([k, l]) => <button key={k} className="btn small" onClick={() => lkPer(k)}>{l}</button>)}</div>}
       {can && <div className="lk-src" role="radiogroup" aria-label="Where from"><span className="note">From</span><button role="radio" aria-checked={fromTally} onClick={() => lkSrc("tally")}>FinCom's copy</button>

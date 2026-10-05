@@ -44,6 +44,7 @@ run_gst_api_ui.py                     120
 run_gstq.js                           120
 run_gstregs_ui.py                     120  TDSDESK_SITE=../app/dist-test
 run_gstset.js                         120
+run_held_books.py                     120  TDSDESK_SITE=../app/dist-test
 run_held_not_in_sync.py               120  TDSDESK_SITE=../app/dist-test
 run_hostile_ui.py                     120
 run_itemvch.js                        120

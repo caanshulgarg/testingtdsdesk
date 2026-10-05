@@ -528,10 +528,15 @@ const LK = {
     if (r.kind === "bills") return [["Party", "Bill", "Date", "Days", "Outstanding"]].concat(r.rows.map(z => [z.party, z.ref || "on account", FC.iso(z.date), z.age, z.amt]));
     return [["Date", "Type", "No.", "Party", "Narration", "Amount"]].concat(r.rows.map(v => [FC.iso(v.date), v.type, v.no, v.party, v.narr, v.amt]));
   },
+  // the answer's note, worked out again when shown: "in step with Tally" only while no line of these books is held
+  noteOf(r){ return r && r.noteOf && typeof TCloud === "object" ? TCloud.noteFor.apply(TCloud, r.noteOf) : (r && r.note) || ""; },
+  // the ledger a held line's words are for (a ledger account; month by month of one ledger) and its last day
+  heldLed(r){ return r && (r.kind === "ledger" || (r.kind === "monthly" && r.led)) ? [r.led, r.to] : [null, null]; },
   printIt(){
     const r = this.st().res; if (!r) return;
-    const rows = this.sheet(r), co = CO();
+    const rows = this.sheet(r), co = CO(), [hl, ht] = this.heldLed(r);
     const html = "<h1>" + esc(co.name) + "</h1><p class=\"note\">" + esc(r.title) + " · " + (r.src === "cloud" ? esc(r.line || "from FinCom's copy") : "from the books in FinCom") + " · printed " + fmtDate(new Date().toISOString().slice(0, 10)) + "</p>" +
+      heldPrintHtml(S.coId, hl, ht) + (this.noteOf(r) ? "<p class=\"note\">" + esc(this.noteOf(r)) + "</p>" : "") +
       "<table><thead><tr>" + rows[0].map(c => "<th>" + esc(c) + "</th>").join("") + "</tr></thead><tbody>" +
       rows.slice(1).map(rw => "<tr>" + rw.map(c => typeof c === "number" ? '<td class="n">' + INR.format(c) + "</td>" : "<td>" + esc(c) + "</td>").join("") + "</tr>").join("") + "</tbody></table>";
     printView(co.name + " " + r.title, "<style>@page{size:A4 portrait;margin:12mm}</style>" + html);
@@ -566,7 +571,7 @@ function lkAct(a){
   else if (a === "more" && x.res && x.res.src === "cloud"){ const r = x.res; x.busy = "Bringing the next entries\u2026"; render();
     TCloud.find(S.coId, r.q, r.from, r.to, r.typ, r).then(res => { x.busy = ""; x.res = Object.assign(res, {title: r.title}); render(); }, er => { x.busy = ""; toast("Could not ask the cloud: " + ((er && er.message) || er)); render(); }); }
   else if (a === "print") LK.printIt();
-  else if (a === "excel" && x.res) FC.excel(x.res.title, [[x.res.kind === "tb" ? "Trial balance" : "Look up", LK.sheet(x.res)]]).catch(er => toast("Could not build the file: " + (er && er.message)));
+  else if (a === "excel" && x.res) FC.excel(x.res.title, [[x.res.kind === "tb" ? "Trial balance" : "Look up", heldSheetRows.apply(null, [S.coId].concat(LK.heldLed(x.res))).concat(LK.sheet(x.res))]]).catch(er => toast("Could not build the file: " + (er && er.message)));
 }
 
 // the books follow Tally on every screen, not only while Look up is open: once a minute, quietly (only the bridge's

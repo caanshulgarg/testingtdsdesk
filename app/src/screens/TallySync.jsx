@@ -3,16 +3,16 @@
 // the lines waiting over 2 minutes with why; filters Waiting, Mismatch (the ledger check, F37-40: none yet), Today; an
 // owner's Apply now on a held line (tally_recorder_release_held). New lines come in live (Live.joinRecorder, src/js/54).
 import Msg from "../parts/Msg.jsx";
-import { useState } from "react";
 import ListTable from "../parts/ListTable.jsx";
 
-const FILTERS = [["all", "All"], ["waiting", "Waiting"], ["mismatch", "Mismatch"], ["today", "Today"]];
+const FILTERS = [["all", "All"], ["waiting", "Waiting"], ["held", "Held"], ["mismatch", "Mismatch"], ["today", "Today"]];
 // round 20 (d.4): "queued": the cloud queued the line (over 50 at once); its drain fills the state later
 // 05-Oct-2026 (migration 50): "replaced": a later line of the same entry brought its details (greyed as a duplicate is)
 const STATE_CLS = { applied: "ok", duplicate: "no", stale: "no", replaced: "no", held: "warn", received: "warn", queued: "warn", failed: "bad" };
 
 export default function SyncActivity() {
-  const [f, setF] = useState("all");
+  // the filter is S.syncFilter, so a link elsewhere can open the list on it (Rec.openActivity(cid, "held"))
+  const f = S.syncFilter || "all", setF = (v) => { S.syncFilter = v; render(); };
   if (!TCloud.on()) return <div className="pane" data-sync-activity=""><h3 style={{ marginTop: 0 }}>Sync activity</h3><p className="note">Sign in to the firm account to see the changes Tally sent.</p></div>;
   const a = Rec.actOf(), owner = Rec.owner();
   const cos = Object.values(S.companies || {}).filter((c) => !c.deleted).sort((x, y) => x.name.localeCompare(y.name));
@@ -39,7 +39,7 @@ export default function SyncActivity() {
         "Loading…" while the lines are read (K7) */}
     <ListTable name="syncActivity" className="data" rows={rows} rowKey={(r) => r.id} unit={["line", "lines"]} loading={a.rows === null || a.rows === undefined ? "the lines from Tally" : false}
       rowProps={(r) => ({ "data-sync-line": String(r.id) })}
-      empty={<span data-sync-empty="">{f === "mismatch" ? "No mismatch: the ledger check of each line comes later." : f === "waiting" ? "Nothing waiting." : f === "today" ? "No line today yet. Lines appear here as they are saved in Tally." : "No line from Tally yet. Lines appear here once a computer with FinCom’s recorder saves an entry in Tally."}</span>}
+      empty={<span data-sync-empty="">{f === "mismatch" ? "No mismatch: the ledger check of each line comes later." : f === "waiting" ? "Nothing waiting." : f === "held" ? "No line held." : f === "today" ? "No line today yet. Lines appear here as they are saved in Tally." : "No line from Tally yet. Lines appear here once a computer with FinCom’s recorder saves an entry in Tally."}</span>}
       cols={[
         { k: "saved", role: "date", label: "Saved in Tally", v: (r) => r.saved_at || "", cell: (r) => (r.saved_at ? tallyHm(r.saved_at) : "—") },
         { k: "entry", role: "number", label: "Entry", v: (r) => Rec.entry(r), cell: (r) => <>{Rec.entry(r)}{!S.syncClient && coName(r.client_id) && <div className="nr">{coName(r.client_id)}</div>}</> },

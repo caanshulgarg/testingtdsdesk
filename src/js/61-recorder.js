@@ -201,6 +201,7 @@ const Rec = {
   filtered(f){
     const rows = this.sorted(), today = new Date().toDateString();
     if (f === "waiting") return rows.filter(r => r.state === "held" || r.state === "received");
+    if (f === "held") return rows.filter(r => r.state === "held");
     if (f === "mismatch") return rows.filter(r => r.check && r.check.ok === false);        // the ledger check (F37-40): none yet
     if (f === "today") return rows.filter(r => r.received_at && new Date(r.received_at).toDateString() === today);
     return rows;
@@ -250,7 +251,8 @@ const Rec = {
     await this.actLoad();
   },
   // a client's own lines: the Tally page's Sync activity, for that client
-  openActivity(cid){ S.syncClient = cid || ""; S.tallyTab = "activity"; this.act.at = 0; navHome("tally"); },
+  // filter: the list shown first ("held": the lines held, from the books' "not yet in these books" line)
+  openActivity(cid, filter){ S.syncClient = cid || ""; S.syncFilter = filter || "all"; S.tallyTab = "activity"; this.act.at = 0; navHome("tally"); },
 
   // ---------------------------------------------------------------- F36 / N102: is each PC recording?
   // the recorder words a computer's bridges send (info.bridges[id].recorder: {company: {seen, lastAt}}; the beat's

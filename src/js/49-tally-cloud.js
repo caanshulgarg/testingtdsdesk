@@ -86,7 +86,7 @@ const TCloud = {
       else { x.closing = r2(x.closing + num(r.closing)); if (r.parent){ x.parent = x.parent || r.parent; x.master = true; } } });
     const rows = Array.from(by.values());
     const out = rows.filter(r => Math.abs(num(r.closing)) >= 0.005).map(r => ({l: r.ledger, top: this.top(r.ledger, rows), sub: r.parent || "", bal: -r2(num(r.closing)), noMaster: !r.master && !/^profit & loss a\/c$/i.test(r.ledger)}));
-    return LK.tbShape({kind: "tb", src: "cloud", asOn, rows: out, line: copyLine(cid), note: "From the copy in FinCom's cloud (" + (bk.company || "") + "), " + this.age(bk) + "."});
+    return LK.tbShape({kind: "tb", src: "cloud", asOn, rows: out, line: copyLine(cid), note: this.noteFor("From the copy in FinCom's cloud (" + (bk.company || "") + ")", cid), noteOf: ["From the copy in FinCom's cloud (" + (bk.company || "") + ")", cid]});
   },
   // the top group of a ledger, from the groups FinCom knows, else the ledger's own group
   top(l, rows){ try { const t = FC.top(l); if (t) return t; } catch (e){} const r = rows.find(x => x.ledger === l); return (r && r.parent) || "Other"; },
@@ -101,7 +101,7 @@ const TCloud = {
       return {id: guid, date: d, type, no, part: party && party !== led ? party : "", narr: narr || "", dr: dd, cr: c, run};
     });
     const ends = j.to && this.d8(j.to) < to ? " This copy (" + (j.company || "") + ") has entries up to " + FC.when(this.d8(j.to)) + "; a later year kept as another company in Tally is asked separately." : "";
-    return {kind: "ledger", src: "cloud", led, from, to, open, close: run, dr, cr, rows, line: copyLine(cid), note: "From the books (" + (j.company || "") + "), " + this.age(this.book(cid)) + "." + ends};
+    return {kind: "ledger", src: "cloud", led, from, to, open, close: run, dr, cr, rows, line: copyLine(cid), note: this.noteFor("From the books (" + (j.company || "") + ")", cid, ends), noteOf: ["From the books (" + (j.company || "") + ")", cid, ends]};
   },
   // build 192: a group, month by month, and any entry: worked out by the cloud, not from books loaded here
   inG(l, parent, grp){ try { if (FC.inGroup(l, grp)) return true; } catch (e){} return String(parent || "").toLowerCase() === String(grp || "").toLowerCase(); },
@@ -111,7 +111,7 @@ const TCloud = {
     const rows = all.filter(r => this.inG(r.ledger, r.parent, grp)).map(r => { const op = -r2(num(r.open)), dr = r2(num(r.dr)), cr = r2(num(r.cr)); return {l: r.ledger, sub: r.parent || "", open: op, dr, cr, close: r2(op + dr - cr)}; })
       .filter(r => r.dr || r.cr || (r.open && Math.abs(r.open) >= 0.5)).sort((a, c) => Math.abs(c.close) - Math.abs(a.close) || a.l.localeCompare(c.l));
     const sum = k => r2(rows.reduce((t, r) => t + (r[k] || 0), 0));
-    return {kind: "group", src: "cloud", grp, from, to, rows, open: sum("open"), dr: sum("dr"), cr: sum("cr"), close: sum("close"), line: copyLine(cid), note: "From the books (" + (bk.company || "") + "), " + this.age(bk) + "."};
+    return {kind: "group", src: "cloud", grp, from, to, rows, open: sum("open"), dr: sum("dr"), cr: sum("cr"), close: sum("close"), line: copyLine(cid), note: this.noteFor("From the books (" + (bk.company || "") + ")", cid), noteOf: ["From the books (" + (bk.company || "") + ")", cid]};
   },
   async monthly(cid, led, grp, from, to){
     const [per, mon] = await Promise.all([this.period(cid, from, to), this.rpcAll("tally_monthly", {p_client: cid, p_from: this.iso(from), p_to: this.iso(to)})]);
@@ -122,7 +122,7 @@ const TCloud = {
     let run = -r2(per.filter(r => set.has(r.ledger)).reduce((t, r) => t + num(r.open), 0));
     const open = run, bk = this.book(cid) || {};
     const rows = months.map(k => { const x = m[k]; run = r2(run + x.dr - x.cr); return {ym: k, dr: x.dr, cr: x.cr, net: r2(x.dr - x.cr), close: run}; });
-    return {kind: "monthly", src: "cloud", led, grp, from, to, open, rows, dr: r2(rows.reduce((t, r) => t + r.dr, 0)), cr: r2(rows.reduce((t, r) => t + r.cr, 0)), line: copyLine(cid), note: "From the books (" + (bk.company || "") + "), " + this.age(bk) + "."};
+    return {kind: "monthly", src: "cloud", led, grp, from, to, open, rows, dr: r2(rows.reduce((t, r) => t + r.dr, 0)), cr: r2(rows.reduce((t, r) => t + r.cr, 0)), line: copyLine(cid), note: this.noteFor("From the books (" + (bk.company || "") + ")", cid), noteOf: ["From the books (" + (bk.company || "") + ")", cid]};
   },
   FIND_PAGE: 500,
   async find(cid, q, from, to, typ, had){
@@ -198,6 +198,13 @@ const TCloud = {
   fyOf(cid){
     const bk = this.book(cid) || {}, last = this.d8(bk.to || "") || Audit.today(), y = num(last.slice(0, 4)) - (num(last.slice(4, 6)) < 4 ? 1 : 0);
     return {from: y + "0401", to: last < (y + 1) + "0331" ? last : (y + 1) + "0331"};
+  },
+  // "From the books (GARG SHEKHAR & COMPANY), in step with Tally as of 05-Oct-2026 13:59 IST.": never while a line Tally
+  // sent for these books is held (the owner's finding of 05-Oct-2026); then "From the books (…)." and the held line
+  // beside it (HeldBooks, app/src/parts/HeldBooks.jsx)
+  noteFor(lead, cid, ends){
+    const held = typeof booksHeld === "function" && booksHeld(cid), a = held ? "" : this.age(this.book(cid));
+    return lead + (a ? ", " + a : "") + "." + (ends || "");
   },
   age(bk){
     if (!bk) return "";
@@ -1125,22 +1132,33 @@ Object.assign(TLight, {
 if (typeof setInterval === "function") setInterval(() => { try { TLight.tick(); } catch (e){} }, 5000);
 // when the client's books were last read from Tally ("Books as of 15:34"): the bridge's last read of its company, else
 // when FinCom's copy was last brought in. Never shown as "now": entries made in Tally since then come at the next event
+// the time "Books as of" gives, in plain words: FinCom Bridge's last read of the company from Tally (its readAt, the
+// Tally computer's lastRead), its last check of FinCom's copy against Tally (state.seen), the last Day Book read into
+// FinCom, or when the books on this page were brought in
+const BOOKS_ASOF_WHY = {read: "the bridge's last read of this company in Tally", seen: "the bridge's last check of these books against Tally",
+  daybook: "the last Day Book read into FinCom", books: "when these books were last brought into FinCom"};
 function booksAsOf(cid){
   cid = cid || S.coId;
   const co = S.companies && S.companies[cid];
   const l = co ? tallyLine(co) : null, bk = typeof TCloud === "object" ? TCloud.book(cid) : null, st = (bk && bk.state) || {};
   const man = typeof LK === "object" && LK.fr && cid === S.coId ? ((LK.fr() || {}).man || {}) : {};
-  const at = [l && l.read, st.readAt, man.readAt, st.seen, man.seen].filter(x => x && Date.parse(x)).sort((a, b) => Date.parse(b) - Date.parse(a))[0]
-    || (S.books && S.books.cid === cid ? booksFresh(S.books, cid).at : "");
+  // what the time is, said with it (the owner's finding of 05-Oct-2026: "books as of 13:59 IST" did not say what 13:59 was)
+  const cands = [[l && l.read, "read"], [st.readAt, "read"], [man.readAt, "read"], [st.seen, "seen"], [man.seen, "seen"]].filter(x => x[0] && Date.parse(x[0]))
+    .sort((a, b) => Date.parse(b[0]) - Date.parse(a[0]));
+  let at = cands.length ? cands[0][0] : "", what = cands.length ? cands[0][1] : "";
+  if (!at && S.books && S.books.cid === cid){
+    const f = booksFresh(S.books, cid), m = S.books.meta || {};
+    at = f.at; what = !at ? "" : at === String(st.seen || "") || at === String(man.seen || "") ? "seen" : /day book files/i.test(String(m.file || "")) ? "daybook" : "books";
+  }
   if (!at) return null;
-  return {at, text: "Books as of " + tallyHm(at),
+  return {at, what, why: BOOKS_ASOF_WHY[what] || "", text: "Books as of " + tallyHm(at) + (BOOKS_ASOF_WHY[what] ? " (" + BOOKS_ASOF_WHY[what] + ")" : ""),
     say: "Tally cannot send its changes by itself: entries made in Tally after " + tallyHm(at) + " come in at the next update (opening this client, Update now, or the nightly catch-up)."};
 }
 // FinCom Bridge 2.1.4 asks Tally for no balance (its /balances, /tb and /ledgerbalance answer only from its own copy, and
 // on most companies with an error). The owner's decision of 02-Oct-2026: every balance FinCom shows (Look up, the books'
 // opening balances, the bank check after a posting) is worked out from FinCom's cloud copy, openings plus entries, and
 // is shown with this line, never with an error: "Balance from FinCom's copy · books as of 15:34"
-function copyLine(cid){ const a = booksAsOf(cid); return "Balance from FinCom's copy \u00b7 books as of " + (a ? tallyHm(a.at) : "the last update"); }
+function copyLine(cid){ const a = booksAsOf(cid); return "Balance from FinCom's copy \u00b7 books as of " + (a ? tallyHm(a.at) + (a.why ? " (" + a.why + ")" : "") : "the last update"); }
 Object.assign(TCloud, {
   // the view tally_balances (migration-32): each ledger's opening, its entries from the book's start, and the closing.
   // The source of every balance from FinCom's copy. null: not asked yet; false: not on this cloud (an older environment

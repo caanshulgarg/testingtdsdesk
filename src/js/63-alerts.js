@@ -38,7 +38,7 @@ const AlertHub = {
     h.busy = true;
     try {
       const firm = typeof Rec === "object" && Rec.firm ? Rec.firm() : "";
-      h.rows = [].concat(await Cloud.api("tally_recorder_lines?select=id,client_id,book_id,device_id,pc,company,event,object_guid,alter_id,state,held_why,received_at,vch_type,vch_no,vch_date" +
+      h.rows = [].concat(await Cloud.api("tally_recorder_lines?select=id,client_id,book_id,device_id,pc,company,event,object_guid,alter_id,state,held_why,received_at,vch_type,vch_no,vch_date,ledgers" +
         "&firm_id=eq." + encodeURIComponent(firm) + "&state=in.(held,received,queued,failed)&order=received_at.desc&limit=200") || []);
       h.none = false;
     } catch (e){ h.rows = []; if (typeof Rec === "object" && Rec.missing && Rec.missing(e)) h.none = true; }
@@ -65,6 +65,36 @@ const AlertHub = {
   heldSay(lines, count){
     const n = lines.length, whys = [...new Set(lines.map(l => String(l.held_why || "").trim()).filter(Boolean))];
     return (count || n > 1 ? n + " " : "") + "received, not yet entered in the books" + (whys.length === 1 ? ": " + whys[0] : "");
+  },
+  // the owner's finding of 05-Oct-2026 (Look up said "From the books (…), in step with Tally as of 05-Oct-2026 13:59 IST"
+  // with a line of that company held): every view of a client's books (Look up, the trial balance, the day book, P&L,
+  // balance sheet, and their print and Excel) says instead "N entries received from Tally are not yet in these books:
+  // <reason>" (the reason when the lines share one, else "see Sync activity"). null when no line of the client is held
+  booksHeld(cid){
+    if (!cid) return null;
+    const lines = this.heldFor([cid]);
+    if (!lines.length) return null;
+    const n = lines.length, why = this.oneWhy(lines);
+    return {n, lines, why, text: this.n(n) + " received from Tally " + (n === 1 ? "is" : "are") + " not yet in these books: " + (why || "see Sync activity")};
+  },
+  oneWhy(lines){ const w = [...new Set(lines.map(l => String(l.held_why || "").trim()))]; return w.length === 1 ? w[0] : ""; },
+  // the ledgers a line touches (tally_recorder_lines.ledgers: [{name, guid}]); none when the line came without its entry
+  ledgersOf(l){ return [].concat((l && l.ledgers) || []).map(x => typeof x === "string" ? x : (x && (x.name || x.to || x.from)) || "").map(x => String(x).trim()).filter(Boolean); },
+  // the entry's date (yyyymmdd): its voucher date, else the day it reached FinCom
+  heldDay(l){ const d = String(l.vch_date || "").replace(/-/g, "").slice(0, 8); return /^\d{8}$/.test(d) ? d : String(istDay(l.received_at) || "").replace(/-/g, ""); },
+  // a ledger's view (Look up's ledger account, its print and Excel): the held lines that name this ledger, and those whose
+  // ledgers are not known (no entry body), which may touch any ledger. Only entries dated up to the view's last day
+  ledgerHeld(cid, led, to){
+    const h = this.booksHeld(cid);
+    if (!h || !led) return [];
+    const key = x => ledNm(x).trim().toLowerCase(), k = key(led), upto = l => !to || !this.heldDay(l) || this.heldDay(l) <= String(to);
+    const mine = h.lines.filter(l => upto(l) && this.ledgersOf(l).some(x => key(x) === k)), unknown = h.lines.filter(l => upto(l) && !this.ledgersOf(l).length);
+    const ent = ls => { const ds = [...new Set(ls.map(l => this.heldDay(l)).filter(Boolean))].sort().map(d => fmtDate(tallyDate(d)));
+      return this.n(ls.length) + (ds.length ? " of " + ds.join(", ") : ""); };
+    const out = [];
+    if (mine.length) out.push({kind: "known", text: ent(mine) + " for this ledger " + (mine.length === 1 ? "is" : "are") + " waiting: " + (this.oneWhy(mine) || "see Sync activity")});
+    if (unknown.length) out.push({kind: "unknown", text: ent(unknown) + " waiting; the ledger is not yet known, so this balance may be incomplete."});
+    return out;
   },
   // a line waiting because of FinCom's side: no body, the add-on's placeholder GUID ("<company GUID>-00000000"), no GUID,
   // FinCom's own posting coming back, or the queue; then FinCom fetches the details itself and nothing is to be done
@@ -211,6 +241,15 @@ const AlertHub = {
   forClient(cid){ return this.list().filter(x => x.cid === cid && x.sev !== "info"); },
   async read(x){ if (x && x.alert && typeof Rec === "object") await Rec.alertRead(x.alert); }
 };
+// what a client's books say while lines Tally sent for them are held (AlertHub.booksHeld): null when none
+function booksHeld(cid){ return typeof AlertHub === "object" ? AlertHub.booksHeld(cid || S.coId) : null; }
+// the same words on a printed report or ledger (led: a ledger's own lines too), and as the first rows of its Excel sheet
+function heldWords(cid, led, to){
+  const h = booksHeld(cid);
+  return h ? [h.text].concat(led ? AlertHub.ledgerHeld(cid || S.coId, led, to).map(x => x.text) : []) : [];
+}
+function heldPrintHtml(cid, led, to){ return heldWords(cid, led, to).map(t => '<p class="note" data-held-print="" style="color:#9A3412;font-weight:600;margin:4px 0">' + esc(t) + "</p>").join(""); }
+function heldSheetRows(cid, led, to){ const w = heldWords(cid, led, to); return w.length ? w.map(t => [t]).concat([[]]) : []; }
 // "This will post through Office computer (NWS144)." before Post (the bank's and sales' bars, and the posting preview):
 // the computer the posting goes through, the same as the Tally sign says; "" when none is connected
 function postThroughWords(co){

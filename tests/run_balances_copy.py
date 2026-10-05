@@ -82,7 +82,8 @@ with sync_playwright() as p:
     E = lambda js, *a: pg.evaluate(js, *a)
     app = lambda: pg.inner_text("#app")
     hm = E("tallyHm(window.__readAt)")
-    ok(E("copyLine(S.coId)") == LINE + " " + hm, "the line: \"%s %s\"" % (LINE, hm))
+    # the owner's finding of 05-Oct-2026: the time says what it is (the copy's readAt: the bridge's last read in Tally)
+    ok(E("copyLine(S.coId)") == LINE + " " + hm + " (the bridge's last read of this company in Tally)", "the line: \"%s %s (the bridge's last read of this company in Tally)\"" % (LINE, hm))
 
     # 1. Look up: the trial balance on 31-Mar-2026, from the view (the copy holds entries up to that day)
     E("() => { S.booksTab = 'lookup'; render(); }"); pg.wait_for_timeout(400)
