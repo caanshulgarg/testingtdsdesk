@@ -281,7 +281,7 @@ func installStarted() {
 }
 
 // the bridge has to answer (this version, as a FinCom Bridge) within 30 seconds; else exit 4 ("installed but not running")
-// 2.3.0: the port is the one the bridge took and wrote in its settings (the first free one of 9100..9119); mine: the
+// 2.3.0: the port is the one the bridge took and wrote in its settings (the first free one of 9100..9199); mine: the
 // setup runs as the bridge's own Windows user (just for me), so the bridge answering must say it is that user's
 func waitAnswer(cfgPath string, mine bool, by string) int {
 	port := 0
@@ -455,7 +455,7 @@ func writeSettings(o ownerInfo, mode, fincom string) (string, int) {
 		}
 		carryInstanceID(c)
 		c.Set("Mode", "test")
-		installPort(c, 9101) // 2.3.0: a port of 9100..9119 this user's bridge took before is kept
+		installPort(c, 9101) // 2.3.0: a port of 9100..9199 this user's bridge took before is kept
 		c.Set("PsHome", o.home)
 		c.Set("SyncDir", filepath.Join(o.home, "go-sync"))
 		c.Set("JobsDir", filepath.Join(o.home, "go-jobs"))
@@ -473,7 +473,7 @@ func writeSettings(o ownerInfo, mode, fincom string) (string, int) {
 		// switched from test mode: the same bridge for FinCom (the id FinCom made the main one)
 		carryInstanceID(c, filepath.Join(o.home, "go-bridge.config.json"))
 		c.Set("Mode", "")
-		installPort(c, 9100) // 2.3.0: a port of 9100..9119 this user's bridge took before is kept
+		installPort(c, 9100) // 2.3.0: a port of 9100..9199 this user's bridge took before is kept
 		// the main bridge on this computer, with no click: told to FinCom on its first contact (claimMainOnce)
 		c.Set("ClaimMain", true)
 		c.Set("LogFile", filepath.Join(o.home, "tds-bridge.log"))

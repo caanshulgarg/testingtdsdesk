@@ -10,9 +10,14 @@ What 2.3.0 changes (the full notes: docs/bridge-2.3.0-notes.md):
  - Deletes and cancels go by Tally's own GUID for the entry. A cancel shows as Cancelled for that entry; a delete shows
    as Deleted. If FinCom cannot tell which entry was deleted, nothing is removed and the line is held with the words
    "deleted in Tally; FinCom could not tell which entry: upload that day's Day Book to settle it".
- - One bridge for each Windows user on NWS144, each on its own port (9100 to 9119, chosen by itself), each reading and
+   The same when you cancel or delete your own entry and FinCom cannot ask your Tally about it at that moment: the line
+   is held, and uploading that day's Day Book settles it. Any member of the firm can do that upload.
+ - One bridge for each Windows user on NWS144, each on its own port (9100 to 9199, chosen by itself), each reading and
    posting only to the Tally in its own Windows sign-in. The Tally page shows one line per bridge: "NWS144 · <Windows
-   user>". The owner can set a bridge to "Changes only" (it reads, never posts). The Post screen says which bridge posts.
+   user>". Every bridge reads and posts as soon as it is connected, with no approval; a posting goes through the
+   poster's own bridge. The Post screen says which bridge posts.
+ - New bridge versions install by themselves on every computer (no pilot, no approval); the owner can hold a version
+   or roll every bridge back from the Tally page. Any member who may make changes can press "Apply now" on a held line.
  - Four security fixes: the bridge proves itself before FinCom sends it any key; a bridge's id is tied to one computer
    (with "Release this bridge's identity" for owners and one bell alert); refusal words name the company and what to do;
    times in those words are dates and times in IST.
@@ -95,8 +100,7 @@ CHECK 7 - A SECOND WINDOWS USER (only if another Windows user on NWS144 uses Tal
    d. On FinCom's Tally page (as the owner):
       You should see TWO lines for NWS144, one "NWS144 · <your Windows user name>" and one "NWS144 · <their Windows user
       name>", each showing 2.3.0, its own Tally port and the companies open in its own Tally. Your line is unchanged.
-   e. Optional: on their line press "Changes only" and confirm. Their line shows "Changes only: never posts". Press
-      "Allow posting" to turn it back (or leave it on, if that person should only read).
+   e. Their line shows "Reads and posts" at once: nothing to approve or switch on.
    If not, send: the time, a picture of the Tally page's NWS144 lines, and from EACH Windows user: the tray's
    Test connection result and the last 20 lines of Show log.
 
@@ -108,17 +112,20 @@ CHECK 8 - A POSTING GOES TO THE RIGHT BRIDGE
    is never in that list.) Leave it on your own bridge and post.
    You should see: Sync activity shows it as Posted from FinCom, it is in YOUR Tally's GARG SHEKHAR once (not twice),
    and nothing arrives in the other Windows user's Tally.
+   Then, only if CHECK 7 was done: the second Windows user signs in to FinCom (in their own Windows sign-in, with
+   their own FinCom sign-in) and posts one TRIAL bill for GARG SHEKHAR, stopping at the confirm step.
+   You should see: "Through NWS144 · <their Windows user name> · GARG SHEKHAR · <their data folder>." After Post, the
+   entry is in THEIR Tally's GARG SHEKHAR once, and nothing arrives in yours.
    If not, send: the bill, the time you posted it, a picture of the confirm step, and the Show log lines starting
    "Recorder:" around that time from each Windows user's bridge.
 
 CHECK 9 - THE REFUSAL WORDS AND THE BELL (optional: only if you want to see a conflict)
-   a. "Nobody can post" words (needs CHECK 7's second bridge, or any bridge you can set to Changes only):
-      Close GARG SHEKHAR in every Tally on NWS144 except one, set that one bridge to "Changes only" on the Tally page,
-      then try to post a TRIAL bill for GARG SHEKHAR.
-      You should see: nothing is queued, and FinCom says "Nobody can post into GARG SHEKHAR just now: the only computer
-      that has it open (NWS144 · <Windows user>) is set to Changes only. Open the company in Tally on a computer that
-      may post (...), or ask the owner to switch Changes only off for that bridge."
-      Then press "Allow posting" on that line again.
+   a. "Nobody can post" words: close GARG SHEKHAR in YOUR Tally (leave it open in the other user's, if CHECK 7 was
+      done), then try to post a TRIAL bill for GARG SHEKHAR.
+      You should see: nothing is queued (and nothing goes to the other user's Tally), and FinCom says "Nobody can post
+      into GARG SHEKHAR from your sign-in just now: your FinCom Bridge (NWS144 · <your Windows user name>) does not have
+      GARG SHEKHAR open in Tally. Open GARG SHEKHAR in Tally there, then post again."
+      Then open GARG SHEKHAR in your Tally again.
    b. A bridge id used by another computer key (the bell alert): tell us when you want to do this and we send you the
       one-line change to make in the second Windows user's bridge settings (and how to put it back).
       You should see: in the second user's tray and on its line on the Tally page: "This computer key cannot use bridge
@@ -147,4 +154,4 @@ HOW TO ROLL BACK (go back to 2.2.4) - TELL US FIRST
    You should see: within a minute, FinCom's Tally page shows version 2.2.4 for this computer. Automatic updates stay
    off on this computer until FinCom turns them on again.
    A Windows user who installed FinCom Bridge for the first time with 2.3.0 (CHECK 7) has no earlier version to go
-   back to: the owner sets that bridge to "Changes only" on the Tally page (it then never posts), and tells us.
+   back to: tell us.

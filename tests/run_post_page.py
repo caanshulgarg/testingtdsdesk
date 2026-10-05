@@ -72,6 +72,15 @@ with sync_playwright() as p:
     # review 20-21 (02-Oct-2026): the company found by itself is a guess: posting waits until a person confirms it
     ok(E("choiceState(CO(), 'postTo')") == "guessed" and "confirm the Tally company" in prob() and prob().endswith("Confirm the Tally company"), "review 20. the company found by itself is a guess to confirm: '%s'" % prob())
     ok(E("postToProblem(CO(), 'GARG SHEKHAR & COMPANY')").startswith("Confirm the Tally company"), "review 21c. and posting is refused until it is confirmed")
+    # #11 (the owner's rule of 05-Oct-2026): any member who may write chooses and confirms "Posting allowed to company" (who and when kept)
+    E("() => { window.__acct = S.account; S.account = Object.assign({}, S.account || {}, {me: Object.assign({}, (S.account || {}).me || {}, {role: 'staff'})}); S.postStop = null; S.step = null; S.tab = 'cotally'; render(); }"); pg.wait_for_timeout(500)
+    pt = pg.inner_text("#app [data-post-to]") if pg.locator("#app [data-post-to]").count() else ""
+    ok(pg.locator('#app [data-post-to] select[aria-label="Posting allowed to company"]').count() == 1 and pg.locator('#app [data-choice-confirm="postTo"]').count() == 1 and "An owner of the firm" not in pt,
+       "#11. staff: the company can be chosen and Confirmed (no 'An owner of the firm chooses it') (%s)" % pt.replace("\n", " ")[:160])
+    pg.click('#app [data-choice-confirm="postTo"]'); pg.wait_for_timeout(300); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(400)
+    pc = E("(() => { const r = choiceGet(CO(), 'postTo'); return {state: r && r.state, by: !!(r && r.by), at: !!(r && r.at)}; })()")
+    ok(pc == {"state": "confirmed", "by": True, "at": True}, "#11. staff's Confirm: confirmed, with who and when kept (%s)" % pc)
+    E("() => { S.account = window.__acct; goStep('post', 'bills'); }"); pg.wait_for_timeout(500)
     E("() => { choiceConfirm(CO(), 'postTo', 'GARG SHEKHAR & COMPANY'); render(); }"); pg.wait_for_timeout(300)
     # C15: one line
     ok(pg.locator("#app [data-post-line]").count() == 1 and line() == "Posting into GARG SHEKHAR & COMPANY · Tally open on NWS144 · Update now" and prob() == "", "C15. one line, nothing else: '%s'" % line())

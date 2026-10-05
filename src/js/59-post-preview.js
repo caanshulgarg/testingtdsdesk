@@ -393,7 +393,7 @@ function postStatusFor(co){
       closed: [l.text + ": open TallyPrime there, with " + pl.company + ".", "", null],
       notanswering: [l.text + ": close any message box in Tally there; FinCom carries on by itself.", "", null],
       paused: [l.text + ": resume it from the FinCom Bridge icon there. Update now still reads.", "Update now", () => tallyUpdateNow(co.id)],
-      stopped: [l.text + ". An owner resumes it on the Tally page; posting goes on, Update now does not read until then.", "", null]}[l.state] || [l.text, "", null];
+      stopped: [l.text + ". This is FinCom\u2019s Stop, set by an owner of the firm: an owner resumes it on the Tally page (a bridge that stopped by itself is resumed there by the member whose computer key it is); posting goes on, Update now does not read until then.", "", null]}[l.state] || [l.text, "", null];
     out.problem = p(T[0], T[1], T[2], l.state); return out;
   }
   if (!pl.state && pl.action){ out.problem = p(pl.action + ".", pl.go === "tally" ? "Open the Tally page" : "", pl.go === "tally" ? goTallyPage : null, "bridge"); return out; }
@@ -967,9 +967,12 @@ function postTargetHtml(co, company){
   if (typeof TCloud !== "object" || !TCloud.on() || typeof TCloud.postThrough !== "function") return "";
   let r = null, list = [];
   try { r = TCloud.postThrough(co); list = TCloud.postTargets(); } catch (e){ return ""; }
-  if (!r && !list.length) return "";
+  if (!r && !list.length && !(TCloud.pane.devices || []).length) return "";
   const owner = S.account && S.account.me && S.account.me.role === "owner";
-  let h = '<p data-post-target="' + esc(r ? r.id : "") + '" style="margin:0 0 8px">Through <b data-post-target-words="">' + esc(r ? TCloud.bridgeWords(r, company) : "the main bridge of the computer that keeps " + company) + "</b>.</p>";
+  // the owner's rule of 05-Oct-2026: no bridge of the poster's own for this company: the words say what to do (never
+  // another person's bridge by chance)
+  let h = r || TCloud.pane.noTarget ? '<p data-post-target="' + esc(r ? r.id : "") + '" style="margin:0 0 8px">Through <b data-post-target-words="">' + esc(r ? TCloud.bridgeWords(r, company) : "the main bridge of the computer that keeps " + company) + "</b>.</p>"
+    : '<p data-post-target="" data-post-target-none="" class="bk-warn" style="margin:0 0 8px"><span data-post-target-words="">' + esc(TCloud.noTargetWords(company)) + "</span></p>";
   if (owner && !TCloud.pane.noTarget && list.length > 1)
     h += '<p style="margin:0 0 8px"><label class="note">Post through another bridge: <select data-post-target-pick="" aria-label="The bridge that posts">' +
       list.map(x => '<option value="' + esc(x.id) + '"' + (r && x.id === r.id ? " selected" : "") + ">" + esc(TCloud.bridgeWords(x, company)) + "</option>").join("") + "</select></label></p>";

@@ -128,9 +128,13 @@ with sync_playwright() as p:
     pg.wait_for_timeout(500)
     ids = [rows.nth(i).get_attribute("data-sync-line") for i in range(rows.count())]
     ok(ids[:1] == ["108"] and "Sales 15" in r(108), "live: a new line shows at the top at once (%s)" % ids[:3])
-    # ---- staff: the lines, no Apply now
+    # ---- staff (the owner's rule of 05-Oct-2026, item C): Apply now too; a member who may only read: none
     E(SETUP, ["staff", DEVS, LINES, ""]); pg.wait_for_timeout(300); E("() => { navHome('tally'); S.tallyTab = 'activity'; render(); }"); pg.wait_for_timeout(1200)
-    ok(rows.count() == 7 and pg.locator("#app [data-sync-release]").count() == 0, "staff: the lines, no Apply now")
+    ok(rows.count() == 7 and pg.locator('#app [data-sync-line="102"] [data-sync-release]').count() == 1, "C. staff: Apply now on the held line")
+    if pg.locator('#app [data-sync-line="102"] [data-sync-release]').count(): pg.click('#app [data-sync-line="102"] [data-sync-release]'); pg.wait_for_timeout(800)
+    ok(["tally_recorder_release_held", {"p_line": 102}] in E("window.__calls"), "C. staff's Apply now -> tally_recorder_release_held(p_line)")
+    E(SETUP, ["viewer", DEVS, LINES, ""]); pg.wait_for_timeout(300); E("() => { navHome('tally'); S.tallyTab = 'activity'; render(); }"); pg.wait_for_timeout(1200)
+    ok(rows.count() == 7 and pg.locator("#app [data-sync-release]").count() == 0, "C. a member who may only read: the lines, no Apply now")
     # ---- one client's lines, opened from the client
     E("(id) => Rec.openActivity(id)", cid); pg.wait_for_timeout(1200)
     asked = [a for a in E("window.__asked") if a.startswith("tally_recorder_lines")]

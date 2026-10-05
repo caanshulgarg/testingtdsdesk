@@ -1,6 +1,6 @@
 // 2.3.0: one FinCom Bridge for each Windows user on a shared Windows server (several users' Tally, each in its own Windows
-// session). Each user's bridge listens on its own local port: the first free one of 9100..9119, remembered in that user's
-// settings ("Port") and tried first at the next start. FinCom finds its bridge by asking 9100..9119 (/ping says whether
+// session). Each user's bridge listens on its own local port: the first free one of 9100..9199, remembered in that user's
+// settings ("Port") and tried first at the next start. FinCom finds its bridge by asking 9100..9199 (/ping says whether
 // the bridge there is the asking Windows user's own). When no port of the range is free, or Windows refuses for another
 // reason, the bridge says so once (log and tray) and stops: no endless retry, and the supervisor does not start it again.
 package main
@@ -17,7 +17,7 @@ import (
 
 const (
 	bridgePortFirst = 9100
-	bridgePortLast  = 9119
+	bridgePortLast  = 9199
 	// the bridge stopped because it found no port: the per-user supervisor and the service do not start it again
 	exitNoPort = 4
 )
@@ -25,7 +25,7 @@ const (
 // restartAfter: whether the supervisor starts the bridge again after it ended with this code
 func restartAfter(code int) bool { return code != exitNoPort }
 
-// the ports tried, in order: the remembered one first (when it is a port), then 9100..9119
+// the ports tried, in order: the remembered one first (when it is a port), then 9100..9199
 func bridgePortOrder(remembered int) []int {
 	var l []int
 	if remembered > 0 && remembered <= 65535 {
@@ -131,7 +131,7 @@ func startFailedText() string {
 	return ""
 }
 
-// the setup: a port of 9100..9119 this user's bridge took before is kept; anything else becomes def
+// the setup: a port of 9100..9199 this user's bridge took before is kept; anything else becomes def
 func installPort(c *Ordered, def int) {
 	if p := toInt(c.Get("Port")); p >= bridgePortFirst && p <= bridgePortLast {
 		return

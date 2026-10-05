@@ -12,6 +12,10 @@ anshul, ravi and meena each run their own Tally in their own Windows session; ea
      computer key refused a bridge id shows FinCom's words on its own line; the owner's bell has ONE alert naming the
      computer and Windows user that tried (Mark read: tally_bridge_alert_read); the cloud's nobody-can-post words reach
      the person posting as they are; the target goes with its computer (p_device).
+  5. The owner's rule of 05-Oct-2026: a posting with no bridge picked goes through the POSTER'S OWN bridge (linked, else on a
+     computer key they made, else this browser's own proven bridge, self-linked first); with none, the confirm step names
+     the company and what to do, never another person's bridge; staff link THEMSELVES to their own bridge ("Post through
+     this bridge"); a bridge of theirs that stopped reading by itself is resumed by them (FinCom's own Stop: owners only).
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_bridge_per_user_ui.py"""
 import json, os, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -26,16 +30,18 @@ def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
     if not c: fails.append(w)
 OWNER, RAVI, MEENA = "u-owner", "u-ravi", "u-meena"
-def dev(i, user, tport, folder, bid):
+def dev(i, user, tport, folder, bid, by=None):
     b = {"at": "ago:0.3", "version": "2.3.0", "computer": "NW144", "user": user, "mode": "main", "runMode": "user", "tally": True, "tallyState": "open", "open": ["ZZ CO"],
          "port": 9100 + tport - 9000, "tallyPort": tport, "dataFolder": folder}
-    return {"id": i, "name": "NW144 · " + user, "revoked": False, "last_seen": "ago:0.3", "version": "2.3.0", "main_bridge": None, "created_at": "2026-10-01T00:00:00Z",
+    return {"id": i, "name": "NW144 · " + user, "revoked": False, "last_seen": "ago:0.3", "version": "2.3.0", "main_bridge": None, "created_at": "2026-10-01T00:00:00Z", "created_by": by,
             "info": {"computer": "NW144", "user": user, "beat": {"at": "ago:0.3", "every": 30, "tally": True, "tallyState": "open", "open": ["ZZ CO"]}, "bridges": {bid: b}}}
 DA, DR, DM = "d0000000-0000-4000-8000-0000000000a1", "d0000000-0000-4000-8000-0000000000a2", "d0000000-0000-4000-8000-0000000000a3"
 BA, BR, BM = "go-aaaa000001", "go-bbbb000002", "go-cccc000003"
-DEVS = [dev(DA, "anshul", 9000, "C:\\Users\\Public\\TallyPrime\\data", BA), dev(DR, "ravi", 9001, "D:\\TallyData\\Ravi", BR), dev(DM, "meena", 9002, "D:\\TallyData\\Meena", BM)]
-MEMBERS = [{"user_id": OWNER, "name": "Anshul", "role": "owner", "active": True}, {"user_id": RAVI, "name": "Ravi", "role": "staff", "active": True}, {"user_id": MEENA, "name": "Meena", "role": "staff", "active": True}]
-SETUP = """([devs, prefs, links, members, role, me, balerts]) => {
+DEVS = [dev(DA, "anshul", 9000, "C:\\Users\\Public\\TallyPrime\\data", BA, OWNER), dev(DR, "ravi", 9001, "D:\\TallyData\\Ravi", BR, RAVI), dev(DM, "meena", 9002, "D:\\TallyData\\Meena", BM, MEENA)]
+DURGESH = "u-durgesh"
+MEMBERS = [{"user_id": OWNER, "name": "Anshul", "role": "owner", "active": True}, {"user_id": RAVI, "name": "Ravi", "role": "staff", "active": True}, {"user_id": MEENA, "name": "Meena", "role": "staff", "active": True},
+           {"user_id": DURGESH, "name": "Durgesh", "role": "staff", "active": True}]
+SETUP = """([devs, prefs, links, members, role, me, balerts, local, stops]) => {
   const now = Date.now(), ago = m => new Date(now - m * 60000).toISOString();
   const fix = (o) => JSON.parse(JSON.stringify(o), (k, v) => typeof v === "string" && v.startsWith("ago:") ? ago(Number(v.slice(4))) : v);
   window.__devs = fix(devs); window.__prefs = prefs; window.__links = links; window.__balerts = balerts || []; window.__calls = [];
@@ -48,10 +54,15 @@ SETUP = """([devs, prefs, links, members, role, me, balerts]) => {
     if (/^tally_bridge_prefs/.test(path)) return copy(window.__prefs);
     if (/^tally_member_bridges/.test(path)) return copy(window.__links);
     if (/^tally_bridge_alerts/.test(path)) return copy(window.__balerts);
+    if (/^tally_read_stops/.test(path)) return copy(window.__stops || []);
     if (/^tally_companies/.test(path)) return [{company: "ZZ CO", client_id: "c-zz", device_id: devs[0].id, gstin: "", last_seen: ago(1)}];
     return [];
   };
   TCloud.restAll = async (u) => Cloud.api(u);
+  window.__stops = fix(stops || []);
+  // this browser's own bridge (paired here and proved within the last minutes), or none
+  const lc = local ? {url: "http://127.0.0.1:" + local.port, key: "k", bridgeId: local.id, follow: true} : {url: "http://127.0.0.1:9100", key: "", bridgeId: "", follow: true};
+  Bridge.cfg = () => Object.assign({}, lc); Bridge.proven = local ? {[lc.url]: Date.now()} : {};
   TCloud.rpc = async (fn, a) => { window.__calls.push([fn, JSON.parse(JSON.stringify(a || {}))]); return fn.startsWith("tally_post_enqueue") ? {ok: true, id: a.p_id, company: "ZZ CO"} : {ok: true}; };
   S.account = Object.assign(S.account || {}, {me: Object.assign((S.account || {}).me || {}, {role})});
   TCloud.pane.devices = null; TCloud.pane.at = 0; TCloud.pane.err = ""; S.postTarget = {};
@@ -78,6 +89,7 @@ CONFIRM = """async ([pick]) => {
   try { await CloudPost.run("c-zz", {company: "ZZ CO", vouchers: [{id: "b1", xml: "<VOUCHER/>"}]}); } catch (e){ out.err = String(e && e.message || e); }
   out.enq = window.__calls.filter(c => c[0].startsWith("tally_post_enqueue")).map(c => [c[0], c[1].p_target || null]);
   out.dev = (window.__calls.find(c => c[0] === "tally_post_enqueue_to") || [null, {}])[1].p_device || null;
+  out.linked = window.__calls.filter(c => c[0] === "tally_member_bridge_link").map(c => c[1]);
   return out;
 }"""
 with sync_playwright() as p:
@@ -87,8 +99,8 @@ with sync_playwright() as p:
     pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
     E = lambda js, *a: pg.evaluate(js, *a)
     txt = lambda sel: pg.inner_text(sel).replace("\n", " ").strip() if pg.locator(sel).count() else ""
-    def tally_page(prefs, links, role, me, balerts=None, devs=None):
-        E(SETUP, [devs or DEVS, prefs, links, MEMBERS, role, me, balerts or []]); pg.wait_for_timeout(500)
+    def tally_page(prefs, links, role, me, balerts=None, devs=None, local=None, stops=None):
+        E(SETUP, [devs or DEVS, prefs, links, MEMBERS, role, me, balerts or [], local, stops or []]); pg.wait_for_timeout(500)
         pg.locator('#side button[aria-label="Tally"]').first.click(); pg.wait_for_timeout(1500)
     # ---- 1. the Tally page, as the owner
     tally_page([{"device_id": DM, "bridge_id": BM, "changes_only": True}], [{"user_id": RAVI, "device_id": DR, "bridge_id": BR}, {"user_id": MEENA, "device_id": DM, "bridge_id": BM}], "owner", OWNER)
@@ -118,14 +130,83 @@ with sync_playwright() as p:
     ok(r["posted"] is True and r["enq"] == [["tally_post_enqueue_to", BR]] and r.get("dev") == DR, "2. the posting is queued for ravi's bridge, named with its computer (%s %s %s)" % (r["enq"], r.get("dev"), r.get("err", "")))
     # as Ravi (staff, linked to his own bridge): his bridge named, no picker, queued for it
     tally_page([{"device_id": DM, "bridge_id": BM, "changes_only": True}], [{"user_id": RAVI, "device_id": DR, "bridge_id": BR}, {"user_id": MEENA, "device_id": DM, "bridge_id": BM}], "staff", RAVI)
-    ok(pg.locator("#app [data-changes-only-switch]").count() == 0 and pg.locator("#app [data-member-link-pick]").count() == 0 and "Changes only: never posts" in txt('#app [data-computer="%s"]' % DM),
-       "1. staff see the states, no switch and no link")
+    ok(pg.locator("#app [data-changes-only-switch]").count() == 0 and pg.locator("#app [data-member-link-pick]").count() == 0 and pg.locator("#app [data-member-link-self]").count() == 0
+       and "Changes only: never posts" in txt('#app [data-computer="%s"]' % DM), "1. staff see the states, no switch, no linking of others (Ravi is linked to his own already)")
     r = E(CONFIRM, [None])
     ok(r["words"] == "NW144 · ravi · ZZ CO · D:\\TallyData\\Ravi" and r["options"] is None and r["enq"] == [["tally_post_enqueue_to", BR]], "2. Ravi's posting goes through his own bridge, named; no picker (%s | %s)" % (r["words"], r["enq"]))
     # as Meena (staff, linked to her changes-only bridge): never offered it; the computer's main bridge as before (no target)
     tally_page([{"device_id": DM, "bridge_id": BM, "changes_only": True}], [{"user_id": RAVI, "device_id": DR, "bridge_id": BR}, {"user_id": MEENA, "device_id": DM, "bridge_id": BM}], "staff", MEENA)
     r = E(CONFIRM, [None])
-    ok("meena" not in r["words"] and r["enq"] == [["tally_post_enqueue", None]], "3. Meena's bridge is changes only: not offered, her posting goes as before (%s | %s)" % (r["words"], r["enq"]))
+    ok("anshul" not in r["words"] and "ravi" not in r["words"] and "ZZ CO" in r["words"] and "Changes only" in r["words"] and r["target"] == "" and r["enq"] == [["tally_post_enqueue", None]],
+       "#3. Meena's own bridge is changes only: never another person's bridge; the words name the company and what to do; the cloud decides (%s | %s)" % (r["words"], r["enq"]))
+
+    # ---- 5. the owner's rule of 05-Oct-2026
+    # Ravi, not linked: his own bridge (on the computer key he made) is the default; he can link himself to it
+    tally_page([], [], "staff", RAVI)
+    ok(pg.locator('#app [data-computer="%s"] [data-member-link-self]' % DR).count() == 1 and pg.locator('#app [data-computer="%s"] [data-member-link-self], #app [data-computer="%s"] [data-member-link-self]' % (DA, DM)).count() == 0,
+       "#4. Ravi sees 'Post through this bridge' on his own bridge only")
+    if pg.locator('#app [data-computer="%s"] [data-member-link-self]' % DR).count(): pg.click('#app [data-computer="%s"] [data-member-link-self]' % DR); pg.wait_for_timeout(500)
+    c = [x for x in E("window.__calls") if x[0] == "tally_member_bridge_link"]
+    ok(c and c[-1][1] == {"p_user": RAVI, "p_device": DR, "p_bridge": BR}, "#4. he links himself, no owner needed (%s)" % c)
+    tally_page([], [], "staff", RAVI)
+    r = E(CONFIRM, [None])
+    ok(r["words"] == "NW144 · ravi · ZZ CO · D:\\TallyData\\Ravi" and r["enq"] == [["tally_post_enqueue_to", BR]] and r.get("dev") == DR, "#3. not linked, Ravi's posting goes through his own bridge (%s | %s)" % (r["words"], r["enq"]))
+    # the owner, not linked: his own bridge too (not the company's computer by chance)
+    tally_page([], [], "owner", OWNER)
+    r = E(CONFIRM, [None])
+    ok(r["words"].startswith("NW144 · anshul") and r["enq"] == [["tally_post_enqueue_to", BA]], "#3. the owner, not linked: his own bridge (%s | %s)" % (r["words"], r["enq"]))
+    # Durgesh: his bridge runs on the old shared key (made by the owner); this browser proved it: self-linked first, then through it
+    BD = "go-dddd000004"
+    devs3 = [dict(d, info=dict(d["info"], bridges=dict(d["info"]["bridges"]))) for d in DEVS]
+    devs3[0]["info"]["bridges"][BD] = dict(devs3[0]["info"]["bridges"][BA], user="durgesh", port=9103, tallyPort=9003, dataFolder="D:\\TallyData\\Durgesh")
+    tally_page([], [], "staff", DURGESH, devs=devs3, local={"id": BD, "port": 9103})
+    r = E(CONFIRM, [None])
+    lk = [x for x in E("window.__calls") if x[0] == "tally_member_bridge_link"]
+    ok(r["words"] == "NW144 · durgesh · ZZ CO · D:\\TallyData\\Durgesh" and r["enq"] == [["tally_post_enqueue_to", BD]] and r.get("dev") == DA,
+       "#3. Durgesh: this browser's own proven bridge (%s | %s)" % (r["words"], r["enq"]))
+    ok(r.get("linked") == [{"p_user": DURGESH, "p_device": DA, "p_bridge": BD}], "#3/#4. self-linked to it first, so the cloud knows it is his own (%s)" % r.get("linked"))
+    # nobody's bridge of his own: the words name the company and what to do; never another person's bridge
+    tally_page([], [], "staff", DURGESH)
+    r = E(CONFIRM, [None])
+    ok("ZZ CO" in r["words"] and "FinCom Bridge" in r["words"] and "Install" in r["words"] and "anshul" not in r["words"] and r["target"] == "" and r["enq"] == [["tally_post_enqueue", None]],
+       "#3. no bridge of his own: the confirm step says what to do (%s)" % r["words"])
+    # #4, #7: TCloud.auto() after pairing: links the member to this browser's own bridge; on a key whose main bridge is another
+    # Windows user's, makes a fresh key of this user's own, moves the bridge's identity to it and hands it to the bridge
+    AUTO = """async ([withMain]) => {
+      window.__bcalls = []; window.__calls = [];
+      if (withMain) window.__devs[0].main_bridge = "go-aaaa000001";
+      Bridge.on = () => true; Bridge.up = () => true; Bridge.ensureProven = async () => true;
+      Bridge.call = async (path, body) => { window.__bcalls.push([path, body ? JSON.parse(JSON.stringify(body)) : null]); return path === "/cloudlink" && !body ? {connected: true, url: TCloud.ingestUrl()} : {ok: true}; };
+      const rpc0 = TCloud.rpc; TCloud.rpc = async (fn, a) => fn === "tally_device_create" ? (window.__calls.push([fn, a]), {id: "d-new", key: "fcd_new"}) : rpc0(fn, a);
+      TCloud.autoAt = 0; TCloud.autoBusy = false; await TCloud.auto();
+      return {calls: window.__calls.map(c => [c[0], c[1]]), bcalls: window.__bcalls, err: TCloud.autoErr || ""};
+    }"""
+    tally_page([], [], "staff", DURGESH, devs=devs3, local={"id": BD, "port": 9103})
+    a = E(AUTO, [False])
+    ok(["tally_member_bridge_link", {"p_user": DURGESH, "p_device": DA, "p_bridge": BD}] in a["calls"] and not any(c[0] == "tally_device_create" for c in a["calls"]),
+       "#4. after pairing, Durgesh is linked to his own bridge by itself (%s %s)" % (a["calls"], a["err"]))
+    tally_page([], [], "staff", DURGESH, devs=devs3, local={"id": BD, "port": 9103})
+    a = E(AUTO, [True])
+    names = [c[0] for c in a["calls"]]
+    ok("tally_device_create" in names and ["tally_bridge_own_key", {"p_bridge": BD, "p_to": "d-new"}] in a["calls"] and ["/cloudlink", {"url": E("TCloud.ingestUrl()"), "key": "fcd_new"}] in a["bcalls"]
+       and names.index("tally_member_bridge_link") < names.index("tally_bridge_own_key"),
+       "#7. the shared key's main bridge is anshul's: a fresh key of Durgesh's own, the bridge moved to it, handed to the bridge (%s | %s %s)" % (a["calls"], a["bcalls"], a["err"]))
+    tally_page([], [{"user_id": RAVI, "device_id": DR, "bridge_id": BR}], "staff", RAVI, local={"id": BR, "port": 9101})
+    a = E(AUTO, [False])
+    ok(not any(c[0] in ("tally_member_bridge_link", "tally_device_create", "tally_bridge_own_key") for c in a["calls"]), "#4. already linked to his bridge: nothing done (%s)" % a["calls"])
+    # #18: Meena's bridge stopped reading by itself: she resumes it; Ravi cannot (not his key); FinCom's own Stop: owners only
+    devs4 = [dict(d, info=dict(d["info"], bridges={k: dict(v) for k, v in d["info"]["bridges"].items()})) for d in DEVS]
+    devs4[2]["info"]["bridges"][BM]["readStopped"] = {"by": "self", "reason": "Tally did not answer for 2 minutes", "at": "ago:1"}
+    devs4[1]["info"]["bridges"][BR]["readStopped"] = {"by": "fincom", "reason": "emergency", "at": "ago:1"}
+    FS = [{"id": 1, "device_id": DR, "action": "stop", "reason": "emergency", "stopped_at": "ago:2", "cleared_at": None}]
+    tally_page([], [], "staff", MEENA, devs=devs4, stops=FS)
+    ok(pg.locator('#app [data-read-resume="%s"]' % DM).count() == 1 and pg.locator("#app [data-read-stop], #app [data-read-stop-all]").count() == 0, "#18. Meena sees Resume reading on her own bridge (stopped by itself); no Stop buttons")
+    if pg.locator('#app [data-read-resume="%s"]' % DM).count(): pg.click('#app [data-read-resume="%s"]' % DM); pg.wait_for_timeout(500)
+    ok(["tally_read_resume", {"p_device": DM}] in E("window.__calls"), "#18. -> tally_read_resume(her computer)")
+    tally_page([], [], "staff", RAVI, devs=devs4, stops=FS)
+    ok(pg.locator("#app [data-read-resume]").count() == 0, "#18. Ravi: no Resume on Meena's key, nor on his own under FinCom's Stop (owners resume that)")
+    tally_page([], [], "owner", OWNER, devs=devs4, stops=FS)
+    ok(pg.locator('#app [data-read-resume="%s"]' % DR).count() == 1, "#18. the owner resumes FinCom's Stop")
     # ---- 4. the owner's conditions: release, the refused key's line, the bell, the cloud's words
     import copy as _c
     devs2 = _c.deepcopy(DEVS)

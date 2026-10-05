@@ -28,7 +28,10 @@ READERS = ["tally_tb", "tally_period", "tally_mis", "tally_gst_summary", "tally_
            # 05-Oct-2026 (migration 53: a placeholder line whose entry the copy holds; the AlterID received only from lines whose ids belong together)
            "tally_recorder_ids_together",
            # 05-Oct-2026 (migration 54: a posting names the bridge that posts it; changes only; the member's bridge)
-           "tally_post_enqueue_to", "tally_post_take_for", "tally_bridge_changes_only", "tally_member_bridge_link", "tally_post_enqueue_core", "tally_bridge_bind", "tally_post_device_for", "tally_bridge_reset", "tally_post_nobody_words"]
+           "tally_post_enqueue_to", "tally_post_take_for", "tally_bridge_changes_only", "tally_member_bridge_link", "tally_post_enqueue_core", "tally_bridge_bind", "tally_post_device_for", "tally_bridge_reset", "tally_post_nobody_words",
+           # 05-Oct-2026 (migration 54, the owner's rule: no conditions on any bridge)
+           "tally_bridge_may_post", "tally_bridge_user", "tally_bridge_takes_unnamed", "tally_bridge_poster", "tally_post_reroute", "tally_bridge_is_own", "tally_post_own_bridge", "tally_post_own_words",
+           "tally_bridge_has_open", "tally_bridge_own_key", "tally_device_create", "tally_want_update", "tally_read_resume"]
 texts = {}
 fails = []
 def ok(c, w):
@@ -164,7 +167,9 @@ def run_order(label, ORDER):
                 for row in db.rows("select prosecdef, coalesce(array_to_string(proconfig, ','), '') as conf from pg_proc where proname = %s and pronamespace = 'public'::regnamespace" % q(fn)):
                     if row["prosecdef"] != "t": continue       # plain trigger functions touch no table
                     n += 1
-                    if row["conf"].replace(" ", "") != "search_path=public,pg_temp": ok(False, "%s (%s): search_path = %r" % (fn, f, row["conf"]))
+                    # migration 54's tally_device_create (migration.sql's, without the limit of 50 keys) needs pgcrypto, in extensions on Supabase
+                    want = "search_path=public,extensions,pg_temp" if fn == "tally_device_create" else "search_path=public,pg_temp"
+                    if row["conf"].replace(" ", "") != want: ok(False, "%s (%s): search_path = %r" % (fn, f, row["conf"]))
         ok(n >= 20, "%d security definer functions all search public, pg_temp" % n)
         # round 5 (S1): after 36 -> 36b -> 37, an id Tally accepted stays live when the posting is failed or cancelled; a plain one is freed
         J1 = "00000001-0000-0000-0000-000000000000"

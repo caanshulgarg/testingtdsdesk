@@ -15,7 +15,13 @@ Supabase (fake_supabase.py). Needs Deno (DENO, default: the deno on the PATH).
      its own postings normally, and neither firm sees the other's words;
   8. review M-B: a bridge refused postings (no longer main, or Changes only) has its computer's waiting postings rescued
      (tally_post_rescue: moved to the bridge that may post, else failed in plain words) before the 403, and on its beat;
-     a cloud without tally_post_rescue: the 403 as before."""
+     a cloud without tally_post_rescue: the 403 as before;
+  9. the owner's rule of 05-Oct-2026 (#7): the main-bridge rule holds only among ONE Windows user's bridges: on a computer
+     key shared by several Windows users, another user's main bridge leaves this bridge posting (its beat says no notMain,
+     posts_take hands it its postings, posts_update takes its reports); a posting naming no bridge is still only for the
+     key's main bridge; (#10) a key keeps up to 200 bridges' lines (was 12);
+ 10. (#14) Update now's wake ("open", "ledgers") reaches every computer key with the client's company open in one of its
+     bridges, the company's own computer, and the caller's own keys; never a removed key nor another firm's."""
 import os, sys, json, time, hashlib, subprocess, urllib.request, shutil, threading
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import fake_supabase as F
@@ -142,6 +148,49 @@ try:
     c, r = call({"kind": "posts_take", "version": "2.3.0", "bridge": RAVI})
     ok(c == 403 and r.get("changesOnly"), "8. a cloud without tally_post_rescue: the 403 as before (%s)" % c)
     F.NO_FN.discard("tally_post_rescue"); F.T["tally_bridge_prefs"][0]["changes_only"] = False
+
+    # 9. #7: on a key shared with another Windows user (anshul) whose bridge is the main one there, ravi's bridge still posts
+    import datetime as _dt
+    NOWS = _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    AMAIN = "go-0a0a0a0a0a"
+    dev["info"]["bridges"][AMAIN] = {"at": NOWS, "computer": "NW144", "user": "NW144\\anshul", "mode": "main"}
+    dev["main_bridge"] = AMAIN
+    job("p-ravi6", RAVI["id"], "2026-10-05T06:00:00Z"); job("p-none6", None, "2026-10-05T05:00:00Z")
+    n0 = len(F.ARGS.get("tally_post_rescue", []))
+    c, r = call(BEAT)
+    ok(c == 200 and not r.get("notMain") and r.get("posts", 0) >= 1 and len(F.ARGS.get("tally_post_rescue", [])) == n0,
+       "9. #7: anshul's bridge is the main one on the shared key: ravi's beat says nothing of notMain, counts his postings, rescues nothing (%s)" % {k: r.get(k) for k in ("notMain", "posts", "error")})
+    c, r = call({"kind": "posts_take", "version": "2.3.0", "bridge": RAVI})
+    ok(c == 200 and (r.get("job") or {}).get("id") == "p-ravi6" and st("p-none6") == "waiting" and F.ARGS["tally_post_take_for"][-1].get("p_main") is False,
+       "9. #7: posts_take hands ravi's bridge its own posting; the one naming no bridge stays for the key's main bridge (p_main false) (%s %s)" % (c, (r.get("job") or {}).get("id")))
+    c, r = call({"kind": "posts_update", "version": "2.3.0", "bridge": RAVI, "id": "p-ravi6", "status": "running", "done": 0, "results": []})
+    ok(c == 200, "9. #7: and its report is taken (%s %s)" % (c, r.get("error")))
+    dev["info"]["bridges"][AMAIN]["user"] = "nw144\\RAVI "
+    c, r = call({"kind": "posts_take", "version": "2.3.0", "bridge": RAVI})
+    ok(c == 403 and r.get("notMain"), "9. #7: the main bridge is ravi's own other bridge (case and spaces ignored): this one only reads, as before (%s)" % c)
+    dev["main_bridge"] = None; dev["info"]["bridges"].pop(AMAIN, None)
+    # 9. #10: up to 200 bridges' lines on one key
+    for i in range(30): dev["info"]["bridges"]["go-%010x" % (0xabc000 + i)] = {"at": NOWS, "computer": "NW144", "user": "u%d" % i, "mode": "main"}
+    c, r = call(BEAT)
+    ok(c == 200 and len(dev["info"]["bridges"]) >= 31, "9. #10: a key keeps every bridge's line, up to 200 (%d kept)" % len(dev["info"]["bridges"]))
+    # 10. #14: Update now's wake
+    F.USERS["tok-ravi"] = {"id": "u-ravi", "email": "ravi@zz.test"}
+    F.T["members"].append({"user_id": "u-ravi", "firm_id": FIRM, "role": "staff", "active": True})
+    def wdev(i, info, **kw): F.T["tally_devices"].append(dict({"id": i, "firm_id": FIRM, "name": i, "key_hash": "h-" + i, "revoked": False, "info": info, "wake_token": "t" + i}, **kw))
+    opn = lambda *cos: {"bridges": {"go-%010x" % (abs(hash(cos)) % 10**9): {"at": NOWS, "user": "x", "open": list(cos)}}}
+    wdev("w-company", {}); wdev("w-open", opn("zz co")); wdev("w-mine", {}, created_by="u-ravi"); wdev("w-other", opn("YY CO")); wdev("w-gone", opn("ZZ CO"), revoked=True)
+    F.T["tally_devices"].append({"id": "w-firm2", "firm_id": "f-2", "name": "w-firm2", "key_hash": "h-f2", "revoked": False, "info": opn("ZZ CO"), "wake_token": "tw-firm2"})
+    F.T["tally_companies"].append({"firm_id": FIRM, "company": "ZZ CO", "client_id": "c-zz", "device_id": "w-company"})
+    def ucall(body):
+        rq = urllib.request.Request("http://127.0.0.1:8000/", data=json.dumps(body).encode(), headers={"Content-Type": "application/json", "Authorization": "Bearer tok-ravi"})
+        try: r = urllib.request.urlopen(rq, timeout=60); return r.status, json.loads(r.read())
+        except urllib.error.HTTPError as e: return e.code, json.loads(e.read() or b"{}")
+    for what in ("open", "ledgers"):
+        n0 = len(F.BCAST)
+        c, r = ucall({"kind": "wake", "what": what, "client": "c-zz"})
+        topics = {m["topic"] for b_ in F.BCAST[n0:] for m in b_.get("messages", []) if m.get("event") == what}
+        ok(c == 200 and {"tb-tw-company", "tb-tw-open", "tb-tw-mine"} <= topics and not ({"tb-tw-other", "tb-tw-gone", "tb-tw-firm2"} & topics),
+           "10. #14: wake %s: the company's computer, every key with ZZ CO open, and the caller's own key; never a removed key nor another firm's (%s)" % (what, sorted(topics)))
 finally:
     fn.kill()
     if fails: print("".join(log[-40:]))

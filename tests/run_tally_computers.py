@@ -2,8 +2,9 @@
 Each line: the bridge's version, its last request to Tally (kind, time taken, when) and its longest today, from the
 heartbeat (info.beat.reqs / info.bridges[id].reqs), and the reading state: Reading / Paused / Stopped by itself: <why> /
 Stopped from FinCom: <why> / Offline since ... . An owner has Stop reading on this computer, Stop reading on all
-computers, Resume reading, Try version X on this computer and Approve version X for all computers (X: the setup on this
-site, assets/bridge-go/latest.json); a member sees none of them. Each button calls its RPC (migration-35) with the right
+computers, Resume reading, and (the owner's rule of 05-Oct-2026: new versions go to every computer by themselves, no
+pilot, no approval) Hold version X, Let version X go, Roll back to <version>, Clear the rollback and Withdraw version X
+(X: the setup on this site, assets/bridge-go/latest.json); a member sees none of them. Each button calls its RPC (migration-35) with the right
 arguments; a refusal is shown in plain words, and an older cloud without the RPCs says FinCom's cloud is not ready.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tally_computers.py"""
 import json, os, threading, functools, http.server
@@ -56,7 +57,7 @@ SETUP = """([devs, stops, releases, role, extra]) => {
   extra = extra || {};
   const now = Date.now(), ago = m => new Date(now - m * 60000).toISOString();
   const fix = (o) => JSON.parse(JSON.stringify(o), (k, v) => typeof v === "string" && v.startsWith("ago:") ? ago(Number(v.slice(4))) : v === "TODAY" ? new Date().toISOString().slice(0, 10) : v);
-  window.__fix = fix; window.__devs = fix(devs); window.__stops = fix(stops); window.__releases = fix(releases);
+  window.__fix = fix; window.__devs = fix(devs); window.__stops = fix(stops); window.__releases = fix(releases); window.__rollbacks = fix(extra.rollbacks || []);
   window.__calls = []; window.__fail = null; window.__asked = [];
   window.__cursors = fix(extra.cursors || []); window.__books = fix(extra.books || []); window.__companies = fix(extra.companies || []); window.__old = !!extra.old;
   Cloud.on = () => true; Cloud.st.firm = "f-1"; Cloud.st.members = extra.members || [];
@@ -67,7 +68,8 @@ SETUP = """([devs, stops, releases, role, extra]) => {
     if (/^tally_devices/.test(path)) return copy(window.__devs);
     if (/^tally_read_stops/.test(path)) return copy(window.__stops);
     // an older cloud (before migration 37): no withdrawn_* columns, and tally_sync_cursor cannot be read by members
-    if (/^tally_bridge_releases/.test(path)){ if (window.__old && /withdrawn/.test(path)) throw new Error("column tally_bridge_releases.withdrawn_at does not exist (42703)"); return copy(window.__releases); }
+    if (/^tally_bridge_releases/.test(path)){ if (window.__old && /withdrawn|held/.test(path)) throw new Error("column tally_bridge_releases.withdrawn_at does not exist (42703)"); return copy(window.__releases); }
+    if (/^tally_bridge_rollbacks/.test(path)){ if (window.__old) throw new Error("relation tally_bridge_rollbacks does not exist (42P01)"); return copy(window.__rollbacks); }
     if (/^tally_sync_cursor/.test(path)){ if (window.__old) throw new Error("permission denied for table tally_sync_cursor (42501)"); return copy(window.__cursors); }
     if (/^tally_books/.test(path)) return copy(window.__books);
     if (/^tally_companies/.test(path)) return copy(window.__companies);
@@ -176,8 +178,9 @@ with sync_playwright() as p:
        and sel('[data-read-stop="%s"]' % D4).count() == 0 and sel("[data-read-stop-all]").count() == 1, "owner: Stop reading on a computer reading, Resume reading on one stopped, Stop reading on all computers")
     ok(txt('#app [data-read-stop="%s"]' % D1) == "Stop reading on this computer" and txt("#app [data-read-stop-all]") == "Stop reading on all computers" and txt('#app [data-read-resume="%s"]' % D4) == "Resume reading",
        "the buttons' words")
-    ok(txt('#app [data-release-pilot="%s"]' % D1) == "Try version 2.1.5 on this computer" and txt("#app [data-release-approve]") == "Approve version 2.1.5 for all computers",
-       "release: Try version 2.1.5 on this computer, Approve version 2.1.5 for all computers")
+    ok(sel("[data-release-pilot], [data-release-approve]").count() == 0 and txt("#app [data-release-hold]") == "Hold version 2.1.5" and txt("#app [data-release-rollback]") == "Roll back to an earlier version",
+       "A. no pilot and no approval: the owner has Hold version 2.1.5 and Roll back to an earlier version (%s)" % txt("#app [data-release]"))
+    ok("goes to every computer by itself" in txt("#app [data-release]"), "A. the words: version 2.1.5 goes to every computer by itself (%s)" % txt("#app [data-release]"))
     # Stop reading on this computer: asked with a reason, then tally_read_stop(p_device, p_reason)
     sel('[data-read-stop="%s"]' % D1).click(); pg.wait_for_timeout(400)
     pg.fill("#confirmBox #readStopWhy", "Tally slow at month end"); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(600)
@@ -187,16 +190,21 @@ with sync_playwright() as p:
     ok(["tally_read_stop", {"p_device": None, "p_reason": "Bridge update"}] in E("window.__calls"), "Stop reading on all computers -> tally_read_stop(null, reason)")
     sel('[data-read-resume="%s"]' % D4).click(); pg.wait_for_timeout(600)
     ok(["tally_read_resume", {"p_device": D4}] in E("window.__calls"), "Resume reading -> tally_read_resume(p_device)")
-    sel('[data-release-pilot="%s"]' % D1).click(); pg.wait_for_timeout(400)
-    if pg.locator('#confirmBox [data-cbx="yes"]').count(): pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(600)
-    ok(["tally_release_pilot", {"p_version": "2.1.5", "p_device": D1}] in E("window.__calls"), "Try version 2.1.5 on this computer -> tally_release_pilot(p_version, p_device)")
-    # a refusal, in plain words: approve before a working day on the pilot
-    E("() => { window.__fail = 'the pilot of 2.1.5 on NWS144 has not run a working day yet: it started 02-Oct 09:10; approve after 03-Oct 05:10'; }")
-    sel("[data-release-approve]").click(); pg.wait_for_timeout(400)
-    if pg.locator('#confirmBox [data-cbx="yes"]').count(): pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(600)
+    if sel("[data-release-hold]").count(): sel("[data-release-hold]").click(); pg.wait_for_timeout(400)
+    if pg.locator('#confirmBox [data-cbx="yes"]').count(): pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(300)
+    ok(not [c for c in E("window.__calls") if c[0] == "tally_release_hold"], "A. Hold without a reason: asked for one, nothing sent")
+    if pg.locator("#confirmBox #holdWhy").count(): pg.fill("#confirmBox #holdWhy", "posting broke on NWS144"); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(600)
+    ok(["tally_release_hold", {"p_version": "2.1.5", "p_why": "posting broke on NWS144"}] in E("window.__calls"), "A. Hold version 2.1.5 -> tally_release_hold(p_version, p_why)")
+    if sel("[data-release-rollback]").count(): sel("[data-release-rollback]").click(); pg.wait_for_timeout(400)
+    if pg.locator("#confirmBox #rollbackVersion").count():
+        pg.fill("#confirmBox #rollbackVersion", "2.1.4"); pg.fill("#confirmBox #rollbackWhy", "posting broke"); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(600)
+    ok(["tally_release_rollback", {"p_version": "2.1.4", "p_why": "posting broke"}] in E("window.__calls"), "A. Roll back to 2.1.4 -> tally_release_rollback(p_version, p_why)")
+    # a refusal, in plain words
+    E("() => { window.__fail = 'only an owner of the firm can hold a bridge version'; }")
+    if sel("[data-release-hold]").count(): sel("[data-release-hold]").click(); pg.wait_for_timeout(400)
+    if pg.locator("#confirmBox #holdWhy").count(): pg.fill("#confirmBox #holdWhy", "x"); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(600)
     err = txt("#app [data-control-err]")
-    ok(["tally_release_approve", {"p_version": "2.1.5"}] in E("window.__calls") and "has not run a working day yet" in err and "approve after 03-Oct 05:10" in err,
-       "Approve version 2.1.5 for all computers -> tally_release_approve(p_version); refused: the reason shown (%s)" % err)
+    ok("only an owner of the firm can hold a bridge version" in err.lower(), "A. refused: the reason shown (%s)" % err)
     # the cloud without migration-35
     E("() => { window.__fail = 'Could not find the function public.tally_read_stop(p_device, p_reason) in the schema cache'; }")
     sel('[data-read-stop="%s"]' % D2).click(); pg.wait_for_timeout(400)
@@ -212,19 +220,27 @@ with sync_playwright() as p:
        "all computers stopped: every line says so, and only Resume reading on all computers (%s)" % l1)
     sel("[data-read-resume-all]").click(); pg.wait_for_timeout(600)
     ok(["tally_read_resume", {"p_device": None}] in E("window.__calls"), "Resume reading on all computers -> tally_read_resume(null)")
-    # ---- a release in pilot, then approved
-    E(SETUP, [DEVS, [], [{"version": "2.1.5", "pilot_device": D1, "pilot_started_at": "ago:300", "approved_at": None}], "owner"]); pg.wait_for_timeout(300)
+    # ---- A: a version held, then let go; a rollback standing, then cleared
+    E(SETUP, [DEVS, [], [{"version": "2.1.5", "held_at": "ago:30", "held_by": "u-1", "held_why": "posting broke on NWS144", "withdrawn_at": None}], "owner"]); pg.wait_for_timeout(300)
     E("() => navHome('tally')"); pg.wait_for_timeout(1500)
-    ok("Version 2.1.5 on trial on NWS144" in txt("#app [data-release]") and sel("[data-release-pilot]").count() == 0, "a pilot going on: said, and no second pilot (%s)" % txt("#app [data-release]"))
-    E(SETUP, [DEVS, [], [{"version": "2.1.5", "pilot_device": D1, "pilot_started_at": "ago:2000", "approved_at": "ago:10"}], "owner"]); pg.wait_for_timeout(300)
+    rl = txt("#app [data-release]")
+    ok("Version 2.1.5 is held" in rl and "posting broke on NWS144" in rl and sel("[data-release-hold]").count() == 0 and txt("#app [data-release-unhold]") == "Let version 2.1.5 go", "A. held: said with why; Let version 2.1.5 go (%s)" % rl)
+    sel("[data-release-unhold]").click(); pg.wait_for_timeout(400)
+    if pg.locator('#confirmBox [data-cbx="yes"]').count(): pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(600)
+    ok(any(c[0] == "tally_release_unhold" and c[1].get("p_version") == "2.1.5" for c in E("window.__calls")), "A. Let it go -> tally_release_unhold")
+    E(SETUP, [DEVS, [], [], "owner", {"rollbacks": [{"version": "2.1.4", "why": "posting broke", "set_by": "u-1", "set_at": "ago:20"}]}]); pg.wait_for_timeout(300)
     E("() => navHome('tally')"); pg.wait_for_timeout(1500)
-    ok("Version 2.1.5 is approved for all computers" in txt("#app [data-release]") and sel("[data-release-approve]").count() == 0, "approved: said, no button (%s)" % txt("#app [data-release]"))
+    rl = txt("#app [data-release]")
+    ok("Rolled back to version 2.1.4" in rl and "posting broke" in rl and txt("#app [data-release-rollback-clear]") == "Clear the rollback", "A. a rollback standing: said, with Clear the rollback (%s)" % rl)
+    sel("[data-release-rollback-clear]").click(); pg.wait_for_timeout(400)
+    if pg.locator('#confirmBox [data-cbx="yes"]').count(): pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(600)
+    ok(any(c[0] == "tally_release_rollback_clear" for c in E("window.__calls")), "A. Clear the rollback -> tally_release_rollback_clear")
     # ---- a member: the lines, no buttons
     E(SETUP, [DEVS, STOPS, [], "member"]); pg.wait_for_timeout(300)
     E("() => navHome('tally')"); pg.wait_for_timeout(1500)
     ok(pg.locator("#app [data-computer]").count() == 5 and "Stopped from FinCom: Tally hangs on the bank ledger" in line(D4), "a member sees the lines")
     ok("Posts only to: ZZ TEST" in line(D1), "a member sees Posts only to: ZZ TEST too (information, not a control)")
-    ok(sel("[data-read-stop], [data-read-stop-all], [data-read-resume], [data-read-resume-all], [data-release-pilot], [data-release-approve]").count() == 0, "a member sees none of the owner's buttons")
+    ok(sel("[data-read-stop], [data-read-stop-all], [data-read-resume], [data-read-resume-all], [data-release-pilot], [data-release-approve], [data-release-hold], [data-release-rollback]").count() == 0, "a member sees none of the owner's buttons")
     # ---- live: a beat passed on by FinCom's cloud changes the line at once
     E("""() => TLight.beatIn({device: '%s', beat: {at: new Date().toISOString(), bridge: 'go-%s', paused: false, readStopped: {by: 'self', reason: 'Tally did not answer for 2 minutes', at: new Date().toISOString()},
       reqs: {day: new Date().toISOString().slice(0, 10), last: {kind: 'probe', ms: 120000, at: new Date().toISOString()}, longest: {kind: 'probe', ms: 120000, at: new Date().toISOString()}, over20: 1, n: 5}}})""" % (D2, D2))
@@ -256,7 +272,7 @@ with sync_playwright() as p:
     ok("Resumed by neha@fincom.in at" in l2 and hmIn(l2, 100), "24. a computer resumed: Resumed by <name> at <time>, the member's e-mail when there is no name (%s)" % l2)
     ok("Resumed by neha@fincom.in at" in l1 and hmIn(l1, 300), "24. a resume of all computers shows on a computer with no own stop or resume since (%s)" % l1)
     rel = txt("#app [data-release]")
-    ok(inAny("Pilot started by Anshul at %s on NWS144", 300, rel), "24. the release: Pilot started by <name> at <time> on <computer> (%s)" % rel)
+    ok("Pilot started" not in rel and "Approve" not in rel, "A. no pilot or approval words any more (%s)" % rel)
     ok(txt("#app [data-release-withdraw]") == "Withdraw version 2.1.5", "23. owner: Withdraw version 2.1.5")
     sel("[data-release-withdraw]").click(); pg.wait_for_timeout(400)
     pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(300)
@@ -269,15 +285,8 @@ with sync_playwright() as p:
     E("() => navHome('tally')"); pg.wait_for_timeout(1500)
     rel = txt("#app [data-release]")
     ok(any(("Withdrawn by Anshul at %s: Crashes on NWS144 at the bank ledger" % hm(x)) in rel for x in (0, 1, 2)) and "withdrawn" in rel.lower(), "23. withdrawn: Withdrawn by <name> at <time>: <why> (%s)" % rel)
-    ok(sel("[data-release-approve]").count() == 0 and sel("[data-release-withdraw]").count() == 0 and txt('#app [data-release-pilot="%s"]' % D1) == "Try version 2.1.5 on this computer",
-       "23. withdrawn: no Approve, no Withdraw; Try version 2.1.5 on this computer is back")
-    # approved, not withdrawn: Approved by <name> at <time>, and Withdraw stays
-    REL_A = [dict(REL[0], approved_at="ago:10", approved_by="u-neha")]
-    E(SETUP, [DEVS, STOPS2, REL_A, "owner", X]); pg.wait_for_timeout(300)
-    E("() => navHome('tally')"); pg.wait_for_timeout(1500)
-    rel = txt("#app [data-release]")
-    ok(inAny("Approved by neha@fincom.in at %s", 10, rel) and inAny("Pilot started by Anshul at %s on NWS144", 300, rel) and sel("[data-release-withdraw]").count() == 1 and sel("[data-release-approve]").count() == 0,
-       "24. approved: Approved by <name> at <time>, the pilot line kept, Withdraw stays (%s)" % rel)
+    ok(sel("[data-release-approve], [data-release-pilot], [data-release-withdraw]").count() == 0, "23. withdrawn: no Withdraw (and no pilot or approval)")
+    REL_A = REL
     # 10. a company of the computer needing a fresh baseline
     bl = txt('#app [data-computer="%s"] [data-baseline="%s"]' % (D1, BOOKS[0]["book_id"]))
     ok(("ZZ TEST" in bl) and inAny("Needs a fresh baseline since %s: AlterID went backwards (a restore in Tally?)", 50, bl), "10. under the computer: <company>: Needs a fresh baseline since <time>: <why> (%s)" % bl)
@@ -293,14 +302,14 @@ with sync_playwright() as p:
     # a member sees the words, none of the buttons
     E(SETUP, [DEVS, STOPS2, REL_A, "member", X]); pg.wait_for_timeout(300)
     E("() => navHome('tally')"); pg.wait_for_timeout(1500)
-    ok(inAny("Stopped by Anshul at %s", 40, line(D4)) and "Approved by neha@fincom.in" in txt("#app [data-release]") and "Needs a fresh baseline since" in txt('#app [data-baseline="%s"]' % BOOKS[0]["book_id"]),
+    ok(inAny("Stopped by Anshul at %s", 40, line(D4)) and "goes to every computer by itself" in txt("#app [data-release]") and "Needs a fresh baseline since" in txt('#app [data-baseline="%s"]' % BOOKS[0]["book_id"]),
        "a member sees who and when, the withdrawal and the baseline words")
     ok(sel("[data-release-withdraw], [data-baseline-clear]").count() == 0, "a member has no Withdraw and no Clear")
     # an older cloud (migration 37 not applied): the page works, and says FinCom's cloud is not ready for what it cannot do
     E(SETUP, [DEVS, STOPS2, REL, "owner", dict(X, old=True)]); pg.wait_for_timeout(300)
     E("() => navHome('tally')"); pg.wait_for_timeout(1500)
     rel = txt("#app [data-release]")
-    ok(pg.locator("#app [data-computer]").count() == 5 and inAny("Pilot started by Anshul at %s on NWS144", 300, rel) and "Stopped by Anshul" in line(D4), "older cloud: the lines, who and when still shown (%s)" % rel)
+    ok(pg.locator("#app [data-computer]").count() == 5 and "Stopped by Anshul" in line(D4), "older cloud: the lines, who and when still shown (%s)" % rel)
     nr = txt("#app [data-release] [data-not-ready]")
     ok(sel("[data-release-withdraw]").count() == 0 and nr.startswith("FinCom’s cloud is not ready for this yet"), "older cloud: no Withdraw; 'FinCom's cloud is not ready for this yet' (%s)" % nr)
     ok(sel("[data-baseline]").count() == 0 and not txt("#app [data-bridge-lines]").count("permission denied"), "older cloud: no baseline rows and no error from tally_sync_cursor")

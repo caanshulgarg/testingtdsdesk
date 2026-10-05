@@ -264,6 +264,11 @@ function heldSheetRows(cid, led, to){ const w = heldWords(cid, led, to); return 
 function postThroughWords(co){
   const s = typeof tallySign === "function" ? tallySign(co) : null;
   if (!s || !s.on) return "";
+  // the owner's rule of 05-Oct-2026: the poster's own bridge, named with its Windows user (a shared computer has one a user)
+  try {
+    const r = typeof TCloud === "object" && TCloud.pane && TCloud.pane.devices && !TCloud.pane.noTarget && typeof TCloud.postThrough === "function" ? TCloud.postThrough(co) : null;
+    if (r) return "This will post through " + [r.computer, r.user].filter(Boolean).join(" \u00b7 ") + ".";
+  } catch (e){}
   if (s.local) return "This will post through this computer.";
   return "This will post through " + (s.through && s.through.length === 1 ? s.through[0] : s.computer) + ".";
 }

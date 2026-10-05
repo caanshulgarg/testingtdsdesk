@@ -1,5 +1,5 @@
 """python3 run_bridge_ports_ui.py - FinCom Bridge 2.3.0 on a shared Windows server: each Windows user's bridge has its own
-port of 9100..9119. FinCom never takes a listener on its word (the owner's condition of 05-Oct-2026): before the bridge
+port of 9100..9199 (the owner's rule of 05-Oct-2026: was 9100..9119). FinCom never takes a listener on its word (the owner's condition of 05-Oct-2026): before the bridge
 key, a pairing code or a computer key goes anywhere, the bridge proves itself on /ping?n=<fresh nonce> (HMAC of its key,
 nonce, id and port; of the pairing code while its window is open). A rogue listener on a LOWER port (9100) that claims to
 be "yours", names this user's bridge id and replays a proof it saw is recorded: every request it gets carries no key, no
@@ -8,7 +8,9 @@ code and no computer key, and FinCom never saves its address.
   2. the bridge moved to 9105: found again by its proof; the rogue never picked;
   3. only the rogue (replaying an old proof): nothing sent, FinCom says it did not prove itself; the address not saved;
   4. only another Windows user's bridge: said plainly;
-  5. an older bridge (no proof) on 9100: not connected, said plainly, the code never sent."""
+  5. an older bridge (no proof) on 9100: not connected, said plainly, the code never sent;
+  6. #9: the range is 9100..9199: this user's bridge on 9150 (beyond the old 9119) is found and connected; the scan stays
+     one parallel round: with nothing listening on any of the 100 ports it takes well under its 1.5 s per-port limit."""
 import json, os, sys, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
@@ -51,7 +53,7 @@ def other_user(r):
 def nothing(r): return r.abort("connectionrefused")
 def route_all(pg, plan):
     pg.unroute("**/*") if False else None
-    for p in range(9100, 9120):
+    for p in range(9100, 9200):
         pg.unroute("http://127.0.0.1:%d/**" % p)
         pg.route("http://127.0.0.1:%d/**" % p, plan.get(p, nothing))
 def rogue_clean(tag):
@@ -97,6 +99,20 @@ with sync_playwright() as p:
     route_all(pg, {9100: old})
     pg.goto("http://localhost:8163/#pair=" + CODE); pg.wait_for_timeout(3500)
     ok(not pg.evaluate("Bridge.cfg().key") and not any("code=" in u for u in old_got) and "proved" in pg.inner_text("body"), "5. an older bridge (no proof): not connected, the code never sent, said plainly")
+    # 6. #9: 9100..9199
+    ok(pg.evaluate("Bridge.PORTS.length === 100 && Bridge.PORTS[0] === 9100 && Bridge.PORTS[99] === 9199"), "6. FinCom asks 9100..9199 (100 ports)")
+    pg.evaluate("Bridge.setCfg({url: 'http://127.0.0.1:9100', key: '', bridgeId: ''}); Bridge.proven = {}; Bridge.foundAt = 0")
+    route_all(pg, {9150: mine(9150)})
+    pg.goto("about:blank"); pg.goto("http://localhost:8163/#pair=" + CODE); pg.wait_for_timeout(3500)
+    cfg = pg.evaluate("Bridge.cfg()")
+    ok(cfg.get("key") == KEY and cfg.get("url") == "http://127.0.0.1:9150", "6. this user's bridge on 9150 is found and connected (%r)" % cfg.get("url"))
+    for q_ in range(9100, 9200): pg.unroute("http://127.0.0.1:%d/**" % q_)
+    ms = pg.evaluate("(async () => { const t = performance.now(); await Bridge.find(); return Math.round(performance.now() - t); })()")
+    print("  info the scan of 9100..9199 with nothing listening (real connections refused by this machine): %d ms" % ms)
+    ok(ms < 1500, "6. the scan is one parallel round, under the 1.5 s per-port limit (%d ms)" % ms)
+    route_all(pg, {})
+    ms2 = pg.evaluate("(async () => { const t = performance.now(); await Bridge.find(); return Math.round(performance.now() - t); })()")
+    print("  info the same, each refused at once (Playwright): %d ms" % ms2)
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0][:200]))
     br.close()
 print("all passed" if not fails else str(len(fails)) + " FAILED")

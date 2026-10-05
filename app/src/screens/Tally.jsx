@@ -84,19 +84,23 @@ function lineState(r, latest, owner) {
   if (!r.go || r.old) return { text: "Needs FinCom Bridge", cls: "bad", act: "Install FinCom Bridge below on " + r.computer + ": it replaces this one by itself." };
   if (!r.online) return { text: "Offline" + (r.at ? " since " + fmtDateTime(r.at) : ""), cls: "bad", act: "On " + r.computer + ", sign in to Windows as " + (r.user || "the Tally user") + ": FinCom Bridge starts by itself. Its icon near the clock: right-click → Test connection." };
   if (!r.main) return { text: "Online · reads only", cls: "warn", act: owner ? "Another bridge posts on this computer." : "Another bridge posts on this computer; an owner of the firm can make this the main bridge.", makeMain: owner };
-  // with staged releases (migration-35) a new version goes to a computer only once an owner tries it there or approves it
-  if (latest && vnum(latest) > vnum(r.version)) return { text: "Online · update ready", cls: "warn", act: TCloud.pane.releases && !TCloud.pane.noControl
-    ? (owner ? "Try version " + latest + " on one computer, then approve it for all." : "An owner of the firm tries version " + latest + " on one computer, then approves it for all.")
-    : "Download FinCom Bridge " + latest + " under Details and run it on " + r.computer + "." };
+  // the owner's rule of 05-Oct-2026 (migration 54): a new version goes to every computer by itself, unless an owner held it
+  // (or withdrew it) or rolled the bridges back
+  if (latest && vnum(latest) > vnum(r.version)) {
+    const p = TCloud.pane, rel = (p.releases || []).find((x) => x.version === latest), stopped = !!(p.rollback || (rel && (rel.held_at || rel.withdrawn_at)));
+    return { text: "Online · update ready", cls: "warn", act: p.releases && !p.noControl
+      ? (stopped ? "Version " + latest + " is held back on the owner's word (below)." : "It updates itself to version " + latest + " (each bridge checks every few hours).")
+      : "Download FinCom Bridge " + latest + " under Details and run it on " + r.computer + "." };
+  }
   if (r.tally === "busy") return { text: "Online · Tally busy", cls: "warn", act: "It carries on when Tally is free." };
   if (r.tally !== "open") return { text: "Online · Tally not open", cls: "warn", act: "Open TallyPrime and the company on " + r.computer + "." };
   return { text: "Online · Tally open", cls: "ok", act: r.open.length ? r.open.join(", ") : "" };
 }
 // plan item 14 (All clients → Tally): with each computer, its reading state (Reading / Paused / Stopped by itself: why /
 // Stopped from FinCom: why / Offline since …), its last request to Tally and its longest today (the heartbeat's reqs),
-// and for an owner: Stop reading on this computer / on all computers, Resume reading, and the staged release (Try
-// version X on this computer, Approve version X for all computers; X: this site's setup). The cloud checks every one
-// again (migration-35); its refusal is shown as it says it.
+// and for an owner: Stop reading on this computer / on all computers, Resume reading, and the release (the owner's rule of
+// 05-Oct-2026: Hold version X, Let it go, Roll back, Withdraw; X: this site's setup). The cloud checks every one again
+// (migrations 35, 37, 54); its refusal is shown as it says it.
 const RS_CLS = { reading: "ok", paused: "warn", selfstop: "bad", fincomstop: "bad", offline: "bad" };
 function Reqs({ r }) {
   const q = r.reqs || {}, today = !q.day || q.day === new Date().toISOString().slice(0, 10);
@@ -109,23 +113,24 @@ const who = (uid) => typeof memberName === "function" ? memberName(uid) : "a mem
 const NOT_READY = "FinCom’s cloud is not ready for this yet";
 function Release({ rows, latest, owner }) {
   if (!latest || !TCloud.on()) return null;
-  const rel = (TCloud.pane.releases || []).find((x) => x.version === latest);
-  const behind = rows.some((r) => r.go && !r.old && vnum(r.version) < vnum(latest));
-  if (!rel && !behind) return null;
-  const wd = !!(rel && rel.withdrawn_at);
-  const pilot = rel && rel.pilot_device ? rows.find((r) => r.device.id === rel.pilot_device) : null;
-  // round 4 (items 23, 24): who started the pilot, who approved, who withdrew and why
-  const lines = rel ? [rel.pilot_started_at && "Pilot started by " + who(rel.pilot_by) + " at " + tallyHm(rel.pilot_started_at) + " on " + (pilot ? pilot.computer : "the pilot computer") + ".",
-    rel.approved_at && "Approved by " + who(rel.approved_by) + " at " + tallyHm(rel.approved_at) + ".",
-    wd && "Withdrawn by " + who(rel.withdrawn_by) + " at " + tallyHm(rel.withdrawn_at) + ": " + (rel.withdrawn_why || "no reason given")].filter(Boolean) : [];
+  const p = TCloud.pane, rel = (p.releases || []).find((x) => x.version === latest), rb = p.rollback || null;
+  const wd = !!(rel && rel.withdrawn_at), held = !!(rel && rel.held_at);
+  if (!p.releases && !rb) return null;
+  // the owner's rule of 05-Oct-2026 (migration 54): no pilot, no approval; an owner holds a version, lets it go, rolls
+  // the bridges back, clears that; withdraws a version (migration 37). Who, when and why are said
+  const lines = [held && "Held by " + who(rel.held_by) + " at " + tallyHm(rel.held_at) + ": " + (rel.held_why || "no reason given"),
+    wd && "Withdrawn by " + who(rel.withdrawn_by) + " at " + tallyHm(rel.withdrawn_at) + ": " + (rel.withdrawn_why || "no reason given")].filter(Boolean);
   return <div className="row" data-release="" style={{ alignItems: "center", gap: 8, flexWrap: "wrap", margin: "6px 0 2px" }}>
-    {wd ? <span className="note" data-release-withdrawn="">{"Version " + latest + " is withdrawn: no computer gets it from FinCom’s cloud. Once it is put right, try it on one computer again."}</span>
-      : rel && rel.approved_at ? <span className="note">{"Version " + latest + " is approved for all computers (" + fmtDateTime(rel.approved_at) + ")."}</span>
-      : rel && rel.pilot_started_at ? <span className="note">{"Version " + latest + " on trial on " + (pilot ? pilot.computer : "the pilot computer") + " since " + fmtDateTime(rel.pilot_started_at) + "."}</span>
-      : <span className="note">{"Version " + latest + " is ready: try it on one computer first."}</span>}
+    {rb ? <span className="note" data-release-rolled-back="">{"Rolled back to version " + rb.version + " by " + who(rb.set_by) + " at " + tallyHm(rb.set_at) + ": " + (rb.why || "no reason given") + ". No bridge takes a newer version until the rollback is cleared."}</span>
+      : wd ? <span className="note" data-release-withdrawn="">{"Version " + latest + " is withdrawn: no computer gets it from FinCom’s cloud."}</span>
+      : held ? <span className="note" data-release-held="">{"Version " + latest + " is held: no bridge takes it until an owner lets it go."}</span>
+      : <span className="note">{"Version " + latest + " goes to every computer by itself (each bridge checks every few hours)."}</span>}
     {lines.length > 0 && <span className="note" data-release-who="">{lines.join(" ")}</span>}
-    {owner && !wd && !(rel && rel.approved_at) && <button className="btn small" data-release-approve="" onClick={() => TCloud.releaseApprove(latest)}>{"Approve version " + latest + " for all computers"}</button>}
-    {owner && rel && !wd && (rel.pilot_started_at || rel.approved_at) && (TCloud.pane.noWithdraw
+    {owner && !p.noHold && !wd && !held && !rb && <button className="btn small" data-release-hold="" onClick={() => TCloud.releaseHold(latest)}>{"Hold version " + latest}</button>}
+    {owner && !p.noHold && held && <button className="btn small" data-release-unhold="" onClick={() => TCloud.releaseUnhold(latest)}>{"Let version " + latest + " go"}</button>}
+    {owner && !p.noRollback && (rb ? <button className="btn small" data-release-rollback-clear="" onClick={() => TCloud.releaseRollbackClear()}>Clear the rollback</button>
+      : <button className="btn small" data-release-rollback="" onClick={() => TCloud.releaseRollback()}>Roll back to an earlier version</button>)}
+    {owner && rel && !wd && (p.noWithdraw
       ? <span className="note" data-not-ready="">{NOT_READY + " (withdrawing a version needs migration 37)."}</span>
       : <button className="btn small" data-release-withdraw="" onClick={() => TCloud.releaseWithdraw(latest)}>{"Withdraw version " + latest}</button>)}
   </div>;
@@ -261,16 +266,26 @@ function ChangesOnly({ r, owner }) {
     {owner && <> <button className="btn small" data-changes-only-switch="" disabled={!!(p.ctl && p.ctl.busy)} onClick={() => TCloud.changesOnly(r, !on)}>{on ? "Allow posting" : "Changes only"}</button></>}
   </span>;
 }
-// migration 54: the members who post through this bridge (an owner links them; a member's postings go through their own
-// bridge by default). Staff see the names only
+// migration 54: the members who post through this bridge (an owner links anyone; a member's postings go through their own
+// bridge by default). The owner's rule of 05-Oct-2026: a member who may write links THEMSELVES to their own bridge (on a
+// computer key they made, or this browser's own), when it posts for nobody else
+function selfResume(r) {
+  const me = TCloud.me(), role = S.account && S.account.me ? S.account.me.role : "";
+  return !!me && ["owner", "staff"].includes(role) && r.device.created_by === me && !!(r.readStopped && r.readStopped.by === "self")
+    && !(TCloud.stopFor && TCloud.stopFor(r.device.id)) && !(TCloud.stoppedAll && TCloud.stoppedAll());
+}
 function MemberLink({ r, owner }) {
   const p = TCloud.pane;
   if (p.noTarget || !r.id) return null;
   const members = (Cloud.st && Cloud.st.members) || [], name = (uid) => { const m = members.find((x) => x.user_id === uid); return m ? (m.name || m.email || uid) : uid; };
   const linked = TCloud.linkedTo(r), others = members.filter((m) => m.active !== false && !linked.includes(m.user_id));
-  if (!owner && !linked.length) return null;
+  const me = TCloud.me(), role = S.account && S.account.me ? S.account.me.role : "";
+  const loc = typeof Bridge === "object" && Bridge.cfg ? (Bridge.cfg() || {}).bridgeId : "";
+  const self = !owner && !!me && ["owner", "staff"].includes(role) && !linked.length && !r.changesOnly && (r.device.created_by === me || (!!loc && loc === r.id));
+  if (!owner && !linked.length && !self) return null;
   return <span className="note" data-member-link="">
     {"Posts for: " + (linked.length ? linked.map(name).join(", ") : "nobody linked yet")}
+    {self && <> <button className="btn small" data-member-link-self="" disabled={!!(p.ctl && p.ctl.busy)} onClick={() => TCloud.linkMember(me, r)}>Post through this bridge (mine)</button></>}
     {owner && linked.map((uid) => <button key={uid} className="linkbtn" data-member-unlink={uid} onClick={() => TCloud.linkMember(uid, null)}>{" (unlink " + name(uid) + ")"}</button>)}
     {owner && <> <button className="linkbtn" data-release-identity={r.id} onClick={() => TCloud.releaseIdentity(r)}>Release this bridge's identity</button></>}
     {owner && !r.changesOnly && others.length > 0 && <> <select data-member-link-pick="" aria-label={"Link a member to " + TCloud.bridgeWords(r)} value="" disabled={!!(p.ctl && p.ctl.busy)}
@@ -282,8 +297,6 @@ function BridgeLines({ rows, latest }) {
   const [open, setOpen] = useState(false);
   const owner = S.account && S.account.me && S.account.me.role === "owner";
   const p = TCloud.pane, ctl = p.ctl || {}, allStopped = TCloud.stoppedAll && TCloud.stoppedAll();
-  // a withdrawn version (item 23) is on trial nowhere: a new pilot is allowed
-  const rel = latest ? (p.releases || []).find((x) => x.version === latest) : null, piloting = !!(rel && !rel.withdrawn_at && (rel.approved_at || rel.pilot_started_at));
   // the computer's main bridge, else its newest
   const byDev = new Map();
   // 2.3.0: one line per computer and Windows user ("<PC> · <Windows user>"): each user's bridge on a shared server
@@ -307,7 +320,8 @@ function BridgeLines({ rows, latest }) {
           {owner && !allStopped && (stopped
             ? <button className="btn small primary" data-read-resume={r.device.id} onClick={() => TCloud.readResume(r)}>Resume reading</button>
             : <button className="btn small" data-read-stop={r.device.id} onClick={() => TCloud.readStop(r)}>Stop reading on this computer</button>)}
-          {owner && latest && !piloting && vnum(latest) > vnum(r.version) && <button className="btn small" data-release-pilot={r.device.id} onClick={() => TCloud.releasePilot(latest, r)}>{"Try version " + latest + " on this computer"}</button>}
+          {/* the owner's rule of 05-Oct-2026: a bridge that stopped reading by itself is resumed by the member whose computer key it is (FinCom's own Stop: owners only) */}
+          {!owner && selfResume(r) && <button className="btn small primary" data-read-resume={r.device.id} onClick={() => TCloud.readResume(r)}>Resume reading</button>}
         </div>}
         {live && <div className="row" data-bridge-per-user="" style={{ alignItems: "center", gap: 8, flexWrap: "wrap", marginLeft: 16 }}>
           <BridgeWhere r={r} /><ChangesOnly r={r} owner={owner} /><MemberLink r={r} owner={owner} /></div>}

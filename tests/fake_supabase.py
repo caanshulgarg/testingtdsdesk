@@ -114,13 +114,16 @@ def rpc(fn, a):
                 j["status"] = "taken"; return [j]
         return []
     if fn == "tally_post_rescue":       # migration 54 (review M-B): a computer's waiting postings for a bridge that may no longer post: moved to its main bridge
-        d = next((x for x in T["tally_devices"] if x["id"] == a["p_device"]), {}); main = d.get("main_bridge")
+        # (the owner's rule of 05-Oct-2026: only the main bridge of the SAME Windows user stops a bridge, and a posting moves only to it)
+        d = next((x for x in T["tally_devices"] if x["id"] == a["p_device"]), {}); main = d.get("main_bridge"); bs = (d.get("info") or {}).get("bridges") or {}
+        u = lambda b: str((bs.get(b) or {}).get("user") or "").strip().lower()
+        same = lambda t: bool(main) and main in bs and u(main) == u(t)
         co = {p.get("bridge_id") for p in T.get("tally_bridge_prefs", []) if p.get("device_id") == a["p_device"] and p.get("changes_only")}
         moved = failed = 0
         for j in T["tally_post_jobs"]:
             t = j.get("target_bridge")
-            if j["device_id"] != a["p_device"] or j["status"] != "waiting" or not t or ((not main or main == t) and t not in co): continue
-            if main and main not in co: j["target_bridge"] = main; moved += 1
+            if j["device_id"] != a["p_device"] or j["status"] != "waiting" or not t or ((not same(t) or main == t) and t not in co): continue
+            if same(t) and main not in co: j["target_bridge"] = main; moved += 1
             else: j["status"] = "failed"; failed += 1
         return {"ok": True, "moved": moved, "failed": failed}
     if fn == "tally_post_take":

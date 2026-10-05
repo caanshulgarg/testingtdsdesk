@@ -185,7 +185,7 @@ func runUser(args []string) int {
 			stamp = exeStamp(exe)
 		}
 		if !restartAfter(code) {
-			// 2.3.0: no port of 9100..9119 free (the bridge said so once, in the log and the tray): not started again
+			// 2.3.0: no port of 9100..9199 free (the bridge said so once, in the log and the tray): not started again
 			// until the next sign-in; the icon stays and shows why
 			writeLog("The bridge is not started again: it found no free port (see the message above)")
 			<-stop

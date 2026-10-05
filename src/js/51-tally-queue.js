@@ -54,8 +54,10 @@ const CloudPost = {
     const id = this.uuid(), sleep = ms => new Promise(r => setTimeout(r, ms));
     const ids = [].concat(payload.masters || [], payload.vouchers || []).map(x => x.id);
     // FinCom Bridge 2.3.0 (migration 54): the bridge it goes through (the owner's pick, else the member's own): named;
-    // none: the computer's main bridge, as before
+    // none: the cloud chooses the poster's own bridge, or says what to do
     const target = typeof TCloud.postTargetFor === "function" ? TCloud.postTargetFor(cid) : "";
+    // the owner's rule of 05-Oct-2026: this browser's own bridge, not linked yet, is linked to the member first
+    if (target && typeof TCloud.linkIfLocal === "function") await TCloud.linkIfLocal(target);
     const args = {p_id: id, p_client: cid, p_payload: {masters: payload.masters || [], vouchers: payload.vouchers || [], ledger: payload.ledger || ""}};
     // review M3: the bridge is named with its computer (the cloud checks the bridge id is bound to it)
     const trow = target ? TCloud.bridgesHeard().find(x => x.id === target) : null;

@@ -10,7 +10,7 @@ const Bridge = {
   on(){ return !this.blocked() && !!this.cfg().key; },
   up(){ return this.st.state === "ok"; },
   pinQ(){ const pp = this.cfg().port; return pp ? "&port=" + pp : ""; },
-  // FinCom Bridge 2.3.0: on a shared Windows server each Windows user's bridge takes its own port of 9100..9119 and
+  // FinCom Bridge 2.3.0: on a shared Windows server each Windows user's bridge takes its own port of 9100..9199 and
   // answers only programs of its own Windows user. Another user's program may listen on one of those ports and claim
   // anything, so a bridge is never taken on its word (the owner's condition of 05-Oct-2026): before the bridge key, a
   // pairing code or a computer key goes to a listener, it proves itself. FinCom sends a fresh random nonce to /ping?n=;
@@ -18,7 +18,7 @@ const Bridge = {
   // not paired yet: HMAC-SHA256(pairing code, nonce), given only while the bridge's pairing window is open. A proof is
   // kept per address for 5 minutes and done again after the bridge is looked for anew; an old proof (another nonce) never
   // passes. A bridge that cannot prove itself (older than 2.3.0, or not a FinCom Bridge) is never sent a secret.
-  PORTS: Array.from({length: 20}, (_, i) => 9100 + i),
+  PORTS: Array.from({length: 100}, (_, i) => 9100 + i),   // 9100..9199 (the owner's rule of 05-Oct-2026: no limit by number of bridges; was 9100..9119)
   proven: {},              // address -> when it proved itself with the key held
   localUrl(u){ const m = String(u || "").match(/^http:\/\/(127\.0\.0\.1|localhost):(\d+)\/*$/); return !!m && this.PORTS.includes(+m[2]); },
   urlPort(u){ const m = String(u || "").match(/^https?:\/\/[^/:]+:(\d+)/); return m ? +m[1] : 0; },
@@ -42,7 +42,7 @@ const Bridge = {
     } catch (e){ return null; } finally { clearTimeout(t); }
   },
   async probe(port, ms, key, code){ return this.probeUrl("http://127.0.0.1:" + port, ms, key, code); },
-  // this user's bridge among 9100..9119: only one that proves itself (with the key held, or with the pairing code given);
+  // this user's bridge among 9100..9199: only one that proves itself (with the key held, or with the pairing code given);
   // among those the one paired with (its id), else the bridge linked to the signed-in member, else the first
   async find(code){
     const c = this.cfg();
@@ -79,7 +79,7 @@ const Bridge = {
     if (!(await this.ensureProven())){
       const other = this.lastProbe && this.lastProbe.yours === false;
       if (!again && await this.refind()) return this.call(path, body, ms, true);
-      if (other) throw {code: "bridge_other_user", message: "The FinCom Bridge at " + this.cfg().url + " is another Windows user's on this computer, and FinCom did not find yours on ports 9100\u20139119. Install FinCom Bridge for your own Windows user (the setup, \u201cJust for me\u201d)."};
+      if (other) throw {code: "bridge_other_user", message: "The FinCom Bridge at " + this.cfg().url + " is another Windows user's on this computer, and FinCom did not find yours on ports 9100\u20139199. Install FinCom Bridge for your own Windows user (the setup, \u201cJust for me\u201d)."};
       throw {code: this.lastProbe ? "bridge_unproven" : "bridge_down", message: this.lastProbe
         ? "The program answering at " + this.cfg().url + " did not prove it is your FinCom Bridge, so nothing was sent to it. Install FinCom Bridge 2.3.0 or later for your Windows user, then connect again (right-click the FinCom Bridge icon \u2192 Connect FinCom on this computer\u2026)."
         : "FinCom Bridge is not running on this computer (" + this.cfg().url + "). Check the FinCom Bridge icon near the clock (right-click \u2192 Test connection)."};
@@ -106,7 +106,7 @@ const Bridge = {
     if (r.status === 403 && j && j.notYours){
       delete this.proven[c.url.replace(/\/+$/, "")];
       if (!again && await this.refind()) return this.call(path, body, ms, true);
-      throw {code: "bridge_other_user", message: "The FinCom Bridge at " + c.url + " is another Windows user's on this computer, and FinCom did not find yours on ports 9100\u20139119. Install FinCom Bridge for your own Windows user (the setup, \u201cJust for me\u201d)."};
+      throw {code: "bridge_other_user", message: "The FinCom Bridge at " + c.url + " is another Windows user's on this computer, and FinCom did not find yours on ports 9100\u20139199. Install FinCom Bridge for your own Windows user (the setup, \u201cJust for me\u201d)."};
     }
     if (!r.ok || !j || j.ok === false) throw {code: r.status === 401 ? "bridge_key" : "bridge", message: (j && (j.error || j.message)) || ("The bridge answered with error " + r.status + ".")};
     return j;
@@ -282,7 +282,7 @@ const Bridge = {
   // ask the bridge on this computer for its key, with the 6-digit code FinCom Bridge shows (tray icon → Connect FinCom on this computer…)
   // (bridge 1.11: only for a few minutes after it starts, once, and never for another web page)
   // pairing: only with a bridge that proves it shows this code now (its pairing window open), on this address or found
-  // on 9100..9119; the code goes to it only then, and the key it hands over must prove itself before it is kept
+  // on 9100..9199; the code goes to it only then, and the key it hands over must prove itself before it is kept
   async pair(code){
     code = String(code || "").trim();
     const c = this.cfg();

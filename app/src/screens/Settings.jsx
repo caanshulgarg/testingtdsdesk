@@ -194,9 +194,10 @@ function SupInvFrom({ co }) {
 }
 
 // the one Tally company this client's entries may be posted to (review of 02-Oct-2026): nothing is posted, from any
-// computer, until it is chosen; changed by an owner, asked first
+// computer, until it is chosen; the owner's rule of 05-Oct-2026: chosen and confirmed by any member who may write, asked
+// first (who and when are kept)
 function PostTo({ co, open }) {
-  const bk = typeof TCloud === "object" ? TCloud.book(co.id) : null, owner = S.account && S.account.me ? S.account.me.role === "owner" : true;
+  const bk = typeof TCloud === "object" ? TCloud.book(co.id) : null, canWrite = S.account && S.account.me ? ["owner", "staff"].includes(S.account.me.role) : true;
   const names = [...new Set([co.postTo, bk && bk.company, co.tallyName, ...(open || []).map((o) => o.name)].filter(Boolean))];
   const set = (v) => askConfirm({ title: v ? "Post " + co.name + "’s entries into " + v + "?" : "Stop posting for " + co.name + "?", ok: v ? "Allow" : "Stop posting",
     body: v ? "<p>FinCom and the bridge will post this client’s bills, bank lines and sales <b>only</b> into the Tally company <b>" + esc(v) + "</b>. A posting meant for any other company is refused.</p>"
@@ -206,10 +207,10 @@ function PostTo({ co, open }) {
     <div className="row" data-post-to="" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
       {co.postTo ? <span className={"tag " + (pc && pc.state === "confirmed" ? "ok" : "warn")}>{co.postTo}</span> : <span className="tag bad">None chosen: posting is off</span>}
       {co.postTo && pc && pc.state !== "confirmed" && <span className="cfm-guess" data-choice="postTo" data-choice-state="guessed"><span className="note">Found by FinCom (the one Tally company linked, same GSTIN): not used for posting until confirmed.</span>{" "}
-        {owner ? <button type="button" className="btn small primary" data-choice-confirm="postTo" onClick={() => set(co.postTo)}>Confirm</button> : <span className="note">An owner of the firm confirms it.</span>}</span>}
-      {owner ? <select aria-label="Posting allowed to company" value="" onChange={(ev) => ev.target.value && set(ev.target.value === "\u0000" ? "" : ev.target.value)}>
+        {canWrite ? <button type="button" className="btn small primary" data-choice-confirm="postTo" onClick={() => set(co.postTo)}>Confirm</button> : <span className="note">A member of the firm who may make changes confirms it.</span>}</span>}
+      {canWrite ? <select aria-label="Posting allowed to company" value="" onChange={(ev) => ev.target.value && set(ev.target.value === "\u0000" ? "" : ev.target.value)}>
         <option value="">{co.postTo ? "Change…" : "Choose the company…"}</option>{names.map((n) => <option key={n} value={n}>{n}</option>)}{co.postTo && <option value={"\u0000"}>Stop posting</option>}</select>
-        : <span className="note">An owner of the firm chooses it.</span>}
+        : <span className="note">A member of the firm who may make changes chooses it.</span>}
       {co.postToAt && pc && pc.state === "confirmed" && <span className="note">{"confirmed " + fmtDateTime(pc.at || co.postToAt) + (pc.by || co.postToBy ? " by " + (pc.by || co.postToBy) : "")}</span>}
     </div>
     {bk && bk.company && co.postTo && ledNm(bk.company).toLowerCase() !== ledNm(co.postTo).toLowerCase() && <p className="bk-warn" style={{ margin: "8px 0 0" }}>{"This client’s books in FinCom’s cloud come from " + bk.company + ", not " + co.postTo + ". Postings through the cloud are refused until the two agree."}</p>}

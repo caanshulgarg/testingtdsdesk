@@ -55,25 +55,45 @@ bridge could answer on the computer. Now each Windows user has their own.
 
 - **Install "Just for me".** Each Windows user runs the setup in their own sign-in and chooses "Just for me" (no
   administrator needed). The program goes into that user's own folder and starts when that user signs in.
-- **A port each, chosen by itself.** Each user's bridge takes the first free port of 9100 to 9119 and remembers it.
-  Nobody has to set anything. If all twenty are taken, the bridge says so once (tray and log) and stops; it does not
+- **A port each, chosen by itself.** Each user's bridge takes the first free port of 9100 to 9199 and remembers it.
+  Nobody has to set anything. If all hundred are taken, the bridge says so once (tray and log) and stops; it does not
   keep restarting.
 - **Only its own Windows user.** A bridge answers only programs of its own Windows user; another user's program gets
   "not your FinCom Bridge". It reads and posts only to the Tally running in its own user's Windows session, never
   another user's Tally.
-- **FinCom finds your own bridge.** FinCom looks on ports 9100 to 9119 for the bridge that belongs to you. If the one it
+- **FinCom finds your own bridge.** FinCom looks on ports 9100 to 9199 for the bridge that belongs to you. If the one it
   finds belongs to another Windows user it says so plainly and asks you to install your own ("Just for me").
 - **The Tally page shows one line per bridge**, headed `<PC> · <Windows user>` (for example "NWS144 · <your Windows user name>"), with the
   version, Tally's port, the companies open there and the data folder. Two users on NWS144 show as two lines.
-- **Changes only** (owner's switch, per bridge, on the Tally page): a bridge set to Changes only keeps sending Tally's
-  changes to FinCom but is never given a posting, and the Post screen never offers it. Its line shows
-  "Changes only: never posts"; "Allow posting" turns it back. Useful for a staff member's bridge that should only read.
-- **Which bridge a posting goes to.** The Post screen's confirm step now says which bridge will post:
-  "Through `<PC> · <Windows user> · <company> · <data folder>`". By default a posting goes through the bridge linked to
-  the person posting (an owner links members to bridges on the Tally page, "Posts for: ..."); with no link, through the
-  main bridge of the computer that has the company open. An owner may pick another bridge in "Post through another
-  bridge". A bridge only takes postings meant for it. Queueing a posting again, or Retry, never moves it to another
-  bridge.
+- **No conditions on any bridge.** Every bridge, of any Windows user, owner or staff, reads Tally and posts into it as
+  soon as it is installed and connected: no owner approval, no switch to turn on, no waiting. There is no limit by
+  user, by company or by number of bridges or computers; anyone in the firm can link a company and work.
+- **Changes only** (an optional owner's switch, per bridge, on the Tally page; OFF by default): a bridge set to Changes
+  only keeps sending Tally's changes to FinCom but is never given a posting. Its line shows "Changes only: never
+  posts"; "Allow posting" turns it back.
+- **Which bridge a posting goes to: the poster's own.** The Post screen's confirm step says which bridge will post:
+  "Through `<PC> · <Windows user> · <company> · <data folder>`". A posting goes through the bridge of the person who
+  posts: the bridge they are linked to ("Posts for: ..." on the Tally page; FinCom links you to your own bridge by itself
+  when you connect it, and you can link yourself there with "Post through this bridge (mine)"), else their own bridge
+  that has the company open. An entry lands only in its own company's books and in the poster's own Tally, never in
+  another person's Tally. If you have no bridge of your own with the company open, nothing is queued and FinCom says so,
+  naming the company and what to do (install and connect your FinCom Bridge, or open the company in your Tally). If
+  your bridge has not been heard from for 3 minutes, the posting is queued all the same and says "waits for your
+  FinCom Bridge on `<PC> · <Windows user>`"; it is posted as soon as that bridge is back. An owner may still pick
+  another bridge in "Post through another bridge". Queueing a posting again, or Retry, never moves it to another bridge.
+- **A computer key shared by several Windows users** (settings carried over from the old 1.15.0 bridge): the "main
+  bridge" choice now holds only among the bridges of the same Windows user, so another user's main bridge never stops
+  yours, and a waiting posting is never moved to another Windows user's bridge. When you connect, FinCom gives your
+  bridge a computer key of its own.
+- **Your own cancel or delete when your Tally cannot be asked.** If you cancel or delete an entry in Tally and FinCom
+  cannot ask your Tally about it at that moment, the line is held, not guessed. Uploading that day's Day Book settles
+  it; any member of the firm can do that upload.
+- **New bridge versions install by themselves** on every computer, with no pilot and no approval. The owner can hold a
+  version ("Hold version X" on the Tally page, with a reason), let it go again, roll every bridge back to an earlier
+  version ("Roll back to an earlier version", until cleared), or withdraw a version. The tray's own "Roll back to the
+  previous version" stays as it is.
+- **Apply now** on a held line in Sync activity: any member who may make changes can press it; the same checks run,
+  and a line that fails one stays held with its reason.
 
 ### 4. Four security fixes
 
@@ -92,10 +112,9 @@ bridge could answer on the computer. Now each Windows user has their own.
      user, or release the identity). One alert per id and computer, not one per minute. "Mark read" clears it.
 3. **Refusal words name the company and the action.** When a bridge is refused, its tray and its line on the Tally page
    say: "This computer key cannot use bridge `<id>`: it belongs to `<PC> · <Windows user>`. Ask the firm's owner."
-   When nobody can post into a company, FinCom names the company and what to do, for example: "Nobody can post into
-   GARG SHEKHAR just now: no computer has it open in Tally. Open the company in Tally on a computer that may post
-   (...), then post again." or "...is set to Changes only. ... or ask the owner to switch Changes only off for that
-   bridge."
+   When you cannot post into a company, FinCom names the company and what to do, for example: "Nobody can post into
+   GARG SHEKHAR from your sign-in just now: your FinCom Bridge (NWS144 · `<your Windows user>`) does not have GARG
+   SHEKHAR open in Tally. Open GARG SHEKHAR in Tally there, then post again."
 4. **Dates confirmed.** Where these words give a time (for example "your FinCom Bridge (...) has not been heard from
    since 05-Oct-2026 14:32 IST"), it is the date and time in IST.
 
@@ -105,8 +124,7 @@ From the tray: right-click the FinCom icon > "Roll back to the previous version"
 **But the 2.3.0 app does not trust a 2.2.4 bridge**, so after a bridge rollback FinCom stops sending to it (the "did not
 prove it is your FinCom Bridge" words above). Rolling back therefore means: **tell us first**, with the time and what
 went wrong; we roll back the app and the bridge together. A Windows user who installed a bridge for the first time with
-2.3.0 has no earlier version to roll back to: set that bridge to "Changes only" on the Tally page (it then never
-posts) and tell us.
+2.3.0 has no earlier version to roll back to: tell us.
 
 ## What we need from you if something fails
 

@@ -334,7 +334,8 @@ const TCloud = {
     const p = this.pane; p.busy = "Loading…"; render();
     try {
       // main_bridge from migration-22 on; without it, the list as before
-      const cols = "id,name,created_at,last_seen,version,info,revoked";
+      // created_by: the member whose page made the computer key (the owner's rule of 05-Oct-2026: their own bridge)
+      const cols = "id,name,created_at,created_by,last_seen,version,info,revoked";
       // round 15 (F3): the posting settings an owner saved for the computer (migration 43: post_only, post_batch_bills,
       // post_batch_bank, post_settings_at, post_settings_by); without the columns the page says they are not available
       const PS = ",post_only,post_batch_bills,post_batch_bank,post_settings_at,post_settings_by", noPS = m => /post_only|post_batch|post_settings/.test(m);
@@ -375,12 +376,17 @@ const TCloud = {
         p.stops = all.filter(x => x.action !== "resume" && !x.cleared_at); p.resumes = resumeRows(all); p.noControl = false;
       } catch (e){ p.stops = []; p.resumes = {}; p.noControl = true; }
       const relCols = "version,pilot_device,pilot_started_at,pilot_by,pilot_seen_at,pilot_self_stop,approved_at,approved_by";
-      try { p.releases = [].concat(await Cloud.api("tally_bridge_releases?select=" + relCols + ",withdrawn_at,withdrawn_by,withdrawn_why&order=pilot_started_at.desc") || []); p.noWithdraw = false; }
+      // migration 54: held_* (an owner's hold of a version) and the rollback standing (tally_bridge_rollbacks); without them
+      // (an older cloud) the page offers neither
+      try { p.releases = [].concat(await Cloud.api("tally_bridge_releases?select=" + relCols + ",withdrawn_at,withdrawn_by,withdrawn_why,held_at,held_by,held_why&order=pilot_started_at.desc") || []); p.noWithdraw = false; p.noHold = false; }
+      catch (e){ p.noHold = true; try { p.releases = [].concat(await Cloud.api("tally_bridge_releases?select=" + relCols + ",withdrawn_at,withdrawn_by,withdrawn_why&order=pilot_started_at.desc") || []); p.noWithdraw = false; }
       catch (e){
         // migration 37 not applied: no withdrawal columns yet (the page says FinCom's cloud is not ready for a withdrawal)
         if (/withdrawn|42703/i.test(String(e && e.message))){ p.noWithdraw = true; try { p.releases = [].concat(await Cloud.api("tally_bridge_releases?select=" + relCols + "&order=pilot_started_at.desc") || []); } catch (e2){ p.releases = []; } }
         else p.releases = [];
-      }
+      } }
+      try { p.rollback = ([].concat(await Cloud.api("tally_bridge_rollbacks?select=version,why,set_by,set_at&cleared_at=is.null&order=set_at.desc&limit=1") || []))[0] || null; p.noRollback = false; }
+      catch (e){ p.rollback = null; p.noRollback = true; }
       // migration-37 (item 10): each book's reading state (needs_baseline: since when, why; cleared by whom, with the note)
       // and the books, to list them under their computer. Not readable (an older cloud, no select for members): nothing shown
       try { p.cursors = [].concat(await Cloud.api("tally_sync_cursor?select=book_id,state,state_why,state_at,cleared_at,cleared_by,cleared_note") || []); p.noBaselineClear = false; }
@@ -401,16 +407,20 @@ const TCloud = {
     const now = Date.now(), rows = [];
     (this.pane.devices || []).filter(d => !d.revoked).forEach(d => {
       const info = d.info || {}, br = info.bridges || {}, main = d.main_bridge || "";
-      const beat = info.beat || {};
+      const beat = info.beat || {}, wu = (x) => String((x && x.user) || "").trim().toLowerCase();
       Object.keys(br).forEach(id => { const b = br[id] || {}, isMain = main ? id === main : b.mode === "main";
         // 2.1.5: its requests to Tally (last, longest today, over 20 s) and whether it stopped reading: its own entry,
         // else the computer's beat when it is the main bridge
         const mine = (k) => b[k] !== undefined ? b[k] : isMain ? beat[k] : undefined;
         // 2.3.0: its own port, its Tally's port and data folder, and the owner's "Changes only"
         const co = this.isChangesOnly(d.id, id);
+        // the owner's rule of 05-Oct-2026 (migration 54's tally_bridge_may_post): the main bridge chosen stops only the other
+        // bridges of its own Windows user; another user's main bridge on a shared key stops nobody
+        const coOn = co === null ? !!b.changesOnly : co;
+        const mayPost = !coOn && (main && br[main] && wu(br[main]) === wu(b) ? id === main : b.mode !== "test");
         rows.push({device: d, id, computer: b.computer || info.computer || d.name, user: b.user || "", version: b.version || "", runMode: b.runMode || "",
           port: b.port || null, tallyPort: b.tallyPort || (isMain && beat.tallyPort) || null, dataFolder: b.dataFolder || (isMain && beat.dataFolder) || "", changesOnly: co === null ? !!b.changesOnly : co,
-          main: isMain, at: b.at, tally: b.tallyState || (b.tally ? "open" : "closed"), open: b.open || [], go: id !== "v1",
+          main: isMain, mayPost, at: b.at, tally: b.tallyState || (b.tally ? "open" : "closed"), open: b.open || [], go: id !== "v1",
           reqs: mine("reqs") || null, readStopped: mine("readStopped") || null, paused: !!mine("paused"), readStop: info.readStop || null}); });
       if (!br.v1 && info.beat) rows.push({device: d, id: "v1", computer: info.computer || d.name, user: info.user || "", version: info.beat.version || d.version || "",
         main: !main, at: info.beat.at, tally: info.beat.tallyState || (info.beat.tally ? "open" : "closed"), open: info.beat.open || [], go: false});
@@ -428,31 +438,84 @@ const TCloud = {
     if (!r) return "";
     return [r.computer || "", r.user || "", company || (r.open || []).join(", "), r.dataFolder || ""].filter(Boolean).join(" \u00b7 ");
   },
-  // the bridge the signed-in member posts through (set by an owner on the Tally page); "" when none
+  // the signed-in member
+  me(){ return typeof Cloud === "object" && Cloud.sess ? ((Cloud.sess() || {}).user_id || "") : ""; },
+  // the bridge the signed-in member is linked to (by an owner, or by themselves); "" when none
   myBridge(){
-    const me = typeof Cloud === "object" && Cloud.sess ? (Cloud.sess() || {}).user_id : "";
+    const me = this.me();
     const l = me && (this.pane.links || []).find(x => x.user_id === me && x.bridge_id);
     return l ? l.bridge_id : "";
   },
   // the members linked to a bridge
   linkedTo(r){ return (this.pane.links || []).filter(x => x.bridge_id && x.bridge_id === r.id && x.device_id === r.device.id).map(x => x.user_id); },
-  // the bridges a posting may be sent through: FinCom Bridge 2.x, the main bridge of its computer, not changes only
-  postTargets(){ return this.bridgesHeard().filter(r => r.go && !r.old && r.id && r.main && !r.changesOnly); },
-  // the bridge a posting of this client goes through: the one an owner picked on the Post screen, else the member's own
-  // (when it may post); "" for none (the main bridge of the computer that keeps the client's company, as before)
+  // the owner's rule of 05-Oct-2026 (migration 54's tally_bridge_is_own): a member's own bridge is the one they are linked
+  // to, or one on a computer key they made on which every bridge is of one Windows user
+  isOwn(r){
+    const me = this.me();
+    if (!me || !r || !r.device) return false;
+    if ((this.pane.links || []).some(x => x.user_id === me && x.bridge_id === r.id && x.device_id === r.device.id)) return true;
+    if (r.device.created_by !== me) return false;
+    const u = (x) => String((x && x.user) || "").trim().toLowerCase(), br = (r.device.info && r.device.info.bridges) || {};
+    return Object.keys(br).every(k => u(br[k]) === u(r));
+  },
+  // this browser's own FinCom Bridge (paired here, proved within the last 10 minutes), as a line FinCom has heard from; null
+  localRow(){
+    if (typeof Bridge !== "object" || !Bridge.cfg) return null;
+    const c = Bridge.cfg() || {}, u = String(c.url || "").replace(/\/+$/, ""), at = (Bridge.proven || {})[u];
+    if (!c.key || !c.bridgeId || !at || Date.now() - at > 600000) return null;
+    return this.bridgesHeard().find(r => r.go && !r.old && r.id === c.bridgeId) || null;
+  },
+  // the client's Tally company (its link in FinCom's cloud, else the one it may post to)
+  companyOf(cid){
+    const c = (this.pane.companies || []).find(x => x.client_id === cid && x.company), co = typeof S === "object" && S.companies ? S.companies[cid] : null;
+    return (c && c.company) || (co && (co.postTo || co.tallyName)) || "";
+  },
+  hasOpen(r, company){ const n = (x) => String(x || "").trim().replace(/\s+/g, " ").toLowerCase(); return !company || (r.open || []).some(o => n(o) === n(company)); },
+  // the bridges a posting may be sent through: FinCom Bridge 2.x, allowed to post (the main bridge among its own Windows
+  // user's on its computer, not changes only)
+  postTargets(){ return this.bridgesHeard().filter(r => r.go && !r.old && r.id && r.mayPost); },
+  // the bridge a posting of this client goes through: the one an owner picked on the Post screen, else the POSTER'S OWN
+  // (the owner's rule of 05-Oct-2026, as migration 54 decides it): the linked one (when it may post, and has the company
+  // open or no other of theirs has), else the newest of theirs that may post with the company open, else this browser's
+  // own proven bridge (not linked to another member); "" for none: the cloud then says what to do, and never routes into
+  // another person's Tally
   postTargetFor(cid){
     if (this.pane.noTarget) return "";
-    const t = this.postTargets(), pick = (S.postTarget || {})[cid];
+    const t = this.postTargets(), pick = (S.postTarget || {})[cid], company = this.companyOf(cid);
     if (pick && t.some(r => r.id === pick)) return pick;
-    const mine = this.myBridge();
-    return mine && t.some(r => r.id === mine) ? mine : "";
+    const mine = this.myBridge(), linked = mine && t.find(r => r.id === mine);
+    const own = t.filter(r => this.isOwn(r) && this.hasOpen(r, company)).sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
+    if (linked && (this.hasOpen(linked, company) || !own.length)) return linked.id;
+    if (own.length) return own[0].id;
+    const loc = this.localRow(), me = this.me();
+    if (loc && t.some(r => r.id === loc.id) && this.hasOpen(loc, company) && !this.linkedTo(loc).some(u => u !== me)) return loc.id;
+    return "";
   },
-  // the bridge's line that will post a client's entries: the target's, else the main bridge of the computer keeping the company
+  // a posting through this browser's own bridge, not yet linked to the member: linked first (so the cloud knows it is theirs)
+  async linkIfLocal(target){
+    const loc = this.localRow(), me = this.me();
+    if (!loc || loc.id !== target || !me || this.isOwn(loc)) return;
+    await this.rpc("tally_member_bridge_link", {p_user: me, p_device: loc.device.id, p_bridge: loc.id});
+    this.pane.links = (this.pane.links || []).filter(x => x.user_id !== me).concat([{user_id: me, device_id: loc.device.id, bridge_id: loc.id}]);
+  },
+  // the bridge's line that will post a client's entries: the target's; none (null) when the poster has no bridge of their
+  // own for it (an older cloud without migration 54: the main bridge of the computer keeping the company, as before)
   postThrough(co){
     const rows = this.bridgesHeard(), id = co ? this.postTargetFor(co.id) : "";
     if (id) return rows.find(r => r.id === id) || null;
+    if (!this.pane.noTarget) return null;
     const c = co && (this.pane.companies || []).find(x => x.client_id === co.id && x.device_id), devId = c && c.device_id;
     return rows.find(r => r.go && !r.old && r.main && !r.changesOnly && (!devId || r.device.id === devId)) || null;
+  },
+  // why the poster has no bridge of their own for a company, and what to do (migration 54's tally_post_own_words)
+  noTargetWords(company){
+    const own = this.bridgesHeard().filter(r => r.go && !r.old && r.id && this.isOwn(r)), w = (l) => [...new Set(l.map(r => [r.computer, r.user].filter(Boolean).join(" \u00b7 ")))].join(", ");
+    const head = "Nobody can post into " + company + " from your sign-in just now: ";
+    if (!own.length) return head + "FinCom has not heard from a FinCom Bridge of yours. Install FinCom Bridge on the computer where you use Tally, as your own Windows user (\u201cJust for me\u201d), and connect it to FinCom; then open " + company + " in Tally there and post again.";
+    const has = own.filter(r => this.hasOpen(r, company));
+    if (has.length) return head + "your FinCom Bridge (" + w(has) + ") has it open but is set to Changes only or only reads Tally. Ask the firm\u2019s owner to switch Changes only off for it (Tally page), then post again.";
+    const may = own.filter(r => r.mayPost);
+    return head + "your FinCom Bridge (" + w(may.length ? may : own) + ") does not have " + company + " open in Tally. Open " + company + " in Tally there, then post again.";
   },
   // an owner switches a bridge to changes only (it never takes a posting) or back -> tally_bridge_changes_only
   async changesOnly(r, on){
@@ -609,17 +672,39 @@ const TCloud = {
   async readResume(r){
     await this.control("tally_read_resume", {p_device: r ? r.device.id : null}, "Reading resumes on " + (r ? r.computer : "every computer") + " within 30 seconds.");
   },
-  async releasePilot(v, r){
-    const a = await askConfirm({title: "Try version " + v + " on " + r.computer + "?", ok: "Try it there",
-      body: "<p>FinCom Bridge " + esc(v) + " installs itself on <b>" + esc(r.computer) + "</b> only. Every other computer keeps its version until you approve " + esc(v) + " for all, after a working day on " + esc(r.computer) + ".</p>"});
+  // the owner's rule of 05-Oct-2026 (migration 54): new versions go to every computer by themselves; an owner HOLDS a
+  // version (no bridge takes it; a reason is required, kept with who and when), lets it go again, rolls every bridge back
+  // to an earlier version (until cleared), and clears that rollback
+  async releaseHold(v){
+    const a = await askConfirm({title: "Hold version " + v + "?", ok: "Hold it",
+      body: "<p>No bridge of the firm takes FinCom Bridge " + esc(v) + " until you let it go; the ones running it keep running.</p>" +
+        '<div class="bk-form one"><label><span>Why (kept with the version, shown on this page)</span><input id="holdWhy" maxlength="500" placeholder="What went wrong"></label></div>',
+      read: () => ({why: ((document.getElementById("holdWhy") || {}).value || "").trim()}), validate: d => d && d.why ? "" : "Say why the version is held."});
     if (!a || !a.ok) return;
-    await this.control("tally_release_pilot", {p_version: v, p_device: r.device.id}, "Version " + v + " goes to " + r.computer + " at its next heartbeat.");
+    await this.control("tally_release_hold", {p_version: v, p_why: a.data.why}, "Version " + v + " is held: no bridge takes it.");
   },
-  async releaseApprove(v){
-    const a = await askConfirm({title: "Approve version " + v + " for all computers?", ok: "Approve",
-      body: "<p>Every computer of the firm installs FinCom Bridge " + esc(v) + " at its next check. FinCom\u2019s cloud allows it only after a working day on the pilot computer with no stop by itself.</p>"});
+  async releaseUnhold(v){
+    const a = await askConfirm({title: "Let version " + v + " go?", ok: "Let it go",
+      body: "<p>Every bridge of the firm takes FinCom Bridge " + esc(v) + " by itself again, within a few hours.</p>" +
+        '<div class="bk-form one"><label><span>Note (kept)</span><input id="unholdWhy" maxlength="500" placeholder="What was put right"></label></div>',
+      read: () => ({why: ((document.getElementById("unholdWhy") || {}).value || "").trim()})});
     if (!a || !a.ok) return;
-    await this.control("tally_release_approve", {p_version: v}, "Version " + v + " is approved for all computers.");
+    await this.control("tally_release_unhold", {p_version: v, p_why: (a.data && a.data.why) || ""}, "Version " + v + " goes to every computer again.");
+  },
+  async releaseRollback(){
+    const a = await askConfirm({title: "Roll every bridge back to an earlier version?", ok: "Roll back",
+      body: "<p>Each bridge of the firm that keeps that version from its last update puts it back by itself, and no bridge takes a newer version until you clear the rollback. A bridge that does not keep it stays as it is and says so in its log.</p>" +
+        '<div class="bk-form one"><label><span>Version (like 2.2.4)</span><input id="rollbackVersion" maxlength="20" placeholder="2.2.4"></label>' +
+        '<label><span>Why (kept, shown on this page)</span><input id="rollbackWhy" maxlength="500" placeholder="What went wrong"></label></div>',
+      read: () => ({version: ((document.getElementById("rollbackVersion") || {}).value || "").trim(), why: ((document.getElementById("rollbackWhy") || {}).value || "").trim()}),
+      validate: d => !d || !/^\d{1,4}\.\d{1,4}\.\d{1,4}$/.test(d.version) ? "Give the version, like 2.2.4." : !d.why ? "Say why." : ""});
+    if (!a || !a.ok) return;
+    await this.control("tally_release_rollback", {p_version: a.data.version, p_why: a.data.why}, "Every bridge goes back to version " + a.data.version + " (where it is kept); no newer version until you clear it.");
+  },
+  async releaseRollbackClear(){
+    const a = await askConfirm({title: "Clear the rollback?", ok: "Clear it", body: "<p>Every bridge takes the newest version by itself again, within a few hours.</p>"});
+    if (!a || !a.ok) return;
+    await this.control("tally_release_rollback_clear", {p_why: ""}, "The rollback is cleared; the bridges update themselves again.");
   },
   // round 4, item 23: an owner withdraws a version on trial or approved (a reason is required; the cloud's beat gives it
   // to no computer any more; a new pilot of it is allowed)
@@ -690,6 +775,9 @@ const TCloud = {
         await Bridge.call("/cloudlink", {url: this.ingestUrl(), key: d.key}, 60000);
         this.autoAt = Date.now() + 60000;
       }
+      // the owner's rule of 05-Oct-2026: this browser's own bridge is the member's (self-linked); on a computer key shared
+      // with another Windows user whose bridge is the main one, it gets a key of its own
+      if (await this.autoOwn()) return;
       const co = CO(), o = co && Bridge.openFor(co);
       if (o){
         const row = ((await Cloud.api("tally_companies?select=client_id&company=eq." + encodeURIComponent(o.name))) || [])[0];
@@ -700,6 +788,35 @@ const TCloud = {
       this.autoAt = Date.now() + 10 * 60000;
     } catch (e){ this.autoErr = (e && e.message) || String(e); }
     finally { this.autoBusy = false; }
+  },
+  // after pairing (TCloud.auto): #4 the member is linked to this browser's own proven bridge when they are linked to none
+  // (or to one FinCom no longer hears from), unless it posts for another member; #7 when that bridge reports through a
+  // computer key whose main bridge is ANOTHER Windows user's (1.15.0's settings carried over), a fresh key is made for this
+  // user, the bridge's identity moves to it (tally_bridge_own_key: its postings and links go with it) and the bridge is
+  // given the new key. true when a new key was handed over. An older cloud without migration 54: nothing done
+  async autoOwn(){
+    const me = this.me(), id = (Bridge.cfg() || {}).bridgeId || "";
+    if (!me || !/^go-[0-9a-f]{6,32}$/.test(id)) return false;
+    try {
+      const devs = [].concat(await Cloud.api("tally_devices?select=id,name,main_bridge,info,created_by,revoked") || []).filter(d => !d.revoked);
+      const d = devs.find(x => x.info && x.info.bridges && x.info.bridges[id]);
+      if (!d) return false;                                                  // not reported yet: next time
+      const bs = d.info.bridges, u = (x) => String((x && x.user) || "").trim().toLowerCase();
+      const links = [].concat(await Cloud.api("tally_member_bridges?select=user_id,device_id,bridge_id") || []);
+      const mine = links.find(l => l.user_id === me && l.bridge_id), taken = links.some(l => l.user_id !== me && l.bridge_id === id && l.device_id === d.id);
+      if (taken) return false;
+      const link = async () => { await this.rpc("tally_member_bridge_link", {p_user: me, p_device: d.id, p_bridge: id}); this.pane.links = links.filter(l => l.user_id !== me).concat([{user_id: me, device_id: d.id, bridge_id: id}]); };
+      if (d.main_bridge && d.main_bridge !== id && bs[d.main_bridge] && u(bs[d.main_bridge]) !== u(bs[id])){
+        if (!mine || mine.bridge_id !== id || mine.device_id !== d.id) await link();
+        const k = await this.rpc("tally_device_create", {p_name: String([Bridge.st.computer || bs[id].computer || "Office computer", Bridge.st.user || bs[id].user || ""].filter(Boolean).join(" \u00b7 ")).slice(0, 80)});
+        await this.rpc("tally_bridge_own_key", {p_bridge: id, p_to: k.id});
+        await Bridge.call("/cloudlink", {url: this.ingestUrl(), key: k.key}, 60000);
+        return true;
+      }
+      const heard = mine && devs.some(x => x.id === mine.device_id && x.info && x.info.bridges && x.info.bridges[mine.bridge_id]);
+      if (!mine || !heard) await link();
+    } catch (e){ this.autoErr = (e && e.message) || String(e); }
+    return false;
   },
   async revoke(id, name){
     const r = await askConfirm({title: "Remove " + name + "?", ok: "Remove it", danger: true, body: "<p>That computer will not be able to send anything to the cloud any more. What it sent stays. To send again, connect it again.</p>"});

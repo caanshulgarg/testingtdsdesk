@@ -314,7 +314,7 @@ func runBridge(console bool) int {
 	if testMode() {
 		seedFromOldCopy()
 	}
-	// 2.3.0: the first free port of 9100..9119 (the remembered one first); none: said once, and the bridge stops
+	// 2.3.0: the first free port of 9100..9199 (the remembered one first); none: said once, and the bridge stops
 	ln, err := bindAndRemember(listenLocal, ownBridgeOn)
 	if err != nil {
 		msg := err.Error()

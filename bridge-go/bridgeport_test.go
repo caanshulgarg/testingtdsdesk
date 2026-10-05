@@ -1,4 +1,4 @@
-// 2.3.0: one bridge for each Windows user on a shared server: the first free port of 9100..9119, remembered; when none
+// 2.3.0: one bridge for each Windows user on a shared server: the first free port of 9100..9199, remembered; when none
 // is free, one plain message and the bridge stops (no endless retry).
 package main
 
@@ -62,7 +62,7 @@ func TestBridgePortFirstFree(t *testing.T) {
 
 func TestBridgePortAllTakenGivesUp(t *testing.T) {
 	busy := map[int]bool{}
-	for p := 9100; p <= 9119; p++ {
+	for p := 9100; p <= 9199; p++ {
 		busy[p] = true
 	}
 	var tried []int
@@ -70,18 +70,18 @@ func TestBridgePortAllTakenGivesUp(t *testing.T) {
 	if ln != nil || err == nil {
 		t.Fatal("bound with every port taken")
 	}
-	want := "FinCom Bridge could not start: ports 9100–9119 are all in use on " + computerName()
+	want := "FinCom Bridge could not start: ports 9100–9199 are all in use on " + computerName()
 	if err.Error() != want {
 		t.Fatalf("message:\n got %q\nwant %q", err.Error(), want)
 	}
-	if len(tried) != 20 {
+	if len(tried) != 100 {
 		t.Fatalf("each port once, then stop (no retry): %v", tried)
 	}
 }
 
 func TestBridgePortWindowsReason(t *testing.T) {
 	odd := map[int]error{}
-	for p := 9100; p <= 9119; p++ {
+	for p := 9100; p <= 9199; p++ {
 		odd[p] = errors.New("An attempt was made to access a socket in a way forbidden by its access permissions.")
 	}
 	var tried []int
@@ -122,7 +122,7 @@ func TestRunBridgeNoPortStops(t *testing.T) {
 		t.Fatalf("exit code %d, want %d", code, exitNoPort)
 	}
 	msg := readText(startFailedFile())
-	if !strings.Contains(msg, "ports 9100–9119 are all in use on") {
+	if !strings.Contains(msg, "ports 9100–9199 are all in use on") {
 		t.Fatalf("the tray's message: %q", msg)
 	}
 	if n := strings.Count(readText(logFile()), "could not start"); n != 1 {
@@ -156,7 +156,7 @@ func TestBridgePortRemembered(t *testing.T) {
 
 // the setup keeps a port of the range the user's bridge took before; anything else becomes the default
 func TestInstallPortKept(t *testing.T) {
-	for _, c := range []struct{ had, def, want int }{{9103, 9100, 9103}, {0, 9100, 9100}, {9200, 9100, 9100}, {9119, 9101, 9119}, {8080, 9101, 9101}} {
+	for _, c := range []struct{ had, def, want int }{{9103, 9100, 9103}, {0, 9100, 9100}, {9200, 9100, 9100}, {9119, 9101, 9119}, {9150, 9100, 9150}, {9199, 9101, 9199}, {9200, 9101, 9101}, {8080, 9101, 9101}} {
 		o := newOrdered()
 		if c.had != 0 {
 			o.Set("Port", float64(c.had))
@@ -166,4 +166,29 @@ func TestInstallPortKept(t *testing.T) {
 			t.Fatalf("had %d: got %v want %d", c.had, o.Get("Port"), c.want)
 		}
 	}
+}
+
+// the owner's rule of 05-Oct-2026 (no limit by user or number of bridges): 100 ports, 9100..9199, one for each Windows
+// user's bridge on a shared server (was 20, 9100..9119); with the first twenty taken, the 21st user's bridge starts on 9120
+func TestBridgePortRange9100to9199(t *testing.T) {
+	if bridgePortFirst != 9100 || bridgePortLast != 9199 {
+		t.Fatalf("the range: %d..%d, want 9100..9199", bridgePortFirst, bridgePortLast)
+	}
+	l := bridgePortOrder(0)
+	if len(l) != 100 || l[0] != 9100 || l[99] != 9199 {
+		t.Fatalf("the ports tried: %d of them, %v..%v", len(l), l[0], l[len(l)-1])
+	}
+	if l2 := bridgePortOrder(9150); len(l2) != 100 || l2[0] != 9150 {
+		t.Fatalf("the remembered one first, each once: %d %v", len(l2), l2[:3])
+	}
+	busy := map[int]bool{}
+	for p := 9100; p <= 9119; p++ {
+		busy[p] = true
+	}
+	var tried []int
+	ln, port, err := bindBridgePort(9100, fakeListen(busy, nil, &tried), func(int) bool { return false })
+	if err != nil || port != 9120 {
+		t.Fatalf("the 21st Windows user's bridge: port %d, %v", port, err)
+	}
+	ln.Close()
 }
