@@ -167,7 +167,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			pairUntil = time.Now().Add(-time.Minute) // one connection per code
 			pairMu.Unlock()
 			writeLog("FinCom connected with the code (" + sentOrigin + ").")
-			sendJSON(w, 200, M{"ok": true, "key": cfgS("Key"), "computer": computerName(), "user": ownerName(), "version": BridgeVersion}, origin)
+			sendJSON(w, 200, M{"ok": true, "key": cfgS("Key"), "computer": computerName(), "user": ownerName(), "version": BridgeVersion, "bridgeId": "go-" + instanceID(), "port": toInt(cfg("Port"))}, origin)
 			return
 		}
 		pairMu.Unlock()

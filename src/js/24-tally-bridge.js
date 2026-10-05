@@ -10,7 +10,37 @@ const Bridge = {
   on(){ return !this.blocked() && !!this.cfg().key; },
   up(){ return this.st.state === "ok"; },
   pinQ(){ const pp = this.cfg().port; return pp ? "&port=" + pp : ""; },
-  async call(path, body, ms){
+  // FinCom Bridge 2.3.0: on a shared Windows server each Windows user's bridge takes its own port of 9100..9119 and
+  // answers only programs of its own Windows user (another user's bridge: 403 "not your FinCom Bridge"). FinCom finds its
+  // own by asking /ping on each port: the bridge it was paired with (its id), else the bridge linked to the signed-in
+  // member on the Tally page, else the one that says it is this Windows user's ("yours"); an older bridge (no "yours")
+  // on 9100 as before. Only 127.0.0.1 addresses of the range are looked through; another address set by hand is kept.
+  PORTS: Array.from({length: 20}, (_, i) => 9100 + i),
+  localUrl(u){ const m = String(u || "").match(/^http:\/\/(127\.0\.0\.1|localhost):(\d+)\/*$/); return !!m && this.PORTS.includes(+m[2]); },
+  async probe(port, ms){
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), ms || 1500);
+    try { const r = await fetch("http://127.0.0.1:" + port + "/ping", {cache: "no-store", signal: ctl.signal}); const j = await r.json().catch(() => null); return j && j.ok !== false ? Object.assign({port}, j) : null; }
+    catch (e){ return null; } finally { clearTimeout(t); }
+  },
+  async find(){
+    const c = this.cfg();
+    if (!this.localUrl(c.url)) return null;
+    const found = (await Promise.all(this.PORTS.map(p => this.probe(p)))).filter(Boolean);
+    const linked = typeof TCloud === "object" && TCloud.myBridge ? TCloud.myBridge() : "";
+    const pick = (c.bridgeId && found.find(b => b.bridgeId === c.bridgeId && b.yours !== false)) || (linked && found.find(b => b.bridgeId === linked && b.yours !== false))
+      || found.find(b => b.yours === true) || found.find(b => b.yours === undefined && b.port === 9100) || null;
+    this.foundAt = Date.now();
+    return pick ? {url: "http://127.0.0.1:" + pick.port, bridgeId: pick.bridgeId || "", port: pick.port} : null;
+  },
+  // the bridge did not answer, or it is another Windows user's: looked for once (at most every 15 s) on 9100..9119
+  async refind(){
+    if (this.foundAt && Date.now() - this.foundAt < 15000) return false;
+    const f = await this.find();
+    if (!f || f.url === this.cfg().url.replace(/\/+$/, "")) return false;
+    this.setCfg({url: f.url, bridgeId: f.bridgeId || this.cfg().bridgeId || ""});
+    return true;
+  },
+  async call(path, body, ms, again){
     const c = this.cfg();
     if (c.port){ if (body && typeof body === "object" && !Array.isArray(body)) body = Object.assign({port: c.port}, body); }
     // writes to Tally go into the firm's audit trail (who, which company, how many)
@@ -24,10 +54,15 @@ const Bridge = {
     try {
       r = await fetch(c.url.replace(/\/+$/, "") + path, {method: body ? "POST" : "GET", headers: Object.assign({"X-Bridge-Key": c.key}, body ? {"Content-Type": "application/json"} : {}), body: body ? JSON.stringify(body) : undefined, signal: ctl.signal, cache: "no-store"});
     } catch (e){
+      if (!again && e && e.name !== "AbortError" && await this.refind()) return this.call(path, body, ms, true);
       throw {code: "bridge_down", message: e && e.name === "AbortError" ? "FinCom Bridge did not answer in time. Check the FinCom Bridge icon near the clock (right-click \u2192 Test connection)." : "FinCom Bridge is not running on this computer (" + c.url + "). Check the FinCom Bridge icon near the clock (right-click \u2192 Test connection)."};
     } finally { clearTimeout(timer); }
     let j = null;
     try { j = await r.json(); } catch (e){ j = null; }
+    if (r.status === 403 && j && j.notYours){
+      if (!again && await this.refind()) return this.call(path, body, ms, true);
+      throw {code: "bridge_other_user", message: "The FinCom Bridge at " + c.url + " is another Windows user's on this computer, and FinCom did not find yours on ports 9100\u20139119. Install FinCom Bridge for your own Windows user (the setup, \u201cJust for me\u201d)."};
+    }
     if (!r.ok || !j || j.ok === false) throw {code: r.status === 401 ? "bridge_key" : "bridge", message: (j && (j.error || j.message)) || ("The bridge answered with error " + r.status + ".")};
     return j;
   },
@@ -203,12 +238,20 @@ const Bridge = {
   // (bridge 1.11: only for a few minutes after it starts, once, and never for another web page)
   async pair(code){
     const c = this.cfg();
-    const base = c.url.replace(/\/+$/, "");
-    const r = await fetch(base + "/pair?code=" + encodeURIComponent(String(code || "").trim()), {cache: "no-store"}).catch(() => null);
+    let base = c.url.replace(/\/+$/, ""), bridgeId = "";
+    const ask = b => fetch(b + "/pair?code=" + encodeURIComponent(String(code || "").trim()), {cache: "no-store"}).catch(() => null);
+    let r = await ask(base);
+    let j = r ? await r.json().catch(() => null) : null;
+    // 2.3.0: nothing there, or another Windows user's bridge: this user's own on 9100..9119
+    if ((!r || (r.status === 403 && j && j.notYours)) && this.localUrl(base)){
+      this.foundAt = 0;
+      const f = await this.find();
+      if (f && f.url !== base){ base = f.url; bridgeId = f.bridgeId || ""; r = await ask(base); j = r ? await r.json().catch(() => null) : null; }
+    }
     if (!r) throw {code: "bridge_down", message: "FinCom Bridge is not running on this computer yet. Install FinCom Bridge from the Tally page."};
-    const j = await r.json().catch(() => null);
+    if (r.status === 403 && j && j.notYours) throw {code: "pair", message: "That FinCom Bridge is another Windows user's on this computer. Install FinCom Bridge for your own Windows user (the setup, \u201cJust for me\u201d), then connect again."};
     if (!j || !j.ok) throw {code: "pair", message: (j && j.error) || "The bridge would not hand over its key."};
-    this.setCfg({key: j.key, url: base});
+    this.setCfg({key: j.key, url: base, bridgeId: j.bridgeId || bridgeId || ""});
     return j;
   },
   tallyName(co){ const o = this.openFor(co); return o ? o.name : (co.tallyName || co.name); },
