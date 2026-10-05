@@ -60,5 +60,6 @@
  "62-post-reasons.js",
  "58-ledgers.js",
  "60-choices.js",
- "61-recorder.js"
+ "61-recorder.js",
+ "63-alerts.js"
 ]

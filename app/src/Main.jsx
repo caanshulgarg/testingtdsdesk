@@ -8,32 +8,12 @@ import Guard from "./Guard.jsx";
 import Legacy from "./parts/Legacy.jsx";
 import SignIn from "./screens/SignIn.jsx";
 import SCREENS from "./screens/index.js";
-import { RecorderNotes } from "./parts/TallyLine.jsx";
 import Loading from "./parts/Loading.jsx";
 
 const { Working, Books, Txn, Dash, DocqPanel, PostStep, DoneStep, ClientSetup, Collect, Sales, VendorRecon, ReviewTable, Invoices, Bank, Parties, Export,
   Help, Today, InboxAll, TallyHome, FirmSettings, Clients, Drawer, BankBar, SalesBar, ActionBar } = SCREENS;
 
 // something wrong with reading bills on this computer
-function SelfTestBanner() {
-  const sum = selfTestSummary();
-  if (sum.state !== "fail") return null;
-  const msgs = sum.fails.map((k) => (k === "pdf" ? "PDF reading: " : "Photo OCR: ") + sum.r[k].msg);
-  return <div className="banner" style={{ borderLeftColor: "var(--stop)", background: "var(--stop-soft)", marginBottom: 12 }}><b>Bill reading has a problem here.</b> {msgs.join(" ")}{" "}
-    <button className="linkbtn" onClick={() => doAct("goSelfTest")}>See the self-test</button></div>;
-}
-
-// the firm's credit running out, and where the work is being saved
-function Banners() {
-  const a = S.account, bal = a && a.firm ? num(a.firm.balance) : 0, warn = a && a.firm ? num(a.firm.warn_at) : 0;
-  const credit = !a || !a.firm ? null
-    : S.creditStop && Date.now() - S.creditStop.at < 6 * 3600e3 && bal <= 0 ? <p className="banner" style={{ borderLeftColor: "var(--stop)", background: "var(--stop-soft)" }}><b>Credit finished.</b> Reading new bills, bank statements and invoices is paused. Everything already in FinCom still works, and entries can still be posted to Tally. Ask the administrator to add credit.</p>
-    : bal <= warn ? <p className="banner">Credit left: <b>{INR.format(bal)}</b>. Ask the administrator to top it up before it runs out.</p> : null;
-  const saved = S.storeKind === "db" || (Cloud.on() && Cloud.st && !Cloud.st.error) ? null
-    : <p className="banner">{S.storeKind === "local" || S.storeKind === "idb" ? "Your work is saved in this browser only. Clearing browser data will remove it." : "Your work is not being saved. It will be lost when you close this page."}</p>;
-  return <>{credit}{saved}</>;
-}
-
 function ClientInbox() {
   const has = Cloud.on() && docqFor(S.coId).length;
   return <>{has ? <DocqPanel cid={S.coId || ""} /> : <p className="note">Nothing is waiting for this client. Documents sent in by office automation appear here.</p>}
@@ -75,8 +55,8 @@ export default function Main({ v }) {
   if (signInNeeded()) return <Guard name="the sign-in page" v={v}><SignIn /></Guard>;
   const company = S.view === "company" && CO();
   return <>
-    <SelfTestBanner /><Banners />
-    {company && <Guard name="the Tally recorder notes" v={v} quiet><RecorderNotes cid={company.id} /></Guard>}
+    {/* round 3 (05-Oct-2026): no warnings on the pages; the credit, the storage, the self-test and Tally's alerts are in
+        the bell in the top bar (parts/Bell.jsx, AlertHub in src/js/63-alerts.js) */}
     {company && <Guard name="the reading cards" v={v} quiet><Working /></Guard>}
     <Guard name="this screen" v={v} key={S.view + ":" + (company ? S.tab : S.homeTab)}><Screen /></Guard>
     {drawerEntry() && <Guard name="the bill drawer" v={v}><Drawer /></Guard>}

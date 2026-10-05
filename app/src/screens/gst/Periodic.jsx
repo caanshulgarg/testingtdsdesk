@@ -81,7 +81,8 @@ function Status({ c }) {
 
 function FileBox({ q, c, reg }) {
   const iff = c.kind === "iff";
-  return <div className="bk-alert" data-qfile={c.m} style={{ margin: "12px 0 0" }}>
+  // the file's contents: a section of the page, not a warning box (round 3, 05-Oct-2026)
+  return <div className="dash-card qfile" data-qfile={c.m} style={{ margin: "12px 0 0" }}>
     <b>What goes in this file: {c.label}</b>
     {iff ? <ul style={{ margin: "6px 0 0 18px", padding: 0 }}>
       <li>{pl(c.n, "invoice") + " to registered customers (table 4A)" + (c.notes ? " and " + pl(c.notes, "credit or debit note") + " (table 9B)" : "") + ", dated in " + GSTR.label(c.m) + "."}</li>

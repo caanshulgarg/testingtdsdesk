@@ -23,6 +23,7 @@ import { Notices } from "../parts/Ai.jsx";
 import { LedgerBanner, GstDriftNote, SyncNote, JobsNote } from "../parts/Notes.jsx";
 import { BooksAsOf } from "../parts/TallyLine.jsx";
 import Loading from "../parts/Loading.jsx";
+import { AlertLine } from "../parts/Bell.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const Q_MONTHS = { Q1: "Apr to Jun", Q2: "Jul to Sep", Q3: "Oct to Dec", Q4: "Jan to Mar" };
@@ -190,7 +191,14 @@ function EmptyTab({ tab }) {
   </>;
 }
 
+// round 3 of the UI pass (05-Oct-2026): the client's Books page is one of the two places with an alert on the page: ONE
+// slim line, the client's first alert and its button (the rest in the bell)
 export default function Books() {
+  const co = CO();
+  return <>{co && <AlertLine cid={co.id} />}<BooksPage /></>;
+}
+
+function BooksPage() {
   const co = CO();
   if (!S.books || S.books.cid !== co.id) { openBooks(co.id); return <Loading what="the books" />; }
   // live sync: the server's latest first; this computer's copy is not shown in place of a newer one

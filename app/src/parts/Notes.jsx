@@ -1,4 +1,5 @@
 import { ListRows } from "./ListTable.jsx";
+import NoticeLine from "./NoticeLine.jsx";
 // Small notes shared by several screens: ledgers still to confirm (TDS, GST), filed GST returns the books no longer
 // match, whether the TDS and GST work is saved for the firm, Tally having changed since a tab was worked out, a new
 // client's first steps, and bringing in day books for several clients at once. Was ledgerBanner, gstDriftNote,
@@ -9,8 +10,10 @@ export function LedgerBanner({ b, which }) {
   // one count everywhere (review of 01-Oct-2026): the same ledgers as the "N to confirm" on the Tally ledgers tab
   const p = LedMaster.pending(b);
   if (!p.length) return null;
-  return <div className="bk-alert bad" style={{ marginBottom: 12 }}><b>{p.length + " ledger" + (p.length === 1 ? " is" : "s are") + " still to be confirmed."}</b> The figures below use the guesses; the return files wait until they are confirmed.{" "}
-    <button className="linkbtn" onClick={() => booksTabGo("ledgers")}>Confirm them</button><div className="nr" style={{ whiteSpace: "normal" }}>{p.slice(0, 6).map((x) => x[0]).join(", ") + (p.length > 6 ? " and " + (p.length - 6) + " more" : "")}</div></div>;
+  // one row (round 3, 05-Oct-2026); the ledgers' names on hover
+  return <NoticeLine sev="bad" data-ledger-banner="" style={{ marginBottom: 12 }} text={p.length + " ledger" + (p.length === 1 ? " is" : "s are") + " still to be confirmed: the figures use guesses and the return files wait."}
+    how={"Still to confirm: " + p.slice(0, 6).map((x) => x[0]).join(", ") + (p.length > 6 ? " and " + (p.length - 6) + " more" : "") + ". Confirm them on the Tally ledgers tab."}>
+    <button className="btn small" onClick={() => booksTabGo("ledgers")}>Confirm them</button></NoticeLine>;
 }
 
 // filed GST returns that the books no longer match

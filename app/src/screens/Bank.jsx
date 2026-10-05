@@ -19,6 +19,7 @@ import LedgerBox from "../parts/LedgerBox.jsx";
 import { BankLedger } from "../parts/Confirm.jsx";
 import { BusyCard } from "../parts/Reading.jsx";
 import { ChipBar, NoMatch } from "../parts/ChipBar.jsx";
+import NoticeLine from "../parts/NoticeLine.jsx";
 
 const MODE_NAME = { ATM: "ATM cash withdrawal", CASH: "Cash deposit", CHARGES: "Bank charges", INTEREST: "Interest credit" };
 // an empty tab says what to do next (spec K6, round 2)
@@ -163,11 +164,12 @@ function LastFail({ f }) {
 
 // before the ledgers are known, suggestions cannot be made: how to get them
 function LedgerSetup({ co }) {
+  // one row each (round 3, 05-Oct-2026), the how-to on hover and behind How
   if (hasLedgerList()) return null;
-  if (B().ledgersLoading || (typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id))) return <div className="bk-setup"><div><b>Loading ledgers from FinCom’s cloud copy of the books…</b><div className="note">The ledgers of {(TCloud.book(co.id) || {}).company || co.name}, as the Tally computer last sent them.</div></div></div>;
-  if (bridgeLive(co)) return <div className="bk-setup"><div><b>Loading ledgers from Tally…</b><div className="note">{Bridge.openFor(co).name} is open in Tally.</div></div></div>;
-  if (live()) return <div className="bk-setup"><div><b>Open {Bridge.tallyName(co)} in TallyPrime</b><div className="note">Its ledgers load automatically once it is open. Or import the ledger list from a file.</div></div><button className="btn small" onClick={() => bankAct("ledPick")}>Import from file</button></div>;
-  return <div className="bk-setup"><div><b>Import the Tally ledger list for {co.name}</b><div className="note">Suggestions only use ledgers that exist in Tally. In Tally: Display More Reports → List of Accounts → Export (Excel or XML). With FinCom Bridge this happens automatically.</div></div><button className="btn small" onClick={() => bankAct("ledPick")}>Import ledger list</button></div>;
+  if (B().ledgersLoading || (typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id))) return <NoticeLine sev="info" text={"Loading ledgers from FinCom’s cloud copy of the books of " + ((TCloud.book(co.id) || {}).company || co.name) + "…"} />;
+  if (bridgeLive(co)) return <NoticeLine sev="info" text={"Loading ledgers from Tally (" + Bridge.openFor(co).name + " is open)…"} />;
+  if (live()) return <NoticeLine text={"Open " + Bridge.tallyName(co) + " in TallyPrime: its ledgers load by themselves."} how="Or import the ledger list from a file."><button className="btn small" onClick={() => bankAct("ledPick")}>Import from file</button></NoticeLine>;
+  return <NoticeLine text={"Import the Tally ledger list for " + co.name + ": suggestions use only ledgers Tally has."} how="In Tally: Display More Reports → List of Accounts → Export (Excel or XML). With FinCom Bridge this happens by itself."><button className="btn small" onClick={() => bankAct("ledPick")}>Import ledger list</button></NoticeLine>;
 }
 
 // the deleted statements (soft deletes, kept on the server and in this browser), read once for the Restore item
@@ -334,6 +336,7 @@ export function BankBar() {
       {noLed && <span className="bk-stat bad" data-bank-noledger="">{whyLed + " "}<button className="linkbtn" onClick={chooseLed}>{/guessed/.test(whyLed) ? "Confirm the ledger" : "Choose the ledger"}</button></span>}</>;
     right = <>
       {tc.suggested > 0 && <button className="btn" onClick={() => bankAct("bankAcceptAll")}>Confirm all suggestions ({tc.suggested})</button>}
+      {canPostTally(CO()) && postThroughWords(CO()) && <span className="note" data-post-through="">{postThroughWords(CO())}</span>}
       {canPostTally(CO()) ? <button className="btn primary" disabled={!tc.post || noLed} title={noLed ? whyLed : undefined} onClick={() => bankAct("bankPost")}>Post to Tally ({tc.post})</button>
         : <button className="btn primary" disabled={!tc.post || noLed} title={noLed ? whyLed : undefined} onClick={() => bankAct("bankXml")}>Create Tally file ({tc.post})</button>}
     </>;

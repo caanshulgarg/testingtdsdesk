@@ -17,6 +17,7 @@ import LedgerSelect from "../parts/LedgerSelect.jsx";
 import Confirm from "../parts/Confirm.jsx";
 import { BusyCard } from "../parts/Reading.jsx";
 import { ChipBar, NoMatch } from "../parts/ChipBar.jsx";
+import NoticeLine from "../parts/NoticeLine.jsx";
 
 const live = () => Bridge.on() && Bridge.up();
 const STATUS = { ready: ["ok", "Post to Tally"], review: ["warn", "To review"], posted: ["ok", "Posted"], intally: ["no", "In Tally"], ignored: ["no", "Ignored"] };
@@ -305,10 +306,11 @@ export default function Sales() {
   const head = <>
     {tabs}
     {s.busy && <BusyCard title="Working on sales…" detail={s.busy} />}
-    {!hasLedgerList() && (bridgeLive(co) ? <div className="bk-setup"><div><b>Loading ledgers from Tally…</b></div></div>
-      : (B() && B().ledgersLoading) || (typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id)) ? <div className="bk-setup"><div><b>Loading ledgers from FinCom’s cloud copy of the books…</b></div></div>
-      : <div className="bk-setup"><div><b>Tally ledgers are needed for Sales vouchers</b><div className="note">{Bridge.on() ? "Open " + Bridge.tallyName(co) + " in TallyPrime, or import the ledger list." : "Import the ledger list (Tally: Display More Reports → List of Accounts → Export), or connect FinCom Bridge."}</div></div>
-        <button className="btn small" onClick={() => salesAct("ledPick")}>Import ledger list</button></div>)}
+    {/* one row (round 3, 05-Oct-2026), the how-to on hover and behind How */}
+    {!hasLedgerList() && (bridgeLive(co) ? <NoticeLine sev="info" text="Loading ledgers from Tally…" />
+      : (B() && B().ledgersLoading) || (typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id)) ? <NoticeLine sev="info" text="Loading ledgers from FinCom’s cloud copy of the books…" />
+      : <NoticeLine text="Tally ledgers are needed for Sales vouchers." how={Bridge.on() ? "Open " + Bridge.tallyName(co) + " in TallyPrime, or import the ledger list." : "Import the ledger list (Tally: Display More Reports → List of Accounts → Export), or connect FinCom Bridge."}>
+        <button className="btn small" onClick={() => salesAct("ledPick")}>Import ledger list</button></NoticeLine>)}
     <div className="bk-head">
       {/* the page is named in the top bar (one heading, spec I); here only what it holds */}
       <div className="bk-id"><div className="bk-sub">{all.length} invoice{all.length === 1 ? "" : "s"}{all.length ? " · " + fmtDate(dates[0]) + " to " + fmtDate(dates[dates.length - 1]) : ""}</div></div>
@@ -383,6 +385,7 @@ export function SalesBar() {
     left = <><span className="bk-stat"><b>{tc.review}</b> to review</span><span className="bk-stat"><b>{tc.ready}</b> ready to post</span></>;
     right = <>
       {confirmable > 0 && <button className="btn" onClick={() => salesAct("salesConfirmAll")}>Confirm all suggestions ({confirmable})</button>}
+      {canPostTally(CO()) && postThroughWords(CO()) && <span className="note" data-post-through="">{postThroughWords(CO())}</span>}
       {canPostTally(CO()) ? <button className="btn primary" disabled={!tc.ready} onClick={() => salesAct("salesPost")}>Post to Tally ({tc.ready})</button>
         : <button className="btn primary" disabled={!tc.ready} onClick={() => salesAct("salesFile")}>Create Tally file ({tc.ready})</button>}
     </>;

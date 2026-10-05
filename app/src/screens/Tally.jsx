@@ -7,7 +7,8 @@
 import Msg from "../parts/Msg.jsx";
 import ListTable from "../parts/ListTable.jsx";
 import TallyPill from "../parts/TallyPill.jsx";
-import TallyLine, { GapLine } from "../parts/TallyLine.jsx";
+import TallyLine from "../parts/TallyLine.jsx";
+import { AlertLine } from "../parts/Bell.jsx";
 import SyncActivity from "./TallySync.jsx";
 import { TallyStates, TallyHistory } from "../parts/TallyStates.jsx";
 import { PostLog } from "./Done.jsx";
@@ -221,27 +222,6 @@ function RecorderSource({ r, owner }) {
       onChange={(ev) => TCloud.recorderSource(d, ev.target.value)}>
       {TCloud.RECORDER_SOURCES.map(([k, w]) => <option key={k} value={k}>{w}</option>)}</select></span>;
 }
-// round 20 (d.1): Tally's alerts (tally_alerts, migration 47): unread first, newest first; owner and staff mark one
-// read (tally_alert_read). Nothing at all when there are none, or without the table
-function Alerts() {
-  const rows = TCloud.on() ? Rec.alertsOf() : [];
-  if (!rows.length) return null;
-  const can = Rec.canWrite(), msg = Rec.alerts.msg, unread = rows.filter((x) => !x.read_at).length;
-  const coName = (cid) => (cid && S.companies && S.companies[cid] && S.companies[cid].name) || "";
-  return <div className="pane" data-alerts="" style={{ padding: "8px 16px" }}>
-    <h3 style={{ margin: "0 0 6px" }}>{"Alerts" + (unread ? " (" + unread + " unread)" : "")}</h3>
-    {msg && msg.err && <p className="bk-alert bad" data-alerts-msg="" style={{ margin: "4px 0" }}><Msg text={msg.err} /></p>}
-    {rows.map((x) => <div key={x.id} className="row" data-alert={String(x.id)} data-alert-unread={x.read_at ? undefined : ""} data-alert-kind={x.kind}
-      style={{ alignItems: "center", gap: 8, flexWrap: "wrap", margin: "2px 0", opacity: x.read_at ? 0.7 : 1 }}>
-      <span className={"tag " + (x.read_at ? "no" : x.kind === "summary" ? "ok" : "warn")}>{Rec.alertKind(x.kind)}</span>
-      {x.read_at ? <span>{x.words || ""}</span> : <b>{x.words || ""}</b>}
-      {coName(x.client_id) && <span className="note">{"· " + coName(x.client_id)}</span>}
-      <span className="note">{"· " + (x.at ? fmtDateTime(x.at) : "")}</span>
-      {x.read_at && <span className="note">{"· read by " + who(x.read_by)}</span>}
-      {!x.read_at && can && <button className="linkbtn" data-alert-read="" disabled={!!(msg && msg.busy)} onClick={() => Rec.alertRead(x)}>Mark read</button>}
-    </div>)}
-  </div>;
-}
 // phase 2 (F36, N102): is Tally's change recorder working on this computer, per company open there (the bridge's
 // heartbeat: info.bridges[id].recorder, FinCom Bridge 2.1.9 on). Nothing for a computer whose bridges report no recorder
 function RecorderLine({ r }) {
@@ -250,16 +230,8 @@ function RecorderLine({ r }) {
   const off = Rec.notRecording(r.device), open = Rec.openOf(r.device).filter((co) => rc[co]);
   if (!off.length && !open.length) return null;
   return <div className="row" data-recorder="" style={{ alignItems: "center", gap: 8, flexWrap: "wrap", marginLeft: 16 }}>
-    {off.length > 0 && <span className="tag bad" data-recorder-off="">{"Tally changes are not being recorded on " + r.computer}</span>}
-    {open.map((co) => { const x = rc[co]; return <span key={co} className={"note" + (x.seen ? "" : " bad")} data-recorder-co={co}>{co + ": " + (x.seen ? "recording" + (x.lastAt ? " \u00b7 last line " + tallyHm(x.lastAt) : "") : "not recording")}</span>; })}
+    {open.map((co) => { const x = rc[co]; return <span key={co} className="note" data-recorder-co={co}>{co + ": " + (x.seen ? "recording" + (x.lastAt ? " \u00b7 last line " + tallyHm(x.lastAt) : "") : "not recording")}</span>; })}
   </div>;
-}
-// J64: the computers whose Tally was open today with no recorder line for a working day (tally_recorder_silent)
-function Silent() {
-  const rows = TCloud.on() ? Rec.silentOf() : [];
-  if (!rows.length) return null;
-  return <div className="pane" style={{ padding: "8px 16px" }}>{rows.map((x) => { const d = Rec.devOf(x.device), pc = (d && ((d.info || {}).computer)) || x.name || "a computer";
-    return <p key={x.device || x.name} className="bk-alert warn" data-recorder-silent="" style={{ margin: "4px 0" }}>{"Silent today: " + pc + " (Tally open since " + (x.tallyOpenAt ? tallyHm(x.tallyOpenAt) : "today") + ", " + (x.lastLineAt ? "no recorder line since " + tallyHm(x.lastLineAt) : "no recorder line") + ")"}</p>; })}</div>;
 }
 function BridgeLines({ rows, latest }) {
   const [open, setOpen] = useState(false);
@@ -291,7 +263,6 @@ function BridgeLines({ rows, latest }) {
             : <button className="btn small" data-read-stop={r.device.id} onClick={() => TCloud.readStop(r)}>Stop reading on this computer</button>)}
           {owner && latest && !piloting && vnum(latest) > vnum(r.version) && <button className="btn small" data-release-pilot={r.device.id} onClick={() => TCloud.releasePilot(latest, r)}>{"Try version " + latest + " on this computer"}</button>}
         </div>}
-        {live && Rec.notResponding(r) && <div className="row" style={{ marginLeft: 16 }}><span className="tag bad" data-not-responding="">{Rec.notResponding(r)}</span></div>}
         {live && <RecorderLine r={r} />}
         {live && <div className="row" style={{ alignItems: "center", gap: 8, flexWrap: "wrap", marginLeft: 16 }}><PostSettings r={r} owner={owner} /></div>}
         {live && <div className="row" style={{ alignItems: "center", gap: 8, flexWrap: "wrap", marginLeft: 16 }}><TrialTools r={r} owner={owner} /></div>}
@@ -563,7 +534,7 @@ export default function TallyHome() {
       <button key={id} data-tally-tab={id} aria-selected={tab === id} onClick={() => { S.tallyTab = id; if (id === "activity") Rec.act.at = 0; render(); }}>{label}</button>)}</nav>
     {tab === "activity" ? <SyncActivity />
       : tab === "sent" ? <PostLog />
-      : <><Alerts /><Silent />
+      : <><AlertLine />
         {rows.length > 0 && <BridgeLines rows={rows} latest={latest} />}
         <ClientLines />
         {needCard ? <BridgeDownload m={m} /> : <DetailsCard m={m} />}
@@ -575,14 +546,14 @@ export default function TallyHome() {
 function ClientLines() {
   if (typeof tallyLine !== "function") return null;
   const cos = Object.values(S.companies || {}).filter((c) => !c.deleted).sort((a, c) => (c.id === S.coId) - (a.id === S.coId) || a.name.localeCompare(c.name));
-  const rows = cos.map((co) => [co, tallyLine(co)]).filter(([co, l]) => l || Rec.gapFor(co.id).length);
+  const rows = cos.map((co) => [co, tallyLine(co)]).filter(([co, l]) => l);
   if (!rows.length) return null;
   return <div className="pane" data-client-lines="">
     <h3 style={{ marginTop: 0 }}>Clients’ Tally</h3>
     <p className="note" style={{ margin: "0 0 8px" }}>The bridge reads Tally only when needed: when a client is opened here, on Update now, for a posting, and in its nightly catch-up. Entries made in Tally show here after the next of these.</p>
     {rows.map(([co]) => <div key={co.id} data-client-line={co.id} style={{ margin: "2px 0" }}>
       <div className="row" style={{ alignItems: "center", gap: 8, flexWrap: "wrap" }}><b>{co.name}</b><span className="note">·</span><TallyLine co={co} /></div>
-      <GapLine cid={co.id} /></div>)}
+</div>)}
   </div>;
 }
 

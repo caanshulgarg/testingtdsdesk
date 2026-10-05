@@ -1,10 +1,11 @@
 """python3 run_recorder_pcs.py - phase 2, F36 + N102 (is each PC recording Tally's changes?), J64 (silent today) and H52
 (Tally not responding). From the heartbeat (tally_devices.info.bridges[id].recorder = {<company>: {seen, lastAt}}, FinCom
-Bridge 2.1.9 on): the Tally page says per company on each computer "recording · last line <time>" or "not recording", and a
-computer with a company open whose recorder is not seen says "Tally changes are not being recorded on <PC>"; the same red
-banner at the top of the pages of a client whose company that is. No word at all while no bridge reports a recorder (before
-2.1.9). tally_recorder_silent(p_firm) -> "Silent today: <PC> (Tally open since <time>, no recorder line)" for owner and staff.
-beat.notAnsweringSince with reqs.last -> "Tally not responding on <PC> since <time>, last request <kind> <seconds>".
+Bridge 2.1.9 on): the Tally page says per company on each computer "recording · last line <time>" or "not recording". Since
+round 3 of the UI pass (05-Oct-2026) the warnings are in the bell in the top bar, one per problem, the computer behind
+"details" (run_alerts_one_place.py): a client whose company a computer keeps open without recording it -> one amber alert
+for that client (no banner on its pages); tally_recorder_silent(p_firm) -> information "No change recorded today on one
+computer"; beat.notAnsweringSince -> "Tally is not answering on one computer since <time>". No word at all while no bridge
+reports a recorder (before 2.1.9).
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_recorder_pcs.py"""
 import json, os, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -68,36 +69,35 @@ with sync_playwright() as p:
     zz = txt(comp(D1) + ' [data-recorder-co="ZZ TEST"]'); abc = txt(comp(D1) + ' [data-recorder-co="ABC LTD"]')
     ok(zz.startswith("ZZ TEST: recording") and "last line" in zz and hmIn(zz, 3), "NWS144, ZZ TEST: recording · last line <time> (%s)" % zz)
     ok(abc.startswith("ABC LTD: not recording"), "NWS144, ABC LTD: not recording (%s)" % abc)
-    off = txt(comp(D1) + " [data-recorder-off]")
-    ok(off == "Tally changes are not being recorded on NWS144", "the computer's line: 'Tally changes are not being recorded on NWS144' (%s)" % off)
-    ok(pg.locator(comp(D2) + " [data-recorder-co], " + comp(D2) + " [data-recorder-off]").count() == 0, "TALLYSRV (a bridge before 2.1.9, no recorder word): nothing said")
-    ok(pg.locator(comp(D3) + " [data-recorder-off]").count() == 0, "ACCTS2: its recorder not seen for ZZ TEST, but the company is not open there: no 'not being recorded'")
+    BELL = """() => { const b = document.querySelector('#cobar [data-bell]'); if (!b) return []; if (!document.querySelector('[data-alerts-panel]')) b.click();
+      const r = [...document.querySelectorAll('[data-alerts-panel] [data-alert-key]')].map(e => ({key: e.getAttribute('data-alert-key'), sev: e.getAttribute('data-sev'), text: (e.querySelector('[data-alert-text]') || {}).innerText || '',
+        fix: (e.querySelector('[data-alert-fix]') || {}).innerText || '', details: (e.querySelector('[data-alert-details]') || {}).textContent || ''})); S.alertsOpen = false; render(); return r; }"""
+    ok(pg.locator("#app [data-recorder-off], #app [data-not-responding], #app [data-recorder-silent]").count() == 0 and "not being recorded" not in txt("#app"), "the Tally page: the computers' state, no warnings printed (they are in the bell)")
+    items = E(BELL)
+    abc_ = [x for x in items if x["text"].startswith("ABC Client:")]
+    ok(len(abc_) == 1 and abc_[0]["sev"] == "warn" and "not recording" in abc_[0]["text"] and "NWS144" in abc_[0]["details"] and "NWS144" not in abc_[0]["text"], "F36: ABC LTD open on NWS144, not recorded: one amber alert for ABC Client, the computer behind details (%s)" % abc_)
+    ok(not [x for x in items if x["text"].startswith("ZZ Test Client:")], "ZZ TEST is recorded: no alert for it")
     # ---- H52
-    nr = txt(comp(D3) + " [data-not-responding]")
-    ok(nr.startswith("Tally not responding on ACCTS2 since ") and hmIn(nr, 12) and nr.endswith(", last request vouchers 24.1 s"), "H52: 'Tally not responding on ACCTS2 since <time>, last request vouchers 24.1 s' (%s)" % nr)
-    ok(pg.locator(comp(D1) + " [data-not-responding]").count() == 0, "H52: not on a computer whose Tally answers")
+    nr = [x for x in items if "not answering" in x["text"]]
+    ok(len(nr) == 1 and hmIn(nr[0]["text"], 12) and "ACCTS2" in nr[0]["details"], "H52: 'Tally is not answering on one computer since <time>', ACCTS2 behind details (%s)" % nr)
     # ---- J64
     ok(["tally_recorder_silent", {"p_firm": "f-1"}] in E("window.__calls"), "J64: tally_recorder_silent(p_firm) asked (%s)" % E("window.__calls"))
-    sl = txt("#app [data-recorder-silent]")
-    ok(sl.startswith("Silent today: TALLYSRV (Tally open since ") and hmIn(sl, 300) and sl.endswith(", no recorder line)"), "J64: 'Silent today: TALLYSRV (Tally open since <time>, no recorder line)' (%s)" % sl)
+    sl = [x for x in items if "No change recorded today" in x["text"]]
+    ok(len(sl) == 1 and sl[0]["sev"] == "info" and "TALLYSRV" in sl[0]["details"], "J64: silent today, as information, TALLYSRV behind details (%s)" % sl)
     E(SETUP, ["staff", DEVS, SILENT, "", ""]); pg.wait_for_timeout(1800)
-    ok(txt("#app [data-recorder-silent]").startswith("Silent today: TALLYSRV"), "J64: staff see it too")
-    ok(txt(comp(D1) + " [data-recorder-off]") == "Tally changes are not being recorded on NWS144", "F36: staff see the computer's line too")
+    items = E(BELL)
+    ok([x for x in items if "No change recorded today" in x["text"]] and [x for x in items if x["text"].startswith("ABC Client:")], "J64, F36: staff see them too")
     E(SETUP, ["owner", DEVS, SILENT, "Could not find the function public.tally_recorder_silent(p_firm) in the schema cache (PGRST202)", ""]); pg.wait_for_timeout(1800)
-    ok(pg.locator("#app [data-recorder-silent]").count() == 0 and pg.locator("#app [data-computer]").count() == 3, "J64: the function missing: nothing said, the page as before")
-    # ---- the banner on a client's pages
+    ok(not [x for x in E(BELL) if "No change recorded today" in x["text"]] and pg.locator("#app [data-computer]").count() == 3 and "PGRST202" not in txt("#app"), "J64: the function missing: nothing said, the page as before")
+    # ---- a client's pages: no banner (the bell has it)
     E(SETUP, ["owner", DEVS, SILENT, "", "abc"]); pg.wait_for_timeout(1500)
-    bn = txt("#app [data-recorder-banner]")
-    ok(bn == "Tally changes are not being recorded on NWS144", "ABC Client (ABC LTD open on NWS144, not recorded): the red banner at the top of its pages (%s)" % bn)
-    ok("bad" in (pg.get_attribute("#app [data-recorder-banner]", "class") or "") or pg.locator("#app .bad [data-recorder-banner], #app [data-recorder-banner] .bad").count() > 0, "the banner is red")
+    ok(pg.locator("#app [data-recorder-banner]").count() == 0 and "not being recorded" not in txt("#app") and "not recording" not in txt("#app"), "ABC Client's pages: no banner")
     E("() => { S.tab = 'books'; S.booksTab = 'tds'; render(); }"); pg.wait_for_timeout(800)
-    ok(txt("#app [data-recorder-banner]") == "Tally changes are not being recorded on NWS144", "the same banner on the client's books")
-    E(SETUP, ["owner", DEVS, SILENT, "", "zz"]); pg.wait_for_timeout(1500)
-    ok(pg.locator("#app [data-recorder-banner]").count() == 0, "ZZ Test Client (recorded on NWS144): no banner")
-    # no bridge reports a recorder at all (every bridge before 2.1.9): no banner, no word on the Tally page
+    ok(pg.locator("#app [data-alert-line]").count() == 1 and "not recording" in txt("#app [data-alert-line]"), "ABC Client's books: the one slim line (%s)" % txt("#app [data-alert-line]"))
+    # no bridge reports a recorder at all (every bridge before 2.1.9): no alert, no word on the Tally page
     OLD = [dev(D1, "NWS144", ["ZZ TEST", "ABC LTD"]), dev(D2, "TALLYSRV", ["OTHER CO"])]
     E(SETUP, ["owner", OLD, {"ok": True, "silent": []}, "", "abc"]); pg.wait_for_timeout(1500)
-    ok(pg.locator("#app [data-recorder-banner]").count() == 0, "bridges before 2.1.9: no banner")
+    ok(not [x for x in E(BELL) if "not recording" in x["text"]], "bridges before 2.1.9: no alert")
     E("() => navHome('tally')"); pg.wait_for_timeout(1500)
     ok(pg.locator("#app [data-recorder-co], #app [data-recorder-off], #app [data-recorder-silent]").count() == 0, "bridges before 2.1.9: nothing on the Tally page")
     ok(not errors, "no page errors %s" % errors[:2])

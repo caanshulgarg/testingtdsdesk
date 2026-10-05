@@ -1,8 +1,9 @@
 """python3 run_alerts.py - round 20 (d.1): Tally's alerts (migration 47: tally_alerts, kind gap | silent | summary, RLS
-read by the firm; tally_alert_read(p_id) marks one read). On the Tally page (Computers): a list, unread first, newest
-first, each with its words and, for an owner or staff, Mark read -> tally_alert_read(p_id). On a client's pages: a line for
-each of that client's unread alerts, with Mark read. The table missing (42P01) or a column missing (42703): nothing shown,
-no error.
+read by the firm; tally_alert_read(p_id) marks one read). Since round 3 of the UI pass (05-Oct-2026) every alert is in the
+bell in the top bar (run_alerts_one_place.py has the rest): the rows are read for the firm; a gap row shows only while its
+book's gap is there (it clears itself, no Mark read); "silent today" is information; the daily summary keeps Mark read ->
+tally_alert_read(p_id), for owner and staff, a refusal said in its words; no alert text on the pages. The table missing
+(42P01) or a column missing (42703): nothing shown, no error.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_alerts.py"""
 import json, os, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -31,6 +32,7 @@ ALERTS = [
     al(1, "gap", "ago:5", "ZZ TEST: up to 12 changes not received since 10:05", cid="ZZ"),
     al(2, "silent", "ago:60", "Silent today: NWS144, Tally open with no recorder line", dev=D1),
     al(3, "summary", "ago:2", "Today: 140 lines, 2 held, no gap, 3 postings", read="ago:1"),
+    al(6, "summary", "ago:1", "Today so far: 12 lines, none held"),
     al(4, "gap", "ago:30", "ABC LTD: up to 3 changes not received", cid="ABC"),
     al(5, "gap", "ago:90", "ZZ TEST: an older gap, read already", cid="ZZ", read="ago:80")]
 SETUP = """async ([role, devs, alerts, missing, open]) => {
@@ -48,6 +50,8 @@ SETUP = """async ([role, devs, alerts, missing, open]) => {
     window.__asked.push(p);
     if (/^tally_devices/.test(p)) return copy(window.__devs);
     if (/^tally_alerts/.test(p)){ if (window.__missing) throw new Error(window.__missing); return copy(window.__alerts); }
+    if (/^tally_sync_cursor/.test(p)) return copy(window.__cursor || []);
+    if (/^tally_books/.test(p)) return [{book_id: "b1", client_id: zz.id, company: "ZZ TEST"}];
     return [];
   };
   TCloud.restAll = async (u) => Cloud.api(u);
@@ -71,56 +75,56 @@ with sync_playwright() as p:
     pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
     E = lambda js, *a: pg.evaluate(js, *a)
     txt = lambda sel: pg.inner_text(sel).replace("\n", " ").strip() if pg.locator(sel).count() else ""
-    rows = pg.locator("#app [data-alerts] [data-alert]")
-    ids = lambda: [rows.nth(i).get_attribute("data-alert") for i in range(rows.count())]
     # ---- the Tally page, owner
     zz, abc = E(SETUP, ["owner", DEVS, ALERTS, "", ""]); pg.wait_for_timeout(1800)
     asked = [a for a in E("window.__asked") if a.startswith("tally_alerts")]
     ok(asked and "firm_id=eq.f-1" in asked[-1] and "order=at.desc" in asked[-1], "the Tally page reads tally_alerts for the firm, newest first (%s)" % asked[-1:])
-    ok(pg.locator("#app [data-alerts]").count() == 1, "the Tally page has the alerts list")
-    ok(ids() == ["1", "4", "2", "3", "5"], "unread first, newest first, then the read ones newest first (%s)" % ids())
-    un = [rows.nth(i).get_attribute("data-alert") for i in range(rows.count()) if rows.nth(i).get_attribute("data-alert-unread") is not None]
-    ok(un == ["1", "4", "2"], "the unread ones are marked unread (%s)" % un)
-    a1 = txt('#app [data-alerts] [data-alert="1"]')
-    ok("ZZ TEST: up to 12 changes not received since 10:05" in a1 and "ZZ Test Client" in a1, "an alert: its words and the client (%s)" % a1)
-    ok("Silent today: NWS144" in txt('#app [data-alerts] [data-alert="2"]'), "a silent alert's words (%s)" % txt('#app [data-alerts] [data-alert="2"]'))
-    ok(pg.locator('#app [data-alerts] [data-alert="1"] [data-alert-read]').count() == 1 and pg.locator('#app [data-alerts] [data-alert="3"] [data-alert-read]').count() == 0,
-       "owner: Mark read on an unread alert, none on a read one")
-    pg.click('#app [data-alerts] [data-alert="1"] [data-alert-read]'); pg.wait_for_timeout(900)
-    ok(["tally_alert_read", {"p_id": 1}] in E("window.__calls"), "Mark read -> tally_alert_read(p_id) (%s)" % E("window.__calls"))
-    ok(ids()[:2] == ["4", "2"] and rows.nth(0).get_attribute("data-alert-unread") is not None and pg.locator('#app [data-alerts] [data-alert="1"][data-alert-unread]').count() == 0,
-       "read now: it moves down among the read ones (%s)" % ids())
-    # the RPC refused: its words, the alert stays unread
-    E("() => { window.__rpcFail = 'Only a member of the firm can mark an alert read.'; }")
-    pg.click('#app [data-alerts] [data-alert="4"] [data-alert-read]'); pg.wait_for_timeout(900)
-    ok("Only a member of the firm can mark an alert read" in txt("#app [data-alerts-msg]") and pg.locator('#app [data-alerts] [data-alert="4"][data-alert-unread]').count() == 1,
-       "a refusal is said in its own words (%s)" % txt("#app [data-alerts-msg]"))
+    BELL = """() => { const b = document.querySelector('#cobar [data-bell]'); if (!b) return []; if (!document.querySelector('[data-alerts-panel]')) b.click();
+      return [...document.querySelectorAll('[data-alerts-panel] [data-alert-key]')].map(e => ({key: e.getAttribute('data-alert-key'), sev: e.getAttribute('data-sev'), text: e.innerText.replace(/\\s+/g, ' ').trim(), read: !!e.querySelector('[data-alert-read]')})); }"""
+    shut = lambda: E("() => { S.alertsOpen = false; render(); }")
+    items = E(BELL)
+    keys = [x["key"] for x in items]
+    ok(not [x for x in items if "changes not received" in x["text"] or "ZZ" in x["text"]], "no gap in the cursor: the gap rows have cleared themselves, nothing to mark read (%s)" % keys)
+    sl = [x for x in items if "No change recorded today" in x["text"]]
+    ok(len(sl) == 1 and sl[0]["sev"] == "info" and not sl[0]["read"], "the silent row: information, clearing itself (%s)" % sl)
+    sm = [x for x in items if "Today so far" in x["text"]]
+    ok(len(sm) == 1 and sm[0]["read"] and not [x for x in items if "140 lines" in x["text"]], "the unread summary with Mark read; the one read already is gone (%s)" % [x["text"][:40] for x in items])
+    ok(pg.locator("#app [data-alerts], #app [data-client-alert]").count() == 0 and "Mark read" not in txt("#app"), "no alerts list on the Tally page any more: the bell holds them")
+    pg.click('[data-alerts-panel] [data-alert-key="alert:6"] [data-alert-read]'); pg.wait_for_timeout(900)
+    ok(["tally_alert_read", {"p_id": 6}] in E("window.__calls"), "Mark read -> tally_alert_read(p_id) (%s)" % E("window.__calls"))
+    items = E(BELL)
+    ok(not [x for x in items if "Today so far" in x["text"]], "read now: it leaves the bell")
+    shut()
+    # the RPC refused: its words, the alert stays
+    E("() => { window.__rpcFail = 'Only a member of the firm can mark an alert read.'; window.__alerts.push({id: 7, firm_id: 'f-1', kind: 'summary', day: 'x', words: 'Another summary', data: {}, at: new Date().toISOString(), read_at: null}); Rec.alerts.at = 0; AlertHub.refresh(true); }"); pg.wait_for_timeout(1500)
+    E(BELL); pg.click('[data-alerts-panel] [data-alert-key="alert:7"] [data-alert-read]'); pg.wait_for_timeout(900)
+    ok("Only a member of the firm can mark an alert read" in txt("[data-alerts-msg]") and pg.locator('[data-alerts-panel] [data-alert-key="alert:7"]').count() == 1,
+       "a refusal is said in its own words, the alert stays (%s)" % txt("[data-alerts-msg]"))
+    shut()
     # ---- staff read and mark read too
     E(SETUP, ["staff", DEVS, ALERTS, "", ""]); pg.wait_for_timeout(1800)
-    ok(ids() == ["1", "4", "2", "3", "5"] and pg.locator("#app [data-alerts] [data-alert-read]").count() == 3, "staff: the same list, Mark read on each unread one")
-    pg.click('#app [data-alerts] [data-alert="2"] [data-alert-read]'); pg.wait_for_timeout(900)
-    ok(["tally_alert_read", {"p_id": 2}] in E("window.__calls"), "staff: Mark read -> tally_alert_read (%s)" % E("window.__calls"))
-    # ---- a client's pages: that client's unread alerts only
+    items = E(BELL)
+    ok([x for x in items if "Today so far" in x["text"] and x["read"]], "staff: the summary with Mark read")
+    pg.click('[data-alerts-panel] [data-alert-key="alert:6"] [data-alert-read]'); pg.wait_for_timeout(900)
+    ok(["tally_alert_read", {"p_id": 6}] in E("window.__calls"), "staff: Mark read -> tally_alert_read (%s)" % E("window.__calls"))
+    shut()
+    # ---- a gap in the cursor for ZZ: ONE alert for ZZ (its two rows and the cursor), none for ABC (no gap there)
+    E("() => { window.__cursor = [{book_id: 'b1', gap: {missing: 12, missingMax: 12, since: new Date(Date.now() - 3600e3).toISOString(), tally_altvchid: 512, recorder_max: 500}, gap_at: new Date().toISOString()}]; }")
     E(SETUP, ["owner", DEVS, ALERTS, "", "zz"]); pg.wait_for_timeout(1800)
-    cl = pg.locator("#app [data-client-alert]")
-    cids = [cl.nth(i).get_attribute("data-client-alert") for i in range(cl.count())]
-    ok(cids == ["1"], "ZZ Test Client: its one unread alert (not ABC's, not its read one) (%s)" % cids)
-    ok("ZZ TEST: up to 12 changes not received since 10:05" in txt('#app [data-client-alert="1"]'), "the line has the alert's words (%s)" % txt('#app [data-client-alert="1"]'))
-    pg.click('#app [data-client-alert="1"] [data-alert-read]'); pg.wait_for_timeout(900)
-    ok(["tally_alert_read", {"p_id": 1}] in E("window.__calls") and pg.locator("#app [data-client-alert]").count() == 0, "Mark read on the client's page: the line goes (%s)" % E("window.__calls"))
-    E("() => { S.tab = 'books'; S.booksTab = 'tds'; render(); }"); pg.wait_for_timeout(600)
-    ok(pg.locator("#app [data-client-alert]").count() == 0, "on the client's books too: nothing unread left")
-    E(SETUP, ["staff", DEVS, ALERTS, "", "abc"]); pg.wait_for_timeout(1800)
-    ok([cl.nth(i).get_attribute("data-client-alert") for i in range(cl.count())] == ["4"] and pg.locator('#app [data-client-alert="4"] [data-alert-read]').count() == 1,
-       "ABC Client, staff: its unread alert with Mark read")
+    E("() => { window.__cursor = [{book_id: 'b1', gap: {missing: 12, missingMax: 12, since: new Date(Date.now() - 3600e3).toISOString(), tally_altvchid: 512, recorder_max: 500}, gap_at: new Date().toISOString()}]; AlertHub.refresh(true); }"); pg.wait_for_timeout(1500)
+    items = E(BELL)
+    zz_ = [x for x in items if x["text"].startswith("ZZ Test Client:")]
+    ok(len(zz_) == 1 and "12 entries made in Tally" in zz_[0]["text"] and not zz_[0]["read"] and not [x for x in items if "ABC" in x["text"]], "the gap: one alert for ZZ Test Client, none for ABC (%s)" % [x["text"][:60] for x in items])
+    shut()
+    ok(pg.locator("#app [data-client-alert]").count() == 0 and "changes not received" not in txt("#app"), "nothing on the client's pages")
     # ---- the table or a column missing: nothing, no error
     for miss in ["relation \"public.tally_alerts\" does not exist (42P01)", "column tally_alerts.read_at does not exist (42703)"]:
+        E("() => { window.__cursor = []; }")
         E(SETUP, ["owner", DEVS, ALERTS, miss, ""]); pg.wait_for_timeout(1800)
         page = txt("#app")
-        ok(pg.locator("#app [data-alerts]").count() == 0 and "42P01" not in page and "42703" not in page and "does not exist" not in page and pg.locator("#app [data-computer]").count() == 1,
-           "%s: no alerts list, no error, the page as before" % miss.split("(")[-1].rstrip(")"))
-        E(SETUP, ["owner", DEVS, ALERTS, miss, "zz"]); pg.wait_for_timeout(1500)
-        ok(pg.locator("#app [data-client-alert]").count() == 0 and "does not exist" not in txt("#app"), "%s: nothing on the client's page" % miss.split("(")[-1].rstrip(")"))
+        items = E(BELL); shut()
+        ok(not [x for x in items if x["key"].startswith("alert:")] and "42P01" not in page and "42703" not in page and "does not exist" not in page and pg.locator("#app [data-computer]").count() == 1,
+           "%s: no alert rows, no error, the page as before" % miss.split("(")[-1].rstrip(")"))
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()
 srv.shutdown()

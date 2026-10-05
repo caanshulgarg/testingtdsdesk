@@ -1109,7 +1109,7 @@ header.top .tbar-title{align-items:center}
 /* Page header (review item 26): a row with the title on the left, which wraps when long, and the page's buttons on the
    right; nothing is hidden under the buttons down to 1024 px wide */
 header.top .headrow:not(:has(> .sbar)){display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px}
-header.top .headrow > .tbar{flex:1 1 320px;min-width:0}
+header.top .headrow > .tbar{flex:1 1 200px;min-width:0}
 header.top .tbar{flex-wrap:wrap;row-gap:6px}
 header.top .tbar-title{flex:1 1 auto;min-width:0}
 header.top .tbar-title h2{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
@@ -1306,3 +1306,30 @@ table.lt tfoot td.lt-count b{color:var(--ink)}
 /* a long action: what it is doing and how far ("Posting 143 of 365") */
 .lt-progress{display:flex;flex-direction:column;gap:4px;margin:6px 0}
 .lt-progress progress{width:100%;max-width:420px;height:8px}
+/* round 3 of the UI pass (05-Oct-2026): every alert in one place, the bell (app/src/parts/Bell.jsx); red needs action,
+   amber attention, grey information */
+.bell-wrap{position:relative;display:inline-flex}
+.bell{position:relative;display:inline-flex;align-items:center;justify-content:center;width:34px;height:32px;border:1px solid var(--rule);background:var(--sheet);border-radius:16px;color:var(--muted);cursor:pointer;padding:0}
+.bell.al-bad{color:var(--st-failed);border-color:var(--st-failed)}.bell.al-warn{color:var(--st-attention);border-color:var(--st-attention)}
+.bell-n{position:absolute;top:-6px;right:-6px;min-width:17px;height:17px;border-radius:9px;background:var(--st-waiting);color:#fff;font-size:11px;font-weight:700;line-height:17px;text-align:center;padding:0 4px}
+.bell.al-bad .bell-n{background:var(--st-failed)}.bell.al-warn .bell-n{background:var(--st-attention)}
+.alerts-panel{position:absolute;top:calc(100% + 8px);right:0;z-index:80;width:min(440px,calc(100vw - 32px));max-height:70vh;overflow:auto;background:var(--sheet);border:1px solid var(--rule);border-radius:12px;box-shadow:0 12px 32px rgb(var(--shade) / .18);font-size:13.5px;color:var(--ink);text-align:left;white-space:normal}
+.alerts-panel .fm-head{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--rule)}
+.al-list{list-style:none;margin:0;padding:4px 0}
+.al-item{display:flex;gap:10px;padding:10px 14px;border-bottom:1px solid var(--rule-soft)}
+.al-item:last-child{border-bottom:0}
+.al-dot{flex:none;width:10px;height:10px;border-radius:50%;margin-top:5px;background:var(--st-waiting)}
+.al-bad .al-dot{background:var(--st-failed)}.al-warn .al-dot{background:var(--st-attention)}.al-info .al-dot{background:var(--st-waiting)}
+.al-body{flex:1;min-width:0}
+.al-fix{color:var(--muted);margin-top:2px}
+.al-acts{display:flex;gap:10px;align-items:center;margin-top:6px}
+.al-details{margin-top:6px;font-size:12px;word-break:break-word}
+.alert-line{display:flex;align-items:center;gap:10px;white-space:nowrap;overflow:hidden;height:34px;padding:0 12px;margin:0 0 10px;border-radius:8px;border:1px solid var(--rule);background:var(--sheet);font-size:13px}
+.alert-line.al-bad{border-color:var(--st-failed);background:var(--st-failed-soft)}.alert-line.al-warn{border-color:var(--st-attention);background:var(--st-attention-soft)}
+.alert-line .al-dot{margin-top:0}
+.al-line-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.alert-line .btn{flex:none}
+/* round 3, part 2: the Tally sign says which computer; on a phone the dot and the computer's name */
+.tsign .tsign-long{max-width:440px;overflow:hidden;text-overflow:ellipsis}
+.tsign .tsign-short{display:none}
+@media (max-width:760px){.tsign .tsign-long{display:none}.tsign .tsign-short{display:inline;max-width:160px;overflow:hidden;text-overflow:ellipsis}}

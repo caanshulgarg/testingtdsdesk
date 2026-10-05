@@ -176,6 +176,9 @@ with sync_playwright() as p:
         ok(not badam and not left, "%s: table amounts like 1,25,000.00 and right-aligned (%d checked; %s; left: %s)" % (name, len(am), badam, left))
         if not own:
             list_checks(pg, name)
+            # round 3 (05-Oct-2026): no banner, notice or warning takes more than one row (the alerts are in the bell)
+            tall = pg.evaluate("""() => [...document.querySelectorAll('#app .bk-alert, #app .bk-warn, #app .banner, #app .bk-setup, #app [data-notice-line], #app [data-alert-line]')].filter(e => e.offsetParent && e.getBoundingClientRect().height > 40).map(e => e.innerText.replace(/\\s+/g, ' ').slice(0, 60))""")
+            ok(not tall, "%s: every notice one row (%s)" % (name, tall[:2]))
             bare = BARE_TIME.findall(t)
             ok(not bare, "%s: time stamps say IST (%s)" % (name, bare[:3]))
     # the lists that are empty for the made-up client: some made-up rows, then the same checks

@@ -954,7 +954,7 @@ async function postPreview(co, rows, opts){
   const items = rows.filter(r => r.xml).map(r => ({kind: r.kind, id: r.id, xml: r.xml, e: r.e}));
   const nWarn = () => document.querySelectorAll("#confirmBox [data-pv-warn] li").length;
   const a = await askConfirm({title: opts.view ? "Preview: " + (rows[0] ? (rows[0].no || rows[0].party) : "") : "Post " + entries(items.length) + " to " + company + "?", ok: opts.view ? "Close" : "Post", wide: true,
-    body: '<div data-post-preview="" style="max-height:60vh;overflow:auto">' + (opts.view ? "" : '<p style="margin:0 0 8px">Each entry exactly as it goes to Tally, into <b>' + esc(company) + "</b>.</p>") + PostGate.html(items, co, masters, company) + "</div>",
+    body: '<div data-post-preview="" style="max-height:60vh;overflow:auto">' + (opts.view ? "" : '<p style="margin:0 0 8px">Each entry exactly as it goes to Tally, into <b>' + esc(company) + "</b>." + (typeof postThroughWords === "function" && postThroughWords(co) ? " " + esc(postThroughWords(co)) : "") + "</p>") + PostGate.html(items, co, masters, company) + "</div>",
     onReady: box => { if (opts.view){ const no = box.querySelector('[data-cbx="no"]'); if (no) no.remove(); } else { const n = nWarn(); if (n){ const p = document.createElement("p"); p.className = "bk-warn"; p.setAttribute("data-pv-count", ""); p.textContent = n + " warning" + (n === 1 ? "" : "s") + " above: look at them before posting."; box.querySelector(".cbx .row").before(p); } } }});
   if (!a || opts.view) return false;
   PostGate.approve(masters.map(m => m.name), company);

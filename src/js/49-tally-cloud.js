@@ -1424,6 +1424,13 @@ function tallyIst(t){
   const ms = typeof t === "number" ? t : Date.parse(String(t || ""));
   return ms ? fmtDateTime(ms) : "";
 }
+// a computer as the owner knows it: its name in FinCom (tally_devices.name) and its Windows name from the heartbeat:
+// "Office computer (NWS144)"; one of them alone when there is one, or they are the same
+function tallyPcLabel(d){
+  const info = (d && d.info) || {}, beat = info.beat || {};
+  const name = String((d && d.name) || "").trim(), win = String(info.computer || beat.computer || beat.pc || beat.hostname || "").trim();
+  return name && win && norm(name) !== norm(win) ? name + " (" + win + ")" : name || win || "the Tally computer";
+}
 function tallySign(co){
   if (typeof TLight === "object") TLight.refresh();
   const now = Date.now(), st = (typeof TLight === "object" && TLight.st) || {};
@@ -1437,31 +1444,39 @@ function tallySign(co){
     const info = d.info || {}, beat = info.beat || {}, ds = devState(d, now);
     const open = [].concat(beat.open || []).concat(...Object.values(info.bridges || {}).map(b => [].concat(b.open || []))).map(String).filter(Boolean);
     const at = Date.parse(beat.at || d.last_seen || 0) || 0;
-    return {id: d.id, computer: info.computer || beat.computer || d.name || "the Tally computer", recent: ds.bridge === "online" || ds.bridge === "reconnecting",
+    return {id: d.id, computer: tallyPcLabel(d), win: info.computer || beat.computer || beat.pc || beat.hostname || d.name || "", recent: ds.bridge === "online" || ds.bridge === "reconnecting",
       tally: ds.tally, open: Array.from(new Set(open)), at};
   });
-  // this computer's bridge, answering here
+  // this computer's bridge, answering here (on 127.0.0.1): only then is it "this computer" (round 3, 05-Oct-2026: never
+  // guessed from the user or the firm)
   if (localUp){
     const o = (lst.open || []).map(x => x.name), name = lst.computer || "this computer";
-    const mine = pcs.find(x => norm(x.computer) === norm(name));
+    const mine = pcs.find(x => norm(x.win) === norm(name) || norm(x.computer) === norm(name));
     // its heartbeats not reaching FinCom (no internet there): not recent, whatever it sees in Tally
     const noNet = !!(lst.beat && lst.beat.on !== false && lst.beat.missedSince);
     const me = {id: mine ? mine.id : "local", computer: name, recent: !noNet, local: true, tally: lst.tallyState || (lst.tallyUp ? "open" : "closed"), open: o, at: (typeof Bridge === "object" && Bridge.okAt) || lst.at || now,
       noNet};
     // the last contact: with FinCom's cloud when the bridge here cannot reach it, else the latest of the two
-    if (mine) pcs.splice(pcs.indexOf(mine), 1, Object.assign({}, mine, me, {at: noNet ? mine.at : Math.max(mine.at, me.at)})); else pcs.push(noNet ? Object.assign(me, {at: Date.parse(lst.beat.last || 0) || 0}) : me);
+    if (mine) pcs.splice(pcs.indexOf(mine), 1, Object.assign({}, mine, me, {computer: mine.computer, at: noNet ? mine.at : Math.max(mine.at, me.at)})); else pcs.push(noNet ? Object.assign(me, {at: Date.parse(lst.beat.last || 0) || 0}) : me);
   }
   const isOpen = x => x.tally === "open" || x.tally === "busy";
   const has = x => co ? x.open.some(same) : x.open.length > 0;
-  const good = pcs.find(x => x.recent && isOpen(x) && has(x) && (!link || !link.device_id || x.id === link.device_id || x.local)) || pcs.find(x => x.recent && isOpen(x) && has(x));
-  const out = (o) => Object.assign({computer: "", company: co ? want : "", at: "", reason: "", fix: ""}, o);
+  const goods = pcs.filter(x => x.recent && isOpen(x) && has(x));
+  const good = goods.find(x => x.local) || goods.find(x => !link || !link.device_id || x.id === link.device_id) || goods[0];
+  const out = (o) => Object.assign({computer: "", company: co ? want : "", at: "", reason: "", fix: "", short: o.computer || ""}, o);
   if (good){
     const company = co ? good.open.find(same) : good.open.join(", ");
-    return out({on: true, code: "ok", computer: good.computer, company, at: tallyIst(good.at), words: "Tally connected"});
+    // round 3 (05-Oct-2026): the sign says which computer: this one, the other one, or how many
+    if (good.local) return out({on: true, code: "ok", local: true, computer: "this computer (" + good.computer + ")", company, at: tallyIst(good.at), words: "Tally connected on this computer", short: "This computer", through: [good.computer]});
+    if (goods.length > 1) return out({on: true, code: "ok", computer: goods.map(x => x.computer).join(", "), company, at: goods.map(x => x.computer + ": " + tallyIst(x.at)).join(", "), words: "Tally connected through " + goods.length + " computers",
+      short: goods.length + " computers", through: goods.map(x => x.computer), many: goods.map(x => ({computer: x.computer, company: co ? x.open.find(same) : x.open.join(", "), at: tallyIst(x.at)}))});
+    return out({on: true, code: "ok", computer: good.computer, company, at: tallyIst(good.at), words: "Tally connected through " + good.computer, short: good.computer, through: [good.computer]});
   }
   // the computer that matters: the one linked to this client, else the one heard from last
   const pick = (link && link.device_id && pcs.find(x => x.id === link.device_id)) || pcs.slice().sort((a, b) => (b.recent - a.recent) || (b.at - a.at))[0];
-  const off = (code, reason, fix, x) => out({on: false, code, computer: x ? x.computer : "", at: x && x.at ? tallyIst(x.at) : "", reason, fix, words: "Tally disconnected"});
+  const off = (code, reason, fix, x) => out({on: false, code, computer: x ? x.computer : "", at: x && x.at ? tallyIst(x.at) : "", reason, fix,
+    words: code === "othercompany" && x ? "Tally is open on " + x.computer + " with a different company" : "Tally not connected" + (x && x.at ? ". Last seen on " + x.computer + " at " + tallyIst(x.at) : ""),
+    short: x ? x.computer : "No Tally"});
   const coName = co ? want : "the client's company";
   if (!pick){
     if (localOn && !localUp) return off("bridge", "FinCom Bridge is not running on this computer.", "Start FinCom Bridge (its icon near the clock, or from the Start menu), then keep TallyPrime open.", {computer: "this computer"});
@@ -1477,10 +1492,10 @@ function tallySign(co){
   if (!pick.open.length) return off("nocompany", "TallyPrime is open on " + pick.computer + ", but no company is open in it.", "Open " + coName + " in TallyPrime on " + pick.computer + ".", pick);
   return off("othercompany", "A different company is open in Tally on " + pick.computer + ": " + pick.open.slice(0, 3).join(", ") + ".", "Open " + coName + " in TallyPrime on " + pick.computer + " (the other company can stay open)." + (co && !link ? " If it is open under another name, link it in Client setup → Tally." : ""), pick);
 }
-function localIsPick(x){ return !!(x && (x.local || (typeof Bridge === "object" && Bridge.st && Bridge.st.computer && norm(Bridge.st.computer) === norm(x.computer)))); }
+function localIsPick(x){ return !!(x && (x.local || (typeof Bridge === "object" && Bridge.st && Bridge.st.computer && (norm(Bridge.st.computer) === norm(x.win || "") || norm(Bridge.st.computer) === norm(x.computer))))); }
 // the same, in words for the hover and the panel: "Tally connected · OFFICE-PC · TESTING AAD · last contact …"
 function tallySignWords(s){
-  return "Tally: " + (s.on ? "connected" : "disconnected") + (s.computer ? " — computer: " + s.computer : "") + (s.company ? " — company: " + s.company : "") +
+  return (s.words || "Tally: " + (s.on ? "connected" : "not connected")) + (s.computer ? " — computer: " + s.computer : "") + (s.company ? " — company: " + s.company : "") +
     (s.at ? " — last contact: " + s.at : "") + (s.on ? "" : " — why: " + s.reason + " — what to do: " + s.fix);
 }
 // the computers' connection history for the last 24 hours (tally_devices.info.history, kept by tally-ingest from the

@@ -85,7 +85,10 @@ with sync_playwright() as p:
     ok(hb[:3] == ["To review", "Post to Tally", "In Tally"] and hb[3:] in (["Duplicates", "Deleted"], ["Duplicates", "Deleted", "No entry"]) and hb.count("To review") == 1, "3. Purchase, one row of tabs (review of 02-Oct-2026): %s" % hb)
     # 1. chips short, full text on hover; tabs on their own row
     chip = pg.locator("#cobar .tallychip"); t = chip.inner_text().strip()
-    ok(len(t) <= 26 and t.startswith("Tally") and "Tally:" in (chip.get_attribute("title") or ""), "1. Tally chip short (%s), the full words on hover" % t)
+    # UI pass round 3 (owner item 2): the sign's words name the computer ("Tally not connected", "Tally connected through
+    # Office computer (NWS144)"); the hover title starts with the same words and adds the details
+    ttl = chip.get_attribute("title") or ""
+    ok(len(t) <= 26 and t.startswith("Tally") and ttl.startswith(t) and len(ttl) > len(t), "1. Tally chip short (%s), the full words on hover (%s)" % (t, ttl[:80]))
     rows = pg.evaluate("(() => { const s = document.querySelector('#cobar .headrow > nav.sbar'), r = document.querySelector('#cobar .topright'); return s && r ? [s.getBoundingClientRect().top, r.getBoundingClientRect().bottom, s.getBoundingClientRect().width, document.querySelector('#cobar .headrow').getBoundingClientRect().width] : null; })()")
     ok(rows and rows[0] >= rows[1] - 1 and rows[2] >= rows[3] - 2, "1. the tabs on their own full-width row below the chips (%s)" % rows)
     pg.evaluate("S.account = {firm: {plan: 'pro', balance: 499900000}}; render();"); pg.wait_for_timeout(300)

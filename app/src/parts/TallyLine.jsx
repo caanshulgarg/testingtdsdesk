@@ -3,7 +3,6 @@
 //   TallyLine: "Tally open on NWS144 · last read 15:34" / "Tally is closed on NWS144" / "NWS144 is offline" /
 //              "Tally is not answering on NWS144 since 12:28" / "Background reading paused on NWS144" · Update now
 //   BooksAsOf: "Books as of 15:34 · Update now", wherever the client's books figures are shown
-import Msg from "./Msg.jsx";
 
 export default function TallyLine({ co, update = true }) {
   if (!co || typeof tallyLine !== "function") return null;
@@ -35,36 +34,4 @@ export function BooksAsOf({ cid }) {
     <b>{a.text}</b>{" · "}<button className="linkbtn" data-update-now="" onClick={() => tallyUpdateNow(cid)}>Update now</button>
     {" "}<YearNote cid={cid} />
   </span>;
-}
-
-// phase 2 (migration 44, item 9): a PC without the recorder changed Tally (tally_sync_cursor.gap): one red line a book with
-// the cloud's words, the change numbers, and the way to fill the gap (Books -> From Tally -> Day Book, the dates filled in
-// from gap.since to today). Nothing without a gap, or on a cloud without the column (Rec.gapFor, src/js/61)
-export function GapLine({ cid }) {
-  if (typeof Rec !== "object" || !cid) return null;
-  const list = Rec.gapFor(cid);
-  if (!list.length) return null;
-  return <>{list.map(({ book, gap }) => <div key={book} className="bk-alert bad" data-gap-line="" style={{ margin: "4px 0" }}>
-    {Rec.gapWords(gap) + " "}<button className="btn small" data-gap-upload="" onClick={() => Rec.uploadDays(cid, gap)}>Upload the Day Book for these days</button>
-  </div>)}</>;
-}
-// phase 2 (F36, N102): at the top of a client's pages, in red, each computer that keeps the client's company open in Tally
-// without recording its changes (FinCom Bridge 2.1.9's heartbeat: info.bridges[id].recorder), then the gap line. Nothing
-// while no bridge reports a recorder (before 2.1.9)
-export function RecorderNotes({ cid }) {
-  if (typeof Rec !== "object" || !cid || typeof TCloud !== "object" || !TCloud.on()) return null;
-  const off = [...new Set(Rec.clientNotRecording(cid).map((x) => x.pc))];
-  const gaps = Rec.gapFor(cid);
-  // round 20 (d.1): this client's unread alerts (tally_alerts, migration 47), a line each, with Mark read for owner and staff
-  const alerts = Rec.clientAlerts(cid), can = Rec.canWrite(), msg = Rec.alerts.msg;
-  if (!off.length && !gaps.length && !alerts.length) return null;
-  return <div data-recorder-notes="" style={{ margin: "0 0 10px" }}>
-    {off.map((pc) => <p key={pc} className="bk-alert bad" data-recorder-banner="" style={{ margin: "4px 0" }}>{"Tally changes are not being recorded on " + pc}</p>)}
-    {alerts.map((x) => <p key={x.id} className="bk-alert warn" data-client-alert={String(x.id)} style={{ margin: "4px 0" }}>
-      {Rec.alertKind(x.kind) + ": " + (x.words || "") + (x.at ? " (" + fmtDateTime(x.at) + ")" : "") + " "}
-      {can && <button className="linkbtn" data-alert-read="" disabled={!!(msg && msg.busy)} onClick={() => Rec.alertRead(x)}>Mark read</button>}</p>)}
-    {msg && msg.err && alerts.length > 0 && <p className="bk-alert bad" data-alerts-msg="" style={{ margin: "4px 0" }}><Msg text={msg.err} /></p>}
-    <GapLine cid={cid} />
-    <button className="linkbtn note" data-sync-open="" onClick={() => Rec.openActivity(cid)}>See this client’s sync activity</button>
-  </div>;
 }

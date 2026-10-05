@@ -1,5 +1,10 @@
 """python3 run_tally_sign.py - the top bar's one Tally sign (owner's spec H, 04-Oct-2026):
-  - exactly two states: a green dot "Tally connected", a red dot "Tally disconnected"; connected only when FinCom Bridge
+  - round 3 (05-Oct-2026, part 2): the sign says WHICH computer: "Tally connected on this computer" only when the bridge
+    here answers (127.0.0.1), "Tally connected through Office computer (NWS144)" (tally_devices' name, the beat's Windows
+    name), "through 2 computers" (names on a click), "Tally not connected. Last seen on <computer> at <time IST>",
+    "Tally is open on <computer> with a different company"; on a phone the dot and the computer's name, never
+    "connected" alone;
+  - two states: a green dot (connected), a red dot (not connected); connected only when FinCom Bridge
     on a computer of the firm is online (its heartbeat recent) AND Tally is open there with THIS client's company;
   - the detail on hover and on a click: which computer, which company, the last contact (dd-Mon-yyyy HH:MM IST), and
     when disconnected the reason and the fix, one for each: the bridge not running, Tally closed, no company open, a
@@ -39,7 +44,7 @@ with sync_playwright() as p:
     # 1. connected
     s = pg.evaluate(setup, [cid, beat(), None]); pg.wait_for_timeout(300)
     st, txt, title = top()
-    ok(s["on"] is True and st == "on" and txt == "Tally connected", "connected: the bridge's heartbeat 5 s ago, Tally open with TESTING AAD: “%s”" % txt)
+    ok(s["on"] is True and st == "on" and txt == "Tally connected through OFFICE-PC", "connected: the bridge's heartbeat 5 s ago, Tally open with TESTING AAD, through which computer: “%s”" % txt)
     dot = pg.evaluate("getComputedStyle(document.querySelector('#cobar [data-tally-sign] .tsign-dot')).backgroundColor")
     ok(dot == "rgb(21, 128, 61)", "a green dot (%s)" % dot)
     ok("OFFICE-PC" in title and "TESTING AAD" in title and IST.search(title), "hover: computer, company and the last contact in IST (%s)" % title[:140])
@@ -61,7 +66,8 @@ with sync_playwright() as p:
     for code, args, why, fix in cases:
         s = pg.evaluate(setup, args); pg.wait_for_timeout(600)
         st, txt, title = top()
-        ok(s["on"] is False and s["code"] == code and st == "off" and txt == "Tally disconnected", "%s: “Tally disconnected” (%s; %s %s %s)" % (code, s.get("reason", ""), s.get("code"), st, txt))
+        want = "Tally is open on OFFICE-PC with a different company" if code == "othercompany" else "Tally not connected"
+        ok(s["on"] is False and s["code"] == code and st == "off" and txt.startswith(want), "%s: “%s…” (%s; %s %s %s)" % (code, want, s.get("reason", ""), s.get("code"), st, txt))
         ok(why.lower() in (s.get("reason") or "").lower() and fix.lower() in (s.get("fix") or "").lower(), "%s: the reason says “%s” and the fix “%s” (%s | %s)" % (code, why, fix, s.get("reason"), s.get("fix")))
         ok(why.lower() in title.lower() and fix.lower() in title.lower(), "%s: reason and fix on hover (%s)" % (code, title[-160:]))
         ok("OFFICE-PC" in s.get("computer", "") and (code == "bridge" or IST.search(s.get("at", "") or "") or code == "internet"), "%s: which computer (%s), last contact %s" % (code, s.get("computer"), s.get("at")))
@@ -75,7 +81,58 @@ with sync_playwright() as p:
     ok(s["on"] is False and s["code"] == "bridge", "no Tally computer at all: disconnected, the bridge is not running (%s)" % s.get("reason"))
     # only two states, whatever the old status said
     states = set(pg.evaluate("""(cid) => { const out = []; for (const b of [null, {at: new Date().toISOString(), every: 30, tallyState: 'busy', open: ['TESTING AAD']}]) { TLight.st.devs = b ? [{id: 'd1', name: 'OFFICE-PC', info: {beat: b}}] : []; render(); out.push(document.querySelector('#cobar [data-tally-sign]').innerText.trim()); } return out; }""", cid))
-    ok(states <= {"Tally connected", "Tally disconnected"}, "only the two words ever (%s)" % states)
+    ok(all(x.startswith(("Tally connected through", "Tally connected on this computer", "Tally not connected", "Tally is open on")) for x in states), "only the two states, each naming the computer (%s)" % states)
+    # ---- round 3, part 2: which computer
+    two = """(a) => { const [cid, devs, local] = a; TCloud.on = () => true; TLight.refresh = () => {}; TLight.st.at = Date.now(); TLight.st.devs = devs;
+      TLight.st.cos = [{company: "TESTING AAD", client_id: cid, device_id: devs[0] ? devs[0].id : null}]; for (const k in BeatSeen) delete BeatSeen[k];
+      if (local){ Bridge.on = () => true; Bridge.up = () => local.state === "ok"; Bridge.st = Object.assign({sessions: [], open: [], at: Date.now()}, local); Bridge.okAt = Date.now(); }
+      else { Bridge.on = () => false; Bridge.up = () => false; Bridge.st = {state: "off", sessions: [], open: [], at: Date.now()}; }
+      S.tallyPanel = false; render(); return tallySign(S.companies[cid]); }"""
+    d = lambda i, name, pc, **k: {"id": i, "name": name, "last_seen": iso(5), "info": {"computer": pc, "beat": beat(computer=pc, **k)}}
+    # this computer: the bridge here answers on 127.0.0.1 with the company open
+    s = pg.evaluate(two, [cid, [d("d1", "Office computer", "NWS144")], {"state": "ok", "computer": "NWS144", "tallyState": "open", "tallyUp": True, "open": [{"name": "TESTING AAD"}]}]); pg.wait_for_timeout(300)
+    st, txt, title = top()
+    ok(txt == "Tally connected on this computer", "the bridge here answers: “Tally connected on this computer” (%s)" % txt)
+    # another device (the owner's Mac: no bridge here), connected through the office computer
+    s = pg.evaluate(two, [cid, [d("d1", "Office computer", "NWS144")], None]); pg.wait_for_timeout(300)
+    st, txt, title = top()
+    ok(txt == "Tally connected through Office computer (NWS144)", "another device: “Tally connected through Office computer (NWS144)” (%s)" % txt)
+    # "this computer" is never guessed: a bridge set up here that does not answer
+    s = pg.evaluate(two, [cid, [d("d1", "Office computer", "NWS144")], {"state": "down", "computer": "NWS144"}]); pg.wait_for_timeout(300)
+    st, txt, title = top()
+    ok("this computer" not in txt and txt == "Tally connected through Office computer (NWS144)", "a bridge here that does not answer: still through Office computer, never “this computer” (%s)" % txt)
+    # two computers
+    s = pg.evaluate(two, [cid, [d("d1", "Office computer", "NWS144"), d("d2", "Accounts desk", "NWS210")], None]); pg.wait_for_timeout(300)
+    st, txt, title = top()
+    ok(txt == "Tally connected through 2 computers", "two computers: “Tally connected through 2 computers” (%s)" % txt)
+    pg.click("#cobar [data-tally-sign]"); pg.wait_for_timeout(300)
+    dd = pg.inner_text("[data-tally-detail]") if pg.locator("[data-tally-detail]").count() else ""
+    ok("Office computer (NWS144)" in dd and "Accounts desk (NWS210)" in dd and "TESTING AAD" in dd and IST.search(dd), "a click: both computers, the company and the last contact (%s)" % dd.replace("\n", " / ")[:200])
+    pg.evaluate("() => { S.tallyPanel = false; render(); }")
+    # none: last seen, the reason and the fix on a click
+    s = pg.evaluate(two, [cid, [dict(d("d1", "Office computer", "NWS144", at=iso(900)), last_seen=iso(900))], None]); pg.wait_for_timeout(300)
+    st, txt, title = top()
+    ok(re.match(r"Tally not connected\. Last seen on Office computer \(NWS144\) at \d{2}-[A-Z][a-z]{2}-\d{4} \d{2}:\d{2} IST$", txt), "none: “Tally not connected. Last seen on Office computer (NWS144) at <time IST>” (%s)" % txt)
+    pg.click("#cobar [data-tally-sign]"); pg.wait_for_timeout(300)
+    dd = pg.inner_text("[data-tally-detail]") if pg.locator("[data-tally-detail]").count() else ""
+    ok("not running" in dd and "start FinCom Bridge" in dd, "a click: the reason and the fix (%s)" % dd.replace("\n", " / ")[:200])
+    pg.evaluate("() => { S.tallyPanel = false; render(); }")
+    # another company open
+    s = pg.evaluate(two, [cid, [d("d1", "Office computer", "NWS144", open=["MASTERCAD SOLUTIONS"])], None]); pg.wait_for_timeout(300)
+    st, txt, title = top()
+    ok(txt == "Tally is open on Office computer (NWS144) with a different company" and st == "off", "a different company: “Tally is open on Office computer (NWS144) with a different company” (%s)" % txt)
+    # a phone: the dot and the computer's name
+    pg.set_viewport_size({"width": 390, "height": 800}); pg.wait_for_timeout(300)
+    s = pg.evaluate(two, [cid, [d("d1", "Office computer", "NWS144")], None]); pg.wait_for_timeout(400)
+    st, txt, title = top()
+    ok(txt == "Office computer (NWS144)" and st == "on", "a phone, connected: the green dot and “Office computer (NWS144)” (%s)" % txt)
+    s = pg.evaluate(two, [cid, [dict(d("d1", "Office computer", "NWS144", at=iso(900)), last_seen=iso(900))], None]); pg.wait_for_timeout(400)
+    st, txt, title = top()
+    ok(txt == "Office computer (NWS144)" and st == "off" and "connected" not in txt.lower(), "a phone, not connected: the red dot and the computer's name, never “connected” alone (%s)" % txt)
+    pg.set_viewport_size({"width": 1366, "height": 768}); pg.wait_for_timeout(300)
+    # posting says the same before Post: bank and sales, and the shared words for the posting preview
+    s = pg.evaluate(two, [cid, [d("d1", "Office computer", "NWS144")], None]); pg.wait_for_timeout(300)
+    ok(pg.evaluate("(cid) => postThroughWords(S.companies[cid])", cid) == "This will post through Office computer (NWS144).", "before Post: “This will post through Office computer (NWS144).” (postThroughWords)")
     # 3. saving
     pg.evaluate(setup, [cid, beat(), None])
     hdr = lambda: pg.inner_text("#cobar")

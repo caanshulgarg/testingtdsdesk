@@ -7,6 +7,7 @@ import { TallyStates } from "./parts/TallyStates.jsx";
 import HelpButton from "./parts/HelpButton.jsx";
 import { useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
+import Bell from "./parts/Bell.jsx";
 
 const HOME_TITLES = { clients: "Clients", today: "Today", inbox: "Inbox", tally: "Tally", rules: "Settings", help: "Help" };
 // one name for one thing (spec K1): each page is called what the sidebar calls it
@@ -107,9 +108,15 @@ function ReviewLink() {
   return <button className="treview" data-review-link="" title="Open Post to Tally → Errors" onClick={go}>{n + (n === 1 ? " entry needs review" : " entries need review")}</button>;
 }
 
-// the one Tally sign (spec H1, H2): green "Tally connected" / red "Tally disconnected" (tallySign, src/js/49); the detail
-// on hover, and in the Tally panel on a click
+// the one Tally sign (spec H1, H2): green connected / red not connected (tallySign, src/js/49), naming the computer (round
+// 3, 05-Oct-2026): "Tally connected on this computer", "… through Office computer (NWS144)", "… through 2 computers",
+// "Tally not connected. Last seen on …", "Tally is open on … with a different company"; on a phone the dot and the
+// computer's name. The detail on hover, and in the Tally panel on a click
 export function TallyDetail({ s }) {
+  // round 3 (05-Oct-2026): connected through more than one computer: each, with its company and last contact
+  if (s.many) return <dl className="tdetail" data-tally-detail="" data-tally-reason="">
+    {s.many.map((m) => <span key={m.computer} style={{ display: "contents" }}><dt>Computer</dt><dd>{m.computer}</dd><dt>Company</dt><dd>{m.company || "\u2014"}</dd><dt>Last contact</dt><dd>{m.at || "never"}</dd></span>)}
+  </dl>;
   return <dl className="tdetail" data-tally-detail="" data-tally-reason={s.on ? "" : s.code}>
     <dt>Computer</dt><dd>{s.computer || "none heard from"}</dd>
     <dt>Company</dt><dd>{s.company || "\u2014"}</dd>
@@ -122,7 +129,7 @@ function TallySign() {
   return <span className="tsign-wrap">
     <button className={"tsign tallychip " + (s.on ? "on" : "off")} data-tally-sign={s.on ? "on" : "off"} data-tally={t.state} aria-haspopup="dialog"
       title={tallySignWords(s)} onClick={() => doAct("tallyPanel")}>
-      <span className="tsign-dot" aria-hidden="true" />{s.on ? "Tally connected" : "Tally disconnected"}
+      <span className="tsign-dot" aria-hidden="true" /><span className="tsign-long">{s.words}</span><span className="tsign-short">{s.short || s.computer}</span>
     </button>
     {!S.tallyPanel && <span className="tsign-pop" role="tooltip"><TallyDetail s={s} /></span>}
   </span>;
@@ -136,6 +143,7 @@ function TopRight() {
       {inCo && <HelpButton page />}
       <ReviewLink />
       <SaveState />
+      <Bell />
       <TallySign />
       <button className="firmbtn" onClick={() => doAct("firmMenu")} title={(S.firm.firmName || "Firm") + (plan ? " · plan " + plan : "") + (bal != null ? " · credit " + money(bal) : "")}>
         <b>{(S.firm.firmName || "Firm").slice(0, 26)}</b>

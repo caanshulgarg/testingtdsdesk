@@ -224,3 +224,83 @@ Only what cannot be undone is asked first, and the question names what will chan
 
 - With FinCom's copy of the books empty, Reports showed "Refresh books" (top bar) and Look up showed "Look up" as primaries beside the page's "Read the books from Tally". Now, while the copy needs reading, "Read the books from Tally" is the page's one primary and Refresh books / Look up are plain buttons; once the books are read they are the primary again.
 - `tests/run_ui_standards.py` checks every books page (Reports, Look up, Letters, MIS, Accounts, Audit, TDS, TDS & GST, Day Book) twice, with the copy read (tests/data, else the made-up books) and with it empty: one primary at most, and when the prompt to read the books shows, it is that one. So it cannot pass by which books happen to be there.
+
+# Round 3 (05-Oct-2026): alerts in one place, the Tally sign says which computer
+
+Screenshots: `docs/ui-pass/before3/` and `docs/ui-pass/after3/` (`tests/shots_alerts.py`: a client's dashboard,
+Purchase, Books → Reports, the Tally page, and the bell opened, all with the same alerts seeded: a gap in the books on
+05-Oct-2026, a silent computer, and a summary).
+
+## Alerts and warnings: one place
+
+- **The bell** in the top bar (`app/src/parts/Bell.jsx`), left of the Tally sign, with the count of the alerts and the
+  colour of the worst one. It opens the list: one line each, in plain words, what to do, a button when there is one, and
+  "Details" for the change numbers, the computer's name and the ids.
+- **One list** (`AlertHub.list()`, new `src/js/63-alerts.js`) builds every alert from its cause, read-only on what
+  `Rec` (src/js/61) already loads (the books' sync cursor, the recorder's lines, the computers, `tally_alerts`), plus
+  the app's own warnings (credit, where the work is saved, the bill-reading self-test).
+  - One alert per problem: a book's gap, its held lines and its computer not recording make **one** alert for that
+    book; the same cause on several days (the gap rows of 04-Oct and 05-Oct) is one alert.
+  - Advice follows the cause. Lines FinCom holds by its own doing (no entry body yet, no GUID, still queued) say
+    "FinCom is fetching the entry's details from Tally; nothing to do." (amber), never "upload a Day Book". A real gap
+    says "Upload the Day Book for 05-Oct to bring it in." with an Upload Day Book button (red).
+  - Severity: red (the books are missing entries, credit finished, the work is not saved), amber (lines held, a
+    computer not recording, Tally not answering, FinCom stopped reading, credit low, the self-test failed), grey
+    (information: the daily summary, a computer silent today, "Your work is saved in this browser only"). Grey ones
+    show only in the bell.
+  - They clear themselves: each alert is worked out from its cause every time, so when the gap is filled or the lines
+    are released it goes. "Mark read" is offered only for the ones that cannot clear themselves (the summary).
+  - No repeats: the alert rows of `tally_alerts` that a known cause already covers are dropped; rescanning does not
+    add lines.
+- **The only exception**: the Tally page (Computers tab) and that client's Books pages have **one slim line**
+  (`AlertLine`, one row of 34 px, never wrapping, the rest after "+N more") with the most serious alert and its button.
+
+### Removed (they repeated the bell, or were longer than one row)
+
+| Where | What went | Now |
+|---|---|---|
+| Every client page (Main.jsx) | the red recorder banner "Tally changes are not being recorded on <PC>" | bell (amber, per book) |
+| Every client page | the client's alert lines (`data-client-alert`, a line per `tally_alerts` row, with Mark read) | bell, one per problem |
+| Every client page | the gap line with "Upload the Day Book for these days" (`GapLine`) | bell; slim line on Books |
+| Every client page | "See this client's sync activity" link under the notes | the alert's button where the cause is held lines |
+| Every page | the credit banners ("Credit finished", "Credit left") | bell (red / amber) |
+| Every page | the storage banner ("saved in this browser only" / "not being saved") | bell (grey / red) |
+| Every page | the self-test banner "Bill reading has a problem here" | bell (amber, button to the self-test) |
+| Tally page | the Alerts pane (all `tally_alerts`, read and unread) | bell |
+| Tally page | the "Silent today" pane | bell (grey) |
+| Tally page | the red tag "Tally changes are not being recorded on <PC>" on a computer, and the red colour of its company | per-company status kept, plain; the problem is in the bell |
+| Tally page | the "not responding since" row under a computer | bell (amber) |
+| Tally page, client lines | the gap line under each client | bell; slim line on the Computers tab |
+| Bank (no ledger list) | a two-row box with the steps | one row: "Import the Tally ledger list for <client>…", Import ledger list / Import from file, "How" for the steps |
+| Sales (no ledger list) | the same two-row box | one row, as on Bank |
+| Every books page | the ledgers-to-confirm box listing the names (`LedgerBanner`) | one row, red: "N ledgers are still to be confirmed…", Confirm them, the names under "How" |
+| GST periodic | the file box styled as a warning (`bk-alert`) | styled as content (`dash-card`): it is the page's work, not a warning |
+
+## The Tally sign says which computer
+
+`tallySign` (src/js/49) now names the computer (`tallyPcLabel`: "Office computer (NWS144)" when the name given and the
+Windows name differ):
+
+- "Tally connected on this computer": only when FinCom Bridge answers here on 127.0.0.1;
+- "Tally connected through Office computer (NWS144)";
+- "Tally connected through 2 computers" (the detail lists each, with its company and when it was last seen);
+- "Tally not connected. Last seen on <computer> at <time> IST";
+- "Tally is open on Office computer (NWS144) with a different company".
+
+On a phone (760 px and narrower) the sign is the dot and the computer's name. The hover text starts with the same words.
+Bank and Sales say "This will post through <computer>." beside their Post to Tally button (`postThroughWords`). The
+Post to Tally page is another helper's; the one-line change for it is in the hand-back.
+
+## Tests (round 3)
+
+- New `tests/run_alerts_one_place.py` (with `tests/alerts_seed.py`): one red alert for the 05-Oct gap, in plain words,
+  the numbers behind Details; the count; nothing on Dashboard, Purchase, Bank, Sales, Transactions; one slim line
+  on Books and the Tally page; no repeats on a rescan; it clears itself; lines held by FinCom say "fetching…, nothing to
+  do" in amber; a computer not recording is amber; the storage note is grey and only in the bell.
+- `tests/run_tally_sign.py` extended: this computer, through another computer, a bridge here that does not answer, two
+  computers, none (last seen), a different company, the phone width, the post-through words.
+- `tests/run_ui_standards.py`: every notice on every page is one row (40 px at most).
+- Updated to the owner's new spec, intent kept: `run_alerts.py`, `run_recorder_gap.py`, `run_recorder_pcs.py` (the
+  bell and the slim line in place of the banners), `run_ui_review_0110b.py` (the sign's hover text starts with its words).
+- The page header's title takes 200 px before the buttons wrap (it was 320 px), so the bell does not push Bank's
+  Upload to a second row (`run_single_upload.py`: the same place on every page).
