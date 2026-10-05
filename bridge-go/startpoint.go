@@ -312,8 +312,8 @@ func plainFileName(s string) bool {
 	return strings.TrimSpace(s) != "" && !strings.ContainsAny(s, `/\:`) && !strings.Contains(s, "..")
 }
 
-// the recorder's holding file for a company (<GUID>.txt, or name-<company>.txt) in the recorder folder: written in the
-// last 7 days, and its last-write time ("" when there is none)
+// the recorder's holding file for a company (<GUID>.txt, or name-<company>.txt; 2.2.2: or the live add-on's daily
+// <GUID>-<yyyymmdd>.txt) in the recorder folder: written in the last 7 days, and its last-write time ("" when there is none)
 func recorderHolding(company, guid string) (bool, string) {
 	var newest time.Time
 	var names []string
@@ -327,6 +327,15 @@ func recorderHolding(company, guid string) (bool, string) {
 	dir, ok := recorderDirChecked()
 	if !ok {
 		return false, ""
+	}
+	// 2.2.2: the live add-on's daily files, <GUID>-<yyyymmdd>.txt (recorder_live.go reLiveFile), count as well
+	if plainFileName(guid) {
+		m, _ := filepath.Glob(filepath.Join(dir, "*.txt"))
+		for _, f := range m {
+			if g := reLiveFile.FindStringSubmatch(filepath.Base(f)); g != nil && g[1] == guid {
+				names = append(names, filepath.Base(f))
+			}
+		}
 	}
 	for _, n := range names {
 		if fi, err := os.Lstat(filepath.Join(dir, n)); err == nil && fi.Mode().IsRegular() && fi.ModTime().After(newest) {
