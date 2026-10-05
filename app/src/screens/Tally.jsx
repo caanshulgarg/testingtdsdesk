@@ -233,6 +233,16 @@ function RecorderLine({ r }) {
     {open.map((co) => { const x = rc[co]; return <span key={co} className="note" data-recorder-co={co}>{co + ": " + (x.seen ? "recording" + (x.lastAt ? " \u00b7 last line " + tallyHm(x.lastAt) : "") : "not recording")}</span>; })}
   </div>;
 }
+// the owner's condition 4: per company, what FinCom Bridge's 2-second rule switched off on this computer (Rec.offOf), the
+// time Tally took, and how to switch it back on (words only: the owner changes "Changes come from" and sets it back)
+function RecorderOff({ r, owner }) {
+  const offs = Rec.offOf(r.device);
+  if (!offs.length) return null;
+  return <div data-recorder-offs="" style={{ marginLeft: 16 }}>
+    {offs.map((x) => <div key={x.kind + "|" + x.company} className="note" data-recorder-off="" data-off-kind={x.kind} data-off-co={x.company} title={x.why || undefined}>
+      {Rec.offWords(x) + " " + Rec.offAgain(owner)}</div>)}
+  </div>;
+}
 function BridgeLines({ rows, latest }) {
   const [open, setOpen] = useState(false);
   const owner = S.account && S.account.me && S.account.me.role === "owner";
@@ -264,6 +274,7 @@ function BridgeLines({ rows, latest }) {
           {owner && latest && !piloting && vnum(latest) > vnum(r.version) && <button className="btn small" data-release-pilot={r.device.id} onClick={() => TCloud.releasePilot(latest, r)}>{"Try version " + latest + " on this computer"}</button>}
         </div>}
         {live && <RecorderLine r={r} />}
+        {live && <RecorderOff r={r} owner={owner} />}
         {live && <div className="row" style={{ alignItems: "center", gap: 8, flexWrap: "wrap", marginLeft: 16 }}><PostSettings r={r} owner={owner} /></div>}
         {live && <div className="row" style={{ alignItems: "center", gap: 8, flexWrap: "wrap", marginLeft: 16 }}><TrialTools r={r} owner={owner} /></div>}
         {live && <div className="row" style={{ alignItems: "center", gap: 8, flexWrap: "wrap", marginLeft: 16 }}><RecorderSource r={r} owner={owner} /></div>}

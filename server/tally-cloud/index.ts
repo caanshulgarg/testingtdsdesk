@@ -236,7 +236,30 @@ function bridgeOf(dev: any, body: any, shadow: boolean) {
     ...postSettingsApplied(body),
     // phase 2 (migration 44): per company, whether this PC holds the recorder's file and its last line ({company: {seen,
     // lastAt}}), for the app's banner "Tally changes are not being recorded on <PC>"; absent on a bridge that does not say
-    ...recorderOf(body) } };
+    ...recorderOf(body),
+    // condition 4 (bridge 2.2.0): per company, the methods its 2-second rule switched off (the entry fetch, Tally's change
+    // list, month slices), {bodies, B, C}; absent on an older bridge or when none is off
+    ...recorderOffOf(body) } };
+}
+// condition 4: recorderBodyFetch / recorderSourceB / recorderSourceC of a 2.2.0 beat, each {company: {off, seconds, at, why}}
+// (bridge-go/recorder_probes.go liveBeatOff): company names up to 200, at most 50, off true, seconds a number 0..3600 (to
+// 0.1), at up to 30, why up to 300; anything else is not kept
+function cleanOffs(x: any) {
+  if (!x || typeof x !== "object" || Array.isArray(x)) return null;
+  const out: Record<string, { off: true; seconds: number; at: string; why: string }> = {};
+  for (const [name, v] of Object.entries(x)) {
+    if (Object.keys(out).length >= 50) break;
+    const o: any = v;
+    if (!name || name.length > 200 || !o || typeof o !== "object" || Array.isArray(o) || o.off !== true) continue;
+    if (typeof o.seconds !== "number" || !Number.isFinite(o.seconds) || o.seconds < 0 || o.seconds > 3600) continue;
+    out[name] = { off: true, seconds: Math.round(o.seconds * 10) / 10, at: typeof o.at === "string" ? o.at.slice(0, 30) : "", why: typeof o.why === "string" ? o.why.slice(0, 300) : "" };
+  }
+  return Object.keys(out).length ? out : null;
+}
+function recorderOffOf(body: any) {
+  const all: Record<string, unknown> = {};
+  for (const [k, f] of [["bodies", "recorderBodyFetch"], ["B", "recorderSourceB"], ["C", "recorderSourceC"]]) { const c = cleanOffs(body?.[f]); if (c) all[k] = c; }
+  return Object.keys(all).length ? { recorderOff: all } : {};
 }
 // phase 2: the companies of a beat that say recorderSeen (a boolean): {company: {seen, lastAt}}, at most 50. Round 19: read
 // from either shape of the beat (beatChanges: companies[] first, else the top-level changeNumbers of bridge 2.1.9)

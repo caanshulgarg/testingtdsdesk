@@ -113,6 +113,27 @@ try:
     c, r = call({"kind": "beat", "version": "2.1.10", "bridge": dict(main, version="2.1.10"), "tally": True})
     ok(c == 200 and r.get("trialTools") is False, "46. off: trialTools false (%s)" % r.get("trialTools"))
     dev.pop("trial_tools", None)
+    # condition 4 (bridge 2.2.0): the 2-second rule's switch-offs (recorderBodyFetch / recorderSourceB / recorderSourceC, each
+    # {company: {off, seconds, at, why}}) kept in the bridge's entry as recorderOff {bodies, B, C}; junk cleaned; absent when not sent
+    off1 = {"off": True, "seconds": 3.4567, "at": "2026-10-05T14:05:09", "why": "Tally took 3.5 s for one entry (limit 2 s)"}
+    junk = {"GARG SHEKHAR & COMPANY": off1, "x" * 300: off1, "NotOff": dict(off1, off=False), "Str": dict(off1, seconds="3"),
+            "Big": dict(off1, seconds=99999), "Neg": dict(off1, seconds=-1), "Arr": [1], "Long": dict(off1, at="t" * 50, why="w" * 500)}
+    junk.update({"Co %02d" % i: off1 for i in range(60)})
+    c, r = call({"kind": "beat", "version": "2.2.0", "bridge": dict(main, version="2.2.0"), "tally": True,
+                 "recorderBodyFetch": junk, "recorderSourceB": {"ZZ CO": dict(off1, seconds=2.04)}, "recorderSourceC": "nonsense"})
+    ro = dev["info"]["bridges"][GO["id"]].get("recorderOff") or {}
+    bo = ro.get("bodies") or {}
+    ok(c == 200 and bo.get("GARG SHEKHAR & COMPANY") == {"off": True, "seconds": 3.5, "at": "2026-10-05T14:05:09", "why": off1["why"]},
+       "c4. recorderBodyFetch stored in the bridge's entry as recorderOff.bodies, seconds rounded to 0.1 (%s)" % bo.get("GARG SHEKHAR & COMPANY"))
+    ok(ro.get("B") == {"ZZ CO": {"off": True, "seconds": 2.0, "at": "2026-10-05T14:05:09", "why": off1["why"]}} and "C" not in ro,
+       "c4. recorderSourceB stored as recorderOff.B; recorderSourceC not an object: not kept (%s)" % {k: ro.get(k) for k in ("B", "C")})
+    ok(len(bo) <= 50 and all(len(k) <= 200 for k in bo) and not any(k in bo for k in ("NotOff", "Str", "Big", "Neg", "Arr")),
+       "c4. junk dropped: off not true, seconds not a number or outside 0..3600, not an object, names over 200; at most 50 (%d kept)" % len(bo))
+    ok(bo.get("Long", {}).get("at") == "t" * 30 and len(bo.get("Long", {}).get("why", "")) == 300, "c4. at cut to 30, why cut to 300")
+    c, r = call({"kind": "beat", "version": "2.2.0", "bridge": dict(main, version="2.2.0"), "tally": True, "recorderBodyFetch": {"NotOff": dict(off1, off=False)}})
+    ok(c == 200 and "recorderOff" not in dev["info"]["bridges"][GO["id"]], "c4. nothing off after cleaning: no recorderOff in the entry")
+    c, r = call({"kind": "beat", "version": "2.1.10", "bridge": main, "tally": True})
+    ok(c == 200 and "recorderOff" not in dev["info"]["bridges"][GO["id"]], "c4. an older bridge (no fields sent): no recorderOff")
     c, r = call({"kind": "posts_take", "version": "2.1.0", "bridge": main})
     ok(c == 200, "and may take it (%s)" % c)
     # the bridge's menu: Switch to main bridge (a second Go install takes over)

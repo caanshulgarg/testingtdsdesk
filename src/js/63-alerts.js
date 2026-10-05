@@ -148,6 +148,15 @@ const AlertHub = {
         const quiet = silent.find(x => x.device === d.id);
         const rowsD = unread.filter(x => x.device_id === d.id && x.kind === "silent");
         if (ds.bridge === "offline") return;   // the Tally sign says it (and the bell does not repeat it)
+        // the owner's condition 4: one alert per company the bridge's 2-second rule switched a method off for; it goes
+        // when the bridge's heartbeat no longer says it (Rec.offOf reads the last one)
+        if (Rec.offOf) Rec.offOf(d).forEach(x => {
+          const link = (((typeof TLight === "object" && TLight.st) || {}).cos || []).find(c => c.device_id === d.id && c.client_id && norm(c.company) === norm(x.company));
+          out.push({key: "off:" + d.id + ":" + x.kind + ":" + x.company, sev: "warn", cid: link ? link.client_id : "", selfClear: true, at: beat.at || "",
+            text: Rec.OFF_BELL[x.kind] + " is switched off for " + x.company + ": Tally took " + (Math.round(x.seconds * 10) / 10) + " s (limit " + Rec.OFF_LIMIT + " s).",
+            fix: Rec.offAgain(!!(S.account && S.account.me && S.account.me.role === "owner")),
+            details: [label, x.at && "since " + (istDay(x.at) === istDay(Date.now()) ? fmtTime(x.at) : fmtDateTime(x.at)), x.why].filter(Boolean).join(" · ")});
+        });
         const base = {key: "pc:" + d.id, details: [label, stop && stop.reason, beat.notAnsweringSince && "not answering since " + fmtDateTime(beat.notAnsweringSince)].filter(Boolean).join(" · "), selfClear: true, at: beat.at || ""};
         if (stop) out.push(Object.assign(base, {sev: "warn", text: "FinCom stopped reading Tally by itself: " + (stop.reason || "Tally did not answer") + ".", fix: "It starts again by itself when Tally answers; nothing to do."}));
         else if (beat.notAnsweringSince) out.push(Object.assign(base, {sev: "warn", text: "Tally is not answering on one computer since " + this.when(beat.notAnsweringSince) + ".", fix: "Close any open window or report in Tally on that computer (the details say which)."}));

@@ -285,6 +285,37 @@ const Rec = {
     if (!rc) return [];
     return this.openOf(dev).filter(co => rc[co] && rc[co].seen === false);
   },
+  // the owner's condition 4 (05-Oct-2026): what FinCom Bridge's 2-second rule switched off on a computer, per company
+  // (info.bridges[id].recorderOff {bodies, B, C}, kept by tally-ingest from the 2.2.0 beat): from the main bridge, else
+  // the one heard last; [] when none is off or the bridge does not say (before 2.2.0).
+  // [{kind: bodies|B|C, what: "Entry fetch" | "Tally's change list" | "Month slices", company, seconds, at, why}]
+  OFF_WHAT: {bodies: "Entry fetch", B: "Tally's change list", C: "Month slices"},
+  OFF_BELL: {bodies: "FinCom's entry fetch", B: "FinCom's reading of Tally's change list", C: "FinCom's reading by month slices"},
+  OFF_LIMIT: 2,
+  offOf(dev){
+    const br = ((dev && dev.info) || {}).bridges || {};
+    const ids = Object.keys(br).filter(id => br[id] && typeof br[id] === "object");
+    const id = dev && dev.main_bridge && br[dev.main_bridge] ? dev.main_bridge : ids.sort((x, y) => String(br[y].at || "").localeCompare(String(br[x].at || "")))[0];
+    const ro = id && br[id].recorderOff;
+    if (!ro || typeof ro !== "object") return [];
+    const out = [];
+    Object.keys(this.OFF_WHAT).forEach(kind => Object.entries(ro[kind] || {}).forEach(([company, x]) => {
+      if (x && x.off === true) out.push({kind, what: this.OFF_WHAT[kind], company, seconds: Number(x.seconds) || 0, at: x.at || "", why: x.why || ""});
+    }));
+    return out;
+  },
+  // "Entry fetch switched off for <company>: Tally took 3.4 s at 14:05 IST (limit 2 s)." The bridge's time has no zone
+  // and is India's (istParts reads it so); another day: with its date
+  offWords(x){
+    const when = x.at ? (istDay(x.at) === istDay(Date.now()) ? fmtTime(x.at) : fmtDateTime(x.at)) : "";
+    return x.what + " switched off for " + x.company + ": Tally took " + (Math.round(x.seconds * 10) / 10) + " s" + (when ? " at " + when : "") + " (limit " + this.OFF_LIMIT + " s).";
+  },
+  // the bridge switches it on again when "Changes come from" for the computer changes from the value in force when it
+  // switched off (bridge-go/recorder_probes.go liveOnAgain); a change and back within one heartbeat may not be seen
+  offAgain(owner){
+    return owner ? 'To switch it back on: change "Changes come from" for this computer to another choice, wait one minute, then set it back.'
+      : 'To switch it back on: the owner changes "Changes come from" for this computer to another choice, waits one minute, then sets it back.';
+  },
   // the computers keeping a client's company open without recording it: [{pc, company}]
   clientNotRecording(cid){
     const st = (typeof TLight === "object" && TLight.st) || {}, out = [];
