@@ -12,12 +12,13 @@ may be built until it passes. Its self-test is `bash bridge-go/release_check_tes
    has ever had a setup in `assets-test/bridge-go/`, a git tag, or a row in the release log below is never used again.
    The only exception is a build that was never published (`FORCE_REBUILD=1`). The script checks the published
    lists to confirm it: `assets-test/bridge-go/latest.json`, and `review/assets/bridge-go/` on `main`.
-2. **All tests pass.** `go vet` for Linux and Windows, then `go test ./...` in `bridge-go/`. The CI job
-   `bridge-linux` runs the same tests on every push.
-3. **The size test passes** (`go test -run Size -v`). It uses a made-up company of 50,000 ledgers and 200,000
+2. **All tests pass.** `go vet` for Linux and Windows, then `go test -timeout 20m ./...` in `bridge-go/` (the full run takes about 10 minutes, so Go's
+   default 10-minute limit is not enough: it cut a run at 588 s on 05-Oct-2026). The CI job `bridge-linux` runs the same
+   tests on every push.
+3. **The size test passes** (`go test -timeout 20m -run Size -v`). It uses a made-up company of 50,000 ledgers and 200,000
    vouchers and fails if any request to Tally would take over 20 seconds or ask for more than the allowed chunk. A
    missing size test counts as a failure.
-4. **The allow-list tests pass** (`go test -run 'AllowList|NoComputedFigure|EveryRequestOnList|UnknownRequest' -v`):
+4. **The allow-list tests pass** (`go test -timeout 20m -run 'AllowList|NoComputedFigure|EveryRequestOnList|UnknownRequest' -v`):
    - every request the bridge can send is on the list;
    - an unknown request is refused;
    - no request asks Tally to compute a figure;

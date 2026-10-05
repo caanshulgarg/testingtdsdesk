@@ -15,7 +15,7 @@
 #                 only if it was never published (assets-test/bridge-go/latest.json does not name it, and origin/main
 #                 holds no FinComBridge*-<v>.exe and its review/assets/bridge-go/latest.json does not name it).
 #   2 tests       go vet (Linux, Windows); the required tests exist (a missing one fails as "missing test X");
-#                 go test ./... ; the size test and the allow-list tests each run and print "--- PASS" by name.
+#                 go test -timeout 20m ./... ; the size test and the allow-list tests each run and print "--- PASS" by name.
 #   3 go.mod      go mod tidy -diff shows nothing (it changes no file).
 #   4 allow-list  the table in docs/tally-allowlist.md parses (a header naming the worst-case column and at least one
 #                 row, each starting with '|'; "no rows parsed" fails) and every row has a worst case > 0 ("not yet
@@ -104,10 +104,12 @@ for t in $SIZE_TESTS $ALLOW_TESTS; do
   grep -qE "^func $t[A-Za-z0-9_]*\(t \*testing\.T\)" ./*_test.go 2>/dev/null \
     || fail "2 required tests" "missing test $t (no 'func $t...(t *testing.T)' in bridge-go/*_test.go)"
 done
-go test -count=1 ./... >"$LOG" 2>&1 || fail "2 go test ./..." "$(grep -E '^(--- FAIL|FAIL|panic)' "$LOG" | head -20)" "$(tail -10 "$LOG")"
+# an explicit limit: Go's default of 10 minutes killed a full run at 588 s on 05-Oct-2026 (it passed on the next try)
+GO_TEST_TIMEOUT=20m
+go test -count=1 -timeout "$GO_TEST_TIMEOUT" ./... >"$LOG" 2>&1 || fail "2 go test ./..." "$(grep -E '^(--- FAIL|FAIL|panic)' "$LOG" | head -20)" "$(tail -10 "$LOG")"
 run_named() { # $1: label, $2: -run pattern, rest: test-name prefixes that must each PASS
   local label="$1" pat="$2"; shift 2
-  go test -count=1 -run "$pat" -v ./... >"$LOG" 2>&1 || fail "$label" "$(grep -E '^(--- FAIL|FAIL|panic)' "$LOG" | head -20)" "$(tail -10 "$LOG")"
+  go test -count=1 -timeout "$GO_TEST_TIMEOUT" -run "$pat" -v ./... >"$LOG" 2>&1 || fail "$label" "$(grep -E '^(--- FAIL|FAIL|panic)' "$LOG" | head -20)" "$(tail -10 "$LOG")"
   for t in "$@"; do
     grep -qE "^--- PASS: $t" "$LOG" || fail "$label" "missing test $t (go test -run '$pat' ran no passing $t)"
   done
