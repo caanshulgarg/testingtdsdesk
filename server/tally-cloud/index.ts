@@ -479,6 +479,14 @@ async function changesOnly(dev: any, id: string) {
   const { data, error } = await db.from("tally_bridge_prefs").select("changes_only").eq("device_id", dev.id).eq("bridge_id", id).maybeSingle();
   return !error && data?.changes_only === true;
 }
+// review M-B (migration 54): a bridge refused postings (not the main one, changes only, test mode) never leaves a posting
+// waiting for ever: the computer's waiting postings that no bridge of it may take are moved to its bridge that may post,
+// else failed in plain words (tally_post_rescue; never to another computer key). Never fails the call; a cloud without
+// the function: as before
+async function rescuePosts(dev: any) {
+  const { error } = await db.rpc("tally_post_rescue", { p_device: dev.id });
+  if (error && error.code !== "PGRST202" && !missingFn(String(error.message || ""))) console.error("tally-ingest: tally_post_rescue", dev.id, error.message);
+}
 // the waiting postings this bridge may take: those naming it (tally_post_jobs.target_bridge), and those naming none when it
 // is the computer's main bridge; a cloud without migration 54 (no column): every waiting posting of the computer, when main
 async function postsFor(dev: any, id: string, main: boolean) {
@@ -605,7 +613,10 @@ async function makeMain(dev: any, id: string) {
 //   - companies, ledgers, groups, state: answered, nothing stored.
 async function shadowCall(dev: any, firm: string, body: any) {
   const kind = String(body.kind || "");
-  if (kind === "posts_take" || kind === "posts_update") return reply(403, { ok: false, error: "A bridge in test mode does not post." });
+  if (kind === "posts_take" || kind === "posts_update") {
+    if (kind === "posts_take") await rescuePosts(dev);   // review M-B: a posting for this bridge before it went to test mode is not left waiting
+    return reply(403, { ok: false, error: "A bridge in test mode does not post." });
+  }
   if (kind === "support") return await supportPack(firm, dev, body);
   if (kind === "make_main") return await makeMain(dev, bridgeOf(dev, body, true).id);
   if (kind === "hello") {
@@ -625,6 +636,7 @@ async function shadowCall(dev: any, firm: string, body: any) {
     // a bridge 2.0.0 in test mode sends no name of its own: it is kept in info.shadow only, never in bridge 1.15.0's place
     const info = me.id === "v1" ? { ...prev, ...ctl.info, shadow } : { ...prev, ...ctl.info, shadow, bridges: bridgesWith(prev, me.id, me.entry) };
     await db.from("tally_devices").update({ info }).eq("id", dev.id);
+    if (me.id !== "v1") await rescuePosts(dev);   // review M-B: a bridge now in test mode does not post: its postings are not left waiting
     const tok = dev.wake_token;
     const wake = tok ? { url: URL.replace(/^http/, "ws").replace(/\/+$/, "") + "/realtime/v1/websocket", key: ANON, topic: "tb-" + tok } : null;
     // made the main bridge on FinCom's Tally page: the bridge switches itself over (and 1.15.0 is refused postings already)
@@ -1888,6 +1900,7 @@ Deno.serve(async (req) => {
         const settings = { postOnly: Array.isArray((dev as any).post_only) ? (dev as any).post_only : null, postBatchBills: cleanBatch((dev as any).post_batch_bills), postBatchBank: cleanBatch((dev as any).post_batch_bank),
           at: typeof (dev as any).post_settings_at === "string" ? (dev as any).post_settings_at : null };
         // migration 54: only the postings this bridge may take (for it, or naming none when it is the main bridge); none when changes only
+        if (co || !mayPost(dev, me.id)) await rescuePosts(dev);
         const posts = co ? 0 : await postsFor(dev, me.id, mayPost(dev, me.id));
         // fast-sync (bridge 1.15.0): the computer's own Realtime channel, where the database wakes it the moment a
         // posting is queued or an update asked for (migration-13); the heartbeat stays the fallback
@@ -1920,8 +1933,9 @@ Deno.serve(async (req) => {
       case "make_main": return await makeMain(dev, bridgeOf(dev, body, false).id);
       case "posts_take": {
         const meT = bridgeOf(dev, body, false).id;
-        if (!mayPost(dev, meT)) return reply(403, { ok: false, notMain: true, error: "Another bridge is the main bridge on this computer now (chosen in FinCom); this one reads only and does not post." });
-        if (await changesOnly(dev, meT)) return reply(403, { ok: false, notMain: true, changesOnly: true, error: CHANGES_ONLY });
+        // review M-B: refused, but a posting that was for this bridge is moved to the one that may post (or failed in words) first
+        if (!mayPost(dev, meT)) { await rescuePosts(dev); return reply(403, { ok: false, notMain: true, error: "Another bridge is the main bridge on this computer now (chosen in FinCom); this one reads only and does not post." }); }
+        if (await changesOnly(dev, meT)) { await rescuePosts(dev); return reply(403, { ok: false, notMain: true, changesOnly: true, error: CHANGES_ONLY }); }
         // migration 54: only a posting naming this bridge, or naming none (it is the main bridge); an older cloud: as before
         let { data, error } = await db.rpc("tally_post_take_for", { p_device: dev.id, p_bridge: meT, p_main: true });
         if (error && (error.code === "PGRST202" || missingFn(String(error.message || "")))) ({ data, error } = await db.rpc("tally_post_take", { p_device: dev.id }));

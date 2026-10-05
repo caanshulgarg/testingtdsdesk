@@ -7,10 +7,15 @@ Supabase (fake_supabase.py). Needs Deno (DENO, default: the deno on the PATH).
   2. posts_take hands out the posting for this bridge first (the oldest), then one naming none; never one for another bridge;
   3. a posting for another bridge cannot be reported by this one (posts_update refused);
   4. "Changes only" (tally_bridge_prefs): the beat says notMain + changesOnly and counts none; posts_take is refused and the
-     posting waits (a posting it took before the switch is still reported);
+     posting for it is rescued, not left waiting (review M-B) (a posting it took before the switch is still reported);
   5. a cloud without migration 54 (no tally_post_take_for): the hand-out as before (tally_post_take);
   6. review M3: a bridge id belongs to the first computer key that reported it: another key reporting it (an id copied from
-     another user's settings) is refused, and nothing it says is kept; a cloud without tally_bridge_bind: as before."""
+     another user's settings) is refused, and nothing it says is kept; a cloud without tally_bridge_bind: as before;
+  7. review M-A: the same id under another firm's computer (a cloned Windows profile) is that firm's own: it beats and takes
+     its own postings normally, and neither firm sees the other's words;
+  8. review M-B: a bridge refused postings (no longer main, or Changes only) has its computer's waiting postings rescued
+     (tally_post_rescue: moved to the bridge that may post, else failed in plain words) before the 403, and on its beat;
+     a cloud without tally_post_rescue: the 403 as before."""
 import os, sys, json, time, hashlib, subprocess, urllib.request, shutil, threading
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import fake_supabase as F
@@ -71,7 +76,7 @@ try:
        "4. changes only: the beat counts none and says so (notMain, changesOnly: %s)" % r.get("error"))
     ok(dev["info"]["bridges"][RAVI["id"]].get("changesOnly") is True, "4. the bridge's line says changes only")
     c, r = call({"kind": "posts_take", "version": "2.3.0", "bridge": RAVI})
-    ok(c == 403 and r.get("changesOnly") and r.get("notMain") and st("p-ravi2") == "waiting", "4. posts_take refused, the posting waits (%s)" % r.get("error"))
+    ok(c == 403 and r.get("changesOnly") and r.get("notMain") and st("p-ravi2") == "failed", "4. posts_take refused; the posting for it is not left waiting for ever (review M-B: no other bridge may post, so failed in words) (%s)" % r.get("error"))
     c, r = call({"kind": "posts_update", "version": "2.3.0", "bridge": RAVI, "id": "p-ravi", "status": "running", "done": 0, "results": []})
     ok(c == 200, "4. a posting it took before the switch is still reported (not left running) (%s)" % c)
     F.T["tally_bridge_prefs"][0]["changes_only"] = False
@@ -99,6 +104,44 @@ try:
     F.NO_FN.add("tally_bridge_bind")
     c, r = call2(dict(BEAT, bridge=dict(RAVI, id="go-dddd00000d")))
     ok(c == 200, "6. a cloud without tally_bridge_bind: as before (%s)" % c)
+    F.NO_FN.discard("tally_bridge_bind")
+    # 7. review M-A: another firm's computer reporting ravi's id
+    KEY3 = "fcd_" + "e" * 48
+    F.T["tally_devices"].append({"id": "d-9", "firm_id": "f-2", "name": "OTHERPC · priya", "key_hash": hashlib.sha256(KEY3.encode()).hexdigest(), "revoked": False, "info": {}, "wake_token": "u" * 64, "version": "2.3.0"})
+    F.T["tally_post_jobs"].append({"id": "p-f2", "firm_id": "f-2", "device_id": "d-9", "company": "YY CO", "status": "waiting", "payload": {"vouchers": []}, "created_at": "2026-10-05T08:00:00Z", "target_bridge": RAVI["id"]})
+    def call3(body):
+        rq = urllib.request.Request("http://127.0.0.1:8000/", data=json.dumps(body).encode(), headers={"Content-Type": "application/json", "x-fincom-device": KEY3})
+        try: r = urllib.request.urlopen(rq, timeout=60); return r.status, json.loads(r.read())
+        except urllib.error.HTTPError as e: return e.code, json.loads(e.read() or b"{}")
+    c, r = call3(dict(BEAT, bridge=dict(RAVI, computer="OTHERPC", user="OTHERPC\\priya"), open=["YY CO"]))
+    d9 = next(d for d in F.T["tally_devices"] if d["id"] == "d-9")
+    ok(c == 200 and not r.get("idRefused") and "idRefused" not in (d9.get("info") or {}), "7. another firm's computer reporting the same id beats normally (%s %s)" % (c, r.get("error")))
+    c, r = call3({"kind": "posts_take", "version": "2.3.0", "bridge": dict(RAVI, computer="OTHERPC", user="OTHERPC\\priya")})
+    ok(c == 200 and (r.get("job") or {}).get("id") == "p-f2", "7. and takes its own firm's posting for that id (%s %s)" % (c, (r.get("job") or {}).get("id")))
+    c, r = call(BEAT)
+    ok(c == 200 and "priya" not in json.dumps(r) and "OTHERPC" not in json.dumps(dev.get("info") or {}), "7. ravi's own key still beats; the other firm's words appear nowhere on its line (%s)" % c)
+    # 8. review M-B: ravi's bridge no longer main: its waiting posting is rescued before the 403
+    MAIN = "go-eeee00000e"
+    dev["info"]["bridges"][MAIN] = {"at": "2026-10-05T12:00:00Z", "computer": "NW144", "user": "NW144\\ravi", "mode": "main"}
+    dev["main_bridge"] = MAIN
+    job("p-ravi5", RAVI["id"], "2026-10-05T13:00:00Z")
+    n0 = len(F.ARGS.get("tally_post_rescue", []))
+    c, r = call({"kind": "posts_take", "version": "2.3.0", "bridge": RAVI})
+    tgt = next(j for j in F.T["tally_post_jobs"] if j["id"] == "p-ravi5").get("target_bridge")
+    ok(c == 403 and r.get("notMain") and len(F.ARGS.get("tally_post_rescue", [])) > n0 and F.ARGS["tally_post_rescue"][-1].get("p_device") == "d-2" and tgt == MAIN,
+       "8. a bridge no longer main: refused, and its computer's waiting posting rescued first (moved to %s) (%s)" % (tgt, c))
+    n0 = len(F.ARGS.get("tally_post_rescue", []))
+    c, r = call(BEAT)
+    ok(c == 200 and r.get("notMain") and len(F.ARGS.get("tally_post_rescue", [])) > n0, "8. its beat (not main) rescues too (%s)" % c)
+    dev["main_bridge"] = None
+    F.T["tally_bridge_prefs"][0]["changes_only"] = True
+    n0 = len(F.ARGS.get("tally_post_rescue", []))
+    c, r = call({"kind": "posts_take", "version": "2.3.0", "bridge": RAVI})
+    ok(c == 403 and r.get("changesOnly") and len(F.ARGS.get("tally_post_rescue", [])) > n0, "8. a changes-only bridge refused: rescued first (%s)" % c)
+    F.NO_FN.add("tally_post_rescue")
+    c, r = call({"kind": "posts_take", "version": "2.3.0", "bridge": RAVI})
+    ok(c == 403 and r.get("changesOnly"), "8. a cloud without tally_post_rescue: the 403 as before (%s)" % c)
+    F.NO_FN.discard("tally_post_rescue"); F.T["tally_bridge_prefs"][0]["changes_only"] = False
 finally:
     fn.kill()
     if fails: print("".join(log[-40:]))

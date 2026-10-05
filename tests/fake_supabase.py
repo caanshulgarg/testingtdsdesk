@@ -97,11 +97,12 @@ def rpc(fn, a):
         SECRETS[a["p_name"]] = a["p_value"]; return "sec-" + a["p_name"]
     if fn == "gsp_secret_get": return SECRETS.get(a["p_name"]) if a["p_name"].startswith("gsp:") else None
     if fn == "gst_cron_ok": return a.get("k") == CRON_KEY
-    if fn == "tally_bridge_bind":       # migration 54 (review M3): a bridge id belongs to the first computer that reports it
+    if fn == "tally_bridge_bind":       # migration 54 (review M3, M-A): a bridge id belongs to the first of the firm's computers that reports it
         bound = T.setdefault("tally_bridge_ids", [])
         if not re.match(r"^go-[0-9a-f]{6,32}$", a.get("p_bridge") or ""): return {"own": True}
-        hit = next((x for x in bound if x["bridge_id"] == a["p_bridge"]), None)
-        if not hit: hit = {"bridge_id": a["p_bridge"], "device_id": a["p_device"]}; bound.append(hit)
+        firm = next((x.get("firm_id") for x in T["tally_devices"] if x["id"] == a["p_device"]), None)
+        hit = next((x for x in bound if x["bridge_id"] == a["p_bridge"] and x.get("firm_id") == firm), None)
+        if not hit: hit = {"bridge_id": a["p_bridge"], "device_id": a["p_device"], "firm_id": firm}; bound.append(hit)
         if hit["device_id"] == a["p_device"]: return {"own": True}
         d = next((x for x in T["tally_devices"] if x["id"] == hit["device_id"]), {}); e = ((d.get("info") or {}).get("bridges") or {}).get(a["p_bridge"]) or {}
         return {"own": False, "words": "This computer key cannot use bridge %s: it belongs to %s. Ask the firm's owner." % (a["p_bridge"], " · ".join(x for x in (e.get("computer"), e.get("user")) if x) or d.get("name", ""))}
@@ -112,6 +113,16 @@ def rpc(fn, a):
             if j["device_id"] == a["p_device"] and j["status"] == "waiting" and (j.get("target_bridge") == a["p_bridge"] or (j.get("target_bridge") is None and a.get("p_main"))):
                 j["status"] = "taken"; return [j]
         return []
+    if fn == "tally_post_rescue":       # migration 54 (review M-B): a computer's waiting postings for a bridge that may no longer post: moved to its main bridge
+        d = next((x for x in T["tally_devices"] if x["id"] == a["p_device"]), {}); main = d.get("main_bridge")
+        co = {p.get("bridge_id") for p in T.get("tally_bridge_prefs", []) if p.get("device_id") == a["p_device"] and p.get("changes_only")}
+        moved = failed = 0
+        for j in T["tally_post_jobs"]:
+            t = j.get("target_bridge")
+            if j["device_id"] != a["p_device"] or j["status"] != "waiting" or not t or ((not main or main == t) and t not in co): continue
+            if main and main not in co: j["target_bridge"] = main; moved += 1
+            else: j["status"] = "failed"; failed += 1
+        return {"ok": True, "moved": moved, "failed": failed}
     if fn == "tally_post_take":
         for j in T["tally_post_jobs"]:
             if j["device_id"] == a["p_device"] and j["status"] == "waiting": j["status"] = "taken"; return [j]

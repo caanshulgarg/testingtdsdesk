@@ -24,16 +24,32 @@
 --   5. tally_post_take_for(p_device, p_bridge, p_main): tally_post_take (36b's) for one bridge: the oldest waiting posting of
 --      its computer that names it, or names none when p_main (it is the computer's main bridge, tally-ingest decides); a
 --      changes-only bridge takes none, nor a bridge FinCom has not heard from on that computer. The service role only (tally-ingest).
---   6. tally_bridge_ids (review M3): a bridge id ("go-…", which the bridge reports itself) belongs to the first computer key
---      that reported it; tally_bridge_bind(p_device, p_bridge) (the service role: tally-ingest, on every call naming a bridge)
---      binds an id not bound yet and says whether it is this computer's; tally-ingest refuses an id bound to another computer.
---      The ids heard from before 54 on exactly one computer are bound to it here; an id seen on two is left unbound (the
---      first computer to report it afterwards gets it), and named in a NOTICE. Targets resolve through these bindings only.
+--   6. tally_bridge_ids (review M3): a bridge id ("go-…", which the bridge reports itself) belongs, within a firm, to the
+--      first of the firm's computer keys that reported it (review M-A: bound per firm; one live binding per (firm, id); the
+--      same id under another firm's computer, e.g. a cloned Windows profile, is that firm's own business: it never refuses,
+--      and its computer's name and Windows user never appear in this firm's rows). tally_bridge_bind(p_device, p_bridge)
+--      (the service role: tally-ingest, on every call naming a bridge) binds an id not bound yet in the computer's firm and
+--      says whether it is this computer's; tally-ingest refuses an id bound to another computer of the same firm.
+--      The ids heard from before 54 on exactly one computer of a firm are bound to it here; an id seen on two computers of
+--      the same firm is left unbound there (the first of them to report it afterwards gets it), and named in a NOTICE.
+--      Targets resolve through the firm's own bindings only.
 --      A refused key: plain words on its own line (info.idRefused) and to its bridge, and ONE alert per (id, computer) for
---      the owners (tally_bridge_alerts; tally_bridge_alert_read). tally_bridge_reset(p_bridge, p_why), owners only: the
---      binding kept with who, when and why (never removed), its alerts cleared; the next computer to report the id gets it.
+--      the owners (tally_bridge_alerts; tally_bridge_alert_read). tally_bridge_reset(p_bridge, p_why), owners only, within
+--      their firm: the binding kept with who, when and why (never removed), its alerts cleared; the next of the firm's
+--      computers to report the id gets it.
 --   7. Words (Fix 3): nobody can post into a company just now (none has it open; only changes-only bridges have it; the
 --      poster's own bridge not heard from for 3 minutes): the company named, and what to do.
+--   8. No posting stranded (review M-B): a waiting posting whose bridge can no longer post (switched to Changes only,
+--      another bridge made the main one on its computer, not heard from there any more, in test mode), or naming no bridge
+--      on a computer none of whose bridges may post, is moved to the bridge of the SAME computer key that may post (its
+--      main bridge), else failed with plain words naming the company and what to do; never left waiting for ever
+--      (tally_post_reroute, one posting; tally_post_rescue(p_device), every waiting posting of a computer: the service role,
+--      tally-ingest, when it refuses a bridge postings). Run when an owner switches a bridge to Changes only, when a
+--      computer's main bridge changes (a trigger on tally_devices.main_bridge), when a posting is queued again, and on Retry
+--      (Retry: moved the same way, or refused in plain words; nothing changed). Never to another computer key: on a shared
+--      Windows server each key is one Windows user's own Tally, so moving a posting there would post someone's entries into
+--      another person's Tally without anyone choosing it (review M2 kept); posting the entries again as a new posting
+--      chooses afresh, by the same rules as the 3-argument enqueue, for the person who posts them.
 --   tally_post_take stays as it is (an older cloud function).
 --   Tested on pg_stand only: tests/run_migration54.py.
 
@@ -82,7 +98,7 @@ revoke insert, update on public.tally_member_bridges from anon, authenticated;
 grant select on public.tally_member_bridges to authenticated;
 
 -- ---------------------------------------------------------------- 6. a bridge id belongs to one computer (review M3, Fix 2)
--- one row per binding; the live one has reset_at null (one per id). An owner's release (tally_bridge_reset) keeps the row
+-- one row per binding; the live one has reset_at null (one per firm and id, review M-A). An owner's release (tally_bridge_reset) keeps the row
 -- with who, when and why; the next computer to report the id is bound by a new row. Rows are never removed
 create table if not exists public.tally_bridge_ids (
   id        bigserial primary key,
@@ -94,7 +110,7 @@ create table if not exists public.tally_bridge_ids (
   reset_by  uuid,
   reset_why text
 );
-create unique index if not exists tally_bridge_ids_live on public.tally_bridge_ids (bridge_id) where reset_at is null;
+create unique index if not exists tally_bridge_ids_live on public.tally_bridge_ids (firm_id, bridge_id) where reset_at is null;
 create index if not exists tally_bridge_ids_firm on public.tally_bridge_ids (firm_id, bridge_id);
 alter table public.tally_bridge_ids enable row level security;
 do $$ begin
@@ -104,27 +120,28 @@ do $$ begin
 end $$;
 revoke insert, update on public.tally_bridge_ids from anon, authenticated;
 grant select on public.tally_bridge_ids to authenticated;
--- Fix 2a: every id reported today (tally_devices.info.bridges, computers not removed) bound to the computer reporting it;
--- an id reported by two or more computers is bound to none and named in a NOTICE for the owner (an insert only; safe twice)
+-- Fix 2a: every id reported today (tally_devices.info.bridges, computers not removed) bound to the computer reporting it,
+-- within its firm (review M-A); an id reported by two or more computers of the same firm is bound to none there and named
+-- in a NOTICE for the owner (an insert only; safe twice)
 insert into public.tally_bridge_ids (bridge_id, device_id, firm_id)
-select x.k, (array_agg(x.id))[1], (array_agg(x.firm_id))[1]
+select x.k, (array_agg(x.id))[1], x.firm_id
   from (select d.id, d.firm_id, k from public.tally_devices d,
                jsonb_object_keys(case when jsonb_typeof(d.info -> 'bridges') = 'object' then d.info -> 'bridges' else '{}'::jsonb end) k
          where not coalesce(d.revoked, false) and k ~ '^go-[0-9a-f]{6,32}$') x
- where not exists (select 1 from public.tally_bridge_ids i where i.bridge_id = x.k)
- group by x.k having count(distinct x.id) = 1
+ where not exists (select 1 from public.tally_bridge_ids i where i.bridge_id = x.k and i.firm_id = x.firm_id)
+ group by x.firm_id, x.k having count(distinct x.id) = 1
 on conflict do nothing;
 do $$
 declare r record;
 begin
   for r in select x.k, string_agg(x.id::text || ' (' || coalesce(x.name, '') || ')', ', ' order by x.id::text) as devs
-             from (select d.id, d.name, k from public.tally_devices d,
+             from (select d.id, d.name, d.firm_id, k from public.tally_devices d,
                           jsonb_object_keys(case when jsonb_typeof(d.info -> 'bridges') = 'object' then d.info -> 'bridges' else '{}'::jsonb end) k
                     where not coalesce(d.revoked, false) and k ~ '^go-[0-9a-f]{6,32}$') x
-            where not exists (select 1 from public.tally_bridge_ids i where i.bridge_id = x.k and i.reset_at is null)
-            group by x.k having count(distinct x.id) > 1
+            where not exists (select 1 from public.tally_bridge_ids i where i.bridge_id = x.k and i.firm_id = x.firm_id and i.reset_at is null)
+            group by x.firm_id, x.k having count(distinct x.id) > 1
   loop
-    raise notice 'Migration 54: bridge id % is reported by more than one computer (%): bound to none; the first of them to report it from now on gets it (an owner can release it on the Tally page)', r.k, r.devs;
+    raise notice 'Migration 54: bridge id % is reported by more than one computer of one firm (%): bound to none; the first of them to report it from now on gets it (an owner can release it on the Tally page)', r.k, r.devs;
   end loop;
 end $$;
 
@@ -163,17 +180,20 @@ returns text language sql stable security definer set search_path = public, pg_t
 $function$;
 revoke all on function public.tally_bridge_words(uuid, text) from public, anon, authenticated;
 
--- tally-ingest, on every call naming a bridge: binds an id not bound yet to this computer. {own: true} when it is this
--- computer's; else {own: false, words}, the one alert for the owner kept, and the words on this computer's line
--- (info.idRefused); a computer that is the id's own again loses its idRefused
+-- tally-ingest, on every call naming a bridge: binds an id not bound yet in this computer's firm to this computer (review
+-- M-A: only the firm's own bindings count; another firm's never refuses). {own: true} when it is this computer's; else
+-- {own: false, words}, the one alert for the owner kept, and the words on this computer's line (info.idRefused); a
+-- computer that is the id's own again loses its idRefused
 create or replace function public.tally_bridge_bind(p_device uuid, p_bridge text)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
-declare b text := left(btrim(coalesce(p_bridge, '')), 40); bound uuid; w text; me record;
+declare b text := left(btrim(coalesce(p_bridge, '')), 40); bound uuid; w text; me record; f uuid;
 begin
   if b !~ '^go-[0-9a-f]{6,32}$' then return jsonb_build_object('own', true); end if;   -- bridge 1.15.0 ("v1") has no id of its own
-  insert into tally_bridge_ids (bridge_id, device_id, firm_id) select b, d.id, d.firm_id from tally_devices d where d.id = p_device
-    on conflict (bridge_id) where reset_at is null do nothing;
-  select i.device_id into bound from tally_bridge_ids i where i.bridge_id = b and i.reset_at is null;
+  select d.firm_id into f from tally_devices d where d.id = p_device;
+  if f is null then return jsonb_build_object('own', true); end if;
+  insert into tally_bridge_ids (bridge_id, device_id, firm_id) values (b, p_device, f)
+    on conflict (firm_id, bridge_id) where reset_at is null do nothing;
+  select i.device_id into bound from tally_bridge_ids i where i.firm_id = f and i.bridge_id = b and i.reset_at is null;
   if bound = p_device then
     update tally_devices set info = info - 'idRefused' where id = p_device and info ? 'idRefused' and info -> 'idRefused' ->> 'bridge' = b;
     return jsonb_build_object('own', true);
@@ -188,8 +208,9 @@ begin
 end $function$;
 revoke all on function public.tally_bridge_bind(uuid, text) from public, anon, authenticated;
 
--- Fix 2b: an owner releases a bridge's identity ("Release this bridge's identity" on the Tally page): the binding kept
--- with who, when and why; its alerts cleared; the next computer that reports the id is bound to it
+-- Fix 2b: an owner releases a bridge's identity ("Release this bridge's identity" on the Tally page), in the owner's firm
+-- only: the binding kept with who, when and why; its alerts cleared; the next of the firm's computers that reports the id
+-- is bound to it
 create or replace function public.tally_bridge_reset(p_bridge text, p_why text)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
 declare f uuid := my_firm(); b text := left(btrim(coalesce(p_bridge, '')), 40); n int;
@@ -225,7 +246,7 @@ grant execute on function public.tally_bridge_alert_read(bigint) to authenticate
 create or replace function public.tally_bridge_device(p_firm uuid, p_bridge text)
 returns uuid language sql stable security definer set search_path = public, pg_temp as $function$
   select d.id from tally_bridge_ids i join tally_devices d on d.id = i.device_id
-   where i.bridge_id = p_bridge and i.reset_at is null and d.firm_id = p_firm and not coalesce(d.revoked, false) and coalesce(p_bridge, '') ~ '^go-[0-9a-f]{6,32}$'
+   where i.firm_id = p_firm and i.bridge_id = p_bridge and i.reset_at is null and d.firm_id = p_firm and not coalesce(d.revoked, false) and coalesce(p_bridge, '') ~ '^go-[0-9a-f]{6,32}$'
      and d.info -> 'bridges' ? p_bridge
 $function$;
 revoke all on function public.tally_bridge_device(uuid, text) from public, anon, authenticated;
@@ -294,9 +315,102 @@ returns text language sql stable security definer set search_path = public, pg_t
 $function$;
 revoke all on function public.tally_post_nobody_words(uuid, text) from public, anon, authenticated;
 
+-- review M-B: the bridge of a computer key that may post (its main bridge; none chosen: the newest heard from not in
+-- test mode, never a changes-only one); null when none (internal: granted to nobody)
+create or replace function public.tally_bridge_poster(p_device uuid)
+returns text language sql stable security definer set search_path = public, pg_temp as $function$
+  select k.key from tally_devices d, jsonb_each(case when jsonb_typeof(d.info -> 'bridges') = 'object' then d.info -> 'bridges' else '{}'::jsonb end) k
+   where d.id = p_device and not coalesce(d.revoked, false) and tally_bridge_may_post(d.id, k.key)
+   order by (k.key = d.main_bridge) desc nulls last, k.value ->> 'at' desc nulls last, k.key limit 1
+$function$;
+revoke all on function public.tally_bridge_poster(uuid) from public, anon, authenticated;
+
+-- review M-B: why a posting cannot be posted where it waits, and what to do, in plain words (internal: granted to nobody)
+create or replace function public.tally_post_stranded_words(p_device uuid, p_bridge text)
+returns text language plpgsql stable security definer set search_path = public, pg_temp as $function$
+declare d record;
+begin
+  select x.id, x.name, x.main_bridge, x.info into d from tally_devices x where x.id = p_device;
+  if p_bridge is null then
+    return 'the computer it was for (' || coalesce(nullif(d.name, ''), 'a computer removed from FinCom') || ') has no FinCom Bridge that may post just now (each is set to Changes only or only reads Tally). '
+        || 'Ask the firm''s owner to make one of its bridges the main one or switch Changes only off for it (Tally page), then Retry; or post these entries again so FinCom chooses a bridge that may post.';
+  end if;
+  return 'the FinCom Bridge it was for (' || coalesce(nullif(tally_bridge_words(p_device, p_bridge), ''), p_bridge) || ') '
+      || case when tally_bridge_changes_only_on(p_device, p_bridge) then 'is set to Changes only'
+              when d.id is null or not coalesce(d.info -> 'bridges' ? p_bridge, false) then 'has not been heard from on its computer for a long time'
+              when nullif(d.main_bridge, '') is not null and d.main_bridge <> p_bridge then 'only reads Tally now: another bridge is the main one on its computer'
+              else 'is in test mode' end
+      || ', and no other bridge on that computer may post. '
+      || case when tally_bridge_changes_only_on(p_device, p_bridge) then 'Ask the firm''s owner to switch Changes only off for that bridge (Tally page), then Retry'
+              when d.id is null or not coalesce(d.info -> 'bridges' ? p_bridge, false) then 'Start that FinCom Bridge on its computer, then Retry'
+              when nullif(d.main_bridge, '') is not null and d.main_bridge <> p_bridge then 'Make that bridge the main one again (Tally page), then Retry'
+              else 'Switch that bridge out of test mode, then Retry' end
+      || '; or post these entries again so FinCom chooses a bridge that may post.';
+end $function$;
+revoke all on function public.tally_post_stranded_words(uuid, text) from public, anon, authenticated;
+
+-- review M-B: one posting that cannot be posted where it waits: moved to the same computer key's bridge that may post
+-- ({state: moved}), else ({state: stranded, words}) failed in plain words when p_fail; {state: ok} when it can be posted.
+-- Never to another computer key (review M2). Internal: granted to nobody
+create or replace function public.tally_post_reroute(p_id uuid, p_fail boolean)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
+declare j record; nb text; w text;
+begin
+  select x.id, x.device_id, x.target_bridge, x.company into j from tally_post_jobs x where x.id = p_id;
+  if not found then return jsonb_build_object('state', 'none'); end if;
+  if (j.target_bridge is not null and tally_bridge_may_post(j.device_id, j.target_bridge))
+     or (j.target_bridge is null and tally_device_may_post(j.device_id)) then return jsonb_build_object('state', 'ok'); end if;
+  nb := tally_bridge_poster(j.device_id);
+  if nb is not null then
+    -- a bridge 1.15.0 ("v1") has no id of its own: the posting then names none (the computer's main bridge)
+    update tally_post_jobs set target_bridge = case when nb ~ '^go-[0-9a-f]{6,32}$' then nb end, updated_at = now(),
+           message = left('Moved to ' || coalesce(nullif(tally_bridge_words(j.device_id, nb), ''), nb) || ' on the same computer: the bridge it was for can no longer post', 300)
+     where id = p_id;
+    return jsonb_build_object('state', 'moved', 'bridge', nb);
+  end if;
+  w := tally_post_stranded_words(j.device_id, j.target_bridge);
+  if coalesce(p_fail, false) then
+    update tally_post_jobs set status = 'failed', taken_at = null, updated_at = now(), message = 'Not posted into ' || j.company || ': ' || w
+     where id = p_id and status = 'waiting';
+  end if;
+  return jsonb_build_object('state', 'stranded', 'words', w);
+end $function$;
+revoke all on function public.tally_post_reroute(uuid, boolean) from public, anon, authenticated;
+
+-- review M-B: every waiting posting of a computer that cannot be posted where it waits: moved or failed (above). The
+-- service role only (tally-ingest, when it refuses a bridge postings); the owner's switch and the trigger below call it
+create or replace function public.tally_post_rescue(p_device uuid)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
+declare r record; x jsonb; moved int := 0; failed int := 0;
+begin
+  for r in select j.id from tally_post_jobs j where j.device_id = p_device and j.status = 'waiting' order by j.created_at for update skip locked loop
+    x := tally_post_reroute(r.id, true);
+    if x ->> 'state' = 'moved' then moved := moved + 1; elsif x ->> 'state' = 'stranded' then failed := failed + 1; end if;
+  end loop;
+  return jsonb_build_object('ok', true, 'moved', moved, 'failed', failed);
+end $function$;
+revoke all on function public.tally_post_rescue(uuid) from public, anon, authenticated;
+
+-- review M-B: a computer's main bridge changed (its menu "Switch to main bridge", or the Tally page): its waiting
+-- postings for a bridge that may no longer post are moved or failed at once
+create or replace function public.tally_post_rescue_on_main()
+returns trigger language plpgsql security definer set search_path = public, pg_temp as $function$
+begin
+  perform tally_post_rescue(new.id);
+  return null;
+end $function$;
+revoke all on function public.tally_post_rescue_on_main() from public, anon, authenticated;
+do $$ begin
+  if not exists (select 1 from pg_trigger where tgname = 'tally_devices_main_rescue' and tgrelid = 'public.tally_devices'::regclass) then
+    create trigger tally_devices_main_rescue after update of main_bridge on public.tally_devices for each row
+      when (old.main_bridge is distinct from new.main_bridge) execute function public.tally_post_rescue_on_main();
+  end if;
+end $$;
+
+-- an owner's "Changes only" for a bridge; switched on, the bridge's waiting postings are moved or failed (review M-B)
 create or replace function public.tally_bridge_changes_only(p_device uuid, p_bridge text, p_on boolean)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
-declare f uuid := my_firm(); b text := left(btrim(coalesce(p_bridge, '')), 40);
+declare f uuid := my_firm(); b text := left(btrim(coalesce(p_bridge, '')), 40); x jsonb := '{}'::jsonb;
 begin
   if f is null or not exists (select 1 from members m where m.user_id = auth.uid() and m.firm_id = f and m.role = 'owner' and coalesce(m.active, true))
     then raise exception 'only an owner of the firm can switch a bridge to changes only' using errcode = '42501'; end if;
@@ -304,7 +418,8 @@ begin
     then raise exception 'not a bridge FinCom has heard from on this computer'; end if;
   insert into tally_bridge_prefs (device_id, bridge_id, firm_id, changes_only, set_by, set_at) values (p_device, b, f, coalesce(p_on, false), auth.uid(), now())
     on conflict (device_id, bridge_id) do update set changes_only = excluded.changes_only, set_by = excluded.set_by, set_at = excluded.set_at;
-  return jsonb_build_object('ok', true, 'device', p_device, 'bridge', b, 'changesOnly', coalesce(p_on, false));
+  if coalesce(p_on, false) then x := tally_post_rescue(p_device); end if;
+  return jsonb_build_object('ok', true, 'device', p_device, 'bridge', b, 'changesOnly', coalesce(p_on, false), 'moved', coalesce((x ->> 'moved')::int, 0), 'failed', coalesce((x ->> 'failed')::int, 0));
 end $function$;
 revoke all on function public.tally_bridge_changes_only(uuid, text, boolean) from public, anon;
 grant execute on function public.tally_bridge_changes_only(uuid, text, boolean) to authenticated;
@@ -328,11 +443,13 @@ grant execute on function public.tally_member_bridge_link(uuid, uuid, text) to a
 
 -- ---------------------------------------------------------------- 4. queueing with a target
 -- 36b's tally_post_enqueue, every check kept; a NEW posting goes to p_device for p_target (both given or both null), or
--- with none to tally_post_device_for (review M4); queueing again or a Retry never moves a posting (review M2). Internal:
+-- with none to tally_post_device_for (review M4); queueing again or a Retry never moves a posting to another computer key
+-- (review M2): one whose bridge can no longer post is moved to that same computer's bridge that may post, or (Retry)
+-- refused in plain words (review M-B). Internal:
 -- granted to nobody (tally_post_enqueue_to and the 3-argument tally_post_enqueue call it)
 create or replace function public.tally_post_enqueue_core(p_id uuid, p_client text, p_payload jsonb, p_device uuid, p_target text)
 returns jsonb language plpgsql security definer set search_path to 'public', 'pg_temp' as $function$
-declare f uuid := my_firm(); c record; n int; dup text; allowed text; cname text; j record; dev uuid;
+declare f uuid := my_firm(); c record; n int; dup text; allowed text; cname text; j record; dev uuid; rr jsonb;
 begin
   if f is null then raise exception 'not allowed'; end if;
   select t.company, t.device_id into c from tally_companies t
@@ -344,8 +461,9 @@ begin
       'error', 'Choose the Tally company ' || coalesce(cname, 'this client') || ' may post to (Client setup → Tally). Its books in FinCom''s cloud come from ' || c.company || '.'); end if;
   if lower(tally_nm(allowed)) <> lower(tally_nm(c.company)) then return jsonb_build_object('ok', false, 'notAllowed', true, 'company', c.company,
       'error', coalesce(cname, 'This client') || ' may post only to ' || allowed || ', but its books in FinCom''s cloud come from ' || c.company || '. Nothing was posted.'); end if;
-  -- the same posting again (Retry, by its id alone): a failed or cancelled one waits again, under the same id (and for the
-  -- same bridge and computer as before: never moved, review M2)
+  -- the same posting again (Retry, by its id alone): a failed or cancelled one waits again, under the same id (and on the
+  -- same computer as before: never moved to another computer key, review M2; its bridge no longer able to post: that
+  -- computer's bridge that may post, else refused in plain words, review M-B)
   select * into j from tally_post_jobs where id = p_id;
   if found then
     if j.firm_id <> f or j.client_id <> p_client then raise exception 'not allowed'; end if;
@@ -353,9 +471,16 @@ begin
       select coalesce(i.entry_id, i.fincom_id) into dup from tally_post_ids i
        where i.job_id = p_id and exists (select 1 from tally_post_ids o where o.firm_id = i.firm_id and o.fincom_id = i.fincom_id and o.job_id <> p_id and o.live) limit 1;
       if dup is not null then return jsonb_build_object('ok', false, 'error', 'Not queued again: the entry ' || dup || ' is being posted in another posting; wait for that one to finish (or cancel it).'); end if;
+      rr := tally_post_reroute(p_id, false);
+      if rr ->> 'state' = 'stranded' then return jsonb_build_object('ok', false, 'company', j.company, 'error', 'Not queued again for ' || j.company || ': ' || (rr ->> 'words')); end if;
       update tally_post_jobs set status = 'waiting', message = 'Retry: waiting for the Tally computer', taken_at = null, updated_at = now(),
              attempts = coalesce(attempts, 0) + 1 where id = p_id;
       return jsonb_build_object('ok', true, 'id', p_id, 'company', j.company, 'retry', true);
+    end if;
+    -- still waiting for a bridge that can no longer post: moved, or failed in plain words (review M-B)
+    if j.status = 'waiting' then
+      rr := tally_post_reroute(p_id, true);
+      if rr ->> 'state' = 'stranded' then return jsonb_build_object('ok', false, 'company', j.company, 'error', 'Not posted into ' || j.company || ': ' || (rr ->> 'words')); end if;
     end if;
     return jsonb_build_object('ok', true, 'id', p_id, 'company', j.company, 'again', true);
   end if;
