@@ -1,0 +1,4 @@
+bridge source: 9e172728f0e55f361f588d6b19fb3a84f969ebed Test stand-in for Supabase: tally_bridge_bind's list no longer named ids (it hid the queue's message counter inside rpc(): run_queue_server and run_upload_split failed in CI)
+setup: FinComBridge-Setup-2.2.4.exe 3268059 bytes SHA256 9C636F5DF12961D8FBE679D98219C9A3FFA5353726D493CC7E6AC25DAB3C2B7F
+::add-mask::8eev4faYek6ciEtKfEnaAa1!
+user 2: fcuser2 S-1-5-21-1643835476-1616584234-1346609752-1003; administrators: runnervmfi6oq\runneradmin
