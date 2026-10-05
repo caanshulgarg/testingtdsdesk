@@ -27,7 +27,7 @@ def ok(c, w):
     if not c: fails.append(w)
 D1 = "d0000000-0000-4000-8000-000000000001"
 NOBODY = "waiting for the entry's details from FinCom Bridge (it asks Tally again on its next run); or upload this day's Day Book"
-UNKNOWN = "the entry is not in FinCom's copy yet; it is applied by itself once the Day Book for 01-Oct-2026 is uploaded"
+UNKNOWN = "the entry is not in FinCom's copy yet; it is applied by itself once a complete Day Book for 01-Oct-2026 is uploaded"
 def dev(i, comp):
     b = {"at": "ago:0.3", "version": "2.2.0", "computer": comp, "user": "tally", "mode": "main", "runMode": "user", "tally": True, "tallyState": "open", "open": ["GARG SHEKHAR & COMPANY"]}
     bt = {"at": "ago:0.3", "every": 30, "tally": True, "tallyState": "open", "open": b["open"], "paused": False}

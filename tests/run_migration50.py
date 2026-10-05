@@ -35,7 +35,9 @@ MasterID's own GUID only, E1e a Day Book's other Receipt 503, E1d an 'altered' p
 GUID); M2 (only the lines a day can release, no rewrite (xmin), E4 the 601st line, one day with 3,000 held lines timed with and
 without the triggers; M50_PERF=1 also times 365 days with 3,000 held lines); L1 (a statement timeout inside the release: the day
 stored, the line left held, the next store releases it); L2 (an error keeps the line held, said once); L3; L4; L5; L6 (statement
-triggers; one UPDATE of two days).
+triggers; one UPDATE of two days). ROUND 2: N1 (staging's line 2 exactly, on a book of its own: a complete 01-Oct Day Book stored
+after it with alter_max 54384 -> "nothing to delete"; an older kept file holding the entry read again -> deleted again at once;
+E3 the same; a cancel -> "nothing to cancel"; an incomplete day says so), L8 (a cancel twice: the twin 'duplicate'), L9.
 RED (before 50): the file is missing. RED (before the review's fixes): tdd/r51.1.red."""
 import os, re, sys, json, hashlib, subprocess, difflib
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -61,9 +63,10 @@ B, D1 = "f79e4bc3-871d-4482-874d-71c5fb2a1b33", "58d73e82-57f3-4f72-9f3d-14cc93a
 CG = "7c5fd9b3-7235-4cbb-b4cd-1124be599189"                                                   # GARG SHEKHAR & COMPANY's company GUID
 PH = CG + "-00000000"
 NOBODY = "waiting for the entry's details from FinCom Bridge (it asks Tally again on its next run); or upload this day's Day Book"
-UNKNOWN = "the entry is not in FinCom's copy yet; it is applied by itself once the Day Book for %s is uploaded"
-NOTHING = "nothing to delete: the Day Book for %s, complete and made after this change (its AlterIDs reach %s), does not hold the entry"
-CANCEL_NOT = "the Day Book for %s, complete and made after this change, does not hold this entry; it is applied by itself once a Day Book holding it is uploaded"
+UNKNOWN = "the entry is not in FinCom's copy yet; it is applied by itself once a complete Day Book for %s is uploaded"
+NOTHING = "nothing to delete: the Day Book for %s, complete and stored after this change arrived, does not hold the entry"
+NOTHING_C = "nothing to cancel: the Day Book for %s, complete and stored after this change arrived, does not hold the entry"
+SHORT = "the Day Book for %s stored after this change was not complete (%s of %s entries); the entry is not in FinCom's copy, and this line is applied by itself once a complete Day Book for that day is uploaded"
 NOGUID_DEL = "no entry GUID on the line: FinCom cannot tell which entry was %s, so this line is never applied by itself; uploading the Day Book for %s brings that day up to date"
 ERRSUF = " (a try to apply it by itself met an error: "
 OLD_NOBODY, OLD_UNKNOWN = "no entry body on the line: the next day read applies it", "unknown entry: not in the copy (the next day read decides)"
@@ -241,9 +244,8 @@ try:
     print("== a Day Book made after the delete (the entry not in it)")
     a = day("2026-10-03", [V(CG + "-00007003", 54502, "303", "Debtor H")], LN(CG + "-00007003", "Debtor H", 100))
     n2, n3 = row("n-2"), row("n-3")
-    ok(n2["state"] == "applied" and n2["why"] == NOTHING % ("03-Oct-2026", 54502), "an unknown delete whose day is stored complete and newer than it: applied, nothing to delete (%s)" % n2)
-    ok(n3["state"] == "held" and n3["why"] == CANCEL_NOT % "03-Oct-2026",
-       "an unknown cancel the same: still held, with what releases it (%s)" % n3)
+    ok(n2["state"] == "applied" and n2["why"] == NOTHING % "03-Oct-2026", "an unknown delete whose day is stored complete after it: applied, nothing to delete (%s)" % n2)
+    ok(n3["state"] == "applied" and n3["why"] == NOTHING_C % "03-Oct-2026", "an unknown cancel the same: applied, nothing to cancel (round 2: never a promise no upload keeps) (%s)" % n3)
     books_ok("03-Oct-2026 stored")
     # ---------------------------------------------------------------- the month lock: words as before; the day release leaves such a line to the owner
     as_user(OWNER, "select tally_month_lock('c1', '2026-11-01', 'closing')::text")
@@ -265,25 +267,38 @@ try:
     print("== review H1: 'nothing to delete' only on a complete Day Book made after the delete")
     apply([sline("e2a", "deleted", CG + "-0000a001", "40961", 64000, "620", "2026-10-08", "2026-10-05T06:00:00Z")])
     day("2026-10-08", [V(CG + "-0000a002", 64010, "621", "Debtor L")], LN(CG + "-0000a002", "Debtor L", 10), n=5)
-    ok(row("e2a")["state"] == "held" and row("e2a")["why"] == UNKNOWN % "08-Oct-2026", "H1/E2a. a short read (1 of 5) does not make the delete 'nothing to delete': held (%s)" % row("e2a"))
+    ok(row("e2a")["state"] == "held" and row("e2a")["why"] == SHORT % ("08-Oct-2026", 1, 5), "H1/E2a. a short read (1 of 5) does not make the delete 'nothing to delete': held (%s)" % row("e2a"))
     apply([sline("e2b", "deleted", CG + "-0000a101", "41217", 64100, "622", "2026-10-11", "2026-10-05T06:01:00Z")])
     e2b = day("2026-10-11", [], [], n=4)
-    ok(row("e2b")["state"] == "held" and row("e2b")["why"] == UNKNOWN % "11-Oct-2026", "H1/E2b. an empty file the bridge counted 4 for (%s): held (%s)" % (e2b.get("refused"), row("e2b")))
+    ok(row("e2b")["state"] == "held" and row("e2b")["why"] == SHORT % ("11-Oct-2026", 0, 4), "H1/E2b. an empty file the bridge counted 4 for (%s): held (%s)" % (e2b.get("refused"), row("e2b")))
     old_file = ([V(CG + "-0000a200", 64200, "623", "Debtor M")], LN(CG + "-0000a200", "Debtor M", 20))
     day("2026-10-09", *old_file)
     apply([sline("e3-del", "deleted", CG + "-0000a201", "41473", 64210, "611", "2026-10-09", "2026-10-05T06:02:00Z")])
+    ok(row("e3-del")["state"] == "held" and row("e3-del")["why"] == UNKNOWN % "09-Oct-2026", "H1/E3. a Day Book stored BEFORE the delete came proves nothing: held (%s)" % row("e3-del"))
     day("2026-10-09", *old_file)
-    ok(row("e3-del")["state"] == "held" and row("e3-del")["why"] == UNKNOWN % "09-Oct-2026", "H1/E3. an old file read again (its AlterIDs reach 64200, the delete is 64210): held (%s)" % row("e3-del"))
+    ok(row("e3-del")["state"] == "applied" and row("e3-del")["why"] == NOTHING % "09-Oct-2026", "N1. the day stored again after the delete, complete, without the entry: nothing to delete (%s)" % row("e3-del"))
     apply([dict(sline("e3-create", "created", CG + "-0000a201", "41473", 64205, "611", "2026-10-09", "2026-10-05T06:03:00Z"), pc="OTHERPC",
                 vouchers=[dict(V(CG + "-0000a201", 64205, "611", "Debtor N"), day="2026-10-09")], lines=LN(CG + "-0000a201", "Debtor N", 30))])
-    ok(row("e3-create")["state"] == "applied" and vch(CG + "-0000a201").get("deleted") == "t" and row("e3-del")["state"] == "applied",
-       "H1/E3. the late create from another PC (AlterID 64205) brings the entry; the held delete (64210) is applied with it: Receipt 611 deleted, never live (%s; %s; %s)" % (row("e3-create"), row("e3-del"), vch(CG + "-0000a201")))
-    day("2026-10-10", [V(CG + "-0000a300", 64300, "624", "Debtor O")], LN(CG + "-0000a300", "Debtor O", 40))
+    ok(row("e3-create")["state"] == "stale" and vch(CG + "-0000a201") == {}, "H1/E3. the late create from another PC (AlterID 64205, below the delete's 64210): 'stale', never live (%s)" % row("e3-create"))
+    older = ([V(CG + "-0000a200", 64200, "623", "Debtor M"), V(CG + "-0000a201", 64190, "611", "Debtor N")], LN(CG + "-0000a200", "Debtor M", 20) + LN(CG + "-0000a201", "Debtor N", 30))
+    day("2026-10-09", *older)
+    ok(vch(CG + "-0000a201").get("deleted") == "t" and vch(CG + "-0000a201").get("alter_id") == "64210", "N1 (2). an OLDER kept file holding Receipt 611 (AlterID 64190) read again: deleted again at once by the applied delete (64210), never live (%s)" % vch(CG + "-0000a201"))
+    apply([sline("e5-del", "deleted", CG + "-0000a401", "42001", 64410, "612", "2026-10-23", "2026-10-05T06:06:00Z")])
+    apply([dict(sline("e5-create", "created", CG + "-0000a401", "42001", 64405, "612", "2026-10-23", "2026-10-05T06:07:00Z"), pc="OTHERPC",
+                vouchers=[dict(V(CG + "-0000a401", 64405, "612", "Debtor N2"), day="2026-10-23")], lines=LN(CG + "-0000a401", "Debtor N2", 35))])
+    ok(row("e5-create")["state"] == "applied" and row("e5-del")["state"] == "applied" and vch(CG + "-0000a401").get("deleted") == "t",
+       "H1. a delete held (no Day Book yet), then the late create brings the entry: the delete is applied with it, never live (%s; %s)" % (row("e5-create"), row("e5-del")))
     apply([sline("h1-del", "deleted", CG + "-0000a301", "41729", 64290, "625", "2026-10-10", "2026-10-05T06:04:00Z")])
-    ok(row("h1-del")["state"] == "applied" and row("h1-del")["why"] == NOTHING % ("10-Oct-2026", 64300), "H1. a complete Day Book whose AlterIDs reach past the delete: nothing to delete (%s)" % row("h1-del"))
+    day("2026-10-10", [V(CG + "-0000a300", 64300, "624", "Debtor O")], LN(CG + "-0000a300", "Debtor O", 40))
+    ok(row("h1-del")["state"] == "applied" and row("h1-del")["why"] == NOTHING % "10-Oct-2026", "H1. a complete Day Book stored after the delete: nothing to delete (%s)" % row("h1-del"))
     apply([dict(sline("h1-create", "created", CG + "-0000a301", "41729", 64280, "625", "2026-10-10", "2026-10-05T06:05:00Z"), pc="OTHERPC",
                 vouchers=[dict(V(CG + "-0000a301", 64280, "625", "Debtor P"), day="2026-10-10")], lines=LN(CG + "-0000a301", "Debtor P", 50))])
     ok(row("h1-create")["state"] == "stale" and "64290" in row("h1-create")["why"] and vch(CG + "-0000a301") == {}, "H1. a later create of that GUID with a LOWER AlterID: 'stale', the deleted entry never revived (%s)" % row("h1-create"))
+    print("== round 2 L8: a cancel arriving twice")
+    apply([sline("l8-a", "cancelled", CG + "-0000a501", "42241", 64510, "613", "2026-10-24", "2026-10-05T06:08:00Z"), dict(sline("l8-b", "cancelled", CG + "-0000a501", "42241", 64510, "613", "2026-10-24", "2026-10-05T06:08:00Z"), pc="OTHERPC")])
+    apply([dict(sline("l8-create", "created", CG + "-0000a501", "42241", 64505, "613", "2026-10-24", "2026-10-05T06:09:00Z"), vouchers=[dict(V(CG + "-0000a501", 64505, "613", "Debtor N3"), day="2026-10-24")], lines=LN(CG + "-0000a501", "Debtor N3", 45))])
+    ok(row("l8-a")["state"] == "applied" and row("l8-b")["state"] == "duplicate" and "line %s" % row("l8-a")["id"] in row("l8-b")["why"] and vch(CG + "-0000a501").get("cancelled") == "t",
+       "L8. the entry arrives: the first cancel applied, its twin from the other computer 'duplicate', not left held (%s; %s)" % (row("l8-a"), row("l8-b")))
     books_ok("H1")
     print("== review M1: matching")
     day("2026-10-06", [V(CG + "-00009000", 63000, "500", "Debtor Q")], LN(CG + "-00009000", "Debtor Q", 60))
@@ -311,6 +326,8 @@ try:
     mx0 = db.one("select recorder_max_alter from tally_sync_cursor where book_id = %s" % q(B))
     apply([sline("l4", "created", PH, "0", 99999, "530", "2026-10-21", "2026-10-05T06:20:00Z")])
     ok(row("l4")["state"] == "duplicate" and db.one("select recorder_max_alter from tally_sync_cursor where book_id = %s" % q(B)) == mx0, "L4. a placeholder line 'duplicate' with AlterID 99999: recorder_max_alter stays %s" % mx0)
+    apply([dict(sline("l9", "created", PH + "  ", "0", 99998, "530", "2026-10-21", "2026-10-05T06:21:00Z"))])
+    ok(row("l9")["state"] == "duplicate" and db.one("select recorder_max_alter from tally_sync_cursor where book_id = %s" % q(B)) == mx0, "round 2 L9. the placeholder GUID with spaces after it (trimmed as the line trims it): recorder_max_alter stays %s" % mx0)
     print("== review L2: an error in a re-run keeps the line held")
     gb = CG + "-0000b001"
     db.sql("""insert into tally_recorder_lines (firm_id, client_id, book_id, device_id, line_id, event, object_guid, alter_id, vch_type, vch_no, vch_date, state, held_why, body)
@@ -398,6 +415,20 @@ try:
         y_on = year("on, stored again")
         print("       365 days x 20 entries, 3,000 held lines (about 8 a day, each day's deletes run again and stay held): first store, trigger on %.0f ms (%.1f ms a day)" % (y_on1, y_on1 / 365))
         print("       the same days stored again: trigger off %.0f ms (%.1f ms a day), on %.0f ms (%.1f ms a day)" % (y_off, y_off / 365, y_on, y_on / 365))
+    print("== round 2 N1: staging's line 2, exactly (a book of its own)")
+    B0, B = B, "f79e4bc3-871d-4482-874d-000000000002"
+    db.sql("insert into tally_books (book_id, firm_id, client_id, company, from_date, open_as_on) values (%s, %s, 'c1', 'GARG SHEKHAR & COMPANY', '2025-04-01', '2025-03-31')" % (q(B), q(F)))
+    r = apply([dict(L2, line_id="st2-" + L2["line_id"])])
+    ok([x.get("state") for x in r.get("results", [])] == ["held"] and row("st2-" + L2["line_id"])["why"] == UNKNOWN % "01-Oct-2026", "line 2 (Receipt 189 deleted at AlterID 54386), not in the copy: held (%s)" % row("st2-" + L2["line_id"]))
+    day("2026-10-01", [V(CG + "-000066bf", 54383, "187", "Debtor S1"), V(CG + "-000066c0", 54384, "188", "Debtor S2")], LN(CG + "-000066bf", "Debtor S1", 11) + LN(CG + "-000066c0", "Debtor S2", 12))
+    s2 = row("st2-" + L2["line_id"])
+    ok(db.one("select concat_ws(',', n, alter_max) from tally_days where book_id = %s and day = '2026-10-01'" % q(B)) == "2,54384" and s2["state"] == "applied" and s2["why"] == NOTHING % "01-Oct-2026",
+       "N1. the 01-Oct Day Book stored after it, complete (n 2 = 2 live), alter_max 54384 below the delete's 54386: applied, nothing to delete (%s)" % s2)
+    day("2026-10-01", [V(CG + "-000066bf", 54383, "187", "Debtor S1"), V(CG + "-000066c0", 54384, "188", "Debtor S2"), V(CG + "-000066c1", 54380, "189", "Debtor S3")],
+        LN(CG + "-000066bf", "Debtor S1", 11) + LN(CG + "-000066c0", "Debtor S2", 12) + LN(CG + "-000066c1", "Debtor S3", 13))
+    ok(vch(CG + "-000066c1").get("deleted") == "t", "N1 (2). an old kept 01-Oct file still holding Receipt 189 read again: 189 deleted again at once, never live (%s)" % vch(CG + "-000066c1"))
+    books_ok("staging's line 2")
+    B = B0
     print("\n  md5(prosrc) of 50's functions:")
     for k, v in md5s.items(): print("    %-60s %s" % (k, v))
 finally:

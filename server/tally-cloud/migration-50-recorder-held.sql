@@ -21,15 +21,21 @@
 --      to date"; a duplicate "(from a Day Book or another line)" (was "a day read"); a month locked -> as before.
 --      tally_ingest_delete (44's text but its two held words; it also answers unknown: true for an entry not in the copy). The
 --      rows already held with the old words get the new ones (an UPDATE of held_why on held rows only: nothing removed).
---   2. NOTHING TO DELETE (review H1). A delete of an entry not in the copy is applied ("nothing to delete: the Day Book for
---      <date>, complete and made after this change (its AlterIDs reach N), does not hold the entry") ONLY when the stored day
---      was complete (tally_days.n, the count the bridge or the upload vouched for, equals the entries the copy holds live for
---      the day: never a short, unconfirmed empty or capped read) AND its highest AlterID (tally_days.alter_max) is at or above
---      the delete's (a re-read of an older file fails); else it stays held with the words of 1. A cancel so: held, "the Day Book
---      for <date>, complete and made after this change, does not hold this entry; it is applied by itself once a Day Book
---      holding it is uploaded". A delete applied for a GUID makes any later entry line of that GUID with a LOWER AlterID
---      'stale' (a late create from another computer never revives a deleted entry); and when an entry line brings the entry
---      into the copy, a delete / cancel of it held "not in FinCom's copy yet" at a higher AlterID is applied with it.
+--   2. NOTHING TO DELETE (review H1; round 2, N1). A delete (a cancel) of an entry not in the copy is applied ("nothing to
+--      delete (cancel): the Day Book for <date>, complete and stored after this change arrived, does not hold the entry") ONLY
+--      when that day was stored AFTER the line came (tally_days.at) and complete (tally_days.n, the count the bridge or the
+--      upload vouched for, equals the entries the copy holds live for the day: never a short, unconfirmed empty or capped
+--      read); stored after but not complete -> held, "the Day Book for <date> stored after this change was not complete (k of
+--      n entries); ... applied by itself once a complete Day Book for that day is uploaded"; not stored after -> held, "... once
+--      a complete Day Book for <date> is uploaded". (Round 1 also required tally_days.alter_max >= the line's AlterID; but
+--      alter_max is the highest AlterID of that day's OWN entries, so a past day almost never passed: staging's line 2 would
+--      have stayed held for ever.) An older kept file read again later cannot bring a deleted entry back: on every stored day,
+--      tally_recorder_release_day deletes (cancels) again, through tally_ingest_delete, each entry of the day whose applied
+--      delete (cancel) line is above the entry's version (this also closes the same hole since 44 for deletes of entries the
+--      copy held). A delete or cancel applied for a GUID makes any later entry line of that GUID with a LOWER AlterID 'stale'
+--      (a late create from another computer never revives it); when an entry line brings the entry into the copy, a delete /
+--      cancel of it held "not in FinCom's copy yet" at a higher AlterID is applied with it, and its twin from another computer
+--      (the same AlterID, applied already) is 'duplicate' (round 2, L8).
 --   3. RELEASE BY ITSELF. (a) tally_recorder_line: an entry line (created / altered / imported) with a real GUID that ends
 --      applied marks 'replaced' ("replaced by line <id> (the entry's details arrived)") the HELD entry lines it stands for: the
 --      same GUID at an AlterID not above its own; a placeholder / GUID-less line (review M1) whose MasterID makes this GUID
@@ -57,14 +63,15 @@
 --      (tally_recorder_short_retry's). An applied one raises the book's recorder_max_alter as a release does. An error or a
 --      cancel (a statement timeout) inside the release is caught and logged, its work undone, the day kept (review L1).
 --      Measured on pg_stand (tests/run_migration50.py; M50_PERF=1 for the year): one day of 20 entries with 3,000 held lines
---      it cannot change: 23-24 ms a store with the triggers, 16-18 ms without (the review's row trigger: 2.9-3.1 s); 365 days of
---      20 entries with 3,000 held lines: 33.7 ms a day stored again with the triggers, 22.9 ms without.
+--      it cannot change: 23-24 ms a store with the triggers, 14-18 ms without (the review's row trigger: 2.9-3.1 s); 365 days of
+--      20 entries with 3,000 held lines: 46.9 ms a day on the first store with the triggers; stored again 26.3 ms a day with
+--      them, 21.7 ms without.
 --   Functions replaced: tally_recorder_line (48's), tally_recorder_apply (48's), tally_ingest_delete (44's), same arguments.
 --   New: tally_recorder_release_day(uuid, date) and the trigger function tally_days_recorder_release(). Every one security
 --   definer, search_path = public, pg_temp; tally_ingest_delete and tally_recorder_apply the service role's (revoked from
 --   public, anon, authenticated); tally_recorder_line, tally_recorder_release_day and the trigger function granted to nobody.
 --   tally-ingest (index.ts) is not changed: the triggers cover every path that stores a day. The review of 50:
---   docs/reviews/migration-50-review.md (H1, M1, M2, L1-L6 fixed here).
+--   docs/reviews/migration-50-review.md (H1, M1, M2, L1-L6 and round 2's N1, L8, L9 fixed here).
 
 begin;
 set local lock_timeout = '10s';     -- never queue long behind a session holding a table here (a timeout rolls the whole file back: run it again)
@@ -112,7 +119,7 @@ declare b tally_books%rowtype; rid bigint := p_row; ev text := left(btrim(coales
   -- the line's entry by its MasterID, or its type, number and date under its company; a held line run again: its row's time
   ph boolean := coalesce(og ~ '-0{8}$', false); lt text := nullif(left(btrim(coalesce(p_line->>'vch_type', '')), 60), ''); lno text := vno;
   lcg text := nullif(left(btrim(coalesce(p_line->>'company_guid', '')), 100), ''); r_at timestamptz := now(); dt text; d_hit text; d_alt bigint; d_day date;
-  nfit int; pref text; dg text; del_alt bigint; hd record; res2 jsonb;
+  nfit int; pref text; dg text; del_alt bigint; del_ev text; hd record; res2 jsonb; d_at timestamptz; d_n int; d_live int; twin bigint;
   known constant text[] := array['created', 'altered', 'deleted', 'cancelled', 'imported', 'ledger_created', 'ledger_altered', 'ledger_renamed', 'ledger_deleted'];
 begin
   select * into b from tally_books where book_id = p_book;
@@ -173,21 +180,20 @@ begin
       if ev in ('deleted', 'cancelled') then
         res := tally_ingest_delete(p_book, og, alt, ev = 'cancelled', 'recorder ' || coalesce(left(p_line->>'pc', 60), ''));
         stt := res->>'state'; wy := res->>'why';
-        -- 50: an entry not in the copy: what releases it, by the line's date. Review H1: only a COMPLETE Day Book of that day (the
-        -- count the bridge or the upload vouched for, tally_days.n, equals the entries the copy holds live for the day: never a
-        -- short, unconfirmed empty or capped read) made AFTER this change (its highest AlterID at or above the line's: a re-read of
-        -- an older file fails) proves the entry gone from Tally: a delete has nothing left to do; a cancel waits for a Day Book
-        -- that holds it
+        -- 50: an entry not in the copy: what releases it, by the line's date. Review H1 and round 2 (N1): a COMPLETE Day Book of
+        -- that day (tally_days.n, the count the bridge or the upload vouched for, equals the entries the copy holds live for the
+        -- day: never a short, unconfirmed empty or capped read) stored AFTER this line came, not holding the entry, proves it gone
+        -- from Tally: a delete or a cancel has nothing left to do. An older kept file read again later cannot bring the entry back:
+        -- tally_recorder_release_day deletes (cancels) again an entry whose applied delete (cancel) is above its version
         if stt = 'held' and coalesce((res->>'unknown')::boolean, false) then
           dt := coalesce(to_char(vd, 'DD-Mon-YYYY'), 'its date');
-          select d.alter_max into d_alt from tally_days d
-           where d.book_id = p_book and d.day = vd and alt > 0 and d.alter_max >= alt
-             and d.n = (select count(*) from tally_vouchers v where v.book_id = p_book and v.day = vd and v.deleted_at is null);
-          if found then
-            if ev = 'deleted' then stt := 'applied'; wy := format('nothing to delete: the Day Book for %s, complete and made after this change (its AlterIDs reach %s), does not hold the entry', dt, d_alt);
-            else wy := format('the Day Book for %s, complete and made after this change, does not hold this entry; it is applied by itself once a Day Book holding it is uploaded', dt);
-            end if;
-          else wy := format('the entry is not in FinCom''s copy yet; it is applied by itself once the Day Book for %s is uploaded', dt);
+          select d.at, d.n, (select count(*) from tally_vouchers v where v.book_id = p_book and v.day = vd and v.deleted_at is null) into d_at, d_n, d_live
+            from tally_days d where d.book_id = p_book and d.day = vd and d.at > r_at;
+          if d_at is not null and d_n = d_live then
+            stt := 'applied'; wy := format('nothing to %s: the Day Book for %s, complete and stored after this change arrived, does not hold the entry', case when ev = 'deleted' then 'delete' else 'cancel' end, dt);
+          elsif d_at is not null then
+            wy := format('the Day Book for %s stored after this change was not complete (%s of %s entries); the entry is not in FinCom''s copy, and this line is applied by itself once a complete Day Book for that day is uploaded', dt, d_live, d_n);
+          else wy := format('the entry is not in FinCom''s copy yet; it is applied by itself once a complete Day Book for %s is uploaded', dt);
           end if;
         end if;
       else
@@ -216,8 +222,10 @@ begin
             m_done := true;
           end if;
         end if;
-        -- 50 (review H1): the highest AlterID at which a delete of this GUID was applied
-        select max(r.alter_id) into del_alt from tally_recorder_lines r where r.book_id = p_book and r.object_guid = og and r.event = 'deleted' and r.state = 'applied';
+        -- 50 (review H1; round 2: a cancel too, "nothing to cancel" leaves the entry out of the copy): the highest AlterID at which
+        -- a delete or cancel of this GUID was applied
+        select r.alter_id, r.event into del_alt, del_ev from tally_recorder_lines r where r.book_id = p_book and r.object_guid = og and r.event in ('deleted', 'cancelled') and r.state = 'applied'
+         order by r.alter_id desc nulls last limit 1;
         if stt is null then
           lk := tally_month_locked(p_book, array(select tally_d8(replace(coalesce(x->>'day', ''), '-', '')) from jsonb_array_elements(vs) x) || array[c_day, vd]);
           if lk is not null then
@@ -227,7 +235,7 @@ begin
           -- 50 (review H1): a delete of this entry applied at a higher AlterID (gone from Tally, perhaps never in the copy): an older
           -- line of it, late from another computer, never revives it
           elsif alt is not null and del_alt > alt then
-            stt := 'stale'; wy := format('AlterID %s is older than the delete applied at AlterID %s: an older change, not applied', alt, del_alt);
+            stt := 'stale'; wy := format('AlterID %s is older than the %s applied at AlterID %s: an older change, not applied', alt, case when del_ev = 'deleted' then 'delete' else 'cancel' end, del_alt);
           elsif c_found and alt is not null and alt = c_alter and c_del is null then
             stt := 'duplicate'; wy := format('the copy holds this entry at AlterID %s already (from a Day Book or another line)', alt);
           elsif jsonb_array_length(vs) = 0 then
@@ -360,10 +368,14 @@ begin
                  where r.book_id = p_book and r.state = 'held' and r.object_guid = og and r.event in ('deleted', 'cancelled')
                    and r.alter_id > coalesce(alt, 0) and coalesce(r.held_why, '') not like 'month locked%' order by r.alter_id, r.id loop
         res2 := tally_ingest_delete(p_book, og, hd.alter_id, hd.event = 'cancelled', 'recorder ' || coalesce(hd.pc, ''));
-        if res2->>'state' = 'applied' and not exists (select 1 from tally_recorder_lines a where a.book_id = p_book and a.object_guid = og and a.alter_id = hd.alter_id and a.event = hd.event and a.state = 'applied') then
+        twin := null;
+        select a.id into twin from tally_recorder_lines a where a.book_id = p_book and a.object_guid = og and a.alter_id = hd.alter_id and a.event = hd.event and a.state = 'applied' order by a.id limit 1;
+        if res2->>'state' = 'applied' and twin is null then
           update tally_recorder_lines set state = 'applied', held_why = format('applied when line %s brought the entry', rid), applied_at = now() where id = hd.id;
           insert into tally_sync_cursor (book_id, firm_id) values (p_book, b.firm_id) on conflict (book_id) do nothing;
           update tally_sync_cursor set recorder_max_alter = greatest(coalesce(recorder_max_alter, 0), hd.alter_id), recorder_last_at = now(), updated_at = now() where book_id = p_book;
+        elsif res2->>'state' = 'applied' then     -- round 2 (L8): the same change from another computer, applied already
+          update tally_recorder_lines set state = 'duplicate', held_why = format('the same change already came as line %s (applied)', twin), body = null where id = hd.id;
         end if;
       end loop;
     end if;
@@ -393,7 +405,7 @@ begin
   select v.day, coalesce(v.alter_id, 0), v.deleted_at, v.cancelled into v_day, v_alter, v_del, v_can from tally_vouchers v where v.book_id = p_book and v.guid = g;
   if not found then
     return jsonb_build_object('ok', true, 'state', 'held', 'guid', g, 'action', act, 'unknown', true,
-      'why', 'the entry is not in FinCom''s copy yet; it is applied by itself once the Day Book for its date is uploaded');     -- 50: what releases it
+      'why', 'the entry is not in FinCom''s copy yet; it is applied by itself once a complete Day Book for its date is uploaded');     -- 50: what releases it
   end if;
   lk := tally_month_locked(p_book, array[v_day]);
   if lk is not null then
@@ -453,7 +465,7 @@ begin
     -- lowered; only from a line that ended applied, duplicate or stale: a held or failed line never raises it (review L2)
     if one->>'state' in ('applied', 'duplicate', 'stale') and x->>'event' in ('created', 'altered', 'deleted', 'cancelled', 'imported')
        and coalesce(x->>'object_guid', '') <> '' and coalesce(x->>'alter_id', '') ~ '^[0-9]{1,15}$'
-       and x->>'object_guid' !~ '-0{8}$' then     -- 50 (review L4): the add-on's placeholder GUID is no entry's: its AlterID is never received
+       and left(btrim(x->>'object_guid'), 100) !~ '-0{8}$' then     -- 50 (review L4): the add-on's placeholder GUID is no entry's: its AlterID is never received
       mx := greatest(mx, (x->>'alter_id')::bigint);
     end if;
   end loop;
@@ -489,11 +501,28 @@ create index if not exists tally_recorder_lines_held_master on public.tally_reco
 create or replace function public.tally_recorder_release_day(p_book uuid, p_day date)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
 declare r tally_recorder_lines%rowtype; one jsonb; prev text := coalesce(current_setting('fincom.recorder_release', true), ''); n int := 0; a int := 0; f uuid; st text;
+  x record; redone int := 0;
 begin
   if p_book is null or p_day is null then return jsonb_build_object('ok', true, 'ran', 0, 'applied', 0); end if;
   select firm_id into f from tally_books where book_id = p_book;
   if f is null then return jsonb_build_object('ok', true, 'ran', 0, 'applied', 0); end if;
   perform pg_advisory_xact_lock(hashtext(p_book::text));
+  -- round 2 (N1): a Day Book read again (an older kept file) never brings back an entry that a delete (cancel) line applied at a
+  -- higher AlterID than the day's version of it took away: deleted (cancelled) again at once, through tally_ingest_delete
+  perform set_config('fincom.recorder_release', '0', true);
+  for x in select v.guid, l.event, max(l.alter_id) as alt from tally_vouchers v
+             join tally_recorder_lines l on l.book_id = p_book and l.object_guid = v.guid and l.state = 'applied' and l.event in ('deleted', 'cancelled')
+            where v.book_id = p_book and v.day = p_day and v.deleted_at is null and coalesce(l.alter_id, 0) > coalesce(v.alter_id, 0)
+              and (l.event = 'deleted' or not v.cancelled)
+            group by v.guid, l.event order by v.guid, l.event
+  loop
+    begin
+      perform tally_ingest_delete(p_book, x.guid, x.alt, x.event = 'cancelled', 'recorder: an older Day Book read again');
+      redone := redone + 1;
+    exception when others then
+      raise log 'tally_recorder_release_day: entry % of book % not %: % %', x.guid, p_book, x.event, sqlstate, sqlerrm;
+    end;
+  end loop;
   for r in
     with dv as (select v.guid, v.vtype, v.vno, coalesce(v.alter_id, 0) as alter_id,
                        case when v.guid ~ '-[0-9A-Fa-f]{8}$' then (('x' || right(v.guid, 8))::bit(32)::bigint)::text end as mid
@@ -541,7 +570,7 @@ begin
     end;
   end loop;
   perform set_config('fincom.recorder_release', prev, true);
-  return jsonb_build_object('ok', true, 'ran', n, 'applied', a);
+  return jsonb_build_object('ok', true, 'ran', n, 'applied', a, 'redone', redone);
 end $function$;
 revoke all on function public.tally_recorder_release_day(uuid, date) from public, anon, authenticated, service_role;
 
@@ -553,7 +582,7 @@ language plpgsql security definer set search_path = public, pg_temp as $function
 declare d record;
 begin
   for d in select distinct n.book_id, n.day from new_days n
-            where exists (select 1 from tally_recorder_lines l where l.book_id = n.book_id and l.state = 'held')
+            where exists (select 1 from tally_recorder_lines l where l.book_id = n.book_id and l.state in ('held', 'applied') and l.event in ('created', 'altered', 'imported', 'deleted', 'cancelled'))
             order by n.book_id, n.day loop
     begin
       perform tally_recorder_release_day(d.book_id, d.day);
@@ -581,7 +610,7 @@ end $$;
 -- ---------------------------------------------------------------- the rows already held: the new words (held_why only)
 update public.tally_recorder_lines set held_why = case
     when held_why = 'unknown entry: not in the copy (the next day read decides)'
-      then format('the entry is not in FinCom''s copy yet; it is applied by itself once the Day Book for %s is uploaded', coalesce(to_char(vch_date, 'DD-Mon-YYYY'), 'its date'))
+      then format('the entry is not in FinCom''s copy yet; it is applied by itself once a complete Day Book for %s is uploaded', coalesce(to_char(vch_date, 'DD-Mon-YYYY'), 'its date'))
     when held_why like 'FinCom posting % matched; no entry body (its posted XML could not be read): the next day read applies it'
       then replace(held_why, 'the next day read applies it', 'waiting for the entry''s details from FinCom Bridge (it asks Tally again on its next run); or upload this day''s Day Book')
     when held_why = 'unknown ledger: not in the copy'

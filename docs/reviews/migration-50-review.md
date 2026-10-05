@@ -449,3 +449,58 @@ Other facts about staging:
   base on staging is exactly what 50 replaces.
 - But it leaves staging's line 2 (Receipt 189's delete) held for ever, with words promising an upload will release it.
 - Fix N1 before running 50, or run it knowing line 2 needs the follow-up.
+
+## Round 2: Fixed (05-Oct-2026, before 50 ran anywhere)
+
+The file was changed test-first. The reds are in the session scratchpad: `tdd/r52.1.red` (14 checks failing on file
+`aba6aba6…`) and `tdd/r52.2.red` (the L9 check failing on the untrimmed guard). All checks now pass:
+`run_migration50.py`, `run_migration_order.py`, `run_recorder_server.py`, `run_recorder_held_words.py`,
+`run_migration47.py` and `run_migration48.py`. File md5: `9cd910b3c74f7af3d57774211966bfc8`.
+
+| Function | md5 |
+|---|---|
+| `tally_recorder_line(uuid, uuid, jsonb, bigint)` | `8ac8ea2dacc07f56714eab9bb7dc3cf2` |
+| `tally_ingest_delete(uuid, text, bigint, boolean, text)` | `09ec611a970cfc03cafdd494f1e88c0b` (its held words only) |
+| `tally_recorder_apply(uuid, uuid, uuid, jsonb)` | `25f02b91454654526be375af42019856` (L9) |
+| `tally_recorder_release_day(uuid, date)` | `b44bd07e78059fd23efc599dd7c2ef8b` |
+| `tally_days_recorder_release()` | `c54362f5…` → `4248dcfb246c492b90f20a940ef516be` |
+
+- **N1: Fixed.**
+  - **The test.** "Nothing to delete" now needs the day to be stored after the line arrived (`tally_days.at` later than
+    the line's `received_at`) and complete (`n` = the live entries of that day). The AlterID test is gone.
+  - **Cancels.** A cancel in the same position is applied as "nothing to cancel".
+  - **The re-parse hole.** On every stored day, `tally_recorder_release_day` first deletes (or cancels) again, through
+    `tally_ingest_delete`, each entry of that day whose applied delete (or cancel) line is above the entry's version.
+    An older kept file read again therefore never revives the entry. This also closes the same hole for entries the copy
+    held, which existed since 44. The triggers run this for books that have any recorder lines.
+  - **Late creates.** The stale rule for a late, lower-AlterID create now counts an applied cancel as well as an applied
+    delete.
+  - **Words.** A day stored after the line but not complete says so: "the Day Book for <date> stored after this change
+    was not complete (k of n entries); … applied by itself once a complete Day Book for that day is uploaded". Otherwise
+    the line says "… once a complete Day Book for <date> is uploaded". Every promise names a complete Day Book (see L7).
+  - **Checks.**
+    - Staging's line 2, on a book of its own: the 01-Oct day is stored after the line, complete (`n = 2`), with
+      `alter_max` 54384. Result: 'applied', "nothing to delete: the Day Book for 01-Oct-2026, complete and stored after
+      this change arrived, does not hold the entry".
+    - An old kept 01-Oct file that still holds Receipt 189 is read again: 189 is deleted again at once and is never live.
+    - E3: a day stored before the line arrived keeps the line held. Stored again after it, the line is "nothing to
+      delete". The late create from another computer (AlterID 64205) is 'stale'. An older file holding the entry, read
+      again, deletes it again.
+    - E2a and E2b: held, with the "not complete (1 of 5)" and "(0 of 4)" words.
+  - **On staging after 50 runs:** line 2 is released by the next store of 01-Oct, or at once by an owner's Apply now
+    (the same rule: the 01-Oct day was stored at 02:33:40, after the line's 02:26:59).
+- **L7: not fixed here.** It predates 50: the bridge counts `<VOUCHER` tags while the parser keeps fewer. Until the
+  bridge counts what the parser keeps, a bridge store of such a day says "not complete (k of n)", which is true. An
+  upload without a bridge count, or a re-parse, completes it.
+- **L8: Fixed.** When the entry arrives, a held cancel or delete whose same change (same GUID, AlterID and event) is
+  already applied becomes 'duplicate', "the same change already came as line N (applied)". Check: two cancels from two
+  computers, then the create. The first is applied and the second is 'duplicate'.
+- **L9: Fixed.** The apply guard trims the GUID as the line does: `left(btrim(x->>'object_guid'), 100) !~ '-0{8}$'`.
+  Check: a placeholder with trailing spaces leaves `recorder_max_alter` unchanged.
+- **Timings, re-measured on pg_stand:**
+
+  | Run | With the triggers | Without |
+  |---|---|---|
+  | One day, 3,000 held lines | 23-24 ms a store | 14-18 ms |
+  | 365 days, 3,000 held lines, first store | 46.9 ms a day | not measured |
+  | 365 days, 3,000 held lines, the same days stored again | 26.3 ms a day | 21.7 ms a day |
