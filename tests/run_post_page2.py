@@ -173,9 +173,13 @@ with sync_playwright() as p:
       Bridge.call = async (u) => { window.__bridgeCalls.push(u); if (window.__bridgeDown) throw new Error("timed out after 120 s"); return {vouchers: window.__vs}; };
       window.__bp = []; Bridge.post = async (pl) => { window.__bp.push(JSON.parse(JSON.stringify(pl))); return window.__answer ? window.__answer(pl) : {ok: true, company: pl.company, results: pl.vouchers.map(v => ({id: v.id, ok: true, verified: true}))}; };
       render(); }""")
-    pg.click('#app [data-bill-row="fa"] [data-check-now]'); pg.wait_for_timeout(800)
+    t0 = E("tallyHm(Date.now())")
+    pg.click('#app [data-bill-row="fa"] [data-check-now]')
+    try: pg.wait_for_function("() => (document.querySelector('#app [data-post-attention] [data-bill-row=\"fa\"]') || {}).innerText.includes('Not found in Tally at the')", timeout=8000)
+    except Exception: pass
+    pg.wait_for_timeout(300)
     fa = txt('#app [data-post-attention] [data-bill-row="fa"]'); now = E("tallyHm(Date.now())")
-    ok(("Not found in Tally at the %s read" % now) in fa and pg.locator('#app [data-bill-row="fa"] [data-post-again]').count() == 1 and "/vouchers?company=GARG" in (E("window.__bridgeCalls") or [""])[-1],
+    ok(any(("Not found in Tally at the %s read" % m) in fa for m in {t0, now}) and pg.locator('#app [data-bill-row="fa"] [data-post-again]').count() == 1 and "/vouchers?company=GARG" in (E("window.__bridgeCalls") or [""])[-1],
        "3. a live read through the bridge: 'Not found in Tally at the %s read', Post again offered (%s)" % (now, fa))
     # Post again, the live check failing: refused with the reason, nothing posted
     E("() => { window.__bridgeDown = true; }")
