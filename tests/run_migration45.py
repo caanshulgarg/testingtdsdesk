@@ -435,7 +435,10 @@ insert into tally_post_jobs (id, firm_id, client_id, company, device_id, payload
 insert into tally_post_ids (firm_id, client_id, fincom_id, job_id, entry_id, live, accepted_at)
   select %(F)s, 'c1', 'P' || g || '-' || k, md5('pj' || g)::uuid, 'e' || g || '-' || k, true, now() - (g || ' minutes')::interval from generate_series(1, 8000) g, generate_series(1, 25) k;
 alter table tally_post_ids enable trigger user;
-analyze tally_post_ids; analyze tally_post_jobs;""" % {"F": q(F), "D": q(D1), "C": q(CO["PERF"])})
+vacuum (analyze) tally_post_ids, tally_post_jobs;""" % {"F": q(F), "D": q(D1), "C": q(CO["PERF"])})
+        # vacuum (analyze), not analyze alone: the load's autovacuum (200,000 new rows) is done before the timing, not during it;
+        # jit off as on Supabase (staging: jit off, not available): the call's estimate (~197,000) is over jit_above_cost, and a
+        # fresh backend's first JIT loads LLVM (about 120 MB) and compiles without answering a cancel
         # the time bound measures the SQL, not the machine: on a shared CI runner the wall clock around one psql call (start a
         # process, connect, parse, run the first call on a cold cache straight after loading 200,000 rows) once took 25 s against
         # 15 s and passed on rerun (05-Oct). So: one untimed warm-up call (its answer still checked), then the same work three
@@ -443,7 +446,7 @@ analyze tally_post_ids; analyze tally_post_jobs;""" % {"F": q(F), "D": q(D1), "C
         # against the bound. A lost index or a slower rule is slow every time (167 s without the indexes); a busy neighbour is not
         def in_db(call, timeout="60s"):
             # (seconds inside the database, the call's answer as text); call is one SQL expression giving text
-            r = jn("set statement_timeout = %s; do $m4$ declare t0 timestamptz := clock_timestamp(); r text; begin r := (%s); "
+            r = jn("set statement_timeout = %s; set jit = off; do $m4$ declare t0 timestamptz := clock_timestamp(); r text; begin r := (%s); "
                    "perform set_config('m4.r', coalesce(r, '-'), false), set_config('m4.s', extract(epoch from clock_timestamp() - t0)::text, false); end $m4$; "
                    "select current_setting('m4.s') || '|' || current_setting('m4.r')" % (q(timeout), call))
             if not r or r.startswith("ERROR") or "|" not in r: return 1e9, str(r)[:200]
