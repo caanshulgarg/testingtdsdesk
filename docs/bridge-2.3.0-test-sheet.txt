@@ -147,4 +147,4 @@ HOW TO ROLL BACK (go back to 2.2.4) - TELL US FIRST
    You should see: within a minute, FinCom's Tally page shows version 2.2.4 for this computer. Automatic updates stay
    off on this computer until FinCom turns them on again.
    A Windows user who installed FinCom Bridge for the first time with 2.3.0 (CHECK 7) has no earlier version to go
-   back to: right-click their FinCom icon > Pause, and tell us.
+   back to: the owner sets that bridge to "Changes only" on the Tally page (it then never posts), and tells us.

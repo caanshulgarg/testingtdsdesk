@@ -105,7 +105,8 @@ From the tray: right-click the FinCom icon > "Roll back to the previous version"
 **But the 2.3.0 app does not trust a 2.2.4 bridge**, so after a bridge rollback FinCom stops sending to it (the "did not
 prove it is your FinCom Bridge" words above). Rolling back therefore means: **tell us first**, with the time and what
 went wrong; we roll back the app and the bridge together. A Windows user who installed a bridge for the first time with
-2.3.0 has no earlier version to roll back to: tell us and we stop that bridge instead.
+2.3.0 has no earlier version to roll back to: set that bridge to "Changes only" on the Tally page (it then never
+posts) and tell us.
 
 ## What we need from you if something fails
 
