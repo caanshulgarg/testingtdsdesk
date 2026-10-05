@@ -877,7 +877,7 @@ func TestLiveUploaderDuringPosting(t *testing.T) {
 		for i := 0; i < 2000; i += 40 {
 			var ls []string
 			for k := i; k < i+40; k++ {
-				ls = append(ls, vchLine("after_import_object", fmt.Sprint("g-l", k), fmt.Sprint(k+1), fmt.Sprint(k+1), fmt.Sprintf("TDSDesk:lv%d | n=%d", k+1, k)))
+				ls = append(ls, vchLine("after_import_object", fmt.Sprintf("%s-%08x", b220CoGUID, k+1), fmt.Sprint(k+1), fmt.Sprint(k+1), fmt.Sprintf("TDSDesk:lv%d | n=%d", k+1, k)))
 			}
 			liveAppend(t, p, ls...)
 			time.Sleep(10 * time.Millisecond)
