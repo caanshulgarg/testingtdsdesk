@@ -1,8 +1,23 @@
 {
   "extraKnownMarketplaces": {
-    "ecc": { "source": { "source": "github", "repo": "affaan-m/ECC" } },
-    "trailofbits": { "source": { "source": "github", "repo": "trailofbits/skills" } },
-    "claude-plugins-official": { "source": { "source": "github", "repo": "anthropics/claude-plugins-official" } }
+    "ecc": {
+      "source": {
+        "source": "github",
+        "repo": "affaan-m/ECC"
+      }
+    },
+    "trailofbits": {
+      "source": {
+        "source": "github",
+        "repo": "trailofbits/skills"
+      }
+    },
+    "claude-plugins-official": {
+      "source": {
+        "source": "github",
+        "repo": "anthropics/claude-plugins-official"
+      }
+    }
   },
   "enabledPlugins": {
     "ecc@ecc": true,
@@ -16,5 +31,18 @@
     "supply-chain-risk-auditor@trailofbits": true,
     "fp-check@trailofbits": true,
     "audit-context-building@trailofbits": true
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"$CLAUDE_PROJECT_DIR/.claude/hooks/block-production.sh\""
+          }
+        ]
+      }
+    ]
   }
 }
