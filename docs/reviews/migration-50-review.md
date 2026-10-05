@@ -504,3 +504,136 @@ The file was changed test-first. The reds are in the session scratchpad: `tdd/r5
   | One day, 3,000 held lines | 23-24 ms a store | 14-18 ms |
   | 365 days, 3,000 held lines, first store | 46.9 ms a day | not measured |
   | 365 days, 3,000 held lines, the same days stored again | 26.3 ms a day | 21.7 ms a day |
+
+## Round 3 (05-Oct-2026, after the round-2 fixes)
+
+Branch `tax-accuracy`, commit `9dff0da`. This round was read-only, and this section is the only change. The file
+reviewed is `server/tally-cloud/migration-50-recorder-held.sql`, md5 `9cd910b3c74f7af3d57774211966bfc8`.
+
+### Test runs (one at a time)
+
+| Suite | Result |
+|---|---|
+| `python3 tests/run_migration50.py` | **all passed** (exit 0, 94 checks) |
+| `python3 tests/run_migration_order.py` | **all checks passed** (exit 0; 144 security definer functions search `public, pg_temp`; both orders end with the same 66 function texts) |
+
+md5 of each function body. Each is the file's text between the `$function$` marks, and each equals the suite's
+`md5(prosrc)`.
+
+| Function | File line | md5 |
+|---|---|---|
+| `tally_recorder_line(uuid, uuid, jsonb, bigint)` | `:102` | `8ac8ea2dacc07f56714eab9bb7dc3cf2` |
+| `tally_ingest_delete(uuid, text, bigint, boolean, text)` | `:395` | `09ec611a970cfc03cafdd494f1e88c0b` |
+| `tally_recorder_apply(uuid, uuid, uuid, jsonb)` | `:437` | `25f02b91454654526be375af42019856` |
+| `tally_recorder_release_day(uuid, date)` | `:501` | `b44bd07e78059fd23efc599dd7c2ef8b` |
+| `tally_days_recorder_release()` | `:580` | `4248dcfb246c492b90f20a940ef516be` |
+
+**Staging's base** (read-only SELECT, `tds-desk-staging`):
+
+| Function | md5(prosrc) | Matches |
+|---|---|---|
+| `tally_recorder_line` | `360fb49a87d037356a863591456beaca` | 48 |
+| `tally_ingest_delete` | `8db783fcde9064bf8e6188a1ce63e594` | 44 |
+| `tally_recorder_apply` | `fef11f9e85d1f4e5cde79cd48a771543` | 48 |
+
+The two new functions do not exist on staging yet. These are exactly the texts 50 replaces.
+
+Other checks on the file:
+- `tally_recorder_apply` diffed against 48's text: still exactly one changed condition (`:466-467`, now trimmed).
+- The grants are unchanged.
+- The file still holds no `delete from`.
+
+### Confirmation of round 2
+
+| Finding | Result | Evidence |
+|---|---|---|
+| N1 the AlterID test holds a delete for ever | **Confirmed** | `:190-197` stored after the line (`d.at > r_at`) and complete; the AlterID test is gone. The check reproduces staging's line 2 (01-Oct, `alter_max` 54384 below the delete's 54386, stored 02:33:40 after the line's 02:26:59): 'applied', "nothing to delete" |
+| L8 a cancel arriving twice stays held | **Confirmed** | `:373-378` the twin is found, and the held line becomes 'duplicate' |
+| L9 the apply guard does not trim | **Confirmed** | `:467` `left(btrim(x->>'object_guid'), 100) !~ '-0{8}$'` |
+
+### What the fixes introduced, checked
+
+- **(a) The re-delete on every stored day** (`:512-525`).
+  - **Which entries.** It acts only on an entry live in the copy on the stored day that has an **applied** delete or
+    cancel line at an AlterID strictly above the copy's version (`coalesce(l.alter_id, 0) > coalesce(v.alter_id, 0)`).
+    A cancel is skipped when the entry is already cancelled.
+  - **It never deletes what Tally holds.** Tally gives each change a new, higher AlterID, so a file made after the
+    delete or cancel carries the entry (if at all) at an AlterID at or above it, and it is left alone. Only a file
+    older than the change revives an entry below that AlterID, and that entry is deleted again.
+  - **Re-created entries.** An entry re-created with the same GUID would carry an AlterID above the delete's and would
+    not be touched. (Tally never reuses a GUID.)
+  - **How it deletes.** Only through `tally_ingest_delete`, which is soft:
+    - `deleted_at` is set, or `cancelled` for a cancel.
+    - The versions are kept: version lines are written before and after, and a version row is added for the AlterID.
+    - The ledger-day cache is rebuilt.
+    - Its own stale and lock checks still apply.
+  - **Permission.** `fincom.recorder_release = '0'` allows the call. It is local to the transaction, and it is reset to
+    the caller's value at `:572`. A subtransaction that fails reverts it with itself.
+  - **Cost.** It is driven by the day's entries, through `(book_id, day)` and `(book_id, object_guid)`. It is one index
+    probe per entry of the day, not per applied delete, so a book with many applied deletes pays nothing extra.
+    `tally_ingest_delete`, with its cache rebuild, runs only for an entry actually revived.
+  - **Failure.** Each entry runs in its own subtransaction, and an error is logged. An entry that fails stays live (only
+    logged) until the next store of the day. It never fails the day.
+- **(b) "Nothing to cancel" applied** (`:192-193`).
+  - Tally lists a cancelled entry in its Day Book, and `parse.js:126` keeps it when it has a number. So a complete
+    Day Book stored after the cancel line arrived that does not hold the entry means the entry is gone, or the file is
+    an older one read again from before the entry existed.
+  - In both cases the copy correctly holds nothing live. An older file that later holds it uncancelled is cancelled
+    again by (a).
+  - Accounting is unaffected either way, because cancelled entries are never in the ledger-day cache (44 `:236`).
+  - There is one gap in what the copy lists: see R3-L2.
+- **(c) The triggers now run for any book with recorder lines** (`:585`, an `exists` over 44's `(book_id, state)`
+  index).
+  - Every day store of such a book now runs the release.
+  - Measured by the suite: 26.3 ms a day stored again with the triggers, against 21.7 ms without; the first store is
+    46.9 ms. On a single day with 3,000 held lines: 23-24 ms, against 14-18 ms.
+  - Failure handling is unchanged: each day runs in a subtransaction, the outer handler catches `query_canceled` and
+    other errors, and the day is always stored.
+  - Recursion is still impossible: nothing called writes `tally_days`.
+- **(d) The held words.**
+  - **"Not in FinCom's copy yet; ... once a complete Day Book for `<date>` is uploaded"** (`:197`, `:417`, `:625`) is
+    true. Any complete store of that day after the line arrived picks it up: the release's third union finds held
+    deletes and cancels by `vch_date`, and the rule then applies it.
+  - **"Stored after this change was not complete (k of n entries)"** (`:195`) is true when written.
+  - **Exceptions:** see R3-L3.
+
+### Findings
+
+No High and no Medium.
+
+- **R3-L1. "Nothing to delete (cancel)" no longer needs an AlterID.**
+  - **Where:** `:190-193`. Round 1 had `alt > 0`.
+  - **What happens with no AlterID:** a delete or cancel line with no AlterID that is applied this way is invisible to
+    the late-create stale rule (`:237`, where `del_alt > alt` is null) and to the re-delete (`:516`, where 0 > version
+    is false). For such a line, H1's revival hole is open again.
+  - **What happens with a placeholder GUID:** `:166` never treats it as the same change, so a placeholder delete with
+    AlterID 0 that arrives twice would be applied twice. The second write violates `applied_once` in the final UPDATE
+    at `:388`, which is outside the line's exception block, so the whole `tally_recorder_apply` call errors.
+  - **Why this is Low:** the add-on writes delete and cancel lines only for saved entries, which have a real GUID and
+    an AlterID (`bridge-go/recorder_live.go:806-812`; the placeholder exists only at Form Accept of a new entry).
+  - **Fix:** require `alt > 0 and not ph` for "nothing to delete (cancel)". Hold a placeholder delete or cancel as a
+    GUID-less one is held.
+- **R3-L2. A late create after "nothing to cancel" is 'stale', so the cancelled entry is not listed until its Day Book.**
+  - **Where:** `:228, :237`.
+  - **What happens:** the stale rule now counts an applied cancel, so a create line from another computer with a lower
+    AlterID is 'stale' and its body is dropped. Tally still holds the entry (cancelled). The copy lacks it until a Day
+    Book of that day holding it is stored, which then brings it in, cancelled.
+  - **Impact:** none on any figure. Round 2's order instead applied the create, then the held cancel.
+  - **Fix:** when `del_ev = 'cancelled'`, apply the create and then cancel it (`tally_ingest_delete` with cancel)
+    instead of 'stale'. Keep 'stale' for deletes.
+- **R3-L3. Two edge cases in the held words.**
+  - **(i) A line with no `vch_date`.** It says "once a complete Day Book for its date is uploaded", but no day store can
+    reach it: the release finds it by `vch_date`, and the rule needs `vd`. It stays held until an owner's release,
+    which gives the same answer. Better words: "no date on the line: ...".
+  - **(ii) A day an older file revived.** After the re-delete, the day's live count is one below `n`, so another
+    unknown delete of that day is told the Day Book "was not complete (k of n)" when the file was complete, only old.
+    What it promises (a complete Day Book, that is a fresh one) still releases it.
+  - L7 (the bridge count against the parser count) is unchanged and predates 50.
+
+### Verdict
+
+**Clear to run.**
+- No High or Medium remains.
+- N1, L8 and L9 are confirmed fixed.
+- What the fixes added never deletes an entry Tally holds, and it never fails or measurably slows a day store.
+- The three Lows can follow later.
