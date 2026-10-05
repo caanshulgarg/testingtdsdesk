@@ -94,10 +94,17 @@ foreach ($fid in @('FCRLiveLog', '$$FCRLiveLog')) {
   Post "D-call-$fid" ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Function</TYPE><ID>' + $fid + '</ID></HEADER><BODY><DESC><STATICVARIABLES><SVCURRENTCOMPANY>' + $co + '</SVCURRENTCOMPANY></STATICVARIABLES><FUNCPARAMLIST><PARAM>xml_probe</PARAM></FUNCPARAMLIST></DESC></BODY></ENVELOPE>') | Out-Null
 }
 Rec 'after calling FCRLiveLog by XML'
-# which TDLs Tally says it loaded: F1 Help -> TDLs & AddOns
-Keys '{F1}' 3 'D-4-f1'
-Keys 't' 4 'D-5-tdls'
-Keys '{ESC}' 2 ''; Keys '{ESC}' 2 'D-6-back'
+# a voucher by XML import (EDU mode allows only the 1st, 2nd and 31st of a month)
+$vch = @"
+<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>Vouchers</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>$co</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA>
+<TALLYMESSAGE xmlns:UDF="TallyUDF"><VOUCHER VCHTYPE="Journal" ACTION="Create"><DATE>20260401</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><NARRATION>spike TDSDesk:test-1</NARRATION>
+<ALLLEDGERENTRIES.LIST><LEDGERNAME>Spike Party</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-100.00</AMOUNT></ALLLEDGERENTRIES.LIST>
+<ALLLEDGERENTRIES.LIST><LEDGERNAME>Spike Party 2</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>100.00</AMOUNT></ALLLEDGERENTRIES.LIST>
+</VOUCHER></TALLYMESSAGE></REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>
+"@
+Post 'D-import-ledger2' ($led -replace 'Spike Party', 'Spike Party 2') | Out-Null
+Post 'D-import-voucher' $vch | Out-Null
+Rec 'after XML voucher import'
 # a ledger made on screen (Form Accept path): Gateway -> Create -> Ledger
 Keys 'c' 3 'D-7-create'
 Keys 'Ledger{ENTER}' 3 'D-8-ledger-form'
