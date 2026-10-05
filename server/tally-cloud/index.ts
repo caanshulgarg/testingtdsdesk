@@ -114,7 +114,9 @@
 //   the error (console.error); a function the database lacks is said once per cold start. The beat's answer carries
 //   trialTools: true / false (tally_devices.trial_tools, migration 46: the owner's switch "Trial tools on this computer";
 //   false without the column); and (round 20, migration 47) recorderSource: addon | alterid | both (tally_devices.
-//   recorder_source, the owner's tally_device_recorder_source), left out without the column
+//   recorder_source, the owner's tally_device_recorder_source), left out without the column; and (FinCom Bridge 2.2.2)
+//   heldLines: [{line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date}] this computer's lines held
+//   without their entry (heldLinesFor), left out when none
 //   {kind:"start_point", company, guid?, altvchid, altmstid, at} -> {set, startVoucher, startMaster, guid, at, state}: the
 //                                                       bridge's starting point (reading is prospective), kept once per book
 //                                                       and company GUID on tally_sync_cursor (tally_start_point)
@@ -356,6 +358,45 @@ async function bookForBeat(firm: string, name: string) {
 // device, altvchid, at) (migration 44, 45): compared with what every PC's recorder lines (and the day books read) reached; the
 // answer per company {gap, missing (UP TO: an upper bound on the changes not received), needsBaseline, startRecorded}. A company
 // without a GUID gets the gap check alone (it records a starting point without the GUID). Never fails the beat
+// FinCom Bridge 2.2.2: the lines this computer sent that the cloud holds without their entry (state 'held', received in the
+// last 7 days, created / altered / imported, its company still linked to the same book, the entry's month not locked),
+// oldest first, at most 200: the bridge asks Tally for each again by its MasterID (else its number) and sends it as
+// <line_id>:resolved with Tally's own GUID and body; it uses nothing else of these rows as the entry's. Without the table
+// (or on any error) the field is left out: the beat never fails for it
+async function heldLinesFor(dev: any, firm: string) {
+  try {
+    const since = new Date(Date.now() - 7 * 86400000).toISOString();
+    const { data, error } = await db.from("tally_recorder_lines").select("line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date, book_id, received_at")
+      .eq("firm_id", firm).eq("device_id", dev.id).eq("state", "held").in("event", ["created", "altered", "imported"]).gt("received_at", since)
+      .order("received_at", { ascending: true }).limit(400);
+    if (error || !Array.isArray(data) || !data.length) return null;
+    const rows = (data as any[]).filter((r) => r && Date.parse(String(r.received_at)) > Date.now() - 7 * 86400000)
+      .sort((a, b) => Date.parse(String(a.received_at)) - Date.parse(String(b.received_at)));
+    const books = [...new Set(rows.map((r) => String(r.book_id || "")).filter(Boolean))];
+    const locked = new Set<string>();
+    if (books.length) {
+      const { data: lk, error: le } = await db.from("tally_month_locks").select("book_id, month").in("book_id", books).is("unlocked_at", null);
+      if (!le && Array.isArray(lk)) for (const l of lk as any[]) locked.add(String(l.book_id) + "|" + String(l.month || "").slice(0, 7));
+    }
+    const linked = new Map<string, string | null>();
+    const s = (v: unknown, n: number) => typeof v === "string" || typeof v === "number" ? String(v).trim().slice(0, n) : "";
+    const out: Record<string, string>[] = [];
+    for (const r of rows) {
+      const lid = s(r.line_id, 80), company = s(r.company, 200), day = s(r.vch_date, 10);
+      if (!lid || lid.endsWith(":resolved") || !company || !/^\d{4}-\d{2}-\d{2}$/.test(day)) continue;
+      if (locked.has(String(r.book_id) + "|" + day.slice(0, 7))) continue;
+      if (!linked.has(company)) { try { linked.set(company, await bookForBeat(firm, company)); } catch { linked.set(company, null); } }
+      if (!r.book_id || linked.get(company) !== String(r.book_id)) continue;
+      out.push({ line_id: lid, company, company_guid: s(r.company_guid, 100), event: s(r.event, 20), master_id: s(r.master_id, 40), vch_type: s(r.vch_type, 60),
+        vch_no: s(r.vch_no, 60), vch_date: day.replace(/-/g, "") });
+      if (out.length >= 200) break;
+    }
+    return out.length ? out : null;
+  } catch (e) {
+    console.log("tally-ingest beat: held lines not read:", String((e as Error)?.message || e).slice(0, 200));
+    return null;
+  }
+}
 async function recorderGaps(dev: any, firm: string, bridge: string, changes: BeatChange[]) {
   const out: Record<string, unknown> = {};
   for (const c of changes.filter((c) => c.altvchid !== null || (c.start && c.guid)).slice(0, 20)) {
@@ -1763,7 +1804,9 @@ Deno.serve(async (req) => {
         // round 20 (migration 47): where this computer's changes come from (the owner's tally_device_recorder_source): addon,
         // alterid or both; left out when the cloud has no column (the bridge keeps its own default)
         const rs = (dev as any).recorder_source, recorderSource = rs === "addon" || rs === "alterid" || rs === "both" ? rs : null;
-        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(mayPost(dev, me.id) ? {} : { notMain: true }), ...ctl.out });
+        // FinCom Bridge 2.2.2: the lines held without their entry, asked of Tally again by the bridge (left out when none)
+        const heldLines = await heldLinesFor(dev, firm);
+        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(heldLines ? { heldLines } : {}), ...(mayPost(dev, me.id) ? {} : { notMain: true }), ...ctl.out });
       }
       case "make_main": return await makeMain(dev, bridgeOf(dev, body, false).id);
       case "posts_take": {
