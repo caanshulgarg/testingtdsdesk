@@ -26,6 +26,7 @@ import (
 	"html"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -709,7 +710,7 @@ func liveResolveTurn() {
 	heldMu.Unlock()
 	// the asks, outside the lock
 	type res struct {
-		id, x           string
+		id, x, why      string
 		answered, final bool
 	}
 	var got []res
@@ -718,11 +719,11 @@ func liveResolveTurn() {
 		if time.Now().After(deadline) {
 			break
 		}
-		x, answered, final, err := liveResolveOne(h)
+		x, why, answered, final, err := liveResolveOne(h)
 		if gaveWay(err) {
 			break
 		}
-		got = append(got, res{h.ID, x, answered, final})
+		got = append(got, res{h.ID, x, why, answered, final})
 		if x == "" {
 			continue
 		}
@@ -758,6 +759,10 @@ func liveResolveTurn() {
 		}
 		if r.final {
 			h.Final = true
+			if r.why != "" {
+				h.Why = liveCapWhy(r.why)
+				writeLog(fmt.Sprintf("Recorder: %s of %s in %s (line %s) stays held: %s", or(strings.TrimSpace(h.Type+" "+h.No), "an entry"), liveDay(h.Date), h.Company, h.ID, h.Why))
+			}
 		}
 		items[r.id] = h
 	}
@@ -772,7 +777,7 @@ const (
 // one held line's entry asked of Tally: by MasterID when the line had it, else (or when Tally gave nothing with that
 // MasterID) by type, number and date; checked as the body fetch checks it (liveVoucherWrong). Security L3: when the
 // MasterID gave another real voucher, nothing is asked by number (final). answered: Tally answered a request (a try)
-func liveResolveOne(h heldLine) (x string, answered, final bool, err error) {
+func liveResolveOne(h heldLine) (x, why string, answered, final bool, err error) {
 	sp, spOK := startPointOf(h.Company)
 	key := h.Company + "|" + h.CGUID
 	tc := recorderTC(func(sec float64) {
@@ -782,32 +787,105 @@ func liveResolveOne(h heldLine) (x string, answered, final bool, err error) {
 	})
 	port, err := findCompanyPort(h.Company, 0)
 	if err != nil {
-		return "", false, false, err
+		return "", "", false, false, err
 	}
 	w := liveWant{company: h.Company, cguid: h.CGUID, typ: h.Type, no: h.No, date: h.Date, mid: h.MID, sp: sp, spOK: spOK, lineAlter: h.LineAlter}
 	if h.MID != "" {
 		m, err := fetchVouchersByMasterIn(tc, h.Company, port, h.Date, []string{h.MID}, liveBodySec())
 		if err != nil {
-			return "", false, false, err
+			return "", "", false, false, err
 		}
-		why, kind := liveVoucherWrong(m[h.MID], "voucher with MasterID "+h.MID, w)
-		if why == "" {
-			return m[h.MID], true, false, nil
+		w2, kind := liveVoucherWrong(m[h.MID], "voucher with MasterID "+h.MID, w)
+		if w2 == "" {
+			return m[h.MID], "", true, false, nil
 		}
 		if kind == wrongFinal {
-			return "", true, true, nil
+			return "", w2, true, true, nil
 		}
-		answered = true
+		why, answered = w2, true
 	}
 	if h.No == "" || !liveNumberText(h.No) || !liveNumberText(h.Type) {
-		return "", answered, h.MID == "", nil
+		return "", why, answered, h.MID == "", nil
 	}
-	x, _, kind, err := liveOneByNumber(tc, h.Company, port, w, liveBodySec())
+	x, w3, kind, err := liveOneByNumber(tc, h.Company, port, w, liveBodySec())
 	if err != nil {
-		return "", answered, false, err
+		return "", why, answered, false, err
 	}
-	return x, true, kind == wrongFinal, nil
+	return x, w3, true, kind == wrongFinal, nil
 }
 
-// stub
-func applyHeldLines(j M) {}
+// --- 2.2.2: the lines the cloud holds (the beat's answer "heldLines": [{line_id, company, company_guid, event,
+// master_id, vch_type, vch_no, vch_date}], at most 200, this computer's, the last 7 days). The re-scan of the add-on's
+// files cannot know a line an earlier bridge sent without its body for a passing reason (staging lines 9, 11, 15); the
+// cloud does. Each joins the held list once (not one already resolved, or sent with its body) and is asked like any
+// other: the MasterID only as the key to ask Tally, every acceptance rule unchanged (liveVoucherWrong); the cloud's GUID
+// and AlterID are not even read
+var reHeldID = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,80}$`)
+
+func applyHeldLines(j M) {
+	rows := arr(j["heldLines"])
+	if len(rows) == 0 {
+		return
+	}
+	if len(rows) > 200 {
+		rows = rows[:200]
+	}
+	var cs []heldLine
+	now := nowFn().Format(time.RFC3339)
+	for _, r := range rows {
+		e := obj(r)
+		id := strings.TrimSpace(str(e["line_id"]))
+		ev := strings.TrimSpace(str(e["event"]))
+		if !reHeldID.MatchString(id) || strings.HasSuffix(id, ":resolved") || (ev != "created" && ev != "altered" && ev != "imported") {
+			continue
+		}
+		co, cg := cutRunes(strings.TrimSpace(str(e["company"])), 200), cut(cleanGUID(str(e["company_guid"])), 100)
+		date := normDate(str(e["vch_date"]))
+		if co == "" || cg == "" || len(date) != 8 || !isTallyDate(date) {
+			continue
+		}
+		if held := heldGUID(co); held != "" && !strings.EqualFold(held, cg) {
+			continue // not the company this computer holds under that name
+		}
+		mid := onlyDigits(str(e["master_id"]))
+		if len(mid) > 18 || toI64(mid) <= 0 {
+			mid = ""
+		}
+		typ, no := cutRunes(strings.TrimSpace(str(e["vch_type"])), 200), cutRunes(strings.TrimSpace(str(e["vch_no"])), 200)
+		if mid == "" && (no == "" || !liveNumberText(no) || !liveNumberText(typ)) {
+			continue // nothing to ask Tally by
+		}
+		cs = append(cs, heldLine{ID: id, Company: co, CGUID: cg, Type: typ, No: no, Date: date, MID: mid, At: now, Added: now, Ev: ev})
+	}
+	if len(cs) == 0 {
+		return
+	}
+	live.mu.Lock()
+	liveFresh()
+	var fresh []heldLine
+	for _, h := range cs {
+		rid := h.ID + ":resolved"
+		if live.sent[rid] || live.queued[rid] || live.bodied[h.ID] {
+			continue
+		}
+		fresh = append(fresh, h)
+	}
+	live.mu.Unlock()
+	heldMu.Lock()
+	defer heldMu.Unlock()
+	all, items := liveHeldLoad()
+	added := 0
+	for _, h := range fresh {
+		if _, had := items[h.ID]; had {
+			continue
+		}
+		items[h.ID] = h
+		added++
+	}
+	if added == 0 {
+		return
+	}
+	liveHeldCap(items)
+	liveHeldSave(all, items)
+	writeLog(fmt.Sprintf("Recorder: FinCom holds %d line(s) of this computer without their entry; each is asked of Tally again (by its MasterID, else its number) and sent with Tally's GUID and body once Tally gives it", added))
+}

@@ -711,6 +711,7 @@ func beatOnce() {
 		applyCloudSettings(r.json)  // round 15: PostOnly and the batch sizes set in FinCom
 		applyAutoUpdateOn(r.json)   // review S4: the owner turns automatic updates on again
 		applyRecorderSource(r.json) // 2.2.0: where the recorder's changes come from (the owner's choice; absent: the setting)
+		applyHeldLines(r.json)      // 2.2.2: the lines FinCom holds without their entry, asked of Tally again
 		// made the main bridge on FinCom's Tally page: this test bridge switches itself to main, once
 		if testMode() && truthy(r.json["makeMain"]) && makeMainSeen.CompareAndSwap(false, true) {
 			writeLog("FinCom made this the main bridge")
