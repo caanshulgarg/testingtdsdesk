@@ -358,6 +358,13 @@ const TCloud = {
         (p.devices || []).forEach(d => { if (by.has(d.id)) d.recorder_source = by.get(d.id) || "addon"; });
         p.noRecorderSource = false;
       } catch (e){ p.noRecorderSource = true; }
+      // FinCom Bridge 2.3.0 (migration 54): "Changes only" per bridge, and the bridge each member posts through; without
+      // the tables (an older cloud) neither is shown and postings go as before
+      try {
+        p.prefs = [].concat(await Cloud.api("tally_bridge_prefs?select=device_id,bridge_id,changes_only") || []);
+        p.links = [].concat(await Cloud.api("tally_member_bridges?select=user_id,device_id,bridge_id") || []);
+        p.noTarget = false;
+      } catch (e){ p.prefs = []; p.links = []; p.noTarget = true; }
       p.companies = await this.restAll("tally_companies?select=company,client_id,device_id,gstin,last_seen,linked_at&order=company.asc");
       // migration-35: the stops and resumes from FinCom with who and when (round 4, item 24: the latest 300 rows; the
       // standing stops and the latest resume a computer are taken out here), and the bridge versions on trial, approved
@@ -398,7 +405,10 @@ const TCloud = {
         // 2.1.5: its requests to Tally (last, longest today, over 20 s) and whether it stopped reading: its own entry,
         // else the computer's beat when it is the main bridge
         const mine = (k) => b[k] !== undefined ? b[k] : isMain ? beat[k] : undefined;
+        // 2.3.0: its own port, its Tally's port and data folder, and the owner's "Changes only"
+        const co = this.isChangesOnly(d.id, id);
         rows.push({device: d, id, computer: b.computer || info.computer || d.name, user: b.user || "", version: b.version || "", runMode: b.runMode || "",
+          port: b.port || null, tallyPort: b.tallyPort || (isMain && beat.tallyPort) || null, dataFolder: b.dataFolder || (isMain && beat.dataFolder) || "", changesOnly: co === null ? !!b.changesOnly : co,
           main: isMain, at: b.at, tally: b.tallyState || (b.tally ? "open" : "closed"), open: b.open || [], go: id !== "v1",
           reqs: mine("reqs") || null, readStopped: mine("readStopped") || null, paused: !!mine("paused"), readStop: info.readStop || null}); });
       if (!br.v1 && info.beat) rows.push({device: d, id: "v1", computer: info.computer || d.name, user: info.user || "", version: info.beat.version || d.version || "",
@@ -408,6 +418,56 @@ const TCloud = {
     });
     rows.forEach(r => { r.online = !!r.at && now - Date.parse(r.at) < 3 * 60000; r.read = this.readState(r); });
     return rows.sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
+  },
+  // ---------- FinCom Bridge 2.3.0: one bridge for each Windows user on a shared server (migration 54)
+  // the owner's "Changes only" for a bridge (tally_bridge_prefs): true / false, null when nothing is set
+  isChangesOnly(devId, id){ const x = (this.pane.prefs || []).find(q => q.device_id === devId && q.bridge_id === id); return x ? x.changes_only === true : null; },
+  // a bridge in words: "<PC> · <Windows user> · <company> · <data folder>" (the company given, else those open there)
+  bridgeWords(r, company){
+    if (!r) return "";
+    return [r.computer || "", r.user || "", company || (r.open || []).join(", "), r.dataFolder || ""].filter(Boolean).join(" \u00b7 ");
+  },
+  // the bridge the signed-in member posts through (set by an owner on the Tally page); "" when none
+  myBridge(){
+    const me = typeof Cloud === "object" && Cloud.sess ? (Cloud.sess() || {}).user_id : "";
+    const l = me && (this.pane.links || []).find(x => x.user_id === me && x.bridge_id);
+    return l ? l.bridge_id : "";
+  },
+  // the members linked to a bridge
+  linkedTo(r){ return (this.pane.links || []).filter(x => x.bridge_id && x.bridge_id === r.id && x.device_id === r.device.id).map(x => x.user_id); },
+  // the bridges a posting may be sent through: FinCom Bridge 2.x, the main bridge of its computer, not changes only
+  postTargets(){ return this.bridgesHeard().filter(r => r.go && !r.old && r.id && r.main && !r.changesOnly); },
+  // the bridge a posting of this client goes through: the one an owner picked on the Post screen, else the member's own
+  // (when it may post); "" for none (the main bridge of the computer that keeps the client's company, as before)
+  postTargetFor(cid){
+    if (this.pane.noTarget) return "";
+    const t = this.postTargets(), pick = (S.postTarget || {})[cid];
+    if (pick && t.some(r => r.id === pick)) return pick;
+    const mine = this.myBridge();
+    return mine && t.some(r => r.id === mine) ? mine : "";
+  },
+  // the bridge's line that will post a client's entries: the target's, else the main bridge of the computer keeping the company
+  postThrough(co){
+    const rows = this.bridgesHeard(), id = co ? this.postTargetFor(co.id) : "";
+    if (id) return rows.find(r => r.id === id) || null;
+    const c = co && (this.pane.companies || []).find(x => x.client_id === co.id && x.device_id), devId = c && c.device_id;
+    return rows.find(r => r.go && !r.old && r.main && !r.changesOnly && (!devId || r.device.id === devId)) || null;
+  },
+  // an owner switches a bridge to changes only (it never takes a posting) or back -> tally_bridge_changes_only
+  async changesOnly(r, on){
+    if (on){
+      const a = await askConfirm({title: "Changes only for " + this.bridgeWords(r) + "?", ok: "Changes only",
+        body: "<p>This bridge keeps reading Tally\u2019s changes for FinCom but is never given a posting, and the Post screen never offers it. A posting it is running now finishes.</p>"});
+      if (!a || !a.ok) return;
+    }
+    await this.control("tally_bridge_changes_only", {p_device: r.device.id, p_bridge: r.id, p_on: !!on},
+      (on ? "Changes only: " : "Posting allowed again: ") + this.bridgeWords(r) + ".");
+  },
+  // an owner links a member to the bridge they post through (r null: unlinked) -> tally_member_bridge_link
+  async linkMember(uid, r){
+    const m = ((typeof Cloud === "object" && Cloud.st.members) || []).find(x => x.user_id === uid), who = (m && (m.name || m.email)) || "The member";
+    await this.control("tally_member_bridge_link", {p_user: uid, p_device: r ? r.device.id : null, p_bridge: r ? r.id : null},
+      r ? who + " now posts through " + this.bridgeWords(r) + "." : who + " is no longer linked to a bridge.");
   },
   // the reading state of a bridge's computer (plan item 14): {state: reading | paused | selfstop | fincomstop | offline,
   // text, reason}. A stop from FinCom still standing (tally_read_stops, for this computer or for all of them, or the
@@ -466,7 +526,7 @@ const TCloud = {
       toast(done);
     } catch (e){
       const m = String((e && e.message) || e), missing = /PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(m);
-      const mig = {tally_release_withdraw: 37, tally_baseline_clear: 37, tally_device_post_settings: 43, tally_device_trial_tools: 46, tally_device_recorder_source: 47}[fn] || 35;
+      const mig = {tally_bridge_changes_only: 54, tally_member_bridge_link: 54, tally_release_withdraw: 37, tally_baseline_clear: 37, tally_device_post_settings: 43, tally_device_trial_tools: 46, tally_device_recorder_source: 47}[fn] || 35;
       p.ctl = {err: missing && fn === "tally_device_post_settings" ? "Posting settings are not available until migration 43 runs."
         : missing && fn === "tally_device_trial_tools" ? "Trial tools on this computer: not available until migration 46 runs."
         : missing && fn === "tally_device_recorder_source" ? "Changes come from: not available until migration 47 runs."
@@ -601,7 +661,8 @@ const TCloud = {
       const s = await Bridge.call("/cloudlink", null, 15000);
       if (!s.connected || s.url !== this.ingestUrl()){
         this.autoAt = Date.now() + 30 * 60000;
-        const d = await this.rpc("tally_device_create", {p_name: String(Bridge.st.computer || "Office computer").slice(0, 80)});
+        // 2.3.0: one key per Windows user's bridge: "<PC> · <Windows user>"
+        const d = await this.rpc("tally_device_create", {p_name: String([Bridge.st.computer || "Office computer", Bridge.st.user || ""].filter(Boolean).join(" \u00b7 ")).slice(0, 80)});
         await Bridge.call("/cloudlink", {url: this.ingestUrl(), key: d.key}, 60000);
         this.autoAt = Date.now() + 60000;
       }

@@ -954,11 +954,36 @@ async function postPreview(co, rows, opts){
   const items = rows.filter(r => r.xml).map(r => ({kind: r.kind, id: r.id, xml: r.xml, e: r.e}));
   const nWarn = () => document.querySelectorAll("#confirmBox [data-pv-warn] li").length;
   const a = await askConfirm({title: opts.view ? "Preview: " + (rows[0] ? (rows[0].no || rows[0].party) : "") : "Post " + entries(items.length) + " to " + company + "?", ok: opts.view ? "Close" : "Post", wide: true,
-    body: '<div data-post-preview="" style="max-height:60vh;overflow:auto">' + (opts.view ? "" : '<p style="margin:0 0 8px">Each entry exactly as it goes to Tally, into <b>' + esc(company) + "</b>." + (typeof postThroughWords === "function" && postThroughWords(co) ? " " + esc(postThroughWords(co)) : "") + "</p>") + PostGate.html(items, co, masters, company) + "</div>",
-    onReady: box => { if (opts.view){ const no = box.querySelector('[data-cbx="no"]'); if (no) no.remove(); } else { const n = nWarn(); if (n){ const p = document.createElement("p"); p.className = "bk-warn"; p.setAttribute("data-pv-count", ""); p.textContent = n + " warning" + (n === 1 ? "" : "s") + " above: look at them before posting."; box.querySelector(".cbx .row").before(p); } } }});
+    body: '<div data-post-preview="" style="max-height:60vh;overflow:auto">' + (opts.view ? "" : '<p style="margin:0 0 8px">Each entry exactly as it goes to Tally, into <b>' + esc(company) + "</b>." + (typeof postThroughWords === "function" && postThroughWords(co) ? " " + esc(postThroughWords(co)) : "") + "</p>" + postTargetHtml(co, company)) + PostGate.html(items, co, masters, company) + "</div>",
+    onReady: box => { postTargetWire(box, co, company); if (opts.view){ const no = box.querySelector('[data-cbx="no"]'); if (no) no.remove(); } else { const n = nWarn(); if (n){ const p = document.createElement("p"); p.className = "bk-warn"; p.setAttribute("data-pv-count", ""); p.textContent = n + " warning" + (n === 1 ? "" : "s") + " above: look at them before posting."; box.querySelector(".cbx .row").before(p); } } }});
   if (!a || opts.view) return false;
   PostGate.approve(masters.map(m => m.name), company);
   return true;
+}
+// FinCom Bridge 2.3.0: the confirm step names the bridge that posts: computer · Windows user · company · data folder; an
+// owner may pick another bridge that may post (never one set to changes only). Nothing when FinCom's cloud does not know
+// the bridges (no cloud, or none heard from)
+function postTargetHtml(co, company){
+  if (typeof TCloud !== "object" || !TCloud.on() || typeof TCloud.postThrough !== "function") return "";
+  let r = null, list = [];
+  try { r = TCloud.postThrough(co); list = TCloud.postTargets(); } catch (e){ return ""; }
+  if (!r && !list.length) return "";
+  const owner = S.account && S.account.me && S.account.me.role === "owner";
+  let h = '<p data-post-target="' + esc(r ? r.id : "") + '" style="margin:0 0 8px">Through <b data-post-target-words="">' + esc(r ? TCloud.bridgeWords(r, company) : "the main bridge of the computer that keeps " + company) + "</b>.</p>";
+  if (owner && !TCloud.pane.noTarget && list.length > 1)
+    h += '<p style="margin:0 0 8px"><label class="note">Post through another bridge: <select data-post-target-pick="" aria-label="The bridge that posts">' +
+      list.map(x => '<option value="' + esc(x.id) + '"' + (r && x.id === r.id ? " selected" : "") + ">" + esc(TCloud.bridgeWords(x, company)) + "</option>").join("") + "</select></label></p>";
+  return h;
+}
+function postTargetWire(box, co, company){
+  const sel = box && box.querySelector("[data-post-target-pick]");
+  if (!sel) return;
+  sel.addEventListener("change", () => {
+    S.postTarget = Object.assign({}, S.postTarget, {[co.id]: sel.value});
+    const r = TCloud.bridgesHeard().find(x => x.id === sel.value), w = box.querySelector("[data-post-target-words]"), p = box.querySelector("[data-post-target]");
+    if (w && r) w.textContent = TCloud.bridgeWords(r, company);
+    if (p) p.setAttribute("data-post-target", sel.value);
+  });
 }
 // "Post N to Tally": the bills ready to post (review of 02-Oct-2026: "Ready to post" is approved bills only; bank lines
 // and sales are posted from their own pages), each shown first as it goes to Tally. only: one bill (Retry of one whose

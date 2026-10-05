@@ -243,6 +243,40 @@ function RecorderOff({ r, owner }) {
       {Rec.offWords(x) + " " + Rec.offAgain(owner)}</div>)}
   </div>;
 }
+// FinCom Bridge 2.3.0 (one bridge for each Windows user on a shared server): where this bridge reads and posts: its
+// Tally's port, the companies open there and the data folder, as its heartbeat says them (nothing when it says none)
+function BridgeWhere({ r }) {
+  const parts = [r.tallyPort ? "Tally port " + r.tallyPort : "", (r.open || []).join(", "), r.dataFolder ? "data folder " + r.dataFolder : ""].filter(Boolean);
+  if (!parts.length) return null;
+  return <span className="note" data-bridge-where="">{parts.join(" · ")}</span>;
+}
+// migration 54: "Changes only", an owner's switch per bridge: it reads Tally's changes and never takes a posting; the Post
+// screen never offers it. Staff see the state only; an older cloud (no table) shows nothing
+function ChangesOnly({ r, owner }) {
+  const p = TCloud.pane;
+  if (p.noTarget || !r.id) return null;
+  const on = !!r.changesOnly;
+  return <span className="note" data-changes-only="" data-changes-on={on ? "" : undefined}>
+    {on ? <span className="tag warn">Changes only: never posts</span> : "Reads and posts"}
+    {owner && <> <button className="btn small" data-changes-only-switch="" disabled={!!(p.ctl && p.ctl.busy)} onClick={() => TCloud.changesOnly(r, !on)}>{on ? "Allow posting" : "Changes only"}</button></>}
+  </span>;
+}
+// migration 54: the members who post through this bridge (an owner links them; a member's postings go through their own
+// bridge by default). Staff see the names only
+function MemberLink({ r, owner }) {
+  const p = TCloud.pane;
+  if (p.noTarget || !r.id) return null;
+  const members = (Cloud.st && Cloud.st.members) || [], name = (uid) => { const m = members.find((x) => x.user_id === uid); return m ? (m.name || m.email || uid) : uid; };
+  const linked = TCloud.linkedTo(r), others = members.filter((m) => m.active !== false && !linked.includes(m.user_id));
+  if (!owner && !linked.length) return null;
+  return <span className="note" data-member-link="">
+    {"Posts for: " + (linked.length ? linked.map(name).join(", ") : "nobody linked yet")}
+    {owner && linked.map((uid) => <button key={uid} className="linkbtn" data-member-unlink={uid} onClick={() => TCloud.linkMember(uid, null)}>{" (unlink " + name(uid) + ")"}</button>)}
+    {owner && !r.changesOnly && others.length > 0 && <> <select data-member-link-pick="" aria-label={"Link a member to " + TCloud.bridgeWords(r)} value="" disabled={!!(p.ctl && p.ctl.busy)}
+      onChange={(ev) => ev.target.value && TCloud.linkMember(ev.target.value, r)}>
+      <option value="">Link a member…</option>{others.map((m) => <option key={m.user_id} value={m.user_id}>{m.name || m.email || m.user_id}</option>)}</select></>}
+  </span>;
+}
 function BridgeLines({ rows, latest }) {
   const [open, setOpen] = useState(false);
   const owner = S.account && S.account.me && S.account.me.role === "owner";
@@ -251,12 +285,13 @@ function BridgeLines({ rows, latest }) {
   const rel = latest ? (p.releases || []).find((x) => x.version === latest) : null, piloting = !!(rel && !rel.withdrawn_at && (rel.approved_at || rel.pilot_started_at));
   // the computer's main bridge, else its newest
   const byDev = new Map();
-  rows.forEach((r) => { const k = r.device.id, h = byDev.get(k); if (!h || (r.main && r.go && !(h.main && h.go)) || (r.go && !h.go)) byDev.set(k, r); });
+  // 2.3.0: one line per computer and Windows user ("<PC> · <Windows user>"): each user's bridge on a shared server
+  rows.forEach((r) => { const k = r.device.id + "|" + String(r.user || "").toLowerCase(), h = byDev.get(k); if (!h || (r.main && r.go && !(h.main && h.go)) || (r.go && !h.go)) byDev.set(k, r); });
   return <div className="pane" data-bridge-lines="" data-computers="">
     {[...byDev.values()].map((r) => { const st = lineState(r, latest, owner), rd = r.read || { state: r.online ? "reading" : "offline", text: "" };
       const stopped = !!(TCloud.stopFor && TCloud.stopFor(r.device.id)) || !!(r.readStopped && r.readStopped.by);
       const live = r.go && !r.old;
-      return <div key={r.device.id} data-computer={r.device.id} data-read-state={live ? rd.state : "old"} style={{ margin: "4px 0" }}>
+      return <div key={r.device.id + "|" + (r.user || "")} data-computer={r.device.id} data-bridge-user={r.user || ""} data-read-state={live ? rd.state : "old"} style={{ margin: "4px 0" }}>
         <div className="row" data-bridge-line={r.id || "old"} style={{ alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <b>{r.computer}</b><span className="note">·</span><span>{r.user || "—"}</span><span className="note">·</span><span>{live ? "FinCom Bridge " + (r.version || "") : "Older bridge"}</span><span className="note">·</span>
           <span className={"tag " + st.cls} data-bridge-state="">{st.text}</span>
@@ -273,6 +308,8 @@ function BridgeLines({ rows, latest }) {
             : <button className="btn small" data-read-stop={r.device.id} onClick={() => TCloud.readStop(r)}>Stop reading on this computer</button>)}
           {owner && latest && !piloting && vnum(latest) > vnum(r.version) && <button className="btn small" data-release-pilot={r.device.id} onClick={() => TCloud.releasePilot(latest, r)}>{"Try version " + latest + " on this computer"}</button>}
         </div>}
+        {live && <div className="row" data-bridge-per-user="" style={{ alignItems: "center", gap: 8, flexWrap: "wrap", marginLeft: 16 }}>
+          <BridgeWhere r={r} /><ChangesOnly r={r} owner={owner} /><MemberLink r={r} owner={owner} /></div>}
         {live && <RecorderLine r={r} />}
         {live && <RecorderOff r={r} owner={owner} />}
         {live && <div className="row" style={{ alignItems: "center", gap: 8, flexWrap: "wrap", marginLeft: 16 }}><PostSettings r={r} owner={owner} /></div>}
