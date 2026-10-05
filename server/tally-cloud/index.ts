@@ -917,6 +917,11 @@ function cleanRecorderLine(x: any, me: { id: string }): { line?: Record<string, 
   const fidRaw = s(x?.fid, 120), narr = s(x?.narration, 1000);
   const fid = /^[A-Za-z0-9._-]{1,80}$/.test(fidRaw) ? fidRaw : ((narr.match(/TDSDesk:([A-Za-z0-9._-]{1,80})/) || [])[1] || "");
   if (fid && !event.startsWith("ledger_")) { line.fid = fid; if (!xml) line.short = true; }
+  // bridge 2.2.2 (migration 51): the add-on's ids did not belong together (idsMismatch, the add-on's GUID as lineGuid, for
+  // information only), and the bridge's plain reason when the line goes without the entry's body (heldWhy)
+  if (x?.idsMismatch === true) line.idsMismatch = true;
+  const lg = s(x?.lineGuid, 100); if (lg) line.lineGuid = lg;
+  const hw = s(x?.heldWhy, 300); if (hw) line.heldWhy = hw;
   line.payload = { ...line, xmlBytes: xml.length || undefined };
   if (xml && ["created", "altered", "imported"].includes(event)) {
     if (xml.length > MAX_RECORDER_XML) return { bad: "the entry's XML is larger than FinCom takes (" + xml.length + " characters)" };

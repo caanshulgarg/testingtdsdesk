@@ -37,6 +37,10 @@ lines' bodies built as before) go on the queue as one message (tally_recorder_en
 order; a cloud without 47 applies them directly. The beat answers recorderSource (tally_devices.recorder_source; left out
 without the column or for another value). The bridge's own recorder_lines body (tests/fixtures/recorder-lines-2.2.0.json, when
 bridge-go has written it) is fed through.
+Migration 51 (FinCom Bridge 2.2.2; the order now 32 -> ... -> 47 -> 48 -> 49 -> 50 -> 51): a created line with no XML, idsMismatch
+true, lineGuid <company GUID>-00006346 (an entry the copy holds) and heldWhy -> held, never duplicate, held_why = heldWhy, the
+payload keeping idsMismatch / lineGuid / heldWhy; a heldWhy over 300 characters cut to 300; idsMismatch "yes" (not true) not
+kept; a normal line unchanged (no new keys). 50's words for a line with no GUID: "waiting for the entry's details ...".
 Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno)."""
 import os, sys, json, time, hashlib, subprocess, urllib.request, shutil, threading
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -50,7 +54,8 @@ FILES = [os.path.join(SQLDIR, f) for f in ("migration-32-sync-safety.sql", "migr
         [os.path.join(HERE, "fixtures", "migration-34-as-run-on-staging.sql")] + \
         [os.path.join(SQLDIR, f) for f in ("migration-36b-post-acceptance.sql", "migration-37-follow-ups.sql", "migration-36-ledger-rename.sql", "migration-38-post-followups.sql", "migration-39-rename-map-empty-day.sql",
                                            "migration-40-states-carried.sql", "migration-41-day-counts.sql", "migration-42-empty-day-second-read.sql", "migration-43-posting-reply.sql", "migration-44-recorder.sql", "migration-45-bulk-posting.sql", "migration-46-trial-tools.sql",
-                                           "migration-47-recorder-queue-alerts.sql")]
+                                           "migration-47-recorder-queue-alerts.sql", "migration-48-day-cache-once.sql", "migration-49-post-row-flags.sql",
+                                           "migration-50-recorder-held.sql", "migration-51-recorder-ids-mismatch.sql")]
 fails = []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
@@ -128,6 +133,7 @@ try:
         x.update({k: v for k, v in kw.items() if k not in ("narr", "ledger", "cancel")}); return x
     rec = lambda lines, key=KA, bridge=GA: call({"kind": "recorder_lines", "company": "ZZ CO", "version": "2.2.0", "bridge": bridge, "lines": lines}, key)
     st = lambda r: {x.get("line_id"): x.get("state") for x in (r.get("results") or [])}
+    vrow_b = lambda b, g: (db.rows("select day, alter_id, deleted_at, cancelled, origin, fincom_id from tally_vouchers where book_id = %s and guid = %s" % (q(b), q(g))) or [{}])[0]
     vrow = lambda g: (db.rows("select day, alter_id, deleted_at, cancelled, origin, fincom_id from tally_vouchers where book_id = %s and guid = %s" % (q(BOOK), q(g))) or [{}])[0]
     # ---- refused for an unlinked company
     c, r = call({"kind": "recorder_lines", "company": "NOT LINKED", "lines": [line("x", "created", "g0", 1)]})
@@ -171,8 +177,8 @@ try:
     db.sql("insert into tally_month_locks (firm_id, client_id, book_id, month, locked_by) values (%s, 'c1', %s, '2026-06-01', %s)" % (q(FIRM), q(BOOK), q(OWNER)))
     c, r = rec([line("L9", "created", "v4", 48, "20260610", amt=9), line("L10", "exploded", "v5", 49), line("L11", "created", "", 49, amt=1)])
     res = {x["line_id"]: x for x in r.get("results") or []}
-    ok(st(r) == {"L9": "held", "L10": "failed", "L11": "held"} and "month locked" in str(res.get("L9", {}).get("why")) and vrow("v4") == {} and "GUID" in str(res.get("L11", {}).get("why")),
-       "a locked month: held; an unknown event: failed; no GUID: held, never a new row (%s)" % st(r))
+    ok(st(r) == {"L9": "held", "L10": "failed", "L11": "held"} and "month locked" in str(res.get("L9", {}).get("why")) and vrow("v4") == {} and "waiting for the entry's details from FinCom Bridge" in str(res.get("L11", {}).get("why")) and db.one("select count(*) from tally_vouchers where guid = ''") == "0",
+       "a locked month: held; an unknown event: failed; no GUID: held (50's words: waiting for the entry's details), never a new row (%s)" % st(r))
     ok(db.one("select count(*) from tally_recorder_lines where line_id = 'L10'") == "0" and r.get("applied") == 0 and r.get("held") == 2 and r.get("failed") == 1, "the unknown event is not stored; the counts answered")
     # ---- the gap: PC A's lines reach 50 (start 40); PC B says 53 without the add-on
     c, r = rec([line("L12", "created", "v6", 50, amt=5)])
@@ -576,6 +582,33 @@ try:
     ok(c == 200 and ans.get("missing") == 61 and "queued send" in str((ans.get("gap") or {}).get("words")), "R21-H1. the beat says 8063 (the recorder's highest too): still up to 61 not received, never a silent match (%s)" % {k: ans.get(k) for k in ("missing",)})
     ok(db.one("select count(*) from tally_alerts where kind = 'gap' and book_id = %s and device_id = %s and words like '%%61 changes%%not applied%%'" % (q(BO), q(DA))) == "1",
        "R21-H1. a 'gap' alert for ZZ ORDER from PC-A the moment the send failed")
+    # ---------------------------------------------------------------- migration 51 (FinCom Bridge 2.2.2): idsMismatch / lineGuid / heldWhy kept
+    BI, CGI = "51000000-0000-0000-0000-000000000051", "7c5fd9b3-7235-4cbb-b4cd-1124be599189"
+    GI = CGI + "-00006346"
+    newbook(BI, "ZZ IDS")
+    reci = lambda lines: call({"kind": "recorder_lines", "company": "ZZ IDS", "version": "2.2.2", "bridge": dict(GA, version="2.2.2"), "lines": lines})
+    lrow51 = lambda lid: (db.rows("select state, coalesce(held_why, '') as why, payload::text as payload from tally_recorder_lines where book_id = %s and line_id = %s order by id desc limit 1" % (q(BI), q(lid))) or [{}])[0]
+    pl = lambda lid: json.loads(lrow51(lid).get("payload") or "{}")
+    nI = lambda: db.one("select count(*) from tally_vouchers where book_id = %s" % q(BI))
+    c, r = reci([line("I0", "created", GI, 9001, "20260812", amt=500, company_guid=CGI, master_id="25414")])
+    ok(c == 200 and st(r) == {"I0": "applied"} and vrow_b(BI, GI).get("alter_id") == "9001", "51. the copy holds the entry of GUID ...-00006346 (%s)" % st(r))
+    HW = "Tally's voucher with MasterID 25683 is a Payment of 12-Aug-2026, not this Journal of 01-Oct-2026"
+    n0 = nI()
+    c, r = reci([line("I1", "created", "", None, "20261001", company_guid=CGI, master_id="25683", vch_type="Journal", vch_no="J-1", idsMismatch=True, lineGuid=GI, heldWhy=HW)])
+    lr, p1 = lrow51("I1"), pl("I1")
+    ok(c == 200 and st(r) == {"I1": "held"} and lr.get("state") == "held" and lr.get("why") == HW and nI() == n0 and vrow_b(BI, GI).get("alter_id") == "9001",
+       "51-1. idsMismatch true, lineGuid ...-00006346 (the copy holds it), no XML: held (never duplicate), held_why = the bridge's heldWhy, the copy unchanged (%s; %r)" % (st(r), lr.get("why")))
+    ok(p1.get("idsMismatch") is True and p1.get("lineGuid") == GI and p1.get("heldWhy") == HW, "51-1. the payload keeps idsMismatch / lineGuid / heldWhy (%s)" % {k: p1.get(k) for k in ("idsMismatch", "lineGuid", "heldWhy")})
+    long_ = "x" * 280 + " the bridge's reason goes on and on past three hundred characters" + "y" * 100
+    c, r = reci([line("I2", "created", "", None, "20261001", company_guid=CGI, master_id="25684", vch_type="Journal", vch_no="J-2", idsMismatch="yes", lineGuid=GI, heldWhy=long_)])
+    lr, p2 = lrow51("I2"), pl("I2")
+    ok(c == 200 and lr.get("state") == "held" and p2.get("heldWhy") == long_[:300] and len(lr.get("why", "")) == 300 and lr.get("why") == long_[:300],
+       "51-2. a heldWhy over 300 characters: cut to 300 (payload %d, held_why %d)" % (len(p2.get("heldWhy") or ""), len(lr.get("why", ""))))
+    ok("idsMismatch" not in p2 and p2.get("lineGuid") == GI, "51-2. idsMismatch \"yes\" (not true): not kept (%s)" % {k: p2.get(k) for k in ("idsMismatch", "lineGuid")})
+    c, r = reci([line("I3", "created", CGI + "-00006400", 9002, "20261002", amt=40, company_guid=CGI, master_id="25600")])
+    p3 = pl("I3")
+    ok(c == 200 and st(r) == {"I3": "applied"} and not any(k in p3 for k in ("idsMismatch", "lineGuid", "heldWhy")),
+       "51-3. a normal line: unchanged, applied, no new keys in its payload (%s)" % sorted(p3))
 finally:
     if fn: fn.terminate()
     db.stop()
