@@ -1,7 +1,7 @@
 FINCOM BRIDGE 2.2.1 - TEST SHEET (NWS144, staging)
 
 File:        FinComBridge-Setup-2.2.1.exe
-Fingerprint: (filled in when the setup is built; compare with the .sha256 file next to the setup)
+Fingerprint: SHA-256 90c35be9509370ea4474ca3ee11385384c4677776662e0a901ba6448478d602c (FinComBridge-Setup-2.2.1.exe; compare with the .sha256 file next to the setup)
 Link:        https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.2.1.exe
 
 What 2.2.1 changes: a NEW entry you save in Tally now reaches FinCom as Created, with Tally's own GUID and the whole
