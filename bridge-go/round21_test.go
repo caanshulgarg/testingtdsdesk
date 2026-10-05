@@ -315,6 +315,10 @@ func TestBeatCompaniesFixture(t *testing.T) {
 	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)
 	enc.SetIndent("", "  ")
+	// 2.3.0: the stand Tally's port changes every run; the fixture keeps Tally's usual port, so it does not change by itself
+	if toInt(b["tallyPort"]) > 0 {
+		b["tallyPort"] = 9000
+	}
 	if err := enc.Encode(b); err != nil {
 		t.Fatal(err)
 	}
@@ -548,7 +552,7 @@ func TestAddonAnyCompany(t *testing.T) {
 
 // --- C, D: the version, and the sheets name no company
 func TestVersionAndSheets2110(t *testing.T) {
-	if BridgeVersion != "2.2.4" { // 2.2.4: Tally's answers read with or without TYPE attributes, CMPINFO's counters never objects
+	if BridgeVersion != "2.3.0" { // 2.3.0: one bridge per Windows user, deletes and cancels by GUID, the bridge proves itself
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	for _, f := range []string{"../docs/bridge-2.1.10-test-sheet.txt", "../docs/recorder-trial-sheet.txt"} {

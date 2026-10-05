@@ -138,13 +138,19 @@ try:
     ok(c == 200, "and may take it (%s)" % c)
     # the bridge's menu: Switch to main bridge (a second Go install takes over)
     dev["main_bridge"] = None
-    other = dict(GO, id="go-aaaaaaaaaaaa", user="tally2")
+    other = dict(GO, id="go-aaaaaaaaaaaa")   # the same Windows user's second install (the main-bridge rule holds within ONE Windows user)
     c, r = call({"kind": "make_main", "shadow": True, "version": "2.1.0", "bridge": other})
     ok(c == 200 and dev.get("main_bridge") == "go-aaaaaaaaaaaa", "Switch to main bridge from a bridge's menu records it as the main one")
     c, r = call({"kind": "make_main", "version": "1.15.0"})
     ok(c == 400 and dev.get("main_bridge") == "go-aaaaaaaaaaaa", "1.15.0 cannot make itself the main bridge")
+    # its line, as its own beats put it there (the main-bridge rule compares the Windows users of the two lines)
+    dev["info"]["bridges"].setdefault("go-aaaaaaaaaaaa", {"at": dev["info"]["bridges"][GO["id"]]["at"], "computer": "NWS144", "user": GO["user"], "mode": "test"})
     c, r = call({"kind": "beat", "version": "2.1.0", "bridge": main, "tally": True})
-    ok(r.get("notMain") is True and r.get("posts") == 0, "and the first 2.1.0 is then told it is not the main one")
+    ok(r.get("notMain") is True and r.get("posts") == 0, "and the first 2.1.0 (the same Windows user) is then told it is not the main one")
+    # the owner's rule of 05-Oct-2026: another Windows user's main bridge on the same computer key stops nobody
+    dev["info"]["bridges"]["go-aaaaaaaaaaaa"]["user"] = "tally2"
+    c, r = call({"kind": "beat", "version": "2.1.0", "bridge": main, "tally": True})
+    ok(c == 200 and not r.get("notMain"), "#7. another Windows user's main bridge (tally2) on the same key: this bridge still posts (%s)" % r.get("notMain"))
     # posting updates (02-Oct-2026): each entry's state kept; a cancelled or vanished posting is told to the bridge
     dev["main_bridge"] = None
     c, r = call({"kind": "posts_update", "version": "2.1.0", "bridge": main, "id": "p-1", "status": "taken", "done": 0, "message": "Waiting for Tally: ZZ CO is not open",

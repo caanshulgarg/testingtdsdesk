@@ -23,7 +23,7 @@ concurrency:
 jobs:
   bridge-linux:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: bridge-go
@@ -44,8 +44,8 @@ jobs:
       - name: go vet (Windows)
         run: GOOS=windows go vet ./...
       - name: go test
-        # the suite takes about 9.5 minutes on the runner: go test's own 10-minute default is too close
-        run: go test -count=1 -timeout 14m ./...
+        # the suite takes about 12 minutes (2.3.0, 05-Oct-2026; 9.5 at 2.2.4): go test's own 10-minute default is too close
+        run: go test -count=1 -timeout 25m ./...
       - name: Size and allow-list tests, by name (docs/RELEASE-CHECKLIST.md)
         # Until size_test.go is in git this step only says so: the tests are being written, and a vacuous "ok" (no test
         # matched) must not pass for them. Once it is there, the size test (and, with allowlist_test.go, the allow-list
@@ -67,7 +67,7 @@ jobs:
   # fails here even when the plain run passes
   bridge-linux-typed:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: bridge-go
@@ -81,7 +81,7 @@ jobs:
           go-version-file: bridge-go/go.mod
           cache-dependency-path: bridge-go/go.sum
       - name: go test, the stand Tally typed as TallyPrime 7.1
-        run: go test -count=1 -timeout 14m ./...
+        run: go test -count=1 -timeout 25m ./...
 
   app:
     runs-on: ubuntu-24.04

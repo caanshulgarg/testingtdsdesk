@@ -29,7 +29,9 @@
 //    reqs:{day, last:{kind, ms, at}, longest:{kind, ms, at}, over20, n} and readStopped:{by: self|fincom, reason, at}|null
 //    (kept in info.beat and its info.bridges entry), and the answer carries readStop:{by:"fincom", reason, at}|null
 //    (Stop reading from FinCom, for this computer or all of the firm's), readResume:true once after a Resume, and
-//    release:{version, allowed} (the version this computer may install; none without a release row). Without
+//    release (the owner's rule of 05-Oct-2026, migration 54): {newest:true, allowed:true, held:[versions], version?} (the
+//    newest version goes to every computer by itself, except those the owner held or withdrew) or {version, allowed:true,
+//    rollback:true} (the owner's "Roll back to <version>"). Without
 //    migration-35 none of the three is said. Older bridges ignore them. Round 2 (migration-34): the beat also carries
 //    allowlist:{measured, hash} (every Tally request on the bridge's allow-list timed, and which list); kept with the
 //    beat and, for the pilot computer, as evidence on the release (approval waits for measured)
@@ -225,8 +227,12 @@ function bridgeOf(dev: any, body: any, shadow: boolean) {
   const b = body?.bridge && typeof body.bridge === "object" ? body.bridge : null;
   const id = b && /^go-[0-9a-f]{6,32}$/.test(String(b.id || "")) ? String(b.id) : "v1";
   const hello = (dev?.info && typeof dev.info === "object") ? dev.info : {};
+  const port = (v: unknown) => { const n = Math.floor(Number(v)); return n > 0 && n <= 65535 ? n : null; };
   return { id, entry: { at: new Date().toISOString(), version: s(body?.version, 40) || s(b?.version, 40),
-    computer: s(b?.computer, 60) || (id === "v1" ? s(hello.computer, 60) : ""), user: s(b?.user, 60) || (id === "v1" ? s(hello.user, 60) : ""),
+    computer: s(b?.computer, 60) || (id === "v1" ? s(hello.computer, 60) : ""), user: s(b?.user, 60) || s(body?.windowsUser, 60) || (id === "v1" ? s(hello.user, 60) : ""),
+    // FinCom Bridge 2.3.0 (one bridge per Windows user on a shared server): its own local port, its Tally's port and data
+    // folder (tally.ini's Data), for the Tally page's "<PC> · <Windows user>" line; null / "" when not said
+    port: port(body?.bridgePort ?? b?.port), tallyPort: port(body?.tallyPort), dataFolder: s(body?.dataFolder, 260),
     mode: shadow ? "test" : "main", runMode: ["user", "service", "window"].includes(b?.runMode) ? b.runMode : "",
     tally: !!body?.tally, tallyState: ["open", "busy", "closed"].includes(body?.tallyState) ? body.tallyState : (body?.tally ? "open" : "closed"),
     open: (Array.isArray(body?.open) ? body.open : []).slice(0, 50).map((x: unknown) => s(x, 200)),
@@ -458,16 +464,65 @@ function cleanAllowlist(x: any) {
   if (!x || typeof x !== "object" || Array.isArray(x)) return null;
   return { measured: x.measured === true, hash: typeof x.hash === "string" ? x.hash.slice(0, 80) : "" };
 }
-// the bridges heard from, with this one brought up to date: at most 12, none silent for more than 60 days
+// the bridges heard from, with this one brought up to date: at most 200 (the owner's rule of 05-Oct-2026: no limit by
+// user or number of bridges; was 12), none silent for more than 60 days
 function bridgesWith(info: any, id: string, entry: any) {
   const old = info?.bridges && typeof info.bridges === "object" ? info.bridges : {};
   const cut = Date.now() - 60 * 86400000;
   const kept = Object.entries({ ...old, [id]: entry }).filter(([, v]: any) => Date.parse(v?.at || "") > cut)
-    .sort((a: any, b: any) => String(b[1].at).localeCompare(String(a[1].at))).slice(0, 12);
+    .sort((a: any, b: any) => String(b[1].at).localeCompare(String(a[1].at))).slice(0, 200);
   return Object.fromEntries(kept);
 }
-// may this bridge post? Only the main one; with none chosen, any bridge not in test mode (as before)
-function mayPost(dev: any, id: string) { return !dev?.main_bridge || dev.main_bridge === id; }
+// may this bridge post? The owner's rule of 05-Oct-2026 (migration 54's tally_bridge_may_post): the main-bridge rule holds
+// only among ONE Windows user's bridges. The main one chosen (tally_devices.main_bridge) stops only the other bridges of
+// its own Windows user on that key; on a key shared by several Windows users (1.15.0's settings carried over), another
+// user's main bridge stops nobody. user: this bridge's Windows user (its beat's), else as its line says
+const winUser = (v: unknown) => String(v ?? "").trim().toLowerCase();
+function mayPost(dev: any, id: string, user?: string) {
+  const m = dev?.main_bridge;
+  if (!m || m === id) return true;
+  const bs = dev?.info?.bridges && typeof dev.info.bridges === "object" ? dev.info.bridges : {};
+  if (!bs[m]) return true;
+  return winUser(bs[m].user) !== winUser(user !== undefined ? user : bs[id]?.user);
+}
+// a posting naming no bridge (queued before migration 54) is the key's main bridge's, as before: the main one chosen, else any
+function isMain(dev: any, id: string) { return !dev?.main_bridge || dev.main_bridge === id; }
+// migration 54 (FinCom Bridge 2.3.0): the owner's "Changes only" for a bridge (tally_bridge_prefs): it reads Tally's changes
+// and is never given a posting. False on a cloud without the table
+const CHANGES_ONLY = "This bridge is set to changes only in FinCom (Tally page): it reads Tally's changes and never posts.";
+async function changesOnly(dev: any, id: string) {
+  const { data, error } = await db.from("tally_bridge_prefs").select("changes_only").eq("device_id", dev.id).eq("bridge_id", id).maybeSingle();
+  return !error && data?.changes_only === true;
+}
+// review M-B (migration 54): a bridge refused postings (not the main one, changes only, test mode) never leaves a posting
+// waiting for ever: the computer's waiting postings that no bridge of it may take are moved to its bridge that may post,
+// else failed in plain words (tally_post_rescue; never to another computer key). Never fails the call; a cloud without
+// the function: as before
+async function rescuePosts(dev: any) {
+  const { error } = await db.rpc("tally_post_rescue", { p_device: dev.id });
+  if (error && error.code !== "PGRST202" && !missingFn(String(error.message || ""))) console.error("tally-ingest: tally_post_rescue", dev.id, error.message);
+}
+// the waiting postings this bridge may take: those naming it (tally_post_jobs.target_bridge), and those naming none when it
+// is the computer's main bridge; a cloud without migration 54 (no column): every waiting posting of the computer, when main
+async function postsFor(dev: any, id: string, main: boolean) {
+  const { data, error } = await db.from("tally_post_jobs").select("id, target_bridge").eq("device_id", dev.id).eq("status", "waiting");
+  if (error) {
+    if (!main) return 0;
+    const { count } = await db.from("tally_post_jobs").select("id", { count: "exact", head: true }).eq("device_id", dev.id).eq("status", "waiting");
+    return count || 0;
+  }
+  return (data || []).filter((j: any) => j.target_bridge === id || (!j.target_bridge && main)).length;
+}
+// migration 55 (the owner's decision B, 05-Oct-2026): the checks "Not in Tally - post again" asks of this bridge (its
+// computer's postings that name it, or name none when it is the main one): the company, the entry and its voucher. A cloud
+// without 55 (or any error): none, as before
+async function checksFor(dev: any, id: string, main: boolean) {
+  try {
+    const { data, error } = await db.rpc("tally_post_checks_for", { p_device: dev.id, p_bridge: id, p_main: main });
+    return !error && Array.isArray(data) ? data.slice(0, 20) : [];
+  } catch (_) { return []; }
+}
+
 
 // FinCom Bridge 2.1.5's self-watch in its beat (plan item 10): the last request, the longest today (kind and
 // milliseconds), how many took over 20 s and how many there were; and whether it stopped reading (by itself, or told to
@@ -514,12 +569,20 @@ async function bridgeControl(dev: any, firm: string, me: { id: string; entry: an
       }
     }
     const rows = rl.error ? [] : (rl.data || []).filter((r: any) => VERSION.test(String(r?.version || "")));
+    if (!rl.error) {
+      // the owner's rule of 05-Oct-2026 (migration 54): no pilot, no approval. The newest version goes to every computer
+      // by itself ({newest, allowed}: the newest on FinCom's signed list, latest.json; version: the newest a row names
+      // that is not held, for an older bridge that needs one named), except the versions the firm's owner HELD or
+      // withdrew (held); the owner's "Roll back to <version>" (tally_bridge_rollbacks, not cleared) instead names that
+      // version as a rollback. A cloud without migration 54 (no tally_bridge_rollbacks): no rollback
+      const blocked = (r: any) => !!(r.held_at || r.withdrawn_at);
+      const held = [...new Set(rows.filter(blocked).map((r: any) => String(r.version)))].sort(newer);
+      const free = rows.filter((r: any) => !blocked(r)).sort((a: any, b: any) => newer(b.version, a.version))[0];
+      const rbq = await db.from("tally_bridge_rollbacks").select("version, set_at").eq("firm_id", firm).is("cleared_at", null);
+      const rb = rbq.error ? null : (rbq.data || []).filter((x: any) => VERSION.test(String(x?.version || ""))).sort((a: any, b: any) => String(b.set_at || "").localeCompare(String(a.set_at || "")))[0];
+      out.release = rb ? { version: rb.version, allowed: true, rollback: true } : { newest: true, allowed: true, held, ...(free ? { version: free.version } : {}) };
+    }
     if (rows.length) {
-      // the newest version this computer may install: approved for all, or this computer is its pilot (started);
-      // none allowed: the newest there is, not allowed
-      const may = rows.filter((r: any) => r.approved_at || (r.pilot_device === dev.id && r.pilot_started_at));
-      const pick = (may.length ? may : rows).slice().sort((a: any, b: any) => newer(b.version, a.version))[0];
-      out.release = { version: pick.version, allowed: may.length > 0 };
       // the pilot computer beating on the version during its pilot: evidence for approval (at most one write each
       // 5 minutes), and a stop by itself on it (approval is then refused)
       const v = String(me.entry?.version || "");
@@ -565,6 +628,22 @@ async function supportPack(firm: string, dev: any, body: any) {
   console.log("tally-ingest support pack", path, String(body.note || "").slice(0, 200));
   return reply(200, { ok: true, path });
 }
+// final review M3: {kind: "own_key", oldKey, bridge}: the bridge, given a new computer key by its member's FinCom page,
+// moves its identity from the old key (shared with another Windows user's bridge) to the new one. The old key must be a
+// key of the same firm, not removed, that FinCom knows; the database checks the rest (tally_bridge_own_key_move: the id
+// bound to the old key under that Windows user, the new key made by a member within 15 minutes, nothing else on it)
+async function ownKey(dev: any, firm: string, body: any) {
+  const me = body?.bridge && typeof body.bridge === "object" ? body.bridge : {};
+  const bid = String(me.id || ""), oldKey = String(body.oldKey || "").trim();
+  if (!/^go-[0-9a-f]{6,32}$/.test(bid)) return reply(400, { ok: false, error: "Not a FinCom Bridge id." });
+  if (!/^fcd_[0-9a-f]{48}$/.test(oldKey)) return reply(400, { ok: false, error: "The old computer key is missing." });
+  const { data: old } = await db.from("tally_devices").select("id, firm_id, revoked").eq("key_hash", await sha256(oldKey)).maybeSingle();
+  if (!old || old.revoked || old.firm_id !== firm || old.id === dev.id) return reply(403, { ok: false, error: "Not moved: the old computer key is not a key of this firm that FinCom knows." });
+  const { data, error } = await db.rpc("tally_bridge_own_key_move", { p_bridge: bid, p_from: old.id, p_to: dev.id, p_user: String(me.user || "").slice(0, 120) });
+  if (error) return (error.code === "PGRST202" || missingFn(String(error.message || ""))) ? reply(409, { ok: false, error: "FinCom's cloud is not ready for this yet (migration 54)." }) : reply(500, { ok: false, error: error.message });
+  console.log("tally-ingest: own_key", bid, old.id, "->", dev.id, JSON.stringify(data));
+  return reply(data && (data as any).ok === false ? 409 : 200, data);
+}
 // a bridge makes itself the main one (its menu: Switch to main bridge): from now on the others on this key do not post
 async function makeMain(dev: any, id: string) {
   if (id === "v1") return reply(400, { ok: false, error: "Only FinCom Bridge 2.x can be made the main bridge from its menu." });
@@ -582,7 +661,10 @@ async function makeMain(dev: any, id: string) {
 //   - companies, ledgers, groups, state: answered, nothing stored.
 async function shadowCall(dev: any, firm: string, body: any) {
   const kind = String(body.kind || "");
-  if (kind === "posts_take" || kind === "posts_update") return reply(403, { ok: false, error: "A bridge in test mode does not post." });
+  if (kind === "posts_take" || kind === "posts_update" || kind === "post_check") {
+    if (kind === "posts_take") await rescuePosts(dev);   // review M-B: a posting for this bridge before it went to test mode is not left waiting
+    return reply(403, { ok: false, error: "A bridge in test mode does not post." });
+  }
   if (kind === "support") return await supportPack(firm, dev, body);
   if (kind === "make_main") return await makeMain(dev, bridgeOf(dev, body, true).id);
   if (kind === "hello") {
@@ -602,6 +684,7 @@ async function shadowCall(dev: any, firm: string, body: any) {
     // a bridge 2.0.0 in test mode sends no name of its own: it is kept in info.shadow only, never in bridge 1.15.0's place
     const info = me.id === "v1" ? { ...prev, ...ctl.info, shadow } : { ...prev, ...ctl.info, shadow, bridges: bridgesWith(prev, me.id, me.entry) };
     await db.from("tally_devices").update({ info }).eq("id", dev.id);
+    if (me.id !== "v1") await rescuePosts(dev);   // review M-B: a bridge now in test mode does not post: its postings are not left waiting
     const tok = dev.wake_token;
     const wake = tok ? { url: URL.replace(/^http/, "ws").replace(/\/+$/, "") + "/realtime/v1/websocket", key: ANON, topic: "tb-" + tok } : null;
     // made the main bridge on FinCom's Tally page: the bridge switches itself over (and 1.15.0 is refused postings already)
@@ -686,8 +769,12 @@ async function bridgeSafety(dev: any, firm: string, body: any) {
   const me = bridgeOf(dev, body, false);
   if (body.kind === "lease_take") {
     const ttl = Math.max(30, Math.min(900, Math.floor(Number(body.ttl) || 120)));
-    const { data, error } = await db.rpc("tally_lease_take", { p_firm: firm, p_book: book, p_holder: me.id, p_device: dev.id, p_ttl: ttl,
-      p_info: { computer: me.entry.computer, user: me.entry.user, version: me.entry.version } });
+    const args = { p_firm: firm, p_book: book, p_holder: me.id, p_device: dev.id, p_ttl: ttl, p_info: { computer: me.entry.computer, user: me.entry.user, version: me.entry.version } };
+    // migration 55 (decision D): the lease's purpose (post / read): a posting finding a read records "want to post", the
+    // reader yields on its renewal; a bridge that says none (older), or a cloud without 55: the 6-argument call as before
+    const purpose = body.purpose === "post" || body.purpose === "read" ? body.purpose : null;
+    let { data, error } = purpose ? await db.rpc("tally_lease_take", { ...args, p_purpose: purpose }) : await db.rpc("tally_lease_take", args);
+    if (error && purpose && (error.code === "PGRST202" || missingFn(String(error.message || "")))) ({ data, error } = await db.rpc("tally_lease_take", args));
     if (error) return notReady(error.message) ? reply(200, { ok: true, noLease: true }) : reply(500, { ok: false, error: error.message });
     return reply(200, data);
   }
@@ -967,6 +1054,9 @@ function cleanRecorderLine(x: any, me: { id: string }): { line?: Record<string, 
   if (x?.idsMismatch === true) line.idsMismatch = true;
   const lg = s(x?.lineGuid, 100); if (lg) line.lineGuid = lg;
   const hw = s(x?.heldWhy, 300); if (hw) line.heldWhy = hw;
+  // bridge 2.3.0 review H1: a cancel / delete the bridge's own Tally does not show happened there (guidHeld): kept held,
+  // never resolved from FinCom's record (guidsFromRecord)
+  if (x?.guidHeld === true && (event === "deleted" || event === "cancelled")) line.guidHeld = true;
   line.payload = { ...line, xmlBytes: xml.length || undefined };
   if (xml && ["created", "altered", "imported"].includes(event)) {
     if (xml.length > MAX_RECORDER_XML) return { bad: "the entry's XML is larger than FinCom takes (" + xml.length + " characters)" };
@@ -993,6 +1083,7 @@ async function recorderLines(dev: any, firm: string, book: string, body: any) {
     else { send.push({ ...c.line, company }); at.push(i); }
   });
   if (send.length) await shortBodies(firm, book, send);
+  const found = send.length ? await guidsFromRecord(book, send, String(dev?.id || ""), me.id) : new Map<string, string>();     // bridge 2.3.0: cancel/delete GUID
   // round 20 (migration 47): more than 50 FULL lines (an entry body read from the add-on's XML; short lines' bodies built from
   // the posting do not count) go on the queue as ONE message and are answered {queued: n} at once; the database's drain
   // (pg_cron every 30 s) applies them in order and Sync activity shows each line's state. Round 21 (review 47/48 H1): ONE
@@ -1011,17 +1102,81 @@ async function recorderLines(dev: any, firm: string, book: string, body: any) {
     if (error && notReady44(error)) return reply(503, { ok: false, notReady: true, error: "The cloud does not take recorder lines yet (migration 44)." });
     if (error) throw dbFail("recorder_lines " + via, error, "The cloud could not store these recorder lines just now; send them again.");
     if (data && typeof data.queued === "number") {
-      send.forEach((l: any, k: number) => { results[at[k]] = { line_id: String(l.line_id ?? ""), state: "queued", why: null }; });
+      send.forEach((l: any, k: number) => { results[at[k]] = { line_id: String(l.line_id ?? ""), state: "queued", why: null, ...(found.has(String(l.line_id ?? "")) ? { guid: found.get(String(l.line_id ?? "")) } : {}) }; });
       const failed = results.filter((r) => r?.state === "failed").length;
       console.log("tally-ingest recorder_lines queued", book, JSON.stringify({ n: send.length, full, failed, msg: data.msg ?? null, behind: data.behind ?? 0 }));
       return reply(200, { ok: true, queued: send.length, failed, msg: data.msg ?? null, ...(data.behind ? { behind: data.behind } : {}), results });
     }
-    ((data as any)?.results || []).forEach((r: any, k: number) => { if (k < at.length) results[at[k]] = { line_id: String(r?.line_id ?? send[k].line_id ?? ""), state: String(r?.state || "failed"), why: r?.why ?? null }; });
+    ((data as any)?.results || []).forEach((r: any, k: number) => {
+      if (k >= at.length) return;
+      const lid = String(r?.line_id ?? send[k].line_id ?? "");
+      results[at[k]] = { line_id: lid, state: String(r?.state || "failed"), why: r?.why ?? null, ...(found.has(lid) ? { guid: found.get(lid) } : {}) };
+    });
   }
   const out: Record<string, unknown> = { ok: true, results };
   for (const k of ["applied", "held", "duplicate", "stale", "failed"]) out[k] = results.filter((r) => r?.state === k).length;
   if (out.held || out.failed) console.log("tally-ingest recorder_lines", book, JSON.stringify({ n: results.length, held: out.held, failed: out.failed, why: results.filter((r) => r && r.state !== "applied" && r.state !== "duplicate").slice(0, 3).map((r) => r.why) }));
   return reply(200, out);
+}
+// FinCom Bridge 2.3.0 (cancel/delete GUID): a real TallyPrime 7.1 writes no GUID on a voucher's delete or cancel line (the
+// add-on's Before/After Delete / Cancel Object), and the bridge sends one only when Tally (a cancel, asked by its MasterID) or
+// its own record gave it. For such a line without a GUID, FinCom's own record: the book's recorder lines under the same
+// company GUID and MasterID that ended applied or duplicate and came WITH Tally's entry under their GUID (body.vouchers
+// holding it): never a placeholder (...-00000000), never a line whose ids did not belong together (idsMismatch), never the
+// GUID a MasterID makes on its own (an entry that came by import or sync keeps another GUID). Exactly one GUID found: the line
+// goes on with it (the bridge's heldWhy dropped; payload.guidFrom), and the answer's result carries guid. Else the line goes
+// as sent: the database holds it with words. No migration: tally_recorder_lines is read through the API. Never fails the call
+// Review H1 (2.3.0): every Windows user's Tally on a computer writes into one shared recorder folder, so another user's
+// bridge reads a line made in a copy of the company in that user's Tally. FinCom's record is therefore only the earlier
+// lines sent by the SAME computer key (device_id) and the SAME bridge (its id, the column bridge) as this call; a line the
+// bridge held because its own Tally does not show the cancel / delete (guidHeld) is never resolved here
+async function guidsFromRecord(book: string, send: Record<string, any>[], device: string, bridge: string) {
+  const found = new Map<string, string>();
+  const want = send.filter((l) => (l.event === "deleted" || l.event === "cancelled") && !l.object_guid && l.guidHeld !== true && /^[0-9]{1,10}$/.test(String(l.master_id || "")) && Number(l.master_id) > 0 && l.company_guid);
+  if (!want.length || !device || !bridge) return found;
+  try {
+    const mids = [...new Set(want.map((l) => String(l.master_id)))].slice(0, 500);
+    const { data, error } = await db.from("tally_recorder_lines").select("id, object_guid, master_id, company_guid, state, event, body, payload, device_id, bridge")
+      .eq("book_id", book).eq("device_id", device).eq("bridge", bridge).in("master_id", mids).in("state", ["applied", "duplicate"]).in("event", ["created", "altered", "imported"]).order("id", { ascending: false }).limit(2000);
+    if (error || !Array.isArray(data)) { console.log("tally-ingest recorder_lines: cancel/delete GUID: FinCom's record not read", book, String(error?.message || "").slice(0, 200)); return found; }
+    for (const l of want) {
+      const gs = new Map<string, number | string>();
+      // the lines BEFORE it in this same call that carry Tally's entry under their GUID (an alteration and its delete sent
+      // together): as the stored ones
+      for (const e of send) {
+        if (e === l) break;
+        const g = String(e.object_guid || "");
+        if (!["created", "altered", "imported"].includes(String(e.event)) || String(e.master_id || "") !== String(l.master_id)) continue;
+        if (String(e.company_guid || "").toLowerCase() !== String(l.company_guid).toLowerCase() || !g || /-0{8}$/.test(g) || e.idsMismatch === true) continue;
+        if (Array.isArray(e.vouchers) && e.vouchers.some((v: any) => v?.guid === g) && !gs.has(g)) gs.set(g, "sent with it (" + String(e.line_id || "") + ")");
+      }
+      for (const r of data as any[]) {
+        const g = String(r?.object_guid || "");
+        if (String(r?.device_id || "") !== device || String(r?.bridge || "") !== bridge) continue;     // review H1: this computer key's and this bridge's only
+        if (String(r?.master_id || "") !== String(l.master_id) || String(r?.company_guid || "").toLowerCase() !== String(l.company_guid).toLowerCase()) continue;
+        if (!g || /-0{8}$/.test(g) || r?.payload?.idsMismatch === true || String(r?.payload?.idsMismatch || "").toLowerCase() === "true") continue;
+        if (!(Array.isArray(r?.body?.vouchers) && r.body.vouchers.some((v: any) => v?.guid === g))) continue;     // Tally's entry came with it
+        if (!gs.has(g)) gs.set(g, Number(r.id));
+      }
+      const lid = String(l.line_id || ""), verb = l.event === "deleted" ? "delete" : "cancel";
+      if (gs.size !== 1) {
+        console.log("tally-ingest recorder_lines: cancel/delete GUID: line " + lid + ", " + verb + " of mid " + l.master_id + ": " + (gs.size ? gs.size + " different GUIDs in FinCom's record: not told" : "not in FinCom's record") + "; held", book);
+        continue;
+      }
+      const [g, rid] = [...gs.entries()][0];
+      const made = String(l.company_guid) + "-" + Number(l.master_id).toString(16).padStart(8, "0");
+      l.object_guid = g; delete l.heldWhy;
+      const src = typeof rid === "number" ? "recorder line " + rid : "the line " + rid.replace(/^sent with it \(|\)$/g, "") + " sent with it";
+      const pl = { ...(l.payload || {}), object_guid: g, guidFrom: "FinCom's copy: " + src };
+      delete (pl as any).heldWhy; l.payload = pl;
+      found.set(lid, g);
+      console.log("tally-ingest recorder_lines: cancel/delete GUID: line " + lid + ", " + verb + " of mid " + l.master_id + ": GUID from FinCom's record (" + src + "): " + g +
+        (g.toLowerCase() === made.toLowerCase() ? "; the GUID its MasterID makes agrees" : "; not the GUID its MasterID makes"), book);
+    }
+  } catch (e) {
+    console.log("tally-ingest recorder_lines: cancel/delete GUID: FinCom's record not read", book, String((e as Error)?.message || e).slice(0, 200));
+  }
+  return found;
 }
 // migration 45: the short lines' entries from FinCom's own posted XML (tally_post_xml_for: the live, accepted posting of
 // each FinCom id for this firm and book), read with parse.js as a day book is, the line's GUID and AlterID overriding (the
@@ -1568,19 +1723,30 @@ async function queueJob(firm: string, client: string, book: string, user: string
 // company, on that computer's own Realtime channel (Realtime's broadcast API: no table, function or SQL is needed); the
 // time is also kept in tally_devices.info (opened, activityAt) for the heartbeat's answer, the fallback when the channel
 // is down. "active": FinCom in use (a page says so every few minutes at most), so the nightly catch-up waits.
-async function wakeFor(firm: string, body: any) {
+// The owner's rule of 05-Oct-2026 (#14, as migration 54's tally_want_update): "open" and "ledgers" wake the company's own
+// computer (tally_companies.device_id), every computer key of the firm (not removed) one of whose bridges has the
+// company open, and the caller's own keys (created_by): each user's bridge on a shared server is its own key
+const coName = (v: unknown) => String(v ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+function openOn(d: any) {
+  const bs = d?.info?.bridges && typeof d.info.bridges === "object" ? d.info.bridges : {}, out = new Set<string>();
+  for (const b of Object.values(bs) as any[]) for (const o of Array.isArray(b?.open) ? b.open : []) out.add(coName(o));
+  return out;
+}
+async function wakeFor(firm: string, body: any, userId = "") {
   const what = body.what === "open" ? "open" : body.what === "active" ? "active" : body.what === "ledgers" ? "ledgers" : "";
   if (!what) return reply(400, { ok: false, error: "Say what: open, active or ledgers." });
   const at = new Date().toISOString();
   let links: { company: string; device_id: string }[] = [];
   if (what === "open" || what === "ledgers") {
     const { data } = await db.from("tally_companies").select("company, device_id").eq("firm_id", firm).eq("client_id", String(body.client || ""));
-    links = (data || []).filter((r: any) => r.device_id) as any;
+    links = ((data || []) as any[]).filter((r: any) => r.device_id || r.company);
     if (!links.length) return reply(200, { ok: true, woken: 0 });
   }
-  let q = db.from("tally_devices").select("*").eq("firm_id", firm);
-  if (what === "open" || what === "ledgers") q = q.in("id", [...new Set(links.map((r) => r.device_id))]);
-  const { data: devs } = await q;
+  const { data: all } = await db.from("tally_devices").select("*").eq("firm_id", firm);
+  // the companies of this client a key is woken for: its own (the company's computer), those open there, all for the caller's own key
+  const cosOf = (d: any) => { const o = openOn(d), mine = !!userId && d.created_by === userId;
+    return [...new Set(links.filter((r) => r.device_id === d.id || mine || o.has(coName(r.company))).map((r) => r.company))]; };
+  const devs = what === "active" ? (all || []) : (all || []).filter((d: any) => cosOf(d).length > 0);
   let woken = 0;
   // 2.1.4: a bill's ledger chooser opened with a list older than the last posting: the computer reads the ledger list
   // ("ledgers", {company, at}); the time kept in info.ledgers for the heartbeat's answer. At most one a minute per
@@ -1591,8 +1757,8 @@ async function wakeFor(firm: string, body: any) {
       const prev = (d.info && typeof d.info === "object") ? d.info : {};
       const led: Record<string, string> = {};
       for (const [k, v] of Object.entries((prev.ledgers && typeof prev.ledgers === "object") ? prev.ledgers : {})) if (Date.parse(String(v)) > Date.now() - 3600000) led[k] = String(v);
-      const cos = links.filter((r) => r.device_id === d.id).map((r) => r.company).filter((c) => !(led[c] && Date.parse(led[c]) > Date.now() - 60000));
-      debounced += links.filter((r) => r.device_id === d.id).length - cos.length;
+      const mineCos = cosOf(d), cos = mineCos.filter((c) => !(led[c] && Date.parse(led[c]) > Date.now() - 60000));
+      debounced += mineCos.length - cos.length;
       if (!cos.length) continue;
       cos.forEach((c) => { led[c] = at; });
       await db.from("tally_devices").update({ info: { ...prev, ledgers: led, activityAt: at } }).eq("id", d.id);
@@ -1604,7 +1770,7 @@ async function wakeFor(firm: string, body: any) {
     const prev = (d.info && typeof d.info === "object") ? d.info : {};
     const opened: Record<string, string> = {};
     for (const [k, v] of Object.entries((prev.opened && typeof prev.opened === "object") ? prev.opened : {})) if (Date.parse(String(v)) > Date.now() - 3600000) opened[k] = String(v);
-    const cos = links.filter((r) => r.device_id === d.id).map((r) => r.company);
+    const cos = what === "open" ? cosOf(d) : [];
     cos.forEach((c) => { opened[c] = at; });
     await db.from("tally_devices").update({ info: { ...prev, opened, activityAt: at } }).eq("id", d.id);
     if (d.wake_token) for (const c of cos) if (await broadcast("tb-" + d.wake_token, "open", { company: c, at })) woken++;
@@ -1644,7 +1810,7 @@ async function userUpload(req: Request, auth: string) {
     console.log("tally-ingest install log from the web", path, user.id, String(body.name || "").slice(0, 100));
     return reply(200, { ok: true, path });
   }
-  if (body.kind === "wake") return await wakeFor(firm, body);
+  if (body.kind === "wake") return await wakeFor(firm, body, user.id);
   const clientId = String(body.client || "");
   const { data: cl } = await db.from("clients").select("id, name, tally_name, gstin, deleted").eq("firm_id", firm).eq("id", clientId).maybeSingle();
   if (!cl || cl.deleted) return reply(404, { ok: false, error: "No such client in this firm." });
@@ -1710,6 +1876,27 @@ Deno.serve(async (req) => {
   let body: any;
   try { body = JSON.parse(await readBody(req)); } catch (e) { return (e as Error).message === "too large" ? reply(413, { ok: false, error: "Too much in one go; send fewer days at a time." }) : reply(400, { ok: false, error: "Bad request" }); }
   const firm = dev.firm_id as string;
+  // final review M3 (migration 54): the bridge moves itself to its new computer key. This call comes with the NEW key; its
+  // body holds the OLD key the bridge id is bound to: only a program holding both keys can ask (a member alone cannot move
+  // a bridge, and no owner is needed for one's own). Answered before the id is bound to the new key
+  if (body?.kind === "own_key") {
+    try { return await ownKey(dev, firm, body); } catch (e) { console.error("tally-ingest own_key", (e as Error).message); return reply(500, { ok: false, error: (e as Error).message }); }
+  }
+  // migration 54 (review M3): a bridge id ("go-…", which the bridge reports itself) belongs to the first computer key that
+  // reported it (tally_bridge_ids); another key naming it (an id copied from another Windows user's settings) is refused,
+  // and nothing it says is kept. A cloud without the function: as before
+  {
+    const bid = body?.bridge && typeof body.bridge === "object" ? String(body.bridge.id || "") : "";
+    if (/^go-[0-9a-f]{6,32}$/.test(bid)) {
+      // Fix 2c: the words (naming the computer and Windows user the id belongs to) go to the bridge, which shows them in
+      // its tray; the database keeps them on this computer's line and one bell alert for the owners
+      const { data: bound, error: be } = await db.rpc("tally_bridge_bind", { p_device: dev.id, p_bridge: bid });
+      if (!be && bound && typeof bound === "object" && bound.own === false) {
+        console.error("tally-ingest: bridge id of another computer", dev.id, bid);
+        return reply(409, { ok: false, idRefused: true, error: String(bound.words || "This computer key cannot use bridge " + bid + ". Ask the firm's owner.").slice(0, 400) });
+      }
+    }
+  }
   // go-bridge (FinCom Bridge 2.0.0 in test mode, beside bridge 1.15.0 on the same computer and key): compared, never kept
   if (body?.shadow === true) {
     try { return await shadowCall(dev, firm, body); } catch (e) { console.error("tally-ingest shadow", body?.kind, (e as Error).message); return reply(500, { ok: false, error: (e as Error).message }); }
@@ -1756,9 +1943,14 @@ Deno.serve(async (req) => {
           // FinCom Bridge 2.1.6 (round 11): the companies this computer posts to (PostOnly); [] when any; absent on an older bridge
           ...(Array.isArray(b.postOnly) ? { postOnly: cleanPostOnly(b.postOnly) } : {}),
           // FinCom Bridge 2.1.8 (round 15, migration 43): the posting settings it applied (postBatchBills, postBatchBank, settingsAt)
-          ...postSettingsApplied(b) };
+          ...postSettingsApplied(b),
+          // FinCom Bridge 2.3.0: the Windows user it works for, its own local port, its Tally's port and data folder
+          windowsUser: s(b.windowsUser, 60), bridgePort: Math.max(0, Math.min(65535, Math.floor(Number(b.bridgePort) || 0))), tallyPort: Math.max(0, Math.min(65535, Math.floor(Number(b.tallyPort) || 0))), dataFolder: s(b.dataFolder, 260) };
         const prevInfo = ((dev as any).info && typeof (dev as any).info === "object") ? (dev as any).info : {};
         const me = bridgeOf(dev, body, false);
+        // migration 54: switched to changes only by an owner (said on the bridge's line and to the bridge)
+        const co = await changesOnly(dev, me.id);
+        if (co) (me.entry as any).changesOnly = true;
         // migration-35: Stop reading from FinCom, Resume, the version it may install (and the pilot's evidence)
         const ctl = await bridgeControl(dev, firm, me, prevInfo);
         const info = { ...prevInfo, ...ctl.info, beat, history: beatHistory(prevInfo, beat), bridges: bridgesWith(prevInfo, me.id, me.entry) };
@@ -1784,8 +1976,12 @@ Deno.serve(async (req) => {
         // set. On a cloud without the columns every field is null; the beat never fails for them
         const settings = { postOnly: Array.isArray((dev as any).post_only) ? (dev as any).post_only : null, postBatchBills: cleanBatch((dev as any).post_batch_bills), postBatchBank: cleanBatch((dev as any).post_batch_bank),
           at: typeof (dev as any).post_settings_at === "string" ? (dev as any).post_settings_at : null };
-        const { count: waiting } = await db.from("tally_post_jobs").select("id", { count: "exact", head: true }).eq("device_id", dev.id).eq("status", "waiting");
-        const posts = mayPost(dev, me.id) ? waiting : 0;
+        // migration 54: only the postings this bridge may take (for it, or naming none when it is the main bridge); none when changes only
+        const may = mayPost(dev, me.id, (me.entry as any).user);
+        if (co || !may) await rescuePosts(dev);
+        // migration 55: a check waiting for this bridge counts as work too (the bridge then asks posts_take, which carries it)
+        // (final review M1: the checks of the postings this bridge took or is named in; with no record, only the key's main bridge)
+        const posts = co ? 0 : await postsFor(dev, me.id, may && isMain(dev, me.id)) + (may ? (await checksFor(dev, me.id, isMain(dev, me.id))).length : 0);
         // fast-sync (bridge 1.15.0): the computer's own Realtime channel, where the database wakes it the moment a
         // posting is queued or an update asked for (migration-13); the heartbeat stays the fallback
         const tok = (dev as any).wake_token;
@@ -1812,25 +2008,65 @@ Deno.serve(async (req) => {
         const rs = (dev as any).recorder_source, recorderSource = rs === "addon" || rs === "alterid" || rs === "both" ? rs : null;
         // FinCom Bridge 2.2.2: the lines held without their entry, asked of Tally again by the bridge (left out when none)
         const heldLines = await heldLinesFor(dev, firm);
-        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(heldLines ? { heldLines } : {}), ...(mayPost(dev, me.id) ? {} : { notMain: true }), ...ctl.out });
+        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(heldLines ? { heldLines } : {}), ...(co ? { notMain: true, changesOnly: true, error: CHANGES_ONLY } : may ? {} : { notMain: true }), ...ctl.out });
       }
       case "make_main": return await makeMain(dev, bridgeOf(dev, body, false).id);
       case "posts_take": {
-        if (!mayPost(dev, bridgeOf(dev, body, false).id)) return reply(403, { ok: false, notMain: true, error: "Another bridge is the main bridge on this computer now (chosen in FinCom); this one reads only and does not post." });
-        const { data, error } = await db.rpc("tally_post_take", { p_device: dev.id });
+        const meB = bridgeOf(dev, body, false), meT = meB.id;
+        // review M-B: refused, but a posting that was for this bridge is moved to the one that may post (or failed in words) first
+        if (!mayPost(dev, meT, (meB.entry as any).user)) { await rescuePosts(dev); return reply(403, { ok: false, notMain: true, error: "Another bridge of the same Windows user is the main bridge on this computer now (chosen in FinCom); this one reads only and does not post." }); }
+        if (await changesOnly(dev, meT)) { await rescuePosts(dev); return reply(403, { ok: false, notMain: true, changesOnly: true, error: CHANGES_ONLY }); }
+        // migration 54: only a posting naming this bridge, or naming none when it is the key's main bridge (#7: on a key
+        // shared with another Windows user whose bridge is the main one, this bridge takes only its own); an older cloud: as before
+        const main = isMain(dev, meT);
+        let { data, error } = await db.rpc("tally_post_take_for", { p_device: dev.id, p_bridge: meT, p_main: main });
+        if (error && (error.code === "PGRST202" || missingFn(String(error.message || "")))) ({ data, error } = main ? await db.rpc("tally_post_take", { p_device: dev.id }) : { data: [], error: null });
         if (error) throw new Error(error.message);
         const j = (data || [])[0];
         // round 7 (F2): the ids of this posting an owner released (Not in Tally) travel with it, so the bridge sends them
         // once and does not mark them accepted from its memory of a first send; none on a cloud without migration 36b
         let released: unknown[] = [];
+        // final review M1 / L2 (migrations 54, 55): handed back after this bridge's "not found": the entries to send again,
+        // and only those (resend_only); the bridge sends nothing else of the posting
+        const resendOnly = j && Array.isArray(j.resend_only) ? j.resend_only.filter((x: unknown) => typeof x === "string" && x).slice(0, 5000) : [];
         if (j) {
           const { data: rel, error: relErr } = await db.from("tally_post_ids").select("entry_id, fincom_id, released_at, released_by, released_why").eq("job_id", j.id).eq("released_by", "owner");
           if (!relErr) released = (rel || []).filter((r: any) => r.released_at).map((r: any) => ({ id: r.entry_id || r.fincom_id, at: r.released_at, by: r.released_by, why: r.released_why }));
         }
-        return reply(200, { ok: true, job: j ? { id: j.id, company: j.company, payload: j.payload, released } : null });
+        // migration 55 (decision B): the checks waiting for this bridge travel with it ([] on a cloud without 55). Final review
+        // M1: only those of the postings it took (or is named in); a posting with no record, only for the key's main bridge
+        const checks = await checksFor(dev, meT, main);
+        return reply(200, { ok: true, job: j ? { id: j.id, company: j.company, payload: j.payload, released, ...(resendOnly.length ? { resendOnly } : {}) } : null, ...(checks.length ? { checks } : {}) });
+      }
+      case "post_check": {
+        // migration 55 (decision B): the bridge looked in Tally for an entry of an uncertain posting ("Not in Tally - post
+        // again"): found (the voucher found), notseen (not in that company on that day) or unable (Tally not asked). The
+        // database decides; it never releases on a report (a member confirms "not there" after looking)
+        const meCB = bridgeOf(dev, body, false), meC = meCB.id;
+        if (!mayPost(dev, meC, (meCB.entry as any).user)) return reply(403, { ok: false, notMain: true, error: "Another bridge of the same Windows user is the main bridge on this computer now (chosen in FinCom); this one reads only and does not post." });
+        if (await changesOnly(dev, meC)) return reply(403, { ok: false, notMain: true, changesOnly: true, error: CHANGES_ONLY });
+        const result = String(body.result || "");
+        // the owner's rule (a duplicate entry must never be possible from this button): notseen (Tally answered for that
+        // company and has no such voucher on that day) never releases; only a member's confirm does (the database).
+        // "notfound" (an earlier word) is taken as notseen
+        if (!["found", "notseen", "notfound", "unable"].includes(result)) return reply(400, { ok: false, error: "The check's result is found, notseen or unable." });
+        const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
+        // final review M1: the database answers only the bridge that took the posting (or is named in it); p_main (the
+        // key's main bridge) counts only for a posting with no record of its bridge
+        const { data, error } = await db.rpc("tally_post_check_report", { p_check: Math.max(0, Math.floor(Number(body.check) || 0)), p_device: dev.id, p_bridge: meC, p_main: isMain(dev, meC),
+          p_company: s(body.company, 200), p_result: result, p_vch: s(body.vch, 60), p_master: s(body.master, 30), p_words: s(body.words, 500) });
+        if (error) return (error.code === "PGRST202" || missingFn(String(error.message || ""))) ? reply(409, { ok: false, error: "FinCom's cloud is not ready for this yet (migration 55)." }) : reply(500, { ok: false, error: error.message });
+        return reply(200, data);
       }
       case "posts_update": {
-        if (!mayPost(dev, bridgeOf(dev, body, false).id)) return reply(403, { ok: false, notMain: true, error: "Another bridge is the main bridge on this computer now (chosen in FinCom); this one reads only and does not post." });
+        const meUB = bridgeOf(dev, body, false), meU = meUB.id;
+        if (!mayPost(dev, meU, (meUB.entry as any).user)) return reply(403, { ok: false, notMain: true, error: "Another bridge of the same Windows user is the main bridge on this computer now (chosen in FinCom); this one reads only and does not post." });
+        // migration 54: a posting for another bridge is never reported by this one (a cloud without the column: as before).
+        // A bridge switched to changes only still reports a posting it took before the switch
+        {
+          const { data: tj, error: te } = await db.from("tally_post_jobs").select("target_bridge").eq("id", String(body.id || "")).eq("device_id", dev.id).maybeSingle();
+          if (!te && tj?.target_bridge && tj.target_bridge !== meU) return reply(403, { ok: false, error: "This posting is for another bridge on this computer; this one does not report it." });
+        }
         const st = ["taken", "running", "done", "failed"].includes(body.status) ? body.status : "running";
         const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
         const int = (v: unknown, max: number) => Math.max(0, Math.min(max, Math.floor(Number(v)) || 0));
@@ -1956,7 +2192,17 @@ Deno.serve(async (req) => {
           for (const x of theirs) if (!mine.some((m) => fid(m.id) === fid(x.id))) out.push(x);
           return out;
         };
-        const mergedResults = merge(results as any[], ownerOf(cur.results)), mergedItems = items ? merge(items as any[], ownerOf(cur.items)) : null;
+        let mergedResults = merge(results as any[], ownerOf(cur.results)), mergedItems = items ? merge(items as any[], ownerOf(cur.items)) : null;
+        // final review M1 / L2: a posting handed back to send only some entries again (resend_only): the bridge reports those;
+        // every other entry's result stands as it was (never rewritten as missing)
+        {
+          const { data: ro, error: roErr } = await db.from("tally_post_jobs").select("resend_only").eq("id", id).eq("device_id", dev.id).maybeSingle();
+          if (!roErr && Array.isArray(ro?.resend_only) && ro.resend_only.length) {
+            const keepOld = (mine: any[], old: any[]) => mine.concat((Array.isArray(old) ? old : []).filter((x) => x && x.id && !mine.some((m) => fid(m.id) === fid(x.id))));
+            mergedResults = keepOld(mergedResults, cur.results);
+            if (mergedItems) mergedItems = keepOld(mergedItems, cur.items);
+          }
+        }
         let stale = false;
         // the review of 2.1.8 (finding 2, the cloud half): a 'failed' update that carries an entry sent with no answer from Tally
         // (outcomeUnknown, or sent / state sent, not ok) is stored done: the posting never goes to 'failed' while an entry may be

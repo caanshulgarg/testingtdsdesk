@@ -81,7 +81,23 @@ func liveBridge(t *testing.T, extra string) (rec string, f *standTally, c *stand
 	standBridge(t, f, c.cfg()+extra)
 	liveResetState()
 	t.Cleanup(liveResetState)
+	liveSeedOwnOpen(b220CoGUID, zz)
 	return rec, f, c
+}
+
+// fix 3: these tests' bridge reads lines its own Tally wrote: the company was open in its own Tally all along (a stretch
+// over every line's time, kept on disk like the bridge's own looks, so a restart keeps it)
+func liveSeedOwnOpen(guid, name string) {
+	from, to := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)
+	live.mu.Lock()
+	liveFresh()
+	for _, k := range []string{liveOwnKey(guid, name), liveOwnKey("", name)} {
+		live.own[k] = &liveOwnSt{name: name, ivs: []liveOwnIv{{from: from, to: to}}}
+	}
+	live.ownAt = to
+	path, text := liveOwnTallyFile(), liveOwnText()
+	live.mu.Unlock()
+	_ = saveFile(path, text)
 }
 
 // the lines the stand cloud took (200 answers only), in order
@@ -357,7 +373,8 @@ func TestLiveOnlyNewest7Days(t *testing.T) {
 	liveAppend(t, filepath.Join(rec, b220CoGUID+".txt"), vchLine("after_delete", "g-trial", "3", "3", ""))
 	liveReadOnce()
 	q := liveQueue()
-	if len(q) != 1 || q[0].guid != b220CoGUID+"-00000002" {
+	// review H1 of 2.3.0: a delete's own GUID is kept aside (guidKeep) until this Tally shows the voucher gone
+	if len(q) != 1 || q[0].guidKeep != b220CoGUID+"-00000002" || q[0].masterId != "2" {
 		t.Fatalf("read: %+v", q)
 	}
 }
@@ -1165,7 +1182,7 @@ func TestRecorderLogsKept30Days(t *testing.T) {
 
 // --- 8. the version, the sheets and the allow-list decision line
 func TestRecorderVersion220Sheets(t *testing.T) {
-	if BridgeVersion != "2.2.4" { // 2.2.4 (Tally's typed fields read); the 2.2.0 sheet stays as it was
+	if BridgeVersion != "2.3.0" { // 2.3.0 (one bridge per Windows user); the 2.2.0 sheet stays as it was
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	sheet := strings.Join(strings.Fields(readText("../docs/bridge-2.2.0-test-sheet.txt")), " ")
@@ -1191,9 +1208,9 @@ func TestRecorderVersion220Sheets(t *testing.T) {
 		t.Error("the 2.2.0 test sheet has neither the fingerprint placeholder nor the setup's SHA-256")
 	}
 	al := readText("../docs/tally-allowlist.md")
-	if !regexp.MustCompile(`not yet measured[^;]*; allowed for 2\.2\.4 only by the owner's decision of \d{4}-\d{2}-\d{2}`).MatchString(al) || !strings.Contains(al, vchByMasterID) ||
+	if !regexp.MustCompile(`not yet measured[^;]*; allowed for 2\.3\.0 (only )?by the owner's (standing )?decision of \d{4}-\d{2}-\d{2}`).MatchString(al) || !strings.Contains(al, vchByMasterID) ||
 		!strings.Contains(al, vchByNumberID) {
-		t.Fatal("docs/tally-allowlist.md: no decision line for 2.2.4, or no FinComVoucherByMaster / FinComVoucherByNumber row")
+		t.Fatal("docs/tally-allowlist.md: no decision line for 2.3.0, or no FinComVoucherByMaster / FinComVoucherByNumber row")
 	}
 }
 

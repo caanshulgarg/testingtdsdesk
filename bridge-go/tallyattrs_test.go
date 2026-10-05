@@ -56,6 +56,7 @@ func realTallyBridge(t *testing.T, extra string, answers map[string]string) (str
 	f.mu.Unlock()
 	noteCompanyGUID(spikeCo, spikeCoGUID)
 	noteStartPoint(spikeCo, spikeCoGUID, 1, 1)
+	liveSeedOwnOpen(spikeCoGUID, spikeCo) // fix 3: the company open in this bridge's own Tally all along
 	return filepath.Join(rec, spikeCoGUID+"-20261002.txt"), f, c
 }
 

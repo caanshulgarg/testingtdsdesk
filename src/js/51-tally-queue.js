@@ -53,7 +53,15 @@ const CloudPost = {
   async run(cid, payload, onProgress, onChecked){
     const id = this.uuid(), sleep = ms => new Promise(r => setTimeout(r, ms));
     const ids = [].concat(payload.masters || [], payload.vouchers || []).map(x => x.id);
-    const r = await TCloud.rpc("tally_post_enqueue", {p_id: id, p_client: cid, p_payload: {masters: payload.masters || [], vouchers: payload.vouchers || [], ledger: payload.ledger || ""}});
+    // FinCom Bridge 2.3.0 (migration 54): the bridge it goes through (the owner's pick, else the member's own): named;
+    // none: the cloud chooses the poster's own bridge, or says what to do
+    const target = typeof TCloud.postTargetFor === "function" ? TCloud.postTargetFor(cid) : "";
+    // the owner's rule of 05-Oct-2026: this browser's own bridge, not linked yet, is linked to the member first
+    if (target && typeof TCloud.linkIfLocal === "function") await TCloud.linkIfLocal(target);
+    const args = {p_id: id, p_client: cid, p_payload: {masters: payload.masters || [], vouchers: payload.vouchers || [], ledger: payload.ledger || ""}};
+    // review M3: the bridge is named with its computer (the cloud checks the bridge id is bound to it)
+    const trow = target ? TCloud.bridgesHeard().find(x => x.id === target) : null;
+    const r = target ? await TCloud.rpc("tally_post_enqueue_to", Object.assign(args, {p_target: target, p_device: trow ? trow.device.id : null})) : await TCloud.rpc("tally_post_enqueue", args);
     // 02-Oct-2026 (B14): the cloud's own check of the company the client may post to: nothing was queued, nothing sent,
     // and it is not Tally's reason; the entries stay waiting
     if (r && !r.ok && r.notAllowed) return {ok: true, company: r.company || payload.company, notAllowed: true, viaCloud: true,

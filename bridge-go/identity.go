@@ -46,7 +46,7 @@ func bridgeIdentity() M {
 	if testMode() {
 		mode = "test"
 	}
-	return M{"id": "go-" + instanceID(), "computer": computerName(), "user": ownerName(), "mode": mode, "runMode": runMode, "version": BridgeVersion}
+	return M{"id": "go-" + instanceID(), "computer": computerName(), "user": ownerName(), "mode": mode, "runMode": runMode, "version": BridgeVersion, "port": toInt(cfg("Port"))}
 }
 
 // the install keeps the id: a test install switched to main (its settings are then bridge 1.15.0's file) stays the same

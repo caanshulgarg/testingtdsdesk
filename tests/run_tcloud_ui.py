@@ -186,8 +186,13 @@ with sync_playwright() as p:
     ok(calls["link"] and calls["link"][-1] == {"p_company": CO, "p_client": "c_vms"}, "a company is linked to the client chosen: " + json.dumps(calls["link"][-1:]))
     # ---------- the computer with Tally connects itself, and links the open client's company, with nothing pressed
     calls["link"].clear()
+    # FinCom Bridge 2.3.0 (the owner's condition): no computer key is made or handed over before the bridge proved itself
+    r = pg.evaluate("""async (co) => { const got = [];
+      Object.assign(Bridge, {on: () => true, up: () => true, openFor: () => ({name: co}), ensureProven: async () => false, call: async (path, body) => { got.push([path, body]); return {ok: true, connected: false, url: ""}; }});
+      Bridge.st.computer = "ACCOUNTS-PC"; TCloud.autoAt = 0; await TCloud.auto(); return got; }""", CO)
+    ok(calls["create"] == 0 and not r, "a bridge that did not prove itself: no computer key made, nothing asked of it (%d keys, %d calls)" % (calls["create"], len(r)))
     r = pg.evaluate("""async (co) => { const got = []; let linked = false;
-      Object.assign(Bridge, {on: () => true, up: () => true, openFor: () => ({name: co}), call: async (path, body) => { got.push([path, body]); if (body) linked = true; return {ok: true, connected: linked, url: linked ? TCloud.ingestUrl() : ""}; }});
+      Object.assign(Bridge, {on: () => true, up: () => true, openFor: () => ({name: co}), ensureProven: async () => true, call: async (path, body) => { got.push([path, body]); if (body) linked = true; return {ok: true, connected: linked, url: linked ? TCloud.ingestUrl() : ""}; }});
       Bridge.st.computer = "ACCOUNTS-PC"; TCloud.autoAt = 0; await TCloud.auto(); TCloud.autoAt = 0; await TCloud.auto(); return got; }""", CO)
     posts = [b for pth, b in r if b]
     ok(calls["create"] == 1 and len(posts) == 1 and posts[0]["key"].startswith("fcd_") and posts[0]["url"].endswith("/functions/v1/tally-ingest"), "the computer is connected by itself, once (%d keys made)" % calls["create"])

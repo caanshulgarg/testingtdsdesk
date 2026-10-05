@@ -198,10 +198,12 @@ func updateLoop() {
 	}
 }
 
-// --- the staged release (plan item 12): no update installs by itself. FinCom's heartbeat answer names the version this
-// computer may take, release: {version, allowed}: the pilot computer is allowed a new version first, every other one
-// only after the owner approves it. Without a release in the last answer (none named, an older cloud, or no answer
-// yet) nothing is installed
+// --- the release: FinCom's heartbeat answer says what this computer may take. The owner's rule of 05-Oct-2026 (migration
+// 54): release: {newest: true, allowed: true, held: [versions]}: the newest version on FinCom's signed list goes to every
+// computer by itself, unless the firm's owner held it (or withdrew it); release: {version, allowed: true, rollback: true}:
+// the owner rolled the bridge back to that version (ownerRollback below; nothing newer installs meanwhile). An older
+// cloud's release: {version, allowed} (plan item 12, the staged release) works as before. Without a release in the last
+// answer (none named, an older cloud, or no answer yet) nothing is installed
 var (
 	relMu   sync.Mutex
 	relNow  M // {version, allowed} from the last heartbeat answer; nil: none
@@ -214,12 +216,46 @@ func setRelease(rel M, seen bool) {
 	relMu.Unlock()
 }
 
-// from the heartbeat's answer: its release, or none
+// from the heartbeat's answer: its release, or none; the owner's rollback acted on (ownerRollback)
 func applyRelease(j M) {
 	if j == nil {
 		return
 	}
 	setRelease(obj(j["release"]), true)
+	ownerRollback(obj(j["release"]))
+}
+
+// the owner's rule of 05-Oct-2026: the firm's owner rolled FinCom Bridge back to a version (FinCom's Tally page; the beat
+// says release: {version, allowed: true, rollback: true}). A bridge newer than that version which keeps exactly it as its
+// previous program puts it back, as the tray's "Roll back to the previous version" does (automatic updates stay on: the
+// owner's rollback holds newer versions back until the owner clears it); one that keeps another version (or none) stays
+// as it is, takes no newer version, and says so once. Tried once a version while the bridge runs
+var rollbackDone = map[string]bool{}
+
+func ownerRollback(rel M) {
+	if rel == nil || !truthy(rel["rollback"]) || !truthy(rel["allowed"]) {
+		return
+	}
+	v := str(rel["version"])
+	if !reBridgeVersion.MatchString(v) || v == BridgeVersion || !newerVersion(BridgeVersion, v) {
+		return
+	}
+	relMu.Lock()
+	done := rollbackDone[v]
+	rollbackDone[v] = true
+	relMu.Unlock()
+	if done {
+		return
+	}
+	pv := readObjFile(filepath.Join(filepath.Dir(exePathFn()), "previous-version.json"))
+	if str(pv["version"]) != v {
+		writeLog("The firm's owner rolled FinCom Bridge back to " + v + " (FinCom's Tally page), but this computer keeps " + or(str(pv["version"]), "no earlier version") +
+			" for a rollback, so it stays on " + BridgeVersion + " and takes no newer version. To go back to " + v + " here, run the setup of " + v + ".")
+		return
+	}
+	if _, err := rollBackBridgeBy("owner"); err != nil {
+		writeLog("The firm's owner rolled FinCom Bridge back to " + v + ", but it could not be put back: " + err.Error())
+	}
 }
 
 // "" when version may be installed on this computer; else why not
@@ -232,6 +268,20 @@ func releaseRefuses(version string) string {
 		return "FinCom has not answered this computer yet"
 	case rel == nil:
 		return "FinCom names no release for this computer"
+	// the owner's rule of 05-Oct-2026: the owner's rollback holds every other version back
+	case truthy(rel["rollback"]) && str(rel["version"]) != version:
+		return "the firm's owner rolled FinCom Bridge back to " + str(rel["version"]) + " on FinCom's Tally page"
+	// the newest version goes to every computer by itself, unless the firm's owner held it
+	case truthy(rel["newest"]) && !truthy(rel["rollback"]):
+		for _, h := range arr(rel["held"]) {
+			if str(h) == version {
+				return "the firm's owner has held version " + version + " on FinCom's Tally page"
+			}
+		}
+		if !truthy(rel["allowed"]) {
+			return "FinCom has not allowed it on this computer"
+		}
+		return ""
 	case str(rel["version"]) != version:
 		return "FinCom names version " + str(rel["version"]) + " for this computer, not " + version
 	case !truthy(rel["allowed"]):
@@ -315,7 +365,11 @@ func rollbackPreview() (M, error) {
 		"A posting going on resumes after the restart; nothing is posted twice."}, nil
 }
 
-func rollBackBridge() (M, error) {
+func rollBackBridge() (M, error) { return rollBackBridgeBy("tray") }
+
+// by: "tray" (anyone at the computer: automatic updates are then turned off) or "owner" (the firm's owner on FinCom's
+// Tally page: they stay on, the owner's rollback holds newer versions back)
+func rollBackBridgeBy(by string) (M, error) {
 	pv, err := rollbackPreview()
 	if err != nil {
 		return nil, err
@@ -352,10 +406,14 @@ func rollBackBridge() (M, error) {
 		_ = os.WriteFile(filepath.Join(dir, "FinComBridge.rolledback.exe"), b, 0o755)
 	}
 	_ = saveFile(filepath.Join(dir, "update-pending.json"), jsonText(M{"from": BridgeVersion, "at": nowS(), "starts": 0, "rollback": true, "sha256": cur}))
-	setCfg("NoAutoUpdate", true)
-	saveConfig()
-	_ = saveFile(filepath.Join(dir, "update-undone.json"), jsonText(M{"version": BridgeVersion, "back": str(pv["version"]), "at": nowS(), "by": "tray"}))
-	writeLog("Rolled back from " + BridgeVersion + " to " + or(str(pv["version"]), "the previous version") + " from the tray icon; automatic updates are off on this computer (NoAutoUpdate); starting again")
+	_ = saveFile(filepath.Join(dir, "update-undone.json"), jsonText(M{"version": BridgeVersion, "back": str(pv["version"]), "at": nowS(), "by": by}))
+	if by == "owner" {
+		writeLog("Rolled back from " + BridgeVersion + " to " + or(str(pv["version"]), "the previous version") + " by the firm's owner (FinCom's Tally page); starting again")
+	} else {
+		setCfg("NoAutoUpdate", true)
+		saveConfig()
+		writeLog("Rolled back from " + BridgeVersion + " to " + or(str(pv["version"]), "the previous version") + " from the tray icon; automatic updates are off on this computer (NoAutoUpdate); starting again")
+	}
 	go rollbackRestart()
 	return M{"ok": true, "version": str(pv["version"])}, nil
 }

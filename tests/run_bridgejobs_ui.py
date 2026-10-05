@@ -2,7 +2,9 @@
 again with the same job number, a bridge that stops answering is waited for, a stopped job is resumed, an old bridge still
 gets the one long /import, one missed status check does not show the bridge as offline, and a posting left over from
 before a reload is reported."""
-import os, json, threading, functools, http.server, urllib.parse
+import os, sys, json, threading, functools, http.server, urllib.parse
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from bridge_proof import ping_body, is_ping
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
 class Q(http.server.SimpleHTTPRequestHandler):
@@ -16,6 +18,7 @@ M = {"version": "1.12.0", "seen": [], "jobs": {}, "dropPost": 0, "dropPoll": 0, 
 def J(route, body, status=200): return route.fulfill(status=status, content_type="application/json", body=json.dumps(body))
 def bridge(route):
     rq = route.request; u = rq.url; path = urllib.parse.urlparse(u).path; qs = urllib.parse.parse_qs(urllib.parse.urlparse(u).query)
+    if is_ping(u): return J(route, ping_body(u, "K" * 32))   # FinCom Bridge 2.3.0 proves itself before anything is sent
     M["seen"].append(rq.method + " " + path + ("?" + urllib.parse.urlparse(u).query if qs else ""))
     if path == "/status":
         if M["statusFail"] > 0: M["statusFail"] -= 1; return route.abort()

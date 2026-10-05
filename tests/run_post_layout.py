@@ -129,10 +129,12 @@ with sync_playwright() as p:
        "E. the same as the bill number: warned and asked again, nothing sent yet (%s)" % warn[:200])
     pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(700)
     ok([c[1]["p_vch"] for c in E("window.__rpc") if c[0] == "tally_post_job_mark_posted"] == ["4861"], "E. a warning, not a block: 'Use 4861 anyway' sends it")
-    # More menu: owner only
+    # More menu: any member who may post (the owner's decision B of 05-Oct-2026: owner or staff); a viewer has none
     ok(pg.locator('#app [data-post-panel="posted"] [data-row-more] [data-release-owner]').count() >= 1 and pg.locator('#app [data-post-panel="posted"] .acts [data-release-owner]').count() == 0, "E. the undo of the posted mark is under More, not a row button")
     E("() => { S.account = {me: {role: 'staff', user_id: '871ad9b4-dec0-47ab-a22f-9184aa7e5694'}, firm: {name: 'Firm'}}; render(); }"); pg.wait_for_timeout(400); tab("posted")
-    ok(pg.locator('#app [data-post-panel="posted"] [data-row-more]').count() == 0 and pg.locator('#app [data-post-panel="posted"] [data-correct-id]').count() == 0, "E. a staff member: no More menu, no correction")
+    ok(pg.locator('#app [data-post-panel="posted"] [data-row-more] [data-release-owner]').count() >= 1, "E. a staff member (decision B): the More menu too")
+    E("() => { S.account = {me: {role: 'viewer', user_id: '871ad9b4-dec0-47ab-a22f-9184aa7e5694'}, firm: {name: 'Firm'}}; render(); }"); pg.wait_for_timeout(400); tab("posted")
+    ok(pg.locator('#app [data-post-panel="posted"] [data-row-more]').count() == 0 and pg.locator('#app [data-post-panel="posted"] [data-correct-id]').count() == 0, "E. a viewer: no More menu, no correction")
     E("() => { S.account = {me: {role: 'owner', user_id: window.__fx.OWNER, name: 'Anshul garg'}, firm: {name: 'Firm'}}; render(); }"); pg.wait_for_timeout(400)
     # ---- G: search on Posted, links, a bank line
     tab("posted"); SB = '#app [data-post-panel="posted"] [data-posted-search]'

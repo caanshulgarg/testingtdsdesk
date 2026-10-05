@@ -816,7 +816,17 @@ func (k *keepRun) step(company string, port int, booksFrom string) error {
 		st["phase"] = "live"
 	}
 	// only one bridge reads or posts a company at a time (a lease held in FinCom's cloud)
-	if ok, who := leaseTake(company); !ok {
+	if ok, h := leaseTakeFor(company, "read"); !ok {
+		who := h.who
+		if h.purpose == "post" {
+			// decision D: another bridge posts to this company (or the lease is kept for its posting): this read waits and
+			// resumes after it, from where it was
+			if !k.told["leasepost:"+company] {
+				k.told["leasepost:"+company] = true
+				writeLog("Keeping " + company + ": another FinCom Bridge (" + who + ") is posting to this company; this one gives way to a posting and resumes after")
+			}
+			return errPreempted
+		}
 		if !k.told["lease:"+company] {
 			k.told["lease:"+company] = true
 			writeLog("Keeping " + company + ": another FinCom Bridge (" + who + ") is reading or posting this company now; this one gives way")

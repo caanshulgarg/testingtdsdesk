@@ -393,7 +393,7 @@ function postStatusFor(co){
       closed: [l.text + ": open TallyPrime there, with " + pl.company + ".", "", null],
       notanswering: [l.text + ": close any message box in Tally there; FinCom carries on by itself.", "", null],
       paused: [l.text + ": resume it from the FinCom Bridge icon there. Update now still reads.", "Update now", () => tallyUpdateNow(co.id)],
-      stopped: [l.text + ". An owner resumes it on the Tally page; posting goes on, Update now does not read until then.", "", null]}[l.state] || [l.text, "", null];
+      stopped: [l.text + ". This is FinCom\u2019s Stop, set by an owner of the firm: an owner resumes it on the Tally page (a bridge that stopped by itself is resumed there by the member whose computer key it is); posting goes on, Update now does not read until then.", "", null]}[l.state] || [l.text, "", null];
     out.problem = p(T[0], T[1], T[2], l.state); return out;
   }
   if (!pl.state && pl.action){ out.problem = p(pl.action + ".", pl.go === "tally" ? "Open the Tally page" : "", pl.go === "tally" ? goTallyPage : null, "bridge"); return out; }
@@ -791,6 +791,11 @@ async function postTestCopies(cid, id, n){
 // refuses anyone but an owner, and the page shows the buttons to owners only. A cloud without 36b says so.
 // owners of the firm alone (the cloud accepts only an active member with role owner; a superadmin who is not one is refused there)
 function postOwner(){ return !!(S.account && ((S.account.me || {}).role === "owner")); }
+// the owner's decision B (05-Oct-2026, migration 55): any member of the firm who may post (owner or staff: the cloud's
+// can_write) settles a posting whose result is uncertain: "Mark posted" (a Tally id) and "Not in Tally - post again"
+// (the FinCom Bridge looks in Tally first; nothing is sent until it finds the entry is not there). A reason is required;
+// the name and time are kept. A superadmin who is not a member, or a viewer, does not
+function postCanSettle(){ const r = S.account && (S.account.me || {}).role; return r === "owner" || r === "staff"; }
 // the posting of FinCom's cloud that holds the entry: the newest naming it (by entry_ids, results or items)
 function postJobOf(cid, id){
   const js = postJobStates(cid).get(String(id));
@@ -800,7 +805,7 @@ function postJobOf(cid, id){
     .find(j => (CloudJobs.idsOf(j) || []).includes(String(id)) || [].concat(j.results || [], j.items || []).some(x => x && String(x.id) === String(id))) || null;
 }
 const PostOwner = {
-  notReady(m){ return /tally_post_job_mark_posted|tally_post_id_release_owner|PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(String(m || "")); },
+  notReady(m){ return /tally_post_job_mark_posted|tally_post_id_release_owner|tally_post_settle_ask|tally_post_check_withdraw|tally_post_check_confirm|PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(String(m || "")); },
   async call(cid, fn, args, done){
     try {
       const r = await TCloud.rpc(fn, args);
@@ -808,8 +813,10 @@ const PostOwner = {
       toast(done);
     } catch (e){
       const m = String((e && e.message) || e);
-      toast(this.notReady(m) ? "FinCom\u2019s cloud is not ready for this yet (migration 36b)." : m.replace(/^ERROR:\s*/i, ""));
+      toast(this.notReady(m) ? "FinCom\u2019s cloud is not ready for this yet (migration " + (fn === "tally_post_settle_ask" || fn === "tally_post_check_withdraw" || fn === "tally_post_check_confirm" ? "55" : "36b") + ")." : m.replace(/^ERROR:\s*/i, ""));
     }
+    if (typeof PostChecks === "object") PostChecks.load(cid, true);
+    if (typeof PostMarks === "object") PostMarks.load(cid, true);
     if (typeof CloudJobs === "object") await CloudJobs.load(true);
     if (typeof PostIds === "object") PostIds.load(cid, true);
     render();
@@ -825,13 +832,15 @@ const PostOwner = {
       body: "<p>" + esc("You typed " + v + ", which is the bill number. Tally's id is the number Tally gives the entry (for example 26301). Use " + v + " anyway?") + "</p>"});
     return !!(a && (a === true || a.ok));
   },
-  async askId(e, title, ok, pre, intro){
+  // why: a reason is required (Mark posted, decision B); a correction carries its own ("Correction: the Tally id is ...")
+  async askId(e, title, ok, pre, intro, why){
+    why = why !== false;
     const a = await askConfirm({title, ok,
       body: "<p>" + intro + "</p>" +
         '<div class="bk-form one"><label><span>Tally id</span><input id="markVch" maxlength="20" inputmode="numeric" placeholder="Digits only, as Tally shows it" value="' + esc(pre || "") + '"></label>' +
-        '<label><span>Note (optional)</span><input id="markNote" maxlength="300" placeholder="Where you saw it"></label></div>',
+        '<label><span>' + (why ? "Reason (kept with your name)" : "Note (optional)") + '</span><input id="markNote" maxlength="300" placeholder="Where you saw it in Tally"></label></div>',
       read: () => ({vch: ((document.getElementById("markVch") || {}).value || "").trim(), note: ((document.getElementById("markNote") || {}).value || "").trim()}),
-      validate: d => this.idCheck(d && d.vch)});
+      validate: d => this.idCheck(d && d.vch) || (!why || (d && d.note) ? "" : "Say where you saw it in Tally (kept with your name and the time).")});
     if (!a || !a.ok) return null;
     if (!(await this.sameAsBill(e, a.data.vch))) return null;
     return a.data;
@@ -859,7 +868,7 @@ const PostOwner = {
   // (tally_post_job_mark_posted: a new row in tally_post_marks, the result's voucher, the id's accepted_vch)
   async correctId(cid, e, job, suggest, was){
     const no = (e.x && e.x.invoiceNo) || e.id;
-    const d = await this.askId(e, "Correct the Tally id of " + no, "Correct the Tally id", suggest || "", "The Tally id kept for this entry" + (was ? " (" + esc(was) + ")" : "") + " is not Tally's own id. Type the id Tally shows for it; FinCom keeps the correction with who made it and when. Nothing is sent to Tally.");
+    const d = await this.askId(e, "Correct the Tally id of " + no, "Correct the Tally id", suggest || "", "The Tally id kept for this entry" + (was ? " (" + esc(was) + ")" : "") + " is not Tally's own id. Type the id Tally shows for it; FinCom keeps the correction with who made it and when. Nothing is sent to Tally.", false);
     if (!d) return;
     const note = ("Correction: the Tally id is " + d.vch + (was ? ", not " + was : "") + (d.note ? " (" + d.note + ")" : "")).slice(0, 300);
     if (!job){
@@ -869,20 +878,49 @@ const PostOwner = {
     }
     await this.call(cid, "tally_post_job_mark_posted", {p_job: job.id, p_id: String(e.id), p_vch: d.vch, p_note: note}, "The Tally id of " + no + " is now " + d.vch + ".");
   },
-  // E: "This entry is not in Tally (undo the posted mark)", owners only, a reason required
+  // the owner's rule (a duplicate entry must never be possible from this button): after the FinCom Bridge did not see the
+  // entry on its day ("notseen"), a member who may post looks in Tally and confirms it is not there, a reason required
+  // (tally_post_check_confirm: the only way it is released and sent again, that entry alone; name and time kept)
+  async confirmNotSeen(cid, e, job){
+    if (!job) return;
+    const no = (e.x && e.x.invoiceNo) || e.id, co = job.company || "the company";
+    const a = await askConfirm({title: no + ": you looked in Tally and it is not there?", ok: "I looked in Tally: not there \u2013 post again", danger: true,
+      body: "<p>" + esc("The FinCom Bridge did not see this entry in " + co + " on its date, but it cannot see other dates. Confirm only after looking in Tally (Day Book, or search the narration TDSDesk:" + String(e.id) + "). It is then sent again, once; your name, the time and the reason are kept.") + "</p>" +
+        '<div class="bk-form one"><label><span>Reason (where you looked in Tally)</span><input id="confirmWhy" maxlength="500" placeholder="Searched TDSDesk:\u2026 in the Day Book"></label></div>',
+      read: () => ({why: ((document.getElementById("confirmWhy") || {}).value || "").trim()}), validate: d => d && d.why ? "" : "Say where you looked in Tally."});
+    if (!a || !a.ok) return;
+    return this.call(cid, "tally_post_check_confirm", {p_job: job.id, p_id: String(e.id), p_why: a.data.why}, no + " is sent again, once.");
+  },
+  // the final review of 2.3.0 (M2): the member who asked for a check, or an owner, withdraws it while it waits
+  // (tally_post_check_withdraw: who, when and why kept); nothing is released or sent
+  async withdrawCheck(cid, ck){
+    if (!ck || !ck.id) return;
+    const a = await askConfirm({title: "Withdraw the check?", ok: "Withdraw the check",
+      body: "<p>The FinCom Bridge stops looking in Tally for this entry. Nothing is released or sent; your name and the time are kept.</p>" +
+        '<div class="bk-form one"><label><span>Reason (optional)</span><input id="withdrawWhy" maxlength="300" placeholder="Found it in Tally myself"></label></div>',
+      read: () => ({why: ((document.getElementById("withdrawWhy") || {}).value || "").trim()})});
+    if (!a || !a.ok) return;
+    return this.call(cid, "tally_post_check_withdraw", {p_check: ck.id, p_why: (a.data && a.data.why) || ""}, "The check is withdrawn; nothing was released or sent.");
+  },
+  // decision B (05-Oct-2026): "Not in Tally - post again", any member who may post, a reason required. With a posting of
+  // FinCom's cloud: tally_post_settle_ask (migration 55): the FinCom Bridge looks in that company in Tally first; found:
+  // marked posted with the voucher found; not there: released and sent again, once; Tally not reachable: it waits and
+  // looks again by itself. Nothing is sent from here. Without one (a bill posted straight to a bridge): undone here
   async release(cid, e, job){
     const no = (e.x && e.x.invoiceNo) || e.id;
-    const a = await askConfirm({title: no + " is not in Tally: undo the posted mark?", ok: "Undo the posted mark", danger: true,
-      body: "<p>You looked in Tally and this entry is not there. FinCom undoes its posted mark and frees its id so it can be posted again; the reason is kept with the entry. Nothing is sent to Tally now.</p>" +
-        '<div class="bk-form one"><label><span>Why (what you saw in Tally)</span><input id="releaseWhy" maxlength="500" placeholder="Not in the Day Book of …"></label></div>',
+    const co = (job && job.company) || "the company";
+    const a = await askConfirm({title: no + ": not in Tally, post it again?", ok: "Not in Tally \u2013 post again", danger: true,
+      body: "<p>" + (job ? "Before anything is sent, the FinCom Bridge looks in " + esc(co) + " in Tally for this entry. If it is there, it is marked posted with Tally\u2019s id; if it is not, it is sent again, once. If Tally cannot be asked now, it waits and looks again by itself. Your name, the time and the reason are kept."
+          : "You looked in Tally and this entry is not there. FinCom undoes its posted mark so it can be posted again; the reason is kept with the entry. Nothing is sent to Tally now.") + "</p>" +
+        '<div class="bk-form one"><label><span>Reason (what you saw in Tally)</span><input id="releaseWhy" maxlength="500" placeholder="Not in the Day Book of …"></label></div>',
       read: () => ({why: ((document.getElementById("releaseWhy") || {}).value || "").trim()}), validate: d => d && d.why ? "" : "Say what you saw in Tally."});
     if (!a || !a.ok) return;
+    if (job) return this.call(cid, "tally_post_settle_ask", {p_job: job.id, p_id: String(e.id), p_why: a.data.why}, "The FinCom Bridge looks in " + co + " in Tally first; " + no + " is sent again only if it is not there.");
     if (!job){
       e.postUndo = {why: a.data.why, at: new Date().toISOString(), by: postMyName()};
       e.exportedAt = null; e.postVerified = false; e.postByReply = false; e.postUnconfirmed = null; e.postError = ""; e.postCheckFailed = null; delete e.goneFromTally;
       Store.saveEntry(cid, e); refreshStats(cid); toast(no + ": the posted mark is undone; it can be posted again."); render(); return;
     }
-    await this.call(cid, "tally_post_id_release_owner", {p_job: job.id, p_id: String(e.id), p_why: a.data.why}, no + " is released; it can be posted again.");
   }
 };
 // one line on the page after a check or a posting ("Already in Tally (voucher no. …)"): S.postNote
@@ -954,11 +992,39 @@ async function postPreview(co, rows, opts){
   const items = rows.filter(r => r.xml).map(r => ({kind: r.kind, id: r.id, xml: r.xml, e: r.e}));
   const nWarn = () => document.querySelectorAll("#confirmBox [data-pv-warn] li").length;
   const a = await askConfirm({title: opts.view ? "Preview: " + (rows[0] ? (rows[0].no || rows[0].party) : "") : "Post " + entries(items.length) + " to " + company + "?", ok: opts.view ? "Close" : "Post", wide: true,
-    body: '<div data-post-preview="" style="max-height:60vh;overflow:auto">' + (opts.view ? "" : '<p style="margin:0 0 8px">Each entry exactly as it goes to Tally, into <b>' + esc(company) + "</b>." + (typeof postThroughWords === "function" && postThroughWords(co) ? " " + esc(postThroughWords(co)) : "") + "</p>") + PostGate.html(items, co, masters, company) + "</div>",
-    onReady: box => { if (opts.view){ const no = box.querySelector('[data-cbx="no"]'); if (no) no.remove(); } else { const n = nWarn(); if (n){ const p = document.createElement("p"); p.className = "bk-warn"; p.setAttribute("data-pv-count", ""); p.textContent = n + " warning" + (n === 1 ? "" : "s") + " above: look at them before posting."; box.querySelector(".cbx .row").before(p); } } }});
+    body: '<div data-post-preview="" style="max-height:60vh;overflow:auto">' + (opts.view ? "" : '<p style="margin:0 0 8px">Each entry exactly as it goes to Tally, into <b>' + esc(company) + "</b>." + (typeof postThroughWords === "function" && postThroughWords(co) ? " " + esc(postThroughWords(co)) : "") + "</p>" + postTargetHtml(co, company)) + PostGate.html(items, co, masters, company) + "</div>",
+    onReady: box => { postTargetWire(box, co, company); if (opts.view){ const no = box.querySelector('[data-cbx="no"]'); if (no) no.remove(); } else { const n = nWarn(); if (n){ const p = document.createElement("p"); p.className = "bk-warn"; p.setAttribute("data-pv-count", ""); p.textContent = n + " warning" + (n === 1 ? "" : "s") + " above: look at them before posting."; box.querySelector(".cbx .row").before(p); } } }});
   if (!a || opts.view) return false;
   PostGate.approve(masters.map(m => m.name), company);
   return true;
+}
+// FinCom Bridge 2.3.0: the confirm step names the bridge that posts: computer · Windows user · company · data folder; an
+// owner may pick another bridge that may post (never one set to changes only). Nothing when FinCom's cloud does not know
+// the bridges (no cloud, or none heard from)
+function postTargetHtml(co, company){
+  if (typeof TCloud !== "object" || !TCloud.on() || typeof TCloud.postThrough !== "function") return "";
+  let r = null, list = [];
+  try { r = TCloud.postThrough(co); list = TCloud.postTargets(); } catch (e){ return ""; }
+  if (!r && !list.length && !(TCloud.pane.devices || []).length) return "";
+  const owner = S.account && S.account.me && S.account.me.role === "owner";
+  // the owner's rule of 05-Oct-2026: no bridge of the poster's own for this company: the words say what to do (never
+  // another person's bridge by chance)
+  let h = r || TCloud.pane.noTarget ? '<p data-post-target="' + esc(r ? r.id : "") + '" style="margin:0 0 8px">Through <b data-post-target-words="">' + esc(r ? TCloud.bridgeWords(r, company) : "the main bridge of the computer that keeps " + company) + "</b>.</p>"
+    : '<p data-post-target="" data-post-target-none="" class="bk-warn" style="margin:0 0 8px"><span data-post-target-words="">' + esc(TCloud.noTargetWords(company)) + "</span></p>";
+  if (owner && !TCloud.pane.noTarget && list.length > 1)
+    h += '<p style="margin:0 0 8px"><label class="note">Post through another bridge: <select data-post-target-pick="" aria-label="The bridge that posts">' +
+      list.map(x => '<option value="' + esc(x.id) + '"' + (r && x.id === r.id ? " selected" : "") + ">" + esc(TCloud.bridgeWords(x, company)) + "</option>").join("") + "</select></label></p>";
+  return h;
+}
+function postTargetWire(box, co, company){
+  const sel = box && box.querySelector("[data-post-target-pick]");
+  if (!sel) return;
+  sel.addEventListener("change", () => {
+    S.postTarget = Object.assign({}, S.postTarget, {[co.id]: sel.value});
+    const r = TCloud.bridgesHeard().find(x => x.id === sel.value), w = box.querySelector("[data-post-target-words]"), p = box.querySelector("[data-post-target]");
+    if (w && r) w.textContent = TCloud.bridgeWords(r, company);
+    if (p) p.setAttribute("data-post-target", sel.value);
+  });
 }
 // "Post N to Tally": the bills ready to post (review of 02-Oct-2026: "Ready to post" is approved bills only; bank lines
 // and sales are posted from their own pages), each shown first as it goes to Tally. only: one bill (Retry of one whose

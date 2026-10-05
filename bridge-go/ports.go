@@ -142,6 +142,10 @@ func tallyIni(exe string) M {
 	if m := group(`(?im)^\s*server\s*port\s*=\s*(\d+)`, t, 1); m != "" {
 		info["port"] = toInt(m)
 	}
+	// 2.3.0: the data folder (Data = ...), for FinCom's Tally page: which Tally, which books
+	if m := group(`(?im)^\s*data\s*=\s*(.+?)\s*$`, t, 1); m != "" {
+		info["data"] = m
+	}
 	return info
 }
 
@@ -267,8 +271,18 @@ func portPlan() (string, []M) {
 	// ports set in the settings are tried first, then any other Tally of yours found now (it may have moved to another
 	// port since): a port is never only remembered. A 0 or an empty list means "find it"
 	if ports, auto := cleanPorts(cfg("TallyPorts")); !auto {
+		// 2.3.0: a port set by hand that Windows shows as another user's Tally (another session) is that user's: it is
+		// marked so, and skipped with OnlyMySession like any other user's Tally
+		found := map[int]M{}
+		for _, f := range tallyListeners() {
+			found[toInt(f["port"])] = f
+		}
 		var l []M
 		for _, p := range ports {
+			if f, ok := found[p]; ok {
+				l = append(l, f)
+				continue
+			}
 			l = append(l, M{"port": p, "pid": nil, "session": nil, "mine": nil, "program": ""})
 		}
 		for _, f := range tallyListeners() {
@@ -401,6 +415,9 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 	mode, plan := portPlan()
 	sessions := []M{}
 	allFresh := true
+	// fix 3: what the bridge's OWN Tallys list now (never a Tally Windows shows as another user's), for the recorder's rule
+	// that a line is taken only for a company open in the own Tally (recorder_owntally.go); ownAll: each answered or is closed
+	ownOpen, ownAll := map[string]string{}, true
 	for _, pp := range plan {
 		e := M{"port": toInt(pp["port"]), "ok": false, "companies": []any{}, "error": "", "mine": pp["mine"], "session": pp["session"], "program": pp["program"], "user": pp["user"], "skipped": false}
 		if cfgB("OnlyMySession") && pp["mine"] == false {
@@ -422,6 +439,9 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 		raw, err := invokeTally(tc, toInt(pp["port"]), companiesRequest(), 8)
 		if err != nil {
 			allFresh = false
+			if pp["mine"] != false {
+				ownAll = false
+			}
 		}
 		if err != nil && (errors.Is(err, errPreempted) || errors.Is(err, errBackoff)) && prevCompanies(toInt(pp["port"])) != nil {
 			// a background read stopped or held back: the companies named last time stand, nothing new is known
@@ -440,6 +460,9 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 				}
 				inf := getCoInfo(tc, name, toInt(pp["port"]))
 				noteCompanyGUID(name, nt(c, "GUID")) // the first GUID seen is held; another one is noted, never taken
+				if pp["mine"] != false {
+					ownOpen[liveOwnKey(nt(c, "GUID"), name)], ownOpen[liveOwnKey("", name)] = name, name
+				}
 				list = append(list, M{"name": name, "from": nt(c, "STARTINGFROM"), "to": nt(c, "ENDINGAT"), "guid": nt(c, "GUID"), "gstin": str(inf["gstin"]), "pan": str(inf["pan"])})
 			}
 			e["ok"] = true
@@ -453,6 +476,7 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 	coCache, coCacheAt = sessions, time.Now()
 	coMu.Unlock()
 	_ = saveFile(shared, jsonText(sessions))
+	liveNoteOwnTally(ownOpen, ownAll)
 	return copySessions(sessions), allFresh
 }
 
@@ -743,3 +767,48 @@ func coInfoRequest(name string) string {
 	extra := `<FILTERS>TDSDeskThisCo</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="TDSDeskThisCo">$Name = "` + esc(strings.ReplaceAll(name, `"`, "")) + `"</SYSTEM><COLLECTION NAME="TDSDeskUnused" ISMODIFY="No"><TYPE>Company</TYPE>`
 	return collectionRequest("TDSDeskCompanyInfo", "Company", "NAME,GSTREGISTRATIONNUMBER,INCOMETAXNUMBER,GSTREGISTRATIONDETAILS.LIST,GUID", name, extra)
 }
+
+// 2.3.0: the Tally this bridge works with, for the heartbeat: the port of the first of the owner's Tallys that answered
+// (from the sessions the beat is made of), and the data folder its tally.ini names (when Windows says which program it is)
+func myTallyFor(ports []any) (int, string) {
+	port := 0
+	for _, x := range ports {
+		if o := obj(x); o != nil && o["ok"] == true && o["skipped"] != true {
+			port = toInt(o["port"])
+			break
+		}
+	}
+	myTallyMu.Lock()
+	defer myTallyMu.Unlock()
+	if !isFake() && myTallyPort == port && port != 0 && time.Since(myTallyAt) < 5*time.Minute {
+		return port, myTallyData // Windows' process list is read at most every 5 minutes for this
+	}
+	data := ""
+	ok, procs, lis := netState()
+	if ok {
+		byID := map[int]proc{}
+		for _, p := range procs {
+			if reTally.MatchString(p.Name) && isMine(p.Session) {
+				byID[p.ID] = p
+			}
+		}
+		for _, l := range lis {
+			if p, hit := byID[l.Pid]; hit && (port == 0 || l.Port == port) {
+				if port == 0 {
+					port = l.Port
+				}
+				data = str(tallyIni(p.Path)["data"])
+				break
+			}
+		}
+	}
+	myTallyAt, myTallyPort, myTallyData = time.Now(), port, data
+	return port, data
+}
+
+var (
+	myTallyMu   sync.Mutex
+	myTallyAt   time.Time
+	myTallyPort int
+	myTallyData string
+)

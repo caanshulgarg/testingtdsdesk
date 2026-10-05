@@ -15,7 +15,7 @@
 #                 only if it was never published (assets-test/bridge-go/latest.json does not name it, and origin/main
 #                 holds no FinComBridge*-<v>.exe and its review/assets/bridge-go/latest.json does not name it).
 #   2 tests       go vet (Linux, Windows); the required tests exist (a missing one fails as "missing test X");
-#                 go test ./... ; the size test and the allow-list tests each run and print "--- PASS" by name.
+#                 go test -timeout 20m ./... ; the size test and the allow-list tests each run and print "--- PASS" by name.
 #   3 go.mod      go mod tidy -diff shows nothing (it changes no file).
 #   4 allow-list  the table in docs/tally-allowlist.md parses (a header naming the worst-case column and at least one
 #                 row, each starting with '|'; "no rows parsed" fails) and every row has a worst case > 0 ("not yet
@@ -104,10 +104,12 @@ for t in $SIZE_TESTS $ALLOW_TESTS; do
   grep -qE "^func $t[A-Za-z0-9_]*\(t \*testing\.T\)" ./*_test.go 2>/dev/null \
     || fail "2 required tests" "missing test $t (no 'func $t...(t *testing.T)' in bridge-go/*_test.go)"
 done
-go test -count=1 ./... >"$LOG" 2>&1 || fail "2 go test ./..." "$(grep -E '^(--- FAIL|FAIL|panic)' "$LOG" | head -20)" "$(tail -10 "$LOG")"
+# an explicit limit: Go's default of 10 minutes killed a full run at 588 s on 05-Oct-2026 (it passed on the next try)
+GO_TEST_TIMEOUT=20m
+go test -count=1 -timeout "$GO_TEST_TIMEOUT" ./... >"$LOG" 2>&1 || fail "2 go test ./..." "$(grep -E '^(--- FAIL|FAIL|panic)' "$LOG" | head -20)" "$(tail -10 "$LOG")"
 run_named() { # $1: label, $2: -run pattern, rest: test-name prefixes that must each PASS
   local label="$1" pat="$2"; shift 2
-  go test -count=1 -run "$pat" -v ./... >"$LOG" 2>&1 || fail "$label" "$(grep -E '^(--- FAIL|FAIL|panic)' "$LOG" | head -20)" "$(tail -10 "$LOG")"
+  go test -count=1 -timeout "$GO_TEST_TIMEOUT" -run "$pat" -v ./... >"$LOG" 2>&1 || fail "$label" "$(grep -E '^(--- FAIL|FAIL|panic)' "$LOG" | head -20)" "$(tail -10 "$LOG")"
   for t in "$@"; do
     grep -qE "^--- PASS: $t" "$LOG" || fail "$label" "missing test $t (go test -run '$pat' ran no passing $t)"
   done
@@ -147,20 +149,23 @@ EXC=""
 # round 13 (the owner's decision of 03-Oct-2026): the owner decides per build. The exception line ("not yet measured;
 # allowed for <version> only by the owner's decision of YYYY-MM-DD") may name exactly one version, and it must be this
 # BridgeVersion; without the owner's decision words it is not an exception
-excs="$(grep -oiE 'allowed for [0-9][0-9.]* only' "$ALLOWLIST" | grep -oE '[0-9][0-9.]*' | sort -u)"
+# the owner's standing decision of 06-Oct-2026: "allowed for <version> by the owner's standing decision of YYYY-MM-DD" (no
+# request on the list and no request shape changed) counts as the owner's decision too, with or without "only"
+DEC="by the owner'?s (standing )?decision of [0-9]{4}-[0-9]{2}-[0-9]{2}"
+excs="$(grep -oiE "allowed for [0-9][0-9.]*( only)?( $DEC| *[;,.]|$)" "$ALLOWLIST" | grep -oE 'allowed for [0-9][0-9.]*' | grep -oE '[0-9][0-9.]*$' | sort -u)"
 nexc="$(printf '%s\n' "$excs" | grep -c .)"
 if [ "$nexc" -gt 1 ]; then
   fail "4 allow-list" "the exception line names more than one version ($(printf '%s' "$excs" | tr '\n' ' ')): it may name exactly one, this BridgeVersion ($V)"
 fi
 if [ -n "$unmeasured" ]; then
-  exc="$(grep -oiE "not yet measured[^|]*allowed for [0-9.]+ only by the owner'?s decision of [0-9]{4}-[0-9]{2}-[0-9]{2}" "$ALLOWLIST" | grep -oE 'allowed for [0-9.]+ only' | head -1)"
-  excdate="$(grep -oiE "allowed for $V only by the owner'?s decision of [0-9]{4}-[0-9]{2}-[0-9]{2}" "$ALLOWLIST" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1)"
-  if [ "$exc" = "allowed for $V only" ]; then
+  exc="$(grep -oiE "not yet measured[^|]*allowed for [0-9.]+( only)? $DEC" "$ALLOWLIST" | grep -oE 'allowed for [0-9.]+' | head -1)"
+  excdate="$(grep -oiE "allowed for $V( only)? $DEC" "$ALLOWLIST" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1)"
+  if [ "$exc" = "allowed for $V" ]; then
     EXC=" (not yet measured: $exc by the owner's decision of $excdate)"
   else
     why="No exception line names $V (the line 'not yet measured; allowed for $V only by the owner's decision of YYYY-MM-DD' would accept it for this version alone)."
     [ -n "$exc" ] && why="The exception line says '$exc', not $V: it holds for that version only."
-    grep -qiE 'allowed for [0-9.]+ only' "$ALLOWLIST" && ! grep -qiE "allowed for [0-9.]+ only by the owner'?s decision of [0-9]{4}-[0-9]{2}-[0-9]{2}" "$ALLOWLIST" && why="The 'allowed for ... only' line carries no owner's decision (\"by the owner's decision of YYYY-MM-DD\"): it is not an exception."
+    grep -qiE 'allowed for [0-9.]+ only' "$ALLOWLIST" && ! grep -qiE "allowed for [0-9.]+( only)? $DEC" "$ALLOWLIST" && why="The 'allowed for ... only' line carries no owner's decision (\"by the owner's decision of YYYY-MM-DD\"): it is not an exception."
     fail "4 allow-list" "docs/tally-allowlist.md has rows not yet measured (no worst case above 0):" \
       "$(echo "$unmeasured" | tr '\n' ';' | sed 's/;$//; s/;/; /g')" "$why" \
       "Measure every request on ZZ BIG TEST (docs/tally-measure-sheet.txt) and put the times and dates in allowlist.go and the table."

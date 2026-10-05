@@ -94,6 +94,18 @@ type change struct {
 	// FinCom's own import coming back (its FinCom id, a GUID Tally made for its MasterID): not fetched (decided once, when
 	// the line is read)
 	exempt bool
+	// 2.3.0 (cancel/delete GUID, recorder_guids.go): a cancel whose GUID is asked of Tally by its MasterID (guidFetch); a
+	// delete / cancel sent without a GUID for FinCom's own record to tell (guidCloud); a delete (or a cancel Tally cannot be
+	// asked for) whose GUID is looked up in the bridge's record when it is sent, after the lines before it took Tally's
+	// entry (guidLate)
+	guidFetch, guidCloud, guidLate bool
+	// review H1 (2.3.0): a delete this bridge's own Tally answered is not there (guidProven); a cancel / delete held because
+	// this bridge's Tally does not show it happened here (guidHeld: FinCom's cloud never looks in its record for it); the
+	// line's own GUID, used only for a delete proven here (guidKeep)
+	guidProven, guidHeld bool
+	guidKeep, alterKeep  string
+	// the owner's addition: held only because this bridge's Tally could not be asked at that moment: asked again by itself
+	guidRetry bool
 }
 
 func (c *change) key() string { return c.company + "|" + c.companyGuid }
@@ -108,6 +120,9 @@ func (c *change) needsBody() bool {
 	}
 	if c.byNumber {
 		return c.vchDate != ""
+	}
+	if c.guidFetch {
+		return c.masterId != "" && c.vchDate != ""
 	}
 	if c.masterId == "" {
 		return false
@@ -147,6 +162,7 @@ type liveCoSt struct {
 	read, sent      int
 	lastError, last string
 	skipped         int // lines of a company not linked to FinCom, skipped (review H1)
+	notHere         int // fix 3: lines of a company not open in this bridge's own Tally when written, not sent
 }
 
 // a company's link to FinCom as the cloud's answer to recorder_lines said (review H1): linked, or not linked (409) at
@@ -182,6 +198,12 @@ type liveState struct {
 	created  map[string][2]string // 2.2.1: a created entry's save key -> the line id sent and the GUID it went with (this run)
 	scanned  bool                 // 2.2.1: the lines sent with a placeholder looked for (recorder_resolve.go), this run
 	bodied   map[string]bool      // 2.2.2 review M1: the line ids sent WITH their entry's body (7 days, sync\recorder-sent\*.body.txt)
+	// fix 3 (the owner's spike run 37347773182): what this bridge saw of its OWN Tally's open companies (recorder_owntally.go)
+	own      map[string]*liveOwnSt // company GUID (or "name:" + its name key) -> the times it was open in the own Tally
+	ownAt    time.Time             // the last complete look at the own Tally's company list (kept on disk)
+	ownCur   map[string]bool       // open at that look, seen in THIS run (after a restart nothing is taken as still open)
+	ownWant  bool                  // a line waits for a look at the own Tally
+	ownAskAt time.Time             // when the reader last asked the own Tally's company list
 }
 
 var (
@@ -199,6 +221,7 @@ func liveResetState() {
 	live.dir, live.srcDir = "", ""
 	live.mu.Unlock()
 	liveSrc.Store("")
+	liveMidReset()
 }
 
 func liveResetBackoff() {
@@ -252,6 +275,7 @@ func liveFresh() {
 	for _, id := range liveLoadIds(".body.txt") {
 		live.bodied[id] = true
 	}
+	liveOwnLoad()
 }
 
 func liveOffsetsFile() string { return sp("recorder-offsets.json") }
@@ -527,6 +551,13 @@ func liveReadOnce() int {
 	for _, f := range files {
 		n += liveReadFile(f, posting)
 	}
+	// fix 3: a line waits for a look at this bridge's own Tally (written after the last look): asked now (a light,
+	// background read, 30 s apart at most), then the files are read again
+	if liveOwnAskNow() {
+		for _, f := range files {
+			n += liveReadFile(f, posting)
+		}
+	}
 	n += liveFlushStale()
 	if n > 0 {
 		liveSaveOffsets()
@@ -605,7 +636,8 @@ func liveReadFile(path string, posting bool) int {
 	for _, l := range lines {
 		k := liveTake(name, st.gen, l, posting, held)
 		if k < 0 {
-			// review H1: this company has its cap of changes waiting; the file is read on from this line once they go
+			// review H1: this company has its cap of changes waiting; the file is read on from this line once they go.
+			// Fix 3 (-2): the line waits for a look at this bridge's own Tally
 			if l.start < st.off {
 				st.off = l.start
 			}
@@ -763,7 +795,8 @@ func utf8Valid(b []byte) bool { return strings.ToValidUTF8(string(b), "\uFFFD") 
 var livePair = map[string]string{"voucher_accept_pre": "voucher_accept_post", "ledger_accept_pre": "ledger_accept_post", "import_object": "after_import_object"}
 
 // one logical line: mapped, paired, queued (under live.mu). -1: its company has its cap of changes waiting (the line is
-// read again later). held: the company GUIDs held, looked up once per read
+// read again later); -2 (fix 3): it waits for a look at this bridge's own Tally (read again then). held: the company
+// GUIDs held, looked up once per read
 func liveTake(file string, gen int, ll liveLogicalLine, posting bool, held map[string]string) int {
 	text := ll.text
 	if strings.HasPrefix(text, "FCR1|ev=write_failed|") {
@@ -795,6 +828,17 @@ func liveTake(file string, gen int, ll liveLogicalLine, posting bool, held map[s
 	}
 	if h := held[l.CName]; h != "" && !strings.HasPrefix(l.CGUID, "name-") && l.CGUID != "noguid" && h != l.CGUID {
 		liveForeign(file, l.CGUID)
+		return 0
+	}
+	// fix 3 (the owner's spike run 37347773182, two Windows users): the recorder folder is shared by every user's Tally;
+	// a line is taken only when this bridge's OWN Tally had its company open when it was written (recorder_owntally.go).
+	// Else it is passed over, never sent (the Day Book upload stays the fallback for the owner's own entries); written
+	// after the last look at the own Tally: it waits for the next look
+	switch liveOwnVerdict(l) {
+	case liveOwnWait:
+		return -2
+	case liveOwnSkip:
+		liveNotHere(l)
 		return 0
 	}
 	if live.qcount[liveGUID(l.CGUID)] >= liveQueueCap() {
@@ -1122,6 +1166,22 @@ func liveEmit(l recLine, ev, file string, gen int, start, lineStart, end int64, 
 			liveDecide(c, "not asked: FinCom's own posting coming back (matched by FinCom id)")
 		case c.fetchesIds() && c.heldWhy != "":
 			liveDecide(c, "not asked: "+c.heldWhy)
+		}
+	}
+	// 2.3.0 (cancel/delete GUID): a voucher's delete / cancel without Tally's GUID (a real TallyPrime 7.1 gives none on
+	// these events): never the GUID its MasterID makes. Review H1: every voucher delete / cancel (with or without the
+	// add-on's GUID) is asked of THIS bridge's Tally by its MasterID: a cancel takes Tally's GUID when Tally shows it
+	// cancelled; a delete goes on (its own GUID, the bridge's record, else FinCom's) only when Tally answers it is not
+	// there; else, or when Tally cannot be asked, it is held (recorder_guids.go)
+	if c.guidOwn() {
+		if c.guid != "" && !livePlaceholder(c.guid) && c.event == "deleted" {
+			c.guidKeep, c.alterKeep = c.guid, c.alterId
+		}
+		c.guid, c.alterId = "", ""
+		if c.masterId != "" && c.vchDate != "" {
+			c.guidFetch = true
+		} else {
+			liveGuidUnprovenAs(c, "the line has no MasterID or no date", false)
 		}
 	}
 	if livePlaceholder(c.guid) {
@@ -1622,6 +1682,10 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 	failed := func(cs []*change, why string) {
 		live.mu.Lock()
 		for _, c := range cs {
+			if c.guidFetch {
+				liveGuidUnproven(c, why) // review H1: never sent unproven
+				continue
+			}
 			c.bodyTried = true
 			if c.heldWhy == "" {
 				c.heldWhy = "the entry was not read from Tally: " + cutRunes(why, 160)
@@ -1658,6 +1722,12 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 		}
 		if !spOK {
 			// security L6: no starting point recorded: nothing of the company's entries is asked or taken
+			if c.guidFetch {
+				live.mu.Lock()
+				liveGuidUnproven(c, "no starting point recorded for this company")
+				live.mu.Unlock()
+				continue
+			}
 			liveDecide(c, "not asked: no starting point recorded for this company")
 			live.mu.Lock()
 			c.bodyTried, c.heldWhy = true, "the company's starting point is not recorded yet, so its entries are not taken from Tally"
@@ -1716,8 +1786,21 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 			live.mu.Lock()
 			for _, c := range part {
 				x := got[c.masterId]
+				if c.guidFetch && c.event == "deleted" {
+					liveDeleteAnswer(c, got) // review H1: still in this Tally: held; not there: proven deleted here
+					continue
+				}
 				if why, kind := liveVoucherWrong(x, "voucher with MasterID "+c.masterId, liveWantOf(c, sp, spOK)); why != "" {
+					if c.guidFetch {
+						// review H1: a cancel this Tally does not show (never asked by its number, never a record's GUID)
+						liveGuidHold(c, liveCancelHeldWords+" ("+cutRunes(why, 160)+")")
+						continue
+					}
 					missing = append(missing, miss{c, why, kind})
+					continue
+				}
+				if c.guidFetch {
+					liveTakeGUID(c, x)
 					continue
 				}
 				liveTakeBody(c, x)
@@ -1839,6 +1922,11 @@ func (c *change) wire() M {
 	if c.heldWhy != "" && c.xml == "" {
 		m["heldWhy"] = liveCapWhy(c.heldWhy)
 	}
+	// review H1: a cancel / delete this bridge's Tally does not show happened here: FinCom's cloud keeps it held and never
+	// looks in its own record for its GUID
+	if c.guidHeld {
+		m["guidHeld"] = true
+	}
 	// security L2: a line too big for one call goes cut and marked, never blocking the feed
 	if len(jsonText(m)) > liveMaxBytes-(16<<10) {
 		// second review L-C: no entry ids and no FinCom id with it (nothing of it can be matched or built)
@@ -1864,7 +1952,8 @@ func liveRecorderLinesBody(company, guid string, group []*change) M {
 func liveUploadOnce() int {
 	liveUpMu.Lock()
 	defer liveUpMu.Unlock()
-	liveResolveTurn() // 2.2.1: lines sent held, resolved once Tally gives their entry
+	defer liveMidSave() // 2.3.0: the record of Tally's GUIDs, when Tally gave any this turn
+	liveResolveTurn()   // 2.2.1: lines sent held, resolved once Tally gives their entry
 	for i := 0; i < 8; i++ {
 		n, again := liveUploadStep()
 		if !again {
@@ -1984,6 +2073,10 @@ func liveUploadStep() (int, bool) {
 		if c.needsBody() {
 			if bodiesOff {
 				c.bodyTried = true // the body fetch is off for this company (the 2 s rule): the line goes without
+				if c.guidFetch {
+					liveGuidUnproven(c, "the body fetch is off for this company (Tally took longer than the 2 s limit)")
+					continue
+				}
 				if !c.isLedger() {
 					c.heldWhy = "the entry fetch is off for this company (Tally took longer than the 2 s limit)"
 					why := "Tally took longer than the 2 s limit"
@@ -2029,6 +2122,14 @@ func liveUploadStep() (int, bool) {
 			due = c.byNumber && !time.Now().Before(c.askAfter) && !posting && !postingGoing()
 			group = group[:i]
 			break
+		}
+	}
+	// 2.3.0: a delete's GUID from the bridge's record, now that the lines before it in the group took Tally's entry
+	// (review H1: only a delete this bridge's Tally answered is gone; anything else is held there)
+	for _, c := range group {
+		if c.guidLate {
+			c.guidLate = false
+			liveGuidFallback(c, "")
 		}
 	}
 	company, guid := "", ""
@@ -2107,6 +2208,10 @@ func liveUploadStep() (int, bool) {
 		if c.fetchesIds() && c.source == "addon" && c.xml == "" && c.vchDate != "" && !strings.HasSuffix(c.lineId, ":resolved") {
 			held = append(held, c)
 		}
+		// the owner's addition to H1: a cancel / delete held only because this Tally could not be asked then: asked again
+		if c.guidRetry && c.masterId != "" && c.vchDate != "" && !strings.HasSuffix(c.lineId, ":resolved") {
+			held = append(held, c)
+		}
 	}
 	q := live.queue[:0]
 	for _, c := range live.queue {
@@ -2129,6 +2234,7 @@ func liveUploadStep() (int, bool) {
 	liveSaveIds(bodied, ".body.txt")
 	liveSaveOffsets()
 	liveHeldAdd(held)
+	liveGuidAnswers(group, arr(r.json["results"])) // 2.3.0: what FinCom's record said of a delete / cancel sent without a GUID
 	return len(group), false
 }
 

@@ -586,6 +586,7 @@ func setCloudLink(o M) (M, error) {
 		return nil, errors.New("That is not a FinCom computer key.")
 	}
 	oldU, oldK, oldG := cfg("CloudUrl"), cfg("CloudKey"), cfg("CloudKeyGo")
+	oldPlain := cloudKey()
 	pk, err := protectKey(key)
 	if err != nil {
 		return nil, err
@@ -593,6 +594,18 @@ func setCloudLink(o M) (M, error) {
 	setCfg("CloudUrl", u)
 	setCfg("CloudKey", "")
 	setCfg("CloudKeyGo", pk)
+	// final review M3: a NEW key for this bridge (its member's FinCom page made it, e.g. to give the bridge a key of its own
+	// on a computer key shared with another Windows user): the bridge, holding both keys, asks FinCom first, with the new
+	// key and the old one in the body, to move its identity to the new key (FinCom's cloud only: the old key goes nowhere
+	// else; never written to the log). Refused (an older cloud, or nothing to move): the hello below decides as before
+	if oldPlain != "" && oldPlain != key && str(oldU) == u {
+		m := invokeCloud(M{"kind": "own_key", "oldKey": oldPlain}, 60)
+		said := "moved"
+		if !truthy(obj(m.json)["moved"]) {
+			said = "not moved (" + or(m.err, fmt.Sprint("nothing to move, HTTP ", m.code)) + ")"
+		}
+		writeLog("Cloud: this bridge asked to move to its new computer key: " + said)
+	}
 	r := invokeCloud(M{"kind": "hello", "info": M{"computer": computerName(), "user": ownerName()}}, 60)
 	if r.code != 200 {
 		setCfg("CloudUrl", oldU)
@@ -688,6 +701,12 @@ func beatOnce() {
 	// on first sight in this run and at most every 10 minutes while it stays open (startpoint.go); nothing else is read
 	startLightCheck(sessions)
 	r := invokeCloud(beatBody(tally, tstate, tsince, open, ports, cos), 10)
+	// the owner's condition (Fix 2c): FinCom refused this computer key the bridge's id: its words in the tray and the log
+	if r.code == 409 && r.json != nil && truthy(r.json["idRefused"]) {
+		setIdRefused(str(r.json["error"]))
+	} else if r.code == 200 {
+		setIdRefused("")
+	}
 	if r.code != 200 || r.json == nil {
 		// round 22 (the 2.1.10 reviews' Medium 1 / S1): no current "on" from FinCom: the trial tools are off at once
 		trialToolsOff("FinCom's answer to the heartbeat did not come: " + or(r.err, fmt.Sprint("HTTP ", r.code)))
@@ -721,6 +740,16 @@ func beatOnce() {
 		}
 		// another bridge is the main one on this computer: this one reads only (said once in the log)
 		if !testMode() {
+			// L2: FinCom's "Changes only" for this bridge, kept in the settings until FinCom answers without it
+			if on := truthy(r.json["changesOnly"]); on != cfgB("ChangesOnly") {
+				setCfg("ChangesOnly", on)
+				saveConfig()
+				if on {
+					writeLog("FinCom: " + changesOnlyText + " Kept in the settings.")
+				} else {
+					writeLog("FinCom: changes only is off; this bridge may post again")
+				}
+			}
 			if truthy(r.json["notMain"]) {
 				noteNotMain(str(r.json["error"]), true)
 			} else {
@@ -881,7 +910,9 @@ func beatMissedSince() time.Time { _, f := beatTimes(); return f }
 // nightly catch-up, the last read of each company, and that this bridge reads Tally only after an event
 func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
 	au, rb := autoUpdateBeat()
-	return M{"reqs": beatReqs(), "readStopped": readStopAny(), "kind": "beat", "tally": tally, "tallyState": tstate, "busySince": tsince, "every": beatEvery(), "open": open, "ports": ports, "companies": cos,
+	tport, tdata := myTallyFor(ports)
+	return M{"windowsUser": ownerName(), "bridgePort": toInt(cfg("Port")), "tallyPort": tport, "dataFolder": tdata, // 2.3.0: one bridge per Windows user
+		"reqs": beatReqs(), "readStopped": readStopAny(), "kind": "beat", "tally": tally, "tallyState": tstate, "busySince": tsince, "every": beatEvery(), "open": open, "ports": ports, "companies": cos,
 		"updating": keepRunning(), "dailyAt": keepDailyAt(), "nightlyAt": keepDailyAt(), "lastRun": keepLastRun(), "paused": paused(), "notAnsweringSince": notAnsweringSince(),
 		"lastRead": lastReadAt(), "events": true, "computer": computerName(), "allowlist": allowListBeat(),
 		"postOnly": toAny(postOnlyList()), // round 11: the companies this computer may post to (empty: any)
@@ -936,6 +967,15 @@ func cloudPostTake() {
 	if readOnlyWhy() != "" { // only the one bridge that posts takes postings
 		return
 	}
+	// decision B (migration 55): the checks "Not in Tally - post again" asks of this bridge come with posts_take; each is
+	// looked in Tally (postcheck.go) after the postings are taken; one found not there is handed back: taken again here
+	if checks := cloudPostTakeJobs(); len(checks) > 0 && runPostChecks(checks) {
+		cloudPostTakeJobs()
+	}
+}
+
+// the postings waiting for this bridge, taken (five at most a turn); the checks the first answer carried
+func cloudPostTakeJobs() (checks []any) {
 	cpMu.Lock()
 	defer cpMu.Unlock()
 	cp := getCloudPosts()
@@ -945,6 +985,9 @@ func cloudPostTake() {
 			noteNotMain(r.err, false)
 			return
 		}
+		if i == 0 && r.code == 200 && r.json != nil {
+			checks = arr(r.json["checks"])
+		}
 		if r.code != 200 || r.json == nil || obj(r.json["job"]) == nil {
 			return
 		}
@@ -952,7 +995,9 @@ func cloudPostTake() {
 		pl := obj(j["payload"])
 		id := str(j["id"])
 		// round 7 (F2): the owner's releases ("Not in Tally — release") for the job's ids come with it
-		v, err := newPostJob(M{"jobId": id, "company": str(j["company"]), "masters": arr(pl["masters"]), "vouchers": arr(pl["vouchers"]), "released": arr(j["released"])})
+		// review M1 / L2: a posting handed back after the bridge's "not found" names the entries to send again (resendOnly):
+		// only those go, never the whole posting
+		v, err := newPostJob(M{"jobId": id, "company": str(j["company"]), "masters": arr(pl["masters"]), "vouchers": arr(pl["vouchers"]), "released": arr(j["released"]), "resendOnly": arr(j["resendOnly"])})
 		if err != nil {
 			invokeCloud(M{"kind": "posts_update", "id": id, "status": "failed", "done": 0, "message": "The Tally computer could not start this posting: " + err.Error(), "results": []any{}}, 30)
 			continue
@@ -961,6 +1006,7 @@ func cloudPostTake() {
 		saveCloudPosts()
 		writeLog(fmt.Sprintf("Posting from FinCom's queue: %v item(s) for %s (job %s)", v["total"], str(j["company"]), id))
 	}
+	return
 }
 
 // the job's status as FinCom's queue knows it (taken, running, done, failed): a posting waiting for Tally is "taken",
@@ -1269,4 +1315,23 @@ func wakeEvent(ev string, inner M) {
 		}
 		go wakeLedgers(co, "the ledger chooser opened in FinCom", false)
 	}
+}
+
+var (
+	idRefusedMu  sync.Mutex
+	idRefusedWhy string
+)
+
+func setIdRefused(why string) {
+	idRefusedMu.Lock()
+	defer idRefusedMu.Unlock()
+	if why != idRefusedWhy && why != "" {
+		writeLog("FinCom: " + why)
+	}
+	idRefusedWhy = why
+}
+func idRefused() string {
+	idRefusedMu.Lock()
+	defer idRefusedMu.Unlock()
+	return idRefusedWhy
 }

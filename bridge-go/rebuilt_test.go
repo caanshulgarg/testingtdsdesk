@@ -28,7 +28,17 @@ type tVch struct {
 	guid, master, date, typ, no, narr, party string
 	alter                                    int64
 	lines                                    [][2]string
+	cancelled                                bool // review H1 (2.3.0): this Tally answers ISCANCELLED Yes for it
 }
+
+// review H1 (2.3.0): ISCANCELLED as this stand Tally gives it
+func (v *tVch) isCancelled() string {
+	if v.cancelled {
+		return "Yes"
+	}
+	return "No"
+}
+
 type standTally struct {
 	srv       *httptest.Server
 	port      int
@@ -176,8 +186,8 @@ func (v *tVch) xml() string {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, `<VOUCHER REMOTEID="%s" VCHTYPE="%s"><DATE>%s</DATE><GUID>%s</GUID><MASTERID>%s</MASTERID><ALTERID> %d</ALTERID><VOUCHERTYPENAME>%s</VOUCHERTYPENAME>`+
-		`<VOUCHERNUMBER>%s</VOUCHERNUMBER><PARTYLEDGERNAME>%s</PARTYLEDGERNAME><NARRATION>%s</NARRATION><ISOPTIONAL>No</ISOPTIONAL><ISCANCELLED>No</ISCANCELLED>`,
-		v.guid, v.typ, v.date, v.guid, v.master, v.alter, v.typ, v.no, esc(v.party), esc(v.narr))
+		`<VOUCHERNUMBER>%s</VOUCHERNUMBER><PARTYLEDGERNAME>%s</PARTYLEDGERNAME><NARRATION>%s</NARRATION><ISOPTIONAL>No</ISOPTIONAL><ISCANCELLED>%s</ISCANCELLED>`,
+		v.guid, v.typ, v.date, v.guid, v.master, v.alter, v.typ, v.no, esc(v.party), esc(v.narr), v.isCancelled())
 	for _, l := range v.lines {
 		fmt.Fprintf(&b, `<ALLLEDGERENTRIES.LIST><LEDGERNAME>%s</LEDGERNAME><AMOUNT>%s</AMOUNT></ALLLEDGERENTRIES.LIST>`, esc(l[0]), l[1])
 	}
@@ -192,7 +202,7 @@ func (v *tVch) xmlTyped() string {
 	fmt.Fprintf(&b, `<VOUCHER REMOTEID="%s" VCHKEY="%s-0000b4d8:00000008" VCHTYPE="%s" OBJVIEW="Accounting Voucher View">`, v.guid, v.guid, v.typ)
 	for _, f := range []string{standField("DATE", "Date", v.date), "<GUID>" + v.guid + "</GUID>", standField("NARRATION", "String", esc(v.narr)), "<REQUESTORRULE/>",
 		"<VOUCHERTYPENAME>" + v.typ + "</VOUCHERTYPENAME>", standField("PARTYLEDGERNAME", "String", esc(v.party)), "<VOUCHERNUMBER>" + v.no + "</VOUCHERNUMBER>",
-		standField("ISOPTIONAL", "Logical", "No"), standField("EFFECTIVEDATE", "Date", v.date), standField("ISCANCELLED", "Logical", "No"),
+		standField("ISOPTIONAL", "Logical", "No"), standField("EFFECTIVEDATE", "Date", v.date), standField("ISCANCELLED", "Logical", v.isCancelled()),
 		standField("ALTERID", "Number", fmt.Sprint(v.alter)), standField("MASTERID", "Number", v.master), standField("VOUCHERKEY", "Number", "198839805935624")} {
 		b.WriteString(nl + f)
 	}
@@ -487,6 +497,14 @@ type standCloud struct {
 	recRaw    []string
 	recReply  func(b M) (int, M)
 	recDelay  time.Duration
+	// decisions B and D (05-Oct-2026, migration 55): the checks posts_take carries (checks), every post_check body
+	// (checkReports) and how it is answered (checkReply; nil: {ok, state}); the lease kept as migration 55 keeps it
+	// (lease; nil: the plain held / free above)
+	checks       []M
+	checkReports []M
+	checkReply   func(b M) M
+	lease        *leaseModel
+	devKeys      []string // final review M3: the computer key each call came with (x-fincom-device), in order
 }
 
 func newStandCloud(t *testing.T) *standCloud {
@@ -499,11 +517,24 @@ func newStandCloud(t *testing.T) *standCloud {
 		k := str(o["kind"])
 		c.kinds = append(c.kinds, k)
 		c.raw = append(c.raw, string(b))
+		c.devKeys = append(c.devKeys, r.Header.Get("x-fincom-device"))
 		out := M{"ok": true}
 		switch k {
 		case "companies":
 			out["links"] = M{zz: true}
-		case "lease_take":
+		case "lease_take", "lease_release":
+			if c.lease != nil {
+				who := str(obj(o["bridge"])["id"])
+				if k == "lease_take" {
+					out = c.lease.take(who, str(o["purpose"]))
+				} else {
+					out = c.lease.release(who)
+				}
+				break
+			}
+			if k == "lease_release" {
+				break
+			}
 			if c.held {
 				out = M{"ok": true, "held": true, "holder": M{"computer": "PC-2", "bridge": "go-other", "until": "15:00"}}
 			} else {
@@ -521,6 +552,18 @@ func newStandCloud(t *testing.T) *standCloud {
 			if len(c.takeJobs) > 0 {
 				out["job"] = c.takeJobs[0]
 				c.takeJobs = c.takeJobs[1:]
+			}
+			if len(c.checks) > 0 {
+				out["checks"] = toAnyM(c.checks)
+			}
+		case "own_key":
+			out["moved"] = true
+		case "post_check":
+			c.checkReports = append(c.checkReports, o)
+			if c.checkReply != nil {
+				out = c.checkReply(o)
+			} else {
+				out["state"] = str(o["result"])
 			}
 		case "posts_update":
 			c.posts = append(c.posts, o)
@@ -596,7 +639,7 @@ func standBridge(t *testing.T, f *standTally, extra string) string {
 	numberAsks = map[string]time.Time{}
 	numberAskMu.Unlock()
 	leaseMu.Lock()
-	leases = map[string]time.Time{}
+	leases, leasePurp, leaseAsked = map[string]time.Time{}, map[string]string{}, map[string]time.Time{}
 	leaseMu.Unlock()
 	whereMu.Lock()
 	whereMap = map[string]map[string]string{}

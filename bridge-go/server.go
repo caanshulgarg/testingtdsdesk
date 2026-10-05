@@ -3,6 +3,7 @@
 package main
 
 import (
+	"crypto/hmac"
 	"crypto/rand"
 	"encoding/binary"
 	"errors"
@@ -100,8 +101,31 @@ func (e *httpErr) Error() string {
 
 func qint(q url.Values, k string) int { return toInt(q.Get(k)) }
 
+// review M1 (2.3.0, DNS rebinding): the Host a request names must be this bridge's own address, exactly 127.0.0.1:<port>
+// or localhost:<port> (the bridge listens on 127.0.0.1 only, never on [::1]); a page under any other name that resolves
+// to 127.0.0.1 is refused before anything is answered
+func hostAllowed(r *http.Request) bool {
+	local, _ := connPorts(r)
+	h, p, err := net.SplitHostPort(r.Host)
+	if err != nil || local <= 0 || p != fmt.Sprint(local) {
+		return false
+	}
+	return h == "127.0.0.1" || strings.EqualFold(h, "localhost")
+}
+
+// the bridge key as the request carries it (X-Bridge-Key), compared in constant time; false when either is empty
+func keyGiven(r *http.Request) bool {
+	k, g := cfgS("Key"), r.Header.Get("X-Bridge-Key")
+	return k != "" && g != "" && hmac.Equal([]byte(k), []byte(g))
+}
+
 func handle(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 50*1024*1024)
+	if !hostAllowed(r) {
+		liveSayOnce("host|"+cutRunes(r.Host, 100), "Refused a request for another address (Host "+cutRunes(r.Host, 100)+"): this bridge answers 127.0.0.1 and localhost on its own port only.")
+		sendJSON(w, 403, M{"ok": false, "error": "This bridge answers 127.0.0.1 and localhost on its own port only."}, "")
+		return
+	}
 	sentOrigin := r.Header.Get("Origin")
 	originOK := allowedOrigin(sentOrigin)
 	origin := ""
@@ -113,9 +137,39 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		sendJSONRaw(w, 204, "", origin)
 		return
 	}
+	// 2.3.0: only programs of this bridge's own Windows user (ownuser.go); /ping answers all and says whether it is theirs
+	mine, why := fromOwnUser(r)
 	if path == "/ping" {
 		// pid and loopSec: the per-user supervisor checks that its own worker answers and that its main loop still turns
-		sendJSON(w, 200, M{"ok": true, "bridge": "FinCom Tally Bridge", "version": BridgeVersion, "impl": "go", "testMode": testMode(), "runMode": runMode, "pid": os.Getpid(), "loopSec": loopSec()}, origin)
+		p := M{"ok": true, "bridge": "FinCom Tally Bridge", "version": BridgeVersion, "impl": "go", "testMode": testMode(), "runMode": runMode, "pid": os.Getpid(), "loopSec": loopSec(), "yours": mine}
+		if mine {
+			p["bridgeId"], p["port"] = "go-"+instanceID(), toInt(cfg("Port"))
+			// review M1: the proof FinCom checks before it uses this bridge (its key), or pairs with it (the code shown now).
+			// Review M1 of 2.3.0: only to FinCom's own page (an allowed, non-empty Origin) or to the tray (a program of this
+			// computer holding the key: X-Bridge-Key); never to an empty Origin (a page's same-origin request after DNS
+			// rebinding sends none). Both proofs are bound to the bridge's id and port
+			if n := qs.Get("n"); n != "" && ((sentOrigin != "" && originOK) || keyGiven(r)) {
+				bound := "go-" + instanceID() + fmt.Sprint(toInt(cfg("Port")))
+				// the owner's condition: HMAC-SHA256(bridge key, nonce || bridge id || port)
+				if pr := proofFor(cfgS("Key"), n, bound); pr != "" {
+					p["proof"] = pr
+				}
+				pairMu.Lock()
+				if time.Now().Before(pairUntil) {
+					// HMAC-SHA256(pairing code, nonce || bridge id || port)
+					if pr := proofFor(pairCode, n, bound); pr != "" {
+						p["pairProof"] = pr
+					}
+				}
+				pairMu.Unlock()
+			}
+		}
+		sendJSON(w, 200, p, origin)
+		return
+	}
+	if !mine {
+		writeLog("Refused a request from a program of another Windows user (" + path + "): " + why)
+		sendJSON(w, 403, M{"ok": false, "error": notYours, "notYours": true}, origin)
 		return
 	}
 	if sentOrigin != "" && !originOK {
@@ -156,7 +210,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			pairUntil = time.Now().Add(-time.Minute) // one connection per code
 			pairMu.Unlock()
 			writeLog("FinCom connected with the code (" + sentOrigin + ").")
-			sendJSON(w, 200, M{"ok": true, "key": cfgS("Key"), "computer": computerName(), "user": ownerName(), "version": BridgeVersion}, origin)
+			sendJSON(w, 200, M{"ok": true, "key": cfgS("Key"), "computer": computerName(), "user": ownerName(), "version": BridgeVersion, "bridgeId": "go-" + instanceID(), "port": toInt(cfg("Port"))}, origin)
 			return
 		}
 		pairMu.Unlock()
@@ -869,18 +923,12 @@ func pingLocal(port int, timeout time.Duration) M {
 	return nil
 }
 
-// the web server, on this computer only
-func serve() (net.Listener, error) {
-	addr := fmt.Sprintf("127.0.0.1:%d", toInt(cfg("Port")))
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		return nil, err
-	}
+// the web server, on this computer only, on the port bound for it (bridgeport.go)
+func serve(ln net.Listener) {
 	srv := &http.Server{Handler: http.HandlerFunc(handle), ReadHeaderTimeout: 30 * time.Second}
 	srv.SetKeepAlivesEnabled(false)
 	go func() { _ = srv.Serve(ln) }()
 	go func() { <-stopCh; _ = srv.Close() }()
-	return ln, nil
 }
 
 func computerName() string {

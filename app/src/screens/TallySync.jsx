@@ -1,7 +1,7 @@
 // The Tally page's Sync activity (phase 2, H49/H50/H51; migration 44): every change saved in Tally as FinCom's cloud
 // received it (tally_recorder_lines; Rec in src/js/61), newest first, 200 at most, for the firm or one client. A strip of
 // the lines waiting over 2 minutes with why; filters Waiting, Mismatch (the ledger check, F37-40: none yet), Today; an
-// owner's Apply now on a held line (tally_recorder_release_held). New lines come in live (Live.joinRecorder, src/js/54).
+// Apply now on a held line (tally_recorder_release_held; the owner's rule of 05-Oct-2026: any member who may write). New lines come in live (Live.joinRecorder, src/js/54).
 import Msg from "../parts/Msg.jsx";
 import ListTable from "../parts/ListTable.jsx";
 
@@ -14,7 +14,7 @@ export default function SyncActivity() {
   // the filter is S.syncFilter, so a link elsewhere can open the list on it (Rec.openActivity(cid, "held"))
   const f = S.syncFilter || "all", setF = (v) => { S.syncFilter = v; render(); };
   if (!TCloud.on()) return <div className="pane" data-sync-activity=""><h3 style={{ marginTop: 0 }}>Sync activity</h3><p className="note">Sign in to the firm account to see the changes Tally sent.</p></div>;
-  const a = Rec.actOf(), owner = Rec.owner();
+  const a = Rec.actOf(), canApply = Rec.canWrite();
   const cos = Object.values(S.companies || {}).filter((c) => !c.deleted).sort((x, y) => x.name.localeCompare(y.name));
   const pick = <select data-sync-client="" aria-label="Client" value={S.syncClient || ""} onChange={(ev) => { S.syncClient = ev.target.value; Rec.act.at = 0; render(); }}>
     <option value="">All clients</option>{cos.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>;
@@ -48,7 +48,7 @@ export default function SyncActivity() {
         { k: "act", label: "Action", v: (r) => Rec.actWords(r), cell: (r) => <span data-sync-act="">{Rec.actWords(r)}</span> },
         { k: "recv", label: "Reached FinCom", v: (r) => r.received_at || "", cell: (r) => (r.received_at ? tallyHm(r.received_at) : "—") },
         { k: "chk", label: "Ledger check", td: () => ({ className: "note", "data-sync-check": "" }), cell: () => "not checked" },
-        { k: "ac", role: "act", cell: (r) => owner && r.state === "held" && <button className="btn small" data-sync-release="" disabled={!!(msg && msg.busy)} onClick={() => Rec.release(r)}>Apply now</button> },
+        { k: "ac", role: "act", cell: (r) => canApply && r.state === "held" && <button className="btn small" data-sync-release="" disabled={!!(msg && msg.busy)} onClick={() => Rec.release(r)}>Apply now</button> },
       ]} />
   </div>;
 }
