@@ -48,6 +48,7 @@ func notLinkedCloud(c *standCloud, probes *atomic.Int32) {
 // (counted in the beat), the others flow; asked again after an hour
 func TestUnlinkedCompanyNoBodyNoStall(t *testing.T) {
 	rec, f, c := liveBridge(t, "")
+	liveSeedOwnOpen(otherGUID, otherCo) // fix 3: open in this bridge's own Tally too (not linked in FinCom)
 	var probes atomic.Int32
 	notLinkedCloud(c, &probes)
 	td := today()

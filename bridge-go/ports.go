@@ -415,6 +415,9 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 	mode, plan := portPlan()
 	sessions := []M{}
 	allFresh := true
+	// fix 3: what the bridge's OWN Tallys list now (never a Tally Windows shows as another user's), for the recorder's rule
+	// that a line is taken only for a company open in the own Tally (recorder_owntally.go); ownAll: each answered or is closed
+	ownOpen, ownAll := map[string]string{}, true
 	for _, pp := range plan {
 		e := M{"port": toInt(pp["port"]), "ok": false, "companies": []any{}, "error": "", "mine": pp["mine"], "session": pp["session"], "program": pp["program"], "user": pp["user"], "skipped": false}
 		if cfgB("OnlyMySession") && pp["mine"] == false {
@@ -436,6 +439,9 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 		raw, err := invokeTally(tc, toInt(pp["port"]), companiesRequest(), 8)
 		if err != nil {
 			allFresh = false
+			if pp["mine"] != false {
+				ownAll = false
+			}
 		}
 		if err != nil && (errors.Is(err, errPreempted) || errors.Is(err, errBackoff)) && prevCompanies(toInt(pp["port"])) != nil {
 			// a background read stopped or held back: the companies named last time stand, nothing new is known
@@ -454,6 +460,9 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 				}
 				inf := getCoInfo(tc, name, toInt(pp["port"]))
 				noteCompanyGUID(name, nt(c, "GUID")) // the first GUID seen is held; another one is noted, never taken
+				if pp["mine"] != false {
+					ownOpen[liveOwnKey(nt(c, "GUID"), name)], ownOpen[liveOwnKey("", name)] = name, name
+				}
 				list = append(list, M{"name": name, "from": nt(c, "STARTINGFROM"), "to": nt(c, "ENDINGAT"), "guid": nt(c, "GUID"), "gstin": str(inf["gstin"]), "pan": str(inf["pan"])})
 			}
 			e["ok"] = true
@@ -467,6 +476,7 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 	coCache, coCacheAt = sessions, time.Now()
 	coMu.Unlock()
 	_ = saveFile(shared, jsonText(sessions))
+	liveNoteOwnTally(ownOpen, ownAll)
 	return copySessions(sessions), allFresh
 }
 

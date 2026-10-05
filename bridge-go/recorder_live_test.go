@@ -81,7 +81,23 @@ func liveBridge(t *testing.T, extra string) (rec string, f *standTally, c *stand
 	standBridge(t, f, c.cfg()+extra)
 	liveResetState()
 	t.Cleanup(liveResetState)
+	liveSeedOwnOpen(b220CoGUID, zz)
 	return rec, f, c
+}
+
+// fix 3: these tests' bridge reads lines its own Tally wrote: the company was open in its own Tally all along (a stretch
+// over every line's time, kept on disk like the bridge's own looks, so a restart keeps it)
+func liveSeedOwnOpen(guid, name string) {
+	from, to := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)
+	live.mu.Lock()
+	liveFresh()
+	for _, k := range []string{liveOwnKey(guid, name), liveOwnKey("", name)} {
+		live.own[k] = &liveOwnSt{name: name, ivs: []liveOwnIv{{from: from, to: to}}}
+	}
+	live.ownAt = to
+	path, text := liveOwnTallyFile(), liveOwnText()
+	live.mu.Unlock()
+	_ = saveFile(path, text)
 }
 
 // the lines the stand cloud took (200 answers only), in order

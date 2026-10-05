@@ -45,6 +45,7 @@ func nwsBridge(t *testing.T, extra string) (string, *standTally, *standCloud) {
 	t.Cleanup(func() { nowFn = time.Now })
 	f.mu.Lock()
 	f.guid, f.coName = nwsGUID, nwsCo
+	liveSeedOwnOpen(nwsGUID, nwsCo) // fix 3: the company open in this bridge's own Tally all along
 	add := func(no, mid string, alter int64, narr, amt string) {
 		f.vch = append(f.vch, &tVch{guid: fmt.Sprintf("%s-%08x", nwsGUID, toI64(mid)), master: mid, date: "20261005", typ: "Receipt", no: no, narr: narr,
 			party: "Customer A", alter: alter, lines: [][2]string{{"Customer A", amt}, {"Bank", strings.TrimPrefix("-"+amt, "--")}}})

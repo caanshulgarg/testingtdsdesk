@@ -635,6 +635,10 @@ func lightLogResult(name string, had bool) {
 	v, m := toI64(cur["altvchid"]), toI64(cur["altmstid"])
 	sp, ok := startPointOf(name)
 	switch {
+	case !ok && v <= 0:
+		// fix 3 (the owner's spike run): ALTVCHID 0 is never a starting point (noteStartPoint); nothing failed, so the line
+		// says why plainly (the rule itself is unchanged)
+		writeLog(fmt.Sprintf("Light check of %s: no starting point yet for %s: it has no entry in Tally yet; the first entry made will set it (now ALTVCHID=%d, ALTMSTID=%d)", name, name, v, m))
 	case !ok:
 		writeLog(fmt.Sprintf("Light check of %s: no starting point recorded (start-point.json could not be written; see above); now ALTVCHID=%d, ALTMSTID=%d", name, v, m))
 	case !had:
