@@ -1,48 +1,31 @@
-# Step 2: silent install attempts, logging exit codes and where tally.exe lands
+# Step 2: the TallyPrime setup has no working silent switch (/S, /silent kept the GUI "TallyPrime Setup Manager" open);
+# drive its GUI: it shows "C: Configure / O: More Actions / I: Install", so press I.
 $ErrorActionPreference = 'Continue'
 $setup = $env:TALLY_SETUP
-function Find-Tally {
-  $roots = @("$env:ProgramFiles", "${env:ProgramFiles(x86)}", 'C:\', "$env:LOCALAPPDATA", "$env:ProgramData")
-  foreach ($r in $roots) {
-    Get-ChildItem -Path $r -Filter tally.exe -Recurse -Depth 3 -ErrorAction SilentlyContinue | Select-Object -First 1
-  }
+$dest = 'C:\Program Files\TallyPrime'
+$p = Start-Process -FilePath $setup -PassThru
+for ($t = 0; $t -lt 60; $t++) { Start-Sleep 2; if (Get-Process | Where-Object { $_.MainWindowTitle -match 'Setup Manager' }) { break } }
+Start-Sleep 3
+& "$PSScriptRoot\shot.ps1" 'install-a-window'
+& "$PSScriptRoot\keys.ps1" 'Setup Manager' 'i'
+$found = $false
+for ($s = 0; $s -lt 40; $s++) {
+  Start-Sleep 10
+  if ($s % 3 -eq 0) { & "$PSScriptRoot\shot.ps1" ("install-b-{0:d3}s" -f (($s + 1) * 10)) }
+  Get-Process | Where-Object { $_.MainWindowTitle } | ForEach-Object { Write-Host "  [$(($s+1)*10)s] window: $($_.ProcessName) '$($_.MainWindowTitle)'" }
+  if ($p.HasExited) { Write-Host "setup exited with code $($p.ExitCode)"; break }
+  if ((Test-Path "$dest\tally.exe") -and -not $found) { $found = $true; Write-Host "tally.exe appeared after ~$(($s+1)*10)s" }
+  if ($found -and (Get-Process | Where-Object { $_.ProcessName -eq 'tally' })) { Write-Host "tally.exe was started by setup"; break }
 }
-Write-Host "== 7-Zip view of the installer (is it an archive?)"
-& 7z l $setup 2>&1 | Select-Object -First 80 | Out-String | Write-Host
-$switches = @('/S', '/silent', '/verysilent /suppressmsgboxes /norestart', '/quiet', '/s /v/qn')
-$i = 0
-foreach ($sw in $switches) {
-  $i++
-  Write-Host "== Attempt $i : $setup $sw"
-  $p = Start-Process -FilePath $setup -ArgumentList $sw -PassThru
-  $done = $p.WaitForExit(30000)
-  & "$PSScriptRoot\shot.ps1" "install-$i-30s"
-  if (-not $done) { $done = $p.WaitForExit(120000) }
-  if ($done) { Write-Host "  exit code: $($p.ExitCode)" } else {
-    Write-Host "  still running after 150 s; windows:"
-    Get-Process | Where-Object { $_.MainWindowTitle } | Format-Table Id, ProcessName, MainWindowTitle -AutoSize | Out-String | Write-Host
-    & "$PSScriptRoot\shot.ps1" "install-$i-150s"
-    Get-CimInstance Win32_Process | Where-Object { $_.ParentProcessId -eq $p.Id } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-    Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
-  }
-  $t = Find-Tally | Select-Object -First 1
-  if ($t) {
-    Write-Host "  FOUND tally.exe at $($t.FullName) after attempt $i ($sw)"
-    "TALLY_EXE=$($t.FullName)" | Out-File -Append $env:GITHUB_ENV
-    "TALLY_DIR=$($t.DirectoryName)" | Out-File -Append $env:GITHUB_ENV
-    Get-ChildItem $t.DirectoryName | Format-Table Name, Length -AutoSize | Out-String | Write-Host
-    $t.VersionInfo | Format-List | Out-String | Write-Host
-    exit 0
-  }
-}
-Write-Host "== No tally.exe after silent attempts; trying 7z extraction"
-& 7z x $setup "-o$env:RUNNER_TEMP\tallyx" -y 2>&1 | Select-Object -Last 15 | Out-String | Write-Host
-$t = Get-ChildItem "$env:RUNNER_TEMP\tallyx" -Filter tally.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-if ($t) {
-  Write-Host "  FOUND by extraction: $($t.FullName)"
-  "TALLY_EXE=$($t.FullName)" | Out-File -Append $env:GITHUB_ENV
-  "TALLY_DIR=$($t.DirectoryName)" | Out-File -Append $env:GITHUB_ENV
+& "$PSScriptRoot\shot.ps1" 'install-c-end'
+if (Test-Path "$dest\tally.exe") {
+  "TALLY_EXE=$dest\tally.exe" | Out-File -Append $env:GITHUB_ENV
+  "TALLY_DIR=$dest" | Out-File -Append $env:GITHUB_ENV
+  Get-ChildItem $dest | Format-Table Name, Length, LastWriteTime -AutoSize | Out-String -Width 200 | Write-Host
+  (Get-Item "$dest\tally.exe").VersionInfo | Format-List FileVersion, ProductVersion, ProductName | Out-String | Write-Host
+  if (Test-Path "$dest\tally.ini") { Write-Host "== tally.ini as installed"; Get-Content "$dest\tally.ini" | Write-Host }
+  Get-Process tally, TallyPrimeSetup -ErrorAction SilentlyContinue | Stop-Process -Force
   exit 0
 }
-Get-ChildItem "$env:RUNNER_TEMP\tallyx" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 60 FullName, Length | Out-String | Write-Host
+Write-Host "NO tally.exe in $dest"; Get-ChildItem 'C:\Program Files' | Out-String | Write-Host
 exit 1
