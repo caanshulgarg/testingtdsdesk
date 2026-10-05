@@ -1,0 +1,103 @@
+FINCOM BRIDGE 2.2.3 - TEST SHEET (NWS144, staging)
+
+File:        FinComBridge-Setup-2.2.3.exe
+Fingerprint: (filled in when the setup is built; compare with the .sha256 file next to the setup)
+Link:        https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.2.3.exe
+
+What 2.2.3 changes: two things, nothing else.
+ - A new tray item, "Test fetching an entry" (the owner's request: PowerShell cannot be run on NWS144). For one voucher
+   you name, the bridge sends six small requests to this computer's Tally, one at a time (forms A to F, the same as the
+   2.2.2 fetch check), and writes what Tally answered to Show log. It changes nothing in Tally or in FinCom, sends
+   nothing to the cloud, and never runs during a posting. It shows only while FinCom's "Trial tools on this computer"
+   is on for this computer.
+ - The add-on's daily files named like <GUID>-5-Oct-26.txt (TallyPrime 7.1 writes the date as d-Mon-yy) are now read
+   and dated by their name, so the Tally page no longer says "not recording" for a company that is recording.
+
+Keep the add-on loaded as it is (C:\ProgramData\FinCom\addon\FinComRecorder.tdl). 2.2.3 does not change the add-on.
+
+In every entry you make for this sheet, start the narration with TRIAL.
+
+
+INSTALL (over 2.2.2)
+   Open the Link. Double-click the setup; if Windows warns: More info > Run anyway; "Just for me" (as before); Next.
+   You should see: "FinCom Bridge 2.2.3 is installed and running". The setup keeps 2.2.2, so you can go back to it
+   (HOW TO ROLL BACK, below).
+   Within a minute, FinCom's Tally page shows version 2.2.3 for this computer.
+
+
+CHECK 1 - TRIAL TOOLS ON (the owner, in FinCom)
+   In FinCom open the Tally page, find NWS144, and switch "Trial tools on this computer" on.
+   You should see: within a minute, right-click the FinCom icon near the clock: the menu shows
+   "Test fetching an entry" (after "Test reading from Tally").
+   If not, send: the time you switched it on, and a picture of the tray menu.
+
+CHECK 2 - TEST FETCHING AN ENTRY
+   Keep GARG SHEKHAR open in Tally. Do not post from FinCom while this runs.
+   Right-click the FinCom icon near the clock > "Test fetching an entry".
+   Three small boxes ask the voucher type, number and date: accept Receipt, 212 and 05-Oct-2026 (press OK on each).
+   A question names the company and the voucher: answer Yes.
+   A balloon says the test has started. Wait; the result box opens when it is done (each request up to 25 s, usually
+   a few seconds in all).
+   If a box asks for a MasterID ("No MasterID was found by A, B or F..."): press Cancel (that skips C, D and E).
+   You should see: a box headed "FinCom Bridge - Test fetching an entry" naming GARG SHEKHAR, Receipt 212, 05-Oct-2026
+   and one short line per form, for example "A 1 voucher 120 ms · B 1 voucher 95 ms · ...".
+   Send, whatever it shows:
+     a. the text of that result box (all of it), and
+     b. every line of Show log that starts with "Test fetching an entry:" (there are about 20: the company's period,
+        then for each form A to F what was sent, the time, the vouchers and the first part of Tally's answer, then the
+        summary).
+   If a box says "A posting is going on in Tally now", wait for the posting to finish and start again.
+
+CHECK 3 - "NOT RECORDING" GONE (the file-name fix)
+   In FinCom open the Tally page and look at NWS144's companies.
+   You should see: GARG SHEKHAR shows "recording" (with the time of its last line), not "not recording".
+   If not, send: the time, a picture of that line, and the names of the files in
+   C:\ProgramData\FinCom\recorder\ (the folder the add-on writes to) for today.
+
+THE 2.2.2 CHECKS, UNCHANGED (do them after CHECKS 1 to 3)
+
+CHECK 4 - A NEW ENTRY
+   In Tally make one new entry: a Receipt of Rs 1, narration "TRIAL new 2". Save it. Note its number.
+   You should see: within half a minute, Sync activity shows it as Created, and it is in the books.
+   If not, send: its type and number, the time you saved it, and the Show log lines starting "Recorder:" that name it.
+
+CHECK 5 - ALTER IT: CHANGE THE AMOUNT
+   Open the entry from CHECK 4 in Tally, change its amount to Rs 2 and save.
+   You should see: within half a minute, Sync activity shows it as Altered, and the books show Rs 2.
+   If not, send: its type and number, the time, and the Show log lines starting "Recorder:" that name it.
+
+CHECK 6 - DELETE ONE
+   Open another TRIAL entry in Tally and delete it (Alt+D, Yes).
+   You should see: within half a minute, Sync activity shows it as Deleted, and it is gone from the books.
+   If not, send: its type and number, the time, and the Show log lines starting "Recorder:" that name it.
+
+CHECK 7 - CANCEL ONE
+   Open another TRIAL entry in Tally and cancel it (Alt+X, Yes).
+   You should see: within half a minute, Sync activity shows it as Cancelled, and the books show it as cancelled.
+   If not, send: its type and number, the time, and the Show log lines starting "Recorder:" that name it.
+
+CHECK 8 - DUPLICATE AN ENTRY (Alt+2)
+   Open a TRIAL entry in Tally and press Alt+2 (Duplicate). Change the date and the amount, then save.
+   You should see: within half a minute, Sync activity shows a NEW entry as Created, with the new date and amount, and
+   it is in the books. The entry you duplicated from is unchanged in the books (not altered, not replaced).
+   If not, send: the type and number of both entries (the new one and the one you duplicated from), the time, and the
+   Show log lines starting "Recorder:" that name either of them.
+
+CHECK 9 - A BILL POSTED FROM FINCOM
+   In FinCom post one bill to Tally (as you normally do).
+   You should see: Sync activity shows it as Posted from FinCom, and it is in the books once (not twice).
+   If not, send: the bill, the time you posted it, and the Show log lines starting "Recorder:" around that time.
+
+How to send the log lines: right-click the FinCom icon near the clock > Show log. Each line starting "Recorder:" says
+what the bridge decided for one entry: asking Tally, taken, held (with the reason), or not asked (with the reason).
+Each line starting "Test fetching an entry:" is one step of CHECK 2.
+
+When CHECKS 1 to 3 are done, the owner may switch "Trial tools on this computer" off again on the Tally page.
+
+
+HOW TO ROLL BACK (go back to 2.2.2)
+   1. Right-click the FinCom icon near the clock > "Roll back to the previous version".
+   2. A question names the version it goes back to (2.2.2). Answer Yes.
+   3. The icon goes away for a few seconds and comes back.
+   You should see: within a minute, FinCom's Tally page shows version 2.2.2 for this computer. Automatic updates stay
+   off on this computer until FinCom turns them on again.
