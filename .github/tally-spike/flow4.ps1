@@ -151,7 +151,6 @@ for ($i = 0; $i -lt 30; $i++) {
 Write-Host (& query.exe session 2>&1 | Out-String)
 Say "user 2's own Windows session by Remote Desktop: $rdp (session $sess2)"
 if (-not $rdp) { Stop-Process -Id $mstsc.Id -Force -ErrorAction SilentlyContinue }
-Add-Content -Path $resultsFile -Encoding UTF8 -Value $(if ($rdp) { "INFO user 2 ($u2) works in a Windows session of their own (session $sess2, by a Remote Desktop connection to 127.0.0.2); runneradmin in session $((Get-Process -Id $PID).SessionId)" } else { "INFO no session of their own for user 2: their programs run through the secondary logon (Start-Process -Credential) in the runner's session $((Get-Process -Id $PID).SessionId)" })
 if ($rdp) {
   # the sign-in finished (explorer up) before anything is started there
   for ($i = 0; $i -lt 30; $i++) { if (Get-Process explorer -ErrorAction SilentlyContinue | Where-Object SessionId -eq $sess2) { break }; Start-Sleep 3 }
@@ -165,17 +164,20 @@ try { & $in.script @($in.argv) *>&1 | Out-File C:\fcspike\task-out.txt -Encoding
 "done" | Set-Content C:\fcspike\task-done.txt
 '@
 if ($rdp) {
-  $tr = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File C:\fcspike\task.ps1'
-  $o = & schtasks.exe /Create /F /TN fcu2 /TR $tr /SC ONCE /ST 23:59 /RU $u2 /RP $pw /IT 2>&1
-  Write-Host "task for ${u2}: $o"
+  # an interactive task: it runs as user 2 in the session they are signed in to (no password stored)
+  $act = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File C:\fcspike\task.ps1' -WorkingDirectory $fc
+  $pr = New-ScheduledTaskPrincipal -UserId "$env:COMPUTERNAME\$u2" -LogonType Interactive -RunLevel Limited
+  $st = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Hours 3) -MultipleInstances IgnoreNew
+  try { Register-ScheduledTask -TaskName fcu2 -Action $act -Principal $pr -Settings $st -Force -ErrorAction Stop | Out-Null; Write-Host "task fcu2 registered for $u2 (interactive)" } catch { Write-Host "task: $_" }
 }
 # a PowerShell script run as user 2 (in their session, or through the secondary logon); its output back as lines
 function U2Script([string]$script, [string[]]$argv = @(), [int]$sec = 300) {
   Remove-Item "$fc\task-done.txt", "$fc\task-out.txt" -ErrorAction SilentlyContinue
   if ($rdp) {
     @{ script = $script; argv = $argv } | ConvertTo-Json | Set-Content "$fc\task-in.json" -Encoding UTF8
-    $null = & schtasks.exe /Run /TN fcu2 2>&1
+    try { Start-ScheduledTask -TaskName fcu2 -ErrorAction Stop } catch { Write-Host "  task start: $_" }
     $until = (Get-Date).AddSeconds($sec); while (-not (Test-Path "$fc\task-done.txt") -and (Get-Date) -lt $until) { Start-Sleep -Milliseconds 500 }
+    if (-not (Test-Path "$fc\task-done.txt")) { $ti = Get-ScheduledTaskInfo -TaskName fcu2 -ErrorAction SilentlyContinue; Write-Host "  task fcu2 did not finish $script in $sec s: last run $($ti.LastRunTime) result 0x$('{0:x}' -f $ti.LastTaskResult), state $((Get-ScheduledTask fcu2).State)" }
   } else {
     $null = AsU2 'powershell.exe' (@('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$script`"") + @($argv | ForEach-Object { "`"$_`"" })) ($sec * 1000)
   }
@@ -210,7 +212,7 @@ if ($p) {
   $fg = ([K2]::GetForegroundWindow() -eq $p.MainWindowHandle)
   if ($k) { [System.Windows.Forms.SendKeys]::SendWait($k) }
   "keys '$k' -> Tally pid $($p.Id) '$($p.MainWindowTitle)' session $me foreground=$fg"
-} else { "no Tally window in session $me" }
+} else { if ($k) { [System.Windows.Forms.SendKeys]::SendWait($k) }; "no Tally window in session $me; keys '$k' to the window in front" }
 Start-Sleep ([int]$wait)
 if ($shot) {
   try { $b = [System.Windows.Forms.SystemInformation]::VirtualScreen; $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
@@ -219,6 +221,15 @@ if ($shot) {
 '@
 New-Item -ItemType Directory -Force "$fc\shots" | Out-Null
 & icacls.exe $fc /grant '*S-1-5-32-545:(OI)(CI)M' /T /Q | Out-Null
+Set-Content "$fc\who.ps1" -Encoding UTF8 -Value '"who=$([Security.Principal.WindowsIdentity]::GetCurrent().Name) session=$((Get-Process -Id $PID).SessionId)"'
+if ($rdp) {
+  $w = (U2Script "$fc\who.ps1" @() 60) -join ' '
+  if ($w -notmatch "who=\S*\\$u2 session=$sess2") {
+    Write-Host "user 2's task did not run in their session ($w): their programs go through the secondary logon instead"
+    $rdp = $false; & logoff.exe $sess2 2>&1 | Out-Null; Stop-Process -Id $mstsc.Id -Force -ErrorAction SilentlyContinue
+  } else { $null = U2Script "$fc\keys2.ps1" @('{ENTER}', '2', 'u2-desktop') }  # a notice on user 2's new desktop closed
+}
+Add-Content -Path $resultsFile -Encoding UTF8 -Value $(if ($rdp) { "INFO user 2 ($u2) works in a Windows session of their own (session $sess2, by a Remote Desktop connection to 127.0.0.2); runneradmin in session $((Get-Process -Id $PID).SessionId)" } else { "INFO no session of their own for user 2: their programs run through the secondary logon (Start-Process -Credential) in the runner's session $((Get-Process -Id $PID).SessionId)" })
 
 # ---- the stub cloud
 Say '---- the stub cloud'
