@@ -49,10 +49,10 @@ jobs:
         continue-on-error: true
         run: |
           & .github/tally-spike/flow.ps1 *>&1 | Tee-Object -FilePath $env:LOG -Append; exit 0
-      - name: Round 2 (Receipts, fetch A-H, screen create/alter/duplicate/cancel/delete)
+      - name: Round 3 (the real bridge 2.2.2 against this Tally, a local stub cloud)
         continue-on-error: true
         run: |
-          & .github/tally-spike/flow2.ps1 *>&1 | Tee-Object -FilePath "$env:RES\round2.log" -Append; exit 0
+          & .github/tally-spike/flow3.ps1 *>&1 | Tee-Object -FilePath "$env:RES\round3.log" -Append; exit 0
       - name: Commit results back to the branch
         if: always()
         run: |
