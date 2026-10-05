@@ -1,0 +1,69 @@
+== desktop check
+runnervmfi6oq\runneradmin
+ USERNAME              SESSIONNAME        ID  STATE   IDLE TIME  LOGON TIME
+>runneradmin           console             2  Active      none   10/5/2026 9:08 AM
+UserInteractive=True
+session=2
+
+Caption                                  Version
+-------                                  -------
+Microsoft Windows Server 2025 Datacenter 10.0.26100
+
+
+[shot] desktop-0 (1024x768)
+GET https://tallysolutions.com/download/ -> 200 len=270577
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/css/download-page.css
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download-icon.svg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-add-headers-footer-images-to-invoice-print.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-add-watermarks-to-invoice-print.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-fetch-party-name-using-gstin-in-ims-report.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-how-to-create-vouchers-by-importing-documents.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-how-to-create-vouchers-in-tallyprime.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-how-to-get-started-with-docs-by-ira.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-how-to-resolve-documents-and-create-vouchers.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-send-online-payments-from-icici.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-update-terms-and-conditions-in-the-invoice-print.jpg
+   link: https://tallysolutions.com/apac/download/
+   link: https://tallysolutions.com/bd/download/
+   link: https://tallysolutions.com/bd/en/download/
+   link: https://tallysolutions.com/download/
+   link: https://tallysolutions.com/download/support-files/
+   link: https://tallysolutions.com/global/download/
+   link: https://tallysolutions.com/mena/ar/download/
+   link: https://tallysolutions.com/mena/download/
+   link: https://tallysolutions.com/ssa/download/
+   link: https://tallysolutions.com/us/download/
+GET https://tallysolutions.com/download-tallyprime/ FAILED: Response status code does not indicate success: 404 (Not Found).
+GET https://tallysolutions.com/tally-prime-download/ FAILED: Response status code does not indicate success: 404 (Not Found).
+GET https://tallysolutions.com/tallyprime/download/ -> 200 len=209180
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/css/download-page.css
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download-icon.svg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-add-headers-footer-images-to-invoice-print.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-add-watermarks-to-invoice-print.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-fetch-party-name-using-gstin-in-ims-report.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-how-to-create-vouchers-by-importing-documents.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-how-to-create-vouchers-in-tallyprime.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-how-to-get-started-with-docs-by-ira.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-how-to-resolve-documents-and-create-vouchers.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-send-online-payments-from-icici.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-update-terms-and-conditions-in-the-invoice-print.jpg
+   link: https://tallysolutions.com/apac/download/
+   link: https://tallysolutions.com/bd/download/
+   link: https://tallysolutions.com/bd/en/download/
+   link: https://tallysolutions.com/download/
+   link: https://tallysolutions.com/download/support-files/
+   link: https://tallysolutions.com/global/download/
+   link: https://tallysolutions.com/mena/ar/download/
+   link: https://tallysolutions.com/mena/download/
+   link: https://tallysolutions.com/ssa/download/
+   link: https://tallysolutions.com/us/download/
+GET https://help.tallysolutions.com/download-tallyprime/ FAILED: Response status code does not indicate success: 404 (Not Found).
+GET https://help.tallysolutions.com/tally-prime/installation-and-licensing/install-tallyprime/ -> 200 len=182855
+   link: https://help.tallysolutions.com/directly-upload-download-file-gstr-1-from-tallyprime/
+   link: https://help.tallysolutions.com/download-claude-desktop-log-in/
+   link: https://help.tallysolutions.com/download-ims-inward-invoices/
+   link: https://help.tallysolutions.com/wp-content/plugins/lightbox-popup/images/contorl_buttons/download_hover.png
+   link: https://help.tallysolutions.com/wp-content/plugins/lightbox-popup/images/contorl_buttons/download.png
+   link: https://tallysolutions.com/download/
+Installer candidates:
+NO INSTALLER DOWNLOADED
