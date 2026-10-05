@@ -184,6 +184,13 @@ func runUser(args []string) int {
 			}
 			stamp = exeStamp(exe)
 		}
+		if !restartAfter(code) {
+			// 2.3.0: no port of 9100..9119 free (the bridge said so once, in the log and the tray): not started again
+			// until the next sign-in; the icon stays and shows why
+			writeLog("The bridge is not started again: it found no free port (see the message above)")
+			<-stop
+			return 0
+		}
 		if time.Since(started) > 10*time.Minute {
 			fails = 0
 		}
@@ -439,11 +446,7 @@ func installUserCmd(args []string) int {
 		return installFailed(5, "FinCom Bridge did not start ("+err.Error()+"); an antivirus may have blocked "+exe+".", "Allow FinCom Bridge in the antivirus, or sign out and in again; if it stays, send the install log to FinCom.")
 	}
 	_ = c.Process.Release()
-	port := 9100
-	if mode == "test" {
-		port = 9101
-	}
-	return waitAnswer(port, "it starts when you sign in")
+	return waitAnswer(cfgPath, true, "it starts when you sign in")
 }
 
 // uninstall --per-user: the start at sign-in and the record go, the bridge stops, and its own files (uninstall.go); bridge

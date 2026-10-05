@@ -248,7 +248,12 @@ func (t *tray) poll() {
 		t.mu.Lock()
 		t.st, t.reachable = st, st != nil
 		t.mu.Unlock()
-		if st == nil {
+		if st == nil && startFailedText() != "" {
+			// 2.3.0: the bridge found no free port (9100..9119) and stopped: its one message, shown once
+			msg := startFailedText()
+			t.setIcon(false, cutRunes(msg, 127))
+			t.warnIf(true, "nostart", 0, "FinCom Bridge could not start", msg)
+		} else if st == nil {
 			t.setIcon(false, trayTip(nil))
 			t.warnIf(time.Since(t.started) > 30*time.Second, "down", 30*time.Second, "FinCom Bridge is not running",
 				"The bridge on this computer has stopped. "+restartsBy()+"; if this stays, choose Restart from this icon.")
@@ -345,6 +350,9 @@ func (t *tray) statusText() string {
 	st := t.st
 	t.mu.Unlock()
 	if st == nil {
+		if msg := startFailedText(); msg != "" {
+			return msg + ".\n\nEach Windows user's FinCom Bridge takes its own port of 9100-9119. Close a program that holds them, then sign out and in again."
+		}
 		if perUserInstall() {
 			return "FinCom Bridge (installed just for you) is not answering on this computer.\n\n" + restartsBy() + ". If this stays, choose Restart, or see the log."
 		}

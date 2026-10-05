@@ -869,18 +869,12 @@ func pingLocal(port int, timeout time.Duration) M {
 	return nil
 }
 
-// the web server, on this computer only
-func serve() (net.Listener, error) {
-	addr := fmt.Sprintf("127.0.0.1:%d", toInt(cfg("Port")))
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		return nil, err
-	}
+// the web server, on this computer only, on the port bound for it (bridgeport.go)
+func serve(ln net.Listener) {
 	srv := &http.Server{Handler: http.HandlerFunc(handle), ReadHeaderTimeout: 30 * time.Second}
 	srv.SetKeepAlivesEnabled(false)
 	go func() { _ = srv.Serve(ln) }()
 	go func() { <-stopCh; _ = srv.Close() }()
-	return ln, nil
 }
 
 func computerName() string {

@@ -308,25 +308,19 @@ func runBridge(console bool) int {
 	if testMode() {
 		seedFromOldCopy()
 	}
-	var err error
-	for i := 0; ; i++ {
-		if _, err = serve(); err == nil {
-			break
+	// 2.3.0: the first free port of 9100..9119 (the remembered one first); none: said once, and the bridge stops
+	ln, err := bindAndRemember(listenLocal, ownBridgeOn)
+	if err != nil {
+		msg := err.Error()
+		if console {
+			fmt.Println(msg)
 		}
-		if console || i >= 60 {
-			fmt.Printf("Could not start on port %d: %s\n", toInt(cfg("Port")), err)
-			fmt.Println("Another program already uses this port. Usually a bridge is already running. Stop it, or change \"Port\" in the settings.")
-			writeLog(fmt.Sprintf("Could not start on port %d: %s", toInt(cfg("Port")), err))
-			return 1
-		}
-		if i == 0 {
-			writeLog(fmt.Sprintf("Port %d is taken; trying again every 5 seconds (another bridge may be stopping)", toInt(cfg("Port"))))
-		}
-		sleepOrStop(5 * time.Second)
-		if stopping() {
-			return stopCode
-		}
+		writeLog(msg)
+		_ = saveFile(startFailedFile(), msg)
+		return exitNoPort
 	}
+	_ = os.Remove(startFailedFile())
+	serve(ln)
 	openPairWindow(toInt(cfg("PairWindowMin")))
 	mode := "the only bridge on this computer"
 	if testMode() {

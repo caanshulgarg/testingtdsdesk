@@ -68,7 +68,8 @@ func (service) Execute(args []string, req <-chan svc.ChangeRequest, st chan<- sv
 				return false, 0
 			}
 		case code := <-done:
-			if code == 0 {
+			if code == 0 || !restartAfter(code) {
+				// 2.3.0: no port free (said once in the log and the tray): stopped, not started again by Windows
 				return false, 0
 			}
 			// a restart asked for (the tray, an update) or a failure: Windows starts the service again (recovery); for a
@@ -280,12 +281,19 @@ func installStarted() {
 }
 
 // the bridge has to answer (this version, as a FinCom Bridge) within 30 seconds; else exit 4 ("installed but not running")
-func waitAnswer(port int, by string) int {
+// 2.3.0: the port is the one the bridge took and wrote in its settings (the first free one of 9100..9119); mine: the
+// setup runs as the bridge's own Windows user (just for me), so the bridge answering must say it is that user's
+func waitAnswer(cfgPath string, mine bool, by string) int {
+	port := 0
 	for i := 0; i < 30; i++ {
-		if p := pingLocal(port, 2*time.Second); p != nil && str(p["version"]) == BridgeVersion {
+		port = settingsPort(cfgPath)
+		if p := pingLocal(port, 2*time.Second); p != nil && str(p["version"]) == BridgeVersion && (!mine || p["yours"] != false) {
 			installLog(fmt.Sprintf("Install: done; the bridge answers on 127.0.0.1:%d", port))
 			writeInstallResult("", "")
 			return 0
+		}
+		if msg := readText(filepath.Join(filepath.Dir(cfgPath), "bridge-start-failed.txt")); msg != "" && i >= 3 {
+			return installFailed(4, msg+".", "Close a FinCom Bridge another Windows user started by hand, or a program using these ports; then run the setup again.")
 		}
 		time.Sleep(time.Second)
 	}
@@ -422,11 +430,7 @@ func installCmd(args []string) int {
 	if err := startService(); err != nil {
 		return installFailed(5, "The Windows service FinCom Bridge did not start ("+err.Error()+").", "Restart the computer; if the icon near the clock stays red, send the install log to FinCom.")
 	}
-	port := 9100
-	if mode == "test" {
-		port = 9101
-	}
-	return waitAnswer(port, "Windows starts the service with it")
+	return waitAnswer(cfgPath, false, "Windows starts the service with it")
 }
 
 // the settings for the bridge's owner (the same for the service and for an install just for one user): test mode beside
@@ -451,7 +455,7 @@ func writeSettings(o ownerInfo, mode, fincom string) (string, int) {
 		}
 		carryInstanceID(c)
 		c.Set("Mode", "test")
-		c.Set("Port", float64(9101))
+		installPort(c, 9101) // 2.3.0: a port of 9100..9119 this user's bridge took before is kept
 		c.Set("PsHome", o.home)
 		c.Set("SyncDir", filepath.Join(o.home, "go-sync"))
 		c.Set("JobsDir", filepath.Join(o.home, "go-jobs"))
@@ -469,7 +473,7 @@ func writeSettings(o ownerInfo, mode, fincom string) (string, int) {
 		// switched from test mode: the same bridge for FinCom (the id FinCom made the main one)
 		carryInstanceID(c, filepath.Join(o.home, "go-bridge.config.json"))
 		c.Set("Mode", "")
-		c.Set("Port", float64(9100))
+		installPort(c, 9100) // 2.3.0: a port of 9100..9119 this user's bridge took before is kept
 		// the main bridge on this computer, with no click: told to FinCom on its first contact (claimMainOnce)
 		c.Set("ClaimMain", true)
 		c.Set("LogFile", filepath.Join(o.home, "tds-bridge.log"))
