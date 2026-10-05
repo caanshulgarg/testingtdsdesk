@@ -587,8 +587,9 @@ func TestLiveBodyFetch(t *testing.T) {
 	liveAppend(t, p,
 		liveLine("voucher_accept_pre", "Voucher", "", "", "", "Journal", "PA-1", td, "", "", "rent"),
 		liveLine("voucher_accept_post", "Voucher", v.guid, v.master, fmt.Sprint(v.alter), "Journal", "PA-1", td, "", "", "rent"),
-		vchLine("import_object", "g-fin", "77", "78", "TDSDesk:fin1 | bill"),
-		vchLine("after_import_object", "g-fin", "77", "78", "TDSDesk:fin1 | bill"))
+		// 2.2.2 second review L-D: FinCom's own import is exempt only with a GUID Tally made for its MasterID (77 = 0x4d)
+		vchLine("import_object", b220CoGUID+"-0000004d", "77", "78", "TDSDesk:fin1 | bill"),
+		vchLine("after_import_object", b220CoGUID+"-0000004d", "77", "78", "TDSDesk:fin1 | bill"))
 	liveReadOnce()
 	// a posting going: no Tally request, the line waits for its body
 	postTaking.Store(true)
