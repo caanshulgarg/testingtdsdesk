@@ -1,4 +1,6 @@
 # Spike: can a real TallyPrime run on GitHub's hosted Windows runner? (branch tally-real-spike only)
+# Results (log + screenshots) are committed back to this branch under spike-results/<run>-<os>/,
+# because the job logs and artifacts live on a host the analysing session cannot reach.
 name: Tally real spike
 on:
   push:
@@ -6,37 +8,56 @@ on:
     paths: ['.github/workflows/tally-real.yml', '.github/tally-spike/**']
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
+concurrency:
+  group: tally-real-spike
+  cancel-in-progress: false
 jobs:
   tally:
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         os: [windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     env:
-      SHOTS: ${{ github.workspace }}\shots
+      RES: ${{ github.workspace }}\spike-results\${{ github.run_id }}-${{ matrix.os }}
+      SHOTS: ${{ github.workspace }}\spike-results\${{ github.run_id }}-${{ matrix.os }}
+      LOG: ${{ github.workspace }}\spike-results\${{ github.run_id }}-${{ matrix.os }}\log.txt
     defaults:
       run:
         shell: pwsh
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Desktop check
         run: |
-          whoami; query user 2>&1; [Environment]::UserInteractive
-          & .github/tally-spike/shot.ps1 desktop-0
+          New-Item -ItemType Directory -Force $env:RES | Out-Null
+          & { "== desktop check"; whoami; (query user 2>&1); "UserInteractive=$([Environment]::UserInteractive)"; "session=$((Get-Process -Id $PID).SessionId)"
+              Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version | Out-String
+              & .github/tally-spike/shot.ps1 desktop-0 } *>&1 | Tee-Object -FilePath $env:LOG -Append
+          exit 0
       - name: 1 Download installer
-        run: .github/tally-spike/resolve.ps1
+        run: |
+          & .github/tally-spike/resolve.ps1 *>&1 | Tee-Object -FilePath $env:LOG -Append; exit $LASTEXITCODE
       - name: 2 Install
-        run: .github/tally-spike/install.ps1
+        run: |
+          & .github/tally-spike/install.ps1 *>&1 | Tee-Object -FilePath $env:LOG -Append; exit $LASTEXITCODE
       - name: 3 Start Tally plain, test port 9000
         continue-on-error: true
-        run: .github/tally-spike/run.ps1 plain
-      - name: Upload screenshots
+        run: |
+          & .github/tally-spike/run.ps1 plain *>&1 | Tee-Object -FilePath $env:LOG -Append; exit $LASTEXITCODE
+      - name: Commit results back to the branch
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: shots-${{ matrix.os }}
-          path: shots/
-          if-no-files-found: warn
+        run: |
+          Get-Process tally -ErrorAction SilentlyContinue | Stop-Process -Force
+          git config user.name "tally-spike"; git config user.email "tally-spike@users.noreply.github.com"
+          git add spike-results
+          git commit -q -m "spike results ${{ github.run_id }} ${{ matrix.os }}`n`nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`nClaude-Session: https://claude.ai/code/session_01LprHoXx2ACgDW2AjxNH8wN"
+          for ($i = 0; $i -lt 5; $i++) {
+            git pull -q --rebase origin tally-real-spike
+            git push -q origin HEAD:refs/heads/tally-real-spike
+            if ($LASTEXITCODE -eq 0) { break }; Start-Sleep 5
+          }
