@@ -65,10 +65,18 @@ function Receipt($no, $amt) {
 }
 # Receipt numbering is Automatic by default, and the import then ignores VOUCHERNUMBER (round 2 got 1 and 2):
 # let the number through with "Automatic (Manual Override)"
-Post 'vouchertype Receipt numbering' ('<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>All Masters</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>' + $co + '</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA><TALLYMESSAGE xmlns:UDF="TallyUDF"><VOUCHERTYPE NAME="Receipt" ACTION="Alter"><NAME.LIST><NAME>Receipt</NAME></NAME.LIST><NUMBERINGMETHOD>Automatic (Manual Override)</NUMBERINGMETHOD></VOUCHERTYPE></TALLYMESSAGE></REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>') | Out-Null
-Post 'vouchertype Receipt now' ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCVT</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCVT" ISMODIFY="No"><TYPE>VoucherType</TYPE><FETCH>Name, NumberingMethod</FETCH><FILTERS>FCVTR</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="FCVTR">$Name = "Receipt"</SYSTEM></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') | Out-Null
+function VTNum($method) {
+  if ($method) {
+    Post "vouchertype Receipt -> $method" ('<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>All Masters</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>' + $co + '</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA><TALLYMESSAGE xmlns:UDF="TallyUDF"><VOUCHERTYPE NAME="Receipt" ACTION="Alter"><NAME.LIST><NAME>Receipt</NAME></NAME.LIST><NUMBERINGMETHOD>' + $method + '</NUMBERINGMETHOD></VOUCHERTYPE></TALLYMESSAGE></REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>') | Out-Null
+  }
+  $x = Post 'vouchertype Receipt now' ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCVT</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCVT" ISMODIFY="No"><TYPE>VoucherType</TYPE><FETCH>Name, NumberingMethod</FETCH><FILTERS>FCVTR</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="FCVTR">$Name = "Receipt"</SYSTEM></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>')
+  Write-Host ("   Receipt numbering now: " + [regex]::Match($x, '<NUMBERINGMETHOD[^>]*>([^<]*)<').Groups[1].Value)
+}
+VTNum ''
+VTNum 'Manual'
 $mid212 = Receipt 212 '500.00'
 $mid213 = Receipt 213 '600.00'
+VTNum 'Automatic'
 VList 'after-import'
 Rec 'xml-import'
 
@@ -107,13 +115,16 @@ function DayBook($n) {
 DayBook '09'
 Keys '{END}' 2 '12-last-row'
 Keys '{ENTER}' 4 '13-open'
-Keys '{ENTER}{ENTER}' 2 '14-to-amount'
+Keys '{ENTER}' 2 '14a-particular'
+Keys '{ENTER}' 2 '14b-ledger-accepted'
+Keys '{ENTER}' 2 '14-to-amount'
 Keys '800{ENTER}' 2 '15-new-amount'
 Keys '^a' 5 '16-altered'
 Rec 'b-alter'
 VList 'b'
 # (c) duplicate (Alt+2) the last voucher of the day and save
-Keys '{END}' 2 '17a-row'
+Shot '17a-daybook'
+Keys '{END}' 2 '17b-row'
 Keys '%2' 4 '17-duplicate'
 Keys '^a' 5 '18-dup-saved'
 Rec 'c-duplicate'
