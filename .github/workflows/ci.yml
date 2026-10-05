@@ -14,9 +14,10 @@ on:
 permissions:
   contents: read
 
+# Owner's rule (05-Oct-2026): a push never cancels a running CI run; each commit gets its own run to the end
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
 
 jobs:
   bridge-linux:
