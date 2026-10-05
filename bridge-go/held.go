@@ -9,11 +9,10 @@ import (
 	"html"
 	"math"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 )
-
-var reVchBlock = re(`<VOUCHER\b[\s\S]*?</VOUCHER>`)
 
 // --- the requests (request-only TDL)
 func fcCollection(id, company, statics, typ, fetch, filter string) string {
@@ -97,14 +96,14 @@ type vLine struct{ ledger, amount, body string }
 func voucherLines(v string) []vLine {
 	var out []vLine
 	for _, tag := range []string{"ALLLEDGERENTRIES.LIST", "LEDGERENTRIES.LIST", "ACCOUNTINGALLOCATIONS.LIST"} {
-		parts := strings.Split(v, "<"+tag+">")
+		parts := re(tagOpenRe(tag)).Split(v, -1)
 		for _, p := range parts[1:] {
-			e := strings.Split(p, "</"+tag+">")[0]
-			n := html.UnescapeString(strings.TrimSpace(group(`<LEDGERNAME>([^<]*)</LEDGERNAME>`, e, 1)))
+			e := re(`</`+regexp.QuoteMeta(tag)+`\s*>`).Split(p, 2)[0]
+			n := tagValue(e, "LEDGERNAME")
 			if n == "" {
 				continue
 			}
-			out = append(out, vLine{n, group(`<AMOUNT>([^<]*)</AMOUNT>`, e, 1), e})
+			out = append(out, vLine{n, tagRaw(e, "AMOUNT"), e})
 		}
 	}
 	return out
@@ -123,7 +122,7 @@ func (h *heldCopy) moves(a, b string) map[string]float64 {
 			continue
 		}
 		for _, v := range reVchBlock.FindAllString(readText(f), -1) {
-			if strings.EqualFold(group(`<ISOPTIONAL>([^<]*)<`, v, 1), "Yes") || strings.EqualFold(group(`<ISCANCELLED>([^<]*)<`, v, 1), "Yes") {
+			if strings.EqualFold(tagValue(v, "ISOPTIONAL"), "Yes") || strings.EqualFold(tagValue(v, "ISCANCELLED"), "Yes") {
 				continue
 			}
 			for _, l := range voucherLines(v) {
@@ -289,12 +288,12 @@ func heldLedgerVouchers(company, ledger, from, to string) ([]M, error) {
 					touches = true
 				}
 				bills := []any{}
-				for _, m := range re(`<BILLALLOCATIONS\.LIST>[\s\S]*?<NAME>([^<]*)</NAME>`).FindAllStringSubmatch(l.body, -1) {
-					if bn := html.UnescapeString(strings.TrimSpace(m[1])); bn != "" {
+				for _, m := range re(tagOpenRe("BILLALLOCATIONS.LIST")+`([\s\S]*?)</BILLALLOCATIONS\.LIST\s*>`).FindAllStringSubmatch(l.body, -1) {
+					if bn := tagValue(m[1], "NAME"); bn != "" {
 						bills = append(bills, bn)
 					}
 				}
-				entries = append(entries, M{"ledger": l.ledger, "amount": strings.TrimSpace(l.amount), "instrument": strings.TrimSpace(group(`<INSTRUMENTNUMBER>([^<]*)</INSTRUMENTNUMBER>`, l.body, 1)), "bills": bills})
+				entries = append(entries, M{"ledger": l.ledger, "amount": strings.TrimSpace(l.amount), "instrument": strings.TrimSpace(tagRaw(l.body, "INSTRUMENTNUMBER")), "bills": bills})
 			}
 			if !touches {
 				continue

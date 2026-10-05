@@ -101,7 +101,7 @@ func readTestAnchor(port int, company string) (string, map[string]int) {
 	anchor := ""
 	if raw, err := invokeTally(readTestTC, port, tagCheckRequest(company, today()), 60); err == nil {
 		for _, v := range reVoucher.FindAllString(raw, -1) {
-			if d := group(`<DATE>(\d{8})</DATE>`, v, 1); d != "" {
+			if d := tagDate(v, "DATE"); d != "" {
 				days[d]++
 				if d > anchor {
 					anchor = d
@@ -115,7 +115,7 @@ func readTestAnchor(port int, company string) (string, map[string]int) {
 	return anchor, days
 }
 
-var reVoucher = re(`<VOUCHER\b[\s\S]*?</VOUCHER>`)
+var reVoucher = reVchBlock
 
 // a day FinComTag's list shows with no entry, inside the list's span, the nearest before the anchor ("" when none): a
 // form that answers it with entries ignores the period
@@ -141,7 +141,7 @@ func onlyDay(raw, d string) bool {
 		return false
 	}
 	for _, v := range vs {
-		if group(`<DATE>(\d{8})</DATE>`, v, 1) != d {
+		if tagDate(v, "DATE") != d {
 			return false
 		}
 	}

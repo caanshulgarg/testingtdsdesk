@@ -1366,13 +1366,13 @@ func liveSourceB(company string, port int) (int, error) {
 		mid, aid   int64
 	}
 	var es []ent
-	for _, m := range re(`<VOUCHER\b[\s\S]*?</VOUCHER>`).FindAllString(raw, -1) {
-		g := strings.TrimSpace(html.UnescapeString(group(`<GUID>([^<]*)</GUID>`, m, 1)))
-		a, mid := toI64(group(`<ALTERID>\s*(\d+)`, m, 1)), toI64(group(`<MASTERID>\s*(\d+)`, m, 1))
+	for _, m := range reVchBlock.FindAllString(raw, -1) {
+		g := tagValue(m, "GUID")
+		a, mid := toI64(tagNum(m, "ALTERID")), toI64(tagNum(m, "MASTERID"))
 		if g == "" || a <= above || liveInWindow(key, a) { // review M4: FinCom's own postings are not foreign changes
 			continue
 		}
-		es = append(es, ent{g, normDate(group(`<DATE>([^<]*)</DATE>`, m, 1)), mid, a})
+		es = append(es, ent{g, normDate(tagValue(m, "DATE")), mid, a})
 	}
 	sort.Slice(es, func(i, j int) bool { return es[i].aid < es[j].aid })
 	live.mu.Lock()
@@ -1541,8 +1541,8 @@ func fetchVouchersByMasterIn(tc *TC, company string, port int, date string, mids
 		return nil, errors.New("Tally's answer could not be read: " + cut(flat(raw), 120))
 	}
 	out := map[string]string{}
-	for _, m := range re(`<VOUCHER\b[\s\S]*?</VOUCHER>`).FindAllString(raw, -1) {
-		if id := group(`<MASTERID>\s*(\d+)`, m, 1); id != "" {
+	for _, m := range reVchBlock.FindAllString(raw, -1) {
+		if id := tagNum(m, "MASTERID"); id != "" {
 			out[id] = cleanXML(m)
 		}
 	}
@@ -1558,8 +1558,8 @@ func fetchLedgerByMaster(tc *TC, company string, port int, mid int64) (string, e
 	if !strings.Contains(raw, "<ENVELOPE") {
 		return "", errors.New("Tally's answer could not be read: " + cut(flat(raw), 120))
 	}
-	for _, m := range re(`<LEDGER\b[\s\S]*?</LEDGER>`).FindAllString(raw, -1) {
-		if toI64(group(`<MASTERID>\s*(\d+)`, m, 1)) == mid {
+	for _, m := range reLedBlock.FindAllString(raw, -1) {
+		if toI64(tagNum(m, "MASTERID")) == mid {
 			return cleanXML(m), nil
 		}
 	}
@@ -1577,9 +1577,9 @@ func voucherLedgerNames(x string) []string {
 			out = append(out, n)
 		}
 	}
-	add(group(`<PARTYLEDGERNAME>([^<]*)</PARTYLEDGERNAME>`, x, 1))
-	for _, m := range re(`<LEDGERNAME>([^<]*)</LEDGERNAME>`).FindAllStringSubmatch(x, -1) {
-		add(m[1])
+	add(tagRaw(x, "PARTYLEDGERNAME"))
+	for _, n := range re(tagRe("LEDGERNAME")).FindAllStringSubmatch(x, -1) {
+		add(n[1])
 	}
 	return out
 }
@@ -1772,13 +1772,13 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 		}
 		live.mu.Lock()
 		c.xml, c.bodyTried = x, true
-		if n := strings.TrimSpace(html.UnescapeString(group(`<LEDGER NAME="([^"]*)"`, x, 1))); n != "" {
+		if n := strings.TrimSpace(html.UnescapeString(group(`<LEDGER(?:\s[^>]*?)?\sNAME="([^"]*)"`, x, 1))); n != "" {
 			c.name = n
 		}
-		if p := strings.TrimSpace(html.UnescapeString(group(`<PARENT>([^<]*)</PARENT>`, x, 1))); p != "" {
+		if p := tagValue(x, "PARENT"); p != "" {
 			c.parent = p
 		}
-		if g := strings.TrimSpace(html.UnescapeString(group(`<GUID>([^<]*)</GUID>`, x, 1))); g != "" {
+		if g := tagValue(x, "GUID"); g != "" {
 			c.guid = g
 		}
 		live.mu.Unlock()
@@ -1809,7 +1809,7 @@ func (c *change) wire() M {
 	// agreeing, not fetched); a created entry's, a mismatched line's, or one the body does not carry goes as lineFid
 	fid, lineFid := c.fid, c.lineFid
 	if fid != "" && (c.idsMismatch || (c.fetchesIds() && (c.event == "created" || c.xml == "" ||
-		!strings.Contains(html.UnescapeString(group(`<NARRATION>([^<]*)</NARRATION>`, c.xml, 1)), "TDSDesk:"+fid)))) {
+		!strings.Contains(html.UnescapeString(tagRaw(c.xml, "NARRATION")), "TDSDesk:"+fid)))) {
 		fid, lineFid = "", fid
 	}
 	narr := c.narr

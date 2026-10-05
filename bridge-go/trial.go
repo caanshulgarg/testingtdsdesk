@@ -269,7 +269,7 @@ func runBench(company string) (M, error) {
 			if err != nil {
 				return nil, fmt.Errorf("Tally did not answer request %d of the %s: %s (the run stopped there)", i+1, k.what, tallyTrouble(err.Error()))
 			}
-			if toInt(group(`<CREATED>\s*(\d+)`, raw, 1)) != 1 {
+			if toInt(tagNum(raw, "CREATED")) != 1 {
 				failed++
 			}
 		}

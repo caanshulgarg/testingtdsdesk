@@ -227,7 +227,7 @@ func readTestCollectionForms(port int, company string) {
 		n, inMonth := 0, true
 		for _, v := range reVoucher.FindAllString(raw, -1) {
 			n++
-			if dd := group(`<DATE>(\d{8})</DATE>`, v, 1); dd[:minI(6, len(dd))] != ym {
+			if dd := tagDate(v, "DATE"); dd[:minI(6, len(dd))] != ym {
 				inMonth = false
 			}
 		}
@@ -263,7 +263,7 @@ func readTestEditLogProbe(port int, company string, answers ...string) {
 	best, mid := int64(-1), ""
 	for _, raw := range answers {
 		for _, v := range reVoucher.FindAllString(raw, -1) {
-			a, m := toI64(group(`<ALTERID>\s*(\d+)`, v, 1)), group(`<MASTERID>\s*(\d+)`, v, 1)
+			a, m := toI64(tagNum(v, "ALTERID")), tagNum(v, "MASTERID")
 			if m != "" && a > best {
 				best, mid = a, m
 			}
@@ -487,12 +487,12 @@ func liveSourceC(company string, port int) (int, error) {
 	var aids []int64
 	ents := reVoucher.FindAllString(raw, -1)
 	sort.SliceStable(ents, func(i, j int) bool {
-		return toI64(group(`<ALTERID>\s*(\d+)`, ents[i], 1)) < toI64(group(`<ALTERID>\s*(\d+)`, ents[j], 1))
+		return toI64(tagNum(ents[i], "ALTERID")) < toI64(tagNum(ents[j], "ALTERID"))
 	})
 	for _, m := range ents {
-		g := strings.TrimSpace(html.UnescapeString(group(`<GUID>([^<]*)</GUID>`, m, 1)))
-		a, mid := toI64(group(`<ALTERID>\s*(\d+)`, m, 1)), toI64(group(`<MASTERID>\s*(\d+)`, m, 1))
-		d := normDate(group(`<DATE>([^<]*)</DATE>`, m, 1))
+		g := tagValue(m, "GUID")
+		a, mid := toI64(tagNum(m, "ALTERID")), toI64(tagNum(m, "MASTERID"))
+		d := normDate(tagValue(m, "DATE"))
 		if g == "" || a <= from || (len(d) == 8 && d[:6] != ym) || liveInWindow(key, a) {
 			continue
 		}

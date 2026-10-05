@@ -137,8 +137,8 @@ func measureOneTC(tc *TC, port int, key, what, x, count string) (*mItem, string)
 	if count != "" {
 		it.n = len(xmlDoc(raw).All(count))
 	}
-	if re(`(?i)<LINEERROR>`).MatchString(raw) {
-		it.err = "Tally: " + cut(flat(group(`(?i)<LINEERROR>([\s\S]*?)</LINEERROR>`, raw, 1)), 200)
+	if re(`(?i)<LINEERROR[\s>]`).MatchString(raw) {
+		it.err = "Tally: " + cut(flat(group(`(?i)<LINEERROR(?:\s[^>]*)?>([\s\S]*?)</LINEERROR>`, raw, 1)), 200)
 	}
 	return it, raw
 }

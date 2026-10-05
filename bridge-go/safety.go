@@ -288,7 +288,7 @@ func stampFinComID(x string, id any) (string, string) {
 		k = "B" + strings.ToUpper(hex.EncodeToString(h[:]))[:16]
 	}
 	tag := "TDSDesk:" + k
-	if loc := re(`<NARRATION>`).FindStringIndex(x); loc != nil {
+	if loc := re(tagOpenRe("NARRATION")).FindStringIndex(x); loc != nil {
 		rest := x[loc[1]:]
 		sep := " | "
 		if re(`^\s*</NARRATION>`).MatchString(rest) {
@@ -296,10 +296,10 @@ func stampFinComID(x string, id any) (string, string) {
 		}
 		return x[:loc[1]] + tag + sep + rest, tag
 	}
-	if loc := re(`<NARRATION\s*/>`).FindStringIndex(x); loc != nil {
+	if loc := re(`<NARRATION(?:\s[^>]*)?/>`).FindStringIndex(x); loc != nil {
 		return x[:loc[0]] + "<NARRATION>" + tag + "</NARRATION>" + x[loc[1]:], tag
 	}
-	if loc := re(`</DATE>`).FindStringIndex(x); loc != nil {
+	if loc := re(`</DATE\s*>`).FindStringIndex(x); loc != nil {
 		return x[:loc[1]] + "<NARRATION>" + tag + "</NARRATION>" + x[loc[1]:], tag
 	}
 	open := re(`^\s*<VOUCHER\b[^>]*>`).FindString(x)
@@ -309,7 +309,7 @@ func stampFinComID(x string, id any) (string, string) {
 // the voucher's narration with its tag (already in it) moved to the front: "TDSDesk:<id> | <the rest>"; the rest keeps
 // its words, less the separator that stood next to the tag. A tag outside the narration is left where it is
 func tagFirst(x, tag string) string {
-	m := re(`<NARRATION>([\s\S]*?)</NARRATION>`).FindStringSubmatchIndex(x)
+	m := re(tagOpenRe("NARRATION") + `([\s\S]*?)</NARRATION\s*>`).FindStringSubmatchIndex(x)
 	if m == nil {
 		return x
 	}
@@ -425,7 +425,7 @@ func otherTag(narration, tag string) bool {
 // an accepted entry (CREATED/ALTERED with a voucher id) looked for in Tally: by its tag on its date, then by Tally's
 // voucher id in its month. found: the head and how; not found: nil, ""; Tally not answering: an error (nothing is decided)
 func findAccepted(port int, company, xml, lv string) (M, string, error) {
-	date, tag := group(`<DATE>(\d{8})</DATE>`, xml, 1), reTag.FindString(xml)
+	date, tag := tagDate(xml, "DATE"), reTag.FindString(xml)
 	// first Tally's own voucher id, looked up directly (round 6)
 	if lv != "" {
 		k, err := voucherByMaster(port, company, date, lv)
@@ -461,7 +461,7 @@ func markAccepted(r M, company, job, lv string, heads []M, lookedUp string) {
 	if xs == "" {
 		xs = str(r["xml"])
 	}
-	date, tag := group(`<DATE>(\d{8})</DATE>`, xs, 1), reTag.FindString(xs)
+	date, tag := tagDate(xs, "DATE"), reTag.FindString(xs)
 	// ok false (round 5, C7): not posted as far as FinCom knows (an ALTERED one must not count as posted); accepted true:
 	// never failed, never sent again (itemsToSend, confirmedResult, the job's count)
 	r["ok"], r["verified"], r["outcomeUnknown"], r["accepted"], r["state"], r["lastVchId"] = false, nil, true, true, "unknown", lv
@@ -615,17 +615,17 @@ func sendReadGuard(company, guid string, alter int64, count int) {
 // the head Tally gave is the entry sent (its type, date and party): for the copy (round 7, F6: a confirmation by voucher
 // id with no tag in the narration is put in the copy only when they match; else the keeper reads the day)
 func headMatchesXML(h M, xml string) bool {
-	vt := strings.TrimSpace(group(`<VOUCHERTYPENAME>([^<]*)</VOUCHERTYPENAME>`, xml, 1))
+	vt := strings.TrimSpace(tagRaw(xml, "VOUCHERTYPENAME"))
 	if vt == "" {
 		vt = group(`VCHTYPE="([^"]*)"`, xml, 1)
 	}
 	if !strings.EqualFold(strings.TrimSpace(html.UnescapeString(vt)), strings.TrimSpace(str(h["type"]))) {
 		return false
 	}
-	if normDate(str(h["date"])) != group(`<DATE>(\d{8})</DATE>`, xml, 1) {
+	if normDate(str(h["date"])) != tagDate(xml, "DATE") {
 		return false
 	}
-	party := foldName(html.UnescapeString(group(`<PARTYLEDGERNAME>([^<]*)</PARTYLEDGERNAME>`, xml, 1)))
+	party := foldName(html.UnescapeString(tagRaw(xml, "PARTYLEDGERNAME")))
 	hp := str(h["party"])
 	if party != "" && hp != "" && party != hp {
 		return false
