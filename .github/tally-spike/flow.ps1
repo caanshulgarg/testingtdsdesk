@@ -66,7 +66,7 @@ if (-not $have) {
     if ($have) { break }
     Keys $k 6 ("C-{0}-{1}" -f $n, ($k -replace '[^a-zA-Z]', '')); $have = ListCo "C$n"; $n++
   }
-  Shot 'C-9-end'
+  Keys '^a' 5 'C-9-features-accepted'
 }
 Write-Host "== data folder"; Get-ChildItem $data -Recurse -Depth 1 | Select-Object FullName, Length | Format-Table -AutoSize | Out-String -Width 200 | Write-Host
 $folder = Get-ChildItem $data -Directory | Where-Object { $_.Name -match '^\d+$' } | Select-Object -First 1
@@ -87,7 +87,30 @@ $led = @"
 "@
 Post 'D-import-ledger' $led | Out-Null
 Start-Sleep 3; Shot 'D-3-after-ledger'
-Write-Host "== recorder folder $rec"
+function Rec($label) { Write-Host "== recorder folder $rec ($label)"; Get-ChildItem $rec -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $($_.Name) $($_.Length)"; Get-Content $_.FullName -Encoding Unicode | Select-Object -Last 6 | ForEach-Object { Write-Host "    $_" } } }
+Rec 'after XML ledger import'
+# the TDL's own function, called through the XML port
+foreach ($fid in @('FCRLiveLog', '$$FCRLiveLog')) {
+  Post "D-call-$fid" ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Function</TYPE><ID>' + $fid + '</ID></HEADER><BODY><DESC><STATICVARIABLES><SVCURRENTCOMPANY>' + $co + '</SVCURRENTCOMPANY></STATICVARIABLES><FUNCPARAMLIST><PARAM>xml_probe</PARAM></FUNCPARAMLIST></DESC></BODY></ENVELOPE>') | Out-Null
+}
+Rec 'after calling FCRLiveLog by XML'
+# which TDLs Tally says it loaded: F1 Help -> TDLs & AddOns
+Keys '{F1}' 3 'D-4-f1'
+Keys 't' 4 'D-5-tdls'
+Keys '{ESC}' 2 ''; Keys '{ESC}' 2 'D-6-back'
+# a ledger made on screen (Form Accept path): Gateway -> Create -> Ledger
+Keys 'c' 3 'D-7-create'
+Keys 'Ledger{ENTER}' 3 'D-8-ledger-form'
+Keys 'UI Party{ENTER}' 2 ''
+Keys '{ENTER}' 2 'D-9-under'
+Keys 'Sundry Debtors{ENTER}' 2 'D-10-group'
+Keys '^a' 4 'D-11-saved'
+Rec 'after ledger on screen'
+Post 'D-ledgers' '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCLed</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCLed" ISMODIFY="No"><TYPE>Ledger</TYPE><FETCH>Name,Parent,MasterID</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>' | Out-Null
+Write-Host "== files changed in the last 40 minutes (Tally dir, data, temp)"
+Get-ChildItem $dir, $data, $env:TEMP, 'C:\ProgramData\FinCom' -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -gt (Get-Date).AddMinutes(-40) -and $_.Extension -notmatch '1800|tsf' } | Select-Object -First 40 | ForEach-Object { Write-Host "  $($_.FullName) $($_.Length)" }
+Get-ChildItem $dir, $data -Recurse -File -Include *tdl*, *err* -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "== $($_.FullName)"; Get-Content $_.FullName -Tail 30 | Write-Host }
+Write-Host "== end"
 Get-ChildItem $rec -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $($_.Name) $($_.Length)"; Get-Content $_.FullName -Encoding Unicode | Select-Object -First 10 | ForEach-Object { Write-Host "    $_" } }
 Get-ChildItem "$dir\logs", $data -Filter *.log -Recurse -ErrorAction SilentlyContinue | Select-Object -First 5 | ForEach-Object { Write-Host "== $($_.FullName)"; Get-Content $_.FullName -Tail 20 | Write-Host }
 Get-Process tally -ErrorAction SilentlyContinue | Stop-Process -Force
