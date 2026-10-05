@@ -2,7 +2,7 @@
 stands in one line, from the bridge's heartbeat, with one button, Update now:
   - "Tally open on NWS144 · last read 15:34", "Tally is closed on NWS144", "NWS144 is offline",
     "Tally is not answering on NWS144 since 12:28", "Background reading paused on NWS144";
-  - on the Post page's status line ("Posting into ZZ TEST · Tally open on NWS144 · read 15:34 · Update now", what is
+  - on the Post page's status line ("Posting into ZZ TEST · Tally open on NWS144 · read 15:34 IST · Update now", what is
     wrong on a second line: second pass of 02-Oct-2026), in the Tally panel of the top bar, and on the Tally page;
   - Update now sends the event (tally_want_update for the client); opening the client wakes its Tally computer once
     (tally-ingest, kind "wake", what "open"), and not again within five minutes;
@@ -50,7 +50,7 @@ SETUP = """async () => {
 STATE = """(x) => { const b = window.__dev.info.beat; Object.assign(b, {tallyState: "open", tally: true, paused: false, notAnsweringSince: ""}, x.beat || {});
   window.__dev.info.beat.at = new Date(Date.now() - (x.ageMin || 0) * 60000).toISOString(); BeatSeen[window.__dev.id] = null; render(); }"""
 with sync_playwright() as p:
-    br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1440, "height": 950}); pg.on("pageerror", lambda e: errors.append(str(e)))
+    br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1440, "height": 950}, timezone_id="Asia/Kolkata"); pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.goto("http://localhost:8241/"); pg.wait_for_timeout(2500)
     pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
     E = lambda js, *a: pg.evaluate(js, *a)
@@ -64,7 +64,7 @@ with sync_playwright() as p:
     # 1. Tally open, with the last read
     line = lambda sel="#app [data-post-problem]": pg.inner_text(sel).replace("\n", " ").strip() if pg.locator(sel).count() else ""
     pline = lambda: line("#app [data-post-line]")
-    ok(pline() == "Posting into ZZ TEST · Tally open on NWS144 · read 15:34 · Update now" and line() == "", "Post page: one line: %r" % pline())
+    ok(pline() == "Posting into ZZ TEST · Tally open on NWS144 · read 15:34 IST · Update now" and line() == "", "Post page: one line: %r" % pline())
     ok(pg.locator("#app [data-post-line] [data-update-now]").count() == 1, "Post page: in it, one button: Update now")
     pg.click("#app [data-post-line] [data-update-now]"); pg.wait_for_timeout(400)
     ok(["tally_want_update", {"p_client": cid}] in E("window.__rpc"), "Update now sends the event (tally_want_update for the client)")
@@ -85,7 +85,7 @@ with sync_playwright() as p:
     # the Tally panel of the top bar says the same line
     E("() => doAct('tallyPanel')"); pg.wait_for_timeout(400)
     pl = line("[data-panel-tally-line] [data-tally-line-text]")
-    ok(pl == "Tally open on NWS144 · last read 15:34", "the Tally panel: %r" % pl)
+    ok(pl == "Tally open on NWS144 · last read 15:34 IST", "the Tally panel: %r" % pl)
     E("() => doAct('tallyPanelClose')"); pg.wait_for_timeout(300)
     # the Tally page: one line a client, each with Update now
     E("() => navHome('tally')"); pg.wait_for_timeout(800)
