@@ -10,7 +10,7 @@ Windows server; each user's bridge is its own computer key, tally_devices row an
      (bridge null), nothing deleted.
   4. tally_post_enqueue_to(p_id, p_client, p_payload, p_target): no target -> the poster's own linked bridge (its computer);
      no link -> null (the computer's main bridge, as today); an owner may pick another linked bridge; staff may not; a
-     changes-only bridge is never a target (own link changes-only: null); an unknown bridge refused; 53's rules (postTo, an id
+     changes-only bridge, or one that only reads, is never a target (own link changes-only: null); an unknown bridge refused; 53's rules (postTo, an id
      queued twice) unchanged; the 3-argument tally_post_enqueue unchanged (target null).
   5. tally_post_take_for(p_device, p_bridge, p_main): a bridge takes only postings for it, and those with no target only when
      it is the computer's main bridge; a changes-only bridge takes none; granted to the service role only (nobody here).
@@ -127,6 +127,9 @@ try:
     ok(r.get("ok") is False and "changes only" in r.get("error", "") and not jrow(6), "4. a changes-only bridge is never a target (%s)" % r)
     r = enq(STAFF2, 7)
     ok(r.get("ok") is True and jrow(7)["t"] == "null", "4. Meena's own bridge is changes only: her posting goes to the computer's main bridge, as today (%s | %s)" % (r, jrow(7)))
+    db.sql("update tally_devices set main_bridge = %s where id = %s" % (q(B1), q(D1)))
+    r = enq(OWNER, 12, target=B4)
+    ok(r.get("ok") is False and "only reads" in r.get("error", "") and not jrow(12), "4. a bridge that only reads (another is the main one on its computer) is never a target (%s)" % r)
     r = enq(OWNER, 8, target="go-ffff00000f")
     ok(r.get("ok") is False and not jrow(8), "4. a bridge FinCom has not heard from is refused (%s)" % r)
     r = enq(OWNER, 9, target=B2, ids=["V2"])

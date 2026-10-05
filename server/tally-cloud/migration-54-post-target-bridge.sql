@@ -12,8 +12,8 @@
 --   3. tally_member_bridges (firm, member): the bridge a member posts through by default, set by an owner on the Tally page.
 --      tally_member_bridge_link(p_user, p_device, p_bridge), owners only; a null bridge unlinks (the row stays, bridge null).
 --   4. tally_post_enqueue_to(p_id, p_client, p_payload, p_target): tally_post_enqueue (36b's, unchanged, every check of it
---      kept) with a target. No target given: the poster's own linked bridge, unless it is changes only (then none: the main
---      bridge). A target other than the poster's own linked bridge: owners only. A changes-only bridge is never a target; a
+--      kept) with a target. No target given: the poster's own linked bridge, unless it may not post (changes only, or not
+--      the main bridge of its computer; then none: the main bridge). A target other than the poster's own linked bridge: owners only. A changes-only bridge, or one that only reads (not the main bridge of its computer), is never a target; a
 --      bridge FinCom has not heard from on one of the firm's computers is refused. The posting goes to the target's computer
 --      (device_id). Members only.
 --   5. tally_post_take_for(p_device, p_bridge, p_main): tally_post_take (36b's) for one bridge: the oldest waiting posting of
@@ -82,6 +82,17 @@ returns boolean language sql stable security definer set search_path = public, p
 $function$;
 revoke all on function public.tally_bridge_changes_only_on(uuid, text) from public, anon, authenticated;
 
+-- whether a bridge may be given postings: not changes only, and the main bridge of its computer (the one chosen,
+-- tally_devices.main_bridge; none chosen: a bridge not in test mode), as tally-ingest's mayPost (internal: granted to nobody)
+create or replace function public.tally_bridge_may_post(p_device uuid, p_bridge text)
+returns boolean language sql stable security definer set search_path = public, pg_temp as $function$
+  select not tally_bridge_changes_only_on(p_device, p_bridge)
+     and exists (select 1 from tally_devices d where d.id = p_device and d.info -> 'bridges' ? p_bridge
+                   and (case when nullif(d.main_bridge, '') is not null then d.main_bridge = p_bridge
+                             else coalesce(d.info -> 'bridges' -> p_bridge ->> 'mode', 'main') <> 'test' end))
+$function$;
+revoke all on function public.tally_bridge_may_post(uuid, text) from public, anon, authenticated;
+
 create or replace function public.tally_bridge_changes_only(p_device uuid, p_bridge text, p_on boolean)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
 declare f uuid := my_firm(); b text := left(btrim(coalesce(p_bridge, '')), 40);
@@ -125,7 +136,7 @@ begin
   if t is null then
     -- the poster's own linked bridge, unless it is changes only (then none: the computer's main bridge, as today)
     if own.bridge_id is not null and tally_bridge_device(f, own.bridge_id) is not null
-       and not tally_bridge_changes_only_on(tally_bridge_device(f, own.bridge_id), own.bridge_id) then t := own.bridge_id; end if;
+       and tally_bridge_may_post(tally_bridge_device(f, own.bridge_id), own.bridge_id) then t := own.bridge_id; end if;
   else
     if t is distinct from own.bridge_id and not is_owner then
       return jsonb_build_object('ok', false, 'error', 'Only an owner of the firm can post through another bridge than your own.'); end if;
@@ -133,6 +144,8 @@ begin
       return jsonb_build_object('ok', false, 'error', 'FinCom has not heard from that bridge on any of the firm''s computers; nothing was queued.'); end if;
     if tally_bridge_changes_only_on(tally_bridge_device(f, t), t) then
       return jsonb_build_object('ok', false, 'error', 'That bridge is set to changes only: it reads Tally''s changes and never posts. Nothing was queued.'); end if;
+    if not tally_bridge_may_post(tally_bridge_device(f, t), t) then
+      return jsonb_build_object('ok', false, 'error', 'That bridge only reads Tally: another bridge is the main one on its computer. Nothing was queued.'); end if;
   end if;
   if t is not null then tdev := tally_bridge_device(f, t); end if;
   r := tally_post_enqueue(p_id, p_client, p_payload);
