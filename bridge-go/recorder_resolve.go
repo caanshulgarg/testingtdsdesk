@@ -808,3 +808,6 @@ func liveResolveOne(h heldLine) (x string, answered, final bool, err error) {
 	}
 	return x, true, kind == wrongFinal, nil
 }
+
+// stub
+func applyHeldLines(j M) {}
