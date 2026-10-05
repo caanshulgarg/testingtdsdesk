@@ -605,7 +605,7 @@ func TestInstallerRecorderAndAddonFolders(t *testing.T) {
 	if es, _ := addonFiles.ReadDir("addon"); len(es) == 0 {
 		t.Error("no .tdl built into the exe")
 	}
-	if BridgeVersion != "2.2.2" { // 2.2.2 (the owner's NWS144 findings): every entry fetched from Tally, the add-on's ids not trusted
+	if BridgeVersion != "2.2.3" { // 2.2.3 (the owner's request): the tray's Test fetching an entry, and the live files named d-Mon-yy
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 }

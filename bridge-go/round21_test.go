@@ -548,7 +548,7 @@ func TestAddonAnyCompany(t *testing.T) {
 
 // --- C, D: the version, and the sheets name no company
 func TestVersionAndSheets2110(t *testing.T) {
-	if BridgeVersion != "2.2.2" { // 2.2.2 (the owner's NWS144 findings): every entry fetched from Tally, the add-on's ids not trusted
+	if BridgeVersion != "2.2.3" { // 2.2.3 (the owner's request): the tray's Test fetching an entry, and the live files named d-Mon-yy
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	for _, f := range []string{"../docs/bridge-2.1.10-test-sheet.txt", "../docs/recorder-trial-sheet.txt"} {

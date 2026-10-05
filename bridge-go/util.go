@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-var BridgeVersion = "2.2.2" // set at build time for test builds (-X main.BridgeVersion=...)
+var BridgeVersion = "2.2.3" // set at build time for test builds (-X main.BridgeVersion=...)
 
 // M is a JSON object, as PowerShell's [ordered]@{} was
 type M = map[string]any
