@@ -259,3 +259,193 @@ them pass. File md5 after the fixes: `aba6aba619b5952e54a5c4d231a90a14`.
 - **L6: Fixed.** There are two statement-level triggers, after insert and after update, with the transition table
   `new_days`. They run one release per (book, day) in the statement. Check: one UPDATE of two days releases both days'
   held deletes.
+
+## Round 2 (05-Oct-2026, after the fixes)
+
+Branch `tax-accuracy`, commit `e4874f8`. This round was read-only, and this section is the only change. The file
+reviewed is `server/tally-cloud/migration-50-recorder-held.sql`, md5 `aba6aba619b5952e54a5c4d231a90a14` (the same as
+in the fixes section).
+
+### Test runs (one at a time)
+
+| Suite | Result |
+|---|---|
+| `python3 tests/run_migration50.py` | **all passed** (exit 0, 85 checks) |
+| `python3 tests/run_migration_order.py` | **all checks passed** (exit 0; 144 security definer functions search `public, pg_temp`; both orders end with the same 66 function texts) |
+
+md5 of each function body. Each is the file's text between the `$function$` marks, and each equals the suite's
+`md5(prosrc)`.
+
+| Function | File line | md5 |
+|---|---|---|
+| `tally_recorder_line(uuid, uuid, jsonb, bigint)` | `:95` | `9bc527da5e6ad1bbc0cd9566b1da549f` |
+| `tally_ingest_delete(uuid, text, bigint, boolean, text)` | `:383` | `a43aa5450e7ddedcc2f2ee4453eaa42b` |
+| `tally_recorder_apply(uuid, uuid, uuid, jsonb)` | `:425` | `97a585277a7f4da9b105575e4c7fb9bf` |
+| `tally_recorder_release_day(uuid, date)` | `:489` | `cc892ff720a5edfa1a1ba5b02b61a004` |
+| `tally_days_recorder_release()` | `:551` | `c54362f5ed2d515d9f73fda2b6022e03` |
+
+### Staging's base (read-only SELECTs, project `tds-desk-staging`)
+
+| Function on staging | md5(prosrc) | Expected base | Result |
+|---|---|---|---|
+| `tally_recorder_line` | `360fb49a87d037356a863591456beaca` | 48's text (`360fb49a…`) | equal |
+| `tally_ingest_delete` | `8db783fcde9064bf8e6188a1ce63e594` | 44's text (`8db783fc…`) | equal |
+| `tally_recorder_apply` | `fef11f9e85d1f4e5cde79cd48a771543` | 48's text (`fef11f9e…`) | equal |
+
+The same md5s come from the repository's 48 and 44 texts.
+
+Other facts about staging:
+- `tally_recorder_release_day` and `tally_days_recorder_release` do not exist yet, and `tally_days` has no trigger.
+- The state CHECK is exactly 44's text, so the swap at `:76-92` takes it.
+- `tally_recorder_lines` holds **4 rows** (all held, 88 kB). `tally_days` holds 553 rows and `tally_vouchers` 4,016.
+- Staging has two `tally_ingest_day` overloads (7 and 8 arguments). Both upsert `tally_days`, so the triggers cover both.
+
+### Confirmation of round 1
+
+| Finding | Result | Evidence |
+|---|---|---|
+| H1 "nothing to delete" on a cut-short or old Day Book, late create revives | **Confirmed** (safe) | `:183-185` complete and AlterID tests; `:220, :229-230` an applied delete makes an older line stale; `:357-368` a held delete is applied when its entry arrives; E2a/E2b/E3 checks. **But** the AlterID half holds deletes it should release: see N1 |
+| M1 type/number/date matching hits another entry | **Confirmed** | `:126-128` GUID from MasterID; `:330-334` exactly one fit under a known prefix (never null to null); `:336-338` an 'altered' line only when the copy shows the change; `:349-356` the same for 'replaced' |
+| M2 cost, churn, 500 cap | **Confirmed** | `:497-516` only the lines the day can release, no window; `:376` no rewrite when nothing changes; indexes at `:480-481`; suite timings 23 ms (on) and 24 ms (off) a store with 3,000 held lines |
+| L1 statement timeout not swallowed | **Confirmed** | `:565` `when query_canceled or others`; check passed (the day is stored, the line released on the next store) |
+| L2 re-run error makes the line 'failed' | **Confirmed** | `:526-530` put back to 'held', the error said once |
+| L3 old held words on GUID-less deletes | **Confirmed** | `:155`, `:589-590` |
+| L4 placeholder AlterID counted | **Confirmed** | `:456` (apply), `:534` (release_day) |
+| L5 loop does not re-check state | **Confirmed** | `:519-520` `for update`, then skipped unless still held |
+| L6 row trigger | **Confirmed** | `:570-579` statement level |
+
+### What the fixes introduced, checked
+
+- **Statement triggers on an upsert.** `tally_ingest_day` writes the day with one `INSERT ... ON CONFLICT DO UPDATE`
+  (44 `:392`). It never inserts and then updates the same row: one statement cannot touch a row twice.
+  - Measured on a scratch pg_stand (PG 16; staging runs PG 17, and the rule is the same): each such statement fires
+    **both** statement triggers.
+  - Each row appears in exactly one transition table. A new day is in the insert trigger's `new_days`; an existing day
+    is in the update trigger's. The other trigger gets an empty table and loops zero times.
+  - So each stored day gets exactly one release. If a day were written twice in one transaction, the second release
+    would find nothing still held, which is harmless.
+- **Recursion.** None.
+  - `tally_ingest_day` (44 `:392`) is the only function that writes `tally_days`. The functions 11 to 23 that also
+    wrote it have been replaced.
+  - Nothing the release calls writes `tally_days`: `tally_recorder_line`, `tally_ingest_entries`,
+    `tally_ingest_delete`, `tally_ledger_day_rebuild` and `tally_voucher_version_lines`.
+  - No other trigger writes it. The triggers on `tally_vouchers` are 32's origin trigger and its version keeper.
+- **A failure never fails the day.**
+  - Each day is a subtransaction (`:558-562`), and so is the whole trigger body (`:565-567`).
+  - `others` covers every error except `query_canceled`, which the outer handler catches.
+  - The suite proves the case of a statement timeout.
+  - The cost of this: a cancel undoes every release in that statement. Since a statement stores one day, that is
+    acceptable.
+- **`tally_recorder_apply`.** A diff against 48's text (`migration-48-day-cache-once.sql`) shows exactly one change.
+  The `if` at `:454-456` gains `and x->>'object_guid' !~ '-0{8}$'`. Grants are revoked from public, anon and
+  authenticated, and granted to service_role only (`:475-476`, as 48 `:371-372`). Its callers: `tally-ingest`
+  (`index.ts:934`) with the service key; the app never calls it.
+- **The new partial indexes** (`:480-481`).
+  - `IF NOT EXISTS` makes a re-run safe. It would also keep a same-named index with another definition, which is
+    unlikely.
+  - `CREATE INDEX CONCURRENTLY` cannot run inside the file's `begin ... commit`. A plain build takes a SHARE lock, which
+    blocks writes to `tally_recorder_lines` while the build scans the whole table (a partial index still reads every row).
+  - On staging's 4 rows (88 kB), the build takes milliseconds.
+  - On a big table, expect about 1 s per 1 to 2 million rows. The earlier `ALTER TABLE ... ADD CONSTRAINT CHECK`
+    (`:85`) is the bigger lock: ACCESS EXCLUSIVE while it validates every row. Both are bounded by `lock_timeout = '10s'`
+    while waiting, but not while building.
+  - No issue at today's size. If the table reaches millions of rows before 50 runs, build the two indexes
+    `CONCURRENTLY` by hand first; the file's `IF NOT EXISTS` then skips them.
+- **The create-then-held-delete rule** (`:357-368`).
+  - **Permission.** `tally_ingest_delete` is reached either with the service role (apply, short retry, the day trigger
+    under `tally_ingest_day`) or with `fincom.recorder_release` set (an owner's release, `release_day`). So its
+    permission check never fires.
+  - **Duplicates.** The guard against the `applied_once` unique index is right.
+  - **Order.** It runs only after the entry is applied, so the entry is never left live.
+- **The stale rule for a late create** (`:220, :229-230`).
+  - It comes after the copy's own AlterID check, so it adds nothing when the entry is in the copy (`c_alter` already
+    carries the delete's AlterID).
+  - It turns a late lower create into 'stale' when the delete was "nothing to delete".
+  - It counts only `event = 'deleted'`, which is right: a cancelled entry still exists.
+- **The "complete day" test** (`:185`: `tally_days.n` = the live entries of the day).
+  - A soft-deleted entry does not break it. A full read marks every entry missing from the file, and
+    `tally_ingest_entries` clears `deleted_at` on every entry in it (48 `:82`). So after a full read, the live count
+    equals the distinct GUIDs sent.
+  - A cancelled entry does not break it either. It stays live (`deleted_at` null) and is kept by the parser when it has
+    a number (`parse.js:126`), so both sides count it. Staging's Receipt 190 shows this: cancelled, live, counted
+    (05-Oct `n = 2 = live`).
+  - All 553 of staging's stored days pass the test today.
+  - What can fail it is L7 below. A day that recorder lines changed after its store also fails, but only until the day
+    is stored again.
+
+### Medium
+
+#### N1. The AlterID half of "nothing to delete" holds a delete for ever, and the held words promise a release that cannot come
+
+- **Where:** `:184` (`d.alter_max >= alt`), the words at `:190` and `:396`.
+- **The problem:** `tally_days.alter_max` is the highest AlterID **among that day's entries**, not the company's
+  AlterID when the file was read. Deleting an entry takes a new AlterID, which is above every entry already on the day.
+  So a Day Book of that day made after the delete still reaches the delete's AlterID only if another entry **of the
+  same day** was created or altered after it. Usually none is, and for a past day almost never.
+- **Measured on staging** (read-only):
+  - Line 2 deletes Receipt 189 of 01-Oct, at AlterID 54386, received 02:26:59.
+  - The 01-Oct Day Book was stored at 02:33:40, **after** the line. It is complete (`n = 2 = live`), and it does not
+    hold the entry (`...-000066c1` is not in the copy). Its `alter_max` is **54384** (entries 54383 and 54384).
+  - So 50 leaves line 2 held: "the entry is not in FinCom's copy yet; it is applied by itself once the Day Book for
+    01-Oct-2026 is uploaded".
+  - Uploading 01-Oct cannot release it: the same two entries give 54384 again. An owner's release runs the same rule.
+  - Line 2 is one of the four blocker lines 50 exists to release, and the words 50 makes truthful are untrue for it.
+    Nothing is corrupted: it is held, as in 44.
+- **The other three lines on staging, for comparison:**
+  - Line 3, the cancel of Receipt 190: 190 is in the copy, cancelled, so the cancel is applied as "already
+    cancelled".
+  - Line 1, placeholder Receipt 191 with MasterID 0: exactly one Receipt 191 of 05-Oct is under the company. The
+    05-Oct Day Book was stored after the line with `alter_max > 0`, so the line ends 'duplicate'.
+  - Line 4, Receipt 192 with MasterID 26312 (`...66c8`): not in the copy, so it waits for Bridge 2.2.1's `:resolved`
+    line. Its words are truthful.
+  - These three are released only by a store of their day or by an owner's release. The file itself re-runs no line.
+- **Fix (keeps H1 safe):**
+  1. Replace `d.alter_max >= alt` with "stored after the line came": `d.at > r_at`, together with the complete test.
+  2. Close the re-parse hole that the AlterID test was guarding (E3), where an old kept file re-read after the delete
+     brings the entry back live. In `tally_recorder_release_day`, for each entry of the stored day that has a
+     `deleted` line already 'applied' at an AlterID above the day's version of it, call `tally_ingest_delete` again
+     (it is idempotent; that line's AlterID passes the stale check).
+     - This makes "nothing to delete" safe whatever file arrives later. It also closes the same hole for deletes of
+       entries the copy did hold, which exists since 44, because a Day Book re-read clears `deleted_at` without an
+       AlterID check (48 `:82`).
+     - The `:220/:229` stale rule already covers recorder lines.
+  3. The alternative is to record, per stored day, a read time or a company-wide AlterID that a re-parse does not
+     refresh, and test that instead.
+  4. At the least, change the words at `:190` and `:396` so they do not promise that an upload releases the line.
+- **Test to add:** staging's line 2 exactly. A day of entries 54383 and 54384, stored complete after a delete at 54386
+  of an entry not in the copy. The expectation is "nothing to delete", and then an old file re-read must not revive
+  the entry.
+
+### Low
+
+- **L7. A day with an entry the parser drops is never "complete" through the bridge.**
+  - **Where:** the bridge's count is `countVouchers` = every `<VOUCHER` tag (`bridge-go/keep.go:267`; `index.ts:1070`
+    sends it as `p_n`).
+  - **What happens:** `parseDay` drops entries with no GUID, and entries with no ledger lines unless they are
+    cancelled with a number (`parse.js:124-126`). Examples are inventory-only Stock Journals and Delivery Notes.
+  - On such a day, every bridge store is a "short read". This has been so since 38. `tally_days.n` is then above the
+    live count, so a delete of an entry not in the copy dated that day stays held after every bridge store.
+  - The re-parse path (`index.ts:1113`, `p_n = r.n`) passes the count test.
+  - **Fix:** this predates 50. Count in the bridge what the parser keeps, or have `tally-ingest` pass the parsed count
+    beside the bridge's. Until then the words "once the Day Book is uploaded" hold only for an upload that sends no
+    bridge count.
+- **L8. A held cancel can stay held beside an applied cancel of the same AlterID.**
+  - **Where:** `:363`.
+  - **What happens:** the create-then-held-delete rule leaves the held line held when an applied line of the same
+    GUID, AlterID and event exists (this avoids `applied_once`). For deletes this cannot happen: the create would have
+    been stale (`:229`). For a cancel arriving twice from two computers, the second can stay held "not in the copy yet"
+    while the entry is cancelled.
+  - **Fix:** mark it 'duplicate' instead.
+- **L9. The apply guard does not trim the GUID.**
+  - **Where:** `:456`.
+  - **What happens:** the guard tests `x->>'object_guid'` untrimmed, while the line trims it (`:98`). A placeholder
+    GUID with trailing white space would still raise `recorder_max_alter` by its AlterID. The add-on writes AlterID 0
+    on those lines, so this is cosmetic.
+
+### Verdict
+
+**One Medium (N1).**
+- It does not damage data, and running 50 is safe: no line is applied wrongly, the triggers never fail a day, and the
+  base on staging is exactly what 50 replaces.
+- But it leaves staging's line 2 (Receipt 189's delete) held for ever, with words promising an upload will release it.
+- Fix N1 before running 50, or run it knowing line 2 needs the follow-up.
