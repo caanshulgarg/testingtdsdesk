@@ -1,0 +1,42 @@
+# Spike: can a real TallyPrime run on GitHub's hosted Windows runner? (branch tally-real-spike only)
+name: Tally real spike
+on:
+  push:
+    branches: [tally-real-spike]
+    paths: ['.github/workflows/tally-real.yml', '.github/tally-spike/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  tally:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      SHOTS: ${{ github.workspace }}\shots
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - name: Desktop check
+        run: |
+          whoami; query user 2>&1; [Environment]::UserInteractive
+          & .github/tally-spike/shot.ps1 desktop-0
+      - name: 1 Download installer
+        run: .github/tally-spike/resolve.ps1
+      - name: 2 Install
+        run: .github/tally-spike/install.ps1
+      - name: 3 Start Tally plain, test port 9000
+        continue-on-error: true
+        run: .github/tally-spike/run.ps1 plain
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shots-${{ matrix.os }}
+          path: shots/
+          if-no-files-found: warn
