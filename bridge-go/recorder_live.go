@@ -104,6 +104,8 @@ type change struct {
 	// line's own GUID, used only for a delete proven here (guidKeep)
 	guidProven, guidHeld bool
 	guidKeep, alterKeep  string
+	// the owner's addition: held only because this bridge's Tally could not be asked at that moment: asked again by itself
+	guidRetry bool
 }
 
 func (c *change) key() string { return c.company + "|" + c.companyGuid }
@@ -1151,7 +1153,7 @@ func liveEmit(l recLine, ev, file string, gen int, start, lineStart, end int64, 
 		if c.masterId != "" && c.vchDate != "" {
 			c.guidFetch = true
 		} else {
-			liveGuidUnproven(c, "the line has no MasterID or no date")
+			liveGuidUnprovenAs(c, "the line has no MasterID or no date", false)
 		}
 	}
 	if livePlaceholder(c.guid) {
@@ -2176,6 +2178,10 @@ func liveUploadStep() (int, bool) {
 		// 2.2.1: sent held (no body, no GUID): resolved later (recorder_resolve.go). 2.2.2: every voucher of the add-on
 		// sent without its entry, not only a new one with a number
 		if c.fetchesIds() && c.source == "addon" && c.xml == "" && c.vchDate != "" && !strings.HasSuffix(c.lineId, ":resolved") {
+			held = append(held, c)
+		}
+		// the owner's addition to H1: a cancel / delete held only because this Tally could not be asked then: asked again
+		if c.guidRetry && c.masterId != "" && c.vchDate != "" && !strings.HasSuffix(c.lineId, ":resolved") {
 			held = append(held, c)
 		}
 	}

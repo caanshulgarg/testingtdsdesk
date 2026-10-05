@@ -33,6 +33,7 @@ package main
 //   - a held line goes with guidHeld: FinCom's cloud then never looks in its own record for it.
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -212,17 +213,71 @@ func liveTakeGUID(c *change, x string) {
 func liveGuidHold(c *change, words string) {
 	c.bodyTried, c.guidFetch, c.guidLate, c.guidCloud, c.guidProven = true, false, false, false, false
 	c.guid, c.alterId, c.guidKeep, c.alterKeep = "", "", "", ""
-	c.heldWhy, c.guidHeld, c.heldFinal = liveCapWhy(words), true, true
+	c.heldWhy, c.guidHeld, c.heldFinal, c.guidRetry = liveCapWhy(words), true, true, false
 	liveGuidSay(c, "held: "+c.heldWhy)
 }
 
-// review H1 (under live.mu): this bridge's Tally could not be asked (why): held, never sent unproven
-func liveGuidUnproven(c *change, why string) {
+// review H1 (under live.mu): this bridge's Tally could not be asked (why): held, never sent unproven. The owner's
+// addition: when only the moment was wrong (Tally busy, the 2 s stop, the fetch off for now, no answer, no starting point
+// yet), the line joins the held list (recorder_resolve.go) and is asked again by itself (liveResolveGuid); sent with the
+// GUID only when the proof then succeeds. retry false: nothing to ask Tally by (no MasterID or date): held for good
+func liveGuidUnproven(c *change, why string) { liveGuidUnprovenAs(c, why, true) }
+
+func liveGuidUnprovenAs(c *change, why string, retry bool) {
 	w := liveDeleteUnprovenWords
 	if c.event == "cancelled" {
 		w = liveCancelUnprovenWords
 	}
 	liveGuidHold(c, w+" ("+cutRunes(why, 160)+")"+fmt.Sprintf(liveUnprovenWordsEndTail, c.guidVerb()))
+	if retry {
+		c.heldFinal, c.guidRetry = false, true
+	}
+}
+
+// the owner's addition to H1: one held cancel / delete asked again of this bridge's Tally by its MasterID (a background
+// read: the 2 s stop turns the fetch off for the company, a posting goes first). c: the line to send (id + ":resolved")
+// once proven here (a cancel with Tally's GUID; a delete gone from this Tally, its GUID decided when it is sent as before);
+// final: proven NOT to belong to this Tally (held with words, not asked again); err: not asked this time
+func liveResolveGuid(h heldLine) (c *change, why string, answered, final bool, err error) {
+	sp, spOK := startPointOf(h.Company)
+	if !spOK {
+		return nil, "", false, false, errors.New("no starting point recorded for this company yet")
+	}
+	key := h.Company + "|" + h.CGUID
+	tc := recorderTC(func(sec float64) {
+		if sec > liveLimitSec() {
+			liveTurnOff("bodies", key, h.Company, sec)
+		}
+	})
+	port, err := findCompanyPort(h.Company, 0)
+	if err != nil {
+		return nil, "", false, false, err
+	}
+	got, err := fetchVouchersByMasterIn(tc, h.Company, port, h.Date, []string{h.MID}, liveBodySec())
+	if err != nil {
+		return nil, "", false, false, err
+	}
+	c = &change{company: h.Company, companyGuid: h.CGUID, event: h.Ev, masterId: h.MID, vchType: h.Type, vchNo: h.No, vchDate: h.Date, source: "addon",
+		lineId: h.ID + ":resolved", at: h.At, saveMs: -1, readAt: nowFn(), guidKeep: h.KeepGuid, alterKeep: h.KeepAlter}
+	live.mu.Lock()
+	defer live.mu.Unlock()
+	if h.Ev == "cancelled" {
+		x := got[h.MID]
+		w := liveWant{company: h.Company, cguid: h.CGUID, typ: h.Type, no: h.No, date: h.Date, mid: h.MID, sp: sp, spOK: spOK}
+		if wr, _ := liveVoucherWrong(x, "voucher with MasterID "+h.MID, w); wr != "" {
+			return nil, liveCancelHeldWords + " (" + cutRunes(wr, 160) + ")", true, true, nil
+		}
+		if !strings.EqualFold(tagValue(x, "ISCANCELLED"), "Yes") {
+			return nil, liveCancelHeldWords, true, true, nil
+		}
+		liveTakeGUID(c, x)
+		return c, "", true, false, nil
+	}
+	liveDeleteAnswer(c, got)
+	if c.guidHeld {
+		return nil, liveDeleteHeldWords, true, true, nil
+	}
+	return c, "", true, false, nil
 }
 
 // review H1 (under live.mu): a delete's answer from this bridge's Tally by MasterID (got: MasterID -> voucher): a voucher

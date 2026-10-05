@@ -14,8 +14,10 @@ package main
 // Run in both stand modes (plain and Tally's typed answers).
 
 import (
+	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 // the stand Tally no longer holds this voucher (deleted in this Tally)
@@ -122,5 +124,150 @@ func TestH1DeleteTallyCannotBeAskedHeld(t *testing.T) {
 	got := sentEvent(c, "deleted")
 	if len(got) != 1 || str(got[0]["object_guid"]) != "" || got[0]["guidHeld"] != true || !strings.HasPrefix(str(got[0]["heldWhy"]), liveDeleteUnprovenWords) {
 		t.Fatalf("held, the bridge's record not used: %v", got)
+	}
+}
+
+// --- the owner's addition to H1: a cancel / delete held only because this bridge's Tally could not be asked at that
+// moment (busy, the 2 s stop, the fetch off for now, no answer) is asked again by itself when Tally is free (the held
+// list's re-asks: spaced, bounded, giving way to postings, the 2 s rule), one log line per outcome. Proven then: sent
+// with the GUID (line id + ":resolved"); proven not to belong to this Tally: stays held with words
+
+func h1Resolved(c *standCloud, ev string) []M {
+	var o []M
+	for _, l := range sentEvent(c, ev) {
+		if strings.HasSuffix(str(l["line_id"]), ":resolved") {
+			o = append(o, l)
+		}
+	}
+	return o
+}
+
+// Tally busy: it answers the request by MasterID with something that is not an answer (no envelope)
+func h1Busy(w http.ResponseWriter, r *http.Request, id, body string) bool {
+	if id != vchByMasterID {
+		return false
+	}
+	_, _ = w.Write([]byte("busy"))
+	return true
+}
+
+func TestH1RetryDeleteTallyBusyThenFree(t *testing.T) {
+	bothStands(t, func(t *testing.T) {
+		rec, f, c := liveBridge(t, `,"RecorderBodySec":2,"RecorderResolveSec":0`)
+		td := today()
+		f.alter = 10
+		noteStartPoint(zz, b220CoGUID, 5, 1)
+		v := f.add(td, "Party D", "6", "fees", "-9.00")
+		v.typ = "Receipt"
+		v.guid = "eeee-imported-0000d00d"
+		liveMidNote(b220CoGUID, v.master, v.guid, "Receipt", "6", td)
+		f.mu.Lock()
+		f.behave = h1Busy // Tally busy: no answer it can read
+		f.mu.Unlock()
+		liveAppend(t, liveFilePath(rec, ""), realLine("after_delete", "", v.master, "", "Receipt", "6", addonDate(td)))
+		liveReadOnce()
+		uploadAll(t)
+		got := sentEvent(c, "deleted")
+		if len(got) != 1 || str(got[0]["object_guid"]) != "" || got[0]["guidHeld"] != true {
+			t.Fatalf("Tally busy: held for now: %v", got)
+		}
+		// Tally free again, the voucher gone from it: asked again by itself, the delete goes with the GUID
+		f.mu.Lock()
+		f.behave = nil
+		f.mu.Unlock()
+		f.remove(v)
+		liveResolveTurn()
+		uploadAll(t)
+		r := h1Resolved(c, "deleted")
+		if len(r) != 1 || str(r[0]["object_guid"]) != v.guid || str(r[0]["heldWhy"]) != "" || r[0]["guidHeld"] != nil || str(r[0]["master_id"]) != v.master {
+			t.Fatalf("proven when Tally is free: sent with the GUID: %v", sentEvent(c, "deleted"))
+		}
+		if logLines("delete of mid "+v.master+": GUID from the bridge's record: "+v.guid) != 1 {
+			t.Fatalf("the decision:\n%s", readText(logFile()))
+		}
+		// resolved once: asked no more
+		n := f.n(vchByMasterID)
+		liveResolveTurn()
+		uploadAll(t)
+		if f.n(vchByMasterID) != n || len(h1Resolved(c, "deleted")) != 1 {
+			t.Fatalf("asked again after it was resolved: %v", f.ids())
+		}
+	})
+}
+
+func TestH1RetryCopyCompanyStaysHeld(t *testing.T) {
+	bothStands(t, func(t *testing.T) {
+		rec, f, c := liveBridge(t, `,"RecorderBodySec":2,"RecorderResolveSec":0`)
+		td := today()
+		f.alter = 10
+		noteStartPoint(zz, b220CoGUID, 5, 1)
+		v := f.add(td, "Party E", "7", "rent", "-3.00")
+		v.typ = "Receipt"
+		w := f.add(td, "Party F", "8", "rent", "-4.00")
+		w.typ = "Receipt"
+		liveMidNote(b220CoGUID, v.master, v.guid, "Receipt", "7", td)
+		f.mu.Lock()
+		f.behave = h1Busy
+		f.mu.Unlock()
+		liveAppend(t, liveFilePath(rec, ""), realLine("after_delete", "", v.master, "", "Receipt", "7", addonDate(td)),
+			realLine("after_cancel", "", w.master, "", "Receipt", "8", addonDate(td)))
+		liveReadOnce()
+		uploadAll(t)
+		// Tally free: still holds the voucher (deleted in a copy), and the other not cancelled here: both stay held
+		f.mu.Lock()
+		f.behave = nil
+		f.mu.Unlock()
+		liveResolveTurn()
+		uploadAll(t)
+		if r := append(h1Resolved(c, "deleted"), h1Resolved(c, "cancelled")...); len(r) != 0 {
+			t.Fatalf("a copy company's line was sent: %v", r)
+		}
+		if logLines("held: "+liveDeleteHeldWords+" (not asked again)") != 1 || logLines("held: "+liveCancelHeldWords+" (not asked again)") != 1 {
+			t.Fatalf("one line per outcome:\n%s", readText(logFile()))
+		}
+		n := f.n(vchByMasterID)
+		liveResolveTurn()
+		if f.n(vchByMasterID) != n {
+			t.Fatalf("a line proven not this Tally's is asked again: %v", f.ids())
+		}
+	})
+}
+
+// the 2 s stop: the request by MasterID is switched off for the company (the 2 s rule); the held cancel waits while it is
+// off (the rule kept) and is asked again by itself once it is on again, then sent with Tally's GUID
+func TestH1RetryCancelAfterTwoSecondStop(t *testing.T) {
+	rec, f, c := liveBridge(t, `,"RecorderBodySec":2,"RecorderResolveSec":0`)
+	td := today()
+	f.alter = 10
+	noteStartPoint(zz, b220CoGUID, 5, 1)
+	v := f.add(td, "Party G", "9", "rent", "-5.00")
+	v.typ = "Receipt"
+	v.cancelled = true
+	f.mu.Lock()
+	f.behave = silentFor(isID(vchByMasterID), nil)
+	f.mu.Unlock()
+	liveAppend(t, liveFilePath(rec, ""), realLine("after_cancel", "", v.master, "", "Receipt", "9", addonDate(td)))
+	liveReadOnce()
+	uploadAll(t)
+	if got := sentEvent(c, "cancelled"); len(got) != 1 || got[0]["guidHeld"] != true {
+		t.Fatalf("held for now: %v", got)
+	}
+	f.mu.Lock()
+	f.behave = nil
+	f.mu.Unlock()
+	n := f.n(vchByMasterID)
+	liveResolveTurn()
+	if f.n(vchByMasterID) != n {
+		t.Fatalf("asked while the 2 s rule has it off: %v", f.ids())
+	}
+	liveOnAgain("another-source") // the owner switches where the changes come from: on again
+	bgMu.Lock()
+	stopHold = map[int]time.Time{} // and Tally's 30 s of rest after the stop is over
+	bgMu.Unlock()
+	liveResolveTurn()
+	uploadAll(t)
+	r := h1Resolved(c, "cancelled")
+	if len(r) != 1 || str(r[0]["object_guid"]) != v.guid || r[0]["guidHeld"] != nil {
+		t.Fatalf("sent with Tally's GUID once on again: %v", sentEvent(c, "cancelled"))
 	}
 }
