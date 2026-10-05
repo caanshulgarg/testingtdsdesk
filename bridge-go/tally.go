@@ -284,6 +284,9 @@ type TC struct {
 	// number, source B, source C, the held resolver): the bridge stops waiting after this many milliseconds (a context
 	// deadline from the send). Never for a posting (Import), a person's read or the light company check (they never set it)
 	limitMs int
+	// 2.2.2 second review (L-B): the light company check and the open-company list (tiny): not held by the cool-down after
+	// a recorder read's stop (the probe and busy rules still apply)
+	light bool
 }
 
 // round 19 (review finding 1, the owner's rule "reading is prospective only", by any route): a request carrying a period
@@ -811,7 +814,7 @@ func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 	if tc.copier && !bgBackoffUntil(port).IsZero() {
 		return "", errBackoff
 	}
-	if tc.copier && !tc.person && stopHeld(port) {
+	if tc.copier && !tc.person && !tc.light && stopHeld(port) {
 		return "", errBackoff // 2.2.2: a recorder read was stopped at its limit: Tally is still on it
 	}
 	// after a request that did not answer, nothing goes before the "is it free?" check may be sent (once a minute)
@@ -832,6 +835,12 @@ func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 		return "", errBackoff
 	}
 	if tc.yield != nil && tc.yield() {
+		unlock()
+		return "", errBackoff
+	}
+	// 2.2.2 second review (L-A): a background read that waited for the lock while a recorder read was stopped is not
+	// sent into the Tally still working on it
+	if tc.copier && !tc.person && !tc.light && stopHeld(port) {
 		unlock()
 		return "", errBackoff
 	}

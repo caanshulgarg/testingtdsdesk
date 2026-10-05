@@ -510,7 +510,7 @@ func lightCompanyList(sessions []M) []M {
 	if !open {
 		return sessions
 	}
-	fresh, ok := openCompaniesAsk(&TC{copier: true, yield: func() bool { return postingGoing() || importsInFlight.Load() > 0 }}, true)
+	fresh, ok := openCompaniesAsk(&TC{copier: true, light: true, yield: func() bool { return postingGoing() || importsInFlight.Load() > 0 }}, true)
 	switch {
 	case ok:
 		_ = os.Chtimes(shared, nowFn(), nowFn()) // its age by the bridge's clock
@@ -576,7 +576,7 @@ func lightCheckOpen(sessions []M) {
 			}
 			_, had := startPointOf(name)
 			seq := spSeqOf(name)
-			if _, err := companyCheck(&TC{copier: true, yield: lightCheckYield(name)}, name, port); err != nil {
+			if _, err := companyCheck(&TC{copier: true, light: true, yield: lightCheckYield(name)}, name, port); err != nil {
 				// not marked: it goes again at the next turn
 				spMu.Lock()
 				if spChecked[name].Equal(now) {
