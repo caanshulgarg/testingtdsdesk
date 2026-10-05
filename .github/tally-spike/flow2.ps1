@@ -76,13 +76,28 @@ VTNum ''
 VTNum 'Manual'
 $mid212 = Receipt 212 '500.00'
 $mid213 = Receipt 213 '600.00'
+# the import kept Tally's own numbers (1, 2) although Receipt numbering is Manual: try altering the number by MasterID
+foreach ($pair in @(@($mid212, '212', '500.00'), @($mid213, '213', '600.00'))) {
+  $m, $no, $amt = $pair
+  Post "alter number of MasterID $m to $no" ('<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>Vouchers</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>' + $co + '</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA><TALLYMESSAGE xmlns:UDF="TallyUDF"><VOUCHER DATE="20261002" TAGNAME="MasterID" TAGVALUE="' + $m + '" VCHTYPE="Receipt" ACTION="Alter"><DATE>20261002</DATE><VOUCHERTYPENAME>Receipt</VOUCHERTYPENAME><VOUCHERNUMBER>' + $no + '</VOUCHERNUMBER><PARTYLEDGERNAME>Spike Customer</PARTYLEDGERNAME><NARRATION>spike receipt ' + $no + '</NARRATION>' +
+    '<ALLLEDGERENTRIES.LIST><LEDGERNAME>Spike Customer</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>' + $amt + '</AMOUNT></ALLLEDGERENTRIES.LIST>' +
+    '<ALLLEDGERENTRIES.LIST><LEDGERNAME>Spike Cash</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-' + $amt + '</AMOUNT></ALLLEDGERENTRIES.LIST>' +
+    '</VOUCHER></TALLYMESSAGE></REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>') "alter-number-$no.xml" | Out-Null
+}
 VTNum 'Automatic'
 VList 'after-import'
 Rec 'xml-import'
 
 # ---- 2. the fetch requests A-H
 . "$PSScriptRoot\fetchasks.ps1"
-foreach ($a in $FetchAsks) {
+$vx = Post 'number check' $vlistXml 'vouchers-numbercheck.xml'
+$num212 = [regex]::Match($vx, '(?s)<MASTERID[^>]*>\s*' + $mid212 + '\s*</MASTERID>').Success
+$v2 = [regex]::Matches($vx, '(?s)<VOUCHER [^>]*>.*?</VOUCHER>') | Where-Object { $_.Value -match "<MASTERID[^>]*>\s*$mid212\s*<" } | Select-Object -First 1
+$actual = [regex]::Match($v2.Value, '<VOUCHERNUMBER>([^<]*)<').Groups[1].Value
+Write-Host "MasterID $mid212 now has VOUCHERNUMBER '$actual'"
+$asks = @()
+foreach ($a in $FetchAsks) { $asks += $a; if ($a.n -in 'A', 'B', 'F' -and $actual -ne '212') { $asks += @{ n = "$($a.n)n"; what = "$($a.what), asking the number Tally really gave ($actual)"; mid = 0; xml = ($a.xml -replace '212', $actual) } } }
+foreach ($a in $asks) {
   $m = $mid212 + $a.mid
   $xml = $a.xml -replace '__MID__', "$m"
   $t = Post "fetch $($a.n)" $xml "fetch-$($a.n).xml"
