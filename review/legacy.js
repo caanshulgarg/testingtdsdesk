@@ -23877,6 +23877,11 @@ function tallyStatus(co){
   // nothing ready to post, but bills or postings that need a decision (Post to Tally → Needs your attention): not "in sync"
   const attn = cos.reduce((a, c) => a + (typeof postAttentionFor === "function" ? postAttentionFor(c.id) : 0), 0);
   if (attn > 0) return out({state: "attention", level: "warn", label: attn + " to check in Tally", say: attn + (attn === 1 ? " bill or posting needs" : " bills or postings need") + " your attention under Post to Tally" + (co ? "" : " (all clients)") + "."});
+  // the owner's finding of 05-Oct-2026: a line Tally sent that is HELD (tally_recorder_lines.state = 'held') is not in the
+  // books, so a book with one is never "in sync": "N received, not yet entered in the books", with the reasons
+  const held = typeof AlertHub === "object" && AlertHub.heldFor ? AlertHub.heldFor(co ? [co.id] : cos.map(c => c.id)) : [];
+  if (held.length) return out({state: "held", level: "warn", label: AlertHub.heldSay(held.map(l => ({held_why: ""})), true),
+    say: held.length === 1 ? "1 entry " + AlertHub.heldSay(held) + "." : held.length + " entries received from Tally are not yet entered in the books" + (co ? "" : " (all clients)") + ": " + [...new Set(held.map(l => l.held_why || "no reason given"))].slice(0, 3).join("; ") + ". See Tally \u2192 Sync activity."});
   if (tally === "busy") return out({state: "busy", level: "warn", label: "Connected \u2013 Tally busy", say: "The bridge is connected. Tally is open but answering slowly" + (busySince ? " since " + fmtDateTime(Date.parse(busySince)) : "") + " (a long report, or a message box in Tally); the bridge asks again by itself and nothing is lost."});
   const light = co && typeof TLight === "object" ? TLight.st.by[co.id] : null;
   return out({state: "ok", level: "ok", label: "Connected & in sync", say: "Tally is connected" + (local ? " on this computer" : " (" + devs.length + " computer" + (devs.length === 1 ? "" : "s") + " sending)") + " and nothing waits to be sent." + (light ? " " + light.say : "")});
@@ -28943,6 +28948,28 @@ const AlertHub = {
     } catch (e){ h.rows = []; if (typeof Rec === "object" && Rec.missing && Rec.missing(e)) h.none = true; }
     h.busy = false; h.at = Date.now(); if (typeof render === "function") render();
   },
+  // the lines still waiting, as known now: the bell's own read, each brought up to date by Sync activity's lines (read
+  // later, or come in live), so a line applied there is not counted as waiting here
+  waitingRows(){
+    const rows = this.heldOf(), act = typeof Rec === "object" && Rec.act && Array.isArray(Rec.act.rows) ? Rec.act.rows : [];
+    const by = new Map(act.map(r => [String(r.id), r]));
+    const out = rows.map(r => by.get(String(r.id)) || r);
+    const seen = new Set(out.map(r => String(r.id)));
+    act.forEach(r => { if (!seen.has(String(r.id)) && ["held", "received", "queued", "failed"].includes(r.state)) out.push(r); });
+    return out.filter(r => ["held", "received", "queued", "failed"].includes(r.state));
+  },
+  // the owner's finding of 05-Oct-2026: a book with a line HELD is never "in sync". The held lines of these clients
+  // (none given: every client's)
+  heldFor(cids){
+    const want = cids ? new Set([].concat(cids).map(String)) : null;
+    return this.waitingRows().filter(r => r.state === "held" && r.client_id && (!want || want.has(String(r.client_id))));
+  },
+  // the held lines in the owner's words: "received, not yet entered in the books: <held_why>" for one line (or lines
+  // with one reason), "N received, not yet entered in the books" for more
+  heldSay(lines, count){
+    const n = lines.length, whys = [...new Set(lines.map(l => String(l.held_why || "").trim()).filter(Boolean))];
+    return (count || n > 1 ? n + " " : "") + "received, not yet entered in the books" + (whys.length === 1 ? ": " + whys[0] : "");
+  },
   // a line waiting because of FinCom's side: no body, the add-on's placeholder GUID ("<company GUID>-00000000"), no GUID,
   // FinCom's own posting coming back, or the queue; then FinCom fetches the details itself and nothing is to be done
   oursHeld(l){
@@ -28974,7 +29001,7 @@ const AlertHub = {
     const out = [], cloud = typeof TCloud === "object" && TCloud.on() && typeof Rec === "object" && !!(Rec.firm && Rec.firm());
     const coName = cid => ((S.companies || {})[cid] || {}).name || "";
     if (cloud){
-      const g = Rec.gapsOf(), gapsKnown = !!g.byClient || !!g.no44, rows = Rec.alertsOf(), held = this.heldOf();
+      const g = Rec.gapsOf(), gapsKnown = !!g.byClient || !!g.no44, rows = Rec.alertsOf(), held = this.waitingRows();
       // the tally_alerts rows: the latest one for each (kind, client, book, computer), unread only (no stacking of days)
       const latest = new Map();
       rows.forEach(x => { const k = [x.kind, x.client_id || "", x.book_id || "", x.device_id || ""].join("|"); const h = latest.get(k); if (!h || String(x.at || "") > String(h.at || "")) latest.set(k, x); });
@@ -29019,8 +29046,9 @@ const AlertHub = {
         const waiting = b.ours.length + b.other.length;
         if (b.ours.length && (!gapN || b.ours.length >= gapN)){
           // FinCom's own side: the details are on their way, nothing to do
-          const k2 = Math.max(gapN, b.ours.length);
-          out.push(Object.assign(base, {sev: "warn", text: who + ": " + this.n(k2) + " made in Tally" + (since ? " since " + this.when(since) : "") + (k2 === 1 ? " is" : " are") + " not yet in FinCom.",
+          const k2 = Math.max(gapN, b.ours.length), hd = b.ours.filter(l => l.state === "held");
+          out.push(Object.assign(base, {sev: "warn", text: hd.length === b.ours.length && k2 === hd.length ? who + ": " + this.heldSay(hd, true) + "."
+            : who + ": " + this.n(k2) + " made in Tally" + (since ? " since " + this.when(since) : "") + (k2 === 1 ? " is" : " are") + " not yet in FinCom.",
             fix: "FinCom is fetching the entry's details from Tally; nothing to do."}));
         } else if (gapN || (b.rows.length && !b.gap && !waiting)){
           // a real gap: entries made in Tally that never reached FinCom; the Day Book of those days brings them in
@@ -29031,8 +29059,10 @@ const AlertHub = {
             act: {label: "Upload Day Book", run: () => Rec.uploadDays(b.cid, gap)}}));
         } else if (b.other.length){
           const locked = b.other.filter(l => /^month locked/i.test(String(l.held_why || "")));
-          out.push(Object.assign(base, {sev: "warn", text: who + ": " + (b.other.length === 1 ? "1 change" : b.other.length + " changes") + " from Tally " + (b.other.length === 1 ? "is" : "are") + " waiting, not yet in the books" + (locked.length === b.other.length ? " (the month is locked)." : "."),
-            fix: locked.length === b.other.length ? "Apply them on Sync activity, or unlock the month." : "See why on Sync activity.", act: {label: "Sync activity", run: () => Rec.openActivity(b.cid)}}));
+          const hd = b.other.filter(l => l.state === "held");
+          out.push(Object.assign(base, {sev: "warn", text: who + ": " + (hd.length === b.other.length ? this.heldSay(hd, true) + "."
+              : (b.other.length === 1 ? "1 change" : b.other.length + " changes") + " from Tally " + (b.other.length === 1 ? "is" : "are") + " waiting, not yet in the books" + (locked.length === b.other.length ? " (the month is locked)." : ".")),
+            fix: locked.length === b.other.length ? "Apply them on Sync activity, or unlock the month." : hd.length === b.other.length ? "See them on Sync activity." : "See why on Sync activity.", act: {label: "Sync activity", run: () => Rec.openActivity(b.cid)}}));
         } else if (b.off.length){
           out.push(Object.assign(base, {sev: "warn", text: who + ": Tally is not recording its changes for FinCom, so entries made there reach FinCom only with the next Day Book.",
             fix: recFix}));
