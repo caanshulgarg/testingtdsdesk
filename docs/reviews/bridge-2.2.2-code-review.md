@@ -88,4 +88,6 @@ The bridge-go/ changes after cbca321, read by the reviewer in the Claude Code se
 
 No finding. The allow-list table is unchanged (TestAllowListUnchanged); only the decision line names 2.2.2.
 
-Range: 4dc55ef..ce4dbea
+After ce4dbea only tests and fixtures changed (06a415d, 4f00f10, 5321844: the version in two fixtures, GUIDs in one test); no bridge source changed.
+
+Range: 4dc55ef..5321844

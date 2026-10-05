@@ -70,4 +70,6 @@ Accepted, listed for the next build: L-E (the event's label can flip), L-F (one 
 
 No finding.
 
-Range: 4dc55ef..ce4dbea
+After ce4dbea only tests and fixtures changed (06a415d, 4f00f10, 5321844: the version in two fixtures, GUIDs in one test); no bridge source changed.
+
+Range: 4dc55ef..5321844
