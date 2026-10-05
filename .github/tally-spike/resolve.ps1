@@ -6,8 +6,8 @@ $pages = @(
   'https://tallysolutions.com/download-tallyprime/',
   'https://tallysolutions.com/tally-prime-download/',
   'https://tallysolutions.com/tallyprime/download/',
-  'https://tallysolutions.com/download/support-files/',
-  'https://tallysolutions.com/global/download/',
+  'https://tallysolutions.com/utility/js/DownloadUtility-india.js',
+  'https://tallysolutions.com/utility/js/DownloadUtility.js',
   'https://help.tallysolutions.com/tally-prime/installation-and-licensing/install-tallyprime/'
 )
 $links = New-Object System.Collections.Generic.List[string]
@@ -22,10 +22,10 @@ foreach ($p in $pages) {
     foreach ($f in $found) { Write-Host "   link: $f"; $links.Add($f) }
   } catch { Write-Host "GET $p FAILED: $($_.Exception.Message)" }
 }
-$cand = $links | Where-Object { $_ -match '(?i)tally.*\.exe(\?|$)' } | Sort-Object -Unique
+$cand = $links | Where-Object { $_ -match '(?i)prime.*\.exe(\?|$)' } | Sort-Object -Unique
 Write-Host "Installer candidates:"; $cand | ForEach-Object { Write-Host "  $_" }
 $extra = @($env:TALLY_URL) | Where-Object { $_ }
-$try = @($extra) + @($cand | Where-Object { $_ -match '(?i)prime' }) + @($cand)
+$try = @($extra) + @($cand)
 $out = "$env:RUNNER_TEMP\TallyPrimeSetup.exe"
 foreach ($u in $try) {
   try {
