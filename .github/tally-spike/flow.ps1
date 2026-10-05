@@ -18,7 +18,7 @@ function Post($label, $body) {
 $listCo = '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCList</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCList" ISMODIFY="No"><TYPE>Company</TYPE><FETCH>Name,GUID,StartingFrom</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>'
 function ListCo($label) { $x = Post "list-companies $label" $listCo; return ($x -match [regex]::Escape($co)) }
 function Write-Ini($withTdl, $load) {
-  $l = @('[Tally]', "Data = $data", 'Config = ' + $dir, "LangPath = $dir\lang", 'Client Server = Both', 'ServerPort = 9000', 'Enable ODBC Server = Yes', 'Ignore TCP Timeout = Yes', 'User TDL = Yes')
+  $l = @('[Tally]', "Data = $data", "Config = $dir", "LangPath = $dir\lang", 'Client Server = Both', 'ServerPort = 9000', 'Enable ODBC Server = Yes', 'Ignore TCP Timeout = Yes', 'User TDL = Yes')
   if ($load) { $l += @('Default Companies = Yes', "Load = $load") } else { $l += 'Default Companies = No' }
   if ($withTdl) { $l += "TDL = $tdl" }
   Set-Content -Path $ini -Value $l -Encoding ASCII; Write-Host "== tally.ini"; Get-Content $ini | Write-Host
@@ -41,6 +41,7 @@ function Start-Tally($phase) {
 Write-Ini $false $null
 Start-Tally 'A'
 Keys 'a' 4 'A-2-after-a'
+Keys 't' 6 'A-3-after-t-educational'
 ListCo 'A' | Out-Null
 
 # ---- B: company by XML import
@@ -59,9 +60,11 @@ if (-not $have) {
   Keys 'c' 4 'C-2-create'
   Keys $co 2 'C-3-name'
   Keys '^a' 6 'C-4-ctrl-a'
-  Keys '^a' 6 'C-5-ctrl-a-again'
   $have = ListCo 'C'
-  if (-not $have) { Keys '{ENTER}' 4 'C-6-enter'; Keys 'y' 4 'C-7-y'; $have = ListCo 'C2' }
+  if (-not $have) { Keys '^a' 6 'C-5-ctrl-a-again'; $have = ListCo 'C1' }
+  if (-not $have) { Keys 'y' 6 'C-6-y'; $have = ListCo 'C2' }
+  if (-not $have) { Keys '{ENTER}' 6 'C-7-enter'; $have = ListCo 'C3' }
+  Shot 'C-8-end'
 }
 Write-Host "== data folder"; Get-ChildItem $data -Recurse -Depth 1 | Select-Object FullName, Length | Format-Table -AutoSize | Out-String -Width 200 | Write-Host
 $folder = Get-ChildItem $data -Directory | Where-Object { $_.Name -match '^\d+$' } | Select-Object -First 1
@@ -71,6 +74,7 @@ Write-Host "company created: $have; company folder: $($folder.Name)"
 Write-Ini $true $folder.Name
 Start-Tally 'D'
 Keys 'a' 4 'D-2-after-a'
+Shot 'D-2b'
 ListCo 'D' | Out-Null
 $tdlQ = '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Function</TYPE><ID>$$NumItems</ID></HEADER><BODY><DESC><FUNCPARAMLIST><PARAM>Ledger</PARAM></FUNCPARAMLIST></DESC></BODY></ENVELOPE>'
 Post 'D-func' $tdlQ | Out-Null
