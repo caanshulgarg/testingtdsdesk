@@ -153,3 +153,4 @@ run_post_hide_remove.py               120  TDSDESK_SITE=../app/dist-test
 run_migration49.py                    180
 run_migration50.py                    180
 run_recorder_held_words.py            120  TDSDESK_SITE=../app/dist-test
+run_alerts_one_place.py               300  TDSDESK_SITE=../app/dist-test
