@@ -98,7 +98,9 @@ with sync_playwright() as p:
     ok(pg.locator("#app [data-computer]").count() == 5, "one line a computer (%d)" % pg.locator("#app [data-computer]").count())
     hm = lambda m: E("(m) => tallyHm(Date.now() - m * 60000)", m)
     # the fixture times were set when the page loaded; if the minute turned since, the line shows the earlier minute
-    hmIn = lambda text, m: any(("at %s" % hm(x)) in text for x in (m, m + 1))
+    # a time shown "N minutes ago": the fixture and the page read the clock seconds apart, so a minute either way
+    inAny = lambda fmt, m, text: any((fmt % hm(x)) in text for x in (m - 1, m, m + 1))
+    hmIn = lambda text, m: any(("at %s" % hm(x)) in text for x in (m - 1, m, m + 1))   # the fixture and the page read the clock seconds apart: a minute either way
     # ---- each state
     l1 = line(D1)
     ok("NWS144" in l1 and "FinCom Bridge 2.1.4" in l1 and "Reading" in l1 and pg.get_attribute('#app [data-computer="%s"]' % D1, "data-read-state") == "reading", "Reading: NWS144, version 2.1.4 (%s)" % l1)
@@ -254,7 +256,7 @@ with sync_playwright() as p:
     ok("Resumed by neha@fincom.in at" in l2 and hmIn(l2, 100), "24. a computer resumed: Resumed by <name> at <time>, the member's e-mail when there is no name (%s)" % l2)
     ok("Resumed by neha@fincom.in at" in l1 and hmIn(l1, 300), "24. a resume of all computers shows on a computer with no own stop or resume since (%s)" % l1)
     rel = txt("#app [data-release]")
-    ok(("Pilot started by Anshul at %s on NWS144" % hm(300)) in rel, "24. the release: Pilot started by <name> at <time> on <computer> (%s)" % rel)
+    ok(inAny("Pilot started by Anshul at %s on NWS144", 300, rel), "24. the release: Pilot started by <name> at <time> on <computer> (%s)" % rel)
     ok(txt("#app [data-release-withdraw]") == "Withdraw version 2.1.5", "23. owner: Withdraw version 2.1.5")
     sel("[data-release-withdraw]").click(); pg.wait_for_timeout(400)
     pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(300)
@@ -266,7 +268,7 @@ with sync_playwright() as p:
     E(SETUP, [DEVS, STOPS2, REL_W, "owner", X]); pg.wait_for_timeout(300)
     E("() => navHome('tally')"); pg.wait_for_timeout(1500)
     rel = txt("#app [data-release]")
-    ok(("Withdrawn by Anshul at %s: Crashes on NWS144 at the bank ledger" % hm(1)) in rel and "withdrawn" in rel.lower(), "23. withdrawn: Withdrawn by <name> at <time>: <why> (%s)" % rel)
+    ok(any(("Withdrawn by Anshul at %s: Crashes on NWS144 at the bank ledger" % hm(x)) in rel for x in (0, 1, 2)) and "withdrawn" in rel.lower(), "23. withdrawn: Withdrawn by <name> at <time>: <why> (%s)" % rel)
     ok(sel("[data-release-approve]").count() == 0 and sel("[data-release-withdraw]").count() == 0 and txt('#app [data-release-pilot="%s"]' % D1) == "Try version 2.1.5 on this computer",
        "23. withdrawn: no Approve, no Withdraw; Try version 2.1.5 on this computer is back")
     # approved, not withdrawn: Approved by <name> at <time>, and Withdraw stays
@@ -274,11 +276,11 @@ with sync_playwright() as p:
     E(SETUP, [DEVS, STOPS2, REL_A, "owner", X]); pg.wait_for_timeout(300)
     E("() => navHome('tally')"); pg.wait_for_timeout(1500)
     rel = txt("#app [data-release]")
-    ok(("Approved by neha@fincom.in at %s" % hm(10)) in rel and ("Pilot started by Anshul at %s on NWS144" % hm(300)) in rel and sel("[data-release-withdraw]").count() == 1 and sel("[data-release-approve]").count() == 0,
+    ok(inAny("Approved by neha@fincom.in at %s", 10, rel) and inAny("Pilot started by Anshul at %s on NWS144", 300, rel) and sel("[data-release-withdraw]").count() == 1 and sel("[data-release-approve]").count() == 0,
        "24. approved: Approved by <name> at <time>, the pilot line kept, Withdraw stays (%s)" % rel)
     # 10. a company of the computer needing a fresh baseline
     bl = txt('#app [data-computer="%s"] [data-baseline="%s"]' % (D1, BOOKS[0]["book_id"]))
-    ok(("ZZ TEST" in bl) and ("Needs a fresh baseline since %s: AlterID went backwards (a restore in Tally?)" % hm(50)) in bl, "10. under the computer: <company>: Needs a fresh baseline since <time>: <why> (%s)" % bl)
+    ok(("ZZ TEST" in bl) and inAny("Needs a fresh baseline since %s: AlterID went backwards (a restore in Tally?)", 50, bl), "10. under the computer: <company>: Needs a fresh baseline since <time>: <why> (%s)" % bl)
     ok(txt('#app [data-baseline-clear="%s"]' % BOOKS[0]["book_id"]).startswith("Clear"), "10. owner: Clear (note)")
     sel('[data-baseline-clear="%s"]' % BOOKS[0]["book_id"]).click(); pg.wait_for_timeout(400)
     pg.fill("#confirmBox #baselineNote", "Tally restored from the 30-Sep backup; read it afresh"); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(600)
@@ -287,18 +289,18 @@ with sync_playwright() as p:
     E(SETUP, [DEVS, STOPS2, REL, "owner", dict(X, cursors=CUR_OK)]); pg.wait_for_timeout(300)
     E("() => navHome('tally')"); pg.wait_for_timeout(1500)
     bl = txt('#app [data-computer="%s"] [data-baseline="%s"]' % (D1, BOOKS[0]["book_id"]))
-    ok(("Cleared by Anshul at %s: Tally restored from the 30-Sep backup; read it afresh" % hm(0.5)) in bl and sel("[data-baseline-clear]").count() == 0, "10. afterwards: Cleared by <name> at <time>: <note>, no button (%s)" % bl)
+    ok(inAny("Cleared by Anshul at %s: Tally restored from the 30-Sep backup; read it afresh", 0.5, bl) and sel("[data-baseline-clear]").count() == 0, "10. afterwards: Cleared by <name> at <time>: <note>, no button (%s)" % bl)
     # a member sees the words, none of the buttons
     E(SETUP, [DEVS, STOPS2, REL_A, "member", X]); pg.wait_for_timeout(300)
     E("() => navHome('tally')"); pg.wait_for_timeout(1500)
-    ok(("Stopped by Anshul at %s" % hm(40)) in line(D4) and "Approved by neha@fincom.in" in txt("#app [data-release]") and "Needs a fresh baseline since" in txt('#app [data-baseline="%s"]' % BOOKS[0]["book_id"]),
+    ok(inAny("Stopped by Anshul at %s", 40, line(D4)) and "Approved by neha@fincom.in" in txt("#app [data-release]") and "Needs a fresh baseline since" in txt('#app [data-baseline="%s"]' % BOOKS[0]["book_id"]),
        "a member sees who and when, the withdrawal and the baseline words")
     ok(sel("[data-release-withdraw], [data-baseline-clear]").count() == 0, "a member has no Withdraw and no Clear")
     # an older cloud (migration 37 not applied): the page works, and says FinCom's cloud is not ready for what it cannot do
     E(SETUP, [DEVS, STOPS2, REL, "owner", dict(X, old=True)]); pg.wait_for_timeout(300)
     E("() => navHome('tally')"); pg.wait_for_timeout(1500)
     rel = txt("#app [data-release]")
-    ok(pg.locator("#app [data-computer]").count() == 5 and ("Pilot started by Anshul at %s on NWS144" % hm(300)) in rel and "Stopped by Anshul" in line(D4), "older cloud: the lines, who and when still shown (%s)" % rel)
+    ok(pg.locator("#app [data-computer]").count() == 5 and inAny("Pilot started by Anshul at %s on NWS144", 300, rel) and "Stopped by Anshul" in line(D4), "older cloud: the lines, who and when still shown (%s)" % rel)
     nr = txt("#app [data-release] [data-not-ready]")
     ok(sel("[data-release-withdraw]").count() == 0 and nr.startswith("FinCom’s cloud is not ready for this yet"), "older cloud: no Withdraw; 'FinCom's cloud is not ready for this yet' (%s)" % nr)
     ok(sel("[data-baseline]").count() == 0 and not txt("#app [data-bridge-lines]").count("permission denied"), "older cloud: no baseline rows and no error from tally_sync_cursor")
