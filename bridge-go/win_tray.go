@@ -272,6 +272,8 @@ func (t *tray) poll() {
 				t.tallySeen = true
 			}
 			t.setIcon(tally && online && !pausedNow, trayTip(st))
+			// the owner's condition (Fix 2c): FinCom refused this computer key the bridge's id: its words, once
+			t.warnIf(str(st["cloudRefused"]) != "", "idrefused", 0, "FinCom Bridge", str(st["cloudRefused"]))
 			t.warnIf(cloud && !online && !pausedNow, "offline", 2*time.Minute, "Bridge offline",
 				"This computer cannot reach FinCom. Changes from Tally wait here and go as soon as FinCom can be reached.")
 			t.warnIf(!tally && !pausedNow && time.Since(t.started) > 2*time.Minute && (t.tallySeen || officeHours()), "tally", 3*time.Minute, "Tally not open",

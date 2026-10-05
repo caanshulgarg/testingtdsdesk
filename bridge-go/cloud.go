@@ -688,6 +688,12 @@ func beatOnce() {
 	// on first sight in this run and at most every 10 minutes while it stays open (startpoint.go); nothing else is read
 	startLightCheck(sessions)
 	r := invokeCloud(beatBody(tally, tstate, tsince, open, ports, cos), 10)
+	// the owner's condition (Fix 2c): FinCom refused this computer key the bridge's id: its words in the tray and the log
+	if r.code == 409 && r.json != nil && truthy(r.json["idRefused"]) {
+		setIdRefused(str(r.json["error"]))
+	} else if r.code == 200 {
+		setIdRefused("")
+	}
 	if r.code != 200 || r.json == nil {
 		// round 22 (the 2.1.10 reviews' Medium 1 / S1): no current "on" from FinCom: the trial tools are off at once
 		trialToolsOff("FinCom's answer to the heartbeat did not come: " + or(r.err, fmt.Sprint("HTTP ", r.code)))
@@ -1281,4 +1287,23 @@ func wakeEvent(ev string, inner M) {
 		}
 		go wakeLedgers(co, "the ledger chooser opened in FinCom", false)
 	}
+}
+
+var (
+	idRefusedMu  sync.Mutex
+	idRefusedWhy string
+)
+
+func setIdRefused(why string) {
+	idRefusedMu.Lock()
+	defer idRefusedMu.Unlock()
+	if why != idRefusedWhy && why != "" {
+		writeLog("FinCom: " + why)
+	}
+	idRefusedWhy = why
+}
+func idRefused() string {
+	idRefusedMu.Lock()
+	defer idRefusedMu.Unlock()
+	return idRefusedWhy
 }

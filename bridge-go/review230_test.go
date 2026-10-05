@@ -46,7 +46,8 @@ func TestPingProof(t *testing.T) {
 	code := pairCode
 	pairMu.Unlock()
 	o := ping("?n=" + n)
-	if str(o["proof"]) != hmacOf("proof-key-123456", n) || str(o["pairProof"]) != hmacOf(code, n) {
+	// the owner's condition: HMAC-SHA256(bridge key, nonce || bridge id || port)
+	if str(o["proof"]) != hmacOf("proof-key-123456", n+"go-"+instanceID()+fmt.Sprint(toInt(cfg("Port")))) || str(o["pairProof"]) != hmacOf(code, n) || str(o["bridgeId"]) != "go-"+instanceID() {
 		t.Fatalf("own user: proof %v pairProof %v", o["proof"], o["pairProof"])
 	}
 	if o := ping("?n=short"); o["proof"] != nil {
@@ -160,4 +161,34 @@ func clearNotMainForTest() {
 	notMainMu.Lock()
 	notMainAt, notMainBeat, notMainTold = time.Time{}, false, false
 	notMainMu.Unlock()
+}
+
+// the owner's condition (Fix 2c): a computer key refused a bridge id: FinCom's words shown in the tray (its status), until
+// FinCom answers again
+func TestIdRefusedShownInTray(t *testing.T) {
+	f := newStandTally(t)
+	words := "This computer key cannot use bridge go-aaaa000001: it belongs to NW144 · anshul. Ask the firm's owner."
+	refuse := true
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if refuse {
+			w.WriteHeader(409)
+			_, _ = w.Write([]byte(jsonText(M{"ok": false, "idRefused": true, "error": words})))
+			return
+		}
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer srv.Close()
+	standBridge(t, f, fmt.Sprintf(`,"CloudUrl":"%s/","CloudKeyGo":"plain:fcd_%s"`, srv.URL, strings.Repeat("0", 48)))
+	beatOnce()
+	if str(trayStatus()["cloudRefused"]) != words {
+		t.Fatalf("the tray does not show FinCom's words: %v", trayStatus()["cloudRefused"])
+	}
+	if !strings.Contains(readText(logFile()), words) {
+		t.Fatal("not in the log")
+	}
+	refuse = false
+	beatOnce()
+	if trayStatus()["cloudRefused"] != "" {
+		t.Fatalf("still shown after FinCom answered: %v", trayStatus()["cloudRefused"])
+	}
 }

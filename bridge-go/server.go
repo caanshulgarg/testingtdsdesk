@@ -122,12 +122,13 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			p["bridgeId"], p["port"] = "go-"+instanceID(), toInt(cfg("Port"))
 			// review M1: the proof FinCom checks before it uses this bridge (its key), or pairs with it (the code shown now)
 			if n := qs.Get("n"); n != "" {
-				if pr := proofFor(cfgS("Key"), n); pr != "" {
+				// the owner's condition: HMAC-SHA256(bridge key, nonce || bridge id || port)
+				if pr := proofFor(cfgS("Key"), n, "go-"+instanceID()+fmt.Sprint(toInt(cfg("Port")))); pr != "" {
 					p["proof"] = pr
 				}
 				pairMu.Lock()
 				if time.Now().Before(pairUntil) {
-					if pr := proofFor(pairCode, n); pr != "" {
+					if pr := proofFor(pairCode, n, ""); pr != "" {
 						p["pairProof"] = pr
 					}
 				}
