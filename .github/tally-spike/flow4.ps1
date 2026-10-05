@@ -166,7 +166,8 @@ try { & $in.script @a *>&1 | Out-File C:\fcspike\task-out.txt -Encoding utf8 } c
 '@
 if ($rdp) {
   # an interactive task: it runs as user 2 in the session they are signed in to (no password stored)
-  $act = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File C:\fcspike\task.ps1' -WorkingDirectory $fc
+  # through a headless console host: no window of its own that would take the front from user 2's Tally
+  $act = New-ScheduledTaskAction -Execute 'conhost.exe' -Argument '--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File C:\fcspike\task.ps1' -WorkingDirectory $fc
   $pr = New-ScheduledTaskPrincipal -UserId "$env:COMPUTERNAME\$u2" -LogonType Interactive -RunLevel Limited
   $st = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Hours 3) -MultipleInstances IgnoreNew
   try { Register-ScheduledTask -TaskName fcu2 -Action $act -Principal $pr -Settings $st -Force -ErrorAction Stop | Out-Null; Write-Host "task fcu2 registered for $u2 (interactive)" } catch { Write-Host "task: $_" }
@@ -204,14 +205,19 @@ Add-Type @"
 using System; using System.Runtime.InteropServices;
 public static class K2 { [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);
-  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow(); }
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern void keybd_event(byte k, byte s, uint f, UIntPtr e); }
 "@
 $me = (Get-Process -Id $PID).SessionId
 $p = Get-Process tally -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $me -and $_.MainWindowHandle -ne 0 } | Select-Object -First 1
 if ($p) {
-  [K2]::ShowWindow($p.MainWindowHandle, 9) | Out-Null; [K2]::SetForegroundWindow($p.MainWindowHandle) | Out-Null; Start-Sleep -Milliseconds 700
   $fg = ([K2]::GetForegroundWindow() -eq $p.MainWindowHandle)
-  if ($k) { [System.Windows.Forms.SendKeys]::SendWait($k) }
+  for ($t = 0; $t -lt 5 -and -not $fg; $t++) {
+    [K2]::ShowWindow($p.MainWindowHandle, 9) | Out-Null
+    [K2]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero); [K2]::SetForegroundWindow($p.MainWindowHandle) | Out-Null; [K2]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)
+    Start-Sleep -Milliseconds 700; $fg = ([K2]::GetForegroundWindow() -eq $p.MainWindowHandle)
+  }
+  if ($k) { for ($t = 0; $t -lt 4; $t++) { try { [System.Windows.Forms.SendKeys]::SendWait($k); break } catch { "SendWait try $t`: $_"; Start-Sleep 2 } } }
   "keys '$k' -> Tally pid $($p.Id) '$($p.MainWindowTitle)' session $me foreground=$fg"
 } else { if ($k) { [System.Windows.Forms.SendKeys]::SendWait($k) }; "no Tally window in session $me; keys '$k' to the window in front" }
 Start-Sleep ([int]$wait)
