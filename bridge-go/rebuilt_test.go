@@ -524,6 +524,12 @@ func standBridge(t *testing.T, f *standTally, extra string) string {
 	bgMu.Lock()
 	stopHold = map[int]time.Time{}
 	bgMu.Unlock()
+	decideMu.Lock()
+	decideAt = map[string]time.Time{} // the decision log's once-in-10-minutes, per test
+	decideMu.Unlock()
+	numberAskMu.Lock()
+	numberAsks = map[string]time.Time{}
+	numberAskMu.Unlock()
 	leaseMu.Lock()
 	leases = map[string]time.Time{}
 	leaseMu.Unlock()

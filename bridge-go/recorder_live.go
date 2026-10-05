@@ -797,6 +797,7 @@ func liveTake(file string, gen int, ll liveLogicalLine, posting bool, held map[s
 		return 0
 	}
 	if live.qcount[liveGUID(l.CGUID)] >= liveQueueCap() {
+		liveSayOnce("cap|"+l.CGUID, fmt.Sprintf("Recorder: %s has %d changes waiting to be sent: the rest of its file is read once they go", strings.TrimSpace(l.CName), liveQueueCap()))
 		return -1
 	}
 	if a := toI64(onlyDigits(l.AID)); a > 0 {
@@ -1015,6 +1016,10 @@ func liveFlush(p *livePending, posting bool) int {
 		}
 		return liveEmit(l, ev, file, gen, p.start, p.start, p.end, posting)
 	}
+	if l.Ev == "voucher_accept_pre" || l.Ev == "ledger_accept_pre" {
+		liveSayOnce("unsaved|"+l.CGUID+"|"+l.VType+"|"+l.VNo+"|"+l.T0, fmt.Sprintf("Recorder: %s of %s opened in a form and not saved (no GUID, no second line): nothing to send",
+			or(strings.TrimSpace(l.VType+" "+l.VNo), or(strings.TrimSpace(l.Name), "an entry")), liveDay(normDate(l.VDate))))
+	}
 	return 0
 }
 
@@ -1073,6 +1078,7 @@ func liveEmit(l recLine, ev, file string, gen int, start, lineStart, end int64, 
 		// review H1: a company FinCom says is not linked: its lines are counted and skipped (the offset moves on)
 		liveCo(c.company).skipped++
 		live.sent[id] = true
+		liveSayOnce("notlinked|"+c.key(), "Recorder: "+c.company+" is not linked to a FinCom client: its lines are skipped, nothing of them is asked of Tally (asked again in an hour)")
 		return 0
 	}
 	if !c.isLedger() {
@@ -1109,6 +1115,12 @@ func liveEmit(l recLine, ev, file string, gen int, start, lineStart, end int64, 
 			c.heldWhy = "the line has no date, so Tally cannot be asked for its entry"
 		} else if c.fetchesIds() && c.masterId == "" && c.event != "created" {
 			c.heldWhy = "the line has no MasterID, so Tally cannot be asked for its entry"
+		}
+		switch {
+		case c.exempt:
+			liveDecide(c, "not asked: FinCom's own posting coming back (matched by FinCom id)")
+		case c.fetchesIds() && c.heldWhy != "":
+			liveDecide(c, "not asked: "+c.heldWhy)
 		}
 	}
 	if livePlaceholder(c.guid) {
@@ -1181,6 +1193,7 @@ func liveSameSave(c *change) bool {
 		}
 		q.also = append(q.also, c.lineId)
 		live.queued[c.lineId] = true
+		liveDecide(c, "goes with line "+cut(q.lineId, 8)+"… (the other line of the same save)")
 		return true
 	}
 	s, had := live.created[k]
@@ -1190,12 +1203,14 @@ func liveSameSave(c *change) bool {
 	if s[1] != "" {
 		live.sent[c.lineId] = true
 		liveSaveSent([]string{c.lineId})
+		liveDecide(c, "not sent again: the same save went already with Tally's GUID "+s[1])
 		return true
 	}
 	id := s[0] + ":resolved"
 	if live.sent[id] || live.queued[id] {
 		live.sent[c.lineId] = true
 		liveSaveSent([]string{c.lineId})
+		liveDecide(c, "not sent again: the same save was resolved already")
 		return true
 	}
 	c.also = append(c.also, c.lineId)
@@ -1610,6 +1625,9 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 			if c.heldWhy == "" {
 				c.heldWhy = "the entry was not read from Tally: " + cutRunes(why, 160)
 			}
+			if !c.isLedger() {
+				liveDecide(c, "held: "+c.heldWhy)
+			}
 		}
 		live.mu.Unlock()
 		writeLog(fmt.Sprintf("Recorder: the body of %d entr%s of %s was not read from Tally (%s); sent without it (FinCom holds the line until a body comes)",
@@ -1618,6 +1636,11 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 	port, err := findCompanyPort(company, 0)
 	if err != nil {
 		if yield() {
+			for _, c := range need {
+				if !c.isLedger() {
+					liveDecide(c, "not asked: a posting is going on; asked after it")
+				}
+			}
 			return
 		}
 		failed(need, err.Error())
@@ -1634,7 +1657,10 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 		}
 		if !spOK {
 			// security L6: no starting point recorded: nothing of the company's entries is asked or taken
-			liveHeldAs(c, "the company's starting point is not recorded yet, so its entries are not taken from Tally", false)
+			liveDecide(c, "not asked: no starting point recorded for this company")
+			live.mu.Lock()
+			c.bodyTried, c.heldWhy = true, "the company's starting point is not recorded yet, so its entries are not taken from Tally"
+			live.mu.Unlock()
 			continue
 		}
 		if byDate[c.vchDate] == nil {
@@ -1659,11 +1685,20 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 				failed(part, "the body fetch is off for this company (the 2 s rule)")
 				continue
 			}
+			for _, c := range part {
+				liveDecide(c, "asking Tally by MasterID")
+			}
 			got, err := fetchVouchersByMasterIn(tc, company, port, d, mids, left())
 			if gaveWay(err) {
+				for _, c := range part {
+					liveDecide(c, "not asked: a posting is going on; asked after it")
+				}
 				return // a posting goes first: asked again after it
 			}
 			if passing(err) && again(part) {
+				for _, c := range part {
+					liveDecide(c, "not asked yet: "+cutRunes(err.Error(), 160)+"; asked again shortly")
+				}
 				return
 			}
 			if err != nil {
@@ -1699,8 +1734,10 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 				}
 				w := liveWantOf(c, sp, spOK)
 				w.mid = ""
+				liveDecide(c, "asking Tally by type and number ("+cutRunes(m.why, 120)+")")
 				x, why, kind, err := liveOneByNumber(tc, c.company, port, w, left())
 				if gaveWay(err) {
+					liveDecide(c, "not asked: a posting is going on; asked after it")
 					return // review L5: a posting goes first: asked again after it
 				}
 				if err != nil {
@@ -1948,8 +1985,20 @@ func liveUploadStep() (int, bool) {
 				c.bodyTried = true // the body fetch is off for this company (the 2 s rule): the line goes without
 				if !c.isLedger() {
 					c.heldWhy = "the entry fetch is off for this company (Tally took longer than the 2 s limit)"
+					why := "Tally took longer than the 2 s limit"
+					if o := live.off["bodies|"+key]; o != nil {
+						why = strings.TrimSuffix(o.why, ")")
+						if i := strings.Index(why, " for the "); i > 0 {
+							why = why[:i]
+						}
+						why += " at " + cut(strings.TrimPrefix(o.at, cut(o.at, 11)), 5)
+					}
+					liveDecide(c, "not asked: the body fetch is off for this company ("+why+")")
 				}
 				continue
+			}
+			if posting && !c.isLedger() {
+				liveDecide(c, "not asked: a posting is going on; asked after it")
 			}
 			if c.byNumber {
 				if !time.Now().Before(c.askAfter) {

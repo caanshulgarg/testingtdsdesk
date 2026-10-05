@@ -278,6 +278,7 @@ func liveTakeBody(c *change, x string) {
 		c.vchNo = strings.TrimSpace(html.UnescapeString(group(`<VOUCHERNUMBER>([^<]*)</VOUCHERNUMBER>`, x, 1)))
 	}
 	c.heldWhy = ""
+	liveDecide(c, "taken: Tally's GUID "+c.guid+", AlterID "+c.alterId)
 	c.ledgers = voucherLedgerNames(x)
 	if c.during {
 		for _, n := range c.ledgers {
@@ -296,8 +297,46 @@ func liveHeldAs(c *change, why string, final bool) {
 	c.bodyTried, c.heldWhy = true, why
 	c.heldFinal = c.heldFinal || final
 	live.mu.Unlock()
-	writeLog(fmt.Sprintf("Recorder: %s of %s in %s: %s; sent without its body and GUID (FinCom holds the line until it is resolved)",
-		or(strings.TrimSpace(c.vchType+" "+c.vchNo), "an entry"), c.vchDate, c.company, cutRunes(why, 200)))
+	liveDecide(c, "held: "+why+" (sent without its body and GUID; FinCom holds the line until it is resolved)")
+}
+
+// --- 2.2.2 (the owner's requirement before publishing): ONE log line for every decision to fetch or not to fetch a
+// voucher line's entry, with its reason; the same line and reason at most once in 10 minutes
+var (
+	decideMu sync.Mutex
+	decideAt = map[string]time.Time{}
+)
+
+// said once in 10 minutes for this key
+func liveSayOnce(key, text string) {
+	decideMu.Lock()
+	if t, ok := decideAt[key]; ok && time.Since(t) < 10*time.Minute {
+		decideMu.Unlock()
+		return
+	}
+	if len(decideAt) > 5000 {
+		for k, t := range decideAt {
+			if time.Since(t) >= 10*time.Minute {
+				delete(decideAt, k)
+			}
+		}
+		if len(decideAt) > 5000 {
+			decideAt = map[string]time.Time{}
+		}
+	}
+	decideAt[key] = time.Now()
+	decideMu.Unlock()
+	writeLog(text)
+}
+
+// "Recorder: Journal FA/ELEC/024 of 01-Oct-2026 (MasterID 25683, line a14c0d2e…): <what>"
+func liveSay(typ, no, date, mid, lineID, what string) {
+	liveSayOnce("decide|"+lineID+"|"+what, fmt.Sprintf("Recorder: %s of %s (MasterID %s, line %s…): %s", or(strings.TrimSpace(typ+" "+no), "An entry"), liveDay(date),
+		or(mid, "none"), cut(lineID, 8), what))
+}
+
+func liveDecide(c *change, what string) {
+	liveSay(c.vchType, c.vchNo, c.vchDate, c.masterId, c.lineId, what)
 }
 
 // the new entries of one company (MasterID 0 on their line) by type and number, as a background read like the body
@@ -319,6 +358,9 @@ func liveFetchByNumber(cs []*change, sp int64, spOK bool) {
 	port, err := findCompanyPort(company, 0)
 	if err != nil {
 		if yield() {
+			for _, c := range cs {
+				liveDecide(c, "not asked: a posting is going on; asked after it")
+			}
 			return
 		}
 		for _, c := range cs {
@@ -338,8 +380,10 @@ func liveFetchByNumber(cs []*change, sp int64, spOK bool) {
 			continue
 		}
 		left := maxI(2, int(time.Until(deadline).Seconds()+0.999))
+		liveDecide(c, "asking Tally by type and number (a new entry: no MasterID on its line)")
 		x, why, kind, err := liveOneByNumber(tc, company, port, liveWantOf(c, sp, spOK), left)
 		if gaveWay(err) {
+			liveDecide(c, "not asked: a posting is going on; asked after it")
 			return
 		}
 		live.mu.Lock()
@@ -358,6 +402,7 @@ func liveFetchByNumber(cs []*change, sp int64, spOK bool) {
 		if c.numTries < 3 {
 			c.askAfter = time.Now().Add(retry)
 			live.mu.Unlock()
+			liveDecide(c, fmt.Sprintf("not found by its type and number yet (ask %d of 3); asked again shortly", c.numTries))
 			continue
 		}
 		live.mu.Unlock()
@@ -376,9 +421,9 @@ type heldLine struct {
 	Ev, Why                                                  string // 2.2.2: the event the line went as ("" : created); why it stays held
 	// 2.2.2 review: the line's flag and GUID (kept on its :resolved line), its FinCom id not the entry's, its AlterID before
 	// the save (a lower bound for Tally's), and held for a reason no ask can change (never asked again)
-	LineGuid, LineFid string
-	Mismatch, Final   bool
-	LineAlter         int64
+	LineGuid, LineFid      string
+	Mismatch, Final, Cloud bool // Cloud: from FinCom's beat answer (heldLines)
+	LineAlter              int64
 }
 
 var heldMu sync.Mutex
@@ -395,7 +440,8 @@ func liveHeldLoad() (M, map[string]heldLine) {
 		e := obj(v)
 		items[id] = heldLine{ID: id, Company: str(e["company"]), CGUID: str(e["companyGuid"]), Type: str(e["type"]), No: str(e["no"]), Date: str(e["date"]),
 			MID: str(e["masterId"]), At: str(e["savedAt"]), Added: str(e["added"]), Last: str(e["last"]), Tries: toInt(e["tries"]), Ev: str(e["event"]), Why: str(e["why"]),
-			LineGuid: str(e["lineGuid"]), LineFid: str(e["lineFid"]), Mismatch: truthy(e["idsMismatch"]), Final: truthy(e["final"]), LineAlter: toI64(e["lineAlter"])}
+			LineGuid: str(e["lineGuid"]), LineFid: str(e["lineFid"]), Mismatch: truthy(e["idsMismatch"]), Final: truthy(e["final"]), LineAlter: toI64(e["lineAlter"]),
+			Cloud: truthy(e["fromFinCom"])}
 	}
 	return all, items
 }
@@ -405,7 +451,7 @@ func liveHeldSave(all M, items map[string]heldLine) {
 	for id, h := range items {
 		o[id] = M{"company": h.Company, "companyGuid": h.CGUID, "type": h.Type, "no": h.No, "date": h.Date, "masterId": h.MID, "savedAt": h.At,
 			"added": h.Added, "last": h.Last, "tries": h.Tries, "event": h.Ev, "why": liveCapWhy(h.Why), "lineGuid": h.LineGuid, "lineFid": h.LineFid,
-			"idsMismatch": h.Mismatch, "final": h.Final, "lineAlter": h.LineAlter}
+			"idsMismatch": h.Mismatch, "final": h.Final, "lineAlter": h.LineAlter, "fromFinCom": h.Cloud}
 	}
 	all["items"] = o
 	if err := saveFile(liveHeldFile(), jsonText(all)); err != nil {
@@ -494,9 +540,8 @@ func liveRescanOnce() {
 	}
 	all["scanned"], all["scannedVersion"] = now, BridgeVersion
 	liveHeldSave(all, items)
-	if len(found) > 0 {
-		writeLog(fmt.Sprintf("Recorder: %d line(s) sent earlier without their entry (a placeholder GUID, a GUID that is not the MasterID's, or the body fetch off) found in the add-on's files; each is sent again with Tally's GUID and body once Tally gives it", len(found)))
-	}
+	writeLog(fmt.Sprintf("Recorder: re-scan of the add-on's files for %s: %d line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)%s",
+		BridgeVersion, len(found), map[bool]string{true: "; each is asked of Tally again and sent with Tally's GUID and body once Tally gives it", false: ""}[len(found) > 0]))
 }
 
 func liveRescanFiles(scannedBefore bool) []heldLine {
@@ -684,6 +729,12 @@ func liveResolveTurn() {
 			continue
 		}
 		if waiting || off || h.Final || len(ask) >= 10 {
+			switch {
+			case off:
+				liveSay(h.Type, h.No, h.Date, h.MID, id, "not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)")
+			case len(ask) >= 10 && !waiting && !h.Final:
+				liveSay(h.Type, h.No, h.Date, h.MID, id, "not asked this turn: 10 held lines asked already; asked in a later turn")
+			}
 			continue
 		}
 		// 2.2.2 (the owner's condition a): asked again 20 times at most, then left held with plain words
@@ -692,7 +743,7 @@ func liveResolveTurn() {
 				h.Why = liveHeldGiveUp
 				items[id] = h
 				changed = true
-				writeLog(fmt.Sprintf("Recorder: %s of %s in %s (line %s): %s", or(strings.TrimSpace(h.Type+" "+h.No), "an entry"), liveDay(h.Date), h.Company, id, liveHeldGiveUp))
+				liveSay(h.Type, h.No, h.Date, h.MID, id, "held: "+liveHeldGiveUp)
 			}
 			continue
 		}
@@ -715,13 +766,35 @@ func liveResolveTurn() {
 	}
 	var got []res
 	deadline := time.Now().Add(time.Duration(keepNum("RecorderResolveTurnSec", 20)) * time.Second)
+	total, fromFinCom := len(items), 0
+	for _, h := range items {
+		if h.Cloud {
+			fromFinCom++
+		}
+	}
+	resolved := 0
+	defer func() {
+		if len(ask) > 0 {
+			writeLog(fmt.Sprintf("Recorder: held lines: %d from FinCom, %d asked, %d resolved, %d still held (%d in the list)", fromFinCom, len(got), resolved, total-resolved, total))
+		}
+	}()
 	for _, h := range ask {
 		if time.Now().After(deadline) {
+			for _, r := range ask[len(got):] {
+				liveSay(r.Type, r.No, r.Date, r.MID, r.ID, "not asked this turn: 20 s passed; asked in the next one")
+			}
 			break
 		}
+		liveSay(h.Type, h.No, h.Date, h.MID, h.ID, fmt.Sprintf("asking Tally again (a held line, try %d of %d)", h.Tries+1, liveHeldMaxTries))
 		x, why, answered, final, err := liveResolveOne(h)
 		if gaveWay(err) {
+			liveSay(h.Type, h.No, h.Date, h.MID, h.ID, "not asked: a posting is going on; asked after it")
 			break
+		}
+		if err != nil {
+			liveSay(h.Type, h.No, h.Date, h.MID, h.ID, "not asked this time: "+cutRunes(err.Error(), 160)+" (not counted as a try)")
+		} else if x == "" && !final {
+			liveSay(h.Type, h.No, h.Date, h.MID, h.ID, "still held: "+or(cutRunes(why, 200), "Tally gave nothing yet"))
 		}
 		got = append(got, res{h.ID, x, why, answered, final})
 		if x == "" {
@@ -740,6 +813,7 @@ func liveResolveTurn() {
 			liveQueueAdd(c)
 		}
 		live.mu.Unlock()
+		resolved++
 		writeLog(fmt.Sprintf("Recorder: %s %s of %s in %s resolved: sent as %s with its GUID %s and body", h.Type, h.No, h.Date, h.Company, c.event, c.guid))
 	}
 	if len(got) == 0 {
@@ -761,8 +835,8 @@ func liveResolveTurn() {
 			h.Final = true
 			if r.why != "" {
 				h.Why = liveCapWhy(r.why)
-				writeLog(fmt.Sprintf("Recorder: %s of %s in %s (line %s) stays held: %s", or(strings.TrimSpace(h.Type+" "+h.No), "an entry"), liveDay(h.Date), h.Company, h.ID, h.Why))
 			}
+			liveSay(h.Type, h.No, h.Date, h.MID, h.ID, "held: "+or(h.Why, "Tally's voucher is not this line's entry")+" (not asked again)")
 		}
 		items[r.id] = h
 	}
@@ -855,7 +929,7 @@ func applyHeldLines(j M) {
 		if mid == "" && (no == "" || !liveNumberText(no) || !liveNumberText(typ)) {
 			continue // nothing to ask Tally by
 		}
-		cs = append(cs, heldLine{ID: id, Company: co, CGUID: cg, Type: typ, No: no, Date: date, MID: mid, At: now, Added: now, Ev: ev})
+		cs = append(cs, heldLine{ID: id, Company: co, CGUID: cg, Type: typ, No: no, Date: date, MID: mid, At: now, Added: now, Ev: ev, Cloud: true})
 	}
 	if len(cs) == 0 {
 		return
@@ -882,6 +956,10 @@ func applyHeldLines(j M) {
 		items[h.ID] = h
 		added++
 	}
+	// said whatever the outcome (once in 10 minutes while it stays the same)
+	liveSayOnce(fmt.Sprintf("heldbeat|%d|%d|%d|%d", len(rows), len(cs), len(fresh), added), fmt.Sprintf(
+		"Recorder: FinCom holds %d line(s) of this computer without their entry: %d new in the held list, %d there already, %d resolved or sent with their body already, %d not taken (not this company's, no date, or nothing to ask Tally by)",
+		len(rows), added, len(fresh)-added, len(cs)-len(fresh), len(rows)-len(cs)))
 	if added == 0 {
 		return
 	}
