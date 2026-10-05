@@ -91,6 +91,9 @@ type change struct {
 	lineAlter int64
 	lineFid   string
 	heldFinal bool
+	// FinCom's own import coming back (its FinCom id, a GUID Tally made for its MasterID): not fetched (decided once, when
+	// the line is read)
+	exempt bool
 }
 
 func (c *change) key() string { return c.company + "|" + c.companyGuid }
@@ -931,8 +934,17 @@ func (c *change) fetchesIds() bool {
 	if c.isLedger() || (c.event != "created" && c.event != "altered" && c.event != "imported") {
 		return false
 	}
-	return !(c.event == "imported" && c.fid != "" && !c.idsMismatch)
+	return !c.exempt
 }
+
+// 2.2.2 second review (L-D): a GUID Tally made for this MasterID: the company's GUID, "-" and the MasterID in hex
+func liveOwnGUID(guid, cguid, mid string) bool {
+	g, cg, m := strings.ToLower(strings.TrimSpace(guid)), strings.ToLower(strings.TrimSpace(cguid)), toI64(onlyDigits(mid))
+	return m > 0 && cg != "" && strings.HasPrefix(g, cg+"-") && guidHexIs(g[len(cg)+1:], m)
+}
+
+// a narration without its "TDSDesk:<id>" tags
+func liveNoTag(narr string) string { return strings.TrimSpace(reLiveFid.ReplaceAllString(narr, "")) }
 
 // 2.2.2 security review: the words that go with a line, capped
 func liveCapWhy(s string) string { return cutRunes(s, 300) }
@@ -1088,6 +1100,7 @@ func liveEmit(l recLine, ev, file string, gen int, start, lineStart, end int64, 
 			c.idsMismatch, c.lineGuid = true, strings.TrimSpace(l.PreGUID) // review L4: the pre carried another entry's GUID
 		}
 		c.lineGuid = cut(cleanGUID(c.lineGuid), 80)
+		c.exempt = c.event == "imported" && c.fid != "" && !c.idsMismatch && liveOwnGUID(c.guid, c.companyGuid, c.masterId)
 		if c.fetchesIds() || c.idsMismatch {
 			c.guid, c.alterId = "", ""
 		}
@@ -1761,8 +1774,12 @@ func (c *change) wire() M {
 		!strings.Contains(html.UnescapeString(group(`<NARRATION>([^<]*)</NARRATION>`, c.xml, 1)), "TDSDesk:"+fid)))) {
 		fid, lineFid = "", fid
 	}
+	narr := c.narr
+	if lineFid != "" {
+		narr = liveNoTag(narr) // second review L-C: the cloud would take the id from the narration's tag
+	}
 	m := M{"line_id": c.lineId, "event": c.event, "object_guid": c.guid, "master_id": c.masterId, "alter_id": alter, "vch_type": c.vchType, "vch_no": c.vchNo,
-		"vch_date": c.vchDate, "saved_at": c.at, "pc": liveComputerFn(), "user": c.user, "company_guid": c.companyGuid, "ledgers": ls, "narration": c.narr,
+		"vch_date": c.vchDate, "saved_at": c.at, "pc": liveComputerFn(), "user": c.user, "company_guid": c.companyGuid, "ledgers": ls, "narration": narr,
 		"fid": fid, "xml": c.xml, "source": c.source}
 	if lineFid != "" {
 		m["lineFid"] = lineFid
@@ -1786,7 +1803,11 @@ func (c *change) wire() M {
 	}
 	// security L2: a line too big for one call goes cut and marked, never blocking the feed
 	if len(jsonText(m)) > liveMaxBytes-(16<<10) {
-		m["xml"], m["ledgers"], m["narration"], m["oversize"] = "", []any{}, cutRunes(c.narr, 1000), true
+		// second review L-C: no entry ids and no FinCom id with it (nothing of it can be matched or built)
+		m["xml"], m["ledgers"], m["narration"], m["oversize"], m["object_guid"] = "", []any{}, cutRunes(liveNoTag(c.narr), 1000), true, ""
+		if fid != "" {
+			m["fid"], m["lineFid"] = "", fid
+		}
 		m["heldWhy"] = "the entry is larger than FinCom takes in one line; upload that day's Day Book to settle it"
 	}
 	return m
