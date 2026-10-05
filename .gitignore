@@ -15,3 +15,7 @@ scratchpad/
 
 # the bridge's log, if a test ever writes it into the package folder (round 3 R3-2): never committed
 bridge-go/tds-bridge.log
+
+# a go build in the package folder (never committed)
+bridge-go/bridge
+bridge-go/bridge.exe
