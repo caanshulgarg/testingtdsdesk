@@ -87,3 +87,7 @@ func platSwitchToMain(fincom string) error {
 }
 func removeOwnTask()       {}
 func localAppData() string { return os.Getenv("LOCALAPPDATA") }
+
+// 2.3.0: not Windows (the tests): there are no Windows users to tell apart, so nothing is checked
+func platPeerUser(local, remote int) (string, bool, error) { return "", false, nil }
+func platOwnSIDs() []string                                { return nil }

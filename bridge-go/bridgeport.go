@@ -112,7 +112,9 @@ func bindAndRemember(listen func(int) (net.Listener, error), mine func(int) bool
 }
 
 // the message the tray shows when the bridge could not start (kept beside the settings; gone at the next good start)
-func startFailedFile() string { return filepath.Join(filepath.Dir(ConfigPath), "bridge-start-failed.txt") }
+func startFailedFile() string {
+	return filepath.Join(filepath.Dir(ConfigPath), "bridge-start-failed.txt")
+}
 func startFailedText() string {
 	if exists(startFailedFile()) {
 		return readText(startFailedFile())

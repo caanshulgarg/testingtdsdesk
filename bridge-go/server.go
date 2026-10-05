@@ -113,9 +113,20 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		sendJSONRaw(w, 204, "", origin)
 		return
 	}
+	// 2.3.0: only programs of this bridge's own Windows user (ownuser.go); /ping answers all and says whether it is theirs
+	mine, why := fromOwnUser(r)
 	if path == "/ping" {
 		// pid and loopSec: the per-user supervisor checks that its own worker answers and that its main loop still turns
-		sendJSON(w, 200, M{"ok": true, "bridge": "FinCom Tally Bridge", "version": BridgeVersion, "impl": "go", "testMode": testMode(), "runMode": runMode, "pid": os.Getpid(), "loopSec": loopSec()}, origin)
+		p := M{"ok": true, "bridge": "FinCom Tally Bridge", "version": BridgeVersion, "impl": "go", "testMode": testMode(), "runMode": runMode, "pid": os.Getpid(), "loopSec": loopSec(), "yours": mine}
+		if mine {
+			p["bridgeId"], p["port"] = "go-"+instanceID(), toInt(cfg("Port"))
+		}
+		sendJSON(w, 200, p, origin)
+		return
+	}
+	if !mine {
+		writeLog("Refused a request from a program of another Windows user (" + path + "): " + why)
+		sendJSON(w, 403, M{"ok": false, "error": notYours, "notYours": true}, origin)
 		return
 	}
 	if sentOrigin != "" && !originOK {
