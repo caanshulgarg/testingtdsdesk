@@ -6,7 +6,8 @@ $pages = @(
   'https://tallysolutions.com/download-tallyprime/',
   'https://tallysolutions.com/tally-prime-download/',
   'https://tallysolutions.com/tallyprime/download/',
-  'https://help.tallysolutions.com/download-tallyprime/',
+  'https://tallysolutions.com/download/support-files/',
+  'https://tallysolutions.com/global/download/',
   'https://help.tallysolutions.com/tally-prime/installation-and-licensing/install-tallyprime/'
 )
 $links = New-Object System.Collections.Generic.List[string]
@@ -14,6 +15,8 @@ foreach ($p in $pages) {
   try {
     $r = Invoke-WebRequest -Uri $p -UserAgent $ua -UseBasicParsing -TimeoutSec 60 -MaximumRedirection 5
     Write-Host "GET $p -> $($r.StatusCode) len=$($r.Content.Length)"
+    $safe = ($p -replace '[^A-Za-z0-9]+','_'); Set-Content -Path "$env:RES\page$safe.html" -Value $r.Content -Encoding UTF8
+    [regex]::Matches($r.Content, '(?i)[^"''\s<>()]*\.(exe|zip|msi)\b[^"''\s<>()]*') | ForEach-Object { $_.Value } | Sort-Object -Unique | ForEach-Object { Write-Host "   exe-ish: $_"; if ($_ -match '^https?://') { $links.Add($_) } }
     $found = [regex]::Matches($r.Content, '(?i)https?://[^"''\s<>]+') | ForEach-Object { $_.Value } |
       Where-Object { $_ -match '(?i)\.(exe|zip|msi)(\?|$)|download' } | Sort-Object -Unique
     foreach ($f in $found) { Write-Host "   link: $f"; $links.Add($f) }
