@@ -15,7 +15,7 @@ Windows server; each user's bridge is its own computer key, tally_devices row an
   5. tally_post_take_for(p_device, p_bridge, p_main): a bridge takes only postings for it, and those with no target only when
      it is the computer's main bridge; a changes-only bridge takes none; granted to the service role only (nobody here).
 RED: before the file exists it stops at the first check."""
-import os, re, sys, json, subprocess
+import os, re, sys, json, subprocess, datetime
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import pg_stand
 SQLDIR = os.path.join(HERE, "..", "server", "tally-cloud")
@@ -72,7 +72,12 @@ def counts(): return {t: int(db.one("select count(*) from %s" % t)) for t in ["t
 try:
     db.sql(part(os.path.join(HERE, "run_migration33.py"), "SCHEMA")); db.sql(part(os.path.join(HERE, "run_migration35.py"), "SCHEMA")); db.sql(part(os.path.join(HERE, "run_migration37.py"), "SCHEMA_X"))
     db.sql(part(os.path.join(HERE, "run_migration47.py"), "SCHEMA47"))
-    br = lambda *ids: q(json.dumps({"bridges": {i: {"at": "2026-10-05T10:00:00Z", "computer": "NW144", "user": u, "mode": "main", "open": ["ZZ CO"]} for i, u in ids}}))
+    NOW = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    DUP = "go-d0d0d0d0d0"   # an id reported by two computers before 54 (copied settings): bound to neither, said in a NOTICE
+    def br(*ids, dup=False):
+        b = {i: {"at": NOW, "computer": "NW144", "user": u, "mode": "main", "open": ["ZZ CO"]} for i, u in ids}
+        if dup: b[DUP] = {"at": NOW, "computer": "NW144", "user": "copied", "mode": "test", "open": []}
+        return q(json.dumps({"bridges": b}))
     DEV_OF.update({B1: D1, B4: D1, B2: D2, B3: D3, "go-ffff00000f": D1})
     db.sql("""insert into firms values (%(F)s, 'Firm') on conflict do nothing;
       insert into members values (%(O)s, %(F)s, 'Owner', 'owner', true), (%(S)s, %(F)s, 'Ravi', 'staff', true), (%(S2)s, %(F)s, 'Meena', 'staff', true);
@@ -80,7 +85,11 @@ try:
         (%(D3)s, %(F)s, 'NW144 · meena', 'h3', '2.3.0', %(I3)s);
       create table if not exists clients (id text, firm_id uuid, name text, data jsonb, deleted boolean default false, tally_name text, gstin text, primary key (firm_id, id));
       insert into clients (id, firm_id, name, data) values ('c1', %(F)s, 'ZZ', '{"postTo": "ZZ CO"}');""" % {"F": q(F), "O": q(OWNER), "S": q(STAFF), "S2": q(STAFF2), "D1": q(D1), "D2": q(D2), "D3": q(D3),
-        "I1": br((B1, "anshul"), (B4, "anshul")), "I2": br((B2, "ravi")), "I3": br((B3, "meena"))})
+        "I1": br((B1, "anshul"), (B4, "anshul"), dup=True), "I2": br((B2, "ravi"), dup=True), "I3": br((B3, "meena"))})
+    # staging's computer and bridge (Fix 2a: bound to it by the migration)
+    db.sql("insert into firms values ('22222222-2222-2222-2222-222222222222', 'Staging firm') on conflict do nothing")
+    db.sql("insert into tally_devices (id, firm_id, name, key_hash, version, info) values ('58d73e82-57f3-4f72-9f3d-14cc93a5b2b1', '22222222-2222-2222-2222-222222222222', 'Office computer', 'hs', '2.2.3', %s)"
+           % (q(json.dumps({"bridges": {"go-6b1ba45fbb1d": {"at": NOW, "computer": "OFFICE", "user": "tally", "mode": "main", "open": []}}}))))
     for path in FILES:
         r = psql_text(open(path).read())
         if r.returncode: ok(False, "%s runs: %s" % (os.path.basename(path), r.stderr[-300:])); raise SystemExit("cannot go on")
@@ -91,9 +100,16 @@ try:
     before = counts()
     for rnd in (1, 2):
         r = psql_text(text)
-        ok(r.returncode == 0, "0. pass %d: migration 54 runs %s" % (rnd, (r.stderr or "").strip()[-400:]))
+        if rnd == 1: notice1 = r.stderr or ""
+        ok(r.returncode == 0, "0. pass %d: migration 54 runs %s" % (rnd, (r.stderr or "").strip()[-400:] if r.returncode else ""))
         if r.returncode: raise SystemExit("cannot go on")
         ok(counts() == before, "0. pass %d: nothing deleted, nothing added (%s)" % (rnd, counts()))
+    # Fix 2a: every id reported today bound to its computer; an id under two computers bound to none, named in a NOTICE
+    live = lambda b: db.one("select coalesce(string_agg(device_id::text, ','), '-') from tally_bridge_ids where bridge_id = %s and reset_at is null" % q(b))
+    ok(live("go-6b1ba45fbb1d") == "58d73e82-57f3-4f72-9f3d-14cc93a5b2b1", "Fix 2a. staging's go-6b1ba45fbb1d is bound to 58d73e82 (Office computer)")
+    ok(live(B1) == D1 and live(B2) == D2 and live(B3) == D3 and live(B4) == D1, "Fix 2a. every other id bound to the computer that reports it")
+    ok(live(DUP) == "-" and DUP in notice1 and "NOTICE" in notice1, "Fix 2a. %s (under two computers) bound to none, and named in a NOTICE for the owner (%s)" % (DUP, notice1.strip()[-300:]))
+    ok(db.one("select count(*) from tally_bridge_ids") == "5", "Fix 2a. the second run binds nothing more (5)")
     # 1. the column
     col = db.rows("select data_type, is_nullable from information_schema.columns where table_name = 'tally_post_jobs' and column_name = 'target_bridge'")
     ok(col == [{"data_type": "text", "is_nullable": "YES"}], "1. tally_post_jobs.target_bridge text, nullable (%s)" % col)
@@ -156,7 +172,7 @@ try:
     ok(take(D1, B2, True) == [], "5. a bridge never takes another computer's postings")
     privs = lambda sig: [db.one("select has_function_privilege(%s, %s, 'execute')" % (q(r), q("public." + sig))) for r in ("anon", "authenticated")]
     ok(privs("tally_post_take_for(uuid, text, boolean)") == ["f", "f"], "5. tally_post_take_for: not for anon nor members (the service role only)")
-    ok(privs("tally_post_enqueue_to(uuid, text, jsonb, text, uuid)") == ["f", "t"] and privs("tally_bridge_bind(uuid, text)") == ["f", "f"] and privs("tally_post_enqueue_core(uuid, text, jsonb, uuid, text)") == ["f", "f"] and privs("tally_bridge_changes_only(uuid, text, boolean)") == ["f", "t"] and privs("tally_member_bridge_link(uuid, uuid, text)") == ["f", "t"],
+    ok(privs("tally_post_enqueue_to(uuid, text, jsonb, text, uuid)") == ["f", "t"] and privs("tally_bridge_bind(uuid, text)") == ["f", "f"] and privs("tally_bridge_reset(text, text)") == ["f", "t"] and privs("tally_post_enqueue_core(uuid, text, jsonb, uuid, text)") == ["f", "f"] and privs("tally_bridge_changes_only(uuid, text, boolean)") == ["f", "t"] and privs("tally_member_bridge_link(uuid, uuid, text)") == ["f", "t"],
        "5. the owner's and the poster's functions: members only")
     n = 0
     for fn in sorted(set(re.findall(r"function\s+public\.(\w+)\s*\(", text))):
@@ -175,11 +191,29 @@ try:
     r = enq(STAFF, 31)
     ok(r.get("retry") is True and jrow(31) == {"t": B1, "d": D1, "status": "waiting"}, "M2. Ravi's Retry of the owner's failed posting: waits again for the owner's bridge, not Ravi's (%s | %s)" % (r, jrow(31)))
     # ---- review M3: a bridge id belongs to the computer that reported it first; a copied id never moves a posting
-    ok(db.one("select count(*) from tally_bridge_ids") == "4" and db.one("select device_id::text from tally_bridge_ids where bridge_id = %s" % q(B1)) == D1, "M3. the ids heard from before 54 are bound to their computer (4)")
-    db.sql("update tally_devices set info = jsonb_set(info, '{bridges,%s}', '{\"at\": \"2026-10-06T10:00:00Z\", \"mode\": \"main\", \"open\": [\"ZZ CO\"]}'::jsonb) where id = %s" % (B1, q(D2)))
-    ok(db.one("select tally_bridge_bind(%s::uuid, %s)::text" % (q(D2), q(B1))) == "false" and db.one("select tally_bridge_bind(%s::uuid, %s)::text" % (q(D1), q(B1))) == "true",
-       "M3. Ravi's computer reporting the owner's bridge id (copied): not bound to it; the owner's computer is")
-    ok(db.one("select tally_bridge_bind(%s::uuid, 'go-eeee00000e')::text" % q(D2)) == "true" and db.one("select tally_bridge_bind(%s::uuid, 'go-eeee00000e')::text" % q(D1)) == "false", "M3. a new id: bound to the first computer that reports it")
+
+    db.sql("update tally_devices set info = jsonb_set(info, '{bridges,%s}', '{\"at\": \"2026-10-06T10:00:00Z\", \"computer\": \"NW144\", \"user\": \"ravi\", \"mode\": \"main\", \"open\": [\"ZZ CO\"]}'::jsonb) where id = %s" % (B1, q(D2)))
+    bind = lambda d, b: json.loads(db.one("select tally_bridge_bind(%s::uuid, %s)::text" % (q(d), q(b))))
+    x = bind(D2, B1)
+    ok(x.get("own") is False and x.get("words") == "This computer key cannot use bridge %s: it belongs to NW144 · anshul. Ask the firm's owner." % B1 and bind(D1, B1).get("own") is True,
+       "M3 / Fix 2c. Ravi's computer reporting the owner's bridge id (copied): refused with plain words (%s); the owner's computer is its own" % x.get("words"))
+    bind(D2, B1)
+    al = db.rows("select device_id::text as d, tried_computer as c, tried_user as u, coalesce(cleared_at::text, '') as cl from tally_bridge_alerts where bridge_id = %s" % q(B1))
+    ok(al == [{"d": D2, "c": "NW144", "u": "ravi", "cl": ""}], "Fix 2c. ONE bell alert for the owner naming the computer and Windows user that tried, however often it tries (%s)" % al)
+    ok(db.one("select info->'idRefused'->>'words' from tally_devices where id = %s" % q(D2)) == x.get("words"), "Fix 2c. the words on the trying computer's own line (info.idRefused)")
+    ok(bind(D2, "go-eeee00000e").get("own") is True and bind(D1, "go-eeee00000e").get("own") is False, "M3. a new id: bound to the first computer that reports it")
+    # Fix 2b: the owner's soft reset ("Release this bridge's identity"): kept, never deleted; the next computer to report it gets it
+    r = rpcj(STAFF, "select tally_bridge_reset('go-eeee00000e', 'moved')::text")
+    ok("_error" in r and "owner" in r["_error"], "Fix 2b. staff cannot release a bridge's identity (%s)" % r)
+    r = rpcj(OWNER, "select tally_bridge_reset('go-eeee00000e', 'Ravi reinstalled Windows')::text")
+    hist = db.rows("select device_id::text as d, coalesce(reset_by::text, '') as by, coalesce(reset_why, '') as why, (reset_at is not null)::text as reset from tally_bridge_ids where bridge_id = 'go-eeee00000e' order by id")
+    ok(r.get("ok") is True and hist == [{"d": D2, "by": OWNER, "why": "Ravi reinstalled Windows", "reset": "true"}], "Fix 2b. the owner releases it: the binding kept with who, when and why (%s)" % hist)
+    ok(bind(D1, "go-eeee00000e").get("own") is True and live("go-eeee00000e") == D1 and db.one("select count(*) from tally_bridge_ids where bridge_id = 'go-eeee00000e'") == "2",
+       "Fix 2b. the next computer that reports it is bound; the old binding stays as history")
+    bind(D1, B1)
+    r = rpcj(OWNER, "select tally_bridge_reset(%s, 'checked')::text" % q(B1))
+    ok(db.one("select count(*) from tally_bridge_alerts where bridge_id = %s and cleared_at is null" % q(B1)) == "0", "Fix 2c. the alert clears when the identity is released")
+    ok(bind(D1, B1).get("own") is True, "Fix 2b. the owner's computer reporting it again: bound again")
     r = enq(OWNER, 32, target=B1)
     ok(r.get("ok") is True and jrow(32) == {"t": B1, "d": D1, "status": "waiting"}, "M3. the owner's posting for his bridge goes to his computer, whatever Ravi's computer reports (%s)" % jrow(32))
     r = enq(OWNER, 36, target=B1, device=D2)
@@ -199,7 +233,21 @@ try:
             if dv in devs: db.sql("update tally_devices set info = jsonb_set(info, array['bridges', %s, 'open'], %s::jsonb) where id = %s" % (q(bk), q(json.dumps(val)), q(dv)))
     opened((D1, D2), [])
     r = enq(OWNER, 34)
-    ok(r.get("ok") is False and "No computer that may post has ZZ CO open" in r.get("error", "") and not jrow(34), "M4. no computer that may post has it open: refused in plain words (%s)" % r.get("error"))
+    W1 = "Nobody can post into ZZ CO just now: the only computer that has it open (NW144 · meena) is set to Changes only. Open the company in Tally on a computer that may post (NW144 · anshul, NW144 · ravi), or ask the owner to switch Changes only off for that bridge."
+    ok(r.get("ok") is False and r.get("error") == W1 and not jrow(34), "Fix 3. only a changes-only bridge has it open: the words name the company and what to do (%s)" % r.get("error"))
+    opened((D3,), [])
+    r = enq(OWNER, 38)
+    W2 = "Nobody can post into ZZ CO just now: no computer has it open in Tally. Open the company in Tally on a computer that may post (NW144 · anshul, NW144 · ravi), then post again."
+    ok(r.get("ok") is False and r.get("error") == W2 and not jrow(38), "Fix 3. none open anywhere (%s)" % r.get("error"))
+    opened((D3,), ["ZZ CO"])
+    # the poster's own bridge offline (not heard from for more than 3 minutes)
+    db.sql("update tally_devices set info = jsonb_set(info, array['bridges', %s, 'at'], '\"2026-10-01T04:30:00Z\"'::jsonb) where id = %s" % (q(B2), q(D2)))
+    opened((D1, D2), ["ZZ CO"])
+    r = enq(STAFF, 39)
+    W3 = "Nobody can post into ZZ CO just now: your FinCom Bridge (NW144 · ravi) has not been heard from since 01-Oct-2026 10:00 IST. Start it on that computer (sign in to Windows there as ravi), then post again; or ask the owner to post through another bridge."
+    ok(r.get("ok") is False and r.get("error") == W3 and not jrow(39), "Fix 3. the poster's own bridge offline (%s)" % r.get("error"))
+    db.sql("update tally_devices set info = jsonb_set(info, array['bridges', %s, 'at'], to_jsonb(%s::text)) where id = %s" % (q(B2), q(NOW), q(D2)))
+    opened((D1, D2), [])
     db.sql("update tally_companies set device_id = %s where company = 'ZZ CO'" % q(D1))
     opened((D1, D2, D3), ["ZZ CO"])
     # 3 again: unlinking keeps the row

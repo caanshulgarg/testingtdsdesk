@@ -28,7 +28,7 @@ READERS = ["tally_tb", "tally_period", "tally_mis", "tally_gst_summary", "tally_
            # 05-Oct-2026 (migration 53: a placeholder line whose entry the copy holds; the AlterID received only from lines whose ids belong together)
            "tally_recorder_ids_together",
            # 05-Oct-2026 (migration 54: a posting names the bridge that posts it; changes only; the member's bridge)
-           "tally_post_enqueue_to", "tally_post_take_for", "tally_bridge_changes_only", "tally_member_bridge_link", "tally_post_enqueue_core", "tally_bridge_bind", "tally_post_device_for"]
+           "tally_post_enqueue_to", "tally_post_take_for", "tally_bridge_changes_only", "tally_member_bridge_link", "tally_post_enqueue_core", "tally_bridge_bind", "tally_post_device_for", "tally_bridge_reset", "tally_post_nobody_words"]
 texts = {}
 fails = []
 def ok(c, w):

@@ -90,7 +90,8 @@ try:
     job("p-ravi3", RAVI["id"], "2026-10-05T12:00:00Z")
     c, r = call2(dict(BEAT, bridge=dict(RAVI, user="NW144\\anshul")))
     d1 = next(d for d in F.T["tally_devices"] if d["id"] == "d-1")
-    ok(c == 409 and RAVI["id"] not in (d1.get("info") or {}).get("bridges", {}), "6. another key reporting ravi's bridge id: refused (%s %s), not kept on its line" % (c, r.get("error")))
+    ok(c == 409 and r.get("error") == "This computer key cannot use bridge %s: it belongs to NW144 · NW144\\ravi. Ask the firm's owner." % RAVI["id"] and RAVI["id"] not in (d1.get("info") or {}).get("bridges", {}),
+       "6. another key reporting ravi's bridge id: refused in plain words naming the computer and Windows user it belongs to (%s %s), not kept on its line" % (c, r.get("error")))
     c, r = call2({"kind": "posts_take", "version": "2.3.0", "bridge": RAVI})
     ok(c == 409 and st("p-ravi3") == "waiting", "6. nor given ravi's postings (%s)" % c)
     c, r = call(BEAT)

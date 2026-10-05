@@ -99,10 +99,12 @@ def rpc(fn, a):
     if fn == "gst_cron_ok": return a.get("k") == CRON_KEY
     if fn == "tally_bridge_bind":       # migration 54 (review M3): a bridge id belongs to the first computer that reports it
         ids = T.setdefault("tally_bridge_ids", [])
-        if not re.match(r"^go-[0-9a-f]{6,32}$", a.get("p_bridge") or ""): return True
+        if not re.match(r"^go-[0-9a-f]{6,32}$", a.get("p_bridge") or ""): return {"own": True}
         hit = next((x for x in ids if x["bridge_id"] == a["p_bridge"]), None)
         if not hit: hit = {"bridge_id": a["p_bridge"], "device_id": a["p_device"]}; ids.append(hit)
-        return hit["device_id"] == a["p_device"]
+        if hit["device_id"] == a["p_device"]: return {"own": True}
+        d = next((x for x in T["tally_devices"] if x["id"] == hit["device_id"]), {}); e = ((d.get("info") or {}).get("bridges") or {}).get(a["p_bridge"]) or {}
+        return {"own": False, "words": "This computer key cannot use bridge %s: it belongs to %s. Ask the firm's owner." % (a["p_bridge"], " · ".join(x for x in (e.get("computer"), e.get("user")) if x) or d.get("name", ""))}
     if fn == "tally_post_take_for":     # migration 54: the oldest waiting posting of the computer for this bridge (or none named, when main)
         if any(p.get("device_id") == a["p_device"] and p.get("bridge_id") == a["p_bridge"] and p.get("changes_only") for p in T.get("tally_bridge_prefs", [])): return []
         if not any(a["p_bridge"] in ((d.get("info") or {}).get("bridges") or {}) for d in T["tally_devices"] if d["id"] == a["p_device"]): return []

@@ -28,7 +28,12 @@
 --      that reported it; tally_bridge_bind(p_device, p_bridge) (the service role: tally-ingest, on every call naming a bridge)
 --      binds an id not bound yet and says whether it is this computer's; tally-ingest refuses an id bound to another computer.
 --      The ids heard from before 54 on exactly one computer are bound to it here; an id seen on two is left unbound (the
---      first computer to report it afterwards gets it). Targets resolve through these bindings only.
+--      first computer to report it afterwards gets it), and named in a NOTICE. Targets resolve through these bindings only.
+--      A refused key: plain words on its own line (info.idRefused) and to its bridge, and ONE alert per (id, computer) for
+--      the owners (tally_bridge_alerts; tally_bridge_alert_read). tally_bridge_reset(p_bridge, p_why), owners only: the
+--      binding kept with who, when and why (never removed), its alerts cleared; the next computer to report the id gets it.
+--   7. Words (Fix 3): nobody can post into a company just now (none has it open; only changes-only bridges have it; the
+--      poster's own bridge not heard from for 3 minutes): the company named, and what to do.
 --   tally_post_take stays as it is (an older cloud function).
 --   Tested on pg_stand only: tests/run_migration54.py.
 
@@ -76,13 +81,21 @@ end $$;
 revoke insert, update on public.tally_member_bridges from anon, authenticated;
 grant select on public.tally_member_bridges to authenticated;
 
--- ---------------------------------------------------------------- 6. a bridge id belongs to one computer (review M3)
+-- ---------------------------------------------------------------- 6. a bridge id belongs to one computer (review M3, Fix 2)
+-- one row per binding; the live one has reset_at null (one per id). An owner's release (tally_bridge_reset) keeps the row
+-- with who, when and why; the next computer to report the id is bound by a new row. Rows are never removed
 create table if not exists public.tally_bridge_ids (
-  bridge_id text primary key,
+  id        bigserial primary key,
+  bridge_id text not null,
   device_id uuid not null references public.tally_devices(id) on delete cascade,
   firm_id   uuid not null references public.firms(id) on delete cascade,
-  first_at  timestamptz not null default now()
+  first_at  timestamptz not null default now(),
+  reset_at  timestamptz,
+  reset_by  uuid,
+  reset_why text
 );
+create unique index if not exists tally_bridge_ids_live on public.tally_bridge_ids (bridge_id) where reset_at is null;
+create index if not exists tally_bridge_ids_firm on public.tally_bridge_ids (firm_id, bridge_id);
 alter table public.tally_bridge_ids enable row level security;
 do $$ begin
   if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'tally_bridge_ids' and policyname = 'tally_bridge_ids_read') then
@@ -91,33 +104,128 @@ do $$ begin
 end $$;
 revoke insert, update on public.tally_bridge_ids from anon, authenticated;
 grant select on public.tally_bridge_ids to authenticated;
--- the ids heard from before 54 on exactly one computer (not removed): bound to it (an insert only; safe twice)
+-- Fix 2a: every id reported today (tally_devices.info.bridges, computers not removed) bound to the computer reporting it;
+-- an id reported by two or more computers is bound to none and named in a NOTICE for the owner (an insert only; safe twice)
 insert into public.tally_bridge_ids (bridge_id, device_id, firm_id)
 select x.k, (array_agg(x.id))[1], (array_agg(x.firm_id))[1]
   from (select d.id, d.firm_id, k from public.tally_devices d,
                jsonb_object_keys(case when jsonb_typeof(d.info -> 'bridges') = 'object' then d.info -> 'bridges' else '{}'::jsonb end) k
          where not coalesce(d.revoked, false) and k ~ '^go-[0-9a-f]{6,32}$') x
- group by x.k having count(*) = 1
-on conflict (bridge_id) do nothing;
-
--- tally-ingest, on every call naming a bridge: binds an id not bound yet to this computer; true when it is this computer's
-create or replace function public.tally_bridge_bind(p_device uuid, p_bridge text)
-returns boolean language plpgsql security definer set search_path = public, pg_temp as $function$
-declare b text := left(btrim(coalesce(p_bridge, '')), 40);
+ where not exists (select 1 from public.tally_bridge_ids i where i.bridge_id = x.k)
+ group by x.k having count(distinct x.id) = 1
+on conflict do nothing;
+do $$
+declare r record;
 begin
-  if b !~ '^go-[0-9a-f]{6,32}$' then return true; end if;   -- bridge 1.15.0 ("v1") has no id of its own
+  for r in select x.k, string_agg(x.id::text || ' (' || coalesce(x.name, '') || ')', ', ' order by x.id::text) as devs
+             from (select d.id, d.name, k from public.tally_devices d,
+                          jsonb_object_keys(case when jsonb_typeof(d.info -> 'bridges') = 'object' then d.info -> 'bridges' else '{}'::jsonb end) k
+                    where not coalesce(d.revoked, false) and k ~ '^go-[0-9a-f]{6,32}$') x
+            where not exists (select 1 from public.tally_bridge_ids i where i.bridge_id = x.k and i.reset_at is null)
+            group by x.k having count(distinct x.id) > 1
+  loop
+    raise notice 'Migration 54: bridge id % is reported by more than one computer (%): bound to none; the first of them to report it from now on gets it (an owner can release it on the Tally page)', r.k, r.devs;
+  end loop;
+end $$;
+
+-- Fix 2c: a computer key refused a bridge id: ONE alert per (id, computer) for the firm's owners (the bell), naming the
+-- computer and Windows user that tried; cleared when the identity is released. Rows are never removed
+create table if not exists public.tally_bridge_alerts (
+  id              bigserial primary key,
+  firm_id         uuid not null references public.firms(id) on delete cascade,
+  bridge_id       text not null,
+  device_id       uuid not null references public.tally_devices(id) on delete cascade,
+  owner_device_id uuid,
+  tried_computer  text not null default '',
+  tried_user      text not null default '',
+  words           text not null default '',
+  at              timestamptz not null default now(),
+  last_at         timestamptz not null default now(),
+  read_at         timestamptz,
+  read_by         uuid,
+  cleared_at      timestamptz
+);
+create unique index if not exists tally_bridge_alerts_once on public.tally_bridge_alerts (bridge_id, device_id) where cleared_at is null;
+alter table public.tally_bridge_alerts enable row level security;
+do $$ begin
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'tally_bridge_alerts' and policyname = 'tally_bridge_alerts_read') then
+    create policy tally_bridge_alerts_read on public.tally_bridge_alerts for select to authenticated using (firm_id = my_firm());
+  end if;
+end $$;
+revoke insert, update on public.tally_bridge_alerts from anon, authenticated;
+grant select on public.tally_bridge_alerts to authenticated;
+
+-- a bridge on a computer in words: "<PC> · <Windows user>" from its heartbeat, else the computer's name (internal)
+create or replace function public.tally_bridge_words(p_device uuid, p_bridge text)
+returns text language sql stable security definer set search_path = public, pg_temp as $function$
+  select coalesce(nullif(concat_ws(' · ', nullif(d.info -> 'bridges' -> p_bridge ->> 'computer', ''), nullif(d.info -> 'bridges' -> p_bridge ->> 'user', '')), ''), d.name, '')
+    from tally_devices d where d.id = p_device
+$function$;
+revoke all on function public.tally_bridge_words(uuid, text) from public, anon, authenticated;
+
+-- tally-ingest, on every call naming a bridge: binds an id not bound yet to this computer. {own: true} when it is this
+-- computer's; else {own: false, words}, the one alert for the owner kept, and the words on this computer's line
+-- (info.idRefused); a computer that is the id's own again loses its idRefused
+create or replace function public.tally_bridge_bind(p_device uuid, p_bridge text)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
+declare b text := left(btrim(coalesce(p_bridge, '')), 40); bound uuid; w text; me record;
+begin
+  if b !~ '^go-[0-9a-f]{6,32}$' then return jsonb_build_object('own', true); end if;   -- bridge 1.15.0 ("v1") has no id of its own
   insert into tally_bridge_ids (bridge_id, device_id, firm_id) select b, d.id, d.firm_id from tally_devices d where d.id = p_device
-    on conflict (bridge_id) do nothing;
-  return exists (select 1 from tally_bridge_ids i where i.bridge_id = b and i.device_id = p_device);
+    on conflict (bridge_id) where reset_at is null do nothing;
+  select i.device_id into bound from tally_bridge_ids i where i.bridge_id = b and i.reset_at is null;
+  if bound = p_device then
+    update tally_devices set info = info - 'idRefused' where id = p_device and info ? 'idRefused' and info -> 'idRefused' ->> 'bridge' = b;
+    return jsonb_build_object('own', true);
+  end if;
+  w := 'This computer key cannot use bridge ' || b || ': it belongs to ' || tally_bridge_words(bound, b) || '. Ask the firm''s owner.';
+  select d.firm_id, d.info -> 'bridges' -> b ->> 'computer' as c, d.info -> 'bridges' -> b ->> 'user' as u, d.name into me from tally_devices d where d.id = p_device;
+  insert into tally_bridge_alerts (firm_id, bridge_id, device_id, owner_device_id, tried_computer, tried_user, words)
+    values (me.firm_id, b, p_device, bound, coalesce(nullif(me.c, ''), me.name, ''), coalesce(me.u, ''), w)
+    on conflict (bridge_id, device_id) where cleared_at is null do update set last_at = now();
+  update tally_devices set info = info || jsonb_build_object('idRefused', jsonb_build_object('bridge', b, 'words', w, 'at', now())) where id = p_device;
+  return jsonb_build_object('own', false, 'words', w);
 end $function$;
 revoke all on function public.tally_bridge_bind(uuid, text) from public, anon, authenticated;
+
+-- Fix 2b: an owner releases a bridge's identity ("Release this bridge's identity" on the Tally page): the binding kept
+-- with who, when and why; its alerts cleared; the next computer that reports the id is bound to it
+create or replace function public.tally_bridge_reset(p_bridge text, p_why text)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
+declare f uuid := my_firm(); b text := left(btrim(coalesce(p_bridge, '')), 40); n int;
+begin
+  if f is null or not exists (select 1 from members m where m.user_id = auth.uid() and m.firm_id = f and m.role = 'owner' and coalesce(m.active, true))
+    then raise exception 'only an owner of the firm can release a bridge''s identity' using errcode = '42501'; end if;
+  update tally_bridge_ids set reset_at = now(), reset_by = auth.uid(), reset_why = left(coalesce(p_why, ''), 300)
+   where bridge_id = b and firm_id = f and reset_at is null;
+  get diagnostics n = row_count;
+  update tally_bridge_alerts set cleared_at = now() where bridge_id = b and firm_id = f and cleared_at is null;
+  update tally_devices set info = info - 'idRefused' where firm_id = f and info -> 'idRefused' ->> 'bridge' = b;
+  raise log 'tally_bridge_reset: bridge % released by % (%)', b, auth.uid(), left(coalesce(p_why, ''), 300);
+  return jsonb_build_object('ok', true, 'bridge', b, 'released', n > 0, 'at', now());
+end $function$;
+revoke all on function public.tally_bridge_reset(text, text) from public, anon;
+grant execute on function public.tally_bridge_reset(text, text) to authenticated;
+
+-- an owner marks a bridge alert read (the bell)
+create or replace function public.tally_bridge_alert_read(p_id bigint)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
+declare f uuid := my_firm();
+begin
+  if f is null or not exists (select 1 from members m where m.user_id = auth.uid() and m.firm_id = f and m.role = 'owner' and coalesce(m.active, true))
+    then raise exception 'only an owner of the firm can mark it read' using errcode = '42501'; end if;
+  update tally_bridge_alerts set read_at = coalesce(read_at, now()), read_by = coalesce(read_by, auth.uid()) where id = p_id and firm_id = f;
+  return jsonb_build_object('ok', true);
+end $function$;
+revoke all on function public.tally_bridge_alert_read(bigint) from public, anon;
+grant execute on function public.tally_bridge_alert_read(bigint) to authenticated;
 
 -- the firm's computer (not removed) a bridge id is bound to, and on which FinCom has heard from it: its id, or null
 -- (internal: granted to nobody)
 create or replace function public.tally_bridge_device(p_firm uuid, p_bridge text)
 returns uuid language sql stable security definer set search_path = public, pg_temp as $function$
   select d.id from tally_bridge_ids i join tally_devices d on d.id = i.device_id
-   where i.bridge_id = p_bridge and d.firm_id = p_firm and not coalesce(d.revoked, false) and coalesce(p_bridge, '') ~ '^go-[0-9a-f]{6,32}$'
+   where i.bridge_id = p_bridge and i.reset_at is null and d.firm_id = p_firm and not coalesce(d.revoked, false) and coalesce(p_bridge, '') ~ '^go-[0-9a-f]{6,32}$'
      and d.info -> 'bridges' ? p_bridge
 $function$;
 revoke all on function public.tally_bridge_device(uuid, text) from public, anon, authenticated;
@@ -165,6 +273,26 @@ returns uuid language sql stable security definer set search_path = public, pg_t
    order by (d.id = p_pref) desc, d.last_seen desc nulls last, d.id limit 1
 $function$;
 revoke all on function public.tally_post_device_for(uuid, text, uuid) from public, anon, authenticated;
+
+-- Fix 3: why nobody can post into a company just now, naming the company and what to do (internal: granted to nobody)
+create or replace function public.tally_post_nobody_words(p_firm uuid, p_company text)
+returns text language sql stable security definer set search_path = public, pg_temp as $function$
+  with b as (select d.id as dev, k.key as bridge, tally_bridge_words(d.id, k.key) as w, tally_bridge_may_post(d.id, k.key) as may,
+                    tally_bridge_changes_only_on(d.id, k.key) as co,
+                    (jsonb_typeof(k.value -> 'open') = 'array' and exists (select 1 from jsonb_array_elements_text(k.value -> 'open') o where lower(tally_nm(o)) = lower(tally_nm(p_company)))) as has
+               from tally_devices d, jsonb_each(case when jsonb_typeof(d.info -> 'bridges') = 'object' then d.info -> 'bridges' else '{}'::jsonb end) k
+              where d.firm_id = p_firm and not coalesce(d.revoked, false)),
+       mayl as (select coalesce(string_agg(distinct w, ', '), '') as l from b where may),
+       col as (select coalesce(string_agg(distinct w, ', '), '') as l, count(distinct w) as n from b where has and co)
+  select 'Nobody can post into ' || p_company || ' just now: '
+      || case when col.n = 1 then 'the only computer that has it open (' || col.l || ') is set to Changes only. '
+              when col.n > 1 then 'the only computers that have it open (' || col.l || ') are set to Changes only. '
+              else 'no computer has it open in Tally. ' end
+      || 'Open the company in Tally on ' || case when mayl.l <> '' then 'a computer that may post (' || mayl.l || ')' else 'a computer whose FinCom Bridge may post' end
+      || case when col.n > 0 then ', or ask the owner to switch Changes only off for that bridge.' else ', then post again.' end
+    from mayl, col
+$function$;
+revoke all on function public.tally_post_nobody_words(uuid, text) from public, anon, authenticated;
 
 create or replace function public.tally_bridge_changes_only(p_device uuid, p_bridge text, p_on boolean)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
@@ -240,8 +368,7 @@ begin
   if dup is not null then return jsonb_build_object('ok', false, 'error', 'Some of these entries are already waiting to be posted; wait for that posting to finish.'); end if;
   -- review M4: the computer: the target's; else the newest that may post and has the company open
   dev := coalesce(p_device, tally_post_device_for(f, c.company, c.device_id));
-  if dev is null then return jsonb_build_object('ok', false, 'company', c.company,
-      'error', 'No computer that may post has ' || c.company || ' open; open it in Tally on a computer whose FinCom Bridge posts (not one set to changes only), then post again. Nothing was queued.'); end if;
+  if dev is null then return jsonb_build_object('ok', false, 'company', c.company, 'error', tally_post_nobody_words(f, c.company)); end if;
   insert into tally_post_jobs (id, firm_id, client_id, company, device_id, payload, n, target_bridge)
     values (p_id, f, p_client, c.company, dev, jsonb_build_object('masters', coalesce(p_payload->'masters', '[]'::jsonb), 'vouchers', coalesce(p_payload->'vouchers', '[]'::jsonb), 'ledger', coalesce(p_payload->>'ledger', '')), n,
             case when p_device is null then null else p_target end);
@@ -251,7 +378,7 @@ revoke all on function public.tally_post_enqueue_core(uuid, text, jsonb, uuid, t
 
 create or replace function public.tally_post_enqueue_to(p_id uuid, p_client text, p_payload jsonb, p_target text default null, p_device uuid default null)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
-declare f uuid := my_firm(); t text := nullif(left(btrim(coalesce(p_target, '')), 40), ''); own record; tdev uuid; is_owner boolean; r jsonb;
+declare f uuid := my_firm(); t text := nullif(left(btrim(coalesce(p_target, '')), 40), ''); own record; tdev uuid; is_owner boolean; r jsonb; seen record; co text;
 begin
   if f is null then raise exception 'not allowed'; end if;
   is_owner := exists (select 1 from members m where m.user_id = auth.uid() and m.firm_id = f and m.role = 'owner' and coalesce(m.active, true));
@@ -259,7 +386,17 @@ begin
   if t is null then
     -- the poster's own linked bridge, when it may post and is still bound to the linked computer (else none: as today)
     if own.bridge_id is not null and tally_bridge_device(f, own.bridge_id) is not distinct from own.device_id and own.device_id is not null
-       and tally_bridge_may_post(own.device_id, own.bridge_id) then t := own.bridge_id; tdev := own.device_id; end if;
+       and tally_bridge_may_post(own.device_id, own.bridge_id) then
+      t := own.bridge_id; tdev := own.device_id;
+      -- Fix 3: the poster's own bridge not heard from for more than 3 minutes: said, nothing queued
+      select d.info -> 'bridges' -> t ->> 'at' as at, d.info -> 'bridges' -> t ->> 'user' as u, d.info -> 'bridges' -> t ->> 'computer' as c into seen from tally_devices d where d.id = tdev;
+      if coalesce(seen.at, '') !~ '^\d{4}-\d\d-\d\dT' or seen.at::timestamptz < now() - interval '3 minutes' then
+        select t2.company into co from tally_companies t2 where t2.firm_id = f and t2.client_id = p_client and t2.device_id is not null order by t2.last_seen desc nulls last limit 1;
+        return jsonb_build_object('ok', false, 'error', 'Nobody can post into ' || coalesce(co, 'this client''s company') || ' just now: your FinCom Bridge (' || tally_bridge_words(tdev, t)
+          || ') has not been heard from since ' || coalesce(to_char(case when coalesce(seen.at, '') ~ '^\d{4}-\d\d-\d\dT' then seen.at::timestamptz end at time zone 'Asia/Kolkata', 'DD-Mon-YYYY HH24:MI') || ' IST', 'it was set up')
+          || '. Start it on that computer (sign in to Windows there' || coalesce(' as ' || nullif(seen.u, ''), '') || '), then post again; or ask the owner to post through another bridge.');
+      end if;
+    end if;
   else
     if t is distinct from own.bridge_id and not is_owner then
       return jsonb_build_object('ok', false, 'error', 'Only an owner of the firm can post through another bridge than your own.'); end if;
