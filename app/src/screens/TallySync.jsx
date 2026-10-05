@@ -8,7 +8,8 @@ import ListTable from "../parts/ListTable.jsx";
 
 const FILTERS = [["all", "All"], ["waiting", "Waiting"], ["mismatch", "Mismatch"], ["today", "Today"]];
 // round 20 (d.4): "queued": the cloud queued the line (over 50 at once); its drain fills the state later
-const STATE_CLS = { applied: "ok", duplicate: "no", stale: "no", held: "warn", received: "warn", queued: "warn", failed: "bad" };
+// 05-Oct-2026 (migration 50): "replaced": a later line of the same entry brought its details (greyed as a duplicate is)
+const STATE_CLS = { applied: "ok", duplicate: "no", stale: "no", replaced: "no", held: "warn", received: "warn", queued: "warn", failed: "bad" };
 
 export default function SyncActivity() {
   const [f, setF] = useState("all");
@@ -25,7 +26,7 @@ export default function SyncActivity() {
   const coName = (cid) => (S.companies && S.companies[cid] && S.companies[cid].name) || "";
   return <div className="pane" data-sync-activity="">
     {head}
-    <p className="note" style={{ margin: "6px 0 8px" }}>Every change saved in Tally on a computer with FinCom’s recorder, as FinCom’s cloud received it: applied to FinCom’s copy, a duplicate of a change already applied, or held with the reason. Newest first.</p>
+    <p className="note" style={{ margin: "6px 0 8px" }}>Every change saved in Tally on a computer with FinCom’s recorder, as FinCom’s cloud received it: entered in the books, already in the books, or received and not yet entered, with the reason. Newest first.</p>
     {wait.length > 0 && <div className="bk-alert warn" data-sync-waiting="" style={{ margin: "0 0 8px" }}>
       <b>{wait.length + (wait.length === 1 ? " line" : " lines") + " waiting over 2 minutes"}</b>
       {wait.map(({ r, why }) => <div key={r.id} data-sync-waiting-line={String(r.id)}>{Rec.entry(r) + (r.pc ? " from " + r.pc : "") + ", received " + tallyHm(r.received_at) + ": " + why}</div>)}
@@ -44,7 +45,7 @@ export default function SyncActivity() {
         { k: "entry", role: "number", label: "Entry", v: (r) => Rec.entry(r), cell: (r) => <>{Rec.entry(r)}{!S.syncClient && coName(r.client_id) && <div className="nr">{coName(r.client_id)}</div>}</> },
         { k: "pc", role: "party", label: "PC", v: (r) => r.pc || "", cell: (r) => r.pc || "—" },
         { k: "state", role: "status", label: "State", v: (r) => Rec.stateWords(r), cell: (r) => <span className={"tag " + (STATE_CLS[r.state] || "warn")} data-sync-state={r.state}>{Rec.stateWords(r)}</span> },
-        { k: "act", label: "Action", v: (r) => Rec.ACTS[r.event] || String(r.event || ""), cell: (r) => Rec.ACTS[r.event] || String(r.event || "") },
+        { k: "act", label: "Action", v: (r) => Rec.actWords(r), cell: (r) => <span data-sync-act="">{Rec.actWords(r)}</span> },
         { k: "recv", label: "Reached FinCom", v: (r) => r.received_at || "", cell: (r) => (r.received_at ? tallyHm(r.received_at) : "—") },
         { k: "chk", label: "Ledger check", td: () => ({ className: "note", "data-sync-check": "" }), cell: () => "not checked" },
         { k: "ac", role: "act", cell: (r) => owner && r.state === "held" && <button className="btn small" data-sync-release="" disabled={!!(msg && msg.busy)} onClick={() => Rec.release(r)}>Apply now</button> },

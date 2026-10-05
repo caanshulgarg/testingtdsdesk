@@ -151,3 +151,5 @@ run_post_layout.py                    120  TDSDESK_SITE=../app/dist-test
 run_post_rows_fix.py                  120  TDSDESK_SITE=../app/dist-test
 run_post_hide_remove.py               120  TDSDESK_SITE=../app/dist-test
 run_migration49.py                    180
+run_migration50.py                    180
+run_recorder_held_words.py            120  TDSDESK_SITE=../app/dist-test

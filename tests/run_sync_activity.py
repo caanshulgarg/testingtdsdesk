@@ -1,8 +1,8 @@
 """python3 run_sync_activity.py - phase 2, H49/H50/H51: the Tally page in three tabs, Computers (as before), Sync activity
 (new) and Everything sent (the post log). Sync activity reads tally_recorder_lines (migration 44) for the firm, newest
 first, 200 at most (one client's when opened from a client): time saved in Tally, the entry (voucher type, number and date,
-or the ledger's name), the action, the PC, when it reached FinCom's cloud, the state (applied / duplicate / held: why /
-failed: why / waiting) and the ledger check (not checked yet). Filters: Waiting (held or received), Mismatch (none yet),
+or the ledger's name), the action, the PC, when it reached FinCom's cloud, the state (05-Oct-2026, the owner's words: Entered in the
+books / Already in the books / Received, not yet entered in the books: why / Not entered: why / ...) and the ledger check (not checked yet). Filters: Waiting (held or received), Mismatch (none yet),
 Today. A strip at the top: the lines waiting over 2 minutes with the reason (the PC offline, Tally closed there, or the
 line's held_why). An owner has Apply now on a held line (tally_recorder_release_held(p_line)). New lines come in live
 (Live, src/js/54: tally_recorder_lines on a channel of its own). Without the table: "not available until migration 44 runs".
@@ -92,11 +92,11 @@ with sync_playwright() as p:
     ok(ids == ["101", "107", "106", "102", "103", "104", "105"], "every line, newest first (%s)" % ids)
     r = lambda i: txt('#app [data-sync-line="%d"]' % i)
     r1 = r(101)
-    ok("Sales 12" in r1 and "03-Oct-2026" in r1 and "created" in r1 and "NWS144" in r1 and "applied" in r1 and "not checked" in r1 and hm(0.6) in r1, "a line: saved time, Sales 12 · 03-Oct-2026, created, NWS144, applied, not checked (%s)" % r1)
-    ok("held: month locked: 2026-04" in r(102) and "Payment 7" in r(102) and "altered" in r(102), "held, with why (%s)" % r(102))
-    ok("ABC Traders Pvt Ltd" in r(104) and "ledger renamed" in r(104) and "duplicate" in r(104), "a ledger line: the ledger's name, ledger renamed, duplicate (%s)" % r(104))
-    ok("failed: no such entry" in r(105) and "deleted" in r(105), "failed, with why (%s)" % r(105))
-    ok("waiting" in r(103), "received, not applied yet: waiting (%s)" % r(103))
+    ok("Sales 12" in r1 and "03-Oct-2026" in r1 and "Created" in r1 and "NWS144" in r1 and "Entered in the books" in r1 and "not checked" in r1 and hm(0.6) in r1, "a line: saved time, Sales 12 · 03-Oct-2026, Created, NWS144, Entered in the books, not checked (%s)" % r1)
+    ok("Received, not yet entered in the books: month locked: 2026-04" in r(102) and "Payment 7" in r(102) and "Altered" in r(102), "held, with why (%s)" % r(102))
+    ok("ABC Traders Pvt Ltd" in r(104) and "Ledger renamed" in r(104) and "Already in the books" in r(104), "a ledger line: the ledger's name, Ledger renamed, Already in the books (%s)" % r(104))
+    ok("Not entered: no such entry" in r(105) and "Deleted" in r(105), "failed, with why (%s)" % r(105))
+    ok("Received, not yet entered in the books" in r(103), "received, not entered yet (%s)" % r(103))
     # ---- the strip: waiting over 2 minutes, with the reason
     st = txt("#app [data-sync-waiting]")
     wl = pg.locator("#app [data-sync-waiting] [data-sync-waiting-line]")
@@ -118,7 +118,7 @@ with sync_playwright() as p:
     ok(pg.locator("#app [data-sync-release]").count() == 1 and pg.locator('#app [data-sync-line="102"] [data-sync-release]').count() == 1, "owner: Apply now on the held line only")
     pg.click('#app [data-sync-line="102"] [data-sync-release]'); pg.wait_for_timeout(800)
     ok(["tally_recorder_release_held", {"p_line": 102}] in E("window.__calls"), "Apply now -> tally_recorder_release_held(p_line) (%s)" % E("window.__calls"))
-    ok("applied" in txt("#app [data-sync-msg]"), "the answer is said (%s)" % txt("#app [data-sync-msg]"))
+    ok("Entered in the books" in txt("#app [data-sync-msg]"), "the answer is said (%s)" % txt("#app [data-sync-msg]"))
     E("() => { window.__fail = 'line 102 is held: month locked: 2026-04'; }")
     pg.click('#app [data-sync-line="102"] [data-sync-release]'); pg.wait_for_timeout(800)
     ok("month locked: 2026-04" in txt("#app [data-sync-msg]"), "a refusal in its own words (%s)" % txt("#app [data-sync-msg]"))

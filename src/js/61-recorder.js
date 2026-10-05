@@ -154,8 +154,20 @@ const Rec = {
   },
 
   // ---------------------------------------------------------------- H49-H51: Sync activity
-  ACTS: {created: "created", altered: "altered", deleted: "deleted", cancelled: "cancelled", imported: "imported", ledger_created: "ledger created",
-    ledger_altered: "ledger altered", ledger_renamed: "ledger renamed", ledger_deleted: "ledger deleted"},
+  // 05-Oct-2026 (the owner's words): what was done in Tally, and what it means for the books. Never "synced": a line not
+  // entered in the books says so, with the cloud's reason
+  ACTS: {created: "Created", altered: "Altered", deleted: "Deleted", cancelled: "Cancelled", imported: "Imported", ledger_created: "Ledger created",
+    ledger_altered: "Ledger altered", ledger_renamed: "Ledger renamed", ledger_deleted: "Ledger deleted"},
+  // FinCom's own entry coming back from Tally: a line with a FinCom id (fid) or a short line (migration 45; read as fid / short
+  // with the lines, or in the whole row a live line brings), or the cloud's words for it. Only its creation is FinCom's: a
+  // later change to it in Tally is a person's (Altered)
+  fromFincom(r){
+    if (!r || !["created", "imported"].includes(String(r.event || ""))) return false;
+    const p = (r.payload && typeof r.payload === "object") ? r.payload : {};
+    const fid = r.fid || p.fid, short = r.short != null ? r.short : p.short;
+    return !!fid || short === true || short === "true" || /^FinCom (posting|id) /.test(String(r.held_why || ""));
+  },
+  actWords(r){ return this.fromFincom(r) ? "Posted from FinCom" : (this.ACTS[r.event] || String(r.event || "")); },
   act: {},                 // {rows, no44, busy, at, err, cid (whose lines were read), msg}
   actOf(){
     const a = this.act, cid = S.syncClient || "";
@@ -167,7 +179,7 @@ const Rec = {
     const a = this.act, cid = S.syncClient || "";
     a.busy = true; a.cid = cid;
     try {
-      const rows = await Cloud.api("tally_recorder_lines?select=id,client_id,book_id,device_id,pc,company,line_id,event,object_guid,alter_id,vch_type,vch_no,vch_date,saved_at,received_at,applied_at,state,held_why,ledgers" +
+      const rows = await Cloud.api("tally_recorder_lines?select=id,client_id,book_id,device_id,pc,company,line_id,event,object_guid,alter_id,vch_type,vch_no,vch_date,saved_at,received_at,applied_at,state,held_why,ledgers,fid:payload->>fid,short:payload->>short" +
         "&firm_id=eq." + encodeURIComponent(this.firm()) + (cid ? "&client_id=eq." + encodeURIComponent(cid) : "") + "&order=received_at.desc&limit=200");
       a.rows = [].concat(rows || []); a.no44 = false; a.err = "";
     } catch (e){ if (this.missing(e)){ a.no44 = true; a.rows = []; } else a.err = this.say(e); }
@@ -198,10 +210,20 @@ const Rec = {
     const head = [r.vch_type, r.vch_no].filter(Boolean).join(" ");
     return (head || "an entry") + (r.vch_date ? " · " + fmtDate(String(r.vch_date).slice(0, 10)) : "");
   },
+  // a line's state in the owner's words (05-Oct-2026): "Entered in the books" for an applied line alone
   stateWords(r){
     const why = r.held_why ? ": " + r.held_why : "";
-    return r.state === "applied" ? "applied" : r.state === "duplicate" ? "duplicate" : r.state === "stale" ? "stale (older than the copy)" : r.state === "held" ? "held" + why
-      : r.state === "failed" ? "failed" + why : r.state === "received" ? "waiting" : r.state === "queued" ? "queued" : String(r.state || "");
+    switch (r.state){
+      case "applied": return "Entered in the books";
+      case "held": return "Received, not yet entered in the books" + why;
+      case "received": return "Received, not yet entered in the books";
+      case "replaced": return "Replaced by a later line";
+      case "duplicate": return "Already in the books";
+      case "stale": return "An older change, not applied";
+      case "failed": return "Not entered" + why;
+      case "queued": return "Received, waiting in FinCom's queue";
+      default: return "Not entered: " + String(r.state || "unknown state");
+    }
   },
   // the computer a line came from, from the firm's computers as the Tally page or the Tally light read them
   devOf(id){ return [].concat((typeof TCloud === "object" && TCloud.pane.devices) || [], (typeof TLight === "object" && TLight.st.devs) || []).find(d => d && d.id === id) || null; },
@@ -214,7 +236,7 @@ const Rec = {
       let why = r.held_why || "";
       if (!why && d){ const ds = devState(d, now); why = ds.bridge === "offline" || ds.bridge === "none" ? pc + " is offline" : ds.tally === "closed" ? "Tally is closed on " + pc : ""; }
       else if (d && r.state === "received"){ const ds = devState(d, now); if (ds.bridge === "offline" || ds.bridge === "none") why = pc + " is offline"; else if (ds.tally === "closed") why = "Tally is closed on " + pc; }
-      return {r, why: why || "not applied yet"};
+      return {r, why: why || "not yet entered in the books"};
     });
   },
   async release(r){
@@ -223,7 +245,7 @@ const Rec = {
     try {
       const j = await TCloud.rpc("tally_recorder_release_held", {p_line: num(r.id)});
       if (j && j.ok === false) a.msg = {err: "Line " + (j.line_id || r.id) + " is still held" + (j.why ? ": " + j.why : ".")};
-      else a.msg = {ok: "Line " + ((j && j.line_id) || r.line_id || r.id) + ": " + ((j && j.state) || "applied") + (j && j.why ? " (" + j.why + ")" : "") + "."};
+      else a.msg = {ok: "Line " + ((j && j.line_id) || r.line_id || r.id) + ": " + this.stateWords({state: (j && j.state) || "applied"}) + (j && j.why ? " (" + j.why + ")" : "") + "."};
     } catch (e){ a.msg = {err: this.missing(e) ? "Apply now: " + REC_NOT44 + "." : this.say(e)}; }
     await this.actLoad();
   },
