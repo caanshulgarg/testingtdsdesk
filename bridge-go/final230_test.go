@@ -56,7 +56,9 @@ func TestCheckRenumberedNeverNotFound(t *testing.T) {
 	checkReadsOnly(t, f)
 }
 
-// H1: Tally's id known and absent (and the number empty): not found; both one-voucher reads, nothing else
+// H1 + the owner's rule for the by-id read: FinComVoucherByMaster always asks one day (the entry's date as the period, as
+// the owner approved it), so an empty answer by id never proves "not found" (the entry may have been redated): unable;
+// both one-voucher reads, nothing else
 func TestCheckIdKnownAbsentNotFound(t *testing.T) {
 	td := today()
 	f := newStandTally(t)
@@ -69,8 +71,8 @@ func TestCheckIdKnownAbsentNotFound(t *testing.T) {
 	c.checks = []M{ck}
 	c.mu.Unlock()
 	cloudPostTake()
-	if r := lastReport(t, c); str(r["result"]) != "notfound" {
-		t.Fatalf("id known, absent: %v", r)
+	if r := lastReport(t, c); str(r["result"]) != "unable" || !strings.Contains(str(r["words"]), "TDSDesk:k12") {
+		t.Fatalf("id known, absent on that day: %v", r)
 	}
 	if f.n(vchByNumberID) != 1 || f.n(vchByMasterID) != 1 || f.n("Import") != 0 {
 		t.Fatalf("the requests: %v", f.ids())
@@ -258,4 +260,29 @@ func TestCloudLinkMovesItself(t *testing.T) {
 			t.Fatalf("the same key again asked to move: %v", again)
 		}
 	}
+}
+
+// the redated entry: Tally keeps it (with its FinCom id) on another day; the by-id read asks the entry's own day and
+// gets nothing: never "not found" (unable, in words); nothing sent
+func TestCheckRedatedNeverNotFound(t *testing.T) {
+	td := today()
+	f := newStandTally(t)
+	v := f.add(addDays(td, -1), fgParty, "", "TDSDesk:k14 | Electricity", "-10.00") // redated by hand in Tally
+	c := newStandCloud(t)
+	standBridge(t, f, c.cfg())
+	for i, no := range []string{"", "B-95"} {
+		ck := checkFor(fmt.Sprint(46+i), "job-k14", "k14", zz, finVoucher("k14", fgParty, no, td, "10.00"))
+		ck["vchId"] = v.master
+		c.mu.Lock()
+		c.checks = []M{ck}
+		c.mu.Unlock()
+		cloudPostTake()
+		if r := lastReport(t, c); str(r["result"]) == "notfound" || (str(r["result"]) != "unable" && str(r["result"]) != "found") {
+			t.Fatalf("redated (number %q): %v", no, r)
+		}
+	}
+	if f.n("Import") != 0 {
+		t.Fatal("sent to Tally")
+	}
+	checkReadsOnly(t, f)
 }

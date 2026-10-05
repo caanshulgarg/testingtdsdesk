@@ -230,14 +230,14 @@ func TestSettleCheckNoNumber(t *testing.T) {
 	if f.n(vchByMasterID) != 1 || f.n(vchByNumberID) != 0 {
 		t.Fatalf("the requests: %v", f.ids())
 	}
-	// Tally's id names no voucher on that date: not there
+	// Tally's id names no voucher on that date: the by-id read asks one day only (the entry may have been redated): unable
 	ck2 := checkFor("31", "job-k8", "k8", zz, finVoucher("k8", fgParty, "", td, "10.00"))
 	ck2["vchId"] = "999"
 	c.mu.Lock()
 	c.checks = []M{ck2}
 	c.mu.Unlock()
 	cloudPostTake()
-	if r := lastReport(t, c); str(r["result"]) != "notfound" {
+	if r := lastReport(t, c); str(r["result"]) != "unable" || !strings.Contains(str(r["words"]), "one day only") {
 		t.Fatalf("Tally's id names nothing: %v", r)
 	}
 	// neither a number nor Tally's id
@@ -301,10 +301,10 @@ func TestSettleCheckNotFoundSentOnce(t *testing.T) {
 	if r := lastReport(t, c); str(r["result"]) != "unable" || !strings.Contains(str(r["words"]), "Tally may have numbered this entry itself") || f.n("Import") != 1 {
 		t.Fatalf("no id, no number proven: %v (%d imports)", r, f.n("Import"))
 	}
-	// "Not in Tally - post again" with Tally's id known (here: one that names no voucher): on "not found" the cloud
-	// releases the id and hands the posting back, naming the entry to send again
+	// "Not in Tally - post again" with the number Tally gave proven to be the one sent (the posting's result recorded it
+	// from Tally): on "not found" the cloud releases the id and hands the posting back, naming the entry to send again
 	ck := checkFor("9", "job-k2-000001", "k2", zz, x)
-	ck["vchId"] = "999"
+	ck["vchNumber"] = "B-78"
 	c.mu.Lock()
 	c.checks = []M{ck}
 	c.checkReply = func(b M) M {
@@ -355,7 +355,9 @@ func TestSettleCheckPostedDeletedByHand(t *testing.T) {
 	f.vch = nil // deleted in Tally by hand
 	f.mu.Unlock()
 	c.mu.Lock()
-	c.checks = []M{checkFor("13", "job-k5-000001", "k5", zz, x)}
+	ck := checkFor("13", "job-k5-000001", "k5", zz, x)
+	ck["vchNumber"] = "B-80" // the number Tally kept, as the posting's result recorded it from Tally
+	c.checks = []M{ck}
 	c.checkReply = func(b M) M {
 		c.checks = nil
 		c.takeJobs = []M{{"id": "job-k5-000001", "company": zz, "payload": pay, "released": []any{M{"id": "k5", "at": time.Now().UTC().Format(time.RFC3339), "by": "owner", "why": "deleted in Tally by hand (checked by the bridge)"}}}}

@@ -7,9 +7,9 @@
 //	          cloud marks it posted with the voucher found; nothing is sent;
 //	notfound  Tally answered for that exact company (its GUID the one held) and has no such voucher: the cloud releases
 //	          the id and hands the posting back, and that entry alone is sent once. Review H1: FinCom's voucher types number
-//	          automatically, so Tally may have numbered the entry itself; an empty answer by number is never "not found"
-//	          by itself: only when Tally's own id from its reply is known and the voucher with that id is not there
-//	          either (none carrying TDSDesk:<id>), or when the posting's result proves Tally kept the number FinCom sent;
+//	          automatically, so Tally may have numbered the entry itself; an empty answer by number is "not found" only
+//	          when the posting's result proves Tally kept the number FinCom sent. An empty answer by Tally's id is never
+//	          "not found": FinComVoucherByMaster asks one day only (as approved), and the entry may have been redated;
 //	unable    anything else, in plain words: Tally not asked (the company not open, busy, the 2-second stop), the voucher
 //	          there but with another FinCom id or none (a person must look), no number and no Tally id to ask by, a date
 //	          the read rules do not allow (before the starting point, or more than 3 days back by number). Nothing is
@@ -152,7 +152,6 @@ func checkPostedEntry(c M) M {
 		return unable("Tally is busy or did not answer within " + fmt.Sprint(checkMs()/1000) + " s (" + tallyTrouble(err.Error()) + "); looked in again by itself")
 	}
 	byNumberWords := ""
-	var numberVs []string
 	if byNumber {
 		vs, err := fetchVoucherByNumber(checkTC(), name, port, date, vtype, no, 2)
 		if err != nil {
@@ -162,14 +161,13 @@ func checkPostedEntry(c M) M {
 		if r := tagged(vs, byNumberWords); r != nil {
 			return r
 		}
-		numberVs = vs
+		// empty by number: "not found" only when the posting's result proves Tally kept the number FinCom sent
+		if len(vs) == 0 && checkNumberKept(c, entry, no) {
+			return notThere(byNumberWords, "FinComVoucherByNumber; Tally kept the number FinCom sent")
+		}
 		if mid == "" {
 			if len(vs) > 0 {
 				return other(vs[0], byNumberWords)
-			}
-			// empty by number: "not found" only when the posting's result proves Tally kept the number FinCom sent
-			if checkNumberKept(c, entry, no) {
-				return notThere(byNumberWords, "FinComVoucherByNumber; Tally kept the number FinCom sent")
 			}
 			return unable(renumbered)
 		}
@@ -186,13 +184,10 @@ func checkPostedEntry(c M) M {
 		}
 		return other(v, byID) // anything else Tally gave is dropped
 	}
-	if len(numberVs) > 0 {
-		return notThere(byID+" (and "+byNumberWords+" carries another entry)", "FinComVoucherByMaster")
-	}
-	if byNumberWords != "" {
-		return notThere(byID+" (and "+byNumberWords+")", "FinComVoucherByNumber, FinComVoucherByMaster")
-	}
-	return notThere(byID, "FinComVoucherByMaster")
+	// the owner's rule for the by-id read: FinComVoucherByMaster asks ONE day (the entry's date as its period, as approved;
+	// the allow-list unchanged), so an empty answer by id proves nothing: the entry may have been redated in Tally. Never
+	// "not found" from it; a person looks
+	return unable(fmt.Sprintf("FinCom cannot be sure: Tally has no voucher with its id %s on %s, but FinCom asks Tally by id for that one day only, and the entry may have been moved to another date in Tally. Look in Tally for the narration %s; use Mark posted if it is there, or post again only after checking.", mid, ddmmyyyy(date), tag))
 }
 
 // review H1: the number Tally gave the entry, as the posting's result recorded it (read from Tally: the cloud's
