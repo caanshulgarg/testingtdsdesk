@@ -198,18 +198,20 @@ func TestLiveAddonFile(t *testing.T) {
 func TestLiveEventMapping(t *testing.T) {
 	rec, _, _ := liveBridge(t, "")
 	p := liveFilePath(rec, "")
+	// Tally's GUIDs: the company's GUID and the MasterID in hex (2.2.2: a GUID that is not its MasterID's is not trusted)
+	ga, gb, gc, gd := b220CoGUID+"-00000065", b220CoGUID+"-00000066", b220CoGUID+"-00000067", b220CoGUID+"-00000068"
 	liveAppend(t, p,
 		vchLine("voucher_accept_pre", "", "", "", "Rent paid"),
-		vchLine("voucher_accept_post", "g-a", "101", "201", "Rent paid"),
-		vchLine("voucher_accept_pre", "g-a", "101", "201", "Rent paid (changed)"),
-		vchLine("voucher_accept_post", "g-a", "101", "202", "Rent paid (changed)"),
-		vchLine("before_delete", "g-a", "101", "202", ""),
-		vchLine("after_delete", "g-a", "101", "202", ""),
-		vchLine("before_cancel", "g-b", "102", "203", ""),
-		vchLine("after_cancel", "g-b", "102", "204", ""),
+		vchLine("voucher_accept_post", ga, "101", "201", "Rent paid"),
+		vchLine("voucher_accept_pre", ga, "101", "201", "Rent paid (changed)"),
+		vchLine("voucher_accept_post", ga, "101", "202", "Rent paid (changed)"),
+		vchLine("before_delete", ga, "101", "202", ""),
+		vchLine("after_delete", ga, "101", "202", ""),
+		vchLine("before_cancel", gb, "102", "203", ""),
+		vchLine("after_cancel", gb, "102", "204", ""),
 		vchLine("start_import", "", "", "", ""),
-		vchLine("import_object", "g-c", "103", "205", "Bill 1 | TDSDesk:f1"),
-		vchLine("after_import_object", "g-c", "103", "205", "Bill 1 | TDSDesk:f1"),
+		vchLine("import_object", gc, "103", "205", "Bill 1 | TDSDesk:f1"),
+		vchLine("after_import_object", gc, "103", "205", "Bill 1 | TDSDesk:f1"),
 		vchLine("end_import", "", "", "", ""),
 		lLine("ledger_accept_pre", "", "", "", "New Ledger", "Sundry Creditors"),
 		lLine("ledger_accept_post", "l-1", "55", "300", "New Ledger", "Sundry Creditors"),
@@ -226,14 +228,15 @@ func TestLiveEventMapping(t *testing.T) {
 		t.Fatalf("events: %s", got)
 	}
 	cr := q[0]
-	if cr.guid != "g-a" || cr.masterId != "101" || cr.alterId != "201" || cr.vchType != "Payment" || cr.vchNo != "7" || cr.vchDate != "20261004" || cr.narr != "Rent paid" ||
+	// 2.2.2: the line's GUID and AlterID are never the entry's: Tally gives them with the body
+	if cr.guid != "" || cr.masterId != "101" || cr.alterId != "" || cr.vchType != "Payment" || cr.vchNo != "7" || cr.vchDate != "20261004" || cr.narr != "Rent paid" ||
 		cr.company != zz || cr.companyGuid != b220CoGUID || cr.source != "addon" || cr.user != "owner" || cr.fid != "" || !regexp.MustCompile(`^[0-9a-f]{32}$`).MatchString(cr.lineId) {
 		t.Fatalf("created: %+v", cr)
 	}
-	if q[1].alterId != "202" || q[1].narr != "Rent paid (changed)" {
+	if q[1].alterId != "" || q[1].masterId != "101" || q[1].narr != "Rent paid (changed)" {
 		t.Fatalf("altered: %+v", q[1])
 	}
-	if q[4].fid != "f1" || q[4].guid != "g-c" {
+	if q[4].fid != "f1" || q[4].guid != gc {
 		t.Fatalf("imported (the pair once, the FinCom id from the narration): %+v", q[4])
 	}
 	if q[5].name != "New Ledger" || q[5].parent != "Sundry Creditors" || q[5].guid != "l-1" || q[6].name != "Renamed Ledger" {
@@ -251,14 +254,14 @@ func TestLiveEventMapping(t *testing.T) {
 		t.Fatalf("read again: %d", n)
 	}
 	// a pre with a GUID whose post never comes is an alteration once it has waited; a pre without a GUID alone is dropped
-	liveAppend(t, p, vchLine("voucher_accept_pre", "g-d", "104", "206", "edit"), vchLine("voucher_accept_pre", "", "", "", "never saved"))
+	liveAppend(t, p, vchLine("voucher_accept_pre", gd, "104", "206", "edit"), vchLine("voucher_accept_pre", "", "", "", "never saved"))
 	liveReadOnce()
 	old := nowFn
 	nowFn = func() time.Time { return old().Add(time.Minute) }
 	defer func() { nowFn = old }()
 	liveReadOnce()
 	q = liveQueue()
-	if got := strings.Join(eventsOf(q[8:]), ","); got != "altered" || q[8].guid != "g-d" {
+	if got := strings.Join(eventsOf(q[8:]), ","); got != "altered" || q[8].guid != "" || q[8].masterId != "104" {
 		t.Fatalf("pending pres: %s %+v", got, q[8:])
 	}
 }
@@ -350,11 +353,11 @@ func TestLiveOnlyNewest7Days(t *testing.T) {
 	old := nowFn().AddDate(0, 0, -35).Format("20060102")
 	recent := nowFn().AddDate(0, 0, -6).Format("20060102")
 	liveAppend(t, liveFilePath(rec, old), vchLine("after_delete", "g-old", "1", "1", ""))
-	liveAppend(t, liveFilePath(rec, recent), vchLine("after_delete", "g-recent", "2", "2", ""))
+	liveAppend(t, liveFilePath(rec, recent), vchLine("after_delete", b220CoGUID+"-00000002", "2", "2", ""))
 	liveAppend(t, filepath.Join(rec, b220CoGUID+".txt"), vchLine("after_delete", "g-trial", "3", "3", ""))
 	liveReadOnce()
 	q := liveQueue()
-	if len(q) != 1 || q[0].guid != "g-recent" {
+	if len(q) != 1 || q[0].guid != b220CoGUID+"-00000002" {
 		t.Fatalf("read: %+v", q)
 	}
 }
@@ -402,7 +405,7 @@ func TestLiveSourceB(t *testing.T) {
 	for _, c := range q {
 		got[c.guid] = c
 	}
-	if got["g-1"].source != "alterid" || got["g-1"].masterId != "1" || got["g-1"].alterId != "4" || got["g-3"].masterId != "3" || got["g-1"].vchDate != td {
+	if got[b220CoGUID+"-00000001"].source != "alterid" || got[b220CoGUID+"-00000001"].masterId != "1" || got[b220CoGUID+"-00000001"].alterId != "4" || got[b220CoGUID+"-00000003"].masterId != "3" || got[b220CoGUID+"-00000001"].vchDate != td {
 		t.Fatalf("changes: %+v", q)
 	}
 	// a second change: a new entry (MasterID above every one seen) is created, an old one altered
@@ -426,7 +429,7 @@ func TestLiveSourceB(t *testing.T) {
 	for _, c := range liveQueue()[2:] {
 		got[c.guid] = c
 	}
-	if got["g-5"].event != "created" || got["g-2"].event != "altered" {
+	if got[b220CoGUID+"-00000005"].event != "created" || got[b220CoGUID+"-00000002"].event != "altered" {
 		t.Fatalf("second changes: %+v", got)
 	}
 	// the light check asks it by itself when the source includes alterid, and not with the add-on alone
@@ -481,10 +484,10 @@ func TestLiveSourceSwitchKeepsUploader(t *testing.T) {
 	applyRecorderSource(M{"recorderSource": "addon"})
 	setCfg("RecorderSource", "addon")
 	// lines read from the add-on, then the source switched: the queued lines still go, by the same uploader
-	liveAppend(t, liveFilePath(rec, ""), vchLine("after_delete", "g-x", "9", "1", "from the add-on"))
+	liveAppend(t, liveFilePath(rec, ""), vchLine("after_delete", b220CoGUID+"-00000009", "9", "1", "from the add-on"))
 	liveReadOnce()
 	applyRecorderSource(M{"recorderSource": "alterid"})
-	liveAppend(t, liveFilePath(rec, ""), vchLine("after_delete", "g-y", "10", "1", "not read now"))
+	liveAppend(t, liveFilePath(rec, ""), vchLine("after_delete", b220CoGUID+"-0000000a", "10", "1", "not read now"))
 	if n := liveReadOnce(); n != 0 {
 		t.Fatal("the add-on's file read with the source alterid")
 	}
@@ -742,7 +745,8 @@ func TestRecorderLinesFixture(t *testing.T) {
 	oldPC, oldZone := liveComputerFn, liveZone
 	liveComputerFn, liveZone = func() string { return "NWS144" }, time.FixedZone("IST", 19800)
 	defer func() { liveComputerFn, liveZone = oldPC, oldZone }()
-	v := &tVch{guid: "c1d2e3f4-0001", master: "4101", date: "20261004", typ: "Payment", no: "17", narr: "Rent for October", party: "Landlord A", alter: 9001,
+	// 2.2.2: Tally's GUIDs (the company's GUID and the MasterID in hex): a GUID that is not its MasterID's is not trusted
+	v := &tVch{guid: b220CoGUID + "-00001005", master: "4101", date: "20261004", typ: "Payment", no: "17", narr: "Rent for October", party: "Landlord A", alter: 9001,
 		lines: [][2]string{{"Landlord A", "25000.00"}, {"HDFC Bank", "-25000.00"}}}
 	f.mu.Lock()
 	f.vch = append(f.vch, v)
@@ -751,8 +755,8 @@ func TestRecorderLinesFixture(t *testing.T) {
 	liveAppend(t, liveFilePath(rec, "20261004"),
 		liveLine("voucher_accept_pre", "Voucher", "", "", "", "Payment", "17", "4-Oct-2026", "", "", "Rent for October"),
 		liveLine("voucher_accept_post", "Voucher", v.guid, v.master, "9001", "Payment", "17", "4-Oct-2026", "", "", "Rent for October"),
-		liveLine("after_import_object", "Voucher", "c1d2e3f4-0002", "4102", "9002", "Journal", "J-5", "4-Oct-2026", "", "", "TDSDesk:abc123 | TDS on rent"),
-		liveLine("after_delete", "Voucher", "c1d2e3f4-0003", "4103", "9003", "Sales", "S-9", "3-Oct-2026", "", "", "old sale"),
+		liveLine("after_import_object", "Voucher", b220CoGUID+"-00001006", "4102", "9002", "Journal", "J-5", "4-Oct-2026", "", "", "TDSDesk:abc123 | TDS on rent"),
+		liveLine("after_delete", "Voucher", b220CoGUID+"-00001007", "4103", "9003", "Sales", "S-9", "3-Oct-2026", "", "", "old sale"),
 		liveLine("ledger_accept_pre", "Master", "", "", "", "", "", "", "Landlord B", "Sundry Creditors", ""),
 		liveLine("ledger_accept_post", "Master", l.guid, fmt.Sprint(l.mid), fmt.Sprint(l.alter), "", "", "", "Landlord B", "Sundry Creditors", ""))
 	old := nowFn
@@ -1275,11 +1279,13 @@ func TestSourceBOffAfterSlowAnswer(t *testing.T) {
 	if f.n("TDSDeskKeepList") != 1 {
 		t.Fatal("not asked")
 	}
-	if logLines("Source B off: Tally took 2.5 s for the changed-entries list (limit 2 s)") != 1 {
+	// 2.2.2 (the owner's condition b): a hard stop at 2 s: the bridge stops waiting then (not at 2.5 s), and the switch-off
+	// applies as before
+	if logLines("Source B off: Tally took 2.0 s for the changed-entries list (limit 2 s)") != 1 {
 		t.Fatalf("the log: %s", readText(logFile()))
 	}
 	st := obj(obj(beatBody(true, "open", "", nil, nil, nil)["recorderSourceB"])[zz])
-	if st["off"] != true || num(st["seconds"]) < 2.4 || str(st["at"]) == "" || !strings.Contains(str(st["why"]), "2.5 s") {
+	if st["off"] != true || num(st["seconds"]) < 1.9 || num(st["seconds"]) > 2.2 || str(st["at"]) == "" || !strings.Contains(str(st["why"]), "2.0 s") {
 		t.Fatalf("the beat: %v", st)
 	}
 	f.mu.Lock()
@@ -1331,7 +1337,8 @@ func TestSourceBBackOnOwnerSwitch(t *testing.T) {
 	f.mu.Unlock()
 	_, _ = companyCheck(fin, zz, f.port)
 	applyRecorderSource(M{"recorderSource": "both"}) // the owner switches it
-	if n, err := liveSourceB(zz, f.port); err != nil || n != 1 || f.n("TDSDeskKeepList") != 2 {
+	// 2.2.2: the slow request was stopped at 2 s (nothing taken from it): SB-2 comes now with SB-6
+	if n, err := liveSourceB(zz, f.port); err != nil || n != 2 || f.n("TDSDeskKeepList") != 2 {
 		t.Fatalf("after the owner's switch: %d %v", n, err)
 	}
 	if st := obj(obj(beatBody(true, "open", "", nil, nil, nil)["recorderSourceB"])[zz]); st["off"] == true {

@@ -80,6 +80,11 @@ type change struct {
 	askAfter time.Time // not asked before (the bridge's clock: a few seconds after the line, then 10 s apart)
 	numTries int       // asks that found nothing (3 at most)
 	also     []string  // the line ids of the same entry's other line (pre and post of one save) sent with this one
+	// 2.2.2 (the owner's NWS144 findings): the line's own GUID, never sent as the entry's (lineGuid, when it is not its
+	// MasterID in hex: idsMismatch); why the line goes without its entry (heldWhy)
+	lineGuid    string
+	idsMismatch bool
+	heldWhy     string
 }
 
 func (c *change) key() string { return c.company + "|" + c.companyGuid }
@@ -789,7 +794,7 @@ func liveSingle(l recLine) (recLine, string) {
 	master := strings.EqualFold(l.Obj, "Master")
 	switch l.Ev {
 	case "voucher_accept_post":
-		if liveIsNew(l) {
+		if liveIsNew(l) || liveIdsMismatch(l.GUID, l.MID) {
 			return l, "created"
 		}
 		return l, "altered"
@@ -826,6 +831,44 @@ func liveIsNew(l recLine) bool {
 	return strings.TrimSpace(l.GUID) == "" || livePlaceholder(l.GUID) || liveZero(l.MID) || liveZero(l.AID)
 }
 
+// 2.2.2: the MasterID a Tally GUID carries: its part after the last "-" read as hex (a voucher's GUID is its company's
+// GUID and its MasterID as 8 hex digits); -1 when it has none
+func guidMaster(g string) int64 {
+	g = strings.TrimSpace(g)
+	i := strings.LastIndex(g, "-")
+	if i < 0 || i == len(g)-1 || len(g)-i-1 > 15 {
+		return -1
+	}
+	var n int64
+	for _, r := range strings.ToLower(g[i+1:]) {
+		switch {
+		case r >= '0' && r <= '9':
+			n = n*16 + int64(r-'0')
+		case r >= 'a' && r <= 'f':
+			n = n*16 + int64(r-'a'+10)
+		default:
+			return -1
+		}
+	}
+	return n
+}
+
+// 2.2.2 (the owner's NWS144 findings, 05-Oct-2026): a line whose GUID is not its MasterID in hex (a voucher duplicated
+// from an older one carries the source's GUID): its GUID and AlterID are not the entry's
+func liveIdsMismatch(guid, mid string) bool {
+	g, m := strings.TrimSpace(guid), toI64(onlyDigits(mid))
+	if g == "" || livePlaceholder(g) || m <= 0 {
+		return false
+	}
+	return guidMaster(g) != m
+}
+
+// 2.2.2: the entry's GUID, MasterID and AlterID come from Tally: a voucher created, altered or imported by a person
+// (its body is asked of Tally)
+func (c *change) fetchesIds() bool {
+	return !c.isLedger() && c.fid == "" && (c.event == "created" || c.event == "altered" || c.event == "imported")
+}
+
 // a pair: the second half's values, the first half's where the second has none; the event from the first half's state
 // (a new entry or not: liveIsNew)
 func liveMerge(pre, post recLine) (recLine, string) {
@@ -840,7 +883,9 @@ func liveMerge(pre, post recLine) (recLine, string) {
 	fresh := liveIsNew(pre)
 	switch pre.Ev {
 	case "voucher_accept_pre":
-		if fresh {
+		// 2.2.2: a voucher duplicated from an older one: the pre carries the SOURCE's GUID and AlterID, the saved entry has
+		// another MasterID: the GUID is not the MasterID's, so it is a new entry
+		if fresh || liveIdsMismatch(pre.GUID, m.MID) || liveIdsMismatch(m.GUID, m.MID) {
 			return m, "created"
 		}
 		return m, "altered"
@@ -876,7 +921,7 @@ func liveFlush(p *livePending, posting bool) int {
 	case strings.TrimSpace(l.GUID) != "":
 		// 2.2.1: a new entry's pre alone (Tally wrote no post: Receipt 191 on NWS144) is a created entry, found by its type
 		// and number
-		ev := map[bool]string{true: "created", false: "altered"}[liveIsNew(l)]
+		ev := map[bool]string{true: "created", false: "altered"}[liveIsNew(l) || (l.Ev == "voucher_accept_pre" && liveIdsMismatch(l.GUID, l.MID))]
 		if l.Ev == "ledger_accept_pre" {
 			ev = "ledger_" + ev
 		}
@@ -956,6 +1001,18 @@ func liveEmit(l recLine, ev, file string, gen int, start, lineStart, end int64, 
 	if liveZero(c.alterId) {
 		c.alterId = ""
 	}
+	// 2.2.2 (the owner's rule): the line's GUID and AlterID are not trusted. A voucher whose body is asked of Tally takes
+	// Tally's GUID, MasterID and AlterID (none until then); a line whose GUID is not its MasterID in hex keeps its GUID
+	// only as lineGuid (idsMismatch), never as the entry's
+	if !c.isLedger() {
+		c.idsMismatch = liveIdsMismatch(c.guid, c.masterId)
+		if c.idsMismatch {
+			c.lineGuid = c.guid
+		}
+		if c.fetchesIds() || c.idsMismatch {
+			c.guid, c.alterId = "", ""
+		}
+	}
 	if livePlaceholder(c.guid) {
 		c.guid = ""
 		// a voucher only: the rule is proven for vouchers (NWS144); a new ledger's GUID stays empty until Tally gives it
@@ -1019,6 +1076,9 @@ func liveSameSave(c *change) bool {
 			q.masterId, q.guid, q.byNumber, q.bodyTried, q.tries = c.masterId, c.guid, false, false, 0
 			if c.alterId != "" {
 				q.alterId = c.alterId
+			}
+			if c.idsMismatch && !q.idsMismatch {
+				q.idsMismatch, q.lineGuid = true, c.lineGuid
 			}
 		}
 		q.also = append(q.also, c.lineId)
@@ -1176,7 +1236,7 @@ func liveSourceB(company string, port int) (int, error) {
 	live.mu.Unlock()
 	liveSaveOffsets() // round 2 R2-9: the spacing holds across a restart after a failure
 	took := -1.0
-	tc := &TC{copier: true, yield: func() bool { return postingGoing() || importsInFlight.Load() > 0 }, timed: func(sec float64) { took = sec }}
+	tc := recorderTC(func(sec float64) { took = sec })
 	raw, err := invokeTally(tc, port, keepListAboveRequest(company, above), keepNum("RecorderBTimeoutSec", 5)) // review M5: 5 s
 	if took > liveLimitSec() {
 		liveTurnOff("B", key, company, took)
@@ -1432,16 +1492,19 @@ func liveFetchBodies(need []*change, sp int64) {
 	}
 	yield := func() bool { return postingGoing() || importsInFlight.Load() > 0 }
 	slow := false
-	tc := &TC{copier: true, yield: yield, timed: func(sec float64) {
+	tc := recorderTC(func(sec float64) {
 		if sec > liveLimitSec() && !slow {
 			slow = true
 			liveTurnOff("bodies", key, company, sec)
 		}
-	}}
+	})
 	failed := func(cs []*change, why string) {
 		live.mu.Lock()
 		for _, c := range cs {
 			c.bodyTried = true
+			if c.heldWhy == "" {
+				c.heldWhy = "the entry was not read from Tally: " + cutRunes(why, 160)
+			}
 		}
 		live.mu.Unlock()
 		writeLog(fmt.Sprintf("Recorder: the body of %d entr%s of %s was not read from Tally (%s); sent without it (FinCom holds the line until a body comes)",
@@ -1497,41 +1560,48 @@ func liveFetchBodies(need []*change, sp int64) {
 				failed(part, err.Error())
 				continue
 			}
-			var missing []*change
+			// 2.2.2 (the owner's rule): Tally's voucher is the line's only when its GUID is its MasterID in hex under the
+			// line's company GUID, and its type, date (and number, when the line has one) are the line's, above the
+			// starting point by Tally's own ALTERID; else it is asked by type, number and date, or the line is held
+			type miss struct {
+				c   *change
+				why string
+			}
+			var missing []miss
 			live.mu.Lock()
 			for _, c := range part {
 				x := got[c.masterId]
-				xg := strings.TrimSpace(html.UnescapeString(group(`<GUID>([^<]*)</GUID>`, x, 1)))
-				if x == "" || (c.guid != "" && xg != c.guid) || (sp > 0 && toI64(group(`<ALTERID>\s*(\d+)`, x, 1)) <= sp) {
-					missing = append(missing, c)
+				if why := liveVoucherWrong(x, "voucher with MasterID "+c.masterId, liveWantOf(c, sp)); why != "" {
+					missing = append(missing, miss{c, why})
 					continue
 				}
-				c.xml, c.bodyTried = x, true
-				if toI64(c.alterId) <= 0 {
-					c.alterId = onlyDigits(group(`<ALTERID>\s*(\d+)`, x, 1)) // 2.2.1: a new entry's AlterID is 0 on its line
-				}
-				if c.guid == "" {
-					c.guid = strings.TrimSpace(html.UnescapeString(group(`<GUID>([^<]*)</GUID>`, x, 1)))
-				}
-				if c.vchType == "" {
-					c.vchType = html.UnescapeString(group(`<VOUCHERTYPENAME>([^<]*)</VOUCHERTYPENAME>`, x, 1))
-				}
-				if c.vchNo == "" {
-					c.vchNo = html.UnescapeString(group(`<VOUCHERNUMBER>([^<]*)</VOUCHERNUMBER>`, x, 1))
-				}
-				if c.narr == "" {
-					c.narr = html.UnescapeString(group(`<NARRATION>([^<]*)</NARRATION>`, x, 1))
-				}
-				c.ledgers = voucherLedgerNames(x)
-				if c.during {
-					for _, n := range c.ledgers {
-						liveTouch(c.company, n)
-					}
-				}
+				liveTakeBody(c, x)
 			}
 			live.mu.Unlock()
-			if len(missing) > 0 {
-				failed(missing, "Tally gave no entry with that MasterID on that date above the starting point, or another entry")
+			for _, m := range missing {
+				c := m.c
+				if c.vchNo == "" || !liveNumberText(c.vchNo) || !liveNumberText(c.vchType) {
+					liveHeldWhy(c, m.why)
+					continue
+				}
+				if slow || time.Now().After(deadline) {
+					liveHeldWhy(c, m.why+"; not asked by its type and number (the body fetch is off for this company, the 2 s rule, or 20 s passed)")
+					continue
+				}
+				x, why, err := liveOneByNumber(tc, c.company, port, liveWantOf(c, sp), left())
+				if gaveWay(err) {
+					continue // a posting goes first: asked again after it
+				}
+				if err != nil {
+					why = "asked by its type and number: " + err.Error()
+				}
+				if x == "" {
+					liveHeldWhy(c, m.why+"; "+why)
+					continue
+				}
+				live.mu.Lock()
+				liveTakeBody(c, x)
+				live.mu.Unlock()
 			}
 		}
 	}
@@ -1594,6 +1664,14 @@ func (c *change) wire() M {
 	}
 	if c.isLedger() {
 		m["name"], m["parent"] = c.name, c.parent
+	}
+	// 2.2.2: the line's GUID that is not its MasterID's, for information only (never the entry's: the cloud must not mark
+	// the line duplicate on it); why the line goes without its entry
+	if c.idsMismatch {
+		m["idsMismatch"], m["lineGuid"] = true, c.lineGuid
+	}
+	if c.heldWhy != "" && c.xml == "" {
+		m["heldWhy"] = c.heldWhy
 	}
 	return m
 }
@@ -1731,6 +1809,9 @@ func liveUploadStep() (int, bool) {
 		if c.needsBody() {
 			if bodiesOff {
 				c.bodyTried = true // the body fetch is off for this company (the 2 s rule): the line goes without
+				if !c.isLedger() {
+					c.heldWhy = "the entry fetch is off for this company (Tally took longer than the 2 s limit)"
+				}
 				continue
 			}
 			if c.byNumber {
@@ -1748,19 +1829,10 @@ func liveUploadStep() (int, bool) {
 		liveFetchByNumber(byNumber, sp)
 	}
 	if len(need) > 0 && !posting {
-		// review M3: nothing is asked for an entry whose AlterID is not above the company's starting point
+		// review M3: an entry not above the company's starting point is not taken. 2.2.2 (the owner's rule): by Tally's
+		// own ALTERID only (liveVoucherWrong), never the line's
 		sp, _ := startPointOf(need[0].company)
-		var ask []*change
-		live.mu.Lock()
-		for _, c := range need {
-			if a := toI64(c.alterId); sp > 0 && a > 0 && a <= sp {
-				c.bodyTried = true
-				continue
-			}
-			ask = append(ask, c)
-		}
-		live.mu.Unlock()
-		liveFetchBodies(ask, sp)
+		liveFetchBodies(need, sp)
 	}
 	// a change whose body is still to be asked holds the group there (the order is kept)
 	live.mu.Lock()
@@ -1834,9 +1906,11 @@ func liveUploadStep() (int, bool) {
 		}
 		if c.event == "created" && !c.isLedger() && c.vchNo != "" {
 			live.created[c.saveKey()] = [2]string{c.lineId, c.guid}
-			if c.xml == "" && c.fid == "" && !strings.HasSuffix(c.lineId, ":resolved") {
-				held = append(held, c) // 2.2.1: sent held (no body, no GUID): resolved later (recorder_resolve.go)
-			}
+		}
+		// 2.2.1: sent held (no body, no GUID): resolved later (recorder_resolve.go). 2.2.2: every voucher of the add-on
+		// sent without its entry, not only a new one with a number
+		if c.fetchesIds() && c.source == "addon" && c.xml == "" && c.vchDate != "" && !strings.HasSuffix(c.lineId, ":resolved") {
+			held = append(held, c)
 		}
 	}
 	q := live.queue[:0]

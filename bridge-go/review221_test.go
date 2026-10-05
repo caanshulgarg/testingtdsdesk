@@ -3,7 +3,8 @@ package main
 import "testing"
 
 // 2.2.1 review (Medium): a new LEDGER's placeholder GUID is never rebuilt from its MasterID (the rule is proven for
-// vouchers only, on NWS144): the GUID stays empty until Tally gives its own; a voucher's is still rebuilt
+// vouchers only, on NWS144): the GUID stays empty until Tally gives its own. 2.2.2: a voucher's is no longer rebuilt
+// either (the owner's rule: the line's ids are not trusted; Tally's GUID comes with the body fetched by MasterID)
 func TestPlaceholderGUIDRebuiltForVouchersOnly(t *testing.T) {
 	liveBridge(t, "")
 	live.mu.Lock()
@@ -35,7 +36,8 @@ func TestPlaceholderGUIDRebuiltForVouchersOnly(t *testing.T) {
 	if led.guid != "" {
 		t.Errorf("a new ledger's GUID was built from its MasterID: %q (must stay empty until Tally gives it)", led.guid)
 	}
-	if want := b220CoGUID + "-000066c8"; vch.guid != want {
-		t.Errorf("a new voucher's GUID: %q, want %q", vch.guid, want)
+	// 2.2.2 (the owner's rule): a voucher's GUID is not built from its line either: Tally gives it with the body
+	if vch.guid != "" || vch.masterId != "26312" {
+		t.Errorf("a new voucher's GUID: %q (must stay empty until Tally gives it), MasterID %q", vch.guid, vch.masterId)
 	}
 }

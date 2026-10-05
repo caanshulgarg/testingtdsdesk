@@ -228,7 +228,8 @@ func TestForgedLineDropped(t *testing.T) {
 	if logLines("Recorder: "+filepath.Base(p)+": a line naming another company (OTHER-GUID) is not taken") != 1 {
 		t.Fatalf("the log: %s", readText(logFile()))
 	}
-	// the starting point: nothing asked for an AlterID at or below it; a body at or below it not used
+	// the starting point: a body at or below it not used. 2.2.2 (the owner's rule): judged by Tally's own ALTERID only,
+	// never the line's: both entries are asked (one request), only the new one's body goes
 	td := today()
 	v := f.add(td, "Party", "P-1", "x", "-1.00") // alter 1
 	sessions := openCompaniesWith(fin, true)
@@ -241,7 +242,7 @@ func TestForgedLineDropped(t *testing.T) {
 	liveReadOnce()
 	uploadAll(t)
 	bs := f.bodiesOf(vchByMasterID)
-	if len(bs) != 1 || strings.Contains(bs[0], "$MasterID = "+v.master+" ") || !strings.Contains(bs[0], "$MasterID = "+w.master) {
+	if len(bs) != 1 || !strings.Contains(bs[0], "$MasterID = "+v.master+" ") || !strings.Contains(bs[0], "$MasterID = "+w.master) {
 		t.Fatalf("asked: %v", bs)
 	}
 	for _, l := range c.recSent() {
@@ -330,8 +331,8 @@ func TestSourceBBounded(t *testing.T) {
 	_, _ = companyCheck(fin, zz, f.port)
 	laterBy(t, 2*time.Minute)
 	_, _ = liveSourceB(zz, f.port)
-	// the request's own limit is 5 s (the 2 s rule then turns source B off): "Tally took 5.x s"
-	if logLines("Source B off: Tally took 5.") != 1 {
+	// 2.2.2: the hard stop at 2 s comes before the request's own limit of 5 s (the 2 s rule then turns source B off)
+	if logLines("Source B off: Tally took 2.0 s") != 1 {
 		t.Fatalf("the request's limit: %s", readText(logFile()))
 	}
 }
@@ -368,8 +369,8 @@ func TestLiveOldAndFailedLines(t *testing.T) {
 	rec, _, c := liveBridge(t, "")
 	noteCompanyGUID(zz, b220CoGUID) // round 2 R2-3: a failed.txt line is taken only for the company's held GUID
 	old := liveFilePath(rec, nowFn().AddDate(0, 0, -9).Format("20060102"))
-	liveAppend(t, old, vchLine("after_delete", "g-old", "1", "1", "nine days"))
-	inner := vchLine("after_cancel", "g-f", "2", "2", "via failed")
+	liveAppend(t, old, vchLine("after_delete", b220CoGUID+"-00000001", "1", "1", "nine days"))
+	inner := vchLine("after_cancel", b220CoGUID+"-00000002", "2", "2", "via failed")
 	i := strings.Index(inner, "|t1=")
 	failed := "FCR1|ev=write_failed|file=" + liveFilePath(rec, "") + "|was=" + inner[:i] + inner[i:]
 	liveAppend(t, filepath.Join(rec, "failed.txt"), failed)
@@ -378,7 +379,7 @@ func TestLiveOldAndFailedLines(t *testing.T) {
 	for _, l := range c.recSent() {
 		got = append(got, str(l["object_guid"]))
 	}
-	if strings.Join(got, ",") != "g-old,g-f" && strings.Join(got, ",") != "g-f,g-old" {
+	if g1, g2 := b220CoGUID+"-00000001", b220CoGUID+"-00000002"; strings.Join(got, ",") != g1+","+g2 && strings.Join(got, ",") != g2+","+g1 {
 		t.Fatalf("sent: %v", got)
 	}
 	var mu sync.Mutex
