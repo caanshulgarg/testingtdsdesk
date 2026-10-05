@@ -95,7 +95,9 @@ with sync_playwright() as p:
     pg.click('.revfilter button.linkbtn:has-text("GST settings")'); pg.wait_for_timeout(1000)
     ok(pg.evaluate("S.tab") == "gstset" and "Settings of " + OWN in pg.inner_text("#app"), "the link goes to that GSTIN's settings")
     # remove one added here
-    pg.click('tr[data-key="%s"] button:text-is("remove")' % g27); pg.wait_for_timeout(500); pg.click('[data-cbx="yes"]'); pg.wait_for_timeout(700)
+    # spec K9 (round 2): nothing is lost (adding it again brings it back), so no question first
+    pg.click('tr[data-key="%s"] button:text-is("remove")' % g27); pg.wait_for_timeout(700)
+    ok(pg.locator("#confirmBox .cbx").count() == 0, "removing an added GSTIN asks nothing (it comes back when added again)")
     ok(g27 not in pg.evaluate("GSTR.gstins(S.books)") and pg.locator('tr[data-key="%s"] button:text-is("remove")' % OWN).count() == 0, "an added GSTIN can be removed; the one from Client setup cannot")
     if FIXTURE:
         # the made-up day book: its two registrations come from the entries (CMPGSTIN), with nothing added by hand

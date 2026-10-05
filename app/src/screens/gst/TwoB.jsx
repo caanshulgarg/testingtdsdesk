@@ -8,6 +8,7 @@ import { R2bBar, PairCell } from "../../parts/Ai.jsx";
 import GstApiCard from "../GstApiCard.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
 import { Only2bNote } from "./InputRegister.jsx";
+import ListTable from "../../parts/ListTable.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
@@ -64,48 +65,58 @@ function SupplierDocs({ s, k }) {
     .concat(s.pbk.map((d) => ({ d: d.date, cells: <>
       <td>Tally</td><td>—</td><td></td><td></td><td>{d.no + " (vch " + d.voucher + ") " + day(d.date)}</td><td className="n">{money(tx(d))}</td><td className="bad">not in 2B</td></> })))
     .sort((a, c) => String(a.d).localeCompare(String(c.d)));
-  return <tr><td colSpan={10} style={{ background: "var(--paper)", padding: 0 }}>
-    <table className="bk-table" style={{ margin: 0 }}>
+  return <>
+    <table className="bk-table" style={{ margin: 0 }} data-statement="">
       <thead><tr><th>Document</th><th>Number in 2B</th><th className="dt">Date</th><th className="n">Tax in 2B</th><th>In Tally</th><th className="n">Tax in Tally</th><th>Result</th></tr></thead>
       <tbody>{docs.map((x, i) => <tr key={i}>{x.cells}</tr>)}</tbody>
     </table>
     {s.pbk.length > 0 && s.gstin && <div className="row" style={{ gap: 8, padding: 8 }}>
       <button className="btn small" onClick={() => r2Copy(k)}>Copy a note to the supplier</button>
       <span className="note">lists the {s.pbk.length} invoice{s.pbk.length === 1 ? "" : "s"} not in 2B</span></div>}
-  </td></tr>;
+  </>;
 }
 
 function Suppliers({ sup }) {
-  return <div className="bk-tablewrap"><table className="bk-table" id="r2Sup">
-    <thead><tr><th>Supplier</th><th>GSTIN</th><th className="n">Tax in 2B</th><th className="n">Tax in Tally</th><th className="n">Gap</th><th className="n">Matched</th><th className="n">Differences</th><th className="n">To confirm</th><th className="n">2B only</th><th className="n">Tally only</th></tr></thead>
-    <tbody>{sup.slice(0, LIMIT).map((s, i) => { const k = s.gstin || s.party, open = S.r2Open === k; return [<tr key={k + ":" + i}>
-      <td><button className="linkbtn" onClick={() => tdsToggle("r2Open", k)}>{(open ? "▾ " : "▸ ") + (s.party || "—")}</button></td>
-      <td>{s.gstin || <span className="tag warn">no GSTIN in Tally</span>}</td>
-      <td className="n">{money(s.t2b)}</td><td className="n">{money(s.tbk)}</td><td className={"n" + (Math.abs(s.gap) > 1 ? " bad" : "")}>{money(s.gap)}</td>
-      <td className="n">{s.matched || ""}</td><td className="n">{s.diff || ""}</td><td className="n">{s.probable || ""}</td><td className="n">{s.only2b || ""}</td><td className="n">{s.onlyBooks || ""}</td>
-    </tr>, open && <SupplierDocs key={k + ":open:" + i} s={s} k={k} />]; })}</tbody>
-  </table>{!sup.length && <div className="bk-none">Nothing matches.</div>}</div>;
+  // the one list table (spec K6): supplier, tax in 2B and in Tally (amounts), then the rest; a supplier opens to its documents
+  const key = (s) => s.gstin || s.party;
+  return <ListTable name="r2Sup" id="r2Sup" rows={sup} rowKey={(s, i) => key(s) + ":" + i} unit={["supplier", "suppliers"]} limit={LIMIT}
+    empty="Nothing here. Clear the find box above, or choose another tab."
+    after={(s) => S.r2Open === key(s) && <SupplierDocs s={s} k={key(s)} />}
+    cols={[
+      { k: "party", role: "party", label: "Supplier", v: (s) => s.party || "", cell: (s) => <button className="linkbtn" onClick={() => tdsToggle("r2Open", key(s))}>{(S.r2Open === key(s) ? "▾ " : "▸ ") + (s.party || "—")}</button> },
+      { k: "t2b", role: "amount", label: "Tax in 2B", cls: "n", v: (s) => num(s.t2b), fmt: money, cell: (s) => money(s.t2b) },
+      { k: "tbk", role: "amount", label: "Tax in Tally", cls: "n", v: (s) => num(s.tbk), fmt: money, cell: (s) => money(s.tbk) },
+      { k: "gstin", label: "GSTIN", v: (s) => s.gstin || "", cell: (s) => s.gstin || <span className="tag warn">no GSTIN in Tally</span> },
+      { k: "gap", label: "Gap", cls: "n", v: (s) => num(s.gap), sum: true, fmt: money, td: (s) => ({ className: Math.abs(s.gap) > 1 ? "bad" : undefined }), cell: (s) => money(s.gap) },
+      { k: "m", label: "Matched", cls: "n", v: (s) => s.matched || 0, sum: true, fmt: String, cell: (s) => s.matched || "" },
+      { k: "d", label: "Differences", cls: "n", v: (s) => s.diff || 0, sum: true, fmt: String, cell: (s) => s.diff || "" },
+      { k: "p", label: "To confirm", cls: "n", v: (s) => s.probable || 0, sum: true, fmt: String, cell: (s) => s.probable || "" },
+      { k: "o2", label: "2B only", cls: "n", v: (s) => s.only2b || 0, sum: true, fmt: String, cell: (s) => s.only2b || "" },
+      { k: "ob", label: "Tally only", cls: "n", v: (s) => s.onlyBooks || 0, sum: true, fmt: String, cell: (s) => s.onlyBooks || "" },
+    ]} />;
 }
 
 // matched, with a difference, or to confirm: 2B and Tally on one line
 function Pairs({ list, tol }) {
-  return <div className="bk-tablewrap"><table className="bk-table" id="r2Pairs">
-    <thead><tr><th>Supplier</th><th>2B</th><th className="dt">Date</th><th className="n">Taxable</th><th className="n">Tax</th><th>Tally</th><th className="n">Taxable</th><th className="n">Tax</th><th className="n">Difference</th><th style={{ minWidth: 230 }}>What differs</th><th className="ac"></th></tr></thead>
-    <tbody>{list.slice(0, LIMIT).map((x, i) => { const ids = x.books.map((d) => d.id); return <tr key={x.p.key + ":" + i}>
-      <td>{x.p.party || "—"}<div className="nr">{x.p.gstin}</div></td>
-      <td>{x.p.no}<div className="nr">{secName(x.p) + " · " + GSTR.label(x.p.ym)}</div></td><td>{day(x.p.date)}</td>
-      <td className="n">{money(x.p.taxable)}</td><td className="n">{money(tx(x.p))}</td>
-      <td>{x.books.map((d) => d.no).join(", ")}<div className="nr">{"vch " + x.books.map((d) => d.voucher).join(", ") + " · " + Array.from(new Set(x.books.map((d) => GSTR.label(d.ym)))).join(", ")}</div></td>
-      <td className="n">{money(x.sum.taxable)}</td><td className="n">{money(tx(x.sum))}</td>
-      <td className={"n" + (Math.abs(tx(x.diff)) > num(tol) ? " bad" : "")}>{money(tx(x.diff))}</td>
-      <td style={{ minWidth: 230 }}>{x.issues.concat(noteOf(x.p) ? [noteOf(x.p)] : []).join("; ") || (x.timing ? "booked in another month" : "")}</td>
-      <td className="ac" style={{ whiteSpace: "nowrap" }}>{x.status === "probable"
+  // the one list table (spec K6): date, the 2B number, supplier, the tax in 2B (amount), then the rest
+  return <ListTable name="r2Pairs" id="r2Pairs" rows={list} rowKey={(x, i) => x.p.key + ":" + i} unit={["pair", "pairs"]} limit={LIMIT}
+    more={<p className="note">The first {LIMIT} are shown; narrow them with the filters, or download the reconciliation.</p>}
+    empty="Nothing here. Clear the find box above, or choose another tab."
+    cols={[
+      { k: "date", role: "date", label: "Date", cls: "dt", v: (x) => String(x.p.date || ""), cell: (x) => day(x.p.date) },
+      { k: "no", role: "number", label: "2B", v: (x) => x.p.no || "", cell: (x) => <>{x.p.no}<div className="nr">{secName(x.p) + " · " + GSTR.label(x.p.ym)}</div></> },
+      { k: "party", role: "party", label: "Supplier", v: (x) => x.p.party || "", cell: (x) => <>{x.p.party || "—"}<div className="nr">{x.p.gstin}</div></> },
+      { k: "tax", role: "amount", label: "Tax", cls: "n", v: (x) => tx(x.p), fmt: money, cell: (x) => money(tx(x.p)) },
+      { k: "tbl", label: "Taxable", cls: "n", v: (x) => num(x.p.taxable), sum: true, fmt: money, cell: (x) => money(x.p.taxable) },
+      { k: "bk", label: "Tally", cell: (x) => <>{x.books.map((d) => d.no).join(", ")}<div className="nr">{"vch " + x.books.map((d) => d.voucher).join(", ") + " · " + Array.from(new Set(x.books.map((d) => GSTR.label(d.ym)))).join(", ")}</div></> },
+      { k: "btbl", label: "Taxable", cls: "n", v: (x) => num(x.sum.taxable), sum: true, fmt: money, cell: (x) => money(x.sum.taxable) },
+      { k: "btax", label: "Tax", cls: "n", v: (x) => tx(x.sum), sum: true, fmt: money, cell: (x) => money(tx(x.sum)) },
+      { k: "diff", label: "Difference", cls: "n", v: (x) => tx(x.diff), sum: true, fmt: money, td: (x) => ({ className: Math.abs(tx(x.diff)) > num(tol) ? "bad" : undefined }), cell: (x) => money(tx(x.diff)) },
+      { k: "why", label: "What differs", td: () => ({ style: { minWidth: 230 } }), cell: (x) => x.issues.concat(noteOf(x.p) ? [noteOf(x.p)] : []).join("; ") || (x.timing ? "booked in another month" : "") },
+      { k: "ac", role: "act", cls: "ac", td: () => ({ style: { whiteSpace: "nowrap" } }), cell: (x) => { const ids = x.books.map((d) => d.id); return x.status === "probable"
         ? <><button className="btn small primary" onClick={() => r2Confirm(x.p.key)}>Same</button> <button className="btn small" onClick={() => r2Unlink(x.p.key, ids)}>Not the same</button></>
-        : <button className="linkbtn" title="These are not the same document" onClick={() => r2Unlink(x.p.key, ids)}>Unlink</button>}</td>
-    </tr>; })}</tbody>
-  </table>
-    {list.length > LIMIT && <p className="note">The first {LIMIT} are shown; narrow them with the filters, or download the reconciliation.</p>}
-    {!list.length && <div className="bk-none">Nothing here.</div>}</div>;
+        : <button className="linkbtn" title="These are not the same document" onClick={() => r2Unlink(x.p.key, ids)}>Unlink</button>; } },
+    ]} />;
 }
 
 const TagSelect = ({ id, tags, st }) => <select aria-label="Remark" value={(st.tag[id] || {}).tag || ""} onChange={(ev) => r2Tag(id, ev.target.value)}>{tags.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>;
@@ -115,38 +126,42 @@ function Only2b({ list, free, st }) {
   return <>
     <p className="note">In the supplier’s return but not found in Tally. If it is booked under another number, link it; otherwise book it, or note why the credit is not being taken.</p>
     <R2bBar list={list} free={free} />
-    <div className="bk-tablewrap"><table className="bk-table" id="r2Only2b">
-      <thead><tr><th>Supplier</th><th>Number</th><th className="dt">Date</th><th className="n">Taxable</th><th className="n">Tax</th><th>Note</th><th>Booked in Tally as</th><th>Remark</th></tr></thead>
-      <tbody>{list.slice(0, LIMIT).map((p, i) => {
-        const cands = free.filter((d) => d.dir === p.dir && (d.gstin === p.gstin || (!d.gstin && GST2B.lastDigits(d.no) === GST2B.lastDigits(p.no)) || (d.gstin && d.gstin.slice(2, 12) === p.gstin.slice(2, 12))))
-          .sort((a, c) => Math.abs(tx(a) - tx(p)) - Math.abs(tx(c) - tx(p))).slice(0, 12);
-        return <tr key={p.key + ":" + i}>
-          <td>{p.party || "—"}<div className="nr">{p.gstin}</div></td>
-          <td>{p.no}<div className="nr">{secName(p) + " · " + GSTR.label(p.ym)}</div></td><td>{day(p.date)}</td>
-          <td className="n">{money(p.taxable)}</td><td className="n">{money(tx(p))}</td>
-          <td>{noteOf(p)}{p.bookedNoCredit && <div><Only2bNote p={p} /></div>}</td>
-          <td><select aria-label="Booked in Tally as" value="" style={{ maxWidth: 240 }} onChange={(ev) => r2Link(p.key, ev.target.value)}>
+    {/* the one list table (spec K6): date, number, supplier, tax (amount), then the rest */}
+    <ListTable name="r2Only2b" id="r2Only2b" rows={list} rowKey={(p, i) => p.key + ":" + i} unit={["document", "documents"]} limit={LIMIT}
+      empty="Nothing here. Clear the find box above, or choose another tab."
+      cols={[
+        { k: "date", role: "date", label: "Date", cls: "dt", v: (p) => String(p.date || ""), cell: (p) => day(p.date) },
+        { k: "no", role: "number", label: "Number", v: (p) => p.no || "", cell: (p) => <>{p.no}<div className="nr">{secName(p) + " · " + GSTR.label(p.ym)}</div></> },
+        { k: "party", role: "party", label: "Supplier", v: (p) => p.party || "", cell: (p) => <>{p.party || "—"}<div className="nr">{p.gstin}</div></> },
+        { k: "tax", role: "amount", label: "Tax", cls: "n", v: (p) => tx(p), fmt: money, cell: (p) => money(tx(p)) },
+        { k: "tbl", label: "Taxable", cls: "n", v: (p) => num(p.taxable), sum: true, fmt: money, cell: (p) => money(p.taxable) },
+        { k: "note", label: "Note", cell: (p) => <>{noteOf(p)}{p.bookedNoCredit && <div><Only2bNote p={p} /></div>}</> },
+        { k: "link", label: "Booked in Tally as", cell: (p) => { const cands = free.filter((d) => d.dir === p.dir && (d.gstin === p.gstin || (!d.gstin && GST2B.lastDigits(d.no) === GST2B.lastDigits(p.no)) || (d.gstin && d.gstin.slice(2, 12) === p.gstin.slice(2, 12))))
+            .sort((a, c) => Math.abs(tx(a) - tx(p)) - Math.abs(tx(c) - tx(p))).slice(0, 12);
+          return <><select aria-label="Booked in Tally as" value="" style={{ maxWidth: 240 }} onChange={(ev) => r2Link(p.key, ev.target.value)}>
             <option value="">{cands.length ? "not found — choose" : "nothing close in Tally"}</option>
             {cands.map((d) => <option key={d.id} value={d.id}>{d.no + " · vch " + d.voucher + " · " + GSTAmend.dmy(d.date) + " · tax " + INR.format(tx(d)) + (d.gstin ? "" : " · no GSTIN")}</option>)}
-          </select><PairCell p={p} /></td>
-          <td><TagSelect id={p.key} tags={TAGS_2B} st={st} /></td>
-        </tr>; })}</tbody>
-    </table>{!list.length && <div className="bk-none">Nothing here.</div>}</div>
+          </select><PairCell p={p} /></>; } },
+        { k: "tag", label: "Remark", cell: (p) => <TagSelect id={p.key} tags={TAGS_2B} st={st} /> },
+      ]} />
   </>;
 }
 
 // in Tally, not in 2B: credit taken that the supplier has not reported
 function OnlyBooks({ list, st }) {
-  return <div className="bk-tablewrap"><table className="bk-table" id="r2Books">
-    <thead><tr><th>Supplier</th><th>Invoice</th><th className="dt">Date</th><th>Voucher</th><th className="n">Taxable</th><th className="n">Tax</th><th>Note</th><th>Remark</th></tr></thead>
-    <tbody>{list.slice(0, LIMIT).map((d, i) => <tr key={d.id + ":" + i}>
-      <td>{d.party || "—"}<div className="nr">{d.gstin || <span className="bad">no GSTIN in Tally</span>}</div></td>
-      <td>{d.no}</td><td>{day(d.date)}</td><td>{d.voucher}<div className="nr">{d.type + " · " + GSTR.label(d.ym)}</div></td>
-      <td className="n">{money(d.taxable)}</td><td className="n">{money(tx(d))}</td>
-      <td>{[d.rcm ? "reverse charge" : "", d.ineligible ? "ITC not to be taken" : "", d.dir < 0 ? "note from the supplier" : ""].filter(Boolean).join("; ")}</td>
-      <td><TagSelect id={d.id} tags={TAGS_BOOKS} st={st} /></td>
-    </tr>)}</tbody>
-  </table>{!list.length && <div className="bk-none">Nothing here.</div>}</div>;
+  // the one list table (spec K6): date, invoice (number), supplier, tax (amount), then the rest
+  return <ListTable name="r2Books" id="r2Books" rows={list} rowKey={(d, i) => d.id + ":" + i} unit={["entry", "entries"]} limit={LIMIT}
+    empty="Nothing here. Clear the find box above, or choose another tab."
+    cols={[
+      { k: "date", role: "date", label: "Date", cls: "dt", v: (d) => String(d.date || ""), cell: (d) => day(d.date) },
+      { k: "no", role: "number", label: "Invoice", v: (d) => d.no || "", cell: (d) => d.no },
+      { k: "party", role: "party", label: "Supplier", v: (d) => d.party || "", cell: (d) => <>{d.party || "—"}<div className="nr">{d.gstin || <span className="bad">no GSTIN in Tally</span>}</div></> },
+      { k: "tax", role: "amount", label: "Tax", cls: "n", v: (d) => tx(d), fmt: money, cell: (d) => money(tx(d)) },
+      { k: "vch", label: "Voucher", v: (d) => d.voucher || "", cell: (d) => <>{d.voucher}<div className="nr">{d.type + " · " + GSTR.label(d.ym)}</div></> },
+      { k: "tbl", label: "Taxable", cls: "n", v: (d) => num(d.taxable), sum: true, fmt: money, cell: (d) => money(d.taxable) },
+      { k: "note", label: "Note", cell: (d) => [d.rcm ? "reverse charge" : "", d.ineligible ? "ITC not to be taken" : "", d.dir < 0 ? "note from the supplier" : ""].filter(Boolean).join("; ") },
+      { k: "tag", label: "Remark", cell: (d) => <TagSelect id={d.id} tags={TAGS_BOOKS} st={st} /> },
+    ]} />;
 }
 
 export default function TwoB({ b }) {

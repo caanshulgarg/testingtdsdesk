@@ -340,7 +340,7 @@ function bridgeChip(co){
   // build 194: Tally stopped answering (a message box open in Tally, or a long report): said plainly, with since when
   // go-bridge: a slow Tally is busy, never "disconnected" (it is open; the bridge asks again by itself)
   const busyAt = (st.stuck && st.stuck.since) || (st.tallyState === "busy" && st.busySince) || "";
-  if (busyAt || st.tallyState === "busy") return '<span class="tchip warn" title="Tally is open but answering slowly' + (busyAt ? " since " + esc(String(busyAt).slice(11, 16)) : "") + '. A message box (a pop-up) in Tally, or a report still working, holds it up: close it, and FinCom carries on by itself. Nothing is lost meanwhile.">\u25D0 Tally busy' + (busyAt ? " since " + esc(String(busyAt).slice(11, 16)) : "") + "</span>";
+  if (busyAt || st.tallyState === "busy") return '<span class="tchip warn" title="Tally is open but answering slowly' + (busyAt ? " since " + esc(fmtTime(busyAt)) : "") + '. A message box (a pop-up) in Tally, or a report still working, holds it up: close it, and FinCom carries on by itself. Nothing is lost meanwhile.">\u25D0 Tally busy' + (busyAt ? " since " + esc(fmtTime(busyAt)) : "") + "</span>";
   if (st.shaky) return '<span class="tchip warn" title="' + esc(st.error || "") + '">FinCom Bridge: reconnecting\u2026</span>';
   const why = Bridge.diag && (Bridge.diag.findings || []).find(f => f.level !== "ok");
   if (st.pinMissing) return '<button class="tchip warn" data-act="openSettings" title="' + esc(why ? why.text : "The Tally chosen in Settings is not running") + '">Your Tally is not connected \u2014 check</button>';

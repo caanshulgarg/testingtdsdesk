@@ -67,7 +67,7 @@ function Mapping({ c, d }) {
     <div className="revfilter"><input type="search" id="fsq" aria-label="Find a ledger" data-fk="fsq" value={S.fsQ || ""} placeholder="Find a ledger" style={{ width: 260 }} onChange={(ev) => { S.fsPage = 0; setAndShow("fsQ", ev.target.value, true); }} />
       <span className="note">{shown.length + " ledgers · "}<b>{Object.keys(c.map || {}).length}</b> placed by hand</span></div>
     {pager}
-    <div className="bk-tablewrap"><table className="bk-table"><thead><tr><th>Ledger</th><th>Tally group</th><th className="n">Amount</th><th>Goes to</th></tr></thead><tbody>
+    <div className="bk-tablewrap"><table className="bk-table" data-statement=""><thead><tr><th>Ledger</th><th>Tally group</th><th className="n">Amount</th><th>Goes to</th></tr></thead><tbody>
       {page.map(([l, k, v], i) => <tr key={l + ":" + i} data-key={l}><td>{l}{c.map[l] && <>{" "}<span className="tag">by hand</span></>}</td><td className="note">{FS.nature(l).path.join(" ← ")}</td><td className="n">{m(v)}</td>
         <td><select aria-label={"Goes to: " + l} style={{ width: "auto" }} value={k} onChange={(ev) => fsMapSet(l, ev.target.value)}>{lines.map((z) => <option key={z[0]} value={z[0]}>{z[1]}</option>)}</select>
           {c.map[l] && <>{" "}<button className="linkbtn" onClick={() => fsUnmap(l)}>by rule</button></>}
@@ -94,7 +94,7 @@ export default function Accounts({ b }) {
   else if (d.error) body = <div className="bk-alert">The balances are needed: <Msg text={d.error} /></div>;
   else if (tab === "map") body = <Mapping c={c} d={d} />;
   else body = <section className="dash-card fs-doc" style={{ marginTop: 10 }}>{Math.abs(d.diff) >= 1 ? null : <p className="note" style={{ color: "var(--ok)" }}>The balance sheet tallies.</p>}
-    <Legacy html={FS.html(d).replace(/<table>/g, '<div class="bk-tablewrap"><table class="bk-table">').replace(/<\/table>/g, "</table></div>")} /></section>;
+    <Legacy html={FS.html(d).replace(/<table>/g, '<div class="bk-tablewrap"><table class="bk-table" data-statement="">').replace(/<\/table>/g, "</table></div>")} /></section>;
   return <>
     <nav className="sbar" aria-label="Accounts" style={{ marginBottom: 10 }}>{[["st", "Statements"], ["map", "Mapping"]].map(([id, l]) => <button key={id} aria-selected={tab === id} onClick={() => setAndShow("fsTab", id)}>{l}</button>)}</nav>
     <Head c={c} years={years} fy={fy} d={d} />

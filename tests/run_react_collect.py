@@ -64,6 +64,9 @@ with sync_playwright() as p:
     pg.select_option('#app tr:has-text("stray.pdf") select', cid); pg.wait_for_timeout(200)
     ok(pg.evaluate("__calls") == [["assign", "u1", cid]], "an unsorted upload is moved to the chosen client")
     pg.click('#app tr:has-text("stray.pdf") button:has-text("Delete")'); pg.wait_for_timeout(400)
+    # spec K9 (round 2): deleting it cannot be undone, so it is asked first, naming the file
+    ok("stray.pdf" in pg.inner_text("#confirmBox") and "cannot be undone" in pg.inner_text("#confirmBox"), "deleting asks first, naming the file and that it cannot be undone")
+    pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(400)
     ok(not pg.evaluate("S.inbox.u1") and "stray.pdf" not in app(), "or deleted")
     pg.screenshot(path=OUT + "/react-inbox.png")
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))

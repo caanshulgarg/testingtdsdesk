@@ -35,19 +35,20 @@ with sync_playwright() as p:
     ok(pg.locator("#tdsChTable table.bk-table tbody tr").count() > 0, "a challan opened: its deductions")
     # deductions: find, filter, sort
     pg.click('#app nav[aria-label="Return"] button:has-text("Deductions")'); pg.wait_for_timeout(500)
-    n0 = pg.locator("#tdsDnTable > tbody > tr").count() - 1
+    n0 = pg.locator("#tdsDnTable > tbody > tr").count()
     party = pg.evaluate("TDS.rows().filter(x => x.fy === '%s' && x.q === '%s')[0].party" % (fy, q))
     pg.fill('#app input[aria-label="Find a deductee, PAN, voucher or ledger"]', party[:6]); pg.wait_for_timeout(600)
-    n1 = pg.locator("#tdsDnTable > tbody > tr").count() - 1
+    n1 = pg.locator("#tdsDnTable > tbody > tr").count()
     ok(0 < n1 <= n0 and pg.evaluate("document.activeElement.getAttribute('aria-label')") == "Find a deductee, PAN, voucher or ledger", "find “%s”: %d of %d, the cursor stays" % (party[:6], n1, n0))
     pg.click('#app button:has-text("Clear filters")'); pg.wait_for_timeout(400)
-    ok(pg.locator("#tdsDnTable > tbody > tr").count() - 1 == n0, "Clear filters")
+    ok(pg.locator("#tdsDnTable > tbody > tr").count() == n0, "Clear filters")
     pg.select_option('#app select[aria-label="Challan"]', "yes"); pg.wait_for_timeout(400)
-    ok(pg.locator("#tdsDnTable > tbody > tr").count() - 1 == pg.evaluate("TDS.rows().filter(x => x.fy === '%s' && x.q === '%s' && x.challan).length" % (fy, q)), "Challan: against a challan")
+    ok(pg.locator("#tdsDnTable > tbody > tr").count() == pg.evaluate("TDS.rows().filter(x => x.fy === '%s' && x.q === '%s' && x.challan).length" % (fy, q)), "Challan: against a challan")
     pg.select_option('#app select[aria-label="Challan"]', ""); pg.wait_for_timeout(300)
     pg.click('#tdsDnTable thead button:has-text("TDS")'); pg.click('#tdsDnTable thead button:has-text("TDS")'); pg.wait_for_timeout(400)
-    tds = pg.evaluate("Array.from(document.querySelectorAll('#tdsDnTable > tbody > tr')).slice(0, -1).map(r => num(r.cells[8].innerText.replace(/,/g, '')))")
-    ok(tds == sorted(tds, reverse=True) and "↓" in pg.inner_text("#tdsDnTable thead"), "sorted by TDS, largest first")
+    # the one list table (round 2, K6): the totals are in the foot, the TDS column found by its heading, the arrow ▼
+    tds = pg.evaluate("(() => { const t = document.getElementById('tdsDnTable'), i = [...t.tHead.rows[0].cells].findIndex(h => /^TDS/.test(h.innerText.trim())); return Array.from(t.tBodies[0].rows).map(r => num(r.cells[i].innerText.replace(/,/g, ''))); })()")
+    ok(tds == sorted(tds, reverse=True) and "▼" in pg.inner_text("#tdsDnTable thead") and pg.locator("#tdsDnTable tfoot[data-list-foot]").count() == 1, "sorted by TDS, largest first; the totals at the foot")
     # a deduction taken off its challan from the list
     rid = pg.evaluate("TDS.rows().find(x => x.fy === '%s' && x.q === '%s' && x.challan).id" % (fy, q))
     sel = pg.locator("#tdsDnTable select").first

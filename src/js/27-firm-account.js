@@ -1461,10 +1461,8 @@ function doAct(act, t){
     }
     case "cloudSignOut": {
       flushBillSaves();
-      askConfirm({title: "Sign out of the firm account?", ok: "Sign out", body: "This computer keeps its own copy of everything. Changes made after signing out are not shared until you sign in again."}).then(a => {
-        if (!a) return;
-        signOutHere("Signed out.");
-      });
+      // no question first (spec K9, round 2): this computer keeps everything; signing in again undoes it
+      signOutHere("Signed out. This computer keeps its own copy of everything; changes made now are shared when you sign in again.");
       break;
     }
     case "bridgeTest": { const k = document.querySelector('[data-bridge="key"]'), u = document.querySelector('[data-bridge="url"]');
@@ -1718,7 +1716,7 @@ function doAct(act, t){
     case "yearExcel24": TDSYear.toExcel(S.tdsFy || "", "24Q").then(() => toast("Downloaded."), e => toast("Could not build it: " + (e && e.message))); break;
     case "yearExcelAll": TDSYear.toExcel(S.tdsFy || "", "").then(() => toast("Downloaded."), e => toast("Could not build it: " + (e && e.message))); break;
     case "salaryPick": { const i = document.getElementById("salaryIn"); if (i){ i.value = ""; i.click(); } break; }
-    case "salaryClear": askConfirm({title: "Remove the salary sheet?", ok: "Remove", body: '<p class="note">The challans and everything else stay.</p>'}).then(ok => {
+    case "salaryClear": askConfirm({title: "Remove the salary sheet?", ok: "Remove", danger: true, body: '<p class="note">The salary sheet of ' + ((S.books && S.books.salary) || []).length + ' employee' + (((S.books && S.books.salary) || []).length === 1 ? "" : "s") + ' is removed; this cannot be undone (upload it again to bring it back). The challans and everything else stay.</p>'}).then(ok => {
       if (!ok) return; S.books.salary = []; saveBooks(); toast("Removed."); render(); }); break;
     case "q24Excel": TDS24Q.toExcel(S.tdsFy || "", S.tdsQ || "Q4").then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
     case "tdsTxt": { if (!ledgersReady("tds")) break; LedMaster.snap(S.books, (S.tdsForm || "26Q") + " " + (S.tdsQ || "") + " " + (S.tdsFy || "")); saveBooks();
@@ -1803,7 +1801,10 @@ function doAct(act, t){
     case "revDelete": {
       const ids = Array.from(S.revSel || []).filter(id => D().entries[id] && !D().entries[id].exportedAt);
       if (!ids.length) break;
-      askConfirm({title: "Delete " + ids.length + " bill" + (ids.length === 1 ? "" : "s") + "?", ok: "Delete", body: '<p class="note">The files can be uploaded again later.</p>'}).then(ok => {
+      // removed for good (not to Deleted): asked first, naming the bills (spec K9)
+      const names = ids.slice(0, 6).map(id => { const x = D().entries[id].x || {}; return esc((x.vendorName || D().entries[id].fileName || "") + (x.invoiceNo ? " \u00b7 " + x.invoiceNo : "")); });
+      askConfirm({title: "Delete " + ids.length + " bill" + (ids.length === 1 ? "" : "s") + " for good?", ok: "Delete", danger: true, body: '<p class="note">' + names.join("<br>") + (ids.length > 6 ? "<br>and " + (ids.length - 6) + " more" : "") +
+        '</p><p class="note">They and their documents are removed from FinCom; this cannot be undone. The files can be uploaded again.</p>'}).then(ok => {
         if (!ok) return;
         ids.forEach(id => { const e = D().entries[id]; if (!e) return; if (e.status === "approved") unapply(e, S.coId); removeEntry(e); });
         S.revSel = new Set(); S.drawerOpen = false; refreshStats(S.coId); toast(ids.length + " deleted."); render();

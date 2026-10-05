@@ -723,9 +723,7 @@ async function applyToVisible(ledger){
   const exact = exactLedger(ledger);
   if (!exact){ toast("\u201c" + ledger + "\u201d is not a ledger in Tally. Choose one from the list, or create it."); return; }
   if (!rows.length){ toast("No entries are showing."); return; }
-  const a = await askConfirm({title: "Use \u201c" + exact + "\u201d for " + rows.length + " entries?", ok: "Set them all",
-    body: '<p class="note">These are the entries now showing' + (b.q.trim() ? ' for \u201c' + esc(b.q.trim()) + '\u201d' : "") + ". Entries already sent to Tally are left alone.</p>"});
-  if (!a) return;
+  // no question first (the owner's spec K9, round 2: confirmations only for what cannot be undone): Undo in the bar
   const before = rows.map(r => ({id: r.id, ledger: r.ledger, state: r.state, userSet: r.userSet}));
   rows.forEach(r => { r.ledger = exact; r.userSet = true; if (r.state === "attention" || r.state === "suggested") r.state = "ready"; });
   learnRows(rows, "set");
@@ -793,6 +791,8 @@ async function askClaudeForLedgers(){
   try {
     for (let i = 0; i < todo.length; i += 50){
       const batch = todo.slice(i, i + 50);
+      // a long action shows how far it is (spec K7, round 2): "rows 51 to 100 of 150"
+      if (todo.length > 50){ b.busy = "Asking Claude about rows " + (i + 1) + " to " + Math.min(todo.length, i + 50) + " of " + todo.length + "\u2026"; render(); }
       const prompt = "You help an Indian chartered accountant book bank statement lines in Tally.\n" +
         "Client: " + CO(b.cid).name + ".\nExisting Tally ledgers (choose from these when one fits): " + JSON.stringify(names) + "\n" +
         "For each bank line choose one ledger from the list, spelt exactly as listed. If none fits, leave ledger empty.\n" +

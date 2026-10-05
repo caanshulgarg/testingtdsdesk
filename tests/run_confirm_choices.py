@@ -107,14 +107,14 @@ with sync_playwright() as p:
     pg.wait_for_timeout(600)
     ok(up["stmts"] == 2 and up["accs"] == 1 and up["acct"] == "ba1", "a new statement uploaded: the same bank account (%s)" % up)
     ok(pg.locator(sel).count() == 0 and pg.inner_text("#app [data-bank-ledger]").startswith("Tally ledger: HDFC BANK") and "Choose the Tally ledger" not in up["msg"], "and its ledger is kept: no chooser")
-    # Change asks first, and records who and when, with what it was
+    # Change opens the chooser at once (spec K9, round 2: nothing changes until the new one is confirmed), and the change
+    # records who and when, with what it was
     pg.click("#app [data-bank-ledger-change]"); pg.wait_for_timeout(300)
-    ok("Change the Tally ledger of this bank account?" in pg.inner_text("#confirmBox") and "HDFC BANK" in pg.inner_text("#confirmBox"), "Change asks first, naming the ledger and who confirmed it")
-    pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(300)
+    ok(pg.locator("#confirmBox .cbx").count() == 0 and pg.locator(sel).count() == 1, "Change opens the chooser, no question first")
     pg.select_option(sel, "ICICI BANK"); pg.click("#app [data-bank-ledger-confirm]"); pg.wait_for_timeout(400)
     ch = E("CO().choices['bank:ba1']")
     ok(ch["value"] == "ICICI BANK" and ch["prev"]["value"] == "HDFC BANK" and ch["by"] == "this computer", "changed: the new ledger confirmed, the old one kept as prev (%s)" % {k: ch[k] for k in ("value", "prev")})
-    pg.click("#app [data-bank-ledger-change]"); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(200)
+    pg.click("#app [data-bank-ledger-change]"); pg.wait_for_timeout(200)
     pg.select_option(sel, "HDFC BANK"); pg.click("#app [data-bank-ledger-confirm]"); pg.wait_for_timeout(400)
     # auto-matching never overwrites it: the ledger list changes, the bank account's guess is not applied
     E("() => { ledgersChanged(S.coId); render(); }"); pg.wait_for_timeout(300)

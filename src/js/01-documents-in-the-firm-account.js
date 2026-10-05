@@ -404,8 +404,33 @@ function fmtDate(d){
   const dt = toDateObj(d);
   return isNaN(dt) ? String(d).replace(/[^\w \-\/.:]/g, "") : String(dt.getDate()).padStart(2, "0") + "-" + MONTHS3[dt.getMonth()] + "-" + dt.getFullYear();
 }
-function fmtTime(d){ if (!d && d !== 0) return ""; const dt = toDateObj(d); return isNaN(dt) ? "" : String(dt.getHours()).padStart(2, "0") + ":" + String(dt.getMinutes()).padStart(2, "0"); }
-function fmtDateTime(d){ if (!d && d !== 0) return "—"; const dt = toDateObj(d); return isNaN(dt) ? "—" : fmtDate(dt) + " " + fmtTime(dt); }
+function fmtTime(d){ const p = istParts(d); return !p || p.day ? "" : p2ist(p.h) + ":" + p2ist(p.mi) + " IST"; }
+function fmtDateTime(d){ const p = istParts(d); return !p ? "—" : p2ist(p.d) + "-" + MONTHS3[p.mo - 1] + "-" + p.y + (p.day ? "" : " " + p2ist(p.h) + ":" + p2ist(p.mi) + " IST"); }
+// fmtTime ("14:05 IST") and fmtDateTime ("04-Oct-2026 14:05 IST") above: one clock for every time on the screen (the
+// owner's spec K5, round 2 of 04-Oct-2026), Indian time whatever this computer's clock is set to. A moment (a Date, milliseconds, or text with its zone: "…Z",
+// "+05:30") is turned into IST (UTC + 5:30; India has no summer time). Text with a time and no zone ("2026-10-04
+// 14:05:00", as the e-invoice portal gives it) is Indian time already; a date alone has no time to show.
+// {y, mo (1-12), d, h, mi} or {y, mo, d, day: true} or null
+function istParts(v){
+  if (v === null || v === undefined || v === "") return null;
+  let ms;
+  if (v instanceof Date) ms = v.getTime();
+  else if (typeof v === "number") ms = v;
+  else {
+    const t = String(v).trim();
+    let m = t.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m) return {y: +m[1], mo: +m[2], d: +m[3], day: true};
+    m = t.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?$/);
+    if (m) return {y: +m[1], mo: +m[2], d: +m[3], h: +m[4], mi: +m[5]};
+    ms = Date.parse(t);
+  }
+  if (!isFinite(ms)) return null;
+  const x = new Date(ms + 330 * 60000);
+  return {y: x.getUTCFullYear(), mo: x.getUTCMonth() + 1, d: x.getUTCDate(), h: x.getUTCHours(), mi: x.getUTCMinutes()};
+}
+function p2ist(n){ return String(n).padStart(2, "0"); }
+// the day in India of a moment, yyyy-mm-dd ("" when none): for "today" and "yesterday" by Indian time
+function istDay(v){ const p = istParts(v); return p ? p.y + "-" + p2ist(p.mo) + "-" + p2ist(p.d) : ""; }
 function effectivePan(x){
   const pan = String(x.vendorPan || "").toUpperCase().trim();
   if (PAN_RE.test(pan)) return pan;

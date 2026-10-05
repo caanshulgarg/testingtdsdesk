@@ -275,7 +275,7 @@ function TdsSetup() {
       </div>
     </Card>
     <Card title="Ledgers by payment type" note="The TDS ledger each kind of payment is credited to, and the expense ledger a bill goes to unless you choose another.">
-      <div className="tblwrap"><table className="data">
+      <div className="tblwrap"><table className="data" data-statement="">
         <thead><tr><th>Payment type</th><th>TDS ledger in Tally</th><th>Default expense ledger</th></tr></thead>
         <tbody>{rules().map((r) => <tr key={r.id}><td>{r.label}</td><td>{r.basis === "never" ? "—" : <RuleLedger kind="tds" r={r} />}</td><td><RuleLedger kind="exp" r={r} /></td></tr>)}</tbody>
       </table></div>
@@ -297,7 +297,7 @@ function GstSetup() {
       </div>
     </Card>
     <Card title="Blocked credit, section 17(5)" note="Flag: suggest on matching bills, and you accept or reject. Always blocked: applied by itself (it can still be unticked on a bill). Credit allowed: never flagged — for example a car dealer buying motor vehicles.">
-      <div className="tblwrap"><table className="data">
+      <div className="tblwrap"><table className="data" data-statement="">
         <thead><tr><th>Kind of purchase</th><th>Section</th><th>For this client</th></tr></thead>
         <tbody>{BLOCK_CATS.map((b) => <tr key={b.id}><td>{b.label}</td><td>{b.sec}</td>
           <td><select aria-label={"Blocked credit: " + b.label} value={blockRule(co, b.id)} onChange={(ev) => coSetBlockRule(b.id, ev.target.value)}>

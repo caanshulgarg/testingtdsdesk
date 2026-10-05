@@ -3,7 +3,8 @@
 // actionBar (src/js/27). The column filters (funnel buttons, the chips and their pop-up) are still old pieces, shared
 // with the bank and sales tables.
 import { useRef } from "react";
-import ColHead from "../parts/ColHead.jsx";
+import { ColFunnel } from "../parts/ColHead.jsx";
+import ListTable from "../parts/ListTable.jsx";
 import Msg from "../parts/Msg.jsx";
 import BillDetail from "./Bill.jsx";
 import { ChipBar } from "../parts/ChipBar.jsx";
@@ -14,41 +15,47 @@ const NO_TALLY = "Needs Tally open with this client's company and FinCom Bridge 
 const RuleOptions = () => rules().map((r) => <option key={r.id} value={r.id}>{r.label}</option>);
 
 
-function Row({ e, c, sel }) {
-  const t = tallyYtdFor(c.party, fyOf(e.x.invoiceDate), e), m = c.meter;
-  const over = m && m.limit && m.used + m.add > m.limit;
-  const miss = needsLook({ e, c });
-  const led = e.expenseLedger || "", ledOk = led && (!hasLedgerList() || exactLedger(led));
-  return (
-    <tr className={[sel && "picked", miss && "needs", S.drawerOpen && S.selected === e.id && "open"].filter(Boolean).join(" ")}>
-      <td className="ck"><input type="checkbox" checked={sel} aria-label={"Select " + (e.x.vendorName || e.fileName || "bill")} onChange={(ev) => revPick(e.id, ev.target.checked)} /></td>
-      <td className="dt">{e.x.invoiceDate ? shortDate(e.x.invoiceDate) : "—"}</td>
-      <td>{e.x.invoiceNo || "—"}</td>
-      <td className="pt">
+// the review list's columns (spec K6: date, number, party, amount, status, then the rest; ListTable.jsx puts them in
+// that order); the row's figures are worked out once (prep)
+const revPrep = ({ e, c }) => {
+  const m = c.meter, led = e.expenseLedger || "";
+  return { t: tallyYtdFor(c.party, fyOf(e.x.invoiceDate), e), m, over: m && m.limit && m.used + m.add > m.limit, miss: needsLook({ e, c }), led, ledOk: led && (!hasLedgerList() || exactLedger(led)) };
+};
+function revCols(rows, sel, nSel) {
+  return [
+    { k: "pick", role: "pick", cls: "ck", head: <input type="checkbox" aria-label="Select all shown" checked={!!nSel && nSel === rows.length} onChange={(ev) => revPickAll(ev.target.checked)} />,
+      cell: ({ e }) => <input type="checkbox" checked={sel.has(e.id)} aria-label={"Select " + (e.x.vendorName || e.fileName || "bill")} onChange={(ev) => revPick(e.id, ev.target.checked)} /> },
+    { k: "date", role: "date", label: "Date", cls: "dt", filter: <ColFunnel t="rev" k="date" label="Date" />, v: ({ e }) => e.x.invoiceDate || "", cell: ({ e }) => e.x.invoiceDate ? shortDate(e.x.invoiceDate) : "—" },
+    { k: "no", role: "number", label: "Bill no.", filter: <ColFunnel t="rev" k="no" label="Bill no." />, v: ({ e }) => e.x.invoiceNo || "", cell: ({ e }) => e.x.invoiceNo || "—" },
+    { k: "sup", role: "party", label: "Supplier", cls: "pt", filter: <ColFunnel t="rev" k="sup" label="Supplier" />, v: ({ e }) => e.x.vendorName || e.fileName || "",
+      cell: ({ e }, p) => <>
         <button className="linkbtn pn" onClick={() => revOpen(e.id)}>{e.x.vendorName || e.fileName || "—"}</button>
         <div className="nr">{e.x.vendorGstin || e.x.vendorPan || "no GSTIN or PAN"}</div>
-        <div className={"nr " + (ledOk ? "led-ok" : "led-bad")}>{led ? "→ " + led + (ledOk ? " ✓" : " · not in Tally") : "→ no ledger yet"}</div>
+        <div className={"nr " + (p.ledOk ? "led-ok" : "led-bad")}>{p.led ? "→ " + p.led + (p.ledOk ? " ✓" : " · not in Tally") : "→ no ledger yet"}</div>
         {e.postFailedAt && e.postError && <div className="nr bad">Tally refused: <Msg text={e.postError} /></div>}
         {/* the reading service could not read it (review of 02-Oct-2026): why, and Retry; Type it in is the bill itself */}
         {notReadYet(e) && <div className="nr bad" data-notread="">{S.reading[e.id] ? "Reading again…" : <>Not read yet: {e.notRead.reason} <button className="linkbtn" onClick={() => retryNotRead(e.id)}>Retry</button></>}</div>}
         {e.noteKind && <div className="nr"><span className="tag">{e.noteKind === "credit" ? "Credit note → Debit Note in Tally" : "Debit note"}</span></div>}
-      </td>
-      <td className="n">{money(num(e.x.total))}</td>
-      <td><select value={e.natureId || ""} aria-label="Payment type" onChange={(ev) => revNature(e.id, ev.target.value)}><RuleOptions /></select></td>
-      <td className="ck"><input type="checkbox" aria-label="Book TDS" checked={c.tdsWould > 0 && !c.skip} disabled={!!(c.rule && c.rule.basis === "never")}
+      </> },
+    { k: "val", role: "amount", label: "Value", cls: "n", filter: <ColFunnel t="rev" k="val" label="Value" />, v: ({ e }) => num(e.x.total), cell: ({ e }) => money(num(e.x.total)) },
+    { k: "st", role: "status", label: "Status", v: (r) => (needsLook(r) ? "Needs a check" : "Ready to approve"),
+      cell: (r, p) => <span className={"tag " + (p.miss ? "warn" : "ok")}>{p.miss ? "Needs a check" : "Ready to approve"}</span> },
+    { k: "nature", label: "Payment type", filter: <ColFunnel t="rev" k="nature" label="Payment type" />, v: ({ c }) => (c.rule && c.rule.label) || "",
+      cell: ({ e }) => <select value={e.natureId || ""} aria-label="Payment type" onChange={(ev) => revNature(e.id, ev.target.value)}><RuleOptions /></select> },
+    { k: "tdson", label: "TDS", cls: "ck", filter: <ColFunnel t="rev" k="tds" label="TDS" />, cell: ({ e, c }) => <input type="checkbox" aria-label="Book TDS" checked={c.tdsWould > 0 && !c.skip} disabled={!!(c.rule && c.rule.basis === "never")}
         title={c.skip ? skipText(c.skip) : c.tdsWould > 0 ? "TDS is deducted on this bill" : "Below the limits: tick to deduct anyway"}
-        onChange={(ev) => revTds(e.id, ev.target.checked)} /></td>
-      <td className="n">{c.tds ? <b>{money(c.tds)}</b> : c.tdsWould ? <span className="src muted">{money(c.tdsWould)} not booked</span> : "—"}</td>
-      <td>{!m || !m.limit ? <span className="src muted">no yearly limit</span> : <>
-        <span className={over ? "src bad" : "src"}>{money0(m.used + m.add)} of {money0(m.limit)}{over ? " · crossed" : " · within"}</span>
-        <span className="src muted">{t ? "incl. " + money0(t.credited) + " from Tally" : "bills here only"}</span></>}</td>
-      <td className="ac">
-        {miss ? <button className="btn small" onClick={() => revOpen(e.id)}>Check</button> : <button className="btn small primary" onClick={() => revApproveOne(e.id)}>Approve</button>}
+        onChange={(ev) => revTds(e.id, ev.target.checked)} /> },
+    { k: "tds", label: "TDS", cls: "n", v: ({ c }) => num(c.tds), sum: ({ c }) => num(c.tds),
+      cell: ({ c }) => c.tds ? <b>{money(c.tds)}</b> : c.tdsWould ? <span className="src muted">{money(c.tdsWould)} not booked</span> : "—" },
+    { k: "look", label: "This year vs limit", filter: <ColFunnel t="rev" k="look" label="This year vs limit" />, cell: (r, p) => !p.m || !p.m.limit ? <span className="src muted">no yearly limit</span> : <>
+        <span className={p.over ? "src bad" : "src"}>{money0(p.m.used + p.m.add)} of {money0(p.m.limit)}{p.over ? " · crossed" : " · within"}</span>
+        <span className="src muted">{p.t ? "incl. " + money0(p.t.credited) + " from Tally" : "bills here only"}</span></> },
+    { k: "ac", role: "act", cls: "ac", cell: ({ e }, p) => <>
+        {p.miss ? <button className="btn small" onClick={() => revOpen(e.id)}>Check</button> : <button className="btn small primary" onClick={() => revApproveOne(e.id)}>Approve</button>}
         <button className="icon" title="Open this bill" aria-label="Open this bill" onClick={() => revOpen(e.id)}>↗</button>
         <button className="icon danger" title="Delete this bill" aria-label="Delete this bill" onClick={() => billDelete(e.id)}>✕</button>
-      </td>
-    </tr>
-  );
+      </> },
+  ];
 }
 
 // To review, Duplicates and Deleted, with their counts: now in the one row of tabs at the top (TopBar.jsx; review of
@@ -75,26 +82,17 @@ export function ReviewTable() {
         <div className="bk-actions"><button className="btn small" onClick={() => doAct("revList")}>One at a time</button></div>
       </div>
       <UploadResult />
-      {!rows.length && !all.length ? <div className="bk-none" style={{ background: "var(--sheet)", border: "1px solid var(--rule)", borderRadius: 10 }}>Nothing to review. Use <b>Upload bills</b> at the top right to add this client’s bills.</div> : <>
+      {!rows.length && !all.length ? <div className="bk-none lt-empty" data-list-empty="">Nothing to review. Use <b>Upload bills</b> at the top right to add this client’s bills.</div> : <>
         <div className="revfilter">
           <input type="search" value={S.revQuery || ""} placeholder="Filter by supplier, bill no., GSTIN, ledger, payment type or amount" aria-label="Filter the bills"
             onChange={(ev) => { S.revQuery = ev.target.value; render(); }} />
           {S.revQuery && !revColOn() && <span className="note">{rows.length} of {all.length} shown</span>}
         </div>
         <ChipBar t="rev" shown={rows.length} total={all.length + " bills"} />
-        <div className="bk-tablewrap"><table className="bk-table revtbl">
-          <thead><tr>
-            <th className="ck"><input type="checkbox" aria-label="Select all shown" checked={!!nSel && nSel === rows.length} onChange={(ev) => revPickAll(ev.target.checked)} /></th>
-            <ColHead t="rev" k="date" label="Date" cls="dt" /><ColHead t="rev" k="no" label="Bill no." /><ColHead t="rev" k="sup" label="Supplier" /><ColHead t="rev" k="val" label="Value" cls="n" />
-            <ColHead t="rev" k="nature" label="Payment type" /><ColHead t="rev" k="tds" label="TDS" cls="ck" /><th className="n">TDS</th><ColHead t="rev" k="look" label="This year vs limit" /><th className="ac"></th>
-          </tr></thead>
-          <tbody>{rows.map((r) => <Row key={r.e.id} e={r.e} c={r.c} sel={sel.has(r.e.id)} />)}</tbody>
-          {/* the count and the totals at the foot (spec K6) */}
-          {rows.length > 0 && <tfoot data-list-foot=""><tr><td></td><td colSpan={3}><b>{rows.length + (rows.length === 1 ? " bill" : " bills")}</b>{rows.length !== all.length ? " of " + all.length : ""}</td>
-            <td className="n"><b>{money(r2(rows.reduce((a, r) => a + num(r.e.x.total), 0)))}</b></td><td></td><td></td>
-            <td className="n"><b>{money(r2(rows.reduce((a, r) => a + num(r.c.tds), 0)))}</b></td><td></td><td></td></tr></tfoot>}
-        </table></div>
-        {!rows.length && <p className="empty">No bill matches the filter.</p>}
+        {/* the one list table (spec K6): column order, sorting, sticky header, the count and totals at the foot */}
+        <ListTable name="rev" className="bk-table revtbl" cols={revCols(rows, sel, nSel)} rows={rows} rowKey={(r) => r.e.id} prep={revPrep} unit={["bill", "bills"]} of={all.length}
+          rowProps={(r, p) => ({ className: [sel.has(r.e.id) && "picked", p.miss && "needs", S.drawerOpen && S.selected === r.e.id && "open"].filter(Boolean).join(" ") || undefined })}
+          empty={<>No bill matches the filter. <button className="linkbtn" onClick={() => { S.revQuery = ""; colChipAll("rev"); }}>Clear the filters</button> to see all {all.length}.</>} />
       </>}
     </div>
   );

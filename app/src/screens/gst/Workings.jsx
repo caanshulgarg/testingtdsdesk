@@ -4,6 +4,7 @@
 // (src/js/23). GSTR-1A under Amendments is Filing.jsx.
 import CommitBox from "../../parts/CommitBox.jsx";
 import { Gstr1a } from "./Filing.jsx";
+import { ListRows } from "../../parts/ListTable.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
@@ -22,13 +23,12 @@ function FiledCopies({ all }) {
     <section className="dash-card"><h3>Filed GSTR-1 returns kept here</h3>
       <p className="note">Amendments are found by comparing the books now with what was filed. A copy is kept each time the GSTR-1 JSON is downloaded here; for a month filed some other way, bring in the JSON that was uploaded to the portal.</p>
       <div className="row" style={{ gap: 8, margin: "8px 0" }}><button className="btn small primary" onClick={() => doAct("filedPick")}>Bring in filed GSTR-1 JSON</button></div>
-      {all.length ? <div className="bk-tablewrap"><table className="bk-table">
-        <thead><tr><th>Month</th><th>Registration</th><th>Copy from</th><th className="dt">Kept on</th><th className="n">Documents</th><th className="n">B2C small</th><th>Not filed</th></tr></thead>
-        <tbody>{all.map((f) => { const n = GSTAmend.norm(f.json), key = f.gstin + "|" + f.fp; return <tr key={key}>
+      {all.length ? <ListRows name="filedCopies" unit={["copy", "copies"]} head={[{ label: "Month" }, { label: "Registration" }, { label: "Copy from" }, { label: "Kept on", role: "date", cls: "dt" }, { label: "Documents", cls: "n", sum: true, fmt: String }, { label: "B2C small", role: "amount", cls: "n" }, { label: "Not filed", role: "status" }]}>
+        {all.map((f) => { const n = GSTAmend.norm(f.json), key = f.gstin + "|" + f.fp; return <tr key={key}>
           <td>{GSTR.label(f.ym)}</td><td>{f.gstin}</td><td>{f.source === "portal" ? "brought in" : "downloaded here"}</td><td>{fmtDate(String(f.at).slice(0, 10))}</td>
           <td className="n">{n.docs.size}</td><td className="n">{money(b2csTotal(n))}</td>
-          <td><input type="checkbox" checked={!!f.notFiled} aria-label="This copy was not filed" onChange={(ev) => filedSetNotFiled(key, ev.target.checked)} /></td></tr>; })}</tbody>
-      </table></div> : <p className="note">None yet.</p>}
+          <td><input type="checkbox" checked={!!f.notFiled} aria-label="This copy was not filed" onChange={(ev) => filedSetNotFiled(key, ev.target.checked)} /></td></tr>; })}
+      </ListRows> : <p className="note lt-empty" data-list-empty="" style={{ border: 0 }}>None yet. Use Bring in filed GSTR-1 JSON above, or download this month’s JSON here.</p>}
     </section>
   );
 }
@@ -38,10 +38,9 @@ function BooksAgainstFiled({ c, ym }) {
     <Card title={GSTR.label(ym) + ": the books against the return filed"}>
       <div className="dash-row"><span>Taxable value filed</span><b>{money(c.filedTotal)}</b></div><div className="dash-row"><span>Taxable value in the books now</span><b>{money(c.booksTotal)}</b></div>
       {Math.abs(c.b2csF - c.b2csB) >= 1 && <div className="dash-row"><span>B2C small: filed / books</span><b>{money(c.b2csF) + " / " + money(c.b2csB)}</b></div>}
-      {c.rows.length ? <div className="bk-tablewrap"><table className="bk-table">
-        <thead><tr><th>Document</th><th>Party</th><th>Number</th><th className="dt">Date</th><th>What differs</th></tr></thead>
-        <tbody>{c.rows.slice(0, gfN(200)).map((r, i) => <tr key={i}><td>{KIND[r.kind] || r.kind}</td><td>{r.doc.ctin || "—"}</td><td>{r.doc.num}</td><td>{day(r.doc.date)}</td><td>{r.changes.join("; ")}</td></tr>)}</tbody>
-      </table></div> : <p className="note">Every document in the books matches the return filed.</p>}
+      {c.rows.length ? <ListRows name="booksVsFiled" unit={["document", "documents"]} of={c.rows.length} head={[{ label: "Document" }, { label: "Party", role: "party" }, { label: "Number", role: "number" }, { label: "Date", role: "date", cls: "dt" }, { label: "What differs", role: "status" }]}>
+        {c.rows.slice(0, gfN(200)).map((r, i) => <tr key={i}><td>{KIND[r.kind] || r.kind}</td><td>{r.doc.ctin || "—"}</td><td>{r.doc.num}</td><td>{day(r.doc.date)}</td><td>{r.changes.join("; ")}</td></tr>)}
+      </ListRows> : <p className="note">Every document in the books matches the return filed.</p>}
       <p className="note">Differences here are reported as amendments in a later month’s return, not by filing this month again.</p>
     </Card>
   );
@@ -64,13 +63,12 @@ function ToReport({ p, ym }) {
       {p.periods.length > 0 && <p className="note">Compared: {p.periods.map(GSTR.label).join(", ")}.</p>}
       {p.noCopy.length > 0 && <p className="note" style={{ color: "var(--warn)" }}>No filed copy for {p.noCopy.map(GSTR.label).join(", ")}, so those months are not compared.</p>}
       {p.late.length > 0 && <p className="note">Past the time to amend (November after the year): {p.late.map(GSTR.label).join(", ")}.</p>}
-      {p.rows.length ? <div className="bk-tablewrap"><table className="bk-table">
-        <thead><tr><th>Month filed</th><th>Document</th><th>GSTIN</th><th>Number</th><th className="dt">Date</th><th className="n">Taxable now</th><th>What differs</th><th>Report it as</th></tr></thead>
-        <tbody>{p.rows.map((r, i) => { const d = r.now || r.was; return <tr key={r.id + ":" + i}>
+      {p.rows.length ? <ListRows name="toReport" unit={["document", "documents"]} head={[{ label: "Month filed" }, { label: "Document" }, { label: "GSTIN", role: "party" }, { label: "Number", role: "number" }, { label: "Date", role: "date", cls: "dt" }, { label: "Taxable now", role: "amount", cls: "n" }, { label: "What differs" }, { label: "Report it as", role: "status" }]}>
+        {p.rows.map((r, i) => { const d = r.now || r.was; return <tr key={r.id + ":" + i}>
           <td>{GSTR.label(r.P)}</td><td>{KIND[r.kind] || r.kind}</td><td>{d.ctin || "—"}</td><td>{d.num}</td><td>{day(d.date)}</td>
           <td className="n">{r.now ? money(r.now.txval) : "—"}</td><td>{r.changes.join("; ")}</td>
-          <td><select aria-label="Report it as" value={r.act} onChange={(ev) => amendSetAct(r.id, ev.target.value)}>{optsOf(r).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></td></tr>; })}</tbody>
-      </table></div> : <p className="note">{p.periods.length ? "Nothing to amend: the books agree with what was filed." : "Nothing to compare yet."}</p>}
+          <td><select aria-label="Report it as" value={r.act} onChange={(ev) => amendSetAct(r.id, ev.target.value)}>{optsOf(r).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></td></tr>; })}
+      </ListRows> : <p className="note">{p.periods.length ? "Nothing to amend: the books agree with what was filed." : "Nothing to compare yet."}</p>}
     </Card>
   </>;
 }
@@ -104,7 +102,7 @@ function Rate({ r }) {
 function Received({ a }) {
   return <Card title="11A Advances received">
     <p className="note">Money a customer paid before the invoice, for services. An advance billed in the same month is left out, as the return asks. The rate is taken from the customer’s invoice nearest the receipt; change it where it is wrong.</p>
-    {a.at.length ? <div className="bk-tablewrap"><table className="bk-table">
+    {a.at.length ? <div className="bk-tablewrap"><table className="bk-table" data-statement="">
       <thead><tr><th className="dt">Date</th><th>Receipt</th><th>Customer</th><th>Bill ref</th><th className="n">Received</th><th className="n">Rate</th>{ADV_HEAD.map((h, i) => <th key={h} className={i ? "n" : undefined}>{h}</th>)}<th>Not an advance</th></tr></thead>
       <tbody>{a.at.map((r, i) => <tr key={r.id + ":" + i}>
         <td>{day(r.date)}</td><td>{r.no}</td><td>{r.party}{r.gstin && <><br /><small className="note">{r.gstin}</small></>}</td><td>{r.ref || "—"}</td>
@@ -118,7 +116,7 @@ function Received({ a }) {
 function Adjusted({ a }) {
   return <Card title="11B Advances adjusted">
     <p className="note">An advance from an earlier month that an invoice (or a refund) used up this month. The tax paid on it then comes off now, at the same rate.</p>
-    {a.txpd.length ? <div className="bk-tablewrap"><table className="bk-table">
+    {a.txpd.length ? <div className="bk-tablewrap"><table className="bk-table" data-statement="">
       <thead><tr><th className="dt">Adjusted on</th><th>By</th><th>Customer</th><th>Received in</th><th className="n">Amount</th><th className="n">Rate</th>{ADV_HEAD.map((h, i) => <th key={h} className={i ? "n" : undefined}>{h}</th>)}</tr></thead>
       <tbody>{a.txpd.map((r, i) => <tr key={i}>
         <td>{day(r.adjDate)}</td><td>{r.how === "marked" ? "marked by hand" : (r.how === "refund" ? "refund " : "") + (r.by || "")}</td><td>{r.party}</td><td>{GSTR.label(r.receivedYm)}</td>
@@ -134,26 +132,24 @@ function StillOpen({ a, ym }) {
   const later = GSTR.months().filter((m) => m > ym);
   return <Card title={"Advances still open at the end of " + GSTR.label(ym)}>
     <p className="note">Not yet billed or refunded in these books. If one was used up by an invoice that is not tied to it in Tally, pick the month it was billed.</p>
-    <div className="bk-tablewrap"><table className="bk-table">
-      <thead><tr><th className="dt">Received</th><th>Customer</th><th>Bill ref</th><th className="n">Amount</th><th className="n">Still open</th><th>Billed in</th></tr></thead>
-      <tbody>{a.open.map((p, i) => { const left = r2(p.amount - p.adj.filter((x) => x.ym <= ym).reduce((s, x) => s + x.amount, 0));
+    <ListRows name="advOpen" unit={["advance", "advances"]} empty="No advance is open: every one was billed or refunded." head={[{ label: "Received", role: "date", cls: "dt" }, { label: "Customer", role: "party" }, { label: "Bill ref", role: "number" }, { label: "Amount", role: "amount", cls: "n" }, { label: "Still open", cls: "n", sum: true }, { label: "Billed in", role: "status" }]}>
+      {a.open.map((p, i) => { const left = r2(p.amount - p.adj.filter((x) => x.ym <= ym).reduce((s, x) => s + x.amount, 0));
         const ms = later.concat(p.fix.adjYm && !later.includes(p.fix.adjYm) ? [p.fix.adjYm] : []);
         return <tr key={p.id + ":" + i}><td>{day(p.date)}</td><td>{p.party}</td><td>{p.ref || "—"}</td><td className="n">{money(p.amount)}</td><td className="n">{money(left)}</td>
-          <td><select aria-label="Billed in" value={p.fix.adjYm || ""} onChange={(ev) => advFix(p.id, "adjYm", ev.target.value)}><option value="">not yet</option>{ms.map((m) => <option key={m} value={m}>{GSTR.label(m)}</option>)}</select></td></tr>; })}</tbody>
-    </table></div>
+          <td><select aria-label="Billed in" value={p.fix.adjYm || ""} onChange={(ev) => advFix(p.id, "adjYm", ev.target.value)}><option value="">not yet</option>{ms.map((m) => <option key={m} value={m}>{GSTR.label(m)}</option>)}</select></td></tr>; })}
+    </ListRows>
   </Card>;
 }
 
 function LeftOut({ a }) {
   const pieces = GSTAdv.build().pieces;
   return <Card title="Received early, but not in 11A">
-    <div className="bk-tablewrap"><table className="bk-table">
-      <thead><tr><th className="dt">Date</th><th>Customer</th><th>Bill ref</th><th className="n">Received</th><th>Why</th><th>Count it</th></tr></thead>
-      <tbody>{a.untaxed.map((r, i) => { const p = pieces.find((x) => x.id === r.id) || { fix: {} };
+    <ListRows name="advLeftOut" unit={["receipt", "receipts"]} empty="Nothing left out." head={[{ label: "Date", role: "date", cls: "dt" }, { label: "Customer", role: "party" }, { label: "Bill ref", role: "number" }, { label: "Received", role: "amount", cls: "n" }, { label: "Why" }, { label: "Count it", role: "status" }]}>
+      {a.untaxed.map((r, i) => { const p = pieces.find((x) => x.id === r.id) || { fix: {} };
         const ctl = p.skip ? <><input type="checkbox" checked aria-label="Not an advance" onChange={(ev) => advFix(r.id, "skip", ev.target.checked)} /> not an advance</>
           : p.type === "On Account" ? <><input type="checkbox" checked={!!p.fix.isAdv} aria-label="Count as an advance" onChange={(ev) => advFix(r.id, "isAdv", ev.target.checked)} /> it is an advance</> : null;
-        return <tr key={r.id + ":" + i}><td>{day(r.date)}</td><td>{r.party}</td><td>{r.ref || r.type}</td><td className="n">{money(r.received)}</td><td>{r.why}</td><td>{ctl}</td></tr>; })}</tbody>
-    </table></div>
+        return <tr key={r.id + ":" + i}><td>{day(r.date)}</td><td>{r.party}</td><td>{r.ref || r.type}</td><td className="n">{money(r.received)}</td><td>{r.why}</td><td>{ctl}</td></tr>; })}
+    </ListRows>
   </Card>;
 }
 
@@ -180,12 +176,12 @@ export function Advances() {
 const pct = (k) => (Math.round(k * 10000) / 100) + "%";
 const Heads = ({ x }) => <><td className="n">{money(x.igst)}</td><td className="n">{money(x.cgst)}</td><td className="n">{money(x.sgst)}</td><td className="n">{money(x.cess)}</td></>;
 const TH4 = () => <><th className="n">IGST</th><th className="n">CGST</th><th className="n">SGST</th><th className="n">Cess</th></>;
-const HeadTable = ({ rows, style }) => <div className="bk-tablewrap" style={style}><table className="bk-table"><thead><tr><th></th><TH4 /></tr></thead>
+const HeadTable = ({ rows, style }) => <div className="bk-tablewrap" style={style}><table className="bk-table" data-statement=""><thead><tr><th></th><TH4 /></tr></thead>
   <tbody>{rows.map(([label, x, bold], i) => <tr key={i}><td>{bold ? <b>{label}</b> : label}</td><Heads x={x} /></tr>)}</tbody></table></div>;
 
 function Turnover({ t, q }) {
   return <Card title="Turnover of the month">
-    <div className="bk-tablewrap"><table className="bk-table"><tbody>
+    <div className="bk-tablewrap"><table className="bk-table" data-statement=""><tbody>
       <tr><td>Taxable, net of credit notes</td><td className="n">{money(t.taxable)}</td></tr><tr><td>Exports and SEZ</td><td className="n">{money(t.zero)}</td></tr>
       <tr><td>Exempt, nil rated and non-GST (E)</td><td className="n">{money(t.exempt)}</td></tr><tr><td><b>Total turnover (F)</b></td><td className="n"><b>{money(t.total)}</b></td></tr>
     </tbody></table></div>
@@ -197,7 +193,7 @@ function Rule42Year({ y }) {
   const fyLabel = y.fy + "-" + String(num(y.fy) + 1).slice(2), more = GSTRev.total(y.diff);
   return <Card title={"Rule 42(2): the year " + fyLabel + " worked out again"}>
     <p className="note">After the year, D1 is worked out on the whole year’s turnover. {y.rows.length} of 12 months are in these books.</p>
-    <div className="bk-tablewrap"><table className="bk-table">
+    <div className="bk-tablewrap"><table className="bk-table" data-statement="">
       <thead><tr><th>Month</th><th className="n">Common credit</th><th className="n">E ÷ F</th><th className="n">D1</th></tr></thead>
       <tbody>{y.rows.map((r) => <tr key={r.ym}><td>{GSTR.label(r.ym)}</td><td className="n">{money(GSTRev.total(r.C2))}</td><td className="n">{pct(r.share)}</td><td className="n">{money(GSTRev.total(r.D1))}</td></tr>)}
         <tr><td><b>Year</b></td><td className="n"><b>{money(GSTRev.total(y.C2))}</b></td><td className="n"><b>{pct(y.share)}</b></td><td className="n"><b>{money(GSTRev.total(y.monthly))}</b></td></tr></tbody>
@@ -227,7 +223,7 @@ function Rule43({ b, r43, ym }) {
   const regs = GSTR.gstins(b) || [];
   return <Card title="Rule 43: capital goods">
     <p className="note">The credit on a capital good used for both taxable and exempt supplies is spread over 60 months, 5% a quarter, from the month it is put to use. Each month, the exempt share of that month’s part (Tr × E ÷ F) is reversed. A good used only for taxable supplies keeps all its credit; one used only for exempt or non-business supplies gets none, so mark those and they are left out.</p>
-    <div className="bk-tablewrap"><table className="bk-table">
+    <div className="bk-tablewrap"><table className="bk-table" data-statement="">
       <thead><tr><th>Capital good</th><th className="dt">Put to use</th><TH4 /><th>Used for</th>{regs.length > 1 && <th>Registration</th>}<th className="dt">Sold on</th><th className="n">This month (Tm)</th><th></th></tr></thead>
       <tbody>{(b.assets || []).map((a) => <Asset key={a.id} a={a} ym={ym} regs={regs} />)}</tbody>
     </table></div>

@@ -74,8 +74,9 @@ with sync_playwright() as p:
     n = pg.evaluate("bankVisibleRows().length")
     ok(n >= 1 and rows().count() == n and ("%d entr" % n) in pg.inner_text('#app .bk-found:has-text("match")').replace("\n", " ") and pg.evaluate("document.activeElement.getAttribute('aria-label')") == "Search the statement", "search “DIPTI”: %d lines, the cursor stays in the box" % n)
     pg.fill('#app input[aria-label="Ledger for all found"]', "BHARATKOSH"); pg.click('#app .bk-found:has-text("match") button:has-text("Set all")'); pg.wait_for_timeout(300)
-    ok(pg.locator("#confirmBox .cbx").is_visible(), "“Set all” asks first")
-    pg.click('#confirmBox button[data-cbx="yes"]'); pg.wait_for_timeout(500)
+    # spec K9 (round 2 of 04-Oct-2026): it can be undone, so it is done at once, with Undo in the bar
+    pg.wait_for_timeout(300)
+    ok(pg.locator("#confirmBox .cbx").count() == 0 and pg.evaluate("!!B().undo"), "“Set all” is done at once, and can be undone from the bar")
     ok(pg.evaluate("bankVisibleRows().every(r => r.ledger === 'BHARATKOSH' || r.state === 'sent' || r.state === 'intally')"), "and every line found gets that ledger")
     pg.click('#app .bk-found:has-text("match") button:has-text("Clear")'); pg.wait_for_timeout(400)
     ok(pg.input_value('#app input[aria-label="Search the statement"]') == "" and pg.locator('#app .bk-found:has-text("match")').count() == 0, "Clear empties the search")

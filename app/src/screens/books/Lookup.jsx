@@ -10,11 +10,13 @@ import Bars from "../../parts/Bars.jsx";
 import NoBooks from "../../parts/NoBooks.jsx";
 import FreshBar from "../../parts/FreshBar.jsx";
 import { BusyCard } from "../../parts/Reading.jsx";
+import { ListRows } from "../../parts/ListTable.jsx";
 
 const Tile = ({ l, v, cls }) => <div className={"dtile" + (cls ? " " + cls : "")}><span>{l}</span><b>{v}</b></div>;
 const LedBtn = ({ l }) => <button className="linkbtn strong" onClick={(ev) => { ev.stopPropagation(); lkLed(l); }}>{l}</button>;
 const enter = (fn) => (ev) => { if (ev.key === "Enter") { ev.preventDefault(); fn(ev); } };
-const Wrap = ({ head, children }) => <div className="bk-tablewrap"><table className="bk-table lk-t"><thead><tr>{head}</tr></thead><tbody>{children}</tbody></table></div>;
+// a ledger, a group, a trial balance or months: statements, their rows in the books' order
+const Wrap = ({ head, children }) => <div className="bk-tablewrap"><table className="bk-table lk-t" data-statement=""><thead><tr>{head}</tr></thead><tbody>{children}</tbody></table></div>;
 
 // an entry: its row, and when opened, both sides with each ledger to open
 function VoucherRow({ r, x, children }) {
@@ -22,7 +24,7 @@ function VoucherRow({ r, x, children }) {
   return <>
     <tr className={"lk-v" + (open ? " open" : "")} data-key={r.id} tabIndex={0} onClick={() => lkOpen(r.id)} onKeyDown={enter(() => lkOpen(r.id))}>{children}</tr>
     {open && <tr className="lk-sub"><td colSpan={9}><div className="lk-entries">{r.narr && <p className="note">{shownNarr(r.narr)}</p>}
-      <table className="bk-table lk-in"><tbody>{r.ent.map((e, i) => <tr key={i}><td><LedBtn l={e.l} /></td><td className="n">{e.a < 0 ? FC.amt(-e.a) : ""}</td><td className="n">{e.a > 0 ? FC.amt(e.a) : ""}</td></tr>)}</tbody></table></div></td></tr>}
+      <table className="bk-table lk-in" data-statement=""><tbody>{r.ent.map((e, i) => <tr key={i}><td><LedBtn l={e.l} /></td><td className="n">{e.a < 0 ? FC.amt(-e.a) : ""}</td><td className="n">{e.a > 0 ? FC.amt(e.a) : ""}</td></tr>)}</tbody></table></div></td></tr>}
   </>;
 }
 
@@ -79,18 +81,17 @@ function Body({ r, x }) {
     return <>
       <div className="dash-tiles"><Tile l="Outstanding" v={FC.amt(r.total) || "0.00"} /><Tile l="Bills" v={String(r.rows.length)} /><Tile l="Over 90 days" v={FC.amt(over(90)) || "0.00"} cls={over(90) ? "warn" : ""} /><Tile l="Over 180 days" v={FC.amt(over(180)) || "0.00"} cls={over(180) ? "warn" : ""} /></div>
       {!r.rows.length ? <div className="bk-none">{"Nothing open on " + FC.when(r.asOn) + "."}</div> :
-        <Wrap head={<>{!r.led && <th>Party</th>}<th>Bill</th><th>Date</th><th className="n">Days</th><th className="n">Outstanding</th></>}>
+        <ListRows name="lkBills" className="bk-table lk-t" unit={["bill", "bills"]} head={[!r.led && { label: "Party", role: "party" }, { label: "Bill", role: "number" }, { label: "Date", role: "date" }, { label: "Days", cls: "n" }, { label: "Outstanding", role: "amount", cls: "n" }]}>
           {r.rows.slice(0, LIMIT).map((z, i) => <tr key={i}>{!r.led && <td><LedBtn l={z.party} /></td>}<td>{z.ref || "on account"}{!z.hasNew && <>{" "}<span className="tag no" title="Raised before the books read here">older</span></>}</td><td>{FC.when(z.date)}</td>
             <td className={"n" + (z.age > 90 ? " bad" : "")}>{z.age}</td><td className="n">{FC.amt(z.amt)}</td></tr>)}
-          <tr className="lk-tot">{!r.led && <td></td>}<td><b>Total</b></td><td></td><td></td><td className="n"><b>{FC.amt(r.total)}</b></td></tr>
-        </Wrap>}</>;
+        </ListRows>}</>;
   }
   return <>
     <p className="note"><b>{r.n || r.rows.length}</b>{" entries, together " + money(r.total) + (r.opt ? " (" + r.opt + " Optional, not in the total, as in Tally)" : "") + "."}{r.n > r.rows.length && <>{" The first " + r.rows.length + " are here; "}<button className="linkbtn" onClick={() => lkAct("more")}>{"show " + Math.min(TCloud.FIND_PAGE, r.n - r.rows.length) + " more"}</button>.</>}</p>
     {!r.rows.length ? <div className="bk-none">Nothing matches. Try fewer words, or a wider period.</div> : <>
-      <Wrap head={<><th>Date</th><th>Type</th><th>No.</th><th>Party or ledger</th><th className="n">Amount</th></>}>
+      <ListRows name="lkFind" className="bk-table lk-t" unit={["entry", "entries"]} skipSum={(tr) => !!(tr.props.r && tr.props.r.opt)} of={r.n || r.rows.length} head={[{ label: "Date", role: "date" }, { label: "Type" }, { label: "No.", role: "number" }, { label: "Party or ledger", role: "party" }, { label: "Amount", role: "amount", cls: "n" }]}>
         {r.rows.slice(0, LIMIT).map((v, i) => <VoucherRow key={v.id + ":" + i} r={v} x={x}><td>{FC.when(v.date)}</td><td>{v.type}{v.opt && <> <span className="tag" data-opt="1">Optional</span></>}</td><td>{v.no || ""}</td><td><span className="lk-part">{v.party}</span>{v.narr && <span className="nr">{shownNarr(v.narr)}</span>}</td><td className="n">{v.opt ? <s title="Optional: not in the total">{FC.amt(v.amt)}</s> : FC.amt(v.amt)}</td></VoucherRow>)}
-      </Wrap>
+      </ListRows>
       {r.rows.length > LIMIT && <p className="note">{"The first " + LIMIT + " are shown; Excel has them all."}</p>}</>}
   </>;
 }
@@ -123,6 +124,8 @@ function Form({ x }) {
 
 export default function Lookup({ b }) {
   const x = LK.st(), live = LK.live(), have = (b.vouchers || []).length > 0;
+  // the copy of the books needs reading: "Read the books from Tally" (NoBooks) is the page's one primary, Look up is plain
+  const needBooks = !have && !live && !(typeof TCloud === "object" && TCloud.has(S.coId));
   // Tally's ledger names, once per client (light), so typing offers what is in Tally today; the books brought up to date
   useEffect(() => {
     if (!(LK.names && LK.names.cid === S.coId) && !LK._namesBusy && LK._namesTried !== S.coId && typeof TCloud === "object" && TCloud.has(S.coId)) { LK._namesTried = S.coId; setTimeout(() => LK.loadNames(), 0); }
@@ -135,7 +138,7 @@ export default function Lookup({ b }) {
       <p className="note" style={{ margin: "0 0 10px" }}>Ask in plain words, or choose below. Answers come at once from FinCom’s copy of the books; Tally is never asked for a balance.</p>
       <div className="lk-askrow"><input type="search" id="lkAsk" data-fk="lkAsk" value={x.ask || ""} placeholder="Try: HDFC bank for August · Raj Fabrics open bills · sales month by month this year · trial balance as on 31/03/2026" aria-label="Ask a question about the books"
         onChange={(ev) => lkType("ask", ev.target.value)} onKeyDown={enter((ev) => lkAsk(ev.target.value))} />
-        <button className="btn primary" onClick={() => lkAsk(x.ask || "")}>Look up</button></div>
+        <button className={"btn" + (needBooks ? "" : " primary")} onClick={() => lkAsk(x.ask || "")}>Look up</button></div>
       {x.heard && <p className="note lk-heard">Understood as: <b>{x.heard}</b>. Change anything below.</p>}
       <div className="lk-kinds" role="tablist" aria-label="What to look up">{LK.KINDS.map(([k, l]) => <button key={k} role="tab" aria-selected={x.kind === k} onClick={() => lkKind(k)}>{l}</button>)}</div>
       <FreshBar b={b} />
@@ -149,7 +152,7 @@ export default function Lookup({ b }) {
       <datalist id="lkLeds">{leds.slice(0, 5000).map((l) => <option key={l} value={l} />)}</datalist><datalist id="lkGrps">{grps.map((g) => <option key={g} value={g} />)}</datalist>
     </section>
     {rec.length > 0 && !x.res && <section className="dash-card" style={{ marginTop: 12 }}><h3>Looked up lately</h3><div className="lk-recent">{rec.map((r, i) => <button key={i} className="btn small" onClick={() => lkRec(i)}>{r.label}</button>)}</div></section>}
-    {!have && !live && !(typeof TCloud === "object" && TCloud.has(S.coId)) && <NoBooks what="Look up" />}
+    {needBooks && <NoBooks what="Look up" />}
     {x.busy && <BusyCard title="Working it out…" detail={x.busy} done={0} total={0} />}
     {LK.fr().busy && <BusyCard title="Bringing the books up to date…" detail={LK.fr().busy} done={0} total={0} />}
     {x.res && <Result r={x.res} x={x} />}

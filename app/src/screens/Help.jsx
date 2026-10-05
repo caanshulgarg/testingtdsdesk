@@ -6,6 +6,8 @@
 //
 // State: S.sup (tab, list, filter, q, gq: guide search, art: the article open, open/detail: a ticket, newOpen, draft,
 // files, rtext, rfiles, rint, dstat, dpri, dfirm, dq, busy).
+import Loading from "../parts/Loading.jsx";
+import ListTable from "../parts/ListTable.jsx";
 
 const Pill = ({ kind, v }) => {
   const lab = kind === "st" ? (SUP.ST[v] || v) : kind === "pri" ? ((SUP.PRI.find((p) => p[0] === v) || [, v])[1]) : kind === "sla" ? ({ track: "on track", risk: "at risk", late: "late", met: "met" })[v] : v;
@@ -31,13 +33,19 @@ function Guide() {
     <div className="sp-still"><b>Did not find the answer?</b> {SUP.on() ? <Sup a="new">Raise a ticket</Sup> : <span className="note">Sign in to the firm account to raise a ticket.</span>}</div></div></div>;
 }
 
-function Row({ t, adm, now }) {
-  return <tr className="sp-row" data-key={t.id} onClick={() => SUP.open(t.id)}><td className="sp-id">{SUP.code(t)}</td><td>{t.subject}{adm && <div className="note">{(t.firm_name || "") + " · " + (t.created_name || t.created_email || "")}</div>}</td>
-    <td>{t.module}</td><td><Pill kind="pri" v={t.priority} /></td><td><Pill kind="st" v={t.status} />{t.status === "open" && t.last_by === "firm" && adm && <> <span className="note">firm replied</span></>}</td>
-    <td><Pill kind="sla" v={SUP.sla(t, now)} /></td><td className="dt" title={SUP.when(t.updated_at)}>{fmtDate(String(t.updated_at).slice(0, 10))}</td></tr>;
-}
-const TicketTable = ({ rows, adm }) => <div className="bk-tablewrap"><table className="bk-table sp-table"><thead><tr><th>ID</th><th>Subject</th><th>Module</th><th>Priority</th><th>Status</th><th>SLA</th><th className="dt">Updated</th></tr></thead>
-  <tbody>{rows.map((t) => <Row key={t.id} t={t} adm={adm} />)}</tbody></table></div>;
+// the tickets: the one list table (spec K6): updated (date), ticket no., status, then the rest; a click on a row opens it
+const TicketTable = ({ rows, adm, now }) => <ListTable name={adm ? "deskTickets" : "myTickets"} className="bk-table sp-table" rows={rows} rowKey={(t) => t.id} unit={["ticket", "tickets"]}
+  rowProps={(t) => ({ className: "sp-row", "data-key": t.id, onClick: () => SUP.open(t.id) })}
+  empty="No ticket here. Use + New ticket at the top right to ask FinCom support."
+  cols={[
+    { k: "upd", role: "date", label: "Updated", cls: "dt", v: (t) => t.updated_at || "", td: (t) => ({ title: SUP.when(t.updated_at) }), cell: (t) => fmtDate(String(t.updated_at).slice(0, 10)) },
+    { k: "id", role: "number", label: "ID", cls: "sp-id", v: (t) => SUP.code(t), cell: (t) => SUP.code(t) },
+    { k: "st", role: "status", label: "Status", v: (t) => t.status || "", cell: (t) => <><Pill kind="st" v={t.status} />{t.status === "open" && t.last_by === "firm" && adm && <> <span className="note">firm replied</span></>}</> },
+    { k: "subj", label: "Subject", v: (t) => t.subject || "", cell: (t) => <>{t.subject}{adm && <div className="note">{(t.firm_name || "") + " · " + (t.created_name || t.created_email || "")}</div>}</> },
+    { k: "mod", label: "Module", v: (t) => t.module || "", cell: (t) => t.module },
+    { k: "pri", label: "Priority", v: (t) => t.priority || "", cell: (t) => <Pill kind="pri" v={t.priority} /> },
+    { k: "sla", label: "SLA", cell: (t) => <Pill kind="sla" v={SUP.sla(t, now)} /> },
+  ]} />;
 
 function Mine() {
   const s = SUP.st(), l = s.list || [], d30 = Date.now() - 30 * 864e5;
@@ -53,7 +61,7 @@ function Mine() {
     <div className="sp-bar"><div className="sp-chips">{chips.map(([k, lb, c]) => <button key={k} className={f === k ? "on" : ""} onClick={() => supFilter(k)}>{lb} <span>{c}</span></button>)}</div>
       <input type="search" data-fk="supq" aria-label="Search tickets" value={s.q || ""} placeholder="Search tickets…" style={{ width: 240 }} onChange={(ev) => supType("q", ev.target.value)} />
       <Sup a="reload" title="Read again">↻</Sup></div>
-    {shown.length ? <TicketTable rows={shown} adm={false} /> : <p className="note">{l.length ? "No tickets here." : "No tickets yet. Raise one with + New ticket; it goes to FinCom support."}</p>}
+    {shown.length ? <TicketTable rows={shown} adm={false} /> : <p className="note lt-empty" data-list-empty="" style={{ border: 0 }}>{l.length ? "No tickets here. Choose another filter above, or use + New ticket." : "No tickets yet. Use + New ticket to raise one; it goes to FinCom support."}</p>}
   </>;
 }
 
@@ -93,13 +101,22 @@ function Desk() {
     <div className="sp-card"><b>{"Pipeline · where " + open.length + " open tickets sit"}</b>{pipe.length ? <div className="sp-pipe">{pipe.map(([k, c]) => <button key={k} className={"sp-p-" + k} style={{ flex: c }} onClick={() => supDstat(k)}><b>{c}</b><small>{SUP.ST[k]}</small></button>)}</div> : <p className="note">Nothing open.</p>}</div>
     <div className="sp-two"><div className="sp-card"><b>Firms by open tickets</b>{firms.length ? firms.map(([f, c]) => <div key={f} className="sp-hbar"><span>{f}</span><i style={{ width: Math.round(100 * c / fmax) + "%" }}></i><b>{c}</b></div>) : <p className="note">None open.</p>}</div>
       <div className="sp-card"><b>Average time to resolve · 30 days</b>{res.some((r) => r[2]) ? res.map(([lab, v, n2]) => <div key={lab} className="dash-row"><span>{lab}</span><b>{v == null ? "—" : v < 24 ? v.toFixed(1) + " h" : (v / 24).toFixed(1) + " days"}{n2 ? <> <small className="note">{"(" + n2 + ")"}</small></> : null}</b></div>) : <p className="note">Nothing resolved in the last 30 days.</p>}</div></div>
-    <div className="sp-card"><b>Oldest open</b>{old.length ? <div className="bk-tablewrap"><table className="bk-table sp-table"><thead><tr><th>ID</th><th>Subject</th><th>Firm</th><th>Owner</th><th>Status</th><th>Age</th><th>SLA</th></tr></thead><tbody>
-      {old.map((t) => <tr key={t.id} className="sp-row" onClick={() => SUP.open(t.id)}><td className="sp-id">{SUP.code(t)}</td><td>{t.subject}</td><td>{t.firm_name || ""}</td><td>{t.assignee || "—"}</td><td><Pill kind="st" v={t.status} /></td><td>{SUP.ago(t.created_at)}</td><td><Pill kind="sla" v={SUP.sla(t, now)} /></td></tr>)}</tbody></table></div> : <p className="note">Nothing open.</p>}</div>
+    <div className="sp-card"><b>Oldest open</b>{old.length ? <ListTable name="deskOldest" className="bk-table sp-table" rows={old} rowKey={(t) => t.id} unit={["ticket", "tickets"]}
+      rowProps={(t) => ({ className: "sp-row", onClick: () => SUP.open(t.id) })}
+      cols={[
+        { k: "age", role: "date", label: "Opened", v: (t) => t.created_at || "", td: (t) => ({ title: SUP.when(t.created_at) }), cell: (t) => SUP.ago(t.created_at) },
+        { k: "id", role: "number", label: "ID", cls: "sp-id", v: (t) => SUP.code(t), cell: (t) => SUP.code(t) },
+        { k: "firm", role: "party", label: "Firm", v: (t) => t.firm_name || "", cell: (t) => t.firm_name || "" },
+        { k: "st", role: "status", label: "Status", v: (t) => t.status || "", cell: (t) => <Pill kind="st" v={t.status} /> },
+        { k: "subj", label: "Subject", v: (t) => t.subject || "", cell: (t) => t.subject },
+        { k: "own", label: "Owner", v: (t) => t.assignee || "", cell: (t) => t.assignee || "—" },
+        { k: "sla", label: "SLA", cell: (t) => <Pill kind="sla" v={SUP.sla(t, now)} /> },
+      ]} /> : <p className="note">Nothing open.</p>}</div>
     <div className="sp-card"><b>All tickets</b><div className="sp-bar"><div className="sp-chips">{[["active", "Open"], ["new", "New"], ["open", "Firm replied"], ["waiting", "Awaiting firm"], ["done", "Closed"], ["all", "All"]].map(([k, lb]) => <button key={k} className={st === k ? "on" : ""} onClick={() => supDstat(k)}>{lb}</button>)}</div>
       <select aria-label="Priority" style={{ width: "auto" }} value={s.dpri || ""} onChange={(ev) => supType("dpri", ev.target.value, true)}><option value="">Any priority</option>{SUP.PRI.map(([k, lb]) => <option key={k} value={k}>{lb}</option>)}</select>
       <select aria-label="Firm" style={{ width: "auto" }} value={s.dfirm || ""} onChange={(ev) => supType("dfirm", ev.target.value, true)}><option value="">All firms</option>{firmList.map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select>
       <input type="search" data-fk="supdq" aria-label="Search all tickets" value={s.dq || ""} placeholder="Search…" style={{ width: 200 }} onChange={(ev) => supType("dq", ev.target.value)} /><Sup a="reload" title="Read again">↻</Sup></div>
-      {shown.length ? <TicketTable rows={shown} adm /> : <p className="note">No tickets here.</p>}</div>
+      {shown.length ? <TicketTable rows={shown} adm /> : <p className="note lt-empty" data-list-empty="" style={{ border: 0 }}>No tickets here. Choose another filter above.</p>}</div>
   </>;
 }
 
@@ -128,7 +145,7 @@ function NewTicket() {
 
 function Ticket() {
   const s = SUP.st(), t = s.detail, adm = SUP.admin();
-  if (!t) return <p className="note">Opening the ticket…</p>;
+  if (!t) return <Loading what="the ticket" lines={3} />;
   const c = t.context || {};
   return <>
     <div className="sp-card" style={{ marginTop: 12 }}><Sup a="back" className="linkbtn">← All tickets</Sup>
@@ -167,7 +184,7 @@ export default function Help() {
   else if (s.open) body = <Ticket />;
   else if (s.tab === "guide") body = <Guide />;
   else if (!SUP.on()) body = <div className="bk-none">Sign in to the firm account (top right) to raise tickets and follow them. The guide works without it.</div>;
-  else if (s.list === null) { if (!s.loading) { s.loading = true; SUP.load(true).then(() => { s.loading = false; render(); }); } body = <p className="note">Reading tickets…</p>; }
+  else if (s.list === null) { if (!s.loading) { s.loading = true; SUP.load(true).then(() => { s.loading = false; render(); }); } body = <Loading what="tickets" />; }
   else body = s.tab === "desk" ? <Desk /> : <Mine />;
   const tabs = [["guide", "Guide"], ["tickets", "My tickets", !adm && n ? n : null]].concat(adm ? [["desk", "Support desk", n || null]] : []);
   return <div className="pane" style={{ marginTop: 0 }}><div className="sp-head"><div><h2 style={{ margin: 0 }}>Help</h2><p className="note" style={{ margin: "2px 0 0" }}>Search the guide; if it does not answer it, raise a ticket to FinCom support.</p></div>

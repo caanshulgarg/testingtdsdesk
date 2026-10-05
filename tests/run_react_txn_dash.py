@@ -45,7 +45,7 @@ with sync_playwright() as p:
     ok(pg.evaluate("S.tab") == "invoices" and pg.evaluate("D().entries[S.selected].x.vendorName") == "Kappa Labs", "Open: the bill, where it is worked on")
     pg.evaluate("goClient('txn')"); pg.wait_for_timeout(500)
     pg.click('#app nav[aria-label="Kind"] button:has-text("Bank")'); pg.wait_for_timeout(1200)
-    ok(pg.evaluate("txnTab()") == "bank" and "Nothing here yet." in pg.inner_text("#app"), "the Bank register opens (no statement yet)")
+    ok(pg.evaluate("txnTab()") == "bank" and "No bank lines yet. Use Upload statement" in pg.inner_text("#app"), "the Bank register opens (no statement yet: it says what to do next)")
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     br.close()
 srv.shutdown()

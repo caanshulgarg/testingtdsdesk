@@ -10,12 +10,14 @@ import { Fragment } from "react";
 import CommitBox from "../../parts/CommitBox.jsx";
 import { CatchUp } from "../../parts/Notes.jsx";
 import Confirm from "../../parts/Confirm.jsx";
+import { ListRows } from "../../parts/ListTable.jsx";
 
 const m = (v) => INR.format(r2(v || 0));
 const d = (x) => fmtDate(tallyDate(x));
 const Act = ({ act, className = "btn small", children }) => <button className={className} onClick={() => doAct(act)}>{children}</button>;
 const Tile = ({ l, v, sub }) => <div className="dtile"><span>{l}</span><b>{v}</b><small>{sub || ""}</small></div>;
-const Table = ({ id, head, children, style }) => <div className="bk-tablewrap"><table className="bk-table" id={id} style={style}>{head && <thead><tr>{head}</tr></thead>}<tbody>{children}</tbody></table></div>;
+// MIS statements and schedules (profit and loss, ages, months): their rows in the report's order
+const Table = ({ id, head, children, style }) => <div className="bk-tablewrap"><table className="bk-table" id={id} style={style} data-statement="">{head && <thead><tr>{head}</tr></thead>}<tbody>{children}</tbody></table></div>;
 const Card = ({ title, top, children }) => <section className="dash-card" style={top ? { marginTop: 12 } : undefined}>{title && <h3>{title}</h3>}{children}</section>;
 const Opener = ({ open, onClick, children }) => <button className="linkbtn" onClick={onClick}>{(open ? "▾ " : "▸ ")}{children}</button>;
 const toggle = (key, v, none = "") => () => setAndShow(key, S[key] === v ? none : v);
@@ -45,7 +47,7 @@ function Head({ b, r, rg }) {
 
 // the line under the head: the period run, how, when, its result code, and whether it agrees with Tally
 function RunLine({ r }) {
-  return <p className="note" style={{ margin: "10px 0" }}>{d(r.from) + " to " + d(r.to) + " · " + r.how + " on " + fmtDate(r.at.slice(0, 10)) + " at " + r.at.slice(11, 16) + " · result code "}<b>{r.code}</b>
+  return <p className="note" style={{ margin: "10px 0" }}>{d(r.from) + " to " + d(r.to) + " · " + r.how + " on " + fmtDateTime(r.at) + " · result code "}<b>{r.code}</b>
     {r.control ? (r.control.ok ? <>{" · "}<span style={{ color: "var(--ok)" }}>agrees with Tally’s balances, ledger by ledger</span></> : <>{" · "}<span className="bad">{r.control.n + " ledgers differ from Tally by ₹" + m(r.control.amt)}</span></>)
       : " · read the period from Tally through the bridge to check it against Tally’s balances"}</p>;
 }
@@ -97,10 +99,11 @@ function Summary({ b, r }) {
 function LedgerEntries({ b, r }) {
   const vs = (b.vouchers || []).filter((v) => v.date >= r.from && v.date <= r.to && v.ent.some((e) => e.l === S.misLed)).sort((a, c) => a.date.localeCompare(c.date));
   return <Card top title={<>{S.misLed + " "}<button className="linkbtn" onClick={() => setAndShow("misLed", "")}>close</button></>}>
-    <Table head={<><th className="dt">Date</th><th>Voucher</th><th>Party</th><th className="n">Debit</th><th className="n">Credit</th><th>Narration</th></>}>
+    {/* the one list table (spec K6) */}
+    <ListRows name="misLedger" of={vs.length} head={[{ label: "Date", role: "date", cls: "dt" }, { label: "Voucher", role: "number" }, { label: "Party", role: "party" }, { label: "Debit", role: "amount", cls: "n" }, { label: "Credit", role: "amount", cls: "n" }, { label: "Narration" }]}>
       {vs.slice(0, gfN(300)).map((v, i) => { const a = v.ent.filter((e) => e.l === S.misLed).reduce((s, e) => s + e.a, 0);
         return <tr key={v.date + ":" + v.no + ":" + i}><td>{d(v.date)}</td><td>{v.no}<div className="nr">{v.type}</div></td><td>{v.party || ""}</td><td className="n">{a < 0 ? m(-a) : ""}</td><td className="n">{a > 0 ? m(a) : ""}</td><td>{shownNarr(v.narr)}</td></tr>; })}
-    </Table>
+    </ListRows>
     {vs.length > 300 && <p className="note">The first 300 of {vs.length}.</p>}
   </Card>;
 }
@@ -160,8 +163,8 @@ function Ageing({ b, r, tab }) {
     {Math.abs(A.sum.pre) >= 1 && A.sum.tally == null && <p className="bk-alert" style={{ marginTop: 8 }}>{m(Math.abs(A.sum.pre)) + " was " + (tab === "recv" ? "received" : "paid") + " against bills raised before the day book read here, so the total is not the balance. Read the books through the bridge (its balances fix the total), or a day book from when those bills were raised."}</p>}
     <p className="note">{"Age is counted from the bill date to " + d(r.to) + ". A bill “from before these books” was raised before the day book read here; what was received or paid against it is set against the oldest bills." + (tab === "pay" ? " MSME comes from the Udyam details in Tally; mark others here." : "")}</p>
     {tab === "pay" && r.msme.length > 0 && <Card top title={"MSME suppliers unpaid past " + MIS.cfg(b).msmeDays + " days"}><p className="note">Under section 43B(h), what is owed to a micro or small enterprise and unpaid beyond the agreed period (at most 45 days) is allowed only when paid.</p>
-      <Table head={<><th>Supplier</th><th>Type</th><th className="n">Bills</th><th className="n">Amount</th><th className="n">Oldest, days</th></>}>
-        {r.msme.map((x, i) => <tr key={x.party + ":" + i}><td>{x.party}</td><td>{x.type}</td><td className="n">{x.bills.length}</td><td className="n">{m(x.amt)}</td><td className="n">{Math.max.apply(null, x.bills.map((z) => z.age))}</td></tr>)}</Table></Card>}
+      <ListRows name="misMsme" unit={["supplier", "suppliers"]} head={[{ label: "Supplier", role: "party" }, { label: "Type" }, { label: "Bills", cls: "n", sum: true, fmt: String }, { label: "Amount", role: "amount", cls: "n" }, { label: "Oldest, days", cls: "n", sum: false }]}>
+        {r.msme.map((x, i) => <tr key={x.party + ":" + i}><td>{x.party}</td><td>{x.type}</td><td className="n">{x.bills.length}</td><td className="n">{m(x.amt)}</td><td className="n">{Math.max.apply(null, x.bills.map((z) => z.age))}</td></tr>)}</ListRows></Card>}
   </>;
 }
 

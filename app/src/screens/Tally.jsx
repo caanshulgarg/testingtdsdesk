@@ -5,6 +5,7 @@
 // (src/js/49). The work is Bridge and TCloud; boxes and choices go through bridgeSet, bridgeLink, bridgePin, tcLink
 // (src/js/24, 49), buttons through doAct (bridgeTest, bridgeConnect, bridgeOff, bridgeSetupFile, bridgeDiag, bridgeReadTest).
 import Msg from "../parts/Msg.jsx";
+import ListTable from "../parts/ListTable.jsx";
 import TallyPill from "../parts/TallyPill.jsx";
 import TallyLine, { GapLine } from "../parts/TallyLine.jsx";
 import SyncActivity from "./TallySync.jsx";
@@ -23,7 +24,7 @@ function ReadTest() {
     <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}><b>Test reading entries</b><Act act="bridgeReadTest" disabled={!!r.busy}>{r.busy ? "Testing…" : "Run test"}</Act></div>
     <p className="note" style={{ margin: "4px 0" }}>Checks how FinCom can read entries from the company open in Tally (nothing is written). If posts are “not confirmed”, run this and send the result.</p>
     {r.error && <p className="bk-warn"><Msg text={r.error} /></p>}
-    {r.tests && <><table className="data"><tbody>{r.tests.map((t, i) => <tr key={i}><td>{t.name}</td><td>{t.ok ? <><span className="tag ok">works</span>{" " + num(t.count) + " found" + (t.optional ? " (" + num(t.optional) + " Optional)" : "")}</> : <><span className="tag bad">failed</span>{" " + (t.error || "")}</>}</td><td className="n">{num(t.ms) + " ms"}</td></tr>)}</tbody></table>
+    {r.tests && <><table className="data" data-statement=""><tbody>{r.tests.map((t, i) => <tr key={i}><td>{t.name}</td><td>{t.ok ? <><span className="tag ok">works</span>{" " + num(t.count) + " found" + (t.optional ? " (" + num(t.optional) + " Optional)" : "")}</> : <><span className="tag bad">failed</span>{" " + (t.error || "")}</>}</td><td className="n">{num(t.ms) + " ms"}</td></tr>)}</tbody></table>
       <p className="note" style={{ margin: "4px 0 0" }}>{(r.company || "") + " · port " + r.port + " · " + fmtDate(tallyDate(r.from)) + " to " + fmtDate(tallyDate(r.to))}</p></>}
   </div>;
 }
@@ -36,7 +37,7 @@ function Diagnosis() {
   return <div className="bdiag">{head}
     <p className="note" style={{ margin: "6px 0" }}>Bridge running as <b>{d.user || ""}</b>{" (Windows session " + d.mySession + ")."}</p>
     {(d.findings || []).map((f, i) => <div key={i} className={"bd-f " + f.level}><b>{(f.level === "ok" ? "✔ " : "⚠ ") + f.text}</b>{f.fix && <div className="bd-fix">{"What to do: " + f.fix}</div>}</div>)}
-    {(d.tallies || []).length > 0 && <table className="data" style={{ marginTop: 8 }}><thead><tr><th>TallyPrime of</th><th>Accepting connections on</th><th>Its setting</th></tr></thead><tbody>
+    {(d.tallies || []).length > 0 && <table className="data" style={{ marginTop: 8 }} data-statement=""><thead><tr><th>TallyPrime of</th><th>Accepting connections on</th><th>Its setting</th></tr></thead><tbody>
       {d.tallies.map((t, i) => <tr key={i}><td>{t.user || ("session " + t.session)}{t.mine && <> <span className="tag ok">you</span></>}</td><td>{t.ports.length ? "port " + t.ports.join(", ") : <span className="tag bad">not accepting</span>}</td>
         <td>{t.ini && t.ini.found ? (t.ini.mode || "?") + ", port " + (t.ini.port || "9000") : <span className="note">{"—"}</span>}</td></tr>)}</tbody></table>}
     {d.freePort && <p className="note" style={{ margin: "6px 0 0" }}>A free port on this server: <b>{d.freePort}</b>. Each user’s TallyPrime needs its own port.</p>}
@@ -323,20 +324,22 @@ export function BridgesHeard() {
       <button className="btn small" onClick={() => TCloud.refreshPane()}>Refresh</button></div>
     <p className="note" style={{ margin: "6px 0 10px" }}>Every bridge on the firm’s computers, from its last heartbeat. Only the <b>main</b> bridge posts to Tally; a bridge in <b>test mode</b> reads only.</p>
     {p.err && <p className="note bad"><Msg text={p.err} /></p>}
-    {rows.length ? <div className="tblwrap"><table className="data"><thead><tr><th>Computer</th><th>Windows user</th><th>Bridge</th><th>Mode</th><th>Last seen</th><th>Tally</th><th>Companies open</th><th></th></tr></thead><tbody>
-      {rows.map((r, i) => <tr key={r.device.id + ":" + (r.id || "old") + ":" + i} data-bridge-row={r.id || "old"}>
-        <td>{r.computer}<div className="nr">{r.device.name}</div></td>
-        <td>{r.user || "—"}</td>
-        <td>{r.go && !r.old ? "FinCom Bridge " + (r.version || "?") : "Older bridge"}{r.runMode && <div className="nr">{RUN[r.runMode] || r.runMode}</div>}</td>
-        <td>{r.main ? <span className="tag ok">Main: reads and posts</span> : <span className="tag warn">Test: reads only</span>}</td>
-        <td>{r.at ? fmtDateTime(r.at) : "—"}<div className="nr">{r.online ? <span className="ok">online</span> : <span className="bad">offline</span>}</div></td>
-        <td>{TSTATE[r.tally] || r.tally}</td>
-        <td>{r.open.length ? r.open.join(", ") : <span className="note">none</span>}</td>
-        <td>{!r.main && r.go && (r.old ? <span className="note">Install FinCom Bridge on this computer to replace it</span>
+    {/* the one list table (spec K6): last seen (date), computer, mode (status), then the rest */}
+    <ListTable name="bridges" className="data" rows={rows} loading={TCloud.pane.devices == null && !p.err ? "the bridges" : false} rowKey={(r, i) => r.device.id + ":" + (r.id || "old") + ":" + i} unit={["bridge", "bridges"]} rowProps={(r) => ({ "data-bridge-row": r.id || "old" })}
+      empty="No bridge has been heard from yet. Install FinCom Bridge on the computer with TallyPrime: Connect, above, shows how."
+      cols={[
+        { k: "at", role: "date", label: "Last seen", v: (r) => r.at || "", cell: (r) => <>{r.at ? fmtDateTime(r.at) : "—"}<div className="nr">{r.online ? <span className="ok">online</span> : <span className="bad">offline</span>}</div></> },
+        { k: "pc", role: "party", label: "Computer", v: (r) => r.computer || "", cell: (r) => <>{r.computer}<div className="nr">{r.device.name}</div></> },
+        { k: "mode", role: "status", label: "Mode", v: (r) => (r.main ? "Main" : "Test"), cell: (r) => (r.main ? <span className="tag ok">Main: reads and posts</span> : <span className="tag warn">Test: reads only</span>) },
+        { k: "user", label: "Windows user", v: (r) => r.user || "", cell: (r) => r.user || "—" },
+        { k: "ver", label: "Bridge", v: (r) => r.version || "", cell: (r) => <>{r.go && !r.old ? "FinCom Bridge " + (r.version || "?") : "Older bridge"}{r.runMode && <div className="nr">{RUN[r.runMode] || r.runMode}</div>}</> },
+        { k: "tally", label: "Tally", v: (r) => TSTATE[r.tally] || r.tally || "", cell: (r) => TSTATE[r.tally] || r.tally },
+        { k: "open", label: "Companies open", cell: (r) => (r.open.length ? r.open.join(", ") : <span className="note">none</span>) },
+        { k: "ac", role: "act", cell: (r) => !r.main && r.go && (r.old ? <span className="note">Install FinCom Bridge on this computer to replace it</span>
           : p.noMain ? <span className="note">Not available until FinCom’s cloud is updated (migration-22)</span>
           : owner ? <button className="btn small primary" data-make-main={r.id} onClick={() => TCloud.makeMain(r)}>Make this the main bridge</button>
-          : <span className="note">An owner of the firm can make it the main bridge</span>)}</td></tr>)}
-    </tbody></table></div> : <p className="note">No bridge has been heard from yet. Install FinCom Bridge on the computer with TallyPrime.</p>}
+          : <span className="note">An owner of the firm can make it the main bridge</span>) },
+      ]} />
   </div>;
 }
 
@@ -430,7 +433,7 @@ function OldBridge() {
 function Sessions({ c, st }) {
   if (!st.sessions.length) return <p className="note">No TallyPrime found. Start TallyPrime in this Windows session.</p>;
   const cos = sortedCompanies();
-  return <table className="data"><thead><tr><th>Tally</th><th>Owner</th><th>Companies open</th><th>FinCom client</th><th></th></tr></thead><tbody>
+  return <table className="data" data-statement=""><thead><tr><th>Tally</th><th>Owner</th><th>Companies open</th><th>FinCom client</th><th></th></tr></thead><tbody>
     {st.sessions.filter((se) => se.ok || se.skipped || num(c.port) === se.port || st.mode !== "fallback").map((se) => {
       const pinned = num(c.port) === se.port;
       return <tr key={se.port}><td>{"Port " + se.port}</td>
@@ -502,15 +505,22 @@ export function CloudBooks() {
       {p.err && <p className="note bad"><Msg text={p.err} /></p>}{p.busy && <p className="note">{p.busy}</p>}
       <p className="note">The computer with Tally and the bridge sends by itself once someone signs in to FinCom there. Nothing to press.</p>
       {TCloud.autoErr && <p className="note bad">{"Last try: " + TCloud.autoErr}</p>}<div className="row"><button className="btn small" onClick={() => TCloud.refreshPane()}>Refresh</button></div></div>
-    <div className="pane"><h3 style={{ marginTop: 0 }}>Computers that send</h3>{dv.length ? <div className="tblwrap"><table className="data"><thead><tr><th>Computer</th><th>Last heard from</th><th>Bridge</th><th></th></tr></thead><tbody>
-      {dv.map((d) => <tr key={d.id}><td>{d.name}{(d.info || {}).computer && <div className="nr">{d.info.computer + (d.info.user ? " · " + d.info.user : "")}</div>}</td><td>{when(d.last_seen)}</td><td>{d.version || "—"}</td>
-        <td className="n"><button className="btn small" onClick={() => TCloud.revoke(d.id, d.name)}>Remove</button></td></tr>)}</tbody></table></div>
-      : <p className="note">None yet. Open FinCom on the computer with Tally, signed in to the firm, and it connects by itself within a minute.</p>}</div>
+    <div className="pane"><h3 style={{ marginTop: 0 }}>Computers that send</h3><ListTable name="cloudDevices" className="data" rows={dv} loading={p.devices == null && !p.err ? "the computers" : false} rowKey={(d) => d.id} unit={["computer", "computers"]}
+        empty="None yet. Open FinCom on the computer with Tally, signed in to the firm, and it connects by itself within a minute."
+        cols={[
+          { k: "at", role: "date", label: "Last heard from", v: (d) => d.last_seen || "", cell: (d) => when(d.last_seen) },
+          { k: "pc", role: "party", label: "Computer", v: (d) => d.name || "", cell: (d) => <>{d.name}{(d.info || {}).computer && <div className="nr">{d.info.computer + (d.info.user ? " · " + d.info.user : "")}</div>}</> },
+          { k: "ver", label: "Bridge", v: (d) => d.version || "", cell: (d) => d.version || "—" },
+          { k: "ac", role: "act", cls: "n", cell: (d) => <button className="btn small" onClick={() => TCloud.revoke(d.id, d.name)}>Remove</button> },
+        ]} /></div>
     <div className="pane"><h3 style={{ marginTop: 0 }}>Tally companies and clients</h3><p className="note" style={{ margin: "0 0 8px" }}>A company named in Tally as a client’s “Tally name”, or with exactly one client’s GSTIN, is linked by itself. Link the others here. A company whose GSTIN is not the client’s cannot be linked, so no one’s books land in the wrong client.</p>
-      {cl.length ? <div className="tblwrap"><table className="data"><thead><tr><th>Company in Tally</th><th>GSTIN</th><th>Client in FinCom</th><th>Last seen</th></tr></thead><tbody>
-        {cl.map((c) => {
+      {cl.length ? <ListTable name="cloudCompanies" className="data" rows={cl} rowKey={(c) => c.company} unit={["company", "companies"]}
+        cols={[
+          { k: "at", role: "date", label: "Last seen", v: (c) => c.last_seen || "", cell: (c) => when(c.last_seen) },
+          { k: "co", role: "party", label: "Company in Tally", v: (c) => c.company, cell: (c) => c.company },
+          { k: "cl", role: "status", label: "Client in FinCom", v: (c) => (c.client_id ? "linked" : "not linked"), cell: (c) => {
           const cid = String(c.client_id || ""), linked = cid && cos.find((k) => String(k.id) === cid), m = !cid && gstinMatch(c);
-          return <tr key={c.company}><td>{c.company}</td><td>{c.gstin || "—"}</td><td>
+                      return <>
             <select aria-label={"Client for " + c.company} value={cid} onChange={(ev) => TCloud.link(c.company, ev.target.value)}><option value="">— not linked —</option>
               {cid && !linked && <option value={cid}>a client not on this computer</option>}
               {cos.map((k) => <option key={k.id} value={String(k.id)}>{k.name}</option>)}</select>
@@ -527,8 +537,9 @@ export function CloudBooks() {
                     : <span className="note">{"In the cloud: " + g.groups + " groups · " + g.grouped + " of " + g.ledgers + " ledgers with a group" + (g.pl ? " (and Profit & Loss A/c, which has no group in Tally)" : "")} <button className="linkbtn" onClick={() => TCloud.groupStatus(cid)}>check again</button></span>)
                     : <button className="linkbtn" onClick={() => TCloud.groupStatus(cid)}>What is in the cloud?</button>; })()}
                 </div></> : "Linked to a client that is not on this computer."}</div>
-              : m ? <div className="nr">Same GSTIN as <b>{m.name}</b> <button className="btn small" onClick={() => TCloud.link(c.company, m.id)}>Link to {m.name}</button></div> : null}</td><td>{when(c.last_seen)}</td></tr>;
-        })}</tbody></table></div>
+              : m ? <div className="nr">Same GSTIN as <b>{m.name}</b> <button className="btn small" onClick={() => TCloud.link(c.company, m.id)}>Link to {m.name}</button></div> : null}</>; } },
+          { k: "gstin", label: "GSTIN", v: (c) => c.gstin || "", cell: (c) => c.gstin || "—" },
+        ]} />
         : <p className="note">No Tally companies have been seen yet. They appear here once a connected computer has a company open in Tally.</p>}</div>
   </>;
 }

@@ -7,6 +7,7 @@
 // State: S.dbFrom / S.dbTo (a part's dates), S.tbOn (the trial balance date).
 import { useEffect, useState } from "react";
 import TallyPill from "../../parts/TallyPill.jsx";
+import { ListRows } from "../../parts/ListTable.jsx";
 const d = (x) => fmtDate(tallyDate(x));
 const Act = ({ act, className = "btn small", children }) => <button className={className} onClick={() => doAct(act)}>{children}</button>;
 
@@ -84,10 +85,9 @@ function Check({ b }) {
 function Parts({ b }) {
   const parts = ((b.meta || {}).parts || []).slice().sort((x, y) => String(x.from).localeCompare(String(y.from)));
   if (!parts.length) return null;
-  return <div className="bk-tablewrap"><table className="bk-table compact">
-    <thead><tr><th>Part brought in</th><th className="n">Entries</th><th>File</th><th className="dt">On</th><th>Bridge’s copy</th></tr></thead>
-    <tbody>{parts.map((p, i) => <tr key={p.from + ":" + i}><td>{d(p.from) + " to " + d(p.to)}</td><td className="n">{p.n}</td><td>{p.file || ""}</td><td className="dt">{fmtDate(String(p.at || "").slice(0, 10))}</td><td>{p.bridge || "—"}</td></tr>)}</tbody>
-  </table></div>;
+  return <ListRows name="daybookParts" className="bk-table compact" unit={["part", "parts"]} head={[{ label: "Part brought in" }, { label: "Entries", cls: "n", sum: true, fmt: String }, { label: "File", role: "number" }, { label: "On", role: "date", cls: "dt" }, { label: "Bridge’s copy", role: "status" }]}>
+    {parts.map((p, i) => <tr key={p.from + ":" + i}><td>{d(p.from) + " to " + d(p.to)}</td><td className="n">{p.n}</td><td>{p.file || ""}</td><td className="dt">{fmtDate(String(p.at || "").slice(0, 10))}</td><td>{p.bridge || "—"}</td></tr>)}
+  </ListRows>;
 }
 
 function Files({ b }) {

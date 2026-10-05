@@ -21,7 +21,7 @@ function CloudBar({ cid }) {
   const st = bk.state || {}, sk = [].concat(st.skipped || []).filter(Boolean);
   // the same sentence as every other page (booksFresh, src/js/49)
   return <>{st.phase === "first" ? <><b>The books</b>{": the first copy is still being made (up to " + FC.when(String(st.doneTo || "")) + ")."}</> : <span data-fresh="" className={sk.length ? "bad" : ""}>{booksFresh(S.books, cid).text}</span>}
-    {st.trouble && st.trouble.at && <>{" "}<span className="note">{"Tally did not answer at " + String(st.trouble.at).slice(11, 16) + "; the bridge carries on by itself."}</span></>}</>;
+    {st.trouble && st.trouble.at && <>{" "}<span className="note">{"Tally did not answer at " + fmtTime(st.trouble.at) + "; the bridge carries on by itself."}</span></>}</>;
 }
 
 export default function FreshBar({ b }) {

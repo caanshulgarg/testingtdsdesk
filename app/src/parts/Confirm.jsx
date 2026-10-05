@@ -75,9 +75,8 @@ export function BankLedger({ co, acc, compact }) {
   const where = (acc.bank || "Bank") + (acc.last4 ? " ··" + acc.last4 : "") + (acc.ifsc ? " · " + acc.ifsc : "");
   if (!ask) return <div className="bk-ledline" data-bank-ledger={acc.id} data-state="confirmed">
     <span>Tally ledger: <b>{c.value}</b></span>{" · "}
-    <button type="button" className="linkbtn" data-bank-ledger-change="" onClick={() => askConfirm({ title: "Change the Tally ledger of this bank account?", ok: "Change",
-      body: "<p>" + esc(where) + " is posted to <b>" + esc(c.value) + "</b>" + (c.by ? ", confirmed by " + esc(c.by) + (c.at ? " on " + esc(fmtDateTime(c.at)) : "") : "") + ". Bank lines are posted to the ledger you choose next, once you confirm it. Lines already in Tally are not changed.</p>" })
-      .then((ok) => { if (ok) setChanging(true); })}>Change</button>
+    {/* no question first (spec K9, round 2): nothing changes until the new ledger is confirmed, and Cancel keeps this one */}
+    <button type="button" className="linkbtn" data-bank-ledger-change="" onClick={() => setChanging(true)}>Change</button>
     {!compact && c.by && <span className="note">{" · confirmed by " + c.by + (c.at ? " " + fmtDateTime(c.at) : "")}</span>}
   </div>;
   const sel = pick !== undefined ? pick : c.value && !c.gone ? exactLedger(c.value) || "" : "";

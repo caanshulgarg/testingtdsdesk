@@ -1,6 +1,10 @@
 // Step 4 of a client, "Done": what has gone to Tally. Was viewDoneStep() (src/js/02) and viewPostLog() (src/js/18).
 // The post log is also shown in Settings → Posted to Tally and on the Tally home page, for all clients.
 import Msg from "../parts/Msg.jsx";
+import ListTable from "../parts/ListTable.jsx";
+
+const logWhat = (r) => (r.what === "bill" ? "purchase bill" : r.what === "bank" ? "bank entry" : r.what || "");
+const logState = (r) => (r.action === "removed" ? "Taken back" : !r.fromQueue ? "Sent" : r.already ? "Already in Tally" : r.verified ? "Confirmed in Tally" : "Sent, not confirmed");
 
 // every entry sent to Tally (or taken back), newest first: S.firm.postLog, kept in the firm's settings
 export function PostLog() {
@@ -23,23 +27,22 @@ export function PostLog() {
       </div>
       <p className="note" style={{ margin: "6px 0 10px" }}>{mine.length} entr{mine.length === 1 ? "y" : "ies"}{all ? " across every client" : " for " + co.name}. Kept so you can prove what was posted, by whom, and when.</p>
       {CloudJobs.err && <p className="note bad">The postings in FinCom’s cloud could not be read: <Msg text={CloudJobs.err} /></p>}
-      {!mine.length ? <p className="note">{CloudJobs.busy ? "Reading the postings…" : "Nothing yet."}</p> : (
-        <div className="tblwrap"><table className="data">
-          <thead><tr><th>When</th><th>What</th><th>Client</th><th>Reference</th><th className="n">Amount</th><th>Voucher in Tally</th><th>By</th></tr></thead>
-          <tbody>{mine.slice(0, 500).map((r, i) => {
-            const t = r.tally || {};
-            return <tr key={i} style={r.action === "removed" ? { opacity: 0.65 } : undefined}>
-              <td>{fmtDateTime(r.at)}</td>
-              <td>{r.action === "removed" && <><b>taken back</b> · </>}{r.what === "bill" ? "purchase bill" : r.what === "bank" ? "bank entry" : r.what || ""}
-                {r.fromQueue && <div className="nr">{r.already ? "already in Tally" : r.verified ? "confirmed in Tally" : "not confirmed"} · from the cloud queue</div>}</td>
-              <td>{(CO(r.co) || {}).name || "—"}</td><td>{r.ref || ""}{r.party && <div className="nr">{r.party}</div>}</td>
-              <td className="n">{r.amount ? money(num(r.amount)) : "—"}</td>
-              <td>{(t.vchType || "") + " " + (t.masterId || "")}<div className="nr">{t.company || ""}</div></td>
-              <td>{r.fromQueue ? memberName(r.by) : r.by || "—"}</td>
-            </tr>;
-          })}</tbody>
-        </table></div>
-      )}
+      {/* the one list table (spec K6); while the postings are read, "Loading…" (K7) */}
+      <ListTable name="postlog" className="data" rows={mine} rowKey={(r, i) => (r.tally && r.tally.guid) || r.at + ":" + i} unit={["entry", "entries"]} limit={500}
+        loading={!mine.length && CloudJobs.busy ? "the postings" : false}
+        rowProps={(r) => (r.action === "removed" ? { style: { opacity: 0.65 } } : {})}
+        empty={"Nothing sent to Tally yet" + (all ? "" : " for " + co.name) + ". Approve bills under To review, then use Post to Tally."}
+        cols={[
+          { k: "at", role: "date", label: "When", v: (r) => r.at || "", cell: (r) => fmtDateTime(r.at) },
+          { k: "ref", role: "number", label: "Reference", v: (r) => r.ref || "", cell: (r) => r.ref || "—" },
+          { k: "party", role: "party", label: "Party", v: (r) => r.party || "", cell: (r) => r.party || "—" },
+          { k: "amt", role: "amount", label: "Amount", cls: "n", v: (r) => num(r.amount) || null, cell: (r) => (r.amount ? money(num(r.amount)) : "—") },
+          { k: "st", role: "status", label: "Status", v: logState, cell: (r) => { const w = logState(r); return <span className={"tag " + (r.action === "removed" ? "no" : /not confirmed/.test(w) ? "warn" : "ok")}>{w}</span>; } },
+          { k: "what", label: "What", v: (r) => logWhat(r), cell: (r) => <>{logWhat(r)}{r.fromQueue && <div className="nr">from the cloud queue</div>}</> },
+          all && { k: "co", label: "Client", v: (r) => (CO(r.co) || {}).name || "", cell: (r) => (CO(r.co) || {}).name || "—" },
+          { k: "vch", label: "Voucher in Tally", cell: (r) => { const t = r.tally || {}; return <>{(t.vchType || "") + " " + (t.masterId || "")}<div className="nr">{t.company || ""}</div></>; } },
+          { k: "by", label: "By", v: (r) => (r.fromQueue ? memberName(r.by) : r.by || ""), cell: (r) => (r.fromQueue ? memberName(r.by) : r.by || "—") },
+        ]} />
     </div>
   );
 }

@@ -34,7 +34,7 @@ function Items({ e }) {
   return (
     <details className="itembox" open={s.multi}>
       <summary>What was billed · {s.items.length} line{s.items.length === 1 ? "" : "s"}{s.multi && <> <span className="tag">two GST rates</span></>}</summary>
-      <div className="tblwrap"><table className="data">
+      <div className="tblwrap"><table className="data" data-statement="">
         <thead><tr><th>Description</th><th>HSN/SAC</th><th className="n">Quantity</th><th className="n">Rate</th><th className="n">Value</th><th className="n">GST</th></tr></thead>
         <tbody>{s.items.map((i, k) => (
           <tr key={k}><td>{i.desc}</td><td>{i.hsn || "—"}</td><td className="n">{i.qty ? i.qty + (i.unit ? " " + i.unit : "") : "—"}</td>
@@ -43,7 +43,7 @@ function Items({ e }) {
       </table></div>
       {(s.rates.length > 1 || s.multi) && <>
         <h4 style={{ margin: "10px 0 4px", fontSize: 14 }}>By GST rate</h4>
-        <div className="tblwrap"><table className="data">
+        <div className="tblwrap"><table className="data" data-statement="">
           <thead><tr><th>Rate</th><th>HSN/SAC</th><th className="n">Taxable</th><th className="n">GST</th></tr></thead>
           <tbody>{s.rates.map((r, k) => (
             <tr key={k}><td>{r.rate == null ? "rate not shown" : r.rate + "%"}</td><td>{r.hsn.size ? Array.from(r.hsn).join(", ") : "—"}</td>
@@ -267,7 +267,7 @@ function Slip({ e, c, ro, snap, miss }) {
   return (
     <section><h3>Draft entry for Tally: {co.tallyName || co.name}</h3><div className="slip">
       <div className="sh"><b>{co.voucherType} voucher</b><span>{fmtDate(x.invoiceDate) + (x.invoiceNo ? ", ref " + x.invoiceNo : "")}</span></div>
-      <table className="vtbl">
+      <table className="vtbl" data-statement="">
         <thead><tr><th></th><th>Ledger</th><th className="n">Debit ₹</th><th className="n">Credit ₹</th></tr></thead>
         <tbody>{lines.map((l, i) => (
           <tr key={i}><td className="by">{l.side}</td><td><LedgerCell e={e} l={l} ro={ro} tallyCtx={tallyCtx} miss={miss} /></td>
@@ -306,7 +306,7 @@ function DupBeside({ e }) {
     ["Uploaded", (x) => x.createdAt ? fmtDateTime(x.createdAt) : "—"], ["Where it is", (x) => x.status === "duplicate" ? "held as duplicate" : x.status === "approved" ? "approved" + (x.approvedAt ? " on " + fmtDate(x.approvedAt.slice(0, 10)) : "") + " · " + tallyStateOf(x)[1] : statusLabel(x.status)]];
   return <section data-dup-beside=""><h3>Duplicate</h3>
     <p className="note" style={{ margin: "0 0 8px" }}>{(e.dupOf && e.dupOf.msg) || "Held as a duplicate."} It does not count towards limits and cannot be approved.</p>
-    {o ? <table className="data"><thead><tr><th></th><th>This copy</th><th>The original</th></tr></thead><tbody>
+    {o ? <table className="data" data-statement=""><thead><tr><th></th><th>This copy</th><th>The original</th></tr></thead><tbody>
       {rows.map(([label, f]) => { const a = f(e), b = f(o); return <tr key={label}><td>{label}</td><td>{a}</td><td className={a !== b ? "bad" : undefined}>{b}</td></tr>; })}
     </tbody></table> : <p className="note">The original is not on this computer.</p>}
     <div className="row" style={{ gap: 8, marginTop: 8 }}>

@@ -13,7 +13,7 @@ export function Rates() {
   const box = (r, k, label, step) => <td className="n"><CommitBox type="number" step={step} aria-label={label + ": " + r.label} value={r[k]} onCommit={(v) => rateSet(r.id, k, v)} />{k === "limit" && <div className="note">{({ annual: "per year", single_or_annual: "per year", monthly: "per month", excess: "per year, TDS on excess" })[r.basis]}</div>}</td>;
   const none = <td className="n">—</td>;
   return <div className="pane"><h2>Rates and limits for all clients</h2><p className="note" style={{ margin: "0 0 12px" }}>Set for tax year 2026-27 under section 393 of the Income-tax Act, 2025. Check them against the Act and any Finance Act changes before relying on them. Ledger names are set per client in Client setup → TDS.</p>
-    <div className="tblwrap"><table className="data"><thead><tr><th>Payment type</th><th>Section</th><th className="n">Rate: Ind/HUF %</th><th className="n">Rate: others %</th><th className="n">Single bill limit</th><th className="n">Limit</th></tr></thead><tbody>
+    <div className="tblwrap"><table className="data" data-statement=""><thead><tr><th>Payment type</th><th>Section</th><th className="n">Rate: Ind/HUF %</th><th className="n">Rate: others %</th><th className="n">Single bill limit</th><th className="n">Limit</th></tr></thead><tbody>
       {rules().map((r) => <tr key={r.id}><td>{r.label}</td><td>{r.ref}<div className="note">{r.old}{r.form && r.form !== "26Q" ? " · Form " + r.form : ""}</div></td>
         {r.basis === "never" ? <>{none}{none}</> : <>{box(r, "rateInd", "Rate individual", "0.01")}{box(r, "rateOth", "Rate others", "0.01")}</>}
         {r.basis === "single_or_annual" || r.basis === "single" ? box(r, "single", "Single bill limit") : none}
@@ -50,9 +50,9 @@ function SelfTest() {
   const Yn = ({ label, v, fix }) => <tr><td>{label}</td><td>{v ? <Tag c="ok">Yes</Tag> : <Tag c="bad">No</Tag>}</td><td className="note">{v ? "" : fix}</td></tr>;
   return <div className="pane" id="selfTestPane"><h2>Self-test</h2>
     <p className="note" style={{ margin: "0 0 10px" }}>Reads two sample bills built into this app (a PDF and a photo) with the free engines only. No cost. Runs by itself when the app opens.</p>
-    <div className="tblwrap"><table className="data"><tbody><Line label="Sample PDF (free PDF reading)" res={r.pdf} /><Line label="Sample photo (built-in OCR)" res={r.ocr} /></tbody></table></div>
+    <div className="tblwrap"><table className="data" data-statement=""><tbody><Line label="Sample PDF (free PDF reading)" res={r.pdf} /><Line label="Sample photo (built-in OCR)" res={r.ocr} /></tbody></table></div>
     <div className="row" style={{ marginTop: 10 }}><Act act="runSelfTest" className="btn" disabled={sum.state === "busy"}>Run self-test again</Act></div>
-    <h3 style={{ marginTop: 16 }}>This browser</h3><div className="tblwrap"><table className="data"><tbody>
+    <h3 style={{ marginTop: 16 }}>This browser</h3><div className="tblwrap"><table className="data" data-statement=""><tbody>
       <tr><td>Opened</td><td colSpan={2}>{e.where}</td></tr>
       <Yn label="WebAssembly" v={e.wasm} fix="This browser cannot run the OCR. Use a current Chrome or Edge." />
       <Yn label="WebAssembly SIMD" v={e.simd} fix="Needed by the built-in OCR. Update the browser (Chrome 91+, Edge 91+, Firefox 89+, Safari 16.4+)." />
@@ -83,7 +83,7 @@ export function Reading() {
     <SelfTest />
     <div className="pane" id="readingPane"><h2>Reading check</h2>
       <p className="note" style={{ margin: "0 0 10px" }}>Press Test on each line to see whether it really works here. Every bill shows a badge: <Tag c="ok">Free</Tag> or <Tag c="ok">Google OCR</Tag> means no Claude cost, <Tag c="stamp">Claude</Tag> means Claude read it.</p>
-      <div className="tblwrap"><table className="data"><tbody>
+      <div className="tblwrap"><table className="data" data-statement=""><tbody>
         <Row label="1. Free: PDF text" state={(window.pdfjsLib || window.TDS_ASSETS) ? <Tag c="ok">Working</Tag> : <Tag c="bad">Not loaded</Tag>} detail="Computer-made PDFs are read from their own text. No cost." />
         <Row label="2. Free: built-in OCR" state={ocrState} detail={S.ocrState === "unavailable" ? ocrProblem() + "." : S.ocrKind === "built-in" ? "For photos and scans. Built into this app, works offline." : "For photos and scans."} btn={<Act act="testOcr" disabled={!!(S.ocrTest && S.ocrTest.busy)}>Test</Act>} />
         <Row label="3. Google Cloud Vision OCR" state={gState} detail={gDetail} btn={hasGoogle() ? <Act act="testGoogle" disabled={!!(S.googleTest && S.googleTest.busy)}>Test</Act> : null} />

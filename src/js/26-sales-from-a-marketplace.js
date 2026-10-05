@@ -560,11 +560,9 @@ function salesRowAct(a, id, force){
     if (a === "ignore"){ v.status = "ignored"; if (s.openId === v.id) s.openId = null; salesSetUndo("Invoice " + esc(v.x.number) + " ignored", before); }
     if (a === "restore"){ v.status = "review"; mapInvoice(v); salesSetUndo("Invoice " + esc(v.x.number) + " restored", before); }
     if (a === "delete"){
-      askConfirm({title: "Delete invoice " + (v.x.number || "") + "?", danger: true, ok: "Delete", body: "It is removed from FinCom. Tally is not changed."}).then(ans => {
-        if (!ans) return;
-        if (typeof Cloud === "object") Cloud.delete("sales", s.cid, s.cid + ":" + v.id, "invoice deleted");
-        s.list = s.list.filter(o => o.id !== v.id); s.openId = null; salesSetUndo("Invoice " + esc(v.x.number) + " deleted", before); saveSales(); render();
-      });
+      // no question first (spec K9, round 2): Undo in the bar puts it back
+      if (typeof Cloud === "object") Cloud.delete("sales", s.cid, s.cid + ":" + v.id, "invoice deleted");
+      s.list = s.list.filter(o => o.id !== v.id); s.openId = null; salesSetUndo("Invoice " + esc(v.x.number) + " deleted", before); saveSales(); render();
       return true;
     }
     s.sticky.add(v.id); saveSales(); render(); return true;
@@ -653,7 +651,7 @@ function salesClick(t){
     case "salesSelNone": s.sel.clear(); salesLightRefresh(); return true;
     case "salesBulkConfirm": salesBulk("confirm"); return true;
     case "salesBulkIgnore": salesBulk("ignore"); return true;
-    case "salesBulkDelete": askConfirm({title: "Delete " + s.sel.size + " invoices?", danger: true, ok: "Delete", body: "They are removed from FinCom. Tally is not changed."}).then(a => { if (a) salesBulk("delete"); }); return true;
+    case "salesBulkDelete": salesBulk("delete"); return true;   // Undo in the bar (spec K9, round 2)
     case "salesBulkPrint": { const rows = s.list.filter(v => s.sel.has(v.id)); const co = CO(s.cid);
       const html = rows.map(v => invoiceHtml(v.x, co, s.cfg)).join("").replace(/<\/body><\/html><!doctype html><html lang="en"><head>[\s\S]*?<body>(<p class="noprint"[\s\S]*?<\/p>)?/g, '<div style="page-break-before:always"></div>');
       printInvoiceHtml(html, rows.length + "-invoices"); return true; }

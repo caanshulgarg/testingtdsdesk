@@ -238,7 +238,7 @@ const Ledgers = {
     return r;
   },
   // "1,110 ledgers from Tally · 02-Oct 10:56"
-  when(at){ if (!at) return ""; const d = new Date(at); return isNaN(d) ? "" : String(d.getDate()).padStart(2, "0") + "-" + MONTHS3[d.getMonth()] + " " + fmtTime(d); },
+  when(at){ if (!at) return ""; const s = fmtDateTime(at); return s === "—" ? "" : s; },
 
   // ---------- a rename in Tally that carried the ledger's saved choices (migration 39) ----------
   // tally_ledgers.needs_confirm is true until an owner confirms; the rename's entry (before_clean.renamed[], confirm: true)

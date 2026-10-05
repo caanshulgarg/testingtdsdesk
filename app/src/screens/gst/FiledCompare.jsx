@@ -9,7 +9,7 @@ const H = [["taxable", "Taxable"], ["igst", "IGST"], ["cgst", "CGST"], ["sgst", 
 function Table({ title, part, open }) {
   if (!part) return null;
   return <section className="dash-card" style={{ marginBottom: 12 }} data-cmp={title}><h3>{title}</h3>
-    <div className="bk-tablewrap"><table className="bk-table compact">
+    <div className="bk-tablewrap"><table className="bk-table compact" data-statement="">
       <thead><tr><th>Table</th><th></th>{H.map(([k, l]) => <th key={k} className="n">{l}</th>)}</tr></thead>
       <tbody>{part.rows.filter((r) => open || r.any || H.some(([k]) => num(r.filed[k]) || num(r.work[k]))).map((r) => <Fragment key={r.label}>
         <tr><td rowSpan={3}><b>{r.label}</b></td><td className="nr">Filed</td>{H.map(([k]) => <td key={k} className="n">{money(r.filed[k])}</td>)}</tr>
@@ -46,7 +46,7 @@ export default function FiledCompare({ b = S.books }) {
         <button className="btn small" disabled={!!busy} onClick={() => fetchAll("3B")}>Fetch the filed 3B not here</button></div>
         : <p className="note">Connect {gstin} to the portal (2B tab) to fetch the filed returns. A GSTR-1 JSON downloaded from the portal can also be brought in under Amendments.</p>}
       {(busy || S.gstCmpMsg) && <p className="note">{busy || S.gstCmpMsg}</p>}
-      <div className="bk-tablewrap" style={{ marginTop: 8 }}><table className="bk-table compact" data-cmp="year">
+      <div className="bk-tablewrap" style={{ marginTop: 8 }}><table className="bk-table compact" data-statement="" data-cmp="year">
         <thead><tr><th>Month</th><th>GSTR-1</th><th className="n">Tax filed</th><th className="n">Tax, FinCom</th><th>GSTR-3B</th><th className="n">Net ITC filed</th><th className="n">Net ITC, FinCom</th></tr></thead>
         <tbody>{rows.map((r) => {
           const t1 = (side) => r.r1 ? r2(r.r1.rows.reduce((a, x) => a + num(x[side].igst) + num(x[side].cgst) + num(x[side].sgst) + num(x[side].cess), 0)) : null;

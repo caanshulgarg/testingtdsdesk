@@ -38,7 +38,7 @@ export function ServerMis({ b }) {
       <Tile l="You owe" v={m(r.pay.owe)} sub={"on " + fmtDate(tallyDate(r.to)) + (r.pay.advance >= 1 ? " · advance to suppliers " + m(r.pay.advance) : "")} />
     </div>
     <section className="dash-card" style={{ marginTop: 12 }}><h3>Profit and loss</h3>
-      <div className="bk-tablewrap"><table className="bk-table" id="srvPl"><thead><tr><th></th>{cols && months.map((mm) => <th key={mm} className="n">{GSTR.label(mm).replace(/[-\s]\d{4}$/, "")}</th>)}<th className="n">Total</th></tr></thead><tbody>
+      <div className="bk-tablewrap"><table className="bk-table" data-statement="" id="srvPl"><thead><tr><th></th>{cols && months.map((mm) => <th key={mm} className="n">{GSTR.label(mm).replace(/[-\s]\d{4}$/, "")}</th>)}<th className="n">Total</th></tr></thead><tbody>
         {HEADS.filter(([k]) => H[k]).map(([k, l]) => <tr key={k}><td>{l}</td>{cols && months.map((mm) => <td key={mm} className="n">{m((H[k].m || {})[mm])}</td>)}<td className="n">{m(H[k].t)}</td></tr>)}
         {[["gross", "Gross profit"], ["pbt", "Profit before tax"]].map(([k, l]) => <tr key={k}><td><b>{l}</b></td>{cols && months.map((mm) => <td key={mm} className="n"><b>{m((r[k].m || {})[mm])}</b></td>)}<td className="n"><b>{m(r[k].t)}</b></td></tr>)}
       </tbody></table></div></section>
@@ -60,7 +60,7 @@ export function ServerTds({ b }) {
   return <section className="dash-card" data-srv-tds><h3>{"TDS, " + fmtDate(tallyDate(r.from)) + " to " + fmtDate(tallyDate(r.to))}</h3>
     {!r.mapped ? <p className="note">No ledger is marked as TDS or TCS yet in the client’s ledger list.</p> : <>
       <div className="dash-tiles"><Tile l="Deducted" v={m(r.deducted)} sub="TDS and TCS payable ledgers" /><Tile l="Paid" v={m(r.paid)} sub="to the government" /><Tile l="Receivable" v={m(r.receivable)} sub="deducted by customers" /></div>
-      <div className="bk-tablewrap"><table className="bk-table" id="srvTds"><thead><tr><th>Ledger</th><th className="n">Opening</th><th className="n">Deducted</th><th className="n">Paid</th><th className="n">Closing</th></tr></thead><tbody>
+      <div className="bk-tablewrap"><table className="bk-table" data-statement="" id="srvTds"><thead><tr><th>Ledger</th><th className="n">Opening</th><th className="n">Deducted</th><th className="n">Paid</th><th className="n">Closing</th></tr></thead><tbody>
         {r.ledgers.map((l) => <tr key={l.l}><td>{l.l}</td><td className="n">{m(l.open)}</td><td className="n">{m(l.deducted)}</td><td className="n">{m(l.paid)}</td><td className="n">{m(l.close)}</td></tr>)}</tbody></table></div></>}
     <Src x={x} /></section>;
 }
@@ -72,7 +72,7 @@ export function ServerGst({ b }) {
   const sum = (o) => r2((o.CGST || 0) + (o.SGST || 0) + (o.IGST || 0) + (o.CESS || 0));
   return <section className="dash-card" data-srv-gst><h3>{"GST by month, " + fmtDate(tallyDate(r.from)) + " to " + fmtDate(tallyDate(r.to))}</h3>
     {!r.mapped ? <p className="note">No ledger is marked as GST yet in the client’s ledger list.</p> :
-      <div className="bk-tablewrap"><table className="bk-table" id="srvGst"><thead><tr><th>Month</th><th className="n">Taxable sales</th><th className="n">Output tax</th><th className="n">Input tax</th><th className="n">Reverse charge</th><th className="n">Net</th></tr></thead><tbody>
+      <div className="bk-tablewrap"><table className="bk-table" data-statement="" id="srvGst"><thead><tr><th>Month</th><th className="n">Taxable sales</th><th className="n">Output tax</th><th className="n">Input tax</th><th className="n">Reverse charge</th><th className="n">Net</th></tr></thead><tbody>
         {r.months.map((x2) => <tr key={x2.ym}><td>{GSTR.label(x2.ym)}</td><td className="n">{m(x2.taxableSales)}</td><td className="n">{m(sum(x2.out))}</td><td className="n">{m(sum(x2.in))}</td><td className="n">{m(x2.rcmOut)}</td><td className="n">{m(sum(x2.out) + x2.rcmOut - sum(x2.in))}</td></tr>)}</tbody></table></div>}
     <p className="note" style={{ margin: "6px 0 0" }}>From the GST ledgers as confirmed in the client’s ledger list; the returns themselves (GSTR-1, 3B) are worked out when the books are in on this computer.</p>
     <Src x={x} /></section>;

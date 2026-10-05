@@ -9,6 +9,7 @@ import CommitBox from "../../parts/CommitBox.jsx";
 import { AuditButton } from "../../parts/Ai.jsx";
 import { CatchUp } from "../../parts/Notes.jsx";
 import Confirm from "../../parts/Confirm.jsx";
+import { ListRows } from "../../parts/ListTable.jsx";
 
 const m = (v) => INR.format(r2(v || 0));
 const d = (x) => fmtDate(tallyDate(x));
@@ -54,7 +55,10 @@ function Head({ b, run }) {
   </section>;
 }
 
-const Table = ({ head, children }) => <div className="bk-tablewrap"><table className="bk-table"><thead><tr>{head}</tr></thead><tbody>{children}</tbody></table></div>;
+// suggested journal entries: a statement (the lines of each entry stay together, in order)
+const Table = ({ head, children }) => <div className="bk-tablewrap"><table className="bk-table" data-statement=""><thead><tr>{head}</tr></thead><tbody>{children}</tbody></table></div>;
+// the lists: the one list table (spec K6)
+const H = (label, role, cls) => ({ label, role, cls });
 
 // what a finding says when opened: effect, what to do, a note, the entries to pass, the entries behind it, what was put right
 function FindingBody({ f, st }) {
@@ -73,16 +77,16 @@ function FindingBody({ f, st }) {
     </>}
     {f.rows && f.rows.length > 0 && <>
       <p><b>The entries behind it</b></p>
-      <Table head={<><th className="dt">Date</th><th>Voucher</th><th>Party or ledger</th><th className="n">Amount</th><th>Detail</th></>}>
+      <ListRows name={"auditRows-" + f.id} head={[H("Date", "date", "dt"), H("Voucher", "number"), H("Party or ledger", "party"), H("Amount", "amount", "n"), H("Detail")]}>
         {f.rows.slice(0, 100).map((r, i) => <tr key={i}><td>{r.date ? d(r.date) : ""}</td><td>{r.no || ""}{r.type && <div className="nr">{r.type}</div>}</td><td>{r.party || ""}</td><td className="n">{r.amount ? m(r.amount) : ""}</td><td>{r.note || ""}</td></tr>)}
-      </Table>
+      </ListRows>
       {f.rows.length > 100 && <p className="note">The first 100 of {f.rows.length}; all are in the Excel.</p>}
     </>}
     {sv.n > 0 && <>
       <p><b style={{ color: "var(--ok)" }}>Put right</b> <span className="note">found earlier, gone when checked again</span></p>
-      <Table head={<><th className="dt">Date</th><th>Voucher</th><th>Party or ledger</th><th className="n">Amount</th><th>Put right by</th></>}>
+      <ListRows name={"auditSolved-" + f.id} head={[H("Date", "date", "dt"), H("Voucher", "number"), H("Party or ledger", "party"), H("Amount", "amount", "n"), H("Put right by")]}>
         {sv.items.slice(-100).map((it, i) => { const r = it.row || {}; return <tr key={i} style={{ color: "var(--muted)" }}><td>{r.date ? d(r.date) : ""}</td><td><s>{r.no || ""}</s></td><td>{r.party || ""}</td><td className="n">{r.amount ? m(r.amount) : ""}</td><td>{fmtDate(String(it.solved).slice(0, 10))}</td></tr>; })}
-      </Table>
+      </ListRows>
     </>}
   </div>;
 }
@@ -123,7 +127,7 @@ function Findings({ b }) {
     <nav className="sbar" aria-label="Areas"><button aria-selected={!area} onClick={() => setAndShow("auditArea", "")}>All <span className="sbar-n">{f0.length}</span></button>
       {Audit.AREAS.map(([a, l]) => { const n = f0.filter((f) => f.area === a).length; return n ? <button key={a} aria-selected={area === a} onClick={() => setAndShow("auditArea", a)}>{l} <span className="sbar-n">{n}</span></button> : null; })}</nav>
     <Head b={b} run={run} />
-    <p className="note" style={{ margin: "10px 0" }}>{"Last run on " + fmtDate(run.at.slice(0, 10)) + " at " + run.at.slice(11, 16) + " (" + Audit.howLabel(run) + ") for " + d(run.from) + " to " + d(run.to) + ", " + run.vouchers + " vouchers. Result code "}
+    <p className="note" style={{ margin: "10px 0" }}>{"Last run on " + fmtDateTime(run.at) + " (" + Audit.howLabel(run) + ") for " + d(run.from) + " to " + d(run.to) + ", " + run.vouchers + " vouchers. Result code "}
       <b>{run.code || ""}</b>{": the same books always give the same code." + (run.balances ? " Balances from " + run.balances + "." : "") + ((run.notes || []).length ? " " + run.notes.join(" ") : "")}
       {(run.errors || []).length > 0 && <>{" "}<span className="bad">Some checks could not run: {run.errors.join("; ")}</span></>}</p>
     <div className="dash-tiles">
@@ -135,13 +139,13 @@ function Findings({ b }) {
     </div>
     <div className="revfilter"><select aria-label="Status" style={{ width: "auto" }} value={fs} onChange={(ev) => setAndShow("auditSt", ev.target.value)}><option value="">Every status</option>{Audit.STATUS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
     {list.map((f, i) => <Finding key={f.id + ":" + i} f={f} />)}
-    {!list.length && <div className="bk-none" style={{ marginTop: 10 }}>Nothing here.</div>}
+    {!list.length && <div className="bk-none lt-empty" data-list-empty="" style={{ marginTop: 10 }}>Nothing here. Choose Every status above, or run the audit again.</div>}
     {gone.length > 0 && <section className="dash-card" style={{ marginTop: 12, borderLeft: "4px solid var(--ok)" }}><h3 style={{ color: "var(--ok)" }}>Solved</h3><p className="note">Every item of these was put right in the books.</p>
-      <Table head={<><th>Observation</th><th className="n">Items</th><th className="n">Amount</th><th>Last put right</th></>}>
-        {gone.map((x, i) => <tr key={x.id + ":" + i}><td>{x.title}</td><td className="n">{x.n}</td><td className="n">{m(x.amount)}</td><td>{fmtDate(String(x.items[x.items.length - 1].solved).slice(0, 10))}</td></tr>)}</Table></section>}
+      <ListRows name="auditGone" unit={["observation", "observations"]} head={[H("Observation"), { label: "Items", cls: "n", sum: true, fmt: String }, H("Amount", "amount", "n"), H("Last put right", "date")]}>
+        {gone.map((x, i) => <tr key={x.id + ":" + i}><td>{x.title}</td><td className="n">{x.n}</td><td className="n">{m(x.amount)}</td><td>{fmtDate(String(x.items[x.items.length - 1].solved).slice(0, 10))}</td></tr>)}</ListRows></section>}
     {(au.history || []).length > 1 && <section className="dash-card" style={{ marginTop: 12 }}><h3>Earlier runs</h3>
-      <Table head={<><th>Run on</th><th>How</th><th>Period</th><th className="n">Findings</th><th className="n">Serious</th><th className="n">Amount involved</th></>}>
-        {au.history.slice(0, 12).map((x, i) => <tr key={i}><td>{fmtDate(x.at.slice(0, 10)) + " " + x.at.slice(11, 16)}</td><td>{x.how}</td><td>{d(x.from) + " to " + d(x.to)}</td><td className="n">{x.n}</td><td className="n">{x.high}</td><td className="n">{m(x.amount)}</td></tr>)}</Table></section>}
+      <ListRows name="auditRuns" unit={["run", "runs"]} head={[H("Run on", "date"), H("How"), H("Period"), { label: "Findings", cls: "n", sum: false }, { label: "Serious", cls: "n", sum: false }, H("Amount involved", "amount", "n")]}>
+        {au.history.slice(0, 12).map((x, i) => <tr key={i}><td>{fmtDateTime(x.at)}</td><td>{x.how}</td><td>{d(x.from) + " to " + d(x.to)}</td><td className="n">{x.n}</td><td className="n">{x.high}</td><td className="n">{m(x.amount)}</td></tr>)}</ListRows></section>}
   </>;
 }
 
@@ -154,13 +158,13 @@ function Related({ b }) {
         <input type="search" id="relq" list="relList" aria-label="Type a ledger name" data-fk="relq" placeholder="Type a ledger name" style={{ width: 300 }} />
         <datalist id="relList">{Object.keys(Object.assign({}, b.ledInfo || {}, b.map || {})).sort().slice(0, 3000).map((n) => <option key={n} value={n} />)}</datalist>
         <Act act="relAddTyped">Add</Act></div>
-      {rel.length ? <Table head={<><th>Ledger in Tally</th><th>PAN</th><th>Relation</th><th className="ac"></th></>}>
+      {rel.length ? <ListRows name="auditRelated" unit={["party", "parties"]} head={[H("Ledger in Tally", "party"), H("PAN"), H("Relation", "status"), H("", "act", "ac")]}>
         {rel.map((x, i) => <tr key={x.name + ":" + i} data-key={x.name}><td>{x.name}</td><td>{pans[x.name] || "—"}</td>
           <td><select aria-label={"Relation of " + x.name} style={{ width: "auto" }} value={x.relation || ""} onChange={(ev) => relSet(x.name, ev.target.value)}><option value="">choose</option>{REL.map((r) => <option key={r}>{r}</option>)}</select></td>
-          <td className="ac"><button className="linkbtn" onClick={() => relRemove(x.name)}>remove</button></td></tr>)}</Table> : <p className="note">No one listed yet.</p>}
+          <td className="ac"><button className="linkbtn" onClick={() => relRemove(x.name)}>remove</button></td></tr>)}</ListRows> : <p className="note lt-empty" data-list-empty="" style={{ border: 0 }}>No one listed yet. Type a ledger name above and use Add, or add one of those found below.</p>}
     </section>
     {guess.length > 0 && <section className="dash-card" style={{ marginTop: 12 }}><h3>Possibly related</h3><p className="note">Found in the ledgers by where they sit or what they are called. Add the ones that are related.</p>
-      <div className="bk-tablewrap"><table className="bk-table"><tbody>{guess.map((g, i) => <tr key={g.name + ":" + i} data-key={g.name}><td>{g.name}<div className="nr">{g.why}</div></td><td>{pans[g.name] || ""}</td>
+      <div className="bk-tablewrap"><table className="bk-table" data-statement=""><tbody>{guess.map((g, i) => <tr key={g.name + ":" + i} data-key={g.name}><td>{g.name}<div className="nr">{g.why}</div></td><td>{pans[g.name] || ""}</td>
         <td className="ac"><button className="btn small" onClick={() => relAdd(g.name)}>Add</button></td></tr>)}</tbody></table></div></section>}
   </Confirm>;
 }
@@ -170,7 +174,7 @@ function Form3cd({ b }) {
   const run = (b.audit || {}).last;
   if (!run) return <div className="bk-none">Run the audit first (Findings → Run now); the draft is filled from it.</div>;
   return <section className="dash-card"><div className="row" style={{ gap: 8, flexWrap: "wrap", marginBottom: 8 }}><Act act="audit3cdPdf" className="btn small primary">Download the draft (PDF)</Act><Act act="audit3cdExcel">Excel</Act></div>
-    <div className="audit3cd"><Legacy html={Audit.form3cdHtml(Audit.form3cd(run)).replace(/<table>/g, '<div class="bk-tablewrap"><table class="bk-table">').replace(/<\/table>/g, "</table></div>")} /></div></section>;
+    <div className="audit3cd"><Legacy html={Audit.form3cdHtml(Audit.form3cd(run)).replace(/<table>/g, '<div class="bk-tablewrap"><table class="bk-table" data-statement="">').replace(/<\/table>/g, "</table></div>")} /></div></section>;
 }
 
 // named Audit_ so the audit checks (the global Audit) stay in reach inside this file

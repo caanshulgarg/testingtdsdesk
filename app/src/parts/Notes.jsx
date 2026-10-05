@@ -1,3 +1,4 @@
+import { ListRows } from "./ListTable.jsx";
 // Small notes shared by several screens: ledgers still to confirm (TDS, GST), filed GST returns the books no longer
 // match, whether the TDS and GST work is saved for the firm, Tally having changed since a tab was worked out, a new
 // client's first steps, and bringing in day books for several clients at once. Was ledgerBanner, gstDriftNote,
@@ -60,11 +61,11 @@ export function MultiUpload() {
   if (!m) return <div className="pane">{intro}{pick("Choose day book files", "btn")}</div>;
   const cos = Object.values(S.companies || {}).filter((c) => !c.deleted).sort((a, c) => a.name.localeCompare(c.name));
   return <div className="pane">{intro}{m.reading && <p className="note">Reading the files…</p>}
-    <div className="tblwrap"><table className="data"><thead><tr><th>File</th><th>Company in the file</th><th>Client</th><th>Status</th></tr></thead><tbody>
+    <ListRows name="multiUpload" className="data" unit={["file", "files"]} head={[{ label: "File", role: "number" }, { label: "Company in the file", role: "party" }, { label: "Client" }, { label: "Status", role: "status" }]}>
       {m.rows.map((r, i) => <tr key={i}><td>{r.f.name}<div className="nr">{Math.round(r.f.size / 1048576) + " MB"}</div></td><td>{r.name || "—"}{r.gstin && <div className="nr">{r.gstin}</div>}</td>
         <td>{r.status === "waiting" && !m.busy ? <select aria-label={"Client for " + r.f.name} value={r.cid || ""} onChange={(ev) => MultiUp.setClient(i, ev.target.value)}><option value="">— choose —</option>{cos.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-          : (((S.companies || {})[r.cid] || {}).name || "—")}</td><td className={r.ok ? "" : /not taken/.test(r.status) ? "bad" : ""}>{r.status}</td></tr>)}</tbody></table></div>
-    <div className="row" style={{ gap: 8, marginTop: 8 }}>{m.busy ? <span className="note">Bringing them in, one at a time…</span> : <><button className="btn primary" onClick={() => MultiUp.start()}>Bring them in</button>{pick("Choose other files", "btn small")}<button className="btn small" onClick={() => doAct("multiClose")}>Close</button></>}</div></div>;
+          : (((S.companies || {})[r.cid] || {}).name || "—")}</td><td className={r.ok ? "" : /not taken/.test(r.status) ? "bad" : ""}>{r.status}</td></tr>)}</ListRows>
+    <div className="row" style={{ gap: 8, marginTop: 8 }}>{m.busy ? <span className="lt-progress" data-progress=""><span className="note">{"Bringing in " + Math.min((m.done || 0) + 1, m.total || 1) + " of " + (m.total || 1) + (m.at ? ": " + m.at : "") + "…"}</span><progress max={m.total || 1} value={m.done || 0} /></span> : <><button className="btn primary" onClick={() => MultiUp.start()}>Bring them in</button>{pick("Choose other files", "btn small")}<button className="btn small" onClick={() => doAct("multiClose")}>Close</button></>}</div></div>;
 }
 
 // fast-sync: what FinCom's server is doing for this client (a day book being read in, the kept day books read again),

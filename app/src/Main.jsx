@@ -9,6 +9,7 @@ import Legacy from "./parts/Legacy.jsx";
 import SignIn from "./screens/SignIn.jsx";
 import SCREENS from "./screens/index.js";
 import { RecorderNotes } from "./parts/TallyLine.jsx";
+import Loading from "./parts/Loading.jsx";
 
 const { Working, Books, Txn, Dash, DocqPanel, PostStep, DoneStep, ClientSetup, Collect, Sales, VendorRecon, ReviewTable, Invoices, Bank, Parties, Export,
   Help, Today, InboxAll, TallyHome, FirmSettings, Clients, Drawer, BankBar, SalesBar, ActionBar } = SCREENS;
@@ -50,7 +51,7 @@ function Screen() {
   if (open && isSetupTab(S.tab)) return <ClientSetup />;
   if (open && S.step === "collect") return docType() === "sales" ? <Sales /> : <Collect />;
   if (S.view === "company" && co) {
-    if (S.loadingCo) return <p className="note">{"Opening " + co.name + "…"}</p>;
+    if (S.loadingCo) return <Loading what={co.name + "’s work"} />;
     if (S.tab === "invoices") return VR.st() ? <VendorRecon /> : S.reviewTable && S.filter === "draft" ? <ReviewTable /> : <Invoices />;
     if (S.tab === "bank") return <Bank />;
     if (S.tab === "sales") return <Sales />;
@@ -70,7 +71,7 @@ function Bar() {
 }
 
 export default function Main({ v }) {
-  if (!S.firm) return <p className="note">Loading…</p>;
+  if (!S.firm) return <Loading />;
   if (signInNeeded()) return <Guard name="the sign-in page" v={v}><SignIn /></Guard>;
   const company = S.view === "company" && CO();
   return <>

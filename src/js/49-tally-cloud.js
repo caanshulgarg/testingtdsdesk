@@ -1027,7 +1027,7 @@ const TLight = {
 function tallyHm(t){
   const ms = typeof t === "number" ? t : Date.parse(String(t || ""));
   if (!ms) return "";
-  return new Date(ms).toDateString() === new Date().toDateString() ? fmtTime(ms) : fmtDateTime(ms);
+  return istDay(ms) === istDay(Date.now()) ? fmtTime(ms) : fmtDateTime(ms);
 }
 function tallyLine(co){
   if (!co) return null;
@@ -1391,7 +1391,7 @@ function tallyStatus(co){
   const parts = {bridge, tally, company, busySince};
   // the short words for the header chip (review of 01-Oct-2026: the long label pushed the tabs off the row); the full
   // label and sentence go in its tooltip
-  const hhmm = t => { const d = new Date(t), today = new Date(); return d.toDateString() === today.toDateString() ? fmtTime(t) : fmtDate(d); };
+  const hhmm = t => istDay(t) === istDay(Date.now()) ? fmtTime(t) : fmtDateTime(t);
   const SHORT = {none: "Tally not set up", offline: "Tally offline" + (heard ? " \u00b7 " + hhmm(heard) : ""), reconnecting: "Tally reconnecting\u2026",
     unlinked: "Tally: not linked", busy: "Tally busy", ok: "Tally in sync"};
   const out = o => Object.assign(o, {parts, short: o.state === "waiting" ? o.label.replace(/ waiting$/, "") + " for Tally" : SHORT[o.state] || o.label});
@@ -1420,12 +1420,9 @@ function tallyStatus(co){
 // cannot say why from afar: unless this computer is the one (then its bridge says), the reason names both causes.
 // {on, code, computer, company, at ("04-Oct-2026 14:05 IST"), reason, fix, words}
 function tallyIst(t){
+  // the one formatter for times (fmtDateTime, src/js/01: IST whatever this computer's clock)
   const ms = typeof t === "number" ? t : Date.parse(String(t || ""));
-  if (!ms) return "";
-  const p = {};
-  try { new Intl.DateTimeFormat("en-GB", {timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false}).formatToParts(ms).forEach(q => { p[q.type] = q.value; }); }
-  catch (e){ return fmtDateTime(ms); }
-  return p.day + "-" + String(p.month).replace(/^Sept$/, "Sep") + "-" + p.year + " " + (p.hour === "24" ? "00" : p.hour) + ":" + p.minute + " IST";
+  return ms ? fmtDateTime(ms) : "";
 }
 function tallySign(co){
   if (typeof TLight === "object") TLight.refresh();

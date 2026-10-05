@@ -123,7 +123,7 @@ export function Qrmp() {
       <label className="note">Filing frequency:{" "}
         <select aria-label="Filing type for this quarter" data-qtype="" style={{ width: "auto" }} value="qrmp" onChange={(ev) => gqQuarterType(ev.target.value)}>
           <option value="qrmp">quarterly (QRMP)</option><option value="monthly">monthly</option></select></label></div>
-    <div className="bk-tablewrap" style={{ marginTop: 8 }}><table className="bk-table compact gf-off" data-qtable="">
+    <div className="bk-tablewrap" style={{ marginTop: 8 }}><table className="bk-table compact gf-off" data-qtable="" data-statement="">
       <thead><tr><th></th>{cols.map(head)}<th className="n">Quarter</th></tr></thead>
       <tbody>
         {row("Due", (c) => d(c.due), d(q.due3b) + " (3B)")}
@@ -186,9 +186,9 @@ export function Gstr4() {
   const row = (l, x) => <tr key={l}><td>{l}</td><td className="n">{m(x.taxable)}</td><td className="n">{m(x.igst)}</td><td className="n">{m(x.cgst)}</td><td className="n">{m(x.sgst)}</td></tr>;
   return <section className="dash-card gq"><h3>{"GSTR-4 · " + fy} <span className="tag">Composition, the year</span></h3>
     <p className="note">The annual return, due {d(g.due)}. Fill these figures on the portal (Returns → GSTR-4).</p>
-    <Step n={1} title="Table 4: purchases"><div className="bk-tablewrap"><table className="bk-table compact"><thead><tr><th></th><th className="n">Value</th><th className="n">IGST</th><th className="n">CGST</th><th className="n">SGST</th></tr></thead>
+    <Step n={1} title="Table 4: purchases"><div className="bk-tablewrap"><table className="bk-table compact" data-statement=""><thead><tr><th></th><th className="n">Value</th><th className="n">IGST</th><th className="n">CGST</th><th className="n">SGST</th></tr></thead>
       <tbody>{[row("4A From registered suppliers (not reverse charge)", g.t4.reg), row("4B From registered suppliers, reverse charge", g.t4.regRcm), row("4C From unregistered suppliers, reverse charge", g.t4.unregRcm), row("4D Import of services", g.t4.imps)]}</tbody></table></div></Step>
-    <Step n={2} title="Table 5: the year’s CMP-08s"><div className="bk-tablewrap"><table className="bk-table compact">
+    <Step n={2} title="Table 5: the year’s CMP-08s"><div className="bk-tablewrap"><table className="bk-table compact" data-statement="">
       <thead><tr><th>Quarter</th><th className="n">Turnover</th><th className="n">Tax</th><th className="n">Reverse charge</th>{est && <th className="n">Interest, estimate</th>}</tr></thead>
       <tbody>{g.quarters.map((x) => <tr key={x.q}><td>{x.label}</td><td className="n">{m(x.turnover)}</td><td className="n">{m(x.tax)}</td><td className="n">{m(all4(x.rcm))}</td>{est && <td className="n">{m(x.interest)}</td>}</tr>)}
         <tr><td><b>Year</b></td><td className="n"><b>{m(g.turnover)}</b></td><td className="n"><b>{m(g.tax)}</b></td><td className="n"><b>{m(all4(g.rcm))}</b></td>{est && <td className="n"><b>{m(g.interest)}</b></td>}</tr></tbody>

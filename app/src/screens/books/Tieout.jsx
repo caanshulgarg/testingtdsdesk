@@ -61,7 +61,7 @@ export default function Tieout({ b }) {
     {no44 && <p className="bk-warn" data-not-ready="">{"Tie-out: " + REC_NOT44 + ". FinCom’s figures are shown; nothing can be saved yet."}</p>}
     {t.err && <p className="bk-warn"><Msg text={t.err} /></p>}
     {!months.length ? <p className="note">No months yet: the copy of the books has no period. Read the books from Tally first.</p>
-      : <div className="bk-tablewrap"><table className="bk-table" data-tieout-table="">
+      : <div className="bk-tablewrap"><table className="bk-table" data-statement="" data-tieout-table="">
         <thead><tr><th>Month</th>{Rec.FIGS.map(([k, name]) => <th key={k} className="n">{name}</th>)}<th></th></tr></thead>
         <tbody>{months.map((m) => <Month key={m} cid={cid} m={m} t={t} no44={no44} />)}</tbody>
       </table></div>}

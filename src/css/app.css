@@ -1280,3 +1280,29 @@ ol.post-import li{display:list-item;margin:3px 0;overflow-wrap:anywhere}
 .toast .toast-raw{flex-basis:100%;font-size:12px;opacity:.8;user-select:text;word-break:break-word}
 .about-line{margin:24px 0 0;font-size:11.5px;color:var(--muted);text-align:right}
 .msg-details{display:inline}.msg-details summary{display:inline;cursor:pointer;color:var(--brand);text-decoration:underline;font-size:12.5px}.msg-details[open] span{display:block;font-size:12px;color:var(--muted);word-break:break-word}
+/* round 2 of the UI pass (04-Oct-2026), K6: the one list table (app/src/parts/ListTable.jsx). The box scrolls and the
+   header stays in view; a header sorts on a click and the arrow shows which; the foot holds the count and totals */
+.lt-wrap{max-height:calc(100vh - 170px);overflow:auto}
+table.lt thead th{position:sticky;top:0;z-index:2;background:var(--sheet);box-shadow:inset 0 -1px 0 var(--rule)}
+table.data.lt thead th{background:var(--sheet)}
+.txntbl.lt thead th.stick1,.txntbl.lt thead th.stick2{z-index:3}
+.lt-sort{border:0;background:none;padding:0;margin:0;font:inherit;color:inherit;letter-spacing:inherit;text-transform:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:4px;text-align:inherit;white-space:nowrap}
+.lt-sort:hover .gfl,.lt-sort:focus-visible .gfl{color:var(--ink);text-decoration:underline}
+.lt-ar{display:inline-block;min-width:.7em;font-size:9.5px;color:var(--ledger)}
+th[aria-sort=ascending],th[aria-sort=descending]{color:var(--ink)}
+table.lt tfoot td{background:var(--paper);border-top:1px solid var(--rule);border-bottom:0;white-space:nowrap;position:sticky;bottom:0;z-index:1}
+table.lt tfoot td.lt-count{color:var(--muted)}
+table.lt tfoot td.lt-count b{color:var(--ink)}
+.lt-empty{background:var(--sheet);border:1px solid var(--rule);border-radius:10px}
+/* K7: while data loads, "Loading…" over grey bars in the shape of what comes (app/src/parts/Loading.jsx) */
+.lt-loading{padding:16px 18px;background:var(--sheet);border:1px solid var(--rule);border-radius:10px;margin:4px 0}
+.lt-loading-t{color:var(--st-waiting);font-size:13.5px;font-weight:600;margin-bottom:8px}
+.skel-row{display:flex;gap:14px;margin:10px 0}
+.skel{display:block;height:11px;border-radius:6px;background:var(--st-waiting-soft);flex:1;animation:skel 1.3s ease-in-out infinite}
+.lt-loading-inline{display:inline-flex;align-items:center;gap:6px;color:var(--st-waiting)}
+.skel.skel-dot{width:9px;height:9px;flex:none;border-radius:50%}
+@keyframes skel{0%,100%{opacity:1}50%{opacity:.4}}
+@media (prefers-reduced-motion:reduce){.skel{animation:none}}
+/* a long action: what it is doing and how far ("Posting 143 of 365") */
+.lt-progress{display:flex;flex-direction:column;gap:4px;margin:6px 0}
+.lt-progress progress{width:100%;max-width:420px;height:8px}

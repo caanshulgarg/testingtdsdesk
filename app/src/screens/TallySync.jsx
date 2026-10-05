@@ -4,6 +4,7 @@
 // owner's Apply now on a held line (tally_recorder_release_held). New lines come in live (Live.joinRecorder, src/js/54).
 import Msg from "../parts/Msg.jsx";
 import { useState } from "react";
+import ListTable from "../parts/ListTable.jsx";
 
 const FILTERS = [["all", "All"], ["waiting", "Waiting"], ["mismatch", "Mismatch"], ["today", "Today"]];
 // round 20 (d.4): "queued": the cloud queued the line (over 50 at once); its drain fills the state later
@@ -33,19 +34,20 @@ export default function SyncActivity() {
       <button key={id} data-sync-filter={id} aria-selected={f === id} onClick={() => setF(id)}>{label}</button>)}</nav>
     {a.err && <p className="bk-warn"><Msg text={a.err} /></p>}
     {msg && <p className={msg.err ? "bk-alert bad" : "note"} data-sync-msg="" style={{ margin: "6px 0" }}>{msg.busy ? "Applying…" : msg.err || msg.ok}</p>}
-    {a.rows === null || a.rows === undefined ? <p className="note">Reading…</p>
-      : !rows.length ? <p className="note" data-sync-empty="">{f === "mismatch" ? "No mismatch: the ledger check of each line comes later." : f === "waiting" ? "Nothing waiting." : f === "today" ? "No line today yet." : "No line from Tally yet."}</p>
-      : <div className="tblwrap"><table className="data" data-sync-table="">
-        <thead><tr><th>Saved in Tally</th><th>Entry</th><th>Action</th><th>PC</th><th>Reached FinCom</th><th>State</th><th>Ledger check</th><th></th></tr></thead>
-        <tbody>{rows.map((r) => <tr key={r.id} data-sync-line={String(r.id)}>
-          <td>{r.saved_at ? tallyHm(r.saved_at) : "—"}</td>
-          <td>{Rec.entry(r)}{!S.syncClient && coName(r.client_id) && <div className="nr">{coName(r.client_id)}</div>}</td>
-          <td>{Rec.ACTS[r.event] || String(r.event || "")}</td>
-          <td>{r.pc || "—"}</td>
-          <td>{r.received_at ? tallyHm(r.received_at) : "—"}</td>
-          <td><span className={"tag " + (STATE_CLS[r.state] || "warn")} data-sync-state={r.state}>{Rec.stateWords(r)}</span></td>
-          <td className="note" data-sync-check="">not checked</td>
-          <td>{owner && r.state === "held" && <button className="btn small" data-sync-release="" disabled={!!(msg && msg.busy)} onClick={() => Rec.release(r)}>Apply now</button>}</td>
-        </tr>)}</tbody></table></div>}
+    {/* the one list table (spec K6): saved in Tally (date), the entry (number), the computer, the state (status), then the rest;
+        "Loading…" while the lines are read (K7) */}
+    <ListTable name="syncActivity" className="data" rows={rows} rowKey={(r) => r.id} unit={["line", "lines"]} loading={a.rows === null || a.rows === undefined ? "the lines from Tally" : false}
+      rowProps={(r) => ({ "data-sync-line": String(r.id) })}
+      empty={<span data-sync-empty="">{f === "mismatch" ? "No mismatch: the ledger check of each line comes later." : f === "waiting" ? "Nothing waiting." : f === "today" ? "No line today yet. Lines appear here as they are saved in Tally." : "No line from Tally yet. Lines appear here once a computer with FinCom’s recorder saves an entry in Tally."}</span>}
+      cols={[
+        { k: "saved", role: "date", label: "Saved in Tally", v: (r) => r.saved_at || "", cell: (r) => (r.saved_at ? tallyHm(r.saved_at) : "—") },
+        { k: "entry", role: "number", label: "Entry", v: (r) => Rec.entry(r), cell: (r) => <>{Rec.entry(r)}{!S.syncClient && coName(r.client_id) && <div className="nr">{coName(r.client_id)}</div>}</> },
+        { k: "pc", role: "party", label: "PC", v: (r) => r.pc || "", cell: (r) => r.pc || "—" },
+        { k: "state", role: "status", label: "State", v: (r) => Rec.stateWords(r), cell: (r) => <span className={"tag " + (STATE_CLS[r.state] || "warn")} data-sync-state={r.state}>{Rec.stateWords(r)}</span> },
+        { k: "act", label: "Action", v: (r) => Rec.ACTS[r.event] || String(r.event || ""), cell: (r) => Rec.ACTS[r.event] || String(r.event || "") },
+        { k: "recv", label: "Reached FinCom", v: (r) => r.received_at || "", cell: (r) => (r.received_at ? tallyHm(r.received_at) : "—") },
+        { k: "chk", label: "Ledger check", td: () => ({ className: "note", "data-sync-check": "" }), cell: () => "not checked" },
+        { k: "ac", role: "act", cell: (r) => owner && r.state === "held" && <button className="btn small" data-sync-release="" disabled={!!(msg && msg.busy)} onClick={() => Rec.release(r)}>Apply now</button> },
+      ]} />
   </div>;
 }

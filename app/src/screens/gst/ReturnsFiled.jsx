@@ -5,6 +5,7 @@
 // State: S.gstvFy (the year shown).
 import { useState } from "react";
 import CommitBox from "../../parts/CommitBox.jsx";
+import ListTable from "../../parts/ListTable.jsx";
 
 const d = (s) => s ? GSTAmend.dmy(String(s).replace(/-/g, "")) : "";
 
@@ -40,7 +41,7 @@ function Late({ x }) {
 }
 
 function Checklist({ st, reg, late }) {
-  return <div className="bk-tablewrap"><table className="bk-table compact">
+  return <div className="bk-tablewrap"><table className="bk-table compact" data-statement="">
     <thead><tr><th>Period</th><th>Return</th><th>Due</th><th>Filed on</th><th>ARN</th><th>Days late</th><th>Late fee</th><th>Interest (18%)</th><th>Portal PDF</th></tr></thead>
     <tbody>{st.map((r, i) => {
       const lx = late[r.form + "|" + r.per], pt = GSTX.portal(reg, r.form, r.per);
@@ -58,14 +59,14 @@ function Checklist({ st, reg, late }) {
 function ToSort({ list, gl }) {
   const forms = Object.entries(GSTV.FORMS);
   return <section className="dash-card" id="gstvsort" style={{ marginTop: 12 }}><h3>To sort</h3><p className="note">These could not be read for sure. Say which return and period each is, and it is filed in its place.</p>
-    <div className="bk-tablewrap"><table className="bk-table compact"><thead><tr><th>File</th><th>GSTIN</th><th>Return</th><th>Period</th><th></th></tr></thead>
-      <tbody>{list.map((x, i) => <tr key={x.id + ":" + i} data-key={x.id}>
-        <td>{x.name}{x.why && <div className="nr">{x.why}</div>} <button className="linkbtn" data-id={x.id} onClick={() => gstvOpen(x.id)}>open</button></td>
-        <td><select aria-label="GSTIN" style={{ width: "auto" }} value={x.reg || ""} onChange={(ev) => gstvSetSort(x.id, "reg", ev.target.value)}>{gl.map((z) => <option key={z} value={z.slice(0, 2)}>{z}</option>)}</select></td>
-        <td><select aria-label="Return" style={{ width: "auto" }} value={x.form || ""} onChange={(ev) => gstvSetSort(x.id, "form", ev.target.value)}><option value="">—</option>{forms.map(([k, f]) => <option key={k} value={k}>{f.l}</option>)}</select></td>
-        <td><CommitBox aria-label="Period" value={x.per || ""} placeholder={GSTV.isAnnual(x.form) ? "2025-26" : "YYYYMM, e.g. 202603"} style={{ width: 150 }} onCommit={(v) => gstvSetSort(x.id, "per", v)} /></td>
-        <td><button className="btn small" onClick={() => gstvFileIt(x.id)}>File it</button> <button className="linkbtn" data-id={x.id} onClick={() => gstvRemove(x.id)}>remove</button></td>
-      </tr>)}</tbody></table></div>
+    <ListTable name="gstvToSort" className="bk-table compact" rows={list} rowKey={(x, i) => x.id + ":" + i} unit={["file", "files"]} rowProps={(x) => ({ "data-key": x.id })}
+      cols={[
+        { k: "file", role: "number", label: "File", v: (x) => x.name || "", cell: (x) => <>{x.name}{x.why && <div className="nr">{x.why}</div>} <button className="linkbtn" data-id={x.id} onClick={() => gstvOpen(x.id)}>open</button></> },
+        { k: "gstin", label: "GSTIN", cell: (x) => <select aria-label="GSTIN" style={{ width: "auto" }} value={x.reg || ""} onChange={(ev) => gstvSetSort(x.id, "reg", ev.target.value)}>{gl.map((z) => <option key={z} value={z.slice(0, 2)}>{z}</option>)}</select> },
+        { k: "form", label: "Return", cell: (x) => <select aria-label="Return" style={{ width: "auto" }} value={x.form || ""} onChange={(ev) => gstvSetSort(x.id, "form", ev.target.value)}><option value="">—</option>{forms.map(([k, f]) => <option key={k} value={k}>{f.l}</option>)}</select> },
+        { k: "per", label: "Period", cell: (x) => <CommitBox aria-label="Period" value={x.per || ""} placeholder={GSTV.isAnnual(x.form) ? "2025-26" : "YYYYMM, e.g. 202603"} style={{ width: 150 }} onCommit={(v) => gstvSetSort(x.id, "per", v)} /> },
+        { k: "ac", role: "act", cell: (x) => <><button className="btn small" onClick={() => gstvFileIt(x.id)}>File it</button> <button className="linkbtn" data-id={x.id} onClick={() => gstvRemove(x.id)}>remove</button></> },
+      ]} />
   </section>;
 }
 
@@ -76,7 +77,7 @@ function Cross({ reg, fy }) {
   const box = (form, per, path, v) => <CommitBox type="number" step="0.01" aria-label={GSTV.label(form) + " " + GSTR.label(per) + " " + path} value={v == null ? "" : v} placeholder="from the PDF" style={{ width: 120 }} onCommit={(x) => GSTX.figSet(reg, form, per, path, x)} />;
   return <section className="dash-card" style={{ marginTop: 12 }} data-cross="">
     <h3>GSTR-1 + IFF against GSTR-3B, {fy}</h3>
-    <div className="bk-tablewrap"><table className="bk-table compact"><thead><tr><th>Period</th><th>GSTR-1 / IFF taxable value</th><th className="n">GSTR-1 + IFF</th><th className="n">3B 3.1(a)</th><th>Check</th><th className="n">Books (FinCom)</th><th>3B 3.1(d) reverse charge CGST</th><th className="n">Books RCM CGST</th><th>Check</th></tr></thead>
+    <div className="bk-tablewrap"><table className="bk-table compact" data-statement=""><thead><tr><th>Period</th><th>GSTR-1 / IFF taxable value</th><th className="n">GSTR-1 + IFF</th><th className="n">3B 3.1(a)</th><th>Check</th><th className="n">Books (FinCom)</th><th>3B 3.1(d) reverse charge CGST</th><th className="n">Books RCM CGST</th><th>Check</th></tr></thead>
       <tbody>{c.rows.map((r) => <tr key={r.per} data-key={r.per}><td>{r.label}</td>
         <td>{r.parts.map((p) => <div key={p.m} className="note">{GSTV.label(p.form) + " " + GSTR.label(p.m) + ": "}{p.source === "pdf" ? money(p.taxable) : box(p.form, p.m, "tl.taxable", p.taxable)}</div>)}</td>
         <td className="n" data-r1="">{r.r1 == null ? "" : money(r.r1)}</td>
@@ -91,20 +92,30 @@ function Cross({ reg, fy }) {
 // PDFs taken off the list: kept, with who, when and why, and Restore
 function Removed({ list, reg }) {
   return <section className="dash-card" style={{ marginTop: 12 }}><h3>Removed from the list</h3>
-    <div className="bk-tablewrap"><table className="bk-table compact"><thead><tr><th>Return</th><th>Period</th><th>File</th><th>Removed</th><th></th></tr></thead>
-      <tbody>{list.map((x) => <tr key={x.id}><td>{GSTV.label(x.form)}</td><td>{GSTV.perLabel(x.form, x.per, reg)}</td><td>{x.name}</td>
-        <td>{fmtDateTime(x.removed.at)}{x.removed.by ? " by " + x.removed.by : ""}{x.removed.reason ? " · " + x.removed.reason : ""}</td>
-        <td><button className="linkbtn" onClick={() => gstvRestore(x.id)}>restore</button></td></tr>)}</tbody></table></div>
+    <ListTable name="gstvRemoved" className="bk-table compact" rows={list} rowKey={(x) => x.id} unit={["file", "files"]}
+      cols={[
+        { k: "at", role: "date", label: "Removed", v: (x) => x.removed.at || "", cell: (x) => <>{fmtDateTime(x.removed.at)}{x.removed.by ? " by " + x.removed.by : ""}{x.removed.reason ? " · " + x.removed.reason : ""}</> },
+        { k: "file", role: "number", label: "File", v: (x) => x.name || "", cell: (x) => x.name },
+        { k: "form", label: "Return", v: (x) => GSTV.label(x.form), cell: (x) => GSTV.label(x.form) },
+        { k: "per", label: "Period", v: (x) => String(x.per || ""), cell: (x) => GSTV.perLabel(x.form, x.per, reg) },
+        { k: "ac", role: "act", cell: (x) => <button className="linkbtn" onClick={() => gstvRestore(x.id)}>restore</button> },
+      ]} />
   </section>;
 }
 
 function Kept({ kept, fy, reg }) {
   return <section className="dash-card" style={{ marginTop: 12 }}><h3>Every PDF on file, {fy}</h3>
-    <div className="bk-tablewrap"><table className="bk-table compact"><thead><tr><th>Return</th><th>Period</th><th>File</th><th className="dt">Added</th><th>By</th><th>Cloud</th><th></th></tr></thead>
-      <tbody>{kept.map((x, i) => <tr key={x.id + ":" + i}>
-        <td>{GSTV.label(x.form)}</td><td>{GSTV.perLabel(x.form, x.per, reg)}</td><td>{x.name}<div className="nr">{Math.max(1, Math.round((x.size || 0) / 1024))} KB</div></td>
-        <td>{d(String(x.at).slice(0, 10))}</td><td>{x.by || ""}</td><td>{x.docPath ? "✓" : <span className="nr">this computer</span>}</td><td><OpenLinks id={x.id} remove /></td>
-      </tr>)}</tbody></table></div>
+    <ListTable name="gstvKept" className="bk-table compact" rows={kept} rowKey={(x, i) => x.id + ":" + i} unit={["PDF", "PDFs"]}
+      empty="No PDF on file for this year. Use Add PDFs above to bring in the returns filed."
+      cols={[
+        { k: "at", role: "date", label: "Added", cls: "dt", v: (x) => String(x.at || ""), cell: (x) => d(String(x.at).slice(0, 10)) },
+        { k: "file", role: "number", label: "File", v: (x) => x.name || "", cell: (x) => <>{x.name}<div className="nr">{Math.max(1, Math.round((x.size || 0) / 1024))} KB</div></> },
+        { k: "by", role: "party", label: "By", v: (x) => x.by || "", cell: (x) => x.by || "" },
+        { k: "cloud", role: "status", label: "Cloud", v: (x) => (x.docPath ? "in the cloud" : "this computer"), cell: (x) => (x.docPath ? "✓" : <span className="nr">this computer</span>) },
+        { k: "form", label: "Return", v: (x) => GSTV.label(x.form), cell: (x) => GSTV.label(x.form) },
+        { k: "per", label: "Period", v: (x) => String(x.per || ""), cell: (x) => GSTV.perLabel(x.form, x.per, reg) },
+        { k: "ac", role: "act", cell: (x) => <OpenLinks id={x.id} remove /> },
+      ]} />
   </section>;
 }
 

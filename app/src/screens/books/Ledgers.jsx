@@ -9,6 +9,7 @@ import CommitBox from "../../parts/CommitBox.jsx";
 
 import LedCheckCard from "./LedCheck.jsx";
 import Confirm from "../../parts/Confirm.jsx";
+import { ListRows } from "../../parts/ListTable.jsx";
 const NR = ({ children, bad }) => <div className={"nr" + (bad ? " bad" : "")} style={{ whiteSpace: "normal" }}>{children}</div>;
 
 // ledgers changed after returns were made from them: those returns may need a revision
@@ -16,8 +17,8 @@ function Changed({ b }) {
   const ch = LedMaster.changesSince(b);
   if (!ch.length) return null;
   return <section className="bk-alert" style={{ marginBottom: 12 }}><b>{ch.length + " ledger" + (ch.length === 1 ? " was" : "s were") + " changed after returns were made from them."}</b> Check whether those returns need a revision or an amendment.
-    <div className="bk-tablewrap" style={{ marginTop: 6 }}><table className="bk-table"><thead><tr><th>Ledger</th><th>What changed</th><th>Returns made before the change</th></tr></thead>
-      <tbody>{ch.slice(0, 30).map((x, i) => <tr key={x.name + ":" + i}><td>{x.name}</td><td>{x.change}</td><td>{x.returns.slice(0, 4).join("; ") + (x.returns.length > 4 ? " and " + (x.returns.length - 4) + " more" : "")}</td></tr>)}</tbody></table></div>
+    <div style={{ marginTop: 6 }}><ListRows name="ledChanged" unit={["ledger", "ledgers"]} head={[{ label: "Ledger", role: "party" }, { label: "What changed", role: "status" }, { label: "Returns made before the change" }]}>
+      {ch.slice(0, 30).map((x, i) => <tr key={x.name + ":" + i}><td>{x.name}</td><td>{x.change}</td><td>{x.returns.slice(0, 4).join("; ") + (x.returns.length > 4 ? " and " + (x.returns.length - 4) + " more" : "")}</td></tr>)}</ListRows></div>
   </section>;
 }
 
@@ -73,9 +74,10 @@ function Detail({ n, m, regs }) {
 
 function List({ b, view, shown }) {
   const regs = (GSTR.gstins(b) || []).map((g) => g.slice(0, 2)), info = b.ledInfo || {};
-  return <div className="bk-tablewrap"><table className="bk-table" id="lmTable">
-    <thead><tr><th>Tally ledger</th><th>What it is</th><th>Head, side, registration, rate or section</th><th className="n">Used</th><th>Why, and checks</th><th className="ac">Confirmed</th></tr></thead>
-    <tbody>{shown.slice(0, 400).map(([n, m], i) => {
+  // the one list table (spec K6): the ledger, confirmed or not (status), then the rest
+  return <><ListRows name="lmTable" id="lmTable" unit={["ledger", "ledgers"]} of={shown.length} empty={view === "pending" ? "Every GST and TDS ledger is confirmed. Choose All above to see them." : "Nothing here. Choose another view above."}
+    head={[{ label: "Tally ledger", role: "party" }, { label: "What it is" }, { label: "Head, side, registration, rate or section" }, { label: "Used", cls: "n", sum: true, fmt: String }, { label: "Why, and checks" }, { label: "Confirmed", role: "status", cls: "ac" }]}>
+    {shown.slice(0, 400).map(([n, m], i) => {
       const warn = LedMaster.checks(b, n, m), inf = info[n] || {};
       const tallyType = inf.taxType && !/^(others|not applicable)$/i.test(String(inf.taxType).replace(/[^A-Za-z ]/g, "").trim());
       return <tr key={n + ":" + i} data-key={n}>
@@ -83,11 +85,10 @@ function List({ b, view, shown }) {
         <td><WhatSel n={n} m={m} other={view === "other"} /></td><td><Detail n={n} m={m} regs={regs} /></td><td className="n">{m.n || 0}</td>
         <td style={{ minWidth: 200 }}>{m.why && <NR>{m.why}</NR>}{warn.map((w, j) => <NR key={j} bad>{w}</NR>)}</td>
         <td className="ac">{view === "other" ? null : m.ok ? <button className="linkbtn" title="Undo" onClick={() => lmConfirmToggle(n)}>✓ confirmed</button> : <button className="btn small" onClick={() => lmConfirmToggle(n)}>Confirm</button>}</td>
-      </tr>; })}</tbody>
-  </table>
+      </tr>; })}
+  </ListRows>
     {shown.length > 400 && <p className="note">The first 400 are shown; find the rest by name.</p>}
-    {!shown.length && <div className="bk-none">{view === "pending" ? "Every GST and TDS ledger is confirmed." : "Nothing here."}</div>}
-  </div>;
+  </>;
 }
 
 // the ledgers FinCom posts bills to, from the confirmed ledgers
@@ -96,7 +97,7 @@ function Posting({ b }) {
   return <section className="dash-card"><h3>What FinCom posts bills to</h3>
     <p className="note">When FinCom posts a bill into Tally, these are the ledgers it uses. They come from the ledgers confirmed here; an empty one is filled in as soon as its ledger is confirmed, and one set by hand in Client setup is kept until you choose the master’s.</p>
     {diff.length > 0 && <div className="row" style={{ margin: "8px 0" }}><button className="btn small primary" onClick={() => doAct("lmPostAll")}>Use the master’s for all {diff.length}</button></div>}
-    <div className="bk-tablewrap"><table className="bk-table"><thead><tr><th>Used for</th><th>Now</th><th>From the master</th><th>Why</th><th className="ac"></th></tr></thead>
+    <div className="bk-tablewrap"><table className="bk-table" data-statement=""><thead><tr><th>Used for</th><th>Now</th><th>From the master</th><th>Why</th><th className="ac"></th></tr></thead>
       <tbody>{rows.map((x, i) => <tr key={x.k + ":" + i} data-key={x.k}>
         <td>{x.label}</td>
         <td>{x.now ? <>{x.now}{!((b.ledInfo || {})[x.now] || (b.map || {})[x.now]) && <> <span className="tag warn">not in Tally</span></>}</> : <span className="note">—</span>}</td>

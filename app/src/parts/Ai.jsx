@@ -5,6 +5,7 @@
 // aihCo (src/js/50).
 import { useRef } from "react";
 import CommitBox from "./CommitBox.jsx";
+import { ListRows } from "./ListTable.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const pc = (k, n) => n ? Math.round(k * 100 / n) + "%" : "—";
@@ -14,7 +15,7 @@ export function CoverageCard() {
   if (!S.books || !(S.books.vouchers || []).length) return null;
   const c = AIH.coverage(), t = c.tds, i = c.itc, it = i.rules + i.ai + i.pend, a = c.ai, done = a.asIs + a.changed + a.rejected;
   return <section className="dash-card" style={{ marginTop: 12 }}><h3>{"Rules first, AI for the rest: " + ((CO() || {}).name || "this client")}</h3>
-    <div className="bk-tablewrap"><table className="bk-table compact"><thead><tr><th></th><th className="n">By FinCom’s rules</th><th className="n">By AI, accepted</th><th className="n">Still open</th></tr></thead><tbody>
+    <div className="bk-tablewrap"><table className="bk-table compact" data-statement=""><thead><tr><th></th><th className="n">By FinCom’s rules</th><th className="n">By AI, accepted</th><th className="n">Still open</th></tr></thead><tbody>
       <tr><td>{"TDS section of " + c.n + " expense and purchase ledgers"}</td><td className="n">{t.rules + " (" + pc(t.rules, c.n) + ")"}</td><td className="n">{t.ai + " (" + pc(t.ai, c.n) + ")"}</td><td className="n">{t.pend + " (" + pc(t.pend, c.n) + ")"}</td></tr>
       <tr><td>{"GST credit on " + it + " ledgers with credit taken"}</td><td className="n">{i.rules + " (" + pc(i.rules, it) + ")"}</td><td className="n">{i.ai + " (" + pc(i.ai, it) + ")"}</td><td className="n">{i.pend + " (" + pc(i.pend, it) + ")"}</td></tr></tbody></table></div>
     <p className="note">{"How right AI has been here: " + (done ? a.asIs + " accepted as suggested (" + pc(a.asIs, done) + "), " + a.changed + " corrected, " + a.rejected + " rejected" : "nothing decided yet") + (a.waiting ? "; " + a.waiting + " waiting for someone to look" : "") + ". 2B pairs by the rules are on the 2B screen."}</p></section>;
@@ -40,9 +41,9 @@ export function AiLedgers({ b }) {
         {rows.length > 0 && <button className="btn small" onClick={() => aihAct("reviewAgain")}>Review all again</button>}
         <span className="note">{rows.length + " reviewed · " + pend.length + " to accept"}</span></div></section>
     <CoverageCard />
-    {wantTds && pay.length > 0 && <section className="dash-card" style={{ marginTop: 12 }}><h3>TDS ledgers without a section</h3><div className="bk-tablewrap"><table className="bk-table"><thead><tr><th>Ledger</th><th>AI suggests</th><th>Why</th><th></th></tr></thead><tbody>
-      {pay.map(([n, s]) => { const r = AIH.rule(s.rule); return <tr key={n}><td>{n}</td><td>{r.old + " · " + r.label}</td><td>{s.reason}</td><td className="ac"><button className="btn small primary" onClick={() => aihPay(n, true)}>Accept</button> <button className="btn small" onClick={() => aihPay(n, false)}>Not this</button></td></tr>; })}</tbody></table></div></section>}
-    {rows.length > 0 && <div className="bk-tablewrap" style={{ marginTop: 12 }}><table className="bk-table"><thead><tr><th>Ledger</th><th className="n">Booked</th>{wantTds && <th>TDS section</th>}{wantItc && <th>GST credit</th>}<th>AI’s reason</th><th>Status</th></tr></thead><tbody>
+    {wantTds && pay.length > 0 && <section className="dash-card" style={{ marginTop: 12 }}><h3>TDS ledgers without a section</h3><ListRows name="aiPay" unit={["ledger", "ledgers"]} head={[{ label: "Ledger", role: "party" }, { label: "AI suggests", role: "status" }, { label: "Why" }, { label: "", role: "act", cls: "ac" }]}>
+      {pay.map(([n, s]) => { const r = AIH.rule(s.rule); return <tr key={n}><td>{n}</td><td>{r.old + " · " + r.label}</td><td>{s.reason}</td><td className="ac"><button className="btn small primary" onClick={() => aihPay(n, true)}>Accept</button> <button className="btn small" onClick={() => aihPay(n, false)}>Not this</button></td></tr>; })}</ListRows></section>}
+    {rows.length > 0 && <div style={{ marginTop: 12 }}><ListRows name="aiLedgers" unit={["ledger", "ledgers"]} head={[{ label: "Ledger", role: "party" }, { label: "Booked", role: "amount", cls: "n" }, wantTds && { label: "TDS section" }, wantItc && { label: "GST credit" }, { label: "AI’s reason" }, { label: "Status", role: "status" }]}>
       {list.map((x, i) => { const y = a.led[x.l], open = isOpen(y);
         return <tr key={x.l + ":" + i} data-key={x.l}><td>{x.l}<div className="nr">{(x.group || "") + " · " + x.n + " entries" + (x.tds ? " · TDS on " + x.tds : "") + (x.itc ? " · credit on " + x.itc : "")}</div></td><td className="n">{money(x.amt)}</td>
           {wantTds && <td><Pick l={x.l} f="tds" val={y.tds || "unsure"} opts={tdsOpts} /></td>}
@@ -50,7 +51,7 @@ export function AiLedgers({ b }) {
           <td>{y.reason || ""}</td>
           <td>{open ? <><button className="btn small primary" onClick={() => aihAccept(x.l, true)}>Accept</button> <button className="btn small" onClick={() => aihAccept(x.l, false)}>Reject</button></>
             : <span className="nr">{((y.tdsOk || y.itcOk) === "no" ? "rejected" : "accepted") + " by " + (y.okBy || "") + (y.okAt ? " on " + fmtDate(String(y.okAt).slice(0, 10)) : "")}</span>}</td></tr>; })}
-    </tbody></table></div>}
+    </ListRows></div>}
   </>;
 }
 
@@ -86,7 +87,7 @@ function Notice({ n }) {
       {" · "}<button className="linkbtn" onClick={() => aihNote("open", n.id)}>open</button> · <button className="linkbtn" onClick={() => aihNote("del", n.id)}>remove</button></p>
     {n.step === "failed" && <p className="bk-warn">{"Could not be read: " + (n.error || "") + " "}<button className="linkbtn" onClick={() => aihNote("retry", n.id)}>try again</button></p>}
     {f.summary && <p>{f.summary}</p>}
-    {(f.issues || []).length > 0 && <div className="bk-tablewrap"><table className="bk-table"><thead><tr><th>The officer’s point</th><th>Period</th><th className="n">Amount</th></tr></thead><tbody>
+    {(f.issues || []).length > 0 && <div className="bk-tablewrap"><table className="bk-table" data-statement=""><thead><tr><th>The officer’s point</th><th>Period</th><th className="n">Amount</th></tr></thead><tbody>
       {f.issues.map((x, i) => <tr key={i}><td>{x.point || ""}</td><td>{x.period || ""}</td><td className="n">{num(x.amount) ? INR.format(num(x.amount)) : ""}</td></tr>)}</tbody></table></div>}
     {n.reply ? <><h4 style={{ margin: "12px 0 6px" }}>Draft reply (AI, to be checked)</h4>
       <CommitBox as="textarea" aria-label="Draft reply" value={n.reply} rows={16} style={{ width: "100%", font: "13px/1.5 inherit" }} onCommit={(v) => aihReply(n.id, v)} />
@@ -118,10 +119,10 @@ export function AiSettings() {
       <p className="note">Claude suggests; FinCom’s rules work out tax and make returns; your people accept or reject each suggestion, and who accepted it is kept. Each use is charged to the firm’s credit like reading a bill. The client’s ledger names, narrations, invoice details and notices are sent to Claude through the firm’s account: tell your clients, and switch it off below for any client who has not agreed.</p>
       <Cb k="on" on={c.on}><b>Use AI help</b></Cb>
       <div style={{ marginLeft: 24 }}>{AIH.FEATURES.map(([k, l]) => <Cb key={k} k={k} on={c[k] !== false} dis={!c.on}>{l}</Cb>)}</div></section>
-    <section className="dash-card" style={{ marginTop: 12 }}><h3>Clients</h3><p className="note">Tick a client to keep its data away from AI, whatever is switched on above.</p><div className="bk-tablewrap"><table className="bk-table compact"><thead><tr><th>Client</th><th>AI off for this client</th></tr></thead><tbody>
+    <section className="dash-card" style={{ marginTop: 12 }}><h3>Clients</h3><p className="note">Tick a client to keep its data away from AI, whatever is switched on above.</p><div className="bk-tablewrap"><table className="bk-table compact" data-statement=""><thead><tr><th>Client</th><th>AI off for this client</th></tr></thead><tbody>
       {cos.map((co) => <tr key={co.id}><td>{co.name || co.id}</td><td><input type="checkbox" checked={!!co.aiOff} aria-label={"AI off for " + (co.name || "")} onChange={(ev) => aihCo(co.id, ev.target.checked)} /></td></tr>)}</tbody></table></div></section>
     {S.books && S.books.cid === S.coId && <CoverageCard />}
-    {lg.length > 0 && <section className="dash-card" style={{ marginTop: 12 }}><h3>{"What AI did for " + ((CO() || {}).name || "this client")}</h3><div className="bk-tablewrap"><table className="bk-table compact"><thead><tr><th className="dt">When</th><th>Who</th><th>What</th><th>Detail</th></tr></thead><tbody>
-      {lg.slice(0, 40).map((x, i) => <tr key={i}><td className="dt">{fmtDateTime(x.at)}</td><td>{x.by}</td><td>{x.what}</td><td>{x.detail}</td></tr>)}</tbody></table></div></section>}
+    {lg.length > 0 && <section className="dash-card" style={{ marginTop: 12 }}><h3>{"What AI did for " + ((CO() || {}).name || "this client")}</h3><ListRows name="aiLog" className="bk-table compact" unit={["step", "steps"]} head={[{ label: "When", role: "date", cls: "dt" }, { label: "Who", role: "party" }, { label: "What", role: "status" }, { label: "Detail" }]}>
+      {lg.slice(0, 40).map((x, i) => <tr key={i}><td className="dt">{fmtDateTime(x.at)}</td><td>{x.by}</td><td>{x.what}</td><td>{x.detail}</td></tr>)}</ListRows></section>}
   </>;
 }

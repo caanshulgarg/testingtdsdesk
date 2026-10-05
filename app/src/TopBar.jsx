@@ -45,7 +45,8 @@ function MainAction() {
   const own = up === "bills" && S.tab === "invoices" && S.reviewTable && S.filter === "draft";
   if (up) { const [label, title, go] = UPLOADS[up]; return <button className={"btn small" + (own ? "" : " primary")} data-upload={up} title={title} onClick={go}>{label}</button>; }
   if (bt === "letters") return <button className="btn small" onClick={() => ltrMode("confirm")}>New confirmation</button>;   // the letters' own Print is the page's primary
-  if (bt === "reports") return <button className="btn primary small" onClick={() => doAct("keepNow")}>Refresh books</button>;
+  // while the copy of the books is empty, "Read the books from Tally" on the page is its one primary (one primary in every state)
+  if (bt === "reports") return <button className={"btn small" + (S.books && (S.books.vouchers || []).length ? " primary" : "")} onClick={() => doAct("keepNow")}>Refresh books</button>;
   return null;
 }
 

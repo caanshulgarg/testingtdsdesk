@@ -24,7 +24,8 @@ with sync_playwright() as p:
     app = lambda: pg.inner_text("#app"); top = lambda: pg.inner_text("#cobar")
     cid, a, b = pg.evaluate(SETUP)
     # 31. one date format
-    ok(pg.evaluate("[fmtDate('2026-09-19'), fmtDateTime(new Date(2026, 8, 30, 21, 32))]") == ["19-Sep-2026", "30-Sep-2026 21:32"], "31. dates read 19-Sep-2026, and 30-Sep-2026 21:32 with the time")
+    # round 2 of the UI pass (K5): a time is Indian time with IST after it, whatever this computer's clock
+    ok(pg.evaluate("[fmtDate('2026-09-19'), fmtDateTime(Date.UTC(2026, 8, 30, 16, 2))]") == ["19-Sep-2026", "30-Sep-2026 21:32 IST"], "31. dates read 19-Sep-2026, and 30-Sep-2026 21:32 IST with the time")
     # 25. page links: a bill has its own address, which survives a refresh
     pg.evaluate("(a) => openCompany(a[0]).then(() => { goStep('review', 'bills'); S.reviewTable = false; S.selected = a[1]; render(); })", [cid, a]); pg.wait_for_timeout(900)
     link = pg.evaluate("location.hash")

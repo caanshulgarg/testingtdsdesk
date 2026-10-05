@@ -12,14 +12,18 @@ import Msg from "../parts/Msg.jsx";
 import { useRef } from "react";
 import { BankSettings, RulesPanel } from "../parts/BankSettings.jsx";
 import { PostReport, FixBanner, BankBalance, Recon, Gone, DupFind, BankFocus } from "../parts/BankChecks.jsx";
-import ColHead from "../parts/ColHead.jsx";
+import { ColFunnel } from "../parts/ColHead.jsx";
+import ListTable from "../parts/ListTable.jsx";
+import Loading from "../parts/Loading.jsx";
 import LedgerBox from "../parts/LedgerBox.jsx";
 import { BankLedger } from "../parts/Confirm.jsx";
 import { BusyCard } from "../parts/Reading.jsx";
 import { ChipBar, NoMatch } from "../parts/ChipBar.jsx";
 
 const MODE_NAME = { ATM: "ATM cash withdrawal", CASH: "Cash deposit", CHARGES: "Bank charges", INTEREST: "Interest credit" };
-const EMPTY = { review: "Nothing to review. Every entry has a ledger.", ready: "No entries are ready yet.", done: "Nothing posted or ignored yet." };
+// an empty tab says what to do next (spec K6, round 2)
+const EMPTY = { review: "Nothing to review. Every entry has a ledger: use the Post to Tally tab to send them.", ready: "No entries are ready yet. Give each entry under To review its ledger; it then waits here.",
+  done: "Nothing posted or ignored yet. Use Post on the entries that are ready." };
 const live = () => Bridge.on() && Bridge.up();
 
 
@@ -73,75 +77,58 @@ function RowActions({ r }) {
   return r.state === "sent" ? null : <button className="linkbtn" onClick={act("restore")}>Restore</button>;
 }
 
-function Row({ r, sel }) {
-  const party = MODE_NAME[r.dec.mode] || r.dec.name || r.dec.upi || "";
-  const sub = [r.dec.mode !== "OTHER" ? r.dec.mode : "", r.dec.chq ? "Chq " + r.dec.chq : r.dec.utr || ""].filter(Boolean).join(" · ");
-  const flag = r.balOk === false ? <> <span className="flag bad" title="This entry does not agree with the running balance">!</span></>
+// the statement's lines (spec K6: date, number, party, amount, status, then the rest, in ListTable.jsx's order)
+const BST = { attention: ["warn", "No ledger"], suggested: ["warn", "Suggested"], ready: ["ok", "Ready to post"], sent: ["ok", "In Tally"], intally: ["no", "Already in Tally"], ignored: ["no", "Ignored"] };
+const bankParty = (r) => MODE_NAME[r.dec.mode] || r.dec.name || r.dec.upi || "";
+function bankCols(b, total, nSel) {
+  const flag = (r) => r.balOk === false ? <> <span className="flag bad" title="This entry does not agree with the running balance">!</span></>
     : r.repaired ? <> <span className="flag warn" title="Amount read from the balance change: check it">≈</span></> : null;
-  return (
-    <tr className={"st-" + r.state + (sel ? " picked" : "")}>
-      <td className="ck"><input type="checkbox" aria-label="Select" checked={sel} disabled={r.state === "sent"} onChange={() => {}}
-        onClick={(ev) => bankToggleRow(r.id, ev.target.checked, ev.shiftKey)} /></td>
-      <td className="dt" title={fmtDate(r.date)}>{shortDate(r.date)}</td>
-      <td className="pt"><div className="pn">{party || r.narr.slice(0, 60)}</div><div className="nr" title={r.narr}>{sub && <><span className="md">{sub}</span> </>}{r.narr}</div></td>
-      <td className="n">{bkAmt(r.debit)}{r.debit ? flag : null}</td>
-      <td className="n">{bkAmt(r.credit)}{r.credit ? flag : null}</td>
-      <td className="lg"><RowLedger r={r} /></td>
-      <td className="ac"><RowActions r={r} /></td>
-    </tr>
-  );
+  return [
+    { k: "pick", role: "pick", cls: "ck", head: <input type="checkbox" aria-label="Select all" checked={!!nSel && nSel === total} onChange={(ev) => bankSelAll(ev.target.checked)} />,
+      cell: (r) => <input type="checkbox" aria-label="Select" checked={b.sel.has(r.id)} disabled={r.state === "sent"} onChange={() => {}} onClick={(ev) => bankToggleRow(r.id, ev.target.checked, ev.shiftKey)} /> },
+    { k: "date", role: "date", label: "Date", cls: "dt", filter: <ColFunnel t="bank" k="date" label="Date" />, v: (r) => r.date || "", td: (r) => ({ title: fmtDate(r.date) }), cell: (r) => shortDate(r.date) },
+    { k: "narr", role: "party", label: "Particulars", cls: "pt", filter: <ColFunnel t="bank" k="narr" label="Particulars" />, v: (r) => bankParty(r) || r.narr || "", cell: (r) => {
+      const party = bankParty(r), sub = [r.dec.mode !== "OTHER" ? r.dec.mode : "", r.dec.chq ? "Chq " + r.dec.chq : r.dec.utr || ""].filter(Boolean).join(" · ");
+      return <><div className="pn">{party || r.narr.slice(0, 60)}</div><div className="nr" title={r.narr}>{sub && <><span className="md">{sub}</span> </>}{r.narr}</div></>; } },
+    { k: "wd", role: "amount", label: "Withdrawal", cls: "n", filter: <ColFunnel t="bank" k="wd" label="Withdrawal" />, v: (r) => num(r.debit) || null, sum: (r) => num(r.debit), cell: (r) => <>{bkAmt(r.debit)}{r.debit ? flag(r) : null}</> },
+    { k: "dep", role: "amount", label: "Deposit", cls: "n", filter: <ColFunnel t="bank" k="dep" label="Deposit" />, v: (r) => num(r.credit) || null, sum: (r) => num(r.credit), cell: (r) => <>{bkAmt(r.credit)}{r.credit ? flag(r) : null}</> },
+    { k: "st", role: "status", label: "Status", v: (r) => (BST[r.state] || ["", r.state])[1], cell: (r) => { const w = BST[r.state] || ["no", r.state]; return <span className={"tag " + w[0]}>{w[1]}</span>; } },
+    { k: "led", label: "Ledger", cls: "lg", filter: <ColFunnel t="bank" k="led" label="Ledger" />, v: (r) => r.ledger || "", cell: (r) => <RowLedger r={r} /> },
+    { k: "ac", role: "act", cls: "ac", cell: (r) => <RowActions r={r} /> },
+  ];
 }
 
 function Table({ tab }) {
-  const b = B(), all = bankVisibleRows(), total = all.length, list = all.slice(0, b.limit);
+  const b = B(), all = bankVisibleRows(), total = all.length;
   const nSel = all.filter((r) => b.sel.has(r.id)).length;
-  return <>
-    <div className="bk-tablewrap">
-      <table className="bk-table">
-        <thead><tr>
-          <th className="ck"><input type="checkbox" aria-label="Select all" checked={!!nSel && nSel === total} onChange={(ev) => bankSelAll(ev.target.checked)} /></th>
-          <ColHead t="bank" k="date" label="Date" cls="dt" /><ColHead t="bank" k="narr" label="Particulars" /><ColHead t="bank" k="wd" label="Withdrawal" cls="n" />
-          <ColHead t="bank" k="dep" label="Deposit" cls="n" /><ColHead t="bank" k="led" label="Ledger" cls="lg" /><th className="ac"></th>
-        </tr></thead>
-        <tbody>{list.map((r) => <Row key={r.id} r={r} sel={b.sel.has(r.id)} />)}</tbody>
-      </table>
-      {!total && (bankRangeOn() ? <NoMatch t="bank" /> : <div className="bk-none">{EMPTY[tab] || "Nothing here."}</div>)}
-    </div>
-    {/* a long statement: more lines load as the end comes into view (the scroll listener in src/js/23 finds this button) */}
-    {total > list.length && <div className="bk-more"><button className="btn small" data-act="bankMore" onClick={() => bankAct("bankMore")}>Show {Math.min(100, total - list.length)} more ({total - list.length} left)</button></div>}
-  </>;
+  // a long statement: more lines load as the end comes into view (the scroll listener in src/js/23 finds this button)
+  const more = <div className="bk-more"><button className="btn small" data-act="bankMore" onClick={() => bankAct("bankMore")}>Show {Math.min(100, total - Math.min(total, b.limit))} more ({total - Math.min(total, b.limit)} left)</button></div>;
+  return <ListTable name="bank" cols={bankCols(b, total, nSel)} rows={all} rowKey={(r) => r.id} unit={["entry", "entries"]} of={b.rows.length} limit={b.limit} more={more}
+    rowProps={(r) => ({ className: "st-" + r.state + (b.sel.has(r.id) ? " picked" : "") })}
+    empty={bankRangeOn() ? <>Nothing matches these filters. <button className="linkbtn" onClick={() => colChipAll("bank")}>Clear all filters</button> to see every entry.</> : EMPTY[tab] || "Nothing here. Use Upload statement at the top right to add one."} />;
 }
 
 // one line per party among the entries to review, to give all its entries one ledger
-function Group({ g }) {
-  const sug = Object.entries(g.ledgers).sort((a, b) => b[1] - a[1])[0];
-  return (
-    <tr>
-      <td className="pt"><div className="pn">{g.name}</div><div className="nr" title={g.sample}>{g.sample}</div></td>
-      <td className="n">{g.n}</td><td className="n">{bkAmt(g.out)}</td><td className="n">{bkAmt(g.inn)}</td>
-      <td className="lg">
-        <LedgerBox className={"lgbox" + (sug ? " sugg" : "")} value={sug ? sug[0] : ""} fk={"gkey:" + g.key} data-gkey={g.key} placeholder="Select ledger"
+function groupCols() {
+  return [
+    { k: "name", role: "party", label: "Party", cls: "pt", v: (g) => g.name, cell: (g) => <><div className="pn">{g.name}</div><div className="nr" title={g.sample}>{g.sample}</div></> },
+    { k: "out", role: "amount", label: "Withdrawals", cls: "n", v: (g) => num(g.out) || null, sum: (g) => num(g.out), cell: (g) => bkAmt(g.out) },
+    { k: "inn", role: "amount", label: "Deposits", cls: "n", v: (g) => num(g.inn) || null, sum: (g) => num(g.inn), cell: (g) => bkAmt(g.inn) },
+    { k: "n", label: "Entries", cls: "n", v: (g) => g.n, sum: (g) => g.n, fmt: (t) => String(t), cell: (g) => g.n },
+    { k: "led", label: "Ledger for all its entries", cls: "lg", cell: (g) => { const sug = Object.entries(g.ledgers).sort((a, b) => b[1] - a[1])[0];
+      return <><LedgerBox className={"lgbox" + (sug ? " sugg" : "")} value={sug ? sug[0] : ""} fk={"gkey:" + g.key} data-gkey={g.key} placeholder="Select ledger"
           aria-label={"Ledger for " + g.name} id={"g-" + g.key} />
-        {sug && <span className="src">Suggested for {sug[1]} of {g.n}</span>}
-      </td>
-      <td className="ac"><button className="btn small primary" onClick={() => { const inp = document.getElementById("g-" + g.key); applyGroup(g.key, inp ? inp.value : ""); acClose(); }}>Apply</button></td>
-    </tr>
-  );
+        {sug && <span className="src">Suggested for {sug[1]} of {g.n}</span>}</>; } },
+    { k: "ac", role: "act", cls: "ac", cell: (g) => <button className="btn small primary" onClick={() => { const inp = document.getElementById("g-" + g.key); applyGroup(g.key, inp ? inp.value : ""); acClose(); }}>Apply</button> },
+  ];
 }
 
 function Groups() {
   const b = B(), q = b.q.trim().toLowerCase();
-  const all = bankGroups().filter((g) => !q || (g.name + " " + g.sample).toLowerCase().includes(q)), groups = all.slice(0, b.limit);
-  return <>
-    <div className="bk-tablewrap">
-      <table className="bk-table">
-        <thead><tr><th>Party</th><th className="n">Entries</th><th className="n">Withdrawals</th><th className="n">Deposits</th><th className="lg">Ledger for all its entries</th><th className="ac"></th></tr></thead>
-        <tbody>{groups.map((g) => <Group key={g.key} g={g} />)}</tbody>
-      </table>
-      {!all.length && <div className="bk-none">Nothing to review.</div>}
-    </div>
-    {all.length > groups.length && <div className="bk-more"><button className="btn small" data-act="bankMore" onClick={() => bankAct("bankMore")}>Show more parties ({all.length - groups.length} left)</button></div>}
-  </>;
+  const all = bankGroups().filter((g) => !q || (g.name + " " + g.sample).toLowerCase().includes(q));
+  const more = <div className="bk-more"><button className="btn small" data-act="bankMore" onClick={() => bankAct("bankMore")}>Show more parties ({all.length - Math.min(all.length, b.limit)} left)</button></div>;
+  return <ListTable name="bankParties" cols={groupCols()} rows={all} rowKey={(g) => g.key} unit={["party", "parties"]} limit={b.limit} more={more}
+    empty="Nothing to review: every entry has a ledger. Use the Post to Tally tab to send them." />;
 }
 
 // after a search: give every line found the same ledger
@@ -229,8 +216,8 @@ function MoreMenu({ tc }) {
 
 export default function Bank() {
   const b = B(), co = CO();
-  if (!b || b.cid !== co.id) { loadBank(co.id); return <p className="note">Opening bank statements…</p>; }
-  if (b.loading) return <p className="note">Opening bank statements…</p>;
+  if (!b || b.cid !== co.id) { loadBank(co.id); return <Loading what="bank statements" />; }
+  if (b.loading) return <Loading what="bank statements" />;
   setTimeout(() => TallyProof.checkBank(co.id).catch(() => {}), 0);
   ensureFileInputs();
   const st = curStmt();

@@ -7,6 +7,8 @@
 // S.gcontQ (the contacts search).
 import { useRef, useState } from "react";
 import CommitBox from "../../parts/CommitBox.jsx";
+import Loading from "../../parts/Loading.jsx";
+import { ListRows } from "../../parts/ListTable.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const H4 = ({ children, top = 12 }) => <h4 style={{ margin: top + "px 0 4px" }}>{children}</h4>;
@@ -19,7 +21,7 @@ function Registrations({ b, regs }) {
   return (
     <section className="dash-card" style={{ marginBottom: 12 }}><h3>GST registrations</h3>
       <p className="note" style={{ margin: "0 0 8px" }}>The GSTINs of {co.name || "this client"} (PAN {clientPan() || "not set"}). The GST tab works for these even before any Tally day book is brought in: 2B from the portal or its JSON, and the returns filed.</p>
-      {regs.length ? <div className="bk-tablewrap"><table className="bk-table compact">
+      {regs.length ? <div className="bk-tablewrap"><table className="bk-table compact" data-statement="">
         <thead><tr><th>GSTIN</th><th>State</th><th>Filing type now</th><th>Portal username</th><th>Taken from</th><th></th></tr></thead>
         <tbody>{regs.map((g) => { const reg = g.slice(0, 2), src = GSTRegs.source(g, b), only = src.length === 1 && src[0] === "added here", user = GSTSet.peek(reg).portalUser;
           return <tr key={g} data-key={g}><td><b>{g}</b></td><td>{GSTRegs.state(g)}</td><td>{GSTSet.typeLabel(GSTSet.typeOf(latestYm(), reg))}</td>
@@ -135,12 +137,12 @@ function Contacts({ b }) {
       <p className="note">Email and phone for the letters to suppliers (ITC follow-up) and customers (IMS rejections). Taken from Tally where it has them; type or correct them here.</p>
       <input type="search" aria-label="Party or GSTIN" data-fk="gcontq" value={S.gcontQ || ""} placeholder="Party or GSTIN" style={{ width: 260 }} onChange={(ev) => setAndShow("gcontQ", ev.target.value, true)} />
       {" "}<span className="note">{shown.length} of {all.length} parties with a GSTIN</span>
-      <div className="bk-tablewrap"><table className="bk-table compact"><thead><tr><th>Party</th><th>GSTIN</th><th>In the books as</th><th>Email</th><th>Phone</th></tr></thead>
-        <tbody>{shown.slice(0, q ? 200 : 40).map((p, i) => { const k = GSTSet.contact(p.gstin, p.party); return <tr key={p.gstin + ":" + i} data-key={p.gstin}>
+      <ListRows name="gstContacts" className="bk-table compact" unit={["party", "parties"]} of={all.length} empty="No party matches. Clear the search to see them all." head={[{ label: "Party", role: "party" }, { label: "GSTIN" }, { label: "In the books as" }, { label: "Email" }, { label: "Phone" }]}>
+        {shown.slice(0, q ? 200 : 40).map((p, i) => { const k = GSTSet.contact(p.gstin, p.party); return <tr key={p.gstin + ":" + i} data-key={p.gstin}>
           <td>{p.party}</td><td>{p.gstin}</td><td>{p.sides}</td>
           <td><CommitBox type="email" aria-label={"Email of " + p.party} value={(c[p.gstin] || {}).email || k.email} style={{ width: "100%" }} onCommit={(v) => gcontSet(p.gstin, "email", v)} /></td>
-          <td><CommitBox type="tel" aria-label={"Phone of " + p.party} value={(c[p.gstin] || {}).phone || k.phone} style={{ width: "100%" }} onCommit={(v) => gcontSet(p.gstin, "phone", v)} /></td></tr>; })}</tbody>
-      </table></div>
+          <td><CommitBox type="tel" aria-label={"Phone of " + p.party} value={(c[p.gstin] || {}).phone || k.phone} style={{ width: "100%" }} onCommit={(v) => gcontSet(p.gstin, "phone", v)} /></td></tr>; })}
+      </ListRows>
       {!q && shown.length > 40 && <p className="note">The 40 parties with the most documents are shown; search for others.</p>}
     </section>
   );
@@ -148,7 +150,7 @@ function Contacts({ b }) {
 
 export default function GstSettings() {
   const co = CO();
-  if (!S.books || S.books.cid !== co.id || S.books.loading) { if (!S.books || S.books.cid !== co.id) openBooks(co.id); return <p className="note">Opening the books…</p>; }
+  if (!S.books || S.books.cid !== co.id || S.books.loading) { if (!S.books || S.books.cid !== co.id) openBooks(co.id); return <Loading what="the books" />; }
   const b = S.books, regs = GSTR.gstins(b) || [];
   if (!regs.some((g) => g.slice(0, 2) === S.gsetReg)) { const own = String(co.gstin || "").toUpperCase().slice(0, 2); S.gsetReg = ((regs.find((g) => g.slice(0, 2) === own) || regs[0] || "")).slice(0, 2); }
   return (

@@ -7,6 +7,7 @@
 
 import LedgerSelect from "./LedgerSelect.jsx";
 import Confirm, { BankLedger } from "./Confirm.jsx";
+import Loading from "./Loading.jsx";
 
 const Btn = ({ act, className = "btn small", children, disabled }) => <button className={className} disabled={disabled} onClick={() => bankAct(act)}>{children}</button>;
 
@@ -54,7 +55,7 @@ function Suggestions() {
   if (!list.length) return <p className="note" style={{ marginTop: 10 }}>Nothing worth a rule yet — the same wording has to be booked to the same ledger at least three times. <Btn act="ruleFindClose" className="linkbtn">Hide</Btn></p>;
   const all = (ev) => document.querySelectorAll("[data-sug]").forEach((x) => { x.checked = ev.target.checked; });
   return <div className="bdiag" style={{ marginTop: 12 }}><b>{list.length + " rule" + (list.length === 1 ? "" : "s") + " we can make from what you have already done"}</b>
-    <div className="tblwrap" style={{ marginTop: 6 }}><table className="data"><thead><tr><th className="ck"><input type="checkbox" aria-label="Tick all" defaultChecked onClick={all} /></th><th>When the line says</th><th>Money</th><th>Use this ledger</th><th className="n">Done before</th></tr></thead><tbody>
+    <div className="tblwrap" style={{ marginTop: 6 }}><table className="data" data-statement=""><thead><tr><th className="ck"><input type="checkbox" aria-label="Tick all" defaultChecked onClick={all} /></th><th>When the line says</th><th>Money</th><th>Use this ledger</th><th className="n">Done before</th></tr></thead><tbody>
       {list.map((s, i) => <tr key={i}><td className="ck"><input type="checkbox" data-sug={i} aria-label={"Make: " + s.text} defaultChecked={!s.off} /></td><td><b>{s.text}</b><div className="nr">{String(s.sample).slice(0, 60)}</div></td>
         <td>{s.dir === "out" ? "going out" : s.dir === "in" ? "coming in" : "either"}</td><td>{s.ledger}</td><td className="n">{s.n + " times"}{s.agree < 100 && <div className="nr">{s.agree + "% the same"}</div>}</td></tr>)}</tbody></table></div>
     <div className="row" style={{ marginTop: 8 }}><Btn act="ruleMakeSug" className="btn small primary">Make the ticked rules</Btn><Btn act="ruleFindClose">Not now</Btn></div></div>;
@@ -77,7 +78,7 @@ export function RulesPanel() {
   return <section className="pane"><div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}><h2 style={{ margin: 0 }}>Rules</h2>
     <div><Btn act="ruleNew" className="btn small primary">New rule</Btn><Btn act="ruleRunNow">Apply to this statement</Btn>{mine.length > 0 && <Btn act="ruleCopyAll">Copy to other clients</Btn>}</div></div>
     <p className="note" style={{ margin: "6px 0 10px" }}>Rules are read from the top down; the first one that fits wins. Your own choices are never overwritten by a rule.</p>
-    <div className="tblwrap"><table className="data"><thead><tr><th></th><th>Rule</th><th>Does</th><th className="n">Matches</th><th className="n">Used</th><th></th></tr></thead><tbody>
+    <div className="tblwrap"><table className="data" data-statement=""><thead><tr><th></th><th>Rule</th><th>Does</th><th className="n">Matches</th><th className="n">Used</th><th></th></tr></thead><tbody>
       {mine.length ? mine.map((r) => <RuleRow key={r.id} r={r} scope="client" co={co} />) : <tr><td colSpan={6} className="nr">{"No rules for " + co.name + " yet. Make one from any line, or press New rule."}</td></tr>}
       {firm.length > 0 && <><tr><td colSpan={6} style={{ background: "var(--paper)" }}><b>Firm-wide rules</b> — used for every client, after this client’s own rules</td></tr>{firm.map((r) => <RuleRow key={r.id} r={r} scope="firm" co={co} />)}</>}
     </tbody></table></div>
@@ -91,7 +92,7 @@ export function BankSetup({ which }) {
   const co = CO();
   if (!S.bank || S.bank.cid !== co.id || S.bank.loading) {
     if (!S.bank || S.bank.cid !== co.id) loadBank(co.id).then(() => render());
-    return <p className="note">Loading this client’s bank details…</p>;
+    return <Loading what="this client’s bank details" lines={3} />;
   }
   return which === "rules" ? <RulesPanel /> : <BankSettings inline />;
 }

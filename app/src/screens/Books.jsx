@@ -22,6 +22,7 @@ import HelpButton from "../parts/HelpButton.jsx";
 import { Notices } from "../parts/Ai.jsx";
 import { LedgerBanner, GstDriftNote, SyncNote, JobsNote } from "../parts/Notes.jsx";
 import { BooksAsOf } from "../parts/TallyLine.jsx";
+import Loading from "../parts/Loading.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const Q_MONTHS = { Q1: "Apr to Jun", Q2: "Jul to Sep", Q3: "Oct to Dec", Q4: "Jan to Mar" };
@@ -49,7 +50,7 @@ function Years({ b, rows, fys }) {
   </>;
   return (
     <section className="dash-card"><h3>Choose the financial year</h3>
-      <div className="bk-tablewrap"><table className="bk-table">
+      <div className="bk-tablewrap"><table className="bk-table" data-statement="">
         <thead><tr><th>Year</th><th className="n">Deductions</th><th className="n">TDS</th><th className="n">Challans</th><th className="n">Not against a challan</th><th className="n">Without PAN</th><th className="n">Salary employees</th><th className="ac"></th></tr></thead>
         <tbody>{fys.map((fy) => {
           const r = rows.filter((x) => x.fy === fy), ch = TDS.challans().filter((c) => TDS.fyOf(c.date) === fy);
@@ -113,7 +114,7 @@ function Year({ b, rows }) {
     </div>
     <section className="dash-card"><h3>{fy}: returns by quarter</h3>
       <p className="note">Open a return to see its challans, deductees and deductions on separate tabs.</p>
-      <div className="bk-tablewrap"><table className="bk-table">
+      <div className="bk-tablewrap"><table className="bk-table" data-statement="">
         <thead><tr><th>Quarter</th><th>{TDS.formNameLong("26Q", fy)}, other than salary</th><th>{TDS.formNameLong("24Q", fy)}, salary</th>{hasNr && <th>{TDS.formNameLong("27Q", fy)}, non-residents</th>}{hasTcs && <th>{TDS.formNameLong("27EQ", fy)}, TCS</th>}<th>Due</th></tr></thead>
         <tbody>
           {qs.map((x) => <tr key={x.q}><td><b>{x.q}</b><div className="nr">{Q_MONTHS[x.q]}</div></td><Cell26 fy={fy} x={x} /><Cell24 b={b} fy={fy} x={x} />
@@ -191,9 +192,9 @@ function EmptyTab({ tab }) {
 
 export default function Books() {
   const co = CO();
-  if (!S.books || S.books.cid !== co.id) { openBooks(co.id); return <p className="note">Opening the books…</p>; }
+  if (!S.books || S.books.cid !== co.id) { openBooks(co.id); return <Loading what="the books" />; }
   // live sync: the server's latest first; this computer's copy is not shown in place of a newer one
-  if (S.books.loading) return <p className="note" data-opening>Getting the latest from the server…</p>;
+  if (S.books.loading) return <Loading what="the books" note="The latest from FinCom’s server." />;
   const b = S.books, tab = booksTab(), n = (b.vouchers || []).length;
   // fast-sync: the books not in on this computer yet (or still coming in): MIS, TDS and GST from the server meanwhile
   const srv = (!n || !!b.busy) && typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id);

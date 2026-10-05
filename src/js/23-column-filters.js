@@ -1268,8 +1268,9 @@ const MultiUp = {
     if (!todo.length){ toast("Choose the client for each file first."); return; }
     m.busy = true;
     const keepCo = S.coId, keepView = S.view;
+    m.done = 0; m.total = todo.length;
     for (const r of todo){
-      r.status = "reading…"; render();
+      r.status = "reading…"; m.at = r.f.name; render();
       try {
         S.coId = r.cid;
         if (!S.books || S.books.cid !== r.cid){ S.books = null; await openBooks(r.cid); }
@@ -1278,6 +1279,7 @@ const MultiUp = {
         r.ok = !!(res && !res.refused && res.n != null);
         r.status = !res ? "not taken" : res.refused ? "not taken: " + res.refused : "done: " + res.n + " entries, " + fmtDate(tallyDate(res.from)) + " to " + fmtDate(tallyDate(res.to));
       } catch (e){ r.status = "not taken: " + ((e && e.message) || e); }
+      m.done++;
       S.view = keepView; render();
     }
     S.coId = keepCo; S.view = keepView; m.busy = false; render();

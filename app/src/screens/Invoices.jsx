@@ -17,7 +17,12 @@ function Tag({ e }) {
   return c.tds ? <span className="tag ok">TDS {money0(c.tds)}</span> : <span className="tag no">No TDS</span>;
 }
 
-const EMPTY = { draft: (co) => "No drafts for " + co.name + ". Upload invoices above.", approved: () => "Nothing approved yet.", duplicate: () => "No duplicates held." };
+// an empty list says what to do next (spec K6, round 2)
+const EMPTY = { draft: (co) => "No bills to review for " + co.name + ". Use Upload bills at the top right to add them.",
+  approved: () => "Nothing approved yet. Approve bills under To review; they wait here until they are posted to Tally.",
+  duplicate: () => "No duplicates held. A bill uploaded twice waits here, so you can keep both or delete one.",
+  deleted: () => "No deleted bills. A bill you delete waits here; open it to restore it.",
+  rejected: () => "Nothing marked as no entry. Use No entry needed on a bill that should not go to Tally." };
 
 export default function Invoices() {
   const d = D(), co = CO(), all = Object.values(d.entries);
@@ -56,7 +61,7 @@ export default function Invoices() {
           <DropZone mode="company" className="drop-empty" label={"Upload invoices for " + co.name}>
             <strong>No bills yet for {co.name}</strong><div className="note">Drop PDFs or photos here, or click to choose. Several at once is fine.</div>
           </DropZone>
-        ) : <p className="empty">{S.filter === "deleted" ? "No deleted bills." : (EMPTY[S.filter] || (() => "Nothing marked as no entry."))(co)}</p>}
+        ) : <p className="empty lt-empty" data-list-empty="">{(EMPTY[S.filter] || EMPTY.rejected)(co)}</p>}
       </div>
       <div>
         {S.selected ? <BillDetail id={S.selected} /> : <div className="detail"><section><p className="empty">Select an invoice to see its TDS draft.</p></section></div>}

@@ -3,6 +3,8 @@
 // GSTR-1 and 3B) and the e-invoice user. Fetch now from here; the OTP itself is given in the client's GST tab.
 // The data is GSTAPI.firmStatus (src/js/39) from the gst-taxpro function.
 import { useEffect, useState } from "react";
+import { ListRows } from "../parts/ListTable.jsx";
+import Loading from "../parts/Loading.jsx";
 
 const per = (n) => { const t = new Date(Date.now() + 5.5 * 3600000); let y = t.getUTCFullYear(), m = t.getUTCMonth() + 1 - n; while (m < 1) { m += 12; y--; } return String(m).padStart(2, "0") + y; };
 const ymOfPer = (p) => p.slice(2, 6) + p.slice(0, 2);
@@ -44,9 +46,9 @@ export default function GstApiAll() {
       <button className="btn small" onClick={() => { setSt(null); load(); }}>Refresh</button>
     </div>
     {msg && <p className="note">{msg}</p>}
-    {!st ? <p className="note">Asking the server…</p> : <div className="bk-tablewrap"><table className="bk-table compact">
-      <thead><tr><th>Client</th><th>GSTIN</th><th>Portal connection</th><th className="dt">Access ends</th><th>2B {GSTR.label(ymOfPer(last))}</th><th>GSTR-1</th><th>3B</th><th>E-invoice user</th><th></th></tr></thead>
-      <tbody>{rows.map((c) => { const s = sess[c.gstin], a = acc[c.gstin], live = c.st.k === "live" || c.st.k === "soon";
+    {!st ? <Loading what="each client’s portal connection" /> : <ListRows name="gstApiAll" className="bk-table compact" unit={["client", "clients"]} empty="No client with a GSTIN yet. Add the GSTIN in each client’s Client setup."
+      head={[{ label: "Client", role: "party" }, { label: "GSTIN" }, { label: "Portal connection", role: "status" }, { label: "Access ends" }, { label: "2B " + GSTR.label(ymOfPer(last)) }, { label: "GSTR-1" }, { label: "3B" }, { label: "E-invoice user" }, { label: "", role: "act", cls: "ac" }]}>
+      {rows.map((c) => { const s = sess[c.gstin], a = acc[c.gstin], live = c.st.k === "live" || c.st.k === "soon";
         return <tr key={c.id} data-gstin={c.gstin} data-state={c.st.k}>
           <td><button className="linkbtn" onClick={() => openCompany(c.id)}>{c.name}</button></td><td>{c.gstin}</td>
           <td><span className={"tag " + (c.st.k === "live" ? "ok" : c.st.k === "soon" ? "warn" : c.st.k === "ended" ? "bad" : "no")}>{c.st.t}</span>{s && s.username ? <div className="nr">{s.username}</div> : null}</td>
@@ -54,7 +56,7 @@ export default function GstApiAll() {
           <td>{keptText(c.gstin, "2B")}</td><td>{keptText(c.gstin, "R1")}</td><td>{keptText(c.gstin, "3B")}</td>
           <td>{a ? a.username + (a.last_error ? " (sign-in failed)" : "") : "—"}</td>
           <td className="ac">{live && <>{["2B", "R1", "3B"].map((fm) => <button key={fm} className="btn small" disabled={!!busy} onClick={() => fetchNow(c, fm)}>{busy === c.gstin + fm ? "…" : "Fetch " + GSTAPI.formOf[fm]}</button>)}</>}</td>
-        </tr>; })}</tbody></table></div>}
+        </tr>; })}</ListRows>}
     {st && st.host && <p className="note">E-invoice and e-way bill go to the IRP's <b>{st.host}</b>{st.host === "sandbox" ? " (test) until the firm's server is switched to production" : ""}.</p>}
   </div>;
 }

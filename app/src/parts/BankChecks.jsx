@@ -49,7 +49,7 @@ function BalanceInner({ st }) {
   if (t.left.length) li.push(<li key="l"><b>{plural2(t.left.length, " line was", " lines were") + " left out"}</b>{" (" + abs(t.leftEffect) + ") "}<FocusBtn title="left out, not posted" ids={t.left} /></li>);
   if (t.missing && t.missing.length) li.push(<li key="m"><b>{plural2(t.missing.length, " line is", " lines are") + " marked as in Tally, but Tally does not show " + (t.missing.length === 1 ? "it" : "them") + " for these dates"}</b>{" (" + abs(t.missingEffect) + "): deleted in Tally, or under another date. "}<FocusBtn title="marked in Tally, not found there" ids={t.missing} /></li>);
   if (t.extra && t.extra.length) li.push(<li key="x"><b>{plural2(t.extra.length, " entry is", " entries are") + " in Tally for these dates but not on the statement"}</b>{" (" + abs(t.extraEffect) + "):"}
-    <div className="tblwrap" style={{ marginTop: 6, maxHeight: 240, overflow: "auto" }}><table className="data"><thead><tr><th>Date</th><th>Voucher</th><th>Party / ledger</th><th className="n">In</th><th className="n">Out</th><th></th></tr></thead><tbody>
+    <div className="tblwrap" style={{ marginTop: 6, maxHeight: 240, overflow: "auto" }}><table className="data" data-statement=""><thead><tr><th>Date</th><th>Voucher</th><th>Party / ledger</th><th className="n">In</th><th className="n">Out</th><th></th></tr></thead><tbody>
       {t.extra.slice(0, 300).map((x, i) => <tr key={i}><td>{fmtDate(x.date)}</td><td>{[x.type, x.number].filter(Boolean).join(" ")}</td><td>{x.party}</td><td className="n">{x.eff > 0 ? inr(x.eff) : ""}</td><td className="n">{x.eff < 0 ? inr(-x.eff) : ""}</td><td>{x.note || ""}</td></tr>)}</tbody></table></div></li>);
   if (!t.extra) li.push(<li key="r">{live && <><Btn act="reconRun" className="btn small primary">Reconcile with Tally</Btn>{" "}</>}<span className="muted">{"pairs every statement line with the entries of " + t.ledger + " in Tally, and lists what to post and what to delete to make them agree"}</span></li>);
   if (t.unexplained !== undefined && Math.abs(t.unexplained) >= 0.01) li.push(<li key="u"><b>{abs(t.unexplained) + " is not explained"}</b> by the lines above: check the amounts of the entries in Tally against the statement.</li>);
@@ -83,7 +83,7 @@ export function Recon() {
   const needLedger = miss.filter((r) => !canPost.includes(r) && r.state !== "ignored"), left = miss.filter((r) => r.state === "ignored");
   const dup = new Map(R.dupOf);
   return <section className="recon">{head}
-    <table className="data recon-stmt"><tbody>
+    <table className="data recon-stmt" data-statement=""><tbody>
       <tr><td><b>{"Balance in Tally on " + fmtDate(R.to)}</b></td><td className="n"><b>{(R.tClose < 0 ? "−" : "") + abs(R.tClose)}</b></td></tr>
       <Line label="Add: deposits on the statement, not in Tally" v={mIn} sign="+ " /><Line label="Less: withdrawals on the statement, not in Tally" v={mOut} sign="− " />
       <Line label="Less: receipts in Tally, not on the statement" v={xIn} sign="− " /><Line label="Add: payments in Tally, not on the statement" v={xOut} sign="+ " />
@@ -94,7 +94,7 @@ export function Recon() {
     {(R.deleteProblems || []).length > 0 && <div className="bk-alert bad" style={{ marginTop: 10 }}><b>{"Tally did not delete " + R.deleteProblems.length + " entr" + (R.deleteProblems.length === 1 ? "y" : "ies") + "."}</b> What Tally said:<ul style={{ margin: "6px 0 0" }}>{R.deleteProblems.slice(0, 20).map((x, i) => <li key={i}>{x}</li>)}</ul>
       <div className="note">If Tally says the voucher cannot be found, it may already be gone: press Reconcile again. If a Tally security setting blocks deleting, delete these in Tally (Alt+D on the voucher).</div></div>}
     {miss.length > 0 && <div className="recon-sec"><h4>On the statement, not in Tally <span className="cnt">{miss.length}</span></h4>
-      <div className="tblwrap"><table className="data"><thead><tr><th>Date</th><th>Particulars</th><th className="n">Withdrawal</th><th className="n">Deposit</th><th>Ledger</th><th>Why</th></tr></thead><tbody>
+      <div className="tblwrap"><table className="data" data-statement=""><thead><tr><th>Date</th><th>Particulars</th><th className="n">Withdrawal</th><th className="n">Deposit</th><th>Ledger</th><th>Why</th></tr></thead><tbody>
         {miss.slice(0, 400).map((r) => <tr key={r.id}><td>{fmtDate(r.date)}</td><td>{r.dec.name || r.narr.slice(0, 50)}</td><td className="n">{r.debit ? abs(r.debit) : ""}</td><td className="n">{r.credit ? abs(r.credit) : ""}</td><td>{r.ledger || "—"}</td>
           <td>{r.state === "ignored" ? "left out" : ["sent", "intally"].includes(r.state) ? "marked as posted, but Tally does not have it" : r.state === "ready" ? "not posted yet" : "needs a ledger"}</td></tr>)}</tbody></table></div>
       <div className="row" style={{ gap: 8, marginTop: 8 }}>{live && canPost.length > 0 && <Btn act="reconPost" className="btn small primary">{"Post " + (canPost.length === 1 ? "it" : "these " + canPost.length) + " to Tally"}</Btn>}
@@ -102,13 +102,13 @@ export function Recon() {
         {left.length > 0 && <span className="note">{left.length + " were left out on purpose "}<FocusBtn title="left out, not posted" ids={left.map((r) => r.id)} label="Show them" /></span>}</div></div>}
     {R.extra.length > 0 && <div className="recon-sec"><h4>In Tally, not on the statement <span className="cnt">{R.extra.length}</span></h4>
       <p className="note" style={{ margin: "0 0 6px" }}>Tick the entries to delete from Tally. Copies and entries FinCom posted are ticked already; check entries typed in Tally before deleting them.</p>
-      <div className="tblwrap"><table className="data"><thead><tr><th></th><th>Date</th><th>Voucher</th><th>Party / ledger</th><th className="n">In</th><th className="n">Out</th><th>What it is</th></tr></thead><tbody>
+      <div className="tblwrap"><table className="data" data-statement=""><thead><tr><th></th><th>Date</th><th>Voucher</th><th>Party / ledger</th><th className="n">In</th><th className="n">Out</th><th>What it is</th></tr></thead><tbody>
         {R.extra.map((i) => { const t = R.T[i]; return <tr key={i}><td><input type="checkbox" aria-label={"Delete " + [t.type, t.number].filter(Boolean).join(" ")} checked={R.pick.has(i)} disabled={!live} onChange={(ev) => reconPick(i, ev.target.checked)} /></td><td>{fmtDate(t.date)}</td><td>{[t.type, t.number].filter(Boolean).join(" ")}</td><td>{t.party}</td>
           <td className="n">{t.eff > 0 ? abs(t.eff) : ""}</td><td className="n">{t.eff < 0 ? abs(t.eff) : ""}</td>
           <td>{dup.has(i) ? "a second copy of " + fmtDate((rowById.get(dup.get(i)) || {}).date) + "'s line" : t.tag ? "posted by FinCom, from another statement or an old copy" : "typed in Tally"}{t.narr && !t.tag && <div className="muted" style={{ fontSize: 12 }}>{t.narr.slice(0, 80)}</div>}</td></tr>; })}</tbody></table></div>
       {live && <div className="row" style={{ gap: 8, marginTop: 8 }}><Btn act="reconDelete" className="btn small danger" disabled={!R.pick.size}>{"Delete the " + R.pick.size + " ticked from Tally"}</Btn></div>}</div>}
     {R.differ.length > 0 && <div className="recon-sec"><h4>Amount differs <span className="cnt">{R.differ.length}</span></h4>
-      <div className="tblwrap"><table className="data"><thead><tr><th>Date</th><th>Particulars</th><th className="n">Statement</th><th className="n">Tally</th><th>Tally voucher</th></tr></thead><tbody>
+      <div className="tblwrap"><table className="data" data-statement=""><thead><tr><th>Date</th><th>Particulars</th><th className="n">Statement</th><th className="n">Tally</th><th>Tally voucher</th></tr></thead><tbody>
         {R.differ.map((d, i) => { const r = rowById.get(d.rowId), t = R.T[d.ti]; return <tr key={i}><td>{fmtDate(r.date)}</td><td>{r.dec.name || r.narr.slice(0, 50)}</td><td className="n">{abs(bankEffect(r))}</td><td className="n">{abs(t.eff)}</td><td>{[t.type, t.number].filter(Boolean).join(" ")}</td></tr>; })}</tbody></table></div>
       {live && <div className="row" style={{ gap: 8, marginTop: 8 }}><Btn act="reconReplace" className="btn small primary">{"Replace " + (R.differ.length === 1 ? "it" : "them") + " in Tally with the statement’s amount"}</Btn></div>}</div>}
   </section>;
@@ -128,7 +128,7 @@ export function DupFind() {
   const d = S.dupFind;
   if (!d) return null;
   const amt = (v) => money(d.amountOf(v));
-  const Tbl = ({ list, withWant }) => <div className="tblwrap" style={{ marginTop: 6, maxHeight: 260, overflow: "auto" }}><table className="data"><thead><tr><th>{withWant ? "In Tally on" : "Date"}</th>{withWant && <th>Should be</th>}<th>Type</th><th>Voucher</th><th>Party</th><th className="n">Amount</th></tr></thead><tbody>
+  const Tbl = ({ list, withWant }) => <div className="tblwrap" style={{ marginTop: 6, maxHeight: 260, overflow: "auto" }}><table className="data" data-statement=""><thead><tr><th>{withWant ? "In Tally on" : "Date"}</th>{withWant && <th>Should be</th>}<th>Type</th><th>Voucher</th><th>Party</th><th className="n">Amount</th></tr></thead><tbody>
     {list.slice(0, 400).map((v, i) => <tr key={i}><td>{fmtDate(tallyToIso(v.date))}</td>{withWant && <td>{fmtDate(v.wantDate)}</td>}<td>{v.type || ""}</td><td>{v.number || ""}</td><td>{v.party || ""}</td><td className="n">{amt(v)}</td></tr>)}</tbody></table></div>;
   // round 18: the bridge's copy did not hold these dates and Tally was not asked: not checked, never "All clear"
   if (d.notChecked) return <div className="bigwarn" style={{ borderColor: "var(--warn, #b7791f)" }}><b>Not checked.</b>{" " + d.notChecked + " "}<Btn act="dupClose" className="linkbtn">Close</Btn></div>;

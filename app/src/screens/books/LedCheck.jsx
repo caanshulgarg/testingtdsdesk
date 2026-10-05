@@ -4,6 +4,8 @@
 // confirmed. Later, only new ledgers, and confirmed ledgers whose use has changed (a warning), come back here.
 // The working is LedCheck (src/js/57-ledger-check.js).
 import Confirm from "../../parts/Confirm.jsx";
+import { ListRows } from "../../parts/ListTable.jsx";
+import { cloneElement } from "react";
 const SRCC = { master: "ok", usage: "", firm: "", name: "", ai: "warn" };
 const what = (p) => {
   if (!p || !p.what) return "—";
@@ -13,7 +15,7 @@ const what = (p) => {
   return LedMaster.label(p.what) + (p.section ? " · " + LedCheck.secLabel(p.section) : "") + (p.rate ? " · " + p.rate + "%" : "");
 };
 
-function Row({ n, it, m }) {
+function Row({ n, it, m }) {   // also called as Row({…}) to get its <tr>
   const p = LedCheck.pick(it), on = LedCheck.ticked(it), done = m && m.ok;
   return <tr data-key={n} data-conf={p.conf}>
     <td>{!done && <input type="checkbox" aria-label={"Confirm " + n} checked={on} onChange={(ev) => LedCheck.setTick(n, ev.target.checked)} />}</td>
@@ -47,10 +49,10 @@ export default function LedCheckCard({ b }) {
       {c && <label className="chk"><input type="checkbox" checked={!!showAll} onChange={(ev) => setAndShow("lcAll", ev.target.checked)} /> show confirmed too</label>}
       {c && <span className="note">{open.length} to confirm · checked {fmtDateTime(c.ranAt)}{c.savedAt ? " · saved " + fmtDateTime(c.savedAt) + (c.savedBy ? " by " + c.savedBy : "") : ""}</span>}
     </div>
-    {c && list.length > 0 && <div className="bk-tablewrap" style={{ marginTop: 10 }}><table className="bk-table compact" id="lcTable">
-      <thead><tr><th></th><th>Ledger</th><th>Suggestion</th><th>Evidence</th><th>Confidence</th></tr></thead>
-      <tbody>{list.map(([n, it]) => <Row key={n} n={n} it={it} m={(b.map || {})[n]} />)}</tbody>
-    </table></div>}
+    {/* the one list table (spec K6): the ledger, its confidence (status), then the rest (Row draws a plain <tr>) */}
+    {c && list.length > 0 && <div style={{ marginTop: 10 }}><ListRows name="lcTable" id="lcTable" className="bk-table compact" unit={["ledger", "ledgers"]}
+      head={[{ label: "", role: "pick" }, { label: "Ledger", role: "party" }, { label: "Suggestion" }, { label: "Evidence" }, { label: "Confidence", role: "status" }]}>
+      {list.map(([n, it]) => cloneElement(Row({ n, it, m: (b.map || {})[n] }), { key: n }))}</ListRows></div>}
     {c && !list.length && <p className="note">Every tax-like ledger is confirmed.</p>}
   </section></Confirm>;
 }

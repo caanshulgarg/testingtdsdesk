@@ -1,4 +1,5 @@
 // Today: what needs doing, across every client. Was viewToday() in src/js/18.
+import ListTable from "../parts/ListTable.jsx";
 const openAt = (cid, step) => openCompany(cid).then(() => goStep(step, "bills"));
 
 function Metric({ label, n, warn, onClick }) {
@@ -27,23 +28,16 @@ export default function Today() {
         <Metric label="To post" n={sum("post")} />
         <Metric label="Need a look" n={sum("look")} warn />
       </div>
-      {!rows.length ? <p className="note">No clients yet. <button className="linkbtn" onClick={() => navHome("clients")}>Add your first client</button>.</p> : <>
-        <div className="tblwrap">
-          <table className="data">
-            <thead><tr><th>Client</th><th className="n">To read</th><th className="n">To review</th><th className="n">To post</th><th className="n">Need a look</th></tr></thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.c.id}>
-                  <td><button className="linkbtn" onClick={() => openAt(r.c.id, "review")}><b>{r.c.name}</b></button>{r.c.gstin && <> <span className="note">{r.c.gstin}</span></>}</td>
-                  <td className="n">{cell(r, "read", "collect")}</td>
-                  <td className="n">{cell(r, "review", "review")}</td>
-                  <td className="n">{cell(r, "post", "post")}</td>
-                  <td className="n">{cell(r, "look", "review")}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {!rows.length ? <p className="note lt-empty" data-list-empty="">No clients yet. Use <button className="linkbtn" onClick={() => navHome("clients")}>Add your first client</button> to start.</p> : <>
+        {/* the one list table (spec K6) */}
+        <ListTable name="today" className="data" rows={rows} rowKey={(r) => r.c.id} unit={["client", "clients"]}
+          cols={[
+            { k: "name", role: "party", label: "Client", v: (r) => r.c.name, cell: (r) => <><button className="linkbtn" onClick={() => openAt(r.c.id, "review")}><b>{r.c.name}</b></button>{r.c.gstin && <> <span className="note">{r.c.gstin}</span></>}</> },
+            { k: "read", label: "To read", cls: "n", v: (r) => r.read, sum: true, fmt: String, cell: (r) => cell(r, "read", "collect") },
+            { k: "review", label: "To review", cls: "n", v: (r) => r.review, sum: true, fmt: String, cell: (r) => cell(r, "review", "review") },
+            { k: "post", label: "To post", cls: "n", v: (r) => r.post, sum: true, fmt: String, cell: (r) => cell(r, "post", "post") },
+            { k: "look", label: "Need a look", cls: "n", v: (r) => r.look, sum: true, fmt: String, cell: (r) => cell(r, "look", "review") },
+          ]} />
         <p className="note" style={{ marginTop: 8 }}>Counts cover clients opened on this computer; open a client to bring its figures up to date.</p>
       </>}
     </section>
