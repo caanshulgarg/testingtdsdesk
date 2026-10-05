@@ -98,10 +98,10 @@ def rpc(fn, a):
     if fn == "gsp_secret_get": return SECRETS.get(a["p_name"]) if a["p_name"].startswith("gsp:") else None
     if fn == "gst_cron_ok": return a.get("k") == CRON_KEY
     if fn == "tally_bridge_bind":       # migration 54 (review M3): a bridge id belongs to the first computer that reports it
-        ids = T.setdefault("tally_bridge_ids", [])
+        bound = T.setdefault("tally_bridge_ids", [])
         if not re.match(r"^go-[0-9a-f]{6,32}$", a.get("p_bridge") or ""): return {"own": True}
-        hit = next((x for x in ids if x["bridge_id"] == a["p_bridge"]), None)
-        if not hit: hit = {"bridge_id": a["p_bridge"], "device_id": a["p_device"]}; ids.append(hit)
+        hit = next((x for x in bound if x["bridge_id"] == a["p_bridge"]), None)
+        if not hit: hit = {"bridge_id": a["p_bridge"], "device_id": a["p_device"]}; bound.append(hit)
         if hit["device_id"] == a["p_device"]: return {"own": True}
         d = next((x for x in T["tally_devices"] if x["id"] == hit["device_id"]), {}); e = ((d.get("info") or {}).get("bridges") or {}).get(a["p_bridge"]) or {}
         return {"own": False, "words": "This computer key cannot use bridge %s: it belongs to %s. Ask the firm's owner." % (a["p_bridge"], " · ".join(x for x in (e.get("computer"), e.get("user")) if x) or d.get("name", ""))}
