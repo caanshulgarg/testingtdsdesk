@@ -132,7 +132,8 @@ New-Item -Force 'HKCU:\Software\Microsoft\Terminal Server Client' | Out-Null
 Set-ItemProperty 'HKCU:\Software\Microsoft\Terminal Server Client' AuthenticationLevelOverride 0 -Type DWord
 & cmdkey.exe "/generic:TERMSRV/127.0.0.2" "/user:$u2" "/pass:$pw" | Out-Null
 Set-Content "$fc\u2.rdp" -Encoding ASCII -Value @('full address:s:127.0.0.2', "username:s:$u2", 'screen mode id:i:1', 'desktopwidth:i:1024', 'desktopheight:i:740', 'authentication level:i:0', 'prompt for credentials:i:0', 'promptcredentialonce:i:0', 'redirectclipboard:i:0', 'redirectprinters:i:0', 'redirectsmartcards:i:0', 'redirectdrives:i:0', 'audiomode:i:2')
-$mstsc = Start-Process mstsc.exe -ArgumentList "`"$fc\u2.rdp`"" -PassThru
+# /v: rather than an .rdp file (Windows Server 2025 asks before it opens an .rdp file)
+$mstsc = Start-Process mstsc.exe -ArgumentList '/v:127.0.0.2', '/w:1024', '/h:740' -PassThru
 $rdp = $false; $sess2 = $null
 for ($i = 0; $i -lt 30; $i++) {
   Start-Sleep 4
@@ -140,6 +141,12 @@ for ($i = 0; $i -lt 30; $i++) {
   $m = [regex]::Match($q, "(?im)\s$u2\s+(\d+)\s+Active")
   if ($m.Success) { $sess2 = [int]$m.Groups[1].Value; $rdp = $true; break }
   if ($i % 5 -eq 2) { Shot ("rdp-wait-{0:d2}" -f $i) }
+  # a question from the Remote Desktop client (an .rdp file's consent, a certificate): its own keys (I understand / Yes)
+  if ($i -in 4, 9, 14) {
+    Get-Process mstsc -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  mstsc window: '$($_.MainWindowTitle)'" }
+    $w = Get-Process mstsc -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
+    if ($w) { [W32F4]::SetForegroundWindow($w.MainWindowHandle) | Out-Null; Start-Sleep -Milliseconds 500; [System.Windows.Forms.SendKeys]::SendWait('%i'); Start-Sleep 1; [System.Windows.Forms.SendKeys]::SendWait('%y'); Start-Sleep 1; [System.Windows.Forms.SendKeys]::SendWait('{ENTER}') }
+  }
 }
 Write-Host (& query.exe session 2>&1 | Out-String)
 Say "user 2's own Windows session by Remote Desktop: $rdp (session $sess2)"
@@ -261,7 +268,12 @@ if ($up2) {
     Stop-Process -Id $script:t2pid -Force; Start-Sleep 3
     Write-TallyIni "$t2dir\tally.ini" "$fc\u2data" 9001 $tdl $f2.Name
     StartTally2
-    if (WaitPort 9001) { Start-Sleep 5; Keys2 'a' 4; Keys2 't' 10 '01e-tally2-gateway'; AddLedger 9001 $co2; $tally2 = ((ListCo 9001) -match [regex]::Escape($co2)) }
+    if (WaitPort 9001) { Start-Sleep 5; Keys2 'a' 4; Keys2 't' 10 '01e-tally2-gateway'; AddLedger 9001 $co2; $tally2 = ((ListCo 9001) -match [regex]::Escape($co2))
+      # one voucher there before the bridges start, as in user 1's company (flow.ps1): with none, ALTVCHID is 0 and the
+      # bridge records no starting point, so a first entry goes without its GUID and body (seen in run 37334848535)
+      Post 9001 ('<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>All Masters</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>' + $co2 + '</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA><TALLYMESSAGE xmlns:UDF="TallyUDF"><LEDGER NAME="Spike Party" ACTION="Create"><NAME.LIST><NAME>Spike Party</NAME></NAME.LIST><PARENT>Sundry Debtors</PARENT></LEDGER></TALLYMESSAGE></REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>') 'ledger Spike Party' | Out-Null
+      Post 9001 ('<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>Vouchers</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>' + $co2 + '</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA><TALLYMESSAGE xmlns:UDF="TallyUDF"><VOUCHER VCHTYPE="Journal" ACTION="Create"><DATE>20260401</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><NARRATION>round 4 user 2 first entry</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>Spike Party</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-100.00</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>Spike Income</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>100.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER></TALLYMESSAGE></REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>') 'journal :9001' | Out-Null
+    }
   }
 }
 Write-Host "== user 2's own Tally with its company and the add-on: $tally2"
