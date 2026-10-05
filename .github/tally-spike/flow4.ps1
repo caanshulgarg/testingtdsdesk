@@ -100,19 +100,118 @@ try { Add-LocalGroupMember -Group (Get-LocalGroup -SID 'S-1-5-32-545').Name -Mem
 $cred2 = New-Object System.Management.Automation.PSCredential ($u2, $sec)
 $sid2 = (Get-LocalUser $u2).SID.Value
 Write-Host "user 2: $u2 $sid2; administrators: $((Get-LocalGroupMember -Group (Get-LocalGroup -SID 'S-1-5-32-544').Name | ForEach-Object Name) -join ', ')"
+# its profile, made once by the secondary logon
+$p0 = Start-Process cmd.exe -ArgumentList '/c', 'exit' -Credential $cred2 -LoadUserProfile -WorkingDirectory $fc -PassThru; $null = $p0.Handle; $null = $p0.WaitForExit(120000)
+$prof2 = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$sid2" -ErrorAction SilentlyContinue).ProfileImagePath
+if (-not $prof2) { $prof2 = "C:\Users\$u2" }
+Write-Host "user 2's profile: $prof2"
+# A program started with -Credential keeps the CALLER's environment (USERNAME, LOCALAPPDATA, TEMP...): user 2's own is
+# put in place for each start (round 4's first try wrote user 2's settings into runneradmin's folder)
+$envU2 = @{ USERNAME = $u2; USERPROFILE = $prof2; LOCALAPPDATA = "$prof2\AppData\Local"; APPDATA = "$prof2\AppData\Roaming"; HOMEPATH = $prof2.Substring(2); HOMEDRIVE = $prof2.Substring(0, 2); TEMP = "$fc\tmp"; TMP = "$fc\tmp" }
 function AsU2([string]$file, [string[]]$argv, [int]$waitMs = 300000) {
-  $t, $tt = $env:TEMP, $env:TMP; $env:TEMP = "$fc\tmp"; $env:TMP = "$fc\tmp"
+  $saved = @{}; foreach ($k in $envU2.Keys) { $saved[$k] = [Environment]::GetEnvironmentVariable($k); [Environment]::SetEnvironmentVariable($k, $envU2[$k]) }
   try {
     $sp = @{ FilePath = $file; Credential = $cred2; LoadUserProfile = $true; WorkingDirectory = $fc; PassThru = $true }
     if ($argv.Count) { $sp.ArgumentList = $argv }
     $p = Start-Process @sp
     $null = $p.Handle
-  } finally { $env:TEMP, $env:TMP = $t, $tt }
+  } finally { foreach ($k in $saved.Keys) { [Environment]::SetEnvironmentVariable($k, $saved[$k]) } }
   if ($waitMs -le 0) { return $p }
   if (-not $p.WaitForExit($waitMs)) { Write-Host "[as $u2] $file did not end in time"; return -1 }
   return $p.ExitCode
 }
-function PsAsU2([string]$script, [string[]]$more = @()) { AsU2 'powershell.exe' (@('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$script`"") + $more) }
+
+# ---- user 2 in a Windows session of their own: a Remote Desktop connection from this desktop to 127.0.0.2 (as on a
+# shared server); when that cannot be had, user 2's programs run through the secondary logon in the runner's session
+Set-ItemProperty 'HKLM:\System\CurrentControlSet\Control\Terminal Server' fDenyTSConnections 0
+Set-ItemProperty 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' UserAuthentication 0
+try { Enable-NetFirewallRule -DisplayGroup 'Remote Desktop' -ErrorAction Stop } catch { Write-Host "firewall: $_" }
+try { Add-LocalGroupMember -Group (Get-LocalGroup -SID 'S-1-5-32-555').Name -Member $u2 } catch { Write-Host "Remote Desktop Users: $_" }
+Start-Service TermService -ErrorAction SilentlyContinue
+New-Item -Force 'HKCU:\Software\Microsoft\Terminal Server Client' | Out-Null
+Set-ItemProperty 'HKCU:\Software\Microsoft\Terminal Server Client' AuthenticationLevelOverride 0 -Type DWord
+& cmdkey.exe "/generic:TERMSRV/127.0.0.2" "/user:$u2" "/pass:$pw" | Out-Null
+Set-Content "$fc\u2.rdp" -Encoding ASCII -Value @('full address:s:127.0.0.2', "username:s:$u2", 'screen mode id:i:1', 'desktopwidth:i:1024', 'desktopheight:i:740', 'authentication level:i:0', 'prompt for credentials:i:0', 'promptcredentialonce:i:0', 'redirectclipboard:i:0', 'redirectprinters:i:0', 'redirectsmartcards:i:0', 'redirectdrives:i:0', 'audiomode:i:2')
+$mstsc = Start-Process mstsc.exe -ArgumentList "`"$fc\u2.rdp`"" -PassThru
+$rdp = $false; $sess2 = $null
+for ($i = 0; $i -lt 30; $i++) {
+  Start-Sleep 4
+  $q = (& query.exe session 2>&1) -join "`n"
+  $m = [regex]::Match($q, "(?im)\s$u2\s+(\d+)\s+Active")
+  if ($m.Success) { $sess2 = [int]$m.Groups[1].Value; $rdp = $true; break }
+  if ($i % 5 -eq 2) { Shot ("rdp-wait-{0:d2}" -f $i) }
+}
+Write-Host (& query.exe session 2>&1 | Out-String)
+Say "user 2's own Windows session by Remote Desktop: $rdp (session $sess2)"
+if (-not $rdp) { Stop-Process -Id $mstsc.Id -Force -ErrorAction SilentlyContinue }
+Add-Content -Path $resultsFile -Encoding UTF8 -Value $(if ($rdp) { "INFO user 2 ($u2) works in a Windows session of their own (session $sess2, by a Remote Desktop connection to 127.0.0.2); runneradmin in session $((Get-Process -Id $PID).SessionId)" } else { "INFO no session of their own for user 2: their programs run through the secondary logon (Start-Process -Credential) in the runner's session $((Get-Process -Id $PID).SessionId)" })
+if ($rdp) {
+  # the sign-in finished (explorer up) before anything is started there
+  for ($i = 0; $i -lt 30; $i++) { if (Get-Process explorer -ErrorAction SilentlyContinue | Where-Object SessionId -eq $sess2) { break }; Start-Sleep 3 }
+  Start-Sleep 20; Shot '03-rdp-session'
+}
+# user 2's programs in that session: a scheduled task of user 2's, run only while they are signed in (/IT), runs
+# C:\fcspike\task.ps1, which runs the script named in task-in.json and writes its output and a done mark
+Set-Content "$fc\task.ps1" -Encoding UTF8 -Value @'
+$in = Get-Content C:\fcspike\task-in.json -Raw | ConvertFrom-Json
+try { & $in.script @($in.argv) *>&1 | Out-File C:\fcspike\task-out.txt -Encoding utf8 } catch { "ERROR $_" | Out-File C:\fcspike\task-out.txt -Append -Encoding utf8 }
+"done" | Set-Content C:\fcspike\task-done.txt
+'@
+if ($rdp) {
+  $tr = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File C:\fcspike\task.ps1'
+  $o = & schtasks.exe /Create /F /TN fcu2 /TR $tr /SC ONCE /ST 23:59 /RU $u2 /RP $pw /IT 2>&1
+  Write-Host "task for ${u2}: $o"
+}
+# a PowerShell script run as user 2 (in their session, or through the secondary logon); its output back as lines
+function U2Script([string]$script, [string[]]$argv = @(), [int]$sec = 300) {
+  Remove-Item "$fc\task-done.txt", "$fc\task-out.txt" -ErrorAction SilentlyContinue
+  if ($rdp) {
+    @{ script = $script; argv = $argv } | ConvertTo-Json | Set-Content "$fc\task-in.json" -Encoding UTF8
+    $null = & schtasks.exe /Run /TN fcu2 2>&1
+    $until = (Get-Date).AddSeconds($sec); while (-not (Test-Path "$fc\task-done.txt") -and (Get-Date) -lt $until) { Start-Sleep -Milliseconds 500 }
+  } else {
+    $null = AsU2 'powershell.exe' (@('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$script`"") + @($argv | ForEach-Object { "`"$_`"" })) ($sec * 1000)
+  }
+  $r = @(Get-Content "$fc\task-out.txt" -ErrorAction SilentlyContinue); $r | ForEach-Object { Write-Host "  [as $u2] $_" }; return , $r
+}
+# what user 2's scripts use: start a program and say its process; keys to their Tally (in their session); a screenshot
+Set-Content "$fc\start.ps1" -Encoding UTF8 -Value @'
+param($file, $wd, $a1, $a2, $a3)
+$argv = @($a1, $a2, $a3) | Where-Object { $_ }
+$sp = @{ FilePath = $file; WorkingDirectory = $wd; PassThru = $true }; if ($argv) { $sp.ArgumentList = $argv }
+$p = Start-Process @sp
+"pid=$($p.Id) session=$($p.SessionId) user=$([Security.Principal.WindowsIdentity]::GetCurrent().Name)"
+'@
+Set-Content "$fc\runwait.ps1" -Encoding UTF8 -Value @'
+param($file, $a1, $a2, $a3)
+$p = Start-Process -FilePath $file -ArgumentList (@($a1, $a2, $a3) | Where-Object { $_ }) -PassThru; $null = $p.Handle
+$null = $p.WaitForExit(300000); "exit=$($p.ExitCode) user=$([Security.Principal.WindowsIdentity]::GetCurrent().Name) session=$((Get-Process -Id $PID).SessionId)"
+'@
+Set-Content "$fc\keys2.ps1" -Encoding UTF8 -Value @'
+param($k, $wait, $shot)
+Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+Add-Type @"
+using System; using System.Runtime.InteropServices;
+public static class K2 { [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow(); }
+"@
+$me = (Get-Process -Id $PID).SessionId
+$p = Get-Process tally -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $me -and $_.MainWindowHandle -ne 0 } | Select-Object -First 1
+if ($p) {
+  [K2]::ShowWindow($p.MainWindowHandle, 9) | Out-Null; [K2]::SetForegroundWindow($p.MainWindowHandle) | Out-Null; Start-Sleep -Milliseconds 700
+  $fg = ([K2]::GetForegroundWindow() -eq $p.MainWindowHandle)
+  if ($k) { [System.Windows.Forms.SendKeys]::SendWait($k) }
+  "keys '$k' -> Tally pid $($p.Id) '$($p.MainWindowTitle)' session $me foreground=$fg"
+} else { "no Tally window in session $me" }
+Start-Sleep ([int]$wait)
+if ($shot) {
+  try { $b = [System.Windows.Forms.SystemInformation]::VirtualScreen; $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+    [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Left, $b.Top, 0, 0, $bmp.Size); $bmp.Save("C:\fcspike\shots\$shot.png"); "shot $shot" } catch { "shot $shot failed: $_" }
+}
+'@
+New-Item -ItemType Directory -Force "$fc\shots" | Out-Null
+& icacls.exe $fc /grant '*S-1-5-32-545:(OI)(CI)M' /T /Q | Out-Null
 
 # ---- the stub cloud
 Say '---- the stub cloud'
@@ -139,25 +238,30 @@ AddLedger 9000 $co1
 # ---- user 2's own Tally (9001), run as fcuser2: a company made by keys, then started again with it and the add-on
 Say '---- user 2''s own Tally (9001), run as fcuser2: a company made by keys, then started again with it and the add-on'
 $tally2 = $false
+function StartTally2 {
+  if ($rdp) { $r = U2Script "$fc\start.ps1" @("$t2dir\tally.exe", $t2dir); $script:t2pid = [int][regex]::Match(($r -join ' '), 'pid=(\d+)').Groups[1].Value }
+  else { $t = AsU2 "$t2dir\tally.exe" @() 0; $script:t2pid = $t.Id; $script:tallyPids[9001] = $t.Id }
+}
+function Keys2([string]$k, $wait = 3, [string]$n = '') { if ($rdp) { $null = U2Script "$fc\keys2.ps1" @($k, "$wait", $n) } else { KeysTo 9001 $k $wait $n } }
 Write-TallyIni "$t2dir\tally.ini" "$fc\u2data" 9001 $null $null
-$t2 = AsU2 "$t2dir\tally.exe" @() 0; $script:tallyPids[9001] = $t2.Id
+StartTally2
 $up2 = WaitPort 9001
-Write-Host "Tally :9001 (as $u2, pid $($t2.Id)) answers: $up2; owner: $((Invoke-CimMethod -InputObject (Get-CimInstance Win32_Process -Filter "ProcessId=$($t2.Id)") -MethodName GetOwner).User)"
+Write-Host "Tally :9001 (pid $($script:t2pid)) answers: $up2; owner: $((Invoke-CimMethod -InputObject (Get-CimInstance Win32_Process -Filter "ProcessId=$($script:t2pid)") -MethodName GetOwner).User); session $((Get-Process -Id $script:t2pid -ErrorAction SilentlyContinue).SessionId) (runner's own: $((Get-Process -Id $PID).SessionId))"
 if ($up2) {
-  Start-Sleep 5; KeysTo 9001 'a' 4; KeysTo 9001 't' 10 '01-tally2-start'
-  KeysTo 9001 '{ENTER}' 5 '01b-tally2-create-company'
-  KeysTo 9001 $co2 2 ''
-  KeysTo 9001 '^a' 8 '01c-tally2-ctrl-a'
+  Start-Sleep 5; Keys2 'a' 4; Keys2 't' 10 '01-tally2-start'
+  Keys2 '{ENTER}' 5 '01b-tally2-create-company'
+  Keys2 $co2 2 ''
+  Keys2 '^a' 8 '01c-tally2-ctrl-a'
   $have = (ListCo 9001) -match [regex]::Escape($co2)
-  foreach ($k in @('y', '^a', '{ENTER}', 'y', '{ESC}', 'y')) { if ($have) { break }; KeysTo 9001 $k 6 ''; $have = (ListCo 9001) -match [regex]::Escape($co2) }
-  KeysTo 9001 '^a' 5 '01d-tally2-company'
+  foreach ($k in @('y', '^a', '{ENTER}', 'y', '{ESC}', 'y')) { if ($have) { break }; Keys2 $k 6 ''; $have = (ListCo 9001) -match [regex]::Escape($co2) }
+  Keys2 '^a' 5 '01d-tally2-company'
   $f2 = Get-ChildItem "$fc\u2data" -Directory | Where-Object { $_.Name -match '^\d+$' } | Select-Object -First 1
   Write-Host "user 2's company made: $have, folder $($f2.Name)"
   if ($have -and $f2) {
-    Stop-Process -Id $t2.Id -Force; Start-Sleep 3
+    Stop-Process -Id $script:t2pid -Force; Start-Sleep 3
     Write-TallyIni "$t2dir\tally.ini" "$fc\u2data" 9001 $tdl $f2.Name
-    $t2 = AsU2 "$t2dir\tally.exe" @() 0; $script:tallyPids[9001] = $t2.Id
-    if (WaitPort 9001) { Start-Sleep 5; KeysTo 9001 'a' 4; KeysTo 9001 't' 10 '01e-tally2-gateway'; AddLedger 9001 $co2; $tally2 = ((ListCo 9001) -match [regex]::Escape($co2)) }
+    StartTally2
+    if (WaitPort 9001) { Start-Sleep 5; Keys2 'a' 4; Keys2 't' 10 '01e-tally2-gateway'; AddLedger 9001 $co2; $tally2 = ((ListCo 9001) -match [regex]::Escape($co2)) }
   }
 }
 Write-Host "== user 2's own Tally with its company and the add-on: $tally2"
@@ -165,7 +269,8 @@ Write-Host "== user 2's own Tally with its company and the add-on: $tally2"
 # ---- the bridges, each installed by its own Windows user with the real setup, just for me; the settings seeded first
 Say '---- the bridges, each installed by its own Windows user with the real setup, just for me; the settings seeded first'
 # (FinCom's address = the stub, a made-up computer key, the user's own Tally port), as the setup keeps them
-function SeedJson($key, [int]$tport) { (@{ CloudUrl = 'http://127.0.0.1:8787/'; CloudKey = "plain:$key"; TallyPorts = @($tport); FallbackPorts = @($tport) } | ConvertTo-Json -Compress) }
+# in their own sessions each bridge finds its own Tally (TallyPorts auto, as installed); in one shared session the port is set
+function SeedJson($key, [int]$tport) { $tp = if ($rdp) { 'auto' } else { @($tport) }; (@{ CloudUrl = 'http://127.0.0.1:8787/'; CloudKey = "plain:$key"; TallyPorts = $tp } | ConvertTo-Json -Compress) }
 $h1 = Join-Path $env:LOCALAPPDATA 'TDS Desk Bridge'; New-Item -ItemType Directory -Force $h1 | Out-Null
 Set-Content "$h1\tds-bridge.config.json" (SeedJson 'spike-computer-key-user1' 9000) -Encoding UTF8
 $p = Start-Process -FilePath $setup -ArgumentList '/S', '/CURRENTUSER', '/MODE=sole' -PassThru; $null = $p.Handle
@@ -176,12 +281,11 @@ Set-Content "$fc\seed2.json" (SeedJson 'spike-computer-key-user2' 9001) -Encodin
 Set-Content "$fc\seed.ps1" -Encoding UTF8 -Value @(
   '$h = Join-Path $env:LOCALAPPDATA "TDS Desk Bridge"; New-Item -ItemType Directory -Force $h | Out-Null',
   'Copy-Item C:\fcspike\seed2.json (Join-Path $h "tds-bridge.config.json")',
-  '"$env:USERNAME $env:LOCALAPPDATA" | Set-Content C:\fcspike\seed-done.txt')
-$c = PsAsU2 "$fc\seed.ps1"
-Write-Host "seed as ${u2}: $c $(Get-Content $fc\seed-done.txt -ErrorAction SilentlyContinue)"
-$c = AsU2 $setup @('/S', '/CURRENTUSER', '/MODE=sole')
-Write-Host "setup as $u2 (just for me) ended with $c"
-$prof2 = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$sid2").ProfileImagePath
+  '"$([Security.Principal.WindowsIdentity]::GetCurrent().Name) session $((Get-Process -Id $PID).SessionId) $env:LOCALAPPDATA" | Set-Content C:\fcspike\seed-done.txt')
+$null = U2Script "$fc\seed.ps1"
+Write-Host "seed as ${u2}: $(Get-Content $fc\seed-done.txt -ErrorAction SilentlyContinue)"
+if ($rdp) { $c = U2Script "$fc\runwait.ps1" @($setup, '/S', '/CURRENTUSER', '/MODE=sole') } else { $c = AsU2 $setup @('/S', '/CURRENTUSER', '/MODE=sole') }
+Write-Host "setup as $u2 (just for me) ended: $c"
 $h2 = Join-Path $prof2 'AppData\Local\TDS Desk Bridge'
 Get-Content "$prof2\AppData\Local\FinCom Bridge\install.log" -ErrorAction SilentlyContinue | Select-Object -Last 8 | ForEach-Object { Write-Host "  install.log 2: $_" }
 Start-Sleep 10
@@ -228,12 +332,14 @@ function PrintNew($from) { (StubLines $from) | ForEach-Object { Write-Host "  $(
 
 # ---- 6a: both bridges run at once, on their own ports, as their own users
 Say '---- 6a: both bridges run at once, on their own ports, as their own users'
-$procs = Get-CimInstance Win32_Process -Filter "Name='FinComBridge.exe'" | ForEach-Object { [pscustomobject]@{ pid = $_.ProcessId; user = (Invoke-CimMethod -InputObject $_ -MethodName GetOwner).User; cmd = $_.CommandLine } }
-$procs | ForEach-Object { Write-Host "  process $($_.pid) as $($_.user): $($_.cmd)" }
-$lis = Get-NetTCPConnection -State Listen -LocalPort 9100..9119 -ErrorAction SilentlyContinue | ForEach-Object { $pp = $_.OwningProcess; [pscustomobject]@{ port = $_.LocalPort; pid = $pp; user = ($procs | Where-Object pid -eq $pp).user } }
+$procs = Get-CimInstance Win32_Process -Filter "Name='FinComBridge.exe'" | ForEach-Object { [pscustomobject]@{ pid = $_.ProcessId; user = (Invoke-CimMethod -InputObject $_ -MethodName GetOwner).User; session = $_.SessionId; cmd = $_.CommandLine } }
+$procs | ForEach-Object { Write-Host "  process $($_.pid) as $($_.user) in session $($_.session): $($_.cmd)" }
+$lis = Get-NetTCPConnection -State Listen -LocalPort (9100..9119) -ErrorAction SilentlyContinue | ForEach-Object { $pp = $_.OwningProcess; [pscustomobject]@{ port = $_.LocalPort; pid = $pp; user = ($procs | Where-Object pid -eq $pp).user } }
 $lis | ForEach-Object { Write-Host "  listening 127.0.0.1:$($_.port) pid $($_.pid) user $($_.user)" }
+Get-Process tally -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  Tally pid $($_.Id) session $($_.SessionId) owner $((Invoke-CimMethod -InputObject (Get-CimInstance Win32_Process -Filter "ProcessId=$($_.Id)") -MethodName GetOwner).User)" }
 $l1 = $lis | Where-Object { $_.port -eq $B[1].port -and $_.user -eq 'runneradmin' }; $l2 = $lis | Where-Object { $_.port -eq $B[2].port -and $_.user -eq $u2 }
-Result '6a two bridges at once' ([bool]$l1 -and [bool]$l2 -and $B[1].port -ne $B[2].port -and $B[1].id -ne $B[2].id) ("bridge 1 runneradmin on {0} (pid {1}, {2}); bridge 2 {3} on {4} (pid {5}, {6})" -f $B[1].port, $l1.pid, $B[1].id, $u2, $B[2].port, $l2.pid, $B[2].id)
+$s1 = ($procs | Where-Object pid -eq $l1.pid).session; $s2 = ($procs | Where-Object pid -eq $l2.pid).session
+Result '6a two bridges at once' ([bool]$l1 -and [bool]$l2 -and $B[1].port -ne $B[2].port -and $B[1].id -ne $B[2].id) ("bridge 1 runneradmin on 127.0.0.1:{0} (pid {1}, session {7}, {2}); bridge 2 {3} on 127.0.0.1:{4} (pid {5}, session {8}, {6}); both listening at {9}" -f $B[1].port, $l1.pid, $B[1].id, $u2, $B[2].port, $l2.pid, $B[2].id, $s1, $s2, (Get-Date -Format HH:mm:ss))
 
 # ---- 6b: the /ping proof: HMAC-SHA256(bridge key, nonce || bridge id || port), only to the bridge's own Windows user
 Say '---- 6b: the /ping proof: HMAC-SHA256(bridge key, nonce || bridge id || port), only to the bridge''s own Windows user'
@@ -252,9 +358,9 @@ Set-Content "$fc\ping2.ps1" -Encoding UTF8 -Value @'
 param($p1, $p2, $nonce)
 function Ping($port) { try { Invoke-RestMethod "http://127.0.0.1:$port/ping?n=$nonce" -TimeoutSec 10 } catch { @{ error = "$_" } } }
 function Code($url) { try { (Invoke-WebRequest $url -UseBasicParsing -TimeoutSec 10).StatusCode } catch { [int]$_.Exception.Response.StatusCode } }
-@{ who = "$env:USERDOMAIN\$env:USERNAME"; own = (Ping $p2); other = (Ping $p1); ownStatus = (Code "http://127.0.0.1:$p2/status"); otherStatus = (Code "http://127.0.0.1:$p1/status") } | ConvertTo-Json -Depth 5 | Set-Content C:\fcspike\ping2.json
+@{ who = [Security.Principal.WindowsIdentity]::GetCurrent().Name; session = (Get-Process -Id $PID).SessionId; own = (Ping $p2); other = (Ping $p1); ownStatus = (Code "http://127.0.0.1:$p2/status"); otherStatus = (Code "http://127.0.0.1:$p1/status") } | ConvertTo-Json -Depth 5 | Set-Content C:\fcspike\ping2.json
 '@
-$c = PsAsU2 "$fc\ping2.ps1" @("$($B[1].port)", "$($B[2].port)", $n2)
+$c = U2Script "$fc\ping2.ps1" @("$($B[1].port)", "$($B[2].port)", $n2)
 $q = Get-Content "$fc\ping2.json" -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json
 Write-Host "as $u2 ($c): $($q | ConvertTo-Json -Compress -Depth 5)"
 $chk = @(
@@ -332,8 +438,8 @@ Result '5 delete' ([bool]$del -and [bool]$x -and $x.guid -and $x.guid -eq $del.g
 Say '---- 6d: user 2''s own Tally event (a Receipt on 9001), recorded by user 2''s bridge'
 if ($tally2) {
   $b2 = Vouchers 9001 $co2
-  KeysTo 9001 'v' 4 '30-u2-vouchers'; KeysTo 9001 '{F6}' 3; KeysTo 9001 '{F2}' 3; KeysTo 9001 '2-10-2026{ENTER}' 3
-  KeysTo 9001 'Cash{ENTER}' 3; KeysTo 9001 'Spike Income{ENTER}' 3 '31-u2-particular'; KeysTo 9001 '450{ENTER}' 3; KeysTo 9001 '^a' 5 '32-u2-created'
+  Keys2 'v' 4 '30-u2-vouchers'; Keys2 '{F6}' 3; Keys2 '{F2}' 3; Keys2 '2-10-2026{ENTER}' 3
+  Keys2 'Cash{ENTER}' 3; Keys2 'Spike Income{ENTER}' 3 '31-u2-particular'; Keys2 '450{ENTER}' 3; Keys2 '^a' 5 '32-u2-created'
   $a2 = Vouchers 9001 $co2
   $new2 = @($a2 | Where-Object { $_.mid -notin @($b2 | ForEach-Object mid) })[0]
   $hit = WaitLine 0 { $_.ev -eq 'created' -and $_.company -eq $co2 }
@@ -381,4 +487,5 @@ Get-Process tally -ErrorAction SilentlyContinue | Stop-Process -Force
 Get-Process FinComBridge -ErrorAction SilentlyContinue | Stop-Process -Force
 Stop-Process -Id $stub.Id -Force -ErrorAction SilentlyContinue
 Write-Host '== results'; Get-Content $resultsFile | Write-Host
+Get-ChildItem "$fc\shots" -Filter *.png -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName (Join-Path $env:SHOTS "r4u2-$($_.Name)") }
 Write-Host '== round 4 end'
