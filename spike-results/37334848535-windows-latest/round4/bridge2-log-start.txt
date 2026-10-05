@@ -1,0 +1,15 @@
+2026-10-05 15:51:41  FinCom Bridge 2.2.4: started just for runnervmfi6oq\fcuser2 (no service); it keeps the bridge and its icon running
+2026-10-05 15:51:41  Port 9100 is taken (another Windows user's FinCom Bridge, or another program); this bridge uses port 9101 and remembers it
+2026-10-05 15:51:41  FinCom Bridge 2.2.4 (Go) started on 127.0.0.1:9101: the only bridge on this computer; working for runnervmfi6oq\fcuser2, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+2026-10-05 15:51:41  Tally is open on port 9001; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+2026-10-05 15:51:41  Recorder: re-scan of the add-on's files for 2.2.4: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+2026-10-05 15:51:41  Check:  - 
+2026-10-05 15:51:44  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+2026-10-05 15:51:44  Company FinCom Spike U2: its Tally GUID 06f9dd70-e4f7-4c78-80c8-d93139d344b3 is held from now on
+2026-10-05 15:51:44  Company FinCom Spike Co: its Tally GUID ed429be7-8c49-4176-946c-8dec007974f1 is held from now on
+2026-10-05 15:51:44  Company FinCom Spike U2: change numbers read with form a: ALTVCHID=0, ALTMSTID=207
+2026-10-05 15:51:44  Light check of FinCom Spike U2: no starting point recorded (start-point.json could not be written; see above); now ALTVCHID=0, ALTMSTID=207
+2026-10-05 15:51:45  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=1, ALTMSTID=211 (reading is prospective only: the bridge follows what changes after this)
+2026-10-05 15:51:45  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=1, ALTMSTID=211
+2026-10-05 15:51:45  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=1, ALTMSTID=211)
+2026-10-05 15:51:53  Refused a request from a program of another Windows user (/status): not your FinCom Bridge
