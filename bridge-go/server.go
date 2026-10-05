@@ -612,6 +612,28 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 			return startReadTest(str(o["company"])), nil
 		}
 		return readTestStatus(), nil
+	case "/tray/fetchtest":
+		// 2.2.2 (the owner's request): "Test fetching an entry": the six forms of the fetch check for one voucher, one at
+		// a time (fetchtest.go). Started by a person only, as Test reading from Tally is: a web page, FinCom's own
+		// included, is refused; the tray icon sends no Origin and no Sec-Fetch header
+		if r.Header.Get("Origin") != "" || r.Header.Get("Sec-Fetch-Site") != "" || r.Header.Get("Sec-Fetch-Mode") != "" || r.Header.Get("Sec-Fetch-Dest") != "" {
+			writeLog("Refused a fetch test request from a web page (" + path + ", " + r.Header.Get("Origin") + ").")
+			return nil, &httpErr{403, M{"ok": false, "error": "Test fetching an entry is started from the FinCom Bridge tray icon only, never from a web page."}}
+		}
+		if err := trialToolsErr(); err != nil { // owner only, as the read test
+			return nil, err
+		}
+		if r.Method == "POST" {
+			o, _ := bodyObj(body)
+			switch {
+			case truthy(o["preview"]):
+				return fetchTestPreview(str(o["company"])), nil
+			case o["masterId"] != nil || truthy(o["skip"]):
+				return answerFetchTest(o), nil
+			}
+			return startFetchTest(fetchTestInputs(o)), nil
+		}
+		return fetchTestStatus(), nil
 	case "/tray/recorder-lock", "/tray/recorder-bench":
 		// round 19 (the owner's question, "can the add-on hang Tally"): the lock of the open company's holding file for
 		// 30 s and the time saving (trial.go; round 21: any company, the one open in Tally). Started by a person only, as

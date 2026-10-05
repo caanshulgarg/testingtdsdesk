@@ -666,6 +666,75 @@ func (t *tray) command(id int, st M) {
 		lines = append(lines, "", "Dates on this Tally: "+str(r["passed"])+" (the form that answered "+str(r["day"])+" with exactly its entries; nothing was changed)")
 		lines = append(lines, "", "The full lines, with the answer heads, are in Show log. Send that log to FinCom.")
 		msgBox("FinCom Bridge - Test reading from Tally", str(r["company"])+", "+str(r["day"])+"\n\n"+strings.Join(lines, "\n"), mbIconInfo)
+	case 24:
+		// 2.2.2 (the owner's request; NWS144 cannot run PowerShell): the six forms of the fetch check for one voucher, one
+		// at a time (fetchtest.go). It asks the voucher's type, number and date, then a yes/no naming the company
+		title := "FinCom Bridge - Test fetching an entry"
+		pv := trayCall("POST", "/tray/fetchtest", M{"preview": true})
+		if pv == nil || pv["ok"] != true {
+			why := "The bridge is not answering."
+			if pv != nil {
+				why = str(pv["error"])
+			}
+			msgBox(title, why, mbIconWarning)
+			return
+		}
+		company := str(pv["company"])
+		typ, ok := inputBox(title, "Voucher type (as Tally shows it), in "+company+":", "Receipt")
+		if !ok {
+			return
+		}
+		no, ok := inputBox(title, "Voucher number:", "212")
+		if !ok {
+			return
+		}
+		date, ok := inputBox(title, "Voucher date (as 05-Oct-2026):", "05-Oct-2026")
+		if !ok {
+			return
+		}
+		if !yesNo(title, "Test fetching "+typ+" "+no+" of "+date+" from the company "+company+"?\n\nSix small requests for this one voucher, one at a time (each up to 25 s). It changes nothing in Tally or in FinCom.") {
+			return
+		}
+		r := trayCall("POST", "/tray/fetchtest", M{"company": company, "type": typ, "number": no, "date": date})
+		if r == nil || r["ok"] != true {
+			why := "The bridge is not answering."
+			if r != nil {
+				why = str(r["error"])
+			}
+			msgBox(title, why, mbIconWarning)
+			return
+		}
+		t.balloon("FinCom Bridge", "Test fetching an entry: "+company+", "+typ+" "+no+": six requests, one at a time. The result opens when it is done.", false)
+		for i := 0; i < 450; i++ {
+			time.Sleep(2 * time.Second)
+			s := trayCall("GET", "/tray/fetchtest", nil)
+			if s == nil {
+				continue
+			}
+			switch str(s["state"]) {
+			case "needMaster":
+				// none of A, B, F found it: the person may type its MasterID; Cancel skips C, D and E
+				for {
+					mid, ok := inputBox(title, str(s["question"]), "")
+					if !ok || strings.TrimSpace(mid) == "" {
+						trayCall("POST", "/tray/fetchtest", M{"skip": true})
+						break
+					}
+					a := trayCall("POST", "/tray/fetchtest", M{"masterId": strings.TrimSpace(mid)})
+					if a == nil || a["ok"] == true {
+						break
+					}
+					msgBox(title, str(a["error"]), mbIconWarning)
+				}
+			case "failed":
+				msgBox(title, "Not tested: "+str(s["error"]), mbIconWarning)
+				return
+			case "done":
+				msgBox(title, company+", "+typ+" "+no+", "+date+"\n\n"+str(s["summary"])+"\n\nThe full lines, with the answer heads, are in Show log. Send that log to FinCom.", mbIconInfo)
+				return
+			}
+		}
+		msgBox(title, "The test is still running after 15 minutes; its lines are in Show log when it ends.", mbIconWarning)
 	case 19, 20:
 		// round 18: the recorder trial (recorder.go); a person's choice in the tray only
 		title, path := "FinCom Bridge - Recorder trial", "/tray/recorder-note"

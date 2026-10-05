@@ -420,8 +420,9 @@ func TestTrialToolsSwitch(t *testing.T) {
 	for _, it := range items {
 		texts = append(texts, it.text)
 	}
-	want := []string{"Test reading from Tally", "Recorder trial: note change numbers", "Recorder trial: send results", "Recorder trial: lock the holding file for 30 s", "Recorder trial: time saving"}
-	if strings.Join(texts, "|") != strings.Join(want, "|") || items[0].id != 18 || items[4].id != 22 {
+	// 2.2.2: "Test fetching an entry" (the owner's request) after "Test reading from Tally"
+	want := []string{"Test reading from Tally", "Test fetching an entry", "Recorder trial: note change numbers", "Recorder trial: send results", "Recorder trial: lock the holding file for 30 s", "Recorder trial: time saving"}
+	if strings.Join(texts, "|") != strings.Join(want, "|") || items[0].id != 18 || items[1].id != 24 || items[5].id != 22 {
 		t.Fatalf("the menu with the trial tools on: %v", items)
 	}
 	if code, res := callLocal(t, "POST", "/tray/readtest", "", `{"preview":true}`); code != 200 || str(res["company"]) != gsc {

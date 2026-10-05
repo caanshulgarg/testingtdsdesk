@@ -313,6 +313,8 @@ var requestClass = map[string]string{
 	ledListID: "undated", grpListID: "undated", "TDSDeskLedgers": "undated", "TDSDeskGroups": "undated", "TDSDeskNames": "undated",
 	"TDSDeskGroupNames": "undated", "FinComMeasureNames": "undated", "FinComMeasureLedF": "undated", "FinComMeasureLedO": "undated",
 	editLogProbeID: "undated", cnReportID: "undated",
+	// 2.2.2: "Test fetching an entry" (measure-only, a person's): its dated forms and its undated ones
+	fetchTestA: "dated", fetchTestB: "dated", fetchTestC: "dated", fetchTestE: "dated", fetchTestD: "undated", fetchTestF: "undated",
 }
 
 func datedRefused(tc *TC, x string) error {

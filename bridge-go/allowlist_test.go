@@ -87,6 +87,9 @@ func driveEveryRequest(t *testing.T) *standTally {
 	_, err = invokeTally(readTestTC, f.port, editLogProbeRequest(zz, "1"), 20)
 	must("edit log probe", err)
 	measuring.Add(-1)
+	// 2.2.2: "Test fetching an entry" (the tray): its six measure-only forms, C, D and E on the MasterID given
+	_, err = runFetchTest(fetchTestOpts{company: zz, typ: "Journal", no: "D-0", date: td, master: "1"}, nil)
+	must("fetch test", err)
 	_, err = removeTallyVoucher(f.port, zz, "g-1", "1", "Journal", td, "D-0")
 	must("delete", err)
 	// the measuring tool (before Update now: with no copy here it reads the year's dates) and its snapshot

@@ -60,6 +60,14 @@ var tallyAllowList = map[string]allowedReq{
 	"FinComMeasureLedF":  {purpose: "measure: one ledger's master fields", measureOnly: true},
 	"FinComMeasureLedO":  {purpose: "measure: one ledger's stored opening (the field, no period)", measureOnly: true},
 	"FinComSnapshot":     {purpose: "measure: one month's entries as GUID, AlterID, date, type and number", measureOnly: true},
+	// 2.2.2 (the owner's request, 05-Oct-2026): "Test fetching an entry" (fetchtest.go), the forms of
+	// docs/diagnostics/2.2.2-fetch-check.ps1 for one voucher, a person's tray item only
+	fetchTestA: {purpose: "measure (Test fetching an entry): form A, FinComVoucherByNumber as built (one voucher by type and number, one day, yyyymmdd), under its own id", measureOnly: true},
+	fetchTestB: {purpose: "measure (Test fetching an entry): form B, form A with plain quote marks in the filter", measureOnly: true},
+	fetchTestC: {purpose: "measure (Test fetching an entry): form C, FinComVoucherByMaster as built (one MasterID, one day, yyyymmdd), under its own id", measureOnly: true},
+	fetchTestD: {purpose: "measure (Test fetching an entry): form D, form C with no dates", measureOnly: true},
+	fetchTestE: {purpose: "measure (Test fetching an entry): form E, form C with the dates as d-MMM-yyyy TYPE=Date", measureOnly: true},
+	fetchTestF: {purpose: "measure (Test fetching an entry): form F, form B with no dates", measureOnly: true},
 }
 
 // Simulated cost of one row Tally sends back (the size test, size_test.go): a conservative guess until phase 1's
@@ -180,6 +188,12 @@ func allowListSamples() map[string]string {
 		"FinComMeasureLedF":  measureReqLedF(c, "SAMPLE LEDGER"),
 		"FinComMeasureLedO":  measureReqLedO(c, "SAMPLE LEDGER"),
 		"FinComSnapshot":     snapshotRequest(c, a, z),
+		fetchTestA:           fetchTestRequest("A", c, a, "Receipt", "1", ""),
+		fetchTestB:           fetchTestRequest("B", c, a, "Receipt", "1", ""),
+		fetchTestC:           fetchTestRequest("C", c, a, "", "", "1"),
+		fetchTestD:           fetchTestRequest("D", c, "", "", "", "1"),
+		fetchTestE:           fetchTestRequest("E", c, a, "", "", "1"),
+		fetchTestF:           fetchTestRequest("F", c, "", "Receipt", "1", ""),
 	}
 }
 

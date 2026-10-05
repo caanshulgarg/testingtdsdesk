@@ -162,6 +162,6 @@ func trayTrialItems(st M) []trayItem {
 	if st == nil || st["trialTools"] != true {
 		return nil
 	}
-	return []trayItem{{18, "Test reading from Tally"}, {19, "Recorder trial: note change numbers"}, {20, "Recorder trial: send results"},
+	return []trayItem{{18, "Test reading from Tally"}, {24, "Test fetching an entry"}, {19, "Recorder trial: note change numbers"}, {20, "Recorder trial: send results"},
 		{21, "Recorder trial: lock the holding file for 30 s"}, {22, "Recorder trial: time saving"}}
 }

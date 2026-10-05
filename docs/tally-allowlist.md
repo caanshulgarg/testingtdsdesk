@@ -43,6 +43,12 @@ First table: re-measured on 2026-10-05 on the stand; not yet measured on NWS144;
 | FinComCompanyNumbers | the company's change numbers (2.2.0, form b): a report over the one company, its name, GUID, AltVchId and AltMstId | 62084b69e34d | not yet measured | - | bridge |
 | FinComDatesProbe | measure (the read test): one past-year month's entries as GUID, MasterID, AlterID and date, in each date form | f441cc0d993a | not yet measured | - | measure-only |
 | FinComEditLogProbe | measure (the read test): one entry by MasterID with its edit-log sub-collection (candidate names) | 5bc0e4c16b77 | not yet measured | - | measure-only |
+| FinComFetchTestA | measure (Test fetching an entry): form A, FinComVoucherByNumber as built (one voucher by type and number, one day, yyyymmdd), under its own id | 8f9370ab51b7 | not yet measured | - | measure-only |
+| FinComFetchTestB | measure (Test fetching an entry): form B, form A with plain quote marks in the filter | 2d905711230e | not yet measured | - | measure-only |
+| FinComFetchTestC | measure (Test fetching an entry): form C, FinComVoucherByMaster as built (one MasterID, one day, yyyymmdd), under its own id | 63bfa3fbbe2a | not yet measured | - | measure-only |
+| FinComFetchTestD | measure (Test fetching an entry): form D, form C with no dates | 96da1903f282 | not yet measured | - | measure-only |
+| FinComFetchTestE | measure (Test fetching an entry): form E, form C with the dates as d-MMM-yyyy TYPE=Date | ad966bf1dffa | not yet measured | - | measure-only |
+| FinComFetchTestF | measure (Test fetching an entry): form F, form B with no dates | 624561c5f62e | not yet measured | - | measure-only |
 | FinComFree | the small check after a timeout when no company is named: the companies' names and GUIDs | fc989c00dda9 | not yet measured | - | bridge |
 | FinComGroups | the group list, stored master fields only | 91fea7a2c04a | not yet measured | - | bridge |
 | FinComLedgers | the ledger list, 2,000 MasterIDs a request at most, stored master fields only | 9b990b2eb9b9 | not yet measured | - | bridge |
@@ -71,4 +77,4 @@ First table: re-measured on 2026-10-05 on the stand; not yet measured on NWS144;
 | TDSDeskVchHeads | voucher heads (Optional ones too) of one company for one month at most, no ledger lines | 53fc675a1641 | not yet measured | - | bridge |
 <!-- allowlist:end -->
 
-Table hash (SHA-256): 532723d2ee79370d813f5cab2e2a17380f7381d46f7076eef4a3cc52e1d8b1dc
+Table hash (SHA-256): 8d23831f9445777a1f82de0745add209aa647b547a22fb8f67f7643ff9235db6

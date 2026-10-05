@@ -142,6 +142,9 @@ var requestRebuild = map[string]func(x string) []string{
 	"FinComMeasureLedF":  pinOne(func(x string) string { return measureReqLedF(pinCo(x), pinQuoted(x, "$Name")) }),
 	"FinComMeasureLedO":  pinOne(func(x string) string { return measureReqLedO(pinCo(x), pinQuoted(x, "$Name")) }),
 	"FinComSnapshot":     pinOne(func(x string) string { a, z := pinDates(x); return snapshotRequest(pinCo(x), a, z) }),
+	// 2.2.2: "Test fetching an entry" (fetchtest.go)
+	fetchTestA: fetchTestRebuild("A"), fetchTestB: fetchTestRebuild("B"), fetchTestC: fetchTestRebuild("C"),
+	fetchTestD: fetchTestRebuild("D"), fetchTestE: fetchTestRebuild("E"), fetchTestF: fetchTestRebuild("F"),
 }
 
 // the bridge's two import reports, and the objects a posting may carry
