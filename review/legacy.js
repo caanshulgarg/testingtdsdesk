@@ -23895,6 +23895,13 @@ function tallyIst(t){
   const ms = typeof t === "number" ? t : Date.parse(String(t || ""));
   return ms ? fmtDateTime(ms) : "";
 }
+// a computer as the owner knows it: its name in FinCom (tally_devices.name) and its Windows name from the heartbeat:
+// "Office computer (NWS144)"; one of them alone when there is one, or they are the same
+function tallyPcLabel(d){
+  const info = (d && d.info) || {}, beat = info.beat || {};
+  const name = String((d && d.name) || "").trim(), win = String(info.computer || beat.computer || beat.pc || beat.hostname || "").trim();
+  return name && win && norm(name) !== norm(win) ? name + " (" + win + ")" : name || win || "the Tally computer";
+}
 function tallySign(co){
   if (typeof TLight === "object") TLight.refresh();
   const now = Date.now(), st = (typeof TLight === "object" && TLight.st) || {};
@@ -23908,31 +23915,39 @@ function tallySign(co){
     const info = d.info || {}, beat = info.beat || {}, ds = devState(d, now);
     const open = [].concat(beat.open || []).concat(...Object.values(info.bridges || {}).map(b => [].concat(b.open || []))).map(String).filter(Boolean);
     const at = Date.parse(beat.at || d.last_seen || 0) || 0;
-    return {id: d.id, computer: info.computer || beat.computer || d.name || "the Tally computer", recent: ds.bridge === "online" || ds.bridge === "reconnecting",
+    return {id: d.id, computer: tallyPcLabel(d), win: info.computer || beat.computer || beat.pc || beat.hostname || d.name || "", recent: ds.bridge === "online" || ds.bridge === "reconnecting",
       tally: ds.tally, open: Array.from(new Set(open)), at};
   });
-  // this computer's bridge, answering here
+  // this computer's bridge, answering here (on 127.0.0.1): only then is it "this computer" (round 3, 05-Oct-2026: never
+  // guessed from the user or the firm)
   if (localUp){
     const o = (lst.open || []).map(x => x.name), name = lst.computer || "this computer";
-    const mine = pcs.find(x => norm(x.computer) === norm(name));
+    const mine = pcs.find(x => norm(x.win) === norm(name) || norm(x.computer) === norm(name));
     // its heartbeats not reaching FinCom (no internet there): not recent, whatever it sees in Tally
     const noNet = !!(lst.beat && lst.beat.on !== false && lst.beat.missedSince);
     const me = {id: mine ? mine.id : "local", computer: name, recent: !noNet, local: true, tally: lst.tallyState || (lst.tallyUp ? "open" : "closed"), open: o, at: (typeof Bridge === "object" && Bridge.okAt) || lst.at || now,
       noNet};
     // the last contact: with FinCom's cloud when the bridge here cannot reach it, else the latest of the two
-    if (mine) pcs.splice(pcs.indexOf(mine), 1, Object.assign({}, mine, me, {at: noNet ? mine.at : Math.max(mine.at, me.at)})); else pcs.push(noNet ? Object.assign(me, {at: Date.parse(lst.beat.last || 0) || 0}) : me);
+    if (mine) pcs.splice(pcs.indexOf(mine), 1, Object.assign({}, mine, me, {computer: mine.computer, at: noNet ? mine.at : Math.max(mine.at, me.at)})); else pcs.push(noNet ? Object.assign(me, {at: Date.parse(lst.beat.last || 0) || 0}) : me);
   }
   const isOpen = x => x.tally === "open" || x.tally === "busy";
   const has = x => co ? x.open.some(same) : x.open.length > 0;
-  const good = pcs.find(x => x.recent && isOpen(x) && has(x) && (!link || !link.device_id || x.id === link.device_id || x.local)) || pcs.find(x => x.recent && isOpen(x) && has(x));
-  const out = (o) => Object.assign({computer: "", company: co ? want : "", at: "", reason: "", fix: ""}, o);
+  const goods = pcs.filter(x => x.recent && isOpen(x) && has(x));
+  const good = goods.find(x => x.local) || goods.find(x => !link || !link.device_id || x.id === link.device_id) || goods[0];
+  const out = (o) => Object.assign({computer: "", company: co ? want : "", at: "", reason: "", fix: "", short: o.computer || ""}, o);
   if (good){
     const company = co ? good.open.find(same) : good.open.join(", ");
-    return out({on: true, code: "ok", computer: good.computer, company, at: tallyIst(good.at), words: "Tally connected"});
+    // round 3 (05-Oct-2026): the sign says which computer: this one, the other one, or how many
+    if (good.local) return out({on: true, code: "ok", local: true, computer: "this computer (" + good.computer + ")", company, at: tallyIst(good.at), words: "Tally connected on this computer", short: "This computer", through: [good.computer]});
+    if (goods.length > 1) return out({on: true, code: "ok", computer: goods.map(x => x.computer).join(", "), company, at: goods.map(x => x.computer + ": " + tallyIst(x.at)).join(", "), words: "Tally connected through " + goods.length + " computers",
+      short: goods.length + " computers", through: goods.map(x => x.computer), many: goods.map(x => ({computer: x.computer, company: co ? x.open.find(same) : x.open.join(", "), at: tallyIst(x.at)}))});
+    return out({on: true, code: "ok", computer: good.computer, company, at: tallyIst(good.at), words: "Tally connected through " + good.computer, short: good.computer, through: [good.computer]});
   }
   // the computer that matters: the one linked to this client, else the one heard from last
   const pick = (link && link.device_id && pcs.find(x => x.id === link.device_id)) || pcs.slice().sort((a, b) => (b.recent - a.recent) || (b.at - a.at))[0];
-  const off = (code, reason, fix, x) => out({on: false, code, computer: x ? x.computer : "", at: x && x.at ? tallyIst(x.at) : "", reason, fix, words: "Tally disconnected"});
+  const off = (code, reason, fix, x) => out({on: false, code, computer: x ? x.computer : "", at: x && x.at ? tallyIst(x.at) : "", reason, fix,
+    words: code === "othercompany" && x ? "Tally is open on " + x.computer + " with a different company" : "Tally not connected" + (x && x.at ? ". Last seen on " + x.computer + " at " + tallyIst(x.at) : ""),
+    short: x ? x.computer : "No Tally"});
   const coName = co ? want : "the client's company";
   if (!pick){
     if (localOn && !localUp) return off("bridge", "FinCom Bridge is not running on this computer.", "Start FinCom Bridge (its icon near the clock, or from the Start menu), then keep TallyPrime open.", {computer: "this computer"});
@@ -23948,10 +23963,10 @@ function tallySign(co){
   if (!pick.open.length) return off("nocompany", "TallyPrime is open on " + pick.computer + ", but no company is open in it.", "Open " + coName + " in TallyPrime on " + pick.computer + ".", pick);
   return off("othercompany", "A different company is open in Tally on " + pick.computer + ": " + pick.open.slice(0, 3).join(", ") + ".", "Open " + coName + " in TallyPrime on " + pick.computer + " (the other company can stay open)." + (co && !link ? " If it is open under another name, link it in Client setup → Tally." : ""), pick);
 }
-function localIsPick(x){ return !!(x && (x.local || (typeof Bridge === "object" && Bridge.st && Bridge.st.computer && norm(Bridge.st.computer) === norm(x.computer)))); }
+function localIsPick(x){ return !!(x && (x.local || (typeof Bridge === "object" && Bridge.st && Bridge.st.computer && (norm(Bridge.st.computer) === norm(x.win || "") || norm(Bridge.st.computer) === norm(x.computer))))); }
 // the same, in words for the hover and the panel: "Tally connected · OFFICE-PC · TESTING AAD · last contact …"
 function tallySignWords(s){
-  return "Tally: " + (s.on ? "connected" : "disconnected") + (s.computer ? " — computer: " + s.computer : "") + (s.company ? " — company: " + s.company : "") +
+  return (s.words || "Tally: " + (s.on ? "connected" : "not connected")) + (s.computer ? " — computer: " + s.computer : "") + (s.company ? " — company: " + s.company : "") +
     (s.at ? " — last contact: " + s.at : "") + (s.on ? "" : " — why: " + s.reason + " — what to do: " + s.fix);
 }
 // the computers' connection history for the last 24 hours (tally_devices.info.history, kept by tally-ingest from the
@@ -26814,7 +26829,7 @@ async function postPreview(co, rows, opts){
   const items = rows.filter(r => r.xml).map(r => ({kind: r.kind, id: r.id, xml: r.xml, e: r.e}));
   const nWarn = () => document.querySelectorAll("#confirmBox [data-pv-warn] li").length;
   const a = await askConfirm({title: opts.view ? "Preview: " + (rows[0] ? (rows[0].no || rows[0].party) : "") : "Post " + entries(items.length) + " to " + company + "?", ok: opts.view ? "Close" : "Post", wide: true,
-    body: '<div data-post-preview="" style="max-height:60vh;overflow:auto">' + (opts.view ? "" : '<p style="margin:0 0 8px">Each entry exactly as it goes to Tally, into <b>' + esc(company) + "</b>.</p>") + PostGate.html(items, co, masters, company) + "</div>",
+    body: '<div data-post-preview="" style="max-height:60vh;overflow:auto">' + (opts.view ? "" : '<p style="margin:0 0 8px">Each entry exactly as it goes to Tally, into <b>' + esc(company) + "</b>." + (typeof postThroughWords === "function" && postThroughWords(co) ? " " + esc(postThroughWords(co)) : "") + "</p>") + PostGate.html(items, co, masters, company) + "</div>",
     onReady: box => { if (opts.view){ const no = box.querySelector('[data-cbx="no"]'); if (no) no.remove(); } else { const n = nWarn(); if (n){ const p = document.createElement("p"); p.className = "bk-warn"; p.setAttribute("data-pv-count", ""); p.textContent = n + " warning" + (n === 1 ? "" : "s") + " above: look at them before posting."; box.querySelector(".cbx .row").before(p); } } }});
   if (!a || opts.view) return false;
   PostGate.approve(masters.map(m => m.name), company);
@@ -28617,8 +28632,20 @@ const Rec = {
   },
 
   // ---------------------------------------------------------------- H49-H51: Sync activity
-  ACTS: {created: "created", altered: "altered", deleted: "deleted", cancelled: "cancelled", imported: "imported", ledger_created: "ledger created",
-    ledger_altered: "ledger altered", ledger_renamed: "ledger renamed", ledger_deleted: "ledger deleted"},
+  // 05-Oct-2026 (the owner's words): what was done in Tally, and what it means for the books. Never "synced": a line not
+  // entered in the books says so, with the cloud's reason
+  ACTS: {created: "Created", altered: "Altered", deleted: "Deleted", cancelled: "Cancelled", imported: "Imported", ledger_created: "Ledger created",
+    ledger_altered: "Ledger altered", ledger_renamed: "Ledger renamed", ledger_deleted: "Ledger deleted"},
+  // FinCom's own entry coming back from Tally: a line with a FinCom id (fid) or a short line (migration 45; read as fid / short
+  // with the lines, or in the whole row a live line brings), or the cloud's words for it. Only its creation is FinCom's: a
+  // later change to it in Tally is a person's (Altered)
+  fromFincom(r){
+    if (!r || !["created", "imported"].includes(String(r.event || ""))) return false;
+    const p = (r.payload && typeof r.payload === "object") ? r.payload : {};
+    const fid = r.fid || p.fid, short = r.short != null ? r.short : p.short;
+    return !!fid || short === true || short === "true" || /^FinCom (posting|id) /.test(String(r.held_why || ""));
+  },
+  actWords(r){ return this.fromFincom(r) ? "Posted from FinCom" : (this.ACTS[r.event] || String(r.event || "")); },
   act: {},                 // {rows, no44, busy, at, err, cid (whose lines were read), msg}
   actOf(){
     const a = this.act, cid = S.syncClient || "";
@@ -28630,7 +28657,7 @@ const Rec = {
     const a = this.act, cid = S.syncClient || "";
     a.busy = true; a.cid = cid;
     try {
-      const rows = await Cloud.api("tally_recorder_lines?select=id,client_id,book_id,device_id,pc,company,line_id,event,object_guid,alter_id,vch_type,vch_no,vch_date,saved_at,received_at,applied_at,state,held_why,ledgers" +
+      const rows = await Cloud.api("tally_recorder_lines?select=id,client_id,book_id,device_id,pc,company,line_id,event,object_guid,alter_id,vch_type,vch_no,vch_date,saved_at,received_at,applied_at,state,held_why,ledgers,fid:payload->>fid,short:payload->>short" +
         "&firm_id=eq." + encodeURIComponent(this.firm()) + (cid ? "&client_id=eq." + encodeURIComponent(cid) : "") + "&order=received_at.desc&limit=200");
       a.rows = [].concat(rows || []); a.no44 = false; a.err = "";
     } catch (e){ if (this.missing(e)){ a.no44 = true; a.rows = []; } else a.err = this.say(e); }
@@ -28661,10 +28688,20 @@ const Rec = {
     const head = [r.vch_type, r.vch_no].filter(Boolean).join(" ");
     return (head || "an entry") + (r.vch_date ? " · " + fmtDate(String(r.vch_date).slice(0, 10)) : "");
   },
+  // a line's state in the owner's words (05-Oct-2026): "Entered in the books" for an applied line alone
   stateWords(r){
     const why = r.held_why ? ": " + r.held_why : "";
-    return r.state === "applied" ? "applied" : r.state === "duplicate" ? "duplicate" : r.state === "stale" ? "stale (older than the copy)" : r.state === "held" ? "held" + why
-      : r.state === "failed" ? "failed" + why : r.state === "received" ? "waiting" : r.state === "queued" ? "queued" : String(r.state || "");
+    switch (r.state){
+      case "applied": return "Entered in the books";
+      case "held": return "Received, not yet entered in the books" + why;
+      case "received": return "Received, not yet entered in the books";
+      case "replaced": return "Replaced by a later line";
+      case "duplicate": return "Already in the books";
+      case "stale": return "An older change, not applied";
+      case "failed": return "Not entered" + why;
+      case "queued": return "Received, waiting in FinCom's queue";
+      default: return "Not entered: " + String(r.state || "unknown state");
+    }
   },
   // the computer a line came from, from the firm's computers as the Tally page or the Tally light read them
   devOf(id){ return [].concat((typeof TCloud === "object" && TCloud.pane.devices) || [], (typeof TLight === "object" && TLight.st.devs) || []).find(d => d && d.id === id) || null; },
@@ -28677,7 +28714,7 @@ const Rec = {
       let why = r.held_why || "";
       if (!why && d){ const ds = devState(d, now); why = ds.bridge === "offline" || ds.bridge === "none" ? pc + " is offline" : ds.tally === "closed" ? "Tally is closed on " + pc : ""; }
       else if (d && r.state === "received"){ const ds = devState(d, now); if (ds.bridge === "offline" || ds.bridge === "none") why = pc + " is offline"; else if (ds.tally === "closed") why = "Tally is closed on " + pc; }
-      return {r, why: why || "not applied yet"};
+      return {r, why: why || "not yet entered in the books"};
     });
   },
   async release(r){
@@ -28686,7 +28723,7 @@ const Rec = {
     try {
       const j = await TCloud.rpc("tally_recorder_release_held", {p_line: num(r.id)});
       if (j && j.ok === false) a.msg = {err: "Line " + (j.line_id || r.id) + " is still held" + (j.why ? ": " + j.why : ".")};
-      else a.msg = {ok: "Line " + ((j && j.line_id) || r.line_id || r.id) + ": " + ((j && j.state) || "applied") + (j && j.why ? " (" + j.why + ")" : "") + "."};
+      else a.msg = {ok: "Line " + ((j && j.line_id) || r.line_id || r.id) + ": " + this.stateWords({state: (j && j.state) || "applied"}) + (j && j.why ? " (" + j.why + ")" : "") + "."};
     } catch (e){ a.msg = {err: this.missing(e) ? "Apply now: " + REC_NOT44 + "." : this.say(e)}; }
     await this.actLoad();
   },
@@ -28829,3 +28866,190 @@ const Rec = {
     return "Tally not responding on " + r.computer + " since " + tallyHm(since) + (last && last.kind ? ", last request " + last.kind + " " + ((Number(last.ms) || 0) / 1000).toFixed(1) + " s" : "");
   }
 };
+/* ================================================================== */
+/* Alerts: every warning of the app in one place (the owner's round 3 */
+/* of the UI pass, 05-Oct-2026)                                        */
+/* ================================================================== */
+// The fault of 05-Oct: the same warning three times on every page ("Tally changes are not being recorded on NWS144";
+// "Changes not received: … Mark read"; "up to 1 changes not received … (Tally's change number 54396 …) Upload the Day
+// Book for these days"). Now:
+//  - one place: the bell in the top bar, with a count (app/src/parts/Bell.jsx); no alert text on the pages, except ONE
+//    slim line on the Tally page and on that client's Books page (AlertLine);
+//  - one alert per problem: for a book, the cursor's gap (tally_sync_cursor.gap), the tally_alerts gap rows (one a day),
+//    the lines Tally sent that wait (tally_recorder_lines held / received) and the computer not recording are ONE problem;
+//    for a computer, Tally not answering, FinCom having stopped reading by itself and "silent today" are ONE problem;
+//  - plain words: what, then what to do; the change numbers, the computers and the ids only behind "details";
+//  - the advice follows the cause: lines held by FinCom's own fault (no entry body, the add-on's placeholder GUID, the
+//    queue) say FinCom is fetching the entry's details, nothing to do; a real gap says to upload the Day Book;
+//  - it clears itself: worked out again from what is true now, so an alert goes when its cause goes (the gap null, the
+//    lines applied, the recorder recording); Mark read only for what cannot clear itself (the daily summary);
+//  - severity: "bad" red (the books may be wrong and something is to be done), "warn" amber (attention), "info" grey
+//    (information: in the bell only).
+// The recorder's data (Rec, src/js/61-recorder.js) is read, never changed here.
+const AlertHub = {
+  held: {rows: null, at: 0, busy: false, none: false},   // tally_recorder_lines still waiting (held, received, queued, failed)
+  reset(){ this.held = {rows: null, at: 0, busy: false, none: false}; },
+  // read again what the alerts come from (force: now; else at most once a minute, the recorder's own pace)
+  refresh(force){
+    if (typeof Rec !== "object" || typeof TCloud !== "object" || !TCloud.on()) return;
+    if (force){ if (Rec.gaps) Rec.gaps.at = 0; if (Rec.alerts) Rec.alerts.at = 0; this.held.at = 0; }
+    Rec.gapsOf(); Rec.alertsOf(); this.heldOf();
+    if (force) setTimeout(() => { if (typeof render === "function") render(); }, 400);
+  },
+  heldOf(){
+    const h = this.held;
+    if (typeof TCloud === "object" && TCloud.on() && !h.busy && !h.none && Date.now() - (h.at || 0) > 60000){ h.at = Date.now(); setTimeout(() => this.heldLoad(), 0); }
+    return [].concat(h.rows || []);
+  },
+  async heldLoad(){
+    const h = this.held;
+    h.busy = true;
+    try {
+      const firm = typeof Rec === "object" && Rec.firm ? Rec.firm() : "";
+      h.rows = [].concat(await Cloud.api("tally_recorder_lines?select=id,client_id,book_id,device_id,pc,company,event,object_guid,alter_id,state,held_why,received_at,vch_type,vch_no,vch_date" +
+        "&firm_id=eq." + encodeURIComponent(firm) + "&state=in.(held,received,queued,failed)&order=received_at.desc&limit=200") || []);
+      h.none = false;
+    } catch (e){ h.rows = []; if (typeof Rec === "object" && Rec.missing && Rec.missing(e)) h.none = true; }
+    h.busy = false; h.at = Date.now(); if (typeof render === "function") render();
+  },
+  // a line waiting because of FinCom's side: no body, the add-on's placeholder GUID ("<company GUID>-00000000"), no GUID,
+  // FinCom's own posting coming back, or the queue; then FinCom fetches the details itself and nothing is to be done
+  oursHeld(l){
+    const why = String(l.held_why || "");
+    if (/^month locked/i.test(why)) return false;
+    return l.state === "queued" || l.state === "received" || l.state === "failed" && /queue|timeout|server/i.test(why) ||
+      /no entry body|waiting for the entry's details|no GUID|placeholder|FinCom (posting|id) /i.test(why) || /-0{8}$/.test(String(l.object_guid || ""));
+  },
+  // "1 entry", "3 entries"
+  n(k){ return k + (k === 1 ? " entry" : " entries"); },
+  // a time and day in India, as said in a sentence: "08:00 IST today", "04-Oct-2026 18:30 IST"
+  when(t){
+    const ms = typeof t === "number" ? t : Date.parse(String(t || ""));
+    if (!ms) return "";
+    return istDay(ms) === istDay(Date.now()) ? fmtTime(ms) + " today" : fmtDateTime(ms);
+  },
+  // the Day Book's days, from the gap's start to today: "05-Oct", "04-Oct to 05-Oct"
+  days(t){
+    const a = istDay(t || Date.now()), b = istDay(Date.now()), dm = d => { const p = d.split("-"); return p[2] + "-" + MONTHS3[+p[1] - 1]; };
+    return !a || a === b ? dm(b) : dm(a) + " to " + dm(b);
+  },
+  pc(id, fallback){
+    const d = typeof Rec === "object" && Rec.devOf ? Rec.devOf(id) : null;
+    return d && typeof tallyPcLabel === "function" ? tallyPcLabel(d) : fallback || "the Tally computer";
+  },
+  // every alert now: [{key, sev, cid, text, fix, act: {label, run}, details, at, alert (a tally_alerts row: Mark read)}]
+  list(){
+    // the cloud's alerts need a firm signed in: without one nothing is asked of the cloud (no rpc with an empty firm)
+    const out = [], cloud = typeof TCloud === "object" && TCloud.on() && typeof Rec === "object" && !!(Rec.firm && Rec.firm());
+    const coName = cid => ((S.companies || {})[cid] || {}).name || "";
+    if (cloud){
+      const g = Rec.gapsOf(), gapsKnown = !!g.byClient || !!g.no44, rows = Rec.alertsOf(), held = this.heldOf();
+      // the tally_alerts rows: the latest one for each (kind, client, book, computer), unread only (no stacking of days)
+      const latest = new Map();
+      rows.forEach(x => { const k = [x.kind, x.client_id || "", x.book_id || "", x.device_id || ""].join("|"); const h = latest.get(k); if (!h || String(x.at || "") > String(h.at || "")) latest.set(k, x); });
+      const unread = [...latest.values()].filter(x => !x.read_at);
+      // ---- one problem a book: the cursor's gap, the lines waiting, the computer not recording, the gap alert rows
+      const books = new Map();
+      const book = (cid, company, bookId) => { const k = cid + "|" + (bookId || norm(company || "")); if (!books.has(k)) books.set(k, {cid, company: company || "", bookId, gap: null, ours: [], other: [], off: [], rows: []}); return books.get(k); };
+      Object.entries(g.byClient || {}).forEach(([cid, list]) => list.forEach(x => { book(cid, x.company, x.book).gap = x.gap; }));
+      held.filter(l => l.client_id).forEach(l => { const b = book(l.client_id, l.company, l.book_id); (this.oursHeld(l) ? b.ours : b.other).push(l); });
+      // the computers keeping a client's company open in Tally without recording its changes (as Rec.clientNotRecording,
+      // with the computer's id for its name)
+      const tl = (typeof TLight === "object" && TLight.st) || {};
+      (tl.cos || []).filter(c => c.client_id && c.device_id && (S.companies || {})[c.client_id]).forEach(c => {
+        const d = (tl.devs || []).find(x => x.id === c.device_id && !x.revoked);
+        if (!d || !Rec.notRecording(d).includes(c.company)) return;
+        const b = [...books.values()].find(y => y.cid === c.client_id && (!y.company || norm(y.company) === norm(c.company))) || book(c.client_id, c.company, null);
+        b.off.push({deviceId: d.id, pc: Rec.pcOf(d), company: c.company});
+      });
+      // a gap alert row speaks for its book only while the cause cannot be read from FinCom's cloud; else the book's
+      // own state decides (and the row goes when the gap goes)
+      unread.filter(x => x.kind === "gap" && x.client_id).forEach(x => {
+        const b = [...books.values()].find(y => y.cid === x.client_id && (!x.book_id || !y.bookId || y.bookId === x.book_id));
+        if (b) b.rows.push(x); else if (!gapsKnown) book(x.client_id, "", x.book_id).rows.push(x);
+      });
+      books.forEach((b, k) => {
+        const who = coName(b.cid) || b.company || "A client";
+        const gapN = b.gap ? Number(b.gap.missingMax || b.gap.missing || 0) : 0;
+        const since = (b.gap && (b.gap.since || b.gap.last_match_at)) || (b.ours[0] && b.ours[b.ours.length - 1].received_at) || "";
+        const pcs = [...new Set(b.off.map(x => this.pc(x.deviceId, x.pc)).concat(b.ours.concat(b.other).map(l => this.pc(l.device_id, l.pc))))];
+        const det = [];
+        if (b.gap){
+          const base = [b.gap.start_point, b.gap.recorder_max, b.gap.day_max].map(x => x == null || x === "" ? NaN : Number(x)).filter(x => !Number.isNaN(x));
+          det.push("Tally's change number " + (b.gap.tally_altvchid != null ? b.gap.tally_altvchid : "?") + ", received up to " + (base.length ? Math.max(...base) : "?") + (b.gap.words ? " (" + b.gap.words + ")" : ""));
+        }
+        b.ours.concat(b.other).slice(0, 5).forEach(l => det.push("Line " + (l.line_id || l.id) + ": " + [l.vch_type, l.vch_no].filter(Boolean).join(" ") + (l.held_why ? " — " + l.held_why : " — " + l.state)));
+        if (pcs.length) det.push("Computer" + (pcs.length > 1 ? "s" : "") + ": " + pcs.join(", "));
+        if (b.off.length) det.push("Not recording its changes for FinCom: " + b.off.map(x => x.company).join(", "));
+        if (b.bookId) det.push("Book " + b.bookId);
+        const at = [].concat(b.rows.map(x => x.at), b.gap ? [b.gap.at || ""] : [], b.ours.concat(b.other).map(l => l.received_at)).filter(Boolean).sort().pop() || "";
+        const recFix = "Turn on FinCom's recorder in Tally on that computer (the details say which).";
+        const base = {key: "book:" + k, cid: b.cid, details: det.join(" · "), at, selfClear: true};
+        const waiting = b.ours.length + b.other.length;
+        if (b.ours.length && (!gapN || b.ours.length >= gapN)){
+          // FinCom's own side: the details are on their way, nothing to do
+          const k2 = Math.max(gapN, b.ours.length);
+          out.push(Object.assign(base, {sev: "warn", text: who + ": " + this.n(k2) + " made in Tally" + (since ? " since " + this.when(since) : "") + (k2 === 1 ? " is" : " are") + " not yet in FinCom.",
+            fix: "FinCom is fetching the entry's details from Tally; nothing to do."}));
+        } else if (gapN || (b.rows.length && !b.gap && !waiting)){
+          // a real gap: entries made in Tally that never reached FinCom; the Day Book of those days brings them in
+          const gap = b.gap || {since: b.rows[0] && b.rows[0].at};
+          const words = gapN ? this.n(gapN) : "Entries";
+          out.push(Object.assign(base, {sev: "bad", text: who + ": " + words + " made in Tally" + (gap.since ? " since " + this.when(gap.since) : "") + (gapN === 1 ? " is" : " are") + " not yet in FinCom.",
+            fix: "Upload the Day Book for " + this.days(gap.since) + " to bring " + (gapN === 1 ? "it" : "them") + " in." + (b.off.length ? " " + recFix : ""),
+            act: {label: "Upload Day Book", run: () => Rec.uploadDays(b.cid, gap)}}));
+        } else if (b.other.length){
+          const locked = b.other.filter(l => /^month locked/i.test(String(l.held_why || "")));
+          out.push(Object.assign(base, {sev: "warn", text: who + ": " + (b.other.length === 1 ? "1 change" : b.other.length + " changes") + " from Tally " + (b.other.length === 1 ? "is" : "are") + " waiting, not yet in the books" + (locked.length === b.other.length ? " (the month is locked)." : "."),
+            fix: locked.length === b.other.length ? "Apply them on Sync activity, or unlock the month." : "See why on Sync activity.", act: {label: "Sync activity", run: () => Rec.openActivity(b.cid)}}));
+        } else if (b.off.length){
+          out.push(Object.assign(base, {sev: "warn", text: who + ": Tally is not recording its changes for FinCom, so entries made there reach FinCom only with the next Day Book.",
+            fix: recFix}));
+        }
+      });
+      // ---- one problem a computer: not answering, stopped by itself, silent today
+      const devs = ((typeof TLight === "object" && TLight.st.devs) || []).filter(d => d && !d.revoked);
+      const silent = Rec.silentOf();
+      devs.forEach(d => {
+        const beat = ((d.info || {}).beat) || {}, label = typeof tallyPcLabel === "function" ? tallyPcLabel(d) : d.name, ds = devState(d);
+        const stop = beat.readStopped && beat.readStopped.by === "self" ? beat.readStopped : null;
+        const quiet = silent.find(x => x.device === d.id);
+        const rowsD = unread.filter(x => x.device_id === d.id && x.kind === "silent");
+        if (ds.bridge === "offline") return;   // the Tally sign says it (and the bell does not repeat it)
+        const base = {key: "pc:" + d.id, details: [label, stop && stop.reason, beat.notAnsweringSince && "not answering since " + fmtDateTime(beat.notAnsweringSince)].filter(Boolean).join(" · "), selfClear: true, at: beat.at || ""};
+        if (stop) out.push(Object.assign(base, {sev: "warn", text: "FinCom stopped reading Tally by itself: " + (stop.reason || "Tally did not answer") + ".", fix: "It starts again by itself when Tally answers; nothing to do."}));
+        else if (beat.notAnsweringSince) out.push(Object.assign(base, {sev: "warn", text: "Tally is not answering on one computer since " + this.when(beat.notAnsweringSince) + ".", fix: "Close any open window or report in Tally on that computer (the details say which)."}));
+        else if (quiet || rowsD.length) out.push(Object.assign(base, {sev: "info", text: "No change recorded today on one computer, though Tally was open there.", fix: "Nothing to do if nobody worked in Tally there today."}));
+      });
+      // ---- what cannot clear itself: the daily summary, until read
+      unread.filter(x => x.kind === "summary").forEach(x => out.push({key: "alert:" + x.id, sev: "info", cid: x.client_id || "", text: x.words || "The day's summary.", fix: "", details: x.at ? "At " + fmtDateTime(x.at) : "", at: x.at, selfClear: false, alert: x}));
+    }
+    // ---- the app's own warnings
+    const a = S.account, bal = a && a.firm ? num(a.firm.balance) : 0, warnAt = a && a.firm ? num(a.firm.warn_at) : 0;
+    if (a && a.firm){
+      if (S.creditStop && Date.now() - S.creditStop.at < 6 * 3600e3 && bal <= 0) out.push({key: "app:credit", sev: "bad", text: "Credit finished: reading new bills, bank statements and invoices is paused.", fix: "Ask the administrator to add credit. Everything already in FinCom still works.", selfClear: true});
+      else if (bal <= warnAt) out.push({key: "app:credit", sev: "warn", text: "Credit left: " + money(bal) + ".", fix: "Ask the administrator to top it up before it runs out.", selfClear: true});
+    }
+    if (!(S.storeKind === "db" || (typeof Cloud === "object" && Cloud.on() && Cloud.st && !Cloud.st.error))){
+      const kept = S.storeKind === "local" || S.storeKind === "idb";
+      out.push({key: "app:store", sev: kept ? "info" : "bad", text: kept ? "Your work is saved in this browser only." : "Your work is not being saved.",
+        fix: kept ? "Clearing browser data would remove it. Sign in from Settings to keep it in the firm account." : "It will be lost when this page closes. Sign in from Settings to keep it.", selfClear: true});
+    }
+    const st = typeof selfTestSummary === "function" ? selfTestSummary() : {state: "none"};
+    if (st.state === "fail") out.push({key: "app:selftest", sev: "warn", text: "Bill reading has a problem on this computer.", fix: "See the self-test in Settings.",
+      details: st.fails.map(k => (k === "pdf" ? "PDF reading: " : "Photo OCR: ") + st.r[k].msg).join(" "), act: {label: "Self-test", run: () => doAct("goSelfTest")}, selfClear: true});
+    const rank = {bad: 0, warn: 1, info: 2};
+    return out.sort((x, y) => rank[x.sev] - rank[y.sev] || String(y.at || "").localeCompare(String(x.at || "")));
+  },
+  // the client's own alerts first (its Books page), then the rest
+  forClient(cid){ return this.list().filter(x => x.cid === cid && x.sev !== "info"); },
+  async read(x){ if (x && x.alert && typeof Rec === "object") await Rec.alertRead(x.alert); }
+};
+// "This will post through Office computer (NWS144)." before Post (the bank's and sales' bars, and the posting preview):
+// the computer the posting goes through, the same as the Tally sign says; "" when none is connected
+function postThroughWords(co){
+  const s = typeof tallySign === "function" ? tallySign(co) : null;
+  if (!s || !s.on) return "";
+  if (s.local) return "This will post through this computer.";
+  return "This will post through " + (s.through && s.through.length === 1 ? s.through[0] : s.computer) + ".";
+}
