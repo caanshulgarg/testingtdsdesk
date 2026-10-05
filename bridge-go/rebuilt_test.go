@@ -497,6 +497,13 @@ type standCloud struct {
 	recRaw    []string
 	recReply  func(b M) (int, M)
 	recDelay  time.Duration
+	// decisions B and D (05-Oct-2026, migration 55): the checks posts_take carries (checks), every post_check body
+	// (checkReports) and how it is answered (checkReply; nil: {ok, state}); the lease kept as migration 55 keeps it
+	// (lease; nil: the plain held / free above)
+	checks       []M
+	checkReports []M
+	checkReply   func(b M) M
+	lease        *leaseModel
 }
 
 func newStandCloud(t *testing.T) *standCloud {
@@ -513,7 +520,19 @@ func newStandCloud(t *testing.T) *standCloud {
 		switch k {
 		case "companies":
 			out["links"] = M{zz: true}
-		case "lease_take":
+		case "lease_take", "lease_release":
+			if c.lease != nil {
+				who := str(obj(o["bridge"])["id"])
+				if k == "lease_take" {
+					out = c.lease.take(who, str(o["purpose"]))
+				} else {
+					out = c.lease.release(who)
+				}
+				break
+			}
+			if k == "lease_release" {
+				break
+			}
 			if c.held {
 				out = M{"ok": true, "held": true, "holder": M{"computer": "PC-2", "bridge": "go-other", "until": "15:00"}}
 			} else {
@@ -531,6 +550,16 @@ func newStandCloud(t *testing.T) *standCloud {
 			if len(c.takeJobs) > 0 {
 				out["job"] = c.takeJobs[0]
 				c.takeJobs = c.takeJobs[1:]
+			}
+			if len(c.checks) > 0 {
+				out["checks"] = toAnyM(c.checks)
+			}
+		case "post_check":
+			c.checkReports = append(c.checkReports, o)
+			if c.checkReply != nil {
+				out = c.checkReply(o)
+			} else {
+				out["state"] = str(o["result"])
 			}
 		case "posts_update":
 			c.posts = append(c.posts, o)
@@ -606,7 +635,7 @@ func standBridge(t *testing.T, f *standTally, extra string) string {
 	numberAsks = map[string]time.Time{}
 	numberAskMu.Unlock()
 	leaseMu.Lock()
-	leases = map[string]time.Time{}
+	leases, leasePurp, leaseAsked = map[string]time.Time{}, map[string]string{}, map[string]time.Time{}
 	leaseMu.Unlock()
 	whereMu.Lock()
 	whereMap = map[string]map[string]string{}

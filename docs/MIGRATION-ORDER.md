@@ -17,8 +17,8 @@ revoked; `begin; ... commit;`; safe to run twice) and is shown to the owner befo
 
 ## The two valid orders (both end with the same function texts: `tests/run_migration_order.py` asserts it)
 
-- staging: 32 → 33 → 35 → 34 (first) → 36b → 37 → 36 → 38 → 39 (applied 03-Oct, **except 39's tally_ingest_day part**: both forms are still 38's) → 40 → 41 (run 03-Oct, evening; its 8-argument `tally_ingest_day` superseded 39's) → 42 → 43 (run 04-Oct) → 44 (run 04-Oct) → 45 (run 04-Oct) → **46** → **47** → **48** (run by the owner) → **49** → **50** (run by the owner)
-- a fresh database: 32 → 33 → 35 → 34 (reviewed) → 36 → 36b → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50
+- staging: 32 → 33 → 35 → 34 (first) → 36b → 37 → 36 → 38 → 39 (applied 03-Oct, **except 39's tally_ingest_day part**: both forms are still 38's) → 40 → 41 (run 03-Oct, evening; its 8-argument `tally_ingest_day` superseded 39's) → 42 → 43 (run 04-Oct) → 44 (run 04-Oct) → 45 (run 04-Oct) → **46** → **47** → **48** (run by the owner) → **49** → **50** (run by the owner) → 51 → 52 → 53 → 54 → 55
+- a fresh database: 32 → 33 → 35 → 34 (reviewed) → 36 → 36b → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 51 → 52 → 53 → 54 → 55
 
 | # | File | What it adds |
 |---|---|---|
@@ -91,7 +91,8 @@ Run on staging (corrected 04-Oct-2026, evening):
 | `tally_post_id_accept` | `p_job uuid, p_id text, p_vch text` (`p_at` unused, kept in the signature) | `posts_update`, once per accepted id not yet stamped or released (a `needsReview` + `accepted` result among them; and the fallback for a `byReply` ok result when 43 is missing) |
 | `tally_post_id_accept_reply` | `p_job uuid, p_id text, p_vch text, p_batch_end text, p_batch_n integer` (43) | `posts_update`, once per `byReply` + `ok` result not yet stamped |
 | `tally_post_id_release` | `p_job uuid, p_id text, p_why text` | `posts_update`, once per refused / not-found id not yet released |
-| `tally_lease_take` / `tally_lease_release` | as migration 32 / 37 | `lease_take` / `lease_release` |
+| `tally_lease_take` / `tally_lease_release` | as migration 32 / 37; with 55 the 7-argument `tally_lease_take(..., p_purpose)` when the bridge says `purpose` (else the 6-argument one) | `lease_take` / `lease_release` |
+| `tally_post_checks_for` / `tally_post_check_report` | `p_device uuid, p_bridge text, p_main boolean` / `p_check bigint, p_device uuid, p_bridge text, p_main boolean, p_company text, p_result text, p_vch text, p_master text, p_words text` (55) | `beat` (counted with the postings), `posts_take` (`checks`), `post_check` |
 | `tally_read_stop` / `tally_read_resume`, `tally_release_*`, `tally_baseline_clear`, the owner's `tally_post_job_mark_posted` / `tally_post_id_release_owner` / `tally_ledger_rename_confirm` / `tally_device_post_settings` (43), `tally_month_lock` / `tally_month_unlock` / `tally_recorder_release_held` / `tally_tieout_save` / `tally_recorder_silent` (44), `tally_device_trial_tools` (46), `tally_device_recorder_source` / `tally_alert_read` (47, the app), the readers | members (the app), not tally-ingest | — |
 
 ## The rule: never re-run 35 after 34
@@ -149,3 +150,15 @@ FinCom Bridge 2.3.0 (05-Oct-2026): `migration-54-post-target-bridge.sql` runs af
 transaction, safe twice): `tally_post_jobs.target_bridge`, `tally_bridge_prefs` (changes only, per bridge),
 `tally_member_bridges` (the member's bridge), `tally_post_enqueue_to` and `tally_post_take_for`. Tested by
 `run_migration54.py` and `run_migration_order.py` (54 in both orders). tally-ingest works without it (the old hand-out).
+Decisions B and D (05-Oct-2026): `migration-55-settle-and-lease.sql` runs after 54 in both orders (add-only, one
+transaction, `lock_timeout` 10 s, no "delete from", safe twice). B: any member who may write (owner or staff) settles an
+uncertain posting, a reason required, the name and time kept: `tally_post_job_mark_posted` (any member; `tally_post_mark_core`),
+`tally_post_settle_ask` ("Not in Tally - post again": a row in `tally_post_checks` for the posting's own bridge; nothing
+released, nothing sent), `tally_post_checks_for` / `tally_post_check_report` (the service role: tally-ingest's `posts_take`
+carries the checks, `post_check` the answer): found -> marked posted with the voucher found; not found in that exact company
+by the posting's bridge -> released (`tally_post_release_core`) and sent again once; Tally not asked -> keeps waiting.
+`tally_post_id_release_owner` is refused without that "not found". D: `tally_company_lease.purpose` ('post' / 'read') and
+`want_post_*`; the 7-argument `tally_lease_take(..., p_purpose)`: a posting finding a read records its want, the reader's
+renewal hands the lease over, a posting never yields, a lease given up is kept for the waiting posting; the 6-argument
+call (an older bridge) has no purpose and is never asked to yield. Tested by `run_migration55.py` and
+`run_migration_order.py` (55 in both orders). tally-ingest works without it (the 6-argument lease; no checks).

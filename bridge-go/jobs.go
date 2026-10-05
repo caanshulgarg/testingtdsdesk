@@ -140,17 +140,39 @@ func newPostJob(pl M) (M, error) {
 				_ = saveFile(filepath.Join(dir, "payload.json"), jsonText(pay))
 			}
 		}
-		if (st == "failed" || st == "cancelled") && !jobAlive(id) {
-			byItem := map[string]string{}
-			if pay := readObjFile(filepath.Join(dir, "payload.json")); pay != nil {
-				for _, x := range arr(pay["items"]) {
-					if o := obj(x); o != nil {
-						byItem[str(o["id"])] = str(o["xml"])
-					}
+		byItem := map[string]string{}
+		if pay := readObjFile(filepath.Join(dir, "payload.json")); pay != nil {
+			for _, x := range arr(pay["items"]) {
+				if o := obj(x); o != nil {
+					byItem[str(o["id"])] = str(o["xml"])
 				}
 			}
+		}
+		// decision B (migration 55): a posting that ended "done" comes back from the cloud with an entry's release only after
+		// this bridge looked in Tally and did not find it ("Not in Tally - post again": its outcome was unknown, or it was
+		// deleted in Tally by hand since): that entry (and only it) is sent once more, the release honoured once; everything
+		// else of the job is kept as it was
+		releasedHere := func(r M) bool {
+			k := str(r["id"])
+			return releaseFor(arr(pl["released"]), acceptedKey(k, byItem[k]), k, or2(acceptedInfo(acceptedKey(k, byItem[k])), M{})) != nil
+		}
+		doneRelease := false
+		if st == "done" && !jobAlive(id) {
+			for _, r := range rs {
+				if releasedHere(r) {
+					doneRelease = true
+				}
+			}
+		}
+		if (st == "failed" || st == "cancelled" || doneRelease) && !jobAlive(id) {
 			var kept []any
 			for _, r := range rs {
+				if doneRelease {
+					if !releasedHere(r) {
+						kept = append(kept, r)
+					}
+					continue
+				}
 				if !confirmedResult(r) {
 					continue
 				}
@@ -713,14 +735,27 @@ func jobWorker(dir string) {
 
 // the lease on the company (FinCom's cloud): taken or renewed; while another bridge holds it the posting waits.
 // false: the job is to stop (cancelled, or the bridge stops)
+// Decision D (05-Oct-2026): the lease is taken for a posting; another bridge's READ gives way to it at its next request
+// (the want is recorded in the cloud; asked again soon, LeaseWantMs); another POSTING is waited for (they serialize)
 func waitLease(company string, setStatus func(string, string), pause func(time.Duration) bool) bool {
 	for r := 0; ; r++ {
-		ok, who := leaseTake(company)
+		ok, h := leaseTakeFor(company, "post")
 		if ok {
 			return true
 		}
-		setStatus("waiting", "Waiting: another FinCom Bridge ("+who+") is posting to or reading "+company+" now — this one follows by itself")
-		if !pause(waitPause(r)) {
+		d := waitPause(r)
+		switch {
+		case h.wanted:
+			setStatus("waiting", "Waiting: another FinCom Bridge ("+h.who+") is reading "+company+"; it gives way to this posting at its next request — this one follows by itself")
+			if w := time.Duration(keepNum("LeaseWantMs", 2000)) * time.Millisecond; w < d {
+				d = w
+			}
+		case h.purpose == "post":
+			setStatus("waiting", "Waiting: another FinCom Bridge ("+h.who+") is posting to "+company+" now — this one follows after it, by itself")
+		default:
+			setStatus("waiting", "Waiting: another FinCom Bridge ("+h.who+") is posting to or reading "+company+" now — this one follows by itself")
+		}
+		if !pause(d) {
 			return false
 		}
 	}

@@ -513,6 +513,15 @@ async function postsFor(dev: any, id: string, main: boolean) {
   }
   return (data || []).filter((j: any) => j.target_bridge === id || (!j.target_bridge && main)).length;
 }
+// migration 55 (the owner's decision B, 05-Oct-2026): the checks "Not in Tally - post again" asks of this bridge (its
+// computer's postings that name it, or name none when it is the main one): the company, the entry and its voucher. A cloud
+// without 55 (or any error): none, as before
+async function checksFor(dev: any, id: string, main: boolean) {
+  try {
+    const { data, error } = await db.rpc("tally_post_checks_for", { p_device: dev.id, p_bridge: id, p_main: main });
+    return !error && Array.isArray(data) ? data.slice(0, 20) : [];
+  } catch (_) { return []; }
+}
 
 
 // FinCom Bridge 2.1.5's self-watch in its beat (plan item 10): the last request, the longest today (kind and
@@ -636,7 +645,7 @@ async function makeMain(dev: any, id: string) {
 //   - companies, ledgers, groups, state: answered, nothing stored.
 async function shadowCall(dev: any, firm: string, body: any) {
   const kind = String(body.kind || "");
-  if (kind === "posts_take" || kind === "posts_update") {
+  if (kind === "posts_take" || kind === "posts_update" || kind === "post_check") {
     if (kind === "posts_take") await rescuePosts(dev);   // review M-B: a posting for this bridge before it went to test mode is not left waiting
     return reply(403, { ok: false, error: "A bridge in test mode does not post." });
   }
@@ -744,8 +753,12 @@ async function bridgeSafety(dev: any, firm: string, body: any) {
   const me = bridgeOf(dev, body, false);
   if (body.kind === "lease_take") {
     const ttl = Math.max(30, Math.min(900, Math.floor(Number(body.ttl) || 120)));
-    const { data, error } = await db.rpc("tally_lease_take", { p_firm: firm, p_book: book, p_holder: me.id, p_device: dev.id, p_ttl: ttl,
-      p_info: { computer: me.entry.computer, user: me.entry.user, version: me.entry.version } });
+    const args = { p_firm: firm, p_book: book, p_holder: me.id, p_device: dev.id, p_ttl: ttl, p_info: { computer: me.entry.computer, user: me.entry.user, version: me.entry.version } };
+    // migration 55 (decision D): the lease's purpose (post / read): a posting finding a read records "want to post", the
+    // reader yields on its renewal; a bridge that says none (older), or a cloud without 55: the 6-argument call as before
+    const purpose = body.purpose === "post" || body.purpose === "read" ? body.purpose : null;
+    let { data, error } = purpose ? await db.rpc("tally_lease_take", { ...args, p_purpose: purpose }) : await db.rpc("tally_lease_take", args);
+    if (error && purpose && (error.code === "PGRST202" || missingFn(String(error.message || "")))) ({ data, error } = await db.rpc("tally_lease_take", args));
     if (error) return notReady(error.message) ? reply(200, { ok: true, noLease: true }) : reply(500, { ok: false, error: error.message });
     return reply(200, data);
   }
@@ -1944,7 +1957,8 @@ Deno.serve(async (req) => {
         // migration 54: only the postings this bridge may take (for it, or naming none when it is the main bridge); none when changes only
         const may = mayPost(dev, me.id, (me.entry as any).user);
         if (co || !may) await rescuePosts(dev);
-        const posts = co ? 0 : await postsFor(dev, me.id, may && isMain(dev, me.id));
+        // migration 55: a check waiting for this bridge counts as work too (the bridge then asks posts_take, which carries it)
+        const posts = co ? 0 : await postsFor(dev, me.id, may && isMain(dev, me.id)) + (await checksFor(dev, me.id, may)).length;
         // fast-sync (bridge 1.15.0): the computer's own Realtime channel, where the database wakes it the moment a
         // posting is queued or an update asked for (migration-13); the heartbeat stays the fallback
         const tok = (dev as any).wake_token;
@@ -1993,7 +2007,24 @@ Deno.serve(async (req) => {
           const { data: rel, error: relErr } = await db.from("tally_post_ids").select("entry_id, fincom_id, released_at, released_by, released_why").eq("job_id", j.id).eq("released_by", "owner");
           if (!relErr) released = (rel || []).filter((r: any) => r.released_at).map((r: any) => ({ id: r.entry_id || r.fincom_id, at: r.released_at, by: r.released_by, why: r.released_why }));
         }
-        return reply(200, { ok: true, job: j ? { id: j.id, company: j.company, payload: j.payload, released } : null });
+        // migration 55 (decision B): the checks waiting for this bridge travel with it ([] on a cloud without 55)
+        const checks = await checksFor(dev, meT, true);
+        return reply(200, { ok: true, job: j ? { id: j.id, company: j.company, payload: j.payload, released } : null, ...(checks.length ? { checks } : {}) });
+      }
+      case "post_check": {
+        // migration 55 (decision B): the bridge looked in Tally for an entry of an uncertain posting ("Not in Tally - post
+        // again"): found (the voucher found), notfound (in that company) or unable (Tally not asked). The database decides:
+        // the release and the re-send only on "notfound" from the posting's own bridge for its own company
+        const meCB = bridgeOf(dev, body, false), meC = meCB.id;
+        if (!mayPost(dev, meC, (meCB.entry as any).user)) return reply(403, { ok: false, notMain: true, error: "Another bridge of the same Windows user is the main bridge on this computer now (chosen in FinCom); this one reads only and does not post." });
+        if (await changesOnly(dev, meC)) return reply(403, { ok: false, notMain: true, changesOnly: true, error: CHANGES_ONLY });
+        const result = String(body.result || "");
+        if (!["found", "notfound", "unable"].includes(result)) return reply(400, { ok: false, error: "The check's result is found, notfound or unable." });
+        const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
+        const { data, error } = await db.rpc("tally_post_check_report", { p_check: Math.max(0, Math.floor(Number(body.check) || 0)), p_device: dev.id, p_bridge: meC, p_main: true,
+          p_company: s(body.company, 200), p_result: result, p_vch: s(body.vch, 60), p_master: s(body.master, 30), p_words: s(body.words, 500) });
+        if (error) return (error.code === "PGRST202" || missingFn(String(error.message || ""))) ? reply(409, { ok: false, error: "FinCom's cloud is not ready for this yet (migration 55)." }) : reply(500, { ok: false, error: error.message });
+        return reply(200, data);
       }
       case "posts_update": {
         const meUB = bridgeOf(dev, body, false), meU = meUB.id;
