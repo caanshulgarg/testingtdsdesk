@@ -9638,7 +9638,7 @@ function misPackHtml(r){
 async function misExcel(r){
   await ensureXlsx();
   const wb = XLSX.utils.book_new(), add = (n, rows) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), n.slice(0, 31)), months = r.pl.months;
-  const pl = [["Head", "Ledger"].concat(months.map(GSTR.label)).concat(["Period"])];
+  const pl = heldSheetRows(S.coId).concat([["Head", "Ledger"].concat(months.map(GSTR.label)).concat(["Period"])]);
   MIS.HEADS.forEach(([k, l]) => { const H = r.pl.heads[k]; if (!H) return; pl.push([l, ""].concat(months.map(mm => H.m[mm] || 0)).concat([H.t])); H.led.forEach(x => pl.push(["", x.l].concat(months.map(mm => x.m[mm] || 0)).concat([x.t]))); });
   [["Gross profit", r.pl.gross], ["Profit before tax", r.pl.pbt], ["Profit after tax", r.pl.pat]].forEach(([l, x]) => pl.push([l, ""].concat(months.map(mm => x.m[mm] || 0)).concat([x.t])));
   add("Profit and loss", pl);
@@ -18070,7 +18070,7 @@ function doAct(act, t){
       break;
     }
     case "fsRun": { const y = fsYearNow(), c = FS.cfg(S.books); S.fsRun = {fy: y, kind: c.kind, d: FS.build(y)}; render(); break; }
-    case "fsPdf": { const d = S.fsRun && S.fsRun.d; if (d && !d.error) printView(CO().name + " financial statements " + d.fy, "<style>@page{size:A4 portrait;margin:14mm}h2{font-size:14px;margin:14px 0 6px;border-bottom:1px solid #D7DEDA}</style>" + FS.html(d)); break; }
+    case "fsPdf": { const d = S.fsRun && S.fsRun.d; if (d && !d.error) printView(CO().name + " financial statements " + d.fy, "<style>@page{size:A4 portrait;margin:14mm}h2{font-size:14px;margin:14px 0 6px;border-bottom:1px solid #D7DEDA}</style>" + heldPrintHtml(S.coId) + FS.html(d)); break; }
     case "fsExcel": { const d = S.fsRun && S.fsRun.d; if (d && !d.error) fsExcel(d).then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break; }
     case "misRun": {
       const b = S.books, rg = S.misRange || (x => ({from: Audit.iso(x.from), to: Audit.iso(x.to)}))(misRangeQuick("ytd", b));
@@ -18084,7 +18084,7 @@ function doAct(act, t){
       MIS.HEADS.forEach(([h2]) => { const H = r.pl.heads[h2]; if (!H) return; const avg = r2(H.t / n2 * k); B[h2] = {}; GSTRev.fyMonths(fy + "04").forEach(mm => { B[h2][mm] = Math.round(avg); }); });
       saveBooks(); toast("Budget filled: this year's monthly average so far, plus " + (S.misBudPct || 10) + "%. Change any month."); render(); break;
     }
-    case "misPack": { const r = (S.books.mis || {}).last; if (r) printView(CO().name + " MIS " + r.from + "-" + r.to, "<style>@page{size:A4 portrait;margin:14mm}h2{font-size:15px;margin:14px 0 6px;border-bottom:1px solid #D7DEDA;padding-bottom:3px}</style>" + misPackHtml(r)); break; }
+    case "misPack": { const r = (S.books.mis || {}).last; if (r) printView(CO().name + " MIS " + r.from + "-" + r.to, "<style>@page{size:A4 portrait;margin:14mm}h2{font-size:15px;margin:14px 0 6px;border-bottom:1px solid #D7DEDA;padding-bottom:3px}</style>" + heldPrintHtml(S.coId) + misPackHtml(r)); break; }
     case "misExcel": { const r = (S.books.mis || {}).last; if (r) misExcel(r).then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break; }
     case "relAddTyped": {
       const b = S.books, i = document.getElementById("relq"), v = i ? i.value.trim() : "";
@@ -19038,11 +19038,11 @@ async function fsExcel(d){
   await ensureXlsx();
   const wb = XLSX.utils.book_new(), add = (n, rows) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), n.slice(0, 31));
   const pyOn = d.py && Object.keys(d.py).length;
-  add("Balance Sheet", [["Particulars", "31 Mar " + (num(d.fy) + 1)].concat(pyOn ? ["31 Mar " + d.fy] : [])].concat(d.lines.filter(z => num(d.put[z[0]]) || num((d.py || {})[z[0]])).map(z => [FS.SECTIONS[z[2]] + ": " + z[1], num(d.put[z[0]])].concat(pyOn ? [num(d.py[z[0]])] : [])))
-    .concat([["Total equity and liabilities", d.eqL], ["Total assets", d.assets], ["Difference", d.diff]]));
+  add("Balance Sheet", heldSheetRows(S.coId).concat([["Particulars", "31 Mar " + (num(d.fy) + 1)].concat(pyOn ? ["31 Mar " + d.fy] : [])].concat(d.lines.filter(z => num(d.put[z[0]]) || num((d.py || {})[z[0]])).map(z => [FS.SECTIONS[z[2]] + ": " + z[1], num(d.put[z[0]])].concat(pyOn ? [num(d.py[z[0]])] : [])))
+    .concat([["Total equity and liabilities", d.eqL], ["Total assets", d.assets], ["Difference", d.diff]])));
   // review of 02-Oct-2026: a head nil after an expense credit is set off is still listed (MIS.plRule)
   const plSum = d.plSum || {}, plSet = d.plSet || {}, plLab = k => "P&L: " + ((FS.PL.find(z => z[0] === k) || [0, k])[1]);
-  add("Profit and Loss", [["Particulars", "Year to 31 Mar " + (num(d.fy) + 1)]].concat(FS.PL.filter(z => num(d.pl[z[0]]) || (plSum[z[0]] && plSum[z[0]].cr >= 0.005)).map(z => [z[1], num(d.pl[z[0]])])).concat([["Total income", d.inc], ["Total expenses", d.exp], ["Profit before tax", d.pbt], ["Profit for the year", d.pat]]));
+  add("Profit and Loss", heldSheetRows(S.coId).concat([["Particulars", "Year to 31 Mar " + (num(d.fy) + 1)]]).concat(FS.PL.filter(z => num(d.pl[z[0]]) || (plSum[z[0]] && plSum[z[0]].cr >= 0.005)).map(z => [z[1], num(d.pl[z[0]])])).concat([["Total income", d.inc], ["Total expenses", d.exp], ["Profit before tax", d.pbt], ["Profit for the year", d.pat]]));
   // each head: its ledgers (a credit negative, with the flag), then the set-off and the excess credit, then the total
   add("Ledgers", [["Line", "Ledger", "Amount", "Note"]].concat(Object.entries(d.det).flatMap(([k, list]) => list.map(([l, v]) => [(d.lines.find(z => z[0] === k) || [0, k])[1], l, v])))
     .concat(Object.entries(d.plDet).flatMap(([k, list]) => list.map(([l, v, flag]) => [plLab(k), l, v, flag || ""])
@@ -21943,10 +21943,15 @@ const LK = {
     if (r.kind === "bills") return [["Party", "Bill", "Date", "Days", "Outstanding"]].concat(r.rows.map(z => [z.party, z.ref || "on account", FC.iso(z.date), z.age, z.amt]));
     return [["Date", "Type", "No.", "Party", "Narration", "Amount"]].concat(r.rows.map(v => [FC.iso(v.date), v.type, v.no, v.party, v.narr, v.amt]));
   },
+  // the answer's note, worked out again when shown: "in step with Tally" only while no line of these books is held
+  noteOf(r){ return r && r.noteOf && typeof TCloud === "object" ? TCloud.noteFor.apply(TCloud, r.noteOf) : (r && r.note) || ""; },
+  // the ledger a held line's words are for (a ledger account; month by month of one ledger) and its last day
+  heldLed(r){ return r && (r.kind === "ledger" || (r.kind === "monthly" && r.led)) ? [r.led, r.to] : [null, null]; },
   printIt(){
     const r = this.st().res; if (!r) return;
-    const rows = this.sheet(r), co = CO();
+    const rows = this.sheet(r), co = CO(), [hl, ht] = this.heldLed(r);
     const html = "<h1>" + esc(co.name) + "</h1><p class=\"note\">" + esc(r.title) + " · " + (r.src === "cloud" ? esc(r.line || "from FinCom's copy") : "from the books in FinCom") + " · printed " + fmtDate(new Date().toISOString().slice(0, 10)) + "</p>" +
+      heldPrintHtml(S.coId, hl, ht) + (this.noteOf(r) ? "<p class=\"note\">" + esc(this.noteOf(r)) + "</p>" : "") +
       "<table><thead><tr>" + rows[0].map(c => "<th>" + esc(c) + "</th>").join("") + "</tr></thead><tbody>" +
       rows.slice(1).map(rw => "<tr>" + rw.map(c => typeof c === "number" ? '<td class="n">' + INR.format(c) + "</td>" : "<td>" + esc(c) + "</td>").join("") + "</tr>").join("") + "</tbody></table>";
     printView(co.name + " " + r.title, "<style>@page{size:A4 portrait;margin:12mm}</style>" + html);
@@ -21981,7 +21986,7 @@ function lkAct(a){
   else if (a === "more" && x.res && x.res.src === "cloud"){ const r = x.res; x.busy = "Bringing the next entries\u2026"; render();
     TCloud.find(S.coId, r.q, r.from, r.to, r.typ, r).then(res => { x.busy = ""; x.res = Object.assign(res, {title: r.title}); render(); }, er => { x.busy = ""; toast("Could not ask the cloud: " + ((er && er.message) || er)); render(); }); }
   else if (a === "print") LK.printIt();
-  else if (a === "excel" && x.res) FC.excel(x.res.title, [[x.res.kind === "tb" ? "Trial balance" : "Look up", LK.sheet(x.res)]]).catch(er => toast("Could not build the file: " + (er && er.message)));
+  else if (a === "excel" && x.res) FC.excel(x.res.title, [[x.res.kind === "tb" ? "Trial balance" : "Look up", heldSheetRows.apply(null, [S.coId].concat(LK.heldLed(x.res))).concat(LK.sheet(x.res))]]).catch(er => toast("Could not build the file: " + (er && er.message)));
 }
 
 // the books follow Tally on every screen, not only while Look up is open: once a minute, quietly (only the bridge's
@@ -22557,7 +22562,7 @@ const TCloud = {
       else { x.closing = r2(x.closing + num(r.closing)); if (r.parent){ x.parent = x.parent || r.parent; x.master = true; } } });
     const rows = Array.from(by.values());
     const out = rows.filter(r => Math.abs(num(r.closing)) >= 0.005).map(r => ({l: r.ledger, top: this.top(r.ledger, rows), sub: r.parent || "", bal: -r2(num(r.closing)), noMaster: !r.master && !/^profit & loss a\/c$/i.test(r.ledger)}));
-    return LK.tbShape({kind: "tb", src: "cloud", asOn, rows: out, line: copyLine(cid), note: "From the copy in FinCom's cloud (" + (bk.company || "") + "), " + this.age(bk) + "."});
+    return LK.tbShape({kind: "tb", src: "cloud", asOn, rows: out, line: copyLine(cid), note: this.noteFor("From the copy in FinCom's cloud (" + (bk.company || "") + ")", cid), noteOf: ["From the copy in FinCom's cloud (" + (bk.company || "") + ")", cid]});
   },
   // the top group of a ledger, from the groups FinCom knows, else the ledger's own group
   top(l, rows){ try { const t = FC.top(l); if (t) return t; } catch (e){} const r = rows.find(x => x.ledger === l); return (r && r.parent) || "Other"; },
@@ -22572,7 +22577,7 @@ const TCloud = {
       return {id: guid, date: d, type, no, part: party && party !== led ? party : "", narr: narr || "", dr: dd, cr: c, run};
     });
     const ends = j.to && this.d8(j.to) < to ? " This copy (" + (j.company || "") + ") has entries up to " + FC.when(this.d8(j.to)) + "; a later year kept as another company in Tally is asked separately." : "";
-    return {kind: "ledger", src: "cloud", led, from, to, open, close: run, dr, cr, rows, line: copyLine(cid), note: "From the books (" + (j.company || "") + "), " + this.age(this.book(cid)) + "." + ends};
+    return {kind: "ledger", src: "cloud", led, from, to, open, close: run, dr, cr, rows, line: copyLine(cid), note: this.noteFor("From the books (" + (j.company || "") + ")", cid, ends), noteOf: ["From the books (" + (j.company || "") + ")", cid, ends]};
   },
   // build 192: a group, month by month, and any entry: worked out by the cloud, not from books loaded here
   inG(l, parent, grp){ try { if (FC.inGroup(l, grp)) return true; } catch (e){} return String(parent || "").toLowerCase() === String(grp || "").toLowerCase(); },
@@ -22582,7 +22587,7 @@ const TCloud = {
     const rows = all.filter(r => this.inG(r.ledger, r.parent, grp)).map(r => { const op = -r2(num(r.open)), dr = r2(num(r.dr)), cr = r2(num(r.cr)); return {l: r.ledger, sub: r.parent || "", open: op, dr, cr, close: r2(op + dr - cr)}; })
       .filter(r => r.dr || r.cr || (r.open && Math.abs(r.open) >= 0.5)).sort((a, c) => Math.abs(c.close) - Math.abs(a.close) || a.l.localeCompare(c.l));
     const sum = k => r2(rows.reduce((t, r) => t + (r[k] || 0), 0));
-    return {kind: "group", src: "cloud", grp, from, to, rows, open: sum("open"), dr: sum("dr"), cr: sum("cr"), close: sum("close"), line: copyLine(cid), note: "From the books (" + (bk.company || "") + "), " + this.age(bk) + "."};
+    return {kind: "group", src: "cloud", grp, from, to, rows, open: sum("open"), dr: sum("dr"), cr: sum("cr"), close: sum("close"), line: copyLine(cid), note: this.noteFor("From the books (" + (bk.company || "") + ")", cid), noteOf: ["From the books (" + (bk.company || "") + ")", cid]};
   },
   async monthly(cid, led, grp, from, to){
     const [per, mon] = await Promise.all([this.period(cid, from, to), this.rpcAll("tally_monthly", {p_client: cid, p_from: this.iso(from), p_to: this.iso(to)})]);
@@ -22593,7 +22598,7 @@ const TCloud = {
     let run = -r2(per.filter(r => set.has(r.ledger)).reduce((t, r) => t + num(r.open), 0));
     const open = run, bk = this.book(cid) || {};
     const rows = months.map(k => { const x = m[k]; run = r2(run + x.dr - x.cr); return {ym: k, dr: x.dr, cr: x.cr, net: r2(x.dr - x.cr), close: run}; });
-    return {kind: "monthly", src: "cloud", led, grp, from, to, open, rows, dr: r2(rows.reduce((t, r) => t + r.dr, 0)), cr: r2(rows.reduce((t, r) => t + r.cr, 0)), line: copyLine(cid), note: "From the books (" + (bk.company || "") + "), " + this.age(bk) + "."};
+    return {kind: "monthly", src: "cloud", led, grp, from, to, open, rows, dr: r2(rows.reduce((t, r) => t + r.dr, 0)), cr: r2(rows.reduce((t, r) => t + r.cr, 0)), line: copyLine(cid), note: this.noteFor("From the books (" + (bk.company || "") + ")", cid), noteOf: ["From the books (" + (bk.company || "") + ")", cid]};
   },
   FIND_PAGE: 500,
   async find(cid, q, from, to, typ, had){
@@ -22669,6 +22674,13 @@ const TCloud = {
   fyOf(cid){
     const bk = this.book(cid) || {}, last = this.d8(bk.to || "") || Audit.today(), y = num(last.slice(0, 4)) - (num(last.slice(4, 6)) < 4 ? 1 : 0);
     return {from: y + "0401", to: last < (y + 1) + "0331" ? last : (y + 1) + "0331"};
+  },
+  // "From the books (GARG SHEKHAR & COMPANY), in step with Tally as of 05-Oct-2026 13:59 IST.": never while a line Tally
+  // sent for these books is held (the owner's finding of 05-Oct-2026); then "From the books (…)." and the held line
+  // beside it (HeldBooks, app/src/parts/HeldBooks.jsx)
+  noteFor(lead, cid, ends){
+    const held = typeof booksHeld === "function" && booksHeld(cid), a = held ? "" : this.age(this.book(cid));
+    return lead + (a ? ", " + a : "") + "." + (ends || "");
   },
   age(bk){
     if (!bk) return "";
@@ -23596,22 +23608,33 @@ Object.assign(TLight, {
 if (typeof setInterval === "function") setInterval(() => { try { TLight.tick(); } catch (e){} }, 5000);
 // when the client's books were last read from Tally ("Books as of 15:34"): the bridge's last read of its company, else
 // when FinCom's copy was last brought in. Never shown as "now": entries made in Tally since then come at the next event
+// the time "Books as of" gives, in plain words: FinCom Bridge's last read of the company from Tally (its readAt, the
+// Tally computer's lastRead), its last check of FinCom's copy against Tally (state.seen), the last Day Book read into
+// FinCom, or when the books on this page were brought in
+const BOOKS_ASOF_WHY = {read: "the bridge's last read of this company in Tally", seen: "the bridge's last check of these books against Tally",
+  daybook: "the last Day Book read into FinCom", books: "when these books were last brought into FinCom"};
 function booksAsOf(cid){
   cid = cid || S.coId;
   const co = S.companies && S.companies[cid];
   const l = co ? tallyLine(co) : null, bk = typeof TCloud === "object" ? TCloud.book(cid) : null, st = (bk && bk.state) || {};
   const man = typeof LK === "object" && LK.fr && cid === S.coId ? ((LK.fr() || {}).man || {}) : {};
-  const at = [l && l.read, st.readAt, man.readAt, st.seen, man.seen].filter(x => x && Date.parse(x)).sort((a, b) => Date.parse(b) - Date.parse(a))[0]
-    || (S.books && S.books.cid === cid ? booksFresh(S.books, cid).at : "");
+  // what the time is, said with it (the owner's finding of 05-Oct-2026: "books as of 13:59 IST" did not say what 13:59 was)
+  const cands = [[l && l.read, "read"], [st.readAt, "read"], [man.readAt, "read"], [st.seen, "seen"], [man.seen, "seen"]].filter(x => x[0] && Date.parse(x[0]))
+    .sort((a, b) => Date.parse(b[0]) - Date.parse(a[0]));
+  let at = cands.length ? cands[0][0] : "", what = cands.length ? cands[0][1] : "";
+  if (!at && S.books && S.books.cid === cid){
+    const f = booksFresh(S.books, cid), m = S.books.meta || {};
+    at = f.at; what = !at ? "" : at === String(st.seen || "") || at === String(man.seen || "") ? "seen" : /day book files/i.test(String(m.file || "")) ? "daybook" : "books";
+  }
   if (!at) return null;
-  return {at, text: "Books as of " + tallyHm(at),
+  return {at, what, why: BOOKS_ASOF_WHY[what] || "", text: "Books as of " + tallyHm(at) + (BOOKS_ASOF_WHY[what] ? " (" + BOOKS_ASOF_WHY[what] + ")" : ""),
     say: "Tally cannot send its changes by itself: entries made in Tally after " + tallyHm(at) + " come in at the next update (opening this client, Update now, or the nightly catch-up)."};
 }
 // FinCom Bridge 2.1.4 asks Tally for no balance (its /balances, /tb and /ledgerbalance answer only from its own copy, and
 // on most companies with an error). The owner's decision of 02-Oct-2026: every balance FinCom shows (Look up, the books'
 // opening balances, the bank check after a posting) is worked out from FinCom's cloud copy, openings plus entries, and
 // is shown with this line, never with an error: "Balance from FinCom's copy · books as of 15:34"
-function copyLine(cid){ const a = booksAsOf(cid); return "Balance from FinCom's copy \u00b7 books as of " + (a ? tallyHm(a.at) : "the last update"); }
+function copyLine(cid){ const a = booksAsOf(cid); return "Balance from FinCom's copy \u00b7 books as of " + (a ? tallyHm(a.at) + (a.why ? " (" + a.why + ")" : "") : "the last update"); }
 Object.assign(TCloud, {
   // the view tally_balances (migration-32): each ledger's opening, its entries from the book's start, and the closing.
   // The source of every balance from FinCom's copy. null: not asked yet; false: not on this cloud (an older environment
@@ -28684,6 +28707,7 @@ const Rec = {
   filtered(f){
     const rows = this.sorted(), today = new Date().toDateString();
     if (f === "waiting") return rows.filter(r => r.state === "held" || r.state === "received");
+    if (f === "held") return rows.filter(r => r.state === "held");
     if (f === "mismatch") return rows.filter(r => r.check && r.check.ok === false);        // the ledger check (F37-40): none yet
     if (f === "today") return rows.filter(r => r.received_at && new Date(r.received_at).toDateString() === today);
     return rows;
@@ -28733,7 +28757,8 @@ const Rec = {
     await this.actLoad();
   },
   // a client's own lines: the Tally page's Sync activity, for that client
-  openActivity(cid){ S.syncClient = cid || ""; S.tallyTab = "activity"; this.act.at = 0; navHome("tally"); },
+  // filter: the list shown first ("held": the lines held, from the books' "not yet in these books" line)
+  openActivity(cid, filter){ S.syncClient = cid || ""; S.syncFilter = filter || "all"; S.tallyTab = "activity"; this.act.at = 0; navHome("tally"); },
 
   // ---------------------------------------------------------------- F36 / N102: is each PC recording?
   // the recorder words a computer's bridges send (info.bridges[id].recorder: {company: {seen, lastAt}}; the beat's
@@ -28942,7 +28967,7 @@ const AlertHub = {
     h.busy = true;
     try {
       const firm = typeof Rec === "object" && Rec.firm ? Rec.firm() : "";
-      h.rows = [].concat(await Cloud.api("tally_recorder_lines?select=id,client_id,book_id,device_id,pc,company,event,object_guid,alter_id,state,held_why,received_at,vch_type,vch_no,vch_date" +
+      h.rows = [].concat(await Cloud.api("tally_recorder_lines?select=id,client_id,book_id,device_id,pc,company,event,object_guid,alter_id,state,held_why,received_at,vch_type,vch_no,vch_date,ledgers" +
         "&firm_id=eq." + encodeURIComponent(firm) + "&state=in.(held,received,queued,failed)&order=received_at.desc&limit=200") || []);
       h.none = false;
     } catch (e){ h.rows = []; if (typeof Rec === "object" && Rec.missing && Rec.missing(e)) h.none = true; }
@@ -28969,6 +28994,36 @@ const AlertHub = {
   heldSay(lines, count){
     const n = lines.length, whys = [...new Set(lines.map(l => String(l.held_why || "").trim()).filter(Boolean))];
     return (count || n > 1 ? n + " " : "") + "received, not yet entered in the books" + (whys.length === 1 ? ": " + whys[0] : "");
+  },
+  // the owner's finding of 05-Oct-2026 (Look up said "From the books (…), in step with Tally as of 05-Oct-2026 13:59 IST"
+  // with a line of that company held): every view of a client's books (Look up, the trial balance, the day book, P&L,
+  // balance sheet, and their print and Excel) says instead "N entries received from Tally are not yet in these books:
+  // <reason>" (the reason when the lines share one, else "see Sync activity"). null when no line of the client is held
+  booksHeld(cid){
+    if (!cid) return null;
+    const lines = this.heldFor([cid]);
+    if (!lines.length) return null;
+    const n = lines.length, why = this.oneWhy(lines);
+    return {n, lines, why, text: this.n(n) + " received from Tally " + (n === 1 ? "is" : "are") + " not yet in these books: " + (why || "see Sync activity")};
+  },
+  oneWhy(lines){ const w = [...new Set(lines.map(l => String(l.held_why || "").trim()))]; return w.length === 1 ? w[0] : ""; },
+  // the ledgers a line touches (tally_recorder_lines.ledgers: [{name, guid}]); none when the line came without its entry
+  ledgersOf(l){ return [].concat((l && l.ledgers) || []).map(x => typeof x === "string" ? x : (x && (x.name || x.to || x.from)) || "").map(x => String(x).trim()).filter(Boolean); },
+  // the entry's date (yyyymmdd): its voucher date, else the day it reached FinCom
+  heldDay(l){ const d = String(l.vch_date || "").replace(/-/g, "").slice(0, 8); return /^\d{8}$/.test(d) ? d : String(istDay(l.received_at) || "").replace(/-/g, ""); },
+  // a ledger's view (Look up's ledger account, its print and Excel): the held lines that name this ledger, and those whose
+  // ledgers are not known (no entry body), which may touch any ledger. Only entries dated up to the view's last day
+  ledgerHeld(cid, led, to){
+    const h = this.booksHeld(cid);
+    if (!h || !led) return [];
+    const key = x => ledNm(x).trim().toLowerCase(), k = key(led), upto = l => !to || !this.heldDay(l) || this.heldDay(l) <= String(to);
+    const mine = h.lines.filter(l => upto(l) && this.ledgersOf(l).some(x => key(x) === k)), unknown = h.lines.filter(l => upto(l) && !this.ledgersOf(l).length);
+    const ent = ls => { const ds = [...new Set(ls.map(l => this.heldDay(l)).filter(Boolean))].sort().map(d => fmtDate(tallyDate(d)));
+      return this.n(ls.length) + (ds.length ? " of " + ds.join(", ") : ""); };
+    const out = [];
+    if (mine.length) out.push({kind: "known", text: ent(mine) + " for this ledger " + (mine.length === 1 ? "is" : "are") + " waiting: " + (this.oneWhy(mine) || "see Sync activity")});
+    if (unknown.length) out.push({kind: "unknown", text: ent(unknown) + " waiting; the ledger is not yet known, so this balance may be incomplete."});
+    return out;
   },
   // a line waiting because of FinCom's side: no body, the add-on's placeholder GUID ("<company GUID>-00000000"), no GUID,
   // FinCom's own posting coming back, or the queue; then FinCom fetches the details itself and nothing is to be done
@@ -29115,6 +29170,15 @@ const AlertHub = {
   forClient(cid){ return this.list().filter(x => x.cid === cid && x.sev !== "info"); },
   async read(x){ if (x && x.alert && typeof Rec === "object") await Rec.alertRead(x.alert); }
 };
+// what a client's books say while lines Tally sent for them are held (AlertHub.booksHeld): null when none
+function booksHeld(cid){ return typeof AlertHub === "object" ? AlertHub.booksHeld(cid || S.coId) : null; }
+// the same words on a printed report or ledger (led: a ledger's own lines too), and as the first rows of its Excel sheet
+function heldWords(cid, led, to){
+  const h = booksHeld(cid);
+  return h ? [h.text].concat(led ? AlertHub.ledgerHeld(cid || S.coId, led, to).map(x => x.text) : []) : [];
+}
+function heldPrintHtml(cid, led, to){ return heldWords(cid, led, to).map(t => '<p class="note" data-held-print="" style="color:#9A3412;font-weight:600;margin:4px 0">' + esc(t) + "</p>").join(""); }
+function heldSheetRows(cid, led, to){ const w = heldWords(cid, led, to); return w.length ? w.map(t => [t]).concat([[]]) : []; }
 // "This will post through Office computer (NWS144)." before Post (the bank's and sales' bars, and the posting preview):
 // the computer the posting goes through, the same as the Tally sign says; "" when none is connected
 function postThroughWords(co){
