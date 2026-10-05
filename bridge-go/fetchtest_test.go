@@ -292,6 +292,33 @@ func TestFetchTestMasterFromFOrAsked(t *testing.T) {
 	}
 }
 
+// --- 2.2.3 review M1: while the test waits for the person's MasterID nothing of the measuring tool's is held open: the
+// measure-only gate is shut and the self-watch is not suspended (measuring is raised only around each form's send)
+func TestFetchTestMeasuringNotHeldWhileAsking(t *testing.T) {
+	f := newStandTally(t)
+	f.mu.Lock()
+	f.behave = fetchTestStand(func(string) bool { return false }, nil)
+	f.mu.Unlock()
+	standBridge(t, f, `,"Key":"tray-test-key"`)
+	var during int32 = -1
+	r, err := runFetchTest(fetchTestOpts{company: "ZZ TEST", typ: "Receipt", no: "212", date: "20261005"}, func() string {
+		during = measuring.Load()
+		return "777"
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if during != 0 {
+		t.Fatalf("measuring while asking the person: %d (want 0)", during)
+	}
+	if measuring.Load() != 0 {
+		t.Fatalf("measuring after the test: %d", measuring.Load())
+	}
+	if ids, _ := fetchTestBodies(f); strings.Join(ids, "") != "ABFCDE" || str(r["masterId"]) != "777" {
+		t.Fatalf("the forms: %v %v", ids, r["masterId"])
+	}
+}
+
 // --- 4. never during a posting: refused with plain words before anything goes; a posting that starts during the test
 // stops it before the next form
 func TestFetchTestRefusedDuringPosting(t *testing.T) {
