@@ -1,0 +1,1 @@
+2026-10-05 15:35:57  Recorder: FinCom Spike Co: delete of mid 3: GUID from the bridge's record: bad8e138-ecfb-444f-a49b-5eb7dee38294-00000003; the GUID its MasterID makes agrees
