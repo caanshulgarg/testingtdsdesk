@@ -8,7 +8,9 @@ Supabase (fake_supabase.py). Needs Deno (DENO, default: the deno on the PATH).
   3. a posting for another bridge cannot be reported by this one (posts_update refused);
   4. "Changes only" (tally_bridge_prefs): the beat says notMain + changesOnly and counts none; posts_take is refused and the
      posting waits (a posting it took before the switch is still reported);
-  5. a cloud without migration 54 (no tally_post_take_for): the hand-out as before (tally_post_take)."""
+  5. a cloud without migration 54 (no tally_post_take_for): the hand-out as before (tally_post_take);
+  6. review M3: a bridge id belongs to the first computer key that reported it: another key reporting it (an id copied from
+     another user's settings) is refused, and nothing it says is kept; a cloud without tally_bridge_bind: as before."""
 import os, sys, json, time, hashlib, subprocess, urllib.request, shutil, threading
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import fake_supabase as F
@@ -77,6 +79,25 @@ try:
     F.NO_FN.add("tally_post_take_for")
     c, r = call({"kind": "posts_take", "version": "2.3.0", "bridge": RAVI})
     ok(c == 200 and (r.get("job") or {}).get("id") in ("p-other", "p-ravi2"), "5. without migration 54 the hand-out is as before (tally_post_take: %s)" % (r.get("job") or {}).get("id"))
+    # 6. review M3: anshul's key (another tally_devices row) reporting ravi's bridge id
+    KEY2 = "fcd_" + "c" * 48
+    F.T["tally_devices"].append({"id": "d-1", "firm_id": FIRM, "name": "NW144 · anshul", "key_hash": hashlib.sha256(KEY2.encode()).hexdigest(), "revoked": False, "info": {}, "wake_token": "v" * 64, "version": "2.3.0"})
+    def call2(body):
+        rq = urllib.request.Request("http://127.0.0.1:8000/", data=json.dumps(body).encode(), headers={"Content-Type": "application/json", "x-fincom-device": KEY2})
+        try: r = urllib.request.urlopen(rq, timeout=60); return r.status, json.loads(r.read())
+        except urllib.error.HTTPError as e: return e.code, json.loads(e.read() or b"{}")
+    F.NO_FN.discard("tally_post_take_for")
+    job("p-ravi3", RAVI["id"], "2026-10-05T12:00:00Z")
+    c, r = call2(dict(BEAT, bridge=dict(RAVI, user="NW144\\anshul")))
+    d1 = next(d for d in F.T["tally_devices"] if d["id"] == "d-1")
+    ok(c == 409 and RAVI["id"] not in (d1.get("info") or {}).get("bridges", {}), "6. another key reporting ravi's bridge id: refused (%s %s), not kept on its line" % (c, r.get("error")))
+    c, r = call2({"kind": "posts_take", "version": "2.3.0", "bridge": RAVI})
+    ok(c == 409 and st("p-ravi3") == "waiting", "6. nor given ravi's postings (%s)" % c)
+    c, r = call(BEAT)
+    ok(c == 200, "6. ravi's own key still beats (%s)" % c)
+    F.NO_FN.add("tally_bridge_bind")
+    c, r = call2(dict(BEAT, bridge=dict(RAVI, id="go-dddd00000d")))
+    ok(c == 200, "6. a cloud without tally_bridge_bind: as before (%s)" % c)
 finally:
     fn.kill()
     if fails: print("".join(log[-40:]))

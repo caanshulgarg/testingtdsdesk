@@ -57,7 +57,9 @@ const CloudPost = {
     // none: the computer's main bridge, as before
     const target = typeof TCloud.postTargetFor === "function" ? TCloud.postTargetFor(cid) : "";
     const args = {p_id: id, p_client: cid, p_payload: {masters: payload.masters || [], vouchers: payload.vouchers || [], ledger: payload.ledger || ""}};
-    const r = target ? await TCloud.rpc("tally_post_enqueue_to", Object.assign(args, {p_target: target})) : await TCloud.rpc("tally_post_enqueue", args);
+    // review M3: the bridge is named with its computer (the cloud checks the bridge id is bound to it)
+    const trow = target ? TCloud.bridgesHeard().find(x => x.id === target) : null;
+    const r = target ? await TCloud.rpc("tally_post_enqueue_to", Object.assign(args, {p_target: target, p_device: trow ? trow.device.id : null})) : await TCloud.rpc("tally_post_enqueue", args);
     // 02-Oct-2026 (B14): the cloud's own check of the company the client may post to: nothing was queued, nothing sent,
     // and it is not Tally's reason; the entries stay waiting
     if (r && !r.ok && r.notAllowed) return {ok: true, company: r.company || payload.company, notAllowed: true, viaCloud: true,

@@ -28,7 +28,7 @@ READERS = ["tally_tb", "tally_period", "tally_mis", "tally_gst_summary", "tally_
            # 05-Oct-2026 (migration 53: a placeholder line whose entry the copy holds; the AlterID received only from lines whose ids belong together)
            "tally_recorder_ids_together",
            # 05-Oct-2026 (migration 54: a posting names the bridge that posts it; changes only; the member's bridge)
-           "tally_post_enqueue_to", "tally_post_take_for", "tally_bridge_changes_only", "tally_member_bridge_link"]
+           "tally_post_enqueue_to", "tally_post_take_for", "tally_bridge_changes_only", "tally_member_bridge_link", "tally_post_enqueue_core", "tally_bridge_bind", "tally_post_device_for"]
 texts = {}
 fails = []
 def ok(c, w):
@@ -137,9 +137,9 @@ def run_order(label, ORDER):
            and db.one("select has_function_privilege('authenticated', 'public.tally_recorder_release_held(bigint)', 'execute')") == "t",
            "53: a held placeholder line whose entry the copy holds above the starting point is 'duplicate'; the AlterID received only from lines whose ids belong together (52's rules kept) (in force in this order)")
         ok(db.one("select count(*) from information_schema.columns where table_name = 'tally_post_jobs' and column_name = 'target_bridge'") == "1"
-           and "target_bridge = p_bridge" in fdef("tally_post_take_for") and "tally_post_enqueue(p_id, p_client, p_payload)" in fdef("tally_post_enqueue_to")
+           and "target_bridge = p_bridge" in fdef("tally_post_take_for") and "tally_post_enqueue_core(p_id, p_client, p_payload, tdev, t)" in fdef("tally_post_enqueue_to") and "tally_post_enqueue_to(p_id, p_client, p_payload, null, null)" in fdef("tally_post_enqueue", "uuid, text, jsonb")
            and db.one("select has_function_privilege('authenticated', 'public.tally_post_take_for(uuid, text, boolean)', 'execute')") == "f",
-           "54: tally_post_jobs.target_bridge; tally_post_enqueue_to wraps 36b's tally_post_enqueue; tally_post_take_for for the service role only (in force in this order)")
+           "54: tally_post_jobs.target_bridge; tally_post_enqueue_to and the 3-argument tally_post_enqueue go through tally_post_enqueue_core; tally_post_take_for for the service role only (in force in this order)")
         ok("tally_ledger_carry_choices" in fdef("tally_ledger_rename") and db.one("select count(*) from information_schema.columns where table_name = 'tally_ledgers' and column_name = 'needs_confirm'") == "1", "39: the rename carries the choices; tally_ledgers.needs_confirm")
         ok(db.one("select string_agg(confdeltype::text, '') from pg_constraint where conrelid = 'public.tally_post_marks'::regclass and contype = 'f'") == "rr", "38: tally_post_marks' foreign keys restrict (no cascade)")
         for fn in ("tally_tb", "tally_period", "tally_balances_on"): ok("d.merged_into is null" in fdef(fn), "%s hides the twins" % fn)

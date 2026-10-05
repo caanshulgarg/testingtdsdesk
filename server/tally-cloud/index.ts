@@ -1733,6 +1733,19 @@ Deno.serve(async (req) => {
   let body: any;
   try { body = JSON.parse(await readBody(req)); } catch (e) { return (e as Error).message === "too large" ? reply(413, { ok: false, error: "Too much in one go; send fewer days at a time." }) : reply(400, { ok: false, error: "Bad request" }); }
   const firm = dev.firm_id as string;
+  // migration 54 (review M3): a bridge id ("go-…", which the bridge reports itself) belongs to the first computer key that
+  // reported it (tally_bridge_ids); another key naming it (an id copied from another Windows user's settings) is refused,
+  // and nothing it says is kept. A cloud without the function: as before
+  {
+    const bid = body?.bridge && typeof body.bridge === "object" ? String(body.bridge.id || "") : "";
+    if (/^go-[0-9a-f]{6,32}$/.test(bid)) {
+      const { data: own, error: be } = await db.rpc("tally_bridge_bind", { p_device: dev.id, p_bridge: bid });
+      if (!be && own === false) {
+        console.error("tally-ingest: bridge id of another computer", dev.id, bid);
+        return reply(409, { ok: false, error: "This bridge's id belongs to another computer key in FinCom. Install FinCom Bridge again for this Windows user (it makes an id of its own), then connect it again." });
+      }
+    }
+  }
   // go-bridge (FinCom Bridge 2.0.0 in test mode, beside bridge 1.15.0 on the same computer and key): compared, never kept
   if (body?.shadow === true) {
     try { return await shadowCall(dev, firm, body); } catch (e) { console.error("tally-ingest shadow", body?.kind, (e as Error).message); return reply(500, { ok: false, error: (e as Error).message }); }
