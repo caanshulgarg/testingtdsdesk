@@ -1,0 +1,2 @@
+2026-10-05 17:30:59  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 3236d212…): held: the entry was not read from Tally: Company 'FinCom Spike Co' is not open in Tally. Open it in TallyPrime on this computer and try again.
+2026-10-05 17:30:59  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (Company 'FinCom Spike Co' is not open in Tally. Open it in TallyPrime on this computer and try again.); sent without it (FinCom holds the line until a body comes)

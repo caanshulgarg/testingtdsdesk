@@ -1,0 +1,303 @@
+[17:25:38] ---- the bridge built from the ref
+bridge source: 246ffefa1b4070ed3d7adcb54901d440f629af36 Merge decisions-230 (owner's decisions B and D: any member settles an uncertain posting after the bridge's one-entry check; a posting goes ahead of another bridge's reading; migration 55) into per-user-bridge; the post_check main rule per Windows user
+setup: FinComBridge-Setup-2.2.4.exe 3295636 bytes SHA256 328151B8500C3D4CA1BBBBAB47052E4CDE4E9B429842F56BEC2E56CC08D8D18F
+[17:25:38] ---- the second Windows user (not an administrator)
+user 2: fcuser2 S-1-5-21-1643835476-1616584234-1346609752-1003; administrators: runnervmfi6oq\runneradmin
+user 2's profile: C:\Users\fcuser2
+ SESSIONNAME               USERNAME                 ID  STATE   TYPE        DEVICE 
+ services                                            0  Disc                        
+ rdp-tcp#0                 fcuser2                   1  Active                      
+>console                   runneradmin               2  Active                      
+ 31c5ce94259d4006a9e4                            65536  Listen                      
+ rdp-tcp                                         65537  Listen                      
+
+[17:26:02] user 2's own Windows session by Remote Desktop: True (session 1)
+[shot] r4-03-rdp-session (1024x768)
+task fcu2 registered for fcuser2 (interactive)
+  [as fcuser2] who=runnervmfi6oq\fcuser2 session=1
+  [as fcuser2] no Tally window in session 1; keys '{ENTER}' to the window in front
+  [as fcuser2] shot u2-desktop
+[17:26:30] ---- the stub cloud
+[17:26:33] ---- user 1's Tally (9000) with the add-on; a copy of the program for user 2 first (its own tally.ini and port)
+  still running from the Tally folder: tallyscheduler 7064
+  robocopy:    Bytes :  177.74 m  177.74 m         0         0       512         0
+  robocopy:    Times :   0:00:00   0:00:00                       0:00:00   0:00:00
+  robocopy: 
+  robocopy: 
+  robocopy:    Speed :           2,218,854,726 Bytes/sec.
+  robocopy:    Speed :             126,963.883 MegaBytes/min.
+  robocopy:    Ended : Monday, October 5, 2026 5:26:35 PM
+  robocopy: 
+[17:26:35] copy for user 2: robocopy 9, tally.exe there: True
+Tally :9000 answers: True
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[keys] 't' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-00-tally1 (1024x768)
+[ledger Spike Income :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[17:27:08] ---- user 2's own Tally (9001), run as fcuser2: a company made by keys, then started again with it and the add-on
+  [as fcuser2] pid=10652 session=1 user=runnervmfi6oq\fcuser2
+Tally :9001 (pid 10652) answers: True; owner: fcuser2; session 1 (runner's own: 2)
+  [as fcuser2] keys 'a' -> Tally pid 10652 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys 't' -> Tally pid 10652 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01-tally2-start
+  [as fcuser2] keys '{ENTER}' -> Tally pid 10652 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01b-tally2-create-company
+  [as fcuser2] keys 'FinCom Spike U2' -> Tally pid 10652 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys '^a' -> Tally pid 10652 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01c-tally2-ctrl-a
+[companies :9001] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+  [as fcuser2] keys '^a' -> Tally pid 10652 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01d-tally2-company
+user 2's company made: True, folder 100000
+  [as fcuser2] pid=10300 session=1 user=runnervmfi6oq\fcuser2
+  [as fcuser2] keys 'a' -> Tally pid 10300 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys 't' -> Tally pid 10300 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01e-tally2-gateway
+[ledger Spike Income :9001] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[companies :9001] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>1</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[ledger Spike Party :9001] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[journal :9001 :9001] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>1</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+== user 2's own Tally with its company and the add-on: True
+[17:28:38] ---- the bridges, each installed by its own Windows user with the real setup, just for me; the settings seeded first
+setup as runneradmin (just for me) ended with 0
+  install.log 1: 2026-10-05 17:28:39  Install (just for this user, no service): FinCom Bridge 2.2.4 for runnervmfi6oq\runneradmin (S-1-5-21-1643835476-1616584234-1346609752-500), sole mode, folder C:\Users\runneradmin\AppData\Local\TDS Desk Bridge
+  install.log 1: 2026-10-05 17:28:42  Install: the add-on FinComRecorder.tdl written in C:\ProgramData\FinCom\addon
+  install.log 1: 2026-10-05 17:28:42  Install: the add-on FinComRecorderAnyCompany.tdl written in C:\ProgramData\FinCom\addon
+  install.log 1: 2026-10-05 17:28:42  Install: the recorder folder C:\ProgramData\FinCom\recorder and the add-on folder C:\ProgramData\FinCom\addon are ready (just for this user)
+  install.log 1: 2026-10-05 17:28:42  Install: starts when runnervmfi6oq\runneradmin signs in to Windows (HKCU Run)
+  install.log 1: 2026-10-05 17:28:43  Install: done; the bridge answers on 127.0.0.1:9100
+  install.log 1: 2026-10-05 17:28:43  Setup: FinComBridge.exe install: done, the bridge answers
+  install.log 1: 2026-10-05 17:28:43  Setup: Finished: installed and running (sole mode)
+seed as fcuser2: runnervmfi6oq\fcuser2 session 1 C:\Users\fcuser2\AppData\Local
+  [as fcuser2] exit=0 user=runnervmfi6oq\fcuser2 session=1
+setup as fcuser2 (just for me) ended: exit=0 user=runnervmfi6oq\fcuser2 session=1
+  install.log 2: 2026-10-05 17:28:45  Install (just for this user, no service): FinCom Bridge 2.2.4 for runnervmfi6oq\fcuser2 (S-1-5-21-1643835476-1616584234-1346609752-1003), sole mode, folder C:\Users\fcuser2\AppData\Local\TDS Desk Bridge
+  install.log 2: 2026-10-05 17:28:48  Install: the add-on FinComRecorder.tdl was not written in C:\ProgramData\FinCom\addon: remove C:\ProgramData\FinCom\addon\FinComRecorder.tdl: Access is denied.
+  install.log 2: 2026-10-05 17:28:48  Install: the add-on FinComRecorderAnyCompany.tdl was not written in C:\ProgramData\FinCom\addon: remove C:\ProgramData\FinCom\addon\FinComRecorderAnyCompany.tdl: Access is denied.
+  install.log 2: 2026-10-05 17:28:48  Install: the recorder folder C:\ProgramData\FinCom\recorder and the add-on folder C:\ProgramData\FinCom\addon are ready (just for this user)
+  install.log 2: 2026-10-05 17:28:48  Install: starts when runnervmfi6oq\fcuser2 signs in to Windows (HKCU Run)
+  install.log 2: 2026-10-05 17:28:49  Install: done; the bridge answers on 127.0.0.1:9101
+  install.log 2: 2026-10-05 17:28:49  Setup: FinComBridge.exe install: done, the bridge answers
+  install.log 2: 2026-10-05 17:28:49  Setup: Finished: installed and running (sole mode)
+bridge 1: user runneradmin, port 9100, id go-acf7fefe0436, key 24 chars, Owner runnervmfi6oq\runneradmin, OwnerSid S-1-5-21-1643835476-1616584234-1346609752-500
+bridge 2: user fcuser2, port 9101, id go-a0b70a4805fa, key 24 chars, Owner runnervmfi6oq\fcuser2, OwnerSid S-1-5-21-1643835476-1616584234-1346609752-1003
+[shot] r4-02-bridges (1024x768)
+[17:28:59] ---- 6a: both bridges run at once, on their own ports, as their own users
+  process 11160 as runneradmin in session 2: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" user --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json"
+  process 5528 as runneradmin in session 2: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" worker --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json" --home "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge" --parent 11160
+  process 692 as runneradmin in session 2: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" tray --quiet --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json"
+  process 5740 as fcuser2 in session 1: "C:\Users\fcuser2\AppData\Local\FinCom Bridge\FinComBridge.exe" user --config "C:\Users\fcuser2\AppData\Local\TDS Desk Bridge\tds-bridge.config.json"
+  process 10364 as fcuser2 in session 1: "C:\Users\fcuser2\AppData\Local\FinCom Bridge\FinComBridge.exe" worker --config "C:\Users\fcuser2\AppData\Local\TDS Desk Bridge\tds-bridge.config.json" --home "C:\Users\fcuser2\AppData\Local\TDS Desk Bridge" --parent 5740
+  process 11156 as fcuser2 in session 1: "C:\Users\fcuser2\AppData\Local\FinCom Bridge\FinComBridge.exe" tray
+  listening 127.0.0.1:9101 pid 10364 user fcuser2
+  listening 127.0.0.1:9100 pid 5528 user runneradmin
+  Tally pid 6632 session 2 owner runneradmin
+  Tally pid 10300 session 1 owner fcuser2
+######## PASS 6a two bridges at once: bridge 1 runneradmin on 127.0.0.1:9100 (pid 5528, session 2, go-acf7fefe0436); bridge 2 fcuser2 on 127.0.0.1:9101 (pid 10364, session 1, go-a0b70a4805fa); both listening at 17:29:00
+[17:29:00] ---- 6b: the /ping proof: HMAC-SHA256(bridge key, nonce || bridge id || port), only to the bridge's own Windows user
+runneradmin -> own bridge, no Origin: {"bridge":"FinCom Tally Bridge","bridgeId":"go-acf7fefe0436","impl":"go","loopSec":0,"ok":true,"pid":5528,"port":9100,"runMode":"user","testMode":false,"version":"2.2.4","yours":true}
+runneradmin -> own bridge: {"bridge":"FinCom Tally Bridge","bridgeId":"go-acf7fefe0436","impl":"go","loopSec":0,"ok":true,"pairProof":"5be3246a3fbf0065c2dcf9b9e94f89644e1518e78eff68a135d1d48ba96c4fba","pid":5528,"port":9100,"proof":"45270030133400573d77cb6ff367c0f79c7597fcf15f57d1f2cb1779a0a6ea6a","runMode":"user","testMode":false,"version":"2.2.4","yours":true}
+runneradmin -> user 2's bridge: {"bridge":"FinCom Tally Bridge","impl":"go","loopSec":0,"ok":true,"pid":10364,"runMode":"user","testMode":false,"version":"2.2.4","yours":false}
+as fcuser2 (): {"ownStatus":401,"other":{"bridge":"FinCom Tally Bridge","impl":"go","loopSec":0,"ok":true,"pid":5528,"runMode":"user","testMode":false,"version":"2.2.4","yours":false},"session":1,"own":{"bridge":"FinCom Tally Bridge","bridgeId":"go-a0b70a4805fa","impl":"go","loopSec":0,"ok":true,"pairProof":"653d59c180cbe58a18c20c18f6384a0fef520acce12024495d8c1ef9d32931ed","pid":10364,"port":9101,"proof":"ad26f04205699920091242ad51a1ddceecc723ed677c49758b4028c3848dfd67","runMode":"user","testMode":false,"version":"2.2.4","yours":true},"otherStatus":403,"who":"runnervmfi6oq\\fcuser2"}
+  ok   bridge 1 proves itself to runneradmin: yours=True bridgeId=go-acf7fefe0436 port=9100 proof=45270030133400573d77cb6ff367c0f79c7597fcf15f57d1f2cb1779a0a6ea6a
+  ok   bridge 1 proof checked against user 2 identity fails: HMAC(key2, nonce||go-a0b70a4805fa||9101)=a9195c7ba572e8e7e3a4f984012218addda3915344031daf772cae163b9539b3
+  ok   bridge 2 proves itself to fcuser2: yours=True bridgeId=go-a0b70a4805fa port=9101 proof=ad26f04205699920091242ad51a1ddceecc723ed677c49758b4028c3848dfd67
+  ok   bridge 2 proof checked against user 1 identity fails: HMAC(key1, nonce||go-acf7fefe0436||9100)=66573236e0eca7ea27e90e3fa5c9f27ad2746834f933e828d28272026907f3bb
+  ok   bridge 2 gives runneradmin no proof: yours=False proof= bridgeId=
+  ok   bridge 1 gives fcuser2 no proof: yours=False proof=
+  ok   other users refused 403 beyond /ping: runneradmin: own /status 401, other 403; fcuser2: own /status 401, other 403
+######## PASS 6b /ping proof: bridge 1 proves itself to runneradmin: ok; bridge 1 proof checked against user 2 identity fails: ok; bridge 2 proves itself to fcuser2: ok; bridge 2 proof checked against user 1 identity fails: ok; bridge 2 gives runneradmin no proof: ok; bridge 1 gives fcuser2 no proof: ok; other users refused 403 beyond /ping: ok
+  bridge1 log: 2026-10-05 17:28:42  FinCom Bridge 2.2.4: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+  bridge1 log: 2026-10-05 17:28:42  FinCom Bridge 2.2.4 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+  bridge1 log: 2026-10-05 17:28:42  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+  bridge1 log: 2026-10-05 17:28:42  Recorder: re-scan of the add-on's files for 2.2.4: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+  bridge1 log: 2026-10-05 17:28:42  Check:  - 
+  bridge1 log: 2026-10-05 17:28:45  Tray icon: set to show next to the clock always (Windows 11)
+  bridge1 log: 2026-10-05 17:28:45  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+  bridge1 log: 2026-10-05 17:28:45  Company FinCom Spike Co: its Tally GUID 6848f60a-b3f8-4695-80ae-9be85833a9db is held from now on
+  bridge1 log: 2026-10-05 17:28:46  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=1, ALTMSTID=211 (reading is prospective only: the bridge follows what changes after this)
+  bridge1 log: 2026-10-05 17:28:46  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=1, ALTMSTID=211
+  bridge1 log: 2026-10-05 17:28:46  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=1, ALTMSTID=211)
+  bridge1 log: 2026-10-05 17:28:48  Refused a request from a program of another Windows user (/tray/idle): not your FinCom Bridge
+  bridge1 log: 2026-10-05 17:28:48  Refused a request from a program of another Windows user (/tray/status): not your FinCom Bridge
+  bridge1 log: 2026-10-05 17:29:09  Refused a request from a program of another Windows user (/status): not your FinCom Bridge
+  bridge2 log: 2026-10-05 17:28:48  FinCom Bridge 2.2.4: started just for runnervmfi6oq\fcuser2 (no service); it keeps the bridge and its icon running
+  bridge2 log: 2026-10-05 17:28:48  Port 9100 is taken (another Windows user's FinCom Bridge, or another program); this bridge uses port 9101 and remembers it
+  bridge2 log: 2026-10-05 17:28:48  FinCom Bridge 2.2.4 (Go) started on 127.0.0.1:9101: the only bridge on this computer; working for runnervmfi6oq\fcuser2, Windows session 1; runs just for this Windows user (starts at sign-in, no service)
+  bridge2 log: 2026-10-05 17:28:48  Tally is open on port 9001; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+  bridge2 log: 2026-10-05 17:28:48  Recorder: re-scan of the add-on's files for 2.2.4: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+  bridge2 log: 2026-10-05 17:28:48  Check:  - 
+  bridge2 log: 2026-10-05 17:28:51  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+  bridge2 log: 2026-10-05 17:28:51  Tray icon: set to show next to the clock always (Windows 11)
+  bridge2 log: 2026-10-05 17:28:51  Company FinCom Spike U2: its Tally GUID 642714e8-9543-429a-9b67-176c0831e962 is held from now on
+  bridge2 log: 2026-10-05 17:28:51  Company FinCom Spike U2: its starting point is recorded: ALTVCHID=1, ALTMSTID=209 (reading is prospective only: the bridge follows what changes after this)
+  bridge2 log: 2026-10-05 17:28:51  Company FinCom Spike U2: change numbers read with form a: ALTVCHID=1, ALTMSTID=209
+  bridge2 log: 2026-10-05 17:28:51  Light check of FinCom Spike U2: starting point recorded (ALTVCHID=1, ALTMSTID=209)
+  bridge2 log: 2026-10-05 17:29:08  Refused a request from a program of another Windows user (/status): not your FinCom Bridge (the program asking has no Windows user)
+[17:29:40] ---- steps 1-5 on user 1's Tally (9000), as round 3
+  Tally :9000 voucher mid=1 aid=1 guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000001 no=1 cancelled=False
+[keys] 'v' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-10-vouchers (1024x768)
+[keys] '{F6}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '2-10-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Cash{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Spike Income{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-11-particular (1024x768)
+[keys] '700{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-12-created (1024x768)
+  Tally :9000 voucher mid=1 aid=1 guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000002 no=1 cancelled=False
+  bridge1 log: 2026-10-05 17:30:09  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 08d8aae2…): asking Tally by MasterID
+  bridge1 log: 2026-10-05 17:30:14  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 08d8aae2…): taken: Tally's GUID 6848f60a-b3f8-4695-80ae-9be85833a9db-00000002, AlterID 2
+  bridge2 log: 2026-10-05 17:30:09  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 08d8aae2…): held: the entry was not read from Tally: Company 'FinCom Spike Co' is not open in Tally. Open it in TallyPrime on this computer and try again.
+  bridge2 log: 2026-10-05 17:30:09  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (Company 'FinCom Spike Co' is not open in Tally. Open it in TallyPrime on this computer and try again.); sent without it (FinCom holds the line until a body comes)
+  stub 17:30:09 recorder_lines event=created guid='' mid=2 aid= vch=Receipt/1/20261002 user=runnervmfi6oq\fcuser2 bridge=go-a0b70a4805fa port=9101 company=FinCom Spike Co body=none heldWhy=the entry was not read from Tally: Company 'FinCom Spike Co' is not open in Tally. Open it in TallyPrime on this computer and try again.
+  stub 17:30:14 recorder_lines event=created guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000002 mid=2 aid=2 vch=Receipt/1/20261002 user=runnervmfi6oq\runneradmin bridge=go-acf7fefe0436 port=9100 company=FinCom Spike Co body=yes(2434 chars)
+######## PASS 1 create: Tally made mid 2 guid 6848f60a-b3f8-4695-80ae-9be85833a9db-00000002; stub 17:30:14 recorder_lines event=created guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000002 mid=2 aid=2 vch=Receipt/1/20261002 user=runnervmfi6oq\runneradmin bridge=go-acf7fefe0436 port=9100 company=FinCom Spike Co body=yes(2434 chars)
+[keys] '%g' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '2-10-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-13-daybook (1024x768)
+[keys] '{END}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-14-open (1024x768)
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-15-at-amount (1024x768)
+[keys] '800{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-16-altered (1024x768)
+  Tally :9000 voucher mid=1 aid=1 guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=3 guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000002 no=1 cancelled=False
+  bridge1 log: 2026-10-05 17:30:59  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 3236d212…): asking Tally by MasterID
+  bridge1 log: 2026-10-05 17:31:03  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 3236d212…): taken: Tally's GUID 6848f60a-b3f8-4695-80ae-9be85833a9db-00000002, AlterID 3
+  bridge2 log: 2026-10-05 17:30:59  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 3236d212…): held: the entry was not read from Tally: Company 'FinCom Spike Co' is not open in Tally. Open it in TallyPrime on this computer and try again.
+  bridge2 log: 2026-10-05 17:30:59  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (Company 'FinCom Spike Co' is not open in Tally. Open it in TallyPrime on this computer and try again.); sent without it (FinCom holds the line until a body comes)
+  stub 17:30:59 recorder_lines event=altered guid='' mid=2 aid= vch=Receipt/1/20261002 user=runnervmfi6oq\fcuser2 bridge=go-a0b70a4805fa port=9101 company=FinCom Spike Co body=none heldWhy=the entry was not read from Tally: Company 'FinCom Spike Co' is not open in Tally. Open it in TallyPrime on this computer and try again.
+  stub 17:31:03 recorder_lines event=altered guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000002 mid=2 aid=3 vch=Receipt/1/20261002 user=runnervmfi6oq\runneradmin bridge=go-acf7fefe0436 port=9100 company=FinCom Spike Co body=yes(2434 chars)
+######## PASS 2 alter: Tally: mid 2 AlterID 2 -> 3; stub 17:31:03 recorder_lines event=altered guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000002 mid=2 aid=3 vch=Receipt/1/20261002 user=runnervmfi6oq\runneradmin bridge=go-acf7fefe0436 port=9100 company=FinCom Spike Co body=yes(2434 chars)
+[keys] '%g' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '2-10-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-17-daybook (1024x768)
+[keys] '{END}' -> Tally :9000 'TallyPrime:9000'
+[keys] '%2' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-18-duplicate (1024x768)
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-19-dup-at-amount (1024x768)
+[keys] '900{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-20-dup-saved (1024x768)
+  Tally :9000 voucher mid=1 aid=1 guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=3 guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000002 no=1 cancelled=False
+  Tally :9000 voucher mid=3 aid=4 guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000003 no=2 cancelled=False
+  bridge1 log: 2026-10-05 17:31:46  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 3, line 45e670be…): asking Tally by MasterID
+  bridge1 log: 2026-10-05 17:31:50  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 3, line 45e670be…): taken: Tally's GUID 6848f60a-b3f8-4695-80ae-9be85833a9db-00000003, AlterID 4
+  bridge2 log: 2026-10-05 17:31:47  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 3, line 45e670be…): held: the entry was not read from Tally: Company 'FinCom Spike Co' is not open in Tally. Open it in TallyPrime on this computer and try again.
+  bridge2 log: 2026-10-05 17:31:47  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (Company 'FinCom Spike Co' is not open in Tally. Open it in TallyPrime on this computer and try again.); sent without it (FinCom holds the line until a body comes)
+  stub 17:31:47 recorder_lines event=created guid='' mid=3 aid= vch=Receipt/2/20261002 user=runnervmfi6oq\fcuser2 bridge=go-a0b70a4805fa port=9101 company=FinCom Spike Co body=none idsMismatch lineGuid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000002 heldWhy=the entry was not read from Tally: Company 'FinCom Spike Co' is not open in Tally. Open it in TallyPrime on this computer and try again.
+  stub 17:31:50 recorder_lines event=created guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000003 mid=3 aid=4 vch=Receipt/2/20261002 user=runnervmfi6oq\runneradmin bridge=go-acf7fefe0436 port=9100 company=FinCom Spike Co body=yes(2434 chars) idsMismatch lineGuid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000002
+######## PASS 3 Alt+2 copy: Tally made mid 3 guid 6848f60a-b3f8-4695-80ae-9be85833a9db-00000003; source mid 2 AlterID still 3, no line for it; stub 17:31:50 recorder_lines event=created guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000003 mid=3 aid=4 vch=Receipt/2/20261002 user=runnervmfi6oq\runneradmin bridge=go-acf7fefe0436 port=9100 company=FinCom Spike Co body=yes(2434 chars) idsMismatch lineGuid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000002
+[keys] '%g' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '2-10-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-21-daybook (1024x768)
+[keys] '{HOME}' -> Tally :9000 'TallyPrime:9000'
+[keys] '%x' -> Tally :9000 'TallyPrime:9000'
+[keys] 'y' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-22-cancelled (1024x768)
+  Tally :9000 voucher mid=1 aid=1 guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=5 guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000002 no=1 cancelled=True
+  Tally :9000 voucher mid=3 aid=4 guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000003 no=2 cancelled=False
+  bridge1 log: 2026-10-05 17:32:44  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line fecf26b9…): asking Tally by MasterID
+  bridge1 log: 2026-10-05 17:32:48  Recorder: FinCom Spike Co: cancel of mid 2: GUID from Tally (asked by MasterID): 6848f60a-b3f8-4695-80ae-9be85833a9db-00000002; the GUID its MasterID makes agrees
+  bridge2 log: 2026-10-05 17:32:44  Recorder: FinCom Spike Co: cancel of mid 2: held: this computer's Tally could not be asked whether it was cancelled here (Company 'FinCom Spike Co' is not open in Tally. Open it in TallyPrime on this computer and try again.); not sent as a cancel: held
+  bridge2 log: 2026-10-05 17:32:44  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (Company 'FinCom Spike Co' is not open in Tally. Open it in TallyPrime on this computer and try again.); sent without it (FinCom holds the line until a body comes)
+  stub 17:32:44 recorder_lines event=cancelled guid='' mid=2 aid= vch=Receipt/1/20261002 user=runnervmfi6oq\fcuser2 bridge=go-a0b70a4805fa port=9101 company=FinCom Spike Co body=none heldWhy=this computer's Tally could not be asked whether it was cancelled here (Company 'FinCom Spike Co' is not open in Tally. Open it in TallyPrime on this computer and try again.); not sent as a cancel: held
+  stub 17:32:48 recorder_lines event=cancelled guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000002 mid=2 aid=5 vch=Receipt/1/20261002 user=runnervmfi6oq\runneradmin bridge=go-acf7fefe0436 port=9100 company=FinCom Spike Co body=none
+######## PASS 4 cancel: Tally cancelled mid 2 guid 6848f60a-b3f8-4695-80ae-9be85833a9db-00000002; stub 17:32:48 recorder_lines event=cancelled guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000002 mid=2 aid=5 vch=Receipt/1/20261002 user=runnervmfi6oq\runneradmin bridge=go-acf7fefe0436 port=9100 company=FinCom Spike Co body=none
+[keys] '%g' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '2-10-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-23-daybook (1024x768)
+[keys] '{END}' -> Tally :9000 'TallyPrime:9000'
+[keys] '%d' -> Tally :9000 'TallyPrime:9000'
+[keys] 'y' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-24-deleted (1024x768)
+  Tally :9000 voucher mid=1 aid=1 guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=5 guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000002 no=1 cancelled=True
+  bridge1 log: 2026-10-05 17:33:20  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 3, line 18b778a0…): asking Tally by MasterID
+  bridge1 log: 2026-10-05 17:33:24  Recorder: FinCom Spike Co: delete of mid 3: not in this Tally (asked by MasterID): proven deleted here
+  bridge1 log: 2026-10-05 17:33:24  Recorder: FinCom Spike Co: delete of mid 3: GUID from the bridge's record: 6848f60a-b3f8-4695-80ae-9be85833a9db-00000003; the GUID its MasterID makes agrees
+  bridge2 log: 2026-10-05 17:33:21  Recorder: FinCom Spike Co: delete of mid 3: held: this computer's Tally could not be asked whether it was deleted here (Company 'FinCom Spike Co' is not open in Tally. Open it in TallyPrime on this computer and try again.); not sent as a delete: held
+  bridge2 log: 2026-10-05 17:33:21  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (Company 'FinCom Spike Co' is not open in Tally. Open it in TallyPrime on this computer and try again.); sent without it (FinCom holds the line until a body comes)
+  stub 17:33:21 recorder_lines event=deleted guid='' mid=3 aid= vch=Receipt/2/20261002 user=runnervmfi6oq\fcuser2 bridge=go-a0b70a4805fa port=9101 company=FinCom Spike Co body=none heldWhy=this computer's Tally could not be asked whether it was deleted here (Company 'FinCom Spike Co' is not open in Tally. Open it in TallyPrime on this computer and try again.); not sent as a delete: held
+  stub 17:33:24 recorder_lines event=deleted guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000003 mid=3 aid= vch=Receipt/2/20261002 user=runnervmfi6oq\runneradmin bridge=go-acf7fefe0436 port=9100 company=FinCom Spike Co body=none
+######## PASS 5 delete: Tally deleted mid 3 guid 6848f60a-b3f8-4695-80ae-9be85833a9db-00000003; stub 17:33:24 recorder_lines event=deleted guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000003 mid=3 aid= vch=Receipt/2/20261002 user=runnervmfi6oq\runneradmin bridge=go-acf7fefe0436 port=9100 company=FinCom Spike Co body=none
+[17:33:28] ---- 6d: user 2's own Tally event (a Receipt on 9001), recorded by user 2's bridge
+  Tally :9001 voucher mid=1 aid=1 guid=642714e8-9543-429a-9b67-176c0831e962-00000001 no=1 cancelled=False
+  [as fcuser2] keys 'v' -> Tally pid 10300 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 30-u2-vouchers
+  [as fcuser2] keys '{F6}' -> Tally pid 10300 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys '{F2}' -> Tally pid 10300 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys '2-10-2026{ENTER}' -> Tally pid 10300 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys 'Cash{ENTER}' -> Tally pid 10300 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys 'Spike Income{ENTER}' -> Tally pid 10300 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 31-u2-particular
+  [as fcuser2] keys '450{ENTER}' -> Tally pid 10300 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys '^a' -> Tally pid 10300 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 32-u2-created
+  Tally :9001 voucher mid=1 aid=1 guid=642714e8-9543-429a-9b67-176c0831e962-00000001 no=1 cancelled=False
+  Tally :9001 voucher mid=2 aid=2 guid=642714e8-9543-429a-9b67-176c0831e962-00000002 no=1 cancelled=False
+  bridge1 log: 2026-10-05 17:34:00  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 9ee7f89a…): held: the entry was not read from Tally: Company 'FinCom Spike U2' is not open in Tally. Open it in TallyPrime on this computer and try again.
+  bridge1 log: 2026-10-05 17:34:00  Recorder: the body of 1 entry of FinCom Spike U2 was not read from Tally (Company 'FinCom Spike U2' is not open in Tally. Open it in TallyPrime on this computer and try again.); sent without it (FinCom holds the line until a body comes)
+  bridge2 log: 2026-10-05 17:33:59  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 9ee7f89a…): asking Tally by MasterID
+  bridge2 log: 2026-10-05 17:34:04  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 9ee7f89a…): taken: Tally's GUID 642714e8-9543-429a-9b67-176c0831e962-00000002, AlterID 2
+######## PASS 6d user 2 own Tally event: Tally :9001 (as fcuser2) made mid 2 guid 642714e8-9543-429a-9b67-176c0831e962-00000002; stub 17:34:04 recorder_lines event=created guid=642714e8-9543-429a-9b67-176c0831e962-00000002 mid=2 aid=2 vch=Receipt/1/20261002 user=runnervmfi6oq\fcuser2 bridge=go-a0b70a4805fa port=9101 company=FinCom Spike U2 body=yes(2434 chars)
+[17:34:29] ---- 6c: the beats, 6e: every recorder line attributed to the user whose Tally made it
+######## PASS 6c beats: stub 17:34:15 beat x12 bridge=go-acf7fefe0436 user=runnervmfi6oq\runneradmin windowsUser=runnervmfi6oq\runneradmin bridgePort=9100 tallyPort=9000 dataFolder=D:\a\_temp\TallyData device=spike-computer-key-user1 computer=runnervmfi6oq | stub 17:34:21 beat x12 bridge=go-a0b70a4805fa user=runnervmfi6oq\fcuser2 windowsUser=runnervmfi6oq\fcuser2 bridgePort=9101 tallyPort=9001 dataFolder=C:\fcspike\u2data device=spike-computer-key-user2 computer=runnervmfi6oq
+  all: stub 17:30:09 recorder_lines event=created guid='' mid=2 aid= vch=Receipt/1/20261002 user=runnervmfi6oq\fcuser2 bridge=go-a0b70a4805fa port=9101 company=FinCom Spike Co body=none heldWhy=the entry was not read from Tally: Company 'FinCom Spike Co' is not open in Tally. Open it in TallyPrime on this computer and try again.
+  all: stub 17:30:14 recorder_lines event=created guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000002 mid=2 aid=2 vch=Receipt/1/20261002 user=runnervmfi6oq\runneradmin bridge=go-acf7fefe0436 port=9100 company=FinCom Spike Co body=yes(2434 chars)
+  all: stub 17:30:59 recorder_lines event=altered guid='' mid=2 aid= vch=Receipt/1/20261002 user=runnervmfi6oq\fcuser2 bridge=go-a0b70a4805fa port=9101 company=FinCom Spike Co body=none heldWhy=the entry was not read from Tally: Company 'FinCom Spike Co' is not open in Tally. Open it in TallyPrime on this computer and try again.
+  all: stub 17:31:03 recorder_lines event=altered guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000002 mid=2 aid=3 vch=Receipt/1/20261002 user=runnervmfi6oq\runneradmin bridge=go-acf7fefe0436 port=9100 company=FinCom Spike Co body=yes(2434 chars)
+  all: stub 17:31:47 recorder_lines event=created guid='' mid=3 aid= vch=Receipt/2/20261002 user=runnervmfi6oq\fcuser2 bridge=go-a0b70a4805fa port=9101 company=FinCom Spike Co body=none idsMismatch lineGuid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000002 heldWhy=the entry was not read from Tally: Company 'FinCom Spike Co' is not open in Tally. Open it in TallyPrime on this computer and try again.
+  all: stub 17:31:50 recorder_lines event=created guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000003 mid=3 aid=4 vch=Receipt/2/20261002 user=runnervmfi6oq\runneradmin bridge=go-acf7fefe0436 port=9100 company=FinCom Spike Co body=yes(2434 chars) idsMismatch lineGuid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000002
+  all: stub 17:32:44 recorder_lines event=cancelled guid='' mid=2 aid= vch=Receipt/1/20261002 user=runnervmfi6oq\fcuser2 bridge=go-a0b70a4805fa port=9101 company=FinCom Spike Co body=none heldWhy=this computer's Tally could not be asked whether it was cancelled here (Company 'FinCom Spike Co' is not open in Tally. Open it in TallyPrime on this computer and try again.); not sent as a cancel: held
+  all: stub 17:32:48 recorder_lines event=cancelled guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000002 mid=2 aid=5 vch=Receipt/1/20261002 user=runnervmfi6oq\runneradmin bridge=go-acf7fefe0436 port=9100 company=FinCom Spike Co body=none
+  all: stub 17:33:21 recorder_lines event=deleted guid='' mid=3 aid= vch=Receipt/2/20261002 user=runnervmfi6oq\fcuser2 bridge=go-a0b70a4805fa port=9101 company=FinCom Spike Co body=none heldWhy=this computer's Tally could not be asked whether it was deleted here (Company 'FinCom Spike Co' is not open in Tally. Open it in TallyPrime on this computer and try again.); not sent as a delete: held
+  all: stub 17:33:24 recorder_lines event=deleted guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000003 mid=3 aid= vch=Receipt/2/20261002 user=runnervmfi6oq\runneradmin bridge=go-acf7fefe0436 port=9100 company=FinCom Spike Co body=none
+  all: stub 17:34:00 recorder_lines event=created guid='' mid=2 aid= vch=Receipt/1/20261002 user=runnervmfi6oq\runneradmin bridge=go-acf7fefe0436 port=9100 company=FinCom Spike U2 body=none heldWhy=the entry was not read from Tally: Company 'FinCom Spike U2' is not open in Tally. Open it in TallyPrime on this computer and try again.
+  all: stub 17:34:04 recorder_lines event=created guid=642714e8-9543-429a-9b67-176c0831e962-00000002 mid=2 aid=2 vch=Receipt/1/20261002 user=runnervmfi6oq\fcuser2 bridge=go-a0b70a4805fa port=9101 company=FinCom Spike U2 body=yes(2434 chars)
+######## FAIL 6e attribution: 6 line(s) from bridge 1 (runneradmin, FinCom Spike Co), 6 from bridge 2 (fcuser2, FinCom Spike U2); misattributed: 6 e.g. stub 17:30:09 recorder_lines event=created guid='' mid=2 aid= vch=Receipt/1/20261002 user=runnervmfi6oq\fcuser2 bridge=go-a0b70a4805fa port=9101 company=FinCom Spike Co body=none heldWhy=the entry was not read from Tally: Company 'FinCom Spike Co' is not open in Tally. Open it in TallyPrime on this computer and try again.
+[17:34:29] ---- step 6 as one line
+######## FAIL 6 two Windows users: PASS 6a two bridges at once; PASS 6b /ping proof; PASS 6d user 2 own Tally event; PASS 6c beats; FAIL 6e attribution
+[17:34:29] ---- what is kept: the bridges' logs, install logs, settings without their keys
+  Tally :9000 voucher mid=1 aid=1 guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=5 guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000002 no=1 cancelled=True
+== results
+INFO user 2 (fcuser2) works in a Windows session of their own (session 1, by a Remote Desktop connection to 127.0.0.2); runneradmin in session 2
+PASS 6a two bridges at once: bridge 1 runneradmin on 127.0.0.1:9100 (pid 5528, session 2, go-acf7fefe0436); bridge 2 fcuser2 on 127.0.0.1:9101 (pid 10364, session 1, go-a0b70a4805fa); both listening at 17:29:00
+INFO /ping with a nonce but no Origin (own bridge): proof not given
+PASS 6b /ping proof: bridge 1 proves itself to runneradmin: ok; bridge 1 proof checked against user 2 identity fails: ok; bridge 2 proves itself to fcuser2: ok; bridge 2 proof checked against user 1 identity fails: ok; bridge 2 gives runneradmin no proof: ok; bridge 1 gives fcuser2 no proof: ok; other users refused 403 beyond /ping: ok
+PASS 1 create: Tally made mid 2 guid 6848f60a-b3f8-4695-80ae-9be85833a9db-00000002; stub 17:30:14 recorder_lines event=created guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000002 mid=2 aid=2 vch=Receipt/1/20261002 user=runnervmfi6oq\runneradmin bridge=go-acf7fefe0436 port=9100 company=FinCom Spike Co body=yes(2434 chars)
+PASS 2 alter: Tally: mid 2 AlterID 2 -> 3; stub 17:31:03 recorder_lines event=altered guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000002 mid=2 aid=3 vch=Receipt/1/20261002 user=runnervmfi6oq\runneradmin bridge=go-acf7fefe0436 port=9100 company=FinCom Spike Co body=yes(2434 chars)
+PASS 3 Alt+2 copy: Tally made mid 3 guid 6848f60a-b3f8-4695-80ae-9be85833a9db-00000003; source mid 2 AlterID still 3, no line for it; stub 17:31:50 recorder_lines event=created guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000003 mid=3 aid=4 vch=Receipt/2/20261002 user=runnervmfi6oq\runneradmin bridge=go-acf7fefe0436 port=9100 company=FinCom Spike Co body=yes(2434 chars) idsMismatch lineGuid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000002
+PASS 4 cancel: Tally cancelled mid 2 guid 6848f60a-b3f8-4695-80ae-9be85833a9db-00000002; stub 17:32:48 recorder_lines event=cancelled guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000002 mid=2 aid=5 vch=Receipt/1/20261002 user=runnervmfi6oq\runneradmin bridge=go-acf7fefe0436 port=9100 company=FinCom Spike Co body=none
+PASS 5 delete: Tally deleted mid 3 guid 6848f60a-b3f8-4695-80ae-9be85833a9db-00000003; stub 17:33:24 recorder_lines event=deleted guid=6848f60a-b3f8-4695-80ae-9be85833a9db-00000003 mid=3 aid= vch=Receipt/2/20261002 user=runnervmfi6oq\runneradmin bridge=go-acf7fefe0436 port=9100 company=FinCom Spike Co body=none
+PASS 6d user 2 own Tally event: Tally :9001 (as fcuser2) made mid 2 guid 642714e8-9543-429a-9b67-176c0831e962-00000002; stub 17:34:04 recorder_lines event=created guid=642714e8-9543-429a-9b67-176c0831e962-00000002 mid=2 aid=2 vch=Receipt/1/20261002 user=runnervmfi6oq\fcuser2 bridge=go-a0b70a4805fa port=9101 company=FinCom Spike U2 body=yes(2434 chars)
+PASS 6c beats: stub 17:34:15 beat x12 bridge=go-acf7fefe0436 user=runnervmfi6oq\runneradmin windowsUser=runnervmfi6oq\runneradmin bridgePort=9100 tallyPort=9000 dataFolder=D:\a\_temp\TallyData device=spike-computer-key-user1 computer=runnervmfi6oq | stub 17:34:21 beat x12 bridge=go-a0b70a4805fa user=runnervmfi6oq\fcuser2 windowsUser=runnervmfi6oq\fcuser2 bridgePort=9101 tallyPort=9001 dataFolder=C:\fcspike\u2data device=spike-computer-key-user2 computer=runnervmfi6oq
+FAIL 6e attribution: 6 line(s) from bridge 1 (runneradmin, FinCom Spike Co), 6 from bridge 2 (fcuser2, FinCom Spike U2); misattributed: 6 e.g. stub 17:30:09 recorder_lines event=created guid='' mid=2 aid= vch=Receipt/1/20261002 user=runnervmfi6oq\fcuser2 bridge=go-a0b70a4805fa port=9101 company=FinCom Spike Co body=none heldWhy=the entry was not read from Tally: Company 'FinCom Spike Co' is not open in Tally. Open it in TallyPrime on this computer and try again.
+FAIL 6 two Windows users: PASS 6a two bridges at once; PASS 6b /ping proof; PASS 6d user 2 own Tally event; PASS 6c beats; FAIL 6e attribution
+== round 4 end

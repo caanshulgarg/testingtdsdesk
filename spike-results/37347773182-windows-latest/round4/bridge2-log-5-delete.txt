@@ -1,0 +1,2 @@
+2026-10-05 17:33:21  Recorder: FinCom Spike Co: delete of mid 3: held: this computer's Tally could not be asked whether it was deleted here (Company 'FinCom Spike Co' is not open in Tally. Open it in TallyPrime on this computer and try again.); not sent as a delete: held
+2026-10-05 17:33:21  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (Company 'FinCom Spike Co' is not open in Tally. Open it in TallyPrime on this computer and try again.); sent without it (FinCom holds the line until a body comes)
