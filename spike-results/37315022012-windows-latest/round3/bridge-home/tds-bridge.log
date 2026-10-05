@@ -1,0 +1,20 @@
+2026-10-05 13:16:39  FinCom Bridge 2.2.3 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs in a window
+2026-10-05 13:16:39  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+2026-10-05 13:16:39  Recorder: re-scan of the add-on's files for 2.2.3: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+2026-10-05 13:16:39  Check:  - 
+2026-10-05 13:16:42  Company FinCom Spike Co: its Tally GUID 55f2a394-7ecf-4789-a4a9-6bbc935d624f is held from now on
+2026-10-05 13:16:43  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=1, ALTMSTID=211 (reading is prospective only: the bridge follows what changes after this)
+2026-10-05 13:16:43  Company FinCom Spike Co: change numbers read with form b: ALTVCHID=1, ALTMSTID=211
+2026-10-05 13:16:43  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=1, ALTMSTID=211)
+2026-10-05 13:17:23  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 95549826…): asking Tally by MasterID
+2026-10-05 13:17:28  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 95549826…): asking Tally by type and number (Tally gave no voucher with MasterID 2 on 02-Oct-2026)
+2026-10-05 13:17:28  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-05 13:17:28  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 95549826…): held: Tally gave no voucher with MasterID 2 on 02-Oct-2026; asked by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (sent without its body and GUID; FinCom holds the line until it is resolved)
+2026-10-05 13:18:49  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 3fba3a06…): asking Tally by MasterID
+2026-10-05 13:18:53  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 3fba3a06…): asking Tally by type and number (Tally gave no voucher with MasterID 2 on 02-Oct-2026)
+2026-10-05 13:18:53  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-05 13:18:53  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 3fba3a06…): held: Tally gave no voucher with MasterID 2 on 02-Oct-2026; asked by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (sent without its body and GUID; FinCom holds the line until it is resolved)
+2026-10-05 13:20:09  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 3, line b0d82d88…): asking Tally by MasterID
+2026-10-05 13:20:14  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 3, line b0d82d88…): asking Tally by type and number (Tally gave no voucher with MasterID 3 on 02-Oct-2026)
+2026-10-05 13:20:14  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-05 13:20:14  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 3, line b0d82d88…): held: Tally gave no voucher with MasterID 3 on 02-Oct-2026; asked by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (sent without its body and GUID; FinCom holds the line until it is resolved)
