@@ -143,7 +143,7 @@ func (v *tVch) xml() string {
 
 func (f *standTally) add(date, party, no, narr, amt string) *tVch {
 	f.alter++
-	v := &tVch{guid: fmt.Sprintf("g-%d", f.alter), master: fmt.Sprint(f.alter), date: date, typ: "Journal", no: no, narr: narr, party: party, alter: f.alter,
+	v := &tVch{guid: fmt.Sprintf("%s-%08x", f.guid, f.alter), master: fmt.Sprint(f.alter), date: date, typ: "Journal", no: no, narr: narr, party: party, alter: f.alter,
 		lines: [][2]string{{party, amt}, {"Sales", strings.TrimPrefix("-"+amt, "--")}}}
 	f.vch = append(f.vch, v)
 	return v
