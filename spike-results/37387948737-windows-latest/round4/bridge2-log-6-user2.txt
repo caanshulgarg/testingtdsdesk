@@ -1,0 +1,2 @@
+2026-10-05 23:33:47  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 5250210b…): asking Tally by MasterID
+2026-10-05 23:33:47  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 5250210b…): taken: Tally's GUID 7406232d-9fb7-4bcc-8b76-7bc4a1dc575b-00000002, AlterID 2
