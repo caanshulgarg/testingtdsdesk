@@ -1,30 +1,68 @@
-# Spike: can a real TallyPrime run on GitHub's hosted Windows runner? (branch tally-real-spike only)
-# Results (log + screenshots) are committed back to this branch under spike-results/<run>-<os>/,
-# because the job logs and artifacts live on a host the analysing session cannot reach.
+# Spike: a real TallyPrime on GitHub's hosted Windows runner (branch tally-real-spike only).
+# Round 4: bridge 2.3.0 (per-user bridges) built from a ref (input bridge_ref, default per-user-bridge) and proven on real
+# Tally against a local stub cloud (stub.py): create, alter, Alt+2 copy, cancel, delete, and two bridges of two Windows
+# users side by side (flow4.ps1). Results (log, stub lines, screenshots) are committed back under spike-results/<run>-<os>/
+# and kept as an artifact. The job fails when any step fails.
 name: Tally real spike
 on:
   push:
     branches: [tally-real-spike]
     paths: ['.github/workflows/tally-real.yml', '.github/tally-spike/**']
   workflow_dispatch:
+    inputs:
+      bridge_ref:
+        description: 'Branch, tag or commit of the bridge to build (bridge-go/)'
+        default: per-user-bridge
 permissions:
   contents: write
 concurrency:
   group: tally-real-spike
   cancel-in-progress: false
 jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.sha.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.bridge_ref || 'per-user-bridge' }}
+      - id: sha
+        run: |
+          echo "sha=$(git rev-parse HEAD)" | tee -a "$GITHUB_OUTPUT"
+          git log -1 --format='bridge source: %H %s' | tee bridge-source.txt
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: bridge-go/go.mod
+          cache-dependency-path: bridge-go/go.sum
+      - name: NSIS (makensis)
+        run: sudo apt-get update -q && sudo apt-get install -y -q nsis
+      - name: Program and setup (built only to be tested here)
+        working-directory: bridge-go
+        run: |
+          FORCE_REBUILD=1 ./build.sh
+          cp addon/FinComRecorder.tdl dist/
+          cp ../bridge-source.txt dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bridge-dist
+          path: bridge-go/dist/
+          if-no-files-found: error
+
   tally:
+    needs: build
     strategy:
       fail-fast: false
       max-parallel: 1
       matrix:
         os: [windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 50
     env:
       RES: ${{ github.workspace }}\spike-results\${{ github.run_id }}-${{ matrix.os }}
       SHOTS: ${{ github.workspace }}\spike-results\${{ github.run_id }}-${{ matrix.os }}
       LOG: ${{ github.workspace }}\spike-results\${{ github.run_id }}-${{ matrix.os }}\log.txt
+      BRIDGE_SHA: ${{ needs.build.outputs.sha }}
     defaults:
       run:
         shell: pwsh
@@ -32,6 +70,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: bridge-dist
+          path: bridge-dist
       - name: Desktop check
         run: |
           New-Item -ItemType Directory -Force $env:RES | Out-Null
@@ -49,22 +91,29 @@ jobs:
         continue-on-error: true
         run: |
           & .github/tally-spike/flow.ps1 *>&1 | Tee-Object -FilePath $env:LOG -Append; exit 0
-      - name: Round 3 (the real bridge against this Tally, a local stub cloud)
-        continue-on-error: true
+      - name: Round 4 (bridge 2.3.0 built from the ref, two Windows users, a local stub cloud)
         env:
-          BRIDGE_REF: 9076c77
-          BRIDGE_VER: 2.2.4
+          BRIDGE_DIST: ${{ github.workspace }}\bridge-dist
         run: |
-          & .github/tally-spike/flow3.ps1 *>&1 | Tee-Object -FilePath "$env:RES\round3.log" -Append; exit 0
+          & .github/tally-spike/flow4.ps1 *>&1 | Tee-Object -FilePath "$env:RES\round4.log" -Append
+          $r = Join-Path $env:RES 'round4\results.txt'
+          if (Test-Path $r) { Get-Content $r | ForEach-Object { if ($_ -like 'FAIL*') { Write-Host "::error::$_" } else { Write-Host "::notice::$_" } } }
+          if (-not (Test-Path $r) -or (Select-String -Path $r -Pattern '^FAIL' -Quiet)) { exit 1 }
+          exit 0
+      - name: Artifact (stub lines, screenshots, logs)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: round4-${{ github.run_id }}
+          path: spike-results/${{ github.run_id }}-${{ matrix.os }}/
       - name: Commit results back to the branch
         if: always()
         run: |
           Get-Process tally -ErrorAction SilentlyContinue | Stop-Process -Force
           git config user.name "tally-spike"; git config user.email "tally-spike@users.noreply.github.com"
-          Select-String -Path $env:LOG -Pattern 'Caption|company created' | Select-Object -First 3 | ForEach-Object { $m = $_.Line; if ($m.Length -gt 300) { $m = $m.Substring(0, 300) }; Write-Host "::notice::$m" }
           git status --short | Select-Object -First 20
           git add spike-results
-          git commit -q -m "spike results ${{ github.run_id }} ${{ matrix.os }}`n`nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`nClaude-Session: https://claude.ai/code/session_01LprHoXx2ACgDW2AjxNH8wN"
+          git commit -q -m "spike results ${{ github.run_id }} ${{ matrix.os }} (bridge ${{ needs.build.outputs.sha }})`n`nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`nClaude-Session: https://claude.ai/code/session_01LprHoXx2ACgDW2AjxNH8wN"
           for ($i = 0; $i -lt 5; $i++) {
             git pull -q --rebase --autostash origin tally-real-spike
             git push -q origin HEAD:refs/heads/tally-real-spike
