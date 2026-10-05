@@ -768,6 +768,11 @@ func myTallyFor(ports []any) (int, string) {
 			break
 		}
 	}
+	myTallyMu.Lock()
+	defer myTallyMu.Unlock()
+	if !isFake() && myTallyPort == port && port != 0 && time.Since(myTallyAt) < 5*time.Minute {
+		return port, myTallyData // Windows' process list is read at most every 5 minutes for this
+	}
 	data := ""
 	ok, procs, lis := netState()
 	if ok {
@@ -787,5 +792,13 @@ func myTallyFor(ports []any) (int, string) {
 			}
 		}
 	}
+	myTallyAt, myTallyPort, myTallyData = time.Now(), port, data
 	return port, data
 }
+
+var (
+	myTallyMu   sync.Mutex
+	myTallyAt   time.Time
+	myTallyPort int
+	myTallyData string
+)
