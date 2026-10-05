@@ -90,7 +90,7 @@
     }
   },
   "tally": true,
-  "tallyPort": 33975,
+  "tallyPort": 9000,
   "tallyState": "open",
   "trialTools": false,
   "updating": false,

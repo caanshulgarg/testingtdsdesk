@@ -315,6 +315,10 @@ func TestBeatCompaniesFixture(t *testing.T) {
 	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)
 	enc.SetIndent("", "  ")
+	// 2.3.0: the stand Tally's port changes every run; the fixture keeps Tally's usual port, so it does not change by itself
+	if toInt(b["tallyPort"]) > 0 {
+		b["tallyPort"] = 9000
+	}
 	if err := enc.Encode(b); err != nil {
 		t.Fatal(err)
 	}
