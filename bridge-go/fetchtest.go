@@ -198,8 +198,6 @@ func runFetchTest(o fetchTestOpts, ask func() string) (M, error) {
 	if fetchTestPosting() {
 		return nil, errors.New(fetchTestPostingWords)
 	}
-	measuring.Add(1) // the forms are measure-only
-	defer measuring.Add(-1)
 	port, err := findCompanyPort(o.company, 0)
 	if err != nil {
 		return nil, err
@@ -226,7 +224,12 @@ func runFetchTest(o fetchTestOpts, ask func() string) (M, error) {
 		}
 		x := fetchTestRequest(l, o.company, o.date, o.typ, o.no, mid)
 		t0 := time.Now()
+		// the forms are measure-only: measuring is raised around each send only (2.2.3 review M1), never while the
+		// test waits for the person's MasterID (up to 10 minutes), so the measure-only gate and the self-watch stay as
+		// they are the rest of the time
+		measuring.Add(1)
 		raw, err := invokeTally(fetchTestTC, port, x, fetchTestSec)
+		measuring.Add(-1)
 		ms := time.Since(t0).Milliseconds()
 		head := fmt.Sprintf("%s%s. %s: sent %s: %d ms", pre, l, what, fetchTestPeriodSent(x), ms)
 		if err != nil {
