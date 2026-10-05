@@ -30,6 +30,12 @@
 --      released_at / released_by untouched (they mean an owner's release; as 50, the words are the record). Run again they
 --      stay held with these words (51's rule 1) until their ":resolved" line comes. Rows whose GUID is their MasterID's (25413
 --      with ...00006345) keep 'duplicate'.
+--   REVIEW of 51 (f1ea268): M the inferred mismatch (no flag) and the correction only for a GUID under the line's own company
+--   GUID (an entry from Tally sync or an XML import keeps another company's prefix and that company's MasterID: genuine); the
+--   correction bounded to rows received before 06-Oct-2026 00:00 India time. L1 a ":resolved" line ending 'stale' replaces too.
+--   L2 a held flagged delete / cancel is never released by a Day Book (which entry it meant is not sure); it is replaced when the
+--   same change is applied under Tally's own GUID (its ":resolved" line, or the GUID its MasterID makes under its company).
+--   L3 idsMismatch read in any case. L4 a matched short line keeps 50's words, the bridge's heldWhy after them.
 --   Function replaced: tally_recorder_line (50's), same arguments, security definer, search_path = public, pg_temp, granted to
 --   nobody. tally_recorder_apply, tally_recorder_release_day, tally_ingest_delete and the ingest functions are not touched.
 --   tally-ingest (index.ts) must pass idsMismatch, lineGuid and heldWhy on (cleanRecorderLine builds a new line object).
@@ -77,11 +83,14 @@ begin
   -- 51: the line carries its entry (Tally's own, under the line's GUID)
   hb := og is not null and not ph and exists (select 1 from jsonb_array_elements(case when jsonb_typeof(p_line->'vouchers') = 'array' then p_line->'vouchers' else '[]'::jsonb end) x where x->>'guid' = og);
   -- 51: the ids did not belong together: the bridge says so (idsMismatch), or a line without a body whose GUID is not the GUID its
-  -- MasterID makes (its last 8 hex digits are not the MasterID in hex; an older bridge's line, or a row 51 held again)
+  -- MasterID makes (its last 8 hex digits are not the MasterID in hex; an older bridge's line, or a row 51 held again). Review M:
+  -- inferred only for a GUID under the line's own company GUID: an entry from Tally sync or an XML import keeps another
+  -- company's prefix and that company's MasterID, a genuine Tally GUID
   mdv := case when coalesce(mid, '') ~ '^[0-9]{1,10}$' then mid::bigint else 0 end;
   mm := ev in ('created', 'altered', 'imported', 'deleted', 'cancelled') and coalesce(
           'true' in (lower(coalesce(p_line->>'idsMismatch', '')), lower(coalesce(p_line->'payload'->>'idsMismatch', '')), lower(coalesce(rp->>'idsMismatch', '')))
           or (ev in ('created', 'altered', 'imported') and not hb and not ph and og ~ '-[0-9A-Fa-f]{8}$' and mdv between 1 and 4294967295
+              and lcg is not null and lower(left(og, length(lcg) + 1)) = lower(lcg) || '-'
               and lower(right(og, 8)) <> lpad(to_hex(mdv), 8, '0')), false);
   -- 50 (review M1): the company's GUID prefix (the placeholder's, else the line's company GUID; never guessed) and, for a line
   -- without its entry's real GUID, the GUID its MasterID makes: "<company GUID>-<MasterID in 8 hex digits>"
@@ -203,8 +212,9 @@ begin
             stt := 'held'; wy := case when m_done and sh_changed then format('FinCom posting %s matched; changed in Tally after posting: the next full line or Day Book upload applies it', m_fid)
                                       when m_done then format('FinCom posting %s matched; no entry body (its posted XML could not be read): waiting for the entry''s details from FinCom Bridge (it asks Tally again on its next run); or upload this day''s Day Book', m_fid)
                                       else 'waiting for the entry''s details from FinCom Bridge (it asks Tally again on its next run); or upload this day''s Day Book' end;     -- 50: what releases it
-            -- 51: the bridge's plain reason when it gave one (the release rules stay 50's)
-            if hw is not null then wy := case when m_done then format('FinCom posting %s matched; %s', m_fid, hw) else hw end; end if;
+            -- 51: the bridge's plain reason when it gave one (the release rules stay 50's); review L4: after 50's words of a matched
+            -- short line, never instead of them
+            if hw is not null then wy := case when m_done then wy || '; ' || hw else hw end; end if;
           else
             res := tally_ingest_entries(p_book, vs, p_line->'lines', not once);
             if coalesce((res->>'locked')::boolean, false) then stt := 'held'; wy := res->>'refused';
@@ -320,8 +330,9 @@ begin
          and (r.line_id || ':resolved' = p_line->>'line_id'
          -- 51: a held line whose ids did not belong together (the bridge said so, or its stored GUID is not its MasterID's) is
          -- replaced by its ":resolved" line only, never by its GUID, MasterID, or type, number and date
-         or (coalesce(r.payload->>'idsMismatch', '') <> 'true'
+         or (lower(coalesce(r.payload->>'idsMismatch', '')) <> 'true'     -- review L3: in any case
              and not coalesce(r.object_guid ~ '-[0-9A-Fa-f]{8}$' and r.object_guid !~ '-0{8}$'
+                              and nullif(r.company_guid, '') is not null and lower(left(r.object_guid, length(r.company_guid) + 1)) = lower(r.company_guid) || '-'     -- review M
                               and (case when coalesce(r.master_id, '') ~ '^[0-9]{1,10}$' then r.master_id::bigint else 0 end) between 1 and 4294967295
                               and lower(right(r.object_guid, 8)) <> lpad(to_hex(case when coalesce(r.master_id, '') ~ '^[0-9]{1,10}$' then r.master_id::bigint else 0 end), 8, '0'), false)
          and ((r.object_guid = og and coalesce(r.alter_id, 0) <= coalesce(alt, 0))
@@ -351,10 +362,24 @@ begin
       end loop;
     end if;
     -- 51: the line carrying the held line's entry (its line_id + ":resolved") that ends 'duplicate' (the copy holds Tally's entry
-    -- already): the entry is in, so the held line is replaced as by an applied one
-    if stt = 'duplicate' and ev in ('created', 'altered', 'imported') and og is not null and not ph and coalesce(p_line->>'line_id', '') like '%:resolved' then
+    -- already) or, review L1, 'stale' (the copy holds a newer version): the entry is in, so the held line is replaced as by an
+    -- applied one
+    if stt in ('duplicate', 'stale') and ev in ('created', 'altered', 'imported') and og is not null and not ph and coalesce(p_line->>'line_id', '') like '%:resolved' then
       update tally_recorder_lines r set state = 'replaced', held_why = format('replaced by line %s (the entry''s details arrived)', rid)
        where r.book_id = p_book and r.state = 'held' and r.id <> rid and r.event in ('created', 'altered', 'imported') and r.line_id || ':resolved' = p_line->>'line_id';
+    end if;
+    -- 51 (review L2): a held delete / cancel whose ids did not belong together (no GUID of its own) is never applied by a guess (no
+    -- Day Book release: which entry it meant is not known for sure). It is replaced once the same change is applied under Tally's
+    -- own GUID: its ":resolved" line, or a delete (cancel) of the GUID its MasterID makes under its company GUID; that line did
+    -- the deletion (cancellation) itself
+    if stt = 'applied' and ev in ('deleted', 'cancelled') and og is not null and not ph then
+      update tally_recorder_lines r set state = 'replaced',
+             held_why = format('replaced by line %s (the %s came with the entry''s own GUID)', rid, case when ev = 'deleted' then 'deletion' else 'cancellation' end)
+       where r.book_id = p_book and r.state = 'held' and r.id <> rid and r.event = ev
+         and (r.line_id || ':resolved' = p_line->>'line_id'
+              or (lower(coalesce(r.payload->>'idsMismatch', '')) = 'true' and r.object_guid is null and nullif(r.company_guid, '') is not null
+                  and (case when coalesce(r.master_id, '') ~ '^[0-9]{1,10}$' then r.master_id::bigint else 0 end) between 1 and 4294967295
+                  and lower(r.company_guid) || '-' || lpad(to_hex(case when coalesce(r.master_id, '') ~ '^[0-9]{1,10}$' then r.master_id::bigint else 0 end), 8, '0') = lower(og)));
     end if;
   exception when others then
     stt := 'failed'; wy := left(sqlerrm, 300);
@@ -374,6 +399,10 @@ update public.tally_recorder_lines r set state = 'held',
  where r.state = 'duplicate' and r.event in ('created', 'altered', 'imported') and jsonb_typeof(r.payload) = 'object'
    and coalesce(r.payload->>'object_guid', '') ~ '-[0-9A-Fa-f]{8}$' and r.payload->>'object_guid' !~ '-0{8}$'
    and (case when coalesce(r.payload->>'master_id', '') ~ '^[0-9]{1,10}$' then (r.payload->>'master_id')::bigint else 0 end) between 1 and 4294967295
-   and lower(right(r.payload->>'object_guid', 8)) <> lpad(to_hex(case when coalesce(r.payload->>'master_id', '') ~ '^[0-9]{1,10}$' then (r.payload->>'master_id')::bigint else 0 end), 8, '0');
+   and lower(right(r.payload->>'object_guid', 8)) <> lpad(to_hex(case when coalesce(r.payload->>'master_id', '') ~ '^[0-9]{1,10}$' then (r.payload->>'master_id')::bigint else 0 end), 8, '0')
+   -- review M: only a GUID under the line's own company GUID (a synced / imported entry keeps another company's prefix: genuine)
+   and coalesce(r.payload->>'company_guid', '') <> '' and lower(left(r.payload->>'object_guid', length(r.payload->>'company_guid') + 1)) = lower(r.payload->>'company_guid') || '-'
+   -- review M: bounded to the rows 50 marked, received on or before 05-Oct-2026 (India time)
+   and r.received_at < timestamptz '2026-10-06 00:00:00+05:30';
 
 commit;

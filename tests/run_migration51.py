@@ -21,6 +21,12 @@ without the entry's body). On throwaway PostgreSQL (pg_stand, port 30510; never 
      nothing more changes.
   4. a later line carrying the entry, line_id = the held line's + ":resolved", replaces it ('replaced') for the re-held rows
      and the 2.2.2 held lines, whether it ends applied or 'duplicate' (the copy holding Tally's entry already).
+  REVIEW of 51 (f1ea268): M the inferred mismatch only for a GUID under the line's own company GUID (an entry from Tally sync or
+     an XML import keeps another company's prefix and its own source MasterID: genuine), and the correction likewise and
+     bounded to rows received on or before 05-Oct-2026 (IST); L1 a ":resolved" line ending 'stale' replaces too; L2 a held
+     flagged delete / cancel replaced by the later delete / cancel applied under Tally's GUID (its ":resolved" line, or the
+     GUID its MasterID makes under its company): nothing deleted on a guess; L3 the replace guard reads idsMismatch in any case;
+     L4 a matched short line keeps 50's words, heldWhy appended.
   The file: begin; set local lock_timeout = '10s'; commit; no "delete from" (comments too); no drop / truncate; every function
   security definer, search_path = public, pg_temp, granted to nobody as 50's tally_recorder_line; md5(prosrc) = the file's
   text between its $function$ marks (printed). The trial balance 0.00 and the day cache equal to one computed afresh.
@@ -47,6 +53,7 @@ def part(path, name):
 F, OWNER = "99999999-9999-9999-9999-999999999999", "55555555-5555-5555-5555-555555555555"
 B, B2, D1 = "f79e4bc3-871d-4482-874d-71c5fb2a1b33", "f79e4bc3-871d-4482-874d-000000000051", "58d73e82-57f3-4f72-9f3d-14cc93a5b2b1"
 CG = "7c5fd9b3-7235-4cbb-b4cd-1124be599189"                                                   # GARG SHEKHAR & COMPANY's company GUID
+FG = "0d8a1c2e-1111-2222-3333-444455556666"                                                   # another company's GUID (an entry synced or imported from it)
 PH = CG + "-00000000"
 G = lambda mid: CG + "-%08x" % mid                                                            # the GUID a MasterID makes
 MARKED = "marked duplicate on 05-Oct-2026 on a GUID that was not this entry's (%s); held until FinCom Bridge 2.2.2 sends the entry as Tally gives it"
@@ -122,8 +129,12 @@ try:
     K1 = sline("k1", "altered", G(0x6345), "25413", 70000, "345", D4)       # the GUID is its MasterID's: a true duplicate
     P1 = sline("p1", "created", PH, "25414", 0, "346", D4)                  # the placeholder, MasterID 25414: a true duplicate
     A1 = dict(sline("a1", "created", G(0x6399), "25600", 70010, "604", "2026-10-02"), **body(G(0x6399), 70010, "604", "Debtor D", 50, "2026-10-02"))   # applied, ids not together
-    got = states(apply([X1, X2, X3, K1, P1, A1]))
-    ok([s for s, _ in got] == ["duplicate"] * 5 + ["applied"], "50: the staging-like lines 25682/...6345, 25683/...6346, 25684/...6332 'duplicate' (wrong), 25413/...6345 and the placeholder 'duplicate', the bodied one applied (%s)" % got)
+    day("2026-10-01", [V(FG + "-00001234", 70003, "801", "Debtor I")], LN(FG + "-00001234", "Debtor I", 60))     # an imported entry: another company's GUID prefix
+    F1 = sline("f1", "altered", FG + "-00001234", "25750", 70003, "801", "2026-10-01")   # its GUID's hex is the SOURCE company's MasterID: genuine, not a mismatch
+    LT = sline("late1", "altered", G(0x6346), "25760", 70001, "802", D4)                 # a mismatch received after 05-Oct-2026 (IST): beyond the correction
+    got = states(apply([X1, X2, X3, K1, P1, A1, F1, LT]))
+    f1_why = got[6][1]
+    ok([s for s, _ in got] == ["duplicate"] * 5 + ["applied"] + ["duplicate"] * 2, "50: the staging-like lines 25682/...6345, 25683/...6346, 25684/...6332 'duplicate' (wrong), 25413/...6345 and the placeholder 'duplicate', the bodied one applied (%s)" % got)
     # the proof book: each idsMismatch line as 2.2.2 sends it, through 50
     PM1 = sline("pm1", "altered", G(0x6345), "25686", 70000, "701", D4, idsMismatch=True, lineGuid=G(0x6345))                               # by GUID
     PM2 = sline("pm2", "created", "", "25413", None, "702", D4, idsMismatch=True, lineGuid=G(0x6399))                                        # by MasterID
@@ -131,7 +142,9 @@ try:
     PM4 = dict(sline("pm4", "altered", G(25413), "25413", 70000, "345", D4, idsMismatch=True, lineGuid=G(0x6332)), **body(G(25413), 70000, "345", "Debtor A", 100, D4))   # Tally's entry, the copy's AlterID
     got = states(apply([PM1, PM2, PM3, PM4], book=B2))
     ok([s for s, _ in got] == ["duplicate"] * 4, "50: every idsMismatch line 'duplicate' on some lookup (GUID, MasterID, type+number+date, the copy's AlterID) (%s)" % got)
-    pre = {k: row(k) for k in ("x1", "x2", "x3", "k1", "p1", "a1")}
+    # the arrival times as on staging (never the test machine's clock)
+    db.sql("update tally_recorder_lines set received_at = '2026-10-05 08:00:00+05:30'; update tally_recorder_lines set received_at = '2026-10-06 09:00:00+05:30' where line_id = 'late1'")
+    pre = {k: row(k) for k in ("x1", "x2", "x3", "k1", "p1", "a1", "f1", "late1")}
     pre2 = {k: row(k, B2) for k in ("pm1", "pm2", "pm3", "pm4")}
     books_ok("before 51")
     # ---------------------------------------------------------------- 51, twice
@@ -166,6 +179,8 @@ try:
     ok(all(now[k]["bm"] == pre[k]["bm"] and now[k]["pm"] == pre[k]["pm"] and now[k]["rel"] == "" and now[k]["relby"] == "" for k in pre), "body and payload unchanged; released_at / released_by untouched")
     ok((now["k1"]["state"], now["p1"]["state"], now["a1"]["state"]) == ("duplicate", "duplicate", "applied") and all(now[k]["xm"] == pre[k]["xm"] for k in ("k1", "p1", "a1")),
        "25413/...00006345 (its own GUID) and the placeholder keep 'duplicate'; the applied mismatched row untouched (not rewritten)")
+    ok(now["f1"]["state"] == "duplicate" and now["f1"]["xm"] == pre["f1"]["xm"], "review M: a GUID under another company's prefix (synced / imported) with a different local MasterID keeps 'duplicate' (%s)" % now["f1"]["state"])
+    ok(now["late1"]["state"] == "duplicate" and now["late1"]["xm"] == pre["late1"]["xm"], "review M: a mismatched 'duplicate' received after 05-Oct-2026 (IST) is beyond the correction (%s)" % now["late1"]["state"])
     now2 = {k: row(k, B2) for k in pre2}
     ok({k: v["state"] for k, v in now2.items()} == {"pm1": "held", "pm2": "duplicate", "pm3": "duplicate", "pm4": "duplicate"} and now2["pm1"]["why"] == MARKED % G(0x6345),
        "the proof book: only the row whose payload GUID is not its MasterID's re-held (GUID ''-lines and Tally's own pair keep their verdict) (%s)" % {k: v["state"] for k, v in now2.items()})
@@ -190,6 +205,8 @@ try:
     ok(got[5] == ("held", MISMATCH % G(0x6345)), "a delete with the ids not together: held, nothing deleted (%s)" % (got[5],))
     ok(got[6] == ("held", MISMATCH % G(0x6345)), "an older bridge's line, no flag, GUID ...6345 with MasterID 25690, no body: held, not 'duplicate' (%s)" % (got[6],))
     ok(not any(s == "duplicate" for s, _ in got), "none of them 'duplicate'")
+    got = states(apply([dict(F1, line_id="f2")]))
+    ok(got == [("duplicate", f1_why)], "review M: a new line with another company's GUID prefix behaves exactly as under 50 (%s)" % got)
     books_ok("idsMismatch lines")
     # ---------------------------------------------------------------- 2. heldWhy on any line without a body; 50's release kept
     print("== 2. heldWhy on a line without a body")
@@ -231,6 +248,37 @@ try:
     ok(sw("n-m1")[0] == "held" and sw("n-d1")[0] == "held", "lines without their \":resolved\" line stay held")
     ok(db.one("select count(*) from tally_vouchers where guid ~ '-0{8}$'") == "0", "never an entry under the placeholder GUID")
     books_ok("resolved")
+    # ---------------------------------------------------------------- the review of 51: L1 - L4
+    print("== review L1: a \":resolved\" line ending 'stale'")
+    got = states(apply([sline("n-m7", "created", "", "25770", None, "810", "2026-10-07", idsMismatch=True, lineGuid=G(0x6345))]))
+    day("2026-10-07", [V(G(25770), 70200, "810", "Debtor J")], LN(G(25770), "Debtor J", 15))
+    ok(got == [("held", MISMATCH % G(0x6345))] and sw("n-m7")[0] == "held", "a flagged line, its entry's Day Book stored: still held (%s)" % (sw("n-m7"),))
+    got = states(apply([dict(sline("n-m7:resolved", "altered", G(25770), "25770", 70150, "810", "2026-10-07"), **body(G(25770), 70150, "810", "Debtor J", 15, "2026-10-07"))]))
+    ok(got[0][0] == "stale" and sw("n-m7") == ("replaced", REPLACED % row("n-m7:resolved")["id"]), "its \":resolved\" line older than the copy's version: 'stale', and the held line replaced (%s, %s)" % (got, sw("n-m7")))
+    print("== review L2: a held flagged delete / cancel")
+    got = states(apply([sline("n-m8", "cancelled", "", "25780", 70305, "811", "2026-10-08", idsMismatch=True, lineGuid=G(0x6346))]))
+    ok(got == [("held", MISMATCH % G(0x6346))], "a flagged cancel: held (%s)" % got)
+    day("2026-10-08", [V(G(25686), 70290, "701", "Debtor K"), V(G(25780), 70295, "811", "Debtor L")], LN(G(25686), "Debtor K", 25) + LN(G(25780), "Debtor L", 35))
+    ok(sw("n-m6")[0] == "held" and sw("n-m8")[0] == "held" and vch(G(25686)).get("deleted") == "f", "the Day Book holding their MasterIDs' entries: both still held, nothing deleted on a guess")
+    got = states(apply([sline("n-m6b", "deleted", G(25686), "25686", 70300, "701", "2026-10-08"), sline("n-m8:resolved", "cancelled", G(25780), "25780", 70310, "811", "2026-10-08")]))
+    ok([s for s, _ in got] == ["applied", "applied"] and vch(G(25686)).get("deleted") == "t", "the later delete / cancel under Tally's GUID applied (%s)" % got)
+    ok(sw("n-m6") == ("replaced", "replaced by line %s (the deletion came with the entry's own GUID)" % row("n-m6b")["id"]) and sw("n-m8") == ("replaced", "replaced by line %s (the cancellation came with the entry's own GUID)" % row("n-m8:resolved")["id"]),
+       "the held flagged delete replaced by the delete under the GUID its MasterID makes; the cancel by its \":resolved\" line (%s, %s)" % (sw("n-m6"), sw("n-m8")))
+    books_ok("L2")
+    print("== review L3: idsMismatch in any case")
+    got = states(apply([sline("n-m9", "created", "", "25790", None, "812", "2026-10-09", idsMismatch="True", lineGuid=G(0x6332))]))
+    ok(got == [("held", MISMATCH % G(0x6332))], "idsMismatch \"True\": held as a flagged line (%s)" % got)
+    got = states(apply([dict(sline("n-other", "created", G(25790), "25790", 70320, "812", "2026-10-09"), **body(G(25790), 70320, "812", "Debtor M", 45, "2026-10-09"))]))
+    ok(got[0][0] == "applied" and sw("n-m9")[0] == "held", "the line applied under the GUID its MasterID makes (not its \":resolved\" line) does not replace it (%s)" % (sw("n-m9"),))
+    books_ok("L3")
+    print("== review L4: a matched short line keeps 50's words, heldWhy appended")
+    J = "00000051-0000-0000-0000-000000000001"
+    db.sql("insert into tally_post_jobs (id, firm_id, client_id, company, device_id, payload, n, status, results, taken_at) values (%s, %s, 'c1', 'GARG SHEKHAR & COMPANY', %s, '{\"vouchers\": []}', 1, 'done', '[]', now());"
+           "insert into tally_post_ids (firm_id, client_id, fincom_id, job_id, entry_id, live, accepted_at) values (%s, 'c1', 'FC-51', %s, 'e51', true, now())" % (q(J), q(F), q(D1), q(F), q(J)))
+    HW4 = "Tally's entry could not be read after the change (asked 1 of 20 times)"
+    got = states(apply([sline("s1", "altered", G(25800), "25800", 70400, "820", D4, fid="FC-51", short=True, heldWhy=HW4)]))
+    ok(got == [("held", "FinCom posting FC-51 matched; changed in Tally after posting: the next full line or Day Book upload applies it; " + HW4)], "50's words for a matched short line, the bridge's after them (%s)" % got)
+    books_ok("L4")
     print("\n  md5(prosrc) of 51's functions (after applying on the stand):")
     for k, v in md5s.items(): print("    %-60s %s" % (k, v))
 finally:
