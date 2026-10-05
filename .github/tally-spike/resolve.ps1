@@ -22,7 +22,16 @@ foreach ($p in $pages) {
     foreach ($f in $found) { Write-Host "   link: $f"; $links.Add($f) }
   } catch { Write-Host "GET $p FAILED: $($_.Exception.Message)" }
 }
-$cand = $links | Where-Object { $_ -match '(?i)prime.*\.exe(\?|$)' } | Sort-Object -Unique
+# The download page's buttons call ERP9DownloadLater() -> DownloadResource(.., '<id>') -> files_json[<id>] in DownloadUtility-india.js
+try {
+  $js = (Invoke-WebRequest -Uri 'https://tallysolutions.com/utility/js/DownloadUtility-india.js' -UserAgent $ua -UseBasicParsing -TimeoutSec 60).Content
+  $id = [regex]::Match($js, 'function ERP9DownloadLater\(\)\{\s*DownloadResource\([^,]+,\s*''(\d+)''').Groups[1].Value
+  $json = [regex]::Match($js, 'var files_json\s*=\s*(\{.*?\})\s*;?\s*\r?\n').Groups[1].Value
+  $u = ($json | ConvertFrom-Json).$id
+  Write-Host "ERP9DownloadLater -> file id $id -> $u"
+  if ($u) { $links.Insert(0, $u) }
+} catch { Write-Host "files_json parse failed: $_" }
+$cand = $links | Where-Object { $_ -match '(?i)(prime.*\.exe|/TP/Full/setup\.exe)(\?|$)' } | Select-Object -Unique
 Write-Host "Installer candidates:"; $cand | ForEach-Object { Write-Host "  $_" }
 $extra = @($env:TALLY_URL) | Where-Object { $_ }
 $try = @($extra) + @($cand)

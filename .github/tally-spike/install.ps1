@@ -17,11 +17,11 @@ foreach ($sw in $switches) {
   $p = Start-Process -FilePath $setup -ArgumentList $sw -PassThru
   $done = $p.WaitForExit(30000)
   & "$PSScriptRoot\shot.ps1" "install-$i-30s"
-  if (-not $done) { $done = $p.WaitForExit(210000) }
+  if (-not $done) { $done = $p.WaitForExit(120000) }
   if ($done) { Write-Host "  exit code: $($p.ExitCode)" } else {
-    Write-Host "  still running after 240 s; windows:"
+    Write-Host "  still running after 150 s; windows:"
     Get-Process | Where-Object { $_.MainWindowTitle } | Format-Table Id, ProcessName, MainWindowTitle -AutoSize | Out-String | Write-Host
-    & "$PSScriptRoot\shot.ps1" "install-$i-240s"
+    & "$PSScriptRoot\shot.ps1" "install-$i-150s"
     Get-CimInstance Win32_Process | Where-Object { $_.ParentProcessId -eq $p.Id } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
     Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
   }
