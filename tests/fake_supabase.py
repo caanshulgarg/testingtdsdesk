@@ -29,6 +29,7 @@ FAIL_INSERT = {}          # table -> {message, code}: a POST answers this PostgR
 FAIL_DONE = {"upload": 0} # the next n tally_work_done of an upload piece fail
 FAIL_DAY = {}             # day -> n: the next n calls queuing a day file of that day fail (tally_work_send / tally_upload_advance)
 NO_FN = set()             # functions this database does not have yet (an older cloud): PostgREST's 404 PGRST202
+LEASE7_MISSING = [False]  # migration 55 not run: the 7-argument tally_lease_take (p_purpose) is not there (PGRST202 for that call only)
 PK = {"gst_sessions": ["firm_id", "gstin"], "gst_returns": ["firm_id", "gstin", "form", "period"], "gst_einv_accounts": ["firm_id", "gstin"], "gst_einvoices": ["firm_id", "gstin", "doc_key"]}
 ids = itertools.count(1)
 def now(): return time.time()
@@ -123,6 +124,21 @@ def rpc(fn, a):
             if main and main not in co: j["target_bridge"] = main; moved += 1
             else: j["status"] = "failed"; failed += 1
         return {"ok": True, "moved": moved, "failed": failed}
+    if fn == "tally_post_checks_for":   # migration 55 (decision B): the waiting checks of this bridge's postings
+        out = []
+        for c in T.get("tally_post_checks", []):
+            j = next((x for x in T["tally_post_jobs"] if x["id"] == c["job_id"]), None)
+            if c.get("state") != "waiting" or not j or j["device_id"] != a["p_device"]: continue
+            if not (j.get("target_bridge") == a["p_bridge"] or (j.get("target_bridge") is None and a.get("p_main"))): continue
+            xml = next((v.get("xml") for v in (j.get("payload") or {}).get("vouchers", []) if v.get("id") == c["entry_id"]), None)
+            out.append({"check": c["id"], "job": j["id"], "entry": c["entry_id"], "company": j["company"], "why": c.get("why"), "xml": xml})
+        return out
+    if fn == "tally_post_check_report":  # migration 55: the bridge's answer (the SQL is tested on pg_stand: run_migration55.py)
+        return {"ok": True, "state": "waiting" if a.get("p_result") == "unable" else a.get("p_result"), "check": a.get("p_check")}
+    if fn == "tally_lease_take":        # 32/37 (6 arguments) and 55 (7, p_purpose): free unless the test says otherwise
+        if "p_purpose" in a and LEASE7_MISSING[0]: raise LookupError("PGRST202")
+        return {"ok": True, "held": False, "purpose": a.get("p_purpose") or "", "lease": {"until": "2026-10-05T12:00:00Z", "ttl": a.get("p_ttl")}}
+    if fn == "tally_lease_release": return {"ok": True, "released": True}
     if fn == "tally_post_take":
         for j in T["tally_post_jobs"]:
             if j["device_id"] == a["p_device"] and j["status"] == "waiting": j["status"] = "taken"; return [j]
@@ -154,6 +170,8 @@ class H(http.server.BaseHTTPRequestHandler):
             if path.rsplit("/", 1)[1] in NO_FN:
                 return self.send(404, {"code": "PGRST202", "message": "Could not find the function public.%s in the schema cache" % path.rsplit("/", 1)[1], "details": None, "hint": None})
             try: return self.send(200, rpc(path.rsplit("/", 1)[1], json.loads(raw or b"{}")))
+            except LookupError:   # an overload this database does not have (PostgREST answers 404 PGRST202)
+                return self.send(404, {"code": "PGRST202", "message": "Could not find the function public.%s with those arguments in the schema cache" % path.rsplit("/", 1)[1], "details": None, "hint": None})
             except Exception as e: return self.send(400, {"message": str(e), "code": "P0001"})
         if path.startswith("/rest/v1/"):
             t = path.rsplit("/", 1)[1]; rows = T.setdefault(t, []); single = "vnd.pgrst.object" in (self.headers.get("Accept") or "")
