@@ -12,9 +12,11 @@ function Keys($k, $wait = 3, $n = '') { & "$PSScriptRoot\keys.ps1" '^tally$' $k;
 # ---- the program and the add-on of origin/tax-accuracy (binary-safe: git archive | tar)
 $src = "$env:RUNNER_TEMP\ta"; New-Item -ItemType Directory -Force $src | Out-Null
 git fetch -q origin tax-accuracy
-git -C $env:GITHUB_WORKSPACE log -1 --format='origin/tax-accuracy: %h %s' origin/tax-accuracy | Write-Host
-cmd /c "git archive origin/tax-accuracy assets-test/bridge-go/FinComBridge-2.2.2.exe bridge-go/addon/FinComRecorder.tdl | tar -x -C `"$src`""
-$bexe = "$src\assets-test\bridge-go\FinComBridge-2.2.2.exe"; $tdl = "$src\bridge-go\addon\FinComRecorder.tdl"
+$ref = if ($env:BRIDGE_REF) { $env:BRIDGE_REF } else { 'origin/tax-accuracy' }
+$ver = if ($env:BRIDGE_VER) { $env:BRIDGE_VER } else { '2.2.2' }
+git -C $env:GITHUB_WORKSPACE log -1 --format="bridge source: %h %s" $ref | Write-Host
+cmd /c "git archive $ref assets-test/bridge-go/FinComBridge-$ver.exe bridge-go/addon/FinComRecorder.tdl | tar -x -C `"$src`""
+$bexe = "$src\assets-test\bridge-go\FinComBridge-$ver.exe"; $tdl = "$src\bridge-go\addon\FinComRecorder.tdl"
 Write-Host "bridge: $((Get-Item $bexe).Length) bytes, SHA256 $((Get-FileHash $bexe).Hash); add-on: $((Get-Item $tdl).Length) bytes"
 Remove-Item "$rec\*" -Force -ErrorAction SilentlyContinue
 

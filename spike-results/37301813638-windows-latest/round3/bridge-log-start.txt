@@ -1,8 +1,0 @@
-2026-10-05 11:20:11  FinCom Bridge 2.2.2 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs in a window
-2026-10-05 11:20:11  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
-2026-10-05 11:20:11  Recorder: re-scan of the add-on's files for 2.2.2: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
-2026-10-05 11:20:11  Check:  - 
-2026-10-05 11:20:14  Company FinCom Spike Co: its Tally GUID adb30d9f-44e4-4626-a95d-6709206de32a is held from now on
-2026-10-05 11:20:15  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=1, ALTMSTID=211 (reading is prospective only: the bridge follows what changes after this)
-2026-10-05 11:20:15  Company FinCom Spike Co: change numbers read with form b: ALTVCHID=1, ALTMSTID=211
-2026-10-05 11:20:15  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=1, ALTMSTID=211)
