@@ -352,7 +352,9 @@ func (t *tray) statusText() string {
 	st := t.st
 	t.mu.Unlock()
 	if st == nil {
-		if msg := startFailedText(); msg != "" {
+		if msg := startFailedText(); strings.Contains(msg, "Another FinCom Bridge already runs") {
+			return msg + "." // review M3: a second bridge on the same settings
+		} else if msg != "" {
 			return msg + ".\n\nEach Windows user's FinCom Bridge takes its own port of 9100-9199. Close a program that holds them, then sign out and in again."
 		}
 		if perUserInstall() {

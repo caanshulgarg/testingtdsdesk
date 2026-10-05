@@ -421,6 +421,8 @@ type heldLine struct {
 	LineGuid, LineFid      string
 	Mismatch, Final, Cloud bool // Cloud: from FinCom's beat answer (heldLines)
 	LineAlter              int64
+	// review H1 (the owner's addition): a delete's own GUID and AlterID, used only once this Tally shows it gone
+	KeepGuid, KeepAlter string
 }
 
 var heldMu sync.Mutex
@@ -438,7 +440,7 @@ func liveHeldLoad() (M, map[string]heldLine) {
 		items[id] = heldLine{ID: id, Company: str(e["company"]), CGUID: str(e["companyGuid"]), Type: str(e["type"]), No: str(e["no"]), Date: str(e["date"]),
 			MID: str(e["masterId"]), At: str(e["savedAt"]), Added: str(e["added"]), Last: str(e["last"]), Tries: toInt(e["tries"]), Ev: str(e["event"]), Why: str(e["why"]),
 			LineGuid: str(e["lineGuid"]), LineFid: str(e["lineFid"]), Mismatch: truthy(e["idsMismatch"]), Final: truthy(e["final"]), LineAlter: toI64(e["lineAlter"]),
-			Cloud: truthy(e["fromFinCom"])}
+			Cloud: truthy(e["fromFinCom"]), KeepGuid: str(e["keepGuid"]), KeepAlter: str(e["keepAlter"])}
 	}
 	return all, items
 }
@@ -448,7 +450,8 @@ func liveHeldSave(all M, items map[string]heldLine) {
 	for id, h := range items {
 		o[id] = M{"company": h.Company, "companyGuid": h.CGUID, "type": h.Type, "no": h.No, "date": h.Date, "masterId": h.MID, "savedAt": h.At,
 			"added": h.Added, "last": h.Last, "tries": h.Tries, "event": h.Ev, "why": liveCapWhy(h.Why), "lineGuid": h.LineGuid, "lineFid": h.LineFid,
-			"idsMismatch": h.Mismatch, "final": h.Final, "lineAlter": h.LineAlter, "fromFinCom": h.Cloud}
+			"idsMismatch": h.Mismatch, "final": h.Final, "lineAlter": h.LineAlter, "fromFinCom": h.Cloud,
+			"keepGuid": h.KeepGuid, "keepAlter": h.KeepAlter}
 	}
 	all["items"] = o
 	if err := saveFile(liveHeldFile(), jsonText(all)); err != nil {
@@ -472,7 +475,13 @@ func liveHeldAdd(cs []*change) {
 		}
 		items[c.lineId] = heldLine{ID: c.lineId, Company: c.company, CGUID: c.companyGuid, Type: c.vchType, No: c.vchNo, Date: c.vchDate, MID: mid,
 			At: c.at, Added: now, Last: now, Ev: c.event, Why: c.heldWhy, LineGuid: c.lineGuid, LineFid: c.lineFid, Mismatch: c.idsMismatch,
-			Final: c.heldFinal || (mid == "" && c.vchNo == ""), LineAlter: c.lineAlter}
+			Final: c.heldFinal || (mid == "" && c.vchNo == ""), LineAlter: c.lineAlter, KeepGuid: c.guidKeep, KeepAlter: c.alterKeep}
+		if c.guidRetry {
+			h := items[c.lineId]
+			h.Final, h.MID = false, c.masterId // asked again by its MasterID (liveResolveGuid)
+			h.KeepGuid, h.KeepAlter = c.guidKeep, c.alterKeep
+			items[c.lineId] = h
+		}
 	}
 	liveHeldCap(items)
 	liveHeldSave(all, items)
@@ -783,17 +792,36 @@ func liveResolveTurn() {
 			break
 		}
 		liveSay(h.Type, h.No, h.Date, h.MID, h.ID, fmt.Sprintf("asking Tally again (a held line, try %d of %d)", h.Tries+1, liveHeldMaxTries))
-		x, why, answered, final, err := liveResolveOne(h)
+		var x, why string
+		var answered, final bool
+		var err error
+		var gc *change // review H1 (the owner's addition): a held cancel / delete proven in this Tally now
+		if h.Ev == "deleted" || h.Ev == "cancelled" {
+			gc, why, answered, final, err = liveResolveGuid(h)
+		} else {
+			x, why, answered, final, err = liveResolveOne(h)
+		}
 		if gaveWay(err) {
 			liveSay(h.Type, h.No, h.Date, h.MID, h.ID, "not asked: a posting is going on; asked after it")
 			break
 		}
 		if err != nil {
 			liveSay(h.Type, h.No, h.Date, h.MID, h.ID, "not asked this time: "+cutRunes(err.Error(), 160)+" (not counted as a try)")
-		} else if x == "" && !final {
+		} else if x == "" && gc == nil && !final {
 			liveSay(h.Type, h.No, h.Date, h.MID, h.ID, "still held: "+or(cutRunes(why, 200), "Tally gave nothing yet"))
 		}
 		got = append(got, res{h.ID, x, why, answered, final})
+		if gc != nil {
+			live.mu.Lock()
+			liveFresh()
+			if !live.sent[gc.lineId] && !live.queued[gc.lineId] {
+				liveQueueAdd(gc)
+			}
+			live.mu.Unlock()
+			resolved++
+			liveSay(h.Type, h.No, h.Date, h.MID, h.ID, "proven in this Tally now: the "+map[bool]string{true: "cancel", false: "delete"}[h.Ev == "cancelled"]+" goes as "+gc.lineId)
+			continue
+		}
 		if x == "" {
 			continue
 		}

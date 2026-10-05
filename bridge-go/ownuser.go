@@ -1,5 +1,5 @@
 // 2.3.0: the bridge's local web server answers only programs of its own Windows user. On a shared Windows server every
-// signed-in user can reach 127.0.0.1:9100..9119, so without this another user's browser (or any program of theirs)
+// signed-in user can reach 127.0.0.1:9100..9199, so without this another user's browser (or any program of theirs)
 // could ask this user's bridge for this user's Tally. On Windows the other end of each connection is looked up (the TCP
 // table gives the process, its token the Windows user, win_peer.go); anything not of this bridge's own user gets 403
 // "not your FinCom Bridge". /ping still answers everyone (it says nothing of the books and needs no key) and says whether
@@ -100,8 +100,8 @@ func listenerPidFrom(rows []tcpRow, port int) int {
 // the Windows user of the program listening on a port (platform; a stand-in in the tests); checked false when not Windows
 var listenerUserOf = platListenerUser
 
-// review M1: the bridge proves itself to FinCom: HMAC-SHA256(secret, nonce || bound) in hex (bound: its id and port for the
-// key's proof, nothing for the pairing code's). A nonce is 16 to 128 letters,
+// review M1: the bridge proves itself to FinCom: HMAC-SHA256(secret, nonce || bound) in hex (bound: its id and port, for
+// the key's proof and, since the 2.3.0 review's M1, for the pairing code's too). A nonce is 16 to 128 letters,
 // digits, "-" or "_"; anything else gets no proof
 func proofFor(secret, nonce, bound string) string {
 	if secret == "" || !re(`^[A-Za-z0-9_-]{16,128}$`).MatchString(nonce) {

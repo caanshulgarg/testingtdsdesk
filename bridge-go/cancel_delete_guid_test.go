@@ -15,6 +15,9 @@ package main
 //   - the GUID a MasterID makes (<company GUID>-<MasterID in 8 hex digits>) is never used on its own;
 //   - one log line per decision: "Recorder: <company>: delete of mid N: GUID from <source>".
 // Run in both stand modes (plain and Tally's typed answers, STAND_TALLY_TYPED=1).
+// Review H1 of 2.3.0 (review230h1_test.go): a cancel takes Tally's GUID only when this bridge's Tally shows it cancelled,
+// and a delete goes on only when this bridge's Tally answers (asked by MasterID) that the voucher is not there; else held.
+// The genuine cases below model that: the voucher cancelled in the stand Tally, or gone from it.
 
 import (
 	"fmt"
@@ -67,6 +70,7 @@ func TestCancelGUIDFromTally(t *testing.T) {
 		v.typ = "Receipt"
 		// an entry that came by import: its GUID is not the one its MasterID makes, so only Tally can say it
 		v.guid = "aaaa1111-2222-3333-4444-555566667777-0000abcd"
+		v.cancelled = true // cancelled in this bridge's own Tally (review H1)
 		liveAppend(t, liveFilePath(rec, ""),
 			realLine("before_cancel", "", v.master, "", "Receipt", "1", addonDate(td)),
 			realLine("after_cancel", "", v.master, "", "Receipt", "1", addonDate(td)))
@@ -86,15 +90,17 @@ func TestCancelGUIDFromTally(t *testing.T) {
 		if logLines("Recorder: "+zz+": cancel of mid "+v.master+": GUID from Tally") != 1 {
 			t.Fatalf("one log line for the decision:\n%s", readText(logFile()))
 		}
-		// and the bridge keeps it: a delete of the same entry later needs no Tally request
-		n1 := len(f.ids())
+		// and the bridge keeps it: a delete of the same entry later (gone from this Tally) asks Tally only whether it is
+		// still there (review H1), and takes the GUID from the bridge's record
+		f.remove(v)
+		n1 := f.n(vchByMasterID)
 		liveAppend(t, liveFilePath(rec, ""),
 			realLine("before_delete", "", v.master, "", "Receipt", "1", addonDate(td)),
 			realLine("after_delete", "", v.master, "", "Receipt", "1", addonDate(td)))
 		liveReadOnce()
 		uploadAll(t)
-		if len(f.ids()) != n1 {
-			t.Fatalf("a delete asks Tally nothing: %v", f.ids()[n1:])
+		if f.n(vchByMasterID) != n1+1 {
+			t.Fatalf("a delete asks this Tally once by MasterID whether it is still there: %v", f.ids())
 		}
 		got = sentEvent(c, "deleted")
 		if len(got) != 1 || str(got[0]["object_guid"]) != v.guid {
@@ -128,16 +134,17 @@ func TestDeleteGUIDFromBridgeRecordAfterRestart(t *testing.T) {
 		if !exists(sp("recorder-guids.json")) {
 			t.Fatal("no sync\\recorder-guids.json")
 		}
-		// the restart: everything in memory forgotten
+		// the restart: everything in memory forgotten; the entry deleted in this Tally
 		liveResetState()
-		n1 := len(f.ids())
+		f.remove(v)
+		n1 := f.n(vchByMasterID)
 		liveAppend(t, liveFilePath(rec, ""),
 			realLine("before_delete", "", v.master, "", "Receipt", "2", addonDate(td)),
 			realLine("after_delete", "", v.master, "", "Receipt", "2", addonDate(td)))
 		liveReadOnce()
 		uploadAll(t)
-		if len(f.ids()) != n1 {
-			t.Fatalf("a delete asks Tally nothing: %v", f.ids()[n1:])
+		if f.n(vchByMasterID) != n1+1 {
+			t.Fatalf("a delete asks this Tally once by MasterID whether it is still there (review H1): %v", f.ids())
 		}
 		got := sentEvent(c, "deleted")
 		if len(got) != 1 || str(got[0]["object_guid"]) != v.guid || str(got[0]["heldWhy"]) != "" || str(got[0]["master_id"]) != v.master {
@@ -149,12 +156,15 @@ func TestDeleteGUIDFromBridgeRecordAfterRestart(t *testing.T) {
 	})
 }
 
-// a delete of an entry the bridge never saw: no Tally request, no GUID built from the MasterID; sent for FinCom's own
-// record, held with plain words when FinCom cannot tell either; FinCom's record taken when it can
+// a delete of an entry the bridge never saw (gone from this Tally: asked by MasterID only, review H1), no GUID built from
+// the MasterID; sent for FinCom's own record, held with plain words when FinCom cannot tell either; FinCom's record taken
+// when it can
 func TestDeleteGUIDUnknownHeldWithWords(t *testing.T) {
 	bothStands(t, func(t *testing.T) {
 		rec, f, c := liveBridge(t, "")
 		td := today()
+		f.alter = 10
+		noteStartPoint(zz, b220CoGUID, 5, 1)
 		var answers []M
 		c.mu.Lock()
 		c.recReply = func(b M) (int, M) {
@@ -171,15 +181,15 @@ func TestDeleteGUIDUnknownHeldWithWords(t *testing.T) {
 			return 200, M{"ok": true, "results": res}
 		}
 		c.mu.Unlock()
-		n0 := len(f.ids())
+		n0 := f.n(vchByMasterID)
 		liveAppend(t, liveFilePath(rec, ""),
 			realLine("before_delete", "", "40", "", "Receipt", "9", addonDate(td)),
 			realLine("after_delete", "", "40", "", "Receipt", "9", addonDate(td)),
 			realLine("after_delete", "", "41", "", "Receipt", "10", addonDate(td)))
 		liveReadOnce()
 		uploadAll(t)
-		if len(f.ids()) != n0 {
-			t.Fatalf("a delete asks Tally nothing: %v", f.ids()[n0:])
+		if f.n(vchByMasterID) != n0+1 || f.n(vchByNumberID) != 0 {
+			t.Fatalf("the deletes are asked of this Tally once, by MasterID only: %v", f.ids())
 		}
 		var del []M
 		for _, l := range answers {
@@ -213,7 +223,8 @@ func TestDeleteGUIDUnknownHeldWithWords(t *testing.T) {
 func TestDeleteGUIDRecordMustBeTheSameEntry(t *testing.T) {
 	rec, f, c := liveBridge(t, "")
 	td := today()
-	_ = f
+	f.alter = 10
+	noteStartPoint(zz, b220CoGUID, 5, 1)
 	liveMidNote(b220CoGUID, "77", b220CoGUID+"-0000004d", "Payment", "5", td)
 	liveMidSave()
 	liveAppend(t, liveFilePath(rec, ""), realLine("after_delete", "", "77", "", "Receipt", "5", addonDate(td)))
@@ -228,7 +239,9 @@ func TestDeleteGUIDRecordMustBeTheSameEntry(t *testing.T) {
 	}
 }
 
-// a cancel Tally cannot answer for (it does not answer within the 2 s stop): the bridge's record, else held with words
+// a cancel Tally cannot answer for (it does not answer within the 2 s stop). Review H1 of 2.3.0: nothing proves it
+// happened in this bridge's Tally, so both are held with words, the bridge's record NOT used, never the GUID its
+// MasterID makes
 func TestCancelGUIDTallySilentFallsBack(t *testing.T) {
 	rec, f, c := liveBridge(t, `,"RecorderBodySec":2`)
 	td := today()
@@ -247,13 +260,12 @@ func TestCancelGUIDTallySilentFallsBack(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("both cancels go: %v", got)
 	}
-	if str(got[0]["object_guid"]) != "cccc-imported-00000777" || str(got[0]["heldWhy"]) != "" {
-		t.Fatalf("the bridge's record when Tally does not answer: %v", got[0])
+	for _, l := range got {
+		if str(l["object_guid"]) != "" || l["guidHeld"] != true || !strings.HasPrefix(str(l["heldWhy"]), liveCancelUnprovenWords) {
+			t.Fatalf("held with words when this Tally cannot be asked; not the bridge's record, never the GUID its MasterID makes: %v", l)
+		}
 	}
-	if str(got[1]["object_guid"]) != "" || str(got[1]["heldWhy"]) != strings.Replace(deleteWords, "deleted", "cancelled", 1) {
-		t.Fatalf("held with words, never the GUID its MasterID makes: %v", got[1])
-	}
-	if logLines("Recorder: "+zz+": cancel of mid 12: GUID from the bridge's record") != 1 {
+	if logLines("Recorder: "+zz+": cancel of mid 12: held: "+liveCancelUnprovenWords) != 1 || logLines("cancel of mid 12: GUID from") != 0 {
 		t.Fatalf("the decision:\n%s", readText(logFile()))
 	}
 }
@@ -277,8 +289,9 @@ func TestMidRecordFileCapped(t *testing.T) {
 	}
 }
 
-// an alteration and the delete of the same entry read in one turn: the delete is decided when it is sent, after the
-// alteration's body came from Tally, so the bridge's record has Tally's GUID by then
+// an alteration and the delete of the same entry read in one turn. Review H1 of 2.3.0: the one request by MasterID finds
+// the voucher still in this bridge's Tally, so the delete is not proven here and is held (the alteration takes Tally's
+// GUID into the bridge's record); once the voucher is gone from this Tally, a delete of it takes that recorded GUID
 func TestDeleteGUIDSameTurnAsAlteration(t *testing.T) {
 	bothStands(t, func(t *testing.T) {
 		rec, f, c := liveBridge(t, `,"RecorderBodySec":2`)
@@ -295,9 +308,21 @@ func TestDeleteGUIDSameTurnAsAlteration(t *testing.T) {
 			realLine("after_delete", "", v.master, "", "Receipt", "3", addonDate(td)))
 		liveReadOnce()
 		uploadAll(t)
+		if alt := sentEvent(c, "altered"); len(alt) != 1 || str(alt[0]["object_guid"]) != v.guid {
+			t.Fatalf("the alteration goes with Tally's GUID: %v", alt)
+		}
 		got := sentEvent(c, "deleted")
-		if len(got) != 1 || str(got[0]["object_guid"]) != v.guid || str(got[0]["heldWhy"]) != "" {
-			t.Fatalf("the delete goes with the GUID Tally gave for the alteration: %v", got)
+		if len(got) != 1 || str(got[0]["object_guid"]) != "" || str(got[0]["heldWhy"]) != liveDeleteHeldWords || got[0]["guidHeld"] != true {
+			t.Fatalf("still in this Tally: the delete is held: %v", got)
+		}
+		f.remove(v)
+		liveAppend(t, liveFilePath(rec, ""),
+			strings.Replace(realLine("after_delete", "", v.master, "", "Receipt", "3", addonDate(td)), "t1=5-Oct-26 13:55", "t1=5-Oct-26 13:58", 1))
+		liveReadOnce()
+		uploadAll(t)
+		got = sentEvent(c, "deleted")
+		if len(got) != 2 || str(got[1]["object_guid"]) != v.guid || str(got[1]["heldWhy"]) != "" || got[1]["guidHeld"] != nil {
+			t.Fatalf("gone from this Tally: the delete goes with the GUID Tally gave for the alteration: %v", got)
 		}
 		if logLines("Recorder: "+zz+": delete of mid "+v.master+": GUID from the bridge's record: "+v.guid) != 1 {
 			t.Fatalf("the decision:\n%s", readText(logFile()))

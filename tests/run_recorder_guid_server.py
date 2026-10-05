@@ -9,7 +9,9 @@ where it came from) and the answer's result for that line carries guid. None, or
 own. Lines with a GUID, ledger lines and other events are untouched.
 The real cloud function (server/tally-cloud/index.ts) under Deno against the stand-in for Supabase (fake_supabase.py); the
 database's tally_recorder_send is answered by the stand-in here (what reaches it is checked). Needs Deno (DENO).
-RED (before the change): the delete / cancel lines reach tally_recorder_send without a GUID."""
+RED (before the change): the delete / cancel lines reach tally_recorder_send without a GUID.
+Review H1 (2.3.0): FinCom's record is only the lines the SAME computer key (device_id) and the SAME bridge (its id, the
+column bridge) sent before; a line the bridge held (guidHeld) is never resolved from it."""
 import os, sys, json, time, hashlib, subprocess, urllib.request, shutil, threading
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import fake_supabase as F
@@ -24,10 +26,11 @@ CG = "78257d7a-c68a-4ffc-a253-148c60566464"
 F.T["clients"].append({"id": CID, "firm_id": FIRM, "name": "ZZ TEST", "tally_name": "ZZ CO", "gstin": "", "deleted": False})
 F.T["tally_companies"].append({"firm_id": FIRM, "company": "ZZ CO", "client_id": CID, "book_id": BOOK, "last_seen": "2026-10-05T00:00:00Z"})
 F.T["tally_devices"].append({"id": "d-1", "firm_id": FIRM, "name": "OFFICE-PC", "key_hash": hashlib.sha256(KEY.encode()).hexdigest(), "revoked": False, "info": {}, "version": "2.3.0"})
-def row(i, mid, guid, event="created", state="applied", body=True, book=BOOK, cg=CG, mm=None):
+BRID = "go-aaaaaa111111"
+def row(i, mid, guid, event="created", state="applied", body=True, book=BOOK, cg=CG, mm=None, dev="d-1", bridge=BRID):
     pl = {"line_id": "s%d" % i, "event": event, "object_guid": guid, "master_id": str(mid)}
     if mm: pl["idsMismatch"] = True
-    return {"id": i, "book_id": book, "firm_id": FIRM, "line_id": "s%d" % i, "event": event, "state": state, "object_guid": guid, "master_id": str(mid), "company_guid": cg,
+    return {"id": i, "book_id": book, "firm_id": FIRM, "device_id": dev, "bridge": bridge, "line_id": "s%d" % i, "event": event, "state": state, "object_guid": guid, "master_id": str(mid), "company_guid": cg,
             "vch_type": "Receipt", "vch_no": str(i), "vch_date": "2026-10-02", "payload": pl, "body": {"vouchers": [{"guid": guid, "type": "Receipt"}]} if body else {}}
 IMP = "aaaa1111-2222-3333-4444-555566667777-0000abcd"          # an entry that came by import: not the GUID its MasterID makes
 F.T["tally_recorder_lines"] = [
@@ -41,6 +44,11 @@ F.T["tally_recorder_lines"] = [
     row(9, 9, CG + "-00000009", book=OTHER),                      # mid 9: another book's
     row(10, 10, "zz-other-co-0000000a", cg="zz-other-co"),         # mid 10: another company GUID's
     row(11, 11, CG + "-00000063", mm=True),                       # mid 11: ids that did not belong together
+    # review H1 (2.3.0): FinCom's record is only what THIS computer's key and THIS bridge (its id) sent before: another
+    # computer's, or another Windows user's bridge on the same computer (a copy of the company in that user's Tally), never
+    row(12, 15, CG + "-0000000f", dev="d-2"),                       # mid 15: another computer's key sent it
+    row(13, 16, CG + "-00000010", bridge="go-bbbbbb222222"),        # mid 16: another bridge (another Windows user) sent it
+    row(14, 17, CG + "-00000011"),                                  # mid 17: this bridge's own: the line below says guidHeld
 ]
 SENT = []
 real = F.rpc
@@ -59,12 +67,13 @@ def call(body):
     try: r = urllib.request.urlopen(rq, timeout=60); return r.status, json.loads(r.read())
     except urllib.error.HTTPError as e: return e.code, json.loads(e.read() or b"{}")
 WORDS = "deleted in Tally; FinCom could not tell which entry: upload that day's Day Book to settle it"
+HELD = "not deleted in this Tally: held"
 def line(lid, event, mid, guid="", why=WORDS, cg=CG):
     l = {"line_id": lid, "event": event, "object_guid": guid, "master_id": str(mid), "alter_id": None, "vch_type": "Receipt", "vch_no": "1", "vch_date": "20261002",
          "saved_at": "2026-10-05T13:56:00Z", "pc": "PC", "user": "TALLY User", "company_guid": cg, "ledgers": [], "narration": "", "fid": "", "xml": "", "source": "addon"}
     if why: l["heldWhy"] = why
     return l
-BR = {"id": "go-aaaaaa111111", "computer": "PC", "user": "u", "mode": "main", "runMode": "user", "version": "2.3.0"}
+BR = {"id": BRID, "computer": "PC", "user": "u", "mode": "main", "runMode": "user", "version": "2.3.0"}
 try:
     for i in range(240):
         try: urllib.request.urlopen("http://127.0.0.1:8000/", timeout=1)
@@ -72,7 +81,9 @@ try:
         except Exception: time.sleep(0.5)
     lines = [line("L2", "deleted", 2), line("L3", "cancelled", 3, why=WORDS.replace("deleted", "cancelled")), line("L5", "deleted", 5), line("L6", "deleted", 6),
              line("L7", "deleted", 7), line("L8", "deleted", 8), line("L9", "deleted", 9), line("L10", "deleted", 10), line("L11", "deleted", 11), line("L12", "deleted", 12),
-             line("LG", "deleted", 2, guid="given-guid-1", why=None), line("LA", "altered", 2, why=None), line("LL", "ledger_deleted", 2, why=None)]
+             line("LG", "deleted", 2, guid="given-guid-1", why=None), line("LA", "altered", 2, why=None), line("LL", "ledger_deleted", 2, why=None),
+             line("L15", "deleted", 15), line("L16", "cancelled", 16, why=WORDS.replace("deleted", "cancelled")),
+             dict(line("L17", "deleted", 17, why=HELD), guidHeld=True)]
     c, r = call({"kind": "recorder_lines", "version": "2.3.0", "bridge": BR, "company": "ZZ CO", "company_guid": CG, "lines": lines})
     ok(c == 200 and len(SENT) == len(lines), "recorder_lines answered and every line reaches the database (%s, %d)" % (c, len(SENT)))
     got = {l["line_id"]: l for l in SENT}
@@ -86,6 +97,12 @@ try:
     for k, why in (("L5", "no entry came with the line"), ("L6", "only the placeholder"), ("L7", "two GUIDs for one MasterID"), ("L8", "only a held line"),
                    ("L9", "another book's"), ("L10", "another company GUID's"), ("L11", "ids that did not belong together"), ("L12", "nothing known: never the GUID its MasterID makes")):
         ok(not g(k) and got.get(k, {}).get("heldWhy") == WORDS and "guid" not in res.get(k, {}), "%s not resolved: %s; held with the bridge's words (%s)" % (k, why, g(k)))
+    ok(not g("L15") and got.get("L15", {}).get("heldWhy") == WORDS and "guid" not in res.get("L15", {}),
+       "review H1: another computer's record (its key) is never used (%s)" % g("L15"))
+    ok(not g("L16") and "guid" not in res.get("L16", {}),
+       "review H1: another bridge's record (another Windows user's, same computer key) is never used (%s)" % g("L16"))
+    ok(not g("L17") and got.get("L17", {}).get("heldWhy") == HELD and got.get("L17", {}).get("guidHeld") is True and "guid" not in res.get("L17", {}),
+       "review H1: a line the bridge held (guidHeld: not deleted in its own Tally) is never resolved from FinCom's record, its words kept (%s)" % got.get("L17"))
     ok(g("LG") == "given-guid-1" and g("LA") in (None, "") and g("LL") in (None, ""), "a line with a GUID, an alteration and a ledger delete untouched (%s %s %s)" % (g("LG"), g("LA"), g("LL")))
     ok(any("cancel/delete GUID" in l and "L2" in l for l in log), "tally-ingest logs the decision (%s)" % [l.strip() for l in log if "GUID" in l][:3])
     # the alteration carrying Tally's entry and the delete of it in the SAME call: the delete takes the GUID of the entry sent

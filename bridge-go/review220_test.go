@@ -241,7 +241,13 @@ func TestForgedLineDropped(t *testing.T) {
 		liveLine("voucher_accept_post", "Voucher", w.guid, w.master, "2", "Journal", "P-2", td, "", "", "new"))
 	liveReadOnce()
 	uploadAll(t)
-	bs := f.bodiesOf(vchByMasterID)
+	// (review H1 of 2.3.0: the cancel line above is asked of this Tally by its MasterID too, on its own date)
+	var bs []string
+	for _, b := range f.bodiesOf(vchByMasterID) {
+		if strings.Contains(b, "<SVFROMDATE>"+td+"</SVFROMDATE>") {
+			bs = append(bs, b)
+		}
+	}
 	if len(bs) != 1 || !strings.Contains(bs[0], "$MasterID = "+v.master+" ") || !strings.Contains(bs[0], "$MasterID = "+w.master) {
 		t.Fatalf("asked: %v", bs)
 	}
@@ -375,11 +381,12 @@ func TestLiveOldAndFailedLines(t *testing.T) {
 	failed := "FCR1|ev=write_failed|file=" + liveFilePath(rec, "") + "|was=" + inner[:i] + inner[i:]
 	liveAppend(t, filepath.Join(rec, "failed.txt"), failed)
 	readAndUploadAll(t)
+	// by their MasterIDs (review H1 of 2.3.0: a delete / cancel this Tally cannot show goes held, without a GUID)
 	var got []string
 	for _, l := range c.recSent() {
-		got = append(got, str(l["object_guid"]))
+		got = append(got, str(l["master_id"]))
 	}
-	if g1, g2 := b220CoGUID+"-00000001", b220CoGUID+"-00000002"; strings.Join(got, ",") != g1+","+g2 && strings.Join(got, ",") != g2+","+g1 {
+	if strings.Join(got, ",") != "1,2" && strings.Join(got, ",") != "2,1" {
 		t.Fatalf("sent: %v", got)
 	}
 	var mu sync.Mutex

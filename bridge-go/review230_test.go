@@ -36,6 +36,7 @@ func TestPingProof(t *testing.T) {
 	ping := func(q string) M {
 		r := httptest.NewRequest("GET", "http://127.0.0.1:9100/ping"+q, nil)
 		r.RemoteAddr = "127.0.0.1:50999"
+		r.Header.Set("Origin", "https://app.fincom.live") // review M1 of 2.3.0: proofs only to FinCom's page (or the tray)
 		w := httptest.NewRecorder()
 		handle(w, r)
 		return parseObj(w.Body.String())
@@ -47,7 +48,7 @@ func TestPingProof(t *testing.T) {
 	pairMu.Unlock()
 	o := ping("?n=" + n)
 	// the owner's condition: HMAC-SHA256(bridge key, nonce || bridge id || port)
-	if str(o["proof"]) != hmacOf("proof-key-123456", n+"go-"+instanceID()+fmt.Sprint(toInt(cfg("Port")))) || str(o["pairProof"]) != hmacOf(code, n) || str(o["bridgeId"]) != "go-"+instanceID() {
+	if str(o["proof"]) != hmacOf("proof-key-123456", n+"go-"+instanceID()+fmt.Sprint(toInt(cfg("Port")))) || str(o["pairProof"]) != hmacOf(code, n+"go-"+instanceID()+fmt.Sprint(toInt(cfg("Port")))) || str(o["bridgeId"]) != "go-"+instanceID() {
 		t.Fatalf("own user: proof %v pairProof %v", o["proof"], o["pairProof"])
 	}
 	if o := ping("?n=short"); o["proof"] != nil {

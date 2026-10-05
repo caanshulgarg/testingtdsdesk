@@ -50,6 +50,7 @@ func nwsBridge(t *testing.T, extra string) (string, *standTally, *standCloud) {
 			party: "Customer A", alter: alter, lines: [][2]string{{"Customer A", amt}, {"Bank", strings.TrimPrefix("-"+amt, "--")}}})
 	}
 	add("190", "26309", 54390, "Receipt 190", "100.00")
+	f.vch[len(f.vch)-1].cancelled = true // review H1 of 2.3.0: cancelled in this Tally (its cancel line is proven here)
 	add("191", "26311", 54391, "Received from customer", "500.00")
 	add("192", "26312", 54392, "Received again", "700.00")
 	f.mu.Unlock()
@@ -109,8 +110,10 @@ func TestNWS144RealLines(t *testing.T) {
 			t.Errorf("Receipt %s: save_ms %v sent from times to the minute", str(want["vch_no"]), g["save_ms"])
 		}
 	}
-	// 191 (MasterID 0) by its type and number, once, for its own day; 192 by its MasterID
-	if f.n(vchByNumberID) != 1 || f.n(vchByMasterID) != 1 {
+	// 191 (MasterID 0) by its type and number, once, for its own day; 192 by its MasterID; review H1 of 2.3.0: the cancel
+	// of 190 and the delete of 189 are asked of this Tally by their MasterIDs too (proof they happened here)
+	asked := strings.Join(f.bodiesOf(vchByMasterID), " ")
+	if f.n(vchByNumberID) != 1 || f.n(vchByMasterID) < 2 || f.n(vchByMasterID) > 3 || !strings.Contains(asked, "$MasterID = 26309") || !strings.Contains(asked, "$MasterID = 26305") {
 		t.Fatalf("requests: %v", f.ids())
 	}
 	b := f.bodiesOf(vchByNumberID)[0]
@@ -121,8 +124,8 @@ func TestNWS144RealLines(t *testing.T) {
 	if b != voucherByNumberRequest(nwsCo, "20261005", "Receipt", "191") {
 		t.Fatal("the request by number is not as built")
 	}
-	if !strings.Contains(f.bodiesOf(vchByMasterID)[0], "$MasterID = 26312") {
-		t.Fatalf("the body by MasterID: %s", f.bodiesOf(vchByMasterID)[0])
+	if !strings.Contains(asked, "$MasterID = 26312") {
+		t.Fatalf("the body by MasterID: %s", asked)
 	}
 }
 

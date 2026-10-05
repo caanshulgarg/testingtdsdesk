@@ -769,6 +769,9 @@ const TCloud = {
       if (!(await Bridge.ensureProven())) return;
       const s = await Bridge.call("/cloudlink", null, 15000);
       if (!s.connected || s.url !== this.ingestUrl()){
+        // review M2 of 2.3.0: a computer key is made only when the bridge proved itself in this same step (a squatter that
+        // took the port since the call above gets no key made for it); Bridge.call proves it again before handing it over
+        if (!(await Bridge.ensureProven())) return;
         this.autoAt = Date.now() + 30 * 60000;
         // 2.3.0: one key per Windows user's bridge: "<PC> · <Windows user>"
         const d = await this.rpc("tally_device_create", {p_name: String([Bridge.st.computer || "Office computer", Bridge.st.user || ""].filter(Boolean).join(" \u00b7 ")).slice(0, 80)});

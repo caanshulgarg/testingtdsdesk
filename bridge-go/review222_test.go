@@ -73,7 +73,13 @@ func TestR222DuplicatedVoucherPair(t *testing.T) {
 // --- 2. a line whose GUID is not its MasterID in hex (a delete, nothing to fetch): its GUID only as lineGuid, flagged;
 // a line whose GUID and MasterID agree goes as before
 func TestR222MismatchFlag(t *testing.T) {
-	p, _, c := nwsBridge(t, "")
+	p, f, c := nwsBridge(t, "")
+	// review H1 of 2.3.0: 191 deleted in this Tally (a delete goes on only when this Tally shows it gone)
+	for _, v := range append([]*tVch{}, f.vch...) {
+		if v.master == "26311" {
+			f.remove(v)
+		}
+	}
 	liveAppend(t, p,
 		r222Line("after_delete", "08:10", r222GUID(25414), "25683", "51986", "Journal", "J-55", "5-Oct-2026", "x"),
 		r222Line("after_delete", "08:11", r222GUID(26311), "26311", "54391", "Receipt", "191", "5-Oct-2026", "y"))
