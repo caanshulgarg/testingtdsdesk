@@ -1,0 +1,133 @@
+bridge source: 9076c77 Bridge 2.2.4 built: setup SHA-256 51dde37d…11bb, release log row (2.2.3 superseded), test sheet fingerprint; 2.2.3 assets moved to bridge-go-old
+bridge: 9494016 bytes, SHA256 DE71C1EE15BDAD8DDCDB582B4CF8A5A5600520042C9A4E68DC8FC837015E2B60; add-on: 9609 bytes
+python: C:\hostedtoolcache\windows\Python\3.12.10\x64\python.exe
+stub answers
+[keys] sent 'a' to tally 'TallyPrime:9000'
+[keys] sent 't' to tally 'TallyPrime:9000'
+[shot] r3-00-gateway (1024x768)
+ledger Spike Income: <RESPONSE>
+ <CREATED>1</CREATED>
+ <ALTERED>0</ALTERED>
+ <DELETED>0</DELETED>
+ <LASTVCHID>0</LASTVCHID>
+ <LASTMID>0</LASTMID>
+ <COMBINED>0</COMBINED>
+ <IGNORED>0</IGNORED>
+ <ERRORS>0</ERRORS>
+ <CANCELLED>0</CANCELLED>
+ <EXCEPTIONS>0</EXCEPTIONS>
+</RESPONSE>
+
+bridge pid 3040
+===== after step 'start' (bridge running: True)
+  log: 2026-10-05 13:50:56  FinCom Bridge 2.2.4 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs in a window
+  log: 2026-10-05 13:50:56  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+  log: 2026-10-05 13:50:56  Recorder: re-scan of the add-on's files for 2.2.4: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+  log: 2026-10-05 13:50:56  Check:  - 
+  log: 2026-10-05 13:51:00  Company FinCom Spike Co: its Tally GUID 78257d7a-c68a-4ffc-a253-148c60566464 is held from now on
+  log: 2026-10-05 13:51:00  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=1, ALTMSTID=211 (reading is prospective only: the bridge follows what changes after this)
+  log: 2026-10-05 13:51:00  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=1, ALTMSTID=211
+  log: 2026-10-05 13:51:00  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=1, ALTMSTID=211)
+  cloud: 13:50:21 ping
+  cloud: 13:50:59 beat
+[keys] sent 'v' to tally 'TallyPrime:9000'
+[shot] r3-01-vouchers (1024x768)
+[keys] sent '{F6}' to tally 'TallyPrime:9000'
+[keys] sent '{F2}' to tally 'TallyPrime:9000'
+[keys] sent '2-10-2026{ENTER}' to tally 'TallyPrime:9000'
+[keys] sent 'Cash{ENTER}' to tally 'TallyPrime:9000'
+[keys] sent 'Spike Income{ENTER}' to tally 'TallyPrime:9000'
+[shot] r3-02-particular (1024x768)
+[keys] sent '700{ENTER}' to tally 'TallyPrime:9000'
+[keys] sent '^a' to tally 'TallyPrime:9000'
+[shot] r3-03-created (1024x768)
+===== after step 'a-create' (bridge running: True)
+  log: 2026-10-05 13:51:40  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 594a9ba8…): asking Tally by MasterID
+  log: 2026-10-05 13:51:45  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 594a9ba8…): taken: Tally's GUID 78257d7a-c68a-4ffc-a253-148c60566464-00000002, AlterID 2
+  cloud: 13:51:29 beat
+  cloud: 13:51:40 recorder_lines company=FinCom Spike Co lines=0
+  cloud: 13:51:45 recorder_lines company=FinCom Spike Co lines=1
+    LINE event=created object_guid=78257d7a-c68a-4ffc-a253-148c60566464-00000002 master_id=2 alter_id=2 vch=Receipt/1/20261002 xml=True heldWhy= idsMismatch= lineGuid=
+  cloud: 13:51:56 companies
+  cloud: 13:51:59 beat
+[keys] sent '%g' to tally 'TallyPrime:9000'
+[keys] sent 'Day Book' to tally 'TallyPrime:9000'
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[keys] sent '{F2}' to tally 'TallyPrime:9000'
+[keys] sent '2-10-2026{ENTER}' to tally 'TallyPrime:9000'
+[shot] r3-04-daybook (1024x768)
+[keys] sent '{END}' to tally 'TallyPrime:9000'
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r3-05-open (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r3-06-at-amount (1024x768)
+[keys] sent '800{ENTER}' to tally 'TallyPrime:9000'
+[keys] sent '^a' to tally 'TallyPrime:9000'
+[shot] r3-07-altered (1024x768)
+===== after step 'b-alter' (bridge running: True)
+  log: 2026-10-05 13:53:06  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line c0bbd1a4…): asking Tally by MasterID
+  log: 2026-10-05 13:53:10  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line c0bbd1a4…): taken: Tally's GUID 78257d7a-c68a-4ffc-a253-148c60566464-00000002, AlterID 3
+  cloud: 13:52:29 beat
+  cloud: 13:52:59 beat
+  cloud: 13:53:10 recorder_lines company=FinCom Spike Co lines=1
+    LINE event=altered object_guid=78257d7a-c68a-4ffc-a253-148c60566464-00000002 master_id=2 alter_id=3 vch=Receipt/1/20261002 xml=True heldWhy= idsMismatch= lineGuid=
+  cloud: 13:53:29 beat
+[keys] sent '%g' to tally 'TallyPrime:9000'
+[keys] sent 'Day Book' to tally 'TallyPrime:9000'
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[keys] sent '{F2}' to tally 'TallyPrime:9000'
+[keys] sent '2-10-2026{ENTER}' to tally 'TallyPrime:9000'
+[shot] r3-07b-daybook (1024x768)
+[keys] sent '{END}' to tally 'TallyPrime:9000'
+[keys] sent '%2' to tally 'TallyPrime:9000'
+[shot] r3-08-duplicate (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r3-09-dup-at-amount (1024x768)
+[keys] sent '900{ENTER}' to tally 'TallyPrime:9000'
+[shot] r3-09b-dup-amount (1024x768)
+[keys] sent '^a' to tally 'TallyPrime:9000'
+[shot] r3-10-dup-saved (1024x768)
+===== after step 'c-duplicate' (bridge running: True)
+  log: 2026-10-05 13:54:28  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 3, line 874fc108…): asking Tally by MasterID
+  log: 2026-10-05 13:54:32  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 3, line 874fc108…): taken: Tally's GUID 78257d7a-c68a-4ffc-a253-148c60566464-00000003, AlterID 4
+  cloud: 13:53:59 beat
+  cloud: 13:54:29 beat
+  cloud: 13:54:32 recorder_lines company=FinCom Spike Co lines=1
+    LINE event=created object_guid=78257d7a-c68a-4ffc-a253-148c60566464-00000003 master_id=3 alter_id=4 vch=Receipt/2/20261002 xml=True heldWhy= idsMismatch=True lineGuid=78257d7a-c68a-4ffc-a253-148c60566464-00000002
+  cloud: 13:54:59 beat
+[keys] sent '%g' to tally 'TallyPrime:9000'
+[keys] sent 'Day Book' to tally 'TallyPrime:9000'
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[keys] sent '{F2}' to tally 'TallyPrime:9000'
+[keys] sent '2-10-2026{ENTER}' to tally 'TallyPrime:9000'
+[shot] r3-10b-daybook (1024x768)
+[keys] sent '{HOME}' to tally 'TallyPrime:9000'
+[keys] sent '%x' to tally 'TallyPrime:9000'
+[keys] sent 'y' to tally 'TallyPrime:9000'
+[shot] r3-11-cancelled (1024x768)
+===== after step 'd-cancel' (bridge running: True)
+  cloud: 13:55:29 beat
+  cloud: 13:55:40 recorder_lines company=FinCom Spike Co lines=1
+    LINE event=cancelled object_guid= master_id=2 alter_id= vch=Receipt/1/20261002 xml=False heldWhy= idsMismatch= lineGuid=
+  cloud: 13:55:59 beat
+[keys] sent '%g' to tally 'TallyPrime:9000'
+[keys] sent 'Day Book' to tally 'TallyPrime:9000'
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[keys] sent '{F2}' to tally 'TallyPrime:9000'
+[keys] sent '2-10-2026{ENTER}' to tally 'TallyPrime:9000'
+[shot] r3-11b-daybook (1024x768)
+[keys] sent '{END}' to tally 'TallyPrime:9000'
+[keys] sent '%d' to tally 'TallyPrime:9000'
+[keys] sent 'y' to tally 'TallyPrime:9000'
+[shot] r3-12-deleted (1024x768)
+===== after step 'e-delete' (bridge running: True)
+  cloud: 13:56:29 beat
+  cloud: 13:56:52 recorder_lines company=FinCom Spike Co lines=1
+    LINE event=deleted object_guid= master_id=3 alter_id= vch=Receipt/2/20261002 xml=False heldWhy= idsMismatch= lineGuid=
+  cloud: 13:56:56 companies
+  cloud: 13:56:59 beat
+  cloud: 13:57:29 beat
+== round 3 end

@@ -1,0 +1,14 @@
+2026-10-05 13:50:56  FinCom Bridge 2.2.4 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs in a window
+2026-10-05 13:50:56  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+2026-10-05 13:50:56  Recorder: re-scan of the add-on's files for 2.2.4: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+2026-10-05 13:50:56  Check:  - 
+2026-10-05 13:51:00  Company FinCom Spike Co: its Tally GUID 78257d7a-c68a-4ffc-a253-148c60566464 is held from now on
+2026-10-05 13:51:00  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=1, ALTMSTID=211 (reading is prospective only: the bridge follows what changes after this)
+2026-10-05 13:51:00  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=1, ALTMSTID=211
+2026-10-05 13:51:00  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=1, ALTMSTID=211)
+2026-10-05 13:51:40  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 594a9ba8…): asking Tally by MasterID
+2026-10-05 13:51:45  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 594a9ba8…): taken: Tally's GUID 78257d7a-c68a-4ffc-a253-148c60566464-00000002, AlterID 2
+2026-10-05 13:53:06  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line c0bbd1a4…): asking Tally by MasterID
+2026-10-05 13:53:10  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line c0bbd1a4…): taken: Tally's GUID 78257d7a-c68a-4ffc-a253-148c60566464-00000002, AlterID 3
+2026-10-05 13:54:28  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 3, line 874fc108…): asking Tally by MasterID
+2026-10-05 13:54:32  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 3, line 874fc108…): taken: Tally's GUID 78257d7a-c68a-4ffc-a253-148c60566464-00000003, AlterID 4
