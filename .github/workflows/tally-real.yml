@@ -18,7 +18,7 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        os: [windows-2022]
+        os: [windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     env:
@@ -49,12 +49,16 @@ jobs:
         continue-on-error: true
         run: |
           & .github/tally-spike/flow.ps1 *>&1 | Tee-Object -FilePath $env:LOG -Append; exit 0
+      - name: Round 2 (Receipts, fetch A-H, screen create/alter/duplicate/cancel/delete)
+        continue-on-error: true
+        run: |
+          & .github/tally-spike/flow2.ps1 *>&1 | Tee-Object -FilePath "$env:RES\round2.log" -Append; exit 0
       - name: Commit results back to the branch
         if: always()
         run: |
           Get-Process tally -ErrorAction SilentlyContinue | Stop-Process -Force
           git config user.name "tally-spike"; git config user.email "tally-spike@users.noreply.github.com"
-          Select-String -Path $env:LOG -Pattern 'Caption|Windows Server|appeared|port 9000 answers|company created|import-voucher|^    FCR1' | Select-Object -First 9 | ForEach-Object { $m = $_.Line; if ($m.Length -gt 300) { $m = $m.Substring(0, 300) }; Write-Host "::notice::$m" }
+          Select-String -Path $env:LOG -Pattern 'Caption|company created' | Select-Object -First 3 | ForEach-Object { $m = $_.Line; if ($m.Length -gt 300) { $m = $m.Substring(0, 300) }; Write-Host "::notice::$m" }
           git status --short | Select-Object -First 20
           git add spike-results
           git commit -q -m "spike results ${{ github.run_id }} ${{ matrix.os }}`n`nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`nClaude-Session: https://claude.ai/code/session_01LprHoXx2ACgDW2AjxNH8wN"
