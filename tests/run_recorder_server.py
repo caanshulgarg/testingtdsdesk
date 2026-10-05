@@ -612,6 +612,14 @@ try:
     p3 = pl("I3")
     ok(c == 200 and st(r) == {"I3": "applied"} and not any(k in p3 for k in ("idsMismatch", "lineGuid", "heldWhy")),
        "51-3. a normal line: unchanged, applied, no new keys in its payload (%s)" % sorted(p3))
+    # 2.2.2 second review L-C: a line carrying lineFid (the bridge moved a copied FinCom id there) never takes fid from its
+    # narration's "TDSDesk:<id>"; lineFid kept (80 characters, the FinCom id's characters); a bad lineFid is dropped
+    c, r = reci([line("I4", "created", "", None, "20261003", company_guid=CGI, master_id="25690", vch_type="Journal", vch_no="J-4", narration="TDSDesk:fin9 | rent", lineFid="fin9")])
+    p4 = pl("I4")
+    ok(c == 200 and "fid" not in p4 and "short" not in p4 and p4.get("lineFid") == "fin9",
+       "L-C. lineFid fin9 with TDSDesk:fin9 in the narration: no fid taken from the narration, not short, lineFid kept (%s)" % {k: p4.get(k) for k in ("fid", "short", "lineFid")})
+    c, r = reci([line("I5", "created", "", None, "20261003", company_guid=CGI, master_id="25691", vch_type="Journal", vch_no="J-5", narration="x", lineFid="bad id!")])
+    ok(c == 200 and "lineFid" not in pl("I5"), "L-C. a lineFid outside the FinCom id's characters: not kept (%s)" % pl("I5").get("lineFid"))
     # ---------------------------------------------------------------- FinCom Bridge 2.2.2: the beat answers heldLines
     # the stand-in serves tables from memory: the database's recorder lines and month locks copied in as they are now
     FS.T["tally_recorder_lines"] = [dict(r, device_id=r["device_id"] or None) for r in db.rows(
