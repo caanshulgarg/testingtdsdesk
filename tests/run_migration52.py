@@ -15,6 +15,9 @@ PostgreSQL (pg_stand, port 30520; never a real database), built 32 -> ... -> 50 
   51's guards); line 7 not replaced by the September entry's alteration (and a held delete of it never applied with it); an
   unnumbered one only by its ":resolved" line. A FinCom posting later ALTERED in Tally (a full altered line with its body)
   is applied as an alteration.
+THE DECISION ON 52: (a) a genuine alteration in Tally to another date and number (the body Tally's own under the line's GUID,
+  naming what the line names) is applied, both days' cache right; (b) 2.2.0's September-under-October line (the body the
+  source's content) stays held; (c) a body whose own GUID is not the line's: held.
 RED: before the file exists it stops at the first check; with an empty file the checks of the rule fail."""
 import os, re, sys, json, hashlib, subprocess
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -161,12 +164,13 @@ try:
     got = states(apply([jl("n1", "created", G(0x6345), "25413", 51985, "FA/2026-27/141", "2026-10-02"),
                         jl("n-del", "deleted", G(0x6346), "25414", 52005, "FA/ELEC/025", "2026-10-01"),
                         jl("n-ph", "created", PH, "25415", 0, "FA/ELEC/026", "2026-10-01"),
-                        dict(jl("n-body", "altered", G(0x6346), "25414", 51999, "FA/ELEC/024", "2026-10-01"), **jbody(G(0x6346), 51999, "FA/ELEC/024", "2026-10-01", "Asset B", 250)),
+                        dict(jl("n-body", "altered", G(0x6346), "25414", 51999, "FA/ELEC/024", "2026-10-01"), **jbody(G(0x6346), 51999, "FA/ELEC/019", "2026-09-01", "Asset B", 250)),     # 2.2.0: September's content, the line says October
                         dict(jl("n-body2", "altered", G(0x6347), "25415", 51999, "FA/ELEC/020", "2026-09-01"), **jbody(G(0x6347), 51999, "FA/ELEC/032", "2026-10-01", "Asset C", 350))]))
     ok(got[0] == ("held", W % ("Journal FA/2026-27/141 of 02-Oct-2026", G(0x6345), "Journal of 01-Sep-2026", "in the copy")), "no body, by GUID: held, never 'duplicate' (%s)" % (got[0],))
     ok(got[1] == ("held", W % ("Journal FA/ELEC/025 of 01-Oct-2026", G(0x6346), "Journal FA/ELEC/019 of 01-Sep-2026", "in the copy")) and vch(G(0x6346)).get("deleted") == "f", "a delete naming another entry than the copy's at its GUID: held, nothing deleted (%s)" % (got[1],))
     ok(got[2] == ("held", W % ("Journal FA/ELEC/026 of 01-Oct-2026", G(0x6347), "Journal FA/ELEC/020 of 01-Sep-2026", "in the copy")), "the placeholder, by the GUID its MasterID makes: held, never 'duplicate' (%s)" % (got[2],))
-    ok(got[3] == ("held", W % ("Journal FA/ELEC/024 of 01-Oct-2026", G(0x6346), "Journal FA/ELEC/019 of 01-Sep-2026", "in the copy")) and vch(G(0x6346)).get("alter_id") == "51986", "a body under the September GUID: never applied as an alteration of it (%s)" % (got[3],))
+    ok(got[3] == ("held", W % ("Journal FA/ELEC/024 of 01-Oct-2026", G(0x6346), "Journal FA/ELEC/019 of 01-Sep-2026", "in the entry sent with the line")) and vch(G(0x6346)).get("alter_id") == "51986",
+       "(b) 2.2.0's September-under-October line (the body September's content, the line October's): held, never applied (%s)" % (got[3],))
     ok(got[4] == ("held", W % ("Journal FA/ELEC/020 of 01-Sep-2026", G(0x6347), "Journal FA/ELEC/032 of 01-Oct-2026", "in the entry sent with the line")) and vch(G(0x6347)).get("alter_id") == "51987", "a body that is another entry than the line names: held (%s)" % (got[4],))
     books_ok("the rule")
     print("== release")
@@ -185,6 +189,17 @@ try:
     day("2026-09-01", [JV(G(0x6345), 51985, "", "2026-09-01", "Asset A"), JV(G(0x6346), 52000, "FA/ELEC/019", "2026-09-01", "Asset B"), JV(G(0x6347), 51987, "FA/ELEC/020", "2026-09-01", "Asset C")],
         LN(G(0x6345), "Asset A", 100) + LN(G(0x6346), "Asset B", 210) + LN(G(0x6347), "Asset C", 300))
     ok(sw("n1")[0] == "held" and sw("n-ph")[0] == "held" and sw("n-del")[0] == "held" and vch(G(0x6346)).get("deleted") == "f", "01-Sep's Day Book stored again: the held lines naming other entries stay held, nothing deleted")
+    # the decision on 52: a genuine alteration that changes the date and number, its body Tally's own under the line's GUID, applies
+    got = states(apply([dict(jl("sep-redate", "altered", G(0x6346), "25414", 52300, "FA/ELEC/019A", "2026-09-02"), **jbody(G(0x6346), 52300, "FA/ELEC/019A", "2026-09-02", "Asset B", 220))]))
+    v6 = vch(G(0x6346))
+    ok(got[0][0] == "applied" and (v6.get("day"), v6.get("vno"), v6.get("alter_id"), v6.get("deleted")) == ("2026-09-02", "FA/ELEC/019A", "52300", "f")
+       and db.one("select count(*) from tally_voucher_versions where book_id = %s and tally_guid = %s" % (q(B), q(G(0x6346)))) not in ("0", "1"),
+       "(a) FA/ELEC/019 of 01-Sep altered in Tally to FA/ELEC/019A of 02-Sep, the body its own GUID ...6346: applied, the copy shows 02-Sep / FA/ELEC/019A, versions kept (%s, %s)" % (got, v6))
+    ok(db.one("select coalesce(sum(amount), 0) from tally_ledger_day where book_id = %s and ledger = 'Asset B' and day = '2026-09-01'" % q(B)) == "0"
+       and db.one("select sum(amount) from tally_ledger_day where book_id = %s and ledger = 'Asset B' and day = '2026-09-02'" % q(B)) == "220", "(a) the day cache: Asset B left 01-Sep, 220 on 02-Sep")
+    books_ok("(a) the alteration across days")
+    got = states(apply([dict(jl("n-otherguid", "altered", G(0x6347), "25415", 52200, "FA/ELEC/020", "2026-09-01"), **jbody(G(0x6399), 52200, "FA/ELEC/020", "2026-09-01", "Asset C", 330))]))
+    ok(got[0][0] == "held" and vch(G(0x6347)).get("alter_id") == "51987" and vch(G(0x6399)) == {}, "(c) a body whose own GUID is not the line's: held, nothing applied (%s)" % (got,))
     rel = j("select tally_recorder_release_held(%s)::text" % row("n1")["id"], OWNER)
     ok(rel.get("state") == "held", "an owner's release of such a line: still held (%s)" % rel.get("state"))
     books_ok("release")

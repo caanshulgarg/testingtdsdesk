@@ -11,9 +11,12 @@
 --      entry sent with the line (a body naming another entry than the line does) and the entry its MasterID makes (a placeholder
 --      or GUID-less line). Such a line is held: "the add-on named entry <type> <no> of <date>, but GUID <g> is <type> <no> of
 --      <date> in the copy; held until FinCom Bridge sends this entry as Tally gives it" ("in the entry sent with the line" for a
---      body), the bridge's heldWhy after it when given. A genuine alteration that changes an entry's type, date or number, sent
---      as a line, is therefore held too (never overwriting the entry the GUID holds on a guess); a Day Book upload of the new
---      date brings it, and the held line then runs again and matches.
+--      body), the bridge's heldWhy after it when given. THE DECISION ON 52: a line carrying a body whose own GUID is the line's
+--      and whose own type, date and number are the line's is the alteration of that GUID and is applied, the copy's old date /
+--      number replaced (versions kept as usual): from 2.2.2 the body and its GUID come from Tally (fetched by MasterID, the GUID
+--      its MasterID in hex); an older bridge's body fetched by the source's MasterID carries the source's own content, which then
+--      differs from the line: held. Held: no body and the copy's entry differs; a body whose own GUID is not the line's (no body
+--      of this GUID); a body whose type / date / number differ from the line's; a delete / cancel whose entry differs.
 --   2. RELEASE. A held line is replaced by GUID or MasterID only by a line that brought this same entry (50's same-GUID and
 --      MasterID rules, now with the type / date / number check). A numbered held line whose stored GUID is another entry in the
 --      copy is replaced when its own entry arrives under Tally's own GUID: by type, number and date under the same company, when
@@ -91,7 +94,9 @@ begin
   if og is not null and not ph and ev in ('created', 'altered', 'imported', 'deleted', 'cancelled') then
     select true, nullif(btrim(v.vtype), ''), nullif(btrim(v.vno), ''), v.day into cx_found, cx_t, cx_n, cx_d from tally_vouchers v where v.book_id = p_book and v.guid = og;
     cx_found := coalesce(cx_found, false);
-    dif_c := cx_found and ((lt is not null and cx_t is not null and lt <> cx_t) or (vd is not null and cx_d is not null and vd <> cx_d) or (lno is not null and cx_n is not null and lno <> cx_n));
+    -- the decision on 52: a line WITH a body (Tally's entry under the line's own GUID, naming what the line names) is the
+    -- alteration of that GUID, whatever date or number the copy had; only a line without one is checked against the copy
+    dif_c := cx_found and not hb and ((lt is not null and cx_t is not null and lt <> cx_t) or (vd is not null and cx_d is not null and vd <> cx_d) or (lno is not null and cx_n is not null and lno <> cx_n));
   end if;
   if hb then
     select x into bv from jsonb_array_elements(p_line->'vouchers') x where x->>'guid' = og limit 1;
