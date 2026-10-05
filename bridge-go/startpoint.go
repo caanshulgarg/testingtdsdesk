@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -328,12 +329,12 @@ func recorderHolding(company, guid string) (bool, string) {
 	if !ok {
 		return false, ""
 	}
-	// 2.2.2: the live add-on's daily files, <GUID>-<yyyymmdd>.txt (recorder_live.go reLiveFile), count as well
+	// 2.2.2: the live add-on's daily files, <GUID>-<yyyymmdd>.txt (any case), count as well: the newest one holding at
+	// least one valid recorder line of that GUID (review L6, security L7). The folder is listed at most once in 10 s
 	if plainFileName(guid) {
-		m, _ := filepath.Glob(filepath.Join(dir, "*.txt"))
-		for _, f := range m {
-			if g := reLiveFile.FindStringSubmatch(filepath.Base(f)); g != nil && g[1] == guid {
-				names = append(names, filepath.Base(f))
+		for _, f := range liveDailyFiles(dir) {
+			if g := reLiveFileAnyCase.FindStringSubmatch(filepath.Base(f.name)); g != nil && strings.EqualFold(g[1], guid) && f.mod.After(newest) && dailyHasLine(dir, f, guid) {
+				newest = f.mod
 			}
 		}
 	}
@@ -346,6 +347,73 @@ func recorderHolding(company, guid string) (bool, string) {
 		return false, ""
 	}
 	return time.Since(newest) <= 7*24*time.Hour, newest.Format("2006-01-02T15:04:05")
+}
+
+var (
+	reLiveFileAnyCase = regexp.MustCompile(`(?i)^(.+)-(\d{8}|\d{4}-\d{2}-\d{2})\.txt$`)
+	dailyMu           sync.Mutex
+	dailyAt           time.Time
+	dailyDirMod       time.Time
+	dailyDir          string
+	dailyList         []dailyFile
+	dailyValid        = map[string]bool{} // name|size|time|guid -> it holds a valid line of that GUID
+)
+
+type dailyFile struct {
+	name string
+	mod  time.Time
+	size int64
+}
+
+// the recorder folder's .txt files (any case), listed at most once in 10 s
+func liveDailyFiles(dir string) []dailyFile {
+	dailyMu.Lock()
+	defer dailyMu.Unlock()
+	var mod time.Time
+	if fi, err := os.Stat(dir); err == nil {
+		mod = fi.ModTime()
+	}
+	if dir == dailyDir && mod.Equal(dailyDirMod) && time.Since(dailyAt) < 10*time.Second {
+		return dailyList // nothing added or removed since (a file written to changes its own time: it is read below)
+	}
+	dailyDir, dailyDirMod, dailyAt, dailyList = dir, mod, time.Now(), nil
+	es, _ := os.ReadDir(dir)
+	for _, e := range es {
+		if !e.Type().IsRegular() || !strings.EqualFold(filepath.Ext(e.Name()), ".txt") {
+			continue
+		}
+		if fi, err := e.Info(); err == nil {
+			dailyList = append(dailyList, dailyFile{e.Name(), fi.ModTime(), fi.Size()})
+		}
+	}
+	return dailyList
+}
+
+// a daily file holds at least one valid recorder line of that company GUID (its first 64 KB, read shared)
+func dailyHasLine(dir string, f dailyFile, guid string) bool {
+	k := f.name + "|" + fmt.Sprint(f.size) + "|" + f.mod.String() + "|" + strings.ToLower(guid)
+	dailyMu.Lock()
+	v, had := dailyValid[k]
+	dailyMu.Unlock()
+	if had {
+		return v
+	}
+	ok := false
+	if b, _, err := readSharedFrom(filepath.Join(dir, f.name), 0, 64<<10); err == nil {
+		for _, l := range parseRecorderText(decodeRecorderText(b)) {
+			if strings.EqualFold(strings.TrimSpace(l.CGUID), guid) {
+				ok = true
+				break
+			}
+		}
+	}
+	dailyMu.Lock()
+	if len(dailyValid) > 500 {
+		dailyValid = map[string]bool{}
+	}
+	dailyValid[k] = ok
+	dailyMu.Unlock()
+	return ok
 }
 
 // round 19 (review finding 8): asked again right after the light check took the Tally lock (it may have waited behind
