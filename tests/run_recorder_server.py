@@ -41,6 +41,9 @@ Migration 51 (FinCom Bridge 2.2.2; the order now 32 -> ... -> 47 -> 48 -> 49 -> 
 true, lineGuid <company GUID>-00006346 (an entry the copy holds) and heldWhy -> held, never duplicate, held_why = heldWhy, the
 payload keeping idsMismatch / lineGuid / heldWhy; a heldWhy over 300 characters cut to 300; idsMismatch "yes" (not true) not
 kept; a normal line unchanged (no new keys). 50's words for a line with no GUID: "waiting for the entry's details ...".
+FinCom Bridge 2.2.2: the beat answers heldLines (this computer's held lines of the last 7 days, created / altered / imported,
+the company still linked to the book, the month not locked, oldest first, at most 200: line_id, company, company_guid, event,
+master_id, vch_type, vch_no, vch_date) and leaves the field out when there are none.
 Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno)."""
 import os, sys, json, time, hashlib, subprocess, urllib.request, shutil, threading
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -609,6 +612,34 @@ try:
     p3 = pl("I3")
     ok(c == 200 and st(r) == {"I3": "applied"} and not any(k in p3 for k in ("idsMismatch", "lineGuid", "heldWhy")),
        "51-3. a normal line: unchanged, applied, no new keys in its payload (%s)" % sorted(p3))
+    # ---------------------------------------------------------------- FinCom Bridge 2.2.2: the beat answers heldLines
+    # the stand-in serves tables from memory: the database's recorder lines and month locks copied in as they are now
+    FS.T["tally_recorder_lines"] = [dict(r, device_id=r["device_id"] or None) for r in db.rows(
+        "select id, line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date::text as vch_date, book_id::text as book_id, firm_id::text as firm_id, "
+        "device_id::text as device_id, state, to_char(received_at at time zone 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') as received_at from tally_recorder_lines order by id")]
+    FS.T["tally_month_locks"] = [dict(r, unlocked_at=r["unlocked_at"] or None) for r in db.rows("select book_id::text as book_id, month::text as month, unlocked_at::text as unlocked_at from tally_month_locks")]
+    old_ = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(time.time() - 8 * 86400))
+    FS.T["tally_recorder_lines"] += [
+        {"line_id": "H-OLD", "company": "ZZ IDS", "company_guid": CGI, "event": "created", "master_id": "1", "vch_type": "Journal", "vch_no": "J-9", "vch_date": "2026-10-01",
+         "book_id": BI, "firm_id": FIRM, "device_id": DA, "state": "held", "received_at": old_},
+        {"line_id": "H-B", "company": "ZZ IDS", "company_guid": CGI, "event": "created", "master_id": "2", "vch_type": "Journal", "vch_no": "J-8", "vch_date": "2026-10-01",
+         "book_id": BI, "firm_id": FIRM, "device_id": DB_, "state": "held", "received_at": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())},
+        {"line_id": "I1:resolved", "company": "ZZ IDS", "company_guid": CGI, "event": "created", "master_id": "25683", "vch_type": "Journal", "vch_no": "J-1", "vch_date": "2026-10-01",
+         "book_id": BI, "firm_id": FIRM, "device_id": DA, "state": "held", "received_at": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())}]
+    c, r = call({"kind": "beat", "version": "2.2.2", "bridge": dict(GA, version="2.2.2"), "tally": True, "open": []})
+    hl = r.get("heldLines") or []
+    got_ids = [x.get("line_id") for x in hl]
+    ok(c == 200 and "I1" in got_ids and "I2" in got_ids and "H-OLD" not in got_ids and "H-B" not in got_ids and "I1:resolved" not in got_ids and "L9" not in got_ids,
+       "2.2.2. the beat answers heldLines: this computer's held lines of the last 7 days (I1, I2), not another computer's, not older, not a :resolved one, not a locked month (%s)" % got_ids)
+    i1 = next((x for x in hl if x.get("line_id") == "I1"), {})
+    ok(set(i1) == {"line_id", "company", "company_guid", "event", "master_id", "vch_type", "vch_no", "vch_date"} and i1.get("master_id") == "25683" and i1.get("vch_date") == "20261001"
+       and i1.get("event") == "created" and i1.get("company") == "ZZ IDS" and len(hl) <= 200,
+       "2.2.2. each held line: line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date (yyyymmdd), nothing else (%s)" % i1)
+    at_ = {x["line_id"]: x["received_at"] for x in FS.T["tally_recorder_lines"]}
+    ok([at_[x] for x in got_ids] == sorted(at_[x] for x in got_ids), "2.2.2. oldest first (%s)" % got_ids)
+    FS.T.pop("tally_recorder_lines", None)
+    c2, r2 = call({"kind": "beat", "version": "2.2.2", "bridge": dict(GA, version="2.2.2"), "tally": True, "open": []})
+    ok(c2 == 200 and "heldLines" not in r2, "2.2.2. no held lines: the field left out, the beat answered (%s)" % c2)
 finally:
     if fn: fn.terminate()
     db.stop()
