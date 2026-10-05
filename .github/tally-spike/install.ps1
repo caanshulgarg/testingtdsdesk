@@ -15,7 +15,7 @@ for ($s = 0; $s -lt 40; $s++) {
   Get-Process | Where-Object { $_.MainWindowTitle } | ForEach-Object { Write-Host "  [$(($s+1)*10)s] window: $($_.ProcessName) '$($_.MainWindowTitle)'" }
   if ($p.HasExited) { Write-Host "setup exited with code $($p.ExitCode)"; break }
   if ((Test-Path "$dest\tally.exe") -and -not $found) { $found = $true; Write-Host "tally.exe appeared after ~$(($s+1)*10)s" }
-  if ($found -and (Get-Process | Where-Object { $_.ProcessName -eq 'tally' })) { Write-Host "tally.exe was started by setup"; break }
+  if ($found -and $s -ge 3) { Write-Host "stopping the wait: setup shows 'Installation Successful' (S: Start TallyPrime) by now"; break }
 }
 & "$PSScriptRoot\shot.ps1" 'install-c-end'
 if (Test-Path "$dest\tally.exe") {

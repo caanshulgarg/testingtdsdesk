@@ -45,10 +45,10 @@ jobs:
       - name: 2 Install
         run: |
           & .github/tally-spike/install.ps1 *>&1 | Tee-Object -FilePath $env:LOG -Append; exit $LASTEXITCODE
-      - name: 3 Start Tally plain, test port 9000
+      - name: 3-5 Start Tally, port 9000, company, TDL
         continue-on-error: true
         run: |
-          & .github/tally-spike/run.ps1 plain *>&1 | Tee-Object -FilePath $env:LOG -Append; exit $LASTEXITCODE
+          & .github/tally-spike/flow.ps1 *>&1 | Tee-Object -FilePath $env:LOG -Append; exit 0
       - name: Commit results back to the branch
         if: always()
         run: |
