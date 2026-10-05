@@ -291,8 +291,9 @@ func copyVouchersAll(dir string) int {
 
 // the head of a Tally answer for the log: its first 200 characters with the tags only (attributes and every value
 // between tags dropped, so no figure or name is logged) and runs of white space collapsed to one space
+// (CMPINFO's counters dropped first: a real Tally's would fill the 200 characters before its data)
 func answerHead(x string) string {
-	t := re(`<([/?!]?[\w.:-]*)[^>]*>`).ReplaceAllString(x, "<$1>")
+	t := re(`<([/?!]?[\w.:-]*)[^>]*>`).ReplaceAllString(dropCmpInfo(x), "<$1>")
 	t = re(`>[^<]*<`).ReplaceAllString(t, "><")
 	if i := strings.Index(t, "<"); i >= 0 {
 		t = t[i:]
