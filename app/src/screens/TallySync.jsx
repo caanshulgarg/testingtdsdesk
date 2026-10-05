@@ -29,7 +29,7 @@ export default function SyncActivity() {
     <p className="note" style={{ margin: "6px 0 8px" }}>Every change saved in Tally on a computer with FinCom’s recorder, as FinCom’s cloud received it: entered in the books, already in the books, or received and not yet entered, with the reason. Newest first.</p>
     {wait.length > 0 && <div className="bk-alert warn" data-sync-waiting="" style={{ margin: "0 0 8px" }}>
       <b>{wait.length + (wait.length === 1 ? " line" : " lines") + " waiting over 2 minutes"}</b>
-      {wait.map(({ r, why }) => <div key={r.id} data-sync-waiting-line={String(r.id)}>{Rec.entry(r) + (r.pc ? " from " + r.pc : "") + ", received " + tallyHm(r.received_at) + ": " + why}</div>)}
+      {wait.map(({ r, why }) => <div key={r.id} data-sync-waiting-line={String(r.id)}>{Rec.entry(r) + (r.pc ? " from " + r.pc : "") + ", received " + tallyHm(r.received_at) + (r.state === "held" && r.held_why ? ", not yet entered in the books: " + r.held_why : ": " + why)}</div>)}
     </div>}
     <nav className="sbar" aria-label="Sync activity filter">{FILTERS.map(([id, label]) =>
       <button key={id} data-sync-filter={id} aria-selected={f === id} onClick={() => setF(id)}>{label}</button>)}</nav>

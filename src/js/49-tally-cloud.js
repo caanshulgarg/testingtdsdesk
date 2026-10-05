@@ -1406,6 +1406,11 @@ function tallyStatus(co){
   // nothing ready to post, but bills or postings that need a decision (Post to Tally → Needs your attention): not "in sync"
   const attn = cos.reduce((a, c) => a + (typeof postAttentionFor === "function" ? postAttentionFor(c.id) : 0), 0);
   if (attn > 0) return out({state: "attention", level: "warn", label: attn + " to check in Tally", say: attn + (attn === 1 ? " bill or posting needs" : " bills or postings need") + " your attention under Post to Tally" + (co ? "" : " (all clients)") + "."});
+  // the owner's finding of 05-Oct-2026: a line Tally sent that is HELD (tally_recorder_lines.state = 'held') is not in the
+  // books, so a book with one is never "in sync": "N received, not yet entered in the books", with the reasons
+  const held = typeof AlertHub === "object" && AlertHub.heldFor ? AlertHub.heldFor(co ? [co.id] : cos.map(c => c.id)) : [];
+  if (held.length) return out({state: "held", level: "warn", label: AlertHub.heldSay(held.map(l => ({held_why: ""})), true),
+    say: held.length === 1 ? "1 entry " + AlertHub.heldSay(held) + "." : held.length + " entries received from Tally are not yet entered in the books" + (co ? "" : " (all clients)") + ": " + [...new Set(held.map(l => l.held_why || "no reason given"))].slice(0, 3).join("; ") + ". See Tally \u2192 Sync activity."});
   if (tally === "busy") return out({state: "busy", level: "warn", label: "Connected \u2013 Tally busy", say: "The bridge is connected. Tally is open but answering slowly" + (busySince ? " since " + fmtDateTime(Date.parse(busySince)) : "") + " (a long report, or a message box in Tally); the bridge asks again by itself and nothing is lost."});
   const light = co && typeof TLight === "object" ? TLight.st.by[co.id] : null;
   return out({state: "ok", level: "ok", label: "Connected & in sync", say: "Tally is connected" + (local ? " on this computer" : " (" + devs.length + " computer" + (devs.length === 1 ? "" : "s") + " sending)") + " and nothing waits to be sent." + (light ? " " + light.say : "")});

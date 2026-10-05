@@ -34,7 +34,7 @@ function Setup({ b }) {
   const ts = tallyStatus(CO());
   if (!Bridge.on()) {
     const cloud = !["none", "offline"].includes(ts.state);
-    bok = ts.state === "ok";
+    bok = ts.state === "ok" || ts.state === "held";   // connected; a held line is said by the pill
     bs = <><TallyPill co={CO()} />{" "}{cloud
       ? "Through the firm’s Tally computer (FinCom’s cloud). There is no bridge on this computer; it is needed only on the computer with Tally, to post entries and bring in each day’s changes."
       : "Needed only on the computer with Tally: it posts entries and brings in each day’s changes."}</>;

@@ -44,6 +44,7 @@ run_gst_api_ui.py                     120
 run_gstq.js                           120
 run_gstregs_ui.py                     120  TDSDESK_SITE=../app/dist-test
 run_gstset.js                         120
+run_held_not_in_sync.py               120  TDSDESK_SITE=../app/dist-test
 run_hostile_ui.py                     120
 run_itemvch.js                        120
 run_keep_daily.py                     420
@@ -155,5 +156,6 @@ run_migration49.py                    180
 run_migration50.py                    180
 run_migration51.py                    120
 run_migration52.py                    120
+run_migration53.py                    120
 run_recorder_held_words.py            120  TDSDESK_SITE=../app/dist-test
 run_alerts_one_place.py               300  TDSDESK_SITE=../app/dist-test
