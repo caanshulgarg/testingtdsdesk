@@ -316,9 +316,18 @@ function postStatus(entry, job, ids, marks, ctx){
       // decision B (migration 55): "Not in Tally - post again" asked: the FinCom Bridge looks in Tally first; until it has,
       // the row says so in plain words (who asked, when, why, what the bridge said last); nothing is sent meanwhile
       const ck = ctx.check && ctx.check.state === "waiting" ? ctx.check : null;
+      // final review: a check given up (10 tries or 24 hours) or withdrawn says so; the person looks in Tally and settles it
+      const ckDone = ctx.check && ctx.check.state === "given_up" ? (postReasonText(ctx.check.words) || "FinCom stopped looking in Tally for this entry by itself. Look in Tally: use Mark posted if it is there, or press Not in Tally \u2013 post again only after checking.") + " "
+        : ctx.check && ctx.check.state === "withdrawn" ? "The check was withdrawn by " + (ctx.me && ctx.check.withdrawn_by === ctx.me ? "you" : postWhoSay(ctx.check.withdrawn_by) || "a member") + (ctx.check.withdrawn_at ? " on " + postWhenSay(ctx.check.withdrawn_at) : "") + (ctx.check.withdrawn_why ? " (" + ctx.check.withdrawn_why + ")" : "") + "; nothing was released or sent. " : "";
+      // the owner's rule: the bridge did not see it on that day ("notseen"): nothing is sent; a person looks in Tally and
+      // confirms "not there" (the only way it is sent again), or marks it posted
+      const ns = ctx.check && ctx.check.state === "notseen" ? ctx.check : null;
+      if (ns) return mk(6, (postReasonText(ns.words) || "Tally has no such voucher on that day. FinCom cannot see other dates, so a person must confirm: look in Tally (Day Book, or search the narration TDSDesk:" + String(e.id) + "); if it is not there, press \u2018I looked in Tally: not there \u2013 post again\u2019 (reason required).")
+          + (ns.checked_at ? " (The FinCom Bridge looked on " + postWhenSay(ns.checked_at) + ".)" : ""),
+        {kind: "settle", label: "It is in Tally: mark posted (Tally id)"}, {reason, id: tid, posted: at, accepted: !!acc, checking: live, notSeen: ns});
       if (ck) return mk(6, "Checking Tally before it is sent again: " + (postReasonText(ck.last_words) || "waiting for the FinCom Bridge to look in Tally") + ". Asked by " + (ctx.me && ck.asked_by === ctx.me ? "you" : postWhoSay(ck.asked_by) || "a member") + (ck.asked_at ? " on " + postWhenSay(ck.asked_at) : "") + (ck.why ? " (" + ck.why + ")" : "") + ". It is looked in again by itself; nothing is sent until the bridge finds it is not there.",
         {kind: "settle", label: "It is in Tally: mark posted (Tally id)"}, {reason, id: tid, posted: at, accepted: !!acc, checking: live, check: ck});
-      return mk(6, (ctx.differs ? ctx.differs + " " : "") + reason.reason + (tid.ids.length === 1 ? " (Tally id " + tid.ids[0] + ")" : "") + ". " + (reason.fix || "Look in Tally's Day Book: if it is there, mark it posted; if not, press Not in Tally – post again (the FinCom Bridge looks in Tally first).") + (deleted ? " The bill is " + (ctx.missing ? "no longer in FinCom." : "deleted in FinCom.") : ""),
+      return mk(6, ckDone + (ctx.differs ? ctx.differs + " " : "") + reason.reason + (tid.ids.length === 1 ? " (Tally id " + tid.ids[0] + ")" : "") + ". " + (reason.fix || "Look in Tally's Day Book: if it is there, mark it posted; if not, press Not in Tally – post again (the FinCom Bridge looks in Tally first).") + (deleted ? " The bill is " + (ctx.missing ? "no longer in FinCom." : "deleted in FinCom.") : ""),
         live && !acc ? null : {kind: "settle", label: "It is in Tally: mark posted (Tally id)"}, {reason, id: tid, posted: at, accepted: !!acc, checking: live});
     }
     if (live){
@@ -389,7 +398,8 @@ const PostMarks = {
 };
 // decision B (05-Oct-2026, migration 55): the checks "Not in Tally - post again" asked of the FinCom Bridge
 // (tally_post_checks), the newest per posting and entry: waiting (the bridge has not looked yet, or Tally could not be
-// asked: last_words), found, notfound. A cloud without 55: none
+// asked: last_words), found, notfound; superseded (a Mark posted closed it), withdrawn (by the asker or an owner) and
+// given_up (10 tries or 24 hours, in words): the final review of 2.3.0. A cloud without 55: none
 const PostChecks = {
   by: {}, readable: null, busy: {},
   async load(cid, force){
@@ -398,7 +408,7 @@ const PostChecks = {
     if (!key || (!force && s && s.key === key && Date.now() - s.at < 20000)) return;
     this.busy[cid] = true;
     try {
-      const rows = await TCloud.restAll("tally_post_checks?select=id,job_id,entry_id,state,why,asked_by,asked_at,last_words,tries,checked_at,words,resent&job_id=in.(" + key + ")&order=id.asc");
+      const rows = await TCloud.restAll("tally_post_checks?select=*&job_id=in.(" + key + ")&order=id.asc");
       const m = new Map();
       [].concat(rows || []).forEach(x => { if (x && x.job_id) m.set(x.job_id + "|" + x.entry_id, x); });
       const sig = JSON.stringify([...m.entries()]);

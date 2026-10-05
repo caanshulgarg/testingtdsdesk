@@ -57,6 +57,9 @@ try:
     c, r = call({"kind": "post_check", "version": "2.3.0", "bridge": ME, "check": 1, "result": "found", "company": "ZZ CO", "vch": "26301", "master": "9911"})
     a = F.ARGS["tally_post_check_report"][-1]
     ok(c == 200 and a.get("p_vch") == "26301" and a.get("p_master") == "9911", "B3. found: the voucher number and Tally's id passed on (%s)" % a)
+    c, r = call({"kind": "post_check", "version": "2.3.0", "bridge": ME, "check": 1, "result": "notseen", "company": "ZZ CO", "words": "Tally has no voucher Purchase B-1 on 05-07-2026 in ZZ CO"})
+    a = F.ARGS["tally_post_check_report"][-1]
+    ok(c == 200 and a.get("p_result") == "notseen" and "B-1" in a.get("p_words", ""), "owner's rule. notseen (Tally answered, nothing that day) goes to the database, which never releases on it (%s %s)" % (c, a))
     n = len(F.ARGS["tally_post_check_report"])
     c, r = call({"kind": "post_check", "version": "2.3.0", "bridge": ME, "check": 1, "result": "posted"})
     ok(c == 400 and len(F.ARGS["tally_post_check_report"]) == n, "B3. a result other than found / notfound / unable is refused (%s %s)" % (c, r.get("error")))
@@ -86,6 +89,50 @@ try:
     F.LEASE7_MISSING[0] = True
     c, r = call({"kind": "lease_take", "version": "2.3.0", "bridge": ME, "company": "ZZ CO", "ttl": 120, "purpose": "post"})
     ok(c == 200 and r.get("held") is False and "p_purpose" not in F.ARGS["tally_lease_take"][-1], "D1. a cloud without 55: the 6-argument call (%s | %s)" % (r, F.ARGS["tally_lease_take"][-1]))
+    # ---- the final review of 2.3.0
+    # M1: another Windows user's bridge on the same key (the key's main bridge is anshul's): its posts_take and post_check
+    # go to the database as NOT the main bridge, so a posting with no record of its bridge is never its to check
+    OTHERU = {"id": "go-dddd000004", "computer": "NW144", "user": "NW144\\meena", "mode": "main", "runMode": "user", "version": "2.3.0", "port": 9102}
+    dev["main_bridge"] = ME["id"]; dev["info"]["bridges"][ME["id"]]["user"] = ME["user"]; dev["info"]["bridges"][OTHERU["id"]] = {"at": "2026-10-05T10:00:00Z", "user": OTHERU["user"]}
+    F.T.setdefault("tally_bridge_ids", []).append({"bridge_id": OTHERU["id"], "device_id": "d-5", "firm_id": FIRM})
+    F.ARGS.pop("tally_post_checks_for", None); F.ARGS.pop("tally_post_check_report", None)
+    c, r = call({"kind": "posts_take", "version": "2.3.0", "bridge": OTHERU})
+    a = (F.ARGS.get("tally_post_checks_for") or [{}])[-1]
+    ok(c == 200 and not r.get("checks") and a.get("p_bridge") == OTHERU["id"] and a.get("p_main") is False, "final M1. another Windows user's bridge on the key: asked as not the main one, given no check (%s | %s)" % (r.get("checks"), a))
+    c, r = call({"kind": "post_check", "version": "2.3.0", "bridge": OTHERU, "check": 1, "result": "notfound", "company": "ZZ CO"})
+    a = (F.ARGS.get("tally_post_check_report") or [{}])[-1]
+    ok(a.get("p_bridge") == OTHERU["id"] and a.get("p_main") is False, "final M1. its answer goes to the database as not the main one (the database refuses it) (%s)" % a)
+    c, r = call({"kind": "posts_take", "version": "2.3.0", "bridge": ME})
+    a = F.ARGS["tally_post_checks_for"][-1]
+    ok(a.get("p_bridge") == ME["id"] and a.get("p_main") is True, "final M1. the key's main bridge is asked as main (%s)" % a)
+    # M1 / L2: the re-send names only the released entries; an update of the bridge keeps the others
+    jm = F.T["tally_post_jobs"][0]
+    jm.update({"status": "waiting", "target_bridge": ME["id"], "resend_only": ["K2"], "results": [{"id": "K1", "ok": True, "byReply": True, "vchId": "501"}, {"id": "K2", "ok": False, "state": "notfound", "byOwner": True, "byOwnerAt": "2026-10-05T10:00:00Z"}],
+               "items": [{"id": "K1", "state": "posted"}, {"id": "K2", "state": "notfound", "byOwner": True, "byOwnerAt": "2026-10-05T10:00:00Z"}]})
+    jm["payload"]["vouchers"].append({"id": "K1", "xml": "<VOUCHER><NARRATION>TDSDesk:K1</NARRATION></VOUCHER>"})
+    c, r = call({"kind": "posts_take", "version": "2.3.0", "bridge": ME})
+    ok(c == 200 and (r.get("job") or {}).get("id") == "j-mine" and (r.get("job") or {}).get("resendOnly") == ["K2"], "final M1. the hand-back names the one entry to send (resendOnly) (%s)" % r.get("job"))
+    c, r = call({"kind": "posts_update", "version": "2.3.0", "bridge": ME, "id": "j-mine", "status": "done", "done": 1, "message": "Posted 1 of 1", "updatedAt": "2026-10-05T11:00:00Z",
+                 "results": [{"id": "K2", "ok": True, "byReply": True, "vchId": "502", "batchN": 1, "acceptedAt": "2026-10-05T11:00:00Z"}], "items": [{"id": "K2", "state": "posted"}]})
+    ids_ = sorted(x.get("id") for x in jm.get("results") or [])
+    ok(c == 200 and ids_ == ["K1", "K2"] and next(x for x in jm["results"] if x["id"] == "K1").get("vchId") == "501", "final M1. the bridge reported only K2: K1's result is kept (%s)" % jm.get("results"))
+    # M3: the bridge moves itself to its new key: the call comes with the NEW key and the OLD key in its body
+    KEY2 = "fcd_" + "f" * 48
+    F.T["tally_devices"].append({"id": "d-6", "firm_id": FIRM, "name": "NW144 · anshul (own)", "key_hash": hashlib.sha256(KEY2.encode()).hexdigest(), "revoked": False, "info": {}, "version": "2.3.0", "created_by": "u-1"})
+    F.T["tally_devices"].append({"id": "d-7", "firm_id": "f-other", "name": "OTHER", "key_hash": hashlib.sha256(("fcd_" + "a" * 48).encode()).hexdigest(), "revoked": False, "info": {}, "version": "2.3.0"})
+    def call2(body, key):
+        rq = urllib.request.Request("http://127.0.0.1:8000/", data=json.dumps(body).encode(), headers={"Content-Type": "application/json", "x-fincom-device": key})
+        try: r = urllib.request.urlopen(rq, timeout=60); return r.status, json.loads(r.read())
+        except urllib.error.HTTPError as e: return e.code, json.loads(e.read() or b"{}")
+    n0 = len(F.ARGS.get("tally_bridge_own_key_move") or [])
+    c, r = call2({"kind": "own_key", "version": "2.3.0", "bridge": ME, "oldKey": "fcd_" + "9" * 48}, KEY2)
+    ok(c == 403 and len(F.ARGS.get("tally_bridge_own_key_move") or []) == n0, "final M3. own_key with an old key FinCom does not know: refused, nothing moved (%s %s)" % (c, r))
+    c, r = call2({"kind": "own_key", "version": "2.3.0", "bridge": ME, "oldKey": "fcd_" + "a" * 48}, KEY2)
+    ok(c == 403 and len(F.ARGS.get("tally_bridge_own_key_move") or []) == n0, "final M3. an old key of another firm: refused (%s %s)" % (c, r))
+    c, r = call2({"kind": "own_key", "version": "2.3.0", "bridge": ME, "oldKey": KEY}, KEY2)
+    a = (F.ARGS.get("tally_bridge_own_key_move") or [{}])[-1]
+    ok(c == 200 and r.get("moved") is True and a == {"p_bridge": ME["id"], "p_from": "d-5", "p_to": "d-6", "p_user": ME["user"]}, "final M3. the bridge holding both keys asks: tally_bridge_own_key_move from the old key to the new (%s | %s)" % (r, a))
+    ok(not any(x.get("p_device") == "d-6" for x in F.ARGS.get("tally_bridge_bind", [])), "final M3. own_key is answered before the id is bound to the new key (no refusal, no alert)")
 finally:
     fn.terminate()
 print("\n%d failure(s)" % len(fails) if fails else "\nall checks passed")

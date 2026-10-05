@@ -162,9 +162,8 @@ with sync_playwright() as p:
     tally_page([], [], "staff", DURGESH, devs=devs3, local={"id": BD, "port": 9103})
     r = E(CONFIRM, [None])
     lk = [x for x in E("window.__calls") if x[0] == "tally_member_bridge_link"]
-    ok(r["words"] == "NW144 · durgesh · ZZ CO · D:\\TallyData\\Durgesh" and r["enq"] == [["tally_post_enqueue_to", BD]] and r.get("dev") == DA,
-       "#3. Durgesh: this browser's own proven bridge (%s | %s)" % (r["words"], r["enq"]))
-    ok(r.get("linked") == [{"p_user": DURGESH, "p_device": DA, "p_bridge": BD}], "#3/#4. self-linked to it first, so the cloud knows it is his own (%s)" % r.get("linked"))
+    ok(r["target"] == "" and r["enq"] == [["tally_post_enqueue", None]] and not r.get("linked"),
+       "final M3. Durgesh's proven bridge on a key another member made is not his own yet (no self-link there; it gets a key of its own first) (%s | %s | %s)" % (r["words"], r["enq"], r.get("linked")))
     # nobody's bridge of his own: the words name the company and what to do; never another person's bridge
     tally_page([], [], "staff", DURGESH)
     r = E(CONFIRM, [None])
@@ -183,14 +182,21 @@ with sync_playwright() as p:
     }"""
     tally_page([], [], "staff", DURGESH, devs=devs3, local={"id": BD, "port": 9103})
     a = E(AUTO, [False])
-    ok(["tally_member_bridge_link", {"p_user": DURGESH, "p_device": DA, "p_bridge": BD}] in a["calls"] and not any(c[0] == "tally_device_create" for c in a["calls"]),
-       "#4. after pairing, Durgesh is linked to his own bridge by itself (%s %s)" % (a["calls"], a["err"]))
+    names = [c[0] for c in a["calls"]]
+    ok("tally_device_create" in names and ["/cloudlink", {"url": E("TCloud.ingestUrl()"), "key": "fcd_new"}] in a["bcalls"] and "tally_member_bridge_link" not in names and "tally_bridge_own_key" not in names,
+       "final M3. his bridge on a key the owner made: a fresh key of Durgesh's own, handed to the bridge (which moves itself); no self-link on the owner's key (%s | %s %s)" % (a["calls"], a["bcalls"], a["err"]))
     tally_page([], [], "staff", DURGESH, devs=devs3, local={"id": BD, "port": 9103})
     a = E(AUTO, [True])
     names = [c[0] for c in a["calls"]]
-    ok("tally_device_create" in names and ["tally_bridge_own_key", {"p_bridge": BD, "p_to": "d-new"}] in a["calls"] and ["/cloudlink", {"url": E("TCloud.ingestUrl()"), "key": "fcd_new"}] in a["bcalls"]
-       and names.index("tally_member_bridge_link") < names.index("tally_bridge_own_key"),
-       "#7. the shared key's main bridge is anshul's: a fresh key of Durgesh's own, the bridge moved to it, handed to the bridge (%s | %s %s)" % (a["calls"], a["bcalls"], a["err"]))
+    ok("tally_device_create" in names and ["/cloudlink", {"url": E("TCloud.ingestUrl()"), "key": "fcd_new"}] in a["bcalls"] and "tally_bridge_own_key" not in names and "tally_member_bridge_link" not in names,
+       "#7. the shared key's main bridge is anshul's: a fresh key of Durgesh's own, handed to the bridge, which moves itself (no owner, no member move) (%s | %s %s)" % (a["calls"], a["bcalls"], a["err"]))
+    # the next pass: the bridge reports through the key Durgesh's page made: he is linked to it, no owner
+    devs5 = [dict(d, info=dict(d["info"], bridges=dict(d["info"]["bridges"]))) for d in DEVS]
+    devs5.append(dict(dev("d-new", "durgesh", 9003, "D:\\TallyData\\Durgesh", BD, DURGESH)))
+    tally_page([], [], "staff", DURGESH, devs=devs5, local={"id": BD, "port": 9103})
+    a = E(AUTO, [False])
+    ok(["tally_member_bridge_link", {"p_user": DURGESH, "p_device": "d-new", "p_bridge": BD}] in a["calls"] and not any(c[0] == "tally_device_create" for c in a["calls"]),
+       "final M3. on his own key, Durgesh's own freshly paired bridge is linked by itself (%s %s)" % (a["calls"], a["err"]))
     tally_page([], [{"user_id": RAVI, "device_id": DR, "bridge_id": BR}], "staff", RAVI, local={"id": BR, "port": 9101})
     a = E(AUTO, [False])
     ok(not any(c[0] in ("tally_member_bridge_link", "tally_device_create", "tally_bridge_own_key") for c in a["calls"]), "#4. already linked to his bridge: nothing done (%s)" % a["calls"])

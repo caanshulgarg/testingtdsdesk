@@ -586,6 +586,7 @@ func setCloudLink(o M) (M, error) {
 		return nil, errors.New("That is not a FinCom computer key.")
 	}
 	oldU, oldK, oldG := cfg("CloudUrl"), cfg("CloudKey"), cfg("CloudKeyGo")
+	oldPlain := cloudKey()
 	pk, err := protectKey(key)
 	if err != nil {
 		return nil, err
@@ -593,6 +594,18 @@ func setCloudLink(o M) (M, error) {
 	setCfg("CloudUrl", u)
 	setCfg("CloudKey", "")
 	setCfg("CloudKeyGo", pk)
+	// final review M3: a NEW key for this bridge (its member's FinCom page made it, e.g. to give the bridge a key of its own
+	// on a computer key shared with another Windows user): the bridge, holding both keys, asks FinCom first, with the new
+	// key and the old one in the body, to move its identity to the new key (FinCom's cloud only: the old key goes nowhere
+	// else; never written to the log). Refused (an older cloud, or nothing to move): the hello below decides as before
+	if oldPlain != "" && oldPlain != key && str(oldU) == u {
+		m := invokeCloud(M{"kind": "own_key", "oldKey": oldPlain}, 60)
+		said := "moved"
+		if !truthy(obj(m.json)["moved"]) {
+			said = "not moved (" + or(m.err, fmt.Sprint("nothing to move, HTTP ", m.code)) + ")"
+		}
+		writeLog("Cloud: this bridge asked to move to its new computer key: " + said)
+	}
 	r := invokeCloud(M{"kind": "hello", "info": M{"computer": computerName(), "user": ownerName()}}, 60)
 	if r.code != 200 {
 		setCfg("CloudUrl", oldU)
@@ -982,7 +995,9 @@ func cloudPostTakeJobs() (checks []any) {
 		pl := obj(j["payload"])
 		id := str(j["id"])
 		// round 7 (F2): the owner's releases ("Not in Tally — release") for the job's ids come with it
-		v, err := newPostJob(M{"jobId": id, "company": str(j["company"]), "masters": arr(pl["masters"]), "vouchers": arr(pl["vouchers"]), "released": arr(j["released"])})
+		// review M1 / L2: a posting handed back after the bridge's "not found" names the entries to send again (resendOnly):
+		// only those go, never the whole posting
+		v, err := newPostJob(M{"jobId": id, "company": str(j["company"]), "masters": arr(pl["masters"]), "vouchers": arr(pl["vouchers"]), "released": arr(j["released"]), "resendOnly": arr(j["resendOnly"])})
 		if err != nil {
 			invokeCloud(M{"kind": "posts_update", "id": id, "status": "failed", "done": 0, "message": "The Tally computer could not start this posting: " + err.Error(), "results": []any{}}, 30)
 			continue

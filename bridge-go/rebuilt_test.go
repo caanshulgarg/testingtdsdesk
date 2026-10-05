@@ -504,6 +504,7 @@ type standCloud struct {
 	checkReports []M
 	checkReply   func(b M) M
 	lease        *leaseModel
+	devKeys      []string // final review M3: the computer key each call came with (x-fincom-device), in order
 }
 
 func newStandCloud(t *testing.T) *standCloud {
@@ -516,6 +517,7 @@ func newStandCloud(t *testing.T) *standCloud {
 		k := str(o["kind"])
 		c.kinds = append(c.kinds, k)
 		c.raw = append(c.raw, string(b))
+		c.devKeys = append(c.devKeys, r.Header.Get("x-fincom-device"))
 		out := M{"ok": true}
 		switch k {
 		case "companies":
@@ -554,6 +556,8 @@ func newStandCloud(t *testing.T) *standCloud {
 			if len(c.checks) > 0 {
 				out["checks"] = toAnyM(c.checks)
 			}
+		case "own_key":
+			out["moved"] = true
 		case "post_check":
 			c.checkReports = append(c.checkReports, o)
 			if c.checkReply != nil {

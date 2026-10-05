@@ -5,12 +5,17 @@
 //	found     the voucher with the entry's type and number on its date (FinComVoucherByNumber), or with Tally's own id
 //	          from its reply (FinComVoucherByMaster), carries the entry's FinCom id (TDSDesk:<id>) in its narration: the
 //	          cloud marks it posted with the voucher found; nothing is sent;
-//	notfound  Tally answered for that exact company (its GUID the one held) and has no such voucher: the cloud releases
-//	          the id and hands the posting back, and it is sent once;
+//	notseen   Tally answered for that exact company (its GUID the one held) and has no such voucher ON THAT DAY. Both
+//	          reads are one-day reads (Tally may also have numbered the entry itself: Automatic numbering), so this is
+//	          never "not found": the cloud releases nothing and nothing is sent. The owner's rule ("a duplicate entry must
+//	          never be possible from this button"): a person looks in Tally and presses "I looked in Tally: not there -
+//	          post again" (a reason required); only then is that entry alone handed back and sent once;
 //	unable    anything else, in plain words: Tally not asked (the company not open, busy, the 2-second stop), the voucher
 //	          there but with another FinCom id or none (a person must look), no number and no Tally id to ask by, a date
 //	          the read rules do not allow (before the starting point, or more than 3 days back by number). Nothing is
-//	          sent; the cloud keeps the check waiting and hands it again on the next turn; it never releases on "unable".
+//	          sent; the cloud keeps the check waiting and hands it again on a later turn (the one tried longest ago first), at
+//	          most 10 tries or 24 hours, then "given up" in words; it never releases on "unable". At most 5 checks a turn,
+//	          none while a posting is going on (postings first).
 //
 // The owner's rule for entry reads ("one voucher only, never a day's list or any earlier voucher"): only the two
 // owner-approved one-voucher reads, exactly as the recorder builds them (the allow-list and its hash unchanged), as
@@ -118,12 +123,9 @@ func checkPostedEntry(c M) M {
 			byNumber = false // Tally's own id instead (no day bound but the starting point)
 		}
 	}
-	verdict := func(vs []string, by, how string) M {
-		if len(vs) == 0 {
-			rep["result"] = "notfound"
-			rep["words"] = cut(fmt.Sprintf("Looked in %s for %s (%s): not there", name, by, how), 480)
-			return rep
-		}
+	// review H1 (05-Oct-2026): FinCom's voucher types number automatically, so Tally may have numbered the entry itself.
+	// The voucher carrying the entry's FinCom id is found; the one asked carries another id or none: a person must look
+	tagged := func(vs []string, by string) M {
 		for _, v := range vs {
 			if hasTag(tagValue(v, "NARRATION"), tag) {
 				rep["result"], rep["vch"], rep["master"] = "found", tagValue(v, "VOUCHERNUMBER"), tagNum(v, "MASTERID")
@@ -131,42 +133,88 @@ func checkPostedEntry(c M) M {
 				return rep
 			}
 		}
+		return nil
+	}
+	other := func(v, by string) M {
 		carries := "no FinCom id"
-		if other := reTag.FindString(tagValue(vs[0], "NARRATION")); other != "" {
-			carries = "another FinCom id (" + other + ")"
+		if o := reTag.FindString(tagValue(v, "NARRATION")); o != "" {
+			carries = "another FinCom id (" + o + ")"
 		}
 		return unable(fmt.Sprintf("In %s, %s is there but carries %s, not %s: a person must look in Tally; use Mark posted if it is this entry, post again only if it is not", name, by, carries, tag))
+	}
+	// the owner's rule ("a duplicate entry must never be possible from this button"): both reads are one-day reads, so an
+	// empty answer is never "not found": notseen (Tally answered for that exact company, no such voucher on that day). The
+	// cloud releases nothing on it; a person looks in Tally and confirms "not there" (the only path to send again)
+	notSeen := func(what string) M {
+		rep["result"] = "notseen"
+		rep["words"] = cut(fmt.Sprintf("Tally has no voucher %s on %s in %s. FinCom cannot see other dates, so a person must confirm: look in Tally (Day Book, or search the narration %s); if it is not there, press 'I looked in Tally: not there – post again' (reason required).", what, ddmmyyyy(date), name, tag), 480)
+		return rep
 	}
 	busy := func(err error) M {
 		return unable("Tally is busy or did not answer within " + fmt.Sprint(checkMs()/1000) + " s (" + tallyTrouble(err.Error()) + "); looked in again by itself")
 	}
+	byNumberWords := ""
 	if byNumber {
 		vs, err := fetchVoucherByNumber(checkTC(), name, port, date, vtype, no, 2)
 		if err != nil {
 			return busy(err)
 		}
-		return verdict(vs, fmt.Sprintf("%s %s of %s", vtype, no, ddmmyyyy(date)), "FinComVoucherByNumber")
+		byNumberWords = fmt.Sprintf("%s %s of %s", vtype, no, ddmmyyyy(date))
+		if r := tagged(vs, byNumberWords); r != nil {
+			return r
+		}
+		if mid == "" {
+			if len(vs) > 0 {
+				return other(vs[0], byNumberWords)
+			}
+			return notSeen(vtype + " " + no)
+		}
 	}
+	// Tally's own id from its reply: the one voucher with that id
 	got, err := fetchVouchersByMasterIn(checkTC(), name, port, date, []string{mid}, 2)
 	if err != nil {
 		return busy(err)
 	}
-	var vs []string
-	if v := got[mid]; v != "" && normDate(tagValue(v, "DATE")) == date {
-		vs = []string{v} // anything else Tally gave is dropped
+	byID := fmt.Sprintf("Tally's voucher id %s of %s", mid, ddmmyyyy(date))
+	if v := got[mid]; v != "" {
+		if r := tagged([]string{v}, byID); r != nil {
+			return r
+		}
+		return other(v, byID) // anything else Tally gave is dropped
 	}
-	return verdict(vs, fmt.Sprintf("Tally's voucher id %s of %s", mid, ddmmyyyy(date)), "FinComVoucherByMaster")
+	// FinComVoucherByMaster asks ONE day (the entry's date as its period, as approved; the allow-list unchanged): the entry
+	// may have been redated in Tally
+	what := "with Tally's id " + mid
+	if byNumberWords != "" {
+		what = vtype + " " + no + " / Tally's id " + mid
+	}
+	return notSeen(what)
 }
 
-// the checks the cloud handed with posts_take, one at a time; true when one came back "not found" and the cloud handed
-// the posting back to be sent again (posts_take is then asked again)
+// review M4: at most this many checks a turn (each may ask Tally for one voucher)
+const checksPerTurn = 5
+
+// a posting is going on on this computer (any job's worker running): no check asks Tally meanwhile (postings first)
+func anyJobAlive() bool {
+	jobsMu.Lock()
+	defer jobsMu.Unlock()
+	return len(jobsRunning) > 0
+}
+
+// the checks the cloud handed with posts_take, one at a time, at most checksPerTurn, none while a posting is going on;
+// true when one came back "not found" and the cloud handed the posting back to be sent again (posts_take is then
+// asked again)
 func runPostChecks(list []any) bool {
-	resent, seen := false, map[string]bool{}
+	resent, seen, n := false, map[string]bool{}, 0
 	for _, x := range list {
 		c := obj(x)
 		if c == nil || seen[fmt.Sprint(c["check"])] {
 			continue
 		}
+		if n >= checksPerTurn || anyJobAlive() {
+			break
+		}
+		n++
 		seen[fmt.Sprint(c["check"])] = true
 		rep := checkPostedEntry(c)
 		r := invokeCloud(rep, 30)

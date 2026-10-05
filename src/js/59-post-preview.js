@@ -805,7 +805,7 @@ function postJobOf(cid, id){
     .find(j => (CloudJobs.idsOf(j) || []).includes(String(id)) || [].concat(j.results || [], j.items || []).some(x => x && String(x.id) === String(id))) || null;
 }
 const PostOwner = {
-  notReady(m){ return /tally_post_job_mark_posted|tally_post_id_release_owner|tally_post_settle_ask|PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(String(m || "")); },
+  notReady(m){ return /tally_post_job_mark_posted|tally_post_id_release_owner|tally_post_settle_ask|tally_post_check_withdraw|tally_post_check_confirm|PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(String(m || "")); },
   async call(cid, fn, args, done){
     try {
       const r = await TCloud.rpc(fn, args);
@@ -813,7 +813,7 @@ const PostOwner = {
       toast(done);
     } catch (e){
       const m = String((e && e.message) || e);
-      toast(this.notReady(m) ? "FinCom\u2019s cloud is not ready for this yet (migration " + (fn === "tally_post_settle_ask" ? "55" : "36b") + ")." : m.replace(/^ERROR:\s*/i, ""));
+      toast(this.notReady(m) ? "FinCom\u2019s cloud is not ready for this yet (migration " + (fn === "tally_post_settle_ask" || fn === "tally_post_check_withdraw" || fn === "tally_post_check_confirm" ? "55" : "36b") + ")." : m.replace(/^ERROR:\s*/i, ""));
     }
     if (typeof PostChecks === "object") PostChecks.load(cid, true);
     if (typeof PostMarks === "object") PostMarks.load(cid, true);
@@ -877,6 +877,30 @@ const PostOwner = {
       Store.saveEntry(cid, e); toast("The Tally id of " + no + " is now " + d.vch + "."); render(); return;
     }
     await this.call(cid, "tally_post_job_mark_posted", {p_job: job.id, p_id: String(e.id), p_vch: d.vch, p_note: note}, "The Tally id of " + no + " is now " + d.vch + ".");
+  },
+  // the owner's rule (a duplicate entry must never be possible from this button): after the FinCom Bridge did not see the
+  // entry on its day ("notseen"), a member who may post looks in Tally and confirms it is not there, a reason required
+  // (tally_post_check_confirm: the only way it is released and sent again, that entry alone; name and time kept)
+  async confirmNotSeen(cid, e, job){
+    if (!job) return;
+    const no = (e.x && e.x.invoiceNo) || e.id, co = job.company || "the company";
+    const a = await askConfirm({title: no + ": you looked in Tally and it is not there?", ok: "I looked in Tally: not there \u2013 post again", danger: true,
+      body: "<p>" + esc("The FinCom Bridge did not see this entry in " + co + " on its date, but it cannot see other dates. Confirm only after looking in Tally (Day Book, or search the narration TDSDesk:" + String(e.id) + "). It is then sent again, once; your name, the time and the reason are kept.") + "</p>" +
+        '<div class="bk-form one"><label><span>Reason (where you looked in Tally)</span><input id="confirmWhy" maxlength="500" placeholder="Searched TDSDesk:\u2026 in the Day Book"></label></div>',
+      read: () => ({why: ((document.getElementById("confirmWhy") || {}).value || "").trim()}), validate: d => d && d.why ? "" : "Say where you looked in Tally."});
+    if (!a || !a.ok) return;
+    return this.call(cid, "tally_post_check_confirm", {p_job: job.id, p_id: String(e.id), p_why: a.data.why}, no + " is sent again, once.");
+  },
+  // the final review of 2.3.0 (M2): the member who asked for a check, or an owner, withdraws it while it waits
+  // (tally_post_check_withdraw: who, when and why kept); nothing is released or sent
+  async withdrawCheck(cid, ck){
+    if (!ck || !ck.id) return;
+    const a = await askConfirm({title: "Withdraw the check?", ok: "Withdraw the check",
+      body: "<p>The FinCom Bridge stops looking in Tally for this entry. Nothing is released or sent; your name and the time are kept.</p>" +
+        '<div class="bk-form one"><label><span>Reason (optional)</span><input id="withdrawWhy" maxlength="300" placeholder="Found it in Tally myself"></label></div>',
+      read: () => ({why: ((document.getElementById("withdrawWhy") || {}).value || "").trim()})});
+    if (!a || !a.ok) return;
+    return this.call(cid, "tally_post_check_withdraw", {p_check: ck.id, p_why: (a.data && a.data.why) || ""}, "The check is withdrawn; nothing was released or sent.");
   },
   // decision B (05-Oct-2026): "Not in Tally - post again", any member who may post, a reason required. With a posting of
   // FinCom's cloud: tally_post_settle_ask (migration 55): the FinCom Bridge looks in that company in Tally first; found:

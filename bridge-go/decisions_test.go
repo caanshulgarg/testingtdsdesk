@@ -230,14 +230,14 @@ func TestSettleCheckNoNumber(t *testing.T) {
 	if f.n(vchByMasterID) != 1 || f.n(vchByNumberID) != 0 {
 		t.Fatalf("the requests: %v", f.ids())
 	}
-	// Tally's id names no voucher on that date: not there
+	// Tally's id names no voucher on that date: "notseen" (one day only: a person confirms)
 	ck2 := checkFor("31", "job-k8", "k8", zz, finVoucher("k8", fgParty, "", td, "10.00"))
 	ck2["vchId"] = "999"
 	c.mu.Lock()
 	c.checks = []M{ck2}
 	c.mu.Unlock()
 	cloudPostTake()
-	if r := lastReport(t, c); str(r["result"]) != "notfound" {
+	if r := lastReport(t, c); str(r["result"]) != "notseen" || !strings.Contains(str(r["words"]), "FinCom cannot see other dates") {
 		t.Fatalf("Tally's id names nothing: %v", r)
 	}
 	// neither a number nor Tally's id
@@ -292,22 +292,21 @@ func TestSettleCheckNotFoundSentOnce(t *testing.T) {
 		t.Fatalf("the first send: %v %v (%d imports)", p["status"], p["message"], f.n("Import"))
 	}
 	time.Sleep(1100 * time.Millisecond) // the probe may go again
-	// "Not in Tally - post again": the cloud's check; on "not found" it releases the id and hands the posting back
+	// the owner's rule: Tally answers for ZZ and has no such voucher that day: "notseen"; nothing is sent by the report
 	c.mu.Lock()
 	c.checks = []M{checkFor("9", "job-k2-000001", "k2", zz, x)}
-	c.checkReply = func(b M) M {
-		if str(b["result"]) == "notfound" {
-			c.checks = nil
-			c.takeJobs = []M{{"id": "job-k2-000001", "company": zz, "payload": pay, "released": []any{M{"id": "k2", "at": time.Now().UTC().Format(time.RFC3339), "by": "owner", "why": "not in the Day Book (checked by the bridge)"}}}}
-			return M{"ok": true, "state": "notfound", "resent": true}
-		}
-		return M{"ok": true, "state": str(b["result"])}
-	}
 	c.mu.Unlock()
 	cloudPostTake()
-	if r := lastReport(t, c); str(r["result"]) != "notfound" || str(r["company"]) != zz {
-		t.Fatalf("the report: %v", r)
+	if r := lastReport(t, c); str(r["result"]) != "notseen" || str(r["company"]) != zz || !strings.Contains(str(r["words"]), "FinCom cannot see other dates") || f.n("Import") != 1 {
+		t.Fatalf("the report: %v (%d imports)", r, f.n("Import"))
 	}
+	// a member looked in Tally and confirmed "not there" (tally_post_check_confirm): the cloud hands the posting back,
+	// naming that entry alone; it is sent once
+	c.mu.Lock()
+	c.checks = nil
+	c.takeJobs = []M{{"id": "job-k2-000001", "company": zz, "payload": pay, "released": []any{M{"id": "k2", "at": time.Now().UTC().Format(time.RFC3339), "by": "owner", "why": "not in the Day Book (confirmed)"}}, "resendOnly": []any{"k2"}}}
+	c.mu.Unlock()
+	cloudPostTake()
 	p := waitJob(t, "job-k2-000001")
 	if str(p["status"]) != "done" || f.n("Import") != 2 || f.tagged("TDSDesk:k2") != 1 {
 		t.Fatalf("sent again: %v %q, %d imports, %d in Tally", p["status"], p["message"], f.n("Import"), f.tagged("TDSDesk:k2"))
@@ -344,16 +343,17 @@ func TestSettleCheckPostedDeletedByHand(t *testing.T) {
 	f.mu.Unlock()
 	c.mu.Lock()
 	c.checks = []M{checkFor("13", "job-k5-000001", "k5", zz, x)}
-	c.checkReply = func(b M) M {
-		c.checks = nil
-		c.takeJobs = []M{{"id": "job-k5-000001", "company": zz, "payload": pay, "released": []any{M{"id": "k5", "at": time.Now().UTC().Format(time.RFC3339), "by": "owner", "why": "deleted in Tally by hand (checked by the bridge)"}}}}
-		return M{"ok": true, "state": "notfound", "resent": true}
-	}
 	c.mu.Unlock()
 	cloudPostTake()
-	if r := lastReport(t, c); str(r["result"]) != "notfound" {
+	if r := lastReport(t, c); str(r["result"]) != "notseen" || f.n("Import") != 1 {
 		t.Fatalf("the report: %v", r)
 	}
+	// a member confirms after looking: handed back with that entry alone
+	c.mu.Lock()
+	c.checks = nil
+	c.takeJobs = []M{{"id": "job-k5-000001", "company": zz, "payload": pay, "released": []any{M{"id": "k5", "at": time.Now().UTC().Format(time.RFC3339), "by": "owner", "why": "deleted in Tally by hand (confirmed)"}}, "resendOnly": []any{"k5"}}}
+	c.mu.Unlock()
+	cloudPostTake()
 	if p := waitJob(t, "job-k5-000001"); str(p["status"]) != "done" || f.n("Import") != 2 || f.tagged("TDSDesk:k5") != 1 {
 		t.Fatalf("sent again: %v %q, %d imports, %d in Tally", p["status"], p["message"], f.n("Import"), f.tagged("TDSDesk:k5"))
 	}
@@ -398,8 +398,12 @@ func TestSettleCheckSilentWaits(t *testing.T) {
 	c.checks = []M{checkFor("11", "job-k3", "k3", zz, x)}
 	c.mu.Unlock()
 	cloudPostTake()
-	if r := lastReport(t, c); str(r["result"]) != "notfound" || toInt(r["check"]) != 11 {
+	// (the owner's rule: Tally answered, nothing that day: notseen, never released by the report)
+	if r := lastReport(t, c); str(r["result"]) != "notseen" || toInt(r["check"]) != 11 || !strings.Contains(str(r["words"]), "FinCom cannot see other dates") {
 		t.Fatalf("asked again: %v", r)
+	}
+	if f.n(vchByNumberID) < 2 {
+		t.Fatalf("not asked again: %v", f.ids())
 	}
 	if f.n("Import") != 0 {
 		t.Fatal("sent to Tally")
