@@ -958,7 +958,9 @@ func liveEmit(l recLine, ev, file string, gen int, start, lineStart, end int64, 
 	}
 	if livePlaceholder(c.guid) {
 		c.guid = ""
-		if mid := toI64(c.masterId); mid > 0 && c.companyGuid != "" {
+		// a voucher only: the rule is proven for vouchers (NWS144); a new ledger's GUID stays empty until Tally gives it
+		// (its body fetch), never built (2.2.1 review)
+		if mid := toI64(c.masterId); mid > 0 && c.companyGuid != "" && !c.isLedger() {
 			c.guid = fmt.Sprintf("%s-%08x", c.companyGuid, mid)
 		}
 	}
