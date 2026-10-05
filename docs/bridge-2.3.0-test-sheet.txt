@@ -1,0 +1,150 @@
+FINCOM BRIDGE 2.3.0 - TEST SHEET (NWS144, staging)
+
+File:        FinComBridge-Setup-2.3.0.exe
+Fingerprint: SHA-256 <SHA-256> (filled in when the setup is built; compare with the .sha256 file next to the setup)
+Link:        https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.3.0.exe
+App update:  FinCom's app is updated at <time> IST, together with this bridge.
+
+What 2.3.0 changes (the full notes: docs/bridge-2.3.0-notes.md):
+ - Everything in 2.2.4: Tally's typed answers are read, so an entry saved in Tally reaches the books with its body.
+ - Deletes and cancels go by Tally's own GUID for the entry. A cancel shows as Cancelled for that entry; a delete shows
+   as Deleted. If FinCom cannot tell which entry was deleted, nothing is removed and the line is held with the words
+   "deleted in Tally; FinCom could not tell which entry: upload that day's Day Book to settle it".
+ - One bridge for each Windows user on NWS144, each on its own port (9100 to 9119, chosen by itself), each reading and
+   posting only to the Tally in its own Windows sign-in. The Tally page shows one line per bridge: "NWS144 · <Windows
+   user>". The owner can set a bridge to "Changes only" (it reads, never posts). The Post screen says which bridge posts.
+ - Four security fixes: the bridge proves itself before FinCom sends it any key; a bridge's id is tied to one computer
+   (with "Release this bridge's identity" for owners and one bell alert); refusal words name the company and what to do;
+   times in those words are dates and times in IST.
+
+IMPORTANT: the app and the bridge go out together. From <time> IST, FinCom does not trust a bridge older than 2.3.0:
+it sends it no key and no posting, and says "The program answering at http://127.0.0.1:9100 did not prove it is your
+FinCom Bridge, so nothing was sent to it. Install FinCom Bridge 2.3.0 or later for your Windows user...". Every Windows
+user on NWS144 that runs a FinCom Bridge must install 2.3.0. Install it on your own Windows user as soon as you can
+after <time> IST.
+
+Keep the add-on loaded as it is (C:\ProgramData\FinCom\addon\FinComRecorder.tdl). 2.3.0 does not change the add-on.
+
+Before you start: you are signed in to FinCom as the owner, TallyPrime 7.1 is open with the add-on loaded, and
+GARG SHEKHAR is open in Tally. In every entry you make for this sheet, start the narration with TRIAL.
+
+Write down the time (IST) of each check you do; we need it if something fails.
+
+
+INSTALL (over 2.2.4, for your own Windows user)
+   Sign in to Windows on NWS144 as you normally do. Open the Link. Double-click the setup; if Windows warns:
+   More info > Run anyway; "Just for me" (as before); Next.
+   You should see: "FinCom Bridge 2.3.0 is installed and running". The setup keeps 2.2.4, so the tray can go back to it
+   (HOW TO ROLL BACK, below; read it first: a rollback now needs us too).
+   If the setup ends with a message instead, send: a picture of it, and the install log
+   (%LOCALAPPDATA%\FinCom Bridge\install.log, or the tray: right-click the FinCom icon > Send install log to FinCom).
+
+
+CHECK 1 - THE TALLY PAGE SHOWS 2.3.0 AND YOUR WINDOWS USER
+   In FinCom open the Tally page (refresh the page once after <time> IST, so the new app is loaded).
+   You should see, within a minute of installing:
+     a. a line headed "NWS144 · <your Windows user name>" showing version 2.3.0;
+     b. under it: "Tally port 9000 · GARG SHEKHAR · data folder <your Tally data folder>" (your own Tally's port and
+        folder) and "Reads and posts";
+     c. no red message saying "did not prove it is your FinCom Bridge" or "is another Windows user's".
+   Then right-click the FinCom icon near the clock > Test connection: every line is OK.
+   If not, send: the time, a picture of the Tally page's NWS144 lines, and a picture of the Test connection result.
+
+CHECK 2 - A NEW ENTRY
+   In Tally make one new entry: a Receipt of Rs 1, narration "TRIAL new 230". Save it. Note its number.
+   You should see: within half a minute, Sync activity shows it as Created (its type, number and date), and it is in
+   the books with its amount and narration.
+   If not, send: its type and number, the time you saved it, and the Show log lines starting "Recorder:" that name it.
+
+CHECK 3 - ALTER IT: CHANGE THE AMOUNT
+   Open the entry from CHECK 2 in Tally, change its amount to Rs 2 and save.
+   You should see: within half a minute, Sync activity shows it as Altered, and the books show Rs 2.
+   If not, send: its type and number, the time, and the Show log lines starting "Recorder:" that name it.
+
+CHECK 4 - DUPLICATE AN ENTRY (Alt+2)
+   Open the entry from CHECK 2 in Tally and press Alt+2 (Duplicate). Change the date and the amount (Rs 3), narration
+   "TRIAL dup 230", then save. Note its number.
+   You should see: within half a minute, Sync activity shows a NEW entry as Created, with the new date and amount, and
+   it is in the books. The entry you duplicated from is unchanged in the books (still Rs 2; not altered, not replaced).
+   If not, send: the type and number of both entries, the time, and the Show log lines starting "Recorder:" that name
+   either of them.
+
+CHECK 5 - CANCEL ONE
+   Open the entry from CHECK 4 ("TRIAL dup 230") in Tally and cancel it (Alt+X, Yes).
+   You should see: within half a minute, Sync activity shows Cancelled for THAT entry (the same type and number), and
+   the books show it as cancelled. No other entry changes.
+   If not, send: its type and number, the time, what Sync activity shows, and the Show log lines starting "Recorder:"
+   that name it.
+
+CHECK 6 - DELETE ONE
+   Open the entry from CHECK 2 ("TRIAL new 230", Rs 2) in Tally and delete it (Alt+D, Yes).
+   You should see: within half a minute, Sync activity shows Deleted for THAT entry (the same type and number), and it
+   is gone from the books. No other entry changes.
+   If instead it is held with the words "deleted in Tally; FinCom could not tell which entry: upload that day's Day
+   Book to settle it": nothing was removed, which is the safe answer, but for this fresh TRIAL entry FinCom should have
+   known it. Send it to us (below), then upload that day's Day Book and see that the entry is settled.
+   If not, send: its type and number, the time, what Sync activity shows, and the Show log lines starting "Recorder:"
+   that name it.
+
+CHECK 7 - A SECOND WINDOWS USER (only if another Windows user on NWS144 uses Tally; else write "n/a")
+   a. Sign in to NWS144 as that other Windows user (or ask that person to). Open their TallyPrime as usual.
+   b. In that sign-in: open the Link, run the setup, choose "Just for me", Next.
+      You should see: "FinCom Bridge 2.3.0 is installed and running" (no administrator asked for).
+   c. In that sign-in, connect it: right-click the FinCom icon > Connect FinCom on this computer..., and follow it
+      (FinCom asks for the code shown in the bridge's window; the code works for 15 minutes).
+   d. On FinCom's Tally page (as the owner):
+      You should see TWO lines for NWS144, one "NWS144 · <your Windows user name>" and one "NWS144 · <their Windows user
+      name>", each showing 2.3.0, its own Tally port and the companies open in its own Tally. Your line is unchanged.
+   e. Optional: on their line press "Changes only" and confirm. Their line shows "Changes only: never posts". Press
+      "Allow posting" to turn it back (or leave it on, if that person should only read).
+   If not, send: the time, a picture of the Tally page's NWS144 lines, and from EACH Windows user: the tray's
+   Test connection result and the last 20 lines of Show log.
+
+CHECK 8 - A POSTING GOES TO THE RIGHT BRIDGE
+   In FinCom post one bill for GARG SHEKHAR to Tally (as you normally do), narration starting TRIAL. Stop at the
+   confirm step and read it.
+   You should see: a line "Through NWS144 · <your Windows user name> · GARG SHEKHAR · <data folder>." (If CHECK 7 was
+   done, an owner also sees "Post through another bridge" with the bridges that may post; a bridge set to Changes only
+   is never in that list.) Leave it on your own bridge and post.
+   You should see: Sync activity shows it as Posted from FinCom, it is in YOUR Tally's GARG SHEKHAR once (not twice),
+   and nothing arrives in the other Windows user's Tally.
+   If not, send: the bill, the time you posted it, a picture of the confirm step, and the Show log lines starting
+   "Recorder:" around that time from each Windows user's bridge.
+
+CHECK 9 - THE REFUSAL WORDS AND THE BELL (optional: only if you want to see a conflict)
+   a. "Nobody can post" words (needs CHECK 7's second bridge, or any bridge you can set to Changes only):
+      Close GARG SHEKHAR in every Tally on NWS144 except one, set that one bridge to "Changes only" on the Tally page,
+      then try to post a TRIAL bill for GARG SHEKHAR.
+      You should see: nothing is queued, and FinCom says "Nobody can post into GARG SHEKHAR just now: the only computer
+      that has it open (NWS144 · <Windows user>) is set to Changes only. Open the company in Tally on a computer that
+      may post (...), or ask the owner to switch Changes only off for that bridge."
+      Then press "Allow posting" on that line again.
+   b. A bridge id used by another computer key (the bell alert): tell us when you want to do this and we send you the
+      one-line change to make in the second Windows user's bridge settings (and how to put it back).
+      You should see: in the second user's tray and on its line on the Tally page: "This computer key cannot use bridge
+      go-...: it belongs to NWS144 · <Windows user>. Ask the firm's owner."; and ONE alert in the owner's bell:
+      "NWS144 · <Windows user> tried to use bridge go-..., which belongs to another computer; FinCom refused it.", with
+      "Mark read". It does not repeat every minute. After the setting is put back, the refused words go away.
+      "Release this bridge's identity" (owners, on a bridge's line) asks why, and frees the id for the next computer
+      that reports it. Use it only when we ask.
+   If not, send: the time, a picture of the message or of the bell, and the last 20 lines of Show log of the bridge
+   concerned.
+
+How to send the log lines: right-click the FinCom icon near the clock > Show log. Each line starting "Recorder:" says
+what the bridge decided for one entry: asking Tally, taken, held (with the reason), or not asked (with the reason).
+On NWS144 each Windows user has their own FinCom icon and their own log: send the log of the Windows user named in the
+check.
+
+
+HOW TO ROLL BACK (go back to 2.2.4) - TELL US FIRST
+   The 2.3.0 app does not trust a 2.2.4 bridge. If you roll back only the bridge, FinCom stops sending to it and says
+   "The program answering at http://127.0.0.1:9100 did not prove it is your FinCom Bridge, so nothing was sent to it."
+   So a rollback means: send us the time, the check that failed and what you saw, and we put the app back as well.
+   When we say so:
+   1. Right-click the FinCom icon near the clock > "Roll back to the previous version".
+   2. A question names the version it goes back to (2.2.4). Answer Yes.
+   3. The icon goes away for a few seconds and comes back.
+   You should see: within a minute, FinCom's Tally page shows version 2.2.4 for this computer. Automatic updates stay
+   off on this computer until FinCom turns them on again.
+   A Windows user who installed FinCom Bridge for the first time with 2.3.0 (CHECK 7) has no earlier version to go
+   back to: right-click their FinCom icon > Pause, and tell us.
