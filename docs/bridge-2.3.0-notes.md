@@ -5,8 +5,8 @@ For the owner. Plain words; times are IST. The steps to try it on NWS144 are in 
 | | |
 |---|---|
 | Setup file | FinComBridge-Setup-2.3.0.exe |
-| Fingerprint | SHA-256 `<SHA-256>` (filled in when the setup is built; compare with the .sha256 file next to the setup) |
-| FinCom app update | goes live at `<time>` IST, together with the bridge |
+| Fingerprint | SHA-256 `d63311d10aeb9a830b0b36658637ef4a70afce7a121890a75521b47375ba9206` (FinComBridge-Setup-2.3.0.exe; compare with the .sha256 file next to the setup) |
+| FinCom app update | goes live at 06-Oct-2026 05:25 IST, together with the bridge |
 | Replaces | 2.2.4 (kept on the computer, so the tray can roll back to it) |
 | Add-on | unchanged: keep `C:\ProgramData\FinCom\addon\FinComRecorder.tdl` loaded as it is |
 
@@ -15,7 +15,7 @@ For the owner. Plain words; times are IST. The steps to try it on NWS144 are in 
 2.3.0 is the first bridge that proves to FinCom that it is really your FinCom Bridge before FinCom hands it anything
 secret (see "Four security fixes" below). FinCom's app is updated at the same time to ask for that proof.
 
-- **After the app update (`<time>` IST), FinCom no longer trusts a bridge older than 2.3.0.** It sends such a bridge no
+- **After the app update (06-Oct-2026 05:25 IST), FinCom no longer trusts a bridge older than 2.3.0.** It sends such a bridge no
   key, no pairing code and no posting. Where it would have talked to it, FinCom says:
   "The program answering at http://127.0.0.1:9100 did not prove it is your FinCom Bridge, so nothing was sent to it.
   Install FinCom Bridge 2.3.0 or later for your Windows user, then connect again (right-click the FinCom Bridge icon >

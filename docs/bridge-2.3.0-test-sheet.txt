@@ -1,9 +1,9 @@
 FINCOM BRIDGE 2.3.0 - TEST SHEET (NWS144, staging)
 
 File:        FinComBridge-Setup-2.3.0.exe
-Fingerprint: SHA-256 <SHA-256> (filled in when the setup is built; compare with the .sha256 file next to the setup)
+Fingerprint: SHA-256 d63311d10aeb9a830b0b36658637ef4a70afce7a121890a75521b47375ba9206 (FinComBridge-Setup-2.3.0.exe; compare with the .sha256 file next to the setup)
 Link:        https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.3.0.exe
-App update:  FinCom's app is updated at <time> IST, together with this bridge.
+App update:  FinCom's app is updated at 06-Oct-2026 05:25 IST, together with this bridge.
 
 What 2.3.0 changes (the full notes: docs/bridge-2.3.0-notes.md):
  - Everything in 2.2.4: Tally's typed answers are read, so an entry saved in Tally reaches the books with its body.
@@ -22,11 +22,11 @@ What 2.3.0 changes (the full notes: docs/bridge-2.3.0-notes.md):
    (with "Release this bridge's identity" for owners and one bell alert); refusal words name the company and what to do;
    times in those words are dates and times in IST.
 
-IMPORTANT: the app and the bridge go out together. From <time> IST, FinCom does not trust a bridge older than 2.3.0:
+IMPORTANT: the app and the bridge go out together. From 06-Oct-2026 05:25 IST, FinCom does not trust a bridge older than 2.3.0:
 it sends it no key and no posting, and says "The program answering at http://127.0.0.1:9100 did not prove it is your
 FinCom Bridge, so nothing was sent to it. Install FinCom Bridge 2.3.0 or later for your Windows user...". Every Windows
 user on NWS144 that runs a FinCom Bridge must install 2.3.0. Install it on your own Windows user as soon as you can
-after <time> IST.
+after 06-Oct-2026 05:25 IST.
 
 Keep the add-on loaded as it is (C:\ProgramData\FinCom\addon\FinComRecorder.tdl). 2.3.0 does not change the add-on.
 
@@ -46,7 +46,7 @@ INSTALL (over 2.2.4, for your own Windows user)
 
 
 CHECK 1 - THE TALLY PAGE SHOWS 2.3.0 AND YOUR WINDOWS USER
-   In FinCom open the Tally page (refresh the page once after <time> IST, so the new app is loaded).
+   In FinCom open the Tally page (refresh the page once after 06-Oct-2026 05:25 IST, so the new app is loaded).
    You should see, within a minute of installing:
      a. a line headed "NWS144 · <your Windows user name>" showing version 2.3.0;
      b. under it: "Tally port 9000 · GARG SHEKHAR · data folder <your Tally data folder>" (your own Tally's port and
