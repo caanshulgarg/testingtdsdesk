@@ -1,0 +1,509 @@
+== desktop check
+runnervmfi6oq\runneradmin
+ USERNAME              SESSIONNAME        ID  STATE   IDLE TIME  LOGON TIME
+>runneradmin           console             2  Active      none   10/5/2026 9:03 AM
+UserInteractive=True
+session=2
+
+Caption                                  Version
+-------                                  -------
+Microsoft Windows Server 2025 Datacenter 10.0.26100
+
+
+[shot] desktop-0 (1024x768)
+GET https://tallysolutions.com/download/ -> 200 len=270577
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/css/download-page.css
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download-icon.svg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-add-headers-footer-images-to-invoice-print.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-add-watermarks-to-invoice-print.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-fetch-party-name-using-gstin-in-ims-report.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-how-to-create-vouchers-by-importing-documents.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-how-to-create-vouchers-in-tallyprime.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-how-to-get-started-with-docs-by-ira.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-how-to-resolve-documents-and-create-vouchers.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-send-online-payments-from-icici.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-update-terms-and-conditions-in-the-invoice-print.jpg
+   link: https://tallysolutions.com/apac/download/
+   link: https://tallysolutions.com/bd/download/
+   link: https://tallysolutions.com/bd/en/download/
+   link: https://tallysolutions.com/download/
+   link: https://tallysolutions.com/download/support-files/
+   link: https://tallysolutions.com/global/download/
+   link: https://tallysolutions.com/mena/ar/download/
+   link: https://tallysolutions.com/mena/download/
+   link: https://tallysolutions.com/ssa/download/
+   link: https://tallysolutions.com/us/download/
+GET https://tallysolutions.com/download-tallyprime/ FAILED: Response status code does not indicate success: 404 (Not Found).
+GET https://tallysolutions.com/tally-prime-download/ FAILED: Response status code does not indicate success: 404 (Not Found).
+GET https://tallysolutions.com/tallyprime/download/ -> 200 len=270577
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/css/download-page.css
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download-icon.svg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-add-headers-footer-images-to-invoice-print.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-add-watermarks-to-invoice-print.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-fetch-party-name-using-gstin-in-ims-report.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-how-to-create-vouchers-by-importing-documents.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-how-to-create-vouchers-in-tallyprime.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-how-to-get-started-with-docs-by-ira.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-how-to-resolve-documents-and-create-vouchers.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-send-online-payments-from-icici.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-update-terms-and-conditions-in-the-invoice-print.jpg
+   link: https://tallysolutions.com/apac/download/
+   link: https://tallysolutions.com/bd/download/
+   link: https://tallysolutions.com/bd/en/download/
+   link: https://tallysolutions.com/download/
+   link: https://tallysolutions.com/download/support-files/
+   link: https://tallysolutions.com/global/download/
+   link: https://tallysolutions.com/mena/ar/download/
+   link: https://tallysolutions.com/mena/download/
+   link: https://tallysolutions.com/ssa/download/
+   link: https://tallysolutions.com/us/download/
+GET https://tallysolutions.com/download/support-files/ -> 200 len=284902
+   exe-ish: .zip
+   exe-ish: http://mirror.tallysolutions.com/Downloads/EarlierverofTally/Tally9_R213/install.exe
+   exe-ish: http://mirror.tallysolutions.com/Downloads/TallyBSS/tallyserver9/install-32bit.exe
+   exe-ish: http://mirror.tallysolutions.com/Downloads/TallyBSS/tallyserver9/install-64bit.exe
+   exe-ish: https://mirror.tallysolutions.com/Downloads/sample_demo_data/TallyPrime_Demo.zip
+   exe-ish: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Shoper9HO/ShoperHOchm.zip
+   exe-ish: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Shoper9POS/ShoperDistributorchm.zip
+   exe-ish: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Shoper9POS/ShoperInterface.zip
+   exe-ish: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Shoper9POS/ShoperPOSchm.zip
+   exe-ish: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/ShoperLiveUpdates/Shoper9LiveupdateInstaller.zip
+   exe-ish: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/SSV.zip
+   exe-ish: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Tools/Shoper_B2C_QR_CODE_Tool.zip
+   exe-ish: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Tools/Shoper_E-Invoice_Tool_Support.zip
+   exe-ish: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Tools/Shoper_E-Invoice_Tool_V2.zip
+   exe-ish: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Tools/Shoper_e-Invoice_Tool.zip
+   exe-ish: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Tools/Shoper_TallyPrime_Interface.zip
+   exe-ish: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Tools/Shoper_TallyPrime1.1_Interface.zip
+   exe-ish: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Tools/Shoper_TallyPrime5-0_Interface.zip
+   exe-ish: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Tools/Shoper9-TallyPrime.zip
+   exe-ish: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Tools/ShoperEL.zip
+   exe-ish: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Tools/ShoperKFCSetup.zip
+   exe-ish: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Tools/SSV_TallyPrime3-0.zip
+   exe-ish: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Tools/SSV_TallyPrime4-0.zip
+   exe-ish: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Tools/ssv_tallyprime5_addon.zip
+   exe-ish: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Tools/SSV-TallyPrime.zip
+   exe-ish: https://mirror.tallysolutions.com/tallyweb/tally/tallyerp/tally72migration.exe
+   exe-ish: https://tallymirror.tallysolutions.com/download_centre/R6.0_Beta/ImportGSTINAddOn/ImportGSTIN.zip
+   exe-ish: https://tallymirror.tallysolutions.com/download_centre/R6.0_GA/Shoper9HOGST_GA/Shoper9HOGSTPatch.zip
+   exe-ish: https://tallymirror.tallysolutions.com/download_centre/R6.0_GA/ShoperGST_POS_GA/Shoper9GSTSetup.zip
+   exe-ish: https://tallymirror.tallysolutions.com/download_centre/R6.0_GA/SSV_GST_GA/SSVGSTPatchAdd_On.zip
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/MigratingData/Convert45to72.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/Tally72/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/Tally9_R214/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease10/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease11/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease12/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease13/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease15/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease151/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease152/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease16/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease161/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease18/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease181/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease182/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease20/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease21/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease3.2/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease3.3/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease3.31/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease3.4/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease3.41/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease3.6/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease3.61/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease3.62/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease3.7/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease30/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease31/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease4.5/install32bit.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease4.5/install64bit.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease4.51/install-32bit.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease4.51/install-64bit.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease4.6/install-32bit.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease4.6/install-64bit.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease4.61/install-32bit.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease4.61/install-64bit.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease4.7/install-32Bit.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease4.7/install-64Bit.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease48/install-32Bit.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease48/install-64Bit.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease49/install-32Bit.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease49/install-64Bit.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease491/install-32Bit.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease491/install-64Bit.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease492/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease492/install64.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease493/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease493/install64.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyDeveloper/Rel1/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyDeveloper/Rel2/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyDeveloper/Rel3/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyDeveloper/Rel32/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyDeveloper/Rel33/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyDeveloper/Rel47/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyDeveloper/tally.developer9rel3.6/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyDeveloper/TallyDeveloper9Release4.5/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyDeveloper/TallyDeveloper9Release4.6/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyDeveloper/TallyDeveloper9Release4.61/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyServer/TallyServer9SeriesARelease4.5/install-32bit.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyServer/TallyServer9SeriesARelease4.5/install-64bit.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyServer/TallyServer9SeriesARelease4.51/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyServer/TallyServer9SeriesARelease4.51/install64.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyServer/TallyServer9SeriesARelease4.7/install-32bit.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyServer/TallyServer9SeriesARelease4.7/install-64bit.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyServer/TallyServer9SeriesARelease4.9/32Bit/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyServer/TallyServer9SeriesARelease4.9/64Bit/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyServer/TallyServer9SeriesARelease4.91/32Bit/install.exe
+   exe-ish: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyServer/TallyServer9SeriesARelease4.91/64Bit/install.exe
+   link: http://mirror.tallysolutions.com/Downloads/EarlierverofTally/Tally9_R213/install.exe
+   link: http://mirror.tallysolutions.com/Downloads/TallyBSS/tallyserver9/install-32bit.exe
+   link: http://mirror.tallysolutions.com/Downloads/TallyBSS/tallyserver9/install-64bit.exe
+   link: http://mirror.tallysolutions.com/Downloads/TallyPDFs/Keypointstonote_Release5.0.pdf
+   link: https://mirror.tallysolutions.com/Downloads/FS-for-NCE-V1.2.xlsm
+   link: https://mirror.tallysolutions.com/Downloads/sample_demo_data/TallyPrime_Demo.zip
+   link: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Shoper9HO/Shoper%209%20HO%20Installation%20Guide.pdf
+   link: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Shoper9HO/Shoper9HOSeriesA-Release2.7ReleaseNotes.pdf
+   link: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Shoper9HO/ShoperHOchm.zip
+   link: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Shoper9POS/Shoper%209%20POS%20Installation%20Guide.pdf
+   link: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Shoper9POS/Shoper9POSSeriesA-Release2.7ReleaseNotes.pdf
+   link: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Shoper9POS/ShoperDistributorchm.zip
+   link: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Shoper9POS/ShoperInterface.zip
+   link: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Shoper9POS/ShoperPOSchm.zip
+   link: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/ShoperLiveUpdates/Shoper%209%20LiveUpdate.pdf
+   link: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/ShoperLiveUpdates/Shoper9LiveupdateInstaller.zip
+   link: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/SSV.zip
+   link: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Tools/Shoper_B2C_QR_CODE_Tool.zip
+   link: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Tools/Shoper_E-Invoice_Tool_Support.zip
+   link: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Tools/Shoper_E-Invoice_Tool_V2.zip
+   link: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Tools/Shoper_e-Invoice_Tool.zip
+   link: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Tools/Shoper_TallyPrime_Interface.zip
+   link: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Tools/Shoper_TallyPrime1.1_Interface.zip
+   link: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Tools/Shoper_TallyPrime5-0_Interface.zip
+   link: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Tools/Shoper9-TallyPrime.zip
+   link: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Tools/ShoperEL.zip
+   link: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Tools/ShoperKFCSetup.zip
+   link: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Tools/SSV_TallyPrime3-0.zip
+   link: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Tools/SSV_TallyPrime4-0.zip
+   link: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Tools/ssv_tallyprime5_addon.zip
+   link: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Tools/SSV-TallyPrime.zip
+   link: https://mirror.tallysolutions.com/Downloads/support-files/fs-for-nce-V1-0-1.xlsm
+   link: https://mirror.tallysolutions.com/Downloads/support-files/fs-for-nce-V1-1.xlsm
+   link: https://mirror.tallysolutions.com/tallyweb/tally/tallyerp/tally72migration.exe
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/icons/download.svg
+   link: https://tallymirror.tallysolutions.com/download_centre/R6.0_Beta/ImportGSTINAddOn/ImportGSTIN.zip
+   link: https://tallymirror.tallysolutions.com/download_centre/R6.0_GA/Shoper9HOGST_GA/Shoper9HOGSTPatch.zip
+   link: https://tallymirror.tallysolutions.com/download_centre/R6.0_GA/ShoperGST_POS_GA/Shoper9GSTSetup.zip
+   link: https://tallymirror.tallysolutions.com/download_centre/R6.0_GA/SSV_GST_GA/SSVGSTPatchAdd_On.zip
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/172/stat.900
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/177/stat.900
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/183/stat.900
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/187/stat.900
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/MigratingData/Convert45to72.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/MigratingData/Process%20for%20converting%20data%20from%20Tally45%20to%20TallyERP9.pdf
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/stat-158/stat.900
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/stat-165/stat.900
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/stat110/stat.900
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/stat111/stat.900
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/stat112/stat.900
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/stat114/stat.900
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/stat115/stat.900
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/stat116/stat.900
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/stat118/stat.900
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/stat119/stat.900
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/stat120/stat.900
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/stat123/stat.900
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/stat133/stat.900
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/stat139/stat.900
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/stat143/stat.900
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/stat91/stat.900
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/Tally72/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/Tally72/stat.slk
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/Tally72/tallyref.chm
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/Tally9_R213/stat.900
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/Tally9_R214/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/Tally9_R214/stat.900
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease10/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease11/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease11/stat.900
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease12/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease13/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease13/stat.900
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease15/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease151/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease151/stat.900
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease152/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease152/stat.900
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease16/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease16/stat.900
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease161/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease18/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease181/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease182/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease20/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease21/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease3.2/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease3.3/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease3.31/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease3.4/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease3.41/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease3.6/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease3.61/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease3.62/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease3.7/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease30/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease31/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease4.5/install32bit.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease4.5/install64bit.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease4.51/install-32bit.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease4.51/install-64bit.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease4.6/install-32bit.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease4.6/install-64bit.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease4.61/install-32bit.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease4.61/install-64bit.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease4.613/stat.900
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease4.7/install-32Bit.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease4.7/install-64Bit.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease48/install-32Bit.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease48/install-64Bit.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease49/install-32Bit.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease49/install-64Bit.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease491/install-32Bit.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease491/install-64Bit.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease492/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease492/install64.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease493/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease493/install64.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyDeveloper/Rel1/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyDeveloper/Rel2/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyDeveloper/Rel3/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyDeveloper/Rel32/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyDeveloper/Rel33/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyDeveloper/Rel47/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyDeveloper/tally.developer9rel3.6/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyDeveloper/tallydeveloper.chm
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyDeveloper/TallyDeveloper9Release4.5/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyDeveloper/TallyDeveloper9Release4.6/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyDeveloper/TallyDeveloper9Release4.61/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyServer/TallyServer9SeriesARelease4.5/install-32bit.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyServer/TallyServer9SeriesARelease4.5/install-64bit.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyServer/TallyServer9SeriesARelease4.51/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyServer/TallyServer9SeriesARelease4.51/install64.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyServer/TallyServer9SeriesARelease4.7/install-32bit.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyServer/TallyServer9SeriesARelease4.7/install-64bit.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyServer/TallyServer9SeriesARelease4.9/32Bit/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyServer/TallyServer9SeriesARelease4.9/64Bit/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyServer/TallyServer9SeriesARelease4.91/32Bit/install.exe
+   link: https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyServer/TallyServer9SeriesARelease4.91/64Bit/install.exe
+   link: https://tallysolutions.com/apac/download/support-files/
+   link: https://tallysolutions.com/bd/download/support-files/
+   link: https://tallysolutions.com/bd/en/download/support-files/
+   link: https://tallysolutions.com/download/
+   link: https://tallysolutions.com/download/support-files/
+   link: https://tallysolutions.com/download/support-files/#breadcrumb
+   link: https://tallysolutions.com/global/download/support-files/
+   link: https://tallysolutions.com/mena/ar/download/support-files/
+   link: https://tallysolutions.com/mena/download/support-files/
+   link: https://tallysolutions.com/ssa/download/support-files/
+   link: https://tallysolutions.com/us/download/support-files/
+GET https://tallysolutions.com/global/download/ -> 200 len=198100
+   link: https://resources.tallysolutions.com/global/wp-content/themes/tally/assets/css/download-page.css
+   link: https://resources.tallysolutions.com/global/wp-content/themes/tally/assets/images/download-icon.svg
+   link: https://tallysolutions.com/apac/download/
+   link: https://tallysolutions.com/bd/download/
+   link: https://tallysolutions.com/bd/en/download/
+   link: https://tallysolutions.com/download/
+   link: https://tallysolutions.com/global/download/
+   link: https://tallysolutions.com/global/download/#breadcrumb
+   link: https://tallysolutions.com/global/download/support-files/
+   link: https://tallysolutions.com/mena/ar/download/
+   link: https://tallysolutions.com/mena/download/
+   link: https://tallysolutions.com/ssa/download/
+   link: https://tallysolutions.com/us/download/
+GET https://help.tallysolutions.com/tally-prime/installation-and-licensing/install-tallyprime/ -> 200 len=182857
+   exe-ish: .exe
+   exe-ish: .zip
+   exe-ish: setup.exe
+   link: https://help.tallysolutions.com/directly-upload-download-file-gstr-1-from-tallyprime/
+   link: https://help.tallysolutions.com/download-claude-desktop-log-in/
+   link: https://help.tallysolutions.com/download-ims-inward-invoices/
+   link: https://help.tallysolutions.com/wp-content/plugins/lightbox-popup/images/contorl_buttons/download_hover.png
+   link: https://help.tallysolutions.com/wp-content/plugins/lightbox-popup/images/contorl_buttons/download.png
+   link: https://tallysolutions.com/download/
+Installer candidates:
+  http://mirror.tallysolutions.com/Downloads/EarlierverofTally/Tally9_R213/install.exe
+  http://mirror.tallysolutions.com/Downloads/TallyBSS/tallyserver9/install-32bit.exe
+  http://mirror.tallysolutions.com/Downloads/TallyBSS/tallyserver9/install-64bit.exe
+  https://mirror.tallysolutions.com/tallyweb/tally/tallyerp/tally72migration.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/MigratingData/Convert45to72.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/Tally72/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/Tally9_R214/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease10/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease11/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease12/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease13/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease15/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease151/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease152/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease16/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease161/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease18/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease181/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease182/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease20/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease21/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease3.2/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease3.3/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease3.31/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease3.4/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease3.41/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease3.6/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease3.61/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease3.62/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease3.7/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease30/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease31/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease4.5/install32bit.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease4.5/install64bit.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease4.51/install-32bit.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease4.51/install-64bit.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease4.6/install-32bit.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease4.6/install-64bit.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease4.61/install-32bit.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease4.61/install-64bit.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease4.7/install-32Bit.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease4.7/install-64Bit.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease48/install-32Bit.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease48/install-64Bit.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease49/install-32Bit.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease49/install-64Bit.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease491/install-32Bit.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease491/install-64Bit.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease492/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease492/install64.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease493/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTally/TallyERP9SeriesARelease493/install64.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyDeveloper/Rel1/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyDeveloper/Rel2/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyDeveloper/Rel3/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyDeveloper/Rel32/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyDeveloper/Rel33/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyDeveloper/Rel47/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyDeveloper/tally.developer9rel3.6/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyDeveloper/TallyDeveloper9Release4.5/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyDeveloper/TallyDeveloper9Release4.6/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyDeveloper/TallyDeveloper9Release4.61/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyServer/TallyServer9SeriesARelease4.5/install-32bit.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyServer/TallyServer9SeriesARelease4.5/install-64bit.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyServer/TallyServer9SeriesARelease4.51/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyServer/TallyServer9SeriesARelease4.51/install64.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyServer/TallyServer9SeriesARelease4.7/install-32bit.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyServer/TallyServer9SeriesARelease4.7/install-64bit.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyServer/TallyServer9SeriesARelease4.9/32Bit/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyServer/TallyServer9SeriesARelease4.9/64Bit/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyServer/TallyServer9SeriesARelease4.91/32Bit/install.exe
+  https://tallymirror.tallysolutions.com/Downloads/EarlierverofTallyServer/TallyServer9SeriesARelease4.91/64Bit/install.exe
+Downloading http://mirror.tallysolutions.com/Downloads/EarlierverofTally/Tally9_R213/install.exe
+  OK size=28265158
+  SHA256=9DC802D0D7B9F5312D045B70A7453236C84AD05B25BE0BD03BFC1CD328963499
+
+OriginalFilename  : Setup.exe
+FileDescription   : Setup.exe
+ProductName       : InstallShield
+Comments          : 
+CompanyName       : Macrovision Corporation
+FileName          : D:\a\_temp\TallyPrimeSetup.exe
+FileVersion       : 11.50.42618
+ProductVersion    : 11.50
+IsDebug           : False
+IsPatched         : False
+IsPreRelease      : False
+IsPrivateBuild    : False
+IsSpecialBuild    : False
+Language          : English (United States)
+LegalCopyright    : Copyright (C) 2005 Macrovision Corporation
+LegalTrademarks   : 
+PrivateBuild      : 
+SpecialBuild      : 
+FileVersionRaw    : 11.50.0.42618
+ProductVersionRaw : 11.50.0.0
+
+
+
+Status            : NotSigned
+SignerCertificate : 
+
+
+== 7-Zip view of the installer (is it an archive?)
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 28265158 bytes (27 MiB)
+
+Listing archive: D:\a\_temp\TallyPrimeSetup.exe
+
+
+Errors: 1
+
+ERROR: D:\a\_temp\TallyPrimeSetup.exe : Cannot open the file as archive
+
+
+
+== Attempt 1 : D:\a\_temp\TallyPrimeSetup.exe /S
+[shot] install-1-30s (1024x768)
+  exit code: 0
+== Attempt 2 : D:\a\_temp\TallyPrimeSetup.exe /silent
+[shot] install-2-30s (1024x768)
+  still running after 240 s; windows:
+
+  Id ProcessName     MainWindowTitle
+  -- -----------     ---------------
+1264 TallyPrimeSetup Tally 9
+3316 WindowsTerminal C:\ProgramData\GitHub\HostedComputeAgent\hosted-compute-agent
+
+
+[shot] install-2-240s (1024x768)
+== Attempt 3 : D:\a\_temp\TallyPrimeSetup.exe /verysilent /suppressmsgboxes /norestart
+[shot] install-3-30s (1024x768)
+  still running after 240 s; windows:
+
+  Id ProcessName     MainWindowTitle
+  -- -----------     ---------------
+5544 TallyPrimeSetup Tally 9
+3316 WindowsTerminal C:\ProgramData\GitHub\HostedComputeAgent\hosted-compute-agent
+
+
+[shot] install-3-240s (1024x768)
+== Attempt 4 : D:\a\_temp\TallyPrimeSetup.exe /quiet
+[shot] install-4-30s (1024x768)
+  still running after 240 s; windows:
+
+  Id ProcessName     MainWindowTitle
+  -- -----------     ---------------
+5728 TallyPrimeSetup Tally 9
+3316 WindowsTerminal C:\ProgramData\GitHub\HostedComputeAgent\hosted-compute-agent
+
+
+[shot] install-4-240s (1024x768)
+== Attempt 5 : D:\a\_temp\TallyPrimeSetup.exe /s /v/qn
+[shot] install-5-30s (1024x768)
+  exit code: 0
+== No tally.exe after silent attempts; trying 7z extraction
+ERROR: D:\a\_temp\TallyPrimeSetup.exe
+
+Cannot open the file as archive
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 28265158 bytes (27 MiB)
+
+Extracting archive: D:\a\_temp\TallyPrimeSetup.exe
+
+Can't open as archive: 1
+Files: 0
+Size:       0
+Compressed: 0
+
+
