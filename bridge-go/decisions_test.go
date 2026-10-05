@@ -1,11 +1,12 @@
 // The owner's decisions of 05-Oct-2026 (migration 55), on the stand-in Tally and a stand-in cloud.
 //
 // B, "Not in Tally - post again" (any member, a reason): before anything is sent again the bridge looks in that company
-// in Tally for the entry, with the read a posting's read-back already uses (FinComTag: one date's heads and narrations,
-// the entry found by its FinCom id TDSDesk:<id>, else by its type, number and date), and tells the cloud. Found: the
-// cloud marks it posted with the voucher found; nothing is sent. Not found: the cloud releases the id and hands the
-// posting back; it is sent once. Unable (silent: stopped after CheckSec, 2 s; the company not open): nothing is sent,
-// the cloud keeps waiting and the next turn asks again.
+// in Tally for the ONE voucher the entry may be (the owner's rule for entry reads: FinComVoucherByNumber, by its type
+// and number on its date; else FinComVoucherByMaster, by Tally's id from its reply; never a day's list), the entry's
+// FinCom id TDSDesk:<id> looked for in its narration, and tells the cloud. Found: the cloud marks it posted with the
+// voucher found; nothing is sent. Not found: the cloud releases the id and hands the posting back; it is sent once.
+// Unable (silent: the 2-second stop; the company not open; the voucher there with another FinCom id or none; no number
+// and no Tally id; a date the read rules do not allow): nothing is sent, the cloud keeps waiting.
 //
 // D, two bridges and one company: a posting goes ahead of another bridge's background reading. The other bridge is
 // played by the test through the cloud's lease (leaseModel, as migration 55 keeps it): the reader yields at its next
@@ -140,11 +141,26 @@ func lastReport(t *testing.T, c *standCloud) M {
 	return c.checkReports[len(c.checkReports)-1]
 }
 
-// Tally holds the entry (its FinCom id in the narration): marked posted with the voucher found; nothing is sent
+// the reads the check may send: the company check and ONE voucher (FinComVoucherByNumber, else FinComVoucherByMaster);
+// never a day's list (FinComTag, the Day Book, ...)
+func checkReadsOnly(t *testing.T, f *standTally) {
+	t.Helper()
+	for _, id := range f.ids() {
+		switch id {
+		case "FinComCompany", "TDSDeskCompanies", "TDSDeskCompanyInfo", "FinComFree", cnReportID, vchByNumberID, vchByMasterID:
+		default:
+			t.Fatalf("the check sent %s (only one voucher may be read): %v", id, f.ids())
+		}
+	}
+}
+
+// Tally holds the entry (its FinCom id in the narration of the one voucher with that type and number on its date): marked
+// posted with the voucher found; nothing is sent; only that one voucher read (FinComVoucherByNumber)
 func TestSettleCheckFoundNothingSent(t *testing.T) {
 	td := today()
 	f := newStandTally(t)
 	v := f.add(td, fgParty, "B-77", "TDSDesk:k1 | Electricity", "-10.00")
+	f.add(td, "Other Party", "B-99", "TDSDesk:zz9 | another entry the same day", "-1.00") // never read
 	c := newStandCloud(t)
 	standBridge(t, f, c.cfg())
 	c.mu.Lock()
@@ -155,31 +171,102 @@ func TestSettleCheckFoundNothingSent(t *testing.T) {
 	if str(r["result"]) != "found" || str(r["vch"]) != "B-77" || str(r["master"]) != v.master || str(r["company"]) != zz || toInt(r["check"]) != 7 {
 		t.Fatalf("the report: %v", r)
 	}
-	if f.n("Import") != 0 {
-		t.Fatalf("sent to Tally: %v", f.ids())
+	if f.n("Import") != 0 || f.n(vchByNumberID) != 1 || f.n(tagCheckID) != 0 {
+		t.Fatalf("the requests: %v", f.ids())
 	}
-	if f.n(tagCheckID) != 1 {
-		t.Fatalf("the check is FinComTag, once: %v", f.ids())
-	}
+	checkReadsOnly(t, f)
 	for _, id := range f.ids() {
 		if _, ok := tallyAllowList[id]; !ok || tallyAllowList[id].measureOnly {
 			t.Fatalf("a request not on the allow-list: %s", id)
 		}
 	}
-	// by type, number and date when the narration lost the id (an entry altered by hand in Tally)
-	f.mu.Lock()
-	v.narr = "Electricity (altered by hand)"
-	f.mu.Unlock()
-	c.mu.Lock()
-	c.checks = []M{checkFor("8", "job-k1", "k1", zz, finVoucher("k1", fgParty, "B-77", td, "10.00"))}
-	c.mu.Unlock()
-	cloudPostTake()
-	if r := lastReport(t, c); str(r["result"]) != "found" || str(r["vch"]) != "B-77" || !strings.Contains(str(r["words"]), "type, number and date") {
-		t.Fatalf("found by type, number and date: %v", r)
+}
+
+// the voucher with that type, number and date is in Tally but carries another FinCom id, or none: a person must look;
+// never "not found" (nothing released, nothing sent)
+func TestSettleCheckOtherTagUnable(t *testing.T) {
+	td := today()
+	f := newStandTally(t)
+	v := f.add(td, fgParty, "B-81", "TDSDesk:other1 | someone else's entry", "-10.00")
+	c := newStandCloud(t)
+	standBridge(t, f, c.cfg())
+	for i, narr := range []string{"TDSDesk:other1 | someone else's entry", "Electricity (typed by hand)"} {
+		f.mu.Lock()
+		v.narr = narr
+		f.mu.Unlock()
+		c.mu.Lock()
+		c.checks = []M{checkFor(fmt.Sprint(20+i), "job-k6", "k6", zz, finVoucher("k6", fgParty, "B-81", td, "10.00"))}
+		c.mu.Unlock()
+		cloudPostTake()
+		r := lastReport(t, c)
+		if str(r["result"]) != "unable" || !strings.Contains(str(r["words"]), "a person must look") || !strings.Contains(str(r["words"]), "B-81") {
+			t.Fatalf("%q: %v", narr, r)
+		}
 	}
 	if f.n("Import") != 0 {
 		t.Fatal("sent to Tally")
 	}
+	checkReadsOnly(t, f)
+}
+
+// no voucher number (Tally numbers it itself): Tally's own voucher id from its reply, when the result has one
+// (FinComVoucherByMaster); with neither: "unable", FinCom cannot check it by itself
+func TestSettleCheckNoNumber(t *testing.T) {
+	td := today()
+	f := newStandTally(t)
+	v := f.add(td, fgParty, "", "TDSDesk:k7 | Electricity", "-10.00")
+	c := newStandCloud(t)
+	standBridge(t, f, c.cfg())
+	x := finVoucher("k7", fgParty, "", td, "10.00")
+	ck := checkFor("30", "job-k7", "k7", zz, x)
+	ck["vchId"] = v.master
+	c.mu.Lock()
+	c.checks = []M{ck}
+	c.mu.Unlock()
+	cloudPostTake()
+	if r := lastReport(t, c); str(r["result"]) != "found" || str(r["master"]) != v.master {
+		t.Fatalf("by Tally's voucher id: %v", r)
+	}
+	if f.n(vchByMasterID) != 1 || f.n(vchByNumberID) != 0 {
+		t.Fatalf("the requests: %v", f.ids())
+	}
+	// Tally's id names no voucher on that date: not there
+	ck2 := checkFor("31", "job-k8", "k8", zz, finVoucher("k8", fgParty, "", td, "10.00"))
+	ck2["vchId"] = "999"
+	c.mu.Lock()
+	c.checks = []M{ck2}
+	c.mu.Unlock()
+	cloudPostTake()
+	if r := lastReport(t, c); str(r["result"]) != "notfound" {
+		t.Fatalf("Tally's id names nothing: %v", r)
+	}
+	// neither a number nor Tally's id
+	c.mu.Lock()
+	c.checks = []M{checkFor("32", "job-k9", "k9", zz, finVoucher("k9", fgParty, "", td, "10.00"))}
+	c.mu.Unlock()
+	n := len(f.ids())
+	cloudPostTake()
+	if r := lastReport(t, c); str(r["result"]) != "unable" || !strings.Contains(str(r["words"]), "FinCom cannot check this entry by itself") {
+		t.Fatalf("no number, no id: %v", r)
+	}
+	for _, id := range f.ids()[n:] {
+		if id == vchByNumberID || id == vchByMasterID {
+			t.Fatalf("a voucher was asked for with nothing to ask by: %v", f.ids()[n:])
+		}
+	}
+	// dated before the company's starting point: Tally is not asked by number (the read rule); said in words
+	c.mu.Lock()
+	c.checks = []M{checkFor("33", "job-k10", "k10", zz, finVoucher("k10", fgParty, "B-82", addDays(td, -1), "10.00"))}
+	c.mu.Unlock()
+	n = len(f.ids())
+	cloudPostTake()
+	if r := lastReport(t, c); str(r["result"]) != "unable" || !strings.Contains(str(r["words"]), "starting point") {
+		t.Fatalf("before the starting point: %v", r)
+	}
+	if f.n("Import") != 0 || f.n(vchByNumberID) != 0 {
+		t.Fatalf("the requests: %v", f.ids()[n:])
+	}
+	checkReadsOnly(t, f)
 }
 
 // Tally does not hold it: the cloud releases it and hands the posting back; it is sent once
@@ -192,6 +279,7 @@ func TestSettleCheckNotFoundSentOnce(t *testing.T) {
 		once.Do(func() { create, d = false, 3*time.Second }) // the first send: Tally took it and did not answer (and made nothing)
 		return create, d
 	}
+	f.add(td, "Other Party", "Z-2", "an earlier entry", "-1.00") // Tally's numbers above 0: the starting point is recorded
 	c := newStandCloud(t)
 	standBridge(t, f, `,"TallyMaxSec":1,"PostTimeoutSec":1,"PostTimeoutBaseSec":1,"TallyProbeEverySec":1,"PostWaitMs":200`+c.cfg())
 	x := finVoucher("k2", fgParty, "B-78", td, "20.00")
@@ -276,7 +364,8 @@ func TestSettleCheckSilentWaits(t *testing.T) {
 	td := today()
 	f := newStandTally(t)
 	log := &fakeLog{}
-	f.behave = silentFor(func(id, body string) bool { return id == tagCheckID }, log)
+	f.add(td, "Other Party", "Z-1", "an earlier entry", "-1.00") // Tally's numbers above 0: the starting point is recorded
+	f.behave = silentFor(func(id, body string) bool { return id == vchByNumberID }, log)
 	c := newStandCloud(t)
 	standBridge(t, f, `,"TallyMaxSec":1,"TallyProbeEverySec":1`+c.cfg())
 	x := finVoucher("k3", fgParty, "B-79", td, "30.00")

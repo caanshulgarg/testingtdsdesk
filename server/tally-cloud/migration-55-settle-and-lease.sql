@@ -4,21 +4,26 @@
 --
 -- B. Any member of the firm who may write (owner or staff: can_write()) settles a posting whose result is uncertain; a
 --    reason is required; the name and time are kept (tally_post_marks, by_user; the entry's stamp names the person).
+--    The bridge reads ONE voucher only (the owner's rule for entry reads): FinComVoucherByNumber (type, number, the
+--    entry's date), else FinComVoucherByMaster (Tally's id from its reply); never a day's list.
 --    1. tally_post_job_mark_posted(job, id, vch, note): as 36b's, for any member who may write, the note (the reason)
 --       required; the stamp says who marked it (by, byUser). tally_post_mark_core holds 36b's text, granted to nobody.
 --    2. "Not in Tally - post again": tally_post_settle_ask(job, id, why) records a check (tally_post_checks) for the
---       posting's own bridge; nothing is released and nothing is sent. The bridge looks in Tally for the entry (its FinCom
---       id, TDSDesk:<id>, in the narration; else its type, number and date) with the read it already uses for a posting's
---       read-back (FinComTag) and reports (tally_post_check_report, the service role: tally-ingest):
+--       posting's own bridge; nothing is released and nothing is sent. The bridge reads the one voucher the entry may be
+--       (by its type, number and date; else by Tally's id from its reply) and looks for the entry's FinCom id,
+--       TDSDesk:<id>, in its narration, then reports (tally_post_check_report, the service role: tally-ingest):
 --         found     -> the entry is marked posted with the voucher found (in the asker's name); nothing is sent again;
 --         notfound  -> ONLY when the company it looked in is the posting's own company and the bridge is the posting's
 --                      bridge: the id is released (tally_post_release_core, 36b's release text, in the asker's name) and
 --                      the posting waits to be sent again (once; the resend guard of 36b still applies);
 --         unable    -> Tally could not be asked (the bridge offline, Tally busy or closed, the company not open, the 2-second
---                      stop): the check keeps waiting with the bridge's words and is asked again by itself; never sent.
+--                      stop), or the voucher is there with another FinCom id or none (a person must look), or the entry
+--                      cannot be asked for (no number and no Tally id, a date the read rules do not allow): the check
+--                      keeps waiting with the bridge's words and is asked again by itself; never released, never sent.
 --    3. tally_post_id_release_owner(job, id, why): for any member who may write, and refused unless the posting's bridge
 --       has reported "checked, not found" for that entry (the release itself is then already done: said, not repeated).
---    4. tally_post_checks_for(device, bridge, main): the waiting checks a bridge may answer (the service role).
+--    4. tally_post_checks_for(device, bridge, main): the waiting checks a bridge may answer (the service role), with
+--       Tally's own voucher id from its reply when the result has one (for an entry with no voucher number).
 -- D. Two bridges, one company: the lease (tally_company_lease, 32/37) marks its purpose ('post' or 'read'). A posting
 --    that finds the lease held by another bridge's READ records "want to post" (want_post_*); the reader sees it on its
 --    renewal (between two requests, never cutting one) and yields: the lease is handed to the posting bridge at once. A
@@ -214,7 +219,13 @@ create or replace function public.tally_post_checks_for(p_device uuid, p_bridge 
 returns jsonb language sql stable security definer set search_path to 'public', 'pg_temp' as $function$
   select coalesce(jsonb_agg(x.o order by x.id), '[]'::jsonb) from (
     select c.id, jsonb_build_object('check', c.id, 'job', c.job_id, 'entry', c.entry_id, 'company', j.company, 'why', c.why, 'askedAt', c.asked_at, 'tries', c.tries,
-             'xml', (select v->>'xml' from jsonb_array_elements(coalesce(j.payload->'vouchers', '[]'::jsonb)) v where v->>'id' = c.entry_id limit 1)) o
+             'xml', (select v->>'xml' from jsonb_array_elements(coalesce(j.payload->'vouchers', '[]'::jsonb)) v where v->>'id' = c.entry_id limit 1),
+             -- Tally's own voucher id for the entry from its reply (vchId; LASTVCHID only when the request held this one
+             -- entry): the bridge asks Tally for that one voucher when the entry has no number (FinComVoucherByMaster)
+             'vchId', (select coalesce(nullif(regexp_replace(coalesce(r->>'vchId', ''), '\D', '', 'g'), ''),
+                                       case when coalesce(nullif(regexp_replace(coalesce(r->>'batchN', ''), '\D', '', 'g'), ''), '1')::bigint <= 1
+                                            then nullif(regexp_replace(coalesce(r->>'lastVchId', ''), '\D', '', 'g'), '') end)
+                         from jsonb_array_elements(coalesce(j.results, '[]'::jsonb)) r where r->>'id' = c.entry_id limit 1)) o
       from tally_post_checks c join tally_post_jobs j on j.id = c.job_id
      where c.state = 'waiting' and j.device_id = p_device
        and (j.target_bridge = p_bridge or (j.target_bridge is null and coalesce(p_main, false)))

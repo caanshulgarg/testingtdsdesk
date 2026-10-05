@@ -151,6 +151,7 @@ try:
     lst = svc("select tally_post_checks_for(%s::uuid, %s, true)::text" % (q(D1), q(B1)))
     ok(isinstance(lst, list) and len(lst) == 1 and lst[0].get("check") == CK and lst[0].get("company") == "ZZ CO" and "TDSDesk:K2" in lst[0].get("xml", "") and lst[0].get("entry") == "K2",
        "B4. the posting's bridge lists the check with the company and the entry's voucher (%s)" % lst)
+    ok(lst and lst[0].get("vchId") == "26298", "B4. with Tally's voucher id from the posting's result (its reply held this one entry), for an entry with no number (%s)" % (lst[0].get("vchId") if lst else lst))
     ok(svc("select tally_post_checks_for(%s::uuid, %s, false)::text" % (q(D1), q(B1))) == [], "B4. a bridge that is not the main one (and not named) lists none")
     ok(svc("select tally_post_checks_for(%s::uuid, %s, true)::text" % (q(D2), q(B2))) == [], "B4. another computer lists none")
     for fn in ("tally_post_checks_for(uuid, text, boolean)", "tally_post_check_report(bigint, uuid, text, boolean, text, text, text, text, text)"):
