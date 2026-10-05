@@ -16,6 +16,8 @@
 #   green 3  BridgeVersion 2.1.7 with the owner's decision line naming 2.1.7 (round 13) -> passes check 4
 #   red 10   BridgeVersion 2.1.7 with an "allowed for 2.1.7 only" line WITHOUT the owner's decision words -> fails "owner's decision"
 #   red 11   an exception line naming two versions                    -> fails "names more than one version"
+#   pin      every 'go test' line in release-check.sh carries -timeout 20m (Go's default 10 minutes cut a full run at 588 s
+#            on 05-Oct-2026)
 # Nothing outside the temp folder is touched. Run: bash bridge-go/release_check_test.sh
 # (RELEASE_CHECK_SCRIPT=<file> tests another copy of the script, e.g. one that always passes, to see this test fail.)
 set -u
@@ -126,6 +128,12 @@ expect "red 11: an exception naming two versions" 1 "names more than one version
 
 setup; printf '# Tally allow-list\n\nre-measured on 2026-10-02\n| id | purpose | worst case (s) | measured on |\n|---|---|---|---|\nledgers | ledger list | 4 | 2026-09-30\n' >"$R/docs/tally-allowlist.md"; g add -A; g commit -qm "no rows"
 expect "red 9: no row of the allow-list table can be parsed" 1 "no rows parsed"
+
+# pin: every go test command in the script carries the explicit 20-minute limit (GO_TEST_TIMEOUT=20m, used on each line)
+S="${RELEASE_CHECK_SCRIPT:-$HERE/release-check.sh}"
+nt="$(grep -cE '^[[:space:]]*go test ' "$S")"; nl="$(grep -E '^[[:space:]]*go test ' "$S" | grep -cF -- '-timeout "$GO_TEST_TIMEOUT"')"
+if [ "$nt" -ge 2 ] && [ "$nt" = "$nl" ] && grep -qx 'GO_TEST_TIMEOUT=20m' "$S"; then echo "PASS  pin: all $nt go test lines run with -timeout 20m"
+else echo "FAIL  pin: $nl of $nt go test lines carry -timeout \$GO_TEST_TIMEOUT, or GO_TEST_TIMEOUT=20m is missing"; FAILS=$((FAILS+1)); fi
 
 echo
 if [ "$FAILS" = 0 ]; then echo "release_check_test: all cases as expected"; else echo "release_check_test: $FAILS case(s) wrong"; exit 1; fi

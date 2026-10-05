@@ -29,7 +29,7 @@ Then:
     copy unchanged, the gap check counts it), G12, L4 (a full line stamps only the live posting of this book's company), L10
     (below the last match read after it: needs_baseline), M6 (a held short line re-run on acceptance:
     tally_recorder_short_held / tally_recorder_short_retry), M4 (200,000 ids: 500 unknown ids under 2 s, 500 unmatched short
-    lines under 5 s, the spelling rule kept). L2 (lock_timeout: 45 gives up behind a held lock), L6 (privileges under
+    lines under 5 s, each timed inside the database after a warm-up, best of three; the spelling rule kept). L2 (lock_timeout: 45 gives up behind a held lock), L6 (privileges under
     Supabase's default privileges) and the text holding no 'delete from' at all.
 RED (before 45): SKIP45=1. ONLY=3 / 4 / G: that item alone."""
 import os, re, sys, json, subprocess
@@ -436,18 +436,37 @@ insert into tally_post_ids (firm_id, client_id, fincom_id, job_id, entry_id, liv
   select %(F)s, 'c1', 'P' || g || '-' || k, md5('pj' || g)::uuid, 'e' || g || '-' || k, true, now() - (g || ' minutes')::interval from generate_series(1, 8000) g, generate_series(1, 25) k;
 alter table tally_post_ids enable trigger user;
 analyze tally_post_ids; analyze tally_post_jobs;""" % {"F": q(F), "D": q(D1), "C": q(CO["PERF"])})
-        t0 = _t.time(); n = jn("set statement_timeout = '20s'; select jsonb_array_length(tally_post_xml_for(%s, %s, array(select 'NOSUCH-' || g from generate_series(1, 500) g))->'posts')" % (q(F), q(PB))); t1 = _t.time() - t0
-        # the time bound is generous (CI runners are slower: 4.1 s there against 0.3 s here; without the indexes it was 167 s); what
-        # proves the indexes is the plan of each spelling's lookup below (CI, 04-Oct)
-        ok(n == "0" and t1 < 15, "M4. tally_post_xml_for with 500 unknown ids over %s ids: %.2f s (under 15 s; 167 s without the indexes) (%s)" % (db.one("select count(*) from tally_post_ids"), t1, str(n)[:120]))
+        # the time bound measures the SQL, not the machine: on a shared CI runner the wall clock around one psql call (start a
+        # process, connect, parse, run the first call on a cold cache straight after loading 200,000 rows) once took 25 s against
+        # 15 s and passed on rerun (05-Oct). So: one untimed warm-up call (its answer still checked), then the same work three
+        # times with the clock read inside the database (clock_timestamp() around the call in one DO block), the best of three
+        # against the bound. A lost index or a slower rule is slow every time (167 s without the indexes); a busy neighbour is not
+        def in_db(call, timeout="60s"):
+            # (seconds inside the database, the call's answer as text); call is one SQL expression giving text
+            r = jn("set statement_timeout = %s; do $m4$ declare t0 timestamptz := clock_timestamp(); r text; begin r := (%s); "
+                   "perform set_config('m4.r', coalesce(r, '-'), false), set_config('m4.s', extract(epoch from clock_timestamp() - t0)::text, false); end $m4$; "
+                   "select current_setting('m4.s') || '|' || current_setting('m4.r')" % (q(timeout), call))
+            if not r or r.startswith("ERROR") or "|" not in r: return 1e9, str(r)[:200]
+            secs, ans = r.split("|", 1); return float(secs), ans
+        def best_of(make_call, want, n=3):
+            # the warm-up (wall clock, psql start included, for the message only), then n timed runs; each answer must be want
+            t0 = _t.time(); s0, a0 = in_db(make_call("w"), "120s"); wall = _t.time() - t0
+            runs = [in_db(make_call(str(i))) for i in range(n)]
+            return min(s for s, _ in runs), [round(s, 3) for s, _ in runs], (wall, s0), all(a == want for _, a in [(s0, a0)] + runs), [a0] + [a for _, a in runs]
+        XML_BOUND, APPLY_BOUND = 2.0, 5.0      # inside the database, warm; the header's 'under 2 s' and 'under 5 s'
+        best, runs, (wall, cold), good, ans = best_of(lambda k: "jsonb_array_length(tally_post_xml_for(%s, %s, array(select 'NOSUCH%s-' || g from generate_series(1, 500) g))->'posts')::text" % (q(F), q(PB), k), "0")
+        ok(good and best < XML_BOUND, "M4. tally_post_xml_for with 500 unknown ids over %s ids: %.3f s in the database, warm, best of %s (under %.0f s; 167 s without the indexes); "
+           "the warm-up took %.2f s inside, %.2f s by the wall clock with psql (%s)" % (db.one("select count(*) from tally_post_ids"), best, runs, XML_BOUND, cold, wall, ans if not good else "0"))
         plans = {k: jn("explain select 1 from tally_post_ids p where p.firm_id = %s and p.live and %s" % (q(F), w)) for k, w in (
             ("entry", "p.entry_id = 'NOSUCH-1'"),
             ("fid_an", "regexp_replace(p.fincom_id, '[^A-Za-z0-9]', '', 'g') = 'NOSUCH1'"),
             ("entry_an", "regexp_replace(coalesce(p.entry_id, ''), '[^A-Za-z0-9]', '', 'g') = 'NOSUCH1'"))}
         ok(all("Index" in v and "Seq Scan on tally_post_ids" not in v for v in plans.values()),
            "M4. each spelling's lookup over 200,000 ids goes through an index, never a scan of the table (%s)" % {k: v.split("\n")[0][:90] for k, v in plans.items()})
-        t0 = _t.time(); n = jn("set statement_timeout = '20s'; select (tally_recorder_apply(%s, %s, %s, %s)->>'held')" % (q(F), q(PB), q(D1), js([short("pf%d" % i, "gpf-%d" % i, 9001 + i, "NOSUCH.%d" % i, body=False) for i in range(500)]))); t1 = _t.time() - t0
-        ok(n == "500" and t1 < 15, "M4. tally_recorder_apply with 500 unmatched short lines: %.2f s (under 15 s), 500 held (%s)" % (t1, str(n)[:120]))
+        # each run holds 500 new lines (its own line ids, GUIDs, AlterIDs and FinCom ids), so every run does the same work
+        best, runs, (wall, cold), good, ans = best_of(lambda k: "tally_recorder_apply(%s, %s, %s, %s)->>'held'" % (q(F), q(PB), q(D1), js([short("pf%s-%d" % (k, i), "gpf%s-%d" % (k, i), 9001 + 1000 * "w012".index(k) + i, "NOSUCH%s.%d" % (k, i), body=False) for i in range(500)])), "500")
+        ok(good and best < APPLY_BOUND, "M4. tally_recorder_apply with 500 unmatched short lines: %.3f s in the database, warm, best of %s (under %.0f s), 500 held each time; "
+           "the warm-up took %.2f s inside, %.2f s by the wall clock with psql (%s)" % (best, runs, APPLY_BOUND, cold, wall, ans if not good else "500"))
         live = lambda fid: jn("select coalesce(string_agg(post_fid, ','), '-') from tally_post_live_for(%s, %s, %s)" % (q(F), q(PB), q(fid)))
         sp = {f: live(f) for f in ("P8-3", "P8_3", "e8.3", "e8-3", "P83", "P8-4", "NOSUCH", "P9-3", "--")}
         ok(sp == {"P8-3": "P8-3", "P8_3": "P8-3", "e8.3": "P8-3", "e8-3": "P8-3", "P83": "P8-3", "P8-4": "P8-4", "NOSUCH": "-", "P9-3": "-", "--": "-"},
