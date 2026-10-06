@@ -142,6 +142,9 @@ jobs:
           git status --short | Select-Object -First 20
           git add spike-results
           git commit -q -m "spike results ${{ github.run_id }} ${{ matrix.os }} (bridge ${{ needs.build.outputs.sha }})`n`nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`nClaude-Session: https://claude.ai/code/session_01LprHoXx2ACgDW2AjxNH8wN"
+          # anything else the job left changed in tracked files (seen: app/src/Main.jsx) is dropped: it stopped the rebase
+          # in run 37393792265 when the branch had moved meanwhile
+          git checkout -- .
           for ($i = 0; $i -lt 5; $i++) {
             git pull -q --rebase --autostash origin tally-real-spike
             git push -q origin HEAD:refs/heads/tally-real-spike
