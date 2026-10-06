@@ -303,6 +303,10 @@ foreach ($it in $items8) { if ($si -notmatch [regex]::Escape($it)) { Write-Host 
 Imp 9000 $co1 'All Masters' ((Led 'Spike Sales' 'Sales Accounts' '<AFFECTSSTOCK>Yes</AFFECTSSTOCK>') + (Led 'Spike Purchase' 'Purchase Accounts' '<AFFECTSSTOCK>Yes</AFFECTSSTOCK>') + (Led 'Spike CGST' 'Duties &amp; Taxes' '<TAXTYPE>Others</TAXTYPE>') + (Led 'Spike SGST' 'Duties &amp; Taxes' '<TAXTYPE>Others</TAXTYPE>') + (Led 'Spike Trader' 'Sundry Debtors' '<ISBILLWISEON>No</ISBILLWISEON>') + (Led 'Spike Supplier' 'Sundry Creditors' '<ISBILLWISEON>No</ISBILLWISEON>')) 'check 8 ledgers' | Out-Null
 StockNames 9000 $co1 | Out-Null
 
+# the owner's real-Tally checks for bridge 2.3.1 (S1..S10): scen231.ps1; their masters now, before the bridges start
+. (Join-Path $PSScriptRoot 'scen231.ps1')
+try { S231Masters } catch { Write-Host "S231 masters: $_" }
+
 # ---- user 2's own Tally (9001), run as fcuser2: a company made by keys, then started again with it and the add-on
 Say '---- user 2''s own Tally (9001), run as fcuser2: a company made by keys, then started again with it and the add-on'
 $tally2 = $false
@@ -388,8 +392,9 @@ function StubLines([int]$from = 0) {
     $o = $r[$i]; if ($o.kind -ne 'recorder_lines') { continue }
     foreach ($x in @($o.body.lines)) {
       if (-not $x) { continue }
+      $ans = @(@($o.answer.results) | Where-Object { $_.line_id -eq $x.line_id })[0]
       $l += [pscustomobject]@{ i = $i; at = $o.at; bid = $o.body.bridge.id; buser = $o.body.bridge.user; bport = $o.body.bridge.port; device = $o.device; company = $o.body.company
-        ev = $x.event; guid = "$($x.object_guid)"; mid = $x.master_id; aid = $x.alter_id; xml = "$($x.xml)"; lineGuid = $x.lineGuid; ids = $x.idsMismatch; held = "$($x.heldWhy)"; vch = "$($x.vch_type)/$($x.vch_no)/$($x.vch_date)" }
+        ev = $x.event; guid = "$($x.object_guid)"; lid = "$($x.line_id)"; state = "$($ans.state)"; why = "$($ans.why)"; mid = $x.master_id; aid = $x.alter_id; xml = "$($x.xml)"; lineGuid = $x.lineGuid; ids = $x.idsMismatch; held = "$($x.heldWhy)"; vch = "$($x.vch_type)/$($x.vch_no)/$($x.vch_date)" }
     }
   }
   return , $l
@@ -454,6 +459,8 @@ Result '6b /ping proof' $okb (($chk | ForEach-Object { "$($_[0]): $(if ($_[1]) {
 
 Snap 'start'
 Start-Sleep 30
+# S9's first half: the GSTIN altered once bridge 1's starting point is recorded (its first light check)
+try { S231AfterStart } catch { Write-Host "S231 after start: $_" }
 
 # ---- steps 1-5 on user 1's Tally (9000), as round 3
 Say '---- steps 1-5 on user 1''s Tally (9000), as round 3'
@@ -675,6 +682,9 @@ $r6 = @(Get-Content $resultsFile | Where-Object { $_ -match '^(PASS|FAIL|HARNESS
 $r6h = @($r6 | Where-Object { $_ -like 'HARNESS*' }).Count -gt 0 -and @($r6 | Where-Object { $_ -like 'FAIL*' }).Count -eq 0
 Result '6 two Windows users' (@($r6 | Where-Object { $_ -notlike 'PASS*' }).Count -eq 0 -and $r6.Count -eq 5) (($r6 | ForEach-Object { ($_ -split ':')[0] }) -join '; ') $r6h
 if ($script:harness) { Add-Content -Path $resultsFile -Encoding UTF8 -Value "HARNESS: user 2's task did not run ($($script:harness) time(s) in this run; see round4.log '[harness]' lines)" }
+
+# ---- the owner's 2.3.1 scenarios S1..S10 (scen231.ps1)
+try { S231Run } catch { Write-Host "S231: $_ $($_.ScriptStackTrace)"; Result 'S231 scenarios' $false "the harness stopped: $_" $true }
 
 # ---- what is kept: the bridges' logs, install logs, settings without their keys
 Say '---- what is kept: the bridges'' logs, install logs, settings without their keys'

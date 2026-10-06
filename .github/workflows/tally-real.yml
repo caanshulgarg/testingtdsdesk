@@ -39,8 +39,12 @@ jobs:
       - name: Committed setup at the ref
         id: committed
         run: |
-          f=$(ls assets-test/bridge-go/FinComBridge-Setup-*.exe 2>/dev/null | head -1 || true)
-          if [ -z "$f" ]; then echo "no committed setup at the ref: building from source"; echo "use=no" >> "$GITHUB_OUTPUT"; exit 0; fi
+          # only the setup of the ref's own version (BridgeVersion in bridge-go/util.go): a branch that carries an older
+          # committed setup (a-231 / b-231 / items-231 keep 2.3.0's) is built from source
+          ver=$(grep -oP 'var BridgeVersion = "\K[0-9.]+' bridge-go/util.go || true)
+          f=$(ls assets-test/bridge-go/FinComBridge-Setup-$ver.exe 2>/dev/null | head -1 || true)
+          echo "the ref's BridgeVersion: $ver; committed setups: $(ls assets-test/bridge-go/FinComBridge-Setup-*.exe 2>/dev/null | tr '\n' ' ')"
+          if [ -z "$ver" ] || [ -z "$f" ]; then echo "no committed setup of version $ver at the ref: building from source"; echo "use=no" >> "$GITHUB_OUTPUT"; exit 0; fi
           [ -f "$f.sha256" ] || { echo "::error::$f has no $f.sha256 next to it"; exit 1; }
           want=$(awk '{print tolower($1); exit}' "$f.sha256"); got=$(sha256sum "$f" | awk '{print $1}')
           echo "committed setup $f: SHA-256 $got (expected from $(basename "$f").sha256: $want)"
@@ -49,7 +53,6 @@ jobs:
           echo "setup origin: COMMITTED $f SHA-256 $got" | tee bridge-go/dist/setup-origin.txt
           echo "use=yes" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-go@v5
-        if: steps.committed.outputs.use != 'yes'
         with:
           go-version-file: bridge-go/go.mod
           cache-dependency-path: bridge-go/go.sum
@@ -65,6 +68,25 @@ jobs:
           cp ../bridge-source.txt dist/
           f=$(ls dist/FinComBridge-Setup-*.exe | head -1)
           echo "setup origin: BUILT from source $f SHA-256 $(sha256sum "$f" | awk '{print $1}')" | tee dist/setup-origin.txt
+      # the owner's 2.3.1 scenarios: the bridge's own requests to Tally, as its code at the ref builds them, printed by throwaway
+      # test files that live only in this checkout (never committed; the bridge's code is not changed): the one-entry request
+      # (voucherByMasterRequest; MasterID 99999 and the day 20261001 are placeholders the harness replaces), and, from b-231,
+      # the ledger requests (ledgerChangesRequest with the span 77777..88888, ledgerByNameRequest with the name FCSPIKENAME).
+      # Each is built on its own, so a ref without one of them (a-231 has no ledger requests) still gives the others
+      - name: The bridge's own requests (for the 2.3.1 scenarios)
+        continue-on-error: true
+        working-directory: bridge-go
+        run: |
+          mkdir -p dist/requests
+          one() {
+            printf 'package main\n\nimport (\n\t"os"\n\t"testing"\n)\n\nfunc TestFCSpikeReq(t *testing.T) {\n\tif err := os.WriteFile(os.Getenv("FC_REQ_OUT"), []byte(%s), 0o644); err != nil {\n\t\tt.Fatal(err)\n\t}\n}\n' "$2" > zz_fcspike_req_test.go
+            if FC_REQ_OUT="$PWD/dist/requests/$1.xml" go test -run '^TestFCSpikeReq$' -count=1 . > "dist/requests/$1.log" 2>&1; then echo "$1: $(head -c 300 dist/requests/$1.xml)"; else echo "$1: not at this ref ($(grep -m1 -E 'undefined|error' dist/requests/$1.log))"; rm -f dist/requests/$1.xml; fi
+            rm -f zz_fcspike_req_test.go
+          }
+          one entry 'voucherByMasterRequest("FinCom Spike Co", "20261001", []string{"99999"})'
+          one ledger-changes 'ledgerChangesRequest("FinCom Spike Co", 77777, 88888)'
+          one ledger-by-name 'ledgerByNameRequest("FinCom Spike Co", "FCSPIKENAME")'
+          ls -la dist/requests
       # check 7: the cloud's own parser at the ref (tally-ingest's parse.js and the names rule it imports), run under node
       - name: Cloud parser at the ref
         run: |
@@ -87,7 +109,7 @@ jobs:
       matrix:
         os: [windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 50
+    timeout-minutes: 100
     env:
       RES: ${{ github.workspace }}\spike-results\${{ github.run_id }}-${{ matrix.os }}
       SHOTS: ${{ github.workspace }}\spike-results\${{ github.run_id }}-${{ matrix.os }}
@@ -125,7 +147,7 @@ jobs:
         if: inputs.probe == 'yes'
         run: |
           & .github/tally-spike/probe.ps1 *>&1 | Tee-Object -FilePath "$env:RES\probe.log" -Append; exit 0
-      - name: Round 4 (bridge 2.3.0 built from the ref, two Windows users, a local stub cloud)
+      - name: Round 4 (the bridge from the ref, two Windows users, a local stub cloud; the 2.3.1 scenarios S1-S10)
         if: inputs.probe != 'yes'
         env:
           BRIDGE_DIST: ${{ github.workspace }}\bridge-dist
@@ -149,6 +171,8 @@ jobs:
           git config user.name "tally-spike"; git config user.email "tally-spike@users.noreply.github.com"
           git status --short | Select-Object -First 20
           git add spike-results
+          # the real XML Tally gave to the bridge's own requests in the 2.3.1 scenarios, for the bridge's tests
+          if (Test-Path bridge-go/testdata/real-tally-7.1/231) { git add bridge-go/testdata/real-tally-7.1/231 }
           git commit -q -m "spike results ${{ github.run_id }} ${{ matrix.os }} (bridge ${{ needs.build.outputs.sha }})`n`nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`nClaude-Session: https://claude.ai/code/session_01LprHoXx2ACgDW2AjxNH8wN"
           # anything else the job left changed in tracked files (seen: app/src/Main.jsx) is dropped: it stopped the rebase
           # in run 37393792265 when the branch had moved meanwhile
