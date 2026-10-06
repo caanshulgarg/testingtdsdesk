@@ -57,23 +57,23 @@ function Walk($tag, $kind, $name, $group, [int]$n = 22) {
 # individuals/HUF with PAN, rate for other deductee types with PAN, Is zero rated, Threshold
 function Clear { K '{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}' 1 '' }
 Say '---- the nature of payment 194C, made by keys'
-Clear; K 'TDS Nature of Payments{ENTER}' 3 '20-nature-form'
+Clear; K 'TDS Nature of Payments' 2; K '{ENTER}' 3 '20-nature-form'
 K 'Probe 194C Contractors{ENTER}' 1 '21-name'; K '194C{ENTER}' 1 '22-section'; K '94C{ENTER}' 1 '23-paycode'; K '{ENTER}' 1 '24-remit'
-K '1{ENTER}' 1 '25-rate-ind'; K '2{ENTER}' 1 '26-rate-other'; K '{ENTER}' 1 '27-zero'; K '{ENTER}' 2 '28-threshold'; K '^a' 2 '29-ctrl-a'; K '{ESC}' 2 '29b-esc'
+K '1{ENTER}' 1 '25-rate-ind'; K '2{ENTER}' 1 '26-rate-other'; K '{ENTER}' 1 '27-zero'; K '{ENTER}' 3 '28-threshold'; K '{ESC}' 3 '29-esc-blank'
 Say '---- the deductee party (Sundry Creditors, bill-wise, Is TDS Deductable: Yes)'
-Clear; K 'Ledger{ENTER}' 3 '30-party-form'; K 'Probe Deductee{ENTER}' 1; K '{ENTER}' 1; K 'Sundry Creditors{ENTER}' 2 '31-group'
+Clear; K 'Ledger' 2 '30a-typed'; K '{ENTER}' 3 '30-party-form'; K 'Probe Deductee{ENTER}' 1; K '{ENTER}' 1; K 'Sundry Creditors{ENTER}' 2 '31-group'
 K '{ENTER}' 1 '32-billwise'; K '{ENTER}' 1 '33-credit'; K '{ENTER}' 1 '34-at-tds'; K 'y' 2 '35-tds-yes'; K '{ENTER}' 2 '36-after-yes'
 for ($i = 1; $i -le 14; $i++) { K '{ENTER}' 1 ("37-party-{0:d2}" -f $i) }
-K '^a' 3 '38-ctrl-a'; K '{ESC}' 2 '39-esc'
+K '{ESC}' 3 '38-esc'; K 'y' 3 '39-y'
 Say '---- the TDS duty ledger (Duties & Taxes, Type of Duty/Tax: TDS)'
-Clear; K 'Ledger{ENTER}' 3 '40-duty-form'; K 'Probe TDS Ledger{ENTER}' 1; K '{ENTER}' 1; K 'Duties & Taxes{ENTER}' 2 '41-group'
+Clear; K 'Ledger' 2 '40a-typed'; K '{ENTER}' 3 '40-duty-form'; K 'Probe TDS Ledger{ENTER}' 1; K '{ENTER}' 1; K 'Duties & Taxes{ENTER}' 2 '41-group'
 K 'TDS{ENTER}' 2 '42-type-tds'
 for ($i = 1; $i -le 10; $i++) { K '{ENTER}' 1 ("43-duty-{0:d2}" -f $i) }
-K '^a' 3 '44-ctrl-a'; K '{ESC}' 2 '45-esc'
+K '{ESC}' 3 '44-esc'; K 'y' 3 '45-y'
 Say '---- the expense ledger (Indirect Expenses): its TDS field, if any, by Down'
-Clear; K 'Ledger{ENTER}' 3 '50-exp-form'; K 'Probe Contract Work{ENTER}' 1; K '{ENTER}' 1; K 'Indirect Expenses{ENTER}' 2 '51-group'
+Clear; K 'Ledger' 2 '50a-typed'; K '{ENTER}' 3 '50-exp-form'; K 'Probe Contract Work{ENTER}' 1; K '{ENTER}' 1; K 'Indirect Expenses{ENTER}' 2 '51-group'
 for ($i = 1; $i -le 10; $i++) { K '{ENTER}' 1 ("52-exp-{0:d2}" -f $i) }
-K '^a' 3 '53-ctrl-a'; K '{ESC}' 2 '54-esc'
+K '{ESC}' 3 '53-esc'; K 'y' 3 '54-y'; Clear
 # what Tally keeps of them: its own export
 K '{ESC}' 2 '59-gateway'
 Coll 'Ledger' '*' 'ledgers.xml'
