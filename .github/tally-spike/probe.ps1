@@ -42,21 +42,22 @@ Post ('<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY>
 K '{F11}' 3 '10-f11'
 for ($i = 1; $i -le 30; $i++) { K '{ENTER}' 1 ("11-f11-{0:d2}" -f $i) }
 K '{ESC}' 2 '12-f11-esc'; K 'y' 2 '12b-f11-y'; Shot '12d-where'
-# a ledger form, walked: name, group, then every field (Enter) with a screenshot
-function LedgerWalk($tag, $name, $group, [int]$n = 22) {
-  Say "---- ledger form: $name under $group"
-  K 'c' 3 "$tag-0-create"; K 'Ledger{ENTER}' 3 "$tag-1-form"; K "$name{ENTER}" 2 "$tag-2-name"; K '{ENTER}' 2 "$tag-3-under"; K "$group{ENTER}" 3 "$tag-4-group"
+# after F11 (Esc, y) Tally stands in Master Creation with its search box (probe 37442505835): every walk starts there,
+# clears the box, types the master's kind and Enter; a walk ends with Esc, y (quit without saving) back in that list
+function Walk($tag, $kind, $name, $group, [int]$n = 22) {
+  Say "---- $kind form: $name $group"
+  K '{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}' 1 "$tag-0-list"
+  K "$kind{ENTER}" 3 "$tag-1-form"; K "$name{ENTER}" 2 "$tag-2-name"
+  if ($group) { K '{ENTER}' 2 "$tag-3-under"; K "$group{ENTER}" 3 "$tag-4-group" }
   for ($i = 1; $i -le $n; $i++) { K '{ENTER}' 1 ("$tag-5-{0:d2}" -f $i) }
-  K '{ESC}' 2 "$tag-6-esc"; K 'y' 2 "$tag-7-y"; K '{ESC}' 2 "$tag-8-esc"; Shot "$tag-9b-where"
+  K '{ESC}' 2 "$tag-6-esc"; K 'y' 2 "$tag-7-y"; Shot "$tag-9-where"
 }
-LedgerWalk '20-party' 'Probe Deductee' 'Sundry Creditors'
-LedgerWalk '30-expense' 'Probe Contract Work' 'Indirect Expenses'
-LedgerWalk '40-duty' 'Probe TDS Ledger' 'Duties & Taxes'
-# the statutory masters Tally offers under Create (TDS Nature of Payment): the Create list with "Show more"
-Say '---- Create list (statutory masters)'
-K 'c' 3 '50-create'; K 'TDS Nature{ENTER}' 3 '52-tds-nature'
-for ($i = 1; $i -le 12; $i++) { K '{ENTER}' 1 ("53-nature-{0:d2}" -f $i) }
-K '{ESC}' 2 '54-esc'; K 'y' 2; K '{ESC}' 2 '55-where'
+Walk '20-nature' 'TDS Nature of Payments' 'Probe Contract Nature' '' 16
+Walk '30-party' 'Ledger' 'Probe Deductee' 'Sundry Creditors'
+Walk '40-expense' 'Ledger' 'Probe Contract Work' 'Indirect Expenses'
+Walk '50-duty' 'Ledger' 'Probe TDS Ledger' 'Duties & Taxes'
+# the natures Tally already holds (the list in Alter): Esc to the Gateway, Alter, TDS Nature of Payments
+K '{ESC}' 2 '60-esc'; K 'a' 3 '61-alter'; K 'TDS Nature of Payments{ENTER}' 3 '62-natures'; K '{DOWN}' 1 '63-natures-down'; K '{PGDN}' 2 '64-natures-pgdn'
 Post ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCC</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCC" ISMODIFY="No"><TYPE>Company</TYPE><FETCH>Name, IsTDSOn</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') 'company TDS' 'company.xml' | Out-Null
 Get-Process tally -ErrorAction SilentlyContinue | Stop-Process -Force
 Say '== probe end'
