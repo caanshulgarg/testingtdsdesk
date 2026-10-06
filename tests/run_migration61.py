@@ -21,6 +21,14 @@ tally_balances (security invoker, as on staging). Then 61, twice. Checks:
      the records upsert and deleted flag, the activity POST (id from activity_id_seq, user_id auth.uid()); a security
      definer function writing a table (tally_device_trial_tools). All work.
   7. refused: anon TRUNCATE / INSERT; authenticated TRUNCATE, an INSERT into tally_vouchers, a DELETE on clients.
+  8. members and platform_secrets, with staging's policies (members_self; secrets_write / secrets_update; no SELECT policy
+     on platform_secrets) and admin_set_secret / admin_secrets() as granted on staging (bodies: the stand's own). Before
+     AND after 61: anon and authenticated (a member, a platform administrator) read no row of platform_secrets;
+     admin_secrets() is refused to both; the service role reads (admin_secrets() and the table), postgres reads. Before 61
+     the policies let a member update their own row and a platform administrator write a key directly (rolled back);
+     after 61 those direct writes are refused, and what the pages send (tests/run_perms61_pages.py) works: the key saved
+     through admin_set_secret as the platform administrator (refused to a firm owner who is not one), and the admin edge
+     function's members upsert (invite / add) and update (role, switch off) as the service role.
 RED: before the file exists it stops at the first check."""
 import os, re, sys, subprocess
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -56,6 +64,7 @@ def part(path, name):
     s = open(path).read(); i = s.index(name + ' = r"""') if (name + ' = r"""') in s else s.index(name + ' = """')
     i = s.index('"""', i) + 3; return s[i:s.index('"""', i)]
 F, OWNER, D1 = "99999999-9999-9999-9999-999999999999", "55555555-5555-5555-5555-555555555555", "d1000000-0000-0000-0000-000000000001"
+ADMIN, STAFF = "77777777-7777-7777-7777-777777777777", "66666666-6666-6666-6666-666666666666"     # a platform administrator; a new staff member
 
 text = open(M61).read() if os.path.exists(M61) else ""
 ok(bool(text), "the migration file is there (%s)" % os.path.basename(M61))
@@ -98,7 +107,7 @@ def fingerprint():
     parts = ["select %s as t, md5(coalesce(string_agg(x::text, '|' order by x::text), '')) as m, count(*) as n from public.%s x" % (q(t), '"%s"' % t) for t in tables()]
     return {r["t"]: (r["m"], r["n"]) for r in db.rows(" union all ".join(parts))}
 def as_role(role, sql, uid=None):
-    pre = "set role %s;\n" % role + ("set fincom.uid = '%s';\n" % uid if uid else "")
+    pre = "\\pset tuples_only on\n\\pset format unaligned\nset role %s;\n" % role + ("set fincom.uid = '%s';\n" % uid if uid else "")
     return psql_text(pre + sql)
 try:
     # Supabase's default grants, before anything is made: every new public table, sequence and function to the three roles
@@ -136,11 +145,36 @@ try:
       create policy members_read on public.members for select to authenticated using (true);
       alter table public.members enable row level security;
       create sequence if not exists public.book_item_seq;""")
+    # members, platform_admins, platform_secrets with staging's write policies (06-Oct-2026: members_self; secrets_write,
+    # secrets_update; no SELECT policy on platform_secrets). admin_set_secret (security definer, is_superadmin(), executable by
+    # authenticated) and admin_secrets() (the service role's) as staging has them by signature and grant; their bodies here
+    # are the stand's own (an upsert by name; the names and times). members' key user_id: the admin function's upsert key.
+    db.sql("""
+      alter table public.members add column if not exists email text; alter table public.members add primary key (user_id);
+      create policy members_self on public.members for update to authenticated using (user_id = auth.uid()) with check ((user_id = auth.uid()) and (firm_id = my_firm()));
+      create table public.platform_admins (user_id uuid primary key);
+      alter table public.platform_admins enable row level security;
+      create or replace function public.is_superadmin() returns boolean language sql stable security definer set search_path = public as $$ select exists (select 1 from public.platform_admins where user_id = auth.uid()) $$;
+      create table public.platform_secrets (name text primary key, value text not null, set_at timestamptz not null default now(), set_by uuid);
+      alter table public.platform_secrets enable row level security;
+      create policy secrets_write on public.platform_secrets for insert to authenticated with check (is_superadmin());
+      create policy secrets_update on public.platform_secrets for update to authenticated using (is_superadmin()) with check (is_superadmin());
+      create or replace function public.admin_set_secret(p_name text, p_value text) returns void language plpgsql security definer set search_path = public, pg_temp as $f$
+      begin
+        if not is_superadmin() then raise exception 'not allowed' using errcode = '42501'; end if;
+        insert into platform_secrets (name, value, set_at, set_by) values (p_name, p_value, now(), auth.uid())
+          on conflict (name) do update set value = excluded.value, set_at = excluded.set_at, set_by = excluded.set_by;
+      end $f$;
+      revoke all on function public.admin_set_secret(text, text) from public, anon; grant execute on function public.admin_set_secret(text, text) to authenticated, service_role;
+      create or replace function public.admin_secrets() returns table (name text, set_at timestamptz) language sql stable security definer set search_path = public, pg_temp as $f$ select name, set_at from platform_secrets order by name $f$;
+      revoke all on function public.admin_secrets() from public, anon, authenticated; grant execute on function public.admin_secrets() to service_role;""")
     db.sql("""insert into firms values (%(F)s, 'Firm') on conflict do nothing;
-      insert into members values (%(O)s, %(F)s, 'Anshul', 'owner', true);
+      insert into members (user_id, firm_id, name, role, active, email) values (%(O)s, %(F)s, 'Anshul', 'owner', true, 'a@b.in'), (%(A)s, %(F)s, 'Platform', 'owner', true, 'p@b.in');
+      insert into platform_admins values (%(A)s);
+      insert into platform_secrets (name, value) values ('claude_api_key', 'sk-old'), ('google_vision_key', 'gv-old');
       insert into tally_devices (id, firm_id, name, key_hash, version, info) values (%(D1)s, %(F)s, 'NW144', 'h1', '2.3.0', '{}');
       insert into clients (id, firm_id, name, data) values ('c1', %(F)s, 'Client One', '{"name": "Client One"}');
-      insert into records (firm_id, client_id, kind, id, data) values (%(F)s, 'c1', 'bill', 'b1', '{"no": "1"}');""" % {"F": q(F), "O": q(OWNER), "D1": q(D1)})
+      insert into records (firm_id, client_id, kind, id, data) values (%(F)s, 'c1', 'bill', 'b1', '{"no": "1"}');""" % {"F": q(F), "O": q(OWNER), "D1": q(D1), "A": q(ADMIN)})
     for path in FILES:
         r = psql_text(open(path).read())
         if r.returncode: ok(False, "%s runs: %s" % (os.path.basename(path), r.stderr[-300:])); raise SystemExit("cannot go on")
@@ -156,6 +190,30 @@ try:
     trunc = [t for t in tables() if "TRUNCATE" in g0.get(("anon", t), set()) and "TRUNCATE" in g0.get(("authenticated", t), set())]
     anonw = [t for t in tables() if {"INSERT", "UPDATE", "DELETE"} <= g0.get(("anon", t), set())]
     ok(len(trunc) >= 32 and len(anonw) >= 26, "1. before 61 (red): %d tables grant TRUNCATE to anon and authenticated, %d grant anon INSERT, UPDATE and DELETE" % (len(trunc), len(anonw)))
+    def secrets_reads(when):
+        """8. platform_secrets: anon and authenticated (a member, a platform administrator) read no row (no SELECT policy);
+        admin_secrets() refused to both; the service role reads (admin_secrets() and directly, bypassing row security, as the
+        gateway function does); postgres reads"""
+        n = {}
+        for role, uid, key in (("anon", None, "anon"), ("authenticated", OWNER, "member"), ("authenticated", ADMIN, "platform admin")):
+            r = as_role(role, "select 'n=' || count(*) from public.platform_secrets;", uid)
+            n[key] = (r.stdout.strip() or r.stderr.strip()[-80:])
+        ok(all(v == "n=0" or "permission denied" in v for v in n.values()), "8. %s: platform_secrets: anon and authenticated read no row (%s)" % (when, n))
+        refused = [as_role(r, "select * from public.admin_secrets();", u) for r, u in (("anon", None), ("authenticated", ADMIN))]
+        ok(all(x.returncode != 0 and "permission denied for function admin_secrets" in x.stderr for x in refused), "8. %s: admin_secrets() refused to anon and to authenticated (a platform administrator too)" % when)
+        sv = as_role("service_role", "select 'f=' || (select count(*) from public.admin_secrets()) || ',t=' || (select count(*) from public.platform_secrets);")
+        ok(sv.returncode == 0 and sv.stdout.strip() == "f=2,t=2" and db.one("select count(*) from public.platform_secrets") == "2",
+           "8. %s: the service role reads them (admin_secrets() and the table: %s); postgres reads them" % (when, sv.stdout.strip() or sv.stderr.strip()[-100:]))
+    def tried(role, sql, uid):
+        """a write tried and always rolled back: 'ok' when it worked, else the error"""
+        r = as_role(role, "begin;\n%s\nrollback;" % sql, uid)
+        return "ok" if r.returncode == 0 else r.stderr.strip()[-90:]
+    secrets_reads("before 61")
+    SELF = "update public.members set name = 'Anshul G' where user_id = %s;" % q(OWNER)
+    SEC_INS = "insert into public.platform_secrets (name, value) values ('gst_key', 'x');"
+    SEC_UPD = "update public.platform_secrets set value = 'sk-new' where name = 'claude_api_key';"
+    b = {"members self update": tried("authenticated", SELF, OWNER), "secrets insert (platform admin)": tried("authenticated", SEC_INS, ADMIN), "secrets update (platform admin)": tried("authenticated", SEC_UPD, ADMIN)}
+    ok(b["members self update"] == "ok" and b["secrets insert (platform admin)"] == "ok", "8. before 61: staging's policies let a member update their own row and a platform administrator write a key directly (%s; rolled back)" % b)
     fp0 = fingerprint()
     for rnd in (1, 2):
         r = psql_text(text)
@@ -213,6 +271,23 @@ try:
     r = as_role("service_role", "update public.tally_devices set version = version where id = %s; update public.tally_jobs set status = status where false;" % q(D1))
     ok(r.returncode == 0, "6. service_role still writes (tally_devices, tally_jobs) %s" % (r.stderr or "").strip()[-300:])
 
+    # 8. members and platform_secrets after 61: nothing the pages send is refused; the direct writes the policies allowed are
+    secrets_reads("after 61")
+    a = {"members self update": tried("authenticated", SELF, OWNER), "secrets insert (platform admin)": tried("authenticated", SEC_INS, ADMIN), "secrets update (platform admin)": tried("authenticated", SEC_UPD, ADMIN)}
+    ok(all("permission denied" in v for v in a.values()), "8. after 61: the direct writes the policies allowed are refused: no page sends them (%s)" % a)
+    r = as_role("authenticated", "select public.admin_set_secret('claude_api_key', 'sk-new'); select public.admin_set_secret('google_vision_key', 'gv-new');", ADMIN)
+    ok(r.returncode == 0 and db.one("select string_agg(name || '=' || value || ':' || (set_by = %s)::text, ',' order by name) from platform_secrets" % q(ADMIN)) == "claude_api_key=sk-new:true,google_vision_key=gv-new:true",
+       "8. Settings -> Platform -> Keys -> Save (POST rpc/admin_set_secret) as the platform administrator: saved %s" % (r.stderr or "").strip()[-200:])
+    r = as_role("authenticated", "select public.admin_set_secret('claude_api_key', 'sk-x');", OWNER)
+    ok(r.returncode != 0 and "not allowed" in r.stderr, "8. admin_set_secret refuses a firm's owner who is not a platform administrator")
+    # the service role, as the admin edge function writes members (invite_person / add_person: upsert by user_id; set_person: update)
+    r = as_role("service_role", """insert into public.members (user_id, firm_id, name, email, role, active) values (%(S)s, %(F)s, 'Chetan', 'c@b.in', 'readonly', true)
+        on conflict (user_id) do update set firm_id = excluded.firm_id, name = excluded.name, email = excluded.email, role = excluded.role, active = excluded.active;
+      insert into public.members (user_id, firm_id, name, email, role, active) values (%(S)s, %(F)s, 'Chetan', 'c@b.in', 'staff', true)
+        on conflict (user_id) do update set firm_id = excluded.firm_id, name = excluded.name, email = excluded.email, role = excluded.role, active = excluded.active;
+      update public.members set role = 'readonly' where user_id = %(S)s; update public.members set active = false where user_id = %(S)s;""" % {"S": q(STAFF), "F": q(F)})
+    ok(r.returncode == 0 and db.one("select role || ':' || active::text from members where user_id = %s" % q(STAFF)) == "readonly:false",
+       "8. Settings -> People: invite / add (the admin function's members upsert), the role and switch-off (its update) work as the service role %s" % (r.stderr or "").strip()[-200:])
     # 7. refused
     for role, sql, w in [("anon", "truncate public.clients;", "anon TRUNCATE clients"), ("anon", "truncate public.tally_vouchers;", "anon TRUNCATE tally_vouchers"),
                          ("anon", "insert into public.clients (firm_id, id) values (%s, 'x');" % q(F), "anon INSERT into clients"),

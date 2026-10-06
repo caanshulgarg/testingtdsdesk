@@ -78,6 +78,7 @@ run_pair_ui.py                        120
 run_parts_ui.py                       120  TDSDESK_SITE=../app/dist-test
 run_party_hist.js                     120
 run_payroll.py                        120
+run_perms61_pages.py                  120  TDSDESK_SITE=../app/dist-test
 run_phase2.py                         120
 run_phase2b.py                        120
 run_post_jobs_dismiss.py              120

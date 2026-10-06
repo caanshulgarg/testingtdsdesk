@@ -21,6 +21,16 @@
 --   write privilege. (Row security already refuses every anon write: no policy on staging names anon for a write.)
 --   No delete is ever sent (a removal is the deleted flag), activity is append-only (activity_append_only), so DELETE on
 --   clients / records and UPDATE / DELETE on activity go too; staging has no policy that would allow them.
+--   members and platform_secrets: no page writes either directly, although staging has policies for it (members_self:
+--   UPDATE of one's own row; secrets_write / secrets_update: INSERT / UPDATE by a platform administrator). Inviting or
+--   adding a person, switching one off or on (and a role, which only the admin function can change: the page shows it,
+--   not editable) go to the edge function admin (POST /functions/v1/admin), which writes members as the service role; a
+--   platform key is saved through admin_set_secret (POST rpc/admin_set_secret, security definer, is_superadmin()). The
+--   app's code has read members only (GET members?select=...) and saved keys through admin_set_secret since the first
+--   commit of this repository (24-Sep-2026); the policies are not in any SQL file here (made before it). So 61 takes
+--   these writes away; tests/run_perms61_pages.py records what the pages send. Should a page be refused on staging:
+--     grant update on public.members to authenticated;
+--     grant insert, update on public.platform_secrets to authenticated;
 --   No security invoker function in public writes a table, and the triggers on clients / records that write
 --   (sync_guard_clients, sync_guard_records) are security definer.
 --
