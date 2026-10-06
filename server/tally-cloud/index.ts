@@ -41,7 +41,7 @@
 //                                                       only one bridge reads or posts a company at a time (renewed by taking
 //                                                       it again); {noLease:true} when the cloud keeps none
 //   {kind:"lease_release", company}                  -> the lease given back by its holder
-//   {kind:"ledger_list", company, ledgers:[[guid, masterId, alterId, name, group, storedOpening, gstin, pan, openingChanged]],
+//   {kind:"ledger_list", company, ledgers:[[guid, masterId, alterId, name, group, storedOpening, gstin, pan, openingChanged, state?, deducteeType? (2.3.1)]],
 //    renamed?:[[guid, from, to]], deleted?:[[guid, name]], groups?:[[name, parent]], last, round?, complete?, rowsRead?, seen?:[guid]}
 //                                                    -> {added, renamed, deleted, deletesHeld, deletedIgnored, notes}: 2.1.4, the
 //                                                       plain ledger list (applyLedgerList): rows added or brought up to date,
@@ -989,12 +989,30 @@ async function selectIn(cols: string, book: string, field: string, vals: string[
   }
   return out;
 }
+// bridge 2.3.1 (parts A and B): the party's deductee type (TDSDEDUCTEETYPE, a ledger master field; the owner asked for it
+// with the TDS details) is the 11th column of a ledger_list / ledger_changes row, kept in tally_ledgers.tds_deductee_type
+// (migration 57: text, not null, default ''). Absent (a row of 10 columns): left as it is; "" clears it
+const DTYPE = "tds_deductee_type";
+function deducteeType(l: any): string | null {
+  return Array.isArray(l) && l.length > 10 ? String(l[10] ?? "").trim().slice(0, 100) : null;
+}
+// the ledgers upserted; refused for want of 57's column (the cloud's update out before 57 ran, the column check cached):
+// the same rows again without it, and the check remembered as "not there"
+async function upsertLedgers(rows: Record<string, unknown>[]) {
+  let { error } = await db.from("tally_ledgers").upsert(rows, { onConflict: "book_id,name" });
+  if (error && rows.some((r) => DTYPE in r) && String(error.message || "").includes(DTYPE)) {
+    colCache.set("tally_ledgers:" + DTYPE, { ok: false, at: Date.now() });
+    ({ error } = await db.from("tally_ledgers").upsert(rows.map(({ [DTYPE]: _drop, ...r }) => r), { onConflict: "book_id,name" }));
+  }
+  return error;
+}
 async function applyLedgerList(firm: string, book: string, body: any, dev?: any, me?: { id: string; entry: any }) {
   const s = (v: unknown, n: number) => String(v ?? "").slice(0, n);
   const m32 = await hasCols("tally_ledgers", "tally_guid, alter_id, deleted_at");
   const m31 = await hasCols("tally_ledgers", "before_clean");
   const m28 = await hasCols("tally_ledgers", "gstin, pan");
   const m40 = await hasCols("tally_ledgers", "state");            // migration 40: Tally's LEDSTATENAME (the bridge's 10th column)
+  const m57 = await hasCols("tally_ledgers", DTYPE);              // migration 57: the party's deductee type (the 11th column, 2.3.1)
   const notes: string[] = [];
   const out = { ok: true, ledgers: 0, added: 0, renamed: 0, deleted: 0, deletesHeld: 0, deletedIgnored: 0, groups: 0, round: "", notes };
   const now = new Date().toISOString();
@@ -1004,7 +1022,7 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
   const rows = (Array.isArray(body.ledgers) ? body.ledgers : []).slice(0, 5000).map((l: any) => ({
     guid: s(l?.[0], 100).trim(), alter: Math.max(0, Math.floor(Number(l?.[2]) || 0)), name: cleanName(s(l?.[3], 300)),
     parent: cleanName(s(l?.[4], 300)).replace(/^\W*Primary$/i, ""), open: Math.round(amt(l?.[5]) * 100) / 100,
-    gstin: s(l?.[6], 15).trim().toUpperCase(), pan: s(l?.[7], 10).trim().toUpperCase(), oc: !!Number(l?.[8]), state: s(l?.[9], 60).trim() }))
+    gstin: s(l?.[6], 15).trim().toUpperCase(), pan: s(l?.[7], 10).trim().toUpperCase(), oc: !!Number(l?.[8]), state: s(l?.[9], 60).trim(), dtype: deducteeType(l) }))
     .filter((r: any) => r.name && !seen.has(r.name) && seen.add(r.name));
   out.ledgers = rows.length;
   // 0. migration-34: this call is one batch of a read of the whole list (round); the bridge says whether the read is
@@ -1099,6 +1117,7 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
     const o: Record<string, unknown> = { book_id: book, firm_id: firm, name: r.name, parent: r.parent, chain: c, primary_group: c.length ? c[c.length - 1] : "" };
     if (m28) { o.gstin = r.gstin || null; o.pan = r.pan || null; }
     if (m40 && r.state) o.state = r.state;      // absent or empty: left as it is
+    if (m57 && r.dtype !== null) o[DTYPE] = r.dtype;   // 2.3.1: sent (blank too): as Tally has it; absent: left as it is
     if (m32) { o.tally_guid = r.guid && (!owner.has(r.guid) || owner.get(r.guid) === r.name) ? r.guid : null; o.alter_id = r.alter; o.deleted_at = null; }
     return o;
   };
@@ -1107,7 +1126,7 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
   const plain = rows.filter((r: any) => have.has(r.name) && !r.oc).map(base);
   for (const set of [fresh, opened, plain]) {
     for (let i = 0; i < set.length; i += 1000) {
-      const { error } = await db.from("tally_ledgers").upsert(set.slice(i, i + 1000), { onConflict: "book_id,name" });
+      const error = await upsertLedgers(set.slice(i, i + 1000));
       if (error) throw new Error(error.message);
     }
   }
@@ -1155,7 +1174,7 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
   return reply(200, out);
 }
 // Bridge 2.3.1, part B (the owner's scope of 06-Oct-2026, masters): {kind:"ledger_changes", company, company_guid, ledgers:
-// [[guid, masterId, alterId, name, group, opening, gstin, pan, openingChanged, state]] (the ledger list's row shape, at most
+// [[guid, masterId, alterId, name, group, opening, gstin, pan, openingChanged, state, deducteeType]] (the ledger list's row shape, at most
 // 2000), why: "counter" (the ledgers created or altered since Tally's master counter last moved; after, upto: the AlterID
 // span) | "wanted" (a ledger an entry uses that FinCom did not have)} -> {ok, ledgers, added, updated, kept:[words]}. Keeps
 // name, group, GSTIN, PAN, state and opening balance current and nothing else: a new ledger is added (its group's chain from
@@ -1165,12 +1184,14 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
 // under another name, or a ledger in another group than FinCom's, keeps FinCom's name and group and is said in kept (the
 // bridge logs it). A row older than FinCom's (a lower AlterID) changes nothing. No round, no seen list, no deleted list.
 // The openings of the year are worked out again when a ledger is added or its opening changes. At most 60 calls a minute
-// from one computer (shared with ledger_list). No migration (the columns of 28, 32 and 40, each used when there)
+// from one computer (shared with ledger_list). No migration of its own (the columns of 28, 32 and 40, each used when there);
+// the 11th column, the party's deductee type, goes to 57's tds_deductee_type when 57 is there
 async function applyLedgerChanges(firm: string, book: string, body: any) {
   const s = (v: unknown, n: number) => String(v ?? "").slice(0, n);
   const m32 = await hasCols("tally_ledgers", "tally_guid, alter_id, deleted_at");
   const m28 = await hasCols("tally_ledgers", "gstin, pan");
   const m40 = await hasCols("tally_ledgers", "state");
+  const m57 = await hasCols("tally_ledgers", DTYPE);
   const why = body.why === "wanted" ? "wanted" : "counter";
   const kept: string[] = [];
   const out = { ok: true, ledgers: 0, added: 0, updated: 0, kept };
@@ -1178,7 +1199,7 @@ async function applyLedgerChanges(firm: string, book: string, body: any) {
   const rows = (Array.isArray(body.ledgers) ? body.ledgers : []).slice(0, 2000).map((l: any) => ({
     guid: s(l?.[0], 100).trim(), alter: Math.max(0, Math.floor(Number(l?.[2]) || 0)), name: cleanName(s(l?.[3], 300)),
     parent: cleanName(s(l?.[4], 300)).replace(/^\W*Primary$/i, ""), open: Math.round(amt(l?.[5]) * 100) / 100,
-    gstin: s(l?.[6], 15).trim().toUpperCase(), pan: s(l?.[7], 10).trim().toUpperCase(), state: s(l?.[9], 60).trim() }))
+    gstin: s(l?.[6], 15).trim().toUpperCase(), pan: s(l?.[7], 10).trim().toUpperCase(), state: s(l?.[9], 60).trim(), dtype: deducteeType(l) }))
     .filter((r: any) => r.name && !seen.has(r.name) && seen.add(r.name));
   out.ledgers = rows.length;
   if (!rows.length) return reply(200, out);
@@ -1197,6 +1218,7 @@ async function applyLedgerChanges(firm: string, book: string, body: any) {
       const o: Record<string, unknown> = { book_id: book, firm_id: firm, name: r.name, parent: r.parent, chain: c, primary_group: c.length ? c[c.length - 1] : "", open: r.open, open_sent: r.open };
       if (m28) { o.gstin = r.gstin || null; o.pan = r.pan || null; }
       if (m40 && r.state) o.state = r.state;
+      if (m57 && r.dtype !== null) o[DTYPE] = r.dtype;
       if (m32) { o.tally_guid = r.guid || null; o.alter_id = r.alter; }
       fresh.push(o);
       continue;
@@ -1209,6 +1231,7 @@ async function applyLedgerChanges(firm: string, book: string, body: any) {
     const o: Record<string, unknown> = { book_id: book, firm_id: firm, name: have.name, parent: have.parent ?? "", chain: c, primary_group: c.length ? c[c.length - 1] : "" };
     if (m28) { o.gstin = r.gstin || null; o.pan = r.pan || null; }
     if (m40 && r.state) o.state = r.state;
+    if (m57 && r.dtype !== null) o[DTYPE] = r.dtype;
     if (m32) { o.alter_id = r.alter; if (!have.tally_guid && r.guid && !byGuid.has(r.guid)) o.tally_guid = r.guid; }
     const was = have.open_sent ?? have.open, sent = was === null || was === undefined ? null : Math.round(Number(was) * 100) / 100;
     if (sent === null || sent !== r.open) opened.push({ ...o, open: r.open, open_sent: r.open });
@@ -1221,7 +1244,7 @@ async function applyLedgerChanges(firm: string, book: string, body: any) {
     for (const o of set) groups.set(shape(o), [...(groups.get(shape(o)) || []), o]);
     for (const g of groups.values()) {
       for (let i = 0; i < g.length; i += 1000) {
-        const { error } = await db.from("tally_ledgers").upsert(g.slice(i, i + 1000), { onConflict: "book_id,name" });
+        const error = await upsertLedgers(g.slice(i, i + 1000));
         if (error) throw new Error(error.message);
       }
     }

@@ -926,6 +926,26 @@ try:
     c, r = lch([["lg-npb", 501, 79, "New Party B", "Sundry Debtors", "-250.00", "27AAACN1234B1Z5", "AAACN1234B", 0, "Maharashtra"]], "counter", after=78, upto=79)
     ok(c == 200 and r.get("updated") == 1 and len(FS.T["tally_ledgers"]) == n_led and not any(x.get("deleted_at") for x in FS.T["tally_ledgers"]) and (led("New Party B") or {}).get("open") == -250,
        "2.3.1-B. nothing marked gone, nothing added twice; the opening unchanged when Tally's is the one sent (%s)" % r)
+    # bridge 2.3.1 (parts A and B): the party's deductee type, the row's 11th column (TDSDEDUCTEETYPE, a ledger master field),
+    # kept in tally_ledgers.tds_deductee_type (migration 57): stored when sent, "" clears it, a 10-column row (an earlier
+    # 2.3.1 build) leaves it as it is; a database without 57's column: the ledger kept current without it, nothing fails
+    c, r = lch([["lg-npd", 503, 80, "New Party D", "Sundry Creditors", "0", "", "", 0, "", "Company - Resident"]], "wanted")
+    ok(c == 200 and r.get("added") == 1 and (led("New Party D") or {}).get("tds_deductee_type") == "Company - Resident",
+       "2.3.1 deductee type: a new ledger sent with its deductee type: stored (%s; %s)" % (r, led("New Party D")))
+    c, r = lch([["lg-npd", 503, 81, "New Party D", "Sundry Creditors", "0", "27AAACN9999B1Z5", "", 0, ""]], "counter", after=80, upto=81)
+    nd = led("New Party D") or {}
+    ok(c == 200 and r.get("updated") == 1 and nd.get("gstin") == "27AAACN9999B1Z5" and nd.get("tds_deductee_type") == "Company - Resident",
+       "2.3.1 deductee type: a 10-column row: the GSTIN kept current, the deductee type left as it is (%s)" % nd)
+    c, r = lch([["lg-npd", 503, 82, "New Party D", "Sundry Creditors", "0", "27AAACN9999B1Z5", "", 0, "", "Individual/HUF - Resident"]], "counter", after=81, upto=82)
+    ok(c == 200 and (led("New Party D") or {}).get("tds_deductee_type") == "Individual/HUF - Resident", "2.3.1 deductee type: changed in Tally: changed (%s)" % led("New Party D"))
+    c, r = lch([["lg-npd", 503, 83, "New Party D", "Sundry Creditors", "0", "27AAACN9999B1Z5", "", 0, "", ""]], "counter", after=82, upto=83)
+    ok(c == 200 and (led("New Party D") or {}).get("tds_deductee_type") == "", "2.3.1 deductee type: removed in Tally: blank (%s)" % led("New Party D"))
+    FS.NO_COL["tally_ledgers"] = {"tds_deductee_type"}
+    c, r = lch([["lg-npd", 503, 84, "New Party D", "Sundry Creditors", "0", "29AAACN9999B1Z5", "", 0, "", "Firm - Resident"]], "counter", after=83, upto=84)
+    nd = led("New Party D") or {}
+    ok(c == 200 and r.get("ok") is True and r.get("updated") == 1 and nd.get("gstin") == "29AAACN9999B1Z5" and nd.get("alter_id") == 84 and nd.get("tds_deductee_type") == "",
+       "2.3.1 deductee type: a database without migration 57's column: the ledger kept current without it, nothing fails (%s; %s)" % (r, nd))
+    FS.NO_COL.clear()
     c, r = call({"kind": "ledger_changes", "company": "NOT LINKED", "version": "2.3.1", "bridge": dict(GA, version="2.3.1"), "ledgers": []})
     ok(c == 409, "2.3.1-B. a company not linked: 409 (%s)" % c)
     FS.T.pop("tally_recorder_lines", None); FS.T.pop("tally_ledgers", None); FS.T.pop("tally_groups", None)

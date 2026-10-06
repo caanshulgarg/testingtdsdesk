@@ -79,6 +79,7 @@ type standTally struct {
 type tLed struct {
 	guid, name, parent, open, gstin, pan string
 	state                                string // LEDSTATENAME (round 11)
+	dtype                                string // TDSDEDUCTEETYPE (2.3.1): the party's deductee type, a ledger master field
 	mid, alter                           int64
 }
 
@@ -342,6 +343,11 @@ func newStandTally(t *testing.T) *standTally {
 					fmt.Fprintf(&o, `<LEDGER NAME="%s" RESERVEDNAME="">%s%s%s%s%s%s%s%s</LEDGER>`, esc(l.name), standField("GUID", "String", l.guid),
 						standField("MASTERID", "Number", fmt.Sprintf(" %d", l.mid)), standField("ALTERID", "Number", fmt.Sprintf(" %d", l.alter)), standField("PARENT", "String", esc(l.parent)),
 						standField("OPENINGBALANCE", "Amount", l.open), standField("PARTYGSTIN", "String", l.gstin), standField("INCOMETAXNUMBER", "String", l.pan), standField("LEDSTATENAME", "String", esc(l.state)))
+					if strings.Contains(body, "TDSDEDUCTEETYPE") && l.dtype != "" { // asked for: a real Tally writes it when set
+						s := o.String()
+						o.Reset()
+						o.WriteString(strings.TrimSuffix(s, "</LEDGER>") + standField("TDSDEDUCTEETYPE", "String", esc(l.dtype)) + "</LEDGER>")
+					}
 				}
 			}
 		case "FinComGroups":

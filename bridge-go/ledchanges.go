@@ -244,7 +244,7 @@ func ledAskChanges(company, key string, port int, after, m int64) ([]ledRow, int
 }
 
 // to FinCom's cloud: tally-ingest "ledger_changes", the ledger list's rows [guid, MasterID, AlterID, name, parent,
-// opening, GSTIN, PAN, openingChanged (0: FinCom compares with the opening it was sent), state], 500 a call; nil only when
+// opening, GSTIN, PAN, openingChanged (0: FinCom compares with the opening it was sent), state, deductee type], 500 a call; nil only when
 // every call was taken
 func ledSend(company, guid string, rows []ledRow, why string, after, upto int64) error {
 	sort.Slice(rows, func(i, j int) bool { return rows[i].alter < rows[j].alter })
@@ -252,7 +252,7 @@ func ledSend(company, guid string, rows []ledRow, why string, after, upto int64)
 		n := minI(500, len(rows))
 		led := []any{}
 		for _, r := range rows[:n] {
-			led = append(led, []any{r.guid, r.mid, r.alter, r.name, r.parent, r.open, r.gstin, r.pan, 0, r.state})
+			led = append(led, []any{r.guid, r.mid, r.alter, r.name, r.parent, r.open, r.gstin, r.pan, 0, r.state, r.dtype})
 		}
 		body := M{"kind": "ledger_changes", "company": company, "company_guid": guid, "ledgers": led, "why": why}
 		if why == "counter" {

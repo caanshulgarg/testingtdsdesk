@@ -110,7 +110,7 @@ func TestInstallerPostOnly(t *testing.T) {
 	}
 }
 
-// --- 3. the ledger list rows carry the ledger's state (LEDSTATENAME) as the 10th column
+// --- 3. the ledger list rows carry the ledger's state (LEDSTATENAME) as the 10th column (2.3.1: the deductee type the 11th)
 func TestLedgerListCarriesState(t *testing.T) {
 	f := newStandTally(t)
 	c := newStandCloud(t)
@@ -140,8 +140,8 @@ func TestLedgerListCarriesState(t *testing.T) {
 	}
 	for i, want := range map[int]string{0: "", 1: "Delhi", 2: ""} {
 		a := byGUID[f.led[i].guid]
-		if len(a) != 10 || str(at(a, 9)) != want {
-			t.Fatalf("the row of %s: %v (want 10 columns, state %q)", f.led[i].name, a, want)
+		if len(a) != 11 || str(at(a, 9)) != want { // 2.3.1: the deductee type after the state (deductee231_test.go)
+			t.Fatalf("the row of %s: %v (want 11 columns, state %q)", f.led[i].name, a, want)
 		}
 	}
 }

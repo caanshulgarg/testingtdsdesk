@@ -98,7 +98,8 @@ Limits, in plain words:
 - **TDS section and deductee type.** The section is taken as Tally keeps it on the entry (the bill-wise detail's section
   field); if the entry has none, from a section written in the nature of payment's name (for example "194C - Payment to
   Contractors"); else it stays blank and FinCom says so, never guessed. The deductee type is the party ledger's (Tally
-  keeps it on the ledger, not the entry): it comes with the ledger list (2.3.1 part B) and FinCom shows it with the
+  keeps it on the ledger, not the entry): the ledger requests ask it (TDSDEDUCTEETYPE: the ledger list, and the ledger
+  changes and the ledger by name of the masters change below), FinCom keeps it on the ledger and shows it with the
   entry's TDS details.
 - **Tag names not yet seen from a real Tally.** The e-invoice (IRN, acknowledgement), e-way bill and TDS fields are asked
   by the names TallyPrime 7.1 uses as far as we know, but no real export in our test files carries them yet; the tests

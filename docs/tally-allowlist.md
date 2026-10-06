@@ -51,9 +51,9 @@ First table: re-measured on 2026-10-06 on the stand (not real Tally); not yet me
 | FinComFetchTestF | measure (Test fetching an entry): form F, form B with no dates | 624561c5f62e | not yet measured | - | measure-only |
 | FinComFree | the small check after a timeout when no company is named: the companies' names and GUIDs | fc989c00dda9 | not yet measured | - | bridge |
 | FinComGroups | the group list, stored master fields only | 91fea7a2c04a | not yet measured | - | bridge |
-| FinComLedgerByName | one ledger an entry uses that FinCom does not have, by its name (2.3.1), fetched before the entry is applied: the ledger list's stored master fields only | 68ae450a8bc6 | not yet measured | - | bridge |
-| FinComLedgerChanges | the ledgers created or altered since Tally's master counter last moved (2.3.1): AlterID above the last number, 200 AlterIDs a request at most, the ledger list's stored master fields only | 5435db4da526 | not yet measured | - | bridge |
-| FinComLedgers | the ledger list, 2,000 MasterIDs a request at most, stored master fields only | 9b990b2eb9b9 | not yet measured | - | bridge |
+| FinComLedgerByName | one ledger an entry uses that FinCom does not have, by its name (2.3.1), fetched before the entry is applied: the ledger list's stored master fields only | 4183cdeb4b5a | not yet measured | - | bridge |
+| FinComLedgerChanges | the ledgers created or altered since Tally's master counter last moved (2.3.1): AlterID above the last number, 200 AlterIDs a request at most, the ledger list's stored master fields only | 8531d7c95e13 | not yet measured | - | bridge |
+| FinComLedgers | the ledger list, 2,000 MasterIDs a request at most, stored master fields only (2.3.1: the party's deductee type too) | a6215c4f0aee | not yet measured | - | bridge |
 | FinComMeasureB | measure: entries above an AlterID over the year | 7e0798aa39f7 | not yet measured | - | measure-only |
 | FinComMeasureC | measure: entries above an AlterID, one month | 4426a7f95daa | not yet measured | - | measure-only |
 | FinComMeasureD | measure: one month's GUIDs only | 09151f17e805 | not yet measured | - | measure-only |
@@ -79,4 +79,4 @@ First table: re-measured on 2026-10-06 on the stand (not real Tally); not yet me
 | TDSDeskVchHeads | voucher heads (Optional ones too) of one company for one month at most, no ledger lines | 53fc675a1641 | not yet measured | - | bridge |
 <!-- allowlist:end -->
 
-Table hash (SHA-256): b3a08f2dc932a10fd836b2e1cfbe42abc5de19e3dc4a180cab56a1a7e57a1b16
+Table hash (SHA-256): 59e563343911f37abc615c6072ef2535d7183a91d088b34c30cf76c66ad76849

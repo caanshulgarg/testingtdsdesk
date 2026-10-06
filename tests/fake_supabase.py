@@ -31,6 +31,8 @@ FAIL_DAY = {}             # day -> n: the next n calls queuing a day file of tha
 NO_FN = set()             # functions this database does not have yet (an older cloud): PostgREST's 404 PGRST202
 FAIL_SELECT = {}          # table -> {message, code}: a GET answers this PostgREST error (bridge 2.3.1 Lows: errors are logged)
 MAX_URL = [0]             # > 0: a request whose path and query are longer answers 414 (a gateway's URL limit; the refetch chunks)
+NO_COL = {}               # table -> {column}: a database without these columns (a migration not run): a GET selecting one answers
+                          # 42703, a POST carrying one PGRST204, as PostgREST does (bridge 2.3.1: 57's tally_ledgers.tds_deductee_type)
 HONOR_LIMIT = [False]     # True: order=col.asc|desc and limit=n are applied to a GET (off by default: as before)
 LEASE7_MISSING = [False]  # migration 55 not run: the 7-argument tally_lease_take (p_purpose) is not there (PGRST202 for that call only)
 PK = {"gst_sessions": ["firm_id", "gstin"], "gst_returns": ["firm_id", "gstin", "form", "period"], "gst_einv_accounts": ["firm_id", "gstin"], "gst_einvoices": ["firm_id", "gstin", "doc_key"]}
@@ -188,6 +190,13 @@ class H(http.server.BaseHTTPRequestHandler):
             t = path.rsplit("/", 1)[1]; rows = T.setdefault(t, []); single = "vnd.pgrst.object" in (self.headers.get("Accept") or "")
             if method in ("GET", "HEAD") and t in FAIL_SELECT:
                 return self.send(400, dict(FAIL_SELECT[t], details=None, hint=None))
+            if method in ("GET", "HEAD") and NO_COL.get(t):
+                bad = [c.strip() for c in (q.get("select") or ["*"])[0].split(",") if c.strip() in NO_COL[t]]
+                if bad: return self.send(400, {"code": "42703", "message": "column %s.%s does not exist" % (t, bad[0]), "details": None, "hint": None})
+            if method == "POST" and NO_COL.get(t):
+                d0 = json.loads(raw or b"[]"); d0 = d0 if isinstance(d0, list) else [d0]
+                bad = sorted(set(k for d in d0 for k in d if k in NO_COL[t]))
+                if bad: return self.send(400, {"code": "PGRST204", "message": "Could not find the '%s' column of '%s' in the schema cache" % (bad[0], t), "details": None, "hint": None})
             if method in ("GET", "HEAD"):
                 hit = [r for r in rows if match(r, q)]
                 if HONOR_LIMIT[0]:

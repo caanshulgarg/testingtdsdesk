@@ -36,7 +36,7 @@ var tallyAllowList = map[string]allowedReq{
 	"Day Book":           {purpose: "the day book of one company for one month at most (Update now, the nightly run, a FinCom read)"},
 	"TDSDeskVchHeads":    {purpose: "voucher heads (Optional ones too) of one company for one month at most, no ledger lines"},
 	"TDSDeskKeepList":    {purpose: "one month's entries as GUID, AlterID and date only (the copy's check)"},
-	ledListID:            {purpose: "the ledger list, 2,000 MasterIDs a request at most, stored master fields only"},
+	ledListID:            {purpose: "the ledger list, 2,000 MasterIDs a request at most, stored master fields only (2.3.1: the party's deductee type too)"},
 	// 2.3.1 (the owner's decision of 06-Oct-2026, masters): the ledgers changed since the master counter last moved, and
 	// one ledger an entry names that FinCom does not have (ledchanges.go)
 	ledChangesID:         {purpose: "the ledgers created or altered since Tally's master counter last moved (2.3.1): AlterID above the last number, 200 AlterIDs a request at most, the ledger list's stored master fields only"},

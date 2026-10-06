@@ -73,7 +73,7 @@ func TestLed231Requests(t *testing.T) {
 	ch := ledgerChangesRequest("SAMPLE CO", 5, 205)
 	want := `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FinComLedgerChanges</ID></HEADER>` +
 		`<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>SAMPLE CO</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE>` +
-		`<COLLECTION NAME="FinComLedgerChanges" ISMODIFY="No"><TYPE>Ledger</TYPE><FETCH>GUID, MASTERID, ALTERID, NAME, PARENT, OPENINGBALANCE, PARTYGSTIN, INCOMETAXNUMBER, LEDGSTREGDETAILS.LIST, LEDSTATENAME</FETCH>` +
+		`<COLLECTION NAME="FinComLedgerChanges" ISMODIFY="No"><TYPE>Ledger</TYPE><FETCH>GUID, MASTERID, ALTERID, NAME, PARENT, OPENINGBALANCE, PARTYGSTIN, INCOMETAXNUMBER, LEDGSTREGDETAILS.LIST, LEDSTATENAME, TDSDEDUCTEETYPE</FETCH>` +
 		`<FILTERS>FinComLedgerChangesOnly</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="FinComLedgerChangesOnly">$AlterID &gt; 5 AND $AlterID &lt;= 205</SYSTEM>` +
 		`</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>`
 	if ch != want {
@@ -82,7 +82,7 @@ func TestLed231Requests(t *testing.T) {
 	bn := ledgerByNameRequest("SAMPLE CO", "New Party & Co")
 	wantN := `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FinComLedgerByName</ID></HEADER>` +
 		`<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>SAMPLE CO</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE>` +
-		`<COLLECTION NAME="FinComLedgerByName" ISMODIFY="No"><TYPE>Ledger</TYPE><FETCH>GUID, MASTERID, ALTERID, NAME, PARENT, OPENINGBALANCE, PARTYGSTIN, INCOMETAXNUMBER, LEDGSTREGDETAILS.LIST, LEDSTATENAME</FETCH>` +
+		`<COLLECTION NAME="FinComLedgerByName" ISMODIFY="No"><TYPE>Ledger</TYPE><FETCH>GUID, MASTERID, ALTERID, NAME, PARENT, OPENINGBALANCE, PARTYGSTIN, INCOMETAXNUMBER, LEDGSTREGDETAILS.LIST, LEDSTATENAME, TDSDEDUCTEETYPE</FETCH>` +
 		`<FILTERS>FinComLedgerByNameOnly</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="FinComLedgerByNameOnly">$Name = &#34;New Party &amp; Co&#34;</SYSTEM>` +
 		`</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>`
 	if bn != wantN {
@@ -157,8 +157,8 @@ func TestLed231CounterMovesOnlyChangedAsked(t *testing.T) {
 		t.Fatalf("the update: %v", u)
 	}
 	ca := rows["Customer A"]
-	// [guid, MasterID, AlterID, name, parent, opening, GSTIN, PAN, openingChanged, state]: the ledger list's row
-	if len(ca) != 10 || str(ca[0]) != "led-2" || toI64(ca[2]) != 6 || str(ca[4]) != "Sundry Debtors" || str(ca[6]) != "27AAACA1234B1Z5" || str(ca[7]) != "AAACA1234B" || str(ca[9]) != "Maharashtra" {
+	// [guid, MasterID, AlterID, name, parent, opening, GSTIN, PAN, openingChanged, state, deductee type]: the ledger list's row
+	if len(ca) != 11 || str(ca[0]) != "led-2" || toI64(ca[2]) != 6 || str(ca[4]) != "Sundry Debtors" || str(ca[6]) != "27AAACA1234B1Z5" || str(ca[7]) != "AAACA1234B" || str(ca[9]) != "Maharashtra" {
 		t.Fatalf("Customer A's row: %v", ca)
 	}
 	if r := rows["New Party"]; str(r[0]) != np.guid || toI64(r[1]) != np.mid || str(r[5]) != "500.00" {
