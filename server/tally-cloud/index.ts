@@ -1977,6 +1977,12 @@ Deno.serve(async (req) => {
       // Fix 2c: the words (naming the computer and Windows user the id belongs to) go to the bridge, which shows them in
       // its tray; the database keeps them on this computer's line and one bell alert for the owners
       const { data: bound, error: be } = await db.rpc("tally_bridge_bind", { p_device: dev.id, p_bridge: bid });
+      // 2.3.1 (2.3.0 review round 1 L1): only a cloud without the function (PGRST202) goes on unchecked; any other error
+      // refuses the call (the bridge asks again) and is logged, never passes as "own"
+      if (be && be.code !== "PGRST202" && !missingFn(String(be.message || ""))) {
+        console.error("tally-ingest: tally_bridge_bind", dev.id, bid, String(be.message || "").slice(0, 200));
+        return reply(503, { ok: false, error: "FinCom's cloud could not check this bridge just now; it asks again by itself." });
+      }
       if (!be && bound && typeof bound === "object" && bound.own === false) {
         console.error("tally-ingest: bridge id of another computer", dev.id, bid);
         return reply(409, { ok: false, idRefused: true, error: String(bound.words || "This computer key cannot use bridge " + bid + ". Ask the firm's owner.").slice(0, 400) });
