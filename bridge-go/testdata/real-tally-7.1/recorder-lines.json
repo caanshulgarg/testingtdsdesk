@@ -1,0 +1,131 @@
+[
+  {
+    "alter_id": 3,
+    "company_guid": "8b08d9ac-b4e4-4d08-8140-938485752004",
+    "event": "created",
+    "fid": "",
+    "ledgers": [
+      {
+        "guid": "",
+        "name": "Cash"
+      },
+      {
+        "guid": "",
+        "name": "Spike Income"
+      }
+    ],
+    "line_id": "2c0143ef2ff1ad04975f43b7b0aef5ab",
+    "master_id": "3",
+    "narration": "",
+    "object_guid": "8b08d9ac-b4e4-4d08-8140-938485752004-00000003",
+    "pc": "runnervmfi6oq",
+    "received_at": "2026-10-06T05:31:35Z",
+    "saved_at": "2026-10-06T05:31:00Z",
+    "source": "addon",
+    "user": "TALLY User",
+    "vch_date": "20261002",
+    "vch_no": "1",
+    "vch_type": "Receipt",
+    "xml": "<VOUCHER REMOTEID=\"8b08d9ac-b4e4-4d08-8140-938485752004-00000003\" VCHKEY=\"8b08d9ac-b4e4-4d08-8140-938485752004-0000b4d8:00000008\" VCHTYPE=\"Receipt\" OBJVIEW=\"Accounting Voucher View\">\r\n     <DATE TYPE=\"Date\">20261002</DATE>\r\n     <GUID>8b08d9ac-b4e4-4d08-8140-938485752004-00000003</GUID>\r\n     <NARRATION TYPE=\"String\"></NARRATION>\r\n     <REQUESTORRULE/>\r\n     <VOUCHERTYPENAME>Receipt</VOUCHERTYPENAME>\r\n     <PARTYLEDGERNAME TYPE=\"String\">Cash</PARTYLEDGERNAME>\r\n     <VOUCHERNUMBER>1</VOUCHERNUMBER>\r\n     <SERIALMASTER TYPE=\"String\"></SERIALMASTER>\r\n     <ARESERIALMASTER TYPE=\"String\"></ARESERIALMASTER>\r\n     <NUMBERINGSTYLE>Auto Retain</NUMBERINGSTYLE>\r\n     <PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW>\r\n     <ISDELETED>No</ISDELETED>\r\n     <ASORIGINAL>No</ASORIGINAL>\r\n     <ISDEEMEDPOSITIVE TYPE=\"Logical\">No</ISDEEMEDPOSITIVE>\r\n     <ISOPTIONAL TYPE=\"Logical\">No</ISOPTIONAL>\r\n     <ISCANCELLED TYPE=\"Logical\">No</ISCANCELLED>\r\n     <ISINVOICE>No</ISINVOICE>\r\n     <ASPAYSLIP>No</ASPAYSLIP>\r\n     <ISDELETEDVCHRETAINED>No</ISDELETEDVCHRETAINED>\r\n     <ISNEGISPOSSET TYPE=\"Logical\">Yes</ISNEGISPOSSET>\r\n     <ALTERID TYPE=\"Number\"> 3</ALTERID>\r\n     <MASTERID TYPE=\"Number\"> 3</MASTERID>\r\n     <VOUCHERKEY TYPE=\"Number\">198839805935624</VOUCHERKEY>\r\n     <VOUCHERRETAINKEY TYPE=\"Number\">1</VOUCHERRETAINKEY>\r\n     <REUSEHOLEID TYPE=\"Number\">0</REUSEHOLEID>\r\n     <VOUCHERNUMBERSERIES TYPE=\"String\">Default</VOUCHERNUMBERSERIES>\r\n     <ALLLEDGERENTRIES.LIST>\r\n      <LEDGERNAME TYPE=\"String\">Spike Income</LEDGERNAME>\r\n      <ISDEEMEDPOSITIVE TYPE=\"Logical\">No</ISDEEMEDPOSITIVE>\r\n      <ISLASTDEEMEDPOSITIVE TYPE=\"Logical\">No</ISLASTDEEMEDPOSITIVE>\r\n      <AMOUNT TYPE=\"Amount\">700.00</AMOUNT>\r\n      <VATASSESSABLEVALUE TYPE=\"Amount\"></VATASSESSABLEVALUE>\r\n      <BILLALLOCATIONS.LIST>      </BILLALLOCATIONS.LIST>\r\n      <COSTTRACKALLOCATIONS.LIST>      </COSTTRACKALLOCATIONS.LIST>\r\n     </ALLLEDGERENTRIES.LIST>\r\n     <ALLLEDGERENTRIES.LIST>\r\n      <LEDGERNAME TYPE=\"String\">Cash</LEDGERNAME>\r\n      <ISDEEMEDPOSITIVE TYPE=\"Logical\">Yes</ISDEEMEDPOSITIVE>\r\n      <ISLASTDEEMEDPOSITIVE TYPE=\"Logical\">Yes</ISLASTDEEMEDPOSITIVE>\r\n      <AMOUNT TYPE=\"Amount\">-700.00</AMOUNT>\r\n      <VATASSESSABLEVALUE TYPE=\"Amount\"></VATASSESSABLEVALUE>\r\n      <BILLALLOCATIONS.LIST>      </BILLALLOCATIONS.LIST>\r\n      <COSTTRACKALLOCATIONS.LIST>      </COSTTRACKALLOCATIONS.LIST>\r\n     </ALLLEDGERENTRIES.LIST>\r\n    </VOUCHER>"
+  },
+  {
+    "alter_id": 4,
+    "company_guid": "8b08d9ac-b4e4-4d08-8140-938485752004",
+    "event": "altered",
+    "fid": "",
+    "ledgers": [
+      {
+        "guid": "",
+        "name": "Cash"
+      },
+      {
+        "guid": "",
+        "name": "Spike Income"
+      }
+    ],
+    "line_id": "c550c548f77c2abf73538e499a926c07",
+    "master_id": "3",
+    "narration": "",
+    "object_guid": "8b08d9ac-b4e4-4d08-8140-938485752004-00000003",
+    "pc": "runnervmfi6oq",
+    "received_at": "2026-10-06T05:32:21Z",
+    "saved_at": "2026-10-06T05:32:00Z",
+    "source": "addon",
+    "user": "TALLY User",
+    "vch_date": "20261002",
+    "vch_no": "1",
+    "vch_type": "Receipt",
+    "xml": "<VOUCHER REMOTEID=\"8b08d9ac-b4e4-4d08-8140-938485752004-00000003\" VCHKEY=\"8b08d9ac-b4e4-4d08-8140-938485752004-0000b4d8:00000008\" VCHTYPE=\"Receipt\" OBJVIEW=\"Accounting Voucher View\">\r\n     <DATE TYPE=\"Date\">20261002</DATE>\r\n     <GUID>8b08d9ac-b4e4-4d08-8140-938485752004-00000003</GUID>\r\n     <NARRATION TYPE=\"String\"></NARRATION>\r\n     <REQUESTORRULE/>\r\n     <VOUCHERTYPENAME>Receipt</VOUCHERTYPENAME>\r\n     <PARTYLEDGERNAME TYPE=\"String\">Cash</PARTYLEDGERNAME>\r\n     <VOUCHERNUMBER>1</VOUCHERNUMBER>\r\n     <SERIALMASTER TYPE=\"String\"></SERIALMASTER>\r\n     <ARESERIALMASTER TYPE=\"String\"></ARESERIALMASTER>\r\n     <NUMBERINGSTYLE>Auto Retain</NUMBERINGSTYLE>\r\n     <PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW>\r\n     <ISDELETED>No</ISDELETED>\r\n     <ASORIGINAL>No</ASORIGINAL>\r\n     <ISDEEMEDPOSITIVE TYPE=\"Logical\">No</ISDEEMEDPOSITIVE>\r\n     <ISOPTIONAL TYPE=\"Logical\">No</ISOPTIONAL>\r\n     <ISCANCELLED TYPE=\"Logical\">No</ISCANCELLED>\r\n     <ISINVOICE>No</ISINVOICE>\r\n     <ASPAYSLIP>No</ASPAYSLIP>\r\n     <ISDELETEDVCHRETAINED>No</ISDELETEDVCHRETAINED>\r\n     <ISNEGISPOSSET TYPE=\"Logical\">Yes</ISNEGISPOSSET>\r\n     <ALTERID TYPE=\"Number\"> 4</ALTERID>\r\n     <MASTERID TYPE=\"Number\"> 3</MASTERID>\r\n     <VOUCHERKEY TYPE=\"Number\">198839805935624</VOUCHERKEY>\r\n     <VOUCHERRETAINKEY TYPE=\"Number\">1</VOUCHERRETAINKEY>\r\n     <REUSEHOLEID TYPE=\"Number\">0</REUSEHOLEID>\r\n     <VOUCHERNUMBERSERIES TYPE=\"String\">Default</VOUCHERNUMBERSERIES>\r\n     <ALLLEDGERENTRIES.LIST>\r\n      <LEDGERNAME TYPE=\"String\">Spike Income</LEDGERNAME>\r\n      <ISDEEMEDPOSITIVE TYPE=\"Logical\">No</ISDEEMEDPOSITIVE>\r\n      <ISLASTDEEMEDPOSITIVE TYPE=\"Logical\">No</ISLASTDEEMEDPOSITIVE>\r\n      <AMOUNT TYPE=\"Amount\">800.00</AMOUNT>\r\n      <VATASSESSABLEVALUE TYPE=\"Amount\"></VATASSESSABLEVALUE>\r\n      <BILLALLOCATIONS.LIST>      </BILLALLOCATIONS.LIST>\r\n      <COSTTRACKALLOCATIONS.LIST>      </COSTTRACKALLOCATIONS.LIST>\r\n     </ALLLEDGERENTRIES.LIST>\r\n     <ALLLEDGERENTRIES.LIST>\r\n      <LEDGERNAME TYPE=\"String\">Cash</LEDGERNAME>\r\n      <ISDEEMEDPOSITIVE TYPE=\"Logical\">Yes</ISDEEMEDPOSITIVE>\r\n      <ISLASTDEEMEDPOSITIVE TYPE=\"Logical\">Yes</ISLASTDEEMEDPOSITIVE>\r\n      <AMOUNT TYPE=\"Amount\">-800.00</AMOUNT>\r\n      <VATASSESSABLEVALUE TYPE=\"Amount\"></VATASSESSABLEVALUE>\r\n      <BILLALLOCATIONS.LIST>      </BILLALLOCATIONS.LIST>\r\n      <COSTTRACKALLOCATIONS.LIST>      </COSTTRACKALLOCATIONS.LIST>\r\n     </ALLLEDGERENTRIES.LIST>\r\n    </VOUCHER>"
+  },
+  {
+    "alter_id": 5,
+    "company_guid": "8b08d9ac-b4e4-4d08-8140-938485752004",
+    "event": "created",
+    "fid": "",
+    "idsMismatch": true,
+    "ledgers": [
+      {
+        "guid": "",
+        "name": "Cash"
+      },
+      {
+        "guid": "",
+        "name": "Spike Income"
+      }
+    ],
+    "lineGuid": "8b08d9ac-b4e4-4d08-8140-938485752004-00000003",
+    "line_id": "f87b6fdc5b1e2b5299c5ce880ab396bf",
+    "master_id": "4",
+    "narration": "",
+    "object_guid": "8b08d9ac-b4e4-4d08-8140-938485752004-00000004",
+    "pc": "runnervmfi6oq",
+    "received_at": "2026-10-06T05:33:06Z",
+    "saved_at": "2026-10-06T05:33:00Z",
+    "source": "addon",
+    "user": "TALLY User",
+    "vch_date": "20261002",
+    "vch_no": "2",
+    "vch_type": "Receipt",
+    "xml": "<VOUCHER REMOTEID=\"8b08d9ac-b4e4-4d08-8140-938485752004-00000004\" VCHKEY=\"8b08d9ac-b4e4-4d08-8140-938485752004-0000b4d8:00000010\" VCHTYPE=\"Receipt\" OBJVIEW=\"Accounting Voucher View\">\r\n     <DATE TYPE=\"Date\">20261002</DATE>\r\n     <GUID>8b08d9ac-b4e4-4d08-8140-938485752004-00000004</GUID>\r\n     <NARRATION TYPE=\"String\"></NARRATION>\r\n     <REQUESTORRULE/>\r\n     <VOUCHERTYPENAME>Receipt</VOUCHERTYPENAME>\r\n     <PARTYLEDGERNAME TYPE=\"String\">Cash</PARTYLEDGERNAME>\r\n     <VOUCHERNUMBER>2</VOUCHERNUMBER>\r\n     <SERIALMASTER TYPE=\"String\"></SERIALMASTER>\r\n     <ARESERIALMASTER TYPE=\"String\"></ARESERIALMASTER>\r\n     <NUMBERINGSTYLE>Auto Retain</NUMBERINGSTYLE>\r\n     <PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW>\r\n     <ISDELETED>No</ISDELETED>\r\n     <ASORIGINAL>No</ASORIGINAL>\r\n     <ISDEEMEDPOSITIVE TYPE=\"Logical\">No</ISDEEMEDPOSITIVE>\r\n     <ISOPTIONAL TYPE=\"Logical\">No</ISOPTIONAL>\r\n     <ISCANCELLED TYPE=\"Logical\">No</ISCANCELLED>\r\n     <ISINVOICE>No</ISINVOICE>\r\n     <ASPAYSLIP>No</ASPAYSLIP>\r\n     <ISDELETEDVCHRETAINED>No</ISDELETEDVCHRETAINED>\r\n     <ISNEGISPOSSET TYPE=\"Logical\">Yes</ISNEGISPOSSET>\r\n     <ALTERID TYPE=\"Number\"> 5</ALTERID>\r\n     <MASTERID TYPE=\"Number\"> 4</MASTERID>\r\n     <VOUCHERKEY TYPE=\"Number\">198839805935632</VOUCHERKEY>\r\n     <VOUCHERRETAINKEY TYPE=\"Number\">5</VOUCHERRETAINKEY>\r\n     <REUSEHOLEID TYPE=\"Number\">0</REUSEHOLEID>\r\n     <VOUCHERNUMBERSERIES TYPE=\"String\">Default</VOUCHERNUMBERSERIES>\r\n     <ALLLEDGERENTRIES.LIST>\r\n      <LEDGERNAME TYPE=\"String\">Spike Income</LEDGERNAME>\r\n      <ISDEEMEDPOSITIVE TYPE=\"Logical\">No</ISDEEMEDPOSITIVE>\r\n      <ISLASTDEEMEDPOSITIVE TYPE=\"Logical\">No</ISLASTDEEMEDPOSITIVE>\r\n      <AMOUNT TYPE=\"Amount\">900.00</AMOUNT>\r\n      <VATASSESSABLEVALUE TYPE=\"Amount\"></VATASSESSABLEVALUE>\r\n      <BILLALLOCATIONS.LIST>      </BILLALLOCATIONS.LIST>\r\n      <COSTTRACKALLOCATIONS.LIST>      </COSTTRACKALLOCATIONS.LIST>\r\n     </ALLLEDGERENTRIES.LIST>\r\n     <ALLLEDGERENTRIES.LIST>\r\n      <LEDGERNAME TYPE=\"String\">Cash</LEDGERNAME>\r\n      <ISDEEMEDPOSITIVE TYPE=\"Logical\">Yes</ISDEEMEDPOSITIVE>\r\n      <ISLASTDEEMEDPOSITIVE TYPE=\"Logical\">Yes</ISLASTDEEMEDPOSITIVE>\r\n      <AMOUNT TYPE=\"Amount\">-900.00</AMOUNT>\r\n      <VATASSESSABLEVALUE TYPE=\"Amount\"></VATASSESSABLEVALUE>\r\n      <BILLALLOCATIONS.LIST>      </BILLALLOCATIONS.LIST>\r\n      <COSTTRACKALLOCATIONS.LIST>      </COSTTRACKALLOCATIONS.LIST>\r\n     </ALLLEDGERENTRIES.LIST>\r\n    </VOUCHER>"
+  },
+  {
+    "alter_id": 6,
+    "company_guid": "8b08d9ac-b4e4-4d08-8140-938485752004",
+    "event": "cancelled",
+    "fid": "",
+    "ledgers": [],
+    "line_id": "8053ec61d6045cda1780d4afc48724a9",
+    "master_id": "3",
+    "narration": "",
+    "object_guid": "8b08d9ac-b4e4-4d08-8140-938485752004-00000003",
+    "pc": "runnervmfi6oq",
+    "received_at": "2026-10-06T05:33:54Z",
+    "saved_at": "2026-10-06T05:33:00Z",
+    "source": "addon",
+    "user": "TALLY User",
+    "vch_date": "20261002",
+    "vch_no": "1",
+    "vch_type": "Receipt",
+    "xml": ""
+  },
+  {
+    "alter_id": null,
+    "company_guid": "8b08d9ac-b4e4-4d08-8140-938485752004",
+    "event": "deleted",
+    "fid": "",
+    "ledgers": [],
+    "line_id": "81522d4c65aa17756fe700f6cdff5fd4",
+    "master_id": "4",
+    "narration": "",
+    "object_guid": "8b08d9ac-b4e4-4d08-8140-938485752004-00000004",
+    "pc": "runnervmfi6oq",
+    "received_at": "2026-10-06T05:34:25Z",
+    "saved_at": "2026-10-06T05:34:00Z",
+    "source": "addon",
+    "user": "TALLY User",
+    "vch_date": "20261002",
+    "vch_no": "2",
+    "vch_type": "Receipt",
+    "xml": ""
+  }
+]

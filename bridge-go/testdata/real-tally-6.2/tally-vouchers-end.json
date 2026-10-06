@@ -1,0 +1,32 @@
+[
+  {
+    "guid": "abe4dc31-4c7d-4265-ba12-f8594855ee02-00000001",
+    "mid": 1,
+    "aid": 1,
+    "cancelled": false,
+    "vno": "1",
+    "type": "Journal",
+    "date": "20260401",
+    "narr": "spike TDSDesk:test-1"
+  },
+  {
+    "guid": "abe4dc31-4c7d-4265-ba12-f8594855ee02-00000002",
+    "mid": 2,
+    "aid": 2,
+    "cancelled": false,
+    "vno": "2",
+    "type": "Journal",
+    "date": "20261001",
+    "narr": "TDSDesk:fcv6242bc4f2e | FinCom versions posting"
+  },
+  {
+    "guid": "abe4dc31-4c7d-4265-ba12-f8594855ee02-00000003",
+    "mid": 3,
+    "aid": 6,
+    "cancelled": true,
+    "vno": "1",
+    "type": "Receipt",
+    "date": "20261002",
+    "narr": ""
+  }
+]

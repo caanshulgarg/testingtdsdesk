@@ -1,0 +1,61 @@
+{
+  "company": "FinCom Spike Co",
+  "date": "20261002",
+  "masterId": "3",
+  "number": "1",
+  "ok": true,
+  "results": [
+    {
+      "bytes": 13605,
+      "error": "",
+      "form": "A",
+      "ms": 171,
+      "vouchers": 1,
+      "what": "FinComVoucherByNumber as sent (&#34; quotes, dates yyyymmdd)"
+    },
+    {
+      "bytes": 13605,
+      "error": "",
+      "form": "B",
+      "ms": 172,
+      "vouchers": 1,
+      "what": "by number with plain quote marks, dates yyyymmdd"
+    },
+    {
+      "bytes": 13605,
+      "error": "",
+      "form": "C",
+      "ms": 172,
+      "vouchers": 1,
+      "what": "FinComVoucherByMaster as sent, MasterID 3 (dates yyyymmdd)"
+    },
+    {
+      "bytes": 13605,
+      "error": "",
+      "form": "D",
+      "ms": 172,
+      "vouchers": 1,
+      "what": "by MasterID 3 with no dates"
+    },
+    {
+      "bytes": 13605,
+      "error": "",
+      "form": "E",
+      "ms": 172,
+      "vouchers": 1,
+      "what": "by MasterID 3 with the dates as d-MMM-yyyy TYPE=Date"
+    },
+    {
+      "bytes": 13605,
+      "error": "",
+      "form": "F",
+      "ms": 172,
+      "vouchers": 1,
+      "what": "by number with plain quote marks and no dates"
+    }
+  ],
+  "state": "done",
+  "stopped": false,
+  "summary": "A 1 voucher 171 ms · B 1 voucher 172 ms · C 1 voucher 172 ms · D 1 voucher 172 ms · E 1 voucher 172 ms · F 1 voucher 172 ms",
+  "type": "Receipt"
+}

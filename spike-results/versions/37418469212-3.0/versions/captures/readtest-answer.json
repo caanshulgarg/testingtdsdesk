@@ -1,0 +1,95 @@
+{
+  "company": "FinCom Spike Co",
+  "day": "20261002",
+  "emptyDay": "20260930",
+  "ok": true,
+  "passed": "none",
+  "results": [
+    {
+      "bytes": 25287,
+      "emptyDay": "20260930",
+      "emptyDayVouchers": 1,
+      "error": "",
+      "head": "<ENVELOPE><HEADER><TALLYREQUEST></TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME></REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY></SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><R",
+      "label": "Day Book, dates yyyymmdd",
+      "passed": false,
+      "seconds": 0.1663804,
+      "vouchers": 1
+    },
+    {
+      "bytes": 25287,
+      "emptyDay": "20260930",
+      "emptyDayVouchers": 1,
+      "error": "",
+      "head": "<ENVELOPE><HEADER><TALLYREQUEST></TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME></REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY></SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><R",
+      "label": "Day Book, dates d-MMM-yyyy",
+      "passed": false,
+      "seconds": 0.158697,
+      "vouchers": 1
+    },
+    {
+      "bytes": 25287,
+      "emptyDay": "20260930",
+      "emptyDayVouchers": 1,
+      "error": "",
+      "head": "<ENVELOPE><HEADER><TALLYREQUEST></TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME></REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY></SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><R",
+      "label": "Day Book, dates yyyymmdd TYPE=Date",
+      "passed": false,
+      "seconds": 0.1596672,
+      "vouchers": 1
+    },
+    {
+      "bytes": 25287,
+      "emptyDay": "20260930",
+      "emptyDayVouchers": 1,
+      "error": "",
+      "head": "<ENVELOPE><HEADER><TALLYREQUEST></TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME></REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY></SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><R",
+      "label": "Day Book, dates d-MMM-yyyy TYPE=Date",
+      "passed": false,
+      "seconds": 0.1591192,
+      "vouchers": 1
+    },
+    {
+      "bytes": 5618,
+      "error": "",
+      "head": "<ENVELOPE><HEADER><VERSION></VERSION><STATUS></STATUS></HEADER><BODY><DESC></DESC><DATA><COLLECTION><VOUCHER><DATE></DATE><GUID></GUID><NARRATION></NARRATION><REQUESTORRULE><VOUCHERTYPENAME></VOUCHERT",
+      "label": "FinComTag (the posting read-back's request)",
+      "seconds": 0.1666688,
+      "vouchers": 3
+    },
+    {
+      "altmstid": 209,
+      "altvchid": 8,
+      "bytes": 1746,
+      "error": "",
+      "head": "<ENVELOPE><HEADER><VERSION></VERSION><STATUS></STATUS></HEADER><BODY><DESC></DESC><DATA><COLLECTION><COMPANY><NAME></NAME><GUID></GUID><ALTVCHID></ALTVCHID><ALTMSTID></ALTMSTID></COMPANY></COLLECTION>",
+      "label": "FinComCompany (change numbers)",
+      "seconds": 0.1523191,
+      "vouchers": 0
+    },
+    {
+      "bytes": 199,
+      "error": "",
+      "head": "<FINCOMNUMBERS><COMPANY><NAME></NAME><GUID></GUID><ALTVCHID></ALTVCHID><ALTMSTID></ALTMSTID></COMPANY></FINCOMNUMBERS>",
+      "label": "FinComCompanyNumbers (change numbers, form b: the report)",
+      "seconds": 0.1530303,
+      "vouchers": 0
+    },
+    {
+      "bytes": 3914,
+      "error": "",
+      "head": "<ENVELOPE><HEADER><VERSION></VERSION><STATUS></STATUS></HEADER><BODY><DESC></DESC><DATA><COLLECTION><VOUCHER><DATE></DATE><GUID></GUID><REQUESTORRULE><VOUCHERTYPENAME></VOUCHERTYPENAME><VOUCHERNUMBER>",
+      "label": "Entries above the starting point (TDSDeskKeepList, AlterID above 1, no dates)",
+      "seconds": 0.1665986,
+      "vouchers": 2
+    },
+    {
+      "bytes16": 1746,
+      "bytes8": 1746,
+      "error": "",
+      "label": "FinComCompany sent as UTF-16 and as UTF-8",
+      "same": true
+    }
+  ],
+  "state": "done"
+}
