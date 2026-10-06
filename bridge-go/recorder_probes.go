@@ -130,10 +130,16 @@ func dateFormsFile() string { return sp("date-forms.json") }
 func tallyProgram() (string, string) {
 	if ok, ps, _ := platNetState(); ok {
 		pf, pf86 := os.Getenv("ProgramFiles"), os.Getenv("ProgramFiles(x86)")
+		var cand []proc
 		for _, p := range ps {
 			if p.Path == "" || !reTally.MatchString(p.Name) || !(underDir(p.Path, pf) || underDir(p.Path, pf86)) {
 				continue
 			}
+			if _, err := os.Stat(p.Path); err == nil {
+				cand = append(cand, p)
+			}
+		}
+		if p, ok := pickTallyProgram(cand); ok {
 			if fi, err := os.Stat(p.Path); err == nil {
 				id := fmt.Sprintf("%s, %d bytes, %s", filepath.Base(p.Path), fi.Size(), fi.ModTime().Format("2006-01-02"))
 				return id, p.Path
@@ -141,6 +147,36 @@ func tallyProgram() (string, string) {
 		}
 	}
 	return "not known", ""
+}
+
+// 2.3.1 (the version tests, run 37418469212): TallyPrime 7.1 also runs tallyscheduler.exe from its install folder. The
+// Tally program is exactly tally.exe; failing that a program named TallyPrime.exe (^tally(prime)?\.exe$); never
+// tallyscheduler or any other helper program
+var reTallyExe = regexp.MustCompile(`(?i)^tally(prime)?\.exe$`)
+
+func tallyExeName(p proc) string {
+	if p.Path != "" {
+		b := p.Path
+		if i := strings.LastIndexAny(b, `\/`); i >= 0 {
+			b = b[i+1:]
+		}
+		return strings.ToLower(b)
+	}
+	return strings.ToLower(p.Name) + ".exe" // Get-Process names a program without .exe
+}
+
+func pickTallyProgram(ps []proc) (proc, bool) {
+	for _, p := range ps {
+		if tallyExeName(p) == "tally.exe" {
+			return p, true
+		}
+	}
+	for _, p := range ps {
+		if reTallyExe.MatchString(tallyExeName(p)) {
+			return p, true
+		}
+	}
+	return proc{}, false
 }
 
 // round 2 R2-11: kept per company (the Tally program is recorded with it, as data)
