@@ -230,7 +230,8 @@ func TestForgedLineDropped(t *testing.T) {
 		t.Fatalf("the log: %s", readText(logFile()))
 	}
 	// the starting point: a body at or below it not used. 2.2.2 (the owner's rule): judged by Tally's own ALTERID only,
-	// never the line's: both entries are asked (one request), only the new one's body goes
+	// never the line's: both entries are asked (2.3.1: one request each, strictly one MasterID a request), only the new one's
+	// body goes
 	td := today()
 	v := f.add(td, "Party", "P-1", "x", "-1.00") // alter 1
 	sessions := openCompaniesWith(fin, true)
@@ -249,7 +250,7 @@ func TestForgedLineDropped(t *testing.T) {
 			bs = append(bs, b)
 		}
 	}
-	if len(bs) != 1 || !strings.Contains(bs[0], "$MasterID = "+v.master+" ") || !strings.Contains(bs[0], "$MasterID = "+w.master) {
+	if len(bs) != 2 || strings.Count(strings.Join(bs, " "), "$MasterID = ") != 2 || !strings.Contains(bs[0]+bs[1], "$MasterID = "+v.master+"<") || !strings.Contains(bs[0]+bs[1], "$MasterID = "+w.master+"<") {
 		t.Fatalf("asked: %v", bs)
 	}
 	for _, l := range c.recSent() {
@@ -338,13 +339,15 @@ func TestSourceBBounded(t *testing.T) {
 	_, _ = companyCheck(fin, zz, f.port)
 	laterBy(t, 2*time.Minute)
 	_, _ = liveSourceB(zz, f.port)
-	// 2.2.2: the hard stop at 2 s comes before the request's own limit of 5 s (the 2 s rule then turns source B off)
-	if logLines("Source B off: Tally took 2.0 s") != 1 {
+	// 2.2.2: the hard stop at 2 s comes before the request's own limit of 5 s (2.3.1: then the shared retry schedule)
+	if logLines("TDSDeskKeepList") < 1 || logLines("took 2.0s and failed: Tally took longer than the recorder") != 1 || logLines("(TDSDeskKeepList, try 1); trying again by itself at") != 1 {
 		t.Fatalf("the request's limit: %s", readText(logFile()))
 	}
 }
 
-// --- M6 / S5: never back on without the owner: an answer without the field, or the same value after a restart
+// --- M6 / S5 (2.3.1, the owner's last change: nothing is switched off, so nothing waits for the owner): after a stop
+// source B goes again by itself at the retry, whatever FinCom's answer says, and after a restart; the source stays the
+// owner's
 func TestSourceBNeverBackWithoutOwner(t *testing.T) {
 	f, _, _ := sourceBReady(t)
 	slowKeepList(f, 2500*time.Millisecond)
@@ -356,8 +359,8 @@ func TestSourceBNeverBackWithoutOwner(t *testing.T) {
 	f.add(today(), fgParty, "NB-1", "x", "-1.00")
 	f.mu.Unlock()
 	_, _ = companyCheck(fin, zz, f.port)
-	if n, _ := liveSourceB(zz, f.port); n != 0 || f.n("TDSDeskKeepList") != 1 {
-		t.Fatal("on again by an answer without the field")
+	if n, err := liveSourceB(zz, f.port); err != nil || n != 2 || f.n("TDSDeskKeepList") != 2 {
+		t.Fatalf("not asked again by itself: %d %v", n, err)
 	}
 	if recorderSource() != "alterid" {
 		t.Fatalf("an answer without the field changed the source: %s", recorderSource())
@@ -365,9 +368,6 @@ func TestSourceBNeverBackWithoutOwner(t *testing.T) {
 	liveResetState() // a restart, before any beat
 	if recorderSource() != "alterid" {
 		t.Fatalf("the owner's source after a restart: %s", recorderSource())
-	}
-	if n, _ := liveSourceB(zz, f.port); n != 0 || f.n("TDSDeskKeepList") != 1 {
-		t.Fatal("on again after a restart")
 	}
 }
 

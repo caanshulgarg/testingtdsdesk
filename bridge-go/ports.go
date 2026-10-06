@@ -93,7 +93,9 @@ func netState() (bool, []proc, []listener) {
 	return platNetState()
 }
 
-var reTally = regexp.MustCompile(`(?i)^tally`)
+// review L2 (06-Oct-2026): the Tally program alone (tally, TallyPrime; with or without .exe), never tallyscheduler or another
+// helper TallyPrime 7.1 runs from its install folder (as tallyProgram, recorder_probes.go)
+var reTally = regexp.MustCompile(`(?i)^tally(prime)?(\.exe)?$`)
 
 // TallyPrime programs that are listening, with the Windows session they run in; nil when Windows cannot tell
 func tallyListeners() []M {
@@ -436,6 +438,7 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 			sessions = append(sessions, e)
 			continue
 		}
+		// 2.3.1: asked in the background (tc.bg), it follows the shared retry schedule (retry.go)
 		raw, err := invokeTally(tc, toInt(pp["port"]), companiesRequest(), 8)
 		if err != nil {
 			allFresh = false
@@ -443,8 +446,9 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 				ownAll = false
 			}
 		}
-		if err != nil && (errors.Is(err, errPreempted) || errors.Is(err, errBackoff)) && prevCompanies(toInt(pp["port"])) != nil {
-			// a background read stopped or held back: the companies named last time stand, nothing new is known
+		if err != nil && (errors.Is(err, errPreempted) || errors.Is(err, errBackoff) || errors.Is(err, errRecorderStop) || errors.Is(err, errRetryWait)) && prevCompanies(toInt(pp["port"])) != nil {
+			// a background read stopped or held back (2.3.1: or stopped at its 2 s hard stop): the companies named last time
+			// stand, nothing new is known
 			e["ok"], e["companies"], e["tallyState"] = true, prevCompanies(toInt(pp["port"])), "open"
 		} else if err != nil && isBusyErr(err) && tallyPortOpen(toInt(pp["port"])) && prevCompanies(toInt(pp["port"])) != nil {
 			// a busy Tally is still open: the companies it named last time stay, marked busy
@@ -637,18 +641,37 @@ func findCompany(company string, preferred int) (int, string, error) {
 	return findCompanyIn(company, preferred, []bool{false, true})
 }
 
+// review M1 (06-Oct-2026): the same for a BACKGROUND read (the ledger changes, the recorder's body fetch, its resolve of
+// held lines, its GUID ask): the company list asked under the 2-second hard stop (bgCompaniesTC) and never while the
+// shared retry schedule waits (retryHeld, retry.go): then the companies named last time stand. A person's request and a posting use findCompany /
+// findCompanyNow, unchanged
+func findCompanyPortBg(company string, preferred int) (int, error) {
+	p, _, err := findCompanyWith(company, preferred, []bool{false, true}, func(fresh bool) []M {
+		if retryHeld() {
+			return openCompaniesCached()
+		}
+		l, _ := openCompaniesAsk(bgCompaniesTC(), fresh)
+		return l
+	})
+	return p, err
+}
+
 // for a posting: Tally asked now, every time (a list even 30 seconds old may name a company closed since)
 func findCompanyNow(company string, preferred int) (int, string, error) {
 	return findCompanyIn(company, preferred, []bool{true})
 }
 
 func findCompanyIn(company string, preferred int, passes []bool) (int, string, error) {
+	return findCompanyWith(company, preferred, passes, openCompanies)
+}
+
+func findCompanyWith(company string, preferred int, passes []bool, list func(fresh bool) []M) (int, string, error) {
 	var last error
 	for _, fresh := range passes {
 		last = nil
 		var usable []M
 		answered, busy := false, false
-		for _, s := range openCompanies(fresh) {
+		for _, s := range list(fresh) {
 			if s["skipped"] == true {
 				continue
 			}

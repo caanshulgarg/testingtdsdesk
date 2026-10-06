@@ -676,7 +676,6 @@ func beatLoop() {
 					writeLog(fmt.Sprint("Heartbeat: ", r))
 				}
 			}()
-			selfWatchTick()
 			if cloudOn() {
 				beatOnce()
 				claimMainOnce()
@@ -732,6 +731,7 @@ func beatOnce() {
 		applyRecorderSource(r.json) // 2.2.0: where the recorder's changes come from (the owner's choice; absent: the setting)
 		applyHeldLines(r.json)      // 2.2.2: the lines FinCom holds without their entry, asked of Tally again
 		applyRefetch(r.json)        // after 2.3.0: this bridge's own held lines FinCom asks for again (body missing, placeholder GUID)
+		applyLedgersWanted(r.json)  // 2.3.1: the ledgers FinCom holds an entry for, asked of the own Tally by name (ledchanges.go)
 		// made the main bridge on FinCom's Tally page: this test bridge switches itself to main, once
 		if testMode() && truthy(r.json["makeMain"]) && makeMainSeen.CompareAndSwap(false, true) {
 			writeLog("FinCom made this the main bridge")
@@ -926,10 +926,14 @@ func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
 		"trialTools": trialTools(),
 		// 2.2.0: the live recorder per company (lines read, sent, waiting, the oldest waiting, the source) and its source
 		"recorderState": liveBeat(), "recorderSource": recorderSource(),
-		// the owner's rule: source B off by itself after a list that took more than 2 s, per company
-		"recorderSourceB": liveBeatOff("B"), "recorderSourceC": liveBeatOff("C"), "recorderBodyFetch": liveBeatOff("bodies"),
+		// 2.3.1 (the owner's last change): nothing is switched off by the 2-second rule any more: always {} (an older cloud
+		// and page read these per company), and tallyRetry says when a request was not answered in time and when the
+		// bridge tries again by itself (retry.go; null when the background requests go as normal)
+		"recorderSourceB": M{}, "recorderSourceC": M{}, "recorderBodyFetch": M{}, "tallyRetry": retryBeat(),
 		// review M8: the add-on's file names read; review S4: whether automatic updates are on, and the last rollback
-		"recorderFiles": liveFilesSeen(), "autoUpdate": au, "rolledBack": rb}
+		"recorderFiles": liveFilesSeen(), "autoUpdate": au, "rolledBack": rb,
+		// review H1 (2.3.1): why this computer's changes wait for a complete look at its own Tally, in plain words ("" when none)
+		"recorderWaitWords": liveOwnWaitWords()}
 }
 
 // --- the posting queue (build 199): postings queued in FinCom on any computer, taken one at a time

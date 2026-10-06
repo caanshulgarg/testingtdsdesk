@@ -203,14 +203,15 @@ func TestWrongCompanyNotEmpty(t *testing.T) {
 	}
 }
 
-// --- the self-watch stopped reading on the request (it took longer than SelfStopSec although it answered): the day is
-// not taken as read, not sent, not empty; nothing in any payload says empty:true
+// --- reading stopped (2.3.1: only the owner's stop from FinCom; the bridge never stops itself) while a day was being read:
+// the day is not taken as read, not sent, not empty; nothing in any payload says empty:true
 func TestSelfStopDayNotEmpty(t *testing.T) {
 	td := today()
 	f := newStandTally(t)
 	c := newStandCloud(t)
 	f.slow = func(id, body string) time.Duration {
 		if id == "Day Book" {
+			setReadStop("fincom", "Stopped by the owner from FinCom") // FinCom's answer arriving while the day is read
 			return 1500 * time.Millisecond
 		}
 		return 0
@@ -220,14 +221,14 @@ func TestSelfStopDayNotEmpty(t *testing.T) {
 	liveFrom(td)
 	k := &keepRun{tc: &TC{copier: true, readSec: 5}, kind: "now", force: true, told: map[string]bool{}, id: "r10-selfstop", alter: map[string]int64{}}
 	err := r10Round(t, k, f.port)
-	if st := readStop(); st == nil || str(st["by"]) != "self" {
-		t.Fatalf("the self-watch did not stop reading: %v (%v)", st, err)
+	if st := readStop(); st == nil || str(st["by"]) != "fincom" {
+		t.Fatalf("not stopped: %v (%v)", st, err)
 	}
 	if err == nil || !strings.Contains(err.Error(), "stopped") {
 		t.Fatalf("the read under the stop did not fail: %v", err)
 	}
 	if len(c.dayEntries()) != 0 {
-		t.Fatalf("a day read under a self-watch stop went to the cloud: %v", c.dayEntries())
+		t.Fatalf("a day read under a stop went to the cloud: %v", c.dayEntries())
 	}
 	noEmptyDay(t, c)
 	if st := readKeepState(syncFolder(zz)); str(st["roundAt"]) != "" || str(st["roundNext"]) > td {

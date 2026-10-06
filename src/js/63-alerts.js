@@ -9,7 +9,7 @@
 //    slim line on the Tally page and on that client's Books page (AlertLine);
 //  - one alert per problem: for a book, the cursor's gap (tally_sync_cursor.gap), the tally_alerts gap rows (one a day),
 //    the lines Tally sent that wait (tally_recorder_lines held / received) and the computer not recording are ONE problem;
-//    for a computer, Tally not answering, FinCom having stopped reading by itself and "silent today" are ONE problem;
+//    for a computer, Tally not answering, a request not answered in time (tried again by itself) and "silent today" are ONE problem;
 //  - plain words: what, then what to do; the change numbers, the computers and the ids only behind "details";
 //  - the advice follows the cause: lines held by FinCom's own fault (no entry body, the add-on's placeholder GUID, the
 //    queue) say FinCom is fetching the entry's details, nothing to do; a real gap says to upload the Day Book;
@@ -194,26 +194,25 @@ const AlertHub = {
             fix: recFix}));
         }
       });
-      // ---- one problem a computer: not answering, stopped by itself, silent today
+      // ---- one problem a computer: not answering, tried again by itself, silent today
       const devs = ((typeof TLight === "object" && TLight.st.devs) || []).filter(d => d && !d.revoked);
       const silent = Rec.silentOf();
       devs.forEach(d => {
         const beat = ((d.info || {}).beat) || {}, label = typeof tallyPcLabel === "function" ? tallyPcLabel(d) : d.name, ds = devState(d);
-        const stop = beat.readStopped && beat.readStopped.by === "self" ? beat.readStopped : null;
+        // bridge 2.3.1: a request not answered in time, tried again by itself (never a stop); a bridge before 2.3.1 that
+        // stopped by itself is said the same way (2.3.1 clears that stop when it starts)
+        const old = beat.readStopped && beat.readStopped.by === "self" ? beat.readStopped : null;
+        const retry = beat.tallyRetry && beat.tallyRetry.words ? beat.tallyRetry : null;
         const quiet = silent.find(x => x.device === d.id);
         const rowsD = unread.filter(x => x.device_id === d.id && x.kind === "silent");
         if (ds.bridge === "offline") return;   // the Tally sign says it (and the bell does not repeat it)
-        // the owner's condition 4: one alert per company the bridge's 2-second rule switched a method off for; it goes
-        // when the bridge's heartbeat no longer says it (Rec.offOf reads the last one)
-        if (Rec.offOf) Rec.offOf(d).forEach(x => {
-          const link = (((typeof TLight === "object" && TLight.st) || {}).cos || []).find(c => c.device_id === d.id && c.client_id && norm(c.company) === norm(x.company));
-          out.push({key: "off:" + d.id + ":" + x.kind + ":" + x.company, sev: "warn", cid: link ? link.client_id : "", selfClear: true, at: beat.at || "",
-            text: Rec.OFF_BELL[x.kind] + " is switched off for " + x.company + ": Tally took " + (Math.round(x.seconds * 10) / 10) + " s (limit " + Rec.OFF_LIMIT + " s).",
-            fix: Rec.offAgain(!!(S.account && S.account.me && S.account.me.role === "owner")),
-            details: [label, x.at && "since " + (istDay(x.at) === istDay(Date.now()) ? fmtTime(x.at) : fmtDateTime(x.at)), x.why].filter(Boolean).join(" · ")});
-        });
-        const base = {key: "pc:" + d.id, details: [label, stop && stop.reason, beat.notAnsweringSince && "not answering since " + fmtDateTime(beat.notAnsweringSince)].filter(Boolean).join(" · "), selfClear: true, at: beat.at || ""};
-        if (stop) out.push(Object.assign(base, {sev: "warn", text: "FinCom stopped reading Tally by itself: " + (stop.reason || "Tally did not answer") + ".", fix: "It starts again by itself when Tally answers; nothing to do."}));
+        // review H1 (bridge 2.3.1): the own Tally lists its companies too slowly (the bridge stops at 2 s): this computer's
+        // changes wait, in the bridge's own plain words; gone by itself when the list answers in time again
+        if (beat.recorderWaitWords) out.push({key: "ownwait:" + d.id, sev: "warn", cid: "", selfClear: true, at: beat.at || "", details: label,
+          text: String(beat.recorderWaitWords).replace(/\.?$/, "."), fix: "Nothing is lost: they go by themselves once Tally answers in time. Close any open window or report in Tally on that computer, or press Update now there."});
+        const base = {key: "pc:" + d.id, details: [label, old && old.reason, beat.notAnsweringSince && "not answering since " + fmtDateTime(beat.notAnsweringSince)].filter(Boolean).join(" · "), selfClear: true, at: beat.at || ""};
+        if (retry) out.push(Object.assign(base, {sev: "warn", text: String(retry.words).replace(/\.?$/, ".") + " (one computer)", fix: "Nothing to do: it tries again by itself; postings go on."}));
+        else if (old) out.push(Object.assign(base, {sev: "warn", text: "Tally did not answer in time" + (old.at ? " at " + fmtTime(old.at) : "") + " on one computer; reading starts again by itself once FinCom Bridge 2.3.1 is on it.", fix: "Update the bridge on that computer (it updates by itself within a few hours)."}));
         else if (beat.notAnsweringSince) out.push(Object.assign(base, {sev: "warn", text: "Tally is not answering on one computer since " + this.when(beat.notAnsweringSince) + ".", fix: "Close any open window or report in Tally on that computer (the details say which)."}));
         else if (quiet || rowsD.length) out.push(Object.assign(base, {sev: "info", text: "No change recorded today on one computer, though Tally was open there.", fix: "Nothing to do if nobody worked in Tally there today."}));
       });

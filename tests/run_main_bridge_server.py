@@ -605,6 +605,15 @@ try:
     c, r = lst({"round": "r-2s", "complete": False, "last": False, "seen": ["g1"], "ledgers": [row("g1", "Alpha")]})
     led = {x["name"]: x for x in F.T["tally_ledgers"] if x.get("book_id") == BOOK}
     ok(c == 200 and led["Alpha"].get("state") == "Uttar Pradesh", "40. the same row sent again without a state: the state kept")
+    # bridge 2.3.1 (parts A and B): the 11th column is the party's deductee type (TDSDEDUCTEETYPE, a ledger master field):
+    # stored in tally_ledgers.tds_deductee_type (migration 57), "" stored as blank; a 10-column row leaves it as it is
+    c, r = lst({"round": "r-2d", "complete": False, "last": False, "seen": ["g1", "g2"], "ledgers": [row("g1", "Alpha") + ["Uttar Pradesh", "Company - Resident"], row("g2", "Beta") + ["", ""]]})
+    led = {x["name"]: x for x in F.T["tally_ledgers"] if x.get("book_id") == BOOK}
+    ok(c == 200 and led["Alpha"].get("tds_deductee_type") == "Company - Resident" and led["Beta"].get("tds_deductee_type") == "" and led["Alpha"].get("state") == "Uttar Pradesh",
+       "2.3.1. a row with the deductee type: stored (Alpha: Company - Resident); blank: blank (%s)" % {k: led.get(k, {}).get("tds_deductee_type") for k in ("Alpha", "Beta")})
+    c, r = lst({"round": "r-2d", "complete": False, "last": False, "seen": ["g1"], "ledgers": [row("g1", "Alpha") + ["Uttar Pradesh"]]})
+    led = {x["name"]: x for x in F.T["tally_ledgers"] if x.get("book_id") == BOOK}
+    ok(c == 200 and led["Alpha"].get("tds_deductee_type") == "Company - Resident", "2.3.1. the same row without the 11th column: the deductee type kept")
     # at most 60 ledger_list calls a minute from one computer (a rogue key cannot bloat the rounds)
     codes = [lst({"round": "r-3", "complete": False, "last": False, "seen": [], "ledgers": []})[0] for i in range(70)]
     c, r = lst({"round": "r-3", "complete": False, "last": False, "seen": [], "ledgers": []})

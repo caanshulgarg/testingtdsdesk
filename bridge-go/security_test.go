@@ -43,13 +43,12 @@ func TestTrayResumeKeepsFinComStop(t *testing.T) {
 	}
 	// FinCom lifts its own stop
 	clearReadStop("fincom-lifted")
-	// a stop by the bridge itself: the tray clears it
-	setReadStop("self", "Tally has not answered for 15 minutes")
-	if code, res := callLocal(t, "POST", "/tray/resume-reading", "", "{}"); code != 200 {
+	// 2.3.1: no stop by the bridge itself any more (never a manual resume): the tray's Resume reading has nothing to do
+	if code, res := callLocal(t, "POST", "/tray/resume-reading", "", "{}"); code != 200 || res["resumed"] != false {
 		t.Fatalf("resume-reading: %d %v", code, res)
 	}
 	if st := readStop(); st != nil {
-		t.Fatalf("a self stop is still there after the tray's Resume reading: %v", st)
+		t.Fatalf("a stop: %v", st)
 	}
 }
 
@@ -57,7 +56,7 @@ func TestTrayResumeKeepsFinComStop(t *testing.T) {
 func TestTrayRoutesRefuseBrowserOrigin(t *testing.T) {
 	f := newStandTally(t)
 	standBridge(t, f, `,"Key":"tray-test-key"`)
-	setReadStop("self", "Tally has not answered for 15 minutes")
+	setReadStop("fincom", "Stopped by the owner from FinCom")
 	for _, origin := range []string{"https://app.fincom.live", "http://localhost:5173", "https://evil.example"} {
 		for _, p := range []string{"/tray/pause", "/tray/resume-reading", "/tray/restart", "/tray/update", "/tray/idle", "/tray/quit", "/tray/check",
 			"/tray/makemain", "/tray/cloudkey", "/tray/measure"} {

@@ -46,7 +46,7 @@ func TestPoisonNotMarkedWhenRefused(t *testing.T) {
 			late.Add(1)
 		}
 		if id == ledListID && n.Add(1) == 3 {
-			setReadStop("self", "test: stopped in the middle of the ledger list")
+			setReadStop("fincom", "test: stopped from FinCom in the middle of the ledger list")
 		}
 		return false
 	}
@@ -59,7 +59,7 @@ func TestPoisonNotMarkedWhenRefused(t *testing.T) {
 	if n.Load() < 3 || late.Load() != 0 {
 		t.Fatalf("%d chunk requests, %d of them after reading stopped (want none after)", n.Load(), late.Load())
 	}
-	clearReadStop("tray")
+	clearReadStop("fincom-lifted")
 	// (b) Tally did not answer a moment ago: requests are held (nothing sent) until the small check may go
 	f.mu.Lock()
 	f.behave = nil
@@ -179,7 +179,6 @@ func TestNoSelfStopWhenIdleAfterOneError(t *testing.T) {
 	f := newStandTally(t)
 	f.behave = silentFor(isID("TDSDeskNames"), nil)
 	standBridge(t, f, `,"TallyMaxSec":1`)
-	resetSilence()
 	if _, err := getLedgerNames(fin, zz, f.port); err == nil {
 		t.Fatal("answered")
 	}
@@ -190,7 +189,8 @@ func TestNoSelfStopWhenIdleAfterOneError(t *testing.T) {
 		o["since"] = start.Add(-10 * time.Minute).Format("2006-01-02T15:04:05")
 		_ = saveFile(stuckFile(), jsonText(o))
 	}
-	selfWatchTick()
+	// 2.3.1: the bridge never stops reading by itself (the self-watch's stop is gone): nothing stopped, the heartbeat ran
+	beatBody(true, "open", "", nil, nil, nil)
 	if st := readStop(); st != nil {
 		t.Fatalf("stopped after one error and ten idle minutes: %v", st)
 	}
@@ -199,10 +199,9 @@ func TestNoSelfStopWhenIdleAfterOneError(t *testing.T) {
 func TestNoSelfStopFromOldStuckFile(t *testing.T) {
 	f := newStandTally(t)
 	standBridge(t, f, "")
-	resetSilence()
 	// left by an earlier bridge: Tally not answering since an hour ago
 	_ = saveFile(stuckFile(), jsonText(M{"port": f.port, "since": time.Now().Add(-time.Hour).Format("2006-01-02T15:04:05"), "last": time.Now().Add(-50 * time.Minute).Format("2006-01-02T15:04:05")}))
-	selfWatchTick()
+	beatBody(true, "open", "", nil, nil, nil)
 	if st := readStop(); st != nil {
 		t.Fatalf("stopped by a stuck file from before: %v", st)
 	}

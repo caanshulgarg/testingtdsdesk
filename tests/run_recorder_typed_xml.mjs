@@ -6,7 +6,8 @@
 // Fixtures: bridge-go/testdata/real-tally-7.1/ (captured from a real TallyPrime 7.1 in the spike's runs) and
 // bridge-go/testdata/typed-like-7.1/receipt-213-by-master.xml (the owner's voucher, typed exactly as the real fixtures:
 // Receipt 213 of 06-Oct-2026, Salesify Marketing LLP bill-wise Agst Ref, and Cash). The Day Book export (untyped) is read
-// as before: tests/run_cloud_parse.mjs.
+// as before: tests/run_cloud_parse.mjs. Section 4 (bridge 2.3.1): item invoices, their sales or purchase ledger read from
+// under the items (typed-like-7.1/*-items.xml).
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -88,6 +89,42 @@ const J = JSON.stringify;
   ok(r.n === 1 && r.lines.length === 3 && sum(r.lines) === -100000, "item invoice without its sales line: 3 lines adding up to -100,000 (" + J(r.lines.map((l) => [l[1], l[2]])) + ")");
   const w = parseDay(t.replace("</ALLINVENTORYENTRIES.LIST>", '<ACCOUNTINGALLOCATIONS.LIST><LEDGERNAME TYPE="String">Sales GST 18%</LEDGERNAME><AMOUNT TYPE="Amount">100000.00</AMOUNT></ACCOUNTINGALLOCATIONS.LIST></ALLINVENTORYENTRIES.LIST>'));
   ok(w.lines.length === 4 && sum(w.lines) === 0, "with the sales ledger under the item's accounting allocations: 4 lines adding up to 0 (" + J(w.lines.map((l) => [l[1], l[2]])) + ")");
+}
+
+// 4. bridge 2.3.1 (the owner's decision of 06-Oct-2026): item invoices. The entry request also fetches the ledger lines kept
+// under an invoice's items (ALLINVENTORYENTRIES.LIST > ACCOUNTINGALLOCATIONS.LIST: the sales or purchase ledger), so the
+// body holds every line: the party, CGST, SGST (ledger entries) and the sales or purchase ledger (under the items). Fixtures:
+// bridge-go/testdata/typed-like-7.1/{sales-invoice,purchase-invoice,credit-note}-items.xml, typed exactly as the real 7.1
+// answers (not captured from a real Tally); the Go side is bridge-go/items231_test.go. Each parses to lines summing to 0
+// that match the invoice's figures; the 2.3.0 answer (no items' lines) is the unbalanced body FinCom got before
+{
+  const CO = "226fb516-9d2d-45ad-ad78-304d86b64500";
+  const cases = [
+    ["sales-invoice-items.xml", CO + "-0000000b", {type: "Sales", no: "101", party: "Spike Customer", alter: 21},
+      [["Spike Customer", -4130, [["101", "New Ref", -4130, null]]], ["CGST Output 9%", 315, []], ["SGST Output 9%", 315, []],
+       ["Sales GST 18%", 2000, []], ["Sales GST 18%", 1500, []]], "a sales invoice with two items and GST (CGST + SGST)"],
+    ["purchase-invoice-items.xml", CO + "-0000000c", {type: "Purchase", no: "55", party: "Spike Supplier", alter: 22},
+      [["Spike Supplier", 11800, [["SUP/2026/0912", "New Ref", 11800, null]]], ["CGST Input 9%", -900, []], ["SGST Input 9%", -900, []],
+       ["Purchase GST 18%", -6000, []], ["Purchase GST 18%", -4000, []]], "a purchase invoice with items"],
+    ["credit-note-items.xml", CO + "-0000000d", {type: "Credit Note", no: "7", party: "Spike Customer", alter: 23},
+      [["Spike Customer", 1180, [["101", "Agst Ref", 1180, null]]], ["CGST Output 9%", -90, []], ["SGST Output 9%", -90, []],
+       ["Sales GST 18%", -1000, []]], "a credit note with items"],
+  ];
+  const sum = (ls) => Math.round(ls.reduce((a, l) => a + l[2], 0) * 100) / 100;
+  for (const [file, G, head, want, what] of cases) {
+    const t = read("typed-like-7.1/" + file);
+    for (const [how, x] of [["the whole answer", t], ["the voucher element as the bridge sends it", el(t)]]) {
+      const r = parseDay(x), v = r.vouchers[0] || {};
+      ok(r.n === 1 && v.guid === G && v.date === "20261002" && v.type === head.type && v.no === head.no && v.party === head.party && v.alter === head.alter && !v.cancel && !v.opt,
+        what + ", " + how + ": one voucher, its GUID, 02-Oct-2026, " + head.type + " " + head.no + ", " + head.party + ", AlterID " + head.alter + " (" + J(v) + ")");
+      ok(J(r.lines) === J(want.map(([n, a, b]) => [G, n, a, "", null, b])),
+        what + ", " + how + ": every line, the sales or purchase ledger from under the items included (" + J(r.lines) + ")");
+      ok(sum(r.lines) === 0 && r.lines.length === want.length, what + ", " + how + ": the lines sum to 0 (" + sum(r.lines) + ")");
+    }
+    // the answer to 2.3.0's request (no items' lines): the party and GST only, not balancing (what 2.3.1 fixes)
+    const old = parseDay(t.replace(/\s*<ALLINVENTORYENTRIES\.LIST>[\s\S]*?<\/ALLINVENTORYENTRIES\.LIST>/g, ""));
+    ok(old.n === 1 && old.lines.length === 3 && sum(old.lines) !== 0, what + ": without the items' lines (2.3.0's request) the body does not balance (" + sum(old.lines) + ")");
+  }
 }
 
 // 3. one(): a tag with or without attributes and padded values; never a self-closed <TAG/>, never a longer tag

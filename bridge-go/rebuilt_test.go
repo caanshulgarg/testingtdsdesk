@@ -79,6 +79,7 @@ type standTally struct {
 type tLed struct {
 	guid, name, parent, open, gstin, pan string
 	state                                string // LEDSTATENAME (round 11)
+	dtype                                string // TDSDEDUCTEETYPE (2.3.1): the party's deductee type, a ledger master field
 	mid, alter                           int64
 }
 
@@ -172,8 +173,13 @@ func standCollectionHead(ledgers, vouchers int) string {
 	}
 	var b strings.Builder
 	b.WriteString("<ENVELOPE>\r\n <HEADER>\r\n  <VERSION>1</VERSION>\r\n  <STATUS>1</STATUS>\r\n </HEADER>\r\n <BODY>\r\n  <DESC>\r\n   <CMPINFO>\r\n")
-	for _, c := range [][2]any{{"COMPANY", 0}, {"GROUP", 0}, {"LEDGER", ledgers}, {"COSTCATEGORY", 0}, {"VOUCHERTYPE", 2}, {"CURRENCY", 4},
-		{"TAXUNIT", 6}, {"VOUCHERNUMBERSERIES", 6}, {"VOUCHER", vouchers}} {
+	// 2.3.1 (2.2.4 review L7): every counter a real TallyPrime 7.1 writes, in its order (testdata/real-tally-7.1/vouchers-d.xml)
+	for _, c := range [][2]any{{"COMPANY", 0}, {"GROUP", 0}, {"LEDGER", ledgers}, {"COSTCATEGORY", 0}, {"COSTCENTRE", 0}, {"GODOWN", 0}, {"STOCKGROUP", 0},
+		{"STOCKCATEGORY", 0}, {"STOCKITEM", 0}, {"VOUCHERTYPE", 2}, {"CURRENCY", 8}, {"UNIT", 0}, {"BUDGET", 0}, {"CLIENTRULE", 0}, {"SERVERRULE", 0},
+		{"STATE", 0}, {"TDSRATE", 0}, {"TAXCLASSIFICATION", 0}, {"STCATEGORY", 0}, {"DEDUCTEETYPE", 0}, {"ATTENDANCETYPE", 0}, {"FBTCATEGORY", 0},
+		{"FBTASSESSEETYPE", 0}, {"TARIFFCLASSIFICATION", 0}, {"EXCISEDUTYCLASSIFICATION", 0}, {"SERIALNUMBER", 0}, {"ADJUSTMENTCLASSIFICATION", 0},
+		{"INCOMETAXSLAB", 0}, {"INCOMETAXCLASSIFICATION", 0}, {"LBTCLASSIFICATION", 0}, {"TAXUNIT", 12}, {"RETURNMASTER", 0}, {"GSTCLASSIFICATION", 0},
+		{"VOUCHERNUMBERSERIES", 14}, {"VOUCHER", vouchers}} {
 		fmt.Fprintf(&b, "    <%s>%v</%s>\r\n", c[0], c[1], c[0])
 	}
 	b.WriteString("   </CMPINFO>\r\n  </DESC>\r\n  <DATA>\r\n   <COLLECTION ISCMPDEPTYPE=\"Yes\" CMPLOCUS=\"4\" CMPDEPTYPE=\"64\">")
@@ -309,19 +315,39 @@ func newStandTally(t *testing.T) *standTally {
 			}
 			fmt.Fprintf(&o, `<COMPANY NAME="%s" RESERVEDNAME="">%s%s%s%s%s</COMPANY>`, esc(coName), standField("NAME", "String", esc(coName)), standField("GUID", "String", f.guid),
 				standField("STARTINGFROM", "Date", "20260401"), standField("ALTVCHID", "Number", v), standField("ALTMSTID", "Number", m))
-		case "FinComLedgers":
+		case "FinComLedgers", "FinComLedgerChanges", "FinComLedgerByName":
+			// 2.3.1 (masters): the ledgers with an AlterID in (after, upto], or the one ledger of that name, the same fields
 			var after, upto int64 = 0, -1
-			if m := reMidRange.FindStringSubmatch(body); m != nil {
+			if m := reMidRange.FindStringSubmatch(body); m != nil && id == "FinComLedgers" {
 				after = toI64(m[1])
 				if m[2] != "" {
 					upto = toI64(m[2])
 				}
 			}
+			var aAfter, aUpto int64 = -1, -1
+			if m := regexp.MustCompile(`\$AlterID &gt; (\d+) AND \$AlterID &lt;= (\d+)`).FindStringSubmatch(body); m != nil && id == "FinComLedgerChanges" {
+				aAfter, aUpto = toI64(m[1]), toI64(m[2])
+			}
+			byName := ""
+			if id == "FinComLedgerByName" {
+				byName = pinQuoted(body, "$Name")
+			}
 			for _, l := range f.led {
+				if id == "FinComLedgerChanges" && (aAfter < 0 || l.alter <= aAfter || l.alter > aUpto) {
+					continue
+				}
+				if id == "FinComLedgerByName" && !strings.EqualFold(l.name, byName) {
+					continue
+				}
 				if l.mid > after && (upto < 0 || l.mid <= upto) {
 					fmt.Fprintf(&o, `<LEDGER NAME="%s" RESERVEDNAME="">%s%s%s%s%s%s%s%s</LEDGER>`, esc(l.name), standField("GUID", "String", l.guid),
 						standField("MASTERID", "Number", fmt.Sprintf(" %d", l.mid)), standField("ALTERID", "Number", fmt.Sprintf(" %d", l.alter)), standField("PARENT", "String", esc(l.parent)),
 						standField("OPENINGBALANCE", "Amount", l.open), standField("PARTYGSTIN", "String", l.gstin), standField("INCOMETAXNUMBER", "String", l.pan), standField("LEDSTATENAME", "String", esc(l.state)))
+					if strings.Contains(body, "TDSDEDUCTEETYPE") && l.dtype != "" { // asked for: a real Tally writes it when set
+						s := o.String()
+						o.Reset()
+						o.WriteString(strings.TrimSuffix(s, "</LEDGER>") + standField("TDSDEDUCTEETYPE", "String", esc(l.dtype)) + "</LEDGER>")
+					}
 				}
 			}
 		case "FinComGroups":
@@ -505,6 +531,9 @@ type standCloud struct {
 	checkReply   func(b M) M
 	lease        *leaseModel
 	devKeys      []string // final review M3: the computer key each call came with (x-fincom-device), in order
+	// 2.3.1 (masters): every ledger_changes body, and how it is answered (nil: 200 {ok, added})
+	ledChanges []M
+	ledChReply func(b M) (int, M)
 }
 
 func newStandCloud(t *testing.T) *standCloud {
@@ -570,6 +599,18 @@ func newStandCloud(t *testing.T) *standCloud {
 		case "ledger_list":
 			c.ledList = append(c.ledList, o)
 			out["added"], out["renamed"], out["deleted"] = len(arr(o["ledgers"])), len(arr(o["renamed"])), 0
+		case "ledger_changes":
+			// 2.3.1 (masters): the ledgers created or altered since the master counter last moved, or asked for an entry
+			c.ledChanges = append(c.ledChanges, o)
+			if c.ledChReply != nil {
+				code, ans := c.ledChReply(o)
+				if code != 200 {
+					w.WriteHeader(code)
+				}
+				_, _ = w.Write([]byte(jsonText(ans)))
+				return
+			}
+			out["added"], out["updated"] = len(arr(o["ledgers"])), 0
 		case "recorder_lines":
 			c.recRaw = append(c.recRaw, string(b))
 			if c.recDelay > 0 {
@@ -632,6 +673,7 @@ func standBridge(t *testing.T, f *standTally, extra string) string {
 	bgMu.Lock()
 	stopHold = map[int]time.Time{}
 	bgMu.Unlock()
+	retryReset() // 2.3.1: the shared retry schedule (retry.go), per test
 	decideMu.Lock()
 	decideAt = map[string]time.Time{} // the decision log's once-in-10-minutes, per test
 	decideMu.Unlock()

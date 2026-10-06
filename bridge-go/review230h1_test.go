@@ -17,7 +17,6 @@ import (
 	"net/http"
 	"strings"
 	"testing"
-	"time"
 )
 
 // the stand Tally no longer holds this voucher (deleted in this Tally)
@@ -121,6 +120,11 @@ func TestH1DeleteTallyCannotBeAskedHeld(t *testing.T) {
 	liveAppend(t, liveFilePath(rec, ""), realLine("after_delete", "", "12", "", "Receipt", "4", addonDate(td)))
 	liveReadOnce()
 	uploadAll(t)
+	// 2.3.1: stopped at 2 s, asked again at each try of the shared retry schedule; stopped 3 times, it goes held
+	for i := 0; i < 2; i++ {
+		retryDue()
+		uploadAll(t)
+	}
 	got := sentEvent(c, "deleted")
 	if len(got) != 1 || str(got[0]["object_guid"]) != "" || got[0]["guidHeld"] != true || !strings.HasPrefix(str(got[0]["heldWhy"]), liveDeleteUnprovenWords) {
 		t.Fatalf("held, the bridge's record not used: %v", got)
@@ -233,8 +237,9 @@ func TestH1RetryCopyCompanyStaysHeld(t *testing.T) {
 	})
 }
 
-// the 2 s stop: the request by MasterID is switched off for the company (the 2 s rule); the held cancel waits while it is
-// off (the rule kept) and is asked again by itself once it is on again, then sent with Tally's GUID
+// the 2 s stop: 2.3.1 (the owner's last change) switches nothing off; the cancel is asked again at each try of the shared
+// retry schedule, goes held after 3 stops, and is asked again by itself (a held line) at the next try, then sent with
+// Tally's GUID
 func TestH1RetryCancelAfterTwoSecondStop(t *testing.T) {
 	rec, f, c := liveBridge(t, `,"RecorderBodySec":2,"RecorderResolveSec":0`)
 	td := today()
@@ -249,6 +254,11 @@ func TestH1RetryCancelAfterTwoSecondStop(t *testing.T) {
 	liveAppend(t, liveFilePath(rec, ""), realLine("after_cancel", "", v.master, "", "Receipt", "9", addonDate(td)))
 	liveReadOnce()
 	uploadAll(t)
+	// 2.3.1: stopped at 2 s, asked again at each try of the retry schedule; stopped 3 times, it goes held for now
+	for i := 0; i < 2; i++ {
+		retryDue()
+		uploadAll(t)
+	}
 	if got := sentEvent(c, "cancelled"); len(got) != 1 || got[0]["guidHeld"] != true {
 		t.Fatalf("held for now: %v", got)
 	}
@@ -258,12 +268,9 @@ func TestH1RetryCancelAfterTwoSecondStop(t *testing.T) {
 	n := f.n(vchByMasterID)
 	liveResolveTurn()
 	if f.n(vchByMasterID) != n {
-		t.Fatalf("asked while the 2 s rule has it off: %v", f.ids())
+		t.Fatalf("asked before the retry's time: %v", f.ids())
 	}
-	liveOnAgain("another-source") // the owner switches where the changes come from: on again
-	bgMu.Lock()
-	stopHold = map[int]time.Time{} // and Tally's 30 s of rest after the stop is over
-	bgMu.Unlock()
+	retryDue() // the next try, by itself
 	liveResolveTurn()
 	uploadAll(t)
 	r := h1Resolved(c, "cancelled")

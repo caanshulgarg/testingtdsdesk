@@ -1,4 +1,4 @@
-// 2.2.2 (05-Oct-2026, the owner's request): "Test fetching an entry", a tray item. On NWS144 the entry fetch (by type and
+// 2.2.3 (05-Oct-2026, the owner's request): "Test fetching an entry", a tray item. On NWS144 the entry fetch (by type and
 // number, then by MasterID) finds nothing, and PowerShell cannot be run there, so the six forms of
 // docs/diagnostics/2.2.2-fetch-check.ps1 are sent by the bridge itself, for ONE voucher the person names (type, number,
 // date), one at a time, through the same gate as every request (invokeTally: one request to Tally at a time), each capped
@@ -15,7 +15,9 @@
 //
 // Every form goes under a measure-only id of its own (FinComFetchTestA..F, allowlist.go): the bridge's own two ids are
 // the narrow dated exceptions (a line waiting on them, within 3 days, a starting point recorded) and never go as a
-// person's; A and C are otherwise byte for byte what voucherByNumberRequest and voucherByMasterRequest build.
+// person's; A and C are otherwise byte for byte what voucherByNumberRequest and voucherByMasterRequest build. 2.3.1: A and
+// C carry the entry request's fetch as built (liveFetchField, with the ledger lines under an invoice's items); B, D, E and
+// F stay byte for byte the ps1's (2.2.2 .. 2.3.0, liveFetchField222), so no other row changed (review M2).
 package main
 
 import (
@@ -81,7 +83,13 @@ func fetchTestRequest(letter, company, date, typ, no, mid string) string {
 		}
 		filter = "$MasterID = " + mid
 	}
-	x := fcCollection(id, company, statics, "Voucher", liveFetchField, filter)
+	// 2.3.1 (review M2): A and C are byte for byte the bridge's two requests, so they carry the entry fetch as built now
+	// (with the ledger lines under an invoice's items); B, D, E and F stay byte for byte as in 2.2.2 .. 2.3.0
+	fetch := liveFetchField222
+	if letter == "A" || letter == "C" {
+		fetch = liveFetchField
+	}
+	x := fcCollection(id, company, statics, "Voucher", fetch, filter)
 	if letter == "B" || letter == "F" {
 		e := esc(filter)
 		i := strings.LastIndex(x, e)
@@ -328,7 +336,7 @@ func startFetchTest(o fetchTestOpts) M {
 		return M{"ok": false, "error": "A test is already running; wait for its message box."}
 	}
 	ch := make(chan string, 1)
-	fetchTestAnswer = ch
+	fetchTestAnswer, fetchTestWaitEnded = ch, false
 	base := M{"ok": true, "company": o.company, "type": o.typ, "number": o.no, "date": o.date, "at": nowS()}
 	fetchTestLast = M{"state": "running"}
 	for k, v := range base {
@@ -340,12 +348,15 @@ func startFetchTest(o fetchTestOpts) M {
 		fetchTestLast["question"] = "No MasterID was found by A, B or F for " + o.typ + " " + o.no + ". Type the voucher's MasterID to send C, D and E, or Cancel to skip them."
 		fetchTestMu.Unlock()
 		var mid string
+		ended := false
 		select {
 		case mid = <-ch:
-		case <-time.After(10 * time.Minute):
+		case <-time.After(fetchTestMasterWait):
+			ended = true
 		}
 		fetchTestMu.Lock()
 		fetchTestLast["state"] = "running"
+		fetchTestWaitEnded = ended // 2.2.3 review L1: a MasterID typed later is told the wait ended
 		delete(fetchTestLast, "question")
 		fetchTestMu.Unlock()
 		return mid
@@ -364,6 +375,15 @@ func startFetchTest(o fetchTestOpts) M {
 	return M{"ok": true, "started": true, "company": o.company, "type": o.typ, "number": o.no, "date": o.date}
 }
 
+// how long the test waits for the person's MasterID before it goes on without one (C, D and E skipped)
+var fetchTestMasterWait = 10 * time.Minute
+
+// under fetchTestMu: the last test's wait for a MasterID ended without one (reset when a test starts)
+var fetchTestWaitEnded bool
+
+// 2.2.3 review L1: the words for a MasterID typed after that wait ended
+const fetchTestWaitEndedWords = "The test stopped waiting for a MasterID after 10 minutes and went on without one: C, D and E were skipped. Press Cancel, then start the test again to send them."
+
 // POST {masterId} or {skip: true} while the test waits for a MasterID
 func answerFetchTest(o M) M {
 	mid := strings.TrimSpace(str(o["masterId"]))
@@ -376,6 +396,9 @@ func answerFetchTest(o M) M {
 	fetchTestMu.Lock()
 	defer fetchTestMu.Unlock()
 	if fetchTestLast == nil || str(fetchTestLast["state"]) != "needMaster" || fetchTestAnswer == nil {
+		if fetchTestWaitEnded {
+			return M{"ok": false, "error": fetchTestWaitEndedWords}
+		}
 		return M{"ok": false, "error": "The test is not waiting for a MasterID."}
 	}
 	select {

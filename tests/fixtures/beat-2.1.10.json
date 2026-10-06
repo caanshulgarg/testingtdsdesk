@@ -1,6 +1,6 @@
 {
   "allowlist": {
-    "hash": "8d23831f9445777a1f82de0745add209aa647b547a22fb8f67f7643ff9235db6",
+    "hash": "1c17806d483e0a31477bc93bcf0646334c156eda88e8a401a8df155d0bca02dd",
     "measured": false
   },
   "autoUpdate": true,
@@ -64,6 +64,7 @@
   "recorderSourceB": {},
   "recorderSourceC": {},
   "recorderState": {},
+  "recorderWaitWords": "",
   "reqs": {
     "day": "2026-10-04",
     "last": {
@@ -91,9 +92,10 @@
   },
   "tally": true,
   "tallyPort": 9000,
+  "tallyRetry": null,
   "tallyState": "open",
   "trialTools": false,
   "updating": false,
-  "version": "2.3.0",
+  "version": "2.3.1",
   "windowsUser": ""
 }

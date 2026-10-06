@@ -29,6 +29,12 @@ func ps1Forms(t *testing.T, company string) map[string]string {
 		x := strings.ReplaceAll(m[2], "GARG SHEKHAR &amp; COMPANY", esc(company))
 		x = strings.ReplaceAll(x, "FinComVoucherByNumber", "FinComFetchTest"+m[1])
 		x = strings.ReplaceAll(x, "FinComVoucherByMaster", "FinComFetchTest"+m[1])
+		// 2.3.1 (the owner's decision of 06-Oct-2026; review M2): the ps1 stays the record of what 2.2.2 sent; A and C carry
+		// the entry request's fetch as built now (the 2.2.2 fields plus the ledger lines under an invoice's items), so they
+		// stay byte for byte the bridge's two requests; B, D, E and F stay byte for byte the ps1's (2.2.2 .. 2.3.0)
+		if m[1] == "A" || m[1] == "C" {
+			x = strings.Replace(x, "<FETCH>"+items231OldFetch+"</FETCH>", "<FETCH>"+liveFetchField+"</FETCH>", 1)
+		}
 		out[m[1]] = x
 	}
 	if len(out) != 6 {

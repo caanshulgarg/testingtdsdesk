@@ -124,6 +124,21 @@ with sync_playwright() as p:
     st = [x for x in b["items"] if "browser" in x["text"].lower()]
     ok(len(st) == 1 and st[0]["sev"] == "info", "it is information in the bell (%s)" % st[:1])
     E(CLOSE)
+    # review H1 (bridge 2.3.1): the bridge's own Tally lists its companies too slowly (stopped at 2 s): the lines of this
+    # computer wait, said in plain words in the bell (the beat's recorderWaitWords), never lost; gone when it answers again
+    WW = "Tally took longer than 2 s to list its open companies (limit 2 s); this computer's changes are waiting until it answers in time (Update now asks it without the limit)"
+    cid = scene({"devs": [dev(recording=True)], "alerts": [], "gap": None})
+    E("""(w) => { window.__w.devs = window.__w.devs.map(d => { d.info.beat = Object.assign({}, d.info.beat || {}, {recorderWaitWords: w}); return d; }); TLight.st.devs = JSON.parse(JSON.stringify(window.__w.devs)); AlertHub.refresh(true); }""", WW)
+    pg.wait_for_timeout(400)
+    b = E(BELL)
+    ww = [x for x in (b or {}).get("items", []) if "list its open companies" in x["text"]]
+    ok(len(ww) == 1 and ww[0]["sev"] == "warn" and WW in ww[0]["text"] and "nothing is lost" in ww[0]["fix"].lower(), "a slow company list: one amber alert in plain words, nothing lost (%s)" % ww[:1])
+    E(CLOSE)
+    E("""() => { window.__w.devs = window.__w.devs.map(d => { delete d.info.beat.recorderWaitWords; return d; }); TLight.st.devs = JSON.parse(JSON.stringify(window.__w.devs)); AlertHub.refresh(true); }""")
+    pg.wait_for_timeout(400)
+    b = E(BELL)
+    ok(not [x for x in (b or {}).get("items", []) if "list its open companies" in x["text"]], "it answers in time again: the alert is gone by itself")
+    E(CLOSE)
     ok(not errors, "no page errors " + str(errors[:2]))
     br.close()
 srv.shutdown()

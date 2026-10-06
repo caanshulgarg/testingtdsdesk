@@ -188,8 +188,9 @@ func TestDeleteGUIDUnknownHeldWithWords(t *testing.T) {
 			realLine("after_delete", "", "41", "", "Receipt", "10", addonDate(td)))
 		liveReadOnce()
 		uploadAll(t)
-		if f.n(vchByMasterID) != n0+1 || f.n(vchByNumberID) != 0 {
-			t.Fatalf("the deletes are asked of this Tally once, by MasterID only: %v", f.ids())
+		// 2.3.1: one request per MasterID (40 and 41), each asked once
+		if f.n(vchByMasterID) != n0+2 || f.n(vchByNumberID) != 0 {
+			t.Fatalf("the deletes are asked of this Tally once each, by MasterID only: %v", f.ids())
 		}
 		var del []M
 		for _, l := range answers {
@@ -256,6 +257,11 @@ func TestCancelGUIDTallySilentFallsBack(t *testing.T) {
 		realLine("after_cancel", "", "13", "", "Receipt", "5", addonDate(td)))
 	liveReadOnce()
 	uploadAll(t)
+	// 2.3.1: stopped at 2 s, asked again at each try of the shared retry schedule; each stopped 3 times, they go held
+	for i := 0; i < 5 && len(sentEvent(c, "cancelled")) < 2; i++ {
+		retryDue()
+		uploadAll(t)
+	}
 	got := sentEvent(c, "cancelled")
 	if len(got) != 2 {
 		t.Fatalf("both cancels go: %v", got)

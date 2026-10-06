@@ -421,7 +421,9 @@ const TCloud = {
         rows.push({device: d, id, computer: b.computer || info.computer || d.name, user: b.user || "", version: b.version || "", runMode: b.runMode || "",
           port: b.port || null, tallyPort: b.tallyPort || (isMain && beat.tallyPort) || null, dataFolder: b.dataFolder || (isMain && beat.dataFolder) || "", changesOnly: co === null ? !!b.changesOnly : co,
           main: isMain, mayPost, at: b.at, tally: b.tallyState || (b.tally ? "open" : "closed"), open: b.open || [], go: id !== "v1",
-          reqs: mine("reqs") || null, readStopped: mine("readStopped") || null, paused: !!mine("paused"), readStop: info.readStop || null}); });
+          reqs: mine("reqs") || null, readStopped: mine("readStopped") || null, paused: !!mine("paused"), readStop: info.readStop || null,
+          // bridge 2.3.1: a request not answered in time and when it tries again by itself ({words, at, next, tries})
+          tallyRetry: mine("tallyRetry") || null}); });
       if (!br.v1 && info.beat) rows.push({device: d, id: "v1", computer: info.computer || d.name, user: info.user || "", version: info.beat.version || d.version || "",
         main: !main, at: info.beat.at, tally: info.beat.tallyState || (info.beat.tally ? "open" : "closed"), open: info.beat.open || [], go: false});
       if (info.shadow && !Object.keys(br).some(id => id !== "v1")) rows.push({device: d, id: "", computer: info.computer || d.name, user: info.user || "", version: info.shadow.version || "",
@@ -558,16 +560,22 @@ const TCloud = {
     await this.control("tally_member_bridge_link", {p_user: uid, p_device: r ? r.device.id : null, p_bridge: r ? r.id : null},
       r ? who + " now posts through " + this.bridgeWords(r) + "." : who + " is no longer linked to a bridge.");
   },
-  // the reading state of a bridge's computer (plan item 14): {state: reading | paused | selfstop | fincomstop | offline,
+  // the reading state of a bridge's computer (plan item 14): {state: reading | paused | retrying | fincomstop | offline,
   // text, reason}. A stop from FinCom still standing (tally_read_stops, for this computer or for all of them, or the
-  // computer's info.readStop) wins over what the bridge last said, then a stop by itself, then paused.
+  // computer's info.readStop) wins over what the bridge last said, then paused. Bridge 2.3.1 (the owner's last change)
+  // never stops reading by itself: a request not answered in time is tried again by itself, said in plain words
+  // ("Tally did not answer in time at 12:14; trying again by itself at 12:15"). A bridge before 2.3.1 that stopped by
+  // itself is said the same way, with no Resume: 2.3.1 clears such a stop when it starts.
   readState(r){
     if (!r.online) return {state: "offline", text: "Offline" + (r.at ? " since " + fmtDateTime(r.at) : "")};
     const st = this.stopFor(r.device.id), rs = r.readStopped || {};
     if (st) return {state: "fincomstop", text: "Stopped from FinCom: " + (st.reason || "no reason given"), reason: st.reason || ""};
     if (rs.by === "fincom") return {state: "fincomstop", text: "Stopped from FinCom: " + (rs.reason || "no reason given"), reason: rs.reason || ""};
-    if (rs.by === "self") return {state: "selfstop", text: "Stopped by itself: " + (rs.reason || "no reason given"), reason: rs.reason || ""};
     if (r.paused) return {state: "paused", text: "Paused"};
+    const tr = r.tallyRetry || {};
+    if (tr.words) return {state: "retrying", text: String(tr.words), reason: ""};
+    if (rs.by === "self") return {state: "retrying", text: "Tally did not answer in time" + (rs.at ? " at " + tallyHm(rs.at) : "") +
+      "; reading starts again by itself once FinCom Bridge 2.3.1 is on that computer (it tries again by itself)", reason: rs.reason || ""};
     return {state: "reading", text: "Reading"};
   },
   // the stop from FinCom standing for a computer: the one for all computers ({device_id: null}), else its own; with no
@@ -1325,7 +1333,7 @@ Object.assign(TLight, {
       const bid = m.beat.bridge;
       if (bid && d.info.bridges && d.info.bridges[bid]){
         const b = Object.assign({}, d.info.bridges[bid]);
-        ["reqs", "readStopped", "paused", "at", "tallyState", "open"].forEach(k => { if (m.beat[k] !== undefined) b[k] = m.beat[k]; });
+        ["reqs", "readStopped", "paused", "at", "tallyState", "open", "tallyRetry"].forEach(k => { if (m.beat[k] !== undefined) b[k] = m.beat[k]; });
         d.info.bridges = Object.assign({}, d.info.bridges, {[bid]: b});
       }
       if (m.beat.readStop !== undefined) d.info.readStop = m.beat.readStop;

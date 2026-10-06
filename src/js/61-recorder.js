@@ -179,7 +179,7 @@ const Rec = {
     const a = this.act, cid = S.syncClient || "";
     a.busy = true; a.cid = cid;
     try {
-      const rows = await Cloud.api("tally_recorder_lines?select=id,client_id,book_id,device_id,pc,company,line_id,event,object_guid,alter_id,vch_type,vch_no,vch_date,saved_at,received_at,applied_at,state,held_why,ledgers,fid:payload->>fid,short:payload->>short" +
+      const rows = await Cloud.api("tally_recorder_lines?select=id,client_id,book_id,device_id,pc,company,line_id,event,object_guid,alter_id,vch_type,vch_no,vch_date,saved_at,received_at,applied_at,state,held_why,ledgers,fid:payload->>fid,short:payload->>short,checks:payload->checkNotes" +
         "&firm_id=eq." + encodeURIComponent(this.firm()) + (cid ? "&client_id=eq." + encodeURIComponent(cid) : "") + "&order=received_at.desc&limit=200");
       a.rows = [].concat(rows || []); a.no44 = false; a.err = "";
     } catch (e){ if (this.missing(e)){ a.no44 = true; a.rows = []; } else a.err = this.say(e); }
@@ -211,11 +211,18 @@ const Rec = {
     const head = [r.vch_type, r.vch_no].filter(Boolean).join(" ");
     return (head || "an entry") + (r.vch_date ? " · " + fmtDate(String(r.vch_date).slice(0, 10)) : "");
   },
+  // bridge 2.3.1 (the owner's rule after review, 06-Oct-2026): an entry is held only when its lines do not total zero; any
+  // other mismatch is entered with plain words for a person (tally-ingest's payload checkNotes, read as checks; a live row
+  // carries its payload): "; to check: ..." after "Entered in the books"
+  notesWords(r){
+    const n = [].concat((r && (r.checks || (r.payload && r.payload.checkNotes))) || []).map(x => String(x || "").trim()).filter(Boolean);
+    return n.length ? "; to check: " + n.join("; ") : "";
+  },
   // a line's state in the owner's words (05-Oct-2026): "Entered in the books" for an applied line alone
   stateWords(r){
     const why = r.held_why ? ": " + r.held_why : "";
     switch (r.state){
-      case "applied": return "Entered in the books";
+      case "applied": return "Entered in the books" + this.notesWords(r);
       case "held": return "Received, not yet entered in the books" + why;
       case "received": return "Received, not yet entered in the books";
       case "replaced": return "Replaced by a later line";
@@ -333,37 +340,9 @@ const Rec = {
     if (!rc) return [];
     return this.openOf(dev).filter(co => rc[co] && rc[co].seen === false);
   },
-  // the owner's condition 4 (05-Oct-2026): what FinCom Bridge's 2-second rule switched off on a computer, per company
-  // (info.bridges[id].recorderOff {bodies, B, C}, kept by tally-ingest from the 2.2.0 beat): from the main bridge, else
-  // the one heard last; [] when none is off or the bridge does not say (before 2.2.0).
-  // [{kind: bodies|B|C, what: "Entry fetch" | "Tally's change list" | "Month slices", company, seconds, at, why}]
-  OFF_WHAT: {bodies: "Entry fetch", B: "Tally's change list", C: "Month slices"},
-  OFF_BELL: {bodies: "FinCom's entry fetch", B: "FinCom's reading of Tally's change list", C: "FinCom's reading by month slices"},
-  OFF_LIMIT: 2,
-  offOf(dev){
-    const br = ((dev && dev.info) || {}).bridges || {};
-    const ids = Object.keys(br).filter(id => br[id] && typeof br[id] === "object");
-    const id = dev && dev.main_bridge && br[dev.main_bridge] ? dev.main_bridge : ids.sort((x, y) => String(br[y].at || "").localeCompare(String(br[x].at || "")))[0];
-    const ro = id && br[id].recorderOff;
-    if (!ro || typeof ro !== "object") return [];
-    const out = [];
-    Object.keys(this.OFF_WHAT).forEach(kind => Object.entries(ro[kind] || {}).forEach(([company, x]) => {
-      if (x && x.off === true) out.push({kind, what: this.OFF_WHAT[kind], company, seconds: Number(x.seconds) || 0, at: x.at || "", why: x.why || ""});
-    }));
-    return out;
-  },
-  // "Entry fetch switched off for <company>: Tally took 3.4 s at 14:05 IST (limit 2 s)." The bridge's time has no zone
-  // and is India's (istParts reads it so); another day: with its date
-  offWords(x){
-    const when = x.at ? (istDay(x.at) === istDay(Date.now()) ? fmtTime(x.at) : fmtDateTime(x.at)) : "";
-    return x.what + " switched off for " + x.company + ": Tally took " + (Math.round(x.seconds * 10) / 10) + " s" + (when ? " at " + when : "") + " (limit " + this.OFF_LIMIT + " s).";
-  },
-  // the bridge switches it on again when "Changes come from" for the computer changes from the value in force when it
-  // switched off (bridge-go/recorder_probes.go liveOnAgain); a change and back within one heartbeat may not be seen
-  offAgain(owner){
-    return owner ? 'To switch it back on: change "Changes come from" for this computer to another choice, wait one minute, then set it back.'
-      : 'To switch it back on: the owner changes "Changes come from" for this computer to another choice, waits one minute, then sets it back.';
-  },
+  // (bridge 2.3.1, the owner's last change: nothing is switched off by the 2-second rule any more; the per-company
+  // "switched off" lines and their "Changes come from" advice are gone. A request not answered in time is said on the
+  // computer's line, TCloud.readState)
   // the computers keeping a client's company open without recording it: [{pc, company}]
   clientNotRecording(cid){
     const st = (typeof TLight === "object" && TLight.st) || {}, out = [];

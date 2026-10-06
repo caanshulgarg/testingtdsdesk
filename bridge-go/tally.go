@@ -281,12 +281,19 @@ type TC struct {
 	// the failure), the wait for Tally's lock not counted
 	timed func(seconds float64)
 	// 2.2.2 (the owner's condition b): a HARD stop for the recorder's background reads (the entry fetch by MasterID and by
-	// number, source B, source C, the held resolver): the bridge stops waiting after this many milliseconds (a context
-	// deadline from the send). Never for a posting (Import), a person's read or the light company check (they never set it)
+	// number, source B, source C, the held resolver; 2.3.1: the company list asked in the background, bgCompaniesTC): the
+	// bridge stops waiting after this many milliseconds (a context deadline from the send). Never for a posting (Import), a
+	// person's read or the light company check FinComCompany (they never set it)
 	limitMs int
 	// 2.2.2 second review (L-B): the light company check and the open-company list (tiny): not held by the cool-down after
 	// a recorder read's stop (the probe and busy rules still apply)
 	light bool
+	// 2.3.1 (the owner's last change, retry.go): a background request (the entry fetch, the company list asked in the
+	// background, the ledger changes, the light check, the held-line resolve): it waits for the shared retry schedule after
+	// a stop or no answer, and its answer in time ends it. Never a posting or a person's request
+	bg bool
+	// the shared retry schedule's try itself (set by invokeTally on its own copy of the TC)
+	isTry bool
 }
 
 // round 19 (review finding 1, the owner's rule "reading is prospective only", by any route): a request carrying a period
@@ -294,7 +301,7 @@ type TC struct {
 //
 // 2.2.0 (the owner's rule, prospective only): one narrow exception, the recorder's body fetch (FinComVoucherByMaster):
 // it asks only the entries just changed, by MasterID, with the line's own date as the period; it passes only when it is
-// exactly what voucherByMasterRequest builds for one day and 1 to 50 MasterIDs (recorder_live.go). Never a day's list
+// exactly what voucherByMasterRequest builds for one day and exactly one MasterID (2.3.1; recorder_live.go). Never a day's list
 //
 // Round 3 R3-1: the two exceptions are checked by their id, always (whatever ReadDays says, whatever date form they use):
 // a FinComVoucherByMaster or FinComSlice that is not exactly as built, with its values in bounds, never goes.
@@ -313,7 +320,8 @@ var requestClass = map[string]string{
 	ledListID: "undated", grpListID: "undated", "TDSDeskLedgers": "undated", "TDSDeskGroups": "undated", "TDSDeskNames": "undated",
 	"TDSDeskGroupNames": "undated", "FinComMeasureNames": "undated", "FinComMeasureLedF": "undated", "FinComMeasureLedO": "undated",
 	editLogProbeID: "undated", cnReportID: "undated",
-	// 2.2.2: "Test fetching an entry" (measure-only, a person's): its dated forms and its undated ones
+	ledChangesID: "undated", ledByNameID: "undated", // 2.3.1 (masters): no period, ever
+	// 2.2.3: "Test fetching an entry" (measure-only, a person's): its dated forms and its undated ones
 	fetchTestA: "dated", fetchTestB: "dated", fetchTestC: "dated", fetchTestE: "dated", fetchTestD: "undated", fetchTestF: "undated",
 }
 
@@ -501,9 +509,7 @@ func tallyRaw(ctx context.Context, port int, x string, timeoutSec int) (string, 
 		if errors.Is(ctx.Err(), context.Canceled) {
 			return "", errPreempted
 		}
-		e := plainNetErr(err)
-		noteSilence(e)
-		return "", e
+		return "", plainNetErr(err)
 	}
 	defer resp.Body.Close()
 	b, err := io.ReadAll(resp.Body)
@@ -514,11 +520,8 @@ func tallyRaw(ctx context.Context, port int, x string, timeoutSec int) (string, 
 		if errors.Is(ctx.Err(), context.Canceled) {
 			return "", errPreempted
 		}
-		e := plainNetErr(err)
-		noteSilence(e)
-		return "", e
+		return "", plainNetErr(err)
 	}
-	noteSilence(nil)
 	return textFromBytes(b), nil
 }
 
@@ -800,6 +803,22 @@ func isBusyErr(err error) bool {
 }
 
 func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
+	if !tc.bg || tc.person || isImportRequest(x) || checkAllowed(x) != nil || readStopRefuses(x) != nil {
+		return invokeTallyNow(tc, port, x, timeoutSec)
+	}
+	// 2.3.1: a background request waits for the shared retry schedule (retry.go); nothing is sent before its time
+	try, err := retryTake()
+	if err != nil {
+		return "", err
+	}
+	t2 := *tc
+	t2.isTry = try
+	r, err := invokeTallyNow(&t2, port, x, timeoutSec)
+	retryNote(port, tallyRequestID(x), err)
+	return r, err
+}
+
+func invokeTallyNow(tc *TC, port int, x string, timeoutSec int) (string, error) {
 	// plan item 7: a request not on the allow-list is refused before anything is sent (allowlist.go)
 	if err := checkAllowed(x); err != nil {
 		writeLog(fmt.Sprintf("Tally %d: refused: %s", port, err.Error()))
@@ -813,10 +832,11 @@ func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 	if err := readStopRefuses(x); err != nil {
 		return "", err
 	}
-	if tc.copier && !bgBackoffUntil(port).IsZero() {
+	// (a background request of 2.3.1 follows the shared retry schedule instead: invokeTally)
+	if tc.copier && !tc.bg && !bgBackoffUntil(port).IsZero() {
 		return "", errBackoff
 	}
-	if tc.copier && !tc.person && !tc.light && stopHeld(port) {
+	if tc.copier && !tc.bg && !tc.person && !tc.light && stopHeld(port) {
 		return "", errBackoff // 2.2.2: a recorder read was stopped at its limit: Tally is still on it
 	}
 	// after a request that did not answer, nothing goes before the "is it free?" check may be sent (once a minute)
@@ -839,7 +859,7 @@ func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if tc.copier && !bgBackoffUntil(port).IsZero() {
+	if tc.copier && !tc.bg && !bgBackoffUntil(port).IsZero() {
 		unlock()
 		return "", errBackoff
 	}
@@ -847,9 +867,17 @@ func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 		unlock()
 		return "", errBackoff
 	}
+	// 2.3.1 (as 2.2.2's L-A): a background request that waited for the lock while another was stopped or not answered is
+	// not sent: it waits for the retry schedule's try
+	if tc.bg && !tc.isTry {
+		if err := retryWaiting(); err != nil {
+			unlock()
+			return "", err
+		}
+	}
 	// 2.2.2 second review (L-A): a background read that waited for the lock while a recorder read was stopped is not
 	// sent into the Tally still working on it
-	if tc.copier && !tc.person && !tc.light && stopHeld(port) {
+	if tc.copier && !tc.bg && !tc.person && !tc.light && stopHeld(port) {
 		unlock()
 		return "", errBackoff
 	}

@@ -17,7 +17,7 @@
 //   - RecorderSource addon | alterid | both (setting, default addon), overridden by the beat's recorderSource.
 //
 // The body fetch: a created, altered or imported entry that is not FinCom's own is asked of Tally by MasterID
-// (FinComVoucherByMaster: up to 50 MasterIDs, the line's own date as the period; the one dated request allowed with
+// (FinComVoucherByMaster: exactly one MasterID a request since 2.3.1, the line's own date as the period; the one dated request allowed with
 // ReadDays off, tally.go); a ledger created or altered by the ledger list's request with a one-ID range. A background
 // read: it gives way to a posting, 20 s at most; without a body the line still goes (the cloud holds it).
 //
@@ -46,17 +46,53 @@ import (
 )
 
 const (
-	liveAddonName  = "FinComRecorder.tdl"    // the live add-on (addon/), written beside the trial's by the install step
-	vchByMasterID  = "FinComVoucherByMaster" // the body fetch's request id (allowlist.go)
-	vchByNumberID  = "FinComVoucherByNumber" // 2.2.1: a new entry's body by its type and number on its date (allowlist.go)
-	liveMaxIDs     = 50                      // MasterIDs per body fetch
-	liveMaxLines   = 500                     // lines per recorder_lines call (the cloud's MAX_RECORDER_LINES)
-	liveMaxBytes   = 1 << 20                 // bytes per recorder_lines call
-	liveReadMax    = 1 << 20                 // bytes read from one file per turn
-	liveNarrMax    = 4000                    // characters of a narration kept (the cloud reads 1,000; review Low 11)
-	liveFetchField = "GUID, MASTERID, ALTERID, DATE, VOUCHERTYPENAME, VOUCHERNUMBER, PARTYLEDGERNAME, NARRATION, ISCANCELLED, ISOPTIONAL, " +
+	liveAddonName = "FinComRecorder.tdl"    // the live add-on (addon/), written beside the trial's by the install step
+	vchByMasterID = "FinComVoucherByMaster" // the body fetch's request id (allowlist.go)
+	vchByNumberID = "FinComVoucherByNumber" // 2.2.1: a new entry's body by its type and number on its date (allowlist.go)
+	liveMaxIDs    = 1                       // 2.3.1 (the owner, 06-Oct-2026): strictly ONE MasterID per body fetch
+	liveMaxLines  = 500                     // lines per recorder_lines call (the cloud's MAX_RECORDER_LINES)
+	liveMaxBytes  = 1 << 20                 // bytes per recorder_lines call
+	liveReadMax   = 1 << 20                 // bytes read from one file per turn
+	liveNarrMax   = 4000                    // characters of a narration kept (the cloud reads 1,000; review Low 11)
+	// the entry fetch of 2.2.2 .. 2.3.0, byte for byte: the trial forms B, D, E and F keep it (fetchtest.go, review M2)
+	liveFetchField222 = "GUID, MASTERID, ALTERID, DATE, VOUCHERTYPENAME, VOUCHERNUMBER, PARTYLEDGERNAME, NARRATION, ISCANCELLED, ISOPTIONAL, " +
 		"ALLLEDGERENTRIES.LEDGERNAME, ALLLEDGERENTRIES.AMOUNT, ALLLEDGERENTRIES.ISDEEMEDPOSITIVE, ALLLEDGERENTRIES.BILLALLOCATIONS.NAME, " +
 		"ALLLEDGERENTRIES.BILLALLOCATIONS.BILLTYPE, ALLLEDGERENTRIES.BILLALLOCATIONS.AMOUNT, ALLLEDGERENTRIES.BILLALLOCATIONS.BILLCREDITPERIOD"
+	liveFetchField = liveFetchField222 +
+		// 2.3.1 (the owner's decision of 06-Oct-2026): the ledger lines kept under an invoice's items (item invoice mode:
+		// the sales or purchase ledger sits under each item, the party and GST are its ledger entries), so an item
+		// invoice's body balances; nothing else added (items231_test.go)
+		", ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.LEDGERNAME, ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.AMOUNT, " +
+		"ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.ISDEEMEDPOSITIVE" +
+		// 2.3.1 part A (the owner's decision of 06-Oct-2026, "item invoices enter complete"; parta231_test.go): the entry's
+		// reference and date, the party GSTIN, place of supply and company GSTIN (the Day Book path reads them: the live route
+		// no longer blanks them), the e-invoice IRN and acknowledgement, the e-way bill number; on the ledger lines the GST
+		// fields the Day Book path reads (HSN, rate details), cost centre allocations, bank details (transaction type,
+		// instrument number or UTR, instrument date, bank date) and TDS details (nature of payment, rate, assessable value,
+		// tax, the deductee); the items (name, billed quantity with its unit, rate, taxable value, the HSN and GST rate Tally
+		// applied to that line) and the cost centres of the ledger lines under them. Stored fields only, nothing Tally works
+		// out; read only, one entry per request, the 2-second rule
+		", REFERENCE, REFERENCEDATE, PARTYGSTIN, PLACEOFSUPPLY, CMPGSTIN, IRN, IRNACKNO, IRNACKDATE, EWAYBILLDETAILS.BILLNUMBER, " +
+		"ALLLEDGERENTRIES.GSTHSNNAME, ALLLEDGERENTRIES.RATEDETAILS.GSTRATEDUTYHEAD, ALLLEDGERENTRIES.RATEDETAILS.GSTRATEVALUATIONTYPE, " +
+		"ALLLEDGERENTRIES.RATEDETAILS.GSTRATE, ALLLEDGERENTRIES.CATEGORYALLOCATIONS.CATEGORY, " +
+		"ALLLEDGERENTRIES.CATEGORYALLOCATIONS.COSTCENTREALLOCATIONS.NAME, ALLLEDGERENTRIES.CATEGORYALLOCATIONS.COSTCENTREALLOCATIONS.AMOUNT, " +
+		"ALLLEDGERENTRIES.BANKALLOCATIONS.DATE, ALLLEDGERENTRIES.BANKALLOCATIONS.NAME, " +
+		"ALLLEDGERENTRIES.BANKALLOCATIONS.TRANSACTIONTYPE, ALLLEDGERENTRIES.BANKALLOCATIONS.INSTRUMENTNUMBER, " +
+		"ALLLEDGERENTRIES.BANKALLOCATIONS.INSTRUMENTDATE, ALLLEDGERENTRIES.BANKALLOCATIONS.BANKERSDATE, ALLLEDGERENTRIES.BANKALLOCATIONS.UNIQUEREFERENCENUMBER, " +
+		"ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.TAXTYPE, ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.CATEGORY, " +
+		"ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.PARTYLEDGER, ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.SUBCATEGORYALLOCATION.TAXRATE, " +
+		"ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.SUBCATEGORYALLOCATION.ASSESSABLEAMOUNT, ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.SUBCATEGORYALLOCATION.TAX, " +
+		"ALLINVENTORYENTRIES.STOCKITEMNAME, ALLINVENTORYENTRIES.BILLEDQTY, ALLINVENTORYENTRIES.RATE, ALLINVENTORYENTRIES.AMOUNT, " +
+		"ALLINVENTORYENTRIES.GSTHSNNAME, ALLINVENTORYENTRIES.RATEDETAILS.GSTRATEDUTYHEAD, ALLINVENTORYENTRIES.RATEDETAILS.GSTRATEVALUATIONTYPE, " +
+		"ALLINVENTORYENTRIES.RATEDETAILS.GSTRATE, ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.CATEGORYALLOCATIONS.CATEGORY, " +
+		"ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.CATEGORYALLOCATIONS.COSTCENTREALLOCATIONS.NAME, " +
+		"ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.CATEGORYALLOCATIONS.COSTCENTREALLOCATIONS.AMOUNT, " +
+		// (bank: 2.3.1 after the real TallyPrime 7.1 run of 06-Oct-2026, real231_test.go: the four bank fields came back as an
+		// empty BANKALLOCATIONS.LIST; the allocation's own DATE and NAME are fetched with them, and the UTR,
+		// UNIQUEREFERENCENUMBER, as Tally's own export of the entry carries them)
+		// the TDS section as Tally keeps it on the entry: the bill-wise detail's section (a stored field TallyPrime 7.1
+		// writes on every bill allocation; the owner asked for the section, 06-Oct-2026)
+		"ALLLEDGERENTRIES.BILLALLOCATIONS.TDSDEDUCTEESECTIONNUMBER"
 )
 
 // one change, whichever source it came from
@@ -106,7 +142,36 @@ type change struct {
 	guidKeep, alterKeep  string
 	// the owner's addition: held only because this bridge's Tally could not be asked at that moment: asked again by itself
 	guidRetry bool
+	// 2.3.1 (masters): a ":resolved" line sent once more because FinCom held the one before waiting for a ledger
+	ledAgain bool
+	// 2.3.1 (the owner's "full", 06-Oct-2026): the body is the answer to this version's entry request, which fetches every
+	// field migration 56 keeps (liveFullFields): sent "full": true, so FinCom stores its blanks as Tally has them
+	full bool
+	// re-review M-B: a cancel sent without an AlterID: Tally's voucher counter (ALTVCHID) read then (liveCancelCounters)
+	vchCounter int64
 }
+
+// the fields migration 56 keeps for a body that did not ask them (2.3.0's request): the party GSTIN, place of supply,
+// reference and its date, the company GSTIN, and the ledger lines' HSN and rate
+var liveFullFields = []string{"PARTYGSTIN", "PLACEOFSUPPLY", "REFERENCE", "REFERENCEDATE", "CMPGSTIN", "ALLLEDGERENTRIES.GSTHSNNAME",
+	"ALLLEDGERENTRIES.RATEDETAILS.GSTRATEDUTYHEAD", "ALLLEDGERENTRIES.RATEDETAILS.GSTRATE"}
+
+// the fetch asks every one of the fields (a FETCH list, ", " between)
+func fetchHasAll(fetch string, fields []string) bool {
+	have := map[string]bool{}
+	for _, f := range strings.Split(fetch, ",") {
+		have[strings.TrimSpace(f)] = true
+	}
+	for _, f := range fields {
+		if !have[f] {
+			return false
+		}
+	}
+	return true
+}
+
+// the entry request of this build fetches every field 56 keeps
+func liveFetchFull() bool { return fetchHasAll(liveFetchField, liveFullFields) }
 
 func (c *change) key() string { return c.company + "|" + c.companyGuid }
 
@@ -154,7 +219,7 @@ type livePending struct {
 type liveBSt struct {
 	company, guid          string
 	after, seen, maxMaster int64
-	// the owner's rule (04-Oct): 60 s at least between two requests (the 2 s switch-off: live.off, recorder_probes.go)
+	// the owner's rule (04-Oct): 60 s at least between two requests
 	lastAsk time.Time
 }
 
@@ -172,16 +237,20 @@ type liveLinkSt struct {
 }
 
 type liveState struct {
-	mu       sync.Mutex
-	dir      string // the sync folder this state belongs to ("" : not loaded)
-	files    map[string]*liveFileSt
-	pending  map[string]*livePending // file -> the first half of a pair waiting for its second
-	queue    []*change
-	queued   map[string]bool
-	sent     map[string]bool
-	b        map[string]*liveBSt
-	c        map[string]*liveCSt    // source C, per company key
-	off      map[string]*liveOffSt  // method|company key -> off by the 2 s rule
+	mu      sync.Mutex
+	dir     string // the sync folder this state belongs to ("" : not loaded)
+	files   map[string]*liveFileSt
+	pending map[string]*livePending // file -> the first half of a pair waiting for its second
+	queue   []*change
+	queued  map[string]bool
+	sent    map[string]bool
+	b       map[string]*liveBSt
+	c       map[string]*liveCSt // source C, per company key
+	// 2.3.1: what a 2.3.0 bridge saved as switched off by the 2 s rule (method|company key -> since when), read once and
+	// never in force: the first re-scan uses the entry fetch's to find the lines it sent without their body, and the file
+	// is written again without it (offDrop: clearOldSwitchOffs says so)
+	offWas   map[string]time.Time
+	offDrop  bool
 	links    map[string]*liveLinkSt // company key -> linked or not (review H1)
 	qcount   map[string]int         // company GUID -> changes waiting (the cap per company, review H1)
 	high     map[string]int64       // company key -> the highest AlterID received from the add-on (source B's start, M5)
@@ -198,12 +267,21 @@ type liveState struct {
 	created  map[string][2]string // 2.2.1: a created entry's save key -> the line id sent and the GUID it went with (this run)
 	scanned  bool                 // 2.2.1: the lines sent with a placeholder looked for (recorder_resolve.go), this run
 	bodied   map[string]bool      // 2.2.2 review M1: the line ids sent WITH their entry's body (7 days, sync\recorder-sent\*.body.txt)
+	// 2.3.1 review H1: the "<line id>:resolved" ids THIS version sent with Tally's body, its request fetching the items' ledger
+	// lines (7 days, sync\recorder-sent\*.items.txt). A ":resolved" id sent and not here went from an older bridge (2.3.0's
+	// request, without the items' lines): when FinCom lists its line again (refetch), it is asked and sent once more
+	items231 map[string]bool
+	// 2.3.1 (masters): the "<line id>:resolved" ids sent once more after FinCom held them waiting for a ledger (7 days,
+	// sync\recorder-sent\*.ledger.txt): never a third time
+	ledAgain map[string]bool
 	// fix 3 (the owner's spike run 37347773182): what this bridge saw of its OWN Tally's open companies (recorder_owntally.go)
-	own      map[string]*liveOwnSt // company GUID (or "name:" + its name key) -> the times it was open in the own Tally
-	ownAt    time.Time             // the last complete look at the own Tally's company list (kept on disk)
-	ownCur   map[string]bool       // open at that look, seen in THIS run (after a restart nothing is taken as still open)
-	ownWant  bool                  // a line waits for a look at the own Tally
-	ownAskAt time.Time             // when the reader last asked the own Tally's company list
+	own       map[string]*liveOwnSt // company GUID (or "name:" + its name key) -> the times it was open in the own Tally
+	ownAt     time.Time             // the last complete look at the own Tally's company list (kept on disk)
+	ownCur    map[string]bool       // open at that look (review H1: kept on disk, so a restart keeps attributing lines by it)
+	ownWaitAt time.Time             // review H1: the last time a line waited for a look
+	ownBlind  bool                  // review H1: a look was stopped or backed off since the last complete look (kept on disk)
+	ownWant   bool                  // a line waits for a look at the own Tally
+	ownAskAt  time.Time             // when the reader last asked the own Tally's company list
 }
 
 var (
@@ -239,7 +317,7 @@ func liveFresh() {
 	live.dir = d
 	live.files, live.pending, live.queue, live.queued = map[string]*liveFileSt{}, map[string]*livePending{}, nil, map[string]bool{}
 	live.sent, live.b, live.co, live.back = map[string]bool{}, map[string]*liveBSt{}, map[string]*liveCoSt{}, map[string]keepBack{}
-	live.c, live.off = map[string]*liveCSt{}, map[string]*liveOffSt{}
+	live.c, live.offWas, live.offDrop = map[string]*liveCSt{}, map[string]time.Time{}, false
 	live.links, live.qcount, live.high, live.windows, live.busyAt = map[string]*liveLinkSt{}, map[string]int{}, map[string]int64{}, map[string][][2]int64{}, map[string]time.Time{}
 	live.touched, live.logged, live.gapSet, live.lastPost = map[string]map[string]bool{}, map[string]bool{}, false, time.Time{}
 	live.created, live.scanned = map[string][2]string{}, false
@@ -264,9 +342,13 @@ func liveFresh() {
 		}
 		live.c[k] = st
 	}
-	for k, v := range obj(o["off"]) {
-		e := obj(v)
-		live.off[k] = &liveOffSt{method: str(e["method"]), company: str(e["company"]), secs: num(e["seconds"]), at: str(e["at"]), why: str(e["why"]), beat: str(e["beat"])}
+	if offs, had := o["off"]; had && offs != nil {
+		for k, v := range obj(offs) {
+			if at, err := time.ParseInLocation("2006-01-02T15:04:05", str(obj(v)["at"]), liveZone); err == nil {
+				live.offWas[k] = at
+			}
+		}
+		live.offDrop = true
 	}
 	for _, id := range liveLoadSent() {
 		live.sent[id] = true
@@ -274,6 +356,14 @@ func liveFresh() {
 	live.bodied = map[string]bool{}
 	for _, id := range liveLoadIds(".body.txt") {
 		live.bodied[id] = true
+	}
+	live.items231 = map[string]bool{}
+	for _, id := range liveLoadIds(liveItemsSuffix) {
+		live.items231[id] = true
+	}
+	live.ledAgain = map[string]bool{}
+	for _, id := range liveLoadIds(liveLedgerSuffix) {
+		live.ledAgain[id] = true
 	}
 	liveOwnLoad()
 }
@@ -337,6 +427,22 @@ func liveSaveIds(ids []string, suffix string) {
 	}
 }
 
+// 2.3.1 review H1: the file suffix of the ":resolved" ids this version sent with their body
+const liveItemsSuffix = ".items.txt"
+
+// 2.3.1 (masters): the file suffix of the ":resolved" ids sent once more after a ledger FinCom waited for came in
+const liveLedgerSuffix = ".ledger.txt"
+
+// under live.mu: a held line's resolution went already, as far as this version is concerned: queued, or sent by THIS
+// version (with the items' ledger lines). again: FinCom listed the line again (refetch) after an older bridge's resolution;
+// without it, any sent resolution counts (the rule before 2.3.1)
+func liveResolvedDone(rid string, again bool) bool {
+	if live.queued[rid] {
+		return true
+	}
+	return live.sent[rid] && (!again || live.items231[rid])
+}
+
 func liveSaveSent(ids []string) {
 	if len(ids) == 0 {
 		return
@@ -396,13 +502,9 @@ func liveSaveOffsets() {
 		}
 		cs[k] = e
 	}
-	offs := M{}
-	for k, o := range live.off {
-		offs[k] = M{"method": o.method, "company": o.company, "seconds": o.secs, "at": o.at, "why": o.why, "beat": o.beat}
-	}
 	path := liveOffsetsFile()
 	live.mu.Unlock()
-	if err := saveFile(path, jsonText(M{"files": files, "alterid": bs, "slices": cs, "off": offs, "at": nowS()})); err != nil {
+	if err := saveFile(path, jsonText(M{"files": files, "alterid": bs, "slices": cs, "at": nowS()})); err != nil {
 		writeLog("Recorder: " + path + " could not be written: " + err.Error())
 	}
 }
@@ -463,7 +565,6 @@ func applyRecorderSource(j M) {
 		return
 	}
 	liveSrcLoad()
-	liveOnAgain(s)
 	was, _ := liveSrc.Load().(string)
 	if was != s {
 		liveSrc.Store(s)
@@ -1386,7 +1487,7 @@ func liveSourceB(company string, port int) (int, error) {
 	}
 	liveSkipWindows(key, &st.seen)
 	above := st.seen
-	if span := v - above; span > int64(keepNum("RecorderBMaxSpan", 500)) && !liveIsOffLocked("B", key) {
+	if span := v - above; span > int64(keepNum("RecorderBMaxSpan", 500)) {
 		// review M5: too many to ask for in one list; left to the gap check and the Day Book
 		st.seen, st.after = v, v
 		live.mu.Unlock()
@@ -1394,9 +1495,9 @@ func liveSourceB(company string, port int) (int, error) {
 		liveSaveOffsets()
 		return 0, nil
 	}
-	if liveIsOffLocked("B", key) || v <= above {
+	if v <= above {
 		live.mu.Unlock()
-		return 0, nil // off by the 2 s rule (the owner switches it back on), or nothing above what was received
+		return 0, nil // nothing above what was received
 	}
 	if !st.lastAsk.IsZero() && nowFn().Sub(st.lastAsk) < time.Duration(keepNum("RecorderBGapSec", 60))*time.Second {
 		live.mu.Unlock()
@@ -1409,12 +1510,8 @@ func liveSourceB(company string, port int) (int, error) {
 	st.lastAsk = nowFn()
 	live.mu.Unlock()
 	liveSaveOffsets() // round 2 R2-9: the spacing holds across a restart after a failure
-	took := -1.0
-	tc := recorderTC(func(sec float64) { took = sec })
-	raw, err := invokeTally(tc, port, keepListAboveRequest(company, above), keepNum("RecorderBTimeoutSec", 5)) // review M5: 5 s
-	if took > liveLimitSec() {
-		liveTurnOff("B", key, company, took)
-	}
+	// 2.3.1: a list stopped at 2 s, or not answered, is asked again by the shared retry schedule (retry.go); never off
+	raw, err := invokeTally(recorderTC(nil), port, keepListAboveRequest(company, above), keepNum("RecorderBTimeoutSec", 5)) // review M5: 5 s
 	if err != nil {
 		return 0, err
 	}
@@ -1526,23 +1623,20 @@ func liveInWindow(key string, a int64) bool {
 }
 
 // --- the body fetch
-// FinComVoucherByMaster: the vouchers with these MasterIDs (at most 50), the date's period (one day), the fields the
-// cloud's day parse reads (parse.js parseDay), nothing Tally works out
+// FinComVoucherByMaster: the voucher with this one MasterID (2.3.1), the date's period (one day), the fields the
+// cloud's day parse reads (parse.js parseDay; 2.3.1: with the ledger lines under an item invoice's items), nothing Tally
+// works out
+// 2.3.1 (the owner, 06-Oct-2026: "one entry per request: strictly one, asked for by Tally's own id"): exactly ONE MasterID;
+// "" (nothing can be sent) for none, more than one, or one that is not a number
 func voucherByMasterRequest(company, date string, mids []string) string {
-	var f []string
-	for _, m := range mids {
-		if d := onlyDigits(m); d != "" {
-			f = append(f, "$MasterID = "+d)
-		}
+	if len(mids) != 1 || mids[0] == "" || onlyDigits(mids[0]) != mids[0] || len(mids[0]) > 18 {
+		return ""
 	}
-	if len(f) == 0 {
-		f = []string{"$MasterID = 0"}
-	}
-	return fcCollection(vchByMasterID, company, periodVars(date, date), "Voucher", liveFetchField, strings.Join(f, " OR "))
+	return fcCollection(vchByMasterID, company, periodVars(date, date), "Voucher", liveFetchField, "$MasterID = "+mids[0])
 }
 
 // the one narrow exception to "no dated request while ReadDays is off" (tally.go): exactly the body fetch as built
-// above, for one day and 1 to 50 MasterIDs
+// above, for one day and exactly one MasterID (2.3.1)
 func voucherByMasterExact(x string) bool {
 	if tallyRequestID(x) != vchByMasterID {
 		return false
@@ -1555,7 +1649,7 @@ func voucherByMasterExact(x string) bool {
 	for _, m := range re(`\$MasterID = (\d+)`).FindAllStringSubmatch(x, -1) {
 		ids = append(ids, m[1])
 	}
-	if len(ids) == 0 || len(ids) > liveMaxIDs {
+	if len(ids) != 1 {
 		return false
 	}
 	co := html.UnescapeString(group(`<SVCURRENTCOMPANY>([^<]*)</SVCURRENTCOMPANY>`, x, 1))
@@ -1593,7 +1687,11 @@ func fetchVouchersByMaster(tc *TC, company string, port int, date string, mids [
 }
 
 func fetchVouchersByMasterIn(tc *TC, company string, port int, date string, mids []string, sec int) (map[string]string, error) {
-	raw, err := invokeTally(tc, port, voucherByMasterRequest(company, date, mids), sec)
+	x := voucherByMasterRequest(company, date, mids)
+	if x == "" {
+		return nil, fmt.Errorf("not asked: the entry request names exactly one MasterID (%d given)", len(mids))
+	}
+	raw, err := invokeTally(tc, port, x, sec)
 	if err != nil {
 		return nil, err
 	}
@@ -1652,7 +1750,7 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 	if len(need) == 0 {
 		return
 	}
-	company, key := need[0].company, need[0].key()
+	company := need[0].company
 	deadline := time.Now().Add(time.Duration(liveBodySec()) * time.Second)
 	left := func() int { return maxI(2, int(time.Until(deadline).Seconds()+0.999)) } // review Low 12: the 20 s in all
 	// review Low 9: a reason that passes (reading stopped, Tally left alone after a timeout) is not a failure: asked
@@ -1672,13 +1770,18 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 		return true
 	}
 	yield := func() bool { return postingGoing() || importsInFlight.Load() > 0 }
-	slow := false
-	tc := recorderTC(func(sec float64) {
-		if sec > liveLimitSec() && !slow {
-			slow = true
-			liveTurnOff("bodies", key, company, sec)
+	// 2.3.1 (the owner's last change): a request stopped at 2 s, or not answered, never turns the entry fetch off: the shared
+	// retry schedule (retry.go) asks again by itself, and the entries not asked yet wait for it (never sent without their
+	// body for it); an entry whose own request was stopped 3 times goes without its body (FinCom holds the line, and this
+	// bridge asks for it again as a held line, on the same schedule)
+	tc := recorderTC(nil)
+	waitRetry := func(err error, cs []*change) {
+		for _, c := range cs {
+			if !c.isLedger() {
+				liveDecide(c, "not asked yet: "+cutRunes(err.Error(), 160)+"; asked then")
+			}
 		}
-	})
+	}
 	failed := func(cs []*change, why string) {
 		live.mu.Lock()
 		for _, c := range cs {
@@ -1698,7 +1801,7 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 		writeLog(fmt.Sprintf("Recorder: the body of %d entr%s of %s was not read from Tally (%s); sent without it (FinCom holds the line until a body comes)",
 			len(cs), map[bool]string{true: "y", false: "ies"}[len(cs) == 1], company, cutRunes(why, 160)))
 	}
-	port, err := findCompanyPort(company, 0)
+	port, err := findCompanyPortBg(company, 0)
 	if err != nil {
 		if yield() {
 			for _, c := range need {
@@ -1711,7 +1814,7 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 		failed(need, err.Error())
 		return
 	}
-	// vouchers by date, 50 MasterIDs a request
+	// vouchers by date, one MasterID a request (2.3.1)
 	byDate := map[string][]*change{}
 	var dates []string
 	var ledgers []*change
@@ -1739,27 +1842,44 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 		}
 		byDate[c.vchDate] = append(byDate[c.vchDate], c)
 	}
-	for _, d := range dates {
+byDay:
+	for di, d := range dates {
 		cs := byDate[d]
 		for len(cs) > 0 {
 			part := cs[:minI(len(cs), liveMaxIDs)]
 			cs = cs[len(part):]
 			if time.Now().After(deadline) {
-				failed(part, "20 s passed")
-				continue
+				// 2.3.1 (one entry per request): the turn's time is used; the entries not asked yet are asked in the next
+				// turn, in order (the group waits at the first of them), never sent without their body for want of time
+				rest := append(append([]*change{}, part...), cs...)
+				for _, d2 := range dates[di+1:] {
+					rest = append(rest, byDate[d2]...)
+				}
+				for _, c := range rest {
+					liveDecide(c, fmt.Sprintf("not asked yet: this turn's %d s are used (one entry a request); asked in the next turn", liveBodySec()))
+				}
+				break byDay
 			}
 			var mids []string
 			for _, c := range part {
 				mids = append(mids, c.masterId)
 			}
-			if slow {
-				failed(part, "the body fetch is off for this company (the 2 s rule)")
-				continue
-			}
 			for _, c := range part {
 				liveDecide(c, "asking Tally by MasterID")
 			}
 			got, err := fetchVouchersByMasterIn(tc, company, port, d, mids, left())
+			if errors.Is(err, errRetryWait) {
+				rest := append(append([]*change{}, part...), cs...)
+				for _, d2 := range dates[di+1:] {
+					rest = append(rest, byDate[d2]...)
+				}
+				waitRetry(err, rest)
+				return
+			}
+			if errors.Is(err, errRecorderStop) && again(part) {
+				waitRetry(&retryErr{nowFn(), retryNext()}, part)
+				return
+			}
 			if gaveWay(err) {
 				for _, c := range part {
 					liveDecide(c, "not asked: a posting is going on; asked after it")
@@ -1812,14 +1932,18 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 					liveHeldAs(c, m.why, m.kind != wrongRetry)
 					continue
 				}
-				if slow || time.Now().After(deadline) {
-					liveHeldAs(c, m.why+"; not asked by its type and number (the body fetch is off for this company, the 2 s rule, or 20 s passed)", false)
+				if time.Now().After(deadline) {
+					liveHeldAs(c, m.why+"; not asked by its type and number (20 s passed)", false)
 					continue
 				}
 				w := liveWantOf(c, sp, spOK)
 				w.mid = ""
 				liveDecide(c, "asking Tally by type and number ("+cutRunes(m.why, 120)+")")
 				x, why, kind, err := liveOneByNumber(tc, c.company, port, w, left())
+				if errors.Is(err, errRetryWait) {
+					waitRetry(err, []*change{c})
+					return
+				}
 				if gaveWay(err) {
 					liveDecide(c, "not asked: a posting is going on; asked after it")
 					return // review L5: a posting goes first: asked again after it
@@ -1841,12 +1965,12 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 		}
 	}
 	for _, c := range ledgers {
-		if time.Now().After(deadline) || slow {
-			failed([]*change{c}, "20 s passed, or the body fetch is off")
+		if time.Now().After(deadline) {
+			failed([]*change{c}, "20 s passed")
 			continue
 		}
 		x, err := fetchLedgerByMaster(tc, company, port, toI64(c.masterId))
-		if gaveWay(err) {
+		if gaveWay(err) || errors.Is(err, errRetryWait) {
 			return
 		}
 		if err != nil || x == "" {
@@ -1866,6 +1990,39 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 		}
 		live.mu.Unlock()
 	}
+	if !retryHeld() && !yield() {
+		liveCancelCounters(tc, company, port, need)
+	}
+}
+
+// re-review M-B (06-Oct-2026): the cancels of this group that go with Tally's GUID but without an AlterID carry Tally's
+// voucher counter now (ALTVCHID, the existing FinComCompany request, one for the group): FinCom cancels again only a body
+// of that GUID at or below it (migration 57); a later change in Tally stays live. A delete carries none (always deleted
+// again: Tally never brings a deleted GUID back). Not read: the cancel goes without it (FinCom then cancels again at most once)
+func liveCancelCounters(tc *TC, company string, port int, cs []*change) {
+	var need []*change
+	live.mu.Lock()
+	for _, c := range cs {
+		if c.event == "cancelled" && toI64(onlyDigits(c.alterId)) <= 0 && c.guid != "" && !c.guidHeld && !c.guidFetch && c.vchCounter == 0 {
+			need = append(need, c)
+		}
+	}
+	live.mu.Unlock()
+	if len(need) == 0 || port == 0 {
+		return
+	}
+	if _, given, err := companyCheckNumbers(tc, company, port); err != nil || !given {
+		return
+	}
+	n := companyAlter(company)
+	if n <= 0 {
+		return
+	}
+	live.mu.Lock()
+	for _, c := range need {
+		c.vchCounter = n
+	}
+	live.mu.Unlock()
 }
 
 func errText(err error) string {
@@ -1902,6 +2059,11 @@ func (c *change) wire() M {
 	m := M{"line_id": c.lineId, "event": c.event, "object_guid": c.guid, "master_id": c.masterId, "alter_id": alter, "vch_type": c.vchType, "vch_no": c.vchNo,
 		"vch_date": c.vchDate, "saved_at": c.at, "pc": liveComputerFn(), "user": c.user, "company_guid": c.companyGuid, "ledgers": ls, "narration": narr,
 		"fid": fid, "xml": c.xml, "source": c.source}
+	if c.event == "cancelled" && alter == nil && c.vchCounter > 0 {
+		m["vch_counter"] = c.vchCounter // re-review M-B: FinCom cancels again only a body at or below it
+	}
+	// 2.3.1: FinCom passes the body's blanks as sent (the owner's "full", 06-Oct-2026); false on every other line (one shape)
+	m["full"] = c.full && c.xml != ""
 	if lineFid != "" {
 		m["lineFid"] = lineFid
 	}
@@ -1931,6 +2093,7 @@ func (c *change) wire() M {
 	if len(jsonText(m)) > liveMaxBytes-(16<<10) {
 		// second review L-C: no entry ids and no FinCom id with it (nothing of it can be matched or built)
 		m["xml"], m["ledgers"], m["narration"], m["oversize"], m["object_guid"] = "", []any{}, cutRunes(liveNoTag(c.narr), 1000), true, ""
+		m["full"] = false
 		if fid != "" {
 			m["fid"], m["lineFid"] = "", fid
 		}
@@ -1952,8 +2115,8 @@ func liveRecorderLinesBody(company, guid string, group []*change) M {
 func liveUploadOnce() int {
 	liveUpMu.Lock()
 	defer liveUpMu.Unlock()
-	defer liveMidSave() // 2.3.0: the record of Tally's GUIDs, when Tally gave any this turn
-	liveResolveTurn()   // 2.2.1: lines sent held, resolved once Tally gives their entry
+	defer liveMidSaveSoon() // 2.3.0: the record of Tally's GUIDs, when Tally gave any (2.3.1: at most every 30 s)
+	liveResolveTurn()       // 2.2.1: lines sent held, resolved once Tally gives their entry
 	for i := 0; i < 8; i++ {
 		n, again := liveUploadStep()
 		if !again {
@@ -2068,29 +2231,8 @@ func liveUploadStep() (int, bool) {
 		size += s
 	}
 	var need, byNumber []*change
-	bodiesOff := liveIsOffLocked("bodies", key)
 	for _, c := range group {
 		if c.needsBody() {
-			if bodiesOff {
-				c.bodyTried = true // the body fetch is off for this company (the 2 s rule): the line goes without
-				if c.guidFetch {
-					liveGuidUnproven(c, "the body fetch is off for this company (Tally took longer than the 2 s limit)")
-					continue
-				}
-				if !c.isLedger() {
-					c.heldWhy = "the entry fetch is off for this company (Tally took longer than the 2 s limit)"
-					why := "Tally took longer than the 2 s limit"
-					if o := live.off["bodies|"+key]; o != nil {
-						why = strings.TrimSuffix(o.why, ")")
-						if i := strings.Index(why, " for the "); i > 0 {
-							why = why[:i]
-						}
-						why += " at " + cut(strings.TrimPrefix(o.at, cut(o.at, 11)), 5)
-					}
-					liveDecide(c, "not asked: the body fetch is off for this company ("+why+")")
-				}
-				continue
-			}
 			if posting && !c.isLedger() {
 				liveDecide(c, "not asked: a posting is going on; asked after it")
 			}
@@ -2179,7 +2321,7 @@ func liveUploadStep() (int, bool) {
 		return 0, false
 	}
 	sentIDs := make([]string, 0, len(group))
-	var bodied []string
+	var bodied, items, ledAgain []string
 	gone := map[*change]bool{}
 	var held []*change
 	for _, c := range group {
@@ -2192,6 +2334,14 @@ func liveUploadStep() (int, bool) {
 			live.sent[a] = true
 			delete(live.queued, a)
 			sentIDs = append(sentIDs, a)
+		}
+		if c.xml != "" && !c.isLedger() && strings.HasSuffix(c.lineId, ":resolved") {
+			items = append(items, c.lineId) // 2.3.1 review H1: a resolution sent by this version
+			live.items231[c.lineId] = true
+			if c.ledAgain {
+				ledAgain = append(ledAgain, c.lineId) // 2.3.1 (masters): sent once more, never again
+				live.ledAgain[c.lineId] = true
+			}
 		}
 		if c.xml != "" && !c.isLedger() {
 			bodied = append(bodied, c.lineId)
@@ -2232,6 +2382,8 @@ func liveUploadStep() (int, bool) {
 	live.mu.Unlock()
 	liveSaveSent(sentIDs)
 	liveSaveIds(bodied, ".body.txt")
+	liveSaveIds(items, liveItemsSuffix)
+	liveSaveIds(ledAgain, liveLedgerSuffix)
 	liveSaveOffsets()
 	liveHeldAdd(held)
 	liveGuidAnswers(group, arr(r.json["results"])) // 2.3.0: what FinCom's record said of a delete / cancel sent without a GUID

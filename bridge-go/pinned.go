@@ -75,7 +75,16 @@ var requestRebuild = map[string]func(x string) []string{
 		n := pinNum(x, `\$AlterID &gt; (\d+)`)
 		return []string{keepListRequest(pinCo(x), a, z, n), keepListAboveRequest(pinCo(x), n)}
 	},
-	ledListID:           pinOne(func(x string) string { a, u := pinMasterRange(x); return ledgerChunkRequest(pinCo(x), a, u) }),
+	ledListID: pinOne(func(x string) string { a, u := pinMasterRange(x); return ledgerChunkRequest(pinCo(x), a, u) }),
+	// 2.3.1 (masters): an AlterID span with both ends, and one ledger by its name
+	ledChangesID: func(x string) []string {
+		m := regexp.MustCompile(`\$AlterID &gt; (\d+) AND \$AlterID &lt;= (\d+)</SYSTEM>`).FindStringSubmatch(x)
+		if m == nil {
+			return nil
+		}
+		return []string{ledgerChangesRequest(pinCo(x), toI64(m[1]), toI64(m[2]))}
+	},
+	ledByNameID:         pinOne(func(x string) string { return ledgerByNameRequest(pinCo(x), pinQuoted(x, "$Name")) }),
 	grpListID:           pinOne(func(x string) string { return groupListRequest(pinCo(x)) }),
 	"TDSDeskLedgers":    pinOne(func(x string) string { a, u := pinMasterRange(x); return ledgersFullRequest(pinCo(x), a, u) }),
 	"TDSDeskGroups":     pinOne(func(x string) string { return groupsFullRequest(pinCo(x)) }),
@@ -142,7 +151,7 @@ var requestRebuild = map[string]func(x string) []string{
 	"FinComMeasureLedF":  pinOne(func(x string) string { return measureReqLedF(pinCo(x), pinQuoted(x, "$Name")) }),
 	"FinComMeasureLedO":  pinOne(func(x string) string { return measureReqLedO(pinCo(x), pinQuoted(x, "$Name")) }),
 	"FinComSnapshot":     pinOne(func(x string) string { a, z := pinDates(x); return snapshotRequest(pinCo(x), a, z) }),
-	// 2.2.2: "Test fetching an entry" (fetchtest.go)
+	// 2.2.3: "Test fetching an entry" (fetchtest.go)
 	fetchTestA: fetchTestRebuild("A"), fetchTestB: fetchTestRebuild("B"), fetchTestC: fetchTestRebuild("C"),
 	fetchTestD: fetchTestRebuild("D"), fetchTestE: fetchTestRebuild("E"), fetchTestF: fetchTestRebuild("F"),
 }

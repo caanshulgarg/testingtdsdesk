@@ -33,11 +33,9 @@ func TestR222dQueuedCopierHeldAfterStop(t *testing.T) {
 		_, err = fetchVouchersByMasterIn(recorderTC(nil), nwsCo, f.port, "20261005", []string{"26312"}, 10)
 	}()
 	time.Sleep(300 * time.Millisecond)
-	bgMu.Lock()
-	stopHold[f.port] = nowFn().Add(30 * time.Second) // a recorder read was stopped meanwhile
-	bgMu.Unlock()
+	retryNote(f.port, vchByMasterID, errRecorderStop) // a recorder read was stopped meanwhile (2.3.1: the retry schedule)
 	wg.Wait()
-	if !errors.Is(err, errBackoff) || f.n(vchByMasterID) != 0 {
+	if !errors.Is(err, errRetryWait) || f.n(vchByMasterID) != 0 {
 		t.Fatalf("the queued background read went into the busy Tally: %v (%d requests)", err, f.n(vchByMasterID))
 	}
 }

@@ -33,6 +33,7 @@ package main
 
 import (
 	"html"
+	"sort"
 	"strings"
 	"time"
 )
@@ -51,7 +52,10 @@ var (
 
 // one stretch the company was open in the own Tally: seen open at every look from from to to; after: the look before
 // it (zero: none known), when it was not open
-type liveOwnIv struct{ after, from, to time.Time }
+type liveOwnIv struct {
+	after, from, to time.Time
+	blind           bool // review H1: no complete look could be had between after and from (stopped at 2 s, or backed off)
+}
 
 type liveOwnSt struct {
 	name string
@@ -78,11 +82,16 @@ func liveOwnParse(s string) time.Time {
 	return t
 }
 
-// under live.mu (liveFresh): the stretches kept on disk; nothing is taken as open in this run until a look says so
+// under live.mu (liveFresh): the stretches kept on disk, and (review H1) the companies open at the last complete look and
+// whether a look was stopped since: a restart keeps attributing lines by the last complete list
 func liveOwnLoad() {
 	live.own, live.ownCur, live.ownWant, live.ownAskAt = map[string]*liveOwnSt{}, map[string]bool{}, false, time.Time{}
 	o := readObjFile(liveOwnTallyFile())
 	live.ownAt = liveOwnParse(str(o["at"]))
+	for _, k := range strs(o["cur"]) {
+		live.ownCur[k] = true
+	}
+	live.ownBlind = truthy(o["blind"])
 	for k, v := range obj(o["companies"]) {
 		e := obj(v)
 		st := &liveOwnSt{name: str(e["name"])}
@@ -92,7 +101,7 @@ func liveOwnLoad() {
 			if from.IsZero() || to.IsZero() {
 				continue
 			}
-			st.ivs = append(st.ivs, liveOwnIv{after: liveOwnParse(str(iv["after"])), from: from, to: to})
+			st.ivs = append(st.ivs, liveOwnIv{after: liveOwnParse(str(iv["after"])), from: from, to: to, blind: truthy(iv["blind"])})
 		}
 		if len(st.ivs) > 0 {
 			live.own[k] = st
@@ -122,6 +131,9 @@ func liveOwnText() string {
 			if !iv.after.IsZero() {
 				e["after"] = iv.after.Format(time.RFC3339Nano)
 			}
+			if iv.blind {
+				e["blind"] = true
+			}
 			ivs = append(ivs, e)
 		}
 		if len(ivs) == 0 {
@@ -134,6 +146,12 @@ func liveOwnText() string {
 	if !live.ownAt.IsZero() {
 		o["at"] = live.ownAt.Format(time.RFC3339Nano)
 	}
+	var cur []string
+	for k := range live.ownCur {
+		cur = append(cur, k)
+	}
+	sort.Strings(cur)
+	o["cur"], o["blind"] = toAny(cur), live.ownBlind
 	return jsonText(o)
 }
 
@@ -141,10 +159,13 @@ func liveOwnText() string {
 // (key -> name); complete: every own Tally answered afresh or is closed. An incomplete look tells nothing (a Tally that
 // did not answer may have the company open): it is not used
 func liveNoteOwnTally(open map[string]string, complete bool) {
+	now := nowFn()
 	if !complete {
+		// review H1: a look stopped at 2 s (or one that did not answer) decides nothing, but is remembered: a line written
+		// meanwhile waits for the next complete look, which may take it (never the 2-minute pass-over)
+		liveOwnBlindNow()
 		return
 	}
-	now := nowFn()
 	live.mu.Lock()
 	liveFresh()
 	for k, name := range open {
@@ -158,8 +179,9 @@ func liveNoteOwnTally(open map[string]string, complete bool) {
 			st.ivs[n-1].to = now // open at the look before and at this one: the stretch goes on
 			continue
 		}
-		st.ivs = append(st.ivs, liveOwnIv{after: live.ownAt, from: now, to: now})
+		st.ivs = append(st.ivs, liveOwnIv{after: live.ownAt, from: now, to: now, blind: live.ownBlind})
 	}
+	live.ownBlind = false
 	live.ownCur = map[string]bool{}
 	for k := range open {
 		live.ownCur[k] = true
@@ -203,11 +225,16 @@ func liveOwnVerdict(l recLine) int {
 			if t.Before(iv.from) && iv.from.Sub(t) <= liveOwnLead && (iv.after.IsZero() || t.After(iv.after)) {
 				return liveOwnTake
 			}
+			// review H1: written while no complete look could be had (stopped at 2 s or backed off) and open at the next
+			// complete look: taken (never passed over for a look that could not be had)
+			if iv.blind && t.Before(iv.from) && (iv.after.IsZero() || t.After(iv.after)) {
+				return liveOwnTake
+			}
 		}
 	}
 	if t.Add(res).After(live.ownAt) {
 		// written after the last look (or within the time text's precision of it): the next look tells
-		live.ownWant = true
+		live.ownWant, live.ownWaitAt = true, nowFn()
 		return liveOwnWait
 	}
 	return liveOwnSkip
@@ -230,19 +257,33 @@ func liveNotHere(l recLine) {
 
 // the reader's own look at the own Tally, when a line waits for one: the light company-list request as a background
 // read (it gives way to a posting or an import; never while reading is stopped), 30 s apart at most. True: a look went
+// 2.3.1: under the 2-second rule and its back-off (retry.go); not less often than 30 s, as a line written between
+// two looks further apart could be taken under the lead rule (liveOwnLead) though another user's Tally wrote it
 func liveOwnAskNow() bool {
 	now := nowFn()
 	live.mu.Lock()
 	go1 := live.ownWant && (now.Sub(live.ownAskAt) >= liveOwnAskEvery || now.Before(live.ownAskAt))
 	live.mu.Unlock()
-	if !go1 || lightCheckBlocked() != "" {
+	if go1 && retryHeld() {
+		liveOwnBlindNow() // review H1: a line waits and the list is backed off: the next complete look decides it
+	}
+	if !go1 || lightCheckBlocked() != "" || retryHeld() {
 		return false
 	}
 	live.mu.Lock()
 	live.ownWant, live.ownAskAt = false, now
 	live.mu.Unlock()
-	openCompaniesAsk(&TC{copier: true, light: true, yield: func() bool { return postingGoing() || importsInFlight.Load() > 0 }}, true)
+	openCompaniesAsk(bgCompaniesTC(), true)
 	return true
+}
+
+// 2.3.1 (the owner, 06-Oct-2026): the company list (TDSDeskCompanies) asked in the background - the reader's own look
+// here, when a line waits for one, and the light check's list (startpoint.go lightCompanyList) - is a background read
+// under the same 2-second HARD stop as the entry request (RecorderLimitMs): the bridge stops waiting then, and a look so
+// stopped is incomplete (it tells nothing; liveNoteOwnTally). It gives way to a posting. A person's look (Update now, the
+// tray, the setup) is not cut
+func bgCompaniesTC() *TC {
+	return &TC{copier: true, light: true, bg: true, yield: func() bool { return postingGoing() || importsInFlight.Load() > 0 }, limitMs: keepNum("RecorderLimitMs", 2000)}
 }
 
 // After 2.3.0 (refetch): under live.mu, whether this bridge's own Tally has the company open now: its last look saw it open, or
@@ -263,4 +304,34 @@ func liveOwnOpenNow(guid, name string) bool {
 		}
 	}
 	return false
+}
+
+// review H1: no complete look at the own Tally since the last one (a look stopped at 2 s, or backed off): kept on disk
+func liveOwnBlindNow() {
+	live.mu.Lock()
+	liveFresh()
+	if live.ownBlind {
+		live.mu.Unlock()
+		return
+	}
+	live.ownBlind = true
+	path, text := liveOwnTallyFile(), liveOwnText()
+	live.mu.Unlock()
+	if err := saveFile(path, text); err != nil {
+		writeLog("Recorder: " + path + " could not be written: " + err.Error())
+	}
+	writeLog("Recorder: Tally took longer than 2 s to list its open companies (limit 2 s); this computer's changes " +
+		"of companies not seen open here yet wait until it answers in time; none is passed over or lost")
+}
+
+// review H1: the plain words for the Tally page (the beat) while lines wait for a complete look that could not be had;
+// "" when nothing waits so
+func liveOwnWaitWords() string {
+	live.mu.Lock()
+	defer live.mu.Unlock()
+	liveFresh()
+	if !live.ownBlind || live.ownWaitAt.IsZero() || (!live.ownAt.IsZero() && !live.ownWaitAt.After(live.ownAt)) {
+		return ""
+	}
+	return "Tally took longer than 2 s to list its open companies (limit 2 s); this computer's changes are waiting until it answers in time (Update now asks it without the limit)"
 }

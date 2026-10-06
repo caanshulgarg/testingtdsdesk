@@ -55,14 +55,14 @@ func TestR222eDecisionLog(t *testing.T) {
 	if n := logLines("): not asked: a posting is going on; asked after it"); n != 1 {
 		t.Fatalf("the posting reason said %d times", n)
 	}
-	// the body fetch off
-	liveTurnOff("bodies", nwsCo+"|"+nwsGUID, nwsCo, 3.4)
+	// 2.3.1: waiting for the retry schedule (never a switch-off): said in the decision log too
+	retryNote(f.port, vchByMasterID, errRecorderStop)
 	uploadAll(t)
-	if !strings.Contains(r222eLog(), "): not asked: the body fetch is off for this company (Tally took 3.4 s") {
-		t.Fatalf("the switch-off not in the log:\n%s", r222eLog())
+	if !strings.Contains(r222eLog(), "): not asked yet: Tally did not answer in time at ") || !strings.Contains(r222eLog(), "; trying again by itself at ") {
+		t.Fatalf("the wait not in the log:\n%s", r222eLog())
 	}
 	// the resolver's turn: one line
-	applyRecorderSource(M{"recorderSource": "both"}) // the owner switches it back on
+	retryDue()
 	applyHeldLines(M{"heldLines": []any{r222cRow("st-1", "altered", "26312", "Receipt", "192", "20261005")}})
 	liveUploadOnce()
 	if logLines("Recorder: held lines: ") < 1 || !strings.Contains(r222eLog(), " from FinCom, ") || !strings.Contains(r222eLog(), " asked, ") || !strings.Contains(r222eLog(), " resolved, ") ||
