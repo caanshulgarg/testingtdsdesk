@@ -1,0 +1,4 @@
+{
+  "s5-tds-on-screen.entry.xml": "S5 payment with TDS entered on the screen: Tally's answer to the bridge's entry request (FinComVoucherByMaster, MasterID 3, 20270101); 5881 bytes, 32 ms",
+  "_run": "run 37489632354, bridge ae2b2cf974dec0e2379f923567e50731dc072011, TallyPrime 7.1 Educational on Windows, 2026-10-06 16:03 (only S5 on the screen and R1)"
+}

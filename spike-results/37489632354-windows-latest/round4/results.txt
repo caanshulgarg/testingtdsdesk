@@ -1,0 +1,28 @@
+INFO setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.3.1.exe SHA-256 7d4a37a93a52dbc55ab9992c7148c7d607485d567fd34e1bde7d607288a216be; on this runner SHA-256 7d4a37a93a52dbc55ab9992c7148c7d607485d567fd34e1bde7d607288a216be
+INFO user 2 (fcuser2) works in a Windows session of their own (session 1, by a Remote Desktop connection to 127.0.0.2); runneradmin in session 2
+INFO S231 import masters-1-items: created 4, altered 0, errors 0
+INFO S231 import masters-2-costs: created 3, altered 0, errors 0
+INFO S231 import masters-4-ledgers: created 14, altered 0, errors 0
+INFO S231 import masters-6-bulk: created 400, altered 0, errors 0
+INFO S231 import S4 the bill (New Ref S231-BILL-1, a journal): created 1, altered 0, errors 0
+PASS 6a two bridges at once: bridge 1 runneradmin on 127.0.0.1:9100 (pid 11032, session 2, go-d61804c9e361); bridge 2 fcuser2 on 127.0.0.1:9101 (pid 2560, session 1, go-601850c62dac); both listening at 15:56:13
+INFO /ping with a nonce but no Origin (own bridge): proof not given
+PASS 6b /ping proof: bridge 1 proves itself to runneradmin: ok; bridge 1 proof checked against user 2 identity fails: ok; bridge 2 proves itself to fcuser2: ok; bridge 2 proof checked against user 1 identity fails: ok; bridge 2 gives runneradmin no proof: ok; bridge 1 gives fcuser2 no proof: ok; other users refused 403 beyond /ping: ok
+INFO S231 import masters-0-company: created 0, altered 1, errors 0
+INFO S231 import masters-3-nature: created 1, altered 0, errors 0
+INFO S231 import masters-5-tds: created 1, altered 0, errors 0 (TDS Rate &apos;S231 Contract Work&apos; does not exist!)
+INFO S231 company features after the import: ISBILLWISEON=Yes ISCOSTCENTRESON=Yes ISTDSON=Yes ISGSTON=Yes
+INFO S5 screen: the nature of payment 'S231 Contract Work' made on its form: True; Tally's TDS Rate export: GUID=49af0a16-0297-4046-a99a-154a1ad56310-00000285 REMOTEALTGUID=49af0a16-0297-4046-a99a-154a1ad56310 ASORIGINAL=No ISACTIVE=Yes MARKFORDELETION=No ISBASEDONREALIZATION=No ERRKEY=0 REMOTEALTERID=0 UPDATEDDATETIME=000000000 NAME=S231 Contract Work APPLICABLEFROM=20260401 TDSRATECHALLANCODE=94C TDSRATESECTION=194C ISABOVEEXEMPTIONLIMIT=No
+INFO S231 import masters-5-tds again (after the nature on its form): created 0, altered 3, errors 0
+INFO S5 screen: the company's TDS details in Tally: TANUMBER=DELF01234E TANREGNO=DELF01234E TDSDEDUCTORTYPE=Company ISTDSON=Yes
+INFO S5 screen: the TDS masters in Tally: S231 Contractor [TDSRATE=1 DEDUCTEETYPE=0 INCOMETAXSLAB=0 INCOMETAXCLASSIFICATION=0 INCOMETAXNUMBER=AAACS2310K TDSAPPLICABLE=Yes TDSDEDUCTEETYPE=Company - Resident IGNORETDSEXEMPT=No ISTDSAPPLICABLE=Yes ISTDSEXPENSE=No INTERESTINCLDAYOFDEDUCTION=No TDSDEDUCTEEISSPECIALRATE=No TDSDEDUCTEESPECIALRATE=0]; S231 Contract Exp [TDSRATE=1 DEDUCTEETYPE=0 INCOMETAXSLAB=0 INCOMETAXCLASSIFICATION=0 TDSRATENAME=S231 Contract Work IGNORETDSEXEMPT=No ISTDSAPPLICABLE=Yes ISTDSEXPENSE=Yes INTERESTINCLDAYOFDEDUCTION=No TDSDEDUCTEEISSPECIALRATE=No TDSDEDUCTEESPECIALRATE=0]; S231 TDS Payable [TDSRATE=1 DEDUCTEETYPE=0 INCOMETAXSLAB=0 INCOMETAXCLASSIFICATION=0 TDSRATENAME=S231 Contract Work IGNORETDSEXEMPT=No ISTDSAPPLICABLE=No ISTDSEXPENSE=No INTERESTINCLDAYOFDEDUCTION=No TDSDEDUCTEEISSPECIALRATE=No TDSDEDUCTEESPECIALRATE=0]
+INFO S5 screen: OCR read the screens; TDS row amount not filled by Tally: 2000 typed ; sub-screens after the TDS ledger: none; screenshots tds-*
+INFO S5 TDS section: Tally gives no TDSDEDUCTEESECTIONNUMBER on this entry; FinCom's section (none) (from (none))
+INFO S5 deductee type: Tally's ledger master TDSDEDUCTEETYPE "Company - Resident"; the entry body carries none (FinCom: (none))
+FAIL S5 payment with TDS entered on the screen: Tally mid 3, the bridge's created line at 15:58:44, body 4360 chars, full=True; voucher type: Tally Journal / FinCom Journal / entered Journal; FinCom's lines add up to 0: Tally 0 / FinCom 0 / entered 0; ledger S231 Contract Exp: Tally -100000 / FinCom -100000 / entered -100000; ledger S231 TDS Payable: Tally 2000 / FinCom 2000 / entered 2000; ledger S231 Contractor: Tally 98000 / FinCom 98000 / entered 98000; parse.js's accuracy checks: Tally (none) / FinCom none; TDS nature of payment: Tally S231 Contract Work / FinCom (none) / entered S231 Contract Work NO; TDS rate: Tally 0 / FinCom (none) / entered 2 NO; TDS assessable value: Tally 100000 / FinCom (none) / entered 100000 NO; TDS amount: Tally 2000 / FinCom (none) / entered 2000 NO
+TAG TAXOBJECTALLOCATIONS.LIST: WITH A VALUE in Tally's own Day Book export (S5 on the screen) x2 'S231 Contract Work TDS 5XAkE1Oajv98GfrC S231 Contractor S231 Contract Exp New Re'
+TAG TDSDEDUCTEESECTIONNUMBER: NOT SEEN WITH A VALUE
+TAG TDSDEDUCTEETYPE: NOT SEEN WITH A VALUE
+INFO S231 import R1 ledger (no cost centres): created 1, altered 0, errors 0
+INFO S231 import R1 the entry: created 1, altered 0, errors 0
+HARNESS R1 retry schedule: Tally silent 16:00:06..16:03:06 (suspended; a small request: no answer (suspended); the entry saved 16:00:06); bridge 1's tries: ; steps  s (expected 15, 30, 60, 120, then 300); back to normal: not seen; switch-off words: none; posting queued 16:00:26, taken 16:00:27, updates 16:00:27 taken done 0; 16:00:36 taken done 0, in Tally: False; the entry at the stub 16:00:06 (Tally free 16:03:06; the first try after that none); the bridge's busy lines: 16:00:36  Tally 9000 is busy (no answer in 8s); nothing more is sent to it until it answers a small check (the company's name), asked once a minute | 16:00:36  Posting job r1-job-1: Waiting for Tally: Tally is busy (a report, a pop-up or another user may be holding it) — finish or close it in TallyPrime; it will be posted automatically; no try in bridge 1's log (did the bridge ask before the suspension?)
