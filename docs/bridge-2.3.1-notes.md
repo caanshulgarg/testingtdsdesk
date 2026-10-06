@@ -60,6 +60,12 @@ for a Credit Note or Debit Note with items.
 These used to come only with a Day Book upload; a live entry no longer leaves them blank. FinCom reads them with the
 same reader for the Day Book upload and the live entry, so both give the same result.
 
+**A blank in Tally is a blank in FinCom (the owner's decision of 06-Oct-2026).** 2.3.0's request did not ask for the party
+GSTIN, place of supply, reference and its date, the company GSTIN or the lines' HSN and rate, so FinCom kept the values it
+already had when a live entry came without them. 2.3.1 asks for all of them, so when 2.3.1 sends an entry it says so, and
+FinCom then stores what Tally has, blanks included: a GSTIN or HSN removed in Tally is removed in FinCom too. An entry sent
+by a 2.3.0 bridge is kept as before. A Day Book upload is unchanged.
+
 **FinCom's accuracy checks (the owner's rules).** An entry from the bridge enters only if its lines total zero, its
 items' taxable value plus tax equal its ledger lines (within Rs 1 for Tally's rounding), and its bill-wise and cost
 centre allocations add up to their line's amount. If any check fails, the line is held with plain words (for example

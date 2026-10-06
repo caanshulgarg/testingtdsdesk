@@ -260,6 +260,7 @@ func liveOneByNumber(tc *TC, company string, port int, w liveWant, sec int) (str
 // under live.mu: a change takes the entry's GUID, numbers and body
 func liveTakeBody(c *change, x string) {
 	c.xml, c.bodyTried, c.byNumber = x, true, false
+	c.full = liveFetchFull() // 2.3.1: the entry request's answer, every field 56 keeps asked: its blanks are Tally's
 	c.guid = tagValue(x, "GUID")
 	c.masterId = onlyDigits(tagNum(x, "MASTERID"))
 	c.alterId = onlyDigits(tagNum(x, "ALTERID"))

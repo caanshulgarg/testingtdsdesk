@@ -1329,6 +1329,13 @@ function cleanRecorderLine(x: any, me: { id: string }): { line?: Record<string, 
     line.vouchers = og ? r.vouchers.filter((v: any) => v?.guid === og).map((v: any) => ({ ...dayVouchers({ vouchers: [v] })[0], day: isDay(v.date) ? iso(v.date) : day })) : [];
     // 2.2.2 (second review L-C): a copied FinCom id (lineFid) is not the entry's, from the body's narration either
     if (lineFid && !fid) line.vouchers = (line.vouchers as any[]).map((v: any) => ({ ...v, fid: null }));
+    // bridge 2.3.1 (the owner's decision of 06-Oct-2026: "let blanks through for every field the 2.3.1 request fetches in
+    // full; keep the guard only for lines from a bridge older than 2.3.1 that did not ask for the field"): the bridge marks a
+    // line "full": true only when its body is the answer to its 2.3.1 entry request (FinComVoucherByMaster / ByNumber), whose
+    // fetch has the party GSTIN, place of supply, ref, ref date, company GSTIN and the lines' HSN and rate. Its voucher goes
+    // "full": true, so migration 56's keep passes it as sent (a blank is Tally's) and 56's repair skips it. Never guessed from
+    // the body: no marker (a 2.3.0 bridge, the add-on's own XML), no "full" (56 keeps). The Day Book path never marks
+    if (x?.full === true) line.vouchers = (line.vouchers as any[]).map((v: any) => ({ ...v, full: true }));
     line.lines = og ? dayLines(r).filter((l: any) => Array.isArray(l) && l[0] === og) : [];
     // guard-230 (review: bridge 2.3.x reads an entry's body with ALLLEDGERENTRIES only; an item invoice's sales or purchase
     // ledger may sit only under ALLINVENTORYENTRIES' ACCOUNTINGALLOCATIONS, so such a body would come without it): the body

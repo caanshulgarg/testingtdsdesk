@@ -140,7 +140,32 @@ type change struct {
 	guidRetry bool
 	// 2.3.1 (masters): a ":resolved" line sent once more because FinCom held the one before waiting for a ledger
 	ledAgain bool
+	// 2.3.1 (the owner's "full", 06-Oct-2026): the body is the answer to this version's entry request, which fetches every
+	// field migration 56 keeps (liveFullFields): sent "full": true, so FinCom stores its blanks as Tally has them
+	full bool
 }
+
+// the fields migration 56 keeps for a body that did not ask them (2.3.0's request): the party GSTIN, place of supply,
+// reference and its date, the company GSTIN, and the ledger lines' HSN and rate
+var liveFullFields = []string{"PARTYGSTIN", "PLACEOFSUPPLY", "REFERENCE", "REFERENCEDATE", "CMPGSTIN", "ALLLEDGERENTRIES.GSTHSNNAME",
+	"ALLLEDGERENTRIES.RATEDETAILS.GSTRATEDUTYHEAD", "ALLLEDGERENTRIES.RATEDETAILS.GSTRATE"}
+
+// the fetch asks every one of the fields (a FETCH list, ", " between)
+func fetchHasAll(fetch string, fields []string) bool {
+	have := map[string]bool{}
+	for _, f := range strings.Split(fetch, ",") {
+		have[strings.TrimSpace(f)] = true
+	}
+	for _, f := range fields {
+		if !have[f] {
+			return false
+		}
+	}
+	return true
+}
+
+// the entry request of this build fetches every field 56 keeps
+func liveFetchFull() bool { return fetchHasAll(liveFetchField, liveFullFields) }
 
 func (c *change) key() string { return c.company + "|" + c.companyGuid }
 
@@ -1977,6 +2002,9 @@ func (c *change) wire() M {
 	m := M{"line_id": c.lineId, "event": c.event, "object_guid": c.guid, "master_id": c.masterId, "alter_id": alter, "vch_type": c.vchType, "vch_no": c.vchNo,
 		"vch_date": c.vchDate, "saved_at": c.at, "pc": liveComputerFn(), "user": c.user, "company_guid": c.companyGuid, "ledgers": ls, "narration": narr,
 		"fid": fid, "xml": c.xml, "source": c.source}
+	if c.full && c.xml != "" {
+		m["full"] = true // 2.3.1: FinCom passes the body's blanks as sent (the owner's "full", 06-Oct-2026)
+	}
 	if lineFid != "" {
 		m["lineFid"] = lineFid
 	}
@@ -2006,6 +2034,7 @@ func (c *change) wire() M {
 	if len(jsonText(m)) > liveMaxBytes-(16<<10) {
 		// second review L-C: no entry ids and no FinCom id with it (nothing of it can be matched or built)
 		m["xml"], m["ledgers"], m["narration"], m["oversize"], m["object_guid"] = "", []any{}, cutRunes(liveNoTag(c.narr), 1000), true, ""
+		delete(m, "full")
 		if fid != "" {
 			m["fid"], m["lineFid"] = "", fid
 		}

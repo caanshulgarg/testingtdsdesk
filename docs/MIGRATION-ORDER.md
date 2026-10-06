@@ -171,7 +171,13 @@ ref date only when the party is the same; the company GSTIN always; a malformed 
 HSN / rate from the entry's current lines, ledger by ledger (`tally_recorder_pair_lines`, the same in the repair): one HSN
 and rate on all the stored lines of the ledger -> carried to every line; else the same amounts as stored -> each line the
 values of its amount; else blank), then 48's 4-argument form runs unchanged; a sent non-blank value always wins; an entry
-marked `"full": true` (2.3.1 part A) is passed as sent. No line order is used (`tally_lines` has no order column). `tally_recorder_line` = 53's text with that one
+marked `"full": true` (2.3.1 part A) is passed as sent: blanks included, as Tally has them (the owner, 06-Oct-2026: "let
+blanks through for every field the 2.3.1 request fetches in full; keep the guard only for lines from a bridge older than
+2.3.1 that did not ask for the field"). tally-ingest marks an entry so only when bridge 2.3.1 marks its line `"full": true`,
+which it does only for a body that answers its own entry request (FinComVoucherByMaster / ByNumber, which asks for the party
+GSTIN, place of supply, ref, ref date, company GSTIN and the lines' HSN and rate); never guessed from the body. A 2.3.0
+bridge's line (no mark) is kept as before, and the repair skips a marked entry. A Day Book is never marked and stays
+authoritative as before. 56 itself is unchanged (live on staging). No line order is used (`tally_lines` has no order column). `tally_recorder_line` = 53's text with that one
 call passing `true`. 48's 4-argument and 44's 3-argument forms and `tally_ingest_day` are untouched: a Day Book stays
 authoritative. The repair, not run by the migration: `tally_recorder_restore_fields(book, p_dry_run)` (service role /
 owner; the 1-argument form restores): the dry run answers the count and the list (type, number, date, fields); the run

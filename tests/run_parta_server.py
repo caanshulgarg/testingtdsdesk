@@ -14,9 +14,14 @@ amount; if any check fails, hold the line with plain words; never apply part of 
      line, no item line); a bill-wise detail that does not add up to its line: held the same way.
   2b. one sales invoice with 50 items (partA-sales-50-items.xml): applied with its 50 item lines.
   4. a delete line for an entry never in FinCom's copy: settles by itself, "nothing to remove ...", kept visible.
+  5. the owner's "full" (06-Oct-2026: "let blanks through for every field the 2.3.1 request fetches in full; keep the guard
+     only for lines from a bridge older than 2.3.1 that did not ask for the field"): a body the bridge marks "full": true
+     (its 2.3.1 entry request fetched party GSTIN, place of supply, ref, ref date, company GSTIN and the lines' HSN and rate)
+     with a blank GSTIN and HSN blanks the stored values; the same body without the marker (a 2.3.0 bridge) keeps them
+     (migration 56's keep); a Day Book upload is as before (authoritative: what it says is stored, blanks too).
 The Deno function listens on port 30579 (Deno.serve wrapped by a one-line module in a temporary folder) and the stand-in on
 30578, so this test runs beside the others. Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno)."""
-import os, re, sys, json, time, hashlib, subprocess, urllib.request, shutil, threading, tempfile
+import os, re, sys, json, time, hashlib, subprocess, urllib.request, shutil, threading, tempfile, gzip, base64
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import fake_supabase as FS
 import pg_stand
@@ -68,7 +73,7 @@ try:
         return q(v)
     real = FS.rpc
     def rpc(name, a):
-        if name in ("tally_recorder_apply", "tally_start_point", "tally_recorder_gap_check", "tally_recorder_short_held", "tally_recorder_short_retry", "tally_recorder_enqueue", "tally_recorder_send"):
+        if name in ("tally_recorder_apply", "tally_start_point", "tally_recorder_gap_check", "tally_recorder_short_held", "tally_recorder_short_retry", "tally_recorder_enqueue", "tally_recorder_send", "tally_ingest_day"):
             FS.ARGS.setdefault(name, []).append(a)
             try: return json.loads(db.one("select public.%s(%s)::text" % (name, ", ".join("%s => %s" % (k, lit(v)) for k, v in a.items()))))
             except RuntimeError as e: raise RuntimeError(str(e).split("\n")[0][:300])
@@ -151,6 +156,31 @@ try:
     ok(x.get("state") == "applied" and "nothing to remove" in str(x.get("why") or one("select coalesce(held_why, '') || coalesce(payload->>'why', '') from tally_recorder_lines where line_id = 'A7'")),
        "settles by itself: nothing to remove (%s)" % x)
     ok(one("select count(*) from tally_recorder_lines where line_id = 'A7'") == "1", "the line kept, visible")
+
+    print("== 5. the owner's \"full\": a 2.3.1 body passes blanks as sent; a 2.3.0 body keeps them; a Day Book as before")
+    GST = '<PARTYGSTIN TYPE="String">07AAJFQ3158R1ZH</PARTYGSTIN>'
+    def body(alt, blank):
+        x = fx("partA-sales-two-rates.xml").replace("> 41</ALTERID>", "> %d</ALTERID>" % alt)
+        if blank: x = re.sub(r'(<GSTHSNNAME TYPE="String">)[^<]*(</GSTHSNNAME>)', r"\1\2", x.replace(GST, '<PARTYGSTIN TYPE="String"></PARTYGSTIN>'))
+        return x
+    hsn = lambda: sorted((r["ledger"], r["hsn"] or "") for r in db.rows("select ledger, hsn from tally_lines where book_id = %s and guid = %s" % (q(BOOK), q(G(21)))))
+    h0 = hsn()
+    ok(vrow(G(21)).get("gstin") == "07AAJFQ3158R1ZH" and any(h for _, h in h0), "before: the sales invoice holds its GSTIN and a line HSN (%s)" % h0)
+    c, r = rec([line("A9", 21, 42, "Sales", body(42, True), "altered")])
+    ok(res(r).get("A9", {}).get("state") == "applied" and vrow(G(21)).get("gstin") == "07AAJFQ3158R1ZH" and hsn() == h0,
+       "a body without the marker (a 2.3.0 bridge) with a blank GSTIN and HSN: applied, the stored GSTIN and HSN kept (%s; %s)" % (res(r).get("A9"), hsn()))
+    c, r = rec([dict(line("A10", 21, 43, "Sales", body(43, True), "altered"), full=True)])
+    ok(res(r).get("A10", {}).get("state") == "applied" and vrow(G(21)).get("gstin") == "" and not any(h for _, h in hsn()),
+       "a 2.3.1 body marked full with a blank GSTIN and HSN: applied, the stored GSTIN and HSN blank as Tally has them (%s; %s; %s)" % (res(r).get("A10"), vrow(G(21)).get("gstin"), hsn()))
+    ok(one("select count(*) from tally_recorder_lines where line_id = 'A10' and body->'vouchers'->0->>'full' = 'true'") == "1"
+       and one("select count(*) from tally_recorder_lines where line_id = 'A9' and body->'vouchers'->0 ? 'full'") == "0", "the marker on the 2.3.1 body only (A10 full, A9 none)")
+    c, r = rec([dict(line("A11", 21, 44, "Sales", None, "altered"), full=True)])
+    ok(one("select count(*) from tally_recorder_lines where line_id = 'A11' and body->'vouchers'->0 ? 'full'") == "0", "the marker without a body: nothing marked")
+    day = lambda x: call({"kind": "days", "version": "2.3.1", "bridge": GA, "company": "FinCom Spike Co", "days": [{"day": "20261002", "n": 1, "gz": base64.b64encode(gzip.compress(x.encode())).decode()}]})
+    c, r = day(body(45, False))
+    ok(c == 200 and vrow(G(21)).get("gstin") == "07AAJFQ3158R1ZH" and hsn() == h0, "a Day Book with the GSTIN and HSN: stored as before (%s; %s)" % (c, vrow(G(21)).get("gstin")))
+    c, r = day(body(46, True))
+    ok(c == 200 and vrow(G(21)).get("gstin") == "" and not any(h for _, h in hsn()), "a Day Book with them blank: blank, as before (authoritative) (%s; %s)" % (c, hsn()))
 finally:
     if fn: fn.terminate()
     db.stop(); shutil.rmtree(tmp, ignore_errors=True)
