@@ -73,10 +73,29 @@ number or by id) is "notseen", never "not found"; tally_post_check_report never 
 after a member's "I looked in Tally: not there - post again" (a reason, name and time kept), so a duplicate entry is
 never possible from that button.
 
+## Round 3 (06-Oct): the cloud's typed-XML reader and held lines settling by themselves; the midnight test fixes
+
+The first 2.3.0 build (e9169a2, setup d63311d1...9206) was withdrawn before publishing: the cloud could not read Tally's
+typed entry details (NWS144 line 18, Receipt 213 held with an empty body). Added in e9169a2..9e5db15 (merge of
+fix-body-230):
+- **The cloud reads Tally's typed XML** (e5c8760, 3a14fa7): server/tally-cloud/parse.js takes a field with or without
+  TYPE attributes, as the bridge has since 2.2.4; tested with the bridge's own recorder lines from a real TallyPrime 7.1
+  (tests/run_recorder_typed_xml.mjs, run 37395099848).
+- **Held lines settle by themselves** (dabfbfa): the beat carries the cloud's refetch list (server/tally-cloud/index.ts)
+  and the bridge asks those lines again (applyRefetch, recorder_resolve.go, recorder_owntally.go), within the same read
+  rules (NWS144 lines 4, 17, 18). No request added and no request shape changed; the allow-list file is unchanged.
+- **Midnight-proof tests** (cdb24bd): tests no longer depend on the clock across midnight (CI run 37391306886); CI keeps
+  its logs with tee.
+
+The short review of e9169a2..9e5db15 is running at build time. It is not done: its findings will be recorded here and
+any High or Medium fixed before this build is published.
+
 ## After the rounds
 
 8795bdc and aefb5e7: BridgeVersion 2.3.0, the version pins in the tests and fixtures, the allow-list line for 2.3.0 by
 the owner's standing decision of 2026-10-06, and the release check accepting that wording. c810774 is the squash of
 per-user-bridge aefb5e7 into tax-accuracy (its tree is aefb5e7's). No finding.
+6d56d47 withdrew the first build (its files moved to assets-test/bridge-go-old, renamed; its release log row marked). Nothing else outside docs/ changed before the rebuild.
 
-Range: 9076c77..c810774
+
+Range: 9076c77..6d56d47
