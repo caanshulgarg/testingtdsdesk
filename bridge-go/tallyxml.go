@@ -15,9 +15,14 @@ import (
 	"strings"
 )
 
+// the regexp text of a tag's attributes and white space after its name, up to its ">": a quoted value is passed over
+// whole, so a ">" inside it does not end the tag (2.3.1, the 2.2.4 review's L2: legal XML, though Tally escapes it today);
+// never ending in "/" (a self-closed tag is not an opening one). Go's regexp runs in linear time
+const tagAttrsRe = `(?:\s(?:[^>"'/]|"[^"]*"|'[^']*'|/+(?:[^>"'/]|"[^"]*"|'[^']*'))*)?`
+
 // the regexp text of an opening tag, with or without attributes and white space (<TAG>, <TAG TYPE="Number">), never a
 // self-closed <TAG/> nor a longer tag (<TAGNAME>)
-func tagOpenRe(tag string) string { return `<` + regexp.QuoteMeta(tag) + `(?:\s[^>]*[^/>])?\s*>` }
+func tagOpenRe(tag string) string { return `<` + regexp.QuoteMeta(tag) + tagAttrsRe + `>` }
 
 // the regexp text of a whole element <TAG ...>text</TAG>, the text its group 1
 func tagRe(tag string) string {
@@ -53,13 +58,13 @@ func tagDate(x, tag string) string {
 
 // the voucher elements of a text: <VOUCHER ...>...</VOUCHER> holding child elements. CMPINFO's counter
 // <VOUCHER>4</VOUCHER> is not one (its text is a number), nor a self-closed <VOUCHER/>
-var reVchBlock = re(`<VOUCHER(?:\s[^>]*[^/>])?\s*>\s*<[^/][\s\S]*?</VOUCHER\s*>`)
+var reVchBlock = re(`<VOUCHER` + tagAttrsRe + `>\s*<[^/][\s\S]*?</VOUCHER\s*>`)
 
 // the opening tags of the voucher elements of a text, a voucher cut short included (a counter is not one)
-var reVchOpen = re(`<VOUCHER(?:\s[^>]*[^/>])?\s*>\s*<[^/]`)
+var reVchOpen = re(`<VOUCHER` + tagAttrsRe + `>\s*<[^/]`)
 
 // the ledger elements, likewise (CMPINFO's <LEDGER>21</LEDGER> is not one)
-var reLedBlock = re(`<LEDGER(?:\s[^>]*[^/>])?\s*>\s*<[^/][\s\S]*?</LEDGER\s*>`)
+var reLedBlock = re(`<LEDGER` + tagAttrsRe + `>\s*<[^/][\s\S]*?</LEDGER\s*>`)
 
 // a Tally answer without its CMPINFO block of counters (whose <COMPANY>0</COMPANY>, <LEDGER>n</LEDGER> and
 // <VOUCHER>n</VOUCHER> would otherwise be read as a company, a ledger or a voucher)

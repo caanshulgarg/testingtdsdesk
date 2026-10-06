@@ -216,3 +216,35 @@ func TestMeasureFieldStateTyped(t *testing.T) {
 		}
 	}
 }
+
+// 2.2.4 review L2: a ">" inside a quoted attribute value (legal XML; Tally escapes it today) broke the field patterns
+// ([^>]* stopped at it). The opening-tag patterns now pass over a quoted value whole; a self-closed tag is still not an
+// opening one, and a longer tag name is still not the tag
+func TestTagReadsGreaterThanInQuotedAttribute(t *testing.T) {
+	for _, c := range []struct{ x, tag, want string }{
+		{`<GUID TYPE="a>b">g-1</GUID>`, "GUID", "g-1"},
+		{`<NARRATION TYPE="x>y"/><NARRATION TYPE="String">n</NARRATION>`, "NARRATION", "n"},
+		{`<NARRATION TYPE="x>y" />`, "NARRATION", ""},
+		{`<LEDGERNAMEX>a</LEDGERNAMEX><LEDGERNAME TYPE="String" X='q>r'>Cash</LEDGERNAME >`, "LEDGERNAME", "Cash"},
+		{`<NAME TYPE="String">O'Brien & Co</NAME>`, "NAME", "O'Brien & Co"},
+		{`<NAME X="it's">A</NAME>`, "NAME", "A"},
+	} {
+		if got := tagValue(c.x, c.tag); got != c.want {
+			t.Errorf("%s in %s: %q, want %q", c.tag, c.x, got, c.want)
+		}
+	}
+	if got := tagNum(`<MASTERID TYPE="N>"> 7</MASTERID>`, "MASTERID"); got != "7" {
+		t.Errorf("the MasterID: %q", got)
+	}
+	v := `<VOUCHER REMOTEID="a>b" VCHTYPE="Receipt"><GUID>g</GUID></VOUCHER>`
+	if got := reVchBlock.FindAllString(`<VOUCHER A="x>"/>`+v, -1); len(got) != 1 || got[0] != v {
+		t.Errorf("the voucher block: %q", got)
+	}
+	if reVchOpen.FindString(`<VOUCHER A="x>"/><X/>`) != "" {
+		t.Error("a self-closed voucher with a > in its attribute taken as an opening one")
+	}
+	if got := reLedBlock.FindAllString(`<LEDGER NAME="A>B"><PARENT>x</PARENT></LEDGER>`, -1); len(got) != 1 {
+		t.Errorf("the ledger block: %q", got)
+	}
+}
+
