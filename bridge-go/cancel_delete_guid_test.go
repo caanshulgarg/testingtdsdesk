@@ -188,8 +188,9 @@ func TestDeleteGUIDUnknownHeldWithWords(t *testing.T) {
 			realLine("after_delete", "", "41", "", "Receipt", "10", addonDate(td)))
 		liveReadOnce()
 		uploadAll(t)
-		if f.n(vchByMasterID) != n0+1 || f.n(vchByNumberID) != 0 {
-			t.Fatalf("the deletes are asked of this Tally once, by MasterID only: %v", f.ids())
+		// 2.3.1: one request per MasterID (40 and 41), each asked once
+		if f.n(vchByMasterID) != n0+2 || f.n(vchByNumberID) != 0 {
+			t.Fatalf("the deletes are asked of this Tally once each, by MasterID only: %v", f.ids())
 		}
 		var del []M
 		for _, l := range answers {

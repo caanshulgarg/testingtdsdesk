@@ -29,6 +29,9 @@ FAIL_INSERT = {}          # table -> {message, code}: a POST answers this PostgR
 FAIL_DONE = {"upload": 0} # the next n tally_work_done of an upload piece fail
 FAIL_DAY = {}             # day -> n: the next n calls queuing a day file of that day fail (tally_work_send / tally_upload_advance)
 NO_FN = set()             # functions this database does not have yet (an older cloud): PostgREST's 404 PGRST202
+FAIL_SELECT = {}          # table -> {message, code}: a GET answers this PostgREST error (bridge 2.3.1 Lows: errors are logged)
+MAX_URL = [0]             # > 0: a request whose path and query are longer answers 414 (a gateway's URL limit; the refetch chunks)
+HONOR_LIMIT = [False]     # True: order=col.asc|desc and limit=n are applied to a GET (off by default: as before)
 LEASE7_MISSING = [False]  # migration 55 not run: the 7-argument tally_lease_take (p_purpose) is not there (PGRST202 for that call only)
 PK = {"gst_sessions": ["firm_id", "gstin"], "gst_returns": ["firm_id", "gstin", "form", "period"], "gst_einv_accounts": ["firm_id", "gstin"], "gst_einvoices": ["firm_id", "gstin", "doc_key"]}
 ids = itertools.count(1)
@@ -46,6 +49,7 @@ def match(row, q):
         if op == "gt" and not cs > val: return False
         if op == "is" and val == "null" and cell is not None: return False
         if op == "in" and cs not in val.strip("()").split(","): return False
+        if op == "ilike" and not re.fullmatch("".join(".*" if ch in "%*" else re.escape(ch) for ch in val), cs, re.I | re.S): return False
     return True
 def rpc(fn, a):
     ARGS.setdefault(fn, []).append(a)
@@ -168,6 +172,7 @@ class H(http.server.BaseHTTPRequestHandler):
     def handle_any(self, method):
         u = urlparse(self.path); path = u.path; q = parse_qs(u.query, keep_blank_values=True); raw = self.body() if method in ("POST", "PATCH") else b""
         CALLS.append((method, path))
+        if MAX_URL[0] and len(self.path) > MAX_URL[0]: return self.send(414, {"message": "URI Too Long"})
         if path == "/auth/v1/user":
             w = self.who(); return self.send(200, w) if isinstance(w, dict) else self.send(401, {"msg": "bad token"})
         if path.startswith("/rest/v1/rpc/"):
@@ -179,8 +184,14 @@ class H(http.server.BaseHTTPRequestHandler):
             except Exception as e: return self.send(400, {"message": str(e), "code": "P0001"})
         if path.startswith("/rest/v1/"):
             t = path.rsplit("/", 1)[1]; rows = T.setdefault(t, []); single = "vnd.pgrst.object" in (self.headers.get("Accept") or "")
+            if method in ("GET", "HEAD") and t in FAIL_SELECT:
+                return self.send(400, dict(FAIL_SELECT[t], details=None, hint=None))
             if method in ("GET", "HEAD"):
                 hit = [r for r in rows if match(r, q)]
+                if HONOR_LIMIT[0]:
+                    for o in reversed(((q.get("order") or [""])[0]).split(",")):
+                        if o: col, _, d = o.partition("."); hit.sort(key=lambda r: (r.get(col) is None, r.get(col) if r.get(col) is not None else 0), reverse=d.startswith("desc"))
+                    if q.get("limit"): hit = hit[:int(q["limit"][0])]
                 sel = (q.get("select") or ["*"])[0]
                 if t.startswith("gst_") and sel != "*" and "(" not in sel:      # the columns asked for (gst-taxpro's tests)
                     cols = [c.strip() for c in sel.split(",")]; hit = [{c: r.get(c) for c in cols} for r in hit]

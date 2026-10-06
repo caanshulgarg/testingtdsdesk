@@ -510,7 +510,10 @@ func lightCompanyList(sessions []M) []M {
 	if !open {
 		return sessions
 	}
-	fresh, ok := openCompaniesAsk(&TC{copier: true, light: true, yield: func() bool { return postingGoing() || importsInFlight.Load() > 0 }}, true)
+	if coListHeld() {
+		return sessions // 2.3.1: backed off after the list took over 2 s (companylist.go): the list held stands
+	}
+	fresh, ok := openCompaniesAsk(bgCompaniesTC(), true) // 2.3.1: the 2 s hard stop (recorder_owntally.go)
 	switch {
 	case ok:
 		_ = os.Chtimes(shared, nowFn(), nowFn()) // its age by the bridge's clock

@@ -9,10 +9,18 @@ Note entered WITH stock items (item invoice mode) now enters the books complete.
 ledger of such an invoice under its items; 2.3.0 did not ask Tally for it, so FinCom held these entries ("the entry's
 details from Tally are incomplete (its lines do not add up ...)"). 2.3.1 also asks Tally for the ledger lines under the
 items, so the entry arrives with every line: the party, the sales or purchase ledger, CGST and SGST (or IGST).
-Nothing else changed: the same entries per request as before (by MasterID up to 50 entries of one day; by type and
-number one entry), read only, inside the 2-second rule. Two limits: a very large invoice (over about 1 MB of details,
-roughly 1,000 items or more) is held with plain words for a Day Book upload; the item lines carry no HSN or GST rate from
-this path (FinCom's reports read the Day Book upload, so they are unaffected).
+With it (part A) the whole entry comes: the items (name, quantity, unit, rate, taxable value, the HSN or SAC and GST
+rate Tally applied to that line, and the CGST / SGST / IGST / cess per line, worked out from the line's rate as Tally
+does: Tally keeps no tax amount per item line), bill-wise details, TDS details, cost centres, bank details (UTR,
+instrument date, bank date, transaction type), reference number and date, party GSTIN, place of supply, the e-invoice
+IRN and acknowledgement, the e-way bill number.
+FinCom's accuracy checks: an entry enters only if its lines total zero, its items' taxable value plus tax equal its
+ledger lines (within Rs 1), and its bill-wise and cost centre allocations add up to their line; else it is held with
+plain words and nothing of it is applied.
+One entry per request, by Tally's own id (FinComVoucherByMaster) or by type and number (FinComVoucherByNumber);
+read only, inside the 2-second rule, after postings. One limit: a very large invoice (over about 1 MB of details,
+roughly 1,000 items or more) is held with plain words for a Day Book upload.
+Needs FinCom's cloud update of 2.3.1 and database migrations 56 and 57 on staging before you start.
 
 The app is not updated with this bridge. Keep the add-on loaded as it is
 (C:\ProgramData\FinCom\addon\FinComRecorder.tdl). 2.3.1 does not change the add-on.
@@ -73,10 +81,37 @@ CHECK 5 - ITEM INVOICES HELD UNDER 2.3.0 SETTLE BY THEMSELVES
    You should see: the held entry is in the books with every line, once, and its held lines show as 'replaced'.
    If not, send: its type, number and date, and the Show log lines starting "Recorder:" that name it.
 
-CHECK 6 - EVERYTHING ELSE AS IN 2.3.0
-   Make one Receipt of Rs 1, narration "TRIAL 231 receipt". Save it.
-   You should see: within a minute, Sync activity shows it as Created, and it is in the books, as with 2.3.0.
+CHECK 6 - A RECEIPT AGAINST A BILL
+   Make one Receipt of Rs 1 from the party of CHECK 1, against that sales invoice's bill (Agst Ref), narration
+   "TRIAL 231 receipt". Save it.
+   You should see: within a minute, Sync activity shows it as Created, and it is in the books with its bill-wise
+   detail (the bill's name, Agst Ref, Rs 1).
    If not, send: its number, the time, and the Show log lines starting "Recorder:" that name it.
+
+CHECK 7 - THE SALES INVOICE'S ITEMS, E-INVOICE AND E-WAY BILL
+   Look at the Sales entry of CHECK 1 in FinCom.
+   You should see: each item with its quantity, unit, rate, taxable value, HSN and GST rate as on the invoice in Tally,
+   and CGST and SGST per item adding up to the invoice's CGST and SGST. If the invoice has an e-invoice IRN or an e-way
+   bill number in Tally, FinCom shows the same.
+   If not, send: a picture of the invoice in Tally (with its e-invoice details) and what FinCom shows.
+
+CHECK 8 - A BANK PAYMENT WITH A UTR
+   Make a Payment from a bank ledger of Rs 1, transaction type e-Fund Transfer (or NEFT), with a UTR / instrument number
+   and date, narration "TRIAL 231 bank". Save it.
+   You should see: within a minute, in the books with the UTR, the instrument date and the transaction type.
+   If not, send: its number, the time, a picture of its bank details in Tally, and the Show log lines.
+
+CHECK 9 - A PAYMENT WITH TDS
+   Make a Payment (or Journal) with TDS deducted on a party with a TDS nature of payment, narration "TRIAL 231 tds".
+   Save it.
+   You should see: within a minute, in the books with its TDS details: nature of payment, rate, amount. (The section
+   and deductee type are not on the entry in Tally; they stay blank here.)
+   If not, send: its number, the time, a picture of the entry in Tally, and the Show log lines.
+
+CHECK 10 - A JOURNAL WITH COST CENTRES
+   Make a Journal of Rs 2 split between two cost centres (Rs 1 each), narration "TRIAL 231 cost centres". Save it.
+   You should see: within a minute, in the books with its two cost centre allocations (category, centre, amount).
+   If not, send: its number, the time, a picture of the entry in Tally, and the Show log lines.
 
 How to send the log lines: right-click the FinCom icon near the clock > Show log. Each line starting "Recorder:" says
 what the bridge decided for one entry: asking Tally, taken, held (with the reason), or not asked (with the reason).

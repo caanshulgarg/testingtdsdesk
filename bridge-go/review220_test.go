@@ -230,7 +230,8 @@ func TestForgedLineDropped(t *testing.T) {
 		t.Fatalf("the log: %s", readText(logFile()))
 	}
 	// the starting point: a body at or below it not used. 2.2.2 (the owner's rule): judged by Tally's own ALTERID only,
-	// never the line's: both entries are asked (one request), only the new one's body goes
+	// never the line's: both entries are asked (2.3.1: one request each, strictly one MasterID a request), only the new one's
+	// body goes
 	td := today()
 	v := f.add(td, "Party", "P-1", "x", "-1.00") // alter 1
 	sessions := openCompaniesWith(fin, true)
@@ -249,7 +250,7 @@ func TestForgedLineDropped(t *testing.T) {
 			bs = append(bs, b)
 		}
 	}
-	if len(bs) != 1 || !strings.Contains(bs[0], "$MasterID = "+v.master+" ") || !strings.Contains(bs[0], "$MasterID = "+w.master) {
+	if len(bs) != 2 || strings.Count(strings.Join(bs, " "), "$MasterID = ") != 2 || !strings.Contains(bs[0]+bs[1], "$MasterID = "+v.master+"<") || !strings.Contains(bs[0]+bs[1], "$MasterID = "+w.master+"<") {
 		t.Fatalf("asked: %v", bs)
 	}
 	for _, l := range c.recSent() {

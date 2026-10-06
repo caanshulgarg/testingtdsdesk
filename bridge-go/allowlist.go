@@ -49,8 +49,8 @@ var tallyAllowList = map[string]allowedReq{
 	sliceID:              {purpose: "the recorder's source C (2.2.0, off by default): one month's entries above an AlterID as GUID, MasterID, AlterID and date, in the date form the read test kept"},
 	datesProbeID:         {purpose: "measure (the read test): one past-year month's entries as GUID, MasterID, AlterID and date, in each date form", measureOnly: true},
 	editLogProbeID:       {purpose: "measure (the read test): one entry by MasterID with its edit-log sub-collection (candidate names)", measureOnly: true},
-	vchByMasterID:        {purpose: "the recorder's body fetch (2.2.0): the entries just changed, by MasterID (50 at most), the line's own date as the period, the fields FinCom's day parse reads (2.3.1: with the ledger lines under an invoice's items)"},
-	vchByNumberID:        {purpose: "the recorder's new entry (2.2.1): one entry by its voucher type and number, the line's own date as the period, the body fetch's fields (2.3.1: with the ledger lines under an invoice's items)"},
+	vchByMasterID:        {purpose: "the recorder's body fetch (2.2.0): the entry just changed, by its MasterID (exactly one a request since 2.3.1), the line's own date as the period, the fields FinCom's day parse reads (2.3.1: the whole entry: items, the ledger lines under them, bill-wise, cost centres, bank, TDS, GST, e-invoice and e-way bill details)"},
+	vchByNumberID:        {purpose: "the recorder's new entry (2.2.1): one entry by its voucher type and number, the line's own date as the period, the body fetch's fields (2.3.1: the whole entry, as the body fetch)"},
 	"FinComMeasureB":     {purpose: "measure: entries above an AlterID over the year", measureOnly: true},
 	"FinComMeasureC":     {purpose: "measure: entries above an AlterID, one month", measureOnly: true},
 	"FinComMeasureYear":  {purpose: "measure: the year's entries, dates only", measureOnly: true},
@@ -60,7 +60,7 @@ var tallyAllowList = map[string]allowedReq{
 	"FinComMeasureLedF":  {purpose: "measure: one ledger's master fields", measureOnly: true},
 	"FinComMeasureLedO":  {purpose: "measure: one ledger's stored opening (the field, no period)", measureOnly: true},
 	"FinComSnapshot":     {purpose: "measure: one month's entries as GUID, AlterID, date, type and number", measureOnly: true},
-	// 2.2.2 (the owner's request, 05-Oct-2026): "Test fetching an entry" (fetchtest.go), the forms of
+	// 2.2.3 (the owner's request, 05-Oct-2026): "Test fetching an entry" (fetchtest.go), the forms of
 	// docs/diagnostics/2.2.2-fetch-check.ps1 for one voucher, a person's tray item only
 	fetchTestA: {purpose: "measure (Test fetching an entry): form A, FinComVoucherByNumber as built (one voucher by type and number, one day, yyyymmdd), under its own id", measureOnly: true},
 	fetchTestB: {purpose: "measure (Test fetching an entry): form B, form A with plain quote marks in the filter", measureOnly: true},
@@ -173,7 +173,7 @@ func allowListSamples() map[string]string {
 		dupCheckID:           dupCheckRequest(c, a, "SAMPLE PARTY"),
 		tagCheckID:           tagCheckRequest(c, a),
 		masterCheckID:        masterCheckRequest(c, a, z, "1"),
-		vchByMasterID:        voucherByMasterRequest(c, a, []string{"1", "2"}),
+		vchByMasterID:        voucherByMasterRequest(c, a, []string{"1"}),
 		vchByNumberID:        voucherByNumberRequest(c, a, "Receipt", "1"),
 		sliceID:              sliceRequest(c, formPlain, "202604", 1),
 		datesProbeID:         datesProbeRequest(c, collFilterGE, a, z),

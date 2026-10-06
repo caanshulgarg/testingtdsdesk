@@ -38,6 +38,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 )
 
 // MasterIDs kept per company (the highest: Tally's MasterIDs grow, so the oldest entries go first)
@@ -66,11 +67,17 @@ type midEntry struct {
 }
 
 var mids = struct {
-	mu    sync.Mutex
-	dir   string
-	m     map[string]map[string]midEntry // company GUID (lower case) -> MasterID -> entry
-	dirty bool
+	mu      sync.Mutex
+	dir     string
+	m       map[string]map[string]midEntry // company GUID (lower case) -> MasterID -> entry
+	dirty   bool
+	savedAt time.Time // 2.3.1 (2.3.0 review L2/L3): when the file was last written
 }{}
+
+// 2.3.1 (2.3.0 review L2/L3): the record is written at most this often by the uploader (and when the bridge stops)
+func liveMidSaveEvery() time.Duration {
+	return time.Duration(keepNum("RecorderGuidsSaveSec", 30)) * time.Second
+}
 
 func liveGuidsFile() string { return sp("recorder-guids.json") }
 
@@ -98,7 +105,8 @@ func midFresh() {
 // a restart, as far as the record is concerned (read again from the file at its next use)
 func liveMidReset() {
 	mids.mu.Lock()
-	mids.dir, mids.m = "", nil
+	liveMidSaveLocked() // 2.3.1: what was learnt since the last write is kept (a clean stop)
+	mids.dir, mids.m, mids.savedAt = "", nil, time.Time{}
 	mids.mu.Unlock()
 }
 
@@ -142,10 +150,27 @@ func liveMidLookup(cguid, mid string) (midEntry, bool) {
 	return e, ok
 }
 
-// sync\recorder-guids.json, written whole and atomically (as start-point.json), only when something changed
+// sync\recorder-guids.json, written whole and atomically (as start-point.json), only when something changed: now (the
+// bridge stopping, the tests)
 func liveMidSave() {
 	mids.mu.Lock()
 	defer mids.mu.Unlock()
+	liveMidSaveLocked()
+}
+
+// 2.3.1 (2.3.0 review L2/L3): the uploader's turn: written only when something changed AND the last write is at least
+// RecorderGuidsSaveSec old (the file holds up to 20,000 MasterIDs a company: not rewritten every turn)
+func liveMidSaveSoon() {
+	mids.mu.Lock()
+	defer mids.mu.Unlock()
+	if !mids.dirty || (!mids.savedAt.IsZero() && nowFn().Sub(mids.savedAt) < liveMidSaveEvery()) {
+		return
+	}
+	liveMidSaveLocked()
+}
+
+// under mids.mu
+func liveMidSaveLocked() {
 	if !mids.dirty || mids.m == nil || mids.dir != syncDir() {
 		return
 	}
@@ -161,7 +186,7 @@ func liveMidSave() {
 		writeLog("Recorder: the record of Tally's GUIDs could not be written to " + liveGuidsFile() + ": " + err.Error())
 		return
 	}
-	mids.dirty = false
+	mids.dirty, mids.savedAt = false, nowFn()
 }
 
 // a voucher delete / cancel line the bridge finds the GUID for (the add-on gave none)

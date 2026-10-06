@@ -1,0 +1,143 @@
+// node run_parse_parta.mjs - bridge 2.3.1 part A (the owner's decisions of 06-Oct-2026, "item invoices enter complete"):
+// the cloud's one reader (server/tally-cloud/parse.js, the Day Book days path and the recorder's entry body alike) reads
+// the items (name, quantity, unit, rate, taxable value, HSN or SAC and GST rate as Tally applied them to the line, and the
+// CGST / SGST / IGST / cess worked out per line), bill-wise due dates given as dates, cost centres (on ledger lines and on
+// the ledger lines under items), bank details, TDS details, the e-invoice IRN and acknowledgement and the e-way bill
+// number, and checks the owner's accuracy rules, each failure in plain words.
+// Fixtures: bridge-go/testdata/typed-like-7.1/partA-*.xml (typed as the real TallyPrime 7.1 answers; NOT captured from a
+// real Tally). Section 2 proves the entry request's fetch (bridge-go/recorder_live.go liveFetchField) carries every field
+// the reader uses: each fixture cut down to the fetched fields reads exactly as the whole one.
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import { parseDay, d8 } from "../server/tally-cloud/parse.js";
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const TD = path.join(HERE, "..", "bridge-go", "testdata", "typed-like-7.1");
+let fails = 0;
+const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
+const J = JSON.stringify;
+const read = (f) => fs.readFileSync(path.join(TD, f), "utf8");
+const el = (t) => t.slice(t.indexOf("<VOUCHER REMOTEID"), t.lastIndexOf("</VOUCHER>") + 10);
+const G = (mid) => "226fb516-9d2d-45ad-ad78-304d86b64500-" + mid.toString(16).padStart(8, "0");
+const one = (t) => parseDay(t).vouchers[0] || {};
+
+// ---- 1. each scenario the owner named, read whole (the answer and the voucher element the bridge sends)
+const CASES = [
+  ["partA-sales-two-rates.xml", "sales with two items at different GST rates", (v) => [
+    [J(v.items), J([
+      {n: 0, item: "Widget A", qty: 10, unit: "Nos", rate: 200, taxable: 2000, alloc: 2000, hsn: "8471", gst: 18, cgst: 180, sgst: 180, igst: 0, cess: 0},
+      {n: 1, item: "Rice B", qty: 20, unit: "Kg", rate: 50, taxable: 1000, alloc: 1000, hsn: "1006", gst: 5, cgst: 25, sgst: 25, igst: 0, cess: 0}])],
+    [J([v.irn, v.ackNo, v.ackDate, v.eway]), J(["a5c12dca80e743321740b001fd70953e8738d109865d28ba4013750f2046f229", "112610020345678", "20261002", "381001234567"])],
+    [J([v.gstin, v.pos, v.cmp, v.ref, v.refDate]), J(["07AAJFQ3158R1ZH", "Delhi", "07AAGCL4827M1Z3", "PO-88", "20260930"])],
+    [J(v.costs), J([{n: 3, ledger: "Sales GST 18%", cat: "Primary Cost Category", centre: "Retail", amt: 2000}])]]],
+  ["partA-purchase-igst.xml", "purchase with items (IGST)", (v) => [
+    [J(v.items), J([{n: 0, item: "Widget A", qty: 5, unit: "Nos", rate: 1000, taxable: -5000, alloc: -5000, hsn: "8471", gst: 18, cgst: 0, sgst: 0, igst: -900, cess: 0}])],
+    [J(v.dues), J([{n: 0, ledger: "Spike Supplier", name: "INV-77", type: "New Ref", amt: 5900, due: "20261115"}])],
+    [J([v.ref, v.refDate]), J(["INV-77", "20261001"])]]],
+  ["partA-credit-note-items.xml", "credit note with items", (v) => [
+    [J(v.items), J([{n: 0, item: "Widget A", qty: 1, unit: "Nos", rate: 200, taxable: -200, alloc: -200, hsn: "8471", gst: 18, cgst: -18, sgst: -18, igst: 0, cess: 0}])]]],
+  ["partA-receipt-against-bill.xml", "receipt against a bill", (v) => [
+    [J(v.banks), J([{n: 1, ledger: "Spike Bank", type: "Cheque", no: "000451", date: "20261002", bdate: "20261003"}])], [J(v.items), "[]"]]],
+  ["partA-payment-tds.xml", "payment with TDS", (v) => [
+    [J(v.tds), J([{n: 1, ledger: "TDS on Contract", nature: "Payment to Contractors", party: "Spike Contractor", rate: 2, base: 100000, tax: 2000}])],
+    [J(v.banks), J([{n: 2, ledger: "Spike Bank", type: "e-Fund Transfer", no: "UTR26100200991", date: "20261002", bdate: ""}])]]],
+  ["partA-journal-cost-centres.xml", "journal with cost centres", (v) => [
+    [J(v.costs), J([{n: 0, ledger: "Rent", cat: "Primary Cost Category", centre: "Head Office", amt: -20000}, {n: 0, ledger: "Rent", cat: "Primary Cost Category", centre: "Branch", amt: -10000}])]]],
+  ["partA-bank-payment-utr.xml", "bank payment with UTR", (v) => [
+    [J(v.banks), J([{n: 1, ledger: "Spike Bank", type: "e-Fund Transfer", no: "SBIN526275123456", date: "20261002", bdate: "20261002"}])]]],
+];
+for (const [file, what, want] of CASES) {
+  const t = read(file);
+  for (const [how, x] of [["the answer", t], ["the voucher element", el(t)]]) {
+    const r = parseDay(x), v = r.vouchers[0] || {};
+    ok(r.n === 1 && Math.round(r.lines.reduce((a, l) => a + l[2], 0) * 100) === 0, what + ", " + how + ": one entry, its lines add up to 0");
+    ok(J(v.checks) === "[]", what + ", " + how + ": passes the accuracy checks (" + J(v.checks) + ")");
+    for (const [got, exp] of want(v)) ok(got === exp, what + ", " + how + ": " + exp.slice(0, 90) + (got === exp ? "" : " -- got " + got));
+  }
+}
+
+// ---- 2. the entry request's fetch carries everything the reader uses: each fixture cut down to the fetched fields (as a
+// collection export answers: a field comes back only when fetched, a list only when one of its fields is) reads the same
+const goSrc = fs.readFileSync(path.join(HERE, "..", "bridge-go", "recorder_live.go"), "utf8");
+const strs = (code) => (code.replace(/\/\/[^\n]*/g, "").match(/"[^"]*"/g) || []).map((x) => x.slice(1, -1)).join("");
+const block = goSrc.slice(goSrc.indexOf("\tliveFetchField222 = "), goSrc.indexOf("\n)", goSrc.indexOf("\tliveFetchField222 = ")));
+const f222 = strs(block.slice(0, block.indexOf("\tliveFetchField = ")));
+const FETCH = f222 + strs(block.slice(block.indexOf("\tliveFetchField = ") + "\tliveFetchField = liveFetchField222".length));
+ok(FETCH.startsWith("GUID, MASTERID, ALTERID, DATE") && FETCH.includes("ALLINVENTORYENTRIES.STOCKITEMNAME") && FETCH.split(", ").length === 57,
+  "the fetch read from recorder_live.go: " + FETCH.split(", ").length + " fields");
+function cut(voucher, fetch) {
+  const want = new Set(fetch.split(", "));
+  const tok = /<(\/?)([A-Za-z0-9.:_]+)([^>]*?)(\/?)>([^<]*)/g, root = {kids: []}, stack = [root];
+  let m;
+  while ((m = tok.exec(voucher))) {
+    const top = stack[stack.length - 1];
+    if (m[1] === "/") { if (stack.length > 1) stack.pop(); continue; }
+    if (m[4] === "/") { top.kids.push({name: m[2], open: "<" + m[2] + m[3] + "/>", kids: [], self: true}); continue; }
+    const n = {name: m[2], open: "<" + m[2] + m[3] + ">", text: m[5], kids: []};
+    top.kids.push(n); stack.push(n);
+  }
+  const emit = (n, p0) => {
+    const p = (p0 ? p0 + "." : "") + n.name.replace(/\.LIST$/, "");
+    if (!n.kids.length && !/\.LIST$/.test(n.name)) return want.has(p) ? (n.self ? n.open : n.open + n.text + "</" + n.name + ">") : "";
+    const inner = n.kids.map((k) => emit(k, p)).join("");
+    return inner ? n.open + inner + "</" + n.name + ">" : "";
+  };
+  const v = root.kids[0];
+  return v.open + v.kids.map((k) => emit(k, "")).join("") + "</VOUCHER>";
+}
+const OLDFETCH = f222 + ", ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.LEDGERNAME, ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.AMOUNT, ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.ISDEEMEDPOSITIVE";
+for (const [file, what] of CASES) {
+  const x = el(read(file)), whole = parseDay(x), part = parseDay(cut(x, FETCH));
+  ok(J(part) === J(whole), what + ": the body as the 2.3.1 request fetches it reads exactly as the whole voucher" + (J(part) === J(whole) ? "" : ": " + J(part).slice(0, 300)));
+  const old = parseDay(cut(x, OLDFETCH));
+  ok(J(old) !== J(whole), what + ": the body as the request before part A fetched it lacked some of it");
+}
+
+// ---- 3. the owner's accuracy rules: each failure held in plain words; within one rupee of rounding passes
+const S = read("partA-sales-two-rates.xml"), P = read("partA-purchase-igst.xml"), JC = read("partA-journal-cost-centres.xml");
+const amtTag = (a) => '<AMOUNT TYPE="Amount">' + a + "</AMOUNT>";
+{
+  const v = one(S.replace(amtTag("-3410.00"), amtTag("-3400.00")));
+  ok(v.checks.length && /^its lines do not add up to zero \(Rs 10\.00 more credit\)/.test(v.checks[0]), "lines that do not total zero: '" + v.checks[0] + "'");
+}
+{
+  // CGST typed 10 rupees more than Tally's rates give, the party moved with it (the lines still add up)
+  const x = S.replace(amtTag("205.00"), amtTag("215.00")).replace(amtTag("-3410.00"), amtTag("-3420.00")).replace("<AMOUNT>-3410.00</AMOUNT>", "<AMOUNT>-3420.00</AMOUNT>");
+  const v = one(x);
+  ok(J(v.checks) === J(["the GST worked out on the items (Rs 410.00) does not match the GST ledger lines (Rs 420.00)"]), "item tax not equal to the GST ledger lines: " + J(v.checks));
+  const y = S.replace(amtTag("205.00"), amtTag("205.40")).replace(amtTag("-3410.00"), amtTag("-3410.40")).replace("<AMOUNT>-3410.00</AMOUNT>", "<AMOUNT>-3410.40</AMOUNT>");
+  ok(J(one(y).checks) === "[]", "within one rupee (Tally's rounding per ledger): passes (" + J(one(y).checks) + ")");
+}
+{
+  // an item's taxable value not the ledger line under it
+  const x = S.replace(amtTag("2000.00") + "\n      <ACTUALQTY", amtTag("2100.00") + "\n      <ACTUALQTY");
+  const v = one(x);
+  ok(v.checks.some((c) => c === "item Widget A: taxable value Rs 2100.00 but the ledger lines under it come to Rs 2000.00"), "an item's taxable value not its ledger lines: " + J(v.checks));
+}
+{
+  const v = one(S.replace("<AMOUNT>-3410.00</AMOUNT>", "<AMOUNT>-3400.00</AMOUNT>"));
+  ok(J(v.checks) === J(["the bill-wise details of Spike Customer come to Rs 3400.00, not the line's Rs 3410.00"]), "bill-wise not adding up to the line: " + J(v.checks));
+}
+{
+  const v = one(JC.replace(amtTag("-10000.00"), amtTag("-9000.00")));
+  ok(J(v.checks) === J(["the cost centres of Rent (Primary Cost Category) come to Rs 29000.00, not the line's Rs 30000.00"]), "cost centres not adding up to the line: " + J(v.checks));
+}
+{
+  // IGST: the purchase's IGST typed short by 50 (the supplier moved with it)
+  const v = one(P.replace(amtTag("-900.00"), amtTag("-850.00")).replace(amtTag("5900.00"), amtTag("5850.00")).replace("<AMOUNT>5900.00</AMOUNT>", "<AMOUNT>5850.00</AMOUNT>"));
+  ok(J(v.checks) === J(["the GST worked out on the items (Rs 900.00) does not match the GST ledger lines (Rs 850.00)"]), "IGST not equal to the items' tax: " + J(v.checks));
+}
+{
+  // no GST ledger lines at all (reverse charge, an unregistered supplier): the tax is not checked
+  const x = S.replace(/<ALLLEDGERENTRIES\.LIST>\s*<LEDGERNAME TYPE="String">[CS]GST Output<\/LEDGERNAME>[\s\S]*?<\/ALLLEDGERENTRIES\.LIST>/g, "")
+    .replace(amtTag("-3410.00"), amtTag("-3000.00")).replace("<AMOUNT>-3410.00</AMOUNT>", "<AMOUNT>-3000.00</AMOUNT>");
+  ok(J(one(x).checks) === "[]", "an item invoice with no GST ledger lines: the tax is not checked (" + J(one(x).checks) + ")");
+}
+{
+  const v = one(S.replace(/<ISCANCELLED TYPE="Logical">No/, '<ISCANCELLED TYPE="Logical">Yes').replace(amtTag("-3410.00"), amtTag("-3400.00")));
+  ok(J(v.checks) === "[]", "a cancelled entry is not checked");
+}
+
+// ---- 4. dates as Tally writes them
+ok(d8("20261002") === "20261002" && d8("15-Nov-2026") === "20261115" && d8("5-Oct-26") === "20261005" && d8("30 Days") === "" && d8("") === "", "d8: yyyymmdd, d-Mon-yyyy, d-Mon-yy; a period in days is no date");
+console.log(fails ? fails + " FAILED" : "all passed"); process.exit(fails ? 1 : 0);
