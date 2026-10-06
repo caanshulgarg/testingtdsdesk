@@ -513,7 +513,7 @@ func lightCompanyList(sessions []M) []M {
 	if coListHeld() {
 		return sessions // 2.3.1: backed off after the list took over 2 s (companylist.go): the list held stands
 	}
-	fresh, ok := openCompaniesAsk(coListTC(), true)
+	fresh, ok := openCompaniesAsk(bgCompaniesTC(), true) // 2.3.1: the 2 s hard stop (recorder_owntally.go)
 	switch {
 	case ok:
 		_ = os.Chtimes(shared, nowFn(), nowFn()) // its age by the bridge's clock

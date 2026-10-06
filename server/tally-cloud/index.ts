@@ -817,7 +817,19 @@ async function bookFor(firm: string, company: string) {
 
 // a day's entries and lines as tally_ingest_day takes them. Ledger and party names are cleaned (migration-23: no line
 // breaks; other spaces kept as Tally has them), as the masters are, so an entry meets its ledger's opening in every report
-const dayVouchers = (r: any) => r.vouchers.map((v: any) => ({ guid: v.guid, alter: v.alter, type: v.type, no: v.no, party: cleanName(v.party), narr: v.narr, cancel: v.cancel, opt: v.opt, gstin: v.gstin, pos: v.pos, ref: v.ref, refDate: v.refDate, cmp: v.cmp, fid: v.fid ?? null }));   // fid (migration 37): the TDSDesk id from the full narration
+const dayVouchers = (r: any) => r.vouchers.map((v: any) => ({ guid: v.guid, alter: v.alter, type: v.type, no: v.no, party: cleanName(v.party), narr: v.narr, cancel: v.cancel, opt: v.opt, gstin: v.gstin, pos: v.pos, ref: v.ref, refDate: v.refDate, cmp: v.cmp, fid: v.fid ?? null,   // fid (migration 37): the TDSDesk id from the full narration
+  ...partA(v) }));
+// bridge 2.3.1 part A (migration 57): the rest of the entry, read by parse.js the same way on both paths (the days path and
+// the recorder's entry body): the e-invoice and e-way bill, the items, cost centres, bank and TDS details, due dates given
+// as dates, and the accuracy checks' plain words (none: []). Names cleaned as every other name. A voucher a parser without
+// part A read (none of these keys) carries none of them: the database then keeps what it has (never blanked)
+function partA(v: any): Record<string, unknown> {
+  if (!Array.isArray(v?.items)) return {};
+  const nm = (x: any) => ({ ...x, ledger: cleanName(String(x.ledger || "")) });
+  return { irn: v.irn || "", ackNo: v.ackNo || "", ackDate: v.ackDate || "", eway: v.eway || "",
+    items: v.items.map((x: any) => ({ ...x, item: cleanName(String(x.item || "")) })), costs: (v.costs || []).map(nm), banks: (v.banks || []).map(nm),
+    tds: (v.tds || []).map((x: any) => ({ ...nm(x), party: cleanName(String(x.party || "")) })), dues: (v.dues || []).map(nm), checks: Array.isArray(v.checks) ? v.checks : [] };
+}
 const dayLines = (r: any) => r.lines.map((l: any[]) => [l[0], cleanName(l[1]), ...l.slice(2)]);
 // a list of [name, parent] (ledgers or groups) with the names cleaned (migration-23); "Primary" as a parent is none. Two
 // that are one once cleaned are kept once: the one with a parent, else the one already clean
@@ -1153,6 +1165,15 @@ function cleanRecorderLine(x: any, me: { id: string }): { line?: Record<string, 
           : hasInventory(xml, og as string) ? "its lines do not add up: an item invoice's sales or purchase ledger may not have come" : "its lines do not add up")
           + "): upload this day's Day Book to settle it";
         console.log("tally-ingest recorder_lines: body not taken (" + bl.length + " lines, sum " + sum + ")", line.line_id, og);
+        line.vouchers = []; line.lines = []; line.heldWhy = why;
+        (line.payload as Record<string, unknown>).heldWhy = why;
+      } else if (Array.isArray(bv.checks) && bv.checks.length) {
+        // bridge 2.3.1 part A (the owner's accuracy rules of 06-Oct-2026): an entry applies only if its lines total zero, its
+        // items' taxable value plus tax equal its ledger lines, and its bill-wise and cost centre allocations add up to their
+        // line. Else the line is held with plain words and NOTHING of the entry is applied (vouchers [], lines []); the Day
+        // Book for its date, once uploaded, brings the entry in as Tally has it, marked for checking (never refused)
+        const why = ("the entry is held, nothing of it applied: " + bv.checks.join("; ")).slice(0, 210) + "; the Day Book for its date, once uploaded, brings it in marked for checking";
+        console.log("tally-ingest recorder_lines: body held by the accuracy checks", line.line_id, og, bv.checks);
         line.vouchers = []; line.lines = []; line.heldWhy = why;
         (line.payload as Record<string, unknown>).heldWhy = why;
       }

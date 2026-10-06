@@ -243,8 +243,17 @@ func liveOwnAskNow() bool {
 	live.mu.Lock()
 	live.ownWant, live.ownAskAt = false, now
 	live.mu.Unlock()
-	openCompaniesAsk(coListTC(), true) // 2.3.1: under the 2-second rule (companylist.go)
+	openCompaniesAsk(bgCompaniesTC(), true)
 	return true
+}
+
+// 2.3.1 (the owner, 06-Oct-2026): the company list (TDSDeskCompanies) asked in the background - the reader's own look
+// here, when a line waits for one, and the light check's list (startpoint.go lightCompanyList) - is a background read
+// under the same 2-second HARD stop as the entry request (RecorderLimitMs): the bridge stops waiting then, and a look so
+// stopped is incomplete (it tells nothing; liveNoteOwnTally). It gives way to a posting. A person's look (Update now, the
+// tray, the setup) is not cut
+func bgCompaniesTC() *TC {
+	return &TC{copier: true, light: true, yield: func() bool { return postingGoing() || importsInFlight.Load() > 0 }, limitMs: keepNum("RecorderLimitMs", 2000)}
 }
 
 // After 2.3.0 (refetch): under live.mu, whether this bridge's own Tally has the company open now: its last look saw it open, or

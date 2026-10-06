@@ -17,8 +17,8 @@ revoked; `begin; ... commit;`; safe to run twice) and is shown to the owner befo
 
 ## The two valid orders (both end with the same function texts: `tests/run_migration_order.py` asserts it)
 
-- staging: 32 → 33 → 35 → 34 (first) → 36b → 37 → 36 → 38 → 39 (applied 03-Oct, **except 39's tally_ingest_day part**: both forms are still 38's) → 40 → 41 (run 03-Oct, evening; its 8-argument `tally_ingest_day` superseded 39's) → 42 → 43 (run 04-Oct) → 44 (run 04-Oct) → 45 (run 04-Oct) → **46** → **47** → **48** (run by the owner) → **49** → **50** (run by the owner) → 51 → 52 → 53 → 54 → 55 → 56
-- a fresh database: 32 → 33 → 35 → 34 (reviewed) → 36 → 36b → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 51 → 52 → 53 → 54 → 55 → 56
+- staging: 32 → 33 → 35 → 34 (first) → 36b → 37 → 36 → 38 → 39 (applied 03-Oct, **except 39's tally_ingest_day part**: both forms are still 38's) → 40 → 41 (run 03-Oct, evening; its 8-argument `tally_ingest_day` superseded 39's) → 42 → 43 (run 04-Oct) → 44 (run 04-Oct) → 45 (run 04-Oct) → **46** → **47** → **48** (run by the owner) → **49** → **50** (run by the owner) → 51 → 52 → 53 → 54 → 55 → 56 → 57
+- a fresh database: 32 → 33 → 35 → 34 (reviewed) → 36 → 36b → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 51 → 52 → 53 → 54 → 55 → 56 → 57
 
 | # | File | What it adds |
 |---|---|---|
@@ -183,6 +183,24 @@ the live entry count and ledger-day total before and after. `tally_recorder_blan
 `tally_unknown_ledger_entries(book)` (members; null: the firm's books): live entries naming a ledger FinCom does not have,
 listed in plain words on Sync activity and the client's Books page. Tested by `run_migration56.py`,
 `run_migration_order.py` (56 in both orders) and `run_unknown_ledgers_ui.py`.
+FinCom Bridge 2.3.1 part A (06-Oct-2026): `migration-57-entry-details.sql` runs after 56 in both orders (add-only, one
+transaction, `lock_timeout` 10 s, no "delete from", safe twice; NOT yet run on staging). It stores the whole entry the
+2.3.1 request fetches and parse.js reads (one reader for the Day Book and the entry body): `tally_vouchers` + `irn`,
+`irn_ack_no`, `irn_ack_date`, `eway_no`, `check_notes` (the accuracy checks' plain words, `[]` when none); the tables
+`tally_item_lines` (item, qty, unit, rate, taxable, HSN / SAC and GST rate Tally applied to the line, CGST / SGST / IGST /
+cess worked out from the line's rate and taxable value: Tally 7.1 writes no tax amount per item line, `tax_basis` says
+so), `tally_cost_allocs`, `tally_bank_allocs`, `tally_tds_lines` (RLS: the firm's members read; rows of an earlier version
+marked `gone_at`, never removed); `tally_bills.due` (a due date given as a date). `tally_ingest_details(book, vouchers,
+p_keep)` (granted to nobody) writes them, called by 56's 5-argument `tally_ingest_entries` after 48's 4-argument form; a
+Day Book (`tally_ingest_day`, now through the 5-argument form with `p_keep` false) is authoritative, a recorder line
+(`p_keep` true) never blanks a stored value. tally-ingest does not mark entries `"full": true`, so 56's keep stays in force
+for the recorder path: a value removed in Tally reaches the copy by a Day Book upload. `tally_ingest_delete` = 50's text
+but a delete or cancel of an entry never in the copy settles at once ("nothing to remove: the entry is not in FinCom's
+copy and no longer counts in Tally", kept visible); a later body bringing that GUID is deleted (cancelled) again.
+The accuracy checks themselves run in tally-ingest (a recorder body failing one is held with plain words, nothing of it
+applied); a Day Book entry failing one comes in, its words in `check_notes`. tally-ingest works without 57 (the details
+are then not stored). Tested by `run_migration57.py`, `run_migration_order.py` (57 in both orders), `run_parta_server.py`
+(through tally-ingest) and `run_parse_parta.mjs`.
 
 Bridge 2.3.1 (06-Oct-2026, the 2.3.0 review's deferred cloud Low): `migration-58-lows.sql` runs after 55 in both orders,
 independent of 56 and 57 (add-only, one transaction, `lock_timeout` 10 s, safe twice): on the seven tables 54 and 55 made
@@ -191,11 +209,11 @@ independent of 56 and 57 (add-only, one transaction, `lock_timeout` 10 s, safe t
 insert and update; Supabase's defaults left delete and the rest) and select granted back to authenticated; their id
 sequences closed to both. Functions unchanged. Tested by `run_migration58.py`. Nothing in tally-ingest or the app needs it.
 
-Bridge 2.3.1 (06-Oct-2026, the owner's report of 08:05 and the migration-50 review's round-3 Lows): `migration-60-recorder-lows.sql`
-runs after 56 in both orders (fresh: ... -> 55 -> 56 -> 60; staging: after 56), independent of 57, 58 and 59 (add-only, one
-transaction, `lock_timeout` 10 s, no "delete from", safe twice; NOT yet run on staging). One function replaced,
-`tally_recorder_line` (56's text, the lines marked "60" changed; granted to nobody): a delete or cancel line for an entry FinCom's
-copy never had is applied as "nothing to remove" (a real GUID and an AlterID above 0); without an AlterID, or under the add-on's
-placeholder GUID, it stays held (R3-L1); a create late below a cancel applied for its GUID is applied and cancelled again, below a
-delete 'stale' as before (R3-L2); no words promise a Day Book that cannot settle a line (R3-L3). Tested by `run_migration60.py`
-and `run_migration_order.py` (60 in both orders).
+Bridge 2.3.1 (06-Oct-2026, the migration-50 review's round-3 Lows): `migration-60-recorder-lows.sql` runs after 56 and 57
+in both orders (fresh and staging: ... -> 55 -> 56 -> 57 -> 58 -> 60; independent of 58 and 59; add-only, one transaction,
+`lock_timeout` 10 s, no "delete from", safe twice; NOT yet run on staging). One function replaced, `tally_recorder_line`
+(56's text, which 57 does not replace; the lines marked "60" changed; granted to nobody): a delete or cancel under the
+add-on's placeholder GUID is held as a GUID-less one (R3-L1: twice it broke the line's call); a create late below a cancel
+applied for its GUID is applied and cancelled again, below a delete 'stale' as before (R3-L2); a GUID-less delete with no
+date promises no Day Book (R3-L3). The owner's "nothing to remove" (08:05) is 57's (`tally_ingest_delete`), not repeated.
+Tested by `run_migration60.py` (on 56 -> 57 -> 58) and `run_migration_order.py` (56 -> 57 -> 58 -> 60 in both orders).

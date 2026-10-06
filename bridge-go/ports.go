@@ -438,7 +438,7 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 		}
 		raw, err := invokeTally(tc, toInt(pp["port"]), companiesRequest(), 8)
 		if tc.limitMs > 0 {
-			coListNote(toInt(pp["port"]), err) // 2.3.1: a background ask under the 2-second rule (companylist.go)
+			coListNote(toInt(pp["port"]), err) // 2.3.1: a stopped background ask backs the list off (companylist.go)
 		}
 		if err != nil {
 			allFresh = false
@@ -447,7 +447,8 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 			}
 		}
 		if err != nil && (errors.Is(err, errPreempted) || errors.Is(err, errBackoff) || errors.Is(err, errRecorderStop)) && prevCompanies(toInt(pp["port"])) != nil {
-			// a background read stopped or held back: the companies named last time stand, nothing new is known
+			// a background read stopped or held back (2.3.1: or stopped at its 2 s hard stop): the companies named last time
+			// stand, nothing new is known
 			e["ok"], e["companies"], e["tallyState"] = true, prevCompanies(toInt(pp["port"])), "open"
 		} else if err != nil && isBusyErr(err) && tallyPortOpen(toInt(pp["port"])) && prevCompanies(toInt(pp["port"])) != nil {
 			// a busy Tally is still open: the companies it named last time stay, marked busy
