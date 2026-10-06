@@ -1,0 +1,20 @@
+2026-10-06 11:49:26  Recorder: FinCom sets where the changes come from on this computer: both
+2026-10-06 11:49:56  Recorder: FinCom sets where the changes come from on this computer: addon
+2026-10-06 11:49:56  Posting job pd-30-light-full-jobs-1-f1124e: 1 item(s) for FinCom Spike Co
+2026-10-06 11:49:57      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>31</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> </RESPONSE> 
+2026-10-06 11:49:57  Posting job pd-30-light-full-jobs-1-f1124e: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 31)
+2026-10-06 11:49:57  Posting job pd-30-light-full-jobs-1-f1124e: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 11:49:57  Posting job pd-30-light-full-jobs-1-f1124e: posting window ALTVCHID 36 to 37, 1 voucher(s) and 0 master(s) created
+2026-10-06 11:49:57  Posting job pd-30-light-full-jobs-1-f1124e done: Posted 1 of 1 (Tally's reply)
+2026-10-06 11:50:09  Posting job pd-30-light-full-jobs-2-a4023d: 1 item(s) for FinCom Spike Co
+2026-10-06 11:50:10      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>32</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> </RESPONSE> 
+2026-10-06 11:50:10  Posting job pd-30-light-full-jobs-2-a4023d: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 32)
+2026-10-06 11:50:10  Posting job pd-30-light-full-jobs-2-a4023d: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 11:50:10  Posting job pd-30-light-full-jobs-2-a4023d: posting window ALTVCHID 37 to 38, 1 voucher(s) and 0 master(s) created
+2026-10-06 11:50:10  Posting job pd-30-light-full-jobs-2-a4023d done: Posted 1 of 1 (Tally's reply)
+2026-10-06 11:50:23      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>33</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> </RESPONSE> 
+2026-10-06 11:50:23    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 33)
+2026-10-06 11:50:23  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 11:50:35      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>34</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> </RESPONSE> 
+2026-10-06 11:50:35    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 34)
+2026-10-06 11:50:35  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply

@@ -1,0 +1,39 @@
+2026-10-06 12:19:49  Recorder: Sales 1611 of 02-Oct-2026 (MasterID 4027, line be19f1d8…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 12:19:49  Recorder: Sales 1611 of 02-Oct-2026 (MasterID 4027, line be19f1d8…): not asked this time: TallyPrime is not running in your Windows login, or does not accept connections (F1 Help > Settings > Connectivity: TallyPrime acts as Both). (not counted as a try)
+2026-10-06 12:19:49  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 9 still held (9 in the list)
+2026-10-06 12:20:09  Recorder: Sales 1612 of 02-Oct-2026 (MasterID 4028, line 1fe28bb0…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 12:20:15  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-06 12:20:15  Recorder: Sales 1612 of 02-Oct-2026 (MasterID 4028, line 1fe28bb0…): not asked this time: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (not counted as a try)
+2026-10-06 12:20:15  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 9 still held (9 in the list)
+2026-10-06 12:20:20  Recorder: FinCom sets where the changes come from on this computer: both
+2026-10-06 12:20:34  Recorder: Sales 1613 of 31-Oct-2026 (MasterID 4029, line b7435929…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 12:20:34  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-06 12:20:34  Recorder: Sales 1613 of 31-Oct-2026 (MasterID 4029, line b7435929…): not asked this time: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (not counted as a try)
+2026-10-06 12:20:34  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 9 still held (9 in the list)
+2026-10-06 12:20:50  Recorder: FinCom sets where the changes come from on this computer: addon
+2026-10-06 12:20:51  Posting job pd-71-light-heads-gentle0-jobs-1-28860e: 1 item(s) for FinCom Spike Co
+2026-10-06 12:20:51      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>48</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 12:20:51  Posting job pd-71-light-heads-gentle0-jobs-1-28860e: request 1 of 1: 1 vouchers in 0.1 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 48)
+2026-10-06 12:20:51  Posting job pd-71-light-heads-gentle0-jobs-1-28860e: 1 requests, 1 vouchers, 0.1 s total
+2026-10-06 12:20:51  Posting job pd-71-light-heads-gentle0-jobs-1-28860e: posting window ALTVCHID 58 to 59, 1 voucher(s) and 0 master(s) created
+2026-10-06 12:20:51  Posting job pd-71-light-heads-gentle0-jobs-1-28860e done: Posted 1 of 1 (Tally's reply)
+2026-10-06 12:20:56  Recorder: Sales 1614 of 31-Oct-2026 (MasterID 4030, line e1fc22dc…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 12:20:56  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-06 12:20:56  Recorder: Sales 1614 of 31-Oct-2026 (MasterID 4030, line e1fc22dc…): not asked this time: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (not counted as a try)
+2026-10-06 12:20:56  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 9 still held (9 in the list)
+2026-10-06 12:21:03  Posting job pd-71-light-heads-gentle0-jobs-2-9b4d0a: 1 item(s) for FinCom Spike Co
+2026-10-06 12:21:03      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>49</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 12:21:03  Posting job pd-71-light-heads-gentle0-jobs-2-9b4d0a: request 1 of 1: 1 vouchers in 0.0 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 49)
+2026-10-06 12:21:03  Posting job pd-71-light-heads-gentle0-jobs-2-9b4d0a: 1 requests, 1 vouchers, 0.0 s total
+2026-10-06 12:21:03  Posting job pd-71-light-heads-gentle0-jobs-2-9b4d0a: posting window ALTVCHID 59 to 60, 1 voucher(s) and 0 master(s) created
+2026-10-06 12:21:03  Posting job pd-71-light-heads-gentle0-jobs-2-9b4d0a done: Posted 1 of 1 (Tally's reply)
+2026-10-06 12:21:15      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>50</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 12:21:15    request 1 of 1: 1 voucher in 0.0 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 50)
+2026-10-06 12:21:15  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 12:21:19  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line b6f64403…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 12:21:20  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-06 12:21:20  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line b6f64403…): not asked this time: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (not counted as a try)
+2026-10-06 12:21:20  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 9 still held (9 in the list)
+2026-10-06 12:21:27      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>51</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 12:21:27    request 1 of 1: 1 voucher in 0.0 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 51)
+2026-10-06 12:21:27  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply

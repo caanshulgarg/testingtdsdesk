@@ -1,0 +1,38 @@
+2026-10-06 11:45:19  Recorder: FinCom sets where the changes come from on this computer: both
+2026-10-06 11:45:49  Recorder: FinCom sets where the changes come from on this computer: addon
+2026-10-06 11:45:49  Posting job pd-71-light-heads-jobs-1-a7be53: 1 item(s) for FinCom Spike Co
+2026-10-06 11:45:49      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>21</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 11:45:49  Posting job pd-71-light-heads-jobs-1-a7be53: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 21)
+2026-10-06 11:45:49  Posting job pd-71-light-heads-jobs-1-a7be53: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 11:45:50  Posting job pd-71-light-heads-jobs-1-a7be53: posting window ALTVCHID 24 to 25, 1 voucher(s) and 0 master(s) created
+2026-10-06 11:45:50  Posting job pd-71-light-heads-jobs-1-a7be53 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 11:46:02  Posting job pd-71-light-heads-jobs-2-171a42: 1 item(s) for FinCom Spike Co
+2026-10-06 11:46:02      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>22</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 11:46:02  Posting job pd-71-light-heads-jobs-2-171a42: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 22)
+2026-10-06 11:46:02  Posting job pd-71-light-heads-jobs-2-171a42: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 11:46:03  Posting job pd-71-light-heads-jobs-2-171a42: posting window ALTVCHID 25 to 26, 1 voucher(s) and 0 master(s) created
+2026-10-06 11:46:03  Posting job pd-71-light-heads-jobs-2-171a42 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 11:46:15      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>23</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 11:46:15    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 23)
+2026-10-06 11:46:15  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 11:46:27      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>24</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 11:46:27    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 24)
+2026-10-06 11:46:27  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 11:47:21  Recorder: Receipt 7 of 01-Oct-2026 (MasterID 26, line b73b837b…): asking Tally by MasterID
+2026-10-06 11:47:26  Recorder: Receipt 7 of 01-Oct-2026 (MasterID 26, line b73b837b…): taken: Tally's GUID 3e7ea37f-058f-4d06-93f4-050519fdce72-0000001a, AlterID 30
+2026-10-06 11:47:44  Recorder: Sales 11 of 02-Oct-2026 (MasterID 27, line b191ba5f…): asking Tally by MasterID
+2026-10-06 11:47:46  The body fetch off: Tally took 2.0 s for the entry bodies (limit 2 s) (FinCom Spike Co; on again when the owner switches where the changes come from)
+2026-10-06 11:47:46  Tally 9000: FinComVoucherByMaster 20261002 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 11:47:46  Recorder: Sales 11 of 02-Oct-2026 (MasterID 27, line b191ba5f…): held: the entry was not read from Tally: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 11:47:46  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)); sent without it (FinCom holds the line until a body comes)
+2026-10-06 11:47:46  Recorder: Sales 11 of 02-Oct-2026 (MasterID 27, line b191ba5f…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:48:06  Recorder: Sales 12 of 02-Oct-2026 (MasterID 28, line d234e491…): not asked: the body fetch is off for this company (Tally took 2.0 s at 11:47)
+2026-10-06 11:48:06  Recorder: Sales 12 of 02-Oct-2026 (MasterID 28, line d234e491…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:48:29  Recorder: Sales 13 of 31-Oct-2026 (MasterID 29, line 9501877c…): not asked: the body fetch is off for this company (Tally took 2.0 s at 11:47)
+2026-10-06 11:48:29  Recorder: Sales 13 of 31-Oct-2026 (MasterID 29, line 9501877c…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:48:51  Recorder: Sales 14 of 31-Oct-2026 (MasterID 30, line e07f0fa6…): not asked: the body fetch is off for this company (Tally took 2.0 s at 11:47)
+2026-10-06 11:48:51  Recorder: Sales 14 of 31-Oct-2026 (MasterID 30, line e07f0fa6…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:49:13  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line 056f9218…): not asked: the body fetch is off for this company (Tally took 2.0 s at 11:47)
+2026-10-06 11:49:13  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line 056f9218…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:49:36  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line 0503c394…): not asked: the body fetch is off for this company (Tally took 2.0 s at 11:47)
+2026-10-06 11:49:36  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line 0503c394…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)

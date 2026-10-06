@@ -1,0 +1,21 @@
+2026-10-06 12:12:49  The body fetch on again for FinCom Spike Co: the owner switched where the changes come from (both)
+2026-10-06 12:12:49  Recorder: FinCom sets where the changes come from on this computer: both
+2026-10-06 12:13:19  Recorder: FinCom sets where the changes come from on this computer: addon
+2026-10-06 12:13:20  Posting job pd-71-heavy-full-jobs-1-de064c: 1 item(s) for FinCom Spike Co
+2026-10-06 12:13:21      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>4031</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 12:13:21  Posting job pd-71-heavy-full-jobs-1-de064c: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 4031)
+2026-10-06 12:13:21  Posting job pd-71-heavy-full-jobs-1-de064c: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 12:13:21  Posting job pd-71-heavy-full-jobs-1-de064c: posting window ALTVCHID 4036 to 4037, 1 voucher(s) and 0 master(s) created
+2026-10-06 12:13:21  Posting job pd-71-heavy-full-jobs-1-de064c done: Posted 1 of 1 (Tally's reply)
+2026-10-06 12:13:33  Posting job pd-71-heavy-full-jobs-2-8999f2: 1 item(s) for FinCom Spike Co
+2026-10-06 12:13:33      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>4032</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 12:13:33  Posting job pd-71-heavy-full-jobs-2-8999f2: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 4032)
+2026-10-06 12:13:33  Posting job pd-71-heavy-full-jobs-2-8999f2: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 12:13:34  Posting job pd-71-heavy-full-jobs-2-8999f2: posting window ALTVCHID 4037 to 4038, 1 voucher(s) and 0 master(s) created
+2026-10-06 12:13:34  Posting job pd-71-heavy-full-jobs-2-8999f2 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 12:13:46      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>4033</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 12:13:46    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 4033)
+2026-10-06 12:13:46  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 12:13:58      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>4034</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 12:13:58    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 4034)
+2026-10-06 12:13:58  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply

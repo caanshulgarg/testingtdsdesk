@@ -1,0 +1,27 @@
+2026-10-06 12:15:55  FinCom Bridge 2.3.0: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+2026-10-06 12:15:55  FinCom Bridge 2.3.0 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+2026-10-06 12:15:55  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+2026-10-06 12:15:55  Check:  - 
+2026-10-06 12:15:58  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=4048, ALTMSTID=1468
+2026-10-06 12:15:58  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=4; now ALTVCHID=4048, ALTMSTID=1468
+2026-10-06 12:15:58  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+2026-10-06 12:16:58  Recorder: FinCom sets where the changes come from on this computer: both
+2026-10-06 12:17:28  Recorder: FinCom sets where the changes come from on this computer: addon
+2026-10-06 12:17:29  Posting job pd-30-light-none-gentle0-jobs-1-561538: 1 item(s) for FinCom Spike Co
+2026-10-06 12:17:29      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>44</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> </RESPONSE> 
+2026-10-06 12:17:29  Posting job pd-30-light-none-gentle0-jobs-1-561538: request 1 of 1: 1 vouchers in 0.0 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 44)
+2026-10-06 12:17:29  Posting job pd-30-light-none-gentle0-jobs-1-561538: 1 requests, 1 vouchers, 0.0 s total
+2026-10-06 12:17:29  Posting job pd-30-light-none-gentle0-jobs-1-561538: posting window ALTVCHID 54 to 55, 1 voucher(s) and 0 master(s) created
+2026-10-06 12:17:29  Posting job pd-30-light-none-gentle0-jobs-1-561538 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 12:17:41  Posting job pd-30-light-none-gentle0-jobs-2-0c16c6: 1 item(s) for FinCom Spike Co
+2026-10-06 12:17:41      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>45</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> </RESPONSE> 
+2026-10-06 12:17:41  Posting job pd-30-light-none-gentle0-jobs-2-0c16c6: request 1 of 1: 1 vouchers in 0.0 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 45)
+2026-10-06 12:17:41  Posting job pd-30-light-none-gentle0-jobs-2-0c16c6: 1 requests, 1 vouchers, 0.0 s total
+2026-10-06 12:17:41  Posting job pd-30-light-none-gentle0-jobs-2-0c16c6: posting window ALTVCHID 55 to 56, 1 voucher(s) and 0 master(s) created
+2026-10-06 12:17:41  Posting job pd-30-light-none-gentle0-jobs-2-0c16c6 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 12:17:53      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>46</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> </RESPONSE> 
+2026-10-06 12:17:53    request 1 of 1: 1 voucher in 0.0 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 46)
+2026-10-06 12:17:53  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 12:18:05      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>47</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> </RESPONSE> 
+2026-10-06 12:18:05    request 1 of 1: 1 voucher in 0.0 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 47)
+2026-10-06 12:18:05  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply

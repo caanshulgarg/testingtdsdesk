@@ -1,0 +1,15 @@
+2026-10-06 11:56:52  Tally 9000: FinComCompany took 3.5s
+2026-10-06 11:57:45      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>43</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 11:57:45    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 43)
+2026-10-06 11:57:45  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 11:57:46  Recorder: Sales 11 of 02-Oct-2026 (MasterID 27, line b191ba5f…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 11:57:49  Recorder: Sales 11 of 02-Oct-2026 (MasterID 27, line b191ba5f…): taken: Tally's GUID 3e7ea37f-058f-4d06-93f4-050519fdce72-0000001b, AlterID 31
+2026-10-06 11:57:49  Recorder: Sales 11 of 20261002 in FinCom Spike Co resolved: sent as created with its GUID 3e7ea37f-058f-4d06-93f4-050519fdce72-0000001b and body
+2026-10-06 11:57:49  Recorder: held lines: 0 from FinCom, 1 asked, 1 resolved, 5 still held (6 in the list)
+2026-10-06 11:58:06  Recorder: Sales 12 of 02-Oct-2026 (MasterID 28, line d234e491…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 11:58:06  Tally 9000: FinComVoucherByMaster 20261002 took 0.2s and failed: No connection could be made because the target machine actively refused it
+2026-10-06 11:58:06  Recorder: Sales 12 of 02-Oct-2026 (MasterID 28, line d234e491…): not asked this time: No connection could be made because the target machine actively refused it (not counted as a try)
+2026-10-06 11:58:06  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 5 still held (5 in the list)
+2026-10-06 11:58:29  Recorder: Sales 13 of 31-Oct-2026 (MasterID 29, line 9501877c…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 11:58:33  Recorder: Sales 13 of 31-Oct-2026 (MasterID 29, line 9501877c…): held: Tally's voucher with MasterID 29 is a Journal of 31-Jul-2026, not this Sales of 31-Oct-2026 (not asked again)
+2026-10-06 11:58:33  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 5 still held (5 in the list)

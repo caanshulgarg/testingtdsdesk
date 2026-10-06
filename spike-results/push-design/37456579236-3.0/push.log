@@ -1,0 +1,897 @@
+[11:32:08.922] push-design on TallyPrime 3.0: reps 2, heavy 600 ledgers / 600 items / up to 4000 vouchers (15 min), postings 2
+[11:32:09.881] system clock step after timeBeginPeriod(1): 0.456 ms (min 0.0039, max 5.231)
+[11:32:09.903] two files written 2 ms apart: NTFS write times 10.9946 ms apart
+[11:32:09.925] light company folder: D:\a\_temp\TallyData\100000
+[11:32:12.945] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-setup-light-started (1024x768)
+[11:32:41.117] Tally started (setup-light) in 28.2 s; company open: True
+[11:32:41.130] company GUID 22b4dfab-d32d-481b-a648-f82f87d9dce4
+[11:32:43.152] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[11:32:44.393] import light masters: 60 sent, created 59, errors 0, 207 ms
+[11:32:44.533] import template s5 (all fields): 1 sent, created 1, errors 0, 81.2 ms
+[11:32:44.764] import template s50 (all fields): 1 sent, created 1, errors 0, 226.1 ms
+[11:32:44.785] import template rc (all fields): 1 sent, created 1, errors 0, 19.8 ms
+[11:32:44.790] templates: rc all fields; s5 all fields; s50 all fields
+[11:32:44.834]   template Receipt 1 20261001 mid 4 aid 4 22b4dfab-d32d-481b-a648-f82f87d9dce4-00000004
+[11:32:44.836]   template Sales 1 20261002 mid 2 aid 2 22b4dfab-d32d-481b-a648-f82f87d9dce4-00000002
+[11:32:44.836]   template Sales 2 20261031 mid 3 aid 3 22b4dfab-d32d-481b-a648-f82f87d9dce4-00000003
+[11:32:45.014] TDL $$MachineName => '' 
+[11:32:45.022] TDL $$CmpUserName => 'TALLY User' 
+[11:32:45.029] TDL $$SysInfo:WindowsUser => 'runneradmin' 
+[11:32:45.033] TDL $$SysInfo:WindowsUserName => '' 
+[11:32:45.036] TDL $$SysInfo:UserName => '' 
+[11:32:45.040] TDL $$SysInfo:LoginUser => '' 
+[11:32:45.043] TDL $$SysInfo:SystemName => 'runnervmfi6oq' 
+[11:32:45.046] TDL $$SysInfo:ComputerName => '' 
+[11:32:45.049] TDL $$SysInfo:MachineName => '' 
+[11:32:45.056] TDL $$SysInfo:IPAddress => '10.1.0.105' 
+[11:32:45.060] TDL $$SysInfo:ApplicationPath => 'C:\Program Files\TallyPrime' 
+[11:32:45.063] TDL $$SysInfo:TempPath => '' 
+[11:32:51.094] tally.ini: Data D:\a\_temp\TallyHeavy; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-setup-heavy-started (1024x768)
+[11:33:19.035] Tally started (setup-heavy) in 27.9 s; company open: True
+[11:33:21.052] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[11:33:24.303] import heavy masters 0: 1000 sent, created 1000, errors 0, 3180.6 ms
+[11:33:24.930] import heavy masters 1000: 200 sent, created 200, errors 0, 624.4 ms
+[11:33:41.809] import heavy vouchers 0: 1000 sent, created 1000, errors 0, 16726.7 ms
+[11:33:59.707] import heavy vouchers 1000: 1000 sent, created 1000, errors 0, 17812.4 ms
+[11:34:17.898] import heavy vouchers 2000: 1000 sent, created 1000, errors 0, 18104.7 ms
+[11:34:35.837] import heavy vouchers 3000: 1000 sent, created 1000, errors 0, 17839 ms
+[11:34:36.752] heavy company: 611 ledgers, 650 stock items, 4004 vouchers in Tally (import took 1.8 min)
+[11:34:43.760] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-count-light-started (1024x768)
+[11:35:11.706] Tally started (count-light) in 27.9 s; company open: True
+[11:35:13.715] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[11:35:13.742] light company: 11 ledgers, 50 stock items, 4 vouchers
+[11:35:19.764] bridge's TallyHost: 127.0.0.2 (through the timing proxy)
+[11:35:19.774] bridge: setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.3.0.exe SHA-256 8e8145693224edf5459836323ce187e87e8dbca6eeac0bde494cf64b2ca6a7b9
+[11:35:39.461] bridge config after setup: TallyHost '127.0.0.2', TallyPorts 9000, port 9100
+[11:35:39.486] bridge on 127.0.0.1:9100, version 2.3.0
+[11:35:43.509] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-light-none-started (1024x768)
+[11:36:11.488] Tally started (light-none) in 28 s; company open: True
+[11:36:13.497] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[11:36:31.596] -- b: light / none / jobs #1: 1073.2 ms (done, ok True)
+[11:36:44.535] -- b: light / none / jobs #2: 936.8 ms (done, ok True)
+[11:36:56.888] -- b: light / none / import #1: 348.3 ms (answered, ok True)
+[11:37:09.240] -- b: light / none / import #2: 349 ms (answered, ok True)
+[11:37:09.246] -- a: light / none / receipt (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[shot] p-light-none-receipt-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-none-receipt-dup (1024x768)
+   rep 1: ui sendwait 0.5 first 31.4 settled 190.2; stamps pre  save  post  final ; line  B
+[shot] p-light-none-receipt-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.3 first 33.0 settled 205.5; stamps pre  save  post  final ; line  B
+[11:37:53.453]    Tally: 2 new, 0 altered (wanted 2)
+[11:37:53.461] -- a: light / none / sales5 (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[shot] p-light-none-sales5-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-none-sales5-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 47.5 settled 590.6; stamps pre  save  post  final ; line  B
+[shot] p-light-none-sales5-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.3 first 76.2 settled 430.3; stamps pre  save  post  final ; line  B
+[11:38:38.224]    Tally: 2 new, 0 altered (wanted 2)
+[11:38:38.226] -- a: light / none / sales50 (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-light-none-sales50-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-none-sales50-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 47.9 settled 270.3; stamps pre  save  post  final ; line  B
+[shot] p-light-none-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.3 first 76.7 settled 221.0; stamps pre  save  post  final ; line  B
+[11:39:22.487]    Tally: 2 new, 0 altered (wanted 2)
+[11:39:22.489] -- a: light / none / sales50 (alter) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-light-none-sales50-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-light-none-sales50-open (1024x768)
+   rep 1: ui sendwait 0.3 first 65.8 settled 335.6; stamps pre  save  post  final ; line  B
+[shot] p-light-none-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{HOME}'
+[keys] '{ENTER}'
+   rep 2: ui sendwait 0.3 first 76.4 settled 687.2; stamps pre  save  post  final ; line  B
+[11:40:07.268]    Tally: 0 new, 1 altered (wanted 2)
+[11:40:11.283] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPStamp.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-light-stamp-started (1024x768)
+[11:40:39.288] Tally started (light-stamp) in 28 s; company open: True
+[11:40:41.296] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[11:40:46.300] -- a: light / stamp / receipt (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[shot] p-light-stamp-receipt-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-stamp-receipt-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 32.8 settled 237.6; stamps pre 0 save 29.1 post 0 final ; line  B
+[shot] p-light-stamp-receipt-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.3 first 31.5 settled 188.9; stamps pre 0 save 20.1 post 0.5 final ; line  B
+[11:41:30.496]    Tally: 2 new, 0 altered (wanted 2)
+[11:41:30.497] -- a: light / stamp / sales5 (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[shot] p-light-stamp-sales5-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-stamp-sales5-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 32.3 settled 512.1; stamps pre 1 save 62.6 post 0 final ; line  B
+[shot] p-light-stamp-sales5-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.3 first 63.2 settled 476.8; stamps pre 0 save 58 post 1 final ; line  B
+[11:42:15.291]    Tally: 2 new, 0 altered (wanted 2)
+[11:42:15.292] -- a: light / stamp / sales50 (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-light-stamp-sales50-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-stamp-sales50-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 76.8 settled 205.7; stamps pre 0.6 save 214.3 post 0 final ; line  B
+[shot] p-light-stamp-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.3 first 32.7 settled 220.9; stamps pre 0 save 226.7 post 0 final ; line  B
+[11:42:59.544]    Tally: 2 new, 0 altered (wanted 2)
+[11:42:59.546] -- a: light / stamp / sales50 (alter) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-light-stamp-sales50-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-light-stamp-sales50-open (1024x768)
+   rep 1: ui sendwait 0.3 first 65.6 settled 688.5; stamps pre 0.4 save 308.5 post 0 final ; line  B
+[shot] p-light-stamp-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{HOME}'
+[keys] '{ENTER}'
+   rep 2: ui sendwait 0.4 first 76.8 settled 688.0; stamps pre 0 save 297 post 0.5 final ; line  B
+[11:43:44.708]    Tally: 0 new, 1 altered (wanted 2)
+[11:43:48.721] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPHeads.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-light-heads-started (1024x768)
+[11:44:16.722] Tally started (light-heads) in 28 s; company open: True
+[11:44:18.731] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[11:44:56.792] body fetch: recorderSource both -> addon sent by the stub cloud (nothing was off)
+[11:45:09.732] -- b: light / heads / jobs #1: 937.7 ms (done, ok True)
+[11:45:22.667] -- b: light / heads / jobs #2: 932.5 ms (done, ok True)
+[11:45:35.009] -- b: light / heads / import #1: 340.2 ms (answered, ok True)
+[11:45:47.364] -- b: light / heads / import #2: 353.1 ms (answered, ok True)
+[11:45:47.365] -- a: light / heads / receipt (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[shot] p-light-heads-receipt-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-heads-receipt-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 32.0 settled 220.9; stamps pre 4 save 16 post 1 final ; line  B
+[shot] p-light-heads-receipt-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.3 first 64.8 settled 204.3; stamps pre 1 save 25 post 1 final ; line  B
+[11:46:31.631]    Tally: 2 new, 0 altered (wanted 2)
+[11:46:31.632] -- a: light / heads / sales5 (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[shot] p-light-heads-sales5-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-heads-sales5-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 31.7 settled 529.9; stamps pre 1 save 70.3 post 1 final ; line  B
+[shot] p-light-heads-sales5-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.3 first 48.8 settled 477.8; stamps pre 1 save 62.6 post 1 final ; line  B
+[11:47:16.422]    Tally: 2 new, 0 altered (wanted 2)
+[11:47:16.424] -- a: light / heads / sales50 (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-light-heads-sales50-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-heads-sales50-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 77.9 settled 205.7; stamps pre 1 save 208.7 post 1 final ; line  B
+[shot] p-light-heads-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.3 first 61.6 settled 220.0; stamps pre 1 save 231.9 post 1 final ; line  B
+[11:48:00.653]    Tally: 2 new, 0 altered (wanted 2)
+[11:48:00.654] -- a: light / heads / sales50 (alter) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-light-heads-sales50-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-light-heads-sales50-open (1024x768)
+   rep 1: ui sendwait 0.3 first 77.7 settled 687.7; stamps pre 1 save 305.4 post 1 final ; line  B
+[shot] p-light-heads-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{HOME}'
+[keys] '{ENTER}'
+   rep 2: ui sendwait 0.4 first 76.0 settled 717.1; stamps pre 1 save 311.2 post 0 final ; line  B
+[11:48:45.851]    Tally: 0 new, 1 altered (wanted 2)
+[11:48:49.868] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPFull.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-light-full-started (1024x768)
+[11:49:17.854] Tally started (light-full) in 28 s; company open: True
+[11:49:19.873] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[11:49:56.977] body fetch: recorderSource both -> addon sent by the stub cloud (nothing was off)
+[11:50:09.913] -- b: light / full / jobs #1: 933 ms (done, ok True)
+[11:50:22.851] -- b: light / full / jobs #2: 935.6 ms (done, ok True)
+[11:50:35.203] -- b: light / full / import #1: 350.3 ms (answered, ok True)
+[11:50:47.560] -- b: light / full / import #2: 355.1 ms (answered, ok True)
+[11:50:47.561] -- a: light / full / receipt (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[shot] p-light-full-receipt-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-full-receipt-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 32.3 settled 237.8; stamps pre 0 save 19.5 post 9 final 11; line 599 B
+[shot] p-light-full-receipt-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.3 first 60.1 settled 236.2; stamps pre 0 save 17.6 post 1 final 12.6; line 599 B
+[11:51:31.881]    Tally: 2 new, 0 altered (wanted 2)
+[11:51:31.883] -- a: light / full / sales5 (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[shot] p-light-full-sales5-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-full-sales5-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 32.1 settled 592.7; stamps pre 0 save 76.5 post 3 final 10; line 1779 B
+[shot] p-light-full-sales5-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.3 first 63.8 settled 497.9; stamps pre 0 save 63.3 post 2 final 16.3; line 1779 B
+[11:52:16.783]    Tally: 2 new, 0 altered (wanted 2)
+[11:52:16.785] -- a: light / full / sales50 (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-light-full-sales50-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-full-sales50-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 61.2 settled 221.6; stamps pre 0 save 213.3 post 10 final 12; line 12599 B
+[shot] p-light-full-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.4 first 60.4 settled 219.8; stamps pre 1 save 241.3 post 10 final 15; line 12599 B
+[11:53:01.052]    Tally: 2 new, 0 altered (wanted 2)
+[11:53:01.054] -- a: light / full / sales50 (alter) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-light-full-sales50-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-light-full-sales50-open (1024x768)
+   rep 1: ui sendwait 0.4 first 62.0 settled 687.5; stamps pre 0.5 save 320.2 post 11 final 17; line 12694 B
+[shot] p-light-full-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{HOME}'
+[keys] '{ENTER}'
+   rep 2: ui sendwait 0.3 first 80.1 settled 710.5; stamps pre 1 save 321.9 post 10.2 final 18.1; line 12694 B
+[11:53:46.295]    Tally: 0 new, 1 altered (wanted 2)
+[11:53:50.508] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPFull.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-light-full-again-started (1024x768)
+[11:54:18.500] Tally started (light-full-again) in 28 s; company open: True
+[11:54:20.509] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[keys] 'c'
+[keys] 'Ledger{ENTER}'
+[shot] p-light-full-ledger-form (1024x768)
+[keys] 'PD Keys Party{ENTER}'
+[keys] '{ENTER}'
+[keys] 'Sundry Debtors{ENTER}'
+[keys] '^a'
+[shot] p-light-full-ledger-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[shot] p-light-full-cd-daybook (1024x768)
+[keys] '{END}'
+[keys] '{UP}'
+[keys] '%x'
+[keys] 'y'
+[shot] p-light-full-cancelled (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[shot] p-light-full-cd-daybook2 (1024x768)
+[keys] '{END}'
+[keys] '%d'
+[keys] 'y'
+[shot] p-light-full-deleted (1024x768)
+[keys] '{ESC}'
+[11:55:31.001] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPFull.tdl, C:\fcspike\FCPEv_aso.tdl, C:\fcspike\FCPEv_bso.tdl, C:\fcspike\FCPEv_so.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-light-evprobe-started (1024x768)
+[11:55:58.946] Tally started (light-evprobe) in 27.9 s; company open: True
+[11:56:00.954] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[11:56:00.955] -- a: light / evprobe / sales5 (dup) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[shot] p-light-evprobe-sales5-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-evprobe-sales5-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 31.9 settled 575.4; stamps pre 0 save 76.3 post 6 final 14; line 1779 B
+[shot] p-light-evprobe-sales5-saved (1024x768)
+[11:56:23.576]    Tally: 1 new, 0 altered (wanted 1)
+[11:56:23.577] -- a: light / evprobe / sales5 (alter) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[shot] p-light-evprobe-sales5-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-light-evprobe-sales5-open (1024x768)
+   rep 1: ui sendwait 0.3 first 32.8 settled 559.9; stamps pre 0 save 66.6 post 2 final 16; line 1988 B
+[shot] p-light-evprobe-sales5-saved (1024x768)
+[11:56:46.187]    Tally: 0 new, 1 altered (wanted 1)
+[11:56:58.727] -- b: light / evprobe / import #1: 536.5 ms (answered, ok True)
+[11:56:58.729] candidate event files written: 
+[11:57:02.742] tally.ini: Data D:\a\_temp\TallyHeavy; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-heavy-none-started (1024x768)
+[11:57:30.705] Tally started (heavy-none) in 28 s; company open: True
+[11:57:32.712] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[11:57:50.656] -- b: heavy / none / jobs #1: 940.8 ms (done, ok True)
+[11:58:03.593] -- b: heavy / none / jobs #2: 934.9 ms (done, ok True)
+[11:58:15.947] -- b: heavy / none / import #1: 350.6 ms (answered, ok True)
+[11:58:28.302] -- b: heavy / none / import #2: 353.3 ms (answered, ok True)
+[11:58:28.303] -- a: heavy / none / receipt (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[shot] p-heavy-none-receipt-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-none-receipt-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 61.3 settled 238.5; stamps pre  save  post  final ; line  B
+[shot] p-heavy-none-receipt-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.3 first 64.4 settled 219.8; stamps pre  save  post  final ; line  B
+[11:59:13.353]    Tally: 2 new, 0 altered (wanted 2)
+[11:59:13.355] -- a: heavy / none / sales5 (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[shot] p-heavy-none-sales5-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-none-sales5-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 60.6 settled 674.3; stamps pre  save  post  final ; line  B
+[shot] p-heavy-none-sales5-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.3 first 48.1 settled 542.6; stamps pre  save  post  final ; line  B
+[11:59:59.246]    Tally: 2 new, 0 altered (wanted 2)
+[11:59:59.248] -- a: heavy / none / sales50 (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-heavy-none-sales50-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-none-sales50-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 60.9 settled 350.9; stamps pre  save  post  final ; line  B
+[shot] p-heavy-none-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.3 first 76.8 settled 269.0; stamps pre  save  post  final ; line  B
+[12:00:44.647]    Tally: 2 new, 0 altered (wanted 2)
+[12:00:44.648] -- a: heavy / none / sales50 (alter) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-heavy-none-sales50-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-heavy-none-sales50-open (1024x768)
+   rep 1: ui sendwait 0.3 first 65.2 settled 382.1; stamps pre  save  post  final ; line  B
+[shot] p-heavy-none-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{HOME}'
+[keys] '{ENTER}'
+   rep 2: ui sendwait 0.3 first 63.9 settled 384.3; stamps pre  save  post  final ; line  B
+[12:01:30.220]    Tally: 0 new, 1 altered (wanted 2)
+[12:01:34.234] tally.ini: Data D:\a\_temp\TallyHeavy; TDL: C:\fcspike\FCPStamp.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-heavy-stamp-started (1024x768)
+[12:02:02.227] Tally started (heavy-stamp) in 28 s; company open: True
+[12:02:04.235] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[12:02:09.238] -- a: heavy / stamp / receipt (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[shot] p-heavy-stamp-receipt-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-stamp-receipt-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 32.3 settled 253.8; stamps pre 1 save 29 post 0 final ; line  B
+[shot] p-heavy-stamp-receipt-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.3 first 32.5 settled 193.1; stamps pre 0 save 23 post 1 final ; line  B
+[12:02:54.256]    Tally: 2 new, 0 altered (wanted 2)
+[12:02:54.257] -- a: heavy / stamp / sales5 (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[shot] p-heavy-stamp-sales5-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-stamp-sales5-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 32.1 settled 607.8; stamps pre 0 save 73.8 post 0 final ; line  B
+[shot] p-heavy-stamp-sales5-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.3 first 31.1 settled 559.7; stamps pre 0 save 58 post 1 final ; line  B
+[12:03:40.095]    Tally: 2 new, 0 altered (wanted 2)
+[12:03:40.097] -- a: heavy / stamp / sales50 (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-heavy-stamp-sales50-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-stamp-sales50-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 77.4 settled 255.5; stamps pre 0 save 237.3 post 0 final ; line  B
+[shot] p-heavy-stamp-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.3 first 77.8 settled 270.8; stamps pre 1 save 251.2 post 1 final ; line  B
+[12:04:25.423]    Tally: 2 new, 0 altered (wanted 2)
+[12:04:25.424] -- a: heavy / stamp / sales50 (alter) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-heavy-stamp-sales50-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-heavy-stamp-sales50-open (1024x768)
+   rep 1: ui sendwait 0.3 first 47.9 settled 784.4; stamps pre 1 save 327.7 post 0 final ; line  B
+[shot] p-heavy-stamp-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{HOME}'
+[keys] '{ENTER}'
+   rep 2: ui sendwait 0.3 first 59.9 settled 350.7; stamps pre 0 save 303.8 post 1 final ; line  B
+[12:05:11.344]    Tally: 0 new, 1 altered (wanted 2)
+[12:05:15.355] tally.ini: Data D:\a\_temp\TallyHeavy; TDL: C:\fcspike\FCPHeads.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-heavy-heads-started (1024x768)
+[12:05:43.326] Tally started (heavy-heads) in 28 s; company open: True
+[12:05:45.335] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[12:06:27.462] body fetch: recorderSource both -> addon sent by the stub cloud (nothing was off)
+[12:06:40.396] -- b: heavy / heads / jobs #1: 932.4 ms (done, ok True)
+[12:06:53.335] -- b: heavy / heads / jobs #2: 935.8 ms (done, ok True)
+[12:07:05.682] -- b: heavy / heads / import #1: 344.8 ms (answered, ok True)
+[12:07:18.038] -- b: heavy / heads / import #2: 353.3 ms (answered, ok True)
+[12:07:18.038] -- a: heavy / heads / receipt (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[shot] p-heavy-heads-receipt-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-heads-receipt-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 61.3 settled 222.3; stamps pre 4 save 22 post 1 final ; line  B
+[shot] p-heavy-heads-receipt-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.3 first 65.0 settled 269.6; stamps pre 0.5 save 25.6 post 1 final ; line  B
+[12:08:03.174]    Tally: 2 new, 0 altered (wanted 2)
+[12:08:03.175] -- a: heavy / heads / sales5 (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[shot] p-heavy-heads-sales5-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-heads-sales5-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 65.7 settled 626.1; stamps pre 1.4 save 80.1 post 0.5 final ; line  B
+[shot] p-heavy-heads-sales5-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.3 first 61.3 settled 590.1; stamps pre 1 save 65.1 post 1 final ; line  B
+[12:08:49.193]    Tally: 2 new, 0 altered (wanted 2)
+[12:08:49.195] -- a: heavy / heads / sales50 (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-heavy-heads-sales50-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-heads-sales50-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 61.5 settled 241.4; stamps pre 0 save 233.7 post 1 final ; line  B
+[shot] p-heavy-heads-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.3 first 63.2 settled 285.6; stamps pre 1 save 259.7 post 1 final ; line  B
+[12:09:34.559]    Tally: 2 new, 0 altered (wanted 2)
+[12:09:34.560] -- a: heavy / heads / sales50 (alter) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-heavy-heads-sales50-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-heavy-heads-sales50-open (1024x768)
+   rep 1: ui sendwait 0.3 first 65.3 settled 350.6; stamps pre 1 save 320.6 post 1 final ; line  B
+[shot] p-heavy-heads-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{HOME}'
+[keys] '{ENTER}'
+   rep 2: ui sendwait 0.3 first 64.2 settled 349.7; stamps pre 1 save 321.2 post 1 final ; line  B
+[12:10:20.168]    Tally: 0 new, 1 altered (wanted 2)
+[12:10:24.184] tally.ini: Data D:\a\_temp\TallyHeavy; TDL: C:\fcspike\FCPFull.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-heavy-full-started (1024x768)
+[12:10:52.150] Tally started (heavy-full) in 28 s; company open: True
+[12:10:54.157] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[12:11:57.468] body fetch: recorderSource both -> addon sent by the stub cloud (nothing was off)
+[12:12:10.407] -- b: heavy / full / jobs #1: 937.1 ms (done, ok True)
+[12:12:23.344] -- b: heavy / full / jobs #2: 934.7 ms (done, ok True)
+[12:12:35.698] -- b: heavy / full / import #1: 351.8 ms (answered, ok True)
+[12:12:48.041] -- b: heavy / full / import #2: 341.9 ms (answered, ok True)
+[12:12:48.042] -- a: heavy / full / receipt (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[shot] p-heavy-full-receipt-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-full-receipt-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 60.8 settled 60.8; stamps pre 0 save 24 post 6 final 466.6; line 606 B
+[shot] p-heavy-full-receipt-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.3 first 31.1 settled 31.1; stamps pre 0 save 24 post 2 final 476.3; line 606 B
+[12:13:32.784]    Tally: 2 new, 0 altered (wanted 2)
+[12:13:32.786] -- a: heavy / full / sales5 (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[shot] p-heavy-full-sales5-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-full-sales5-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 61.3 settled 447.9; stamps pre 1 save 90.2 post 3 final 566.3; line 1785 B
+[shot] p-heavy-full-sales5-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.3 first 76.9 settled 412.9; stamps pre 1 save 79.5 post 3 final 601; line 1785 B
+[12:14:18.437]    Tally: 2 new, 0 altered (wanted 2)
+[12:14:18.439] -- a: heavy / full / sales50 (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-heavy-full-sales50-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-full-sales50-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 61.2 settled 270.0; stamps pre 1 save 239.7 post 10 final 584.3; line 12605 B
+[shot] p-heavy-full-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.3 first 48.9 settled 284.5; stamps pre 0.4 save 251 post 10 final 575.9; line 12605 B
+[12:15:03.872]    Tally: 2 new, 0 altered (wanted 2)
+[12:15:03.874] -- a: heavy / full / sales50 (alter) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-heavy-full-sales50-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-heavy-full-sales50-open (1024x768)
+   rep 1: ui sendwait 0.3 first 67.3 settled 369.2; stamps pre 0 save 327.6 post 9.5 final 584.2; line 12696 B
+[shot] p-heavy-full-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{HOME}'
+[keys] '{ENTER}'
+   rep 2: ui sendwait 0.3 first 61.2 settled 446.1; stamps pre 1 save 334.4 post 11 final 636.1; line 12696 B
+[12:15:49.869]    Tally: 0 new, 1 altered (wanted 2)
+[12:15:58.414] bridge started again with GentleMs 0 (C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe): version 2.3.0
+[12:16:02.442] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-light-none-gentle0-started (1024x768)
+[12:16:32.002] Tally started (light-none-gentle0) in 29.5 s; company open: True
+[12:16:34.011] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[12:17:29.340] body fetch: recorderSource both -> addon sent by the stub cloud (nothing was off)
+[12:17:41.526] -- b: light / none-gentle0 / jobs #1: 183.9 ms (done, ok True)
+[12:17:53.712] -- b: light / none-gentle0 / jobs #2: 182.6 ms (done, ok True)
+[12:18:05.752] -- b: light / none-gentle0 / import #1: 37.5 ms (answered, ok True)
+[12:18:17.805] -- b: light / none-gentle0 / import #2: 51.5 ms (answered, ok True)
+[12:18:21.813] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPHeads.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-light-heads-gentle0-started (1024x768)
+[12:18:49.813] Tally started (light-heads-gentle0) in 28 s; company open: True
+[12:18:51.823] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[12:19:29.017] body fetch: recorderSource both -> addon sent by the stub cloud (nothing was off)
+[12:19:41.213] -- b: light / heads-gentle0 / jobs #1: 193.7 ms (done, ok True)
+[12:19:53.352] -- b: light / heads-gentle0 / jobs #2: 137.3 ms (done, ok True)
+[12:20:05.390] -- b: light / heads-gentle0 / import #1: 35.5 ms (answered, ok True)
+[12:20:17.444] -- b: light / heads-gentle0 / import #2: 52.1 ms (answered, ok True)
+[12:20:21.461] done
