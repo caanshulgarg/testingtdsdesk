@@ -63,7 +63,7 @@ const strs = (code) => (code.replace(/\/\/[^\n]*/g, "").match(/"[^"]*"/g) || [])
 const block = goSrc.slice(goSrc.indexOf("\tliveFetchField222 = "), goSrc.indexOf("\n)", goSrc.indexOf("\tliveFetchField222 = ")));
 const f222 = strs(block.slice(0, block.indexOf("\tliveFetchField = ")));
 const FETCH = f222 + strs(block.slice(block.indexOf("\tliveFetchField = ") + "\tliveFetchField = liveFetchField222".length));
-ok(FETCH.startsWith("GUID, MASTERID, ALTERID, DATE") && FETCH.includes("ALLINVENTORYENTRIES.STOCKITEMNAME") && FETCH.split(", ").length === 58,
+ok(FETCH.startsWith("GUID, MASTERID, ALTERID, DATE") && FETCH.includes("ALLINVENTORYENTRIES.STOCKITEMNAME") && FETCH.split(", ").length === 61, // 58, and the bank allocation's DATE, NAME and UTR after the real 7.1 run
   "the fetch read from recorder_live.go: " + FETCH.split(", ").length + " fields");
 function cut(voucher, fetch) {
   const want = new Set(fetch.split(", "));
