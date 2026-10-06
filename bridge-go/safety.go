@@ -669,6 +669,25 @@ func leasesHeld() []string {
 	return o
 }
 
+// the keeper's end of run: its own (read) leases go back; 2.3.1 (2.3.0 review round 2 L1): a lease held for a posting
+// running at the same time stays (the posting releases it when it ends)
+func keepReleaseLeases() {
+	for _, c := range leasesHeld() {
+		leaseMu.Lock()
+		_, had := leases[c]
+		if leasePurp[c] == "post" {
+			had = false
+		} else {
+			delete(leases, c)
+			delete(leasePurp, c)
+		}
+		leaseMu.Unlock()
+		if had && cloudOn() {
+			invokeCloud(M{"kind": "lease_release", "company": c}, 15)
+		}
+	}
+}
+
 // --- the rewind guard: what this read saw, for FinCom's cloud
 // (round 4: an AlterID not known, 0 or less, goes as null, never as 0: 0 would read as a rewind on the cloud)
 func sendReadGuard(company, guid string, alter int64, count int) {

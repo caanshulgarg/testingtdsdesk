@@ -60,3 +60,28 @@ func TestMidRecordSavedAtMostEveryInterval(t *testing.T) {
 		}
 	}
 }
+
+// 2.3.0 round 2 L1: the keeper's end-of-run cleanup released every lease this bridge held, also the lease a posting
+// running at the same time holds (the cloud then let another bridge read or post the company mid-posting). It now
+// releases only its own (read) leases
+func TestKeeperCleanupKeepsPostingLease(t *testing.T) {
+	leaseMu.Lock()
+	leases["CO POST"], leasePurp["CO POST"] = time.Now().Add(time.Minute), "post"
+	leases["CO READ"], leasePurp["CO READ"] = time.Now().Add(time.Minute), "read"
+	leaseMu.Unlock()
+	t.Cleanup(func() {
+		leaseMu.Lock()
+		delete(leases, "CO POST")
+		delete(leasePurp, "CO POST")
+		delete(leases, "CO READ")
+		delete(leasePurp, "CO READ")
+		leaseMu.Unlock()
+	})
+	keepReleaseLeases()
+	if !leaseHeldHere("CO POST") {
+		t.Fatal("the lease a running posting holds is kept")
+	}
+	if leaseHeldHere("CO READ") {
+		t.Fatal("the keeper's own read lease is released")
+	}
+}

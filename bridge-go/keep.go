@@ -1331,9 +1331,7 @@ func keepWorker(r runReq) {
 		}
 		sleepOrStop(time.Duration(minI(5, keepNum("KeepCycleSec", 5))) * time.Second)
 	}
-	for _, c := range leasesHeld() {
-		leaseRelease(c)
-	}
+	keepReleaseLeases()
 	// what came in goes on to the cloud before this stops (a few minutes at most; Tally is not asked)
 	until := time.Now().Add(10 * time.Minute)
 	for time.Now().Before(until) && !stopping() {
