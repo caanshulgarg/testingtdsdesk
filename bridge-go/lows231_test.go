@@ -130,3 +130,14 @@ func TestVoucherCountsAgreeOnEmptyVoucher(t *testing.T) {
 		}
 	}
 }
+
+// 2.3.0 review round 3 L3, the bridge's side (the same pattern as the cloud's parse.js): a self-closed CMPINFO with
+// attributes was taken as an opening one, and the counters' drop ran on to the next </CMPINFO> over the vouchers between
+func TestDropCmpInfoSelfClosedWithAttributes(t *testing.T) {
+	v := `<VOUCHER REMOTEID="g-1"><GUID>g-1</GUID></VOUCHER>`
+	for _, x := range []string{`<CMPINFO TYPE="x"/>` + v + `<CMPINFO><VOUCHER>2</VOUCHER></CMPINFO>`, `<CMPINFO/>` + v, `<CMPINFO TYPE="x"><VOUCHER>4</VOUCHER></CMPINFO>` + v} {
+		if got := dropCmpInfo(x); !strings.Contains(got, v) || strings.Contains(got, "CMPINFO") {
+			t.Fatalf("%s -> %s", x, got)
+		}
+	}
+}

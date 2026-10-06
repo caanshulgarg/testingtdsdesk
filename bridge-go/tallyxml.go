@@ -67,7 +67,8 @@ func dropCmpInfo(t string) string {
 	if !strings.Contains(t, "CMPINFO") {
 		return t
 	}
-	return re(`<CMPINFO(?:\s[^>]*)?>[\s\S]*?</CMPINFO\s*>|<CMPINFO\s*/>`).ReplaceAllString(t, "")
+	// 2.3.1 (2.3.0 review round 3 L3, as the cloud's parse.js): a self-closed <CMPINFO .../> with attributes goes alone
+	return re(`<CMPINFO(?:\s[^<>]*[^/<>])?\s*>[\s\S]*?</CMPINFO\s*>|<CMPINFO(?:\s[^<>]*)?/>`).ReplaceAllString(t, "")
 }
 
 // the decoded VOUCHER elements that are vouchers: with child elements (never a counter). 2.3.1 (2.2.4 review L3): an
