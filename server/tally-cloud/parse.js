@@ -38,7 +38,9 @@ function after(s, tag){
 function upTo(p, tag){ const m = p.match(new RegExp("</" + reEsc(tag) + "\\s*>")); return m ? p.slice(0, m.index) : p; }
 // a collection's answer carries a CMPINFO block of counters ahead of its data (<VOUCHER>4</VOUCHER>, <LEDGER>21</LEDGER>):
 // never read as a voucher (bridge-go/tallyxml.go dropCmpInfo)
-function dropCmpInfo(t){ return t.indexOf("CMPINFO") < 0 ? t : t.replace(/<CMPINFO(?:\s[^>]*)?>[\s\S]*?<\/CMPINFO\s*>|<CMPINFO\s*\/>/g, ""); }
+// 2.3.1 (2.3.0 review round 3 L3): a self-closed CMPINFO with attributes (<CMPINFO TYPE="x"/>) is dropped alone, never
+// taken as an opening one running on to the next </CMPINFO> over the vouchers between
+function dropCmpInfo(t){ return t.indexOf("CMPINFO") < 0 ? t : t.replace(/<CMPINFO(?:\s[^<>]*[^\/<>])?\s*>[\s\S]*?<\/CMPINFO\s*>|<CMPINFO(?:\s[^<>]*)?\/>/g, ""); }
 // "$17000.00 @ ₹ 86.40/$ = ₹ 1468800.00" is 1468800: the rupee value after the last "="
 function amt(v){ const t = String(v || ""), i = t.lastIndexOf("="); return num(i >= 0 ? t.slice(i + 1) : t); }
 // the IGST rate in a block's rate details, which is the whole GST rate; null when not set (as Books.igstRate)

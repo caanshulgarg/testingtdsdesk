@@ -3,6 +3,8 @@
 //   L1. the tag pattern (one(), after(), igstRate) was quadratic on crafted input: an opening tag never closed made each
 //       try scan to the end of the text ([^>]* crossed every later tag). A tag's attributes now stop at the next "<"
 //       ((?:\s[^<>]*[^/<>])?\s*>): 40,000 unclosed tags read in well under a second; real Tally output reads as before.
+//   L3. a self-closed CMPINFO with attributes (<CMPINFO TYPE="x"/>) was taken as an opening one, so the counters' drop ran
+//       on to the next </CMPINFO> and swallowed the vouchers between. It is now dropped alone.
 import { parseDay, one, igstRate } from "../server/tally-cloud/parse.js";
 let fails = 0;
 const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
@@ -34,6 +36,17 @@ const wrap = (x) => `<ENVELOPE><BODY><DATA><COLLECTION>${x}</COLLECTION></DATA><
   const g = '<GSTRATEDUTYHEAD TYPE="String">IGST</GSTRATEDUTYHEAD><GSTRATEVALUATIONTYPE TYPE="String">Based on Value</GSTRATEVALUATIONTYPE><GSTRATE TYPE="Number"> 18</GSTRATE>';
   ok(igstRate(g) === 18, "igstRate typed: 18 (" + igstRate(g) + ")");
   ok(igstRate(g.replace(/ TYPE="[^"]*"/g, "")) === 18, "igstRate untyped: 18");
+}
+// L3: a self-closed CMPINFO with attributes swallows no voucher
+{
+  const x = wrap('<CMPINFO TYPE="x"/>' + V("bbbb-00000001", "1") + V("bbbb-00000002", "2") + "<CMPINFO><VOUCHER>2</VOUCHER></CMPINFO>");
+  const r = parseDay(x);
+  ok(r.vouchers.length === 2, "L3: <CMPINFO TYPE=\"x\"/> before two vouchers: both read (" + r.vouchers.map((v) => v.guid).join(",") + ")");
+  const y = wrap("<CMPINFO/>" + V("cccc-00000001", "1"));
+  ok(parseDay(y).vouchers.length === 1, "L3: <CMPINFO/> (no attributes): the voucher read");
+  const z = wrap('<CMPINFO TYPE="x"><VOUCHER>4</VOUCHER><LEDGER>21</LEDGER></CMPINFO>' + V("dddd-00000001", "1"));
+  const rz = parseDay(z);
+  ok(rz.vouchers.length === 1 && rz.vouchers[0].guid === "dddd-00000001", "CMPINFO with attributes and counters: the counters are not a voucher");
 }
 console.log(fails ? fails + " FAILED" : "all passed");
 process.exit(fails ? 1 : 0);
