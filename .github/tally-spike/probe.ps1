@@ -1,70 +1,88 @@
-# A probe of TallyPrime 7.1 EDU's TDS screens (the owner's S5 by keys, bridge 2.3.1): run instead of round 4
-# when the workflow is dispatched with probe=yes. Nothing is checked: screenshots (r5-*) and Tally's own exports go to
-# $env:RES\probe so the keys for each scenario can be written from what Tally shows.
+# A probe of TallyPrime 7.1 EDU for S5 (TDS) by its own screens, with a screen check between keys (tdslib.ps1: every
+# step a screenshot read by Windows' OCR). Run instead of round 4 when the workflow is dispatched with probe=yes. No
+# bridge: Tally's own exports go to $env:RES\probe, screenshots tds-* to the shots. What it finds is written to
+# $env:RES\probe\tds-findings.txt.
 $ErrorActionPreference = 'Continue'
 $dir = $env:TALLY_DIR; $exe = $env:TALLY_EXE
 $data1 = "$env:RUNNER_TEMP\TallyData"; $co = 'FinCom Spike Co'
 $out = Join-Path $env:RES 'probe'; New-Item -ItemType Directory -Force $out | Out-Null
+$find = Join-Path $out 'tds-findings.txt'
 function Say($m) { Write-Host "[$(Get-Date -Format HH:mm:ss)] $m" }
-function Shot($n) { & "$PSScriptRoot\shot.ps1" "r5-$n" }
-function K($k, $wait = 2, $n = '') { & "$PSScriptRoot\keys.ps1" '^tally$' $k; Start-Sleep $wait; if ($n) { Shot $n } }
-function Post($body, $label = '', $file = '') {
-  try { $c = (Invoke-WebRequest 'http://localhost:9000' -Method Post -Body $body -ContentType 'text/xml;charset=utf-8' -UseBasicParsing -TimeoutSec 60).Content } catch { $c = "failed: $($_.Exception.Message)" }
-  if ($file) { Set-Content (Join-Path $out $file) $c -Encoding UTF8 }
-  if ($label) { $s = $c -replace '\s*\r?\n\s*', ''; if ($s.Length -gt 1500) { $s = $s.Substring(0, 1500) + '...' }; Write-Host "[$label] $s" }
-  return $c
+function Find($m) { Write-Host "FINDING $m"; Add-Content -Path $find -Value $m -Encoding UTF8 }
+function Post($body) { try { (Invoke-WebRequest 'http://localhost:9000' -Method Post -Body $body -ContentType 'text/xml;charset=utf-8' -UseBasicParsing -TimeoutSec 60).Content } catch { "failed: $($_.Exception.Message)" } }
+function Keep($file, $text) { Set-Content (Join-Path $out $file) "$text" -Encoding UTF8 }
+function StartTally {
+  Get-Process tally -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.Id -Force }; Start-Sleep 3
+  $script:tp = Start-Process -FilePath $exe -WorkingDirectory $dir -PassThru
+  for ($i = 0; $i -lt 30; $i++) { Start-Sleep 3; try { Invoke-WebRequest 'http://localhost:9000' -UseBasicParsing -TimeoutSec 5 | Out-Null; break } catch {} }
+  Start-Sleep 5; & "$PSScriptRoot\keys.ps1" '^tally$' 'a'; Start-Sleep 4; & "$PSScriptRoot\keys.ps1" '^tally$' 't'; Start-Sleep 10
 }
-function Imp($report, $msg, $label) { Post ('<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>' + $report + '</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>' + $co + '</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA><TALLYMESSAGE xmlns:UDF="TallyUDF">' + $msg + '</TALLYMESSAGE></REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>') $label }
-function Coll($type, $fetch, $file, $filter = '') {
-  $f = if ($filter) { "<FILTERS>FCF</FILTERS></COLLECTION><SYSTEM TYPE=`"Formulae`" NAME=`"FCF`">$filter</SYSTEM>" } else { '</COLLECTION>' }
-  Post ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCP</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCP" ISMODIFY="No"><TYPE>' + $type + '</TYPE><FETCH>' + $fetch + '</FETCH>' + $f + '</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') "export $type" $file | Out-Null
-}
-# a GSTIN with its check character (the GSTN mod-36 rule)
-function Gstin($first14) {
-  $cs = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'; $f = 2; $sum = 0
-  for ($i = $first14.Length - 1; $i -ge 0; $i--) { $d = $f * $cs.IndexOf($first14[$i]); $f = if ($f -eq 2) { 1 } else { 2 }; $sum += [math]::Floor($d / 36) + ($d % 36) }
-  $first14 + $cs[(36 - ($sum % 36)) % 36]
-}
-
-# ---- Tally with the company (as round 4 starts it)
 $folder = Get-ChildItem $data1 -Directory | Where-Object { $_.Name -match '^\d+$' } | Select-Object -First 1
 Set-Content (Join-Path $dir 'tally.ini') -Encoding ASCII -Value @('[Tally]', "Data = $data1", "Config = $dir", "LangPath = $dir\lang", 'Client Server = Both', 'ServerPort = 9000', 'Enable ODBC Server = Yes', 'Ignore TCP Timeout = Yes', 'User TDL = Yes', 'Default Companies = Yes', "Load = $($folder.Name)")
-Get-Process tally -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep 2
-$t = Start-Process -FilePath $exe -WorkingDirectory $dir -PassThru
-for ($i = 0; $i -lt 30; $i++) { Start-Sleep 3; try { Invoke-WebRequest 'http://localhost:9000' -UseBasicParsing -TimeoutSec 5 | Out-Null; break } catch {} }
-Start-Sleep 5; K 'a' 4; K 't' 10 '00-gateway'
+StartTally
 
-# ---- TDS by Tally's own screens (the owner's S5): what Educational mode shows. Nothing is saved here: every form is
-# walked field by field (Enter, a screenshot each) and left with Esc. Tally's modal messages stop its XML server (probe
-# 37406443289): only imports known to work are sent.
-Say '---- TDS on (the import that worked in run 37425863775), then F11 as Tally shows it'
-Post ('<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>All Masters</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>' + $co + '</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA><TALLYMESSAGE xmlns:UDF="TallyUDF"><COMPANY NAME="' + $co + '" ACTION="Alter"><NAME>' + $co + '</NAME><ISTDSON>Yes</ISTDSON></COMPANY></TALLYMESSAGE></REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>') 'TDS on' | Out-Null
-K '{F11}' 3 '10-f11'
-for ($i = 1; $i -le 30; $i++) { K '{ENTER}' 1 ("11-f11-{0:d2}" -f $i) }
-K '{ESC}' 2 '12-f11-esc'; K 'y' 2 '12b-f11-y'; Shot '12d-where'
-# after F11 (Esc, y) Tally stands in Master Creation with its search box (probe 37442505835): every walk starts there,
-# clears the box, types the master's kind and Enter; a walk ends with Esc, y (quit without saving) back in that list
-function Walk($tag, $kind, $name, $group, [int]$n = 22) {
-  Say "---- $kind form: $name $group"
-  K '{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}' 1 "$tag-0-list"
-  K "$kind{ENTER}" 3 "$tag-1-form"; K "$name{ENTER}" 2 "$tag-2-name"
-  if ($group) { K '{ENTER}' 2 "$tag-3-under"; K "$group{ENTER}" 3 "$tag-4-group" }
-  for ($i = 1; $i -le $n; $i++) { K '{ENTER}' 1 ("$tag-5-{0:d2}" -f $i) }
-  K '{ESC}' 2 "$tag-6-esc"; K 'y' 2 "$tag-7-y"; Shot "$tag-9-where"
+$script:TdsSend = { param([string]$k) & "$PSScriptRoot\keys.ps1" '^tally$' $k | Out-Null }
+$script:TdsPost = { param([string]$x) Post $x }
+$script:TdsRestart = { StartTally }
+$script:TdsCo = $co
+. "$PSScriptRoot\tdslib.ps1"
+
+Say '---- OCR self-test at the Gateway'
+$t = TdsScreen 'selftest'
+Find "OCR at the Gateway: $(if ($t -match 'Gateway of Tally') { 'reads the screen' } else { "did not read 'Gateway of Tally': $($t.Substring(0, [Math]::Min(200, $t.Length)))" })"
+
+Say '---- the company: TDS on and its deductor details by XML (TANUMBER, TANREGNO, TDSDEDUCTORTYPE), read back'
+$r = TdsImport 'All Masters' ('<COMPANY NAME="' + $co + '" ACTION="Alter"><NAME>' + $co + '</NAME><ISTDSON>Yes</ISTDSON><TANUMBER>DELF01234E</TANUMBER><TANREGNO>DELF01234E</TANREGNO><TDSDEDUCTORTYPE>Company</TDSDEDUCTORTYPE></COMPANY>')
+$c = TdsExport 'Company' 'Name, IsTDSOn, TANumber, TANRegNo, TDSDeductorType'; Keep 'company-after-xml.xml' $c
+Find "company by XML: import $(($r -replace '\s+', '').Substring(0, [Math]::Min(160, ($r -replace '\s+', '').Length))); read back: $(([regex]::Matches("$c", '<(TANUMBER|TANREGNO|TDSDEDUCTORTYPE|ISTDSON)[^>]*>([^<]*)<') | ForEach-Object { "$($_.Groups[1].Value)=$($_.Groups[2].Value)" }) -join ' ')"
+if ("$c" -notmatch 'DELF01234E') { $ok = TdsDeductorScreen 'DELF01234E' 'DELF01234E'; Find "deductor details by the screen: $ok" }
+
+Say '---- the nature of payment: by XML (PX) and by the screen (PK); both read back'
+$r = TdsImport 'All Masters' '<TAXCLASSIFICATION NAME="PX 194C Contract" ACTION="Create"><NAME.LIST><NAME>PX 194C Contract</NAME></NAME.LIST><TAXTYPE>TDS</TAXTYPE><SECTIONNUMBER>194C</SECTIONNUMBER><PAYMENTCODE>94C</PAYMENTCODE><TDSRATEDETAILS.LIST><APPLICABLEFROM>20260401</APPLICABLEFROM><DEDUCTEETYPE>Company - Resident</DEDUCTEETYPE><TDSRATE>2</TDSRATE></TDSRATEDETAILS.LIST></TAXCLASSIFICATION>'
+Find "nature by XML: $(($r -replace '\s+', '').Substring(0, [Math]::Min(160, ($r -replace '\s+', '').Length)))"
+$ok = TdsNatureScreen 'PK 194C Contractors' '194C' '94C' '1' '2'
+Find "nature by the screen: $ok"
+$tc = TdsExport 'TaxClassification' '*'; Keep 'taxclassification-all.xml' $tc
+foreach ($n in 'PX 194C Contract', 'PK 194C Contractors') {
+  $m = [regex]::Match("$tc", '(?s)<TAXCLASSIFICATION NAME="' + [regex]::Escape($n) + '".*?</TAXCLASSIFICATION>')
+  Find "nature '$n' in Tally's export: $(if ($m.Success) { (([regex]::Matches($m.Value, '<([A-Z.]+)[^>]*>([^<\s][^<]*)<') | ForEach-Object { "$($_.Groups[1].Value)=$($_.Groups[2].Value)" }) -join ' ') } else { 'NOT THERE' })"
 }
-# probe 3 (from probe 37443895060's screens): the nature of payment is a master of the user's own (no predefined list:
-# Alter showed only the one the probe made); its form is Name, Section, Payment code, Remittance code, rate for
-# individuals/HUF with PAN, rate for other deductee types with PAN, Is zero rated, Threshold
-function Clear { K '{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}' 1 '' }
-Say '---- probe 9: the company TDS Details form (Create -> TDS Details), then the expense ledger and Stat Adjustment again'
-Clear; K 'TDS Details' 2 '20-typed'; K '{ENTER}' 3 '21-tds-details'
-for ($i = 1; $i -le 14; $i++) { K '{ENTER}' 1 ("22-td-{0:d2}" -f $i) }
-K '^a' 3 '23-accept'; K '{ESC}' 3 '24-esc'; K 'y' 3 '25-y'
-Clear; K 'Ledger' 2; K '{ENTER}' 3 '30-exp-form'; K 'Probe Contract Work{ENTER}' 1; K '{ENTER}' 1; K 'Indirect Expenses{ENTER}' 2 '31-group'
-for ($i = 1; $i -le 6; $i++) { K '{ENTER}' 1 ("32-exp-{0:d2}" -f $i) }
-K '{ESC}' 3 '33-esc'; K 'y' 3 '34-y'; K '{ESC}' 3 '35-gateway'
-K 'v' 3 '40-vouchers'; K '{F7}' 3 '41-journal'; K '%j' 3 '42-stat-adj'; K '{ESC}' 2 '43-esc'; K '{ESC}' 2; K 'y' 2 '44-y'
-Post ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCC2</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCC2" ISMODIFY="No"><TYPE>Company</TYPE><FETCH>*</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') 'company *' 'company-all.xml' | Out-Null
-Post ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCC</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCC" ISMODIFY="No"><TYPE>Company</TYPE><FETCH>Name, IsTDSOn</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') 'company TDS' 'company.xml' | Out-Null
-Get-Process tally -ErrorAction SilentlyContinue | Stop-Process -Force
+
+Say '---- the ledgers by XML for the PK nature (party, TDS ledger, expense), read back with FETCH *'
+$led = { param($n, $p, $x) "<LEDGER NAME=`"$n`" ACTION=`"Create`"><NAME.LIST><NAME>$n</NAME></NAME.LIST><PARENT>$p</PARENT>$x</LEDGER>" }
+$nat = 'PK 194C Contractors'
+$r = TdsImport 'All Masters' ((& $led 'PK Contractor' 'Sundry Creditors' '<ISBILLWISEON>No</ISBILLWISEON><ISCOSTCENTRESON>No</ISCOSTCENTRESON><INCOMETAXNUMBER>AAACS2310K</INCOMETAXNUMBER><ISTDSAPPLICABLE>Yes</ISTDSAPPLICABLE><TDSAPPLICABLE>Yes</TDSAPPLICABLE><TDSDEDUCTEETYPE>Company - Resident</TDSDEDUCTEETYPE><TDSDEDUCTEEISSPECIALRATE>No</TDSDEDUCTEEISSPECIALRATE><ISTDSDEDUCTEDINSAMEVCH>Yes</ISTDSDEDUCTEDINSAMEVCH>') +
+  (& $led 'PK TDS 194C' 'Duties &amp; Taxes' "<TAXTYPE>TDS</TAXTYPE><TDSCATEGORYNAME>$nat</TDSCATEGORYNAME><TAXCLASSIFICATIONNAME>$nat</TAXCLASSIFICATIONNAME>") +
+  (& $led 'PK Contract Work' 'Indirect Expenses' "<ISCOSTCENTRESON>No</ISCOSTCENTRESON><ISTDSAPPLICABLE>Yes</ISTDSAPPLICABLE><TDSAPPLICABLE>$nat</TDSAPPLICABLE><TDSCATEGORYNAME>$nat</TDSCATEGORYNAME>"))
+Find "ledgers by XML: $(($r -replace '\s+', '').Substring(0, [Math]::Min(200, ($r -replace '\s+', '').Length)))"
+
+Say '---- the party and the TDS ledger by the screen too (PKS), each key screenshotted'
+$ok1 = TdsLedgerScreen 'PKS Contractor' 'Sundry Creditors' @(@('n', ''), @('y', 'Deductee'), @('Company - Resident{ENTER}', ''), @('y', ''), @('{ENTER}', ''), @('{ENTER}', ''))
+$ok2 = TdsLedgerScreen 'PKS TDS 194C' 'Duties & Taxes' @(@('TDS{ENTER}', 'Nature'), @("$nat{ENTER}", ''), @('{ENTER}', ''), @('{ENTER}', ''))
+Find "ledgers by the screen: party $ok1, TDS ledger $ok2"
+$lx = TdsExport 'Ledger' '*' '$Name Starting With "PK"'; Keep 'ledgers-pk.xml' $lx
+foreach ($n in 'PK Contractor', 'PK TDS 194C', 'PK Contract Work', 'PKS Contractor', 'PKS TDS 194C') {
+  $m = [regex]::Match("$lx", '(?s)<LEDGER NAME="' + [regex]::Escape($n) + '".*?</LEDGER>')
+  Find "ledger '$n': $(if ($m.Success) { (([regex]::Matches($m.Value, '<([A-Z.]*(TDS|TAX|DEDUCT|NATURE|CATEGORY|INCOMETAX|PAN)[A-Z.]*)[^>]*>([^<\s][^<]*)<') | ForEach-Object { "$($_.Groups[1].Value)=$($_.Groups[3].Value)" }) -join ' ') } else { 'NOT THERE' })"
+}
+
+Say '---- entries: by XML with the TDS allocation, then a journal and a payment by the screen'
+$x = '<VOUCHER VCHTYPE="Journal" ACTION="Create"><DATE>20260802</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><NARRATION>PKX journal by XML</NARRATION>' +
+  '<ALLLEDGERENTRIES.LIST><LEDGERNAME>PK Contract Work</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-100000.00</AMOUNT></ALLLEDGERENTRIES.LIST>' +
+  '<ALLLEDGERENTRIES.LIST><LEDGERNAME>PK TDS 194C</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>2000.00</AMOUNT><TAXOBJECTALLOCATIONS.LIST><CATEGORY>' + $nat + '</CATEGORY><TAXTYPE>TDS</TAXTYPE><PARTYLEDGER>PK Contractor</PARTYLEDGER><REFTYPE>New Ref</REFTYPE><ISPANVALID>Yes</ISPANVALID><SUBCATEGORYALLOCATION.LIST><SUBCATEGORY>Income Tax</SUBCATEGORY><DUTYLEDGER>PK TDS 194C</DUTYLEDGER><TAXRATE>2</TAXRATE><ASSESSABLEAMOUNT>100000.00</ASSESSABLEAMOUNT><TAX>2000.00</TAX></SUBCATEGORYALLOCATION.LIST></TAXOBJECTALLOCATIONS.LIST></ALLLEDGERENTRIES.LIST>' +
+  '<ALLLEDGERENTRIES.LIST><LEDGERNAME>PK Contractor</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>98000.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>'
+$r = TdsImport 'Vouchers' $x
+$v = TdsVoucherExport 'PKX journal by XML'; Keep 'voucher-pkx.xml' $v; $a = TdsTaxAlloc "$v"
+Find "journal by XML: import $(($r -replace '\s+', '').Substring(0, [Math]::Min(160, ($r -replace '\s+', '').Length))); TDS allocation kept: $($a.any) nature '$($a.nature)' rate '$($a.rate)' base '$($a.base)' tax '$($a.tax)' party '$($a.party)'"
+
+$null = TdsEntryScreen '{F7}' 'Journal' '2-8-2026' @(@('PK Contract Work', '100000'), @('PK TDS 194C', ''), @('PK Contractor', '')) 'PKJ journal on the screen'
+$v = TdsVoucherExport 'PKJ journal on the screen'; Keep 'voucher-pkj.xml' $v; $a = TdsTaxAlloc "$v"
+Find "journal by the screen: saved $([bool]("$v" -match 'PKJ journal')); TDS allocation: $($a.any) nature '$($a.nature)' rate '$($a.rate)' base '$($a.base)' tax '$($a.tax)' party '$($a.party)'; amounts $((([regex]::Matches("$v", '(?s)<LEDGERNAME>([^<]*)</LEDGERNAME>.*?<AMOUNT>([^<]*)</AMOUNT>') | ForEach-Object { "$($_.Groups[1].Value) $($_.Groups[2].Value)" }) -join ', '))"
+
+$null = TdsEntryScreen '{F5}' 'Payment' '2-8-2026' @(@('PK Contract Work', '100000'), @('PK TDS 194C', ''), @('Cash', '')) 'PKP payment on the screen'
+$v = TdsVoucherExport 'PKP payment on the screen'; Keep 'voucher-pkp.xml' $v; $a = TdsTaxAlloc "$v"
+Find "payment by the screen: saved $([bool]("$v" -match 'PKP payment')); TDS allocation: $($a.any) nature '$($a.nature)' rate '$($a.rate)' base '$($a.base)' tax '$($a.tax)' party '$($a.party)'; amounts $((([regex]::Matches("$v", '(?s)<LEDGERNAME>([^<]*)</LEDGERNAME>.*?<AMOUNT>([^<]*)</AMOUNT>') | ForEach-Object { "$($_.Groups[1].Value) $($_.Groups[2].Value)" }) -join ', '))"
+
+Set-Content (Join-Path $out 'tds-screen-log.txt') $script:tdsLog -Encoding UTF8
+Get-Process tally -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.Id -Force }
 Say '== probe end'

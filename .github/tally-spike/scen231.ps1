@@ -165,8 +165,11 @@ function S231LedgerTiming {
 function S231Retry {
   Say '---- R1: the retry schedule while Tally is busy for about 3 minutes'
   $x = '<VOUCHER VCHTYPE="Receipt" ACTION="Create"><DATE>20260801</DATE><VOUCHERTYPENAME>Receipt</VOUCHERTYPENAME><NARRATION>R1 the retry check</NARRATION>' +
-       '<ALLLEDGERENTRIES.LIST><LEDGERNAME>Spike Income</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>321.00</AMOUNT></ALLLEDGERENTRIES.LIST>' +
+       '<ALLLEDGERENTRIES.LIST><LEDGERNAME>R1 Income</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>321.00</AMOUNT></ALLLEDGERENTRIES.LIST>' +
        '<ALLLEDGERENTRIES.LIST><LEDGERNAME>Cash</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-321.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>'
+  # a ledger with no cost centres (run 37469732673: Spike Income asked for its cost centres on Ctrl+A once the company's
+  # cost centres were on, so the receipt was never saved); Cash has none either
+  $null = ImpT 'All Masters' '<LEDGER NAME="R1 Income" ACTION="Create"><NAME.LIST><NAME>R1 Income</NAME></NAME.LIST><PARENT>Indirect Incomes</PARENT><ISCOSTCENTRESON>No</ISCOSTCENTRESON></LEDGER>' 'R1 ledger (no cost centres)'
   $pre = Vouchers 9000 $co1
   $null = ImpT 'Vouchers' $x 'R1 the entry'
   $nv = @((Vouchers 9000 $co1) | Where-Object { $_.mid -notin @($pre | ForEach-Object mid) })[0]
@@ -187,7 +190,7 @@ function S231Retry {
   # a FinCom posting while Tally is silent (postings never wait for the retry schedule: it goes the moment Tally answers)
   $pv = '<VOUCHER VCHTYPE="Journal" ACTION="Create"><DATE>20260801</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><NARRATION>R1 posting | TDSDesk:R1P1</NARRATION>' +
         '<ALLLEDGERENTRIES.LIST><LEDGERNAME>Cash</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-55.00</AMOUNT></ALLLEDGERENTRIES.LIST>' +
-        '<ALLLEDGERENTRIES.LIST><LEDGERNAME>Spike Income</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>55.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>'
+        '<ALLLEDGERENTRIES.LIST><LEDGERNAME>R1 Income</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>55.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>'
   Start-Sleep 20; $tPost = Get-Date
   $null = Invoke-RestMethod 'http://127.0.0.1:8787/' -Method Post -Body (@{ kind = '_queue_post'; id = 'r1-job-1'; company = $co1; payload = @{ vouchers = @(@{ id = 'R1P1'; xml = $pv }) } } | ConvertTo-Json -Compress -Depth 6) -ContentType 'application/json'
   while ((Get-Date) -lt $tSave.AddSeconds(180)) { Start-Sleep 5 }
