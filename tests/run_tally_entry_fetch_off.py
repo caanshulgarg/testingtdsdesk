@@ -1,14 +1,15 @@
-"""python3 run_tally_entry_fetch_off.py - the owner's condition 4 (05-Oct-2026): the Tally page shows when FinCom Bridge's
-2-second rule has switched the entry fetch off for a company on a computer, with the time Tally took and how to switch it
-back on. The bridge (2.2.0) sends recorderBodyFetch / recorderSourceB / recorderSourceC in its heartbeat; tally-ingest
-keeps them on the bridge's entry as info.bridges[id].recorderOff {bodies, B, C} (run_main_bridge_server.py checks that).
-Checked here, offline with FinCom's cloud made up in the page:
-  - per computer, one line per company switched off: "Entry fetch switched off for <company>: Tally took 3.4 s at 14:05
-    IST (limit 2 s). To switch it back on: ..." (Tally's change list and month slices the same, with their own names);
-  - the owner is told to change "Changes come from" to another choice, wait one minute and set it back; staff are told
-    the owner does that; no button (words only);
-  - nothing when nothing is off;
-  - the bell: one alert per switched-off company, once; it clears itself when the bridge no longer says it.
+"""python3 run_tally_entry_fetch_off.py - FinCom Bridge 2.3.1, the owner's last change (06-Oct-2026): "A slow or unanswered
+request never switches reading off and never turns the entry fetch off for a company." The Tally page says it in plain
+words and offers nothing to press:
+  - a 2.3.1 bridge's beat carries tallyRetry {words, at, next, tries} (tally-ingest keeps it on the bridge's entry and the
+    beat): the computer's line reads "Tally did not answer in time at 12:14; trying again by itself at 12:15", with no
+    Resume button; the bell has one alert with the same words ("Nothing to do"), which goes by itself once the bridge no
+    longer says it;
+  - the old "switched off for <company> ... change 'Changes come from'" lines (2.2.0's recorderOff, still on an older
+    bridge's entry) are never shown, on the page or in the bell;
+  - a 2.3.0 bridge that stopped reading by itself is said in plain words (it reads again once 2.3.1 is on it), with no
+    Resume button for anyone (the computer key's member included);
+  - the owner's stop from FinCom is as before: Stopped from FinCom, and the owner's Resume reading.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tally_entry_fetch_off.py"""
 import os, re, sys, threading, functools, http.server, datetime, copy
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -26,13 +27,23 @@ ist = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
 AT = ist.strftime("%Y-%m-%dT%H:%M:%S")      # the bridge's local time (IST), no zone
 HM = ist.strftime("%H:%M") + " IST"
 CO, CO2 = "GARG SHEKHAR & COMPANY", "ZZ TEST"
+WORDS = "Tally did not answer in time at 12:14; trying again by itself at 12:15"
 OFF = {"bodies": {CO: {"off": True, "seconds": 3.4, "at": AT, "why": "Tally took 3.4 s for one entry"}},
-       "B": {CO2: {"off": True, "seconds": 2.6, "at": AT, "why": "Tally took 2.6 s for its change list"}},
-       "C": {CO2: {"off": True, "seconds": 5.0, "at": AT, "why": "Tally took 5 s for a month"}}}
-def devOff(off):
+       "B": {CO2: {"off": True, "seconds": 2.6, "at": AT, "why": "Tally took 2.6 s for its change list"}}}
+def devOff(off=None, retry=False, self_stop=False, fincom=False):
     d = dev(recording=True)
-    d["info"]["bridges"]["go-1"]["open"] = [CO, CO2]; d["info"]["beat"]["open"] = [CO, CO2]
-    if off: d["info"]["bridges"]["go-1"]["recorderOff"] = copy.deepcopy(off)
+    b = d["info"]["bridges"]["go-1"]; bt = d["info"]["beat"]
+    b["open"] = [CO, CO2]; bt["open"] = [CO, CO2]; b["version"] = "2.3.1"
+    if off: b["recorderOff"] = copy.deepcopy(off)
+    if retry:
+        r = {"words": WORDS, "at": AT, "next": AT, "tries": 2}
+        b["tallyRetry"] = copy.deepcopy(r); bt["tallyRetry"] = copy.deepcopy(r)
+    if self_stop:
+        rs = {"by": "self", "reason": "Tally has not answered since 12:10 (over 2 minutes of requests not answered)", "at": AT}
+        b["readStopped"] = copy.deepcopy(rs); bt["readStopped"] = copy.deepcopy(rs); b["version"] = "2.3.0"
+    if fincom:
+        rs = {"by": "fincom", "reason": "Stopped by the owner from FinCom", "at": AT}
+        b["readStopped"] = copy.deepcopy(rs); bt["readStopped"] = copy.deepcopy(rs)
     return d
 BELL = """() => { const b = document.querySelector('#cobar [data-bell]'); if (!b) return null;
   if (!document.querySelector('[data-alerts-panel]')) b.click();
@@ -41,67 +52,61 @@ BELL = """() => { const b = document.querySelector('#cobar [data-bell]'); if (!b
     details: (e.querySelector('[data-alert-details]') || {textContent: ''}).textContent.trim()}));
   return {count: (b.querySelector('[data-bell-count]') || {innerText: '0'}).innerText.trim(), items}; }"""
 CLOSE = "() => { S.alertsOpen = false; render(); }"
-OWNER_WORDS = 'To switch it back on: change "Changes come from" for this computer to another choice, wait one minute, then set it back.'
-STAFF_WORDS = 'To switch it back on: the owner changes "Changes come from" for this computer to another choice, waits one minute, then sets it back.'
 srv = http.server.ThreadingHTTPServer(("localhost", 8361), functools.partial(Q, directory=SITE)); threading.Thread(target=srv.serve_forever, daemon=True).start()
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1440, "height": 950}); pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.goto("http://localhost:8361/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
     E = lambda js, *a: pg.evaluate(js, *a)
-    def scene(devs, role):
-        E(SETUP, [{"devs": devs, "alerts": [], "gap": None}, role]); E("() => navHome('tally')"); pg.wait_for_timeout(1500)
-        E("() => { if (typeof AlertHub === 'object') AlertHub.refresh(true); }"); pg.wait_for_timeout(900)
-    lines = lambda: E("() => [...document.querySelectorAll('#app [data-computer] [data-recorder-off]')].map(e => ({kind: e.getAttribute('data-off-kind'), co: e.getAttribute('data-off-co'), text: e.innerText.replace(/\\s+/g, ' ').trim(), btn: e.querySelectorAll('button').length}))")
-    # ---- 1. the owner: one line per company switched off, per method
-    scene([devOff(OFF)], "owner")
-    L = lines(); body = [x for x in L if x["kind"] == "bodies"]
-    t = body[0]["text"] if body else ""
-    ok(len(body) == 1 and t.startswith("Entry fetch switched off for %s: Tally took 3.4 s at %s (limit 2 s)." % (CO, HM)),
-       "the line: company, seconds, the time in IST and the limit (%s)" % t)
-    ok(OWNER_WORDS in t and body[0]["btn"] == 0, "the owner: change 'Changes come from', wait a minute, set it back; words only, no button (%s)" % t)
-    b = [x for x in L if x["kind"] == "B"]; c = [x for x in L if x["kind"] == "C"]
-    ok(len(b) == 1 and b[0]["text"].startswith("Tally's change list switched off for %s: Tally took 2.6 s at %s (limit 2 s)." % (CO2, HM)), "Tally's change list, its own plain name (%s)" % (b[0]["text"] if b else L))
-    ok(len(c) == 1 and c[0]["text"].startswith("Month slices switched off for %s: Tally took 5 s at %s (limit 2 s)." % (CO2, HM)), "month slices, its own plain name (%s)" % (c[0]["text"] if c else L))
-    ok(len(L) == 3, "one line per company and method, nothing more (%d)" % len(L))
-    ok(not re.search(r"recorderBodyFetch|recorderSource|bodies|seconds:", pg.inner_text("#app")), "plain words: no field names on the page")
-    # ---- 2. the bell: one alert per switched-off company, once
+    def scene(devs, role, mine=False):
+        E(SETUP, [{"devs": devs, "alerts": [], "gap": None}, role])
+        if mine:  # the computer key is this member's own (2.3.0's self-Resume was offered to its maker)
+            E("() => { const me = TCloud.me(); [window.__w.devs, TLight.st.devs, TCloud.pane.devices].forEach(l => (l || []).forEach(d => { d.created_by = me; })); }")
+        E("() => navHome('tally')"); pg.wait_for_timeout(1500)
+        E("() => { if (typeof AlertHub === 'object') AlertHub.refresh(true); render(); }"); pg.wait_for_timeout(900)
+    readText = lambda: E("() => { const e = document.querySelector('#app [data-computer=\"%s\"] [data-read-text]'); return e ? e.innerText.trim() : null; }" % D1)
+    resumes = lambda: pg.locator('#app [data-computer="%s"] [data-read-resume]' % D1).count()
+    offLines = lambda: pg.locator('#app [data-recorder-off]').count()
+    # ---- 1. a 2.3.1 bridge trying again by itself: plain words, nothing to press; an older entry's switch-offs never shown
+    scene([devOff(OFF, retry=True)], "owner")
+    ok(readText() == WORDS, "the computer's line: the bridge's own words (%s)" % readText())
+    ok(resumes() == 0 and pg.locator('#app [data-computer="%s"] [data-read-stop]' % D1).count() == 1, "no Resume reading for it (the owner's Stop is still offered)")
+    page = pg.inner_text("#app")
+    ok(offLines() == 0 and "switched off" not in page and "Changes come from\" for this computer" not in page and "To switch it back on" not in page,
+       "no 'switched off ... Changes come from' words, though the entry still carries 2.2.0's recorderOff")
+    ok(not re.search(r"recorderBodyFetch|recorderSource|tallyRetry|seconds:", page), "plain words: no field names on the page")
     bl = E(BELL) or {"items": []}
-    offs = [x for x in bl["items"] if x["key"].startswith("off:")]
-    ok(len(offs) == 3 and len({x["key"] for x in offs}) == 3, "the bell: one alert per switched-off company and method (%s)" % [x["text"] for x in offs])
-    g = [x for x in offs if CO in x["text"]]
-    g = g[0] if g else {"text": "", "fix": "", "sev": "", "details": ""}
-    ok(any(x["text"].startswith("FinCom's reading of Tally's change list is switched off for ZZ TEST") for x in offs) and any(x["text"].startswith("FinCom's reading by month slices is switched off for ZZ TEST") for x in offs),
-       "the bell's words for Tally's change list and month slices (%s)" % [x["text"] for x in offs])
-    ok(g["text"].startswith("FinCom's entry fetch is switched off for %s" % CO) and "3.4 s" in g["text"] and "2 s" in g["text"] and "Changes come from" in g["fix"] and g["sev"] == "warn",
-       "its words: what, how long Tally took, the limit; the fix: 'Changes come from' (%s | %s)" % (g["text"], g["fix"]))
-    ok("NWS144" in g["details"] and "NWS144" not in g["text"], "the computer behind details (%s)" % g["details"])
+    pc = [x for x in bl["items"] if x["key"] == "pc:" + D1]
+    ok(len(pc) == 1 and pc[0]["text"].startswith(WORDS + ".") and pc[0]["fix"].startswith("Nothing to do") and pc[0]["sev"] == "warn", "the bell: one alert in the same words, nothing to do (%s)" % pc)
+    ok(not [x for x in bl["items"] if x["key"].startswith("off:") or "switched off" in x["text"]], "the bell: nothing switched off (%s)" % [x["text"][:60] for x in bl["items"]])
     E(CLOSE)
-    E("() => { AlertHub.refresh(true); render(); }"); pg.wait_for_timeout(1200)
-    bl = E(BELL) or {"items": []}
-    ok(len([x for x in bl["items"] if x["key"].startswith("off:")]) == 3, "read again: still one each, not repeated")
-    E(CLOSE)
-    # ---- 3. staff: the same line, the owner does it
-    scene([devOff(OFF)], "member")
-    L = lines(); body = [x for x in L if x["kind"] == "bodies"]
-    t = body[0]["text"] if body else ""
-    ok(len(body) == 1 and t.startswith("Entry fetch switched off for %s: Tally took 3.4 s at %s (limit 2 s)." % (CO, HM)) and STAFF_WORDS in t and OWNER_WORDS not in t and body[0]["btn"] == 0,
-       "staff: the same line; the owner changes 'Changes come from' (%s)" % t)
-    # ---- 4. the bridge no longer says it: the line and the alert go by themselves
-    scene([devOff(OFF)], "owner")
-    E("""() => { const strip = (d) => { delete d.info.bridges['go-1'].recorderOff; return d; };
+    # ---- 2. the same for staff
+    scene([devOff(OFF, retry=True)], "member", mine=True)
+    ok(readText() == WORDS and resumes() == 0 and offLines() == 0, "staff: the same words, nothing to press (%s)" % readText())
+    # ---- 3. Tally answers in time again: the words and the alert go by themselves
+    scene([devOff(retry=True)], "owner")
+    E("""() => { const strip = (d) => { delete d.info.bridges['go-1'].tallyRetry; delete d.info.beat.tallyRetry; return d; };
       window.__w.devs = window.__w.devs.map(strip); TLight.st.devs = TLight.st.devs.map(strip); TCloud.pane.devices = TCloud.pane.devices.map(strip);
       AlertHub.refresh(true); render(); }""")
     pg.wait_for_timeout(1500)
-    ok(pg.locator('#app [data-computer="%s"]' % D1).count() == 1 and len(lines()) == 0, "the entry gone from the beat: no line (%s)" % lines())
+    ok(readText() == "Reading", "back to normal: Reading (%s)" % readText())
     bl = E(BELL) or {"items": []}
-    ok(not [x for x in bl["items"] if x["key"].startswith("off:")], "and the bell's alert cleared itself (%s)" % [x["text"][:50] for x in bl["items"]])
+    ok(not [x for x in bl["items"] if x["key"] == "pc:" + D1], "and the bell's alert cleared itself (%s)" % [x["text"][:50] for x in bl["items"]])
     E(CLOSE)
-    # ---- 5. nothing off (an older bridge): nothing shown
-    scene([devOff(None)], "owner")
-    ok(pg.locator('#app [data-computer="%s"]' % D1).count() == 1 and len(lines()) == 0 and "switched off" not in pg.inner_text("#app"), "nothing off: the computer's line, nothing switched off shown")
+    # ---- 4. a 2.3.0 bridge that stopped by itself: plain words, no Resume for anyone (2.3.1 clears that stop when it starts)
+    scene([devOff(self_stop=True)], "member", mine=True)
+    t = readText() or ""
+    ok(t.startswith("Tally did not answer in time at ") and "FinCom Bridge 2.3.1" in t and "Stopped by itself" not in pg.inner_text("#app"), "a 2.3.0 self-stop in plain words (%s)" % t)
+    ok(resumes() == 0, "no Resume reading for the computer key's member")
+    scene([devOff(self_stop=True)], "owner")
+    ok(resumes() == 0, "nor for the owner")
     bl = E(BELL) or {"items": []}
-    ok(not [x for x in bl["items"] if x["key"].startswith("off:")], "and nothing in the bell")
+    pc = [x for x in bl["items"] if x["key"] == "pc:" + D1]
+    ok(len(pc) == 1 and pc[0]["text"].startswith("Tally did not answer in time") and "stopped reading Tally by itself" not in pc[0]["text"], "the bell's words (%s)" % pc)
     E(CLOSE)
+    # ---- 5. the owner's stop from FinCom: as before
+    scene([devOff(fincom=True)], "owner")
+    t = readText() or ""
+    ok(t.startswith("Stopped from FinCom") and resumes() == 1, "FinCom's stop: Stopped from FinCom and the owner's Resume reading (%s, %d)" % (t, resumes()))
     ok(not errors, "no page errors " + str(errors[:2]))
     br.close()
 srv.shutdown()

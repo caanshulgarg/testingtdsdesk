@@ -195,7 +195,7 @@ func TestR222HeldTwentyTries(t *testing.T) {
 }
 
 // --- 7. a HARD 2 s stop for the recorder's background reads (the entry fetch here): the bridge stops waiting at 2 s and
-// the switch-off applies; a posting (Import) is never cut by it
+// (2.3.1) tries again by itself on the shared schedule; a posting (Import) is never cut by it
 func TestR222HardTwoSecondStop(t *testing.T) {
 	p, f, c := nwsBridge(t, "")
 	setCfg("RecorderBodySec", float64(20))
@@ -217,11 +217,21 @@ func TestR222HardTwoSecondStop(t *testing.T) {
 	if el := time.Since(t0); el > 7500*time.Millisecond {
 		t.Fatalf("the recorder read took %s (a hard stop at 2 s)", el)
 	}
-	if logLines("The body fetch off: Tally took 2.0 s for the entry bodies (limit 2 s)") != 1 {
-		t.Fatalf("the switch-off: %s", readText(logFile()))
+	// 2.3.1 (the owner's last change): never switched off; the line waits for the shared retry schedule (retry.go)
+	if logLines("off: Tally took") != 0 || logLines("(FinComVoucherByMaster, try 1); trying again by itself at") != 1 {
+		t.Fatalf("switched off, or the retry not said: %s", readText(logFile()))
 	}
-	if !liveIsOff("bodies", nwsCo+"|"+nwsGUID) {
-		t.Fatal("the body fetch was not switched off")
+	if sent := c.recSent(); len(sent) != 0 {
+		t.Fatalf("sent before the retry: %v", sent)
+	}
+	// asked again at each try; an entry whose own request was stopped 3 times goes without its body (FinCom holds it, and
+	// this bridge asks for it again as a held line)
+	for i := 0; i < 2; i++ {
+		retryDue()
+		uploadAll(t)
+	}
+	if n := f.n(vchByMasterID); n != 3 {
+		t.Fatalf("asked %d times (one at each try)", n)
 	}
 	if sent := c.recSent(); len(sent) != 1 || str(sent[0]["xml"]) != "" {
 		t.Fatalf("sent: %v", sent)

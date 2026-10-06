@@ -230,13 +230,13 @@ func TestBody230RefetchSpacedAndStopped(t *testing.T) {
 	if f.n(vchByMasterID)+f.n(vchByNumberID) != 0 {
 		t.Fatalf("asked during a posting: %v", f.ids())
 	}
-	// the 2-second stop: the body fetch off for the company, nothing asked
-	liveTurnOff("bodies", nwsCo+"|"+nwsGUID, nwsCo, 3.4)
+	// the 2-second stop (2.3.1: never a switch-off): nothing asked until the shared retry schedule's next try
+	retryNote(f.port, vchByMasterID, errRecorderStop)
 	b230Turns(2)
 	if f.n(vchByMasterID)+f.n(vchByNumberID) != 0 {
-		t.Fatalf("asked with the body fetch off: %v", f.ids())
+		t.Fatalf("asked before the retry: %v", f.ids())
 	}
-	applyRecorderSource(M{"recorderSource": "both"}) // the owner switches it back on
+	retryDue() // the retry's time: it goes by itself
 	// one refetch line a turn
 	liveResolveTurn()
 	if n := f.n(vchByMasterID) + f.n(vchByNumberID); n != 1 {

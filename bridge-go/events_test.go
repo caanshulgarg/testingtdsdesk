@@ -163,7 +163,6 @@ func bridgeFor(t *testing.T, s *standIn, extra string) string {
 	lcMu.Lock()
 	lcSkipped, lcUnchanged = map[string]time.Time{}, map[string]time.Time{}
 	lcMu.Unlock()
-	resetSilence()
 	resetSelfWatch()
 	forgetTallyOpen()
 	return dir

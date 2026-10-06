@@ -438,17 +438,15 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 			sessions = append(sessions, e)
 			continue
 		}
+		// 2.3.1: asked in the background (tc.bg), it follows the shared retry schedule (retry.go)
 		raw, err := invokeTally(tc, toInt(pp["port"]), companiesRequest(), 8)
-		if tc.limitMs > 0 {
-			coListNote(toInt(pp["port"]), err) // 2.3.1: a stopped background ask backs the list off (companylist.go)
-		}
 		if err != nil {
 			allFresh = false
 			if pp["mine"] != false {
 				ownAll = false
 			}
 		}
-		if err != nil && (errors.Is(err, errPreempted) || errors.Is(err, errBackoff) || errors.Is(err, errRecorderStop)) && prevCompanies(toInt(pp["port"])) != nil {
+		if err != nil && (errors.Is(err, errPreempted) || errors.Is(err, errBackoff) || errors.Is(err, errRecorderStop) || errors.Is(err, errRetryWait)) && prevCompanies(toInt(pp["port"])) != nil {
 			// a background read stopped or held back (2.3.1: or stopped at its 2 s hard stop): the companies named last time
 			// stand, nothing new is known
 			e["ok"], e["companies"], e["tallyState"] = true, prevCompanies(toInt(pp["port"])), "open"
@@ -644,12 +642,12 @@ func findCompany(company string, preferred int) (int, string, error) {
 }
 
 // review M1 (06-Oct-2026): the same for a BACKGROUND read (the ledger changes, the recorder's body fetch, its resolve of
-// held lines, its GUID ask): the company list asked under the 2-second hard stop (bgCompaniesTC) and never while it is
-// backed off (coListHeld): then the companies named last time stand. A person's request and a posting use findCompany /
+// held lines, its GUID ask): the company list asked under the 2-second hard stop (bgCompaniesTC) and never while the
+// shared retry schedule waits (retryHeld, retry.go): then the companies named last time stand. A person's request and a posting use findCompany /
 // findCompanyNow, unchanged
 func findCompanyPortBg(company string, preferred int) (int, error) {
 	p, _, err := findCompanyWith(company, preferred, []bool{false, true}, func(fresh bool) []M {
-		if coListHeld() {
+		if retryHeld() {
 			return openCompaniesCached()
 		}
 		l, _ := openCompaniesAsk(bgCompaniesTC(), fresh)

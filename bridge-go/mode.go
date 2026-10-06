@@ -327,6 +327,9 @@ func runBridge(console bool) int {
 		return exitTwice
 	}
 	defer release()
+	// 2.3.1 (the owner's last change): a 2.3.0 bridge's stop of reading by itself and its 2-second switch-offs, saved on
+	// disk, are cleared (the owner's stop from FinCom is kept)
+	clearOldSwitchOffs()
 	// 2.3.0: the first free port of 9100..9199 (the remembered one first); none: said once, and the bridge stops
 	ln, err := bindAndRemember(listenLocal, ownBridgeOn)
 	if err != nil {

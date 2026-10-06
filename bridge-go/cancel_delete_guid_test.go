@@ -257,6 +257,11 @@ func TestCancelGUIDTallySilentFallsBack(t *testing.T) {
 		realLine("after_cancel", "", "13", "", "Receipt", "5", addonDate(td)))
 	liveReadOnce()
 	uploadAll(t)
+	// 2.3.1: stopped at 2 s, asked again at each try of the shared retry schedule; each stopped 3 times, they go held
+	for i := 0; i < 5 && len(sentEvent(c, "cancelled")) < 2; i++ {
+		retryDue()
+		uploadAll(t)
+	}
 	got := sentEvent(c, "cancelled")
 	if len(got) != 2 {
 		t.Fatalf("both cancels go: %v", got)

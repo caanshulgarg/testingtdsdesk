@@ -136,7 +136,6 @@ func TestR222bStopHoldsBackgroundOnly(t *testing.T) {
 		return 0
 	}
 	f.mu.Unlock()
-	resetSilence()
 	liveAppend(t, p,
 		r222Line("voucher_accept_pre", "10:40", r222GUID(26311), "26311", "54391", "Receipt", "191", "5-Oct-2026", "a"),
 		r222Line("voucher_accept_post", "10:40", r222GUID(26311), "26311", "54395", "Receipt", "191", "5-Oct-2026", "a"))
@@ -145,11 +144,9 @@ func TestR222bStopHoldsBackgroundOnly(t *testing.T) {
 	if n != 1 {
 		t.Fatalf("asked %d", n)
 	}
-	silMu.Lock()
-	sil := silFirst
-	silMu.Unlock()
-	if !sil.IsZero() {
-		t.Fatal("the deliberate stop counted as Tally's silence")
+	// 2.3.1: never a stop of reading (the self-watch's silence is gone); the background waits for the retry schedule
+	if readStop() != nil || !retryHeld() {
+		t.Fatalf("after the stop: reading %v, retry pending %v", readStop(), retryHeld())
 	}
 	if _, err := fetchVouchersByMasterIn(recorderTC(nil), nwsCo, f.port, "20261005", []string{"26312"}, 5); err == nil || f.n(vchByMasterID) != n {
 		t.Fatalf("a background read sent into Tally right after the stop: %v (%d requests)", err, f.n(vchByMasterID))
@@ -231,7 +228,7 @@ func TestR222bLimitAfterGentleWait(t *testing.T) {
 		r222Line("voucher_accept_pre", "11:00", r222GUID(26311), "26311", "54391", "Receipt", "191", "5-Oct-2026", "g"),
 		r222Line("voucher_accept_post", "11:00", r222GUID(26311), "26311", "54395", "Receipt", "191", "5-Oct-2026", "g"))
 	readAndUploadAll(t)
-	if s := c.recSent(); len(s) != 1 || str(s[0]["xml"]) == "" || liveIsOff("bodies", nwsCo+"|"+nwsGUID) {
+	if s := c.recSent(); len(s) != 1 || str(s[0]["xml"]) == "" || retryHeld() {
 		t.Fatalf("a 1 s answer after a 1.5 s gentle wait was stopped: %v", s)
 	}
 }

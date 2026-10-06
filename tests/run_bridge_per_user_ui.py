@@ -200,15 +200,16 @@ with sync_playwright() as p:
     tally_page([], [{"user_id": RAVI, "device_id": DR, "bridge_id": BR}], "staff", RAVI, local={"id": BR, "port": 9101})
     a = E(AUTO, [False])
     ok(not any(c[0] in ("tally_member_bridge_link", "tally_device_create", "tally_bridge_own_key") for c in a["calls"]), "#4. already linked to his bridge: nothing done (%s)" % a["calls"])
-    # #18: Meena's bridge stopped reading by itself: she resumes it; Ravi cannot (not his key); FinCom's own Stop: owners only
+    # #18 (bridge 2.3.1, the owner's last change: never a manual resume): Meena's 2.3.0 bridge stopped reading by itself: no
+    # Resume for her (2.3.1 clears that stop when it starts and tries again by itself); Ravi none; FinCom's own Stop: owners only
     devs4 = [dict(d, info=dict(d["info"], bridges={k: dict(v) for k, v in d["info"]["bridges"].items()})) for d in DEVS]
     devs4[2]["info"]["bridges"][BM]["readStopped"] = {"by": "self", "reason": "Tally did not answer for 2 minutes", "at": "ago:1"}
     devs4[1]["info"]["bridges"][BR]["readStopped"] = {"by": "fincom", "reason": "emergency", "at": "ago:1"}
     FS = [{"id": 1, "device_id": DR, "action": "stop", "reason": "emergency", "stopped_at": "ago:2", "cleared_at": None}]
     tally_page([], [], "staff", MEENA, devs=devs4, stops=FS)
-    ok(pg.locator('#app [data-read-resume="%s"]' % DM).count() == 1 and pg.locator("#app [data-read-stop], #app [data-read-stop-all]").count() == 0, "#18. Meena sees Resume reading on her own bridge (stopped by itself); no Stop buttons")
-    if pg.locator('#app [data-read-resume="%s"]' % DM).count(): pg.click('#app [data-read-resume="%s"]' % DM); pg.wait_for_timeout(500)
-    ok(["tally_read_resume", {"p_device": DM}] in E("window.__calls"), "#18. -> tally_read_resume(her computer)")
+    ok(pg.locator('#app [data-read-resume="%s"]' % DM).count() == 0 and pg.locator("#app [data-read-stop], #app [data-read-stop-all]").count() == 0, "#18. Meena: no Resume reading on her own bridge (2.3.0's stop by itself); no Stop buttons")
+    ok("Tally did not answer in time" in txt('#app [data-computer="%s"]' % DM) and "Stopped by itself" not in txt("#app"), "#18. her line says it in plain words (%s)" % txt('#app [data-computer="%s"]' % DM)[:200])
+    ok(not any(c[0] == "tally_read_resume" for c in E("window.__calls")), "#18. nothing resumed by hand")
     tally_page([], [], "staff", RAVI, devs=devs4, stops=FS)
     ok(pg.locator("#app [data-read-resume]").count() == 0, "#18. Ravi: no Resume on Meena's key, nor on his own under FinCom's Stop (owners resume that)")
     tally_page([], [], "owner", OWNER, devs=devs4, stops=FS)

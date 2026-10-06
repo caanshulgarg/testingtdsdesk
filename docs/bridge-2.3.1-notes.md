@@ -6,7 +6,7 @@ For the owner. Plain words; times are IST. The steps to try it on NWS144 are in 
 |---|---|
 | Setup file | FinComBridge-Setup-2.3.1.exe |
 | Fingerprint | SHA-256 `<SHA-256>` (filled in when the setup is built; compare with the .sha256 file next to the setup) |
-| FinCom app update | none: the app of 2.3.0 works with 2.3.1 |
+| FinCom app update | the one that goes with 2.3.1 says on the Tally page when Tally did not answer in time and when the bridge tries again; the app of 2.3.0 still works with 2.3.1 (it shows "Reading") |
 | Replaces | 2.3.0 (kept on the computer, so the tray can roll back to it) |
 | Add-on | unchanged: keep `C:\ProgramData\FinCom\addon\FinComRecorder.tdl` loaded as it is |
 
@@ -157,6 +157,33 @@ only, inside the 2-second rule, after postings, nothing else added, each bridge 
 
 This needs the FinCom cloud update (tally-ingest) that goes out with 2.3.1; the ledger's deductee type is stored in the
 column migration 57 adds (`tally_ledgers.tds_deductee_type`); no other database change.
+
+## A slow Tally never switches reading off (the owner's last change to 2.3.1)
+
+"A slow or unanswered request never switches reading off and never turns the entry fetch off for a company."
+
+- Every background request still stops at 2 seconds. When Tally does not answer in time, the bridge tries again by
+  itself after 15 seconds, then 30 seconds, 1 minute, 2 minutes, and then every 5 minutes. When Tally answers in time,
+  everything goes back to normal at once. This applies to every background request: the entry fetch, the company list,
+  ledger changes, the light check and held lines.
+- Nothing is switched off any more. 2.3.0 stopped all reading by itself after a request took over 20 s, or after Tally
+  was silent for 2 minutes, and kept the stop until someone resumed it. The 2-second rule also switched the entry fetch,
+  Tally's change list, month slices or ledger changes off for a company until the owner changed "Changes come from".
+  2.3.1 does none of this. The company list's 5/10/20/30-minute back-off is replaced by the same schedule.
+- When 2.3.1 starts, it clears any such stop or switch-off that 2.3.0 saved on the computer, and says so once in its
+  log. The owner's "Stop reading" from FinCom works exactly as before.
+- Postings and a person's own actions (Update now, the tray's tests) never wait for the schedule.
+- There is nothing to resume by hand. The tray's "Resume reading" now only answers that FinCom's stop is lifted in
+  FinCom. The Tally page has no Resume button for this. It shows the bridge's own words, for example "Tally did not
+  answer in time at 12:14; trying again by itself at 12:15". The bell shows them once, and they go away by themselves.
+  Each try is one line in the log.
+- Lines a 2.3.0 bridge held because reading was off or stopped are asked again by the bridge that holds them, on the
+  same schedule, by MasterID (or by type and number), and replace the held lines as any ":resolved" line does. These
+  are lines with the words "Reading entries from Tally is off on this computer…", "Reading from Tally is stopped on
+  this computer by the bridge itself…", or "Tally gave no voucher with MasterID … Reading entries from Tally is off…":
+  staging's 29 Journal lines of GARG SHEKHAR on NWS144, and Durgesh's lines of IX DESIGNS. No other bridge asks for them.
+- No Tally request changed for this (the request texts are compared by the allow-list's shapes). The allow-list's
+  decision line only lost its "switches the entry fetch off" words.
 
 ## Found on a real Tally (TallyPrime 7.1, the harness run of 06-Oct-2026) and fixed before release
 

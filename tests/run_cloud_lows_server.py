@@ -170,6 +170,17 @@ try:
     c, r = call(BEAT)
     bt = ((F.T["tally_devices"][0].get("info") or {}).get("beat") or {})
     ok(c == 200 and "recorderWaitWords" not in bt, "H1. a beat without them: gone (%s)" % bt.get("recorderWaitWords"))
+    # bridge 2.3.1, the owner's last change: a request not answered in time, and when the bridge tries again by itself
+    # (tallyRetry), kept on the beat and the bridge's entry for the Tally page; gone when it answers in time again
+    TR = {"words": "Tally did not answer in time at 12:14; trying again by itself at 12:15", "at": "2026-10-06T12:14:50", "next": "2026-10-06T12:15:05", "tries": 1, "x": "dropped"}
+    c, r = call(dict(BEAT, tallyRetry=TR))
+    inf = F.T["tally_devices"][0].get("info") or {}; bt = inf.get("beat") or {}
+    ent = [b for b in (inf.get("bridges") or {}).values() if isinstance(b, dict) and b.get("tallyRetry")]
+    want = {k: TR[k] for k in ("words", "at", "next", "tries")}
+    ok(c == 200 and bt.get("tallyRetry") == want and len(ent) == 1 and ent[0]["tallyRetry"] == want, "2.3.1. the beat and the bridge's entry keep tallyRetry, its four fields only (%s)" % bt.get("tallyRetry"))
+    c, r = call(BEAT)
+    inf = F.T["tally_devices"][0].get("info") or {}; bt = inf.get("beat") or {}
+    ok(c == 200 and "tallyRetry" not in bt and not [b for b in (inf.get("bridges") or {}).values() if isinstance(b, dict) and b.get("tallyRetry")], "2.3.1. a beat without it: gone (%s)" % bt.get("tallyRetry"))
 finally:
     fn.terminate()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); raise SystemExit(1 if fails else 0)

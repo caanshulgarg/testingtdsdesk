@@ -646,6 +646,11 @@ func TestLiveBodyFetch(t *testing.T) {
 	if el := time.Since(t0); el > 6*time.Second {
 		t.Fatalf("the body fetch held the line %s", el)
 	}
+	// 2.3.1: stopped at 2 s, asked again at each try of the shared retry schedule; stopped 3 times, it goes without
+	for i := 0; i < 2; i++ {
+		retryDue()
+		uploadAll(t)
+	}
 	sent = c.recSent()
 	if len(sent) != 3 || str(sent[2]["xml"]) != "" || str(sent[2]["event"]) != "altered" {
 		t.Fatalf("without a body: %v", sent[len(sent)-1])
@@ -1303,6 +1308,8 @@ func TestSourceBSpacingAndPosting(t *testing.T) {
 	}
 }
 
+// 2.3.1 (the owner's last change): a list stopped at 2 s never turns source B off; it is asked again by itself on the
+// shared retry schedule (retry.go), and the beat carries no switch-off
 func TestSourceBOffAfterSlowAnswer(t *testing.T) {
 	f, _, sessions := sourceBReady(t)
 	slowKeepList(f, 2500*time.Millisecond)
@@ -1310,15 +1317,15 @@ func TestSourceBOffAfterSlowAnswer(t *testing.T) {
 	if f.n("TDSDeskKeepList") != 1 {
 		t.Fatal("not asked")
 	}
-	// 2.2.2 (the owner's condition b): a hard stop at 2 s: the bridge stops waiting then (not at 2.5 s), and the switch-off
-	// applies as before
-	if logLines("Source B off: Tally took 2.0 s for the changed-entries list (limit 2 s)") != 1 {
+	// 2.2.2 (the owner's condition b): a hard stop at 2 s: the bridge stops waiting then (not at 2.5 s)
+	if logLines("off: Tally took") != 0 || logLines("(TDSDeskKeepList, try 1); trying again by itself at") != 1 {
 		t.Fatalf("the log: %s", readText(logFile()))
 	}
-	st := obj(obj(beatBody(true, "open", "", nil, nil, nil)["recorderSourceB"])[zz])
-	if st["off"] != true || num(st["seconds"]) < 1.9 || num(st["seconds"]) > 2.2 || str(st["at"]) == "" || !strings.Contains(str(st["why"]), "2.0 s") {
-		t.Fatalf("the beat: %v", st)
+	b := beatBody(true, "open", "", nil, nil, nil)
+	if len(obj(b["recorderSourceB"])) != 0 || !strings.HasPrefix(str(obj(b["tallyRetry"])["words"]), "Tally did not answer in time at ") {
+		t.Fatalf("the beat: %v %v", b["recorderSourceB"], b["tallyRetry"])
 	}
+	slowKeepList(f, 0)
 	f.mu.Lock()
 	f.add(today(), fgParty, "SB-4", "four", "-1.00")
 	f.mu.Unlock()
@@ -1326,13 +1333,17 @@ func TestSourceBOffAfterSlowAnswer(t *testing.T) {
 	spMu.Lock()
 	spChecked = map[string]time.Time{}
 	spMu.Unlock()
-	lightCheckOpen(sessions)
-	_, _ = liveSourceB(zz, f.port)
-	if f.n("TDSDeskKeepList") != 1 {
-		t.Fatal("source B asked again after it turned off")
+	lightCheckOpen(sessions) // the light check sees the counter moved and asks source B (by itself: no owner's switch)
+	// the stopped request took nothing: SB-2 comes now with SB-4
+	if f.n("TDSDeskKeepList") != 2 || logLines("Recorder (Tally's change list) for "+zz+": 2 change(s) found") != 1 {
+		t.Fatalf("source B not asked again by itself: %v\n%s", f.ids(), readText(logFile()))
+	}
+	if b := beatBody(true, "open", "", nil, nil, nil); b["tallyRetry"] != nil {
+		t.Fatalf("the beat after an answer in time: %v", b["tallyRetry"])
 	}
 }
 
+// nothing is kept switched off across a restart (2.3.1)
 func TestSourceBStaysOffAfterRestart(t *testing.T) {
 	f, _, _ := sourceBReady(t)
 	slowKeepList(f, 2500*time.Millisecond)
@@ -1345,37 +1356,34 @@ func TestSourceBStaysOffAfterRestart(t *testing.T) {
 	f.add(today(), fgParty, "SB-5", "five", "-1.00")
 	f.mu.Unlock()
 	_, _ = companyCheck(fin, zz, f.port)
-	if n, _ := liveSourceB(zz, f.port); n != 0 || f.n("TDSDeskKeepList") != 1 {
-		t.Fatal("source B came back on after a restart")
+	if n, err := liveSourceB(zz, f.port); err != nil || n != 2 || f.n("TDSDeskKeepList") != 2 {
+		t.Fatalf("source B not asked after a restart: %d %v", n, err)
 	}
-	if st := obj(obj(beatBody(true, "open", "", nil, nil, nil)["recorderSourceB"])[zz]); st["off"] != true {
+	if st := obj(beatBody(true, "open", "", nil, nil, nil)["recorderSourceB"]); len(st) != 0 {
 		t.Fatalf("the beat after the restart: %v", st)
 	}
 }
 
+// no owner's switch is needed: it goes again by itself (2.3.1); the owner's switch changes nothing of it
 func TestSourceBBackOnOwnerSwitch(t *testing.T) {
 	f, _, _ := sourceBReady(t)
 	slowKeepList(f, 2500*time.Millisecond)
 	_, _ = liveSourceB(zz, f.port)
 	slowKeepList(f, 0)
-	laterBy(t, 10*time.Minute)
-	applyRecorderSource(M{"recorderSource": "alterid"}) // unchanged: still off
+	laterBy(t, 10*time.Second)
 	if n, _ := liveSourceB(zz, f.port); n != 0 || f.n("TDSDeskKeepList") != 1 {
-		t.Fatal("on again without the owner's switch")
+		t.Fatal("asked before the retry's time")
 	}
 	f.mu.Lock()
 	f.add(today(), fgParty, "SB-6", "six", "-1.00")
 	f.mu.Unlock()
+	laterBy(t, 10*time.Minute)
 	_, _ = companyCheck(fin, zz, f.port)
-	applyRecorderSource(M{"recorderSource": "both"}) // the owner switches it
 	// 2.2.2: the slow request was stopped at 2 s (nothing taken from it): SB-2 comes now with SB-6
 	if n, err := liveSourceB(zz, f.port); err != nil || n != 2 || f.n("TDSDeskKeepList") != 2 {
-		t.Fatalf("after the owner's switch: %d %v", n, err)
+		t.Fatalf("by itself: %d %v", n, err)
 	}
-	if st := obj(obj(beatBody(true, "open", "", nil, nil, nil)["recorderSourceB"])[zz]); st["off"] == true {
-		t.Fatalf("the beat after the switch: %v", st)
-	}
-	if logLines("Source B on again for "+zz) != 1 {
-		t.Fatal("the switch back is not in the log")
+	if logLines("Source B on again for "+zz) != 0 {
+		t.Fatal("an owner's switch was needed")
 	}
 }

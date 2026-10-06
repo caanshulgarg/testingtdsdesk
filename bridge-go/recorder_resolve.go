@@ -338,21 +338,16 @@ func liveDecide(c *change, what string) {
 }
 
 // the new entries of one company (MasterID 0 on their line) by type and number, as a background read like the body
-// fetch: it gives way to a posting, the 2 s rule turns it off for the company, 20 s in all
+// fetch: it gives way to a posting, 20 s in all; a request stopped at 2 s or not answered waits for the shared retry
+// schedule (retry.go), never switched off (2.3.1)
 func liveFetchByNumber(cs []*change, sp int64, spOK bool) {
 	if len(cs) == 0 {
 		return
 	}
-	company, key := cs[0].company, cs[0].key()
+	company := cs[0].company
 	deadline := time.Now().Add(time.Duration(liveBodySec()) * time.Second)
 	yield := func() bool { return postingGoing() || importsInFlight.Load() > 0 }
-	slow := false
-	tc := recorderTC(func(sec float64) {
-		if sec > liveLimitSec() && !slow {
-			slow = true
-			liveTurnOff("bodies", key, company, sec)
-		}
-	})
+	tc := recorderTC(nil)
 	port, err := findCompanyPortBg(company, 0)
 	if err != nil {
 		if yield() {
@@ -373,13 +368,17 @@ func liveFetchByNumber(cs []*change, sp int64, spOK bool) {
 			liveNumberHeld(c, "the line has no MasterID and the entry no voucher number, so Tally cannot be asked for it")
 			continue
 		}
-		if slow || time.Now().After(deadline) {
-			liveNumberHeld(c, "not found by its type and number (the body fetch is off for this company, the 2 s rule, or 20 s passed)")
+		if time.Now().After(deadline) {
+			liveNumberHeld(c, "not found by its type and number (20 s passed)")
 			continue
 		}
 		left := maxI(2, int(time.Until(deadline).Seconds()+0.999))
 		liveDecide(c, "asking Tally by type and number (a new entry: no MasterID on its line)")
 		x, why, kind, err := liveOneByNumber(tc, company, port, liveWantOf(c, sp, spOK), left)
+		if errors.Is(err, errRetryWait) {
+			liveDecide(c, "not asked yet: "+cutRunes(err.Error(), 160)+"; asked then")
+			return
+		}
 		if gaveWay(err) {
 			liveDecide(c, "not asked: a posting is going on; asked after it")
 			return
@@ -572,15 +571,14 @@ func liveRescanFiles(scannedBefore bool) []heldLine {
 		start int64
 	}
 	pending := map[string]*pend{}
-	// 2.2.2: the body fetch switched off (the 2 s rule) for a company since a time: its lines after it went without
+	// 2.2.2: the body fetch switched off (the 2 s rule) for a company since a time: its lines after it went without (2.3.1:
+	// nothing is switched off any more; what a 2.3.0 bridge saved is read once for this, never in force)
 	offSince := map[string]time.Time{}
 	live.mu.Lock()
 	liveFresh()
-	for k, o := range live.off {
-		if o.method == "bodies" {
-			if at, err := time.ParseInLocation("2006-01-02T15:04:05", o.at, liveZone); err == nil {
-				offSince[strings.TrimPrefix(k, "bodies|")] = at
-			}
+	for k, at := range live.offWas {
+		if strings.HasPrefix(k, "bodies|") {
+			offSince[strings.TrimPrefix(k, "bodies|")] = at
 		}
 	}
 	live.mu.Unlock()
@@ -716,6 +714,11 @@ func liveResolveTurn() {
 	if !cloudOn() || postingGoing() || importsInFlight.Load() > 0 {
 		return
 	}
+	// 2.3.1 (the owner's last change): while the shared retry schedule waits (retry.go) nothing is asked; the held lines
+	// are asked at its next try, and a line not answered then is not spaced by RecorderResolveSec: it goes at the next try
+	if retryHeld() {
+		return
+	}
 	heldMu.Lock()
 	all, items := liveHeldLoad()
 	if len(items) == 0 {
@@ -731,6 +734,7 @@ func liveResolveTurn() {
 	}
 	sort.Strings(ids)
 	var ask []heldLine
+	prevLast := map[string]string{} // the line's last ask before this turn's: put back when Tally did not answer in time
 	refetchAsked := 0
 	for _, id := range ids {
 		h := items[id]
@@ -739,7 +743,6 @@ func liveResolveTurn() {
 		liveFresh()
 		done := live.sent[rid] && (!h.Again || live.items231[rid]) && !liveLedgerAgainDue(h) // 2.3.1 review H1: an older bridge's resolution is not this one
 		waiting := live.queued[rid]
-		off := liveIsOffLocked("bodies", h.Company+"|"+h.CGUID)
 		ownOpen := !h.Refetch || liveOwnOpenNow(h.CGUID, h.Company)
 		live.mu.Unlock()
 		added, _ := time.Parse(time.RFC3339, h.Added)
@@ -748,10 +751,8 @@ func liveResolveTurn() {
 			changed = true
 			continue
 		}
-		if waiting || off || h.Final || len(ask) >= 10 {
+		if waiting || h.Final || len(ask) >= 10 {
 			switch {
-			case off:
-				liveSay(h.Type, h.No, h.Date, h.MID, id, "not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)")
 			case len(ask) >= 10 && !waiting && !h.Final:
 				liveSay(h.Type, h.No, h.Date, h.MID, id, "not asked this turn: 10 held lines asked already; asked in a later turn")
 			}
@@ -782,7 +783,8 @@ func liveResolveTurn() {
 		if h.Refetch {
 			refetchAsked++
 		}
-		h.Last = now.Format(time.RFC3339) // spaced whatever the answer
+		prevLast[id] = h.Last
+		h.Last = now.Format(time.RFC3339) // spaced whatever the answer (2.3.1: but a stop or no answer waits for the retry)
 		items[id] = h
 		changed = true
 		ask = append(ask, h)
@@ -797,6 +799,7 @@ func liveResolveTurn() {
 		answered, final bool
 	}
 	var got []res
+	retryIds := map[string]bool{}
 	deadline := time.Now().Add(time.Duration(keepNum("RecorderResolveTurnSec", 20)) * time.Second)
 	total, fromFinCom := len(items), 0
 	for _, h := range items {
@@ -829,6 +832,14 @@ func liveResolveTurn() {
 		}
 		if gaveWay(err) {
 			liveSay(h.Type, h.No, h.Date, h.MID, h.ID, "not asked: a posting is going on; asked after it")
+			break
+		}
+		if errors.Is(err, errRetryWait) || errors.Is(err, errRecorderStop) || tallyNoAnswer(err) {
+			// 2.3.1: Tally did not answer in time: this line and those not asked yet go at the retry schedule's next try
+			for _, r := range ask[len(got):] {
+				retryIds[r.ID] = true
+			}
+			liveSay(h.Type, h.No, h.Date, h.MID, h.ID, "not asked this time: "+cutRunes(err.Error(), 160)+"; asked again by itself (not counted as a try)")
 			break
 		}
 		if err != nil {
@@ -868,13 +879,19 @@ func liveResolveTurn() {
 		resolved++
 		writeLog(fmt.Sprintf("Recorder: %s %s of %s in %s resolved: sent as %s with its GUID %s and body", h.Type, h.No, h.Date, h.Company, c.event, c.guid))
 	}
-	if len(got) == 0 {
+	if len(got) == 0 && len(retryIds) == 0 {
 		return
 	}
 	// the answers merged into the list as it is now
 	heldMu.Lock()
 	defer heldMu.Unlock()
 	all, items = liveHeldLoad()
+	for id := range retryIds {
+		if h, had := items[id]; had {
+			h.Last = prevLast[id]
+			items[id] = h
+		}
+	}
 	for _, r := range got {
 		h, had := items[r.id]
 		if !had {
@@ -912,12 +929,7 @@ const (
 // MasterID gave another real voucher, nothing is asked by number (final). answered: Tally answered a request (a try)
 func liveResolveOne(h heldLine) (x, why string, answered, final bool, err error) {
 	sp, spOK := startPointOf(h.Company)
-	key := h.Company + "|" + h.CGUID
-	tc := recorderTC(func(sec float64) {
-		if sec > liveLimitSec() {
-			liveTurnOff("bodies", key, h.Company, sec)
-		}
-	})
+	tc := recorderTC(nil)
 	port, err := findCompanyPortBg(h.Company, 0)
 	if err != nil {
 		return "", "", false, false, err

@@ -1,8 +1,8 @@
 package main
 
-// Plan item 10: the self-watch. Every request's kind and time go into the heartbeat; a request over 20 s, or Tally not
-// answering for over 2 minutes, stops all reading on this computer (kept in the settings, so a restart keeps it) while
-// postings go on; the tray's "Resume reading" clears it.
+// Plan item 10: the self-watch. Every request's kind and time go into the heartbeat. 2.3.1 (the owner's last change): a
+// request over 20 s, or Tally not answering for over 2 minutes, no longer stops reading (retry231_test.go); the owner's
+// stop from FinCom stops reading on this computer (kept in the settings) while postings go on.
 
 import (
 	"net/http"
@@ -33,6 +33,7 @@ func readsRefused(t *testing.T, f *standTally) {
 	}
 }
 
+// 2.3.1 (the owner's last change): a request over 20 s is counted and said; reading is never stopped for it
 func TestSelfStopOnSlowRequest(t *testing.T) {
 	f := newStandTally(t)
 	f.slow = func(id, body string) time.Duration {
@@ -46,24 +47,32 @@ func TestSelfStopOnSlowRequest(t *testing.T) {
 	if selfStopSec := keepNum("SelfStopSec", 20); selfStopSec != 1 {
 		t.Fatal("config")
 	}
-	_, _ = getLedgerNames(fin, zz, f.port) // its second request (the groups) is already refused
-	st := readStop()
-	if st == nil || str(st["by"]) != "self" || !strings.Contains(str(st["reason"]), "TDSDeskNames") || str(st["at"]) == "" {
-		t.Fatalf("not stopped by itself after a slow request: %v", st)
+	if _, err := getLedgerNames(fin, zz, f.port); err != nil {
+		t.Fatalf("the ledger list with a slow request: %v", err)
 	}
-	if logLines("Reading from Tally stopped on this computer by the bridge itself") != 1 {
-		t.Fatal("the stop is not in the log")
+	if st := readStop(); st != nil || obj(cfg("ReadStop")) != nil {
+		t.Fatalf("reading was stopped by itself after a slow request: %v", st)
+	}
+	if logLines("Reading from Tally stopped") != 0 || logLines("a request (TDSDeskNames) took") != 1 {
+		t.Fatalf("the log:\n%s", readText(logFile()))
+	}
+	if toInt(obj(beatReqs())["over20"]) != 1 {
+		t.Fatalf("not counted: %v", beatReqs())
 	}
 	f.mu.Lock()
 	f.slow = nil
 	f.mu.Unlock()
-	readsRefused(t, f)
-	// the tray shows why
-	if tip := trayTip(trayStatus()); !strings.Contains(tip, "Reading stopped") {
+	n0 := f.n("")
+	if _, err := getLedgerNames(fin, zz, f.port); err != nil || f.n("") == n0 {
+		t.Fatalf("a read after it: %v", err)
+	}
+	if tip := trayTip(trayStatus()); strings.Contains(tip, "Reading stopped") {
 		t.Fatalf("the tray tip: %q", tip)
 	}
 }
 
+// 2.3.1: Tally silent for over 2 minutes stops nothing; the small check goes once a minute as before and reads go again
+// once Tally answers
 func TestSelfStopOnSilence(t *testing.T) {
 	f := newStandTally(t)
 	var silent atomic.Bool
@@ -76,38 +85,33 @@ func TestSelfStopOnSilence(t *testing.T) {
 	}
 	standBridge(t, f, `,"TallyMaxSec":1,"TallyProbeSec":1`)
 	liveFrom(today())
-	resetSilence()
 	start := time.Now()
 	at := func(sec int) { nowFn = func() time.Time { return start.Add(time.Duration(sec) * time.Second) } }
-	at(0)
-	_, _ = getLedgerNames(fin, zz, f.port) // not answered
-	// the small check once a minute, not answered either: 61 s, still under 2 minutes
-	at(61)
-	_, _ = getLedgerNames(fin, zz, f.port)
-	selfWatchTick()
-	if readStop() != nil {
-		t.Fatal("stopped after a minute")
-	}
-	// 122 s: Tally has answered nothing for over 2 minutes while being asked
-	at(122)
-	_, _ = getLedgerNames(fin, zz, f.port)
-	selfWatchTick()
-	st := readStop()
-	if st == nil || str(st["by"]) != "self" || !strings.Contains(str(st["reason"]), "has not answered") {
-		t.Fatalf("not stopped after Tally was silent for over 2 minutes: %v", st)
+	t.Cleanup(func() { nowFn = time.Now })
+	for _, sec := range []int{0, 61, 122, 183} {
+		at(sec)
+		_, _ = getLedgerNames(fin, zz, f.port) // not answered
+		if readStop() != nil {
+			t.Fatalf("reading stopped after %d s of silence", sec)
+		}
 	}
 	silent.Store(false)
-	nowFn = time.Now
-	clearProbe(f.port)
-	readsRefused(t, f)
+	at(244)
+	if _, err := getLedgerNames(fin, zz, f.port); err != nil {
+		t.Fatalf("a read once Tally answers again: %v", err)
+	}
+	if logLines("Reading from Tally stopped") != 0 {
+		t.Fatalf("the log:\n%s", readText(logFile()))
+	}
 }
 
+// postings go while FinCom's owner has stopped reading on this computer
 func TestPostingWorksWhenStopped(t *testing.T) {
 	td := today()
 	f := newStandTally(t)
 	standBridge(t, f, "")
 	liveFrom(td)
-	setReadStop("self", "a request to Tally (Day Book) took 21 s")
+	setReadStop("fincom", "Stopped by the owner from FinCom")
 	n0 := f.n("")
 	if r := postOne(t, "st1", finVoucher("st1", fgParty, "ST-1", td, "5.00")); r["ok"] != true || r["byReply"] != true {
 		t.Fatalf("a posting while reading is stopped: %v", r)
@@ -127,34 +131,36 @@ func TestPostingWorksWhenStopped(t *testing.T) {
 	readsRefused(t, f)
 }
 
+// FinCom's stop is kept across a restart; the tray cannot lift it (FinCom does); a 2.3.0 stop by itself is not kept
 func TestStopSurvivesRestart(t *testing.T) {
 	f := newStandTally(t)
 	standBridge(t, f, "")
 	liveFrom(today())
-	setReadStop("self", "a request to Tally (FinComLedgers) took 24 s")
+	setReadStop("fincom", "Stopped by the owner from FinCom")
 	// a restart: the settings read again from the file
 	setCfg("ReadStop", nil)
 	loadConfig()
+	clearOldSwitchOffs()
 	st := readStop()
-	if st == nil || str(st["by"]) != "self" || !strings.Contains(str(st["reason"]), "FinComLedgers") {
+	if st == nil || str(st["by"]) != "fincom" {
 		t.Fatalf("the stop after a restart: %v", st)
 	}
 	readsRefused(t, f)
-	// the tray: Resume reading
-	if _, err := trayResumeReading(); err != nil {
-		t.Fatal(err)
+	if r, err := trayResumeReading(); err != nil || r["resumed"] != false || r["byFinCom"] != true {
+		t.Fatalf("the tray: %v %v", r, err)
 	}
-	if readStop() != nil {
-		t.Fatal("still stopped after Resume reading")
+	if readStop() == nil {
+		t.Fatal("the tray lifted FinCom's stop")
 	}
+	applyReadControl(M{"readStop": nil})
 	loadConfig()
 	if readStop() != nil {
 		t.Fatal("the stop came back after a restart")
 	}
 	if _, err := getLedgerNames(fin, zz, f.port); err != nil {
-		t.Fatalf("a read after Resume reading: %v", err)
+		t.Fatalf("a read after FinCom lifted the stop: %v", err)
 	}
-	if logLines("Reading from Tally resumed from the tray icon") != 1 {
+	if logLines("Reading from Tally resumed from FinCom") != 1 {
 		t.Fatal("the resume is not in the log")
 	}
 }
@@ -183,12 +189,16 @@ func TestBeatCarriesTimings(t *testing.T) {
 	if str(last["kind"]) != "TDSDeskGroupNames" || str(long["kind"]) != "TDSDeskGroupNames" || toInt(long["ms"]) < 1100 || str(long["at"]) == "" {
 		t.Fatalf("last %v, longest %v", last, long)
 	}
-	rs := obj(b["readStopped"])
-	if rs == nil || str(rs["by"]) != "self" || str(rs["reason"]) == "" {
-		t.Fatalf("readStopped in the beat: %v", b["readStopped"])
+	if b["readStopped"] != nil {
+		t.Fatalf("a slow request stopped reading: %v", b["readStopped"])
+	}
+	setReadStop("fincom", "Stopped by the owner from FinCom")
+	rs := obj(beatBody(true, "open", "", nil, nil, nil)["readStopped"])
+	if rs == nil || str(rs["by"]) != "fincom" || str(rs["reason"]) == "" {
+		t.Fatalf("readStopped in the beat: %v", rs)
 	}
 	// no stop: readStopped is null
-	clearReadStop("tray")
+	clearReadStop("fincom-lifted")
 	if b := beatBody(true, "open", "", nil, nil, nil); b["readStopped"] != nil {
 		t.Fatalf("readStopped without a stop: %v", b["readStopped"])
 	}
@@ -245,14 +255,8 @@ func TestRemoteStopFromBeat(t *testing.T) {
 	if _, err := getLedgerNames(fin, zz, f.port); err != nil {
 		t.Fatalf("a read after FinCom lifted the stop: %v", err)
 	}
-	// a stop by the bridge itself is not lifted by readStop: null, nor replaced by FinCom's stop
-	setReadStop("self", "a request to Tally (Day Book) took 22 s")
-	reply(M{"readStop": nil})
+	// FinCom's resume clears its stop too
 	reply(M{"readStop": M{"by": "fincom", "reason": "Stopped by the owner from FinCom"}})
-	if st := readStop(); st == nil || str(st["by"]) != "self" {
-		t.Fatalf("the bridge's own stop: %v", st)
-	}
-	// only FinCom's resume clears it
 	reply(M{"readStop": nil, "readResume": true})
 	if readStop() != nil {
 		t.Fatal("still stopped after FinCom's resume")
@@ -261,12 +265,12 @@ func TestRemoteStopFromBeat(t *testing.T) {
 		t.Fatal("the resume is not in the log")
 	}
 	// the beat says what is stopped
-	setReadStop("self", "Tally has not answered since 10:00 (over 2 minutes)")
-	reply(M{})
+	reply(M{"readStop": M{"by": "fincom", "reason": "Stopped by the owner from FinCom"}})
+	reply(M{"readStop": M{"by": "fincom", "reason": "Stopped by the owner from FinCom"}})
 	c.mu.Lock()
 	rs := obj(c.lastBeat["readStopped"])
 	c.mu.Unlock()
-	if rs == nil || str(rs["by"]) != "self" {
+	if rs == nil || str(rs["by"]) != "fincom" {
 		t.Fatalf("the beat's readStopped: %v", rs)
 	}
 }

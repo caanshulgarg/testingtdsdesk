@@ -510,8 +510,8 @@ func lightCompanyList(sessions []M) []M {
 	if !open {
 		return sessions
 	}
-	if coListHeld() {
-		return sessions // 2.3.1: backed off after the list took over 2 s (companylist.go): the list held stands
+	if retryHeld() {
+		return sessions // 2.3.1: backed off after the list took over 2 s (retry.go): the list held stands
 	}
 	fresh, ok := openCompaniesAsk(bgCompaniesTC(), true) // 2.3.1: the 2 s hard stop (recorder_owntally.go)
 	switch {
@@ -579,7 +579,7 @@ func lightCheckOpen(sessions []M) {
 			}
 			_, had := startPointOf(name)
 			seq := spSeqOf(name)
-			if _, err := companyCheck(&TC{copier: true, light: true, yield: lightCheckYield(name)}, name, port); err != nil {
+			if _, err := companyCheck(&TC{copier: true, light: true, bg: true, yield: lightCheckYield(name)}, name, port); err != nil {
 				// not marked: it goes again at the next turn
 				spMu.Lock()
 				if spChecked[name].Equal(now) {

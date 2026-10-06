@@ -673,6 +673,7 @@ func standBridge(t *testing.T, f *standTally, extra string) string {
 	bgMu.Lock()
 	stopHold = map[int]time.Time{}
 	bgMu.Unlock()
+	retryReset() // 2.3.1: the shared retry schedule (retry.go), per test
 	decideMu.Lock()
 	decideAt = map[string]time.Time{} // the decision log's once-in-10-minutes, per test
 	decideMu.Unlock()

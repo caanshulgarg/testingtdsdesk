@@ -274,8 +274,8 @@ func TestLed231AdvanceOnlyAfterCloudConfirms(t *testing.T) {
 	}
 }
 
-// --- 5. the 2-second rule: a Tally slow to answer is left at 2 s, the number stays, the ledger changes are off for the
-// company until the owner switches where the changes come from
+// --- 5. the 2-second rule: a Tally slow to answer is left at 2 s, the number stays; 2.3.1 (the owner's last change): never
+// switched off, asked again by itself on the shared retry schedule (retry.go)
 func TestLed231TwoSecondStop(t *testing.T) {
 	_, f, c := led231Bridge(t)
 	led231Alter(f, "Cash", func(l *tLed) { l.open = "-2000.00" })
@@ -302,18 +302,27 @@ func TestLed231TwoSecondStop(t *testing.T) {
 	if m, _ := ledChangesAfter(zz, b220CoGUID); m != 5 || len(c.ledChanges) != 0 {
 		t.Fatalf("the number moved: %d", m)
 	}
-	if !liveIsOff("ledgers", companyKey(zz)+"|"+b220CoGUID) || logLines("The ledger changes off: Tally took") != 1 {
-		t.Fatal("not switched off by the 2 s rule")
+	// 2.3.1 (the owner's last change): never switched off; nothing more is asked until the shared retry schedule's next try
+	if logLines("off: Tally took") != 0 || logLines("(FinComLedgerChanges, try 1); trying again by itself at") != 1 {
+		t.Fatalf("switched off, or the retry not said:\n%s", readText(logFile()))
 	}
-	// off: nothing more asked (the wanted ledgers neither)
 	k := len(f.reqs)
-	bgMu.Lock()
-	stopHold = map[int]time.Time{}
-	bgMu.Unlock()
 	_, _ = ledChangesCheck(zz)
 	ledWantedRun(M{"ledgersWanted": []any{M{"company": zz, "company_guid": b220CoGUID, "name": "Cash"}}})
 	if f.n(ledChangesID) != 1 || f.n(ledByNameID) != 0 {
-		t.Fatalf("asked while off: %v", f.ids()[k:])
+		t.Fatalf("asked before the retry: %v", f.ids()[k:])
+	}
+	// at the retry, Tally answering in time: the changes go by themselves, and the wanted ledger
+	f.mu.Lock()
+	f.slow = nil
+	f.mu.Unlock()
+	retryDue()
+	if n, err := ledChangesCheck(zz); err != nil || f.n(ledChangesID) != 2 || retryHeld() {
+		t.Fatalf("not asked again at the retry: %d %v %v", n, err, f.ids()[k:])
+	}
+	ledWantedRun(M{"ledgersWanted": []any{M{"company": zz, "company_guid": b220CoGUID, "name": "Cash"}}})
+	if f.n(ledByNameID) != 1 {
+		t.Fatalf("the wanted ledger not asked: %v", f.ids()[k:])
 	}
 }
 

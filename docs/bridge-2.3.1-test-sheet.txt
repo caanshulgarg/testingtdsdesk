@@ -142,6 +142,19 @@ CHECK 13 - A LEDGER RENAMED IN TALLY, USED UNDER ITS NEW NAME
    keeps the old name in 2.3.1), once each; no second ledger with the new name; the second entry goes in without waiting.
    If not, send: the entries' numbers, the time, and the Show log lines starting "Ledger" and "Recorder:".
 
+CHECK 14 - TALLY SLOW FOR A WHILE: NOTHING SWITCHED OFF, IT TRIES AGAIN BY ITSELF
+   In Tally on NWS144, open a large report (for example Display More Reports > Day Book for the whole year) so that
+   Tally is busy for a few minutes. Meanwhile make a Journal entry of Rs 1 in GARG SHEKHAR, narration "TRIAL 231
+   retry", from another Tally window if you have one, else right after the report finishes.
+   You should see: FinCom's Tally page shows for your line "Tally did not answer in time at <time>; trying again by
+   itself at <time>", with no Resume button; once Tally is free again (within 5 minutes) the line goes back to
+   "Reading" by itself and the entry is in the books. Nothing on the page says "switched off" or "Stopped by itself".
+   The log has one line per try ("did not answer in time ... trying again by itself at") and one line "answered in time
+   again".
+   The held Journal lines from 2.3.0 (GARG SHEKHAR, MasterIDs 25689 and up) come into the books within a few minutes
+   of 2.3.1 starting, without anyone pressing anything.
+   If not, send: the time, a photo of the Tally page line, and the Show log lines starting "Tally" and "Recorder:".
+
 How to send the log lines: right-click the FinCom icon near the clock > Show log. Each line starting "Recorder:" says
 what the bridge decided for one entry: asking Tally, taken, held (with the reason), or not asked (with the reason).
 On NWS144 each Windows user has their own FinCom icon and their own log: send the log of the Windows user named in the

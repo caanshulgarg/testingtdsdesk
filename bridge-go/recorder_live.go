@@ -219,7 +219,7 @@ type livePending struct {
 type liveBSt struct {
 	company, guid          string
 	after, seen, maxMaster int64
-	// the owner's rule (04-Oct): 60 s at least between two requests (the 2 s switch-off: live.off, recorder_probes.go)
+	// the owner's rule (04-Oct): 60 s at least between two requests
 	lastAsk time.Time
 }
 
@@ -237,16 +237,20 @@ type liveLinkSt struct {
 }
 
 type liveState struct {
-	mu       sync.Mutex
-	dir      string // the sync folder this state belongs to ("" : not loaded)
-	files    map[string]*liveFileSt
-	pending  map[string]*livePending // file -> the first half of a pair waiting for its second
-	queue    []*change
-	queued   map[string]bool
-	sent     map[string]bool
-	b        map[string]*liveBSt
-	c        map[string]*liveCSt    // source C, per company key
-	off      map[string]*liveOffSt  // method|company key -> off by the 2 s rule
+	mu      sync.Mutex
+	dir     string // the sync folder this state belongs to ("" : not loaded)
+	files   map[string]*liveFileSt
+	pending map[string]*livePending // file -> the first half of a pair waiting for its second
+	queue   []*change
+	queued  map[string]bool
+	sent    map[string]bool
+	b       map[string]*liveBSt
+	c       map[string]*liveCSt // source C, per company key
+	// 2.3.1: what a 2.3.0 bridge saved as switched off by the 2 s rule (method|company key -> since when), read once and
+	// never in force: the first re-scan uses the entry fetch's to find the lines it sent without their body, and the file
+	// is written again without it (offDrop: clearOldSwitchOffs says so)
+	offWas   map[string]time.Time
+	offDrop  bool
 	links    map[string]*liveLinkSt // company key -> linked or not (review H1)
 	qcount   map[string]int         // company GUID -> changes waiting (the cap per company, review H1)
 	high     map[string]int64       // company key -> the highest AlterID received from the add-on (source B's start, M5)
@@ -313,7 +317,7 @@ func liveFresh() {
 	live.dir = d
 	live.files, live.pending, live.queue, live.queued = map[string]*liveFileSt{}, map[string]*livePending{}, nil, map[string]bool{}
 	live.sent, live.b, live.co, live.back = map[string]bool{}, map[string]*liveBSt{}, map[string]*liveCoSt{}, map[string]keepBack{}
-	live.c, live.off = map[string]*liveCSt{}, map[string]*liveOffSt{}
+	live.c, live.offWas, live.offDrop = map[string]*liveCSt{}, map[string]time.Time{}, false
 	live.links, live.qcount, live.high, live.windows, live.busyAt = map[string]*liveLinkSt{}, map[string]int{}, map[string]int64{}, map[string][][2]int64{}, map[string]time.Time{}
 	live.touched, live.logged, live.gapSet, live.lastPost = map[string]map[string]bool{}, map[string]bool{}, false, time.Time{}
 	live.created, live.scanned = map[string][2]string{}, false
@@ -338,9 +342,13 @@ func liveFresh() {
 		}
 		live.c[k] = st
 	}
-	for k, v := range obj(o["off"]) {
-		e := obj(v)
-		live.off[k] = &liveOffSt{method: str(e["method"]), company: str(e["company"]), secs: num(e["seconds"]), at: str(e["at"]), why: str(e["why"]), beat: str(e["beat"])}
+	if offs, had := o["off"]; had && offs != nil {
+		for k, v := range obj(offs) {
+			if at, err := time.ParseInLocation("2006-01-02T15:04:05", str(obj(v)["at"]), liveZone); err == nil {
+				live.offWas[k] = at
+			}
+		}
+		live.offDrop = true
 	}
 	for _, id := range liveLoadSent() {
 		live.sent[id] = true
@@ -494,13 +502,9 @@ func liveSaveOffsets() {
 		}
 		cs[k] = e
 	}
-	offs := M{}
-	for k, o := range live.off {
-		offs[k] = M{"method": o.method, "company": o.company, "seconds": o.secs, "at": o.at, "why": o.why, "beat": o.beat}
-	}
 	path := liveOffsetsFile()
 	live.mu.Unlock()
-	if err := saveFile(path, jsonText(M{"files": files, "alterid": bs, "slices": cs, "off": offs, "at": nowS()})); err != nil {
+	if err := saveFile(path, jsonText(M{"files": files, "alterid": bs, "slices": cs, "at": nowS()})); err != nil {
 		writeLog("Recorder: " + path + " could not be written: " + err.Error())
 	}
 }
@@ -561,7 +565,6 @@ func applyRecorderSource(j M) {
 		return
 	}
 	liveSrcLoad()
-	liveOnAgain(s)
 	was, _ := liveSrc.Load().(string)
 	if was != s {
 		liveSrc.Store(s)
@@ -1484,7 +1487,7 @@ func liveSourceB(company string, port int) (int, error) {
 	}
 	liveSkipWindows(key, &st.seen)
 	above := st.seen
-	if span := v - above; span > int64(keepNum("RecorderBMaxSpan", 500)) && !liveIsOffLocked("B", key) {
+	if span := v - above; span > int64(keepNum("RecorderBMaxSpan", 500)) {
 		// review M5: too many to ask for in one list; left to the gap check and the Day Book
 		st.seen, st.after = v, v
 		live.mu.Unlock()
@@ -1492,9 +1495,9 @@ func liveSourceB(company string, port int) (int, error) {
 		liveSaveOffsets()
 		return 0, nil
 	}
-	if liveIsOffLocked("B", key) || v <= above {
+	if v <= above {
 		live.mu.Unlock()
-		return 0, nil // off by the 2 s rule (the owner switches it back on), or nothing above what was received
+		return 0, nil // nothing above what was received
 	}
 	if !st.lastAsk.IsZero() && nowFn().Sub(st.lastAsk) < time.Duration(keepNum("RecorderBGapSec", 60))*time.Second {
 		live.mu.Unlock()
@@ -1507,12 +1510,8 @@ func liveSourceB(company string, port int) (int, error) {
 	st.lastAsk = nowFn()
 	live.mu.Unlock()
 	liveSaveOffsets() // round 2 R2-9: the spacing holds across a restart after a failure
-	took := -1.0
-	tc := recorderTC(func(sec float64) { took = sec })
-	raw, err := invokeTally(tc, port, keepListAboveRequest(company, above), keepNum("RecorderBTimeoutSec", 5)) // review M5: 5 s
-	if took > liveLimitSec() {
-		liveTurnOff("B", key, company, took)
-	}
+	// 2.3.1: a list stopped at 2 s, or not answered, is asked again by the shared retry schedule (retry.go); never off
+	raw, err := invokeTally(recorderTC(nil), port, keepListAboveRequest(company, above), keepNum("RecorderBTimeoutSec", 5)) // review M5: 5 s
 	if err != nil {
 		return 0, err
 	}
@@ -1751,7 +1750,7 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 	if len(need) == 0 {
 		return
 	}
-	company, key := need[0].company, need[0].key()
+	company := need[0].company
 	deadline := time.Now().Add(time.Duration(liveBodySec()) * time.Second)
 	left := func() int { return maxI(2, int(time.Until(deadline).Seconds()+0.999)) } // review Low 12: the 20 s in all
 	// review Low 9: a reason that passes (reading stopped, Tally left alone after a timeout) is not a failure: asked
@@ -1771,13 +1770,18 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 		return true
 	}
 	yield := func() bool { return postingGoing() || importsInFlight.Load() > 0 }
-	slow := false
-	tc := recorderTC(func(sec float64) {
-		if sec > liveLimitSec() && !slow {
-			slow = true
-			liveTurnOff("bodies", key, company, sec)
+	// 2.3.1 (the owner's last change): a request stopped at 2 s, or not answered, never turns the entry fetch off: the shared
+	// retry schedule (retry.go) asks again by itself, and the entries not asked yet wait for it (never sent without their
+	// body for it); an entry whose own request was stopped 3 times goes without its body (FinCom holds the line, and this
+	// bridge asks for it again as a held line, on the same schedule)
+	tc := recorderTC(nil)
+	waitRetry := func(err error, cs []*change) {
+		for _, c := range cs {
+			if !c.isLedger() {
+				liveDecide(c, "not asked yet: "+cutRunes(err.Error(), 160)+"; asked then")
+			}
 		}
-	})
+	}
 	failed := func(cs []*change, why string) {
 		live.mu.Lock()
 		for _, c := range cs {
@@ -1860,14 +1864,22 @@ byDay:
 			for _, c := range part {
 				mids = append(mids, c.masterId)
 			}
-			if slow {
-				failed(part, "the body fetch is off for this company (the 2 s rule)")
-				continue
-			}
 			for _, c := range part {
 				liveDecide(c, "asking Tally by MasterID")
 			}
 			got, err := fetchVouchersByMasterIn(tc, company, port, d, mids, left())
+			if errors.Is(err, errRetryWait) {
+				rest := append(append([]*change{}, part...), cs...)
+				for _, d2 := range dates[di+1:] {
+					rest = append(rest, byDate[d2]...)
+				}
+				waitRetry(err, rest)
+				return
+			}
+			if errors.Is(err, errRecorderStop) && again(part) {
+				waitRetry(&retryErr{nowFn(), retryNext()}, part)
+				return
+			}
 			if gaveWay(err) {
 				for _, c := range part {
 					liveDecide(c, "not asked: a posting is going on; asked after it")
@@ -1920,14 +1932,18 @@ byDay:
 					liveHeldAs(c, m.why, m.kind != wrongRetry)
 					continue
 				}
-				if slow || time.Now().After(deadline) {
-					liveHeldAs(c, m.why+"; not asked by its type and number (the body fetch is off for this company, the 2 s rule, or 20 s passed)", false)
+				if time.Now().After(deadline) {
+					liveHeldAs(c, m.why+"; not asked by its type and number (20 s passed)", false)
 					continue
 				}
 				w := liveWantOf(c, sp, spOK)
 				w.mid = ""
 				liveDecide(c, "asking Tally by type and number ("+cutRunes(m.why, 120)+")")
 				x, why, kind, err := liveOneByNumber(tc, c.company, port, w, left())
+				if errors.Is(err, errRetryWait) {
+					waitRetry(err, []*change{c})
+					return
+				}
 				if gaveWay(err) {
 					liveDecide(c, "not asked: a posting is going on; asked after it")
 					return // review L5: a posting goes first: asked again after it
@@ -1949,12 +1965,12 @@ byDay:
 		}
 	}
 	for _, c := range ledgers {
-		if time.Now().After(deadline) || slow {
-			failed([]*change{c}, "20 s passed, or the body fetch is off")
+		if time.Now().After(deadline) {
+			failed([]*change{c}, "20 s passed")
 			continue
 		}
 		x, err := fetchLedgerByMaster(tc, company, port, toI64(c.masterId))
-		if gaveWay(err) {
+		if gaveWay(err) || errors.Is(err, errRetryWait) {
 			return
 		}
 		if err != nil || x == "" {
@@ -1974,7 +1990,7 @@ byDay:
 		}
 		live.mu.Unlock()
 	}
-	if !slow && !yield() {
+	if !retryHeld() && !yield() {
 		liveCancelCounters(tc, company, port, need)
 	}
 }
@@ -2215,29 +2231,8 @@ func liveUploadStep() (int, bool) {
 		size += s
 	}
 	var need, byNumber []*change
-	bodiesOff := liveIsOffLocked("bodies", key)
 	for _, c := range group {
 		if c.needsBody() {
-			if bodiesOff {
-				c.bodyTried = true // the body fetch is off for this company (the 2 s rule): the line goes without
-				if c.guidFetch {
-					liveGuidUnproven(c, "the body fetch is off for this company (Tally took longer than the 2 s limit)")
-					continue
-				}
-				if !c.isLedger() {
-					c.heldWhy = "the entry fetch is off for this company (Tally took longer than the 2 s limit)"
-					why := "Tally took longer than the 2 s limit"
-					if o := live.off["bodies|"+key]; o != nil {
-						why = strings.TrimSuffix(o.why, ")")
-						if i := strings.Index(why, " for the "); i > 0 {
-							why = why[:i]
-						}
-						why += " at " + cut(strings.TrimPrefix(o.at, cut(o.at, 11)), 5)
-					}
-					liveDecide(c, "not asked: the body fetch is off for this company ("+why+")")
-				}
-				continue
-			}
 			if posting && !c.isLedger() {
 				liveDecide(c, "not asked: a posting is going on; asked after it")
 			}

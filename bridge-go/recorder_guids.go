@@ -260,7 +260,7 @@ func liveGuidUnprovenAs(c *change, why string, retry bool) {
 }
 
 // the owner's addition to H1: one held cancel / delete asked again of this bridge's Tally by its MasterID (a background
-// read: the 2 s stop turns the fetch off for the company, a posting goes first). c: the line to send (id + ":resolved")
+// read: stopped at 2 s, asked again by the shared retry schedule (retry.go); a posting goes first). c: the line to send (id + ":resolved")
 // once proven here (a cancel with Tally's GUID; a delete gone from this Tally, its GUID decided when it is sent as before);
 // final: proven NOT to belong to this Tally (held with words, not asked again); err: not asked this time
 func liveResolveGuid(h heldLine) (c *change, why string, answered, final bool, err error) {
@@ -268,12 +268,7 @@ func liveResolveGuid(h heldLine) (c *change, why string, answered, final bool, e
 	if !spOK {
 		return nil, "", false, false, errors.New("no starting point recorded for this company yet")
 	}
-	key := h.Company + "|" + h.CGUID
-	tc := recorderTC(func(sec float64) {
-		if sec > liveLimitSec() {
-			liveTurnOff("bodies", key, h.Company, sec)
-		}
-	})
+	tc := recorderTC(nil)
 	port, err := findCompanyPortBg(h.Company, 0)
 	if err != nil {
 		return nil, "", false, false, err

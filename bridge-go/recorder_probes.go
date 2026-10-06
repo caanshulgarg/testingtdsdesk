@@ -30,7 +30,6 @@ package main
 import (
 	"fmt"
 	"html"
-	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -320,90 +319,14 @@ func readTestEditLogProbe(port int, company string, answers ...string) {
 	writeLog(fmt.Sprintf("Edit Log probe (%s, MasterID %s): answered, %d bytes, %.1f s; tags: %s", editLogProbeID, mid, len(raw), sec, cut(tags, 300)))
 }
 
-// --- the 2 s rule, every method
-type liveOffSt struct {
-	method, company string
-	secs            float64
-	at, why, beat   string
-}
-
-var methodNames = map[string][2]string{
-	"B":      {"Source B", "changed-entries list"},
-	"C":      {"Source C", "month slice"},
-	"bodies": {"The body fetch", "entry bodies"},
-	// 2.3.1 (masters): the ledgers changed since the master counter moved, and a ledger an entry needs (ledchanges.go)
-	"ledgers": {"The ledger changes", "ledger changes"},
-}
-
+// --- the 2 s hard stop, every background read (2.3.1, the owner's last change: never a switch-off; a request stopped or
+// not answered is asked again by the shared retry schedule, retry.go)
 func liveLimitSec() float64 { return float64(keepNum("RecorderLimitMs", 2000)) / 1000 }
 
-// 2.2.2 (the owner's condition b): a recorder background read: it gives way to a posting, is told its time (the 2 s
-// switch-off) and is stopped HARD at RecorderLimitMs (2000): the bridge stops waiting for Tally then (tally.go)
+// 2.2.2 (the owner's condition b): a recorder background read: it gives way to a posting, is told its time, is stopped
+// HARD at RecorderLimitMs (2000): the bridge stops waiting for Tally then (tally.go), and follows the retry schedule
 func recorderTC(timed func(sec float64)) *TC {
-	return &TC{copier: true, yield: func() bool { return postingGoing() || importsInFlight.Load() > 0 }, timed: timed, limitMs: keepNum("RecorderLimitMs", 2000)}
-}
-
-// under live.mu
-func liveIsOffLocked(method, key string) bool { return live.off[method+"|"+key] != nil }
-
-func liveIsOff(method, key string) bool {
-	live.mu.Lock()
-	defer live.mu.Unlock()
-	liveFresh()
-	return liveIsOffLocked(method, key)
-}
-
-func liveTurnOff(method, key, company string, took float64) {
-	nm := methodNames[method]
-	why := fmt.Sprintf("Tally took %.1f s for the %s (limit %g s)", took, nm[1], liveLimitSec())
-	beat := recorderSource() // review M6: the source in force (the owner's, else the setting's), never the raw answer
-	live.mu.Lock()
-	liveFresh()
-	live.off[method+"|"+key] = &liveOffSt{method: method, company: company, secs: math.Round(took*10) / 10, at: nowFn().Format("2006-01-02T15:04:05"), why: why, beat: beat}
-	live.mu.Unlock()
-	writeLog(nm[0] + " off: " + why + " (" + company + "; on again when the owner switches where the changes come from)")
-	liveSaveOffsets()
-}
-
-// the beat's source value: one other than the value in force when a method stopped turns it on again
-func liveOnAgain(s string) {
-	live.mu.Lock()
-	liveFresh()
-	var back []string
-	for k, o := range live.off {
-		if o.beat != s {
-			delete(live.off, k)
-			back = append(back, methodNames[o.method][0]+" on again for "+o.company)
-			if st := live.b[strings.TrimPrefix(k, "B|")]; o.method == "B" && st != nil {
-				st.lastAsk = time.Time{}
-			}
-			if st := live.c[strings.TrimPrefix(k, "C|")]; o.method == "C" && st != nil {
-				st.lastAsk = time.Time{}
-			}
-		}
-	}
-	live.mu.Unlock()
-	sort.Strings(back)
-	for _, b := range back {
-		writeLog(b + ": the owner switched where the changes come from (" + or(s, "the setting") + ")")
-	}
-	if len(back) > 0 {
-		liveSaveOffsets()
-	}
-}
-
-// the beat: per company, a method off by the 2 s rule {off, seconds, at, why}
-func liveBeatOff(method string) M {
-	live.mu.Lock()
-	defer live.mu.Unlock()
-	liveFresh()
-	out := M{}
-	for _, o := range live.off {
-		if o.method == method {
-			out[o.company] = M{"off": true, "seconds": o.secs, "at": o.at, "why": o.why}
-		}
-	}
-	return out
+	return &TC{copier: true, bg: true, yield: func() bool { return postingGoing() || importsInFlight.Load() > 0 }, timed: timed, limitMs: keepNum("RecorderLimitMs", 2000)}
 }
 
 // --- B. source C
@@ -482,7 +405,7 @@ func liveSourceC(company string, port int) (int, error) {
 	if st.round == nil {
 		liveSkipWindows(key, &st.seen)
 	}
-	if liveIsOffLocked("C", key) || (st.round == nil && v <= st.seen) {
+	if st.round == nil && v <= st.seen {
 		live.mu.Unlock()
 		return 0, nil
 	}
@@ -509,13 +432,8 @@ func liveSourceC(company string, port int) (int, error) {
 	ym, from := r.ym, r.from
 	st.lastAsk = nowFn()
 	live.mu.Unlock()
-	liveSaveOffsets() // round 2 R2-9
-	took := -1.0
-	tc := recorderTC(func(sec float64) { took = sec })
-	raw, err := invokeTally(tc, port, sliceRequest(company, form, ym, from), keepNum("RecorderBTimeoutSec", 5)) // R2-1: 5 s
-	if took > liveLimitSec() {
-		liveTurnOff("C", key, company, took)
-	}
+	liveSaveOffsets()                                                                                                        // round 2 R2-9
+	raw, err := invokeTally(recorderTC(nil), port, sliceRequest(company, form, ym, from), keepNum("RecorderBTimeoutSec", 5)) // R2-1: 5 s
 	if err != nil {
 		return 0, err
 	}

@@ -257,17 +257,17 @@ func liveNotHere(l recLine) {
 
 // the reader's own look at the own Tally, when a line waits for one: the light company-list request as a background
 // read (it gives way to a posting or an import; never while reading is stopped), 30 s apart at most. True: a look went
-// 2.3.1: under the 2-second rule and its back-off (companylist.go); not less often than 30 s, as a line written between
+// 2.3.1: under the 2-second rule and its back-off (retry.go); not less often than 30 s, as a line written between
 // two looks further apart could be taken under the lead rule (liveOwnLead) though another user's Tally wrote it
 func liveOwnAskNow() bool {
 	now := nowFn()
 	live.mu.Lock()
 	go1 := live.ownWant && (now.Sub(live.ownAskAt) >= liveOwnAskEvery || now.Before(live.ownAskAt))
 	live.mu.Unlock()
-	if go1 && coListHeld() {
+	if go1 && retryHeld() {
 		liveOwnBlindNow() // review H1: a line waits and the list is backed off: the next complete look decides it
 	}
-	if !go1 || lightCheckBlocked() != "" || coListHeld() {
+	if !go1 || lightCheckBlocked() != "" || retryHeld() {
 		return false
 	}
 	live.mu.Lock()
@@ -283,7 +283,7 @@ func liveOwnAskNow() bool {
 // stopped is incomplete (it tells nothing; liveNoteOwnTally). It gives way to a posting. A person's look (Update now, the
 // tray, the setup) is not cut
 func bgCompaniesTC() *TC {
-	return &TC{copier: true, light: true, yield: func() bool { return postingGoing() || importsInFlight.Load() > 0 }, limitMs: keepNum("RecorderLimitMs", 2000)}
+	return &TC{copier: true, light: true, bg: true, yield: func() bool { return postingGoing() || importsInFlight.Load() > 0 }, limitMs: keepNum("RecorderLimitMs", 2000)}
 }
 
 // After 2.3.0 (refetch): under live.mu, whether this bridge's own Tally has the company open now: its last look saw it open, or

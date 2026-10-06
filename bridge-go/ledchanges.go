@@ -171,8 +171,8 @@ func ledChangesCheckOn(company string, preferred int) (int, error) {
 		return 0, nil
 	}
 	key := companyKey(company) + "|" + guid
-	if liveIsOff("ledgers", key) || postingGoing() {
-		return 0, nil // off by the 2 s rule (the owner switches it back on), or a posting goes first
+	if postingGoing() {
+		return 0, nil // a posting goes first
 	}
 	if m-after > ledChangesMaxSpan() {
 		ledChSet(company, guid, m)
@@ -212,17 +212,10 @@ func ledAskChanges(company, key string, port int, after, m int64) ([]ledRow, int
 		if upto > m {
 			upto = m
 		}
-		took := -1.0
-		tc := recorderTC(func(sec float64) { took = sec })
-		raw, err := invokeTally(tc, port, ledgerChangesRequest(company, a, upto), ledChangesSec())
+		// 2.3.1 (the owner's last change): stopped at 2 s or not answered: the number stays and the shared retry schedule
+		// (retry.go) asks again by itself; never switched off
+		raw, err := invokeTally(recorderTC(nil), port, ledgerChangesRequest(company, a, upto), ledChangesSec())
 		reqs++
-		if took > liveLimitSec() {
-			liveTurnOff("ledgers", key, company, took)
-			if err == nil {
-				err = fmt.Errorf("Tally took %.1f s", took)
-			}
-			return rows, a, reqs, err
-		}
 		if err != nil {
 			return rows, a, reqs, err
 		}
@@ -341,7 +334,7 @@ func ledWantedRun(j M) {
 	gap := time.Duration(keepNum("LedgerWantedGapSec", 600)) * time.Second
 	for _, w := range order {
 		key := companyKey(w.company) + "|" + w.guid
-		if !cloudOn() || liveIsOff("ledgers", key) || postingGoing() {
+		if !cloudOn() || postingGoing() {
 			continue
 		}
 		port, why := ledOwnPort(w.company, w.guid, 0)
@@ -375,14 +368,9 @@ func ledWantedRun(j M) {
 				unmark()
 				break
 			}
-			took := -1.0
-			tc := recorderTC(func(sec float64) { took = sec })
-			raw, err := invokeTally(tc, port, ledgerByNameRequest(w.company, name), ledChangesSec())
-			if took > liveLimitSec() {
-				liveTurnOff("ledgers", key, w.company, took)
-				break
-			}
-			if gaveWay(err) {
+			raw, err := invokeTally(recorderTC(nil), port, ledgerByNameRequest(w.company, name), ledChangesSec())
+			// 2.3.1: stopped at 2 s, not answered, or waiting for the retry schedule: asked again by itself (retry.go)
+			if gaveWay(err) || errors.Is(err, errRetryWait) || errors.Is(err, errRecorderStop) || tallyNoAnswer(err) {
 				unmark()
 				break
 			}

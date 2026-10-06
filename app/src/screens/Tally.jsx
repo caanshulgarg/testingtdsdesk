@@ -96,12 +96,12 @@ function lineState(r, latest, owner) {
   if (r.tally !== "open") return { text: "Online · Tally not open", cls: "warn", act: "Open TallyPrime and the company on " + r.computer + "." };
   return { text: "Online · Tally open", cls: "ok", act: r.open.length ? r.open.join(", ") : "" };
 }
-// plan item 14 (All clients → Tally): with each computer, its reading state (Reading / Paused / Stopped by itself: why /
-// Stopped from FinCom: why / Offline since …), its last request to Tally and its longest today (the heartbeat's reqs),
+// plan item 14 (All clients → Tally): with each computer, its reading state (Reading / Paused / 2.3.1: "Tally did not
+// answer in time at 12:14; trying again by itself at 12:15" / Stopped from FinCom: why / Offline since …), its last request to Tally and its longest today (the heartbeat's reqs),
 // and for an owner: Stop reading on this computer / on all computers, Resume reading, and the release (the owner's rule of
 // 05-Oct-2026: Hold version X, Let it go, Roll back, Withdraw; X: this site's setup). The cloud checks every one again
 // (migrations 35, 37, 54); its refusal is shown as it says it.
-const RS_CLS = { reading: "ok", paused: "warn", selfstop: "bad", fincomstop: "bad", offline: "bad" };
+const RS_CLS = { reading: "ok", paused: "warn", retrying: "warn", fincomstop: "bad", offline: "bad" };
 function Reqs({ r }) {
   const q = r.reqs || {}, today = !q.day || q.day === new Date().toISOString().slice(0, 10);
   const last = TCloud.reqSay(q.last), long = today ? TCloud.reqSay(q.longest) : "";
@@ -238,16 +238,6 @@ function RecorderLine({ r }) {
     {open.map((co) => { const x = rc[co]; return <span key={co} className="note" data-recorder-co={co}>{co + ": " + (x.seen ? "recording" + (x.lastAt ? " \u00b7 last line " + tallyHm(x.lastAt) : "") : "not recording")}</span>; })}
   </div>;
 }
-// the owner's condition 4: per company, what FinCom Bridge's 2-second rule switched off on this computer (Rec.offOf), the
-// time Tally took, and how to switch it back on (words only: the owner changes "Changes come from" and sets it back)
-function RecorderOff({ r, owner }) {
-  const offs = Rec.offOf(r.device);
-  if (!offs.length) return null;
-  return <div data-recorder-offs="" style={{ marginLeft: 16 }}>
-    {offs.map((x) => <div key={x.kind + "|" + x.company} className="note" data-recorder-off="" data-off-kind={x.kind} data-off-co={x.company} title={x.why || undefined}>
-      {Rec.offWords(x) + " " + Rec.offAgain(owner)}</div>)}
-  </div>;
-}
 // FinCom Bridge 2.3.0 (one bridge for each Windows user on a shared server): where this bridge reads and posts: its
 // Tally's port, the companies open there and the data folder, as its heartbeat says them (nothing when it says none)
 function BridgeWhere({ r }) {
@@ -269,11 +259,6 @@ function ChangesOnly({ r, owner }) {
 // migration 54: the members who post through this bridge (an owner links anyone; a member's postings go through their own
 // bridge by default). The owner's rule of 05-Oct-2026: a member who may write links THEMSELVES to their own bridge (on a
 // computer key they made, or this browser's own), when it posts for nobody else
-function selfResume(r) {
-  const me = TCloud.me(), role = S.account && S.account.me ? S.account.me.role : "";
-  return !!me && ["owner", "staff"].includes(role) && r.device.created_by === me && !!(r.readStopped && r.readStopped.by === "self")
-    && !(TCloud.stopFor && TCloud.stopFor(r.device.id)) && !(TCloud.stoppedAll && TCloud.stoppedAll());
-}
 function MemberLink({ r, owner }) {
   const p = TCloud.pane;
   if (p.noTarget || !r.id) return null;
@@ -303,7 +288,8 @@ function BridgeLines({ rows, latest }) {
   rows.forEach((r) => { const k = r.device.id + "|" + String(r.user || "").toLowerCase(), h = byDev.get(k); if (!h || (r.main && r.go && !(h.main && h.go)) || (r.go && !h.go)) byDev.set(k, r); });
   return <div className="pane" data-bridge-lines="" data-computers="">
     {[...byDev.values()].map((r) => { const st = lineState(r, latest, owner), rd = r.read || { state: r.online ? "reading" : "offline", text: "" };
-      const stopped = !!(TCloud.stopFor && TCloud.stopFor(r.device.id)) || !!(r.readStopped && r.readStopped.by);
+      // the owner's stop from FinCom only (2.3.1: a bridge never stops by itself; no Resume for that)
+      const stopped = !!(TCloud.stopFor && TCloud.stopFor(r.device.id)) || !!(r.readStopped && r.readStopped.by === "fincom");
       const live = r.go && !r.old;
       return <div key={r.device.id + "|" + (r.user || "")} data-computer={r.device.id} data-bridge-user={r.user || ""} data-read-state={live ? rd.state : "old"} style={{ margin: "4px 0" }}>
         <div className="row" data-bridge-line={r.id || "old"} style={{ alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -320,13 +306,10 @@ function BridgeLines({ rows, latest }) {
           {owner && !allStopped && (stopped
             ? <button className="btn small primary" data-read-resume={r.device.id} onClick={() => TCloud.readResume(r)}>Resume reading</button>
             : <button className="btn small" data-read-stop={r.device.id} onClick={() => TCloud.readStop(r)}>Stop reading on this computer</button>)}
-          {/* the owner's rule of 05-Oct-2026: a bridge that stopped reading by itself is resumed by the member whose computer key it is (FinCom's own Stop: owners only) */}
-          {!owner && selfResume(r) && <button className="btn small primary" data-read-resume={r.device.id} onClick={() => TCloud.readResume(r)}>Resume reading</button>}
         </div>}
         {live && <div className="row" data-bridge-per-user="" style={{ alignItems: "center", gap: 8, flexWrap: "wrap", marginLeft: 16 }}>
           <BridgeWhere r={r} /><ChangesOnly r={r} owner={owner} /><MemberLink r={r} owner={owner} /></div>}
         {live && <RecorderLine r={r} />}
-        {live && <RecorderOff r={r} owner={owner} />}
         {live && <div className="row" style={{ alignItems: "center", gap: 8, flexWrap: "wrap", marginLeft: 16 }}><PostSettings r={r} owner={owner} /></div>}
         {live && <div className="row" style={{ alignItems: "center", gap: 8, flexWrap: "wrap", marginLeft: 16 }}><TrialTools r={r} owner={owner} /></div>}
         {live && <div className="row" style={{ alignItems: "center", gap: 8, flexWrap: "wrap", marginLeft: 16 }}><RecorderSource r={r} owner={owner} /></div>}

@@ -1,7 +1,8 @@
 """python3 run_tally_computers.py - All clients -> Tally: one line a computer (plan piped-moseying-frost, item 14).
 Each line: the bridge's version, its last request to Tally (kind, time taken, when) and its longest today, from the
-heartbeat (info.beat.reqs / info.bridges[id].reqs), and the reading state: Reading / Paused / Stopped by itself: <why> /
-Stopped from FinCom: <why> / Offline since ... . An owner has Stop reading on this computer, Stop reading on all
+heartbeat (info.beat.reqs / info.bridges[id].reqs), and the reading state: Reading / Paused / (bridge 2.3.1, the owner's
+last change: never a stop by itself) "Tally did not answer in time at 12:14; trying again by itself at 12:15" / a 2.3.0
+bridge's stop by itself in plain words, no Resume / Stopped from FinCom: <why> / Offline since ... . An owner has Stop reading on this computer, Stop reading on all
 computers, Resume reading, and (the owner's rule of 05-Oct-2026: new versions go to every computer by themselves, no
 pilot, no approval) Hold version X, Let version X go, Roll back to <version>, Clear the rollback and Withdraw version X
 (X: the setup on this site, assets/bridge-go/latest.json); a member sees none of them. Each button calls its RPC (migration-35) with the right
@@ -110,8 +111,9 @@ with sync_playwright() as p:
     l2 = line(D2)
     ok("Paused" in l2 and pg.get_attribute('#app [data-computer="%s"]' % D2, "data-read-state") == "paused", "Paused (beat.paused) (%s)" % l2)
     l3 = line(D3)
-    ok("Stopped by itself: A request took 24 s (ledgers 696-699)" in l3 and pg.get_attribute('#app [data-computer="%s"]' % D3, "data-read-state") == "selfstop" and "1 over 20 s" in l3,
-       "Stopped by itself, with its reason, and the requests over 20 s (%s)" % l3)
+    ok("Tally did not answer in time at " in l3 and "once FinCom Bridge 2.3.1 is on that computer" in l3 and "Stopped by itself" not in l3
+       and pg.get_attribute('#app [data-computer="%s"]' % D3, "data-read-state") == "retrying" and "1 over 20 s" in l3 and pg.locator('#app [data-read-resume="%s"]' % D3).count() == 0,
+       "a 2.3.0 bridge's stop by itself in plain words, no Resume, and the requests over 20 s (%s)" % l3)
     l4 = line(D4)
     ok("Stopped from FinCom: Tally hangs on the bank ledger" in l4 and pg.get_attribute('#app [data-computer="%s"]' % D4, "data-read-state") == "fincomstop", "Stopped from FinCom, with its reason (%s)" % l4)
     l5 = line(D5)
@@ -174,7 +176,7 @@ with sync_playwright() as p:
     E(SETUP, [DEVS, STOPS, [], "owner"]); pg.wait_for_timeout(300); side.first.click(); pg.wait_for_timeout(1200)
     # ---- the owner's buttons
     sel = lambda s: pg.locator("#app " + s)
-    ok(sel('[data-read-stop="%s"]' % D1).count() == 1 and sel('[data-read-stop="%s"]' % D2).count() == 1 and sel('[data-read-resume="%s"]' % D3).count() == 1 and sel('[data-read-resume="%s"]' % D4).count() == 1
+    ok(sel('[data-read-stop="%s"]' % D1).count() == 1 and sel('[data-read-stop="%s"]' % D2).count() == 1 and sel('[data-read-resume="%s"]' % D3).count() == 0 and sel('[data-read-stop="%s"]' % D3).count() == 1 and sel('[data-read-resume="%s"]' % D4).count() == 1
        and sel('[data-read-stop="%s"]' % D4).count() == 0 and sel("[data-read-stop-all]").count() == 1, "owner: Stop reading on a computer reading, Resume reading on one stopped, Stop reading on all computers")
     ok(txt('#app [data-read-stop="%s"]' % D1) == "Stop reading on this computer" and txt("#app [data-read-stop-all]") == "Stop reading on all computers" and txt('#app [data-read-resume="%s"]' % D4) == "Resume reading",
        "the buttons' words")
@@ -242,19 +244,19 @@ with sync_playwright() as p:
     ok("Posts only to: ZZ TEST" in line(D1), "a member sees Posts only to: ZZ TEST too (information, not a control)")
     ok(sel("[data-read-stop], [data-read-stop-all], [data-read-resume], [data-read-resume-all], [data-release-pilot], [data-release-approve], [data-release-hold], [data-release-rollback]").count() == 0, "a member sees none of the owner's buttons")
     # ---- live: a beat passed on by FinCom's cloud changes the line at once
-    E("""() => TLight.beatIn({device: '%s', beat: {at: new Date().toISOString(), bridge: 'go-%s', paused: false, readStopped: {by: 'self', reason: 'Tally did not answer for 2 minutes', at: new Date().toISOString()},
+    E("""() => TLight.beatIn({device: '%s', beat: {at: new Date().toISOString(), bridge: 'go-%s', paused: false, readStopped: null, tallyRetry: {words: 'Tally did not answer in time at 12:14; trying again by itself at 12:15', at: '', next: '', tries: 1},
       reqs: {day: new Date().toISOString().slice(0, 10), last: {kind: 'probe', ms: 120000, at: new Date().toISOString()}, longest: {kind: 'probe', ms: 120000, at: new Date().toISOString()}, over20: 1, n: 5}}})""" % (D2, D2))
     pg.wait_for_timeout(400)
-    ok("Stopped by itself: Tally did not answer for 2 minutes" in line(D2), "a beat passed on at once: the line follows (%s)" % line(D2))
+    ok("Tally did not answer in time at 12:14; trying again by itself at 12:15" in line(D2), "a beat passed on at once: the line follows (%s)" % line(D2))
     # ---- device-sent text (the stop's reason, a request's kind) is shown as text, never as HTML (security review, 2.1.5)
     dialogs = []; pg.on("dialog", lambda d: (dialogs.append(d.message), d.dismiss()))
     XR, XK = "<img src=x onerror=alert(1)>", "<img src=y onerror=alert(2)>"
-    E("""([d, xr, xk]) => TLight.beatIn({device: d, beat: {at: new Date().toISOString(), bridge: 'go-' + d, paused: false, readStopped: {by: 'self', reason: xr, at: new Date().toISOString()},
+    E("""([d, xr, xk]) => TLight.beatIn({device: d, beat: {at: new Date().toISOString(), bridge: 'go-' + d, paused: false, readStopped: null, tallyRetry: {words: xr, at: '', next: '', tries: 1},
       reqs: {day: new Date().toISOString().slice(0, 10), last: {kind: xk, ms: 1500, at: new Date().toISOString()}, longest: {kind: xk, ms: 1500, at: new Date().toISOString()}, over20: 0, n: 2}}})""", [D2, XR, XK])
     pg.wait_for_timeout(600)
     l2 = line(D2)
-    ok(("Stopped by itself: " + XR) in l2 and ("Last request: " + XK) in l2 and pg.locator('#app [data-computer="%s"] img' % D2).count() == 0 and not dialogs,
-       "a reason and a request kind with HTML in them are shown as text (%s; dialogs %s)" % (l2, dialogs))
+    ok(XR in l2 and ("Last request: " + XK) in l2 and pg.locator('#app [data-computer="%s"] img' % D2).count() == 0 and not dialogs,
+       "the bridge's words and a request kind with HTML in them are shown as text (%s; dialogs %s)" % (l2, dialogs))
     # ---- round 4 (plan items 24, 23, 10): who and when, Withdraw version X, a fresh baseline
     MEMBERS = [{"user_id": "u-anshul", "name": "Anshul"}, {"user_id": "u-neha", "email": "neha@fincom.in"}]
     STOPS2 = [{"id": 7, "device_id": D4, "action": "stop", "reason": "Tally hangs on the bank ledger", "stopped_at": "ago:40", "stopped_by": "u-anshul", "cleared_at": None, "cleared_by": None},

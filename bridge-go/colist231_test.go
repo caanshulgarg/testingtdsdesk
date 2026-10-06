@@ -2,6 +2,8 @@ package main
 
 // Bridge 2.3.1 (the owner's report of 06-Oct-2026 08:05: TDSDeskCompanies took 3,307 ms on NWS144): the company list asked
 // in the background is under the 2-second rule of the other background reads, and asked less often. Tests written first.
+// 2.3.1, the owner's last change: after a stop it follows the shared retry schedule (retry.go: 15 s, 30 s, 1 min, 2 min, then
+// 5 min), in place of the 5/10/20/30-minute back-off
 
 import (
 	"strings"
@@ -13,7 +15,7 @@ import (
 func TestCompanyListTwoSecondRule(t *testing.T) {
 	f := r21Stand(t, "")
 	_ = openCompaniesWith(fin, true) // the list as Tally gave it in time
-	t.Cleanup(func() { nowFn = time.Now; coListReset() })
+	t.Cleanup(func() { nowFn = time.Now; retryReset() })
 	base := time.Now()
 	var arrived atomic.Int64
 	f.mu.Lock()
@@ -50,28 +52,28 @@ func TestCompanyListTwoSecondRule(t *testing.T) {
 	if !named {
 		t.Fatalf("a stopped list dropped the companies named last time: %v", got)
 	}
-	if logLines("the company list (TDSDeskCompanies) took longer than 2 s; the bridge stopped waiting") != 1 {
+	if logLines("did not answer in time at") != 1 || logLines("(TDSDeskCompanies, try 1); trying again by itself at") != 1 {
 		t.Fatalf("the stop is not in the log: %s", readText(logFile()))
 	}
-	// backed off: a minute later neither the light check nor the recorder's look asks it
+	// the retry is pending: 10 s later neither the light check nor the recorder's look asks it
 	f.mu.Lock()
 	f.slow = nil
 	f.mu.Unlock()
-	nowFn = func() time.Time { return base.Add(12 * time.Minute) }
+	nowFn = func() time.Time { return base.Add(11*time.Minute + 10*time.Second) }
 	_ = lightCompanyList(openCompaniesCached())
 	live.mu.Lock()
 	live.ownWant, live.ownAskAt = true, time.Time{}
 	live.mu.Unlock()
 	if liveOwnAskNow() || f.n("TDSDeskCompanies") != n0+1 {
-		t.Fatal("the company list was asked again during the back-off")
+		t.Fatal("the company list was asked again before the retry")
 	}
-	// after the back-off (5 minutes): asked again; answered in time, the back-off ends
-	nowFn = func() time.Time { return base.Add(17 * time.Minute) }
+	// at the retry (15 s): asked again by itself; answered in time, back to normal
+	nowFn = func() time.Time { return base.Add(11*time.Minute + 16*time.Second) }
 	_ = lightCompanyList(openCompaniesCached())
-	if f.n("TDSDeskCompanies") != n0+2 || coListHeld() {
-		t.Fatalf("not asked again after the back-off (%d), or still held (%v)", f.n("TDSDeskCompanies")-n0, coListHeld())
+	if f.n("TDSDeskCompanies") != n0+2 || retryHeld() {
+		t.Fatalf("not asked again at the retry (%d), or still held (%v)", f.n("TDSDeskCompanies")-n0, retryHeld())
 	}
-	if !strings.Contains(readText(logFile()), "leaves the company list alone until") {
-		t.Fatal("the log does not say until when")
+	if !strings.Contains(readText(logFile()), "answered in time again (TDSDeskCompanies)") {
+		t.Fatal("the log does not say it is back to normal")
 	}
 }

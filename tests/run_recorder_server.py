@@ -704,6 +704,29 @@ try:
     c, r = call({"kind": "beat", "version": "2.3.1", "bridge": dict(GC, version="2.3.1"), "tally": True, "open": []})
     idc = [x.get("line_id") for x in (r.get("refetch") or [])]
     ok(c == 200 and "RX" in idc and not {"R18", "R4", "R17"} & set(idc), "refetch. the other user's bridge on the same key gets its own line only (%s)" % idc)
+    # bridge 2.3.1, the owner's last change: the lines held under 2.3.0 while reading was off or stopped by the bridge itself,
+    # with staging's exact shapes (NWS144's GARG SHEKHAR Journals from MasterID 25689, Durgesh's IX DESIGNS lines): no GUID,
+    # a MasterID, no AlterID, 2.3.0's held words. They are this bridge's own held lines like any other: listed for it (heldLines
+    # and refetch: no body), so the bridge asks Tally again by MasterID (else type and number) on its retry schedule and
+    # sends "<line id>:resolved"; never for another bridge, even another Windows user's on the same computer key
+    W230 = ["Reading entries from Tally is off on this computer (the 2 s rule switched the entry fetch off for this company); upload the day's Day Book or ask the owner to switch it back on",
+            "Reading from Tally is stopped on this computer by the bridge itself (Tally has not answered since 12:10 (over 2 minutes of requests not answered), 2026-10-06 12:12:30); nothing was sent to Tally. Postings still go. Resume from the tray icon (Resume reading) or FinCom",
+            "Tally gave no voucher with MasterID 25691 of 06-Oct-2026; asked by its type and number: Reading entries from Tally is off on this computer (the 2 s rule)"]
+    now0 = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(time.time() - 3600))
+    s230 = lambda i, mid, why, bridge: {"id": 80000 + i, "line_id": "S230-%d" % i, "company": "ZZ IDS", "company_guid": CGI, "event": "created", "master_id": mid, "alter_id": None,
+                                        "vch_type": "Journal", "vch_no": "", "vch_date": "2026-10-06", "book_id": BI, "firm_id": FIRM, "device_id": DA, "bridge": bridge, "state": "held",
+                                        "held_why": why, "object_guid": None, "body": None, "payload": None, "received_at": now0}
+    FS.T["tally_recorder_lines"] += [s230(1, "25689", W230[0], GA["id"]), s230(2, "25690", W230[1], GA["id"]), s230(3, "25691", W230[2], GA["id"]), s230(4, "25692", W230[0], GC["id"])]
+    c, r = call({"kind": "beat", "version": "2.3.1", "bridge": dict(GA, version="2.3.1"), "tally": True, "open": []})
+    hl = {x.get("line_id"): x for x in (r.get("heldLines") or [])}; rf = {x.get("line_id"): x for x in (r.get("refetch") or [])}
+    ok(c == 200 and {"S230-1", "S230-2", "S230-3"} <= set(hl) and {"S230-1", "S230-2", "S230-3"} <= set(rf) and "S230-4" not in hl and "S230-4" not in rf,
+       "2.3.1. lines held under 2.3.0 with 'Reading entries from Tally is off', 'stopped by the bridge itself' and 'Tally gave no voucher ... off' (no GUID, a MasterID, no AlterID): listed for their own bridge in heldLines and refetch, not for another bridge (%s; %s)" % (sorted(hl), sorted(rf)))
+    ok(hl.get("S230-1", {}).get("master_id") == "25689" and hl.get("S230-3", {}).get("master_id") == "25691" and hl.get("S230-1", {}).get("vch_type") == "Journal" and hl.get("S230-1", {}).get("vch_date") == "20261006",
+       "2.3.1. each with its MasterID to ask Tally by, the type and the day (%s)" % hl.get("S230-1"))
+    c, r = call({"kind": "beat", "version": "2.3.1", "bridge": dict(GC, version="2.3.1"), "tally": True, "open": []})
+    idc = [x.get("line_id") for x in (r.get("heldLines") or [])]
+    ok(c == 200 and "S230-4" in idc and not {"S230-1", "S230-2", "S230-3"} & set(idc), "2.3.1. the other Windows user's bridge gets its own (S230-4) only (%s)" % idc)
+    FS.T["tally_recorder_lines"] = [x for x in FS.T["tally_recorder_lines"] if not str(x.get("line_id", "")).startswith("S230-")]
     now_ = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())
     FS.T["tally_recorder_lines"] += [{"id": 90000 + i, "line_id": "M%02d" % i, "company": "ZZ IDS", "company_guid": CGI, "event": "created", "master_id": str(30000 + i), "vch_type": "Journal",
                                       "vch_no": "", "vch_date": "2026-10-05", "book_id": BI, "firm_id": FIRM, "device_id": DA, "bridge": GA["id"], "state": "held", "object_guid": None, "body": None,

@@ -31,7 +31,7 @@ func ownSlowList(f *standTally, on bool) {
 // the reviewer's probe: no complete list ever until a person's look at +76 minutes
 func TestOwnLookSlowListNoCompleteList(t *testing.T) {
 	rec, f, c := ownBridge(t, "", b220CoGUID, zz)
-	t.Cleanup(func() { nowFn = time.Now; coListReset() })
+	t.Cleanup(func() { nowFn = time.Now; retryReset() })
 	ownSlowList(f, true)
 	base := time.Now().Truncate(time.Second)
 	ownAt(base)
@@ -71,7 +71,7 @@ func TestOwnLookSlowListNoCompleteList(t *testing.T) {
 // company not in it waits, and is passed over (never sent) once a complete look says the company is not open here
 func TestOwnLookSlowListAfterCompleteList(t *testing.T) {
 	rec, f, c := ownBridge(t, "", b220CoGUID, zz)
-	t.Cleanup(func() { nowFn = time.Now; coListReset() })
+	t.Cleanup(func() { nowFn = time.Now; retryReset() })
 	base := time.Now().Truncate(time.Second)
 	ownAt(base)
 	liveAppend(t, ownFile(rec, b220CoGUID), ownLine(b220CoGUID, zz, "mine", "11", base.Add(-20*time.Second)))
@@ -99,7 +99,7 @@ func TestOwnLookSlowListAfterCompleteList(t *testing.T) {
 	}
 	// the list answers in time again: a complete look says the other company is not open here: its lines passed over
 	ownSlowList(f, false)
-	coListReset()
+	retryReset()
 	ownAt(base.Add(40 * time.Minute))
 	readAndUploadAll(t)
 	for _, u := range ownSentUsers(c) {

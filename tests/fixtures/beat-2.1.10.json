@@ -1,6 +1,6 @@
 {
   "allowlist": {
-    "hash": "59e563343911f37abc615c6072ef2535d7183a91d088b34c30cf76c66ad76849",
+    "hash": "1c17806d483e0a31477bc93bcf0646334c156eda88e8a401a8df155d0bca02dd",
     "measured": false
   },
   "autoUpdate": true,
@@ -92,6 +92,7 @@
   },
   "tally": true,
   "tallyPort": 9000,
+  "tallyRetry": null,
   "tallyState": "open",
   "trialTools": false,
   "updating": false,
