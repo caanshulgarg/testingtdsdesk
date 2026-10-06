@@ -190,3 +190,12 @@ independent of 56 and 57 (add-only, one transaction, `lock_timeout` 10 s, safe t
 `tally_bridge_release_log`, `tally_post_checks`) all privileges revoked from anon and authenticated (54/55 revoked only
 insert and update; Supabase's defaults left delete and the rest) and select granted back to authenticated; their id
 sequences closed to both. Functions unchanged. Tested by `run_migration58.py`. Nothing in tally-ingest or the app needs it.
+
+Bridge 2.3.1 (06-Oct-2026, the owner's report of 08:05 and the migration-50 review's round-3 Lows): `migration-60-recorder-lows.sql`
+runs after 56 in both orders (fresh: ... -> 55 -> 56 -> 60; staging: after 56), independent of 57, 58 and 59 (add-only, one
+transaction, `lock_timeout` 10 s, no "delete from", safe twice; NOT yet run on staging). One function replaced,
+`tally_recorder_line` (56's text, the lines marked "60" changed; granted to nobody): a delete or cancel line for an entry FinCom's
+copy never had is applied as "nothing to remove" (a real GUID and an AlterID above 0); without an AlterID, or under the add-on's
+placeholder GUID, it stays held (R3-L1); a create late below a cancel applied for its GUID is applied and cancelled again, below a
+delete 'stale' as before (R3-L2); no words promise a Day Book that cannot settle a line (R3-L3). Tested by `run_migration60.py`
+and `run_migration_order.py` (60 in both orders).
