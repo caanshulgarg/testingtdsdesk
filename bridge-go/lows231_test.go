@@ -4,6 +4,7 @@ package main
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -83,5 +84,28 @@ func TestKeeperCleanupKeepsPostingLease(t *testing.T) {
 	}
 	if leaseHeldHere("CO READ") {
 		t.Fatal("the keeper's own read lease is released")
+	}
+}
+
+// 2.2.3 review L1: after the 10-minute wait for a MasterID the test goes on without one; a MasterID typed after that was
+// refused with "not waiting" and the tray asked again until Cancel. The words now say the wait ended and C, D and E were
+// skipped
+func TestFetchTestMasterWaitEndedSaysSo(t *testing.T) {
+	f := newStandTally(t)
+	f.mu.Lock()
+	f.behave = fetchTestStand(func(l string) bool { return false }, nil)
+	f.mu.Unlock()
+	standBridge(t, f, `,"Key":"tray-test-key"`)
+	trialOn(t)
+	fetchTestReset()
+	old := fetchTestMasterWait
+	fetchTestMasterWait = 300 * time.Millisecond
+	t.Cleanup(func() { fetchTestMasterWait = old })
+	callLocal(t, "POST", "/tray/fetchtest", "", `{"company":"ZZ TEST","type":"Receipt","number":"212","date":"05-Oct-2026"}`)
+	fetchTestWait(t, "needMaster")
+	fetchTestWait(t, "done")
+	code, r := callLocal(t, "POST", "/tray/fetchtest", "", `{"masterId":"777"}`)
+	if code != 200 || r["ok"] != false || !strings.Contains(str(r["error"]), "stopped waiting") || !strings.Contains(str(r["error"]), "C, D and E were skipped") {
+		t.Fatalf("a MasterID after the wait ended: %d %v", code, r)
 	}
 }

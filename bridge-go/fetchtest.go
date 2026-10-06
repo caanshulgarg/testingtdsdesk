@@ -336,7 +336,7 @@ func startFetchTest(o fetchTestOpts) M {
 		return M{"ok": false, "error": "A test is already running; wait for its message box."}
 	}
 	ch := make(chan string, 1)
-	fetchTestAnswer = ch
+	fetchTestAnswer, fetchTestWaitEnded = ch, false
 	base := M{"ok": true, "company": o.company, "type": o.typ, "number": o.no, "date": o.date, "at": nowS()}
 	fetchTestLast = M{"state": "running"}
 	for k, v := range base {
@@ -348,12 +348,15 @@ func startFetchTest(o fetchTestOpts) M {
 		fetchTestLast["question"] = "No MasterID was found by A, B or F for " + o.typ + " " + o.no + ". Type the voucher's MasterID to send C, D and E, or Cancel to skip them."
 		fetchTestMu.Unlock()
 		var mid string
+		ended := false
 		select {
 		case mid = <-ch:
-		case <-time.After(10 * time.Minute):
+		case <-time.After(fetchTestMasterWait):
+			ended = true
 		}
 		fetchTestMu.Lock()
 		fetchTestLast["state"] = "running"
+		fetchTestWaitEnded = ended // 2.2.3 review L1: a MasterID typed later is told the wait ended
 		delete(fetchTestLast, "question")
 		fetchTestMu.Unlock()
 		return mid
@@ -372,6 +375,15 @@ func startFetchTest(o fetchTestOpts) M {
 	return M{"ok": true, "started": true, "company": o.company, "type": o.typ, "number": o.no, "date": o.date}
 }
 
+// how long the test waits for the person's MasterID before it goes on without one (C, D and E skipped)
+var fetchTestMasterWait = 10 * time.Minute
+
+// under fetchTestMu: the last test's wait for a MasterID ended without one (reset when a test starts)
+var fetchTestWaitEnded bool
+
+// 2.2.3 review L1: the words for a MasterID typed after that wait ended
+const fetchTestWaitEndedWords = "The test stopped waiting for a MasterID after 10 minutes and went on without one: C, D and E were skipped. Press Cancel, then start the test again to send them."
+
 // POST {masterId} or {skip: true} while the test waits for a MasterID
 func answerFetchTest(o M) M {
 	mid := strings.TrimSpace(str(o["masterId"]))
@@ -384,6 +396,9 @@ func answerFetchTest(o M) M {
 	fetchTestMu.Lock()
 	defer fetchTestMu.Unlock()
 	if fetchTestLast == nil || str(fetchTestLast["state"]) != "needMaster" || fetchTestAnswer == nil {
+		if fetchTestWaitEnded {
+			return M{"ok": false, "error": fetchTestWaitEndedWords}
+		}
 		return M{"ok": false, "error": "The test is not waiting for a MasterID."}
 	}
 	select {
