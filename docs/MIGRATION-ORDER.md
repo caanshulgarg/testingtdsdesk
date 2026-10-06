@@ -162,3 +162,9 @@ by the posting's bridge -> released (`tally_post_release_core`) and sent again o
 renewal hands the lease over, a posting never yields, a lease given up is kept for the waiting posting; the 6-argument
 call (an older bridge) has no purpose and is never asked to yield. Tested by `run_migration55.py` and
 `run_migration_order.py` (55 in both orders). tally-ingest works without it (the 6-argument lease; no checks).
+Bridge 2.3.1 (06-Oct-2026, the 2.3.0 review's deferred cloud Low): `migration-58-lows.sql` runs after 55 in both orders,
+independent of 56 and 57 (add-only, one transaction, `lock_timeout` 10 s, safe twice): on the seven tables 54 and 55 made
+(`tally_bridge_prefs`, `tally_member_bridges`, `tally_bridge_ids`, `tally_bridge_alerts`, `tally_bridge_rollbacks`,
+`tally_bridge_release_log`, `tally_post_checks`) all privileges revoked from anon and authenticated (54/55 revoked only
+insert and update; Supabase's defaults left delete and the rest) and select granted back to authenticated; their id
+sequences closed to both. Functions unchanged. Tested by `run_migration58.py`. Nothing in tally-ingest or the app needs it.
