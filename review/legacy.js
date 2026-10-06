@@ -22996,7 +22996,9 @@ const TCloud = {
         rows.push({device: d, id, computer: b.computer || info.computer || d.name, user: b.user || "", version: b.version || "", runMode: b.runMode || "",
           port: b.port || null, tallyPort: b.tallyPort || (isMain && beat.tallyPort) || null, dataFolder: b.dataFolder || (isMain && beat.dataFolder) || "", changesOnly: co === null ? !!b.changesOnly : co,
           main: isMain, mayPost, at: b.at, tally: b.tallyState || (b.tally ? "open" : "closed"), open: b.open || [], go: id !== "v1",
-          reqs: mine("reqs") || null, readStopped: mine("readStopped") || null, paused: !!mine("paused"), readStop: info.readStop || null}); });
+          reqs: mine("reqs") || null, readStopped: mine("readStopped") || null, paused: !!mine("paused"), readStop: info.readStop || null,
+          // bridge 2.3.1: a request not answered in time and when it tries again by itself ({words, at, next, tries})
+          tallyRetry: mine("tallyRetry") || null}); });
       if (!br.v1 && info.beat) rows.push({device: d, id: "v1", computer: info.computer || d.name, user: info.user || "", version: info.beat.version || d.version || "",
         main: !main, at: info.beat.at, tally: info.beat.tallyState || (info.beat.tally ? "open" : "closed"), open: info.beat.open || [], go: false});
       if (info.shadow && !Object.keys(br).some(id => id !== "v1")) rows.push({device: d, id: "", computer: info.computer || d.name, user: info.user || "", version: info.shadow.version || "",
@@ -23133,16 +23135,22 @@ const TCloud = {
     await this.control("tally_member_bridge_link", {p_user: uid, p_device: r ? r.device.id : null, p_bridge: r ? r.id : null},
       r ? who + " now posts through " + this.bridgeWords(r) + "." : who + " is no longer linked to a bridge.");
   },
-  // the reading state of a bridge's computer (plan item 14): {state: reading | paused | selfstop | fincomstop | offline,
+  // the reading state of a bridge's computer (plan item 14): {state: reading | paused | retrying | fincomstop | offline,
   // text, reason}. A stop from FinCom still standing (tally_read_stops, for this computer or for all of them, or the
-  // computer's info.readStop) wins over what the bridge last said, then a stop by itself, then paused.
+  // computer's info.readStop) wins over what the bridge last said, then paused. Bridge 2.3.1 (the owner's last change)
+  // never stops reading by itself: a request not answered in time is tried again by itself, said in plain words
+  // ("Tally did not answer in time at 12:14; trying again by itself at 12:15"). A bridge before 2.3.1 that stopped by
+  // itself is said the same way, with no Resume: 2.3.1 clears such a stop when it starts.
   readState(r){
     if (!r.online) return {state: "offline", text: "Offline" + (r.at ? " since " + fmtDateTime(r.at) : "")};
     const st = this.stopFor(r.device.id), rs = r.readStopped || {};
     if (st) return {state: "fincomstop", text: "Stopped from FinCom: " + (st.reason || "no reason given"), reason: st.reason || ""};
     if (rs.by === "fincom") return {state: "fincomstop", text: "Stopped from FinCom: " + (rs.reason || "no reason given"), reason: rs.reason || ""};
-    if (rs.by === "self") return {state: "selfstop", text: "Stopped by itself: " + (rs.reason || "no reason given"), reason: rs.reason || ""};
     if (r.paused) return {state: "paused", text: "Paused"};
+    const tr = r.tallyRetry || {};
+    if (tr.words) return {state: "retrying", text: String(tr.words), reason: ""};
+    if (rs.by === "self") return {state: "retrying", text: "Tally did not answer in time" + (rs.at ? " at " + tallyHm(rs.at) : "") +
+      "; reading starts again by itself once FinCom Bridge 2.3.1 is on that computer (it tries again by itself)", reason: rs.reason || ""};
     return {state: "reading", text: "Reading"};
   },
   // the stop from FinCom standing for a computer: the one for all computers ({device_id: null}), else its own; with no
@@ -23900,7 +23908,7 @@ Object.assign(TLight, {
       const bid = m.beat.bridge;
       if (bid && d.info.bridges && d.info.bridges[bid]){
         const b = Object.assign({}, d.info.bridges[bid]);
-        ["reqs", "readStopped", "paused", "at", "tallyState", "open"].forEach(k => { if (m.beat[k] !== undefined) b[k] = m.beat[k]; });
+        ["reqs", "readStopped", "paused", "at", "tallyState", "open", "tallyRetry"].forEach(k => { if (m.beat[k] !== undefined) b[k] = m.beat[k]; });
         d.info.bridges = Object.assign({}, d.info.bridges, {[bid]: b});
       }
       if (m.beat.readStop !== undefined) d.info.readStop = m.beat.readStop;
@@ -26617,7 +26625,7 @@ function postStatusFor(co){
       closed: [l.text + ": open TallyPrime there, with " + pl.company + ".", "", null],
       notanswering: [l.text + ": close any message box in Tally there; FinCom carries on by itself.", "", null],
       paused: [l.text + ": resume it from the FinCom Bridge icon there. Update now still reads.", "Update now", () => tallyUpdateNow(co.id)],
-      stopped: [l.text + ". This is FinCom\u2019s Stop, set by an owner of the firm: an owner resumes it on the Tally page (a bridge that stopped by itself is resumed there by the member whose computer key it is); posting goes on, Update now does not read until then.", "", null]}[l.state] || [l.text, "", null];
+      stopped: [l.text + ". This is FinCom\u2019s Stop, set by an owner of the firm: an owner resumes it on the Tally page; posting goes on, Update now does not read until then.", "", null]}[l.state] || [l.text, "", null];
     out.problem = p(T[0], T[1], T[2], l.state); return out;
   }
   if (!pl.state && pl.action){ out.problem = p(pl.action + ".", pl.go === "tally" ? "Open the Tally page" : "", pl.go === "tally" ? goTallyPage : null, "bridge"); return out; }
@@ -29116,7 +29124,7 @@ const Rec = {
     const a = this.act, cid = S.syncClient || "";
     a.busy = true; a.cid = cid;
     try {
-      const rows = await Cloud.api("tally_recorder_lines?select=id,client_id,book_id,device_id,pc,company,line_id,event,object_guid,alter_id,vch_type,vch_no,vch_date,saved_at,received_at,applied_at,state,held_why,ledgers,fid:payload->>fid,short:payload->>short" +
+      const rows = await Cloud.api("tally_recorder_lines?select=id,client_id,book_id,device_id,pc,company,line_id,event,object_guid,alter_id,vch_type,vch_no,vch_date,saved_at,received_at,applied_at,state,held_why,ledgers,fid:payload->>fid,short:payload->>short,checks:payload->checkNotes" +
         "&firm_id=eq." + encodeURIComponent(this.firm()) + (cid ? "&client_id=eq." + encodeURIComponent(cid) : "") + "&order=received_at.desc&limit=200");
       a.rows = [].concat(rows || []); a.no44 = false; a.err = "";
     } catch (e){ if (this.missing(e)){ a.no44 = true; a.rows = []; } else a.err = this.say(e); }
@@ -29148,11 +29156,18 @@ const Rec = {
     const head = [r.vch_type, r.vch_no].filter(Boolean).join(" ");
     return (head || "an entry") + (r.vch_date ? " · " + fmtDate(String(r.vch_date).slice(0, 10)) : "");
   },
+  // bridge 2.3.1 (the owner's rule after review, 06-Oct-2026): an entry is held only when its lines do not total zero; any
+  // other mismatch is entered with plain words for a person (tally-ingest's payload checkNotes, read as checks; a live row
+  // carries its payload): "; to check: ..." after "Entered in the books"
+  notesWords(r){
+    const n = [].concat((r && (r.checks || (r.payload && r.payload.checkNotes))) || []).map(x => String(x || "").trim()).filter(Boolean);
+    return n.length ? "; to check: " + n.join("; ") : "";
+  },
   // a line's state in the owner's words (05-Oct-2026): "Entered in the books" for an applied line alone
   stateWords(r){
     const why = r.held_why ? ": " + r.held_why : "";
     switch (r.state){
-      case "applied": return "Entered in the books";
+      case "applied": return "Entered in the books" + this.notesWords(r);
       case "held": return "Received, not yet entered in the books" + why;
       case "received": return "Received, not yet entered in the books";
       case "replaced": return "Replaced by a later line";
@@ -29270,37 +29285,9 @@ const Rec = {
     if (!rc) return [];
     return this.openOf(dev).filter(co => rc[co] && rc[co].seen === false);
   },
-  // the owner's condition 4 (05-Oct-2026): what FinCom Bridge's 2-second rule switched off on a computer, per company
-  // (info.bridges[id].recorderOff {bodies, B, C}, kept by tally-ingest from the 2.2.0 beat): from the main bridge, else
-  // the one heard last; [] when none is off or the bridge does not say (before 2.2.0).
-  // [{kind: bodies|B|C, what: "Entry fetch" | "Tally's change list" | "Month slices", company, seconds, at, why}]
-  OFF_WHAT: {bodies: "Entry fetch", B: "Tally's change list", C: "Month slices"},
-  OFF_BELL: {bodies: "FinCom's entry fetch", B: "FinCom's reading of Tally's change list", C: "FinCom's reading by month slices"},
-  OFF_LIMIT: 2,
-  offOf(dev){
-    const br = ((dev && dev.info) || {}).bridges || {};
-    const ids = Object.keys(br).filter(id => br[id] && typeof br[id] === "object");
-    const id = dev && dev.main_bridge && br[dev.main_bridge] ? dev.main_bridge : ids.sort((x, y) => String(br[y].at || "").localeCompare(String(br[x].at || "")))[0];
-    const ro = id && br[id].recorderOff;
-    if (!ro || typeof ro !== "object") return [];
-    const out = [];
-    Object.keys(this.OFF_WHAT).forEach(kind => Object.entries(ro[kind] || {}).forEach(([company, x]) => {
-      if (x && x.off === true) out.push({kind, what: this.OFF_WHAT[kind], company, seconds: Number(x.seconds) || 0, at: x.at || "", why: x.why || ""});
-    }));
-    return out;
-  },
-  // "Entry fetch switched off for <company>: Tally took 3.4 s at 14:05 IST (limit 2 s)." The bridge's time has no zone
-  // and is India's (istParts reads it so); another day: with its date
-  offWords(x){
-    const when = x.at ? (istDay(x.at) === istDay(Date.now()) ? fmtTime(x.at) : fmtDateTime(x.at)) : "";
-    return x.what + " switched off for " + x.company + ": Tally took " + (Math.round(x.seconds * 10) / 10) + " s" + (when ? " at " + when : "") + " (limit " + this.OFF_LIMIT + " s).";
-  },
-  // the bridge switches it on again when "Changes come from" for the computer changes from the value in force when it
-  // switched off (bridge-go/recorder_probes.go liveOnAgain); a change and back within one heartbeat may not be seen
-  offAgain(owner){
-    return owner ? 'To switch it back on: change "Changes come from" for this computer to another choice, wait one minute, then set it back.'
-      : 'To switch it back on: the owner changes "Changes come from" for this computer to another choice, waits one minute, then sets it back.';
-  },
+  // (bridge 2.3.1, the owner's last change: nothing is switched off by the 2-second rule any more; the per-company
+  // "switched off" lines and their "Changes come from" advice are gone. A request not answered in time is said on the
+  // computer's line, TCloud.readState)
   // the computers keeping a client's company open without recording it: [{pc, company}]
   clientNotRecording(cid){
     const st = (typeof TLight === "object" && TLight.st) || {}, out = [];
@@ -29415,7 +29402,7 @@ const Rec = {
 //    slim line on the Tally page and on that client's Books page (AlertLine);
 //  - one alert per problem: for a book, the cursor's gap (tally_sync_cursor.gap), the tally_alerts gap rows (one a day),
 //    the lines Tally sent that wait (tally_recorder_lines held / received) and the computer not recording are ONE problem;
-//    for a computer, Tally not answering, FinCom having stopped reading by itself and "silent today" are ONE problem;
+//    for a computer, Tally not answering, a request not answered in time (tried again by itself) and "silent today" are ONE problem;
 //  - plain words: what, then what to do; the change numbers, the computers and the ids only behind "details";
 //  - the advice follows the cause: lines held by FinCom's own fault (no entry body, the add-on's placeholder GUID, the
 //    queue) say FinCom is fetching the entry's details, nothing to do; a real gap says to upload the Day Book;
@@ -29600,26 +29587,25 @@ const AlertHub = {
             fix: recFix}));
         }
       });
-      // ---- one problem a computer: not answering, stopped by itself, silent today
+      // ---- one problem a computer: not answering, tried again by itself, silent today
       const devs = ((typeof TLight === "object" && TLight.st.devs) || []).filter(d => d && !d.revoked);
       const silent = Rec.silentOf();
       devs.forEach(d => {
         const beat = ((d.info || {}).beat) || {}, label = typeof tallyPcLabel === "function" ? tallyPcLabel(d) : d.name, ds = devState(d);
-        const stop = beat.readStopped && beat.readStopped.by === "self" ? beat.readStopped : null;
+        // bridge 2.3.1: a request not answered in time, tried again by itself (never a stop); a bridge before 2.3.1 that
+        // stopped by itself is said the same way (2.3.1 clears that stop when it starts)
+        const old = beat.readStopped && beat.readStopped.by === "self" ? beat.readStopped : null;
+        const retry = beat.tallyRetry && beat.tallyRetry.words ? beat.tallyRetry : null;
         const quiet = silent.find(x => x.device === d.id);
         const rowsD = unread.filter(x => x.device_id === d.id && x.kind === "silent");
         if (ds.bridge === "offline") return;   // the Tally sign says it (and the bell does not repeat it)
-        // the owner's condition 4: one alert per company the bridge's 2-second rule switched a method off for; it goes
-        // when the bridge's heartbeat no longer says it (Rec.offOf reads the last one)
-        if (Rec.offOf) Rec.offOf(d).forEach(x => {
-          const link = (((typeof TLight === "object" && TLight.st) || {}).cos || []).find(c => c.device_id === d.id && c.client_id && norm(c.company) === norm(x.company));
-          out.push({key: "off:" + d.id + ":" + x.kind + ":" + x.company, sev: "warn", cid: link ? link.client_id : "", selfClear: true, at: beat.at || "",
-            text: Rec.OFF_BELL[x.kind] + " is switched off for " + x.company + ": Tally took " + (Math.round(x.seconds * 10) / 10) + " s (limit " + Rec.OFF_LIMIT + " s).",
-            fix: Rec.offAgain(!!(S.account && S.account.me && S.account.me.role === "owner")),
-            details: [label, x.at && "since " + (istDay(x.at) === istDay(Date.now()) ? fmtTime(x.at) : fmtDateTime(x.at)), x.why].filter(Boolean).join(" · ")});
-        });
-        const base = {key: "pc:" + d.id, details: [label, stop && stop.reason, beat.notAnsweringSince && "not answering since " + fmtDateTime(beat.notAnsweringSince)].filter(Boolean).join(" · "), selfClear: true, at: beat.at || ""};
-        if (stop) out.push(Object.assign(base, {sev: "warn", text: "FinCom stopped reading Tally by itself: " + (stop.reason || "Tally did not answer") + ".", fix: "It starts again by itself when Tally answers; nothing to do."}));
+        // review H1 (bridge 2.3.1): the own Tally lists its companies too slowly (the bridge stops at 2 s): this computer's
+        // changes wait, in the bridge's own plain words; gone by itself when the list answers in time again
+        if (beat.recorderWaitWords) out.push({key: "ownwait:" + d.id, sev: "warn", cid: "", selfClear: true, at: beat.at || "", details: label,
+          text: String(beat.recorderWaitWords).replace(/\.?$/, "."), fix: "Nothing is lost: they go by themselves once Tally answers in time. Close any open window or report in Tally on that computer, or press Update now there."});
+        const base = {key: "pc:" + d.id, details: [label, old && old.reason, beat.notAnsweringSince && "not answering since " + fmtDateTime(beat.notAnsweringSince)].filter(Boolean).join(" · "), selfClear: true, at: beat.at || ""};
+        if (retry) out.push(Object.assign(base, {sev: "warn", text: String(retry.words).replace(/\.?$/, ".") + " (one computer)", fix: "Nothing to do: it tries again by itself; postings go on."}));
+        else if (old) out.push(Object.assign(base, {sev: "warn", text: "Tally did not answer in time" + (old.at ? " at " + fmtTime(old.at) : "") + " on one computer; reading starts again by itself once FinCom Bridge 2.3.1 is on it.", fix: "Update the bridge on that computer (it updates by itself within a few hours)."}));
         else if (beat.notAnsweringSince) out.push(Object.assign(base, {sev: "warn", text: "Tally is not answering on one computer since " + this.when(beat.notAnsweringSince) + ".", fix: "Close any open window or report in Tally on that computer (the details say which)."}));
         else if (quiet || rowsD.length) out.push(Object.assign(base, {sev: "info", text: "No change recorded today on one computer, though Tally was open there.", fix: "Nothing to do if nobody worked in Tally there today."}));
       });
