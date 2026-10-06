@@ -141,3 +141,32 @@ func TestDropCmpInfoSelfClosedWithAttributes(t *testing.T) {
 		}
 	}
 }
+
+// 2.2.4 review L6: renameKeepLedger compiled its patterns through the shared regex cache, which then grew with every
+// ledger name renamed (never emptied). Its patterns are now compiled per call; the rename itself is unchanged
+func TestRenameKeepLedgerLeavesRegexCache(t *testing.T) {
+	dir := t.TempDir()
+	day := `<ENVELOPE><BODY><DATA><TALLYMESSAGE><VOUCHER REMOTEID="g-1"><GUID>g-1</GUID><LEDGERNAME TYPE="String">Old Ledger</LEDGERNAME></VOUCHER></TALLYMESSAGE></DATA></BODY></ENVELOPE>`
+	if err := saveFile(dir+"/days/20261002.xml", day); err != nil {
+		t.Fatal(err)
+	}
+	renameKeepLedger(dir, M{}, "Warm Up", "Warm Up 2")
+	reMu.Lock()
+	n := len(reCache)
+	reMu.Unlock()
+	for i := 0; i < 20; i++ {
+		renameKeepLedger(dir, M{}, "Another Ledger "+strings.Repeat("x", i), "Renamed")
+	}
+	if got := renameKeepLedger(dir, M{}, "Old Ledger", "New & Ledger"); got != 1 {
+		t.Fatalf("the rename still happens: %d", got)
+	}
+	reMu.Lock()
+	m := len(reCache)
+	reMu.Unlock()
+	if m != n {
+		t.Fatalf("the shared regex cache grew with the ledger names: %d -> %d", n, m)
+	}
+	if txt := readText(dir + "/days/20261002.xml"); !strings.Contains(txt, `<LEDGERNAME TYPE="String">New &amp; Ledger</LEDGERNAME>`) {
+		t.Fatalf("renamed: %s", txt)
+	}
+}

@@ -632,15 +632,19 @@ func renameKeepLedger(dir string, st M, old, nw string) int {
 	olds := uniqSorted([]string{esc(old), ampx(old), strings.ReplaceAll(ampx(old), "'", "&apos;")})
 	nn := ampx(nw)
 	touched := map[string]bool{}
+	// the field as Tally writes it, with or without its TYPE attribute (real TallyPrime 7.1); 2.3.1 (2.2.4 review L6):
+	// compiled here, once a call, not kept in the shared regex cache (which grew with every ledger name)
+	var rs []*regexp.Regexp
+	for _, o := range olds {
+		for _, tag := range []string{"LEDGERNAME", "PARTYLEDGERNAME"} {
+			rs = append(rs, regexp.MustCompile(`(`+tagOpenRe(tag)+`)`+regexp.QuoteMeta(o)+`(</`+tag+`\s*>)`))
+		}
+	}
 	for _, f := range dayFiles(dir, "") {
 		t := readText(f)
 		t2 := t
-		for _, o := range olds {
-			for _, tag := range []string{"LEDGERNAME", "PARTYLEDGERNAME"} {
-				// the field as Tally writes it, with or without its TYPE attribute (real TallyPrime 7.1)
-				r := re(`(` + tagOpenRe(tag) + `)` + regexp.QuoteMeta(o) + `(</` + tag + `\s*>)`)
-				t2 = r.ReplaceAllStringFunc(t2, func(m string) string { sm := r.FindStringSubmatch(m); return sm[1] + nn + sm[2] })
-			}
+		for _, r := range rs {
+			t2 = r.ReplaceAllStringFunc(t2, func(m string) string { sm := r.FindStringSubmatch(m); return sm[1] + nn + sm[2] })
 		}
 		if t2 != t {
 			base := strings.TrimSuffix(filepath.Base(f), ".xml")
