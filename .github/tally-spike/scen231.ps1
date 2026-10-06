@@ -61,17 +61,25 @@ function S231Masters {
   $script:plan231 = Get-Content (Join-Path $s231.dir 'plan.json') -Raw -Encoding UTF8 | ConvertFrom-Json
   foreach ($m in $plan231.masters) { $null = ImpT 'All Masters' (GenText $m) $m }
   $null = ImpT 'Vouchers' (GenText $plan231.bill) 'S4 the bill (New Ref S231-BILL-1, a journal)'
-  # what Tally kept of the masters: its own full export of each (kept with the run), the GST buyer and the TDS deductee
-  foreach ($n in @($plan231.names.buyer, $plan231.names.contractor, $plan231.names.contractExp, $plan231.names.tds)) {
+  LedgerMasters @($plan231.names.buyer)
+  Shot 's231-00-masters'
+}
+# what Tally kept of the masters: its own full export of each (kept with the run)
+function LedgerMasters($list) {
+  foreach ($n in $list) {
     $r = PostT 9000 ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCLM</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCLM" ISMODIFY="No"><TYPE>Ledger</TYPE><FETCH>*</FETCH><FILTERS>FCLMOnly</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="FCLMOnly">$Name = "' + (Esc $n) + '"</SYSTEM></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') "ledger master $n"
     Set-Content (Join-Path $s231.dir ("ledger-" + ($n -replace '\W', '') + ".full.xml")) $r.text -Encoding UTF8
   }
+}
+function S231Later {
+  Say '---- 2.3.1 scenarios: the company''s TDS and cost centre features, the TDS nature of payment and ledgers'
+  foreach ($m in $plan231.later) { $null = ImpT 'All Masters' (GenText $m) $m }
+  LedgerMasters @($plan231.names.contractor, $plan231.names.contractExp, $plan231.names.tds)
   $r = PostT 9000 ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCSI2</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCSI2" ISMODIFY="No"><TYPE>StockItem</TYPE><FETCH>*</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') 'stock items'
   Set-Content (Join-Path $s231.dir 'stockitems.full.xml') $r.text -Encoding UTF8
   $c = PostT 9000 ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCCO</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCCO" ISMODIFY="No"><TYPE>Company</TYPE><FETCH>Name, IsTDSOn, IsCostCentresOn, IsGSTOn, IsBillWiseOn</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') 'company features'
   $feat = ([regex]::Matches($c.text, '<(ISTDSON|ISCOSTCENTRESON|ISGSTON|ISBILLWISEON)[^>]*>([^<]*)<') | ForEach-Object { "$($_.Groups[1].Value)=$($_.Groups[2].Value)" }) -join ' '
   Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO S231 company features after the import: $feat"
-  Shot 's231-00-masters'
 }
 
 function S231AfterStart {
@@ -100,6 +108,8 @@ function S231Entry($s, [switch]$noResave) {
   $e = [ordered]@{ id = $s.id; guid = $(if ($nv) { $nv.guid } else { '' }); mid = $(if ($nv) { $nv.mid } else { 0 }); imp = $i; lines = 0 }
   $s231.ent[$s.id] = $e
   if (-not $nv) { Write-Host "$($s.id): not made in Tally ($($i.why))"; return $e }
+  $t = BridgeReq 'entry'
+  if ($t) { $r = PostT 9000 ($t.Replace('$MasterID = 99999', "`$MasterID = $($nv.mid)").Replace('20261001', $s.date)) "$($s.id) after the import" 30; Set-Content (Join-Path $s231.dir "$($s.key).after-import.entry.xml") $r.text -Encoding UTF8 }
   if (-not $noResave) { $s | Add-Member -Force guid $nv.guid; $h = S231Resave $s; $e.lines = $h.Count }
   Write-Host "$($s.id): Tally mid $($e.mid) guid $($e.guid); lines with a body at the stub: $($e.lines)"
   return $e
@@ -116,14 +126,18 @@ function S231Ask($s, [int]$times = 1) {
   return $last
 }
 function S231DayBook($s) {
-  $x = Post 9000 ('<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Day Book</REPORTNAME><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY><SVFROMDATE>' + $s.date + '</SVFROMDATE><SVTODATE>' + $s.date + '</SVTODATE></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>')
-  $f = Join-Path $s231.dir "$($s.key).daybook.xml"; Set-Content $f "$x" -Encoding UTF8; return $f
+  $x = Post 9000 ('<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Day Book</REPORTNAME><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY><SVCURRENTDATE>' + $s.date + '</SVCURRENTDATE><SVFROMDATE>' + $s.date + '</SVFROMDATE><SVTODATE>' + $s.date + '</SVTODATE></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>')
+  $mid = $s231.ent[$s.id].mid
+  $fl = '*, ALLLEDGERENTRIES.*, ALLLEDGERENTRIES.BILLALLOCATIONS.*, ALLLEDGERENTRIES.BANKALLOCATIONS.*, ALLLEDGERENTRIES.CATEGORYALLOCATIONS.*, ALLLEDGERENTRIES.CATEGORYALLOCATIONS.COSTCENTREALLOCATIONS.*, ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.*, ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.SUBCATEGORYALLOCATION.*, ALLLEDGERENTRIES.RATEDETAILS.*, LEDGERENTRIES.*, ALLINVENTORYENTRIES.*, ALLINVENTORYENTRIES.RATEDETAILS.*, ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.*, ALLINVENTORYENTRIES.BATCHALLOCATIONS.*, EWAYBILLDETAILS.*'
+  $y = if ($mid) { Post 9000 ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCVA</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY><SVFROMDATE>' + $s.date + '</SVFROMDATE><SVTODATE>' + $s.date + '</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCVA" ISMODIFY="No"><TYPE>Voucher</TYPE><FETCH>' + $fl + '</FETCH><FILTERS>FCVAOnly</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="FCVAOnly">$MasterID = ' + $mid + '</SYSTEM></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') } else { '' }
+  $f = Join-Path $s231.dir "$($s.key).daybook.xml"; Set-Content $f "$x`n<!-- the voucher collection of MasterID $mid -->`n$y" -Encoding UTF8; return $f
 }
 function RowText($r) { "{0}: Tally {1} / FinCom {2}{3}{4}" -f $r.what, $r.tally, $r.fincom, $(if ($null -ne $r.entered) { " / entered $($r.entered)" } else { '' }), $(if ($r.status -eq 'fail') { ' NO' } elseif ($r.status -eq 'harness') { ' (not in Tally: harness)' } else { '' }) }
 
 function S231Run {
   Say '---- 2.3.1 scenarios S1-S7 and S10: each imported, opened on the screen and saved, its body checked'
   if (-not $script:s9) { $script:s9 = [ordered]@{ checksBefore = 0; before = [pscustomobject]@{ mst = -1; vch = -1 }; after = [pscustomobject]@{ mst = -1; vch = -1 }; at = (Get-Date).AddMinutes(-13); imp = [pscustomobject]@{ altered = -1; errors = -1 } } }
+  S231Later
   $mark231 = Mark
   $sc = @{}; foreach ($s in $plan231.scenarios) { $sc[$s.id] = $s }
   foreach ($id in 'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S10') { $null = S231Entry $sc[$id] }
@@ -230,7 +244,9 @@ function S231Run {
   foreach ($l in $slow) { Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO bridge 1 log (timing): $l" }
   # ---- the tag names, as real Tally gives them
   foreach ($t in @($ck.tags)) {
-    $w = if (@($t.seen).Count) { (@($t.seen) | ForEach-Object { "$($_.label) x$($_.count)$(if ($_.value) { " '$($_.value)'" })" }) -join '; ' } else { 'NOT SEEN in any answer of this run' }
+    $wv = @(@($t.seen) | Where-Object { $_.count -gt 0 }); $we = @(@($t.seen) | Where-Object { $_.count -eq 0 })
+    $w = if ($wv.Count) { 'WITH A VALUE in ' + (($wv | ForEach-Object { "$($_.label) x$($_.count) '$($_.value)'" }) -join '; ') } else { 'NOT SEEN WITH A VALUE in any answer of this run' }
+    if ($we.Count) { $w += "; only empty in: $(($we | ForEach-Object { $_.label }) -join ', ')" }
     Add-Content -Path $resultsFile -Encoding UTF8 -Value "TAG $($t.tag): $w"
   }
   # ---- the captures: kept with the run and copied for the bridge's tests

@@ -61,15 +61,19 @@ const masters = {
     `<TDSRATEDETAILS.LIST><APPLICABLEFROM>20260401</APPLICABLEFROM><DEDUCTEETYPE>Company - Resident</DEDUCTEETYPE><TDSRATE>2</TDSRATE><SURCHARGERATE>0</SURCHARGERATE><EDUCESSRATE>0</EDUCESSRATE></TDSRATEDETAILS.LIST></TAXCLASSIFICATION>`,
   "masters-4-ledgers": [
     led(N.sales, "Sales Accounts", "<AFFECTSSTOCK>Yes</AFFECTSSTOCK>"), led(N.purchase, "Purchase Accounts", "<AFFECTSSTOCK>Yes</AFFECTSSTOCK>"),
-    ...[N.cgstOut, N.sgstOut, N.cgstIn, N.sgstIn].map(n => led(n, "Duties &amp; Taxes", "<TAXTYPE>Others</TAXTYPE>")),
+    ...[N.cgstOut, N.sgstOut, N.cgstIn, N.sgstIn].map(n => led(n, "Duties & Taxes", "<TAXTYPE>Others</TAXTYPE>")),
     led(N.buyer, "Sundry Debtors", "<ISBILLWISEON>No</ISBILLWISEON>" + gstReg(GSTIN_OLD)),
     led(N.supplier, "Sundry Creditors", "<ISBILLWISEON>No</ISBILLWISEON>"),
     led(N.billParty, "Sundry Debtors", "<ISBILLWISEON>Yes</ISBILLWISEON>"),
-    led(N.contractor, "Sundry Creditors", "<ISBILLWISEON>No</ISBILLWISEON><INCOMETAXNUMBER>AAACS2310K</INCOMETAXNUMBER><ISTDSAPPLICABLE>Yes</ISTDSAPPLICABLE><TDSAPPLICABLE>Yes</TDSAPPLICABLE><TDSDEDUCTEETYPE>Company - Resident</TDSDEDUCTEETYPE><TDSDEDUCTEEISSPECIALRATE>No</TDSDEDUCTEEISSPECIALRATE>"),
-    led(N.contractExp, "Indirect Expenses", `<ISCOSTCENTRESON>Yes</ISCOSTCENTRESON><ISTDSAPPLICABLE>Yes</ISTDSAPPLICABLE><TDSAPPLICABLE>${N.nature}</TDSAPPLICABLE><TDSCATEGORYNAME>${N.nature}</TDSCATEGORYNAME>`),
-    led(N.tds, "Duties &amp; Taxes", `<TAXTYPE>TDS</TAXTYPE><TDSCATEGORYNAME>${N.nature}</TDSCATEGORYNAME><TAXCLASSIFICATIONNAME>${N.nature}</TAXCLASSIFICATIONNAME>`),
     led(N.bank, "Bank Accounts", "<ISBILLWISEON>No</ISBILLWISEON>"),
     led(N.officeExp, "Indirect Expenses", "<ISCOSTCENTRESON>Yes</ISCOSTCENTRESON>"),
+  ].join(""),
+  // after checks 1-8 (S231Run): the company's TDS and cost centre features turned on (on before them, Tally's screens
+  // ask for cost centres in check 1's receipt: run 37416946111), then the TDS nature and ledgers
+  "masters-5-tds": [
+    led(N.contractor, "Sundry Creditors", "<ISBILLWISEON>No</ISBILLWISEON><INCOMETAXNUMBER>AAACS2310K</INCOMETAXNUMBER><ISTDSAPPLICABLE>Yes</ISTDSAPPLICABLE><TDSAPPLICABLE>Yes</TDSAPPLICABLE><TDSDEDUCTEETYPE>Company - Resident</TDSDEDUCTEETYPE><TDSDEDUCTEEISSPECIALRATE>No</TDSDEDUCTEEISSPECIALRATE>"),
+    led(N.contractExp, "Indirect Expenses", `<ISCOSTCENTRESON>Yes</ISCOSTCENTRESON><ISTDSAPPLICABLE>Yes</ISTDSAPPLICABLE><TDSAPPLICABLE>${N.nature}</TDSAPPLICABLE><TDSCATEGORYNAME>${N.nature}</TDSCATEGORYNAME>`),
+    led(N.tds, "Duties & Taxes", `<TAXTYPE>TDS</TAXTYPE><TDSCATEGORYNAME>${N.nature}</TDSCATEGORYNAME><TAXCLASSIFICATIONNAME>${N.nature}</TAXCLASSIFICATIONNAME>`),
   ].join(""),
 };
 
@@ -149,7 +153,7 @@ add({ id: "S7", key: "s7-bank-payment-utr", label: "bank payment with a UTR", ki
   accounting({ type: "Payment", date: "20270201", party: N.supplier, narr: "S7 NEFT to the supplier", rows: [
     { ledger: N.supplier, amount: -5900 },
     { ledger: N.bank, amount: 5900, inner: `<BANKALLOCATIONS.LIST><DATE>20270201</DATE><INSTRUMENTDATE>20270201</INSTRUMENTDATE><NAME>${UTR}</NAME><TRANSACTIONTYPE>e-Fund Transfer</TRANSACTIONTYPE>` +
-      `<TRANSFERMODE>NEFT</TRANSFERMODE><PAYMENTFAVOURING>${N.supplier}</PAYMENTFAVOURING><INSTRUMENTNUMBER>${UTR}</INSTRUMENTNUMBER><UNIQUEREFERENCENUMBER>${UTR}</UNIQUEREFERENCENUMBER><PAYMENTMODE>Transacted</PAYMENTMODE><AMOUNT>5900.00</AMOUNT></BANKALLOCATIONS.LIST>` }] }));
+      `<TRANSFERMODE>NEFT</TRANSFERMODE><BANKPARTYNAME>${N.supplier}</BANKPARTYNAME><PAYMENTFAVOURING>${N.supplier}</PAYMENTFAVOURING><INSTRUMENTNUMBER>${UTR}</INSTRUMENTNUMBER><UNIQUEREFERENCENUMBER>${UTR}</UNIQUEREFERENCENUMBER><PAYMENTMODE>Transacted</PAYMENTMODE><AMOUNT>5900.00</AMOUNT></BANKALLOCATIONS.LIST>` }] }));
 // S10: one sales invoice with 50 item lines (the four items in turn, quantities 1..7)
 add({ id: "S10", key: "s10-sales-50-items", label: "sales invoice with 50 items", kind: "items", day: "2-2-2027", date: "20270202" },
   invoice({ type: "Sales", date: "20270202", party: N.buyer, ledger: N.sales, sign: 1, cgst: N.cgstOut, sgst: N.sgstOut, narr: "S10 fifty lines",
@@ -160,7 +164,8 @@ add({ id: "S8", key: "s8-new-party", label: "a new party ledger used at once", k
 
 const plan = {
   company: CO, names: N, gstinOld: GSTIN_OLD, gstinNew: GSTIN_NEW,
-  masters: Object.keys(masters),
+  masters: ["masters-1-items", "masters-2-costs", "masters-4-ledgers"],
+  later: ["masters-0-company", "masters-3-nature", "masters-5-tds"],
   bill: "s4-bill",
   s8Ledger: "s8-ledger",
   s9Alter: "s9-alter",

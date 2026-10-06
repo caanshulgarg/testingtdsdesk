@@ -148,9 +148,11 @@ if (!s231) {
     const seen = [];
     for (const f of inp.tags || []) {
       const x = read(f.file); if (!x) continue;
-      const re = new RegExp("<" + tag.replace(/\./g, "\\.") + "(?:\\s[^>]*)?(/?)>([^<]*)", "g"); let m, n = 0, val = "";
-      while ((m = re.exec(x))) { n++; if (!val && !m[1] && m[2].trim()) val = T.dec(m[2]); }
-      if (n) seen.push({ label: f.label, count: n, value: val.slice(0, 80) });
+      // an element counts only with a value (Tally writes many empty ones: <IRN TYPE="String"></IRN>, <X.LIST> </X.LIST>)
+      const et = tag.replace(/\./g, "\\."), re = new RegExp("<" + et + "(?:\\s[^>]*)?>([\\s\\S]*?)</" + et + ">", "g"); let m, n = 0, empty = 0, val = "";
+      while ((m = re.exec(x))) { const inner = m[1], text = inner.replace(/<[^>]*>/g, "").trim(); if (text) { n++; if (!val) val = T.dec(text.split(/\s*\n\s*/).join(" ")); } else empty++; }
+      empty += (x.match(new RegExp("<" + et + "(?:\\s[^>]*)?/>", "g")) || []).length;
+      if (n || empty) seen.push({ label: f.label, count: n, empty, value: val.slice(0, 80) });
     }
     out.tags.push({ tag, seen });
   }
