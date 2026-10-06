@@ -158,6 +158,30 @@ only, inside the 2-second rule, after postings, nothing else added, each bridge 
 This needs the FinCom cloud update (tally-ingest) that goes out with 2.3.1; the ledger's deductee type is stored in the
 column migration 57 adds (`tally_ledgers.tds_deductee_type`); no other database change.
 
+## Found on a real Tally (TallyPrime 7.1, the harness run of 06-Oct-2026) and fixed before release
+
+- **Item invoices were read twice.** Tally's answer to the entry request gives an item invoice's ledger lines in two
+  places: the entry's whole ledger list, and again as the party and tax lines plus the sales or purchase ledger under each
+  item. FinCom added both, so every ledger came out at twice Tally's figure (S1: the buyer at Rs 1,42,650 instead of
+  Rs 71,325) while the entry still added up to zero. Now each line is taken once, the way Tally's own Day Book gives it.
+  When both lists are present, FinCom compares them ledger by ledger. If they agree, it takes the lines under the items
+  (each item keeps its HSN and rate) and the entry's other lines. If they do not agree, it takes the entry's own ledger
+  list alone and adds a note that says so. A body is never read doubled. A Day Book reads exactly as before: the
+  ledger lines of Tally's own Day Book exports of the same entries are unchanged.
+- **The tax per item line was half.** The head "State Cess" (rate 0) was taken for SGST and set it to 0. Each duty head
+  Tally writes (CGST, SGST/UTGST, IGST, Cess, State Cess) now goes to its own slot. S1's laptop, Rs 60,000 at 18%, has
+  CGST 5,400 and SGST 5,400 (10,800), and its 5% item has 25. An item line where Tally writes every head at 0 with no
+  valuation type (GST typed on the ledgers by hand) counts as having no rate, so its tax is said "not checked".
+- **Bank details came back empty.** The entry request now also fetches the bank allocation's own date and name
+  (`ALLLEDGERENTRIES.BANKALLOCATIONS.DATE`, `.NAME`) and the UTR (`.UNIQUEREFERENCENUMBER`). These are on the same
+  path as the four fields it already asked for (transaction type, instrument number, instrument date, bank date), and
+  no other field changed. FinCom keeps the instrument number, or the UTR when there is no instrument number. This
+  change is inside the approved entry-request change: the bank details the owner named. Requests changed: FinComVoucherByMaster
+  and FinComVoucherByNumber, and the trial forms A and C that copy them. Their shapes and the table hash are new in
+  `docs/tally-allowlist.md`. Whether Tally now fills the bank allocation is confirmed by the harness's rerun on this head.
+- Tally gives no TDS section on the entry (TDSDEDUCTEESECTIONNUMBER is always empty on 7.1), so the section is read from
+  the nature of payment's name, as before. The party's deductee type (TDSDEDUCTEETYPE) is confirmed on real Tally.
+
 ## Which entries enter the books by themselves in 2.3.1 (for your staff)
 
 **Enter by themselves**, within about a minute of saving in Tally:

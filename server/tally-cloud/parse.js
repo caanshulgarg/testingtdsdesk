@@ -73,17 +73,24 @@ function d8(t){
 }
 // the pieces of s inside each <TAG>...</TAG>
 function blocks(s, tag){ return s.indexOf("<" + tag) < 0 ? [] : after(s, tag).map(({p}) => upTo(p, tag)); }
-// the rates in a block's own rate details (the item's, not its allocations'): {c, s, i, cess} (null when not set);
+// the rates in a block's own rate details (the item's, not its allocations'): {c, s, i, cess, sc} (null when not set);
 // a cess "Based on Quantity" is not a rate on value and is left out
+// 2.3.1 (the real TallyPrime 7.1 run of 06-Oct-2026): each duty head Tally writes goes to its own slot, matched exactly
+// (Tally 7.1 writes CGST, SGST/UTGST, IGST, Cess and State Cess on every item line). Before, "State Cess" (rate 0) was taken
+// for SGST by its first word and set SGST to 0, so an item's tax came out at half. A head not named here is left out
+const HEADS = {"CGST": "c", "CENTRAL TAX": "c", "SGST/UTGST": "s", "SGST": "s", "UTGST": "s", "STATE TAX": "s", "UT TAX": "s", "UNION TERRITORY TAX": "s",
+  "IGST": "i", "INTEGRATED TAX": "i", "CESS": "cess", "STATE CESS": "sc"};
 function rateHeads(own){
-  const o = {c: null, s: null, i: null, cess: null};
+  const o = {c: null, s: null, i: null, cess: null, sc: null};
   blocks(own, "RATEDETAILS.LIST").forEach((q) => {
     const h = one(q, "GSTRATEDUTYHEAD").toUpperCase(), vt = one(q, "GSTRATEVALUATIONTYPE"), rv = one(q, "GSTRATE");
     if (rv && vt && !/value/i.test(vt) && !/not applicable/i.test(vt) && /CESS/.test(h) && num(rv)) o.cessQty = true;     // review M3: said, not worked out
     if (!rv || (vt && !/value/i.test(vt))) return;
-    const r = num(rv);
-    if (/^(CGST|CENTRAL)/.test(h)) o.c = r; else if (/^(SGST|UTGST|STATE|UNION)/.test(h)) o.s = r;
-    else if (/^(IGST|INTEGRATED)/.test(h)) o.i = r; else if (/CESS/.test(h)) o.cess = r;
+    // 2.3.1 (the real run, check 8: GST typed on the ledgers, the items without a rate): Tally 7.1 writes every head with
+    // rate 0 and no valuation type then; that is no rate given, not a rate of 0 % ("Based on Value" when one is set)
+    if (!vt && !num(rv)) return;
+    const slot = HEADS[h.replace(/\s+/g, " ").trim()];
+    if (slot) o[slot] = num(rv);
   });
   return o;
 }
@@ -147,7 +154,7 @@ function takeVoucher(s){
     });
     ccat.forEach((tot, cat) => { if (Math.abs(tot - la) > 0.01) checks.push("the cost centres of " + ledger + " (" + cat + ") come to " + rupees(tot) + ", not the line's " + rupees(la)); });
     blocks(e, "BANKALLOCATIONS.LIST").forEach((q) => {
-      const b = {n, ledger, type: one(q, "TRANSACTIONTYPE").slice(0, 60), no: one(q, "INSTRUMENTNUMBER").slice(0, 60), date: d8(one(q, "INSTRUMENTDATE")), bdate: d8(one(q, "BANKERSDATE"))};
+      const b = {n, ledger, type: one(q, "TRANSACTIONTYPE").slice(0, 60), no: (one(q, "INSTRUMENTNUMBER") || one(q, "UNIQUEREFERENCENUMBER")).slice(0, 60), date: d8(one(q, "INSTRUMENTDATE")), bdate: d8(one(q, "BANKERSDATE"))};
       if (b.type || b.no || b.date || b.bdate) banks.push(b);
     });
     blocks(e, "TAXOBJECTALLOCATIONS.LIST").forEach((q) => {
@@ -170,12 +177,54 @@ function takeVoucher(s){
       if (due) dues.push({n, ledger, name: one(q, "NAME").slice(0, 200), type: one(q, "BILLTYPE").slice(0, 20), amt: r2(amt(one(q, "AMOUNT"))), due});
     });
   };
+  // 2.3.1 (the real TallyPrime 7.1 run of 06-Oct-2026: item invoices read doubled): Tally's answer to the entry request
+  // carries an item invoice's ledger lines twice: in ALLLEDGERENTRIES (the entry's whole ledger list, with the fields the
+  // request fetches: bill-wise, cost centres, bank, TDS, GST rates) and again in LEDGERENTRIES (the party and tax lines,
+  // without those fields) plus each item's ACCOUNTINGALLOCATIONS (the sales or purchase ledger under each item). Each line
+  // is taken once. Tally's own Day Book export gives an item invoice as LEDGERENTRIES and the lines under the items, any
+  // other entry as ALLLEDGERENTRIES alone: read exactly as before (all of what is there). When ALLLEDGERENTRIES is there it
+  // is the entry's list: LEDGERENTRIES is never added to it; a ledger the lines under the items come to exactly is taken as
+  // those lines (each keeps its item's HSN and rate) in place of the list's line for it; a ledger only under the items is
+  // added. When the lines under the items do not come to the list's line for their ledger, or the lines taken would not
+  // add up to zero while the list does, or LEDGERENTRIES does not repeat the list, the entry's list alone is taken and a
+  // note says so: a body is never read doubled
+  const found = [];
   ["ALLLEDGERENTRIES.LIST", "LEDGERENTRIES.LIST", "ACCOUNTINGALLOCATIONS.LIST"].forEach((tag) => {
     after(s, tag).forEach(({a: pos, p}) => {
       const e = upTo(p, tag);
       const name = one(e, "LEDGERNAME");
       if (!name) return;
       const it = tag === "ACCOUNTINGALLOCATIONS.LIST" ? items.find(q => pos > q.a && pos < q.z) : null;
+      found.push({tag, e, name, it, la: Math.round(amt(one(e, "AMOUNT")) * 100) / 100});
+    });
+  });
+  const ofTag = (t) => found.filter((f) => f.tag === t);
+  const fromAll = ofTag("ALLLEDGERENTRIES.LIST"), fromLed = ofTag("LEDGERENTRIES.LIST"), under = ofTag("ACCOUNTINGALLOCATIONS.LIST");
+  let take = found;
+  if (fromAll.length && (fromLed.length || under.length)){
+    const tot = (xs) => { const m = new Map(); xs.forEach((f) => m.set(f.name, r2((m.get(f.name) || 0) + f.la))); return m; };
+    const zero = (xs) => Math.abs(xs.reduce((t, f) => t + f.la, 0)) < 0.005;
+    const ta = tot(fromAll), tu = tot(under);
+    let agree = true;
+    const merged = [], placed = new Set();
+    fromAll.forEach((f) => {
+      if (!tu.has(f.name)) { merged.push(f); return; }
+      if (Math.abs(tu.get(f.name) - ta.get(f.name)) >= 0.005) agree = false;
+      if (!placed.has(f.name)) { placed.add(f.name); under.filter((u) => u.name === f.name).forEach((u) => merged.push(u)); }
+    });
+    under.forEach((u) => { if (!ta.has(u.name)) merged.push(u); });
+    if (zero(fromAll) && !zero(merged)) agree = false;
+    const tl = tot(fromLed);
+    if ([...tl].some(([k, v]) => !ta.has(k) || Math.abs(ta.get(k) - v) >= 0.005)) agree = false;
+    take = agree ? merged : fromAll;
+    if (!agree){
+      const say = (m) => [...m].slice(0, 4).map(([k, v]) => k + " " + rupees(v)).join(", ") + (m.size > 4 ? " and " + (m.size - 4) + " more" : "");
+      checks.push("the ledger lines Tally gave twice do not agree (the entry's ledger list: " + say(ta) + "; its other lists: " + say(tot(fromLed.concat(under))) + "); the entry's ledger list is taken, once");
+      under.forEach((f) => { if (f.it) f.it.alloc = r2(f.it.alloc + f.la); }); // each item's taxable value still checked against them
+    }
+  }
+  take.forEach(({e, name, it}) => {
+    {
       const hsn = (it ? it.h : one(e, "GSTHSNNAME")).slice(0, 20);
       const rate = it ? it.gr : igstRate(e);
       // bill-wise details on the line (review of 01-Oct-2026): [bill name, New Ref / Agst Ref / Advance / On Account,
@@ -196,7 +245,7 @@ function takeVoucher(s){
       meta.push({n: ln, name, a: la, it: !!it, bills: !!bills.length, rate: it ? null : rate, billSum: bills.length ? r2(bills.reduce((t, b) => t + b[2], 0)) : null,
         billList: bills.length ? blocks(e, "BILLALLOCATIONS.LIST") : []});
       lineExtras(e, ln, name, la);
-    });
+    }
   });
   // review of 01-Oct-2026: a payroll voucher (Tally's PaySlip view) has no ledger lines; its pay heads sit in each
   // employee's allocations. A pay head is a ledger in Tally: earnings are debits, deductions (PF, advance) credits, and
