@@ -34,6 +34,7 @@ Last updated: 06-Oct-2026, 10:35.
   - any change to how entries reach the books that the owner has not already agreed.
 - **Tables are created only by migrations, never from the Supabase dashboard** (owner, 06-Oct).
 - **The live database is never connected to by any tool or helper** (hard guard). For a live check, give the owner read-only SQL to paste himself.
+- **A new point raised while a release is in its final checks goes into the NEXT release**, unless it is a High in the release itself. Ask the owner if unsure (owner, 06-Oct).
 - **Status lines the owner wants at each point:** guard live, A done, B done, review clean, real-Tally run passed, published.
 
 ## What is live on staging
@@ -135,3 +136,7 @@ Require the platform admin's second sign-in step in the admin edge function (ser
 
 ## Live
 server/tally-cloud/live-members-fix.sql (md5 fd84f633…) is for the owner to run himself. Never connect to live.
+
+## 2.3.1 build (06-Oct 17:23 IST)
+tax-accuracy 09b1b23; setup 7d4a37a93a52dbc55ab9992c7148c7d607485d567fd34e1bde7d607288a216be; program 89668be15577e580f4febad894c234a2c54d1bf104495ccdf8e3b3485c09a829. Review clean (round 3). CI 37459575969 and Windows CI 37459575962 green. To publish: the final real-Tally run on this build passes; then migrations 57 (8aa48ece…), 59 (882de3e6…), 60 (adbec225…) on staging; tally-ingest deploy with a byte check; publish with FINCOM_SHIP_BRIDGE=1. The owner decided: publish this build as it is; the 'one request in flight, really' change (branch next-inflight) goes in the next release with the push design.
+After install: watch NWS144 for a working day (timeouts, retries, longest wait for an entry, any pile-up).
