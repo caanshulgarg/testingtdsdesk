@@ -181,8 +181,11 @@ jobs:
           # anything else the job left changed in tracked files (seen: app/src/Main.jsx) is dropped: it stopped the rebase
           # in run 37393792265 when the branch had moved meanwhile
           git checkout -- .
+          # the biggest files (GitHub refuses a file over 100 MB), said as notices
+          Get-ChildItem spike-results, bridge-go/testdata -Recurse -File -ErrorAction SilentlyContinue | Sort-Object Length -Descending | Select-Object -First 5 | ForEach-Object { Write-Host "::notice title=biggest results file::$($_.FullName) $($_.Length) bytes" }
           for ($i = 0; $i -lt 5; $i++) {
-            git pull -q --rebase --autostash origin tally-real-spike
-            git push -q origin HEAD:refs/heads/tally-real-spike
-            if ($LASTEXITCODE -eq 0) { break }; Start-Sleep 5
+            $o1 = git pull -q --rebase --autostash origin tally-real-spike 2>&1
+            if ($LASTEXITCODE -ne 0) { Write-Host "::error title=git pull (try $i)::$(($o1 | Out-String).Trim())"; git rebase --abort 2>&1 | Out-Null }
+            $o2 = git push -q origin HEAD:refs/heads/tally-real-spike 2>&1
+            if ($LASTEXITCODE -eq 0) { break }; Write-Host "::error title=git push (try $i)::$(($o2 | Out-String).Trim())"; Start-Sleep 5
           }

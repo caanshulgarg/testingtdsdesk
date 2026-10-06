@@ -97,7 +97,9 @@ function S231Resave($s) {
   DayBook "s231-$($s.id)" $s.day
   KeysTo 9000 '{END}' 2; KeysTo 9000 '{ENTER}' 4 "s231-$($s.id)-open"; KeysTo 9000 '^a' 6 "s231-$($s.id)-saved"
   $hit = WaitLine $m0 $pred 90
-  if (-not $hit.Count) { KeysTo 9000 '{ENTER}' 3 "s231-$($s.id)-enter"; KeysTo 9000 '^a' 6 "s231-$($s.id)-saved2"; $hit = WaitLine $m0 $pred 90 }
+  if (-not $hit.Count) { KeysTo 9000 '{ENTER}' 3 "s231-$($s.id)-enter"; KeysTo 9000 '^a' 6 "s231-$($s.id)-saved2"; $hit = WaitLine $m0 $pred 60 }
+  # a sub-screen Tally opens on the save (TDS details, cost centres): accepted as it stands
+  if (-not $hit.Count) { KeysTo 9000 '^a' 4 "s231-$($s.id)-saved3"; KeysTo 9000 '^a' 4 "s231-$($s.id)-saved4"; KeysTo 9000 'y' 4 "s231-$($s.id)-yes"; $hit = WaitLine $m0 $pred 60 }
   if (-not $hit.Count) { KeysTo 9000 '{ESC}' 2; KeysTo 9000 'y' 3 "s231-$($s.id)-left"; KeysTo 9000 '{ESC}' 2 }
   return , $hit
 }
