@@ -12,7 +12,11 @@ section was written first (red before its fix). Needs Deno (DENO).
   D. cloud Lows: guidsFromRecord read FinCom's record with .limit(2000) and filtered the company in JS, so 2,000 newer rows
      of another company with the same MasterID hid the entry; the company is filtered in the query, MasterIDs in chunks.
   E. round 3 L2: the refetch's ":resolved" lookup put up to 400 ids in one URL; past the gateway's limit it failed quietly
-     to an empty list. It now asks in chunks of 60 (and logs a failure)."""
+     to an empty list. It now asks in chunks of 60 (and logs a failure).
+  F. 2.2.2 L-F: the beat's heldLines listed a held line whose ":resolved" line had already reached FinCom (a 2.2.1 bridge
+     resolved it and kept no mark), so a 2.2.2+ bridge asked Tally again and sent one more ":resolved" (a duplicate row).
+     heldLines now leaves such a line out, as refetch does; 2.3.1 H1's exception (the only ":resolved" row held for want
+     of a complete body) is kept, and run_recorder_server.py proves H1's re-send."""
 import os, sys, json, time, hashlib, subprocess, urllib.request, shutil, threading, datetime
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import fake_supabase as F
@@ -124,6 +128,17 @@ try:
     rf = r.get("refetch") or []
     ok(c == 200 and len(rf) == 20, "E. 300 held lines, the gateway's URL limit at 6,000: the refetch still lists 20 (%s %d)" % (c, len(rf)))
     F.MAX_URL[0] = 0
+
+    # F. heldLines leaves out a line already resolved (L-F)
+    def held(i, lid, state="held", why=None, body=None):
+        return {"id": 20000 + i, "firm_id": FIRM, "device_id": "d-1", "bridge": BRID, "book_id": BOOK, "line_id": lid, "state": state, "event": "created", "held_why": why,
+                "company": "ZZ CO", "company_guid": CG, "master_id": str(500 + i), "vch_type": "Receipt", "vch_no": str(500 + i), "vch_date": "2026-10-02", "object_guid": "",
+                "body": body, "received_at": (now - datetime.timedelta(minutes=60 - i)).isoformat()}
+    F.T["tally_recorder_lines"] = [held(1, "lf-done"), held(2, "lf-done:resolved", "duplicate", "the copy holds this entry"), held(3, "lf-open"),
+                                   held(4, "lf-incomplete"), held(5, "lf-incomplete:resolved", "held", "the entry's details from Tally are incomplete (item lines missing)")]
+    c, r = call(BEAT)
+    hl = sorted(x["line_id"] for x in (r.get("heldLines") or []))
+    ok(c == 200 and hl == ["lf-incomplete", "lf-open"], "F. heldLines leaves out a line whose :resolved already came; keeps the open one and H1's held-incomplete one (%s)" % hl)
 finally:
     fn.terminate()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); raise SystemExit(1 if fails else 0)

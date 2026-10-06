@@ -373,8 +373,11 @@ async function bookForBeat(firm: string, name: string) {
 // (or on any error) the field is left out: the beat never fails for it
 // 06-Oct-2026: only the lines of THIS bridge (the same computer key and the same bridge id, the column bridge): on a shared
 // server every Windows user's bridge has its own lines (the owner's rule: no line from another user's session)
+// Bridge 2.3.1 (2.2.2 review L-F): a line whose "<line id>:resolved" already reached FinCom is left out, as refetch does
+// (a 2.2.1 bridge resolved it and kept no mark, so a later bridge asked Tally again and sent a duplicate ":resolved"); the
+// same exception as refetch (2.3.1 H1: the only ":resolved" row held for want of a complete body) keeps it listed
 async function heldLinesFor(dev: any, firm: string, bridge: string) {
-  const out = await heldOwnLines(dev, firm, bridge, 200, () => true, "held lines");
+  const out = await heldOwnLines(dev, firm, bridge, 200, () => true, "held lines", true);
   return out.length ? out : null;
 }
 // 06-Oct-2026 (the owner, NWS144 lines 4, 17 and 18: "the bridge must ask again for held lines of its own user and settle
