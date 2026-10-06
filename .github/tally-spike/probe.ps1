@@ -56,39 +56,15 @@ function Walk($tag, $kind, $name, $group, [int]$n = 22) {
 # Alter showed only the one the probe made); its form is Name, Section, Payment code, Remittance code, rate for
 # individuals/HUF with PAN, rate for other deductee types with PAN, Is zero rated, Threshold
 function Clear { K '{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}' 1 '' }
-Say '---- the nature of payment 194C, made by keys'
-Clear; K 'TDS Nature of Payments' 2; K '{ENTER}' 3 '20-nature-form'
-K 'Probe 194C Contractors{ENTER}' 1 '21-name'; K '194C{ENTER}' 1 '22-section'; K '94C{ENTER}' 1 '23-paycode'; K '{ENTER}' 1 '24-remit'
-K '1{ENTER}' 1 '25-rate-ind'; K '2{ENTER}' 1 '26-rate-other'; K '{ENTER}' 1 '27-zero'; K '{ENTER}' 3 '28-threshold'; K '{ESC}' 3 '29-esc-blank'; K 'y' 3 '29b-y'
-Say '---- the deductee party (Sundry Creditors, bill-wise, Is TDS Deductable: Yes)'
-Clear; K 'Ledger' 2 '30a-typed'; K '{ENTER}' 3 '30-party-form'; K 'Probe Deductee{ENTER}' 1; K '{ENTER}' 1; K 'Sundry Creditors{ENTER}' 2 '31-group'
-K 'n' 1; K '{ENTER}' 1 '32-billwise-no'; K '{ENTER}' 1 '34-at-tds'; K 'y' 1; K '{ENTER}' 2 '35-tds-yes'
-K 'Company - Resident' 1; K '{ENTER}' 2 '36-deductee'; K 'y' 1 '37-same-voucher'; K '{ENTER}' 2 '37b-after-same'
-for ($i = 1; $i -le 4; $i++) { K '{ENTER}' 1 ("37c-party-{0:d2}" -f $i) }
-K '^a' 3 '38-ctrl-a'; K '{ESC}' 3 '38b-esc'; K 'y' 3 '39-y'
-Say '---- the TDS duty ledger (Duties & Taxes, Type of Duty/Tax: TDS, Nature of payment: the 194C nature)'
-Clear; K 'Ledger' 2 '40a-typed'; K '{ENTER}' 3 '40-duty-form'; K 'Probe TDS Ledger{ENTER}' 1; K '{ENTER}' 1; K 'Duties & Taxes{ENTER}' 2 '41-group'
-K 'TDS' 1; K '{ENTER}' 2 '42-type-tds'; K 'Probe 194C Contractors' 1; K '{ENTER}' 2 '43-nature'
-for ($i = 1; $i -le 3; $i++) { K '{ENTER}' 1 ("43b-duty-{0:d2}" -f $i) }
-K '^a' 3 '44-ctrl-a'; K '{ESC}' 3 '44b-esc'; K 'y' 3 '45-y'
-Say '---- the expense ledger (Indirect Expenses): the lists its statutory fields offer'
-Clear; K 'Ledger' 2 '50a-typed'; K '{ENTER}' 3 '50-exp-form'; K 'Probe Contract Work{ENTER}' 1; K '{ENTER}' 1; K 'Indirect Expenses{ENTER}' 2 '51-group'
-K '{ENTER}' 2 '52-type-of-ledger'; K '{ENTER}' 2 '53-assessable-list'; K '{DOWN}' 1 '53b-down'; K '{DOWN}' 1 '53c-down'
-K '{ENTER}' 2 '54-after-assessable'; K '{ENTER}' 2 '55-next'; K '{ENTER}' 2 '56-next'
-K '^a' 3 '57-ctrl-a'; K '{ESC}' 3 '57b-esc'; K 'y' 3 '58-y'; Clear
-# what Tally keeps of them: its own export
-K '{ESC}' 2 '59-gateway'
-Coll 'Ledger' '*' 'ledgers.xml'
-Say '---- a journal: Dr the expense 100000; To the party (Deduct TDS in same voucher); then To the TDS ledger'
-K 'v' 3 '60-vouchers'; K '{F7}' 3 '61-journal'; K '{F2}' 2; K '1-1-2027{ENTER}' 2 '62-date'
-K 'Probe Contract Work' 1; K '{ENTER}' 2 '63-exp'; K '100000' 1; K '{ENTER}' 2 '64-amt'
-K 't' 1; K '{ENTER}' 2 '65-to'; K 'Probe Deductee' 1; K '{ENTER}' 3 '66-party'
-K '{ENTER}' 3 '67-party-amount'; K '{DOWN}' 1 '67b-down'; K '{UP}' 1 '67c-up'
-for ($i = 1; $i -le 6; $i++) { K '{ENTER}' 2 ("68-p-{0:d2}" -f $i) }
-K 't' 1; K '{ENTER}' 2 '69-to'; K 'Probe TDS Ledger' 1; K '{ENTER}' 3 '70-tds-ledger'; K '{DOWN}' 1 '70b-down'; K '{UP}' 1 '70c-up'
-for ($i = 1; $i -le 6; $i++) { K '{ENTER}' 2 ("71-t-{0:d2}" -f $i) }
-K '^a' 4 '72-ctrl-a'; K '^a' 4 '73-ctrl-a-2'
-Post ('<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Day Book</REPORTNAME><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co + '</SVCURRENTCOMPANY><SVCURRENTDATE>20270101</SVCURRENTDATE><SVFROMDATE>20270101</SVFROMDATE><SVTODATE>20270101</SVTODATE></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>') 'daybook' 'daybook-20270101.xml' | Out-Null
+Say '---- probe 9: the company TDS Details form (Create -> TDS Details), then the expense ledger and Stat Adjustment again'
+Clear; K 'TDS Details' 2 '20-typed'; K '{ENTER}' 3 '21-tds-details'
+for ($i = 1; $i -le 14; $i++) { K '{ENTER}' 1 ("22-td-{0:d2}" -f $i) }
+K '^a' 3 '23-accept'; K '{ESC}' 3 '24-esc'; K 'y' 3 '25-y'
+Clear; K 'Ledger' 2; K '{ENTER}' 3 '30-exp-form'; K 'Probe Contract Work{ENTER}' 1; K '{ENTER}' 1; K 'Indirect Expenses{ENTER}' 2 '31-group'
+for ($i = 1; $i -le 6; $i++) { K '{ENTER}' 1 ("32-exp-{0:d2}" -f $i) }
+K '{ESC}' 3 '33-esc'; K 'y' 3 '34-y'; K '{ESC}' 3 '35-gateway'
+K 'v' 3 '40-vouchers'; K '{F7}' 3 '41-journal'; K '%j' 3 '42-stat-adj'; K '{ESC}' 2 '43-esc'; K '{ESC}' 2; K 'y' 2 '44-y'
+Post ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCC2</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCC2" ISMODIFY="No"><TYPE>Company</TYPE><FETCH>*</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') 'company *' 'company-all.xml' | Out-Null
 Post ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCC</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCC" ISMODIFY="No"><TYPE>Company</TYPE><FETCH>Name, IsTDSOn</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') 'company TDS' 'company.xml' | Out-Null
 Get-Process tally -ErrorAction SilentlyContinue | Stop-Process -Force
 Say '== probe end'
