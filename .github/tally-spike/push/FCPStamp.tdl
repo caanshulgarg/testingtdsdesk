@@ -1,0 +1,24 @@
+;; FCPStamp.tdl  -  MEASUREMENT ONLY (push-design spike). The "no add-on" baseline seen from inside Tally: nothing but the
+;; timing stamps of FCPFull.tdl around Tally's own Form Accept (a, b before; c, d after). Tally's save = c - b.
+
+[#Form: Voucher]
+    On : Form Accept : Yes : Call : FCPStamp : "a"
+    On : Form Accept : Yes : Call : FCPStamp : "b"
+    On : Form Accept : Yes : Form Accept
+    On : Form Accept : Yes : Call : FCPStamp : "c"
+    On : Form Accept : Yes : Call : FCPStamp : "d"
+
+;; ---------------------------------------------------------------- the timing stamp (measurement only)
+[System: Formula]
+    FCPDir    : "C:\fcspike\push\"
+
+[Function: FCPStamp]
+    Parameter : pName : String
+    Returns   : Logical
+    01 : OPEN FILE : @@FCPDir + "stamp-" + ##pName + ".txt" : Text : Write : Unicode
+    02 : IF : NOT $$LastResult
+    03 :    RETURN : Yes
+    04 : END IF
+    05 : WRITE FILE LINE : ##pName
+    06 : CLOSE TARGET FILE
+    07 : RETURN : Yes

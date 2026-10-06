@@ -12,7 +12,7 @@ name: Tally versions
 on:
   push:
     branches: [tally-versions]
-    paths: ['.github/workflows/tally-versions.yml', '.github/tally-spike/**']
+    paths: ['.github/workflows/tally-versions.yml', '.github/tally-spike/**', '!.github/tally-spike/push/**']
   workflow_dispatch:
     inputs:
       bridge_ref:

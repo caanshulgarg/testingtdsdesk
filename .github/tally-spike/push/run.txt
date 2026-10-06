@@ -1,0 +1,7 @@
+versions=7.1,3.0
+reps=2
+posts=2
+heavy_led=600
+heavy_item=600
+heavy_vch=4000
+heavy_min=15

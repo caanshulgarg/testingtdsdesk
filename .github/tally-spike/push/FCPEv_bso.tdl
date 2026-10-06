@@ -1,0 +1,17 @@
+;; FCPEv_bso.tdl  -  MEASUREMENT ONLY (push-design spike). Asks whether TallyPrime knows a system event named
+;; "Before Save Object". Loaded on its own, beside FCPFull.tdl, in the probe step only: if Tally does not know the event, only this file
+;; fails to load. When the event fires it appends the object's heads to C:\fcspike\push\ev-bso.txt.
+
+[System: Events]
+    FCPEbso : Before Save Object : Yes : Call : FCPEbsoLog : "bso"
+
+[Function: FCPEbsoLog]
+    Parameter : pEvent : String
+    Returns   : Logical
+    01 : OPEN FILE : "C:\fcspike\push\ev-bso.txt" : Text : Write : Unicode
+    02 : IF : NOT $$LastResult
+    03 :    RETURN : Yes
+    04 : END IF
+    05 : WRITE FILE LINE : "FCE1|ev=" + ##pEvent + "|guid=" + ($$String:$Guid) + "|mid=" + ($$String:$MasterID) + "|aid=" + ($$String:$AlterID) + "|vtype=" + ($$String:$VoucherTypeName) + "|vno=" + ($$String:$VoucherNumber) + "|name=" + ($$String:$Name) + "|nL=" + ($$String:($$NumItems:AllLedgerEntries)) + "|nI=" + ($$String:($$NumItems:AllInventoryEntries))
+    06 : CLOSE TARGET FILE
+    07 : RETURN : Yes
