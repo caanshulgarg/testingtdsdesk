@@ -245,9 +245,11 @@ function takeVoucher(s){
     });
   }
   v.costs = costs; v.banks = banks; v.tds = tds; v.dues = dues;
-  // ---- part A, the owner's accuracy rules: an entry applies only if its lines total zero; item lines' taxable value
-  // plus tax equal the ledger lines for that invoice; bill-wise and cost centre allocations add up to their line. Each
-  // failure in plain words (the recorder path holds the entry; a Day Book is never refused: flagged)
+  // ---- part A, the owner's accuracy checks: lines totalling zero; item lines' taxable value plus tax against the ledger
+  // lines for that invoice; bill-wise and cost centre allocations against their line. Each failure in plain words. The
+  // owner's rule after review (06-Oct-2026): the recorder path holds an entry only when its lines do not total zero (the
+  // balance guard in tally-ingest); every other failure is a note for a person (check_notes), the entry applied; a Day
+  // Book is never refused
   if (lines.length && !v.cancel){
     const sum = r2(lines.reduce((t, l) => t + l[2], 0));
     if (Math.abs(sum) > 0.01) checks.unshift("its lines do not add up to zero (" + rupees(sum) + " " + (sum < 0 ? "more debit" : "more credit") + ")");

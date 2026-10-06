@@ -11,6 +11,8 @@ the owner's words, exactly:
   Never "synced" anywhere on the page; "Entered in the books" only on an applied line; the strip of lines waiting says
   "not yet entered in the books" when it has no other reason; an owner's Apply now answers in the same words; a line coming
   in live (its whole row, payload included) the same.
+  2.3.1 (the owner's rule after review, 06-Oct-2026): an applied line with notes for checking (payload checkNotes, read as
+  checks) says "Entered in the books; to check: <notes>".
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_recorder_held_words.py
 RED (before the change): the bare states ("applied", "held: ...") and actions ("created")."""
 import json, os, re, threading, functools, http.server
@@ -33,8 +35,9 @@ def dev(i, comp):
     bt = {"at": "ago:0.3", "every": 30, "tally": True, "tallyState": "open", "open": b["open"], "paused": False}
     return {"id": i, "name": comp, "revoked": False, "last_seen": "ago:0.3", "version": "2.2.0", "main_bridge": "go-" + i, "info": {"computer": comp, "user": "tally", "beat": bt, "bridges": {"go-" + i: b}}, "created_at": "2026-09-01T00:00:00Z"}
 DEVS = [dev(D1, "NWS144")]
-def line(i, event, state, rec, why=None, no="191", fid=None, short=None):
-    return {"id": i, "client_id": "CID", "book_id": "b1", "device_id": D1, "pc": "NWS144", "company": "GARG SHEKHAR & COMPANY", "line_id": "L" + str(i), "event": event, "object_guid": "g-%d" % i, "alter_id": 54000 + i,
+NOTE = "the GST worked out on the items (Rs 410.00) does not match the GST ledger lines (Rs 428.00)"
+def line(i, event, state, rec, why=None, no="191", fid=None, short=None, checks=None):
+    return {"checks": checks, "id": i, "client_id": "CID", "book_id": "b1", "device_id": D1, "pc": "NWS144", "company": "GARG SHEKHAR & COMPANY", "line_id": "L" + str(i), "event": event, "object_guid": "g-%d" % i, "alter_id": 54000 + i,
             "vch_type": "Receipt", "vch_no": no, "vch_date": "2026-10-05", "saved_at": rec, "received_at": rec, "applied_at": rec if state == "applied" else None, "state": state, "held_why": why, "ledgers": [],
             "fid": fid, "short": short}
 LINES = [
@@ -50,7 +53,9 @@ LINES = [
     line(210, "created", "applied", "ago:18", no="205", fid="B-17", short="true"),
     line(211, "created", "applied", "ago:19", why="FinCom posting B-18 matched", no="206"),
     line(212, "altered", "held", "ago:20", why="FinCom posting B-19 matched; changed in Tally after posting: the next full line or Day Book upload applies it", no="207", fid="B-19"),
-    line(213, "created", "received", "ago:21", no="208")]
+    line(213, "created", "received", "ago:21", no="208"),
+    # the owner's rule after review (06-Oct-2026): a mismatch other than lines not totalling zero applies the entry with a note
+    line(215, "created", "applied", "ago:22", no="210", checks=[NOTE])]
 SETUP = """async ([role, devs, lines]) => {
   const now = Date.now(), ago = m => new Date(now - m * 60000).toISOString();
   const fix = (o) => JSON.parse(JSON.stringify(o), (k, v) => typeof v === "string" && v.startsWith("ago:") ? ago(Number(v.slice(4))) : v);
@@ -83,7 +88,7 @@ WANT = {201: ("Created", "Entered in the books"), 202: ("Altered", "Received, no
         207: ("Altered", "An older change, not applied"), 208: ("Created", "Not entered: an internal error (code XX000)"), 209: ("Created", "Received, waiting in FinCom's queue"),
         210: ("Posted from FinCom", "Entered in the books"), 211: ("Posted from FinCom", "Entered in the books"),
         212: ("Altered", "Received, not yet entered in the books: FinCom posting B-19 matched; changed in Tally after posting: the next full line or Day Book upload applies it"),
-        213: ("Created", "Received, not yet entered in the books")}
+        213: ("Created", "Received, not yet entered in the books"), 215: ("Created", "Entered in the books; to check: " + NOTE)}
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1600, "height": 1100}); pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.route("**/assets/bridge-go/latest.json", lambda r: r.fulfill(status=200, content_type="application/json",
@@ -95,7 +100,7 @@ with sync_playwright() as p:
     cid = E(SETUP, ["owner", DEVS, LINES]); pg.wait_for_timeout(300)
     E("() => { navHome('tally'); S.tallyTab = 'activity'; render(); }"); pg.wait_for_timeout(1500)
     asked = [a for a in E("window.__asked") if a.startswith("tally_recorder_lines")]
-    ok(asked and "fid:payload->>fid" in asked[-1] and "short:payload->>short" in asked[-1], "the lines are read with their FinCom id and short mark (%s)" % (asked[-1:] or ""))
+    ok(asked and "fid:payload->>fid" in asked[-1] and "short:payload->>short" in asked[-1] and "checks:payload->checkNotes" in asked[-1], "the lines are read with their FinCom id, short mark and notes for checking (%s)" % (asked[-1:] or ""))
     rows = pg.locator("#app [data-sync-line]")
     ok(rows.count() == len(LINES), "every line shown (%d)" % rows.count())
     for i, (act, st) in WANT.items():
@@ -120,6 +125,9 @@ with sync_playwright() as p:
     pg.wait_for_timeout(500)
     ok(txt('#app [data-sync-line="214"] [data-sync-act]') == "Posted from FinCom" and txt('#app [data-sync-line="214"] [data-sync-state]') == "Received, not yet entered in the books: " + NOBODY,
        "a line coming in live: Posted from FinCom, received, not yet entered (%s / %s)" % (txt('#app [data-sync-line="214"] [data-sync-act]'), txt('#app [data-sync-line="214"] [data-sync-state]')))
+    E("""() => { Live.got({topic: 'realtime:fincom-recorder-f-1', event: 'postgres_changes', payload: {data: {type: 'INSERT', table: 'tally_recorder_lines', record: {id: 216, client_id: Object.values(S.companies).find(x => x.name === 'GARG SHEKHAR & COMPANY').id, book_id: 'b1', device_id: '%s', pc: 'NWS144', company: 'GARG SHEKHAR & COMPANY', event: 'created', vch_type: 'Sales', vch_no: '211', vch_date: '2026-10-05', saved_at: new Date().toISOString(), received_at: new Date().toISOString(), state: 'applied', held_why: null, ledgers: [], payload: {checkNotes: [%s]}}}}}); }""" % (D1, json.dumps(NOTE)))
+    pg.wait_for_timeout(500)
+    ok(txt('#app [data-sync-line="216"] [data-sync-state]') == "Entered in the books; to check: " + NOTE, "a line coming in live with notes: entered, with what to check (%s)" % txt('#app [data-sync-line="216"] [data-sync-state]'))
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()
 srv.shutdown()

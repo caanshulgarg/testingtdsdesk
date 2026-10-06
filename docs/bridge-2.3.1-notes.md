@@ -66,12 +66,15 @@ already had when a live entry came without them. 2.3.1 asks for all of them, so 
 FinCom then stores what Tally has, blanks included: a GSTIN or HSN removed in Tally is removed in FinCom too. An entry sent
 by a 2.3.0 bridge is kept as before. A Day Book upload is unchanged.
 
-**FinCom's accuracy checks (the owner's rules).** An entry from the bridge enters only if its lines total zero, its
-items' taxable value plus tax equal its ledger lines (within Rs 1 for Tally's rounding), and its bill-wise and cost
-centre allocations add up to their line's amount. If any check fails, the line is held with plain words (for example
-"the GST worked out on the items (Rs 410.00) does not match the GST ledger lines (Rs 420.00)") and **nothing of the
-entry is applied**. A Day Book upload is never refused: such an entry comes in as Tally has it, marked for checking with
-the same words.
+**FinCom's accuracy checks (the owner's rules, as decided after review on 06-Oct-2026).** An entry from the bridge is
+held only when its ledger lines do not total zero: then it is held with plain words and **nothing of the entry is
+applied**. Every other check enters the entry as Tally has it and keeps a note in plain words for a person to look at:
+the items' taxable value plus tax against the ledger lines (within Rs 1 for Tally's rounding; the tax per item line is
+worked out by FinCom, not Tally's), bill-wise details or cost centres not adding up to their line. For example "the GST
+worked out on the items (Rs 410.00) does not match the GST ledger lines (Rs 428.00)" for an invoice with GST on freight
+(freight or packing has no item line), and round-off or a discount can make the worked-out tax differ too: holding such
+invoices would keep valid entries out. Sync activity shows the entry as "Entered in the books; to check: ..." with the
+note. A Day Book upload is never refused, as before: its entries come in as Tally has them, with the same notes.
 
 **A delete or cancel of an entry FinCom never had** settles by itself: "nothing to remove: the entry is not in FinCom's
 copy and no longer counts in Tally" (the line stays visible in Sync activity). A later Day Book cannot undo a delete; a
@@ -168,7 +171,8 @@ also settles them.
 - A new entry Tally gave no id for, when its date is more than 3 days back.
 - A cancel or delete this computer's Tally cannot confirm (asked again by itself when Tally is free).
 - An entry whose lines still do not add up for another reason (FinCom's balance check holds it with the same words).
-- An entry that fails one of FinCom's accuracy checks (above), with the check's own words.
+- (Not held any more: an entry that fails one of FinCom's other accuracy checks is entered, with the check's words as a
+  note to look at; see above.)
 
 ## Checks (the test sheet has the steps)
 

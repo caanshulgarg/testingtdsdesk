@@ -1366,14 +1366,14 @@ function cleanRecorderLine(x: any, me: { id: string }): { line?: Record<string, 
         line.vouchers = []; line.lines = []; line.heldWhy = why;
         (line.payload as Record<string, unknown>).heldWhy = why;
       } else if (Array.isArray(bv.checks) && bv.checks.length) {
-        // bridge 2.3.1 part A (the owner's accuracy rules of 06-Oct-2026): an entry applies only if its lines total zero, its
-        // items' taxable value plus tax equal its ledger lines, and its bill-wise and cost centre allocations add up to their
-        // line. Else the line is held with plain words and NOTHING of the entry is applied (vouchers [], lines []); the Day
-        // Book for its date, once uploaded, brings the entry in as Tally has it, marked for checking (never refused)
-        const why = ("the entry is held, nothing of it applied: " + bv.checks.join("; ")).slice(0, 210) + "; the Day Book for its date, once uploaded, brings it in marked for checking";
-        console.log("tally-ingest recorder_lines: body held by the accuracy checks", line.line_id, og, bv.checks);
-        line.vouchers = []; line.lines = []; line.heldWhy = why;
-        (line.payload as Record<string, unknown>).heldWhy = why;
+        // bridge 2.3.1, the owner's rule after review (06-Oct-2026): an entry is HELD only when its ledger lines do not total
+        // zero (the balance guard above). Every other mismatch (item taxable value plus tax against the ledger lines, the
+        // per-item tax FinCom works out, bill-wise or cost centres against their line) APPLIES the entry as Tally has it and
+        // keeps the plain words for a person: tally_vouchers.check_notes (migration 57, from the voucher's checks) and the
+        // line's payload (checkNotes, shown in Sync activity). GST on freight or packing has no item line, and round-off or
+        // discounts make the worked-out tax differ: holding would keep valid invoices out
+        console.log("tally-ingest recorder_lines: applied with notes for checking", line.line_id, og, bv.checks);
+        (line.payload as Record<string, unknown>).checkNotes = bv.checks.slice(0, 20);
       }
     }
   }

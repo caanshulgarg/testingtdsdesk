@@ -179,7 +179,7 @@ const Rec = {
     const a = this.act, cid = S.syncClient || "";
     a.busy = true; a.cid = cid;
     try {
-      const rows = await Cloud.api("tally_recorder_lines?select=id,client_id,book_id,device_id,pc,company,line_id,event,object_guid,alter_id,vch_type,vch_no,vch_date,saved_at,received_at,applied_at,state,held_why,ledgers,fid:payload->>fid,short:payload->>short" +
+      const rows = await Cloud.api("tally_recorder_lines?select=id,client_id,book_id,device_id,pc,company,line_id,event,object_guid,alter_id,vch_type,vch_no,vch_date,saved_at,received_at,applied_at,state,held_why,ledgers,fid:payload->>fid,short:payload->>short,checks:payload->checkNotes" +
         "&firm_id=eq." + encodeURIComponent(this.firm()) + (cid ? "&client_id=eq." + encodeURIComponent(cid) : "") + "&order=received_at.desc&limit=200");
       a.rows = [].concat(rows || []); a.no44 = false; a.err = "";
     } catch (e){ if (this.missing(e)){ a.no44 = true; a.rows = []; } else a.err = this.say(e); }
@@ -211,11 +211,18 @@ const Rec = {
     const head = [r.vch_type, r.vch_no].filter(Boolean).join(" ");
     return (head || "an entry") + (r.vch_date ? " · " + fmtDate(String(r.vch_date).slice(0, 10)) : "");
   },
+  // bridge 2.3.1 (the owner's rule after review, 06-Oct-2026): an entry is held only when its lines do not total zero; any
+  // other mismatch is entered with plain words for a person (tally-ingest's payload checkNotes, read as checks; a live row
+  // carries its payload): "; to check: ..." after "Entered in the books"
+  notesWords(r){
+    const n = [].concat((r && (r.checks || (r.payload && r.payload.checkNotes))) || []).map(x => String(x || "").trim()).filter(Boolean);
+    return n.length ? "; to check: " + n.join("; ") : "";
+  },
   // a line's state in the owner's words (05-Oct-2026): "Entered in the books" for an applied line alone
   stateWords(r){
     const why = r.held_why ? ": " + r.held_why : "";
     switch (r.state){
-      case "applied": return "Entered in the books";
+      case "applied": return "Entered in the books" + this.notesWords(r);
       case "held": return "Received, not yet entered in the books" + why;
       case "received": return "Received, not yet entered in the books";
       case "replaced": return "Replaced by a later line";

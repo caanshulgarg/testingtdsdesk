@@ -14,9 +14,10 @@ rate Tally applied to that line, and the CGST / SGST / IGST / cess per line, wor
 does: Tally keeps no tax amount per item line), bill-wise details, TDS details, cost centres, bank details (UTR,
 instrument date, bank date, transaction type), reference number and date, party GSTIN, place of supply, the e-invoice
 IRN and acknowledgement, the e-way bill number.
-FinCom's accuracy checks: an entry enters only if its lines total zero, its items' taxable value plus tax equal its
-ledger lines (within Rs 1), and its bill-wise and cost centre allocations add up to their line; else it is held with
-plain words and nothing of it is applied.
+FinCom's accuracy checks: an entry is held only when its lines do not total zero (held with plain words, nothing of it
+applied). Any other mismatch (items' taxable value plus tax against the ledger lines, e.g. GST on freight with no item
+line, round-off, a discount; bill-wise or cost centres against their line) enters the entry as Tally has it, and Sync
+activity says "Entered in the books; to check: ..." with the note in plain words.
 One entry per request, by Tally's own id (FinComVoucherByMaster) or by type and number (FinComVoucherByNumber);
 read only, inside the 2-second rule, after postings. One limit: a very large invoice (over about 1 MB of details,
 roughly 1,000 items or more) is held with plain words for a Day Book upload.

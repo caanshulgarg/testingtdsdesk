@@ -9,9 +9,10 @@ amount; if any check fails, hold the line with plain words; never apply part of 
   1. the sales invoice with two items at 18% and 5%: applied; its item lines (item, qty, unit, rate, taxable, HSN, GST rate,
      CGST / SGST), the e-invoice IRN and acknowledgement and the e-way bill number stored; no check notes.
   2. the bank payment with a UTR, the payment with TDS, the journal with cost centres: applied with their details.
-  3. the same sales invoice with its CGST line 10 rupees more (the party line too, so the lines still total zero): held with
-     plain words (the GST worked out on the items does not match the GST ledger lines), nothing of it applied (no entry, no
-     line, no item line); a bill-wise detail that does not add up to its line: held the same way.
+  3. the owner's rule after review (06-Oct-2026): an entry is HELD only when its ledger lines do not total zero; every other
+     mismatch APPLIES the entry with a plain-words note (tally_vouchers.check_notes, and the line's payload checkNotes for
+     Sync activity): freight carrying GST with no item line, a round-off line, a discount line, a tax-inclusive item value, a
+     bill-wise detail not adding up to its line; lines not totalling zero: held, nothing applied.
   2b. one sales invoice with 50 items (partA-sales-50-items.xml): applied with its 50 item lines.
   4. a delete line for an entry never in FinCom's copy: settles by itself, "nothing to remove ...", kept visible.
   5. the owner's "full" (06-Oct-2026: "let blanks through for every field the 2.3.1 request fetches in full; keep the guard
@@ -136,19 +137,45 @@ try:
     ok(res(r).get("A8", {}).get("state") == "applied" and one("select count(*) from tally_item_lines where book_id = %s and guid = %s and gone_at is null" % (q(BOOK), q(G(28)))) == "50",
        "applied with its 50 item lines (%s)" % res(r).get("A8"))
 
-    print("== 3. the accuracy checks hold the line with plain words; nothing of the entry applied")
-    bad = fx("partA-sales-two-rates.xml").replace(G(21), G(49)).replace("<AMOUNT TYPE=\"Amount\">205.00</AMOUNT>", "<AMOUNT TYPE=\"Amount\">215.00</AMOUNT>", 1) \
-        .replace("<AMOUNT TYPE=\"Amount\">-3410.00</AMOUNT>", "<AMOUNT TYPE=\"Amount\">-3420.00</AMOUNT>", 1).replace("<AMOUNT>-3410.00</AMOUNT>", "<AMOUNT>-3420.00</AMOUNT>", 1)
-    c, r = rec([line("A5", 49, 51, "Sales", bad)])
-    x = res(r).get("A5", {})
-    ok(x.get("state") == "held" and "the GST worked out on the items" in str(x.get("why")) and "nothing of it applied" in str(x.get("why")), "item tax not matching the GST ledger lines: held with plain words (%s)" % x.get("why"))
-    ok(one("select count(*) from tally_vouchers where guid = %s" % q(G(49))) == "0" and one("select count(*) from tally_lines where guid = %s" % q(G(49))) == "0"
-       and one("select count(*) from tally_item_lines where guid = %s" % q(G(49))) == "0", "nothing of the held entry applied (no entry, no line, no item line)")
-    bill = fx("partA-sales-two-rates.xml").replace(G(21), G(50)).replace("<AMOUNT>-3410.00</AMOUNT>", "<AMOUNT>-3000.00</AMOUNT>", 1)
-    c, r = rec([line("A6", 50, 52, "Sales", bill)])
-    x = res(r).get("A6", {})
-    ok(x.get("state") == "held" and "bill-wise details" in str(x.get("why")) and one("select count(*) from tally_vouchers where guid = %s" % q(G(50))) == "0", "bill-wise not adding up to its line: held, nothing applied (%s)" % x.get("why"))
-    ok(bool(x.get("why")) and one("select held_why from tally_recorder_lines where line_id = 'A6'") == x.get("why"), "the words kept on the line (held_why)")
+    print("== 3. the owner's accuracy rule (06-Oct-2026, after review): HELD only when the lines do not total zero; every other mismatch APPLIES with a note")
+    SALE = fx("partA-sales-two-rates.xml")
+    def le(name, amount, debit):
+        return ('<ALLLEDGERENTRIES.LIST><LEDGERNAME TYPE="String">%s</LEDGERNAME><ISDEEMEDPOSITIVE TYPE="Logical">%s</ISDEEMEDPOSITIVE>'
+                '<AMOUNT TYPE="Amount">%s</AMOUNT><BILLALLOCATIONS.LIST>      </BILLALLOCATIONS.LIST></ALLLEDGERENTRIES.LIST>\n     ' % (name, "Yes" if debit else "No", amount))
+    def sale(mid, party=None, cgst=None, extra="", item_amt=None):
+        x = SALE.replace(G(21), G(mid)).replace("> 41</ALTERID>", "> %d</ALTERID>" % (mid + 30))
+        if party: x = x.replace('<AMOUNT TYPE="Amount">-3410.00</AMOUNT>', '<AMOUNT TYPE="Amount">%s</AMOUNT>' % party, 1).replace("<AMOUNT>-3410.00</AMOUNT>", "<AMOUNT>%s</AMOUNT>" % party, 1)
+        if cgst: x = x.replace('<AMOUNT TYPE="Amount">205.00</AMOUNT>', '<AMOUNT TYPE="Amount">%s</AMOUNT>' % cgst[0], 1).replace('<AMOUNT TYPE="Amount">205.00</AMOUNT>', '<AMOUNT TYPE="Amount">%s</AMOUNT>' % cgst[1], 1)
+        if extra: x = x.replace("<ALLINVENTORYENTRIES.LIST>", extra + "<ALLINVENTORYENTRIES.LIST>", 1)
+        if item_amt: x = x.replace('<RATE TYPE="Rate">200.00/Nos</RATE>\n      <AMOUNT TYPE="Amount">2000.00</AMOUNT>', '<RATE TYPE="Rate">236.00/Nos</RATE>\n      <AMOUNT TYPE="Amount">%s</AMOUNT>' % item_amt, 1)
+        return x
+    notes = lambda g: json.loads(one("select check_notes::text from tally_vouchers where book_id = %s and guid = %s" % (q(BOOK), q(g))) or "null")
+    nlines = lambda g: int(one("select count(*) from tally_lines where book_id = %s and guid = %s" % (q(BOOK), q(g))))
+    total = lambda g: float(one("select coalesce(sum(amount), 0) from tally_lines where book_id = %s and guid = %s" % (q(BOOK), q(g))))
+    cases = [
+        ("freight carrying GST, no item line for it", "A5", 49, sale(49, party="-3528.00", cgst=("214.00", "214.00"), extra=le("Freight Outward", "100.00", False)), "the GST worked out on the items"),
+        ("a round-off line", "A6", 50, sale(50, party="-3410.40", extra=le("Round Off", "0.40", False)), None),
+        ("a discount line", "A12", 53, sale(53, party="-3310.00", extra=le("Discount Allowed", "-100.00", True)), None),
+        ("a tax-inclusive item value (worked-out tax and the item's ledger line differ)", "A13", 54, sale(54, item_amt="2360.00"), "taxable value"),
+        ("a bill-wise detail not adding up to its line", "A14", 55, SALE.replace(G(21), G(55)).replace("> 41</ALTERID>", "> 85</ALTERID>").replace("<AMOUNT>-3410.00</AMOUNT>", "<AMOUNT>-3000.00</AMOUNT>", 1), "bill-wise details"),
+    ]
+    for what, lid, mid, x, word in cases:
+        c, r = rec([line(lid, mid, mid + 30, "Sales", x)])
+        st_ = res(r).get(lid, {})
+        nt = notes(G(mid)) or []
+        ok(st_.get("state") == "applied" and nlines(G(mid)) >= 4 and abs(total(G(mid))) < 0.005 and one("select count(*) from tally_vouchers where guid = %s and deleted_at is null" % q(G(mid))) == "1",
+           "%s: APPLIED, its lines in the books totalling zero (%s; %s lines)" % (what, st_, nlines(G(mid))))
+        if word:
+            ok(any(word in n for n in nt) and one("select (payload->'checkNotes' is not null)::text from tally_recorder_lines where line_id = %s" % q(lid)) == "true",
+               "%s: the mismatch kept as a note for a person (check_notes and the line's payload): %s" % (what, nt))
+    print("== 3b. lines not totalling zero: HELD, nothing applied")
+    bad = SALE.replace(G(21), G(56)).replace('<AMOUNT TYPE="Amount">205.00</AMOUNT>', '<AMOUNT TYPE="Amount">215.00</AMOUNT>', 1)
+    c, r = rec([line("A15", 56, 86, "Sales", bad)])
+    x = res(r).get("A15", {})
+    ok(x.get("state") == "held" and "do not add up" in str(x.get("why")), "an entry whose lines do not total zero: held with plain words (%s)" % x.get("why"))
+    ok(one("select count(*) from tally_vouchers where guid = %s" % q(G(56))) == "0" and one("select count(*) from tally_lines where guid = %s" % q(G(56))) == "0"
+       and one("select count(*) from tally_item_lines where guid = %s" % q(G(56))) == "0", "nothing of it applied (no entry, no line, no item line)")
+    ok(bool(x.get("why")) and one("select held_why from tally_recorder_lines where line_id = 'A15'") == x.get("why"), "the words kept on the line (held_why)")
 
     print("== 4. a delete of an entry never in FinCom's copy")
     c, r = rec([line("A7", 77, 60, "Sales", None, "deleted")])

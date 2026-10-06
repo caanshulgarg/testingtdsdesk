@@ -206,8 +206,11 @@ Day Book (`tally_ingest_day`, now through the 5-argument form with `p_keep` fals
 for the recorder path: a value removed in Tally reaches the copy by a Day Book upload. `tally_ingest_delete` = 50's text
 but a delete or cancel of an entry never in the copy settles at once ("nothing to remove: the entry is not in FinCom's
 copy and no longer counts in Tally", kept visible); a later body bringing that GUID is deleted (cancelled) again.
-The accuracy checks themselves run in tally-ingest (a recorder body failing one is held with plain words, nothing of it
-applied); a Day Book entry failing one comes in, its words in `check_notes`. tally-ingest works without 57 (the details
+The accuracy checks themselves run in tally-ingest. The owner's rule after review (06-Oct-2026): a recorder body is held
+(nothing of it applied) only when its ledger lines do not total zero; any other check failing (item taxable plus tax
+against the ledger lines, bill-wise, cost centres) applies the entry with the words in `check_notes` (and the line's
+payload `checkNotes`, shown in Sync activity); a Day Book entry likewise comes in with its words in `check_notes`. No
+migration holds on the checks: 57 only stores the words. tally-ingest works without 57 (the details
 are then not stored). Tested by `run_migration57.py`, `run_migration_order.py` (57 in both orders), `run_parta_server.py`
 (through tally-ingest) and `run_parse_parta.mjs`.
 
