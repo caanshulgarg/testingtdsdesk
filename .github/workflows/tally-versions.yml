@@ -1,6 +1,6 @@
 # FinCom on every TallyPrime release a customer may have (branch tally-versions only): TallyPrime 3.0, 4.1, 5.1, 6.2 and
-# 7.1, each from Tally's own download centre (tallymirror.tallysolutions.com/download_centre/Rel.<x>_gold/TP/Full/setup.exe,
-# never another mirror), installed in Educational mode on a hosted Windows runner and driven by keys as tally-real.yml does.
+# 7.1, each from Tally's own download centre (tallymirror.tallysolutions.com/download_centre/<release folder>/TP/Full/setup.exe,
+# the folder as Tally's own download page lists it; never another mirror), installed in Educational mode on a hosted Windows runner and driven by keys as tally-real.yml does.
 # The bridge is built from bridge_ref (default tax-accuracy: the published 2.3.0; its committed setup is installed).
 #   quick: install, open the company, the port and the company list (flow.ps1, then flowv.ps1 c1-c2)
 #   full:  also a posting from the bridge, create / alter / cancel / delete by keys with the add-on, Alt+2, the entry
@@ -172,7 +172,8 @@ jobs:
             "run ${{ github.run_id }}, TallyPrime $env:TALLY_REL, bridge ${{ needs.build.outputs.sha }}, $(Get-Date -Format s)" | Set-Content "$td/SOURCE.txt"
           }
           git config user.name "tally-versions"; git config user.email "tally-versions@users.noreply.github.com"
-          git add spike-results/versions bridge-go/testdata
+          git add spike-results/versions
+          if (Test-Path bridge-go/testdata) { git add bridge-go/testdata }
           git commit -q -m "tally versions [skip ci]: results ${{ github.run_id }} TallyPrime ${{ matrix.version }} $env:VMODE (bridge ${{ needs.build.outputs.sha }})`n`nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`nClaude-Session: https://claude.ai/code/session_01LprHoXx2ACgDW2AjxNH8wN"
           git checkout -- .
           for ($i = 0; $i -lt 8; $i++) {
