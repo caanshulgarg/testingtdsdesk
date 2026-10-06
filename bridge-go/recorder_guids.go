@@ -268,7 +268,7 @@ func liveResolveGuid(h heldLine) (c *change, why string, answered, final bool, e
 	if !spOK {
 		return nil, "", false, false, errors.New("no starting point recorded for this company yet")
 	}
-	tc := recorderTC(nil)
+	tc := entryTC(nil)
 	port, err := findCompanyPortBg(h.Company, 0)
 	if err != nil {
 		return nil, "", false, false, err

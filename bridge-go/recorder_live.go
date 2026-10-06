@@ -1774,7 +1774,7 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 	// retry schedule (retry.go) asks again by itself, and the entries not asked yet wait for it (never sent without their
 	// body for it); an entry whose own request was stopped 3 times goes without its body (FinCom holds the line, and this
 	// bridge asks for it again as a held line, on the same schedule)
-	tc := recorderTC(nil)
+	tc := entryTC(nil) // 2.3.1: one entry a request, up to 20 s (the ledgers below keep the 2 s stop)
 	waitRetry := func(err error, cs []*change) {
 		for _, c := range cs {
 			if !c.isLedger() {
@@ -1969,7 +1969,7 @@ byDay:
 			failed([]*change{c}, "20 s passed")
 			continue
 		}
-		x, err := fetchLedgerByMaster(tc, company, port, toI64(c.masterId))
+		x, err := fetchLedgerByMaster(recorderTC(nil), company, port, toI64(c.masterId))
 		if gaveWay(err) || errors.Is(err, errRetryWait) {
 			return
 		}
@@ -1991,7 +1991,7 @@ byDay:
 		live.mu.Unlock()
 	}
 	if !retryHeld() && !yield() {
-		liveCancelCounters(tc, company, port, need)
+		liveCancelCounters(recorderTC(nil), company, port, need)
 	}
 }
 

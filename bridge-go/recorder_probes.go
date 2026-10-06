@@ -329,6 +329,16 @@ func recorderTC(timed func(sec float64)) *TC {
 	return &TC{copier: true, bg: true, yield: func() bool { return postingGoing() || importsInFlight.Load() > 0 }, timed: timed, limitMs: keepNum("RecorderLimitMs", 2000)}
 }
 
+// 2.3.1 (the owner's rule on a busy Tally, inflight.go): a single-entry fetch (one voucher by its MasterID, or by its type and
+// number) waits up to 20 s (RecorderEntryLimitMs) before the bridge gives up on it: the owner prefers waiting longer over
+// retrying sooner, as Tally goes on working on a request whether or not anyone waits. The other background reads (the
+// company list, the light check, ledger changes, Tally's change list, month slices) keep the 2 s stop
+func entryTC(timed func(sec float64)) *TC {
+	t := recorderTC(timed)
+	t.limitMs = keepNum("RecorderEntryLimitMs", 20000)
+	return t
+}
+
 // --- B. source C
 type liveCSt struct {
 	company, guid   string

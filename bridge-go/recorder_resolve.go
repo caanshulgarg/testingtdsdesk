@@ -347,7 +347,7 @@ func liveFetchByNumber(cs []*change, sp int64, spOK bool) {
 	company := cs[0].company
 	deadline := time.Now().Add(time.Duration(liveBodySec()) * time.Second)
 	yield := func() bool { return postingGoing() || importsInFlight.Load() > 0 }
-	tc := recorderTC(nil)
+	tc := entryTC(nil)
 	port, err := findCompanyPortBg(company, 0)
 	if err != nil {
 		if yield() {
@@ -929,7 +929,7 @@ const (
 // MasterID gave another real voucher, nothing is asked by number (final). answered: Tally answered a request (a try)
 func liveResolveOne(h heldLine) (x, why string, answered, final bool, err error) {
 	sp, spOK := startPointOf(h.Company)
-	tc := recorderTC(nil)
+	tc := entryTC(nil)
 	port, err := findCompanyPortBg(h.Company, 0)
 	if err != nil {
 		return "", "", false, false, err

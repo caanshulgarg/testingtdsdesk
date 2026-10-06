@@ -492,40 +492,81 @@ func tallyRaw(ctx context.Context, port int, x string, timeoutSec int) (string, 
 	}
 	// a deliberate stop (the caller's deadline): not Tally's silence, never noted as such
 	stoppedHere := func() bool { return parent.Err() == nil && errors.Is(ctx.Err(), context.DeadlineExceeded) }
-	cl := &http.Client{Timeout: time.Duration(timeoutSec) * time.Second, Transport: &http.Transport{DisableKeepAlives: true, Proxy: nil}}
+	// 2.3.1 (one request in flight per Tally, inflight.go): the exchange itself runs on its own, bounded only by
+	// TallyAbandonMaxSec; the caller waits for it until its timeout, its stop or its cancel. Given up, the connection is
+	// not closed: Tally is still on it, so its answer is read and discarded, and the caller's lock is held until then
+	xctx, xdone := context.WithTimeout(context.Background(), abandonMax())
+	cl := &http.Client{Transport: &http.Transport{DisableKeepAlives: true, Proxy: nil}}
 	body, ctype := tallyBody(x, wantUTF16(ctx))
-	req, _ := http.NewRequestWithContext(ctx, "POST", fmt.Sprintf("http://%s:%d", host, port), bytes.NewReader(body))
+	req, _ := http.NewRequestWithContext(xctx, "POST", fmt.Sprintf("http://%s:%d", host, port), bytes.NewReader(body))
 	req.Header.Set("Content-Type", ctype)
 	tallySent.Add(1)
 	tallySentAt.Store(time.Now().Unix())
 	if at, _ := ctx.Value(sentKey{}).(*time.Time); at != nil {
 		*at = time.Now()
 	}
-	resp, err := cl.Do(req)
-	if err != nil {
-		if stoppedHere() {
-			return "", fmt.Errorf("%w (%g s)", errRecorderStop, ctx.Value(stopKey{}).(time.Duration).Seconds())
-		}
-		if errors.Is(ctx.Err(), context.Canceled) {
-			return "", errPreempted
-		}
-		return "", plainNetErr(err)
+	type answer struct {
+		b   []byte
+		err error
 	}
-	defer resp.Body.Close()
-	b, err := io.ReadAll(resp.Body)
-	if err != nil {
+	got := make(chan answer, 1)
+	go func() {
+		defer xdone()
+		resp, err := cl.Do(req)
+		if err != nil {
+			if errors.Is(xctx.Err(), context.DeadlineExceeded) {
+				err = errTimeout
+			}
+			got <- answer{nil, err}
+			return
+		}
+		b, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil && errors.Is(xctx.Err(), context.DeadlineExceeded) {
+			err = errTimeout
+		}
+		got <- answer{b, err}
+	}()
+	wait := time.NewTimer(time.Duration(timeoutSec) * time.Second)
+	defer wait.Stop()
+	var why error
+	select {
+	case a := <-got:
+		if a.err != nil {
+			return "", plainNetErr(a.err)
+		}
+		return textFromBytes(a.b), nil
+	case <-ctx.Done():
 		if stoppedHere() {
-			return "", fmt.Errorf("%w (%g s)", errRecorderStop, ctx.Value(stopKey{}).(time.Duration).Seconds())
+			why = fmt.Errorf("%w (%g s)", errRecorderStop, ctx.Value(stopKey{}).(time.Duration).Seconds())
+		} else {
+			why = errPreempted
 		}
-		if errors.Is(ctx.Err(), context.Canceled) {
-			return "", errPreempted
-		}
-		return "", plainNetErr(err)
+	case <-wait.C:
+		why = errTimeout
 	}
-	return textFromBytes(b), nil
+	// given up: Tally is still on it. The answer is read in the background and discarded; the lock goes when it ends
+	id, t0 := tallyRequestID(x), time.Now()
+	done := make(chan struct{})
+	if slot, _ := parent.Value(abandonKey{}).(*abandonSlot); slot != nil {
+		slot.done, slot.id, slot.at = done, id, t0
+	}
+	go func() {
+		defer close(done)
+		a := <-got
+		if errors.Is(a.err, errTimeout) && errors.Is(xctx.Err(), context.DeadlineExceeded) {
+			writeLog(fmt.Sprintf("Tally %d did not answer an earlier request (%s, sent at %s) in %s: taken as not answering; the next request may go (the small check first)",
+				port, id, t0.Format("15:04:05"), abandonMax().Round(time.Second)))
+			setProbeAfterTimeout(port)
+			setTallyStuck(port)
+			return
+		}
+		writeLog(fmt.Sprintf("Tally %d answered the earlier request (%s) %s after the bridge stopped waiting; its answer is discarded and the next request may go",
+			port, id, time.Since(t0).Round(100*time.Millisecond)))
+	}()
+	return "", why
 }
 
-// the words Windows uses, which the rest of the bridge (and FinCom) read
 func plainNetErr(err error) error {
 	var ne net.Error
 	s := err.Error()
@@ -618,6 +659,10 @@ func enterTallyLock(tc *TC, port int, cancel context.CancelFunc, post bool) (fun
 			case <-stopCh:
 				return nil, errPreempted
 			case <-time.After(200 * time.Millisecond):
+				// 2.3.1: Tally still on an earlier request given up: not waited for here (the retry schedule)
+				if err := earlierRefusal(port); err != nil && !tc.person {
+					return nil, err
+				}
 				continue
 			}
 			if userWaiting(port) { // FinCom came meanwhile: it goes first
@@ -642,8 +687,15 @@ func enterTallyLock(tc *TC, port int, cancel context.CancelFunc, post bool) (fun
 			}
 			g.mu.Unlock()
 		}()
-		t0, told := time.Now(), false
+		t0, told, toldEarlier := time.Now(), false, false
 		for got := false; !got; {
+			// 2.3.1 (inflight.go): Tally still on an earlier request the bridge stopped waiting for: this one waits, said once
+			if !toldEarlier {
+				if e := earlierRefusal(port); e != nil {
+					toldEarlier = true
+					writeLog(fmt.Sprintf("Tally %d: %s (%s, sent at %s); this one goes when Tally has answered it", port, earlierWords, e.(*earlierErr).s.id, e.(*earlierErr).s.at.Format("15:04:05")))
+				}
+			}
 			// postings jump the queue: another FinCom request waits while a posting waits
 			g.mu.Lock()
 			held := !post && g.posts > 0
@@ -855,9 +907,25 @@ func invokeTallyNow(tc *TC, port int, x string, timeoutSec int) (string, error) 
 	if tc.enc != "" {
 		ctx = context.WithValue(ctx, encKey{}, tc.enc)
 	}
-	unlock, err := enterTallyLock(tc, port, cancel, isPostingRequest(x))
+	// 2.3.1 (inflight.go): a background read is not sent into a Tally still on an earlier request it was given up on
+	if tc.copier && !tc.person {
+		if err := earlierRefusal(port); err != nil {
+			return "", err
+		}
+	}
+	unlock0, err := enterTallyLock(tc, port, cancel, isPostingRequest(x))
 	if err != nil {
 		return "", err
+	}
+	// 2.3.1: a request given up while Tally is still on it keeps the lock until Tally answered or closed it
+	slot := &abandonSlot{}
+	ctx = context.WithValue(ctx, abandonKey{}, slot)
+	unlock := func() {
+		if slot.done != nil {
+			holdUntilAnswered(port, slot, unlock0)
+			return
+		}
+		unlock0()
 	}
 	if tc.copier && !tc.bg && !bgBackoffUntil(port).IsZero() {
 		unlock()

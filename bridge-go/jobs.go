@@ -556,6 +556,10 @@ func jobWorker(dir string) {
 		finish("failed", why)
 		return
 	}
+	// 2.3.1 (inflight.go): a Tally still on an earlier request the bridge stopped waiting for is waited for, in plain words
+	if earlierBusyAny() {
+		setStatus("waiting", "Waiting for Tally to finish an earlier request; this posting follows by itself")
+	}
 	if !waitTally(nil) {
 		return
 	}
