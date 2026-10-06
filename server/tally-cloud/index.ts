@@ -1975,6 +1975,7 @@ Deno.serve(async (req) => {
   // migration 54 (review M3): a bridge id ("go-…", which the bridge reports itself) belongs to the first computer key that
   // reported it (tally_bridge_ids); another key naming it (an id copied from another Windows user's settings) is refused,
   // and nothing it says is kept. A cloud without the function: as before
+  let boundOwn = "";     // 2.3.1: the bridge id the bind just found this computer's own (its idRefused, if any, was cleared there)
   {
     const bid = body?.bridge && typeof body.bridge === "object" ? String(body.bridge.id || "") : "";
     if (/^go-[0-9a-f]{6,32}$/.test(bid)) {
@@ -1991,6 +1992,7 @@ Deno.serve(async (req) => {
         console.error("tally-ingest: bridge id of another computer", dev.id, bid);
         return reply(409, { ok: false, idRefused: true, error: String(bound.words || "This computer key cannot use bridge " + bid + ". Ask the firm's owner.").slice(0, 400) });
       }
+      if (!be && bound && typeof bound === "object" && bound.own === true) boundOwn = bid;
     }
   }
   // go-bridge (FinCom Bridge 2.0.0 in test mode, beside bridge 1.15.0 on the same computer and key): compared, never kept
@@ -2050,6 +2052,9 @@ Deno.serve(async (req) => {
         // migration-35: Stop reading from FinCom, Resume, the version it may install (and the pilot's evidence)
         const ctl = await bridgeControl(dev, firm, me, prevInfo);
         const info = { ...prevInfo, ...ctl.info, beat, history: beatHistory(prevInfo, beat), bridges: bridgesWith(prevInfo, me.id, me.entry) };
+        // 2.3.1 (2.3.0 review, cloud Lows): the computer's row was read before the bind; a refusal of THIS bridge's id that
+        // the bind has just cleared (the id is this computer's own again) is not written back. Another bridge's is kept
+        if (boundOwn && boundOwn === me.id && (info as any).idRefused?.bridge === me.id) delete (info as any).idRefused;
         // build 197: someone pressed Update now on another computer: the bridge is told in this answer, once
         const want = (dev as any).want_update_at, sent = (dev as any).want_sent_at;
         const updateNow = !!want && (!sent || Date.parse(want) > Date.parse(sent));

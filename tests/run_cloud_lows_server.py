@@ -90,6 +90,15 @@ try:
     ok(logged("target", n), "B. the posting-target check failing: logged (%s %s)" % (c, [l.strip() for l in log[n:]][:3]))
     F.FAIL_SELECT.pop("tally_post_jobs")
 
+    # C. idRefused cleared by the bind stays cleared
+    dev["info"]["idRefused"] = {"bridge": BRID, "words": "This computer key cannot use bridge %s." % BRID, "at": "2026-10-05T10:00:00Z"}
+    c, r = call(BEAT)
+    ok(c == 200 and "idRefused" not in dev["info"], "C. the id is this computer's own again: idRefused stays cleared after the beat (%s %s)" % (c, dev["info"].get("idRefused")))
+    dev["info"]["idRefused"] = {"bridge": OTHERB, "words": "This computer key cannot use bridge %s." % OTHERB, "at": "2026-10-05T10:00:00Z"}
+    c, r = call(BEAT)
+    ok(c == 200 and (dev["info"].get("idRefused") or {}).get("bridge") == OTHERB, "C. another bridge's refusal on this computer is kept (%s)" % dev["info"].get("idRefused"))
+    dev["info"].pop("idRefused", None)
+
 finally:
     fn.terminate()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); raise SystemExit(1 if fails else 0)
