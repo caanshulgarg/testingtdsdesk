@@ -70,11 +70,12 @@ func dropCmpInfo(t string) string {
 	return re(`<CMPINFO(?:\s[^>]*)?>[\s\S]*?</CMPINFO\s*>|<CMPINFO\s*/>`).ReplaceAllString(t, "")
 }
 
-// the decoded VOUCHER elements that are vouchers: with attributes or child elements (never a counter)
+// the decoded VOUCHER elements that are vouchers: with child elements (never a counter). 2.3.1 (2.2.4 review L3): an
+// empty or self-closed <VOUCHER .../> with attributes only is not one, as countVouchers counts the text
 func vchNodes(doc *Node) []*Node {
 	var o []*Node
 	for _, v := range doc.All("VOUCHER") {
-		if len(v.Attr) > 0 || len(v.Kids) > 0 {
+		if len(v.Kids) > 0 {
 			o = append(o, v)
 		}
 	}

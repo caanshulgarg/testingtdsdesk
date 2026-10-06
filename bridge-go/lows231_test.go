@@ -109,3 +109,24 @@ func TestFetchTestMasterWaitEndedSaysSo(t *testing.T) {
 		t.Fatalf("a MasterID after the wait ended: %d %v", code, r)
 	}
 }
+
+// 2.2.4 review L3: an empty or self-closed <VOUCHER .../> was counted by the text (countVouchers: none) and by the decoder
+// (vchNodes: one) differently, so a Day Book holding one read as incomplete. Both now count only a voucher with fields
+func TestVoucherCountsAgreeOnEmptyVoucher(t *testing.T) {
+	real := `<VOUCHER REMOTEID="g-1" VCHTYPE="Receipt"><GUID>g-1</GUID><DATE>20261002</DATE></VOUCHER>`
+	for _, x := range []string{
+		`<VOUCHER REMOTEID="g-2" VCHTYPE="Receipt"/>`,
+		`<VOUCHER REMOTEID="g-2" VCHTYPE="Receipt"></VOUCHER>`,
+		`<VOUCHER REMOTEID="g-2" VCHTYPE="Receipt">  </VOUCHER>`,
+		`<VOUCHER/>`,
+		`<CMPINFO><VOUCHER>4</VOUCHER></CMPINFO>`,
+	} {
+		env := `<ENVELOPE><HEADER><VERSION>1</VERSION></HEADER><BODY><DATA><TALLYMESSAGE>` + x + `</TALLYMESSAGE><TALLYMESSAGE>` + real + `</TALLYMESSAGE></DATA></BODY></ENVELOPE>`
+		if a, b := countVouchers(env), len(vchNodes(xmlDoc(env))); a != 1 || b != 1 {
+			t.Fatalf("%s: the text counts %d, the decoder %d (one real voucher)", x, a, b)
+		}
+		if w := dayBookIncomplete(env); w != "" {
+			t.Fatalf("%s: a complete Day Book: %s", x, w)
+		}
+	}
+}
