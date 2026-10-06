@@ -17,8 +17,8 @@ revoked; `begin; ... commit;`; safe to run twice) and is shown to the owner befo
 
 ## The two valid orders (both end with the same function texts: `tests/run_migration_order.py` asserts it)
 
-- staging: 32 → 33 → 35 → 34 (first) → 36b → 37 → 36 → 38 → 39 (applied 03-Oct, **except 39's tally_ingest_day part**: both forms are still 38's) → 40 → 41 (run 03-Oct, evening; its 8-argument `tally_ingest_day` superseded 39's) → 42 → 43 (run 04-Oct) → 44 (run 04-Oct) → 45 (run 04-Oct) → **46** → **47** → **48** (run by the owner) → **49** → **50** (run by the owner) → 51 → 52 → 53 → 54 → 55 → 56 → 57
-- a fresh database: 32 → 33 → 35 → 34 (reviewed) → 36 → 36b → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 51 → 52 → 53 → 54 → 55 → 56 → 57
+- staging: 32 → 33 → 35 → 34 (first) → 36b → 37 → 36 → 38 → 39 (applied 03-Oct, **except 39's tally_ingest_day part**: both forms are still 38's) → 40 → 41 (run 03-Oct, evening; its 8-argument `tally_ingest_day` superseded 39's) → 42 → 43 (run 04-Oct) → 44 (run 04-Oct) → 45 (run 04-Oct) → **46** → **47** → **48** (run by the owner) → **49** → **50** (run by the owner) → 51 → 52 → 53 → 54 → 55 → 56 (live on staging) → 57 → 58 → 60 (there is no 59)
+- a fresh database: 32 → 33 → 35 → 34 (reviewed) → 36 → 36b → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 51 → 52 → 53 → 54 → 55 → 56 → 57 → 58 → 60
 
 | # | File | What it adds |
 |---|---|---|
@@ -163,7 +163,7 @@ renewal hands the lease over, a posting never yields, a lease given up is kept f
 call (an older bridge) has no purpose and is never asked to yield. Tested by `run_migration55.py` and
 `run_migration_order.py` (55 in both orders). tally-ingest works without it (the 6-argument lease; no checks).
 FinCom Bridge 2.3.0 fix (06-Oct-2026): `migration-56-keep-fields.sql` runs after 55 in both orders (add-only, one
-transaction, `lock_timeout` 10 s, no "delete from", safe twice; NOT yet run on staging). A recorder line applied to an entry
+transaction, `lock_timeout` 10 s, no "delete from", safe twice; live on staging). A recorder line applied to an entry
 loaded from a Day Book blanked what the live request does not fetch (GSTIN, place of supply, ref no. / date, company GSTIN,
 a line's HSN / rate). `tally_ingest_entries(book, vouchers, lines, p_rebuild, p_keep)` (5 arguments, granted to nobody):
 with `p_keep` true a blank sent value is filled from the stored entry (`tally_recorder_keep_vouchers`: GSTIN, pos, ref and
@@ -205,15 +205,15 @@ applied); a Day Book entry failing one comes in, its words in `check_notes`. tal
 are then not stored). Tested by `run_migration57.py`, `run_migration_order.py` (57 in both orders), `run_parta_server.py`
 (through tally-ingest) and `run_parse_parta.mjs`.
 
-Bridge 2.3.1 (06-Oct-2026, the 2.3.0 review's deferred cloud Low): `migration-58-lows.sql` runs after 55 in both orders,
-independent of 56 and 57 (add-only, one transaction, `lock_timeout` 10 s, safe twice): on the seven tables 54 and 55 made
+Bridge 2.3.1 (06-Oct-2026, the 2.3.0 review's deferred cloud Low): `migration-58-lows.sql` runs after 57 in both orders
+(it needs only 54 and 55; ... -> 56 -> 57 -> 58 -> 60) (add-only, one transaction, `lock_timeout` 10 s, safe twice): on the seven tables 54 and 55 made
 (`tally_bridge_prefs`, `tally_member_bridges`, `tally_bridge_ids`, `tally_bridge_alerts`, `tally_bridge_rollbacks`,
 `tally_bridge_release_log`, `tally_post_checks`) all privileges revoked from anon and authenticated (54/55 revoked only
 insert and update; Supabase's defaults left delete and the rest) and select granted back to authenticated; their id
 sequences closed to both. Functions unchanged. Tested by `run_migration58.py`. Nothing in tally-ingest or the app needs it.
 
 Bridge 2.3.1 (06-Oct-2026, the migration-50 review's round-3 Lows): `migration-60-recorder-lows.sql` runs after 56 and 57
-in both orders (fresh and staging: ... -> 55 -> 56 -> 57 -> 58 -> 60; independent of 58 and 59; add-only, one transaction,
+in both orders (fresh and staging: ... -> 55 -> 56 -> 57 -> 58 -> 60; independent of 58; there is no 59; add-only, one transaction,
 `lock_timeout` 10 s, no "delete from", safe twice; NOT yet run on staging). One function replaced, `tally_recorder_line`
 (56's text, which 57 does not replace; the lines marked "60" changed; granted to nobody): a delete or cancel under the
 add-on's placeholder GUID is held as a GUID-less one (R3-L1: twice it broke the line's call); a create late below a cancel
