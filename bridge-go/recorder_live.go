@@ -56,7 +56,12 @@ const (
 	liveNarrMax    = 4000                    // characters of a narration kept (the cloud reads 1,000; review Low 11)
 	liveFetchField = "GUID, MASTERID, ALTERID, DATE, VOUCHERTYPENAME, VOUCHERNUMBER, PARTYLEDGERNAME, NARRATION, ISCANCELLED, ISOPTIONAL, " +
 		"ALLLEDGERENTRIES.LEDGERNAME, ALLLEDGERENTRIES.AMOUNT, ALLLEDGERENTRIES.ISDEEMEDPOSITIVE, ALLLEDGERENTRIES.BILLALLOCATIONS.NAME, " +
-		"ALLLEDGERENTRIES.BILLALLOCATIONS.BILLTYPE, ALLLEDGERENTRIES.BILLALLOCATIONS.AMOUNT, ALLLEDGERENTRIES.BILLALLOCATIONS.BILLCREDITPERIOD"
+		"ALLLEDGERENTRIES.BILLALLOCATIONS.BILLTYPE, ALLLEDGERENTRIES.BILLALLOCATIONS.AMOUNT, ALLLEDGERENTRIES.BILLALLOCATIONS.BILLCREDITPERIOD" +
+		// 2.3.1 (the owner's decision of 06-Oct-2026): the ledger lines kept under an invoice's items (item invoice mode:
+		// the sales or purchase ledger sits under each item, the party and GST are its ledger entries), so an item
+		// invoice's body balances; nothing else added (items231_test.go)
+		", ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.LEDGERNAME, ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.AMOUNT, " +
+		"ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.ISDEEMEDPOSITIVE"
 )
 
 // one change, whichever source it came from
@@ -1527,7 +1532,8 @@ func liveInWindow(key string, a int64) bool {
 
 // --- the body fetch
 // FinComVoucherByMaster: the vouchers with these MasterIDs (at most 50), the date's period (one day), the fields the
-// cloud's day parse reads (parse.js parseDay), nothing Tally works out
+// cloud's day parse reads (parse.js parseDay; 2.3.1: with the ledger lines under an item invoice's items), nothing Tally
+// works out
 func voucherByMasterRequest(company, date string, mids []string) string {
 	var f []string
 	for _, m := range mids {
