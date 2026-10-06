@@ -1,0 +1,6 @@
+2026-10-06 13:35:41  Recorder: Receipt 3 of 02-Oct-2026 (MasterID 8, line 1a07d13e…): asking Tally by MasterID
+2026-10-06 13:35:41  Recorder: FinCom Spike Co: delete of mid 8: not in this Tally (asked by MasterID): proven deleted here
+2026-10-06 13:35:41  Recorder: FinCom Spike Co: delete of mid 8: GUID from the bridge's record: dabacf41-cf1b-48c1-ba5c-75b38cbc76d3-00000008; the GUID its MasterID makes agrees
+2026-10-06 13:35:49  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=2; now ALTVCHID=12, ALTMSTID=643
+2026-10-06 13:35:49  Ledger changes for FinCom Spike Co: Tally's master counter 642 -> 643: 1 request(s) for AlterID 643-643, 1 ledger(s) sent to FinCom; the last number is 643
+2026-10-06 13:35:49  Ledger changes for FinCom Spike Co: 1 ledger(s) created or altered in Tally sent to FinCom

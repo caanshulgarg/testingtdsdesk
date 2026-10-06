@@ -1,0 +1,17 @@
+2026-10-06 13:25:53  FinCom Bridge 2.3.1: started just for runnervmfi6oq\fcuser2 (no service); it keeps the bridge and its icon running
+2026-10-06 13:25:53  Port 9100 is taken (another Windows user's FinCom Bridge, or another program); this bridge uses port 9101 and remembers it
+2026-10-06 13:25:53  FinCom Bridge 2.3.1 (Go) started on 127.0.0.1:9101: the only bridge on this computer; working for runnervmfi6oq\fcuser2, Windows session 1; runs just for this Windows user (starts at sign-in, no service)
+2026-10-06 13:25:53  Tally is open on port 9001; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+2026-10-06 13:25:53  Recorder: re-scan of the add-on's files for 2.3.1: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+2026-10-06 13:25:53  Check:  - 
+2026-10-06 13:25:56  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+2026-10-06 13:25:56  Tray icon: set to show next to the clock always (Windows 11)
+2026-10-06 13:25:57  Company FinCom Spike U2: its Tally GUID 77516687-6358-4b35-975d-c2266bc486e7 is held from now on
+2026-10-06 13:25:57  Company FinCom Spike U2: its starting point is recorded: ALTVCHID=1, ALTMSTID=209 (reading is prospective only: the bridge follows what changes after this)
+2026-10-06 13:25:57  Company FinCom Spike U2: change numbers read with form a: ALTVCHID=1, ALTMSTID=209
+2026-10-06 13:25:57  Light check of FinCom Spike U2: starting point recorded (ALTVCHID=1, ALTMSTID=209)
+2026-10-06 13:26:05  Refused a request from a program of another Windows user (/status): not your FinCom Bridge (the program asking has no Windows user)
+2026-10-06 13:28:06  Recorder: FinCom Spike Co: lines from a Tally this bridge does not read (company not open here): not sent
+2026-10-06 13:36:22  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 1e6d8492…): asking Tally by MasterID
+2026-10-06 13:36:22  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 1e6d8492…): taken: Tally's GUID 77516687-6358-4b35-975d-c2266bc486e7-00000002, AlterID 2
+2026-10-06 13:36:27  Light check of FinCom Spike U2: unchanged starting point ALTVCHID=1; now ALTVCHID=2, ALTMSTID=209
