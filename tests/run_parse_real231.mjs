@@ -54,6 +54,17 @@ for (const key of Object.keys(EXP).sort()) {
   ok(r2(rice.cgst + rice.sgst) === 25, "S1 the 5% item: tax 25 (" + J(rice) + ")");
 }
 
+// ---- 1b. review L1 (third review, 06-Oct-2026): a real 7.1 answer carries an empty ALLINVENTORYENTRIES.LIST on an entry
+// without items: no item line (no blank zero row, no "item 1" in a note); the item invoices unchanged
+for (const key of ["s4-receipt-against-bill", "s5-payment-tds", "s6-journal-cost-centres", "s7-bank-payment-utr", "s8-new-party", "s15-renamed-party"]) {
+  const x = read(key + ".entry.xml"), v = parseDay(x).vouchers[0] || {};
+  ok(/<ALLINVENTORYENTRIES\.LIST>\s*<\/ALLINVENTORYENTRIES\.LIST>/.test(x) && J(v.items) === "[]" && !(v.checks || []).some((c) => /item 1/.test(c)), key + ": the empty inventory list gives no item (" + J(v.items) + ")");
+}
+{
+  const n = {"s1-sales-two-rates": 2, "s2-purchase-items": 2, "s10-sales-50-items": 50};
+  for (const k of Object.keys(n)) { const v = parseDay(read(k + ".entry.xml")).vouchers[0]; ok(v.items.length === n[k] && v.items.every((i) => i.item), k + ": its " + n[k] + " items unchanged"); }
+}
+
 // ---- 2. the Day Book path is the same as before: Tally's own Day Book export of the same entries (an item invoice there
 // carries LEDGERENTRIES and the lines under the items, no ALLLEDGERENTRIES) reads Tally's amounts too
 for (const key of ["s1-sales-two-rates", "s2-purchase-items", "s3-credit-note-items", "s7-bank-payment-utr", "s12-sales-round-off"]) {

@@ -134,7 +134,9 @@ function takeVoucher(s){
       const a = ma.index, mz = s.slice(a).match(/<\/ALLINVENTORYENTRIES\.LIST\s*>/); if (!mz) break;
       const z = a + mz.index;
       const own = s.slice(a, z).replace(/<ACCOUNTINGALLOCATIONS\.LIST(?:\s[^<>]*[^\/<>])?\s*>[\s\S]*?<\/ACCOUNTINGALLOCATIONS\.LIST\s*>/g, "");
-      items.push({a, z, h: one(own, "GSTHSNNAME"), gr: igstRate(own), own, alloc: 0});
+      // 2.3.1 (third review L1): a real 7.1 answer carries an empty ALLINVENTORYENTRIES.LIST on an entry without items: a
+      // block with no stock item and no amount is no item line
+      if (one(own, "STOCKITEMNAME") || one(own, "AMOUNT")) items.push({a, z, h: one(own, "GSTHSNNAME"), gr: igstRate(own), own, alloc: 0});
       reA.lastIndex = z + 1;
     }
   }
