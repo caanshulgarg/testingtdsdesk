@@ -5,7 +5,9 @@ PostgreSQL (pg_stand, port 30590; never a real database), built 32 -> ... -> 55 
 Supabase's default grants, then 59 (twice). Checks:
   0. the file: one transaction (begin; set local lock_timeout; ... commit;), no 'delete from', add-only (no drop), no real
      database named; it runs twice; nothing removed (row counts kept); no function.
-  1. tally_ledger_aliases: its columns, its key (book_id, tally_name), row security on with the firm's read policy.
+  1. tally_ledger_aliases: its columns (review H2: confirmed_at, the last fetch by the name that confirmed the GUID;
+     ended_at, when the GUID was seen under another name or the name with another GUID), its key (book_id, tally_name),
+     row security on with the firm's read policy.
   2. privileges: authenticated select only, anon nothing, the service role all; a member reads only the firm's own rows.
   3. an upsert by (book_id, tally_name) keeps one row and takes the newer fincom name / GUID / time (tally-ingest's write).
 RED: before the file exists it stops at the first check."""
@@ -72,7 +74,7 @@ try:
     ok(c == c0, "0. nothing removed (the second run kept the two rows; %s)" % {k: v for k, v in c.items() if n0.get(k) != v})
     ok(int(db.one("select count(*) from pg_proc where pronamespace = 'public'::regnamespace")) == nf, "0. no function added or removed")
     cols = [r["c"] for r in db.rows("select column_name as c from information_schema.columns where table_name = 'tally_ledger_aliases' order by ordinal_position")]
-    ok(cols == ["book_id", "firm_id", "tally_name", "fincom_name", "tally_guid", "seen_at"], "1. the columns (%s)" % cols)
+    ok(cols == ["book_id", "firm_id", "tally_name", "fincom_name", "tally_guid", "seen_at", "confirmed_at", "ended_at"], "1. the columns, with review H2's confirmed_at and ended_at (%s)" % cols)
     pk = db.one("select string_agg(a.attname, ',' order by k.n) from pg_constraint c cross join lateral unnest(c.conkey) with ordinality k(attnum, n) join pg_attribute a on a.attrelid = c.conrelid and a.attnum = k.attnum where c.conrelid = 'public.tally_ledger_aliases'::regclass and c.contype = 'p'")
     ok(pk == "book_id,tally_name", "1. the key: (book_id, tally_name) (%s)" % pk)
     ok(db.one("select relrowsecurity::text from pg_class where oid = 'public.tally_ledger_aliases'::regclass") == "true"

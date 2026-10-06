@@ -10,7 +10,10 @@
 -- second ledger, the amounts untouched), without asking Tally again.
 --
 --   tally_ledger_aliases   (book_id, tally_name) -> fincom_name, with Tally's GUID and when it was last seen; written by
---                          tally-ingest (service role) only; the firm's members read their own rows (the note for 2.3.2)
+--                          tally-ingest (service role) only; the firm's members read their own rows (the note for 2.3.2).
+--                          Review H2 (06-Oct-2026): an alias is used only while valid: confirmed_at (a fetch by its name
+--                          gave this GUID) set and ended_at not set (ended when the GUID is seen under another name or the
+--                          name with another GUID; kept, never removed). Otherwise the entry is held and the ledger fetched
 -- Tested by tests/run_migration59.py and tests/run_migration_order.py (59 in both orders).
 
 begin;
@@ -23,8 +26,12 @@ create table if not exists public.tally_ledger_aliases (
   fincom_name text not null,          -- the ledger FinCom holds (its name kept until 2.3.2 renames)
   tally_guid text not null default '',
   seen_at timestamptz not null default now(),
+  confirmed_at timestamptz,           -- review H2: the last fetch by this name (FinComLedgerByName) that gave this GUID
+  ended_at timestamptz,               -- review H2: the GUID seen under another name, or the name with another GUID
   primary key (book_id, tally_name)
 );
+alter table public.tally_ledger_aliases add column if not exists confirmed_at timestamptz;
+alter table public.tally_ledger_aliases add column if not exists ended_at timestamptz;
 create index if not exists tally_ledger_aliases_guid on public.tally_ledger_aliases (book_id, tally_guid);
 
 alter table public.tally_ledger_aliases enable row level security;

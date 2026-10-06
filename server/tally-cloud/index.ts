@@ -1131,6 +1131,7 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
     }
   }
   out.added = fresh.length;
+  await endStaleAliases(book, rows);     // review H2: the full ledger list proves aliases stale too (migration 59)
   // 3b. migration-36: the GUIDs this batch read are stamped on the rows NOW, after the upsert (which gave a row its GUID
   // when it had none): a first round on a copy whose rows had no GUID yet stamps every row, so the last batch's
   // tally_ledgers_mark_gone finds nothing unseen and logs no 'held' burst. Before 36, tally_ledger_round_batch stamped
@@ -1230,7 +1231,11 @@ async function applyLedgerChanges(firm: string, book: string, body: any) {
       // 2.3.1 (the owner's decision of 06-Oct-2026, migration 59): the same Tally GUID under a new name: recorded, so an entry
       // using the new name is applied under FinCom's ledger without asking Tally again (and 2.3.2 has the rename to make).
       // Only by GUID, and only when no other ledger of FinCom's has the new name
-      if (g !== undefined && r.guid && !byName.has(r.name)) aliases.push({ book_id: book, firm_id: firm, tally_name: r.name, fincom_name: have.name, tally_guid: r.guid, seen_at: new Date().toISOString() });
+      if (g !== undefined && r.guid && !byName.has(r.name)) {
+        // review H2: a fetch by this very name (why "wanted") confirms the GUID; the counter's sighting records it unconfirmed
+        const at = new Date().toISOString();
+        aliases.push({ book_id: book, firm_id: firm, tally_name: r.name, fincom_name: have.name, tally_guid: r.guid, seen_at: at, ended_at: null, confirmed_at: why === "wanted" ? at : null });
+      }
     }
     if (String(have.parent || "") !== r.parent) kept.push(("'" + have.name + "' is in the group '" + (r.parent || "Primary") + "' in Tally, '" + (have.parent || "Primary") + "' in FinCom: the move is left for 2.3.2 (the group stays)").slice(0, 300));
     if (m32 && g === undefined && have.tally_guid && r.guid && have.tally_guid !== r.guid) kept.push(("'" + have.name + "' has another Tally GUID in FinCom: its fields are brought up to date, the GUID stays").slice(0, 300));
@@ -1257,6 +1262,7 @@ async function applyLedgerChanges(firm: string, book: string, body: any) {
     }
   }
   out.added = fresh.length; out.updated = opened.length + plain.length;
+  await endStaleAliases(book, rows);     // review H2: before the new ones are recorded
   if (aliases.length) {
     const { error } = await db.from("tally_ledger_aliases").upsert(aliases, { onConflict: "book_id,tally_name" });
     if (error) console.log("tally-ingest ledger_changes: the new names not recorded (migration 59):", book, String(error.message || "").slice(0, 200));
@@ -1423,11 +1429,14 @@ async function ledgerAliases(book: string, names: string[]): Promise<Map<string,
     const want = [...new Set(names.filter(Boolean))].slice(0, 2000);
     const rows: any[] = [];
     for (let i = 0; i < want.length; i += 150) {
-      const { data, error } = await db.from("tally_ledger_aliases").select("tally_name, fincom_name").eq("book_id", book).in("tally_name", want.slice(i, i + 150));
+      const { data, error } = await db.from("tally_ledger_aliases").select("tally_name, fincom_name, confirmed_at, ended_at").eq("book_id", book).in("tally_name", want.slice(i, i + 150));
       if (error) { console.log("tally-ingest: the renamed ledgers not read (migration 59):", book, String(error.message || "").slice(0, 200)); return out; }
       rows.push(...(data || []));
     }
-    const pairs = rows.map((r: any) => [String(r?.tally_name || ""), String(r?.fincom_name || "")]).filter(([a, b]) => a && b && a !== b);
+    // review H2 (06-Oct-2026): only a valid alias: confirmed by a fetch by its name (confirmed_at) and not ended (ended_at).
+    // An unconfirmed or ended one: the entry is held and the ledger fetched by its name (which confirms it, or brings a new
+    // ledger of that name)
+    const pairs = rows.filter((r: any) => r?.confirmed_at && !r?.ended_at).map((r: any) => [String(r?.tally_name || ""), String(r?.fincom_name || "")]).filter(([a, b]) => a && b && a !== b);
     if (!pairs.length) return out;
     const gone = await ledgersMissingRaw(book, pairs.map(([, b]) => b));
     if (!gone) return out;
@@ -1452,6 +1461,34 @@ function mapLedgerNames(l: Record<string, any>, al: Map<string, string>): string
     return o;
   });
   return [...used];
+}
+// review H2 (06-Oct-2026): the aliases these ledger rows prove stale end (ended_at; kept, never removed): one whose GUID is
+// seen under another name (renamed again), one whose name is seen with another GUID (a new ledger of that name). Nothing
+// fails without migration 59
+async function endStaleAliases(book: string, rows: { guid: string; name: string }[]) {
+  try {
+    const gs = [...new Set(rows.map((r) => r.guid).filter(Boolean))].slice(0, 2000), ns = [...new Set(rows.map((r) => r.name).filter(Boolean))].slice(0, 2000);
+    if (!gs.length && !ns.length) return;
+    const have: any[] = [];
+    for (const [col, vals] of [["tally_guid", gs], ["tally_name", ns]] as [string, string[]][]) {
+      for (let i = 0; i < vals.length; i += 150) {
+        const { data, error } = await db.from("tally_ledger_aliases").select("tally_name, tally_guid, ended_at").eq("book_id", book).in(col, vals.slice(i, i + 150));
+        if (error) return;
+        have.push(...(data || []));
+      }
+    }
+    const byGuid = new Map(rows.filter((r) => r.guid).map((r) => [r.guid, r.name])), byName = new Map(rows.filter((r) => r.name).map((r) => [r.name, r.guid]));
+    const end = [...new Set(have.filter((a: any) => !a?.ended_at && (
+      (byGuid.has(String(a.tally_guid)) && byGuid.get(String(a.tally_guid)) !== String(a.tally_name)) ||
+      (byName.has(String(a.tally_name)) && byName.get(String(a.tally_name)) && byName.get(String(a.tally_name)) !== String(a.tally_guid)))).map((a: any) => String(a.tally_name)))];
+    for (let i = 0; i < end.length; i += 150) {
+      const { error } = await db.from("tally_ledger_aliases").update({ ended_at: new Date().toISOString() }).eq("book_id", book).in("tally_name", end.slice(i, i + 150));
+      if (error) { console.log("tally-ingest: stale ledger aliases not ended:", book, String(error.message || "").slice(0, 200)); return; }
+    }
+    if (end.length) console.log("tally-ingest: ledger aliases ended (renamed again, or the name now another ledger's):", book, JSON.stringify(end.slice(0, 10)));
+  } catch (e) {
+    console.log("tally-ingest: stale ledger aliases not read:", book, String((e as Error)?.message || e).slice(0, 200));
+  }
 }
 async function ledgersMissingRaw(book: string, names: string[]): Promise<Set<string> | null> {
   try {
@@ -1492,13 +1529,22 @@ async function ledgerWait(book: string, send: Record<string, any>[]) {
   }
   if (!miss.size) return;
   for (const l of look) {
-    const names = [...new Set((l.lines as any[]).map((x: any) => String(x?.[1] ?? "")).filter((n) => miss.has(n)))].slice(0, 10);
-    if (!names.length) continue;
-    const why = ledgerWaitWords(names);
+    const all = [...new Set((l.lines as any[]).map((x: any) => String(x?.[1] ?? "")).filter((n) => miss.has(n)))];
+    // review L4 (06-Oct-2026): a name a TDL string cannot hold (the bridge's ledNameOK: a quote mark, a control character,
+    // over 200 characters) can never be asked from Tally by its name: said in plain words, never named in ledgersWanted
+    const bad = all.filter((n) => !askableName(n)), names = all.filter(askableName).slice(0, 10);
+    if (!all.length) continue;
+    const why = bad.length
+      ? ("the ledger " + bad.slice(0, 3).map((n) => "'" + n + "'").join(", ") + " is not in FinCom and cannot be fetched from Tally by its name (a quote mark or a line break in it): upload this day's Day Book, or Update now for the ledger list, to settle it").slice(0, 300)
+      : ledgerWaitWords(names);
     console.log("tally-ingest recorder_lines: " + why, l.line_id, l.object_guid);
     l.vouchers = []; l.lines = []; l.heldWhy = why;
-    l.payload = { ...(l.payload || {}), heldWhy: why, waitLedgers: names };
+    l.payload = { ...(l.payload || {}), heldWhy: why, ...(bad.length ? { unaskableLedgers: bad.slice(0, 10) } : { waitLedgers: names }) };
   }
+}
+// review L4: a name the bridge can ask Tally for (its ledNameOK: trimmed, 1-200 characters, no quote mark, no control character)
+function askableName(n: string): boolean {
+  return !!n && n === n.trim() && [...n].length <= 200 && !n.includes('"') && !/[\x00-\x1f\x7f]/.test(n);
 }
 // the ledgers a held line waits for (its payload's waitLedgers), when its words say so
 function waitsFor(r: any): string[] {

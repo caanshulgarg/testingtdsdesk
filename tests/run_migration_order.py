@@ -175,7 +175,7 @@ def run_order(label, ORDER):
         ok("not once, true)" in fdef("tally_recorder_line") and "only the add-on''s placeholder" in fdef("tally_recorder_line") and "then_cancel" in fdef("tally_recorder_line")
            and db.one("select has_function_privilege('service_role', 'public.tally_recorder_line(uuid, uuid, jsonb, bigint)', 'execute')") == "f",
            "60: the recorder's line is 56's (it keeps) with R3-L1..L3 (the owner's 'nothing to remove' stays 57's); granted to nobody (in force in this order)")
-        ok(db.one("select count(*) from information_schema.columns where table_name = 'tally_ledger_aliases' and column_name in ('book_id', 'firm_id', 'tally_name', 'fincom_name', 'tally_guid', 'seen_at')") == "6"
+        ok(db.one("select count(*) from information_schema.columns where table_name = 'tally_ledger_aliases' and column_name in ('book_id', 'firm_id', 'tally_name', 'fincom_name', 'tally_guid', 'seen_at', 'confirmed_at', 'ended_at')") == "8"
            and db.one("select relrowsecurity::text from pg_class where oid = 'public.tally_ledger_aliases'::regclass") == "true"
            and db.one("select has_table_privilege('anon', 'public.tally_ledger_aliases', 'select')::text") == "false",
            "59: tally_ledger_aliases (a ledger renamed in Tally: Tally's name -> FinCom's ledger), row security on, nothing for anon (in force in this order)")

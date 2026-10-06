@@ -280,9 +280,10 @@ func ledSend(company, guid string, rows []ledRow, why string, after, upto int64)
 
 // --- 2. the beat's ledgersWanted: [{company, company_guid, name}], at most 20; one Tally request per ledger, by name
 var (
-	ledWantMu   sync.Mutex
-	ledWantAt   = map[string]time.Time{}
-	ledWantBusy atomic.Bool
+	ledWantMu    sync.Mutex
+	ledWantAt    = map[string]time.Time{}
+	ledWantNever = map[string]bool{} // review L4: names Tally has no ledger of: not asked again in this run
+	ledWantBusy  atomic.Bool
 )
 
 func applyLedgersWanted(j M) {
@@ -307,8 +308,20 @@ func ledWantedRun(j M) {
 		e := obj(x)
 		co, cg, name := cutRunes(strings.TrimSpace(str(e["company"])), 200), cut(cleanGUID(str(e["company_guid"])), 100), str(e["name"])
 		held := heldGUID(co)
-		if co == "" || cg == "" || held == "" || !strings.EqualFold(held, cg) || !ledNameOK(name) {
-			continue // not the company this bridge holds under that name, or a name that cannot be asked
+		if co == "" || cg == "" || held == "" || !strings.EqualFold(held, cg) {
+			continue // not the company this bridge holds under that name
+		}
+		if !ledNameOK(name) {
+			// review L4: said once, never asked (a TDL string cannot hold it)
+			bk := "bad|" + companyKey(co) + "|" + strings.ToLower(name)
+			ledWantMu.Lock()
+			said := ledWantNever[bk]
+			ledWantNever[bk] = true
+			ledWantMu.Unlock()
+			if !said {
+				writeLog("Ledger '" + cutRunes(name, 200) + "' of " + co + ": FinCom waits for it, but it cannot be asked from Tally by its name (a quote mark, a line break or over 200 characters); its entry stays held: uploading that day's Day Book settles it")
+			}
+			continue
 		}
 		w := want{co, held}
 		if names[w] == nil {
@@ -334,6 +347,10 @@ func ledWantedRun(j M) {
 		for _, name := range names[w] {
 			k := key + "|" + strings.ToLower(name)
 			ledWantMu.Lock()
+			if ledWantNever[k] {
+				ledWantMu.Unlock()
+				continue // review L4: Tally has no ledger of that name: said once, not asked again in this run
+			}
 			last, had := ledWantAt[k]
 			if had && nowFn().Sub(last) < gap && !nowFn().Before(last) {
 				ledWantMu.Unlock()
@@ -374,7 +391,10 @@ func ledWantedRun(j M) {
 				}
 			}
 			if n == 0 {
-				writeLog("Ledger " + name + " of " + w.company + ": Tally has no ledger of that name; its entry stays held (uploading that day's Day Book settles it)")
+				ledWantMu.Lock()
+				ledWantNever[k] = true
+				ledWantMu.Unlock()
+				writeLog("Ledger " + name + " of " + w.company + ": Tally has no ledger of that name (FinCom may keep it cleaned, e.g. a line break as a space); its entry stays held (uploading that day's Day Book settles it); not asked again")
 				continue
 			}
 			asked = append(asked, name)

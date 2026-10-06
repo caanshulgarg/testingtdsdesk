@@ -994,6 +994,52 @@ try:
     c, r = reci2([rl("RN4", mkx(26606, 54706, REN), CGI + "-%08x" % 26606, 26606, 54706)])
     ok(c == 200 and st(r) == {"RN4": "held"} and lrow51("RN4").get("why", "").startswith("waiting for the ledger '%s'" % REN), "2.3.1 rename. without migration 59: the entry waits as before (%s; %r)" % (st(r), lrow51("RN4").get("why")))
     FS.FAIL_SELECT.pop("tally_ledger_aliases", None)
+    # review H2 (06-Oct-2026): a stale alias never puts a NEW ledger's entry on another ledger. X renamed A -> B (alias B -> A),
+    # then B -> C (seen by the counter: the alias B ends, C is recorded but not confirmed); a NEW ledger named B (another GUID)
+    # used at once: held and fetched, never applied to A. An alias applies without a fetch only once a fetch by its name
+    # confirmed the GUID (tally_ledger_aliases.confirmed_at, migration 59), and only while not ended (ended_at)
+    THIRD = "Salesify Third LLP"
+    c, r = lch([["lg-sal", 12, 96, THIRD, "Sundry Debtors", "500.00", "29AABCS1111C1Z1", "AABCS1111C", 0, "Karnataka", ""]], "counter", after=95, upto=96)
+    al_ = {x.get("tally_name"): x for x in FS.T["tally_ledger_aliases"] if x.get("book_id") == BI}
+    ok(c == 200 and (al_.get(REN) or {}).get("ended_at") and al_.get(THIRD) and not al_[THIRD].get("confirmed_at") and not al_[THIRD].get("ended_at"),
+       "H2. lg-sal seen under '%s' (the counter): the alias '%s' ended; '%s' recorded, not confirmed (%s)" % (THIRD, REN, THIRD, {k: (v.get("ended_at"), v.get("confirmed_at")) for k, v in al_.items()}))
+    GP = CGI + "-%08x" % 26690
+    c, r = reci2([rl("PRB1", mkx(26690, 54790, REN), GP, 26690, 54790)])
+    ok(c == 200 and st(r) == {"PRB1": "held"} and not lines_of(GP) and lrow51("PRB1").get("why", "").startswith("waiting for the ledger '%s'" % REN),
+       "H2 (the reviewer's sequence). an entry of a NEW Tally ledger reusing the old name '%s': held and fetched, not applied to '%s' (%s; %s)" % (REN, OLD, st(r), lines_of(GP)))
+    GT = CGI + "-%08x" % 26691
+    c, r = reci2([rl("PRB2", mkx(26691, 54791, THIRD), GT, 26691, 54791)])
+    ok(c == 200 and st(r) == {"PRB2": "held"} and not lines_of(GT), "H2. an alias not confirmed by a fetch by its name ('%s', seen by the counter): held and fetched (%s)" % (THIRD, st(r)))
+    mem_rows2()
+    c, r = beat231()
+    lw = [x.get("name") for x in (r.get("ledgersWanted") or [])]
+    ok(c == 200 and REN in lw and THIRD in lw, "H2. the beat wants both names (%s)" % lw)
+    c, r = lch([["lg-sal", 12, 96, THIRD, "Sundry Debtors", "500.00", "29AABCS1111C1Z1", "AABCS1111C", 0, "Karnataka", ""]], "wanted")
+    c, r = lch([["lg-new", 777, 97, REN, "Sundry Debtors", "0", "", "", 0, "", ""]], "wanted")
+    al_ = {x.get("tally_name"): x for x in FS.T["tally_ledger_aliases"] if x.get("book_id") == BI}
+    ok(al_.get(THIRD, {}).get("confirmed_at") and not al_.get(THIRD, {}).get("ended_at") and (led(REN) or {}).get("tally_guid") == "lg-new" and al_.get(REN, {}).get("ended_at"),
+       "H2. the fetch by name confirms '%s' -> '%s'; '%s' comes as a NEW ledger (lg-new), its old alias stays ended (%s; %s)" % (THIRD, OLD, REN, led(REN), {k: (v.get("ended_at"), v.get("confirmed_at")) for k, v in al_.items()}))
+    mem_rows2()
+    c, r = beat231()
+    ids = [x.get("line_id") for x in (r.get("refetch") or [])]
+    ok(c == 200 and "PRB1" in ids and "PRB2" in ids, "H2. both entries listed for refetch (%s)" % ids)
+    c, r = reci2([rl("PRB1:resolved", mkx(26690, 54790, REN), GP, 26690, 54790), rl("PRB2:resolved", mkx(26691, 54791, THIRD), GT, 26691, 54791)])
+    l1, l2 = [x[0] for x in lines_of(GP)], [x[0] for x in lines_of(GT)]
+    ok(c == 200 and st(r) == {"PRB1:resolved": "applied", "PRB2:resolved": "applied"} and REN in l1 and OLD not in l1 and OLD in l2 and THIRD not in l2,
+       "H2. then: the new ledger's entry on '%s' itself, the confirmed alias's entry under '%s' (%s; %s; %s)" % (REN, OLD, st(r), l1, l2))
+    GT2 = CGI + "-%08x" % 26692
+    c, r = reci2([rl("PRB3", mkx(26692, 54792, THIRD), GT2, 26692, 54792)])
+    ok(c == 200 and st(r) == {"PRB3": "applied"} and OLD in [x[0] for x in lines_of(GT2)], "H2. a confirmed alias, not ended: a later entry applies at once without a fetch (%s)" % st(r))
+    # review L4 (06-Oct-2026): a ledger name that can never be asked from Tally by its name (a quote mark) is said once in plain
+    # words and never named in ledgersWanted (the bridge would never ask it)
+    QN, GQ = 'Q "X" Traders', CGI + "-%08x" % 26693
+    c, r = reci2([rl("PRQ1", mkx(26693, 54793, QN.replace('"', "&quot;")), GQ, 26693, 54793)])
+    w = lrow51("PRQ1").get("why", "")
+    ok(c == 200 and st(r) == {"PRQ1": "held"} and "cannot be fetched from Tally by its name" in w and QN in w and QN not in (pl("PRQ1").get("waitLedgers") or []),
+       "L4. an entry naming a ledger with a quote mark: held with plain words, not waited for by name (%s; %r; %s)" % (st(r), w, pl("PRQ1").get("waitLedgers")))
+    mem_rows2()
+    c, r = beat231()
+    ok(c == 200 and QN not in [x.get("name") for x in (r.get("ledgersWanted") or [])], "L4. the beat never names it (%s)" % r.get("ledgersWanted"))
     c, r = call({"kind": "ledger_changes", "company": "NOT LINKED", "version": "2.3.1", "bridge": dict(GA, version="2.3.1"), "ledgers": []})
     ok(c == 409, "2.3.1-B. a company not linked: 409 (%s)" % c)
     FS.T.pop("tally_recorder_lines", None); FS.T.pop("tally_ledgers", None); FS.T.pop("tally_groups", None)
