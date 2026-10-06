@@ -150,7 +150,6 @@ function TypeMasters {
     $m += LedgerXml $p 'Indirect Expenses' '<PAYTYPE>Earnings for Employees</PAYTYPE><CALCULATIONTYPE>As User Defined Value</CALCULATIONTYPE><AFFECTSNETSALARY>Yes</AFFECTSNETSALARY><ISCOSTCENTRESON>Yes</ISCOSTCENTRESON><FORPAYROLL>Yes</FORPAYROLL>'
   }
   $m += LedgerXml 'PD Salary Payable' 'Current Liabilities' '<PAYTYPE>Not Applicable</PAYTYPE>'
-  $m += '<ATTENDANCETYPE NAME="PD Present" ACTION="Create"><NAME.LIST><NAME>PD Present</NAME></NAME.LIST><ATTENDANCETYPE>Attendance / Leave with Pay</ATTENDANCETYPE><ATTENDANCEPERIOD>Days</ATTENDANCEPERIOD><PARENT/></ATTENDANCETYPE>'
   $m += LedgerXml 'PD Supplier' 'Sundry Creditors' '<ISBILLWISEON>Yes</ISBILLWISEON>'
   $m += LedgerXml 'Purchase' 'Purchase Accounts'
   return $m
@@ -160,10 +159,25 @@ function TypeMasters {
 # match", Cr empty, and went to exceptions on 7.1)
 function PayrollXml($date, $no, $n, $form = 1) {
   $f = '{0:0.00}'
+  if ($form -eq 5) {
+    # 5: the pay heads as ledger lines, each allocated to every employee (cost centres), the payable credited: the
+    # payroll voucher in its accounting form (probe 5: forms 1-3 were refused, the payable line dropped every time)
+    $x = '<VOUCHER VCHTYPE="Payroll" ACTION="Create" OBJVIEW="Accounting Voucher View"><DATE>' + $date + '</DATE><VOUCHERTYPENAME>Payroll</VOUCHERTYPENAME><VOUCHERNUMBER>' + $no + '</VOUCHERNUMBER><PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW><NARRATION>template payroll ' + $n + ' employees</NARRATION>'
+    foreach ($ph in @(@('PD Basic', 1000), @('PD HRA', 500))) {
+      $x += '<ALLLEDGERENTRIES.LIST><LEDGERNAME>' + $ph[0] + '</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-' + ($f -f ($ph[1] * $n)) + '</AMOUNT><CATEGORYALLOCATIONS.LIST><CATEGORY>Primary Cost Category</CATEGORY><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>'
+      for ($i = 1; $i -le $n; $i++) { $x += '<COSTCENTREALLOCATIONS.LIST><NAME>' + (Emp $i) + '</NAME><AMOUNT>-' + ($f -f $ph[1]) + '</AMOUNT></COSTCENTREALLOCATIONS.LIST>' }
+      $x += '</CATEGORYALLOCATIONS.LIST></ALLLEDGERENTRIES.LIST>'
+    }
+    $x += '<ALLLEDGERENTRIES.LIST><LEDGERNAME>PD Salary Payable</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>' + ($f -f (1500 * $n)) + '</AMOUNT></ALLLEDGERENTRIES.LIST>'
+    return $x + '</VOUCHER>'
+  }
   $view = if ($form -eq 3) { 'PaySlip Voucher View' } else { 'Payroll Voucher View' }
-  $lst = if ($form -eq 2) { 'LEDGERENTRIES.LIST' } else { 'ALLLEDGERENTRIES.LIST' }
-  $x = '<VOUCHER VCHTYPE="Payroll" ACTION="Create" OBJVIEW="' + $view + '"><DATE>' + $date + '</DATE><VOUCHERTYPENAME>Payroll</VOUCHERTYPENAME><VOUCHERNUMBER>' + $no + '</VOUCHERNUMBER><PERSISTEDVIEW>' + $view + '</PERSISTEDVIEW><NARRATION>template payroll ' + $n + ' employees</NARRATION>'
-  $x += '<' + $lst + '><LEDGERNAME>PD Salary Payable</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>' + ($f -f (1500 * $n)) + '</AMOUNT></' + $lst + '>'
+  $lst = if ($form -in 2, 4) { 'LEDGERENTRIES.LIST' } else { 'ALLLEDGERENTRIES.LIST' }
+  # 4: the payable as the voucher's party (the payroll form's "Account" field)
+  $party = if ($form -eq 4) { '<PARTYLEDGERNAME>PD Salary Payable</PARTYLEDGERNAME>' } else { '' }
+  $isp = if ($form -eq 4) { '<ISPARTYLEDGER>Yes</ISPARTYLEDGER>' } else { '' }
+  $x = '<VOUCHER VCHTYPE="Payroll" ACTION="Create" OBJVIEW="' + $view + '"><DATE>' + $date + '</DATE><VOUCHERTYPENAME>Payroll</VOUCHERTYPENAME><VOUCHERNUMBER>' + $no + '</VOUCHERNUMBER><PERSISTEDVIEW>' + $view + '</PERSISTEDVIEW>' + $party + '<NARRATION>template payroll ' + $n + ' employees</NARRATION>'
+  $x += '<' + $lst + '><LEDGERNAME>PD Salary Payable</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>' + $isp + '<AMOUNT>' + ($f -f (1500 * $n)) + '</AMOUNT></' + $lst + '>'
   $x += '<CATEGORYENTRY.LIST><CATEGORY>Primary Cost Category</CATEGORY>'
   for ($i = 1; $i -le $n; $i++) {
     $x += '<EMPLOYEEENTRIES.LIST><EMPLOYEENAME>' + (Emp $i) + '</EMPLOYEENAME><EMPLOYEESORTORDER>' + $i + '</EMPLOYEESORTORDER><AMOUNT>-1500.00</AMOUNT>'
@@ -202,16 +216,17 @@ function StockJournalXml($date, $no, $n, $vtype = 'Stock Journal', $view = 'Cons
 # an item voucher with a party (Delivery Note, Receipt Note, Sales Order, Purchase Order, a Sales invoice in batches)
 function ItemVchXml($vtype, $date, $no, $n, $party, $partyLedgerOut, $acct, $order = '', $track = '', $view = 'Invoice Voucher View', $form = 1) {
   if ($form -eq 2) { $order = '' }
+  $due = if ($form -eq 3) { '' } else { $date }; $olist = $form -ne 3
   $f = '{0:0.00}'; $sales = $vtype -in 'Sales', 'Delivery Note', 'Sales Order'
   $sign = if ($sales) { '' } else { '-' }; $psign = if ($sales) { '-' } else { '' }
   $tot = 200 * $n
   $x = '<VOUCHER VCHTYPE="' + $vtype + '" ACTION="Create" OBJVIEW="' + $view + '"><DATE>' + $date + '</DATE><VOUCHERTYPENAME>' + $vtype + '</VOUCHERTYPENAME><VOUCHERNUMBER>' + $no + '</VOUCHERNUMBER><PARTYLEDGERNAME>' + $party + '</PARTYLEDGERNAME><PARTYNAME>' + $party + '</PARTYNAME><BASICBUYERNAME>' + $party + '</BASICBUYERNAME><PERSISTEDVIEW>' + $view + '</PERSISTEDVIEW><ISINVOICE>Yes</ISINVOICE><NARRATION>template ' + $vtype.ToLower() + ' ' + $n + ' items</NARRATION>'
-  if ($order) { $x += '<INVOICEORDERLIST.LIST><BASICORDERDATE>' + $date + '</BASICORDERDATE><BASICPURCHASEORDERNO>' + $order + '</BASICPURCHASEORDERNO></INVOICEORDERLIST.LIST>' }
+  if ($order -and $olist) { $x += '<INVOICEORDERLIST.LIST><BASICORDERDATE>' + $date + '</BASICORDERDATE><BASICPURCHASEORDERNO>' + $order + '</BASICPURCHASEORDERNO></INVOICEORDERLIST.LIST>' }
   $x += '<LEDGERENTRIES.LIST><LEDGERNAME>' + $party + '</LEDGERNAME><ISDEEMEDPOSITIVE>' + $(if ($sales) { 'Yes' } else { 'No' }) + '</ISDEEMEDPOSITIVE><ISPARTYLEDGER>Yes</ISPARTYLEDGER><AMOUNT>' + $psign + ($f -f $tot) + '</AMOUNT></LEDGERENTRIES.LIST>'
   for ($i = 1; $i -le $n; $i++) {
     $g = if ($i % 2) { 'PD Godown A' } else { 'PD Godown B' }; $b = if ($i % 4 -lt 2) { 'B1' } else { 'B2' }
     $x += '<ALLINVENTORYENTRIES.LIST><STOCKITEMNAME>' + (BatchItem $i) + '</STOCKITEMNAME><ISDEEMEDPOSITIVE>' + $(if ($sales) { 'No' } else { 'Yes' }) + '</ISDEEMEDPOSITIVE><RATE>100.00/Nos</RATE><AMOUNT>' + $sign + '200.00</AMOUNT><ACTUALQTY> 2 Nos</ACTUALQTY><BILLEDQTY> 2 Nos</BILLEDQTY>'
-    $x += BatchLine $g $b 2 ($sign + '200.00') $order $track $(if ($order) { $date })
+    $x += BatchLine $g $b 2 ($sign + '200.00') $order $track $(if ($order) { $due })
     $x += '<ACCOUNTINGALLOCATIONS.LIST><LEDGERNAME>' + $acct + '</LEDGERNAME><ISDEEMEDPOSITIVE>' + $(if ($sales) { 'No' } else { 'Yes' }) + '</ISDEEMEDPOSITIVE><AMOUNT>' + $sign + '200.00</AMOUNT></ACCOUNTINGALLOCATIONS.LIST></ALLINVENTORYENTRIES.LIST>'
   }
   $x + '</VOUCHER>'
@@ -225,16 +240,28 @@ function PhysicalStockXml($date, $no, $n) {
 function TypeTemplates {
   $d = $TypeDates
   [ordered]@{
-    payroll50     = @((PayrollXml $d.payroll50 'PR-50' 50 1), (PayrollXml $d.payroll50 'PR-50' 50 2), (PayrollXml $d.payroll50 'PR-50' 50 3))
-    payroll200    = @((PayrollXml $d.payroll200 'PR-200' 200 1), (PayrollXml $d.payroll200 'PR-200' 200 2), (PayrollXml $d.payroll200 'PR-200' 200 3))
+    payroll50     = @(1..5 | ForEach-Object { PayrollXml $d.payroll50 'PR-50' 50 $_ })
+    payroll200    = @(1..5 | ForEach-Object { PayrollXml $d.payroll200 'PR-200' 200 $_ })
     attendance    = AttendanceXml $d.attendance 'AT-1' 50
     stockjournal  = StockJournalXml $d.stockjournal 'SJ-50' 50
     mfgjournal    = StockJournalXml $d.mfgjournal 'MJ-1' 5 'PD Manufacturing Journal'
-    salesorder    = @((ItemVchXml 'Sales Order' $d.salesorder 'SO-1' 5 'Template Party' $true 'Sales' 'SO-1'), (ItemVchXml 'Sales Order' $d.salesorder 'SO-1' 5 'Template Party' $true 'Sales' 'SO-1' '' 'Invoice Voucher View' 2))
-    purchaseorder = @((ItemVchXml 'Purchase Order' $d.purchaseorder 'PO-1' 5 'PD Supplier' $false 'Purchase' 'PO-1'), (ItemVchXml 'Purchase Order' $d.purchaseorder 'PO-1' 5 'PD Supplier' $false 'Purchase' 'PO-1' '' 'Invoice Voucher View' 2))
+    salesorder    = @((ItemVchXml 'Sales Order' $d.salesorder 'SO-1' 5 'Template Party' $true 'Sales' 'SO-1'), (ItemVchXml 'Sales Order' $d.salesorder 'SO-1' 5 'Template Party' $true 'Sales' 'SO-1' '' 'Invoice Voucher View' 2), (ItemVchXml 'Sales Order' $d.salesorder 'SO-1' 5 'Template Party' $true 'Sales' 'SO-1' '' 'Invoice Voucher View' 3))
+    purchaseorder = @((ItemVchXml 'Purchase Order' $d.purchaseorder 'PO-1' 5 'PD Supplier' $false 'Purchase' 'PO-1'), (ItemVchXml 'Purchase Order' $d.purchaseorder 'PO-1' 5 'PD Supplier' $false 'Purchase' 'PO-1' '' 'Invoice Voucher View' 2), (ItemVchXml 'Purchase Order' $d.purchaseorder 'PO-1' 5 'PD Supplier' $false 'Purchase' 'PO-1' '' 'Invoice Voucher View' 3))
     deliverynote  = ItemVchXml 'Delivery Note' $d.deliverynote 'DN-1' 5 'Template Party' $true 'Sales' 'SO-1' 'DN-1'
     receiptnote   = ItemVchXml 'Receipt Note' $d.receiptnote 'RN-1' 5 'PD Supplier' $false 'Purchase' 'PO-1' 'RN-1'
     physicalstock = PhysicalStockXml $d.physicalstock 'PS-1' 5
     salesbatch    = ItemVchXml 'Sales' $d.salesbatch 'SB-50' 50 'Template Party' $true 'Sales'
   }
+}
+
+# the attendance type: probe 5 (run 37482949303) had "Attendance/Production Type specified is invalid" for the field
+# ATTENDANCETYPE with "Attendance/Leave with Pay" and "Attendance / Leave with Pay"; these forms are tried in turn
+function AttendanceTypeForms {
+  $o = @()
+  foreach ($f in 'ATTENDANCEPRODUCTIONTYPE', 'ATTDPRODUCTIONTYPE', 'ATTENDANCETYPE', 'ATTDTYPE') {
+    foreach ($v in 'Attendance/Leave with Pay', 'Attendance / Leave with Pay', 'Attendance') {
+      $o += '<ATTENDANCETYPE NAME="PD Present" ACTION="Create"><NAME.LIST><NAME>PD Present</NAME></NAME.LIST><PARENT/><' + $f + '>' + $v + '</' + $f + '><ATTENDANCEPERIOD>Days</ATTENDANCEPERIOD><BASEUNITS>Days</BASEUNITS></ATTENDANCETYPE>'
+    }
+  }
+  return $o
 }

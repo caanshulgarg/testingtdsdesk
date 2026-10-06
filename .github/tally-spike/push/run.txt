@@ -6,4 +6,4 @@ heavy_item=300
 heavy_vch=1000
 heavy_min=10
 mode=explore
-# probe 5 (explore): voucher types again after probe 4 (run 37479202675) fixes
+# probe 6 (explore): voucher types and master forms after probe 5 (run 37482949303) fixes

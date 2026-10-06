@@ -171,10 +171,11 @@ function Start-T($data, [string[]]$tdls, $tag) {
   $ok = $x -match [regex]::Escape($co)
   # probe 4: a TDL with errors makes Tally say "TallyPrime will ignore the TDLs that have errors ... Press any key" and
   # wait; the key is sent, the company opens after it
+  $script:tdlWarned = $false
   for ($w = 1; -not $ok -and $w -le 2; $w++) {
     KeysTo '{ENTER}' 8 "$tag-key-$w"
     $x = Post (Coll 'FCPCo' 'Company' 'NAME, GUID'); $ok = $x -match [regex]::Escape($co)
-    if ($ok) { Say "Tally ($tag): a TDL had errors (Tally's warning answered); see the screenshot $tag-started" }
+    if ($ok) { $script:tdlWarned = $true; Say "Tally ($tag): a TDL had errors (Tally's warning answered); see the screenshot $tag-started" }
   }
   Say "Tally started ($tag) in $([math]::Round($sw.Elapsed.TotalSeconds,1)) s; company open: $ok"
   if ($script:useProxy) { Start-Proxy | Out-Null }
@@ -263,7 +264,8 @@ $vtMsgs += '<VOUCHERTYPE NAME="PD Manufacturing Journal" ACTION="Create"><NAME.L
 Imp 'All Masters' $vtMsgs 'voucher types active, manufacturing journal' | Out-Null
 $tm = TypeMasters
 Imp 'All Masters' @($tm | Where-Object { $_ -notlike '<ATTENDANCETYPE*' }) 'type masters (godowns, batch items, employees, pay heads, supplier)' | Out-Null
-foreach ($a in @($tm | Where-Object { $_ -like '<ATTENDANCETYPE*' })) { Imp 'All Masters' @($a) 'attendance type' | Out-Null }
+$attOk = $false
+foreach ($a in (AttendanceTypeForms)) { $r = Imp 'All Masters' @($a) 'attendance type'; if ($r.created -ge 1) { $attOk = $true; Say "   attendance type made by: $a"; break } }
 $typeTpl = TypeTemplates; $typeOk = [ordered]@{}
 foreach ($k in $typeTpl.Keys) {
   $vs = @($typeTpl[$k]); $errs = @()
@@ -475,25 +477,43 @@ $cfgs = [ordered]@{ none = @(); stamp = @($tdlStamp); heads = @($tdlHeads); full
 $mfs = @(Get-ChildItem $here -Filter 'FCPM_*.tdl' | ForEach-Object { $d = "$fc\$($_.Name)"; Copy-Item $_.FullName $d -Force; $d })
 $mCsv = Join-Path $out 'm.csv'
 $masters = [ordered]@{ 'Ledger' = 'Template Party'; 'Pay Head' = 'PD Basic'; 'Stock Item' = 'PD Bat 01'; 'Unit' = 'Nos'; 'Godown' = 'PD Godown A'; 'Employee' = 'PD Emp 001' }
+# the object type each master form saves, and the master-form files loaded beside FCPFull.tdl for it (one start each, so a
+# file with an error shows as Tally's warning on that start only)
+$mType = @{ 'Ledger' = 'Ledger'; 'Pay Head' = 'Ledger'; 'Stock Item' = 'StockItem'; 'Unit' = 'Unit'; 'Godown' = 'Godown'; 'Employee' = 'CostCentre' }
+$mFiles = @{ 'Ledger' = @(); 'Pay Head' = @('FCPM_PayHead'); 'Stock Item' = @('FCPM_StockItem'); 'Unit' = @('FCPM_Unit'); 'Godown' = @('FCPM_Godown', 'FCPM_Location'); 'Employee' = @('FCPM_Employee', 'FCPM_CostCentre') }
+function MasterAid($form, $name) { $x = Post (Coll 'FCPMa' $mType[$form] 'NAME, ALTERID' "`$Name = `"$name`""); return [int]('0' + [regex]::Match($x, '<ALTERID[^>]*>\s*(\d+)').Groups[1].Value) }
 function MasterAlter($cfg, $tdls, $form, $name) {
-  if (-not (Start-T $light $tdls "types-$cfg-m")) { return }
+  $extra = @($mFiles[$form] | ForEach-Object { "$fc\$_.tdl" })
+  $all = if ($cfg -eq 'full') { @($tdls) + $extra } else { @($tdls) }
+  if (-not (Start-T $light $all "types-$cfg-m-$($form -replace ' ', '')")) { return }
+  $warned = $script:tdlWarned
   Get-ChildItem $pd -Filter 'stamp-*.txt' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
   NewFullLines | Out-Null; NewRecLines | Out-Null
-  $t = $form -replace ' ', ''
-  KeysTo 'a' 3 "types-$cfg-m-$t-0"; KeysTo $form 2; KeysTo '{ENTER}' 3 "types-$cfg-m-$t-1"; KeysTo $name 2; KeysTo '{ENTER}' 4 "types-$cfg-m-$t-2"
-  if (Focus) { if ($script:noUiTimer) { [System.Windows.Forms.SendKeys]::SendWait('^a') } else { [PdUi]::Measure('^a', 400, 15000) | Out-Null } }
-  Start-Sleep 3; Shot "types-$cfg-m-$t-3"
+  $t = $form -replace ' ', ''; $aid0 = MasterAid $form $name; $saved = $false; $how = ''
+  # Gateway > Alter ('a'), then the master's type and its name (3.0: Ledger, Stock Item ...; 7.1 calls godowns
+  # "Location", whose masters are listed by name in the same list); Ctrl+A; 'y' answers 3.0's GST question
+  foreach ($path in @(@($form, $name), @($name))) {
+    KeysTo 'a' 3 "types-$cfg-m-$t-0"
+    foreach ($k in $path) { KeysTo $k 2; KeysTo '{ENTER}' 3 }
+    Shot "types-$cfg-m-$t-form"
+    if (Focus) { if ($script:noUiTimer) { [System.Windows.Forms.SendKeys]::SendWait('^a') } else { [PdUi]::Measure('^a', 400, 15000) | Out-Null } }
+    Start-Sleep 2; Shot "types-$cfg-m-$t-after"; KeysTo 'y' 3
+    $aid1 = MasterAid $form $name
+    if ($aid1 -gt $aid0) { $saved = $true; $how = $path -join ' > '; break }
+    foreach ($i in 1..3) { KeysTo '{ESC}' 1 }; Shot "types-$cfg-m-$t-back"
+    if (-not (Start-T $light $all "types-$cfg-m-$t-again")) { return }
+  }
   $h = Stamps; $fl = NewFullLines; $rl = NewRecLines
-  $row = [pscustomobject]@{ rel = $rel; cfg = $cfg; form = $form; master = $name; stamps = (($h.Keys | Sort-Object) -join ','); full_lines = $fl.Count; rec_lines = $rl.Count
+  $row = [pscustomobject]@{ rel = $rel; cfg = $cfg; form = $form; master = $name; saved = $saved; via = $how; aid0 = $aid0; aid1 = $aid1; tdl_warning = $warned; files = ($mFiles[$form] -join ','); stamps = (($h.Keys | Sort-Object) -join ','); full_lines = $fl.Count; rec_lines = $rl.Count
     full_events = (($fl | ForEach-Object { [regex]::Match($_, '^FCF1\|ev=([^|]+)').Groups[1].Value }) -join ' '); rec_events = (($rl | ForEach-Object { [regex]::Match($_, '^FCR1\|ev=([^|]+)').Groups[1].Value }) -join ' ') }
   $row | Export-Csv $mCsv -Append -NoTypeInformation -Encoding UTF8
   if ($fl.Count -or $rl.Count) { Set-Content (Join-Path $cap "master-$cfg-$t.txt") (@($fl) + @($rl)) -Encoding UTF8 }
-  Say "   master $form '$name' ($cfg): stamps $($row.stamps); full lines $($fl.Count) ($($row.full_events)); recorder lines $($rl.Count) ($($row.rec_events))"
+  Say "   master $form '$name' ($cfg): saved $saved (AlterID $aid0 -> $aid1, $how); TDL warning $warned; stamps $($row.stamps); full lines $($fl.Count) ($($row.full_events)); recorder lines $($rl.Count) ($($row.rec_events))"
 }
 function TypesStage {
   foreach ($cfg in 'heads', 'full') {
     Remove-Item "$pd\full-*.txt", "$pd\stamp-*.txt", "$rec\*" -Force -ErrorAction SilentlyContinue; $script:fullSeen = @{}; $script:recSeen = @{}
-    $tdls = if ($cfg -eq 'full') { @($tdlFull) + $mfs } else { @($tdlHeads) }
+    $tdls = if ($cfg -eq 'full') { @($tdlFull) } else { @($tdlHeads) }
     if (-not (Start-T $light $tdls "types-$cfg")) { Say "HARNESS: types-$cfg did not open the company"; continue }
     foreach ($k in $typeTpl.Keys) {
       if ($typeOk[$k].created -lt 1) { Say "types: $k has no template in Tally ($($typeOk[$k].err)): skipped"; continue }
@@ -515,7 +535,8 @@ function TypesStage {
   }
   Stop-T
 }
-if ($env:PD_MODE -eq 'explore') { TypesStage; Get-Process FinComBridge -ErrorAction SilentlyContinue | Stop-Process -Force; Stop-Process -Id $stub.Id -Force -ErrorAction SilentlyContinue; Say 'done (explore: the voucher-type probe only)'; return }
+function KeepTallyLogs { Get-ChildItem $dir, $light -Recurse -File -Include *.log, tdlerr*, *.err -ErrorAction SilentlyContinue | Select-Object -First 20 | ForEach-Object { Copy-Item $_.FullName (Join-Path $out "tally-$($_.Directory.Name)-$($_.Name)") -ErrorAction SilentlyContinue } }
+if ($env:PD_MODE -eq 'explore') { TypesStage; KeepTallyLogs; Get-Process FinComBridge -ErrorAction SilentlyContinue | Stop-Process -Force; Stop-Process -Id $stub.Id -Force -ErrorAction SilentlyContinue; Say 'done (explore: the voucher-type probe only)'; return }
 foreach ($coTag in 'light', 'heavy') {
   $data = if ($coTag -eq 'light') { $light } else { $heavy }
   if ($coTag -eq 'heavy' -and -not $heavyOk) { Say 'heavy company not made: skipped'; continue }
@@ -596,7 +617,7 @@ TypesStage
 # ---------------------------------------------------------------- kept
 Stop-T
 Copy-Item $blog (Join-Path $out 'bridge-full.log') -ErrorAction SilentlyContinue
-Get-ChildItem $dir, $light -Recurse -File -Include *tdl*.log, *err*.log, tdlerr* -ErrorAction SilentlyContinue | Select-Object -First 5 | ForEach-Object { Copy-Item $_.FullName (Join-Path $out "tally-$($_.Name)") }
+KeepTallyLogs
 Get-Process FinComBridge -ErrorAction SilentlyContinue | Stop-Process -Force
 Stop-Proxy; Stop-Process -Id $stub.Id -Force -ErrorAction SilentlyContinue
 Say 'done'
