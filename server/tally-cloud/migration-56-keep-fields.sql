@@ -11,95 +11,175 @@
 --
 --   1. KEEP (the recorder only). tally_ingest_entries(p_book, p_vouchers, p_lines, p_rebuild, p_keep boolean): with p_keep
 --      false it is exactly 48's 4-argument form (it calls it with the same arguments). With p_keep true, before calling it:
---        - each sent entry already stored: a blank gstin / pos / ref / cmp, or a missing refDate, is filled with the stored
---          non-blank value (tally_recorder_keep_vouchers); a non-blank value sent always wins (a NEW value updates it);
---        - each sent line with a blank HSN or no rate takes it from the entry's stored line with the same ledger: the one
---          with the same amount when several, else the one at the same place among that ledger's lines
---          (tally_recorder_keep_lines). A value sent always wins.
+--        - each sent entry already stored (tally_recorder_keep_vouchers): a blank gstin / pos / ref, or an absent / blank
+--          refDate, is filled with the stored non-blank value ONLY when the sent party is the stored party (review H1: an
+--          invoice moved to another customer keeps none of the old customer's); a blank cmp (the company's own GSTIN)
+--          whatever the party; a malformed refDate sent is passed on as sent (review L4a); a non-blank value sent always
+--          wins (a NEW value updates it);
+--        - each sent line with a blank HSN or no rate (tally_recorder_keep_lines) takes the value of the stored line it
+--          pairs with (tally_recorder_pair_lines, review M1), per entry and ledger: the same number of lines -> one-to-one,
+--          never a stored line twice (the same amount first, the k-th with the k-th; then the rest the k-th with the k-th
+--          in order); a different number -> only when every stored line of that ledger has the same HSN and rate. A value
+--          sent always wins.
+--        - neither for an entry the bridge marks complete ("full": true; see 2.3.1 below).
+--      THE LINE ORDER (the owner's "keep each line in its original order"): tally_lines has NO position / sequence column,
+--      so no reliable stored line order exists. The only stored order is the element order of the entry's version row
+--      (tally_voucher_versions.lines), which tally_voucher_version_lines writes sorted by ledger and amount (lines of equal
+--      ledger and amount in the order the rows were read). That is what 56 uses, after pairing equal amounts first.
 --      48's 4-argument and 44's 3-argument forms are not touched: the Day Book days path (tally_ingest_day -> the
 --      3-argument form) and every other caller keep today's behaviour exactly: a full Day Book is authoritative.
 --      tally_recorder_line: 53's text, the one call changed to tally_ingest_entries(p_book, vs, p_line->'lines', not once,
 --      true). Every caller of the line (tally_recorder_apply, the drain, the releases, the short retry) is a recorder path.
---   2. REPAIR (not run here). tally_recorder_restore_fields(p_book uuid) returns jsonb, the service role's / the owner's
---      (tally_service_or_owner()). For the book's live entries the recorder applied (a tally_recorder_lines row, state
---      'applied', event created / altered / imported, its object_guid the entry): a field blank NOW (gstin, pos, ref,
---      ref_date, cmp_gstin; a line's hsn / rate) is restored from the LATEST version row at or below the entry's AlterID
---      that has it, when every later version row of the entry is one the recorder applied (its AlterID is an applied
---      line's) and the entry's day was not read from a Day Book after the recorder's last apply (tally_days.at: a Day Book
---      read after it is authoritative). Lines: by ledger; the same amount first, else the same place among the ledger's
---      lines. It writes only blank fields (the update itself re-checks blank), never a non-blank one, and logs every
---      field it writes in tally_recorder_restore_log (book, entry, field, line ledger / amount, old, new, the version's
---      AlterID, who, when). A second run finds nothing to do.
---      tally_recorder_blanked(p_book uuid): the same rules, read-only: the entries and fields the repair would write.
---      The plain read-only query (runs before this migration too): tests/check_recorder_blanked.sql.
---   Every function: security definer, search_path = public, pg_temp. tally_recorder_keep_vouchers / _lines, the 5-argument
+--   2. REPAIR (not run here). tally_recorder_restore_fields(p_book uuid, p_dry_run boolean) returns jsonb, the service
+--      role's / the owner's (tally_service_or_owner()); the 1-argument form restores (p_dry_run false). For the book's live
+--      entries the recorder applied (a tally_recorder_lines row, state 'applied', event created / altered / imported, its
+--      object_guid the entry): a field blank NOW (gstin, pos, ref, ref_date, cmp_gstin; a line's hsn / rate) is restored
+--      from the LATEST version row at or below the entry's AlterID that has it, when every later version row of the entry
+--      is one the recorder applied (its AlterID is an applied line's) and the entry's day was not read from a Day Book
+--      after the recorder's last apply (tally_days.at: a Day Book read after it is authoritative). Lines: by ledger; the
+--      same amount first, else the same place among the ledger's lines.
+--        p_dry_run true: the count and the list (type, number, date, which fields, the value it would restore, from which
+--          version), nothing written;
+--        p_dry_run false: only those entries, only those fields, each written only while blank (the update re-checks),
+--          never a non-blank one; one row per restored field in tally_recorder_restore_log (add-only, RLS, rows kept:
+--          run_id, entry GUID, field, the restored value, the old blank, the version it came from: (book, GUID,
+--          from_alter), who, at). Nothing deleted; no amount, ledger or day written.
+--      Both answer the book's live entry count and ledger-day total before and after ('unchanged'). A second run finds
+--      nothing to do. tally_recorder_blanked(p_book uuid): the same rules, read-only, one row per field. The plain
+--      read-only query (runs before this migration too): tests/check_recorder_blanked.sql.
+--   3. UNKNOWN LEDGERS (the owner, 06-Oct-2026: "flag these on the page in plain words"). tally_unknown_ledger_entries(
+--      p_book uuid) returns the live entries (book, client, GUID, type, number, date) whose lines name a ledger not in
+--      tally_ledgers for that book (or only there marked deleted), with those ledgers' names; p_book null: every book of
+--      the caller's firm. Read-only; members read their own firm's books (my_firm()); granted to authenticated and the
+--      service role. The app's Sync activity (and a client's Books page) lists them in plain words.
+--   REVIEW NOTES (06-Oct-2026). Fixed here: H1 (party), M1 (one-to-one pairing), M2 (the log's grants and sequence), L4a
+--   (a malformed ref date), L2 (the repair works out its list once). Left as notes, not changed by 56: L1, L3, L4b, L4c
+--   (as the review lists them).
+--   2.3.1 (forward note, part A): once the bridge fetches HSN, rate, ref and the party's GSTIN, a blank from it is a real
+--   removal, so the keep must not apply to bodies that carry those fields. Part A marks such an entry "full": true in its
+--   voucher; 56 already passes such an entry as sent (vouchers and lines; tested).
+--   Every function: security definer, search_path = public, pg_temp. tally_recorder_keep_vouchers / _lines / tally_recorder_pair_lines, the 5-argument
 --   tally_ingest_entries and tally_recorder_line granted to nobody (run as the owner by the line); the repair and the
---   read-only list the service role's. Tested by tests/run_migration56.py (pg_stand) and tests/run_migration_order.py.
+--   read-only list the service role's. Tested by tests/run_migration56.py (pg_stand), tests/run_migration_order.py and
+--   tests/run_unknown_ledgers_ui.py (the page).
 
 begin;
 set local lock_timeout = '10s';     -- never queue long behind a session holding a table here (a timeout rolls the whole file back: run it again)
 
 -- ---------------------------------------------------------------- 1. keep: the entries' fields
--- p_vouchers as sent, each entry already stored given back its stored non-blank gstin / pos / ref / refDate / cmp where the
--- sent one is blank; a sent value always wins; the order and every other key unchanged
+-- p_vouchers as sent, each entry already stored given back its stored non-blank values where the sent one is blank (a sent
+-- value always wins; the order and every other key unchanged):
+--   gstin, pos, ref, refDate: only when the sent party is the stored party (tally_nm(party) = tally_vouchers.party; review
+--     H1: an invoice moved to another customer never takes the old customer's GSTIN, place of supply or reference);
+--   refDate: only when absent or blank (review L4a: a malformed one sent is passed on as sent);
+--   cmp (the company's own GSTIN): whatever the party;
+--   none of them for an entry the bridge marks complete ("full": true; 2.3.1 part A: such a body fetched these fields, so
+--     a blank in it is a real removal)
 create or replace function public.tally_recorder_keep_vouchers(p_book uuid, p_vouchers jsonb)
 returns jsonb language plpgsql stable security definer set search_path = public, pg_temp as $function$
 begin
   if jsonb_typeof(p_vouchers) is distinct from 'array' then return p_vouchers; end if;
   return (
     select coalesce(jsonb_agg(
-             case when v.guid is null then x
+             case when v.guid is null or jsonb_typeof(x) <> 'object' or lower(coalesce(x->>'full', '')) = 'true' then x
                   else x
-                    || case when btrim(coalesce(x->>'gstin', '')) = '' and btrim(coalesce(v.gstin, '')) <> '' then jsonb_build_object('gstin', v.gstin) else '{}'::jsonb end
-                    || case when btrim(coalesce(x->>'pos', '')) = '' and btrim(coalesce(v.pos, '')) <> '' then jsonb_build_object('pos', v.pos) else '{}'::jsonb end
-                    || case when btrim(coalesce(x->>'ref', '')) = '' and btrim(coalesce(v.ref, '')) <> '' then jsonb_build_object('ref', v.ref) else '{}'::jsonb end
-                    || case when tally_d8(x->>'refDate') is null and v.ref_date is not null then jsonb_build_object('refDate', to_char(v.ref_date, 'YYYYMMDD')) else '{}'::jsonb end
+                    || case when sp and btrim(coalesce(x->>'gstin', '')) = '' and btrim(coalesce(v.gstin, '')) <> '' then jsonb_build_object('gstin', v.gstin) else '{}'::jsonb end
+                    || case when sp and btrim(coalesce(x->>'pos', '')) = '' and btrim(coalesce(v.pos, '')) <> '' then jsonb_build_object('pos', v.pos) else '{}'::jsonb end
+                    || case when sp and btrim(coalesce(x->>'ref', '')) = '' and btrim(coalesce(v.ref, '')) <> '' then jsonb_build_object('ref', v.ref) else '{}'::jsonb end
+                    || case when sp and btrim(coalesce(x->>'refDate', '')) = '' and v.ref_date is not null then jsonb_build_object('refDate', to_char(v.ref_date, 'YYYYMMDD')) else '{}'::jsonb end
                     || case when btrim(coalesce(x->>'cmp', '')) = '' and btrim(coalesce(v.cmp_gstin, '')) <> '' then jsonb_build_object('cmp', v.cmp_gstin) else '{}'::jsonb end
              end order by o), '[]'::jsonb)
       from jsonb_array_elements(p_vouchers) with ordinality as t(x, o)
       left join tally_vouchers v on v.book_id = p_book and v.guid = x->>'guid' and coalesce(x->>'guid', '') <> ''
+      cross join lateral (select v.guid is not null and tally_nm(x->>'party') is not distinct from v.party as sp) q
   );
 end $function$;
 revoke all on function public.tally_recorder_keep_vouchers(uuid, jsonb) from public, anon, authenticated, service_role;
 
--- p_lines as sent ([guid, ledger, amount, hsn, rate, bills]), a line with a blank hsn or no rate given the stored line's of
--- the same entry and ledger: the same amount first, else the same place among that ledger's lines (by amount); a sent
--- value always wins; a line with both sent, or with no stored line of its ledger, is passed as sent
-create or replace function public.tally_recorder_keep_lines(p_book uuid, p_lines jsonb)
+-- the one rule pairing an entry's lines of one ledger with its earlier lines of that ledger (review M1; the keep and the
+-- repair both use it). p_sent: [{k, g, l, amt, o}] (k: the line's key, g: the entry, l: the ledger, o: its order);
+-- p_stored: [{g, l, amt, o, hsn, rate}]. Per entry and ledger:
+--   the same number of lines on both sides: one-to-one, never a stored line twice: first the lines whose amount is the
+--     same (several of one amount: the k-th with the k-th, in order), then the rest the k-th with the k-th in order;
+--   a different number: every line gets the stored HSN and rate only when all the stored lines of that ledger have the
+--     same HSN and the same rate; else nothing.
+-- THE ORDER: tally_lines has no position column, so no stored line order exists. The stored side's o is the element order
+-- of the entry's version row (tally_voucher_versions.lines), which tally_voucher_version_lines writes sorted by ledger and
+-- amount (equal amounts in the order the rows were read): the amount pass therefore comes first, and "in order" among the
+-- rest means by amount on the stored side
+create or replace function public.tally_recorder_pair_lines(p_sent jsonb, p_stored jsonb)
+returns table (k text, hsn text, rate numeric)
+language sql immutable security definer set search_path = public, pg_temp as $function$
+  with a as (
+    select e->>'k' as k, e->>'g' as g, e->>'l' as l, case when coalesce(e->>'amt', '') ~ '^-?[0-9]+(\.[0-9]+)?$' then (e->>'amt')::numeric end as amt, coalesce((e->>'o')::numeric, n) as o
+      from jsonb_array_elements(case when jsonb_typeof(p_sent) = 'array' then p_sent else '[]'::jsonb end) with ordinality as z(e, n)
+  ), b as (
+    select n as bid, e->>'g' as g, e->>'l' as l, case when coalesce(e->>'amt', '') ~ '^-?[0-9]+(\.[0-9]+)?$' then (e->>'amt')::numeric end as amt, coalesce((e->>'o')::numeric, n) as o,
+           nullif(btrim(coalesce(e->>'hsn', '')), '') as hsn, case when coalesce(e->>'rate', '') ~ '^-?[0-9]+(\.[0-9]+)?$' then (e->>'rate')::numeric end as rate
+      from jsonb_array_elements(case when jsonb_typeof(p_stored) = 'array' then p_stored else '[]'::jsonb end) with ordinality as z(e, n)
+  ), na as (select a.g, a.l, count(*) as n from a group by a.g, a.l
+  ), nb as (select b.g, b.l, count(*) as n, count(distinct coalesce(b.hsn, '')) as dh, count(distinct coalesce(b.rate::text, '')) as dr from b group by b.g, b.l
+  ), same as (select na.g, na.l from na join nb on nb.g = na.g and nb.l = na.l where na.n = nb.n
+  ), ea as (select a.*, row_number() over (partition by a.g, a.l, a.amt order by a.o, a.k) as r from a join same s on s.g = a.g and s.l = a.l
+  ), eb as (select b.*, row_number() over (partition by b.g, b.l, b.amt order by b.o, b.bid) as r from b join same s on s.g = b.g and s.l = b.l
+  ), m1 as (select ea.k, eb.bid, eb.hsn, eb.rate from ea join eb on eb.g = ea.g and eb.l = ea.l and eb.amt = ea.amt and eb.r = ea.r
+  ), ra as (select ea.*, row_number() over (partition by ea.g, ea.l order by ea.o, ea.k) as kk from ea where ea.k not in (select m1.k from m1)
+  ), rb as (select eb.*, row_number() over (partition by eb.g, eb.l order by eb.o, eb.bid) as kk from eb where eb.bid not in (select m1.bid from m1)
+  ), m2 as (select ra.k, rb.hsn, rb.rate from ra join rb on rb.g = ra.g and rb.l = ra.l and rb.kk = ra.kk
+  ), uni as (
+    select a.k, u.hsn, u.rate from a join na on na.g = a.g and na.l = a.l join nb on nb.g = a.g and nb.l = a.l
+      cross join lateral (select b.hsn, b.rate from b where b.g = a.g and b.l = a.l order by b.bid limit 1) u
+     where na.n <> nb.n and nb.dh = 1 and nb.dr = 1
+  )
+  select m1.k, m1.hsn, m1.rate from m1 union all select m2.k, m2.hsn, m2.rate from m2 union all select uni.k, uni.hsn, uni.rate from uni
+$function$;
+revoke all on function public.tally_recorder_pair_lines(jsonb, jsonb) from public, anon, authenticated, service_role;
+
+-- p_lines as sent ([guid, ledger, amount, hsn, rate, bills]): a line with a blank hsn or no rate takes the stored value of
+-- the line it pairs with (tally_recorder_pair_lines); a sent value always wins; entries not stored, and entries the
+-- bridge marks complete ("full": true in p_vouchers), are passed as sent. The stored side: the entry's current version
+-- row's lines (their order), else (an entry stored before migration 37) its tally_lines by ledger and amount
+create or replace function public.tally_recorder_keep_lines(p_book uuid, p_lines jsonb, p_vouchers jsonb)
 returns jsonb language plpgsql stable security definer set search_path = public, pg_temp as $function$
+declare sent jsonb; stored jsonb; pairs jsonb;
 begin
   if jsonb_typeof(p_lines) is distinct from 'array' then return p_lines; end if;
+  with full_g as (
+    select distinct x->>'guid' as g from jsonb_array_elements(case when jsonb_typeof(p_vouchers) = 'array' then p_vouchers else '[]'::jsonb end) x
+     where jsonb_typeof(x) = 'object' and lower(coalesce(x->>'full', '')) = 'true'
+  ), inc as (
+    select x, o, x->>0 as g, tally_nm(x->>1) as l, x->>2 as amt
+      from jsonb_array_elements(p_lines) with ordinality as t(x, o)
+     where jsonb_typeof(x) = 'array' and coalesce(x->>0, '') <> '' and not exists (select 1 from full_g where full_g.g = x->>0)
+  ), ent as (
+    select v.guid, ver.lines from tally_vouchers v
+      left join tally_voucher_versions ver on ver.book_id = v.book_id and ver.tally_guid = v.guid and ver.alter_id = coalesce(v.alter_id, 0) and jsonb_typeof(ver.lines) = 'array'
+     where v.book_id = p_book and v.guid in (select inc.g from inc group by inc.g having bool_or(btrim(coalesce(inc.x->>3, '')) = '' or nullif(btrim(coalesce(inc.x->>4, '')), '') is null))
+  )
+  select (select coalesce(jsonb_agg(jsonb_build_object('k', inc.o::text, 'g', inc.g, 'l', inc.l, 'amt', inc.amt, 'o', inc.o)), '[]'::jsonb) from inc where inc.g in (select ent.guid from ent)),
+         (select coalesce(jsonb_agg(s.e), '[]'::jsonb) from (
+            select jsonb_build_object('g', e.guid, 'l', tally_nm(z.el->>0), 'amt', z.el->>1, 'o', z.ord, 'hsn', z.el->>2, 'rate', z.el->>3) as e
+              from ent e cross join lateral jsonb_array_elements(e.lines) with ordinality as z(el, ord) where e.lines is not null and jsonb_typeof(z.el) = 'array'
+            union all
+            select jsonb_build_object('g', l.guid, 'l', l.ledger, 'amt', l.amount::text, 'o', row_number() over (partition by l.guid order by l.ledger, l.amount), 'hsn', l.hsn, 'rate', l.rate::text)
+              from tally_lines l join ent e on e.guid = l.guid and e.lines is null where l.book_id = p_book) s)
+    into sent, stored;
+  if jsonb_array_length(sent) = 0 then return p_lines; end if;
+  select coalesce(jsonb_object_agg(pl.k, jsonb_build_object('hsn', pl.hsn, 'rate', pl.rate)), '{}'::jsonb) into pairs from tally_recorder_pair_lines(sent, stored) pl;
   return (
-    with inc as (
-      select x, o, x->>0 as guid, tally_nm(x->>1) as ledger, case when coalesce(x->>2, '') ~ '^-?[0-9]+(\.[0-9]+)?$' then (x->>2)::numeric end as amount,
-             btrim(coalesce(x->>3, '')) = '' as no_hsn, nullif(btrim(coalesce(x->>4, '')), '') is null as no_rate
-        from jsonb_array_elements(p_lines) with ordinality as t(x, o)
-       where jsonb_typeof(x) = 'array'
-    ), inc_r as (
-      select i.*, row_number() over (partition by i.guid, i.ledger order by i.amount, i.o) as rk from inc i
-    ), old as (
-      select l.guid, l.ledger, l.amount, l.hsn, l.rate, row_number() over (partition by l.guid, l.ledger order by l.amount, l.ctid) as rk
-        from tally_lines l where l.book_id = p_book and l.guid in (select guid from inc where no_hsn or no_rate)
-    ), pick as (
-      select i.o, i.x, i.no_hsn, i.no_rate, m.hsn, m.rate
-        from inc_r i
-        left join lateral (
-          select o2.hsn, o2.rate from old o2 where o2.guid = i.guid and o2.ledger = i.ledger
-           order by (o2.amount = i.amount) desc nulls last, abs(o2.rk - i.rk), o2.rk limit 1) m on (i.no_hsn or i.no_rate)
-    )
     select coalesce(jsonb_agg(
-             case when p.o is null then a.x
-                  when (p.no_hsn and btrim(coalesce(p.hsn, '')) <> '') or (p.no_rate and p.rate is not null) then
-                    jsonb_build_array(p.x->0, p.x->1, p.x->2,
-                      case when p.no_hsn and btrim(coalesce(p.hsn, '')) <> '' then to_jsonb(p.hsn) else p.x->3 end,
-                      case when p.no_rate and p.rate is not null then to_jsonb(p.rate) else p.x->4 end)
-                    || coalesce((select jsonb_agg(e order by k) from jsonb_array_elements(p.x) with ordinality as z(e, k) where k > 5), '[]'::jsonb)
-                  else p.x end order by a.o), '[]'::jsonb)
+             case when p.v is null then a.x
+                  when (btrim(coalesce(a.x->>3, '')) = '' and btrim(coalesce(p.v->>'hsn', '')) <> '') or (nullif(btrim(coalesce(a.x->>4, '')), '') is null and p.v->'rate' is not null and jsonb_typeof(p.v->'rate') = 'number') then
+                    jsonb_build_array(a.x->0, a.x->1, a.x->2,
+                      case when btrim(coalesce(a.x->>3, '')) = '' and btrim(coalesce(p.v->>'hsn', '')) <> '' then p.v->'hsn' else a.x->3 end,
+                      case when nullif(btrim(coalesce(a.x->>4, '')), '') is null and jsonb_typeof(p.v->'rate') = 'number' then p.v->'rate' else a.x->4 end)
+                    || coalesce((select jsonb_agg(e order by kk) from jsonb_array_elements(a.x) with ordinality as z(e, kk) where kk > 5), '[]'::jsonb)
+                  else a.x end order by a.o), '[]'::jsonb)
       from jsonb_array_elements(p_lines) with ordinality as a(x, o)
-      left join pick p on p.o = a.o
+      left join lateral (select pairs->(a.o::text) as v) p on true
   );
 end $function$;
-revoke all on function public.tally_recorder_keep_lines(uuid, jsonb) from public, anon, authenticated, service_role;
+revoke all on function public.tally_recorder_keep_lines(uuid, jsonb, jsonb) from public, anon, authenticated, service_role;
 
 -- the entry path with the recorder's keep: p_keep false is 48's 4-argument form exactly (the same arguments passed on)
 create or replace function public.tally_ingest_entries(p_book uuid, p_vouchers jsonb, p_lines jsonb, p_rebuild boolean, p_keep boolean)
@@ -110,7 +190,7 @@ begin
   if coalesce(p_keep, false) then
     perform pg_advisory_xact_lock(hashtext(p_book::text));     -- the stored values read under the lock the entry path takes (re-entrant)
     vs := tally_recorder_keep_vouchers(p_book, p_vouchers);
-    ls := tally_recorder_keep_lines(p_book, p_lines);
+    ls := tally_recorder_keep_lines(p_book, p_lines, p_vouchers);
   end if;
   return tally_ingest_entries(p_book, vs, ls, p_rebuild);
 end $function$;
@@ -569,22 +649,24 @@ revoke all on function public.tally_recorder_line(uuid, uuid, jsonb, bigint) fro
 -- ---------------------------------------------------------------- 2. the repair's log (kept: no row is ever removed)
 create table if not exists public.tally_recorder_restore_log (
   id          bigserial primary key,
+  run_id      uuid not null,                 -- one repair run (every field it restored)
   firm_id     uuid not null,
   book_id     uuid not null,
-  guid        text not null,
+  guid        text not null,                 -- the entry (Tally's voucher GUID)
   field       text not null check (field in ('gstin', 'pos', 'ref', 'ref_date', 'cmp_gstin', 'hsn', 'rate')),
-  ledger      text,
+  ledger      text,                          -- a line's: its ledger and amount
   amount      numeric,
-  old_value   text not null default '',
-  new_value   text not null,
-  from_alter  bigint,
+  old_value   text not null default '',      -- blank (what was there)
+  new_value   text not null,                 -- the restored value
+  from_alter  bigint,                        -- the version row it came from: tally_voucher_versions (book_id, guid, from_alter)
   by_user     uuid,
   by_role     text not null default '',
   at          timestamptz not null default now()
 );
 create index if not exists tally_recorder_restore_log_book on public.tally_recorder_restore_log (book_id, at desc);
 alter table public.tally_recorder_restore_log enable row level security;
-revoke insert, update, delete on public.tally_recorder_restore_log from anon, authenticated;
+revoke insert, update, delete, truncate, references, trigger on public.tally_recorder_restore_log from anon, authenticated;     -- review M2 (as 45)
+revoke all on sequence public.tally_recorder_restore_log_id_seq from anon, authenticated;
 do $$ begin
   if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'tally_recorder_restore_log' and policyname = 'tally_recorder_restore_log_read') then
     create policy tally_recorder_restore_log_read on public.tally_recorder_restore_log for select to authenticated using (firm_id = my_firm());
@@ -597,7 +679,8 @@ end $$;
 -- ---------------------------------------------------------------- 3. read-only: what the recorder blanked (the repair's rules)
 -- one row per field to restore: the entry, the field ('gstin', 'pos', 'ref', 'ref_date', 'cmp_gstin'; a line's 'hsn' / 'rate'
 -- with its ledger and amount), the value now (blank) and the value the version row had, that version's AlterID; line_at is
--- the line's row (the repair's own use)
+-- the line's row (the repair's own use). gstin / pos / ref / ref_date only from a version of the same party as now (review
+-- H1); a line's from the latest version holding a value for that ledger, paired by tally_recorder_pair_lines (review M1)
 create or replace function public.tally_recorder_blanked(p_book uuid)
 returns table (guid text, vtype text, vno text, day date, alter_id bigint, field text, ledger text, amount numeric, old_value text, new_value text, from_alter bigint, line_at tid)
 language plpgsql stable security definer set search_path = public, pg_temp as $function$
@@ -607,18 +690,21 @@ begin
   return query
   with rec as (
     -- the entries the recorder applied: the AlterIDs it applied and when it last did
-    select r.object_guid as g, array_agg(distinct r.alter_id) filter (where r.alter_id is not null) as alters, max(r.alter_id) as max_alter, max(r.applied_at) as last_at
+    select r.object_guid as g, array_agg(distinct r.alter_id) filter (where r.alter_id is not null) as alters, max(r.alter_id) as max_alter, max(r.applied_at) as last_at,
+           -- an entry a recorder line brought marked complete ("full", 2.3.1 part A): its blanks are real, never restored
+           bool_or(exists (select 1 from jsonb_array_elements(case when jsonb_typeof(r.body->'vouchers') = 'array' then r.body->'vouchers' else '[]'::jsonb end) x
+                            where jsonb_typeof(x) = 'object' and x->>'guid' = r.object_guid and lower(coalesce(x->>'full', '')) = 'true')) as full_any
       from tally_recorder_lines r
      where r.book_id = p_book and r.state = 'applied' and r.event in ('created', 'altered', 'imported') and r.object_guid is not null
      group by r.object_guid
   ), ent as (
     select v.*, rec.alters, rec.max_alter
       from tally_vouchers v join rec on rec.g = v.guid
-     where v.book_id = p_book and v.deleted_at is null
+     where v.book_id = p_book and v.deleted_at is null and not rec.full_any
        -- a Day Book read of the entry's day after the recorder's last apply is authoritative: nothing restored
        and not exists (select 1 from tally_days d where d.book_id = v.book_id and d.day = v.day and d.at > rec.last_at)
   ), fld as (
-    select e.guid, e.vtype, e.vno, e.day, e.alter_id, k.f, coalesce(to_jsonb(e)->>k.f, '') as now_v, e.alters, e.max_alter
+    select e.guid, e.vtype, e.vno, e.day, e.alter_id, e.party, k.f, coalesce(to_jsonb(e)->>k.f, '') as now_v, e.alters, e.max_alter
       from ent e cross join (values ('gstin'), ('pos'), ('ref'), ('ref_date'), ('cmp_gstin')) as k(f)
      where btrim(coalesce(to_jsonb(e)->>k.f, '')) = ''
   ), fsrc as (
@@ -627,31 +713,46 @@ begin
       join lateral (select ver.payload, ver.alter_id from tally_voucher_versions ver
                      where ver.book_id = p_book and ver.tally_guid = f.guid and ver.alter_id <= coalesce(f.alter_id, 0)
                        and btrim(coalesce(ver.payload->>f.f, '')) <> ''
+                       and (f.f = 'cmp_gstin' or (ver.payload->>'party') is not distinct from f.party)
                      order by ver.alter_id desc limit 1) s on true
   ), lns as (
-    select e.guid, e.vtype, e.vno, e.day, e.alter_id, l.ledger, l.amount, l.hsn, l.rate, l.ctid as at_,
-           row_number() over (partition by l.guid, l.ledger order by l.amount, l.ctid) as rk, e.alters, e.max_alter
+    -- the entries' current lines (no order column exists: by amount, the row handle among equal ones)
+    select e.guid, e.vtype, e.vno, e.day, e.alter_id, l.ledger, l.amount, l.hsn, l.rate, l.ctid as at_, e.alters, e.max_alter,
+           row_number() over (partition by l.guid, l.ledger order by l.amount, l.ctid) as o
       from ent e join tally_lines l on l.book_id = p_book and l.guid = e.guid
-  ), lfld as (
-    select n.*, k.f from lns n cross join (values ('hsn'), ('rate')) as k(f)
-     where (k.f = 'hsn' and btrim(coalesce(n.hsn, '')) = '') or (k.f = 'rate' and n.rate is null)
-  ), lsrc as (
-    select n.*, s.v as src_v, s.alter_id as src_alter
-      from lfld n
+  ), grp as (
+    select n.guid, n.ledger, max(n.alter_id) as alter_id,
+           jsonb_agg(jsonb_build_object('k', n.at_::text, 'g', n.guid, 'l', n.ledger, 'amt', n.amount::text, 'o', n.o)) as sent
+      from lns n group by n.guid, n.ledger
+    having bool_or(btrim(coalesce(n.hsn, '')) = '' or n.rate is null)
+  ), gsrc as (
+    -- the latest version at or below the entry's AlterID holding an HSN or a rate for this ledger, its lines of the ledger
+    select g.guid, g.ledger, g.sent, s.alter_id as src_alter, s.stored
+      from grp g
       join lateral (
-        select case when n.f = 'hsn' then z.el->>2 else z.el->>3 end as v, ver.alter_id
+        select ver.alter_id,
+               (select jsonb_agg(jsonb_build_object('g', g.guid, 'l', g.ledger, 'amt', z.el->>1, 'o', z.ord, 'hsn', z.el->>2, 'rate', z.el->>3) order by z.ord)
+                  from jsonb_array_elements(ver.lines) with ordinality as z(el, ord) where jsonb_typeof(z.el) = 'array' and z.el->>0 = g.ledger) as stored
           from tally_voucher_versions ver
-          cross join lateral (select el, row_number() over (order by case when el->>1 ~ '^-?[0-9]+(\.[0-9]+)?$' then (el->>1)::numeric end, ord) as rk
-                                from jsonb_array_elements(case when jsonb_typeof(ver.lines) = 'array' then ver.lines else '[]'::jsonb end) with ordinality as w(el, ord)
-                               where jsonb_typeof(el) = 'array' and el->>0 = n.ledger) z
-         where ver.book_id = p_book and ver.tally_guid = n.guid and ver.alter_id <= coalesce(n.alter_id, 0)
-           and btrim(coalesce(case when n.f = 'hsn' then z.el->>2 else z.el->>3 end, '')) <> ''
-         order by ver.alter_id desc, (z.el->>1 = n.amount::text or (case when z.el->>1 ~ '^-?[0-9]+(\.[0-9]+)?$' then (z.el->>1)::numeric end) = n.amount) desc, abs(z.rk - n.rk), z.rk
-         limit 1) s on true
+         where ver.book_id = p_book and ver.tally_guid = g.guid and ver.alter_id <= coalesce(g.alter_id, 0) and jsonb_typeof(ver.lines) = 'array'
+           and exists (select 1 from jsonb_array_elements(ver.lines) el where jsonb_typeof(el) = 'array' and el->>0 = g.ledger
+                         and (btrim(coalesce(el->>2, '')) <> '' or coalesce(el->>3, '') ~ '^-?[0-9]+(\.[0-9]+)?$'))
+         order by ver.alter_id desc limit 1) s on true
+  ), lpair as (
+    select gs.guid, gs.ledger, gs.src_alter, pl.k, pl.hsn as p_hsn, pl.rate as p_rate
+      from gsrc gs cross join lateral tally_recorder_pair_lines(gs.sent, gs.stored) pl
+  ), lsrc as (
+    select n.guid, n.vtype, n.vno, n.day, n.alter_id, k.f, n.ledger, n.amount,
+           coalesce(case when k.f = 'hsn' then n.hsn else n.rate::text end, '') as now_v,
+           case when k.f = 'hsn' then p.p_hsn else p.p_rate::text end as src_v, p.src_alter, n.at_, n.alters, n.max_alter
+      from lns n join lpair p on p.guid = n.guid and p.ledger = n.ledger and p.k = n.at_::text
+      cross join (values ('hsn'), ('rate')) as k(f)
+     where (k.f = 'hsn' and btrim(coalesce(n.hsn, '')) = '' and btrim(coalesce(p.p_hsn, '')) <> '')
+        or (k.f = 'rate' and n.rate is null and p.p_rate is not null)
   ), allf as (
     select x.guid, x.vtype, x.vno, x.day, x.alter_id, x.f, null::text as ledger, null::numeric as amount, x.now_v, x.src_v, x.src_alter, null::tid as at_, x.alters, x.max_alter from fsrc x
     union all
-    select y.guid, y.vtype, y.vno, y.day, y.alter_id, y.f, y.ledger, y.amount, coalesce(case when y.f = 'hsn' then y.hsn else y.rate::text end, ''), y.src_v, y.src_alter, y.at_, y.alters, y.max_alter from lsrc y
+    select y.guid, y.vtype, y.vno, y.day, y.alter_id, y.f, y.ledger, y.amount, y.now_v, y.src_v, y.src_alter, y.at_, y.alters, y.max_alter from lsrc y
   )
   select a.guid, a.vtype, a.vno, a.day, a.alter_id, a.f, a.ledger, a.amount, a.now_v, a.src_v, a.src_alter, a.at_
     from allf a
@@ -659,22 +760,41 @@ begin
    where a.max_alter >= a.src_alter
      and not exists (select 1 from tally_voucher_versions w where w.book_id = p_book and w.tally_guid = a.guid
                         and w.alter_id > a.src_alter and w.alter_id <= coalesce(a.alter_id, 0) and not (w.alter_id = any(coalesce(a.alters, '{}'))))
-   order by a.day, a.vno, a.guid, a.f, a.ledger;
+   order by a.day, a.vno, a.guid, a.f, a.ledger, a.amount;
 end $function$;
 revoke all on function public.tally_recorder_blanked(uuid) from public, anon, authenticated;
 grant execute on function public.tally_recorder_blanked(uuid) to service_role;
 
 -- ---------------------------------------------------------------- 4. the repair (not run here)
-create or replace function public.tally_recorder_restore_fields(p_book uuid)
+-- p_dry_run true: the list only (count, entries with type, number, date and the fields), nothing written, nothing logged.
+-- p_dry_run false: only those entries, only those fields, each written only while blank (the update re-checks), one row a
+-- restored field in tally_recorder_restore_log (run_id, entry, field, restored value, old blank, from which version, at).
+-- Both answer the book's live entry count and ledger-day total before and after (the owner's condition e: the same count,
+-- 0.00): the repair writes no amount, no ledger, no day, and removes nothing
+create or replace function public.tally_recorder_restore_fields(p_book uuid, p_dry_run boolean)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
 declare f uuid; r record; o record; n int; nv int := 0; nl int := 0; sh boolean; sr boolean; who uuid := auth.uid(); rl text := coalesce(auth.role(), session_user::text);
+  run uuid := gen_random_uuid(); lst jsonb; todo jsonb; n0 bigint; t0 numeric; n1 bigint; t1 numeric;
 begin
   if not tally_service_or_owner() then raise exception 'not allowed' using errcode = '42501'; end if;
+  if p_dry_run is null then raise exception 'p_dry_run: true (the list only) or false (restore)'; end if;
   perform pg_advisory_xact_lock(hashtext(p_book::text));
   select firm_id into f from tally_books where book_id = p_book;
   if f is null then raise exception 'no such book'; end if;
+  -- review L2: the fields to restore, worked out once (the list, the dry run and the writes all use this one answer)
+  select coalesce(jsonb_agg(to_jsonb(b)), '[]'::jsonb) into todo from tally_recorder_blanked(p_book) b;
+  select count(*) into n0 from tally_vouchers v where v.book_id = p_book and v.deleted_at is null;
+  select coalesce(sum(d.amount), 0) into t0 from tally_ledger_day d where d.book_id = p_book;
+  -- the affected entries: type, number, date and which fields (a line's as "hsn: <ledger>" / "rate: <ledger>")
+  select coalesce(jsonb_agg(jsonb_build_object('guid', e.guid, 'type', e.vtype, 'number', e.vno, 'date', e.day, 'fields', e.fields) order by e.day, e.vno, e.guid), '[]'::jsonb) into lst
+    from (select b.guid, b.vtype, b.vno, b.day,
+                 jsonb_agg(jsonb_build_object('field', b.field, 'ledger', b.ledger, 'amount', b.amount, 'value', b.new_value, 'fromAlter', b.from_alter) order by b.field, b.ledger, b.amount) as fields
+            from jsonb_to_recordset(todo) as b(guid text, vtype text, vno text, day date, alter_id bigint, field text, ledger text, amount numeric, old_value text, new_value text, from_alter bigint, line_at tid) group by b.guid, b.vtype, b.vno, b.day) e;
+  if p_dry_run then
+    return jsonb_build_object('ok', true, 'dryRun', true, 'book', p_book, 'count', jsonb_array_length(lst), 'entries', lst, 'liveEntries', n0, 'total', to_char(t0, 'FM999999999990.00'));
+  end if;
   -- the entries' fields: each written only while blank
-  for r in select * from tally_recorder_blanked(p_book) x where x.field not in ('hsn', 'rate') order by x.guid, x.field loop
+  for r in select * from jsonb_to_recordset(todo) as x(guid text, vtype text, vno text, day date, alter_id bigint, field text, ledger text, amount numeric, old_value text, new_value text, from_alter bigint, line_at tid) where x.field not in ('hsn', 'rate') order by x.guid, x.field loop
     n := 0;
     if r.field = 'gstin' then update tally_vouchers v set gstin = left(upper(r.new_value), 15) where v.book_id = p_book and v.guid = r.guid and btrim(coalesce(v.gstin, '')) = '';
     elsif r.field = 'pos' then update tally_vouchers v set pos = left(r.new_value, 60) where v.book_id = p_book and v.guid = r.guid and btrim(coalesce(v.pos, '')) = '';
@@ -685,14 +805,14 @@ begin
     get diagnostics n = row_count;
     if n > 0 then
       nv := nv + n;
-      insert into tally_recorder_restore_log (firm_id, book_id, guid, field, ledger, amount, old_value, new_value, from_alter, by_user, by_role)
-      values (f, p_book, r.guid, r.field, null, null, coalesce(r.old_value, ''), r.new_value, r.from_alter, who, rl);
+      insert into tally_recorder_restore_log (run_id, firm_id, book_id, guid, field, ledger, amount, old_value, new_value, from_alter, by_user, by_role)
+      values (run, f, p_book, r.guid, r.field, null, null, coalesce(r.old_value, ''), r.new_value, r.from_alter, who, rl);
     end if;
   end loop;
   -- the lines: one update a line (its HSN and rate together), each written only while blank
   for r in select x.line_at, x.guid, x.ledger, x.amount, max(x.new_value) filter (where x.field = 'hsn') as h, max(x.new_value) filter (where x.field = 'rate') as rt,
                   max(x.from_alter) filter (where x.field = 'hsn') as ha, max(x.from_alter) filter (where x.field = 'rate') as ra
-             from tally_recorder_blanked(p_book) x where x.field in ('hsn', 'rate') group by x.line_at, x.guid, x.ledger, x.amount order by x.guid, x.ledger, x.amount loop
+             from jsonb_to_recordset(todo) as x(guid text, vtype text, vno text, day date, alter_id bigint, field text, ledger text, amount numeric, old_value text, new_value text, from_alter bigint, line_at tid) where x.field in ('hsn', 'rate') group by x.line_at, x.guid, x.ledger, x.amount order by x.guid, x.ledger, x.amount loop
     select l.hsn, l.rate into o from tally_lines l where l.ctid = r.line_at and l.book_id = p_book and l.guid = r.guid and l.ledger = r.ledger for update;
     if not found then continue; end if;
     sh := r.h is not null and btrim(coalesce(o.hsn, '')) = '';
@@ -704,19 +824,63 @@ begin
     if n > 0 then
       if sh then
         nl := nl + 1;
-        insert into tally_recorder_restore_log (firm_id, book_id, guid, field, ledger, amount, old_value, new_value, from_alter, by_user, by_role)
-        values (f, p_book, r.guid, 'hsn', r.ledger, r.amount, coalesce(o.hsn, ''), r.h, r.ha, who, rl);
+        insert into tally_recorder_restore_log (run_id, firm_id, book_id, guid, field, ledger, amount, old_value, new_value, from_alter, by_user, by_role)
+        values (run, f, p_book, r.guid, 'hsn', r.ledger, r.amount, coalesce(o.hsn, ''), r.h, r.ha, who, rl);
       end if;
       if sr then
         nl := nl + 1;
-        insert into tally_recorder_restore_log (firm_id, book_id, guid, field, ledger, amount, old_value, new_value, from_alter, by_user, by_role)
-        values (f, p_book, r.guid, 'rate', r.ledger, r.amount, '', r.rt, r.ra, who, rl);
+        insert into tally_recorder_restore_log (run_id, firm_id, book_id, guid, field, ledger, amount, old_value, new_value, from_alter, by_user, by_role)
+        values (run, f, p_book, r.guid, 'rate', r.ledger, r.amount, '', r.rt, r.ra, who, rl);
       end if;
     end if;
   end loop;
-  return jsonb_build_object('ok', true, 'book', p_book, 'entryFields', nv, 'lineFields', nl);
+  select count(*) into n1 from tally_vouchers v where v.book_id = p_book and v.deleted_at is null;
+  select coalesce(sum(d.amount), 0) into t1 from tally_ledger_day d where d.book_id = p_book;
+  return jsonb_build_object('ok', true, 'dryRun', false, 'book', p_book, 'run', run, 'count', jsonb_array_length(lst), 'entries', lst, 'entryFields', nv, 'lineFields', nl,
+    'before', jsonb_build_object('liveEntries', n0, 'total', to_char(t0, 'FM999999999990.00')),
+    'after', jsonb_build_object('liveEntries', n1, 'total', to_char(t1, 'FM999999999990.00')),
+    'unchanged', n0 = n1 and t0 = t1);
+end $function$;
+revoke all on function public.tally_recorder_restore_fields(uuid, boolean) from public, anon, authenticated;
+grant execute on function public.tally_recorder_restore_fields(uuid, boolean) to service_role;
+
+-- the 1-argument form restores (p_dry_run false)
+create or replace function public.tally_recorder_restore_fields(p_book uuid)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
+begin
+  return tally_recorder_restore_fields(p_book, false);
 end $function$;
 revoke all on function public.tally_recorder_restore_fields(uuid) from public, anon, authenticated;
 grant execute on function public.tally_recorder_restore_fields(uuid) to service_role;
+
+-- ---------------------------------------------------------------- 5. entries naming a ledger FinCom does not have (read-only)
+-- the owner (06-Oct-2026): "An entry using an unknown ledger is applied anyway, with nothing flagged. Until 2.3.1 is out, flag
+-- these on the page in plain words." The live entries (not deleted) of a book whose lines name a ledger that is not in
+-- tally_ledgers for that book (or is there only marked deleted), with those ledgers' names. p_book null: every book of the
+-- caller's firm. A member reads their own firm's books only (my_firm(); members read, as tally_tb); the service role any
+-- named book. Newest first, 500 entries at most
+create or replace function public.tally_unknown_ledger_entries(p_book uuid)
+returns table (book_id uuid, client_id text, guid text, vtype text, vno text, day date, ledgers text[])
+language plpgsql stable security definer set search_path = public, pg_temp as $function$
+#variable_conflict use_column
+declare f uuid := my_firm(); svc boolean := tally_service_or_owner();
+begin
+  if f is null and not svc then raise exception 'not allowed' using errcode = '42501'; end if;
+  if svc and f is null and p_book is null then raise exception 'which book?'; end if;
+  return query
+    select b.book_id, b.client_id, v.guid, v.vtype, v.vno, v.day, array_agg(distinct l.ledger order by l.ledger)
+      from tally_books b
+      join tally_vouchers v on v.book_id = b.book_id and v.deleted_at is null
+      join tally_lines l on l.book_id = v.book_id and l.guid = v.guid
+     where (p_book is null or b.book_id = p_book)
+       and (b.firm_id = f or (svc and f is null))
+       and btrim(coalesce(l.ledger, '')) <> ''
+       and not exists (select 1 from tally_ledgers t where t.book_id = l.book_id and tally_nm(t.name) = l.ledger and t.deleted_at is null)
+     group by b.book_id, b.client_id, v.guid, v.vtype, v.vno, v.day
+     order by v.day desc, v.vno, v.guid
+     limit 500;
+end $function$;
+revoke all on function public.tally_unknown_ledger_entries(uuid) from public, anon;
+grant execute on function public.tally_unknown_ledger_entries(uuid) to authenticated, service_role;
 
 commit;

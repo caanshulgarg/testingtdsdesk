@@ -166,12 +166,20 @@ FinCom Bridge 2.3.0 fix (06-Oct-2026): `migration-56-keep-fields.sql` runs after
 transaction, `lock_timeout` 10 s, no "delete from", safe twice; NOT yet run on staging). A recorder line applied to an entry
 loaded from a Day Book blanked what the live request does not fetch (GSTIN, place of supply, ref no. / date, company GSTIN,
 a line's HSN / rate). `tally_ingest_entries(book, vouchers, lines, p_rebuild, p_keep)` (5 arguments, granted to nobody):
-with `p_keep` true a blank sent value is filled from the stored entry (`tally_recorder_keep_vouchers`) and a line's blank
-HSN / rate from the stored line of the same ledger (the same amount first, else the same place; `tally_recorder_keep_lines`),
-then 48's 4-argument form runs unchanged; a sent non-blank value always wins. `tally_recorder_line` = 53's text with that one
+with `p_keep` true a blank sent value is filled from the stored entry (`tally_recorder_keep_vouchers`: GSTIN, pos, ref and
+ref date only when the party is the same; the company GSTIN always; a malformed ref date passed as sent) and a line's blank
+HSN / rate from the stored line it pairs with (`tally_recorder_pair_lines`: one-to-one when the ledger has as many lines as
+before, equal amounts first; else only a uniform HSN and rate), then 48's 4-argument form runs unchanged; a sent non-blank
+value always wins; an entry marked `"full": true` (2.3.1 part A) is passed as sent. `tally_lines` has no line-order column:
+the stored order is the version row's `lines` (sorted by ledger and amount). `tally_recorder_line` = 53's text with that one
 call passing `true`. 48's 4-argument and 44's 3-argument forms and `tally_ingest_day` are untouched: a Day Book stays
-authoritative. The repair, not run by the migration: `tally_recorder_restore_fields(book)` (service role / owner) restores
-blank fields from the latest earlier version row when every later version is a recorder one and the day was not read from a
-Day Book since, writing only blank fields and logging each in `tally_recorder_restore_log` (RLS, kept);
-`tally_recorder_blanked(book)` lists the same read-only, and `tests/check_recorder_blanked.sql` is the plain read-only query
-(`psql -v book=<uuid>`, runs before 56 too). Tested by `run_migration56.py` and `run_migration_order.py` (56 in both orders).
+authoritative. The repair, not run by the migration: `tally_recorder_restore_fields(book, p_dry_run)` (service role /
+owner; the 1-argument form restores): the dry run answers the count and the list (type, number, date, fields); the run
+writes only blank fields from the latest earlier version (same party for GSTIN / pos / ref / ref date) when every later
+version is a recorder one and the day was not read from a Day Book since, one row a restored field in
+`tally_recorder_restore_log` (add-only, RLS, kept; run, entry, field, value, old blank, version AlterID, time), and answers
+the live entry count and ledger-day total before and after. `tally_recorder_blanked(book)` lists the same read-only;
+`tests/check_recorder_blanked.sql` is the plain read-only query (`psql -v book=<uuid>`, runs before 56 too).
+`tally_unknown_ledger_entries(book)` (members; null: the firm's books): live entries naming a ledger FinCom does not have,
+listed in plain words on Sync activity and the client's Books page. Tested by `run_migration56.py`,
+`run_migration_order.py` (56 in both orders) and `run_unknown_ledgers_ui.py`.
