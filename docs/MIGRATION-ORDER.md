@@ -17,8 +17,8 @@ revoked; `begin; ... commit;`; safe to run twice) and is shown to the owner befo
 
 ## The two valid orders (both end with the same function texts: `tests/run_migration_order.py` asserts it)
 
-- staging: 32 → 33 → 35 → 34 (first) → 36b → 37 → 36 → 38 → 39 (applied 03-Oct, **except 39's tally_ingest_day part**: both forms are still 38's) → 40 → 41 (run 03-Oct, evening; its 8-argument `tally_ingest_day` superseded 39's) → 42 → 43 (run 04-Oct) → 44 (run 04-Oct) → 45 (run 04-Oct) → **46** → **47** → **48** (run by the owner) → **49** → **50** (run by the owner) → 51 → 52 → 53 → 54 → 55 → 56
-- a fresh database: 32 → 33 → 35 → 34 (reviewed) → 36 → 36b → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 51 → 52 → 53 → 54 → 55 → 56
+- staging: 32 → 33 → 35 → 34 (first) → 36b → 37 → 36 → 38 → 39 (applied 03-Oct, **except 39's tally_ingest_day part**: both forms are still 38's) → 40 → 41 (run 03-Oct, evening; its 8-argument `tally_ingest_day` superseded 39's) → 42 → 43 (run 04-Oct) → 44 (run 04-Oct) → 45 (run 04-Oct) → **46** → **47** → **48** (run by the owner) → **49** → **50** (run by the owner) → 51 → 52 → 53 → 54 → 55 → 56 → 57
+- a fresh database: 32 → 33 → 35 → 34 (reviewed) → 36 → 36b → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 51 → 52 → 53 → 54 → 55 → 56 → 57
 
 | # | File | What it adds |
 |---|---|---|
@@ -183,3 +183,21 @@ the live entry count and ledger-day total before and after. `tally_recorder_blan
 `tally_unknown_ledger_entries(book)` (members; null: the firm's books): live entries naming a ledger FinCom does not have,
 listed in plain words on Sync activity and the client's Books page. Tested by `run_migration56.py`,
 `run_migration_order.py` (56 in both orders) and `run_unknown_ledgers_ui.py`.
+FinCom Bridge 2.3.1 part A (06-Oct-2026): `migration-57-entry-details.sql` runs after 56 in both orders (add-only, one
+transaction, `lock_timeout` 10 s, no "delete from", safe twice; NOT yet run on staging). It stores the whole entry the
+2.3.1 request fetches and parse.js reads (one reader for the Day Book and the entry body): `tally_vouchers` + `irn`,
+`irn_ack_no`, `irn_ack_date`, `eway_no`, `check_notes` (the accuracy checks' plain words, `[]` when none); the tables
+`tally_item_lines` (item, qty, unit, rate, taxable, HSN / SAC and GST rate Tally applied to the line, CGST / SGST / IGST /
+cess worked out from the line's rate and taxable value: Tally 7.1 writes no tax amount per item line, `tax_basis` says
+so), `tally_cost_allocs`, `tally_bank_allocs`, `tally_tds_lines` (RLS: the firm's members read; rows of an earlier version
+marked `gone_at`, never removed); `tally_bills.due` (a due date given as a date). `tally_ingest_details(book, vouchers,
+p_keep)` (granted to nobody) writes them, called by 56's 5-argument `tally_ingest_entries` after 48's 4-argument form; a
+Day Book (`tally_ingest_day`, now through the 5-argument form with `p_keep` false) is authoritative, a recorder line
+(`p_keep` true) never blanks a stored value. tally-ingest does not mark entries `"full": true`, so 56's keep stays in force
+for the recorder path: a value removed in Tally reaches the copy by a Day Book upload. `tally_ingest_delete` = 50's text
+but a delete or cancel of an entry never in the copy settles at once ("nothing to remove: the entry is not in FinCom's
+copy and no longer counts in Tally", kept visible); a later body bringing that GUID is deleted (cancelled) again.
+The accuracy checks themselves run in tally-ingest (a recorder body failing one is held with plain words, nothing of it
+applied); a Day Book entry failing one comes in, its words in `check_notes`. tally-ingest works without 57 (the details
+are then not stored). Tested by `run_migration57.py`, `run_migration_order.py` (57 in both orders), `run_parta_server.py`
+(through tally-ingest) and `run_parse_parta.mjs`.

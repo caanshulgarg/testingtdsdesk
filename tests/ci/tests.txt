@@ -169,3 +169,6 @@ run_device_keys_60.py                 120
 run_release_held_members.py           300
 run_post_target_server.py             120
 run_bridge_per_user_ui.py             120  TDSDESK_SITE=../app/dist-test
+run_parse_parta.mjs                   120
+run_migration57.py                    120
+run_parta_server.py                   120
