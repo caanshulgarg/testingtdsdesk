@@ -1,0 +1,305 @@
+[14:51:05] ---- the bridge built from the ref
+bridge source: 42eaf7071eb366acef1e8b1a624ae6427180d1b8 Handover: 2.3.1 build and publish gate; new points during final checks go to the next release
+setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.3.1.exe SHA-256 7d4a37a93a52dbc55ab9992c7148c7d607485d567fd34e1bde7d607288a216be
+setup: FinComBridge-Setup-2.3.1.exe 3325727 bytes SHA256 7D4A37A93A52DBC55AB9992C7148C7D607485D567FD34E1BDE7D607288A216BE
+[14:51:05] ---- the second Windows user (not an administrator)
+user 2: fcuser2 S-1-5-21-1643835476-1616584234-1346609752-1003; administrators: runnervmfi6oq\runneradmin
+user 2's profile: C:\Users\fcuser2
+ SESSIONNAME               USERNAME                 ID  STATE   TYPE        DEVICE 
+ services                                            0  Disc                        
+ rdp-tcp#0                 fcuser2                   1  Active                      
+>console                   runneradmin               2  Active                      
+ 31c5ce94259d4006a9e4                            65536  Listen                      
+ rdp-tcp                                         65537  Listen                      
+
+[14:51:32] user 2's own Windows session by Remote Desktop: True (session 1)
+[shot] r4-03-rdp-session (1024x768)
+task fcu2 registered for fcuser2 (interactive)
+  [as fcuser2] who=runnervmfi6oq\fcuser2 session=1
+  [as fcuser2] no Tally window in session 1; keys '{ENTER}' to the window in front
+  [as fcuser2] shot u2-desktop
+[14:52:01] ---- the stub cloud
+[14:52:04] ---- user 1's Tally (9000) with the add-on; a copy of the program for user 2 first (its own tally.ini and port)
+  still running from the Tally folder: tallyscheduler 6864
+  robocopy:    Bytes :  177.74 m  177.74 m         0         0       512         0
+  robocopy:    Times :   0:00:00   0:00:00                       0:00:00   0:00:00
+  robocopy: 
+  robocopy: 
+  robocopy:    Speed :           1,982,806,351 Bytes/sec.
+  robocopy:    Speed :             113,457.086 MegaBytes/min.
+  robocopy:    Ended : Tuesday, October 6, 2026 2:52:07 PM
+  robocopy: 
+[14:52:07] copy for user 2: robocopy 9, tally.exe there: True
+Tally :9000 answers: True
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[keys] 't' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-00-tally1 (1024x768)
+[ledger Spike Income :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[ledger Salesify Marketing LLP (bill-by-bill) :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[14:52:39] ---- check 8's masters on user 1's Tally: unit, two stock items (GST 18%), Sales/Purchase, CGST/SGST 9%, customer, supplier
+[unit Nos :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[stock item Spike Widget (GST 18%) :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[stock item Spike Gadget (GST 18%) :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[stock items :9000] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>2</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>2</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>1</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[check 8 ledgers :9000] <RESPONSE><CREATED>6</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[stock items :9000] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>8</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>2</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>1</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[14:52:40] ---- 2.3.1 scenarios: the masters (stock items with HSN and GST rate, GST, TDS, cost centre, bank and party ledgers)
+  scen231: 7 master sets, 14 entries -> D:\a\testingtdsdesk\testingtdsdesk\spike-results\37481759832-windows-latest\round4\scen231
+[masters-1-items :9000] 33 ms, 269 bytes: <RESPONSE><CREATED>4</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[masters-2-costs :9000] 20 ms, 269 bytes: <RESPONSE><CREATED>3</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[masters-4-ledgers :9000] 72 ms, 270 bytes: <RESPONSE><CREATED>14</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[masters-6-bulk :9000] 1766 ms, 271 bytes: <RESPONSE><CREATED>400</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[S4 the bill (New Ref S231-BILL-1, a journal) :9000] 42 ms, 269 bytes: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>2</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[ledger master S231 Buyer :9000] 10 ms, 17392 bytes: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>425</LEDGER><COSTCATEGORY>1</COSTCATEGORY><COSTCENTRE>2</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>6</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>1</CURRENCY><UNIT>1</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIF...
+[shot] r4-s231-00-masters (1024x768)
+[14:52:45] ---- user 2's own Tally (9001), run as fcuser2: a company made by keys, then started again with it and the add-on
+  [as fcuser2] pid=2040 session=1 user=runnervmfi6oq\fcuser2
+Tally :9001 (pid 2040) answers: True; owner: fcuser2; session 1 (runner's own: 2)
+  [as fcuser2] keys 'a' -> Tally pid 2040 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys 't' -> Tally pid 2040 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01-tally2-start
+  [as fcuser2] keys '{ENTER}' -> Tally pid 2040 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01b-tally2-create-company
+  [as fcuser2] keys 'FinCom Spike U2' -> Tally pid 2040 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys '^a' -> Tally pid 2040 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01c-tally2-ctrl-a
+[companies :9001] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+  [as fcuser2] keys '^a' -> Tally pid 2040 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01d-tally2-company
+user 2's company made: True, folder 100000
+  [as fcuser2] pid=1252 session=1 user=runnervmfi6oq\fcuser2
+  [as fcuser2] keys 'a' -> Tally pid 1252 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys 't' -> Tally pid 1252 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01e-tally2-gateway
+[ledger Spike Income :9001] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[companies :9001] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>1</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[ledger Spike Party :9001] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[journal :9001 :9001] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>1</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+== user 2's own Tally with its company and the add-on: True
+[14:54:22] ---- the bridges, each installed by its own Windows user with the real setup, just for me; the settings seeded first
+setup as runneradmin (just for me) ended with 0
+  install.log 1: 2026-10-06 14:54:22  Install (just for this user, no service): FinCom Bridge 2.3.1 for runnervmfi6oq\runneradmin (S-1-5-21-1643835476-1616584234-1346609752-500), sole mode, folder C:\Users\runneradmin\AppData\Local\TDS Desk Bridge
+  install.log 1: 2026-10-06 14:54:25  Install: the add-on FinComRecorder.tdl written in C:\ProgramData\FinCom\addon
+  install.log 1: 2026-10-06 14:54:25  Install: the add-on FinComRecorderAnyCompany.tdl written in C:\ProgramData\FinCom\addon
+  install.log 1: 2026-10-06 14:54:25  Install: the recorder folder C:\ProgramData\FinCom\recorder and the add-on folder C:\ProgramData\FinCom\addon are ready (just for this user)
+  install.log 1: 2026-10-06 14:54:25  Install: starts when runnervmfi6oq\runneradmin signs in to Windows (HKCU Run)
+  install.log 1: 2026-10-06 14:54:27  Install: done; the bridge answers on 127.0.0.1:9100
+  install.log 1: 2026-10-06 14:54:27  Setup: FinComBridge.exe install: done, the bridge answers
+  install.log 1: 2026-10-06 14:54:27  Setup: Finished: installed and running (sole mode)
+seed as fcuser2: runnervmfi6oq\fcuser2 session 1 C:\Users\fcuser2\AppData\Local
+  [as fcuser2] exit=0 user=runnervmfi6oq\fcuser2 session=1
+setup as fcuser2 (just for me) ended: exit=0 user=runnervmfi6oq\fcuser2 session=1
+  install.log 2: 2026-10-06 14:54:29  Install (just for this user, no service): FinCom Bridge 2.3.1 for runnervmfi6oq\fcuser2 (S-1-5-21-1643835476-1616584234-1346609752-1003), sole mode, folder C:\Users\fcuser2\AppData\Local\TDS Desk Bridge
+  install.log 2: 2026-10-06 14:54:32  Install: the add-on FinComRecorder.tdl was not written in C:\ProgramData\FinCom\addon: remove C:\ProgramData\FinCom\addon\FinComRecorder.tdl: Access is denied.
+  install.log 2: 2026-10-06 14:54:32  Install: the add-on FinComRecorderAnyCompany.tdl was not written in C:\ProgramData\FinCom\addon: remove C:\ProgramData\FinCom\addon\FinComRecorderAnyCompany.tdl: Access is denied.
+  install.log 2: 2026-10-06 14:54:32  Install: the recorder folder C:\ProgramData\FinCom\recorder and the add-on folder C:\ProgramData\FinCom\addon are ready (just for this user)
+  install.log 2: 2026-10-06 14:54:32  Install: starts when runnervmfi6oq\fcuser2 signs in to Windows (HKCU Run)
+  install.log 2: 2026-10-06 14:54:33  Install: done; the bridge answers on 127.0.0.1:9101
+  install.log 2: 2026-10-06 14:54:33  Setup: FinComBridge.exe install: done, the bridge answers
+  install.log 2: 2026-10-06 14:54:33  Setup: Finished: installed and running (sole mode)
+bridge 1: user runneradmin, port 9100, id go-6f8f1b5903ac, key 24 chars, Owner runnervmfi6oq\runneradmin, OwnerSid S-1-5-21-1643835476-1616584234-1346609752-500
+bridge 2: user fcuser2, port 9101, id go-40d5465bba22, key 24 chars, Owner runnervmfi6oq\fcuser2, OwnerSid S-1-5-21-1643835476-1616584234-1346609752-1003
+[shot] r4-02-bridges (1024x768)
+[14:54:44] ---- 6a: both bridges run at once, on their own ports, as their own users
+  process 6932 as runneradmin in session 2: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" user --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json"
+  process 9460 as runneradmin in session 2: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" worker --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json" --home "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge" --parent 6932
+  process 8444 as runneradmin in session 2: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" tray --quiet --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json"
+  process 2348 as fcuser2 in session 1: "C:\Users\fcuser2\AppData\Local\FinCom Bridge\FinComBridge.exe" user --config "C:\Users\fcuser2\AppData\Local\TDS Desk Bridge\tds-bridge.config.json"
+  process 2376 as fcuser2 in session 1: "C:\Users\fcuser2\AppData\Local\FinCom Bridge\FinComBridge.exe" worker --config "C:\Users\fcuser2\AppData\Local\TDS Desk Bridge\tds-bridge.config.json" --home "C:\Users\fcuser2\AppData\Local\TDS Desk Bridge" --parent 2348
+  process 3240 as fcuser2 in session 1: "C:\Users\fcuser2\AppData\Local\FinCom Bridge\FinComBridge.exe" tray
+  listening 127.0.0.1:9101 pid 2376 user fcuser2
+  listening 127.0.0.1:9100 pid 9460 user runneradmin
+  Tally pid 1252 session 1 owner fcuser2
+  Tally pid 3356 session 2 owner runneradmin
+######## PASS 6a two bridges at once: bridge 1 runneradmin on 127.0.0.1:9100 (pid 9460, session 2, go-6f8f1b5903ac); bridge 2 fcuser2 on 127.0.0.1:9101 (pid 2376, session 1, go-40d5465bba22); both listening at 14:54:44
+[14:54:44] ---- 6b: the /ping proof: HMAC-SHA256(bridge key, nonce || bridge id || port), only to the bridge's own Windows user
+runneradmin -> own bridge, no Origin: {"bridge":"FinCom Tally Bridge","bridgeId":"go-6f8f1b5903ac","impl":"go","loopSec":0,"ok":true,"pid":9460,"port":9100,"runMode":"user","testMode":false,"version":"2.3.1","yours":true}
+runneradmin -> own bridge: {"bridge":"FinCom Tally Bridge","bridgeId":"go-6f8f1b5903ac","impl":"go","loopSec":0,"ok":true,"pairProof":"5662b0dbcf949721285d9726e4718146d09a5dd87d91ed15a2cf5744eeacb470","pid":9460,"port":9100,"proof":"e19ca6bda4924df42d0f2dade4f8c0450c31286d99edc940b9642187cba95f4f","runMode":"user","testMode":false,"version":"2.3.1","yours":true}
+runneradmin -> user 2's bridge: {"bridge":"FinCom Tally Bridge","impl":"go","loopSec":0,"ok":true,"pid":2376,"runMode":"user","testMode":false,"version":"2.3.1","yours":false}
+as fcuser2 (): {"ownStatus":401,"other":{"bridge":"FinCom Tally Bridge","impl":"go","loopSec":0,"ok":true,"pid":9460,"runMode":"user","testMode":false,"version":"2.3.1","yours":false},"session":1,"own":{"bridge":"FinCom Tally Bridge","bridgeId":"go-40d5465bba22","impl":"go","loopSec":0,"ok":true,"pairProof":"d532714140bcf70740aaddb447dd3d4041f7683a1447cf01cdf4c6fd0c2dd433","pid":2376,"port":9101,"proof":"950fa721b3aec9c8c22efdc28bc8223d56de5011f7db09c1d35407bd1652192f","runMode":"user","testMode":false,"version":"2.3.1","yours":true},"otherStatus":403,"who":"runnervmfi6oq\\fcuser2"}
+  ok   bridge 1 proves itself to runneradmin: yours=True bridgeId=go-6f8f1b5903ac port=9100 proof=e19ca6bda4924df42d0f2dade4f8c0450c31286d99edc940b9642187cba95f4f
+  ok   bridge 1 proof checked against user 2 identity fails: HMAC(key2, nonce||go-40d5465bba22||9101)=2ab19a39fe4708a39a1c72ac8576dd21a145c61ab679d234eb3ed0ee3c045830
+  ok   bridge 2 proves itself to fcuser2: yours=True bridgeId=go-40d5465bba22 port=9101 proof=950fa721b3aec9c8c22efdc28bc8223d56de5011f7db09c1d35407bd1652192f
+  ok   bridge 2 proof checked against user 1 identity fails: HMAC(key1, nonce||go-6f8f1b5903ac||9100)=9471305cf936c8ebe2ac059264435abf6cbc47d90b88c163b06ff9e2e084d559
+  ok   bridge 2 gives runneradmin no proof: yours=False proof= bridgeId=
+  ok   bridge 1 gives fcuser2 no proof: yours=False proof=
+  ok   other users refused 403 beyond /ping: runneradmin: own /status 401, other 403; fcuser2: own /status 401, other 403
+######## PASS 6b /ping proof: bridge 1 proves itself to runneradmin: ok; bridge 1 proof checked against user 2 identity fails: ok; bridge 2 proves itself to fcuser2: ok; bridge 2 proof checked against user 1 identity fails: ok; bridge 2 gives runneradmin no proof: ok; bridge 1 gives fcuser2 no proof: ok; other users refused 403 beyond /ping: ok
+  bridge1 log: 2026-10-06 14:54:26  FinCom Bridge 2.3.1: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+  bridge1 log: 2026-10-06 14:54:26  FinCom Bridge 2.3.1 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+  bridge1 log: 2026-10-06 14:54:26  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+  bridge1 log: 2026-10-06 14:54:26  Recorder: re-scan of the add-on's files for 2.3.1: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+  bridge1 log: 2026-10-06 14:54:26  Check:  - 
+  bridge1 log: 2026-10-06 14:54:29  Tray icon: set to show next to the clock always (Windows 11)
+  bridge1 log: 2026-10-06 14:54:29  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+  bridge1 log: 2026-10-06 14:54:29  Company FinCom Spike Co: its Tally GUID e19c5013-5e71-47a7-9ac2-d8b0764797cd is held from now on
+  bridge1 log: 2026-10-06 14:54:29  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=2, ALTMSTID=642 (reading is prospective only: the bridge follows what changes after this)
+  bridge1 log: 2026-10-06 14:54:29  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=2, ALTMSTID=642
+  bridge1 log: 2026-10-06 14:54:29  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=2, ALTMSTID=642)
+  bridge1 log: 2026-10-06 14:54:33  Refused a request from a program of another Windows user (/tray/idle): not your FinCom Bridge
+  bridge1 log: 2026-10-06 14:54:33  Refused a request from a program of another Windows user (/tray/status): not your FinCom Bridge
+  bridge1 log: 2026-10-06 14:54:51  Refused a request from a program of another Windows user (/status): not your FinCom Bridge
+  bridge2 log: 2026-10-06 14:54:32  FinCom Bridge 2.3.1: started just for runnervmfi6oq\fcuser2 (no service); it keeps the bridge and its icon running
+  bridge2 log: 2026-10-06 14:54:33  Port 9100 is taken (another Windows user's FinCom Bridge, or another program); this bridge uses port 9101 and remembers it
+  bridge2 log: 2026-10-06 14:54:33  FinCom Bridge 2.3.1 (Go) started on 127.0.0.1:9101: the only bridge on this computer; working for runnervmfi6oq\fcuser2, Windows session 1; runs just for this Windows user (starts at sign-in, no service)
+  bridge2 log: 2026-10-06 14:54:33  Tally is open on port 9001; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+  bridge2 log: 2026-10-06 14:54:33  Recorder: re-scan of the add-on's files for 2.3.1: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+  bridge2 log: 2026-10-06 14:54:33  Check:  - 
+  bridge2 log: 2026-10-06 14:54:36  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+  bridge2 log: 2026-10-06 14:54:36  Tray icon: set to show next to the clock always (Windows 11)
+  bridge2 log: 2026-10-06 14:54:36  Company FinCom Spike U2: its Tally GUID 19dac27c-5a52-47cd-a5fa-95068cfa6d1b is held from now on
+  bridge2 log: 2026-10-06 14:54:36  Company FinCom Spike U2: its starting point is recorded: ALTVCHID=1, ALTMSTID=209 (reading is prospective only: the bridge follows what changes after this)
+  bridge2 log: 2026-10-06 14:54:36  Company FinCom Spike U2: change numbers read with form a: ALTVCHID=1, ALTMSTID=209
+  bridge2 log: 2026-10-06 14:54:36  Light check of FinCom Spike U2: starting point recorded (ALTVCHID=1, ALTMSTID=209)
+  bridge2 log: 2026-10-06 14:54:50  Refused a request from a program of another Windows user (/status): not your FinCom Bridge (the program asking has no Windows user)
+[14:55:21] ---- only S5 (on the screen) and R1
+[14:55:21] ---- 2.3.1 scenarios: the company's TDS and cost centre features, the TDS nature of payment and ledgers
+[masters-0-company :9000] 16 ms, 269 bytes: <RESPONSE><CREATED>0</CREATED><ALTERED>1</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[masters-3-nature :9000] 9 ms, 269 bytes: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[masters-5-tds :9000] 20 ms, 350 bytes: <RESPONSE><LINEERROR>TDS Rate &apos;S231 Contract Work&apos; does not exist!</LINEERROR><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>2</EXCEPTIONS></RESPONSE>
+[ledger master S231 Contractor :9000] 10 ms, 16893 bytes: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>1</COMPANY><GROUP>0</GROUP><LEDGER>426</LEDGER><COSTCATEGORY>1</COSTCATEGORY><COSTCENTRE>2</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>6</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>2</CURRENCY><UNIT>1</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>1</TAXCLASSIF...
+[ledger master S231 Contract Exp :9000] 6 ms, 1499 bytes: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>1</COMPANY><GROUP>0</GROUP><LEDGER>426</LEDGER><COSTCATEGORY>1</COSTCATEGORY><COSTCENTRE>2</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>6</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>2</CURRENCY><UNIT>1</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>1</TAXCLASSIF...
+[ledger master S231 TDS Payable :9000] 5 ms, 1499 bytes: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>1</COMPANY><GROUP>0</GROUP><LEDGER>426</LEDGER><COSTCATEGORY>1</COSTCATEGORY><COSTCENTRE>2</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>6</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>2</CURRENCY><UNIT>1</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>1</TAXCLASSIF...
+[stock items :9000] 8 ms, 47546 bytes: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>1</COMPANY><GROUP>0</GROUP><LEDGER>426</LEDGER><COSTCATEGORY>1</COSTCATEGORY><COSTCENTRE>2</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>6</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>2</CURRENCY><UNIT>1</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>1</TAXCLASSIF...
+[company features :9000] 2 ms, 1788 bytes: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>1</COMPANY><GROUP>0</GROUP><LEDGER>426</LEDGER><COSTCATEGORY>1</COSTCATEGORY><COSTCENTRE>2</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>6</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>2</CURRENCY><UNIT>1</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>1</TAXCLASSIF...
+[14:55:21] ---- S5 on the screen: a journal with TDS typed in Tally (masters by XML)
+[ledger master S231 Contractor :9000] 8 ms, 16893 bytes: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>1</COMPANY><GROUP>0</GROUP><LEDGER>426</LEDGER><COSTCATEGORY>1</COSTCATEGORY><COSTCENTRE>2</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>6</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>2</CURRENCY><UNIT>1</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>1</TAXCLASSIF...
+[ledger master S231 Contract Exp :9000] 5 ms, 1499 bytes: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>1</COMPANY><GROUP>0</GROUP><LEDGER>426</LEDGER><COSTCATEGORY>1</COSTCATEGORY><COSTCENTRE>2</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>6</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>2</CURRENCY><UNIT>1</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>1</TAXCLASSIF...
+[ledger master S231 TDS Payable :9000] 5 ms, 1499 bytes: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>1</COMPANY><GROUP>0</GROUP><LEDGER>426</LEDGER><COSTCATEGORY>1</COSTCATEGORY><COSTCENTRE>2</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>6</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>2</CURRENCY><UNIT>1</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>1</TAXCLASSIF...
+  Tally :9000 voucher mid=1 aid=1 guid=e19c5013-5e71-47a7-9ac2-d8b0764797cd-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=e19c5013-5e71-47a7-9ac2-d8b0764797cd-00000002 no=2 cancelled=False
+[shot] tds-001-gw0 (1024x768)
+[14:55:23] [tds] screen tds-001-gw0 : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data x Find details entered in masters and transactions. Z: Exchange CURRENT OATE Wednesday, I-Apr-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print Gateway Tally CURRE CURRENT PERIOD I-Apr. I-Apr-26 to 31-Mar-27 NAME NAME OF COMPANY FinC( FinCom Spike Co (Schedule Backup) Q Search I-OctQ6 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Fl: Help Dat...
+[keys] 'v' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-002-s5-vouchers (1024x768)
+[14:55:27] [tds] screen tds-002-s5-vouchers : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Pa ment No. 1 CURR I-Apr. Account NAME Current balance: Particulars FinC( Narration: Quit x Find details entered in masters and transactions. (Alt+F) O: Import Z: Exchange A Accept E: Export M: Share inCom Spike p: print upr-26 Wednesday Amount D: Delete x: Q Search Cancel Vch 12 Fl: Help Date Company pany Contra F5: Payment Receipt Journal Purchase FIO: E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure 2...
+[keys] '{F7}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-003-s5-journal (1024x768)
+[14:55:32] [tds] screen tds-003-s5-journal : 127.0.0.2 - Remote Desktop Connection EDU prim x a Find details entered in masters and transactions. (Alt+F) prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME Z: Exchange M: Share inCom Spike Co FinC( By Narration: Quit O: Import E: Export List of Ledger Accounts Input CGST Input SGST output CGST output SGST Profit & Loss A/c S231 Billwise Party S231 Buyer S231 Contractor S231 Freight Charged S231 Office Exp S231 Old Name Party S231 Party 001 S231 Party 002 S231 Party 003 S231 Party 004 S231 Party 005 S231 Party 006 S231 Party 007 S231 Party 008 p:...
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-004-s5-date-box (1024x768)
+[14:55:35] [tds] screen tds-004-s5-date-box : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway Change Voucher Date CURR I-Apr NAME FinC Quit Find details entered in masters and transactions. (Alt+F) O: Import Z: Exchange A Accept E: Export M: Share p: print Fl: Help x x pany FinCom Spike Co Voucher Date 24-2026 Q Search 2:55 PM 10/6/2026
+[keys] '1-1-2027{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-005-s5-date-set (1024x768)
+[14:55:39] [tds] screen tds-005-s5-date-set : 127.0.0.2 - Remote Desktop Connection EDU prim x a Find details entered in masters and transactions. (Alt+F) prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME Z: Exchange M: Share inCom Spike Co FinC( By Narration: Quit O: Import E: Export List of Ledger Accounts Input CGST Input SGST output CGST output SGST Profit & Loss A/c S231 Billwise Party S231 Buyer S231 Contractor S231 Freight Charged S231 Office Exp S231 Old Name Party S231 Party 001 S231 Party 002 S231 Party 003 S231 Party 004 S231 Party 005 S231 Party 006 S231 Party 007 S231 Party 008 p:...
+[keys] 'S231 Contract Exp{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-006-s5-r1-ledger (1024x768)
+[14:55:43] [tds] screen tds-006-s5-r1-ledger : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME FinC( By Narration: Q: Quit x Find details entered In masters and transactions Z: Exchange A: Accept O: Import E: Export List of Ledger Accounts M: Share inCom Spike Co p: print x Create Show More S231 D: Delete Q Contractor X: Cancel Vch 12 Error Oops! Spelling Error Search Fl: Help F2: Date pany F3: Company F4: Contra F5: Payment F6: Receipt F7: Journal F8: Sales F9: Purchase Flo: E: Autofill H: Change = Mode l: More Details O: Related = Reports L: Op...
+[keys] '100000{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-007-s5-r1-amount (1024x768)
+[14:55:47] [tds] screen tds-007-s5-r1-amount : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME FinC( By Narration: Q: Quit x Find details entered In masters and transactions Z: Exchange A: Accept O: Import E: Export List of Ledger Accounts M: Share inCom Spike Co p: print x Create Show More S231 D: Delete Q Contractor X: Cancel Vch 12 Error Oops! Spelling Error Search Fl: Help F2: Date pany F3: Company F4: Contra F5: Payment F6: Receipt F7: Journal F8: Sales F9: Purchase Flo: E: Autofill H: Change = Mode l: More Details O: Related = Reports L: Op...
+[keys] 't{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-008-s5-r2-to (1024x768)
+[14:55:50] [tds] screen tds-008-s5-r2-to : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME FinC( By Narration: Q: Quit x Find details entered In masters and transactions Z: Exchange A: Accept O: Import E: Export List of Ledger Accounts M: Share inCom Spike Co p: print x Create Show More S231 D: Delete Q Contractor X: Cancel Vch 12 Error Oops! Spelling Error Search Fl: Help F2: Date pany F3: Company F4: Contra F5: Payment F6: Receipt F7: Journal F8: Sales F9: Purchase Flo: E: Autofill H: Change = Mode l: More Details O: Related = Reports L: Op...
+[keys] 'S231 TDS Payable{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-009-s5-r2-ledger (1024x768)
+[14:55:54] [tds] screen tds-009-s5-r2-ledger : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME FinC( By Narration: Q: Quit x Find details entered In masters and transactions Z: Exchange A: Accept O: Import E: Export List of Ledger Accounts M: Share inCom Spike Co p: print x Create Show More S231 D: Delete Q Contractor X: Cancel Vch 12 Error Oops! Spelling Error Search Fl: Help F2: Date pany F3: Company F4: Contra F5: Payment F6: Receipt F7: Journal F8: Sales F9: Purchase Flo: E: Autofill H: Change = Mode l: More Details O: Related = Reports L: Op...
+[shot] tds-010-s5-r2-sub1 (1024x768)
+[14:55:55] [tds] screen tds-010-s5-r2-sub1 : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME FinC( By Narration: Q: Quit x Find details entered In masters and transactions Z: Exchange A: Accept O: Import E: Export List of Ledger Accounts M: Share inCom Spike Co p: print x Create Show More S231 D: Delete Q Contractor X: Cancel Vch 12 Error Oops! Spelling Error Search Fl: Help F2: Date pany F3: Company F4: Contra F5: Payment F6: Receipt F7: Journal F8: Sales F9: Purchase Flo: E: Autofill H: Change = Mode l: More Details O: Related = Reports L: Op...
+[shot] tds-011-s5-r2-amount-shown (1024x768)
+[14:55:56] [tds] screen tds-011-s5-r2-amount-shown : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME FinC( By Narration: Q: Quit x Find details entered In masters and transactions Z: Exchange A: Accept O: Import E: Export List of Ledger Accounts M: Share inCom Spike Co p: print x Create Show More S231 D: Delete Q Contractor X: Cancel Vch 12 Error Oops! Spelling Error Search Fl: Help F2: Date pany F3: Company F4: Contra F5: Payment F6: Receipt F7: Journal F8: Sales F9: Purchase Flo: E: Autofill H: Change = Mode l: More Details O: Related = Reports L: Op...
+[keys] '2000{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-012-s5-r2-amount-typed (1024x768)
+[14:56:00] [tds] screen tds-012-s5-r2-amount-typed : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME FinC( By Narration: Q: Quit x Find details entered In masters and transactions Z: Exchange A: Accept O: Import E: Export List of Ledger Accounts M: Share inCom Spike Co p: print x Create Show More S231 D: Delete Q Contractor X: Cancel Vch 12 Error Oops! Spelling Error Search Fl: Help F2: Date pany F3: Company F4: Contra F5: Payment F6: Receipt F7: Journal F8: Sales F9: Purchase Flo: E: Autofill H: Change = Mode l: More Details O: Related = Reports L: Op...
+[shot] tds-013-s5-r2-after1 (1024x768)
+[14:56:01] [tds] screen tds-013-s5-r2-after1 : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME FinC( By Narration: Q: Quit x Find details entered In masters and transactions Z: Exchange A: Accept O: Import E: Export List of Ledger Accounts M: Share inCom Spike Co p: print x Create Show More S231 D: Delete Q Contractor X: Cancel Vch 12 Error Oops! Spelling Error Search Fl: Help F2: Date pany F3: Company F4: Contra F5: Payment F6: Receipt F7: Journal F8: Sales F9: Purchase Flo: E: Autofill H: Change = Mode l: More Details O: Related = Reports L: Op...
+[keys] 't{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-014-s5-r3-to (1024x768)
+[14:56:04] [tds] screen tds-014-s5-r3-to : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME FinC( By Narration: Q: Quit x Find details entered In masters and transactions Z: Exchange A: Accept O: Import E: Export List of Ledger Accounts M: Share inCom Spike Co p: print x Create Show More S231 D: Delete Q Contractor X: Cancel Vch 12 Error Oops! Spelling Error Search Fl: Help F2: Date pany F3: Company F4: Contra F5: Payment F6: Receipt F7: Journal F8: Sales F9: Purchase Flo: E: Autofill H: Change = Mode l: More Details O: Related = Reports L: Op...
+[keys] 'S231 Contractor{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-015-s5-r3-ledger (1024x768)
+[14:56:09] [tds] screen tds-015-s5-r3-ledger : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME FinC( By Narration: Q: Quit x Find details entered In masters and transactions Z: Exchange A: Accept O: Import E: Export List of Ledger Accounts M: Share inCom Spike Co p: print x Create Show More S231 D: Delete Q Contractor X: Cancel Vch 12 Error Oops! Spelling Error Search Fl: Help F2: Date pany F3: Company F4: Contra F5: Payment F6: Receipt F7: Journal F8: Sales F9: Purchase Flo: E: Autofill H: Change = Mode l: More Details O: Related = Reports L: Op...
+[shot] tds-016-s5-r3-amount-shown (1024x768)
+[14:56:10] [tds] screen tds-016-s5-r3-amount-shown : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME FinC( By Narration: Q: Quit x Find details entered In masters and transactions Z: Exchange A: Accept O: Import E: Export List of Ledger Accounts M: Share inCom Spike Co p: print x Create Show More S231 D: Delete Q Contractor X: Cancel Vch 12 Error Oops! Spelling Error Search Fl: Help F2: Date pany F3: Company F4: Contra F5: Payment F6: Receipt F7: Journal F8: Sales F9: Purchase Flo: E: Autofill H: Change = Mode l: More Details O: Related = Reports L: Op...
+[keys] '98000{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-017-s5-r3-amount-typed (1024x768)
+[14:56:13] [tds] screen tds-017-s5-r3-amount-typed : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME FinC( By Narration: Q: Quit x Find details entered In masters and transactions Z: Exchange A: Accept O: Import E: Export List of Ledger Accounts M: Share inCom Spike Co p: print x Create Show More S231 D: Delete Q Contractor X: Cancel Vch 12 Error Oops! Spelling Error Search Fl: Help F2: Date pany F3: Company F4: Contra F5: Payment F6: Receipt F7: Journal F8: Sales F9: Purchase Flo: E: Autofill H: Change = Mode l: More Details O: Related = Reports L: Op...
+[shot] tds-018-s5-r3-after1 (1024x768)
+[14:56:14] [tds] screen tds-018-s5-r3-after1 : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME FinC( By Narration: Q: Quit x Find details entered In masters and transactions Z: Exchange A: Accept O: Import E: Export List of Ledger Accounts M: Share inCom Spike Co p: print x Create Show More S231 D: Delete Q Contractor X: Cancel Vch 12 Error Oops! Spelling Error Search Fl: Help F2: Date pany F3: Company F4: Contra F5: Payment F6: Receipt F7: Journal F8: Sales F9: Purchase Flo: E: Autofill H: Change = Mode l: More Details O: Related = Reports L: Op...
+[shot] tds-019-s5-before-narration (1024x768)
+[14:56:15] [tds] screen tds-019-s5-before-narration : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME FinC( By Narration: Q: Quit x Find details entered In masters and transactions Z: Exchange A: Accept O: Import E: Export List of Ledger Accounts M: Share inCom Spike Co p: print x Create Show More S231 D: Delete Q Contractor X: Cancel Vch 12 Error Oops! Spelling Error Search Fl: Help F2: Date pany F3: Company F4: Contra F5: Payment F6: Receipt F7: Journal F8: Sales F9: Purchase Flo: E: Autofill H: Change = Mode l: More Details O: Related = Reports L: Op...
+[keys] 'S5 contract work TDS 194C entered on the screen{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-020-s5-narration (1024x768)
+[14:56:20] [tds] screen tds-020-s5-narration : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME FinC( By Narration: Q: Quit x Find details entered In masters and transactions Z: Exchange A: Accept O: Import E: Export List of Ledger Accounts M: Share inCom Spike Co p: print x Create Show More S231 D: Delete Q Contractor X: Cancel Vch 12 Error Oops! Spelling Error Search Fl: Help F2: Date pany F3: Company F4: Contra F5: Payment F6: Receipt F7: Journal F8: Sales F9: Purchase Flo: E: Autofill H: Change = Mode l: More Details O: Related = Reports L: Op...
+[shot] tds-021-s5-accept-q (1024x768)
+[14:56:21] [tds] screen tds-021-s5-accept-q : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME FinC( By Narration: Q: Quit x Find details entered In masters and transactions Z: Exchange A: Accept O: Import E: Export List of Ledger Accounts M: Share inCom Spike Co p: print x Create Show More S231 D: Delete Q Contractor X: Cancel Vch 12 Error Oops! Spelling Error Search Fl: Help F2: Date pany F3: Company F4: Contra F5: Payment F6: Receipt F7: Journal F8: Sales F9: Purchase Flo: E: Autofill H: Change = Mode l: More Details O: Related = Reports L: Op...
+[keys] 'y' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-022-s5-accepted (1024x768)
+[14:56:26] [tds] screen tds-022-s5-accepted : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME FinC( By Narration: Q: Quit x Find details entered In masters and transactions Z: Exchange A: Accept O: Import E: Export List of Ledger Accounts M: Share inCom Spike Co p: print x Create Show More S231 D: Delete Q Contractor X: Cancel Vch 12 Error Oops! Spelling Error Search Fl: Help F2: Date pany F3: Company F4: Contra F5: Payment F6: Receipt F7: Journal F8: Sales F9: Purchase Flo: E: Autofill H: Change = Mode l: More Details O: Related = Reports L: Op...
+[shot] tds-023-gw0 (1024x768)
+[14:56:27] [tds] screen tds-023-gw0 : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME FinC( By Narration: Q: Quit x Find details entered In masters and transactions Z: Exchange A: Accept O: Import E: Export List of Ledger Accounts M: Share inCom Spike Co p: print x Create Show More S231 D: Delete Q Contractor X: Cancel Vch 12 Error Oops! Spelling Error Search Fl: Help F2: Date pany F3: Company F4: Contra F5: Payment F6: Receipt F7: Journal F8: Sales F9: Purchase Flo: E: Autofill H: Change = Mode l: More Details O: Related = Reports L: Op...
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-024-gw1 (1024x768)
+[14:56:30] [tds] screen tds-024-gw1 : 127.0.0.2 - Remote Desktop Connection EDU prim x a Find details entered in masters and transactions. (Alt+F) prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME FinC( By Narration: Quit Z: Exchange A Accept M: Share inCom Spike Co O: Import E: Export List of Ledger Accounts p: print x Create Show More S231 D: Delete Contractor x: Q Search Cancel Vch 12 Fl: Help Date Company pany Contra F5: payment F6 Receipt F7: Journal Purchase FIO: E: Autofill H: Change = Mode More Details Related o: ¯ Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused Vch...
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-025-gw2 (1024x768)
+[14:56:34] [tds] screen tds-025-gw2 : 127.0.0.2 - Remote Desktop Connection EDU prim x a Find details entered in masters and transactions. (Alt+F) prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME Z: Exchange M: Share inCom Spike Co FinC( By Narration: Quit O: Import E: Export List of Ledger Accounts Input CGST Input SGST output CGST output SGST Profit & Loss A/c S231 Billwise Party S231 Buyer S231 Contractor S231 Freight Charged S231 Office Exp S231 Old Name Party S231 Party 001 S231 Party 002 S231 Party 003 S231 Party 004 S231 Party 005 S231 Party 006 S231 Party 007 S231 Party 008 p:...
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-026-gw3 (1024x768)
+[14:56:38] [tds] screen tds-026-gw3 : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME x Find details entered In masters and transactions Z: Exchange inCom Spike Co O: Import E: Export M: Share Debit FinC( By Narration: Q: Quit p: print I-Jana Friday Credit Quit o Yes or No Q A: Accept Search D: Delete X: Cancel Vch 12 Fl: Help F2: Date pany F3: Company F4: Contra F5: Payment F6: Receipt F7: Journal F8: Sales F9: Purchase Flo: E: Autofill H: Change = Mode l: More = Details O: Related = Reports L: Optional T: post = -Dated J: Stat ¯ Adjust...
+[keys] 'n' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-027-gw4 (1024x768)
+[14:56:42] [tds] screen tds-027-gw4 : 127.0.0.2 - Remote Desktop Connection EDU prim x a Find details entered in masters and transactions. (Alt+F) prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME Z: Exchange M: Share inCom Spike Co FinC( By Narration: Quit O: Import E: Export List of Ledger Accounts Input CGST Input SGST output CGST output SGST Profit & Loss A/c S231 Billwise Party S231 Buyer S231 Contractor S231 Freight Charged S231 Office Exp S231 Old Name Party S231 Party 001 S231 Party 002 S231 Party 003 S231 Party 004 S231 Party 005 S231 Party 006 S231 Party 007 S231 Party 008 p:...
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-028-gw5 (1024x768)
+[14:56:45] [tds] screen tds-028-gw5 : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME x Find details entered In masters and transactions Z: Exchange inCom Spike Co O: Import E: Export M: Share Debit FinC( By Narration: Q: Quit p: print I-Jana Friday Credit Quit o Yes or No Q A: Accept Search D: Delete X: Cancel Vch 12 Fl: Help F2: Date pany F3: Company F4: Contra F5: Payment F6: Receipt F7: Journal F8: Sales F9: Purchase Flo: E: Autofill H: Change = Mode l: More = Details O: Related = Reports L: Optional T: post = -Dated J: Stat ¯ Adjust...
+[keys] 'n' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-029-gw6 (1024x768)
+[14:56:49] [tds] screen tds-029-gw6 : 127.0.0.2 - Remote Desktop Connection EDU prim x a Find details entered in masters and transactions. (Alt+F) prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME Z: Exchange M: Share inCom Spike Co FinC( By Narration: Quit O: Import E: Export List of Ledger Accounts Input CGST Input SGST output CGST output SGST Profit & Loss A/c S231 Billwise Party S231 Buyer S231 Contractor S231 Freight Charged S231 Office Exp S231 Old Name Party S231 Party 001 S231 Party 002 S231 Party 003 S231 Party 004 S231 Party 005 S231 Party 006 S231 Party 007 S231 Party 008 p:...
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[14:56:52] [tds] the Gateway not reached (after the S5 entry): Tally started again
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[keys] 't' -> Tally :9000 'TallyPrime:9000'
+  Tally :9000 voucher mid=1 aid=1 guid=e19c5013-5e71-47a7-9ac2-d8b0764797cd-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=e19c5013-5e71-47a7-9ac2-d8b0764797cd-00000002 no=2 cancelled=False
+######## HARNESS S5 payment with TDS entered on the screen: no entry saved in Tally (see the tds-s5-* screenshots and tds-screen-log.txt)
+[14:57:28] ---- R1: the retry schedule while Tally is busy for about 3 minutes
+[R1 ledger (no cost centres) :9000] 22 ms, 269 bytes: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  Tally :9000 voucher mid=1 aid=1 guid=e19c5013-5e71-47a7-9ac2-d8b0764797cd-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=e19c5013-5e71-47a7-9ac2-d8b0764797cd-00000002 no=2 cancelled=False
+[R1 the entry :9000] 40 ms, 269 bytes: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>3</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  Tally :9000 voucher mid=1 aid=1 guid=e19c5013-5e71-47a7-9ac2-d8b0764797cd-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=e19c5013-5e71-47a7-9ac2-d8b0764797cd-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=e19c5013-5e71-47a7-9ac2-d8b0764797cd-00000002 no=2 cancelled=False
+[keys] '%g' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '1-8-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-r1-daybook (1024x768)
+[keys] '{END}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-r1-open (1024x768)
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+R1: Tally 9000 (pid 6904) suspended at 14:57:57.599
+R1: Tally 9000 resumed at 15:00:58
+[shot] r4-r1-resumed (1024x768)
+######## FAIL R1 retry schedule: Tally silent 14:57:57..15:00:58 (suspended; a small request: no answer (suspended); the entry saved 14:57:57); bridge 1's tries: try 1 at 14:57:59 (TDSDeskCompanies) next 14:58:14; try 2 at 14:58:16 (FinComVoucherByMaster) next 14:58:46; steps 15, 30 s (expected 15, 30, 60, 120, then 300); back to normal: 2026-10-06 15:01:35  Tally 9000 answered the small check; requests go again; switch-off words: none; posting queued 14:58:17, taken 14:58:29, updates 14:58:29 taken done 0; 14:58:37 taken done 0; 15:01:35 running done 0; 15:01:35 running done 1; 15:01:35 done done 1, in Tally: True; the entry at the stub NOT arrived (Tally free 15:00:58; the first try after that none); the bridge's busy lines: 14:57:59  Tally 9000 did not answer in time at 14:57:59 (TDSDeskCompanies, try 1); trying again by itself at 14:58:14 | 14:57:59  Recorder: Receipt 1 of 01-Aug-2026 (MasterID 3, line 1a7d795f…): not asked yet: Tally did not answer in time at 14:57; trying again by itself at 14:58 (nothing was sent); asked then | 14:58:16  Tally 9000 did not answer in time at 14:58:16 (FinComVoucherByMaster, try 2); trying again by itself at 14:58:46 | 14:58:16  Recorder: Receipt 1 of 01-Aug-2026 (MasterID 3, line 1a7d795f…): not asked yet: Tally did not answer in time at 14:58; trying again by itself at 14:58 (nothing was sent); asked then | 14:58:37  Tally 9000 is busy (no answer in 8s); nothing more is sent to it until it answers a small check (the company's name), asked once a minute | 14:58:37  Posting job r1-job-1: Waiting for Tally: Tally is busy (a report, a pop-up or another user may be holding it) — finish or close it in TallyPrime; it will be posted automatically | 14:58:46  Recorder: Receipt 1 of 01-Aug-2026 (MasterID 3, line 1a7d795f…): not asked yet: Tally (port 9000) is busy: it did not answer a request and may still be working on it; nothing is sent until i | 14:58:47  Recorder: Receipt 1 of 01-Aug-2026 (MasterID 3, line 1a7d795f…): held: the entry was not read from Tally: Tally (port 9000) is busy: it did not answer a request and may still be working on i | 14:58:47  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (Tally (port 9000) is busy: it did not answer a request and may still be working on it; nothing is sent until it answ | 15:01:35  Tally 9000 answered the small check; requests go again
+[15:07:59] ---- what is kept: the bridges' logs, install logs, settings without their keys
+  Tally :9000 voucher mid=1 aid=1 guid=e19c5013-5e71-47a7-9ac2-d8b0764797cd-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=3 aid=4 guid=e19c5013-5e71-47a7-9ac2-d8b0764797cd-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=4 aid=5 guid=e19c5013-5e71-47a7-9ac2-d8b0764797cd-00000004 no=3 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=e19c5013-5e71-47a7-9ac2-d8b0764797cd-00000002 no=2 cancelled=False
+== results
+INFO setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.3.1.exe SHA-256 7d4a37a93a52dbc55ab9992c7148c7d607485d567fd34e1bde7d607288a216be; on this runner SHA-256 7d4a37a93a52dbc55ab9992c7148c7d607485d567fd34e1bde7d607288a216be
+INFO user 2 (fcuser2) works in a Windows session of their own (session 1, by a Remote Desktop connection to 127.0.0.2); runneradmin in session 2
+INFO S231 import masters-1-items: created 4, altered 0, errors 0
+INFO S231 import masters-2-costs: created 3, altered 0, errors 0
+INFO S231 import masters-4-ledgers: created 14, altered 0, errors 0
+INFO S231 import masters-6-bulk: created 400, altered 0, errors 0
+INFO S231 import S4 the bill (New Ref S231-BILL-1, a journal): created 1, altered 0, errors 0
+PASS 6a two bridges at once: bridge 1 runneradmin on 127.0.0.1:9100 (pid 9460, session 2, go-6f8f1b5903ac); bridge 2 fcuser2 on 127.0.0.1:9101 (pid 2376, session 1, go-40d5465bba22); both listening at 14:54:44
+INFO /ping with a nonce but no Origin (own bridge): proof not given
+PASS 6b /ping proof: bridge 1 proves itself to runneradmin: ok; bridge 1 proof checked against user 2 identity fails: ok; bridge 2 proves itself to fcuser2: ok; bridge 2 proof checked against user 1 identity fails: ok; bridge 2 gives runneradmin no proof: ok; bridge 1 gives fcuser2 no proof: ok; other users refused 403 beyond /ping: ok
+INFO S231 import masters-0-company: created 0, altered 1, errors 0
+INFO S231 import masters-3-nature: created 1, altered 0, errors 0
+INFO S231 import masters-5-tds: created 1, altered 0, errors 0 (TDS Rate &apos;S231 Contract Work&apos; does not exist!)
+INFO S231 company features after the import: ISBILLWISEON=Yes ISCOSTCENTRESON=Yes ISTDSON=Yes ISGSTON=Yes
+INFO S5 screen: the company's TDS details in Tally: TANUMBER=DELF01234E TANREGNO=DELF01234E TDSDEDUCTORTYPE=Company ISTDSON=Yes
+INFO S5 screen: the TDS masters in Tally: S231 Contractor [TDSRATE=0 DEDUCTEETYPE=0 INCOMETAXSLAB=0 INCOMETAXCLASSIFICATION=0 INCOMETAXNUMBER=AAACS2310K TDSAPPLICABLE=Yes TDSDEDUCTEETYPE=Company - Resident IGNORETDSEXEMPT=No ISTDSAPPLICABLE=Yes ISTDSEXPENSE=No INTERESTINCLDAYOFDEDUCTION=No TDSDEDUCTEEISSPECIALRATE=No TDSDEDUCTEESPECIALRATE=0]; S231 Contract Exp [TDSRATE=0 DEDUCTEETYPE=0 INCOMETAXSLAB=0 INCOMETAXCLASSIFICATION=0]; S231 TDS Payable [TDSRATE=0 DEDUCTEETYPE=0 INCOMETAXSLAB=0 INCOMETAXCLASSIFICATION=0]
+INFO S5 screen: OCR read the screens; TDS row amount not filled by Tally: 2000 typed; sub-screens after the TDS ledger: none; screenshots tds-*
+HARNESS S5 payment with TDS entered on the screen: no entry saved in Tally (see the tds-s5-* screenshots and tds-screen-log.txt)
+INFO S231 import R1 ledger (no cost centres): created 1, altered 0, errors 0
+INFO S231 import R1 the entry: created 1, altered 0, errors 0
+FAIL R1 retry schedule: Tally silent 14:57:57..15:00:58 (suspended; a small request: no answer (suspended); the entry saved 14:57:57); bridge 1's tries: try 1 at 14:57:59 (TDSDeskCompanies) next 14:58:14; try 2 at 14:58:16 (FinComVoucherByMaster) next 14:58:46; steps 15, 30 s (expected 15, 30, 60, 120, then 300); back to normal: 2026-10-06 15:01:35  Tally 9000 answered the small check; requests go again; switch-off words: none; posting queued 14:58:17, taken 14:58:29, updates 14:58:29 taken done 0; 14:58:37 taken done 0; 15:01:35 running done 0; 15:01:35 running done 1; 15:01:35 done done 1, in Tally: True; the entry at the stub NOT arrived (Tally free 15:00:58; the first try after that none); the bridge's busy lines: 14:57:59  Tally 9000 did not answer in time at 14:57:59 (TDSDeskCompanies, try 1); trying again by itself at 14:58:14 | 14:57:59  Recorder: Receipt 1 of 01-Aug-2026 (MasterID 3, line 1a7d795f…): not asked yet: Tally did not answer in time at 14:57; trying again by itself at 14:58 (nothing was sent); asked then | 14:58:16  Tally 9000 did not answer in time at 14:58:16 (FinComVoucherByMaster, try 2); trying again by itself at 14:58:46 | 14:58:16  Recorder: Receipt 1 of 01-Aug-2026 (MasterID 3, line 1a7d795f…): not asked yet: Tally did not answer in time at 14:58; trying again by itself at 14:58 (nothing was sent); asked then | 14:58:37  Tally 9000 is busy (no answer in 8s); nothing more is sent to it until it answers a small check (the company's name), asked once a minute | 14:58:37  Posting job r1-job-1: Waiting for Tally: Tally is busy (a report, a pop-up or another user may be holding it) — finish or close it in TallyPrime; it will be posted automatically | 14:58:46  Recorder: Receipt 1 of 01-Aug-2026 (MasterID 3, line 1a7d795f…): not asked yet: Tally (port 9000) is busy: it did not answer a request and may still be working on it; nothing is sent until i | 14:58:47  Recorder: Receipt 1 of 01-Aug-2026 (MasterID 3, line 1a7d795f…): held: the entry was not read from Tally: Tally (port 9000) is busy: it did not answer a request and may still be working on i | 14:58:47  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (Tally (port 9000) is busy: it did not answer a request and may still be working on it; nothing is sent until it answ | 15:01:35  Tally 9000 answered the small check; requests go again
+== round 4 end
