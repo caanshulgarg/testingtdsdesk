@@ -191,7 +191,10 @@ function S231Run {
     $null = S231Ask $s8
   }
   $lb = BridgeReq 'ledger-by-name'
-  if ($lb) { $r = PostT 9000 ($lb.Replace('FCSPIKENAME', (Esc $newP))) 'S8 the bridge''s ledger by name request'; Keep 's8-ledger-by-name.xml' $r.text "S8: Tally's answer to the bridge's ledger by name request (FinComLedgerByName, $newP); $($r.bytes) bytes, $($r.ms) ms" }
+  if ($lb) { $r = PostT 9000 ($lb.Replace('FCSPIKENAME', (Esc $newP))) 'S8 the bridge''s ledger by name request'; Keep 's8-ledger-by-name.xml' $r.text "S8: Tally's answer to the bridge's ledger by name request (FinComLedgerByName, $newP); $($r.bytes) bytes, $($r.ms) ms"
+    # the TDS deductee party through the same request (2.3.1 asks for TDSDEDUCTEETYPE)
+    $ct = $plan231.names.contractor; $r = PostT 9000 ($lb.Replace('FCSPIKENAME', (Esc $ct))) 'the bridge''s ledger by name request, TDS deductee'
+    Keep 'ledger-by-name-tds-deductee.xml' $r.text "Tally's answer to the bridge's ledger by name request (FinComLedgerByName, $ct, a TDS deductee 'Company - Resident'); $($r.bytes) bytes, $($r.ms) ms" }
   $wantedAsked = @(StubReqs | Select-Object -Skip $m8 | Where-Object { $_.kind -eq 'beat' -and $_.answer.ledgersWanted }).Count
   $ls8 = @((StubLines $m8) | Where-Object { $_.guid -eq $e8.guid })
   $s8txt = "ledger import created {0}; entry Tally mid {1} guid {2}; stub lines for it: {3}; held: {4}; beats answering ledgersWanted: {5}; ledger_changes with {6}: {7}; applied: {8}" -f $li.created, $e8.mid, $e8.guid, $(($ls8 | ForEach-Object { "$($_.lid.Substring([Math]::Max(0, $_.lid.Length - 18))) $($_.ev) $($_.at) $($_.state)" }) -join ', '), $(if ($hold) { "$($hold.at) '$($hold.why)'" } else { 'no' }), $wantedAsked, $newP, $(if ($wanted) { "$($wanted.at) why=$($wanted.body.why)" } else { 'none' }), $(if ($res) { "$($res.at) as $($res.lid.Substring([Math]::Max(0, $res.lid.Length - 18)))" } else { 'no' })
@@ -217,7 +220,7 @@ function S231Run {
     $tagFiles += [pscustomobject]@{ label = "the bridge's entry request answer ($id)"; file = (Join-Path $s231.cap "$($s.key).entry.xml") }
   }
   $tagFiles += [pscustomobject]@{ label = "Tally's ledger master export ($($plan231.names.contractor), FETCH *)"; file = (Join-Path $s231.dir ("ledger-" + ($plan231.names.contractor -replace '\W', '') + ".full.xml")) }
-  foreach ($f in 's8-ledger-by-name.xml', 's9-ledger-changes.xml') { $tagFiles += [pscustomobject]@{ label = "the bridge's ledger request answer ($f)"; file = (Join-Path $s231.cap $f) } }
+  foreach ($f in 's8-ledger-by-name.xml', 's9-ledger-changes.xml', 'ledger-by-name-tds-deductee.xml') { $tagFiles += [pscustomobject]@{ label = "the bridge's ledger request answer ($f)"; file = (Join-Path $s231.cap $f) } }
   $pin = Join-Path $s231.dir 'check-in.json'; $pout = Join-Path $s231.dir 'check.json'
   ConvertTo-Json -InputObject @{ scenarios = $ins; tags = $tagFiles } -Depth 12 | Set-Content $pin -Encoding UTF8
   & node (Join-Path $PSScriptRoot 'parsecheck.mjs') s231 $parseJs $pin $pout 2>&1 | ForEach-Object { Write-Host "  $_" }
@@ -226,7 +229,8 @@ function S231Run {
     if ($o.id -eq 'S8') { foreach ($n in @($o.notes)) { Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO S8 body: $n" }; Add-Content -Path $resultsFile -Encoding UTF8 -Value ("INFO S8 body: " + ((@($o.rows) | ForEach-Object { RowText $_ }) -join '; ')); continue }
     $s = $sc[$o.id]; $e = $s231.ent[$o.id]
     $txt = ((@($o.rows) | Where-Object { -not $_.quiet } | ForEach-Object { RowText $_ }) -join '; ')
-    $hdr = "Tally mid $($e.mid), $(if ($o.line) { "the bridge's $($o.line.ev) line at $($o.line.at), body $($o.line.xmlChars) chars" } else { 'no line with a body' })"
+    $fl = @(@($all) | Where-Object { $e.guid -and $_.guid -eq $e.guid -and $_.xml } | ForEach-Object { "$($_.full)" })
+    $hdr = "Tally mid $($e.mid), $(if ($o.line) { "the bridge's $($o.line.ev) line at $($o.line.at), body $($o.line.xmlChars) chars, full=$($fl -join '/')" } else { 'no line with a body' })"
     foreach ($n in @($o.notes)) { Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO $($o.id) $n" }
     $timedOut = $e.mid -and -not $e.lines
     if (-not $e.mid) { Result "$($o.id) $($s.label)" $false "the entry was not made in Tally (import: $($e.imp.why)); $txt" $true }

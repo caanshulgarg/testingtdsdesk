@@ -394,7 +394,7 @@ function StubLines([int]$from = 0) {
       if (-not $x) { continue }
       $ans = @(@($o.answer.results) | Where-Object { $_.line_id -eq $x.line_id })[0]
       $l += [pscustomobject]@{ i = $i; at = $o.at; bid = $o.body.bridge.id; buser = $o.body.bridge.user; bport = $o.body.bridge.port; device = $o.device; company = $o.body.company
-        ev = $x.event; guid = "$($x.object_guid)"; lid = "$($x.line_id)"; state = "$($ans.state)"; why = "$($ans.why)"; mid = $x.master_id; aid = $x.alter_id; xml = "$($x.xml)"; lineGuid = $x.lineGuid; ids = $x.idsMismatch; held = "$($x.heldWhy)"; vch = "$($x.vch_type)/$($x.vch_no)/$($x.vch_date)" }
+        ev = $x.event; guid = "$($x.object_guid)"; lid = "$($x.line_id)"; full = $x.full; state = "$($ans.state)"; why = "$($ans.why)"; mid = $x.master_id; aid = $x.alter_id; xml = "$($x.xml)"; lineGuid = $x.lineGuid; ids = $x.idsMismatch; held = "$($x.heldWhy)"; vch = "$($x.vch_type)/$($x.vch_no)/$($x.vch_date)" }
     }
   }
   return , $l
