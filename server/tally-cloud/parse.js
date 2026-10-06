@@ -11,11 +11,36 @@ function num(v){ if (typeof v === "number") return isFinite(v) ? v : 0; const n 
 // 02-Oct-2026 this decoded &#13;&#10; to two spaces, so "Orchid Lane Hospitality Pvt Ltd&#13;&#10;(Noida)" was a second
 // ledger beside the master "Orchid Lane Hospitality Pvt Ltd (Noida)" (finding 4)
 function unesc(v){ return namesClean(v); }
-function one(s, tag){ const m = s.match(new RegExp("<" + tag + ">([^<]*)</" + tag + ">")); return m ? unesc(m[1]) : ""; }
+// 06-Oct-2026 (the owner's NWS144 line 18: Receipt 213 held with an empty body although the bridge sent Tally's XML): a
+// real TallyPrime 7.1 writes a collection's fields typed, <DATE TYPE="Date">, <ALTERID TYPE="Number"> 54493</ALTERID>,
+// <LEDGERNAME TYPE="String">, <AMOUNT TYPE="Amount">, <BILLTYPE TYPE="String">, so a field is read with or without
+// attributes (bridge-go/tallyxml.go tagOpenRe: never a self-closed <TAG/>, never a longer tag), its value trimmed (unesc
+// trims). A Day Book export (no attributes) reads exactly as before
+const reEsc = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const OPEN = new Map();
+function openRe(tag){ let r = OPEN.get(tag); if (!r){ r = "<" + reEsc(tag) + "(?:\\s[^>]*[^/>])?\\s*>"; OPEN.set(tag, r); } return r; }
+const ONE = new Map();
+function one(s, tag){
+  let re = ONE.get(tag);
+  if (!re){ re = new RegExp(openRe(tag) + "([^<]*)</" + reEsc(tag) + "\\s*>"); ONE.set(tag, re); }
+  const m = s.match(re); return m ? unesc(m[1]) : "";
+}
+// the pieces of s after each opening <TAG> or <TAG ...> (as s.split("<TAG>").slice(1) for an untyped text), each with
+// where its tag began
+function after(s, tag){
+  const re = new RegExp(openRe(tag), "g"), at = [];
+  let m; while ((m = re.exec(s))) at.push([m.index, m.index + m[0].length]);
+  return at.map(([a, b], i) => ({a, p: s.slice(b, i + 1 < at.length ? at[i + 1][0] : s.length)}));
+}
+// the text of s up to the first closing </TAG> (as p.split("</TAG>")[0])
+function upTo(p, tag){ const m = p.match(new RegExp("</" + reEsc(tag) + "\\s*>")); return m ? p.slice(0, m.index) : p; }
+// a collection's answer carries a CMPINFO block of counters ahead of its data (<VOUCHER>4</VOUCHER>, <LEDGER>21</LEDGER>):
+// never read as a voucher (bridge-go/tallyxml.go dropCmpInfo)
+function dropCmpInfo(t){ return t.indexOf("CMPINFO") < 0 ? t : t.replace(/<CMPINFO(?:\s[^>]*)?>[\s\S]*?<\/CMPINFO\s*>|<CMPINFO\s*\/>/g, ""); }
 // "$17000.00 @ ₹ 86.40/$ = ₹ 1468800.00" is 1468800: the rupee value after the last "="
 function amt(v){ const t = String(v || ""), i = t.lastIndexOf("="); return num(i >= 0 ? t.slice(i + 1) : t); }
 // the IGST rate in a block's rate details, which is the whole GST rate; null when not set (as Books.igstRate)
-function igstRate(s){ const m = String(s || "").match(/<GSTRATEDUTYHEAD>IGST<\/GSTRATEDUTYHEAD>\s*<GSTRATEVALUATIONTYPE>[^<]*<\/GSTRATEVALUATIONTYPE>\s*<GSTRATE>\s*([\d.]+)\s*<\/GSTRATE>/); return m ? num(m[1]) : null; }
+function igstRate(s){ const m = String(s || "").match(/<GSTRATEDUTYHEAD(?:\s[^>]*[^\/>])?\s*>\s*IGST\s*<\/GSTRATEDUTYHEAD>\s*<GSTRATEVALUATIONTYPE(?:\s[^>]*[^\/>])?\s*>[^<]*<\/GSTRATEVALUATIONTYPE>\s*<GSTRATE(?:\s[^>]*[^\/>])?\s*>\s*([\d.]+)\s*<\/GSTRATE>/); return m ? num(m[1]) : null; }
 
 // a long narration is cut to 300 characters, keeping FinCom's own mark at its end ("TDSDesk:<id>"): the checks before
 // posting look for it in the cloud copy
@@ -54,34 +79,33 @@ function takeVoucher(s){
   // each item's HSN and rate, for the accounting allocation inside it (an item invoice keeps the sales or purchase
   // ledger there), as FinCom reads them in the browser
   const items = [];
-  if (s.indexOf("<ALLINVENTORYENTRIES.LIST>") >= 0){
-    let at = 0;
+  if (s.indexOf("<ALLINVENTORYENTRIES.LIST") >= 0){
+    const reA = new RegExp(openRe("ALLINVENTORYENTRIES.LIST"), "g");
     for (;;){
-      const a = s.indexOf("<ALLINVENTORYENTRIES.LIST>", at); if (a < 0) break;
-      const z = s.indexOf("</ALLINVENTORYENTRIES.LIST>", a); if (z < 0) break;
-      const own = s.slice(a, z).replace(/<ACCOUNTINGALLOCATIONS\.LIST>[\s\S]*?<\/ACCOUNTINGALLOCATIONS\.LIST>/g, "");
+      const ma = reA.exec(s); if (!ma) break;
+      const a = ma.index, mz = s.slice(a).match(/<\/ALLINVENTORYENTRIES\.LIST\s*>/); if (!mz) break;
+      const z = a + mz.index;
+      const own = s.slice(a, z).replace(/<ACCOUNTINGALLOCATIONS\.LIST(?:\s[^>]*[^\/>])?\s*>[\s\S]*?<\/ACCOUNTINGALLOCATIONS\.LIST\s*>/g, "");
       items.push({a, z, h: one(own, "GSTHSNNAME"), gr: igstRate(own)});
-      at = z + 1;
+      reA.lastIndex = z + 1;
     }
   }
   // each line: [guid, ledger, amount, HSN or SAC, GST rate (the whole rate, IGST's) or null, bill-wise details]
   const lines = [];
-  [["<ALLLEDGERENTRIES.LIST>", "</ALLLEDGERENTRIES.LIST>"], ["<LEDGERENTRIES.LIST>", "</LEDGERENTRIES.LIST>"], ["<ACCOUNTINGALLOCATIONS.LIST>", "</ACCOUNTINGALLOCATIONS.LIST>"]].forEach(([open, close]) => {
-    let pos = -1;
-    s.split(open).slice(1).forEach(p => {
-      pos = s.indexOf(open, pos + 1);
-      const e = p.split(close)[0];
+  ["ALLLEDGERENTRIES.LIST", "LEDGERENTRIES.LIST", "ACCOUNTINGALLOCATIONS.LIST"].forEach((tag) => {
+    after(s, tag).forEach(({a: pos, p}) => {
+      const e = upTo(p, tag);
       const name = one(e, "LEDGERNAME");
       if (!name) return;
-      const it = open === "<ACCOUNTINGALLOCATIONS.LIST>" ? items.find(q => pos > q.a && pos < q.z) : null;
+      const it = tag === "ACCOUNTINGALLOCATIONS.LIST" ? items.find(q => pos > q.a && pos < q.z) : null;
       const hsn = (it ? it.h : one(e, "GSTHSNNAME")).slice(0, 20);
       const rate = it ? it.gr : igstRate(e);
       // bill-wise details on the line (review of 01-Oct-2026): [bill name, New Ref / Agst Ref / Advance / On Account,
       // amount, credit days or null], as FinCom reads them in the browser, so ageing works from the cloud copy too
       const bills = [];
-      if (e.indexOf("<BILLALLOCATIONS.LIST>") >= 0){
-        e.split("<BILLALLOCATIONS.LIST>").slice(1).forEach(p2 => {
-          const q = p2.split("</BILLALLOCATIONS.LIST>")[0], type = one(q, "BILLTYPE"), a = Math.round(amt(one(q, "AMOUNT")) * 100) / 100;
+      if (e.indexOf("<BILLALLOCATIONS.LIST") >= 0){
+        after(e, "BILLALLOCATIONS.LIST").forEach(({p: p2}) => {
+          const q = upTo(p2, "BILLALLOCATIONS.LIST"), type = one(q, "BILLTYPE"), a = Math.round(amt(one(q, "AMOUNT")) * 100) / 100;
           if (!type || !a) return;
           const cp = (q.match(/<BILLCREDITPERIOD\b[^>]*>([^<]*)<\/BILLCREDITPERIOD>/) || [])[1] || "", dm = cp.match(/^\s*(\d{1,4})\s*Days?\s*$/i);
           bills.push([one(q, "NAME").slice(0, 200), type.slice(0, 20), a, dm ? Number(dm[1]) : null]);
@@ -93,10 +117,10 @@ function takeVoucher(s){
   // review of 01-Oct-2026: a payroll voucher (Tally's PaySlip view) has no ledger lines; its pay heads sit in each
   // employee's allocations. A pay head is a ledger in Tally: earnings are debits, deductions (PF, advance) credits, and
   // the party ledger (Salary Payable) takes the net. A pay head already among the ledger lines is not counted again
-  if (s.indexOf("<PAYHEADALLOCATIONS.LIST>") >= 0){
+  if (s.indexOf("<PAYHEADALLOCATIONS.LIST") >= 0){
     const by = new Map();
-    s.split("<PAYHEADALLOCATIONS.LIST>").slice(1).forEach(p => {
-      const q = p.split("</PAYHEADALLOCATIONS.LIST>")[0], n = one(q, "PAYHEADNAME"), a = amt(one(q, "AMOUNT"));
+    after(s, "PAYHEADALLOCATIONS.LIST").forEach(({p}) => {
+      const q = upTo(p, "PAYHEADALLOCATIONS.LIST"), n = one(q, "PAYHEADNAME"), a = amt(one(q, "AMOUNT"));
       if (n && a) by.set(n, Math.round(((by.get(n) || 0) + a) * 100) / 100);
     });
     // names met by their key (namesKey), as FinCom does (Books.takeVoucher)
@@ -117,7 +141,8 @@ function cleanName(n){ return namesClean(n); }
 // the whole text of one day (or several): entries, lines, and the highest change number
 function parseDay(text){
   const byId = new Map();
-  let alterMax = 0, buf = String(text || ""), cut;
+  // 06-Oct-2026: a collection's CMPINFO counters dropped first (a Day Book export has none: read as before)
+  let alterMax = 0, buf = dropCmpInfo(String(text || "")), cut;
   while ((cut = buf.indexOf("</VOUCHER>")) >= 0){
     const piece = buf.slice(0, cut + 10); buf = buf.slice(cut + 10);
     const start = piece.lastIndexOf("<VOUCHER ");

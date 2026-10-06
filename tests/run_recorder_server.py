@@ -620,6 +620,25 @@ try:
        "L-C. lineFid fin9 with TDSDesk:fin9 in the narration: no fid taken from the narration, not short, lineFid kept (%s)" % {k: p4.get(k) for k in ("fid", "short", "lineFid")})
     c, r = reci([line("I5", "created", "", None, "20261003", company_guid=CGI, master_id="25691", vch_type="Journal", vch_no="J-5", narration="x", lineFid="bad id!")])
     ok(c == 200 and "lineFid" not in pl("I5"), "L-C. a lineFid outside the FinCom id's characters: not kept (%s)" % pl("I5").get("lineFid"))
+    # ---------------------------------------------------------------- 06-Oct-2026, NWS144 line 18: a real TallyPrime 7.1's typed XML
+    # Receipt 213 (created, GUID ...-00006729, MasterID 26409, AlterID 54493) sent with Tally's voucher as bridge 2.2.4 sends it
+    # (the element of FinComVoucherByMaster's answer, typed: <DATE TYPE="Date">, <ALTERID TYPE="Number"> 54493</ALTERID>,
+    # <LEDGERNAME TYPE="String">, <AMOUNT TYPE="Amount">, a bill-wise Agst Ref): stored WITH its body and applied, never held
+    # "waiting for the entry's details" with body {}
+    tx = open(os.path.join(HERE, "..", "bridge-go", "testdata", "typed-like-7.1", "receipt-213-by-master.xml")).read()
+    tx = tx[tx.index("<VOUCHER REMOTEID"):tx.index("</VOUCHER>", tx.index("<VOUCHER REMOTEID")) + 10]
+    G213 = CGI + "-00006729"
+    c, r = reci([{"line_id": "T213", "event": "created", "saved_at": "2026-10-06T05:50:00+05:30", "pc": "NWS144", "user": "TALLY User", "company_guid": CGI, "object_guid": G213,
+                  "master_id": "26409", "alter_id": 54493, "vch_type": "Receipt", "vch_no": "213", "vch_date": "20261006", "xml": tx,
+                  "ledgers": [{"name": "Salesify Marketing LLP", "guid": ""}, {"name": "Cash", "guid": ""}]}])
+    b213 = json.loads((db.rows("select body::text as b from tally_recorder_lines where book_id = %s and line_id = 'T213'" % q(BI)) or [{}])[0].get("b") or "{}")
+    v213 = (b213.get("vouchers") or [{}])[0]
+    ok(c == 200 and st(r) == {"T213": "applied"} and len(b213.get("vouchers") or []) == 1 and v213.get("no") == "213" and v213.get("day") == "2026-10-06" and v213.get("alter") == 54493,
+       "typed. Receipt 213 with a real TallyPrime 7.1's typed XML (%d characters): applied, its body stored (one voucher, 213 of 06-Oct-2026, AlterID 54493) (%s; %s)" % (len(tx), st(r), v213))
+    l213 = sorted([(x[1], x[2], json.dumps(x[5])) for x in (b213.get("lines") or [])])
+    ok(l213 == [("Cash", -59000, "[]"), ("Salesify Marketing LLP", 59000, json.dumps([["GSC/2026-27/118", "Agst Ref", 59000, None]]))],
+       "typed. its two lines with their signs, the Agst Ref bill on the party's line (%s)" % l213)
+    ok(vrow_b(BI, G213).get("alter_id") == "54493" and vrow_b(BI, G213).get("origin") == "tally", "typed. the entry is in the copy (tally_vouchers, AlterID 54493) (%s)" % vrow_b(BI, G213))
     # ---------------------------------------------------------------- FinCom Bridge 2.2.2: the beat answers heldLines
     # the stand-in serves tables from memory: the database's recorder lines and month locks copied in as they are now
     FS.T["tally_recorder_lines"] = [dict(r, device_id=r["device_id"] or None) for r in db.rows(
