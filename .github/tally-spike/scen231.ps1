@@ -95,7 +95,9 @@ function S231AfterStart {
 function S231Resave($s) {
   $m0 = Mark; $g = $s.guid; $pred = { $_.guid -eq $g -and $_.xml }.GetNewClosure()
   DayBook "s231-$($s.id)" $s.day
-  KeysTo 9000 '{END}' 2; KeysTo 9000 '{ENTER}' 4 "s231-$($s.id)-open"; KeysTo 9000 '^a' 6 "s231-$($s.id)-saved"
+  KeysTo 9000 '{END}' 2; KeysTo 9000 '{ENTER}' 4 "s231-$($s.id)-open"; KeysTo 9000 '^a' 4 "s231-$($s.id)-saved"
+  # an invoice over the e-way bill threshold asks "send voucher details for e-Way Bill generation? Yes or No" (run 37425863775): No
+  KeysTo 9000 'n' 4 "s231-$($s.id)-eway-no"
   $hit = WaitLine $m0 $pred 90
   if (-not $hit.Count) { KeysTo 9000 '{ENTER}' 3 "s231-$($s.id)-enter"; KeysTo 9000 '^a' 6 "s231-$($s.id)-saved2"; $hit = WaitLine $m0 $pred 60 }
   # a sub-screen Tally opens on the save (TDS details, cost centres): accepted as it stands
