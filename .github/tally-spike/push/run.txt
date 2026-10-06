@@ -6,4 +6,4 @@ heavy_item=300
 heavy_vch=1000
 heavy_min=10
 mode=explore
-# probe 4 (explore): the owner's voucher types and master forms only, light company (features, templates, hooks)
+# probe 5 (explore): voucher types again after probe 4 (run 37479202675) fixes

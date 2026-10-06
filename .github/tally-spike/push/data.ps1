@@ -150,14 +150,20 @@ function TypeMasters {
     $m += LedgerXml $p 'Indirect Expenses' '<PAYTYPE>Earnings for Employees</PAYTYPE><CALCULATIONTYPE>As User Defined Value</CALCULATIONTYPE><AFFECTSNETSALARY>Yes</AFFECTSNETSALARY><ISCOSTCENTRESON>Yes</ISCOSTCENTRESON><FORPAYROLL>Yes</FORPAYROLL>'
   }
   $m += LedgerXml 'PD Salary Payable' 'Current Liabilities' '<PAYTYPE>Not Applicable</PAYTYPE>'
-  $m += '<ATTENDANCETYPE NAME="PD Present" ACTION="Create"><NAME.LIST><NAME>PD Present</NAME></NAME.LIST><ATTENDANCETYPE>Attendance/Leave with Pay</ATTENDANCETYPE><ATTENDANCEPERIOD>Days</ATTENDANCEPERIOD><PARENT/></ATTENDANCETYPE>'
+  $m += '<ATTENDANCETYPE NAME="PD Present" ACTION="Create"><NAME.LIST><NAME>PD Present</NAME></NAME.LIST><ATTENDANCETYPE>Attendance / Leave with Pay</ATTENDANCETYPE><ATTENDANCEPERIOD>Days</ATTENDANCEPERIOD><PARENT/></ATTENDANCETYPE>'
   $m += LedgerXml 'PD Supplier' 'Sundry Creditors' '<ISBILLWISEON>Yes</ISBILLWISEON>'
   $m += LedgerXml 'Purchase' 'Purchase Accounts'
   return $m
 }
-function PayrollXml($date, $no, $n) {
+# $form: 1 the payroll view with only the payable on the ledger side; 2 the same in LEDGERENTRIES; 3 the pay heads on the
+# ledger side too (probe 4, run 37479202675: form 3 under PaySlip view was refused on 3.0 as "Voucher totals do not
+# match", Cr empty, and went to exceptions on 7.1)
+function PayrollXml($date, $no, $n, $form = 1) {
   $f = '{0:0.00}'
-  $x = '<VOUCHER VCHTYPE="Payroll" ACTION="Create" OBJVIEW="PaySlip Voucher View"><DATE>' + $date + '</DATE><VOUCHERTYPENAME>Payroll</VOUCHERTYPENAME><VOUCHERNUMBER>' + $no + '</VOUCHERNUMBER><PERSISTEDVIEW>PaySlip Voucher View</PERSISTEDVIEW><NARRATION>template payroll ' + $n + ' employees</NARRATION>'
+  $view = if ($form -eq 3) { 'PaySlip Voucher View' } else { 'Payroll Voucher View' }
+  $lst = if ($form -eq 2) { 'LEDGERENTRIES.LIST' } else { 'ALLLEDGERENTRIES.LIST' }
+  $x = '<VOUCHER VCHTYPE="Payroll" ACTION="Create" OBJVIEW="' + $view + '"><DATE>' + $date + '</DATE><VOUCHERTYPENAME>Payroll</VOUCHERTYPENAME><VOUCHERNUMBER>' + $no + '</VOUCHERNUMBER><PERSISTEDVIEW>' + $view + '</PERSISTEDVIEW><NARRATION>template payroll ' + $n + ' employees</NARRATION>'
+  $x += '<' + $lst + '><LEDGERNAME>PD Salary Payable</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>' + ($f -f (1500 * $n)) + '</AMOUNT></' + $lst + '>'
   $x += '<CATEGORYENTRY.LIST><CATEGORY>Primary Cost Category</CATEGORY>'
   for ($i = 1; $i -le $n; $i++) {
     $x += '<EMPLOYEEENTRIES.LIST><EMPLOYEENAME>' + (Emp $i) + '</EMPLOYEENAME><EMPLOYEESORTORDER>' + $i + '</EMPLOYEESORTORDER><AMOUNT>-1500.00</AMOUNT>'
@@ -166,9 +172,10 @@ function PayrollXml($date, $no, $n) {
     $x += '</EMPLOYEEENTRIES.LIST>'
   }
   $x += '</CATEGORYENTRY.LIST>'
-  $x += '<ALLLEDGERENTRIES.LIST><LEDGERNAME>PD Basic</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-' + ($f -f (1000 * $n)) + '</AMOUNT></ALLLEDGERENTRIES.LIST>'
-  $x += '<ALLLEDGERENTRIES.LIST><LEDGERNAME>PD HRA</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-' + ($f -f (500 * $n)) + '</AMOUNT></ALLLEDGERENTRIES.LIST>'
-  $x += '<ALLLEDGERENTRIES.LIST><LEDGERNAME>PD Salary Payable</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>' + ($f -f (1500 * $n)) + '</AMOUNT></ALLLEDGERENTRIES.LIST>'
+  if ($form -eq 3) {
+    $x += '<ALLLEDGERENTRIES.LIST><LEDGERNAME>PD Basic</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-' + ($f -f (1000 * $n)) + '</AMOUNT></ALLLEDGERENTRIES.LIST>'
+    $x += '<ALLLEDGERENTRIES.LIST><LEDGERNAME>PD HRA</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-' + ($f -f (500 * $n)) + '</AMOUNT></ALLLEDGERENTRIES.LIST>'
+  }
   $x + '</VOUCHER>'
 }
 function AttendanceXml($date, $no, $n) {
@@ -193,7 +200,8 @@ function StockJournalXml($date, $no, $n, $vtype = 'Stock Journal', $view = 'Cons
   $x + '</VOUCHER>'
 }
 # an item voucher with a party (Delivery Note, Receipt Note, Sales Order, Purchase Order, a Sales invoice in batches)
-function ItemVchXml($vtype, $date, $no, $n, $party, $partyLedgerOut, $acct, $order = '', $track = '', $view = 'Invoice Voucher View') {
+function ItemVchXml($vtype, $date, $no, $n, $party, $partyLedgerOut, $acct, $order = '', $track = '', $view = 'Invoice Voucher View', $form = 1) {
+  if ($form -eq 2) { $order = '' }
   $f = '{0:0.00}'; $sales = $vtype -in 'Sales', 'Delivery Note', 'Sales Order'
   $sign = if ($sales) { '' } else { '-' }; $psign = if ($sales) { '-' } else { '' }
   $tot = 200 * $n
@@ -217,13 +225,13 @@ function PhysicalStockXml($date, $no, $n) {
 function TypeTemplates {
   $d = $TypeDates
   [ordered]@{
-    payroll50     = PayrollXml $d.payroll50 'PR-50' 50
-    payroll200    = PayrollXml $d.payroll200 'PR-200' 200
+    payroll50     = @((PayrollXml $d.payroll50 'PR-50' 50 1), (PayrollXml $d.payroll50 'PR-50' 50 2), (PayrollXml $d.payroll50 'PR-50' 50 3))
+    payroll200    = @((PayrollXml $d.payroll200 'PR-200' 200 1), (PayrollXml $d.payroll200 'PR-200' 200 2), (PayrollXml $d.payroll200 'PR-200' 200 3))
     attendance    = AttendanceXml $d.attendance 'AT-1' 50
     stockjournal  = StockJournalXml $d.stockjournal 'SJ-50' 50
     mfgjournal    = StockJournalXml $d.mfgjournal 'MJ-1' 5 'PD Manufacturing Journal'
-    salesorder    = ItemVchXml 'Sales Order' $d.salesorder 'SO-1' 5 'Template Party' $true 'Sales' 'SO-1'
-    purchaseorder = ItemVchXml 'Purchase Order' $d.purchaseorder 'PO-1' 5 'PD Supplier' $false 'Purchase' 'PO-1'
+    salesorder    = @((ItemVchXml 'Sales Order' $d.salesorder 'SO-1' 5 'Template Party' $true 'Sales' 'SO-1'), (ItemVchXml 'Sales Order' $d.salesorder 'SO-1' 5 'Template Party' $true 'Sales' 'SO-1' '' 'Invoice Voucher View' 2))
+    purchaseorder = @((ItemVchXml 'Purchase Order' $d.purchaseorder 'PO-1' 5 'PD Supplier' $false 'Purchase' 'PO-1'), (ItemVchXml 'Purchase Order' $d.purchaseorder 'PO-1' 5 'PD Supplier' $false 'Purchase' 'PO-1' '' 'Invoice Voucher View' 2))
     deliverynote  = ItemVchXml 'Delivery Note' $d.deliverynote 'DN-1' 5 'Template Party' $true 'Sales' 'SO-1' 'DN-1'
     receiptnote   = ItemVchXml 'Receipt Note' $d.receiptnote 'RN-1' 5 'PD Supplier' $false 'Purchase' 'PO-1' 'RN-1'
     physicalstock = PhysicalStockXml $d.physicalstock 'PS-1' 5

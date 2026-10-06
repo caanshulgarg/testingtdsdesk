@@ -169,6 +169,13 @@ function Start-T($data, [string[]]$tdls, $tag) {
   KeysTo 'a' 4; KeysTo 't' 8 "$tag-started"
   $x = Post (Coll 'FCPCo' 'Company' 'NAME, GUID')
   $ok = $x -match [regex]::Escape($co)
+  # probe 4: a TDL with errors makes Tally say "TallyPrime will ignore the TDLs that have errors ... Press any key" and
+  # wait; the key is sent, the company opens after it
+  for ($w = 1; -not $ok -and $w -le 2; $w++) {
+    KeysTo '{ENTER}' 8 "$tag-key-$w"
+    $x = Post (Coll 'FCPCo' 'Company' 'NAME, GUID'); $ok = $x -match [regex]::Escape($co)
+    if ($ok) { Say "Tally ($tag): a TDL had errors (Tally's warning answered); see the screenshot $tag-started" }
+  }
   Say "Tally started ($tag) in $([math]::Round($sw.Elapsed.TotalSeconds,1)) s; company open: $ok"
   if ($script:useProxy) { Start-Proxy | Out-Null }
   return $ok
@@ -213,14 +220,17 @@ foreach ($v in $tv) { Body231 $v.mid "tally-body231-template-$($v.type)-$($v.vno
 function Natives($id, $type, $filter = '') { Post (Coll $id $type 'NAME' $filter '<NATIVEMETHOD>*</NATIVEMETHOD>') '' 120 }
 function YesNoFields($xml, $tag, $re) {
   $o = [ordered]@{}
-  foreach ($m in [regex]::Matches($xml, '<(' + $re + ')(?: [^>]*)?>(Yes|No)</\1>')) { if (-not $o.Contains($m.Groups[1].Value)) { $o[$m.Groups[1].Value] = $m.Groups[2].Value } }
+  foreach ($m in [regex]::Matches($xml, '<(?<n>' + $re + ')(?: [^>]*)?>(?<v>Yes|No)</\k<n>>')) { if (-not $o.Contains($m.Groups['n'].Value)) { $o[$m.Groups['n'].Value] = $m.Groups['v'].Value } }
   return $o
 }
 $featRe = '[A-Z]*(PAYROLL|BATCH|GODOWN|ORDER|TRACK|EXPIRY|MFG|ATTEND|ACTUALANDBILLED|SEPARATEACTUAL|JOBORDER|COSTTRACK)[A-Z]*'
 $co0 = Natives 'FCPCoAll' 'Company'; Set-Content (Join-Path $cap 'company-natives-before.xml') $co0 -Encoding UTF8
 $f0 = YesNoFields $co0 'COMPANY' $featRe
 Say "company feature fields (by name): $(($f0.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join ', ')"
-$alter = '<COMPANY NAME="' + $co + '" ACTION="Alter"><NAME>' + $co + '</NAME>' + (($f0.Keys | ForEach-Object { "<$_>Yes</$_>" }) -join '') + '</COMPANY>'
+# probe 4 (run 37479202675): the Alter works on 3.0 and 7.1; only these are set (it set every matching field, excise and
+# payroll statutory among them)
+$featOn = @('ISPAYROLLON', 'ISBATCHWISEON', 'PREVISMULTIGODOWNON', 'PREVISTRACKINGON', 'PREVISSALESORDERSON', 'PREVISPURCORDERSON', 'ISCOSTCENTRESON', 'PREVISCOSTCATEGORYON') | Where-Object { $co0 -match "<$_>" }
+$alter = '<COMPANY NAME="' + $co + '" ACTION="Alter"><NAME>' + $co + '</NAME>' + (($featOn | ForEach-Object { "<$_>Yes</$_>" }) -join '') + '</COMPANY>'
 $r = Imp 'All Masters' @($alter) 'company features by XML'
 Set-Content (Join-Path $cap 'company-alter-answer.xml') $r.raw -Encoding UTF8
 $co1 = Natives 'FCPCoAll' 'Company'; Set-Content (Join-Path $cap 'company-natives-after-xml.xml') $co1 -Encoding UTF8
@@ -229,7 +239,7 @@ Say "after the XML alter: $(($f1.GetEnumerator() | ForEach-Object { "$($_.Key)=$
 $featStillNo = @($f1.GetEnumerator() | Where-Object { $_.Value -eq 'No' -and $_.Key -match 'PAYROLL|BATCH' }).Count
 # F11 by keys: Show more features, then every field down the form is shown on a screenshot; each Yes/No field whose label
 # the harness knows is answered y (payroll, batches) - the screens say what the release calls them
-if ($featStillNo -or $env:PD_MODE -eq 'explore') {
+if ($featStillNo) {
   KeysTo '{F11}' 3 'f11-0'
   for ($i = 1; $i -le 3; $i++) { KeysTo '{UP}' 1 }
   Shot 'f11-1-top'; KeysTo 'y' 2 'f11-2-show-more'
@@ -246,16 +256,25 @@ $mfgField = @([regex]::Matches($vt, '<([A-Z]*(?:MFG|MANUF)[A-Z]*)(?: [^>]*)?>(Ye
 Say "voucher type fields: active $($actField -join ','); manufacturing $($mfgField -join ',')"
 $vtMsgs = @()
 foreach ($t in 'Payroll', 'Attendance', 'Stock Journal', 'Delivery Note', 'Receipt Note', 'Sales Order', 'Purchase Order', 'Physical Stock') {
-  if ($t -in $vtNames) { $vtMsgs += '<VOUCHERTYPE NAME="' + $t + '" ACTION="Alter"><NAME>' + $t + '</NAME>' + (($actField | ForEach-Object { "<$_>Yes</$_>" }) -join '') + '</VOUCHERTYPE>' }
+  # manual numbering: the order and note numbers in the templates are kept (probe 4: "Bad Order Number in Voucher!")
+  if ($t -in $vtNames) { $vtMsgs += '<VOUCHERTYPE NAME="' + $t + '" ACTION="Alter"><NAME>' + $t + '</NAME><NUMBERINGMETHOD>Manual</NUMBERINGMETHOD>' + (($actField | ForEach-Object { "<$_>Yes</$_>" }) -join '') + '</VOUCHERTYPE>' }
 }
 $vtMsgs += '<VOUCHERTYPE NAME="PD Manufacturing Journal" ACTION="Create"><NAME.LIST><NAME>PD Manufacturing Journal</NAME></NAME.LIST><PARENT>Stock Journal</PARENT><NUMBERINGMETHOD>Manual</NUMBERINGMETHOD>' + (($actField | ForEach-Object { "<$_>Yes</$_>" }) -join '') + (($mfgField | ForEach-Object { "<$_>Yes</$_>" }) -join '') + '</VOUCHERTYPE>'
 Imp 'All Masters' $vtMsgs 'voucher types active, manufacturing journal' | Out-Null
 $tm = TypeMasters
-Imp 'All Masters' $tm 'type masters (godowns, batch items, employees, pay heads, attendance type)' | Out-Null
+Imp 'All Masters' @($tm | Where-Object { $_ -notlike '<ATTENDANCETYPE*' }) 'type masters (godowns, batch items, employees, pay heads, supplier)' | Out-Null
+foreach ($a in @($tm | Where-Object { $_ -like '<ATTENDANCETYPE*' })) { Imp 'All Masters' @($a) 'attendance type' | Out-Null }
 $typeTpl = TypeTemplates; $typeOk = [ordered]@{}
 foreach ($k in $typeTpl.Keys) {
-  $r = Imp 'Vouchers' @($typeTpl[$k]) "template $k"
-  $typeOk[$k] = [pscustomobject]@{ created = $r.created; errors = $r.errors; ms = $r.ms; err = ([regex]::Matches($r.raw, '<LINEERROR>([^<]*)') | Select-Object -First 2 | ForEach-Object { $_.Groups[1].Value }) -join ' / ' }
+  $vs = @($typeTpl[$k]); $errs = @()
+  for ($v = 0; $v -lt $vs.Count; $v++) {
+    $r = Imp 'Vouchers' @($vs[$v]) "template $k (form $($v + 1) of $($vs.Count))"
+    $e = ([regex]::Matches($r.raw, '<LINEERROR>([^<]*)') | Select-Object -First 2 | ForEach-Object { $_.Groups[1].Value }) -join ' / '
+    $x = [regex]::Match($r.raw, '<EXCEPTIONS>(\d+)').Groups[1].Value
+    $errs += "form $($v + 1): created $($r.created), exceptions $x $e"
+    if ($r.created -ge 1) { break }
+  }
+  $typeOk[$k] = [pscustomobject]@{ created = $r.created; form = $v + 1; ms = $r.ms; err = ($errs -join ' | ') }
 }
 $typeOk | ConvertTo-Json -Depth 3 | Set-Content (Join-Path $cap 'type-templates.json') -Encoding UTF8
 foreach ($k in $typeTpl.Keys) {
@@ -400,7 +419,7 @@ function Posting($cfg, $coTag, $route, $i) {
   $id = "pd-$($rel -replace '\D', '')-$coTag-$cfg-$route-$i-$([guid]::NewGuid().ToString('N').Substring(0, 6))"
   $vx = PostingXml "push-design posting $id"
   $t0 = NowMs; $sw = [Diagnostics.Stopwatch]::StartNew(); $st = ''; $ok = $false; $handed = 0
-  if ($route -eq 'jobs') {
+  if ($route -like 'jobs*') {
     $j = Bridge POST '/jobs' @{ jobId = $id; company = $co; port = 9000; vouchers = @(@{ id = $id; xml = $vx }) } 30; $handed = Ms $sw
     while ($sw.Elapsed.TotalSeconds -lt 90) { $j = Bridge GET "/jobs?id=$id" $null 15; if ($j.status -in 'done', 'failed') { break }; Start-Sleep -Milliseconds 50 }
     $st = "$($j.status)"; $ok = (@($j.results)[0].ok -eq $true)
@@ -431,6 +450,16 @@ function PostSet($cfg, $coTag) {
   if ($cfg -ne 'none') { BodyFetchOn }
   for ($i = 1; $i -le $posts; $i++) { Posting $cfg $coTag 'jobs' $i }
   for ($i = 1; $i -le [math]::Max(2, [int]($posts / 2)); $i++) { Posting $cfg $coTag 'import' $i }
+  # the owner's pattern: an entry saved by hand in Tally, FinCom's posting a moment later (with the add-on the bridge
+  # reads the saved entry back from Tally by MasterID: does the posting wait behind that read?)
+  if ($cfg -notlike '*gentle0') {
+    for ($i = 1; $i -le [math]::Max(2, [int]($posts / 2)); $i++) {
+      DayBook '2-10-2026' $(if ($i -eq 1) { "$coTag-$cfg-aftersave-daybook" }); KeysTo '{END}' 1; KeysTo '%2' 3
+      if (Focus) { [System.Windows.Forms.SendKeys]::SendWait('^a') }
+      Start-Sleep -Milliseconds 300
+      Posting $cfg $coTag 'jobs-aftersave' $i
+    }
+  }
 }
 
 $tdlFull = "$fc\FCPFull.tdl"; $tdlHeads = "$fc\FCPHeads.tdl"; $tdlStamp = "$fc\FCPStamp.tdl"
@@ -451,7 +480,7 @@ function MasterAlter($cfg, $tdls, $form, $name) {
   Get-ChildItem $pd -Filter 'stamp-*.txt' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
   NewFullLines | Out-Null; NewRecLines | Out-Null
   $t = $form -replace ' ', ''
-  KeysTo 'l' 3 "types-$cfg-m-$t-0"; KeysTo $form 2; KeysTo '{ENTER}' 3 "types-$cfg-m-$t-1"; KeysTo $name 2; KeysTo '{ENTER}' 4 "types-$cfg-m-$t-2"
+  KeysTo 'a' 3 "types-$cfg-m-$t-0"; KeysTo $form 2; KeysTo '{ENTER}' 3 "types-$cfg-m-$t-1"; KeysTo $name 2; KeysTo '{ENTER}' 4 "types-$cfg-m-$t-2"
   if (Focus) { if ($script:noUiTimer) { [System.Windows.Forms.SendKeys]::SendWait('^a') } else { [PdUi]::Measure('^a', 400, 15000) | Out-Null } }
   Start-Sleep 3; Shot "types-$cfg-m-$t-3"
   $h = Stamps; $fl = NewFullLines; $rl = NewRecLines

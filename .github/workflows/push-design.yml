@@ -42,16 +42,18 @@ jobs:
           echo "led=$(get heavy_led)" | tee -a "$GITHUB_OUTPUT"; echo "item=$(get heavy_item)" | tee -a "$GITHUB_OUTPUT"
           echo "vch=$(get heavy_vch)" | tee -a "$GITHUB_OUTPUT"; echo "hmin=$(get heavy_min)" | tee -a "$GITHUB_OUTPUT"
           m=$(get mode); echo "mode=${m:-full}" | tee -a "$GITHUB_OUTPUT"
+      # bridge 2.3.0 as measured (tax-accuracy 1615231: 2.3.0 rebuilt, setup 8e814569...a7b9); 2.3.1 replaced it on
+      # tax-accuracy later the same day and run 37464758500 took 2.3.1 by mistake
       - uses: actions/checkout@v4
         with:
-          ref: tax-accuracy
+          ref: 1615231761e9ee7812f42e506473cd4cb85a40a3
       - id: sha
         run: |
           echo "sha=$(git rev-parse HEAD)" | tee -a "$GITHUB_OUTPUT"
           git log -1 --format='bridge source: %H %s' | tee bridge-source.txt
       - name: Committed 2.3.0 setup at tax-accuracy
         run: |
-          f=$(ls assets-test/bridge-go/FinComBridge-Setup-*.exe | head -1)
+          f=assets-test/bridge-go/FinComBridge-Setup-2.3.0.exe
           want=$(awk '{print tolower($1); exit}' "$f.sha256"); got=$(sha256sum "$f" | awk '{print $1}')
           echo "committed setup $f: SHA-256 $got (expected $want)"
           [ "$want" = "$got" ] || { echo "::error::committed setup SHA-256 mismatch"; exit 1; }
