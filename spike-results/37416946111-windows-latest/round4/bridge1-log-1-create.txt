@@ -1,0 +1,7 @@
+2026-10-06 05:15:38  Keeping FinCom Spike Co in step: its day book from 20260401 is read at Update now (and the nightly run), a month a request
+2026-10-06 05:15:43  Nightly catch-up: waiting, someone is working in Tally
+2026-10-06 05:16:23  Keeping FinCom Spike Co: ledger list MasterID 1-2000, 22 ledger(s) (0.2s); saved
+2026-10-06 05:16:24  Keeping FinCom Spike Co: ledger list MasterID 2001-end, 0 ledger(s) (0.2s); saved
+2026-10-06 05:16:24  Keeping FinCom Spike Co: the ledger list read (22 ledgers, 28 groups, 3 request(s)): 22 new, 0 changed, 0 renamed, 0 gone
+2026-10-06 05:16:24  Keeping FinCom Spike Co: Reading old entries is off (prospective only); FinComCompany ALTVCHID=2 ALTMSTID=240
+2026-10-06 05:16:24  Nightly catch-up: done (8 request(s) to Tally); the bridge is idle again (next: the nightly catch-up at 02:00, or Update now)

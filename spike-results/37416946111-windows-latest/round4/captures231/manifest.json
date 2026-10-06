@@ -1,0 +1,7 @@
+{
+  "s4-receipt-against-bill.entry.xml": "S4 receipt against a bill (Agst Ref S231-BILL-1): Tally's answer to the bridge's entry request (FinComVoucherByMaster, MasterID 9, 20261202); 5255 bytes, 34 ms",
+  "s6-journal-cost-centres.entry.xml": "S6 journal with cost centres: Tally's answer to the bridge's entry request (FinComVoucherByMaster, MasterID 10, 20270102); 5536 bytes, 31 ms",
+  "s7-bank-payment-utr.entry.xml": "S7 bank payment with a UTR: Tally's answer to the bridge's entry request (FinComVoucherByMaster, MasterID 11, 20270201); 5067 bytes, 32 ms",
+  "s8-new-party.entry.xml": "S8 a new party ledger used at once: Tally's answer to the bridge's entry request (FinComVoucherByMaster, MasterID 12, 20270301); 5074 bytes, 47 ms",
+  "_run": "run 37416946111, bridge 56bcbc64afaa01d7a70d33d08091346b39174d20, TallyPrime 7.1 Educational on Windows, 2026-10-06 05:50"
+}

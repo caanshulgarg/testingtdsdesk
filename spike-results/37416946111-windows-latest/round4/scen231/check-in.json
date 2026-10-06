@@ -1,0 +1,1016 @@
+{
+  "tags": [
+    {
+      "label": "Tally's own Day Book export (S1)",
+      "file": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\s1-sales-two-rates.daybook.xml"
+    },
+    {
+      "label": "the bridge's entry request answer (S1)",
+      "file": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\captures231\\s1-sales-two-rates.entry.xml"
+    },
+    {
+      "label": "Tally's own Day Book export (S2)",
+      "file": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\s2-purchase-items.daybook.xml"
+    },
+    {
+      "label": "the bridge's entry request answer (S2)",
+      "file": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\captures231\\s2-purchase-items.entry.xml"
+    },
+    {
+      "label": "Tally's own Day Book export (S3)",
+      "file": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\s3-credit-note-items.daybook.xml"
+    },
+    {
+      "label": "the bridge's entry request answer (S3)",
+      "file": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\captures231\\s3-credit-note-items.entry.xml"
+    },
+    {
+      "label": "Tally's own Day Book export (S4)",
+      "file": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\s4-receipt-against-bill.daybook.xml"
+    },
+    {
+      "label": "the bridge's entry request answer (S4)",
+      "file": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\captures231\\s4-receipt-against-bill.entry.xml"
+    },
+    {
+      "label": "Tally's own Day Book export (S5)",
+      "file": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\s5-payment-tds.daybook.xml"
+    },
+    {
+      "label": "the bridge's entry request answer (S5)",
+      "file": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\captures231\\s5-payment-tds.entry.xml"
+    },
+    {
+      "label": "Tally's own Day Book export (S6)",
+      "file": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\s6-journal-cost-centres.daybook.xml"
+    },
+    {
+      "label": "the bridge's entry request answer (S6)",
+      "file": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\captures231\\s6-journal-cost-centres.entry.xml"
+    },
+    {
+      "label": "Tally's own Day Book export (S7)",
+      "file": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\s7-bank-payment-utr.daybook.xml"
+    },
+    {
+      "label": "the bridge's entry request answer (S7)",
+      "file": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\captures231\\s7-bank-payment-utr.entry.xml"
+    },
+    {
+      "label": "Tally's own Day Book export (S10)",
+      "file": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\s10-sales-50-items.daybook.xml"
+    },
+    {
+      "label": "the bridge's entry request answer (S10)",
+      "file": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\captures231\\s10-sales-50-items.entry.xml"
+    },
+    {
+      "label": "Tally's own Day Book export (S8)",
+      "file": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\s8-new-party.daybook.xml"
+    },
+    {
+      "label": "the bridge's entry request answer (S8)",
+      "file": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\captures231\\s8-new-party.entry.xml"
+    },
+    {
+      "label": "Tally's ledger master export (S231 Contractor, FETCH *)",
+      "file": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\ledger-S231Contractor.full.xml"
+    },
+    {
+      "label": "the bridge's ledger request answer (s8-ledger-by-name.xml)",
+      "file": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\captures231\\s8-ledger-by-name.xml"
+    },
+    {
+      "label": "the bridge's ledger request answer (s9-ledger-changes.xml)",
+      "file": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\captures231\\s9-ledger-changes.xml"
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "S1",
+      "key": "s1-sales-two-rates",
+      "kind": "items",
+      "label": "sales invoice, two stock items at 5% and 18%",
+      "guid": "",
+      "truth": {
+        "type": "Sales",
+        "party": "S231 Buyer",
+        "items": [
+          {
+            "item": "S231 Rice",
+            "hsn": "1006",
+            "qty": 10,
+            "unit": "Nos",
+            "rate": 50,
+            "taxable": 500,
+            "gst": 5,
+            "tax": 25,
+            "cgst": 12.5,
+            "sgst": 12.5
+          },
+          {
+            "item": "S231 Laptop",
+            "hsn": "8471",
+            "qty": 2,
+            "unit": "Nos",
+            "rate": 30000,
+            "taxable": 60000,
+            "gst": 18,
+            "tax": 10800,
+            "cgst": 5400,
+            "sgst": 5400
+          }
+        ],
+        "ledgers": {
+          "S231 Buyer": -71325,
+          "S231 Sales": 60500,
+          "Output CGST": 5412.5,
+          "Output SGST": 5412.5
+        },
+        "total": 71325,
+        "irn": "a5c12dca80e743321740b001fd70953e8738d109865d28ba4013750f2046f229",
+        "ackNo": "112611010000231",
+        "ackDate": "20261101",
+        "eway": "381101234231"
+      },
+      "tally": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\s1-sales-two-rates.daybook.xml",
+      "entry": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\captures231\\s1-sales-two-rates.entry.xml",
+      "ledger": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\ledger-S231Contractor.full.xml",
+      "lines": []
+    },
+    {
+      "id": "S2",
+      "key": "s2-purchase-items",
+      "kind": "items",
+      "label": "purchase invoice with items",
+      "guid": "",
+      "truth": {
+        "type": "Purchase",
+        "party": "S231 Supplier",
+        "items": [
+          {
+            "item": "S231 Tablet",
+            "hsn": "3004",
+            "qty": 5,
+            "unit": "Nos",
+            "rate": 400,
+            "taxable": 2000,
+            "gst": 12,
+            "tax": 240,
+            "cgst": 120,
+            "sgst": 120
+          },
+          {
+            "item": "S231 Rice",
+            "hsn": "1006",
+            "qty": 20,
+            "unit": "Nos",
+            "rate": 50,
+            "taxable": 1000,
+            "gst": 5,
+            "tax": 50,
+            "cgst": 25,
+            "sgst": 25
+          }
+        ],
+        "ledgers": {
+          "S231 Supplier": 3290,
+          "S231 Purchase": -3000,
+          "Input CGST": -145,
+          "Input SGST": -145
+        },
+        "total": 3290
+      },
+      "tally": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\s2-purchase-items.daybook.xml",
+      "entry": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\captures231\\s2-purchase-items.entry.xml",
+      "ledger": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\ledger-S231Contractor.full.xml",
+      "lines": []
+    },
+    {
+      "id": "S3",
+      "key": "s3-credit-note-items",
+      "kind": "items",
+      "label": "credit note with items",
+      "guid": "",
+      "truth": {
+        "type": "Credit Note",
+        "party": "S231 Buyer",
+        "items": [
+          {
+            "item": "S231 Laptop",
+            "hsn": "8471",
+            "qty": 1,
+            "unit": "Nos",
+            "rate": 30000,
+            "taxable": 30000,
+            "gst": 18,
+            "tax": 5400,
+            "cgst": 2700,
+            "sgst": 2700
+          }
+        ],
+        "ledgers": {
+          "S231 Buyer": 35400,
+          "S231 Sales": -30000,
+          "Output CGST": -2700,
+          "Output SGST": -2700
+        },
+        "total": 35400
+      },
+      "tally": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\s3-credit-note-items.daybook.xml",
+      "entry": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\captures231\\s3-credit-note-items.entry.xml",
+      "ledger": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\ledger-S231Contractor.full.xml",
+      "lines": []
+    },
+    {
+      "id": "S4",
+      "key": "s4-receipt-against-bill",
+      "kind": "bills",
+      "label": "receipt against a bill (Agst Ref S231-BILL-1)",
+      "guid": "305c0901-9cb7-499f-b6ea-4a37084afcf6-00000009",
+      "truth": {
+        "type": "Receipt",
+        "party": "S231 Billwise Party",
+        "ledgers": {
+          "S231 Billwise Party": 2360,
+          "Cash": -2360
+        },
+        "bills": [
+          {
+            "ledger": "S231 Billwise Party",
+            "name": "S231-BILL-1",
+            "type": "Agst Ref",
+            "amount": 2360
+          }
+        ]
+      },
+      "tally": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\s4-receipt-against-bill.daybook.xml",
+      "entry": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\captures231\\s4-receipt-against-bill.entry.xml",
+      "ledger": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\ledger-S231Contractor.full.xml",
+      "lines": [
+        {
+          "ev": "altered",
+          "at": "05:31:35",
+          "xml": "<VOUCHER REMOTEID=\"305c0901-9cb7-499f-b6ea-4a37084afcf6-00000009\" VCHKEY=\"305c0901-9cb7-499f-b6ea-4a37084afcf6-0000b515:00000008\" VCHTYPE=\"Receipt\" OBJVIEW=\"Accounting Voucher View\">\r\n     <DATE TYPE=\"Date\">20261202</DATE>\r\n     <REFERENCEDATE TYPE=\"Date\"></REFERENCEDATE>\r\n     <IRNACKDATE TYPE=\"Date\"></IRNACKDATE>\r\n     <GUID>305c0901-9cb7-499f-b6ea-4a37084afcf6-00000009</GUID>\r\n     <NARRATION TYPE=\"String\">S4 against S231-BILL-1</NARRATION>\r\n     <REQUESTORRULE/>\r\n     <PARTYGSTIN TYPE=\"String\"></PARTYGSTIN>\r\n     <PLACEOFSUPPLY TYPE=\"String\"></PLACEOFSUPPLY>\r\n     <VOUCHERTYPENAME>Receipt</VOUCHERTYPENAME>\r\n     <CMPGSTIN TYPE=\"String\"></CMPGSTIN>\r\n     <PARTYLEDGERNAME TYPE=\"String\">S231 Billwise Party</PARTYLEDGERNAME>\r\n     <VOUCHERNUMBER>3</VOUCHERNUMBER>\r\n     <REFERENCE TYPE=\"String\"></REFERENCE>\r\n     <IRN TYPE=\"String\"></IRN>\r\n     <IRNACKNO TYPE=\"String\"></IRNACKNO>\r\n     <SERIALMASTER TYPE=\"String\"></SERIALMASTER>\r\n     <ARESERIALMASTER TYPE=\"String\"></ARESERIALMASTER>\r\n     <NUMBERINGSTYLE>Auto Retain</NUMBERINGSTYLE>\r\n     <PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW>\r\n     <ISDELETED>No</ISDELETED>\r\n     <ASORIGINAL>No</ASORIGINAL>\r\n     <ISDEEMEDPOSITIVE TYPE=\"Logical\">No</ISDEEMEDPOSITIVE>\r\n     <ISOPTIONAL TYPE=\"Logical\">No</ISOPTIONAL>\r\n     <ISCANCELLED TYPE=\"Logical\">No</ISCANCELLED>\r\n     <ISINVOICE>No</ISINVOICE>\r\n     <ASPAYSLIP>No</ASPAYSLIP>\r\n     <ISDELETEDVCHRETAINED>No</ISDELETEDVCHRETAINED>\r\n     <ISNEGISPOSSET TYPE=\"Logical\">Yes</ISNEGISPOSSET>\r\n     <ALTERID TYPE=\"Number\"> 13</ALTERID>\r\n     <MASTERID TYPE=\"Number\"> 9</MASTERID>\r\n     <VOUCHERKEY TYPE=\"Number\">199101798940680</VOUCHERKEY>\r\n     <VOUCHERRETAINKEY TYPE=\"Number\">9</VOUCHERRETAINKEY>\r\n     <REUSEHOLEID TYPE=\"Number\">0</REUSEHOLEID>\r\n     <VOUCHERNUMBERSERIES TYPE=\"String\">Default</VOUCHERNUMBERSERIES>\r\n     <EWAYBILLDETAILS.LIST>     </EWAYBILLDETAILS.LIST>\r\n     <ALLINVENTORYENTRIES.LIST>     </ALLINVENTORYENTRIES.LIST>\r\n     <ALLLEDGERENTRIES.LIST>\r\n      <LEDGERNAME TYPE=\"String\">S231 Billwise Party</LEDGERNAME>\r\n      <GSTHSNNAME TYPE=\"String\"></GSTHSNNAME>\r\n      <ISDEEMEDPOSITIVE TYPE=\"Logical\">No</ISDEEMEDPOSITIVE>\r\n      <ISLASTDEEMEDPOSITIVE TYPE=\"Logical\">No</ISLASTDEEMEDPOSITIVE>\r\n      <AMOUNT TYPE=\"Amount\">2360.00</AMOUNT>\r\n      <VATASSESSABLEVALUE TYPE=\"Amount\"></VATASSESSABLEVALUE>\r\n      <CATEGORYALLOCATIONS.LIST>      </CATEGORYALLOCATIONS.LIST>\r\n      <BANKALLOCATIONS.LIST>      </BANKALLOCATIONS.LIST>\r\n      <BILLALLOCATIONS.LIST>\r\n       <NAME>S231-BILL-1</NAME>\r\n       <BILLCREDITPERIOD/>\r\n       <TDSDEDUCTEESECTIONNUMBER/>\r\n       <BILLTYPE>Agst Ref</BILLTYPE>\r\n       <AMOUNT TYPE=\"Amount\">2360.00</AMOUNT>\r\n      </BILLALLOCATIONS.LIST>\r\n      <RATEDETAILS.LIST>      </RATEDETAILS.LIST>\r\n      <TAXOBJECTALLOCATIONS.LIST>      </TAXOBJECTALLOCATIONS.LIST>\r\n      <COSTTRACKALLOCATIONS.LIST>      </COSTTRACKALLOCATIONS.LIST>\r\n     </ALLLEDGERENTRIES.LIST>\r\n     <ALLLEDGERENTRIES.LIST>\r\n      <LEDGERNAME TYPE=\"String\">Cash</LEDGERNAME>\r\n      <GSTHSNNAME TYPE=\"String\"></GSTHSNNAME>\r\n      <ISDEEMEDPOSITIVE TYPE=\"Logical\">Yes</ISDEEMEDPOSITIVE>\r\n      <ISLASTDEEMEDPOSITIVE TYPE=\"Logical\">Yes</ISLASTDEEMEDPOSITIVE>\r\n      <AMOUNT TYPE=\"Amount\">-2360.00</AMOUNT>\r\n      <VATASSESSABLEVALUE TYPE=\"Amount\"></VATASSESSABLEVALUE>\r\n      <CATEGORYALLOCATIONS.LIST>      </CATEGORYALLOCATIONS.LIST>\r\n      <BANKALLOCATIONS.LIST>      </BANKALLOCATIONS.LIST>\r\n      <BILLALLOCATIONS.LIST>      </BILLALLOCATIONS.LIST>\r\n      <RATEDETAILS.LIST>      </RATEDETAILS.LIST>\r\n      <TAXOBJECTALLOCATIONS.LIST>      </TAXOBJECTALLOCATIONS.LIST>\r\n      <COSTTRACKALLOCATIONS.LIST>      </COSTTRACKALLOCATIONS.LIST>\r\n     </ALLLEDGERENTRIES.LIST>\r\n    </VOUCHER>",
+          "state": "applied",
+          "why": ""
+        }
+      ]
+    },
+    {
+      "id": "S5",
+      "key": "s5-payment-tds",
+      "kind": "tds",
+      "label": "payment with TDS",
+      "guid": "",
+      "truth": {
+        "type": "Payment",
+        "party": "S231 Contractor",
+        "ledgers": {
+          "S231 Contract Exp": -100000,
+          "S231 TDS Payable": 2000,
+          "Cash": 98000
+        },
+        "tds": {
+          "nature": "S231 Contract Work",
+          "rate": 2,
+          "base": 100000,
+          "tax": 2000,
+          "party": "S231 Contractor",
+          "section": "194C",
+          "deductee": "Company - Resident"
+        }
+      },
+      "tally": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\s5-payment-tds.daybook.xml",
+      "entry": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\captures231\\s5-payment-tds.entry.xml",
+      "ledger": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\ledger-S231Contractor.full.xml",
+      "lines": []
+    },
+    {
+      "id": "S6",
+      "key": "s6-journal-cost-centres",
+      "kind": "costs",
+      "label": "journal with cost centres",
+      "guid": "305c0901-9cb7-499f-b6ea-4a37084afcf6-0000000a",
+      "truth": {
+        "type": "Journal",
+        "ledgers": {
+          "S231 Office Exp": -1000,
+          "S231 Supplier": 1000
+        },
+        "costs": [
+          {
+            "ledger": "S231 Office Exp",
+            "category": "S231 Region",
+            "centre": "S231 North",
+            "amount": -600
+          },
+          {
+            "ledger": "S231 Office Exp",
+            "category": "S231 Region",
+            "centre": "S231 South",
+            "amount": -400
+          }
+        ]
+      },
+      "tally": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\s6-journal-cost-centres.daybook.xml",
+      "entry": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\captures231\\s6-journal-cost-centres.entry.xml",
+      "ledger": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\ledger-S231Contractor.full.xml",
+      "lines": [
+        {
+          "ev": "altered",
+          "at": "05:32:14",
+          "xml": "<VOUCHER REMOTEID=\"305c0901-9cb7-499f-b6ea-4a37084afcf6-0000000a\" VCHKEY=\"305c0901-9cb7-499f-b6ea-4a37084afcf6-0000b534:00000008\" VCHTYPE=\"Journal\" OBJVIEW=\"Accounting Voucher View\">\r\n     <DATE TYPE=\"Date\">20270102</DATE>\r\n     <REFERENCEDATE TYPE=\"Date\"></REFERENCEDATE>\r\n     <IRNACKDATE TYPE=\"Date\"></IRNACKDATE>\r\n     <GUID>305c0901-9cb7-499f-b6ea-4a37084afcf6-0000000a</GUID>\r\n     <NARRATION TYPE=\"String\">S6 office costs by region</NARRATION>\r\n     <REQUESTORRULE/>\r\n     <PARTYGSTIN TYPE=\"String\"></PARTYGSTIN>\r\n     <PLACEOFSUPPLY TYPE=\"String\"></PLACEOFSUPPLY>\r\n     <VOUCHERTYPENAME>Journal</VOUCHERTYPENAME>\r\n     <CMPGSTIN TYPE=\"String\"></CMPGSTIN>\r\n     <PARTYLEDGERNAME TYPE=\"String\">S231 Supplier</PARTYLEDGERNAME>\r\n     <VOUCHERNUMBER>3</VOUCHERNUMBER>\r\n     <REFERENCE TYPE=\"String\"></REFERENCE>\r\n     <IRN TYPE=\"String\"></IRN>\r\n     <IRNACKNO TYPE=\"String\"></IRNACKNO>\r\n     <SERIALMASTER TYPE=\"String\"></SERIALMASTER>\r\n     <ARESERIALMASTER TYPE=\"String\"></ARESERIALMASTER>\r\n     <NUMBERINGSTYLE>Auto Retain</NUMBERINGSTYLE>\r\n     <PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW>\r\n     <ISDELETED>No</ISDELETED>\r\n     <ASORIGINAL>No</ASORIGINAL>\r\n     <ISDEEMEDPOSITIVE TYPE=\"Logical\">Yes</ISDEEMEDPOSITIVE>\r\n     <ISOPTIONAL TYPE=\"Logical\">No</ISOPTIONAL>\r\n     <ISCANCELLED TYPE=\"Logical\">No</ISCANCELLED>\r\n     <ISINVOICE>No</ISINVOICE>\r\n     <ASPAYSLIP>No</ASPAYSLIP>\r\n     <ISDELETEDVCHRETAINED>No</ISDELETEDVCHRETAINED>\r\n     <ISNEGISPOSSET TYPE=\"Logical\">Yes</ISNEGISPOSSET>\r\n     <ALTERID TYPE=\"Number\"> 15</ALTERID>\r\n     <MASTERID TYPE=\"Number\"> 10</MASTERID>\r\n     <VOUCHERKEY TYPE=\"Number\">199234942926856</VOUCHERKEY>\r\n     <VOUCHERRETAINKEY TYPE=\"Number\">9</VOUCHERRETAINKEY>\r\n     <REUSEHOLEID TYPE=\"Number\">0</REUSEHOLEID>\r\n     <VOUCHERNUMBERSERIES TYPE=\"String\">Default</VOUCHERNUMBERSERIES>\r\n     <EWAYBILLDETAILS.LIST>     </EWAYBILLDETAILS.LIST>\r\n     <ALLINVENTORYENTRIES.LIST>     </ALLINVENTORYENTRIES.LIST>\r\n     <ALLLEDGERENTRIES.LIST>\r\n      <LEDGERNAME TYPE=\"String\">S231 Office Exp</LEDGERNAME>\r\n      <GSTHSNNAME TYPE=\"String\"></GSTHSNNAME>\r\n      <ISDEEMEDPOSITIVE TYPE=\"Logical\">Yes</ISDEEMEDPOSITIVE>\r\n      <ISLASTDEEMEDPOSITIVE TYPE=\"Logical\">Yes</ISLASTDEEMEDPOSITIVE>\r\n      <AMOUNT TYPE=\"Amount\">-1000.00</AMOUNT>\r\n      <VATASSESSABLEVALUE TYPE=\"Amount\"></VATASSESSABLEVALUE>\r\n      <CATEGORYALLOCATIONS.LIST>\r\n       <CATEGORY TYPE=\"String\">S231 Region</CATEGORY>\r\n       <ISDEEMEDPOSITIVE TYPE=\"Logical\">Yes</ISDEEMEDPOSITIVE>\r\n       <COSTCENTREALLOCATIONS.LIST>\r\n        <NAME TYPE=\"String\">S231 North</NAME>\r\n        <AMOUNT TYPE=\"Amount\">-600.00</AMOUNT>\r\n       </COSTCENTREALLOCATIONS.LIST>\r\n       <COSTCENTREALLOCATIONS.LIST>\r\n        <NAME TYPE=\"String\">S231 South</NAME>\r\n        <AMOUNT TYPE=\"Amount\">-400.00</AMOUNT>\r\n       </COSTCENTREALLOCATIONS.LIST>\r\n      </CATEGORYALLOCATIONS.LIST>\r\n      <BANKALLOCATIONS.LIST>      </BANKALLOCATIONS.LIST>\r\n      <BILLALLOCATIONS.LIST>      </BILLALLOCATIONS.LIST>\r\n      <RATEDETAILS.LIST>      </RATEDETAILS.LIST>\r\n      <TAXOBJECTALLOCATIONS.LIST>      </TAXOBJECTALLOCATIONS.LIST>\r\n      <COSTTRACKALLOCATIONS.LIST>      </COSTTRACKALLOCATIONS.LIST>\r\n     </ALLLEDGERENTRIES.LIST>\r\n     <ALLLEDGERENTRIES.LIST>\r\n      <LEDGERNAME TYPE=\"String\">S231 Supplier</LEDGERNAME>\r\n      <GSTHSNNAME TYPE=\"String\"></GSTHSNNAME>\r\n      <ISDEEMEDPOSITIVE TYPE=\"Logical\">No</ISDEEMEDPOSITIVE>\r\n      <ISLASTDEEMEDPOSITIVE TYPE=\"Logical\">No</ISLASTDEEMEDPOSITIVE>\r\n      <AMOUNT TYPE=\"Amount\">1000.00</AMOUNT>\r\n      <VATASSESSABLEVALUE TYPE=\"Amount\"></VATASSESSABLEVALUE>\r\n      <CATEGORYALLOCATIONS.LIST>      </CATEGORYALLOCATIONS.LIST>\r\n      <BANKALLOCATIONS.LIST>      </BANKALLOCATIONS.LIST>\r\n      <BILLALLOCATIONS.LIST>      </BILLALLOCATIONS.LIST>\r\n      <RATEDETAILS.LIST>      </RATEDETAILS.LIST>\r\n      <TAXOBJECTALLOCATIONS.LIST>      </TAXOBJECTALLOCATIONS.LIST>\r\n      <COSTTRACKALLOCATIONS.LIST>      </COSTTRACKALLOCATIONS.LIST>\r\n     </ALLLEDGERENTRIES.LIST>\r\n    </VOUCHER>",
+          "state": "applied",
+          "why": ""
+        }
+      ]
+    },
+    {
+      "id": "S7",
+      "key": "s7-bank-payment-utr",
+      "kind": "bank",
+      "label": "bank payment with a UTR",
+      "guid": "305c0901-9cb7-499f-b6ea-4a37084afcf6-0000000b",
+      "truth": {
+        "type": "Payment",
+        "party": "S231 Supplier",
+        "ledgers": {
+          "S231 Supplier": -5900,
+          "S231 Bank": 5900
+        },
+        "bank": {
+          "ledger": "S231 Bank",
+          "txnType": "e-Fund Transfer",
+          "instNo": "SBINR52027020100231",
+          "instDate": "20270201",
+          "amount": 5900
+        }
+      },
+      "tally": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\s7-bank-payment-utr.daybook.xml",
+      "entry": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\captures231\\s7-bank-payment-utr.entry.xml",
+      "ledger": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\ledger-S231Contractor.full.xml",
+      "lines": [
+        {
+          "ev": "altered",
+          "at": "05:32:55",
+          "xml": "<VOUCHER REMOTEID=\"305c0901-9cb7-499f-b6ea-4a37084afcf6-0000000b\" VCHKEY=\"305c0901-9cb7-499f-b6ea-4a37084afcf6-0000b552:00000008\" VCHTYPE=\"Payment\" OBJVIEW=\"Accounting Voucher View\">\r\n     <DATE TYPE=\"Date\">20270201</DATE>\r\n     <REFERENCEDATE TYPE=\"Date\"></REFERENCEDATE>\r\n     <IRNACKDATE TYPE=\"Date\"></IRNACKDATE>\r\n     <GUID>305c0901-9cb7-499f-b6ea-4a37084afcf6-0000000b</GUID>\r\n     <NARRATION TYPE=\"String\">S7 NEFT to the supplier</NARRATION>\r\n     <REQUESTORRULE/>\r\n     <PARTYGSTIN TYPE=\"String\"></PARTYGSTIN>\r\n     <PLACEOFSUPPLY TYPE=\"String\"></PLACEOFSUPPLY>\r\n     <VOUCHERTYPENAME>Payment</VOUCHERTYPENAME>\r\n     <CMPGSTIN TYPE=\"String\"></CMPGSTIN>\r\n     <PARTYLEDGERNAME TYPE=\"String\">S231 Supplier</PARTYLEDGERNAME>\r\n     <VOUCHERNUMBER>1</VOUCHERNUMBER>\r\n     <REFERENCE TYPE=\"String\"></REFERENCE>\r\n     <IRN TYPE=\"String\"></IRN>\r\n     <IRNACKNO TYPE=\"String\"></IRNACKNO>\r\n     <SERIALMASTER TYPE=\"String\"></SERIALMASTER>\r\n     <ARESERIALMASTER TYPE=\"String\"></ARESERIALMASTER>\r\n     <NUMBERINGSTYLE>Auto Retain</NUMBERINGSTYLE>\r\n     <PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW>\r\n     <ISDELETED>No</ISDELETED>\r\n     <ASORIGINAL>No</ASORIGINAL>\r\n     <ISDEEMEDPOSITIVE TYPE=\"Logical\">Yes</ISDEEMEDPOSITIVE>\r\n     <ISOPTIONAL TYPE=\"Logical\">No</ISOPTIONAL>\r\n     <ISCANCELLED TYPE=\"Logical\">No</ISCANCELLED>\r\n     <ISINVOICE>No</ISINVOICE>\r\n     <ASPAYSLIP>No</ASPAYSLIP>\r\n     <ISDELETEDVCHRETAINED>No</ISDELETEDVCHRETAINED>\r\n     <ISNEGISPOSSET TYPE=\"Logical\">Yes</ISNEGISPOSSET>\r\n     <ALTERID TYPE=\"Number\"> 17</ALTERID>\r\n     <MASTERID TYPE=\"Number\"> 11</MASTERID>\r\n     <VOUCHERKEY TYPE=\"Number\">199363791945736</VOUCHERKEY>\r\n     <VOUCHERRETAINKEY TYPE=\"Number\">1</VOUCHERRETAINKEY>\r\n     <REUSEHOLEID TYPE=\"Number\">0</REUSEHOLEID>\r\n     <VOUCHERNUMBERSERIES TYPE=\"String\">Default</VOUCHERNUMBERSERIES>\r\n     <EWAYBILLDETAILS.LIST>     </EWAYBILLDETAILS.LIST>\r\n     <ALLINVENTORYENTRIES.LIST>     </ALLINVENTORYENTRIES.LIST>\r\n     <ALLLEDGERENTRIES.LIST>\r\n      <LEDGERNAME TYPE=\"String\">S231 Supplier</LEDGERNAME>\r\n      <GSTHSNNAME TYPE=\"String\"></GSTHSNNAME>\r\n      <ISDEEMEDPOSITIVE TYPE=\"Logical\">Yes</ISDEEMEDPOSITIVE>\r\n      <ISLASTDEEMEDPOSITIVE TYPE=\"Logical\">Yes</ISLASTDEEMEDPOSITIVE>\r\n      <AMOUNT TYPE=\"Amount\">-5900.00</AMOUNT>\r\n      <VATASSESSABLEVALUE TYPE=\"Amount\"></VATASSESSABLEVALUE>\r\n      <CATEGORYALLOCATIONS.LIST>      </CATEGORYALLOCATIONS.LIST>\r\n      <BANKALLOCATIONS.LIST>      </BANKALLOCATIONS.LIST>\r\n      <BILLALLOCATIONS.LIST>      </BILLALLOCATIONS.LIST>\r\n      <RATEDETAILS.LIST>      </RATEDETAILS.LIST>\r\n      <TAXOBJECTALLOCATIONS.LIST>      </TAXOBJECTALLOCATIONS.LIST>\r\n      <COSTTRACKALLOCATIONS.LIST>      </COSTTRACKALLOCATIONS.LIST>\r\n     </ALLLEDGERENTRIES.LIST>\r\n     <ALLLEDGERENTRIES.LIST>\r\n      <LEDGERNAME TYPE=\"String\">S231 Bank</LEDGERNAME>\r\n      <GSTHSNNAME TYPE=\"String\"></GSTHSNNAME>\r\n      <ISDEEMEDPOSITIVE TYPE=\"Logical\">No</ISDEEMEDPOSITIVE>\r\n      <ISLASTDEEMEDPOSITIVE TYPE=\"Logical\">No</ISLASTDEEMEDPOSITIVE>\r\n      <AMOUNT TYPE=\"Amount\">5900.00</AMOUNT>\r\n      <VATASSESSABLEVALUE TYPE=\"Amount\"></VATASSESSABLEVALUE>\r\n      <CATEGORYALLOCATIONS.LIST>      </CATEGORYALLOCATIONS.LIST>\r\n      <BANKALLOCATIONS.LIST>      </BANKALLOCATIONS.LIST>\r\n      <BILLALLOCATIONS.LIST>      </BILLALLOCATIONS.LIST>\r\n      <RATEDETAILS.LIST>      </RATEDETAILS.LIST>\r\n      <TAXOBJECTALLOCATIONS.LIST>      </TAXOBJECTALLOCATIONS.LIST>\r\n      <COSTTRACKALLOCATIONS.LIST>      </COSTTRACKALLOCATIONS.LIST>\r\n     </ALLLEDGERENTRIES.LIST>\r\n    </VOUCHER>",
+          "state": "applied",
+          "why": ""
+        }
+      ]
+    },
+    {
+      "id": "S10",
+      "key": "s10-sales-50-items",
+      "kind": "items",
+      "label": "sales invoice with 50 items",
+      "guid": "",
+      "truth": {
+        "type": "Sales",
+        "party": "S231 Buyer",
+        "items": [
+          {
+            "item": "S231 Rice",
+            "hsn": "1006",
+            "qty": 1,
+            "unit": "Nos",
+            "rate": 50,
+            "taxable": 50,
+            "gst": 5,
+            "tax": 2.5,
+            "cgst": 1.25,
+            "sgst": 1.25
+          },
+          {
+            "item": "S231 Laptop",
+            "hsn": "8471",
+            "qty": 2,
+            "unit": "Nos",
+            "rate": 30000,
+            "taxable": 60000,
+            "gst": 18,
+            "tax": 10800,
+            "cgst": 5400,
+            "sgst": 5400
+          },
+          {
+            "item": "S231 Tablet",
+            "hsn": "3004",
+            "qty": 3,
+            "unit": "Nos",
+            "rate": 400,
+            "taxable": 1200,
+            "gst": 12,
+            "tax": 144,
+            "cgst": 72,
+            "sgst": 72
+          },
+          {
+            "item": "S231 Car Part",
+            "hsn": "8708",
+            "qty": 4,
+            "unit": "Nos",
+            "rate": 2500,
+            "taxable": 10000,
+            "gst": 28,
+            "tax": 2800,
+            "cgst": 1400,
+            "sgst": 1400
+          },
+          {
+            "item": "S231 Rice",
+            "hsn": "1006",
+            "qty": 5,
+            "unit": "Nos",
+            "rate": 50,
+            "taxable": 250,
+            "gst": 5,
+            "tax": 12.5,
+            "cgst": 6.25,
+            "sgst": 6.25
+          },
+          {
+            "item": "S231 Laptop",
+            "hsn": "8471",
+            "qty": 6,
+            "unit": "Nos",
+            "rate": 30000,
+            "taxable": 180000,
+            "gst": 18,
+            "tax": 32400,
+            "cgst": 16200,
+            "sgst": 16200
+          },
+          {
+            "item": "S231 Tablet",
+            "hsn": "3004",
+            "qty": 7,
+            "unit": "Nos",
+            "rate": 400,
+            "taxable": 2800,
+            "gst": 12,
+            "tax": 336,
+            "cgst": 168,
+            "sgst": 168
+          },
+          {
+            "item": "S231 Car Part",
+            "hsn": "8708",
+            "qty": 1,
+            "unit": "Nos",
+            "rate": 2500,
+            "taxable": 2500,
+            "gst": 28,
+            "tax": 700,
+            "cgst": 350,
+            "sgst": 350
+          },
+          {
+            "item": "S231 Rice",
+            "hsn": "1006",
+            "qty": 2,
+            "unit": "Nos",
+            "rate": 50,
+            "taxable": 100,
+            "gst": 5,
+            "tax": 5,
+            "cgst": 2.5,
+            "sgst": 2.5
+          },
+          {
+            "item": "S231 Laptop",
+            "hsn": "8471",
+            "qty": 3,
+            "unit": "Nos",
+            "rate": 30000,
+            "taxable": 90000,
+            "gst": 18,
+            "tax": 16200,
+            "cgst": 8100,
+            "sgst": 8100
+          },
+          {
+            "item": "S231 Tablet",
+            "hsn": "3004",
+            "qty": 4,
+            "unit": "Nos",
+            "rate": 400,
+            "taxable": 1600,
+            "gst": 12,
+            "tax": 192,
+            "cgst": 96,
+            "sgst": 96
+          },
+          {
+            "item": "S231 Car Part",
+            "hsn": "8708",
+            "qty": 5,
+            "unit": "Nos",
+            "rate": 2500,
+            "taxable": 12500,
+            "gst": 28,
+            "tax": 3500,
+            "cgst": 1750,
+            "sgst": 1750
+          },
+          {
+            "item": "S231 Rice",
+            "hsn": "1006",
+            "qty": 6,
+            "unit": "Nos",
+            "rate": 50,
+            "taxable": 300,
+            "gst": 5,
+            "tax": 15,
+            "cgst": 7.5,
+            "sgst": 7.5
+          },
+          {
+            "item": "S231 Laptop",
+            "hsn": "8471",
+            "qty": 7,
+            "unit": "Nos",
+            "rate": 30000,
+            "taxable": 210000,
+            "gst": 18,
+            "tax": 37800,
+            "cgst": 18900,
+            "sgst": 18900
+          },
+          {
+            "item": "S231 Tablet",
+            "hsn": "3004",
+            "qty": 1,
+            "unit": "Nos",
+            "rate": 400,
+            "taxable": 400,
+            "gst": 12,
+            "tax": 48,
+            "cgst": 24,
+            "sgst": 24
+          },
+          {
+            "item": "S231 Car Part",
+            "hsn": "8708",
+            "qty": 2,
+            "unit": "Nos",
+            "rate": 2500,
+            "taxable": 5000,
+            "gst": 28,
+            "tax": 1400,
+            "cgst": 700,
+            "sgst": 700
+          },
+          {
+            "item": "S231 Rice",
+            "hsn": "1006",
+            "qty": 3,
+            "unit": "Nos",
+            "rate": 50,
+            "taxable": 150,
+            "gst": 5,
+            "tax": 7.5,
+            "cgst": 3.75,
+            "sgst": 3.75
+          },
+          {
+            "item": "S231 Laptop",
+            "hsn": "8471",
+            "qty": 4,
+            "unit": "Nos",
+            "rate": 30000,
+            "taxable": 120000,
+            "gst": 18,
+            "tax": 21600,
+            "cgst": 10800,
+            "sgst": 10800
+          },
+          {
+            "item": "S231 Tablet",
+            "hsn": "3004",
+            "qty": 5,
+            "unit": "Nos",
+            "rate": 400,
+            "taxable": 2000,
+            "gst": 12,
+            "tax": 240,
+            "cgst": 120,
+            "sgst": 120
+          },
+          {
+            "item": "S231 Car Part",
+            "hsn": "8708",
+            "qty": 6,
+            "unit": "Nos",
+            "rate": 2500,
+            "taxable": 15000,
+            "gst": 28,
+            "tax": 4200,
+            "cgst": 2100,
+            "sgst": 2100
+          },
+          {
+            "item": "S231 Rice",
+            "hsn": "1006",
+            "qty": 7,
+            "unit": "Nos",
+            "rate": 50,
+            "taxable": 350,
+            "gst": 5,
+            "tax": 17.5,
+            "cgst": 8.75,
+            "sgst": 8.75
+          },
+          {
+            "item": "S231 Laptop",
+            "hsn": "8471",
+            "qty": 1,
+            "unit": "Nos",
+            "rate": 30000,
+            "taxable": 30000,
+            "gst": 18,
+            "tax": 5400,
+            "cgst": 2700,
+            "sgst": 2700
+          },
+          {
+            "item": "S231 Tablet",
+            "hsn": "3004",
+            "qty": 2,
+            "unit": "Nos",
+            "rate": 400,
+            "taxable": 800,
+            "gst": 12,
+            "tax": 96,
+            "cgst": 48,
+            "sgst": 48
+          },
+          {
+            "item": "S231 Car Part",
+            "hsn": "8708",
+            "qty": 3,
+            "unit": "Nos",
+            "rate": 2500,
+            "taxable": 7500,
+            "gst": 28,
+            "tax": 2100,
+            "cgst": 1050,
+            "sgst": 1050
+          },
+          {
+            "item": "S231 Rice",
+            "hsn": "1006",
+            "qty": 4,
+            "unit": "Nos",
+            "rate": 50,
+            "taxable": 200,
+            "gst": 5,
+            "tax": 10,
+            "cgst": 5,
+            "sgst": 5
+          },
+          {
+            "item": "S231 Laptop",
+            "hsn": "8471",
+            "qty": 5,
+            "unit": "Nos",
+            "rate": 30000,
+            "taxable": 150000,
+            "gst": 18,
+            "tax": 27000,
+            "cgst": 13500,
+            "sgst": 13500
+          },
+          {
+            "item": "S231 Tablet",
+            "hsn": "3004",
+            "qty": 6,
+            "unit": "Nos",
+            "rate": 400,
+            "taxable": 2400,
+            "gst": 12,
+            "tax": 288,
+            "cgst": 144,
+            "sgst": 144
+          },
+          {
+            "item": "S231 Car Part",
+            "hsn": "8708",
+            "qty": 7,
+            "unit": "Nos",
+            "rate": 2500,
+            "taxable": 17500,
+            "gst": 28,
+            "tax": 4900,
+            "cgst": 2450,
+            "sgst": 2450
+          },
+          {
+            "item": "S231 Rice",
+            "hsn": "1006",
+            "qty": 1,
+            "unit": "Nos",
+            "rate": 50,
+            "taxable": 50,
+            "gst": 5,
+            "tax": 2.5,
+            "cgst": 1.25,
+            "sgst": 1.25
+          },
+          {
+            "item": "S231 Laptop",
+            "hsn": "8471",
+            "qty": 2,
+            "unit": "Nos",
+            "rate": 30000,
+            "taxable": 60000,
+            "gst": 18,
+            "tax": 10800,
+            "cgst": 5400,
+            "sgst": 5400
+          },
+          {
+            "item": "S231 Tablet",
+            "hsn": "3004",
+            "qty": 3,
+            "unit": "Nos",
+            "rate": 400,
+            "taxable": 1200,
+            "gst": 12,
+            "tax": 144,
+            "cgst": 72,
+            "sgst": 72
+          },
+          {
+            "item": "S231 Car Part",
+            "hsn": "8708",
+            "qty": 4,
+            "unit": "Nos",
+            "rate": 2500,
+            "taxable": 10000,
+            "gst": 28,
+            "tax": 2800,
+            "cgst": 1400,
+            "sgst": 1400
+          },
+          {
+            "item": "S231 Rice",
+            "hsn": "1006",
+            "qty": 5,
+            "unit": "Nos",
+            "rate": 50,
+            "taxable": 250,
+            "gst": 5,
+            "tax": 12.5,
+            "cgst": 6.25,
+            "sgst": 6.25
+          },
+          {
+            "item": "S231 Laptop",
+            "hsn": "8471",
+            "qty": 6,
+            "unit": "Nos",
+            "rate": 30000,
+            "taxable": 180000,
+            "gst": 18,
+            "tax": 32400,
+            "cgst": 16200,
+            "sgst": 16200
+          },
+          {
+            "item": "S231 Tablet",
+            "hsn": "3004",
+            "qty": 7,
+            "unit": "Nos",
+            "rate": 400,
+            "taxable": 2800,
+            "gst": 12,
+            "tax": 336,
+            "cgst": 168,
+            "sgst": 168
+          },
+          {
+            "item": "S231 Car Part",
+            "hsn": "8708",
+            "qty": 1,
+            "unit": "Nos",
+            "rate": 2500,
+            "taxable": 2500,
+            "gst": 28,
+            "tax": 700,
+            "cgst": 350,
+            "sgst": 350
+          },
+          {
+            "item": "S231 Rice",
+            "hsn": "1006",
+            "qty": 2,
+            "unit": "Nos",
+            "rate": 50,
+            "taxable": 100,
+            "gst": 5,
+            "tax": 5,
+            "cgst": 2.5,
+            "sgst": 2.5
+          },
+          {
+            "item": "S231 Laptop",
+            "hsn": "8471",
+            "qty": 3,
+            "unit": "Nos",
+            "rate": 30000,
+            "taxable": 90000,
+            "gst": 18,
+            "tax": 16200,
+            "cgst": 8100,
+            "sgst": 8100
+          },
+          {
+            "item": "S231 Tablet",
+            "hsn": "3004",
+            "qty": 4,
+            "unit": "Nos",
+            "rate": 400,
+            "taxable": 1600,
+            "gst": 12,
+            "tax": 192,
+            "cgst": 96,
+            "sgst": 96
+          },
+          {
+            "item": "S231 Car Part",
+            "hsn": "8708",
+            "qty": 5,
+            "unit": "Nos",
+            "rate": 2500,
+            "taxable": 12500,
+            "gst": 28,
+            "tax": 3500,
+            "cgst": 1750,
+            "sgst": 1750
+          },
+          {
+            "item": "S231 Rice",
+            "hsn": "1006",
+            "qty": 6,
+            "unit": "Nos",
+            "rate": 50,
+            "taxable": 300,
+            "gst": 5,
+            "tax": 15,
+            "cgst": 7.5,
+            "sgst": 7.5
+          },
+          {
+            "item": "S231 Laptop",
+            "hsn": "8471",
+            "qty": 7,
+            "unit": "Nos",
+            "rate": 30000,
+            "taxable": 210000,
+            "gst": 18,
+            "tax": 37800,
+            "cgst": 18900,
+            "sgst": 18900
+          },
+          {
+            "item": "S231 Tablet",
+            "hsn": "3004",
+            "qty": 1,
+            "unit": "Nos",
+            "rate": 400,
+            "taxable": 400,
+            "gst": 12,
+            "tax": 48,
+            "cgst": 24,
+            "sgst": 24
+          },
+          {
+            "item": "S231 Car Part",
+            "hsn": "8708",
+            "qty": 2,
+            "unit": "Nos",
+            "rate": 2500,
+            "taxable": 5000,
+            "gst": 28,
+            "tax": 1400,
+            "cgst": 700,
+            "sgst": 700
+          },
+          {
+            "item": "S231 Rice",
+            "hsn": "1006",
+            "qty": 3,
+            "unit": "Nos",
+            "rate": 50,
+            "taxable": 150,
+            "gst": 5,
+            "tax": 7.5,
+            "cgst": 3.75,
+            "sgst": 3.75
+          },
+          {
+            "item": "S231 Laptop",
+            "hsn": "8471",
+            "qty": 4,
+            "unit": "Nos",
+            "rate": 30000,
+            "taxable": 120000,
+            "gst": 18,
+            "tax": 21600,
+            "cgst": 10800,
+            "sgst": 10800
+          },
+          {
+            "item": "S231 Tablet",
+            "hsn": "3004",
+            "qty": 5,
+            "unit": "Nos",
+            "rate": 400,
+            "taxable": 2000,
+            "gst": 12,
+            "tax": 240,
+            "cgst": 120,
+            "sgst": 120
+          },
+          {
+            "item": "S231 Car Part",
+            "hsn": "8708",
+            "qty": 6,
+            "unit": "Nos",
+            "rate": 2500,
+            "taxable": 15000,
+            "gst": 28,
+            "tax": 4200,
+            "cgst": 2100,
+            "sgst": 2100
+          },
+          {
+            "item": "S231 Rice",
+            "hsn": "1006",
+            "qty": 7,
+            "unit": "Nos",
+            "rate": 50,
+            "taxable": 350,
+            "gst": 5,
+            "tax": 17.5,
+            "cgst": 8.75,
+            "sgst": 8.75
+          },
+          {
+            "item": "S231 Laptop",
+            "hsn": "8471",
+            "qty": 1,
+            "unit": "Nos",
+            "rate": 30000,
+            "taxable": 30000,
+            "gst": 18,
+            "tax": 5400,
+            "cgst": 2700,
+            "sgst": 2700
+          }
+        ],
+        "ledgers": {
+          "S231 Buyer": -1976834,
+          "S231 Sales": 1666800,
+          "Output CGST": 155017,
+          "Output SGST": 155017
+        },
+        "total": 1976834
+      },
+      "tally": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\s10-sales-50-items.daybook.xml",
+      "entry": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\captures231\\s10-sales-50-items.entry.xml",
+      "ledger": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\ledger-S231Contractor.full.xml",
+      "lines": []
+    },
+    {
+      "id": "S8",
+      "key": "s8-new-party",
+      "kind": "ledgers",
+      "label": "a new party ledger used at once",
+      "guid": "305c0901-9cb7-499f-b6ea-4a37084afcf6-0000000c",
+      "truth": {
+        "type": "Receipt",
+        "party": "S231 New Party",
+        "ledgers": {
+          "S231 New Party": 1180,
+          "Cash": -1180
+        },
+        "newLedger": "S231 New Party"
+      },
+      "tally": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\s8-new-party.daybook.xml",
+      "entry": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\captures231\\s8-new-party.entry.xml",
+      "ledger": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\ledger-S231Contractor.full.xml",
+      "lines": [
+        {
+          "ev": "altered",
+          "at": "05:44:35",
+          "xml": "<VOUCHER REMOTEID=\"305c0901-9cb7-499f-b6ea-4a37084afcf6-0000000c\" VCHKEY=\"305c0901-9cb7-499f-b6ea-4a37084afcf6-0000b56e:00000008\" VCHTYPE=\"Receipt\" OBJVIEW=\"Accounting Voucher View\">\r\n     <DATE TYPE=\"Date\">20270301</DATE>\r\n     <REFERENCEDATE TYPE=\"Date\"></REFERENCEDATE>\r\n     <IRNACKDATE TYPE=\"Date\"></IRNACKDATE>\r\n     <GUID>305c0901-9cb7-499f-b6ea-4a37084afcf6-0000000c</GUID>\r\n     <NARRATION TYPE=\"String\">S8 first receipt from a new party</NARRATION>\r\n     <REQUESTORRULE/>\r\n     <PARTYGSTIN TYPE=\"String\"></PARTYGSTIN>\r\n     <PLACEOFSUPPLY TYPE=\"String\"></PLACEOFSUPPLY>\r\n     <VOUCHERTYPENAME>Receipt</VOUCHERTYPENAME>\r\n     <CMPGSTIN TYPE=\"String\"></CMPGSTIN>\r\n     <PARTYLEDGERNAME TYPE=\"String\">S231 New Party</PARTYLEDGERNAME>\r\n     <VOUCHERNUMBER>4</VOUCHERNUMBER>\r\n     <REFERENCE TYPE=\"String\"></REFERENCE>\r\n     <IRN TYPE=\"String\"></IRN>\r\n     <IRNACKNO TYPE=\"String\"></IRNACKNO>\r\n     <SERIALMASTER TYPE=\"String\"></SERIALMASTER>\r\n     <ARESERIALMASTER TYPE=\"String\"></ARESERIALMASTER>\r\n     <NUMBERINGSTYLE>Auto Retain</NUMBERINGSTYLE>\r\n     <PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW>\r\n     <ISDELETED>No</ISDELETED>\r\n     <ASORIGINAL>No</ASORIGINAL>\r\n     <ISDEEMEDPOSITIVE TYPE=\"Logical\">No</ISDEEMEDPOSITIVE>\r\n     <ISOPTIONAL TYPE=\"Logical\">No</ISOPTIONAL>\r\n     <ISCANCELLED TYPE=\"Logical\">No</ISCANCELLED>\r\n     <ISINVOICE>No</ISINVOICE>\r\n     <ASPAYSLIP>No</ASPAYSLIP>\r\n     <ISDELETEDVCHRETAINED>No</ISDELETEDVCHRETAINED>\r\n     <ISNEGISPOSSET TYPE=\"Logical\">Yes</ISNEGISPOSSET>\r\n     <ALTERID TYPE=\"Number\"> 19</ALTERID>\r\n     <MASTERID TYPE=\"Number\"> 12</MASTERID>\r\n     <VOUCHERKEY TYPE=\"Number\">199484051030024</VOUCHERKEY>\r\n     <VOUCHERRETAINKEY TYPE=\"Number\">13</VOUCHERRETAINKEY>\r\n     <REUSEHOLEID TYPE=\"Number\">0</REUSEHOLEID>\r\n     <VOUCHERNUMBERSERIES TYPE=\"String\">Default</VOUCHERNUMBERSERIES>\r\n     <EWAYBILLDETAILS.LIST>     </EWAYBILLDETAILS.LIST>\r\n     <ALLINVENTORYENTRIES.LIST>     </ALLINVENTORYENTRIES.LIST>\r\n     <ALLLEDGERENTRIES.LIST>\r\n      <LEDGERNAME TYPE=\"String\">S231 New Party</LEDGERNAME>\r\n      <GSTHSNNAME TYPE=\"String\"></GSTHSNNAME>\r\n      <ISDEEMEDPOSITIVE TYPE=\"Logical\">No</ISDEEMEDPOSITIVE>\r\n      <ISLASTDEEMEDPOSITIVE TYPE=\"Logical\">No</ISLASTDEEMEDPOSITIVE>\r\n      <AMOUNT TYPE=\"Amount\">1180.00</AMOUNT>\r\n      <VATASSESSABLEVALUE TYPE=\"Amount\"></VATASSESSABLEVALUE>\r\n      <CATEGORYALLOCATIONS.LIST>      </CATEGORYALLOCATIONS.LIST>\r\n      <BANKALLOCATIONS.LIST>      </BANKALLOCATIONS.LIST>\r\n      <BILLALLOCATIONS.LIST>      </BILLALLOCATIONS.LIST>\r\n      <RATEDETAILS.LIST>      </RATEDETAILS.LIST>\r\n      <TAXOBJECTALLOCATIONS.LIST>      </TAXOBJECTALLOCATIONS.LIST>\r\n      <COSTTRACKALLOCATIONS.LIST>      </COSTTRACKALLOCATIONS.LIST>\r\n     </ALLLEDGERENTRIES.LIST>\r\n     <ALLLEDGERENTRIES.LIST>\r\n      <LEDGERNAME TYPE=\"String\">Cash</LEDGERNAME>\r\n      <GSTHSNNAME TYPE=\"String\"></GSTHSNNAME>\r\n      <ISDEEMEDPOSITIVE TYPE=\"Logical\">Yes</ISDEEMEDPOSITIVE>\r\n      <ISLASTDEEMEDPOSITIVE TYPE=\"Logical\">Yes</ISLASTDEEMEDPOSITIVE>\r\n      <AMOUNT TYPE=\"Amount\">-1180.00</AMOUNT>\r\n      <VATASSESSABLEVALUE TYPE=\"Amount\"></VATASSESSABLEVALUE>\r\n      <CATEGORYALLOCATIONS.LIST>      </CATEGORYALLOCATIONS.LIST>\r\n      <BANKALLOCATIONS.LIST>      </BANKALLOCATIONS.LIST>\r\n      <BILLALLOCATIONS.LIST>      </BILLALLOCATIONS.LIST>\r\n      <RATEDETAILS.LIST>      </RATEDETAILS.LIST>\r\n      <TAXOBJECTALLOCATIONS.LIST>      </TAXOBJECTALLOCATIONS.LIST>\r\n      <COSTTRACKALLOCATIONS.LIST>      </COSTTRACKALLOCATIONS.LIST>\r\n     </ALLLEDGERENTRIES.LIST>\r\n    </VOUCHER>",
+          "state": "held",
+          "why": "waiting for the ledger 'S231 New Party' from Tally (FinCom does not have it yet; the bridge fetches it, then the entry is applied)"
+        }
+      ]
+    }
+  ]
+}

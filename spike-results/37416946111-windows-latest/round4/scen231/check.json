@@ -1,0 +1,577 @@
+{
+ "scenarios": [
+  {
+   "id": "S1",
+   "key": "s1-sales-two-rates",
+   "label": "sales invoice, two stock items at 5% and 18%",
+   "guid": "",
+   "rows": [],
+   "notes": [
+    "Tally's own export D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\s1-sales-two-rates.daybook.xml has no voucher (no GUID: the entry was not made)",
+    "no line the stub received for (no GUID) has a body parse.js reads (0 line(s): none)"
+   ],
+   "tallyFound": false,
+   "fincomFound": false,
+   "line": null,
+   "status": "harness"
+  },
+  {
+   "id": "S2",
+   "key": "s2-purchase-items",
+   "label": "purchase invoice with items",
+   "guid": "",
+   "rows": [],
+   "notes": [
+    "Tally's own export D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\s2-purchase-items.daybook.xml has no voucher (no GUID: the entry was not made)",
+    "no line the stub received for (no GUID) has a body parse.js reads (0 line(s): none)"
+   ],
+   "tallyFound": false,
+   "fincomFound": false,
+   "line": null,
+   "status": "harness"
+  },
+  {
+   "id": "S3",
+   "key": "s3-credit-note-items",
+   "label": "credit note with items",
+   "guid": "",
+   "rows": [],
+   "notes": [
+    "Tally's own export D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\s3-credit-note-items.daybook.xml has no voucher (no GUID: the entry was not made)",
+    "no line the stub received for (no GUID) has a body parse.js reads (0 line(s): none)"
+   ],
+   "tallyFound": false,
+   "fincomFound": false,
+   "line": null,
+   "status": "harness"
+  },
+  {
+   "id": "S4",
+   "key": "s4-receipt-against-bill",
+   "label": "receipt against a bill (Agst Ref S231-BILL-1)",
+   "guid": "305c0901-9cb7-499f-b6ea-4a37084afcf6-00000009",
+   "rows": [],
+   "notes": [
+    "Tally's own export D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\s4-receipt-against-bill.daybook.xml has no voucher 305c0901-9cb7-499f-b6ea-4a37084afcf6-00000009"
+   ],
+   "tallyFound": false,
+   "fincomFound": true,
+   "line": {
+    "ev": "altered",
+    "at": "05:31:35",
+    "xmlChars": 3725,
+    "state": "applied",
+    "why": ""
+   },
+   "status": "harness"
+  },
+  {
+   "id": "S5",
+   "key": "s5-payment-tds",
+   "label": "payment with TDS",
+   "guid": "",
+   "rows": [],
+   "notes": [
+    "Tally's own export D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\s5-payment-tds.daybook.xml has no voucher (no GUID: the entry was not made)",
+    "no line the stub received for (no GUID) has a body parse.js reads (0 line(s): none)"
+   ],
+   "tallyFound": false,
+   "fincomFound": false,
+   "line": null,
+   "status": "harness"
+  },
+  {
+   "id": "S6",
+   "key": "s6-journal-cost-centres",
+   "label": "journal with cost centres",
+   "guid": "305c0901-9cb7-499f-b6ea-4a37084afcf6-0000000a",
+   "rows": [],
+   "notes": [
+    "Tally's own export D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\s6-journal-cost-centres.daybook.xml has no voucher 305c0901-9cb7-499f-b6ea-4a37084afcf6-0000000a"
+   ],
+   "tallyFound": false,
+   "fincomFound": true,
+   "line": {
+    "ev": "altered",
+    "at": "05:32:14",
+    "xmlChars": 4006,
+    "state": "applied",
+    "why": ""
+   },
+   "status": "harness"
+  },
+  {
+   "id": "S7",
+   "key": "s7-bank-payment-utr",
+   "label": "bank payment with a UTR",
+   "guid": "305c0901-9cb7-499f-b6ea-4a37084afcf6-0000000b",
+   "rows": [],
+   "notes": [
+    "Tally's own export D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\s7-bank-payment-utr.daybook.xml has no voucher 305c0901-9cb7-499f-b6ea-4a37084afcf6-0000000b"
+   ],
+   "tallyFound": false,
+   "fincomFound": true,
+   "line": {
+    "ev": "altered",
+    "at": "05:32:55",
+    "xmlChars": 3537,
+    "state": "applied",
+    "why": ""
+   },
+   "status": "harness"
+  },
+  {
+   "id": "S10",
+   "key": "s10-sales-50-items",
+   "label": "sales invoice with 50 items",
+   "guid": "",
+   "rows": [],
+   "notes": [
+    "Tally's own export D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37416946111-windows-latest\\round4\\scen231\\s10-sales-50-items.daybook.xml has no voucher (no GUID: the entry was not made)",
+    "no line the stub received for (no GUID) has a body parse.js reads (0 line(s): none)"
+   ],
+   "tallyFound": false,
+   "fincomFound": false,
+   "line": null,
+   "status": "harness"
+  },
+  {
+   "id": "S8",
+   "key": "s8-new-party",
+   "label": "a new party ledger used at once",
+   "guid": "305c0901-9cb7-499f-b6ea-4a37084afcf6-0000000c",
+   "rows": [
+    {
+     "what": "voucher type",
+     "tally": "Receipt",
+     "fincom": "Receipt",
+     "entered": "Receipt",
+     "status": "ok"
+    },
+    {
+     "what": "FinCom's lines add up to 0",
+     "tally": "0",
+     "fincom": "0",
+     "entered": "0",
+     "status": "ok"
+    },
+    {
+     "what": "ledger S231 New Party",
+     "tally": "1180",
+     "fincom": "1180",
+     "entered": "1180",
+     "status": "ok"
+    },
+    {
+     "what": "ledger Cash",
+     "tally": "-1180",
+     "fincom": "-1180",
+     "entered": "-1180",
+     "status": "ok"
+    },
+    {
+     "what": "parse.js's accuracy checks",
+     "tally": "(none)",
+     "fincom": "none",
+     "status": "ok"
+    }
+   ],
+   "notes": [],
+   "tallyFound": true,
+   "fincomFound": true,
+   "line": {
+    "ev": "altered",
+    "at": "05:44:35",
+    "xmlChars": 3544,
+    "state": "held",
+    "why": "waiting for the ledger 'S231 New Party' from Tally (FinCom does not have it yet; the bridge fetches it, then the entry is applied)"
+   },
+   "status": "pass"
+  }
+ ],
+ "tags": [
+  {
+   "tag": "IRN",
+   "seen": [
+    {
+     "label": "Tally's own Day Book export (S1)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S2)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S3)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S4)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S4)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S5)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S6)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S6)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S7)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S7)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S10)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S8)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S8)",
+     "count": 1,
+     "value": ""
+    }
+   ]
+  },
+  {
+   "tag": "IRNACKNO",
+   "seen": [
+    {
+     "label": "Tally's own Day Book export (S1)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S2)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S3)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S4)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S4)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S5)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S6)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S6)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S7)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S7)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S10)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S8)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S8)",
+     "count": 1,
+     "value": ""
+    }
+   ]
+  },
+  {
+   "tag": "IRNACKDATE",
+   "seen": [
+    {
+     "label": "Tally's own Day Book export (S1)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S2)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S3)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S4)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S4)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S5)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S6)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S6)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S7)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S7)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S10)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S8)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S8)",
+     "count": 1,
+     "value": ""
+    }
+   ]
+  },
+  {
+   "tag": "EWAYBILLDETAILS.LIST",
+   "seen": [
+    {
+     "label": "Tally's own Day Book export (S1)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S2)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S3)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S4)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S4)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S5)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S6)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S6)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S7)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S7)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S10)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S8)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S8)",
+     "count": 1,
+     "value": ""
+    }
+   ]
+  },
+  {
+   "tag": "BILLNUMBER",
+   "seen": []
+  },
+  {
+   "tag": "TAXOBJECTALLOCATIONS.LIST",
+   "seen": [
+    {
+     "label": "Tally's own Day Book export (S1)",
+     "count": 2,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S2)",
+     "count": 2,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S3)",
+     "count": 2,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S4)",
+     "count": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S4)",
+     "count": 2,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S5)",
+     "count": 2,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S6)",
+     "count": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S6)",
+     "count": 2,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S7)",
+     "count": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S7)",
+     "count": 2,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S10)",
+     "count": 2,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S8)",
+     "count": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S8)",
+     "count": 2,
+     "value": ""
+    }
+   ]
+  },
+  {
+   "tag": "UNIQUEREFERENCENUMBER",
+   "seen": []
+  },
+  {
+   "tag": "TDSDEDUCTEESECTIONNUMBER",
+   "seen": [
+    {
+     "label": "the bridge's entry request answer (S4)",
+     "count": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's ledger master export (S231 Contractor, FETCH *)",
+     "count": 1,
+     "value": ""
+    }
+   ]
+  },
+  {
+   "tag": "TDSDEDUCTEETYPE",
+   "seen": [
+    {
+     "label": "Tally's ledger master export (S231 Contractor, FETCH *)",
+     "count": 1,
+     "value": "Company - Resident"
+    }
+   ]
+  }
+ ]
+}
