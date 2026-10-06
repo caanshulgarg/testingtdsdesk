@@ -146,15 +146,17 @@ function cleanName(n){ return namesClean(n); }
 function parseDay(text){
   const byId = new Map();
   // 06-Oct-2026: a collection's CMPINFO counters dropped first (a Day Book export has none: read as before)
-  let alterMax = 0, buf = dropCmpInfo(String(text || "")), cut;
+  // 2.3.1 (migration-50 review L7): skipped, the voucher elements left out by the rule below (no GUID; no ledger lines and not a
+  // cancelled document with a number), so tally-ingest takes them off the bridge's count of the day (they are not missing)
+  let alterMax = 0, skipped = 0, buf = dropCmpInfo(String(text || "")), cut;
   while ((cut = buf.indexOf("</VOUCHER>")) >= 0){
     const piece = buf.slice(0, cut + 10); buf = buf.slice(cut + 10);
     const start = piece.lastIndexOf("<VOUCHER ");
     if (start < 0) continue;
     const r = takeVoucher(piece.slice(start));
-    if (!r.v.guid) continue;
+    if (!r.v.guid) { skipped++; continue; }
     // as FinCom: an entry with no ledger lines is kept only when it is a cancelled document with a number
-    if (!r.lines.length && !(r.v.cancel && r.v.no)) continue;
+    if (!r.lines.length && !(r.v.cancel && r.v.no)) { skipped++; continue; }
     if (r.v.alter > alterMax) alterMax = r.v.alter;
     // the same entry twice (it should not happen): the later change wins, and its lines only
     const had = byId.get(r.v.guid);
@@ -162,7 +164,7 @@ function parseDay(text){
   }
   const vouchers = [], lines = [], dates = new Set();
   byId.forEach(r => { vouchers.push(r.v); dates.add(r.v.date); r.lines.forEach(l => lines.push(l)); });
-  return {vouchers, lines, n: vouchers.length, alterMax, dates: Array.from(dates)};
+  return {vouchers, lines, n: vouchers.length, skipped, alterMax, dates: Array.from(dates)};
 }
 
 export { parseDay, amt, one, unesc, igstRate, cleanName, namesKey };

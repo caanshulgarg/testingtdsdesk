@@ -1404,7 +1404,11 @@ async function ingestDaysRaw(firm: string, book: string, daysIn: unknown): Promi
     // A cloud without 39 has no p_empty: the 7-argument call as before
     // migration 38/39's short-read guard works only against the bridge's OWN count of the day (d.n, counted in the text it
     // kept): with the parsed count alone (r.n) the two could never differ. The parsed count is used when the bridge sends none
-    const nBridge = Number.isInteger(Number(d.n)) && Number(d.n) >= 0 && Number(d.n) <= 100000 && d.n !== null && d.n !== "" ? Number(d.n) : null;
+    // 2.3.1 (migration-50 review L7): the entries the reader leaves out by its rule (no GUID; no ledger lines and not a cancelled
+    // document with a number: an inventory-only Stock Journal, a Delivery Note) are taken off the bridge's count: they are in the
+    // file, not missing, so such a day is no longer a short read after every bridge store; a voucher not read at all still is
+    const nSent = Number.isInteger(Number(d.n)) && Number(d.n) >= 0 && Number(d.n) <= 100000 && d.n !== null && d.n !== "" ? Number(d.n) : null;
+    const nBridge = nSent === null ? null : Math.max(0, nSent - (Number.isInteger(r.skipped) ? r.skipped : 0));
     if (nBridge !== null && r.n < nBridge) console.log("tally-ingest day " + d.day + ": parsed " + r.n + " of the bridge's " + nBridge + " entries (short read: the cloud marks nothing)", book);
     const dayArgs = { p_book: book, p_day: iso(d.day), p_vouchers: dayVouchers(r), p_lines: dayLines(r), p_n: nBridge ?? r.n, p_alter: r.alterMax, p_bytes: gz.length };
     let { data: dayAns, error } = d.empty === true ? await db.rpc("tally_ingest_day", { ...dayArgs, p_empty: true }) : await db.rpc("tally_ingest_day", dayArgs);

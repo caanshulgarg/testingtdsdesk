@@ -48,5 +48,14 @@ const wrap = (x) => `<ENVELOPE><BODY><DATA><COLLECTION>${x}</COLLECTION></DATA><
   const rz = parseDay(z);
   ok(rz.vouchers.length === 1 && rz.vouchers[0].guid === "dddd-00000001", "CMPINFO with attributes and counters: the counters are not a voucher");
 }
+// migration-50 review L7: how many voucher elements the reader leaves out by its rule (no GUID; no ledger lines and not a
+// cancelled document with a number), so tally-ingest does not take them as missing from the bridge's count
+{
+  const inv = '<VOUCHER REMOTEID="eeee-00000003" VCHTYPE="Stock Journal"><DATE>20261002</DATE><GUID>eeee-00000003</GUID><ALTERID>4</ALTERID>' +
+    '<VOUCHERNUMBER>3</VOUCHERNUMBER><INVENTORYENTRIES.LIST><STOCKITEMNAME>Bolt</STOCKITEMNAME></INVENTORYENTRIES.LIST></VOUCHER>';
+  const r = parseDay(wrap(V("eeee-00000001", "1") + V("eeee-00000002", "2") + inv + V("", "4")));
+  ok(r.n === 2 && r.skipped === 2, "L7: 4 vouchers, 2 left out by rule (inventory only; no GUID): n 2, skipped 2 (" + r.n + ", " + r.skipped + ")");
+  ok(parseDay(wrap(V("ffff-00000001", "1"))).skipped === 0, "L7: none left out: skipped 0");
+}
 console.log(fails ? fails + " FAILED" : "all passed");
 process.exit(fails ? 1 : 0);

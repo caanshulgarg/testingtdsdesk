@@ -16,7 +16,12 @@ section was written first (red before its fix). Needs Deno (DENO).
   F. 2.2.2 L-F: the beat's heldLines listed a held line whose ":resolved" line had already reached FinCom (a 2.2.1 bridge
      resolved it and kept no mark), so a 2.2.2+ bridge asked Tally again and sent one more ":resolved" (a duplicate row).
      heldLines now leaves such a line out, as refetch does; 2.3.1 H1's exception (the only ":resolved" row held for want
-     of a complete body) is kept, and run_recorder_server.py proves H1's re-send."""
+     of a complete body) is kept, and run_recorder_server.py proves H1's re-send.
+  G. migration-50 review L7: a day holding an entry the cloud's reader leaves out by its rule (no GUID; no ledger lines and
+     not a cancelled document with a number: an inventory-only Stock Journal, a Delivery Note) was a "short read" after every
+     bridge store (the bridge counts every voucher), so tally_days.n stayed above the copy's count for that day. tally-ingest
+     now takes those the reader leaves out by rule off the bridge's count (p_n); a voucher the reader could not read at all
+     still makes the day short."""
 import os, sys, json, time, hashlib, subprocess, urllib.request, shutil, threading, datetime
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import fake_supabase as F
@@ -139,6 +144,23 @@ try:
     c, r = call(BEAT)
     hl = sorted(x["line_id"] for x in (r.get("heldLines") or []))
     ok(c == 200 and hl == ["lf-incomplete", "lf-open"], "F. heldLines leaves out a line whose :resolved already came; keeps the open one and H1's held-incomplete one (%s)" % hl)
+    # G. the day's count: the entries the reader leaves out by rule are not missing (migration-50 L7)
+    import base64, gzip
+    def VX(g, no, lines=True):
+        x = '<VOUCHER REMOTEID="%s" VCHTYPE="Stock Journal" ACTION="Create"><DATE>20261002</DATE>%s<ALTERID>4</ALTERID><VOUCHERTYPENAME>Receipt</VOUCHERTYPENAME><VOUCHERNUMBER>%s</VOUCHERNUMBER>' % (g, ("<GUID>%s</GUID>" % g) if g else "", no)
+        if lines:
+            x += ('<ALLLEDGERENTRIES.LIST><LEDGERNAME>Cash</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-100.00</AMOUNT></ALLLEDGERENTRIES.LIST>'
+                  '<ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>100.00</AMOUNT></ALLLEDGERENTRIES.LIST>')
+        else:
+            x += '<INVENTORYENTRIES.LIST><STOCKITEMNAME>Bolt</STOCKITEMNAME><ACTUALQTY> 5 Nos</ACTUALQTY></INVENTORYENTRIES.LIST>'
+        return x + '</VOUCHER>'
+    xml = "<ENVELOPE><BODY><IMPORTDATA><REQUESTDATA>" + "".join("<TALLYMESSAGE>%s</TALLYMESSAGE>" % v for v in (VX(CG + "-00000101", "1"), VX(CG + "-00000102", "2"), VX(CG + "-00000103", "3", False), VX("", "4"))) + "</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>"
+    gz = base64.b64encode(gzip.compress(xml.encode())).decode()
+    n_ing = len(F.ARGS.get("tally_ingest_day") or [])
+    c, r = call({"kind": "days", "version": "2.3.1", "bridge": BR, "company": "ZZ CO", "days": [{"day": "20261002", "n": 4, "gz": gz}, {"day": "20261002", "n": 5, "gz": gz}]})
+    ings = (F.ARGS.get("tally_ingest_day") or [])[n_ing:]
+    ok(c == 200 and [a.get("p_n") for a in ings] == [2, 3] and len(ings[0].get("p_vouchers") or []) == 2,
+       "G. a day of 4 the bridge counted, 2 left out by the reader's rule: p_n 2 (complete); counted 5: p_n 3 (still short) (%s %s)" % (c, [a.get("p_n") for a in ings]))
 finally:
     fn.terminate()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); raise SystemExit(1 if fails else 0)
