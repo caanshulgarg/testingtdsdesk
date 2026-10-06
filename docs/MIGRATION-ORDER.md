@@ -236,7 +236,10 @@ seen_at; key (book_id, tally_name); RLS: the firm's members read; written by tal
 fetched by name for an entry (FinComLedgerByName) has the Tally GUID of a ledger FinCom holds under another name, the new
 name is recorded here (the note for 2.3.2's rename; 2.3.1 does not rename), and an entry using the new name is applied
 under FinCom's ledger (its lines' ledger names mapped, the amounts untouched; the balance guard still first), without
-asking Tally again. A cloud without 59 records nothing and such an entry keeps waiting, as before. Tested by
+asking Tally again. Review H2 (06-Oct-2026): `confirmed_at` and `ended_at` (add-only); an alias is used only once a
+fetch by its name confirmed the GUID and while it is not ended; it ends (kept) when its GUID is seen under another name
+or its name with another GUID (ledger_changes, ledger_list), so a new ledger reusing an old name is held and fetched,
+never put on the old ledger. A cloud without 59 records nothing and such an entry keeps waiting, as before. Tested by
 `run_migration59.py`, `run_migration_order.py` (59 in both orders) and `run_recorder_server.py` (through tally-ingest).
 
 Bridge 2.3.1 (06-Oct-2026, the migration-50 review's round-3 Lows): `migration-60-recorder-lows.sql` runs after 56 and 57

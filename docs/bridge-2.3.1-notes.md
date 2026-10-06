@@ -151,8 +151,10 @@ only, inside the 2-second rule, after postings, nothing else added, each bridge 
   Tally GUID) FinCom holds under the old name. FinCom then applies the entry under its existing ledger, never as a second
   ledger, and notes the new name for 2.3.2's rename (FinCom keeps the old name in 2.3.1). Every later entry with the new
   name goes in the same way at once, without asking Tally again. The entry's lines must still total zero, and the amounts
-  are exactly Tally's, so the books' total does not change. This needs database migration 59; without it such an entry
-  waits, as before.
+  are exactly Tally's, so the books' total does not change. FinCom uses the new name this way only after asking
+  Tally for it by that name confirmed it is the same ledger, and stops as soon as Tally shows the ledger under yet
+  another name or a different ledger under that name (a new ledger reusing an old name is then fetched and entered as
+  its own ledger). This needs database migration 59; without it such an entry waits, as before.
 
 This needs the FinCom cloud update (tally-ingest) that goes out with 2.3.1; the ledger's deductee type is stored in the
 column migration 57 adds (`tally_ledgers.tds_deductee_type`); no other database change.
