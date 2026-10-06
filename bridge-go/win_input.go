@@ -40,7 +40,9 @@ const (
 	wmClose        = 0x0010
 	wmSetFont      = 0x0030
 	emSetSel       = 0x00B1
+	emLimitText    = 0x00C5
 	inputEditID    = 100
+	inputMaxChars  = 100 // 2.2.3 review L3: the edit line takes at most this (the bridge refuses longer with plain words)
 )
 
 var (
@@ -110,6 +112,7 @@ func inputBox(title, prompt, def string) (string, bool) {
 	inputEdit = child(wsExClientEdge, "EDIT", def, wsTabStop|esAutoHScroll, 12, 58, w-40, 24, inputEditID)
 	child(0, "BUTTON", "OK", wsTabStop|bsDefPush, w-198, 96, 80, 28, 1)
 	child(0, "BUTTON", "Cancel", wsTabStop, w-110, 96, 80, 28, 2)
+	pSendMessage.Call(inputEdit, emLimitText, inputMaxChars, 0)
 	pSendMessage.Call(inputEdit, emSetSel, 0, ^uintptr(0))
 	pSetForegroundWindow.Call(hwnd)
 	pSetFocus.Call(inputEdit)
