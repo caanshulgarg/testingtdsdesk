@@ -492,16 +492,16 @@ $script:salGuid = if ($salNew) { $salNew.guid } else { '(none)' }
 Say '---- check 8''s entries: purchase, sales invoice and credit note with items, by keys (item invoice mode)'
 function ItemRows($rows) { $k = @(); foreach ($r in $rows) { $k += , @("$($r[0]){ENTER}", 3, ''); $k += , @("$($r[1]){ENTER}", 2, ''); $k += , @("$($r[2]){ENTER}", 2, ''); $k += , @('{ENTER}', 2, ''); $k += , @('{ENTER}', 2, "item-$($r[0] -replace ' ', '')") }; return , $k }
 $inv8 = [ordered]@{
-  purchase = @{ key = '{F9}'; type = 'Purchase'; party = 'Spike Supplier'; ledger = 'Spike Purchase'; rows = @(, @('Spike Widget', 10, 200)) + @(, @('Spike Gadget', 10, 300)); tax = 450; head = @(@('SUP-101{ENTER}', 2, 'supinv'), @('{ENTER}', 2, 'supdate')) }
-  sales = @{ key = '{F8}'; type = 'Sales'; party = 'Spike Trader'; ledger = 'Spike Sales'; rows = @(, @('Spike Widget', 2, 250)) + @(, @('Spike Gadget', 3, 400)); tax = 153; head = @() }
-  credit = @{ key = '^{F8}'; type = 'Credit Note'; party = 'Spike Trader'; ledger = 'Spike Sales'; rows = @(, @('Spike Widget', 1, 250)); tax = 22.5; head = @() }
+  purchase = @{ key = @('{F9}'); type = 'Purchase'; party = 'Spike Supplier'; ledger = 'Spike Purchase'; rows = @(, @('Spike Widget', 10, 200)) + @(, @('Spike Gadget', 10, 300)); tax = 450; head = @(@('SUP-101{ENTER}', 2, 'supinv'), @('{ENTER}', 2, 'supdate')) }
+  sales = @{ key = @('{F8}'); type = 'Sales'; party = 'Spike Trader'; ledger = 'Spike Sales'; rows = @(, @('Spike Widget', 2, 250)) + @(, @('Spike Gadget', 3, 400)); tax = 153; head = @() }
+  credit = @{ key = @('{F10}', 'Credit Note{ENTER}'); type = 'Credit Note'; party = 'Spike Trader'; ledger = 'Spike Sales'; rows = @(, @('Spike Widget', 1, 250)); tax = 22.5; head = @() }
 }
 # after the party Tally opens two screens, Receipt / Dispatch Details (run 37399828148) and then Party Details (Supplier /
 # Buyer, run 37402702702): each accepted with Ctrl+A
 foreach ($kind in $inv8.Keys) {
   $d = $inv8[$kind]; $d.how = 'none'; $d.guid = '(none)'
   $pre = Vouchers 9000 $co1
-  $seq = @(@($d.key, 4, "50-$kind-type"), @('^h', 3, "51-$kind-mode"), @('Item Invoice{ENTER}', 3, ''), @('{F2}', 3, ''), @('1-10-2026{ENTER}', 3, "52-$kind-date")) + $d.head + @(@("$($d.party){ENTER}", 3, "53-$kind-party"), @('^a', 3, "53b-$kind-dispatch-details-accepted"), @('^a', 3, "53c-$kind-party-details-accepted"), @("$($d.ledger){ENTER}", 3, "54-$kind-ledger")) + (ItemRows $d.rows) + @(@('{ENTER}', 3, "56-$kind-items-done"), @('Spike CGST{ENTER}', 2, ''), @("$($d.tax){ENTER}", 2, ''), @('Spike SGST{ENTER}', 2, ''), @("$($d.tax){ENTER}", 2, "57-$kind-taxes"))
+  $seq = @($d.key | ForEach-Object { , @($_, 4, "50-$kind-type") }) + @(@('^h', 3, "51-$kind-mode"), @('Item Invoice{ENTER}', 3, ''), @('{F2}', 3, ''), @('1-10-2026{ENTER}', 3, "52-$kind-date")) + $d.head + @(@("$($d.party){ENTER}", 3, "53-$kind-party"), @('^a', 3, "53b-$kind-dispatch-details-accepted"), @('^a', 3, "53c-$kind-party-details-accepted"), @("$($d.ledger){ENTER}", 3, "54-$kind-ledger")) + (ItemRows $d.rows) + @(@('{ENTER}', 3, "56-$kind-items-done"), @('Spike CGST{ENTER}', 2, ''), @('9{ENTER}', 2, ''), @('{ENTER}', 2, ''), @('Spike SGST{ENTER}', 2, ''), @('9{ENTER}', 2, ''), @('{ENTER}', 2, "57-$kind-taxes"))
   foreach ($q in $seq) { KeysTo 9000 $q[0] $q[1] $(if ($q[2] -and $q[2] -notmatch '^\d') { "55-$kind-$($q[2])" } else { $q[2] }) }
   $nv = $null
   for ($t = 0; $t -lt 3 -and -not $nv; $t++) { KeysTo 9000 '^a' 5 "58-$kind-ctrl-a-$t"; $nv = @((Vouchers 9000 $co1) | Where-Object { $_.mid -notin @($pre | ForEach-Object mid) })[0] }
@@ -662,6 +662,8 @@ foreach ($o in $c8) {
 $ok8 = $c8.Count -eq 3 -and @($c8 | Where-Object { -not $_.ok }).Count -eq 0
 $how8 = ($inv8.Keys | ForEach-Object { "$_ $($inv8[$_].how)" }) -join ', '
 $ev8 = "3 item invoices ($how8), each line read with parse.js at the bridge ref against Tally's own export: {0} matching ledger by ledger and adding to 0; bridge {1}" -f @($c8 | Where-Object ok).Count, $bver
+# an entry Tally saved as another voucher type than asked (run 37404597467: Ctrl+F8 left a Sales) is the harness's
+$ki = @($inv8.Keys); for ($i = 0; $i -lt $c8.Count; $i++) { if ($c8[$i].tally -and $c8[$i].tally.type -ne $inv8[$ki[$i]].type) { $missing += "$($ki[$i]) (saved as $($c8[$i].tally.type), not $($inv8[$ki[$i]].type))" } }
 if ($missing.Count) { Result '8 item invoices against Tally' $false "$ev8; not entered in Tally: $($missing -join ', ') (the harness)" $true }
 elseif ($ok8) { Result '8 item invoices against Tally' $true $ev8 }
 elseif ([version]$bver -lt [version]'2.3.1' -and $expectedOnly) { $l8 = "EXPECTED 8 item invoices against Tally: $ev8 - as expected before bridge 2.3.1: the body comes without the items' accounting allocations (sales/purchase ledger), so its lines do not add up and the cloud's balance guard holds it; PASS needs bridge 2.3.1+"; Write-Host "######## $l8"; Add-Content -Path $resultsFile -Value $l8 -Encoding UTF8 }
