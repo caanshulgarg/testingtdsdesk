@@ -118,7 +118,9 @@
 //   false without the column); and (round 20, migration 47) recorderSource: addon | alterid | both (tally_devices.
 //   recorder_source, the owner's tally_device_recorder_source), left out without the column; and (FinCom Bridge 2.2.2)
 //   heldLines: [{line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date}] this computer's lines held
-//   without their entry (heldLinesFor), left out when none
+//   without their entry (heldLinesFor; from 06-Oct-2026 this bridge's only), left out when none; and (06-Oct-2026) refetch:
+//   the same fields, at most 20 of this bridge's own held lines whose body is missing or whose GUID is a placeholder
+//   (refetchFor), asked of its own Tally again by a bridge built after 2.3.0 and sent as "<line id>:resolved"; left out when none
 //   {kind:"start_point", company, guid?, altvchid, altmstid, at} -> {set, startVoucher, startMaster, guid, at, state}: the
 //                                                       bridge's starting point (reading is prospective), kept once per book
 //                                                       and company GUID on tally_sync_cursor (tally_start_point)
@@ -369,15 +371,48 @@ async function bookForBeat(firm: string, name: string) {
 // oldest first, at most 200: the bridge asks Tally for each again by its MasterID (else its number) and sends it as
 // <line_id>:resolved with Tally's own GUID and body; it uses nothing else of these rows as the entry's. Without the table
 // (or on any error) the field is left out: the beat never fails for it
-async function heldLinesFor(dev: any, firm: string) {
+// 06-Oct-2026: only the lines of THIS bridge (the same computer key and the same bridge id, the column bridge): on a shared
+// server every Windows user's bridge has its own lines (the owner's rule: no line from another user's session)
+async function heldLinesFor(dev: any, firm: string, bridge: string) {
+  const out = await heldOwnLines(dev, firm, bridge, 200, () => true, "held lines");
+  return out.length ? out : null;
+}
+// 06-Oct-2026 (the owner, NWS144 lines 4, 17 and 18: "the bridge must ask again for held lines of its own user and settle
+// them"): refetch, at most 20 of this bridge's own held lines (the same computer key AND the same bridge id) whose entry's
+// body is missing (body null, {} or without vouchers) or whose GUID is none or a placeholder ("<company GUID>-00000000"),
+// with no "<line id>:resolved" line in FinCom's record yet; the same fields and rules as heldLines (7 days, created /
+// altered / imported, the company still linked to the same book, the month not locked, oldest first). A bridge
+// built after 2.3.0 asks its own Tally for each again with the allow-listed reads (by MasterID, else by type and number), spaced and
+// within its 2-second stop, never during a posting, and sends "<line id>:resolved" with Tally's GUID, AlterID and body,
+// which the database applies once and marks the held line 'replaced' (migrations 50-52). An older bridge ignores the
+// field. Left out when none or on any error: the beat never fails for it
+const REFETCH_MAX = 20;
+async function refetchFor(dev: any, firm: string, bridge: string) {
+  const out = await heldOwnLines(dev, firm, bridge, REFETCH_MAX, (r) => {
+    const g = String(r?.object_guid ?? "").trim(), b = r?.body;
+    const noBody = !b || typeof b !== "object" || !Array.isArray(b.vouchers) || !b.vouchers.length;
+    return noBody || !g || /-0{8}$/.test(g);
+  }, "refetch", true);
+  return out.length ? out : null;
+}
+async function heldOwnLines(dev: any, firm: string, bridge: string, max: number, want: (r: any) => boolean, what: string, unresolved = false) {
   try {
+    if (!bridge) return [];
     const since = new Date(Date.now() - 7 * 86400000).toISOString();
-    const { data, error } = await db.from("tally_recorder_lines").select("line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date, book_id, received_at")
-      .eq("firm_id", firm).eq("device_id", dev.id).eq("state", "held").in("event", ["created", "altered", "imported"]).gt("received_at", since)
+    const { data, error } = await db.from("tally_recorder_lines").select("line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date, book_id, received_at, bridge, device_id, object_guid, body")
+      .eq("firm_id", firm).eq("device_id", dev.id).eq("bridge", bridge).eq("state", "held").in("event", ["created", "altered", "imported"]).gt("received_at", since)
       .order("received_at", { ascending: true }).limit(400);
-    if (error || !Array.isArray(data) || !data.length) return null;
-    const rows = (data as any[]).filter((r) => r && Date.parse(String(r.received_at)) > Date.now() - 7 * 86400000)
+    if (error || !Array.isArray(data) || !data.length) return [];
+    let rows = (data as any[]).filter((r) => r && String(r.device_id ?? dev.id) === String(dev.id) && String(r.bridge ?? "") === bridge && Date.parse(String(r.received_at)) > Date.now() - 7 * 86400000 && want(r))
       .sort((a, b) => Date.parse(String(a.received_at)) - Date.parse(String(b.received_at)));
+    if (unresolved && rows.length) {
+      // a line whose ":resolved" line already reached FinCom (in any state) is not asked for again
+      const rids = [...new Set(rows.map((r) => String(r.line_id || "") + ":resolved"))].slice(0, 400);
+      const { data: rs, error: re } = await db.from("tally_recorder_lines").select("line_id").eq("firm_id", firm).in("line_id", rids);
+      if (re) return [];
+      const have = new Set(((rs || []) as any[]).map((x) => String(x?.line_id || "")));
+      rows = rows.filter((r) => !have.has(String(r.line_id || "") + ":resolved"));
+    }
     const books = [...new Set(rows.map((r) => String(r.book_id || "")).filter(Boolean))];
     const locked = new Set<string>();
     if (books.length) {
@@ -395,12 +430,12 @@ async function heldLinesFor(dev: any, firm: string) {
       if (!r.book_id || linked.get(company) !== String(r.book_id)) continue;
       out.push({ line_id: lid, company, company_guid: s(r.company_guid, 100), event: s(r.event, 20), master_id: s(r.master_id, 40), vch_type: s(r.vch_type, 60),
         vch_no: s(r.vch_no, 60), vch_date: day.replace(/-/g, "") });
-      if (out.length >= 200) break;
+      if (out.length >= max) break;
     }
-    return out.length ? out : null;
+    return out;
   } catch (e) {
-    console.log("tally-ingest beat: held lines not read:", String((e as Error)?.message || e).slice(0, 200));
-    return null;
+    console.log("tally-ingest beat: " + what + " not read:", String((e as Error)?.message || e).slice(0, 200));
+    return [];
   }
 }
 async function recorderGaps(dev: any, firm: string, bridge: string, changes: BeatChange[]) {
@@ -2007,8 +2042,10 @@ Deno.serve(async (req) => {
         // alterid or both; left out when the cloud has no column (the bridge keeps its own default)
         const rs = (dev as any).recorder_source, recorderSource = rs === "addon" || rs === "alterid" || rs === "both" ? rs : null;
         // FinCom Bridge 2.2.2: the lines held without their entry, asked of Tally again by the bridge (left out when none)
-        const heldLines = await heldLinesFor(dev, firm);
-        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(heldLines ? { heldLines } : {}), ...(co ? { notMain: true, changesOnly: true, error: CHANGES_ONLY } : may ? {} : { notMain: true }), ...ctl.out });
+        const heldLines = await heldLinesFor(dev, firm, me.id);
+        // 06-Oct-2026: this bridge's own held lines without their entry's body or with a placeholder GUID, at most 20
+        const refetch = await refetchFor(dev, firm, me.id);
+        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(heldLines ? { heldLines } : {}), ...(refetch ? { refetch } : {}), ...(co ? { notMain: true, changesOnly: true, error: CHANGES_ONLY } : may ? {} : { notMain: true }), ...ctl.out });
       }
       case "make_main": return await makeMain(dev, bridgeOf(dev, body, false).id);
       case "posts_take": {

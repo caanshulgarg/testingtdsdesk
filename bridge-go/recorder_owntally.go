@@ -244,3 +244,23 @@ func liveOwnAskNow() bool {
 	openCompaniesAsk(&TC{copier: true, light: true, yield: func() bool { return postingGoing() || importsInFlight.Load() > 0 }}, true)
 	return true
 }
+
+// After 2.3.0 (refetch): under live.mu, whether this bridge's own Tally has the company open now: its last look saw it open, or
+// a stretch of looks covers now or ended within the last 15 minutes (the looks come every few minutes while Tally is open)
+func liveOwnOpenNow(guid, name string) bool {
+	k := liveOwnKey(guid, name)
+	if live.ownCur[k] {
+		return true
+	}
+	st := live.own[k]
+	if st == nil {
+		return false
+	}
+	now := nowFn()
+	for _, iv := range st.ivs {
+		if !now.Before(iv.from) && now.Sub(iv.to) <= 15*time.Minute {
+			return true
+		}
+	}
+	return false
+}

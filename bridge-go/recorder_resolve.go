@@ -420,7 +420,12 @@ type heldLine struct {
 	// the save (a lower bound for Tally's), and held for a reason no ask can change (never asked again)
 	LineGuid, LineFid      string
 	Mismatch, Final, Cloud bool // Cloud: from FinCom's beat answer (heldLines)
-	LineAlter              int64
+	// after 2.3.0 (06-Oct-2026): FinCom listed it in the beat's refetch (its body missing or its GUID a placeholder: asked one a
+	// turn); the version whose asks the tries count (a try of an older bridge, which could not read a real Tally's typed
+	// answer, does not count once FinCom lists the line again)
+	Refetch   bool
+	TriesVer  string
+	LineAlter int64
 	// review H1 (the owner's addition): a delete's own GUID and AlterID, used only once this Tally shows it gone
 	KeepGuid, KeepAlter string
 }
@@ -440,7 +445,7 @@ func liveHeldLoad() (M, map[string]heldLine) {
 		items[id] = heldLine{ID: id, Company: str(e["company"]), CGUID: str(e["companyGuid"]), Type: str(e["type"]), No: str(e["no"]), Date: str(e["date"]),
 			MID: str(e["masterId"]), At: str(e["savedAt"]), Added: str(e["added"]), Last: str(e["last"]), Tries: toInt(e["tries"]), Ev: str(e["event"]), Why: str(e["why"]),
 			LineGuid: str(e["lineGuid"]), LineFid: str(e["lineFid"]), Mismatch: truthy(e["idsMismatch"]), Final: truthy(e["final"]), LineAlter: toI64(e["lineAlter"]),
-			Cloud: truthy(e["fromFinCom"]), KeepGuid: str(e["keepGuid"]), KeepAlter: str(e["keepAlter"])}
+			Cloud: truthy(e["fromFinCom"]), KeepGuid: str(e["keepGuid"]), KeepAlter: str(e["keepAlter"]), Refetch: truthy(e["refetch"]), TriesVer: str(e["triesVersion"])}
 	}
 	return all, items
 }
@@ -451,7 +456,7 @@ func liveHeldSave(all M, items map[string]heldLine) {
 		o[id] = M{"company": h.Company, "companyGuid": h.CGUID, "type": h.Type, "no": h.No, "date": h.Date, "masterId": h.MID, "savedAt": h.At,
 			"added": h.Added, "last": h.Last, "tries": h.Tries, "event": h.Ev, "why": liveCapWhy(h.Why), "lineGuid": h.LineGuid, "lineFid": h.LineFid,
 			"idsMismatch": h.Mismatch, "final": h.Final, "lineAlter": h.LineAlter, "fromFinCom": h.Cloud,
-			"keepGuid": h.KeepGuid, "keepAlter": h.KeepAlter}
+			"keepGuid": h.KeepGuid, "keepAlter": h.KeepAlter, "refetch": h.Refetch, "triesVersion": h.TriesVer}
 	}
 	all["items"] = o
 	if err := saveFile(liveHeldFile(), jsonText(all)); err != nil {
@@ -719,6 +724,7 @@ func liveResolveTurn() {
 	}
 	sort.Strings(ids)
 	var ask []heldLine
+	refetchAsked := 0
 	for _, id := range ids {
 		h := items[id]
 		rid := id + ":resolved"
@@ -727,6 +733,7 @@ func liveResolveTurn() {
 		done := live.sent[rid]
 		waiting := live.queued[rid]
 		off := liveIsOffLocked("bodies", h.Company+"|"+h.CGUID)
+		ownOpen := !h.Refetch || liveOwnOpenNow(h.CGUID, h.Company)
 		live.mu.Unlock()
 		added, _ := time.Parse(time.RFC3339, h.Added)
 		if done || (!added.IsZero() && now.Sub(added) > 7*24*time.Hour) {
@@ -755,6 +762,18 @@ func liveResolveTurn() {
 		}
 		if last, err := time.Parse(time.RFC3339, h.Last); err == nil && now.Sub(last) < wait {
 			continue
+		}
+		// after 2.3.0: a line FinCom asked for again (refetch): only while this bridge's own Tally has its company open (the
+		// own-Tally rule), and one such line a turn
+		if h.Refetch && !ownOpen {
+			liveSay(h.Type, h.No, h.Date, h.MID, id, "not asked: its company is not open in this bridge's own Tally; asked when it is")
+			continue
+		}
+		if h.Refetch && refetchAsked >= 1 {
+			continue
+		}
+		if h.Refetch {
+			refetchAsked++
 		}
 		h.Last = now.Format(time.RFC3339) // spaced whatever the answer
 		items[id] = h
@@ -855,6 +874,7 @@ func liveResolveTurn() {
 		}
 		if r.answered {
 			h.Tries++
+			h.TriesVer = BridgeVersion
 		}
 		if r.final {
 			h.Final = true
@@ -991,4 +1011,101 @@ func applyHeldLines(j M) {
 	liveHeldCap(items)
 	liveHeldSave(all, items)
 	writeLog(fmt.Sprintf("Recorder: FinCom holds %d line(s) of this computer without their entry; each is asked of Tally again (by its MasterID, else its number) and sent with Tally's GUID and body once Tally gives it", added))
+}
+
+// --- after 2.3.0 (06-Oct-2026, the owner: "the bridge must ask again for held lines of its own user and settle them"): FinCom's
+// beat answer "refetch": [{line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date}], at most 20 of
+// THIS bridge's own held lines (the same computer key and bridge id) whose body is missing or whose GUID is a placeholder
+// (staging's lines 4, 17 and 18). Unlike heldLines, a line the bridge sent WITH its body (line 18: Tally's typed XML the
+// cloud could not read before 06-Oct-2026) is taken too: FinCom says it holds no body. A line whose ":resolved" line went
+// already is not. Taken only for a company this bridge's own Tally has open (the own-Tally rule) and under the GUID held
+// for it. Asked like any held line (liveResolveTurn: by MasterID, else by type and number; postings first; the 2-second
+// stop; every acceptance rule unchanged), one such line a turn, each at most every 10 minutes, 20 tries at most over 7
+// days; tries an older version counted (it could not read a real Tally's typed answer) start again once. The cloud's
+// GUID and AlterID are never read
+const refetchMax = 20
+
+func applyRefetch(j M) {
+	rows := arr(j["refetch"])
+	if len(rows) == 0 {
+		return
+	}
+	if len(rows) > refetchMax {
+		rows = rows[:refetchMax]
+	}
+	now := nowFn().Format(time.RFC3339)
+	var cs []heldLine
+	notOwn := 0
+	for _, r := range rows {
+		e := obj(r)
+		id := strings.TrimSpace(str(e["line_id"]))
+		ev := strings.TrimSpace(str(e["event"]))
+		if !reHeldID.MatchString(id) || strings.HasSuffix(id, ":resolved") || (ev != "created" && ev != "altered" && ev != "imported") {
+			continue
+		}
+		co, cg := cutRunes(strings.TrimSpace(str(e["company"])), 200), cut(cleanGUID(str(e["company_guid"])), 100)
+		date := normDate(str(e["vch_date"]))
+		if co == "" || cg == "" || len(date) != 8 || !isTallyDate(date) {
+			continue
+		}
+		if held := heldGUID(co); held == "" || !strings.EqualFold(held, cg) {
+			notOwn++
+			continue // not the company this bridge holds under that name
+		}
+		mid := onlyDigits(str(e["master_id"]))
+		if len(mid) > 18 || toI64(mid) <= 0 {
+			mid = ""
+		}
+		typ, no := cutRunes(strings.TrimSpace(str(e["vch_type"])), 200), cutRunes(strings.TrimSpace(str(e["vch_no"])), 200)
+		if mid == "" && (no == "" || !liveNumberText(no) || !liveNumberText(typ)) {
+			continue // nothing to ask Tally by
+		}
+		cs = append(cs, heldLine{ID: id, Company: co, CGUID: cg, Type: typ, No: no, Date: date, MID: mid, At: now, Added: now, Ev: ev, Cloud: true, Refetch: true})
+	}
+	live.mu.Lock()
+	liveFresh()
+	var fresh []heldLine
+	done := 0
+	for _, h := range cs {
+		rid := h.ID + ":resolved"
+		if live.sent[rid] || live.queued[rid] {
+			done++
+			continue
+		}
+		if !liveOwnOpenNow(h.CGUID, h.Company) {
+			notOwn++
+			continue
+		}
+		fresh = append(fresh, h)
+	}
+	live.mu.Unlock()
+	heldMu.Lock()
+	defer heldMu.Unlock()
+	all, items := liveHeldLoad()
+	added, again := 0, 0
+	for _, h := range fresh {
+		old, had := items[h.ID]
+		if !had {
+			items[h.ID] = h
+			added++
+			continue
+		}
+		if !old.Refetch {
+			old.Refetch, old.Cloud = true, true
+			if (old.Tries > 0 || old.Final) && old.TriesVer != BridgeVersion {
+				// tries of an older bridge: Tally's typed answer was not read then; asked afresh under this version's rules
+				old.Tries, old.Final, old.Why, old.Last = 0, false, "", ""
+				again++
+			}
+			items[h.ID] = old
+		}
+	}
+	liveSayOnce(fmt.Sprintf("refetch|%d|%d|%d|%d|%d|%d", len(rows), len(fresh), added, again, done, notOwn), fmt.Sprintf(
+		"Recorder: FinCom asks again for %d held line(s) of this bridge: %d new in the held list, %d asked afresh (tries of an older version), %d there already, %d resolved already, %d not this bridge's own Tally's (company not open here or another GUID)",
+		len(rows), added, again, len(fresh)-added-again, done, notOwn))
+	if added+again == 0 {
+		return
+	}
+	liveHeldCap(items)
+	liveHeldSave(all, items)
 }

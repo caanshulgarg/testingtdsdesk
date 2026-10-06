@@ -43,7 +43,10 @@ payload keeping idsMismatch / lineGuid / heldWhy; a heldWhy over 300 characters 
 kept; a normal line unchanged (no new keys). 50's words for a line with no GUID: "waiting for the entry's details ...".
 FinCom Bridge 2.2.2: the beat answers heldLines (this computer's held lines of the last 7 days, created / altered / imported,
 the company still linked to the book, the month not locked, oldest first, at most 200: line_id, company, company_guid, event,
-master_id, vch_type, vch_no, vch_date) and leaves the field out when there are none.
+master_id, vch_type, vch_no, vch_date) and leaves the field out when there are none; from 06-Oct-2026 this bridge's only.
+06-Oct-2026 (NWS144 lines 4, 17, 18): a real TallyPrime 7.1's typed voucher XML is read (applied with its body); the beat answers
+refetch, at most 20 of this bridge's own held lines (same key AND bridge id) without a body or with a placeholder GUID, never
+another user's bridge or computer; "<line id>:resolved" with Tally's typed body is applied once and the held line 'replaced'.
 Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno)."""
 import os, sys, json, time, hashlib, subprocess, urllib.request, shutil, threading
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -620,20 +623,39 @@ try:
        "L-C. lineFid fin9 with TDSDesk:fin9 in the narration: no fid taken from the narration, not short, lineFid kept (%s)" % {k: p4.get(k) for k in ("fid", "short", "lineFid")})
     c, r = reci([line("I5", "created", "", None, "20261003", company_guid=CGI, master_id="25691", vch_type="Journal", vch_no="J-5", narration="x", lineFid="bad id!")])
     ok(c == 200 and "lineFid" not in pl("I5"), "L-C. a lineFid outside the FinCom id's characters: not kept (%s)" % pl("I5").get("lineFid"))
+    # ---------------------------------------------------------------- 06-Oct-2026, NWS144 line 18: a real TallyPrime 7.1's typed XML
+    # Receipt 213 (created, GUID ...-00006729, MasterID 26409, AlterID 54493) sent with Tally's voucher as bridge 2.2.4 sends it
+    # (the element of FinComVoucherByMaster's answer, typed: <DATE TYPE="Date">, <ALTERID TYPE="Number"> 54493</ALTERID>,
+    # <LEDGERNAME TYPE="String">, <AMOUNT TYPE="Amount">, a bill-wise Agst Ref): stored WITH its body and applied, never held
+    # "waiting for the entry's details" with body {}
+    tx = open(os.path.join(HERE, "..", "bridge-go", "testdata", "typed-like-7.1", "receipt-213-by-master.xml")).read()
+    tx = tx[tx.index("<VOUCHER REMOTEID"):tx.index("</VOUCHER>", tx.index("<VOUCHER REMOTEID")) + 10]
+    G213 = CGI + "-00006729"
+    c, r = reci([{"line_id": "T213", "event": "created", "saved_at": "2026-10-06T05:50:00+05:30", "pc": "NWS144", "user": "TALLY User", "company_guid": CGI, "object_guid": G213,
+                  "master_id": "26409", "alter_id": 54493, "vch_type": "Receipt", "vch_no": "213", "vch_date": "20261006", "xml": tx,
+                  "ledgers": [{"name": "Salesify Marketing LLP", "guid": ""}, {"name": "Cash", "guid": ""}]}])
+    b213 = json.loads((db.rows("select body::text as b from tally_recorder_lines where book_id = %s and line_id = 'T213'" % q(BI)) or [{}])[0].get("b") or "{}")
+    v213 = (b213.get("vouchers") or [{}])[0]
+    ok(c == 200 and st(r) == {"T213": "applied"} and len(b213.get("vouchers") or []) == 1 and v213.get("no") == "213" and v213.get("day") == "2026-10-06" and v213.get("alter") == 54493,
+       "typed. Receipt 213 with a real TallyPrime 7.1's typed XML (%d characters): applied, its body stored (one voucher, 213 of 06-Oct-2026, AlterID 54493) (%s; %s)" % (len(tx), st(r), v213))
+    l213 = sorted([(x[1], x[2], json.dumps(x[5])) for x in (b213.get("lines") or [])])
+    ok(l213 == [("Cash", -59000, "[]"), ("Salesify Marketing LLP", 59000, json.dumps([["GSC/2026-27/118", "Agst Ref", 59000, None]]))],
+       "typed. its two lines with their signs, the Agst Ref bill on the party's line (%s)" % l213)
+    ok(vrow_b(BI, G213).get("alter_id") == "54493" and vrow_b(BI, G213).get("origin") == "tally", "typed. the entry is in the copy (tally_vouchers, AlterID 54493) (%s)" % vrow_b(BI, G213))
     # ---------------------------------------------------------------- FinCom Bridge 2.2.2: the beat answers heldLines
     # the stand-in serves tables from memory: the database's recorder lines and month locks copied in as they are now
     FS.T["tally_recorder_lines"] = [dict(r, device_id=r["device_id"] or None) for r in db.rows(
         "select id, line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date::text as vch_date, book_id::text as book_id, firm_id::text as firm_id, "
-        "device_id::text as device_id, state, to_char(received_at at time zone 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') as received_at from tally_recorder_lines order by id")]
+        "device_id::text as device_id, bridge, state, to_char(received_at at time zone 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') as received_at from tally_recorder_lines order by id")]
     FS.T["tally_month_locks"] = [dict(r, unlocked_at=r["unlocked_at"] or None) for r in db.rows("select book_id::text as book_id, month::text as month, unlocked_at::text as unlocked_at from tally_month_locks")]
     old_ = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(time.time() - 8 * 86400))
     FS.T["tally_recorder_lines"] += [
         {"line_id": "H-OLD", "company": "ZZ IDS", "company_guid": CGI, "event": "created", "master_id": "1", "vch_type": "Journal", "vch_no": "J-9", "vch_date": "2026-10-01",
-         "book_id": BI, "firm_id": FIRM, "device_id": DA, "state": "held", "received_at": old_},
+         "book_id": BI, "firm_id": FIRM, "device_id": DA, "bridge": GA["id"], "state": "held", "received_at": old_},
         {"line_id": "H-B", "company": "ZZ IDS", "company_guid": CGI, "event": "created", "master_id": "2", "vch_type": "Journal", "vch_no": "J-8", "vch_date": "2026-10-01",
-         "book_id": BI, "firm_id": FIRM, "device_id": DB_, "state": "held", "received_at": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())},
+         "book_id": BI, "firm_id": FIRM, "device_id": DB_, "bridge": GB["id"], "state": "held", "received_at": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())},
         {"line_id": "I1:resolved", "company": "ZZ IDS", "company_guid": CGI, "event": "created", "master_id": "25683", "vch_type": "Journal", "vch_no": "J-1", "vch_date": "2026-10-01",
-         "book_id": BI, "firm_id": FIRM, "device_id": DA, "state": "held", "received_at": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())}]
+         "book_id": BI, "firm_id": FIRM, "device_id": DA, "bridge": GA["id"], "state": "held", "received_at": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())}]
     c, r = call({"kind": "beat", "version": "2.2.2", "bridge": dict(GA, version="2.2.2"), "tally": True, "open": []})
     hl = r.get("heldLines") or []
     got_ids = [x.get("line_id") for x in hl]
@@ -648,6 +670,60 @@ try:
     FS.T.pop("tally_recorder_lines", None)
     c2, r2 = call({"kind": "beat", "version": "2.2.2", "bridge": dict(GA, version="2.2.2"), "tally": True, "open": []})
     ok(c2 == 200 and "heldLines" not in r2, "2.2.2. no held lines: the field left out, the beat answered (%s)" % c2)
+    # ---------------------------------------------------------------- 06-Oct-2026 (the owner: "the bridge must ask again for held lines of
+    # its own user and settle them"): the beat answers refetch, at most 20 of THIS bridge's own held lines (the same computer key
+    # AND the same bridge id) whose body is missing or whose GUID is a placeholder: line_id, company, company_guid, event,
+    # master_id, vch_type, vch_no, vch_date. The bridge asks its own Tally again and sends "<line id>:resolved" with Tally's
+    # GUID, AlterID and body; the database replaces the held line and applies the entry once (migrations 50-52)
+    GC = dict(GB, id="go-cccccc333333", computer="PC-A", user="other")      # another Windows user's bridge on PC-A's key
+    reci2 = lambda lines, key=KA, bridge=GA: call({"kind": "recorder_lines", "company": "ZZ IDS", "version": "2.3.1", "bridge": dict(bridge, version="2.3.1"), "lines": lines}, key)
+    G18 = CGI + "-0000672a"
+    base = {"saved_at": "2026-10-06T05:50:00+05:30", "pc": "NWS144", "user": "TALLY User", "company_guid": CGI, "ledgers": []}
+    c, r = reci2([dict(base, line_id="R18", event="created", object_guid=G18, master_id="26410", alter_id=54494, vch_type="Receipt", vch_no="214", vch_date="20261006"),
+                  dict(base, line_id="R4", event="altered", object_guid=CGI + "-00000000", master_id="26312", alter_id=0, vch_type="Receipt", vch_no="192", vch_date="20261005"),
+                  dict(base, line_id="R17", event="created", object_guid="", master_id="", alter_id=None, vch_type="Receipt", vch_no="212", vch_date="20261005",
+                       heldWhy="not found by its type and number (asked 3 times)")])
+    ok(c == 200 and st(r) == {"R18": "held", "R4": "held", "R17": "held"}, "refetch. lines like staging's 18 (no body), 4 (placeholder GUID, AlterID 0) and 17 (no GUID, no MasterID): held (%s)" % st(r))
+    c, r = reci2([dict(base, line_id="RX", event="created", object_guid=CGI + "-0000672b", master_id="26411", alter_id=54495, vch_type="Receipt", vch_no="215", vch_date="20261006")], KA, GC)
+    c2, r2 = reci2([dict(base, line_id="RY", event="created", object_guid=CGI + "-0000672c", master_id="26412", alter_id=54496, vch_type="Receipt", vch_no="216", vch_date="20261006")], KB, GB)
+    ok(st(r) == {"RX": "held"} and st(r2) == {"RY": "held"}, "refetch. another user's bridge on the same key (RX) and another computer (RY): held too (%s %s)" % (st(r), st(r2)))
+    def mem_rows():
+        FS.T["tally_recorder_lines"] = [dict(r, device_id=r["device_id"] or None, body=json.loads(r["body"]) if r["body"] else None, object_guid=r["object_guid"] or None) for r in db.rows(
+            "select id, line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date::text as vch_date, book_id::text as book_id, firm_id::text as firm_id, "
+            "device_id::text as device_id, bridge, state, object_guid, body::text as body, to_char(received_at at time zone 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') as received_at from tally_recorder_lines order by id")]
+    mem_rows()
+    c, r = call({"kind": "beat", "version": "2.3.1", "bridge": dict(GA, version="2.3.1"), "tally": True, "open": []})
+    rf = r.get("refetch") or []
+    ids = [x.get("line_id") for x in rf]
+    ok(c == 200 and {"R18", "R4", "R17"} <= set(ids) and not {"RX", "RY", "T213", "I3", "R18:resolved"} & set(ids) and len(rf) <= 20,
+       "refetch. the beat answers this bridge's own held lines without a body or with a placeholder GUID (R18, R4, R17); never another user's bridge (RX) or computer (RY), never an applied line (%s)" % ids)
+    r4 = next((x for x in rf if x.get("line_id") == "R4"), {}); r17 = next((x for x in rf if x.get("line_id") == "R17"), {})
+    ok(set(r4) == {"line_id", "company", "company_guid", "event", "master_id", "vch_type", "vch_no", "vch_date"} and r4.get("master_id") == "26312" and r4.get("event") == "altered"
+       and r4.get("vch_date") == "20261005" and r17.get("master_id") == "" and r17.get("vch_no") == "212" and r17.get("vch_type") == "Receipt",
+       "refetch. each row: line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date (R4 %s; R17 %s)" % (r4, r17))
+    c, r = call({"kind": "beat", "version": "2.3.1", "bridge": dict(GC, version="2.3.1"), "tally": True, "open": []})
+    idc = [x.get("line_id") for x in (r.get("refetch") or [])]
+    ok(c == 200 and "RX" in idc and not {"R18", "R4", "R17"} & set(idc), "refetch. the other user's bridge on the same key gets its own line only (%s)" % idc)
+    now_ = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())
+    FS.T["tally_recorder_lines"] += [{"id": 90000 + i, "line_id": "M%02d" % i, "company": "ZZ IDS", "company_guid": CGI, "event": "created", "master_id": str(30000 + i), "vch_type": "Journal",
+                                      "vch_no": "", "vch_date": "2026-10-05", "book_id": BI, "firm_id": FIRM, "device_id": DA, "bridge": GA["id"], "state": "held", "object_guid": None, "body": None,
+                                      "received_at": now_} for i in range(25)]
+    c, r = call({"kind": "beat", "version": "2.3.1", "bridge": dict(GA, version="2.3.1"), "tally": True, "open": []})
+    ok(c == 200 and len(r.get("refetch") or []) == 20 and len(r.get("heldLines") or []) > 20, "refetch. at most 20 a beat (%d; heldLines %d)" % (len(r.get("refetch") or []), len(r.get("heldLines") or [])))
+    # the bridge's answer for R18: "R18:resolved" with Tally's own GUID, AlterID and (typed) body -> applied, R18 replaced, once
+    x18 = tx.replace("-00006729", "-0000672a").replace("> 26409<", "> 26410<").replace("> 54493<", "> 54494<").replace("<VOUCHERNUMBER>213<", "<VOUCHERNUMBER>214<")
+    n0 = nI()
+    c, r = reci2([dict(base, line_id="R18:resolved", event="created", object_guid=G18, master_id="26410", alter_id=54494, vch_type="Receipt", vch_no="214", vch_date="20261006", xml=x18)])
+    s18 = (db.rows("select state, coalesce(held_why, '') as why from tally_recorder_lines where book_id = %s and line_id = 'R18'" % q(BI)) or [{}])[0]
+    ok(c == 200 and st(r) == {"R18:resolved": "applied"} and s18.get("state") == "replaced" and s18.get("why", "").startswith("replaced by line ") and int(nI()) == int(n0) + 1 and vrow_b(BI, G18).get("alter_id") == "54494",
+       "refetch. R18:resolved with Tally's typed body: applied, R18 'replaced', the entry in the copy once (%s; %s; %s -> %s)" % (st(r), s18, n0, nI()))
+    c, r = reci2([dict(base, line_id="R18:resolved", event="created", object_guid=G18, master_id="26410", alter_id=54494, vch_type="Receipt", vch_no="214", vch_date="20261006", xml=x18)])
+    ok(c == 200 and st(r).get("R18:resolved") in ("duplicate",) and int(nI()) == int(n0) + 1, "refetch. the same :resolved line again: duplicate, applied once (%s)" % st(r))
+    mem_rows()
+    c, r = call({"kind": "beat", "version": "2.3.1", "bridge": dict(GA, version="2.3.1"), "tally": True, "open": []})
+    ids = [x.get("line_id") for x in (r.get("refetch") or [])]
+    ok(c == 200 and "R18" not in ids and "R4" in ids, "refetch. once replaced, R18 is not asked for again (%s)" % ids)
+    FS.T.pop("tally_recorder_lines", None)
 finally:
     if fn: fn.terminate()
     db.stop()
