@@ -125,6 +125,16 @@ for (const [file, what] of CASES) {
   ok(J(parseDay(cut(x, FETCH))) === J(parseDay(x)), "50 items: the body as the request fetches it (" + cut(x, FETCH).length + " characters) reads as the whole one");
 }
 
+// ---- 2d. round-3 L1 for the credit period (part C's finding): a long run of "<BILLCREDITPERIOD x" never closed inside a
+// bill allocation is read in linear time (the attributes stop at the next "<"), and a real credit period still reads
+{
+  const S0 = read("partA-sales-two-rates.xml");
+  const bad = S0.replace(/<BILLCREDITPERIOD JD[^\n]*<\/BILLCREDITPERIOD>/, "<BILLCREDITPERIOD x=1 ".repeat(40000));
+  const t0 = Date.now(); parseDay(bad); const ms = Date.now() - t0;
+  ok(ms < 1500, "a long attribute-like run in a bill allocation read in " + ms + " ms");
+  ok(one(S0).dues.length === 0 && J(parseDay(S0).lines[0][5]) === J([["201", "New Ref", -3410, 30]]), "the credit period still reads (30 days): " + J(parseDay(S0).lines[0][5]));
+}
+
 // ---- 3. the owner's accuracy rules: each failure held in plain words; within one rupee of rounding passes
 const S = read("partA-sales-two-rates.xml"), P = read("partA-purchase-igst.xml"), JC = read("partA-journal-cost-centres.xml");
 const amtTag = (a) => '<AMOUNT TYPE="Amount">' + a + "</AMOUNT>";

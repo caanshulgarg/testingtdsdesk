@@ -161,7 +161,7 @@ function takeVoucher(s){
       tds.push({n, ledger, nature, party, rate, base, tax: tax == null ? la : tax, section: own.slice(0, 20), sectionFrom: own ? "Tally's entry" : ""});
     });
     if (e.indexOf("<BILLALLOCATIONS.LIST") >= 0) blocks(e, "BILLALLOCATIONS.LIST").forEach((q) => {
-      const cp = (q.match(/<BILLCREDITPERIOD\b[^>]*>([^<]*)<\/BILLCREDITPERIOD>/) || [])[1] || "", due = d8(cp);
+      const cp = (q.match(/<BILLCREDITPERIOD(?:\s[^<>]*[^/<>])?\s*>([^<]*)<\/BILLCREDITPERIOD>/) || [])[1] || "", due = d8(cp);
       if (due) dues.push({n, ledger, name: one(q, "NAME").slice(0, 200), type: one(q, "BILLTYPE").slice(0, 20), amt: r2(amt(one(q, "AMOUNT"))), due});
     });
   };
@@ -180,7 +180,7 @@ function takeVoucher(s){
         after(e, "BILLALLOCATIONS.LIST").forEach(({p: p2}) => {
           const q = upTo(p2, "BILLALLOCATIONS.LIST"), type = one(q, "BILLTYPE"), a = Math.round(amt(one(q, "AMOUNT")) * 100) / 100;
           if (!type || !a) return;
-          const cp = (q.match(/<BILLCREDITPERIOD\b[^>]*>([^<]*)<\/BILLCREDITPERIOD>/) || [])[1] || "", dm = cp.match(/^\s*(\d{1,4})\s*Days?\s*$/i);
+          const cp = (q.match(/<BILLCREDITPERIOD(?:\s[^<>]*[^/<>])?\s*>([^<]*)<\/BILLCREDITPERIOD>/) || [])[1] || "", dm = cp.match(/^\s*(\d{1,4})\s*Days?\s*$/i);
           bills.push([one(q, "NAME").slice(0, 200), type.slice(0, 20), a, dm ? Number(dm[1]) : null]);
         });
       }
