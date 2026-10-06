@@ -283,6 +283,9 @@ $t1 = Start-Process -FilePath $exe -WorkingDirectory $dir -PassThru; $script:tal
 Write-Host "Tally :9000 answers: $(WaitPort 9000)"; Start-Sleep 5
 KeysTo 9000 'a' 4; KeysTo 9000 't' 10 '00-tally1'
 AddLedger 9000 $co1
+# check 7: a party like the owner's (Salesify Marketing LLP, Sundry Debtors, balances kept bill by bill), before the bridges start
+$sal = 'Salesify Marketing LLP'
+Post 9000 ('<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>All Masters</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA><TALLYMESSAGE xmlns:UDF="TallyUDF"><LEDGER NAME="' + $sal + '" ACTION="Create"><NAME.LIST><NAME>' + $sal + '</NAME></NAME.LIST><PARENT>Sundry Debtors</PARENT><ISBILLWISEON>Yes</ISBILLWISEON></LEDGER></TALLYMESSAGE></REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>') "ledger $sal (bill-by-bill)" | Out-Null
 
 # ---- user 2's own Tally (9001), run as fcuser2: a company made by keys, then started again with it and the add-on
 Say '---- user 2''s own Tally (9001), run as fcuser2: a company made by keys, then started again with it and the add-on'
@@ -451,6 +454,22 @@ $x = @($hit | Where-Object bid -eq $B[1].id)[0]
 Result '1 create' ([bool]$new -and [bool]$x -and $x.guid -eq $new.guid -and [int]$x.mid -eq $new.mid -and [bool]$x.xml -and $x.buser -match 'runneradmin$') ("Tally made mid {0} guid {1}; {2}" -f $new.mid, $new.guid, (Ev $x))
 $src = $new
 
+# ---- check 7's entry: a Receipt like the owner's (NWS144 Receipt 213) by keys on the screen left by step 1 (a new Receipt):
+# dated 1-10-2026 (the Day Book of 2-10-2026 that steps 2-5 work in does not show it), Cash, the bill-by-bill party with a
+# New Ref bill allocation, Ctrl+A
+Say '---- check 7''s entry: a Receipt from Salesify Marketing LLP with a bill allocation (New Ref SAL-213), by keys'
+$salBefore = Vouchers 9000 $co1
+KeysTo 9000 '{F2}' 3; KeysTo 9000 '1-10-2026{ENTER}' 3; KeysTo 9000 'Cash{ENTER}' 3
+KeysTo 9000 "$sal{ENTER}" 3 '40-sal-party'; KeysTo 9000 '450{ENTER}' 4 '41-sal-billwise'
+KeysTo 9000 'New Ref{ENTER}' 3 '42-sal-newref'; KeysTo 9000 'SAL-213{ENTER}' 3 '43-sal-name'; KeysTo 9000 '{ENTER}' 3 '44-sal-due'; KeysTo 9000 '{ENTER}' 3 '45-sal-amount'
+$salNew = $null
+for ($t = 0; $t -lt 3 -and -not $salNew; $t++) {
+  KeysTo 9000 '^a' 5 "46-sal-ctrl-a-$t"
+  $salNew = @((Vouchers 9000 $co1) | Where-Object { $_.mid -notin @($salBefore | ForEach-Object mid) })[0]
+}
+Write-Host "check 7 entry saved: $(if ($salNew) { "mid $($salNew.mid) guid $($salNew.guid) no $($salNew.vno)" } else { 'NO' })"
+$script:salGuid = if ($salNew) { $salNew.guid } else { '(none)' }
+
 $m = Mark
 DayBook '13'; KeysTo 9000 '{END}' 2; KeysTo 9000 '{ENTER}' 4 '14-open'
 KeysTo 9000 '{ENTER}' 2; KeysTo 9000 '{ENTER}' 2; KeysTo 9000 '{ENTER}' 2 '15-at-amount'; KeysTo 9000 '800{ENTER}' 2; KeysTo 9000 '^a' 5 '16-altered'
@@ -467,7 +486,7 @@ KeysTo 9000 '{ENTER}' 2; KeysTo 9000 '{ENTER}' 2 '19-dup-at-amount'; KeysTo 9000
 $after3 = Vouchers 9000 $co1
 $dup = @($after3 | Where-Object { $_.mid -notin @($after2 | ForEach-Object mid) })[0]
 $srcThen = @($after3 | Where-Object mid -eq $src.mid)[0]
-$hit = WaitLine 0 { $_.ev -eq 'created' -and $_.company -eq $co1 -and $_.guid -ne $src.guid }
+$hit = WaitLine 0 { $_.ev -eq 'created' -and $_.company -eq $co1 -and $_.guid -ne $src.guid -and $_.guid -ne $script:salGuid }
 Start-Sleep 20
 Snap '3-copy'; PrintNew $m
 $x = @($hit | Where-Object bid -eq $B[1].id)[0]
@@ -527,6 +546,26 @@ $all | ForEach-Object { Write-Host "  all: $(Ev $_)" }
 $wrong = @($all | Where-Object { ($_.company -eq $co1 -and $_.bid -ne $B[1].id) -or ($_.company -eq $co2 -and $_.bid -ne $B[2].id) -or ($_.bid -eq $B[1].id -and $_.buser -notmatch 'runneradmin$') -or ($_.bid -eq $B[2].id -and $_.buser -notmatch "$u2$") })
 $n1l = @($all | Where-Object bid -eq $B[1].id).Count; $n2l = @($all | Where-Object bid -eq $B[2].id).Count
 Result '6e attribution' ($wrong.Count -eq 0 -and $n1l -gt 0) ("{0} line(s) from bridge 1 (runneradmin, {1}), {2} from bridge 2 ({3}, {4}); misattributed: {5}{6}" -f $n1l, $co1, $n2l, $u2, $co2, $wrong.Count, $(if ($wrong.Count) { ' e.g. ' + (Ev $wrong[0]) } else { '' }))
+
+# ---- 7: the body as the cloud reads it: each created/altered/imported line's xml through tally-ingest's parse.js (parseDay at
+# the bridge ref), the voucher of the line's GUID and its lines, as cleanRecorderLine does
+Say '---- 7: each created/altered/imported line''s xml through the cloud''s parse.js (parseDay at the bridge ref)'
+$parseJs = Join-Path $env:BRIDGE_DIST 'cloud\tally-cloud\parse.js'
+$bodies = @($all | Where-Object { $_.ev -in 'created', 'altered', 'imported' } | ForEach-Object { [pscustomobject]@{ label = "$($_.company) $($_.ev) $($_.vch) bridge $($_.bid) at $($_.at)"; guid = $_.guid; ev = $_.ev; xml = $_.xml } })
+$pin = Join-Path $out 'parse-in.json'; $pout = Join-Path $out 'parse-check.json'
+ConvertTo-Json -InputObject $bodies -Depth 5 | Set-Content $pin -Encoding UTF8
+& node (Join-Path $PSScriptRoot 'parsecheck.mjs') $parseJs $pin $pout 2>&1 | ForEach-Object { Write-Host "  $_" }
+$pc = @(); try { $pc = @(Get-Content $pout -Raw -Encoding UTF8 | ConvertFrom-Json) } catch { Write-Host "parse check output: $_" }
+foreach ($o in $pc) {
+  $ls = (@($o.lines) | ForEach-Object { "$($_.ledger) $($_.amount)$(if (@($_.bills).Count) { ' bills[' + ((@($_.bills) | ForEach-Object { ($_ | ForEach-Object { "$_" }) -join '/' }) -join '; ') + ']' })" }) -join ', '
+  $l = "PARSE {0} {1}: guid {2}; xml {3} chars; parseDay vouchers {4} (guids {5}), with this GUID {6}; type={7} no={8} date={9} party={10}; lines: {11}{12}" -f $(if ($o.ok) { 'ok' } else { 'NO' }), $o.label, $o.guid, $o.xmlChars, $o.parsedVouchers, ((@($o.parsedGuids) | ForEach-Object { if ($_) { $_ } else { "''" } }) -join ','), $o.match, $o.type, $o.no, $o.date, $o.party, $(if ($ls) { $ls } else { 'none' }), $(if ($o.error) { " error $($o.error)" } else { '' })
+  Write-Host "  $l"; Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO $l"
+}
+$salPc = @($pc | Where-Object { $_.guid -and $_.guid -eq $script:salGuid -and $_.ev -eq 'created' })[0]
+$salBills = if ($salPc) { @(@($salPc.lines) | Where-Object { $_.ledger -eq $sal } | ForEach-Object { @($_.bills) } | Where-Object { $_ }).Count } else { 0 }
+$bad = @($pc | Where-Object { -not $_.ok })
+$ok7 = $pc.Count -gt 0 -and $bad.Count -eq 0 -and $pc.Count -eq $bodies.Count -and [bool]$salPc -and $salPc.ok -and $salBills -ge 1
+Result '7 body through the cloud''s parse.js' $ok7 ("{0} created/altered line(s) read with parse.js at the bridge ref: {1} with exactly one voucher of the line's GUID and >= 2 non-zero ledger lines, {2} without; the Receipt from {3} (entered by keys, {4}): {5}" -f $pc.Count, ($pc.Count - $bad.Count), $bad.Count, $sal, $(if ($salNew) { "Tally mid $($salNew.mid) guid $($salNew.guid)" } else { 'NOT saved in Tally' }), $(if (-not $salPc) { 'no created line with its GUID' } else { "type=$($salPc.type) no=$($salPc.no) date=$($salPc.date) party=$($salPc.party), $(@($salPc.lines).Count) line(s), $($salPc.nonZero) non-zero, $salBills bill allocation(s) on the party line" }))
 
 # ---- step 6 as one line
 Say '---- step 6 as one line'
