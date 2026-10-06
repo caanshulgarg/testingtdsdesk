@@ -10,6 +10,21 @@ For the owner. Plain words; times are IST. The steps to try it on NWS144 are in 
 | Replaces | 2.3.0 (kept on the computer, so the tray can roll back to it) |
 | Add-on | unchanged: keep `C:\ProgramData\FinCom\addon\FinComRecorder.tdl` loaded as it is |
 
+## Not yet proven on real Tally when this was published (06-Oct-2026)
+
+The owner decided to publish 2.3.1 before two checks had run on a real TallyPrime. They were not proven when it went out:
+
+1. **A payment with TDS.** An imported payment kept no TDS details in Tally, and entering one on Tally's screen did not
+   work in the test run (the test's keystrokes, not the bridge). The payment's ledger amounts and the party's deductee
+   type ("Company - Resident") did arrive correctly; the TDS nature, rate, amount and section on the entry were not seen.
+2. **The retry timings.** That the bridge asks again after 15 s, 30 s, 1 min and 2 min (then every 5 min) when Tally does
+   not answer was not seen on a real Tally (the test receipt opened a cost-centre screen instead of saving). What was
+   seen: with Tally frozen for 3 minutes nothing was switched off, and a posting queued meanwhile went through by itself
+   the moment Tally answered.
+
+Both are being run now on this same build; the result is added here. Every other check passed on real TallyPrime 7.1
+(run 37469732673, this exact setup).
+
 ## What 2.3.1 changes: item invoices enter the books complete
 
 Two changes, by the owner's decisions of 06-Oct-2026: the entry request (this section) and the masters (the next
