@@ -15,7 +15,9 @@
 //
 // Every form goes under a measure-only id of its own (FinComFetchTestA..F, allowlist.go): the bridge's own two ids are
 // the narrow dated exceptions (a line waiting on them, within 3 days, a starting point recorded) and never go as a
-// person's; A and C are otherwise byte for byte what voucherByNumberRequest and voucherByMasterRequest build.
+// person's; A and C are otherwise byte for byte what voucherByNumberRequest and voucherByMasterRequest build. 2.3.1: every
+// form carries the entry request's fetch as built (liveFetchField, with the ledger lines under an invoice's items), so the
+// forms are the ps1's with that fetch; the ps1 stays the record of what 2.2.2 sent.
 package main
 
 import (
