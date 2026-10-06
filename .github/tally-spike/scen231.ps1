@@ -510,6 +510,10 @@ function S231TdsScreen {
   for ($j = 1; $j -le 5; $j++) { $t = TdsScreen "s5-r2-sub$j"; if ($t -match 'Details for|Bill-wise|Assessable|Nature of Pay|Nature ef Pay|Deductee|Party Details|Tax Details') { $sub += $j; & $script:TdsSend '{ENTER}'; Start-Sleep 2 } else { break } }
   $t = TdsScreen 's5-r2-amount-shown'
   $byTally = $t -match '2,000|2000'
+  $pct = ''
+  # a duty ledger's row can stand first on a rate (%) column (run 37485855619: 2000 typed there, "Percentage cannot be
+  # more than 100"): its rate kept with Enter, then the amount Tally works out
+  if (-not $byTally -and $t -match '\d ?%') { $pct = 'a % column first (kept with Enter)'; $null = TK '{ENTER}' 2 's5-r2-pct'; $t = TdsScreen 's5-r2-amount-shown2'; $byTally = $t -match '2,000|2000' }
   if ($byTally) { $null = TK '{ENTER}' 2 's5-r2-amount-tally' } else { $null = TK '2000{ENTER}' 2 's5-r2-amount-typed' }
   for ($j = 1; $j -le 4; $j++) { $t = TdsScreen "s5-r2-after$j"; if ($t -match 'Details for|Bill-wise|Assessable|Nature of Pay|Nature ef Pay|Party Details|Tax Details') { & $script:TdsSend '{ENTER}'; Start-Sleep 2 } else { break } }
   # To the party: Tally's balance (98000) kept
@@ -530,7 +534,7 @@ function S231TdsScreen {
   $lt = [ordered]@{}; $lt[$N.contractExp] = -100000; $lt[$N.tds] = 2000; $lt[$N.contractor] = 98000
   $s5 = [pscustomobject]@{ id = 'S5'; key = 's5-tds-on-screen'; label = 'payment with TDS entered on the screen'; kind = 'tds'; day = '1-1-2027'; date = '20270101'; notesOnly = $false
     truth = [pscustomobject]@{ type = 'Journal'; ledgers = $lt; tds = $s.truth.tds } }
-  Add-Content -Path $resultsFile -Encoding UTF8 -Value ("INFO S5 screen: OCR {0}; TDS row amount {1}; sub-screens after the TDS ledger: {2}; screenshots tds-*" -f $(if ($script:ocrOk) { 'read the screens' } else { 'UNAVAILABLE' }), $(if ($byTally) { "put there by Tally (2,000 seen before Enter)" } else { 'not filled by Tally: 2000 typed' }), $(if ($sub.Count) { $sub -join ',' } else { 'none' }))
+  Add-Content -Path $resultsFile -Encoding UTF8 -Value ("INFO S5 screen: OCR {0}; TDS row amount {1}; sub-screens after the TDS ledger: {2}; screenshots tds-*" -f $(if ($script:ocrOk) { 'read the screens' } else { 'UNAVAILABLE' }), $(if ($byTally) { "put there by Tally (2,000 seen before Enter)" } else { 'not filled by Tally: 2000 typed' }) $pct, $(if ($sub.Count) { $sub -join ',' } else { 'none' }))
   if (-not $nv) { Result 'S5 payment with TDS entered on the screen' $false "no entry saved in Tally (see the tds-s5-* screenshots and tds-screen-log.txt)" $true; return $null }
   $s231.ent['S5'] = [ordered]@{ id = 'S5'; guid = $nv.guid; mid = $nv.mid; lines = 0 }
   $g = $nv.guid; $hit = @(WaitLine $m0 ({ $_.guid -eq $g -and $_.xml }.GetNewClosure()) 150)
@@ -572,6 +576,8 @@ function S231Only {
       if ($t.tag -match 'TDS|TAXOBJECT') { Add-Content -Path $resultsFile -Encoding UTF8 -Value "TAG $($t.tag): $(if ($wv.Count) { 'WITH A VALUE in ' + (($wv | ForEach-Object { "$($_.label) x$($_.count) '$($_.value)'" }) -join '; ') } else { 'NOT SEEN WITH A VALUE' })" }
     }
   }
+  # R1 from a clean screen: Tally started again (by its PID) and standing at the Gateway
+  if ($script:TdsRestart) { Say 'R1: Tally 9000 started again for a clean screen'; & $script:TdsRestart; Shot 'r1-00-fresh' }
   try { S231Retry } catch { Result 'R1 retry schedule' $false "the harness stopped: $_" $true }
   $s231.manifest['_run'] = "run $env:GITHUB_RUN_ID, bridge $env:BRIDGE_SHA, TallyPrime 7.1 Educational on $env:RUNNER_OS, $(Get-Date -Format 'yyyy-MM-dd HH:mm') (only S5 on the screen and R1)"
   $s231.manifest | ConvertTo-Json | Set-Content (Join-Path $s231.cap 'manifest.json') -Encoding UTF8

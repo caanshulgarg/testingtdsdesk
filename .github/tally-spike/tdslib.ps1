@@ -42,7 +42,7 @@ function TdsGateway([string]$why = '') {
   for ($i = 0; $i -lt 7; $i++) {
     $t = TdsScreen "gw$i"
     if ($t -match '^OCR-UNAVAILABLE') { $script:ocrOk = $false; break }
-    $form = $t -match 'Creati|Alterati|List of Masters|Select |Deductor Details|Accept \?|Yes or No|Change Date'
+    $form = $t -match 'Creati|Alterati|List of Masters|Select |Deductor|Accept \?|Yes or No|Change Date|Nature e?o?f Pay|Rate for|Section|Particulars|Under|Narration|Name of Item'
     if ($t -match 'Gateway' -and -not $form) { return $true }
     if ($t -match 'Yes or No' -and $t -match 'Creati|Alterati|Deductor') { & $script:TdsSend 'y'; Start-Sleep 2; continue }
     if ($t -match 'Yes or No') { & $script:TdsSend 'n'; Start-Sleep 2; continue }
@@ -82,6 +82,8 @@ function TdsNatureScreen([string]$name, [string]$section, [string]$pay, [string]
   $null = TK '{ENTER}' 1.5 'nat-zero'
   $null = TK '{ENTER}' 2 'nat-threshold'
   $null = TK '^a' 2.5 'nat-accept'
+  # Tally opens a new blank form after the save: left with Esc (a blank form asks nothing)
+  $null = TK '{ESC}' 2 'nat-esc1'; $null = TK '{ESC}' 2 'nat-esc2'
   $ok = TdsHas 'TDSRate' $name
   TdsSay "nature '$name' in Tally's export (TDSRate): $ok"
   $null = TdsGateway 'after the nature'
