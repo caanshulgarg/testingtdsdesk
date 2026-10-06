@@ -1,0 +1,2 @@
+2026-10-06 00:14:59  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=1; now ALTVCHID=7, ALTMSTID=211
+2026-10-06 00:15:11  Recorder: FinCom Spike U2: lines from a Tally this bridge does not read (company not open here): not sent
