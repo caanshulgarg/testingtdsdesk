@@ -183,9 +183,16 @@ jobs:
           git checkout -- .
           # the biggest files (GitHub refuses a file over 100 MB), said as notices
           Get-ChildItem spike-results, bridge-go/testdata -Recurse -File -ErrorAction SilentlyContinue | Sort-Object Length -Descending | Select-Object -First 5 | ForEach-Object { Write-Host "::notice title=biggest results file::$($_.FullName) $($_.Length) bytes" }
+          # the results commit put on the branch as it is now: a fresh checkout of the branch's head (forced: Windows line
+          # endings make the job's checkout look changed, which stopped pull --rebase in runs 37420812931 and 37432020247
+          # whenever the branch moved during the run) and the results commit cherry-picked onto it
+          $mine = git rev-parse HEAD
           for ($i = 0; $i -lt 5; $i++) {
-            $o1 = git pull -q --rebase --autostash origin tally-real-spike 2>&1
-            if ($LASTEXITCODE -ne 0) { Write-Host "::error title=git pull (try $i)::$(($o1 | Out-String).Trim())"; git rebase --abort 2>&1 | Out-Null }
+            git fetch -q origin tally-real-spike
+            git checkout -q -f -B results FETCH_HEAD
+            $o1 = git cherry-pick $mine 2>&1
+            if ($LASTEXITCODE -ne 0) { Write-Host "::error title=cherry-pick (try $i)::$(($o1 | Out-String) -replace '\r?\n', ' | ')"; git cherry-pick --abort 2>&1 | Out-Null; Start-Sleep 5; continue }
             $o2 = git push -q origin HEAD:refs/heads/tally-real-spike 2>&1
-            if ($LASTEXITCODE -eq 0) { break }; Write-Host "::error title=git push (try $i)::$(($o2 | Out-String).Trim())"; Start-Sleep 5
+            if ($LASTEXITCODE -eq 0) { Write-Host "results pushed on try $i"; break }
+            Write-Host "::error title=git push (try $i)::$(($o2 | Out-String) -replace '\r?\n', ' | ')"; Start-Sleep 5
           }
