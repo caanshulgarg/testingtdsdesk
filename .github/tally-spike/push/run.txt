@@ -1,8 +1,8 @@
-versions=7.1,3.0
-reps=2
-posts=2
-heavy_led=600
-heavy_item=600
-heavy_vch=4000
-heavy_min=15
-# probe run 3: two releases, small sizes (fixes after run 37450532756)
+versions=3.0,4.1,5.1,6.2,7.1
+reps=5
+posts=5
+heavy_led=3000
+heavy_item=3000
+heavy_vch=30000
+heavy_min=40
+# full run: five releases, full sizes (harness checked by probe run 37456579236)
