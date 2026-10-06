@@ -37,7 +37,7 @@ READERS = ["tally_tb", "tally_period", "tally_mis", "tally_gst_summary", "tally_
            # 06-Oct-2026 (migration 56: a recorder line keeps the fields its request does not fetch; the repair, not run)
            "tally_ingest_entries/5", "tally_recorder_keep_vouchers", "tally_recorder_keep_lines", "tally_recorder_blanked", "tally_recorder_restore_fields", "tally_recorder_restore_fields/2", "tally_unknown_ledger_entries", "tally_recorder_pair_lines",
            # 06-Oct-2026 (migration 57, bridge 2.3.1 part A: the entry's details, written by the entry path for both paths)
-           "tally_ingest_details"]
+           "tally_ingest_details", "tally_tds_details"]
 texts = {}
 fails = []
 def ok(c, w):
@@ -166,7 +166,9 @@ def run_order(label, ORDER):
            and "p_lines, true, false);" in fdef("tally_ingest_day", "uuid, date, jsonb, jsonb, integer, bigint, integer, boolean") and "nothing to remove: the entry is not in FinCom" in fdef("tally_ingest_delete")
            and db.one("select count(*) from pg_class where relname in ('tally_item_lines', 'tally_cost_allocs', 'tally_bank_allocs', 'tally_tds_lines') and relrowsecurity") == "4"
            and db.one("select count(*) from information_schema.columns where table_name = 'tally_vouchers' and column_name in ('irn', 'irn_ack_no', 'irn_ack_date', 'eway_no', 'check_notes')") == "5"
-           and db.one("select has_function_privilege('service_role', 'public.tally_ingest_details(uuid, jsonb, boolean)', 'execute')") == "f",
+           and db.one("select has_function_privilege('service_role', 'public.tally_ingest_details(uuid, jsonb, boolean)', 'execute')") == "f"
+           and db.one("select count(*) from information_schema.columns where table_name = 'tally_ledgers' and column_name = 'tds_deductee_type'") == "1"
+           and db.one("select has_function_privilege('authenticated', 'public.tally_tds_details(uuid)', 'execute')") == "t",
            "57: the entry's details (items, cost centres, bank, TDS, e-invoice, e-way bill, the checks' words) written by the 5-argument entry path, the Day Book through it; a delete of an entry never in the copy settles (in force in this order)")
         ok("tally_ledger_carry_choices" in fdef("tally_ledger_rename") and db.one("select count(*) from information_schema.columns where table_name = 'tally_ledgers' and column_name = 'needs_confirm'") == "1", "39: the rename carries the choices; tally_ledgers.needs_confirm")
         ok(db.one("select string_agg(confdeltype::text, '') from pg_constraint where conrelid = 'public.tally_post_marks'::regclass and contype = 'f'") == "rr", "38: tally_post_marks' foreign keys restrict (no cascade)")

@@ -51,7 +51,7 @@ for a Credit Note or Debit Note with items.
 - the items: name, quantity and unit, rate, taxable value, and the HSN or SAC and GST rate **Tally applied to that
   invoice line** (not from the item's master); CGST, SGST, IGST and cess per item line (see the limits below);
 - bill-wise details on the party line: bill name, type, due date or credit period, amount;
-- TDS details where present: nature of payment, rate, assessable value, tax, the deductee;
+- TDS details where present: nature of payment, section, rate, assessable value, tax, the deductee and its deductee type;
 - cost centre and cost category allocations, on the entry's ledger lines and on the ledger lines under the items;
 - bank details on bank lines: transaction type, instrument number or UTR, instrument date, bank date;
 - the narration, reference number and date, the party GSTIN, place of supply and company GSTIN, the e-invoice IRN and
@@ -94,8 +94,11 @@ Limits, in plain words:
 - **Tax per item line is worked out, not read.** TallyPrime 7.1 keeps no CGST, SGST, IGST or cess amount on an item
   line, only the line's GST rate. FinCom works each line's tax out from its taxable value and rate as Tally does (half
   each to CGST and SGST within the state, IGST otherwise) and checks the total against the entry's GST ledger lines.
-- **TDS section and deductee type** are not kept on the entry in Tally; they belong to the ledger and party masters, so
-  the entry's TDS details carry the nature of payment, rate, amounts and the deductee, and leave these two blank.
+- **TDS section and deductee type.** The section is taken as Tally keeps it on the entry (the bill-wise detail's section
+  field); if the entry has none, from a section written in the nature of payment's name (for example "194C - Payment to
+  Contractors"); else it stays blank and FinCom says so, never guessed. The deductee type is the party ledger's (Tally
+  keeps it on the ledger, not the entry): it comes with the ledger list (2.3.1 part B) and FinCom shows it with the
+  entry's TDS details.
 - **Tag names not yet seen from a real Tally.** The e-invoice (IRN, acknowledgement), e-way bill and TDS fields are asked
   by the names TallyPrime 7.1 uses as far as we know, but no real export in our test files carries them yet; the tests
   use typed copies. The NWS144 checks below confirm them.

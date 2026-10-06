@@ -187,7 +187,10 @@ FinCom Bridge 2.3.1 part A (06-Oct-2026): `migration-57-entry-details.sql` runs 
 transaction, `lock_timeout` 10 s, no "delete from", safe twice; NOT yet run on staging). It stores the whole entry the
 2.3.1 request fetches and parse.js reads (one reader for the Day Book and the entry body): `tally_vouchers` + `irn`,
 `irn_ack_no`, `irn_ack_date`, `eway_no`, `check_notes` (the accuracy checks' plain words, `[]` when none); the tables
-`tally_item_lines` (item, qty, unit, rate, taxable, HSN / SAC and GST rate Tally applied to the line, CGST / SGST / IGST /
+`tally_ledgers.tds_deductee_type` (the party ledger master's TDSDEDUCTEETYPE, written by the ledger list once part B
+fetches it); `tally_tds_lines.section_from` (the section is Tally's own from the entry's bill-wise detail
+TDSDEDUCTEESECTIONNUMBER, else written in the nature of payment's name, else blank); `tally_tds_details(book)` (members of
+the firm, as 56's unknown-ledger list: the TDS details with the deductee type the ledger has now); `tally_item_lines` (item, qty, unit, rate, taxable, HSN / SAC and GST rate Tally applied to the line, CGST / SGST / IGST /
 cess worked out from the line's rate and taxable value: Tally 7.1 writes no tax amount per item line, `tax_basis` says
 so), `tally_cost_allocs`, `tally_bank_allocs`, `tally_tds_lines` (RLS: the firm's members read; rows of an earlier version
 marked `gone_at`, never removed); `tally_bills.due` (a due date given as a date). `tally_ingest_details(book, vouchers,

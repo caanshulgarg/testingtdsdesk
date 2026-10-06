@@ -154,7 +154,11 @@ function takeVoucher(s){
       let rate = null, base = null, tax = null;
       subs.forEach((x) => { const tr = one(x, "TAXRATE"), ab = one(x, "ASSESSABLEAMOUNT"), tx = one(x, "TAX");
         if (tr && rate == null) rate = num(tr); if (ab && base == null) base = r2(amt(ab)); if (tx) tax = r2((tax || 0) + amt(tx)); });
-      tds.push({n, ledger, nature, party, rate, base, tax: tax == null ? la : tax});
+      // the section (the owner, 06-Oct-2026): Tally's own on the line's bill-wise detail (TDSDEDUCTEESECTIONNUMBER), else
+      // on another bill-wise detail of the entry (filled in below); else the section written in the nature of payment's
+      // name (192 .. 196x, 206C.., the 2025 Act's 393); else blank, never guessed
+      const own = blocks(e, "BILLALLOCATIONS.LIST").map((b) => one(b, "TDSDEDUCTEESECTIONNUMBER")).find(Boolean) || "";
+      tds.push({n, ledger, nature, party, rate, base, tax: tax == null ? la : tax, section: own.slice(0, 20), sectionFrom: own ? "Tally's entry" : ""});
     });
     if (e.indexOf("<BILLALLOCATIONS.LIST") >= 0) blocks(e, "BILLALLOCATIONS.LIST").forEach((q) => {
       const cp = (q.match(/<BILLCREDITPERIOD\b[^>]*>([^<]*)<\/BILLCREDITPERIOD>/) || [])[1] || "", due = d8(cp);
@@ -227,6 +231,15 @@ function takeVoucher(s){
       cgst: gr == null || inter ? 0 : r2(tx * cg / 100), sgst: gr == null || inter ? 0 : r2(tx * sg / 100), igst: gr == null || !inter ? 0 : r2(tx * gr / 100),
       cess: rh.cess == null ? 0 : r2(tx * rh.cess / 100)};
   });
+  if (tds.length){
+    const anySec = blocks(s, "BILLALLOCATIONS.LIST").map((b) => one(b, "TDSDEDUCTEESECTIONNUMBER")).find(Boolean) || "";
+    tds.forEach((t) => {
+      if (t.section) return;
+      const nm = (t.nature.match(/(?:^|[^A-Za-z0-9])(19[2-6][A-Z]{0,3}|206C[A-Z]{0,3}|393(?:\([0-9a-z]+\))*)(?![A-Za-z0-9])/) || [])[1] || "";
+      if (anySec) { t.section = anySec.slice(0, 20); t.sectionFrom = "Tally's entry"; }
+      else if (nm) { t.section = nm; t.sectionFrom = "the nature of payment's name"; }
+    });
+  }
   v.costs = costs; v.banks = banks; v.tds = tds; v.dues = dues;
   // ---- part A, the owner's accuracy rules: an entry applies only if its lines total zero; item lines' taxable value
   // plus tax equal the ledger lines for that invoice; bill-wise and cost centre allocations add up to their line. Each

@@ -42,7 +42,8 @@ const partAAdded = ", REFERENCE, REFERENCEDATE, PARTYGSTIN, PLACEOFSUPPLY, CMPGS
 	"ALLINVENTORYENTRIES.GSTHSNNAME, ALLINVENTORYENTRIES.RATEDETAILS.GSTRATEDUTYHEAD, ALLINVENTORYENTRIES.RATEDETAILS.GSTRATEVALUATIONTYPE, " +
 	"ALLINVENTORYENTRIES.RATEDETAILS.GSTRATE, ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.CATEGORYALLOCATIONS.CATEGORY, " +
 	"ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.CATEGORYALLOCATIONS.COSTCENTREALLOCATIONS.NAME, " +
-	"ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.CATEGORYALLOCATIONS.COSTCENTREALLOCATIONS.AMOUNT"
+	"ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.CATEGORYALLOCATIONS.COSTCENTREALLOCATIONS.AMOUNT, " +
+	"ALLLEDGERENTRIES.BILLALLOCATIONS.TDSDEDUCTEESECTIONNUMBER"
 
 // the 2.3.1 fetch before part A (the items' ledger lines only)
 const partABefore = liveFetchField222 + items231Added
@@ -212,8 +213,8 @@ func TestPartAFetchExactly(t *testing.T) {
 			t.Errorf("not a plain stored field: %q", f)
 		}
 	}
-	if n := len(strings.Split(partAAdded, ", ")) - 1; n != 37 {
-		t.Errorf("part A adds %d fields, want 37", n)
+	if n := len(strings.Split(partAAdded, ", ")) - 1; n != 38 {
+		t.Errorf("part A adds %d fields, want 38", n)
 	}
 	byMaster := voucherByMasterRequest(spikeCo, "20261002", []string{"21"})
 	byNumber := voucherByNumberRequest(spikeCo, "20261002", "Sales", "201")
@@ -412,6 +413,40 @@ func TestPartATurnTimeUsedNextTurn(t *testing.T) {
 	}
 	if logLines("this turn's 1 s are used (one entry a request); asked in the next turn") == 0 {
 		t.Fatal("the log does not say why the rest wait")
+	}
+}
+
+// --- 4c. one invoice with 50 items (tests/tools/mk_sales50.py): its one request's answer stays far under the 1 MB a body
+// may take and is answered inside the 2-second rule on the stand; the line goes with its whole body, all 50 items
+func TestPartAFiftyItemInvoice(t *testing.T) {
+	old := partAVchs
+	partAVchs = append(append([]partAVch{}, old...), partAVch{"partA-sales-50-items.xml", "28", "Sales", "250",
+		[]string{"<STOCKITEMNAME TYPE=\"String\">Item 01 (18%)</STOCKITEMNAME>", "<STOCKITEMNAME TYPE=\"String\">Item 50 (5%)</STOCKITEMNAME>",
+			"<BILLEDQTY TYPE=\"Quantity\"> 50 Kg</BILLEDQTY>", "<GSTHSNNAME TYPE=\"String\">1050</GSTHSNNAME>"}})
+	defer func() { partAVchs = old }()
+	p, f, c := partABridge(t)
+	req := voucherByMasterRequest(spikeCo, "20261002", []string{"28"})
+	answer := partAAnswer(items231Fixture(t, "partA-sales-50-items.xml"), req)
+	t0 := time.Now()
+	got, err := fetchVouchersByMasterIn(recorderTC(nil), spikeCo, f.port, "20261002", []string{"28"}, 20)
+	took := time.Since(t0)
+	t.Logf("50-item invoice: request %d bytes, answer %d bytes, answered in %s on the stand", len(req), len(answer), took)
+	if err != nil || strings.Count(got["28"], "<STOCKITEMNAME") != 50 {
+		t.Fatalf("the 50-item invoice was not read whole: %v (%d items)", err, strings.Count(got["28"], "<STOCKITEMNAME"))
+	}
+	if len(answer) >= liveMaxBytes/4 || took >= 2*time.Second {
+		t.Fatalf("answer %d bytes (limit %d), %s (limit 2 s)", len(answer), liveMaxBytes, took)
+	}
+	setCfg("RecorderBodySec", float64(20))
+	liveAppend(t, p, "FCR1|ev=voucher_accept_post|t0=2-Oct-26 10:55|tw=2-Oct-26 10:55|cguid="+spikeCoGUID+"|cname="+spikeCo+
+		"|user=TALLY User|obj=Voucher|guid="+spikeCoGUID+"-00000000|mid=28|aid=0|vtype=Sales|vno=250|vdate=2-Oct-26|name=|parent=|narr=|t1=2-Oct-26 10:55|src=live")
+	readAndUploadAll(t)
+	sent := c.recSent()
+	if len(sent) != 1 || str(sent[0]["heldWhy"]) != "" || strings.Count(str(sent[0]["xml"]), "<STOCKITEMNAME") != 50 || len(jsonText(sent[0])) >= liveMaxBytes {
+		t.Fatalf("the line went as %d lines, held %q, %d items", len(sent), str(sent[0]["heldWhy"]), strings.Count(str(sent[0]["xml"]), "<STOCKITEMNAME"))
+	}
+	if bs := f.bodiesOf(vchByMasterID); len(bs) != 2 || strings.Count(bs[1], "$MasterID = ") != 1 { // the direct ask above, then the line's
+		t.Fatalf("asked: %v", f.ids())
 	}
 }
 

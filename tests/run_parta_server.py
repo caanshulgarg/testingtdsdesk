@@ -12,6 +12,7 @@ amount; if any check fails, hold the line with plain words; never apply part of 
   3. the same sales invoice with its CGST line 10 rupees more (the party line too, so the lines still total zero): held with
      plain words (the GST worked out on the items does not match the GST ledger lines), nothing of it applied (no entry, no
      line, no item line); a bill-wise detail that does not add up to its line: held the same way.
+  2b. one sales invoice with 50 items (partA-sales-50-items.xml): applied with its 50 item lines.
   4. a delete line for an entry never in FinCom's copy: settles by itself, "nothing to remove ...", kept visible.
 The Deno function listens on port 30579 (Deno.serve wrapped by a one-line module in a temporary folder) and the stand-in on
 30578, so this test runs beside the others. Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno)."""
@@ -124,6 +125,11 @@ try:
     ok(one("select count(*) from tally_bank_allocs where book_id = %s and guid = %s and gone_at is null and instrument_no <> ''" % (q(BOOK), q(G(27)))) == "1", "the bank line's UTR stored")
     ok(int(one("select count(*) from tally_tds_lines where book_id = %s and guid = %s and gone_at is null" % (q(BOOK), q(G(25))))) >= 1, "the TDS details stored")
     ok(int(one("select count(*) from tally_cost_allocs where book_id = %s and guid = %s and gone_at is null" % (q(BOOK), q(G(26))))) >= 2, "the cost centre allocations stored")
+
+    print("== 2b. one invoice with 50 items")
+    c, r = rec([line("A8", 28, 48, "Sales", fx("partA-sales-50-items.xml"))])
+    ok(res(r).get("A8", {}).get("state") == "applied" and one("select count(*) from tally_item_lines where book_id = %s and guid = %s and gone_at is null" % (q(BOOK), q(G(28)))) == "50",
+       "applied with its 50 item lines (%s)" % res(r).get("A8"))
 
     print("== 3. the accuracy checks hold the line with plain words; nothing of the entry applied")
     bad = fx("partA-sales-two-rates.xml").replace(G(21), G(49)).replace("<AMOUNT TYPE=\"Amount\">205.00</AMOUNT>", "<AMOUNT TYPE=\"Amount\">215.00</AMOUNT>", 1) \
