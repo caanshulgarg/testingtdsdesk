@@ -65,14 +65,14 @@ function TdsOpenCreate([string]$kind, [string]$formWords) {
   $null = TdsGateway "before $kind"
   if (-not (TK 'c' 2 "create-$kind" 'Master Creation|List of Masters')) { return $false }
   $null = TK ('{BACKSPACE}' * 30) 0.5
-  $null = TK (SK $kind) 1.5 "typed-$kind" ([regex]::Escape($kind))
+  $null = TK (SK $kind) 1.5 "typed-$kind"
   return (TK '{ENTER}' 2.5 "form-$kind" $formWords)
 }
 # the nature of payment by its form (Name, Section, Payment code, Remittance code, rate individuals/HUF with PAN, rate
 # others with PAN, Is zero rated, Threshold), accepted; checked by Tally's own export (TaxClassification)
 function TdsNatureScreen([string]$name, [string]$section, [string]$pay, [string]$rInd, [string]$rOth) {
   if (TdsHas 'TaxClassification' $name) { TdsSay "nature '$name' is there already"; return $true }
-  if (-not (TdsOpenCreate 'TDS Nature of Payments' 'Nature of Payment')) { return $false }
+  if (-not (TdsOpenCreate 'TDS Nature of Payments' 'Nature|Section')) { return $false }
   $null = TK ((SK $name) + '{ENTER}') 1.5 'nat-name' 'Section'
   $null = TK ((SK $section) + '{ENTER}') 1.5 'nat-section'
   $null = TK ((SK $pay) + '{ENTER}') 1.5 'nat-paycode'

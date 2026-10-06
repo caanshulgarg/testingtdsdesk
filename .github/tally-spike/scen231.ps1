@@ -463,3 +463,109 @@ function S231Run {
   Copy-Item (Join-Path $s231.cap '*') $td -Force
   Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO S231 captures: $((Get-ChildItem $td -File | ForEach-Object { "$($_.Name) ($($_.Length) bytes)" }) -join ', ') -> bridge-go/testdata/real-tally-7.1/231/"
 }
+
+# ---- S5 entered on Tally's screen (input only=s5r1): the masters by XML (company TDS with its TAN, the nature of payment,
+# the deductee party, the TDS ledger and the expense with their nature as TDSRATENAME: probe 37479302026), then the entry
+# typed on Tally's screen as a journal (Dr the expense 100000, To the TDS ledger: Tally's own TDS amount, To the party:
+# Tally's balance), each key checked on the screen by OCR (tdslib.ps1) and screenshotted (tds-*)
+function S231TdsScreen {
+  Say '---- S5 on the screen: a journal with TDS typed in Tally (masters by XML)'
+  . (Join-Path $PSScriptRoot 'tdslib.ps1')
+  $script:TdsSend = { param([string]$k) KeysTo 9000 $k 0 | Out-Null }
+  $script:TdsPost = { param([string]$x) Post 9000 $x }
+  $script:TdsRestart = {
+    Stop-Process -Id $script:tallyPids[9000] -Force -ErrorAction SilentlyContinue; Start-Sleep 4
+    $t = Start-Process -FilePath $exe -WorkingDirectory $dir -PassThru; $script:tallyPids[9000] = $t.Id
+    $null = WaitPort 9000; Start-Sleep 5; KeysTo 9000 'a' 4; KeysTo 9000 't' 10 }
+  $script:TdsCo = $co1
+  $N = $plan231.names
+  $c = "$(TdsExport 'Company' 'Name, IsTDSOn, TANumber, TANRegNo, TDSDeductorType')"
+  $comp = ([regex]::Matches($c, '<(TANUMBER|TANREGNO|TDSDEDUCTORTYPE|ISTDSON)[^>]*>([^<]*)<') | ForEach-Object { "$($_.Groups[1].Value)=$($_.Groups[2].Value)" }) -join ' '
+  Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO S5 screen: the company's TDS details in Tally: $comp"
+  LedgerMasters @($N.contractor, $N.contractExp, $N.tds)
+  $lm = (@($N.contractor, $N.contractExp, $N.tds) | ForEach-Object { $f = Join-Path $s231.dir ("ledger-" + ($_ -replace '\W', '') + ".full.xml"); $x = if (Test-Path $f) { Get-Content $f -Raw } else { '' }
+      "$_ [" + ((([regex]::Matches($x, '<([A-Z.]*(TDS|DEDUCT|INCOMETAX)[A-Z.]*)[^>]*>([^<\s][^<]*)<') | ForEach-Object { "$($_.Groups[1].Value)=$($_.Groups[3].Value)" }) | Select-Object -Unique) -join ' ') + ']' }) -join '; '
+  Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO S5 screen: the TDS masters in Tally: $lm"
+  $pre = Vouchers 9000 $co1; $m0 = Mark
+  $narr = 'S5 contract work TDS 194C entered on the screen'
+  $null = TdsGateway 'before the S5 entry'
+  $null = TK 'v' 2.5 's5-vouchers' 'Voucher'
+  $null = TK '{F7}' 2.5 's5-journal' 'Journal'
+  $null = TK '{F2}' 1.5 's5-date-box' 'Date'
+  $null = TK '1-1-2027{ENTER}' 2 's5-date-set'
+  # Dr the expense
+  $null = TK ((SK $N.contractExp) + '{ENTER}') 2 's5-r1-ledger'
+  $null = TK '100000{ENTER}' 2 's5-r1-amount'
+  # To the TDS ledger: whatever Tally puts in the amount (its own TDS) is kept; its sub-screens are shown and accepted
+  $null = TK 't{ENTER}' 1.5 's5-r2-to'
+  $null = TK ((SK $N.tds) + '{ENTER}') 2.5 's5-r2-ledger'
+  $sub = @()
+  for ($j = 1; $j -le 5; $j++) { $t = TdsScreen "s5-r2-sub$j"; if ($t -match 'Details for|Bill-wise|Assessable|Nature of Pay|Nature ef Pay|Deductee|Party Details|Tax Details') { $sub += $j; & $script:TdsSend '{ENTER}'; Start-Sleep 2 } else { break } }
+  $t = TdsScreen 's5-r2-amount-shown'
+  $byTally = $t -match '2,000|2000'
+  if ($byTally) { $null = TK '{ENTER}' 2 's5-r2-amount-tally' } else { $null = TK '2000{ENTER}' 2 's5-r2-amount-typed' }
+  for ($j = 1; $j -le 4; $j++) { $t = TdsScreen "s5-r2-after$j"; if ($t -match 'Details for|Bill-wise|Assessable|Nature of Pay|Nature ef Pay|Party Details|Tax Details') { & $script:TdsSend '{ENTER}'; Start-Sleep 2 } else { break } }
+  # To the party: Tally's balance (98000) kept
+  $null = TK 't{ENTER}' 1.5 's5-r3-to'
+  $null = TK ((SK $N.contractor) + '{ENTER}') 2.5 's5-r3-ledger'
+  $t = TdsScreen 's5-r3-amount-shown'
+  if ($t -match '98,000|98000') { $null = TK '{ENTER}' 2 's5-r3-amount' } else { $null = TK '98000{ENTER}' 2 's5-r3-amount-typed' }
+  for ($j = 1; $j -le 4; $j++) { $t = TdsScreen "s5-r3-after$j"; if ($t -match 'Details for|Bill-wise|Assessable|Party Details|Tax Details') { & $script:TdsSend '{ENTER}'; Start-Sleep 2 } else { break } }
+  $t = TdsScreen 's5-before-narration'
+  if ($t -notmatch 'Narration') { $null = TK '{ENTER}' 2 's5-rows-done' }
+  $null = TK ((SK $narr) + '{ENTER}') 2 's5-narration'
+  $t = TdsScreen 's5-accept-q'
+  if ($t -match 'Accept|Yes or No') { $null = TK 'y' 3 's5-accepted' } else { $null = TK '^a' 3 's5-ctrl-a'; $t = TdsScreen 's5-accept-q2'; if ($t -match 'Accept|Yes or No') { $null = TK 'y' 3 's5-accepted2' } }
+  $null = TdsGateway 'after the S5 entry'
+  Set-Content (Join-Path $out 'tds-screen-log.txt') $script:tdsLog -Encoding UTF8
+  $nv = @((Vouchers 9000 $co1) | Where-Object { $_.mid -notin @($pre | ForEach-Object mid) })[0]
+  $s = $plan231.scenarios | Where-Object id -eq 'S5'
+  $lt = [ordered]@{}; $lt[$N.contractExp] = -100000; $lt[$N.tds] = 2000; $lt[$N.contractor] = 98000
+  $s5 = [pscustomobject]@{ id = 'S5'; key = 's5-tds-on-screen'; label = 'payment with TDS entered on the screen'; kind = 'tds'; day = '1-1-2027'; date = '20270101'; notesOnly = $false
+    truth = [pscustomobject]@{ type = 'Journal'; ledgers = $lt; tds = $s.truth.tds } }
+  Add-Content -Path $resultsFile -Encoding UTF8 -Value ("INFO S5 screen: OCR {0}; TDS row amount {1}; sub-screens after the TDS ledger: {2}; screenshots tds-*" -f $(if ($script:ocrOk) { 'read the screens' } else { 'UNAVAILABLE' }), $(if ($byTally) { "put there by Tally (2,000 seen before Enter)" } else { 'not filled by Tally: 2000 typed' }), $(if ($sub.Count) { $sub -join ',' } else { 'none' }))
+  if (-not $nv) { Result 'S5 payment with TDS entered on the screen' $false "no entry saved in Tally (see the tds-s5-* screenshots and tds-screen-log.txt)" $true; return $null }
+  $s231.ent['S5'] = [ordered]@{ id = 'S5'; guid = $nv.guid; mid = $nv.mid; lines = 0 }
+  $g = $nv.guid; $hit = @(WaitLine $m0 ({ $_.guid -eq $g -and $_.xml }.GetNewClosure()) 150)
+  $s231.ent['S5'].lines = $hit.Count
+  $null = S231Ask $s5
+  return $s5
+}
+
+# ---- input only=s5r1: S5 entered on the screen and R1, after the masters (no checks 1-8, no other scenario)
+function S231Only {
+  Say '---- only S5 (on the screen) and R1'
+  if (-not $script:s9) { $script:s9 = [ordered]@{ checksBefore = 0; before = [pscustomobject]@{ mst = -1; vch = -1 }; after = [pscustomobject]@{ mst = -1; vch = -1 }; at = (Get-Date); imp = [pscustomobject]@{ altered = -1; errors = -1 } } }
+  S231Later
+  $mark231 = Mark
+  $s5 = $null
+  try { $s5 = S231TdsScreen } catch { Write-Host "S5 screen: $_ $($_.ScriptStackTrace)"; Result 'S5 payment with TDS entered on the screen' $false "the harness stopped: $_" $true }
+  if ($s5) {
+    $parseJs = Join-Path $env:BRIDGE_DIST 'cloud\tally-cloud\parse.js'
+    $all = StubLines $mark231; $e = $s231.ent['S5']; $g = $e.guid
+    $db = S231DayBook $s5
+    $ins = @([pscustomobject]@{ id = 'S5'; key = $s5.key; kind = 'tds'; notesOnly = $false; label = $s5.label; guid = $g; truth = $s5.truth; tally = $db; entry = (Join-Path $s231.cap "$($s5.key).entry.xml")
+        ledger = (Join-Path $s231.dir ("ledger-" + ($plan231.names.contractor -replace '\W', '') + ".full.xml"))
+        lines = @($all | Where-Object { $_.guid -eq $g } | ForEach-Object { [pscustomobject]@{ ev = $_.ev; at = $_.at; xml = $_.xml; state = $_.state; why = $_.why } }) })
+    $tags = @([pscustomobject]@{ label = "Tally's own Day Book export (S5 on the screen)"; file = $db }, [pscustomobject]@{ label = "the bridge's entry request answer (S5 on the screen)"; file = (Join-Path $s231.cap "$($s5.key).entry.xml") })
+    $pin = Join-Path $s231.dir 'check-in-s5.json'; $pout = Join-Path $s231.dir 'check-s5.json'
+    ConvertTo-Json -InputObject @{ scenarios = $ins; tags = $tags } -Depth 12 | Set-Content $pin -Encoding UTF8
+    & node (Join-Path $PSScriptRoot 'parsecheck.mjs') s231 $parseJs $pin $pout 2>&1 | ForEach-Object { Write-Host "  $_" }
+    $ck = $null; try { $ck = Get-Content $pout -Raw -Encoding UTF8 | ConvertFrom-Json } catch { Write-Host "S5 check output: $_" }
+    foreach ($o in @($ck.scenarios)) {
+      $txt = ((@($o.rows) | Where-Object { -not $_.quiet } | ForEach-Object { RowText $_ }) -join '; ')
+      $fl = @(@($all) | Where-Object { $_.guid -eq $g -and $_.xml } | ForEach-Object { "$($_.full)" })
+      $hdr = "Tally mid $($e.mid), $(if ($o.line) { "the bridge's $($o.line.ev) line at $($o.line.at), body $($o.line.xmlChars) chars, full=$($fl -join '/')" } else { 'no line with a body' })"
+      foreach ($n in @($o.notes)) { Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO S5 $n" }
+      if (-not $e.lines -and -not $o.fincomFound) { Result "S5 $($s5.label)" $false "$hdr; timed out: no line with a body reached the stub; $txt" $true }
+      else { Result "S5 $($s5.label)" ($o.status -eq 'pass') "$hdr; $txt" ($o.status -eq 'harness') }
+    }
+    foreach ($t in @($ck.tags)) {
+      $wv = @(@($t.seen) | Where-Object { $_.count -gt 0 })
+      if ($t.tag -match 'TDS|TAXOBJECT') { Add-Content -Path $resultsFile -Encoding UTF8 -Value "TAG $($t.tag): $(if ($wv.Count) { 'WITH A VALUE in ' + (($wv | ForEach-Object { "$($_.label) x$($_.count) '$($_.value)'" }) -join '; ') } else { 'NOT SEEN WITH A VALUE' })" }
+    }
+  }
+  try { S231Retry } catch { Result 'R1 retry schedule' $false "the harness stopped: $_" $true }
+  $s231.manifest['_run'] = "run $env:GITHUB_RUN_ID, bridge $env:BRIDGE_SHA, TallyPrime 7.1 Educational on $env:RUNNER_OS, $(Get-Date -Format 'yyyy-MM-dd HH:mm') (only S5 on the screen and R1)"
+  $s231.manifest | ConvertTo-Json | Set-Content (Join-Path $s231.cap 'manifest.json') -Encoding UTF8
+}

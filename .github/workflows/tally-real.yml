@@ -16,6 +16,9 @@ on:
       probe:
         description: 'yes: run probe.ps1 (screens and exports of Tally for the scenario list) instead of round 4'
         default: 'no'
+      only:
+        description: 'round 4 in part: s5r1 = S5 by the screens and R1 only (no checks 1-8); pileup = the busy-Tally measurements A and B only'
+        default: ''
 permissions:
   contents: write
 concurrency:
@@ -155,6 +158,7 @@ jobs:
         if: inputs.probe != 'yes'
         env:
           BRIDGE_DIST: ${{ github.workspace }}\bridge-dist
+          ONLY: ${{ inputs.only }}
         run: |
           & .github/tally-spike/flow4.ps1 *>&1 | Tee-Object -FilePath "$env:RES\round4.log" -Append
           $r = Join-Path $env:RES 'round4\results.txt'

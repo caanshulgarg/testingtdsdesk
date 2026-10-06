@@ -305,6 +305,8 @@ StockNames 9000 $co1 | Out-Null
 
 # the owner's real-Tally checks for bridge 2.3.1 (S1..S10): scen231.ps1; their masters now, before the bridges start
 . (Join-Path $PSScriptRoot 'scen231.ps1')
+# the busy-Tally measurements A and B (input only=pileup)
+. (Join-Path $PSScriptRoot 'pileup.ps1')
 try { S231Masters } catch { Write-Host "S231 masters: $_" }
 
 # ---- user 2's own Tally (9001), run as fcuser2: a company made by keys, then started again with it and the add-on
@@ -460,11 +462,13 @@ Result '6b /ping proof' $okb (($chk | ForEach-Object { "$($_[0]): $(if ($_[1]) {
 Snap 'start'
 Start-Sleep 30
 # S9's first half: the GSTIN altered once bridge 1's starting point is recorded (its first light check)
-try { S231AfterStart } catch { Write-Host "S231 after start: $_" }
+if (-not $env:ONLY) { try { S231AfterStart } catch { Write-Host "S231 after start: $_" } }
 
+function DayBook($n, $d = '2-10-2026') { KeysTo 9000 '%g' 3; KeysTo 9000 'Day Book' 2; KeysTo 9000 '{ENTER}' 4; KeysTo 9000 '{F2}' 3; KeysTo 9000 "$d{ENTER}" 4 "$n-daybook" }
+# a part of round 4 only (input only: s5r1, pileup): checks 1-8 are not run
+if (-not $env:ONLY) {
 # ---- steps 1-5 on user 1's Tally (9000), as round 3
 Say '---- steps 1-5 on user 1''s Tally (9000), as round 3'
-function DayBook($n, $d = '2-10-2026') { KeysTo 9000 '%g' 3; KeysTo 9000 'Day Book' 2; KeysTo 9000 '{ENTER}' 4; KeysTo 9000 '{F2}' 3; KeysTo 9000 "$d{ENTER}" 4 "$n-daybook" }
 $before = Vouchers 9000 $co1
 $m = Mark
 KeysTo 9000 'v' 4 '10-vouchers'; KeysTo 9000 '{F6}' 3; KeysTo 9000 '{F2}' 3; KeysTo 9000 '2-10-2026{ENTER}' 3
@@ -683,8 +687,12 @@ $r6h = @($r6 | Where-Object { $_ -like 'HARNESS*' }).Count -gt 0 -and @($r6 | Wh
 Result '6 two Windows users' (@($r6 | Where-Object { $_ -notlike 'PASS*' }).Count -eq 0 -and $r6.Count -eq 5) (($r6 | ForEach-Object { ($_ -split ':')[0] }) -join '; ') $r6h
 if ($script:harness) { Add-Content -Path $resultsFile -Encoding UTF8 -Value "HARNESS: user 2's task did not run ($($script:harness) time(s) in this run; see round4.log '[harness]' lines)" }
 
-# ---- the owner's 2.3.1 scenarios S1..S10 (scen231.ps1)
-try { S231Run } catch { Write-Host "S231: $_ $($_.ScriptStackTrace)"; Result 'S231 scenarios' $false "the harness stopped: $_" $true }
+} # end of checks 1-8 (not run with input only)
+
+# ---- the owner's 2.3.1 scenarios S1..S10 (scen231.ps1); or a part of them (input only)
+if ($env:ONLY -eq 's5r1') { try { S231Only } catch { Write-Host "S231Only: $_ $($_.ScriptStackTrace)"; Result 'S5/R1' $false "the harness stopped: $_" $true } }
+elseif ($env:ONLY -eq 'pileup') { try { PileUp } catch { Write-Host "PileUp: $_ $($_.ScriptStackTrace)"; Result 'pile-up measurements' $false "the harness stopped: $_" $true } }
+else { try { S231Run } catch { Write-Host "S231: $_ $($_.ScriptStackTrace)"; Result 'S231 scenarios' $false "the harness stopped: $_" $true } }
 
 # ---- what is kept: the bridges' logs, install logs, settings without their keys
 Say '---- what is kept: the bridges'' logs, install logs, settings without their keys'
