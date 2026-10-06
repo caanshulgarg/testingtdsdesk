@@ -143,7 +143,7 @@ function S231DayBook($s) {
 # in turn three times each on the same company (400+ ledgers): time, size, ledger count
 function S231LedgerTiming {
   Say '---- FinComLedgers on real Tally: 2.3.0''s request and the ref''s, three times each in turn'
-  $v = [ordered]@{ '2.3.0 (tax-accuracy)' = (BridgeReq 'ledger-list-230'); "the ref ($env:BRIDGE_SHA)" = (BridgeReq 'ledger-list') }
+  $v = [ordered]@{ '2.3.0 (e628ae0)' = (BridgeReq 'ledger-list-230'); "the ref ($env:BRIDGE_SHA)" = (BridgeReq 'ledger-list') }
   $res = [ordered]@{}
   foreach ($k in $v.Keys) { $res[$k] = @() }
   for ($i = 0; $i -lt 3; $i++) { foreach ($k in $v.Keys) { if ($v[$k]) { $res[$k] += PostT 9000 $v[$k] "FinComLedgers $k" 60 } } }

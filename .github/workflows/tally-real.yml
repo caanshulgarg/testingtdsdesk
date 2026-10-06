@@ -87,8 +87,8 @@ jobs:
           one ledger-changes 'ledgerChangesRequest("FinCom Spike Co", 77777, 88888)'
           one ledger-by-name 'ledgerByNameRequest("FinCom Spike Co", "FCSPIKENAME")'
           one ledger-list 'ledgerChunkRequest("FinCom Spike Co", 0, 2000)'
-          # 2.3.0's ledger list (tax-accuracy), for the timing beside the ref's
-          git fetch -q --depth 1 origin tax-accuracy && rm -rf /tmp/ta && mkdir -p /tmp/ta && git -C .. archive FETCH_HEAD bridge-go | tar -x -C /tmp/ta
+          # 2.3.0's ledger list (the 2.3.0 build, e628ae0), for the timing beside the ref's
+          git fetch -q --depth 1 origin e628ae0595e30d3de16658edf9406487b7b0be30 && rm -rf /tmp/ta && mkdir -p /tmp/ta && git -C .. archive FETCH_HEAD bridge-go | tar -x -C /tmp/ta
           out="$PWD/dist/requests"; ( cd /tmp/ta/bridge-go && printf 'package main\n\nimport (\n\t"os"\n\t"testing"\n)\n\nfunc TestFCSpikeReq(t *testing.T) {\n\tif err := os.WriteFile(os.Getenv("FC_REQ_OUT"), []byte(ledgerChunkRequest("FinCom Spike Co", 0, 2000)), 0o644); err != nil {\n\t\tt.Fatal(err)\n\t}\n}\n' > zz_fcspike_req_test.go && FC_REQ_OUT="$out/ledger-list-230.xml" go test -run '^TestFCSpikeReq$' -count=1 . > "$out/ledger-list-230.log" 2>&1 ) && echo "ledger-list-230: $(head -c 300 $out/ledger-list-230.xml)" || echo "ledger-list-230: not built ($(tail -3 $out/ledger-list-230.log))"
           ls -la dist/requests
       # check 7: the cloud's own parser at the ref (tally-ingest's parse.js and the names rule it imports), run under node
