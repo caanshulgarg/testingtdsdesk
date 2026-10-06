@@ -15,6 +15,10 @@ cloud's own reader (server/tally-cloud/parse.js) into the shape tally-ingest sen
      stored (never refused) with the plain words in check_notes.
   4. a delete or cancel of an entry never in the copy settles by itself ("nothing to remove: ..."), kept; a later Day Book
      bringing the entry cannot undo the delete; a cancelled one comes in cancelled.
+  4c. (the owner's review of 06-Oct-2026) a delete or cancel settled as "nothing to remove" WITHOUT an AlterID records a
+     bound (tally_nothing_removed: the book's highest AlterID received then): a later body at or below it is deleted
+     (cancelled) again; one above it is a later change in Tally, applied and left live, and the line never touches it again;
+     with no bound known, re-applied at most once.
   5. RLS: the firm's member reads the details; another firm's member reads none.
 Prints md5(pg_get_functiondef) and md5(prosrc) of every function of the file, the file's md5 and its 'delete from' count.
 RED: before the file exists it stops at the first check."""
@@ -256,6 +260,35 @@ try:
     try: db.one("set role authenticated; insert into tally_item_lines (book_id, firm_id, guid, day, line_no) values (%s, %s, 'x', '2026-10-02', 0) returning 1" % (q(B), q(F)), OWNER)
     except RuntimeError: good = False
     ok(not good, "an authenticated member cannot write the details")
+
+    print("== 4c. 'nothing to remove' without an AlterID never re-cancels for ever (the owner, 06-Oct-2026 review)")
+    NB, NN = G(0x2003), G(0x2004)
+    hw = lambda: int(db.one("select greatest(coalesce((select recorder_max_alter from tally_sync_cursor where book_id = %s), 0), coalesce((select max(alter_id) from tally_vouchers where book_id = %s), 0))" % (q(B), q(B))))
+    mx = hw()
+    got = states(apply([gone_line("x-nb", NB, "cancelled", None)]))
+    nr = (rows("select coalesce(bound::text, '') as bound, reapplied::text as n from tally_nothing_removed where book_id = %s and guid = %s and event = 'cancelled'" % (q(B), q(NB))) or [{}])[0]
+    ok(got == ["applied"] and nr.get("bound") == str(mx) and nr.get("n") == "0",
+       "a cancel with no AlterID of an entry never in the copy settles; its bound is the book's highest AlterID received then (%s; %s; %s)" % (got, nr, mx))
+    bl = [[NB, "Spike Customer", -100, "", None, []], [NB, "Sales GST 18%", 100, "", None, []]]
+    bv = dict(sv, guid=NB, no="303", alter=mx - 1, items=[], costs=[], checks=[])
+    base4 = [nv, ncv]
+    ok(day(B, D2, ALLV + base4 + [bv], ALLL + nl + bl).get("ok") is True and vx(NB)["can"] == "true",
+       "a body at or below the bound (AlterID %d, an older read): cancelled again (%s)" % (mx - 1, vx(NB)))
+    got = states(apply([rline("x-nb-up", dict(bv, alter=mx + 50), bl, ev="altered")]))
+    ok(got == ["applied"] and vx(NB)["can"] == "false" and vx(NB)["del"] == "",
+       "a body above the bound (AlterID %d, a later change in Tally): applied and stays live (%s; %s)" % (mx + 50, got, vx(NB)))
+    ok(day(B, D2, ALLV + base4 + [dict(bv, alter=mx + 60)], ALLL + nl + bl).get("ok") is True and vx(NB)["can"] == "false" and vx(NB)["del"] == "",
+       "a third body after that (AlterID %d): not cancelled (%s)" % (mx + 60, vx(NB)))
+    got = states(apply([gone_line("x-nn", NN, "deleted", None)]))
+    db.sql("update tally_nothing_removed set bound = null where book_id = %s and guid = %s" % (q(B), q(NN)))     # no bound known at all
+    nnv = dict(sv, guid=NN, no="304", alter=mx + 70, items=[], costs=[], checks=[]); nnl = [[NN, "Spike Customer", -100, "", None, []], [NN, "Sales GST 18%", 100, "", None, []]]
+    ok(day(B, D2, ALLV + base4 + [dict(bv, alter=mx + 60), nnv], ALLL + nl + bl + nnl).get("ok") is True and vx(NN)["del"] != "",
+       "no bound known: the first body is deleted again, once (%s)" % vx(NN))
+    ok(day(B, D2, ALLV + base4 + [dict(bv, alter=mx + 60), dict(nnv, alter=mx + 80)], ALLL + nl + bl + nnl).get("ok") is True and vx(NN)["del"] == "",
+       "no bound known: a later body is not deleted again (at most once, then never) (%s)" % vx(NN))
+    ok(db.one("select relrowsecurity::text from pg_class where oid = 'public.tally_nothing_removed'::regclass") == "true"
+       and db.one("select has_table_privilege('authenticated', 'public.tally_nothing_removed', 'select')::text") == "false"
+       and db.one("select has_table_privilege('anon', 'public.tally_nothing_removed', 'select')::text") == "false", "tally_nothing_removed: RLS on, nothing for anon or authenticated")
 
     print("== md5(pg_get_functiondef) after 32 .. 56, 57 (pg_stand)")
     for fn in FNS:

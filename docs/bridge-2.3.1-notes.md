@@ -78,7 +78,9 @@ note. A Day Book upload is never refused, as before: its entries come in as Tall
 
 **A delete or cancel of an entry FinCom never had** settles by itself: "nothing to remove: the entry is not in FinCom's
 copy and no longer counts in Tally" (the line stays visible in Sync activity). A later Day Book cannot undo a delete; a
-cancelled entry from a later Day Book comes in as cancelled.
+cancelled entry from a later Day Book comes in as cancelled. If Tally later shows a newer change of that entry (a change
+made after FinCom heard of the delete or cancel), the newer change enters the books as usual and is not deleted or
+cancelled again.
 
 **The company list asked in the background** (the bridge's own look at which companies are open, and the light check)
 now stops at 2 seconds too, like the entry request. When you look yourself (Update now, the tray, the setup) it is not cut.

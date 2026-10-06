@@ -33,12 +33,16 @@
 --   2. tally_ingest_entries(p_book, p_vouchers, p_lines, p_rebuild, p_keep): 56's text; after 48's 4-argument form it calls
 --      tally_ingest_details, and re-applies an applied delete (cancel) of an entry the body brings back at a lower AlterID,
 --      or one settled as "nothing to remove": a later Day Book cannot undo a delete; a cancelled entry comes in cancelled.
+--      The owner's review of 06-Oct-2026: one settled as "nothing to remove" WITHOUT an AlterID is re-applied only to a body
+--      at or below its bound (tally_nothing_removed: the book's highest AlterID received when it settled); a body above it
+--      is a later change in Tally, applied normally and never touched by that line again; no bound known: at most once.
 --      Both paths reach it: the recorder (tally_recorder_line, 56: p_keep true) and the Day Book (below: p_keep false).
 --   3. tally_ingest_day (8 arguments): 44's text, its one call through the 5-argument form with p_keep false (48's 4-argument
 --      behaviour exactly, plus the details). The 7-argument form calls it (41), unchanged.
 --   4. tally_ingest_delete: 50's text; a delete or cancel of an entry never in FinCom's copy settles by itself: state applied,
 --      "nothing to remove: the entry is not in FinCom's copy and no longer counts in Tally" (the line kept, visible in Sync
---      activity), instead of waiting for a Day Book.
+--      activity), instead of waiting for a Day Book; it records the bound above (tally_nothing_removed, add-only, RLS on,
+--      the service role's only).
 --   Every function: security definer, search_path = public, pg_temp; tally_ingest_details and the 5-argument
 --   tally_ingest_entries granted to nobody (run as the owner by the entry path); tally_ingest_day and tally_ingest_delete
 --   the service role's, as before. Tested by tests/run_migration57.py (pg_stand) and tests/run_migration_order.py.
@@ -152,6 +156,23 @@ begin
   end loop;
 end $$;
 
+-- the owner's review of 06-Oct-2026: a delete or cancel settled as "nothing to remove" (the entry never in the copy) records
+-- a bound here: its own AlterID, or without one the book's highest AlterID received then (tally_sync_cursor.recorder_max_alter,
+-- the copy's highest); null when nothing is known. A later body is deleted (cancelled) again only at or below the bound;
+-- with no bound, at most once (reapplied). Written by tally_ingest_delete / tally_ingest_entries only (no member, no anon)
+create table if not exists public.tally_nothing_removed (
+  book_id uuid not null,
+  guid text not null,
+  event text not null check (event in ('deleted', 'cancelled')),
+  bound bigint,
+  settled_at timestamptz not null default now(),
+  reapplied integer not null default 0,
+  primary key (book_id, guid, event)
+);
+alter table public.tally_nothing_removed enable row level security;
+revoke all on public.tally_nothing_removed from public, anon, authenticated;
+grant all on public.tally_nothing_removed to service_role;
+
 -- the details of the entries just stored (p_vouchers as the entry path got them, each with its guid, alter and day). p_keep
 -- (the recorder, 56): never blank a stored value; else (the Day Book) authoritative
 create or replace function public.tally_ingest_details(p_book uuid, p_vouchers jsonb, p_keep boolean)
@@ -247,7 +268,7 @@ grant execute on function public.tally_tds_details(uuid) to authenticated, servi
 -- 56's text; the one return replaced by the details and the re-applied delete (cancel)
 create or replace function public.tally_ingest_entries(p_book uuid, p_vouchers jsonb, p_lines jsonb, p_rebuild boolean, p_keep boolean)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
-declare vs jsonb := p_vouchers; ls jsonb := p_lines; res jsonb; sent text[]; x record;     -- 57: res, sent, x
+declare vs jsonb := p_vouchers; ls jsonb := p_lines; res jsonb; sent text[]; x record; nb bigint; nr int;     -- 57: res, sent, x, nb, nr
 begin
   if not tally_service_or_owner() and coalesce(current_setting('fincom.recorder_release', true), '') !~ '^[0-9]+$' then raise exception 'not allowed' using errcode = '42501'; end if;
   if coalesce(p_keep, false) then
@@ -261,14 +282,27 @@ begin
   if coalesce((res->>'ok')::boolean, false) then
     perform tally_ingest_details(p_book, vs, coalesce(p_keep, false));
     -- 57: a later entry body (a Day Book, or another computer's line) cannot undo a delete or cancel already received: an
-    -- applied delete (cancel) of the entry above the body's AlterID, or one settled as "nothing to remove", is applied again
+    -- applied delete (cancel) of the entry above the body's AlterID is applied again. One settled as "nothing to remove"
+    -- without an AlterID (the owner's review of 06-Oct-2026) only up to its bound (tally_nothing_removed: the book's highest
+    -- AlterID received when it settled): a body at or below it is the old entry, deleted (cancelled) again; one above it is a
+    -- later change in Tally, applied and never touched by that line again; with no bound known, at most once
     select coalesce(array_agg(distinct y->>'guid'), '{}') into sent from jsonb_array_elements(vs) y where coalesce(y->>'guid', '') <> '';
-    for x in select v.guid, l.event, max(l.alter_id) as alt from tally_vouchers v
+    for x in select v.guid, l.event, max(l.alter_id) as alt, max(coalesce(v.alter_id, 0)) as valt,
+                    bool_or(coalesce(l.alter_id, 0) > coalesce(v.alter_id, 0)) as above from tally_vouchers v
                join tally_recorder_lines l on l.book_id = p_book and l.object_guid = v.guid and l.state = 'applied' and l.event in ('deleted', 'cancelled')
               where v.book_id = p_book and v.guid = any(sent) and v.deleted_at is null and (l.event = 'deleted' or not v.cancelled)
                 and (coalesce(l.alter_id, 0) > coalesce(v.alter_id, 0) or (l.alter_id is null and coalesce(l.held_why, '') like 'nothing to remove%'))
               group by v.guid, l.event order by v.guid, l.event
     loop
+      if not x.above then
+        select n.bound, n.reapplied into nb, nr from tally_nothing_removed n where n.book_id = p_book and n.guid = x.guid and n.event = x.event for update;
+        if not found then
+          insert into tally_nothing_removed (book_id, guid, event, bound, reapplied) values (p_book, x.guid, x.event, null, 0) on conflict do nothing;
+          nb := null; nr := 0;
+        end if;
+        if (nb is not null and x.valt > nb) or (nb is null and nr > 0) then continue; end if;
+        update tally_nothing_removed set reapplied = reapplied + 1 where book_id = p_book and guid = x.guid and event = x.event;
+      end if;
       perform tally_ingest_delete(p_book, x.guid, x.alt, x.event = 'cancelled', 'a delete or cancel already received: a later entry body does not undo it');
     end loop;
   end if;
@@ -368,6 +402,13 @@ begin
     -- 57 (the owner's decision of 06-Oct-2026): a delete or cancel of an entry never in FinCom's copy settles by itself (the line
     -- kept, with these words): nothing is removed and nothing is waited for. A later Day Book cannot undo it: an entry body
     -- that brings this GUID later is deleted (cancelled) again at once (tally_ingest_entries, 5 arguments; and 50's day release)
+    -- 57 (the owner's review of 06-Oct-2026): the bound of that re-apply (tally_nothing_removed): the line's AlterID, else the
+    -- book's highest AlterID received so far; null when nothing is known (then at most once)
+    insert into tally_nothing_removed (book_id, guid, event, bound)
+    values (p_book, g, case when p_cancel then 'cancelled' else 'deleted' end,
+            coalesce(p_alter, nullif(greatest(coalesce((select c.recorder_max_alter from tally_sync_cursor c where c.book_id = p_book), 0),
+                                              coalesce((select max(v.alter_id) from tally_vouchers v where v.book_id = p_book), 0)), 0)))
+    on conflict (book_id, guid, event) do update set bound = greatest(tally_nothing_removed.bound, excluded.bound), settled_at = now();
     return jsonb_build_object('ok', true, 'state', 'applied', 'guid', g, 'action', act, 'unknown', true, 'settled', true,
       'why', 'nothing to remove: the entry is not in FinCom''s copy and no longer counts in Tally');
   end if;

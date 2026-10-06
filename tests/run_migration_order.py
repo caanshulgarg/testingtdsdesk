@@ -168,7 +168,9 @@ def run_order(label, ORDER):
            and db.one("select count(*) from information_schema.columns where table_name = 'tally_vouchers' and column_name in ('irn', 'irn_ack_no', 'irn_ack_date', 'eway_no', 'check_notes')") == "5"
            and db.one("select has_function_privilege('service_role', 'public.tally_ingest_details(uuid, jsonb, boolean)', 'execute')") == "f"
            and db.one("select count(*) from information_schema.columns where table_name = 'tally_ledgers' and column_name = 'tds_deductee_type'") == "1"
-           and db.one("select has_function_privilege('authenticated', 'public.tally_tds_details(uuid)', 'execute')") == "t",
+           and db.one("select has_function_privilege('authenticated', 'public.tally_tds_details(uuid)', 'execute')") == "t"
+           and db.one("select relrowsecurity::text from pg_class where oid = 'public.tally_nothing_removed'::regclass") == "true"
+           and "tally_nothing_removed" in fdef("tally_ingest_delete") and "x.valt > nb" in fdef("tally_ingest_entries", "uuid, jsonb, jsonb, boolean, boolean"),
            "57: the entry's details (items, cost centres, bank, TDS, e-invoice, e-way bill, the checks' words) written by the 5-argument entry path, the Day Book through it; a delete of an entry never in the copy settles (in force in this order)")
         ok("not once, true)" in fdef("tally_recorder_line") and "only the add-on''s placeholder" in fdef("tally_recorder_line") and "then_cancel" in fdef("tally_recorder_line")
            and db.one("select has_function_privilege('service_role', 'public.tally_recorder_line(uuid, uuid, jsonb, bigint)', 'execute')") == "f",

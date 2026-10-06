@@ -205,7 +205,15 @@ Day Book (`tally_ingest_day`, now through the 5-argument form with `p_keep` fals
 (`p_keep` true) never blanks a stored value. tally-ingest does not mark entries `"full": true`, so 56's keep stays in force
 for the recorder path: a value removed in Tally reaches the copy by a Day Book upload. `tally_ingest_delete` = 50's text
 but a delete or cancel of an entry never in the copy settles at once ("nothing to remove: the entry is not in FinCom's
-copy and no longer counts in Tally", kept visible); a later body bringing that GUID is deleted (cancelled) again.
+copy and no longer counts in Tally", kept visible); a later body bringing that GUID is deleted (cancelled) again. The
+owner's review (06-Oct-2026): a delete or cancel settled so WITHOUT an AlterID records a bound in `tally_nothing_removed`
+(57, add-only, RLS on, the service role's only): the book's highest AlterID received then
+(`tally_sync_cursor.recorder_max_alter`, or the copy's highest), null when nothing is known. Only a body at or below the
+bound is deleted (cancelled) again; a body above it is a later change in Tally, applied normally, and that line never
+touches it again; with no bound, at most once. A delete or cancel with an AlterID is bounded by it as before. 50's day
+release re-applies only a delete (cancel) applied above the day's AlterID (never one without an AlterID), so it needs no
+change; 60's R3-L2 (a create late below a cancel, then cancelled again) acts only when the cancel has an AlterID and the
+create's is below it, so it is bounded the same way.
 The accuracy checks themselves run in tally-ingest. The owner's rule after review (06-Oct-2026): a recorder body is held
 (nothing of it applied) only when its ledger lines do not total zero; any other check failing (item taxable plus tax
 against the ledger lines, bill-wise, cost centres) applies the entry with the words in `check_notes` (and the line's

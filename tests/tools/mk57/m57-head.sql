@@ -33,12 +33,16 @@
 --   2. tally_ingest_entries(p_book, p_vouchers, p_lines, p_rebuild, p_keep): 56's text; after 48's 4-argument form it calls
 --      tally_ingest_details, and re-applies an applied delete (cancel) of an entry the body brings back at a lower AlterID,
 --      or one settled as "nothing to remove": a later Day Book cannot undo a delete; a cancelled entry comes in cancelled.
+--      The owner's review of 06-Oct-2026: one settled as "nothing to remove" WITHOUT an AlterID is re-applied only to a body
+--      at or below its bound (tally_nothing_removed: the book's highest AlterID received when it settled); a body above it
+--      is a later change in Tally, applied normally and never touched by that line again; no bound known: at most once.
 --      Both paths reach it: the recorder (tally_recorder_line, 56: p_keep true) and the Day Book (below: p_keep false).
 --   3. tally_ingest_day (8 arguments): 44's text, its one call through the 5-argument form with p_keep false (48's 4-argument
 --      behaviour exactly, plus the details). The 7-argument form calls it (41), unchanged.
 --   4. tally_ingest_delete: 50's text; a delete or cancel of an entry never in FinCom's copy settles by itself: state applied,
 --      "nothing to remove: the entry is not in FinCom's copy and no longer counts in Tally" (the line kept, visible in Sync
---      activity), instead of waiting for a Day Book.
+--      activity), instead of waiting for a Day Book; it records the bound above (tally_nothing_removed, add-only, RLS on,
+--      the service role's only).
 --   Every function: security definer, search_path = public, pg_temp; tally_ingest_details and the 5-argument
 --   tally_ingest_entries granted to nobody (run as the owner by the entry path); tally_ingest_day and tally_ingest_delete
 --   the service role's, as before. Tested by tests/run_migration57.py (pg_stand) and tests/run_migration_order.py.

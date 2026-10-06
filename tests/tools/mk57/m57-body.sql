@@ -104,6 +104,23 @@ begin
   end loop;
 end $$;
 
+-- the owner's review of 06-Oct-2026: a delete or cancel settled as "nothing to remove" (the entry never in the copy) records
+-- a bound here: its own AlterID, or without one the book's highest AlterID received then (tally_sync_cursor.recorder_max_alter,
+-- the copy's highest); null when nothing is known. A later body is deleted (cancelled) again only at or below the bound;
+-- with no bound, at most once (reapplied). Written by tally_ingest_delete / tally_ingest_entries only (no member, no anon)
+create table if not exists public.tally_nothing_removed (
+  book_id uuid not null,
+  guid text not null,
+  event text not null check (event in ('deleted', 'cancelled')),
+  bound bigint,
+  settled_at timestamptz not null default now(),
+  reapplied integer not null default 0,
+  primary key (book_id, guid, event)
+);
+alter table public.tally_nothing_removed enable row level security;
+revoke all on public.tally_nothing_removed from public, anon, authenticated;
+grant all on public.tally_nothing_removed to service_role;
+
 -- the details of the entries just stored (p_vouchers as the entry path got them, each with its guid, alter and day). p_keep
 -- (the recorder, 56): never blank a stored value; else (the Day Book) authoritative
 create or replace function public.tally_ingest_details(p_book uuid, p_vouchers jsonb, p_keep boolean)
