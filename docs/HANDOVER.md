@@ -32,6 +32,8 @@ Last updated: 06-Oct-2026, 10:35.
   - a new or changed Tally request;
   - AI in the bridge or add-on;
   - any change to how entries reach the books that the owner has not already agreed.
+- **Tables are created only by migrations, never from the Supabase dashboard** (owner, 06-Oct).
+- **The live database is never connected to by any tool or helper** (hard guard). For a live check, give the owner read-only SQL to paste himself.
 - **Status lines the owner wants at each point:** guard live, A done, B done, review clean, real-Tally run passed, published.
 
 ## What is live on staging
@@ -48,7 +50,8 @@ Last updated: 06-Oct-2026, 10:35.
   |---|---|---|
   | 54 | 96318bf965a63180e6f22cb19e4281bd | 8 pieces, by Claude |
   | 55 | 68711988926cd6cfae121cdade5d81bc | Pasted by the owner into the SQL editor, after piece 2 timed out in the tool. The holding table keeps only pieces 1–2 (13,144 characters, md5 1824d2ca…), which is why it looks partial. All 14 function bodies match the file. |
-  | 56 | 0f8456c18349c961d3d296d9da7819e5 | 8 pieces, run at 09:08 by Claude. All 11 function md5s match. Dry run: 0 affected entries, including Payment 938. |
+  | 58 | db5b429519308c9768f6e6e6befee08a | 1 piece, run at 12:05 by Claude (permissions on 54/55's seven tables) |
+| 56 | 0f8456c18349c961d3d296d9da7819e5 | 8 pieces, run at 09:08 by Claude. All 11 function md5s match. Dry run: 0 affected entries, including Payment 938. |
 
 - **Earlier versions of 56 that must never run:** 3e976269… (27de563) and e234d68c… (02d81c4). They are superseded; 0f8456c1… (7f2366f) is the final file.
 - **Book f79e4bc3-871d-4482-874d-71c5fb2a1b33** (GARG SHEKHAR & COMPANY) at 10:31: 4,020 live entries, total 0.00, 10,120 lines.
