@@ -295,6 +295,8 @@ var methodNames = map[string][2]string{
 	"B":      {"Source B", "changed-entries list"},
 	"C":      {"Source C", "month slice"},
 	"bodies": {"The body fetch", "entry bodies"},
+	// 2.3.1 (masters): the ledgers changed since the master counter moved, and a ledger an entry needs (ledchanges.go)
+	"ledgers": {"The ledger changes", "ledger changes"},
 }
 
 func liveLimitSec() float64 { return float64(keepNum("RecorderLimitMs", 2000)) / 1000 }

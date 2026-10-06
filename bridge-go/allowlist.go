@@ -37,6 +37,10 @@ var tallyAllowList = map[string]allowedReq{
 	"TDSDeskVchHeads":    {purpose: "voucher heads (Optional ones too) of one company for one month at most, no ledger lines"},
 	"TDSDeskKeepList":    {purpose: "one month's entries as GUID, AlterID and date only (the copy's check)"},
 	ledListID:            {purpose: "the ledger list, 2,000 MasterIDs a request at most, stored master fields only"},
+	// 2.3.1 (the owner's decision of 06-Oct-2026, masters): the ledgers changed since the master counter last moved, and
+	// one ledger an entry names that FinCom does not have (ledchanges.go)
+	ledChangesID:         {purpose: "the ledgers created or altered since Tally's master counter last moved (2.3.1): AlterID above the last number, 200 AlterIDs a request at most, the ledger list's stored master fields only"},
+	ledByNameID:          {purpose: "one ledger an entry uses that FinCom does not have, by its name (2.3.1), fetched before the entry is applied: the ledger list's stored master fields only"},
 	grpListID:            {purpose: "the group list, stored master fields only"},
 	"TDSDeskLedgers":     {purpose: "ledger masters for FinCom's /ledgers, 2,000 MasterIDs a request at most, stored fields only"},
 	"TDSDeskGroups":      {purpose: "groups for FinCom's /ledgers (name, parent, GUID)"},
@@ -165,6 +169,8 @@ func allowListSamples() map[string]string {
 		"TDSDeskVchHeads":    vchHeadsRequest(c, a, z),
 		"TDSDeskKeepList":    keepListRequest(c, a, z, 0),
 		ledListID:            ledgerChunkRequest(c, 0, 2000),
+		ledChangesID:         ledgerChangesRequest(c, 0, 200),
+		ledByNameID:          ledgerByNameRequest(c, "SAMPLE LEDGER"),
 		grpListID:            groupListRequest(c),
 		"TDSDeskLedgers":     ledgersFullRequest(c, 0, 2000),
 		"TDSDeskGroups":      groupsFullRequest(c),

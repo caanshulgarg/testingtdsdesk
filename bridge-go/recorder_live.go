@@ -113,6 +113,8 @@ type change struct {
 	guidKeep, alterKeep  string
 	// the owner's addition: held only because this bridge's Tally could not be asked at that moment: asked again by itself
 	guidRetry bool
+	// 2.3.1 (masters): a ":resolved" line sent once more because FinCom held the one before waiting for a ledger
+	ledAgain bool
 }
 
 func (c *change) key() string { return c.company + "|" + c.companyGuid }
@@ -209,6 +211,9 @@ type liveState struct {
 	// lines (7 days, sync\recorder-sent\*.items.txt). A ":resolved" id sent and not here went from an older bridge (2.3.0's
 	// request, without the items' lines): when FinCom lists its line again (refetch), it is asked and sent once more
 	items231 map[string]bool
+	// 2.3.1 (masters): the "<line id>:resolved" ids sent once more after FinCom held them waiting for a ledger (7 days,
+	// sync\recorder-sent\*.ledger.txt): never a third time
+	ledAgain map[string]bool
 	// fix 3 (the owner's spike run 37347773182): what this bridge saw of its OWN Tally's open companies (recorder_owntally.go)
 	own      map[string]*liveOwnSt // company GUID (or "name:" + its name key) -> the times it was open in the own Tally
 	ownAt    time.Time             // the last complete look at the own Tally's company list (kept on disk)
@@ -290,6 +295,10 @@ func liveFresh() {
 	for _, id := range liveLoadIds(liveItemsSuffix) {
 		live.items231[id] = true
 	}
+	live.ledAgain = map[string]bool{}
+	for _, id := range liveLoadIds(liveLedgerSuffix) {
+		live.ledAgain[id] = true
+	}
 	liveOwnLoad()
 }
 
@@ -354,6 +363,9 @@ func liveSaveIds(ids []string, suffix string) {
 
 // 2.3.1 review H1: the file suffix of the ":resolved" ids this version sent with their body
 const liveItemsSuffix = ".items.txt"
+
+// 2.3.1 (masters): the file suffix of the ":resolved" ids sent once more after a ledger FinCom waited for came in
+const liveLedgerSuffix = ".ledger.txt"
 
 // under live.mu: a held line's resolution went already, as far as this version is concerned: queued, or sent by THIS
 // version (with the items' ledger lines). again: FinCom listed the line again (refetch) after an older bridge's resolution;
@@ -2208,7 +2220,7 @@ func liveUploadStep() (int, bool) {
 		return 0, false
 	}
 	sentIDs := make([]string, 0, len(group))
-	var bodied, items []string
+	var bodied, items, ledAgain []string
 	gone := map[*change]bool{}
 	var held []*change
 	for _, c := range group {
@@ -2225,6 +2237,10 @@ func liveUploadStep() (int, bool) {
 		if c.xml != "" && !c.isLedger() && strings.HasSuffix(c.lineId, ":resolved") {
 			items = append(items, c.lineId) // 2.3.1 review H1: a resolution sent by this version
 			live.items231[c.lineId] = true
+			if c.ledAgain {
+				ledAgain = append(ledAgain, c.lineId) // 2.3.1 (masters): sent once more, never again
+				live.ledAgain[c.lineId] = true
+			}
 		}
 		if c.xml != "" && !c.isLedger() {
 			bodied = append(bodied, c.lineId)
@@ -2266,6 +2282,7 @@ func liveUploadStep() (int, bool) {
 	liveSaveSent(sentIDs)
 	liveSaveIds(bodied, ".body.txt")
 	liveSaveIds(items, liveItemsSuffix)
+	liveSaveIds(ledAgain, liveLedgerSuffix)
 	liveSaveOffsets()
 	liveHeldAdd(held)
 	liveGuidAnswers(group, arr(r.json["results"])) // 2.3.0: what FinCom's record said of a delete / cancel sent without a GUID

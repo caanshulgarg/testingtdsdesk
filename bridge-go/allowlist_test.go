@@ -72,6 +72,12 @@ func driveEveryRequest(t *testing.T) *standTally {
 	// 2.2.1: a new entry by its type and number (the line's own date, the starting point's day on or before it)
 	_, err = fetchVoucherByNumber(&TC{copier: true}, zz, f.port, td, "Journal", "1", 20)
 	must("new entry by number", err)
+	// 2.3.1 (masters): the ledgers changed since the master counter moved, and one ledger an entry uses, by its name
+	// (ledchanges.go; the paths themselves are driven in ledchanges231_test.go)
+	_, err = invokeTally(recorderTC(nil), f.port, ledgerChangesRequest(zz, 0, 200), ledChangesSec())
+	must("ledger changes", err)
+	_, err = invokeTally(recorderTC(nil), f.port, ledgerByNameRequest(zz, "Ledger A"), ledChangesSec())
+	must("ledger by name", err)
 	// 2.2.0: the change numbers' report form (form b; the company check sends it when form a gives no numbers)
 	_, err = invokeTally(fin, f.port, companyNumbersRequest(zz), 15)
 	must("change numbers, form b", err)

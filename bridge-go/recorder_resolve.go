@@ -427,8 +427,11 @@ type heldLine struct {
 	TriesVer string
 	// 2.3.1 review H1: FinCom listed it again although an older bridge sent its ":resolved" line (2.3.0's request, without the
 	// items' ledger lines, held by the cloud's guard): asked and sent once more under this version
-	Again     bool
-	LineAlter int64
+	Again bool
+	// 2.3.1 (masters): FinCom held this bridge's own ":resolved" line waiting for a ledger it did not have; the ledger is in
+	// now, so the line is asked and sent once more (the same id), once (sync\recorder-sent\*.ledger.txt)
+	LedgerAgain bool
+	LineAlter   int64
 	// review H1 (the owner's addition): a delete's own GUID and AlterID, used only once this Tally shows it gone
 	KeepGuid, KeepAlter string
 }
@@ -448,7 +451,7 @@ func liveHeldLoad() (M, map[string]heldLine) {
 		items[id] = heldLine{ID: id, Company: str(e["company"]), CGUID: str(e["companyGuid"]), Type: str(e["type"]), No: str(e["no"]), Date: str(e["date"]),
 			MID: str(e["masterId"]), At: str(e["savedAt"]), Added: str(e["added"]), Last: str(e["last"]), Tries: toInt(e["tries"]), Ev: str(e["event"]), Why: str(e["why"]),
 			LineGuid: str(e["lineGuid"]), LineFid: str(e["lineFid"]), Mismatch: truthy(e["idsMismatch"]), Final: truthy(e["final"]), LineAlter: toI64(e["lineAlter"]),
-			Cloud: truthy(e["fromFinCom"]), KeepGuid: str(e["keepGuid"]), KeepAlter: str(e["keepAlter"]), Refetch: truthy(e["refetch"]), TriesVer: str(e["triesVersion"]), Again: truthy(e["again"])}
+			Cloud: truthy(e["fromFinCom"]), KeepGuid: str(e["keepGuid"]), KeepAlter: str(e["keepAlter"]), Refetch: truthy(e["refetch"]), TriesVer: str(e["triesVersion"]), Again: truthy(e["again"]), LedgerAgain: truthy(e["ledgerAgain"])}
 	}
 	return all, items
 }
@@ -459,7 +462,7 @@ func liveHeldSave(all M, items map[string]heldLine) {
 		o[id] = M{"company": h.Company, "companyGuid": h.CGUID, "type": h.Type, "no": h.No, "date": h.Date, "masterId": h.MID, "savedAt": h.At,
 			"added": h.Added, "last": h.Last, "tries": h.Tries, "event": h.Ev, "why": liveCapWhy(h.Why), "lineGuid": h.LineGuid, "lineFid": h.LineFid,
 			"idsMismatch": h.Mismatch, "final": h.Final, "lineAlter": h.LineAlter, "fromFinCom": h.Cloud,
-			"keepGuid": h.KeepGuid, "keepAlter": h.KeepAlter, "refetch": h.Refetch, "triesVersion": h.TriesVer, "again": h.Again}
+			"keepGuid": h.KeepGuid, "keepAlter": h.KeepAlter, "refetch": h.Refetch, "triesVersion": h.TriesVer, "again": h.Again, "ledgerAgain": h.LedgerAgain}
 	}
 	all["items"] = o
 	if err := saveFile(liveHeldFile(), jsonText(all)); err != nil {
@@ -733,7 +736,7 @@ func liveResolveTurn() {
 		rid := id + ":resolved"
 		live.mu.Lock()
 		liveFresh()
-		done := live.sent[rid] && (!h.Again || live.items231[rid]) // 2.3.1 review H1: an older bridge's resolution is not this one
+		done := live.sent[rid] && (!h.Again || live.items231[rid]) && !liveLedgerAgainDue(h) // 2.3.1 review H1: an older bridge's resolution is not this one
 		waiting := live.queued[rid]
 		off := liveIsOffLocked("bodies", h.Company+"|"+h.CGUID)
 		ownOpen := !h.Refetch || liveOwnOpenNow(h.CGUID, h.Company)
@@ -856,7 +859,8 @@ func liveResolveTurn() {
 		live.mu.Lock()
 		liveFresh()
 		liveTakeBody(c, x)
-		if !liveResolvedDone(rid, h.Again) {
+		if !liveResolvedDone(rid, h.Again) || (!live.queued[rid] && liveLedgerAgainDue(h)) {
+			c.ledAgain = h.LedgerAgain
 			liveQueueAdd(c)
 		}
 		live.mu.Unlock()
@@ -889,6 +893,12 @@ func liveResolveTurn() {
 		items[r.id] = h
 	}
 	liveHeldSave(all, items)
+}
+
+// under live.mu: a line FinCom listed again because its ":resolved" line waited for a ledger, not yet sent again by this
+// bridge (2.3.1, masters)
+func liveLedgerAgainDue(h heldLine) bool {
+	return h.LedgerAgain && !live.ledAgain[h.ID+":resolved"]
 }
 
 const (
@@ -1063,7 +1073,8 @@ func applyRefetch(j M) {
 		if mid == "" && (no == "" || !liveNumberText(no) || !liveNumberText(typ)) {
 			continue // nothing to ask Tally by
 		}
-		cs = append(cs, heldLine{ID: id, Company: co, CGUID: cg, Type: typ, No: no, Date: date, MID: mid, At: now, Added: now, Ev: ev, Cloud: true, Refetch: true})
+		cs = append(cs, heldLine{ID: id, Company: co, CGUID: cg, Type: typ, No: no, Date: date, MID: mid, At: now, Added: now, Ev: ev, Cloud: true, Refetch: true,
+			LedgerAgain: truthy(e["ledgerAgain"])})
 	}
 	live.mu.Lock()
 	liveFresh()
@@ -1074,7 +1085,8 @@ func applyRefetch(j M) {
 		// 2.3.1 review H1: FinCom lists a line again whose ":resolved" line an older bridge sent (2.3.0's request, without the
 		// items' ledger lines: held by the cloud's guard). That earlier mark is not this version's: asked and sent once more,
 		// under the same id (the cloud's rules match it). One this version sent, or queued, is done
-		if liveResolvedDone(rid, true) {
+		// 2.3.1 (masters): FinCom held this version's ":resolved" line waiting for a ledger (in now): asked once more
+		if liveResolvedDone(rid, true) && !liveLedgerAgainDue(h) {
 			done++
 			continue
 		}
@@ -1098,6 +1110,14 @@ func applyRefetch(j M) {
 		if !had {
 			items[h.ID] = h
 			added++
+			continue
+		}
+		if h.LedgerAgain && !old.LedgerAgain {
+			// 2.3.1 (masters): its ":resolved" line waited for a ledger FinCom has now: asked afresh once
+			old.Again, old.LedgerAgain, old.Refetch, old.Cloud = true, true, true, true
+			old.Tries, old.Final, old.Why, old.Last = 0, false, "", ""
+			items[h.ID] = old
+			again++
 			continue
 		}
 		if h.Again && !old.Again {
