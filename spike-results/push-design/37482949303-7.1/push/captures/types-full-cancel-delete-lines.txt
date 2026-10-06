@@ -1,0 +1,2 @@
+FCF1|ev=before_delete|cguid=ca308654-aab7-460f-b462-73507af28443|cname=FinCom Spike Co|tuser=TALLY User|guid=|mid=18|aid=|date=1-Jan-27|vtype=Stock Journal|vno=3|end=1
+FCF1|ev=after_delete|cguid=ca308654-aab7-460f-b462-73507af28443|cname=FinCom Spike Co|tuser=TALLY User|guid=|mid=18|aid=|date=1-Jan-27|vtype=Stock Journal|vno=3|end=1

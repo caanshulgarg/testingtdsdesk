@@ -1,0 +1,1 @@
+FCF1|ev=ledger_saved|cguid=ca308654-aab7-460f-b462-73507af28443|cname=FinCom Spike Co|tuser=TALLY User|guid=ca308654-aab7-460f-b462-73507af28443-000000d4|mid=212|aid=551|name=Template Party|parent=Sundry Debtors|gstin=07AAACT1234A1Z5|state=|pan=AAACT1234A|billwise=Yes|end=1

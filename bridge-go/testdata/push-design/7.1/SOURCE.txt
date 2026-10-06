@@ -1,1 +1,1 @@
-run 37479202675, TallyPrime 7.1, bridge 42eaf7071eb366acef1e8b1a624ae6427180d1b8 (tax-accuracy, 2.3.0 setup), 2026-10-06T14:50:47Z
+run 37482949303, TallyPrime 7.1, bridge 1615231761e9ee7812f42e506473cd4cb85a40a3 (tax-accuracy, 2.3.0 setup), 2026-10-06T15:31:43Z
