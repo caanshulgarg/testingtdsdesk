@@ -1,0 +1,467 @@
+[keys] sent 'a' to tally 'TallyPrime:9000'
+[keys] sent 't' to tally 'TallyPrime:9000'
+[shot] r5-00-gateway (1024x768)
+[02:59:22] ---- exports of Tally's own objects (to learn the import tags)
+[export Company] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBTCATEGORY>0</FBTCATEGORY><FBTASSESSEETYPE>0</FBTASSESSEETYPE><TARIFFCLASSIFICATION>0</TARIFFCLASSIFICATION><EXCISEDUTYCLASSIFICATION>0</EXCISEDUTYCLASSIFICATION><SERIALNUMBER>0</SERIALNUMBER><ADJUSTMENTCLASSIFICATION>0</ADJUSTMENTCLASSIFICATION><INCOMETAXSLAB>0</INCOMETAXSLAB><INCOMETAXCLASSIFICATION>0</INCOMETAXCLASSIFICATION><LBTCLASSIFICATION>0</LBTCLASSIFICATION><TAXUNIT>0</TAXUNIT><RETURNMASTER>0</RETURNMASTER><GSTCLASSIFICATION>0</GSTCLASSIFICATION><VOUCHERNUMBERSERIES>0</VOUCHERNUMBERSERIES><VOUCHER>0</VOUCHER></CMPINFO></DESC><DATA><COLLECTION><COMPANY NAME="FinCom Spike Co" RESERVEDNAME=""><STARTINGFROM>20260401</STARTINGFROM><BOOKSFROM>20260401</BOOKSFROM><VATAPPLDATE/><COMPOSITEAPPLICABLEDATE/><VATREGDATE/><DEACTIVATEEXCISEFROM/><STREGDATE/><DEACTIVATESERVICETAXFROM/><LBTREGNDATE/><DEACTIVATEVATFROM/><CMPVATTINVALIDTILL/><CMPENTITLEMENTDATE/><CMPEXEMPTIONEXPIRYDATE/><CMPEXEMPTI...
+[export TaxUnit] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBTCATEGORY>0</FBTCATEGORY><FBTASSESSEETYPE>0</FBTASSESSEETYPE><TARIFFCLASSIFICATION>0</TARIFFCLASSIFICATION><EXCISEDUTYCLASSIFICATION>0</EXCISEDUTYCLASSIFICATION><SERIALNUMBER>0</SERIALNUMBER><ADJUSTMENTCLASSIFICATION>0</ADJUSTMENTCLASSIFICATION><INCOMETAXSLAB>0</INCOMETAXSLAB><INCOMETAXCLASSIFICATION>0</INCOMETAXCLASSIFICATION><LBTCLASSIFICATION>0</LBTCLASSIFICATION><TAXUNIT>0</TAXUNIT><RETURNMASTER>0</RETURNMASTER><GSTCLASSIFICATION>0</GSTCLASSIFICATION><VOUCHERNUMBERSERIES>0</VOUCHERNUMBERSERIES><VOUCHER>0</VOUCHER></CMPINFO></DESC><DATA><COLLECTION ISMSTDEPTYPE="Yes" MSTDEPTYPE="-2147483648"><TAXUNIT NAME="Default Tax Unit" RESERVEDNAME="" TAXTYPE=""><STREGDATE/><GSTAPPLICABLEDATE/><GSTREGDATE/><EWAYBILLAPPLICABLEDATEPREV/><STATECESSAPPLICABLEDATE/><GSTEINVAPPLICABLEDATEPREV/><GUID>b64bc27b-39fb-4e41-8608-6f5089196371-00000064</GUID><EMAIL/><PRIORSTATENAME/><PINCODE/><PHONENUMBER/><FAX...
+[export GSTRegistration] failed: The request was canceled due to the configured HttpClient.Timeout of 60 seconds elapsing.
+[export GST Registration] failed: The request was canceled due to the configured HttpClient.Timeout of 60 seconds elapsing.
+[export Ledger] failed: The request was canceled due to the configured HttpClient.Timeout of 60 seconds elapsing.
+[export VoucherType] failed: The request was canceled due to the configured HttpClient.Timeout of 60 seconds elapsing.
+[export TDSNatureOfPayment] failed: The request was canceled due to the configured HttpClient.Timeout of 60 seconds elapsing.
+[export CostCategory] failed: The request was canceled due to the configured HttpClient.Timeout of 60 seconds elapsing.
+company GSTIN to try: 07AAACF1234A1ZH
+[import TAXUNIT] failed: The request was canceled due to the configured HttpClient.Timeout of 60 seconds elapsing.
+[import GSTREGISTRATION] failed: The request was canceled due to the configured HttpClient.Timeout of 60 seconds elapsing.
+[export TaxUnit] failed: The request was canceled due to the configured HttpClient.Timeout of 60 seconds elapsing.
+[import probe ledgers] failed: The request was canceled due to the configured HttpClient.Timeout of 60 seconds elapsing.
+[unit] failed: The request was canceled due to the configured HttpClient.Timeout of 60 seconds elapsing.
+[stock item Probe Five] failed: The request was canceled due to the configured HttpClient.Timeout of 60 seconds elapsing.
+[stock item Probe Eighteen] failed: The request was canceled due to the configured HttpClient.Timeout of 60 seconds elapsing.
+[export StockItem] failed: The request was canceled due to the configured HttpClient.Timeout of 60 seconds elapsing.
+[cost category / centres] failed: The request was canceled due to the configured HttpClient.Timeout of 60 seconds elapsing.
+[export CostCentre] failed: The request was canceled due to the configured HttpClient.Timeout of 60 seconds elapsing.
+[03:15:22] ---- F11 company features
+[keys] sent '{F11}' to tally 'Error'
+[shot] r5-10-f11 (1024x768)
+[keys] sent '{ENTER}' to tally 'Error'
+[shot] r5-11-f11-enter-01 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-11-f11-enter-02 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-11-f11-enter-03 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-11-f11-enter-04 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-11-f11-enter-05 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-11-f11-enter-06 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-11-f11-enter-07 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-11-f11-enter-08 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-11-f11-enter-09 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-12-f11-esc (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-12b-f11-n (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-12c-f11-esc (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-12d-f11-y (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-13-f11-again (1024x768)
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[shot] r5-14-f11-top (1024x768)
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[shot] r5-15-f11-show-more (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-01 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-02 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-03 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-04 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-05 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-06 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-07 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-08 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-09 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-10 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-11 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-12 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-13 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-14 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-15 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-16 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-17 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-18 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-19 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-20 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-21 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-22 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-23 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-24 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-25 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-26 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-27 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-28 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-29 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-30 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-31 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-32 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-33 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-34 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-35 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-36 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-37 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-38 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-39 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-40 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-41 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-42 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-43 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-44 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-16-f11-more-45 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-17-f11-esc (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-17b-f11-y (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-17c-esc (1024x768)
+[03:16:46] ---- F11: Set/Alter Company GST details
+[keys] no window matching '^tally$'
+[shot] r5-20-f11 (1024x768)
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[shot] r5-21-f11-at-set-alter-gst (1024x768)
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[shot] r5-22-gst-details (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-23-gst-details-01 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-23-gst-details-02 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-23-gst-details-03 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-23-gst-details-04 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-23-gst-details-05 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-23-gst-details-06 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-23-gst-details-07 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-23-gst-details-08 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-23-gst-details-09 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-23-gst-details-10 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-23-gst-details-11 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-23-gst-details-12 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-23-gst-details-13 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-23-gst-details-14 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-23-gst-details-15 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-23-gst-details-16 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-23-gst-details-17 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-23-gst-details-18 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-23-gst-details-19 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-23-gst-details-20 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-23-gst-details-21 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-23-gst-details-22 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-23-gst-details-23 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-23-gst-details-24 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-23-gst-details-25 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-24-esc (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-24b-y (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-24c-esc (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-24d-y (1024x768)
+[03:17:34] ---- F11: Enable TDS
+[keys] no window matching '^tally$'
+[shot] r5-30-f11 (1024x768)
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[shot] r5-31-f11-at-tds (1024x768)
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[shot] r5-32-tds (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-33-tds-01 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-33-tds-02 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-33-tds-03 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-33-tds-04 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-33-tds-05 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-33-tds-06 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-33-tds-07 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-33-tds-08 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-33-tds-09 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-33-tds-10 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-33-tds-11 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-33-tds-12 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-33-tds-13 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-33-tds-14 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-33-tds-15 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-33-tds-16 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-33-tds-17 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-33-tds-18 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-33-tds-19 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-33-tds-20 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-34-esc (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-34b-y (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-34c-esc (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-34d-y (1024x768)
+[03:18:17] ---- ledger alteration: Probe Buyer
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[shot] r5-40-alter (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-41-ledger-list (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-42-ledger-form (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-43-ledger-01 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-43-ledger-02 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-43-ledger-03 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-43-ledger-04 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-43-ledger-05 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-43-ledger-06 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-43-ledger-07 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-43-ledger-08 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-43-ledger-09 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-43-ledger-10 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-43-ledger-11 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-43-ledger-12 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-43-ledger-13 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-43-ledger-14 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-43-ledger-15 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-43-ledger-16 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-43-ledger-17 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-43-ledger-18 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-43-ledger-19 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-43-ledger-20 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-43-ledger-21 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-43-ledger-22 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-43-ledger-23 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-43-ledger-24 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-43-ledger-25 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-43-ledger-26 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-43-ledger-27 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-43-ledger-28 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-43-ledger-29 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-43-ledger-30 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-44-esc (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-44b-y (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-44c-esc (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-44d-esc (1024x768)
+[03:19:07] ---- bank payment
+[keys] no window matching '^tally$'
+[shot] r5-50-vouchers (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-51-payment (1024x768)
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[shot] r5-52-date (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-53-account (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-54-particular (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-55-amount (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-56-payment-01 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-56-payment-02 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-56-payment-03 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-56-payment-04 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-56-payment-05 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-56-payment-06 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-56-payment-07 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-56-payment-08 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-56-payment-09 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-56-payment-10 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-56-payment-11 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-56-payment-12 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-56-payment-13 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-56-payment-14 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-57-esc (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-57b-y (1024x768)
+[03:19:46] ---- GST sales invoice
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[shot] r5-60-sales (1024x768)
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[shot] r5-61-date (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-62-party (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-63-dispatch (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-64-party-details (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-65-ledger (1024x768)
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[shot] r5-66-item1 (1024x768)
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[keys] no window matching '^tally$'
+[shot] r5-67-item2 (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-68-items-done (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-69-cgst (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-70-cgst-enter (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-71-sgst (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-72-sgst-enter (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-73-after (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-74-ctrl-a (1024x768)
+[keys] no window matching '^tally$'
+[shot] r5-75-ctrl-a-2 (1024x768)
+[daybook] failed: No connection could be made because the target machine actively refused it. (localhost:9000)
+[export Company] failed: No connection could be made because the target machine actively refused it. (localhost:9000)
+[03:20:57] == probe end
