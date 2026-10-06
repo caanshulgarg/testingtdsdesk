@@ -278,7 +278,7 @@ function S231Run {
     $s = $sc[$id]; $e = $s231.ent[$id]; if (-not $e) { continue }
     $db = S231DayBook $s
     $g = $e.guid
-    $ins += [pscustomobject]@{ id = $id; key = $s.key; kind = $s.kind; label = $s.label; guid = $g; truth = $s.truth; tally = $db; entry = (Join-Path $s231.cap "$($s.key).entry.xml")
+    $ins += [pscustomobject]@{ id = $id; key = $s.key; kind = $s.kind; notesOnly = [bool]$s.notesOnly; label = $s.label; guid = $g; truth = $s.truth; tally = $db; entry = (Join-Path $s231.cap "$($s.key).entry.xml")
       ledger = (Join-Path $s231.dir ("ledger-" + ($plan231.names.contractor -replace '\W', '') + ".full.xml"))
       lines = @($all | Where-Object { $g -and $_.guid -eq $g } | ForEach-Object { [pscustomobject]@{ ev = $_.ev; at = $_.at; xml = $_.xml; state = $_.state; why = $_.why } }) }
     $tagFiles += [pscustomobject]@{ label = "Tally's own Day Book export ($id)"; file = $db }
