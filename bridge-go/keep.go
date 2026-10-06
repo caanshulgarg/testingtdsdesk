@@ -714,13 +714,15 @@ func useKeepPosted(dir string, st M) int {
 			v += "<VOUCHERNUMBER>" + esc(str(e["number"])) + "</VOUCHERNUMBER>"
 		}
 		v += rest
-		tag := "<GUID>" + esc(str(e["guid"])) + "</GUID>"
+		// 2.3.1 (2.2.4 review L4): the old copy's GUID with or without attributes (<GUID TYPE="String">, a real TallyPrime
+		// 7.1), compiled for this entry only (not kept in the shared regex cache)
+		tag := regexp.MustCompile(tagOpenRe("GUID") + `\s*` + regexp.QuoteMeta(esc(str(e["guid"]))) + `\s*</GUID\s*>`)
 		for _, day := range uniqSorted([]string{str(e["date"]), whereGet(where, str(e["guid"]))}) {
 			df := filepath.Join(days, day+".xml")
 			t := readText(df)
 			var keep strings.Builder
 			for _, pc := range re(`<TALLYMESSAGE>[\s\S]*?</TALLYMESSAGE>`).FindAllString(t, -1) {
-				if !strings.Contains(pc, tag) {
+				if !tag.MatchString(pc) {
 					keep.WriteString(pc)
 				}
 			}

@@ -170,3 +170,24 @@ func TestRenameKeepLedgerLeavesRegexCache(t *testing.T) {
 		t.Fatalf("renamed: %s", txt)
 	}
 }
+
+// 2.2.4 review L4: useKeepPosted (FinCom's own posting read back into the day's copy) found the old copy of the entry by
+// a literal <GUID>; a day file holding it typed (<GUID TYPE="String">, as a real TallyPrime 7.1 answers) kept the old
+// copy beside the new one. The GUID field is now matched with or without attributes
+func TestUseKeepPostedReplacesTypedGUID(t *testing.T) {
+	dir := t.TempDir()
+	old := `<VOUCHER REMOTEID="g-1" VCHTYPE="Receipt"><DATE TYPE="Date">20261002</DATE><GUID TYPE="String">g-1</GUID><ALTERID TYPE="Number"> 4</ALTERID><NARRATION>old</NARRATION></VOUCHER>`
+	other := `<VOUCHER REMOTEID="g-2" VCHTYPE="Receipt"><DATE>20261002</DATE><GUID>g-2</GUID><ALTERID> 5</ALTERID></VOUCHER>`
+	if err := saveFile(dir+"/days/20261002.xml", "<TALLYMESSAGE>"+old+"</TALLYMESSAGE><TALLYMESSAGE>"+other+"</TALLYMESSAGE>"); err != nil {
+		t.Fatal(err)
+	}
+	nw := `<VOUCHER VCHTYPE="Receipt"><DATE>20261002</DATE><NARRATION>new</NARRATION></VOUCHER>`
+	_ = appendText(dir+"/posted-in.jsonl", jsonText(M{"guid": "g-1", "alter": 9, "date": "20261002", "number": "1", "type": "Receipt", "xml": nw})+"\n")
+	if n := useKeepPosted(dir, M{"from": "20260401"}); n != 1 {
+		t.Fatalf("one posted entry used: %d", n)
+	}
+	txt := readText(dir + "/days/20261002.xml")
+	if strings.Count(txt, "g-1</GUID>") != 1 || strings.Contains(txt, ">old<") || !strings.Contains(txt, ">new<") || !strings.Contains(txt, "g-2</GUID>") {
+		t.Fatalf("the typed old copy replaced, the other entry kept: %s", txt)
+	}
+}
