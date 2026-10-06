@@ -24,7 +24,7 @@ export const N = {
   buyer: "S231 Buyer", supplier: "S231 Supplier", billParty: "S231 Billwise Party", contractor: "S231 Contractor", contractExp: "S231 Contract Exp",
   tds: "S231 TDS Payable", bank: "S231 Bank", officeExp: "S231 Office Exp", cat: "S231 Region", north: "S231 North", south: "S231 South",
   nature: "S231 Contract Work", newParty: "S231 New Party", income: "Spike Income",
-  freight: "S231 Freight Charged", roundOff: "S231 Round Off",
+  freight: "S231 Freight Charged", roundOff: "S231 Round Off", oldName: "S231 Old Name Party", newName: "S231 Renamed Party",
 };
 export const GSTIN_OLD = gstin("07AAACS2310K1Z"), GSTIN_NEW = gstin("07AAACS2310K2Z");
 // stock items: name, HSN, GST rate (whole), sale rate
@@ -70,6 +70,7 @@ const masters = {
     led(N.officeExp, "Indirect Expenses", "<ISCOSTCENTRESON>Yes</ISCOSTCENTRESON>"),
     led(N.freight, "Indirect Incomes", "<GSTAPPLICABLE>&#4; Applicable</GSTAPPLICABLE><GSTTYPEOFSUPPLY>Services</GSTTYPEOFSUPPLY>"),
     led(N.roundOff, "Indirect Expenses", "<ROUNDINGMETHOD>Normal Rounding</ROUNDINGMETHOD>"),
+    led(N.oldName, "Sundry Debtors", "<ISBILLWISEON>No</ISBILLWISEON>"),
   ].join(""),
   // a realistic ledger list for the FinComLedgers timing: 400 parties
   "masters-6-bulk": Array.from({ length: 400 }, (_, i) => led(`S231 Party ${String(i + 1).padStart(3, "0")}`, i % 2 ? "Sundry Creditors" : "Sundry Debtors",
@@ -189,6 +190,9 @@ add({ id: "S14", key: "s14-sales-tax-inclusive", label: "tax-inclusive invoice",
 const s8 = accounting({ type: "Receipt", date: "20270301", party: N.newParty, narr: "S8 first receipt from a new party", rows: [{ ledger: N.newParty, amount: 1180 }, { ledger: "Cash", amount: -1180 }] });
 add({ id: "S8", key: "s8-new-party", label: "a new party ledger used at once", kind: "ledgers", day: "1-3-2027", date: "20270301", truth: { newLedger: N.newParty } }, s8);
 
+// S15: a party FinCom holds, renamed in Tally, then used under its new name at once
+const s15 = accounting({ type: "Receipt", date: "20270302", party: N.newName, narr: "S15 receipt from the renamed party", rows: [{ ledger: N.newName, amount: 1770 }, { ledger: "Cash", amount: -1770 }] });
+add({ id: "S15", key: "s15-renamed-party", label: "a party renamed in Tally, used under its new name", kind: "ledgers", day: "2-3-2027", date: "20270302", truth: { oldName: N.oldName, newName: N.newName } }, s15);
 const plan = {
   company: CO, names: N, gstinOld: GSTIN_OLD, gstinNew: GSTIN_NEW,
   masters: ["masters-1-items", "masters-2-costs", "masters-4-ledgers", "masters-6-bulk"],
@@ -196,11 +200,13 @@ const plan = {
   bill: "s4-bill",
   s8Ledger: "s8-ledger",
   s9Alter: "s9-alter",
+  s15Rename: "s15-rename",
   scenarios: S.map(({ xml, ...o }) => o),
 };
 const extra = {
   "s4-bill": billJ.xml,
   "s8-ledger": led(N.newParty, "Sundry Debtors", "<ISBILLWISEON>No</ISBILLWISEON>"),
+  "s15-rename": `<LEDGER NAME="${N.oldName}" ACTION="Alter"><NAME.LIST><NAME>${N.newName}</NAME></NAME.LIST><PARENT>Sundry Debtors</PARENT></LEDGER>`,
   // S9: the party's GSTIN altered (the same PAN, another entity number)
   "s9-alter": `<LEDGER NAME="${N.buyer}" ACTION="Alter"><NAME.LIST><NAME>${N.buyer}</NAME></NAME.LIST><PARENT>Sundry Debtors</PARENT>${gstReg(GSTIN_NEW)}</LEDGER>`,
 };

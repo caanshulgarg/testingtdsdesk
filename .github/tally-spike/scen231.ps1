@@ -43,8 +43,11 @@ function TallyAlt {
   return [pscustomobject]@{ mst = $(if ($m.Success) { [int64]$m.Groups[1].Value } else { -1 }); vch = $(if ($v.Success) { [int64]$v.Groups[1].Value } else { -1 }) }
 }
 function LedgerNames {
-  $x = Post 9000 ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCLN</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCLN" ISMODIFY="No"><TYPE>Ledger</TYPE><FETCH>Name</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>')
-  return @([regex]::Matches("$x", '<LEDGER NAME="([^"]*)"') | ForEach-Object { [Net.WebUtility]::HtmlDecode($_.Groups[1].Value) })
+  $x = Post 9000 ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCLN</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCLN" ISMODIFY="No"><TYPE>Ledger</TYPE><FETCH>Name, GUID</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>')
+  $g = @{}; $n = @()
+  foreach ($m in [regex]::Matches("$x", '(?s)<LEDGER NAME="([^"]*)"[^>]*>.*?<GUID[^>]*>([^<]*)</GUID>')) { $nm = [Net.WebUtility]::HtmlDecode($m.Groups[1].Value); $n += $nm; $g[$m.Groups[2].Value.Trim()] = $nm }
+  if (-not $n.Count) { $n = @([regex]::Matches("$x", '<LEDGER NAME="([^"]*)"') | ForEach-Object { [Net.WebUtility]::HtmlDecode($_.Groups[1].Value) }) }
+  return [pscustomobject]@{ names = $n; guids = $g }
 }
 function LightChecks { if (Test-Path $B[1].log) { @(Get-Content $B[1].log | Where-Object { $_ -match "Light check of $([regex]::Escape($co1))" }).Count } else { 0 } }
 # the bridge's own request at the ref (the build job printed it with placeholders); '' when the ref has none
@@ -187,9 +190,10 @@ function S231Run {
 
   # ---- S8: a new party ledger, made and used at once, right after a light check (so the counter does not bring it first)
   Say '---- S8: the stub''s ledger book seeded from Tally; a new party ledger made and used at once, after a light check'
-  $names = LedgerNames
-  $seed = Invoke-RestMethod 'http://127.0.0.1:8787/' -Method Post -Body (@{ kind = '_seed_ledgers'; company = $co1; names = $names } | ConvertTo-Json -Compress) -ContentType 'application/json'
-  Write-Host "stub ledger book seeded with $($seed.seeded) ledger(s) of $co1"
+  $ln = LedgerNames
+  $seed = Invoke-RestMethod 'http://127.0.0.1:8787/' -Method Post -Body (@{ kind = '_seed_ledgers'; company = $co1; names = $ln.names; guids = $ln.guids } | ConvertTo-Json -Compress -Depth 4) -ContentType 'application/json'
+  $script:oldGuid = @($ln.guids.Keys | Where-Object { $ln.guids[$_] -eq $plan231.names.oldName })[0]
+  Write-Host "stub ledger book seeded with $($seed.seeded) ledger(s) of $co1 ($($ln.guids.Count) GUIDs; $($plan231.names.oldName) $oldGuid)"
   $lcN = LightChecks; $until = (Get-Date).AddMinutes(11)
   while ((Get-Date) -lt $until -and (LightChecks) -le $lcN) { Start-Sleep 5 }
   Write-Host "S8 after light check $(LightChecks) at $(Get-Date -Format HH:mm:ss)"
@@ -226,12 +230,51 @@ function S231Run {
   elseif (-not $hold) { Result 'S8 new party ledger used at once' $false "$s8txt; the entry was applied without waiting (the ledger came first by the counter?)" $true }
   else { Result 'S8 new party ledger used at once' ([bool]$wanted -and [bool]$res -and [string]$wanted.at -le [string]$res.at) $s8txt }
 
+  # ---- S15: a party FinCom holds renamed in Tally and used under its new name at once
+  Say '---- S15: a party FinCom holds, renamed in Tally, used under its new name'
+  $s15 = $sc['S15']; $oldN = $plan231.names.oldName; $newN = $plan231.names.newName
+  $m15 = Mark
+  $ri = ImpT 'All Masters' (GenText $plan231.s15Rename) "S15 $oldN renamed $newN"
+  $e15 = S231Entry $s15 -noResave
+  $hold15 = $null; $want15 = $null; $res15 = $null; $wb15 = $null
+  if ($e15.mid) {
+    $s15 | Add-Member -Force guid $e15.guid
+    $h = S231Resave $s15; $e15.lines = $h.Count
+    $until = (Get-Date).AddMinutes(6)
+    while ((Get-Date) -lt $until) {
+      $ls = @((StubLines $m15) | Where-Object { $_.guid -eq $e15.guid })
+      $hold15 = @($ls | Where-Object { $_.state -eq 'held' -and $_.why -like 'waiting for the ledger*' })[0]
+      $want15 = @(StubReqs | Select-Object -Skip $m15 | Where-Object { $_.kind -eq 'ledger_changes' -and @($_.body.ledgers | Where-Object { "$($_[3])" -eq $newN }).Count })[0]
+      $res15 = @($ls | Where-Object { $_.lid -like '*:resolved' -and $_.state -eq 'applied' })[0]
+      if ($res15 -or (-not $hold15 -and @($ls | Where-Object { $_.state -eq 'applied' }).Count)) { break }
+      Start-Sleep 10
+    }
+    $wb15 = @(StubReqs | Select-Object -Skip $m15 | Where-Object { $_.kind -eq 'beat' -and @($_.answer.ledgersWanted | Where-Object { $_.name -eq $newN }).Count })[0]
+    $null = S231Ask $s15
+  }
+  if ($lb) { $r = PostT 9000 ($lb.Replace('FCSPIKENAME', (Esc $newN))) 'S15 the bridge''s ledger by name request'; Keep 's15-ledger-by-name.xml' $r.text "S15: Tally's answer to the bridge's ledger by name request (FinComLedgerByName, $newN, renamed from $oldN); $($r.bytes) bytes, $($r.ms) ms" }
+  $row15 = if ($want15) { @($want15.body.ledgers | Where-Object { "$($_[3])" -eq $newN })[0] } else { $null }
+  $ls15 = @((StubLines $m15) | Where-Object { $_.guid -eq $e15.guid })
+  $seq = @()
+  $seq += "rename import altered $($ri.altered) errors $($ri.errors)"
+  $seq += "entry Tally mid $($e15.mid) guid $($e15.guid)"
+  $seq += $(if ($hold15) { "1. held $($hold15.at): '$($hold15.why)'" } else { '1. held: NO' })
+  $seq += $(if ($wb15) { "2. beat $($wb15.at) answered ledgersWanted '$newN'" } else { '2. ledgersWanted: none' })
+  $seq += $(if ($want15) { "3. ledger_changes $($want15.at) why=$($want15.body.why) row '$($row15[3])' GUID $($row15[0]) (FinCom holds '$oldN' as GUID ${oldGuid}: $(if ("$($row15[0])" -eq "$oldGuid") { 'same' } else { 'DIFFERENT' })); the stub's answer kept: $(@($want15.answer.kept) -join ' | ')" } else { '3. ledger_changes with the new name: none' })
+  $seq += $(if ($res15) { "4. applied $($res15.at) as $($res15.lid.Substring([Math]::Max(0, $res15.lid.Length - 18))): '$($res15.why)'" } else { "4. applied: no (lines: $(($ls15 | ForEach-Object { "$($_.ev) $($_.at) $($_.state)" }) -join ', '))" })
+  $t15 = $seq -join '; '
+  if (-not $lb) { Add-Content -Path $resultsFile -Encoding UTF8 -Value "EXPECTED S15 renamed party: $t15 - no ledger requests at this ref" }
+  elseif (-not $e15.mid) { Result 'S15 renamed party used under its new name' $false "$t15; the entry was not made in Tally" $true }
+  elseif (-not $ls15.Count) { Result 'S15 renamed party used under its new name' $false "$t15; timed out: no line for the entry reached the stub" $true }
+  elseif (-not $hold15) { Result 'S15 renamed party used under its new name' $false "$t15; applied without waiting (the counter brought the rename first?)" $true }
+  else { Result 'S15 renamed party used under its new name' ([bool]$wb15 -and [bool]$want15 -and "$($row15[0])" -eq "$oldGuid" -and [bool]$res15 -and $res15.why -like "*'$oldN'*" -and [string]$want15.at -le [string]$res15.at) $t15 }
+
   # ---- the checks of S1-S7, S10 (and S8's body): parse.js on the stub's body, against Tally's own export and the entry
   Say '---- 2.3.1 scenarios: parse.js (bridge ref) against Tally''s own export and what the harness entered'
   $parseJs = Join-Path $env:BRIDGE_DIST 'cloud\tally-cloud\parse.js'
   $all = StubLines $mark231
   $ins = @(); $tagFiles = @()
-  foreach ($id in 'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S10', 'S11', 'S12', 'S13', 'S14', 'S8') {
+  foreach ($id in 'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S10', 'S11', 'S12', 'S13', 'S14', 'S8', 'S15') {
     $s = $sc[$id]; $e = $s231.ent[$id]; if (-not $e) { continue }
     $db = S231DayBook $s
     $g = $e.guid
@@ -242,13 +285,13 @@ function S231Run {
     $tagFiles += [pscustomobject]@{ label = "the bridge's entry request answer ($id)"; file = (Join-Path $s231.cap "$($s.key).entry.xml") }
   }
   $tagFiles += [pscustomobject]@{ label = "Tally's ledger master export ($($plan231.names.contractor), FETCH *)"; file = (Join-Path $s231.dir ("ledger-" + ($plan231.names.contractor -replace '\W', '') + ".full.xml")) }
-  foreach ($f in 's8-ledger-by-name.xml', 's9-ledger-changes.xml', 'ledger-by-name-tds-deductee.xml', 'ledger-list-2.3.1.xml', 'ledger-list-2.3.0.xml') { $tagFiles += [pscustomobject]@{ label = "the bridge's ledger request answer ($f)"; file = (Join-Path $s231.cap $f) } }
+  foreach ($f in 's15-ledger-by-name.xml', 's8-ledger-by-name.xml', 's9-ledger-changes.xml', 'ledger-by-name-tds-deductee.xml', 'ledger-list-2.3.1.xml', 'ledger-list-2.3.0.xml') { $tagFiles += [pscustomobject]@{ label = "the bridge's ledger request answer ($f)"; file = (Join-Path $s231.cap $f) } }
   $pin = Join-Path $s231.dir 'check-in.json'; $pout = Join-Path $s231.dir 'check.json'
   ConvertTo-Json -InputObject @{ scenarios = $ins; tags = $tagFiles } -Depth 12 | Set-Content $pin -Encoding UTF8
   & node (Join-Path $PSScriptRoot 'parsecheck.mjs') s231 $parseJs $pin $pout 2>&1 | ForEach-Object { Write-Host "  $_" }
   $ck = $null; try { $ck = Get-Content $pout -Raw -Encoding UTF8 | ConvertFrom-Json } catch { Write-Host "S231 check output: $_" }
   foreach ($o in @($ck.scenarios)) {
-    if ($o.id -eq 'S8') { foreach ($n in @($o.notes)) { Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO S8 body: $n" }; Add-Content -Path $resultsFile -Encoding UTF8 -Value ("INFO S8 body: " + ((@($o.rows) | ForEach-Object { RowText $_ }) -join '; ')); continue }
+    if ($o.id -in 'S8', 'S15') { foreach ($n in @($o.notes)) { Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO $($o.id) body: $n" }; Add-Content -Path $resultsFile -Encoding UTF8 -Value ("INFO $($o.id) body: " + ((@($o.rows) | ForEach-Object { RowText $_ }) -join '; ')); continue }
     $s = $sc[$o.id]; $e = $s231.ent[$o.id]
     $txt = ((@($o.rows) | Where-Object { -not $_.quiet } | ForEach-Object { RowText $_ }) -join '; ')
     $fl = @(@($all) | Where-Object { $e.guid -and $_.guid -eq $e.guid -and $_.xml } | ForEach-Object { "$($_.full)" })

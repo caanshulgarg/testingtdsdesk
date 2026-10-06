@@ -14,6 +14,9 @@ LOG = sys.argv[2]
 LOCK = threading.Lock()
 BOOK = {}      # company -> {lower name: name}
 HELD = {}      # base line id -> {line, company, bridge, waits, again, done}
+GUIDS = {}     # company -> {ledger GUID: FinCom's name}  (seeded with the names)
+ALIAS = {}     # company -> {lower Tally name: FinCom's name}: a ledger renamed in Tally, kept under FinCom's name (2.3.1, as
+               # tally-ingest with migration 59: the GUID FinCom holds, the new name noted)
 LEDGER_WAIT = 'waiting for the ledger'
 RE_LED = re.compile(r'<LEDGERNAME(?:\s[^>]*)?>([^<]*)</LEDGERNAME>')
 
@@ -54,9 +57,15 @@ def recorder(body):
                 else:
                     h['waits'] = miss
                     h['again'] = h['again'] or lid != base
+        if state == 'applied' and xml and not ev.startswith('ledger_'):
+            al = ALIAS.get(company, {})
+            under = [(n, al[n.lower()]) for n in dict.fromkeys(html.unescape(m).strip() for m in RE_LED.findall(xml)) if n.lower() in al]
+            if under:
+                why = '; '.join("applied under FinCom's ledger '%s' (named '%s' in Tally now)" % (old, new) for new, old in under)
         if state == 'applied' and base in HELD and lid != base:
             HELD[base]['done'] = True
             HELD[base]['appliedAt'] = time.strftime('%H:%M:%S')
+            HELD[base]['appliedWhy'] = why
         res.append({'line_id': lid, 'state': state, 'why': why})
     n = lambda k: sum(1 for r in res if r['state'] == k)
     return {'ok': True, 'results': res, 'applied': n('applied'), 'held': n('held'), 'duplicate': 0, 'stale': 0, 'failed': 0}
@@ -89,14 +98,25 @@ def beat(body):
 def ledger_changes(body):
     company = str(body.get('company', ''))
     b = BOOK.setdefault(company, {})
-    added = 0
+    g = GUIDS.setdefault(company, {})
+    added, kept = 0, []
     for r in body.get('ledgers', []) or []:
         name = str(r[3] if isinstance(r, list) and len(r) > 3 else '').strip()
+        guid = str(r[0] if isinstance(r, list) and r else '').strip()
+        have = g.get(guid) if guid else None
+        if have and have != name:
+            # the GUID FinCom holds under another name: kept under FinCom's name, the new name noted (an alias)
+            ALIAS.setdefault(company, {})[name.lower()] = have
+            b[name.lower()] = have
+            kept.append("'%s' is named '%s' in Tally now: kept under FinCom's name (GUID %s)" % (have, name, guid))
+            continue
         if name and name.lower() not in b:
             b[name.lower()] = name
+            if guid:
+                g[guid] = name
             added += 1
     rows = body.get('ledgers') or []
-    return {'ok': True, 'ledgers': len(rows), 'added': added, 'updated': len(rows) - added, 'kept': []}
+    return {'ok': True, 'ledgers': len(rows), 'added': added, 'updated': len(rows) - added, 'kept': kept}
 
 class H(BaseHTTPRequestHandler):
     def do_POST(self):
@@ -120,6 +140,7 @@ class H(BaseHTTPRequestHandler):
                 out = ledger_changes(body)
             elif kind == '_seed_ledgers':
                 BOOK[str(body.get('company', ''))] = {str(x).strip().lower(): str(x).strip() for x in body.get('names', []) if str(x).strip()}
+                GUIDS[str(body.get('company', ''))] = {str(k): str(v) for k, v in (body.get('guids') or {}).items()}
                 out = {'ok': True, 'seeded': len(BOOK[str(body.get('company', ''))])}
             elif kind == '_state':
                 out = {'ok': True, 'book': {k: sorted(v.values()) for k, v in BOOK.items()}, 'held': {k: {a: b for a, b in h.items() if a != 'line'} for k, h in HELD.items()}}
