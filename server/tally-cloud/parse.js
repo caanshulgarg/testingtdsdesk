@@ -53,6 +53,42 @@ function shortNarr(t){
 // cloud keeps it in tally_vouchers.fincom_id, so the checks before posting and the bridge's read-back do not depend on
 // where in a long narration the tag sits); null when there is none
 function fincomId(t){ const m = String(t || "").match(/TDSDesk:([A-Za-z0-9._-]+)/); return m ? m[1] : null; }
+// ---- bridge 2.3.1 part A (the owner's decisions of 06-Oct-2026: "item invoices enter complete"). Read the same way from
+// a Day Book export and from the entry request's typed XML (one reader for both paths); the fields read before are
+// unchanged. Each a plain value, never one Tally works out except where said
+const r2 = (x) => Math.round(x * 100) / 100;
+// a Tally date as yyyymmdd: "20261002", or "2-Oct-2026" / "2-Oct-26" (a credit period given as a date); "" when none
+const MON = {jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12};
+function d8(t){
+  t = String(t || "").trim();
+  if (/^\d{8}$/.test(t)) return t;
+  const m = t.match(/^(\d{1,2})[-\s]([A-Za-z]{3})[A-Za-z]*[-\s](\d{2}|\d{4})$/);
+  if (!m || !MON[m[2].toLowerCase()]) return "";
+  const y = m[3].length === 2 ? "20" + m[3] : m[3];
+  return y + String(MON[m[2].toLowerCase()]).padStart(2, "0") + m[1].padStart(2, "0");
+}
+// the pieces of s inside each <TAG>...</TAG>
+function blocks(s, tag){ return s.indexOf("<" + tag) < 0 ? [] : after(s, tag).map(({p}) => upTo(p, tag)); }
+// the rates in a block's own rate details (the item's, not its allocations'): {c, s, i, cess} (null when not set);
+// a cess "Based on Quantity" is not a rate on value and is left out
+function rateHeads(own){
+  const o = {c: null, s: null, i: null, cess: null};
+  blocks(own, "RATEDETAILS.LIST").forEach((q) => {
+    const h = one(q, "GSTRATEDUTYHEAD").toUpperCase(), vt = one(q, "GSTRATEVALUATIONTYPE"), rv = one(q, "GSTRATE");
+    if (!rv || (vt && !/value/i.test(vt))) return;
+    const r = num(rv);
+    if (/^(CGST|CENTRAL)/.test(h)) o.c = r; else if (/^(SGST|UTGST|STATE|UNION)/.test(h)) o.s = r;
+    else if (/^(IGST|INTEGRATED)/.test(h)) o.i = r; else if (/CESS/.test(h)) o.cess = r;
+  });
+  return o;
+}
+// a GST tax ledger line, by its name (the voucher does not say which ledger is a tax ledger): CGST, SGST, UTGST, IGST, cess
+const TAXNAME = /\b(?:C|S|I|UT)GST\b|\bcess\b|central tax|state tax|integrated tax|union territory tax/i;
+const IGSTNAME = /\bIGST\b|integrated tax/i, CSNAME = /\b(?:C|S|UT)GST\b|central tax|state tax|union territory tax/i;
+// "200.00/Nos" -> 200; " 10 Nos" -> [10, "Nos"]
+function rateOf(t){ t = String(t || ""); const i = t.indexOf("/"); return amt(i >= 0 ? t.slice(0, i) : t); }
+function qtyOf(t){ const m = String(t || "").trim().match(/^(-?[\d.,]+)\s*(.*)$/); return m ? [Math.abs(num(m[1].replace(/,/g, ""))), m[2].trim().split(/\s+/)[0] || ""] : [null, ""]; }
+const rupees = (x) => "Rs " + (Math.round(Math.abs(x) * 100) / 100).toFixed(2);
 function takeVoucher(s){
   const id = String(one(s, "GUID") || (s.match(/REMOTEID="([^"]*)"/) || [])[1] || "").replace(/[^\w\-.:]/g, "");
   const narrFull = one(s, "NARRATION");
@@ -86,12 +122,45 @@ function takeVoucher(s){
       const a = ma.index, mz = s.slice(a).match(/<\/ALLINVENTORYENTRIES\.LIST\s*>/); if (!mz) break;
       const z = a + mz.index;
       const own = s.slice(a, z).replace(/<ACCOUNTINGALLOCATIONS\.LIST(?:\s[^>]*[^\/>])?\s*>[\s\S]*?<\/ACCOUNTINGALLOCATIONS\.LIST\s*>/g, "");
-      items.push({a, z, h: one(own, "GSTHSNNAME"), gr: igstRate(own)});
+      items.push({a, z, h: one(own, "GSTHSNNAME"), gr: igstRate(own), own, alloc: 0});
       reA.lastIndex = z + 1;
     }
   }
   // each line: [guid, ledger, amount, HSN or SAC, GST rate (the whole rate, IGST's) or null, bill-wise details]
-  const lines = [];
+  const lines = [], meta = [], costs = [], banks = [], tds = [], dues = [], checks = [];
+  // part A: a ledger line's cost centres, bank details, TDS details and a due date given as a date
+  const lineExtras = (e, n, ledger, la) => {
+    const ccat = new Map();
+    blocks(e, "CATEGORYALLOCATIONS.LIST").forEach((blk) => {
+      const cat = (one(blk, "CATEGORY") || "Primary Cost Category").slice(0, 200);
+      blocks(blk, "COSTCENTREALLOCATIONS.LIST").forEach((q) => {
+        const cn = one(q, "NAME"); if (!cn) return;
+        const ca = r2(amt(one(q, "AMOUNT")));
+        costs.push({n, ledger, cat, centre: cn.slice(0, 200), amt: ca});
+        ccat.set(cat, r2((ccat.get(cat) || 0) + ca));
+      });
+    });
+    ccat.forEach((tot, cat) => { if (Math.abs(tot - la) > 0.01) checks.push("the cost centres of " + ledger + " (" + cat + ") come to " + rupees(tot) + ", not the line's " + rupees(la)); });
+    blocks(e, "BANKALLOCATIONS.LIST").forEach((q) => {
+      const b = {n, ledger, type: one(q, "TRANSACTIONTYPE").slice(0, 60), no: one(q, "INSTRUMENTNUMBER").slice(0, 60), date: d8(one(q, "INSTRUMENTDATE")), bdate: d8(one(q, "BANKERSDATE"))};
+      if (b.type || b.no || b.date || b.bdate) banks.push(b);
+    });
+    blocks(e, "TAXOBJECTALLOCATIONS.LIST").forEach((q) => {
+      const tt = one(q, "TAXTYPE");
+      if (tt && !/TDS/i.test(tt)) return;
+      const subs = blocks(q, "SUBCATEGORYALLOCATION.LIST");
+      const nature = one(q, "CATEGORY").slice(0, 200), party = one(q, "PARTYLEDGER").slice(0, 300);
+      if (!subs.length && !nature) return;
+      let rate = null, base = null, tax = null;
+      subs.forEach((x) => { const tr = one(x, "TAXRATE"), ab = one(x, "ASSESSABLEAMOUNT"), tx = one(x, "TAX");
+        if (tr && rate == null) rate = num(tr); if (ab && base == null) base = r2(amt(ab)); if (tx) tax = r2((tax || 0) + amt(tx)); });
+      tds.push({n, ledger, nature, party, rate, base, tax: tax == null ? la : tax});
+    });
+    if (e.indexOf("<BILLALLOCATIONS.LIST") >= 0) blocks(e, "BILLALLOCATIONS.LIST").forEach((q) => {
+      const cp = (q.match(/<BILLCREDITPERIOD\b[^>]*>([^<]*)<\/BILLCREDITPERIOD>/) || [])[1] || "", due = d8(cp);
+      if (due) dues.push({n, ledger, name: one(q, "NAME").slice(0, 200), type: one(q, "BILLTYPE").slice(0, 20), amt: r2(amt(one(q, "AMOUNT"))), due});
+    });
+  };
   ["ALLLEDGERENTRIES.LIST", "LEDGERENTRIES.LIST", "ACCOUNTINGALLOCATIONS.LIST"].forEach((tag) => {
     after(s, tag).forEach(({a: pos, p}) => {
       const e = upTo(p, tag);
@@ -111,7 +180,13 @@ function takeVoucher(s){
           bills.push([one(q, "NAME").slice(0, 200), type.slice(0, 20), a, dm ? Number(dm[1]) : null]);
         });
       }
-      lines.push([id, name, Math.round(amt(one(e, "AMOUNT")) * 100) / 100, hsn, rate == null ? null : rate, bills]);
+      const ln = lines.length, la = Math.round(amt(one(e, "AMOUNT")) * 100) / 100;
+      lines.push([id, name, la, hsn, rate == null ? null : rate, bills]);
+      // part A: what the line carries besides (each with the line's number in the entry and its ledger)
+      if (it) it.alloc = r2(it.alloc + la);
+      meta.push({n: ln, name, a: la, it: !!it, bills: !!bills.length, rate: it ? null : rate, billSum: bills.length ? r2(bills.reduce((t, b) => t + b[2], 0)) : null,
+        billList: bills.length ? blocks(e, "BILLALLOCATIONS.LIST") : []});
+      lineExtras(e, ln, name, la);
     });
   });
   // review of 01-Oct-2026: a payroll voucher (Tally's PaySlip view) has no ledger lines; its pay heads sit in each
@@ -129,6 +204,50 @@ function takeVoucher(s){
     const party = one(s, "PARTYLEDGERNAME");
     if (party && !have.has(namesKey(party)) && Math.abs(tot) >= 0.005) lines.push([id, party, Math.round(-tot * 100) / 100, "", null, []]);
   }
+  // ---- part A: the e-invoice and e-way bill
+  v.irn = one(s, "IRN").slice(0, 100);
+  v.ackNo = one(s, "IRNACKNO").slice(0, 40);
+  v.ackDate = d8(one(s, "IRNACKDATE"));
+  v.eway = (blocks(s, "EWAYBILLDETAILS.LIST").map((q) => one(q, "BILLNUMBER")).find(Boolean) || "").slice(0, 40);
+  // the GST split: IGST when the entry's tax ledgers are IGST, CGST + SGST when they are those; else the company's and the
+  // party's GSTIN states (the same: within the state); else within the state
+  const named = meta.filter((m) => !m.it && !m.bills && TAXNAME.test(m.name));
+  const hasI = named.some((m) => IGSTNAME.test(m.name)), hasCS = named.some((m) => CSNAME.test(m.name));
+  const inter = hasI && !hasCS ? true : hasCS && !hasI ? false : (v.cmp.length >= 2 && v.gstin.length >= 2 ? v.cmp.slice(0, 2) !== v.gstin.slice(0, 2) : false);
+  // the items: name, quantity and unit (billed), rate, taxable value, the HSN or SAC and the GST rate Tally applied to that
+  // line (its own rate details, never the master's), and the tax on it. Tally 7.1 writes no tax amount per item line: it is
+  // worked out here as Tally does, the line's taxable value times the head's rate, to the paisa (CGST and SGST each half of
+  // the IGST rate when Tally gives only that)
+  v.items = items.map((it, k) => {
+    const [qty, unit] = qtyOf(one(it.own, "BILLEDQTY")), rh = rateHeads(it.own), tx = r2(amt(one(it.own, "AMOUNT")));
+    const gr = rh.i != null ? rh.i : (rh.c != null || rh.s != null ? (rh.c || 0) + (rh.s || 0) : null);
+    const cg = rh.c != null ? rh.c : (gr != null ? gr / 2 : null), sg = rh.s != null ? rh.s : (gr != null ? gr / 2 : null);
+    return {n: k, item: one(it.own, "STOCKITEMNAME").slice(0, 300), qty, unit: unit.slice(0, 20), rate: one(it.own, "RATE") ? r2(rateOf(one(it.own, "RATE"))) : null,
+      taxable: tx, alloc: it.alloc, hsn: it.h.slice(0, 20), gst: gr,
+      cgst: gr == null || inter ? 0 : r2(tx * cg / 100), sgst: gr == null || inter ? 0 : r2(tx * sg / 100), igst: gr == null || !inter ? 0 : r2(tx * gr / 100),
+      cess: rh.cess == null ? 0 : r2(tx * rh.cess / 100)};
+  });
+  v.costs = costs; v.banks = banks; v.tds = tds; v.dues = dues;
+  // ---- part A, the owner's accuracy rules: an entry applies only if its lines total zero; item lines' taxable value
+  // plus tax equal the ledger lines for that invoice; bill-wise and cost centre allocations add up to their line. Each
+  // failure in plain words (the recorder path holds the entry; a Day Book is never refused: flagged)
+  if (lines.length && !v.cancel){
+    const sum = r2(lines.reduce((t, l) => t + l[2], 0));
+    if (Math.abs(sum) > 0.01) checks.unshift("its lines do not add up to zero (" + rupees(sum) + " " + (sum < 0 ? "more debit" : "more credit") + ")");
+    meta.forEach((m) => { if (m.billSum != null && Math.abs(m.billSum - m.a) > 0.01) checks.push("the bill-wise details of " + m.name + " come to " + rupees(m.billSum) + ", not the line's " + rupees(m.a)); });
+    v.items.forEach((it) => { if (Math.abs(it.alloc - it.taxable) > 0.01) checks.push("item " + (it.item || it.n + 1) + ": taxable value " + rupees(it.taxable) + " but the ledger lines under it come to " + rupees(it.alloc)); });
+    // the tax: checked when the invoice charges GST (it has GST ledger lines) and Tally applied a GST rate to its items:
+    // the items' tax (and that of a taxed ledger line beside them, e.g. freight with its own rate) against those lines,
+    // within one rupee (Tally rounds per ledger). Items with no rate of Tally's (GST typed on the ledgers by hand, or a
+    // body from a bridge before 2.3.1 part A) cannot be checked this way: not a failure
+    if (v.items.some((it) => it.gst != null) && named.length){
+      const want = r2(v.items.reduce((t, it) => t + it.cgst + it.sgst + it.igst + it.cess, 0) +
+        meta.filter((m) => !m.it && !m.bills && !TAXNAME.test(m.name) && m.rate).reduce((t, m) => t + m.a * m.rate / 100, 0));
+      const got = r2(named.reduce((t, m) => t + m.a, 0));
+      if (Math.abs(want - got) > 1) checks.push("the GST worked out on the items (" + rupees(want) + ") does not match the GST ledger lines (" + rupees(got) + ")");
+    }
+  }
+  v.checks = checks.map((c) => c.slice(0, 300)).slice(0, 20);
   return {v, lines};
 }
 
@@ -161,4 +280,4 @@ function parseDay(text){
   return {vouchers, lines, n: vouchers.length, alterMax, dates: Array.from(dates)};
 }
 
-export { parseDay, amt, one, unesc, igstRate, cleanName, namesKey };
+export { parseDay, amt, one, unesc, igstRate, cleanName, namesKey, d8 };
