@@ -187,8 +187,11 @@ Privileges clean-up (06-Oct-2026): `migration-61-privileges.sql` runs after 58 o
 (privileges only; add-only: it only revokes; one transaction, `lock_timeout` 10 s, no "delete from", safe twice; NOT yet
 run on staging). On every public table, view and sequence: TRUNCATE, REFERENCES and TRIGGER revoked from anon and
 authenticated (row security does not cover TRUNCATE); INSERT, UPDATE and DELETE revoked from anon everywhere (the app
-writes no table before sign-in) and from authenticated everywhere except what the app writes directly: `clients` and
-`records` insert + update (the upsert and the deleted-flag PATCH), `activity` insert; sequences closed to anon, setval
+writes no table before sign-in) and from authenticated everywhere, then granted back on exactly the columns the app's
+requests send: `clients` and `records` insert + update (the upsert and the deleted-flag PATCH; not the server's
+`*_at` / `*_by` columns), `activity` insert (firm_id, client_id, what, detail; not id / user_id / at). `members` keeps no
+write: the owner's finding (members_self let a staff member make themselves owner) is closed; the live database gets the
+same through `live-members-fix.sql` (one revoke, run by the owner; `run_live_members_fix.py`); sequences closed to anon, setval
 closed to authenticated, usage kept only on `activity_id_seq`; postgres's default privileges in public no longer give the
 two roles TRUNCATE, REFERENCES or TRIGGER on a new table. SELECT, service_role and postgres untouched. Tested by
 `run_migration61.py` and `run_migration_order.py` (61 in both orders).

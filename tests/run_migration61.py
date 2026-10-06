@@ -21,6 +21,14 @@ tally_balances (security invoker, as on staging). Then 61, twice. Checks:
      the records upsert and deleted flag, the activity POST (id from activity_id_seq, user_id auth.uid()); a security
      definer function writing a table (tally_device_trial_tools). All work.
   7. refused: anon TRUNCATE / INSERT; authenticated TRUNCATE, an INSERT into tally_vouchers, a DELETE on clients.
+  9. the owner's finding (06-Oct-2026), with staging's helpers, members_read / members_self / audit_members and the sync
+     guard (tests/members_stand.py, server/security/migration-19-sync-guard.sql), each tried as the member and rolled
+     back, before and after 61: 1a a staff member makes themselves owner (before: works, logged; after: refused); 1b an
+     inactive member switches on, 1c moves firm, 1d own email / user_id (after: all refused); 3 a client or record moved
+     or put into another firm (refused before and after by the WITH CHECK), the server's columns (deleted_by,
+     restored_by, updated_by / at) and activity's id / at (before: writable; after: refused), the app's audit POST and a
+     staff member restoring a deleted record (still work). authenticated's INSERT / UPDATE: exactly the columns the app
+     sends (KEEPCOLS).
   8. members and platform_secrets, with staging's policies (members_self; secrets_write / secrets_update; no SELECT policy
      on platform_secrets) and admin_set_secret / admin_secrets() as granted on staging (bodies: the stand's own). Before
      AND after 61: anon and authenticated (a member, a platform administrator) read no row of platform_secrets;
@@ -32,7 +40,7 @@ tally_balances (security invoker, as on staging). Then 61, twice. Checks:
 RED: before the file exists it stops at the first check."""
 import os, re, sys, subprocess
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
-import pg_stand
+import pg_stand, members_stand as MS
 SQLDIR = os.path.join(HERE, "..", "server", "tally-cloud")
 FILES = [os.path.join(SQLDIR, f) for f in ("migration-32-sync-safety.sql", "migration-33-ledger-lists.sql", "migration-35-bridge-control.sql")] + \
         [os.path.join(HERE, "fixtures", "migration-34-as-run-on-staging.sql")] + \
@@ -53,6 +61,10 @@ tally_post_ids tally_post_jobs tally_post_marks tally_post_row_flags tally_post_
 tally_recorder_pending tally_recorder_restore_log tally_sync_cursor tally_sync_reads tally_tieouts tally_voucher_versions tally_vouchers usage_period
 wallet_entries""".split()
 KEEP = {"clients": {"INSERT", "UPDATE"}, "records": {"INSERT", "UPDATE"}, "activity": {"INSERT"}}
+# exactly the columns the app's requests send (migration 61's header): (privilege, column)
+KEEPCOLS = {"clients": {("INSERT", c) for c in ("firm_id", "id", "name", "gstin", "pan", "tally_name", "data", "deleted")} | {("UPDATE", c) for c in ("firm_id", "id", "name", "gstin", "pan", "tally_name", "data", "deleted", "delete_reason")},
+            "records": {("INSERT", c) for c in ("firm_id", "kind", "id", "client_id", "data", "deleted")} | {("UPDATE", c) for c in ("firm_id", "kind", "id", "client_id", "data", "deleted", "delete_reason")},
+            "activity": {("INSERT", c) for c in ("firm_id", "client_id", "what", "detail")}}
 PRIVS = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"]
 ROLES = ["anon", "authenticated", "service_role", "postgres"]
 fails = []
@@ -107,7 +119,8 @@ def fingerprint():
     parts = ["select %s as t, md5(coalesce(string_agg(x::text, '|' order by x::text), '')) as m, count(*) as n from public.%s x" % (q(t), '"%s"' % t) for t in tables()]
     return {r["t"]: (r["m"], r["n"]) for r in db.rows(" union all ".join(parts))}
 def as_role(role, sql, uid=None):
-    pre = "\\pset tuples_only on\n\\pset format unaligned\nset role %s;\n" % role + ("set fincom.uid = '%s';\n" % uid if uid else "")
+    pre = "\\pset tuples_only on\n\\pset format unaligned\nset role %s;\n" % role + ("set fincom.uid = '%s';\n" % uid if uid else "") \
+          + ("set fincom.jwt = '{\"aal\": \"aal2\"}';\n" if uid == ADMIN else "")      # the platform administrator past the second step (is_superadmin() needs aal2)
     return psql_text(pre + sql)
 try:
     # Supabase's default grants, before anything is made: every new public table, sequence and function to the three roles
@@ -151,7 +164,6 @@ try:
     # are the stand's own (an upsert by name; the names and times). members' key user_id: the admin function's upsert key.
     db.sql("""
       alter table public.members add column if not exists email text; alter table public.members add primary key (user_id);
-      create policy members_self on public.members for update to authenticated using (user_id = auth.uid()) with check ((user_id = auth.uid()) and (firm_id = my_firm()));
       create table public.platform_admins (user_id uuid primary key);
       alter table public.platform_admins enable row level security;
       create or replace function public.is_superadmin() returns boolean language sql stable security definer set search_path = public as $$ select exists (select 1 from public.platform_admins where user_id = auth.uid()) $$;
@@ -174,11 +186,16 @@ try:
       insert into platform_secrets (name, value) values ('claude_api_key', 'sk-old'), ('google_vision_key', 'gv-old');
       insert into tally_devices (id, firm_id, name, key_hash, version, info) values (%(D1)s, %(F)s, 'NW144', 'h1', '2.3.0', '{}');
       insert into clients (id, firm_id, name, data) values ('c1', %(F)s, 'Client One', '{"name": "Client One"}');
-      insert into records (firm_id, client_id, kind, id, data) values (%(F)s, 'c1', 'bill', 'b1', '{"no": "1"}');""" % {"F": q(F), "O": q(OWNER), "D1": q(D1), "A": q(ADMIN)})
+      insert into records (firm_id, client_id, kind, id, data) values (%(F)s, 'c1', 'bill', 'b1', '{"no": "1"}');
+      insert into records (firm_id, client_id, kind, id, data, deleted, deleted_at, delete_reason) values (%(F)s, 'c1', 'bill', 'b9', '{"no": "9"}', true, now(), 'removed in the app');""" % {"F": q(F), "O": q(OWNER), "D1": q(D1), "A": q(ADMIN)})
     for path in FILES:
         r = psql_text(open(path).read())
         if r.returncode: ok(False, "%s runs: %s" % (os.path.basename(path), r.stderr[-300:])); raise SystemExit("cannot go on")
     db.sql("alter view public.tally_balances set (security_invoker = true);")      # made by 32; on staging a security invoker view
+    # staging's helpers, members (columns, members_read, members_self, audit_members) and the sync guard (migration 19)
+    db.sql(MS.HELPERS); db.sql(MS.MEMBERS); db.sql(MS.seed(q, F))
+    r = psql_text(open(os.path.join(HERE, "..", "server", "security", "migration-19-sync-guard.sql")).read())
+    ok(r.returncode == 0, "the sync guard (server/security/migration-19-sync-guard.sql) on clients / records %s" % (r.stderr or "").strip()[-300:] if r.returncode else "")
     # the rest of staging's tables, by name (Supabase's default grants on them), row security on, one row each where it can
     have = set(tables())
     for t in STAGING:
@@ -209,6 +226,34 @@ try:
         r = as_role(role, "begin;\n%s\nrollback;" % sql, uid)
         return "ok" if r.returncode == 0 else r.stderr.strip()[-90:]
     secrets_reads("before 61")
+    # 1a-1d (members) and 3 (clients, records, activity): each tried as the signed-in member, rolled back, before and after 61
+    F2, OTHER = MS.F2, MS.OTHER_USER
+    upd = lambda x: "with u as (%s returning 1) select 'updated=' || count(*) from u;" % x
+    TABLE_CASES = [
+        ("3-client-move", OWNER, upd("update public.clients set firm_id = %s where firm_id = %s and id = 'c1'" % (q(F2), q(F))), "an owner moves a client to another firm (PATCH firm_id)"),
+        ("3-client-upsert-other", OWNER, "insert into public.clients (firm_id, id, name) values (%s, 'cx', 'X') on conflict (firm_id, id) do update set name = excluded.name;" % q(F2), "an owner upserts a client into another firm"),
+        ("3-record-move", OWNER, upd("update public.records set firm_id = %s where firm_id = %s and id = 'b1'" % (q(F2), q(F))), "an owner moves a record to another firm"),
+        ("3-record-insert-other", MS.STAFF_A, "insert into public.records (firm_id, kind, id, data) values (%s, 'bill', 'bx', '{}');" % q(F2), "a staff member inserts a record into another firm"),
+        ("3-client-deleted_by", MS.STAFF_A, upd("update public.clients set deleted_by = %s where id = 'c1'" % q(OTHER)), "a staff member writes clients.deleted_by (someone else's name)"),
+        ("3-record-restored_by", MS.STAFF_A, upd("update public.records set restored_by = %s, restored_at = now() where id = 'b1'" % q(OTHER)), "a staff member writes records.restored_by / restored_at"),
+        ("3-client-updated_by", MS.STAFF_A, upd("update public.clients set updated_by = %s, updated_at = '2020-01-01' where id = 'c1'" % q(OTHER)), "a staff member writes clients.updated_by / updated_at"),
+        ("3-activity-backdated", MS.STAFF_A, "insert into public.activity (firm_id, what, detail, at) values (%s, 'signin', 'x', '2020-01-01');" % q(F), "a staff member back-dates an audit row (activity.at)"),
+        ("3-activity-own-id", MS.STAFF_A, "insert into public.activity (id, firm_id, what) values (900000, %s, 'signin');" % q(F), "a staff member picks an audit row's id (ahead of the sequence)"),
+        ("3-activity-plain", MS.STAFF_A, "insert into public.activity (firm_id, client_id, what, detail) values (%s, '', 'signin', 'x');" % q(F), "the app's own audit POST (firm_id, client_id, what, detail)"),
+        ("3-record-restore", MS.STAFF_A, "with u as (update public.records set deleted = false where id = 'b9' returning (restored_by = auth.uid()) as mine) select 'updated=' || count(*) || ' stamped=' || coalesce(bool_and(mine)::text, '-') from u;",
+         "a staff member flips a deleted record back (deleted = false; the sync guard stamps restored_by)"),
+    ]
+    def run_table_cases(): return {k: (MS.attempt(psql_text, uid, sql), w) for k, uid, sql, w in TABLE_CASES}
+    mb0, tb0 = MS.run_cases(psql_text, q, F), run_table_cases()
+    for k, (res, w) in sorted(mb0.items()) + sorted(tb0.items()): print("       before 61  %-22s %-80s -> %s" % (k, w, res))
+    ok(mb0["1a"][0] == "updated=1 audit=1", "1a. before 61: a staff member makes themselves owner with one PATCH, and audit_members only logs it (%s)" % mb0["1a"][0])
+    ok(MS.rls_refused(mb0["1b"][0]), "1b. before 61: an inactive member switching themselves on is already refused by members_self's WITH CHECK (my_firm() is null) (%s)" % mb0["1b"][0])
+    ok(MS.rls_refused(mb0["1c"][0]), "1c. before 61: moving oneself to another firm is already refused by the WITH CHECK (firm_id = my_firm()) (%s)" % mb0["1c"][0])
+    ok(mb0["1d-email"][0] == "updated=1 audit=1" and MS.rls_refused(mb0["1d-user_id"][0]), "1d. before 61: one's own email changes (%s); one's own user_id is refused by the WITH CHECK (%s)" % (mb0["1d-email"][0], mb0["1d-user_id"][0]))
+    ok(all(MS.rls_refused(tb0[k][0]) for k in ("3-client-move", "3-client-upsert-other", "3-record-move", "3-record-insert-other")),
+       "3. before 61: a client or record moved / put into another firm is refused by the policies' WITH CHECK (firm_id = my_firm())")
+    ok(all(tb0[k][0].startswith("updated=1") for k in ("3-client-deleted_by", "3-record-restored_by", "3-client-updated_by")) and all("ERROR" not in tb0[k][0] and "denied" not in tb0[k][0] and "violates" not in tb0[k][0] for k in ("3-activity-backdated", "3-activity-own-id")),
+       "3. before 61 (red): a member can write the server's columns (deleted_by, restored_by, updated_by / at) and back-date or number an audit row")
     SELF = "update public.members set name = 'Anshul G' where user_id = %s;" % q(OWNER)
     SEC_INS = "insert into public.platform_secrets (name, value) values ('gst_key', 'x');"
     SEC_UPD = "update public.platform_secrets set value = 'sk-new' where name = 'claude_api_key';"
@@ -228,10 +273,19 @@ try:
     ok(not bad, "3. no public relation grants TRUNCATE, REFERENCES or TRIGGER to anon or authenticated (%d relations) %s" % (len(rels()), bad or ""))
     bad = {t: sorted(g1.get(("anon", t), set()) & {"INSERT", "UPDATE", "DELETE"}) for t in rels() if g1.get(("anon", t), set()) & {"INSERT", "UPDATE", "DELETE"}}
     ok(not bad, "3. anon holds no INSERT, UPDATE or DELETE anywhere %s" % (bad or ""))
-    writes = {t: g1.get(("authenticated", t), set()) & {"INSERT", "UPDATE", "DELETE"} for t in rels()}
-    writes = {t: v for t, v in writes.items() if v}
+    colw = {}
+    for x in db.rows("select c.relname as t, a.attname as col, p from pg_class c join pg_attribute a on a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped cross join unnest(array['INSERT', 'UPDATE']) p "
+                     "where c.relnamespace = 'public'::regnamespace and c.relkind in ('r', 'p', 'v', 'm', 'f') and has_column_privilege('authenticated', c.oid, a.attname, p)"):
+        colw.setdefault(x["t"], set()).add((x["p"], x["col"]))
+    ok(colw == KEEPCOLS, "3. authenticated's INSERT / UPDATE: exactly the columns the app sends on clients, records, activity; none elsewhere %s"
+       % {t: sorted(v ^ KEEPCOLS.get(t, set())) for t, v in colw.items() if v != KEEPCOLS.get(t)})
+    ok(not [t for t in rels() if "DELETE" in g1.get(("authenticated", t), set())] and not [t for t in rels() if g1.get(("authenticated", t), set()) & {"INSERT", "UPDATE"}],
+       "3. authenticated holds DELETE nowhere, and INSERT / UPDATE on no whole table (columns only)")
+    writes = {t: {p for p, _ in v} for t, v in colw.items()}
     ok(writes == KEEP, "3. authenticated writes only clients (insert, update), records (insert, update), activity (insert): %s" % {t: sorted(v) for t, v in writes.items()})
-    ok(all((g0.get((ro, t), set()) & {"SELECT"}) == (g1.get((ro, t), set()) & {"SELECT"}) for ro in ("anon", "authenticated") for t in rels()) and c0 == c1,
+    ok(all((g0.get((ro, t), set()) & {"SELECT"}) == (g1.get((ro, t), set()) & {"SELECT"}) for ro in ("anon", "authenticated") for t in rels())
+       and [x for x in c0 if x["t"] not in KEEP] == [x for x in c1 if x["t"] not in KEEP]
+       and all(db.one("select bool_and(has_column_privilege('authenticated', %s::regclass, attname, 'SELECT')) from pg_attribute where attrelid = %s::regclass and attnum > 0 and not attisdropped" % (q("public." + t), q("public." + t))) == "t" for t in KEEP),
        "3. SELECT of anon and authenticated exactly as before, the column grants (tally_devices, tally_post_jobs) too")
     ok(all(g0.get((ro, t)) == g1.get((ro, t)) for ro in ("service_role", "postgres") for t in rels()) and all(len(g1.get(("service_role", t), set())) == 7 for t in tables()),
        "3. service_role and postgres exactly as before (service_role all seven on every table)")
@@ -265,12 +319,22 @@ try:
         r = as_role("authenticated", sql, OWNER)
         ok(r.returncode == 0, "6. authenticated: %s works %s" % (w, (r.stderr or "").strip()[-300:]))
     ok(db.one("select string_agg(id || ':' || deleted::text || ':' || name, ',' order by id) from clients") == "c1:false:Client One (merged),c2:true:Client Two"
-       and db.one("select string_agg(id || ':' || deleted::text, ',' order by id) from records") == "b1:false,b2:true"
+       and db.one("select string_agg(id || ':' || deleted::text, ',' order by id) from records") == "b1:false,b2:true,b9:true"
        and db.one("select count(*) from activity where user_id = %s and what = 'signin'" % q(OWNER)) == "1"
        and db.one("select trial_tools::text from tally_devices where id = %s" % q(D1)) == "true", "6. the rows are as the app wrote them")
     r = as_role("service_role", "update public.tally_devices set version = version where id = %s; update public.tally_jobs set status = status where false;" % q(D1))
     ok(r.returncode == 0, "6. service_role still writes (tally_devices, tally_jobs) %s" % (r.stderr or "").strip()[-300:])
 
+    mb1, tb1 = MS.run_cases(psql_text, q, F), run_table_cases()
+    for k, (res, w) in sorted(mb1.items()) + sorted(tb1.items()): print("       after 61   %-22s %-80s -> %s" % (k, w, res))
+    for k in ("1a", "1b", "1c", "1d-email", "1d-user_id"):
+        ok(MS.refused(mb1[k][0]), "%s. after 61: %s: refused (%s)" % (k, mb1[k][1], mb1[k][0]))
+    ok(all(MS.rls_refused(tb1[k][0]) for k in ("3-client-move", "3-client-upsert-other", "3-record-move", "3-record-insert-other")),
+       "3. after 61: a client or record moved / put into another firm: still refused by the WITH CHECK (firm_id stays writable: the upsert sends it)")
+    ok(all("permission denied for table" in tb1[k][0] for k in ("3-client-deleted_by", "3-record-restored_by", "3-client-updated_by", "3-activity-backdated", "3-activity-own-id")),
+       "3. after 61: the server's columns (deleted_by, restored_by, updated_by / at) and activity's id / at: refused (%s)" % {k: tb1[k][0][-40:] for k in ("3-client-deleted_by", "3-activity-backdated")})
+    ok(tb1["3-activity-plain"][0] == "audit=0" and tb1["3-record-restore"][0].startswith("updated=1 stamped=true") and tb0["3-record-restore"][0].startswith("updated=1 stamped=true"),
+       "3. after 61: the app's audit POST works; a staff member may still restore a deleted record (as before; a writer may delete too), the guard stamps restored_by (%s)" % tb1["3-record-restore"][0])
     # 8. members and platform_secrets after 61: nothing the pages send is refused; the direct writes the policies allowed are
     secrets_reads("after 61")
     a = {"members self update": tried("authenticated", SELF, OWNER), "secrets insert (platform admin)": tried("authenticated", SEC_INS, ADMIN), "secrets update (platform admin)": tried("authenticated", SEC_UPD, ADMIN)}

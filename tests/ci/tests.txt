@@ -57,6 +57,7 @@ run_led2_ui.py                        120  TDSDESK_SITE=../app/dist-test
 run_ledger_names_receivables.js       120
 run_ledgerpick_ui.py                  120  TDSDESK_SITE=../app/dist-test
 run_libs_ui.py                        120
+run_live_members_fix.py               120
 run_lock_beat.py                      570
 run_main_bridge_server.py             120
 run_migration31.py                    120
