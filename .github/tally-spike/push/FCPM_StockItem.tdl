@@ -1,0 +1,36 @@
+;; FCPM_StockItem.tdl  -  MEASUREMENT ONLY (push-design spike). Loaded beside FCPFull.tdl in the voucher-type probe only: does the
+;; "Stock Item" form accept an On : Form Accept hook, and what does a line of it hold? A form name this release does not
+;; know fails this file alone. Writes to the same full-<company GUID>-<day>.txt as FCPFull.tdl.
+
+[#Form: Stock Item]
+    On : Form Accept : Yes : Call : FCPStamp : "msta"
+    On : Form Accept : Yes : Form Accept
+    On : Form Accept : Yes : Call : FCPStamp : "mstc"
+    On : Form Accept : Yes : Call : FCPMStockItemW : "stockitem_saved"
+
+[Function: FCPMStockItemW]
+    Parameter : pEvent : String
+    Variable  : vCG : String
+    Returns   : Logical
+    01 : SET : vCG : $Guid:Company:##SVCurrentCompany
+    02 : OPEN FILE : "C:\fcspike\push\full-" + ##vCG + "-" + ($$String:$$MachineDate:"UniversalDate") + ".txt" : Text : Write : Unicode
+    03 : IF : NOT $$LastResult
+    04 :    RETURN : Yes
+    05 : END IF
+    06 : WRITE FILE : "FCF1|ev=" + ##pEvent + "|form=Stock Item|cguid=" + ##vCG
+    07 : WRITE FILE : "|guid=" + ($$String:$Guid)
+    08 : WRITE FILE : "|mid=" + ($$String:$MasterID)
+    09 : WRITE FILE : "|aid=" + ($$String:$AlterID)
+    10 : WRITE FILE : "|name=" + ($$String:$Name)
+    11 : WRITE FILE : "|parent=" + ($$String:$Parent)
+    12 : WRITE FILE : "|category=" + ($$String:$Category)
+    13 : WRITE FILE : "|baseunits=" + ($$String:$BaseUnits)
+    14 : WRITE FILE : "|isbatchwiseon=" + ($$String:$IsBatchWiseOn)
+    15 : WRITE FILE : "|hasmfgdate=" + ($$String:$HasMfgDate)
+    16 : WRITE FILE : "|gstapplicable=" + ($$String:$GSTApplicable)
+    17 : WRITE FILE : "|openingbalance=" + ($$String:$OpeningBalance)
+    18 : WRITE FILE : "|openingvalue=" + ($$String:$OpeningValue)
+    19 : WRITE FILE : "|openingrate=" + ($$String:$OpeningRate)
+    20 : WRITE FILE LINE : "|end=1"
+    21 : CLOSE TARGET FILE
+    22 : RETURN : Yes

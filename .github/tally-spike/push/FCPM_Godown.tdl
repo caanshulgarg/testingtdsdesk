@@ -1,0 +1,30 @@
+;; FCPM_Godown.tdl  -  MEASUREMENT ONLY (push-design spike). Loaded beside FCPFull.tdl in the voucher-type probe only: does the
+;; "Godown" form accept an On : Form Accept hook, and what does a line of it hold? A form name this release does not
+;; know fails this file alone. Writes to the same full-<company GUID>-<day>.txt as FCPFull.tdl.
+
+[#Form: Godown]
+    On : Form Accept : Yes : Call : FCPStamp : "mgoa"
+    On : Form Accept : Yes : Form Accept
+    On : Form Accept : Yes : Call : FCPStamp : "mgoc"
+    On : Form Accept : Yes : Call : FCPMGodownW : "godown_saved"
+
+[Function: FCPMGodownW]
+    Parameter : pEvent : String
+    Variable  : vCG : String
+    Returns   : Logical
+    01 : SET : vCG : $Guid:Company:##SVCurrentCompany
+    02 : OPEN FILE : "C:\fcspike\push\full-" + ##vCG + "-" + ($$String:$$MachineDate:"UniversalDate") + ".txt" : Text : Write : Unicode
+    03 : IF : NOT $$LastResult
+    04 :    RETURN : Yes
+    05 : END IF
+    06 : WRITE FILE : "FCF1|ev=" + ##pEvent + "|form=Godown|cguid=" + ##vCG
+    07 : WRITE FILE : "|guid=" + ($$String:$Guid)
+    08 : WRITE FILE : "|mid=" + ($$String:$MasterID)
+    09 : WRITE FILE : "|aid=" + ($$String:$AlterID)
+    10 : WRITE FILE : "|name=" + ($$String:$Name)
+    11 : WRITE FILE : "|parent=" + ($$String:$Parent)
+    12 : WRITE FILE : "|hasnospace=" + ($$String:$HasNoSpace)
+    13 : WRITE FILE : "|address=" + ($$String:$Address)
+    14 : WRITE FILE LINE : "|end=1"
+    15 : CLOSE TARGET FILE
+    16 : RETURN : Yes

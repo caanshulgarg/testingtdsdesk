@@ -161,6 +161,7 @@ function Start-Proxy {
 }
 function Start-T($data, [string[]]$tdls, $tag) {
   Stop-Proxy; Stop-T; Write-Ini $data $tdls
+  $script:lastStamp = if (@($tdls | Where-Object { $_ -like '*FCPFull*' }).Count) { 'e' } elseif (@($tdls | Where-Object { $_ -like '*FCPStamp*' -or $_ -like '*FCPHeads*' }).Count) { 'd' } else { '' }
   $sw = [Diagnostics.Stopwatch]::StartNew()
   $p = Start-Process -FilePath $exe -WorkingDirectory $dir -PassThru; $script:tpid = $p.Id
   for ($i = 0; $i -lt 60; $i++) { Start-Sleep 2; try { Invoke-WebRequest 'http://127.0.0.1:9000' -UseBasicParsing -TimeoutSec 5 | Out-Null; break } catch {}; if ($p.HasExited) { break } }
@@ -172,6 +173,7 @@ function Start-T($data, [string[]]$tdls, $tag) {
   if ($script:useProxy) { Start-Proxy | Out-Null }
   return $ok
 }
+function DMY($d) { '{0}-{1}-{2}' -f [int]$d.Substring(6, 2), [int]$d.Substring(4, 2), $d.Substring(0, 4) }
 function DayBook($date, $n) { KeysTo '%g' 2; KeysTo 'Day Book' 1; KeysTo '{ENTER}' 3; KeysTo '{F2}' 2; KeysTo "$date{ENTER}" 3 $n }
 
 # ---------------------------------------------------------------- setup: light, then heavy (a copy + bulk)
@@ -203,6 +205,64 @@ $tv = OctVouchers; $tv | ForEach-Object { Say "  template $($_.type) $($_.vno) $
 $fetch231 = 'GUID, MASTERID, ALTERID, DATE, VOUCHERTYPENAME, VOUCHERNUMBER, PARTYLEDGERNAME, NARRATION, ISCANCELLED, ISOPTIONAL, ALLLEDGERENTRIES.LEDGERNAME, ALLLEDGERENTRIES.AMOUNT, ALLLEDGERENTRIES.ISDEEMEDPOSITIVE, ALLLEDGERENTRIES.BILLALLOCATIONS.NAME, ALLLEDGERENTRIES.BILLALLOCATIONS.BILLTYPE, ALLLEDGERENTRIES.BILLALLOCATIONS.AMOUNT, ALLLEDGERENTRIES.BILLALLOCATIONS.BILLCREDITPERIOD, ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.LEDGERNAME, ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.AMOUNT, ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.ISDEEMEDPOSITIVE, REFERENCE, REFERENCEDATE, PARTYGSTIN, PLACEOFSUPPLY, CMPGSTIN, IRN, IRNACKNO, IRNACKDATE, EWAYBILLDETAILS.BILLNUMBER, ALLLEDGERENTRIES.GSTHSNNAME, ALLLEDGERENTRIES.RATEDETAILS.GSTRATEDUTYHEAD, ALLLEDGERENTRIES.RATEDETAILS.GSTRATEVALUATIONTYPE, ALLLEDGERENTRIES.RATEDETAILS.GSTRATE, ALLLEDGERENTRIES.CATEGORYALLOCATIONS.CATEGORY, ALLLEDGERENTRIES.CATEGORYALLOCATIONS.COSTCENTREALLOCATIONS.NAME, ALLLEDGERENTRIES.CATEGORYALLOCATIONS.COSTCENTREALLOCATIONS.AMOUNT, ALLLEDGERENTRIES.BANKALLOCATIONS.TRANSACTIONTYPE, ALLLEDGERENTRIES.BANKALLOCATIONS.INSTRUMENTNUMBER, ALLLEDGERENTRIES.BANKALLOCATIONS.INSTRUMENTDATE, ALLLEDGERENTRIES.BANKALLOCATIONS.BANKERSDATE, ALLLEDGERENTRIES.BANKALLOCATIONS.UNIQUEREFERENCENUMBER, ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.TAXTYPE, ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.CATEGORY, ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.PARTYLEDGER, ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.SUBCATEGORYALLOCATION.TAXRATE, ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.SUBCATEGORYALLOCATION.ASSESSABLEAMOUNT, ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.SUBCATEGORYALLOCATION.TAX, ALLINVENTORYENTRIES.STOCKITEMNAME, ALLINVENTORYENTRIES.BILLEDQTY, ALLINVENTORYENTRIES.RATE, ALLINVENTORYENTRIES.AMOUNT, ALLINVENTORYENTRIES.GSTHSNNAME, ALLINVENTORYENTRIES.RATEDETAILS.GSTRATEDUTYHEAD, ALLINVENTORYENTRIES.RATEDETAILS.GSTRATEVALUATIONTYPE, ALLINVENTORYENTRIES.RATEDETAILS.GSTRATE, ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.CATEGORYALLOCATIONS.CATEGORY, ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.CATEGORYALLOCATIONS.COSTCENTREALLOCATIONS.NAME, ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.CATEGORYALLOCATIONS.COSTCENTREALLOCATIONS.AMOUNT, ALLLEDGERENTRIES.BILLALLOCATIONS.TDSDEDUCTEESECTIONNUMBER'
 function Body231($mid, $file) { $x = Post (Coll 'FCPBody231' 'Voucher' $fetch231 "`$MasterID = $mid"); Set-Content (Join-Path $cap $file) $x -Encoding UTF8; return $x }
 foreach ($v in $tv) { Body231 $v.mid "tally-body231-template-$($v.type)-$($v.vno).xml" | Out-Null }
+# ---------------------------------------------------------------- the owner's second ask: every voucher type
+# features (payroll, batches, godowns, orders, tracking numbers) asked by XML first: the company's own fields are read
+# (NATIVEMETHOD *), every Yes/No field whose name speaks of them is set to Yes by an Alter, and read again; F11 by keys
+# after that if any is still No (its screens are kept); then the voucher types made active, a manufacturing journal type,
+# the masters and one template per voucher type
+function Natives($id, $type, $filter = '') { Post (Coll $id $type 'NAME' $filter '<NATIVEMETHOD>*</NATIVEMETHOD>') '' 120 }
+function YesNoFields($xml, $tag, $re) {
+  $o = [ordered]@{}
+  foreach ($m in [regex]::Matches($xml, '<(' + $re + ')(?: [^>]*)?>(Yes|No)</\1>')) { if (-not $o.Contains($m.Groups[1].Value)) { $o[$m.Groups[1].Value] = $m.Groups[2].Value } }
+  return $o
+}
+$featRe = '[A-Z]*(PAYROLL|BATCH|GODOWN|ORDER|TRACK|EXPIRY|MFG|ATTEND|ACTUALANDBILLED|SEPARATEACTUAL|JOBORDER|COSTTRACK)[A-Z]*'
+$co0 = Natives 'FCPCoAll' 'Company'; Set-Content (Join-Path $cap 'company-natives-before.xml') $co0 -Encoding UTF8
+$f0 = YesNoFields $co0 'COMPANY' $featRe
+Say "company feature fields (by name): $(($f0.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join ', ')"
+$alter = '<COMPANY NAME="' + $co + '" ACTION="Alter"><NAME>' + $co + '</NAME>' + (($f0.Keys | ForEach-Object { "<$_>Yes</$_>" }) -join '') + '</COMPANY>'
+$r = Imp 'All Masters' @($alter) 'company features by XML'
+Set-Content (Join-Path $cap 'company-alter-answer.xml') $r.raw -Encoding UTF8
+$co1 = Natives 'FCPCoAll' 'Company'; Set-Content (Join-Path $cap 'company-natives-after-xml.xml') $co1 -Encoding UTF8
+$f1 = YesNoFields $co1 'COMPANY' $featRe
+Say "after the XML alter: $(($f1.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join ', ')"
+$featStillNo = @($f1.GetEnumerator() | Where-Object { $_.Value -eq 'No' -and $_.Key -match 'PAYROLL|BATCH' }).Count
+# F11 by keys: Show more features, then every field down the form is shown on a screenshot; each Yes/No field whose label
+# the harness knows is answered y (payroll, batches) - the screens say what the release calls them
+if ($featStillNo -or $env:PD_MODE -eq 'explore') {
+  KeysTo '{F11}' 3 'f11-0'
+  for ($i = 1; $i -le 3; $i++) { KeysTo '{UP}' 1 }
+  Shot 'f11-1-top'; KeysTo 'y' 2 'f11-2-show-more'
+  for ($i = 1; $i -le 48; $i++) { KeysTo '{DOWN}' 1 $("f11-d{0:d2}" -f $i) }
+  KeysTo '^a' 3 'f11-accepted'
+  $co2 = Natives 'FCPCoAll' 'Company'; Set-Content (Join-Path $cap 'company-natives-after-f11.xml') $co2 -Encoding UTF8
+  Say "after F11 (show more features only): $(((YesNoFields $co2 'COMPANY' $featRe).GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join ', ')"
+}
+$vt = Natives 'FCPVtAll' 'VoucherType'; Set-Content (Join-Path $cap 'vouchertypes-natives.xml') $vt -Encoding UTF8
+$vtNames = @([regex]::Matches($vt, '<VOUCHERTYPE NAME="([^"]+)"') | ForEach-Object { $_.Groups[1].Value })
+Say "voucher types: $($vtNames -join ', ')"
+$actField = @([regex]::Matches($vt, '<(ISACTIVE|[A-Z]*ACTIVE[A-Z]*)(?: [^>]*)?>(Yes|No)<') | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique)
+$mfgField = @([regex]::Matches($vt, '<([A-Z]*(?:MFG|MANUF)[A-Z]*)(?: [^>]*)?>(Yes|No)<') | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique)
+Say "voucher type fields: active $($actField -join ','); manufacturing $($mfgField -join ',')"
+$vtMsgs = @()
+foreach ($t in 'Payroll', 'Attendance', 'Stock Journal', 'Delivery Note', 'Receipt Note', 'Sales Order', 'Purchase Order', 'Physical Stock') {
+  if ($t -in $vtNames) { $vtMsgs += '<VOUCHERTYPE NAME="' + $t + '" ACTION="Alter"><NAME>' + $t + '</NAME>' + (($actField | ForEach-Object { "<$_>Yes</$_>" }) -join '') + '</VOUCHERTYPE>' }
+}
+$vtMsgs += '<VOUCHERTYPE NAME="PD Manufacturing Journal" ACTION="Create"><NAME.LIST><NAME>PD Manufacturing Journal</NAME></NAME.LIST><PARENT>Stock Journal</PARENT><NUMBERINGMETHOD>Manual</NUMBERINGMETHOD>' + (($actField | ForEach-Object { "<$_>Yes</$_>" }) -join '') + (($mfgField | ForEach-Object { "<$_>Yes</$_>" }) -join '') + '</VOUCHERTYPE>'
+Imp 'All Masters' $vtMsgs 'voucher types active, manufacturing journal' | Out-Null
+$tm = TypeMasters
+Imp 'All Masters' $tm 'type masters (godowns, batch items, employees, pay heads, attendance type)' | Out-Null
+$typeTpl = TypeTemplates; $typeOk = [ordered]@{}
+foreach ($k in $typeTpl.Keys) {
+  $r = Imp 'Vouchers' @($typeTpl[$k]) "template $k"
+  $typeOk[$k] = [pscustomobject]@{ created = $r.created; errors = $r.errors; ms = $r.ms; err = ([regex]::Matches($r.raw, '<LINEERROR>([^<]*)') | Select-Object -First 2 | ForEach-Object { $_.Groups[1].Value }) -join ' / ' }
+}
+$typeOk | ConvertTo-Json -Depth 3 | Set-Content (Join-Path $cap 'type-templates.json') -Encoding UTF8
+foreach ($k in $typeTpl.Keys) {
+  $d = $TypeDates[$k]
+  Post (Coll "FCPTyp$k" 'Voucher' 'NAME' "`$Date = `$`$Date:`"$($d.Substring(6,2))-$($d.Substring(4,2))-$($d.Substring(0,4))`"" '<NATIVEMETHOD>*</NATIVEMETHOD>') '' 120 | Set-Content (Join-Path $cap "tally-type-$k-template.xml") -Encoding UTF8
+}
+
 # the Windows user, as TDL sees it (each candidate asked on its own: a name Tally does not know only fails that request)
 $who = @()
 foreach ($c in @('$$MachineName', '$$CmpUserName', '$$SysInfo:WindowsUser', '$$SysInfo:WindowsUserName', '$$SysInfo:UserName', '$$SysInfo:LoginUser', '$$SysInfo:SystemName', '$$SysInfo:ComputerName', '$$SysInfo:MachineName', '$$SysInfo:IPAddress', '$$SysInfo:ApplicationPath', '$$SysInfo:TempPath')) {
@@ -278,7 +338,7 @@ function Stamps {
 }
 function D($h, $x, $y) { if ($h.ContainsKey($x) -and $h.ContainsKey($y)) { return [math]::Round(($h[$y] - $h[$x]).TotalMilliseconds, 1) }; return '' }
 function FullFile { Get-ChildItem $pd -Filter 'full-*.txt' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1 }
-$script:fullSeen = @{}
+$script:fullSeen = @{}; $script:recSeen = @{}
 function NewFullLines {
   $o = @()
   foreach ($f in (Get-ChildItem $pd -Filter 'full-*.txt' -ErrorAction SilentlyContinue)) {
@@ -289,28 +349,43 @@ function NewFullLines {
   }
   return , $o
 }
+$script:recSeen = @{}
+function NewRecLines {
+  $o = @()
+  foreach ($f in (Get-ChildItem $rec -File -ErrorAction SilentlyContinue)) {
+    $b = [IO.File]::ReadAllBytes($f.FullName); $from = [int]$script:recSeen[$f.FullName]; $script:recSeen[$f.FullName] = $b.Length
+    if ($b.Length -le $from) { continue }
+    $s = [Text.Encoding]::Unicode.GetString($b, $from, $b.Length - $from).TrimStart([char]0xFEFF)
+    $o += @($s -split "`r?`n" | Where-Object { $_ -like 'FCR1|*' })
+  }
+  return , $o
+}
 function SaveBlock($cfg, $coTag, $kind, $date, $n, $mode) {
   Say "-- a: $coTag / $cfg / $kind ($mode) x $n"
   $before = OctVouchers
   Get-ChildItem $pd -Filter 'stamp-*.txt' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
-  NewFullLines | Out-Null
+  NewFullLines | Out-Null; NewRecLines | Out-Null
   for ($r = 1; $r -le $n; $r++) {
     DayBook $date $(if ($r -eq 1) { "$coTag-$cfg-$kind-daybook" })
     if ($mode -eq 'dup') { KeysTo '{END}' 1; KeysTo '%2' 4 $(if ($r -eq 1) { "$coTag-$cfg-$kind-dup" }) }
     else { KeysTo '{HOME}' 1; KeysTo '{ENTER}' 4 $(if ($r -eq 1) { "$coTag-$cfg-$kind-open" }) }
     if (-not (Focus)) { continue }
     if ($script:noUiTimer) { [System.Windows.Forms.SendKeys]::SendWait('^a'); $m = @('-1', '-1', '-1', '0') } else { $m = ([PdUi]::Measure('^a', 400, 15000)) -split ';' }
-    Start-Sleep 2
-    $h = Stamps; $lines = NewFullLines
+    # wait for the add-on's last stamp (run 37464758500: on the heavy company the full add-on's read-back outlasted the
+    # fixed 2 s and its stamp was read with the next save)
+    $sw2 = [Diagnostics.Stopwatch]::StartNew(); Start-Sleep 2
+    if ($script:lastStamp) { while (-not (Test-Path "$pd\stamp-$($script:lastStamp).txt") -and $sw2.Elapsed.TotalSeconds -lt 120) { Start-Sleep -Milliseconds 250 }; Start-Sleep -Milliseconds 300 }
+    $h = Stamps; $lines = NewFullLines; $rl = NewRecLines
     $saved = @($lines | Where-Object { $_ -like 'FCF1|ev=voucher_saved*' })[0]; $final = @($lines | Where-Object { $_ -like 'FCF1|ev=voucher_final*' })[0]
     $row = [pscustomobject]@{ rel = $rel; company = $coTag; cfg = $cfg; kind = $kind; mode = $mode; rep = $r
       ui_sendwait_ms = $m[0]; ui_first_ms = $m[1]; ui_settled_ms = $m[2]; frames = $m[3]
       pre_ms = (D $h 'a' 'b'); save_ms = (D $h 'b' 'c'); post_ms = (D $h 'c' 'd'); final_ms = (D $h 'd' 'e'); total_ms = $(if ($h.ContainsKey('e')) { D $h 'a' 'e' } else { D $h 'a' 'd' })
       stamps = (($h.Keys | Sort-Object) -join ''); line_bytes_utf16 = $(if ($saved) { 2 * $saved.Length } else { '' }); line_bytes_utf8 = $(if ($saved) { [Text.Encoding]::UTF8.GetByteCount($saved) } else { '' })
-      final = $(if ($final) { $final } else { '' }) }
+      final = $(if ($final) { $final } else { '' }); rec_lines = $rl.Count; rec_events = (($rl | ForEach-Object { [regex]::Match($_, '^FCR1\|ev=([^|]+)').Groups[1].Value }) -join ' ') }
     $aRows.Add($row); $row | Export-Csv $aCsv -Append -NoTypeInformation -Encoding UTF8
     Write-Host ("   rep {0}: ui sendwait {1} first {2} settled {3}; stamps pre {4} save {5} post {6} final {7}; line {8} B" -f $r, $m[0], $m[1], $m[2], $row.pre_ms, $row.save_ms, $row.post_ms, $row.final_ms, $row.line_bytes_utf8)
     if ($saved -and $r -eq 1) { Set-Content (Join-Path $cap "line-$coTag-$cfg-$kind-$mode.txt") (@($saved) + @($final) | Where-Object { $_ }) -Encoding UTF8 }
+    if ($rl.Count -and $r -eq 1) { Set-Content (Join-Path $cap "recline-$coTag-$cfg-$kind-$mode.txt") $rl -Encoding UTF8 }
     if ($r -eq 1) { Shot "$coTag-$cfg-$kind-saved" }
   }
   $after = OctVouchers
@@ -362,11 +437,61 @@ $tdlFull = "$fc\FCPFull.tdl"; $tdlHeads = "$fc\FCPHeads.tdl"; $tdlStamp = "$fc\F
 Copy-Item "$here\FCPFull.tdl" $tdlFull -Force; Copy-Item "$here\FCPHeads.tdl" $tdlHeads -Force; Copy-Item "$here\FCPStamp.tdl" $tdlStamp -Force
 $evs = @(Get-ChildItem $here -Filter 'FCPEv_*.tdl' | ForEach-Object { $d = "$fc\$($_.Name)"; Copy-Item $_.FullName $d -Force; $d })
 $cfgs = [ordered]@{ none = @(); stamp = @($tdlStamp); heads = @($tdlHeads); full = @($tdlFull) }
+
+# ---------------------------------------------------------------- the owner's second ask: does the hook fire, what is written
+# light company; today's heads-only add-on (FCPHeads.tdl: [#Form: Voucher], [#Form: Ledger], the events) and the full-entry
+# add-on (FCPFull.tdl with the FCPM_*.tdl master-form files beside it). Each voucher type: its template duplicated
+# (Alt+2, Ctrl+A) and altered (Enter, Ctrl+A); each master form: one master altered (Gateway > Alter, Ctrl+A); a payroll
+# voucher cancelled and a stock journal deleted. Tally's own copy of every voucher of those days is kept beside the lines.
+$mfs = @(Get-ChildItem $here -Filter 'FCPM_*.tdl' | ForEach-Object { $d = "$fc\$($_.Name)"; Copy-Item $_.FullName $d -Force; $d })
+$mCsv = Join-Path $out 'm.csv'
+$masters = [ordered]@{ 'Ledger' = 'Template Party'; 'Pay Head' = 'PD Basic'; 'Stock Item' = 'PD Bat 01'; 'Unit' = 'Nos'; 'Godown' = 'PD Godown A'; 'Employee' = 'PD Emp 001' }
+function MasterAlter($cfg, $tdls, $form, $name) {
+  if (-not (Start-T $light $tdls "types-$cfg-m")) { return }
+  Get-ChildItem $pd -Filter 'stamp-*.txt' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+  NewFullLines | Out-Null; NewRecLines | Out-Null
+  $t = $form -replace ' ', ''
+  KeysTo 'l' 3 "types-$cfg-m-$t-0"; KeysTo $form 2; KeysTo '{ENTER}' 3 "types-$cfg-m-$t-1"; KeysTo $name 2; KeysTo '{ENTER}' 4 "types-$cfg-m-$t-2"
+  if (Focus) { if ($script:noUiTimer) { [System.Windows.Forms.SendKeys]::SendWait('^a') } else { [PdUi]::Measure('^a', 400, 15000) | Out-Null } }
+  Start-Sleep 3; Shot "types-$cfg-m-$t-3"
+  $h = Stamps; $fl = NewFullLines; $rl = NewRecLines
+  $row = [pscustomobject]@{ rel = $rel; cfg = $cfg; form = $form; master = $name; stamps = (($h.Keys | Sort-Object) -join ','); full_lines = $fl.Count; rec_lines = $rl.Count
+    full_events = (($fl | ForEach-Object { [regex]::Match($_, '^FCF1\|ev=([^|]+)').Groups[1].Value }) -join ' '); rec_events = (($rl | ForEach-Object { [regex]::Match($_, '^FCR1\|ev=([^|]+)').Groups[1].Value }) -join ' ') }
+  $row | Export-Csv $mCsv -Append -NoTypeInformation -Encoding UTF8
+  if ($fl.Count -or $rl.Count) { Set-Content (Join-Path $cap "master-$cfg-$t.txt") (@($fl) + @($rl)) -Encoding UTF8 }
+  Say "   master $form '$name' ($cfg): stamps $($row.stamps); full lines $($fl.Count) ($($row.full_events)); recorder lines $($rl.Count) ($($row.rec_events))"
+}
+function TypesStage {
+  foreach ($cfg in 'heads', 'full') {
+    Remove-Item "$pd\full-*.txt", "$pd\stamp-*.txt", "$rec\*" -Force -ErrorAction SilentlyContinue; $script:fullSeen = @{}; $script:recSeen = @{}
+    $tdls = if ($cfg -eq 'full') { @($tdlFull) + $mfs } else { @($tdlHeads) }
+    if (-not (Start-T $light $tdls "types-$cfg")) { Say "HARNESS: types-$cfg did not open the company"; continue }
+    foreach ($k in $typeTpl.Keys) {
+      if ($typeOk[$k].created -lt 1) { Say "types: $k has no template in Tally ($($typeOk[$k].err)): skipped"; continue }
+      SaveBlock "types-$cfg" 'light' $k (DMY $TypeDates[$k]) 1 'dup' | Out-Null
+      SaveBlock "types-$cfg" 'light' $k (DMY $TypeDates[$k]) 1 'alter' | Out-Null
+      $d = $TypeDates[$k]
+      Post (Coll "FCPTyp$k" 'Voucher' 'NAME' "`$Date = `$`$Date:`"$(DMY $d)`"" '<NATIVEMETHOD>*</NATIVEMETHOD>') '' 120 | Set-Content (Join-Path $cap "tally-type-$k-after-$cfg.xml") -Encoding UTF8
+    }
+    # a payroll voucher cancelled, a stock journal deleted (the events of today's add-on and of FCPFull)
+    NewFullLines | Out-Null; NewRecLines | Out-Null
+    if ($typeOk['payroll50'].created -ge 1) { DayBook (DMY $TypeDates.payroll50) "types-$cfg-cancel-daybook"; KeysTo '{END}' 1; KeysTo '%x' 3; KeysTo 'y' 4 "types-$cfg-cancelled" }
+    if ($typeOk['stockjournal'].created -ge 1) { DayBook (DMY $TypeDates.stockjournal) "types-$cfg-delete-daybook"; KeysTo '{END}' 1; KeysTo '%d' 3; KeysTo 'y' 4 "types-$cfg-deleted" }
+    Start-Sleep 2; $fl = NewFullLines; $rl = NewRecLines
+    Set-Content (Join-Path $cap "types-$cfg-cancel-delete-lines.txt") (@($fl) + @($rl)) -Encoding UTF8
+    Say "   cancel / delete ($cfg): full lines $(($fl | ForEach-Object { [regex]::Match($_, '^FCF1\|ev=([^|]+)').Groups[1].Value }) -join ' '); recorder lines $(($rl | ForEach-Object { [regex]::Match($_, '^FCR1\|ev=([^|]+)').Groups[1].Value }) -join ' ')"
+    foreach ($f in $masters.Keys) { MasterAlter $cfg $tdls $f $masters[$f] }
+    Get-ChildItem $pd -Filter 'full-*.txt' -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName (Join-Path $cap "fullfile-types-$cfg-$($_.Name)") }
+    Get-ChildItem $rec -File -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName (Join-Path $cap "recfile-types-$cfg-$($_.Name)") }
+  }
+  Stop-T
+}
+if ($env:PD_MODE -eq 'explore') { TypesStage; Get-Process FinComBridge -ErrorAction SilentlyContinue | Stop-Process -Force; Stop-Process -Id $stub.Id -Force -ErrorAction SilentlyContinue; Say 'done (explore: the voucher-type probe only)'; return }
 foreach ($coTag in 'light', 'heavy') {
   $data = if ($coTag -eq 'light') { $light } else { $heavy }
   if ($coTag -eq 'heavy' -and -not $heavyOk) { Say 'heavy company not made: skipped'; continue }
   foreach ($cfg in $cfgs.Keys) {
-    Remove-Item "$pd\full-*.txt", "$pd\stamp-*.txt", "$rec\*" -Force -ErrorAction SilentlyContinue; $script:fullSeen = @{}
+    Remove-Item "$pd\full-*.txt", "$pd\stamp-*.txt", "$rec\*" -Force -ErrorAction SilentlyContinue; $script:fullSeen = @{}; $script:recSeen = @{}
     if (-not (Start-T $data $cfgs[$cfg] "$coTag-$cfg")) { Say "HARNESS: Tally did not open the company ($coTag / $cfg)"; continue }
     Start-Sleep 5; BridgeLog "$coTag-$cfg-start"
     # part b first, while nobody works in Tally's screens (run 37450532756: a body fetch timed while a voucher form was
@@ -378,6 +503,11 @@ foreach ($coTag in 'light', 'heavy') {
     $nv += SaveBlock $cfg $coTag 'sales5' '2-10-2026' $reps 'dup'
     $nv += SaveBlock $cfg $coTag 'sales50' '31-10-2026' $reps 'dup'
     SaveBlock $cfg $coTag 'sales50' '31-10-2026' ([math]::Max(2, [int]($reps / 2))) 'alter' | Out-Null
+    # the owner's second ask: payroll for 50 and 200 employees, a stock journal with 50 items, a sales invoice with 50
+    # items across batches and godowns
+    foreach ($k in 'payroll50', 'payroll200', 'stockjournal', 'salesbatch') {
+      if ($typeOk[$k].created -ge 1) { $nv += SaveBlock $cfg $coTag $k (DMY $TypeDates[$k]) $reps 'dup' } else { Say "   $k skipped: its template is not in Tally" }
+    }
     # part c: Tally's own ids and the 2.3.1 body of the vouchers the full add-on wrote, beside its lines
     if ($cfg -eq 'full') {
       $tvx = OctVouchers; $tvx | ConvertTo-Json -Depth 3 | Set-Content (Join-Path $cap "tally-ids-$coTag-full.json") -Encoding UTF8
@@ -402,7 +532,7 @@ foreach ($coTag in 'light', 'heavy') {
   }
   # the candidate events: FCPFull plus each FCPEv_*.tdl (light only; a create, an alter, an import)
   if ($coTag -eq 'light') {
-    Remove-Item "$pd\full-*.txt", "$pd\ev-*.txt" -Force -ErrorAction SilentlyContinue; $script:fullSeen = @{}
+    Remove-Item "$pd\full-*.txt", "$pd\ev-*.txt" -Force -ErrorAction SilentlyContinue; $script:fullSeen = @{}; $script:recSeen = @{}
     if (Start-T $data (@($tdlFull) + $evs) 'light-evprobe') {
       SaveBlock 'evprobe' $coTag 'sales5' '2-10-2026' 1 'dup' | Out-Null
       SaveBlock 'evprobe' $coTag 'sales5' '2-10-2026' 1 'alter' | Out-Null
@@ -413,6 +543,8 @@ foreach ($coTag in 'light', 'heavy') {
     }
   }
 }
+
+TypesStage
 
 # ---------------------------------------------------------------- b again with the bridge's GentleMs at 0
 # (config.go: GentleMs 150 by default, tally.go tallyRaw waits that long before EVERY request it sends Tally, a

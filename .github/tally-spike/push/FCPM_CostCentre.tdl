@@ -1,0 +1,31 @@
+;; FCPM_CostCentre.tdl  -  MEASUREMENT ONLY (push-design spike). Loaded beside FCPFull.tdl in the voucher-type probe only: does the
+;; "Cost Centre" form accept an On : Form Accept hook, and what does a line of it hold? A form name this release does not
+;; know fails this file alone. Writes to the same full-<company GUID>-<day>.txt as FCPFull.tdl.
+
+[#Form: Cost Centre]
+    On : Form Accept : Yes : Call : FCPStamp : "mcoa"
+    On : Form Accept : Yes : Form Accept
+    On : Form Accept : Yes : Call : FCPStamp : "mcoc"
+    On : Form Accept : Yes : Call : FCPMCostCentreW : "costcentre_saved"
+
+[Function: FCPMCostCentreW]
+    Parameter : pEvent : String
+    Variable  : vCG : String
+    Returns   : Logical
+    01 : SET : vCG : $Guid:Company:##SVCurrentCompany
+    02 : OPEN FILE : "C:\fcspike\push\full-" + ##vCG + "-" + ($$String:$$MachineDate:"UniversalDate") + ".txt" : Text : Write : Unicode
+    03 : IF : NOT $$LastResult
+    04 :    RETURN : Yes
+    05 : END IF
+    06 : WRITE FILE : "FCF1|ev=" + ##pEvent + "|form=Cost Centre|cguid=" + ##vCG
+    07 : WRITE FILE : "|guid=" + ($$String:$Guid)
+    08 : WRITE FILE : "|mid=" + ($$String:$MasterID)
+    09 : WRITE FILE : "|aid=" + ($$String:$AlterID)
+    10 : WRITE FILE : "|name=" + ($$String:$Name)
+    11 : WRITE FILE : "|parent=" + ($$String:$Parent)
+    12 : WRITE FILE : "|category=" + ($$String:$Category)
+    13 : WRITE FILE : "|forpayroll=" + ($$String:$ForPayroll)
+    14 : WRITE FILE : "|isemployeegroup=" + ($$String:$IsEmployeeGroup)
+    15 : WRITE FILE LINE : "|end=1"
+    16 : CLOSE TARGET FILE
+    17 : RETURN : Yes

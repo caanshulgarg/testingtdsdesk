@@ -1,0 +1,33 @@
+;; FCPM_Unit.tdl  -  MEASUREMENT ONLY (push-design spike). Loaded beside FCPFull.tdl in the voucher-type probe only: does the
+;; "Unit" form accept an On : Form Accept hook, and what does a line of it hold? A form name this release does not
+;; know fails this file alone. Writes to the same full-<company GUID>-<day>.txt as FCPFull.tdl.
+
+[#Form: Unit]
+    On : Form Accept : Yes : Call : FCPStamp : "muna"
+    On : Form Accept : Yes : Form Accept
+    On : Form Accept : Yes : Call : FCPStamp : "munc"
+    On : Form Accept : Yes : Call : FCPMUnitW : "unit_saved"
+
+[Function: FCPMUnitW]
+    Parameter : pEvent : String
+    Variable  : vCG : String
+    Returns   : Logical
+    01 : SET : vCG : $Guid:Company:##SVCurrentCompany
+    02 : OPEN FILE : "C:\fcspike\push\full-" + ##vCG + "-" + ($$String:$$MachineDate:"UniversalDate") + ".txt" : Text : Write : Unicode
+    03 : IF : NOT $$LastResult
+    04 :    RETURN : Yes
+    05 : END IF
+    06 : WRITE FILE : "FCF1|ev=" + ##pEvent + "|form=Unit|cguid=" + ##vCG
+    07 : WRITE FILE : "|guid=" + ($$String:$Guid)
+    08 : WRITE FILE : "|mid=" + ($$String:$MasterID)
+    09 : WRITE FILE : "|aid=" + ($$String:$AlterID)
+    10 : WRITE FILE : "|name=" + ($$String:$Name)
+    11 : WRITE FILE : "|originalname=" + ($$String:$OriginalName)
+    12 : WRITE FILE : "|issimpleunit=" + ($$String:$IsSimpleUnit)
+    13 : WRITE FILE : "|decimalplaces=" + ($$String:$DecimalPlaces)
+    14 : WRITE FILE : "|baseunits=" + ($$String:$BaseUnits)
+    15 : WRITE FILE : "|additionalunits=" + ($$String:$AdditionalUnits)
+    16 : WRITE FILE : "|conversion=" + ($$String:$Conversion)
+    17 : WRITE FILE LINE : "|end=1"
+    18 : CLOSE TARGET FILE
+    19 : RETURN : Yes

@@ -32,6 +32,15 @@
     FCPTax    : "tt=" + ($$String:$TaxType) + "~cat=" + ($$String:$Category) + "~pl=" + ($$String:$PartyLedger)
     FCPSub    : "rate=" + ($$String:$TaxRate) + "~ass=" + ($$String:$AssessableAmount) + "~tax=" + ($$String:$Tax)
     FCPAa     : "led=" + ($$String:$LedgerName) + "~amt=" + ($$String:$Amount) + "~dp=" + ($$String:$IsDeemedPositive)
+    ;; batches (godown, batch, tracking number, order number and due date, quantities, amount), the order list,
+    ;; payroll (employee, pay head) and attendance lines
+    FCPBat    : "god=" + ($$String:$GodownName) + "~bat=" + ($$String:$BatchName) + "~trk=" + ($$String:$TrackingNumber) + "~ord=" + ($$String:$OrderNo)
+    FCPBat2   : "~due=" + ($$String:$OrderDueDate) + "~aq=" + ($$String:$ActualQty) + "~bq=" + ($$String:$BilledQty) + "~amt=" + ($$String:$Amount)
+    FCPOrd    : "no=" + ($$String:$BasicPurchaseOrderNo) + "~dt=" + ($$String:$BasicOrderDate)
+    FCPEmp    : "emp=" + ($$String:$EmployeeName) + "~amt=" + ($$String:$Amount)
+    FCPPh     : "ph=" + ($$String:$PayHeadName) + "~amt=" + ($$String:$Amount)
+    FCPAtt    : "att=" + ($$String:$AttendanceType) + "~val=" + ($$String:$AttdTypeValue)
+    FCPIo     : "item=" + ($$String:$StockItemName) + "~aq=" + ($$String:$ActualQty) + "~rate=" + ($$String:$Rate) + "~amt=" + ($$String:$Amount)
     ;; a ledger master
     FCPLm     : "|guid=" + ($$String:$Guid) + "|mid=" + ($$String:$MasterID) + "|aid=" + ($$String:$AlterID) + "|name=" + ($$String:$Name) + "|parent=" + ($$String:$Parent) + "|gstin=" + ($$String:$PartyGSTIN) + "|state=" + ($$String:$LedStateName) + "|pan=" + ($$String:$IncomeTaxNumber) + "|billwise=" + ($$String:$IsBillWiseOn)
     ;; the final-id read: the saved voucher by its MasterID
@@ -231,6 +240,95 @@
     88 :    END WHILE
     89 :    INCREMENT : vI
     90 : END WHILE
+
+    ;; ---- the batches of each item line (godown, batch, tracking number, order number)
+    9101 : SET : vI : 1
+    91020 : SET : vNI : 0
+    9102 : SET : vNI : $$NumItems:AllInventoryEntries
+    9103 : WHILE : ##vI <= ##vNI
+    91040 : SET : vNJ : 0
+    9104 :    SET : vNJ : $$CollectionField:($$NumItems:BatchAllocations):##vI:AllInventoryEntries
+    9105 :    SET : vJ : 1
+    9106 :    WHILE : ##vJ <= ##vNJ
+    9107 :       WRITE FILE : "|I" + ($$String:##vI) + "b" + ($$String:##vJ) + "=" + ($$CollectionField:($$CollectionField:@@FCPBat:##vJ:BatchAllocations):##vI:AllInventoryEntries)
+    9108 :       WRITE FILE : ($$CollectionField:($$CollectionField:@@FCPBat2:##vJ:BatchAllocations):##vI:AllInventoryEntries)
+    9109 :       INCREMENT : vJ
+    9110 :    END WHILE
+    9111 :    INCREMENT : vI
+    9112 : END WHILE
+    ;; ---- the order list of an invoice or note
+    92010 : SET : vNI : 0
+    9201 : SET : vNI : $$NumItems:InvoiceOrderList
+    9202 : WRITE FILE : "|nO=" + ($$String:##vNI)
+    9203 : SET : vI : 1
+    9204 : WHILE : ##vI <= ##vNI
+    9205 :    WRITE FILE : "|O" + ($$String:##vI) + "=" + ($$CollectionField:@@FCPOrd:##vI:InvoiceOrderList)
+    9206 :    INCREMENT : vI
+    9207 : END WHILE
+    ;; ---- stock journal, manufacturing journal, physical stock: the lines out (source) and in (destination), each with batches
+    93010 : SET : vNI : 0
+    9301 : SET : vNI : $$NumItems:InventoryEntriesOut
+    9302 : WRITE FILE : "|nSO=" + ($$String:##vNI)
+    9303 : SET : vI : 1
+    9304 : WHILE : ##vI <= ##vNI
+    9305 :    WRITE FILE : "|SO" + ($$String:##vI) + "=" + ($$CollectionField:@@FCPIo:##vI:InventoryEntriesOut)
+    93060 : SET : vNJ : 0
+    9306 :    SET : vNJ : $$CollectionField:($$NumItems:BatchAllocations):##vI:InventoryEntriesOut
+    9307 :    SET : vJ : 1
+    9308 :    WHILE : ##vJ <= ##vNJ
+    9309 :       WRITE FILE : "|SO" + ($$String:##vI) + "b" + ($$String:##vJ) + "=" + ($$CollectionField:($$CollectionField:@@FCPBat:##vJ:BatchAllocations):##vI:InventoryEntriesOut)
+    9310 :       WRITE FILE : ($$CollectionField:($$CollectionField:@@FCPBat2:##vJ:BatchAllocations):##vI:InventoryEntriesOut)
+    9311 :       INCREMENT : vJ
+    9312 :    END WHILE
+    9313 :    INCREMENT : vI
+    9314 : END WHILE
+    93210 : SET : vNI : 0
+    9321 : SET : vNI : $$NumItems:InventoryEntriesIn
+    9322 : WRITE FILE : "|nSI=" + ($$String:##vNI)
+    9323 : SET : vI : 1
+    9324 : WHILE : ##vI <= ##vNI
+    9325 :    WRITE FILE : "|SI" + ($$String:##vI) + "=" + ($$CollectionField:@@FCPIo:##vI:InventoryEntriesIn)
+    93260 : SET : vNJ : 0
+    9326 :    SET : vNJ : $$CollectionField:($$NumItems:BatchAllocations):##vI:InventoryEntriesIn
+    9327 :    SET : vJ : 1
+    9328 :    WHILE : ##vJ <= ##vNJ
+    9329 :       WRITE FILE : "|SI" + ($$String:##vI) + "b" + ($$String:##vJ) + "=" + ($$CollectionField:($$CollectionField:@@FCPBat:##vJ:BatchAllocations):##vI:InventoryEntriesIn)
+    9330 :       WRITE FILE : ($$CollectionField:($$CollectionField:@@FCPBat2:##vJ:BatchAllocations):##vI:InventoryEntriesIn)
+    9331 :       INCREMENT : vJ
+    9332 :    END WHILE
+    9333 :    INCREMENT : vI
+    9334 : END WHILE
+    ;; ---- payroll and attendance: the category, each employee, the pay heads or attendance lines under the employee
+    94010 : SET : vNI : 0
+    9401 : SET : vNI : $$NumItems:CategoryEntry
+    9402 : WRITE FILE : "|nCE=" + ($$String:##vNI)
+    9403 : SET : vI : 1
+    9404 : WHILE : ##vI <= ##vNI
+    9405 :    WRITE FILE : "|CE" + ($$String:##vI) + "=" + ($$String:($$CollectionField:$Category:##vI:CategoryEntry))
+    94060 : SET : vNJ : 0
+    9406 :    SET : vNJ : $$CollectionField:($$NumItems:EmployeeEntries):##vI:CategoryEntry
+    9407 :    WRITE FILE : "|nE=" + ($$String:##vNJ)
+    9408 :    SET : vJ : 1
+    9409 :    WHILE : ##vJ <= ##vNJ
+    9410 :       WRITE FILE : "|E" + ($$String:##vJ) + "=" + ($$CollectionField:($$CollectionField:@@FCPEmp:##vJ:EmployeeEntries):##vI:CategoryEntry)
+    94110 : SET : vNK : 0
+    9411 :       SET : vNK : $$CollectionField:($$CollectionField:($$NumItems:PayHeadAllocations):##vJ:EmployeeEntries):##vI:CategoryEntry
+    9412 :       SET : vK : 1
+    9413 :       WHILE : ##vK <= ##vNK
+    9414 :          WRITE FILE : "|E" + ($$String:##vJ) + "p" + ($$String:##vK) + "=" + ($$CollectionField:($$CollectionField:($$CollectionField:@@FCPPh:##vK:PayHeadAllocations):##vJ:EmployeeEntries):##vI:CategoryEntry)
+    9415 :          INCREMENT : vK
+    9416 :       END WHILE
+    94170 : SET : vNK : 0
+    9417 :       SET : vNK : $$CollectionField:($$CollectionField:($$NumItems:AttendanceEntries):##vJ:EmployeeEntries):##vI:CategoryEntry
+    9418 :       SET : vK : 1
+    9419 :       WHILE : ##vK <= ##vNK
+    9420 :          WRITE FILE : "|E" + ($$String:##vJ) + "a" + ($$String:##vK) + "=" + ($$CollectionField:($$CollectionField:($$CollectionField:@@FCPAtt:##vK:AttendanceEntries):##vJ:EmployeeEntries):##vI:CategoryEntry)
+    9421 :          INCREMENT : vK
+    9422 :       END WHILE
+    9423 :       INCREMENT : vJ
+    9424 :    END WHILE
+    9425 :    INCREMENT : vI
+    9426 : END WHILE
 
     95 : WRITE FILE LINE : "|end=1"
     96 : CLOSE TARGET FILE

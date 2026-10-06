@@ -27,6 +27,7 @@ jobs:
       item: ${{ steps.plan.outputs.item }}
       vch: ${{ steps.plan.outputs.vch }}
       hmin: ${{ steps.plan.outputs.hmin }}
+      mode: ${{ steps.plan.outputs.mode }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -40,6 +41,7 @@ jobs:
           echo "reps=$(get reps)" | tee -a "$GITHUB_OUTPUT"; echo "posts=$(get posts)" | tee -a "$GITHUB_OUTPUT"
           echo "led=$(get heavy_led)" | tee -a "$GITHUB_OUTPUT"; echo "item=$(get heavy_item)" | tee -a "$GITHUB_OUTPUT"
           echo "vch=$(get heavy_vch)" | tee -a "$GITHUB_OUTPUT"; echo "hmin=$(get heavy_min)" | tee -a "$GITHUB_OUTPUT"
+          m=$(get mode); echo "mode=${m:-full}" | tee -a "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
         with:
           ref: tax-accuracy
@@ -81,6 +83,7 @@ jobs:
       PD_HEAVY_ITEM: ${{ needs.build.outputs.item }}
       PD_HEAVY_VCH: ${{ needs.build.outputs.vch }}
       PD_HEAVY_MIN: ${{ needs.build.outputs.hmin }}
+      PD_MODE: ${{ needs.build.outputs.mode }}
     defaults:
       run:
         shell: pwsh
