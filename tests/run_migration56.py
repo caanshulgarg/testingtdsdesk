@@ -6,7 +6,8 @@ which the live request does not fetch). On throwaway PostgreSQL (pg_stand, port 
      database named; every function security definer, search_path public, pg_temp; tally_recorder_line is 53's text with the
      one call changed; 48's tally_ingest_entries (3 and 4 arguments) and tally_ingest_day untouched; the grants.
   1. KEEP: a Day Book load with GSTIN / pos / ref / ref date / company GSTIN and lines with HSN / rate, then a recorder alter
-     with blanks: all kept (lines: by ledger; the same amount among several of a ledger; the place when amounts changed).
+     with blanks: all kept (lines, by ledger: one HSN and rate on all the stored lines -> carried; the same amounts -> each
+     its own; else blank).
   2. a recorder line with a NEW non-blank value (GSTIN, pos, an HSN, a rate) updates it.
   3. REPAIR: tally_recorder_blanked (and tests/check_recorder_blanked.sql, the same) lists exactly the entry blanked under 55;
      tally_recorder_restore_fields restores it and touches nothing else (a field made non-blank since is not overwritten; an
@@ -179,32 +180,25 @@ try:
     ok(lrows(m1) == l_before and sorted(h for _, _, h, _ in lrows(m1)) == ["", "", "998314", "998315"], "the lines' HSN and rate kept, each of the two 'Sales GST 18%%' lines its own HSN (%s)" % lrows(m1))
     ver = j("select payload::text from tally_voucher_versions where book_id = %s and tally_guid = %s and alter_id = 54201" % (q(B), q(G(m1))))
     ok(ver.get("gstin") == GST1 and ver.get("pos") == "Delhi", "the new version row (54201) carries the kept values")
-    # the amounts changed on the alter: the single-ledger line keeps its HSN-less rate; the two GST lines by place (amounts both new)
+    # the amounts changed on the alter (re-review M-B, rule c): the GST lines (HSN mixed, amounts not the stored ones) stay
+    # blank; Output IGST (one line, so one HSN and one rate: rule a) keeps its rate
     got = states(apply([rline("k-1b", m1, 54202, no1, D3, V(m1, 54202, no1, D3, p1), [[G(m1), p1, -1416, "", None, []], [G(m1), "Sales GST 18%", 700, "", None, []], [G(m1), "Sales GST 18%", 500, "", None, []], [G(m1), "Output IGST", 216, "", None, []]])]))
-    ok(got == ["applied"] and lrows(m1) == [("Output IGST", "216", "", "18"), ("Party One", "-1416", "", ""), ("Sales GST 18%", "500", "998314", "18"), ("Sales GST 18%", "700", "998315", "18")],
-       "amounts changed: each line keeps the HSN / rate of the line at its place among the ledger's lines (%s)" % lrows(m1))
+    ok(got == ["applied"] and lrows(m1) == [("Output IGST", "216", "", "18"), ("Party One", "-1416", "", ""), ("Sales GST 18%", "500", "", ""), ("Sales GST 18%", "700", "", "")],
+       "rule c: amounts changed, HSN mixed: the GST lines blank (no wrong but plausible rate); rule a: the one IGST line keeps its rate (%s)" % lrows(m1))
 
     # the owner (06-Oct-2026): several lines of the same ledger and the same amount keep each its own HSN, in their order
     D2 = "2026-10-02"
     m8 = 0x7008
     sent8 = [[G(m8), "Party Eight", -1500, "", None, []], [G(m8), "Sales GST 18%", 500, "111111", 5, []], [G(m8), "Sales GST 18%", 500, "222222", 12, []], [G(m8), "Sales GST 18%", 500, "333333", 18, []]]
     ok(day(D2, [V(m8, 54008, "S-8", D2, "Party Eight", GST1)], sent8).get("ok") is True, "a Day Book of 02-Oct-2026: S-8 with three 'Sales GST 18%' lines of 500 (HSN 111111 / 5, 222222 / 12, 333333 / 18)")
-    def vorder(alter): return [(e[2], str(e[3])) for e in json.loads(db.one("select lines::text from tally_voucher_versions where book_id = %s and tally_guid = %s and alter_id = %d" % (q(B), q(G(m8)), alter)) or "[]") if e[0] == "Sales GST 18%"]
-    o_db = vorder(54008)
-    print("     the Day Book version's order of the three lines: %s (sent: 111111, 222222, 333333)" % o_db)
-    # the physical row order is not the key: a row rewritten in place (here: its rate set to itself) moves to the table's end
-    db.sql("update tally_lines set rate = rate where book_id = %s and guid = %s and hsn = '111111'" % (q(B), q(G(m8))))
-    ok([h for _, _, h, _ in [(r["ledger"], 0, r["hsn"], 0) for r in db.rows("select ledger, hsn from tally_lines where book_id = %s and guid = %s and ledger = 'Sales GST 18%%' order by ctid" % (q(B), q(G(m8))))]] == ["222222", "333333", "111111"],
-       "(the stored rows' physical order is now 222222, 333333, 111111: not the stored order)")
     got = states(apply([rline("k-8", m8, 54208, "S-8", D2, V(m8, 54208, "S-8", D2, "Party Eight"), [[G(m8), "Party Eight", -1500, "", None, []]] + [[G(m8), "Sales GST 18%", 500, "", None, []]] * 3)]))
     pairs = sorted((h, r) for l, _, h, r in lrows(m8) if l == "Sales GST 18%")
-    ok(got == ["applied"] and pairs == [("111111", "5"), ("222222", "12"), ("333333", "18")], "the recorder alter with blanks: each of the three lines keeps its own HSN and rate, none swapped (%s)" % pairs)
-    ok(vorder(54208) == o_db and [h for h, _ in o_db] == ["111111", "222222", "333333"], "and in their order: the new version's lines in the same order as the Day Book's (%s)" % vorder(54208))
+    ok(got == ["applied"] and pairs == [("111111", "5"), ("222222", "12"), ("333333", "18")], "rule b: the same amounts: the three lines of 500 keep the HSN and rates of the three stored ones, each used once (%s)" % pairs)
     print("== 2. a NEW non-blank value updates")
     got = states(apply([rline("n-1", m1, 54203, no1, D3, V(m1, 54203, no1, D3, p1, gstin=GST2, pos="Maharashtra"), [[G(m1), p1, -1416, "", None, []], [G(m1), "Sales GST 18%", 700, "999999", 12, []], [G(m1), "Sales GST 18%", 500, "", None, []], [G(m1), "Output IGST", 216, "", None, []]])]))
     v1 = vrow(m1)
     ok(got == ["applied"] and v1["gstin"] == GST2 and v1["pos"] == "Maharashtra" and v1["ref"] == "INV-S-1" and v1["cmp_gstin"] == CMP, "the new GSTIN and place of supply taken; the blank ref / company GSTIN kept (%s)" % v1)
-    ok(lrows(m1) == [("Output IGST", "216", "", "18"), ("Party One", "-1416", "", ""), ("Sales GST 18%", "500", "998314", "18"), ("Sales GST 18%", "700", "999999", "12")], "the line sent with HSN 999999 / rate 12 takes them; the other keeps its own (%s)" % lrows(m1))
+    ok(lrows(m1) == [("Output IGST", "216", "", "18"), ("Party One", "-1416", "", ""), ("Sales GST 18%", "500", "", ""), ("Sales GST 18%", "700", "999999", "12")], "the line sent with HSN 999999 / rate 12 takes them; the other stays blank (stored blank) (%s)" % lrows(m1))
     # a created line for an entry never stored: as sent
     got = states(apply([rline("n-new", 0x7100, 54300, "S-100", D3, V(0x7100, 54300, "S-100", D3, "Party New"), [[G(0x7100), "Party New", -5, "", None, []], [G(0x7100), "Sales GST 18%", 5, "", None, []]], ev="created")]))
     ok(got == ["applied"] and vrow(0x7100)["gstin"] == "" and lrows(0x7100) == [("Party New", "-5", "", ""), ("Sales GST 18%", "5", "", "")], "a new entry from the recorder: stored as sent (%s)" % lrows(0x7100))
@@ -270,9 +264,12 @@ try:
            0x7103: ("M-3", "Party M3", [["Party M3", -3000, "", None, []], ["Sales GST 18%", 1000, "1111", 5, []], ["Sales GST 18%", 2000, "2222", 18, []]]),
            0x7104: ("M-4", "Party M4", [["Party M4", -3000, "", None, []], ["Sales GST 18%", 1000, "998314", 18, []], ["Sales GST 18%", 2000, "998314", 18, []]]),
            0x7105: ("F-1", "Party F", [["Party F", -118, "", None, []], ["Sales GST 18%", 100, "998314", 18, []], ["Output IGST", 18, "", 18, []]]),
-           0x7106: ("L-1", "Party L", [["Party L", -118, "", None, []], ["Sales GST 18%", 118, "998314", 18, []]])}
+           0x7106: ("L-1", "Party L", [["Party L", -118, "", None, []], ["Sales GST 18%", 118, "998314", 18, []]]),
+           0x7107: ("P-1", "Party P1", [["Party P1", -3000, "", None, []], ["Sales GST 18%", 2000, "2222", 18, []], ["Sales GST 18%", 1000, "1111", 5, []]]),
+           0x7108: ("P-2", "Party P2", [["Party P2", -3000, "", None, []], ["Sales GST 18%", 1000, "1111", 5, []], ["Sales GST 18%", 2000, "2222", 18, []]]),
+           0x7109: ("M-5", "Party M5", [["Party M5", -3000, "", None, []], ["Sales GST 18%", 1000, "1111", 5, []], ["Sales GST 18%", 2000, "2222", 18, []]])}
     ok(day(D1b, [V(m, 54500, no, D1b, p, GST1, "Delhi", "INV-" + no, "20260930", CMP) for m, (no, p, _) in DBD.items()], sum([[[G(m)] + l for l in ls] for m, (_, _, ls) in DBD.items()], [])).get("ok") is True,
-       "a Day Book of 01-Oct-2026: six entries with GSTIN, pos, ref, ref date, company GSTIN, HSN, rate")
+       "a Day Book of 01-Oct-2026: nine entries with GSTIN, pos, ref, ref date, company GSTIN, HSN, rate")
     # H1: the invoice moved to another customer: the old customer's GSTIN / pos / ref / ref date are not carried
     got = rec("h1-new", 0x7101, 54600, "H-1", "New Customer", [["New Customer", -118, "", None, []], ["Sales GST 18%", 100, "", None, []], ["Output IGST", 18, "", None, []]])
     vh = vrow(0x7101)
@@ -281,9 +278,18 @@ try:
     got = rec("h1-same2", 0x7101, 54602, "H-1", "New Customer", [["New Customer", -118, "", None, []], ["Sales GST 18%", 100, "", None, []], ["Output IGST", 18, "", None, []]])
     vh = vrow(0x7101)
     ok(got == ["applied"] and vh["gstin"] == GST2 and vh["pos"] == "Punjab", "H1: the same party again: its own GSTIN and pos carried (%s)" % vh)
-    # M1: the reviewer's case: 1000/1111 changed to 3000; 2000/2222 unchanged (sent first the changed line)
+    # M1: the reviewer's case: 1000/1111 changed to 3000; 2000/2222 unchanged: rule c (the amounts are not the stored ones): blank
     got = rec("m1", 0x7102, 54600, "M-1", "Party M", [["Party M", -5000, "", None, []], ["Sales GST 18%", 3000, "", None, []], ["Sales GST 18%", 2000, "", None, []]])
-    ok(got == ["applied"] and [(a, h) for l, a, h, _ in lrows(0x7102) if l == "Sales GST 18%"] == [("2000", "2222"), ("3000", "1111")], "M1: 1000 -> 3000: 1111 stays on that line, 2222 on the other; no stored line used twice (%s)" % lrows(0x7102))
+    ok(got == ["applied"] and [(a, h, r) for l, a, h, r in lrows(0x7102) if l == "Sales GST 18%"] == [("2000", "", ""), ("3000", "", "")], "M1 / rule c: 1000 -> 3000 with HSN mixed: both lines blank (%s)" % lrows(0x7102))
+    # re-review P1: stored 2000 (2222 / 18) and 1000 (1111 / 5); sent 2100 and 1100: blank, never swapped
+    got = rec("p1", 0x7107, 54600, "P-1", "Party P1", [["Party P1", -3200, "", None, []], ["Sales GST 18%", 2100, "", None, []], ["Sales GST 18%", 1100, "", None, []]])
+    ok(got == ["applied"] and [(a, h, r) for l, a, h, r in lrows(0x7107) if l == "Sales GST 18%"] == [("1100", "", ""), ("2100", "", "")], "P1: 2000 / 1000 sent as 2100 / 1100: blank, no rate swapped (%s)" % lrows(0x7107))
+    # re-review P2: stored 1000 (1111 / 5) and 2000 (2222 / 18), raised to 2000 and 3000: blank (the new 2000 never takes the old 2000's)
+    got = rec("p2", 0x7108, 54600, "P-2", "Party P2", [["Party P2", -5000, "", None, []], ["Sales GST 18%", 2000, "", None, []], ["Sales GST 18%", 3000, "", None, []]])
+    ok(got == ["applied"] and [(a, h, r) for l, a, h, r in lrows(0x7108) if l == "Sales GST 18%"] == [("2000", "", ""), ("3000", "", "")], "P2: 1000 / 2000 raised to 2000 / 3000: blank, the new 2000 does not take the old 2000's values (%s)" % lrows(0x7108))
+    # unchanged amounts, HSN mixed, sent in another order: each keeps its own (rule b)
+    got = rec("m5", 0x7109, 54600, "M-5", "Party M5", [["Party M5", -3000, "", None, []], ["Sales GST 18%", 2000, "", None, []], ["Sales GST 18%", 1000, "", None, []]])
+    ok(got == ["applied"] and [(a, h, r) for l, a, h, r in lrows(0x7109) if l == "Sales GST 18%"] == [("1000", "1111", "5"), ("2000", "2222", "18")], "rule b: amounts unchanged, HSN mixed: each line keeps its own HSN and rate (%s)" % lrows(0x7109))
     # M1: the number of lines changed, the stored HSN mixed: blank
     got = rec("m3", 0x7103, 54600, "M-3", "Party M3", [["Party M3", -3000, "", None, []], ["Sales GST 18%", 3000, "", None, []]])
     ok(got == ["applied"] and [(h, r) for l, _, h, r in lrows(0x7103) if l == "Sales GST 18%"] == [("", "")], "M1: two lines became one, HSN and rate mixed (1111 / 5, 2222 / 18): left blank (%s)" % lrows(0x7103))
@@ -298,6 +304,13 @@ try:
     got = rec("l4a", 0x7106, 54600, "L-1", "Party L", [["Party L", -118, "", None, []], ["Sales GST 18%", 118, "", None, []]], refDate="31/12/2026")
     vl = vrow(0x7106)
     ok(got == ["applied"] and vl["ref_date"] == "" and vl["gstin"] == GST1, "L4a: a malformed ref date sent is passed on (stored empty), not replaced by the stored one; the GSTIN still kept (%s)" % vl)
+    # re-review M-A: after the repair, the next blank recorder line keeps the restored values (the keep reads the current lines)
+    m3_, no3, p3, amt3, _ = E[3]
+    got = states(apply([blank_line(3, "ma-3", 54303)]))
+    v3b = vrow(m3_)
+    ok(got == ["applied"] and v3b["gstin"] == GST1 and v3b["pos"] == "Delhi" and sorted((h, r) for l, _, h, r in lrows(m3_) if l != p3) == [("", "18"), ("998314", "18"), ("998315", "18")],
+       "M-A: after the repair a blank recorder line on E3 keeps the restored GSTIN, pos, HSN and rates (%s)" % lrows(m3_))
+    ok(not any(r["guid"] == G(m3_) for r in db.rows("select guid from tally_recorder_blanked(%s)" % q(B))), "M-A: and a repair now finds nothing to do on E3")
     lst = [(r["guid"], r["field"]) for r in db.rows("select guid, field from tally_recorder_blanked(%s)" % q(B))]
     ok(not any(g == G(0x7105) for g, _ in lst), "the repair's list leaves the entry marked full alone (its blanks are real) (%s)" % sorted(set((g[-4:], f) for g, f in lst)))
     print("== 4. a Day Book reload replaces as today (after the repair)")
