@@ -62,7 +62,7 @@ K 'Probe 194C Contractors{ENTER}' 1 '21-name'; K '194C{ENTER}' 1 '22-section'; K
 K '1{ENTER}' 1 '25-rate-ind'; K '2{ENTER}' 1 '26-rate-other'; K '{ENTER}' 1 '27-zero'; K '{ENTER}' 3 '28-threshold'; K '{ESC}' 3 '29-esc-blank'; K 'y' 3 '29b-y'
 Say '---- the deductee party (Sundry Creditors, bill-wise, Is TDS Deductable: Yes)'
 Clear; K 'Ledger' 2 '30a-typed'; K '{ENTER}' 3 '30-party-form'; K 'Probe Deductee{ENTER}' 1; K '{ENTER}' 1; K 'Sundry Creditors{ENTER}' 2 '31-group'
-K '{ENTER}' 1 '32-billwise'; K '{ENTER}' 1 '33-credit'; K '{ENTER}' 1 '34-at-tds'; K 'y' 1; K '{ENTER}' 2 '35-tds-yes'
+K 'n' 1; K '{ENTER}' 1 '32-billwise-no'; K '{ENTER}' 1 '34-at-tds'; K 'y' 1; K '{ENTER}' 2 '35-tds-yes'
 K 'Company - Resident' 1; K '{ENTER}' 2 '36-deductee'; K 'y' 1 '37-same-voucher'; K '{ENTER}' 2 '37b-after-same'
 for ($i = 1; $i -le 4; $i++) { K '{ENTER}' 1 ("37c-party-{0:d2}" -f $i) }
 K '^a' 3 '38-ctrl-a'; K '{ESC}' 3 '38b-esc'; K 'y' 3 '39-y'
@@ -79,14 +79,14 @@ K '^a' 3 '57-ctrl-a'; K '{ESC}' 3 '57b-esc'; K 'y' 3 '58-y'; Clear
 # what Tally keeps of them: its own export
 K '{ESC}' 2 '59-gateway'
 Coll 'Ledger' '*' 'ledgers.xml'
-Say '---- a journal: the expense Dr 100000, then the party: what Tally asks (TDS worked out?)'
+Say '---- a journal: Dr the expense 100000; To the TDS ledger (does Tally work it out?); To the party (the balance)'
 K 'v' 3 '60-vouchers'; K '{F7}' 3 '61-journal'; K '{F2}' 2; K '1-1-2027{ENTER}' 2 '62-date'
-K 'Probe Contract Work{ENTER}' 2 '63-exp'; K '100000{ENTER}' 2 '64-amt'
-K 'Probe Deductee{ENTER}' 3 '65-party'
-for ($i = 1; $i -le 10; $i++) { K '{ENTER}' 2 ("66-j-{0:d2}" -f $i) }
-K 'Probe TDS Ledger{ENTER}' 3 '67-tds-ledger'
-for ($i = 1; $i -le 6; $i++) { K '{ENTER}' 2 ("68-j-{0:d2}" -f $i) }
-K '^a' 4 '69-ctrl-a'
+K 'Probe Contract Work' 1; K '{ENTER}' 2 '63-exp'; K '100000' 1; K '{ENTER}' 2 '64-amt'
+K 't' 1; K '{ENTER}' 2 '65-to'; K 'Probe TDS Ledger' 1; K '{ENTER}' 3 '66-tds-ledger'
+for ($i = 1; $i -le 4; $i++) { K '{ENTER}' 2 ("67-tds-{0:d2}" -f $i) }
+K 't' 1; K '{ENTER}' 2 '68-to'; K 'Probe Deductee' 1; K '{ENTER}' 3 '69-party'
+for ($i = 1; $i -le 4; $i++) { K '{ENTER}' 2 ("70-party-{0:d2}" -f $i) }
+K '^a' 4 '71-ctrl-a'; K '^a' 4 '72-ctrl-a-2'
 Post ('<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Day Book</REPORTNAME><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co + '</SVCURRENTCOMPANY><SVCURRENTDATE>20270101</SVCURRENTDATE><SVFROMDATE>20270101</SVFROMDATE><SVTODATE>20270101</SVTODATE></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>') 'daybook' 'daybook-20270101.xml' | Out-Null
 Post ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCC</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCC" ISMODIFY="No"><TYPE>Company</TYPE><FETCH>Name, IsTDSOn</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') 'company TDS' 'company.xml' | Out-Null
 Get-Process tally -ErrorAction SilentlyContinue | Stop-Process -Force
