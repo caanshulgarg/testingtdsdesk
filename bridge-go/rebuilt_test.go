@@ -172,8 +172,13 @@ func standCollectionHead(ledgers, vouchers int) string {
 	}
 	var b strings.Builder
 	b.WriteString("<ENVELOPE>\r\n <HEADER>\r\n  <VERSION>1</VERSION>\r\n  <STATUS>1</STATUS>\r\n </HEADER>\r\n <BODY>\r\n  <DESC>\r\n   <CMPINFO>\r\n")
-	for _, c := range [][2]any{{"COMPANY", 0}, {"GROUP", 0}, {"LEDGER", ledgers}, {"COSTCATEGORY", 0}, {"VOUCHERTYPE", 2}, {"CURRENCY", 4},
-		{"TAXUNIT", 6}, {"VOUCHERNUMBERSERIES", 6}, {"VOUCHER", vouchers}} {
+	// 2.3.1 (2.2.4 review L7): every counter a real TallyPrime 7.1 writes, in its order (testdata/real-tally-7.1/vouchers-d.xml)
+	for _, c := range [][2]any{{"COMPANY", 0}, {"GROUP", 0}, {"LEDGER", ledgers}, {"COSTCATEGORY", 0}, {"COSTCENTRE", 0}, {"GODOWN", 0}, {"STOCKGROUP", 0},
+		{"STOCKCATEGORY", 0}, {"STOCKITEM", 0}, {"VOUCHERTYPE", 2}, {"CURRENCY", 8}, {"UNIT", 0}, {"BUDGET", 0}, {"CLIENTRULE", 0}, {"SERVERRULE", 0},
+		{"STATE", 0}, {"TDSRATE", 0}, {"TAXCLASSIFICATION", 0}, {"STCATEGORY", 0}, {"DEDUCTEETYPE", 0}, {"ATTENDANCETYPE", 0}, {"FBTCATEGORY", 0},
+		{"FBTASSESSEETYPE", 0}, {"TARIFFCLASSIFICATION", 0}, {"EXCISEDUTYCLASSIFICATION", 0}, {"SERIALNUMBER", 0}, {"ADJUSTMENTCLASSIFICATION", 0},
+		{"INCOMETAXSLAB", 0}, {"INCOMETAXCLASSIFICATION", 0}, {"LBTCLASSIFICATION", 0}, {"TAXUNIT", 12}, {"RETURNMASTER", 0}, {"GSTCLASSIFICATION", 0},
+		{"VOUCHERNUMBERSERIES", 14}, {"VOUCHER", vouchers}} {
 		fmt.Fprintf(&b, "    <%s>%v</%s>\r\n", c[0], c[1], c[0])
 	}
 	b.WriteString("   </CMPINFO>\r\n  </DESC>\r\n  <DATA>\r\n   <COLLECTION ISCMPDEPTYPE=\"Yes\" CMPLOCUS=\"4\" CMPDEPTYPE=\"64\">")

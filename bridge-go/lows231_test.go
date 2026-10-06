@@ -4,6 +4,7 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -248,3 +249,30 @@ func TestTagReadsGreaterThanInQuotedAttribute(t *testing.T) {
 	}
 }
 
+// 2.2.4 review L7 (what the real captures give): the typed stand's CMPINFO block lists Tally's counters as a real
+// TallyPrime 7.1 does (testdata/real-tally-7.1/vouchers-d.xml: every counter, in Tally's order, the ledger and voucher
+// counts the answer's), not a few of them. The Day Book's prologue and the company-numbers report have no real capture
+// in the repo, so they stay as they were
+func TestTypedStandHeadAsRealTally(t *testing.T) {
+	real := readText(filepath.Join("testdata", "real-tally-7.1", "vouchers-d.xml"))
+	names := func(x string) []string {
+		blk := re(`<CMPINFO>([\s\S]*?)</CMPINFO>`).FindStringSubmatch(x)
+		if blk == nil {
+			return nil
+		}
+		var o []string
+		for _, m := range re(`<([A-Z]+)>(\d+)</`).FindAllStringSubmatch(blk[1], -1) {
+			o = append(o, m[1]+"="+m[2])
+		}
+		return o
+	}
+	was := standTyped.Load()
+	standTyped.Store(true)
+	t.Cleanup(func() { standTyped.Store(was) })
+	want := names(real)
+	got := names(standCollectionHead(36, 8))
+	// the counts that are not ledgers or vouchers are this capture's; the stand writes its own ledger and voucher counts
+	if len(want) == 0 || strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Fatalf("the stand's counters:\n%v\nwant (the real capture):\n%v", got, want)
+	}
+}
