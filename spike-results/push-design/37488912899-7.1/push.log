@@ -1,0 +1,962 @@
+[15:40:54.960] push-design on TallyPrime 7.1: reps 1, heavy 300 ledgers / 300 items / up to 1000 vouchers (10 min), postings 1
+[15:40:55.714] system clock step after timeBeginPeriod(1): 0.376 ms (min 0.0026, max 4.0279)
+[15:40:55.738] two files written 2 ms apart: NTFS write times 13.4828 ms apart
+[15:40:55.755] light company folder: D:\a\_temp\TallyData\100000
+[15:40:58.775] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-setup-light-started (1024x768)
+[15:41:27.912] Tally started (setup-light) in 29.1 s; company open: True
+[15:41:27.923] company GUID f0eb2fe7-e16b-449a-9a1a-479075465e4f
+[15:41:29.947] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[15:41:31.183] import light masters: 60 sent, created 59, errors 0, 204.3 ms
+[15:41:31.303] import template s5 (all fields): 1 sent, created 1, errors 0, 86.5 ms
+[15:41:31.510] import template s50 (all fields): 1 sent, created 1, errors 0, 201.2 ms
+[15:41:31.530] import template rc (all fields): 1 sent, created 1, errors 0, 17.9 ms
+[15:41:31.535] templates: s5 all fields; s50 all fields; rc all fields
+[15:41:31.583]   template Receipt 1 20261001 mid 4 aid 4 f0eb2fe7-e16b-449a-9a1a-479075465e4f-00000004
+[15:41:31.584]   template Sales 1 20261002 mid 2 aid 2 f0eb2fe7-e16b-449a-9a1a-479075465e4f-00000002
+[15:41:31.585]   template Sales 2 20261031 mid 3 aid 3 f0eb2fe7-e16b-449a-9a1a-479075465e4f-00000003
+[15:41:31.755] company feature fields (by name): ISBATCHWISEON=No, PREVISMULTIGODOWNON=No, PREVISTRACKINGON=No, ISPAYROLLON=No, PREVISSALESORDERSON=No, PREVISPURCORDERSON=No, ISEXCISEMFGRTRADERON=No, ISPAYROLLSTATON=No, ISCOSTTRACKINGON=No, NOTIFYOFEXPIRY=No, ISTRACKVOUCHERSON=No, RESETTRACKEDCHANGES=No
+[15:41:31.770] import company features by XML: 1 sent, created 0, errors 0, 11.6 ms
+[15:41:31.779] after the XML alter: ISBATCHWISEON=Yes, PREVISMULTIGODOWNON=Yes, PREVISTRACKINGON=Yes, ISPAYROLLON=Yes, PREVISSALESORDERSON=Yes, PREVISPURCORDERSON=Yes, ISEXCISEMFGRTRADERON=No, ISPAYROLLSTATON=No, ISCOSTTRACKINGON=No, NOTIFYOFEXPIRY=No, ISTRACKVOUCHERSON=No, RESETTRACKEDCHANGES=No
+[keys] '{F11}'
+[shot] p-f11-0 (1024x768)
+[keys] '{UP}'
+[keys] '{UP}'
+[keys] '{UP}'
+[shot] p-f11-1-top (1024x768)
+[keys] 'y'
+[shot] p-f11-2-show-more (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d01 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d02 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d03 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d04 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d05 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d06 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d07 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d08 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d09 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d10 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d11 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d12 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d13 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d14 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d15 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d16 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d17 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d18 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d19 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d20 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d21 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d22 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d23 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d24 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d25 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d26 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d27 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d28 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d29 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d30 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d31 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d32 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d33 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d34 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d35 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d36 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d37 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d38 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d39 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d40 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d41 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d42 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d43 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d44 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d45 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d46 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d47 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d48 (1024x768)
+[keys] '^a'
+[shot] p-f11-accepted (1024x768)
+[15:42:55.214] after F11 (show more features only): ISBATCHWISEON=Yes, PREVISMULTIGODOWNON=Yes, PREVISTRACKINGON=Yes, ISPAYROLLON=Yes, PREVISSALESORDERSON=Yes, PREVISPURCORDERSON=Yes, ISEXCISEMFGRTRADERON=No, ISPAYROLLSTATON=No, ISCOSTTRACKINGON=No, NOTIFYOFEXPIRY=No, ISTRACKVOUCHERSON=No, RESETTRACKEDCHANGES=No
+[15:42:55.231] voucher types: Attendance, Contra, Credit Note, Debit Note, Delivery Note, Job Work In Order, Job Work Out Order, Journal, Material In, Material Out, Memorandum, Payment, Payroll, Physical Stock, Purchase, Purchase Order, Receipt, Receipt Note, Rejections In, Rejections Out, Reversing Journal, Sales, Sales Order, Stock Journal
+[15:42:55.242] voucher type fields: active ISACTIVE; manufacturing ASMFGJRNL
+[15:42:55.281] import voucher types active, manufacturing journal: 9 sent, created 1, errors 0, 36.4 ms
+[15:42:56.153] import type masters (godowns, batch items, employees, pay heads, supplier): 258 sent, created 258, errors 0, 820.9 ms
+[15:42:56.163] import attendance type: 1 sent, created 0, errors 0, 6.6 ms; Tally: Unit &apos;Days&apos; does not exist!
+[15:42:56.171] import attendance type: 1 sent, created 0, errors 0, 6.1 ms; Tally: Unit &apos;Days&apos; does not exist!
+[15:42:56.178] import attendance type: 1 sent, created 0, errors 0, 5.6 ms; Tally: Unit &apos;Days&apos; does not exist!
+[15:42:56.184] import attendance type: 1 sent, created 0, errors 0, 5.6 ms; Tally: Unit &apos;Days&apos; does not exist!
+[15:42:56.191] import attendance type: 1 sent, created 0, errors 0, 5.5 ms; Tally: Unit &apos;Days&apos; does not exist!
+[15:42:56.197] import attendance type: 1 sent, created 0, errors 0, 5.5 ms; Tally: Unit &apos;Days&apos; does not exist!
+[15:42:56.203] import attendance type: 1 sent, created 0, errors 0, 5.4 ms; Tally: Unit &apos;Days&apos; does not exist!
+[15:42:56.210] import attendance type: 1 sent, created 0, errors 0, 5.5 ms; Tally: Unit &apos;Days&apos; does not exist!
+[15:42:56.217] import attendance type: 1 sent, created 0, errors 0, 5.6 ms; Tally: Unit &apos;Days&apos; does not exist!
+[15:42:56.223] import attendance type: 1 sent, created 0, errors 0, 5.6 ms; Tally: Unit &apos;Days&apos; does not exist!
+[15:42:56.230] import attendance type: 1 sent, created 0, errors 0, 5.4 ms; Tally: Unit &apos;Days&apos; does not exist!
+[15:42:56.236] import attendance type: 1 sent, created 0, errors 0, 5.4 ms; Tally: Unit &apos;Days&apos; does not exist!
+[15:42:56.451] import template payroll50 (form 1 of 5): 1 sent, created 0, errors 0, 34.3 ms
+[15:42:56.465] import template payroll50 (form 2 of 5): 1 sent, created 0, errors 0, 13 ms
+[15:42:56.482] import template payroll50 (form 3 of 5): 1 sent, created 0, errors 0, 16.3 ms
+[15:42:56.496] import template payroll50 (form 4 of 5): 1 sent, created 0, errors 0, 12 ms
+[15:42:56.518] import template payroll50 (form 5 of 5): 1 sent, created 1, errors 0, 21 ms
+[15:42:56.538] import template payroll200 (form 1 of 5): 1 sent, created 0, errors 0, 17.7 ms
+[15:42:56.557] import template payroll200 (form 2 of 5): 1 sent, created 0, errors 0, 17.7 ms
+[15:42:56.589] import template payroll200 (form 3 of 5): 1 sent, created 0, errors 0, 30.9 ms
+[15:42:56.608] import template payroll200 (form 4 of 5): 1 sent, created 0, errors 0, 17.5 ms
+[15:42:56.643] import template payroll200 (form 5 of 5): 1 sent, created 1, errors 0, 33.7 ms
+[15:42:56.657] import template attendance (form 1 of 1): 1 sent, created 0, errors 0, 12.8 ms
+[15:42:56.712] import template stockjournal (form 1 of 1): 1 sent, created 1, errors 0, 54.2 ms
+[15:42:56.735] import template mfgjournal (form 1 of 1): 1 sent, created 1, errors 0, 21.3 ms
+[15:42:56.758] import template salesorder (form 1 of 3): 1 sent, created 0, errors 0, 21.5 ms; Tally: Bad Order Number in Voucher!
+[15:42:56.778] import template salesorder (form 2 of 3): 1 sent, created 0, errors 0, 18.6 ms; Tally: Bad Order Number in Voucher!
+[15:42:56.798] import template salesorder (form 3 of 3): 1 sent, created 0, errors 0, 18.7 ms; Tally: Bad Order Number in Voucher!
+[15:42:56.818] import template purchaseorder (form 1 of 3): 1 sent, created 0, errors 0, 18.1 ms; Tally: Bad Order Number in Voucher!
+[15:42:56.838] import template purchaseorder (form 2 of 3): 1 sent, created 0, errors 0, 19.3 ms; Tally: Bad Order Number in Voucher!
+[15:42:56.858] import template purchaseorder (form 3 of 3): 1 sent, created 0, errors 0, 18.3 ms; Tally: Bad Order Number in Voucher!
+[15:42:56.905] import template deliverynote (form 1 of 1): 1 sent, created 1, errors 0, 45.7 ms
+[15:42:56.950] import template receiptnote (form 1 of 1): 1 sent, created 1, errors 0, 43.8 ms
+[15:42:56.974] import template physicalstock (form 1 of 1): 1 sent, created 1, errors 0, 22.1 ms
+[15:42:57.194] import template salesbatch (form 1 of 1): 1 sent, created 1, errors 0, 218.6 ms
+[15:42:57.542] TDL $$MachineName => '' 
+[15:42:57.545] TDL $$CmpUserName => 'TALLY User' 
+[15:42:57.549] TDL $$SysInfo:WindowsUser => 'runneradmin' 
+[15:42:57.552] TDL $$SysInfo:WindowsUserName => '' 
+[15:42:57.554] TDL $$SysInfo:UserName => '' 
+[15:42:57.557] TDL $$SysInfo:LoginUser => '' 
+[15:42:57.560] TDL $$SysInfo:SystemName => 'runnervmfi6oq' 
+[15:42:57.563] TDL $$SysInfo:ComputerName => '' 
+[15:42:57.566] TDL $$SysInfo:MachineName => '' 
+[15:42:57.571] TDL $$SysInfo:IPAddress => '10.1.0.104,172.25.224.1' 
+[15:42:57.574] TDL $$SysInfo:ApplicationPath => 'C:\Program Files\TallyPrime' 
+[15:42:57.577] TDL $$SysInfo:TempPath => '' 
+[15:43:03.609] tally.ini: Data D:\a\_temp\TallyHeavy; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-setup-heavy-started (1024x768)
+[15:43:32.601] Tally started (setup-heavy) in 29 s; company open: True
+[15:43:34.616] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[15:43:36.537] import heavy masters 0: 600 sent, created 600, errors 0, 1890.2 ms
+[15:43:46.305] import heavy vouchers 0: 1000 sent, created 600, errors 0, 9671.3 ms
+[15:43:46.444] heavy company: 316 ledgers, 400 stock items, 612 vouchers in Tally (import took 0.8 min)
+[15:43:53.455] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-count-light-started (1024x768)
+[15:44:22.450] Tally started (count-light) in 29 s; company open: True
+[15:44:24.459] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[15:44:24.501] light company: 16 ledgers, 100 stock items, 12 vouchers
+[15:44:30.514] bridge's TallyHost: 127.0.0.2 (through the timing proxy)
+[15:44:30.521] bridge: setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.3.0.exe SHA-256 8e8145693224edf5459836323ce187e87e8dbca6eeac0bde494cf64b2ca6a7b9
+[15:44:57.039] bridge config after setup: TallyHost '127.0.0.2', TallyPorts 9000, port 9100
+[15:44:57.098] bridge on 127.0.0.1:9100, version 2.3.0
+[15:45:01.133] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPHeads.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-types-heads-started (1024x768)
+[15:45:30.156] Tally started (types-heads) in 29 s; company open: True
+[15:45:32.164] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[15:45:32.170] -- a: light / types-heads / payroll50 (dup) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-12-2026{ENTER}'
+[shot] p-light-types-heads-payroll50-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-types-heads-payroll50-dup (1024x768)
+   rep 1: ui sendwait 0.7 first 62.9 settled 62.9; stamps pre 208.5 save 26 post 1 final ; line  B
+[shot] p-light-types-heads-payroll50-saved (1024x768)
+[15:45:54.654]    Tally: 1 new, 0 altered (wanted 1)
+[15:45:54.661] -- a: light / types-heads / payroll50 (alter) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-12-2026{ENTER}'
+[shot] p-light-types-heads-payroll50-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-light-types-heads-payroll50-open (1024x768)
+   rep 1: ui sendwait 0.4 first 63.9 settled 161.1; stamps pre  save  post  final ; line  B
+[shot] p-light-types-heads-payroll50-saved (1024x768)
+[15:48:15.149]    Tally: 0 new, 0 altered (wanted 1)
+[15:48:15.185] -- a: light / types-heads / payroll200 (dup) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-12-2026{ENTER}'
+[shot] p-light-types-heads-payroll200-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-types-heads-payroll200-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 62.7 settled 62.7; stamps pre 0 save 47 post 1 final ; line  B
+[shot] p-light-types-heads-payroll200-saved (1024x768)
+[15:48:37.545]    Tally: 1 new, 0 altered (wanted 1)
+[15:48:37.547] -- a: light / types-heads / payroll200 (alter) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-12-2026{ENTER}'
+[shot] p-light-types-heads-payroll200-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-light-types-heads-payroll200-open (1024x768)
+   rep 1: ui sendwait 0.3 first 60.6 settled 272.6; stamps pre  save  post  final ; line  B
+[shot] p-light-types-heads-payroll200-saved (1024x768)
+[15:50:58.112]    Tally: 0 new, 0 altered (wanted 1)
+[15:50:58.147] types: attendance has no template in Tally (form 1: created 0, exceptions 1 ): skipped
+[15:50:58.148] -- a: light / types-heads / stockjournal (dup) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-1-2027{ENTER}'
+[shot] p-light-types-heads-stockjournal-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-types-heads-stockjournal-dup (1024x768)
+   rep 1: ui sendwait 0.4 first 47.8 settled 2619.4; stamps pre 1 save 80.1 post 1 final ; line  B
+[shot] p-light-types-heads-stockjournal-saved (1024x768)
+[15:51:23.051]    Tally: 1 new, 0 altered (wanted 1)
+[15:51:23.053] -- a: light / types-heads / stockjournal (alter) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-1-2027{ENTER}'
+[shot] p-light-types-heads-stockjournal-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-light-types-heads-stockjournal-open (1024x768)
+   rep 1: ui sendwait 0.4 first 76.1 settled 2582.6; stamps pre 0.4 save 112.7 post 1 final ; line  B
+[shot] p-light-types-heads-stockjournal-saved (1024x768)
+[15:51:47.937]    Tally: 0 new, 1 altered (wanted 1)
+[15:51:48.012] -- a: light / types-heads / mfgjournal (dup) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-1-2027{ENTER}'
+[shot] p-light-types-heads-mfgjournal-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-types-heads-mfgjournal-dup (1024x768)
+   rep 1: ui sendwait 0.2 first 75.2 settled 605.5; stamps pre 1 save 30 post 1 final ; line  B
+[shot] p-light-types-heads-mfgjournal-saved (1024x768)
+[15:52:10.978]    Tally: 1 new, 0 altered (wanted 1)
+[15:52:10.979] -- a: light / types-heads / mfgjournal (alter) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-1-2027{ENTER}'
+[shot] p-light-types-heads-mfgjournal-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-light-types-heads-mfgjournal-open (1024x768)
+   rep 1: ui sendwait 0.3 first 79.6 settled 574.4; stamps pre 1 save 43.6 post 1 final ; line  B
+[shot] p-light-types-heads-mfgjournal-saved (1024x768)
+[15:52:33.842]    Tally: 0 new, 1 altered (wanted 1)
+[15:52:33.890] types: salesorder has no template in Tally (form 1: created 0, exceptions 1 Bad Order Number in Voucher! | form 2: created 0, exceptions 1 Bad Order Number in Voucher! | form 3: created 0, exceptions 1 Bad Order Number in Voucher!): skipped
+[15:52:33.890] types: purchaseorder has no template in Tally (form 1: created 0, exceptions 1 Bad Order Number in Voucher! | form 2: created 0, exceptions 1 Bad Order Number in Voucher! | form 3: created 0, exceptions 1 Bad Order Number in Voucher!): skipped
+[15:52:33.891] -- a: light / types-heads / deliverynote (dup) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-1-2027{ENTER}'
+[shot] p-light-types-heads-deliverynote-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-types-heads-deliverynote-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 79.1 settled 687.3; stamps pre 0.6 save 82.7 post 1 final ; line  B
+[shot] p-light-types-heads-deliverynote-saved (1024x768)
+[15:52:59.719]    Tally: 1 new, 0 altered (wanted 1)
+[15:52:59.721] -- a: light / types-heads / deliverynote (alter) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-1-2027{ENTER}'
+[shot] p-light-types-heads-deliverynote-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-light-types-heads-deliverynote-open (1024x768)
+   rep 1: ui sendwait 0.3 first 75.7 settled 818.0; stamps pre 1 save 74.1 post 2 final ; line  B
+[shot] p-light-types-heads-deliverynote-saved (1024x768)
+[15:53:22.876]    Tally: 0 new, 1 altered (wanted 1)
+[15:53:22.913] -- a: light / types-heads / receiptnote (dup) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-2-2027{ENTER}'
+[shot] p-light-types-heads-receiptnote-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-types-heads-receiptnote-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 79.4 settled 815.6; stamps pre 1 save 51.6 post 0.4 final ; line  B
+[shot] p-light-types-heads-receiptnote-saved (1024x768)
+[15:53:45.989]    Tally: 1 new, 0 altered (wanted 1)
+[15:53:45.991] -- a: light / types-heads / receiptnote (alter) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-2-2027{ENTER}'
+[shot] p-light-types-heads-receiptnote-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-light-types-heads-receiptnote-open (1024x768)
+   rep 1: ui sendwait 0.5 first 76.4 settled 847.1; stamps pre 0 save 69.9 post 1 final ; line  B
+[shot] p-light-types-heads-receiptnote-saved (1024x768)
+[15:54:09.139]    Tally: 0 new, 1 altered (wanted 1)
+[15:54:09.180] -- a: light / types-heads / physicalstock (dup) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-3-2027{ENTER}'
+[shot] p-light-types-heads-physicalstock-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-types-heads-physicalstock-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 78.8 settled 302.9; stamps pre 0.3 save 21.7 post 0.3 final ; line  B
+[shot] p-light-types-heads-physicalstock-saved (1024x768)
+[15:54:31.778]    Tally: 1 new, 0 altered (wanted 1)
+[15:54:31.780] -- a: light / types-heads / physicalstock (alter) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-3-2027{ENTER}'
+[shot] p-light-types-heads-physicalstock-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-light-types-heads-physicalstock-open (1024x768)
+   rep 1: ui sendwait 0.4 first 63.0 settled 366.3; stamps pre 0.6 save 40.5 post 1 final ; line  B
+[shot] p-light-types-heads-physicalstock-saved (1024x768)
+[15:54:54.464]    Tally: 0 new, 1 altered (wanted 1)
+[15:54:54.506] -- a: light / types-heads / salesbatch (dup) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-3-2027{ENTER}'
+[shot] p-light-types-heads-salesbatch-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-types-heads-salesbatch-dup (1024x768)
+   rep 1: ui sendwait 0.4 first 76.5 settled 2037.1; stamps pre 1 save 263.7 post 1 final ; line  B
+[shot] p-light-types-heads-salesbatch-saved (1024x768)
+[15:55:18.869]    Tally: 1 new, 0 altered (wanted 1)
+[15:55:18.870] -- a: light / types-heads / salesbatch (alter) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-3-2027{ENTER}'
+[shot] p-light-types-heads-salesbatch-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-light-types-heads-salesbatch-open (1024x768)
+   rep 1: ui sendwait 0.4 first 76.2 settled 2005.6; stamps pre 0.7 save 328.4 post 1 final ; line  B
+[shot] p-light-types-heads-salesbatch-saved (1024x768)
+[15:55:43.168]    Tally: 0 new, 1 altered (wanted 1)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-12-2026{ENTER}'
+[shot] p-types-heads-cancel-daybook (1024x768)
+[keys] '{END}'
+[keys] '%x'
+[keys] 'y'
+[shot] p-types-heads-cancelled (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-1-2027{ENTER}'
+[shot] p-types-heads-delete-daybook (1024x768)
+[keys] '{END}'
+[keys] '%d'
+[keys] 'y'
+[shot] p-types-heads-deleted (1024x768)
+[15:56:30.098]    cancel / delete (heads): full lines ; recorder lines before_cancel after_cancel before_delete after_delete
+[15:56:34.112] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPHeads.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-types-heads-m-Ledger-started (1024x768)
+[15:57:03.124] Tally started (types-heads-m-Ledger) in 29 s; company open: True
+[15:57:05.132] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[keys] 'a'
+[shot] p-types-heads-m-Ledger-0 (1024x768)
+[keys] 'Ledger'
+[keys] '{ENTER}'
+[keys] 'Template Party'
+[keys] '{ENTER}'
+[shot] p-types-heads-m-Ledger-form (1024x768)
+[shot] p-types-heads-m-Ledger-after (1024x768)
+[keys] 'y'
+[15:57:26.825]    master Ledger 'Template Party' (heads): saved True (AlterID 214 -> 551, Ledger > Template Party); TDL warning False; stamps ; full lines 0 (); recorder lines 2 (ledger_accept_pre ledger_accept_post)
+[15:57:30.831] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPHeads.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-types-heads-m-PayHead-started (1024x768)
+[15:57:59.817] Tally started (types-heads-m-PayHead) in 29 s; company open: True
+[15:58:01.825] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[keys] 'a'
+[shot] p-types-heads-m-PayHead-0 (1024x768)
+[keys] 'Pay Head'
+[keys] '{ENTER}'
+[keys] 'PD Basic'
+[keys] '{ENTER}'
+[shot] p-types-heads-m-PayHead-form (1024x768)
+[shot] p-types-heads-m-PayHead-after (1024x768)
+[keys] 'y'
+[15:58:23.450]    master Pay Head 'PD Basic' (heads): saved True (AlterID 546 -> 552, Pay Head > PD Basic); TDL warning False; stamps ; full lines 0 (); recorder lines 0 ()
+[15:58:27.458] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPHeads.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-types-heads-m-StockItem-started (1024x768)
+[15:58:56.950] Tally started (types-heads-m-StockItem) in 29.5 s; company open: True
+[15:58:58.959] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[keys] 'a'
+[shot] p-types-heads-m-StockItem-0 (1024x768)
+[keys] 'Stock Item'
+[keys] '{ENTER}'
+[keys] 'PD Bat 01'
+[keys] '{ENTER}'
+[shot] p-types-heads-m-StockItem-form (1024x768)
+[shot] p-types-heads-m-StockItem-after (1024x768)
+[keys] 'y'
+[15:59:20.603]    master Stock Item 'PD Bat 01' (heads): saved True (AlterID 295 -> 553, Stock Item > PD Bat 01); TDL warning False; stamps ; full lines 0 (); recorder lines 0 ()
+[15:59:24.610] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPHeads.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-types-heads-m-Unit-started (1024x768)
+[15:59:53.625] Tally started (types-heads-m-Unit) in 29 s; company open: True
+[15:59:55.634] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[keys] 'a'
+[shot] p-types-heads-m-Unit-0 (1024x768)
+[keys] 'Unit'
+[keys] '{ENTER}'
+[keys] 'Nos'
+[keys] '{ENTER}'
+[shot] p-types-heads-m-Unit-form (1024x768)
+[shot] p-types-heads-m-Unit-after (1024x768)
+[keys] 'y'
+[16:00:17.194]    master Unit 'Nos' (heads): saved True (AlterID 211 -> 554, Unit > Nos); TDL warning False; stamps ; full lines 0 (); recorder lines 0 ()
+[16:00:21.201] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPHeads.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-types-heads-m-Godown-started (1024x768)
+[16:00:50.170] Tally started (types-heads-m-Godown) in 29 s; company open: True
+[16:00:52.178] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[keys] 'a'
+[shot] p-types-heads-m-Godown-0 (1024x768)
+[keys] 'Godown'
+[keys] '{ENTER}'
+[keys] 'PD Godown A'
+[keys] '{ENTER}'
+[shot] p-types-heads-m-Godown-form (1024x768)
+[shot] p-types-heads-m-Godown-after (1024x768)
+[keys] 'y'
+[keys] '{ESC}'
+[keys] '{ESC}'
+[keys] '{ESC}'
+[shot] p-types-heads-m-Godown-back (1024x768)
+[16:01:22.065] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPHeads.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-types-heads-m-Godown-again-started (1024x768)
+[16:01:55.225] Tally started (types-heads-m-Godown-again) in 33.2 s; company open: True
+[16:01:57.234] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[keys] 'a'
+[shot] p-types-heads-m-Godown-0 (1024x768)
+[keys] 'PD Godown A'
+[keys] '{ENTER}'
+[shot] p-types-heads-m-Godown-form (1024x768)
+[shot] p-types-heads-m-Godown-after (1024x768)
+[keys] 'y'
+[keys] '{ESC}'
+[keys] '{ESC}'
+[keys] '{ESC}'
+[shot] p-types-heads-m-Godown-back (1024x768)
+[16:02:21.257] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPHeads.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-types-heads-m-Godown-again-started (1024x768)
+[16:02:50.262] Tally started (types-heads-m-Godown-again) in 29 s; company open: True
+[16:02:52.271] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[16:02:52.275]    master Godown 'PD Godown A' (heads): saved False (AlterID 293 -> 293, ); TDL warning False; stamps ; full lines 0 (); recorder lines 0 ()
+[16:02:56.282] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPHeads.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-types-heads-m-Employee-started (1024x768)
+[16:03:25.290] Tally started (types-heads-m-Employee) in 29 s; company open: True
+[16:03:27.300] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[keys] 'a'
+[shot] p-types-heads-m-Employee-0 (1024x768)
+[keys] 'Employee'
+[keys] '{ENTER}'
+[keys] 'PD Emp 001'
+[keys] '{ENTER}'
+[shot] p-types-heads-m-Employee-form (1024x768)
+[shot] p-types-heads-m-Employee-after (1024x768)
+[keys] 'y'
+[16:03:48.915]    master Employee 'PD Emp 001' (heads): saved True (AlterID 346 -> 555, Employee > PD Emp 001); TDL warning False; stamps ; full lines 0 (); recorder lines 0 ()
+[16:03:52.927] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPFull.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-types-full-started (1024x768)
+[16:04:21.907] Tally started (types-full) in 29 s; company open: True
+[16:04:23.914] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[16:04:23.916] -- a: light / types-full / payroll50 (dup) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-12-2026{ENTER}'
+[shot] p-light-types-full-payroll50-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-types-full-payroll50-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 31.5 settled 76.0; stamps pre  save  post  final ; line  B
+[shot] p-light-types-full-payroll50-saved (1024x768)
+[16:06:44.341]    Tally: 0 new, 0 altered (wanted 1)
+[16:06:44.343] -- a: light / types-full / payroll50 (alter) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-12-2026{ENTER}'
+[shot] p-light-types-full-payroll50-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-light-types-full-payroll50-open (1024x768)
+   rep 1: ui sendwait 0.4 first 64.0 settled 221.4; stamps pre  save  post  final ; line  B
+[shot] p-light-types-full-payroll50-saved (1024x768)
+[16:09:04.873]    Tally: 0 new, 0 altered (wanted 1)
+[16:09:04.906] -- a: light / types-full / payroll200 (dup) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-12-2026{ENTER}'
+[shot] p-light-types-full-payroll200-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-types-full-payroll200-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 76.8 settled 76.8; stamps pre 0 save 53.1 post 21.7 final 9; line 32626 B
+[shot] p-light-types-full-payroll200-saved (1024x768)
+[16:09:27.314]    Tally: 1 new, 0 altered (wanted 1)
+[16:09:27.315] -- a: light / types-full / payroll200 (alter) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-12-2026{ENTER}'
+[shot] p-light-types-full-payroll200-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-light-types-full-payroll200-open (1024x768)
+   rep 1: ui sendwait 0.4 first 61.5 settled 286.3; stamps pre  save  post  final ; line  B
+[shot] p-light-types-full-payroll200-saved (1024x768)
+[16:11:47.933]    Tally: 0 new, 0 altered (wanted 1)
+[16:11:47.972] types: attendance has no template in Tally (form 1: created 0, exceptions 1 ): skipped
+[16:11:47.973] -- a: light / types-full / stockjournal (dup) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-1-2027{ENTER}'
+[shot] p-light-types-full-stockjournal-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-types-full-stockjournal-dup (1024x768)
+   rep 1: ui sendwait 0.4 first 46.3 settled 2745.9; stamps pre 0.5 save 75.1 post 13 final 14.1; line 32931 B
+[shot] p-light-types-full-stockjournal-saved (1024x768)
+[16:12:13.032]    Tally: 1 new, 0 altered (wanted 1)
+[16:12:13.034] -- a: light / types-full / stockjournal (alter) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-1-2027{ENTER}'
+[shot] p-light-types-full-stockjournal-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-light-types-full-stockjournal-open (1024x768)
+   rep 1: ui sendwait 0.2 first 76.9 settled 2668.1; stamps pre 0 save 120.3 post 12.4 final 15.2; line 32930 B
+[shot] p-light-types-full-stockjournal-saved (1024x768)
+[16:12:37.999]    Tally: 0 new, 1 altered (wanted 1)
+[16:12:38.087] -- a: light / types-full / mfgjournal (dup) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-1-2027{ENTER}'
+[shot] p-light-types-full-mfgjournal-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-types-full-mfgjournal-dup (1024x768)
+   rep 1: ui sendwait 0.4 first 75.9 settled 639.9; stamps pre 0 save 32 post 2 final 12; line 3482 B
+[shot] p-light-types-full-mfgjournal-saved (1024x768)
+[16:13:01.068]    Tally: 1 new, 0 altered (wanted 1)
+[16:13:01.070] -- a: light / types-full / mfgjournal (alter) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-1-2027{ENTER}'
+[shot] p-light-types-full-mfgjournal-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-light-types-full-mfgjournal-open (1024x768)
+   rep 1: ui sendwait 0.4 first 63.1 settled 620.8; stamps pre 0 save 42.1 post 2 final 15; line 3425 B
+[shot] p-light-types-full-mfgjournal-saved (1024x768)
+[16:13:23.984]    Tally: 0 new, 1 altered (wanted 1)
+[16:13:24.040] types: salesorder has no template in Tally (form 1: created 0, exceptions 1 Bad Order Number in Voucher! | form 2: created 0, exceptions 1 Bad Order Number in Voucher! | form 3: created 0, exceptions 1 Bad Order Number in Voucher!): skipped
+[16:13:24.041] types: purchaseorder has no template in Tally (form 1: created 0, exceptions 1 Bad Order Number in Voucher! | form 2: created 0, exceptions 1 Bad Order Number in Voucher! | form 3: created 0, exceptions 1 Bad Order Number in Voucher!): skipped
+[16:13:24.041] -- a: light / types-full / deliverynote (dup) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-1-2027{ENTER}'
+[shot] p-light-types-full-deliverynote-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-types-full-deliverynote-dup (1024x768)
+   rep 1: ui sendwait 0.4 first 76.4 settled 463.6; stamps pre 0 save 72.6 post 8 final 13.3; line 2537 B
+[shot] p-light-types-full-deliverynote-saved (1024x768)
+[16:13:49.670]    Tally: 1 new, 0 altered (wanted 1)
+[16:13:49.672] -- a: light / types-full / deliverynote (alter) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-1-2027{ENTER}'
+[shot] p-light-types-full-deliverynote-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-light-types-full-deliverynote-open (1024x768)
+   rep 1: ui sendwait 0.4 first 79.3 settled 912.5; stamps pre 0.4 save 76.1 post 6 final 11; line 2536 B
+[shot] p-light-types-full-deliverynote-saved (1024x768)
+[16:14:12.925]    Tally: 0 new, 1 altered (wanted 1)
+[16:14:12.972] -- a: light / types-full / receiptnote (dup) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-2-2027{ENTER}'
+[shot] p-light-types-full-receiptnote-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-types-full-receiptnote-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 76.9 settled 751.8; stamps pre 0 save 56.3 post 6 final 14; line 2539 B
+[shot] p-light-types-full-receiptnote-saved (1024x768)
+[16:14:36.035]    Tally: 1 new, 0 altered (wanted 1)
+[16:14:36.037] -- a: light / types-full / receiptnote (alter) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-2-2027{ENTER}'
+[shot] p-light-types-full-receiptnote-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-light-types-full-receiptnote-open (1024x768)
+   rep 1: ui sendwait 0.4 first 77.1 settled 900.5; stamps pre 0 save 72.1 post 7 final 13; line 2539 B
+[shot] p-light-types-full-receiptnote-saved (1024x768)
+[16:14:59.231]    Tally: 0 new, 1 altered (wanted 1)
+[16:14:59.280] -- a: light / types-full / physicalstock (dup) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-3-2027{ENTER}'
+[shot] p-light-types-full-physicalstock-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-types-full-physicalstock-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 76.8 settled 385.7; stamps pre 0 save 26.6 post 1 final 19; line 567 B
+[shot] p-light-types-full-physicalstock-saved (1024x768)
+[16:15:21.988]    Tally: 1 new, 0 altered (wanted 1)
+[16:15:21.989] -- a: light / types-full / physicalstock (alter) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-3-2027{ENTER}'
+[shot] p-light-types-full-physicalstock-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-light-types-full-physicalstock-open (1024x768)
+   rep 1: ui sendwait 0.4 first 92.6 settled 401.4; stamps pre 0 save 33.5 post 1 final 14.7; line 567 B
+[shot] p-light-types-full-physicalstock-saved (1024x768)
+[16:15:44.708]    Tally: 0 new, 1 altered (wanted 1)
+[16:15:44.747] -- a: light / types-full / salesbatch (dup) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-3-2027{ENTER}'
+[shot] p-light-types-full-salesbatch-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-types-full-salesbatch-dup (1024x768)
+   rep 1: ui sendwait 0.4 first 75.3 settled 1840.4; stamps pre 0 save 246.7 post 48.7 final 15; line 22578 B
+[shot] p-light-types-full-salesbatch-saved (1024x768)
+[16:16:08.914]    Tally: 1 new, 0 altered (wanted 1)
+[16:16:08.916] -- a: light / types-full / salesbatch (alter) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-3-2027{ENTER}'
+[shot] p-light-types-full-salesbatch-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-light-types-full-salesbatch-open (1024x768)
+   rep 1: ui sendwait 0.3 first 76.3 settled 1911.8; stamps pre 0 save 321.4 post 47.7 final 16; line 22578 B
+[shot] p-light-types-full-salesbatch-saved (1024x768)
+[16:16:33.131]    Tally: 0 new, 1 altered (wanted 1)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-12-2026{ENTER}'
+[shot] p-types-full-cancel-daybook (1024x768)
+[keys] '{END}'
+[keys] '%x'
+[keys] 'y'
+[shot] p-types-full-cancelled (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-1-2027{ENTER}'
+[shot] p-types-full-delete-daybook (1024x768)
+[keys] '{END}'
+[keys] '%d'
+[keys] 'y'
+[shot] p-types-full-deleted (1024x768)
+[16:17:20.075]    cancel / delete (full): full lines before_cancel after_cancel before_delete after_delete; recorder lines 
+[16:17:24.083] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPFull.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-types-full-m-Ledger-started (1024x768)
+[16:17:53.058] Tally started (types-full-m-Ledger) in 29 s; company open: True
+[16:17:55.067] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[keys] 'a'
+[shot] p-types-full-m-Ledger-0 (1024x768)
+[keys] 'Ledger'
+[keys] '{ENTER}'
+[keys] 'Template Party'
+[keys] '{ENTER}'
+[shot] p-types-full-m-Ledger-form (1024x768)
+[shot] p-types-full-m-Ledger-after (1024x768)
+[keys] 'y'
+[16:18:16.726]    master Ledger 'Template Party' (full): saved True (AlterID 551 -> 556, Ledger > Template Party); TDL warning False; stamps la,lc,ld; full lines 1 (ledger_saved); recorder lines 0 ()
+[16:18:20.733] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPFull.tdl, C:\fcspike\FCPM_PayHead.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-types-full-m-PayHead-started (1024x768)
+[16:18:49.724] Tally started (types-full-m-PayHead) in 29 s; company open: True
+[16:18:51.733] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[keys] 'a'
+[shot] p-types-full-m-PayHead-0 (1024x768)
+[keys] 'Pay Head'
+[keys] '{ENTER}'
+[keys] 'PD Basic'
+[keys] '{ENTER}'
+[shot] p-types-full-m-PayHead-form (1024x768)
+[shot] p-types-full-m-PayHead-after (1024x768)
+[keys] 'y'
+[16:19:13.350]    master Pay Head 'PD Basic' (full): saved True (AlterID 552 -> 557, Pay Head > PD Basic); TDL warning False; stamps mpaa,mpac; full lines 1 (payhead_saved); recorder lines 0 ()
+[16:19:17.357] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPFull.tdl, C:\fcspike\FCPM_StockItem.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-types-full-m-StockItem-started (1024x768)
+[16:19:46.318] Tally started (types-full-m-StockItem) in 29 s; company open: True
+[16:19:48.326] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[keys] 'a'
+[shot] p-types-full-m-StockItem-0 (1024x768)
+[keys] 'Stock Item'
+[keys] '{ENTER}'
+[keys] 'PD Bat 01'
+[keys] '{ENTER}'
+[shot] p-types-full-m-StockItem-form (1024x768)
+[shot] p-types-full-m-StockItem-after (1024x768)
+[keys] 'y'
+[16:20:09.942]    master Stock Item 'PD Bat 01' (full): saved True (AlterID 553 -> 558, Stock Item > PD Bat 01); TDL warning False; stamps msta,mstc; full lines 1 (stockitem_saved); recorder lines 0 ()
+[16:20:13.948] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPFull.tdl, C:\fcspike\FCPM_Unit.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-types-full-m-Unit-started (1024x768)
+[16:20:42.948] Tally started (types-full-m-Unit) in 29 s; company open: True
+[16:20:44.957] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[keys] 'a'
+[shot] p-types-full-m-Unit-0 (1024x768)
+[keys] 'Unit'
+[keys] '{ENTER}'
+[keys] 'Nos'
+[keys] '{ENTER}'
+[shot] p-types-full-m-Unit-form (1024x768)
+[shot] p-types-full-m-Unit-after (1024x768)
+[keys] 'y'
+[keys] '{ESC}'
+[keys] '{ESC}'
+[keys] '{ESC}'
+[shot] p-types-full-m-Unit-back (1024x768)
+[16:21:14.995] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPFull.tdl, C:\fcspike\FCPM_Unit.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-types-full-m-Unit-again-started (1024x768)
+[16:21:43.987] Tally started (types-full-m-Unit-again) in 29 s; company open: True
+[16:21:45.994] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[keys] 'a'
+[shot] p-types-full-m-Unit-0 (1024x768)
+[keys] 'Nos'
+[keys] '{ENTER}'
+[shot] p-types-full-m-Unit-form (1024x768)
+[shot] p-types-full-m-Unit-after (1024x768)
+[keys] 'y'
+[keys] '{ESC}'
+[keys] '{ESC}'
+[keys] '{ESC}'
+[shot] p-types-full-m-Unit-back (1024x768)
+[16:22:09.994] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPFull.tdl, C:\fcspike\FCPM_Unit.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-types-full-m-Unit-again-started (1024x768)
+[16:22:38.975] Tally started (types-full-m-Unit-again) in 29 s; company open: True
+[16:22:40.994] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[16:22:41.001]    master Unit 'Nos' (full): saved False (AlterID 554 -> 554, ); TDL warning False; stamps muna,munc; full lines 2 (unit_saved unit_saved); recorder lines 0 ()
+[16:22:45.007] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPFull.tdl, C:\fcspike\FCPM_Godown.tdl, C:\fcspike\FCPM_Location.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-types-full-m-Godown-started (1024x768)
+[keys] '{ENTER}'
+[shot] p-types-full-m-Godown-key-1 (1024x768)
+[16:23:22.429] Tally (types-full-m-Godown): a TDL had errors (Tally's warning answered); see the screenshot types-full-m-Godown-started
+[16:23:22.430] Tally started (types-full-m-Godown) in 37.4 s; company open: True
+[16:23:24.438] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[keys] 'a'
+[shot] p-types-full-m-Godown-0 (1024x768)
+[keys] 'Godown'
+[keys] '{ENTER}'
+[keys] 'PD Godown A'
+[keys] '{ENTER}'
+[shot] p-types-full-m-Godown-form (1024x768)
+[shot] p-types-full-m-Godown-after (1024x768)
+[keys] 'y'
+[keys] '{ESC}'
+[keys] '{ESC}'
+[keys] '{ESC}'
+[shot] p-types-full-m-Godown-back (1024x768)
+[16:23:54.338] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPFull.tdl, C:\fcspike\FCPM_Godown.tdl, C:\fcspike\FCPM_Location.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-types-full-m-Godown-again-started (1024x768)
+[keys] '{ENTER}'
+[shot] p-types-full-m-Godown-again-key-1 (1024x768)
+[16:24:31.780] Tally (types-full-m-Godown-again): a TDL had errors (Tally's warning answered); see the screenshot types-full-m-Godown-again-started
+[16:24:31.781] Tally started (types-full-m-Godown-again) in 37.4 s; company open: True
+[16:24:33.789] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[keys] 'a'
+[shot] p-types-full-m-Godown-0 (1024x768)
+[keys] 'PD Godown A'
+[keys] '{ENTER}'
+[shot] p-types-full-m-Godown-form (1024x768)
+[shot] p-types-full-m-Godown-after (1024x768)
+[keys] 'y'
+[keys] '{ESC}'
+[keys] '{ESC}'
+[keys] '{ESC}'
+[shot] p-types-full-m-Godown-back (1024x768)
+[16:24:57.829] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPFull.tdl, C:\fcspike\FCPM_Godown.tdl, C:\fcspike\FCPM_Location.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-types-full-m-Godown-again-started (1024x768)
+[keys] '{ENTER}'
+[shot] p-types-full-m-Godown-again-key-1 (1024x768)
+[16:25:35.267] Tally (types-full-m-Godown-again): a TDL had errors (Tally's warning answered); see the screenshot types-full-m-Godown-again-started
+[16:25:35.268] Tally started (types-full-m-Godown-again) in 37.4 s; company open: True
+[16:25:37.277] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[16:25:37.285]    master Godown 'PD Godown A' (full): saved False (AlterID 293 -> 293, ); TDL warning True; stamps mgoa,mgoc; full lines 2 (godown_saved godown_saved); recorder lines 0 ()
+[16:25:41.291] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPFull.tdl, C:\fcspike\FCPM_Employee.tdl, C:\fcspike\FCPM_CostCentre.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-types-full-m-Employee-started (1024x768)
+[keys] '{ENTER}'
+[shot] p-types-full-m-Employee-key-1 (1024x768)
+[16:26:18.763] Tally (types-full-m-Employee): a TDL had errors (Tally's warning answered); see the screenshot types-full-m-Employee-started
+[16:26:18.764] Tally started (types-full-m-Employee) in 37.5 s; company open: True
+[16:26:20.773] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[keys] 'a'
+[shot] p-types-full-m-Employee-0 (1024x768)
+[keys] 'Employee'
+[keys] '{ENTER}'
+[keys] 'PD Emp 001'
+[keys] '{ENTER}'
+[shot] p-types-full-m-Employee-form (1024x768)
+[shot] p-types-full-m-Employee-after (1024x768)
+[keys] 'y'
+[16:26:42.376]    master Employee 'PD Emp 001' (full): saved True (AlterID 555 -> 559, Employee > PD Emp 001); TDL warning True; stamps ; full lines 0 (); recorder lines 0 ()
+[16:26:45.400] done (explore: the voucher-type probe only)

@@ -1,0 +1,1 @@
+FCF1|ev=stockitem_saved|form=Stock Item|cguid=3231183e-84ae-42ae-8614-17653180a55d|guid=3231183e-84ae-42ae-8614-17653180a55d-0000010f|mid=271|aid=551|name=PD Bat 01|parent= Primary|category= Not Applicable|baseunits=Nos|isbatchwiseon=Yes|hasmfgdate=No|gstapplicable= Applicable|openingbalance=4,000 Nos|openingvalue=2,00,000.00|openingrate=50.00/Nos|end=1
