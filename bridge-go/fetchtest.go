@@ -1,4 +1,4 @@
-// 2.2.2 (05-Oct-2026, the owner's request): "Test fetching an entry", a tray item. On NWS144 the entry fetch (by type and
+// 2.2.3 (05-Oct-2026, the owner's request): "Test fetching an entry", a tray item. On NWS144 the entry fetch (by type and
 // number, then by MasterID) finds nothing, and PowerShell cannot be run there, so the six forms of
 // docs/diagnostics/2.2.2-fetch-check.ps1 are sent by the bridge itself, for ONE voucher the person names (type, number,
 // date), one at a time, through the same gate as every request (invokeTally: one request to Tally at a time), each capped
