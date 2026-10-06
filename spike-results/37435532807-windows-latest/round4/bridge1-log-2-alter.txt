@@ -1,0 +1,14 @@
+2026-10-06 08:43:54  Recorder: Receipt 2 of 01-Oct-2026 (MasterID 4, line 036ff3c0…): asking Tally by MasterID
+2026-10-06 08:43:54  Recorder: Receipt 2 of 01-Oct-2026 (MasterID 4, line 036ff3c0…): taken: Tally's GUID fd3c65f7-3356-4b09-8177-48e9c18577ed-00000004, AlterID 4
+2026-10-06 08:45:34  Recorder: Purchase 1 of 01-Oct-2026 (MasterID 5, line 10bdca88…): asking Tally by MasterID
+2026-10-06 08:45:34  Recorder: Purchase 1 of 01-Oct-2026 (MasterID 5, line 10bdca88…): taken: Tally's GUID fd3c65f7-3356-4b09-8177-48e9c18577ed-00000005, AlterID 5
+2026-10-06 08:47:09  Tally 9000: TDSDeskCompanies took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 08:47:09  Tally 9000: the company list (TDSDeskCompanies) took longer than 2 s; the bridge stopped waiting and leaves the company list alone until 08:52 (the companies named last time stand)
+2026-10-06 08:47:09  Recorder: Tally took longer than 2 s to list its open companies (limit 2 s); this computer's changes of companies not seen open here yet wait until it answers in time; none is passed over or lost
+2026-10-06 08:47:09  Recorder: Sales 1 of 01-Oct-2026 (MasterID 6, line fc7c1981…): asking Tally by MasterID
+2026-10-06 08:47:09  Recorder: Sales 1 of 01-Oct-2026 (MasterID 6, line fc7c1981…): not asked: a posting is going on; asked after it
+2026-10-06 08:47:39  Recorder: Sales 1 of 01-Oct-2026 (MasterID 6, line fc7c1981…): taken: Tally's GUID fd3c65f7-3356-4b09-8177-48e9c18577ed-00000006, AlterID 6
+2026-10-06 08:48:31  Recorder: Credit Note 1 of 01-Oct-2026 (MasterID 7, line b438ded9…): asking Tally by MasterID
+2026-10-06 08:48:31  Recorder: Credit Note 1 of 01-Oct-2026 (MasterID 7, line b438ded9…): taken: Tally's GUID fd3c65f7-3356-4b09-8177-48e9c18577ed-00000007, AlterID 7
+2026-10-06 08:49:16  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line 405aaff5…): asking Tally by MasterID
+2026-10-06 08:49:16  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line 405aaff5…): taken: Tally's GUID fd3c65f7-3356-4b09-8177-48e9c18577ed-00000003, AlterID 8

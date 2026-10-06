@@ -1,0 +1,1073 @@
+{
+ "company": "FinCom Spike Co",
+ "names": {
+  "sales": "S231 Sales",
+  "purchase": "S231 Purchase",
+  "cgstOut": "Output CGST",
+  "sgstOut": "Output SGST",
+  "cgstIn": "Input CGST",
+  "sgstIn": "Input SGST",
+  "buyer": "S231 Buyer",
+  "supplier": "S231 Supplier",
+  "billParty": "S231 Billwise Party",
+  "contractor": "S231 Contractor",
+  "contractExp": "S231 Contract Exp",
+  "tds": "S231 TDS Payable",
+  "bank": "S231 Bank",
+  "officeExp": "S231 Office Exp",
+  "cat": "S231 Region",
+  "north": "S231 North",
+  "south": "S231 South",
+  "nature": "S231 Contract Work",
+  "newParty": "S231 New Party",
+  "income": "Spike Income",
+  "freight": "S231 Freight Charged",
+  "roundOff": "S231 Round Off",
+  "oldName": "S231 Old Name Party",
+  "newName": "S231 Renamed Party"
+ },
+ "gstinOld": "07AAACS2310K1ZO",
+ "gstinNew": "07AAACS2310K2ZN",
+ "masters": [
+  "masters-1-items",
+  "masters-2-costs",
+  "masters-4-ledgers",
+  "masters-6-bulk"
+ ],
+ "later": [
+  "masters-0-company",
+  "masters-3-nature",
+  "masters-5-tds"
+ ],
+ "bill": "s4-bill",
+ "s8Ledger": "s8-ledger",
+ "s9Alter": "s9-alter",
+ "s15Rename": "s15-rename",
+ "scenarios": [
+  {
+   "id": "S1",
+   "key": "s1-sales-two-rates",
+   "label": "sales invoice, two stock items at 5% and 18%",
+   "kind": "items",
+   "day": "1-11-2026",
+   "date": "20261101",
+   "truth": {
+    "type": "Sales",
+    "party": "S231 Buyer",
+    "items": [
+     {
+      "item": "S231 Rice",
+      "hsn": "1006",
+      "qty": 10,
+      "unit": "Nos",
+      "rate": 50,
+      "taxable": 500,
+      "gst": 5,
+      "tax": 25,
+      "cgst": 12.5,
+      "sgst": 12.5
+     },
+     {
+      "item": "S231 Laptop",
+      "hsn": "8471",
+      "qty": 2,
+      "unit": "Nos",
+      "rate": 30000,
+      "taxable": 60000,
+      "gst": 18,
+      "tax": 10800,
+      "cgst": 5400,
+      "sgst": 5400
+     }
+    ],
+    "ledgers": {
+     "S231 Buyer": -71325,
+     "S231 Sales": 60500,
+     "Output CGST": 5412.5,
+     "Output SGST": 5412.5
+    },
+    "total": 71325,
+    "irn": "a5c12dca80e743321740b001fd70953e8738d109865d28ba4013750f2046f229",
+    "ackNo": "112611010000231",
+    "ackDate": "20261101",
+    "eway": "381101234231"
+   }
+  },
+  {
+   "id": "S2",
+   "key": "s2-purchase-items",
+   "label": "purchase invoice with items",
+   "kind": "items",
+   "day": "2-11-2026",
+   "date": "20261102",
+   "truth": {
+    "type": "Purchase",
+    "party": "S231 Supplier",
+    "items": [
+     {
+      "item": "S231 Tablet",
+      "hsn": "3004",
+      "qty": 5,
+      "unit": "Nos",
+      "rate": 400,
+      "taxable": 2000,
+      "gst": 12,
+      "tax": 240,
+      "cgst": 120,
+      "sgst": 120
+     },
+     {
+      "item": "S231 Rice",
+      "hsn": "1006",
+      "qty": 20,
+      "unit": "Nos",
+      "rate": 50,
+      "taxable": 1000,
+      "gst": 5,
+      "tax": 50,
+      "cgst": 25,
+      "sgst": 25
+     }
+    ],
+    "ledgers": {
+     "S231 Supplier": 3290,
+     "S231 Purchase": -3000,
+     "Input CGST": -145,
+     "Input SGST": -145
+    },
+    "total": 3290
+   }
+  },
+  {
+   "id": "S3",
+   "key": "s3-credit-note-items",
+   "label": "credit note with items",
+   "kind": "items",
+   "day": "1-12-2026",
+   "date": "20261201",
+   "truth": {
+    "type": "Credit Note",
+    "party": "S231 Buyer",
+    "items": [
+     {
+      "item": "S231 Laptop",
+      "hsn": "8471",
+      "qty": 1,
+      "unit": "Nos",
+      "rate": 30000,
+      "taxable": 30000,
+      "gst": 18,
+      "tax": 5400,
+      "cgst": 2700,
+      "sgst": 2700
+     }
+    ],
+    "ledgers": {
+     "S231 Buyer": 35400,
+     "S231 Sales": -30000,
+     "Output CGST": -2700,
+     "Output SGST": -2700
+    },
+    "total": 35400
+   }
+  },
+  {
+   "id": "S4",
+   "key": "s4-receipt-against-bill",
+   "label": "receipt against a bill (Agst Ref S231-BILL-1)",
+   "kind": "bills",
+   "day": "2-12-2026",
+   "date": "20261202",
+   "truth": {
+    "type": "Receipt",
+    "party": "S231 Billwise Party",
+    "ledgers": {
+     "S231 Billwise Party": 2360,
+     "Cash": -2360
+    },
+    "bills": [
+     {
+      "ledger": "S231 Billwise Party",
+      "name": "S231-BILL-1",
+      "type": "Agst Ref",
+      "amount": 2360
+     }
+    ]
+   }
+  },
+  {
+   "id": "S5",
+   "key": "s5-payment-tds",
+   "label": "payment with TDS",
+   "kind": "tds",
+   "day": "1-1-2027",
+   "date": "20270101",
+   "truth": {
+    "type": "Payment",
+    "party": "S231 Contractor",
+    "ledgers": {
+     "S231 Contract Exp": -100000,
+     "S231 TDS Payable": 2000,
+     "Cash": 98000
+    },
+    "tds": {
+     "nature": "S231 Contract Work",
+     "rate": 2,
+     "base": 100000,
+     "tax": 2000,
+     "party": "S231 Contractor",
+     "section": "194C",
+     "deductee": "Company - Resident"
+    }
+   }
+  },
+  {
+   "id": "S6",
+   "key": "s6-journal-cost-centres",
+   "label": "journal with cost centres",
+   "kind": "costs",
+   "day": "2-1-2027",
+   "date": "20270102",
+   "truth": {
+    "type": "Journal",
+    "ledgers": {
+     "S231 Office Exp": -1000,
+     "S231 Supplier": 1000
+    },
+    "costs": [
+     {
+      "ledger": "S231 Office Exp",
+      "category": "S231 Region",
+      "centre": "S231 North",
+      "amount": -600
+     },
+     {
+      "ledger": "S231 Office Exp",
+      "category": "S231 Region",
+      "centre": "S231 South",
+      "amount": -400
+     }
+    ]
+   }
+  },
+  {
+   "id": "S7",
+   "key": "s7-bank-payment-utr",
+   "label": "bank payment with a UTR",
+   "kind": "bank",
+   "day": "1-2-2027",
+   "date": "20270201",
+   "truth": {
+    "type": "Payment",
+    "party": "S231 Supplier",
+    "ledgers": {
+     "S231 Supplier": -5900,
+     "S231 Bank": 5900
+    },
+    "bank": {
+     "ledger": "S231 Bank",
+     "txnType": "e-Fund Transfer",
+     "instNo": "SBINR52027020100231",
+     "instDate": "20270201",
+     "amount": 5900
+    }
+   }
+  },
+  {
+   "id": "S10",
+   "key": "s10-sales-50-items",
+   "label": "sales invoice with 50 items",
+   "kind": "items",
+   "day": "2-2-2027",
+   "date": "20270202",
+   "truth": {
+    "type": "Sales",
+    "party": "S231 Buyer",
+    "items": [
+     {
+      "item": "S231 Rice",
+      "hsn": "1006",
+      "qty": 1,
+      "unit": "Nos",
+      "rate": 50,
+      "taxable": 50,
+      "gst": 5,
+      "tax": 2.5,
+      "cgst": 1.25,
+      "sgst": 1.25
+     },
+     {
+      "item": "S231 Laptop",
+      "hsn": "8471",
+      "qty": 2,
+      "unit": "Nos",
+      "rate": 30000,
+      "taxable": 60000,
+      "gst": 18,
+      "tax": 10800,
+      "cgst": 5400,
+      "sgst": 5400
+     },
+     {
+      "item": "S231 Tablet",
+      "hsn": "3004",
+      "qty": 3,
+      "unit": "Nos",
+      "rate": 400,
+      "taxable": 1200,
+      "gst": 12,
+      "tax": 144,
+      "cgst": 72,
+      "sgst": 72
+     },
+     {
+      "item": "S231 Car Part",
+      "hsn": "8708",
+      "qty": 4,
+      "unit": "Nos",
+      "rate": 2500,
+      "taxable": 10000,
+      "gst": 28,
+      "tax": 2800,
+      "cgst": 1400,
+      "sgst": 1400
+     },
+     {
+      "item": "S231 Rice",
+      "hsn": "1006",
+      "qty": 5,
+      "unit": "Nos",
+      "rate": 50,
+      "taxable": 250,
+      "gst": 5,
+      "tax": 12.5,
+      "cgst": 6.25,
+      "sgst": 6.25
+     },
+     {
+      "item": "S231 Laptop",
+      "hsn": "8471",
+      "qty": 6,
+      "unit": "Nos",
+      "rate": 30000,
+      "taxable": 180000,
+      "gst": 18,
+      "tax": 32400,
+      "cgst": 16200,
+      "sgst": 16200
+     },
+     {
+      "item": "S231 Tablet",
+      "hsn": "3004",
+      "qty": 7,
+      "unit": "Nos",
+      "rate": 400,
+      "taxable": 2800,
+      "gst": 12,
+      "tax": 336,
+      "cgst": 168,
+      "sgst": 168
+     },
+     {
+      "item": "S231 Car Part",
+      "hsn": "8708",
+      "qty": 1,
+      "unit": "Nos",
+      "rate": 2500,
+      "taxable": 2500,
+      "gst": 28,
+      "tax": 700,
+      "cgst": 350,
+      "sgst": 350
+     },
+     {
+      "item": "S231 Rice",
+      "hsn": "1006",
+      "qty": 2,
+      "unit": "Nos",
+      "rate": 50,
+      "taxable": 100,
+      "gst": 5,
+      "tax": 5,
+      "cgst": 2.5,
+      "sgst": 2.5
+     },
+     {
+      "item": "S231 Laptop",
+      "hsn": "8471",
+      "qty": 3,
+      "unit": "Nos",
+      "rate": 30000,
+      "taxable": 90000,
+      "gst": 18,
+      "tax": 16200,
+      "cgst": 8100,
+      "sgst": 8100
+     },
+     {
+      "item": "S231 Tablet",
+      "hsn": "3004",
+      "qty": 4,
+      "unit": "Nos",
+      "rate": 400,
+      "taxable": 1600,
+      "gst": 12,
+      "tax": 192,
+      "cgst": 96,
+      "sgst": 96
+     },
+     {
+      "item": "S231 Car Part",
+      "hsn": "8708",
+      "qty": 5,
+      "unit": "Nos",
+      "rate": 2500,
+      "taxable": 12500,
+      "gst": 28,
+      "tax": 3500,
+      "cgst": 1750,
+      "sgst": 1750
+     },
+     {
+      "item": "S231 Rice",
+      "hsn": "1006",
+      "qty": 6,
+      "unit": "Nos",
+      "rate": 50,
+      "taxable": 300,
+      "gst": 5,
+      "tax": 15,
+      "cgst": 7.5,
+      "sgst": 7.5
+     },
+     {
+      "item": "S231 Laptop",
+      "hsn": "8471",
+      "qty": 7,
+      "unit": "Nos",
+      "rate": 30000,
+      "taxable": 210000,
+      "gst": 18,
+      "tax": 37800,
+      "cgst": 18900,
+      "sgst": 18900
+     },
+     {
+      "item": "S231 Tablet",
+      "hsn": "3004",
+      "qty": 1,
+      "unit": "Nos",
+      "rate": 400,
+      "taxable": 400,
+      "gst": 12,
+      "tax": 48,
+      "cgst": 24,
+      "sgst": 24
+     },
+     {
+      "item": "S231 Car Part",
+      "hsn": "8708",
+      "qty": 2,
+      "unit": "Nos",
+      "rate": 2500,
+      "taxable": 5000,
+      "gst": 28,
+      "tax": 1400,
+      "cgst": 700,
+      "sgst": 700
+     },
+     {
+      "item": "S231 Rice",
+      "hsn": "1006",
+      "qty": 3,
+      "unit": "Nos",
+      "rate": 50,
+      "taxable": 150,
+      "gst": 5,
+      "tax": 7.5,
+      "cgst": 3.75,
+      "sgst": 3.75
+     },
+     {
+      "item": "S231 Laptop",
+      "hsn": "8471",
+      "qty": 4,
+      "unit": "Nos",
+      "rate": 30000,
+      "taxable": 120000,
+      "gst": 18,
+      "tax": 21600,
+      "cgst": 10800,
+      "sgst": 10800
+     },
+     {
+      "item": "S231 Tablet",
+      "hsn": "3004",
+      "qty": 5,
+      "unit": "Nos",
+      "rate": 400,
+      "taxable": 2000,
+      "gst": 12,
+      "tax": 240,
+      "cgst": 120,
+      "sgst": 120
+     },
+     {
+      "item": "S231 Car Part",
+      "hsn": "8708",
+      "qty": 6,
+      "unit": "Nos",
+      "rate": 2500,
+      "taxable": 15000,
+      "gst": 28,
+      "tax": 4200,
+      "cgst": 2100,
+      "sgst": 2100
+     },
+     {
+      "item": "S231 Rice",
+      "hsn": "1006",
+      "qty": 7,
+      "unit": "Nos",
+      "rate": 50,
+      "taxable": 350,
+      "gst": 5,
+      "tax": 17.5,
+      "cgst": 8.75,
+      "sgst": 8.75
+     },
+     {
+      "item": "S231 Laptop",
+      "hsn": "8471",
+      "qty": 1,
+      "unit": "Nos",
+      "rate": 30000,
+      "taxable": 30000,
+      "gst": 18,
+      "tax": 5400,
+      "cgst": 2700,
+      "sgst": 2700
+     },
+     {
+      "item": "S231 Tablet",
+      "hsn": "3004",
+      "qty": 2,
+      "unit": "Nos",
+      "rate": 400,
+      "taxable": 800,
+      "gst": 12,
+      "tax": 96,
+      "cgst": 48,
+      "sgst": 48
+     },
+     {
+      "item": "S231 Car Part",
+      "hsn": "8708",
+      "qty": 3,
+      "unit": "Nos",
+      "rate": 2500,
+      "taxable": 7500,
+      "gst": 28,
+      "tax": 2100,
+      "cgst": 1050,
+      "sgst": 1050
+     },
+     {
+      "item": "S231 Rice",
+      "hsn": "1006",
+      "qty": 4,
+      "unit": "Nos",
+      "rate": 50,
+      "taxable": 200,
+      "gst": 5,
+      "tax": 10,
+      "cgst": 5,
+      "sgst": 5
+     },
+     {
+      "item": "S231 Laptop",
+      "hsn": "8471",
+      "qty": 5,
+      "unit": "Nos",
+      "rate": 30000,
+      "taxable": 150000,
+      "gst": 18,
+      "tax": 27000,
+      "cgst": 13500,
+      "sgst": 13500
+     },
+     {
+      "item": "S231 Tablet",
+      "hsn": "3004",
+      "qty": 6,
+      "unit": "Nos",
+      "rate": 400,
+      "taxable": 2400,
+      "gst": 12,
+      "tax": 288,
+      "cgst": 144,
+      "sgst": 144
+     },
+     {
+      "item": "S231 Car Part",
+      "hsn": "8708",
+      "qty": 7,
+      "unit": "Nos",
+      "rate": 2500,
+      "taxable": 17500,
+      "gst": 28,
+      "tax": 4900,
+      "cgst": 2450,
+      "sgst": 2450
+     },
+     {
+      "item": "S231 Rice",
+      "hsn": "1006",
+      "qty": 1,
+      "unit": "Nos",
+      "rate": 50,
+      "taxable": 50,
+      "gst": 5,
+      "tax": 2.5,
+      "cgst": 1.25,
+      "sgst": 1.25
+     },
+     {
+      "item": "S231 Laptop",
+      "hsn": "8471",
+      "qty": 2,
+      "unit": "Nos",
+      "rate": 30000,
+      "taxable": 60000,
+      "gst": 18,
+      "tax": 10800,
+      "cgst": 5400,
+      "sgst": 5400
+     },
+     {
+      "item": "S231 Tablet",
+      "hsn": "3004",
+      "qty": 3,
+      "unit": "Nos",
+      "rate": 400,
+      "taxable": 1200,
+      "gst": 12,
+      "tax": 144,
+      "cgst": 72,
+      "sgst": 72
+     },
+     {
+      "item": "S231 Car Part",
+      "hsn": "8708",
+      "qty": 4,
+      "unit": "Nos",
+      "rate": 2500,
+      "taxable": 10000,
+      "gst": 28,
+      "tax": 2800,
+      "cgst": 1400,
+      "sgst": 1400
+     },
+     {
+      "item": "S231 Rice",
+      "hsn": "1006",
+      "qty": 5,
+      "unit": "Nos",
+      "rate": 50,
+      "taxable": 250,
+      "gst": 5,
+      "tax": 12.5,
+      "cgst": 6.25,
+      "sgst": 6.25
+     },
+     {
+      "item": "S231 Laptop",
+      "hsn": "8471",
+      "qty": 6,
+      "unit": "Nos",
+      "rate": 30000,
+      "taxable": 180000,
+      "gst": 18,
+      "tax": 32400,
+      "cgst": 16200,
+      "sgst": 16200
+     },
+     {
+      "item": "S231 Tablet",
+      "hsn": "3004",
+      "qty": 7,
+      "unit": "Nos",
+      "rate": 400,
+      "taxable": 2800,
+      "gst": 12,
+      "tax": 336,
+      "cgst": 168,
+      "sgst": 168
+     },
+     {
+      "item": "S231 Car Part",
+      "hsn": "8708",
+      "qty": 1,
+      "unit": "Nos",
+      "rate": 2500,
+      "taxable": 2500,
+      "gst": 28,
+      "tax": 700,
+      "cgst": 350,
+      "sgst": 350
+     },
+     {
+      "item": "S231 Rice",
+      "hsn": "1006",
+      "qty": 2,
+      "unit": "Nos",
+      "rate": 50,
+      "taxable": 100,
+      "gst": 5,
+      "tax": 5,
+      "cgst": 2.5,
+      "sgst": 2.5
+     },
+     {
+      "item": "S231 Laptop",
+      "hsn": "8471",
+      "qty": 3,
+      "unit": "Nos",
+      "rate": 30000,
+      "taxable": 90000,
+      "gst": 18,
+      "tax": 16200,
+      "cgst": 8100,
+      "sgst": 8100
+     },
+     {
+      "item": "S231 Tablet",
+      "hsn": "3004",
+      "qty": 4,
+      "unit": "Nos",
+      "rate": 400,
+      "taxable": 1600,
+      "gst": 12,
+      "tax": 192,
+      "cgst": 96,
+      "sgst": 96
+     },
+     {
+      "item": "S231 Car Part",
+      "hsn": "8708",
+      "qty": 5,
+      "unit": "Nos",
+      "rate": 2500,
+      "taxable": 12500,
+      "gst": 28,
+      "tax": 3500,
+      "cgst": 1750,
+      "sgst": 1750
+     },
+     {
+      "item": "S231 Rice",
+      "hsn": "1006",
+      "qty": 6,
+      "unit": "Nos",
+      "rate": 50,
+      "taxable": 300,
+      "gst": 5,
+      "tax": 15,
+      "cgst": 7.5,
+      "sgst": 7.5
+     },
+     {
+      "item": "S231 Laptop",
+      "hsn": "8471",
+      "qty": 7,
+      "unit": "Nos",
+      "rate": 30000,
+      "taxable": 210000,
+      "gst": 18,
+      "tax": 37800,
+      "cgst": 18900,
+      "sgst": 18900
+     },
+     {
+      "item": "S231 Tablet",
+      "hsn": "3004",
+      "qty": 1,
+      "unit": "Nos",
+      "rate": 400,
+      "taxable": 400,
+      "gst": 12,
+      "tax": 48,
+      "cgst": 24,
+      "sgst": 24
+     },
+     {
+      "item": "S231 Car Part",
+      "hsn": "8708",
+      "qty": 2,
+      "unit": "Nos",
+      "rate": 2500,
+      "taxable": 5000,
+      "gst": 28,
+      "tax": 1400,
+      "cgst": 700,
+      "sgst": 700
+     },
+     {
+      "item": "S231 Rice",
+      "hsn": "1006",
+      "qty": 3,
+      "unit": "Nos",
+      "rate": 50,
+      "taxable": 150,
+      "gst": 5,
+      "tax": 7.5,
+      "cgst": 3.75,
+      "sgst": 3.75
+     },
+     {
+      "item": "S231 Laptop",
+      "hsn": "8471",
+      "qty": 4,
+      "unit": "Nos",
+      "rate": 30000,
+      "taxable": 120000,
+      "gst": 18,
+      "tax": 21600,
+      "cgst": 10800,
+      "sgst": 10800
+     },
+     {
+      "item": "S231 Tablet",
+      "hsn": "3004",
+      "qty": 5,
+      "unit": "Nos",
+      "rate": 400,
+      "taxable": 2000,
+      "gst": 12,
+      "tax": 240,
+      "cgst": 120,
+      "sgst": 120
+     },
+     {
+      "item": "S231 Car Part",
+      "hsn": "8708",
+      "qty": 6,
+      "unit": "Nos",
+      "rate": 2500,
+      "taxable": 15000,
+      "gst": 28,
+      "tax": 4200,
+      "cgst": 2100,
+      "sgst": 2100
+     },
+     {
+      "item": "S231 Rice",
+      "hsn": "1006",
+      "qty": 7,
+      "unit": "Nos",
+      "rate": 50,
+      "taxable": 350,
+      "gst": 5,
+      "tax": 17.5,
+      "cgst": 8.75,
+      "sgst": 8.75
+     },
+     {
+      "item": "S231 Laptop",
+      "hsn": "8471",
+      "qty": 1,
+      "unit": "Nos",
+      "rate": 30000,
+      "taxable": 30000,
+      "gst": 18,
+      "tax": 5400,
+      "cgst": 2700,
+      "sgst": 2700
+     }
+    ],
+    "ledgers": {
+     "S231 Buyer": -1976834,
+     "S231 Sales": 1666800,
+     "Output CGST": 155017,
+     "Output SGST": 155017
+    },
+    "total": 1976834
+   }
+  },
+  {
+   "id": "S11",
+   "key": "s11-sales-freight-gst",
+   "label": "sales invoice with freight carrying GST (no item line for it)",
+   "kind": "items",
+   "notesOnly": true,
+   "day": "1-6-2026",
+   "date": "20260601",
+   "truth": {
+    "type": "Sales",
+    "party": "S231 Buyer",
+    "items": [
+     {
+      "item": "S231 Laptop",
+      "hsn": "8471",
+      "qty": 1,
+      "unit": "Nos",
+      "rate": 30000,
+      "taxable": 30000,
+      "gst": 18,
+      "tax": 5400,
+      "cgst": 2700,
+      "sgst": 2700
+     }
+    ],
+    "ledgers": {
+     "S231 Buyer": -36580,
+     "S231 Sales": 30000,
+     "Output CGST": 2790,
+     "Output SGST": 2790,
+     "S231 Freight Charged": 1000
+    },
+    "total": 36580
+   }
+  },
+  {
+   "id": "S12",
+   "key": "s12-sales-round-off",
+   "label": "invoice with round-off",
+   "kind": "items",
+   "notesOnly": true,
+   "day": "2-6-2026",
+   "date": "20260602",
+   "truth": {
+    "type": "Sales",
+    "party": "S231 Buyer",
+    "items": [
+     {
+      "item": "S231 Tablet",
+      "hsn": "3004",
+      "qty": 1,
+      "unit": "Nos",
+      "rate": 399.5,
+      "taxable": 399.5,
+      "gst": 12,
+      "tax": 47.94,
+      "cgst": 23.97,
+      "sgst": 23.97
+     }
+    ],
+    "ledgers": {
+     "S231 Buyer": -447,
+     "S231 Sales": 399.5,
+     "Output CGST": 23.97,
+     "Output SGST": 23.97,
+     "S231 Round Off": -0.44
+    },
+    "total": 447
+   }
+  },
+  {
+   "id": "S13",
+   "key": "s13-sales-discount",
+   "label": "invoice with a discount",
+   "kind": "items",
+   "notesOnly": true,
+   "day": "1-7-2026",
+   "date": "20260701",
+   "truth": {
+    "type": "Sales",
+    "party": "S231 Buyer",
+    "items": [
+     {
+      "item": "S231 Laptop",
+      "hsn": "8471",
+      "qty": 2,
+      "unit": "Nos",
+      "rate": 30000,
+      "taxable": 54000,
+      "gst": 18,
+      "tax": 9720,
+      "cgst": 4860,
+      "sgst": 4860,
+      "disc": 10
+     }
+    ],
+    "ledgers": {
+     "S231 Buyer": -63720,
+     "S231 Sales": 54000,
+     "Output CGST": 4860,
+     "Output SGST": 4860
+    },
+    "total": 63720
+   }
+  },
+  {
+   "id": "S14",
+   "key": "s14-sales-tax-inclusive",
+   "label": "tax-inclusive invoice",
+   "kind": "items",
+   "notesOnly": true,
+   "day": "2-7-2026",
+   "date": "20260702",
+   "truth": {
+    "type": "Sales",
+    "party": "S231 Buyer",
+    "items": [
+     {
+      "item": "S231 Rice",
+      "hsn": "1006",
+      "qty": 10,
+      "unit": "Nos",
+      "rate": 50,
+      "taxable": 500,
+      "gst": 5,
+      "tax": 25,
+      "cgst": 12.5,
+      "sgst": 12.5,
+      "incl": 52.5
+     }
+    ],
+    "ledgers": {
+     "S231 Buyer": -525,
+     "S231 Sales": 500,
+     "Output CGST": 12.5,
+     "Output SGST": 12.5
+    },
+    "total": 525
+   }
+  },
+  {
+   "id": "S8",
+   "key": "s8-new-party",
+   "label": "a new party ledger used at once",
+   "kind": "ledgers",
+   "day": "1-3-2027",
+   "date": "20270301",
+   "truth": {
+    "type": "Receipt",
+    "party": "S231 New Party",
+    "ledgers": {
+     "S231 New Party": 1180,
+     "Cash": -1180
+    },
+    "newLedger": "S231 New Party"
+   }
+  },
+  {
+   "id": "S15",
+   "key": "s15-renamed-party",
+   "label": "a party renamed in Tally, used under its new name",
+   "kind": "ledgers",
+   "day": "2-3-2027",
+   "date": "20270302",
+   "truth": {
+    "type": "Receipt",
+    "party": "S231 Renamed Party",
+    "ledgers": {
+     "S231 Renamed Party": 1770,
+     "Cash": -1770
+    },
+    "oldName": "S231 Old Name Party",
+    "newName": "S231 Renamed Party"
+   }
+  }
+ ]
+}
