@@ -1,30 +1,27 @@
--- Migration 60 (06-Oct-2026, FinCom Bridge 2.3.1: the owner's report of 08:05 and the migration-50 review's round-3 Lows).
--- Runs AFTER 56 (fresh database: ... -> 55 -> 56 -> 60; staging: after 56; independent of 57, 58 and 59). ADD-ONLY: no table,
--- column, row or function removed; no statement in this file removes rows, not even in a comment; safe to run twice; one
--- transaction (lock_timeout 10 s). One function replaced: tally_recorder_line (same arguments, security definer,
--- search_path = public, pg_temp, granted to nobody as before), 56's text with the lines marked "60" changed:
---   1. THE OWNER (08:05): a delete or cancel line for an entry FinCom's copy never had settles by itself: 'applied', in the
---      words "nothing to remove: FinCom's copy never had this entry, so there is nothing to delete (cancel)". Before 60 it
---      stayed held until a complete Day Book of its day was stored after it. Only for a line with the entry's real GUID
---      and an AlterID above 0 (the add-on writes deletes and cancels only for saved entries, which have both), so the
---      late-create rule and tally_recorder_release_day's re-delete see its AlterID (50's H1 stays closed).
---   2. R3-L1: without an AlterID such a line stays held ("FinCom cannot tell this deletion from an older change"); a delete or
---      cancel under the add-on's placeholder GUID ("<company GUID>-00000000") is held as a GUID-less one (before 60 a
---      placeholder delete applied twice broke the line's call on applied_once).
---   3. R3-L2: a create (alter, import) arriving late, below a cancel applied for its GUID ("nothing to cancel" when the cancel
---      came first), is applied and then cancelled again at the cancel's AlterID, as Tally holds it, instead of 'stale' (left
+-- Migration 60 (06-Oct-2026, FinCom Bridge 2.3.1: the migration-50 review's round-3 Lows R3-L1, R3-L2 and R3-L3). Runs AFTER
+-- 56 and 57 (fresh database and staging: ... -> 55 -> 56 -> 57 -> 58 -> 60; independent of 58 and 59). 57 does not replace
+-- tally_recorder_line, so 56's text is the base. ADD-ONLY: no table, column, row or function removed; no statement in this
+-- file removes rows, not even in a comment; safe to run twice; one transaction (lock_timeout 10 s). One function replaced:
+-- tally_recorder_line (same arguments, security definer, search_path = public, pg_temp, granted to nobody as before), 56's
+-- text with the lines marked "60" changed:
+--   1. R3-L1: a delete or cancel under the add-on's placeholder GUID ("<company GUID>-00000000") names no entry: held as a
+--      GUID-less one is. Before 60 it went on to tally_ingest_delete as an entry not in the copy (since 57 settled there as
+--      "nothing to remove"), and a second arrival, never taken as the same change by the placeholder, broke the line's call
+--      on applied_once.
+--   2. R3-L2: a create (alter, import) arriving late, below a cancel applied for its GUID (57's "nothing to remove" when the
+--      cancel came first), is applied and cancelled again at the cancel's AlterID, as Tally holds it, instead of 'stale' (left
 --      out of the copy until its Day Book). Below a delete: 'stale' as before.
---   4. R3-L3: no words promise a Day Book that cannot settle the line: a GUID-less (or placeholder) delete / cancel with no date
---      says "no date on the line either: it stays held, and nothing in FinCom's books changes for it"; the "Day Book was not
---      complete (k of n)" words (wrong for a day an older file revived) are gone with item 1.
--- Nothing else is touched; no row is changed by running it (held lines settle when they are run again: a release, a Day Book
--- day stored, or the next line of the same entry). Tested on pg_stand only: tests/run_migration60.py and
+--   3. R3-L3 (i): a GUID-less (or placeholder) delete / cancel with no date promises no Day Book: "no date on the line either:
+--      it stays held, and nothing in FinCom's books changes for it". (ii) went with 57: an entry never in the copy no longer
+--      waits for a complete Day Book.
+--   The owner's "nothing to remove" (06-Oct 08:05) is 57's, in tally_ingest_delete; 60 does not repeat it.
+-- Nothing else is touched; no row is changed by running it. Tested on pg_stand only: tests/run_migration60.py and
 -- tests/run_migration_order.py.
 
 begin;
 set local lock_timeout = '10s';     -- never queue long behind a session holding a table here (a timeout rolls the whole file back: run it again)
 
--- ---------------------------------------------------------------- 56's line with the owner's 08:05 rule and R3-L1..L3 (lines marked "60")
+-- ---------------------------------------------------------------- 56's line with R3-L1..L3 (lines marked "60")
 create or replace function public.tally_recorder_line(p_book uuid, p_device uuid, p_line jsonb, p_row bigint)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
 declare b tally_books%rowtype; rid bigint := p_row; ev text := left(btrim(coalesce(p_line->>'event', '')), 40);
@@ -148,7 +145,8 @@ begin
                    case when dif_c then 'in the copy' else 'in the entry sent with the line' end) || coalesce('; ' || hw, '');
     elsif ph and ev in ('deleted', 'cancelled') then
       -- 60 (migration-50 review R3-L1): a delete / cancel under the add-on's placeholder GUID names no entry: held as a GUID-less
-      -- one is (before 60 it went on as an entry not in the copy: applied twice it broke the line's call on applied_once)
+      -- one is (before 60 it went on to tally_ingest_delete as an entry not in the copy - since 57 "nothing to remove", applied -
+      -- and a second arrival, never the same change by the placeholder, broke the line's call on applied_once)
       stt := 'held'; wy := format('no entry GUID on the line (only the add-on''s placeholder): FinCom cannot tell which entry was %s, so this line is never applied by itself; %s', ev,
                                   case when vd is null then 'no date on the line either: it stays held, and nothing in FinCom''s books changes for it' else format('uploading the Day Book for %s brings that day up to date', to_char(vd, 'DD-Mon-YYYY')) end);
     elsif og is null and ev <> 'ledger_renamed' then
@@ -175,18 +173,20 @@ begin
       if ev in ('deleted', 'cancelled') then
         res := tally_ingest_delete(p_book, og, alt, ev = 'cancelled', 'recorder ' || coalesce(left(p_line->>'pc', 60), ''));
         stt := res->>'state'; wy := res->>'why';
-        -- 60 (the owner's report of 06-Oct-2026 08:05; migration-50 review R3-L1 and R3-L3): an entry FinCom's copy never had
-        -- settles by itself: 'applied', "nothing to remove" - only for a line with the entry's real GUID (the placeholder is held
-        -- above) and an AlterID above 0, so the late-create rule (a create below it is 'stale'; below a cancel, applied and
-        -- cancelled again: R3-L2) and tally_recorder_release_day's re-delete (an older file read again) both see it. Without
-        -- an AlterID it stays held: FinCom cannot tell it from an older change (R3-L1). No Day Book is waited for, so no
-        -- words promise one (R3-L3: a line with no date; a day an older file revived)
+        -- 50: an entry not in the copy: what releases it, by the line's date. Review H1 and round 2 (N1): a COMPLETE Day Book of
+        -- that day (tally_days.n, the count the bridge or the upload vouched for, equals the entries the copy holds live for the
+        -- day: never a short, unconfirmed empty or capped read) stored AFTER this line came, not holding the entry, proves it gone
+        -- from Tally: a delete or a cancel has nothing left to do. An older kept file read again later cannot bring the entry back:
+        -- tally_recorder_release_day deletes (cancels) again an entry whose applied delete (cancel) is above its version
         if stt = 'held' and coalesce((res->>'unknown')::boolean, false) then
-          if alt is not null and alt > 0 then     -- 60: the owner's "nothing to remove"; R3-L1: never without an AlterID
-            stt := 'applied'; wy := format('nothing to remove: FinCom''s copy never had this entry, so there is nothing to %s', case when ev = 'deleted' then 'delete' else 'cancel' end);
-          else
-            wy := format('the entry is not in FinCom''s copy and the line has no AlterID: FinCom cannot tell this %s from an older change, so it is not applied by itself; it stays held, and nothing in FinCom''s books changes for it',
-                         case when ev = 'deleted' then 'deletion' else 'cancellation' end);
+          dt := coalesce(to_char(vd, 'DD-Mon-YYYY'), 'its date');
+          select d.at, d.n, (select count(*) from tally_vouchers v where v.book_id = p_book and v.day = vd and v.deleted_at is null) into d_at, d_n, d_live
+            from tally_days d where d.book_id = p_book and d.day = vd and d.at > r_at;
+          if d_at is not null and d_n = d_live then
+            stt := 'applied'; wy := format('nothing to %s: the Day Book for %s, complete and stored after this change arrived, does not hold the entry', case when ev = 'deleted' then 'delete' else 'cancel' end, dt);
+          elsif d_at is not null then
+            wy := format('the Day Book for %s stored after this change was not complete (%s of %s entries); the entry is not in FinCom''s copy, and this line is applied by itself once a complete Day Book for that day is uploaded', dt, d_live, d_n);
+          else wy := format('the entry is not in FinCom''s copy yet; it is applied by itself once a complete Day Book for %s is uploaded', dt);
           end if;
         end if;
       else
@@ -449,8 +449,9 @@ begin
       end loop;
     end if;
     -- 60 (migration-50 review R3-L2): a create (alter, import) late from another computer below a cancel applied for its GUID
-    -- ("nothing to cancel" when the cancel came first): the entry is applied, then cancelled again at the cancel's AlterID, as
-    -- Tally holds it (cancelled), instead of being left out of the copy until its Day Book
+    -- ("nothing to remove" when the cancel came first, 57): the entry is applied, then cancelled again at the cancel's AlterID, as
+    -- Tally holds it (cancelled), instead of 'stale' and left out of the copy until its Day Book. 57's entry path re-applies
+    -- the cancel itself when the body is stored; this call makes it sure whatever ran before (then "already cancelled")
     if stt = 'applied' and then_cancel then
       res3 := tally_ingest_delete(p_book, og, del_alt, true, 'recorder ' || coalesce(left(p_line->>'pc', 60), ''));
       wy := concat_ws('; ', wy, format('then cancelled, as the cancel applied at AlterID %s says (%s)', del_alt, coalesce(res3->>'state', 'not done')));

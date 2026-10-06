@@ -1,18 +1,18 @@
-"""python3 run_migration60.py - migration-60-recorder-lows (06-Oct-2026, FinCom Bridge 2.3.1: the owner's report of 08:05, "a
-delete or cancel of an entry that was never in FinCom settles as nothing to remove", and the migration-50 review's R3-L1, R3-L2,
-R3-L3). On throwaway PostgreSQL (pg_stand, port 30600 unless PG60_PORT; never a real database), built 32 -> ... -> 55 -> 56 in
-staging's order, then 60 (twice).
+"""python3 run_migration60.py - migration-60-recorder-lows (06-Oct-2026, FinCom Bridge 2.3.1: the migration-50 review's R3-L1,
+R3-L2, R3-L3). On throwaway PostgreSQL (pg_stand, port 30600 unless PG60_PORT; never a real database), built 32 -> ... -> 55 ->
+56 -> 57 -> 58 in staging's order, then 60 (twice).
   0. the file: one transaction (begin; set local lock_timeout '10s'; ... commit;), no 'delete from' anywhere, add-only, no real
-     database named; one function, tally_recorder_line: 56's text with only lines marked "60" changed; security definer,
-     search_path public, pg_temp; granted to nobody; run twice, its text is the same.
-  1. THE OWNER: a delete and a cancel of an entry FinCom's copy never had: 'applied', "nothing to remove"; no entry made.
-  2. R3-L1: such a line with no AlterID stays held (in plain words); a delete under the placeholder GUID is held, twice
-     without an error (before 60 the second broke the call on applied_once).
+     database named; one function, tally_recorder_line: 56's text (57 does not replace it) with only lines marked "60"
+     changed; security definer, search_path public, pg_temp; granted to nobody; run twice, its text is the same.
+  1. 57's "nothing to remove" (the owner's 08:05) stays 57's and is unchanged under 60: a delete and a cancel of an entry never
+     in FinCom, with an AlterID or without: applied in 57's words; no entry made.
+  2. R3-L1: a delete under the placeholder GUID is held, twice without an error (before 60 the second broke the call on
+     applied_once).
   3. R3-L2: a create late below a cancel applied for its GUID: applied and cancelled again; below a delete: 'stale', no entry.
   4. R3-L3: a GUID-less delete with no date promises no Day Book; with a date it names the day.
   5. unchanged: a delete of an entry the copy holds is applied (the entry deleted); the same unknown delete twice: 'duplicate'.
 Prints md5(prosrc) of tally_recorder_line before and after 60.
-RED: before the file exists it stops at the first check."""
+RED: before the file exists it stops at the first check; on 56's text sections 0, 2 and 3 fail."""
 import os, re, sys, json, hashlib, subprocess, difflib
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import pg_stand
@@ -22,7 +22,7 @@ FILES = [os.path.join(SQLDIR, f) for f in ("migration-32-sync-safety.sql", "migr
         [os.path.join(SQLDIR, f) for f in ("migration-36b-post-acceptance.sql", "migration-37-follow-ups.sql", "migration-36-ledger-rename.sql", "migration-38-post-followups.sql", "migration-39-rename-map-empty-day.sql",
                                            "migration-40-states-carried.sql", "migration-41-day-counts.sql", "migration-42-empty-day-second-read.sql", "migration-43-posting-reply.sql", "migration-44-recorder.sql", "migration-45-bulk-posting.sql",
                                            "migration-46-trial-tools.sql", "migration-47-recorder-queue-alerts.sql", "migration-48-day-cache-once.sql", "migration-49-post-row-flags.sql", "migration-50-recorder-held.sql", "migration-51-recorder-ids-mismatch.sql",
-                                           "migration-52-recorder-duplicate-needs-same-entry.sql", "migration-53-recorder-placeholder-settled.sql", "migration-54-post-target-bridge.sql", "migration-55-settle-and-lease.sql", "migration-56-keep-fields.sql")]
+                                           "migration-52-recorder-duplicate-needs-same-entry.sql", "migration-53-recorder-placeholder-settled.sql", "migration-54-post-target-bridge.sql", "migration-55-settle-and-lease.sql", "migration-56-keep-fields.sql", "migration-57-entry-details.sql", "migration-58-lows.sql")]
 M60 = os.environ.get("M60_FILE") or os.path.join(SQLDIR, "migration-60-recorder-lows.sql")
 fails = []
 def ok(c, w):
@@ -111,23 +111,22 @@ try:
     ok(db.one("select prosecdef::text || ' ' || array_to_string(proconfig, ',') from pg_proc where oid = 'public.tally_recorder_line(uuid, uuid, jsonb, bigint)'::regprocedure") == "true search_path=public, pg_temp", "0. security definer, search_path public, pg_temp")
     ok(all(can(r) in ("f", "false", False) for r in ("anon", "authenticated", "service_role")), "0. granted to nobody (%s)" % [can(r) for r in ("anon", "authenticated", "service_role")])
 
-    print("== 1. the owner: an entry FinCom never had")
-    r = res(apply([L("o-del", "deleted", 900, 60001), L("o-can", "cancelled", 901, 60002)]))
-    ok([x[0] for x in r] == ["applied", "applied"] and r[0][1].startswith("nothing to remove") and "nothing to delete" in r[0][1] and "nothing to cancel" in r[1][1], "1. a delete and a cancel of an entry never in FinCom: applied, 'nothing to remove' (%s)" % r)
-    ok(vrow(900) is None and vrow(901) is None, "1. no entry made for them")
+    print("== 1. 57's nothing to remove, unchanged under 60")
+    r = res(apply([L("o-del", "deleted", 900, 60001), L("o-can", "cancelled", 901, 60002), L("n-alt", "deleted", 902, None)]))
+    ok([x[0] for x in r] == ["applied"] * 3 and all(x[1].startswith("nothing to remove: the entry is not in FinCom's copy") for x in r),
+       "1. a delete, a cancel, a delete without an AlterID of an entry never in FinCom: applied in 57's words (%s)" % r)
+    ok(vrow(900) is None and vrow(901) is None and vrow(902) is None, "1. no entry made for them")
     r = res(apply([L("o-del-again", "deleted", 900, 60001)]))
     ok(r[0][0] == "duplicate", "5. the same delete again (another computer): 'duplicate' (%s)" % r)
 
     print("== 2. R3-L1")
-    r = res(apply([L("n-alt", "deleted", 902, None)]))
-    ok(r[0][0] == "held" and "has no AlterID" in r[0][1], "2. a delete of an entry never in FinCom with no AlterID: held, in plain words (%s)" % r)
     r1 = res(apply([L("ph-1", "deleted", 0, 60003, guid=CG + "-00000000")]))
     r2 = res(apply([L("ph-2", "deleted", 0, 60003, guid=CG + "-00000000")]))
-    ok(r1[0][0] == "held" and r2[0][0] == "held" and "placeholder" in r1[0][1], "2. a placeholder delete, twice: held both times, no error (%s %s)" % (r1, r2))
+    ok(r1[0][0] == "held" and r2[0][0] == "held" and "placeholder" in r1[0][1] and "_error" not in json.dumps(r2), "2. a placeholder delete, twice: held both times, no error (%s %s)" % (r1, r2))
 
     print("== 3. R3-L2")
     r = res(apply([L("c-can", "cancelled", 903, 60010)]))
-    ok(r[0][0] == "applied", "3. a cancel first (nothing to cancel): applied (%s)" % r)
+    ok(r[0][0] == "applied", "3. a cancel first (57: nothing to remove): applied (%s)" % r)
     r = res(apply([L("c-cre", "created", 903, 60005, body=True)]))
     v = vrow(903)
     ok(r[0][0] == "applied" and "then cancelled" in r[0][1] and v is not None and v["cancelled"] == "true" and v["deleted"] == "false",
@@ -147,6 +146,7 @@ try:
     r2 = res(apply([L("k-del", "deleted", 907, 60041)]))
     v = vrow(907)
     ok(r[0][0] == "applied" and r2[0][0] == "applied" and "nothing to remove" not in r2[0][1] and v and v["deleted"] == "true", "5. a delete of an entry the copy holds: applied, deleted (%s %s %s)" % (r, r2, v))
+    ok(prosrc() == after, "0. tally_recorder_line is still 60's at the end")
 finally:
     db.stop()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); raise SystemExit(1 if fails else 0)
