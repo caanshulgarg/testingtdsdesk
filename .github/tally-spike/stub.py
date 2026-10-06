@@ -58,12 +58,18 @@ def recorder(body):
                 else:
                     h['waits'] = miss
                     h['again'] = h['again'] or lid != base
+        # a created / altered / imported line with no body (the bridge could not read the entry from Tally): held, and listed
+        # in the beat's refetch as tally-ingest's refetchFor does (index.ts: the body missing), so the bridge asks again
+        if not xml and ev in ('created', 'altered', 'imported') and not (HELD.get(base) or {}).get('done'):
+            state, why = 'held', "the entry's details are not in yet (the bridge did not read it from Tally); FinCom asks for it again"
+            if base not in HELD:
+                HELD[base] = {'line': l, 'company': company, 'bridge': bridge, 'waits': [], 'again': lid != base, 'done': False, 'heldAt': time.strftime('%H:%M:%S'), 'noBody': True}
         if state == 'applied' and xml and not ev.startswith('ledger_'):
             al = ALIAS.get(company, {})
             under = [(n, al[n.lower()]) for n in dict.fromkeys(html.unescape(m).strip() for m in RE_LED.findall(xml)) if n.lower() in al]
             if under:
                 why = '; '.join("applied under FinCom's ledger '%s' (named '%s' in Tally now)" % (old, new) for new, old in under)
-        if state == 'applied' and base in HELD and lid != base:
+        if state == 'applied' and base in HELD and (lid != base or (xml and HELD[base].get('noBody'))):
             HELD[base]['done'] = True
             HELD[base]['appliedAt'] = time.strftime('%H:%M:%S')
             HELD[base]['appliedWhy'] = why

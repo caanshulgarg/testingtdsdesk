@@ -42,9 +42,9 @@ function TdsGateway([string]$why = '') {
   for ($i = 0; $i -lt 7; $i++) {
     $t = TdsScreen "gw$i"
     if ($t -match '^OCR-UNAVAILABLE') { $script:ocrOk = $false; break }
-    $form = $t -match 'Creation|Alteration|List of Masters|Select |Deductor Details|Accept \?|Yes or No|Change Date'
-    if ($t -match 'Gateway of Tally' -and -not $form) { return $true }
-    if ($t -match 'Yes or No' -and $t -match 'Creation|Alteration|Deductor') { & $script:TdsSend 'y'; Start-Sleep 2; continue }
+    $form = $t -match 'Creati|Alterati|List of Masters|Select |Deductor Details|Accept \?|Yes or No|Change Date'
+    if ($t -match 'Gateway' -and -not $form) { return $true }
+    if ($t -match 'Yes or No' -and $t -match 'Creati|Alterati|Deductor') { & $script:TdsSend 'y'; Start-Sleep 2; continue }
     if ($t -match 'Yes or No') { & $script:TdsSend 'n'; Start-Sleep 2; continue }
     & $script:TdsSend '{ESC}'; Start-Sleep 2
   }
@@ -71,7 +71,7 @@ function TdsOpenCreate([string]$kind, [string]$formWords) {
 # the nature of payment by its form (Name, Section, Payment code, Remittance code, rate individuals/HUF with PAN, rate
 # others with PAN, Is zero rated, Threshold), accepted; checked by Tally's own export (TaxClassification)
 function TdsNatureScreen([string]$name, [string]$section, [string]$pay, [string]$rInd, [string]$rOth) {
-  if (TdsHas 'TaxClassification' $name) { TdsSay "nature '$name' is there already"; return $true }
+  if (TdsHas 'TDSRate' $name) { TdsSay "nature '$name' is there already (TDSRate)"; return $true }
   if (-not (TdsOpenCreate 'TDS Nature of Payments' 'Nature|Section')) { return $false }
   $null = TK ((SK $name) + '{ENTER}') 1.5 'nat-name' 'Section'
   $null = TK ((SK $section) + '{ENTER}') 1.5 'nat-section'
@@ -82,8 +82,8 @@ function TdsNatureScreen([string]$name, [string]$section, [string]$pay, [string]
   $null = TK '{ENTER}' 1.5 'nat-zero'
   $null = TK '{ENTER}' 2 'nat-threshold'
   $null = TK '^a' 2.5 'nat-accept'
-  $ok = TdsHas 'TaxClassification' $name
-  TdsSay "nature '$name' in Tally's export: $ok"
+  $ok = TdsHas 'TDSRate' $name
+  TdsSay "nature '$name' in Tally's export (TDSRate): $ok"
   $null = TdsGateway 'after the nature'
   return $ok
 }

@@ -479,6 +479,13 @@ function S231TdsScreen {
     $null = WaitPort 9000; Start-Sleep 5; KeysTo 9000 'a' 4; KeysTo 9000 't' 10 }
   $script:TdsCo = $co1
   $N = $plan231.names
+  # the nature of payment: Tally 7.1 keeps it as a TDS Rate (run 37481759832: the ledgers' TDSRATENAME refused "TDS Rate
+  # 'S231 Contract Work' does not exist" after the XML TAXCLASSIFICATION import): made on its own form, then the ledgers again
+  $natOk = TdsNatureScreen $N.nature '194C' '94C' '1' '2'
+  $tr = "$(TdsExport 'TDSRate' '*')"; Set-Content (Join-Path $s231.dir 'tdsrate-all.xml') $tr -Encoding UTF8
+  $nm = [regex]::Match($tr, '(?s)<TDSRATE NAME="' + [regex]::Escape($N.nature) + '".*?</TDSRATE>')
+  Add-Content -Path $resultsFile -Encoding UTF8 -Value ("INFO S5 screen: the nature of payment '{0}' made on its form: {1}; Tally's TDS Rate export: {2}" -f $N.nature, $natOk, $(if ($nm.Success) { (([regex]::Matches($nm.Value, '<([A-Z.]+)[^>]*>([^<\s][^<]*)<') | ForEach-Object { "$($_.Groups[1].Value)=$($_.Groups[2].Value)" }) | Select-Object -First 25) -join ' ' } else { 'not there' }))
+  $null = ImpT 'All Masters' (GenText 'masters-5-tds') 'masters-5-tds again (after the nature on its form)'
   $c = "$(TdsExport 'Company' 'Name, IsTDSOn, TANumber, TANRegNo, TDSDeductorType')"
   $comp = ([regex]::Matches($c, '<(TANUMBER|TANREGNO|TDSDEDUCTORTYPE|ISTDSON)[^>]*>([^<]*)<') | ForEach-Object { "$($_.Groups[1].Value)=$($_.Groups[2].Value)" }) -join ' '
   Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO S5 screen: the company's TDS details in Tally: $comp"
