@@ -423,8 +423,14 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
       // rules, replaces the held line (by its line id) and the earlier held ":resolved" row (the same GUID at an AlterID not
       // above its own); the earlier one never had a body, so it is never applied
       const rids = [...new Set(rows.map((r) => String(r.line_id || "") + ":resolved"))].slice(0, 400);
-      const { data: rs, error: re } = await db.from("tally_recorder_lines").select("line_id, state, held_why, body").eq("firm_id", firm).in("line_id", rids);
-      if (re) return [];
+      // 2.3.1 (2.3.0 review round 3 L2): asked 60 ids at a time (400 in one URL could pass a gateway's limit and fail
+      // quietly to an empty list); a failure is logged
+      const rs: any[] = [];
+      for (let i = 0; i < rids.length; i += 60) {
+        const { data: d, error: re } = await db.from("tally_recorder_lines").select("line_id, state, held_why, body").eq("firm_id", firm).in("line_id", rids.slice(i, i + 60));
+        if (re) { console.log("tally-ingest beat: " + what + ": the lines already resolved not read:", String(re.message || "").slice(0, 200)); return []; }
+        rs.push(...(d || []));
+      }
       const have = new Map<string, any[]>();
       for (const x of (rs || []) as any[]) {
         const k = String(x?.line_id || "");

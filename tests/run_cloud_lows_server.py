@@ -114,6 +114,16 @@ try:
        "D. 2,100 newer rows of another company with the same MasterID do not hide the entry (the company GUID in any case) (%s)" % got.get("D21", {}).get("object_guid"))
     F.HONOR_LIMIT[0] = False
 
+    # E. the refetch's ":resolved" lookup in chunks
+    now = datetime.datetime.now(datetime.timezone.utc)
+    F.T["tally_recorder_lines"] = [{"id": 10000 + i, "firm_id": FIRM, "device_id": "d-1", "bridge": BRID, "book_id": BOOK, "line_id": "refetch-line-%04d-%s" % (i, "x" * 30), "state": "held", "event": "created",
+                                    "company": "ZZ CO", "company_guid": CG, "master_id": str(100 + i), "vch_type": "Receipt", "vch_no": str(i), "vch_date": "2026-10-02", "object_guid": "",
+                                    "body": None, "received_at": (now - datetime.timedelta(minutes=300 - i)).isoformat()} for i in range(300)]
+    F.MAX_URL[0] = 6000; n = len(log)
+    c, r = call(BEAT)
+    rf = r.get("refetch") or []
+    ok(c == 200 and len(rf) == 20, "E. 300 held lines, the gateway's URL limit at 6,000: the refetch still lists 20 (%s %d)" % (c, len(rf)))
+    F.MAX_URL[0] = 0
 finally:
     fn.terminate()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); raise SystemExit(1 if fails else 0)
