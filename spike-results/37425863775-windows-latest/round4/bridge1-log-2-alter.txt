@@ -1,0 +1,11 @@
+2026-10-06 07:00:42  Recorder: Receipt 2 of 01-Oct-2026 (MasterID 4, line 96e6ed85…): asking Tally by MasterID
+2026-10-06 07:00:46  Recorder: Receipt 2 of 01-Oct-2026 (MasterID 4, line 96e6ed85…): taken: Tally's GUID f0e8e156-c770-4ef8-8079-5171a4d76274-00000004, AlterID 4
+2026-10-06 07:02:21  Recorder: Purchase 1 of 01-Oct-2026 (MasterID 5, line 5f7bf00b…): asking Tally by MasterID
+2026-10-06 07:02:26  Recorder: Purchase 1 of 01-Oct-2026 (MasterID 5, line 5f7bf00b…): taken: Tally's GUID f0e8e156-c770-4ef8-8079-5171a4d76274-00000005, AlterID 5
+2026-10-06 07:03:59  Tally 9000: TDSDeskCompanies took 4.0s
+2026-10-06 07:03:59  Recorder: Sales 1 of 01-Oct-2026 (MasterID 6, line 979df49c…): asking Tally by MasterID
+2026-10-06 07:04:04  Recorder: Sales 1 of 01-Oct-2026 (MasterID 6, line 979df49c…): taken: Tally's GUID f0e8e156-c770-4ef8-8079-5171a4d76274-00000006, AlterID 6
+2026-10-06 07:05:19  Recorder: Credit Note 1 of 01-Oct-2026 (MasterID 7, line 110e55a3…): asking Tally by MasterID
+2026-10-06 07:05:23  Recorder: Credit Note 1 of 01-Oct-2026 (MasterID 7, line 110e55a3…): taken: Tally's GUID f0e8e156-c770-4ef8-8079-5171a4d76274-00000007, AlterID 7
+2026-10-06 07:06:04  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line b2222a36…): asking Tally by MasterID
+2026-10-06 07:06:08  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line b2222a36…): taken: Tally's GUID f0e8e156-c770-4ef8-8079-5171a4d76274-00000003, AlterID 8
