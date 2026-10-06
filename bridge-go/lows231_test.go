@@ -191,3 +191,28 @@ func TestUseKeepPostedReplacesTypedGUID(t *testing.T) {
 		t.Fatalf("the typed old copy replaced, the other entry kept: %s", txt)
 	}
 }
+
+// 2.2.4 review L5: the measure's item e. ("one entry with every field") matched a field's closing tag literally (</TAG>
+// only) and took an empty field only as <TAG/> with no attributes, so on a real TallyPrime 7.1 a self-closed typed field
+// (<NARRATION TYPE="String"/>) read "absent", or, worse, ran on to the next </NARRATION>. Each field is now read as the
+// rest of the bridge reads Tally's fields: attributes or none, "</TAG >" or "</TAG>", a self-closed one empty
+func TestMeasureFieldStateTyped(t *testing.T) {
+	v := `<VOUCHER VCHTYPE="Receipt"><GUID TYPE="String">g-1</GUID ><NARRATION TYPE="String"/><VOUCHERNUMBER>1</VOUCHERNUMBER>` +
+		`<ALLLEDGERENTRIES.LIST><LEDGERNAME TYPE="String">Cash</LEDGERNAME><BANKALLOCATIONS.LIST TYPE="x"/></ALLLEDGERENTRIES.LIST>` +
+		`<BILLALLOCATIONS.LIST>      </BILLALLOCATIONS.LIST><NARRATION2>x</NARRATION2></VOUCHER>`
+	for tags, want := range map[string]string{
+		"GUID":          "present",
+		"NARRATION":     "present, empty",
+		"VOUCHERNUMBER": "present",
+		"LEDGERNAME":    "present",
+		"ALLLEDGERENTRIES.LIST|LEDGERENTRIES.LIST": "present",
+		"BANKALLOCATIONS.LIST":                     "present, empty",
+		"BILLALLOCATIONS.LIST":                     "present, empty",
+		"PARTYGSTIN":                               "absent",
+		"LEDGERENTRIES.LIST":                       "absent",
+	} {
+		if got := measureFieldState(v, tags); got != want {
+			t.Errorf("%s: %q, want %q", tags, got, want)
+		}
+	}
+}
