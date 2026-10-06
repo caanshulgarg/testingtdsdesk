@@ -1,0 +1,38 @@
+2026-10-06 13:21:09  Recorder: FinCom sets where the changes come from on this computer: both
+2026-10-06 13:21:39  Recorder: FinCom sets where the changes come from on this computer: addon
+2026-10-06 13:21:39  Posting job pd-41-light-full-jobs-1-c54543: 1 item(s) for FinCom Spike Co
+2026-10-06 13:21:40      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>64</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:21:40  Posting job pd-41-light-full-jobs-1-c54543: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 64)
+2026-10-06 13:21:40  Posting job pd-41-light-full-jobs-1-c54543: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 13:21:40  Posting job pd-41-light-full-jobs-1-c54543: posting window ALTVCHID 69 to 70, 1 voucher(s) and 0 master(s) created
+2026-10-06 13:21:40  Posting job pd-41-light-full-jobs-1-c54543 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 13:21:52  Posting job pd-41-light-full-jobs-2-1176c2: 1 item(s) for FinCom Spike Co
+2026-10-06 13:21:53      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>65</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:21:53  Posting job pd-41-light-full-jobs-2-1176c2: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 65)
+2026-10-06 13:21:53  Posting job pd-41-light-full-jobs-2-1176c2: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 13:21:53  Posting job pd-41-light-full-jobs-2-1176c2: posting window ALTVCHID 70 to 71, 1 voucher(s) and 0 master(s) created
+2026-10-06 13:21:53  Posting job pd-41-light-full-jobs-2-1176c2 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 13:22:05  Posting job pd-41-light-full-jobs-3-69798a: 1 item(s) for FinCom Spike Co
+2026-10-06 13:22:06      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>66</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:22:06  Posting job pd-41-light-full-jobs-3-69798a: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 66)
+2026-10-06 13:22:06  Posting job pd-41-light-full-jobs-3-69798a: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 13:22:06  Posting job pd-41-light-full-jobs-3-69798a: posting window ALTVCHID 71 to 72, 1 voucher(s) and 0 master(s) created
+2026-10-06 13:22:06  Posting job pd-41-light-full-jobs-3-69798a done: Posted 1 of 1 (Tally's reply)
+2026-10-06 13:22:18  Posting job pd-41-light-full-jobs-4-43e69c: 1 item(s) for FinCom Spike Co
+2026-10-06 13:22:19      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>67</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:22:19  Posting job pd-41-light-full-jobs-4-43e69c: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 67)
+2026-10-06 13:22:19  Posting job pd-41-light-full-jobs-4-43e69c: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 13:22:19  Posting job pd-41-light-full-jobs-4-43e69c: posting window ALTVCHID 72 to 73, 1 voucher(s) and 0 master(s) created
+2026-10-06 13:22:19  Posting job pd-41-light-full-jobs-4-43e69c done: Posted 1 of 1 (Tally's reply)
+2026-10-06 13:22:31  Posting job pd-41-light-full-jobs-5-815928: 1 item(s) for FinCom Spike Co
+2026-10-06 13:22:32      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>68</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:22:32  Posting job pd-41-light-full-jobs-5-815928: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 68)
+2026-10-06 13:22:32  Posting job pd-41-light-full-jobs-5-815928: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 13:22:32  Posting job pd-41-light-full-jobs-5-815928: posting window ALTVCHID 73 to 74, 1 voucher(s) and 0 master(s) created
+2026-10-06 13:22:32  Posting job pd-41-light-full-jobs-5-815928 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 13:22:44      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>69</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:22:44    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 69)
+2026-10-06 13:22:44  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 13:22:57      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>70</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:22:57    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 70)
+2026-10-06 13:22:57  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply

@@ -1,0 +1,13 @@
+Windows user of this runner: runneradmin (runnervmfi6oq), computer runnervmfi6oq
+$$MachineName => '' 
+$$CmpUserName => 'TALLY User' 
+$$SysInfo:WindowsUser => 'runneradmin' 
+$$SysInfo:WindowsUserName => '' 
+$$SysInfo:UserName => '' 
+$$SysInfo:LoginUser => '' 
+$$SysInfo:SystemName => 'runnervmfi6oq' 
+$$SysInfo:ComputerName => '' 
+$$SysInfo:MachineName => '' 
+$$SysInfo:IPAddress => '10.1.1.37' 
+$$SysInfo:ApplicationPath => 'C:\Program Files\TallyPrime' 
+$$SysInfo:TempPath => '' 

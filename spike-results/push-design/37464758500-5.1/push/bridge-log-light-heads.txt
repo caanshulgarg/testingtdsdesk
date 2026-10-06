@@ -1,0 +1,70 @@
+2026-10-06 13:09:46  Recorder: FinCom sets where the changes come from on this computer: both
+2026-10-06 13:10:16  Recorder: FinCom sets where the changes come from on this computer: addon
+2026-10-06 13:10:16  Posting job pd-51-light-heads-jobs-1-431e1d: 1 item(s) for FinCom Spike Co
+2026-10-06 13:10:17      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>42</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:10:17  Posting job pd-51-light-heads-jobs-1-431e1d: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 42)
+2026-10-06 13:10:17  Posting job pd-51-light-heads-jobs-1-431e1d: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 13:10:17  Posting job pd-51-light-heads-jobs-1-431e1d: posting window ALTVCHID 45 to 46, 1 voucher(s) and 0 master(s) created
+2026-10-06 13:10:17  Posting job pd-51-light-heads-jobs-1-431e1d done: Posted 1 of 1 (Tally's reply)
+2026-10-06 13:10:29  Posting job pd-51-light-heads-jobs-2-6253ab: 1 item(s) for FinCom Spike Co
+2026-10-06 13:10:30      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>43</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:10:30  Posting job pd-51-light-heads-jobs-2-6253ab: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 43)
+2026-10-06 13:10:30  Posting job pd-51-light-heads-jobs-2-6253ab: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 13:10:30  Posting job pd-51-light-heads-jobs-2-6253ab: posting window ALTVCHID 46 to 47, 1 voucher(s) and 0 master(s) created
+2026-10-06 13:10:30  Posting job pd-51-light-heads-jobs-2-6253ab done: Posted 1 of 1 (Tally's reply)
+2026-10-06 13:10:42  Posting job pd-51-light-heads-jobs-3-fcd5f7: 1 item(s) for FinCom Spike Co
+2026-10-06 13:10:43      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>44</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:10:43  Posting job pd-51-light-heads-jobs-3-fcd5f7: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 44)
+2026-10-06 13:10:43  Posting job pd-51-light-heads-jobs-3-fcd5f7: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 13:10:43  Posting job pd-51-light-heads-jobs-3-fcd5f7: posting window ALTVCHID 47 to 48, 1 voucher(s) and 0 master(s) created
+2026-10-06 13:10:43  Posting job pd-51-light-heads-jobs-3-fcd5f7 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 13:10:55  Posting job pd-51-light-heads-jobs-4-b218bd: 1 item(s) for FinCom Spike Co
+2026-10-06 13:10:56      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>45</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:10:56  Posting job pd-51-light-heads-jobs-4-b218bd: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 45)
+2026-10-06 13:10:56  Posting job pd-51-light-heads-jobs-4-b218bd: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 13:10:56  Posting job pd-51-light-heads-jobs-4-b218bd: posting window ALTVCHID 48 to 49, 1 voucher(s) and 0 master(s) created
+2026-10-06 13:10:56  Posting job pd-51-light-heads-jobs-4-b218bd done: Posted 1 of 1 (Tally's reply)
+2026-10-06 13:11:08  Posting job pd-51-light-heads-jobs-5-e62511: 1 item(s) for FinCom Spike Co
+2026-10-06 13:11:08      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>46</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:11:08  Posting job pd-51-light-heads-jobs-5-e62511: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 46)
+2026-10-06 13:11:08  Posting job pd-51-light-heads-jobs-5-e62511: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 13:11:09  Posting job pd-51-light-heads-jobs-5-e62511: posting window ALTVCHID 49 to 50, 1 voucher(s) and 0 master(s) created
+2026-10-06 13:11:09  Posting job pd-51-light-heads-jobs-5-e62511 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 13:11:21      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>47</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:11:21    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 47)
+2026-10-06 13:11:21  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 13:11:33      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>48</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:11:33    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 48)
+2026-10-06 13:11:33  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 13:12:28  Recorder: Receipt 13 of 01-Oct-2026 (MasterID 50, line 4c3e69f0…): asking Tally by MasterID
+2026-10-06 13:12:28  Recorder: Receipt 13 of 01-Oct-2026 (MasterID 50, line 4c3e69f0…): taken: Tally's GUID 03f784e1-c1b6-465c-ad3c-f1330e6246aa-00000032, AlterID 54
+2026-10-06 13:12:50  Recorder: Receipt 14 of 01-Oct-2026 (MasterID 51, line 04e02e3a…): asking Tally by MasterID
+2026-10-06 13:12:50  Recorder: Receipt 14 of 01-Oct-2026 (MasterID 51, line 04e02e3a…): taken: Tally's GUID 03f784e1-c1b6-465c-ad3c-f1330e6246aa-00000033, AlterID 55
+2026-10-06 13:13:12  Recorder: Receipt 15 of 01-Oct-2026 (MasterID 52, line 52fbe6ca…): asking Tally by MasterID
+2026-10-06 13:13:12  Recorder: Receipt 15 of 01-Oct-2026 (MasterID 52, line 52fbe6ca…): taken: Tally's GUID 03f784e1-c1b6-465c-ad3c-f1330e6246aa-00000034, AlterID 56
+2026-10-06 13:13:34  Recorder: Receipt 16 of 01-Oct-2026 (MasterID 53, line ad9c5fbc…): asking Tally by MasterID
+2026-10-06 13:13:34  Recorder: Receipt 16 of 01-Oct-2026 (MasterID 53, line ad9c5fbc…): taken: Tally's GUID 03f784e1-c1b6-465c-ad3c-f1330e6246aa-00000035, AlterID 57
+2026-10-06 13:13:56  Recorder: Sales 23 of 02-Oct-2026 (MasterID 54, line 3e4e21a5…): asking Tally by MasterID
+2026-10-06 13:13:56  Recorder: Sales 23 of 02-Oct-2026 (MasterID 54, line 3e4e21a5…): taken: Tally's GUID 03f784e1-c1b6-465c-ad3c-f1330e6246aa-00000036, AlterID 58
+2026-10-06 13:14:19  Recorder: Sales 24 of 02-Oct-2026 (MasterID 55, line 875e5c72…): asking Tally by MasterID
+2026-10-06 13:14:19  Recorder: Sales 24 of 02-Oct-2026 (MasterID 55, line 875e5c72…): taken: Tally's GUID 03f784e1-c1b6-465c-ad3c-f1330e6246aa-00000037, AlterID 59
+2026-10-06 13:14:41  Recorder: Sales 25 of 02-Oct-2026 (MasterID 56, line 4ba5f074…): asking Tally by MasterID
+2026-10-06 13:14:41  Recorder: Sales 25 of 02-Oct-2026 (MasterID 56, line 4ba5f074…): taken: Tally's GUID 03f784e1-c1b6-465c-ad3c-f1330e6246aa-00000038, AlterID 60
+2026-10-06 13:15:03  Recorder: Sales 26 of 02-Oct-2026 (MasterID 57, line e1964e77…): asking Tally by MasterID
+2026-10-06 13:15:03  Recorder: Sales 26 of 02-Oct-2026 (MasterID 57, line e1964e77…): taken: Tally's GUID 03f784e1-c1b6-465c-ad3c-f1330e6246aa-00000039, AlterID 61
+2026-10-06 13:15:25  Recorder: Sales 27 of 02-Oct-2026 (MasterID 58, line 1708e563…): asking Tally by MasterID
+2026-10-06 13:15:25  Recorder: Sales 27 of 02-Oct-2026 (MasterID 58, line 1708e563…): taken: Tally's GUID 03f784e1-c1b6-465c-ad3c-f1330e6246aa-0000003a, AlterID 62
+2026-10-06 13:15:48  Recorder: Sales 28 of 31-Oct-2026 (MasterID 59, line 774520c7…): asking Tally by MasterID
+2026-10-06 13:15:48  Recorder: Sales 28 of 31-Oct-2026 (MasterID 59, line 774520c7…): taken: Tally's GUID 03f784e1-c1b6-465c-ad3c-f1330e6246aa-0000003b, AlterID 63
+2026-10-06 13:16:10  Recorder: Sales 29 of 31-Oct-2026 (MasterID 60, line 00ce79e8…): asking Tally by MasterID
+2026-10-06 13:16:10  Recorder: Sales 29 of 31-Oct-2026 (MasterID 60, line 00ce79e8…): taken: Tally's GUID 03f784e1-c1b6-465c-ad3c-f1330e6246aa-0000003c, AlterID 64
+2026-10-06 13:16:32  Recorder: Sales 30 of 31-Oct-2026 (MasterID 61, line cc1bbdf7…): asking Tally by MasterID
+2026-10-06 13:16:32  Recorder: Sales 30 of 31-Oct-2026 (MasterID 61, line cc1bbdf7…): taken: Tally's GUID 03f784e1-c1b6-465c-ad3c-f1330e6246aa-0000003d, AlterID 65
+2026-10-06 13:16:55  Recorder: Sales 31 of 31-Oct-2026 (MasterID 62, line 10c7aae7…): asking Tally by MasterID
+2026-10-06 13:16:55  Recorder: Sales 31 of 31-Oct-2026 (MasterID 62, line 10c7aae7…): taken: Tally's GUID 03f784e1-c1b6-465c-ad3c-f1330e6246aa-0000003e, AlterID 66
+2026-10-06 13:17:17  Recorder: Sales 32 of 31-Oct-2026 (MasterID 63, line 968462b6…): asking Tally by MasterID
+2026-10-06 13:17:17  Recorder: Sales 32 of 31-Oct-2026 (MasterID 63, line 968462b6…): taken: Tally's GUID 03f784e1-c1b6-465c-ad3c-f1330e6246aa-0000003f, AlterID 67
+2026-10-06 13:17:39  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line 31752a37…): asking Tally by MasterID
+2026-10-06 13:17:39  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line 31752a37…): taken: Tally's GUID 03f784e1-c1b6-465c-ad3c-f1330e6246aa-00000003, AlterID 68
+2026-10-06 13:18:01  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line c24a4902…): asking Tally by MasterID
+2026-10-06 13:18:01  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line c24a4902…): taken: Tally's GUID 03f784e1-c1b6-465c-ad3c-f1330e6246aa-00000003, AlterID 69

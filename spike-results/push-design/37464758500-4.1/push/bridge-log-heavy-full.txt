@@ -1,0 +1,105 @@
+2026-10-06 14:00:10  Recorder: FinCom sets where the changes come from on this computer: both
+2026-10-06 14:00:40  Recorder: FinCom sets where the changes come from on this computer: addon
+2026-10-06 14:00:41  Posting job pd-41-heavy-full-jobs-1-89fb3c: 1 item(s) for FinCom Spike Co
+2026-10-06 14:00:41      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30064</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 14:00:41  Posting job pd-41-heavy-full-jobs-1-89fb3c: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 30064)
+2026-10-06 14:00:41  Posting job pd-41-heavy-full-jobs-1-89fb3c: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 14:00:41  Posting job pd-41-heavy-full-jobs-1-89fb3c: posting window ALTVCHID 30069 to 30070, 1 voucher(s) and 0 master(s) created
+2026-10-06 14:00:41  Posting job pd-41-heavy-full-jobs-1-89fb3c done: Posted 1 of 1 (Tally's reply)
+2026-10-06 14:00:53  Posting job pd-41-heavy-full-jobs-2-d6d532: 1 item(s) for FinCom Spike Co
+2026-10-06 14:00:54      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30065</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 14:00:54  Posting job pd-41-heavy-full-jobs-2-d6d532: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 30065)
+2026-10-06 14:00:54  Posting job pd-41-heavy-full-jobs-2-d6d532: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 14:00:54  Posting job pd-41-heavy-full-jobs-2-d6d532: posting window ALTVCHID 30070 to 30071, 1 voucher(s) and 0 master(s) created
+2026-10-06 14:00:54  Posting job pd-41-heavy-full-jobs-2-d6d532 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 14:01:06  Posting job pd-41-heavy-full-jobs-3-f4873d: 1 item(s) for FinCom Spike Co
+2026-10-06 14:01:07      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30066</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 14:01:07  Posting job pd-41-heavy-full-jobs-3-f4873d: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 30066)
+2026-10-06 14:01:07  Posting job pd-41-heavy-full-jobs-3-f4873d: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 14:01:07  Posting job pd-41-heavy-full-jobs-3-f4873d: posting window ALTVCHID 30071 to 30072, 1 voucher(s) and 0 master(s) created
+2026-10-06 14:01:07  Posting job pd-41-heavy-full-jobs-3-f4873d done: Posted 1 of 1 (Tally's reply)
+2026-10-06 14:01:19  Posting job pd-41-heavy-full-jobs-4-fe95b0: 1 item(s) for FinCom Spike Co
+2026-10-06 14:01:20      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30067</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 14:01:20  Posting job pd-41-heavy-full-jobs-4-fe95b0: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 30067)
+2026-10-06 14:01:20  Posting job pd-41-heavy-full-jobs-4-fe95b0: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 14:01:20  Posting job pd-41-heavy-full-jobs-4-fe95b0: posting window ALTVCHID 30072 to 30073, 1 voucher(s) and 0 master(s) created
+2026-10-06 14:01:20  Posting job pd-41-heavy-full-jobs-4-fe95b0 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 14:01:32  Posting job pd-41-heavy-full-jobs-5-b3a62a: 1 item(s) for FinCom Spike Co
+2026-10-06 14:01:33      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30068</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 14:01:33  Posting job pd-41-heavy-full-jobs-5-b3a62a: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 30068)
+2026-10-06 14:01:33  Posting job pd-41-heavy-full-jobs-5-b3a62a: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 14:01:33  Posting job pd-41-heavy-full-jobs-5-b3a62a: posting window ALTVCHID 30073 to 30074, 1 voucher(s) and 0 master(s) created
+2026-10-06 14:01:33  Posting job pd-41-heavy-full-jobs-5-b3a62a done: Posted 1 of 1 (Tally's reply)
+2026-10-06 14:01:46      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30069</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 14:01:46    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 30069)
+2026-10-06 14:01:46  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 14:01:58      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30070</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 14:01:58    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 30070)
+2026-10-06 14:01:58  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 14:03:26  Recorder: Receipt 12012 of 01-Oct-2026 (MasterID 30049, line 3c96edbb…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:03:28  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:03:28  Tally 9000 did not answer in time at 14:03:28 (FinComVoucherByMaster, try 1); trying again by itself at 14:03:43
+2026-10-06 14:03:28  Recorder: Receipt 12012 of 01-Oct-2026 (MasterID 30049, line 3c96edbb…): not asked this time: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s); asked again by itself (not counted as a try)
+2026-10-06 14:03:28  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:03:45  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:03:45  Tally 9000 did not answer in time at 14:03:45 (FinComVoucherByMaster, try 2); trying again by itself at 14:04:15
+2026-10-06 14:03:45  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:04:15  Tally 9000 answered in time again (TDSDeskCompanies): the background requests are back to normal
+2026-10-06 14:04:17  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:04:17  Tally 9000 did not answer in time at 14:04:17 (FinComVoucherByMaster, try 1); trying again by itself at 14:04:32
+2026-10-06 14:04:17  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:04:35  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:04:35  Tally 9000 did not answer in time at 14:04:35 (FinComVoucherByMaster, try 2); trying again by itself at 14:05:05
+2026-10-06 14:04:35  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:05:06  Tally 9000 answered in time again (TDSDeskCompanies): the background requests are back to normal
+2026-10-06 14:05:08  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:05:08  Tally 9000 did not answer in time at 14:05:08 (FinComVoucherByMaster, try 1); trying again by itself at 14:05:23
+2026-10-06 14:05:08  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:05:26  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:05:26  Tally 9000 did not answer in time at 14:05:26 (FinComVoucherByMaster, try 2); trying again by itself at 14:05:56
+2026-10-06 14:05:26  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:05:56  Recorder: Receipt 12014 of 01-Oct-2026 (MasterID 30051, line 06ce13fc…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:05:56  Tally 9000 answered in time again (TDSDeskCompanies): the background requests are back to normal
+2026-10-06 14:05:58  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:05:58  Tally 9000 did not answer in time at 14:05:58 (FinComVoucherByMaster, try 1); trying again by itself at 14:06:13
+2026-10-06 14:05:58  Recorder: Receipt 12014 of 01-Oct-2026 (MasterID 30051, line 06ce13fc…): not asked this time: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s); asked again by itself (not counted as a try)
+2026-10-06 14:05:58  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:06:15  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:06:15  Tally 9000 did not answer in time at 14:06:15 (FinComVoucherByMaster, try 2); trying again by itself at 14:06:45
+2026-10-06 14:06:15  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:06:45  Tally 9000 answered in time again (TDSDeskCompanies): the background requests are back to normal
+2026-10-06 14:06:47  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:06:47  Tally 9000 did not answer in time at 14:06:47 (FinComVoucherByMaster, try 1); trying again by itself at 14:07:02
+2026-10-06 14:06:47  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:07:05  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:07:05  Tally 9000 did not answer in time at 14:07:05 (FinComVoucherByMaster, try 2); trying again by itself at 14:07:35
+2026-10-06 14:07:05  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:07:35  Tally 9000 answered in time again (TDSDeskCompanies): the background requests are back to normal
+2026-10-06 14:07:37  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:07:37  Tally 9000 did not answer in time at 14:07:37 (FinComVoucherByMaster, try 1); trying again by itself at 14:07:52
+2026-10-06 14:07:37  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:07:54  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:07:54  Tally 9000 did not answer in time at 14:07:54 (FinComVoucherByMaster, try 2); trying again by itself at 14:08:24
+2026-10-06 14:07:54  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:08:24  Tally 9000 answered in time again (TDSDeskCompanies): the background requests are back to normal
+2026-10-06 14:08:27  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:08:27  Tally 9000 did not answer in time at 14:08:27 (FinComVoucherByMaster, try 1); trying again by itself at 14:08:42
+2026-10-06 14:08:27  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:08:44  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:08:44  Tally 9000 did not answer in time at 14:08:44 (FinComVoucherByMaster, try 2); trying again by itself at 14:09:14
+2026-10-06 14:08:44  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:09:14  Tally 9000 answered in time again (TDSDeskCompanies): the background requests are back to normal
+2026-10-06 14:09:16  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:09:16  Tally 9000 did not answer in time at 14:09:16 (FinComVoucherByMaster, try 1); trying again by itself at 14:09:31
+2026-10-06 14:09:16  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:09:31  Recorder: Receipt 12015 of 01-Oct-2026 (MasterID 30052, line b148eb41…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-06 14:09:31  Recorder: Sales 12024 of 02-Oct-2026 (MasterID 30055, line b484a295…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-06 14:09:31  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line cc714785…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-06 14:09:31  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line e21cfa9c…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-06 14:09:31  Recorder: Sales 12030 of 31-Oct-2026 (MasterID 30061, line e5755e53…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-06 14:09:31  Recorder: Sales 12029 of 31-Oct-2026 (MasterID 30060, line f0622db0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-06 14:09:31  Recorder: Sales 12027 of 02-Oct-2026 (MasterID 30058, line fcd10615…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-06 14:09:33  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:09:33  Tally 9000 did not answer in time at 14:09:33 (FinComVoucherByMaster, try 2); trying again by itself at 14:10:03
+2026-10-06 14:09:33  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:09:40  Light check of FinCom Spike Co: skipped: Tally did not answer (Tally did not answer in time at 14:09; trying again by itself at 14:10 (nothing was sent))

@@ -1,0 +1,331 @@
+{"t0": 1791290659378, "t1": 1791290659379, "ms": 1, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791291177848, "t1": 1791291177849, "ms": 1, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791291242882, "t1": 1791291242884, "ms": 2, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791291248070, "t1": 1791291248082, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 612, "status": 200, "err": ""}
+{"t0": 1791291248235, "t1": 1791291248247, "ms": 13, "method": "POST", "id": "TDSDeskCompanyInfo", "req": "Export", "vouchers": 0, "in": 704, "out": 570, "status": 200, "err": ""}
+{"t0": 1791291248404, "t1": 1791291248416, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 604, "status": 200, "err": ""}
+{"t0": 1791291248582, "t1": 1791291248594, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 612, "status": 200, "err": ""}
+{"t0": 1791291248752, "t1": 1791291248783, "ms": 31, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 857, "out": 150, "status": 200, "err": ""}
+{"t0": 1791291248938, "t1": 1791291248951, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 609, "status": 200, "err": ""}
+{"t0": 1791291256045, "t1": 1791291256057, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 609, "status": 200, "err": ""}
+{"t0": 1791291261171, "t1": 1791291261184, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 620, "status": 200, "err": ""}
+{"t0": 1791291261342, "t1": 1791291261344, "ms": 2, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 609, "status": 200, "err": ""}
+{"t0": 1791291261513, "t1": 1791291261525, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 620, "status": 200, "err": ""}
+{"t0": 1791291261685, "t1": 1791291261714, "ms": 28, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 857, "out": 150, "status": 200, "err": ""}
+{"t0": 1791291261871, "t1": 1791291261883, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 611, "status": 200, "err": ""}
+{"t0": 1791291274119, "t1": 1791291274130, "ms": 11, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 619, "status": 200, "err": ""}
+{"t0": 1791291274287, "t1": 1791291274289, "ms": 2, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 611, "status": 200, "err": ""}
+{"t0": 1791291274452, "t1": 1791291274464, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 619, "status": 200, "err": ""}
+{"t0": 1791291274623, "t1": 1791291274648, "ms": 25, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 857, "out": 150, "status": 200, "err": ""}
+{"t0": 1791291274803, "t1": 1791291274816, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 612, "status": 200, "err": ""}
+{"t0": 1791291287007, "t1": 1791291287018, "ms": 11, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 621, "status": 200, "err": ""}
+{"t0": 1791291287175, "t1": 1791291287187, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 612, "status": 200, "err": ""}
+{"t0": 1791291287352, "t1": 1791291287363, "ms": 11, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 621, "status": 200, "err": ""}
+{"t0": 1791291287522, "t1": 1791291287545, "ms": 22, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 857, "out": 150, "status": 200, "err": ""}
+{"t0": 1791291287699, "t1": 1791291287712, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 612, "status": 200, "err": ""}
+{"t0": 1791291299945, "t1": 1791291299947, "ms": 2, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 622, "status": 200, "err": ""}
+{"t0": 1791291300105, "t1": 1791291300117, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 612, "status": 200, "err": ""}
+{"t0": 1791291300283, "t1": 1791291300285, "ms": 2, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 622, "status": 200, "err": ""}
+{"t0": 1791291300445, "t1": 1791291300469, "ms": 24, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 857, "out": 149, "status": 200, "err": ""}
+{"t0": 1791291300624, "t1": 1791291300636, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 613, "status": 200, "err": ""}
+{"t0": 1791291312809, "t1": 1791291312822, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 613, "status": 200, "err": ""}
+{"t0": 1791291312976, "t1": 1791291312989, "ms": 13, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 861, "out": 149, "status": 200, "err": ""}
+{"t0": 1791291325151, "t1": 1791291325164, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 613, "status": 200, "err": ""}
+{"t0": 1791291325318, "t1": 1791291325341, "ms": 24, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 861, "out": 148, "status": 200, "err": ""}
+{"t0": 1791291754602, "t1": 1791291754604, "ms": 2, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791291856148, "t1": 1791291856161, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 614, "status": 200, "err": ""}
+{"t0": 1791291916166, "t1": 1791291916178, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 632, "status": 200, "err": ""}
+{"t0": 1791292170510, "t1": 1791292170522, "ms": 12, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791292216781, "t1": 1791292216792, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 613, "status": 200, "err": ""}
+{"t0": 1791292216950, "t1": 1791292216961, "ms": 11, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 605, "status": 200, "err": ""}
+{"t0": 1791292217126, "t1": 1791292217138, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 613, "status": 200, "err": ""}
+{"t0": 1791292217297, "t1": 1791292217345, "ms": 48, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 859, "out": 150, "status": 200, "err": ""}
+{"t0": 1791292217499, "t1": 1791292217510, "ms": 11, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 610, "status": 200, "err": ""}
+{"t0": 1791292229732, "t1": 1791292229744, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 620, "status": 200, "err": ""}
+{"t0": 1791292229899, "t1": 1791292229911, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 610, "status": 200, "err": ""}
+{"t0": 1791292230077, "t1": 1791292230089, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 620, "status": 200, "err": ""}
+{"t0": 1791292230248, "t1": 1791292230275, "ms": 27, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 859, "out": 150, "status": 200, "err": ""}
+{"t0": 1791292230430, "t1": 1791292230442, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 613, "status": 200, "err": ""}
+{"t0": 1791292242619, "t1": 1791292242631, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 619, "status": 200, "err": ""}
+{"t0": 1791292242788, "t1": 1791292242800, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 613, "status": 200, "err": ""}
+{"t0": 1791292242966, "t1": 1791292242977, "ms": 11, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 619, "status": 200, "err": ""}
+{"t0": 1791292243136, "t1": 1791292243165, "ms": 29, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 859, "out": 150, "status": 200, "err": ""}
+{"t0": 1791292243321, "t1": 1791292243333, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 613, "status": 200, "err": ""}
+{"t0": 1791292255556, "t1": 1791292255559, "ms": 2, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 621, "status": 200, "err": ""}
+{"t0": 1791292255715, "t1": 1791292255727, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 613, "status": 200, "err": ""}
+{"t0": 1791292255892, "t1": 1791292255905, "ms": 13, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 621, "status": 200, "err": ""}
+{"t0": 1791292256063, "t1": 1791292256088, "ms": 25, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 859, "out": 150, "status": 200, "err": ""}
+{"t0": 1791292256242, "t1": 1791292256255, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 614, "status": 200, "err": ""}
+{"t0": 1791292268429, "t1": 1791292268440, "ms": 11, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 622, "status": 200, "err": ""}
+{"t0": 1791292268597, "t1": 1791292268609, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 614, "status": 200, "err": ""}
+{"t0": 1791292268774, "t1": 1791292268787, "ms": 13, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 622, "status": 200, "err": ""}
+{"t0": 1791292268946, "t1": 1791292268973, "ms": 27, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 859, "out": 151, "status": 200, "err": ""}
+{"t0": 1791292269128, "t1": 1791292269140, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 611, "status": 200, "err": ""}
+{"t0": 1791292281356, "t1": 1791292281368, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 611, "status": 200, "err": ""}
+{"t0": 1791292281523, "t1": 1791292281547, "ms": 24, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 863, "out": 151, "status": 200, "err": ""}
+{"t0": 1791292293706, "t1": 1791292293719, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 614, "status": 200, "err": ""}
+{"t0": 1791292293873, "t1": 1791292293898, "ms": 25, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 863, "out": 151, "status": 200, "err": ""}
+{"t0": 1791292348117, "t1": 1791292348130, "ms": 13, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 626, "status": 200, "err": ""}
+{"t0": 1791292348285, "t1": 1791292348337, "ms": 52, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2929, "out": 2774, "status": 200, "err": ""}
+{"t0": 1791292370275, "t1": 1791292370328, "ms": 53, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2929, "out": 2774, "status": 200, "err": ""}
+{"t0": 1791292392278, "t1": 1791292392290, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 626, "status": 200, "err": ""}
+{"t0": 1791292392445, "t1": 1791292392498, "ms": 53, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2929, "out": 2775, "status": 200, "err": ""}
+{"t0": 1791292414188, "t1": 1791292414240, "ms": 53, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2929, "out": 2777, "status": 200, "err": ""}
+{"t0": 1791292436189, "t1": 1791292436200, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 629, "status": 200, "err": ""}
+{"t0": 1791292436356, "t1": 1791292436426, "ms": 70, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2929, "out": 4904, "status": 200, "err": ""}
+{"t0": 1791292456270, "t1": 1791292456283, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 620, "status": 200, "err": ""}
+{"t0": 1791292459375, "t1": 1791292459443, "ms": 68, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2929, "out": 4903, "status": 200, "err": ""}
+{"t0": 1791292481398, "t1": 1791292481411, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 630, "status": 200, "err": ""}
+{"t0": 1791292481566, "t1": 1791292481636, "ms": 70, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2929, "out": 4903, "status": 200, "err": ""}
+{"t0": 1791292503332, "t1": 1791292503402, "ms": 70, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2929, "out": 4906, "status": 200, "err": ""}
+{"t0": 1791292525361, "t1": 1791292525374, "ms": 13, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 631, "status": 200, "err": ""}
+{"t0": 1791292525530, "t1": 1791292525592, "ms": 62, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2929, "out": 4906, "status": 200, "err": ""}
+{"t0": 1791292548292, "t1": 1791292548390, "ms": 98, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2929, "out": 11550, "status": 200, "err": ""}
+{"t0": 1791292570401, "t1": 1791292570414, "ms": 13, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 633, "status": 200, "err": ""}
+{"t0": 1791292570569, "t1": 1791292570680, "ms": 111, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2929, "out": 11550, "status": 200, "err": ""}
+{"t0": 1791292592427, "t1": 1791292592540, "ms": 112, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2929, "out": 11549, "status": 200, "err": ""}
+{"t0": 1791292615543, "t1": 1791292615555, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 632, "status": 200, "err": ""}
+{"t0": 1791292615711, "t1": 1791292615826, "ms": 115, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2929, "out": 11548, "status": 200, "err": ""}
+{"t0": 1791292637569, "t1": 1791292637676, "ms": 107, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2929, "out": 11550, "status": 200, "err": ""}
+{"t0": 1791292659427, "t1": 1791292659439, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 639, "status": 200, "err": ""}
+{"t0": 1791292659594, "t1": 1791292659711, "ms": 117, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2928, "out": 11728, "status": 200, "err": ""}
+{"t0": 1791292681457, "t1": 1791292681574, "ms": 117, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2928, "out": 11728, "status": 200, "err": ""}
+{"t0": 1791292717411, "t1": 1791292717412, "ms": 1, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791292757098, "t1": 1791292757110, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 613, "status": 200, "err": ""}
+{"t0": 1791292757266, "t1": 1791292757279, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 605, "status": 200, "err": ""}
+{"t0": 1791292757443, "t1": 1791292757445, "ms": 2, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 613, "status": 200, "err": ""}
+{"t0": 1791292757603, "t1": 1791292757649, "ms": 46, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 857, "out": 151, "status": 200, "err": ""}
+{"t0": 1791292757803, "t1": 1791292757815, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 609, "status": 200, "err": ""}
+{"t0": 1791292770035, "t1": 1791292770047, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 620, "status": 200, "err": ""}
+{"t0": 1791292770204, "t1": 1791292770217, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 609, "status": 200, "err": ""}
+{"t0": 1791292770381, "t1": 1791292770393, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 620, "status": 200, "err": ""}
+{"t0": 1791292770552, "t1": 1791292770580, "ms": 28, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 857, "out": 151, "status": 200, "err": ""}
+{"t0": 1791292770734, "t1": 1791292770747, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 613, "status": 200, "err": ""}
+{"t0": 1791292782971, "t1": 1791292782983, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 619, "status": 200, "err": ""}
+{"t0": 1791292783141, "t1": 1791292783152, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 613, "status": 200, "err": ""}
+{"t0": 1791292783317, "t1": 1791292783329, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 619, "status": 200, "err": ""}
+{"t0": 1791292783489, "t1": 1791292783516, "ms": 28, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 857, "out": 150, "status": 200, "err": ""}
+{"t0": 1791292783670, "t1": 1791292783682, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 613, "status": 200, "err": ""}
+{"t0": 1791292795908, "t1": 1791292795920, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 621, "status": 200, "err": ""}
+{"t0": 1791292796078, "t1": 1791292796080, "ms": 2, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 613, "status": 200, "err": ""}
+{"t0": 1791292796246, "t1": 1791292796259, "ms": 13, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 621, "status": 200, "err": ""}
+{"t0": 1791292796418, "t1": 1791292796435, "ms": 17, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 857, "out": 151, "status": 200, "err": ""}
+{"t0": 1791292796589, "t1": 1791292796602, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 613, "status": 200, "err": ""}
+{"t0": 1791292808783, "t1": 1791292808794, "ms": 11, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 622, "status": 200, "err": ""}
+{"t0": 1791292808951, "t1": 1791292808963, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 613, "status": 200, "err": ""}
+{"t0": 1791292809127, "t1": 1791292809138, "ms": 11, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 622, "status": 200, "err": ""}
+{"t0": 1791292809297, "t1": 1791292809322, "ms": 26, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 857, "out": 151, "status": 200, "err": ""}
+{"t0": 1791292809478, "t1": 1791292809490, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 614, "status": 200, "err": ""}
+{"t0": 1791292821710, "t1": 1791292821722, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 614, "status": 200, "err": ""}
+{"t0": 1791292821877, "t1": 1791292821901, "ms": 25, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 861, "out": 151, "status": 200, "err": ""}
+{"t0": 1791292834061, "t1": 1791292834073, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 614, "status": 200, "err": ""}
+{"t0": 1791292834228, "t1": 1791292834251, "ms": 23, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 861, "out": 150, "status": 200, "err": ""}
+{"t0": 1791293056370, "t1": 1791293056383, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 620, "status": 200, "err": ""}
+{"t0": 1791293258814, "t1": 1791293258815, "ms": 2, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791293359280, "t1": 1791293359282, "ms": 2, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791293404687, "t1": 1791293404700, "ms": 13, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 628, "status": 200, "err": ""}
+{"t0": 1791293404855, "t1": 1791293404868, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 622, "status": 200, "err": ""}
+{"t0": 1791293405021, "t1": 1791293405048, "ms": 27, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 867, "out": 150, "status": 200, "err": ""}
+{"t0": 1791293451047, "t1": 1791293451049, "ms": 1, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791293456218, "t1": 1791293456229, "ms": 11, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 612, "status": 200, "err": ""}
+{"t0": 1791293456386, "t1": 1791293456399, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 608, "status": 200, "err": ""}
+{"t0": 1791293456563, "t1": 1791293456565, "ms": 1, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 612, "status": 200, "err": ""}
+{"t0": 1791293456724, "t1": 1791293456758, "ms": 34, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 857, "out": 152, "status": 200, "err": ""}
+{"t0": 1791293456913, "t1": 1791293456915, "ms": 3, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 614, "status": 200, "err": ""}
+{"t0": 1791293469106, "t1": 1791293469108, "ms": 2, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 620, "status": 200, "err": ""}
+{"t0": 1791293469265, "t1": 1791293469276, "ms": 11, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 614, "status": 200, "err": ""}
+{"t0": 1791293469442, "t1": 1791293469453, "ms": 11, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 620, "status": 200, "err": ""}
+{"t0": 1791293469611, "t1": 1791293469638, "ms": 27, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 857, "out": 152, "status": 200, "err": ""}
+{"t0": 1791293469793, "t1": 1791293469806, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 616, "status": 200, "err": ""}
+{"t0": 1791293481979, "t1": 1791293481991, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 619, "status": 200, "err": ""}
+{"t0": 1791293482148, "t1": 1791293482161, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 616, "status": 200, "err": ""}
+{"t0": 1791293482325, "t1": 1791293482337, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 619, "status": 200, "err": ""}
+{"t0": 1791293482496, "t1": 1791293482524, "ms": 28, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 857, "out": 153, "status": 200, "err": ""}
+{"t0": 1791293482679, "t1": 1791293482691, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 617, "status": 200, "err": ""}
+{"t0": 1791293494919, "t1": 1791293494932, "ms": 13, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 621, "status": 200, "err": ""}
+{"t0": 1791293495089, "t1": 1791293495101, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 617, "status": 200, "err": ""}
+{"t0": 1791293495267, "t1": 1791293495278, "ms": 11, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 621, "status": 200, "err": ""}
+{"t0": 1791293495438, "t1": 1791293495465, "ms": 27, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 857, "out": 153, "status": 200, "err": ""}
+{"t0": 1791293495620, "t1": 1791293495632, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 616, "status": 200, "err": ""}
+{"t0": 1791293507857, "t1": 1791293507869, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 622, "status": 200, "err": ""}
+{"t0": 1791293508025, "t1": 1791293508036, "ms": 11, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 616, "status": 200, "err": ""}
+{"t0": 1791293508202, "t1": 1791293508204, "ms": 2, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 622, "status": 200, "err": ""}
+{"t0": 1791293508363, "t1": 1791293508388, "ms": 26, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 857, "out": 152, "status": 200, "err": ""}
+{"t0": 1791293508543, "t1": 1791293508555, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 618, "status": 200, "err": ""}
+{"t0": 1791293520732, "t1": 1791293520745, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 618, "status": 200, "err": ""}
+{"t0": 1791293520900, "t1": 1791293520928, "ms": 28, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 861, "out": 151, "status": 200, "err": ""}
+{"t0": 1791293533088, "t1": 1791293533101, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 616, "status": 200, "err": ""}
+{"t0": 1791293533256, "t1": 1791293533283, "ms": 27, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 861, "out": 151, "status": 200, "err": ""}
+{"t0": 1791293656468, "t1": 1791293656480, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 621, "status": 200, "err": ""}
+{"t0": 1791293986256, "t1": 1791293986257, "ms": 2, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791294136553, "t1": 1791294136566, "ms": 13, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 631, "status": 200, "err": ""}
+{"t0": 1791294256568, "t1": 1791294256570, "ms": 2, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 628, "status": 200, "err": ""}
+{"t0": 1791294433737, "t1": 1791294433738, "ms": 1, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791294496812, "t1": 1791294496824, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 613, "status": 200, "err": ""}
+{"t0": 1791294496981, "t1": 1791294496994, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 608, "status": 200, "err": ""}
+{"t0": 1791294497159, "t1": 1791294497161, "ms": 2, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 613, "status": 200, "err": ""}
+{"t0": 1791294497320, "t1": 1791294497362, "ms": 42, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 859, "out": 153, "status": 200, "err": ""}
+{"t0": 1791294497516, "t1": 1791294497529, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 615, "status": 200, "err": ""}
+{"t0": 1791294509750, "t1": 1791294509763, "ms": 13, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 620, "status": 200, "err": ""}
+{"t0": 1791294509920, "t1": 1791294509931, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 615, "status": 200, "err": ""}
+{"t0": 1791294510097, "t1": 1791294510109, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 620, "status": 200, "err": ""}
+{"t0": 1791294510269, "t1": 1791294510289, "ms": 20, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 859, "out": 152, "status": 200, "err": ""}
+{"t0": 1791294510444, "t1": 1791294510458, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 615, "status": 200, "err": ""}
+{"t0": 1791294522688, "t1": 1791294522700, "ms": 11, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 619, "status": 200, "err": ""}
+{"t0": 1791294522857, "t1": 1791294522869, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 615, "status": 200, "err": ""}
+{"t0": 1791294523033, "t1": 1791294523045, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 619, "status": 200, "err": ""}
+{"t0": 1791294523203, "t1": 1791294523234, "ms": 31, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 859, "out": 152, "status": 200, "err": ""}
+{"t0": 1791294523390, "t1": 1791294523402, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 616, "status": 200, "err": ""}
+{"t0": 1791294535628, "t1": 1791294535639, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 621, "status": 200, "err": ""}
+{"t0": 1791294535797, "t1": 1791294535799, "ms": 2, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 616, "status": 200, "err": ""}
+{"t0": 1791294535964, "t1": 1791294535976, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 621, "status": 200, "err": ""}
+{"t0": 1791294536135, "t1": 1791294536152, "ms": 17, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 859, "out": 153, "status": 200, "err": ""}
+{"t0": 1791294536306, "t1": 1791294536319, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 617, "status": 200, "err": ""}
+{"t0": 1791294548499, "t1": 1791294548511, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 622, "status": 200, "err": ""}
+{"t0": 1791294548668, "t1": 1791294548680, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 617, "status": 200, "err": ""}
+{"t0": 1791294548846, "t1": 1791294548858, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 622, "status": 200, "err": ""}
+{"t0": 1791294549018, "t1": 1791294549049, "ms": 31, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 859, "out": 153, "status": 200, "err": ""}
+{"t0": 1791294549204, "t1": 1791294549207, "ms": 3, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 615, "status": 200, "err": ""}
+{"t0": 1791294561428, "t1": 1791294561439, "ms": 11, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 615, "status": 200, "err": ""}
+{"t0": 1791294561594, "t1": 1791294561619, "ms": 26, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 863, "out": 153, "status": 200, "err": ""}
+{"t0": 1791294573778, "t1": 1791294573791, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 617, "status": 200, "err": ""}
+{"t0": 1791294573945, "t1": 1791294573973, "ms": 28, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 863, "out": 154, "status": 200, "err": ""}
+{"t0": 1791294610284, "t1": 1791294610296, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 625, "status": 200, "err": ""}
+{"t0": 1791294610451, "t1": 1791294613664, "ms": 3213, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2932, "out": 2790, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791294627652, "t1": 1791294631348, "ms": 3696, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2932, "out": 2790, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791294659918, "t1": 1791294659931, "ms": 13, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 627, "status": 200, "err": ""}
+{"t0": 1791294660086, "t1": 1791294664104, "ms": 4018, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2932, "out": 2791, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791294677302, "t1": 1791294681526, "ms": 4224, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2932, "out": 2787, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791294709584, "t1": 1791294709596, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 627, "status": 200, "err": ""}
+{"t0": 1791294709752, "t1": 1791294714179, "ms": 4428, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2932, "out": 2788, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791294726962, "t1": 1791294731629, "ms": 4668, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2932, "out": 2788, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791294759251, "t1": 1791294759264, "ms": 13, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 630, "status": 200, "err": ""}
+{"t0": 1791294759419, "t1": 1791294763873, "ms": 4454, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2932, "out": 2790, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791294776629, "t1": 1791294781355, "ms": 4725, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2932, "out": 2790, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791294808901, "t1": 1791294808913, "ms": 13, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 629, "status": 200, "err": ""}
+{"t0": 1791294809069, "t1": 1791294813434, "ms": 4365, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2932, "out": 2792, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791294826284, "t1": 1791294830683, "ms": 4400, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2932, "out": 2793, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791294858564, "t1": 1791294858577, "ms": 13, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 631, "status": 200, "err": ""}
+{"t0": 1791294858732, "t1": 1791294863447, "ms": 4715, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2932, "out": 2793, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791294875945, "t1": 1791294880434, "ms": 4488, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2932, "out": 2795, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791294908229, "t1": 1791294909683, "ms": 1454, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 634, "status": 200, "err": ""}
+{"t0": 1791294909840, "t1": 1791294914334, "ms": 4494, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2932, "out": 2795, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791294927054, "t1": 1791294931572, "ms": 4517, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2932, "out": 2795, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791294959340, "t1": 1791294961168, "ms": 1828, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 632, "status": 200, "err": ""}
+{"t0": 1791294961325, "t1": 1791294969982, "ms": 8657, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2932, "out": 2795, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791294978545, "t1": 1791294982939, "ms": 4394, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2932, "out": 4918, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791295010834, "t1": 1791295013800, "ms": 2967, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 639, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791295047848, "t1": 1791295047850, "ms": 2, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791295096714, "t1": 1791295096726, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 608, "status": 200, "err": ""}
+{"t0": 1791295097703, "t1": 1791295097706, "ms": 3, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 613, "status": 200, "err": ""}
+{"t0": 1791295097862, "t1": 1791295097864, "ms": 2, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 608, "status": 200, "err": ""}
+{"t0": 1791295098029, "t1": 1791295098041, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 613, "status": 200, "err": ""}
+{"t0": 1791295098200, "t1": 1791295098250, "ms": 50, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 857, "out": 153, "status": 200, "err": ""}
+{"t0": 1791295098405, "t1": 1791295098417, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 613, "status": 200, "err": ""}
+{"t0": 1791295110651, "t1": 1791295110664, "ms": 13, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 620, "status": 200, "err": ""}
+{"t0": 1791295110820, "t1": 1791295110831, "ms": 11, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 613, "status": 200, "err": ""}
+{"t0": 1791295110996, "t1": 1791295111008, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 620, "status": 200, "err": ""}
+{"t0": 1791295111167, "t1": 1791295111196, "ms": 29, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 857, "out": 153, "status": 200, "err": ""}
+{"t0": 1791295111351, "t1": 1791295111363, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 616, "status": 200, "err": ""}
+{"t0": 1791295123590, "t1": 1791295123601, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 619, "status": 200, "err": ""}
+{"t0": 1791295123758, "t1": 1791295123771, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 616, "status": 200, "err": ""}
+{"t0": 1791295123935, "t1": 1791295123947, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 619, "status": 200, "err": ""}
+{"t0": 1791295124106, "t1": 1791295124126, "ms": 20, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 857, "out": 153, "status": 200, "err": ""}
+{"t0": 1791295124281, "t1": 1791295124283, "ms": 2, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 617, "status": 200, "err": ""}
+{"t0": 1791295136462, "t1": 1791295136475, "ms": 13, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 621, "status": 200, "err": ""}
+{"t0": 1791295136631, "t1": 1791295136644, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 617, "status": 200, "err": ""}
+{"t0": 1791295136808, "t1": 1791295136821, "ms": 13, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 621, "status": 200, "err": ""}
+{"t0": 1791295136979, "t1": 1791295137008, "ms": 29, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 857, "out": 153, "status": 200, "err": ""}
+{"t0": 1791295137164, "t1": 1791295137175, "ms": 11, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 618, "status": 200, "err": ""}
+{"t0": 1791295149399, "t1": 1791295149412, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 622, "status": 200, "err": ""}
+{"t0": 1791295149568, "t1": 1791295149580, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 618, "status": 200, "err": ""}
+{"t0": 1791295149745, "t1": 1791295149757, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 622, "status": 200, "err": ""}
+{"t0": 1791295149916, "t1": 1791295149943, "ms": 27, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 857, "out": 153, "status": 200, "err": ""}
+{"t0": 1791295150098, "t1": 1791295150110, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 617, "status": 200, "err": ""}
+{"t0": 1791295162328, "t1": 1791295162341, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 617, "status": 200, "err": ""}
+{"t0": 1791295162495, "t1": 1791295162512, "ms": 17, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 861, "out": 153, "status": 200, "err": ""}
+{"t0": 1791295174673, "t1": 1791295174684, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 618, "status": 200, "err": ""}
+{"t0": 1791295174840, "t1": 1791295174865, "ms": 25, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 861, "out": 153, "status": 200, "err": ""}
+{"t0": 1791295262307, "t1": 1791295262319, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 627, "status": 200, "err": ""}
+{"t0": 1791295262474, "t1": 1791295266515, "ms": 4041, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2932, "out": 2791, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791295279650, "t1": 1791295283853, "ms": 4203, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2932, "out": 2791, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791295311852, "t1": 1791295311864, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 627, "status": 200, "err": ""}
+{"t0": 1791295312019, "t1": 1791295316330, "ms": 4311, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2932, "out": 2790, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791295329195, "t1": 1791295338532, "ms": 9337, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2932, "out": 2788, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791295361399, "t1": 1791295361411, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 630, "status": 200, "err": ""}
+{"t0": 1791295361566, "t1": 1791295365912, "ms": 4346, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2932, "out": 2790, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791295378743, "t1": 1791295383338, "ms": 4595, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2932, "out": 2790, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791295410948, "t1": 1791295410960, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 629, "status": 200, "err": ""}
+{"t0": 1791295411115, "t1": 1791295415458, "ms": 4343, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2932, "out": 2793, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791295428290, "t1": 1791295436945, "ms": 8655, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2932, "out": 2794, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791295460493, "t1": 1791295460504, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 632, "status": 200, "err": ""}
+{"t0": 1791295460659, "t1": 1791295464985, "ms": 4325, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2932, "out": 2792, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791295477837, "t1": 1791295484701, "ms": 6865, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2932, "out": 2795, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791295510039, "t1": 1791295510041, "ms": 2, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 634, "status": 200, "err": ""}
+{"t0": 1791295510197, "t1": 1791295514583, "ms": 4386, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2932, "out": 2795, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791295527370, "t1": 1791295531744, "ms": 4373, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2932, "out": 2795, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791295559575, "t1": 1791295559588, "ms": 13, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 632, "status": 200, "err": ""}
+{"t0": 1791295559743, "t1": 1791295564153, "ms": 4410, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2932, "out": 2795, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791295576918, "t1": 1791295586113, "ms": 9195, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 2932, "out": 2802, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791295609127, "t1": 1791295612409, "ms": 3283, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 639, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791295661221, "t1": 1791295661222, "ms": 2, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791295718041, "t1": 1791295718053, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 613, "status": 200, "err": ""}
+{"t0": 1791295718059, "t1": 1791295718071, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 604, "status": 200, "err": ""}
+{"t0": 1791295718085, "t1": 1791295718097, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 613, "status": 200, "err": ""}
+{"t0": 1791295718105, "t1": 1791295718148, "ms": 43, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 872, "out": 150, "status": 200, "err": ""}
+{"t0": 1791295718153, "t1": 1791295718165, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 611, "status": 200, "err": ""}
+{"t0": 1791295730239, "t1": 1791295730251, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 620, "status": 200, "err": ""}
+{"t0": 1791295730256, "t1": 1791295730268, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 611, "status": 200, "err": ""}
+{"t0": 1791295730281, "t1": 1791295730293, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 620, "status": 200, "err": ""}
+{"t0": 1791295730300, "t1": 1791295730314, "ms": 14, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 872, "out": 150, "status": 200, "err": ""}
+{"t0": 1791295730318, "t1": 1791295730329, "ms": 11, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 613, "status": 200, "err": ""}
+{"t0": 1791295742364, "t1": 1791295742366, "ms": 2, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 619, "status": 200, "err": ""}
+{"t0": 1791295742371, "t1": 1791295742382, "ms": 11, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 613, "status": 200, "err": ""}
+{"t0": 1791295742396, "t1": 1791295742408, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 619, "status": 200, "err": ""}
+{"t0": 1791295742415, "t1": 1791295742443, "ms": 27, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 872, "out": 149, "status": 200, "err": ""}
+{"t0": 1791295742447, "t1": 1791295742458, "ms": 11, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 615, "status": 200, "err": ""}
+{"t0": 1791295747316, "t1": 1791295747328, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 615, "status": 200, "err": ""}
+{"t0": 1791295754491, "t1": 1791295754503, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 621, "status": 200, "err": ""}
+{"t0": 1791295754509, "t1": 1791295754521, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 615, "status": 200, "err": ""}
+{"t0": 1791295754534, "t1": 1791295754536, "ms": 2, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 621, "status": 200, "err": ""}
+{"t0": 1791295754544, "t1": 1791295754567, "ms": 23, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 872, "out": 150, "status": 200, "err": ""}
+{"t0": 1791295754570, "t1": 1791295754581, "ms": 11, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 615, "status": 200, "err": ""}
+{"t0": 1791295766614, "t1": 1791295766626, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 622, "status": 200, "err": ""}
+{"t0": 1791295766632, "t1": 1791295766644, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 615, "status": 200, "err": ""}
+{"t0": 1791295766657, "t1": 1791295766669, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 622, "status": 200, "err": ""}
+{"t0": 1791295766677, "t1": 1791295766702, "ms": 25, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 872, "out": 151, "status": 200, "err": ""}
+{"t0": 1791295766706, "t1": 1791295766717, "ms": 11, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 615, "status": 200, "err": ""}
+{"t0": 1791295778727, "t1": 1791295778738, "ms": 11, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 615, "status": 200, "err": ""}
+{"t0": 1791295778742, "t1": 1791295778764, "ms": 22, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 876, "out": 151, "status": 200, "err": ""}
+{"t0": 1791295790773, "t1": 1791295790786, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 616, "status": 200, "err": ""}
+{"t0": 1791295790790, "t1": 1791295790815, "ms": 25, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 876, "out": 151, "status": 200, "err": ""}
+{"t0": 1791295836821, "t1": 1791295836823, "ms": 2, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791295897703, "t1": 1791295897715, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 613, "status": 200, "err": ""}
+{"t0": 1791295897721, "t1": 1791295897733, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 606, "status": 200, "err": ""}
+{"t0": 1791295897747, "t1": 1791295897748, "ms": 1, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 613, "status": 200, "err": ""}
+{"t0": 1791295897756, "t1": 1791295897796, "ms": 40, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 874, "out": 151, "status": 200, "err": ""}
+{"t0": 1791295897800, "t1": 1791295897811, "ms": 11, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 612, "status": 200, "err": ""}
+{"t0": 1791295909898, "t1": 1791295909900, "ms": 2, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 620, "status": 200, "err": ""}
+{"t0": 1791295909905, "t1": 1791295909916, "ms": 11, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 612, "status": 200, "err": ""}
+{"t0": 1791295909929, "t1": 1791295909940, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 620, "status": 200, "err": ""}
+{"t0": 1791295909949, "t1": 1791295909973, "ms": 24, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 874, "out": 151, "status": 200, "err": ""}
+{"t0": 1791295909977, "t1": 1791295909989, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 613, "status": 200, "err": ""}
+{"t0": 1791295922018, "t1": 1791295922030, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 619, "status": 200, "err": ""}
+{"t0": 1791295922036, "t1": 1791295922048, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 613, "status": 200, "err": ""}
+{"t0": 1791295922061, "t1": 1791295922073, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 619, "status": 200, "err": ""}
+{"t0": 1791295922081, "t1": 1791295922104, "ms": 23, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 874, "out": 150, "status": 200, "err": ""}
+{"t0": 1791295922108, "t1": 1791295922119, "ms": 11, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 613, "status": 200, "err": ""}
+{"t0": 1791295934145, "t1": 1791295934156, "ms": 11, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 621, "status": 200, "err": ""}
+{"t0": 1791295934162, "t1": 1791295934173, "ms": 11, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 613, "status": 200, "err": ""}
+{"t0": 1791295934185, "t1": 1791295934198, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 621, "status": 200, "err": ""}
+{"t0": 1791295934205, "t1": 1791295934230, "ms": 25, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 874, "out": 150, "status": 200, "err": ""}
+{"t0": 1791295934235, "t1": 1791295934246, "ms": 11, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 614, "status": 200, "err": ""}
+{"t0": 1791295946272, "t1": 1791295946284, "ms": 13, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 622, "status": 200, "err": ""}
+{"t0": 1791295946290, "t1": 1791295946301, "ms": 11, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 614, "status": 200, "err": ""}
+{"t0": 1791295946315, "t1": 1791295946326, "ms": 11, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 622, "status": 200, "err": ""}
+{"t0": 1791295946334, "t1": 1791295946357, "ms": 24, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 874, "out": 149, "status": 200, "err": ""}
+{"t0": 1791295946362, "t1": 1791295946373, "ms": 11, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 614, "status": 200, "err": ""}
+{"t0": 1791295958383, "t1": 1791295958394, "ms": 11, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 614, "status": 200, "err": ""}
+{"t0": 1791295958398, "t1": 1791295958422, "ms": 24, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 878, "out": 149, "status": 200, "err": ""}
+{"t0": 1791295970430, "t1": 1791295970441, "ms": 11, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 615, "status": 200, "err": ""}
+{"t0": 1791295970445, "t1": 1791295970468, "ms": 22, "method": "POST", "id": "", "req": "Import Data", "vouchers": 1, "in": 878, "out": 150, "status": 200, "err": ""}

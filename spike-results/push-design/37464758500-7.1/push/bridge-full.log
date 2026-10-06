@@ -1,0 +1,644 @@
+2026-10-06 12:57:11  FinCom Bridge 2.3.1: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+2026-10-06 12:57:12  FinCom Bridge 2.3.1 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+2026-10-06 12:57:12  Tally is not open; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+2026-10-06 12:57:12  Recorder: re-scan of the add-on's files for 2.3.1: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+2026-10-06 12:57:12  Recorder: FinCom Spike Co: lines from a Tally this bridge does not read (company not open here): not sent
+2026-10-06 12:57:12  Check:  - 
+2026-10-06 12:57:15  Tray icon: set to show next to the clock always (Windows 11)
+2026-10-06 12:57:15  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+2026-10-06 12:57:15  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+2026-10-06 12:58:08  Posting job pd-71-light-none-jobs-1-1ef939: 1 item(s) for FinCom Spike Co
+2026-10-06 12:58:08  Company FinCom Spike Co: its Tally GUID 0b4f6084-ad2b-4e77-8634-1cc6871408cf is held from now on
+2026-10-06 12:58:09  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=4, ALTMSTID=270 (reading is prospective only: the bridge follows what changes after this)
+2026-10-06 12:58:09  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=4, ALTMSTID=270
+2026-10-06 12:58:09      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>5</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 12:58:09  Posting job pd-71-light-none-jobs-1-1ef939: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 5)
+2026-10-06 12:58:09  Posting job pd-71-light-none-jobs-1-1ef939: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 12:58:09  Posting job pd-71-light-none-jobs-1-1ef939: posting window ALTVCHID 4 to 5, 1 voucher(s) and 0 master(s) created
+2026-10-06 12:58:09  Posting job pd-71-light-none-jobs-1-1ef939 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 12:58:15  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=4; now ALTVCHID=5, ALTMSTID=270
+2026-10-06 12:58:21  Posting job pd-71-light-none-jobs-2-09b91c: 1 item(s) for FinCom Spike Co
+2026-10-06 12:58:22      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>6</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 12:58:22  Posting job pd-71-light-none-jobs-2-09b91c: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 6)
+2026-10-06 12:58:22  Posting job pd-71-light-none-jobs-2-09b91c: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 12:58:22  Posting job pd-71-light-none-jobs-2-09b91c: posting window ALTVCHID 5 to 6, 1 voucher(s) and 0 master(s) created
+2026-10-06 12:58:22  Posting job pd-71-light-none-jobs-2-09b91c done: Posted 1 of 1 (Tally's reply)
+2026-10-06 12:58:34  Posting job pd-71-light-none-jobs-3-48e374: 1 item(s) for FinCom Spike Co
+2026-10-06 12:58:35      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>7</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 12:58:35  Posting job pd-71-light-none-jobs-3-48e374: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 7)
+2026-10-06 12:58:35  Posting job pd-71-light-none-jobs-3-48e374: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 12:58:35  Posting job pd-71-light-none-jobs-3-48e374: posting window ALTVCHID 6 to 7, 1 voucher(s) and 0 master(s) created
+2026-10-06 12:58:35  Posting job pd-71-light-none-jobs-3-48e374 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 12:58:47  Posting job pd-71-light-none-jobs-4-ebb1fc: 1 item(s) for FinCom Spike Co
+2026-10-06 12:58:48      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>8</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 12:58:48  Posting job pd-71-light-none-jobs-4-ebb1fc: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 8)
+2026-10-06 12:58:48  Posting job pd-71-light-none-jobs-4-ebb1fc: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 12:58:48  Posting job pd-71-light-none-jobs-4-ebb1fc: posting window ALTVCHID 7 to 8, 1 voucher(s) and 0 master(s) created
+2026-10-06 12:58:48  Posting job pd-71-light-none-jobs-4-ebb1fc done: Posted 1 of 1 (Tally's reply)
+2026-10-06 12:59:00  Posting job pd-71-light-none-jobs-5-cfd296: 1 item(s) for FinCom Spike Co
+2026-10-06 12:59:01      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>9</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 12:59:01  Posting job pd-71-light-none-jobs-5-cfd296: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 9)
+2026-10-06 12:59:01  Posting job pd-71-light-none-jobs-5-cfd296: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 12:59:01  Posting job pd-71-light-none-jobs-5-cfd296: posting window ALTVCHID 8 to 9, 1 voucher(s) and 0 master(s) created
+2026-10-06 12:59:01  Posting job pd-71-light-none-jobs-5-cfd296 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 12:59:13      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>10</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 12:59:13    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 10)
+2026-10-06 12:59:13  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 12:59:26      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>11</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 12:59:26    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 11)
+2026-10-06 12:59:26  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 13:13:45  Recorder: FinCom sets where the changes come from on this computer: both
+2026-10-06 13:14:15  Recorder: FinCom sets where the changes come from on this computer: addon
+2026-10-06 13:14:15  Posting job pd-71-light-heads-jobs-1-aeb232: 1 item(s) for FinCom Spike Co
+2026-10-06 13:14:16      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>42</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:14:16  Posting job pd-71-light-heads-jobs-1-aeb232: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 42)
+2026-10-06 13:14:16  Posting job pd-71-light-heads-jobs-1-aeb232: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 13:14:16  Posting job pd-71-light-heads-jobs-1-aeb232: posting window ALTVCHID 45 to 46, 1 voucher(s) and 0 master(s) created
+2026-10-06 13:14:16  Posting job pd-71-light-heads-jobs-1-aeb232 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 13:14:28  Posting job pd-71-light-heads-jobs-2-e6668c: 1 item(s) for FinCom Spike Co
+2026-10-06 13:14:29      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>43</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:14:29  Posting job pd-71-light-heads-jobs-2-e6668c: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 43)
+2026-10-06 13:14:29  Posting job pd-71-light-heads-jobs-2-e6668c: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 13:14:29  Posting job pd-71-light-heads-jobs-2-e6668c: posting window ALTVCHID 46 to 47, 1 voucher(s) and 0 master(s) created
+2026-10-06 13:14:29  Posting job pd-71-light-heads-jobs-2-e6668c done: Posted 1 of 1 (Tally's reply)
+2026-10-06 13:14:41  Posting job pd-71-light-heads-jobs-3-284c67: 1 item(s) for FinCom Spike Co
+2026-10-06 13:14:42      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>44</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:14:42  Posting job pd-71-light-heads-jobs-3-284c67: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 44)
+2026-10-06 13:14:42  Posting job pd-71-light-heads-jobs-3-284c67: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 13:14:42  Posting job pd-71-light-heads-jobs-3-284c67: posting window ALTVCHID 47 to 48, 1 voucher(s) and 0 master(s) created
+2026-10-06 13:14:42  Posting job pd-71-light-heads-jobs-3-284c67 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 13:14:54  Posting job pd-71-light-heads-jobs-4-d33e60: 1 item(s) for FinCom Spike Co
+2026-10-06 13:14:55      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>45</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:14:55  Posting job pd-71-light-heads-jobs-4-d33e60: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 45)
+2026-10-06 13:14:55  Posting job pd-71-light-heads-jobs-4-d33e60: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 13:14:55  Posting job pd-71-light-heads-jobs-4-d33e60: posting window ALTVCHID 48 to 49, 1 voucher(s) and 0 master(s) created
+2026-10-06 13:14:55  Posting job pd-71-light-heads-jobs-4-d33e60 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 13:15:07  Posting job pd-71-light-heads-jobs-5-50687f: 1 item(s) for FinCom Spike Co
+2026-10-06 13:15:07      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>46</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:15:07  Posting job pd-71-light-heads-jobs-5-50687f: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 46)
+2026-10-06 13:15:07  Posting job pd-71-light-heads-jobs-5-50687f: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 13:15:08  Posting job pd-71-light-heads-jobs-5-50687f: posting window ALTVCHID 49 to 50, 1 voucher(s) and 0 master(s) created
+2026-10-06 13:15:08  Posting job pd-71-light-heads-jobs-5-50687f done: Posted 1 of 1 (Tally's reply)
+2026-10-06 13:15:20      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>47</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:15:20    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 47)
+2026-10-06 13:15:20  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 13:15:32      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>48</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:15:32    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 48)
+2026-10-06 13:15:32  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 13:16:27  Recorder: Receipt 13 of 01-Oct-2026 (MasterID 50, line 7e2d0de2…): asking Tally by MasterID
+2026-10-06 13:16:27  Recorder: Receipt 13 of 01-Oct-2026 (MasterID 50, line 7e2d0de2…): taken: Tally's GUID 0b4f6084-ad2b-4e77-8634-1cc6871408cf-00000032, AlterID 54
+2026-10-06 13:16:49  Recorder: Receipt 14 of 01-Oct-2026 (MasterID 51, line 0234015e…): asking Tally by MasterID
+2026-10-06 13:16:49  Recorder: Receipt 14 of 01-Oct-2026 (MasterID 51, line 0234015e…): taken: Tally's GUID 0b4f6084-ad2b-4e77-8634-1cc6871408cf-00000033, AlterID 55
+2026-10-06 13:17:11  Recorder: Receipt 15 of 01-Oct-2026 (MasterID 52, line 36367134…): asking Tally by MasterID
+2026-10-06 13:17:11  Recorder: Receipt 15 of 01-Oct-2026 (MasterID 52, line 36367134…): taken: Tally's GUID 0b4f6084-ad2b-4e77-8634-1cc6871408cf-00000034, AlterID 56
+2026-10-06 13:17:33  Recorder: Receipt 16 of 01-Oct-2026 (MasterID 53, line 1f8779f3…): asking Tally by MasterID
+2026-10-06 13:17:33  Recorder: Receipt 16 of 01-Oct-2026 (MasterID 53, line 1f8779f3…): taken: Tally's GUID 0b4f6084-ad2b-4e77-8634-1cc6871408cf-00000035, AlterID 57
+2026-10-06 13:17:58  Tally 9000: TDSDeskCompanies took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 13:17:58  Tally 9000 did not answer in time at 13:17:58 (TDSDeskCompanies, try 1); trying again by itself at 13:18:13
+2026-10-06 13:17:58  Recorder: Tally took longer than 2 s to list its open companies (limit 2 s); this computer's changes of companies not seen open here yet wait until it answers in time; none is passed over or lost
+2026-10-06 13:17:58  Recorder: Sales 23 of 02-Oct-2026 (MasterID 54, line fbdf7302…): asking Tally by MasterID
+2026-10-06 13:17:58  Recorder: Sales 23 of 02-Oct-2026 (MasterID 54, line fbdf7302…): not asked yet: Tally did not answer in time at 13:17; trying again by itself at 13:18 (nothing was sent); asked then
+2026-10-06 13:18:13  Tally 9000 answered in time again (FinComVoucherByMaster): the background requests are back to normal
+2026-10-06 13:18:13  Recorder: Sales 23 of 02-Oct-2026 (MasterID 54, line fbdf7302…): taken: Tally's GUID 0b4f6084-ad2b-4e77-8634-1cc6871408cf-00000036, AlterID 58
+2026-10-06 13:18:18  Recorder: Sales 24 of 02-Oct-2026 (MasterID 55, line dee5214d…): asking Tally by MasterID
+2026-10-06 13:18:18  Recorder: Sales 24 of 02-Oct-2026 (MasterID 55, line dee5214d…): taken: Tally's GUID 0b4f6084-ad2b-4e77-8634-1cc6871408cf-00000037, AlterID 59
+2026-10-06 13:18:40  Recorder: Sales 25 of 02-Oct-2026 (MasterID 56, line 520bf742…): asking Tally by MasterID
+2026-10-06 13:18:40  Recorder: Sales 25 of 02-Oct-2026 (MasterID 56, line 520bf742…): taken: Tally's GUID 0b4f6084-ad2b-4e77-8634-1cc6871408cf-00000038, AlterID 60
+2026-10-06 13:19:03  Recorder: Sales 26 of 02-Oct-2026 (MasterID 57, line 2fd733c6…): asking Tally by MasterID
+2026-10-06 13:19:03  Recorder: Sales 26 of 02-Oct-2026 (MasterID 57, line 2fd733c6…): taken: Tally's GUID 0b4f6084-ad2b-4e77-8634-1cc6871408cf-00000039, AlterID 61
+2026-10-06 13:19:25  Recorder: Sales 27 of 02-Oct-2026 (MasterID 58, line e92ae938…): asking Tally by MasterID
+2026-10-06 13:19:25  Recorder: Sales 27 of 02-Oct-2026 (MasterID 58, line e92ae938…): taken: Tally's GUID 0b4f6084-ad2b-4e77-8634-1cc6871408cf-0000003a, AlterID 62
+2026-10-06 13:19:48  Recorder: Sales 28 of 31-Oct-2026 (MasterID 59, line 8268565d…): asking Tally by MasterID
+2026-10-06 13:19:48  Recorder: Sales 28 of 31-Oct-2026 (MasterID 59, line 8268565d…): taken: Tally's GUID 0b4f6084-ad2b-4e77-8634-1cc6871408cf-0000003b, AlterID 63
+2026-10-06 13:20:10  Recorder: Sales 29 of 31-Oct-2026 (MasterID 60, line b3961172…): asking Tally by MasterID
+2026-10-06 13:20:10  Recorder: Sales 29 of 31-Oct-2026 (MasterID 60, line b3961172…): taken: Tally's GUID 0b4f6084-ad2b-4e77-8634-1cc6871408cf-0000003c, AlterID 64
+2026-10-06 13:20:32  Recorder: Sales 30 of 31-Oct-2026 (MasterID 61, line 3df8f6f2…): asking Tally by MasterID
+2026-10-06 13:20:32  Recorder: Sales 30 of 31-Oct-2026 (MasterID 61, line 3df8f6f2…): taken: Tally's GUID 0b4f6084-ad2b-4e77-8634-1cc6871408cf-0000003d, AlterID 65
+2026-10-06 13:20:54  Recorder: Sales 31 of 31-Oct-2026 (MasterID 62, line d7f51cd8…): asking Tally by MasterID
+2026-10-06 13:20:54  Recorder: Sales 31 of 31-Oct-2026 (MasterID 62, line d7f51cd8…): taken: Tally's GUID 0b4f6084-ad2b-4e77-8634-1cc6871408cf-0000003e, AlterID 66
+2026-10-06 13:21:16  Recorder: Sales 32 of 31-Oct-2026 (MasterID 63, line 1c5520d7…): asking Tally by MasterID
+2026-10-06 13:21:16  Recorder: Sales 32 of 31-Oct-2026 (MasterID 63, line 1c5520d7…): taken: Tally's GUID 0b4f6084-ad2b-4e77-8634-1cc6871408cf-0000003f, AlterID 67
+2026-10-06 13:21:39  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line 5e2de215…): asking Tally by MasterID
+2026-10-06 13:21:40  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line 5e2de215…): taken: Tally's GUID 0b4f6084-ad2b-4e77-8634-1cc6871408cf-00000003, AlterID 68
+2026-10-06 13:22:01  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line 518afd6a…): asking Tally by MasterID
+2026-10-06 13:22:01  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line 518afd6a…): taken: Tally's GUID 0b4f6084-ad2b-4e77-8634-1cc6871408cf-00000003, AlterID 69
+2026-10-06 13:22:45  Recorder: FinCom sets where the changes come from on this computer: both
+2026-10-06 13:23:15  Recorder: FinCom sets where the changes come from on this computer: addon
+2026-10-06 13:23:16  Posting job pd-71-light-full-jobs-1-57f8bd: 1 item(s) for FinCom Spike Co
+2026-10-06 13:23:16      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>64</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:23:16  Posting job pd-71-light-full-jobs-1-57f8bd: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 64)
+2026-10-06 13:23:16  Posting job pd-71-light-full-jobs-1-57f8bd: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 13:23:17  Posting job pd-71-light-full-jobs-1-57f8bd: posting window ALTVCHID 69 to 70, 1 voucher(s) and 0 master(s) created
+2026-10-06 13:23:17  Posting job pd-71-light-full-jobs-1-57f8bd done: Posted 1 of 1 (Tally's reply)
+2026-10-06 13:23:29  Posting job pd-71-light-full-jobs-2-5503d1: 1 item(s) for FinCom Spike Co
+2026-10-06 13:23:29      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>65</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:23:29  Posting job pd-71-light-full-jobs-2-5503d1: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 65)
+2026-10-06 13:23:29  Posting job pd-71-light-full-jobs-2-5503d1: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 13:23:30  Posting job pd-71-light-full-jobs-2-5503d1: posting window ALTVCHID 70 to 71, 1 voucher(s) and 0 master(s) created
+2026-10-06 13:23:30  Posting job pd-71-light-full-jobs-2-5503d1 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 13:23:42  Posting job pd-71-light-full-jobs-3-18129e: 1 item(s) for FinCom Spike Co
+2026-10-06 13:23:42      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>66</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:23:42  Posting job pd-71-light-full-jobs-3-18129e: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 66)
+2026-10-06 13:23:42  Posting job pd-71-light-full-jobs-3-18129e: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 13:23:43  Posting job pd-71-light-full-jobs-3-18129e: posting window ALTVCHID 71 to 72, 1 voucher(s) and 0 master(s) created
+2026-10-06 13:23:43  Posting job pd-71-light-full-jobs-3-18129e done: Posted 1 of 1 (Tally's reply)
+2026-10-06 13:23:55  Posting job pd-71-light-full-jobs-4-48da0a: 1 item(s) for FinCom Spike Co
+2026-10-06 13:23:55      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>67</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:23:55  Posting job pd-71-light-full-jobs-4-48da0a: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 67)
+2026-10-06 13:23:55  Posting job pd-71-light-full-jobs-4-48da0a: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 13:23:55  Posting job pd-71-light-full-jobs-4-48da0a: posting window ALTVCHID 72 to 73, 1 voucher(s) and 0 master(s) created
+2026-10-06 13:23:55  Posting job pd-71-light-full-jobs-4-48da0a done: Posted 1 of 1 (Tally's reply)
+2026-10-06 13:24:07  Posting job pd-71-light-full-jobs-5-b4c848: 1 item(s) for FinCom Spike Co
+2026-10-06 13:24:08      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>68</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:24:08  Posting job pd-71-light-full-jobs-5-b4c848: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 68)
+2026-10-06 13:24:08  Posting job pd-71-light-full-jobs-5-b4c848: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 13:24:08  Posting job pd-71-light-full-jobs-5-b4c848: posting window ALTVCHID 73 to 74, 1 voucher(s) and 0 master(s) created
+2026-10-06 13:24:08  Posting job pd-71-light-full-jobs-5-b4c848 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 13:24:21      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>69</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:24:21    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 69)
+2026-10-06 13:24:21  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 13:24:33      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>70</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:24:33    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 70)
+2026-10-06 13:24:33  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 13:34:10      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>88</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:34:10    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 88)
+2026-10-06 13:34:10  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 13:35:02  Posting job pd-71-heavy-none-jobs-1-bbee32: 1 item(s) for FinCom Spike Co
+2026-10-06 13:35:03      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30005</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:35:03  Posting job pd-71-heavy-none-jobs-1-bbee32: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 30005)
+2026-10-06 13:35:03  Posting job pd-71-heavy-none-jobs-1-bbee32: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 13:35:03  Posting job pd-71-heavy-none-jobs-1-bbee32: posting window ALTVCHID 30004 to 30005, 1 voucher(s) and 0 master(s) created
+2026-10-06 13:35:03  Posting job pd-71-heavy-none-jobs-1-bbee32 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 13:35:15  Posting job pd-71-heavy-none-jobs-2-944564: 1 item(s) for FinCom Spike Co
+2026-10-06 13:35:16      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30006</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:35:16  Posting job pd-71-heavy-none-jobs-2-944564: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 30006)
+2026-10-06 13:35:16  Posting job pd-71-heavy-none-jobs-2-944564: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 13:35:16  Posting job pd-71-heavy-none-jobs-2-944564: posting window ALTVCHID 30005 to 30006, 1 voucher(s) and 0 master(s) created
+2026-10-06 13:35:16  Posting job pd-71-heavy-none-jobs-2-944564 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 13:35:28  Posting job pd-71-heavy-none-jobs-3-270aca: 1 item(s) for FinCom Spike Co
+2026-10-06 13:35:29      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30007</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:35:29  Posting job pd-71-heavy-none-jobs-3-270aca: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 30007)
+2026-10-06 13:35:29  Posting job pd-71-heavy-none-jobs-3-270aca: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 13:35:29  Posting job pd-71-heavy-none-jobs-3-270aca: posting window ALTVCHID 30006 to 30007, 1 voucher(s) and 0 master(s) created
+2026-10-06 13:35:29  Posting job pd-71-heavy-none-jobs-3-270aca done: Posted 1 of 1 (Tally's reply)
+2026-10-06 13:35:41  Posting job pd-71-heavy-none-jobs-4-a27ac6: 1 item(s) for FinCom Spike Co
+2026-10-06 13:35:42      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30008</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:35:42  Posting job pd-71-heavy-none-jobs-4-a27ac6: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 30008)
+2026-10-06 13:35:42  Posting job pd-71-heavy-none-jobs-4-a27ac6: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 13:35:42  Posting job pd-71-heavy-none-jobs-4-a27ac6: posting window ALTVCHID 30007 to 30008, 1 voucher(s) and 0 master(s) created
+2026-10-06 13:35:42  Posting job pd-71-heavy-none-jobs-4-a27ac6 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 13:35:54  Posting job pd-71-heavy-none-jobs-5-938712: 1 item(s) for FinCom Spike Co
+2026-10-06 13:35:55      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30009</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:35:55  Posting job pd-71-heavy-none-jobs-5-938712: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 30009)
+2026-10-06 13:35:55  Posting job pd-71-heavy-none-jobs-5-938712: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 13:35:55  Posting job pd-71-heavy-none-jobs-5-938712: posting window ALTVCHID 30008 to 30009, 1 voucher(s) and 0 master(s) created
+2026-10-06 13:35:55  Posting job pd-71-heavy-none-jobs-5-938712 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 13:36:07      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30010</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:36:07    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 30010)
+2026-10-06 13:36:07  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 13:36:20      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30011</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:36:20    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 30011)
+2026-10-06 13:36:20  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 13:38:15  Ledger changes for FinCom Spike Co: Tally's master counter moved by 6000 since 270 (more than 5000): not asked one by one; the full ledger list (Update now or the nightly run) brings them
+2026-10-06 13:51:45  Recorder: FinCom sets where the changes come from on this computer: both
+2026-10-06 13:52:15  Recorder: FinCom sets where the changes come from on this computer: addon
+2026-10-06 13:52:16  Posting job pd-71-heavy-heads-jobs-1-c1fb0f: 1 item(s) for FinCom Spike Co
+2026-10-06 13:52:17      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30042</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:52:17  Posting job pd-71-heavy-heads-jobs-1-c1fb0f: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 30042)
+2026-10-06 13:52:17  Posting job pd-71-heavy-heads-jobs-1-c1fb0f: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 13:52:17  Posting job pd-71-heavy-heads-jobs-1-c1fb0f: posting window ALTVCHID 30045 to 30046, 1 voucher(s) and 0 master(s) created
+2026-10-06 13:52:17  Posting job pd-71-heavy-heads-jobs-1-c1fb0f done: Posted 1 of 1 (Tally's reply)
+2026-10-06 13:52:29  Posting job pd-71-heavy-heads-jobs-2-2114d2: 1 item(s) for FinCom Spike Co
+2026-10-06 13:52:30      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30043</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:52:30  Posting job pd-71-heavy-heads-jobs-2-2114d2: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 30043)
+2026-10-06 13:52:30  Posting job pd-71-heavy-heads-jobs-2-2114d2: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 13:52:30  Posting job pd-71-heavy-heads-jobs-2-2114d2: posting window ALTVCHID 30046 to 30047, 1 voucher(s) and 0 master(s) created
+2026-10-06 13:52:30  Posting job pd-71-heavy-heads-jobs-2-2114d2 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 13:52:42  Posting job pd-71-heavy-heads-jobs-3-67b556: 1 item(s) for FinCom Spike Co
+2026-10-06 13:52:43      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30044</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:52:43  Posting job pd-71-heavy-heads-jobs-3-67b556: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 30044)
+2026-10-06 13:52:43  Posting job pd-71-heavy-heads-jobs-3-67b556: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 13:52:43  Posting job pd-71-heavy-heads-jobs-3-67b556: posting window ALTVCHID 30047 to 30048, 1 voucher(s) and 0 master(s) created
+2026-10-06 13:52:43  Posting job pd-71-heavy-heads-jobs-3-67b556 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 13:52:55  Posting job pd-71-heavy-heads-jobs-4-b39159: 1 item(s) for FinCom Spike Co
+2026-10-06 13:52:56      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30045</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:52:56  Posting job pd-71-heavy-heads-jobs-4-b39159: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 30045)
+2026-10-06 13:52:56  Posting job pd-71-heavy-heads-jobs-4-b39159: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 13:52:56  Posting job pd-71-heavy-heads-jobs-4-b39159: posting window ALTVCHID 30048 to 30049, 1 voucher(s) and 0 master(s) created
+2026-10-06 13:52:56  Posting job pd-71-heavy-heads-jobs-4-b39159 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 13:53:08  Posting job pd-71-heavy-heads-jobs-5-6c016e: 1 item(s) for FinCom Spike Co
+2026-10-06 13:53:09      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30046</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:53:09  Posting job pd-71-heavy-heads-jobs-5-6c016e: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 30046)
+2026-10-06 13:53:09  Posting job pd-71-heavy-heads-jobs-5-6c016e: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 13:53:09  Posting job pd-71-heavy-heads-jobs-5-6c016e: posting window ALTVCHID 30049 to 30050, 1 voucher(s) and 0 master(s) created
+2026-10-06 13:53:09  Posting job pd-71-heavy-heads-jobs-5-6c016e done: Posted 1 of 1 (Tally's reply)
+2026-10-06 13:53:21      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30047</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:53:21    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 30047)
+2026-10-06 13:53:21  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 13:53:34      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30048</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:53:34    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 30048)
+2026-10-06 13:53:34  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 13:54:09  Recorder: 0b4f6084-ad2b-4e77-8634-1cc6871408cf-6-Oct-26.txt is shorter than what was read: it is read again from its start
+2026-10-06 13:54:10  Recorder: Receipt 12012 of 01-Oct-2026 (MasterID 30049, line 6c688ac2…): asking Tally by MasterID
+2026-10-06 13:54:12  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 13:54:12  Tally 9000 did not answer in time at 13:54:12 (FinComVoucherByMaster, try 1); trying again by itself at 13:54:27
+2026-10-06 13:54:12  Recorder: Receipt 12012 of 01-Oct-2026 (MasterID 30049, line 6c688ac2…): not asked yet: Tally did not answer in time at 13:54; trying again by itself at 13:54 (nothing was sent); asked then
+2026-10-06 13:54:30  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 13:54:30  Tally 9000 did not answer in time at 13:54:30 (FinComVoucherByMaster, try 2); trying again by itself at 13:55:00
+2026-10-06 13:54:30  Recorder: Receipt 12012 of 01-Oct-2026 (MasterID 30049, line 6c688ac2…): not asked yet: Tally did not answer in time at 13:54; trying again by itself at 13:55 (nothing was sent); asked then
+2026-10-06 13:54:33  Recorder: Receipt 12013 of 01-Oct-2026 (MasterID 30050, line 088b8988…): not asked yet: Tally did not answer in time at 13:54; trying again by itself at 13:55 (nothing was sent); asked then
+2026-10-06 13:54:55  Recorder: Receipt 12014 of 01-Oct-2026 (MasterID 30051, line b12424f3…): not asked yet: Tally did not answer in time at 13:54; trying again by itself at 13:55 (nothing was sent); asked then
+2026-10-06 13:55:00  Tally 9000 answered in time again (TDSDeskCompanies): the background requests are back to normal
+2026-10-06 13:55:02  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 13:55:02  Tally 9000 did not answer in time at 13:55:02 (FinComVoucherByMaster, try 1); trying again by itself at 13:55:17
+2026-10-06 13:55:02  Recorder: Receipt 12012 of 01-Oct-2026 (MasterID 30049, line 6c688ac2…): held: the entry was not read from Tally: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 13:55:02  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)); sent without it (FinCom holds the line until a body comes)
+2026-10-06 13:55:02  Recorder: Receipt 12013 of 01-Oct-2026 (MasterID 30050, line 088b8988…): asking Tally by MasterID
+2026-10-06 13:55:02  Recorder: Receipt 12013 of 01-Oct-2026 (MasterID 30050, line 088b8988…): not asked yet: Tally did not answer in time at 13:55; trying again by itself at 13:55 (nothing was sent); asked then
+2026-10-06 13:55:02  Recorder: Receipt 12014 of 01-Oct-2026 (MasterID 30051, line b12424f3…): not asked yet: Tally did not answer in time at 13:55; trying again by itself at 13:55 (nothing was sent); asked then
+2026-10-06 13:55:19  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 13:55:19  Tally 9000 did not answer in time at 13:55:19 (FinComVoucherByMaster, try 2); trying again by itself at 13:55:49
+2026-10-06 13:55:19  Recorder: Receipt 12015 of 01-Oct-2026 (MasterID 30052, line aeea5f72…): not asked yet: Tally did not answer in time at 13:55; trying again by itself at 13:55 (nothing was sent); asked then
+2026-10-06 13:55:39  Recorder: Receipt 12016 of 01-Oct-2026 (MasterID 30053, line cae5465d…): not asked yet: Tally did not answer in time at 13:55; trying again by itself at 13:55 (nothing was sent); asked then
+2026-10-06 13:55:51  Tally 9000 answered in time again (TDSDeskCompanies): the background requests are back to normal
+2026-10-06 13:55:53  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 13:55:53  Tally 9000 did not answer in time at 13:55:53 (FinComVoucherByMaster, try 1); trying again by itself at 13:56:08
+2026-10-06 13:55:53  Recorder: Receipt 12013 of 01-Oct-2026 (MasterID 30050, line 088b8988…): not asked yet: Tally did not answer in time at 13:55; trying again by itself at 13:56 (nothing was sent); asked then
+2026-10-06 13:55:53  Recorder: Receipt 12014 of 01-Oct-2026 (MasterID 30051, line b12424f3…): not asked yet: Tally did not answer in time at 13:55; trying again by itself at 13:56 (nothing was sent); asked then
+2026-10-06 13:55:53  Recorder: Receipt 12015 of 01-Oct-2026 (MasterID 30052, line aeea5f72…): not asked yet: Tally did not answer in time at 13:55; trying again by itself at 13:56 (nothing was sent); asked then
+2026-10-06 13:55:53  Recorder: Receipt 12016 of 01-Oct-2026 (MasterID 30053, line cae5465d…): not asked yet: Tally did not answer in time at 13:55; trying again by itself at 13:56 (nothing was sent); asked then
+2026-10-06 13:56:10  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 13:56:10  Tally 9000 did not answer in time at 13:56:10 (FinComVoucherByMaster, try 2); trying again by itself at 13:56:40
+2026-10-06 13:56:10  Recorder: Receipt 12013 of 01-Oct-2026 (MasterID 30050, line 088b8988…): held: the entry was not read from Tally: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 13:56:10  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)); sent without it (FinCom holds the line until a body comes)
+2026-10-06 13:56:10  Recorder: Receipt 12014 of 01-Oct-2026 (MasterID 30051, line b12424f3…): asking Tally by MasterID
+2026-10-06 13:56:10  Recorder: Receipt 12014 of 01-Oct-2026 (MasterID 30051, line b12424f3…): not asked yet: Tally did not answer in time at 13:56; trying again by itself at 13:56 (nothing was sent); asked then
+2026-10-06 13:56:10  Recorder: Receipt 12015 of 01-Oct-2026 (MasterID 30052, line aeea5f72…): not asked yet: Tally did not answer in time at 13:56; trying again by itself at 13:56 (nothing was sent); asked then
+2026-10-06 13:56:10  Recorder: Receipt 12016 of 01-Oct-2026 (MasterID 30053, line cae5465d…): not asked yet: Tally did not answer in time at 13:56; trying again by itself at 13:56 (nothing was sent); asked then
+2026-10-06 13:56:15  Recorder: Sales 12023 of 02-Oct-2026 (MasterID 30054, line 20471a08…): not asked yet: Tally did not answer in time at 13:56; trying again by itself at 13:56 (nothing was sent); asked then
+2026-10-06 13:56:37  Recorder: Sales 12024 of 02-Oct-2026 (MasterID 30055, line ac218111…): not asked yet: Tally did not answer in time at 13:56; trying again by itself at 13:56 (nothing was sent); asked then
+2026-10-06 13:56:41  Tally 9000 answered in time again (TDSDeskCompanies): the background requests are back to normal
+2026-10-06 13:56:43  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 13:56:43  Tally 9000 did not answer in time at 13:56:43 (FinComVoucherByMaster, try 1); trying again by itself at 13:56:58
+2026-10-06 13:57:00  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 13:57:00  Tally 9000 did not answer in time at 13:57:00 (FinComVoucherByMaster, try 2); trying again by itself at 13:57:30
+2026-10-06 13:57:00  Recorder: Receipt 12014 of 01-Oct-2026 (MasterID 30051, line b12424f3…): not asked yet: Tally did not answer in time at 13:57; trying again by itself at 13:57 (nothing was sent); asked then
+2026-10-06 13:57:00  Recorder: Receipt 12015 of 01-Oct-2026 (MasterID 30052, line aeea5f72…): not asked yet: Tally did not answer in time at 13:57; trying again by itself at 13:57 (nothing was sent); asked then
+2026-10-06 13:57:00  Recorder: Receipt 12016 of 01-Oct-2026 (MasterID 30053, line cae5465d…): not asked yet: Tally did not answer in time at 13:57; trying again by itself at 13:57 (nothing was sent); asked then
+2026-10-06 13:57:00  Recorder: Sales 12023 of 02-Oct-2026 (MasterID 30054, line 20471a08…): not asked yet: Tally did not answer in time at 13:57; trying again by itself at 13:57 (nothing was sent); asked then
+2026-10-06 13:57:00  Recorder: Sales 12024 of 02-Oct-2026 (MasterID 30055, line ac218111…): not asked yet: Tally did not answer in time at 13:57; trying again by itself at 13:57 (nothing was sent); asked then
+2026-10-06 13:57:00  Recorder: Sales 12025 of 02-Oct-2026 (MasterID 30056, line 2faf71c5…): not asked yet: Tally did not answer in time at 13:57; trying again by itself at 13:57 (nothing was sent); asked then
+2026-10-06 13:57:22  Recorder: Sales 12026 of 02-Oct-2026 (MasterID 30057, line 629afb83…): not asked yet: Tally did not answer in time at 13:57; trying again by itself at 13:57 (nothing was sent); asked then
+2026-10-06 13:57:30  Tally 9000 answered in time again (TDSDeskCompanies): the background requests are back to normal
+2026-10-06 13:57:33  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 13:57:33  Tally 9000 did not answer in time at 13:57:33 (FinComVoucherByMaster, try 1); trying again by itself at 13:57:48
+2026-10-06 13:57:33  Recorder: Receipt 12014 of 01-Oct-2026 (MasterID 30051, line b12424f3…): held: the entry was not read from Tally: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 13:57:33  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)); sent without it (FinCom holds the line until a body comes)
+2026-10-06 13:57:33  Recorder: Receipt 12015 of 01-Oct-2026 (MasterID 30052, line aeea5f72…): asking Tally by MasterID
+2026-10-06 13:57:45  Recorder: Sales 12027 of 02-Oct-2026 (MasterID 30058, line faa621cc…): not asked yet: Tally did not answer in time at 13:57; trying again by itself at 13:57 (nothing was sent); asked then
+2026-10-06 13:57:50  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 13:57:50  Tally 9000 did not answer in time at 13:57:50 (FinComVoucherByMaster, try 2); trying again by itself at 13:58:20
+2026-10-06 13:57:50  Recorder: Receipt 12015 of 01-Oct-2026 (MasterID 30052, line aeea5f72…): not asked yet: Tally did not answer in time at 13:57; trying again by itself at 13:58 (nothing was sent); asked then
+2026-10-06 13:57:50  Recorder: Receipt 12016 of 01-Oct-2026 (MasterID 30053, line cae5465d…): not asked yet: Tally did not answer in time at 13:57; trying again by itself at 13:58 (nothing was sent); asked then
+2026-10-06 13:57:50  Recorder: Sales 12023 of 02-Oct-2026 (MasterID 30054, line 20471a08…): not asked yet: Tally did not answer in time at 13:57; trying again by itself at 13:58 (nothing was sent); asked then
+2026-10-06 13:57:50  Recorder: Sales 12024 of 02-Oct-2026 (MasterID 30055, line ac218111…): not asked yet: Tally did not answer in time at 13:57; trying again by itself at 13:58 (nothing was sent); asked then
+2026-10-06 13:57:50  Recorder: Sales 12025 of 02-Oct-2026 (MasterID 30056, line 2faf71c5…): not asked yet: Tally did not answer in time at 13:57; trying again by itself at 13:58 (nothing was sent); asked then
+2026-10-06 13:57:50  Recorder: Sales 12026 of 02-Oct-2026 (MasterID 30057, line 629afb83…): not asked yet: Tally did not answer in time at 13:57; trying again by itself at 13:58 (nothing was sent); asked then
+2026-10-06 13:57:50  Recorder: Sales 12027 of 02-Oct-2026 (MasterID 30058, line faa621cc…): not asked yet: Tally did not answer in time at 13:57; trying again by itself at 13:58 (nothing was sent); asked then
+2026-10-06 13:58:15  Light check of FinCom Spike Co: skipped: Tally did not answer (Tally did not answer in time at 13:57; trying again by itself at 13:58 (nothing was sent))
+2026-10-06 13:58:20  Tally 9000 answered in time again (TDSDeskCompanies): the background requests are back to normal
+2026-10-06 13:58:22  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 13:58:22  Tally 9000 did not answer in time at 13:58:22 (FinComVoucherByMaster, try 1); trying again by itself at 13:58:37
+2026-10-06 13:58:22  Recorder: Receipt 12015 of 01-Oct-2026 (MasterID 30052, line aeea5f72…): not asked yet: Tally did not answer in time at 13:58; trying again by itself at 13:58 (nothing was sent); asked then
+2026-10-06 13:58:22  Recorder: Receipt 12016 of 01-Oct-2026 (MasterID 30053, line cae5465d…): not asked yet: Tally did not answer in time at 13:58; trying again by itself at 13:58 (nothing was sent); asked then
+2026-10-06 13:58:22  Recorder: Sales 12023 of 02-Oct-2026 (MasterID 30054, line 20471a08…): not asked yet: Tally did not answer in time at 13:58; trying again by itself at 13:58 (nothing was sent); asked then
+2026-10-06 13:58:22  Recorder: Sales 12024 of 02-Oct-2026 (MasterID 30055, line ac218111…): not asked yet: Tally did not answer in time at 13:58; trying again by itself at 13:58 (nothing was sent); asked then
+2026-10-06 13:58:22  Recorder: Sales 12025 of 02-Oct-2026 (MasterID 30056, line 2faf71c5…): not asked yet: Tally did not answer in time at 13:58; trying again by itself at 13:58 (nothing was sent); asked then
+2026-10-06 13:58:22  Recorder: Sales 12026 of 02-Oct-2026 (MasterID 30057, line 629afb83…): not asked yet: Tally did not answer in time at 13:58; trying again by itself at 13:58 (nothing was sent); asked then
+2026-10-06 13:58:22  Recorder: Sales 12027 of 02-Oct-2026 (MasterID 30058, line faa621cc…): not asked yet: Tally did not answer in time at 13:58; trying again by itself at 13:58 (nothing was sent); asked then
+2026-10-06 13:58:28  Recorder: Sales 12028 of 31-Oct-2026 (MasterID 30059, line db2da874…): not asked yet: Tally did not answer in time at 13:58; trying again by itself at 13:58 (nothing was sent); asked then
+2026-10-06 13:58:39  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 13:58:39  Tally 9000 did not answer in time at 13:58:39 (FinComVoucherByMaster, try 2); trying again by itself at 13:59:09
+2026-10-06 13:58:39  Recorder: Receipt 12015 of 01-Oct-2026 (MasterID 30052, line aeea5f72…): held: the entry was not read from Tally: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 13:58:39  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)); sent without it (FinCom holds the line until a body comes)
+2026-10-06 13:58:39  Recorder: Receipt 12016 of 01-Oct-2026 (MasterID 30053, line cae5465d…): asking Tally by MasterID
+2026-10-06 13:58:39  Recorder: Receipt 12016 of 01-Oct-2026 (MasterID 30053, line cae5465d…): not asked yet: Tally did not answer in time at 13:58; trying again by itself at 13:59 (nothing was sent); asked then
+2026-10-06 13:58:39  Recorder: Sales 12023 of 02-Oct-2026 (MasterID 30054, line 20471a08…): not asked yet: Tally did not answer in time at 13:58; trying again by itself at 13:59 (nothing was sent); asked then
+2026-10-06 13:58:39  Recorder: Sales 12024 of 02-Oct-2026 (MasterID 30055, line ac218111…): not asked yet: Tally did not answer in time at 13:58; trying again by itself at 13:59 (nothing was sent); asked then
+2026-10-06 13:58:39  Recorder: Sales 12025 of 02-Oct-2026 (MasterID 30056, line 2faf71c5…): not asked yet: Tally did not answer in time at 13:58; trying again by itself at 13:59 (nothing was sent); asked then
+2026-10-06 13:58:39  Recorder: Sales 12026 of 02-Oct-2026 (MasterID 30057, line 629afb83…): not asked yet: Tally did not answer in time at 13:58; trying again by itself at 13:59 (nothing was sent); asked then
+2026-10-06 13:58:39  Recorder: Sales 12027 of 02-Oct-2026 (MasterID 30058, line faa621cc…): not asked yet: Tally did not answer in time at 13:58; trying again by itself at 13:59 (nothing was sent); asked then
+2026-10-06 13:58:39  Recorder: Sales 12028 of 31-Oct-2026 (MasterID 30059, line db2da874…): not asked yet: Tally did not answer in time at 13:58; trying again by itself at 13:59 (nothing was sent); asked then
+2026-10-06 13:58:50  Recorder: Sales 12029 of 31-Oct-2026 (MasterID 30060, line eb5b6b39…): not asked yet: Tally did not answer in time at 13:58; trying again by itself at 13:59 (nothing was sent); asked then
+2026-10-06 13:59:10  Tally 9000 answered in time again (TDSDeskCompanies): the background requests are back to normal
+2026-10-06 13:59:12  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 13:59:12  Tally 9000 did not answer in time at 13:59:12 (FinComVoucherByMaster, try 1); trying again by itself at 13:59:27
+2026-10-06 13:59:12  Recorder: Receipt 12016 of 01-Oct-2026 (MasterID 30053, line cae5465d…): not asked yet: Tally did not answer in time at 13:59; trying again by itself at 13:59 (nothing was sent); asked then
+2026-10-06 13:59:12  Recorder: Sales 12023 of 02-Oct-2026 (MasterID 30054, line 20471a08…): not asked yet: Tally did not answer in time at 13:59; trying again by itself at 13:59 (nothing was sent); asked then
+2026-10-06 13:59:12  Recorder: Sales 12024 of 02-Oct-2026 (MasterID 30055, line ac218111…): not asked yet: Tally did not answer in time at 13:59; trying again by itself at 13:59 (nothing was sent); asked then
+2026-10-06 13:59:12  Recorder: Sales 12025 of 02-Oct-2026 (MasterID 30056, line 2faf71c5…): not asked yet: Tally did not answer in time at 13:59; trying again by itself at 13:59 (nothing was sent); asked then
+2026-10-06 13:59:12  Recorder: Sales 12026 of 02-Oct-2026 (MasterID 30057, line 629afb83…): not asked yet: Tally did not answer in time at 13:59; trying again by itself at 13:59 (nothing was sent); asked then
+2026-10-06 13:59:12  Recorder: Sales 12027 of 02-Oct-2026 (MasterID 30058, line faa621cc…): not asked yet: Tally did not answer in time at 13:59; trying again by itself at 13:59 (nothing was sent); asked then
+2026-10-06 13:59:12  Recorder: Sales 12028 of 31-Oct-2026 (MasterID 30059, line db2da874…): not asked yet: Tally did not answer in time at 13:59; trying again by itself at 13:59 (nothing was sent); asked then
+2026-10-06 13:59:12  Recorder: Sales 12029 of 31-Oct-2026 (MasterID 30060, line eb5b6b39…): not asked yet: Tally did not answer in time at 13:59; trying again by itself at 13:59 (nothing was sent); asked then
+2026-10-06 13:59:18  Recorder: Sales 12030 of 31-Oct-2026 (MasterID 30061, line 05cf2a27…): not asked yet: Tally did not answer in time at 13:59; trying again by itself at 13:59 (nothing was sent); asked then
+2026-10-06 13:59:29  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 13:59:29  Tally 9000 did not answer in time at 13:59:29 (FinComVoucherByMaster, try 2); trying again by itself at 13:59:59
+2026-10-06 13:59:39  Recorder: Sales 12031 of 31-Oct-2026 (MasterID 30062, line e746abcd…): not asked yet: Tally did not answer in time at 13:59; trying again by itself at 13:59 (nothing was sent); asked then
+2026-10-06 14:00:01  Tally 9000: TDSDeskCompanies took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:00:01  Tally 9000 did not answer in time at 14:00:01 (TDSDeskCompanies, try 3); trying again by itself at 14:01:01
+2026-10-06 14:00:01  Recorder: Tally took longer than 2 s to list its open companies (limit 2 s); this computer's changes of companies not seen open here yet wait until it answers in time; none is passed over or lost
+2026-10-06 14:00:01  Recorder: Receipt 12016 of 01-Oct-2026 (MasterID 30053, line cae5465d…): not asked yet: Tally did not answer in time at 14:00; trying again by itself at 14:01 (nothing was sent); asked then
+2026-10-06 14:00:01  Recorder: Sales 12023 of 02-Oct-2026 (MasterID 30054, line 20471a08…): not asked yet: Tally did not answer in time at 14:00; trying again by itself at 14:01 (nothing was sent); asked then
+2026-10-06 14:00:01  Recorder: Sales 12024 of 02-Oct-2026 (MasterID 30055, line ac218111…): not asked yet: Tally did not answer in time at 14:00; trying again by itself at 14:01 (nothing was sent); asked then
+2026-10-06 14:00:01  Recorder: Sales 12025 of 02-Oct-2026 (MasterID 30056, line 2faf71c5…): not asked yet: Tally did not answer in time at 14:00; trying again by itself at 14:01 (nothing was sent); asked then
+2026-10-06 14:00:01  Recorder: Sales 12026 of 02-Oct-2026 (MasterID 30057, line 629afb83…): not asked yet: Tally did not answer in time at 14:00; trying again by itself at 14:01 (nothing was sent); asked then
+2026-10-06 14:00:01  Recorder: Sales 12027 of 02-Oct-2026 (MasterID 30058, line faa621cc…): not asked yet: Tally did not answer in time at 14:00; trying again by itself at 14:01 (nothing was sent); asked then
+2026-10-06 14:00:01  Recorder: Sales 12028 of 31-Oct-2026 (MasterID 30059, line db2da874…): not asked yet: Tally did not answer in time at 14:00; trying again by itself at 14:01 (nothing was sent); asked then
+2026-10-06 14:00:01  Recorder: Sales 12029 of 31-Oct-2026 (MasterID 30060, line eb5b6b39…): not asked yet: Tally did not answer in time at 14:00; trying again by itself at 14:01 (nothing was sent); asked then
+2026-10-06 14:00:01  Recorder: Sales 12030 of 31-Oct-2026 (MasterID 30061, line 05cf2a27…): not asked yet: Tally did not answer in time at 14:00; trying again by itself at 14:01 (nothing was sent); asked then
+2026-10-06 14:00:01  Recorder: Sales 12031 of 31-Oct-2026 (MasterID 30062, line e746abcd…): not asked yet: Tally did not answer in time at 14:00; trying again by itself at 14:01 (nothing was sent); asked then
+2026-10-06 14:00:02  Recorder: Sales 12032 of 31-Oct-2026 (MasterID 30063, line e7c78917…): not asked yet: Tally did not answer in time at 14:00; trying again by itself at 14:01 (nothing was sent); asked then
+2026-10-06 14:00:35  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line 99d41903…): not asked yet: Tally did not answer in time at 14:00; trying again by itself at 14:01 (nothing was sent); asked then
+2026-10-06 14:00:57  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line 16212d09…): not asked yet: Tally did not answer in time at 14:00; trying again by itself at 14:01 (nothing was sent); asked then
+2026-10-06 14:01:02  Tally 9000 answered in time again (TDSDeskCompanies): the background requests are back to normal
+2026-10-06 14:01:03  Tally 9000 is busy (no answer in 1s); nothing more is sent to it until it answers a small check (the company's name), asked once a minute
+2026-10-06 14:01:03  Tally 9000: FinComVoucherByMaster 20261001 took 1.1s and failed: The underlying connection was closed: An unexpected error occurred on a receive.
+2026-10-06 14:01:03  Tally 9000 did not answer in time at 14:01:03 (FinComVoucherByMaster, try 1); trying again by itself at 14:01:18
+2026-10-06 14:01:03  Recorder: Receipt 12016 of 01-Oct-2026 (MasterID 30053, line cae5465d…): held: the entry was not read from Tally: The underlying connection was closed: An unexpected error occurred on a receive.
+2026-10-06 14:01:03  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (The underlying connection was closed: An unexpected error occurred on a receive.); sent without it (FinCom holds the line until a body comes)
+2026-10-06 14:01:03  Recorder: Sales 12023 of 02-Oct-2026 (MasterID 30054, line 20471a08…): asking Tally by MasterID
+2026-10-06 14:01:03  Recorder: Sales 12023 of 02-Oct-2026 (MasterID 30054, line 20471a08…): not asked yet: Tally did not answer in time at 14:01; trying again by itself at 14:01 (nothing was sent); asked then
+2026-10-06 14:01:03  Recorder: Sales 12024 of 02-Oct-2026 (MasterID 30055, line ac218111…): not asked yet: Tally did not answer in time at 14:01; trying again by itself at 14:01 (nothing was sent); asked then
+2026-10-06 14:01:03  Recorder: Sales 12025 of 02-Oct-2026 (MasterID 30056, line 2faf71c5…): not asked yet: Tally did not answer in time at 14:01; trying again by itself at 14:01 (nothing was sent); asked then
+2026-10-06 14:01:03  Recorder: Sales 12026 of 02-Oct-2026 (MasterID 30057, line 629afb83…): not asked yet: Tally did not answer in time at 14:01; trying again by itself at 14:01 (nothing was sent); asked then
+2026-10-06 14:01:03  Recorder: Sales 12027 of 02-Oct-2026 (MasterID 30058, line faa621cc…): not asked yet: Tally did not answer in time at 14:01; trying again by itself at 14:01 (nothing was sent); asked then
+2026-10-06 14:01:03  Recorder: Sales 12028 of 31-Oct-2026 (MasterID 30059, line db2da874…): not asked yet: Tally did not answer in time at 14:01; trying again by itself at 14:01 (nothing was sent); asked then
+2026-10-06 14:01:03  Recorder: Sales 12029 of 31-Oct-2026 (MasterID 30060, line eb5b6b39…): not asked yet: Tally did not answer in time at 14:01; trying again by itself at 14:01 (nothing was sent); asked then
+2026-10-06 14:01:03  Recorder: Sales 12030 of 31-Oct-2026 (MasterID 30061, line 05cf2a27…): not asked yet: Tally did not answer in time at 14:01; trying again by itself at 14:01 (nothing was sent); asked then
+2026-10-06 14:01:03  Recorder: Sales 12031 of 31-Oct-2026 (MasterID 30062, line e746abcd…): not asked yet: Tally did not answer in time at 14:01; trying again by itself at 14:01 (nothing was sent); asked then
+2026-10-06 14:01:03  Recorder: Sales 12032 of 31-Oct-2026 (MasterID 30063, line e7c78917…): not asked yet: Tally did not answer in time at 14:01; trying again by itself at 14:01 (nothing was sent); asked then
+2026-10-06 14:01:03  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line 99d41903…): not asked yet: Tally did not answer in time at 14:01; trying again by itself at 14:01 (nothing was sent); asked then
+2026-10-06 14:01:03  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line 16212d09…): not asked yet: Tally did not answer in time at 14:01; trying again by itself at 14:01 (nothing was sent); asked then
+2026-10-06 14:01:07  Recorder: Sales 12023 of 02-Oct-2026 (MasterID 30054, line 20471a08…): held: the entry was not read from Tally: TallyPrime is not running in your Windows login, or does not accept connections (F1 Help > Settings > Connectivity: TallyPrime acts as Both).
+2026-10-06 14:01:07  Recorder: Sales 12024 of 02-Oct-2026 (MasterID 30055, line ac218111…): held: the entry was not read from Tally: TallyPrime is not running in your Windows login, or does not accept connections (F1 Help > Settings > Connectivity: TallyPrime acts as Both).
+2026-10-06 14:01:07  Recorder: Sales 12025 of 02-Oct-2026 (MasterID 30056, line 2faf71c5…): held: the entry was not read from Tally: TallyPrime is not running in your Windows login, or does not accept connections (F1 Help > Settings > Connectivity: TallyPrime acts as Both).
+2026-10-06 14:01:07  Recorder: Sales 12026 of 02-Oct-2026 (MasterID 30057, line 629afb83…): held: the entry was not read from Tally: TallyPrime is not running in your Windows login, or does not accept connections (F1 Help > Settings > Connectivity: TallyPrime acts as Both).
+2026-10-06 14:01:07  Recorder: Sales 12027 of 02-Oct-2026 (MasterID 30058, line faa621cc…): held: the entry was not read from Tally: TallyPrime is not running in your Windows login, or does not accept connections (F1 Help > Settings > Connectivity: TallyPrime acts as Both).
+2026-10-06 14:01:07  Recorder: Sales 12028 of 31-Oct-2026 (MasterID 30059, line db2da874…): held: the entry was not read from Tally: TallyPrime is not running in your Windows login, or does not accept connections (F1 Help > Settings > Connectivity: TallyPrime acts as Both).
+2026-10-06 14:01:07  Recorder: Sales 12029 of 31-Oct-2026 (MasterID 30060, line eb5b6b39…): held: the entry was not read from Tally: TallyPrime is not running in your Windows login, or does not accept connections (F1 Help > Settings > Connectivity: TallyPrime acts as Both).
+2026-10-06 14:01:07  Recorder: Sales 12030 of 31-Oct-2026 (MasterID 30061, line 05cf2a27…): held: the entry was not read from Tally: TallyPrime is not running in your Windows login, or does not accept connections (F1 Help > Settings > Connectivity: TallyPrime acts as Both).
+2026-10-06 14:01:07  Recorder: Sales 12031 of 31-Oct-2026 (MasterID 30062, line e746abcd…): held: the entry was not read from Tally: TallyPrime is not running in your Windows login, or does not accept connections (F1 Help > Settings > Connectivity: TallyPrime acts as Both).
+2026-10-06 14:01:07  Recorder: Sales 12032 of 31-Oct-2026 (MasterID 30063, line e7c78917…): held: the entry was not read from Tally: TallyPrime is not running in your Windows login, or does not accept connections (F1 Help > Settings > Connectivity: TallyPrime acts as Both).
+2026-10-06 14:01:07  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line 99d41903…): held: the entry was not read from Tally: TallyPrime is not running in your Windows login, or does not accept connections (F1 Help > Settings > Connectivity: TallyPrime acts as Both).
+2026-10-06 14:01:07  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line 16212d09…): held: the entry was not read from Tally: TallyPrime is not running in your Windows login, or does not accept connections (F1 Help > Settings > Connectivity: TallyPrime acts as Both).
+2026-10-06 14:01:07  Recorder: the body of 12 entries of FinCom Spike Co was not read from Tally (TallyPrime is not running in your Windows login, or does not accept connections (F1 Help > Settings > Connectivity: TallyPrime acts as Both).); sent without it (FinCom holds the line until a body comes)
+2026-10-06 14:01:45  Light check of FinCom Spike Co: skipped: Tally did not answer (Tally (port 9000) is busy: it did not answer a request and may still be working on it; nothing is sent until it answers a small check (next at 14:02:03))
+2026-10-06 14:01:45  Recorder: FinCom sets where the changes come from on this computer: both
+2026-10-06 14:02:15  Recorder: FinCom sets where the changes come from on this computer: addon
+2026-10-06 14:02:15  Tally 9000 answered the small check; requests go again
+2026-10-06 14:02:15  Tally 9000 answered in time again (FinComCompany): the background requests are back to normal
+2026-10-06 14:02:15  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=4; now ALTVCHID=30069, ALTMSTID=6270
+2026-10-06 14:02:16  Posting job pd-71-heavy-full-jobs-1-e0d41e: 1 item(s) for FinCom Spike Co
+2026-10-06 14:02:16  Tally 9000 answers again (it was busy for 1m14s)
+2026-10-06 14:02:17      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30064</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 14:02:17  Posting job pd-71-heavy-full-jobs-1-e0d41e: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 30064)
+2026-10-06 14:02:17  Posting job pd-71-heavy-full-jobs-1-e0d41e: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 14:02:17  Posting job pd-71-heavy-full-jobs-1-e0d41e: posting window ALTVCHID 30069 to 30070, 1 voucher(s) and 0 master(s) created
+2026-10-06 14:02:17  Posting job pd-71-heavy-full-jobs-1-e0d41e done: Posted 1 of 1 (Tally's reply)
+2026-10-06 14:02:29  Posting job pd-71-heavy-full-jobs-2-f9bf0b: 1 item(s) for FinCom Spike Co
+2026-10-06 14:02:30      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30065</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 14:02:30  Posting job pd-71-heavy-full-jobs-2-f9bf0b: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 30065)
+2026-10-06 14:02:30  Posting job pd-71-heavy-full-jobs-2-f9bf0b: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 14:02:30  Posting job pd-71-heavy-full-jobs-2-f9bf0b: posting window ALTVCHID 30070 to 30071, 1 voucher(s) and 0 master(s) created
+2026-10-06 14:02:30  Posting job pd-71-heavy-full-jobs-2-f9bf0b done: Posted 1 of 1 (Tally's reply)
+2026-10-06 14:02:42  Posting job pd-71-heavy-full-jobs-3-fe818c: 1 item(s) for FinCom Spike Co
+2026-10-06 14:02:43      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30066</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 14:02:43  Posting job pd-71-heavy-full-jobs-3-fe818c: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 30066)
+2026-10-06 14:02:43  Posting job pd-71-heavy-full-jobs-3-fe818c: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 14:02:43  Posting job pd-71-heavy-full-jobs-3-fe818c: posting window ALTVCHID 30071 to 30072, 1 voucher(s) and 0 master(s) created
+2026-10-06 14:02:43  Posting job pd-71-heavy-full-jobs-3-fe818c done: Posted 1 of 1 (Tally's reply)
+2026-10-06 14:02:55  Posting job pd-71-heavy-full-jobs-4-f5c621: 1 item(s) for FinCom Spike Co
+2026-10-06 14:02:56      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30067</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 14:02:56  Posting job pd-71-heavy-full-jobs-4-f5c621: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 30067)
+2026-10-06 14:02:56  Posting job pd-71-heavy-full-jobs-4-f5c621: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 14:02:56  Posting job pd-71-heavy-full-jobs-4-f5c621: posting window ALTVCHID 30072 to 30073, 1 voucher(s) and 0 master(s) created
+2026-10-06 14:02:56  Posting job pd-71-heavy-full-jobs-4-f5c621 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 14:03:08  Posting job pd-71-heavy-full-jobs-5-c6eb57: 1 item(s) for FinCom Spike Co
+2026-10-06 14:03:08      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30068</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 14:03:08  Posting job pd-71-heavy-full-jobs-5-c6eb57: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 30068)
+2026-10-06 14:03:08  Posting job pd-71-heavy-full-jobs-5-c6eb57: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 14:03:09  Posting job pd-71-heavy-full-jobs-5-c6eb57: posting window ALTVCHID 30073 to 30074, 1 voucher(s) and 0 master(s) created
+2026-10-06 14:03:09  Posting job pd-71-heavy-full-jobs-5-c6eb57 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 14:03:21      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30069</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 14:03:21    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 30069)
+2026-10-06 14:03:21  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 14:03:33      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30070</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 14:03:33    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 30070)
+2026-10-06 14:03:33  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 14:05:02  Recorder: Receipt 12012 of 01-Oct-2026 (MasterID 30049, line 6c688ac2…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:05:04  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:05:04  Tally 9000 did not answer in time at 14:05:04 (FinComVoucherByMaster, try 1); trying again by itself at 14:05:19
+2026-10-06 14:05:04  Recorder: Receipt 12012 of 01-Oct-2026 (MasterID 30049, line 6c688ac2…): not asked this time: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s); asked again by itself (not counted as a try)
+2026-10-06 14:05:04  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:05:21  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:05:21  Tally 9000 did not answer in time at 14:05:21 (FinComVoucherByMaster, try 2); trying again by itself at 14:05:51
+2026-10-06 14:05:21  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:05:52  Tally 9000 answered in time again (TDSDeskCompanies): the background requests are back to normal
+2026-10-06 14:05:54  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:05:54  Tally 9000 did not answer in time at 14:05:54 (FinComVoucherByMaster, try 1); trying again by itself at 14:06:09
+2026-10-06 14:05:54  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:06:11  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:06:11  Tally 9000 did not answer in time at 14:06:11 (FinComVoucherByMaster, try 2); trying again by itself at 14:06:41
+2026-10-06 14:06:11  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:06:41  Recorder: Receipt 12013 of 01-Oct-2026 (MasterID 30050, line 088b8988…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:06:42  Tally 9000 answered in time again (TDSDeskCompanies): the background requests are back to normal
+2026-10-06 14:06:44  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:06:44  Tally 9000 did not answer in time at 14:06:44 (FinComVoucherByMaster, try 1); trying again by itself at 14:06:59
+2026-10-06 14:06:44  Recorder: Receipt 12013 of 01-Oct-2026 (MasterID 30050, line 088b8988…): not asked this time: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s); asked again by itself (not counted as a try)
+2026-10-06 14:06:44  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:07:02  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:07:02  Tally 9000 did not answer in time at 14:07:02 (FinComVoucherByMaster, try 2); trying again by itself at 14:07:32
+2026-10-06 14:07:02  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:07:32  Tally 9000 answered in time again (TDSDeskCompanies): the background requests are back to normal
+2026-10-06 14:07:34  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:07:34  Tally 9000 did not answer in time at 14:07:34 (FinComVoucherByMaster, try 1); trying again by itself at 14:07:49
+2026-10-06 14:07:34  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:07:51  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:07:51  Tally 9000 did not answer in time at 14:07:51 (FinComVoucherByMaster, try 2); trying again by itself at 14:08:21
+2026-10-06 14:07:51  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:08:21  Tally 9000 answered in time again (TDSDeskCompanies): the background requests are back to normal
+2026-10-06 14:08:24  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:08:24  Tally 9000 did not answer in time at 14:08:24 (FinComVoucherByMaster, try 1); trying again by itself at 14:08:39
+2026-10-06 14:08:24  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:08:41  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:08:41  Tally 9000 did not answer in time at 14:08:41 (FinComVoucherByMaster, try 2); trying again by itself at 14:09:11
+2026-10-06 14:08:41  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:09:11  Tally 9000 answered in time again (TDSDeskCompanies): the background requests are back to normal
+2026-10-06 14:09:13  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:09:13  Tally 9000 did not answer in time at 14:09:13 (FinComVoucherByMaster, try 1); trying again by itself at 14:09:28
+2026-10-06 14:09:13  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:09:30  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:09:30  Tally 9000 did not answer in time at 14:09:30 (FinComVoucherByMaster, try 2); trying again by itself at 14:10:00
+2026-10-06 14:09:30  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:10:00  Tally 9000 answered in time again (TDSDeskCompanies): the background requests are back to normal
+2026-10-06 14:10:03  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:10:03  Tally 9000 did not answer in time at 14:10:03 (FinComVoucherByMaster, try 1); trying again by itself at 14:10:18
+2026-10-06 14:10:03  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:10:20  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:10:20  Tally 9000 did not answer in time at 14:10:20 (FinComVoucherByMaster, try 2); trying again by itself at 14:10:50
+2026-10-06 14:10:20  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:10:52  Tally 9000: TDSDeskCompanies took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:10:52  Tally 9000 did not answer in time at 14:10:52 (TDSDeskCompanies, try 3); trying again by itself at 14:11:52
+2026-10-06 14:10:52  Recorder: Tally took longer than 2 s to list its open companies (limit 2 s); this computer's changes of companies not seen open here yet wait until it answers in time; none is passed over or lost
+2026-10-06 14:10:52  Recorder: Receipt 12013 of 01-Oct-2026 (MasterID 30050, line 088b8988…): not asked this time: Tally did not answer in time at 14:10; trying again by itself at 14:11 (nothing was sent); asked again by itself (not counted as a try)
+2026-10-06 14:10:52  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:11:42  FinCom Bridge 2.3.1: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+2026-10-06 14:11:42  FinCom Bridge 2.3.1 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+2026-10-06 14:11:42  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+2026-10-06 14:11:42  Recorder: Receipt 12014 of 01-Oct-2026 (MasterID 30051, line b12424f3…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-06 14:11:42  Recorder: Receipt 12016 of 01-Oct-2026 (MasterID 30053, line cae5465d…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-06 14:11:42  Recorder: Sales 12028 of 31-Oct-2026 (MasterID 30059, line db2da874…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-06 14:11:42  Recorder: Sales 12031 of 31-Oct-2026 (MasterID 30062, line e746abcd…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-06 14:11:42  Recorder: Sales 12032 of 31-Oct-2026 (MasterID 30063, line e7c78917…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-06 14:11:42  Recorder: Sales 12029 of 31-Oct-2026 (MasterID 30060, line eb5b6b39…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-06 14:11:42  Recorder: Sales 12027 of 02-Oct-2026 (MasterID 30058, line faa621cc…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-06 14:11:42  Recorder: Sales 12030 of 31-Oct-2026 (MasterID 30061, line 05cf2a27…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:11:42  Check:  - 
+2026-10-06 14:11:44  Tally 9000: FinComVoucherByMaster 20261031 took 2.0s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:11:44  Tally 9000 did not answer in time at 14:11:44 (FinComVoucherByMaster, try 1); trying again by itself at 14:11:59
+2026-10-06 14:11:44  Recorder: Sales 12030 of 31-Oct-2026 (MasterID 30061, line 05cf2a27…): not asked this time: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s); asked again by itself (not counted as a try)
+2026-10-06 14:11:44  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:11:45  Light check of FinCom Spike Co: skipped: Tally did not answer (Tally did not answer in time at 14:11; trying again by itself at 14:11 (nothing was sent))
+2026-10-06 14:11:45  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+2026-10-06 14:11:59  Tally 9000: FinComVoucherByMaster 20261031 took 0.0s and failed: No connection could be made because the target machine actively refused it
+2026-10-06 14:11:59  Recorder: Sales 12030 of 31-Oct-2026 (MasterID 30061, line 05cf2a27…): not asked this time: No connection could be made because the target machine actively refused it (not counted as a try)
+2026-10-06 14:11:59  Recorder: Receipt 12013 of 01-Oct-2026 (MasterID 30050, line 088b8988…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:11:59  Tally 9000: FinComVoucherByMaster 20261001 took 0.0s and failed: No connection could be made because the target machine actively refused it
+2026-10-06 14:11:59  Recorder: Receipt 12013 of 01-Oct-2026 (MasterID 30050, line 088b8988…): not asked this time: No connection could be made because the target machine actively refused it (not counted as a try)
+2026-10-06 14:11:59  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line 16212d09…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:11:59  Tally 9000: FinComVoucherByMaster 20261031 took 0.0s and failed: No connection could be made because the target machine actively refused it
+2026-10-06 14:11:59  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line 16212d09…): not asked this time: No connection could be made because the target machine actively refused it (not counted as a try)
+2026-10-06 14:11:59  Recorder: Sales 12023 of 02-Oct-2026 (MasterID 30054, line 20471a08…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:11:59  Tally 9000: FinComVoucherByMaster 20261002 took 0.0s and failed: No connection could be made because the target machine actively refused it
+2026-10-06 14:11:59  Recorder: Sales 12023 of 02-Oct-2026 (MasterID 30054, line 20471a08…): not asked this time: No connection could be made because the target machine actively refused it (not counted as a try)
+2026-10-06 14:11:59  Recorder: Sales 12025 of 02-Oct-2026 (MasterID 30056, line 2faf71c5…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:11:59  Tally 9000: FinComVoucherByMaster 20261002 took 0.0s and failed: No connection could be made because the target machine actively refused it
+2026-10-06 14:11:59  Recorder: Sales 12025 of 02-Oct-2026 (MasterID 30056, line 2faf71c5…): not asked this time: No connection could be made because the target machine actively refused it (not counted as a try)
+2026-10-06 14:11:59  Recorder: Sales 12026 of 02-Oct-2026 (MasterID 30057, line 629afb83…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:11:59  Tally 9000: FinComVoucherByMaster 20261002 took 0.0s and failed: No connection could be made because the target machine actively refused it
+2026-10-06 14:11:59  Recorder: Sales 12026 of 02-Oct-2026 (MasterID 30057, line 629afb83…): not asked this time: No connection could be made because the target machine actively refused it (not counted as a try)
+2026-10-06 14:11:59  Recorder: Receipt 12012 of 01-Oct-2026 (MasterID 30049, line 6c688ac2…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:11:59  Tally 9000: FinComVoucherByMaster 20261001 took 0.0s and failed: No connection could be made because the target machine actively refused it
+2026-10-06 14:11:59  Recorder: Receipt 12012 of 01-Oct-2026 (MasterID 30049, line 6c688ac2…): not asked this time: No connection could be made because the target machine actively refused it (not counted as a try)
+2026-10-06 14:11:59  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line 99d41903…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:11:59  Tally 9000: FinComVoucherByMaster 20261031 took 0.0s and failed: No connection could be made because the target machine actively refused it
+2026-10-06 14:11:59  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line 99d41903…): not asked this time: No connection could be made because the target machine actively refused it (not counted as a try)
+2026-10-06 14:11:59  Recorder: Sales 12024 of 02-Oct-2026 (MasterID 30055, line ac218111…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:11:59  Tally 9000: FinComVoucherByMaster 20261002 took 0.0s and failed: No connection could be made because the target machine actively refused it
+2026-10-06 14:11:59  Recorder: Sales 12024 of 02-Oct-2026 (MasterID 30055, line ac218111…): not asked this time: No connection could be made because the target machine actively refused it (not counted as a try)
+2026-10-06 14:11:59  Recorder: Receipt 12015 of 01-Oct-2026 (MasterID 30052, line aeea5f72…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:11:59  Tally 9000: FinComVoucherByMaster 20261001 took 0.0s and failed: No connection could be made because the target machine actively refused it
+2026-10-06 14:11:59  Recorder: Receipt 12015 of 01-Oct-2026 (MasterID 30052, line aeea5f72…): not asked this time: No connection could be made because the target machine actively refused it (not counted as a try)
+2026-10-06 14:11:59  Recorder: held lines: 0 from FinCom, 10 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:12:00  Recorder: Receipt 12014 of 01-Oct-2026 (MasterID 30051, line b12424f3…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:12:00  Tally 9000: FinComVoucherByMaster 20261001 took 0.0s and failed: No connection could be made because the target machine actively refused it
+2026-10-06 14:12:00  Recorder: Receipt 12014 of 01-Oct-2026 (MasterID 30051, line b12424f3…): not asked this time: No connection could be made because the target machine actively refused it (not counted as a try)
+2026-10-06 14:12:00  Recorder: Receipt 12016 of 01-Oct-2026 (MasterID 30053, line cae5465d…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:12:00  Tally 9000: FinComVoucherByMaster 20261001 took 0.0s and failed: No connection could be made because the target machine actively refused it
+2026-10-06 14:12:00  Recorder: Receipt 12016 of 01-Oct-2026 (MasterID 30053, line cae5465d…): not asked this time: No connection could be made because the target machine actively refused it (not counted as a try)
+2026-10-06 14:12:00  Recorder: Sales 12028 of 31-Oct-2026 (MasterID 30059, line db2da874…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:12:00  Tally 9000: FinComVoucherByMaster 20261031 took 0.0s and failed: No connection could be made because the target machine actively refused it
+2026-10-06 14:12:00  Recorder: Sales 12028 of 31-Oct-2026 (MasterID 30059, line db2da874…): not asked this time: No connection could be made because the target machine actively refused it (not counted as a try)
+2026-10-06 14:12:00  Recorder: Sales 12031 of 31-Oct-2026 (MasterID 30062, line e746abcd…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:12:00  Tally 9000: FinComVoucherByMaster 20261031 took 0.0s and failed: No connection could be made because the target machine actively refused it
+2026-10-06 14:12:00  Recorder: Sales 12031 of 31-Oct-2026 (MasterID 30062, line e746abcd…): not asked this time: No connection could be made because the target machine actively refused it (not counted as a try)
+2026-10-06 14:12:00  Recorder: Sales 12032 of 31-Oct-2026 (MasterID 30063, line e7c78917…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:12:00  Tally 9000: FinComVoucherByMaster 20261031 took 0.0s and failed: No connection could be made because the target machine actively refused it
+2026-10-06 14:12:00  Recorder: Sales 12032 of 31-Oct-2026 (MasterID 30063, line e7c78917…): not asked this time: No connection could be made because the target machine actively refused it (not counted as a try)
+2026-10-06 14:12:00  Recorder: Sales 12029 of 31-Oct-2026 (MasterID 30060, line eb5b6b39…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:12:00  Tally 9000: FinComVoucherByMaster 20261031 took 0.0s and failed: No connection could be made because the target machine actively refused it
+2026-10-06 14:12:00  Recorder: Sales 12029 of 31-Oct-2026 (MasterID 30060, line eb5b6b39…): not asked this time: No connection could be made because the target machine actively refused it (not counted as a try)
+2026-10-06 14:12:00  Recorder: Sales 12027 of 02-Oct-2026 (MasterID 30058, line faa621cc…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:12:00  Tally 9000: FinComVoucherByMaster 20261002 took 0.0s and failed: No connection could be made because the target machine actively refused it
+2026-10-06 14:12:00  Recorder: Sales 12027 of 02-Oct-2026 (MasterID 30058, line faa621cc…): not asked this time: No connection could be made because the target machine actively refused it (not counted as a try)
+2026-10-06 14:12:00  Recorder: held lines: 0 from FinCom, 7 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:12:17  Tally 9000 answered in time again (FinComCompany): the background requests are back to normal
+2026-10-06 14:12:17  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=99, ALTMSTID=271
+2026-10-06 14:12:17  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=4; now ALTVCHID=99, ALTMSTID=271
+2026-10-06 14:12:45  Recorder: FinCom sets where the changes come from on this computer: both
+2026-10-06 14:13:15  Recorder: FinCom sets where the changes come from on this computer: addon
+2026-10-06 14:13:16  Posting job pd-71-light-none-gentle0-jobs-1-b66601: 1 item(s) for FinCom Spike Co
+2026-10-06 14:13:16      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>89</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 14:13:16  Posting job pd-71-light-none-gentle0-jobs-1-b66601: request 1 of 1: 1 vouchers in 0.0 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 89)
+2026-10-06 14:13:16  Posting job pd-71-light-none-gentle0-jobs-1-b66601: 1 requests, 1 vouchers, 0.0 s total
+2026-10-06 14:13:16  Posting job pd-71-light-none-gentle0-jobs-1-b66601: posting window ALTVCHID 99 to 100, 1 voucher(s) and 0 master(s) created
+2026-10-06 14:13:16  Posting job pd-71-light-none-gentle0-jobs-1-b66601 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 14:13:28  Posting job pd-71-light-none-gentle0-jobs-2-451d42: 1 item(s) for FinCom Spike Co
+2026-10-06 14:13:28      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>90</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 14:13:28  Posting job pd-71-light-none-gentle0-jobs-2-451d42: request 1 of 1: 1 vouchers in 0.0 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 90)
+2026-10-06 14:13:28  Posting job pd-71-light-none-gentle0-jobs-2-451d42: 1 requests, 1 vouchers, 0.0 s total
+2026-10-06 14:13:28  Posting job pd-71-light-none-gentle0-jobs-2-451d42: posting window ALTVCHID 100 to 101, 1 voucher(s) and 0 master(s) created
+2026-10-06 14:13:28  Posting job pd-71-light-none-gentle0-jobs-2-451d42 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 14:13:40  Posting job pd-71-light-none-gentle0-jobs-3-2c57b5: 1 item(s) for FinCom Spike Co
+2026-10-06 14:13:40      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>91</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 14:13:40  Posting job pd-71-light-none-gentle0-jobs-3-2c57b5: request 1 of 1: 1 vouchers in 0.0 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 91)
+2026-10-06 14:13:40  Posting job pd-71-light-none-gentle0-jobs-3-2c57b5: 1 requests, 1 vouchers, 0.0 s total
+2026-10-06 14:13:41  Posting job pd-71-light-none-gentle0-jobs-3-2c57b5: posting window ALTVCHID 101 to 102, 1 voucher(s) and 0 master(s) created
+2026-10-06 14:13:41  Posting job pd-71-light-none-gentle0-jobs-3-2c57b5 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 14:13:53  Posting job pd-71-light-none-gentle0-jobs-4-72c8d7: 1 item(s) for FinCom Spike Co
+2026-10-06 14:13:53      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>92</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 14:13:53  Posting job pd-71-light-none-gentle0-jobs-4-72c8d7: request 1 of 1: 1 vouchers in 0.0 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 92)
+2026-10-06 14:13:53  Posting job pd-71-light-none-gentle0-jobs-4-72c8d7: 1 requests, 1 vouchers, 0.0 s total
+2026-10-06 14:13:53  Posting job pd-71-light-none-gentle0-jobs-4-72c8d7: posting window ALTVCHID 102 to 103, 1 voucher(s) and 0 master(s) created
+2026-10-06 14:13:53  Posting job pd-71-light-none-gentle0-jobs-4-72c8d7 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 14:14:05  Posting job pd-71-light-none-gentle0-jobs-5-966c36: 1 item(s) for FinCom Spike Co
+2026-10-06 14:14:05      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>93</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 14:14:05  Posting job pd-71-light-none-gentle0-jobs-5-966c36: request 1 of 1: 1 vouchers in 0.0 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 93)
+2026-10-06 14:14:05  Posting job pd-71-light-none-gentle0-jobs-5-966c36: 1 requests, 1 vouchers, 0.0 s total
+2026-10-06 14:14:05  Posting job pd-71-light-none-gentle0-jobs-5-966c36: posting window ALTVCHID 103 to 104, 1 voucher(s) and 0 master(s) created
+2026-10-06 14:14:05  Posting job pd-71-light-none-gentle0-jobs-5-966c36 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 14:14:17      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>94</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 14:14:17    request 1 of 1: 1 voucher in 0.0 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 94)
+2026-10-06 14:14:17  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 14:14:29      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>95</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 14:14:29    request 1 of 1: 1 voucher in 0.1 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 95)
+2026-10-06 14:14:29  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 14:15:45  Recorder: FinCom sets where the changes come from on this computer: both
+2026-10-06 14:16:15  Recorder: FinCom sets where the changes come from on this computer: addon
+2026-10-06 14:16:16  Posting job pd-71-light-heads-gentle0-jobs-1-14ee22: 1 item(s) for FinCom Spike Co
+2026-10-06 14:16:16      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>96</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 14:16:16  Posting job pd-71-light-heads-gentle0-jobs-1-14ee22: request 1 of 1: 1 vouchers in 0.1 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 96)
+2026-10-06 14:16:16  Posting job pd-71-light-heads-gentle0-jobs-1-14ee22: 1 requests, 1 vouchers, 0.1 s total
+2026-10-06 14:16:16  Posting job pd-71-light-heads-gentle0-jobs-1-14ee22: posting window ALTVCHID 106 to 107, 1 voucher(s) and 0 master(s) created
+2026-10-06 14:16:16  Posting job pd-71-light-heads-gentle0-jobs-1-14ee22 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 14:16:28  Posting job pd-71-light-heads-gentle0-jobs-2-1eea20: 1 item(s) for FinCom Spike Co
+2026-10-06 14:16:28      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>97</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 14:16:28  Posting job pd-71-light-heads-gentle0-jobs-2-1eea20: request 1 of 1: 1 vouchers in 0.0 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 97)
+2026-10-06 14:16:28  Posting job pd-71-light-heads-gentle0-jobs-2-1eea20: 1 requests, 1 vouchers, 0.0 s total
+2026-10-06 14:16:28  Posting job pd-71-light-heads-gentle0-jobs-2-1eea20: posting window ALTVCHID 107 to 108, 1 voucher(s) and 0 master(s) created
+2026-10-06 14:16:28  Posting job pd-71-light-heads-gentle0-jobs-2-1eea20 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 14:16:40  Posting job pd-71-light-heads-gentle0-jobs-3-e92ef6: 1 item(s) for FinCom Spike Co
+2026-10-06 14:16:41      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>98</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 14:16:41  Posting job pd-71-light-heads-gentle0-jobs-3-e92ef6: request 1 of 1: 1 vouchers in 0.0 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 98)
+2026-10-06 14:16:41  Posting job pd-71-light-heads-gentle0-jobs-3-e92ef6: 1 requests, 1 vouchers, 0.0 s total
+2026-10-06 14:16:41  Posting job pd-71-light-heads-gentle0-jobs-3-e92ef6: posting window ALTVCHID 108 to 109, 1 voucher(s) and 0 master(s) created
+2026-10-06 14:16:41  Posting job pd-71-light-heads-gentle0-jobs-3-e92ef6 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 14:16:53  Posting job pd-71-light-heads-gentle0-jobs-4-ec5e8a: 1 item(s) for FinCom Spike Co
+2026-10-06 14:16:53      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>99</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 14:16:53  Posting job pd-71-light-heads-gentle0-jobs-4-ec5e8a: request 1 of 1: 1 vouchers in 0.0 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 99)
+2026-10-06 14:16:53  Posting job pd-71-light-heads-gentle0-jobs-4-ec5e8a: 1 requests, 1 vouchers, 0.0 s total
+2026-10-06 14:16:53  Posting job pd-71-light-heads-gentle0-jobs-4-ec5e8a: posting window ALTVCHID 109 to 110, 1 voucher(s) and 0 master(s) created
+2026-10-06 14:16:53  Posting job pd-71-light-heads-gentle0-jobs-4-ec5e8a done: Posted 1 of 1 (Tally's reply)
+2026-10-06 14:17:05  Posting job pd-71-light-heads-gentle0-jobs-5-e3c2fe: 1 item(s) for FinCom Spike Co
+2026-10-06 14:17:05      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>100</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 14:17:05  Posting job pd-71-light-heads-gentle0-jobs-5-e3c2fe: request 1 of 1: 1 vouchers in 0.0 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 100)
+2026-10-06 14:17:05  Posting job pd-71-light-heads-gentle0-jobs-5-e3c2fe: 1 requests, 1 vouchers, 0.0 s total
+2026-10-06 14:17:05  Posting job pd-71-light-heads-gentle0-jobs-5-e3c2fe: posting window ALTVCHID 110 to 111, 1 voucher(s) and 0 master(s) created
+2026-10-06 14:17:05  Posting job pd-71-light-heads-gentle0-jobs-5-e3c2fe done: Posted 1 of 1 (Tally's reply)
+2026-10-06 14:17:17      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>101</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 14:17:17    request 1 of 1: 1 voucher in 0.0 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 101)
+2026-10-06 14:17:17  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 14:17:29      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>102</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 14:17:29    request 1 of 1: 1 voucher in 0.0 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 102)
+2026-10-06 14:17:29  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply

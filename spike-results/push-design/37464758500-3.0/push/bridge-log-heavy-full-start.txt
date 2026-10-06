@@ -1,0 +1,47 @@
+2026-10-06 14:00:14  Tally 9000: FinComVoucherByMaster 20261002 took 0.2s and failed: No connection could be made because the target machine actively refused it
+2026-10-06 14:00:14  Recorder: Sales 12023 of 02-Oct-2026 (MasterID 30054, line e4da0ed0…): held: the entry was not read from Tally: No connection could be made because the target machine actively refused it
+2026-10-06 14:00:14  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (No connection could be made because the target machine actively refused it); sent without it (FinCom holds the line until a body comes)
+2026-10-06 14:00:14  Recorder: Sales 12024 of 02-Oct-2026 (MasterID 30055, line 32a642b6…): asking Tally by MasterID
+2026-10-06 14:00:14  Tally 9000: FinComVoucherByMaster 20261002 took 0.2s and failed: No connection could be made because the target machine actively refused it
+2026-10-06 14:00:14  Recorder: Sales 12024 of 02-Oct-2026 (MasterID 30055, line 32a642b6…): held: the entry was not read from Tally: No connection could be made because the target machine actively refused it
+2026-10-06 14:00:14  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (No connection could be made because the target machine actively refused it); sent without it (FinCom holds the line until a body comes)
+2026-10-06 14:00:14  Recorder: Sales 12025 of 02-Oct-2026 (MasterID 30056, line d1d5b7c6…): asking Tally by MasterID
+2026-10-06 14:00:14  Tally 9000: FinComVoucherByMaster 20261002 took 0.2s and failed: No connection could be made because the target machine actively refused it
+2026-10-06 14:00:14  Recorder: Sales 12025 of 02-Oct-2026 (MasterID 30056, line d1d5b7c6…): held: the entry was not read from Tally: No connection could be made because the target machine actively refused it
+2026-10-06 14:00:14  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (No connection could be made because the target machine actively refused it); sent without it (FinCom holds the line until a body comes)
+2026-10-06 14:00:14  Recorder: Sales 12026 of 02-Oct-2026 (MasterID 30057, line 9bb5480c…): asking Tally by MasterID
+2026-10-06 14:00:14  Tally 9000: FinComVoucherByMaster 20261002 took 0.2s and failed: No connection could be made because the target machine actively refused it
+2026-10-06 14:00:14  Recorder: Sales 12026 of 02-Oct-2026 (MasterID 30057, line 9bb5480c…): held: the entry was not read from Tally: No connection could be made because the target machine actively refused it
+2026-10-06 14:00:14  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (No connection could be made because the target machine actively refused it); sent without it (FinCom holds the line until a body comes)
+2026-10-06 14:00:14  Recorder: Sales 12027 of 02-Oct-2026 (MasterID 30058, line a342b3a8…): asking Tally by MasterID
+2026-10-06 14:00:14  Tally 9000: FinComVoucherByMaster 20261002 took 0.2s and failed: No connection could be made because the target machine actively refused it
+2026-10-06 14:00:14  Recorder: Sales 12027 of 02-Oct-2026 (MasterID 30058, line a342b3a8…): held: the entry was not read from Tally: No connection could be made because the target machine actively refused it
+2026-10-06 14:00:14  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (No connection could be made because the target machine actively refused it); sent without it (FinCom holds the line until a body comes)
+2026-10-06 14:00:14  Recorder: Sales 12028 of 31-Oct-2026 (MasterID 30059, line 5d0f3a87…): asking Tally by MasterID
+2026-10-06 14:00:14  Tally 9000: FinComVoucherByMaster 20261031 took 0.2s and failed: No connection could be made because the target machine actively refused it
+2026-10-06 14:00:14  Recorder: Sales 12028 of 31-Oct-2026 (MasterID 30059, line 5d0f3a87…): held: the entry was not read from Tally: No connection could be made because the target machine actively refused it
+2026-10-06 14:00:14  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (No connection could be made because the target machine actively refused it); sent without it (FinCom holds the line until a body comes)
+2026-10-06 14:00:14  Recorder: Sales 12029 of 31-Oct-2026 (MasterID 30060, line 451dafb7…): asking Tally by MasterID
+2026-10-06 14:00:15  Tally 9000: FinComVoucherByMaster 20261031 took 0.2s and failed: No connection could be made because the target machine actively refused it
+2026-10-06 14:00:15  Recorder: Sales 12029 of 31-Oct-2026 (MasterID 30060, line 451dafb7…): held: the entry was not read from Tally: No connection could be made because the target machine actively refused it
+2026-10-06 14:00:15  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (No connection could be made because the target machine actively refused it); sent without it (FinCom holds the line until a body comes)
+2026-10-06 14:00:15  Recorder: Sales 12030 of 31-Oct-2026 (MasterID 30061, line c36e9109…): asking Tally by MasterID
+2026-10-06 14:00:15  Tally 9000: FinComVoucherByMaster 20261031 took 0.2s and failed: No connection could be made because the target machine actively refused it
+2026-10-06 14:00:15  Recorder: Sales 12030 of 31-Oct-2026 (MasterID 30061, line c36e9109…): held: the entry was not read from Tally: No connection could be made because the target machine actively refused it
+2026-10-06 14:00:15  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (No connection could be made because the target machine actively refused it); sent without it (FinCom holds the line until a body comes)
+2026-10-06 14:00:15  Recorder: Sales 12031 of 31-Oct-2026 (MasterID 30062, line 68c00210…): asking Tally by MasterID
+2026-10-06 14:00:15  Tally 9000: FinComVoucherByMaster 20261031 took 0.2s and failed: No connection could be made because the target machine actively refused it
+2026-10-06 14:00:15  Recorder: Sales 12031 of 31-Oct-2026 (MasterID 30062, line 68c00210…): held: the entry was not read from Tally: No connection could be made because the target machine actively refused it
+2026-10-06 14:00:15  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (No connection could be made because the target machine actively refused it); sent without it (FinCom holds the line until a body comes)
+2026-10-06 14:00:15  Recorder: Sales 12032 of 31-Oct-2026 (MasterID 30063, line 724064e1…): asking Tally by MasterID
+2026-10-06 14:00:15  Tally 9000: FinComVoucherByMaster 20261031 took 0.2s and failed: No connection could be made because the target machine actively refused it
+2026-10-06 14:00:15  Recorder: Sales 12032 of 31-Oct-2026 (MasterID 30063, line 724064e1…): held: the entry was not read from Tally: No connection could be made because the target machine actively refused it
+2026-10-06 14:00:15  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (No connection could be made because the target machine actively refused it); sent without it (FinCom holds the line until a body comes)
+2026-10-06 14:00:15  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line 4a120273…): asking Tally by MasterID
+2026-10-06 14:00:15  Tally 9000: FinComVoucherByMaster 20261031 took 0.2s and failed: No connection could be made because the target machine actively refused it
+2026-10-06 14:00:15  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line 4a120273…): held: the entry was not read from Tally: No connection could be made because the target machine actively refused it
+2026-10-06 14:00:15  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (No connection could be made because the target machine actively refused it); sent without it (FinCom holds the line until a body comes)
+2026-10-06 14:00:15  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line fa651e6f…): asking Tally by MasterID
+2026-10-06 14:00:15  Tally 9000: FinComVoucherByMaster 20261031 took 0.2s and failed: No connection could be made because the target machine actively refused it
+2026-10-06 14:00:15  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line fa651e6f…): held: the entry was not read from Tally: No connection could be made because the target machine actively refused it
+2026-10-06 14:00:15  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (No connection could be made because the target machine actively refused it); sent without it (FinCom holds the line until a body comes)

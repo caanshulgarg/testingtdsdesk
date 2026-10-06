@@ -1,0 +1,123 @@
+2026-10-06 14:10:45  FinCom Bridge 2.3.1: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+2026-10-06 14:10:45  FinCom Bridge 2.3.1 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+2026-10-06 14:10:45  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+2026-10-06 14:10:45  Recorder: Sales 12026 of 02-Oct-2026 (MasterID 30057, line 9bb5480c…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-06 14:10:45  Recorder: Sales 12027 of 02-Oct-2026 (MasterID 30058, line a342b3a8…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-06 14:10:45  Recorder: Sales 12030 of 31-Oct-2026 (MasterID 30061, line c36e9109…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-06 14:10:45  Recorder: Receipt 12015 of 01-Oct-2026 (MasterID 30052, line c71a947c…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-06 14:10:45  Recorder: Sales 12025 of 02-Oct-2026 (MasterID 30056, line d1d5b7c6…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-06 14:10:45  Recorder: Sales 12023 of 02-Oct-2026 (MasterID 30054, line e4da0ed0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-06 14:10:45  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line fa651e6f…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-06 14:10:45  Recorder: Receipt 12016 of 01-Oct-2026 (MasterID 30053, line 01185dd5…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:10:45  Check:  - 
+2026-10-06 14:10:47  Tally 9000: FinComVoucherByMaster 20261001 took 2.0s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:10:47  Tally 9000 did not answer in time at 14:10:47 (FinComVoucherByMaster, try 1); trying again by itself at 14:11:02
+2026-10-06 14:10:47  Recorder: Receipt 12016 of 01-Oct-2026 (MasterID 30053, line 01185dd5…): not asked this time: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s); asked again by itself (not counted as a try)
+2026-10-06 14:10:47  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:10:48  Light check of FinCom Spike Co: skipped: Tally did not answer (Tally did not answer in time at 14:10; trying again by itself at 14:11 (nothing was sent))
+2026-10-06 14:10:48  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+2026-10-06 14:11:04  Tally 9000: FinComVoucherByMaster 20261001 took 2.0s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:11:04  Tally 9000 did not answer in time at 14:11:04 (FinComVoucherByMaster, try 2); trying again by itself at 14:11:34
+2026-10-06 14:11:04  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:11:36  Tally 9000: TDSDeskCompanies took 2.0s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:11:36  Tally 9000 did not answer in time at 14:11:36 (TDSDeskCompanies, try 3); trying again by itself at 14:12:36
+2026-10-06 14:11:36  Recorder: Tally took longer than 2 s to list its open companies (limit 2 s); this computer's changes of companies not seen open here yet wait until it answers in time; none is passed over or lost
+2026-10-06 14:11:36  Recorder: Receipt 12016 of 01-Oct-2026 (MasterID 30053, line 01185dd5…): not asked this time: Tally did not answer in time at 14:11; trying again by itself at 14:12 (nothing was sent); asked again by itself (not counted as a try)
+2026-10-06 14:11:36  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:12:39  Tally 9000: TDSDeskCompanies took 2.0s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 14:12:39  Tally 9000 did not answer in time at 14:12:39 (TDSDeskCompanies, try 4); trying again by itself at 14:14:39
+2026-10-06 14:12:39  Recorder: Receipt 12016 of 01-Oct-2026 (MasterID 30053, line 01185dd5…): not asked this time: Tally did not answer in time at 14:12; trying again by itself at 14:14 (nothing was sent); asked again by itself (not counted as a try)
+2026-10-06 14:12:39  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:14:18  Recorder: FinCom sets where the changes come from on this computer: both
+2026-10-06 14:14:39  Tally 9000 answered in time again (TDSDeskCompanies): the background requests are back to normal
+2026-10-06 14:14:39  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-06 14:14:39  Recorder: Receipt 12016 of 01-Oct-2026 (MasterID 30053, line 01185dd5…): not asked this time: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (not counted as a try)
+2026-10-06 14:14:39  Recorder: Sales 12024 of 02-Oct-2026 (MasterID 30055, line 32a642b6…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:14:39  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-06 14:14:39  Recorder: Sales 12024 of 02-Oct-2026 (MasterID 30055, line 32a642b6…): not asked this time: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (not counted as a try)
+2026-10-06 14:14:39  Recorder: Receipt 12013 of 01-Oct-2026 (MasterID 30050, line 34fd28dd…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:14:39  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-06 14:14:39  Recorder: Receipt 12013 of 01-Oct-2026 (MasterID 30050, line 34fd28dd…): not asked this time: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (not counted as a try)
+2026-10-06 14:14:39  Recorder: Sales 12029 of 31-Oct-2026 (MasterID 30060, line 451dafb7…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:14:39  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-06 14:14:39  Recorder: Sales 12029 of 31-Oct-2026 (MasterID 30060, line 451dafb7…): not asked this time: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (not counted as a try)
+2026-10-06 14:14:39  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line 4a120273…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:14:39  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-06 14:14:39  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line 4a120273…): not asked this time: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (not counted as a try)
+2026-10-06 14:14:39  Recorder: Sales 12028 of 31-Oct-2026 (MasterID 30059, line 5d0f3a87…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:14:39  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-06 14:14:39  Recorder: Sales 12028 of 31-Oct-2026 (MasterID 30059, line 5d0f3a87…): not asked this time: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (not counted as a try)
+2026-10-06 14:14:39  Recorder: Sales 12031 of 31-Oct-2026 (MasterID 30062, line 68c00210…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:14:39  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-06 14:14:39  Recorder: Sales 12031 of 31-Oct-2026 (MasterID 30062, line 68c00210…): not asked this time: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (not counted as a try)
+2026-10-06 14:14:39  Recorder: Receipt 12012 of 01-Oct-2026 (MasterID 30049, line 6d6baffd…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:14:39  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-06 14:14:39  Recorder: Receipt 12012 of 01-Oct-2026 (MasterID 30049, line 6d6baffd…): not asked this time: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (not counted as a try)
+2026-10-06 14:14:39  Recorder: Sales 12032 of 31-Oct-2026 (MasterID 30063, line 724064e1…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:14:39  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-06 14:14:39  Recorder: Sales 12032 of 31-Oct-2026 (MasterID 30063, line 724064e1…): not asked this time: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (not counted as a try)
+2026-10-06 14:14:39  Recorder: Receipt 12014 of 01-Oct-2026 (MasterID 30051, line 80cf9755…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:14:39  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-06 14:14:39  Recorder: Receipt 12014 of 01-Oct-2026 (MasterID 30051, line 80cf9755…): not asked this time: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (not counted as a try)
+2026-10-06 14:14:39  Recorder: held lines: 0 from FinCom, 10 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:14:40  Recorder: Sales 12026 of 02-Oct-2026 (MasterID 30057, line 9bb5480c…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:14:40  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-06 14:14:40  Recorder: Sales 12026 of 02-Oct-2026 (MasterID 30057, line 9bb5480c…): not asked this time: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (not counted as a try)
+2026-10-06 14:14:40  Recorder: Sales 12027 of 02-Oct-2026 (MasterID 30058, line a342b3a8…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:14:40  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-06 14:14:40  Recorder: Sales 12027 of 02-Oct-2026 (MasterID 30058, line a342b3a8…): not asked this time: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (not counted as a try)
+2026-10-06 14:14:40  Recorder: Sales 12030 of 31-Oct-2026 (MasterID 30061, line c36e9109…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:14:40  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-06 14:14:40  Recorder: Sales 12030 of 31-Oct-2026 (MasterID 30061, line c36e9109…): not asked this time: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (not counted as a try)
+2026-10-06 14:14:40  Recorder: Receipt 12015 of 01-Oct-2026 (MasterID 30052, line c71a947c…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:14:40  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-06 14:14:40  Recorder: Receipt 12015 of 01-Oct-2026 (MasterID 30052, line c71a947c…): not asked this time: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (not counted as a try)
+2026-10-06 14:14:40  Recorder: Sales 12025 of 02-Oct-2026 (MasterID 30056, line d1d5b7c6…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:14:40  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-06 14:14:40  Recorder: Sales 12025 of 02-Oct-2026 (MasterID 30056, line d1d5b7c6…): not asked this time: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (not counted as a try)
+2026-10-06 14:14:40  Recorder: Sales 12023 of 02-Oct-2026 (MasterID 30054, line e4da0ed0…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:14:40  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-06 14:14:40  Recorder: Sales 12023 of 02-Oct-2026 (MasterID 30054, line e4da0ed0…): not asked this time: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (not counted as a try)
+2026-10-06 14:14:40  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line fa651e6f…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 14:14:40  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-06 14:14:40  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line fa651e6f…): not asked this time: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (not counted as a try)
+2026-10-06 14:14:40  Recorder: held lines: 0 from FinCom, 7 asked, 0 resolved, 17 still held (17 in the list)
+2026-10-06 14:14:48  Recorder: FinCom sets where the changes come from on this computer: addon
+2026-10-06 14:14:48  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=99, ALTMSTID=269
+2026-10-06 14:14:48  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=4; now ALTVCHID=99, ALTMSTID=269
+2026-10-06 14:14:49  Posting job pd-30-light-heads-gentle0-jobs-1-242de4: 1 item(s) for FinCom Spike Co
+2026-10-06 14:14:49      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>89</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> </RESPONSE> 
+2026-10-06 14:14:49  Posting job pd-30-light-heads-gentle0-jobs-1-242de4: request 1 of 1: 1 vouchers in 0.0 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 89)
+2026-10-06 14:14:49  Posting job pd-30-light-heads-gentle0-jobs-1-242de4: 1 requests, 1 vouchers, 0.0 s total
+2026-10-06 14:14:49  Posting job pd-30-light-heads-gentle0-jobs-1-242de4: posting window ALTVCHID 99 to 100, 1 voucher(s) and 0 master(s) created
+2026-10-06 14:14:49  Posting job pd-30-light-heads-gentle0-jobs-1-242de4 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 14:15:01  Posting job pd-30-light-heads-gentle0-jobs-2-b34123: 1 item(s) for FinCom Spike Co
+2026-10-06 14:15:01      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>90</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> </RESPONSE> 
+2026-10-06 14:15:01  Posting job pd-30-light-heads-gentle0-jobs-2-b34123: request 1 of 1: 1 vouchers in 0.0 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 90)
+2026-10-06 14:15:01  Posting job pd-30-light-heads-gentle0-jobs-2-b34123: 1 requests, 1 vouchers, 0.0 s total
+2026-10-06 14:15:01  Posting job pd-30-light-heads-gentle0-jobs-2-b34123: posting window ALTVCHID 100 to 101, 1 voucher(s) and 0 master(s) created
+2026-10-06 14:15:01  Posting job pd-30-light-heads-gentle0-jobs-2-b34123 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 14:15:13  Posting job pd-30-light-heads-gentle0-jobs-3-49e7b8: 1 item(s) for FinCom Spike Co
+2026-10-06 14:15:13      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>91</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> </RESPONSE> 
+2026-10-06 14:15:13  Posting job pd-30-light-heads-gentle0-jobs-3-49e7b8: request 1 of 1: 1 vouchers in 0.0 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 91)
+2026-10-06 14:15:13  Posting job pd-30-light-heads-gentle0-jobs-3-49e7b8: 1 requests, 1 vouchers, 0.0 s total
+2026-10-06 14:15:13  Posting job pd-30-light-heads-gentle0-jobs-3-49e7b8: posting window ALTVCHID 101 to 102, 1 voucher(s) and 0 master(s) created
+2026-10-06 14:15:13  Posting job pd-30-light-heads-gentle0-jobs-3-49e7b8 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 14:15:25  Posting job pd-30-light-heads-gentle0-jobs-4-fae5ed: 1 item(s) for FinCom Spike Co
+2026-10-06 14:15:25      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>92</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> </RESPONSE> 
+2026-10-06 14:15:25  Posting job pd-30-light-heads-gentle0-jobs-4-fae5ed: request 1 of 1: 1 vouchers in 0.0 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 92)
+2026-10-06 14:15:25  Posting job pd-30-light-heads-gentle0-jobs-4-fae5ed: 1 requests, 1 vouchers, 0.0 s total
+2026-10-06 14:15:25  Posting job pd-30-light-heads-gentle0-jobs-4-fae5ed: posting window ALTVCHID 102 to 103, 1 voucher(s) and 0 master(s) created
+2026-10-06 14:15:25  Posting job pd-30-light-heads-gentle0-jobs-4-fae5ed done: Posted 1 of 1 (Tally's reply)
+2026-10-06 14:15:37  Posting job pd-30-light-heads-gentle0-jobs-5-57401a: 1 item(s) for FinCom Spike Co
+2026-10-06 14:15:38      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>93</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> </RESPONSE> 
+2026-10-06 14:15:38  Posting job pd-30-light-heads-gentle0-jobs-5-57401a: request 1 of 1: 1 vouchers in 0.0 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 93)
+2026-10-06 14:15:38  Posting job pd-30-light-heads-gentle0-jobs-5-57401a: 1 requests, 1 vouchers, 0.0 s total
+2026-10-06 14:15:38  Posting job pd-30-light-heads-gentle0-jobs-5-57401a: posting window ALTVCHID 103 to 104, 1 voucher(s) and 0 master(s) created
+2026-10-06 14:15:38  Posting job pd-30-light-heads-gentle0-jobs-5-57401a done: Posted 1 of 1 (Tally's reply)
+2026-10-06 14:15:50      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>94</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> </RESPONSE> 
+2026-10-06 14:15:50    request 1 of 1: 1 voucher in 0.0 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 94)
+2026-10-06 14:15:50  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 14:16:02      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>95</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> </RESPONSE> 
+2026-10-06 14:16:02    request 1 of 1: 1 voucher in 0.0 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 95)
+2026-10-06 14:16:02  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply

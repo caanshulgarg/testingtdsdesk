@@ -1,0 +1,238 @@
+[12:43:07.205] push-design on TallyPrime 4.1: reps 5, heavy 3000 ledgers / 3000 items / up to 30000 vouchers (40 min), postings 5
+[12:43:08.137] system clock step after timeBeginPeriod(1): 0.413 ms (min 0.0038, max 4.4545)
+[12:43:08.164] two files written 2 ms apart: NTFS write times 16.0127 ms apart
+[12:43:08.184] light company folder: D:\a\_temp\TallyData\100000
+[12:43:11.203] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[12:43:39.384] Tally started (setup-light) in 28.2 s; company open: True
+[12:43:39.395] company GUID dc875135-d53e-4700-8574-ecc3a81bbcb9
+[12:43:41.419] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[12:43:42.652] import light masters: 60 sent, created 59, errors 0, 201.5 ms
+[12:43:42.788] import template s5 (all fields): 1 sent, created 1, errors 0, 78.3 ms
+[12:43:42.999] import template s50 (all fields): 1 sent, created 1, errors 0, 206 ms
+[12:43:43.022] import template rc (all fields): 1 sent, created 1, errors 0, 21.1 ms
+[12:43:43.027] templates: s5 all fields; s50 all fields; rc all fields
+[12:43:43.069]   template Receipt 1 20261001 mid 4 aid 4 dc875135-d53e-4700-8574-ecc3a81bbcb9-00000004
+[12:43:43.070]   template Sales 1 20261002 mid 2 aid 2 dc875135-d53e-4700-8574-ecc3a81bbcb9-00000002
+[12:43:43.071]   template Sales 2 20261031 mid 3 aid 3 dc875135-d53e-4700-8574-ecc3a81bbcb9-00000003
+[12:43:43.233] TDL $$MachineName => '' 
+[12:43:43.237] TDL $$CmpUserName => 'TALLY User' 
+[12:43:43.244] TDL $$SysInfo:WindowsUser => 'runneradmin' 
+[12:43:43.246] TDL $$SysInfo:WindowsUserName => '' 
+[12:43:43.249] TDL $$SysInfo:UserName => '' 
+[12:43:43.252] TDL $$SysInfo:LoginUser => '' 
+[12:43:43.255] TDL $$SysInfo:SystemName => 'runnervmfi6oq' 
+[12:43:43.258] TDL $$SysInfo:ComputerName => '' 
+[12:43:43.260] TDL $$SysInfo:MachineName => '' 
+[12:43:43.265] TDL $$SysInfo:IPAddress => '10.1.1.37' 
+[12:43:43.268] TDL $$SysInfo:ApplicationPath => 'C:\Program Files\TallyPrime' 
+[12:43:43.271] TDL $$SysInfo:TempPath => '' 
+[12:43:49.300] tally.ini: Data D:\a\_temp\TallyHeavy; TDL: none
+[12:44:17.302] Tally started (setup-heavy) in 28 s; company open: True
+[12:44:19.318] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[12:44:22.705] import heavy masters 0: 1000 sent, created 1000, errors 0, 3167 ms
+[12:44:25.981] import heavy masters 1000: 1000 sent, created 1000, errors 0, 3271.6 ms
+[12:44:29.277] import heavy masters 2000: 1000 sent, created 1000, errors 0, 3291.1 ms
+[12:44:32.353] import heavy masters 3000: 1000 sent, created 1000, errors 0, 3071.8 ms
+[12:44:35.507] import heavy masters 4000: 1000 sent, created 1000, errors 0, 3147.3 ms
+[12:44:38.648] import heavy masters 5000: 1000 sent, created 1000, errors 0, 3137 ms
+[12:44:55.357] import heavy vouchers 0: 1000 sent, created 1000, errors 0, 16576.7 ms
+[12:45:15.203] import heavy vouchers 1000: 1000 sent, created 1000, errors 0, 19756.7 ms
+[12:45:34.724] import heavy vouchers 2000: 1000 sent, created 1000, errors 0, 19366.6 ms
+[12:45:53.571] import heavy vouchers 3000: 1000 sent, created 1000, errors 0, 18755.9 ms
+[12:46:12.606] import heavy vouchers 4000: 1000 sent, created 1000, errors 0, 18951.7 ms
+[12:46:32.438] import heavy vouchers 5000: 1000 sent, created 1000, errors 0, 19741.2 ms
+[12:46:51.802] import heavy vouchers 6000: 1000 sent, created 1000, errors 0, 19282 ms
+[12:47:11.132] import heavy vouchers 7000: 1000 sent, created 1000, errors 0, 19246.4 ms
+[12:47:31.187] import heavy vouchers 8000: 1000 sent, created 1000, errors 0, 19967.5 ms
+[12:47:51.791] import heavy vouchers 9000: 1000 sent, created 1000, errors 0, 20508 ms
+[12:48:12.315] import heavy vouchers 10000: 1000 sent, created 1000, errors 0, 20431.1 ms
+[12:48:32.792] import heavy vouchers 11000: 1000 sent, created 1000, errors 0, 20395 ms
+[12:48:52.682] import heavy vouchers 12000: 1000 sent, created 1000, errors 0, 19798.8 ms
+[12:49:12.461] import heavy vouchers 13000: 1000 sent, created 1000, errors 0, 19697.3 ms
+[12:49:32.340] import heavy vouchers 14000: 1000 sent, created 1000, errors 0, 19796.4 ms
+[12:49:52.319] import heavy vouchers 15000: 1000 sent, created 1000, errors 0, 19887.8 ms
+[12:50:11.904] import heavy vouchers 16000: 1000 sent, created 1000, errors 0, 19495.2 ms
+[12:50:31.463] import heavy vouchers 17000: 1000 sent, created 1000, errors 0, 19463.9 ms
+[12:50:51.091] import heavy vouchers 18000: 1000 sent, created 1000, errors 0, 19546.4 ms
+[12:51:11.125] import heavy vouchers 19000: 1000 sent, created 1000, errors 0, 19950.8 ms
+[12:51:30.855] import heavy vouchers 20000: 1000 sent, created 1000, errors 0, 19643.2 ms
+[12:51:50.777] import heavy vouchers 21000: 1000 sent, created 1000, errors 0, 19829.8 ms
+[12:52:11.868] import heavy vouchers 22000: 1000 sent, created 1000, errors 0, 20994.3 ms
+[12:52:31.799] import heavy vouchers 23000: 1000 sent, created 1000, errors 0, 19851.1 ms
+[12:52:52.000] import heavy vouchers 24000: 1000 sent, created 1000, errors 0, 20101 ms
+[12:53:13.446] import heavy vouchers 25000: 1000 sent, created 1000, errors 0, 21360.9 ms
+[12:53:33.938] import heavy vouchers 26000: 1000 sent, created 1000, errors 0, 20412.7 ms
+[12:53:54.581] import heavy vouchers 27000: 1000 sent, created 1000, errors 0, 20541.9 ms
+[12:54:15.184] import heavy vouchers 28000: 1000 sent, created 1000, errors 0, 20509 ms
+[12:54:35.733] import heavy vouchers 29000: 1000 sent, created 1000, errors 0, 20467.2 ms
+[12:54:44.143] heavy company: 3011 ledgers, 3050 stock items, 30004 vouchers in Tally (import took 11 min)
+[12:54:51.154] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[12:55:19.159] Tally started (count-light) in 28 s; company open: True
+[12:55:21.168] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[12:55:21.196] light company: 11 ledgers, 50 stock items, 4 vouchers
+[12:55:27.523] bridge's TallyHost: 127.0.0.2 (through the timing proxy)
+[12:55:27.532] bridge: setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.3.1.exe SHA-256 7d4a37a93a52dbc55ab9992c7148c7d607485d567fd34e1bde7d607288a216be
+[12:55:52.316] bridge config after setup: TallyHost '127.0.0.2', TallyPorts 9000, port 9100
+[12:55:52.341] bridge on 127.0.0.1:9100, version 2.3.1
+[12:55:56.370] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[12:56:24.364] Tally started (light-none) in 28 s; company open: True
+[12:56:26.373] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[12:56:44.529] -- b: light / none / jobs #1: 1129.5 ms (done, ok True)
+[12:56:57.410] -- b: light / none / jobs #2: 878.2 ms (done, ok True)
+[12:57:10.300] -- b: light / none / jobs #3: 886.4 ms (done, ok True)
+[12:57:23.174] -- b: light / none / jobs #4: 871 ms (done, ok True)
+[12:57:36.129] -- b: light / none / jobs #5: 951.3 ms (done, ok True)
+[12:57:48.485] -- b: light / none / import #1: 350.7 ms (answered, ok True)
+[12:58:00.827] -- b: light / none / import #2: 339.2 ms (answered, ok True)
+[12:58:00.833] -- a: light / none / receipt (dup) x 5
+[12:59:51.021]    Tally: 5 new, 0 altered (wanted 5)
+[12:59:51.034] -- a: light / none / sales5 (dup) x 5
+[13:01:43.061]    Tally: 5 new, 0 altered (wanted 5)
+[13:01:43.063] -- a: light / none / sales50 (dup) x 5
+[13:03:37.904]    Tally: 5 new, 0 altered (wanted 5)
+[13:03:37.906] -- a: light / none / sales50 (alter) x 2
+[13:04:22.377]    Tally: 0 new, 1 altered (wanted 2)
+[13:04:26.393] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPStamp.tdl
+[13:04:55.464] Tally started (light-stamp) in 29.1 s; company open: True
+[13:04:57.474] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[13:05:02.478] -- a: light / stamp / receipt (dup) x 5
+[13:06:52.638]    Tally: 5 new, 0 altered (wanted 5)
+[13:06:52.639] -- a: light / stamp / sales5 (dup) x 5
+[13:08:44.412]    Tally: 5 new, 0 altered (wanted 5)
+[13:08:44.414] -- a: light / stamp / sales50 (dup) x 5
+[13:10:34.734]    Tally: 5 new, 0 altered (wanted 5)
+[13:10:34.736] -- a: light / stamp / sales50 (alter) x 2
+[13:11:20.009]    Tally: 0 new, 1 altered (wanted 2)
+[13:11:24.022] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPHeads.tdl
+[13:11:52.048] Tally started (light-heads) in 28 s; company open: True
+[13:11:54.066] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[13:12:40.150] body fetch: recorderSource both -> addon sent by the stub cloud (nothing was off)
+[13:12:53.096] -- b: light / heads / jobs #1: 943.8 ms (done, ok True)
+[13:13:06.033] -- b: light / heads / jobs #2: 933.7 ms (done, ok True)
+[13:13:18.987] -- b: light / heads / jobs #3: 940.4 ms (done, ok True)
+[13:13:31.863] -- b: light / heads / jobs #4: 873.1 ms (done, ok True)
+[13:13:44.733] -- b: light / heads / jobs #5: 868.9 ms (done, ok True)
+[13:13:57.084] -- b: light / heads / import #1: 348.5 ms (answered, ok True)
+[13:14:09.439] -- b: light / heads / import #2: 352.5 ms (answered, ok True)
+[13:14:09.440] -- a: light / heads / receipt (dup) x 5
+[13:15:59.735]    Tally: 5 new, 0 altered (wanted 5)
+[13:15:59.737] -- a: light / heads / sales5 (dup) x 5
+[13:17:51.756]    Tally: 5 new, 0 altered (wanted 5)
+[13:17:51.758] -- a: light / heads / sales50 (dup) x 5
+[13:19:42.130]    Tally: 5 new, 0 altered (wanted 5)
+[13:19:42.132] -- a: light / heads / sales50 (alter) x 2
+[13:20:26.556]    Tally: 0 new, 1 altered (wanted 2)
+[13:20:30.573] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPFull.tdl
+[13:20:58.571] Tally started (light-full) in 28 s; company open: True
+[13:21:00.580] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[13:21:39.991] body fetch: recorderSource both -> addon sent by the stub cloud (nothing was off)
+[13:21:52.937] -- b: light / full / jobs #1: 943.6 ms (done, ok True)
+[13:22:05.844] -- b: light / full / jobs #2: 905.6 ms (done, ok True)
+[13:22:18.719] -- b: light / full / jobs #3: 873 ms (done, ok True)
+[13:22:31.657] -- b: light / full / jobs #4: 936.1 ms (done, ok True)
+[13:22:44.533] -- b: light / full / jobs #5: 872.6 ms (done, ok True)
+[13:22:56.884] -- b: light / full / import #1: 348.9 ms (answered, ok True)
+[13:23:09.223] -- b: light / full / import #2: 337.2 ms (answered, ok True)
+[13:23:09.224] -- a: light / full / receipt (dup) x 5
+[13:24:59.764]    Tally: 5 new, 0 altered (wanted 5)
+[13:24:59.766] -- a: light / full / sales5 (dup) x 5
+[13:26:52.019]    Tally: 5 new, 0 altered (wanted 5)
+[13:26:52.021] -- a: light / full / sales50 (dup) x 5
+[13:28:42.439]    Tally: 5 new, 0 altered (wanted 5)
+[13:28:42.441] -- a: light / full / sales50 (alter) x 2
+[13:29:27.784]    Tally: 0 new, 1 altered (wanted 2)
+[13:29:32.048] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPFull.tdl
+[13:30:00.038] Tally started (light-full-again) in 28 s; company open: True
+[13:30:02.045] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[13:31:12.555] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPFull.tdl, C:\fcspike\FCPEv_aso.tdl, C:\fcspike\FCPEv_bso.tdl, C:\fcspike\FCPEv_so.tdl
+[13:31:40.514] Tally started (light-evprobe) in 28 s; company open: True
+[13:31:42.521] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[13:31:42.522] -- a: light / evprobe / sales5 (dup) x 1
+[13:32:05.296]    Tally: 1 new, 0 altered (wanted 1)
+[13:32:05.301] -- a: light / evprobe / sales5 (alter) x 1
+[13:32:28.027]    Tally: 0 new, 1 altered (wanted 1)
+[13:32:40.563] -- b: light / evprobe / import #1: 533.8 ms (answered, ok True)
+[13:32:40.566] candidate event files written: 
+[13:32:44.577] tally.ini: Data D:\a\_temp\TallyHeavy; TDL: none
+[13:33:12.565] Tally started (heavy-none) in 28 s; company open: True
+[13:33:14.572] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[13:33:32.513] -- b: heavy / none / jobs #1: 935.8 ms (done, ok True)
+[13:33:45.453] -- b: heavy / none / jobs #2: 936.3 ms (done, ok True)
+[13:33:58.326] -- b: heavy / none / jobs #3: 871.7 ms (done, ok True)
+[13:34:11.200] -- b: heavy / none / jobs #4: 871.2 ms (done, ok True)
+[13:34:24.140] -- b: heavy / none / jobs #5: 937.9 ms (done, ok True)
+[13:34:36.490] -- b: heavy / none / import #1: 348.7 ms (answered, ok True)
+[13:34:48.833] -- b: heavy / none / import #2: 340.9 ms (answered, ok True)
+[13:34:48.834] -- a: heavy / none / receipt (dup) x 5
+[13:36:46.151]    Tally: 5 new, 0 altered (wanted 5)
+[13:36:46.153] -- a: heavy / none / sales5 (dup) x 5
+[13:38:47.129]    Tally: 5 new, 0 altered (wanted 5)
+[13:38:47.131] -- a: heavy / none / sales50 (dup) x 5
+[13:40:46.652]    Tally: 5 new, 0 altered (wanted 5)
+[13:40:46.654] -- a: heavy / none / sales50 (alter) x 2
+[13:41:40.110]    Tally: 0 new, 1 altered (wanted 2)
+[13:41:44.126] tally.ini: Data D:\a\_temp\TallyHeavy; TDL: C:\fcspike\FCPStamp.tdl
+[13:42:12.095] Tally started (heavy-stamp) in 28 s; company open: True
+[13:42:14.103] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[13:42:19.107] -- a: heavy / stamp / receipt (dup) x 5
+[13:44:16.384]    Tally: 5 new, 0 altered (wanted 5)
+[13:44:16.386] -- a: heavy / stamp / sales5 (dup) x 5
+[13:46:18.305]    Tally: 5 new, 0 altered (wanted 5)
+[13:46:18.308] -- a: heavy / stamp / sales50 (dup) x 5
+[13:48:18.582]    Tally: 5 new, 0 altered (wanted 5)
+[13:48:18.584] -- a: heavy / stamp / sales50 (alter) x 2
+[13:49:12.218]    Tally: 0 new, 1 altered (wanted 2)
+[13:49:16.232] tally.ini: Data D:\a\_temp\TallyHeavy; TDL: C:\fcspike\FCPHeads.tdl
+[13:49:44.214] Tally started (heavy-heads) in 28 s; company open: True
+[13:49:46.222] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[13:50:40.872] body fetch: recorderSource both -> addon sent by the stub cloud (nothing was off)
+[13:50:53.811] -- b: heavy / heads / jobs #1: 936.3 ms (done, ok True)
+[13:51:06.684] -- b: heavy / heads / jobs #2: 870.6 ms (done, ok True)
+[13:51:19.619] -- b: heavy / heads / jobs #3: 933.5 ms (done, ok True)
+[13:51:32.497] -- b: heavy / heads / jobs #4: 875.5 ms (done, ok True)
+[13:51:45.433] -- b: heavy / heads / jobs #5: 933.9 ms (done, ok True)
+[13:51:57.787] -- b: heavy / heads / import #1: 350.7 ms (answered, ok True)
+[13:52:10.144] -- b: heavy / heads / import #2: 353.5 ms (answered, ok True)
+[13:52:10.145] -- a: heavy / heads / receipt (dup) x 5
+[13:54:09.607]    Tally: 5 new, 0 altered (wanted 5)
+[13:54:09.610] -- a: heavy / heads / sales5 (dup) x 5
+[13:56:23.950]    Tally: 5 new, 0 altered (wanted 5)
+[13:56:23.952] -- a: heavy / heads / sales50 (dup) x 5
+[13:58:26.777]    Tally: 5 new, 0 altered (wanted 5)
+[13:58:26.779] -- a: heavy / heads / sales50 (alter) x 2
+[13:59:20.475]    Tally: 0 new, 1 altered (wanted 2)
+[13:59:24.492] tally.ini: Data D:\a\_temp\TallyHeavy; TDL: C:\fcspike\FCPFull.tdl
+[13:59:52.486] Tally started (heavy-full) in 28 s; company open: True
+[13:59:54.494] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[14:00:41.031] body fetch: recorderSource both -> addon sent by the stub cloud (nothing was off)
+[14:00:53.978] -- b: heavy / full / jobs #1: 945.7 ms (done, ok True)
+[14:01:06.915] -- b: heavy / full / jobs #2: 934.7 ms (done, ok True)
+[14:01:19.791] -- b: heavy / full / jobs #3: 873.4 ms (done, ok True)
+[14:01:32.730] -- b: heavy / full / jobs #4: 936.5 ms (done, ok True)
+[14:01:45.667] -- b: heavy / full / jobs #5: 934.3 ms (done, ok True)
+[14:01:58.020] -- b: heavy / full / import #1: 351.6 ms (answered, ok True)
+[14:02:10.371] -- b: heavy / full / import #2: 348.3 ms (answered, ok True)
+[14:02:10.372] -- a: heavy / full / receipt (dup) x 5
+[14:04:10.695]    Tally: 5 new, 0 altered (wanted 5)
+[14:04:10.698] -- a: heavy / full / sales5 (dup) x 5
+[14:06:18.792]    Tally: 5 new, 0 altered (wanted 5)
+[14:06:18.794] -- a: heavy / full / sales50 (dup) x 5
+[14:08:42.001]    Tally: 5 new, 0 altered (wanted 5)
+[14:08:42.003] -- a: heavy / full / sales50 (alter) x 2
+[14:09:40.148]    Tally: 0 new, 1 altered (wanted 2)
+[14:10:05.374] bridge started again with GentleMs 0 (C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe): version 2.3.1
+[14:10:09.382] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[14:12:37.378] Tally started (light-none-gentle0) in 148 s; company open: False
+[14:12:49.384] proxy 127.0.0.2:9000 -> Tally: False (failed: The request was canceled due to the configured HttpClient.Timeout of 10 seconds elapsing.)
+[14:12:53.400] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPHeads.tdl
+[14:13:21.367] Tally started (light-heads-gentle0) in 28 s; company open: True
+[14:13:23.374] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[14:14:05.907] body fetch: recorderSource both -> addon sent by the stub cloud (nothing was off)
+[14:14:18.040] -- b: light / heads-gentle0 / jobs #1: 131.5 ms (done, ok True)
+[14:14:30.167] -- b: light / heads-gentle0 / jobs #2: 124.5 ms (done, ok True)
+[14:14:42.355] -- b: light / heads-gentle0 / jobs #3: 185.3 ms (done, ok True)
+[14:14:54.493] -- b: light / heads-gentle0 / jobs #4: 136.6 ms (done, ok True)
+[14:15:06.616] -- b: light / heads-gentle0 / jobs #5: 121 ms (done, ok True)
+[14:15:18.665] -- b: light / heads-gentle0 / import #1: 46.8 ms (answered, ok True)
+[14:15:30.716] -- b: light / heads-gentle0 / import #2: 49.5 ms (answered, ok True)
+[14:15:34.738] done
