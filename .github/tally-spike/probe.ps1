@@ -59,7 +59,7 @@ function Clear { K '{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACK
 Say '---- the nature of payment 194C, made by keys'
 Clear; K 'TDS Nature of Payments' 2; K '{ENTER}' 3 '20-nature-form'
 K 'Probe 194C Contractors{ENTER}' 1 '21-name'; K '194C{ENTER}' 1 '22-section'; K '94C{ENTER}' 1 '23-paycode'; K '{ENTER}' 1 '24-remit'
-K '1{ENTER}' 1 '25-rate-ind'; K '2{ENTER}' 1 '26-rate-other'; K '{ENTER}' 1 '27-zero'; K '{ENTER}' 3 '28-threshold'; K '{ESC}' 3 '29-esc-blank'
+K '1{ENTER}' 1 '25-rate-ind'; K '2{ENTER}' 1 '26-rate-other'; K '{ENTER}' 1 '27-zero'; K '{ENTER}' 3 '28-threshold'; K '{ESC}' 3 '29-esc-blank'; K 'y' 3 '29b-y'
 Say '---- the deductee party (Sundry Creditors, bill-wise, Is TDS Deductable: Yes)'
 Clear; K 'Ledger' 2 '30a-typed'; K '{ENTER}' 3 '30-party-form'; K 'Probe Deductee{ENTER}' 1; K '{ENTER}' 1; K 'Sundry Creditors{ENTER}' 2 '31-group'
 K '{ENTER}' 1 '32-billwise'; K '{ENTER}' 1 '33-credit'; K '{ENTER}' 1 '34-at-tds'; K 'y' 2 '35-tds-yes'; K '{ENTER}' 2 '36-after-yes'
