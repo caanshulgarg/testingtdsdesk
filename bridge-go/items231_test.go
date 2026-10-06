@@ -458,7 +458,9 @@ func TestItems231VersionAndDecisionLine(t *testing.T) {
 		"one entry per request, by Tally's own id (FinComVoucherByMaster) or by type and number (FinComVoucherByNumber); read only, within the 2-second rule, after postings, nothing else added, each bridge on its own Windows user's Tally only",
 		"TDSDeskCompanies, when asked in the background (the recorder's own-Tally look, the light check), stops hard at 2 seconds too",
 		"FinComFetchTestB, D, E and F stay byte for byte as in 2.3.0; no other row changed",
-		"as for 2.3.0: the owner's standing decision of 2026-10-06"} {
+		"as for 2.3.0: the owner's standing decision of 2026-10-06",
+		// the owner's approval (06-Oct-2026, after review L1): the two trial forms that copy the entry request
+		"the trial forms FinComFetchTestA and FinComFetchTestC, approved by the owner: tray only, started by the owner, read only, and copy the 2.3.1 entry request exactly"} {
 		if !strings.Contains(line, s) {
 			t.Errorf("the decision line does not say %q", s)
 		}
