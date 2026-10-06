@@ -18,7 +18,9 @@ function unesc(v){ return namesClean(v); }
 // trims). A Day Book export (no attributes) reads exactly as before
 const reEsc = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const OPEN = new Map();
-function openRe(tag){ let r = OPEN.get(tag); if (!r){ r = "<" + reEsc(tag) + "(?:\\s[^>]*[^/>])?\\s*>"; OPEN.set(tag, r); } return r; }
+// 2.3.1 (2.3.0 review round 3 L1): a tag's attributes stop at the next "<" ([^<>], not [^>]): an opening tag never closed
+// no longer makes each try scan to the end of the text (quadratic on crafted input)
+function openRe(tag){ let r = OPEN.get(tag); if (!r){ r = "<" + reEsc(tag) + "(?:\\s[^<>]*[^/<>])?\\s*>"; OPEN.set(tag, r); } return r; }
 const ONE = new Map();
 function one(s, tag){
   let re = ONE.get(tag);
@@ -40,7 +42,7 @@ function dropCmpInfo(t){ return t.indexOf("CMPINFO") < 0 ? t : t.replace(/<CMPIN
 // "$17000.00 @ ₹ 86.40/$ = ₹ 1468800.00" is 1468800: the rupee value after the last "="
 function amt(v){ const t = String(v || ""), i = t.lastIndexOf("="); return num(i >= 0 ? t.slice(i + 1) : t); }
 // the IGST rate in a block's rate details, which is the whole GST rate; null when not set (as Books.igstRate)
-function igstRate(s){ const m = String(s || "").match(/<GSTRATEDUTYHEAD(?:\s[^>]*[^\/>])?\s*>\s*IGST\s*<\/GSTRATEDUTYHEAD>\s*<GSTRATEVALUATIONTYPE(?:\s[^>]*[^\/>])?\s*>[^<]*<\/GSTRATEVALUATIONTYPE>\s*<GSTRATE(?:\s[^>]*[^\/>])?\s*>\s*([\d.]+)\s*<\/GSTRATE>/); return m ? num(m[1]) : null; }
+function igstRate(s){ const m = String(s || "").match(/<GSTRATEDUTYHEAD(?:\s[^<>]*[^\/<>])?\s*>\s*IGST\s*<\/GSTRATEDUTYHEAD>\s*<GSTRATEVALUATIONTYPE(?:\s[^<>]*[^\/<>])?\s*>[^<]*<\/GSTRATEVALUATIONTYPE>\s*<GSTRATE(?:\s[^<>]*[^\/<>])?\s*>\s*([\d.]+)\s*<\/GSTRATE>/); return m ? num(m[1]) : null; }
 
 // a long narration is cut to 300 characters, keeping FinCom's own mark at its end ("TDSDesk:<id>"): the checks before
 // posting look for it in the cloud copy
@@ -85,7 +87,7 @@ function takeVoucher(s){
       const ma = reA.exec(s); if (!ma) break;
       const a = ma.index, mz = s.slice(a).match(/<\/ALLINVENTORYENTRIES\.LIST\s*>/); if (!mz) break;
       const z = a + mz.index;
-      const own = s.slice(a, z).replace(/<ACCOUNTINGALLOCATIONS\.LIST(?:\s[^>]*[^\/>])?\s*>[\s\S]*?<\/ACCOUNTINGALLOCATIONS\.LIST\s*>/g, "");
+      const own = s.slice(a, z).replace(/<ACCOUNTINGALLOCATIONS\.LIST(?:\s[^<>]*[^\/<>])?\s*>[\s\S]*?<\/ACCOUNTINGALLOCATIONS\.LIST\s*>/g, "");
       items.push({a, z, h: one(own, "GSTHSNNAME"), gr: igstRate(own)});
       reA.lastIndex = z + 1;
     }

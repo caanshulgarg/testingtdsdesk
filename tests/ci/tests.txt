@@ -139,6 +139,7 @@ run_migration44.py                    120
 run_migration45.py                    120
 run_recorder_server.py                120
 run_recorder_typed_xml.mjs            120
+run_parse_lows.mjs                    60
 run_recorder_guid_server.py           120
 run_trial_tools_switch.py             120
 run_migration46.py                    120
