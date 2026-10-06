@@ -17,8 +17,8 @@ revoked; `begin; ... commit;`; safe to run twice) and is shown to the owner befo
 
 ## The two valid orders (both end with the same function texts: `tests/run_migration_order.py` asserts it)
 
-- staging: 32 → 33 → 35 → 34 (first) → 36b → 37 → 36 → 38 → 39 (applied 03-Oct, **except 39's tally_ingest_day part**: both forms are still 38's) → 40 → 41 (run 03-Oct, evening; its 8-argument `tally_ingest_day` superseded 39's) → 42 → 43 (run 04-Oct) → 44 (run 04-Oct) → 45 (run 04-Oct) → **46** → **47** → **48** (run by the owner) → **49** → **50** (run by the owner) → 51 → 52 → 53 → 54 → 55 → 56
-- a fresh database: 32 → 33 → 35 → 34 (reviewed) → 36 → 36b → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 51 → 52 → 53 → 54 → 55 → 56
+- staging: 32 → 33 → 35 → 34 (first) → 36b → 37 → 36 → 38 → 39 (applied 03-Oct, **except 39's tally_ingest_day part**: both forms are still 38's) → 40 → 41 (run 03-Oct, evening; its 8-argument `tally_ingest_day` superseded 39's) → 42 → 43 (run 04-Oct) → 44 (run 04-Oct) → 45 (run 04-Oct) → **46** → **47** → **48** (run by the owner) → **49** → **50** (run by the owner) → 51 → 52 → 53 → 54 → 55 → 56 → (57, 58 on their branches) → 61
+- a fresh database: 32 → 33 → 35 → 34 (reviewed) → 36 → 36b → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 51 → 52 → 53 → 54 → 55 → 56 → 61
 
 | # | File | What it adds |
 |---|---|---|
@@ -183,3 +183,12 @@ the live entry count and ledger-day total before and after. `tally_recorder_blan
 `tally_unknown_ledger_entries(book)` (members; null: the firm's books): live entries naming a ledger FinCom does not have,
 listed in plain words on Sync activity and the client's Books page. Tested by `run_migration56.py`,
 `run_migration_order.py` (56 in both orders) and `run_unknown_ledgers_ui.py`.
+Privileges clean-up (06-Oct-2026): `migration-61-privileges.sql` runs after 58 on staging and after 56 on a fresh database
+(privileges only; add-only: it only revokes; one transaction, `lock_timeout` 10 s, no "delete from", safe twice; NOT yet
+run on staging). On every public table, view and sequence: TRUNCATE, REFERENCES and TRIGGER revoked from anon and
+authenticated (row security does not cover TRUNCATE); INSERT, UPDATE and DELETE revoked from anon everywhere (the app
+writes no table before sign-in) and from authenticated everywhere except what the app writes directly: `clients` and
+`records` insert + update (the upsert and the deleted-flag PATCH), `activity` insert; sequences closed to anon, setval
+closed to authenticated, usage kept only on `activity_id_seq`; postgres's default privileges in public no longer give the
+two roles TRUNCATE, REFERENCES or TRIGGER on a new table. SELECT, service_role and postgres untouched. Tested by
+`run_migration61.py` and `run_migration_order.py` (61 in both orders).

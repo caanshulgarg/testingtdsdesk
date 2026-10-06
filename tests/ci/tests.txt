@@ -64,6 +64,7 @@ run_migration34.py                    180
 run_migration35.py                    120
 run_migration36b.py                   120
 run_migration36.py                    240
+run_migration61.py                    180
 run_migration_order.py                180
 run_mis.js                            120
 run_mis2.js                           120
