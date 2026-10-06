@@ -5,7 +5,7 @@ For the owner. Plain words; times are IST. The steps to try it on NWS144 are in 
 | | |
 |---|---|
 | Setup file | FinComBridge-Setup-2.3.1.exe |
-| Fingerprint | SHA-256 `<SHA-256>` (filled in when the setup is built; compare with the .sha256 file next to the setup) |
+| Fingerprint | SHA-256 `7d4a37a93a52dbc55ab9992c7148c7d607485d567fd34e1bde7d607288a216be` (FinComBridge-Setup-2.3.1.exe, built 06-Oct-2026 17:23 IST; compare with the .sha256 file next to the setup) |
 | FinCom app update | the one that goes with 2.3.1 says on the Tally page when Tally did not answer in time and when the bridge tries again; the app of 2.3.0 still works with 2.3.1 (it shows "Reading") |
 | Replaces | 2.3.0 (kept on the computer, so the tray can roll back to it) |
 | Add-on | unchanged: keep `C:\ProgramData\FinCom\addon\FinComRecorder.tdl` loaded as it is |
