@@ -51,6 +51,7 @@ Last updated: 06-Oct-2026, 10:35.
   | 54 | 96318bf965a63180e6f22cb19e4281bd | 8 pieces, by Claude |
   | 55 | 68711988926cd6cfae121cdade5d81bc | Pasted by the owner into the SQL editor, after piece 2 timed out in the tool. The holding table keeps only pieces 1–2 (13,144 characters, md5 1824d2ca…), which is why it looks partial. All 14 function bodies match the file. |
   | 58 | db5b429519308c9768f6e6e6befee08a | 1 piece, run at 12:05 by Claude (permissions on 54/55's seven tables) |
+| 61 | cec075a148f26144fd1808c94b841684 | 2 pieces, run at 13:43 by Claude (privileges: no TRUNCATE/anon writes anywhere; authenticated writes only listed columns of clients, records, activity; members closed). Restore lines in its header. Branch perms-61. |
 | 56 | 0f8456c18349c961d3d296d9da7819e5 | 8 pieces, run at 09:08 by Claude. All 11 function md5s match. Dry run: 0 affected entries, including Payment 938. |
 
 - **Earlier versions of 56 that must never run:** 3e976269… (27de563) and e234d68c… (02d81c4). They are superseded; 0f8456c1… (7f2366f) is the final file.
@@ -64,14 +65,14 @@ Last updated: 06-Oct-2026, 10:35.
   - C: the deferred Lows.
   - The two 08:05 items: TDSDeskCompanies, and "nothing to remove".
 - **Branches on origin:**
-  - a-231 at 56bcbc6: migration 57 (md5 b630a27f…).
+  - a-231 at 56bcbc6: migration 57 (md5 e5e40d9a…, items-231 3eebfb1).
   - b-231 at b4a3f18: no migration.
   - c-231 at 8e834a5: migration 58 (db5b4295…) and migration 60 (adbec225…).
   - All three are being merged into items-231 now.
 - **Owner's decisions of 06-Oct:**
   - **Blanks from full entries.** A 2.3.1 full entry passes blanks through for the fields it fetches ("full": true). The guard stays only for older bridges' lines.
   - **Same ledger, same amount, different HSN.** Keep the rule as built: by amount, else blank on a changed ledger. Do not blank the same-amount case.
-  - **A renamed ledger fetched for an unknown name** (same Tally GUID as a ledger FinCom holds): apply the entry under FinCom's ledger and note the new name. This goes in 2.3.1, with migration 59 if storage is needed.
+  - **A renamed ledger fetched for an unknown name** (same Tally GUID as a ledger FinCom holds): apply the entry under FinCom's ledger and note the new name. This goes in 2.3.1, with migration 59 (md5 882de3e6…).
 - **Real-Tally checks required before publishing:**
   1. a sales invoice with two items at two GST rates;
   2. a purchase invoice with items;
@@ -128,3 +129,9 @@ Never remove rows from fincom_migration_text.
 - Never pkill.
 - Each helper uses its own worktree, its own pg port and its own branch.
 - A helper's transcript is in the session tasks folder, as `<agentId>.output`. Its first line is the helper's brief.
+
+## Admin second step (owner, 06-Oct)
+Require the platform admin's second sign-in step in the admin edge function (server/security/functions/admin/index.ts:66). Do NOT switch on until the owner says his second step works. Staging's only platform admin is test@test.com, with no second step enrolled (13:45).
+
+## Live
+server/tally-cloud/live-members-fix.sql (md5 fd84f633…) is for the owner to run himself. Never connect to live.
