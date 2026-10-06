@@ -550,8 +550,12 @@ function isMain(dev: any, id: string) { return !dev?.main_bridge || dev.main_bri
 const CHANGES_ONLY = "This bridge is set to changes only in FinCom (Tally page): it reads Tally's changes and never posts.";
 async function changesOnly(dev: any, id: string) {
   const { data, error } = await db.from("tally_bridge_prefs").select("changes_only").eq("device_id", dev.id).eq("bridge_id", id).maybeSingle();
+  // 2.3.1 (2.3.0 review, cloud Lows): an error is logged (a cloud without the table says nothing, as before)
+  if (error && !missingRel(error)) console.error("tally-ingest: tally_bridge_prefs (changes only) not read", dev.id, id, String(error.message || "").slice(0, 200));
   return !error && data?.changes_only === true;
 }
+// a cloud without the table or column asked (an older migration): PostgREST's PGRST204/205, PostgreSQL's 42P01/42703
+const missingRel = (e: any) => ["PGRST204", "PGRST205", "42P01", "42703"].includes(String(e?.code || "")) || /does not exist|schema cache/i.test(String(e?.message || ""));
 // review M-B (migration 54): a bridge refused postings (not the main one, changes only, test mode) never leaves a posting
 // waiting for ever: the computer's waiting postings that no bridge of it may take are moved to its bridge that may post,
 // else failed in plain words (tally_post_rescue; never to another computer key). Never fails the call; a cloud without
@@ -2159,6 +2163,7 @@ Deno.serve(async (req) => {
         // A bridge switched to changes only still reports a posting it took before the switch
         {
           const { data: tj, error: te } = await db.from("tally_post_jobs").select("target_bridge").eq("id", String(body.id || "")).eq("device_id", dev.id).maybeSingle();
+          if (te && !missingRel(te)) console.error("tally-ingest: posts_update target check not read", dev.id, String(body.id || "").slice(0, 60), String(te.message || "").slice(0, 200));     // 2.3.1: logged
           if (!te && tj?.target_bridge && tj.target_bridge !== meU) return reply(403, { ok: false, error: "This posting is for another bridge on this computer; this one does not report it." });
         }
         const st = ["taken", "running", "done", "failed"].includes(body.status) ? body.status : "running";

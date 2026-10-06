@@ -76,6 +76,20 @@ try:
     ok(c == 200, "A. a cloud without tally_bridge_bind (migration 54 not run): as before (%s)" % c)
     F.NO_FN.discard("tally_bridge_bind")
 
+    # B. changes only and the posting-target check: errors logged
+    F.FAIL_SELECT["tally_bridge_prefs"] = {"message": "canceling statement due to statement timeout", "code": "57014"}; n = len(log)
+    c, r = call(BEAT)
+    ok(c == 200 and logged("tally_bridge_prefs", n), "B. the changes-only read failing: the beat goes on, the error logged (%s %s)" % (c, [l.strip() for l in log[n:]][:3]))
+    F.FAIL_SELECT["tally_bridge_prefs"] = {"message": "Could not find the table 'public.tally_bridge_prefs' in the schema cache", "code": "PGRST205"}; n = len(log)
+    c, r = call(BEAT)
+    ok(c == 200 and not logged("tally_bridge_prefs", n), "B. a cloud without the table: as before, nothing logged (%s)" % [l.strip() for l in log[n:]][:3])
+    F.FAIL_SELECT.pop("tally_bridge_prefs")
+    F.T["tally_post_jobs"].append({"id": "p-1", "firm_id": FIRM, "device_id": "d-1", "company": "ZZ CO", "status": "taken", "payload": {"vouchers": []}, "created_at": "2026-10-05T10:00:00Z", "target_bridge": BRID})
+    F.FAIL_SELECT["tally_post_jobs"] = {"message": "canceling statement due to statement timeout", "code": "57014"}; n = len(log)
+    c, r = call({"kind": "posts_update", "version": "2.3.1", "bridge": BR, "id": "p-1", "status": "running", "windowsUser": "u"})
+    ok(logged("target", n), "B. the posting-target check failing: logged (%s %s)" % (c, [l.strip() for l in log[n:]][:3]))
+    F.FAIL_SELECT.pop("tally_post_jobs")
+
 finally:
     fn.terminate()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); raise SystemExit(1 if fails else 0)
