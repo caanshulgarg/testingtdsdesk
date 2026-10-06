@@ -231,6 +231,11 @@ function S231TdsKeys {
   KeysTo 9000 $clear 1; KeysTo 9000 'TDS Nature of Payments' 2; KeysTo 9000 '{ENTER}' 3 's5k-10-nature'
   foreach ($k in 'S5K 194C Contractors{ENTER}', '194C{ENTER}', '94C{ENTER}', '{ENTER}', '1{ENTER}', '2{ENTER}', '{ENTER}') { KeysTo 9000 $k 1 }
   KeysTo 9000 '{ENTER}' 3 's5k-11-nature-saved'; KeysTo 9000 '{ESC}' 3; KeysTo 9000 'y' 3 's5k-12-list'
+  # the company's TDS deductor details (Create -> TDS Details: TAN registration number, TAN, deductor type Company; probe
+  # 37460722413), which the Stat Adjustment may need before it offers TDS (run 37453586452 offered GST only)
+  KeysTo 9000 $clear 1; KeysTo 9000 'TDS Details' 2; KeysTo 9000 '{ENTER}' 3 's5k-13-deductor'
+  foreach ($k in 'DELF01234E{ENTER}', 'DELF01234E{ENTER}', '{ENTER}', '{ENTER}', '{ENTER}', '{ENTER}') { KeysTo 9000 $k 1 }
+  KeysTo 9000 '^a' 3 's5k-14-deductor-accept'; KeysTo 9000 '{ESC}' 3; KeysTo 9000 'y' 3 's5k-15-list'
   KeysTo 9000 $clear 1; KeysTo 9000 'Ledger' 2; KeysTo 9000 '{ENTER}' 3 's5k-20-party'
   foreach ($k in 'S5K Contractor{ENTER}', '{ENTER}', 'Sundry Creditors{ENTER}', 'n', '{ENTER}', 'y', '{ENTER}', 'Company - Resident', '{ENTER}', 'y', '{ENTER}') { KeysTo 9000 $k 1 }
   KeysTo 9000 '^a' 3 's5k-21-party-accept'; KeysTo 9000 '{ESC}' 3; KeysTo 9000 'y' 3 's5k-22-list'
