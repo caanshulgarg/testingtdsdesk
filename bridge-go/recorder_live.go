@@ -2002,9 +2002,8 @@ func (c *change) wire() M {
 	m := M{"line_id": c.lineId, "event": c.event, "object_guid": c.guid, "master_id": c.masterId, "alter_id": alter, "vch_type": c.vchType, "vch_no": c.vchNo,
 		"vch_date": c.vchDate, "saved_at": c.at, "pc": liveComputerFn(), "user": c.user, "company_guid": c.companyGuid, "ledgers": ls, "narration": narr,
 		"fid": fid, "xml": c.xml, "source": c.source}
-	if c.full && c.xml != "" {
-		m["full"] = true // 2.3.1: FinCom passes the body's blanks as sent (the owner's "full", 06-Oct-2026)
-	}
+	// 2.3.1: FinCom passes the body's blanks as sent (the owner's "full", 06-Oct-2026); false on every other line (one shape)
+	m["full"] = c.full && c.xml != ""
 	if lineFid != "" {
 		m["lineFid"] = lineFid
 	}
@@ -2034,7 +2033,7 @@ func (c *change) wire() M {
 	if len(jsonText(m)) > liveMaxBytes-(16<<10) {
 		// second review L-C: no entry ids and no FinCom id with it (nothing of it can be matched or built)
 		m["xml"], m["ledgers"], m["narration"], m["oversize"], m["object_guid"] = "", []any{}, cutRunes(liveNoTag(c.narr), 1000), true, ""
-		delete(m, "full")
+		m["full"] = false
 		if fid != "" {
 			m["fid"], m["lineFid"] = "", fid
 		}

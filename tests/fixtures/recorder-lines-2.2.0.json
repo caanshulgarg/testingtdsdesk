@@ -16,6 +16,7 @@
       "company_guid": "co-guid-1",
       "event": "created",
       "fid": "",
+      "full": true,
       "ledgers": [
         {
           "guid": "",
@@ -46,6 +47,7 @@
       "company_guid": "co-guid-1",
       "event": "imported",
       "fid": "abc123",
+      "full": false,
       "ledgers": [],
       "line_id": "e3e9b233db1cbcf06a9fa9ca411624e1",
       "master_id": "4102",
@@ -67,6 +69,7 @@
       "company_guid": "co-guid-1",
       "event": "deleted",
       "fid": "",
+      "full": false,
       "ledgers": [],
       "line_id": "d15a51769ef13ceb1293ba261570d130",
       "master_id": "4103",
@@ -88,6 +91,7 @@
       "company_guid": "co-guid-1",
       "event": "ledger_created",
       "fid": "",
+      "full": false,
       "ledgers": [],
       "line_id": "8188939aef092e670c4d1cfc94d9cd7e",
       "master_id": "1",

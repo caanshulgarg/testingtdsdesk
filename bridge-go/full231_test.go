@@ -36,9 +36,10 @@ func TestFull231FetchHasTheFields(t *testing.T) {
 }
 
 func TestFull231MarkedOnlyWithTheEntryRequestsBody(t *testing.T) {
+	partABridge(t) // a bridge folder of the test's own (the log is never written into the package folder)
 	x := `<VOUCHER><GUID>g-1</GUID><MASTERID> 7</MASTERID><ALTERID> 9</ALTERID><NARRATION>n</NARRATION></VOUCHER>`
 	c := &change{company: "ZZ", event: "altered", lineId: "L1", source: "addon", masterId: "7", saveMs: -1}
-	if m := c.wire(); m["full"] != nil {
+	if m := c.wire(); m["full"] != false {
 		t.Fatalf("a line without a body is marked: %v", m)
 	}
 	liveTakeBody(c, x)
@@ -48,7 +49,7 @@ func TestFull231MarkedOnlyWithTheEntryRequestsBody(t *testing.T) {
 	// a body too big for one line goes without it: no marker
 	big := &change{company: "ZZ", event: "altered", lineId: "L2", source: "addon", masterId: "7", saveMs: -1}
 	liveTakeBody(big, strings.Replace(x, "<NARRATION>n</NARRATION>", "<NARRATION>"+strings.Repeat("x", liveMaxBytes)+"</NARRATION>", 1))
-	if m := big.wire(); m["full"] != nil || str(m["xml"]) != "" {
+	if m := big.wire(); m["full"] != false || str(m["xml"]) != "" {
 		t.Fatalf("an oversize line is marked: %v", m["full"])
 	}
 }
