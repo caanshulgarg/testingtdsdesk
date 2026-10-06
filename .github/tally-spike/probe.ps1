@@ -62,18 +62,20 @@ K 'Probe 194C Contractors{ENTER}' 1 '21-name'; K '194C{ENTER}' 1 '22-section'; K
 K '1{ENTER}' 1 '25-rate-ind'; K '2{ENTER}' 1 '26-rate-other'; K '{ENTER}' 1 '27-zero'; K '{ENTER}' 3 '28-threshold'; K '{ESC}' 3 '29-esc-blank'; K 'y' 3 '29b-y'
 Say '---- the deductee party (Sundry Creditors, bill-wise, Is TDS Deductable: Yes)'
 Clear; K 'Ledger' 2 '30a-typed'; K '{ENTER}' 3 '30-party-form'; K 'Probe Deductee{ENTER}' 1; K '{ENTER}' 1; K 'Sundry Creditors{ENTER}' 2 '31-group'
-K '{ENTER}' 1 '32-billwise'; K '{ENTER}' 1 '33-credit'; K '{ENTER}' 1 '34-at-tds'; K 'y' 2 '35-tds-yes'; K '{ENTER}' 2 '36-after-yes'
-for ($i = 1; $i -le 14; $i++) { K '{ENTER}' 1 ("37-party-{0:d2}" -f $i) }
-K '{ESC}' 3 '38-esc'; K 'y' 3 '39-y'
-Say '---- the TDS duty ledger (Duties & Taxes, Type of Duty/Tax: TDS)'
+K '{ENTER}' 1 '32-billwise'; K '{ENTER}' 1 '33-credit'; K '{ENTER}' 1 '34-at-tds'; K 'y' 1; K '{ENTER}' 2 '35-tds-yes'
+K 'Company - Resident' 1; K '{ENTER}' 2 '36-deductee'; K 'y' 1 '37-same-voucher'; K '{ENTER}' 2 '37b-after-same'
+for ($i = 1; $i -le 4; $i++) { K '{ENTER}' 1 ("37c-party-{0:d2}" -f $i) }
+K '^a' 3 '38-ctrl-a'; K '{ESC}' 3 '38b-esc'; K 'y' 3 '39-y'
+Say '---- the TDS duty ledger (Duties & Taxes, Type of Duty/Tax: TDS, Nature of payment: the 194C nature)'
 Clear; K 'Ledger' 2 '40a-typed'; K '{ENTER}' 3 '40-duty-form'; K 'Probe TDS Ledger{ENTER}' 1; K '{ENTER}' 1; K 'Duties & Taxes{ENTER}' 2 '41-group'
-K 'TDS{ENTER}' 2 '42-type-tds'
-for ($i = 1; $i -le 10; $i++) { K '{ENTER}' 1 ("43-duty-{0:d2}" -f $i) }
-K '{ESC}' 3 '44-esc'; K 'y' 3 '45-y'
-Say '---- the expense ledger (Indirect Expenses): its TDS field, if any, by Down'
+K 'TDS' 1; K '{ENTER}' 2 '42-type-tds'; K 'Probe 194C Contractors' 1; K '{ENTER}' 2 '43-nature'
+for ($i = 1; $i -le 3; $i++) { K '{ENTER}' 1 ("43b-duty-{0:d2}" -f $i) }
+K '^a' 3 '44-ctrl-a'; K '{ESC}' 3 '44b-esc'; K 'y' 3 '45-y'
+Say '---- the expense ledger (Indirect Expenses): the lists its statutory fields offer'
 Clear; K 'Ledger' 2 '50a-typed'; K '{ENTER}' 3 '50-exp-form'; K 'Probe Contract Work{ENTER}' 1; K '{ENTER}' 1; K 'Indirect Expenses{ENTER}' 2 '51-group'
-for ($i = 1; $i -le 10; $i++) { K '{ENTER}' 1 ("52-exp-{0:d2}" -f $i) }
-K '{ESC}' 3 '53-esc'; K 'y' 3 '54-y'; Clear
+K '{ENTER}' 2 '52-type-of-ledger'; K '{ENTER}' 2 '53-assessable-list'; K '{DOWN}' 1 '53b-down'; K '{DOWN}' 1 '53c-down'
+K '{ENTER}' 2 '54-after-assessable'; K '{ENTER}' 2 '55-next'; K '{ENTER}' 2 '56-next'
+K '^a' 3 '57-ctrl-a'; K '{ESC}' 3 '57b-esc'; K 'y' 3 '58-y'; Clear
 # what Tally keeps of them: its own export
 K '{ESC}' 2 '59-gateway'
 Coll 'Ledger' '*' 'ledgers.xml'
