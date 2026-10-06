@@ -264,15 +264,16 @@ func TestR222RecorderSeenDailyFiles(t *testing.T) {
 	if c := cur(); c["recorderSeen"] != false {
 		t.Fatalf("no file: %v", c)
 	}
-	_ = os.WriteFile(filepath.Join(rec, "co-guid-1-"+time.Now().Format("20060102")+".txt"), utf16leBOM(r18Line1+"\r\n"), 0o644)
+	day := time.Now().Format("20060102") // read once: a midnight between writing and removing the file must not leave it behind
+	_ = os.WriteFile(filepath.Join(rec, "co-guid-1-"+day+".txt"), utf16leBOM(r18Line1+"\r\n"), 0o644)
 	if c := cur(); c["recorderSeen"] != true || str(c["recorderLastAt"]) == "" {
 		t.Fatalf("a daily file: %v", c)
 	}
 	// another company's daily file is not this one's
 	f2 := filepath.Join(rec, "co-guid-1-20261005.txt")
-	_ = os.Remove(filepath.Join(rec, "co-guid-1-"+time.Now().Format("20060102")+".txt"))
+	_ = os.Remove(filepath.Join(rec, "co-guid-1-"+day+".txt"))
 	_ = os.Remove(f2)
-	_ = os.WriteFile(filepath.Join(rec, "co-guid-9-"+time.Now().Format("20060102")+".txt"), []byte("x"), 0o644)
+	_ = os.WriteFile(filepath.Join(rec, "co-guid-9-"+day+".txt"), []byte("x"), 0o644)
 	if c := cur(); c["recorderSeen"] != false {
 		t.Fatalf("another company's file: %v", c)
 	}

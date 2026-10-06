@@ -19,3 +19,6 @@ bridge-go/tds-bridge.log
 # a go build in the package folder (never committed)
 bridge-go/bridge
 bridge-go/bridge.exe
+
+# the Go tests' whole output, kept by CI for upload (.github/workflows/ci.yml): never committed
+bridge-go/go-test.log

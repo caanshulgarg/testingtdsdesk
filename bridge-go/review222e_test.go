@@ -74,8 +74,9 @@ func TestR222eDecisionLog(t *testing.T) {
 // no starting point: said, never silent
 func TestR222eNoStartPointSaid(t *testing.T) {
 	rec, f, _ := liveBridge(t, "")
-	v := f.add(today(), "Party", "N-1", "x", "-1.00")
-	liveAppend(t, liveFilePath(rec, ""), liveLine("voucher_accept_post", "Voucher", v.guid, v.master, "1", "Journal", "N-1", today(), "", "", "x"))
+	td := today() // read once: the voucher and its live line on the same day
+	v := f.add(td, "Party", "N-1", "x", "-1.00")
+	liveAppend(t, liveFilePath(rec, ""), liveLine("voucher_accept_post", "Voucher", v.guid, v.master, "1", "Journal", "N-1", td, "", "", "x"))
 	readAndUploadAll(t)
 	if !strings.Contains(r222eLog(), "): not asked: no starting point recorded for this company") {
 		t.Fatalf("not said:\n%s", r222eLog())

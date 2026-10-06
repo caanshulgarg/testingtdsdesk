@@ -1171,8 +1171,14 @@ func TestRecorderLogsKept30Days(t *testing.T) {
 	// 5 MB in a day: a second copy of the same date
 	big := strings.Repeat("y", 5*1024*1024+10)
 	_ = os.WriteFile(lf, []byte(big), 0o644)
+	// the copy is named by the log's own date (its time), read once here: a midnight between writing it and the
+	// check must not make the test look for the next day's name (CI 06-Oct-2026 ran across midnight)
+	bigDay := ""
+	if fi, err := os.Stat(lf); err == nil {
+		bigDay = fi.ModTime().Format("2006-01-02")
+	}
 	writeLog("after five megabytes")
-	if m, _ := filepath.Glob(filepath.Join(dir, base+"."+time.Now().Format("2006-01-02")+"*")); len(m) != 1 {
+	if m, _ := filepath.Glob(filepath.Join(dir, base+"."+bigDay+"*")); len(m) != 1 {
 		t.Fatalf("the size rotation: %v", m)
 	}
 	if !strings.Contains(readText(lf), "after five megabytes") || len(readText(lf)) > 1000 {

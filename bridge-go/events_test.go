@@ -354,12 +354,13 @@ func TestNightlyWaitsForQuiet(t *testing.T) {
 		t.Fatal("started 13 minutes after the cloud's last activity")
 	}
 	nowFn = func() time.Time { return at(2, 17) }
+	before := today() // the run notes the real date when it ends: the date before or after it (midnight between)
 	nightlyCheck()
 	waitIdle(t)
 	if s.count("") == 0 || logLines("Nightly catch-up (02:00)") != 1 {
 		t.Fatal("the catch-up did not run after 15 quiet minutes")
 	}
-	if keepLastRun() != today() {
+	if lr := keepLastRun(); lr != before && lr != today() {
 		t.Fatal("the night's run is not recorded")
 	}
 	n := s.count("")
