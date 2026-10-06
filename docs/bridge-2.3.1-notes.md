@@ -83,7 +83,12 @@ made after FinCom heard of the delete or cancel), the newer change enters the bo
 cancelled again.
 
 **The company list asked in the background** (the bridge's own look at which companies are open, and the light check)
-now stops at 2 seconds too, like the entry request. When you look yourself (Update now, the tray, the setup) it is not cut.
+now stops at 2 seconds too, like the entry request. When you look yourself (Update now, the tray, the setup) it is not cut. Every background
+ask of it (the ledger changes and the entry fetch too) stops at 2 seconds and waits 5 minutes (then longer) after a slow
+answer. No change made in this computer's Tally is lost or passed over for it: the bridge goes on by the last complete
+list of open companies (kept across a restart), a change of a company not in that list waits for the next complete
+list, and while there is none the Tally page says "Tally took longer than 2 s to list its open companies (limit 2 s);
+this computer's changes are waiting until it answers in time". Another Windows user's changes are never sent.
 
 What did not change:
 - **One entry per request.** Strictly one, by Tally's own id (FinComVoucherByMaster names exactly one MasterID) or by

@@ -212,6 +212,10 @@ const AlertHub = {
             fix: Rec.offAgain(!!(S.account && S.account.me && S.account.me.role === "owner")),
             details: [label, x.at && "since " + (istDay(x.at) === istDay(Date.now()) ? fmtTime(x.at) : fmtDateTime(x.at)), x.why].filter(Boolean).join(" · ")});
         });
+        // review H1 (bridge 2.3.1): the own Tally lists its companies too slowly (the bridge stops at 2 s): this computer's
+        // changes wait, in the bridge's own plain words; gone by itself when the list answers in time again
+        if (beat.recorderWaitWords) out.push({key: "ownwait:" + d.id, sev: "warn", cid: "", selfClear: true, at: beat.at || "", details: label,
+          text: String(beat.recorderWaitWords).replace(/\.?$/, "."), fix: "Nothing is lost: they go by themselves once Tally answers in time. Close any open window or report in Tally on that computer, or press Update now there."});
         const base = {key: "pc:" + d.id, details: [label, stop && stop.reason, beat.notAnsweringSince && "not answering since " + fmtDateTime(beat.notAnsweringSince)].filter(Boolean).join(" · "), selfClear: true, at: beat.at || ""};
         if (stop) out.push(Object.assign(base, {sev: "warn", text: "FinCom stopped reading Tally by itself: " + (stop.reason || "Tally did not answer") + ".", fix: "It starts again by itself when Tally answers; nothing to do."}));
         else if (beat.notAnsweringSince) out.push(Object.assign(base, {sev: "warn", text: "Tally is not answering on one computer since " + this.when(beat.notAnsweringSince) + ".", fix: "Close any open window or report in Tally on that computer (the details say which)."}));

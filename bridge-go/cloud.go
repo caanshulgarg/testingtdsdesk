@@ -930,7 +930,9 @@ func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
 		// the owner's rule: source B off by itself after a list that took more than 2 s, per company
 		"recorderSourceB": liveBeatOff("B"), "recorderSourceC": liveBeatOff("C"), "recorderBodyFetch": liveBeatOff("bodies"),
 		// review M8: the add-on's file names read; review S4: whether automatic updates are on, and the last rollback
-		"recorderFiles": liveFilesSeen(), "autoUpdate": au, "rolledBack": rb}
+		"recorderFiles": liveFilesSeen(), "autoUpdate": au, "rolledBack": rb,
+		// review H1 (2.3.1): why this computer's changes wait for a complete look at its own Tally, in plain words ("" when none)
+		"recorderWaitWords": liveOwnWaitWords()}
 }
 
 // --- the posting queue (build 199): postings queued in FinCom on any computer, taken one at a time

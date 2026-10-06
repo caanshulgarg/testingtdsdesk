@@ -161,6 +161,15 @@ try:
     ings = (F.ARGS.get("tally_ingest_day") or [])[n_ing:]
     ok(c == 200 and [a.get("p_n") for a in ings] == [2, 3] and len(ings[0].get("p_vouchers") or []) == 2,
        "G. a day of 4 the bridge counted, 2 left out by the reader's rule: p_n 2 (complete); counted 5: p_n 3 (still short) (%s %s)" % (c, [a.get("p_n") for a in ings]))
+    # review H1 (bridge 2.3.1): the beat's plain words for this computer's waiting changes are kept for the Tally page;
+    # gone when the bridge no longer says them
+    WW = "Tally took longer than 2 s to list its open companies (limit 2 s); this computer's changes are waiting until it answers in time"
+    c, r = call(dict(BEAT, recorderWaitWords=WW))
+    bt = ((F.T["tally_devices"][0].get("info") or {}).get("beat") or {})
+    ok(c == 200 and bt.get("recorderWaitWords") == WW, "H1. the beat keeps recorderWaitWords for the Tally page (%s)" % bt.get("recorderWaitWords"))
+    c, r = call(BEAT)
+    bt = ((F.T["tally_devices"][0].get("info") or {}).get("beat") or {})
+    ok(c == 200 and "recorderWaitWords" not in bt, "H1. a beat without them: gone (%s)" % bt.get("recorderWaitWords"))
 finally:
     fn.terminate()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); raise SystemExit(1 if fails else 0)

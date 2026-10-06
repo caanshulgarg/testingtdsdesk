@@ -2449,6 +2449,8 @@ Deno.serve(async (req) => {
           // FinCom Bridge 2.1.8 (round 15, migration 43): the posting settings it applied (postBatchBills, postBatchBank, settingsAt)
           ...postSettingsApplied(b),
           // FinCom Bridge 2.3.0: the Windows user it works for, its own local port, its Tally's port and data folder
+          // bridge 2.3.1 (review H1): why this computer's changes wait (its own Tally lists its companies too slowly), in plain words
+          ...(s(b.recorderWaitWords, 300) ? { recorderWaitWords: s(b.recorderWaitWords, 300) } : {}),
           windowsUser: s(b.windowsUser, 60), bridgePort: Math.max(0, Math.min(65535, Math.floor(Number(b.bridgePort) || 0))), tallyPort: Math.max(0, Math.min(65535, Math.floor(Number(b.tallyPort) || 0))), dataFolder: s(b.dataFolder, 260) };
         const prevInfo = ((dev as any).info && typeof (dev as any).info === "object") ? (dev as any).info : {};
         const me = bridgeOf(dev, body, false);

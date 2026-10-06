@@ -265,11 +265,13 @@ type liveState struct {
 	// sync\recorder-sent\*.ledger.txt): never a third time
 	ledAgain map[string]bool
 	// fix 3 (the owner's spike run 37347773182): what this bridge saw of its OWN Tally's open companies (recorder_owntally.go)
-	own      map[string]*liveOwnSt // company GUID (or "name:" + its name key) -> the times it was open in the own Tally
-	ownAt    time.Time             // the last complete look at the own Tally's company list (kept on disk)
-	ownCur   map[string]bool       // open at that look, seen in THIS run (after a restart nothing is taken as still open)
-	ownWant  bool                  // a line waits for a look at the own Tally
-	ownAskAt time.Time             // when the reader last asked the own Tally's company list
+	own       map[string]*liveOwnSt // company GUID (or "name:" + its name key) -> the times it was open in the own Tally
+	ownAt     time.Time             // the last complete look at the own Tally's company list (kept on disk)
+	ownCur    map[string]bool       // open at that look (review H1: kept on disk, so a restart keeps attributing lines by it)
+	ownWaitAt time.Time             // review H1: the last time a line waited for a look
+	ownBlind  bool                  // review H1: a look was stopped or backed off since the last complete look (kept on disk)
+	ownWant   bool                  // a line waits for a look at the own Tally
+	ownAskAt  time.Time             // when the reader last asked the own Tally's company list
 }
 
 var (
