@@ -496,11 +496,12 @@ $inv8 = [ordered]@{
   sales = @{ key = '{F8}'; type = 'Sales'; party = 'Spike Trader'; ledger = 'Spike Sales'; rows = @(, @('Spike Widget', 2, 250)) + @(, @('Spike Gadget', 3, 400)); tax = 153; head = @() }
   credit = @{ key = '^{F8}'; type = 'Credit Note'; party = 'Spike Trader'; ledger = 'Spike Sales'; rows = @(, @('Spike Widget', 1, 250)); tax = 22.5; head = @() }
 }
-# after the party Tally opens its Party Details screen (Receipt / Dispatch details: run 37399828148): accepted with Ctrl+A
+# after the party Tally opens two screens, Receipt / Dispatch Details (run 37399828148) and then Party Details (Supplier /
+# Buyer, run 37402702702): each accepted with Ctrl+A
 foreach ($kind in $inv8.Keys) {
   $d = $inv8[$kind]; $d.how = 'none'; $d.guid = '(none)'
   $pre = Vouchers 9000 $co1
-  $seq = @(@($d.key, 4, "50-$kind-type"), @('^h', 3, "51-$kind-mode"), @('Item Invoice{ENTER}', 3, ''), @('{F2}', 3, ''), @('1-10-2026{ENTER}', 3, "52-$kind-date")) + $d.head + @(@("$($d.party){ENTER}", 3, "53-$kind-party"), @('^a', 3, "53b-$kind-party-details-accepted"), @("$($d.ledger){ENTER}", 3, "54-$kind-ledger")) + (ItemRows $d.rows) + @(@('{ENTER}', 3, "56-$kind-items-done"), @('Spike CGST{ENTER}', 2, ''), @("$($d.tax){ENTER}", 2, ''), @('Spike SGST{ENTER}', 2, ''), @("$($d.tax){ENTER}", 2, "57-$kind-taxes"))
+  $seq = @(@($d.key, 4, "50-$kind-type"), @('^h', 3, "51-$kind-mode"), @('Item Invoice{ENTER}', 3, ''), @('{F2}', 3, ''), @('1-10-2026{ENTER}', 3, "52-$kind-date")) + $d.head + @(@("$($d.party){ENTER}", 3, "53-$kind-party"), @('^a', 3, "53b-$kind-dispatch-details-accepted"), @('^a', 3, "53c-$kind-party-details-accepted"), @("$($d.ledger){ENTER}", 3, "54-$kind-ledger")) + (ItemRows $d.rows) + @(@('{ENTER}', 3, "56-$kind-items-done"), @('Spike CGST{ENTER}', 2, ''), @("$($d.tax){ENTER}", 2, ''), @('Spike SGST{ENTER}', 2, ''), @("$($d.tax){ENTER}", 2, "57-$kind-taxes"))
   foreach ($q in $seq) { KeysTo 9000 $q[0] $q[1] $(if ($q[2] -and $q[2] -notmatch '^\d') { "55-$kind-$($q[2])" } else { $q[2] }) }
   $nv = $null
   for ($t = 0; $t -lt 3 -and -not $nv; $t++) { KeysTo 9000 '^a' 5 "58-$kind-ctrl-a-$t"; $nv = @((Vouchers 9000 $co1) | Where-Object { $_.mid -notin @($pre | ForEach-Object mid) })[0] }
