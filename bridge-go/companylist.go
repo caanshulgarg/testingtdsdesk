@@ -1,13 +1,12 @@
 package main
 
-// Bridge 2.3.1 (the owner's report of 06-Oct-2026 08:05: TDSDeskCompanies took 3,307 ms on NWS144). The company list asked
-// in the background (the light check's list when it is 10 minutes old, and the recorder's look at its own Tally only while
-// a line waits for a company not seen open, 30 s apart at most) is under the 2-second rule of the other
-// background reads: the bridge stops waiting at 2 s (Tally finishes the request alone and the background reads leave it
-// for 30 s, RecorderStopCoolSec), says so in the log, keeps the companies named last time, and leaves the background company
-// list alone for 5 minutes, then 10, 20, at most 30 while it keeps taking longer; one answered in time ends the back-off.
-// The request is byte for byte as before (companiesRequest). A posting, Update now, the tray's Test connection and a
-// person's status ask it as before: no limit, never held. A background ask gives way to a posting or an import (yield).
+// Bridge 2.3.1 (the owner's report of 06-Oct-2026 08:05: TDSDeskCompanies took 3,307 ms on NWS144): the company list is asked
+// LESS OFTEN in the background. Part A put the background asks (the light check's list when it is 10 minutes old, and the
+// recorder's look at its own Tally while a line waits for a company not seen open, 30 s apart at most) under the 2-second
+// hard stop (bgCompaniesTC, recorder_owntally.go; the companies named last time stand). On top of it: after a stopped ask
+// the bridge leaves the background company list alone for 5 minutes, then 10, 20, at most 30 while it keeps taking longer
+// than 2 s, and says so in the log; one answered in time ends the back-off. The request is byte for byte as before
+// (companiesRequest). A posting, Update now, the tray's Test connection and a person's status ask it as before: never held.
 
 import (
 	"errors"
@@ -16,18 +15,11 @@ import (
 	"time"
 )
 
-const coListLimitMs = 2000
-
 var (
 	coListMu    sync.Mutex
 	coListN     int       // stops in a row
 	coListUntil time.Time // no background ask of the company list before this
 )
-
-// the TC of a background ask of the company list
-func coListTC() *TC {
-	return &TC{copier: true, light: true, limitMs: coListLimitMs, yield: func() bool { return postingGoing() || importsInFlight.Load() > 0 }}
-}
 
 // whether the background company list is backed off now
 func coListHeld() bool {
