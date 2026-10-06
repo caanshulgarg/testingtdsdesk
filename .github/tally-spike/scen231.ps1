@@ -156,6 +156,128 @@ function S231LedgerTiming {
     Write-Host "######## $l"; Add-Content -Path $resultsFile -Value $l -Encoding UTF8
   }
 }
+
+# ---- R1, the retry schedule (bridge 2.3.1, the owner's "never switch off"): Tally held busy for about 3 minutes (eight
+# threads asking it the whole year's Day Book and every ledger in turn, so the bridge's entry request waits past its 2 s
+# stop) while an entry is saved on the screen and a FinCom posting is queued. Read from bridge 1's log: its tries
+# ("did not answer in time ... try N; trying again by itself at ..."), no switch-off words, the posting done, and the entry
+# reaching the stub at the first try after Tally answers again
+function S231Retry {
+  Say '---- R1: the retry schedule while Tally is busy for about 3 minutes'
+  $x = '<VOUCHER VCHTYPE="Receipt" ACTION="Create"><DATE>20260801</DATE><VOUCHERTYPENAME>Receipt</VOUCHERTYPENAME><NARRATION>R1 the retry check</NARRATION>' +
+       '<ALLLEDGERENTRIES.LIST><LEDGERNAME>Spike Income</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>321.00</AMOUNT></ALLLEDGERENTRIES.LIST>' +
+       '<ALLLEDGERENTRIES.LIST><LEDGERNAME>Cash</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-321.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>'
+  $pre = Vouchers 9000 $co1
+  $null = ImpT 'Vouchers' $x 'R1 the entry'
+  $nv = @((Vouchers 9000 $co1) | Where-Object { $_.mid -notin @($pre | ForEach-Object mid) })[0]
+  if (-not $nv) { Result 'R1 retry schedule' $false 'the entry was not made in Tally' $true; return }
+  $logBefore = @(Get-Content $B[1].log).Count; $m0 = Mark
+  $heavy = @(
+    ('<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Day Book</REPORTNAME><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY><SVFROMDATE>20260401</SVFROMDATE><SVTODATE>20270331</SVTODATE></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>'),
+    ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCBUSY</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCBUSY" ISMODIFY="No"><TYPE>Ledger</TYPE><FETCH>*</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>'))
+  $until = (Get-Date).AddSeconds(185)
+  $jobs = @(for ($j = 0; $j -lt 8; $j++) { Start-ThreadJob -ArgumentList $heavy, $until, $j -ScriptBlock { param($h, $u, $j) $n = 0
+      while ((Get-Date) -lt $u) { try { $null = Invoke-WebRequest 'http://localhost:9000' -Method Post -Body $h[($n + $j) % 2] -ContentType 'text/xml;charset=utf-8' -UseBasicParsing -TimeoutSec 120 } catch {}; $n++ }; $n } })
+  Start-Sleep 8
+  $lat = PostT 9000 '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCList</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCList" ISMODIFY="No"><TYPE>Company</TYPE><FETCH>Name</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>' 'R1 a small request while Tally is busy' 120
+  $tSave = Get-Date
+  DayBook 'r1' '1-8-2026'; KeysTo 9000 '{END}' 2; KeysTo 9000 '{ENTER}' 4 'r1-open'; KeysTo 9000 '^a' 4 'r1-saved'; KeysTo 9000 'n' 2 'r1-no'
+  # a FinCom posting while the reads wait (postings never wait for the retry schedule)
+  $pv = '<VOUCHER VCHTYPE="Journal" ACTION="Create"><DATE>20260801</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><NARRATION>R1 posting | TDSDesk:R1P1</NARRATION>' +
+        '<ALLLEDGERENTRIES.LIST><LEDGERNAME>Cash</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-55.00</AMOUNT></ALLLEDGERENTRIES.LIST>' +
+        '<ALLLEDGERENTRIES.LIST><LEDGERNAME>Spike Income</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>55.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>'
+  $tPost = Get-Date
+  $null = Invoke-RestMethod 'http://127.0.0.1:8787/' -Method Post -Body (@{ kind = '_queue_post'; id = 'r1-job-1'; company = $co1; payload = @{ vouchers = @(@{ id = 'R1P1'; xml = $pv }) } } | ConvertTo-Json -Compress -Depth 6) -ContentType 'application/json'
+  while ((Get-Date) -lt $until) { Start-Sleep 5 }
+  $done = @($jobs | Wait-Job -Timeout 150 | Receive-Job); $jobs | Remove-Job -Force -ErrorAction SilentlyContinue
+  $tFree = Get-Date
+  Write-Host "R1: busy until $($tFree.ToString('HH:mm:ss')), heavy requests answered: $(($done | Measure-Object -Sum).Sum)"
+  $g = $nv.guid; $pred = { $_.guid -eq $g -and $_.xml }.GetNewClosure()
+  $hit = @(WaitLine $m0 $pred 420)
+  $tArr = if ($hit.Count) { $hit[0].at } else { '' }
+  $log = @(Get-Content $B[1].log | Select-Object -Skip $logBefore)
+  $tries = @($log | ForEach-Object { $m = [regex]::Match($_, 'did not answer in time at (\d\d:\d\d:\d\d) \(([^,]+), try (\d+)\); trying again by itself at (\d\d:\d\d:\d\d)'); if ($m.Success) { [pscustomobject]@{ at = $m.Groups[1].Value; id = $m.Groups[2].Value; n = [int]$m.Groups[3].Value; next = $m.Groups[4].Value } } })
+  $back = @($log | Where-Object { $_ -match 'answered in time again' }) | Select-Object -First 1
+  $off = @($log | Where-Object { $_ -match 'switch(ed)? off|turned off|is off for|stopped by the bridge itself|stops reading' })
+  $gap = { param($a, $b) [int]([datetime]::ParseExact($b, 'HH:mm:ss', $null) - [datetime]::ParseExact($a, 'HH:mm:ss', $null)).TotalSeconds }
+  $steps = @(for ($i = 0; $i -lt $tries.Count; $i++) { & $gap $tries[$i].at $tries[$i].next })
+  $pu = @(StubReqs | Where-Object { $_.kind -eq 'posts_update' -and $_.body.id -eq 'r1-job-1' } | ForEach-Object { "$($_.at) $($_.body.status) done $($_.body.done)" })
+  $pt = @(StubReqs | Where-Object { $_.kind -eq 'posts_take' -and $_.answer.job } | ForEach-Object { $_.at })
+  $px = Post 9000 ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCR1P</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCR1P" ISMODIFY="No"><TYPE>Voucher</TYPE><FETCH>Narration, MasterID</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>')
+  $posted = "$px" -match 'TDSDesk:R1P1'
+  $firstAfter = @($tries | Where-Object { [datetime]::ParseExact($_.next, 'HH:mm:ss', $null) -ge [datetime]::ParseExact($tFree.ToString('HH:mm:ss'), 'HH:mm:ss', $null) })[0]
+  $arrOk = $tArr -and $firstAfter -and [math]::Abs((& $gap $firstAfter.next $tArr)) -le 20
+  $want = @(15, 30, 60, 120)
+  $stepsOk = $steps.Count -ge 4 -and @(0..3 | Where-Object { [math]::Abs($steps[$_] - $want[$_]) -le [math]::Max(5, $want[$_] * 0.25) }).Count -eq 4
+  $txt = "Tally busy {0}..{1} (a small request took {2} ms; the entry saved {3}); bridge 1's tries: {4}; steps {5} s (expected 15, 30, 60, 120, then 300); back to normal: {6}; switch-off words: {7}; posting queued {8}, taken {9}, updates {10}, in Tally: {11}; the entry at the stub {12} (Tally free {13}; the first try after that {14})" -f `
+    $tSave.ToString('HH:mm:ss'), $tFree.ToString('HH:mm:ss'), $lat.ms, $tSave.ToString('HH:mm:ss'), $(($tries | ForEach-Object { "try $($_.n) at $($_.at) ($($_.id)) next $($_.next)" }) -join '; '), ($steps -join ', '), $(if ($back) { $back.Substring(0, [Math]::Min(120, $back.Length)) } else { 'not seen' }), $(if ($off.Count) { $off -join ' | ' } else { 'none' }), $tPost.ToString('HH:mm:ss'), ($pt -join ','), ($pu -join '; '), $posted, $(if ($tArr) { $tArr } else { 'NOT arrived' }), $tFree.ToString('HH:mm:ss'), $(if ($firstAfter) { $firstAfter.next } else { 'none' })
+  if (-not $tries.Count) { Result 'R1 retry schedule' $false "$txt; Tally was not busy enough to stop the bridge's request (no try in its log)" $true }
+  else { Result 'R1 retry schedule' ($stepsOk -and $off.Count -eq 0 -and $posted -and $arrOk) $txt }
+}
+
+
+# ---- S5 by Tally's own screens (the import kept no TDS): Tally 9000 started again (at the Gateway, the company loaded), the
+# masters made by keys as probes 37443895060..37452140499 found the forms (Create -> TDS Nature of Payments: Name, Section,
+# Payment code, Remittance code, rate for individuals/HUF, rate for others, zero rated, threshold; a Sundry Creditors ledger:
+# bill-by-bill, Is TDS Deductable, Deductee type, Deduct TDS in Same Voucher; a Duties & Taxes ledger: Type of Duty/Tax TDS,
+# Nature of payment), then a journal with Tally's Stat Adjustment (Alt+J) for the TDS deduction. Screenshots s5k-*
+function S231TdsKeys {
+  Say '---- S5 by keys: Tally started again; the TDS masters and a journal on the screen'
+  Stop-Process -Id $script:tallyPids[9000] -Force -ErrorAction SilentlyContinue; Start-Sleep 4
+  $t = Start-Process -FilePath $exe -WorkingDirectory $dir -PassThru; $script:tallyPids[9000] = $t.Id
+  $null = WaitPort 9000; Start-Sleep 5; KeysTo 9000 'a' 4; KeysTo 9000 't' 10 's5k-00-gateway'
+  $clear = '{BACKSPACE}' * 24
+  KeysTo 9000 'c' 3 's5k-01-create'
+  KeysTo 9000 $clear 1; KeysTo 9000 'TDS Nature of Payments' 2; KeysTo 9000 '{ENTER}' 3 's5k-10-nature'
+  foreach ($k in 'S5K 194C Contractors{ENTER}', '194C{ENTER}', '94C{ENTER}', '{ENTER}', '1{ENTER}', '2{ENTER}', '{ENTER}') { KeysTo 9000 $k 1 }
+  KeysTo 9000 '{ENTER}' 3 's5k-11-nature-saved'; KeysTo 9000 '{ESC}' 3; KeysTo 9000 'y' 3 's5k-12-list'
+  KeysTo 9000 $clear 1; KeysTo 9000 'Ledger' 2; KeysTo 9000 '{ENTER}' 3 's5k-20-party'
+  foreach ($k in 'S5K Contractor{ENTER}', '{ENTER}', 'Sundry Creditors{ENTER}', 'n', '{ENTER}', 'y', '{ENTER}', 'Company - Resident', '{ENTER}', 'y', '{ENTER}') { KeysTo 9000 $k 1 }
+  KeysTo 9000 '^a' 3 's5k-21-party-accept'; KeysTo 9000 '{ESC}' 3; KeysTo 9000 'y' 3 's5k-22-list'
+  KeysTo 9000 $clear 1; KeysTo 9000 'Ledger' 2; KeysTo 9000 '{ENTER}' 3 's5k-30-duty'
+  foreach ($k in 'S5K TDS 194C{ENTER}', '{ENTER}', 'Duties & Taxes{ENTER}', 'TDS', '{ENTER}', 'S5K 194C Contractors', '{ENTER}') { KeysTo 9000 $k 1 }
+  KeysTo 9000 '^a' 3 's5k-31-duty-accept'; KeysTo 9000 '{ESC}' 3; KeysTo 9000 'y' 3 's5k-32-list'
+  KeysTo 9000 $clear 1; KeysTo 9000 'Ledger' 2; KeysTo 9000 '{ENTER}' 3 's5k-40-exp'
+  foreach ($k in 'S5K Contract Work{ENTER}', '{ENTER}', 'Indirect Expenses{ENTER}') { KeysTo 9000 $k 1 }
+  KeysTo 9000 '^a' 3 's5k-41-exp-accept'; KeysTo 9000 '{ESC}' 3; KeysTo 9000 'y' 3; KeysTo 9000 '{ESC}' 3 's5k-42-gateway'
+  $lm = Post 9000 ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCS5K</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCS5K" ISMODIFY="No"><TYPE>Ledger</TYPE><FETCH>*</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>')
+  Set-Content (Join-Path $s231.dir 's5k-ledgers.full.xml') "$lm" -Encoding UTF8
+  $made = @('S5K Contractor', 'S5K TDS 194C', 'S5K Contract Work' | Where-Object { "$lm" -match [regex]::Escape("NAME=`"$_`"") })
+  $dt = [regex]::Match("$lm", '(?s)<LEDGER NAME="S5K Contractor".*?<TDSDEDUCTEETYPE[^>]*>([^<]*)<').Groups[1].Value
+  $nat = [regex]::Match("$lm", '(?s)<LEDGER NAME="S5K TDS 194C".*?<TDSRATENAME[^>]*>([^<]*)<').Groups[1].Value
+  Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO S5 by keys: ledgers made: $($made -join ', '); deductee type '$dt'; the TDS ledger's nature '$nat'"
+  # the journal: Stat Adjustment (Alt+J) for TDS, then Dr the expense, To the TDS ledger, To the party
+  $pre = Vouchers 9000 $co1; $m0 = Mark
+  KeysTo 9000 'v' 3 's5k-50-vouchers'; KeysTo 9000 '{F7}' 3 's5k-51-journal'; KeysTo 9000 '{F2}' 2; KeysTo 9000 '2-8-2026{ENTER}' 2 's5k-52-date'
+  KeysTo 9000 '%j' 3 's5k-53-stat-adj'; KeysTo 9000 'TDS' 1; KeysTo 9000 '{ENTER}' 2 's5k-54-type'
+  KeysTo 9000 '{ENTER}' 2 's5k-55-nature-adj'; KeysTo 9000 '{DOWN}' 1 's5k-55b-down'; KeysTo 9000 '{UP}' 1; KeysTo 9000 '{ENTER}' 2 's5k-56'; KeysTo 9000 '{ENTER}' 2 's5k-57'; KeysTo 9000 '^a' 3 's5k-58-adj-accept'
+  KeysTo 9000 'S5K Contract Work' 1; KeysTo 9000 '{ENTER}' 2 's5k-60-exp'; KeysTo 9000 '100000' 1; KeysTo 9000 '{ENTER}' 2 's5k-61-amt'
+  KeysTo 9000 't' 1; KeysTo 9000 '{ENTER}' 2; KeysTo 9000 'S5K TDS 194C' 1; KeysTo 9000 '{ENTER}' 3 's5k-62-tds'
+  KeysTo 9000 '{DOWN}' 1 's5k-63-tds-list'; KeysTo 9000 '{UP}' 1
+  for ($i = 1; $i -le 6; $i++) { KeysTo 9000 '{ENTER}' 2 ("s5k-64-tds-{0:d2}" -f $i) }
+  KeysTo 9000 't' 1; KeysTo 9000 '{ENTER}' 2; KeysTo 9000 'S5K Contractor' 1; KeysTo 9000 '{ENTER}' 3 's5k-65-party'
+  for ($i = 1; $i -le 4; $i++) { KeysTo 9000 '{ENTER}' 2 ("s5k-66-party-{0:d2}" -f $i) }
+  KeysTo 9000 '^a' 4 's5k-67-accept'; KeysTo 9000 '^a' 4 's5k-68-accept-2'
+  $nv = @((Vouchers 9000 $co1) | Where-Object { $_.mid -notin @($pre | ForEach-Object mid) })[0]
+  $s = [pscustomobject]@{ id = 'S5'; key = 's5-payment-tds-keys'; label = 'TDS entered on the screen'; kind = 'tds'; day = '2-8-2026'; date = '20260802' }
+  if (-not $nv) { Result 'S5 TDS entered on the screen' $false "masters made by keys: $($made -join ', ') (deductee type '$dt', TDS ledger nature '$nat'); no journal saved: see the s5k-* screenshots" $true; return }
+  $s231.ent['S5K'] = [ordered]@{ id = 'S5K'; guid = $nv.guid; mid = $nv.mid; lines = 0 }
+  $g = $nv.guid; $hit = @(WaitLine $m0 ({ $_.guid -eq $g -and $_.xml }.GetNewClosure()) 120)
+  $s231.ent['S5'] = $s231.ent['S5K']
+  $a = S231Ask $s
+  $db = S231DayBook ([pscustomobject]@{ id = 'S5'; key = 's5-payment-tds-keys'; date = '20260802' })
+  $d = Get-Content $db -Raw
+  $tx = [regex]::Match($d, '(?s)<TAXOBJECTALLOCATIONS\.LIST>(.*?)</TAXOBJECTALLOCATIONS\.LIST>').Groups[1].Value
+  $tv = { param($t) [regex]::Match($tx, "<$t[^>]*>([^<]+)<").Groups[1].Value }
+  $fx = if ($hit.Count) { $hit[-1].xml } else { '' }
+  $ft = [regex]::Match($fx, '(?s)<TAXOBJECTALLOCATIONS\.LIST>(.*?)</TAXOBJECTALLOCATIONS\.LIST>').Groups[1].Value
+  $fv = { param($t) [regex]::Match($ft, "<$t[^>]*>([^<]+)<").Groups[1].Value }
+  $sec = [regex]::Match($d, '<TDSDEDUCTEESECTIONNUMBER[^>]*>([^<]+)<').Groups[1].Value
+  $txt = "Tally mid $($nv.mid); nature: Tally '$(& $tv 'CATEGORY')' / FinCom body '$(& $fv 'CATEGORY')'; rate: Tally '$(& $tv 'TAXRATE')' / FinCom '$(& $fv 'TAXRATE')'; assessable: Tally '$(& $tv 'ASSESSABLEAMOUNT')' / FinCom '$(& $fv 'ASSESSABLEAMOUNT')'; TDS: Tally '$(& $tv 'TAX')' / FinCom '$(& $fv 'TAX')'; section: Tally '$sec' (nature master 194C); deductee type: Tally ledger '$dt'; the bridge's line: $(if ($hit.Count) { "$($hit[-1].ev) at $($hit[-1].at), body $($fx.Length) chars" } else { 'none' })"
+  if (-not $tx.Trim()) { Result 'S5 TDS entered on the screen' $false "$txt; Tally kept no TDS details on the saved journal (see s5k-* screenshots)" $true }
+  else { Result 'S5 TDS entered on the screen' ((& $tv 'TAX') -and (& $tv 'TAX') -eq (& $fv 'TAX') -and (& $tv 'CATEGORY') -eq (& $fv 'CATEGORY')) $txt }
+}
+
 function RowText($r) { "{0}: Tally {1} / FinCom {2}{3}{4}" -f $r.what, $r.tally, $r.fincom, $(if ($null -ne $r.entered) { " / entered $($r.entered)" } else { '' }), $(if ($r.status -eq 'fail') { ' NO' } elseif ($r.status -eq 'harness') { ' (not in Tally: harness)' } else { '' }) }
 
 function S231Run {
@@ -318,6 +440,8 @@ function S231Run {
     if ($we.Count) { $w += "; only empty in: $(($we | ForEach-Object { $_.label }) -join ', ')" }
     Add-Content -Path $resultsFile -Encoding UTF8 -Value "TAG $($t.tag): $w"
   }
+  try { S231Retry } catch { Result 'R1 retry schedule' $false "the harness stopped: $_" $true }
+  try { S231TdsKeys } catch { Result 'S5 TDS entered on the screen' $false "the harness stopped: $_" $true }
   # ---- the captures: kept with the run and copied for the bridge's tests
   $s231.manifest['_run'] = "run $env:GITHUB_RUN_ID, bridge $env:BRIDGE_SHA, TallyPrime 7.1 Educational on $env:RUNNER_OS, $(Get-Date -Format 'yyyy-MM-dd HH:mm')"
   $s231.manifest | ConvertTo-Json | Set-Content (Join-Path $s231.cap 'manifest.json') -Encoding UTF8

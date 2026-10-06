@@ -15,6 +15,7 @@ LOCK = threading.Lock()
 BOOK = {}      # company -> {lower name: name}
 HELD = {}      # base line id -> {line, company, bridge, waits, again, done}
 GUIDS = {}     # company -> {ledger GUID: FinCom's name}  (seeded with the names)
+POSTS = []     # the retry check's posting: {id, company, payload, taken, updates} (a FinCom posting job, as tally-ingest's queue gives it)
 ALIAS = {}     # company -> {lower Tally name: FinCom's name}: a ledger renamed in Tally, kept under FinCom's name (2.3.1, as
                # tally-ingest with migration 59: the GUID FinCom holds, the new name noted)
 LEDGER_WAIT = 'waiting for the ledger'
@@ -71,7 +72,7 @@ def recorder(body):
     return {'ok': True, 'results': res, 'applied': n('applied'), 'held': n('held'), 'duplicate': 0, 'stale': 0, 'failed': 0}
 
 def beat(body):
-    out = {'ok': True, 'updateNow': False, 'posts': 0}
+    out = {'ok': True, 'updateNow': False, 'posts': sum(1 for p in POSTS if not p['taken'])}
     bridge = str((body.get('bridge') or {}).get('id', ''))
     wanted, refetch = [], []
     for base, h in HELD.items():
@@ -142,6 +143,21 @@ class H(BaseHTTPRequestHandler):
                 BOOK[str(body.get('company', ''))] = {str(x).strip().lower(): str(x).strip() for x in body.get('names', []) if str(x).strip()}
                 GUIDS[str(body.get('company', ''))] = {str(k): str(v) for k, v in (body.get('guids') or {}).items()}
                 out = {'ok': True, 'seeded': len(BOOK[str(body.get('company', ''))])}
+            elif kind == '_queue_post':
+                POSTS.append({'id': str(body.get('id')), 'company': body.get('company'), 'payload': body.get('payload'), 'taken': None, 'updates': []})
+                out = {'ok': True, 'queued': len(POSTS)}
+            elif kind == 'posts_take':
+                job = next((p for p in POSTS if not p['taken']), None)
+                if job:
+                    job['taken'] = time.strftime('%H:%M:%S')
+                    out = {'ok': True, 'job': {'id': job['id'], 'company': job['company'], 'payload': job['payload'], 'released': [], 'resendOnly': []}}
+                else:
+                    out = {'ok': True, 'job': None}
+            elif kind == 'posts_update':
+                for p in POSTS:
+                    if p['id'] == str(body.get('id')):
+                        p['updates'].append({'at': time.strftime('%H:%M:%S'), 'status': body.get('status'), 'done': body.get('done'), 'message': body.get('message')})
+                out = {'ok': True}
             elif kind == '_state':
                 out = {'ok': True, 'book': {k: sorted(v.values()) for k, v in BOOK.items()}, 'held': {k: {a: b for a, b in h.items() if a != 'line'} for k, h in HELD.items()}}
             else:
