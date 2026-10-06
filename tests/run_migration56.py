@@ -66,7 +66,7 @@ L56 = block(text, "create or replace function public.tally_recorder_line(", "rev
 ok(L56 == L53.replace("res := tally_ingest_entries(p_book, vs, p_line->'lines', not once);", "res := tally_ingest_entries(p_book, vs, p_line->'lines', not once, true);     -- 56: the recorder keeps what its request does not fetch"),
    "0. tally_recorder_line is 53's text, byte for byte, but the one call (now with the recorder's keep, true)")
 
-db = pg_stand.start(30560)
+db = pg_stand.start(int(os.environ.get("M56_PORT") or 30560))
 def psql_text(sql):
     return subprocess.run(["runuser", "-u", "postgres", "--", pg_stand.BIN + "/psql", "-h", "127.0.0.1", "-p", str(db.port), "-U", "postgres", "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-q", "-f", "-"], input=sql, capture_output=True, text=True)
 def j(s, uid=None):
@@ -84,8 +84,24 @@ def rline(lid, mid, alter, no, d, v, lines, ev="altered"):
             "vch_date": d, "vch_type": "Sales", "master_id": str(mid), "object_guid": G(mid), "company_guid": CG, "company": "GARG SHEKHAR & COMPANY", "vouchers": [v], "lines": lines}
 def vrow(mid): return (db.rows("select gstin, pos, ref, coalesce(ref_date::text, '') as ref_date, cmp_gstin, alter_id::text as alter_id from tally_vouchers where book_id = %s and guid = %s" % (q(B), q(G(mid)))) or [{}])[0]
 def lrows(mid): return [(r["ledger"], r["amount"], r["hsn"], r["rate"]) for r in db.rows("select ledger, amount::text as amount, coalesce(hsn, '') as hsn, coalesce(rate::text, '') as rate from tally_lines where book_id = %s and guid = %s order by ledger, amount" % (q(B), q(G(mid))))]
+# M56_THEN_57=1 (06-Oct-2026, bridge 2.3.1 part A): migration 57 is run twice right after 56, and every check below runs on
+# top of it; the rows are compared without 57's added columns (at their defaults), and 57's tally_ingest_day (44's text
+# with its one call through the 5-argument form, checked by run_migration57.py) is the one function text allowed to differ
+ON57 = os.environ.get("M56_THEN_57") == "1"
+NEW57 = {"tally_vouchers": ("irn", "irn_ack_no", "irn_ack_date", "eway_no", "check_notes"), "tally_bills": ("due",)}
 def snap():
     """every row of the entry tables (the cells the repair may write and the rest)"""
+    if ON57 and db.one("select count(*) from information_schema.columns where table_name = 'tally_vouchers' and column_name = 'irn'") == "1":
+        cut = lambda t: "".join(" - %s" % q(c) for c in NEW57.get(t, ()))
+        return {"v": {r["guid"]: r for r in [{k: v for k, v in r.items() if k not in NEW57["tally_vouchers"]} for r in db.rows("select * from tally_vouchers where book_id = %s" % q(B))]},
+                "l": sorted(tuple(sorted(r.items())) for r in db.rows("select guid, ledger, amount::text, hsn, rate::text, day::text from tally_lines where book_id = %s" % q(B))),
+                "other": {t: db.one("select md5(coalesce(string_agg(y, '|' order by y), '')) from (select (to_jsonb(x)%s)::text as y from %s x) z" % (cut(t), t)) if t in NEW57 else
+                          db.one("select md5(coalesce(string_agg(x::text, '|' order by x::text), '')) from %s x" % t) for t in ("tally_bills", "tally_voucher_versions", "tally_ledger_day", "tally_days", "tally_recorder_lines", "tally_books", "tally_ledgers")}}
+    if ON57:
+        return {"v": {r["guid"]: r for r in db.rows("select * from tally_vouchers where book_id = %s" % q(B))},
+                "l": sorted(tuple(sorted(r.items())) for r in db.rows("select guid, ledger, amount::text, hsn, rate::text, day::text from tally_lines where book_id = %s" % q(B))),
+                "other": {t: db.one("select md5(coalesce(string_agg(y, '|' order by y), '')) from (select to_jsonb(x)::text as y from %s x) z" % t) if t in NEW57 else
+                          db.one("select md5(coalesce(string_agg(x::text, '|' order by x::text), '')) from %s x" % t) for t in ("tally_bills", "tally_voucher_versions", "tally_ledger_day", "tally_days", "tally_recorder_lines", "tally_books", "tally_ledgers")}}
     return {"v": {r["guid"]: r for r in db.rows("select * from tally_vouchers where book_id = %s" % q(B))},
             "l": sorted(tuple(sorted(r.items())) for r in db.rows("select guid, ledger, amount::text, hsn, rate::text, day::text from tally_lines where book_id = %s" % q(B))),
             "other": {t: db.one("select md5(coalesce(string_agg(x::text, '|' order by x::text), '')) from %s x" % t) for t in ("tally_bills", "tally_voucher_versions", "tally_ledger_day", "tally_days", "tally_recorder_lines", "tally_books", "tally_ledgers")}}
@@ -155,8 +171,13 @@ try:
     if rr.returncode: raise SystemExit("cannot go on without the migration")
     s1 = snap()
     rr = psql_text(text); ok(rr.returncode == 0, "migration-56 runs (2) %s" % (rr.stderr.strip()[-600:] if rr.returncode else ""))
+    if ON57:
+        for i in (1, 2):
+            r57 = psql_text(open(os.path.join(SQLDIR, "migration-57-entry-details.sql")).read())
+            ok(r57.returncode == 0, "M56_THEN_57: migration-57 runs on top of 56 (%d) %s" % (i, r57.stderr.strip()[-300:] if r57.returncode else ""))
+            if r57.returncode: raise SystemExit("cannot go on without 57")
     ok(snap() == s1 == before, "running it (twice) changes no row (vouchers, lines, bills, versions, the day cache, the days, the recorder lines)")
-    ok({s: hashlib.md5(prosrc(s).encode()).hexdigest() for s in keep_src} == keep_src, "48's tally_ingest_entries (4 and 3 arguments), tally_ingest_day, the apply and the version lines untouched")
+    ok({s: hashlib.md5(prosrc(s).encode()).hexdigest() for s in keep_src if not (ON57 and s.startswith("tally_ingest_day("))} == {s: h for s, h in keep_src.items() if not (ON57 and s.startswith("tally_ingest_day("))}, "48's tally_ingest_entries (4 and 3 arguments), tally_ingest_day, the apply and the version lines untouched")
     ok(prosrc("tally_recorder_line(uuid, uuid, jsonb, bigint)").count("not once, true)") == 1 and prosrc("tally_recorder_line(uuid, uuid, jsonb, bigint)").count("tally_ingest_entries(") == 1, "the line calls the 5-argument form with the keep (and nothing else of the entry path)")
     for fn in FNS:
         for r in db.rows("select prosecdef::text as d, coalesce(array_to_string(proconfig, ','), '') as c, oid::regprocedure::text as o from pg_proc where proname = %s and pronamespace = 'public'::regnamespace" % q(fn)):
