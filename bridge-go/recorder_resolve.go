@@ -423,8 +423,11 @@ type heldLine struct {
 	// after 2.3.0 (06-Oct-2026): FinCom listed it in the beat's refetch (its body missing or its GUID a placeholder: asked one a
 	// turn); the version whose asks the tries count (a try of an older bridge, which could not read a real Tally's typed
 	// answer, does not count once FinCom lists the line again)
-	Refetch   bool
-	TriesVer  string
+	Refetch  bool
+	TriesVer string
+	// 2.3.1 review H1: FinCom listed it again although an older bridge sent its ":resolved" line (2.3.0's request, without the
+	// items' ledger lines, held by the cloud's guard): asked and sent once more under this version
+	Again     bool
 	LineAlter int64
 	// review H1 (the owner's addition): a delete's own GUID and AlterID, used only once this Tally shows it gone
 	KeepGuid, KeepAlter string
@@ -445,7 +448,7 @@ func liveHeldLoad() (M, map[string]heldLine) {
 		items[id] = heldLine{ID: id, Company: str(e["company"]), CGUID: str(e["companyGuid"]), Type: str(e["type"]), No: str(e["no"]), Date: str(e["date"]),
 			MID: str(e["masterId"]), At: str(e["savedAt"]), Added: str(e["added"]), Last: str(e["last"]), Tries: toInt(e["tries"]), Ev: str(e["event"]), Why: str(e["why"]),
 			LineGuid: str(e["lineGuid"]), LineFid: str(e["lineFid"]), Mismatch: truthy(e["idsMismatch"]), Final: truthy(e["final"]), LineAlter: toI64(e["lineAlter"]),
-			Cloud: truthy(e["fromFinCom"]), KeepGuid: str(e["keepGuid"]), KeepAlter: str(e["keepAlter"]), Refetch: truthy(e["refetch"]), TriesVer: str(e["triesVersion"])}
+			Cloud: truthy(e["fromFinCom"]), KeepGuid: str(e["keepGuid"]), KeepAlter: str(e["keepAlter"]), Refetch: truthy(e["refetch"]), TriesVer: str(e["triesVersion"]), Again: truthy(e["again"])}
 	}
 	return all, items
 }
@@ -456,7 +459,7 @@ func liveHeldSave(all M, items map[string]heldLine) {
 		o[id] = M{"company": h.Company, "companyGuid": h.CGUID, "type": h.Type, "no": h.No, "date": h.Date, "masterId": h.MID, "savedAt": h.At,
 			"added": h.Added, "last": h.Last, "tries": h.Tries, "event": h.Ev, "why": liveCapWhy(h.Why), "lineGuid": h.LineGuid, "lineFid": h.LineFid,
 			"idsMismatch": h.Mismatch, "final": h.Final, "lineAlter": h.LineAlter, "fromFinCom": h.Cloud,
-			"keepGuid": h.KeepGuid, "keepAlter": h.KeepAlter, "refetch": h.Refetch, "triesVersion": h.TriesVer}
+			"keepGuid": h.KeepGuid, "keepAlter": h.KeepAlter, "refetch": h.Refetch, "triesVersion": h.TriesVer, "again": h.Again}
 	}
 	all["items"] = o
 	if err := saveFile(liveHeldFile(), jsonText(all)); err != nil {
@@ -730,7 +733,7 @@ func liveResolveTurn() {
 		rid := id + ":resolved"
 		live.mu.Lock()
 		liveFresh()
-		done := live.sent[rid]
+		done := live.sent[rid] && (!h.Again || live.items231[rid]) // 2.3.1 review H1: an older bridge's resolution is not this one
 		waiting := live.queued[rid]
 		off := liveIsOffLocked("bodies", h.Company+"|"+h.CGUID)
 		ownOpen := !h.Refetch || liveOwnOpenNow(h.CGUID, h.Company)
@@ -853,7 +856,7 @@ func liveResolveTurn() {
 		live.mu.Lock()
 		liveFresh()
 		liveTakeBody(c, x)
-		if !live.sent[rid] && !live.queued[rid] {
+		if !liveResolvedDone(rid, h.Again) {
 			liveQueueAdd(c)
 		}
 		live.mu.Unlock()
@@ -1066,11 +1069,18 @@ func applyRefetch(j M) {
 	liveFresh()
 	var fresh []heldLine
 	done := 0
-	for _, h := range cs {
+	for i, h := range cs {
 		rid := h.ID + ":resolved"
-		if live.sent[rid] || live.queued[rid] {
+		// 2.3.1 review H1: FinCom lists a line again whose ":resolved" line an older bridge sent (2.3.0's request, without the
+		// items' ledger lines: held by the cloud's guard). That earlier mark is not this version's: asked and sent once more,
+		// under the same id (the cloud's rules match it). One this version sent, or queued, is done
+		if liveResolvedDone(rid, true) {
 			done++
 			continue
+		}
+		if live.sent[rid] {
+			h.Again = true
+			cs[i] = h
 		}
 		if !liveOwnOpenNow(h.CGUID, h.Company) {
 			notOwn++
@@ -1088,6 +1098,16 @@ func applyRefetch(j M) {
 		if !had {
 			items[h.ID] = h
 			added++
+			continue
+		}
+		if h.Again && !old.Again {
+			// 2.3.1 review H1: still in the list from the older bridge: asked afresh once under this version
+			old.Again, old.Refetch, old.Cloud = true, true, true
+			if old.TriesVer != BridgeVersion {
+				old.Tries, old.Final, old.Why, old.Last = 0, false, "", ""
+			}
+			items[h.ID] = old
+			again++
 			continue
 		}
 		if !old.Refetch {

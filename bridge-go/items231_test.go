@@ -356,6 +356,67 @@ func TestItems231HeldUnder230SettleByRefetch(t *testing.T) {
 	}
 }
 
+// --- 3c. review H1: an item invoice a 2.3.0 bridge already refetched (its "S1:resolved" went with 2.3.0's body, without
+// the items' ledger lines, and the cloud's guard held it). FinCom lists S1 again: 2.3.1 does not take 2.3.0's sent mark as
+// done, asks its own Tally once more and sends "S1:resolved" once (the same id) with a body that balances; listed again
+// after that (or after a restart), nothing more is asked or sent. A line still in the held list from 2.3.0 (P1) the same
+func TestItems231RefetchAfter230Resolved(t *testing.T) {
+	_, f, c := items231Bridge(t)
+	setCfg("RecorderResolveSec", float64(0))
+	row := func(id, mid string, v items231Vch) M {
+		return M{"line_id": id, "company": spikeCo, "company_guid": spikeCoGUID, "event": "created", "master_id": mid, "vch_type": v.typ, "vch_no": v.no, "vch_date": "20261002"}
+	}
+	// what 2.3.0 left on disk: S1:resolved and P1:resolved sent (with a body), P1 still in the held list, tried once by 2.3.0
+	live.mu.Lock()
+	liveFresh()
+	live.sent["S1:resolved"], live.sent["P1:resolved"] = true, true
+	live.mu.Unlock()
+	liveSaveSent([]string{"S1:resolved", "P1:resolved"})
+	heldMu.Lock()
+	all, items := liveHeldLoad()
+	items["P1"] = heldLine{ID: "P1", Company: spikeCo, CGUID: spikeCoGUID, Type: items231Vchs[1].typ, No: items231Vchs[1].no, Date: "20261002", MID: "12", Ev: "created",
+		Added: nowFn().Add(-2 * time.Hour).Format(time.RFC3339), Last: nowFn().Add(-time.Hour).Format(time.RFC3339), Tries: 1, TriesVer: "2.3.0", Refetch: true, Cloud: true}
+	liveHeldSave(all, items)
+	heldMu.Unlock()
+	rows := []any{row("S1", "11", items231Vchs[0]), row("P1", "12", items231Vchs[1])}
+	applyRefetch(M{"refetch": rows})
+	_, items = liveHeldLoad()
+	for _, id := range []string{"S1", "P1"} {
+		if h := items[id]; h.ID == "" || !h.Again || h.Tries != 0 {
+			t.Fatalf("%s not in the held list to be asked once more: %+v", id, h)
+		}
+	}
+	b230Turns(6)
+	for i, id := range []string{"S1", "P1"} {
+		v := items231Vchs[i]
+		s := r222cSentID(c, id+":resolved")
+		if len(s) != 1 || str(s[0]["object_guid"]) != fmt.Sprintf("%s-%08x", spikeCoGUID, toI64(v.mid)) {
+			t.Fatalf("%s: sent %d times: %v (%v)", id, len(s), s, f.ids())
+		}
+		if m, sum := items231Totals(str(s[0]["xml"])); sum != 0 || !items231Same(m, v.lines) {
+			t.Fatalf("%s: the body sent: %v (sum %v)", id, m, sum)
+		}
+	}
+	// once: listed again (the cloud's answer not in yet), and again after a restart (the state read from disk)
+	k := f.n(vchByMasterID) + f.n(vchByNumberID)
+	for _, restart := range []bool{false, true} {
+		if restart {
+			live.mu.Lock()
+			live.dir = ""
+			live.mu.Unlock()
+		}
+		applyRefetch(M{"refetch": rows})
+		b230Turns(3)
+		if f.n(vchByMasterID)+f.n(vchByNumberID) != k || len(r222cSentID(c, "S1:resolved")) != 1 || len(r222cSentID(c, "P1:resolved")) != 1 {
+			t.Fatalf("restart %v: asked or sent again: %d -> %d asks; %v", restart, k, f.n(vchByMasterID)+f.n(vchByNumberID), f.ids())
+		}
+	}
+	// a line no older bridge resolved, which this version resolved: never asked again (the rule before 2.3.1)
+	if _, items = liveHeldLoad(); items["S1"].ID != "" || items["P1"].ID != "" {
+		t.Fatalf("still in the held list: %+v %+v", items["S1"], items["P1"])
+	}
+}
+
 // --- 4. the 2-second rule holds for the new request: a Tally slow to answer it is left at 2 s
 func TestItems231TwoSecondRule(t *testing.T) {
 	_, f, _ := items231Bridge(t)
@@ -381,8 +442,11 @@ func TestItems231VersionAndDecisionLine(t *testing.T) {
 	}
 	al := readText("../docs/tally-allowlist.md")
 	line := group(`(?m)^(First table: .*)$`, al, 1)
-	for _, s := range []string{"re-measured on 2026-10-06 on the stand", "not yet measured on NWS144",
-		"allowed for 2.3.1 by the owner's decision of 2026-10-06: FinComVoucherByMaster and FinComVoucherByNumber also fetch the ledger lines kept under an invoice's items (ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS); one entry per request, read only, within the 2-second rule; nothing else changed",
+	// review M1: what the two requests ask, as built (ByMaster up to 50 entries of one day, as before; ByNumber one entry), and
+	// the stand named as not real Tally; review M2: the four other trial forms unchanged, so "no other row changed" holds
+	for _, s := range []string{"re-measured on 2026-10-06 on the stand (not real Tally)", "not yet measured on NWS144",
+		"allowed for 2.3.1 by the owner's decision of 2026-10-06: FinComVoucherByMaster and FinComVoucherByNumber also fetch the ledger lines kept under an invoice's items (ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS); FinComVoucherByMaster asks up to 50 entries of one day per request, as before; FinComVoucherByNumber one entry; read only, within the 2-second rule; nothing else changed",
+		"FinComFetchTestB, D, E and F stay byte for byte as in 2.3.0; no other row changed",
 		"as for 2.3.0: the owner's standing decision of 2026-10-06"} {
 		if !strings.Contains(line, s) {
 			t.Errorf("the decision line does not say %q", s)

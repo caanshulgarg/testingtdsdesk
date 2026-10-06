@@ -46,17 +46,19 @@ import (
 )
 
 const (
-	liveAddonName  = "FinComRecorder.tdl"    // the live add-on (addon/), written beside the trial's by the install step
-	vchByMasterID  = "FinComVoucherByMaster" // the body fetch's request id (allowlist.go)
-	vchByNumberID  = "FinComVoucherByNumber" // 2.2.1: a new entry's body by its type and number on its date (allowlist.go)
-	liveMaxIDs     = 50                      // MasterIDs per body fetch
-	liveMaxLines   = 500                     // lines per recorder_lines call (the cloud's MAX_RECORDER_LINES)
-	liveMaxBytes   = 1 << 20                 // bytes per recorder_lines call
-	liveReadMax    = 1 << 20                 // bytes read from one file per turn
-	liveNarrMax    = 4000                    // characters of a narration kept (the cloud reads 1,000; review Low 11)
-	liveFetchField = "GUID, MASTERID, ALTERID, DATE, VOUCHERTYPENAME, VOUCHERNUMBER, PARTYLEDGERNAME, NARRATION, ISCANCELLED, ISOPTIONAL, " +
+	liveAddonName = "FinComRecorder.tdl"    // the live add-on (addon/), written beside the trial's by the install step
+	vchByMasterID = "FinComVoucherByMaster" // the body fetch's request id (allowlist.go)
+	vchByNumberID = "FinComVoucherByNumber" // 2.2.1: a new entry's body by its type and number on its date (allowlist.go)
+	liveMaxIDs    = 50                      // MasterIDs per body fetch
+	liveMaxLines  = 500                     // lines per recorder_lines call (the cloud's MAX_RECORDER_LINES)
+	liveMaxBytes  = 1 << 20                 // bytes per recorder_lines call
+	liveReadMax   = 1 << 20                 // bytes read from one file per turn
+	liveNarrMax   = 4000                    // characters of a narration kept (the cloud reads 1,000; review Low 11)
+	// the entry fetch of 2.2.2 .. 2.3.0, byte for byte: the trial forms B, D, E and F keep it (fetchtest.go, review M2)
+	liveFetchField222 = "GUID, MASTERID, ALTERID, DATE, VOUCHERTYPENAME, VOUCHERNUMBER, PARTYLEDGERNAME, NARRATION, ISCANCELLED, ISOPTIONAL, " +
 		"ALLLEDGERENTRIES.LEDGERNAME, ALLLEDGERENTRIES.AMOUNT, ALLLEDGERENTRIES.ISDEEMEDPOSITIVE, ALLLEDGERENTRIES.BILLALLOCATIONS.NAME, " +
-		"ALLLEDGERENTRIES.BILLALLOCATIONS.BILLTYPE, ALLLEDGERENTRIES.BILLALLOCATIONS.AMOUNT, ALLLEDGERENTRIES.BILLALLOCATIONS.BILLCREDITPERIOD" +
+		"ALLLEDGERENTRIES.BILLALLOCATIONS.BILLTYPE, ALLLEDGERENTRIES.BILLALLOCATIONS.AMOUNT, ALLLEDGERENTRIES.BILLALLOCATIONS.BILLCREDITPERIOD"
+	liveFetchField = liveFetchField222 +
 		// 2.3.1 (the owner's decision of 06-Oct-2026): the ledger lines kept under an invoice's items (item invoice mode:
 		// the sales or purchase ledger sits under each item, the party and GST are its ledger entries), so an item
 		// invoice's body balances; nothing else added (items231_test.go)
@@ -203,6 +205,10 @@ type liveState struct {
 	created  map[string][2]string // 2.2.1: a created entry's save key -> the line id sent and the GUID it went with (this run)
 	scanned  bool                 // 2.2.1: the lines sent with a placeholder looked for (recorder_resolve.go), this run
 	bodied   map[string]bool      // 2.2.2 review M1: the line ids sent WITH their entry's body (7 days, sync\recorder-sent\*.body.txt)
+	// 2.3.1 review H1: the "<line id>:resolved" ids THIS version sent with Tally's body, its request fetching the items' ledger
+	// lines (7 days, sync\recorder-sent\*.items.txt). A ":resolved" id sent and not here went from an older bridge (2.3.0's
+	// request, without the items' lines): when FinCom lists its line again (refetch), it is asked and sent once more
+	items231 map[string]bool
 	// fix 3 (the owner's spike run 37347773182): what this bridge saw of its OWN Tally's open companies (recorder_owntally.go)
 	own      map[string]*liveOwnSt // company GUID (or "name:" + its name key) -> the times it was open in the own Tally
 	ownAt    time.Time             // the last complete look at the own Tally's company list (kept on disk)
@@ -280,6 +286,10 @@ func liveFresh() {
 	for _, id := range liveLoadIds(".body.txt") {
 		live.bodied[id] = true
 	}
+	live.items231 = map[string]bool{}
+	for _, id := range liveLoadIds(liveItemsSuffix) {
+		live.items231[id] = true
+	}
 	liveOwnLoad()
 }
 
@@ -340,6 +350,19 @@ func liveSaveIds(ids []string, suffix string) {
 	if err := appendText(f, strings.Join(ids, "\n")+"\n"); err != nil {
 		writeLog("Recorder: the line ids could not be written to " + f + ": " + err.Error())
 	}
+}
+
+// 2.3.1 review H1: the file suffix of the ":resolved" ids this version sent with their body
+const liveItemsSuffix = ".items.txt"
+
+// under live.mu: a held line's resolution went already, as far as this version is concerned: queued, or sent by THIS
+// version (with the items' ledger lines). again: FinCom listed the line again (refetch) after an older bridge's resolution;
+// without it, any sent resolution counts (the rule before 2.3.1)
+func liveResolvedDone(rid string, again bool) bool {
+	if live.queued[rid] {
+		return true
+	}
+	return live.sent[rid] && (!again || live.items231[rid])
 }
 
 func liveSaveSent(ids []string) {
@@ -2185,7 +2208,7 @@ func liveUploadStep() (int, bool) {
 		return 0, false
 	}
 	sentIDs := make([]string, 0, len(group))
-	var bodied []string
+	var bodied, items []string
 	gone := map[*change]bool{}
 	var held []*change
 	for _, c := range group {
@@ -2198,6 +2221,10 @@ func liveUploadStep() (int, bool) {
 			live.sent[a] = true
 			delete(live.queued, a)
 			sentIDs = append(sentIDs, a)
+		}
+		if c.xml != "" && !c.isLedger() && strings.HasSuffix(c.lineId, ":resolved") {
+			items = append(items, c.lineId) // 2.3.1 review H1: a resolution sent by this version
+			live.items231[c.lineId] = true
 		}
 		if c.xml != "" && !c.isLedger() {
 			bodied = append(bodied, c.lineId)
@@ -2238,6 +2265,7 @@ func liveUploadStep() (int, bool) {
 	live.mu.Unlock()
 	liveSaveSent(sentIDs)
 	liveSaveIds(bodied, ".body.txt")
+	liveSaveIds(items, liveItemsSuffix)
 	liveSaveOffsets()
 	liveHeldAdd(held)
 	liveGuidAnswers(group, arr(r.json["results"])) // 2.3.0: what FinCom's record said of a delete / cancel sent without a GUID
