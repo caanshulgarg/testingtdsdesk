@@ -4,6 +4,7 @@
 // Apply now on a held line (tally_recorder_release_held; the owner's rule of 05-Oct-2026: any member who may write). New lines come in live (Live.joinRecorder, src/js/54).
 import Msg from "../parts/Msg.jsx";
 import ListTable from "../parts/ListTable.jsx";
+import UnknownLedgers from "../parts/UnknownLedgers.jsx";
 
 const FILTERS = [["all", "All"], ["waiting", "Waiting"], ["held", "Held"], ["mismatch", "Mismatch"], ["today", "Today"]];
 // round 20 (d.4): "queued": the cloud queued the line (over 50 at once); its drain fills the state later
@@ -31,6 +32,8 @@ export default function SyncActivity() {
       <b>{wait.length + (wait.length === 1 ? " line" : " lines") + " waiting over 2 minutes"}</b>
       {wait.map(({ r, why }) => <div key={r.id} data-sync-waiting-line={String(r.id)}>{Rec.entry(r) + (r.pc ? " from " + r.pc : "") + ", received " + tallyHm(r.received_at) + (r.state === "held" && r.held_why ? ", not yet entered in the books: " + r.held_why : ": " + why)}</div>)}
     </div>}
+    {/* the owner (06-Oct-2026): entries naming a ledger FinCom does not have yet, in plain words (migration 56) */}
+    <UnknownLedgers cid={S.syncClient || ""} where="activity" names />
     <nav className="sbar" aria-label="Sync activity filter">{FILTERS.map(([id, label]) =>
       <button key={id} data-sync-filter={id} aria-selected={f === id} onClick={() => setF(id)}>{label}</button>)}</nav>
     {a.err && <p className="bk-warn"><Msg text={a.err} /></p>}

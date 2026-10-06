@@ -254,6 +254,42 @@ const Rec = {
   // filter: the list shown first ("held": the lines held, from the books' "not yet in these books" line)
   openActivity(cid, filter){ S.syncClient = cid || ""; S.syncFilter = filter || "all"; S.tallyTab = "activity"; this.act.at = 0; navHome("tally"); },
 
+  // ---------------------------------------------------------------- unknown ledgers (the owner, 06-Oct-2026; migration 56)
+  // "An entry using an unknown ledger is applied anyway, with nothing flagged. Until 2.3.1 is out, flag these on the page in
+  // plain words so they are visible." The firm's live entries whose lines name a ledger FinCom's copy does not have
+  // (tally_unknown_ledger_entries(p_book null): every book of the firm; members read). Read once a minute at most; nothing
+  // shown (and no error) while migration 56 has not run
+  unk: {},                 // {rows, at, busy, none, err}
+  unkOf(){
+    const u = this.unk;
+    if (!("at" in u)) Object.assign(u, {rows: null, at: 0, busy: false, none: false, err: ""});
+    if (typeof TCloud === "object" && TCloud.on() && !u.busy && (!u.at || Date.now() - u.at > 60000)){ u.at = Date.now(); setTimeout(() => this.unkLoad(), 0); }
+    return u;
+  },
+  async unkLoad(){
+    const u = this.unk;
+    u.busy = true;
+    try { u.rows = [].concat(await TCloud.rpc("tally_unknown_ledger_entries", {p_book: null}) || []); u.none = false; u.err = ""; }
+    catch (e){ u.rows = []; if (this.missing(e)) u.none = true; else u.err = this.say(e); }
+    u.busy = false; u.at = Date.now(); render();
+  },
+  // one sentence an entry and ledger: "<type> <number> of <date> uses the ledger '<name>', which FinCom does not have yet. It
+  // is in the books; the ledger's group is unknown until the next ledger list or bridge 2.3.1."
+  unkWords(r, name){
+    const head = [r.vtype, r.vno].map(x => String(x || "").trim()).filter(Boolean).join(" ") || "An entry";
+    return head + (r.day ? " of " + fmtDate(String(r.day).slice(0, 10)) : "") + " uses the ledger '" + name + "', which FinCom does not have yet. It is in the books; the ledger's group is unknown until the next ledger list or bridge 2.3.1.";
+  },
+  // the sentences for one client ("" or none: every client), newest entry first: [{key, cid, text}]
+  unkLines(cid){
+    const rows = this.unkOf().rows || [];
+    const out = [];
+    rows.filter(r => !cid || String(r.client_id || "") === String(cid)).forEach(r => {
+      const names = Array.isArray(r.ledgers) ? r.ledgers : String(r.ledgers || "").replace(/^\{|\}$/g, "").split(",").map(x => x.replace(/^"|"$/g, "")).filter(Boolean);
+      names.forEach(n => out.push({key: (r.book_id || "") + ":" + r.guid + ":" + n, cid: r.client_id || "", text: this.unkWords(r, n)}));
+    });
+    return out;
+  },
+
   // ---------------------------------------------------------------- F36 / N102: is each PC recording?
   // the recorder words a computer's bridges send (info.bridges[id].recorder: {company: {seen, lastAt}}; the beat's
   // companies may carry recorderSeen / recorderLastAt too): null when none of its bridges reports one (before 2.1.9)

@@ -35,7 +35,7 @@ READERS = ["tally_tb", "tally_period", "tally_mis", "tally_gst_summary", "tally_
            # 05-Oct-2026 (migration 55: any member settles an uncertain posting after the bridge's check; the lease's purpose and "want to post")
            "tally_post_job_mark_posted", "tally_post_id_release_owner", "tally_post_settle_ask", "tally_post_checks_for", "tally_post_check_report", "tally_post_mark_core", "tally_post_release_core", "tally_member_name",
            # 06-Oct-2026 (migration 56: a recorder line keeps the fields its request does not fetch; the repair, not run)
-           "tally_ingest_entries/5", "tally_recorder_keep_vouchers", "tally_recorder_keep_lines", "tally_recorder_blanked", "tally_recorder_restore_fields"]
+           "tally_ingest_entries/5", "tally_recorder_keep_vouchers", "tally_recorder_keep_lines", "tally_recorder_blanked", "tally_recorder_restore_fields", "tally_recorder_restore_fields/2", "tally_unknown_ledger_entries", "tally_recorder_pair_lines"]
 texts = {}
 fails = []
 def ok(c, w):
@@ -81,7 +81,7 @@ def run_order(label, ORDER):
                 if r.returncode: raise SystemExit("cannot go on: migration-%s failed" % n)
             k = counts()
             ok(all(k.get(t) == v for t, v in before.items()), "pass %d: nothing deleted (%s rows kept)" % (round_, sum(before.values())))
-        ARGS = {"tally_ingest_day": "uuid, date, jsonb, jsonb, integer, bigint, integer, boolean", "tally_ingest_entries": "uuid, jsonb, jsonb, boolean", "tally_ingest_entries/3": "uuid, jsonb, jsonb", "tally_ingest_entries/5": "uuid, jsonb, jsonb, boolean, boolean"}
+        ARGS = {"tally_ingest_day": "uuid, date, jsonb, jsonb, integer, bigint, integer, boolean", "tally_ingest_entries": "uuid, jsonb, jsonb, boolean", "tally_ingest_entries/3": "uuid, jsonb, jsonb", "tally_ingest_entries/5": "uuid, jsonb, jsonb, boolean, boolean", "tally_recorder_restore_fields": "uuid", "tally_recorder_restore_fields/2": "uuid, boolean"}
         for fn in READERS: texts.setdefault(fn, {})[label] = re.sub(r"\s+", " ", fdef(fn.split("/")[0], ARGS.get(fn)))
         ok("tally_post_job_accepted" in fdef("tally_post_ids_sync") and "tally_post_result_taken" in fdef("tally_post_ids_sync") and "tally_post_result_confirmed" not in fdef("tally_post_ids_sync") and "tally_post_result_taken" in fdef("tally_post_job_accepted"), "migration-40's sync and tally_post_job_accepted (39/36b's rules, calling tally_post_result_taken) are in force")
         ok(db.one("select count(*) from information_schema.columns where (table_name, column_name) in (('client_book_items', 'carried'), ('tally_ledgers', 'state'))") == "2" and "'states'" in fdef("tally_ledger_carry_choices") and "carriedTo" not in fdef("tally_ledger_carry_choices"), "40: client_book_items.carried, tally_ledgers.state; the carry marks `carried`, not data")
@@ -156,8 +156,10 @@ def run_order(label, ORDER):
            and "tally_ingest_entries(p_book, p_vouchers, p_lines, true)" in fdef("tally_ingest_entries", "uuid, jsonb, jsonb") and "keep" not in fdef("tally_ingest_entries", "uuid, jsonb, jsonb, boolean")
            and db.one("select count(*) from pg_proc where proname = 'tally_ingest_entries'") == "3" and db.one("select relrowsecurity from pg_class where relname = 'tally_recorder_restore_log'") == "t"
            and db.one("select has_function_privilege('authenticated', 'public.tally_recorder_restore_fields(uuid)', 'execute')") == "f"
+           and db.one("select has_function_privilege('authenticated', 'public.tally_recorder_restore_fields(uuid, boolean)', 'execute')") == "f"
+           and db.one("select has_function_privilege('authenticated', 'public.tally_unknown_ledger_entries(uuid)', 'execute')") == "t"
            and db.one("select has_function_privilege('service_role', 'public.tally_ingest_entries(uuid, jsonb, jsonb, boolean, boolean)', 'execute')") == "f",
-           "56: the recorder's line keeps (the 5-argument entry path); 48's 3- and 4-argument forms unchanged (the Day Book's); the repair and its log, the service role's (in force in this order)")
+           "56: the recorder's line keeps (the 5-argument entry path); 48's 3- and 4-argument forms unchanged (the Day Book's); the repair (dry run) and its log, the service role's; the unknown-ledger list for members (in force in this order)")
         ok("tally_ledger_carry_choices" in fdef("tally_ledger_rename") and db.one("select count(*) from information_schema.columns where table_name = 'tally_ledgers' and column_name = 'needs_confirm'") == "1", "39: the rename carries the choices; tally_ledgers.needs_confirm")
         ok(db.one("select string_agg(confdeltype::text, '') from pg_constraint where conrelid = 'public.tally_post_marks'::regclass and contype = 'f'") == "rr", "38: tally_post_marks' foreign keys restrict (no cascade)")
         for fn in ("tally_tb", "tally_period", "tally_balances_on"): ok("d.merged_into is null" in fdef(fn), "%s hides the twins" % fn)
