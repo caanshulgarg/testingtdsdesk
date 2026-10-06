@@ -18,9 +18,11 @@ $fc = 'C:\fcspike'; New-Item -ItemType Directory -Force $fc, "$fc\tmp", "$fc\u2d
 & icacls.exe $rec /grant '*S-1-5-32-545:(OI)(CI)M' /Q | Out-Null
 $resultsFile = Join-Path $out 'results.txt'; Set-Content $resultsFile -Value @() -Encoding UTF8
 $script:fails = 0
+# harness failures (user 2's scheduled task never ran a step): not the bridge's; a HARNESS line, the job fails apart from FAIL
+$script:harness = 0
 function Say($m) { Write-Host "[$(Get-Date -Format HH:mm:ss)] $m" }
-function Result($step, [bool]$ok, $evidence) {
-  $l = '{0} {1}: {2}' -f $(if ($ok) { 'PASS' } else { 'FAIL' }), $step, $evidence
+function Result($step, [bool]$ok, $evidence, [bool]$harness = $false) {
+  $l = '{0} {1}: {2}' -f $(if ($ok) { 'PASS' } elseif ($harness) { 'HARNESS' } else { 'FAIL' }), $step, $evidence
   Write-Host "######## $l"; Add-Content -Path $resultsFile -Value $l -Encoding UTF8
 }
 function Shot($n) { & "$PSScriptRoot\shot.ps1" "r4-$n" }
@@ -84,6 +86,9 @@ function Write-TallyIni($path, $data, [int]$port, $tdl, $load) {
 Say '---- the bridge built from the ref'
 $setupSrc = Get-ChildItem $env:BRIDGE_DIST -Filter 'FinComBridge-Setup-*.exe' | Select-Object -First 1
 Get-Content (Join-Path $env:BRIDGE_DIST 'bridge-source.txt') | Write-Host
+$origin = Get-Content (Join-Path $env:BRIDGE_DIST 'setup-origin.txt') -ErrorAction SilentlyContinue
+Write-Host "$origin"
+Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO $origin; on this runner SHA-256 $((Get-FileHash $setupSrc.FullName).Hash.ToLower())"
 Write-Host "setup: $($setupSrc.Name) $($setupSrc.Length) bytes SHA256 $((Get-FileHash $setupSrc.FullName).Hash)"
 $setup = "$fc\FinComBridge-Setup.exe"; Copy-Item $setupSrc.FullName $setup
 $tdl = "$fc\FinComRecorder.tdl"; Copy-Item (Join-Path $env:BRIDGE_DIST 'FinComRecorder.tdl') $tdl
@@ -176,10 +181,29 @@ if ($rdp) {
 function U2Script([string]$script, [string[]]$argv = @(), [int]$sec = 300) {
   Remove-Item "$fc\task-done.txt", "$fc\task-out.txt" -ErrorAction SilentlyContinue
   if ($rdp) {
+    # the previous run writes its done mark just before its PowerShell ends: a start while it still runs is dropped
+    # (MultipleInstances IgnoreNew), so wait for the task to be Ready first
+    for ($w = 0; $w -lt 40 -and (Get-ScheduledTask fcu2 -ErrorAction SilentlyContinue).State -eq 'Running'; $w++) { Start-Sleep -Milliseconds 500 }
     @{ script = $script; argv = $argv } | ConvertTo-Json | Set-Content "$fc\task-in.json" -Encoding UTF8
     try { Start-ScheduledTask -TaskName fcu2 -ErrorAction Stop } catch { Write-Host "  task start: $_" }
-    $until = (Get-Date).AddSeconds($sec); while (-not (Test-Path "$fc\task-done.txt") -and (Get-Date) -lt $until) { Start-Sleep -Milliseconds 500 }
-    if (-not (Test-Path "$fc\task-done.txt")) { $ti = Get-ScheduledTaskInfo -TaskName fcu2 -ErrorAction SilentlyContinue; Write-Host "  task fcu2 did not finish $script in $sec s: last run $($ti.LastRunTime) result 0x$('{0:x}' -f $ti.LastTaskResult), state $((Get-ScheduledTask fcu2).State)" }
+    $t0 = Get-Date; $until = $t0.AddSeconds($sec); $restarts = 0; $next = $t0.AddSeconds(30)
+    while (-not (Test-Path "$fc\task-done.txt") -and (Get-Date) -lt $until) {
+      Start-Sleep -Milliseconds 500
+      if ((Get-Date) -ge $next -and $restarts -lt 3 -and -not (Test-Path "$fc\task-done.txt")) {
+        $next = (Get-Date).AddSeconds(30)
+        $stt = (Get-ScheduledTask fcu2 -ErrorAction SilentlyContinue).State
+        if ($stt -eq 'Ready') {
+          $restarts++; $ti = Get-ScheduledTaskInfo -TaskName fcu2 -ErrorAction SilentlyContinue
+          Write-Host "  [harness] task fcu2 has not run $script after $([int]((Get-Date) - $t0).TotalSeconds) s (state Ready, last run $($ti.LastRunTime) result 0x$('{0:x}' -f $ti.LastTaskResult)): Start-ScheduledTask again ($restarts of 3)"
+          try { Start-ScheduledTask -TaskName fcu2 -ErrorAction Stop } catch { Write-Host "  task start: $_" }
+        }
+      }
+    }
+    if (-not (Test-Path "$fc\task-done.txt")) {
+      $ti = Get-ScheduledTaskInfo -TaskName fcu2 -ErrorAction SilentlyContinue
+      $script:harness++
+      Write-Host "  HARNESS: user 2's task did not run: task fcu2 did not finish $script in $sec s after $restarts restart(s): last run $($ti.LastRunTime) result 0x$('{0:x}' -f $ti.LastTaskResult), state $((Get-ScheduledTask fcu2).State)"
+    } elseif ($restarts) { Write-Host "  [harness] task fcu2 ran $script after $restarts restart(s)" }
   } else {
     $null = AsU2 'powershell.exe' (@('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$script`"") + @($argv | ForEach-Object { "`"$_`"" })) ($sec * 1000)
   }
@@ -471,6 +495,7 @@ Result '5 delete' ([bool]$del -and [bool]$x -and $x.guid -and $x.guid -eq $del.g
 # ---- 6d: user 2's own Tally event (a Receipt on 9001), recorded by user 2's bridge
 Say '---- 6d: user 2''s own Tally event (a Receipt on 9001), recorded by user 2''s bridge'
 if ($tally2) {
+  $h0 = $script:harness
   $b2 = Vouchers 9001 $co2
   Keys2 'v' 4 '30-u2-vouchers'; Keys2 '{F6}' 3; Keys2 '{F2}' 3; Keys2 '2-10-2026{ENTER}' 3
   Keys2 'Cash{ENTER}' 3; Keys2 'Spike Income{ENTER}' 3 '31-u2-particular'; Keys2 '450{ENTER}' 3; Keys2 '^a' 5 '32-u2-created'
@@ -479,7 +504,8 @@ if ($tally2) {
   $hit = WaitLine 0 { $_.ev -eq 'created' -and $_.company -eq $co2 }
   Snap '6-user2'
   $x = @($hit | Where-Object bid -eq $B[2].id)[0]
-  Result '6d user 2 own Tally event' ([bool]$new2 -and [bool]$x -and $x.guid -eq $new2.guid -and [bool]$x.xml -and $x.buser -match "$u2$") ("Tally :9001 (as $u2) made mid {0} guid {1}; {2}" -f $new2.mid, $new2.guid, (Ev $x))
+  $hn = $script:harness - $h0
+  Result '6d user 2 own Tally event' ([bool]$new2 -and [bool]$x -and $x.guid -eq $new2.guid -and [bool]$x.xml -and $x.buser -match "$u2$") ("{3}Tally :9001 (as $u2) made mid {0} guid {1}; {2}" -f $new2.mid, $new2.guid, (Ev $x), $(if ($hn) { "user 2's task did not run ($hn keystroke step(s) never ran, so no entry was made in user 2's Tally; not the bridge's); " } else { '' })) ($hn -gt 0)
 } else {
   Result '6d user 2 own Tally event' $false 'user 2''s own Tally (9001) could not be brought up with its company: see the log and r4-01* screenshots'
 }
@@ -504,8 +530,10 @@ Result '6e attribution' ($wrong.Count -eq 0 -and $n1l -gt 0) ("{0} line(s) from 
 
 # ---- step 6 as one line
 Say '---- step 6 as one line'
-$r6 = @(Get-Content $resultsFile | Where-Object { $_ -match '^(PASS|FAIL) 6[a-e] ' })
-Result '6 two Windows users' (@($r6 | Where-Object { $_ -like 'FAIL*' }).Count -eq 0 -and $r6.Count -eq 5) (($r6 | ForEach-Object { ($_ -split ':')[0] }) -join '; ')
+$r6 = @(Get-Content $resultsFile | Where-Object { $_ -match '^(PASS|FAIL|HARNESS) 6[a-e] ' })
+$r6h = @($r6 | Where-Object { $_ -like 'HARNESS*' }).Count -gt 0 -and @($r6 | Where-Object { $_ -like 'FAIL*' }).Count -eq 0
+Result '6 two Windows users' (@($r6 | Where-Object { $_ -notlike 'PASS*' }).Count -eq 0 -and $r6.Count -eq 5) (($r6 | ForEach-Object { ($_ -split ':')[0] }) -join '; ') $r6h
+if ($script:harness) { Add-Content -Path $resultsFile -Encoding UTF8 -Value "HARNESS: user 2's task did not run ($($script:harness) time(s) in this run; see round4.log '[harness]' lines)" }
 
 # ---- what is kept: the bridges' logs, install logs, settings without their keys
 Say '---- what is kept: the bridges'' logs, install logs, settings without their keys'

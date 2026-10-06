@@ -31,18 +31,37 @@ jobs:
         run: |
           echo "sha=$(git rev-parse HEAD)" | tee -a "$GITHUB_OUTPUT"
           git log -1 --format='bridge source: %H %s' | tee bridge-source.txt
+      # the setup committed at the ref (assets-test/bridge-go/FinComBridge-Setup-<version>.exe, with its .sha256) is the
+      # one installed when there is one: the exact file that ships; building from source is the fallback
+      - name: Committed setup at the ref
+        id: committed
+        run: |
+          f=$(ls assets-test/bridge-go/FinComBridge-Setup-*.exe 2>/dev/null | head -1 || true)
+          if [ -z "$f" ]; then echo "no committed setup at the ref: building from source"; echo "use=no" >> "$GITHUB_OUTPUT"; exit 0; fi
+          [ -f "$f.sha256" ] || { echo "::error::$f has no $f.sha256 next to it"; exit 1; }
+          want=$(awk '{print tolower($1); exit}' "$f.sha256"); got=$(sha256sum "$f" | awk '{print $1}')
+          echo "committed setup $f: SHA-256 $got (expected from $(basename "$f").sha256: $want)"
+          [ "$want" = "$got" ] || { echo "::error::committed setup SHA-256 mismatch: $got, expected $want"; exit 1; }
+          mkdir -p bridge-go/dist && cp "$f" bridge-go/dist/ && cp bridge-go/addon/FinComRecorder.tdl bridge-source.txt bridge-go/dist/
+          echo "setup origin: COMMITTED $f SHA-256 $got" | tee bridge-go/dist/setup-origin.txt
+          echo "use=yes" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-go@v5
+        if: steps.committed.outputs.use != 'yes'
         with:
           go-version-file: bridge-go/go.mod
           cache-dependency-path: bridge-go/go.sum
       - name: NSIS (makensis)
+        if: steps.committed.outputs.use != 'yes'
         run: sudo apt-get update -q && sudo apt-get install -y -q nsis
       - name: Program and setup (built only to be tested here)
+        if: steps.committed.outputs.use != 'yes'
         working-directory: bridge-go
         run: |
           FORCE_REBUILD=1 ./build.sh
           cp addon/FinComRecorder.tdl dist/
           cp ../bridge-source.txt dist/
+          f=$(ls dist/FinComBridge-Setup-*.exe | head -1)
+          echo "setup origin: BUILT from source $f SHA-256 $(sha256sum "$f" | awk '{print $1}')" | tee dist/setup-origin.txt
       - uses: actions/upload-artifact@v4
         with:
           name: bridge-dist
@@ -97,8 +116,9 @@ jobs:
         run: |
           & .github/tally-spike/flow4.ps1 *>&1 | Tee-Object -FilePath "$env:RES\round4.log" -Append
           $r = Join-Path $env:RES 'round4\results.txt'
-          if (Test-Path $r) { Get-Content $r | ForEach-Object { if ($_ -like 'FAIL*') { Write-Host "::error::$_" } else { Write-Host "::notice::$_" } } }
+          if (Test-Path $r) { Get-Content $r | ForEach-Object { if ($_ -like 'FAIL*') { Write-Host "::error::$_" } elseif ($_ -like 'HARNESS*') { Write-Host "::error title=harness failure (not the bridge)::$_" } else { Write-Host "::notice::$_" } } }
           if (-not (Test-Path $r) -or (Select-String -Path $r -Pattern '^FAIL' -Quiet)) { exit 1 }
+          if (Select-String -Path $r -Pattern '^HARNESS' -Quiet) { Write-Host 'harness failure: the test harness, not the bridge, failed (no bridge FAIL line)'; exit 2 }
           exit 0
       - name: Artifact (stub lines, screenshots, logs)
         if: always()
