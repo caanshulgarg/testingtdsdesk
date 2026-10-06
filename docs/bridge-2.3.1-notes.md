@@ -78,9 +78,9 @@ note. A Day Book upload is never refused, as before: its entries come in as Tall
 
 **A delete or cancel of an entry FinCom never had** settles by itself: "nothing to remove: the entry is not in FinCom's
 copy and no longer counts in Tally" (the line stays visible in Sync activity). A later Day Book cannot undo a delete; a
-cancelled entry from a later Day Book comes in as cancelled. If Tally later shows a newer change of that entry (a change
-made after FinCom heard of the delete or cancel), the newer change enters the books as usual and is not deleted or
-cancelled again.
+cancelled entry from a later Day Book comes in as cancelled. A deleted entry never comes back (Tally never brings a
+deleted entry back). A cancelled entry can still be changed in Tally: a change made after the cancel (the bridge notes
+Tally's change counter when it sends the cancel) enters the books as usual and is not cancelled again.
 
 **The company list asked in the background** (the bridge's own look at which companies are open, and the light check)
 now stops at 2 seconds too, like the entry request. When you look yourself (Update now, the tray, the setup) it is not cut. Every background
@@ -149,12 +149,11 @@ only, inside the 2-second rule, after postings, nothing else added, each bridge 
 - **A ledger renamed in Tally and used under its new name** (the owner's decision of 06-Oct-2026). FinCom does not know
   the new name, so the bridge fetches that ledger from Tally by the new name; Tally's answer is the same ledger (the same
   Tally GUID) FinCom holds under the old name. FinCom then applies the entry under its existing ledger, never as a second
-  ledger, and notes the new name for 2.3.2's rename (FinCom keeps the old name in 2.3.1). Every later entry with the new
-  name goes in the same way at once, without asking Tally again. The entry's lines must still total zero, and the amounts
-  are exactly Tally's, so the books' total does not change. FinCom uses the new name this way only after asking
-  Tally for it by that name confirmed it is the same ledger, and stops as soon as Tally shows the ledger under yet
-  another name or a different ledger under that name (a new ledger reusing an old name is then fetched and entered as
-  its own ledger). This needs database migration 59; without it such an entry waits, as before.
+  ledger, and notes the new name for 2.3.2's rename (FinCom keeps the old name in 2.3.1). Every entry with the new name
+  is checked the same way (held a moment, the ledger asked of Tally by that name, a very quick read): only when Tally's
+  answer for that very entry is the same ledger is it entered under FinCom's ledger. If the answer is another ledger (the
+  ledger renamed again and a new one took the name), that new ledger is added and the entry goes to it. The entry's lines
+  must still total zero, and the amounts are exactly Tally's, so the books' total does not change. This needs database migration 59; without it such an entry waits, as before.
 
 This needs the FinCom cloud update (tally-ingest) that goes out with 2.3.1; the ledger's deductee type is stored in the
 column migration 57 adds (`tally_ledgers.tds_deductee_type`); no other database change.

@@ -206,11 +206,12 @@ Day Book (`tally_ingest_day`, now through the 5-argument form with `p_keep` fals
 for the recorder path: a value removed in Tally reaches the copy by a Day Book upload. `tally_ingest_delete` = 50's text
 but a delete or cancel of an entry never in the copy settles at once ("nothing to remove: the entry is not in FinCom's
 copy and no longer counts in Tally", kept visible); a later body bringing that GUID is deleted (cancelled) again. The
-owner's review (06-Oct-2026): a delete or cancel settled so WITHOUT an AlterID records a bound in `tally_nothing_removed`
-(57, add-only, RLS on, the service role's only): the book's highest AlterID received then
-(`tally_sync_cursor.recorder_max_alter`, or the copy's highest), null when nothing is known. Only a body at or below the
-bound is deleted (cancelled) again; a body above it is a later change in Tally, applied normally, and that line never
-touches it again; with no bound, at most once. A delete or cancel with an AlterID is bounded by it as before. 50's day
+owner's review and re-review M-B (06-Oct-2026) for one settled so WITHOUT an AlterID (recorded in `tally_nothing_removed`,
+57, add-only, RLS on, the service role's only): a DELETE is applied again to any later body of its GUID (Tally never brings
+a deleted voucher's GUID back); a CANCEL only to a body at or below Tally's voucher counter (ALTVCHID) at the time of the
+cancel, which bridge 2.3.1 reads with FinComCompany and sends on the line (payload `vchCounter`): a body above it is a
+later change in Tally, applied normally; with no counter, at most once. A delete or cancel with an AlterID is bounded by
+it as before. 50's day
 release re-applies only a delete (cancel) applied above the day's AlterID (never one without an AlterID), so it needs no
 change; 60's R3-L2 (a create late below a cancel, then cancelled again) acts only when the cancel has an AlterID and the
 create's is below it, so it is bounded the same way.
@@ -235,8 +236,10 @@ function; NOT yet run on staging). One table, `tally_ledger_aliases` (book_id, t
 seen_at; key (book_id, tally_name); RLS: the firm's members read; written by tally-ingest only). When the ledger the bridge
 fetched by name for an entry (FinComLedgerByName) has the Tally GUID of a ledger FinCom holds under another name, the new
 name is recorded here (the note for 2.3.2's rename; 2.3.1 does not rename), and an entry using the new name is applied
-under FinCom's ledger (its lines' ledger names mapped, the amounts untouched; the balance guard still first), without
-asking Tally again. Review H2 (06-Oct-2026): `confirmed_at` and `ended_at` (add-only); an alias is used only once a
+under FinCom's ledger (its lines' ledger names mapped, the amounts untouched; the balance guard still first). Re-review
+M-A (06-Oct-2026): an alias never maps by itself: every entry naming it is held and the ledger fetched by its name; only
+a fetch made after that hold (`confirmed_at` above the hold) that gives the alias's GUID maps the entry when it comes
+again (its ":resolved"); another GUID ends the alias and the new ledger is added and used. Review H2 (06-Oct-2026): `confirmed_at` and `ended_at` (add-only); an alias is used only once a
 fetch by its name confirmed the GUID and while it is not ended; it ends (kept) when its GUID is seen under another name
 or its name with another GUID (ledger_changes, ledger_list), so a new ledger reusing an old name is held and fetched,
 never put on the old ledger. A cloud without 59 records nothing and such an entry keeps waiting, as before. Tested by

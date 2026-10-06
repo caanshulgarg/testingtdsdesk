@@ -143,6 +143,8 @@ type change struct {
 	// 2.3.1 (the owner's "full", 06-Oct-2026): the body is the answer to this version's entry request, which fetches every
 	// field migration 56 keeps (liveFullFields): sent "full": true, so FinCom stores its blanks as Tally has them
 	full bool
+	// re-review M-B: a cancel sent without an AlterID: Tally's voucher counter (ALTVCHID) read then (liveCancelCounters)
+	vchCounter int64
 }
 
 // the fields migration 56 keeps for a body that did not ask them (2.3.0's request): the party GSTIN, place of supply,
@@ -1968,6 +1970,39 @@ byDay:
 		}
 		live.mu.Unlock()
 	}
+	if !slow && !yield() {
+		liveCancelCounters(tc, company, port, need)
+	}
+}
+
+// re-review M-B (06-Oct-2026): the cancels of this group that go with Tally's GUID but without an AlterID carry Tally's
+// voucher counter now (ALTVCHID, the existing FinComCompany request, one for the group): FinCom cancels again only a body
+// of that GUID at or below it (migration 57); a later change in Tally stays live. A delete carries none (always deleted
+// again: Tally never brings a deleted GUID back). Not read: the cancel goes without it (FinCom then cancels again at most once)
+func liveCancelCounters(tc *TC, company string, port int, cs []*change) {
+	var need []*change
+	live.mu.Lock()
+	for _, c := range cs {
+		if c.event == "cancelled" && toI64(onlyDigits(c.alterId)) <= 0 && c.guid != "" && !c.guidHeld && !c.guidFetch && c.vchCounter == 0 {
+			need = append(need, c)
+		}
+	}
+	live.mu.Unlock()
+	if len(need) == 0 || port == 0 {
+		return
+	}
+	if _, given, err := companyCheckNumbers(tc, company, port); err != nil || !given {
+		return
+	}
+	n := companyAlter(company)
+	if n <= 0 {
+		return
+	}
+	live.mu.Lock()
+	for _, c := range need {
+		c.vchCounter = n
+	}
+	live.mu.Unlock()
 }
 
 func errText(err error) string {
@@ -2004,6 +2039,9 @@ func (c *change) wire() M {
 	m := M{"line_id": c.lineId, "event": c.event, "object_guid": c.guid, "master_id": c.masterId, "alter_id": alter, "vch_type": c.vchType, "vch_no": c.vchNo,
 		"vch_date": c.vchDate, "saved_at": c.at, "pc": liveComputerFn(), "user": c.user, "company_guid": c.companyGuid, "ledgers": ls, "narration": narr,
 		"fid": fid, "xml": c.xml, "source": c.source}
+	if c.event == "cancelled" && alter == nil && c.vchCounter > 0 {
+		m["vch_counter"] = c.vchCounter // re-review M-B: FinCom cancels again only a body at or below it
+	}
 	// 2.3.1: FinCom passes the body's blanks as sent (the owner's "full", 06-Oct-2026); false on every other line (one shape)
 	m["full"] = c.full && c.xml != ""
 	if lineFid != "" {

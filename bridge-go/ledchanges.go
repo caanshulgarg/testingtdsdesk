@@ -303,6 +303,7 @@ func ledWantedRun(j M) {
 	}
 	type want struct{ company, guid string }
 	names := map[want][]string{}
+	heldAt := map[string]time.Time{} // re-review M-A: the latest hold FinCom says waits for each name
 	var order []want
 	for _, x := range rows {
 		e := obj(x)
@@ -330,6 +331,12 @@ func ledWantedRun(j M) {
 		if !contains(names[w], name) {
 			names[w] = append(names[w], name)
 		}
+		if h, err := time.Parse(time.RFC3339Nano, str(e["heldAt"])); err == nil {
+			k := companyKey(co) + "|" + held + "|" + strings.ToLower(name)
+			if h.After(heldAt[k]) {
+				heldAt[k] = h
+			}
+		}
 	}
 	gap := time.Duration(keepNum("LedgerWantedGapSec", 600)) * time.Second
 	for _, w := range order {
@@ -352,7 +359,8 @@ func ledWantedRun(j M) {
 				continue // review L4: Tally has no ledger of that name: said once, not asked again in this run
 			}
 			last, had := ledWantAt[k]
-			if had && nowFn().Sub(last) < gap && !nowFn().Before(last) {
+			// re-review M-A: a hold after the last ask has its own fetch (only a fetch made for that hold maps its entry)
+			if had && nowFn().Sub(last) < gap && !nowFn().Before(last) && !heldAt[k].After(last) {
 				ledWantMu.Unlock()
 				continue // asked a short while ago
 			}

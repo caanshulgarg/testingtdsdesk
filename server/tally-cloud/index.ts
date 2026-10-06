@@ -427,21 +427,26 @@ async function ledgersWantedFor(dev: any, firm: string, bridge: string) {
       .sort((a, b) => Date.parse(String(a.received_at)) - Date.parse(String(b.received_at)));
     if (!rows.length) return null;
     const s = (v: unknown, n: number) => typeof v === "string" || typeof v === "number" ? String(v).trim().slice(0, n) : "";
-    const linked = new Map<string, string | null>(), still = new Map<string, Set<string> | null>(), seen = new Set<string>();
+    const linked = new Map<string, string | null>(), still = new Map<string, LedgerWaitState | null>(), seen = new Map<string, Record<string, string>>();
     const out: Record<string, string>[] = [];
     for (const r of rows) {
       const company = s(r.company, 200), book = String(r.book_id || "");
       if (!company || !book) continue;
       if (!linked.has(company)) { try { linked.set(company, await bookForBeat(firm, company)); } catch { linked.set(company, null); } }
       if (linked.get(company) !== book) continue;
-      if (!still.has(book)) still.set(book, await ledgersMissing(book, rows.filter((x) => String(x.book_id || "") === book).flatMap(waitsFor)));
+      if (!still.has(book)) still.set(book, await ledgerWaitState(book, rows.filter((x) => String(x.book_id || "") === book).flatMap(waitsFor)));
       const m = still.get(book);
       if (!m) continue;
+      const holdAt = Date.parse(String(r.received_at));
       for (const name of waitsFor(r)) {
         const k = book + "|" + name;
-        if (!m.has(name) || seen.has(k)) continue;
-        seen.add(k);
-        out.push({ company, company_guid: s(r.company_guid, 100), name });
+        if (!stillMissing(m, name, holdAt)) continue;
+        // re-review M-A: heldAt, the latest hold waiting for it: the bridge asks again unless it asked after that
+        const had = seen.get(k);
+        if (had) { if (Date.parse(had.heldAt) < holdAt) had.heldAt = new Date(holdAt).toISOString(); continue; }
+        const e = { company, company_guid: s(r.company_guid, 100), name, heldAt: new Date(holdAt).toISOString() };
+        seen.set(k, e);
+        out.push(e);
         if (out.length >= LEDGERS_WANTED_MAX) return out;
       }
     }
@@ -500,7 +505,7 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
         const newest = xs.slice().sort((a, b) => Number(b?.id || 0) - Number(a?.id || 0) || Date.parse(String(b?.received_at)) - Date.parse(String(a?.received_at)))[0];
         if (newest && String(newest.state || "") === "held" && waitsFor(newest).length) {
           if (xs.length > 2 || xs.filter((x) => waitsFor(x).length).length > 1) return false;
-          r._waits = waitsFor(newest); r._ledgerAgain = true;
+          r._waits = waitsFor(newest); r._ledgerAgain = true; r._holdAt = Date.parse(String(newest.received_at));
           return true;
         }
         return !xs.length || (xs.length === 1 && heldIncomplete(xs[0]) && !waitsFor(xs[0]).length);
@@ -513,12 +518,13 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
     if (waiting.length) {
       const byBook = new Map<string, string[]>();
       for (const r of waiting) byBook.set(String(r.book_id || ""), [...(byBook.get(String(r.book_id || "")) || []), ...r._waits]);
-      const still = new Map<string, Set<string> | null>();
-      for (const [b, ns] of byBook) still.set(b, b ? await ledgersMissing(b, ns) : null);
+      const still = new Map<string, LedgerWaitState | null>();
+      for (const [b, ns] of byBook) still.set(b, b ? await ledgerWaitState(b, ns) : null);
       rows = rows.filter((r) => {
         if (!r._waits.length) return true;
         const m = still.get(String(r.book_id || ""));
-        return !!m && !r._waits.some((n: string) => m.has(n));
+        const holdAt = Number.isFinite(r._holdAt) ? r._holdAt : Date.parse(String(r.received_at));
+        return !!m && !r._waits.some((n: string) => stillMissing(m, n, holdAt));
       });
     }
     const books = [...new Set(rows.map((r) => String(r.book_id || "")).filter(Boolean))];
@@ -1319,6 +1325,11 @@ function cleanRecorderLine(x: any, me: { id: string }): { line?: Record<string, 
     company_guid: s(x?.company_guid, 100), bridge: me.id, object_guid: s(x?.object_guid, 100) || null, master_id: s(x?.master_id, 40), alter_id: alter,
     vch_type: s(x?.vch_type, 60), vch_no: s(x?.vch_no, 60), vch_date: day, ledgers, save_ms: Number.isFinite(ms) && ms >= 0 && ms < 3.6e6 ? Math.round(ms * 1000) / 1000 : null };
   if (event.startsWith("ledger_")) { line.name = cleanName(s(x?.name, 300)) || null; line.from = cleanName(s(x?.from, 300)) || null; line.to = cleanName(s(x?.to, 300)) || null; }
+  // re-review M-B (06-Oct-2026): a cancel without an AlterID carries Tally's voucher counter at the time of the cancel (the
+  // bridge's vch_counter, from FinComCompany): kept in the payload (vchCounter), migration 57 cancels again only a body of
+  // that GUID at or below it. Never on a delete (always deleted again) nor with an AlterID
+  const vc = Number(x?.vch_counter);
+  if (event === "cancelled" && alter === null && typeof x?.vch_counter === "number" && Number.isInteger(vc) && vc > 0 && vc < 1e15) line.vchCounter = vc;
   const xml = typeof x?.xml === "string" ? x.xml : "";
   // migration 45: a short line (FinCom's own entry): its FinCom id as fid, or the text after "TDSDesk:" in the narration it
   // carries (the rule of parse.js); an id outside [A-Za-z0-9._-]{1,80} is none
@@ -1413,18 +1424,26 @@ function ledgerWaitWords(names: string[]): string {
 }
 // the names of these the book's ledger list has no row of (exact clean name, else the same name in other capitals); null
 // when the list cannot be read or the book has none yet (then nothing is held)
-async function ledgersMissing(book: string, names: string[]): Promise<Set<string> | null> {
+// re-review M-A (06-Oct-2026): an alias never maps an entry by itself. A held line's name is no longer missing only when it
+// is in the ledger list, or when a fetch by that name made AFTER the line was held (the alias's confirmed_at above the hold)
+// gave the alias's GUID. Missing (and so wanted again by name) otherwise: every use of an alias has its own fetch
+type LedgerWaitState = { raw: Set<string>; al: Map<string, { fincom: string; at: number }> };
+async function ledgerWaitState(book: string, names: string[]): Promise<LedgerWaitState | null> {
   const raw = await ledgersMissingRaw(book, names);
-  if (!raw || !raw.size) return raw;
-  const al = await ledgerAliases(book, [...raw]);
-  return new Set([...raw].filter((n) => !al.has(n)));
+  if (!raw) return null;
+  return { raw, al: raw.size ? await ledgerAliases(book, [...raw]) : new Map() };
+}
+function stillMissing(m: LedgerWaitState, name: string, holdAt: number): boolean {
+  if (!m.raw.has(name)) return false;
+  const a = m.al.get(name);
+  return !(a && Number.isFinite(holdAt) && a.at > holdAt);
 }
 // bridge 2.3.1 (the owner's decision of 06-Oct-2026, migration 59): a ledger renamed in Tally and fetched for an unknown name.
 // The names of these that Tally gave to a ledger FinCom holds under another name (tally_ledger_aliases: same Tally GUID,
 // recorded by ledger_changes), each with FinCom's name, when FinCom's ledger is still in the book's list. An entry using
 // such a name is applied under FinCom's ledger and never waits for it. Empty on any error (a cloud without 59: as before)
-async function ledgerAliases(book: string, names: string[]): Promise<Map<string, string>> {
-  const out = new Map<string, string>();
+async function ledgerAliases(book: string, names: string[]): Promise<Map<string, { fincom: string; at: number }>> {
+  const out = new Map<string, { fincom: string; at: number }>();
   try {
     const want = [...new Set(names.filter(Boolean))].slice(0, 2000);
     const rows: any[] = [];
@@ -1436,11 +1455,12 @@ async function ledgerAliases(book: string, names: string[]): Promise<Map<string,
     // review H2 (06-Oct-2026): only a valid alias: confirmed by a fetch by its name (confirmed_at) and not ended (ended_at).
     // An unconfirmed or ended one: the entry is held and the ledger fetched by its name (which confirms it, or brings a new
     // ledger of that name)
-    const pairs = rows.filter((r: any) => r?.confirmed_at && !r?.ended_at).map((r: any) => [String(r?.tally_name || ""), String(r?.fincom_name || "")]).filter(([a, b]) => a && b && a !== b);
+    const pairs = rows.filter((r: any) => r?.confirmed_at && !r?.ended_at).map((r: any) => [String(r?.tally_name || ""), String(r?.fincom_name || ""), Date.parse(String(r.confirmed_at))] as [string, string, number])
+      .filter(([a, b, t]) => a && b && a !== b && Number.isFinite(t));
     if (!pairs.length) return out;
     const gone = await ledgersMissingRaw(book, pairs.map(([, b]) => b));
     if (!gone) return out;
-    for (const [a, b] of pairs) if (!gone.has(b)) out.set(a, b);
+    for (const [a, b, t] of pairs) if (!gone.has(b)) out.set(a, { fincom: b, at: t });
   } catch (e) {
     console.log("tally-ingest: the renamed ledgers not read:", book, String((e as Error)?.message || e).slice(0, 200));
   }
@@ -1448,7 +1468,7 @@ async function ledgerAliases(book: string, names: string[]): Promise<Map<string,
 }
 // a line's entry under FinCom's ledger names (the aliases above): the ledger lines' names, the party, and the ledger / party
 // named in its details; amounts, dates and everything else untouched (the lines total what they did)
-function mapLedgerNames(l: Record<string, any>, al: Map<string, string>): string[] {
+function mapLedgerNames(l: Record<string, any>, al: Map<string, string>): string[] {     // al: Tally's name -> FinCom's
   const used = new Set<string>();
   const m = (n: unknown) => { const k = String(n ?? ""); if (al.has(k)) { used.add(k); return al.get(k)!; } return n; };
   l.lines = (l.lines as any[]).map((x: any) => Array.isArray(x) && al.has(String(x[1] ?? "")) ? [x[0], m(x[1]), ...x.slice(2)] : x);
@@ -1512,22 +1532,28 @@ async function ledgersMissingRaw(book: string, names: string[]): Promise<Set<str
 async function ledgerWait(book: string, send: Record<string, any>[]) {
   const look = send.filter((l) => l.short !== true && !l.heldWhy && Array.isArray(l.vouchers) && l.vouchers.length && Array.isArray(l.lines) && l.lines.length);
   if (!look.length) return;
-  const raw = await ledgersMissingRaw(book, look.flatMap((l) => (l.lines as any[]).map((x: any) => String(x?.[1] ?? ""))));
-  if (!raw || !raw.size) return;
+  const st = await ledgerWaitState(book, look.flatMap((l) => (l.lines as any[]).map((x: any) => String(x?.[1] ?? ""))));
+  if (!st || !st.raw.size) return;
   // 2.3.1 (migration 59): a name Tally gave to a ledger FinCom holds under another name: the entry goes under FinCom's
-  // ledger at once (said in the payload as renamedLedgers, the note for 2.3.2), never waiting, never a second ledger
-  const al = await ledgerAliases(book, [...raw]);
-  const miss = new Set([...raw].filter((n) => !al.has(n)));
-  if (al.size) {
-    for (const l of look) {
-      const used = mapLedgerNames(l, al);
-      if (!used.length) continue;
-      const ren = Object.fromEntries(used.map((n) => [n, al.get(n)]));
-      console.log("tally-ingest recorder_lines: ledger renamed in Tally, applied under FinCom's name", l.line_id, JSON.stringify(ren));
-      l.payload = { ...(l.payload || {}), renamedLedgers: ren };
+  // ledger (said in the payload as renamedLedgers, the note for 2.3.2), never a second ledger. Re-review M-A: only an entry
+  // that comes again for its own hold (its ":resolved") after a fetch by that name made since the hold gave the alias's
+  // GUID; any other entry naming it is held and the ledger fetched by its name (each use its own fetch)
+  const holds = await ledgerHoldTimes(book, look.map((l) => String(l.line_id || "")).filter((id) => id.endsWith(":resolved")).map((id) => id.slice(0, -9)));
+  for (const l of look) {
+    const id = String(l.line_id || ""), holdAt = id.endsWith(":resolved") ? (holds.get(id.slice(0, -9)) ?? NaN) : NaN;
+    const use = new Map<string, string>();
+    for (const n of new Set((l.lines as any[]).map((x: any) => String(x?.[1] ?? "")))) {
+      const a = st.al.get(n);
+      if (st.raw.has(n) && a && !stillMissing(st, n, holdAt)) use.set(n, a.fincom);
     }
+    if (!use.size) continue;
+    const used = mapLedgerNames(l, use);
+    if (!used.length) continue;
+    const ren = Object.fromEntries(used.map((n) => [n, use.get(n)]));
+    console.log("tally-ingest recorder_lines: ledger renamed in Tally (confirmed by a fetch for this hold), applied under FinCom's name", l.line_id, JSON.stringify(ren));
+    l.payload = { ...(l.payload || {}), renamedLedgers: ren };
   }
-  if (!miss.size) return;
+  const miss = new Set([...st.raw]);
   for (const l of look) {
     const all = [...new Set((l.lines as any[]).map((x: any) => String(x?.[1] ?? "")).filter((n) => miss.has(n)))];
     // review L4 (06-Oct-2026): a name a TDL string cannot hold (the bridge's ledNameOK: a quote mark, a control character,
@@ -1541,6 +1567,27 @@ async function ledgerWait(book: string, send: Record<string, any>[]) {
     l.vouchers = []; l.lines = []; l.heldWhy = why;
     l.payload = { ...(l.payload || {}), heldWhy: why, ...(bad.length ? { unaskableLedgers: bad.slice(0, 10) } : { waitLedgers: names }) };
   }
+}
+// re-review M-A: when each line was last held waiting for a ledger (its own row or an earlier ":resolved" of it), by line id
+async function ledgerHoldTimes(book: string, ids: string[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  const want = [...new Set(ids.filter(Boolean))].slice(0, 400);
+  if (!want.length) return out;
+  try {
+    const all = want.flatMap((id) => [id, id + ":resolved"]);
+    for (let i = 0; i < all.length; i += 60) {
+      const { data, error } = await db.from("tally_recorder_lines").select("line_id, received_at, held_why").eq("book_id", book).in("line_id", all.slice(i, i + 60));
+      if (error) return out;
+      for (const r of (data || []) as any[]) {
+        if (!String(r?.held_why || "").startsWith(LEDGER_WAIT)) continue;
+        const base = String(r.line_id || "").replace(/:resolved$/, ""), t = Date.parse(String(r.received_at));
+        if (Number.isFinite(t) && t > (out.get(base) ?? -Infinity)) out.set(base, t);
+      }
+    }
+  } catch (e) {
+    console.log("tally-ingest: the holds for a ledger not read:", book, String((e as Error)?.message || e).slice(0, 200));
+  }
+  return out;
 }
 // review L4: a name the bridge can ask Tally for (its ledNameOK: trimmed, 1-200 characters, no quote mark, no control character)
 function askableName(n: string): boolean {

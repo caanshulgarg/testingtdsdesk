@@ -17,10 +17,11 @@ cloud's own reader (server/tally-cloud/parse.js) into the shape tally-ingest sen
      stored (never refused) with the plain words in check_notes.
   4. a delete or cancel of an entry never in the copy settles by itself ("nothing to remove: ..."), kept; a later Day Book
      bringing the entry cannot undo the delete; a cancelled one comes in cancelled.
-  4c. (the owner's review of 06-Oct-2026) a delete or cancel settled as "nothing to remove" WITHOUT an AlterID records a
-     bound (tally_nothing_removed: the book's highest AlterID received then): a later body at or below it is deleted
-     (cancelled) again; one above it is a later change in Tally, applied and left live, and the line never touches it again;
-     with no bound known, re-applied at most once.
+  4c. (the owner's review and re-review M-B, 06-Oct-2026) settled as "nothing to remove" WITHOUT an AlterID: a DELETE is
+     applied again to any later body of its GUID (Tally never brings a deleted GUID back); a CANCEL is bounded by Tally's
+     voucher counter at the time of the cancel (the bridge's vchCounter on the line, from FinComCompany): a body at or
+     below it is cancelled again, one above it is a later change in Tally, applied and left live; with no counter, at
+     most once.
   5. RLS: the firm's member reads the details; another firm's member reads none.
 Prints md5(pg_get_functiondef) and md5(prosrc) of every function of the file, the file's md5 and its 'delete from' count.
 RED: before the file exists it stops at the first check."""
@@ -271,31 +272,37 @@ try:
     except RuntimeError: good = False
     ok(not good, "an authenticated member cannot write the details")
 
-    print("== 4c. 'nothing to remove' without an AlterID never re-cancels for ever (the owner, 06-Oct-2026 review)")
-    NB, NN = G(0x2003), G(0x2004)
+    print("== 4c. 'nothing to remove' without an AlterID (the owner's review, 06-Oct-2026; re-review M-B)")
+    NB, NN, ND = G(0x2003), G(0x2004), G(0x2005)
     hw = lambda: int(db.one("select greatest(coalesce((select recorder_max_alter from tally_sync_cursor where book_id = %s), 0), coalesce((select max(alter_id) from tally_vouchers where book_id = %s), 0))" % (q(B), q(B))))
     mx = hw()
-    got = states(apply([gone_line("x-nb", NB, "cancelled", None)]))
-    nr = (rows("select coalesce(bound::text, '') as bound, reapplied::text as n from tally_nothing_removed where book_id = %s and guid = %s and event = 'cancelled'" % (q(B), q(NB))) or [{}])[0]
-    ok(got == ["applied"] and nr.get("bound") == str(mx) and nr.get("n") == "0",
-       "a cancel with no AlterID of an entry never in the copy settles; its bound is the book's highest AlterID received then (%s; %s; %s)" % (got, nr, mx))
-    bl = [[NB, "Spike Customer", -100, "", None, []], [NB, "Sales GST 18%", 100, "", None, []]]
-    bv = dict(sv, guid=NB, no="303", alter=mx - 1, items=[], costs=[], checks=[])
     base4 = [nv, ncv]
-    ok(day(B, D2, ALLV + base4 + [bv], ALLL + nl + bl).get("ok") is True and vx(NB)["can"] == "true",
-       "a body at or below the bound (AlterID %d, an older read): cancelled again (%s)" % (mx - 1, vx(NB)))
-    got = states(apply([rline("x-nb-up", dict(bv, alter=mx + 50), bl, ev="altered")]))
+    lns = lambda g: [[g, "Spike Customer", -100, "", None, []], [g, "Sales GST 18%", 100, "", None, []]]
+    # a delete: Tally never brings a deleted voucher's GUID back: no bound, a body of it is always deleted again, even an
+    # older Day Book's read before the delete with an AlterID above FinCom's highest
+    got = states(apply([gone_line("x-nd", ND, "deleted", None)]))
+    ndv = dict(sv, guid=ND, no="305", alter=mx + 500, items=[], costs=[], checks=[])
+    ok(got == ["applied"] and day(B, D2, ALLV + base4 + [ndv], ALLL + nl + lns(ND)).get("ok") is True and vx(ND)["del"] != "",
+       "a delete without an AlterID, then an older body above FinCom's highest (AlterID %d): deleted again (%s; %s)" % (mx + 500, got, vx(ND)))
+    ok(day(B, D2, ALLV + base4 + [dict(ndv, alter=mx + 600)], ALLL + nl + lns(ND)).get("ok") is True and vx(ND)["del"] != "", "and again for another body: a deleted entry never comes back (%s)" % vx(ND))
+    # a cancel with Tally's voucher counter (ALTVCHID at the time of the cancel, sent by the bridge as vchCounter)
+    V = mx + 700
+    got = states(apply([dict(gone_line("x-nb", NB, "cancelled", None), vchCounter=V)]))
+    bv = dict(sv, guid=NB, no="303", alter=V, items=[], costs=[], checks=[])
+    ok(got == ["applied"] and day(B, D2, ALLV + base4 + [dict(ndv, alter=mx + 600), bv], ALLL + nl + lns(ND) + lns(NB)).get("ok") is True and vx(NB)["can"] == "true",
+       "a cancel with Tally's counter %d: a body at it (an older read) is cancelled again (%s)" % (V, vx(NB)))
+    got = states(apply([rline("x-nb-up", dict(bv, alter=V + 50), lns(NB), ev="altered")]))
     ok(got == ["applied"] and vx(NB)["can"] == "false" and vx(NB)["del"] == "",
-       "a body above the bound (AlterID %d, a later change in Tally): applied and stays live (%s; %s)" % (mx + 50, got, vx(NB)))
-    ok(day(B, D2, ALLV + base4 + [dict(bv, alter=mx + 60)], ALLL + nl + bl).get("ok") is True and vx(NB)["can"] == "false" and vx(NB)["del"] == "",
-       "a third body after that (AlterID %d): not cancelled (%s)" % (mx + 60, vx(NB)))
-    got = states(apply([gone_line("x-nn", NN, "deleted", None)]))
-    db.sql("update tally_nothing_removed set bound = null where book_id = %s and guid = %s" % (q(B), q(NN)))     # no bound known at all
-    nnv = dict(sv, guid=NN, no="304", alter=mx + 70, items=[], costs=[], checks=[]); nnl = [[NN, "Spike Customer", -100, "", None, []], [NN, "Sales GST 18%", 100, "", None, []]]
-    ok(day(B, D2, ALLV + base4 + [dict(bv, alter=mx + 60), nnv], ALLL + nl + bl + nnl).get("ok") is True and vx(NN)["del"] != "",
-       "no bound known: the first body is deleted again, once (%s)" % vx(NN))
-    ok(day(B, D2, ALLV + base4 + [dict(bv, alter=mx + 60), dict(nnv, alter=mx + 80)], ALLL + nl + bl + nnl).get("ok") is True and vx(NN)["del"] == "",
-       "no bound known: a later body is not deleted again (at most once, then never) (%s)" % vx(NN))
+       "a body above the counter (AlterID %d, a later change in Tally): applied and stays live (%s; %s)" % (V + 50, got, vx(NB)))
+    ok(day(B, D2, ALLV + base4 + [dict(ndv, alter=mx + 600), dict(bv, alter=V + 60)], ALLL + nl + lns(ND) + lns(NB)).get("ok") is True and vx(NB)["can"] == "false" and vx(NB)["del"] == "",
+       "a third body after that (AlterID %d): not cancelled (%s)" % (V + 60, vx(NB)))
+    # a cancel with no counter: cancelled again at most once
+    got = states(apply([gone_line("x-nn", NN, "cancelled", None)]))
+    nnv = dict(sv, guid=NN, no="304", alter=mx + 70, items=[], costs=[], checks=[])
+    ok(day(B, D2, ALLV + base4 + [dict(ndv, alter=mx + 600), dict(bv, alter=V + 60), nnv], ALLL + nl + lns(ND) + lns(NB) + lns(NN)).get("ok") is True and vx(NN)["can"] == "true",
+       "a cancel with no counter: the first body is cancelled again, once (%s)" % vx(NN))
+    ok(day(B, D2, ALLV + base4 + [dict(ndv, alter=mx + 600), dict(bv, alter=V + 60), dict(nnv, alter=mx + 80)], ALLL + nl + lns(ND) + lns(NB) + lns(NN)).get("ok") is True and vx(NN)["can"] == "false",
+       "a cancel with no counter: a later body is not cancelled again (at most once, then never) (%s)" % vx(NN))
     ok(db.one("select relrowsecurity::text from pg_class where oid = 'public.tally_nothing_removed'::regclass") == "true"
        and db.one("select has_table_privilege('authenticated', 'public.tally_nothing_removed', 'select')::text") == "false"
        and db.one("select has_table_privilege('anon', 'public.tally_nothing_removed', 'select')::text") == "false", "tally_nothing_removed: RLS on, nothing for anon or authenticated")

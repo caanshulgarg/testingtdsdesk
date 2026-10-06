@@ -28,12 +28,10 @@ DEL = DEL.replace(OLDNF, """  if not found then
     -- 57 (the owner's decision of 06-Oct-2026): a delete or cancel of an entry never in FinCom's copy settles by itself (the line
     -- kept, with these words): nothing is removed and nothing is waited for. A later Day Book cannot undo it: an entry body
     -- that brings this GUID later is deleted (cancelled) again at once (tally_ingest_entries, 5 arguments; and 50's day release)
-    -- 57 (the owner's review of 06-Oct-2026): the bound of that re-apply (tally_nothing_removed): the line's AlterID, else the
-    -- book's highest AlterID received so far; null when nothing is known (then at most once)
+    -- 57 (the owner's review of 06-Oct-2026): the settle recorded (tally_nothing_removed: its AlterID when it had one); a
+    -- cancel without one is re-applied at most once unless the bridge sent Tally's voucher counter (re-review M-B)
     insert into tally_nothing_removed (book_id, guid, event, bound)
-    values (p_book, g, case when p_cancel then 'cancelled' else 'deleted' end,
-            coalesce(p_alter, nullif(greatest(coalesce((select c.recorder_max_alter from tally_sync_cursor c where c.book_id = p_book), 0),
-                                              coalesce((select max(v.alter_id) from tally_vouchers v where v.book_id = p_book), 0)), 0)))
+    values (p_book, g, case when p_cancel then 'cancelled' else 'deleted' end, p_alter)
     on conflict (book_id, guid, event) do update set bound = greatest(tally_nothing_removed.bound, excluded.bound), settled_at = now();
     return jsonb_build_object('ok', true, 'state', 'applied', 'guid', g, 'action', act, 'unknown', true, 'settled', true,
       'why', 'nothing to remove: the entry is not in FinCom''s copy and no longer counts in Tally');
@@ -43,7 +41,7 @@ ENT = block(m56, "create or replace function public.tally_ingest_entries(p_book 
 OLDENT_DECL = "declare vs jsonb := p_vouchers; ls jsonb := p_lines;"
 OLDENT_RET = "  return tally_ingest_entries(p_book, vs, ls, p_rebuild);\nend $function$;"
 assert ENT.count(OLDENT_DECL) == 1 and ENT.count(OLDENT_RET) == 1
-ENT = ENT.replace(OLDENT_DECL, "declare vs jsonb := p_vouchers; ls jsonb := p_lines; res jsonb; sent text[]; x record; nb bigint; nr int;     -- 57: res, sent, x, nb, nr")
+ENT = ENT.replace(OLDENT_DECL, "declare vs jsonb := p_vouchers; ls jsonb := p_lines; res jsonb; sent text[]; x record; nr int;     -- 57: res, sent, x, nr")
 ENT = ENT.replace(OLDENT_RET, """  res := tally_ingest_entries(p_book, vs, ls, p_rebuild);
   -- 57: the entry's details (bridge 2.3.1 part A), written for both paths here; nothing when the entries were not stored (a
   -- locked month)
@@ -51,26 +49,33 @@ ENT = ENT.replace(OLDENT_RET, """  res := tally_ingest_entries(p_book, vs, ls, p
     perform tally_ingest_details(p_book, vs, coalesce(p_keep, false));
     -- 57: a later entry body (a Day Book, or another computer's line) cannot undo a delete or cancel already received: an
     -- applied delete (cancel) of the entry above the body's AlterID is applied again. One settled as "nothing to remove"
-    -- without an AlterID (the owner's review of 06-Oct-2026) only up to its bound (tally_nothing_removed: the book's highest
-    -- AlterID received when it settled): a body at or below it is the old entry, deleted (cancelled) again; one above it is a
-    -- later change in Tally, applied and never touched by that line again; with no bound known, at most once
+    -- without an AlterID (the owner's review and re-review M-B of 06-Oct-2026): a DELETE is applied again to any body of its
+    -- GUID (Tally never brings a deleted voucher's GUID back); a CANCEL (the voucher still exists and can be altered) only to
+    -- a body at or below Tally's voucher counter (ALTVCHID) at the time of the cancel, which the bridge sends on the line
+    -- (payload vchCounter, read with FinComCompany): one above it is a later change in Tally, applied and never touched by
+    -- that line again; with no counter, at most once (tally_nothing_removed.reapplied)
     select coalesce(array_agg(distinct y->>'guid'), '{}') into sent from jsonb_array_elements(vs) y where coalesce(y->>'guid', '') <> '';
     for x in select v.guid, l.event, max(l.alter_id) as alt, max(coalesce(v.alter_id, 0)) as valt,
-                    bool_or(coalesce(l.alter_id, 0) > coalesce(v.alter_id, 0)) as above from tally_vouchers v
+                    bool_or(coalesce(l.alter_id, 0) > coalesce(v.alter_id, 0)) as above,
+                    max(case when l.alter_id is null and coalesce(l.payload->>'vchCounter', '') ~ '^[0-9]{1,15}$' then (l.payload->>'vchCounter')::bigint end) as vcc from tally_vouchers v
                join tally_recorder_lines l on l.book_id = p_book and l.object_guid = v.guid and l.state = 'applied' and l.event in ('deleted', 'cancelled')
               where v.book_id = p_book and v.guid = any(sent) and v.deleted_at is null and (l.event = 'deleted' or not v.cancelled)
                 and (coalesce(l.alter_id, 0) > coalesce(v.alter_id, 0) or (l.alter_id is null and coalesce(l.held_why, '') like 'nothing to remove%'))
               group by v.guid, l.event order by v.guid, l.event
     loop
-      if not x.above then
-        select n.bound, n.reapplied into nb, nr from tally_nothing_removed n where n.book_id = p_book and n.guid = x.guid and n.event = x.event for update;
-        if not found then
-          insert into tally_nothing_removed (book_id, guid, event, bound, reapplied) values (p_book, x.guid, x.event, null, 0) on conflict do nothing;
-          nb := null; nr := 0;
+      if not x.above and x.event = 'cancelled' then
+        if x.vcc is not null then
+          if x.valt > x.vcc then continue; end if;     -- a later change in Tally than the cancel: left live
+        else
+          select n.reapplied into nr from tally_nothing_removed n where n.book_id = p_book and n.guid = x.guid and n.event = x.event for update;
+          if not found then
+            insert into tally_nothing_removed (book_id, guid, event, bound, reapplied) values (p_book, x.guid, x.event, null, 0) on conflict do nothing;
+            nr := 0;
+          end if;
+          if nr > 0 then continue; end if;     -- no counter: at most once
+          update tally_nothing_removed set reapplied = reapplied + 1 where book_id = p_book and guid = x.guid and event = x.event;
         end if;
-        if (nb is not null and x.valt > nb) or (nb is null and nr > 0) then continue; end if;
-        update tally_nothing_removed set reapplied = reapplied + 1 where book_id = p_book and guid = x.guid and event = x.event;
-      end if;
+      end if;     -- a delete: always (Tally never brings a deleted voucher's GUID back)
       perform tally_ingest_delete(p_book, x.guid, x.alt, x.event = 'cancelled', 'a delete or cancel already received: a later entry body does not undo it');
     end loop;
   end if;

@@ -37,3 +37,29 @@ func TestLedWantedNeverAskableSaidOnce(t *testing.T) {
 		t.Fatalf("the name Tally does not have said %d times, want once", n)
 	}
 }
+
+// re-review M-A (06-Oct-2026): every entry naming an aliased name is held and the ledger fetched for THAT hold: a ledger
+// FinCom names again with a later heldAt is asked again at once, whatever the 10-minute gap; the same hold is not
+func TestLedWantedAskedAgainForEachHold(t *testing.T) {
+	_, f, _ := led231Bridge(t)
+	old := nowFn
+	t.Cleanup(func() { nowFn = old })
+	at := time.Now()
+	nowFn = func() time.Time { return at }
+	w := func(held time.Time) M {
+		return M{"ledgersWanted": []any{M{"company": zz, "company_guid": b220CoGUID, "name": "Customer A", "heldAt": held.UTC().Format(time.RFC3339Nano)}}}
+	}
+	h1 := at.Add(-time.Minute)
+	ledWantedRun(w(h1))
+	at = at.Add(time.Minute)
+	ledWantedRun(w(h1)) // the same hold, within the gap: not asked again
+	if n := f.n(ledByNameID); n != 1 {
+		t.Fatalf("asked %d times for one hold (want once)", n)
+	}
+	h2 := at.Add(-10 * time.Second) // a new hold, after the first ask
+	at = at.Add(time.Minute)
+	ledWantedRun(w(h2))
+	if n := f.n(ledByNameID); n != 2 {
+		t.Fatalf("a new hold was not asked for at once (%d asks)", n)
+	}
+}

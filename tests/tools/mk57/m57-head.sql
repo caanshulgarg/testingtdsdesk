@@ -33,9 +33,10 @@
 --   2. tally_ingest_entries(p_book, p_vouchers, p_lines, p_rebuild, p_keep): 56's text; after 48's 4-argument form it calls
 --      tally_ingest_details, and re-applies an applied delete (cancel) of an entry the body brings back at a lower AlterID,
 --      or one settled as "nothing to remove": a later Day Book cannot undo a delete; a cancelled entry comes in cancelled.
---      The owner's review of 06-Oct-2026: one settled as "nothing to remove" WITHOUT an AlterID is re-applied only to a body
---      at or below its bound (tally_nothing_removed: the book's highest AlterID received when it settled); a body above it
---      is a later change in Tally, applied normally and never touched by that line again; no bound known: at most once.
+--      The owner's review and re-review M-B of 06-Oct-2026: one settled as "nothing to remove" WITHOUT an AlterID: a delete
+--      is applied again to any later body (Tally never brings a deleted GUID back); a cancel only to a body at or below
+--      Tally's voucher counter at the time of the cancel (the bridge's vchCounter on the line); a body above it is a later
+--      change in Tally, applied normally; no counter: at most once (tally_nothing_removed).
 --      Both paths reach it: the recorder (tally_recorder_line, 56: p_keep true) and the Day Book (below: p_keep false).
 --   3. tally_ingest_day (8 arguments): 44's text, its one call through the 5-argument form with p_keep false (48's 4-argument
 --      behaviour exactly, plus the details). The 7-argument form calls it (41), unchanged.

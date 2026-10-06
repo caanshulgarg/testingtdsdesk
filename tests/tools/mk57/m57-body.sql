@@ -104,10 +104,10 @@ begin
   end loop;
 end $$;
 
--- the owner's review of 06-Oct-2026: a delete or cancel settled as "nothing to remove" (the entry never in the copy) records
--- a bound here: its own AlterID, or without one the book's highest AlterID received then (tally_sync_cursor.recorder_max_alter,
--- the copy's highest); null when nothing is known. A later body is deleted (cancelled) again only at or below the bound;
--- with no bound, at most once (reapplied). Written by tally_ingest_delete / tally_ingest_entries only (no member, no anon)
+-- the owner's review and re-review M-B of 06-Oct-2026: a delete or cancel settled as "nothing to remove" (the entry never in
+-- the copy) is recorded here (bound: its own AlterID when it had one). A delete without an AlterID is applied again to any
+-- later body; a cancel without one up to Tally's voucher counter the bridge sent on the line (vchCounter), else at most once
+-- (reapplied). Written by tally_ingest_delete / tally_ingest_entries only (no member, no anon)
 create table if not exists public.tally_nothing_removed (
   book_id uuid not null,
   guid text not null,

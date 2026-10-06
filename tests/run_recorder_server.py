@@ -847,6 +847,8 @@ try:
         FS.T["tally_recorder_lines"] = [dict(r, device_id=r["device_id"] or None, body=json.loads(r["body"]) if r["body"] else None, payload=json.loads(r["payload"]) if r["payload"] else None, object_guid=r["object_guid"] or None) for r in db.rows(
             "select id, line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date::text as vch_date, book_id::text as book_id, firm_id::text as firm_id, "
             "device_id::text as device_id, bridge, state, held_why, object_guid, body::text as body, payload::text as payload, to_char(received_at at time zone 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') as received_at from tally_recorder_lines order by id")]
+    # re-review M-A: each ledger wanted carries heldAt (the latest hold waiting for it); compared here without it
+    nohold = lambda xs: [{k: v for k, v in x.items() if k != "heldAt"} for x in (xs or []) if x.get("heldAt")]
     beat231 = lambda: call({"kind": "beat", "version": "2.3.1", "bridge": dict(GA, version="2.3.1"), "tally": True, "open": []})
     lch = lambda rows, why="counter", **kw: call(dict({"kind": "ledger_changes", "company": "ZZ IDS", "company_guid": CGI, "version": "2.3.1", "bridge": dict(GA, version="2.3.1"), "ledgers": rows, "why": why}, **kw))
     led = lambda name: next((x for x in FS.T["tally_ledgers"] if x.get("book_id") == BI and x.get("name") == name), None)
@@ -871,7 +873,7 @@ try:
     mem_rows2()
     c, r = beat231()
     lw, ids, hids = r.get("ledgersWanted") or [], [x.get("line_id") for x in (r.get("refetch") or [])], [x.get("line_id") for x in (r.get("heldLines") or [])]
-    ok(c == 200 and lw == [{"company": "ZZ IDS", "company_guid": CGI, "name": "New Party B"}] and "M1" not in ids and "M1" not in hids,
+    ok(c == 200 and nohold(lw) == [{"company": "ZZ IDS", "company_guid": CGI, "name": "New Party B"}] and "M1" not in ids and "M1" not in hids,
        "2.3.1-B. the beat names the ledger the held entry waits for (ledgersWanted), and does not list the entry for refetch yet (%s; %s)" % (lw, ids))
     # the bridge fetched the ledger from its own Tally by name and sends it (kind ledger_changes, why wanted)
     c, r = lch([["lg-npb", 501, 77, "New Party B", "Sundry Debtors", "-250.00", "27aaacn1234b1z5", "aaacn1234b", 0, "Maharashtra"]], "wanted")
@@ -899,7 +901,7 @@ try:
     mem_rows2()
     c, r = beat231()
     ids = [x.get("line_id") for x in (r.get("refetch") or [])]
-    ok(c == 200 and (r.get("ledgersWanted") or []) == [{"company": "ZZ IDS", "company_guid": CGI, "name": "New Party C"}] and "M2" not in ids, "2.3.1-B. M2 not listed while 'New Party C' is missing; the ledger wanted (%s; %s)" % (r.get("ledgersWanted"), ids))
+    ok(c == 200 and nohold(r.get("ledgersWanted")) == [{"company": "ZZ IDS", "company_guid": CGI, "name": "New Party C"}] and "M2" not in ids, "2.3.1-B. M2 not listed while 'New Party C' is missing; the ledger wanted (%s; %s)" % (r.get("ledgersWanted"), ids))
     c, r = lch([["lg-npc", 502, 78, "New Party C", "Sundry Debtors", "0", "", "", 0, ""]], "wanted")
     mem_rows2()
     c, r = beat231()
@@ -961,7 +963,7 @@ try:
     ok(c == 200 and st(r) == {"RN1": "held"} and lrow51("RN1").get("why", "").startswith("waiting for the ledger '%s'" % REN), "2.3.1 rename. an entry naming '%s' (FinCom has no such ledger): held waiting for it (%r)" % (REN, lrow51("RN1").get("why")))
     mem_rows2()
     c, r = beat231()
-    ok(c == 200 and {"company": "ZZ IDS", "company_guid": CGI, "name": REN} in (r.get("ledgersWanted") or []), "2.3.1 rename. the beat names it (%s)" % r.get("ledgersWanted"))
+    ok(c == 200 and {"company": "ZZ IDS", "company_guid": CGI, "name": REN} in nohold(r.get("ledgersWanted")), "2.3.1 rename. the beat names it (%s)" % r.get("ledgersWanted"))
     n_led = len(FS.T["tally_ledgers"])
     c, r = lch([["lg-sal", 12, 95, REN, "Sundry Debtors", "500.00", "29AABCS1111C1Z1", "AABCS1111C", 0, "Karnataka", ""]], "wanted")
     al = [x for x in FS.T["tally_ledger_aliases"] if x.get("book_id") == BI and x.get("tally_name") == REN]
@@ -979,13 +981,24 @@ try:
        "2.3.1 rename. then the entry: applied under '%s' (its line mapped from the new name), lines total zero (%s; %s)" % (OLD, st(r), l1))
     sent = sorted(float(x[2]) for x in bodyof("RN1:resolved").get("lines") or [])
     ok(sorted(float(x[1]) for x in l1) == sent and len(l1) == len(sent) and len(sent) >= 2, "2.3.1 rename. the amounts as Tally sent them: the books' total unchanged by the mapping (%s)" % sent)
+    # re-review M-A (06-Oct-2026): an alias never maps by itself. Every entry naming an aliased name is held and the ledger
+    # fetched by its name; only a fetch made for THIS hold that gives the alias's GUID maps it (each use: its own fetch)
     c, r = reci2([rl("RN2", r2x, GR2, 26604, 54704)])
-    l2 = lines_of(GR2)
-    ok(c == 200 and st(r) == {"RN2": "applied"} and OLD in [x[0] for x in l2] and REN not in [x[0] for x in l2] and "waitLedgers" not in pl("RN2"),
-       "2.3.1 rename. a second entry with the new name: applied at once under '%s', nothing waited for (%s; %s)" % (OLD, st(r), l2))
+    ok(c == 200 and st(r) == {"RN2": "held"} and not lines_of(GR2) and pl("RN2").get("waitLedgers") == [REN],
+       "M-A. a second entry with the new name (the alias confirmed for RN1): held, its own fetch wanted, not mapped by itself (%s; %s)" % (st(r), lines_of(GR2)))
     mem_rows2()
     c, r = beat231()
-    ok(c == 200 and REN not in str(r.get("ledgersWanted")), "2.3.1 rename. and Tally is not asked for it again (%s)" % r.get("ledgersWanted"))
+    wr = [x for x in (r.get("ledgersWanted") or []) if x.get("name") == REN]
+    ok(c == 200 and len(wr) == 1 and wr[0].get("heldAt"), "M-A. the beat wants it again, with when the entry was held (heldAt) (%s)" % wr)
+    c, r = lch([["lg-sal", 12, 95, REN, "Sundry Debtors", "500.00", "29AABCS1111C1Z1", "AABCS1111C", 0, "Karnataka", ""]], "wanted")
+    mem_rows2()
+    c, r = beat231()
+    ok(c == 200 and "RN2" in [x.get("line_id") for x in (r.get("refetch") or [])] and REN not in [x.get("name") for x in (r.get("ledgersWanted") or [])],
+       "M-A. the fetch made for this hold gave the alias's GUID: the entry listed for refetch (%s)" % [x.get("line_id") for x in (r.get("refetch") or [])])
+    c, r = reci2([rl("RN2:resolved", r2x, GR2, 26604, 54704)])
+    l2 = lines_of(GR2)
+    ok(c == 200 and st(r) == {"RN2:resolved": "applied"} and OLD in [x[0] for x in l2] and REN not in [x[0] for x in l2],
+       "M-A. then mapped under '%s' (%s; %s)" % (OLD, st(r), l2))
     c, r = reci2([rl("RN3", mkx(26605, 54705, REN).replace("-59000.00", "-58000.00"), GR3, 26605, 54705)])
     ok(c == 200 and st(r) == {"RN3": "held"} and "do not add up" in lrow51("RN3").get("why", "") and not lines_of(GR3), "2.3.1 rename. the balance guard still first: an unbalanced body with the new name held (%r)" % lrow51("RN3").get("why"))
     ok(not [x for x in FS.T["tally_ledger_aliases"] if x.get("tally_name") in ("New Party B", "New Party C", "New Party D")], "2.3.1 rename. a GUID FinCom has no ledger of: added as a new ledger, no alias (New Party B, C, D)")
@@ -1028,8 +1041,27 @@ try:
     ok(c == 200 and st(r) == {"PRB1:resolved": "applied", "PRB2:resolved": "applied"} and REN in l1 and OLD not in l1 and OLD in l2 and THIRD not in l2,
        "H2. then: the new ledger's entry on '%s' itself, the confirmed alias's entry under '%s' (%s; %s; %s)" % (REN, OLD, st(r), l1, l2))
     GT2 = CGI + "-%08x" % 26692
+    # re-review M-A: a genuine renamed-ledger entry with the confirmed alias: held, fetched, the same GUID: mapped
     c, r = reci2([rl("PRB3", mkx(26692, 54792, THIRD), GT2, 26692, 54792)])
-    ok(c == 200 and st(r) == {"PRB3": "applied"} and OLD in [x[0] for x in lines_of(GT2)], "H2. a confirmed alias, not ended: a later entry applies at once without a fetch (%s)" % st(r))
+    ok(c == 200 and st(r) == {"PRB3": "held"} and not lines_of(GT2), "M-A. a confirmed alias, not ended: the entry is still held and fetched (%s)" % st(r))
+    c, r = lch([["lg-sal", 12, 96, THIRD, "Sundry Debtors", "500.00", "29AABCS1111C1Z1", "AABCS1111C", 0, "Karnataka", ""]], "wanted")
+    mem_rows2()
+    c, r = beat231()
+    c, r = reci2([rl("PRB3:resolved", mkx(26692, 54792, THIRD), GT2, 26692, 54792)])
+    ok(c == 200 and st(r) == {"PRB3:resolved": "applied"} and OLD in [x[0] for x in lines_of(GT2)], "M-A. the fetch gave the alias's GUID: mapped under '%s' (%s)" % (OLD, st(r)))
+    # re-review M-A, the reviewer's probe A: X renamed again in Tally and a NEW ledger takes the alias name before the next
+    # counter check: its entry is held, the fetch gives the NEW ledger's GUID: the alias ends, the new ledger is added and used
+    GPA = CGI + "-%08x" % 26694
+    c, r = reci2([rl("PRA1", mkx(26694, 54794, THIRD), GPA, 26694, 54794)])
+    ok(c == 200 and st(r) == {"PRA1": "held"} and not lines_of(GPA), "M-A probe A. a new ledger reusing a confirmed alias name, before the counter: held, not applied to '%s' (%s; %s)" % (OLD, st(r), lines_of(GPA)))
+    c, r = lch([["lg-new3", 778, 98, THIRD, "Sundry Debtors", "0", "", "", 0, "", ""]], "wanted")
+    al_ = {x.get("tally_name"): x for x in FS.T["tally_ledger_aliases"] if x.get("book_id") == BI}
+    ok((led(THIRD) or {}).get("tally_guid") == "lg-new3" and al_.get(THIRD, {}).get("ended_at"), "M-A probe A. the fetch gives another GUID: the alias ends, the new ledger '%s' added (%s)" % (THIRD, led(THIRD)))
+    mem_rows2()
+    c, r = beat231()
+    c, r = reci2([rl("PRA1:resolved", mkx(26694, 54794, THIRD), GPA, 26694, 54794)])
+    la = [x[0] for x in lines_of(GPA)]
+    ok(c == 200 and st(r) == {"PRA1:resolved": "applied"} and THIRD in la and OLD not in la, "M-A probe A. the entry lands on the NEW ledger '%s' (%s; %s)" % (THIRD, st(r), la))
     # review L4 (06-Oct-2026): a ledger name that can never be asked from Tally by its name (a quote mark) is said once in plain
     # words and never named in ledgersWanted (the bridge would never ask it)
     QN, GQ = 'Q "X" Traders', CGI + "-%08x" % 26693
@@ -1040,6 +1072,12 @@ try:
     mem_rows2()
     c, r = beat231()
     ok(c == 200 and QN not in [x.get("name") for x in (r.get("ledgersWanted") or [])], "L4. the beat never names it (%s)" % r.get("ledgersWanted"))
+    # re-review M-B (06-Oct-2026): a cancel without an AlterID carries Tally's voucher counter from the bridge (vch_counter):
+    # kept in the line's payload as vchCounter (migration 57 bounds the re-cancel by it); never on a delete, nor with an AlterID
+    vcl = lambda lid, ev, mid, alt=None, **kw: dict(dict(base, line_id=lid, event=ev, object_guid=CGI + "-%08x" % mid, master_id=str(mid), alter_id=alt, vch_type="Sales", vch_no=str(mid), vch_date="20261006"), **kw)
+    c, r = reci2([vcl("VC1", "cancelled", 26701, vch_counter=55123), vcl("VC2", "deleted", 26702, vch_counter=55123), vcl("VC3", "cancelled", 26703, 55100, vch_counter=55123), vcl("VC4", "cancelled", 26704, vch_counter="x1")])
+    ok(c == 200 and pl("VC1").get("vchCounter") == 55123 and "vchCounter" not in pl("VC2") and "vchCounter" not in pl("VC3") and "vchCounter" not in pl("VC4"),
+       "M-B. a cancel without an AlterID keeps Tally's counter (vchCounter); a delete, a cancel with its AlterID, a bad value: none (%s)" % [pl(x).get("vchCounter") for x in ("VC1", "VC2", "VC3", "VC4")])
     c, r = call({"kind": "ledger_changes", "company": "NOT LINKED", "version": "2.3.1", "bridge": dict(GA, version="2.3.1"), "ledgers": []})
     ok(c == 409, "2.3.1-B. a company not linked: 409 (%s)" % c)
     FS.T.pop("tally_recorder_lines", None); FS.T.pop("tally_ledgers", None); FS.T.pop("tally_groups", None)
