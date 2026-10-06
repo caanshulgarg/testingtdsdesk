@@ -87,8 +87,17 @@ fix-body-230):
 - **Midnight-proof tests** (cdb24bd): tests no longer depend on the clock across midnight (CI run 37391306886); CI keeps
   its logs with tee.
 
-The short review of e9169a2..9e5db15 is running at build time. It is not done: its findings will be recorded here and
-any High or Medium fixed before this build is published.
+The short review of e9169a2..9e5db15 finished on 06-Oct-2026 at about 07:05 IST, after the build started: **no High, no
+Medium.** Day Book output byte-identical old vs new parse.js on every XML in the repo; the typed real-7.1 answers parse
+(the bill on the party line only); refetch lists only this firm's, device's and bridge's own lines; the bridge re-asks
+only companies open in its own Tally with the held company GUID, with the existing reads, 2 s stop, never during a
+posting; the try reset runs once. Lows, for the next build: L1 parse.js's tag pattern is quadratic on crafted input
+(parse.js:21 and igstRate; real Tally output unaffected, 2.3 MB in 162 ms); L2 the refetch candidate query can grow to
+~400 ids in one URL and fails quietly to an empty list; L3 a self-closed CMPINFO with attributes would swallow vouchers
+(Tally never writes it). Raised by the review and fixed in the cloud before publishing (guard-230, 8b86579): the cloud
+applies an entry body only when its lines add up to zero (an item invoice's sales or purchase ledger, kept under its
+items, is not yet fetched by the bridge: such a body is held with plain words; the fetch is the owner's decision of
+06-Oct-2026 for 2.3.1). No bridge code changed after the build.
 
 ## After the rounds
 

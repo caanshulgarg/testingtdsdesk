@@ -118,6 +118,29 @@ bridge could answer on the computer. Now each Windows user has their own.
 4. **Dates confirmed.** Where these words give a time (for example "your FinCom Bridge (...) has not been heard from
    since 05-Oct-2026 14:32 IST"), it is the date and time in IST.
 
+## Which entries enter the books by themselves in 2.3.0 (for your staff)
+
+**Enter by themselves**, within about a minute of saving in Tally:
+- Receipts, Payments, Contras and Journals.
+- Sales, Purchase, Credit Note and Debit Note entered **without stock items** (accounting invoice mode).
+- Alterations of these, and Alt+2 copies (a new entry with its own GUID).
+- Cancels and deletes, matched by Tally's own GUID, when this computer's Tally shows them.
+
+**Held until bridge 2.3.1** (the same day as 2.3.0, about 16:00 IST):
+- Sales, Purchase, Credit Note and Debit Note entered **with stock items** (item invoice mode). Tally keeps their sales or
+  purchase ledger under the items, which 2.3.0 does not ask for, so the lines do not add up. FinCom then holds the entry
+  with the words "the entry's details from Tally are incomplete (its lines do not add up: an item invoice's sales or
+  purchase ledger may not have come): upload this day's Day Book to settle it". Nothing incomplete reaches the books.
+
+**Also held, as before:**
+- Lines written by another Windows user's Tally (each bridge sends only its own user's lines).
+- A new entry Tally gave no id for, when its date is more than 3 days back.
+- A cancel or delete this computer's Tally cannot confirm (asked again by itself when Tally is free).
+
+Held lines of your own settle by themselves: the bridge asks its own Tally again (at most every 10 minutes, up to 20 tries
+over 7 days). Receipts 192, 212 and 213 of NWS144 are asked again this way once 2.3.0 runs there (before 12-Oct 08:00 IST
+for 192 and 212). A held line can always be settled by uploading that day's Day Book.
+
 ## Rollback
 
 From the tray: right-click the FinCom icon > "Roll back to the previous version" > Yes. The bridge goes back to 2.2.4.
