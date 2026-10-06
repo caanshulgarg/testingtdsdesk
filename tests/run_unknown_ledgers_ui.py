@@ -6,7 +6,7 @@ name a ledger FinCom does not have; the page says, one sentence an entry and led
    is unknown until the next ledger list or bridge 2.3.1."
   1. the Tally page's Sync activity: every client's (with the client's name), or the client picked only; read with
      p_book null;
-  2. a client's Books page: that client's only;
+  2. a client's Books page: that client's only, asked for its own books (p_book = each book), not the firm's list;
   3. none: nothing shown; before migration 56 (the function missing, PGRST202): nothing shown, no error, the rest as before.
 Offline, FinCom's cloud made up in the page (run_sync_activity's SETUP; alerts_seed's and run_held_books' books).
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_unknown_ledgers_ui.py
@@ -48,7 +48,7 @@ STUB = """([rows, fail]) => {
   window.__unk = rows; window.__unkFail = fail || ""; window.__unkAsked = [];
   const rpc = TCloud.rpc;
   TCloud.rpc = async (fn, a) => {
-    if (fn === "tally_unknown_ledger_entries"){ window.__unkAsked.push(JSON.parse(JSON.stringify(a || {}))); if (window.__unkFail) throw new Error(window.__unkFail); return JSON.parse(JSON.stringify(window.__unk)); }
+    if (fn === "tally_unknown_ledger_entries"){ window.__unkAsked.push(JSON.parse(JSON.stringify(a || {}))); if (window.__unkFail) throw new Error(window.__unkFail); return JSON.parse(JSON.stringify(window.__unk.filter(r => !a || !a.p_book || r.book_id === a.p_book))); }
     return rpc(fn, a); };
   Rec.unk = {};
 }"""
@@ -91,6 +91,7 @@ with sync_playwright() as p:
     E("() => { S.view = 'company'; S.tab = 'books'; S.booksTab = 'mis'; S.misTab = 'pl'; render(); }"); pg.wait_for_timeout(1500)
     lines = alltxt('#app [data-unknown-ledgers="books"] [data-unknown-ledger]')
     ok(lines == [S3, S2, S1], "2. the client's Books page: its own entries in plain words, not another client's (%s)" % lines)
+    ok(E("window.__unkAsked") == [{"p_book": "b1"}], "2. the Books page asks for the client's own book (b1), not the firm's list (%s)" % E("window.__unkAsked"))
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()
 srv.shutdown()

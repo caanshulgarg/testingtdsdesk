@@ -168,10 +168,10 @@ loaded from a Day Book blanked what the live request does not fetch (GSTIN, plac
 a line's HSN / rate). `tally_ingest_entries(book, vouchers, lines, p_rebuild, p_keep)` (5 arguments, granted to nobody):
 with `p_keep` true a blank sent value is filled from the stored entry (`tally_recorder_keep_vouchers`: GSTIN, pos, ref and
 ref date only when the party is the same; the company GSTIN always; a malformed ref date passed as sent) and a line's blank
-HSN / rate from the stored line it pairs with (`tally_recorder_pair_lines`: one-to-one when the ledger has as many lines as
-before, equal amounts first; else only a uniform HSN and rate), then 48's 4-argument form runs unchanged; a sent non-blank
-value always wins; an entry marked `"full": true` (2.3.1 part A) is passed as sent. `tally_lines` has no line-order column:
-the stored order is the version row's `lines` (sorted by ledger and amount). `tally_recorder_line` = 53's text with that one
+HSN / rate from the entry's current lines, ledger by ledger (`tally_recorder_pair_lines`, the same in the repair): one HSN
+and rate on all the stored lines of the ledger -> carried to every line; else the same amounts as stored -> each line the
+values of its amount; else blank), then 48's 4-argument form runs unchanged; a sent non-blank value always wins; an entry
+marked `"full": true` (2.3.1 part A) is passed as sent. No line order is used (`tally_lines` has no order column). `tally_recorder_line` = 53's text with that one
 call passing `true`. 48's 4-argument and 44's 3-argument forms and `tally_ingest_day` are untouched: a Day Book stays
 authoritative. The repair, not run by the migration: `tally_recorder_restore_fields(book, p_dry_run)` (service role /
 owner; the 1-argument form restores): the dry run answers the count and the list (type, number, date, fields); the run

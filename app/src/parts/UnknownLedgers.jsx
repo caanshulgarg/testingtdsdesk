@@ -4,9 +4,11 @@
 // ledger '<name>', which FinCom does not have yet. It is in the books; the ledger's group is unknown until the next ledger
 // list or bridge 2.3.1." On the Tally page's Sync activity (the firm, or the client picked) and a client's Books page.
 // Nothing when there are none, or before migration 56 runs.
-export default function UnknownLedgers({ cid, where, names }) {
+// byBook: the client's own books are asked for (Rec.unkBooks), not the firm's list filtered (the Books page)
+export default function UnknownLedgers({ cid, where, names, byBook }) {
   if (typeof Rec !== "object" || !Rec.unkLines || typeof TCloud !== "object" || !TCloud.on()) return null;
-  const lines = Rec.unkLines(cid || "");
+  const books = byBook && cid ? Rec.unkBooks(cid) : null;
+  const lines = Rec.unkLines(cid || "", books && books.length ? books : null);
   if (!lines.length) return null;
   const n = new Set(lines.map((x) => x.key.split(":").slice(0, 2).join(":"))).size;
   const coName = (id) => (S.companies && S.companies[id] && S.companies[id].name) || "";

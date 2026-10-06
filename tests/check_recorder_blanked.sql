@@ -36,7 +36,7 @@ with rec as (
   ), lns as (
     -- the entries' current lines (no order column exists: by amount, the row handle among equal ones)
     select e.guid, e.vtype, e.vno, e.day, e.alter_id, l.ledger, l.amount, l.hsn, l.rate, l.ctid as at_, e.alters, e.max_alter,
-           row_number() over (partition by l.guid, l.ledger order by l.amount, l.ctid) as o
+           row_number() over (partition by l.guid, l.ledger order by l.amount, l.ctid) as o     -- by amount, as the stored side
       from ent e join tally_lines l on l.book_id = (:'book')::uuid and l.guid = e.guid
   ), grp as (
     select n.guid, n.ledger, max(n.alter_id) as alter_id,
@@ -66,21 +66,20 @@ with rec as (
     select n as bid, e->>'g' as g, e->>'l' as l, case when coalesce(e->>'amt', '') ~ '^-?[0-9]+(\.[0-9]+)?$' then (e->>'amt')::numeric end as amt, coalesce((e->>'o')::numeric, n) as o,
            nullif(btrim(coalesce(e->>'hsn', '')), '') as hsn, case when coalesce(e->>'rate', '') ~ '^-?[0-9]+(\.[0-9]+)?$' then (e->>'rate')::numeric end as rate
       from jsonb_array_elements(case when jsonb_typeof(gs.stored) = 'array' then gs.stored else '[]'::jsonb end) with ordinality as z(e, n)
-  ), na as (select a.g, a.l, count(*) as n from a group by a.g, a.l
-  ), nb as (select b.g, b.l, count(*) as n, count(distinct coalesce(b.hsn, '')) as dh, count(distinct coalesce(b.rate::text, '')) as dr from b group by b.g, b.l
-  ), same as (select na.g, na.l from na join nb on nb.g = na.g and nb.l = na.l where na.n = nb.n
+  ), nb as (
+    select b.g, b.l, min(b.bid) as b0, array_agg(b.amt order by b.amt nulls last) as amts,
+           (count(distinct coalesce(b.hsn, '')) = 1 and count(distinct b.rate) + (case when bool_or(b.rate is null) then 1 else 0 end) = 1) as uniform
+      from b group by b.g, b.l
+  ), na as (
+    select a.g, a.l, array_agg(a.amt order by a.amt nulls last) as amts from a group by a.g, a.l
+  ), uni as (            -- a) one HSN and one rate on every stored line of the ledger
+    select a.k, b.hsn, b.rate from a join nb on nb.g = a.g and nb.l = a.l and nb.uniform join b on b.bid = nb.b0
+  ), same as (           -- b) the same amounts, as many times each
+    select na.g, na.l from na join nb on nb.g = na.g and nb.l = na.l where not nb.uniform and na.amts is not distinct from nb.amts
   ), ea as (select a.*, row_number() over (partition by a.g, a.l, a.amt order by a.o, a.k) as r from a join same s on s.g = a.g and s.l = a.l
   ), eb as (select b.*, row_number() over (partition by b.g, b.l, b.amt order by b.o, b.bid) as r from b join same s on s.g = b.g and s.l = b.l
-  ), m1 as (select ea.k, eb.bid, eb.hsn, eb.rate from ea join eb on eb.g = ea.g and eb.l = ea.l and eb.amt = ea.amt and eb.r = ea.r
-  ), ra as (select ea.*, row_number() over (partition by ea.g, ea.l order by ea.o, ea.k) as kk from ea where ea.k not in (select m1.k from m1)
-  ), rb as (select eb.*, row_number() over (partition by eb.g, eb.l order by eb.o, eb.bid) as kk from eb where eb.bid not in (select m1.bid from m1)
-  ), m2 as (select ra.k, rb.hsn, rb.rate from ra join rb on rb.g = ra.g and rb.l = ra.l and rb.kk = ra.kk
-  ), uni as (
-    select a.k, u.hsn, u.rate from a join na on na.g = a.g and na.l = a.l join nb on nb.g = a.g and nb.l = a.l
-      cross join lateral (select b.hsn, b.rate from b where b.g = a.g and b.l = a.l order by b.bid limit 1) u
-     where na.n <> nb.n and nb.dh = 1 and nb.dr = 1
-  )
-  select m1.k, m1.hsn, m1.rate from m1 union all select m2.k, m2.hsn, m2.rate from m2 union all select uni.k, uni.hsn, uni.rate from uni
+  ), m as (select ea.k, eb.hsn, eb.rate from ea join eb on eb.g = ea.g and eb.l = ea.l and eb.amt = ea.amt and eb.r = ea.r)
+  select uni.k, uni.hsn, uni.rate from uni union all select m.k, m.hsn, m.rate from m       -- c) nothing else
       ) pl
   ), lsrc as (
     select n.guid, n.vtype, n.vno, n.day, n.alter_id, k.f, n.ledger, n.amount,
