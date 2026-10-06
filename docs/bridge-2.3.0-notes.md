@@ -5,8 +5,8 @@ For the owner. Plain words; times are IST. The steps to try it on NWS144 are in 
 | | |
 |---|---|
 | Setup file | FinComBridge-Setup-2.3.0.exe |
-| Fingerprint | SHA-256 `d63311d10aeb9a830b0b36658637ef4a70afce7a121890a75521b47375ba9206` (FinComBridge-Setup-2.3.0.exe; compare with the .sha256 file next to the setup) |
-| FinCom app update | goes live at 06-Oct-2026 05:25 IST, together with the bridge |
+| Fingerprint | SHA-256 `8e8145693224edf5459836323ce187e87e8dbca6eeac0bde494cf64b2ca6a7b9` (FinComBridge-Setup-2.3.0.exe; compare with the .sha256 file next to the setup) |
+| FinCom app update | goes live at 06-Oct-2026 06:59 IST, together with the bridge |
 | Replaces | 2.2.4 (kept on the computer, so the tray can roll back to it) |
 | Add-on | unchanged: keep `C:\ProgramData\FinCom\addon\FinComRecorder.tdl` loaded as it is |
 
@@ -15,7 +15,7 @@ For the owner. Plain words; times are IST. The steps to try it on NWS144 are in 
 2.3.0 is the first bridge that proves to FinCom that it is really your FinCom Bridge before FinCom hands it anything
 secret (see "Four security fixes" below). FinCom's app is updated at the same time to ask for that proof.
 
-- **After the app update (06-Oct-2026 05:25 IST), FinCom no longer trusts a bridge older than 2.3.0.** It sends such a bridge no
+- **After the app update (06-Oct-2026 06:59 IST), FinCom no longer trusts a bridge older than 2.3.0.** It sends such a bridge no
   key, no pairing code and no posting. Where it would have talked to it, FinCom says:
   "The program answering at http://127.0.0.1:9100 did not prove it is your FinCom Bridge, so nothing was sent to it.
   Install FinCom Bridge 2.3.0 or later for your Windows user, then connect again (right-click the FinCom Bridge icon >
@@ -117,6 +117,29 @@ bridge could answer on the computer. Now each Windows user has their own.
    SHEKHAR open in Tally. Open GARG SHEKHAR in Tally there, then post again."
 4. **Dates confirmed.** Where these words give a time (for example "your FinCom Bridge (...) has not been heard from
    since 05-Oct-2026 14:32 IST"), it is the date and time in IST.
+
+## Which entries enter the books by themselves in 2.3.0 (for your staff)
+
+**Enter by themselves**, within about a minute of saving in Tally:
+- Receipts, Payments, Contras and Journals.
+- Sales, Purchase, Credit Note and Debit Note entered **without stock items** (accounting invoice mode).
+- Alterations of these, and Alt+2 copies (a new entry with its own GUID).
+- Cancels and deletes, matched by Tally's own GUID, when this computer's Tally shows them.
+
+**Held until bridge 2.3.1** (the same day as 2.3.0, about 16:00 IST):
+- Sales, Purchase, Credit Note and Debit Note entered **with stock items** (item invoice mode). Tally keeps their sales or
+  purchase ledger under the items, which 2.3.0 does not ask for, so the lines do not add up. FinCom then holds the entry
+  with the words "the entry's details from Tally are incomplete (its lines do not add up: an item invoice's sales or
+  purchase ledger may not have come): upload this day's Day Book to settle it". Nothing incomplete reaches the books.
+
+**Also held, as before:**
+- Lines written by another Windows user's Tally (each bridge sends only its own user's lines).
+- A new entry Tally gave no id for, when its date is more than 3 days back.
+- A cancel or delete this computer's Tally cannot confirm (asked again by itself when Tally is free).
+
+Held lines of your own settle by themselves: the bridge asks its own Tally again (at most every 10 minutes, up to 20 tries
+over 7 days). Receipts 192, 212 and 213 of NWS144 are asked again this way once 2.3.0 runs there (before 12-Oct 08:00 IST
+for 192 and 212). A held line can always be settled by uploading that day's Day Book.
 
 ## Rollback
 

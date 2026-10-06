@@ -48,7 +48,7 @@ master_id, vch_type, vch_no, vch_date) and leaves the field out when there are n
 refetch, at most 20 of this bridge's own held lines (same key AND bridge id) without a body or with a placeholder GUID, never
 another user's bridge or computer; "<line id>:resolved" with Tally's typed body is applied once and the held line 'replaced'.
 Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno)."""
-import os, sys, json, time, hashlib, subprocess, urllib.request, shutil, threading
+import os, sys, json, time, hashlib, subprocess, urllib.request, shutil, threading, re
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import fake_supabase as FS
 import pg_stand, csv
@@ -724,6 +724,54 @@ try:
     ids = [x.get("line_id") for x in (r.get("refetch") or [])]
     ok(c == 200 and "R18" not in ids and "R4" in ids, "refetch. once replaced, R18 is not asked for again (%s)" % ids)
     FS.T.pop("tally_recorder_lines", None)
+    # ---------------------------------------------------------------- guard-230 (review: an item invoice's body may come without
+    # its sales / purchase line): the bridge's body read asks ALLLEDGERENTRIES only, and Tally may keep an item invoice's sales or
+    # purchase ledger only under ALLINVENTORYENTRIES' ACCOUNTINGALLOCATIONS. tally-ingest accepts an entry body only when the
+    # line's voucher has at least 2 ledger lines that add up to 0 (within 0.01); else the body is not sent (vouchers [], lines
+    # []) and the line is held with plain words (heldWhy, in the payload too). A cancelled voucher with no lines is unaffected
+    ix = open(os.path.join(HERE, "fixtures", "typed-item-invoice-no-sales-line.xml")).read()
+    ix = ix[ix.index("<VOUCHER REMOTEID"):ix.index("</VOUCHER>", ix.index("<VOUCHER REMOTEID")) + 10]
+    GIV = CGI + "-00006800"
+    WORDS = "the entry's details from Tally are incomplete (its lines do not add up: an item invoice's sales or purchase ledger may not have come): upload this day's Day Book to settle it"
+    bodyof = lambda lid: json.loads((db.rows("select coalesce(body::text, '{}') as b from tally_recorder_lines where book_id = %s and line_id = %s order by id desc limit 1" % (q(BI), q(lid))) or [{}])[0].get("b") or "{}")
+    ivl = lambda lid, x, g=GIV, alter=54600, **kw: dict(base, line_id=lid, event="created", object_guid=g, master_id="26500", alter_id=alter, vch_type="Sales", vch_no="GSC/2026-27/130", vch_date="20261006", xml=x, **kw)
+    n0 = nI()
+    c, r = reci2([ivl("G1", ix)])
+    lr, pg = lrow51("G1"), pl("G1")
+    ok(c == 200 and st(r) == {"G1": "held"} and lr.get("why") == WORDS and pg.get("heldWhy") == WORDS,
+       "guard. a typed item invoice whose ledger entries lack the sales line (party -118,000, CGST 9,000, SGST 9,000): held with the words, in the payload too (%s; %r)" % (st(r), lr.get("why")))
+    ok(not (bodyof("G1").get("vouchers") or []) and nI() == n0 and not vrow_b(BI, GIV), "guard. its body not applied: no voucher in the line's body, nothing in the copy (%s)" % bodyof("G1"))
+    c, r = reci2([ivl("G1b", ix, heldWhy="the bridge's own words")])
+    ok(c == 200 and st(r) == {"G1b": "held"} and lrow51("G1b").get("why") == WORDS, "guard. the cloud's words over a bridge's heldWhy for such a body (%r)" % lrow51("G1b").get("why"))
+    # the same invoice with its sales ledger under the item's accounting allocations (what the Day Book carries): applied
+    ok_x = ix.replace("</ALLINVENTORYENTRIES.LIST>", '<ACCOUNTINGALLOCATIONS.LIST><LEDGERNAME TYPE="String">Sales GST 18%</LEDGERNAME><ISDEEMEDPOSITIVE TYPE="Logical">No</ISDEEMEDPOSITIVE><AMOUNT TYPE="Amount">100000.00</AMOUNT></ACCOUNTINGALLOCATIONS.LIST></ALLINVENTORYENTRIES.LIST>')
+    c, r = reci2([ivl("G2", ok_x)])
+    bl = bodyof("G2").get("lines") or []
+    ok(c == 200 and st(r) == {"G2": "applied"} and len(bl) == 4 and round(sum(x[2] for x in bl), 2) == 0 and vrow_b(BI, GIV).get("alter_id") == "54600" and "heldWhy" not in pl("G2"),
+       "guard. the invoice WITH its sales line under the item's accounting allocations: applied, 4 lines adding up to 0 (%s; %s)" % (st(r), [(x[1], x[2]) for x in bl]))
+    # an unbalanced voucher without inventory, and a voucher of one line: held too
+    G9 = CGI + "-00006801"
+    ux = tx.replace("-00006729", "-00006801").replace("-59000.00", "-58000.00")
+    c, r = reci2([dict(base, line_id="G3", event="created", object_guid=G9, master_id="26501", alter_id=54601, vch_type="Receipt", vch_no="301", vch_date="20261006", xml=ux)])
+    ok(c == 200 and st(r) == {"G3": "held"} and "do not add up" in lrow51("G3").get("why", "") and "item invoice" not in lrow51("G3").get("why", "") and not vrow_b(BI, G9),
+       "guard. a receipt whose lines add up to 1,000 (no inventory): held, not applied (%r)" % lrow51("G3").get("why"))
+    G10 = CGI + "-00006802"
+    one_ = re.sub(r"<ALLLEDGERENTRIES\.LIST>(?:(?!<ALLLEDGERENTRIES\.LIST>)[\s\S])*?<LEDGERNAME TYPE=\"String\">Cash[\s\S]*?</ALLLEDGERENTRIES\.LIST>", "", tx.replace("-00006729", "-00006802"))
+    c, r = reci2([dict(base, line_id="G4", event="created", object_guid=G10, master_id="26502", alter_id=54602, vch_type="Receipt", vch_no="302", vch_date="20261006", xml=one_)])
+    ok(c == 200 and st(r) == {"G4": "held"} and "incomplete" in lrow51("G4").get("why", "") and not vrow_b(BI, G10),
+       "guard. a receipt of one ledger line: held, not applied (%s; %r)" % (one_.count("<ALLLEDGERENTRIES.LIST>"), lrow51("G4").get("why")))
+    # a cancelled voucher with a number and no lines: unaffected (never these words)
+    G11 = CGI + "-00006803"
+    cx = re.sub(r"<ALLLEDGERENTRIES\.LIST>[\s\S]*</ALLLEDGERENTRIES\.LIST>", "", tx.replace("-00006729", "-00006803")).replace('<ISCANCELLED TYPE="Logical">No<', '<ISCANCELLED TYPE="Logical">Yes<')
+    c, r = reci2([dict(base, line_id="G5", event="created", object_guid=G11, master_id="26503", alter_id=54603, vch_type="Receipt", vch_no="303", vch_date="20261006", xml=cx)])
+    ok(c == 200 and "incomplete" not in lrow51("G5").get("why", "") and len(bodyof("G5").get("vouchers") or []) == 1,
+       "guard. a cancelled voucher with no lines: its body kept as before, not held for its lines (%s; %r)" % (st(r), lrow51("G5").get("why")))
+    # the bridge's own lines from a real TallyPrime 7.1 (run 37395099848): still applied with their bodies
+    for i, it in enumerate(json.load(open(os.path.join(HERE, "..", "bridge-go", "testdata", "real-tally-7.1", "recorder-lines-run37395099848.json")))):
+        al = int(re.search(r"<ALTERID[^>]*>\s*(\d+)", it["xml"]).group(1))
+        c, r = reci2([dict(base, line_id="RUN%d" % i, event=it["ev"], company_guid=it["guid"].rsplit("-", 1)[0], object_guid=it["guid"], master_id=str(900 + i), alter_id=al, vch_type="Receipt", vch_no="", vch_date="", xml=it["xml"])])
+        ok(c == 200 and st(r).get("RUN%d" % i) in ("applied", "duplicate", "stale") and "heldWhy" not in pl("RUN%d" % i) and len(bodyof("RUN%d" % i).get("lines") or []) >= 2,
+           "guard. run 37395099848, %s: %s with its body, never held for its lines (%r)" % (it["label"], st(r), lrow51("RUN%d" % i).get("why")))
 finally:
     if fn: fn.terminate()
     db.stop()

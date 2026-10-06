@@ -80,6 +80,17 @@ const J = JSON.stringify;
   ok(t.n === 1 && t.vouchers[0].guid === sal.guid && t.lines.length === 2, "a typed <GUID TYPE=\"String\"> (and no REMOTEID): the same voucher (" + J(t.vouchers.map((v) => v.guid)) + ")");
 }
 
+// 2c. guard-230: a typed item invoice as the bridge's ALLLEDGERENTRIES-only read may give it (tests/fixtures): the party and
+// the taxes, no sales line (Tally keeps it under the item's ACCOUNTINGALLOCATIONS): its lines do not add up, so tally-ingest
+// holds the line (tests/run_recorder_server.py "guard."); with the allocation, the four lines add up to 0
+{
+  const t = fs.readFileSync(path.join(HERE, "fixtures", "typed-item-invoice-no-sales-line.xml"), "utf8"), r = parseDay(t);
+  const sum = (ls) => Math.round(ls.reduce((a, l) => a + l[2], 0) * 100) / 100;
+  ok(r.n === 1 && r.lines.length === 3 && sum(r.lines) === -100000, "item invoice without its sales line: 3 lines adding up to -100,000 (" + J(r.lines.map((l) => [l[1], l[2]])) + ")");
+  const w = parseDay(t.replace("</ALLINVENTORYENTRIES.LIST>", '<ACCOUNTINGALLOCATIONS.LIST><LEDGERNAME TYPE="String">Sales GST 18%</LEDGERNAME><AMOUNT TYPE="Amount">100000.00</AMOUNT></ACCOUNTINGALLOCATIONS.LIST></ALLINVENTORYENTRIES.LIST>'));
+  ok(w.lines.length === 4 && sum(w.lines) === 0, "with the sales ledger under the item's accounting allocations: 4 lines adding up to 0 (" + J(w.lines.map((l) => [l[1], l[2]])) + ")");
+}
+
 // 4. bridge 2.3.1 (the owner's decision of 06-Oct-2026): item invoices. The entry request also fetches the ledger lines kept
 // under an invoice's items (ALLINVENTORYENTRIES.LIST > ACCOUNTINGALLOCATIONS.LIST: the sales or purchase ledger), so the
 // body holds every line: the party, CGST, SGST (ledger entries) and the sales or purchase ledger (under the items). Fixtures:

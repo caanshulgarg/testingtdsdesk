@@ -1103,8 +1103,36 @@ function cleanRecorderLine(x: any, me: { id: string }): { line?: Record<string, 
     // 2.2.2 (second review L-C): a copied FinCom id (lineFid) is not the entry's, from the body's narration either
     if (lineFid && !fid) line.vouchers = (line.vouchers as any[]).map((v: any) => ({ ...v, fid: null }));
     line.lines = og ? dayLines(r).filter((l: any) => Array.isArray(l) && l[0] === og) : [];
+    // guard-230 (review: bridge 2.3.x reads an entry's body with ALLLEDGERENTRIES only; an item invoice's sales or purchase
+    // ledger may sit only under ALLINVENTORYENTRIES' ACCOUNTINGALLOCATIONS, so such a body would come without it): the body
+    // is accepted only when the line's voucher has at least 2 ledger lines adding up to 0 (parse.js keeps Tally's signed
+    // AMOUNTs, Dr negative, so a whole entry sums to 0) within 0.01. Else the body is not sent (vouchers [], lines []) and
+    // the line is held for want of its body (migrations 50-51) with these words as heldWhy (in the payload too). A
+    // cancelled voucher with no lines is kept as before. The Day Book upload (days) is read as before and settles it
+    const bv = (line.vouchers as any[])[0], bl = line.lines as any[];
+    if (bv && !(bv.cancel && !bl.length)) {
+      const sum = Math.round(bl.reduce((a: number, l: any) => a + (Number(l[2]) || 0), 0) * 100) / 100;
+      if (bl.length < 2 || Math.abs(sum) > 0.01) {
+        const why = "the entry's details from Tally are incomplete (" + (bl.length < 2 ? "fewer than two ledger lines came"
+          : hasInventory(xml, og as string) ? "its lines do not add up: an item invoice's sales or purchase ledger may not have come" : "its lines do not add up")
+          + "): upload this day's Day Book to settle it";
+        console.log("tally-ingest recorder_lines: body not taken (" + bl.length + " lines, sum " + sum + ")", line.line_id, og);
+        line.vouchers = []; line.lines = []; line.heldWhy = why;
+        (line.payload as Record<string, unknown>).heldWhy = why;
+      }
+    }
   }
   return { line };
+}
+// guard-230: the voucher element of this GUID (else the whole XML) carries inventory entries
+function hasInventory(xml: string, guid: string): boolean {
+  let el = xml;
+  const m = new RegExp("<GUID(?:\\s[^>]*)?>\\s*" + guid.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*</GUID>").exec(xml);
+  if (m) {
+    const a = xml.lastIndexOf("<VOUCHER ", m.index), z = xml.indexOf("</VOUCHER>", m.index);
+    if (a >= 0 && z > a) el = xml.slice(a, z);
+  }
+  return /<(?:ALL)?INVENTORYENTRIES\.LIST[\s>]/.test(el);
 }
 async function recorderLines(dev: any, firm: string, book: string, body: any) {
   const me = bridgeOf(dev, body, false);
