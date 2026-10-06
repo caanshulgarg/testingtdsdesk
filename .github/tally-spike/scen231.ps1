@@ -171,27 +171,27 @@ function S231Retry {
   $null = ImpT 'Vouchers' $x 'R1 the entry'
   $nv = @((Vouchers 9000 $co1) | Where-Object { $_.mid -notin @($pre | ForEach-Object mid) })[0]
   if (-not $nv) { Result 'R1 retry schedule' $false 'the entry was not made in Tally' $true; return }
+  # Tally 9000 made silent for 3 minutes the moment the entry is saved: its process suspended (NtSuspendProcess) right after
+  # Ctrl+A, so the bridge's entry request goes unanswered (run 37453586452: eight threads of exports kept Tally only ~0.7 s
+  # behind, and the keys were lost under that load)
+  Add-Type -Namespace FcSpike -Name Nt -MemberDefinition '[DllImport("ntdll.dll")] public static extern int NtSuspendProcess(IntPtr h); [DllImport("ntdll.dll")] public static extern int NtResumeProcess(IntPtr h);' -ErrorAction SilentlyContinue
+  $tp = Get-Process -Id $script:tallyPids[9000]
+  DayBook 'r1' '1-8-2026'; KeysTo 9000 '{END}' 2; KeysTo 9000 '{ENTER}' 4 'r1-open'
   $logBefore = @(Get-Content $B[1].log).Count; $m0 = Mark
-  $heavy = @(
-    ('<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Day Book</REPORTNAME><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY><SVFROMDATE>20260401</SVFROMDATE><SVTODATE>20270331</SVTODATE></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>'),
-    ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCBUSY</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCBUSY" ISMODIFY="No"><TYPE>Ledger</TYPE><FETCH>*</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>'))
-  $until = (Get-Date).AddSeconds(185)
-  $jobs = @(for ($j = 0; $j -lt 8; $j++) { Start-ThreadJob -ArgumentList $heavy, $until, $j -ScriptBlock { param($h, $u, $j) $n = 0
-      while ((Get-Date) -lt $u) { try { $null = Invoke-WebRequest 'http://localhost:9000' -Method Post -Body $h[($n + $j) % 2] -ContentType 'text/xml;charset=utf-8' -UseBasicParsing -TimeoutSec 120 } catch {}; $n++ }; $n } })
-  Start-Sleep 8
-  $lat = PostT 9000 '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCList</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCList" ISMODIFY="No"><TYPE>Company</TYPE><FETCH>Name</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>' 'R1 a small request while Tally is busy' 120
-  $tSave = Get-Date
-  DayBook 'r1' '1-8-2026'; KeysTo 9000 '{END}' 2; KeysTo 9000 '{ENTER}' 4 'r1-open'; KeysTo 9000 '^a' 4 'r1-saved'; KeysTo 9000 'n' 2 'r1-no'
-  # a FinCom posting while the reads wait (postings never wait for the retry schedule)
+  KeysTo 9000 '^a' 0
+  $null = [FcSpike.Nt]::NtSuspendProcess($tp.Handle); $tSave = Get-Date
+  Write-Host "R1: Tally 9000 (pid $($tp.Id)) suspended at $($tSave.ToString('HH:mm:ss.fff'))"
+  $lat = [pscustomobject]@{ ms = 'no answer (suspended)' }
+  # a FinCom posting while Tally is silent (postings never wait for the retry schedule: it goes the moment Tally answers)
   $pv = '<VOUCHER VCHTYPE="Journal" ACTION="Create"><DATE>20260801</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><NARRATION>R1 posting | TDSDesk:R1P1</NARRATION>' +
         '<ALLLEDGERENTRIES.LIST><LEDGERNAME>Cash</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-55.00</AMOUNT></ALLLEDGERENTRIES.LIST>' +
         '<ALLLEDGERENTRIES.LIST><LEDGERNAME>Spike Income</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>55.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>'
-  $tPost = Get-Date
+  Start-Sleep 20; $tPost = Get-Date
   $null = Invoke-RestMethod 'http://127.0.0.1:8787/' -Method Post -Body (@{ kind = '_queue_post'; id = 'r1-job-1'; company = $co1; payload = @{ vouchers = @(@{ id = 'R1P1'; xml = $pv }) } } | ConvertTo-Json -Compress -Depth 6) -ContentType 'application/json'
-  while ((Get-Date) -lt $until) { Start-Sleep 5 }
-  $done = @($jobs | Wait-Job -Timeout 150 | Receive-Job); $jobs | Remove-Job -Force -ErrorAction SilentlyContinue
-  $tFree = Get-Date
-  Write-Host "R1: busy until $($tFree.ToString('HH:mm:ss')), heavy requests answered: $(($done | Measure-Object -Sum).Sum)"
+  while ((Get-Date) -lt $tSave.AddSeconds(180)) { Start-Sleep 5 }
+  $null = [FcSpike.Nt]::NtResumeProcess($tp.Handle); $tFree = Get-Date
+  Write-Host "R1: Tally 9000 resumed at $($tFree.ToString('HH:mm:ss'))"
+  Shot 'r1-resumed'
   $g = $nv.guid; $pred = { $_.guid -eq $g -and $_.xml }.GetNewClosure()
   $hit = @(WaitLine $m0 $pred 420)
   $tArr = if ($hit.Count) { $hit[0].at } else { '' }
@@ -209,9 +209,9 @@ function S231Retry {
   $arrOk = $tArr -and $firstAfter -and [math]::Abs((& $gap $firstAfter.next $tArr)) -le 20
   $want = @(15, 30, 60, 120)
   $stepsOk = $steps.Count -ge 4 -and @(0..3 | Where-Object { [math]::Abs($steps[$_] - $want[$_]) -le [math]::Max(5, $want[$_] * 0.25) }).Count -eq 4
-  $txt = "Tally busy {0}..{1} (a small request took {2} ms; the entry saved {3}); bridge 1's tries: {4}; steps {5} s (expected 15, 30, 60, 120, then 300); back to normal: {6}; switch-off words: {7}; posting queued {8}, taken {9}, updates {10}, in Tally: {11}; the entry at the stub {12} (Tally free {13}; the first try after that {14})" -f `
+  $txt = "Tally silent {0}..{1} (suspended; a small request: {2}; the entry saved {3}); bridge 1's tries: {4}; steps {5} s (expected 15, 30, 60, 120, then 300); back to normal: {6}; switch-off words: {7}; posting queued {8}, taken {9}, updates {10}, in Tally: {11}; the entry at the stub {12} (Tally free {13}; the first try after that {14})" -f `
     $tSave.ToString('HH:mm:ss'), $tFree.ToString('HH:mm:ss'), $lat.ms, $tSave.ToString('HH:mm:ss'), $(($tries | ForEach-Object { "try $($_.n) at $($_.at) ($($_.id)) next $($_.next)" }) -join '; '), ($steps -join ', '), $(if ($back) { $back.Substring(0, [Math]::Min(120, $back.Length)) } else { 'not seen' }), $(if ($off.Count) { $off -join ' | ' } else { 'none' }), $tPost.ToString('HH:mm:ss'), ($pt -join ','), ($pu -join '; '), $posted, $(if ($tArr) { $tArr } else { 'NOT arrived' }), $tFree.ToString('HH:mm:ss'), $(if ($firstAfter) { $firstAfter.next } else { 'none' })
-  if (-not $tries.Count) { Result 'R1 retry schedule' $false "$txt; Tally was not busy enough to stop the bridge's request (no try in its log)" $true }
+  if (-not $tries.Count) { Result 'R1 retry schedule' $false "$txt; no try in bridge 1's log (did the bridge ask before the suspension?)" $true }
   else { Result 'R1 retry schedule' ($stepsOk -and $off.Count -eq 0 -and $posted -and $arrOk) $txt }
 }
 
