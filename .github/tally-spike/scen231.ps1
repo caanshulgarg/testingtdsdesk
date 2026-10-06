@@ -132,6 +132,23 @@ function S231DayBook($s) {
   $y = if ($mid) { Post 9000 ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCVA</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY><SVFROMDATE>' + $s.date + '</SVFROMDATE><SVTODATE>' + $s.date + '</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCVA" ISMODIFY="No"><TYPE>Voucher</TYPE><FETCH>' + $fl + '</FETCH><FILTERS>FCVAOnly</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="FCVAOnly">$MasterID = ' + $mid + '</SYSTEM></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') } else { '' }
   $f = Join-Path $s231.dir "$($s.key).daybook.xml"; Set-Content $f "$x`n<!-- the voucher collection of MasterID $mid -->`n$y" -Encoding UTF8; return $f
 }
+# the full ledger list (FinComLedgers, the first chunk: MasterID 0..2000) as 2.3.0 (tax-accuracy) and the ref build it, asked
+# in turn three times each on the same company (400+ ledgers): time, size, ledger count
+function S231LedgerTiming {
+  Say '---- FinComLedgers on real Tally: 2.3.0''s request and the ref''s, three times each in turn'
+  $v = [ordered]@{ '2.3.0 (tax-accuracy)' = (BridgeReq 'ledger-list-230'); "the ref ($env:BRIDGE_SHA)" = (BridgeReq 'ledger-list') }
+  $res = [ordered]@{}
+  foreach ($k in $v.Keys) { $res[$k] = @() }
+  for ($i = 0; $i -lt 3; $i++) { foreach ($k in $v.Keys) { if ($v[$k]) { $res[$k] += PostT 9000 $v[$k] "FinComLedgers $k" 60 } } }
+  foreach ($k in $v.Keys) {
+    if (-not $v[$k]) { Add-Content -Path $resultsFile -Encoding UTF8 -Value "HARNESS FinComLedgers timing ${k}: the request was not built (see the build job)"; continue }
+    $t = $res[$k][-1].text; $n = ([regex]::Matches($t, '<LEDGER NAME=')).Count; $dt = ([regex]::Matches($t, '<TDSDEDUCTEETYPE[^>]*>[^<]+<')).Count
+    $f = if ($k -like '2.3.0*') { 'ledger-list-2.3.0.xml' } else { 'ledger-list-2.3.1.xml' }
+    Keep $f $t "Tally's answer to FinComLedgers as $k builds it (MasterID 0..2000): $n ledgers, $($res[$k][-1].bytes) bytes"
+    $l = "INFO FinComLedgers timing {0}: {1} ledgers, answer {2} bytes, Tally took {3} (slowest {4} ms){5}; TDSDEDUCTEETYPE with a value on {6} ledger(s)" -f $k, $n, $res[$k][-1].bytes, (($res[$k] | ForEach-Object { "$($_.ms) ms" }) -join ', '), ($res[$k] | Measure-Object ms -Maximum).Maximum, $(if (@($res[$k] | Where-Object { $_.ms -gt 2000 }).Count) { ' - OVER 2 s' } else { '' }), $dt
+    Write-Host "######## $l"; Add-Content -Path $resultsFile -Value $l -Encoding UTF8
+  }
+}
 function RowText($r) { "{0}: Tally {1} / FinCom {2}{3}{4}" -f $r.what, $r.tally, $r.fincom, $(if ($null -ne $r.entered) { " / entered $($r.entered)" } else { '' }), $(if ($r.status -eq 'fail') { ' NO' } elseif ($r.status -eq 'harness') { ' (not in Tally: harness)' } else { '' }) }
 
 function S231Run {
@@ -140,8 +157,9 @@ function S231Run {
   S231Later
   $mark231 = Mark
   $sc = @{}; foreach ($s in $plan231.scenarios) { $sc[$s.id] = $s }
-  foreach ($id in 'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S10') { $null = S231Entry $sc[$id] }
-  foreach ($id in 'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7') { $null = S231Ask $sc[$id] }
+  S231LedgerTiming
+  foreach ($id in 'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S10', 'S11', 'S12', 'S13', 'S14') { $null = S231Entry $sc[$id] }
+  foreach ($id in 'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S11', 'S12', 'S13', 'S14') { $null = S231Ask $sc[$id] }
   $a10 = S231Ask $sc['S10'] 3
 
   # ---- S9: the ledger_changes the bridge sends when the master counter moved (the light check every 10 minutes)
@@ -209,7 +227,7 @@ function S231Run {
   $parseJs = Join-Path $env:BRIDGE_DIST 'cloud\tally-cloud\parse.js'
   $all = StubLines $mark231
   $ins = @(); $tagFiles = @()
-  foreach ($id in 'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S10', 'S8') {
+  foreach ($id in 'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S10', 'S11', 'S12', 'S13', 'S14', 'S8') {
     $s = $sc[$id]; $e = $s231.ent[$id]; if (-not $e) { continue }
     $db = S231DayBook $s
     $g = $e.guid
@@ -220,7 +238,7 @@ function S231Run {
     $tagFiles += [pscustomobject]@{ label = "the bridge's entry request answer ($id)"; file = (Join-Path $s231.cap "$($s.key).entry.xml") }
   }
   $tagFiles += [pscustomobject]@{ label = "Tally's ledger master export ($($plan231.names.contractor), FETCH *)"; file = (Join-Path $s231.dir ("ledger-" + ($plan231.names.contractor -replace '\W', '') + ".full.xml")) }
-  foreach ($f in 's8-ledger-by-name.xml', 's9-ledger-changes.xml', 'ledger-by-name-tds-deductee.xml') { $tagFiles += [pscustomobject]@{ label = "the bridge's ledger request answer ($f)"; file = (Join-Path $s231.cap $f) } }
+  foreach ($f in 's8-ledger-by-name.xml', 's9-ledger-changes.xml', 'ledger-by-name-tds-deductee.xml', 'ledger-list-2.3.1.xml', 'ledger-list-2.3.0.xml') { $tagFiles += [pscustomobject]@{ label = "the bridge's ledger request answer ($f)"; file = (Join-Path $s231.cap $f) } }
   $pin = Join-Path $s231.dir 'check-in.json'; $pout = Join-Path $s231.dir 'check.json'
   ConvertTo-Json -InputObject @{ scenarios = $ins; tags = $tagFiles } -Depth 12 | Set-Content $pin -Encoding UTF8
   & node (Join-Path $PSScriptRoot 'parsecheck.mjs') s231 $parseJs $pin $pout 2>&1 | ForEach-Object { Write-Host "  $_" }

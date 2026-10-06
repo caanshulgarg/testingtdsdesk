@@ -71,7 +71,11 @@ if (!s231) {
       const by = list => { const m = new Map(); list.forEach(([n, a]) => { const k = namesKey(n), h = m.get(k) || { n, a: 0 }; h.a = r2(h.a + a); m.set(k, h); }); return m; };
       const tb = by(tm.lines.map(l => [l.ledger, l.amount])), fb = by(fl.map(l => [l[1], Number(l[2]) || 0])), eb = by(Object.entries(t.ledgers || {}));
       for (const k of new Set([...tb.keys(), ...fb.keys()])) { const a = tb.get(k)?.a ?? null, b = fb.get(k)?.a ?? null, e = eb.get(k)?.a; row(`ledger ${(tb.get(k) || fb.get(k)).n}`, a, b, e, near(a, b)); }
-      if (Array.isArray(fv.checks)) row("parse.js's accuracy checks", "", fv.checks.length ? fv.checks.join(" | ") : "none", undefined, fv.checks.length === 0);
+      // S11-S14 (the owner's new rule): applied whenever the lines total zero; parse.js's other findings are notes, never a hold
+      if (sc.notesOnly) {
+        row("applied under the new rule (only lines not totalling zero are held)", "", Math.abs(fsum) <= 0.01 ? "yes" : "NO: held", "yes", Math.abs(fsum) <= 0.01);
+        notes.push(`what FinCom stores: ${fl.map(l => `${l[1]} ${l[2]}${l[3] ? ` HSN ${l[3]}` : ""}${l[4] != null ? ` GST ${l[4]}%` : ""}`).join(", ")}; items ${(fv.items || []).map(i => `${i.item} qty ${i.qty} rate ${i.rate} taxable ${i.taxable} GST ${i.gst}% tax ${r2((i.cgst || 0) + (i.sgst || 0) + (i.igst || 0))}`).join("; ") || "none"}; parse.js notes: ${Array.isArray(fv.checks) && fv.checks.length ? fv.checks.join(" | ") : "none"}`);
+      } else if (Array.isArray(fv.checks)) row("parse.js's accuracy checks", "", fv.checks.length ? fv.checks.join(" | ") : "none", undefined, fv.checks.length === 0);
       if (sc.kind === "items") {
         const ti = tm.items, fi = Array.isArray(fv.items) ? fv.items : null, ei = t.items || [];
         row("item lines", ti.length, fi ? fi.length : "(parse.js reads no items)", ei.length, !!fi && fi.length === ei.length && ti.length === ei.length, ti.length !== ei.length);

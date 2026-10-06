@@ -24,6 +24,7 @@ export const N = {
   buyer: "S231 Buyer", supplier: "S231 Supplier", billParty: "S231 Billwise Party", contractor: "S231 Contractor", contractExp: "S231 Contract Exp",
   tds: "S231 TDS Payable", bank: "S231 Bank", officeExp: "S231 Office Exp", cat: "S231 Region", north: "S231 North", south: "S231 South",
   nature: "S231 Contract Work", newParty: "S231 New Party", income: "Spike Income",
+  freight: "S231 Freight Charged", roundOff: "S231 Round Off",
 };
 export const GSTIN_OLD = gstin("07AAACS2310K1Z"), GSTIN_NEW = gstin("07AAACS2310K2Z");
 // stock items: name, HSN, GST rate (whole), sale rate
@@ -67,7 +68,12 @@ const masters = {
     led(N.billParty, "Sundry Debtors", "<ISBILLWISEON>Yes</ISBILLWISEON>"),
     led(N.bank, "Bank Accounts", "<ISBILLWISEON>No</ISBILLWISEON>"),
     led(N.officeExp, "Indirect Expenses", "<ISCOSTCENTRESON>Yes</ISCOSTCENTRESON>"),
+    led(N.freight, "Indirect Incomes", "<GSTAPPLICABLE>&#4; Applicable</GSTAPPLICABLE><GSTTYPEOFSUPPLY>Services</GSTTYPEOFSUPPLY>"),
+    led(N.roundOff, "Indirect Expenses", "<ROUNDINGMETHOD>Normal Rounding</ROUNDINGMETHOD>"),
   ].join(""),
+  // a realistic ledger list for the FinComLedgers timing: 400 parties
+  "masters-6-bulk": Array.from({ length: 400 }, (_, i) => led(`S231 Party ${String(i + 1).padStart(3, "0")}`, i % 2 ? "Sundry Creditors" : "Sundry Debtors",
+    `<ISBILLWISEON>Yes</ISBILLWISEON><OPENINGBALANCE>${f2((i % 2 ? 1 : -1) * (1000 + i))}</OPENINGBALANCE>`)).join(""),
   // after checks 1-8 (S231Run): the company's TDS and cost centre features turned on (on before them, Tally's screens
   // ask for cost centres in check 1's receipt: run 37416946111), then the TDS nature and ledgers
   "masters-5-tds": [
@@ -84,22 +90,30 @@ function ledgerEntry(tag, name, amount, inner = "") {
 }
 // an item invoice: party and duties in LEDGERENTRIES, each item's sales / purchase ledger in its ACCOUNTINGALLOCATIONS (as
 // Tally keeps an item invoice; flow4's check 8 import, run 37402702702). sign: +1 sales (party Dr), -1 purchase / credit note
-function invoice({ type, date, party, ledger, rows, sign, cgst, sgst, head = "", narr }) {
-  const lines = rows.map(([n, qty]) => { const it = item(n), taxable = r2(qty * it.rate); return { item: n, hsn: it.hsn, qty, unit: "Nos", rate: it.rate, taxable, gst: it.gst, tax: r2(taxable * it.gst / 100), cgst: r2(taxable * it.gst / 200), sgst: r2(taxable * it.gst / 200) }; });
+function invoice({ type, date, party, ledger, rows, sign, cgst, sgst, head = "", narr, extra = [], roundOff = false }) {
+  // rows: [item, qty, {rate?, disc? (per cent), incl? (the rate including GST)}]
+  const lines = rows.map(([n, qty, o = {}]) => { const it = item(n), rate = o.rate ?? it.rate, taxable = r2(qty * rate * (1 - (o.disc || 0) / 100));
+    return { item: n, hsn: it.hsn, qty, unit: "Nos", rate, taxable, gst: it.gst, tax: r2(taxable * it.gst / 100), cgst: r2(taxable * it.gst / 200), sgst: r2(taxable * it.gst / 200), disc: o.disc, incl: o.incl }; });
+  // extra ledger lines with their own GST (freight): [ledger, amount, gst, sac]
+  const xt = extra.map(([n, a, g, sac]) => ({ n, a, g, sac, c: r2(a * g / 200) }));
   const net = r2(lines.reduce((s, l) => s + l.taxable, 0));
-  const tc = r2(lines.reduce((s, l) => s + l.cgst, 0)), ts = r2(lines.reduce((s, l) => s + l.sgst, 0)), total = r2(net + tc + ts);
+  const tc = r2(lines.reduce((s, l) => s + l.cgst, 0) + xt.reduce((s, x) => s + x.c, 0)), ts = tc;
+  const gross = r2(net + xt.reduce((s, x) => s + x.a, 0) + tc + ts), total = roundOff ? Math.round(gross) : gross, ro = r2(total - gross);
   const inv = lines.map(l => {
     const v = sign * l.taxable;
     return `<ALLINVENTORYENTRIES.LIST><STOCKITEMNAME>${esc(l.item)}</STOCKITEMNAME><ISDEEMEDPOSITIVE>${dp(v)}</ISDEEMEDPOSITIVE><GSTHSNNAME>${l.hsn}</GSTHSNNAME>` +
-      `<RATE>${f2(l.rate)}/Nos</RATE><AMOUNT>${f2(v)}</AMOUNT><ACTUALQTY> ${l.qty} Nos</ACTUALQTY><BILLEDQTY> ${l.qty} Nos</BILLEDQTY>${rateDet(l.gst)}` +
+      `<RATE>${f2(l.rate)}/Nos</RATE>${l.disc ? `<DISCOUNT> ${l.disc}</DISCOUNT>` : ""}${l.incl ? `<RATEINCLUSIVEOFTAX>${f2(l.incl)}/Nos</RATEINCLUSIVEOFTAX>` : ""}<AMOUNT>${f2(v)}</AMOUNT><ACTUALQTY> ${l.qty} Nos</ACTUALQTY><BILLEDQTY> ${l.qty} Nos</BILLEDQTY>${rateDet(l.gst)}` +
       `<BATCHALLOCATIONS.LIST><GODOWNNAME>Main Location</GODOWNNAME><BATCHNAME>Primary Batch</BATCHNAME><AMOUNT>${f2(v)}</AMOUNT><ACTUALQTY> ${l.qty} Nos</ACTUALQTY><BILLEDQTY> ${l.qty} Nos</BILLEDQTY></BATCHALLOCATIONS.LIST>` +
       ledgerEntry("ACCOUNTINGALLOCATIONS.LIST", ledger, v) + `</ALLINVENTORYENTRIES.LIST>`;
   }).join("");
   const le = `<LEDGERENTRIES.LIST><LEDGERNAME>${esc(party)}</LEDGERNAME><ISDEEMEDPOSITIVE>${dp(-sign * total)}</ISDEEMEDPOSITIVE><ISPARTYLEDGER>Yes</ISPARTYLEDGER><AMOUNT>${f2(-sign * total)}</AMOUNT></LEDGERENTRIES.LIST>` +
-    ledgerEntry("LEDGERENTRIES.LIST", cgst, sign * tc) + ledgerEntry("LEDGERENTRIES.LIST", sgst, sign * ts);
+    xt.map(x => ledgerEntry("LEDGERENTRIES.LIST", x.n, sign * x.a, `<GSTHSNNAME>${x.sac}</GSTHSNNAME>${rateDet(x.g)}`)).join("") +
+    ledgerEntry("LEDGERENTRIES.LIST", cgst, sign * tc) + ledgerEntry("LEDGERENTRIES.LIST", sgst, sign * ts) +
+    (ro ? ledgerEntry("LEDGERENTRIES.LIST", N.roundOff, sign * ro) : "");
   const xml = `<VOUCHER VCHTYPE="${type}" ACTION="Create" OBJVIEW="Invoice Voucher View"><DATE>${date}</DATE><EFFECTIVEDATE>${date}</EFFECTIVEDATE><VOUCHERTYPENAME>${type}</VOUCHERTYPENAME>` +
     `<PARTYLEDGERNAME>${esc(party)}</PARTYLEDGERNAME><PARTYNAME>${esc(party)}</PARTYNAME><PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW><ISINVOICE>Yes</ISINVOICE><NARRATION>${esc(narr)}</NARRATION>${head}${le}${inv}</VOUCHER>`;
   const ledgers = { [party]: r2(-sign * total), [ledger]: r2(sign * net), [cgst]: r2(sign * tc), [sgst]: r2(sign * ts) };
+  xt.forEach(x => { ledgers[x.n] = r2(sign * x.a); }); if (ro) ledgers[N.roundOff] = r2(sign * ro);
   return { xml, truth: { type, party, items: lines, ledgers, total } };
 }
 function accounting({ type, date, party, rows, narr, head = "" }) {
@@ -158,13 +172,26 @@ add({ id: "S7", key: "s7-bank-payment-utr", label: "bank payment with a UTR", ki
 add({ id: "S10", key: "s10-sales-50-items", label: "sales invoice with 50 items", kind: "items", day: "2-2-2027", date: "20270202" },
   invoice({ type: "Sales", date: "20270202", party: N.buyer, ledger: N.sales, sign: 1, cgst: N.cgstOut, sgst: N.sgstOut, narr: "S10 fifty lines",
     rows: Array.from({ length: 50 }, (_, i) => [ITEMS[i % 4].name, (i % 7) + 1]) }));
+// S11-S14 (the owner, 06-Oct-2026): invoices FinCom must APPLY, with a note where the worked-out tax differs, never hold
+add({ id: "S11", key: "s11-sales-freight-gst", label: "sales invoice with freight carrying GST (no item line for it)", kind: "items", notesOnly: true, day: "1-6-2026", date: "20260601" },
+  invoice({ type: "Sales", date: "20260601", party: N.buyer, ledger: N.sales, sign: 1, cgst: N.cgstOut, sgst: N.sgstOut, narr: "S11 freight with GST",
+    rows: [["S231 Laptop", 1]], extra: [[N.freight, 1000, 18, "9965"]] }));
+add({ id: "S12", key: "s12-sales-round-off", label: "invoice with round-off", kind: "items", notesOnly: true, day: "2-6-2026", date: "20260602" },
+  invoice({ type: "Sales", date: "20260602", party: N.buyer, ledger: N.sales, sign: 1, cgst: N.cgstOut, sgst: N.sgstOut, narr: "S12 rounded off",
+    rows: [["S231 Tablet", 1, { rate: 399.5 }]], roundOff: true }));
+add({ id: "S13", key: "s13-sales-discount", label: "invoice with a discount", kind: "items", notesOnly: true, day: "1-7-2026", date: "20260701" },
+  invoice({ type: "Sales", date: "20260701", party: N.buyer, ledger: N.sales, sign: 1, cgst: N.cgstOut, sgst: N.sgstOut, narr: "S13 10% discount",
+    rows: [["S231 Laptop", 2, { disc: 10 }]] }));
+add({ id: "S14", key: "s14-sales-tax-inclusive", label: "tax-inclusive invoice", kind: "items", notesOnly: true, day: "2-7-2026", date: "20260702" },
+  invoice({ type: "Sales", date: "20260702", party: N.buyer, ledger: N.sales, sign: 1, cgst: N.cgstOut, sgst: N.sgstOut, narr: "S14 price includes GST (52.50 a unit)",
+    rows: [["S231 Rice", 10, { incl: 52.5 }]] }));
 // S8: a new party ledger, created and used at once in a receipt (after the stub's ledger book is seeded)
 const s8 = accounting({ type: "Receipt", date: "20270301", party: N.newParty, narr: "S8 first receipt from a new party", rows: [{ ledger: N.newParty, amount: 1180 }, { ledger: "Cash", amount: -1180 }] });
 add({ id: "S8", key: "s8-new-party", label: "a new party ledger used at once", kind: "ledgers", day: "1-3-2027", date: "20270301", truth: { newLedger: N.newParty } }, s8);
 
 const plan = {
   company: CO, names: N, gstinOld: GSTIN_OLD, gstinNew: GSTIN_NEW,
-  masters: ["masters-1-items", "masters-2-costs", "masters-4-ledgers"],
+  masters: ["masters-1-items", "masters-2-costs", "masters-4-ledgers", "masters-6-bulk"],
   later: ["masters-0-company", "masters-3-nature", "masters-5-tds"],
   bill: "s4-bill",
   s8Ledger: "s8-ledger",
