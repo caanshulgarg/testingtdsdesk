@@ -78,6 +78,20 @@ CHECK 6 - EVERYTHING ELSE AS IN 2.3.0
    You should see: within a minute, Sync activity shows it as Created, and it is in the books, as with 2.3.0.
    If not, send: its number, the time, and the Show log lines starting "Recorder:" that name it.
 
+CHECK 7 - A LEDGER CHANGED IN TALLY REACHES FINCOM (MASTERS)
+   In Tally, alter one party ledger: change its GSTIN (or its state, or its opening balance). Save it.
+   You should see: within about 10 minutes, FinCom's ledger list shows the new GSTIN (state, opening) for that ledger.
+   The log has a line "Ledger changes for <company>: ... 1 ledger(s) sent to FinCom".
+   If not, send: the ledger's name, the time, and the Show log lines starting "Ledger changes".
+
+CHECK 8 - A NEW PARTY USED AT ONCE: THE LEDGER FIRST, THEN THE ENTRY
+   Make a Sales entry of Rs 1, narration "TRIAL 231 new party". In the party field press Alt+C and create a new party
+   "TRIAL 231 PARTY" (Sundry Debtors). Save the entry.
+   You should see: for a moment Sync activity may show it held "waiting for the ledger 'TRIAL 231 PARTY' from Tally";
+   within a few minutes the party is in FinCom's ledger list and the entry is in the books, once.
+   The log has a line "Ledger TRIAL 231 PARTY of <company>: fetched from Tally before its entry".
+   If not, send: the entry's number, the time, and the Show log lines starting "Ledger" and "Recorder:".
+
 How to send the log lines: right-click the FinCom icon near the clock > Show log. Each line starting "Recorder:" says
 what the bridge decided for one entry: asking Tally, taken, held (with the reason), or not asked (with the reason).
 On NWS144 each Windows user has their own FinCom icon and their own log: send the log of the Windows user named in the

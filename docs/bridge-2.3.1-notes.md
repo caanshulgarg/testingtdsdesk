@@ -56,6 +56,34 @@ Two limits, in plain words:
 - **No HSN or GST rate on the item lines from this path.** The ledger lines under the items carry the ledger, amount and
   debit/credit only. FinCom's reports read the Day Book upload for HSN and rates, so they are unaffected.
 
+## Masters: ledgers kept current, and a new ledger fetched before its entry
+
+The second change, by the owner's decision of 06-Oct-2026: "Masters, one change: When Tally's master counter moves, ask
+only for ledgers created or altered since the last number. Keep name, group, GSTIN, PAN, state and opening balance
+current. If an entry uses a ledger FinCom does not have, fetch the ledger first, then apply the entry." Approved: read
+only, inside the 2-second rule, after postings, nothing else added, each bridge on its own Windows user's Tally only.
+
+- **A ledger created or altered in Tally reaches FinCom within about 10 minutes.** Every 10 minutes the bridge reads
+  Tally's master counter for each open company (as it already did). When the counter has moved since the last number it
+  processed, it asks Tally only for the ledgers whose AlterID is above that number (FinComLedgerChanges: 200 AlterIDs a
+  request, the ledger list's own fields and nothing else) and sends them to FinCom. FinCom adds a new ledger and keeps
+  GSTIN, PAN, state and opening balance current. The number moves on only when FinCom has taken them; until then the
+  next check asks again. A very large change of masters (more than 5,000 at once) is left to Update now or the nightly
+  ledger list, and the log says so.
+- **A new party used at once.** An entry naming a ledger FinCom does not have yet (for example a party created inside
+  the invoice screen with Alt+C) is held a moment with the words "waiting for the ledger '<name>' from Tally". The
+  bridge asks its own Tally for that ledger by its name (FinComLedgerByName, one request a ledger), sends it, and then
+  asks Tally for the entry again: the ledger is in first, then the entry, within about two beats. FinCom's balance check
+  still applies to the entry.
+- **Read only, inside the 2-second rule, never during a posting, each bridge on its own Windows user's Tally only.** A
+  Tally slow to answer is left at 2 seconds and the ledger changes stop for that company until you switch where the
+  changes come from, as for the entries.
+- **Not in 2.3.1 (planned for 2.3.2):** ledger renames, ledgers moved to another group, new and altered groups, deleted
+  ledgers and groups, PAN worked out from the GSTIN. A ledger renamed or moved in Tally keeps FinCom's name and group;
+  the bridge's log names it ("left for 2.3.2"). Update now and the nightly ledger list handle them as before.
+
+This needs the FinCom cloud update (tally-ingest) that goes out with 2.3.1; no database change.
+
 ## Which entries enter the books by themselves in 2.3.1 (for your staff)
 
 **Enter by themselves**, within about a minute of saving in Tally:
@@ -85,6 +113,8 @@ that day's Day Book also settles them.
 4. An alteration of the sales invoice shows Tally's new figures.
 5. Item invoices held under 2.3.0 settle by themselves.
 6. A Receipt enters as with 2.3.0.
+7. A ledger's GSTIN changed in Tally shows in FinCom within about 10 minutes.
+8. A sales invoice to a party created at once (Alt+C in the invoice) enters the books, with the party, within a few minutes.
 
 ## Rollback
 
