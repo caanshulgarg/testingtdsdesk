@@ -1,0 +1,35 @@
+2026-10-06 11:10:22  Recorder: f1d4e71f-c688-40b6-8189-82fb22976cb0-6-Oct-26.txt is shorter than what was read: it is read again from its start
+2026-10-06 11:10:24  Recorder: Sales 1615 of 01-Oct-2026 (MasterID 4021, line 6a8f5272…): asking Tally by MasterID
+2026-10-06 11:10:28  Recorder: Sales 1615 of 01-Oct-2026 (MasterID 4021, line 6a8f5272…): taken: Tally's GUID f1d4e71f-c688-40b6-8189-82fb22976cb0-00000fb5, AlterID 4025
+2026-10-06 11:10:44  Recorder: Sales 1616 of 01-Oct-2026 (MasterID 4022, line e051f3c8…): asking Tally by MasterID
+2026-10-06 11:10:44  Recorder: Sales 1616 of 01-Oct-2026 (MasterID 4022, line e051f3c8…): taken: Tally's GUID f1d4e71f-c688-40b6-8189-82fb22976cb0-00000fb6, AlterID 4026
+2026-10-06 11:11:11  Recorder: Sales 1617 of 02-Oct-2026 (MasterID 4023, line c5d87cd9…): asking Tally by MasterID
+2026-10-06 11:11:16  Recorder: Sales 1617 of 02-Oct-2026 (MasterID 4023, line c5d87cd9…): taken: Tally's GUID f1d4e71f-c688-40b6-8189-82fb22976cb0-00000fb7, AlterID 4027
+2026-10-06 11:11:32  Recorder: Sales 1618 of 02-Oct-2026 (MasterID 4024, line db6253bb…): asking Tally by MasterID
+2026-10-06 11:11:33  Recorder: Sales 1618 of 02-Oct-2026 (MasterID 4024, line db6253bb…): taken: Tally's GUID f1d4e71f-c688-40b6-8189-82fb22976cb0-00000fb8, AlterID 4028
+2026-10-06 11:11:59  Recorder: Sales 1619 of 31-Oct-2026 (MasterID 4025, line 81e20ffd…): asking Tally by MasterID
+2026-10-06 11:12:04  Recorder: Sales 1619 of 31-Oct-2026 (MasterID 4025, line 81e20ffd…): taken: Tally's GUID f1d4e71f-c688-40b6-8189-82fb22976cb0-00000fb9, AlterID 4029
+2026-10-06 11:12:20  Recorder: Sales 1620 of 31-Oct-2026 (MasterID 4026, line 228ff035…): asking Tally by MasterID
+2026-10-06 11:12:21  Recorder: Sales 1620 of 31-Oct-2026 (MasterID 4026, line 228ff035…): taken: Tally's GUID f1d4e71f-c688-40b6-8189-82fb22976cb0-00000fba, AlterID 4030
+2026-10-06 11:12:48  Recorder: Receipt 8 of 31-Oct-2026 (MasterID 22, line 532ab719…): asking Tally by MasterID
+2026-10-06 11:12:53  Recorder: Receipt 8 of 31-Oct-2026 (MasterID 22, line 532ab719…): taken: Tally's GUID f1d4e71f-c688-40b6-8189-82fb22976cb0-00000016, AlterID 4031
+2026-10-06 11:13:09  Recorder: Receipt 8 of 31-Oct-2026 (MasterID 22, line 2d369ef4…): asking Tally by MasterID
+2026-10-06 11:13:10  Recorder: Receipt 8 of 31-Oct-2026 (MasterID 22, line 2d369ef4…): taken: Tally's GUID f1d4e71f-c688-40b6-8189-82fb22976cb0-00000016, AlterID 4032
+2026-10-06 11:13:15  Posting job pd-30-heavy-heads-jobs-1-667cbb: 1 item(s) for FinCom Spike Co
+2026-10-06 11:13:15      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>4027</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> </RESPONSE> 
+2026-10-06 11:13:15  Posting job pd-30-heavy-heads-jobs-1-667cbb: request 1 of 1: 1 vouchers in 0.3 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 4027)
+2026-10-06 11:13:15  Posting job pd-30-heavy-heads-jobs-1-667cbb: 1 requests, 1 vouchers, 0.3 s total
+2026-10-06 11:13:16  Posting job pd-30-heavy-heads-jobs-1-667cbb: posting window ALTVCHID 4032 to 4033, 1 voucher(s) and 0 master(s) created
+2026-10-06 11:13:16  Posting job pd-30-heavy-heads-jobs-1-667cbb done: Posted 1 of 1 (Tally's reply)
+2026-10-06 11:13:28  Posting job pd-30-heavy-heads-jobs-2-4652fe: 1 item(s) for FinCom Spike Co
+2026-10-06 11:13:28      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>4028</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> </RESPONSE> 
+2026-10-06 11:13:28  Posting job pd-30-heavy-heads-jobs-2-4652fe: request 1 of 1: 1 vouchers in 0.3 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 4028)
+2026-10-06 11:13:28  Posting job pd-30-heavy-heads-jobs-2-4652fe: 1 requests, 1 vouchers, 0.3 s total
+2026-10-06 11:13:29  Posting job pd-30-heavy-heads-jobs-2-4652fe: posting window ALTVCHID 4033 to 4034, 1 voucher(s) and 0 master(s) created
+2026-10-06 11:13:29  Posting job pd-30-heavy-heads-jobs-2-4652fe done: Posted 1 of 1 (Tally's reply)
+2026-10-06 11:13:41      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>4029</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> </RESPONSE> 
+2026-10-06 11:13:41    request 1 of 1: 1 voucher in 0.3 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 4029)
+2026-10-06 11:13:41  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 11:13:54      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>4030</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> </RESPONSE> 
+2026-10-06 11:13:54    request 1 of 1: 1 voucher in 0.3 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 4030)
+2026-10-06 11:13:54  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply

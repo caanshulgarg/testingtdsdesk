@@ -1,0 +1,2 @@
+FCF1|ev=voucher_saved|cguid=f1d4e71f-c688-40b6-8189-82fb22976cb0|cname=FinCom Spike Co|tuser=TALLY User|nL=3|L1=led=Template Party~amt=1,180.00~dp=No~party=Yes~hsn=|L1B1=name=TS5-1~type=Agst Ref~amt=1,180.00~cp=~tdssec=|L1C1=cat=|L2=led=Spike Income~amt=10.00~dp=No~party=No~hsn=|L2C1=cat=Primary Cost Category|L2C1c1=cc=CC Branch~amt=10.00|L3=led=HDFC Bank~amt=1,190.00~dp=Yes~party=Yes~hsn=|nI=0|end=1
+FCF1|ev=voucher_final|cguid=f1d4e71f-c688-40b6-8189-82fb22976cb0|form_guid=f1d4e71f-c688-40b6-8189-82fb22976cb0-00000016|form_mid=31|form_aid=26|cmp_altvchid=|end=1

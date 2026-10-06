@@ -1,0 +1,1030 @@
+[10:37:22.673] push-design on TallyPrime 3.0: reps 2, heavy 600 ledgers / 600 items / up to 4000 vouchers (15 min), postings 2
+Add-Type references: C:\Program Files\PowerShell\7\System.Drawing.Common.dll; C:\Program Files\PowerShell\7\System.Drawing.dll; C:\Program Files\PowerShell\7\System.Windows.Forms.dll; C:\Program Files\PowerShell\7\System.Windows.Forms.Primitives.dll
+Add-Type: D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\push\pushm.ps1:41
+Line |
+  41 |  Add-Type -ReferencedAssemblies $pdRefs -TypeDefinition @'
+     |  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | (7,44): error CS1069: The type name 'Rectangle' could not be found in the namespace 'System.Drawing'. This type
+     | has been forwarded to assembly 'System.Drawing.Primitives, Version=10.0.0.0, Culture=neutral,
+     | PublicKeyToken=b03f5f7f11d50a3a' Consider adding a reference to that assembly.   static long Hash(Bitmap bmp,
+     | Graphics g, Rectangle r) {                                            ^
+
+Add-Type: D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\push\pushm.ps1:41
+Line |
+  41 |  Add-Type -ReferencedAssemblies $pdRefs -TypeDefinition @'
+     |  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | (8,5): error CS0012: The type 'Size' is defined in an assembly that is not referenced. You must add a reference
+     | to assembly 'System.Drawing.Primitives, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'.    
+     | g.CopyFromScreen(r.X, r.Y, 0, 0, r.Size);     ^
+
+Add-Type: D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\push\pushm.ps1:41
+Line |
+  41 |  Add-Type -ReferencedAssemblies $pdRefs -TypeDefinition @'
+     |  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | (8,5): error CS0012: The type 'Point' is defined in an assembly that is not referenced. You must add a reference
+     | to assembly 'System.Drawing.Primitives, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a'.    
+     | g.CopyFromScreen(r.X, r.Y, 0, 0, r.Size);     ^
+
+Add-Type: D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\push\pushm.ps1:41
+Line |
+  41 |  Add-Type -ReferencedAssemblies $pdRefs -TypeDefinition @'
+     |  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | (9,37): error CS1069: The type name 'Rectangle' could not be found in the namespace 'System.Drawing'. This type
+     | has been forwarded to assembly 'System.Drawing.Primitives, Version=10.0.0.0, Culture=neutral,
+     | PublicKeyToken=b03f5f7f11d50a3a' Consider adding a reference to that assembly.     BitmapData d =
+     | bmp.LockBits(new Rectangle(0, 0, r.Width, r.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);      
+     | ^
+
+Add-Type: D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\push\pushm.ps1:41
+Line |
+  41 |  Add-Type -ReferencedAssemblies $pdRefs -TypeDefinition @'
+     |  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | (9,20): error CS0012: The type 'Rectangle' is defined in an assembly that is not referenced. You must add a
+     | reference to assembly 'System.Drawing.Primitives, Version=10.0.0.0, Culture=neutral,
+     | PublicKeyToken=b03f5f7f11d50a3a'.     BitmapData d = bmp.LockBits(new Rectangle(0, 0, r.Width, r.Height),
+     | ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);                    ^
+
+Add-Type: D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\push\pushm.ps1:41
+Line |
+  41 |  Add-Type -ReferencedAssemblies $pdRefs -TypeDefinition @'
+     |  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | (18,5): error CS1069: The type name 'Rectangle' could not be found in the namespace 'System.Drawing'. This type
+     | has been forwarded to assembly 'System.Drawing.Primitives, Version=10.0.0.0, Culture=neutral,
+     | PublicKeyToken=b03f5f7f11d50a3a' Consider adding a reference to that assembly.     Rectangle r =
+     | Screen.PrimaryScreen.Bounds;     ^
+
+Add-Type: D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\push\pushm.ps1:41
+Line |
+  41 |  Add-Type -ReferencedAssemblies $pdRefs -TypeDefinition @'
+     |  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | (18,40): error CS0012: The type 'Rectangle' is defined in an assembly that is not referenced. You must add a
+     | reference to assembly 'System.Drawing.Primitives, Version=10.0.0.0, Culture=neutral,
+     | PublicKeyToken=b03f5f7f11d50a3a'.     Rectangle r = Screen.PrimaryScreen.Bounds;                                
+     | ^
+
+Add-Type: D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\push\pushm.ps1:41
+Line |
+  41 |  Add-Type -ReferencedAssemblies $pdRefs -TypeDefinition @'
+     |  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | (19,55): error CS1503: Argument 3: cannot convert from 'System.Drawing.Imaging.PixelFormat' to
+     | 'System.Drawing.Graphics'     using (Bitmap bmp = new Bitmap(r.Width, r.Height, PixelFormat.Format32bppArgb))
+     | using (Graphics g = Graphics.FromImage(bmp)) {                                                       ^
+
+Add-Type: D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\push\pushm.ps1:41
+Line |
+  41 |  Add-Type -ReferencedAssemblies $pdRefs -TypeDefinition @'
+     |  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | (19,12): error CS0012: The type 'IImage' is defined in an assembly that is not referenced. You must add a
+     | reference to assembly 'System.Private.Windows.GdiPlus, Version=10.0.0.0, Culture=neutral,
+     | PublicKeyToken=b77a5c561934e089'.     using (Bitmap bmp = new Bitmap(r.Width, r.Height,
+     | PixelFormat.Format32bppArgb)) using (Graphics g = Graphics.FromImage(bmp)) {            ^
+
+Add-Type: D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\push\pushm.ps1:41
+Line |
+  41 |  Add-Type -ReferencedAssemblies $pdRefs -TypeDefinition @'
+     |  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | (19,12): error CS0012: The type 'IRawData' is defined in an assembly that is not referenced. You must add a
+     | reference to assembly 'System.Private.Windows.Core, Version=10.0.0.0, Culture=neutral,
+     | PublicKeyToken=b77a5c561934e089'.     using (Bitmap bmp = new Bitmap(r.Width, r.Height,
+     | PixelFormat.Format32bppArgb)) using (Graphics g = Graphics.FromImage(bmp)) {            ^
+
+Add-Type: D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\push\pushm.ps1:41
+Line |
+  41 |  Add-Type -ReferencedAssemblies $pdRefs -TypeDefinition @'
+     |  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | (19,12): error CS0012: The type 'IPointer<>' is defined in an assembly that is not referenced. You must add a
+     | reference to assembly 'System.Private.Windows.Core, Version=10.0.0.0, Culture=neutral,
+     | PublicKeyToken=b77a5c561934e089'.     using (Bitmap bmp = new Bitmap(r.Width, r.Height,
+     | PixelFormat.Format32bppArgb)) using (Graphics g = Graphics.FromImage(bmp)) {            ^
+
+Add-Type: D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\push\pushm.ps1:41
+Line |
+  41 |  Add-Type -ReferencedAssemblies $pdRefs -TypeDefinition @'
+     |  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | (19,12): error CS0012: The type 'IBitmap' is defined in an assembly that is not referenced. You must add a
+     | reference to assembly 'System.Private.Windows.Core, Version=10.0.0.0, Culture=neutral,
+     | PublicKeyToken=b77a5c561934e089'.     using (Bitmap bmp = new Bitmap(r.Width, r.Height,
+     | PixelFormat.Format32bppArgb)) using (Graphics g = Graphics.FromImage(bmp)) {            ^
+
+Add-Type: D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\push\pushm.ps1:41
+Line |
+  41 |  Add-Type -ReferencedAssemblies $pdRefs -TypeDefinition @'
+     |  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | (19,92): error CS0012: The type 'IGraphics' is defined in an assembly that is not referenced. You must add a
+     | reference to assembly 'System.Private.Windows.GdiPlus, Version=10.0.0.0, Culture=neutral,
+     | PublicKeyToken=b77a5c561934e089'.     using (Bitmap bmp = new Bitmap(r.Width, r.Height,
+     | PixelFormat.Format32bppArgb)) using (Graphics g = Graphics.FromImage(bmp)) {                                    
+     | ^
+
+Add-Type: D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\push\pushm.ps1:41
+Line |
+  41 |  Add-Type -ReferencedAssemblies $pdRefs -TypeDefinition @'
+     |  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | (19,92): error CS0012: The type 'IGraphicsContextInfo' is defined in an assembly that is not referenced. You
+     | must add a reference to assembly 'System.Private.Windows.GdiPlus, Version=10.0.0.0, Culture=neutral,
+     | PublicKeyToken=b77a5c561934e089'.     using (Bitmap bmp = new Bitmap(r.Width, r.Height,
+     | PixelFormat.Format32bppArgb)) using (Graphics g = Graphics.FromImage(bmp)) {                                    
+     | ^
+
+Add-Type: D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\push\pushm.ps1:41
+Line |
+  41 |  Add-Type -ReferencedAssemblies $pdRefs -TypeDefinition @'
+     |  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | (19,92): error CS0012: The type 'IPointer<>' is defined in an assembly that is not referenced. You must add a
+     | reference to assembly 'System.Private.Windows.Core, Version=10.0.0.0, Culture=neutral,
+     | PublicKeyToken=b77a5c561934e089'.     using (Bitmap bmp = new Bitmap(r.Width, r.Height,
+     | PixelFormat.Format32bppArgb)) using (Graphics g = Graphics.FromImage(bmp)) {                                    
+     | ^
+
+Add-Type: D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\push\pushm.ps1:41
+Line |
+  41 |  Add-Type -ReferencedAssemblies $pdRefs -TypeDefinition @'
+     |  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | (19,92): error CS0012: The type 'IHdcContext' is defined in an assembly that is not referenced. You must add a
+     | reference to assembly 'System.Private.Windows.Core, Version=10.0.0.0, Culture=neutral,
+     | PublicKeyToken=b77a5c561934e089'.     using (Bitmap bmp = new Bitmap(r.Width, r.Height,
+     | PixelFormat.Format32bppArgb)) using (Graphics g = Graphics.FromImage(bmp)) {                                    
+     | ^
+
+Add-Type: D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\push\pushm.ps1:41
+Line |
+  41 |  Add-Type -ReferencedAssemblies $pdRefs -TypeDefinition @'
+     |  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | (28,9): error CS0103: The name 'Thread' does not exist in the current context         Thread.Sleep(5);         ^ 
+
+Add-Type: D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\push\pushm.ps1:41
+Line |
+  41 |  Add-Type -ReferencedAssemblies $pdRefs -TypeDefinition @'
+     |  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Cannot add type. Compilation errors occurred.
+
+[10:37:23.969] HARNESS: the screen timer did not compile; the keys are sent without it (ui times empty), the stamps still time the save
+[10:37:25.018] system clock step after timeBeginPeriod(1): 0.586 ms (min 0.0111, max 7.8007)
+[10:37:25.050] two files written 2 ms apart: NTFS write times 13.9948 ms apart
+[10:37:25.075] light company folder: D:\a\_temp\TallyData\100000
+[10:37:28.108] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-setup-light-started (1024x768)
+[10:37:56.226] Tally started (setup-light) in 28.1 s; company open: True
+[10:37:56.237] company GUID f1d4e71f-c688-40b6-8189-82fb22976cb0
+[10:37:58.259] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[10:37:59.521] import light masters: 60 sent, created 59, errors 0, 229.8 ms
+[10:37:59.672] import template s5 (all fields): 1 sent, created 1, errors 0, 90.1 ms
+[10:37:59.893] import template s50 (all fields): 1 sent, created 1, errors 0, 217.3 ms
+[10:37:59.915] import template rc (all fields): 1 sent, created 1, errors 0, 20.1 ms
+[10:37:59.920] templates: s50 all fields; rc all fields; s5 all fields
+[10:37:59.960]   template Receipt 1 20261001 mid 4 aid 4 f1d4e71f-c688-40b6-8189-82fb22976cb0-00000004
+[10:37:59.961]   template Sales 1 20261002 mid 2 aid 2 f1d4e71f-c688-40b6-8189-82fb22976cb0-00000002
+[10:37:59.962]   template Sales 2 20261031 mid 3 aid 3 f1d4e71f-c688-40b6-8189-82fb22976cb0-00000003
+[10:38:00.146] TDL $$MachineName => '' 
+[10:38:00.151] TDL $$CmpUserName => 'TALLY User' 
+[10:38:00.155] TDL $$SysInfo:WindowsUser => 'runneradmin' 
+[10:38:00.160] TDL $$SysInfo:WindowsUserName => '' 
+[10:38:00.164] TDL $$SysInfo:UserName => '' 
+[10:38:00.168] TDL $$SysInfo:LoginUser => '' 
+[10:38:00.172] TDL $$SysInfo:SystemName => 'runnervmfi6oq' 
+[10:38:00.176] TDL $$SysInfo:ComputerName => '' 
+[10:38:00.180] TDL $$SysInfo:MachineName => '' 
+[10:38:00.188] TDL $$SysInfo:IPAddress => '10.1.0.79,172.24.32.1' 
+[10:38:00.192] TDL $$SysInfo:ApplicationPath => 'C:\Program Files\TallyPrime' 
+[10:38:00.197] TDL $$SysInfo:TempPath => '' 
+[10:38:06.245] tally.ini: Data D:\a\_temp\TallyHeavy; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-setup-heavy-started (1024x768)
+[10:38:34.230] Tally started (setup-heavy) in 28 s; company open: True
+[10:38:36.256] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[10:38:39.392] import heavy masters 0: 1000 sent, created 1000, errors 0, 3079.6 ms
+[10:38:40.002] import heavy masters 1000: 200 sent, created 200, errors 0, 607.2 ms
+[10:38:56.553] import heavy vouchers 0: 1000 sent, created 1000, errors 0, 16421.8 ms
+[10:39:13.764] import heavy vouchers 1000: 1000 sent, created 1000, errors 0, 17121.6 ms
+[10:39:33.252] import heavy vouchers 2000: 1000 sent, created 1000, errors 0, 19387.9 ms
+[10:39:53.340] import heavy vouchers 3000: 1000 sent, created 1000, errors 0, 19992.9 ms
+[10:39:54.251] heavy company: 611 ledgers, 650 stock items, 4004 vouchers in Tally (import took 1.8 min)
+[10:40:01.260] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-count-light-started (1024x768)
+[10:40:29.254] Tally started (count-light) in 28 s; company open: True
+[10:40:31.273] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[10:40:31.303] light company: 11 ledgers, 50 stock items, 4 vouchers
+[10:40:37.325] bridge's TallyHost: 127.0.0.2 (through the timing proxy)
+[10:40:37.333] bridge: setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.3.0.exe SHA-256 8e8145693224edf5459836323ce187e87e8dbca6eeac0bde494cf64b2ca6a7b9
+[10:41:02.232] bridge config after setup: TallyHost '127.0.0.2', TallyPorts 9000, port 9100
+[10:41:02.256] bridge on 127.0.0.1:9100, version 2.3.0
+[10:41:06.277] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-light-none-started (1024x768)
+[10:41:34.263] Tally started (light-none) in 28 s; company open: True
+[10:41:36.272] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[10:41:41.281] -- a: light / none / receipt (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[shot] p-light-none-receipt-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-none-receipt-dup (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre  save  post  final ; line  B
+[shot] p-light-none-receipt-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait -1 first -1 settled -1; stamps pre  save  post  final ; line  B
+[10:42:24.213]    Tally: 2 new, 0 altered (wanted 2)
+[10:42:24.221] -- a: light / none / sales5 (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[shot] p-light-none-sales5-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-none-sales5-dup (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre  save  post  final ; line  B
+[shot] p-light-none-sales5-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait -1 first -1 settled -1; stamps pre  save  post  final ; line  B
+[10:43:07.124]    Tally: 2 new, 0 altered (wanted 2)
+[10:43:07.126] -- a: light / none / sales50 (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-light-none-sales50-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-none-sales50-dup (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre  save  post  final ; line  B
+[shot] p-light-none-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait -1 first -1 settled -1; stamps pre  save  post  final ; line  B
+[10:43:50.054]    Tally: 2 new, 0 altered (wanted 2)
+[10:43:50.058] -- a: light / none / sales50 (alter) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-light-none-sales50-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-light-none-sales50-open (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre  save  post  final ; line  B
+[shot] p-light-none-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{HOME}'
+[keys] '{ENTER}'
+   rep 2: ui sendwait -1 first -1 settled -1; stamps pre  save  post  final ; line  B
+[10:44:33.022]    Tally: 0 new, 1 altered (wanted 2)
+[10:44:46.110] -- b: light / none / jobs #1: 1075.6 ms (done, ok True)
+[10:44:59.059] -- b: light / none / jobs #2: 946.2 ms (done, ok True)
+[10:45:11.421] -- b: light / none / import #1: 359.6 ms (answered, ok True)
+[10:45:23.781] -- b: light / none / import #2: 357.3 ms (answered, ok True)
+[10:45:27.795] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPStamp.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-light-stamp-started (1024x768)
+[10:45:55.789] Tally started (light-stamp) in 28 s; company open: True
+[10:45:57.797] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[10:46:02.800] -- a: light / stamp / receipt (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[shot] p-light-stamp-receipt-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-stamp-receipt-dup (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre 0 save 17.6 post 1 final ; line  B
+[shot] p-light-stamp-receipt-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait -1 first -1 settled -1; stamps pre 0.4 save 17 post 0.6 final ; line  B
+[10:46:45.734]    Tally: 2 new, 0 altered (wanted 2)
+[10:46:45.736] -- a: light / stamp / sales5 (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[shot] p-light-stamp-sales5-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-stamp-sales5-dup (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre 0 save 72.5 post 0 final ; line  B
+[shot] p-light-stamp-sales5-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait -1 first -1 settled -1; stamps pre 0 save 53.6 post 1 final ; line  B
+[10:47:28.657]    Tally: 2 new, 0 altered (wanted 2)
+[10:47:28.658] -- a: light / stamp / sales50 (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-light-stamp-sales50-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-stamp-sales50-dup (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre 0.4 save 245.7 post 0 final ; line  B
+[shot] p-light-stamp-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait -1 first -1 settled -1; stamps pre 0 save 217.8 post 0.4 final ; line  B
+[10:48:11.613]    Tally: 2 new, 0 altered (wanted 2)
+[10:48:11.614] -- a: light / stamp / sales50 (alter) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-light-stamp-sales50-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-light-stamp-sales50-open (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre 0.5 save 284.8 post 1 final ; line  B
+[shot] p-light-stamp-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{HOME}'
+[keys] '{ENTER}'
+   rep 2: ui sendwait -1 first -1 settled -1; stamps pre 0 save 318.6 post 0 final ; line  B
+[10:48:54.596]    Tally: 0 new, 1 altered (wanted 2)
+[10:48:58.651] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPHeads.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-light-heads-started (1024x768)
+[10:49:26.619] Tally started (light-heads) in 28 s; company open: True
+[10:49:28.628] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[10:49:33.630] -- a: light / heads / receipt (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[shot] p-light-heads-receipt-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-heads-receipt-dup (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre 13.1 save 32 post 1 final ; line  B
+[shot] p-light-heads-receipt-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait -1 first -1 settled -1; stamps pre 1 save 25 post 1 final ; line  B
+[10:50:16.571]    Tally: 2 new, 0 altered (wanted 2)
+[10:50:16.573] -- a: light / heads / sales5 (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[shot] p-light-heads-sales5-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-heads-sales5-dup (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre 1 save 72.5 post 0.5 final ; line  B
+[shot] p-light-heads-sales5-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait -1 first -1 settled -1; stamps pre 1 save 59.2 post 2.1 final ; line  B
+[10:50:59.506]    Tally: 2 new, 0 altered (wanted 2)
+[10:50:59.507] -- a: light / heads / sales50 (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-light-heads-sales50-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-heads-sales50-dup (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre 2 save 227.6 post 1.5 final ; line  B
+[shot] p-light-heads-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait -1 first -1 settled -1; stamps pre 0.5 save 247.5 post 1 final ; line  B
+[10:51:42.465]    Tally: 2 new, 0 altered (wanted 2)
+[10:51:42.467] -- a: light / heads / sales50 (alter) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-light-heads-sales50-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-light-heads-sales50-open (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre 1 save 316.2 post 1 final ; line  B
+[shot] p-light-heads-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{HOME}'
+[keys] '{ENTER}'
+   rep 2: ui sendwait -1 first -1 settled -1; stamps pre 1 save 315.5 post 1 final ; line  B
+[10:52:25.442]    Tally: 0 new, 1 altered (wanted 2)
+[10:52:38.404] -- b: light / heads / jobs #1: 959.8 ms (done, ok True)
+[10:52:51.342] -- b: light / heads / jobs #2: 935.3 ms (done, ok True)
+[10:53:03.693] -- b: light / heads / import #1: 348.2 ms (answered, ok True)
+[10:53:16.057] -- b: light / heads / import #2: 361.1 ms (answered, ok True)
+[10:53:20.074] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPFull.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-light-full-started (1024x768)
+[10:53:48.052] Tally started (light-full) in 28 s; company open: True
+[10:53:50.061] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[10:53:55.065] -- a: light / full / receipt (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[shot] p-light-full-receipt-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-full-receipt-dup (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre 0 save 20.5 post 7 final 1; line 403 B
+[shot] p-light-full-receipt-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait -1 first -1 settled -1; stamps pre 0.6 save 17.4 post 1 final 1; line 403 B
+[10:54:38.085]    Tally: 2 new, 0 altered (wanted 2)
+[10:54:38.087] -- a: light / full / sales5 (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[shot] p-light-full-sales5-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-full-sales5-dup (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre 0 save 73.5 post 3 final 0; line 1535 B
+[shot] p-light-full-sales5-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait -1 first -1 settled -1; stamps pre 1 save 52.4 post 3 final 0; line 1535 B
+[10:55:21.037]    Tally: 2 new, 0 altered (wanted 2)
+[10:55:21.039] -- a: light / full / sales50 (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-light-full-sales50-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-full-sales50-dup (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre 0 save 222.9 post 9 final 1; line 12351 B
+[shot] p-light-full-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait -1 first -1 settled -1; stamps pre 0 save 242.4 post 13.2 final 0; line 12351 B
+[10:56:04.047]    Tally: 2 new, 0 altered (wanted 2)
+[10:56:04.048] -- a: light / full / sales50 (alter) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-light-full-sales50-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-light-full-sales50-open (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre 0.6 save 298.8 post 10 final 0; line 12350 B
+[shot] p-light-full-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{HOME}'
+[keys] '{ENTER}'
+   rep 2: ui sendwait -1 first -1 settled -1; stamps pre 0 save 296.5 post 10 final 0; line 12350 B
+[10:56:47.029]    Tally: 0 new, 1 altered (wanted 2)
+[10:56:51.251] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPFull.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-light-full-again-started (1024x768)
+[10:57:19.251] Tally started (light-full-again) in 28 s; company open: True
+[10:57:21.258] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[keys] 'c'
+[keys] 'Ledger{ENTER}'
+[shot] p-light-full-ledger-form (1024x768)
+[keys] 'PD Keys Party{ENTER}'
+[keys] '{ENTER}'
+[keys] 'Sundry Debtors{ENTER}'
+[keys] '^a'
+[shot] p-light-full-ledger-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[shot] p-light-full-cd-daybook (1024x768)
+[keys] '{END}'
+[keys] '{UP}'
+[keys] '%x'
+[keys] 'y'
+[shot] p-light-full-cancelled (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[shot] p-light-full-cd-daybook2 (1024x768)
+[keys] '{END}'
+[keys] '%d'
+[keys] 'y'
+[shot] p-light-full-deleted (1024x768)
+[keys] '{ESC}'
+[10:58:40.719] -- b: light / full / jobs #1: 940.6 ms (done, ok True)
+[10:58:53.659] -- b: light / full / jobs #2: 937.7 ms (done, ok True)
+[10:59:06.026] -- b: light / full / import #1: 364.4 ms (answered, ok True)
+[10:59:18.387] -- b: light / full / import #2: 358.8 ms (answered, ok True)
+[10:59:22.408] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPFull.tdl, C:\fcspike\FCPEv_aso.tdl, C:\fcspike\FCPEv_bso.tdl, C:\fcspike\FCPEv_so.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-light-evprobe-started (1024x768)
+[10:59:50.393] Tally started (light-evprobe) in 28 s; company open: True
+[10:59:52.402] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[10:59:52.403] -- a: light / evprobe / sales5 (dup) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[shot] p-light-evprobe-sales5-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-light-evprobe-sales5-dup (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre 0.5 save 65.5 post 5 final 1; line 1535 B
+[shot] p-light-evprobe-sales5-saved (1024x768)
+[11:00:14.645]    Tally: 1 new, 0 altered (wanted 1)
+[11:00:14.647] -- a: light / evprobe / sales5 (alter) x 1
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[shot] p-light-evprobe-sales5-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-light-evprobe-sales5-open (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre 0 save 58.1 post 2 final 1; line 1650 B
+[shot] p-light-evprobe-sales5-saved (1024x768)
+[11:00:36.266]    Tally: 0 new, 1 altered (wanted 1)
+[11:00:48.804] -- b: light / evprobe / import #1: 531.1 ms (answered, ok True)
+[11:00:48.806] candidate event files written: 
+[11:00:52.819] tally.ini: Data D:\a\_temp\TallyHeavy; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-heavy-none-started (1024x768)
+[11:01:20.783] Tally started (heavy-none) in 28 s; company open: True
+[11:01:22.802] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[11:01:27.805] -- a: heavy / none / receipt (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[shot] p-heavy-none-receipt-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-none-receipt-dup (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre  save  post  final ; line  B
+[shot] p-heavy-none-receipt-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait -1 first -1 settled -1; stamps pre  save  post  final ; line  B
+[11:02:15.761]    Tally: 2 new, 0 altered (wanted 2)
+[11:02:15.763] -- a: heavy / none / sales5 (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[shot] p-heavy-none-sales5-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-none-sales5-dup (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre  save  post  final ; line  B
+[shot] p-heavy-none-sales5-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait -1 first -1 settled -1; stamps pre  save  post  final ; line  B
+[11:03:03.737]    Tally: 2 new, 0 altered (wanted 2)
+[11:03:03.739] -- a: heavy / none / sales50 (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-heavy-none-sales50-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-none-sales50-dup (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre  save  post  final ; line  B
+[shot] p-heavy-none-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait -1 first -1 settled -1; stamps pre  save  post  final ; line  B
+[11:03:52.048]    Tally: 2 new, 0 altered (wanted 2)
+[11:03:52.050] -- a: heavy / none / sales50 (alter) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-heavy-none-sales50-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-heavy-none-sales50-open (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre  save  post  final ; line  B
+[shot] p-heavy-none-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{HOME}'
+[keys] '{ENTER}'
+   rep 2: ui sendwait -1 first -1 settled -1; stamps pre  save  post  final ; line  B
+[11:04:40.184]    Tally: 0 new, 1 altered (wanted 2)
+[11:04:53.190] -- b: heavy / none / jobs #1: 1002.9 ms (done, ok True)
+[11:05:06.194] -- b: heavy / none / jobs #2: 1001.9 ms (done, ok True)
+[11:05:18.630] -- b: heavy / none / import #1: 433.3 ms (answered, ok True)
+[11:05:31.068] -- b: heavy / none / import #2: 435.6 ms (answered, ok True)
+[11:05:35.081] tally.ini: Data D:\a\_temp\TallyHeavy; TDL: C:\fcspike\FCPStamp.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-heavy-stamp-started (1024x768)
+[11:06:03.065] Tally started (heavy-stamp) in 28 s; company open: True
+[11:06:05.084] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[11:06:10.088] -- a: heavy / stamp / receipt (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[shot] p-heavy-stamp-receipt-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-stamp-receipt-dup (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre 1 save 57.7 post 0.5 final ; line  B
+[shot] p-heavy-stamp-receipt-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait -1 first -1 settled -1; stamps pre 0.5 save 45.8 post 0 final ; line  B
+[11:06:57.974]    Tally: 2 new, 0 altered (wanted 2)
+[11:06:57.976] -- a: heavy / stamp / sales5 (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[shot] p-heavy-stamp-sales5-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-stamp-sales5-dup (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre 0 save 49.5 post 0 final ; line  B
+[shot] p-heavy-stamp-sales5-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait -1 first -1 settled -1; stamps pre 0.5 save 45 post 1 final ; line  B
+[11:07:45.927]    Tally: 2 new, 0 altered (wanted 2)
+[11:07:45.929] -- a: heavy / stamp / sales50 (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-heavy-stamp-sales50-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-stamp-sales50-dup (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre 0 save 42.8 post 0 final ; line  B
+[shot] p-heavy-stamp-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait -1 first -1 settled -1; stamps pre 0 save 40.8 post 1 final ; line  B
+[11:08:34.113]    Tally: 2 new, 0 altered (wanted 2)
+[11:08:34.115] -- a: heavy / stamp / sales50 (alter) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-heavy-stamp-sales50-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-heavy-stamp-sales50-open (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre 0.5 save 31.5 post 0 final ; line  B
+[shot] p-heavy-stamp-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{HOME}'
+[keys] '{ENTER}'
+   rep 2: ui sendwait -1 first -1 settled -1; stamps pre 0 save 32.1 post 0.5 final ; line  B
+[11:09:22.545]    Tally: 0 new, 1 altered (wanted 2)
+[11:09:26.558] tally.ini: Data D:\a\_temp\TallyHeavy; TDL: C:\fcspike\FCPHeads.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-heavy-heads-started (1024x768)
+[11:09:54.541] Tally started (heavy-heads) in 28 s; company open: True
+[11:09:56.549] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[11:10:01.552] -- a: heavy / heads / receipt (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[shot] p-heavy-heads-receipt-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-heads-receipt-dup (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre 3 save 66 post 1 final ; line  B
+[shot] p-heavy-heads-receipt-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait -1 first -1 settled -1; stamps pre 1 save 48.5 post 1 final ; line  B
+[11:10:49.666]    Tally: 2 new, 0 altered (wanted 2)
+[11:10:49.668] -- a: heavy / heads / sales5 (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[shot] p-heavy-heads-sales5-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-heads-sales5-dup (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre 1 save 54.6 post 1 final ; line  B
+[shot] p-heavy-heads-sales5-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait -1 first -1 settled -1; stamps pre 1 save 58.6 post 1 final ; line  B
+[11:11:38.048]    Tally: 2 new, 0 altered (wanted 2)
+[11:11:38.050] -- a: heavy / heads / sales50 (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-heavy-heads-sales50-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-heads-sales50-dup (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre 0.4 save 42.6 post 1 final ; line  B
+[shot] p-heavy-heads-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait -1 first -1 settled -1; stamps pre 0.6 save 46 post 1 final ; line  B
+[11:12:26.774]    Tally: 2 new, 0 altered (wanted 2)
+[11:12:26.776] -- a: heavy / heads / sales50 (alter) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-heavy-heads-sales50-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-heavy-heads-sales50-open (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre 0 save 32.5 post 1 final ; line  B
+[shot] p-heavy-heads-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{HOME}'
+[keys] '{ENTER}'
+   rep 2: ui sendwait -1 first -1 settled -1; stamps pre 1.4 save 36 post 1 final ; line  B
+[11:13:15.164]    Tally: 0 new, 1 altered (wanted 2)
+[11:13:28.162] -- b: heavy / heads / jobs #1: 995.2 ms (done, ok True)
+[11:13:41.162] -- b: heavy / heads / jobs #2: 998.3 ms (done, ok True)
+[11:13:53.601] -- b: heavy / heads / import #1: 436.9 ms (answered, ok True)
+[11:14:06.034] -- b: heavy / heads / import #2: 431 ms (answered, ok True)
+[11:14:10.050] tally.ini: Data D:\a\_temp\TallyHeavy; TDL: C:\fcspike\FCPFull.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-heavy-full-started (1024x768)
+[11:14:38.000] Tally started (heavy-full) in 27.9 s; company open: True
+[11:14:40.008] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[11:14:45.012] -- a: heavy / full / receipt (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[shot] p-heavy-full-receipt-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-full-receipt-dup (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre 1 save 53.5 post 5 final 1; line 884 B
+[shot] p-heavy-full-receipt-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait -1 first -1 settled -1; stamps pre 0 save 49 post 1 final 1; line 884 B
+[11:15:32.948]    Tally: 2 new, 0 altered (wanted 2)
+[11:15:32.950] -- a: heavy / full / sales5 (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[shot] p-heavy-full-sales5-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-full-sales5-dup (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre 0 save 46.2 post 1 final 1; line 884 B
+[shot] p-heavy-full-sales5-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait -1 first -1 settled -1; stamps pre 1 save 49 post 2 final 0; line 884 B
+[11:16:21.140]    Tally: 2 new, 0 altered (wanted 2)
+[11:16:21.142] -- a: heavy / full / sales50 (dup) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-heavy-full-sales50-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-full-sales50-dup (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre 0.4 save 52.5 post 1.5 final 1; line 884 B
+[shot] p-heavy-full-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait -1 first -1 settled -1; stamps pre 1 save 41.6 post 1.6 final 0.4; line 884 B
+[11:17:09.305]    Tally: 2 new, 0 altered (wanted 2)
+[11:17:09.307] -- a: heavy / full / sales50 (alter) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-heavy-full-sales50-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-heavy-full-sales50-open (1024x768)
+   rep 1: ui sendwait -1 first -1 settled -1; stamps pre 1 save 41.1 post 2 final 0; line 349 B
+[shot] p-heavy-full-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{HOME}'
+[keys] '{ENTER}'
+   rep 2: ui sendwait -1 first -1 settled -1; stamps pre 0 save 31.6 post 1 final 0.5; line 349 B
+[11:17:57.843]    Tally: 0 new, 1 altered (wanted 2)
+[11:18:12.258] -- b: heavy / full / jobs #1: 999.6 ms (done, ok True)
+[11:18:25.259] -- b: heavy / full / jobs #2: 998.6 ms (done, ok True)
+[11:18:37.690] -- b: heavy / full / import #1: 429.2 ms (answered, ok True)
+[11:18:50.123] -- b: heavy / full / import #2: 430.1 ms (answered, ok True)
+[11:18:54.154] done

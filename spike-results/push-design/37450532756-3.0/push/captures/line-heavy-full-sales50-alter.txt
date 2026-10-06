@@ -1,0 +1,2 @@
+FCF1|ev=voucher_saved|cguid=f1d4e71f-c688-40b6-8189-82fb22976cb0|cname=FinCom Spike Co|tuser=TALLY User|nL=3|L1=led=HParty 00018~amt=500.00~dp=No~party=Yes~hsn=|L1B1=name=HADV-000017~type=New Ref~amt=500.00~cp=~tdssec=|L1C1=cat=|L2=led=Spike Income~amt=10.00~dp=No~party=No~hsn=|L2C1=cat=|L3=led=HDFC Bank~amt=510.00~dp=Yes~party=Yes~hsn=|nI=0|end=1
+FCF1|ev=voucher_final|cguid=f1d4e71f-c688-40b6-8189-82fb22976cb0|form_guid=f1d4e71f-c688-40b6-8189-82fb22976cb0-00000016|form_mid=22|form_aid=4032|cmp_altvchid=|end=1

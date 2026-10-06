@@ -1,0 +1,171 @@
+2026-10-06 10:39:56  FinCom Bridge 2.3.0: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+2026-10-06 10:39:56  FinCom Bridge 2.3.0 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+2026-10-06 10:39:56  Tally is not open; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+2026-10-06 10:39:56  Recorder: re-scan of the add-on's files for 2.3.0: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+2026-10-06 10:39:56  Recorder: FinCom Spike Co: lines from a Tally this bridge does not read (company not open here): not sent
+2026-10-06 10:39:56  Check:  - 
+2026-10-06 10:39:59  Tray icon: set to show next to the clock always (Windows 11)
+2026-10-06 10:39:59  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+2026-10-06 10:39:59  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+2026-10-06 10:43:43  Posting job pd-71-light-none-jobs-1-a640c4: 1 item(s) for FinCom Spike Co
+2026-10-06 10:43:43  Company FinCom Spike Co: its Tally GUID 3e829a6f-393c-41c2-95f0-501c9deaa33a is held from now on
+2026-10-06 10:43:43  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=12, ALTMSTID=270 (reading is prospective only: the bridge follows what changes after this)
+2026-10-06 10:43:43  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=12, ALTMSTID=270
+2026-10-06 10:43:44      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>11</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 10:43:44  Posting job pd-71-light-none-jobs-1-a640c4: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 11)
+2026-10-06 10:43:44  Posting job pd-71-light-none-jobs-1-a640c4: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 10:43:44  Posting job pd-71-light-none-jobs-1-a640c4: posting window ALTVCHID 12 to 13, 1 voucher(s) and 0 master(s) created
+2026-10-06 10:43:44  Posting job pd-71-light-none-jobs-1-a640c4 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 10:43:56  Posting job pd-71-light-none-jobs-2-81c1a3: 1 item(s) for FinCom Spike Co
+2026-10-06 10:43:56      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>12</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 10:43:56  Posting job pd-71-light-none-jobs-2-81c1a3: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 12)
+2026-10-06 10:43:56  Posting job pd-71-light-none-jobs-2-81c1a3: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 10:43:57  Posting job pd-71-light-none-jobs-2-81c1a3: posting window ALTVCHID 13 to 14, 1 voucher(s) and 0 master(s) created
+2026-10-06 10:43:57  Posting job pd-71-light-none-jobs-2-81c1a3 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 10:44:01  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=12; now ALTVCHID=14, ALTMSTID=270
+2026-10-06 10:44:09      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>13</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 10:44:09    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 13)
+2026-10-06 10:44:09  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 10:44:21      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>14</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 10:44:21    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 14)
+2026-10-06 10:44:21  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 10:49:25  Recorder: Receipt 7 of 01-Oct-2026 (MasterID 22, line f75a9a45…): asking Tally by MasterID
+2026-10-06 10:49:29  Recorder: Receipt 7 of 01-Oct-2026 (MasterID 22, line f75a9a45…): taken: Tally's GUID 3e829a6f-393c-41c2-95f0-501c9deaa33a-00000016, AlterID 26
+2026-10-06 10:49:46  Recorder: Sales 11 of 02-Oct-2026 (MasterID 23, line d788e659…): asking Tally by MasterID
+2026-10-06 10:49:48  The body fetch off: Tally took 2.0 s for the entry bodies (limit 2 s) (FinCom Spike Co; on again when the owner switches where the changes come from)
+2026-10-06 10:49:48  Tally 9000: FinComVoucherByMaster 20261002 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 10:49:48  Recorder: Sales 11 of 02-Oct-2026 (MasterID 23, line d788e659…): held: the entry was not read from Tally: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 10:49:48  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)); sent without it (FinCom holds the line until a body comes)
+2026-10-06 10:49:48  Recorder: Sales 11 of 02-Oct-2026 (MasterID 23, line d788e659…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 10:50:08  Recorder: Sales 12 of 02-Oct-2026 (MasterID 24, line 3b31568e…): not asked: the body fetch is off for this company (Tally took 2.0 s at 10:49)
+2026-10-06 10:50:08  Recorder: Sales 12 of 02-Oct-2026 (MasterID 24, line 3b31568e…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 10:50:29  Recorder: Sales 13 of 31-Oct-2026 (MasterID 25, line 4ac14497…): not asked: the body fetch is off for this company (Tally took 2.0 s at 10:49)
+2026-10-06 10:50:29  Recorder: Sales 13 of 31-Oct-2026 (MasterID 25, line 4ac14497…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 10:50:51  Recorder: Sales 14 of 31-Oct-2026 (MasterID 26, line ace1d667…): not asked: the body fetch is off for this company (Tally took 2.0 s at 10:49)
+2026-10-06 10:50:51  Recorder: Sales 14 of 31-Oct-2026 (MasterID 26, line ace1d667…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 10:51:12  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line ff37c493…): not asked: the body fetch is off for this company (Tally took 2.0 s at 10:49)
+2026-10-06 10:51:12  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line ff37c493…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 10:51:34  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line f04d8606…): not asked: the body fetch is off for this company (Tally took 2.0 s at 10:49)
+2026-10-06 10:51:34  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line f04d8606…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 10:51:34  Posting job pd-71-light-heads-jobs-1-3bfb0f: 1 item(s) for FinCom Spike Co
+2026-10-06 10:51:35      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>27</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 10:51:35  Posting job pd-71-light-heads-jobs-1-3bfb0f: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 27)
+2026-10-06 10:51:35  Posting job pd-71-light-heads-jobs-1-3bfb0f: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 10:51:35  Posting job pd-71-light-heads-jobs-1-3bfb0f: posting window ALTVCHID 32 to 33, 1 voucher(s) and 0 master(s) created
+2026-10-06 10:51:35  Posting job pd-71-light-heads-jobs-1-3bfb0f done: Posted 1 of 1 (Tally's reply)
+2026-10-06 10:51:47  Posting job pd-71-light-heads-jobs-2-965167: 1 item(s) for FinCom Spike Co
+2026-10-06 10:51:48      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>28</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 10:51:48  Posting job pd-71-light-heads-jobs-2-965167: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 28)
+2026-10-06 10:51:48  Posting job pd-71-light-heads-jobs-2-965167: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 10:51:48  Posting job pd-71-light-heads-jobs-2-965167: posting window ALTVCHID 33 to 34, 1 voucher(s) and 0 master(s) created
+2026-10-06 10:51:48  Posting job pd-71-light-heads-jobs-2-965167 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 10:52:00      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>29</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 10:52:00    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 29)
+2026-10-06 10:52:00  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 10:52:13      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>30</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 10:52:13    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 30)
+2026-10-06 10:52:13  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 10:57:36  Posting job pd-71-light-full-jobs-1-6b88b9: 1 item(s) for FinCom Spike Co
+2026-10-06 10:57:36      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>38</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 10:57:36  Posting job pd-71-light-full-jobs-1-6b88b9: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 38)
+2026-10-06 10:57:37  Posting job pd-71-light-full-jobs-1-6b88b9: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 10:57:37  Posting job pd-71-light-full-jobs-1-6b88b9: posting window ALTVCHID 47 to 48, 1 voucher(s) and 0 master(s) created
+2026-10-06 10:57:37  Posting job pd-71-light-full-jobs-1-6b88b9 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 10:57:49  Posting job pd-71-light-full-jobs-2-2879ab: 1 item(s) for FinCom Spike Co
+2026-10-06 10:57:49      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>39</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 10:57:49  Posting job pd-71-light-full-jobs-2-2879ab: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 39)
+2026-10-06 10:57:49  Posting job pd-71-light-full-jobs-2-2879ab: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 10:57:50  Posting job pd-71-light-full-jobs-2-2879ab: posting window ALTVCHID 48 to 49, 1 voucher(s) and 0 master(s) created
+2026-10-06 10:57:50  Posting job pd-71-light-full-jobs-2-2879ab done: Posted 1 of 1 (Tally's reply)
+2026-10-06 10:58:02      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>40</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 10:58:02    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 40)
+2026-10-06 10:58:02  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 10:58:14      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>41</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 10:58:14    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 41)
+2026-10-06 10:58:14  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 10:59:47      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>43</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 10:59:47    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 43)
+2026-10-06 10:59:47  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 10:59:48  Recorder: Sales 11 of 02-Oct-2026 (MasterID 23, line d788e659…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:00:08  Recorder: Sales 12 of 02-Oct-2026 (MasterID 24, line 3b31568e…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:00:29  Recorder: Sales 13 of 31-Oct-2026 (MasterID 25, line 4ac14497…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:00:51  Recorder: Sales 14 of 31-Oct-2026 (MasterID 26, line ace1d667…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:01:12  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line ff37c493…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:01:34  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line f04d8606…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:03:40  Posting job pd-71-heavy-none-jobs-1-72d39e: 1 item(s) for FinCom Spike Co
+2026-10-06 11:03:41      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>4011</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 11:03:41  Posting job pd-71-heavy-none-jobs-1-72d39e: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 4011)
+2026-10-06 11:03:41  Posting job pd-71-heavy-none-jobs-1-72d39e: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 11:03:41  Posting job pd-71-heavy-none-jobs-1-72d39e: posting window ALTVCHID 4012 to 4013, 1 voucher(s) and 0 master(s) created
+2026-10-06 11:03:41  Posting job pd-71-heavy-none-jobs-1-72d39e done: Posted 1 of 1 (Tally's reply)
+2026-10-06 11:03:53  Posting job pd-71-heavy-none-jobs-2-4dee32: 1 item(s) for FinCom Spike Co
+2026-10-06 11:03:54      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>4012</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 11:03:54  Posting job pd-71-heavy-none-jobs-2-4dee32: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 4012)
+2026-10-06 11:03:54  Posting job pd-71-heavy-none-jobs-2-4dee32: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 11:03:54  Posting job pd-71-heavy-none-jobs-2-4dee32: posting window ALTVCHID 4013 to 4014, 1 voucher(s) and 0 master(s) created
+2026-10-06 11:03:54  Posting job pd-71-heavy-none-jobs-2-4dee32 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 11:04:06      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>4013</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 11:04:06    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 4013)
+2026-10-06 11:04:06  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 11:04:19      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>4014</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 11:04:19    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 4014)
+2026-10-06 11:04:19  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 11:09:10  Recorder: 3e829a6f-393c-41c2-95f0-501c9deaa33a-6-Oct-26.txt is shorter than what was read: it is read again from its start
+2026-10-06 11:09:12  Recorder: Sales 1615 of 01-Oct-2026 (MasterID 4021, line 2fd5f088…): not asked: the body fetch is off for this company (Tally took 2.0 s at 10:49)
+2026-10-06 11:09:12  Recorder: Sales 1615 of 01-Oct-2026 (MasterID 4021, line 2fd5f088…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:09:33  Recorder: Sales 1616 of 01-Oct-2026 (MasterID 4022, line 06794527…): not asked: the body fetch is off for this company (Tally took 2.0 s at 10:49)
+2026-10-06 11:09:33  Recorder: Sales 1616 of 01-Oct-2026 (MasterID 4022, line 06794527…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:09:48  Recorder: Sales 11 of 02-Oct-2026 (MasterID 23, line d788e659…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:09:57  Recorder: Sales 1617 of 02-Oct-2026 (MasterID 4023, line 69d41d2e…): not asked: the body fetch is off for this company (Tally took 2.0 s at 10:49)
+2026-10-06 11:09:57  Recorder: Sales 1617 of 02-Oct-2026 (MasterID 4023, line 69d41d2e…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:10:08  Recorder: Sales 12 of 02-Oct-2026 (MasterID 24, line 3b31568e…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:10:18  Recorder: Sales 1618 of 02-Oct-2026 (MasterID 4024, line d98d8a3d…): not asked: the body fetch is off for this company (Tally took 2.0 s at 10:49)
+2026-10-06 11:10:18  Recorder: Sales 1618 of 02-Oct-2026 (MasterID 4024, line d98d8a3d…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:10:29  Recorder: Sales 13 of 31-Oct-2026 (MasterID 25, line 4ac14497…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:10:42  Recorder: Sales 1619 of 31-Oct-2026 (MasterID 4025, line a850727d…): not asked: the body fetch is off for this company (Tally took 2.0 s at 10:49)
+2026-10-06 11:10:42  Recorder: Sales 1619 of 31-Oct-2026 (MasterID 4025, line a850727d…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:10:51  Recorder: Sales 14 of 31-Oct-2026 (MasterID 26, line ace1d667…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:11:04  Recorder: Sales 1620 of 31-Oct-2026 (MasterID 4026, line 45a08c23…): not asked: the body fetch is off for this company (Tally took 2.0 s at 10:49)
+2026-10-06 11:11:04  Recorder: Sales 1620 of 31-Oct-2026 (MasterID 4026, line 45a08c23…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:11:12  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line ff37c493…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:11:28  Recorder: Receipt 8 of 31-Oct-2026 (MasterID 22, line da3e1707…): not asked: the body fetch is off for this company (Tally took 2.0 s at 10:49)
+2026-10-06 11:11:28  Recorder: Receipt 8 of 31-Oct-2026 (MasterID 22, line da3e1707…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:11:34  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line f04d8606…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:11:49  Recorder: Receipt 8 of 31-Oct-2026 (MasterID 22, line 62f8474f…): not asked: the body fetch is off for this company (Tally took 2.0 s at 10:49)
+2026-10-06 11:11:49  Recorder: Receipt 8 of 31-Oct-2026 (MasterID 22, line 62f8474f…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:11:52  Posting job pd-71-heavy-heads-jobs-1-454d9e: 1 item(s) for FinCom Spike Co
+2026-10-06 11:11:53      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>4027</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 11:11:53  Posting job pd-71-heavy-heads-jobs-1-454d9e: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 4027)
+2026-10-06 11:11:53  Posting job pd-71-heavy-heads-jobs-1-454d9e: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 11:11:53  Posting job pd-71-heavy-heads-jobs-1-454d9e: posting window ALTVCHID 4032 to 4033, 1 voucher(s) and 0 master(s) created
+2026-10-06 11:11:53  Posting job pd-71-heavy-heads-jobs-1-454d9e done: Posted 1 of 1 (Tally's reply)
+2026-10-06 11:12:05  Posting job pd-71-heavy-heads-jobs-2-073a57: 1 item(s) for FinCom Spike Co
+2026-10-06 11:12:06      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>4028</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 11:12:06  Posting job pd-71-heavy-heads-jobs-2-073a57: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 4028)
+2026-10-06 11:12:06  Posting job pd-71-heavy-heads-jobs-2-073a57: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 11:12:06  Posting job pd-71-heavy-heads-jobs-2-073a57: posting window ALTVCHID 4033 to 4034, 1 voucher(s) and 0 master(s) created
+2026-10-06 11:12:06  Posting job pd-71-heavy-heads-jobs-2-073a57 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 11:12:19      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>4029</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 11:12:19    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 4029)
+2026-10-06 11:12:19  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 11:12:31      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>4030</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 11:12:31    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 4030)
+2026-10-06 11:12:31  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 11:16:26  Posting job pd-71-heavy-full-jobs-1-d76040: 1 item(s) for FinCom Spike Co
+2026-10-06 11:16:26      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>4037</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 11:16:26  Posting job pd-71-heavy-full-jobs-1-d76040: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 4037)
+2026-10-06 11:16:26  Posting job pd-71-heavy-full-jobs-1-d76040: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 11:16:27  Posting job pd-71-heavy-full-jobs-1-d76040: posting window ALTVCHID 4044 to 4045, 1 voucher(s) and 0 master(s) created
+2026-10-06 11:16:27  Posting job pd-71-heavy-full-jobs-1-d76040 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 11:16:39  Posting job pd-71-heavy-full-jobs-2-23eae3: 1 item(s) for FinCom Spike Co
+2026-10-06 11:16:39      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>4038</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 11:16:39  Posting job pd-71-heavy-full-jobs-2-23eae3: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 4038)
+2026-10-06 11:16:39  Posting job pd-71-heavy-full-jobs-2-23eae3: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 11:16:40  Posting job pd-71-heavy-full-jobs-2-23eae3: posting window ALTVCHID 4045 to 4046, 1 voucher(s) and 0 master(s) created
+2026-10-06 11:16:40  Posting job pd-71-heavy-full-jobs-2-23eae3 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 11:16:52      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>4039</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 11:16:52    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 4039)
+2026-10-06 11:16:52  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 11:17:04      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>4040</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 11:17:04    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 4040)
+2026-10-06 11:17:04  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply

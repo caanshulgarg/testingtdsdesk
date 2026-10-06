@@ -1,0 +1,41 @@
+2026-10-06 11:09:10  Recorder: 3e829a6f-393c-41c2-95f0-501c9deaa33a-6-Oct-26.txt is shorter than what was read: it is read again from its start
+2026-10-06 11:09:12  Recorder: Sales 1615 of 01-Oct-2026 (MasterID 4021, line 2fd5f088…): not asked: the body fetch is off for this company (Tally took 2.0 s at 10:49)
+2026-10-06 11:09:12  Recorder: Sales 1615 of 01-Oct-2026 (MasterID 4021, line 2fd5f088…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:09:33  Recorder: Sales 1616 of 01-Oct-2026 (MasterID 4022, line 06794527…): not asked: the body fetch is off for this company (Tally took 2.0 s at 10:49)
+2026-10-06 11:09:33  Recorder: Sales 1616 of 01-Oct-2026 (MasterID 4022, line 06794527…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:09:48  Recorder: Sales 11 of 02-Oct-2026 (MasterID 23, line d788e659…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:09:57  Recorder: Sales 1617 of 02-Oct-2026 (MasterID 4023, line 69d41d2e…): not asked: the body fetch is off for this company (Tally took 2.0 s at 10:49)
+2026-10-06 11:09:57  Recorder: Sales 1617 of 02-Oct-2026 (MasterID 4023, line 69d41d2e…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:10:08  Recorder: Sales 12 of 02-Oct-2026 (MasterID 24, line 3b31568e…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:10:18  Recorder: Sales 1618 of 02-Oct-2026 (MasterID 4024, line d98d8a3d…): not asked: the body fetch is off for this company (Tally took 2.0 s at 10:49)
+2026-10-06 11:10:18  Recorder: Sales 1618 of 02-Oct-2026 (MasterID 4024, line d98d8a3d…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:10:29  Recorder: Sales 13 of 31-Oct-2026 (MasterID 25, line 4ac14497…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:10:42  Recorder: Sales 1619 of 31-Oct-2026 (MasterID 4025, line a850727d…): not asked: the body fetch is off for this company (Tally took 2.0 s at 10:49)
+2026-10-06 11:10:42  Recorder: Sales 1619 of 31-Oct-2026 (MasterID 4025, line a850727d…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:10:51  Recorder: Sales 14 of 31-Oct-2026 (MasterID 26, line ace1d667…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:11:04  Recorder: Sales 1620 of 31-Oct-2026 (MasterID 4026, line 45a08c23…): not asked: the body fetch is off for this company (Tally took 2.0 s at 10:49)
+2026-10-06 11:11:04  Recorder: Sales 1620 of 31-Oct-2026 (MasterID 4026, line 45a08c23…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:11:12  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line ff37c493…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:11:28  Recorder: Receipt 8 of 31-Oct-2026 (MasterID 22, line da3e1707…): not asked: the body fetch is off for this company (Tally took 2.0 s at 10:49)
+2026-10-06 11:11:28  Recorder: Receipt 8 of 31-Oct-2026 (MasterID 22, line da3e1707…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:11:34  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line f04d8606…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:11:49  Recorder: Receipt 8 of 31-Oct-2026 (MasterID 22, line 62f8474f…): not asked: the body fetch is off for this company (Tally took 2.0 s at 10:49)
+2026-10-06 11:11:49  Recorder: Receipt 8 of 31-Oct-2026 (MasterID 22, line 62f8474f…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-06 11:11:52  Posting job pd-71-heavy-heads-jobs-1-454d9e: 1 item(s) for FinCom Spike Co
+2026-10-06 11:11:53      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>4027</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 11:11:53  Posting job pd-71-heavy-heads-jobs-1-454d9e: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 4027)
+2026-10-06 11:11:53  Posting job pd-71-heavy-heads-jobs-1-454d9e: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 11:11:53  Posting job pd-71-heavy-heads-jobs-1-454d9e: posting window ALTVCHID 4032 to 4033, 1 voucher(s) and 0 master(s) created
+2026-10-06 11:11:53  Posting job pd-71-heavy-heads-jobs-1-454d9e done: Posted 1 of 1 (Tally's reply)
+2026-10-06 11:12:05  Posting job pd-71-heavy-heads-jobs-2-073a57: 1 item(s) for FinCom Spike Co
+2026-10-06 11:12:06      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>4028</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 11:12:06  Posting job pd-71-heavy-heads-jobs-2-073a57: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 4028)
+2026-10-06 11:12:06  Posting job pd-71-heavy-heads-jobs-2-073a57: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 11:12:06  Posting job pd-71-heavy-heads-jobs-2-073a57: posting window ALTVCHID 4033 to 4034, 1 voucher(s) and 0 master(s) created
+2026-10-06 11:12:06  Posting job pd-71-heavy-heads-jobs-2-073a57 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 11:12:19      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>4029</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 11:12:19    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 4029)
+2026-10-06 11:12:19  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 11:12:31      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>4030</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 11:12:31    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 4030)
+2026-10-06 11:12:31  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply

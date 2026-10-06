@@ -1,0 +1,22 @@
+2026-10-06 10:44:33  Posting job pd-30-light-none-jobs-1-09bb26: 1 item(s) for FinCom Spike Co
+2026-10-06 10:44:33  Company FinCom Spike Co: its Tally GUID f1d4e71f-c688-40b6-8189-82fb22976cb0 is held from now on
+2026-10-06 10:44:33  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=12, ALTMSTID=268 (reading is prospective only: the bridge follows what changes after this)
+2026-10-06 10:44:33  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=12, ALTMSTID=268
+2026-10-06 10:44:33      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>11</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> </RESPONSE> 
+2026-10-06 10:44:33  Posting job pd-30-light-none-jobs-1-09bb26: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 11)
+2026-10-06 10:44:33  Posting job pd-30-light-none-jobs-1-09bb26: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 10:44:34  Posting job pd-30-light-none-jobs-1-09bb26: posting window ALTVCHID 12 to 13, 1 voucher(s) and 0 master(s) created
+2026-10-06 10:44:34  Posting job pd-30-light-none-jobs-1-09bb26 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 10:44:46  Posting job pd-30-light-none-jobs-2-f2e8dd: 1 item(s) for FinCom Spike Co
+2026-10-06 10:44:46      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>12</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> </RESPONSE> 
+2026-10-06 10:44:46  Posting job pd-30-light-none-jobs-2-f2e8dd: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 12)
+2026-10-06 10:44:46  Posting job pd-30-light-none-jobs-2-f2e8dd: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 10:44:46  Posting job pd-30-light-none-jobs-2-f2e8dd: posting window ALTVCHID 13 to 14, 1 voucher(s) and 0 master(s) created
+2026-10-06 10:44:46  Posting job pd-30-light-none-jobs-2-f2e8dd done: Posted 1 of 1 (Tally's reply)
+2026-10-06 10:44:51  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=12; now ALTVCHID=14, ALTMSTID=268
+2026-10-06 10:44:59      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>13</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> </RESPONSE> 
+2026-10-06 10:44:59    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 13)
+2026-10-06 10:44:59  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-06 10:45:11      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>14</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> </RESPONSE> 
+2026-10-06 10:45:11    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 14)
+2026-10-06 10:45:11  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
