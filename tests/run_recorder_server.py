@@ -772,6 +772,24 @@ try:
         c, r = reci2([dict(base, line_id="RUN%d" % i, event=it["ev"], company_guid=it["guid"].rsplit("-", 1)[0], object_guid=it["guid"], master_id=str(900 + i), alter_id=al, vch_type="Receipt", vch_no="", vch_date="", xml=it["xml"])])
         ok(c == 200 and st(r).get("RUN%d" % i) in ("applied", "duplicate", "stale") and "heldWhy" not in pl("RUN%d" % i) and len(bodyof("RUN%d" % i).get("lines") or []) >= 2,
            "guard. run 37395099848, %s: %s with its body, never held for its lines (%r)" % (it["label"], st(r), lrow51("RUN%d" % i).get("why")))
+    # bridge 2.3.1 (the owner's decision of 06-Oct-2026): the entry request also fetches the ledger lines under an invoice's
+    # items, so an item invoice's body (typed as a TallyPrime 7.1 answer: bridge-go/testdata/typed-like-7.1/*-items.xml) passes
+    # the guard and is applied with every line; the same body without the items' lines (2.3.0's request) is held
+    TD = os.path.join(HERE, "..", "bridge-go", "testdata", "typed-like-7.1")
+    for i, (f, typ, no, n) in enumerate([("sales-invoice-items.xml", "Sales", "101", 5), ("purchase-invoice-items.xml", "Purchase", "55", 5), ("credit-note-items.xml", "Credit Note", "7", 4)]):
+        t = open(os.path.join(TD, f)).read()
+        vx = t[t.index("<VOUCHER REMOTEID"):t.index("</VOUCHER>", t.index("<VOUCHER REMOTEID")) + 10]
+        g = re.search(r"<GUID>([^<]+)</GUID>", vx).group(1)
+        mid = re.search(r"<MASTERID[^>]*>\s*(\d+)", vx).group(1)
+        al = int(re.search(r"<ALTERID[^>]*>\s*(\d+)", vx).group(1))
+        old = re.sub(r"\s*<ALLINVENTORYENTRIES\.LIST>[\s\S]*?</ALLINVENTORYENTRIES\.LIST>", "", vx)
+        c, r = reci2([dict(base, line_id="I%dold" % i, event="created", company_guid=g.rsplit("-", 1)[0], object_guid=g, master_id=mid, alter_id=al, vch_type=typ, vch_no=no, vch_date="20261002", xml=old)])
+        ok(c == 200 and st(r) == {"I%dold" % i: "held"} and "do not add up" in lrow51("I%dold" % i).get("why", "") and not vrow_b(BI, g),
+           "2.3.1. %s without the items' lines (2.3.0's request): held by the guard, not applied (%s; %r)" % (f, st(r), lrow51("I%dold" % i).get("why")))
+        c, r = reci2([dict(base, line_id="I%d" % i, event="created", company_guid=g.rsplit("-", 1)[0], object_guid=g, master_id=mid, alter_id=al, vch_type=typ, vch_no=no, vch_date="20261002", xml=vx)])
+        bl = bodyof("I%d" % i).get("lines") or []
+        ok(c == 200 and st(r) == {"I%d" % i: "applied"} and len(bl) == n and round(sum(x[2] for x in bl), 2) == 0 and "heldWhy" not in pl("I%d" % i) and vrow_b(BI, g).get("alter_id") == str(al),
+           "2.3.1. %s with the items' lines (the 2.3.1 request): applied, %d lines adding up to 0 (%s; %s)" % (f, n, st(r), [(x[1], x[2]) for x in bl]))
 finally:
     if fn: fn.terminate()
     db.stop()
