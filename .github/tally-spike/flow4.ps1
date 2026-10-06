@@ -287,6 +287,22 @@ AddLedger 9000 $co1
 $sal = 'Salesify Marketing LLP'
 Post 9000 ('<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>All Masters</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA><TALLYMESSAGE xmlns:UDF="TallyUDF"><LEDGER NAME="' + $sal + '" ACTION="Create"><NAME.LIST><NAME>' + $sal + '</NAME></NAME.LIST><PARENT>Sundry Debtors</PARENT><ISBILLWISEON>Yes</ISBILLWISEON></LEDGER></TALLYMESSAGE></REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>') "ledger $sal (bill-by-bill)" | Out-Null
 
+# check 8's masters on user 1's Tally (before the bridges start): a unit, two stock items with a GST rate, a Sales and a
+# Purchase ledger (inventory values affected), CGST and SGST duty ledgers (9% each, amounts entered on the invoice), a
+# customer and a supplier (no bill-by-bill: no allocation screen on the invoices)
+function Imp([int]$port, $co, $report, $msg, $label) { Post $port ('<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>' + $report + '</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>' + $co + '</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA><TALLYMESSAGE xmlns:UDF="TallyUDF">' + $msg + '</TALLYMESSAGE></REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>') $label }
+function Led($n, $parent, $extra = '') { "<LEDGER NAME=`"$n`" ACTION=`"Create`"><NAME.LIST><NAME>$n</NAME></NAME.LIST><PARENT>$parent</PARENT>$extra</LEDGER>" }
+function StockNames([int]$port, $co) { Post $port ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCSI</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCSI" ISMODIFY="No"><TYPE>StockItem</TYPE><FETCH>Name,BaseUnits</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') 'stock items' }
+Say '---- check 8''s masters on user 1''s Tally: unit, two stock items (GST 18%), Sales/Purchase, CGST/SGST 9%, customer, supplier'
+Imp 9000 $co1 'All Masters' '<UNIT NAME="Nos" ACTION="Create"><NAME>Nos</NAME><ISSIMPLEUNIT>Yes</ISSIMPLEUNIT><DECIMALPLACES>0</DECIMALPLACES></UNIT>' 'unit Nos' | Out-Null
+$gstd = '<GSTAPPLICABLE>&#4; Applicable</GSTAPPLICABLE><GSTTYPEOFSUPPLY>Goods</GSTTYPEOFSUPPLY><GSTDETAILS.LIST><APPLICABLEFROM>20260401</APPLICABLEFROM><CALCULATIONTYPE>On Value</CALCULATIONTYPE><TAXABILITY>Taxable</TAXABILITY><STATEWISEDETAILS.LIST><STATENAME>&#4; Any</STATENAME><RATEDETAILS.LIST><GSTRATEDUTYHEAD>CGST</GSTRATEDUTYHEAD><GSTRATEVALUATIONTYPE>Based on Value</GSTRATEVALUATIONTYPE><GSTRATE>9</GSTRATE></RATEDETAILS.LIST><RATEDETAILS.LIST><GSTRATEDUTYHEAD>SGST/UTGST</GSTRATEDUTYHEAD><GSTRATEVALUATIONTYPE>Based on Value</GSTRATEVALUATIONTYPE><GSTRATE>9</GSTRATE></RATEDETAILS.LIST><RATEDETAILS.LIST><GSTRATEDUTYHEAD>IGST</GSTRATEDUTYHEAD><GSTRATEVALUATIONTYPE>Based on Value</GSTRATEVALUATIONTYPE><GSTRATE>18</GSTRATE></RATEDETAILS.LIST></STATEWISEDETAILS.LIST></GSTDETAILS.LIST>'
+$items8 = 'Spike Widget', 'Spike Gadget'
+foreach ($it in $items8) { Imp 9000 $co1 'All Masters' "<STOCKITEM NAME=`"$it`" ACTION=`"Create`"><NAME.LIST><NAME>$it</NAME></NAME.LIST><BASEUNITS>Nos</BASEUNITS>$gstd</STOCKITEM>" "stock item $it (GST 18%)" | Out-Null }
+$si = StockNames 9000 $co1
+foreach ($it in $items8) { if ($si -notmatch [regex]::Escape($it)) { Write-Host "  stock item $it not made with its GST details: made without them"; Imp 9000 $co1 'All Masters' "<STOCKITEM NAME=`"$it`" ACTION=`"Create`"><NAME.LIST><NAME>$it</NAME></NAME.LIST><BASEUNITS>Nos</BASEUNITS></STOCKITEM>" "stock item $it" | Out-Null } }
+Imp 9000 $co1 'All Masters' ((Led 'Spike Sales' 'Sales Accounts' '<AFFECTSSTOCK>Yes</AFFECTSSTOCK>') + (Led 'Spike Purchase' 'Purchase Accounts' '<AFFECTSSTOCK>Yes</AFFECTSSTOCK>') + (Led 'Spike CGST' 'Duties &amp; Taxes' '<TAXTYPE>Others</TAXTYPE>') + (Led 'Spike SGST' 'Duties &amp; Taxes' '<TAXTYPE>Others</TAXTYPE>') + (Led 'Spike Trader' 'Sundry Debtors' '<ISBILLWISEON>No</ISBILLWISEON>') + (Led 'Spike Supplier' 'Sundry Creditors' '<ISBILLWISEON>No</ISBILLWISEON>')) 'check 8 ledgers' | Out-Null
+StockNames 9000 $co1 | Out-Null
+
 # ---- user 2's own Tally (9001), run as fcuser2: a company made by keys, then started again with it and the add-on
 Say '---- user 2''s own Tally (9001), run as fcuser2: a company made by keys, then started again with it and the add-on'
 $tally2 = $false
@@ -441,7 +457,7 @@ Start-Sleep 30
 
 # ---- steps 1-5 on user 1's Tally (9000), as round 3
 Say '---- steps 1-5 on user 1''s Tally (9000), as round 3'
-function DayBook($n) { KeysTo 9000 '%g' 3; KeysTo 9000 'Day Book' 2; KeysTo 9000 '{ENTER}' 4; KeysTo 9000 '{F2}' 3; KeysTo 9000 '2-10-2026{ENTER}' 4 "$n-daybook" }
+function DayBook($n, $d = '2-10-2026') { KeysTo 9000 '%g' 3; KeysTo 9000 'Day Book' 2; KeysTo 9000 '{ENTER}' 4; KeysTo 9000 '{F2}' 3; KeysTo 9000 "$d{ENTER}" 4 "$n-daybook" }
 $before = Vouchers 9000 $co1
 $m = Mark
 KeysTo 9000 'v' 4 '10-vouchers'; KeysTo 9000 '{F6}' 3; KeysTo 9000 '{F2}' 3; KeysTo 9000 '2-10-2026{ENTER}' 3
@@ -470,12 +486,56 @@ for ($t = 0; $t -lt 3 -and -not $salNew; $t++) {
 Write-Host "check 7 entry saved: $(if ($salNew) { "mid $($salNew.mid) guid $($salNew.guid) no $($salNew.vno)" } else { 'NO' })"
 $script:salGuid = if ($salNew) { $salNew.guid } else { '(none)' }
 
+# ---- check 8's entries: a purchase, a sales invoice and a credit note in item invoice mode, by keys on the screen left by
+# the Receipt above (a new Receipt), dated 1-10-2026; each saved with Ctrl+A. One the keys could not save is imported by the
+# harness and then saved on the screen (Day Book of 1-10-2026, the last entry, Enter, Ctrl+A): said as such
+Say '---- check 8''s entries: purchase, sales invoice and credit note with items, by keys (item invoice mode)'
+function ItemRows($rows) { $k = @(); foreach ($r in $rows) { $k += , @("$($r[0]){ENTER}", 3, ''); $k += , @("$($r[1]){ENTER}", 2, ''); $k += , @("$($r[2]){ENTER}", 2, ''); $k += , @('{ENTER}', 2, ''); $k += , @('{ENTER}', 2, "item-$($r[0] -replace ' ', '')") }; return , $k }
+$inv8 = [ordered]@{
+  purchase = @{ key = '{F9}'; type = 'Purchase'; party = 'Spike Supplier'; ledger = 'Spike Purchase'; rows = @(, @('Spike Widget', 10, 200)) + @(, @('Spike Gadget', 10, 300)); tax = 450; head = @(@('SUP-101{ENTER}', 2, 'supinv'), @('{ENTER}', 2, 'supdate')) }
+  sales = @{ key = '{F8}'; type = 'Sales'; party = 'Spike Trader'; ledger = 'Spike Sales'; rows = @(, @('Spike Widget', 2, 250)) + @(, @('Spike Gadget', 3, 400)); tax = 153; head = @() }
+  credit = @{ key = '^{F8}'; type = 'Credit Note'; party = 'Spike Trader'; ledger = 'Spike Sales'; rows = @(, @('Spike Widget', 1, 250)); tax = 22.5; head = @() }
+}
+foreach ($kind in $inv8.Keys) {
+  $d = $inv8[$kind]; $d.how = 'none'; $d.guid = '(none)'
+  $pre = Vouchers 9000 $co1
+  $seq = @(@($d.key, 4, "50-$kind-type"), @('^h', 3, "51-$kind-mode"), @('Item Invoice{ENTER}', 3, ''), @('{F2}', 3, ''), @('1-10-2026{ENTER}', 3, "52-$kind-date")) + $d.head + @(@("$($d.party){ENTER}", 3, "53-$kind-party"), @("$($d.ledger){ENTER}", 3, "54-$kind-ledger")) + (ItemRows $d.rows) + @(@('{ENTER}', 3, "56-$kind-items-done"), @('Spike CGST{ENTER}', 2, ''), @("$($d.tax){ENTER}", 2, ''), @('Spike SGST{ENTER}', 2, ''), @("$($d.tax){ENTER}", 2, "57-$kind-taxes"))
+  foreach ($q in $seq) { KeysTo 9000 $q[0] $q[1] $(if ($q[2] -and $q[2] -notmatch '^\d') { "55-$kind-$($q[2])" } else { $q[2] }) }
+  $nv = $null
+  for ($t = 0; $t -lt 3 -and -not $nv; $t++) { KeysTo 9000 '^a' 5 "58-$kind-ctrl-a-$t"; $nv = @((Vouchers 9000 $co1) | Where-Object { $_.mid -notin @($pre | ForEach-Object mid) })[0] }
+  if ($nv) { $d.how = 'keys'; $d.guid = $nv.guid; $d.mid = $nv.mid }
+  else { KeysTo 9000 '{ESC}' 2; KeysTo 9000 'y' 3 "59-$kind-left"; KeysTo 9000 'v' 4 "59-$kind-vouchers" }
+  Write-Host "check 8 ${kind} by keys: $(if ($nv) { "saved, mid $($nv.mid) guid $($nv.guid) no $($nv.vno)" } else { 'NOT saved' })"
+}
+# the fallback: imported by the harness (as Tally keeps an item invoice: party and duties in LEDGERENTRIES, each item's sales
+# or purchase ledger in its ACCOUNTINGALLOCATIONS), then saved on the screen so the add-on writes its line
+function InvXml($d) {
+  $sales = $d.type -eq 'Sales'; $sg = if ($sales) { 1 } else { -1 }   # Sales: party Dr; Purchase and Credit Note: party Cr
+  $net = 0; $it = ''
+  foreach ($r in $d.rows) { $a = [decimal]$r[1] * [decimal]$r[2]; $net += $a; $v = $sg * $a; $dp = if ($v -lt 0) { 'Yes' } else { 'No' }
+    $it += "<ALLINVENTORYENTRIES.LIST><STOCKITEMNAME>$($r[0])</STOCKITEMNAME><ISDEEMEDPOSITIVE>$dp</ISDEEMEDPOSITIVE><RATE>$($r[2]).00/Nos</RATE><AMOUNT>$v</AMOUNT><ACTUALQTY> $($r[1]) Nos</ACTUALQTY><BILLEDQTY> $($r[1]) Nos</BILLEDQTY><BATCHALLOCATIONS.LIST><GODOWNNAME>Main Location</GODOWNNAME><BATCHNAME>Primary Batch</BATCHNAME><AMOUNT>$v</AMOUNT><ACTUALQTY> $($r[1]) Nos</ACTUALQTY><BILLEDQTY> $($r[1]) Nos</BILLEDQTY></BATCHALLOCATIONS.LIST><ACCOUNTINGALLOCATIONS.LIST><LEDGERNAME>$($d.ledger)</LEDGERNAME><ISDEEMEDPOSITIVE>$dp</ISDEEMEDPOSITIVE><AMOUNT>$v</AMOUNT></ACCOUNTINGALLOCATIONS.LIST></ALLINVENTORYENTRIES.LIST>" }
+  $tax = [decimal]$d.tax; $tot = $net + 2 * $tax; $pv = -$sg * $tot; $tv = $sg * $tax
+  $le = "<LEDGERENTRIES.LIST><LEDGERNAME>$($d.party)</LEDGERNAME><ISDEEMEDPOSITIVE>$(if ($pv -lt 0) { 'Yes' } else { 'No' })</ISDEEMEDPOSITIVE><ISPARTYLEDGER>Yes</ISPARTYLEDGER><AMOUNT>$pv</AMOUNT></LEDGERENTRIES.LIST>"
+  foreach ($tl in 'Spike CGST', 'Spike SGST') { $le += "<LEDGERENTRIES.LIST><LEDGERNAME>$tl</LEDGERNAME><ISDEEMEDPOSITIVE>$(if ($tv -lt 0) { 'Yes' } else { 'No' })</ISDEEMEDPOSITIVE><AMOUNT>$tv</AMOUNT></LEDGERENTRIES.LIST>" }
+  "<VOUCHER VCHTYPE=`"$($d.type)`" ACTION=`"Create`" OBJVIEW=`"Invoice Voucher View`"><DATE>20261001</DATE><VOUCHERTYPENAME>$($d.type)</VOUCHERTYPENAME><PARTYLEDGERNAME>$($d.party)</PARTYLEDGERNAME><PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW><ISINVOICE>Yes</ISINVOICE>$(if ($d.type -eq 'Purchase') { '<REFERENCE>SUP-101</REFERENCE>' })$le$it</VOUCHER>"
+}
+foreach ($kind in $inv8.Keys) {
+  $d = $inv8[$kind]; if ($d.how -ne 'none') { continue }
+  $pre = Vouchers 9000 $co1
+  Imp 9000 $co1 'Vouchers' (InvXml $d) "check 8 $kind imported" | Out-Null
+  $nv = @((Vouchers 9000 $co1) | Where-Object { $_.mid -notin @($pre | ForEach-Object mid) })[0]
+  if (-not $nv) { Write-Host "check 8 $kind could not be imported either"; continue }
+  $d.guid = $nv.guid; $d.mid = $nv.mid; $d.how = 'imported by the harness, saved on the screen'
+  DayBook "60-$kind" '1-10-2026'; KeysTo 9000 '{END}' 2; KeysTo 9000 '{ENTER}' 4 "61-$kind-open"; KeysTo 9000 '^a' 5 "62-$kind-saved"
+  Write-Host "check 8 ${kind}: imported mid $($nv.mid) guid $($nv.guid), saved again on the screen"
+}
+
 $m = Mark
 DayBook '13'; KeysTo 9000 '{END}' 2; KeysTo 9000 '{ENTER}' 4 '14-open'
 KeysTo 9000 '{ENTER}' 2; KeysTo 9000 '{ENTER}' 2; KeysTo 9000 '{ENTER}' 2 '15-at-amount'; KeysTo 9000 '800{ENTER}' 2; KeysTo 9000 '^a' 5 '16-altered'
 $after2 = Vouchers 9000 $co1
 $srcNow = @($after2 | Where-Object mid -eq $src.mid)[0]
-$hit = WaitLine 0 { $_.ev -eq 'altered' -and $_.company -eq $co1 }
+$hit = WaitLine 0 { $_.ev -eq 'altered' -and $_.company -eq $co1 -and $_.guid -eq $src.guid }
 Snap '2-alter'; PrintNew $m
 $x = @($hit | Where-Object bid -eq $B[1].id)[0]
 Result '2 alter' ([bool]$x -and $x.guid -eq $src.guid -and [int]$x.aid -eq $srcNow.aid -and $srcNow.aid -gt $src.aid -and [bool]$x.xml) ("Tally: mid {0} AlterID {1} -> {2}; {3}" -f $src.mid, $src.aid, $srcNow.aid, (Ev $x))
@@ -486,7 +546,7 @@ KeysTo 9000 '{ENTER}' 2; KeysTo 9000 '{ENTER}' 2 '19-dup-at-amount'; KeysTo 9000
 $after3 = Vouchers 9000 $co1
 $dup = @($after3 | Where-Object { $_.mid -notin @($after2 | ForEach-Object mid) })[0]
 $srcThen = @($after3 | Where-Object mid -eq $src.mid)[0]
-$hit = WaitLine 0 { $_.ev -eq 'created' -and $_.company -eq $co1 -and $_.guid -ne $src.guid -and $_.guid -ne $script:salGuid }
+$hit = WaitLine 0 { $_.ev -eq 'created' -and $_.company -eq $co1 -and $_.guid -ne $src.guid -and $_.guid -ne $script:salGuid -and $_.vch -like '*/20261002' }
 Start-Sleep 20
 Snap '3-copy'; PrintNew $m
 $x = @($hit | Where-Object bid -eq $B[1].id)[0]
@@ -566,6 +626,43 @@ $salBills = if ($salPc) { @(@($salPc.lines) | Where-Object { $_.ledger -eq $sal 
 $bad = @($pc | Where-Object { -not $_.ok })
 $ok7 = $pc.Count -gt 0 -and $bad.Count -eq 0 -and $pc.Count -eq $bodies.Count -and [bool]$salPc -and $salPc.ok -and $salBills -ge 1
 Result '7 body through the cloud''s parse.js' $ok7 ("{0} created/altered line(s) read with parse.js at the bridge ref: {1} with exactly one voucher of the line's GUID and >= 2 non-zero ledger lines, {2} without; the Receipt from {3} (entered by keys, {4}): {5}" -f $pc.Count, ($pc.Count - $bad.Count), $bad.Count, $sal, $(if ($salNew) { "Tally mid $($salNew.mid) guid $($salNew.guid)" } else { 'NOT saved in Tally' }), $(if (-not $salPc) { 'no created line with its GUID' } else { "type=$($salPc.type) no=$($salPc.no) date=$($salPc.date) party=$($salPc.party), $(@($salPc.lines).Count) line(s), $($salPc.nonZero) non-zero, $salBills bill allocation(s) on the party line" }))
+
+# ---- 8: the item invoices' lines through parse.js against Tally's own figures (an export the harness asks Tally for)
+Say '---- 8: item invoices: parse.js (bridge ref) against Tally''s own figures, ledger by ledger'
+$bver = ([regex]::Match($setupSrc.Name, '(\d+\.\d+\.\d+)')).Groups[1].Value; if (-not $bver) { $bver = '0.0.0' }
+$tx = Join-Path $out 'tally-daybook-20261001.xml'
+$dbx = Post 9000 ('<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Day Book</REPORTNAME><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY><SVFROMDATE>20261001</SVFROMDATE><SVTODATE>20261001</SVTODATE></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>')
+$cox = Post 9000 ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCV8</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCV8" ISMODIFY="No"><TYPE>Voucher</TYPE><FETCH>*, ALLLEDGERENTRIES.*, LEDGERENTRIES.*, ALLINVENTORYENTRIES.*</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>')
+Write-Host "Tally's own export: Day Book 1-10-2026 $("$dbx".Length) chars, voucher collection $("$cox".Length) chars"
+Set-Content $tx ("$dbx`n<!-- voucher collection -->`n$cox") -Encoding UTF8
+$in8 = @(foreach ($kind in $inv8.Keys) { $d = $inv8[$kind]
+  [pscustomobject]@{ label = "$kind ($($d.type), $($d.how))"; guid = $d.guid; tally = $tx; lines = @((StubLines 0) | Where-Object { $_.guid -eq $d.guid -and $_.ev -in 'created', 'altered', 'imported' } | ForEach-Object { [pscustomobject]@{ ev = $_.ev; at = $_.at; xml = $_.xml } }) } })
+$p8i = Join-Path $out 'check8-in.json'; $p8o = Join-Path $out 'check8.json'
+ConvertTo-Json -InputObject $in8 -Depth 6 | Set-Content $p8i -Encoding UTF8
+& node (Join-Path $PSScriptRoot 'check8.mjs') $parseJs $p8i $p8o 2>&1 | ForEach-Object { Write-Host "  $_" }
+$c8 = @(); try { $c8 = @(Get-Content $p8o -Raw -Encoding UTF8 | ConvertFrom-Json) } catch { Write-Host "check 8 output: $_" }
+function Tot($l) { (@($l) | ForEach-Object { "$($_.ledger) $($_.amount)" }) -join ', ' }
+$expectedOnly = $true; $missing = @(); $nolines = @()
+foreach ($o in $c8) {
+  if ($o.guid -eq '(none)') { $missing += $o.label }
+  $tl = if ($o.tally) { "Tally {0} no {1} date {2}, {3} item(s): {4} (sum {5})" -f $o.tally.type, $o.tally.no, $o.tally.date, $o.tally.items, (Tot $o.tally.totals), $o.tally.sum } else { "Tally: voucher $($o.guid) not found in the harness's own export" }
+  Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO CHECK8 $($o.label) guid $($o.guid): $tl"; Write-Host "  CHECK8 $($o.label): $tl"
+  if (-not @($o.lines).Count) { $nolines += $o.label; $expectedOnly = $false; Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO CHECK8 $($o.label): no created/altered line with this GUID reached the stub"; continue }
+  foreach ($l in @($o.lines)) {
+    $pl = "{0} {1} line at {2}: parse.js voucher(s) {3}, type={4} no={5} date={6} party={7}; lines: {8} (sum {9}){10}; differences from Tally: {11}{12}" -f $(if ($l.ok) { 'ok' } else { 'NO' }), $l.ev, $l.at, $l.match, $l.type, $l.no, $l.date, $l.party, $(if (@($l.totals).Count) { Tot $l.totals } else { 'none' }), $l.sum, $(if ($l.guardHeld) { '; the cloud''s balance guard would HOLD this body' } else { '' }), $(if (@($l.diffs).Count) { (@($l.diffs) | ForEach-Object { "$($_.ledger): Tally $(if ($null -eq $_.tally) { (none) } else { $_.tally }), parse.js $(if ($null -eq $_.parsed) { (none) } else { $_.parsed })" }) -join '; ' } else { 'none' }), $(if ($l.error) { " error $($l.error)" } else { '' })
+    Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO CHECK8 $($o.label): $pl"; Write-Host "  CHECK8 $($o.label): $pl"
+    # what bridge 2.3.0 is expected to do: the body without the items' accounting allocations (the sales or purchase ledger
+    # missing on the parse.js side only), so its lines do not add up and the balance guard holds it
+    if (-not $l.ok -and -not ($l.guardHeld -and @($l.diffs).Count -gt 0 -and @(@($l.diffs) | Where-Object { $null -ne $_.parsed }).Count -eq 0)) { $expectedOnly = $false }
+  }
+}
+$ok8 = $c8.Count -eq 3 -and @($c8 | Where-Object { -not $_.ok }).Count -eq 0
+$how8 = ($inv8.Keys | ForEach-Object { "$_ $($inv8[$_].how)" }) -join ', '
+$ev8 = "3 item invoices ($how8), each line read with parse.js at the bridge ref against Tally's own export: {0} matching ledger by ledger and adding to 0; bridge {1}" -f @($c8 | Where-Object ok).Count, $bver
+if ($missing.Count) { Result '8 item invoices against Tally' $false "$ev8; not entered in Tally: $($missing -join ', ') (the harness)" $true }
+elseif ($ok8) { Result '8 item invoices against Tally' $true $ev8 }
+elseif ([version]$bver -lt [version]'2.3.1' -and $expectedOnly) { $l8 = "EXPECTED 8 item invoices against Tally: $ev8 - as expected before bridge 2.3.1: the body comes without the items' accounting allocations (sales/purchase ledger), so its lines do not add up and the cloud's balance guard holds it; PASS needs bridge 2.3.1+"; Write-Host "######## $l8"; Add-Content -Path $resultsFile -Value $l8 -Encoding UTF8 }
+else { Result '8 item invoices against Tally' $false "$ev8$(if ($nolines.Count) { "; no line for: $($nolines -join ', ')" })" }
 
 # ---- step 6 as one line
 Say '---- step 6 as one line'
