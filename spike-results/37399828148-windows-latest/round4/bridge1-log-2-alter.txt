@@ -1,0 +1,19 @@
+2026-10-06 01:54:54  Recorder: Receipt 2 of 01-Oct-2026 (MasterID 3, line 2dd105ea…): asking Tally by MasterID
+2026-10-06 01:54:58  Recorder: Receipt 2 of 01-Oct-2026 (MasterID 3, line 2dd105ea…): taken: Tally's GUID 320f92e8-d6b9-4fef-8899-101f25845aa6-00000003, AlterID 3
+2026-10-06 01:58:23  Recorder: Purchase 1 of 01-Oct-2026 (MasterID none, line 4158b470…): asking Tally by type and number (a new entry: no MasterID on its line)
+2026-10-06 01:58:23  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-06 01:58:23  Recorder: Purchase 1 of 01-Oct-2026 (MasterID none, line 4158b470…): not found by its type and number yet (ask 1 of 3); asked again shortly
+2026-10-06 01:58:33  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-06 01:58:33  Recorder: Purchase 1 of 01-Oct-2026 (MasterID none, line 4158b470…): not found by its type and number yet (ask 2 of 3); asked again shortly
+2026-10-06 01:58:43  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-06 01:58:43  Recorder: Purchase 1 of 01-Oct-2026 (MasterID none, line 4158b470…): held: not found by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (sent without its body and GUID; FinCom holds the line until it is resolved)
+2026-10-06 02:00:13  Nightly catch-up (02:00): Tally is open and nobody has used FinCom for 15 minutes
+2026-10-06 02:00:13  Nightly catch-up: waiting, someone is working in Tally
+2026-10-06 02:00:29  Recorder: Purchase 1 of 01-Oct-2026 (MasterID 4, line 1a1d607a…): asking Tally by MasterID
+2026-10-06 02:00:33  Recorder: Purchase 1 of 01-Oct-2026 (MasterID 4, line 1a1d607a…): taken: Tally's GUID 320f92e8-d6b9-4fef-8899-101f25845aa6-00000004, AlterID 5
+2026-10-06 02:01:03  Recorder: Purchase 1 of 01-Oct-2026 (MasterID 4, line cade047f…): asking Tally by MasterID
+2026-10-06 02:01:07  Recorder: Purchase 1 of 01-Oct-2026 (MasterID 4, line cade047f…): taken: Tally's GUID 320f92e8-d6b9-4fef-8899-101f25845aa6-00000004, AlterID 7
+2026-10-06 02:01:36  Recorder: Purchase 1 of 01-Oct-2026 (MasterID 4, line 90d39c9c…): asking Tally by MasterID
+2026-10-06 02:01:40  Recorder: Purchase 1 of 01-Oct-2026 (MasterID 4, line 90d39c9c…): taken: Tally's GUID 320f92e8-d6b9-4fef-8899-101f25845aa6-00000004, AlterID 9
+2026-10-06 02:02:20  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 93e485ab…): asking Tally by MasterID
+2026-10-06 02:02:24  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 93e485ab…): taken: Tally's GUID 320f92e8-d6b9-4fef-8899-101f25845aa6-00000002, AlterID 10

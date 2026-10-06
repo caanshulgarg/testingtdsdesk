@@ -1,0 +1,50 @@
+2026-10-06 01:52:42  FinCom Bridge 2.3.0: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+2026-10-06 01:52:42  FinCom Bridge 2.3.0 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+2026-10-06 01:52:42  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+2026-10-06 01:52:42  Recorder: re-scan of the add-on's files for 2.3.0: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+2026-10-06 01:52:42  Check:  - 
+2026-10-06 01:52:45  Tray icon: set to show next to the clock always (Windows 11)
+2026-10-06 01:52:45  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+2026-10-06 01:52:45  Company FinCom Spike Co: its Tally GUID 320f92e8-d6b9-4fef-8899-101f25845aa6 is held from now on
+2026-10-06 01:52:46  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=1, ALTMSTID=221 (reading is prospective only: the bridge follows what changes after this)
+2026-10-06 01:52:46  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=1, ALTMSTID=221
+2026-10-06 01:52:46  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=1, ALTMSTID=221)
+2026-10-06 01:52:48  Refused a request from a program of another Windows user (/tray/idle): not your FinCom Bridge
+2026-10-06 01:52:48  Refused a request from a program of another Windows user (/tray/status): not your FinCom Bridge
+2026-10-06 01:53:01  Refused a request from a program of another Windows user (/status): not your FinCom Bridge
+2026-10-06 01:54:01  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 6e0ddd5c…): asking Tally by MasterID
+2026-10-06 01:54:05  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 6e0ddd5c…): taken: Tally's GUID 320f92e8-d6b9-4fef-8899-101f25845aa6-00000002, AlterID 2
+2026-10-06 01:54:54  Recorder: Receipt 2 of 01-Oct-2026 (MasterID 3, line 2dd105ea…): asking Tally by MasterID
+2026-10-06 01:54:58  Recorder: Receipt 2 of 01-Oct-2026 (MasterID 3, line 2dd105ea…): taken: Tally's GUID 320f92e8-d6b9-4fef-8899-101f25845aa6-00000003, AlterID 3
+2026-10-06 01:58:23  Recorder: Purchase 1 of 01-Oct-2026 (MasterID none, line 4158b470…): asking Tally by type and number (a new entry: no MasterID on its line)
+2026-10-06 01:58:23  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-06 01:58:23  Recorder: Purchase 1 of 01-Oct-2026 (MasterID none, line 4158b470…): not found by its type and number yet (ask 1 of 3); asked again shortly
+2026-10-06 01:58:33  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-06 01:58:33  Recorder: Purchase 1 of 01-Oct-2026 (MasterID none, line 4158b470…): not found by its type and number yet (ask 2 of 3); asked again shortly
+2026-10-06 01:58:43  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-06 01:58:43  Recorder: Purchase 1 of 01-Oct-2026 (MasterID none, line 4158b470…): held: not found by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (sent without its body and GUID; FinCom holds the line until it is resolved)
+2026-10-06 02:00:13  Nightly catch-up (02:00): Tally is open and nobody has used FinCom for 15 minutes
+2026-10-06 02:00:13  Nightly catch-up: waiting, someone is working in Tally
+2026-10-06 02:00:29  Recorder: Purchase 1 of 01-Oct-2026 (MasterID 4, line 1a1d607a…): asking Tally by MasterID
+2026-10-06 02:00:33  Recorder: Purchase 1 of 01-Oct-2026 (MasterID 4, line 1a1d607a…): taken: Tally's GUID 320f92e8-d6b9-4fef-8899-101f25845aa6-00000004, AlterID 5
+2026-10-06 02:01:03  Recorder: Purchase 1 of 01-Oct-2026 (MasterID 4, line cade047f…): asking Tally by MasterID
+2026-10-06 02:01:07  Recorder: Purchase 1 of 01-Oct-2026 (MasterID 4, line cade047f…): taken: Tally's GUID 320f92e8-d6b9-4fef-8899-101f25845aa6-00000004, AlterID 7
+2026-10-06 02:01:36  Recorder: Purchase 1 of 01-Oct-2026 (MasterID 4, line 90d39c9c…): asking Tally by MasterID
+2026-10-06 02:01:40  Recorder: Purchase 1 of 01-Oct-2026 (MasterID 4, line 90d39c9c…): taken: Tally's GUID 320f92e8-d6b9-4fef-8899-101f25845aa6-00000004, AlterID 9
+2026-10-06 02:02:20  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 93e485ab…): asking Tally by MasterID
+2026-10-06 02:02:24  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 93e485ab…): taken: Tally's GUID 320f92e8-d6b9-4fef-8899-101f25845aa6-00000002, AlterID 10
+2026-10-06 02:03:07  Recorder: Receipt 3 of 02-Oct-2026 (MasterID 7, line 9044d436…): asking Tally by MasterID
+2026-10-06 02:03:11  Recorder: Receipt 3 of 02-Oct-2026 (MasterID 7, line 9044d436…): taken: Tally's GUID 320f92e8-d6b9-4fef-8899-101f25845aa6-00000007, AlterID 11
+2026-10-06 02:03:15  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=1; now ALTVCHID=11, ALTMSTID=221
+2026-10-06 02:03:23  Keeping FinCom Spike Co in step: its day book from 20260401 is read at Update now (and the nightly run), a month a request
+2026-10-06 02:03:23  Keeping FinCom Spike Co: ledger list MasterID 1-2000, 13 ledger(s) (0.2s); saved
+2026-10-06 02:03:24  Keeping FinCom Spike Co: ledger list MasterID 2001-end, 0 ledger(s) (0.2s); saved
+2026-10-06 02:03:24  Keeping FinCom Spike Co: the ledger list read (13 ledgers, 28 groups, 3 request(s)): 13 new, 0 changed, 0 renamed, 0 gone
+2026-10-06 02:03:24  Keeping FinCom Spike Co: Reading old entries is off (prospective only); FinComCompany ALTVCHID=11 ALTMSTID=221
+2026-10-06 02:03:24  Nightly catch-up: done (16 request(s) to Tally); the bridge is idle again (next: the nightly catch-up at 02:00, or Update now)
+2026-10-06 02:04:05  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line e62a5ebd…): asking Tally by MasterID
+2026-10-06 02:04:09  Recorder: FinCom Spike Co: cancel of mid 2: GUID from Tally (asked by MasterID): 320f92e8-d6b9-4fef-8899-101f25845aa6-00000002; the GUID its MasterID makes agrees
+2026-10-06 02:04:46  Recorder: Receipt 3 of 02-Oct-2026 (MasterID 7, line d2b1afd5…): asking Tally by MasterID
+2026-10-06 02:04:50  Recorder: FinCom Spike Co: delete of mid 7: not in this Tally (asked by MasterID): proven deleted here
+2026-10-06 02:04:50  Recorder: FinCom Spike Co: delete of mid 7: GUID from the bridge's record: 320f92e8-d6b9-4fef-8899-101f25845aa6-00000007; the GUID its MasterID makes agrees
+2026-10-06 02:06:01  Recorder: FinCom Spike U2: lines from a Tally this bridge does not read (company not open here): not sent
