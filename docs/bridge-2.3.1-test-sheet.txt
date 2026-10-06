@@ -20,7 +20,11 @@ plain words and nothing of it is applied.
 One entry per request, by Tally's own id (FinComVoucherByMaster) or by type and number (FinComVoucherByNumber);
 read only, inside the 2-second rule, after postings. One limit: a very large invoice (over about 1 MB of details,
 roughly 1,000 items or more) is held with plain words for a Day Book upload.
-Needs FinCom's cloud update of 2.3.1 and database migrations 56 and 57 on staging before you start.
+With it (part B, masters) a ledger created or altered in Tally reaches FinCom within about 10 minutes, and a ledger an
+entry uses that FinCom does not have is fetched from Tally first, then the entry (FinComLedgerChanges,
+FinComLedgerByName; read only, inside the 2-second rule, after postings).
+Needs FinCom's cloud update of 2.3.1 and database migrations 56, 57, 58 and 60 (in that order) on staging before you
+start.
 
 The app is not updated with this bridge. Keep the add-on loaded as it is
 (C:\ProgramData\FinCom\addon\FinComRecorder.tdl). 2.3.1 does not change the add-on.
@@ -114,6 +118,20 @@ CHECK 10 - A JOURNAL WITH COST CENTRES
    Make a Journal of Rs 2 split between two cost centres (Rs 1 each), narration "TRIAL 231 cost centres". Save it.
    You should see: within a minute, in the books with its two cost centre allocations (category, centre, amount).
    If not, send: its number, the time, a picture of the entry in Tally, and the Show log lines.
+
+CHECK 11 - A LEDGER CHANGED IN TALLY REACHES FINCOM (MASTERS)
+   In Tally, alter one party ledger: change its GSTIN (or its state, or its opening balance). Save it.
+   You should see: within about 10 minutes, FinCom's ledger list shows the new GSTIN (state, opening) for that ledger.
+   The log has a line "Ledger changes for <company>: ... 1 ledger(s) sent to FinCom".
+   If not, send: the ledger's name, the time, and the Show log lines starting "Ledger changes".
+
+CHECK 12 - A NEW PARTY USED AT ONCE: THE LEDGER FIRST, THEN THE ENTRY
+   Make a Sales entry of Rs 1, narration "TRIAL 231 new party". In the party field press Alt+C and create a new party
+   "TRIAL 231 PARTY" (Sundry Debtors). Save the entry.
+   You should see: for a moment Sync activity may show it held "waiting for the ledger 'TRIAL 231 PARTY' from Tally";
+   within a few minutes the party is in FinCom's ledger list and the entry is in the books, once.
+   The log has a line "Ledger TRIAL 231 PARTY of <company>: fetched from Tally before its entry".
+   If not, send: the entry's number, the time, and the Show log lines starting "Ledger" and "Recorder:".
 
 How to send the log lines: right-click the FinCom icon near the clock > Show log. Each line starting "Recorder:" says
 what the bridge decided for one entry: asking Tally, taken, held (with the reason), or not asked (with the reason).

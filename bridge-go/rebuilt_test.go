@@ -314,15 +314,30 @@ func newStandTally(t *testing.T) *standTally {
 			}
 			fmt.Fprintf(&o, `<COMPANY NAME="%s" RESERVEDNAME="">%s%s%s%s%s</COMPANY>`, esc(coName), standField("NAME", "String", esc(coName)), standField("GUID", "String", f.guid),
 				standField("STARTINGFROM", "Date", "20260401"), standField("ALTVCHID", "Number", v), standField("ALTMSTID", "Number", m))
-		case "FinComLedgers":
+		case "FinComLedgers", "FinComLedgerChanges", "FinComLedgerByName":
+			// 2.3.1 (masters): the ledgers with an AlterID in (after, upto], or the one ledger of that name, the same fields
 			var after, upto int64 = 0, -1
-			if m := reMidRange.FindStringSubmatch(body); m != nil {
+			if m := reMidRange.FindStringSubmatch(body); m != nil && id == "FinComLedgers" {
 				after = toI64(m[1])
 				if m[2] != "" {
 					upto = toI64(m[2])
 				}
 			}
+			var aAfter, aUpto int64 = -1, -1
+			if m := regexp.MustCompile(`\$AlterID &gt; (\d+) AND \$AlterID &lt;= (\d+)`).FindStringSubmatch(body); m != nil && id == "FinComLedgerChanges" {
+				aAfter, aUpto = toI64(m[1]), toI64(m[2])
+			}
+			byName := ""
+			if id == "FinComLedgerByName" {
+				byName = pinQuoted(body, "$Name")
+			}
 			for _, l := range f.led {
+				if id == "FinComLedgerChanges" && (aAfter < 0 || l.alter <= aAfter || l.alter > aUpto) {
+					continue
+				}
+				if id == "FinComLedgerByName" && !strings.EqualFold(l.name, byName) {
+					continue
+				}
 				if l.mid > after && (upto < 0 || l.mid <= upto) {
 					fmt.Fprintf(&o, `<LEDGER NAME="%s" RESERVEDNAME="">%s%s%s%s%s%s%s%s</LEDGER>`, esc(l.name), standField("GUID", "String", l.guid),
 						standField("MASTERID", "Number", fmt.Sprintf(" %d", l.mid)), standField("ALTERID", "Number", fmt.Sprintf(" %d", l.alter)), standField("PARENT", "String", esc(l.parent)),
@@ -510,6 +525,9 @@ type standCloud struct {
 	checkReply   func(b M) M
 	lease        *leaseModel
 	devKeys      []string // final review M3: the computer key each call came with (x-fincom-device), in order
+	// 2.3.1 (masters): every ledger_changes body, and how it is answered (nil: 200 {ok, added})
+	ledChanges []M
+	ledChReply func(b M) (int, M)
 }
 
 func newStandCloud(t *testing.T) *standCloud {
@@ -575,6 +593,18 @@ func newStandCloud(t *testing.T) *standCloud {
 		case "ledger_list":
 			c.ledList = append(c.ledList, o)
 			out["added"], out["renamed"], out["deleted"] = len(arr(o["ledgers"])), len(arr(o["renamed"])), 0
+		case "ledger_changes":
+			// 2.3.1 (masters): the ledgers created or altered since the master counter last moved, or asked for an entry
+			c.ledChanges = append(c.ledChanges, o)
+			if c.ledChReply != nil {
+				code, ans := c.ledChReply(o)
+				if code != 200 {
+					w.WriteHeader(code)
+				}
+				_, _ = w.Write([]byte(jsonText(ans)))
+				return
+			}
+			out["added"], out["updated"] = len(arr(o["ledgers"])), 0
 		case "recorder_lines":
 			c.recRaw = append(c.recRaw, string(b))
 			if c.recDelay > 0 {

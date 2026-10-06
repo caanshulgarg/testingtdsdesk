@@ -36,6 +36,8 @@ LEASE7_MISSING = [False]  # migration 55 not run: the 7-argument tally_lease_tak
 PK = {"gst_sessions": ["firm_id", "gstin"], "gst_returns": ["firm_id", "gstin", "form", "period"], "gst_einv_accounts": ["firm_id", "gstin"], "gst_einvoices": ["firm_id", "gstin", "doc_key"]}
 ids = itertools.count(1)
 def now(): return time.time()
+def like_re(pat):   # a LIKE pattern (\\ escapes, % or PostgREST's * any, _ one) as a regular expression
+    return re.sub(r"\\(.)|[%*]|_|[^%*_\\]+", lambda m: re.escape(m.group(1)) if m.group(1) is not None else ".*" if m.group(0) in "%*" else "." if m.group(0) == "_" else re.escape(m.group(0)), pat)
 def match(row, q):
     for k, vs in q.items():
         if k in ("select", "order", "limit", "offset", "on_conflict", "columns"): continue
@@ -49,7 +51,7 @@ def match(row, q):
         if op == "gt" and not cs > val: return False
         if op == "is" and val == "null" and cell is not None: return False
         if op == "in" and cs not in val.strip("()").split(","): return False
-        if op == "ilike" and not re.fullmatch("".join(".*" if ch in "%*" else re.escape(ch) for ch in val), cs, re.I | re.S): return False
+        if op == "ilike" and not re.fullmatch(like_re(val), cs, re.I | re.S): return False   # bridge 2.3.1: a name in other capitals
     return True
 def rpc(fn, a):
     ARGS.setdefault(fn, []).append(a)

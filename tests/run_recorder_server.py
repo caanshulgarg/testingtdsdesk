@@ -836,6 +836,99 @@ try:
         bl = bodyof("I%d" % i).get("lines") or []
         ok(c == 200 and st(r) == {"I%d" % i: "applied"} and len(bl) == n and round(sum(x[2] for x in bl), 2) == 0 and "heldWhy" not in pl("I%d" % i) and vrow_b(BI, g).get("alter_id") == str(al),
            "2.3.1. %s with the items' lines (the 2.3.1 request): applied, %d lines adding up to 0 (%s; %s)" % (f, n, st(r), [(x[1], x[2]) for x in bl]))
+    # ---------------------------------------------------------------- bridge 2.3.1, part B (the owner's scope of 06-Oct-2026, masters):
+    # "If an entry uses a ledger FinCom does not have, fetch the ledger first, then apply the entry", and "keep name, group,
+    # GSTIN, PAN, state and opening balance current" (kind ledger_changes). The book's ledger list (served from memory)
+    FS.T["tally_groups"] = [{"book_id": BI, "firm_id": FIRM, "name": n, "parent": p} for n, p in (("Sundry Debtors", "Current Assets"), ("Current Assets", ""), ("Cash-in-Hand", "Current Assets"), ("Sales Accounts", ""))]
+    FS.T["tally_ledgers"] = [
+        {"book_id": BI, "firm_id": FIRM, "name": "CASH", "parent": "Cash-in-Hand", "chain": ["Cash-in-Hand", "Current Assets"], "primary_group": "Current Assets", "open": 100, "open_sent": 100, "tally_guid": "lg-cash", "alter_id": 10, "gstin": None, "pan": None, "state": None, "deleted_at": None},
+        {"book_id": BI, "firm_id": FIRM, "name": "Salesify Marketing LLP", "parent": "Sundry Debtors", "chain": ["Sundry Debtors", "Current Assets"], "primary_group": "Current Assets", "open": 0, "open_sent": 0, "tally_guid": "lg-sal", "alter_id": 11, "gstin": None, "pan": None, "state": None, "deleted_at": None}]
+    def mem_rows2():
+        FS.T["tally_recorder_lines"] = [dict(r, device_id=r["device_id"] or None, body=json.loads(r["body"]) if r["body"] else None, payload=json.loads(r["payload"]) if r["payload"] else None, object_guid=r["object_guid"] or None) for r in db.rows(
+            "select id, line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date::text as vch_date, book_id::text as book_id, firm_id::text as firm_id, "
+            "device_id::text as device_id, bridge, state, held_why, object_guid, body::text as body, payload::text as payload, to_char(received_at at time zone 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') as received_at from tally_recorder_lines order by id")]
+    beat231 = lambda: call({"kind": "beat", "version": "2.3.1", "bridge": dict(GA, version="2.3.1"), "tally": True, "open": []})
+    lch = lambda rows, why="counter", **kw: call(dict({"kind": "ledger_changes", "company": "ZZ IDS", "company_guid": CGI, "version": "2.3.1", "bridge": dict(GA, version="2.3.1"), "ledgers": rows, "why": why}, **kw))
+    led = lambda name: next((x for x in FS.T["tally_ledgers"] if x.get("book_id") == BI and x.get("name") == name), None)
+    # Receipt 213's body as another entry (its GUID the MasterID's, its AlterID), its party a new ledger
+    mkx = lambda mid, alt, party: tx.replace("-00006729", "-%08x" % mid).replace("> 26409</MASTERID>", "> %d</MASTERID>" % mid).replace("> 54493</ALTERID>", "> %d</ALTERID>" % alt).replace("Salesify Marketing LLP", party)
+    GNP = CGI + "-%08x" % 26601
+    npx = mkx(26601, 54701, "New Party B")
+    npl = lambda lid, x=npx, g=GNP, **kw: dict(dict(base, line_id=lid, event="created", object_guid=g, master_id="26601", alter_id=54701, vch_type="Receipt", vch_no="401", vch_date="20261006", xml=x), **kw)
+    W1 = "waiting for the ledger 'New Party B' from Tally"
+    n0 = nI()
+    c, r = reci2([npl("M1")])
+    lr, pm = lrow51("M1"), pl("M1")
+    ok(c == 200 and st(r) == {"M1": "held"} and lr.get("why", "").startswith(W1) and pm.get("waitLedgers") == ["New Party B"] and pm.get("heldWhy", "").startswith(W1),
+       "2.3.1-B. an entry naming a ledger FinCom does not have ('New Party B'): held '%s ...', the name in the payload (%s; %r)" % (W1, st(r), lr.get("why")))
+    ok(not (bodyof("M1").get("vouchers") or []) and nI() == n0 and not vrow_b(BI, GNP), "2.3.1-B. not applied before the ledger is in: no body, nothing in the copy (%s)" % bodyof("M1"))
+    ok("CASH" in str([x.get("name") for x in FS.T["tally_ledgers"]]) and "'Cash'" not in lr.get("why", ""), "2.3.1-B. 'Cash' in the entry, 'CASH' in the ledger list: the same ledger, not waited for (%r)" % lr.get("why"))
+    # the balance guard goes first: an unbalanced body naming the new ledger is held with the guard's words
+    c, r = reci2([npl("M0", mkx(26600, 54700, "New Party B").replace("-59000.00", "-58000.00"), CGI + "-%08x" % 26600, master_id="26600", alter_id=54700)])
+    ok(c == 200 and st(r) == {"M0": "held"} and "do not add up" in lrow51("M0").get("why", "") and "waitLedgers" not in pl("M0"),
+       "2.3.1-B. the balance guard still applies first: an unbalanced body naming the new ledger is held with the guard's words (%r)" % lrow51("M0").get("why"))
+    # the beat: the ledger named (ledgersWanted), the line neither in refetch nor heldLines while the ledger is missing
+    mem_rows2()
+    c, r = beat231()
+    lw, ids, hids = r.get("ledgersWanted") or [], [x.get("line_id") for x in (r.get("refetch") or [])], [x.get("line_id") for x in (r.get("heldLines") or [])]
+    ok(c == 200 and lw == [{"company": "ZZ IDS", "company_guid": CGI, "name": "New Party B"}] and "M1" not in ids and "M1" not in hids,
+       "2.3.1-B. the beat names the ledger the held entry waits for (ledgersWanted), and does not list the entry for refetch yet (%s; %s)" % (lw, ids))
+    # the bridge fetched the ledger from its own Tally by name and sends it (kind ledger_changes, why wanted)
+    c, r = lch([["lg-npb", 501, 77, "New Party B", "Sundry Debtors", "-250.00", "27aaacn1234b1z5", "aaacn1234b", 0, "Maharashtra"]], "wanted")
+    nb = led("New Party B") or {}
+    ok(c == 200 and r.get("ok") is True and r.get("added") == 1 and nb.get("parent") == "Sundry Debtors" and nb.get("chain") == ["Sundry Debtors", "Current Assets"] and nb.get("primary_group") == "Current Assets"
+       and nb.get("gstin") == "27AAACN1234B1Z5" and nb.get("pan") == "AAACN1234B" and nb.get("state") == "Maharashtra" and nb.get("open") == -250 and nb.get("open_sent") == -250 and nb.get("tally_guid") == "lg-npb" and nb.get("alter_id") == 77,
+       "2.3.1-B. ledger_changes adds the new ledger: name, group (its chain), GSTIN, PAN, state, opening, GUID, AlterID (%s; %s)" % (r, nb))
+    mem_rows2()
+    c, r = beat231()
+    ids = [x.get("line_id") for x in (r.get("refetch") or [])]
+    m1 = next((x for x in (r.get("refetch") or []) if x.get("line_id") == "M1"), {})
+    ok(c == 200 and "ledgersWanted" not in r and "M1" in ids and "ledgerAgain" not in m1, "2.3.1-B. the ledger in: nothing wanted; the entry listed for refetch (%s; %s)" % (ids, m1))
+    c, r = reci2([npl("M1:resolved")])
+    m1r = db.rows("select state from tally_recorder_lines where book_id = %s and line_id = 'M1' order by id" % q(BI))
+    ok(c == 200 and st(r) == {"M1:resolved": "applied"} and [x["state"] for x in m1r] == ["replaced"] and vrow_b(BI, GNP).get("alter_id") == "54701" and int(nI()) == int(n0) + 1,
+       "2.3.1-B. then the entry: M1:resolved applied, M1 replaced, the entry in the copy once (%s; %s; %s; %s -> %s)" % (st(r), m1r, vrow_b(BI, GNP), n0, nI()))
+    # a line held without its body (asked again), whose ":resolved" names a ledger FinCom does not have: held waiting; once the
+    # ledger is in, listed again with ledgerAgain (once), the second ":resolved" applied, both held rows replaced
+    GNC = CGI + "-%08x" % 26602
+    ncx = mkx(26602, 54702, "New Party C")
+    c, r = reci2([npl("M2", "", GNC, master_id="26602", alter_id=54702)])
+    ok(c == 200 and st(r) == {"M2": "held"}, "2.3.1-B. M2 sent without its body: held (%s)" % st(r))
+    c, r = reci2([npl("M2:resolved", ncx, GNC, master_id="26602", alter_id=54702)])
+    ok(c == 200 and st(r) == {"M2:resolved": "held"} and lrow51("M2:resolved").get("why", "").startswith("waiting for the ledger 'New Party C'"), "2.3.1-B. M2:resolved names 'New Party C': held waiting for it (%r)" % lrow51("M2:resolved").get("why"))
+    mem_rows2()
+    c, r = beat231()
+    ids = [x.get("line_id") for x in (r.get("refetch") or [])]
+    ok(c == 200 and (r.get("ledgersWanted") or []) == [{"company": "ZZ IDS", "company_guid": CGI, "name": "New Party C"}] and "M2" not in ids, "2.3.1-B. M2 not listed while 'New Party C' is missing; the ledger wanted (%s; %s)" % (r.get("ledgersWanted"), ids))
+    c, r = lch([["lg-npc", 502, 78, "New Party C", "Sundry Debtors", "0", "", "", 0, ""]], "wanted")
+    mem_rows2()
+    c, r = beat231()
+    m2 = next((x for x in (r.get("refetch") or []) if x.get("line_id") == "M2"), {})
+    ok(c == 200 and m2.get("ledgerAgain") is True and "ledgersWanted" not in r, "2.3.1-B. 'New Party C' in: M2 listed again with ledgerAgain (%s)" % m2)
+    c, r = reci2([npl("M2:resolved", ncx, GNC, master_id="26602", alter_id=54702)])
+    m2s = [x["state"] for x in db.rows("select state from tally_recorder_lines where book_id = %s and line_id in ('M2', 'M2:resolved') order by id" % q(BI))]
+    ok(c == 200 and st(r) == {"M2:resolved": "applied"} and m2s == ["replaced", "replaced", "applied"] and vrow_b(BI, GNC).get("alter_id") == "54702",
+       "2.3.1-B. the second M2:resolved applied; M2 and the held M2:resolved replaced (%s; %s)" % (st(r), m2s))
+    mem_rows2()
+    c, r = beat231()
+    ok(c == 200 and "M2" not in [x.get("line_id") for x in (r.get("refetch") or [])], "2.3.1-B. settled: M2 not listed again")
+    # ledger_changes keeps GSTIN, PAN, state and opening current; never renames, never moves a group, never goes back in AlterID
+    c, r = lch([["lg-sal", 12, 90, "Salesify LLP", "Sales Accounts", "500.00", "29AABCS1111C1Z1", "AABCS1111C", 0, "Karnataka"],
+                ["lg-cash", 1, 5, "CASH", "Cash-in-Hand", "999.00", "", "", 0, ""]])
+    sl, cs_ = led("Salesify Marketing LLP") or {}, led("CASH") or {}
+    kept = " | ".join(r.get("kept") or [])
+    ok(c == 200 and r.get("updated") == 1 and r.get("added") == 0 and led("Salesify LLP") is None and sl.get("parent") == "Sundry Debtors" and sl.get("gstin") == "29AABCS1111C1Z1" and sl.get("pan") == "AABCS1111C"
+       and sl.get("state") == "Karnataka" and sl.get("open") == 500 and sl.get("open_sent") == 500 and sl.get("alter_id") == 90,
+       "2.3.1-B. a ledger altered in Tally (GSTIN, PAN, state, opening): kept current; its new name and group NOT taken (2.3.2) (%s; %s)" % (r, sl))
+    ok("rename is left for 2.3.2" in kept and "move is left for 2.3.2" in kept, "2.3.1-B. the rename and the group move said in kept, for the bridge's log (%s)" % kept)
+    ok(cs_.get("open") == 100 and cs_.get("alter_id") == 10, "2.3.1-B. a row older than FinCom's (AlterID 5 < 10): nothing changed (%s)" % cs_)
+    n_led = len(FS.T["tally_ledgers"])
+    c, r = lch([["lg-npb", 501, 79, "New Party B", "Sundry Debtors", "-250.00", "27AAACN1234B1Z5", "AAACN1234B", 0, "Maharashtra"]], "counter", after=78, upto=79)
+    ok(c == 200 and r.get("updated") == 1 and len(FS.T["tally_ledgers"]) == n_led and not any(x.get("deleted_at") for x in FS.T["tally_ledgers"]) and (led("New Party B") or {}).get("open") == -250,
+       "2.3.1-B. nothing marked gone, nothing added twice; the opening unchanged when Tally's is the one sent (%s)" % r)
+    c, r = call({"kind": "ledger_changes", "company": "NOT LINKED", "version": "2.3.1", "bridge": dict(GA, version="2.3.1"), "ledgers": []})
+    ok(c == 409, "2.3.1-B. a company not linked: 409 (%s)" % c)
+    FS.T.pop("tally_recorder_lines", None); FS.T.pop("tally_ledgers", None); FS.T.pop("tally_groups", None)
 finally:
     if fn: fn.terminate()
     db.stop()

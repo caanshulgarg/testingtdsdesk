@@ -600,6 +600,8 @@ func lightCheckOpen(sessions []M) {
 			lightLogResult(name, had)
 			// 2.2.0: the recorder's source B (Tally's change list), when it is the source or one of them
 			liveAfterLightCheck(name, port)
+			// 2.3.1 (masters): the master counter moved: the ledgers created or altered since the last number (ledchanges.go)
+			ledChangesAfterLightCheck(name, port)
 		}
 	}
 }

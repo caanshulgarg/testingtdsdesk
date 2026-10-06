@@ -12,7 +12,8 @@ For the owner. Plain words; times are IST. The steps to try it on NWS144 are in 
 
 ## What 2.3.1 changes: item invoices enter the books complete
 
-One change, by the owner's decisions of 06-Oct-2026. First: "change the entry request so the bridge also asks Tally for
+Two changes, by the owner's decisions of 06-Oct-2026: the entry request (this section) and the masters (the next
+section). The entry request first: "change the entry request so the bridge also asks Tally for
 the ledger lines kept under the items of a sales or purchase invoice (item invoice mode). Conditions: one entry per
 request as today, read only, inside the 2-second rule, nothing else added to the request." Then (part A, the same day):
 "Voucher request, one change: Item invoices enter complete: sales, purchase, credit notes and debit notes with stock
@@ -103,6 +104,35 @@ Limits, in plain words:
   by the names TallyPrime 7.1 uses as far as we know, but no real export in our test files carries them yet; the tests
   use typed copies. The NWS144 checks below confirm them.
 
+## Masters: ledgers kept current, and a new ledger fetched before its entry
+
+The second change, by the owner's decision of 06-Oct-2026: "Masters, one change: When Tally's master counter moves, ask
+only for ledgers created or altered since the last number. Keep name, group, GSTIN, PAN, state and opening balance
+current. If an entry uses a ledger FinCom does not have, fetch the ledger first, then apply the entry." Approved: read
+only, inside the 2-second rule, after postings, nothing else added, each bridge on its own Windows user's Tally only.
+
+- **A ledger created or altered in Tally reaches FinCom within about 10 minutes.** Every 10 minutes the bridge reads
+  Tally's master counter for each open company (as it already did). When the counter has moved since the last number it
+  processed, it asks Tally only for the ledgers whose AlterID is above that number (FinComLedgerChanges: 200 AlterIDs a
+  request, the ledger list's own fields and nothing else) and sends them to FinCom. FinCom adds a new ledger and keeps
+  GSTIN, PAN, state and opening balance current. The number moves on only when FinCom has taken them; until then the
+  next check asks again. A very large change of masters (more than 5,000 at once) is left to Update now or the nightly
+  ledger list, and the log says so.
+- **A new party used at once.** An entry naming a ledger FinCom does not have yet (for example a party created inside
+  the invoice screen with Alt+C) is held a moment with the words "waiting for the ledger '<name>' from Tally". The
+  bridge asks its own Tally for that ledger by its name (FinComLedgerByName, one request a ledger), sends it, and then
+  asks Tally for the entry again: the ledger is in first, then the entry, within about two beats. FinCom's balance check
+  still applies to the entry.
+- **Read only, inside the 2-second rule, never during a posting, each bridge on its own Windows user's Tally only.** A
+  Tally slow to answer is left at 2 seconds and the ledger changes stop for that company until you switch where the
+  changes come from, as for the entries.
+- **Not in 2.3.1 (planned for 2.3.2):** ledger renames, ledgers moved to another group, new and altered groups, deleted
+  ledgers and groups, PAN worked out from the GSTIN. A ledger renamed or moved in Tally keeps FinCom's name and group;
+  the bridge's log names it ("left for 2.3.2"). Update now and the nightly ledger list handle them as before.
+
+This needs the FinCom cloud update (tally-ingest) that goes out with 2.3.1; the ledger's deductee type is stored in the
+column migration 57 adds (`tally_ledgers.tds_deductee_type`); no other database change.
+
 ## Which entries enter the books by themselves in 2.3.1 (for your staff)
 
 **Enter by themselves**, within about a minute of saving in Tally:
@@ -115,8 +145,8 @@ Limits, in plain words:
 every 10 minutes, up to 20 tries over 7 days), now with the items' lines, and the entry enters complete. That includes an
 item invoice 2.3.0 had already asked Tally for again (its second answer, without the items' lines, held by FinCom's
 balance check): FinCom lists it once more, 2.3.1 asks once more and sends it, and it enters once (both held lines show
-as 'replaced'). This needs the FinCom cloud update (tally-ingest) that goes out with 2.3.1, and database migrations 56
-and 57 (57 stores the items, cost centres, bank, TDS, e-invoice and e-way bill details). Uploading that day's Day Book
+as 'replaced'). This needs the FinCom cloud update (tally-ingest) that goes out with 2.3.1, and database migrations 56,
+57, 58 and 60, in that order (57 stores the items, cost centres, bank, TDS, e-invoice and e-way bill details). Uploading that day's Day Book
 also settles them.
 
 **Still held, as before:**
@@ -139,6 +169,8 @@ also settles them.
 8. A bank payment with a UTR shows the UTR, instrument date and transaction type.
 9. A payment with TDS shows its TDS details.
 10. A journal with cost centres shows its cost centre allocations.
+11. A ledger's GSTIN changed in Tally shows in FinCom within about 10 minutes.
+12. A sales invoice to a party created at once (Alt+C in the invoice) enters the books, with the party, within a few minutes.
 
 ## Rollback
 

@@ -91,6 +91,13 @@ func readLedgerChunk(tc *TC, company string, port int, after, upto int64) ([]led
 	if !strings.Contains(raw, "<ENVELOPE") {
 		return nil, 0, errors.New("Tally's answer to the ledger list could not be read: " + cut(flat(raw), 120))
 	}
+	out, top := ledRowsOf(raw)
+	return out, top, nil
+}
+
+// the ledgers of an answer to a ledger request (the list, 2.3.1's changes or one by name: the same fields), and the
+// highest MasterID among them
+func ledRowsOf(raw string) ([]ledRow, int64) {
 	var out []ledRow
 	var top int64
 	for _, l := range xmlDoc(raw).All("LEDGER") {
@@ -116,7 +123,7 @@ func readLedgerChunk(tc *TC, company string, port int, after, upto int64) ([]led
 		}
 		out = append(out, r)
 	}
-	return out, top, nil
+	return out, top
 }
 
 // Tally's groups, name and parent (a primary group's parent is empty): one request

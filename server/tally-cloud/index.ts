@@ -56,6 +56,12 @@
 //                                                       bridge's deleted list is ignored for marking (deletedIgnored). Without
 //                                                       migration-34, or without a round id, nothing is marked. At most 60
 //                                                       calls a minute from one computer (429)
+//   {kind:"ledger_changes", company, company_guid, ledgers:[the ledger_list row shape], why: counter | wanted, after?, upto?}
+//                                                    -> {ok, ledgers, added, updated, kept}: FinCom Bridge 2.3.1 (masters,
+//                                                       applyLedgerChanges): the ledgers created or altered since Tally's
+//                                                       master counter last moved, or one an entry uses that FinCom did not
+//                                                       have; name (new ledgers), group, GSTIN, PAN, state and opening kept
+//                                                       current; nothing marked gone, renamed or moved (kept: said for 2.3.2)
 //   {kind:"read_guard", company, guid, alter, count} -> {state: ok | needs_baseline, why}: the company's Tally GUID, highest
 //                                                       AlterID and the entries read, kept at each read (tally_sync_reads)
 //   companies:[{name, gstin, guid}]                  -> the company's Tally GUID kept with its book (tally_sync_cursor)
@@ -121,6 +127,10 @@
 //   without their entry (heldLinesFor; from 06-Oct-2026 this bridge's only), left out when none; and (06-Oct-2026) refetch:
 //   the same fields, at most 20 of this bridge's own held lines whose body is missing or whose GUID is a placeholder
 //   (refetchFor), asked of its own Tally again by a bridge built after 2.3.0 and sent as "<line id>:resolved"; left out when none
+//   FinCom Bridge 2.3.1 (masters): a recorder line whose body names a ledger the book does not have is held "waiting for the
+//   ledger '<name>' from Tally" (ledgerWait); the beat answers ledgersWanted: [{company, company_guid, name}] (at most 20, this
+//   bridge's own held lines), and lists such a line in heldLines / refetch only once its ledgers are in (refetch with
+//   ledgerAgain: true when its "<line id>:resolved" was the line held so); left out when none
 //   {kind:"start_point", company, guid?, altvchid, altmstid, at} -> {set, startVoucher, startMaster, guid, at, state}: the
 //                                                       bridge's starting point (reading is prospective), kept once per book
 //                                                       and company GUID on tally_sync_cursor (tally_start_point)
@@ -399,6 +409,48 @@ async function refetchFor(dev: any, firm: string, bridge: string) {
   }, "refetch", true);
   return out.length ? out : null;
 }
+// bridge 2.3.1, part B (masters): ledgersWanted, the ledgers this bridge's own held lines wait for (held with the words
+// "waiting for the ledger ..." by ledgerWait, the line itself or its "<line id>:resolved"; the same computer key AND bridge
+// id, the last 7 days, the company still linked to the same book) that the book's ledger list still has no row of: at most
+// 20 [{company, company_guid, name}], oldest line first. The bridge asks its own Tally for each by its name (one request a
+// ledger, FinComLedgerByName) and sends what Tally has as kind ledger_changes; the line is then listed for refetch. Left out
+// when none or on any error: the beat never fails for it
+const LEDGERS_WANTED_MAX = 20;
+async function ledgersWantedFor(dev: any, firm: string, bridge: string) {
+  try {
+    if (!bridge) return null;
+    const since = new Date(Date.now() - 7 * 86400000).toISOString();
+    const { data, error } = await db.from("tally_recorder_lines").select("line_id, company, company_guid, book_id, received_at, bridge, device_id, held_why, payload")
+      .eq("firm_id", firm).eq("device_id", dev.id).eq("bridge", bridge).eq("state", "held").gt("received_at", since).order("received_at", { ascending: true }).limit(400);
+    if (error || !Array.isArray(data)) return null;
+    const rows = (data as any[]).filter((r) => r && String(r.device_id ?? "") === String(dev.id) && String(r.bridge ?? "") === bridge && Date.parse(String(r.received_at)) > Date.now() - 7 * 86400000 && waitsFor(r).length)
+      .sort((a, b) => Date.parse(String(a.received_at)) - Date.parse(String(b.received_at)));
+    if (!rows.length) return null;
+    const s = (v: unknown, n: number) => typeof v === "string" || typeof v === "number" ? String(v).trim().slice(0, n) : "";
+    const linked = new Map<string, string | null>(), still = new Map<string, Set<string> | null>(), seen = new Set<string>();
+    const out: Record<string, string>[] = [];
+    for (const r of rows) {
+      const company = s(r.company, 200), book = String(r.book_id || "");
+      if (!company || !book) continue;
+      if (!linked.has(company)) { try { linked.set(company, await bookForBeat(firm, company)); } catch { linked.set(company, null); } }
+      if (linked.get(company) !== book) continue;
+      if (!still.has(book)) still.set(book, await ledgersMissing(book, rows.filter((x) => String(x.book_id || "") === book).flatMap(waitsFor)));
+      const m = still.get(book);
+      if (!m) continue;
+      for (const name of waitsFor(r)) {
+        const k = book + "|" + name;
+        if (!m.has(name) || seen.has(k)) continue;
+        seen.add(k);
+        out.push({ company, company_guid: s(r.company_guid, 100), name });
+        if (out.length >= LEDGERS_WANTED_MAX) return out;
+      }
+    }
+    return out.length ? out : null;
+  } catch (e) {
+    console.log("tally-ingest beat: ledgers wanted not read:", String((e as Error)?.message || e).slice(0, 200));
+    return null;
+  }
+}
 // bridge 2.3.1 (review H1): a ":resolved" row held for want of a complete body: the guard's words (guard-230), or no body
 const GUARD_WORDS = "the entry's details from Tally are incomplete";
 function heldIncomplete(x: any): boolean {
@@ -410,7 +462,7 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
   try {
     if (!bridge) return [];
     const since = new Date(Date.now() - 7 * 86400000).toISOString();
-    const { data, error } = await db.from("tally_recorder_lines").select("line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date, book_id, received_at, bridge, device_id, object_guid, body")
+    const { data, error } = await db.from("tally_recorder_lines").select("line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date, book_id, received_at, bridge, device_id, object_guid, body, held_why, payload")
       .eq("firm_id", firm).eq("device_id", dev.id).eq("bridge", bridge).eq("state", "held").in("event", ["created", "altered", "imported"]).gt("received_at", since)
       .order("received_at", { ascending: true }).limit(400);
     if (error || !Array.isArray(data) || !data.length) return [];
@@ -427,10 +479,10 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
       // above its own); the earlier one never had a body, so it is never applied
       const rids = [...new Set(rows.map((r) => String(r.line_id || "") + ":resolved"))].slice(0, 400);
       // 2.3.1 (2.3.0 review round 3 L2): asked 60 ids at a time (400 in one URL could pass a gateway's limit and fail
-      // quietly to an empty list); a failure is logged
+      // quietly to an empty list); a failure is logged. 2.3.1 (masters): id, payload and received_at for the ledger wait
       const rs: any[] = [];
       for (let i = 0; i < rids.length; i += 60) {
-        const { data: d, error: re } = await db.from("tally_recorder_lines").select("line_id, state, held_why, body").eq("firm_id", firm).in("line_id", rids.slice(i, i + 60));
+        const { data: d, error: re } = await db.from("tally_recorder_lines").select("id, line_id, state, held_why, body, payload, received_at").eq("firm_id", firm).in("line_id", rids.slice(i, i + 60));
         if (re) { console.log("tally-ingest beat: " + what + ": the lines already resolved not read:", String(re.message || "").slice(0, 200)); return []; }
         rs.push(...(d || []));
       }
@@ -442,7 +494,31 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
       }
       rows = rows.filter((r) => {
         const xs = have.get(String(r.line_id || "") + ":resolved") || [];
-        return !xs.length || (xs.length === 1 && heldIncomplete(xs[0]));
+        // bridge 2.3.1 (masters): the newest ":resolved" line held waiting for a ledger FinCom did not have (and the only one so
+        // held): listed again with ledgerAgain once the ledger is in (below), so that the bridge asks Tally for the entry once
+        // more and sends "<line id>:resolved" again (the same id), applied then; it replaces both held rows (50-53's rules)
+        const newest = xs.slice().sort((a, b) => Number(b?.id || 0) - Number(a?.id || 0) || Date.parse(String(b?.received_at)) - Date.parse(String(a?.received_at)))[0];
+        if (newest && String(newest.state || "") === "held" && waitsFor(newest).length) {
+          if (xs.length > 2 || xs.filter((x) => waitsFor(x).length).length > 1) return false;
+          r._waits = waitsFor(newest); r._ledgerAgain = true;
+          return true;
+        }
+        return !xs.length || (xs.length === 1 && heldIncomplete(xs[0]) && !waitsFor(xs[0]).length);
+      });
+    }
+    // bridge 2.3.1 (masters): a line waiting for a ledger FinCom did not have is listed (heldLines, refetch) only once every
+    // ledger it waits for is in the book's ledger list; until then the bridge fetches the ledgers (ledgersWanted)
+    for (const r of rows) if (!r._waits) r._waits = waitsFor(r);
+    const waiting = rows.filter((r) => r._waits.length);
+    if (waiting.length) {
+      const byBook = new Map<string, string[]>();
+      for (const r of waiting) byBook.set(String(r.book_id || ""), [...(byBook.get(String(r.book_id || "")) || []), ...r._waits]);
+      const still = new Map<string, Set<string> | null>();
+      for (const [b, ns] of byBook) still.set(b, b ? await ledgersMissing(b, ns) : null);
+      rows = rows.filter((r) => {
+        if (!r._waits.length) return true;
+        const m = still.get(String(r.book_id || ""));
+        return !!m && !r._waits.some((n: string) => m.has(n));
       });
     }
     const books = [...new Set(rows.map((r) => String(r.book_id || "")).filter(Boolean))];
@@ -453,7 +529,7 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
     }
     const linked = new Map<string, string | null>();
     const s = (v: unknown, n: number) => typeof v === "string" || typeof v === "number" ? String(v).trim().slice(0, n) : "";
-    const out: Record<string, string>[] = [];
+    const out: Record<string, unknown>[] = [];
     for (const r of rows) {
       const lid = s(r.line_id, 80), company = s(r.company, 200), day = s(r.vch_date, 10);
       if (!lid || lid.endsWith(":resolved") || !company || !/^\d{4}-\d{2}-\d{2}$/.test(day)) continue;
@@ -461,7 +537,7 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
       if (!linked.has(company)) { try { linked.set(company, await bookForBeat(firm, company)); } catch { linked.set(company, null); } }
       if (!r.book_id || linked.get(company) !== String(r.book_id)) continue;
       out.push({ line_id: lid, company, company_guid: s(r.company_guid, 100), event: s(r.event, 20), master_id: s(r.master_id, 40), vch_type: s(r.vch_type, 60),
-        vch_no: s(r.vch_no, 60), vch_date: day.replace(/-/g, "") });
+        vch_no: s(r.vch_no, 60), vch_date: day.replace(/-/g, ""), ...(r._ledgerAgain ? { ledgerAgain: true } : {}) });
       if (out.length >= max) break;
     }
     return out;
@@ -1078,6 +1154,86 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
   console.log("tally-ingest ledger_list", book, JSON.stringify({ ...out, notes: notes.slice(0, 5) }));
   return reply(200, out);
 }
+// Bridge 2.3.1, part B (the owner's scope of 06-Oct-2026, masters): {kind:"ledger_changes", company, company_guid, ledgers:
+// [[guid, masterId, alterId, name, group, opening, gstin, pan, openingChanged, state]] (the ledger list's row shape, at most
+// 2000), why: "counter" (the ledgers created or altered since Tally's master counter last moved; after, upto: the AlterID
+// span) | "wanted" (a ledger an entry uses that FinCom did not have)} -> {ok, ledgers, added, updated, kept:[words]}. Keeps
+// name, group, GSTIN, PAN, state and opening balance current and nothing else: a new ledger is added (its group's chain from
+// the groups FinCom has); a ledger FinCom has (by Tally's GUID, else by its name) gets GSTIN, PAN, state (when Tally gives one),
+// AlterID and, when Tally's opening is not the one it last sent (open_sent), the opening. Never marks a ledger gone or brings
+// one back, never renames, never moves a ledger to another group, never adds or changes a group (2.3.2): a GUID FinCom has
+// under another name, or a ledger in another group than FinCom's, keeps FinCom's name and group and is said in kept (the
+// bridge logs it). A row older than FinCom's (a lower AlterID) changes nothing. No round, no seen list, no deleted list.
+// The openings of the year are worked out again when a ledger is added or its opening changes. At most 60 calls a minute
+// from one computer (shared with ledger_list). No migration (the columns of 28, 32 and 40, each used when there)
+async function applyLedgerChanges(firm: string, book: string, body: any) {
+  const s = (v: unknown, n: number) => String(v ?? "").slice(0, n);
+  const m32 = await hasCols("tally_ledgers", "tally_guid, alter_id, deleted_at");
+  const m28 = await hasCols("tally_ledgers", "gstin, pan");
+  const m40 = await hasCols("tally_ledgers", "state");
+  const why = body.why === "wanted" ? "wanted" : "counter";
+  const kept: string[] = [];
+  const out = { ok: true, ledgers: 0, added: 0, updated: 0, kept };
+  const seen = new Set<string>();
+  const rows = (Array.isArray(body.ledgers) ? body.ledgers : []).slice(0, 2000).map((l: any) => ({
+    guid: s(l?.[0], 100).trim(), alter: Math.max(0, Math.floor(Number(l?.[2]) || 0)), name: cleanName(s(l?.[3], 300)),
+    parent: cleanName(s(l?.[4], 300)).replace(/^\W*Primary$/i, ""), open: Math.round(amt(l?.[5]) * 100) / 100,
+    gstin: s(l?.[6], 15).trim().toUpperCase(), pan: s(l?.[7], 10).trim().toUpperCase(), state: s(l?.[9], 60).trim() }))
+    .filter((r: any) => r.name && !seen.has(r.name) && seen.add(r.name));
+  out.ledgers = rows.length;
+  if (!rows.length) return reply(200, out);
+  const { data: allG, error: eg } = await db.from("tally_groups").select("name, parent").eq("book_id", book);
+  if (eg) throw new Error(eg.message);
+  const up = new Map((allG || []).map((g: any) => [String(g.name).toLowerCase(), g.parent || ""]));
+  const chain = (p: string) => { const c: string[] = []; while (p && c.length < 30 && !c.some((x) => x.toLowerCase() === p.toLowerCase())) { c.push(p); p = up.get(p.toLowerCase()) || ""; } return c; };
+  const cols = "name, parent, open, open_sent" + (m32 ? ", tally_guid, alter_id" : "");
+  const byGuid = new Map<string, any>(m32 ? (await selectIn(cols, book, "tally_guid", rows.map((r: any) => r.guid).filter(Boolean))).map((g: any) => [String(g.tally_guid), g]) : []);
+  const byName = new Map<string, any>((await selectIn(cols, book, "name", rows.map((r: any) => r.name))).map((g: any) => [String(g.name), g]));
+  const fresh: Record<string, unknown>[] = [], opened: Record<string, unknown>[] = [], plain: Record<string, unknown>[] = [];
+  for (const r of rows) {
+    const g = r.guid ? byGuid.get(r.guid) : undefined, have = g || byName.get(r.name);
+    if (!have) {
+      const c = chain(r.parent);
+      const o: Record<string, unknown> = { book_id: book, firm_id: firm, name: r.name, parent: r.parent, chain: c, primary_group: c.length ? c[c.length - 1] : "", open: r.open, open_sent: r.open };
+      if (m28) { o.gstin = r.gstin || null; o.pan = r.pan || null; }
+      if (m40 && r.state) o.state = r.state;
+      if (m32) { o.tally_guid = r.guid || null; o.alter_id = r.alter; }
+      fresh.push(o);
+      continue;
+    }
+    if (m32 && have.alter_id !== null && have.alter_id !== undefined && Number(have.alter_id) > r.alter) continue;   // FinCom has a newer one
+    if (have.name !== r.name) kept.push(("'" + have.name + "' is named '" + r.name + "' in Tally now: the rename is left for 2.3.2 (the name stays)").slice(0, 300));
+    if (String(have.parent || "") !== r.parent) kept.push(("'" + have.name + "' is in the group '" + (r.parent || "Primary") + "' in Tally, '" + (have.parent || "Primary") + "' in FinCom: the move is left for 2.3.2 (the group stays)").slice(0, 300));
+    if (m32 && g === undefined && have.tally_guid && r.guid && have.tally_guid !== r.guid) kept.push(("'" + have.name + "' has another Tally GUID in FinCom: its fields are brought up to date, the GUID stays").slice(0, 300));
+    const c = chain(String(have.parent || ""));
+    const o: Record<string, unknown> = { book_id: book, firm_id: firm, name: have.name, parent: have.parent ?? "", chain: c, primary_group: c.length ? c[c.length - 1] : "" };
+    if (m28) { o.gstin = r.gstin || null; o.pan = r.pan || null; }
+    if (m40 && r.state) o.state = r.state;
+    if (m32) { o.alter_id = r.alter; if (!have.tally_guid && r.guid && !byGuid.has(r.guid)) o.tally_guid = r.guid; }
+    const was = have.open_sent ?? have.open, sent = was === null || was === undefined ? null : Math.round(Number(was) * 100) / 100;
+    if (sent === null || sent !== r.open) opened.push({ ...o, open: r.open, open_sent: r.open });
+    else plain.push(o);
+  }
+  // one upsert per shape (the same keys in every row of a call)
+  const shape = (o: Record<string, unknown>) => Object.keys(o).sort().join(",");
+  for (const set of [fresh, opened, plain]) {
+    const groups = new Map<string, Record<string, unknown>[]>();
+    for (const o of set) groups.set(shape(o), [...(groups.get(shape(o)) || []), o]);
+    for (const g of groups.values()) {
+      for (let i = 0; i < g.length; i += 1000) {
+        const { error } = await db.from("tally_ledgers").upsert(g.slice(i, i + 1000), { onConflict: "book_id,name" });
+        if (error) throw new Error(error.message);
+      }
+    }
+  }
+  out.added = fresh.length; out.updated = opened.length + plain.length;
+  if (fresh.length || opened.length) {
+    const { error } = await db.rpc("tally_year_openings", { p_book: book });
+    if (error) kept.push(("year openings: " + error.message).slice(0, 300));
+  }
+  console.log("tally-ingest ledger_changes", book, why, JSON.stringify({ ...out, after: body.after ?? null, upto: body.upto ?? null, kept: kept.slice(0, 5) }));
+  return reply(200, out);
+}
 // Migration 45: the posting window of a job's last posts_update, {a0, a1, vouchersCreated, mastersCreated, guid}: whole numbers
 // 0..10^15 (below), a1 not below a0; anything else ignored with a log line. guid: the company GUID the bridge read in its
 // company check (the review's M1: the gap check counts a window only for the book's own company GUID). Saved only after the
@@ -1191,6 +1347,63 @@ function hasInventory(xml: string, guid: string): boolean {
   }
   return /<(?:ALL)?INVENTORYENTRIES\.LIST[\s>]/.test(el);
 }
+// Bridge 2.3.1, part B (the owner's scope of 06-Oct-2026: "If an entry uses a ledger FinCom does not have, fetch the ledger
+// first, then apply the entry"). A recorder line whose entry body (read from the add-on's or Tally's XML; never a short line,
+// FinCom's own posting) names a ledger the book's ledger list has no row of (by its clean name, else the same name in other
+// capitals; a row marked gone counts as had) is not applied: its body is not sent (vouchers [], lines []) and the database
+// holds it for want of its body (migrations 50-51) with the words "waiting for the ledger '<name>' from Tally" (heldWhy, in
+// the payload too, with the names as waitLedgers). The beat names those ledgers (ledgersWanted); the bridge asks its own
+// Tally for each by name and sends it (kind ledger_changes); once every ledger is in, the beat lists the line for refetch and
+// the bridge sends the entry again ("<line id>:resolved"), applied then. The balance guard (guard-230) goes first: a body it
+// held is not looked at. A book with no ledger list yet holds nothing (every name would be unknown); a ledger list that
+// cannot be read holds nothing (as before 2.3.1). No migration
+const LEDGER_WAIT = "waiting for the ledger";
+function ledgerWaitWords(names: string[]): string {
+  const q = names.slice(0, 5).map((n) => "'" + n + "'").join(", ") + (names.length > 5 ? " and " + (names.length - 5) + " more" : "");
+  return ((names.length === 1 ? LEDGER_WAIT + " " : LEDGER_WAIT + "s ") + q + " from Tally (FinCom does not have " + (names.length === 1 ? "it" : "them")
+    + " yet; the bridge fetches " + (names.length === 1 ? "it" : "them") + ", then the entry is applied)").slice(0, 300);
+}
+// the names of these the book's ledger list has no row of (exact clean name, else the same name in other capitals); null
+// when the list cannot be read or the book has none yet (then nothing is held)
+async function ledgersMissing(book: string, names: string[]): Promise<Set<string> | null> {
+  try {
+    const want = [...new Set(names.filter(Boolean))].slice(0, 2000);
+    if (!want.length) return new Set();
+    const { data: any1, error: e1 } = await db.from("tally_ledgers").select("name").eq("book_id", book).limit(1);
+    if (e1 || !Array.isArray(any1) || !any1.length) return null;
+    const have = new Set((await selectIn("name", book, "name", want)).map((r: any) => String(r.name)));
+    const miss = want.filter((n) => !have.has(n));
+    for (const n of miss.slice(0, 20)) {
+      const { data, error } = await db.from("tally_ledgers").select("name").eq("book_id", book).ilike("name", n.replace(/[\\%_]/g, (c) => "\\" + c)).limit(1);
+      if (error) return null;
+      if (Array.isArray(data) && data.length) have.add(n);
+    }
+    return new Set(miss.filter((n) => !have.has(n)));
+  } catch (e) {
+    console.log("tally-ingest: the ledger list not read for the ledgers an entry uses:", book, String((e as Error)?.message || e).slice(0, 200));
+    return null;
+  }
+}
+async function ledgerWait(book: string, send: Record<string, any>[]) {
+  const look = send.filter((l) => l.short !== true && !l.heldWhy && Array.isArray(l.vouchers) && l.vouchers.length && Array.isArray(l.lines) && l.lines.length);
+  if (!look.length) return;
+  const miss = await ledgersMissing(book, look.flatMap((l) => (l.lines as any[]).map((x: any) => String(x?.[1] ?? ""))));
+  if (!miss || !miss.size) return;
+  for (const l of look) {
+    const names = [...new Set((l.lines as any[]).map((x: any) => String(x?.[1] ?? "")).filter((n) => miss.has(n)))].slice(0, 10);
+    if (!names.length) continue;
+    const why = ledgerWaitWords(names);
+    console.log("tally-ingest recorder_lines: " + why, l.line_id, l.object_guid);
+    l.vouchers = []; l.lines = []; l.heldWhy = why;
+    l.payload = { ...(l.payload || {}), heldWhy: why, waitLedgers: names };
+  }
+}
+// the ledgers a held line waits for (its payload's waitLedgers), when its words say so
+function waitsFor(r: any): string[] {
+  if (!String(r?.held_why || "").startsWith(LEDGER_WAIT)) return [];
+  const w = r?.payload && typeof r.payload === "object" ? r.payload.waitLedgers : null;
+  return Array.isArray(w) ? w.map((n: any) => String(n || "").slice(0, 300)).filter(Boolean).slice(0, 10) : [];
+}
 async function recorderLines(dev: any, firm: string, book: string, body: any) {
   const me = bridgeOf(dev, body, false);
   const company = String(body.company || "").slice(0, 200);
@@ -1203,6 +1416,7 @@ async function recorderLines(dev: any, firm: string, book: string, body: any) {
     else { send.push({ ...c.line, company }); at.push(i); }
   });
   if (send.length) await shortBodies(firm, book, send);
+  if (send.length) await ledgerWait(book, send);     // bridge 2.3.1 (masters): an entry naming a ledger FinCom does not have waits for it
   const found = send.length ? await guidsFromRecord(book, send, String(dev?.id || ""), me.id) : new Map<string, string>();     // bridge 2.3.0: cancel/delete GUID
   // round 20 (migration 47): more than 50 FULL lines (an entry body read from the add-on's XML; short lines' bodies built from
   // the posting do not count) go on the queue as ONE message and are answered {queued: n} at once; the database's drain
@@ -2155,7 +2369,9 @@ Deno.serve(async (req) => {
         const heldLines = await heldLinesFor(dev, firm, me.id);
         // 06-Oct-2026: this bridge's own held lines without their entry's body or with a placeholder GUID, at most 20
         const refetch = await refetchFor(dev, firm, me.id);
-        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(heldLines ? { heldLines } : {}), ...(refetch ? { refetch } : {}), ...(co ? { notMain: true, changesOnly: true, error: CHANGES_ONLY } : may ? {} : { notMain: true }), ...ctl.out });
+        // bridge 2.3.1 (masters): the ledgers this bridge's held lines wait for, fetched by the bridge before the entry
+        const ledgersWanted = await ledgersWantedFor(dev, firm, me.id);
+        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(heldLines ? { heldLines } : {}), ...(refetch ? { refetch } : {}), ...(ledgersWanted ? { ledgersWanted } : {}), ...(co ? { notMain: true, changesOnly: true, error: CHANGES_ONLY } : may ? {} : { notMain: true }), ...ctl.out });
       }
       case "make_main": return await makeMain(dev, bridgeOf(dev, body, false).id);
       case "posts_take": {
@@ -2474,6 +2690,13 @@ Deno.serve(async (req) => {
         const book = await bookFor(firm, String(body.company || ""));
         if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
         return await applyLedgerList(firm, book, body, dev, bridgeOf(dev, body, false));
+      }
+      case "ledger_changes": {
+        // bridge 2.3.1 (masters): the ledgers created or altered since Tally's master counter last moved, or one an entry uses
+        if (!ledgerListAllowed(String(dev.id))) return reply(429, { ok: false, error: "This computer has sent sixty ledger lists in the last minute; try again in a minute." });
+        const book = await bookFor(firm, String(body.company || ""));
+        if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
+        return await applyLedgerChanges(firm, book, body);
       }
       case "groups": {
         const book = await bookFor(firm, String(body.company || ""));
