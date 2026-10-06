@@ -178,7 +178,9 @@ function S231Retry {
   $tp = Get-Process -Id $script:tallyPids[9000]
   DayBook 'r1' '1-8-2026'; KeysTo 9000 '{END}' 2; KeysTo 9000 '{ENTER}' 4 'r1-open'
   $logBefore = @(Get-Content $B[1].log).Count; $m0 = Mark
-  KeysTo 9000 '^a' 0
+  # the save must finish before Tally goes silent (run 37461854776 suspended it inside Ctrl+A: nothing saved, Ctrl left
+  # down): Ctrl+A, 600 ms, then suspended (the bridge reads the add-on's line within about a second and asks then)
+  KeysTo 9000 '^a' 0; Start-Sleep -Milliseconds 600
   $null = [FcSpike.Nt]::NtSuspendProcess($tp.Handle); $tSave = Get-Date
   Write-Host "R1: Tally 9000 (pid $($tp.Id)) suspended at $($tSave.ToString('HH:mm:ss.fff'))"
   $lat = [pscustomobject]@{ ms = 'no answer (suspended)' }
@@ -190,6 +192,8 @@ function S231Retry {
   $null = Invoke-RestMethod 'http://127.0.0.1:8787/' -Method Post -Body (@{ kind = '_queue_post'; id = 'r1-job-1'; company = $co1; payload = @{ vouchers = @(@{ id = 'R1P1'; xml = $pv }) } } | ConvertTo-Json -Compress -Depth 6) -ContentType 'application/json'
   while ((Get-Date) -lt $tSave.AddSeconds(180)) { Start-Sleep 5 }
   $null = [FcSpike.Nt]::NtResumeProcess($tp.Handle); $tFree = Get-Date
+  Add-Type -Namespace FcSpike -Name Kb -MemberDefinition '[DllImport("user32.dll")] public static extern void keybd_event(byte k, byte s, uint f, UIntPtr e);' -ErrorAction SilentlyContinue
+  [FcSpike.Kb]::keybd_event(0x11, 0, 2, [UIntPtr]::Zero)   # Ctrl up, in case
   Write-Host "R1: Tally 9000 resumed at $($tFree.ToString('HH:mm:ss'))"
   Shot 'r1-resumed'
   $g = $nv.guid; $pred = { $_.guid -eq $g -and $_.xml }.GetNewClosure()
@@ -197,7 +201,8 @@ function S231Retry {
   $tArr = if ($hit.Count) { $hit[0].at } else { '' }
   $log = @(Get-Content $B[1].log | Select-Object -Skip $logBefore)
   $tries = @($log | ForEach-Object { $m = [regex]::Match($_, 'did not answer in time at (\d\d:\d\d:\d\d) \(([^,]+), try (\d+)\); trying again by itself at (\d\d:\d\d:\d\d)'); if ($m.Success) { [pscustomobject]@{ at = $m.Groups[1].Value; id = $m.Groups[2].Value; n = [int]$m.Groups[3].Value; next = $m.Groups[4].Value } } })
-  $back = @($log | Where-Object { $_ -match 'answered in time again' }) | Select-Object -First 1
+  $back = @($log | Where-Object { $_ -match 'answered in time again|answers again|answered the small check' }) | Select-Object -First 1
+  $busy = @($log | Where-Object { $_ -match 'is busy|small check|did not answer|Waiting for Tally' } | ForEach-Object { $_.Substring(11, [Math]::Min(200, $_.Length - 11)) })
   $off = @($log | Where-Object { $_ -match 'switch(ed)? off|turned off|is off for|stopped by the bridge itself|stops reading' })
   $gap = { param($a, $b) [int]([datetime]::ParseExact($b, 'HH:mm:ss', $null) - [datetime]::ParseExact($a, 'HH:mm:ss', $null)).TotalSeconds }
   $steps = @(for ($i = 0; $i -lt $tries.Count; $i++) { & $gap $tries[$i].at $tries[$i].next })
@@ -209,8 +214,8 @@ function S231Retry {
   $arrOk = $tArr -and $firstAfter -and [math]::Abs((& $gap $firstAfter.next $tArr)) -le 20
   $want = @(15, 30, 60, 120)
   $stepsOk = $steps.Count -ge 4 -and @(0..3 | Where-Object { [math]::Abs($steps[$_] - $want[$_]) -le [math]::Max(5, $want[$_] * 0.25) }).Count -eq 4
-  $txt = "Tally silent {0}..{1} (suspended; a small request: {2}; the entry saved {3}); bridge 1's tries: {4}; steps {5} s (expected 15, 30, 60, 120, then 300); back to normal: {6}; switch-off words: {7}; posting queued {8}, taken {9}, updates {10}, in Tally: {11}; the entry at the stub {12} (Tally free {13}; the first try after that {14})" -f `
-    $tSave.ToString('HH:mm:ss'), $tFree.ToString('HH:mm:ss'), $lat.ms, $tSave.ToString('HH:mm:ss'), $(($tries | ForEach-Object { "try $($_.n) at $($_.at) ($($_.id)) next $($_.next)" }) -join '; '), ($steps -join ', '), $(if ($back) { $back.Substring(0, [Math]::Min(120, $back.Length)) } else { 'not seen' }), $(if ($off.Count) { $off -join ' | ' } else { 'none' }), $tPost.ToString('HH:mm:ss'), ($pt -join ','), ($pu -join '; '), $posted, $(if ($tArr) { $tArr } else { 'NOT arrived' }), $tFree.ToString('HH:mm:ss'), $(if ($firstAfter) { $firstAfter.next } else { 'none' })
+  $txt = "Tally silent {0}..{1} (suspended; a small request: {2}; the entry saved {3}); bridge 1's tries: {4}; steps {5} s (expected 15, 30, 60, 120, then 300); back to normal: {6}; switch-off words: {7}; posting queued {8}, taken {9}, updates {10}, in Tally: {11}; the entry at the stub {12} (Tally free {13}; the first try after that {14}); the bridge's busy lines: {15}" -f `
+    $tSave.ToString('HH:mm:ss'), $tFree.ToString('HH:mm:ss'), $lat.ms, $tSave.ToString('HH:mm:ss'), $(($tries | ForEach-Object { "try $($_.n) at $($_.at) ($($_.id)) next $($_.next)" }) -join '; '), ($steps -join ', '), $(if ($back) { $back.Substring(0, [Math]::Min(120, $back.Length)) } else { 'not seen' }), $(if ($off.Count) { $off -join ' | ' } else { 'none' }), $tPost.ToString('HH:mm:ss'), ($pt -join ','), ($pu -join '; '), $posted, $(if ($tArr) { $tArr } else { 'NOT arrived' }), $tFree.ToString('HH:mm:ss'), $(if ($firstAfter) { $firstAfter.next } else { 'none' }), ($busy -join ' | ')
   if (-not $tries.Count) { Result 'R1 retry schedule' $false "$txt; no try in bridge 1's log (did the bridge ask before the suspension?)" $true }
   else { Result 'R1 retry schedule' ($stepsOk -and $off.Count -eq 0 -and $posted -and $arrOk) $txt }
 }
@@ -445,8 +450,8 @@ function S231Run {
     if ($we.Count) { $w += "; only empty in: $(($we | ForEach-Object { $_.label }) -join ', ')" }
     Add-Content -Path $resultsFile -Encoding UTF8 -Value "TAG $($t.tag): $w"
   }
-  try { S231Retry } catch { Result 'R1 retry schedule' $false "the harness stopped: $_" $true }
   try { S231TdsKeys } catch { Result 'S5 TDS entered on the screen' $false "the harness stopped: $_" $true }
+  try { S231Retry } catch { Result 'R1 retry schedule' $false "the harness stopped: $_" $true }
   # ---- the captures: kept with the run and copied for the bridge's tests
   $s231.manifest['_run'] = "run $env:GITHUB_RUN_ID, bridge $env:BRIDGE_SHA, TallyPrime 7.1 Educational on $env:RUNNER_OS, $(Get-Date -Format 'yyyy-MM-dd HH:mm')"
   $s231.manifest | ConvertTo-Json | Set-Content (Join-Path $s231.cap 'manifest.json') -Encoding UTF8
