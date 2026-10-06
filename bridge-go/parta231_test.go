@@ -392,6 +392,16 @@ func TestPartALinesOneRequestEach(t *testing.T) {
 func TestPartATurnTimeUsedNextTurn(t *testing.T) {
 	p, f, c := partABridge(t)
 	setCfg("RecorderBodySec", float64(1)) // less than the first request takes on the stand: one entry a turn
+	// each entry request takes 1.1 s on the stand (review M1 made the company list a background read under the 2 s stop,
+	// and no longer the slow part of a turn: the time is now the entry requests' own, as on a real Tally)
+	f.mu.Lock()
+	f.slow = func(id, body string) time.Duration {
+		if id == vchByMasterID {
+			return 1100 * time.Millisecond
+		}
+		return 0
+	}
+	f.mu.Unlock()
 	var ls []string
 	for _, v := range partAVchs {
 		ls = append(ls, "FCR1|ev=voucher_accept_post|t0=2-Oct-26 10:55|tw=2-Oct-26 10:55|cguid="+spikeCoGUID+"|cname="+spikeCo+
