@@ -104,8 +104,10 @@ CHECK 8 - A BANK PAYMENT WITH A UTR
 CHECK 9 - A PAYMENT WITH TDS
    Make a Payment (or Journal) with TDS deducted on a party with a TDS nature of payment, narration "TRIAL 231 tds".
    Save it.
-   You should see: within a minute, in the books with its TDS details: nature of payment, rate, amount. (The section
-   and deductee type are not on the entry in Tally; they stay blank here.)
+   You should see: within a minute, in the books with its TDS details: nature of payment, section, rate, amount, and
+   the party's deductee type (once the ledger list of 2.3.1 has come). Note what Tally shows as the section; if FinCom
+   shows the section blank, send a picture of the entry's TDS details in Tally (the section field is not yet seen from a
+   real Tally).
    If not, send: its number, the time, a picture of the entry in Tally, and the Show log lines.
 
 CHECK 10 - A JOURNAL WITH COST CENTRES

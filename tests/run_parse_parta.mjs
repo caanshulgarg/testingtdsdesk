@@ -39,7 +39,7 @@ const CASES = [
   ["partA-receipt-against-bill.xml", "receipt against a bill", (v) => [
     [J(v.banks), J([{n: 1, ledger: "Spike Bank", type: "Cheque", no: "000451", date: "20261002", bdate: "20261003"}])], [J(v.items), "[]"]]],
   ["partA-payment-tds.xml", "payment with TDS", (v) => [
-    [J(v.tds), J([{n: 1, ledger: "TDS on Contract", nature: "Payment to Contractors", party: "Spike Contractor", rate: 2, base: 100000, tax: 2000}])],
+    [J(v.tds), J([{n: 1, ledger: "TDS on Contract", nature: "Payment to Contractors", party: "Spike Contractor", rate: 2, base: 100000, tax: 2000, section: "", sectionFrom: ""}])],
     [J(v.banks), J([{n: 2, ledger: "Spike Bank", type: "e-Fund Transfer", no: "UTR26100200991", date: "20261002", bdate: ""}])]]],
   ["partA-journal-cost-centres.xml", "journal with cost centres", (v) => [
     [J(v.costs), J([{n: 0, ledger: "Rent", cat: "Primary Cost Category", centre: "Head Office", amt: -20000}, {n: 0, ledger: "Rent", cat: "Primary Cost Category", centre: "Branch", amt: -10000}])]]],
@@ -63,7 +63,7 @@ const strs = (code) => (code.replace(/\/\/[^\n]*/g, "").match(/"[^"]*"/g) || [])
 const block = goSrc.slice(goSrc.indexOf("\tliveFetchField222 = "), goSrc.indexOf("\n)", goSrc.indexOf("\tliveFetchField222 = ")));
 const f222 = strs(block.slice(0, block.indexOf("\tliveFetchField = ")));
 const FETCH = f222 + strs(block.slice(block.indexOf("\tliveFetchField = ") + "\tliveFetchField = liveFetchField222".length));
-ok(FETCH.startsWith("GUID, MASTERID, ALTERID, DATE") && FETCH.includes("ALLINVENTORYENTRIES.STOCKITEMNAME") && FETCH.split(", ").length === 57,
+ok(FETCH.startsWith("GUID, MASTERID, ALTERID, DATE") && FETCH.includes("ALLINVENTORYENTRIES.STOCKITEMNAME") && FETCH.split(", ").length === 58,
   "the fetch read from recorder_live.go: " + FETCH.split(", ").length + " fields");
 function cut(voucher, fetch) {
   const want = new Set(fetch.split(", "));
@@ -91,6 +91,48 @@ for (const [file, what] of CASES) {
   ok(J(part) === J(whole), what + ": the body as the 2.3.1 request fetches it reads exactly as the whole voucher" + (J(part) === J(whole) ? "" : ": " + J(part).slice(0, 300)));
   const old = parseDay(cut(x, OLDFETCH));
   ok(J(old) !== J(whole), what + ": the body as the request before part A fetched it lacked some of it");
+}
+
+// ---- 2b. the TDS section (the owner, 06-Oct-2026: "section ... deductee type"): Tally's own, from the entry's bill-wise
+// detail (TDSDEDUCTEESECTIONNUMBER, a field TallyPrime 7.1 writes on every bill allocation); else the section written in
+// the nature of payment's name; else blank (never guessed). The deductee type is the party ledger's (masters, part B)
+{
+  const T = read("partA-payment-tds.xml");
+  const tdsLine = T.indexOf("<LEDGERNAME TYPE=\"String\">TDS on Contract</LEDGERNAME>");
+  const at = T.indexOf("<BILLALLOCATIONS.LIST>      </BILLALLOCATIONS.LIST>", tdsLine);
+  const withSec = T.slice(0, at) + "<BILLALLOCATIONS.LIST><NAME TYPE=\"String\">PAY-9</NAME><BILLTYPE TYPE=\"String\">New Ref</BILLTYPE>" +
+    "<TDSDEDUCTEESECTIONNUMBER TYPE=\"String\">194C</TDSDEDUCTEESECTIONNUMBER><AMOUNT TYPE=\"Amount\">2000.00</AMOUNT></BILLALLOCATIONS.LIST>" +
+    T.slice(at + "<BILLALLOCATIONS.LIST>      </BILLALLOCATIONS.LIST>".length);
+  const a = one(withSec).tds[0] || {};
+  ok(a.section === "194C" && a.sectionFrom === "Tally's entry" && J(one(withSec).checks) === "[]", "the section from the entry's bill-wise detail: " + J(a));
+  const x = el(withSec);
+  ok(J(parseDay(cut(x, FETCH)).vouchers[0].tds) === J(parseDay(x).vouchers[0].tds), "the request's fetch carries the section field (TDSDEDUCTEESECTIONNUMBER)");
+  const b = one(T.replace("<CATEGORY TYPE=\"String\">Payment to Contractors</CATEGORY>", "<CATEGORY TYPE=\"String\">194C - Payment to Contractors</CATEGORY>")).tds[0] || {};
+  ok(b.section === "194C" && b.sectionFrom === "the nature of payment's name", "the section written in the nature's name: " + J(b));
+  const c = one(T).tds[0] || {};
+  ok(c.section === "" && c.sectionFrom === "", "neither: blank, never guessed (" + J(c) + ")");
+  const d = one(T.replace("<CATEGORY TYPE=\"String\">Payment to Contractors</CATEGORY>", "<CATEGORY TYPE=\"String\">Contract 1940 work</CATEGORY>")).tds[0] || {};
+  ok(d.section === "", "a number inside a word is no section (" + J(d) + ")");
+}
+
+// ---- 2c. one invoice with 50 items (tests/tools/mk_sales50.py): read whole, every item, no check failing, the body as
+// fetched the same
+{
+  const x = el(read("partA-sales-50-items.xml")), v = one(x);
+  const tax = v.items.reduce((t, it) => t + it.cgst + it.sgst, 0);
+  ok(v.items.length === 50 && J(v.checks) === "[]" && Math.abs(tax - 2 * 9676.75) <= 1 && v.items[49].hsn === "1050" && v.items[49].qty === 50,
+    "50 items: all read, the items' tax " + tax.toFixed(2) + " against the GST lines 19353.50, no check failing (" + J(v.checks) + ")");
+  ok(J(parseDay(cut(x, FETCH))) === J(parseDay(x)), "50 items: the body as the request fetches it (" + cut(x, FETCH).length + " characters) reads as the whole one");
+}
+
+// ---- 2d. round-3 L1 for the credit period (part C's finding): a long run of "<BILLCREDITPERIOD x" never closed inside a
+// bill allocation is read in linear time (the attributes stop at the next "<"), and a real credit period still reads
+{
+  const S0 = read("partA-sales-two-rates.xml");
+  const bad = S0.replace(/<BILLCREDITPERIOD JD[^\n]*<\/BILLCREDITPERIOD>/, "<BILLCREDITPERIOD x=1 ".repeat(40000));
+  const t0 = Date.now(); parseDay(bad); const ms = Date.now() - t0;
+  ok(ms < 1500, "a long attribute-like run in a bill allocation read in " + ms + " ms");
+  ok(one(S0).dues.length === 0 && J(parseDay(S0).lines[0][5]) === J([["201", "New Ref", -3410, 30]]), "the credit period still reads (30 days): " + J(parseDay(S0).lines[0][5]));
 }
 
 // ---- 3. the owner's accuracy rules: each failure held in plain words; within one rupee of rounding passes

@@ -14,8 +14,11 @@
 --                        Tally does: Tally 7.1 writes no tax amount per item line; tax_basis says so)
 --     tally_cost_allocs  cost category and cost centre allocations, on ledger lines and on the ledger lines under items
 --     tally_bank_allocs  bank details on bank lines: transaction type, instrument number or UTR, instrument date, bank date
---     tally_tds_lines    TDS details where present: nature of payment, rate, assessable value, tax, the deductee (section
---                        and deductee type: not in Tally's voucher; left blank, the masters carry them)
+--     tally_tds_lines    TDS details where present: nature of payment, section (Tally's own from the entry's bill-wise
+--                        detail TDSDEDUCTEESECTIONNUMBER, else the section written in the nature's name, else blank:
+--                        section_from says which), rate, assessable value, tax, the deductee and the deductee type
+--     tally_ledgers.tds_deductee_type   the party ledger master's TDSDEDUCTEETYPE (written by the ledger list once part B's
+--                        ledger request fetches it); tally_tds_details(book) (members of the firm) reads the current one
 --     tally_bills.due    a due date Tally keeps as a date (a credit period "15-Nov-2026"), besides the credit days (48)
 --   Each detail row carries its entry (guid), AlterID, day and line number (the line's place in the entry as parse.js reads
 --   it) and gone_at: a re-sent entry's earlier rows are marked gone (gone_at, kept as history), never removed. Readers take
@@ -123,6 +126,11 @@ create table if not exists public.tally_tds_lines (
   at timestamptz not null default now(),
   gone_at timestamptz
 );
+-- the TDS section's source ("Tally's entry": the entry's bill-wise detail; "the nature of payment's name"; '' unknown), and
+-- the party ledger's deductee type (the ledger master's TDSDEDUCTEETYPE; written by the ledger list once part B's ledger
+-- request fetches it; '' until then)
+alter table public.tally_tds_lines add column if not exists section_from text not null default '';
+alter table public.tally_ledgers add column if not exists tds_deductee_type text not null default '';
 create index if not exists tally_item_lines_now on public.tally_item_lines (book_id, guid) where gone_at is null;
 create index if not exists tally_item_lines_hsn on public.tally_item_lines (book_id, day, hsn) where gone_at is null;
 create index if not exists tally_cost_allocs_now on public.tally_cost_allocs (book_id, guid) where gone_at is null;
@@ -195,9 +203,11 @@ begin
    where jsonb_typeof(b) = 'object';
   update tally_tds_lines t set gone_at = now() from (select z->>'guid' as guid, (z->>'alter')::bigint as alter_id, (z->>'day')::date as day, z->'x' as x from jsonb_array_elements(din) z) d
    where t.book_id = p_book and t.guid = d.guid and t.gone_at is null and not (k and jsonb_array_length(coalesce(d.x->'tds', '[]'::jsonb)) = 0);
-  insert into tally_tds_lines (book_id, firm_id, guid, alter_id, day, line_no, ledger, nature, rate, assessable, amount, party)
+  insert into tally_tds_lines (book_id, firm_id, guid, alter_id, day, line_no, ledger, nature, rate, assessable, amount, party, section, section_from, deductee_type)
   select p_book, f, d.guid, d.alter_id, d.day, coalesce((t->>'n')::integer, 0), tally_nm(coalesce(t->>'ledger', '')), left(coalesce(t->>'nature', ''), 200),
-         nullif(t->>'rate', '')::numeric, nullif(t->>'base', '')::numeric, nullif(t->>'tax', '')::numeric, tally_nm(coalesce(t->>'party', ''))
+         nullif(t->>'rate', '')::numeric, nullif(t->>'base', '')::numeric, nullif(t->>'tax', '')::numeric, tally_nm(coalesce(t->>'party', '')),
+         left(coalesce(t->>'section', ''), 20), case when coalesce(t->>'section', '') = '' then '' else left(coalesce(t->>'sectionFrom', ''), 40) end,
+         coalesce((select l.tds_deductee_type from tally_ledgers l where l.book_id = p_book and l.name = tally_nm(coalesce(t->>'party', '')) limit 1), '')
     from (select z->>'guid' as guid, (z->>'alter')::bigint as alter_id, (z->>'day')::date as day, z->'x' as x from jsonb_array_elements(din) z) d, jsonb_array_elements(case when jsonb_typeof(d.x->'tds') = 'array' then d.x->'tds' else '[]'::jsonb end) t
    where jsonb_typeof(t) = 'object';
   -- a due date Tally keeps as a date, on the bill the entry path stored just now (the same ledger, name, type and amount)
@@ -208,6 +218,30 @@ begin
      and b.due is distinct from tally_d8(u->>'due');
 end $function$;
 revoke all on function public.tally_ingest_details(uuid, jsonb, boolean) from public, anon, authenticated, service_role;
+-- the TDS details as members read them (as 56's tally_unknown_ledger_entries: the caller's firm, my_firm(); the service
+-- role or owner names the book): the deductee type the party ledger has now (the ledger master's TDSDEDUCTEETYPE, part B),
+-- else the one stored with the line; the section and where it came from
+create or replace function public.tally_tds_details(p_book uuid)
+returns table (book_id uuid, guid text, day date, line_no integer, ledger text, nature text, section text, section_from text, rate numeric,
+               assessable numeric, amount numeric, party text, deductee_type text)
+language plpgsql stable security definer set search_path = public, pg_temp as $function$
+#variable_conflict use_column
+declare f uuid := my_firm(); svc boolean := tally_service_or_owner();
+begin
+  if f is null and not svc then raise exception 'not allowed' using errcode = '42501'; end if;
+  if svc and f is null and p_book is null then raise exception 'which book?'; end if;
+  return query
+    select t.book_id, t.guid, t.day, t.line_no, t.ledger, t.nature, t.section, t.section_from, t.rate, t.assessable, t.amount, t.party,
+           coalesce(nullif((select x.tds_deductee_type from tally_ledgers x where x.book_id = t.book_id and x.name = t.party and x.deleted_at is null limit 1), ''), t.deductee_type)
+      from tally_tds_lines t
+      join tally_books b on b.book_id = t.book_id
+      join tally_vouchers v on v.book_id = t.book_id and v.guid = t.guid and v.deleted_at is null
+     where t.gone_at is null and (p_book is null or t.book_id = p_book) and (b.firm_id = f or (svc and f is null))
+     order by t.day, t.guid, t.line_no
+     limit 5000;
+end $function$;
+revoke all on function public.tally_tds_details(uuid) from public, anon;
+grant execute on function public.tally_tds_details(uuid) to authenticated, service_role;
 
 -- ---------------------------------------------------------------- 2. the entry path: 56's 5-argument form, the details written after the entries
 -- 56's text; the one return replaced by the details and the re-applied delete (cancel)

@@ -16,16 +16,18 @@
 --          invoice moved to another customer keeps none of the old customer's); a blank cmp (the company's own GSTIN)
 --          whatever the party; a malformed refDate sent is passed on as sent (review L4a); a non-blank value sent always
 --          wins (a NEW value updates it);
---        - each sent line with a blank HSN or no rate (tally_recorder_keep_lines) takes the value of the stored line it
---          pairs with (tally_recorder_pair_lines, review M1), per entry and ledger: the same number of lines -> one-to-one,
---          never a stored line twice (the same amount first, the k-th with the k-th; then the rest the k-th with the k-th
---          in order); a different number -> only when every stored line of that ledger has the same HSN and rate. A value
---          sent always wins.
+--        - each sent line with a blank HSN or no rate (tally_recorder_keep_lines) gets them from the entry's CURRENT lines
+--          (tally_lines; never from version rows, which are history), ledger by ledger, by this rule
+--          (tally_recorder_pair_lines; the same rule in the repair):
+--            a) every stored line of the ledger has the same HSN and the same rate: every sent line of it gets them;
+--            b) else, if the sent amounts of the ledger are exactly the stored amounts (the same amounts, as many times
+--               each): each line gets the values of the stored line of the same amount;
+--            c) else none: HSN and rate stay blank on that ledger's lines. A visible blank is better than a wrong but
+--               plausible rate; the next Day Book, or bridge 2.3.1, fills them.
+--          A value sent always wins.
 --        - neither for an entry the bridge marks complete ("full": true; see 2.3.1 below).
---      THE LINE ORDER (the owner's "keep each line in its original order"): tally_lines has NO position / sequence column,
---      so no reliable stored line order exists. The only stored order is the element order of the entry's version row
---      (tally_voucher_versions.lines), which tally_voucher_version_lines writes sorted by ledger and amount (lines of equal
---      ledger and amount in the order the rows were read). That is what 56 uses, after pairing equal amounts first.
+--      No line order is used: tally_lines has no position / sequence column, so no stored line order exists; where an
+--      order is needed (several lines of one amount) both sides are taken by amount.
 --      48's 4-argument and 44's 3-argument forms are not touched: the Day Book days path (tally_ingest_day -> the
 --      3-argument form) and every other caller keep today's behaviour exactly: a full Day Book is authoritative.
 --      tally_recorder_line: 53's text, the one call changed to tally_ingest_entries(p_book, vs, p_line->'lines', not once,
@@ -52,8 +54,9 @@
 --      tally_ledgers for that book (or only there marked deleted), with those ledgers' names; p_book null: every book of
 --      the caller's firm. Read-only; members read their own firm's books (my_firm()); granted to authenticated and the
 --      service role. The app's Sync activity (and a client's Books page) lists them in plain words.
---   REVIEW NOTES (06-Oct-2026). Fixed here: H1 (party), M1 (one-to-one pairing), M2 (the log's grants and sequence), L4a
---   (a malformed ref date), L2 (the repair works out its list once). Left as notes, not changed by 56: L1, L3, L4b, L4c
+--   REVIEW NOTES (06-Oct-2026). Fixed here: H1 (party), M1 / M-B (the line rule above, no pairing by order), M-A (the keep
+--   reads the current lines, so a repaired value stays), M2 (the log's grants and sequence), L4a (a malformed ref date),
+--   L2 (the repair works out its list once). Left as notes, not changed by 56: L1, L3, L4b, L4c
 --   (as the review lists them).
 --   2.3.1 (forward note, part A): once the bridge fetches HSN, rate, ref and the party's GSTIN, a blank from it is a real
 --   removal, so the keep must not apply to bodies that carry those fields. Part A marks such an entry "full": true in its
@@ -96,17 +99,15 @@ begin
 end $function$;
 revoke all on function public.tally_recorder_keep_vouchers(uuid, jsonb) from public, anon, authenticated, service_role;
 
--- the one rule pairing an entry's lines of one ledger with its earlier lines of that ledger (review M1; the keep and the
--- repair both use it). p_sent: [{k, g, l, amt, o}] (k: the line's key, g: the entry, l: the ledger, o: its order);
--- p_stored: [{g, l, amt, o, hsn, rate}]. Per entry and ledger:
---   the same number of lines on both sides: one-to-one, never a stored line twice: first the lines whose amount is the
---     same (several of one amount: the k-th with the k-th, in order), then the rest the k-th with the k-th in order;
---   a different number: every line gets the stored HSN and rate only when all the stored lines of that ledger have the
---     same HSN and the same rate; else nothing.
--- THE ORDER: tally_lines has no position column, so no stored line order exists. The stored side's o is the element order
--- of the entry's version row (tally_voucher_versions.lines), which tally_voucher_version_lines writes sorted by ledger and
--- amount (equal amounts in the order the rows were read): the amount pass therefore comes first, and "in order" among the
--- rest means by amount on the stored side
+-- the one rule giving an entry's lines of one ledger the HSN and rate of its earlier lines of that ledger (re-review M-B;
+-- the keep, tally_recorder_blanked and the repair all use it). p_sent: [{k, g, l, amt, o}] (k: the line's key, g: the
+-- entry, l: the ledger); p_stored: [{g, l, amt, o, hsn, rate}]. For each entry and ledger:
+--   a) every stored line of that ledger has the same HSN and the same rate: every sent line of the ledger gets them;
+--   b) else, the sent amounts of that ledger are exactly the stored amounts (the same amounts, as many times each): each
+--      line gets the values of the stored line of its amount (several lines of one amount: the k-th with the k-th);
+--   c) else nothing: HSN and rate stay blank on every line of that ledger (a visible blank is better than a wrong but
+--      plausible rate; the next Day Book, or bridge 2.3.1, fills them).
+-- No line order is used beyond that (tally_lines has no order column); where an order is needed both sides are by amount
 create or replace function public.tally_recorder_pair_lines(p_sent jsonb, p_stored jsonb)
 returns table (k text, hsn text, rate numeric)
 language sql immutable security definer set search_path = public, pg_temp as $function$
@@ -117,28 +118,27 @@ language sql immutable security definer set search_path = public, pg_temp as $fu
     select n as bid, e->>'g' as g, e->>'l' as l, case when coalesce(e->>'amt', '') ~ '^-?[0-9]+(\.[0-9]+)?$' then (e->>'amt')::numeric end as amt, coalesce((e->>'o')::numeric, n) as o,
            nullif(btrim(coalesce(e->>'hsn', '')), '') as hsn, case when coalesce(e->>'rate', '') ~ '^-?[0-9]+(\.[0-9]+)?$' then (e->>'rate')::numeric end as rate
       from jsonb_array_elements(case when jsonb_typeof(p_stored) = 'array' then p_stored else '[]'::jsonb end) with ordinality as z(e, n)
-  ), na as (select a.g, a.l, count(*) as n from a group by a.g, a.l
-  ), nb as (select b.g, b.l, count(*) as n, count(distinct coalesce(b.hsn, '')) as dh, count(distinct coalesce(b.rate::text, '')) as dr from b group by b.g, b.l
-  ), same as (select na.g, na.l from na join nb on nb.g = na.g and nb.l = na.l where na.n = nb.n
+  ), nb as (
+    select b.g, b.l, min(b.bid) as b0, array_agg(b.amt order by b.amt nulls last) as amts,
+           (count(distinct coalesce(b.hsn, '')) = 1 and count(distinct b.rate) + (case when bool_or(b.rate is null) then 1 else 0 end) = 1) as uniform
+      from b group by b.g, b.l
+  ), na as (
+    select a.g, a.l, array_agg(a.amt order by a.amt nulls last) as amts from a group by a.g, a.l
+  ), uni as (            -- a) one HSN and one rate on every stored line of the ledger
+    select a.k, b.hsn, b.rate from a join nb on nb.g = a.g and nb.l = a.l and nb.uniform join b on b.bid = nb.b0
+  ), same as (           -- b) the same amounts, as many times each
+    select na.g, na.l from na join nb on nb.g = na.g and nb.l = na.l where not nb.uniform and na.amts is not distinct from nb.amts
   ), ea as (select a.*, row_number() over (partition by a.g, a.l, a.amt order by a.o, a.k) as r from a join same s on s.g = a.g and s.l = a.l
   ), eb as (select b.*, row_number() over (partition by b.g, b.l, b.amt order by b.o, b.bid) as r from b join same s on s.g = b.g and s.l = b.l
-  ), m1 as (select ea.k, eb.bid, eb.hsn, eb.rate from ea join eb on eb.g = ea.g and eb.l = ea.l and eb.amt = ea.amt and eb.r = ea.r
-  ), ra as (select ea.*, row_number() over (partition by ea.g, ea.l order by ea.o, ea.k) as kk from ea where ea.k not in (select m1.k from m1)
-  ), rb as (select eb.*, row_number() over (partition by eb.g, eb.l order by eb.o, eb.bid) as kk from eb where eb.bid not in (select m1.bid from m1)
-  ), m2 as (select ra.k, rb.hsn, rb.rate from ra join rb on rb.g = ra.g and rb.l = ra.l and rb.kk = ra.kk
-  ), uni as (
-    select a.k, u.hsn, u.rate from a join na on na.g = a.g and na.l = a.l join nb on nb.g = a.g and nb.l = a.l
-      cross join lateral (select b.hsn, b.rate from b where b.g = a.g and b.l = a.l order by b.bid limit 1) u
-     where na.n <> nb.n and nb.dh = 1 and nb.dr = 1
-  )
-  select m1.k, m1.hsn, m1.rate from m1 union all select m2.k, m2.hsn, m2.rate from m2 union all select uni.k, uni.hsn, uni.rate from uni
+  ), m as (select ea.k, eb.hsn, eb.rate from ea join eb on eb.g = ea.g and eb.l = ea.l and eb.amt = ea.amt and eb.r = ea.r)
+  select uni.k, uni.hsn, uni.rate from uni union all select m.k, m.hsn, m.rate from m       -- c) nothing else
 $function$;
 revoke all on function public.tally_recorder_pair_lines(jsonb, jsonb) from public, anon, authenticated, service_role;
 
--- p_lines as sent ([guid, ledger, amount, hsn, rate, bills]): a line with a blank hsn or no rate takes the stored value of
--- the line it pairs with (tally_recorder_pair_lines); a sent value always wins; entries not stored, and entries the
--- bridge marks complete ("full": true in p_vouchers), are passed as sent. The stored side: the entry's current version
--- row's lines (their order), else (an entry stored before migration 37) its tally_lines by ledger and amount
+-- p_lines as sent ([guid, ledger, amount, hsn, rate, bills]): a line with a blank hsn or no rate takes the value
+-- tally_recorder_pair_lines gives it from the entry's CURRENT lines (tally_lines, by amount; re-review M-A: a repaired
+-- line's values are kept by the next line; version rows are history and never read here); a sent value always wins;
+-- entries not stored, and entries the bridge marks complete ("full": true in p_vouchers), are passed as sent
 create or replace function public.tally_recorder_keep_lines(p_book uuid, p_lines jsonb, p_vouchers jsonb)
 returns jsonb language plpgsql stable security definer set search_path = public, pg_temp as $function$
 declare sent jsonb; stored jsonb; pairs jsonb;
@@ -152,24 +152,20 @@ begin
       from jsonb_array_elements(p_lines) with ordinality as t(x, o)
      where jsonb_typeof(x) = 'array' and coalesce(x->>0, '') <> '' and not exists (select 1 from full_g where full_g.g = x->>0)
   ), ent as (
-    select v.guid, ver.lines from tally_vouchers v
-      left join tally_voucher_versions ver on ver.book_id = v.book_id and ver.tally_guid = v.guid and ver.alter_id = coalesce(v.alter_id, 0) and jsonb_typeof(ver.lines) = 'array'
+    select v.guid from tally_vouchers v
      where v.book_id = p_book and v.guid in (select inc.g from inc group by inc.g having bool_or(btrim(coalesce(inc.x->>3, '')) = '' or nullif(btrim(coalesce(inc.x->>4, '')), '') is null))
   )
   select (select coalesce(jsonb_agg(jsonb_build_object('k', inc.o::text, 'g', inc.g, 'l', inc.l, 'amt', inc.amt, 'o', inc.o)), '[]'::jsonb) from inc where inc.g in (select ent.guid from ent)),
-         (select coalesce(jsonb_agg(s.e), '[]'::jsonb) from (
-            select jsonb_build_object('g', e.guid, 'l', tally_nm(z.el->>0), 'amt', z.el->>1, 'o', z.ord, 'hsn', z.el->>2, 'rate', z.el->>3) as e
-              from ent e cross join lateral jsonb_array_elements(e.lines) with ordinality as z(el, ord) where e.lines is not null and jsonb_typeof(z.el) = 'array'
-            union all
-            select jsonb_build_object('g', l.guid, 'l', l.ledger, 'amt', l.amount::text, 'o', row_number() over (partition by l.guid order by l.ledger, l.amount), 'hsn', l.hsn, 'rate', l.rate::text)
-              from tally_lines l join ent e on e.guid = l.guid and e.lines is null where l.book_id = p_book) s)
+         (select coalesce(jsonb_agg(jsonb_build_object('g', l.guid, 'l', l.ledger, 'amt', l.amount::text, 'o', l.o, 'hsn', l.hsn, 'rate', l.rate::text)), '[]'::jsonb)
+            from (select l.*, row_number() over (partition by l.guid, l.ledger order by l.amount, l.hsn, l.rate) as o
+                    from tally_lines l join ent e on e.guid = l.guid where l.book_id = p_book) l)
     into sent, stored;
   if jsonb_array_length(sent) = 0 then return p_lines; end if;
   select coalesce(jsonb_object_agg(pl.k, jsonb_build_object('hsn', pl.hsn, 'rate', pl.rate)), '{}'::jsonb) into pairs from tally_recorder_pair_lines(sent, stored) pl;
   return (
     select coalesce(jsonb_agg(
              case when p.v is null then a.x
-                  when (btrim(coalesce(a.x->>3, '')) = '' and btrim(coalesce(p.v->>'hsn', '')) <> '') or (nullif(btrim(coalesce(a.x->>4, '')), '') is null and p.v->'rate' is not null and jsonb_typeof(p.v->'rate') = 'number') then
+                  when (btrim(coalesce(a.x->>3, '')) = '' and btrim(coalesce(p.v->>'hsn', '')) <> '') or (nullif(btrim(coalesce(a.x->>4, '')), '') is null and jsonb_typeof(p.v->'rate') = 'number') then
                     jsonb_build_array(a.x->0, a.x->1, a.x->2,
                       case when btrim(coalesce(a.x->>3, '')) = '' and btrim(coalesce(p.v->>'hsn', '')) <> '' then p.v->'hsn' else a.x->3 end,
                       case when nullif(btrim(coalesce(a.x->>4, '')), '') is null and jsonb_typeof(p.v->'rate') = 'number' then p.v->'rate' else a.x->4 end)
@@ -718,7 +714,7 @@ begin
   ), lns as (
     -- the entries' current lines (no order column exists: by amount, the row handle among equal ones)
     select e.guid, e.vtype, e.vno, e.day, e.alter_id, l.ledger, l.amount, l.hsn, l.rate, l.ctid as at_, e.alters, e.max_alter,
-           row_number() over (partition by l.guid, l.ledger order by l.amount, l.ctid) as o
+           row_number() over (partition by l.guid, l.ledger order by l.amount, l.ctid) as o     -- by amount, as the stored side
       from ent e join tally_lines l on l.book_id = p_book and l.guid = e.guid
   ), grp as (
     select n.guid, n.ledger, max(n.alter_id) as alter_id,

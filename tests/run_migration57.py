@@ -78,7 +78,7 @@ ok(low.count("delete from") == 0, "0. no 'delete from' anywhere in the file (com
 ok(not re.search(r"\bdrop\b", low) and not re.search(r"\btruncate\b", low) and not re.search(r"\balter\s+table\s+\S+\s+(drop|rename)", low), "0. add-only (no drop, no truncate, no rename)")
 ok(not re.search(r"supabase\.co|\.supabase\.|project[_ ]ref|qbocskaiewaxqcvaunzc", low), "0. names no real database")
 FNS = sorted(set(re.findall(r"create or replace function public\.(\w+)\s*\(", text)))
-ok(FNS == sorted(["tally_ingest_details", "tally_ingest_entries", "tally_ingest_day", "tally_ingest_delete"]), "0. the functions of the file (%s)" % FNS)
+ok(FNS == sorted(["tally_ingest_details", "tally_ingest_entries", "tally_ingest_day", "tally_ingest_delete", "tally_tds_details"]), "0. the functions of the file (%s)" % FNS)
 def block(t, start, end):
     i = t.index(start); j = t.index("\n", t.index(end, i)) + 1; return t[i:j]
 m44, m50, m56 = (open(os.path.join(SQLDIR, f)).read() for f in ("migration-44-recorder.sql", "migration-50-recorder-held.sql", "migration-56-keep-fields.sql"))
@@ -193,8 +193,9 @@ try:
     bk = rows("select guid, ledger, txn_type, instrument_no, coalesce(instrument_date::text, '') as idate, coalesce(bank_date::text, '') as bdate from tally_bank_allocs where book_id = %s and gone_at is null order by guid" % q(B))
     ok([(r["guid"][-2:], r["txn_type"], r["instrument_no"], r["idate"], r["bdate"]) for r in bk] == [("18", "Cheque", "000451", "2026-10-02", "2026-10-03"), ("19", "e-Fund Transfer", "UTR26100200991", "2026-10-02", ""), ("1b", "e-Fund Transfer", "SBIN526275123456", "2026-10-02", "2026-10-02")],
        "bank details: the receipt's cheque with its bank date, the TDS payment's and the supplier payment's UTRs (%s)" % bk)
-    td = rows("select ledger, nature, section, rate::text, assessable::text, amount::text, party, deductee_type from tally_tds_lines where book_id = %s and gone_at is null" % q(B))
-    ok([tuple(r.values()) for r in td] == [("TDS on Contract", "Payment to Contractors", "", "2", "100000", "2000", "Spike Contractor", "")], "TDS: nature, rate, assessable value, amount, the deductee; section and deductee type blank (not in Tally's voucher) (%s)" % td)
+    td = rows("select ledger, nature, section, section_from, rate::text, assessable::text, amount::text, party, deductee_type from tally_tds_lines where book_id = %s and gone_at is null" % q(B))
+    ok([tuple(r.values()) for r in td] == [("TDS on Contract", "Payment to Contractors", "", "", "2", "100000", "2000", "Spike Contractor", "")],
+       "TDS: nature, rate, assessable value, amount, the deductee; no section in this entry nor in its nature's name: blank; the party's deductee type not known yet (%s)" % td)
 
     print("== 2. the recorder never blanks; new values replace")
     sv = [v for v in ALLV if v["guid"] == S][0]; sl = [l for l in ALLL if l[0] == S]
@@ -230,6 +231,22 @@ try:
     ok(vx(NG)["del"] != "" and vx(NC)["can"] == "true" and vx(NC)["del"] == "", "the delete is not undone (deleted again); the cancelled one comes in cancelled (%s %s)" % (vx(NG), vx(NC)))
     got = states(apply([rline("x-cr", dict(nv, alter=850), nl[:2], ev="created")]))
     ok(vx(NG)["del"] != "", "another computer's line bringing the deleted entry (AlterID 850 < 900): still deleted (%s)" % got)
+
+    print("== 4b. the TDS section and the deductee type")
+    TG = [v for v in ALLV if v.get("tds")][0]
+    tv = dict(TG, day=D2, tds=[dict(TG["tds"][0], section="194C", sectionFrom="Tally's entry")])
+    db.one("select tally_ingest_details(%s, %s, false)::text" % (q(B), js([tv])))
+    ok([tuple(r.values()) for r in rows("select section, section_from, deductee_type from tally_tds_lines where book_id = %s and guid = %s and gone_at is null" % (q(B), q(TG["guid"])))] == [("194C", "Tally's entry", "")],
+       "the section stored with where it came from")
+    db.sql("insert into tally_ledgers (book_id, firm_id, name, parent) select %s, %s, 'Spike Contractor', 'Sundry Creditors' where not exists (select 1 from tally_ledgers where book_id = %s and name = 'Spike Contractor')" % (q(B), q(F), q(B)))
+    db.sql("update tally_ledgers set tds_deductee_type = 'Company - Resident' where book_id = %s and name = 'Spike Contractor'" % q(B))
+    vd = db.rows("set role authenticated; select section, section_from, deductee_type, party from tally_tds_details(%s) where guid = %s" % (q(B), q(TG["guid"])), OWNER)
+    ok([tuple(r.values()) for r in vd] == [("194C", "Tally's entry", "Company - Resident", "Spike Contractor")], "tally_tds_details(book): the party ledger's deductee type (part B's ledger field TDSDEDUCTEETYPE), read by the firm's member (%s)" % vd)
+    ok(db.one("set role authenticated; select count(*) from tally_tds_details(%s)" % q(B), OTHER) == "0", "tally_tds_details(book): another firm's member reads none")
+    ok(tuple(can(r, "tally_tds_details(uuid)") for r in ROLES) == ("f", "t", "t"), "tally_tds_details(uuid): members and the service role, not anon")
+    db.one("select tally_ingest_details(%s, %s, false)::text" % (q(B), js([dict(TG, day=D2)])))
+    ok([tuple(r.values()) for r in rows("select section, deductee_type from tally_tds_lines where book_id = %s and guid = %s and gone_at is null" % (q(B), q(TG["guid"])))] == [("", "Company - Resident")],
+       "a later body: the deductee type the ledger has is stored with the line")
 
     print("== 5. RLS: the firm's member reads its details, another firm's none")
     ok(int(db.one("set role authenticated; select count(*) from tally_item_lines", OWNER)) > 0 and int(db.one("set role authenticated; select count(*) from tally_bank_allocs where gone_at is null", OWNER)) == 3,
