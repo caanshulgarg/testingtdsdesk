@@ -1,0 +1,680 @@
+[02:12:32] ---- the bridge built from the ref
+bridge source: e628ae0595e30d3de16658edf9406487b7b0be30 2.3.0 notes: which entries enter by themselves and which are held (item invoices until 2.3.1); review round 3 recorded (no High or Medium; Lows to the next build; the cloud balance guard)
+setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.3.0.exe SHA-256 8e8145693224edf5459836323ce187e87e8dbca6eeac0bde494cf64b2ca6a7b9
+setup: FinComBridge-Setup-2.3.0.exe 3307122 bytes SHA256 8E8145693224EDF5459836323CE187E87E8DBCA6EEAC0BDE494CF64B2CA6A7B9
+[02:12:32] ---- the second Windows user (not an administrator)
+user 2: fcuser2 S-1-5-21-1643835476-1616584234-1346609752-1003; administrators: runnervmfi6oq\runneradmin
+user 2's profile: C:\Users\fcuser2
+ SESSIONNAME               USERNAME                 ID  STATE   TYPE        DEVICE 
+ services                                            0  Disc                        
+ rdp-tcp#0                 fcuser2                   1  Active                      
+>console                   runneradmin               2  Active                      
+ 31c5ce94259d4006a9e4                            65536  Listen                      
+ rdp-tcp                                         65537  Listen                      
+
+[02:13:14] user 2's own Windows session by Remote Desktop: True (session 1)
+[shot] r4-03-rdp-session (1024x768)
+task fcu2 registered for fcuser2 (interactive)
+  [as fcuser2] who=runnervmfi6oq\fcuser2 session=1
+  [as fcuser2] no Tally window in session 1; keys '{ENTER}' to the window in front
+  [as fcuser2] shot u2-desktop
+[02:13:42] ---- the stub cloud
+[02:13:45] ---- user 1's Tally (9000) with the add-on; a copy of the program for user 2 first (its own tally.ini and port)
+  still running from the Tally folder: tallyscheduler 5252
+  robocopy:    Bytes :  177.74 m  177.74 m         0         0       512         0
+  robocopy:    Times :   0:00:00   0:00:00                       0:00:00   0:00:00
+  robocopy: 
+  robocopy: 
+  robocopy:    Speed :           2,452,418,381 Bytes/sec.
+  robocopy:    Speed :             140,328.500 MegaBytes/min.
+  robocopy:    Ended : Tuesday, October 6, 2026 2:13:48 AM
+  robocopy: 
+[02:13:48] copy for user 2: robocopy 9, tally.exe there: True
+Tally :9000 answers: True
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[keys] 't' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-00-tally1 (1024x768)
+[ledger Spike Income :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[ledger Salesify Marketing LLP (bill-by-bill) :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[02:14:19] ---- check 8's masters on user 1's Tally: unit, two stock items (GST 18%), Sales/Purchase, CGST/SGST 9%, customer, supplier
+[unit Nos :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[stock item Spike Widget (GST 18%) :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[stock item Spike Gadget (GST 18%) :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[stock items :9000] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>2</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>2</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>1</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[check 8 ledgers :9000] <RESPONSE><CREATED>6</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[stock items :9000] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>8</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>2</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>1</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[02:14:19] ---- user 2's own Tally (9001), run as fcuser2: a company made by keys, then started again with it and the add-on
+  [as fcuser2] pid=9640 session=1 user=runnervmfi6oq\fcuser2
+Tally :9001 (pid 9640) answers: True; owner: fcuser2; session 1 (runner's own: 2)
+  [as fcuser2] keys 'a' -> Tally pid 9640 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys 't' -> Tally pid 9640 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01-tally2-start
+  [as fcuser2] keys '{ENTER}' -> Tally pid 9640 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01b-tally2-create-company
+  [as fcuser2] keys 'FinCom Spike U2' -> Tally pid 9640 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys '^a' -> Tally pid 9640 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01c-tally2-ctrl-a
+[companies :9001] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+  [as fcuser2] keys '^a' -> Tally pid 9640 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01d-tally2-company
+user 2's company made: True, folder 100000
+  [as fcuser2] pid=7336 session=1 user=runnervmfi6oq\fcuser2
+  [as fcuser2] keys 'a' -> Tally pid 7336 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys 't' -> Tally pid 7336 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01e-tally2-gateway
+[ledger Spike Income :9001] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[companies :9001] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>1</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[ledger Spike Party :9001] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[journal :9001 :9001] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>1</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+== user 2's own Tally with its company and the add-on: True
+[02:15:55] ---- the bridges, each installed by its own Windows user with the real setup, just for me; the settings seeded first
+setup as runneradmin (just for me) ended with 0
+  install.log 1: 2026-10-06 02:15:57  Install (just for this user, no service): FinCom Bridge 2.3.0 for runnervmfi6oq\runneradmin (S-1-5-21-1643835476-1616584234-1346609752-500), sole mode, folder C:\Users\runneradmin\AppData\Local\TDS Desk Bridge
+  install.log 1: 2026-10-06 02:16:00  Install: the add-on FinComRecorder.tdl written in C:\ProgramData\FinCom\addon
+  install.log 1: 2026-10-06 02:16:00  Install: the add-on FinComRecorderAnyCompany.tdl written in C:\ProgramData\FinCom\addon
+  install.log 1: 2026-10-06 02:16:00  Install: the recorder folder C:\ProgramData\FinCom\recorder and the add-on folder C:\ProgramData\FinCom\addon are ready (just for this user)
+  install.log 1: 2026-10-06 02:16:00  Install: starts when runnervmfi6oq\runneradmin signs in to Windows (HKCU Run)
+  install.log 1: 2026-10-06 02:16:01  Install: done; the bridge answers on 127.0.0.1:9100
+  install.log 1: 2026-10-06 02:16:01  Setup: FinComBridge.exe install: done, the bridge answers
+  install.log 1: 2026-10-06 02:16:01  Setup: Finished: installed and running (sole mode)
+seed as fcuser2: runnervmfi6oq\fcuser2 session 1 C:\Users\fcuser2\AppData\Local
+  [as fcuser2] exit=0 user=runnervmfi6oq\fcuser2 session=1
+setup as fcuser2 (just for me) ended: exit=0 user=runnervmfi6oq\fcuser2 session=1
+  install.log 2: 2026-10-06 02:16:03  Install (just for this user, no service): FinCom Bridge 2.3.0 for runnervmfi6oq\fcuser2 (S-1-5-21-1643835476-1616584234-1346609752-1003), sole mode, folder C:\Users\fcuser2\AppData\Local\TDS Desk Bridge
+  install.log 2: 2026-10-06 02:16:06  Install: the add-on FinComRecorder.tdl was not written in C:\ProgramData\FinCom\addon: remove C:\ProgramData\FinCom\addon\FinComRecorder.tdl: Access is denied.
+  install.log 2: 2026-10-06 02:16:06  Install: the add-on FinComRecorderAnyCompany.tdl was not written in C:\ProgramData\FinCom\addon: remove C:\ProgramData\FinCom\addon\FinComRecorderAnyCompany.tdl: Access is denied.
+  install.log 2: 2026-10-06 02:16:06  Install: the recorder folder C:\ProgramData\FinCom\recorder and the add-on folder C:\ProgramData\FinCom\addon are ready (just for this user)
+  install.log 2: 2026-10-06 02:16:06  Install: starts when runnervmfi6oq\fcuser2 signs in to Windows (HKCU Run)
+  install.log 2: 2026-10-06 02:16:07  Install: done; the bridge answers on 127.0.0.1:9101
+  install.log 2: 2026-10-06 02:16:07  Setup: FinComBridge.exe install: done, the bridge answers
+  install.log 2: 2026-10-06 02:16:07  Setup: Finished: installed and running (sole mode)
+bridge 1: user runneradmin, port 9100, id go-ed7815cb2eb6, key 24 chars, Owner runnervmfi6oq\runneradmin, OwnerSid S-1-5-21-1643835476-1616584234-1346609752-500
+bridge 2: user fcuser2, port 9101, id go-12ca296f4386, key 24 chars, Owner runnervmfi6oq\fcuser2, OwnerSid S-1-5-21-1643835476-1616584234-1346609752-1003
+[shot] r4-02-bridges (1024x768)
+[02:16:17] ---- 6a: both bridges run at once, on their own ports, as their own users
+  process 9352 as runneradmin in session 2: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" user --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json"
+  process 7784 as runneradmin in session 2: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" worker --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json" --home "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge" --parent 9352
+  process 4888 as runneradmin in session 2: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" tray --quiet --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json"
+  process 8548 as fcuser2 in session 1: "C:\Users\fcuser2\AppData\Local\FinCom Bridge\FinComBridge.exe" user --config "C:\Users\fcuser2\AppData\Local\TDS Desk Bridge\tds-bridge.config.json"
+  process 9048 as fcuser2 in session 1: "C:\Users\fcuser2\AppData\Local\FinCom Bridge\FinComBridge.exe" tray --quiet --config "C:\Users\fcuser2\AppData\Local\TDS Desk Bridge\tds-bridge.config.json"
+  process 7116 as fcuser2 in session 1: "C:\Users\fcuser2\AppData\Local\FinCom Bridge\FinComBridge.exe" worker --config "C:\Users\fcuser2\AppData\Local\TDS Desk Bridge\tds-bridge.config.json" --home "C:\Users\fcuser2\AppData\Local\TDS Desk Bridge" --parent 8548
+  listening 127.0.0.1:9101 pid 7116 user fcuser2
+  listening 127.0.0.1:9100 pid 7784 user runneradmin
+  Tally pid 5696 session 2 owner runneradmin
+  Tally pid 7336 session 1 owner fcuser2
+######## PASS 6a two bridges at once: bridge 1 runneradmin on 127.0.0.1:9100 (pid 7784, session 2, go-ed7815cb2eb6); bridge 2 fcuser2 on 127.0.0.1:9101 (pid 7116, session 1, go-12ca296f4386); both listening at 02:16:18
+[02:16:18] ---- 6b: the /ping proof: HMAC-SHA256(bridge key, nonce || bridge id || port), only to the bridge's own Windows user
+runneradmin -> own bridge, no Origin: {"bridge":"FinCom Tally Bridge","bridgeId":"go-ed7815cb2eb6","impl":"go","loopSec":0,"ok":true,"pid":7784,"port":9100,"runMode":"user","testMode":false,"version":"2.3.0","yours":true}
+runneradmin -> own bridge: {"bridge":"FinCom Tally Bridge","bridgeId":"go-ed7815cb2eb6","impl":"go","loopSec":0,"ok":true,"pairProof":"7f9158ca9b9327a6a543c914f0b916c998a8efc125c51ed58eae78040f4bc528","pid":7784,"port":9100,"proof":"2913778e767977ee7269fd3a5511c746df2146a72fe928923f18fe567f14c367","runMode":"user","testMode":false,"version":"2.3.0","yours":true}
+runneradmin -> user 2's bridge: {"bridge":"FinCom Tally Bridge","impl":"go","loopSec":0,"ok":true,"pid":7116,"runMode":"user","testMode":false,"version":"2.3.0","yours":false}
+as fcuser2 (): {"ownStatus":401,"other":{"bridge":"FinCom Tally Bridge","impl":"go","loopSec":0,"ok":true,"pid":7784,"runMode":"user","testMode":false,"version":"2.3.0","yours":false},"session":1,"own":{"bridge":"FinCom Tally Bridge","bridgeId":"go-12ca296f4386","impl":"go","loopSec":0,"ok":true,"pairProof":"f5acbbf5029758d6dec46595a621f7290d099793224eb9832535a9f02c4acea8","pid":7116,"port":9101,"proof":"8a2b6d4a394a5993878e49635d70e687372a6c36f07d103a2199af33a22479db","runMode":"user","testMode":false,"version":"2.3.0","yours":true},"otherStatus":403,"who":"runnervmfi6oq\\fcuser2"}
+  ok   bridge 1 proves itself to runneradmin: yours=True bridgeId=go-ed7815cb2eb6 port=9100 proof=2913778e767977ee7269fd3a5511c746df2146a72fe928923f18fe567f14c367
+  ok   bridge 1 proof checked against user 2 identity fails: HMAC(key2, nonce||go-12ca296f4386||9101)=ca1775506eb20915ac9b5e4f8b5d8d340d7fec20ddee52b9d7eda83186db1d3b
+  ok   bridge 2 proves itself to fcuser2: yours=True bridgeId=go-12ca296f4386 port=9101 proof=8a2b6d4a394a5993878e49635d70e687372a6c36f07d103a2199af33a22479db
+  ok   bridge 2 proof checked against user 1 identity fails: HMAC(key1, nonce||go-ed7815cb2eb6||9100)=366bef9050d422181849ddf5a30e9ba6f99b78fd9db63811e91dfa7560ead0cd
+  ok   bridge 2 gives runneradmin no proof: yours=False proof= bridgeId=
+  ok   bridge 1 gives fcuser2 no proof: yours=False proof=
+  ok   other users refused 403 beyond /ping: runneradmin: own /status 401, other 403; fcuser2: own /status 401, other 403
+######## PASS 6b /ping proof: bridge 1 proves itself to runneradmin: ok; bridge 1 proof checked against user 2 identity fails: ok; bridge 2 proves itself to fcuser2: ok; bridge 2 proof checked against user 1 identity fails: ok; bridge 2 gives runneradmin no proof: ok; bridge 1 gives fcuser2 no proof: ok; other users refused 403 beyond /ping: ok
+  bridge1 log: 2026-10-06 02:16:00  FinCom Bridge 2.3.0: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+  bridge1 log: 2026-10-06 02:16:00  FinCom Bridge 2.3.0 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+  bridge1 log: 2026-10-06 02:16:00  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+  bridge1 log: 2026-10-06 02:16:00  Recorder: re-scan of the add-on's files for 2.3.0: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+  bridge1 log: 2026-10-06 02:16:00  Check:  - 
+  bridge1 log: 2026-10-06 02:16:00  Nightly catch-up (02:00): Tally is open and nobody has used FinCom for 15 minutes
+  bridge1 log: 2026-10-06 02:16:00  Nightly catch-up: waiting, Tally has just opened; letting it finish loading
+  bridge1 log: 2026-10-06 02:16:03  Tray icon: set to show next to the clock always (Windows 11)
+  bridge1 log: 2026-10-06 02:16:03  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+  bridge1 log: 2026-10-06 02:16:03  Company FinCom Spike Co: its Tally GUID 2aa67ee2-e384-4f2d-9e36-e460f175ef8e is held from now on
+  bridge1 log: 2026-10-06 02:16:04  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=1, ALTMSTID=221 (reading is prospective only: the bridge follows what changes after this)
+  bridge1 log: 2026-10-06 02:16:04  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=1, ALTMSTID=221
+  bridge1 log: 2026-10-06 02:16:04  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=1, ALTMSTID=221)
+  bridge1 log: 2026-10-06 02:16:06  Refused a request from a program of another Windows user (/tray/idle): not your FinCom Bridge
+  bridge1 log: 2026-10-06 02:16:18  Refused a request from a program of another Windows user (/status): not your FinCom Bridge
+  bridge2 log: 2026-10-06 02:16:06  FinCom Bridge 2.3.0: started just for runnervmfi6oq\fcuser2 (no service); it keeps the bridge and its icon running
+  bridge2 log: 2026-10-06 02:16:06  Port 9100 is taken (another Windows user's FinCom Bridge, or another program); this bridge uses port 9101 and remembers it
+  bridge2 log: 2026-10-06 02:16:06  FinCom Bridge 2.3.0 (Go) started on 127.0.0.1:9101: the only bridge on this computer; working for runnervmfi6oq\fcuser2, Windows session 1; runs just for this Windows user (starts at sign-in, no service)
+  bridge2 log: 2026-10-06 02:16:06  Tally is open on port 9001; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+  bridge2 log: 2026-10-06 02:16:06  Recorder: re-scan of the add-on's files for 2.3.0: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+  bridge2 log: 2026-10-06 02:16:06  Check:  - 
+  bridge2 log: 2026-10-06 02:16:06  Nightly catch-up (02:00): Tally is open and nobody has used FinCom for 15 minutes
+  bridge2 log: 2026-10-06 02:16:06  Nightly catch-up: waiting, Tally has just opened; letting it finish loading
+  bridge2 log: 2026-10-06 02:16:09  Tray icon: set to show next to the clock always (Windows 11)
+  bridge2 log: 2026-10-06 02:16:09  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+  bridge2 log: 2026-10-06 02:16:09  Company FinCom Spike U2: its Tally GUID 6e18c1ee-018a-4462-8566-66c7c444ec1e is held from now on
+  bridge2 log: 2026-10-06 02:16:09  Company FinCom Spike U2: its starting point is recorded: ALTVCHID=1, ALTMSTID=209 (reading is prospective only: the bridge follows what changes after this)
+  bridge2 log: 2026-10-06 02:16:09  Company FinCom Spike U2: change numbers read with form a: ALTVCHID=1, ALTMSTID=209
+  bridge2 log: 2026-10-06 02:16:09  Light check of FinCom Spike U2: starting point recorded (ALTVCHID=1, ALTMSTID=209)
+  bridge2 log: 2026-10-06 02:16:18  Refused a request from a program of another Windows user (/status): not your FinCom Bridge (the program asking has no Windows user)
+[02:16:49] ---- steps 1-5 on user 1's Tally (9000), as round 3
+  Tally :9000 voucher mid=1 aid=1 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000001 no=1 cancelled=False
+[keys] 'v' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-10-vouchers (1024x768)
+[keys] '{F6}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '2-10-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Cash{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Spike Income{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-11-particular (1024x768)
+[keys] '700{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-12-created (1024x768)
+  Tally :9000 voucher mid=1 aid=1 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 no=1 cancelled=False
+  bridge1 log: 2026-10-06 02:16:50  Nightly catch-up: waiting, someone is working in Tally
+  bridge1 log: 2026-10-06 02:17:18  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line be68505e…): asking Tally by MasterID
+  bridge1 log: 2026-10-06 02:17:23  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line be68505e…): taken: Tally's GUID 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002, AlterID 2
+  stub 02:17:23 recorder_lines event=created guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 mid=2 aid=2 vch=Receipt/1/20261002 user=runnervmfi6oq\runneradmin bridge=go-ed7815cb2eb6 port=9100 company=FinCom Spike Co body=yes(2434 chars)
+######## PASS 1 create: Tally made mid 2 guid 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002; stub 02:17:23 recorder_lines event=created guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 mid=2 aid=2 vch=Receipt/1/20261002 user=runnervmfi6oq\runneradmin bridge=go-ed7815cb2eb6 port=9100 company=FinCom Spike Co body=yes(2434 chars)
+[02:17:32] ---- check 7's entry: a Receipt from Salesify Marketing LLP with a bill allocation (New Ref SAL-213), by keys
+  Tally :9000 voucher mid=1 aid=1 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 no=1 cancelled=False
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '1-10-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Cash{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Salesify Marketing LLP{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-40-sal-party (1024x768)
+[keys] '450{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-41-sal-billwise (1024x768)
+[keys] 'New Ref{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-42-sal-newref (1024x768)
+[keys] 'SAL-213{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-43-sal-name (1024x768)
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-44-sal-due (1024x768)
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-45-sal-amount (1024x768)
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-46-sal-ctrl-a-0 (1024x768)
+  Tally :9000 voucher mid=1 aid=1 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 no=1 cancelled=False
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-46-sal-ctrl-a-1 (1024x768)
+  Tally :9000 voucher mid=1 aid=1 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000003 no=2 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 no=1 cancelled=False
+check 7 entry saved: mid 3 guid 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000003 no 2
+[02:18:20] ---- check 8's entries: purchase, sales invoice and credit note with items, by keys (item invoice mode)
+  Tally :9000 voucher mid=1 aid=1 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000003 no=2 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 no=1 cancelled=False
+[keys] '{F9}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-50-purchase-type (1024x768)
+[keys] '^h' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-51-purchase-mode (1024x768)
+[keys] 'Item Invoice{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '1-10-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-52-purchase-date (1024x768)
+[keys] 'SUP-101{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-55-purchase-supinv (1024x768)
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-55-purchase-supdate (1024x768)
+[keys] 'Spike Supplier{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-53-purchase-party (1024x768)
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-53b-purchase-party-details-accepted (1024x768)
+[keys] 'Spike Purchase{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-54-purchase-ledger (1024x768)
+[keys] 'Spike Widget{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '10{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '200{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-55-purchase-item-SpikeWidget (1024x768)
+[keys] 'Spike Gadget{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '10{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '300{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-55-purchase-item-SpikeGadget (1024x768)
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-56-purchase-items-done (1024x768)
+[keys] 'Spike CGST{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '450{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Spike SGST{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '450{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-57-purchase-taxes (1024x768)
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-58-purchase-ctrl-a-0 (1024x768)
+  Tally :9000 voucher mid=1 aid=1 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000003 no=2 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 no=1 cancelled=False
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-58-purchase-ctrl-a-1 (1024x768)
+  Tally :9000 voucher mid=1 aid=1 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000003 no=2 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 no=1 cancelled=False
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-58-purchase-ctrl-a-2 (1024x768)
+  Tally :9000 voucher mid=1 aid=1 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000003 no=2 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 no=1 cancelled=False
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'y' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-59-purchase-left (1024x768)
+[keys] 'v' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-59-purchase-vouchers (1024x768)
+check 8 purchase by keys: NOT saved
+  Tally :9000 voucher mid=1 aid=1 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000003 no=2 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 no=1 cancelled=False
+[keys] '{F8}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-50-sales-type (1024x768)
+[keys] '^h' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-51-sales-mode (1024x768)
+[keys] 'Item Invoice{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '1-10-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-52-sales-date (1024x768)
+[keys] 'Spike Trader{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-53-sales-party (1024x768)
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-53b-sales-party-details-accepted (1024x768)
+[keys] 'Spike Sales{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-54-sales-ledger (1024x768)
+[keys] 'Spike Widget{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '2{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '250{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-55-sales-item-SpikeWidget (1024x768)
+[keys] 'Spike Gadget{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '3{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '400{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-55-sales-item-SpikeGadget (1024x768)
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-56-sales-items-done (1024x768)
+[keys] 'Spike CGST{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '153{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Spike SGST{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '153{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-57-sales-taxes (1024x768)
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-58-sales-ctrl-a-0 (1024x768)
+  Tally :9000 voucher mid=1 aid=1 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000003 no=2 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 no=1 cancelled=False
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-58-sales-ctrl-a-1 (1024x768)
+  Tally :9000 voucher mid=1 aid=1 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000003 no=2 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 no=1 cancelled=False
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-58-sales-ctrl-a-2 (1024x768)
+  Tally :9000 voucher mid=1 aid=1 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000003 no=2 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 no=1 cancelled=False
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'y' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-59-sales-left (1024x768)
+[keys] 'v' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-59-sales-vouchers (1024x768)
+check 8 sales by keys: NOT saved
+  Tally :9000 voucher mid=1 aid=1 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000003 no=2 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 no=1 cancelled=False
+[keys] '^{F8}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-50-credit-type (1024x768)
+[keys] '^h' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-51-credit-mode (1024x768)
+[keys] 'Item Invoice{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '1-10-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-52-credit-date (1024x768)
+[keys] 'Spike Trader{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-53-credit-party (1024x768)
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-53b-credit-party-details-accepted (1024x768)
+[keys] 'Spike Sales{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-54-credit-ledger (1024x768)
+[keys] 'Spike Widget{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '1{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '250{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-55-credit-item-SpikeWidget (1024x768)
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-56-credit-items-done (1024x768)
+[keys] 'Spike CGST{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '22.5{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Spike SGST{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '22.5{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-57-credit-taxes (1024x768)
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-58-credit-ctrl-a-0 (1024x768)
+  Tally :9000 voucher mid=1 aid=1 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000003 no=2 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 no=1 cancelled=False
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-58-credit-ctrl-a-1 (1024x768)
+  Tally :9000 voucher mid=1 aid=1 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000003 no=2 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 no=1 cancelled=False
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-58-credit-ctrl-a-2 (1024x768)
+  Tally :9000 voucher mid=1 aid=1 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000003 no=2 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 no=1 cancelled=False
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'y' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-59-credit-left (1024x768)
+[keys] 'v' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-59-credit-vouchers (1024x768)
+check 8 credit by keys: NOT saved
+  Tally :9000 voucher mid=1 aid=1 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000003 no=2 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 no=1 cancelled=False
+[check 8 purchase imported :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>4</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  Tally :9000 voucher mid=1 aid=1 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000003 no=2 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000004 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 no=1 cancelled=False
+[keys] '%g' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '1-10-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-60-purchase-daybook (1024x768)
+[keys] '{F4}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Purchase{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-60b-purchase-type (1024x768)
+[keys] '{END}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-61-purchase-open (1024x768)
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-62-purchase-saved (1024x768)
+check 8 purchase: imported mid 4 guid 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000004, saved again on the screen
+  Tally :9000 voucher mid=1 aid=1 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000003 no=2 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000004 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 no=1 cancelled=False
+[check 8 sales imported :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>5</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  Tally :9000 voucher mid=1 aid=1 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000003 no=2 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000004 no=1 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000005 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 no=1 cancelled=False
+[keys] '%g' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '1-10-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-60-sales-daybook (1024x768)
+[keys] '{F4}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Sales{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-60b-sales-type (1024x768)
+[keys] '{END}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-61-sales-open (1024x768)
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-62-sales-saved (1024x768)
+check 8 sales: imported mid 5 guid 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000005, saved again on the screen
+  Tally :9000 voucher mid=1 aid=1 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000003 no=2 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000004 no=1 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000005 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 no=1 cancelled=False
+[check 8 credit imported :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>6</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  Tally :9000 voucher mid=1 aid=1 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000003 no=2 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000004 no=1 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000005 no=1 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000006 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 no=1 cancelled=False
+[keys] '%g' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '1-10-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-60-credit-daybook (1024x768)
+[keys] '{F4}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Credit Note{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-60b-credit-type (1024x768)
+[keys] '{END}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-61-credit-open (1024x768)
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-62-credit-saved (1024x768)
+check 8 credit: imported mid 6 guid 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000006, saved again on the screen
+[keys] '%g' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '2-10-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-13-daybook (1024x768)
+[keys] '{END}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-14-open (1024x768)
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-15-at-amount (1024x768)
+[keys] '800{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-16-altered (1024x768)
+  Tally :9000 voucher mid=1 aid=1 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000003 no=2 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000004 no=1 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000005 no=1 cancelled=False
+  Tally :9000 voucher mid=6 aid=7 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000006 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=8 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 no=1 cancelled=False
+  bridge1 log: 2026-10-06 02:18:17  Recorder: Receipt 2 of 01-Oct-2026 (MasterID 3, line 04485716…): asking Tally by MasterID
+  bridge1 log: 2026-10-06 02:18:21  Recorder: Receipt 2 of 01-Oct-2026 (MasterID 3, line 04485716…): taken: Tally's GUID 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000003, AlterID 3
+  bridge1 log: 2026-10-06 02:20:06  Recorder: Purchase 1 of 01-Oct-2026 (MasterID none, line d0688ee2…): asking Tally by type and number (a new entry: no MasterID on its line)
+  bridge1 log: 2026-10-06 02:20:06  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+  bridge1 log: 2026-10-06 02:20:06  Recorder: Purchase 1 of 01-Oct-2026 (MasterID none, line d0688ee2…): not found by its type and number yet (ask 1 of 3); asked again shortly
+  bridge1 log: 2026-10-06 02:20:16  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+  bridge1 log: 2026-10-06 02:20:16  Recorder: Purchase 1 of 01-Oct-2026 (MasterID none, line d0688ee2…): not found by its type and number yet (ask 2 of 3); asked again shortly
+  bridge1 log: 2026-10-06 02:20:26  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+  bridge1 log: 2026-10-06 02:20:26  Recorder: Purchase 1 of 01-Oct-2026 (MasterID none, line d0688ee2…): held: not found by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (sent without its body and GUID; FinCom holds the line until it is resolved)
+  bridge1 log: 2026-10-06 02:21:52  Recorder: Sales 1 of 01-Oct-2026 (MasterID none, line 5a589165…): asking Tally by type and number (a new entry: no MasterID on its line)
+  bridge1 log: 2026-10-06 02:21:52  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+  bridge1 log: 2026-10-06 02:21:52  Recorder: Sales 1 of 01-Oct-2026 (MasterID none, line 5a589165…): not found by its type and number yet (ask 1 of 3); asked again shortly
+  bridge1 log: 2026-10-06 02:22:02  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+  bridge1 log: 2026-10-06 02:22:02  Recorder: Sales 1 of 01-Oct-2026 (MasterID none, line 5a589165…): not found by its type and number yet (ask 2 of 3); asked again shortly
+  bridge1 log: 2026-10-06 02:22:12  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+  bridge1 log: 2026-10-06 02:22:12  Recorder: Sales 1 of 01-Oct-2026 (MasterID none, line 5a589165…): held: not found by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (sent without its body and GUID; FinCom holds the line until it is resolved)
+  bridge1 log: 2026-10-06 02:23:24  Recorder: Sales 1 of 01-Oct-2026 (MasterID none, line 10cd3fe0…): asking Tally by type and number (a new entry: no MasterID on its line)
+  bridge1 log: 2026-10-06 02:23:24  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+  bridge1 log: 2026-10-06 02:23:24  Recorder: Sales 1 of 01-Oct-2026 (MasterID none, line 10cd3fe0…): not found by its type and number yet (ask 1 of 3); asked again shortly
+  bridge1 log: 2026-10-06 02:23:34  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+  bridge1 log: 2026-10-06 02:23:34  Recorder: Sales 1 of 01-Oct-2026 (MasterID none, line 10cd3fe0…): not found by its type and number yet (ask 2 of 3); asked again shortly
+  bridge1 log: 2026-10-06 02:23:44  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+  bridge1 log: 2026-10-06 02:23:44  Recorder: Sales 1 of 01-Oct-2026 (MasterID none, line 10cd3fe0…): held: not found by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (sent without its body and GUID; FinCom holds the line until it is resolved)
+  bridge1 log: 2026-10-06 02:24:24  Recorder: Sales 1 of 01-Oct-2026 (MasterID none, line 52bfbcc4…): asking Tally by type and number (a new entry: no MasterID on its line)
+  bridge1 log: 2026-10-06 02:24:24  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+  bridge1 log: 2026-10-06 02:24:24  Recorder: Sales 1 of 01-Oct-2026 (MasterID none, line 52bfbcc4…): not found by its type and number yet (ask 1 of 3); asked again shortly
+  bridge1 log: 2026-10-06 02:24:34  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+  bridge1 log: 2026-10-06 02:24:34  Recorder: Sales 1 of 01-Oct-2026 (MasterID none, line 52bfbcc4…): not found by its type and number yet (ask 2 of 3); asked again shortly
+  bridge1 log: 2026-10-06 02:24:44  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+  bridge1 log: 2026-10-06 02:24:44  Recorder: Sales 1 of 01-Oct-2026 (MasterID none, line 52bfbcc4…): held: not found by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (sent without its body and GUID; FinCom holds the line until it is resolved)
+  bridge1 log: 2026-10-06 02:25:36  Recorder: Credit Note 1 of 01-Oct-2026 (MasterID 6, line 7f5c8f5f…): asking Tally by MasterID
+  bridge1 log: 2026-10-06 02:25:40  Recorder: Credit Note 1 of 01-Oct-2026 (MasterID 6, line 7f5c8f5f…): taken: Tally's GUID 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000006, AlterID 7
+  bridge1 log: 2026-10-06 02:26:20  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line ff4a559c…): asking Tally by MasterID
+  bridge1 log: 2026-10-06 02:26:24  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line ff4a559c…): taken: Tally's GUID 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002, AlterID 8
+  bridge1 log: 2026-10-06 02:26:33  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=1; now ALTVCHID=8, ALTMSTID=221
+  bridge2 log: 2026-10-06 02:18:18  Recorder: FinCom Spike Co: lines from a Tally this bridge does not read (company not open here): not sent
+  bridge2 log: 2026-10-06 02:18:21  Keeping FinCom Spike U2 in step: its day book from 20260401 is read at Update now (and the nightly run), a month a request
+  bridge2 log: 2026-10-06 02:18:22  Keeping FinCom Spike U2: ledger list MasterID 1-2000, 4 ledger(s) (0.2s); saved
+  bridge2 log: 2026-10-06 02:18:22  Keeping FinCom Spike U2: ledger list MasterID 2001-end, 0 ledger(s) (0.2s); saved
+  bridge2 log: 2026-10-06 02:18:22  Keeping FinCom Spike U2: the ledger list read (4 ledgers, 28 groups, 3 request(s)): 4 new, 0 changed, 0 renamed, 0 gone
+  bridge2 log: 2026-10-06 02:18:22  Keeping FinCom Spike U2: Reading old entries is off (prospective only); FinComCompany ALTVCHID=1 ALTMSTID=209
+  bridge2 log: 2026-10-06 02:18:22  Nightly catch-up: done (11 request(s) to Tally); the bridge is idle again (next: the nightly catch-up at 02:00, or Update now)
+  stub 02:25:40 recorder_lines event=altered guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000006 mid=6 aid=7 vch=Credit Note/1/20261001 user=runnervmfi6oq\runneradmin bridge=go-ed7815cb2eb6 port=9100 company=FinCom Spike Co body=yes(4672 chars)
+  stub 02:26:24 recorder_lines event=altered guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 mid=2 aid=8 vch=Receipt/1/20261002 user=runnervmfi6oq\runneradmin bridge=go-ed7815cb2eb6 port=9100 company=FinCom Spike Co body=yes(2434 chars)
+######## PASS 2 alter: Tally: mid 2 AlterID 2 -> 8; stub 02:26:24 recorder_lines event=altered guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 mid=2 aid=8 vch=Receipt/1/20261002 user=runnervmfi6oq\runneradmin bridge=go-ed7815cb2eb6 port=9100 company=FinCom Spike Co body=yes(2434 chars)
+[keys] '%g' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '2-10-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-17-daybook (1024x768)
+[keys] '{END}' -> Tally :9000 'TallyPrime:9000'
+[keys] '%2' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-18-duplicate (1024x768)
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-19-dup-at-amount (1024x768)
+[keys] '900{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-20-dup-saved (1024x768)
+  Tally :9000 voucher mid=1 aid=1 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000003 no=2 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000004 no=1 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000005 no=1 cancelled=False
+  Tally :9000 voucher mid=6 aid=7 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000006 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=8 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 no=1 cancelled=False
+  Tally :9000 voucher mid=7 aid=9 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000007 no=3 cancelled=False
+  bridge1 log: 2026-10-06 02:27:12  Recorder: Receipt 3 of 02-Oct-2026 (MasterID 7, line c1f4e49c…): asking Tally by MasterID
+  bridge1 log: 2026-10-06 02:27:16  Recorder: Receipt 3 of 02-Oct-2026 (MasterID 7, line c1f4e49c…): taken: Tally's GUID 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000007, AlterID 9
+  bridge1 log: 2026-10-06 02:27:26  Keeping FinCom Spike Co in step: its day book from 20260401 is read at Update now (and the nightly run), a month a request
+  bridge1 log: 2026-10-06 02:27:27  Keeping FinCom Spike Co: ledger list MasterID 1-2000, 13 ledger(s) (0.2s); saved
+  bridge1 log: 2026-10-06 02:27:27  Keeping FinCom Spike Co: ledger list MasterID 2001-end, 0 ledger(s) (0.2s); saved
+  bridge1 log: 2026-10-06 02:27:27  Keeping FinCom Spike Co: the ledger list read (13 ledgers, 28 groups, 3 request(s)): 13 new, 0 changed, 0 renamed, 0 gone
+  bridge1 log: 2026-10-06 02:27:27  Keeping FinCom Spike Co: Reading old entries is off (prospective only); FinComCompany ALTVCHID=9 ALTMSTID=221
+  bridge1 log: 2026-10-06 02:27:27  Nightly catch-up: done (23 request(s) to Tally); the bridge is idle again (next: the nightly catch-up at 02:00, or Update now)
+  bridge2 log: 2026-10-06 02:26:39  Light check of FinCom Spike U2: unchanged starting point ALTVCHID=1; now ALTVCHID=1, ALTMSTID=209
+  stub 02:27:16 recorder_lines event=created guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000007 mid=7 aid=9 vch=Receipt/3/20261002 user=runnervmfi6oq\runneradmin bridge=go-ed7815cb2eb6 port=9100 company=FinCom Spike Co body=yes(2434 chars) idsMismatch lineGuid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002
+######## PASS 3 Alt+2 copy: Tally made mid 7 guid 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000007; source mid 2 AlterID still 8, no line for it; stub 02:27:16 recorder_lines event=created guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000007 mid=7 aid=9 vch=Receipt/3/20261002 user=runnervmfi6oq\runneradmin bridge=go-ed7815cb2eb6 port=9100 company=FinCom Spike Co body=yes(2434 chars) idsMismatch lineGuid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002
+[keys] '%g' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '2-10-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-21-daybook (1024x768)
+[keys] '{HOME}' -> Tally :9000 'TallyPrime:9000'
+[keys] '%x' -> Tally :9000 'TallyPrime:9000'
+[keys] 'y' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-22-cancelled (1024x768)
+  Tally :9000 voucher mid=1 aid=1 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000003 no=2 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000004 no=1 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000005 no=1 cancelled=False
+  Tally :9000 voucher mid=6 aid=7 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000006 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=10 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 no=1 cancelled=True
+  Tally :9000 voucher mid=7 aid=9 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000007 no=3 cancelled=False
+  bridge1 log: 2026-10-06 02:28:14  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 2b71e658…): asking Tally by MasterID
+  bridge1 log: 2026-10-06 02:28:18  Recorder: FinCom Spike Co: cancel of mid 2: GUID from Tally (asked by MasterID): 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002; the GUID its MasterID makes agrees
+  stub 02:28:18 recorder_lines event=cancelled guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 mid=2 aid=10 vch=Receipt/1/20261002 user=runnervmfi6oq\runneradmin bridge=go-ed7815cb2eb6 port=9100 company=FinCom Spike Co body=none
+######## PASS 4 cancel: Tally cancelled mid 2 guid 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002; stub 02:28:18 recorder_lines event=cancelled guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 mid=2 aid=10 vch=Receipt/1/20261002 user=runnervmfi6oq\runneradmin bridge=go-ed7815cb2eb6 port=9100 company=FinCom Spike Co body=none
+[keys] '%g' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '2-10-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-23-daybook (1024x768)
+[keys] '{END}' -> Tally :9000 'TallyPrime:9000'
+[keys] '%d' -> Tally :9000 'TallyPrime:9000'
+[keys] 'y' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-24-deleted (1024x768)
+  Tally :9000 voucher mid=1 aid=1 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000003 no=2 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000004 no=1 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000005 no=1 cancelled=False
+  Tally :9000 voucher mid=6 aid=7 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000006 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=10 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 no=1 cancelled=True
+  bridge1 log: 2026-10-06 02:28:55  Recorder: Receipt 3 of 02-Oct-2026 (MasterID 7, line a5de8bf5…): asking Tally by MasterID
+  bridge1 log: 2026-10-06 02:29:00  Recorder: FinCom Spike Co: delete of mid 7: not in this Tally (asked by MasterID): proven deleted here
+  bridge1 log: 2026-10-06 02:29:00  Recorder: FinCom Spike Co: delete of mid 7: GUID from the bridge's record: 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000007; the GUID its MasterID makes agrees
+  stub 02:29:00 recorder_lines event=deleted guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000007 mid=7 aid= vch=Receipt/3/20261002 user=runnervmfi6oq\runneradmin bridge=go-ed7815cb2eb6 port=9100 company=FinCom Spike Co body=none
+######## PASS 5 delete: Tally deleted mid 7 guid 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000007; stub 02:29:00 recorder_lines event=deleted guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000007 mid=7 aid= vch=Receipt/3/20261002 user=runnervmfi6oq\runneradmin bridge=go-ed7815cb2eb6 port=9100 company=FinCom Spike Co body=none
+[02:29:09] ---- 6d: user 2's own Tally event (a Receipt on 9001), recorded by user 2's bridge
+  Tally :9001 voucher mid=1 aid=1 guid=6e18c1ee-018a-4462-8566-66c7c444ec1e-00000001 no=1 cancelled=False
+  [as fcuser2] keys 'v' -> Tally pid 7336 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 30-u2-vouchers
+  [as fcuser2] keys '{F6}' -> Tally pid 7336 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys '{F2}' -> Tally pid 7336 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys '2-10-2026{ENTER}' -> Tally pid 7336 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys 'Cash{ENTER}' -> Tally pid 7336 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys 'Spike Income{ENTER}' -> Tally pid 7336 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 31-u2-particular
+  [as fcuser2] keys '450{ENTER}' -> Tally pid 7336 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys '^a' -> Tally pid 7336 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 32-u2-created
+  Tally :9001 voucher mid=1 aid=1 guid=6e18c1ee-018a-4462-8566-66c7c444ec1e-00000001 no=1 cancelled=False
+  Tally :9001 voucher mid=2 aid=2 guid=6e18c1ee-018a-4462-8566-66c7c444ec1e-00000002 no=1 cancelled=False
+  bridge2 log: 2026-10-06 02:29:40  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 07edc8f7…): asking Tally by MasterID
+  bridge2 log: 2026-10-06 02:29:41  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line 07edc8f7…): taken: Tally's GUID 6e18c1ee-018a-4462-8566-66c7c444ec1e-00000002, AlterID 2
+######## PASS 6d user 2 own Tally event: Tally :9001 (as fcuser2) made mid 2 guid 6e18c1ee-018a-4462-8566-66c7c444ec1e-00000002; stub 02:29:41 recorder_lines event=created guid=6e18c1ee-018a-4462-8566-66c7c444ec1e-00000002 mid=2 aid=2 vch=Receipt/1/20261002 user=runnervmfi6oq\fcuser2 bridge=go-12ca296f4386 port=9101 company=FinCom Spike U2 body=yes(2434 chars)
+[02:30:10] ---- 6c: the beats, 6e: every recorder line attributed to the user whose Tally made it
+######## PASS 6c beats: stub 02:30:03 beat x29 bridge=go-ed7815cb2eb6 user=runnervmfi6oq\runneradmin windowsUser=runnervmfi6oq\runneradmin bridgePort=9100 tallyPort=9000 dataFolder=D:\a\_temp\TallyData device=spike-computer-key-user1 computer=runnervmfi6oq | stub 02:30:09 beat x29 bridge=go-12ca296f4386 user=runnervmfi6oq\fcuser2 windowsUser=runnervmfi6oq\fcuser2 bridgePort=9101 tallyPort=9001 dataFolder=C:\fcspike\u2data device=spike-computer-key-user2 computer=runnervmfi6oq
+  all: stub 02:17:23 recorder_lines event=created guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 mid=2 aid=2 vch=Receipt/1/20261002 user=runnervmfi6oq\runneradmin bridge=go-ed7815cb2eb6 port=9100 company=FinCom Spike Co body=yes(2434 chars)
+  all: stub 02:18:21 recorder_lines event=created guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000003 mid=3 aid=3 vch=Receipt/2/20261001 user=runnervmfi6oq\runneradmin bridge=go-ed7815cb2eb6 port=9100 company=FinCom Spike Co body=yes(2604 chars)
+  all: stub 02:20:26 recorder_lines event=created guid='' mid= aid= vch=Purchase/1/20261001 user=runnervmfi6oq\runneradmin bridge=go-ed7815cb2eb6 port=9100 company=FinCom Spike Co body=none heldWhy=not found by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload).
+  all: stub 02:22:12 recorder_lines event=created guid='' mid= aid= vch=Sales/1/20261001 user=runnervmfi6oq\runneradmin bridge=go-ed7815cb2eb6 port=9100 company=FinCom Spike Co body=none heldWhy=not found by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload).
+  all: stub 02:23:44 recorder_lines event=created guid='' mid= aid= vch=Sales/1/20261001 user=runnervmfi6oq\runneradmin bridge=go-ed7815cb2eb6 port=9100 company=FinCom Spike Co body=none heldWhy=not found by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload).
+  all: stub 02:24:44 recorder_lines event=created guid='' mid= aid= vch=Sales/1/20261001 user=runnervmfi6oq\runneradmin bridge=go-ed7815cb2eb6 port=9100 company=FinCom Spike Co body=none heldWhy=not found by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload).
+  all: stub 02:25:40 recorder_lines event=altered guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000006 mid=6 aid=7 vch=Credit Note/1/20261001 user=runnervmfi6oq\runneradmin bridge=go-ed7815cb2eb6 port=9100 company=FinCom Spike Co body=yes(4672 chars)
+  all: stub 02:26:24 recorder_lines event=altered guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 mid=2 aid=8 vch=Receipt/1/20261002 user=runnervmfi6oq\runneradmin bridge=go-ed7815cb2eb6 port=9100 company=FinCom Spike Co body=yes(2434 chars)
+  all: stub 02:27:16 recorder_lines event=created guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000007 mid=7 aid=9 vch=Receipt/3/20261002 user=runnervmfi6oq\runneradmin bridge=go-ed7815cb2eb6 port=9100 company=FinCom Spike Co body=yes(2434 chars) idsMismatch lineGuid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002
+  all: stub 02:28:18 recorder_lines event=cancelled guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 mid=2 aid=10 vch=Receipt/1/20261002 user=runnervmfi6oq\runneradmin bridge=go-ed7815cb2eb6 port=9100 company=FinCom Spike Co body=none
+  all: stub 02:29:00 recorder_lines event=deleted guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000007 mid=7 aid= vch=Receipt/3/20261002 user=runnervmfi6oq\runneradmin bridge=go-ed7815cb2eb6 port=9100 company=FinCom Spike Co body=none
+  all: stub 02:29:41 recorder_lines event=created guid=6e18c1ee-018a-4462-8566-66c7c444ec1e-00000002 mid=2 aid=2 vch=Receipt/1/20261002 user=runnervmfi6oq\fcuser2 bridge=go-12ca296f4386 port=9101 company=FinCom Spike U2 body=yes(2434 chars)
+######## PASS 6e attribution: 11 line(s) from bridge 1 (runneradmin, FinCom Spike Co), 1 from bridge 2 (fcuser2, FinCom Spike U2); misattributed: 0
+[02:30:10] ---- 7: each created/altered/imported line's xml through the cloud's parse.js (parseDay at the bridge ref)
+  parsecheck: 10 line(s), 6 with a body
+  PARSE ok FinCom Spike Co created Receipt/1/20261002 bridge go-ed7815cb2eb6 at 02:17:23: guid 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002; xml 2434 chars; parseDay vouchers 1 (guids 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002), with this GUID 1; type=Receipt no=1 date=20261002 party=Cash; lines: Spike Income 700, Cash -700
+  PARSE ok FinCom Spike Co created Receipt/2/20261001 bridge go-ed7815cb2eb6 at 02:18:21: guid 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000003; xml 2604 chars; parseDay vouchers 1 (guids 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000003), with this GUID 1; type=Receipt no=2 date=20261001 party=Salesify Marketing LLP; lines: Salesify Marketing LLP 450 bills[SAL-213/New Ref/450/], Cash -450
+  PARSE NO FinCom Spike Co created Purchase/1/20261001 bridge go-ed7815cb2eb6 at 02:20:26: guid ; xml 0 chars; parseDay vouchers 0 (guids ), with this GUID 0; type= no= date= party=; lines: none
+  PARSE NO FinCom Spike Co created Sales/1/20261001 bridge go-ed7815cb2eb6 at 02:22:12: guid ; xml 0 chars; parseDay vouchers 0 (guids ), with this GUID 0; type= no= date= party=; lines: none
+  PARSE NO FinCom Spike Co created Sales/1/20261001 bridge go-ed7815cb2eb6 at 02:23:44: guid ; xml 0 chars; parseDay vouchers 0 (guids ), with this GUID 0; type= no= date= party=; lines: none
+  PARSE NO FinCom Spike Co created Sales/1/20261001 bridge go-ed7815cb2eb6 at 02:24:44: guid ; xml 0 chars; parseDay vouchers 0 (guids ), with this GUID 0; type= no= date= party=; lines: none
+  PARSE ok FinCom Spike Co altered Credit Note/1/20261001 bridge go-ed7815cb2eb6 at 02:25:40: guid 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000006; xml 4672 chars; parseDay vouchers 1 (guids 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000006), with this GUID 1; type=Credit Note no=1 date=20261001 party=Spike Trader; lines: Spike Trader 295, Spike Sales -250, Spike CGST -22.5, Spike SGST -22.5
+  PARSE ok FinCom Spike Co altered Receipt/1/20261002 bridge go-ed7815cb2eb6 at 02:26:24: guid 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002; xml 2434 chars; parseDay vouchers 1 (guids 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002), with this GUID 1; type=Receipt no=1 date=20261002 party=Cash; lines: Spike Income 800, Cash -800
+  PARSE ok FinCom Spike Co created Receipt/3/20261002 bridge go-ed7815cb2eb6 at 02:27:16: guid 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000007; xml 2434 chars; parseDay vouchers 1 (guids 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000007), with this GUID 1; type=Receipt no=3 date=20261002 party=Cash; lines: Spike Income 900, Cash -900
+  PARSE ok FinCom Spike U2 created Receipt/1/20261002 bridge go-12ca296f4386 at 02:29:41: guid 6e18c1ee-018a-4462-8566-66c7c444ec1e-00000002; xml 2434 chars; parseDay vouchers 1 (guids 6e18c1ee-018a-4462-8566-66c7c444ec1e-00000002), with this GUID 1; type=Receipt no=1 date=20261002 party=Cash; lines: Spike Income 450, Cash -450
+######## FAIL 7 body through the cloud's parse.js: 10 created/altered line(s) read with parse.js at the bridge ref: 6 with exactly one voucher of the line's GUID and >= 2 non-zero ledger lines, 4 without; the Receipt from Salesify Marketing LLP (entered by keys, Tally mid 3 guid 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000003): type=Receipt no=2 date=20261001 party=Salesify Marketing LLP, 2 line(s), 2 non-zero, 1 bill allocation(s) on the party line
+[02:30:12] ---- 8: item invoices: parse.js (bridge ref) against Tally's own figures, ledger by ledger
+Tally's own export: Day Book 1-10-2026 28515 chars, voucher collection 426003 chars
+  check8: 3 voucher(s), 1 matching Tally
+  CHECK8 purchase (Purchase, imported by the harness, saved on the screen): Tally Purchase no 1 date 20261001, 2 item(s): Spike Supplier 5900, Spike Purchase -5000, Spike CGST -450, Spike SGST -450 (sum 0; from ALLLEDGERENTRIES, the other view agrees: True)
+  CHECK8 sales (Sales, imported by the harness, saved on the screen): Tally Sales no 1 date 20261001, 2 item(s): Spike Trader -2006, Spike Sales 1700, Spike CGST 153, Spike SGST 153 (sum 0; from ALLLEDGERENTRIES, the other view agrees: True)
+  CHECK8 credit (Credit Note, imported by the harness, saved on the screen): Tally Credit Note no 1 date 20261001, 1 item(s): Spike Trader 295, Spike Sales -250, Spike CGST -22.5, Spike SGST -22.5 (sum 0; from ALLLEDGERENTRIES, the other view agrees: True)
+  CHECK8 credit (Credit Note, imported by the harness, saved on the screen): ok altered line at 02:25:40: parse.js voucher(s) 1, type=Credit Note no=1 date=20261001 party=Spike Trader; lines: Spike Trader 295, Spike Sales -250, Spike CGST -22.5, Spike SGST -22.5 (sum 0); differences from Tally: none
+######## FAIL 8 item invoices against Tally: 3 item invoices (purchase imported by the harness, saved on the screen, sales imported by the harness, saved on the screen, credit imported by the harness, saved on the screen), each line read with parse.js at the bridge ref against Tally's own export: 1 matching ledger by ledger and adding to 0; bridge 2.3.0; no line for: purchase (Purchase, imported by the harness, saved on the screen), sales (Sales, imported by the harness, saved on the screen)
+[02:30:12] ---- step 6 as one line
+######## PASS 6 two Windows users: PASS 6a two bridges at once; PASS 6b /ping proof; PASS 6d user 2 own Tally event; PASS 6c beats; PASS 6e attribution
+[02:30:12] ---- what is kept: the bridges' logs, install logs, settings without their keys
+  Tally :9000 voucher mid=1 aid=1 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000003 no=2 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000004 no=1 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000005 no=1 cancelled=False
+  Tally :9000 voucher mid=6 aid=7 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000006 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=10 guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 no=1 cancelled=True
+== results
+INFO setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.3.0.exe SHA-256 8e8145693224edf5459836323ce187e87e8dbca6eeac0bde494cf64b2ca6a7b9; on this runner SHA-256 8e8145693224edf5459836323ce187e87e8dbca6eeac0bde494cf64b2ca6a7b9
+INFO user 2 (fcuser2) works in a Windows session of their own (session 1, by a Remote Desktop connection to 127.0.0.2); runneradmin in session 2
+PASS 6a two bridges at once: bridge 1 runneradmin on 127.0.0.1:9100 (pid 7784, session 2, go-ed7815cb2eb6); bridge 2 fcuser2 on 127.0.0.1:9101 (pid 7116, session 1, go-12ca296f4386); both listening at 02:16:18
+INFO /ping with a nonce but no Origin (own bridge): proof not given
+PASS 6b /ping proof: bridge 1 proves itself to runneradmin: ok; bridge 1 proof checked against user 2 identity fails: ok; bridge 2 proves itself to fcuser2: ok; bridge 2 proof checked against user 1 identity fails: ok; bridge 2 gives runneradmin no proof: ok; bridge 1 gives fcuser2 no proof: ok; other users refused 403 beyond /ping: ok
+PASS 1 create: Tally made mid 2 guid 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002; stub 02:17:23 recorder_lines event=created guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 mid=2 aid=2 vch=Receipt/1/20261002 user=runnervmfi6oq\runneradmin bridge=go-ed7815cb2eb6 port=9100 company=FinCom Spike Co body=yes(2434 chars)
+PASS 2 alter: Tally: mid 2 AlterID 2 -> 8; stub 02:26:24 recorder_lines event=altered guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 mid=2 aid=8 vch=Receipt/1/20261002 user=runnervmfi6oq\runneradmin bridge=go-ed7815cb2eb6 port=9100 company=FinCom Spike Co body=yes(2434 chars)
+PASS 3 Alt+2 copy: Tally made mid 7 guid 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000007; source mid 2 AlterID still 8, no line for it; stub 02:27:16 recorder_lines event=created guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000007 mid=7 aid=9 vch=Receipt/3/20261002 user=runnervmfi6oq\runneradmin bridge=go-ed7815cb2eb6 port=9100 company=FinCom Spike Co body=yes(2434 chars) idsMismatch lineGuid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002
+PASS 4 cancel: Tally cancelled mid 2 guid 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002; stub 02:28:18 recorder_lines event=cancelled guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002 mid=2 aid=10 vch=Receipt/1/20261002 user=runnervmfi6oq\runneradmin bridge=go-ed7815cb2eb6 port=9100 company=FinCom Spike Co body=none
+PASS 5 delete: Tally deleted mid 7 guid 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000007; stub 02:29:00 recorder_lines event=deleted guid=2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000007 mid=7 aid= vch=Receipt/3/20261002 user=runnervmfi6oq\runneradmin bridge=go-ed7815cb2eb6 port=9100 company=FinCom Spike Co body=none
+PASS 6d user 2 own Tally event: Tally :9001 (as fcuser2) made mid 2 guid 6e18c1ee-018a-4462-8566-66c7c444ec1e-00000002; stub 02:29:41 recorder_lines event=created guid=6e18c1ee-018a-4462-8566-66c7c444ec1e-00000002 mid=2 aid=2 vch=Receipt/1/20261002 user=runnervmfi6oq\fcuser2 bridge=go-12ca296f4386 port=9101 company=FinCom Spike U2 body=yes(2434 chars)
+PASS 6c beats: stub 02:30:03 beat x29 bridge=go-ed7815cb2eb6 user=runnervmfi6oq\runneradmin windowsUser=runnervmfi6oq\runneradmin bridgePort=9100 tallyPort=9000 dataFolder=D:\a\_temp\TallyData device=spike-computer-key-user1 computer=runnervmfi6oq | stub 02:30:09 beat x29 bridge=go-12ca296f4386 user=runnervmfi6oq\fcuser2 windowsUser=runnervmfi6oq\fcuser2 bridgePort=9101 tallyPort=9001 dataFolder=C:\fcspike\u2data device=spike-computer-key-user2 computer=runnervmfi6oq
+PASS 6e attribution: 11 line(s) from bridge 1 (runneradmin, FinCom Spike Co), 1 from bridge 2 (fcuser2, FinCom Spike U2); misattributed: 0
+INFO PARSE ok FinCom Spike Co created Receipt/1/20261002 bridge go-ed7815cb2eb6 at 02:17:23: guid 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002; xml 2434 chars; parseDay vouchers 1 (guids 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002), with this GUID 1; type=Receipt no=1 date=20261002 party=Cash; lines: Spike Income 700, Cash -700
+INFO PARSE ok FinCom Spike Co created Receipt/2/20261001 bridge go-ed7815cb2eb6 at 02:18:21: guid 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000003; xml 2604 chars; parseDay vouchers 1 (guids 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000003), with this GUID 1; type=Receipt no=2 date=20261001 party=Salesify Marketing LLP; lines: Salesify Marketing LLP 450 bills[SAL-213/New Ref/450/], Cash -450
+INFO PARSE NO FinCom Spike Co created Purchase/1/20261001 bridge go-ed7815cb2eb6 at 02:20:26: guid ; xml 0 chars; parseDay vouchers 0 (guids ), with this GUID 0; type= no= date= party=; lines: none
+INFO PARSE NO FinCom Spike Co created Sales/1/20261001 bridge go-ed7815cb2eb6 at 02:22:12: guid ; xml 0 chars; parseDay vouchers 0 (guids ), with this GUID 0; type= no= date= party=; lines: none
+INFO PARSE NO FinCom Spike Co created Sales/1/20261001 bridge go-ed7815cb2eb6 at 02:23:44: guid ; xml 0 chars; parseDay vouchers 0 (guids ), with this GUID 0; type= no= date= party=; lines: none
+INFO PARSE NO FinCom Spike Co created Sales/1/20261001 bridge go-ed7815cb2eb6 at 02:24:44: guid ; xml 0 chars; parseDay vouchers 0 (guids ), with this GUID 0; type= no= date= party=; lines: none
+INFO PARSE ok FinCom Spike Co altered Credit Note/1/20261001 bridge go-ed7815cb2eb6 at 02:25:40: guid 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000006; xml 4672 chars; parseDay vouchers 1 (guids 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000006), with this GUID 1; type=Credit Note no=1 date=20261001 party=Spike Trader; lines: Spike Trader 295, Spike Sales -250, Spike CGST -22.5, Spike SGST -22.5
+INFO PARSE ok FinCom Spike Co altered Receipt/1/20261002 bridge go-ed7815cb2eb6 at 02:26:24: guid 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002; xml 2434 chars; parseDay vouchers 1 (guids 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000002), with this GUID 1; type=Receipt no=1 date=20261002 party=Cash; lines: Spike Income 800, Cash -800
+INFO PARSE ok FinCom Spike Co created Receipt/3/20261002 bridge go-ed7815cb2eb6 at 02:27:16: guid 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000007; xml 2434 chars; parseDay vouchers 1 (guids 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000007), with this GUID 1; type=Receipt no=3 date=20261002 party=Cash; lines: Spike Income 900, Cash -900
+INFO PARSE ok FinCom Spike U2 created Receipt/1/20261002 bridge go-12ca296f4386 at 02:29:41: guid 6e18c1ee-018a-4462-8566-66c7c444ec1e-00000002; xml 2434 chars; parseDay vouchers 1 (guids 6e18c1ee-018a-4462-8566-66c7c444ec1e-00000002), with this GUID 1; type=Receipt no=1 date=20261002 party=Cash; lines: Spike Income 450, Cash -450
+FAIL 7 body through the cloud's parse.js: 10 created/altered line(s) read with parse.js at the bridge ref: 6 with exactly one voucher of the line's GUID and >= 2 non-zero ledger lines, 4 without; the Receipt from Salesify Marketing LLP (entered by keys, Tally mid 3 guid 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000003): type=Receipt no=2 date=20261001 party=Salesify Marketing LLP, 2 line(s), 2 non-zero, 1 bill allocation(s) on the party line
+INFO CHECK8 purchase (Purchase, imported by the harness, saved on the screen) guid 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000004: Tally Purchase no 1 date 20261001, 2 item(s): Spike Supplier 5900, Spike Purchase -5000, Spike CGST -450, Spike SGST -450 (sum 0; from ALLLEDGERENTRIES, the other view agrees: True)
+INFO CHECK8 purchase (Purchase, imported by the harness, saved on the screen): no created/altered line with this GUID reached the stub
+INFO CHECK8 sales (Sales, imported by the harness, saved on the screen) guid 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000005: Tally Sales no 1 date 20261001, 2 item(s): Spike Trader -2006, Spike Sales 1700, Spike CGST 153, Spike SGST 153 (sum 0; from ALLLEDGERENTRIES, the other view agrees: True)
+INFO CHECK8 sales (Sales, imported by the harness, saved on the screen): no created/altered line with this GUID reached the stub
+INFO CHECK8 credit (Credit Note, imported by the harness, saved on the screen) guid 2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000006: Tally Credit Note no 1 date 20261001, 1 item(s): Spike Trader 295, Spike Sales -250, Spike CGST -22.5, Spike SGST -22.5 (sum 0; from ALLLEDGERENTRIES, the other view agrees: True)
+INFO CHECK8 credit (Credit Note, imported by the harness, saved on the screen): ok altered line at 02:25:40: parse.js voucher(s) 1, type=Credit Note no=1 date=20261001 party=Spike Trader; lines: Spike Trader 295, Spike Sales -250, Spike CGST -22.5, Spike SGST -22.5 (sum 0); differences from Tally: none
+FAIL 8 item invoices against Tally: 3 item invoices (purchase imported by the harness, saved on the screen, sales imported by the harness, saved on the screen, credit imported by the harness, saved on the screen), each line read with parse.js at the bridge ref against Tally's own export: 1 matching ledger by ledger and adding to 0; bridge 2.3.0; no line for: purchase (Purchase, imported by the harness, saved on the screen), sales (Sales, imported by the harness, saved on the screen)
+PASS 6 two Windows users: PASS 6a two bridges at once; PASS 6b /ping proof; PASS 6d user 2 own Tally event; PASS 6c beats; PASS 6e attribution
+== round 4 end

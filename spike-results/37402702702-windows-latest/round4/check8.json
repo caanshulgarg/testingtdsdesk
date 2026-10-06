@@ -1,0 +1,288 @@
+[
+ {
+  "label": "purchase (Purchase, imported by the harness, saved on the screen)",
+  "guid": "2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000004",
+  "tally": {
+   "view": "ALLLEDGERENTRIES",
+   "viewsAgree": true,
+   "type": "Purchase",
+   "no": "1",
+   "date": "20261001",
+   "items": 2,
+   "rows": [
+    {
+     "list": "ACCOUNTINGALLOCATIONS",
+     "ledger": "Spike Purchase",
+     "amount": -2000
+    },
+    {
+     "list": "ACCOUNTINGALLOCATIONS",
+     "ledger": "Spike Purchase",
+     "amount": -3000
+    },
+    {
+     "list": "LEDGERENTRIES",
+     "ledger": "Spike Supplier",
+     "amount": 5900
+    },
+    {
+     "list": "LEDGERENTRIES",
+     "ledger": "Spike CGST",
+     "amount": -450
+    },
+    {
+     "list": "LEDGERENTRIES",
+     "ledger": "Spike SGST",
+     "amount": -450
+    },
+    {
+     "list": "ALLLEDGERENTRIES",
+     "ledger": "Spike Supplier",
+     "amount": 5900
+    },
+    {
+     "list": "ALLLEDGERENTRIES",
+     "ledger": "Spike Purchase",
+     "amount": -5000
+    },
+    {
+     "list": "ALLLEDGERENTRIES",
+     "ledger": "Spike CGST",
+     "amount": -450
+    },
+    {
+     "list": "ALLLEDGERENTRIES",
+     "ledger": "Spike SGST",
+     "amount": -450
+    }
+   ],
+   "totals": [
+    {
+     "ledger": "Spike Supplier",
+     "amount": 5900
+    },
+    {
+     "ledger": "Spike Purchase",
+     "amount": -5000
+    },
+    {
+     "ledger": "Spike CGST",
+     "amount": -450
+    },
+    {
+     "ledger": "Spike SGST",
+     "amount": -450
+    }
+   ],
+   "sum": 0
+  },
+  "lines": [],
+  "ok": false
+ },
+ {
+  "label": "sales (Sales, imported by the harness, saved on the screen)",
+  "guid": "2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000005",
+  "tally": {
+   "view": "ALLLEDGERENTRIES",
+   "viewsAgree": true,
+   "type": "Sales",
+   "no": "1",
+   "date": "20261001",
+   "items": 2,
+   "rows": [
+    {
+     "list": "ACCOUNTINGALLOCATIONS",
+     "ledger": "Spike Sales",
+     "amount": 500
+    },
+    {
+     "list": "ACCOUNTINGALLOCATIONS",
+     "ledger": "Spike Sales",
+     "amount": 1200
+    },
+    {
+     "list": "LEDGERENTRIES",
+     "ledger": "Spike Trader",
+     "amount": -2006
+    },
+    {
+     "list": "LEDGERENTRIES",
+     "ledger": "Spike CGST",
+     "amount": 153
+    },
+    {
+     "list": "LEDGERENTRIES",
+     "ledger": "Spike SGST",
+     "amount": 153
+    },
+    {
+     "list": "ALLLEDGERENTRIES",
+     "ledger": "Spike Trader",
+     "amount": -2006
+    },
+    {
+     "list": "ALLLEDGERENTRIES",
+     "ledger": "Spike Sales",
+     "amount": 1700
+    },
+    {
+     "list": "ALLLEDGERENTRIES",
+     "ledger": "Spike CGST",
+     "amount": 153
+    },
+    {
+     "list": "ALLLEDGERENTRIES",
+     "ledger": "Spike SGST",
+     "amount": 153
+    }
+   ],
+   "totals": [
+    {
+     "ledger": "Spike Trader",
+     "amount": -2006
+    },
+    {
+     "ledger": "Spike Sales",
+     "amount": 1700
+    },
+    {
+     "ledger": "Spike CGST",
+     "amount": 153
+    },
+    {
+     "ledger": "Spike SGST",
+     "amount": 153
+    }
+   ],
+   "sum": 0
+  },
+  "lines": [],
+  "ok": false
+ },
+ {
+  "label": "credit (Credit Note, imported by the harness, saved on the screen)",
+  "guid": "2aa67ee2-e384-4f2d-9e36-e460f175ef8e-00000006",
+  "tally": {
+   "view": "ALLLEDGERENTRIES",
+   "viewsAgree": true,
+   "type": "Credit Note",
+   "no": "1",
+   "date": "20261001",
+   "items": 1,
+   "rows": [
+    {
+     "list": "ACCOUNTINGALLOCATIONS",
+     "ledger": "Spike Sales",
+     "amount": -250
+    },
+    {
+     "list": "LEDGERENTRIES",
+     "ledger": "Spike Trader",
+     "amount": 295
+    },
+    {
+     "list": "LEDGERENTRIES",
+     "ledger": "Spike CGST",
+     "amount": -22.5
+    },
+    {
+     "list": "LEDGERENTRIES",
+     "ledger": "Spike SGST",
+     "amount": -22.5
+    },
+    {
+     "list": "ALLLEDGERENTRIES",
+     "ledger": "Spike Trader",
+     "amount": 295
+    },
+    {
+     "list": "ALLLEDGERENTRIES",
+     "ledger": "Spike Sales",
+     "amount": -250
+    },
+    {
+     "list": "ALLLEDGERENTRIES",
+     "ledger": "Spike CGST",
+     "amount": -22.5
+    },
+    {
+     "list": "ALLLEDGERENTRIES",
+     "ledger": "Spike SGST",
+     "amount": -22.5
+    }
+   ],
+   "totals": [
+    {
+     "ledger": "Spike Trader",
+     "amount": 295
+    },
+    {
+     "ledger": "Spike Sales",
+     "amount": -250
+    },
+    {
+     "ledger": "Spike CGST",
+     "amount": -22.5
+    },
+    {
+     "ledger": "Spike SGST",
+     "amount": -22.5
+    }
+   ],
+   "sum": 0
+  },
+  "lines": [
+   {
+    "ev": "altered",
+    "at": "02:25:40",
+    "xmlChars": 4672,
+    "match": 1,
+    "type": "Credit Note",
+    "no": "1",
+    "date": "20261001",
+    "party": "Spike Trader",
+    "parsed": [
+     {
+      "ledger": "Spike Trader",
+      "amount": 295
+     },
+     {
+      "ledger": "Spike Sales",
+      "amount": -250
+     },
+     {
+      "ledger": "Spike CGST",
+      "amount": -22.5
+     },
+     {
+      "ledger": "Spike SGST",
+      "amount": -22.5
+     }
+    ],
+    "totals": [
+     {
+      "ledger": "Spike Trader",
+      "amount": 295
+     },
+     {
+      "ledger": "Spike Sales",
+      "amount": -250
+     },
+     {
+      "ledger": "Spike CGST",
+      "amount": -22.5
+     },
+     {
+      "ledger": "Spike SGST",
+      "amount": -22.5
+     }
+    ],
+    "sum": 0,
+    "guardHeld": false,
+    "diffs": [],
+    "ok": true
+   }
+  ],
+  "ok": true
+ }
+]
