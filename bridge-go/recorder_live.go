@@ -1789,7 +1789,7 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 		writeLog(fmt.Sprintf("Recorder: the body of %d entr%s of %s was not read from Tally (%s); sent without it (FinCom holds the line until a body comes)",
 			len(cs), map[bool]string{true: "y", false: "ies"}[len(cs) == 1], company, cutRunes(why, 160)))
 	}
-	port, err := findCompanyPort(company, 0)
+	port, err := findCompanyPortBg(company, 0)
 	if err != nil {
 		if yield() {
 			for _, c := range need {

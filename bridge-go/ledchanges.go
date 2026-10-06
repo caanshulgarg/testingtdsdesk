@@ -119,7 +119,7 @@ func ledOwnPort(company, guid string, preferred int) (int, string) {
 	if !open {
 		return 0, "the company is not open in this bridge's own Tally"
 	}
-	port, err := findCompanyPort(company, preferred)
+	port, err := findCompanyPortBg(company, preferred)
 	if err != nil {
 		return 0, err.Error()
 	}

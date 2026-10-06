@@ -353,7 +353,7 @@ func liveFetchByNumber(cs []*change, sp int64, spOK bool) {
 			liveTurnOff("bodies", key, company, sec)
 		}
 	})
-	port, err := findCompanyPort(company, 0)
+	port, err := findCompanyPortBg(company, 0)
 	if err != nil {
 		if yield() {
 			for _, c := range cs {
@@ -918,7 +918,7 @@ func liveResolveOne(h heldLine) (x, why string, answered, final bool, err error)
 			liveTurnOff("bodies", key, h.Company, sec)
 		}
 	})
-	port, err := findCompanyPort(h.Company, 0)
+	port, err := findCompanyPortBg(h.Company, 0)
 	if err != nil {
 		return "", "", false, false, err
 	}

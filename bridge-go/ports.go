@@ -641,18 +641,37 @@ func findCompany(company string, preferred int) (int, string, error) {
 	return findCompanyIn(company, preferred, []bool{false, true})
 }
 
+// review M1 (06-Oct-2026): the same for a BACKGROUND read (the ledger changes, the recorder's body fetch, its resolve of
+// held lines, its GUID ask): the company list asked under the 2-second hard stop (bgCompaniesTC) and never while it is
+// backed off (coListHeld): then the companies named last time stand. A person's request and a posting use findCompany /
+// findCompanyNow, unchanged
+func findCompanyPortBg(company string, preferred int) (int, error) {
+	p, _, err := findCompanyWith(company, preferred, []bool{false, true}, func(fresh bool) []M {
+		if coListHeld() {
+			return openCompaniesCached()
+		}
+		l, _ := openCompaniesAsk(bgCompaniesTC(), fresh)
+		return l
+	})
+	return p, err
+}
+
 // for a posting: Tally asked now, every time (a list even 30 seconds old may name a company closed since)
 func findCompanyNow(company string, preferred int) (int, string, error) {
 	return findCompanyIn(company, preferred, []bool{true})
 }
 
 func findCompanyIn(company string, preferred int, passes []bool) (int, string, error) {
+	return findCompanyWith(company, preferred, passes, openCompanies)
+}
+
+func findCompanyWith(company string, preferred int, passes []bool, list func(fresh bool) []M) (int, string, error) {
 	var last error
 	for _, fresh := range passes {
 		last = nil
 		var usable []M
 		answered, busy := false, false
-		for _, s := range openCompanies(fresh) {
+		for _, s := range list(fresh) {
 			if s["skipped"] == true {
 				continue
 			}

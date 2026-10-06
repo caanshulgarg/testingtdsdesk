@@ -274,7 +274,7 @@ func liveResolveGuid(h heldLine) (c *change, why string, answered, final bool, e
 			liveTurnOff("bodies", key, h.Company, sec)
 		}
 	})
-	port, err := findCompanyPort(h.Company, 0)
+	port, err := findCompanyPortBg(h.Company, 0)
 	if err != nil {
 		return nil, "", false, false, err
 	}
