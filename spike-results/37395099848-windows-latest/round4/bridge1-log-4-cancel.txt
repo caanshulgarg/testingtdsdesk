@@ -1,0 +1,2 @@
+2026-10-06 00:50:38  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line e7bbc25b…): asking Tally by MasterID
+2026-10-06 00:50:42  Recorder: FinCom Spike Co: cancel of mid 2: GUID from Tally (asked by MasterID): 205a524c-86ea-4249-b5eb-e3ccfaaad02a-00000002; the GUID its MasterID makes agrees
