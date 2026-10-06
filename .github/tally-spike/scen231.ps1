@@ -179,12 +179,22 @@ function S231Retry {
   # behind, and the keys were lost under that load)
   Add-Type -Namespace FcSpike -Name Nt -MemberDefinition '[DllImport("ntdll.dll")] public static extern int NtSuspendProcess(IntPtr h); [DllImport("ntdll.dll")] public static extern int NtResumeProcess(IntPtr h);' -ErrorAction SilentlyContinue
   $tp = Get-Process -Id $script:tallyPids[9000]
-  DayBook 'r1' '1-8-2026'; KeysTo 9000 '{END}' 2; KeysTo 9000 '{ENTER}' 4 'r1-open'
+  # the entry's line written by the harness in the add-on's own format while Tally is held (run 37489632354: saved on the
+  # screen, the bridge read it within the 600 ms before the hold, so nothing was left to retry): the receipt was imported
+  # (an import writes no line), Tally held, then its lines (voucher_accept_pre and _post, its own MasterID and AlterID)
+  # added to the add-on's daily file: the bridge's entry request meets a silent Tally
+  $cg = ([regex]::Match((ListCo 9000), '(?s)NAME="' + [regex]::Escape($co1) + '".*?<GUID[^>]*>([^<]+)<').Groups[1].Value).Trim()
+  $rf = Get-ChildItem $rec -Filter "$cg-*.txt" -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+  $rfile = if ($rf) { $rf.FullName } else { Join-Path $rec ("$cg-" + (Get-Date).ToString('d-MMM-yy', [Globalization.CultureInfo]::InvariantCulture) + '.txt') }
+  DayBook 'r1' '1-8-2026'
   $logBefore = @(Get-Content $B[1].log).Count; $m0 = Mark
-  # the save must finish before Tally goes silent (run 37461854776 suspended it inside Ctrl+A: nothing saved, Ctrl left
-  # down): Ctrl+A, 600 ms, then suspended (the bridge reads the add-on's line within about a second and asks then)
-  KeysTo 9000 '^a' 0; Start-Sleep -Milliseconds 600
   $null = [FcSpike.Nt]::NtSuspendProcess($tp.Handle); $tSave = Get-Date
+  Start-Sleep 1
+  $now = (Get-Date).ToString('d-MMM-yy HH:mm', [Globalization.CultureInfo]::InvariantCulture)
+  $txt = (('voucher_accept_pre', 'voucher_accept_post') | ForEach-Object { "FCR1|ev=$_|t0=$now|tw=$now|cguid=$cg|cname=$co1|user=TALLY User|obj=Voucher|guid=$($nv.guid)|mid=$($nv.mid)|aid=$($nv.aid)|vtype=Receipt|vno=$($nv.vno)|vdate=1-Aug-26|name=|parent=|narr=|t1=$now|src=live`r`n" }) -join ''
+  if (-not (Test-Path $rfile)) { [IO.File]::WriteAllBytes($rfile, [byte[]](0xFF, 0xFE)) }
+  [IO.File]::AppendAllText($rfile, $txt, [Text.UnicodeEncoding]::new($false, $false))
+  Write-Host "R1: the entry's two lines added to $rfile at $(Get-Date -Format 'HH:mm:ss.fff') (MasterID $($nv.mid), AlterID $($nv.aid))"
   Write-Host "R1: Tally 9000 (pid $($tp.Id)) suspended at $($tSave.ToString('HH:mm:ss.fff'))"
   $lat = [pscustomobject]@{ ms = 'no answer (suspended)' }
   # a FinCom posting while Tally is silent (postings never wait for the retry schedule: it goes the moment Tally answers)
@@ -201,6 +211,7 @@ function S231Retry {
   Shot 'r1-resumed'
   $g = $nv.guid; $pred = { $_.guid -eq $g -and $_.xml }.GetNewClosure()
   $hit = @(WaitLine $m0 $pred 420)
+  $untilP = (Get-Date).AddSeconds(240); while ((Get-Date) -lt $untilP -and -not @(StubReqs | Where-Object { $_.kind -eq 'posts_update' -and $_.body.id -eq 'r1-job-1' -and $_.body.status -eq 'done' }).Count) { Start-Sleep 5 }
   $tArr = if ($hit.Count) { $hit[0].at } else { '' }
   $log = @(Get-Content $B[1].log | Select-Object -Skip $logBefore)
   $tries = @($log | ForEach-Object { $m = [regex]::Match($_, 'did not answer in time at (\d\d:\d\d:\d\d) \(([^,]+), try (\d+)\); trying again by itself at (\d\d:\d\d:\d\d)'); if ($m.Success) { [pscustomobject]@{ at = $m.Groups[1].Value; id = $m.Groups[2].Value; n = [int]$m.Groups[3].Value; next = $m.Groups[4].Value } } })
@@ -217,7 +228,7 @@ function S231Retry {
   $arrOk = $tArr -and $firstAfter -and [math]::Abs((& $gap $firstAfter.next $tArr)) -le 20
   $want = @(15, 30, 60, 120)
   $stepsOk = $steps.Count -ge 4 -and @(0..3 | Where-Object { [math]::Abs($steps[$_] - $want[$_]) -le [math]::Max(5, $want[$_] * 0.25) }).Count -eq 4
-  $txt = "Tally silent {0}..{1} (suspended; a small request: {2}; the entry saved {3}); bridge 1's tries: {4}; steps {5} s (expected 15, 30, 60, 120, then 300); back to normal: {6}; switch-off words: {7}; posting queued {8}, taken {9}, updates {10}, in Tally: {11}; the entry at the stub {12} (Tally free {13}; the first try after that {14}); the bridge's busy lines: {15}" -f `
+  $txt = "Tally silent {0}..{1} (suspended; a small request: {2}; the entry's lines written {3}); bridge 1's tries: {4}; steps {5} s (expected 15, 30, 60, 120, then 300); back to normal: {6}; switch-off words: {7}; posting queued {8}, taken {9}, updates {10}, in Tally: {11}; the entry at the stub {12} (Tally free {13}; the first try after that {14}); the bridge's busy lines: {15}" -f `
     $tSave.ToString('HH:mm:ss'), $tFree.ToString('HH:mm:ss'), $lat.ms, $tSave.ToString('HH:mm:ss'), $(($tries | ForEach-Object { "try $($_.n) at $($_.at) ($($_.id)) next $($_.next)" }) -join '; '), ($steps -join ', '), $(if ($back) { $back.Substring(0, [Math]::Min(120, $back.Length)) } else { 'not seen' }), $(if ($off.Count) { $off -join ' | ' } else { 'none' }), $tPost.ToString('HH:mm:ss'), ($pt -join ','), ($pu -join '; '), $posted, $(if ($tArr) { $tArr } else { 'NOT arrived' }), $tFree.ToString('HH:mm:ss'), $(if ($firstAfter) { $firstAfter.next } else { 'none' }), ($busy -join ' | ')
   if (-not $tries.Count) { Result 'R1 retry schedule' $false "$txt; no try in bridge 1's log (did the bridge ask before the suspension?)" $true }
   else { Result 'R1 retry schedule' ($stepsOk -and $off.Count -eq 0 -and $posted -and $arrOk) $txt }
@@ -486,6 +497,9 @@ function S231TdsScreen {
   $nm = [regex]::Match($tr, '(?s)<TDSRATE NAME="' + [regex]::Escape($N.nature) + '".*?</TDSRATE>')
   Add-Content -Path $resultsFile -Encoding UTF8 -Value ("INFO S5 screen: the nature of payment '{0}' made on its form: {1}; Tally's TDS Rate export: {2}" -f $N.nature, $natOk, $(if ($nm.Success) { (([regex]::Matches($nm.Value, '<([A-Z.]+)[^>]*>([^<\s][^<]*)<') | ForEach-Object { "$($_.Groups[1].Value)=$($_.Groups[2].Value)" }) | Select-Object -First 25) -join ' ' } else { 'not there' }))
   $null = ImpT 'All Masters' (GenText 'masters-5-tds') 'masters-5-tds again (after the nature on its form)'
+  # the deductee's "Deduct TDS in same voucher" (run 37489632354: the party had no DEDUCTINSAMEVCHRULES and Tally deducted
+  # nothing on the entry: EXEMPTED Yes, rate 0)
+  $null = ImpT 'All Masters' ('<LEDGER NAME="' + (Esc $N.contractor) + '" ACTION="Alter"><NAME>' + (Esc $N.contractor) + '</NAME><DEDUCTINSAMEVCHRULES.LIST><DATE>20260401</DATE><DEDUCTINSAMEVCH>Yes</DEDUCTINSAMEVCH></DEDUCTINSAMEVCHRULES.LIST></LEDGER>') 'S5 party: deduct TDS in the same voucher'
   $c = "$(TdsExport 'Company' 'Name, IsTDSOn, TANumber, TANRegNo, TDSDeductorType')"
   $comp = ([regex]::Matches($c, '<(TANUMBER|TANREGNO|TDSDEDUCTORTYPE|ISTDSON)[^>]*>([^<]*)<') | ForEach-Object { "$($_.Groups[1].Value)=$($_.Groups[2].Value)" }) -join ' '
   Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO S5 screen: the company's TDS details in Tally: $comp"
