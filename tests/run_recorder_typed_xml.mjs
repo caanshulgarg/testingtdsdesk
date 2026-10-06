@@ -57,6 +57,28 @@ const J = JSON.stringify;
     "a bill typed in every field (NAME, AMOUNT, BILLCREDITPERIOD), New Ref, values padded: read, trimmed (" + J(r.lines[0][5]) + ")");
 }
 
+// 2b. the bridge's own recorder lines from a real TallyPrime 7.1 (run 37395099848, the spike's round 4, parse-in.json: the
+// xml each line carried as the stub received it), read as tally-ingest's cleanRecorderLine reads them: the voucher of the
+// line's GUID, its lines; GUID plain, LEDGERNAME / AMOUNT / PARTYLEDGERNAME / DATE / ALTERID typed, the bill
+// <NAME>SAL-213</NAME><BILLTYPE>New Ref</BILLTYPE><AMOUNT TYPE="Amount">450.00</AMOUNT>. Before the fix each read 0 vouchers
+{
+  const items = JSON.parse(read("real-tally-7.1/recorder-lines-run37395099848.json"));
+  ok(items.length === 5, "run 37395099848: five lines (" + items.length + ")");
+  for (const it of items) {
+    const r = parseDay(it.xml), vs = r.vouchers.filter((v) => v.guid === it.guid), ls = r.lines.filter((l) => l[0] === it.guid);
+    const nz = ls.filter((l) => Math.abs(l[2]) >= 0.005), sum = Math.round(ls.reduce((a, l) => a + l[2], 0) * 100) / 100;
+    ok(vs.length === 1 && nz.length >= 2 && sum === 0 && vs[0].type === "Receipt" && /^\d{8}$/.test(vs[0].date) && vs[0].alter > 0,
+      "run 37395099848, " + it.label + ": its voucher, " + nz.length + " lines balancing (" + J(vs[0] || {}) + ")");
+  }
+  const sal = items.find((x) => x.xml.indexOf("SAL-213") >= 0), r = parseDay(sal.xml);
+  ok(J(r.lines) === J([[sal.guid, "Salesify Marketing LLP", 450, "", null, [["SAL-213", "New Ref", 450, null]]], [sal.guid, "Cash", -450, "", null, []]]) && r.vouchers[0].party === "Salesify Marketing LLP"
+    && r.vouchers[0].date === "20261001" && r.vouchers[0].no === "2" && r.vouchers[0].alter === 3,
+    "run 37395099848, Receipt 2 of Salesify Marketing LLP: 01-Oct-2026, AlterID 3, its New Ref bill SAL-213 450 on the party's line (" + J(r.lines) + ")");
+  // the owner's Tally may type the GUID as well (<GUID TYPE="String">): read alike
+  const t = parseDay(sal.xml.replace("<GUID>" + sal.guid + "</GUID>", '<GUID TYPE="String">' + sal.guid + "</GUID>").replace(/ REMOTEID="[^"]*"/, ""));
+  ok(t.n === 1 && t.vouchers[0].guid === sal.guid && t.lines.length === 2, "a typed <GUID TYPE=\"String\"> (and no REMOTEID): the same voucher (" + J(t.vouchers.map((v) => v.guid)) + ")");
+}
+
 // 3. one(): a tag with or without attributes and padded values; never a self-closed <TAG/>, never a longer tag
 {
   ok(one('<MASTERID TYPE="Number"> 2</MASTERID>', "MASTERID") === "2", "one: a typed number padded with a space is '2'");
