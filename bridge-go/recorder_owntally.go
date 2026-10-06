@@ -230,18 +230,20 @@ func liveNotHere(l recLine) {
 
 // the reader's own look at the own Tally, when a line waits for one: the light company-list request as a background
 // read (it gives way to a posting or an import; never while reading is stopped), 30 s apart at most. True: a look went
+// 2.3.1: under the 2-second rule and its back-off (companylist.go); not less often than 30 s, as a line written between
+// two looks further apart could be taken under the lead rule (liveOwnLead) though another user's Tally wrote it
 func liveOwnAskNow() bool {
 	now := nowFn()
 	live.mu.Lock()
 	go1 := live.ownWant && (now.Sub(live.ownAskAt) >= liveOwnAskEvery || now.Before(live.ownAskAt))
 	live.mu.Unlock()
-	if !go1 || lightCheckBlocked() != "" {
+	if !go1 || lightCheckBlocked() != "" || coListHeld() {
 		return false
 	}
 	live.mu.Lock()
 	live.ownWant, live.ownAskAt = false, now
 	live.mu.Unlock()
-	openCompaniesAsk(&TC{copier: true, light: true, yield: func() bool { return postingGoing() || importsInFlight.Load() > 0 }}, true)
+	openCompaniesAsk(coListTC(), true) // 2.3.1: under the 2-second rule (companylist.go)
 	return true
 }
 
