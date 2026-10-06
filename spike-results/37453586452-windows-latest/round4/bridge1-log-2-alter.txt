@@ -1,0 +1,15 @@
+2026-10-06 11:11:26  Recorder: Receipt 2 of 01-Oct-2026 (MasterID 4, line e3a00f13…): asking Tally by MasterID
+2026-10-06 11:11:26  Recorder: Receipt 2 of 01-Oct-2026 (MasterID 4, line e3a00f13…): taken: Tally's GUID 9d527df9-3bc9-4dbc-bf01-63fbcd65c01b-00000004, AlterID 4
+2026-10-06 11:13:06  Recorder: Purchase 1 of 01-Oct-2026 (MasterID 5, line be2390b5…): asking Tally by MasterID
+2026-10-06 11:13:06  Recorder: Purchase 1 of 01-Oct-2026 (MasterID 5, line be2390b5…): taken: Tally's GUID 9d527df9-3bc9-4dbc-bf01-63fbcd65c01b-00000005, AlterID 5
+2026-10-06 11:14:41  Tally 9000: TDSDeskCompanies took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 11:14:41  Tally 9000 did not answer in time at 11:14:41 (TDSDeskCompanies, try 1); trying again by itself at 11:14:56
+2026-10-06 11:14:41  Recorder: Tally took longer than 2 s to list its open companies (limit 2 s); this computer's changes of companies not seen open here yet wait until it answers in time; none is passed over or lost
+2026-10-06 11:14:41  Recorder: Sales 1 of 01-Oct-2026 (MasterID 6, line 523df914…): asking Tally by MasterID
+2026-10-06 11:14:41  Recorder: Sales 1 of 01-Oct-2026 (MasterID 6, line 523df914…): not asked yet: Tally did not answer in time at 11:14; trying again by itself at 11:14 (nothing was sent); asked then
+2026-10-06 11:14:57  Tally 9000 answered in time again (FinComVoucherByMaster): the background requests are back to normal
+2026-10-06 11:14:57  Recorder: Sales 1 of 01-Oct-2026 (MasterID 6, line 523df914…): taken: Tally's GUID 9d527df9-3bc9-4dbc-bf01-63fbcd65c01b-00000006, AlterID 6
+2026-10-06 11:16:03  Recorder: Credit Note 1 of 01-Oct-2026 (MasterID 7, line 601ddb4f…): asking Tally by MasterID
+2026-10-06 11:16:04  Recorder: Credit Note 1 of 01-Oct-2026 (MasterID 7, line 601ddb4f…): taken: Tally's GUID 9d527df9-3bc9-4dbc-bf01-63fbcd65c01b-00000007, AlterID 7
+2026-10-06 11:16:49  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line ac57fa30…): asking Tally by MasterID
+2026-10-06 11:16:49  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line ac57fa30…): taken: Tally's GUID 9d527df9-3bc9-4dbc-bf01-63fbcd65c01b-00000003, AlterID 8
