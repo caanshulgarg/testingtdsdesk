@@ -1,0 +1,198 @@
+{
+ "scenarios": [
+  {
+   "id": "S5",
+   "key": "s5-tds-on-screen",
+   "label": "payment with TDS entered on the screen",
+   "guid": "cf60d26a-89b1-4c33-811b-bff6eb4c5923-00000003",
+   "rows": [
+    {
+     "what": "voucher type",
+     "tally": "Journal",
+     "fincom": "Journal",
+     "entered": "Journal",
+     "status": "ok"
+    },
+    {
+     "what": "FinCom's lines add up to 0",
+     "tally": "0",
+     "fincom": "0",
+     "entered": "0",
+     "status": "ok"
+    },
+    {
+     "what": "ledger S231 Contract Exp",
+     "tally": "-100000",
+     "fincom": "-100000",
+     "entered": "-100000",
+     "status": "ok"
+    },
+    {
+     "what": "ledger S231 TDS Payable",
+     "tally": "2000",
+     "fincom": "2000",
+     "entered": "2000",
+     "status": "ok"
+    },
+    {
+     "what": "ledger S231 Contractor",
+     "tally": "98000",
+     "fincom": "98000",
+     "entered": "98000",
+     "status": "ok"
+    },
+    {
+     "what": "parse.js's accuracy checks",
+     "tally": "(none)",
+     "fincom": "none",
+     "status": "ok"
+    },
+    {
+     "what": "TDS nature of payment",
+     "tally": "S231 Contract Work",
+     "fincom": "(none)",
+     "entered": "S231 Contract Work",
+     "status": "fail"
+    },
+    {
+     "what": "TDS rate",
+     "tally": "0",
+     "fincom": "(none)",
+     "entered": "2",
+     "status": "fail"
+    },
+    {
+     "what": "TDS assessable value",
+     "tally": "100000",
+     "fincom": "(none)",
+     "entered": "100000",
+     "status": "fail"
+    },
+    {
+     "what": "TDS amount",
+     "tally": "2000",
+     "fincom": "(none)",
+     "entered": "2000",
+     "status": "fail"
+    }
+   ],
+   "notes": [
+    "TDS section: Tally gives no TDSDEDUCTEESECTIONNUMBER on this entry; FinCom's section (none) (from (none))",
+    "deductee type: Tally's ledger master TDSDEDUCTEETYPE \"Company - Resident\"; the entry body carries none (FinCom: (none))"
+   ],
+   "tallyFound": true,
+   "fincomFound": true,
+   "line": {
+    "ev": "created",
+    "at": "16:16:49",
+    "xmlChars": 4360,
+    "state": "applied",
+    "why": ""
+   },
+   "status": "fail"
+  }
+ ],
+ "tags": [
+  {
+   "tag": "IRN",
+   "seen": [
+    {
+     "label": "Tally's own Day Book export (S5 on the screen)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S5 on the screen)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    }
+   ]
+  },
+  {
+   "tag": "IRNACKNO",
+   "seen": [
+    {
+     "label": "Tally's own Day Book export (S5 on the screen)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S5 on the screen)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    }
+   ]
+  },
+  {
+   "tag": "IRNACKDATE",
+   "seen": [
+    {
+     "label": "Tally's own Day Book export (S5 on the screen)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S5 on the screen)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    }
+   ]
+  },
+  {
+   "tag": "EWAYBILLDETAILS.LIST",
+   "seen": [
+    {
+     "label": "Tally's own Day Book export (S5 on the screen)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S5 on the screen)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    }
+   ]
+  },
+  {
+   "tag": "BILLNUMBER",
+   "seen": []
+  },
+  {
+   "tag": "TAXOBJECTALLOCATIONS.LIST",
+   "seen": [
+    {
+     "label": "Tally's own Day Book export (S5 on the screen)",
+     "count": 2,
+     "empty": 4,
+     "value": "S231 Contract Work TDS 5XAlORu700v0sUP6 S231 Contractor S231 Contract Exp New Re"
+    },
+    {
+     "label": "the bridge's entry request answer (S5 on the screen)",
+     "count": 0,
+     "empty": 3,
+     "value": ""
+    }
+   ]
+  },
+  {
+   "tag": "UNIQUEREFERENCENUMBER",
+   "seen": []
+  },
+  {
+   "tag": "TDSDEDUCTEESECTIONNUMBER",
+   "seen": []
+  },
+  {
+   "tag": "TDSDEDUCTEETYPE",
+   "seen": []
+  }
+ ]
+}
