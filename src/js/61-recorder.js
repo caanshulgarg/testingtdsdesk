@@ -254,6 +254,52 @@ const Rec = {
   // filter: the list shown first ("held": the lines held, from the books' "not yet in these books" line)
   openActivity(cid, filter){ S.syncClient = cid || ""; S.syncFilter = filter || "all"; S.tallyTab = "activity"; this.act.at = 0; navHome("tally"); },
 
+  // ---------------------------------------------------------------- unknown ledgers (the owner, 06-Oct-2026; migration 56)
+  // "An entry using an unknown ledger is applied anyway, with nothing flagged. Until 2.3.1 is out, flag these on the page in
+  // plain words so they are visible." The firm's live entries whose lines name a ledger FinCom's copy does not have
+  // (tally_unknown_ledger_entries(p_book null): every book of the firm; members read). Read once a minute at most; nothing
+  // shown (and no error) while migration 56 has not run
+  unk: {},                 // per list: "firm" (p_book null) or "b:<book ids>" (a client's books, one call a book): {rows, at, busy, none, err}
+  unkKey(books){ return books && books.length ? "b:" + books.join(",") : "firm"; },
+  unkOf(books){
+    const key = this.unkKey(books), u = this.unk[key] || (this.unk[key] = {rows: null, at: 0, busy: false, none: false, err: ""});
+    if (typeof TCloud === "object" && TCloud.on() && !u.busy && (!u.at || Date.now() - u.at > 60000)){ u.at = Date.now(); setTimeout(() => this.unkLoad(books), 0); }
+    return u;
+  },
+  async unkLoad(books){
+    const key = this.unkKey(books), u = this.unk[key] || (this.unk[key] = {rows: null, at: 0, busy: false, none: false, err: ""});
+    u.busy = true;
+    try {
+      const out = [];
+      for (const b of (books && books.length ? books : [null])) out.push(...[].concat(await TCloud.rpc("tally_unknown_ledger_entries", {p_book: b}) || []));
+      u.rows = out; u.none = false; u.err = "";
+    } catch (e){ u.rows = []; if (this.missing(e)) u.none = true; else u.err = this.say(e); }
+    u.busy = false; u.at = Date.now(); render();
+  },
+  // a client's books in FinCom's cloud (TCloud.st[cid].books[].book): its Books page asks for these books only (the
+  // firm-wide list stops at 500 entries)
+  unkBooks(cid){
+    const st = cid && typeof TCloud === "object" && TCloud.st && TCloud.st[cid];
+    return [...new Set([].concat((st && st.books) || []).map(b => b && b.book).filter(Boolean).map(String))].sort();
+  },
+  // one sentence an entry and ledger: "<type> <number> of <date> uses the ledger '<name>', which FinCom does not have yet. It
+  // is in the books; the ledger's group is unknown until the next ledger list or bridge 2.3.1."
+  unkWords(r, name){
+    const head = [r.vtype, r.vno].map(x => String(x || "").trim()).filter(Boolean).join(" ") || "An entry";
+    return head + (r.day ? " of " + fmtDate(String(r.day).slice(0, 10)) : "") + " uses the ledger '" + name + "', which FinCom does not have yet. It is in the books; the ledger's group is unknown until the next ledger list or bridge 2.3.1.";
+  },
+  // the sentences for one client ("" or none: every client), newest entry first: [{key, cid, text}]; books: read those
+  // books only (a client's Books page), else the firm's list
+  unkLines(cid, books){
+    const rows = this.unkOf(books).rows || [];
+    const out = [];
+    rows.filter(r => !cid || String(r.client_id || "") === String(cid)).forEach(r => {
+      const names = Array.isArray(r.ledgers) ? r.ledgers : String(r.ledgers || "").replace(/^\{|\}$/g, "").split(",").map(x => x.replace(/^"|"$/g, "")).filter(Boolean);
+      names.forEach(n => out.push({key: (r.book_id || "") + ":" + r.guid + ":" + n, cid: r.client_id || "", text: this.unkWords(r, n)}));
+    });
+    return out;
+  },
+
   // ---------------------------------------------------------------- F36 / N102: is each PC recording?
   // the recorder words a computer's bridges send (info.bridges[id].recorder: {company: {seen, lastAt}}; the beat's
   // companies may carry recorderSeen / recorderLastAt too): null when none of its bridges reports one (before 2.1.9)

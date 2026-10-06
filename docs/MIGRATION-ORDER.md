@@ -17,8 +17,8 @@ revoked; `begin; ... commit;`; safe to run twice) and is shown to the owner befo
 
 ## The two valid orders (both end with the same function texts: `tests/run_migration_order.py` asserts it)
 
-- staging: 32 → 33 → 35 → 34 (first) → 36b → 37 → 36 → 38 → 39 (applied 03-Oct, **except 39's tally_ingest_day part**: both forms are still 38's) → 40 → 41 (run 03-Oct, evening; its 8-argument `tally_ingest_day` superseded 39's) → 42 → 43 (run 04-Oct) → 44 (run 04-Oct) → 45 (run 04-Oct) → **46** → **47** → **48** (run by the owner) → **49** → **50** (run by the owner) → 51 → 52 → 53 → 54 → 55
-- a fresh database: 32 → 33 → 35 → 34 (reviewed) → 36 → 36b → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 51 → 52 → 53 → 54 → 55
+- staging: 32 → 33 → 35 → 34 (first) → 36b → 37 → 36 → 38 → 39 (applied 03-Oct, **except 39's tally_ingest_day part**: both forms are still 38's) → 40 → 41 (run 03-Oct, evening; its 8-argument `tally_ingest_day` superseded 39's) → 42 → 43 (run 04-Oct) → 44 (run 04-Oct) → 45 (run 04-Oct) → **46** → **47** → **48** (run by the owner) → **49** → **50** (run by the owner) → 51 → 52 → 53 → 54 → 55 → 56
+- a fresh database: 32 → 33 → 35 → 34 (reviewed) → 36 → 36b → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 51 → 52 → 53 → 54 → 55 → 56
 
 | # | File | What it adds |
 |---|---|---|
@@ -162,3 +162,24 @@ by the posting's bridge -> released (`tally_post_release_core`) and sent again o
 renewal hands the lease over, a posting never yields, a lease given up is kept for the waiting posting; the 6-argument
 call (an older bridge) has no purpose and is never asked to yield. Tested by `run_migration55.py` and
 `run_migration_order.py` (55 in both orders). tally-ingest works without it (the 6-argument lease; no checks).
+FinCom Bridge 2.3.0 fix (06-Oct-2026): `migration-56-keep-fields.sql` runs after 55 in both orders (add-only, one
+transaction, `lock_timeout` 10 s, no "delete from", safe twice; NOT yet run on staging). A recorder line applied to an entry
+loaded from a Day Book blanked what the live request does not fetch (GSTIN, place of supply, ref no. / date, company GSTIN,
+a line's HSN / rate). `tally_ingest_entries(book, vouchers, lines, p_rebuild, p_keep)` (5 arguments, granted to nobody):
+with `p_keep` true a blank sent value is filled from the stored entry (`tally_recorder_keep_vouchers`: GSTIN, pos, ref and
+ref date only when the party is the same; the company GSTIN always; a malformed ref date passed as sent) and a line's blank
+HSN / rate from the entry's current lines, ledger by ledger (`tally_recorder_pair_lines`, the same in the repair): one HSN
+and rate on all the stored lines of the ledger -> carried to every line; else the same amounts as stored -> each line the
+values of its amount; else blank), then 48's 4-argument form runs unchanged; a sent non-blank value always wins; an entry
+marked `"full": true` (2.3.1 part A) is passed as sent. No line order is used (`tally_lines` has no order column). `tally_recorder_line` = 53's text with that one
+call passing `true`. 48's 4-argument and 44's 3-argument forms and `tally_ingest_day` are untouched: a Day Book stays
+authoritative. The repair, not run by the migration: `tally_recorder_restore_fields(book, p_dry_run)` (service role /
+owner; the 1-argument form restores): the dry run answers the count and the list (type, number, date, fields); the run
+writes only blank fields from the latest earlier version (same party for GSTIN / pos / ref / ref date) when every later
+version is a recorder one and the day was not read from a Day Book since, one row a restored field in
+`tally_recorder_restore_log` (add-only, RLS, kept; run, entry, field, value, old blank, version AlterID, time), and answers
+the live entry count and ledger-day total before and after. `tally_recorder_blanked(book)` lists the same read-only;
+`tests/check_recorder_blanked.sql` is the plain read-only query (`psql -v book=<uuid>`, runs before 56 too).
+`tally_unknown_ledger_entries(book)` (members; null: the firm's books): live entries naming a ledger FinCom does not have,
+listed in plain words on Sync activity and the client's Books page. Tested by `run_migration56.py`,
+`run_migration_order.py` (56 in both orders) and `run_unknown_ledgers_ui.py`.
