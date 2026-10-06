@@ -1,0 +1,308 @@
+[keys] sent 'a' to tally 'TallyPrime:9000'
+[keys] sent 't' to tally 'TallyPrime:9000'
+[shot] r5-00-gateway (1024x768)
+[09:39:39] ---- TDS on (the import that worked in run 37425863775), then F11 as Tally shows it
+[TDS on] <RESPONSE><CREATED>0</CREATED><ALTERED>1</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[keys] sent '{F11}' to tally 'TallyPrime:9000'
+[shot] r5-10-f11 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-01 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-02 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-03 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-04 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-05 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-06 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-07 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-08 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-09 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-10 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-11 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-12 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-13 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-14 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-15 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-16 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-17 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-18 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-19 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-20 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-21 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-22 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-23 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-24 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-25 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-26 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-27 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-28 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-29 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-30 (1024x768)
+[keys] sent '{ESC}' to tally 'TallyPrime:9000'
+[shot] r5-12-f11-esc (1024x768)
+[keys] sent 'y' to tally 'TallyPrime:9000'
+[shot] r5-12b-f11-y (1024x768)
+[shot] r5-12d-where (1024x768)
+[09:40:43] ---- TDS Nature of Payments form: Probe Contract Nature 
+[keys] sent '{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}' to tally 'TallyPrime:9000'
+[shot] r5-20-nature-0-list (1024x768)
+[keys] sent 'TDS Nature of Payments{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-20-nature-1-form (1024x768)
+[keys] sent 'Probe Contract Nature{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-20-nature-2-name (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-20-nature-5-01 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-20-nature-5-02 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-20-nature-5-03 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-20-nature-5-04 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-20-nature-5-05 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-20-nature-5-06 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-20-nature-5-07 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-20-nature-5-08 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-20-nature-5-09 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-20-nature-5-10 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-20-nature-5-11 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-20-nature-5-12 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-20-nature-5-13 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-20-nature-5-14 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-20-nature-5-15 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-20-nature-5-16 (1024x768)
+[keys] sent '{ESC}' to tally 'TallyPrime:9000'
+[shot] r5-20-nature-6-esc (1024x768)
+[keys] sent 'y' to tally 'TallyPrime:9000'
+[shot] r5-20-nature-7-y (1024x768)
+[shot] r5-20-nature-9-where (1024x768)
+[09:41:27] ---- Ledger form: Probe Deductee Sundry Creditors
+[keys] sent '{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}' to tally 'TallyPrime:9000'
+[shot] r5-30-party-0-list (1024x768)
+[keys] sent 'Ledger{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-30-party-1-form (1024x768)
+[keys] sent 'Probe Deductee{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-30-party-2-name (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-30-party-3-under (1024x768)
+[keys] sent 'Sundry Creditors{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-30-party-4-group (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-30-party-5-01 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-30-party-5-02 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-30-party-5-03 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-30-party-5-04 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-30-party-5-05 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-30-party-5-06 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-30-party-5-07 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-30-party-5-08 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-30-party-5-09 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-30-party-5-10 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-30-party-5-11 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-30-party-5-12 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-30-party-5-13 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-30-party-5-14 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-30-party-5-15 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-30-party-5-16 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-30-party-5-17 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-30-party-5-18 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-30-party-5-19 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-30-party-5-20 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-30-party-5-21 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-30-party-5-22 (1024x768)
+[keys] sent '{ESC}' to tally 'TallyPrime:9000'
+[shot] r5-30-party-6-esc (1024x768)
+[keys] sent 'y' to tally 'TallyPrime:9000'
+[shot] r5-30-party-7-y (1024x768)
+[shot] r5-30-party-9-where (1024x768)
+[09:42:28] ---- Ledger form: Probe Contract Work Indirect Expenses
+[keys] sent '{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}' to tally 'TallyPrime:9000'
+[shot] r5-40-expense-0-list (1024x768)
+[keys] sent 'Ledger{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-40-expense-1-form (1024x768)
+[keys] sent 'Probe Contract Work{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-40-expense-2-name (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-40-expense-3-under (1024x768)
+[keys] sent 'Indirect Expenses{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-40-expense-4-group (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-40-expense-5-01 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-40-expense-5-02 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-40-expense-5-03 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-40-expense-5-04 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-40-expense-5-05 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-40-expense-5-06 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-40-expense-5-07 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-40-expense-5-08 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-40-expense-5-09 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-40-expense-5-10 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-40-expense-5-11 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-40-expense-5-12 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-40-expense-5-13 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-40-expense-5-14 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-40-expense-5-15 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-40-expense-5-16 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-40-expense-5-17 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-40-expense-5-18 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-40-expense-5-19 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-40-expense-5-20 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-40-expense-5-21 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-40-expense-5-22 (1024x768)
+[keys] sent '{ESC}' to tally 'TallyPrime:9000'
+[shot] r5-40-expense-6-esc (1024x768)
+[keys] sent 'y' to tally 'TallyPrime:9000'
+[shot] r5-40-expense-7-y (1024x768)
+[shot] r5-40-expense-9-where (1024x768)
+[09:43:29] ---- Ledger form: Probe TDS Ledger Duties & Taxes
+[keys] sent '{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}' to tally 'TallyPrime:9000'
+[shot] r5-50-duty-0-list (1024x768)
+[keys] sent 'Ledger{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-50-duty-1-form (1024x768)
+[keys] sent 'Probe TDS Ledger{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-50-duty-2-name (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-50-duty-3-under (1024x768)
+[keys] sent 'Duties & Taxes{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-50-duty-4-group (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-50-duty-5-01 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-50-duty-5-02 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-50-duty-5-03 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-50-duty-5-04 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-50-duty-5-05 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-50-duty-5-06 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-50-duty-5-07 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-50-duty-5-08 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-50-duty-5-09 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-50-duty-5-10 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-50-duty-5-11 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-50-duty-5-12 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-50-duty-5-13 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-50-duty-5-14 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-50-duty-5-15 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-50-duty-5-16 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-50-duty-5-17 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-50-duty-5-18 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-50-duty-5-19 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-50-duty-5-20 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-50-duty-5-21 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-50-duty-5-22 (1024x768)
+[keys] sent '{ESC}' to tally 'TallyPrime:9000'
+[shot] r5-50-duty-6-esc (1024x768)
+[keys] sent 'y' to tally 'TallyPrime:9000'
+[shot] r5-50-duty-7-y (1024x768)
+[shot] r5-50-duty-9-where (1024x768)
+[keys] sent '{ESC}' to tally 'TallyPrime:9000'
+[shot] r5-60-esc (1024x768)
+[keys] sent 'a' to tally 'TallyPrime:9000'
+[shot] r5-61-alter (1024x768)
+[keys] sent 'TDS Nature of Payments{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-62-natures (1024x768)
+[keys] sent '{DOWN}' to tally 'TallyPrime:9000'
+[shot] r5-63-natures-down (1024x768)
+[keys] sent '{PGDN}' to tally 'TallyPrime:9000'
+[shot] r5-64-natures-pgdn (1024x768)
+[company TDS] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>3</COMPANY><GROUP>0</GROUP><LEDGER>3</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>3</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>1</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBTCATEGORY>0</FBTCATEGORY><FBTASSESSEETYPE>0</FBTASSESSEETYPE><TARIFFCLASSIFICATION>0</TARIFFCLASSIFICATION><EXCISEDUTYCLASSIFICATION>0</EXCISEDUTYCLASSIFICATION><SERIALNUMBER>0</SERIALNUMBER><ADJUSTMENTCLASSIFICATION>0</ADJUSTMENTCLASSIFICATION><INCOMETAXSLAB>0</INCOMETAXSLAB><INCOMETAXCLASSIFICATION>0</INCOMETAXCLASSIFICATION><LBTCLASSIFICATION>0</LBTCLASSIFICATION><TAXUNIT>1</TAXUNIT><RETURNMASTER>0</RETURNMASTER><GSTCLASSIFICATION>0</GSTCLASSIFICATION><VOUCHERNUMBERSERIES>0</VOUCHERNUMBERSERIES><VOUCHER>0</VOUCHER></CMPINFO></DESC><DATA><COLLECTION><COMPANY NAME="FinCom Spike Co" RESERVEDNAME=""><NAME TYPE="String">FinCom Spike Co</NAME><ISTDSON TYPE="Logical">Yes</ISTDSON></COMPANY></COLLECTION></DATA></BODY></ENVELOPE>
+[09:44:46] == probe end
