@@ -1,0 +1,267 @@
+[keys] sent 'a' to tally 'TallyPrime:9000'
+[keys] sent 't' to tally 'TallyPrime:9000'
+[shot] r5-00-gateway (1024x768)
+[10:40:23] ---- TDS on (the import that worked in run 37425863775), then F11 as Tally shows it
+[TDS on] <RESPONSE><CREATED>0</CREATED><ALTERED>1</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[keys] sent '{F11}' to tally 'TallyPrime:9000'
+[shot] r5-10-f11 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-01 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-02 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-03 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-04 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-05 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-06 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-07 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-08 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-09 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-10 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-11 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-12 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-13 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-14 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-15 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-16 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-17 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-18 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-19 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-20 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-21 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-22 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-23 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-24 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-25 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-26 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-27 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-28 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-29 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-11-f11-30 (1024x768)
+[keys] sent '{ESC}' to tally 'TallyPrime:9000'
+[shot] r5-12-f11-esc (1024x768)
+[keys] sent 'y' to tally 'TallyPrime:9000'
+[shot] r5-12b-f11-y (1024x768)
+[shot] r5-12d-where (1024x768)
+[10:41:26] ---- the nature of payment 194C, made by keys
+SetValueInvocationException: 
+Line |
+   3 |  $RawUI.CursorPosition = @{X=0;Y=0}
+     |  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Exception setting "CursorPosition": "The handle is invalid."
+[keys] sent 'TDS Nature of Payments' to tally 'TallyPrime:9000'
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-20-nature-form (1024x768)
+[keys] sent 'Probe 194C Contractors{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-21-name (1024x768)
+[keys] sent '194C{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-22-section (1024x768)
+[keys] sent '94C{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-23-paycode (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-24-remit (1024x768)
+[keys] sent '1{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-25-rate-ind (1024x768)
+[keys] sent '2{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-26-rate-other (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-27-zero (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-28-threshold (1024x768)
+[keys] sent '{ESC}' to tally 'TallyPrime:9000'
+[shot] r5-29-esc-blank (1024x768)
+[keys] sent 'y' to tally 'TallyPrime:9000'
+[shot] r5-29b-y (1024x768)
+[10:41:58] ---- the deductee party (Sundry Creditors, bill-wise, Is TDS Deductable: Yes)
+SetValueInvocationException: 
+Line |
+   3 |  $RawUI.CursorPosition = @{X=0;Y=0}
+     |  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Exception setting "CursorPosition": "The handle is invalid."
+[keys] sent 'Ledger' to tally 'TallyPrime:9000'
+[shot] r5-30a-typed (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-30-party-form (1024x768)
+[keys] sent 'Probe Deductee{ENTER}' to tally 'TallyPrime:9000'
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[keys] sent 'Sundry Creditors{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-31-group (1024x768)
+[keys] sent 'n' to tally 'TallyPrime:9000'
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-32-billwise-no (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-34-at-tds (1024x768)
+[keys] sent 'y' to tally 'TallyPrime:9000'
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-35-tds-yes (1024x768)
+[keys] sent 'Company - Resident' to tally 'TallyPrime:9000'
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-36-deductee (1024x768)
+[keys] sent 'y' to tally 'TallyPrime:9000'
+[shot] r5-37-same-voucher (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-37b-after-same (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-37c-party-01 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-37c-party-02 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-37c-party-03 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-37c-party-04 (1024x768)
+[keys] sent '^a' to tally 'TallyPrime:9000'
+[shot] r5-38-ctrl-a (1024x768)
+[keys] sent '{ESC}' to tally 'TallyPrime:9000'
+[shot] r5-38b-esc (1024x768)
+[keys] sent 'y' to tally 'TallyPrime:9000'
+[shot] r5-39-y (1024x768)
+[10:42:49] ---- the TDS duty ledger (Duties & Taxes, Type of Duty/Tax: TDS, Nature of payment: the 194C nature)
+SetValueInvocationException: 
+Line |
+   3 |  $RawUI.CursorPosition = @{X=0;Y=0}
+     |  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Exception setting "CursorPosition": "The handle is invalid."
+[keys] sent 'Ledger' to tally 'TallyPrime:9000'
+[shot] r5-40a-typed (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-40-duty-form (1024x768)
+[keys] sent 'Probe TDS Ledger{ENTER}' to tally 'TallyPrime:9000'
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[keys] sent 'Duties & Taxes{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-41-group (1024x768)
+[keys] sent 'TDS' to tally 'TallyPrime:9000'
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-42-type-tds (1024x768)
+[keys] sent 'Probe 194C Contractors' to tally 'TallyPrime:9000'
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-43-nature (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-43b-duty-01 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-43b-duty-02 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-43b-duty-03 (1024x768)
+[keys] sent '^a' to tally 'TallyPrime:9000'
+[shot] r5-44-ctrl-a (1024x768)
+[keys] sent '{ESC}' to tally 'TallyPrime:9000'
+[shot] r5-44b-esc (1024x768)
+[keys] sent 'y' to tally 'TallyPrime:9000'
+[shot] r5-45-y (1024x768)
+[10:43:30] ---- the expense ledger (Indirect Expenses): the lists its statutory fields offer
+SetValueInvocationException: 
+Line |
+   3 |  $RawUI.CursorPosition = @{X=0;Y=0}
+     |  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Exception setting "CursorPosition": "The handle is invalid."
+[keys] sent 'Ledger' to tally 'TallyPrime:9000'
+[shot] r5-50a-typed (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-50-exp-form (1024x768)
+[keys] sent 'Probe Contract Work{ENTER}' to tally 'TallyPrime:9000'
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[keys] sent 'Indirect Expenses{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-51-group (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-52-type-of-ledger (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-53-assessable-list (1024x768)
+[keys] sent '{DOWN}' to tally 'TallyPrime:9000'
+[shot] r5-53b-down (1024x768)
+[keys] sent '{DOWN}' to tally 'TallyPrime:9000'
+[shot] r5-53c-down (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-54-after-assessable (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-55-next (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-56-next (1024x768)
+[keys] sent '^a' to tally 'TallyPrime:9000'
+[shot] r5-57-ctrl-a (1024x768)
+[keys] sent '{ESC}' to tally 'TallyPrime:9000'
+[shot] r5-57b-esc (1024x768)
+[keys] sent 'y' to tally 'TallyPrime:9000'
+[shot] r5-58-y (1024x768)
+SetValueInvocationException: 
+Line |
+   3 |  $RawUI.CursorPosition = @{X=0;Y=0}
+     |  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Exception setting "CursorPosition": "The handle is invalid."
+[keys] sent '{ESC}' to tally 'TallyPrime:9000'
+[shot] r5-59-gateway (1024x768)
+[export Ledger] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>3</COMPANY><GROUP>0</GROUP><LEDGER>3</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>3</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>1</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBTCATEGORY>0</FBTCATEGORY><FBTASSESSEETYPE>0</FBTASSESSEETYPE><TARIFFCLASSIFICATION>0</TARIFFCLASSIFICATION><EXCISEDUTYCLASSIFICATION>0</EXCISEDUTYCLASSIFICATION><SERIALNUMBER>0</SERIALNUMBER><ADJUSTMENTCLASSIFICATION>0</ADJUSTMENTCLASSIFICATION><INCOMETAXSLAB>0</INCOMETAXSLAB><INCOMETAXCLASSIFICATION>0</INCOMETAXCLASSIFICATION><LBTCLASSIFICATION>0</LBTCLASSIFICATION><TAXUNIT>1</TAXUNIT><RETURNMASTER>0</RETURNMASTER><GSTCLASSIFICATION>0</GSTCLASSIFICATION><VOUCHERNUMBERSERIES>0</VOUCHERNUMBERSERIES><VOUCHER>0</VOUCHER></CMPINFO></DESC><DATA><COLLECTION ISMSTDEPTYPE="Yes" MSTDEPTYPE="8"><LEDGER NAME="Cash" RESERVEDNAME=""><STARTINGFROM/><STREGDATE/><LBTREGNDATE/><VATREGISTRATIONDATE/><CSTREGISTRATIONDATE/><SAMPLINGDATEONEFACTOR/><SAMPLINGDATETWOFACTOR/><ACTIVEFROM/><ACTIVETO/><CREATEDDATE/><ALTEREDON/><VATAPPLICABLEDATE/><EXCISEREGISTRATIONDATE/><PANAPPLICABLEFROM/><PAYINSRUNNINGFILEDATE/><...
+[10:44:15] ---- a journal: Dr the expense 100000; To the TDS ledger (does Tally work it out?); To the party (the balance)
+[keys] sent 'v' to tally 'TallyPrime:9000'
+[shot] r5-60-vouchers (1024x768)
+[keys] sent '{F7}' to tally 'TallyPrime:9000'
+[shot] r5-61-journal (1024x768)
+[keys] sent '{F2}' to tally 'TallyPrime:9000'
+[keys] sent '1-1-2027{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-62-date (1024x768)
+[keys] sent 'Probe Contract Work' to tally 'TallyPrime:9000'
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-63-exp (1024x768)
+[keys] sent '100000' to tally 'TallyPrime:9000'
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-64-amt (1024x768)
+[keys] sent 't' to tally 'TallyPrime:9000'
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-65-to (1024x768)
+[keys] sent 'Probe TDS Ledger' to tally 'TallyPrime:9000'
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-66-tds-ledger (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-67-tds-01 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-67-tds-02 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-67-tds-03 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-67-tds-04 (1024x768)
+[keys] sent 't' to tally 'TallyPrime:9000'
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-68-to (1024x768)
+[keys] sent 'Probe Deductee' to tally 'TallyPrime:9000'
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-69-party (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-70-party-01 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-70-party-02 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-70-party-03 (1024x768)
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] r5-70-party-04 (1024x768)
+[keys] sent '^a' to tally 'TallyPrime:9000'
+[shot] r5-71-ctrl-a (1024x768)
+[keys] sent '^a' to tally 'TallyPrime:9000'
+[shot] r5-72-ctrl-a-2 (1024x768)
+[daybook] <ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>All Masters</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>FinCom Spike Co</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA>   </REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>
+[company TDS] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>3</COMPANY><GROUP>0</GROUP><LEDGER>3</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>3</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>1</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBTCATEGORY>0</FBTCATEGORY><FBTASSESSEETYPE>0</FBTASSESSEETYPE><TARIFFCLASSIFICATION>0</TARIFFCLASSIFICATION><EXCISEDUTYCLASSIFICATION>0</EXCISEDUTYCLASSIFICATION><SERIALNUMBER>0</SERIALNUMBER><ADJUSTMENTCLASSIFICATION>0</ADJUSTMENTCLASSIFICATION><INCOMETAXSLAB>0</INCOMETAXSLAB><INCOMETAXCLASSIFICATION>0</INCOMETAXCLASSIFICATION><LBTCLASSIFICATION>0</LBTCLASSIFICATION><TAXUNIT>1</TAXUNIT><RETURNMASTER>0</RETURNMASTER><GSTCLASSIFICATION>0</GSTCLASSIFICATION><VOUCHERNUMBERSERIES>0</VOUCHERNUMBERSERIES><VOUCHER>0</VOUCHER></CMPINFO></DESC><DATA><COLLECTION><COMPANY NAME="FinCom Spike Co" RESERVEDNAME=""><NAME TYPE="String">FinCom Spike Co</NAME><ISTDSON TYPE="Logical">Yes</ISTDSON></COMPANY></COLLECTION></DATA></BODY></ENVELOPE>
+[10:45:31] == probe end
