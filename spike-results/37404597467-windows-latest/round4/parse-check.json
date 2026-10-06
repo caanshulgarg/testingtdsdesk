@@ -1,0 +1,264 @@
+[
+ {
+  "label": "FinCom Spike Co created Receipt/1/20261002 bridge go-3c92c229cdcb at 02:40:39",
+  "guid": "46e617af-925d-43e2-8d7d-8e67b255d97d-00000002",
+  "ev": "created",
+  "xmlChars": 2434,
+  "parsedVouchers": 1,
+  "parsedGuids": [
+   "46e617af-925d-43e2-8d7d-8e67b255d97d-00000002"
+  ],
+  "match": 1,
+  "type": "Receipt",
+  "no": "1",
+  "date": "20261002",
+  "party": "Cash",
+  "lines": [
+   {
+    "ledger": "Spike Income",
+    "amount": 700,
+    "bills": []
+   },
+   {
+    "ledger": "Cash",
+    "amount": -700,
+    "bills": []
+   }
+  ],
+  "nonZero": 2,
+  "bills": 0,
+  "ok": true
+ },
+ {
+  "label": "FinCom Spike Co created Receipt/2/20261001 bridge go-3c92c229cdcb at 02:41:37",
+  "guid": "46e617af-925d-43e2-8d7d-8e67b255d97d-00000003",
+  "ev": "created",
+  "xmlChars": 2604,
+  "parsedVouchers": 1,
+  "parsedGuids": [
+   "46e617af-925d-43e2-8d7d-8e67b255d97d-00000003"
+  ],
+  "match": 1,
+  "type": "Receipt",
+  "no": "2",
+  "date": "20261001",
+  "party": "Salesify Marketing LLP",
+  "lines": [
+   {
+    "ledger": "Salesify Marketing LLP",
+    "amount": 450,
+    "bills": [
+     [
+      "SAL-213",
+      "New Ref",
+      450,
+      null
+     ]
+    ]
+   },
+   {
+    "ledger": "Cash",
+    "amount": -450,
+    "bills": []
+   }
+  ],
+  "nonZero": 2,
+  "bills": 1,
+  "ok": true
+ },
+ {
+  "label": "FinCom Spike Co created Purchase/1/20261001 bridge go-3c92c229cdcb at 02:43:11",
+  "guid": "46e617af-925d-43e2-8d7d-8e67b255d97d-00000004",
+  "ev": "created",
+  "xmlChars": 5476,
+  "parsedVouchers": 1,
+  "parsedGuids": [
+   "46e617af-925d-43e2-8d7d-8e67b255d97d-00000004"
+  ],
+  "match": 1,
+  "type": "Purchase",
+  "no": "1",
+  "date": "20261001",
+  "party": "Spike Supplier",
+  "lines": [
+   {
+    "ledger": "Spike Supplier",
+    "amount": 5450,
+    "bills": []
+   },
+   {
+    "ledger": "Spike Purchase",
+    "amount": -5000,
+    "bills": []
+   },
+   {
+    "ledger": "Spike CGST",
+    "amount": -450,
+    "bills": []
+   }
+  ],
+  "nonZero": 3,
+  "bills": 0,
+  "ok": true
+ },
+ {
+  "label": "FinCom Spike Co created Sales/1/20261001 bridge go-3c92c229cdcb at 02:44:43",
+  "guid": "46e617af-925d-43e2-8d7d-8e67b255d97d-00000005",
+  "ev": "created",
+  "xmlChars": 5436,
+  "parsedVouchers": 1,
+  "parsedGuids": [
+   "46e617af-925d-43e2-8d7d-8e67b255d97d-00000005"
+  ],
+  "match": 1,
+  "type": "Sales",
+  "no": "1",
+  "date": "20261001",
+  "party": "Spike Trader",
+  "lines": [
+   {
+    "ledger": "Spike Trader",
+    "amount": -1853,
+    "bills": []
+   },
+   {
+    "ledger": "Spike Sales",
+    "amount": 1700,
+    "bills": []
+   },
+   {
+    "ledger": "Spike CGST",
+    "amount": 153,
+    "bills": []
+   }
+  ],
+  "nonZero": 3,
+  "bills": 0,
+  "ok": true
+ },
+ {
+  "label": "FinCom Spike Co created Sales/2/20261001 bridge go-3c92c229cdcb at 02:45:52",
+  "guid": "46e617af-925d-43e2-8d7d-8e67b255d97d-00000006",
+  "ev": "created",
+  "xmlChars": 4166,
+  "parsedVouchers": 1,
+  "parsedGuids": [
+   "46e617af-925d-43e2-8d7d-8e67b255d97d-00000006"
+  ],
+  "match": 1,
+  "type": "Sales",
+  "no": "2",
+  "date": "20261001",
+  "party": "Spike Trader",
+  "lines": [
+   {
+    "ledger": "Spike Trader",
+    "amount": -272.5,
+    "bills": []
+   },
+   {
+    "ledger": "Spike Sales",
+    "amount": 250,
+    "bills": []
+   },
+   {
+    "ledger": "Spike CGST",
+    "amount": 22.5,
+    "bills": []
+   }
+  ],
+  "nonZero": 3,
+  "bills": 0,
+  "ok": true
+ },
+ {
+  "label": "FinCom Spike Co altered Receipt/1/20261002 bridge go-3c92c229cdcb at 02:46:37",
+  "guid": "46e617af-925d-43e2-8d7d-8e67b255d97d-00000002",
+  "ev": "altered",
+  "xmlChars": 2434,
+  "parsedVouchers": 1,
+  "parsedGuids": [
+   "46e617af-925d-43e2-8d7d-8e67b255d97d-00000002"
+  ],
+  "match": 1,
+  "type": "Receipt",
+  "no": "1",
+  "date": "20261002",
+  "party": "Cash",
+  "lines": [
+   {
+    "ledger": "Spike Income",
+    "amount": 800,
+    "bills": []
+   },
+   {
+    "ledger": "Cash",
+    "amount": -800,
+    "bills": []
+   }
+  ],
+  "nonZero": 2,
+  "bills": 0,
+  "ok": true
+ },
+ {
+  "label": "FinCom Spike Co created Receipt/3/20261002 bridge go-3c92c229cdcb at 02:47:29",
+  "guid": "46e617af-925d-43e2-8d7d-8e67b255d97d-00000007",
+  "ev": "created",
+  "xmlChars": 2434,
+  "parsedVouchers": 1,
+  "parsedGuids": [
+   "46e617af-925d-43e2-8d7d-8e67b255d97d-00000007"
+  ],
+  "match": 1,
+  "type": "Receipt",
+  "no": "3",
+  "date": "20261002",
+  "party": "Cash",
+  "lines": [
+   {
+    "ledger": "Spike Income",
+    "amount": 900,
+    "bills": []
+   },
+   {
+    "ledger": "Cash",
+    "amount": -900,
+    "bills": []
+   }
+  ],
+  "nonZero": 2,
+  "bills": 0,
+  "ok": true
+ },
+ {
+  "label": "FinCom Spike U2 created Receipt/1/20261002 bridge go-6ba4ba69ae25 at 02:49:57",
+  "guid": "60e375fa-3d01-4d85-be82-e07afe0839de-00000002",
+  "ev": "created",
+  "xmlChars": 2434,
+  "parsedVouchers": 1,
+  "parsedGuids": [
+   "60e375fa-3d01-4d85-be82-e07afe0839de-00000002"
+  ],
+  "match": 1,
+  "type": "Receipt",
+  "no": "1",
+  "date": "20261002",
+  "party": "Cash",
+  "lines": [
+   {
+    "ledger": "Spike Income",
+    "amount": 450,
+    "bills": []
+   },
+   {
+    "ledger": "Cash",
+    "amount": -450,
+    "bills": []
+   }
+  ],
+  "nonZero": 2,
+  "bills": 0,
+  "ok": true
+ }
+]
