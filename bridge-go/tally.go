@@ -281,8 +281,9 @@ type TC struct {
 	// the failure), the wait for Tally's lock not counted
 	timed func(seconds float64)
 	// 2.2.2 (the owner's condition b): a HARD stop for the recorder's background reads (the entry fetch by MasterID and by
-	// number, source B, source C, the held resolver): the bridge stops waiting after this many milliseconds (a context
-	// deadline from the send). Never for a posting (Import), a person's read or the light company check (they never set it)
+	// number, source B, source C, the held resolver; 2.3.1: the company list asked in the background, bgCompaniesTC): the
+	// bridge stops waiting after this many milliseconds (a context deadline from the send). Never for a posting (Import), a
+	// person's read or the light company check FinComCompany (they never set it)
 	limitMs int
 	// 2.2.2 second review (L-B): the light company check and the open-company list (tiny): not held by the cool-down after
 	// a recorder read's stop (the probe and busy rules still apply)
@@ -294,7 +295,7 @@ type TC struct {
 //
 // 2.2.0 (the owner's rule, prospective only): one narrow exception, the recorder's body fetch (FinComVoucherByMaster):
 // it asks only the entries just changed, by MasterID, with the line's own date as the period; it passes only when it is
-// exactly what voucherByMasterRequest builds for one day and 1 to 50 MasterIDs (recorder_live.go). Never a day's list
+// exactly what voucherByMasterRequest builds for one day and exactly one MasterID (2.3.1; recorder_live.go). Never a day's list
 //
 // Round 3 R3-1: the two exceptions are checked by their id, always (whatever ReadDays says, whatever date form they use):
 // a FinComVoucherByMaster or FinComSlice that is not exactly as built, with its values in bounds, never goes.

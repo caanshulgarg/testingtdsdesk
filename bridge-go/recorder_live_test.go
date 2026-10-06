@@ -550,7 +550,7 @@ func TestLiveDatedGuardException(t *testing.T) {
 	if readDaysOn() {
 		t.Fatal("ReadDays is on by default")
 	}
-	ok := voucherByMasterRequest(zz, "20261004", []string{"5", "9"})
+	ok := voucherByMasterRequest(zz, "20261004", []string{"5"}) // 2.3.1: exactly one MasterID
 	// 2.2.2 security review: only for a company whose starting point is recorded
 	if datedRefused(fin, ok) == nil {
 		t.Fatal("the body fetch passes for a company with no starting point")
@@ -562,15 +562,11 @@ func TestLiveDatedGuardException(t *testing.T) {
 	if _, err := invokeTally(&TC{copier: true}, f.port, ok, 5); err != nil {
 		t.Fatalf("the body fetch: %v", err)
 	}
-	var ids []string
-	for i := 0; i < 51; i++ {
-		ids = append(ids, fmt.Sprint(i+1))
-	}
 	bad := map[string]string{
 		"two days":       strings.Replace(ok, "<SVTODATE>20261004</SVTODATE>", "<SVTODATE>20261005</SVTODATE>", 1),
-		"51 ids":         voucherByMasterRequest(zz, "20261004", ids),
-		"another filter": strings.Replace(ok, "$MasterID = 5 OR $MasterID = 9", "$AlterID &gt; 0", 1),
-		"no filter":      strings.Replace(ok, "$MasterID = 5 OR $MasterID = 9", "", 1),
+		"two ids":        strings.Replace(ok, "$MasterID = 5", "$MasterID = 5 OR $MasterID = 9", 1), // 2.3.1: strictly one
+		"another filter": strings.Replace(ok, "$MasterID = 5", "$AlterID &gt; 0", 1),
+		"no filter":      strings.Replace(ok, "$MasterID = 5", "", 1),
 		"more fields":    strings.Replace(ok, "<FETCH>", "<FETCH>LEDGERENTRIES.*, ", 1),
 		"another id":     strings.ReplaceAll(ok, vchByMasterID, tagCheckID),
 	}

@@ -17,7 +17,7 @@
 //   - RecorderSource addon | alterid | both (setting, default addon), overridden by the beat's recorderSource.
 //
 // The body fetch: a created, altered or imported entry that is not FinCom's own is asked of Tally by MasterID
-// (FinComVoucherByMaster: up to 50 MasterIDs, the line's own date as the period; the one dated request allowed with
+// (FinComVoucherByMaster: exactly one MasterID a request since 2.3.1, the line's own date as the period; the one dated request allowed with
 // ReadDays off, tally.go); a ledger created or altered by the ledger list's request with a one-ID range. A background
 // read: it gives way to a posting, 20 s at most; without a body the line still goes (the cloud holds it).
 //
@@ -49,7 +49,7 @@ const (
 	liveAddonName = "FinComRecorder.tdl"    // the live add-on (addon/), written beside the trial's by the install step
 	vchByMasterID = "FinComVoucherByMaster" // the body fetch's request id (allowlist.go)
 	vchByNumberID = "FinComVoucherByNumber" // 2.2.1: a new entry's body by its type and number on its date (allowlist.go)
-	liveMaxIDs    = 50                      // MasterIDs per body fetch
+	liveMaxIDs    = 1                       // 2.3.1 (the owner, 06-Oct-2026): strictly ONE MasterID per body fetch
 	liveMaxLines  = 500                     // lines per recorder_lines call (the cloud's MAX_RECORDER_LINES)
 	liveMaxBytes  = 1 << 20                 // bytes per recorder_lines call
 	liveReadMax   = 1 << 20                 // bytes read from one file per turn
@@ -63,7 +63,29 @@ const (
 		// the sales or purchase ledger sits under each item, the party and GST are its ledger entries), so an item
 		// invoice's body balances; nothing else added (items231_test.go)
 		", ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.LEDGERNAME, ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.AMOUNT, " +
-		"ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.ISDEEMEDPOSITIVE"
+		"ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.ISDEEMEDPOSITIVE" +
+		// 2.3.1 part A (the owner's decision of 06-Oct-2026, "item invoices enter complete"; parta231_test.go): the entry's
+		// reference and date, the party GSTIN, place of supply and company GSTIN (the Day Book path reads them: the live route
+		// no longer blanks them), the e-invoice IRN and acknowledgement, the e-way bill number; on the ledger lines the GST
+		// fields the Day Book path reads (HSN, rate details), cost centre allocations, bank details (transaction type,
+		// instrument number or UTR, instrument date, bank date) and TDS details (nature of payment, rate, assessable value,
+		// tax, the deductee); the items (name, billed quantity with its unit, rate, taxable value, the HSN and GST rate Tally
+		// applied to that line) and the cost centres of the ledger lines under them. Stored fields only, nothing Tally works
+		// out; read only, one entry per request, the 2-second rule
+		", REFERENCE, REFERENCEDATE, PARTYGSTIN, PLACEOFSUPPLY, CMPGSTIN, IRN, IRNACKNO, IRNACKDATE, EWAYBILLDETAILS.BILLNUMBER, " +
+		"ALLLEDGERENTRIES.GSTHSNNAME, ALLLEDGERENTRIES.RATEDETAILS.GSTRATEDUTYHEAD, ALLLEDGERENTRIES.RATEDETAILS.GSTRATEVALUATIONTYPE, " +
+		"ALLLEDGERENTRIES.RATEDETAILS.GSTRATE, ALLLEDGERENTRIES.CATEGORYALLOCATIONS.CATEGORY, " +
+		"ALLLEDGERENTRIES.CATEGORYALLOCATIONS.COSTCENTREALLOCATIONS.NAME, ALLLEDGERENTRIES.CATEGORYALLOCATIONS.COSTCENTREALLOCATIONS.AMOUNT, " +
+		"ALLLEDGERENTRIES.BANKALLOCATIONS.TRANSACTIONTYPE, ALLLEDGERENTRIES.BANKALLOCATIONS.INSTRUMENTNUMBER, " +
+		"ALLLEDGERENTRIES.BANKALLOCATIONS.INSTRUMENTDATE, ALLLEDGERENTRIES.BANKALLOCATIONS.BANKERSDATE, " +
+		"ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.TAXTYPE, ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.CATEGORY, " +
+		"ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.PARTYLEDGER, ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.SUBCATEGORYALLOCATION.TAXRATE, " +
+		"ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.SUBCATEGORYALLOCATION.ASSESSABLEAMOUNT, ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.SUBCATEGORYALLOCATION.TAX, " +
+		"ALLINVENTORYENTRIES.STOCKITEMNAME, ALLINVENTORYENTRIES.BILLEDQTY, ALLINVENTORYENTRIES.RATE, ALLINVENTORYENTRIES.AMOUNT, " +
+		"ALLINVENTORYENTRIES.GSTHSNNAME, ALLINVENTORYENTRIES.RATEDETAILS.GSTRATEDUTYHEAD, ALLINVENTORYENTRIES.RATEDETAILS.GSTRATEVALUATIONTYPE, " +
+		"ALLINVENTORYENTRIES.RATEDETAILS.GSTRATE, ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.CATEGORYALLOCATIONS.CATEGORY, " +
+		"ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.CATEGORYALLOCATIONS.COSTCENTREALLOCATIONS.NAME, " +
+		"ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.CATEGORYALLOCATIONS.COSTCENTREALLOCATIONS.AMOUNT"
 )
 
 // one change, whichever source it came from
@@ -1554,24 +1576,20 @@ func liveInWindow(key string, a int64) bool {
 }
 
 // --- the body fetch
-// FinComVoucherByMaster: the vouchers with these MasterIDs (at most 50), the date's period (one day), the fields the
+// FinComVoucherByMaster: the voucher with this one MasterID (2.3.1), the date's period (one day), the fields the
 // cloud's day parse reads (parse.js parseDay; 2.3.1: with the ledger lines under an item invoice's items), nothing Tally
 // works out
+// 2.3.1 (the owner, 06-Oct-2026: "one entry per request: strictly one, asked for by Tally's own id"): exactly ONE MasterID;
+// "" (nothing can be sent) for none, more than one, or one that is not a number
 func voucherByMasterRequest(company, date string, mids []string) string {
-	var f []string
-	for _, m := range mids {
-		if d := onlyDigits(m); d != "" {
-			f = append(f, "$MasterID = "+d)
-		}
+	if len(mids) != 1 || mids[0] == "" || onlyDigits(mids[0]) != mids[0] || len(mids[0]) > 18 {
+		return ""
 	}
-	if len(f) == 0 {
-		f = []string{"$MasterID = 0"}
-	}
-	return fcCollection(vchByMasterID, company, periodVars(date, date), "Voucher", liveFetchField, strings.Join(f, " OR "))
+	return fcCollection(vchByMasterID, company, periodVars(date, date), "Voucher", liveFetchField, "$MasterID = "+mids[0])
 }
 
 // the one narrow exception to "no dated request while ReadDays is off" (tally.go): exactly the body fetch as built
-// above, for one day and 1 to 50 MasterIDs
+// above, for one day and exactly one MasterID (2.3.1)
 func voucherByMasterExact(x string) bool {
 	if tallyRequestID(x) != vchByMasterID {
 		return false
@@ -1584,7 +1602,7 @@ func voucherByMasterExact(x string) bool {
 	for _, m := range re(`\$MasterID = (\d+)`).FindAllStringSubmatch(x, -1) {
 		ids = append(ids, m[1])
 	}
-	if len(ids) == 0 || len(ids) > liveMaxIDs {
+	if len(ids) != 1 {
 		return false
 	}
 	co := html.UnescapeString(group(`<SVCURRENTCOMPANY>([^<]*)</SVCURRENTCOMPANY>`, x, 1))
@@ -1622,7 +1640,11 @@ func fetchVouchersByMaster(tc *TC, company string, port int, date string, mids [
 }
 
 func fetchVouchersByMasterIn(tc *TC, company string, port int, date string, mids []string, sec int) (map[string]string, error) {
-	raw, err := invokeTally(tc, port, voucherByMasterRequest(company, date, mids), sec)
+	x := voucherByMasterRequest(company, date, mids)
+	if x == "" {
+		return nil, fmt.Errorf("not asked: the entry request names exactly one MasterID (%d given)", len(mids))
+	}
+	raw, err := invokeTally(tc, port, x, sec)
 	if err != nil {
 		return nil, err
 	}
@@ -1740,7 +1762,7 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 		failed(need, err.Error())
 		return
 	}
-	// vouchers by date, 50 MasterIDs a request
+	// vouchers by date, one MasterID a request (2.3.1)
 	byDate := map[string][]*change{}
 	var dates []string
 	var ledgers []*change
@@ -1768,14 +1790,23 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 		}
 		byDate[c.vchDate] = append(byDate[c.vchDate], c)
 	}
-	for _, d := range dates {
+byDay:
+	for di, d := range dates {
 		cs := byDate[d]
 		for len(cs) > 0 {
 			part := cs[:minI(len(cs), liveMaxIDs)]
 			cs = cs[len(part):]
 			if time.Now().After(deadline) {
-				failed(part, "20 s passed")
-				continue
+				// 2.3.1 (one entry per request): the turn's time is used; the entries not asked yet are asked in the next
+				// turn, in order (the group waits at the first of them), never sent without their body for want of time
+				rest := append(append([]*change{}, part...), cs...)
+				for _, d2 := range dates[di+1:] {
+					rest = append(rest, byDate[d2]...)
+				}
+				for _, c := range rest {
+					liveDecide(c, fmt.Sprintf("not asked yet: this turn's %d s are used (one entry a request); asked in the next turn", liveBodySec()))
+				}
+				break byDay
 			}
 			var mids []string
 			for _, c := range part {

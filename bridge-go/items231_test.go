@@ -37,7 +37,7 @@ const items231Added = ", ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.LEDGERNAME, A
 
 // the request as 2.3.0 built it
 func items231Old(x string) string {
-	return strings.Replace(x, "<FETCH>"+items231OldFetch+items231Added+"</FETCH>", "<FETCH>"+items231OldFetch+"</FETCH>", 1)
+	return strings.Replace(x, "<FETCH>"+liveFetchField+"</FETCH>", "<FETCH>"+items231OldFetch+"</FETCH>", 1)
 }
 
 type items231Vch struct {
@@ -148,12 +148,13 @@ func items231Bridge(t *testing.T) (string, *standTally, *standCloud) {
 // --- 1. the request: the 2.3.0 request with exactly the items' ledger lines added to its fetch; read only; one entry;
 // the same filters and period; the test forms A and C still byte for byte the two forms
 func TestItems231RequestAddsOnlyTheItemsLedgerLines(t *testing.T) {
-	if liveFetchField != items231OldFetch+items231Added {
-		t.Fatalf("the entry request's fetch is not the 2.3.0 fetch plus the items' ledger lines:\n%s", liveFetchField)
+	// part A (the owner's later decision of 06-Oct-2026) adds the rest of the entry (parta231_test.go)
+	if liveFetchField != items231OldFetch+items231Added+partAAdded {
+		t.Fatalf("the entry request's fetch is not the 2.3.0 fetch plus the items' ledger lines and part A:\n%s", liveFetchField)
 	}
-	// the added fields: exactly three, all under the items' accounting allocations
+	// the added fields before part A: exactly three, all under the items' accounting allocations
 	old := map[string]bool{}
-	for _, f := range strings.Split(items231OldFetch, ", ") {
+	for _, f := range strings.Split(items231OldFetch+partAAdded, ", ") {
 		old[f] = true
 	}
 	var added []string
@@ -201,6 +202,8 @@ func TestItems231RequestAddsOnlyTheItemsLedgerLines(t *testing.T) {
 	}
 	// the 2.3.0 shapes are what 2.3.0 shipped (docs/tally-allowlist.md of 2.3.0): only the fetch moved them
 	s := allowListSamples()
+	// part A: FinComVoucherByMaster names exactly one MasterID now; 2.3.0's sample named two
+	s[vchByMasterID] = strings.Replace(s[vchByMasterID], "$MasterID = 1", "$MasterID = 1 OR $MasterID = 2", 1)
 	for id, sh := range map[string]string{vchByMasterID: "b6b4d3b5f221", vchByNumberID: "42ccf0c70605", fetchTestA: "8f9370ab51b7", fetchTestC: "63bfa3fbbe2a"} {
 		if got := shapeOf(items231Old(s[id])); got != sh {
 			t.Errorf("%s without the added fields has shape %s, not 2.3.0's %s", id, got, sh)
@@ -318,10 +321,15 @@ func TestItems231LinesGoWithBalancedBodies(t *testing.T) {
 				}
 			}
 		} else {
-			// the three lines of one day share a request as before 2.3.1 (the MasterIDs named, no others)
+			// part A (the owner, 06-Oct-2026): strictly one entry per request, by Tally's own id: three requests, one MasterID each
 			bs := f.bodiesOf(vchByMasterID)
-			if len(bs) != 1 || strings.Count(bs[0], "$MasterID = ") != 3 || f.n(vchByNumberID) != 0 {
+			if len(bs) != 3 || f.n(vchByNumberID) != 0 {
 				t.Fatalf("asked: %v", f.ids())
+			}
+			for _, b := range bs {
+				if strings.Count(b, "$MasterID = ") != 1 {
+					t.Fatalf("more than one entry in a request: %s", b)
+				}
 			}
 		}
 	}
@@ -442,10 +450,13 @@ func TestItems231VersionAndDecisionLine(t *testing.T) {
 	}
 	al := readText("../docs/tally-allowlist.md")
 	line := group(`(?m)^(First table: .*)$`, al, 1)
-	// review M1: what the two requests ask, as built (ByMaster up to 50 entries of one day, as before; ByNumber one entry), and
+	// review M1: what the two requests ask, as built (part A: one entry each, by Tally's own id or by type and number), and
 	// the stand named as not real Tally; review M2: the four other trial forms unchanged, so "no other row changed" holds
 	for _, s := range []string{"re-measured on 2026-10-06 on the stand (not real Tally)", "not yet measured on NWS144",
-		"allowed for 2.3.1 by the owner's decision of 2026-10-06: FinComVoucherByMaster and FinComVoucherByNumber also fetch the ledger lines kept under an invoice's items (ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS); FinComVoucherByMaster asks up to 50 entries of one day per request, as before; FinComVoucherByNumber one entry; read only, within the 2-second rule; nothing else changed",
+		// part A (the owner's decisions of 06-Oct-2026): the whole entry, strictly one entry per request
+		"allowed for 2.3.1 by the owner's decision of 2026-10-06: FinComVoucherByMaster and FinComVoucherByNumber fetch the whole entry: the ledger lines kept under an invoice's items (ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS); the items",
+		"one entry per request, by Tally's own id (FinComVoucherByMaster) or by type and number (FinComVoucherByNumber); read only, within the 2-second rule, after postings, nothing else added, each bridge on its own Windows user's Tally only",
+		"TDSDeskCompanies, when asked in the background (the recorder's own-Tally look, the light check), stops hard at 2 seconds too",
 		"FinComFetchTestB, D, E and F stay byte for byte as in 2.3.0; no other row changed",
 		"as for 2.3.0: the owner's standing decision of 2026-10-06"} {
 		if !strings.Contains(line, s) {
@@ -457,7 +468,9 @@ func TestItems231VersionAndDecisionLine(t *testing.T) {
 	}
 	for _, f := range []string{"../docs/bridge-2.3.1-test-sheet.txt", "../docs/bridge-2.3.1-notes.md"} {
 		s := strings.Join(strings.Fields(readText(f)), " ")
-		for _, w := range []string{"2.3.1", "two items", "CGST", "SGST", "Purchase", "Credit Note"} {
+		// part A (the owner's decisions of 06-Oct-2026): the whole entry, the accuracy checks, one entry per request, 57
+		for _, w := range []string{"2.3.1", "two items", "CGST", "SGST", "Purchase", "Credit Note", "HSN", "IRN", "e-way bill", "UTR",
+			"cost centre", "TDS", "accuracy checks", "nothing of", "One entry per request", "migrations 56 and 57"} {
 			if !strings.Contains(s, w) {
 				t.Errorf("%s does not say %q", f, w)
 			}

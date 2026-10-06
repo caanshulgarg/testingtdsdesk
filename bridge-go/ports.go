@@ -443,8 +443,9 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 				ownAll = false
 			}
 		}
-		if err != nil && (errors.Is(err, errPreempted) || errors.Is(err, errBackoff)) && prevCompanies(toInt(pp["port"])) != nil {
-			// a background read stopped or held back: the companies named last time stand, nothing new is known
+		if err != nil && (errors.Is(err, errPreempted) || errors.Is(err, errBackoff) || errors.Is(err, errRecorderStop)) && prevCompanies(toInt(pp["port"])) != nil {
+			// a background read stopped or held back (2.3.1: or stopped at its 2 s hard stop): the companies named last time
+			// stand, nothing new is known
 			e["ok"], e["companies"], e["tallyState"] = true, prevCompanies(toInt(pp["port"])), "open"
 		} else if err != nil && isBusyErr(err) && tallyPortOpen(toInt(pp["port"])) && prevCompanies(toInt(pp["port"])) != nil {
 			// a busy Tally is still open: the companies it named last time stay, marked busy
