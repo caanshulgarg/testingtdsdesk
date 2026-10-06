@@ -82,8 +82,10 @@ function PostingXml($narr) {
 # the heavy company's dates: the 1st and 2nd of every month April - September 2026, and the 31st where it exists (the
 # company's books run 1-Apr-2026 to 31-Mar-2027: Tally refused earlier dates as "Out of Range" in run 37443094212)
 function HeavyDates {
-  $d = @(); $m = Get-Date -Year 2026 -Month 4 -Day 1
-  while ($m -lt (Get-Date -Year 2026 -Month 10 -Day 1)) {
+  # dates only (run 37450532756: two Get-Date calls a moment apart let October in, so the heavy Day Book of 1, 2 and
+  # 31 October held heavy vouchers and the measurement duplicated one of them instead of the template)
+  $d = @(); $m = [DateTime]::new(2026, 4, 1)
+  while ($m -lt [DateTime]::new(2026, 10, 1)) {
     $d += $m.ToString('yyyyMM') + '01'; $d += $m.ToString('yyyyMM') + '02'
     if ([DateTime]::DaysInMonth($m.Year, $m.Month) -eq 31) { $d += $m.ToString('yyyyMM') + '31' }
     $m = $m.AddMonths(1)

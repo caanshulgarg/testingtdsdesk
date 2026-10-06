@@ -122,7 +122,25 @@
     04 :    RETURN : Yes
     05 : END IF
     06 : WRITE FILE : "FCF1|ev=" + ##pEvent + "|cguid=" + ##vCG + "|cname=" + ##SVCurrentCompany + "|tuser=" + ($$String:$$CmpUserName)
-    07 : WRITE FILE : @@FCPVh1 + @@FCPVh2 + @@FCPVh3 + @@FCPVh4
+    0701 : WRITE FILE : "|guid=" + ($$String:$Guid)
+    0702 : WRITE FILE : "|mid=" + ($$String:$MasterID)
+    0703 : WRITE FILE : "|aid=" + ($$String:$AlterID)
+    0704 : WRITE FILE : "|date=" + ($$String:$Date)
+    0705 : WRITE FILE : "|vtype=" + ($$String:$VoucherTypeName)
+    0706 : WRITE FILE : "|vno=" + ($$String:$VoucherNumber)
+    0707 : WRITE FILE : "|party=" + ($$String:$PartyLedgerName)
+    0708 : WRITE FILE : "|canc=" + ($$String:$IsCancelled)
+    0709 : WRITE FILE : "|opt=" + ($$String:$IsOptional)
+    0710 : WRITE FILE : "|ref=" + ($$String:$Reference)
+    0711 : WRITE FILE : "|refdt=" + ($$String:$ReferenceDate)
+    0712 : WRITE FILE : "|pgstin=" + ($$String:$PartyGSTIN)
+    0713 : WRITE FILE : "|pos=" + ($$String:$PlaceOfSupply)
+    0714 : WRITE FILE : "|cgstin=" + ($$String:$CmpGSTIN)
+    0715 : WRITE FILE : "|irn=" + ($$String:$IRN)
+    0716 : WRITE FILE : "|irnack=" + ($$String:$IRNAckNo)
+    0717 : WRITE FILE : "|irnackdt=" + ($$String:$IRNAckDate)
+    0718 : WRITE FILE : "|ewb=" + ($$String:($$CollectionField:$BillNumber:1:EWayBillDetails))
+    0719 : WRITE FILE : "|narr=" + ($$String:$Narration)
 
     ;; ---- ledger entries
     10 : SET : vNI : $$NumItems:AllLedgerEntries
@@ -231,11 +249,25 @@
     04 : IF : NOT $$LastResult
     05 :    RETURN : Yes
     06 : END IF
-    07 : WRITE FILE      : "FCF1|ev=" + ##pEvent + "|cguid=" + ##vCG + "|form_guid=" + ($$String:$Guid) + "|form_mid=" + ($$String:$MasterID) + "|form_aid=" + ($$String:$AlterID)
-    08 : WRITE FILE      : "|db_guid=" + ($$String:($$CollectionField:$Guid:1:FCPByMid)) + "|db_mid=" + ($$String:($$CollectionField:$MasterID:1:FCPByMid)) + "|db_aid=" + ($$String:($$CollectionField:$AlterID:1:FCPByMid))
-    09 : WRITE FILE LINE : "|cmp_altvchid=" + ($$String:($AltVchId:Company:##SVCurrentCompany)) + "|end=1"
-    10 : CLOSE TARGET FILE
-    11 : RETURN : Yes
+    ;; each field on its own WRITE FILE (run 37450532756: one line holding all of them was dropped whole)
+    07 : WRITE FILE : "FCF1|ev=" + ##pEvent + "|cguid=" + ##vCG
+    08 : WRITE FILE : "|form_guid=" + ($$String:$Guid)
+    09 : WRITE FILE : "|form_mid=" + ($$String:$MasterID)
+    10 : WRITE FILE : "|form_aid=" + ($$String:$AlterID)
+    11 : WRITE FILE : "|n_db=" + ($$String:($$NumItems:FCPByMid))
+    ;; the saved voucher read back from the company by its MasterID
+    12 : WALK COLLECTION : FCPByMid
+    13 :    WRITE FILE : "|db_guid=" + ($$String:$Guid)
+    14 :    WRITE FILE : "|db_mid=" + ($$String:$MasterID)
+    15 :    WRITE FILE : "|db_aid=" + ($$String:$AlterID)
+    16 : END WALK
+    17 : WRITE FILE : "|cf_guid=" + ($$String:($$CollectionField:$Guid:1:FCPByMid))
+    18 : WRITE FILE : "|cf_aid=" + ($$String:($$CollectionField:$AlterID:1:FCPByMid))
+    19 : WRITE FILE : "|cmp_altvchid=" + ($$String:($AltVchID:Company:##SVCurrentCompany))
+    20 : WRITE FILE : "|cmp_altmstid=" + ($$String:($AltMstID:Company:##SVCurrentCompany))
+    21 : WRITE FILE LINE : "|end=1"
+    22 : CLOSE TARGET FILE
+    23 : RETURN : Yes
 
 ;; ---------------------------------------------------------------- a ledger created or altered
 [Function: FCPFullLed]

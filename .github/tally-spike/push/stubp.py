@@ -1,7 +1,7 @@
 # push-design copy of stubv.py: the same answers; each request is logged with its time in milliseconds (t, epoch).
 # A stand-in for FinCom's cloud (tally-ingest) on 127.0.0.1: every request body is kept (one JSON per line), and each
 # call gets a 200 with the smallest answer that lets the bridge go on: recorder_lines -> every line "applied".
-import json, sys, threading, time
+import json, os, sys, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 LOG = sys.argv[2]
 LOCK = threading.Lock()
@@ -19,6 +19,12 @@ class H(BaseHTTPRequestHandler):
             out = {'ok': True, 'results': res, 'applied': len(res), 'held': 0, 'duplicate': 0, 'stale': 0, 'failed': 0}
         elif kind == 'beat':
             out = {'ok': True, 'updateNow': False, 'posts': 0, 'trialTools': True}
+            # the harness turns the bridge's body fetch on again (stub-source.txt beside the log: recorderSource)
+            try:
+                src = open(os.path.join(os.path.dirname(LOG), 'stub-source.txt'), encoding='ascii').read().strip()
+                if src: out['recorderSource'] = src
+            except Exception:
+                pass
         elif kind == 'hello':
             out = {'ok': True, 'firm': 'Spike', 'device': 'runner'}
         elif kind == 'companies':

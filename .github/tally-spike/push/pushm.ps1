@@ -33,59 +33,59 @@ function Ms($sw) { [math]::Round($sw.Elapsed.TotalMilliseconds, 1) }
 function NowMs { [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() }
 Say "push-design on TallyPrime ${rel}: reps $reps, heavy $hvLed ledgers / $hvItem items / up to $hvVch vouchers ($hvBudget min), postings $posts"
 
-Add-Type -AssemblyName System.Windows.Forms, System.Drawing
-# PowerShell 7 (.NET): the drawing and forms types live in several assemblies; every one loaded now is referenced
-$null = [System.Drawing.Bitmap]; $null = [System.Drawing.Rectangle]; $null = [System.Windows.Forms.SendKeys]; $null = [System.Windows.Forms.Screen]
-$pdRefs = @([AppDomain]::CurrentDomain.GetAssemblies() | Where-Object { -not $_.IsDynamic -and $_.Location -and $_.GetName().Name -match '^System\.(Windows\.Forms(\.Primitives)?|Drawing(\.Common)?)$' } | ForEach-Object Location | Sort-Object -Unique)
-Write-Host "Add-Type references: $($pdRefs -join '; ')"
-Add-Type -ReferencedAssemblies $pdRefs -TypeDefinition @'
-using System; using System.Diagnostics; using System.Drawing; using System.Drawing.Imaging;
-using System.Runtime.InteropServices; using System.Threading; using System.Windows.Forms;
+Add-Type -AssemblyName System.Windows.Forms
+# the screen timer on plain Win32 calls (GDI BitBlt into a DIB section, keybd_event for Ctrl+A): runs 37443094212 and
+# 37450532756 showed that System.Drawing does not compile under PowerShell 7 here (its types are spread over
+# System.Drawing.Common / Primitives / System.Private.Windows.*), so nothing below needs more than System
+Add-Type -TypeDefinition @'
+using System; using System.Diagnostics; using System.Runtime.InteropServices; using System.Threading;
 public static class PdUi {
   [DllImport("winmm.dll")] public static extern uint timeBeginPeriod(uint p);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);
-  static long Hash(Bitmap bmp, Graphics g, Rectangle r) {
-    g.CopyFromScreen(r.X, r.Y, 0, 0, r.Size);
-    BitmapData d = bmp.LockBits(new Rectangle(0, 0, r.Width, r.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+  [DllImport("user32.dll")] static extern int GetSystemMetrics(int i);
+  [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr h);
+  [DllImport("user32.dll")] static extern int ReleaseDC(IntPtr h, IntPtr dc);
+  [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
+  [DllImport("gdi32.dll")] static extern IntPtr CreateCompatibleDC(IntPtr dc);
+  [DllImport("gdi32.dll")] static extern bool DeleteDC(IntPtr dc);
+  [DllImport("gdi32.dll")] static extern IntPtr SelectObject(IntPtr dc, IntPtr o);
+  [DllImport("gdi32.dll")] static extern bool DeleteObject(IntPtr o);
+  [DllImport("gdi32.dll")] static extern bool BitBlt(IntPtr d, int x, int y, int w, int h, IntPtr s, int sx, int sy, uint rop);
+  [StructLayout(LayoutKind.Sequential)] struct BMIH { public int biSize, biWidth, biHeight; public short biPlanes, biBitCount; public int biCompression, biSizeImage, biXPelsPerMeter, biYPelsPerMeter, biClrUsed, biClrImportant; }
+  [DllImport("gdi32.dll")] static extern IntPtr CreateDIBSection(IntPtr dc, ref BMIH bmi, uint usage, out IntPtr bits, IntPtr sec, uint off);
+  static long Hash(IntPtr mem, IntPtr scr, IntPtr bits, int w, int h) {
+    BitBlt(mem, 0, 0, w, h, scr, 0, 0, 0x00CC0020);
     long s = 1469598103934665603L;
-    try { for (int y = 0; y < r.Height; y += 5) for (int x = 0; x < r.Width; x += 5) { int v = Marshal.ReadInt32(d.Scan0, y * d.Stride + x * 4); s = (s ^ v) * 1099511628211L; } }
-    finally { bmp.UnlockBits(d); }
+    for (int y = 0; y < h; y += 5) for (int x = 0; x < w; x += 5) { int v = Marshal.ReadInt32(bits, (y * w + x) * 4); s = (s ^ v) * 1099511628211L; }
     return s;
   }
-  // sends the keys (SendWait) and watches the screen: ms until SendWait returned; first change; last change before the
-  // screen stayed the same for stableMs; number of frames
+  // keys: "^a" (Ctrl+A) sent by keybd_event. Returns ms until the keys were sent; first change of the screen; last change
+  // before the screen stayed the same for stableMs; frames
   public static string Measure(string keys, int stableMs, int maxMs) {
-    Rectangle r = Screen.PrimaryScreen.Bounds;
-    using (Bitmap bmp = new Bitmap(r.Width, r.Height, PixelFormat.Format32bppArgb)) using (Graphics g = Graphics.FromImage(bmp)) {
-      long prev = Hash(bmp, g, r);
+    int w = GetSystemMetrics(0), h = GetSystemMetrics(1);
+    IntPtr scr = GetDC(IntPtr.Zero), mem = CreateCompatibleDC(scr), bits;
+    BMIH bi = new BMIH(); bi.biSize = 40; bi.biWidth = w; bi.biHeight = -h; bi.biPlanes = 1; bi.biBitCount = 32;
+    IntPtr dib = CreateDIBSection(scr, ref bi, 0, out bits, IntPtr.Zero, 0), old = SelectObject(mem, dib);
+    try {
+      long prev = Hash(mem, scr, bits, w, h);
       Stopwatch sw = Stopwatch.StartNew();
-      SendKeys.SendWait(keys);
+      keybd_event(0x11, 0, 0, UIntPtr.Zero); keybd_event((byte)char.ToUpperInvariant(keys[keys.Length - 1]), 0, 0, UIntPtr.Zero);
+      keybd_event((byte)char.ToUpperInvariant(keys[keys.Length - 1]), 0, 2, UIntPtr.Zero); keybd_event(0x11, 0, 2, UIntPtr.Zero);
       double sent = sw.Elapsed.TotalMilliseconds, first = -1, last = -1; int frames = 0;
       while (sw.ElapsedMilliseconds < maxMs) {
-        long h = Hash(bmp, g, r); double t = sw.Elapsed.TotalMilliseconds; frames++;
-        if (h != prev) { if (first < 0) first = t; last = t; prev = h; }
+        long x = Hash(mem, scr, bits, w, h); double t = sw.Elapsed.TotalMilliseconds; frames++;
+        if (x != prev) { if (first < 0) first = t; last = t; prev = x; }
         else if (first >= 0 && t - last >= stableMs) break;
         Thread.Sleep(5);
       }
       return string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0:0.0};{1:0.0};{2:0.0};{3}", sent, first, last, frames);
-    }
+    } finally { SelectObject(mem, old); DeleteObject(dib); DeleteDC(mem); ReleaseDC(IntPtr.Zero, scr); }
   }
 }
 '@
-if (-not ('PdUi' -as [type])) {
-  Say 'HARNESS: the screen timer did not compile; the keys are sent without it (ui times empty), the stamps still time the save'
-  Add-Type -TypeDefinition @"
-using System; using System.Runtime.InteropServices;
-public static class PdUi {
-  [DllImport("winmm.dll")] public static extern uint timeBeginPeriod(uint p);
-  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
-  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);
-  public static string Measure(string keys, int stableMs, int maxMs) { return "-1;-1;-1;0"; }
-}
-"@
-  $script:noUiTimer = $true
-}
+$script:noUiTimer = -not ('PdUi' -as [type])
+if ($script:noUiTimer) { Say 'HARNESS: the screen timer did not compile' }
 [PdUi]::timeBeginPeriod(1) | Out-Null
 # the clock's step as this process sees it (the NTFS times the stamps use come from the same system time)
 $steps = @(); $t = [DateTime]::UtcNow.Ticks; for ($i = 0; $i -lt 2000000 -and $steps.Count -lt 20; $i++) { $n = [DateTime]::UtcNow.Ticks; if ($n -ne $t) { $steps += ($n - $t) / 10000.0; $t = $n } }
@@ -339,6 +339,25 @@ function Posting($cfg, $coTag, $route, $i) {
   Say ("-- b: {0} / {1} / {2} #{3}: {4} ms ({5}, ok {6})" -f $coTag, $cfg, $route, $i, $ms, $st, $ok)
 }
 
+# the body fetch on again: the stub cloud answers one heartbeat with recorderSource "both", then one with "addon" (the
+# bridge's liveOnAgain: a source other than the one in force when a method stopped turns it on again)
+$srcFile = Join-Path $out 'stub-source.txt'
+function Beats { @(Get-Content $stubLog -ErrorAction SilentlyContinue | Where-Object { $_ -match '"kind": "beat"' }).Count }
+function BodyFetchOn {
+  foreach ($v in 'both', 'addon') {
+    Set-Content $srcFile $v -Encoding ASCII; $n0 = Beats; $sw = [Diagnostics.Stopwatch]::StartNew()
+    while ((Beats) -le $n0 -and $sw.Elapsed.TotalSeconds -lt 75) { Start-Sleep 1 }
+  }
+  Remove-Item $srcFile -ErrorAction SilentlyContinue
+  $off = @(Get-Content $blog -ErrorAction SilentlyContinue | Where-Object { $_ -match 'on again for' } | Select-Object -Last 1)
+  Say "body fetch: recorderSource both -> addon sent by the stub cloud ($(if ($off) { $off[0].Trim() } else { 'nothing was off' }))"
+}
+function PostSet($cfg, $coTag) {
+  if ($cfg -ne 'none') { BodyFetchOn }
+  for ($i = 1; $i -le $posts; $i++) { Posting $cfg $coTag 'jobs' $i }
+  for ($i = 1; $i -le [math]::Max(2, [int]($posts / 2)); $i++) { Posting $cfg $coTag 'import' $i }
+}
+
 $tdlFull = "$fc\FCPFull.tdl"; $tdlHeads = "$fc\FCPHeads.tdl"; $tdlStamp = "$fc\FCPStamp.tdl"
 Copy-Item "$here\FCPFull.tdl" $tdlFull -Force; Copy-Item "$here\FCPHeads.tdl" $tdlHeads -Force; Copy-Item "$here\FCPStamp.tdl" $tdlStamp -Force
 $evs = @(Get-ChildItem $here -Filter 'FCPEv_*.tdl' | ForEach-Object { $d = "$fc\$($_.Name)"; Copy-Item $_.FullName $d -Force; $d })
@@ -350,6 +369,10 @@ foreach ($coTag in 'light', 'heavy') {
     Remove-Item "$pd\full-*.txt", "$pd\stamp-*.txt", "$rec\*" -Force -ErrorAction SilentlyContinue; $script:fullSeen = @{}
     if (-not (Start-T $data $cfgs[$cfg] "$coTag-$cfg")) { Say "HARNESS: Tally did not open the company ($coTag / $cfg)"; continue }
     Start-Sleep 5; BridgeLog "$coTag-$cfg-start"
+    # part b first, while nobody works in Tally's screens (run 37450532756: a body fetch timed while a voucher form was
+    # open took 2.2 s, the bridge's 2 s rule switched the body fetch off for the rest of the run, so the add-on's
+    # postings were timed without it); the stub cloud turns it on again before each set (BodyFetchOn)
+    if ($cfg -ne 'stamp') { PostSet $cfg $coTag }
     $nv = @()
     $nv += SaveBlock $cfg $coTag 'receipt' '1-10-2026' $reps 'dup'
     $nv += SaveBlock $cfg $coTag 'sales5' '2-10-2026' $reps 'dup'
@@ -371,13 +394,11 @@ foreach ($coTag in 'light', 'heavy') {
         OctVouchers | ConvertTo-Json -Depth 3 | Set-Content (Join-Path $cap "tally-ids-$coTag-after-cancel-delete.json") -Encoding UTF8
       }
     }
-    if ($cfg -ne 'stamp') {
-      for ($i = 1; $i -le $posts; $i++) { Posting $cfg $coTag 'jobs' $i }
-      for ($i = 1; $i -le [math]::Max(2, [int]($posts / 2)); $i++) { Posting $cfg $coTag 'import' $i }
-    }
     BridgeLog "$coTag-$cfg"
-    Get-ChildItem $pd -Filter 'full-*.txt' -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName (Join-Path $cap "fullfile-$coTag-$cfg.txt") }
-    Get-ChildItem $rec -File -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName (Join-Path $cap "recfile-$coTag-$cfg.txt") }
+    # every file kept under its own name (run 37450532756: a second file, e.g. one written with no company GUID during an
+    # import, overwrote the first)
+    Get-ChildItem $pd -Filter 'full-*.txt' -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName (Join-Path $cap "fullfile-$coTag-$cfg-$($_.Name)") }
+    Get-ChildItem $rec -File -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName (Join-Path $cap "recfile-$coTag-$cfg-$($_.Name)") }
   }
   # the candidate events: FCPFull plus each FCPEv_*.tdl (light only; a create, an alter, an import)
   if ($coTag -eq 'light') {
@@ -388,8 +409,26 @@ foreach ($coTag in 'light', 'heavy') {
       Posting 'evprobe' $coTag 'import' 1
       Get-ChildItem $pd -Filter 'ev-*.txt' -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName (Join-Path $cap "event-$($_.Name)") }
       Say "candidate event files written: $((Get-ChildItem $pd -Filter 'ev-*.txt' -ErrorAction SilentlyContinue | ForEach-Object Name) -join ', ')"
-      Get-ChildItem $pd -Filter 'full-*.txt' | ForEach-Object { Copy-Item $_.FullName (Join-Path $cap "fullfile-light-evprobe.txt") }
+      Get-ChildItem $pd -Filter 'full-*.txt' | ForEach-Object { Copy-Item $_.FullName (Join-Path $cap "fullfile-light-evprobe-$($_.Name)") }
     }
+  }
+}
+
+# ---------------------------------------------------------------- b again with the bridge's GentleMs at 0
+# (config.go: GentleMs 150 by default, tally.go tallyRaw waits that long before EVERY request it sends Tally, a
+# posting's too). The same postings with the setting at 0: the difference is what the pause costs. The bridge is not
+# changed: only its config file, then the bridge started again.
+& {
+  $bp = (Get-Process FinComBridge -ErrorAction SilentlyContinue | Select-Object -First 1).Path
+  $c0 = Get-Content "$h1\tds-bridge.config.json" -Raw | ConvertFrom-Json
+  $c0 | Add-Member -NotePropertyName GentleMs -NotePropertyValue 0 -Force
+  Set-Content "$h1\tds-bridge.config.json" ($c0 | ConvertTo-Json -Depth 8 -Compress) -Encoding UTF8
+  Get-Process FinComBridge -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep 3
+  if ($bp) { Start-Process -FilePath $bp | Out-Null }
+  $st = $null; for ($i = 0; $i -lt 20 -and -not $st; $i++) { Start-Sleep 3; $st = Bridge GET '/status' }
+  Say "bridge started again with GentleMs 0 ($bp): version $($st.version)"
+  foreach ($cfg in 'none', 'heads') {
+    if (Start-T $light $cfgs[$cfg] "light-$cfg-gentle0") { Start-Sleep 5; PostSet "$cfg-gentle0" 'light'; BridgeLog "light-$cfg-gentle0" }
   }
 }
 
