@@ -1,0 +1,68 @@
+{
+  "payroll50": {
+    "created": 0,
+    "errors": 0,
+    "ms": 20.8,
+    "err": ""
+  },
+  "payroll200": {
+    "created": 0,
+    "errors": 0,
+    "ms": 37.7,
+    "err": ""
+  },
+  "attendance": {
+    "created": 0,
+    "errors": 0,
+    "ms": 15.2,
+    "err": ""
+  },
+  "stockjournal": {
+    "created": 1,
+    "errors": 0,
+    "ms": 66.1,
+    "err": ""
+  },
+  "mfgjournal": {
+    "created": 1,
+    "errors": 0,
+    "ms": 31.5,
+    "err": ""
+  },
+  "salesorder": {
+    "created": 0,
+    "errors": 0,
+    "ms": 33.4,
+    "err": "Bad Order Number in Voucher!"
+  },
+  "purchaseorder": {
+    "created": 0,
+    "errors": 0,
+    "ms": 24.3,
+    "err": "Bad Order Number in Voucher!"
+  },
+  "deliverynote": {
+    "created": 1,
+    "errors": 0,
+    "ms": 48.2,
+    "err": ""
+  },
+  "receiptnote": {
+    "created": 1,
+    "errors": 0,
+    "ms": 47.5,
+    "err": ""
+  },
+  "physicalstock": {
+    "created": 1,
+    "errors": 0,
+    "ms": 24.8,
+    "err": ""
+  },
+  "salesbatch": {
+    "created": 1,
+    "errors": 0,
+    "ms": 246.7,
+    "err": ""
+  }
+}

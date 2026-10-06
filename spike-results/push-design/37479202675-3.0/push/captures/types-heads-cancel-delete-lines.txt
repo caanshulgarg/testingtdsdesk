@@ -1,0 +1,2 @@
+FCR1|ev=before_delete|t0=6-Oct-26 14:41|tw=6-Oct-26 14:41|cguid=cc85d5c1-8882-47d2-a2e0-2cbc42a1c6e4|cname=FinCom Spike Co|user=TALLY User|obj=Voucher|guid=|mid=10|aid=|vtype=Stock Journal|vno=2|vdate=1-Jan-27|name=|parent=|narr=template stock journal 50 items|t1=6-Oct-26 14:41|src=live
+FCR1|ev=after_delete|t0=6-Oct-26 14:41|tw=6-Oct-26 14:41|cguid=cc85d5c1-8882-47d2-a2e0-2cbc42a1c6e4|cname=FinCom Spike Co|user=TALLY User|obj=Voucher|guid=|mid=10|aid=|vtype=Stock Journal|vno=2|vdate=1-Jan-27|name=|parent=|narr=template stock journal 50 items|t1=6-Oct-26 14:41|src=live
