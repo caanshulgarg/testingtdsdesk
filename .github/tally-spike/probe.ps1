@@ -79,14 +79,15 @@ K '^a' 3 '57-ctrl-a'; K '{ESC}' 3 '57b-esc'; K 'y' 3 '58-y'; Clear
 # what Tally keeps of them: its own export
 K '{ESC}' 2 '59-gateway'
 Coll 'Ledger' '*' 'ledgers.xml'
-Say '---- a journal: Dr the expense 100000; To the TDS ledger (does Tally work it out?); To the party (the balance)'
+Say '---- a journal: Dr the expense 100000; To the party (Deduct TDS in same voucher); then To the TDS ledger'
 K 'v' 3 '60-vouchers'; K '{F7}' 3 '61-journal'; K '{F2}' 2; K '1-1-2027{ENTER}' 2 '62-date'
 K 'Probe Contract Work' 1; K '{ENTER}' 2 '63-exp'; K '100000' 1; K '{ENTER}' 2 '64-amt'
-K 't' 1; K '{ENTER}' 2 '65-to'; K 'Probe TDS Ledger' 1; K '{ENTER}' 3 '66-tds-ledger'
-for ($i = 1; $i -le 4; $i++) { K '{ENTER}' 2 ("67-tds-{0:d2}" -f $i) }
-K 't' 1; K '{ENTER}' 2 '68-to'; K 'Probe Deductee' 1; K '{ENTER}' 3 '69-party'
-for ($i = 1; $i -le 4; $i++) { K '{ENTER}' 2 ("70-party-{0:d2}" -f $i) }
-K '^a' 4 '71-ctrl-a'; K '^a' 4 '72-ctrl-a-2'
+K 't' 1; K '{ENTER}' 2 '65-to'; K 'Probe Deductee' 1; K '{ENTER}' 3 '66-party'
+K '{ENTER}' 3 '67-party-amount'; K '{DOWN}' 1 '67b-down'; K '{UP}' 1 '67c-up'
+for ($i = 1; $i -le 6; $i++) { K '{ENTER}' 2 ("68-p-{0:d2}" -f $i) }
+K 't' 1; K '{ENTER}' 2 '69-to'; K 'Probe TDS Ledger' 1; K '{ENTER}' 3 '70-tds-ledger'; K '{DOWN}' 1 '70b-down'; K '{UP}' 1 '70c-up'
+for ($i = 1; $i -le 6; $i++) { K '{ENTER}' 2 ("71-t-{0:d2}" -f $i) }
+K '^a' 4 '72-ctrl-a'; K '^a' 4 '73-ctrl-a-2'
 Post ('<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Day Book</REPORTNAME><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co + '</SVCURRENTCOMPANY><SVCURRENTDATE>20270101</SVCURRENTDATE><SVFROMDATE>20270101</SVFROMDATE><SVTODATE>20270101</SVTODATE></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>') 'daybook' 'daybook-20270101.xml' | Out-Null
 Post ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCC</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCC" ISMODIFY="No"><TYPE>Company</TYPE><FETCH>Name, IsTDSOn</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') 'company TDS' 'company.xml' | Out-Null
 Get-Process tally -ErrorAction SilentlyContinue | Stop-Process -Force
