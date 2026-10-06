@@ -1225,10 +1225,20 @@ async function guidsFromRecord(book: string, send: Record<string, any>[], device
   const want = send.filter((l) => (l.event === "deleted" || l.event === "cancelled") && !l.object_guid && l.guidHeld !== true && /^[0-9]{1,10}$/.test(String(l.master_id || "")) && Number(l.master_id) > 0 && l.company_guid);
   if (!want.length || !device || !bridge) return found;
   try {
-    const mids = [...new Set(want.map((l) => String(l.master_id)))].slice(0, 500);
-    const { data, error } = await db.from("tally_recorder_lines").select("id, object_guid, master_id, company_guid, state, event, body, payload, device_id, bridge")
-      .eq("book_id", book).eq("device_id", device).eq("bridge", bridge).in("master_id", mids).in("state", ["applied", "duplicate"]).in("event", ["created", "altered", "imported"]).order("id", { ascending: false }).limit(2000);
-    if (error || !Array.isArray(data)) { console.log("tally-ingest recorder_lines: cancel/delete GUID: FinCom's record not read", book, String(error?.message || "").slice(0, 200)); return found; }
+    // 2.3.1 (2.3.0 review, cloud Lows): the company GUID is in the query (case ignored, as below; a GUID of other characters is
+    // never looked up), the MasterIDs asked 100 at a time, so another company's newer rows under the same MasterID never push
+    // this company's out of a read's 2,000 rows
+    const data: any[] = [];
+    const cgs = [...new Set(want.map((l) => String(l.company_guid).toLowerCase()))].filter((g) => /^[0-9a-z-]{1,100}$/.test(g));
+    for (const cg of cgs) {
+      const mids = [...new Set(want.filter((l) => String(l.company_guid).toLowerCase() === cg).map((l) => String(l.master_id)))].slice(0, 500);
+      for (let i = 0; i < mids.length; i += 100) {
+        const { data: d, error } = await db.from("tally_recorder_lines").select("id, object_guid, master_id, company_guid, state, event, body, payload, device_id, bridge")
+          .eq("book_id", book).eq("device_id", device).eq("bridge", bridge).ilike("company_guid", cg).in("master_id", mids.slice(i, i + 100)).in("state", ["applied", "duplicate"]).in("event", ["created", "altered", "imported"]).order("id", { ascending: false }).limit(2000);
+        if (error || !Array.isArray(d)) { console.log("tally-ingest recorder_lines: cancel/delete GUID: FinCom's record not read", book, String(error?.message || "").slice(0, 200)); return found; }
+        data.push(...d);
+      }
+    }
     for (const l of want) {
       const gs = new Map<string, number | string>();
       // the lines BEFORE it in this same call that carry Tally's entry under their GUID (an alteration and its delete sent

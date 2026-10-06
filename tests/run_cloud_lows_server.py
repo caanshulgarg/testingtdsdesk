@@ -99,6 +99,21 @@ try:
     ok(c == 200 and (dev["info"].get("idRefused") or {}).get("bridge") == OTHERB, "C. another bridge's refusal on this computer is kept (%s)" % dev["info"].get("idRefused"))
     dev["info"].pop("idRefused", None)
 
+    # D. guidsFromRecord: the company in the query
+    F.HONOR_LIMIT[0] = True
+    def row(i, mid, guid, cg):
+        return {"id": i, "book_id": BOOK, "firm_id": FIRM, "device_id": "d-1", "bridge": BRID, "line_id": "s%d" % i, "event": "created", "state": "applied", "object_guid": guid,
+                "master_id": str(mid), "company_guid": cg, "vch_type": "Receipt", "vch_no": str(i), "vch_date": "2026-10-02", "payload": {}, "body": {"vouchers": [{"guid": guid}]}}
+    F.T["tally_recorder_lines"] = [row(5, 21, CG + "-00000015", CG)] + [row(1000 + i, 21, "other-co-%08x" % i, "11111111-2222-3333-4444-555555555555") for i in range(2100)]
+    line = {"line_id": "D21", "event": "deleted", "object_guid": "", "master_id": "21", "alter_id": None, "vch_type": "Receipt", "vch_no": "5", "vch_date": "20261002",
+            "saved_at": "2026-10-05T13:56:00Z", "pc": "PC", "user": "TALLY User", "company_guid": CG.upper(), "ledgers": [], "narration": "", "fid": "", "xml": "", "source": "addon",
+            "heldWhy": "deleted in Tally; FinCom could not tell which entry: upload that day's Day Book to settle it"}
+    c, r = call({"kind": "recorder_lines", "version": "2.3.1", "bridge": BR, "company": "ZZ CO", "company_guid": CG, "lines": [line]})
+    got = {l["line_id"]: l for l in SENT}
+    ok(c == 200 and got.get("D21", {}).get("object_guid") == CG + "-00000015",
+       "D. 2,100 newer rows of another company with the same MasterID do not hide the entry (the company GUID in any case) (%s)" % got.get("D21", {}).get("object_guid"))
+    F.HONOR_LIMIT[0] = False
+
 finally:
     fn.terminate()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); raise SystemExit(1 if fails else 0)
