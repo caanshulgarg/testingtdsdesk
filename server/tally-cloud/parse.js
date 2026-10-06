@@ -79,6 +79,7 @@ function rateHeads(own){
   const o = {c: null, s: null, i: null, cess: null};
   blocks(own, "RATEDETAILS.LIST").forEach((q) => {
     const h = one(q, "GSTRATEDUTYHEAD").toUpperCase(), vt = one(q, "GSTRATEVALUATIONTYPE"), rv = one(q, "GSTRATE");
+    if (rv && vt && !/value/i.test(vt) && !/not applicable/i.test(vt) && /CESS/.test(h) && num(rv)) o.cessQty = true;     // review M3: said, not worked out
     if (!rv || (vt && !/value/i.test(vt))) return;
     const r = num(rv);
     if (/^(CGST|CENTRAL)/.test(h)) o.c = r; else if (/^(SGST|UTGST|STATE|UNION)/.test(h)) o.s = r;
@@ -259,9 +260,20 @@ function takeVoucher(s){
     // the items' tax (and that of a taxed ledger line beside them, e.g. freight with its own rate) against those lines,
     // within one rupee (Tally rounds per ledger). Items with no rate of Tally's (GST typed on the ledgers by hand, or a
     // body from a bridge before 2.3.1 part A) cannot be checked this way: not a failure
-    if (v.items.some((it) => it.gst != null) && named.length){
-      const want = r2(v.items.reduce((t, it) => t + it.cgst + it.sgst + it.igst + it.cess, 0) +
-        meta.filter((m) => !m.it && !m.bills && !TAXNAME.test(m.name) && m.rate).reduce((t, m) => t + m.a * m.rate / 100, 0));
+    // review M3 (06-Oct-2026): a tax that cannot be checked this way is said in plain words, which case ("tax not checked:
+    // ..."): GST ledgers not named as GST, an item line without Tally's rate, a cess based on quantity. A note, never a hold
+    const unrated = v.items.filter((it) => it.gst == null), cessQty = items.filter((it) => rateHeads(it.own).cessQty);
+    const itemTax = r2(v.items.reduce((t, it) => t + it.cgst + it.sgst + it.igst + it.cess, 0));
+    const others = meta.filter((m) => !m.it && !m.bills && !TAXNAME.test(m.name) && !m.rate && Math.abs(m.a) > 0.005);
+    const nm = (xs) => xs.slice(0, 3).map((x) => x).join(", ") + (xs.length > 3 ? " and " + (xs.length - 3) + " more" : "");
+    if (v.items.some((it) => it.gst != null) && !named.length && others.length && itemTax > 0.005){
+      checks.push("tax not checked: no ledger line of this entry is named as a GST ledger (CGST, SGST, IGST or cess), so the GST worked out on the items (" + rupees(itemTax) + ") was not compared; its other ledger lines: " + nm(others.map((m) => m.name)));
+    } else if (unrated.length && named.length){
+      checks.push("tax not checked: Tally gave no GST rate on the line of " + nm(unrated.map((it) => it.item || "item " + (it.n + 1))) + ", so the items' GST was not worked out");
+    } else if (cessQty.length && named.length){
+      checks.push("tax not checked: a cess based on quantity on " + nm(cessQty.map((it) => one(it.own, "STOCKITEMNAME") || "an item")) + " is not worked out by FinCom");
+    } else if (v.items.some((it) => it.gst != null) && named.length){
+      const want = r2(itemTax + meta.filter((m) => !m.it && !m.bills && !TAXNAME.test(m.name) && m.rate).reduce((t, m) => t + m.a * m.rate / 100, 0));
       const got = r2(named.reduce((t, m) => t + m.a, 0));
       if (Math.abs(want - got) > 1) checks.push("the GST worked out on the items (" + rupees(want) + ") does not match the GST ledger lines (" + rupees(got) + ")");
     }

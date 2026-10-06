@@ -11,6 +11,8 @@ cloud's own reader (server/tally-cloud/parse.js) into the shape tally-ingest sen
      given as a date on the bill); lines, bills and the day cache exactly as under 56 (a second book loaded before 57).
   2. the recorder path never blanks: a body before part A (no details) leaves them; blanks and empty lists keep the stored
      ones; a new value or new rows replace them (the old rows marked gone, kept).
+  2b. (review M2) a 2.3.1 body marked "full": true is authoritative for its own details: a blank IRN, acknowledgement or
+     e-way bill is stored blank, an empty items / costs / banks / TDS list marks that entry's rows gone (soft, kept).
   3. the Day Book is authoritative: an empty list there marks the rows gone; a Day Book entry failing the accuracy checks is
      stored (never refused) with the plain words in check_notes.
   4. a delete or cancel of an entry never in the copy settles by itself ("nothing to remove: ..."), kept; a later Day Book
@@ -217,6 +219,14 @@ try:
        "a new IRN and new item rows from the recorder replace the stored ones (%s)" % items(S))
     ok(db.one("select count(*) from tally_item_lines where guid = %s and gone_at is not null" % q(S)) == "2" and db.one("select count(*) from tally_item_lines where guid = %s" % q(S)) == "3",
        "the earlier item rows kept, marked gone (none removed)")
+
+    print("== 2b. a 2.3.1 'full' body (review M2): the details follow Tally exactly, removals included")
+    fb = dict(sv, alter=sv["alter"] + 3 + 1, irn="", ackNo="", ackDate="", eway="", items=[], costs=[], full=True)
+    got = states(apply([rline("r-full", fb, sl)]))
+    ok(got == ["applied"] and vx(S)["irn"] == "" and vx(S)["ack_date"] == "" and vx(S)["eway_no"] == "" and items(S) == []
+       and db.one("select count(*) from tally_cost_allocs where guid = %s and gone_at is null" % q(S)) == "0",
+       "a full body with the IRN, acknowledgement, e-way bill, items and cost centres removed in Tally: blank and no current rows (%s; %s)" % (got, vx(S)))
+    ok(int(db.one("select count(*) from tally_item_lines where guid = %s and gone_at is not null" % q(S))) >= 3, "the earlier rows kept, marked gone (never removed)")
 
     print("== 3. the Day Book is authoritative; checks flagged, never refused")
     bad = dict(sv, alter=sv["alter"] + 4, items=[], irn="", checks=["the bill-wise details of Spike Customer come to Rs 3400.00, not the line's Rs 3410.00"])

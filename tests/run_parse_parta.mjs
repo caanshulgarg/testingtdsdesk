@@ -180,6 +180,29 @@ const amtTag = (a) => '<AMOUNT TYPE="Amount">' + a + "</AMOUNT>";
   ok(J(v.checks) === "[]", "a cancelled entry is not checked");
 }
 
+// ---- 3b. review M3 (06-Oct-2026): a worked-out tax that cannot be checked is a plain note saying which case ("tax not
+// checked: ..."), never a hold (the owner's rule: only lines not totalling zero hold an entry)
+{
+  // the tax overtyped by Rs 10 on each of CGST and SGST (the party with it): with the usual names, a mismatch note
+  const over = S.replace(/(<LEDGERNAME TYPE="String">CGST Output<\/LEDGERNAME>[\s\S]*?<AMOUNT TYPE="Amount">)205.00/, "$1215.00")
+    .replace(/(<LEDGERNAME TYPE="String">SGST Output<\/LEDGERNAME>[\s\S]*?<AMOUNT TYPE="Amount">)205.00/, "$1215.00").split("-3410.00").join("-3430.00");
+  ok(J(one(over).checks) === J(["the GST worked out on the items (Rs 410.00) does not match the GST ledger lines (Rs 430.00)"]), "tax overtyped, ledgers named CGST / SGST: the mismatch said (" + J(one(over).checks) + ")");
+  // the same with GST ledgers whose names do not say GST: not checked, said so
+  const odd = over.split("CGST Output").join("Output Tax - Centre").split("SGST Output").join("Output Tax - State");
+  const c = one(odd).checks;
+  ok(c.length === 1 && c[0].startsWith("tax not checked: no ledger line of this entry is named as a GST ledger") && c[0].includes("Output Tax - Centre") && c[0].includes("Rs 410.00"),
+     "GST ledgers not named as GST: 'tax not checked', with the ledgers named (" + J(c) + ")");
+  // an item without Tally's GST rate on its line (GST typed on the ledgers): not checked, said so
+  const norate = S.replace(/(<STOCKITEMNAME TYPE="String">Rice B<\/STOCKITEMNAME>[\s\S]*?)<RATEDETAILS\.LIST>[\s\S]*<\/RATEDETAILS\.LIST>/, "$1");
+  const c2 = one(norate).checks;
+  ok(c2.length === 1 && c2[0].startsWith("tax not checked: Tally gave no GST rate on the line of") && c2[0].includes("Rice B"), "an item without Tally's rate: 'tax not checked', the item named (" + J(c2) + ")");
+  // a cess based on quantity: not worked out, said so
+  const qty = S.replace('<GSTRATEDUTYHEAD TYPE="String">Cess</GSTRATEDUTYHEAD>\n       <GSTRATEVALUATIONTYPE TYPE="String">Not Applicable</GSTRATEVALUATIONTYPE>',
+    '<GSTRATEDUTYHEAD TYPE="String">Cess</GSTRATEDUTYHEAD>\n       <GSTRATEVALUATIONTYPE TYPE="String">Based on Quantity</GSTRATEVALUATIONTYPE>\n       <GSTRATE TYPE="Number"> 400</GSTRATE>');
+  const c3 = one(qty).checks;
+  ok(qty !== S && c3.length === 1 && c3[0].startsWith("tax not checked: a cess based on quantity on") && c3[0].includes("Widget A"), "a cess by quantity: 'tax not checked', the item named (" + J(c3) + ")");
+}
+
 // ---- 4. dates as Tally writes them
 ok(d8("20261002") === "20261002" && d8("15-Nov-2026") === "20261115" && d8("5-Oct-26") === "20261005" && d8("30 Days") === "" && d8("") === "", "d8: yyyymmdd, d-Mon-yyyy, d-Mon-yy; a period in days is no date");
 console.log(fails ? fails + " FAILED" : "all passed"); process.exit(fails ? 1 : 0);
