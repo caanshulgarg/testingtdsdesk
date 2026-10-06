@@ -17,8 +17,8 @@ revoked; `begin; ... commit;`; safe to run twice) and is shown to the owner befo
 
 ## The two valid orders (both end with the same function texts: `tests/run_migration_order.py` asserts it)
 
-- staging: 32 → 33 → 35 → 34 (first) → 36b → 37 → 36 → 38 → 39 (applied 03-Oct, **except 39's tally_ingest_day part**: both forms are still 38's) → 40 → 41 (run 03-Oct, evening; its 8-argument `tally_ingest_day` superseded 39's) → 42 → 43 (run 04-Oct) → 44 (run 04-Oct) → 45 (run 04-Oct) → **46** → **47** → **48** (run by the owner) → **49** → **50** (run by the owner) → 51 → 52 → 53 → 54 → 55 → 56 (live on staging) → 57 → 58 → 60 (there is no 59)
-- a fresh database: 32 → 33 → 35 → 34 (reviewed) → 36 → 36b → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 51 → 52 → 53 → 54 → 55 → 56 → 57 → 58 → 60
+- staging: 32 → 33 → 35 → 34 (first) → 36b → 37 → 36 → 38 → 39 (applied 03-Oct, **except 39's tally_ingest_day part**: both forms are still 38's) → 40 → 41 (run 03-Oct, evening; its 8-argument `tally_ingest_day` superseded 39's) → 42 → 43 (run 04-Oct) → 44 (run 04-Oct) → 45 (run 04-Oct) → **46** → **47** → **48** (run by the owner) → **49** → **50** (run by the owner) → 51 → 52 → 53 → 54 → 55 → 56 (live on staging) → 57 → 58 → 59 → 60
+- a fresh database: 32 → 33 → 35 → 34 (reviewed) → 36 → 36b → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 51 → 52 → 53 → 54 → 55 → 56 → 57 → 58 → 59 → 60
 
 | # | File | What it adds |
 |---|---|---|
@@ -212,17 +212,27 @@ are then not stored). Tested by `run_migration57.py`, `run_migration_order.py` (
 (through tally-ingest) and `run_parse_parta.mjs`.
 
 Bridge 2.3.1 (06-Oct-2026, the 2.3.0 review's deferred cloud Low): `migration-58-lows.sql` runs after 57 in both orders
-(it needs only 54 and 55; ... -> 56 -> 57 -> 58 -> 60) (add-only, one transaction, `lock_timeout` 10 s, safe twice): on the seven tables 54 and 55 made
+(it needs only 54 and 55; ... -> 56 -> 57 -> 58 -> 59 -> 60) (add-only, one transaction, `lock_timeout` 10 s, safe twice): on the seven tables 54 and 55 made
 (`tally_bridge_prefs`, `tally_member_bridges`, `tally_bridge_ids`, `tally_bridge_alerts`, `tally_bridge_rollbacks`,
 `tally_bridge_release_log`, `tally_post_checks`) all privileges revoked from anon and authenticated (54/55 revoked only
 insert and update; Supabase's defaults left delete and the rest) and select granted back to authenticated; their id
 sequences closed to both. Functions unchanged. Tested by `run_migration58.py`. Nothing in tally-ingest or the app needs it.
 
+Bridge 2.3.1 (06-Oct-2026, the owner's decision on a ledger renamed in Tally): `migration-59-ledger-aliases.sql` runs
+after 58 and before 60 in both orders (add-only, one transaction, `lock_timeout` 10 s, no "delete from", safe twice; no
+function; NOT yet run on staging). One table, `tally_ledger_aliases` (book_id, tally_name -> fincom_name, tally_guid,
+seen_at; key (book_id, tally_name); RLS: the firm's members read; written by tally-ingest only). When the ledger the bridge
+fetched by name for an entry (FinComLedgerByName) has the Tally GUID of a ledger FinCom holds under another name, the new
+name is recorded here (the note for 2.3.2's rename; 2.3.1 does not rename), and an entry using the new name is applied
+under FinCom's ledger (its lines' ledger names mapped, the amounts untouched; the balance guard still first), without
+asking Tally again. A cloud without 59 records nothing and such an entry keeps waiting, as before. Tested by
+`run_migration59.py`, `run_migration_order.py` (59 in both orders) and `run_recorder_server.py` (through tally-ingest).
+
 Bridge 2.3.1 (06-Oct-2026, the migration-50 review's round-3 Lows): `migration-60-recorder-lows.sql` runs after 56 and 57
-in both orders (fresh and staging: ... -> 55 -> 56 -> 57 -> 58 -> 60; independent of 58; there is no 59; add-only, one transaction,
+in both orders (fresh and staging: ... -> 55 -> 56 -> 57 -> 58 -> 59 -> 60; independent of 58 and 59; add-only, one transaction,
 `lock_timeout` 10 s, no "delete from", safe twice; NOT yet run on staging). One function replaced, `tally_recorder_line`
 (56's text, which 57 does not replace; the lines marked "60" changed; granted to nobody): a delete or cancel under the
 add-on's placeholder GUID is held as a GUID-less one (R3-L1: twice it broke the line's call); a create late below a cancel
 applied for its GUID is applied and cancelled again, below a delete 'stale' as before (R3-L2); a GUID-less delete with no
 date promises no Day Book (R3-L3). The owner's "nothing to remove" (08:05) is 57's (`tally_ingest_delete`), not repeated.
-Tested by `run_migration60.py` (on 56 -> 57 -> 58) and `run_migration_order.py` (56 -> 57 -> 58 -> 60 in both orders).
+Tested by `run_migration60.py` (on 56 -> 57 -> 58) and `run_migration_order.py` (56 -> 57 -> 58 -> 59 -> 60 in both orders).

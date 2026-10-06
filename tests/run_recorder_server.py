@@ -946,6 +946,54 @@ try:
     ok(c == 200 and r.get("ok") is True and r.get("updated") == 1 and nd.get("gstin") == "29AAACN9999B1Z5" and nd.get("alter_id") == 84 and nd.get("tds_deductee_type") == "",
        "2.3.1 deductee type: a database without migration 57's column: the ledger kept current without it, nothing fails (%s; %s)" % (r, nd))
     FS.NO_COL.clear()
+    # bridge 2.3.1 (the owner's decision of 06-Oct-2026, migration 59): a ledger renamed in Tally and fetched for an unknown
+    # name. The ledger fetched by name (FinComLedgerByName) has the Tally GUID of a ledger FinCom holds under another name: the
+    # held entry is applied under FinCom's ledger (its lines mapped from the new name, never a second ledger), the new name
+    # recorded (tally_ledger_aliases, the note for 2.3.2's rename; no rename in 2.3.1); a second entry with the new name applies
+    # the same way without asking Tally again. The balance guard still first; the books' total unchanged by the mapping
+    FS.T.setdefault("tally_ledger_aliases", [])
+    REN, OLD = "Salesify Renamed LLP", "Salesify Marketing LLP"
+    lines_of = lambda g: sorted((r["ledger"], r["amount"]) for r in db.rows("select ledger, amount::text as amount from tally_lines where book_id = %s and guid = %s" % (q(BI), q(g))))
+    GR1, GR2, GR3 = CGI + "-%08x" % 26603, CGI + "-%08x" % 26604, CGI + "-%08x" % 26605
+    r1x, r2x = mkx(26603, 54703, REN), mkx(26604, 54704, REN)
+    rl = lambda lid, x, g, mid, alt: dict(base, line_id=lid, event="created", object_guid=g, master_id=str(mid), alter_id=alt, vch_type="Receipt", vch_no=str(mid), vch_date="20261006", xml=x)
+    c, r = reci2([rl("RN1", r1x, GR1, 26603, 54703)])
+    ok(c == 200 and st(r) == {"RN1": "held"} and lrow51("RN1").get("why", "").startswith("waiting for the ledger '%s'" % REN), "2.3.1 rename. an entry naming '%s' (FinCom has no such ledger): held waiting for it (%r)" % (REN, lrow51("RN1").get("why")))
+    mem_rows2()
+    c, r = beat231()
+    ok(c == 200 and {"company": "ZZ IDS", "company_guid": CGI, "name": REN} in (r.get("ledgersWanted") or []), "2.3.1 rename. the beat names it (%s)" % r.get("ledgersWanted"))
+    n_led = len(FS.T["tally_ledgers"])
+    c, r = lch([["lg-sal", 12, 95, REN, "Sundry Debtors", "500.00", "29AABCS1111C1Z1", "AABCS1111C", 0, "Karnataka", ""]], "wanted")
+    al = [x for x in FS.T["tally_ledger_aliases"] if x.get("book_id") == BI and x.get("tally_name") == REN]
+    ok(c == 200 and len(FS.T["tally_ledgers"]) == n_led and led(REN) is None and (led(OLD) or {}).get("tally_guid") == "lg-sal"
+       and len(al) == 1 and al[0].get("fincom_name") == OLD and al[0].get("tally_guid") == "lg-sal" and al[0].get("firm_id") == FIRM and al[0].get("seen_at"),
+       "2.3.1 rename. the ledger fetched by name has the GUID of '%s': no second ledger, the new name recorded for 2.3.2 (%s)" % (OLD, al))
+    ok(any("rename is left for 2.3.2" in k for k in (r.get("kept") or [])), "2.3.1 rename. the rename itself left for 2.3.2, said in kept (%s)" % r.get("kept"))
+    mem_rows2()
+    c, r = beat231()
+    ids = [x.get("line_id") for x in (r.get("refetch") or [])]
+    ok(c == 200 and REN not in str(r.get("ledgersWanted")) and "RN1" in ids, "2.3.1 rename. the next beat: nothing wanted, the entry listed for refetch (%s; %s)" % (r.get("ledgersWanted"), ids))
+    c, r = reci2([rl("RN1:resolved", r1x, GR1, 26603, 54703)])
+    l1 = lines_of(GR1)
+    ok(c == 200 and st(r) == {"RN1:resolved": "applied"} and OLD in [x[0] for x in l1] and REN not in [x[0] for x in l1] and round(sum(float(x[1]) for x in l1), 2) == 0,
+       "2.3.1 rename. then the entry: applied under '%s' (its line mapped from the new name), lines total zero (%s; %s)" % (OLD, st(r), l1))
+    sent = sorted(float(x[2]) for x in bodyof("RN1:resolved").get("lines") or [])
+    ok(sorted(float(x[1]) for x in l1) == sent and len(l1) == len(sent) and len(sent) >= 2, "2.3.1 rename. the amounts as Tally sent them: the books' total unchanged by the mapping (%s)" % sent)
+    c, r = reci2([rl("RN2", r2x, GR2, 26604, 54704)])
+    l2 = lines_of(GR2)
+    ok(c == 200 and st(r) == {"RN2": "applied"} and OLD in [x[0] for x in l2] and REN not in [x[0] for x in l2] and "waitLedgers" not in pl("RN2"),
+       "2.3.1 rename. a second entry with the new name: applied at once under '%s', nothing waited for (%s; %s)" % (OLD, st(r), l2))
+    mem_rows2()
+    c, r = beat231()
+    ok(c == 200 and REN not in str(r.get("ledgersWanted")), "2.3.1 rename. and Tally is not asked for it again (%s)" % r.get("ledgersWanted"))
+    c, r = reci2([rl("RN3", mkx(26605, 54705, REN).replace("-59000.00", "-58000.00"), GR3, 26605, 54705)])
+    ok(c == 200 and st(r) == {"RN3": "held"} and "do not add up" in lrow51("RN3").get("why", "") and not lines_of(GR3), "2.3.1 rename. the balance guard still first: an unbalanced body with the new name held (%r)" % lrow51("RN3").get("why"))
+    ok(not [x for x in FS.T["tally_ledger_aliases"] if x.get("tally_name") in ("New Party B", "New Party C", "New Party D")], "2.3.1 rename. a GUID FinCom has no ledger of: added as a new ledger, no alias (New Party B, C, D)")
+    # a cloud without migration 59: nothing recorded, such an entry waits as before (nothing fails)
+    FS.FAIL_SELECT["tally_ledger_aliases"] = {"code": "PGRST205", "message": "Could not find the table 'public.tally_ledger_aliases' in the schema cache"}
+    c, r = reci2([rl("RN4", mkx(26606, 54706, REN), CGI + "-%08x" % 26606, 26606, 54706)])
+    ok(c == 200 and st(r) == {"RN4": "held"} and lrow51("RN4").get("why", "").startswith("waiting for the ledger '%s'" % REN), "2.3.1 rename. without migration 59: the entry waits as before (%s; %r)" % (st(r), lrow51("RN4").get("why")))
+    FS.FAIL_SELECT.pop("tally_ledger_aliases", None)
     c, r = call({"kind": "ledger_changes", "company": "NOT LINKED", "version": "2.3.1", "bridge": dict(GA, version="2.3.1"), "ledgers": []})
     ok(c == 409, "2.3.1-B. a company not linked: 409 (%s)" % c)
     FS.T.pop("tally_recorder_lines", None); FS.T.pop("tally_ledgers", None); FS.T.pop("tally_groups", None)

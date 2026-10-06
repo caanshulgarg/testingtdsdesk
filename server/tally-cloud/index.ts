@@ -1211,6 +1211,7 @@ async function applyLedgerChanges(firm: string, book: string, body: any) {
   const byGuid = new Map<string, any>(m32 ? (await selectIn(cols, book, "tally_guid", rows.map((r: any) => r.guid).filter(Boolean))).map((g: any) => [String(g.tally_guid), g]) : []);
   const byName = new Map<string, any>((await selectIn(cols, book, "name", rows.map((r: any) => r.name))).map((g: any) => [String(g.name), g]));
   const fresh: Record<string, unknown>[] = [], opened: Record<string, unknown>[] = [], plain: Record<string, unknown>[] = [];
+  const aliases: Record<string, unknown>[] = [];
   for (const r of rows) {
     const g = r.guid ? byGuid.get(r.guid) : undefined, have = g || byName.get(r.name);
     if (!have) {
@@ -1224,7 +1225,13 @@ async function applyLedgerChanges(firm: string, book: string, body: any) {
       continue;
     }
     if (m32 && have.alter_id !== null && have.alter_id !== undefined && Number(have.alter_id) > r.alter) continue;   // FinCom has a newer one
-    if (have.name !== r.name) kept.push(("'" + have.name + "' is named '" + r.name + "' in Tally now: the rename is left for 2.3.2 (the name stays)").slice(0, 300));
+    if (have.name !== r.name) {
+      kept.push(("'" + have.name + "' is named '" + r.name + "' in Tally now: the rename is left for 2.3.2 (the name stays)").slice(0, 300));
+      // 2.3.1 (the owner's decision of 06-Oct-2026, migration 59): the same Tally GUID under a new name: recorded, so an entry
+      // using the new name is applied under FinCom's ledger without asking Tally again (and 2.3.2 has the rename to make).
+      // Only by GUID, and only when no other ledger of FinCom's has the new name
+      if (g !== undefined && r.guid && !byName.has(r.name)) aliases.push({ book_id: book, firm_id: firm, tally_name: r.name, fincom_name: have.name, tally_guid: r.guid, seen_at: new Date().toISOString() });
+    }
     if (String(have.parent || "") !== r.parent) kept.push(("'" + have.name + "' is in the group '" + (r.parent || "Primary") + "' in Tally, '" + (have.parent || "Primary") + "' in FinCom: the move is left for 2.3.2 (the group stays)").slice(0, 300));
     if (m32 && g === undefined && have.tally_guid && r.guid && have.tally_guid !== r.guid) kept.push(("'" + have.name + "' has another Tally GUID in FinCom: its fields are brought up to date, the GUID stays").slice(0, 300));
     const c = chain(String(have.parent || ""));
@@ -1250,6 +1257,11 @@ async function applyLedgerChanges(firm: string, book: string, body: any) {
     }
   }
   out.added = fresh.length; out.updated = opened.length + plain.length;
+  if (aliases.length) {
+    const { error } = await db.from("tally_ledger_aliases").upsert(aliases, { onConflict: "book_id,tally_name" });
+    if (error) console.log("tally-ingest ledger_changes: the new names not recorded (migration 59):", book, String(error.message || "").slice(0, 200));
+    else for (const a of aliases) kept.push(("entries using '" + a.tally_name + "' are applied under '" + a.fincom_name + "' until 2.3.2 renames it").slice(0, 300));
+  }
   if (fresh.length || opened.length) {
     const { error } = await db.rpc("tally_year_openings", { p_book: book });
     if (error) kept.push(("year openings: " + error.message).slice(0, 300));
@@ -1396,6 +1408,52 @@ function ledgerWaitWords(names: string[]): string {
 // the names of these the book's ledger list has no row of (exact clean name, else the same name in other capitals); null
 // when the list cannot be read or the book has none yet (then nothing is held)
 async function ledgersMissing(book: string, names: string[]): Promise<Set<string> | null> {
+  const raw = await ledgersMissingRaw(book, names);
+  if (!raw || !raw.size) return raw;
+  const al = await ledgerAliases(book, [...raw]);
+  return new Set([...raw].filter((n) => !al.has(n)));
+}
+// bridge 2.3.1 (the owner's decision of 06-Oct-2026, migration 59): a ledger renamed in Tally and fetched for an unknown name.
+// The names of these that Tally gave to a ledger FinCom holds under another name (tally_ledger_aliases: same Tally GUID,
+// recorded by ledger_changes), each with FinCom's name, when FinCom's ledger is still in the book's list. An entry using
+// such a name is applied under FinCom's ledger and never waits for it. Empty on any error (a cloud without 59: as before)
+async function ledgerAliases(book: string, names: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  try {
+    const want = [...new Set(names.filter(Boolean))].slice(0, 2000);
+    const rows: any[] = [];
+    for (let i = 0; i < want.length; i += 150) {
+      const { data, error } = await db.from("tally_ledger_aliases").select("tally_name, fincom_name").eq("book_id", book).in("tally_name", want.slice(i, i + 150));
+      if (error) { console.log("tally-ingest: the renamed ledgers not read (migration 59):", book, String(error.message || "").slice(0, 200)); return out; }
+      rows.push(...(data || []));
+    }
+    const pairs = rows.map((r: any) => [String(r?.tally_name || ""), String(r?.fincom_name || "")]).filter(([a, b]) => a && b && a !== b);
+    if (!pairs.length) return out;
+    const gone = await ledgersMissingRaw(book, pairs.map(([, b]) => b));
+    if (!gone) return out;
+    for (const [a, b] of pairs) if (!gone.has(b)) out.set(a, b);
+  } catch (e) {
+    console.log("tally-ingest: the renamed ledgers not read:", book, String((e as Error)?.message || e).slice(0, 200));
+  }
+  return out;
+}
+// a line's entry under FinCom's ledger names (the aliases above): the ledger lines' names, the party, and the ledger / party
+// named in its details; amounts, dates and everything else untouched (the lines total what they did)
+function mapLedgerNames(l: Record<string, any>, al: Map<string, string>): string[] {
+  const used = new Set<string>();
+  const m = (n: unknown) => { const k = String(n ?? ""); if (al.has(k)) { used.add(k); return al.get(k)!; } return n; };
+  l.lines = (l.lines as any[]).map((x: any) => Array.isArray(x) && al.has(String(x[1] ?? "")) ? [x[0], m(x[1]), ...x.slice(2)] : x);
+  l.vouchers = (l.vouchers as any[]).map((v: any) => {
+    if (!v || typeof v !== "object") return v;
+    const o: Record<string, any> = { ...v, party: m(v.party) };
+    for (const k of ["items", "costs", "banks", "tds", "dues"]) {
+      if (Array.isArray(v[k])) o[k] = v[k].map((x: any) => x && typeof x === "object" ? { ...x, ...("ledger" in x ? { ledger: m(x.ledger) } : {}), ...("party" in x ? { party: m(x.party) } : {}) } : x);
+    }
+    return o;
+  });
+  return [...used];
+}
+async function ledgersMissingRaw(book: string, names: string[]): Promise<Set<string> | null> {
   try {
     const want = [...new Set(names.filter(Boolean))].slice(0, 2000);
     if (!want.length) return new Set();
@@ -1417,8 +1475,22 @@ async function ledgersMissing(book: string, names: string[]): Promise<Set<string
 async function ledgerWait(book: string, send: Record<string, any>[]) {
   const look = send.filter((l) => l.short !== true && !l.heldWhy && Array.isArray(l.vouchers) && l.vouchers.length && Array.isArray(l.lines) && l.lines.length);
   if (!look.length) return;
-  const miss = await ledgersMissing(book, look.flatMap((l) => (l.lines as any[]).map((x: any) => String(x?.[1] ?? ""))));
-  if (!miss || !miss.size) return;
+  const raw = await ledgersMissingRaw(book, look.flatMap((l) => (l.lines as any[]).map((x: any) => String(x?.[1] ?? ""))));
+  if (!raw || !raw.size) return;
+  // 2.3.1 (migration 59): a name Tally gave to a ledger FinCom holds under another name: the entry goes under FinCom's
+  // ledger at once (said in the payload as renamedLedgers, the note for 2.3.2), never waiting, never a second ledger
+  const al = await ledgerAliases(book, [...raw]);
+  const miss = new Set([...raw].filter((n) => !al.has(n)));
+  if (al.size) {
+    for (const l of look) {
+      const used = mapLedgerNames(l, al);
+      if (!used.length) continue;
+      const ren = Object.fromEntries(used.map((n) => [n, al.get(n)]));
+      console.log("tally-ingest recorder_lines: ledger renamed in Tally, applied under FinCom's name", l.line_id, JSON.stringify(ren));
+      l.payload = { ...(l.payload || {}), renamedLedgers: ren };
+    }
+  }
+  if (!miss.size) return;
   for (const l of look) {
     const names = [...new Set((l.lines as any[]).map((x: any) => String(x?.[1] ?? "")).filter((n) => miss.has(n)))].slice(0, 10);
     if (!names.length) continue;

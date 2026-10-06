@@ -468,9 +468,9 @@ func TestItems231VersionAndDecisionLine(t *testing.T) {
 	}
 	for _, f := range []string{"../docs/bridge-2.3.1-test-sheet.txt", "../docs/bridge-2.3.1-notes.md"} {
 		s := strings.Join(strings.Fields(readText(f)), " ")
-		// part A (the owner's decisions of 06-Oct-2026): the whole entry, the accuracy checks, one entry per request, 57; with parts B and C: 56, 57, 58 and 60
+		// part A (the owner's decisions of 06-Oct-2026): the whole entry, the accuracy checks, one entry per request, 57; with parts B and C and the owner's rename decision: 56, 57, 58, 59 and 60
 		for _, w := range []string{"2.3.1", "two items", "CGST", "SGST", "Purchase", "Credit Note", "HSN", "IRN", "e-way bill", "UTR",
-			"cost centre", "TDS", "accuracy checks", "nothing of", "One entry per request", "migrations 56, 57, 58 and 60"} {
+			"cost centre", "TDS", "accuracy checks", "nothing of", "One entry per request", "migrations 56, 57, 58, 59 and 60"} {
 			if !strings.Contains(s, w) {
 				t.Errorf("%s does not say %q", f, w)
 			}

@@ -23,7 +23,7 @@ roughly 1,000 items or more) is held with plain words for a Day Book upload.
 With it (part B, masters) a ledger created or altered in Tally reaches FinCom within about 10 minutes, and a ledger an
 entry uses that FinCom does not have is fetched from Tally first, then the entry (FinComLedgerChanges,
 FinComLedgerByName; read only, inside the 2-second rule, after postings).
-Needs FinCom's cloud update of 2.3.1 and database migrations 56, 57, 58 and 60 (in that order) on staging before you
+Needs FinCom's cloud update of 2.3.1 and database migrations 56, 57, 58, 59 and 60 (in that order) on staging before you
 start.
 
 The app is not updated with this bridge. Keep the add-on loaded as it is
@@ -132,6 +132,14 @@ CHECK 12 - A NEW PARTY USED AT ONCE: THE LEDGER FIRST, THEN THE ENTRY
    within a few minutes the party is in FinCom's ledger list and the entry is in the books, once.
    The log has a line "Ledger TRIAL 231 PARTY of <company>: fetched from Tally before its entry".
    If not, send: the entry's number, the time, and the Show log lines starting "Ledger" and "Recorder:".
+
+CHECK 13 - A LEDGER RENAMED IN TALLY, USED UNDER ITS NEW NAME
+   In Tally, rename one party ledger that FinCom already has (for example "TRIAL 231 PARTY" to "TRIAL 231 PARTY NEW").
+   At once, make a Sales entry of Rs 1 to it under the new name, narration "TRIAL 231 renamed". Save it. Then make a
+   second one the same way, narration "TRIAL 231 renamed 2".
+   You should see: within a few minutes both entries are in the books under FinCom's ledger "TRIAL 231 PARTY" (FinCom
+   keeps the old name in 2.3.1), once each; no second ledger with the new name; the second entry goes in without waiting.
+   If not, send: the entries' numbers, the time, and the Show log lines starting "Ledger" and "Recorder:".
 
 How to send the log lines: right-click the FinCom icon near the clock > Show log. Each line starting "Recorder:" says
 what the bridge decided for one entry: asking Tally, taken, held (with the reason), or not asked (with the reason).

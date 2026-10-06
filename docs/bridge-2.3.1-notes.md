@@ -136,6 +136,13 @@ only, inside the 2-second rule, after postings, nothing else added, each bridge 
 - **Not in 2.3.1 (planned for 2.3.2):** ledger renames, ledgers moved to another group, new and altered groups, deleted
   ledgers and groups, PAN worked out from the GSTIN. A ledger renamed or moved in Tally keeps FinCom's name and group;
   the bridge's log names it ("left for 2.3.2"). Update now and the nightly ledger list handle them as before.
+- **A ledger renamed in Tally and used under its new name** (the owner's decision of 06-Oct-2026). FinCom does not know
+  the new name, so the bridge fetches that ledger from Tally by the new name; Tally's answer is the same ledger (the same
+  Tally GUID) FinCom holds under the old name. FinCom then applies the entry under its existing ledger, never as a second
+  ledger, and notes the new name for 2.3.2's rename (FinCom keeps the old name in 2.3.1). Every later entry with the new
+  name goes in the same way at once, without asking Tally again. The entry's lines must still total zero, and the amounts
+  are exactly Tally's, so the books' total does not change. This needs database migration 59; without it such an entry
+  waits, as before.
 
 This needs the FinCom cloud update (tally-ingest) that goes out with 2.3.1; the ledger's deductee type is stored in the
 column migration 57 adds (`tally_ledgers.tds_deductee_type`); no other database change.
@@ -153,7 +160,7 @@ every 10 minutes, up to 20 tries over 7 days), now with the items' lines, and th
 item invoice 2.3.0 had already asked Tally for again (its second answer, without the items' lines, held by FinCom's
 balance check): FinCom lists it once more, 2.3.1 asks once more and sends it, and it enters once (both held lines show
 as 'replaced'). This needs the FinCom cloud update (tally-ingest) that goes out with 2.3.1, and database migrations 56,
-57, 58 and 60, in that order (57 stores the items, cost centres, bank, TDS, e-invoice and e-way bill details). Uploading that day's Day Book
+57, 58, 59 and 60, in that order (57 stores the items, cost centres, bank, TDS, e-invoice and e-way bill details). Uploading that day's Day Book
 also settles them.
 
 **Still held, as before:**
@@ -178,6 +185,7 @@ also settles them.
 10. A journal with cost centres shows its cost centre allocations.
 11. A ledger's GSTIN changed in Tally shows in FinCom within about 10 minutes.
 12. A sales invoice to a party created at once (Alt+C in the invoice) enters the books, with the party, within a few minutes.
+13. Two sales entries to a party ledger renamed in Tally enter the books under FinCom's ledger, with no second ledger.
 
 ## Rollback
 
