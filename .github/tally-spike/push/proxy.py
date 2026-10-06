@@ -27,7 +27,8 @@ class H(BaseHTTPRequestHandler):
             c = http.client.HTTPConnection('127.0.0.1', PORT, timeout=900)
             h = {k: v for k, v in self.headers.items() if k.lower() not in ('host', 'connection', 'content-length')}
             c.request(method, self.path, body=body if method == 'POST' else None, headers=h)
-            r = c.getresponse(); data = r.read(); st = r.status; ct = r.getheader('Content-Type') or 'text/xml'
+            r = c.getresponse(); data = r.read(); st = r.status
+            hd = [(k, v) for k, v in r.getheaders() if k.lower() not in ('content-length', 'connection', 'transfer-encoding', 'keep-alive')]
             c.close()
         except Exception as e:
             err = str(e)
@@ -36,7 +37,9 @@ class H(BaseHTTPRequestHandler):
             if err:
                 self.send_response(502); self.send_header('Content-Length', '0'); self.send_header('Connection', 'close'); self.end_headers()
             else:
-                self.send_response(st); self.send_header('Content-Type', ct); self.send_header('Content-Length', str(len(data))); self.send_header('Connection', 'close'); self.end_headers(); self.wfile.write(data)
+                self.send_response(st)
+                for k, v in hd: self.send_header(k, v)
+                self.send_header('Content-Length', str(len(data))); self.send_header('Connection', 'close'); self.end_headers(); self.wfile.write(data)
         except Exception as e:
             err = err or ('reply: ' + str(e))
         self.close_connection = True

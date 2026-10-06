@@ -5,4 +5,4 @@ heavy_led=600
 heavy_item=600
 heavy_vch=4000
 heavy_min=15
-# probe run: two releases, small sizes
+# probe run 2: two releases, small sizes (fixes after run 37443094212)

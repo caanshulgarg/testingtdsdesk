@@ -33,7 +33,12 @@ function Ms($sw) { [math]::Round($sw.Elapsed.TotalMilliseconds, 1) }
 function NowMs { [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() }
 Say "push-design on TallyPrime ${rel}: reps $reps, heavy $hvLed ledgers / $hvItem items / up to $hvVch vouchers ($hvBudget min), postings $posts"
 
-Add-Type -ReferencedAssemblies System.Windows.Forms, System.Drawing -TypeDefinition @'
+Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+# PowerShell 7 (.NET): the drawing and forms types live in several assemblies; every one loaded now is referenced
+$null = [System.Drawing.Bitmap]; $null = [System.Drawing.Rectangle]; $null = [System.Windows.Forms.SendKeys]; $null = [System.Windows.Forms.Screen]
+$pdRefs = @([AppDomain]::CurrentDomain.GetAssemblies() | Where-Object { -not $_.IsDynamic -and $_.Location -and $_.GetName().Name -match '^System\.(Windows\.Forms(\.Primitives)?|Drawing(\.Common)?)$' } | ForEach-Object Location | Sort-Object -Unique)
+Write-Host "Add-Type references: $($pdRefs -join '; ')"
+Add-Type -ReferencedAssemblies $pdRefs -TypeDefinition @'
 using System; using System.Diagnostics; using System.Drawing; using System.Drawing.Imaging;
 using System.Runtime.InteropServices; using System.Threading; using System.Windows.Forms;
 public static class PdUi {
@@ -68,6 +73,19 @@ public static class PdUi {
   }
 }
 '@
+if (-not ('PdUi' -as [type])) {
+  Say 'HARNESS: the screen timer did not compile; the keys are sent without it (ui times empty), the stamps still time the save'
+  Add-Type -TypeDefinition @"
+using System; using System.Runtime.InteropServices;
+public static class PdUi {
+  [DllImport("winmm.dll")] public static extern uint timeBeginPeriod(uint p);
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);
+  public static string Measure(string keys, int stableMs, int maxMs) { return "-1;-1;-1;0"; }
+}
+"@
+  $script:noUiTimer = $true
+}
 [PdUi]::timeBeginPeriod(1) | Out-Null
 # the clock's step as this process sees it (the NTFS times the stamps use come from the same system time)
 $steps = @(); $t = [DateTime]::UtcNow.Ticks; for ($i = 0; $i -lt 2000000 -and $steps.Count -lt 20; $i++) { $n = [DateTime]::UtcNow.Ticks; if ($n -ne $t) { $steps += ($n - $t) / 10000.0; $t = $n } }
@@ -137,7 +155,7 @@ function Start-Proxy {
   $script:proxy = Start-Process -FilePath $py -ArgumentList "`"$here\proxy.py`" 9000 `"$proxyLog`"" -PassThru -WindowStyle Hidden -RedirectStandardError (Join-Path $out "proxy-stderr-$(Get-Date -Format HHmmss).txt")
   Start-Sleep 2
   try { $g = (Invoke-WebRequest 'http://127.0.0.2:9000' -UseBasicParsing -TimeoutSec 10).Content } catch { $g = "failed: $($_.Exception.Message)" }
-  $ok = (-not $script:proxy.HasExited) -and ($g -match 'Running')
+  $ok = (-not $script:proxy.HasExited) -and ($g -match 'Running|RESPONSE')
   Say "proxy 127.0.0.2:9000 -> Tally: $ok ($($g -replace '\s+', ' '))"
   return $ok
 }
@@ -281,7 +299,7 @@ function SaveBlock($cfg, $coTag, $kind, $date, $n, $mode) {
     if ($mode -eq 'dup') { KeysTo '{END}' 1; KeysTo '%2' 4 $(if ($r -eq 1) { "$coTag-$cfg-$kind-dup" }) }
     else { KeysTo '{HOME}' 1; KeysTo '{ENTER}' 4 $(if ($r -eq 1) { "$coTag-$cfg-$kind-open" }) }
     if (-not (Focus)) { continue }
-    $m = ([PdUi]::Measure('^a', 400, 15000)) -split ';'
+    if ($script:noUiTimer) { [System.Windows.Forms.SendKeys]::SendWait('^a'); $m = @('-1', '-1', '-1', '0') } else { $m = ([PdUi]::Measure('^a', 400, 15000)) -split ';' }
     Start-Sleep 2
     $h = Stamps; $lines = NewFullLines
     $saved = @($lines | Where-Object { $_ -like 'FCF1|ev=voucher_saved*' })[0]; $final = @($lines | Where-Object { $_ -like 'FCF1|ev=voucher_final*' })[0]
@@ -304,7 +322,7 @@ function SaveBlock($cfg, $coTag, $kind, $date, $n, $mode) {
   return , $newV
 }
 function Posting($cfg, $coTag, $route, $i) {
-  $id = "pd-$rel-$coTag-$cfg-$route-$i-$([guid]::NewGuid().ToString('N').Substring(0, 6))"
+  $id = "pd-$($rel -replace '\D', '')-$coTag-$cfg-$route-$i-$([guid]::NewGuid().ToString('N').Substring(0, 6))"
   $vx = PostingXml "push-design posting $id"
   $t0 = NowMs; $sw = [Diagnostics.Stopwatch]::StartNew(); $st = ''; $ok = $false; $handed = 0
   if ($route -eq 'jobs') {
@@ -343,9 +361,8 @@ foreach ($coTag in 'light', 'heavy') {
       foreach ($v in $nv | Group-Object type | ForEach-Object { $_.Group | Select-Object -Last 1 }) { Body231 $v.mid "tally-body231-$coTag-$($v.type)-$($v.vno).xml" | Out-Null }
       if ($coTag -eq 'light') {
         # a ledger created by keys, then a voucher cancelled and one deleted (the lines carry the GUID?)
-        # to the Gateway (Esc until Tally asks to quit, then No), then Create > Ledger as flow.ps1 does
-        foreach ($k in 1..4) { KeysTo '{ESC}' 1 }
-        KeysTo 'n' 2 "$coTag-full-gateway"
+        # Tally started again (it opens at the Gateway), then Create > Ledger as flow.ps1 does
+        Start-T $data $cfgs[$cfg] "$coTag-full-again" | Out-Null
         KeysTo 'c' 3; KeysTo 'Ledger{ENTER}' 3 "$coTag-full-ledger-form"
         KeysTo 'PD Keys Party{ENTER}' 2; KeysTo '{ENTER}' 2; KeysTo 'Sundry Debtors{ENTER}' 2; KeysTo '^a' 4 "$coTag-full-ledger-saved"
         DayBook '1-10-2026' "$coTag-full-cd-daybook"; KeysTo '{END}' 1; KeysTo '{UP}' 1; KeysTo '%x' 3; KeysTo 'y' 4 "$coTag-full-cancelled"
