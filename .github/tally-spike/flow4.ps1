@@ -496,10 +496,11 @@ $inv8 = [ordered]@{
   sales = @{ key = '{F8}'; type = 'Sales'; party = 'Spike Trader'; ledger = 'Spike Sales'; rows = @(, @('Spike Widget', 2, 250)) + @(, @('Spike Gadget', 3, 400)); tax = 153; head = @() }
   credit = @{ key = '^{F8}'; type = 'Credit Note'; party = 'Spike Trader'; ledger = 'Spike Sales'; rows = @(, @('Spike Widget', 1, 250)); tax = 22.5; head = @() }
 }
+# after the party Tally opens its Party Details screen (Receipt / Dispatch details: run 37399828148): accepted with Ctrl+A
 foreach ($kind in $inv8.Keys) {
   $d = $inv8[$kind]; $d.how = 'none'; $d.guid = '(none)'
   $pre = Vouchers 9000 $co1
-  $seq = @(@($d.key, 4, "50-$kind-type"), @('^h', 3, "51-$kind-mode"), @('Item Invoice{ENTER}', 3, ''), @('{F2}', 3, ''), @('1-10-2026{ENTER}', 3, "52-$kind-date")) + $d.head + @(@("$($d.party){ENTER}", 3, "53-$kind-party"), @("$($d.ledger){ENTER}", 3, "54-$kind-ledger")) + (ItemRows $d.rows) + @(@('{ENTER}', 3, "56-$kind-items-done"), @('Spike CGST{ENTER}', 2, ''), @("$($d.tax){ENTER}", 2, ''), @('Spike SGST{ENTER}', 2, ''), @("$($d.tax){ENTER}", 2, "57-$kind-taxes"))
+  $seq = @(@($d.key, 4, "50-$kind-type"), @('^h', 3, "51-$kind-mode"), @('Item Invoice{ENTER}', 3, ''), @('{F2}', 3, ''), @('1-10-2026{ENTER}', 3, "52-$kind-date")) + $d.head + @(@("$($d.party){ENTER}", 3, "53-$kind-party"), @('^a', 3, "53b-$kind-party-details-accepted"), @("$($d.ledger){ENTER}", 3, "54-$kind-ledger")) + (ItemRows $d.rows) + @(@('{ENTER}', 3, "56-$kind-items-done"), @('Spike CGST{ENTER}', 2, ''), @("$($d.tax){ENTER}", 2, ''), @('Spike SGST{ENTER}', 2, ''), @("$($d.tax){ENTER}", 2, "57-$kind-taxes"))
   foreach ($q in $seq) { KeysTo 9000 $q[0] $q[1] $(if ($q[2] -and $q[2] -notmatch '^\d') { "55-$kind-$($q[2])" } else { $q[2] }) }
   $nv = $null
   for ($t = 0; $t -lt 3 -and -not $nv; $t++) { KeysTo 9000 '^a' 5 "58-$kind-ctrl-a-$t"; $nv = @((Vouchers 9000 $co1) | Where-Object { $_.mid -notin @($pre | ForEach-Object mid) })[0] }
@@ -526,7 +527,8 @@ foreach ($kind in $inv8.Keys) {
   $nv = @((Vouchers 9000 $co1) | Where-Object { $_.mid -notin @($pre | ForEach-Object mid) })[0]
   if (-not $nv) { Write-Host "check 8 $kind could not be imported either"; continue }
   $d.guid = $nv.guid; $d.mid = $nv.mid; $d.how = 'imported by the harness, saved on the screen'
-  DayBook "60-$kind" '1-10-2026'; KeysTo 9000 '{END}' 2; KeysTo 9000 '{ENTER}' 4 "61-$kind-open"; KeysTo 9000 '^a' 5 "62-$kind-saved"
+  # the Day Book lists by voucher type, not by entry (run 37399828148): only this type (F4), then its last entry
+  DayBook "60-$kind" '1-10-2026'; KeysTo 9000 '{F4}' 3; KeysTo 9000 "$($d.type){ENTER}" 4 "60b-$kind-type"; KeysTo 9000 '{END}' 2; KeysTo 9000 '{ENTER}' 4 "61-$kind-open"; KeysTo 9000 '^a' 5 "62-$kind-saved"
   Write-Host "check 8 ${kind}: imported mid $($nv.mid) guid $($nv.guid), saved again on the screen"
 }
 
@@ -645,7 +647,7 @@ function Tot($l) { (@($l) | ForEach-Object { "$($_.ledger) $($_.amount)" }) -joi
 $expectedOnly = $true; $missing = @(); $nolines = @()
 foreach ($o in $c8) {
   if ($o.guid -eq '(none)') { $missing += $o.label }
-  $tl = if ($o.tally) { "Tally {0} no {1} date {2}, {3} item(s): {4} (sum {5})" -f $o.tally.type, $o.tally.no, $o.tally.date, $o.tally.items, (Tot $o.tally.totals), $o.tally.sum } else { "Tally: voucher $($o.guid) not found in the harness's own export" }
+  $tl = if ($o.tally) { "Tally {0} no {1} date {2}, {3} item(s): {4} (sum {5}; from {6}, the other view agrees: {7})" -f $o.tally.type, $o.tally.no, $o.tally.date, $o.tally.items, (Tot $o.tally.totals), $o.tally.sum, $o.tally.view, $o.tally.viewsAgree } else { "Tally: voucher $($o.guid) not found in the harness's own export" }
   Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO CHECK8 $($o.label) guid $($o.guid): $tl"; Write-Host "  CHECK8 $($o.label): $tl"
   if (-not @($o.lines).Count) { $nolines += $o.label; $expectedOnly = $false; Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO CHECK8 $($o.label): no created/altered line with this GUID reached the stub"; continue }
   foreach ($l in @($o.lines)) {

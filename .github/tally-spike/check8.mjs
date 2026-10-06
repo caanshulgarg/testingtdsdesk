@@ -19,7 +19,7 @@ function tallyTotals(text, guid) {
   if (!m) return null;
   const a = text.lastIndexOf("<VOUCHER ", m.index), z = text.indexOf("</VOUCHER>", m.index);
   if (a < 0 || z < 0) return null;
-  const el = text.slice(a, z), by = new Map(), rows = [];
+  const el = text.slice(a, z), rows = [];
   const re = /<(ALLLEDGERENTRIES|LEDGERENTRIES|ACCOUNTINGALLOCATIONS)\.LIST(?:\s[^>]*)?>([\s\S]*?)<\/\1\.LIST>/g;
   let b;
   while ((b = re.exec(el))) {
@@ -28,9 +28,15 @@ function tallyTotals(text, guid) {
     const name = namesClean(field(own, "LEDGERNAME")); if (!name) continue;
     const amount = r2(num(field(own, "AMOUNT")));
     rows.push({ list: b[1], ledger: name, amount });
-    const k = namesKey(name), h = by.get(k) || { ledger: name, amount: 0 }; h.amount = r2(h.amount + amount); by.set(k, h);
   }
-  return { type: (el.match(/VCHTYPE="([^"]*)"/) || [])[1] || field(el, "VOUCHERTYPENAME"), no: field(el, "VOUCHERNUMBER"), date: field(el, "DATE"),
+  // Tally exports an item invoice twice over (run 37399828148): ALLLEDGERENTRIES, the whole entry with the sales or purchase
+  // ledger summed, and LEDGERENTRIES (party, duties) with each item's ACCOUNTINGALLOCATIONS. Tally's figures are
+  // ALLLEDGERENTRIES when it has any; the other view is worked out too and must agree
+  const sum = list => { const m = new Map(); list.forEach(x => { const k = namesKey(x.ledger), h = m.get(k) || { ledger: x.ledger, amount: 0 }; h.amount = r2(h.amount + x.amount); m.set(k, h); }); return m; };
+  const all = rows.filter(x => x.list === "ALLLEDGERENTRIES"), other = rows.filter(x => x.list !== "ALLLEDGERENTRIES");
+  const by = sum(all.length ? all : other), by2 = sum(other);
+  const viewsAgree = !all.length || !other.length || (by.size === by2.size && [...by].every(([k, v]) => Math.abs(v.amount - (by2.get(k)?.amount ?? NaN)) <= 0.01));
+  return { viewsAgree, view: all.length ? "ALLLEDGERENTRIES" : "LEDGERENTRIES + ACCOUNTINGALLOCATIONS", type: (el.match(/VCHTYPE="([^"]*)"/) || [])[1] || field(el, "VOUCHERTYPENAME"), no: field(el, "VOUCHERNUMBER"), date: field(el, "DATE"),
     items: (el.match(/<ALLINVENTORYENTRIES\.LIST/g) || []).length, rows, by };
 }
 const items = JSON.parse(readFileSync(inPath, "utf8").replace(/^\uFEFF/, ""));
@@ -38,7 +44,7 @@ const out = (Array.isArray(items) ? items : [items]).map(it => {
   const res = { label: it.label, guid: it.guid };
   let t = null;
   try { t = tallyTotals(readFileSync(it.tally, "utf8"), it.guid); } catch (e) { res.tallyError = String(e); }
-  res.tally = t ? { type: t.type, no: t.no, date: t.date, items: t.items, rows: t.rows, totals: [...t.by.values()], sum: r2([...t.by.values()].reduce((s, x) => s + x.amount, 0)) } : null;
+  res.tally = t ? { view: t.view, viewsAgree: t.viewsAgree, type: t.type, no: t.no, date: t.date, items: t.items, rows: t.rows, totals: [...t.by.values()], sum: r2([...t.by.values()].reduce((s, x) => s + x.amount, 0)) } : null;
   res.lines = (it.lines || []).map(ln => {
     const o = { ev: ln.ev, at: ln.at, xmlChars: String(ln.xml || "").length };
     try {
@@ -55,7 +61,7 @@ const out = (Array.isArray(items) ? items : [items]).map(it => {
         keys.forEach(k => { const a = t.by.get(k)?.amount ?? null, b2 = by.get(k)?.amount ?? null; if (a === null || b2 === null || Math.abs(a - b2) > 0.01) diffs.push({ ledger: (t.by.get(k) || by.get(k)).ledger, tally: a, parsed: b2 }); });
       }
       o.diffs = diffs;
-      o.ok = !!t && vs.length === 1 && ls.length >= 2 && Math.abs(o.sum) <= 0.01 && diffs.length === 0;
+      o.ok = !!t && t.viewsAgree && vs.length === 1 && ls.length >= 2 && Math.abs(o.sum) <= 0.01 && diffs.length === 0;
     } catch (e) { o.error = String(e && e.stack || e); o.ok = false; }
     return o;
   });
