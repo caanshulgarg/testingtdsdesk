@@ -1,0 +1,150 @@
+2026-10-06 12:23:46  FinCom Bridge 2.3.1: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+2026-10-06 12:23:46  FinCom Bridge 2.3.1 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+2026-10-06 12:23:47  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+2026-10-06 12:23:47  Recorder: re-scan of the add-on's files for 2.3.1: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+2026-10-06 12:23:47  Check:  - 
+2026-10-06 12:23:49  Tray icon: set to show next to the clock always (Windows 11)
+2026-10-06 12:23:50  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+2026-10-06 12:23:50  Company FinCom Spike Co: its Tally GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5 is held from now on
+2026-10-06 12:23:50  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=2, ALTMSTID=642 (reading is prospective only: the bridge follows what changes after this)
+2026-10-06 12:23:50  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=2, ALTMSTID=642
+2026-10-06 12:23:50  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=2, ALTMSTID=642)
+2026-10-06 12:23:54  Refused a request from a program of another Windows user (/tray/idle): not your FinCom Bridge
+2026-10-06 12:23:54  Refused a request from a program of another Windows user (/tray/status): not your FinCom Bridge
+2026-10-06 12:24:08  Refused a request from a program of another Windows user (/status): not your FinCom Bridge
+2026-10-06 12:25:08  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line 4ea5c206…): asking Tally by MasterID
+2026-10-06 12:25:08  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line 4ea5c206…): taken: Tally's GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000003, AlterID 3
+2026-10-06 12:26:01  Recorder: Receipt 2 of 01-Oct-2026 (MasterID 4, line f62b5811…): asking Tally by MasterID
+2026-10-06 12:26:01  Recorder: Receipt 2 of 01-Oct-2026 (MasterID 4, line f62b5811…): taken: Tally's GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000004, AlterID 4
+2026-10-06 12:27:40  Recorder: Purchase 1 of 01-Oct-2026 (MasterID 5, line 74b82e11…): asking Tally by MasterID
+2026-10-06 12:27:40  Recorder: Purchase 1 of 01-Oct-2026 (MasterID 5, line 74b82e11…): taken: Tally's GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000005, AlterID 5
+2026-10-06 12:29:16  Tally 9000: TDSDeskCompanies took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-06 12:29:16  Tally 9000 did not answer in time at 12:29:16 (TDSDeskCompanies, try 1); trying again by itself at 12:29:31
+2026-10-06 12:29:16  Recorder: Tally took longer than 2 s to list its open companies (limit 2 s); this computer's changes of companies not seen open here yet wait until it answers in time; none is passed over or lost
+2026-10-06 12:29:16  Recorder: Sales 1 of 01-Oct-2026 (MasterID 6, line b594a1d4…): asking Tally by MasterID
+2026-10-06 12:29:16  Recorder: Sales 1 of 01-Oct-2026 (MasterID 6, line b594a1d4…): not asked yet: Tally did not answer in time at 12:29; trying again by itself at 12:29 (nothing was sent); asked then
+2026-10-06 12:29:32  Tally 9000 answered in time again (FinComVoucherByMaster): the background requests are back to normal
+2026-10-06 12:29:32  Recorder: Sales 1 of 01-Oct-2026 (MasterID 6, line b594a1d4…): taken: Tally's GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000006, AlterID 6
+2026-10-06 12:30:37  Recorder: Credit Note 1 of 01-Oct-2026 (MasterID 7, line fa7b46c2…): asking Tally by MasterID
+2026-10-06 12:30:38  Recorder: Credit Note 1 of 01-Oct-2026 (MasterID 7, line fa7b46c2…): taken: Tally's GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000007, AlterID 7
+2026-10-06 12:31:22  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line dc43a3bc…): asking Tally by MasterID
+2026-10-06 12:31:22  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line dc43a3bc…): taken: Tally's GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000003, AlterID 8
+2026-10-06 12:32:10  Recorder: Receipt 3 of 02-Oct-2026 (MasterID 8, line 71fb70e2…): asking Tally by MasterID
+2026-10-06 12:32:10  Recorder: Receipt 3 of 02-Oct-2026 (MasterID 8, line 71fb70e2…): taken: Tally's GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000008, AlterID 9
+2026-10-06 12:33:08  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line fda0bf00…): asking Tally by MasterID
+2026-10-06 12:33:08  Recorder: FinCom Spike Co: cancel of mid 3: GUID from Tally (asked by MasterID): b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000003; the GUID its MasterID makes agrees
+2026-10-06 12:33:44  Recorder: Receipt 3 of 02-Oct-2026 (MasterID 8, line e2f098dd…): asking Tally by MasterID
+2026-10-06 12:33:44  Recorder: FinCom Spike Co: delete of mid 8: not in this Tally (asked by MasterID): proven deleted here
+2026-10-06 12:33:44  Recorder: FinCom Spike Co: delete of mid 8: GUID from the bridge's record: b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000008; the GUID its MasterID makes agrees
+2026-10-06 12:33:51  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=2; now ALTVCHID=12, ALTMSTID=643
+2026-10-06 12:33:51  Ledger changes for FinCom Spike Co: Tally's master counter 642 -> 643: 1 request(s) for AlterID 643-643, 1 ledger(s) sent to FinCom; the last number is 643
+2026-10-06 12:33:51  Ledger changes for FinCom Spike Co: 1 ledger(s) created or altered in Tally sent to FinCom
+2026-10-06 12:35:27  Recorder: FinCom Spike U2: lines from a Tally this bridge does not read (company not open here): not sent
+2026-10-06 12:35:27  Recorder: Sales 2 of 01-Nov-2026 (MasterID 10, line 83864754…): asking Tally by MasterID
+2026-10-06 12:35:28  Recorder: Sales 2 of 01-Nov-2026 (MasterID 10, line 83864754…): taken: Tally's GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-0000000a, AlterID 14
+2026-10-06 12:35:51  Ledger S231 Sales of FinCom Spike Co: fetched from Tally before its entry (FinCom held the entry for it); the entry follows
+2026-10-06 12:35:51  Ledger Output CGST of FinCom Spike Co: fetched from Tally before its entry (FinCom held the entry for it); the entry follows
+2026-10-06 12:35:51  Ledger Output SGST of FinCom Spike Co: fetched from Tally before its entry (FinCom held the entry for it); the entry follows
+2026-10-06 12:36:11  Recorder: Purchase 2 of 02-Nov-2026 (MasterID 11, line 4e8fbfa8…): asking Tally by MasterID
+2026-10-06 12:36:11  Recorder: Purchase 2 of 02-Nov-2026 (MasterID 11, line 4e8fbfa8…): taken: Tally's GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-0000000b, AlterID 16
+2026-10-06 12:36:21  Recorder: FinCom asks again for 1 held line(s) of this bridge: 1 new in the held list, 0 asked afresh (tries of an older version), 0 there already, 0 resolved already, 0 not this bridge's own Tally's (company not open here or another GUID)
+2026-10-06 12:36:21  Recorder: Sales 2 of 01-Nov-2026 (MasterID 10, line 83864754…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 12:36:21  Recorder: Sales 2 of 01-Nov-2026 (MasterID 10, line 83864754…): taken: Tally's GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-0000000a, AlterID 14
+2026-10-06 12:36:21  Recorder: Sales 2 of 20261101 in FinCom Spike Co resolved: sent as altered with its GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-0000000a and body
+2026-10-06 12:36:21  Recorder: held lines: 1 from FinCom, 1 asked, 1 resolved, 0 still held (1 in the list)
+2026-10-06 12:36:22  Ledger S231 Purchase of FinCom Spike Co: fetched from Tally before its entry (FinCom held the entry for it); the entry follows
+2026-10-06 12:36:22  Ledger S231 Supplier of FinCom Spike Co: fetched from Tally before its entry (FinCom held the entry for it); the entry follows
+2026-10-06 12:36:22  Ledger Input CGST of FinCom Spike Co: fetched from Tally before its entry (FinCom held the entry for it); the entry follows
+2026-10-06 12:36:22  Ledger Input SGST of FinCom Spike Co: fetched from Tally before its entry (FinCom held the entry for it); the entry follows
+2026-10-06 12:36:51  Recorder: Purchase 2 of 02-Nov-2026 (MasterID 11, line 4e8fbfa8…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 12:36:51  Recorder: Purchase 2 of 02-Nov-2026 (MasterID 11, line 4e8fbfa8…): taken: Tally's GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-0000000b, AlterID 16
+2026-10-06 12:36:51  Recorder: Purchase 2 of 20261102 in FinCom Spike Co resolved: sent as altered with its GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-0000000b and body
+2026-10-06 12:36:51  Recorder: held lines: 1 from FinCom, 1 asked, 1 resolved, 0 still held (1 in the list)
+2026-10-06 12:36:53  Recorder: Credit Note 2 of 01-Dec-2026 (MasterID 12, line 0fde101d…): asking Tally by MasterID
+2026-10-06 12:36:54  Recorder: Credit Note 2 of 01-Dec-2026 (MasterID 12, line 0fde101d…): taken: Tally's GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-0000000c, AlterID 18
+2026-10-06 12:37:36  Recorder: Receipt 4 of 02-Dec-2026 (MasterID 13, line 7d24fb39…): asking Tally by MasterID
+2026-10-06 12:37:36  Recorder: Receipt 4 of 02-Dec-2026 (MasterID 13, line 7d24fb39…): taken: Tally's GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-0000000d, AlterID 20
+2026-10-06 12:37:51  Ledger S231 Billwise Party of FinCom Spike Co: fetched from Tally before its entry (FinCom held the entry for it); the entry follows
+2026-10-06 12:37:51  Ledger Cash of FinCom Spike Co: fetched from Tally before its entry (FinCom held the entry for it); the entry follows
+2026-10-06 12:38:18  Recorder: Payment 1 of 01-Jan-2027 (MasterID 14, line 04a2a6ce…): asking Tally by MasterID
+2026-10-06 12:38:18  Recorder: Payment 1 of 01-Jan-2027 (MasterID 14, line 04a2a6ce…): taken: Tally's GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-0000000e, AlterID 22
+2026-10-06 12:38:21  Recorder: Receipt 4 of 02-Dec-2026 (MasterID 13, line 7d24fb39…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 12:38:21  Recorder: Receipt 4 of 02-Dec-2026 (MasterID 13, line 7d24fb39…): taken: Tally's GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-0000000d, AlterID 20
+2026-10-06 12:38:21  Recorder: Receipt 4 of 20261202 in FinCom Spike Co resolved: sent as altered with its GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-0000000d and body
+2026-10-06 12:38:21  Recorder: held lines: 1 from FinCom, 1 asked, 1 resolved, 0 still held (1 in the list)
+2026-10-06 12:38:21  Ledger S231 Contract Exp of FinCom Spike Co: fetched from Tally before its entry (FinCom held the entry for it); the entry follows
+2026-10-06 12:38:21  Ledger S231 TDS Payable of FinCom Spike Co: fetched from Tally before its entry (FinCom held the entry for it); the entry follows
+2026-10-06 12:38:51  Recorder: Payment 1 of 01-Jan-2027 (MasterID 14, line 04a2a6ce…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 12:38:51  Recorder: Payment 1 of 01-Jan-2027 (MasterID 14, line 04a2a6ce…): taken: Tally's GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-0000000e, AlterID 22
+2026-10-06 12:38:51  Recorder: Payment 1 of 20270101 in FinCom Spike Co resolved: sent as altered with its GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-0000000e and body
+2026-10-06 12:38:51  Recorder: held lines: 1 from FinCom, 1 asked, 1 resolved, 0 still held (1 in the list)
+2026-10-06 12:39:00  Recorder: Journal 3 of 02-Jan-2027 (MasterID 15, line e16766c3…): asking Tally by MasterID
+2026-10-06 12:39:01  Recorder: Journal 3 of 02-Jan-2027 (MasterID 15, line e16766c3…): taken: Tally's GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-0000000f, AlterID 24
+2026-10-06 12:39:21  Ledger S231 Office Exp of FinCom Spike Co: fetched from Tally before its entry (FinCom held the entry for it); the entry follows
+2026-10-06 12:39:43  Recorder: Payment 2 of 01-Feb-2027 (MasterID 16, line 7b17caee…): asking Tally by MasterID
+2026-10-06 12:39:43  Recorder: Payment 2 of 01-Feb-2027 (MasterID 16, line 7b17caee…): taken: Tally's GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000010, AlterID 26
+2026-10-06 12:39:51  Recorder: Journal 3 of 02-Jan-2027 (MasterID 15, line e16766c3…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 12:39:51  Ledger S231 Bank of FinCom Spike Co: fetched from Tally before its entry (FinCom held the entry for it); the entry follows
+2026-10-06 12:39:51  Recorder: Journal 3 of 02-Jan-2027 (MasterID 15, line e16766c3…): taken: Tally's GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-0000000f, AlterID 24
+2026-10-06 12:39:51  Recorder: Journal 3 of 20270102 in FinCom Spike Co resolved: sent as altered with its GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-0000000f and body
+2026-10-06 12:39:51  Recorder: held lines: 1 from FinCom, 1 asked, 1 resolved, 0 still held (1 in the list)
+2026-10-06 12:40:21  Recorder: Payment 2 of 01-Feb-2027 (MasterID 16, line 7b17caee…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 12:40:21  Recorder: Payment 2 of 01-Feb-2027 (MasterID 16, line 7b17caee…): taken: Tally's GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000010, AlterID 26
+2026-10-06 12:40:21  Recorder: Payment 2 of 20270201 in FinCom Spike Co resolved: sent as altered with its GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000010 and body
+2026-10-06 12:40:21  Recorder: held lines: 1 from FinCom, 1 asked, 1 resolved, 0 still held (1 in the list)
+2026-10-06 12:40:27  Recorder: Sales 3 of 02-Feb-2027 (MasterID 17, line e6186723…): asking Tally by MasterID
+2026-10-06 12:40:27  Recorder: Sales 3 of 02-Feb-2027 (MasterID 17, line e6186723…): taken: Tally's GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000011, AlterID 28
+2026-10-06 12:43:51  Ledger changes for FinCom Spike Co: Tally's master counter 643 -> 648: 1 request(s) for AlterID 644-648, 3 ledger(s) sent to FinCom; the last number is 648
+2026-10-06 12:43:51  Ledger changes for FinCom Spike Co: 3 ledger(s) created or altered in Tally sent to FinCom
+2026-10-06 12:43:59  Recorder: Sales 4 of 01-Jun-2026 (MasterID 18, line c875e35b…): asking Tally by MasterID
+2026-10-06 12:43:59  Recorder: Sales 4 of 01-Jun-2026 (MasterID 18, line c875e35b…): taken: Tally's GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000012, AlterID 30
+2026-10-06 12:44:21  Ledger S231 Freight Charged of FinCom Spike Co: fetched from Tally before its entry (FinCom held the entry for it); the entry follows
+2026-10-06 12:44:47  Recorder: Sales 5 of 02-Jun-2026 (MasterID 19, line c532fba2…): asking Tally by MasterID
+2026-10-06 12:44:47  Recorder: Sales 5 of 02-Jun-2026 (MasterID 19, line c532fba2…): taken: Tally's GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000013, AlterID 32
+2026-10-06 12:44:51  Ledger S231 Round Off of FinCom Spike Co: fetched from Tally before its entry (FinCom held the entry for it); the entry follows
+2026-10-06 12:44:51  Recorder: Sales 4 of 01-Jun-2026 (MasterID 18, line c875e35b…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 12:44:51  Recorder: Sales 4 of 01-Jun-2026 (MasterID 18, line c875e35b…): taken: Tally's GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000012, AlterID 30
+2026-10-06 12:44:51  Recorder: Sales 4 of 20260601 in FinCom Spike Co resolved: sent as altered with its GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000012 and body
+2026-10-06 12:44:51  Recorder: held lines: 1 from FinCom, 1 asked, 1 resolved, 0 still held (1 in the list)
+2026-10-06 12:45:21  Recorder: Sales 5 of 02-Jun-2026 (MasterID 19, line c532fba2…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 12:45:22  Recorder: Sales 5 of 02-Jun-2026 (MasterID 19, line c532fba2…): taken: Tally's GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000013, AlterID 32
+2026-10-06 12:45:22  Recorder: Sales 5 of 20260602 in FinCom Spike Co resolved: sent as altered with its GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000013 and body
+2026-10-06 12:45:22  Recorder: held lines: 1 from FinCom, 1 asked, 1 resolved, 0 still held (1 in the list)
+2026-10-06 12:45:30  Recorder: Sales 6 of 01-Jul-2026 (MasterID 20, line 72617a83…): asking Tally by MasterID
+2026-10-06 12:45:30  Recorder: Sales 6 of 01-Jul-2026 (MasterID 20, line 72617a83…): taken: Tally's GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000014, AlterID 34
+2026-10-06 12:46:13  Recorder: Sales 7 of 02-Jul-2026 (MasterID 21, line bf2cf161…): asking Tally by MasterID
+2026-10-06 12:46:13  Recorder: Sales 7 of 02-Jul-2026 (MasterID 21, line bf2cf161…): taken: Tally's GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000015, AlterID 36
+2026-10-06 12:57:57  Recorder: Receipt 5 of 01-Mar-2027 (MasterID 22, line 4fda6f67…): asking Tally by MasterID
+2026-10-06 12:57:57  Recorder: Receipt 5 of 01-Mar-2027 (MasterID 22, line 4fda6f67…): taken: Tally's GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000016, AlterID 38
+2026-10-06 12:58:21  Ledger S231 New Party of FinCom Spike Co: fetched from Tally before its entry (FinCom held the entry for it); the entry follows
+2026-10-06 12:58:51  Recorder: FinCom asks again for 1 held line(s) of this bridge: 1 new in the held list, 0 asked afresh (tries of an older version), 0 there already, 0 resolved already, 0 not this bridge's own Tally's (company not open here or another GUID)
+2026-10-06 12:58:51  Recorder: Receipt 5 of 01-Mar-2027 (MasterID 22, line 4fda6f67…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 12:58:52  Recorder: Receipt 5 of 01-Mar-2027 (MasterID 22, line 4fda6f67…): taken: Tally's GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000016, AlterID 38
+2026-10-06 12:58:52  Recorder: Receipt 5 of 20270301 in FinCom Spike Co resolved: sent as altered with its GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000016 and body
+2026-10-06 12:58:52  Recorder: held lines: 1 from FinCom, 1 asked, 1 resolved, 0 still held (1 in the list)
+2026-10-06 12:59:31  Recorder: Receipt 6 of 02-Mar-2027 (MasterID 23, line ac738d5d…): asking Tally by MasterID
+2026-10-06 12:59:32  Recorder: Receipt 6 of 02-Mar-2027 (MasterID 23, line ac738d5d…): taken: Tally's GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000017, AlterID 40
+2026-10-06 12:59:51  Ledger changes for FinCom Spike Co: 'S231 Old Name Party' is named 'S231 Renamed Party' in Tally now: kept under FinCom's name (GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-000000f0)
+2026-10-06 12:59:51  Ledger S231 Renamed Party of FinCom Spike Co: fetched from Tally before its entry (FinCom held the entry for it); the entry follows
+2026-10-06 13:00:21  Recorder: Receipt 6 of 02-Mar-2027 (MasterID 23, line ac738d5d…): asking Tally again (a held line, try 1 of 20)
+2026-10-06 13:00:22  Recorder: Receipt 6 of 02-Mar-2027 (MasterID 23, line ac738d5d…): taken: Tally's GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000017, AlterID 40
+2026-10-06 13:00:22  Recorder: Receipt 6 of 20270302 in FinCom Spike Co resolved: sent as altered with its GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000017 and body
+2026-10-06 13:00:22  Recorder: held lines: 1 from FinCom, 1 asked, 1 resolved, 0 still held (1 in the list)
+2026-10-06 13:01:21  Posting job r1-job-1: 1 item(s) for FinCom Spike Co
+2026-10-06 13:01:21  Posting from FinCom's queue: 1 item(s) for FinCom Spike Co (job r1-job-1)
+2026-10-06 13:01:29  Tally 9000 is busy (no answer in 8s); nothing more is sent to it until it answers a small check (the company's name), asked once a minute
+2026-10-06 13:01:29  Tally 9000: TDSDeskCompanies took 8.2s and failed: The operation has timed out
+2026-10-06 13:01:29  Recorder: Tally took longer than 2 s to list its open companies (limit 2 s); this computer's changes of companies not seen open here yet wait until it answers in time; none is passed over or lost
+2026-10-06 13:01:29  Posting job r1-job-1: Waiting for Tally: Tally is busy (a report, a pop-up or another user may be holding it) — finish or close it in TallyPrime; it will be posted automatically
+2026-10-06 13:03:55  Tally 9000 answered the small check; requests go again
+2026-10-06 13:03:56  Tally 9000 answers again (it was busy for 2m34s)
+2026-10-06 13:03:56  Ledger changes for FinCom Spike Co: 'S231 Old Name Party' is named 'S231 Renamed Party' in Tally now: kept under FinCom's name (GUID b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-000000f0)
+2026-10-06 13:03:56  Ledger changes for FinCom Spike Co: Tally's master counter 648 -> 650: 1 request(s) for AlterID 649-650, 2 ledger(s) sent to FinCom; the last number is 650
+2026-10-06 13:03:56  Ledger changes for FinCom Spike Co: 2 ledger(s) created or altered in Tally sent to FinCom
+2026-10-06 13:04:25      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>25</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-06 13:04:25  Posting job r1-job-1: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 25)
+2026-10-06 13:04:25  Posting job r1-job-1: 1 requests, 1 vouchers, 0.2 s total
+2026-10-06 13:04:25  Posting job r1-job-1: posting window ALTVCHID 41 to 42, 1 voucher(s) and 0 master(s) created
+2026-10-06 13:04:25  Posting job r1-job-1 done: Posted 1 of 1 (Tally's reply)
+2026-10-06 13:04:25  Posting from FinCom's queue r1-job-1: Posted 1 of 1 (Tally's reply)
+2026-10-06 13:13:52  Ledger changes for FinCom Spike Co: Tally's master counter 650 -> 652: 1 request(s) for AlterID 651-652, 0 ledger(s); the last number is 652

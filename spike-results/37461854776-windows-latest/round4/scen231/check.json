@@ -1,0 +1,4311 @@
+{
+ "scenarios": [
+  {
+   "id": "S1",
+   "key": "s1-sales-two-rates",
+   "label": "sales invoice, two stock items at 5% and 18%",
+   "guid": "b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-0000000a",
+   "rows": [
+    {
+     "what": "voucher type",
+     "tally": "Sales",
+     "fincom": "Sales",
+     "entered": "Sales",
+     "status": "ok"
+    },
+    {
+     "what": "FinCom's lines add up to 0",
+     "tally": "0",
+     "fincom": "0",
+     "entered": "0",
+     "status": "ok"
+    },
+    {
+     "what": "ledger S231 Buyer",
+     "tally": "-71325",
+     "fincom": "-71325",
+     "entered": "-71325",
+     "status": "ok"
+    },
+    {
+     "what": "ledger Output CGST",
+     "tally": "5412.5",
+     "fincom": "5412.5",
+     "entered": "5412.5",
+     "status": "ok"
+    },
+    {
+     "what": "ledger Output SGST",
+     "tally": "5412.5",
+     "fincom": "5412.5",
+     "entered": "5412.5",
+     "status": "ok"
+    },
+    {
+     "what": "ledger S231 Sales",
+     "tally": "60500",
+     "fincom": "60500",
+     "entered": "60500",
+     "status": "ok"
+    },
+    {
+     "what": "parse.js's accuracy checks",
+     "tally": "(none)",
+     "fincom": "none",
+     "status": "ok"
+    },
+    {
+     "what": "item lines",
+     "tally": "2",
+     "fincom": "2",
+     "entered": "2",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Rice HSN",
+     "tally": "1006",
+     "fincom": "1006",
+     "entered": "1006",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Rice quantity",
+     "tally": "10",
+     "fincom": "10",
+     "entered": "10",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Rice taxable value",
+     "tally": "500",
+     "fincom": "500",
+     "entered": "500",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Rice GST rate",
+     "tally": "5",
+     "fincom": "5",
+     "entered": "5",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Rice tax",
+     "tally": "25",
+     "fincom": "25",
+     "entered": "25",
+     "status": "ok"
+    },
+    {
+     "what": "line 2 S231 Laptop HSN",
+     "tally": "8471",
+     "fincom": "8471",
+     "entered": "8471",
+     "status": "ok"
+    },
+    {
+     "what": "line 2 S231 Laptop quantity",
+     "tally": "2",
+     "fincom": "2",
+     "entered": "2",
+     "status": "ok"
+    },
+    {
+     "what": "line 2 S231 Laptop taxable value",
+     "tally": "60000",
+     "fincom": "60000",
+     "entered": "60000",
+     "status": "ok"
+    },
+    {
+     "what": "line 2 S231 Laptop GST rate",
+     "tally": "18",
+     "fincom": "18",
+     "entered": "18",
+     "status": "ok"
+    },
+    {
+     "what": "line 2 S231 Laptop tax",
+     "tally": "10800",
+     "fincom": "10800",
+     "entered": "10800",
+     "status": "ok"
+    },
+    {
+     "what": "IRN",
+     "tally": "a5c12dca80e743321740b001fd70953e8738d109865d28ba4013750f2046f229",
+     "fincom": "a5c12dca80e743321740b001fd70953e8738d109865d28ba4013750f2046f229",
+     "entered": "a5c12dca80e743321740b001fd70953e8738d109865d28ba4013750f2046f229",
+     "status": "ok"
+    },
+    {
+     "what": "IRN ack no",
+     "tally": "112611010000231",
+     "fincom": "112611010000231",
+     "entered": "112611010000231",
+     "status": "ok"
+    },
+    {
+     "what": "IRN ack date",
+     "tally": "20261101",
+     "fincom": "20261101",
+     "entered": "20261101",
+     "status": "ok"
+    },
+    {
+     "what": "e-way bill number",
+     "tally": "381101234231",
+     "fincom": "381101234231",
+     "entered": "381101234231",
+     "status": "ok"
+    }
+   ],
+   "notes": [],
+   "tallyFound": true,
+   "fincomFound": true,
+   "line": {
+    "ev": "altered",
+    "at": "12:36:21",
+    "xmlChars": 14919,
+    "state": "applied",
+    "why": ""
+   },
+   "status": "pass"
+  },
+  {
+   "id": "S2",
+   "key": "s2-purchase-items",
+   "label": "purchase invoice with items",
+   "guid": "b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-0000000b",
+   "rows": [
+    {
+     "what": "voucher type",
+     "tally": "Purchase",
+     "fincom": "Purchase",
+     "entered": "Purchase",
+     "status": "ok"
+    },
+    {
+     "what": "FinCom's lines add up to 0",
+     "tally": "0",
+     "fincom": "0",
+     "entered": "0",
+     "status": "ok"
+    },
+    {
+     "what": "ledger S231 Supplier",
+     "tally": "3290",
+     "fincom": "3290",
+     "entered": "3290",
+     "status": "ok"
+    },
+    {
+     "what": "ledger Input CGST",
+     "tally": "-145",
+     "fincom": "-145",
+     "entered": "-145",
+     "status": "ok"
+    },
+    {
+     "what": "ledger Input SGST",
+     "tally": "-145",
+     "fincom": "-145",
+     "entered": "-145",
+     "status": "ok"
+    },
+    {
+     "what": "ledger S231 Purchase",
+     "tally": "-3000",
+     "fincom": "-3000",
+     "entered": "-3000",
+     "status": "ok"
+    },
+    {
+     "what": "parse.js's accuracy checks",
+     "tally": "(none)",
+     "fincom": "none",
+     "status": "ok"
+    },
+    {
+     "what": "item lines",
+     "tally": "2",
+     "fincom": "2",
+     "entered": "2",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Tablet HSN",
+     "tally": "3004",
+     "fincom": "3004",
+     "entered": "3004",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Tablet quantity",
+     "tally": "5",
+     "fincom": "5",
+     "entered": "5",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Tablet taxable value",
+     "tally": "2000",
+     "fincom": "2000",
+     "entered": "2000",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Tablet GST rate",
+     "tally": "12",
+     "fincom": "12",
+     "entered": "12",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Tablet tax",
+     "tally": "240",
+     "fincom": "240",
+     "entered": "240",
+     "status": "ok"
+    },
+    {
+     "what": "line 2 S231 Rice HSN",
+     "tally": "1006",
+     "fincom": "1006",
+     "entered": "1006",
+     "status": "ok"
+    },
+    {
+     "what": "line 2 S231 Rice quantity",
+     "tally": "20",
+     "fincom": "20",
+     "entered": "20",
+     "status": "ok"
+    },
+    {
+     "what": "line 2 S231 Rice taxable value",
+     "tally": "1000",
+     "fincom": "1000",
+     "entered": "1000",
+     "status": "ok"
+    },
+    {
+     "what": "line 2 S231 Rice GST rate",
+     "tally": "5",
+     "fincom": "5",
+     "entered": "5",
+     "status": "ok"
+    },
+    {
+     "what": "line 2 S231 Rice tax",
+     "tally": "50",
+     "fincom": "50",
+     "entered": "50",
+     "status": "ok"
+    }
+   ],
+   "notes": [],
+   "tallyFound": true,
+   "fincomFound": true,
+   "line": {
+    "ev": "altered",
+    "at": "12:36:51",
+    "xmlChars": 14793,
+    "state": "applied",
+    "why": ""
+   },
+   "status": "pass"
+  },
+  {
+   "id": "S3",
+   "key": "s3-credit-note-items",
+   "label": "credit note with items",
+   "guid": "b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-0000000c",
+   "rows": [
+    {
+     "what": "voucher type",
+     "tally": "Credit Note",
+     "fincom": "Credit Note",
+     "entered": "Credit Note",
+     "status": "ok"
+    },
+    {
+     "what": "FinCom's lines add up to 0",
+     "tally": "0",
+     "fincom": "0",
+     "entered": "0",
+     "status": "ok"
+    },
+    {
+     "what": "ledger S231 Buyer",
+     "tally": "35400",
+     "fincom": "35400",
+     "entered": "35400",
+     "status": "ok"
+    },
+    {
+     "what": "ledger Output CGST",
+     "tally": "-2700",
+     "fincom": "-2700",
+     "entered": "-2700",
+     "status": "ok"
+    },
+    {
+     "what": "ledger Output SGST",
+     "tally": "-2700",
+     "fincom": "-2700",
+     "entered": "-2700",
+     "status": "ok"
+    },
+    {
+     "what": "ledger S231 Sales",
+     "tally": "-30000",
+     "fincom": "-30000",
+     "entered": "-30000",
+     "status": "ok"
+    },
+    {
+     "what": "parse.js's accuracy checks",
+     "tally": "(none)",
+     "fincom": "none",
+     "status": "ok"
+    },
+    {
+     "what": "item lines",
+     "tally": "1",
+     "fincom": "1",
+     "entered": "1",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Laptop HSN",
+     "tally": "8471",
+     "fincom": "8471",
+     "entered": "8471",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Laptop quantity",
+     "tally": "1",
+     "fincom": "1",
+     "entered": "1",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Laptop taxable value",
+     "tally": "30000",
+     "fincom": "30000",
+     "entered": "30000",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Laptop GST rate",
+     "tally": "18",
+     "fincom": "18",
+     "entered": "18",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Laptop tax",
+     "tally": "5400",
+     "fincom": "5400",
+     "entered": "5400",
+     "status": "ok"
+    }
+   ],
+   "notes": [],
+   "tallyFound": true,
+   "fincomFound": true,
+   "line": {
+    "ev": "altered",
+    "at": "12:36:54",
+    "xmlChars": 10510,
+    "state": "applied",
+    "why": ""
+   },
+   "status": "pass"
+  },
+  {
+   "id": "S4",
+   "key": "s4-receipt-against-bill",
+   "label": "receipt against a bill (Agst Ref S231-BILL-1)",
+   "guid": "b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-0000000d",
+   "rows": [
+    {
+     "what": "voucher type",
+     "tally": "Receipt",
+     "fincom": "Receipt",
+     "entered": "Receipt",
+     "status": "ok"
+    },
+    {
+     "what": "FinCom's lines add up to 0",
+     "tally": "0",
+     "fincom": "0",
+     "entered": "0",
+     "status": "ok"
+    },
+    {
+     "what": "ledger S231 Billwise Party",
+     "tally": "2360",
+     "fincom": "2360",
+     "entered": "2360",
+     "status": "ok"
+    },
+    {
+     "what": "ledger Cash",
+     "tally": "-2360",
+     "fincom": "-2360",
+     "entered": "-2360",
+     "status": "ok"
+    },
+    {
+     "what": "parse.js's accuracy checks",
+     "tally": "(none)",
+     "fincom": "none",
+     "status": "ok"
+    },
+    {
+     "what": "S231 Billwise Party bill S231-BILL-1 type",
+     "tally": "Agst Ref",
+     "fincom": "Agst Ref",
+     "entered": "Agst Ref",
+     "status": "ok"
+    },
+    {
+     "what": "S231 Billwise Party bill S231-BILL-1 amount",
+     "tally": "2360",
+     "fincom": "2360",
+     "entered": "2360",
+     "status": "ok"
+    }
+   ],
+   "notes": [],
+   "tallyFound": true,
+   "fincomFound": true,
+   "line": {
+    "ev": "altered",
+    "at": "12:38:21",
+    "xmlChars": 3727,
+    "state": "applied",
+    "why": ""
+   },
+   "status": "pass"
+  },
+  {
+   "id": "S5",
+   "key": "s5-payment-tds",
+   "label": "payment with TDS",
+   "guid": "b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-0000000e",
+   "rows": [
+    {
+     "what": "voucher type",
+     "tally": "Payment",
+     "fincom": "Payment",
+     "entered": "Payment",
+     "status": "ok"
+    },
+    {
+     "what": "FinCom's lines add up to 0",
+     "tally": "0",
+     "fincom": "0",
+     "entered": "0",
+     "status": "ok"
+    },
+    {
+     "what": "ledger S231 Contract Exp",
+     "tally": "-100000",
+     "fincom": "-100000",
+     "entered": "-100000",
+     "status": "ok"
+    },
+    {
+     "what": "ledger S231 TDS Payable",
+     "tally": "-2000",
+     "fincom": "-2000",
+     "entered": "2000",
+     "status": "ok"
+    },
+    {
+     "what": "ledger Cash",
+     "tally": "102000",
+     "fincom": "102000",
+     "entered": "98000",
+     "status": "ok"
+    },
+    {
+     "what": "parse.js's accuracy checks",
+     "tally": "(none)",
+     "fincom": "none",
+     "status": "ok"
+    },
+    {
+     "what": "TDS nature of payment",
+     "tally": "(none)",
+     "fincom": "(none)",
+     "entered": "S231 Contract Work",
+     "status": "harness"
+    },
+    {
+     "what": "TDS rate",
+     "tally": "(none)",
+     "fincom": "(none)",
+     "entered": "2",
+     "status": "harness"
+    },
+    {
+     "what": "TDS assessable value",
+     "tally": "(none)",
+     "fincom": "(none)",
+     "entered": "100000",
+     "status": "harness"
+    },
+    {
+     "what": "TDS amount",
+     "tally": "(none)",
+     "fincom": "(none)",
+     "entered": "2000",
+     "status": "harness"
+    }
+   ],
+   "notes": [
+    "TDS section: Tally gives no TDSDEDUCTEESECTIONNUMBER on this entry; FinCom's section (none) (from (none))",
+    "deductee type: Tally's ledger master TDSDEDUCTEETYPE \"Company - Resident\"; the entry body carries none (FinCom: (none))"
+   ],
+   "tallyFound": true,
+   "fincomFound": true,
+   "line": {
+    "ev": "altered",
+    "at": "12:38:51",
+    "xmlChars": 4326,
+    "state": "applied",
+    "why": ""
+   },
+   "status": "harness"
+  },
+  {
+   "id": "S6",
+   "key": "s6-journal-cost-centres",
+   "label": "journal with cost centres",
+   "guid": "b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-0000000f",
+   "rows": [
+    {
+     "what": "voucher type",
+     "tally": "Journal",
+     "fincom": "Journal",
+     "entered": "Journal",
+     "status": "ok"
+    },
+    {
+     "what": "FinCom's lines add up to 0",
+     "tally": "0",
+     "fincom": "0",
+     "entered": "0",
+     "status": "ok"
+    },
+    {
+     "what": "ledger S231 Office Exp",
+     "tally": "-1000",
+     "fincom": "-1000",
+     "entered": "-1000",
+     "status": "ok"
+    },
+    {
+     "what": "ledger S231 Supplier",
+     "tally": "1000",
+     "fincom": "1000",
+     "entered": "1000",
+     "status": "ok"
+    },
+    {
+     "what": "parse.js's accuracy checks",
+     "tally": "(none)",
+     "fincom": "none",
+     "status": "ok"
+    },
+    {
+     "what": "S231 Office Exp cost centre S231 North (S231 Region)",
+     "tally": "S231 Region: -600",
+     "fincom": "S231 Region: -600",
+     "entered": "S231 Region: -600",
+     "status": "ok"
+    },
+    {
+     "what": "S231 Office Exp cost centre S231 South (S231 Region)",
+     "tally": "S231 Region: -400",
+     "fincom": "S231 Region: -400",
+     "entered": "S231 Region: -400",
+     "status": "ok"
+    }
+   ],
+   "notes": [],
+   "tallyFound": true,
+   "fincomFound": true,
+   "line": {
+    "ev": "altered",
+    "at": "12:39:51",
+    "xmlChars": 4006,
+    "state": "applied",
+    "why": ""
+   },
+   "status": "pass"
+  },
+  {
+   "id": "S7",
+   "key": "s7-bank-payment-utr",
+   "label": "bank payment with a UTR",
+   "guid": "b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000010",
+   "rows": [
+    {
+     "what": "voucher type",
+     "tally": "Payment",
+     "fincom": "Payment",
+     "entered": "Payment",
+     "status": "ok"
+    },
+    {
+     "what": "FinCom's lines add up to 0",
+     "tally": "0",
+     "fincom": "0",
+     "entered": "0",
+     "status": "ok"
+    },
+    {
+     "what": "ledger S231 Supplier",
+     "tally": "-5900",
+     "fincom": "-5900",
+     "entered": "-5900",
+     "status": "ok"
+    },
+    {
+     "what": "ledger S231 Bank",
+     "tally": "5900",
+     "fincom": "5900",
+     "entered": "5900",
+     "status": "ok"
+    },
+    {
+     "what": "parse.js's accuracy checks",
+     "tally": "(none)",
+     "fincom": "none",
+     "status": "ok"
+    },
+    {
+     "what": "bank transaction type",
+     "tally": "Same Bank Transfer",
+     "fincom": "Same Bank Transfer",
+     "entered": "e-Fund Transfer",
+     "status": "ok"
+    },
+    {
+     "what": "bank instrument number (UTR)",
+     "tally": "SBINR52027020100231",
+     "fincom": "SBINR52027020100231",
+     "entered": "SBINR52027020100231",
+     "status": "ok"
+    },
+    {
+     "what": "bank instrument date",
+     "tally": "20270201",
+     "fincom": "20270201",
+     "entered": "20270201",
+     "status": "ok"
+    }
+   ],
+   "notes": [
+    "Tally's bank allocation as exported: {\"DATE\":\"20270201\",\"INSTRUMENTDATE\":\"20270201\",\"NAME\":\"SBINR52027020100231\",\"TRANSACTIONTYPE\":\"Same Bank Transfer\",\"PAYMENTFAVOURING\":\"S231 Supplier\",\"INSTRUMENTNUMBER\":\"SBINR52027020100231\",\"UNIQUEREFERENCENUMBER\":\"SBINR52027020100231\",\"STATUS\":\"No\",\"PAYMENTMODE\":\"Transacted\",\"BANKPARTYNAME\":\"S231 Supplier\",\"ISCONNECTEDPAYMENT\":\"No\",\"ISSPLIT\":\"No\",\"ISCONTRACTUSED\":\"No\",\"ISACCEPTEDWITHWARNING\":\"No\",\"ISTRANSFORCED\":\"No\",\"CHEQUEPRINTED\":\"0\",\"BANKKEYVALUESCRC\":\"0\",\"AMOUNT\":\"5900.00\",\"DENOMINATIONCOUNT2000X\":\"0\",\"DENOMINATIONCOUNT1000X\":\"0\",\"DENOMINATIONCOUNT500X\":\"0\",\"DENOMINATIONCOUNT200X\":\"0\",\""
+   ],
+   "tallyFound": true,
+   "fincomFound": true,
+   "line": {
+    "ev": "altered",
+    "at": "12:40:21",
+    "xmlChars": 3950,
+    "state": "applied",
+    "why": ""
+   },
+   "status": "pass"
+  },
+  {
+   "id": "S10",
+   "key": "s10-sales-50-items",
+   "label": "sales invoice with 50 items",
+   "guid": "b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000011",
+   "rows": [
+    {
+     "what": "voucher type",
+     "tally": "Sales",
+     "fincom": "Sales",
+     "entered": "Sales",
+     "status": "ok"
+    },
+    {
+     "what": "FinCom's lines add up to 0",
+     "tally": "0",
+     "fincom": "0",
+     "entered": "0",
+     "status": "ok"
+    },
+    {
+     "what": "ledger S231 Buyer",
+     "tally": "-1976834",
+     "fincom": "-1976834",
+     "entered": "-1976834",
+     "status": "ok"
+    },
+    {
+     "what": "ledger Output CGST",
+     "tally": "155017",
+     "fincom": "155017",
+     "entered": "155017",
+     "status": "ok"
+    },
+    {
+     "what": "ledger Output SGST",
+     "tally": "155017",
+     "fincom": "155017",
+     "entered": "155017",
+     "status": "ok"
+    },
+    {
+     "what": "ledger S231 Sales",
+     "tally": "1666800",
+     "fincom": "1666800",
+     "entered": "1666800",
+     "status": "ok"
+    },
+    {
+     "what": "parse.js's accuracy checks",
+     "tally": "(none)",
+     "fincom": "none",
+     "status": "ok"
+    },
+    {
+     "what": "item lines",
+     "tally": "50",
+     "fincom": "50",
+     "entered": "50",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Rice HSN",
+     "tally": "1006",
+     "fincom": "1006",
+     "entered": "1006",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Rice quantity",
+     "tally": "1",
+     "fincom": "1",
+     "entered": "1",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Rice taxable value",
+     "tally": "50",
+     "fincom": "50",
+     "entered": "50",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Rice GST rate",
+     "tally": "5",
+     "fincom": "5",
+     "entered": "5",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Rice tax",
+     "tally": "2.5",
+     "fincom": "2.5",
+     "entered": "2.5",
+     "status": "ok"
+    },
+    {
+     "what": "line 2 S231 Laptop HSN",
+     "tally": "8471",
+     "fincom": "8471",
+     "entered": "8471",
+     "status": "ok"
+    },
+    {
+     "what": "line 2 S231 Laptop quantity",
+     "tally": "2",
+     "fincom": "2",
+     "entered": "2",
+     "status": "ok"
+    },
+    {
+     "what": "line 2 S231 Laptop taxable value",
+     "tally": "60000",
+     "fincom": "60000",
+     "entered": "60000",
+     "status": "ok"
+    },
+    {
+     "what": "line 2 S231 Laptop GST rate",
+     "tally": "18",
+     "fincom": "18",
+     "entered": "18",
+     "status": "ok"
+    },
+    {
+     "what": "line 2 S231 Laptop tax",
+     "tally": "10800",
+     "fincom": "10800",
+     "entered": "10800",
+     "status": "ok"
+    },
+    {
+     "what": "line 3 S231 Tablet HSN",
+     "tally": "3004",
+     "fincom": "3004",
+     "entered": "3004",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 3 S231 Tablet quantity",
+     "tally": "3",
+     "fincom": "3",
+     "entered": "3",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 3 S231 Tablet taxable value",
+     "tally": "1200",
+     "fincom": "1200",
+     "entered": "1200",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 3 S231 Tablet GST rate",
+     "tally": "12",
+     "fincom": "12",
+     "entered": "12",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 3 S231 Tablet tax",
+     "tally": "144",
+     "fincom": "144",
+     "entered": "144",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 4 S231 Car Part HSN",
+     "tally": "8708",
+     "fincom": "8708",
+     "entered": "8708",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 4 S231 Car Part quantity",
+     "tally": "4",
+     "fincom": "4",
+     "entered": "4",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 4 S231 Car Part taxable value",
+     "tally": "10000",
+     "fincom": "10000",
+     "entered": "10000",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 4 S231 Car Part GST rate",
+     "tally": "28",
+     "fincom": "28",
+     "entered": "28",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 4 S231 Car Part tax",
+     "tally": "2800",
+     "fincom": "2800",
+     "entered": "2800",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 5 S231 Rice HSN",
+     "tally": "1006",
+     "fincom": "1006",
+     "entered": "1006",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 5 S231 Rice quantity",
+     "tally": "5",
+     "fincom": "5",
+     "entered": "5",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 5 S231 Rice taxable value",
+     "tally": "250",
+     "fincom": "250",
+     "entered": "250",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 5 S231 Rice GST rate",
+     "tally": "5",
+     "fincom": "5",
+     "entered": "5",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 5 S231 Rice tax",
+     "tally": "12.5",
+     "fincom": "12.5",
+     "entered": "12.5",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 6 S231 Laptop HSN",
+     "tally": "8471",
+     "fincom": "8471",
+     "entered": "8471",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 6 S231 Laptop quantity",
+     "tally": "6",
+     "fincom": "6",
+     "entered": "6",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 6 S231 Laptop taxable value",
+     "tally": "180000",
+     "fincom": "180000",
+     "entered": "180000",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 6 S231 Laptop GST rate",
+     "tally": "18",
+     "fincom": "18",
+     "entered": "18",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 6 S231 Laptop tax",
+     "tally": "32400",
+     "fincom": "32400",
+     "entered": "32400",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 7 S231 Tablet HSN",
+     "tally": "3004",
+     "fincom": "3004",
+     "entered": "3004",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 7 S231 Tablet quantity",
+     "tally": "7",
+     "fincom": "7",
+     "entered": "7",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 7 S231 Tablet taxable value",
+     "tally": "2800",
+     "fincom": "2800",
+     "entered": "2800",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 7 S231 Tablet GST rate",
+     "tally": "12",
+     "fincom": "12",
+     "entered": "12",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 7 S231 Tablet tax",
+     "tally": "336",
+     "fincom": "336",
+     "entered": "336",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 8 S231 Car Part HSN",
+     "tally": "8708",
+     "fincom": "8708",
+     "entered": "8708",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 8 S231 Car Part quantity",
+     "tally": "1",
+     "fincom": "1",
+     "entered": "1",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 8 S231 Car Part taxable value",
+     "tally": "2500",
+     "fincom": "2500",
+     "entered": "2500",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 8 S231 Car Part GST rate",
+     "tally": "28",
+     "fincom": "28",
+     "entered": "28",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 8 S231 Car Part tax",
+     "tally": "700",
+     "fincom": "700",
+     "entered": "700",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 9 S231 Rice HSN",
+     "tally": "1006",
+     "fincom": "1006",
+     "entered": "1006",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 9 S231 Rice quantity",
+     "tally": "2",
+     "fincom": "2",
+     "entered": "2",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 9 S231 Rice taxable value",
+     "tally": "100",
+     "fincom": "100",
+     "entered": "100",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 9 S231 Rice GST rate",
+     "tally": "5",
+     "fincom": "5",
+     "entered": "5",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 9 S231 Rice tax",
+     "tally": "5",
+     "fincom": "5",
+     "entered": "5",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 10 S231 Laptop HSN",
+     "tally": "8471",
+     "fincom": "8471",
+     "entered": "8471",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 10 S231 Laptop quantity",
+     "tally": "3",
+     "fincom": "3",
+     "entered": "3",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 10 S231 Laptop taxable value",
+     "tally": "90000",
+     "fincom": "90000",
+     "entered": "90000",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 10 S231 Laptop GST rate",
+     "tally": "18",
+     "fincom": "18",
+     "entered": "18",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 10 S231 Laptop tax",
+     "tally": "16200",
+     "fincom": "16200",
+     "entered": "16200",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 11 S231 Tablet HSN",
+     "tally": "3004",
+     "fincom": "3004",
+     "entered": "3004",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 11 S231 Tablet quantity",
+     "tally": "4",
+     "fincom": "4",
+     "entered": "4",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 11 S231 Tablet taxable value",
+     "tally": "1600",
+     "fincom": "1600",
+     "entered": "1600",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 11 S231 Tablet GST rate",
+     "tally": "12",
+     "fincom": "12",
+     "entered": "12",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 11 S231 Tablet tax",
+     "tally": "192",
+     "fincom": "192",
+     "entered": "192",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 12 S231 Car Part HSN",
+     "tally": "8708",
+     "fincom": "8708",
+     "entered": "8708",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 12 S231 Car Part quantity",
+     "tally": "5",
+     "fincom": "5",
+     "entered": "5",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 12 S231 Car Part taxable value",
+     "tally": "12500",
+     "fincom": "12500",
+     "entered": "12500",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 12 S231 Car Part GST rate",
+     "tally": "28",
+     "fincom": "28",
+     "entered": "28",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 12 S231 Car Part tax",
+     "tally": "3500",
+     "fincom": "3500",
+     "entered": "3500",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 13 S231 Rice HSN",
+     "tally": "1006",
+     "fincom": "1006",
+     "entered": "1006",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 13 S231 Rice quantity",
+     "tally": "6",
+     "fincom": "6",
+     "entered": "6",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 13 S231 Rice taxable value",
+     "tally": "300",
+     "fincom": "300",
+     "entered": "300",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 13 S231 Rice GST rate",
+     "tally": "5",
+     "fincom": "5",
+     "entered": "5",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 13 S231 Rice tax",
+     "tally": "15",
+     "fincom": "15",
+     "entered": "15",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 14 S231 Laptop HSN",
+     "tally": "8471",
+     "fincom": "8471",
+     "entered": "8471",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 14 S231 Laptop quantity",
+     "tally": "7",
+     "fincom": "7",
+     "entered": "7",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 14 S231 Laptop taxable value",
+     "tally": "210000",
+     "fincom": "210000",
+     "entered": "210000",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 14 S231 Laptop GST rate",
+     "tally": "18",
+     "fincom": "18",
+     "entered": "18",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 14 S231 Laptop tax",
+     "tally": "37800",
+     "fincom": "37800",
+     "entered": "37800",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 15 S231 Tablet HSN",
+     "tally": "3004",
+     "fincom": "3004",
+     "entered": "3004",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 15 S231 Tablet quantity",
+     "tally": "1",
+     "fincom": "1",
+     "entered": "1",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 15 S231 Tablet taxable value",
+     "tally": "400",
+     "fincom": "400",
+     "entered": "400",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 15 S231 Tablet GST rate",
+     "tally": "12",
+     "fincom": "12",
+     "entered": "12",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 15 S231 Tablet tax",
+     "tally": "48",
+     "fincom": "48",
+     "entered": "48",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 16 S231 Car Part HSN",
+     "tally": "8708",
+     "fincom": "8708",
+     "entered": "8708",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 16 S231 Car Part quantity",
+     "tally": "2",
+     "fincom": "2",
+     "entered": "2",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 16 S231 Car Part taxable value",
+     "tally": "5000",
+     "fincom": "5000",
+     "entered": "5000",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 16 S231 Car Part GST rate",
+     "tally": "28",
+     "fincom": "28",
+     "entered": "28",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 16 S231 Car Part tax",
+     "tally": "1400",
+     "fincom": "1400",
+     "entered": "1400",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 17 S231 Rice HSN",
+     "tally": "1006",
+     "fincom": "1006",
+     "entered": "1006",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 17 S231 Rice quantity",
+     "tally": "3",
+     "fincom": "3",
+     "entered": "3",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 17 S231 Rice taxable value",
+     "tally": "150",
+     "fincom": "150",
+     "entered": "150",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 17 S231 Rice GST rate",
+     "tally": "5",
+     "fincom": "5",
+     "entered": "5",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 17 S231 Rice tax",
+     "tally": "7.5",
+     "fincom": "7.5",
+     "entered": "7.5",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 18 S231 Laptop HSN",
+     "tally": "8471",
+     "fincom": "8471",
+     "entered": "8471",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 18 S231 Laptop quantity",
+     "tally": "4",
+     "fincom": "4",
+     "entered": "4",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 18 S231 Laptop taxable value",
+     "tally": "120000",
+     "fincom": "120000",
+     "entered": "120000",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 18 S231 Laptop GST rate",
+     "tally": "18",
+     "fincom": "18",
+     "entered": "18",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 18 S231 Laptop tax",
+     "tally": "21600",
+     "fincom": "21600",
+     "entered": "21600",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 19 S231 Tablet HSN",
+     "tally": "3004",
+     "fincom": "3004",
+     "entered": "3004",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 19 S231 Tablet quantity",
+     "tally": "5",
+     "fincom": "5",
+     "entered": "5",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 19 S231 Tablet taxable value",
+     "tally": "2000",
+     "fincom": "2000",
+     "entered": "2000",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 19 S231 Tablet GST rate",
+     "tally": "12",
+     "fincom": "12",
+     "entered": "12",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 19 S231 Tablet tax",
+     "tally": "240",
+     "fincom": "240",
+     "entered": "240",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 20 S231 Car Part HSN",
+     "tally": "8708",
+     "fincom": "8708",
+     "entered": "8708",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 20 S231 Car Part quantity",
+     "tally": "6",
+     "fincom": "6",
+     "entered": "6",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 20 S231 Car Part taxable value",
+     "tally": "15000",
+     "fincom": "15000",
+     "entered": "15000",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 20 S231 Car Part GST rate",
+     "tally": "28",
+     "fincom": "28",
+     "entered": "28",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 20 S231 Car Part tax",
+     "tally": "4200",
+     "fincom": "4200",
+     "entered": "4200",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 21 S231 Rice HSN",
+     "tally": "1006",
+     "fincom": "1006",
+     "entered": "1006",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 21 S231 Rice quantity",
+     "tally": "7",
+     "fincom": "7",
+     "entered": "7",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 21 S231 Rice taxable value",
+     "tally": "350",
+     "fincom": "350",
+     "entered": "350",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 21 S231 Rice GST rate",
+     "tally": "5",
+     "fincom": "5",
+     "entered": "5",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 21 S231 Rice tax",
+     "tally": "17.5",
+     "fincom": "17.5",
+     "entered": "17.5",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 22 S231 Laptop HSN",
+     "tally": "8471",
+     "fincom": "8471",
+     "entered": "8471",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 22 S231 Laptop quantity",
+     "tally": "1",
+     "fincom": "1",
+     "entered": "1",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 22 S231 Laptop taxable value",
+     "tally": "30000",
+     "fincom": "30000",
+     "entered": "30000",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 22 S231 Laptop GST rate",
+     "tally": "18",
+     "fincom": "18",
+     "entered": "18",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 22 S231 Laptop tax",
+     "tally": "5400",
+     "fincom": "5400",
+     "entered": "5400",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 23 S231 Tablet HSN",
+     "tally": "3004",
+     "fincom": "3004",
+     "entered": "3004",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 23 S231 Tablet quantity",
+     "tally": "2",
+     "fincom": "2",
+     "entered": "2",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 23 S231 Tablet taxable value",
+     "tally": "800",
+     "fincom": "800",
+     "entered": "800",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 23 S231 Tablet GST rate",
+     "tally": "12",
+     "fincom": "12",
+     "entered": "12",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 23 S231 Tablet tax",
+     "tally": "96",
+     "fincom": "96",
+     "entered": "96",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 24 S231 Car Part HSN",
+     "tally": "8708",
+     "fincom": "8708",
+     "entered": "8708",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 24 S231 Car Part quantity",
+     "tally": "3",
+     "fincom": "3",
+     "entered": "3",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 24 S231 Car Part taxable value",
+     "tally": "7500",
+     "fincom": "7500",
+     "entered": "7500",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 24 S231 Car Part GST rate",
+     "tally": "28",
+     "fincom": "28",
+     "entered": "28",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 24 S231 Car Part tax",
+     "tally": "2100",
+     "fincom": "2100",
+     "entered": "2100",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 25 S231 Rice HSN",
+     "tally": "1006",
+     "fincom": "1006",
+     "entered": "1006",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 25 S231 Rice quantity",
+     "tally": "4",
+     "fincom": "4",
+     "entered": "4",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 25 S231 Rice taxable value",
+     "tally": "200",
+     "fincom": "200",
+     "entered": "200",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 25 S231 Rice GST rate",
+     "tally": "5",
+     "fincom": "5",
+     "entered": "5",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 25 S231 Rice tax",
+     "tally": "10",
+     "fincom": "10",
+     "entered": "10",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 26 S231 Laptop HSN",
+     "tally": "8471",
+     "fincom": "8471",
+     "entered": "8471",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 26 S231 Laptop quantity",
+     "tally": "5",
+     "fincom": "5",
+     "entered": "5",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 26 S231 Laptop taxable value",
+     "tally": "150000",
+     "fincom": "150000",
+     "entered": "150000",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 26 S231 Laptop GST rate",
+     "tally": "18",
+     "fincom": "18",
+     "entered": "18",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 26 S231 Laptop tax",
+     "tally": "27000",
+     "fincom": "27000",
+     "entered": "27000",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 27 S231 Tablet HSN",
+     "tally": "3004",
+     "fincom": "3004",
+     "entered": "3004",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 27 S231 Tablet quantity",
+     "tally": "6",
+     "fincom": "6",
+     "entered": "6",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 27 S231 Tablet taxable value",
+     "tally": "2400",
+     "fincom": "2400",
+     "entered": "2400",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 27 S231 Tablet GST rate",
+     "tally": "12",
+     "fincom": "12",
+     "entered": "12",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 27 S231 Tablet tax",
+     "tally": "288",
+     "fincom": "288",
+     "entered": "288",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 28 S231 Car Part HSN",
+     "tally": "8708",
+     "fincom": "8708",
+     "entered": "8708",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 28 S231 Car Part quantity",
+     "tally": "7",
+     "fincom": "7",
+     "entered": "7",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 28 S231 Car Part taxable value",
+     "tally": "17500",
+     "fincom": "17500",
+     "entered": "17500",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 28 S231 Car Part GST rate",
+     "tally": "28",
+     "fincom": "28",
+     "entered": "28",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 28 S231 Car Part tax",
+     "tally": "4900",
+     "fincom": "4900",
+     "entered": "4900",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 29 S231 Rice HSN",
+     "tally": "1006",
+     "fincom": "1006",
+     "entered": "1006",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 29 S231 Rice quantity",
+     "tally": "1",
+     "fincom": "1",
+     "entered": "1",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 29 S231 Rice taxable value",
+     "tally": "50",
+     "fincom": "50",
+     "entered": "50",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 29 S231 Rice GST rate",
+     "tally": "5",
+     "fincom": "5",
+     "entered": "5",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 29 S231 Rice tax",
+     "tally": "2.5",
+     "fincom": "2.5",
+     "entered": "2.5",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 30 S231 Laptop HSN",
+     "tally": "8471",
+     "fincom": "8471",
+     "entered": "8471",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 30 S231 Laptop quantity",
+     "tally": "2",
+     "fincom": "2",
+     "entered": "2",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 30 S231 Laptop taxable value",
+     "tally": "60000",
+     "fincom": "60000",
+     "entered": "60000",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 30 S231 Laptop GST rate",
+     "tally": "18",
+     "fincom": "18",
+     "entered": "18",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 30 S231 Laptop tax",
+     "tally": "10800",
+     "fincom": "10800",
+     "entered": "10800",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 31 S231 Tablet HSN",
+     "tally": "3004",
+     "fincom": "3004",
+     "entered": "3004",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 31 S231 Tablet quantity",
+     "tally": "3",
+     "fincom": "3",
+     "entered": "3",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 31 S231 Tablet taxable value",
+     "tally": "1200",
+     "fincom": "1200",
+     "entered": "1200",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 31 S231 Tablet GST rate",
+     "tally": "12",
+     "fincom": "12",
+     "entered": "12",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 31 S231 Tablet tax",
+     "tally": "144",
+     "fincom": "144",
+     "entered": "144",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 32 S231 Car Part HSN",
+     "tally": "8708",
+     "fincom": "8708",
+     "entered": "8708",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 32 S231 Car Part quantity",
+     "tally": "4",
+     "fincom": "4",
+     "entered": "4",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 32 S231 Car Part taxable value",
+     "tally": "10000",
+     "fincom": "10000",
+     "entered": "10000",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 32 S231 Car Part GST rate",
+     "tally": "28",
+     "fincom": "28",
+     "entered": "28",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 32 S231 Car Part tax",
+     "tally": "2800",
+     "fincom": "2800",
+     "entered": "2800",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 33 S231 Rice HSN",
+     "tally": "1006",
+     "fincom": "1006",
+     "entered": "1006",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 33 S231 Rice quantity",
+     "tally": "5",
+     "fincom": "5",
+     "entered": "5",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 33 S231 Rice taxable value",
+     "tally": "250",
+     "fincom": "250",
+     "entered": "250",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 33 S231 Rice GST rate",
+     "tally": "5",
+     "fincom": "5",
+     "entered": "5",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 33 S231 Rice tax",
+     "tally": "12.5",
+     "fincom": "12.5",
+     "entered": "12.5",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 34 S231 Laptop HSN",
+     "tally": "8471",
+     "fincom": "8471",
+     "entered": "8471",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 34 S231 Laptop quantity",
+     "tally": "6",
+     "fincom": "6",
+     "entered": "6",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 34 S231 Laptop taxable value",
+     "tally": "180000",
+     "fincom": "180000",
+     "entered": "180000",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 34 S231 Laptop GST rate",
+     "tally": "18",
+     "fincom": "18",
+     "entered": "18",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 34 S231 Laptop tax",
+     "tally": "32400",
+     "fincom": "32400",
+     "entered": "32400",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 35 S231 Tablet HSN",
+     "tally": "3004",
+     "fincom": "3004",
+     "entered": "3004",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 35 S231 Tablet quantity",
+     "tally": "7",
+     "fincom": "7",
+     "entered": "7",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 35 S231 Tablet taxable value",
+     "tally": "2800",
+     "fincom": "2800",
+     "entered": "2800",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 35 S231 Tablet GST rate",
+     "tally": "12",
+     "fincom": "12",
+     "entered": "12",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 35 S231 Tablet tax",
+     "tally": "336",
+     "fincom": "336",
+     "entered": "336",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 36 S231 Car Part HSN",
+     "tally": "8708",
+     "fincom": "8708",
+     "entered": "8708",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 36 S231 Car Part quantity",
+     "tally": "1",
+     "fincom": "1",
+     "entered": "1",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 36 S231 Car Part taxable value",
+     "tally": "2500",
+     "fincom": "2500",
+     "entered": "2500",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 36 S231 Car Part GST rate",
+     "tally": "28",
+     "fincom": "28",
+     "entered": "28",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 36 S231 Car Part tax",
+     "tally": "700",
+     "fincom": "700",
+     "entered": "700",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 37 S231 Rice HSN",
+     "tally": "1006",
+     "fincom": "1006",
+     "entered": "1006",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 37 S231 Rice quantity",
+     "tally": "2",
+     "fincom": "2",
+     "entered": "2",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 37 S231 Rice taxable value",
+     "tally": "100",
+     "fincom": "100",
+     "entered": "100",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 37 S231 Rice GST rate",
+     "tally": "5",
+     "fincom": "5",
+     "entered": "5",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 37 S231 Rice tax",
+     "tally": "5",
+     "fincom": "5",
+     "entered": "5",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 38 S231 Laptop HSN",
+     "tally": "8471",
+     "fincom": "8471",
+     "entered": "8471",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 38 S231 Laptop quantity",
+     "tally": "3",
+     "fincom": "3",
+     "entered": "3",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 38 S231 Laptop taxable value",
+     "tally": "90000",
+     "fincom": "90000",
+     "entered": "90000",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 38 S231 Laptop GST rate",
+     "tally": "18",
+     "fincom": "18",
+     "entered": "18",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 38 S231 Laptop tax",
+     "tally": "16200",
+     "fincom": "16200",
+     "entered": "16200",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 39 S231 Tablet HSN",
+     "tally": "3004",
+     "fincom": "3004",
+     "entered": "3004",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 39 S231 Tablet quantity",
+     "tally": "4",
+     "fincom": "4",
+     "entered": "4",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 39 S231 Tablet taxable value",
+     "tally": "1600",
+     "fincom": "1600",
+     "entered": "1600",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 39 S231 Tablet GST rate",
+     "tally": "12",
+     "fincom": "12",
+     "entered": "12",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 39 S231 Tablet tax",
+     "tally": "192",
+     "fincom": "192",
+     "entered": "192",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 40 S231 Car Part HSN",
+     "tally": "8708",
+     "fincom": "8708",
+     "entered": "8708",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 40 S231 Car Part quantity",
+     "tally": "5",
+     "fincom": "5",
+     "entered": "5",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 40 S231 Car Part taxable value",
+     "tally": "12500",
+     "fincom": "12500",
+     "entered": "12500",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 40 S231 Car Part GST rate",
+     "tally": "28",
+     "fincom": "28",
+     "entered": "28",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 40 S231 Car Part tax",
+     "tally": "3500",
+     "fincom": "3500",
+     "entered": "3500",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 41 S231 Rice HSN",
+     "tally": "1006",
+     "fincom": "1006",
+     "entered": "1006",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 41 S231 Rice quantity",
+     "tally": "6",
+     "fincom": "6",
+     "entered": "6",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 41 S231 Rice taxable value",
+     "tally": "300",
+     "fincom": "300",
+     "entered": "300",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 41 S231 Rice GST rate",
+     "tally": "5",
+     "fincom": "5",
+     "entered": "5",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 41 S231 Rice tax",
+     "tally": "15",
+     "fincom": "15",
+     "entered": "15",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 42 S231 Laptop HSN",
+     "tally": "8471",
+     "fincom": "8471",
+     "entered": "8471",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 42 S231 Laptop quantity",
+     "tally": "7",
+     "fincom": "7",
+     "entered": "7",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 42 S231 Laptop taxable value",
+     "tally": "210000",
+     "fincom": "210000",
+     "entered": "210000",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 42 S231 Laptop GST rate",
+     "tally": "18",
+     "fincom": "18",
+     "entered": "18",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 42 S231 Laptop tax",
+     "tally": "37800",
+     "fincom": "37800",
+     "entered": "37800",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 43 S231 Tablet HSN",
+     "tally": "3004",
+     "fincom": "3004",
+     "entered": "3004",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 43 S231 Tablet quantity",
+     "tally": "1",
+     "fincom": "1",
+     "entered": "1",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 43 S231 Tablet taxable value",
+     "tally": "400",
+     "fincom": "400",
+     "entered": "400",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 43 S231 Tablet GST rate",
+     "tally": "12",
+     "fincom": "12",
+     "entered": "12",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 43 S231 Tablet tax",
+     "tally": "48",
+     "fincom": "48",
+     "entered": "48",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 44 S231 Car Part HSN",
+     "tally": "8708",
+     "fincom": "8708",
+     "entered": "8708",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 44 S231 Car Part quantity",
+     "tally": "2",
+     "fincom": "2",
+     "entered": "2",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 44 S231 Car Part taxable value",
+     "tally": "5000",
+     "fincom": "5000",
+     "entered": "5000",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 44 S231 Car Part GST rate",
+     "tally": "28",
+     "fincom": "28",
+     "entered": "28",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 44 S231 Car Part tax",
+     "tally": "1400",
+     "fincom": "1400",
+     "entered": "1400",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 45 S231 Rice HSN",
+     "tally": "1006",
+     "fincom": "1006",
+     "entered": "1006",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 45 S231 Rice quantity",
+     "tally": "3",
+     "fincom": "3",
+     "entered": "3",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 45 S231 Rice taxable value",
+     "tally": "150",
+     "fincom": "150",
+     "entered": "150",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 45 S231 Rice GST rate",
+     "tally": "5",
+     "fincom": "5",
+     "entered": "5",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 45 S231 Rice tax",
+     "tally": "7.5",
+     "fincom": "7.5",
+     "entered": "7.5",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 46 S231 Laptop HSN",
+     "tally": "8471",
+     "fincom": "8471",
+     "entered": "8471",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 46 S231 Laptop quantity",
+     "tally": "4",
+     "fincom": "4",
+     "entered": "4",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 46 S231 Laptop taxable value",
+     "tally": "120000",
+     "fincom": "120000",
+     "entered": "120000",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 46 S231 Laptop GST rate",
+     "tally": "18",
+     "fincom": "18",
+     "entered": "18",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 46 S231 Laptop tax",
+     "tally": "21600",
+     "fincom": "21600",
+     "entered": "21600",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 47 S231 Tablet HSN",
+     "tally": "3004",
+     "fincom": "3004",
+     "entered": "3004",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 47 S231 Tablet quantity",
+     "tally": "5",
+     "fincom": "5",
+     "entered": "5",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 47 S231 Tablet taxable value",
+     "tally": "2000",
+     "fincom": "2000",
+     "entered": "2000",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 47 S231 Tablet GST rate",
+     "tally": "12",
+     "fincom": "12",
+     "entered": "12",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 47 S231 Tablet tax",
+     "tally": "240",
+     "fincom": "240",
+     "entered": "240",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 48 S231 Car Part HSN",
+     "tally": "8708",
+     "fincom": "8708",
+     "entered": "8708",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 48 S231 Car Part quantity",
+     "tally": "6",
+     "fincom": "6",
+     "entered": "6",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 48 S231 Car Part taxable value",
+     "tally": "15000",
+     "fincom": "15000",
+     "entered": "15000",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 48 S231 Car Part GST rate",
+     "tally": "28",
+     "fincom": "28",
+     "entered": "28",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 48 S231 Car Part tax",
+     "tally": "4200",
+     "fincom": "4200",
+     "entered": "4200",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 49 S231 Rice HSN",
+     "tally": "1006",
+     "fincom": "1006",
+     "entered": "1006",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 49 S231 Rice quantity",
+     "tally": "7",
+     "fincom": "7",
+     "entered": "7",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 49 S231 Rice taxable value",
+     "tally": "350",
+     "fincom": "350",
+     "entered": "350",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 49 S231 Rice GST rate",
+     "tally": "5",
+     "fincom": "5",
+     "entered": "5",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 49 S231 Rice tax",
+     "tally": "17.5",
+     "fincom": "17.5",
+     "entered": "17.5",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 50 S231 Laptop HSN",
+     "tally": "8471",
+     "fincom": "8471",
+     "entered": "8471",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 50 S231 Laptop quantity",
+     "tally": "1",
+     "fincom": "1",
+     "entered": "1",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 50 S231 Laptop taxable value",
+     "tally": "30000",
+     "fincom": "30000",
+     "entered": "30000",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 50 S231 Laptop GST rate",
+     "tally": "18",
+     "fincom": "18",
+     "entered": "18",
+     "status": "ok",
+     "quiet": true
+    },
+    {
+     "what": "line 50 S231 Laptop tax",
+     "tally": "5400",
+     "fincom": "5400",
+     "entered": "5400",
+     "status": "ok",
+     "quiet": true
+    }
+   ],
+   "notes": [
+    "50 of 50 item lines match on HSN, quantity, taxable value, GST rate and tax (lines 1-2 and any mismatch printed)"
+   ],
+   "tallyFound": true,
+   "fincomFound": true,
+   "line": {
+    "ev": "altered",
+    "at": "12:40:27",
+    "xmlChars": 219399,
+    "state": "applied",
+    "why": ""
+   },
+   "status": "pass"
+  },
+  {
+   "id": "S11",
+   "key": "s11-sales-freight-gst",
+   "label": "sales invoice with freight carrying GST (no item line for it)",
+   "guid": "b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000012",
+   "rows": [
+    {
+     "what": "voucher type",
+     "tally": "Sales",
+     "fincom": "Sales",
+     "entered": "Sales",
+     "status": "ok"
+    },
+    {
+     "what": "FinCom's lines add up to 0",
+     "tally": "0",
+     "fincom": "0",
+     "entered": "0",
+     "status": "ok"
+    },
+    {
+     "what": "ledger S231 Buyer",
+     "tally": "-36580",
+     "fincom": "-36580",
+     "entered": "-36580",
+     "status": "ok"
+    },
+    {
+     "what": "ledger S231 Freight Charged",
+     "tally": "1000",
+     "fincom": "1000",
+     "entered": "1000",
+     "status": "ok"
+    },
+    {
+     "what": "ledger Output CGST",
+     "tally": "2790",
+     "fincom": "2790",
+     "entered": "2790",
+     "status": "ok"
+    },
+    {
+     "what": "ledger Output SGST",
+     "tally": "2790",
+     "fincom": "2790",
+     "entered": "2790",
+     "status": "ok"
+    },
+    {
+     "what": "ledger S231 Sales",
+     "tally": "30000",
+     "fincom": "30000",
+     "entered": "30000",
+     "status": "ok"
+    },
+    {
+     "what": "applied under the new rule (only lines not totalling zero are held)",
+     "tally": "(none)",
+     "fincom": "yes",
+     "entered": "yes",
+     "status": "ok"
+    },
+    {
+     "what": "item lines",
+     "tally": "1",
+     "fincom": "1",
+     "entered": "1",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Laptop HSN",
+     "tally": "8471",
+     "fincom": "8471",
+     "entered": "8471",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Laptop quantity",
+     "tally": "1",
+     "fincom": "1",
+     "entered": "1",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Laptop taxable value",
+     "tally": "30000",
+     "fincom": "30000",
+     "entered": "30000",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Laptop GST rate",
+     "tally": "18",
+     "fincom": "18",
+     "entered": "18",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Laptop tax",
+     "tally": "5400",
+     "fincom": "5400",
+     "entered": "5400",
+     "status": "ok"
+    }
+   ],
+   "notes": [
+    "what FinCom stores: S231 Buyer -36580, S231 Sales 30000 HSN 8471 GST 18%, S231 Freight Charged 1000 GST 18%, Output CGST 2790, Output SGST 2790; items S231 Laptop qty 1 rate 30000 taxable 30000 GST 18% tax 5400; parse.js notes: none"
+   ],
+   "tallyFound": true,
+   "fincomFound": true,
+   "line": {
+    "ev": "altered",
+    "at": "12:44:51",
+    "xmlChars": 12380,
+    "state": "applied",
+    "why": ""
+   },
+   "status": "pass"
+  },
+  {
+   "id": "S12",
+   "key": "s12-sales-round-off",
+   "label": "invoice with round-off",
+   "guid": "b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000013",
+   "rows": [
+    {
+     "what": "voucher type",
+     "tally": "Sales",
+     "fincom": "Sales",
+     "entered": "Sales",
+     "status": "ok"
+    },
+    {
+     "what": "FinCom's lines add up to 0",
+     "tally": "0",
+     "fincom": "0",
+     "entered": "0",
+     "status": "ok"
+    },
+    {
+     "what": "ledger S231 Buyer",
+     "tally": "-447.88",
+     "fincom": "-447.88",
+     "entered": "-447",
+     "status": "ok"
+    },
+    {
+     "what": "ledger Output CGST",
+     "tally": "23.97",
+     "fincom": "23.97",
+     "entered": "23.97",
+     "status": "ok"
+    },
+    {
+     "what": "ledger Output SGST",
+     "tally": "23.97",
+     "fincom": "23.97",
+     "entered": "23.97",
+     "status": "ok"
+    },
+    {
+     "what": "ledger S231 Round Off",
+     "tally": "0.44",
+     "fincom": "0.44",
+     "entered": "-0.44",
+     "status": "ok"
+    },
+    {
+     "what": "ledger S231 Sales",
+     "tally": "399.5",
+     "fincom": "399.5",
+     "entered": "399.5",
+     "status": "ok"
+    },
+    {
+     "what": "applied under the new rule (only lines not totalling zero are held)",
+     "tally": "(none)",
+     "fincom": "yes",
+     "entered": "yes",
+     "status": "ok"
+    },
+    {
+     "what": "item lines",
+     "tally": "1",
+     "fincom": "1",
+     "entered": "1",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Tablet HSN",
+     "tally": "3004",
+     "fincom": "3004",
+     "entered": "3004",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Tablet quantity",
+     "tally": "1",
+     "fincom": "1",
+     "entered": "1",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Tablet taxable value",
+     "tally": "399.5",
+     "fincom": "399.5",
+     "entered": "399.5",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Tablet GST rate",
+     "tally": "12",
+     "fincom": "12",
+     "entered": "12",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Tablet tax",
+     "tally": "47.94",
+     "fincom": "47.94",
+     "entered": "47.94",
+     "status": "ok"
+    }
+   ],
+   "notes": [
+    "what FinCom stores: S231 Buyer -447.88, S231 Sales 399.5 HSN 3004 GST 12%, Output CGST 23.97, Output SGST 23.97, S231 Round Off 0.44; items S231 Tablet qty 1 rate 399.5 taxable 399.5 GST 12% tax 47.94; parse.js notes: none"
+   ],
+   "tallyFound": true,
+   "fincomFound": true,
+   "line": {
+    "ev": "altered",
+    "at": "12:45:22",
+    "xmlChars": 11646,
+    "state": "applied",
+    "why": ""
+   },
+   "status": "pass"
+  },
+  {
+   "id": "S13",
+   "key": "s13-sales-discount",
+   "label": "invoice with a discount",
+   "guid": "b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000014",
+   "rows": [
+    {
+     "what": "voucher type",
+     "tally": "Sales",
+     "fincom": "Sales",
+     "entered": "Sales",
+     "status": "ok"
+    },
+    {
+     "what": "FinCom's lines add up to 0",
+     "tally": "0",
+     "fincom": "0",
+     "entered": "0",
+     "status": "ok"
+    },
+    {
+     "what": "ledger S231 Buyer",
+     "tally": "-63720",
+     "fincom": "-63720",
+     "entered": "-63720",
+     "status": "ok"
+    },
+    {
+     "what": "ledger Output CGST",
+     "tally": "4860",
+     "fincom": "4860",
+     "entered": "4860",
+     "status": "ok"
+    },
+    {
+     "what": "ledger Output SGST",
+     "tally": "4860",
+     "fincom": "4860",
+     "entered": "4860",
+     "status": "ok"
+    },
+    {
+     "what": "ledger S231 Sales",
+     "tally": "54000",
+     "fincom": "54000",
+     "entered": "54000",
+     "status": "ok"
+    },
+    {
+     "what": "applied under the new rule (only lines not totalling zero are held)",
+     "tally": "(none)",
+     "fincom": "yes",
+     "entered": "yes",
+     "status": "ok"
+    },
+    {
+     "what": "item lines",
+     "tally": "1",
+     "fincom": "1",
+     "entered": "1",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Laptop HSN",
+     "tally": "8471",
+     "fincom": "8471",
+     "entered": "8471",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Laptop quantity",
+     "tally": "2",
+     "fincom": "2",
+     "entered": "2",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Laptop taxable value",
+     "tally": "54000",
+     "fincom": "54000",
+     "entered": "54000",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Laptop GST rate",
+     "tally": "18",
+     "fincom": "18",
+     "entered": "18",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Laptop tax",
+     "tally": "9720",
+     "fincom": "9720",
+     "entered": "9720",
+     "status": "ok"
+    }
+   ],
+   "notes": [
+    "what FinCom stores: S231 Buyer -63720, S231 Sales 54000 HSN 8471 GST 18%, Output CGST 4860, Output SGST 4860; items S231 Laptop qty 2 rate 30000 taxable 54000 GST 18% tax 9720; parse.js notes: none"
+   ],
+   "tallyFound": true,
+   "fincomFound": true,
+   "line": {
+    "ev": "altered",
+    "at": "12:45:30",
+    "xmlChars": 10487,
+    "state": "applied",
+    "why": ""
+   },
+   "status": "pass"
+  },
+  {
+   "id": "S14",
+   "key": "s14-sales-tax-inclusive",
+   "label": "tax-inclusive invoice",
+   "guid": "b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000015",
+   "rows": [
+    {
+     "what": "voucher type",
+     "tally": "Sales",
+     "fincom": "Sales",
+     "entered": "Sales",
+     "status": "ok"
+    },
+    {
+     "what": "FinCom's lines add up to 0",
+     "tally": "0",
+     "fincom": "0",
+     "entered": "0",
+     "status": "ok"
+    },
+    {
+     "what": "ledger S231 Buyer",
+     "tally": "-525",
+     "fincom": "-525",
+     "entered": "-525",
+     "status": "ok"
+    },
+    {
+     "what": "ledger Output CGST",
+     "tally": "12.5",
+     "fincom": "12.5",
+     "entered": "12.5",
+     "status": "ok"
+    },
+    {
+     "what": "ledger Output SGST",
+     "tally": "12.5",
+     "fincom": "12.5",
+     "entered": "12.5",
+     "status": "ok"
+    },
+    {
+     "what": "ledger S231 Sales",
+     "tally": "500",
+     "fincom": "500",
+     "entered": "500",
+     "status": "ok"
+    },
+    {
+     "what": "applied under the new rule (only lines not totalling zero are held)",
+     "tally": "(none)",
+     "fincom": "yes",
+     "entered": "yes",
+     "status": "ok"
+    },
+    {
+     "what": "item lines",
+     "tally": "1",
+     "fincom": "1",
+     "entered": "1",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Rice HSN",
+     "tally": "1006",
+     "fincom": "1006",
+     "entered": "1006",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Rice quantity",
+     "tally": "10",
+     "fincom": "10",
+     "entered": "10",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Rice taxable value",
+     "tally": "500",
+     "fincom": "500",
+     "entered": "500",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Rice GST rate",
+     "tally": "5",
+     "fincom": "5",
+     "entered": "5",
+     "status": "ok"
+    },
+    {
+     "what": "line 1 S231 Rice tax",
+     "tally": "25",
+     "fincom": "25",
+     "entered": "25",
+     "status": "ok"
+    }
+   ],
+   "notes": [
+    "what FinCom stores: S231 Buyer -525, S231 Sales 500 HSN 1006 GST 5%, Output CGST 12.5, Output SGST 12.5; items S231 Rice qty 10 rate 50 taxable 500 GST 5% tax 25; parse.js notes: none"
+   ],
+   "tallyFound": true,
+   "fincomFound": true,
+   "line": {
+    "ev": "altered",
+    "at": "12:46:14",
+    "xmlChars": 10473,
+    "state": "applied",
+    "why": ""
+   },
+   "status": "pass"
+  },
+  {
+   "id": "S8",
+   "key": "s8-new-party",
+   "label": "a new party ledger used at once",
+   "guid": "b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000016",
+   "rows": [
+    {
+     "what": "voucher type",
+     "tally": "Receipt",
+     "fincom": "Receipt",
+     "entered": "Receipt",
+     "status": "ok"
+    },
+    {
+     "what": "FinCom's lines add up to 0",
+     "tally": "0",
+     "fincom": "0",
+     "entered": "0",
+     "status": "ok"
+    },
+    {
+     "what": "ledger S231 New Party",
+     "tally": "1180",
+     "fincom": "1180",
+     "entered": "1180",
+     "status": "ok"
+    },
+    {
+     "what": "ledger Cash",
+     "tally": "-1180",
+     "fincom": "-1180",
+     "entered": "-1180",
+     "status": "ok"
+    },
+    {
+     "what": "parse.js's accuracy checks",
+     "tally": "(none)",
+     "fincom": "none",
+     "status": "ok"
+    }
+   ],
+   "notes": [],
+   "tallyFound": true,
+   "fincomFound": true,
+   "line": {
+    "ev": "altered",
+    "at": "12:58:52",
+    "xmlChars": 3544,
+    "state": "applied",
+    "why": ""
+   },
+   "status": "pass"
+  },
+  {
+   "id": "S15",
+   "key": "s15-renamed-party",
+   "label": "a party renamed in Tally, used under its new name",
+   "guid": "b940f2a2-da81-48e2-a5ab-5dc0c01a36e5-00000017",
+   "rows": [
+    {
+     "what": "voucher type",
+     "tally": "Receipt",
+     "fincom": "Receipt",
+     "entered": "Receipt",
+     "status": "ok"
+    },
+    {
+     "what": "FinCom's lines add up to 0",
+     "tally": "0",
+     "fincom": "0",
+     "entered": "0",
+     "status": "ok"
+    },
+    {
+     "what": "ledger S231 Renamed Party",
+     "tally": "1770",
+     "fincom": "1770",
+     "entered": "1770",
+     "status": "ok"
+    },
+    {
+     "what": "ledger Cash",
+     "tally": "-1770",
+     "fincom": "-1770",
+     "entered": "-1770",
+     "status": "ok"
+    },
+    {
+     "what": "parse.js's accuracy checks",
+     "tally": "(none)",
+     "fincom": "none",
+     "status": "ok"
+    }
+   ],
+   "notes": [],
+   "tallyFound": true,
+   "fincomFound": true,
+   "line": {
+    "ev": "altered",
+    "at": "13:00:22",
+    "xmlChars": 3553,
+    "state": "applied",
+    "why": "applied under FinCom's ledger 'S231 Old Name Party' (named 'S231 Renamed Party' in Tally now)"
+   },
+   "status": "pass"
+  }
+ ],
+ "tags": [
+  {
+   "tag": "IRN",
+   "seen": [
+    {
+     "label": "Tally's own Day Book export (S1)",
+     "count": 2,
+     "empty": 0,
+     "value": "a5c12dca80e743321740b001fd70953e8738d109865d28ba4013750f2046f229"
+    },
+    {
+     "label": "the bridge's entry request answer (S1)",
+     "count": 1,
+     "empty": 0,
+     "value": "a5c12dca80e743321740b001fd70953e8738d109865d28ba4013750f2046f229"
+    },
+    {
+     "label": "Tally's own Day Book export (S2)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S2)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S3)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S3)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S4)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S4)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S5)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S5)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S6)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S6)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S7)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S7)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S10)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S10)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S11)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S11)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S12)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S12)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S13)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S13)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S14)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S14)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S8)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S8)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S15)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S15)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    }
+   ]
+  },
+  {
+   "tag": "IRNACKNO",
+   "seen": [
+    {
+     "label": "Tally's own Day Book export (S1)",
+     "count": 2,
+     "empty": 0,
+     "value": "112611010000231"
+    },
+    {
+     "label": "the bridge's entry request answer (S1)",
+     "count": 1,
+     "empty": 0,
+     "value": "112611010000231"
+    },
+    {
+     "label": "Tally's own Day Book export (S2)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S2)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S3)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S3)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S4)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S4)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S5)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S5)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S6)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S6)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S7)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S7)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S10)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S10)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S11)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S11)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S12)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S12)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S13)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S13)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S14)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S14)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S8)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S8)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S15)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S15)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    }
+   ]
+  },
+  {
+   "tag": "IRNACKDATE",
+   "seen": [
+    {
+     "label": "Tally's own Day Book export (S1)",
+     "count": 2,
+     "empty": 0,
+     "value": "20261101"
+    },
+    {
+     "label": "the bridge's entry request answer (S1)",
+     "count": 1,
+     "empty": 0,
+     "value": "20261101"
+    },
+    {
+     "label": "Tally's own Day Book export (S2)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S2)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S3)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S3)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S4)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S4)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S5)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S5)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S6)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S6)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S7)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S7)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S10)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S10)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S11)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S11)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S12)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S12)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S13)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S13)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S14)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S14)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S8)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S8)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S15)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S15)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    }
+   ]
+  },
+  {
+   "tag": "EWAYBILLDETAILS.LIST",
+   "seen": [
+    {
+     "label": "Tally's own Day Book export (S1)",
+     "count": 2,
+     "empty": 0,
+     "value": "20261101 Tax Invoice 381101234231 No No No No No No 000000000 000000000 00000000"
+    },
+    {
+     "label": "the bridge's entry request answer (S1)",
+     "count": 1,
+     "empty": 0,
+     "value": "381101234231"
+    },
+    {
+     "label": "Tally's own Day Book export (S2)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S2)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S3)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S3)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S4)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S4)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S5)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S5)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S6)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S6)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S7)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S7)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S10)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S10)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S11)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S11)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S12)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S12)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S13)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S13)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S14)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S14)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S8)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S8)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S15)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S15)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    }
+   ]
+  },
+  {
+   "tag": "BILLNUMBER",
+   "seen": [
+    {
+     "label": "Tally's own Day Book export (S1)",
+     "count": 2,
+     "empty": 0,
+     "value": "381101234231"
+    },
+    {
+     "label": "the bridge's entry request answer (S1)",
+     "count": 1,
+     "empty": 0,
+     "value": "381101234231"
+    }
+   ]
+  },
+  {
+   "tag": "TAXOBJECTALLOCATIONS.LIST",
+   "seen": [
+    {
+     "label": "Tally's own Day Book export (S1)",
+     "count": 0,
+     "empty": 20,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S1)",
+     "count": 0,
+     "empty": 6,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S2)",
+     "count": 0,
+     "empty": 20,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S2)",
+     "count": 0,
+     "empty": 6,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S3)",
+     "count": 0,
+     "empty": 15,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S3)",
+     "count": 0,
+     "empty": 5,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S4)",
+     "count": 0,
+     "empty": 4,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S4)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S5)",
+     "count": 0,
+     "empty": 6,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S5)",
+     "count": 0,
+     "empty": 3,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S6)",
+     "count": 0,
+     "empty": 4,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S6)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S7)",
+     "count": 0,
+     "empty": 4,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S7)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S10)",
+     "count": 0,
+     "empty": 260,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S10)",
+     "count": 0,
+     "empty": 54,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S11)",
+     "count": 0,
+     "empty": 18,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S11)",
+     "count": 0,
+     "empty": 6,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S12)",
+     "count": 0,
+     "empty": 18,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S12)",
+     "count": 0,
+     "empty": 6,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S13)",
+     "count": 0,
+     "empty": 15,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S13)",
+     "count": 0,
+     "empty": 5,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S14)",
+     "count": 0,
+     "empty": 15,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S14)",
+     "count": 0,
+     "empty": 5,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S8)",
+     "count": 0,
+     "empty": 4,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S8)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "Tally's own Day Book export (S15)",
+     "count": 0,
+     "empty": 4,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S15)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    }
+   ]
+  },
+  {
+   "tag": "UNIQUEREFERENCENUMBER",
+   "seen": [
+    {
+     "label": "Tally's own Day Book export (S7)",
+     "count": 2,
+     "empty": 0,
+     "value": "SBINR52027020100231"
+    },
+    {
+     "label": "the bridge's entry request answer (S7)",
+     "count": 1,
+     "empty": 0,
+     "value": "SBINR52027020100231"
+    }
+   ]
+  },
+  {
+   "tag": "TDSDEDUCTEESECTIONNUMBER",
+   "seen": [
+    {
+     "label": "Tally's own Day Book export (S4)",
+     "count": 0,
+     "empty": 2,
+     "value": ""
+    },
+    {
+     "label": "the bridge's entry request answer (S4)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    },
+    {
+     "label": "Tally's ledger master export (S231 Contractor, FETCH *)",
+     "count": 0,
+     "empty": 1,
+     "value": ""
+    }
+   ]
+  },
+  {
+   "tag": "TDSDEDUCTEETYPE",
+   "seen": [
+    {
+     "label": "Tally's ledger master export (S231 Contractor, FETCH *)",
+     "count": 1,
+     "empty": 0,
+     "value": "Company - Resident"
+    },
+    {
+     "label": "the bridge's ledger request answer (ledger-by-name-tds-deductee.xml)",
+     "count": 1,
+     "empty": 0,
+     "value": "Company - Resident"
+    },
+    {
+     "label": "the bridge's ledger request answer (ledger-list-2.3.1.xml)",
+     "count": 1,
+     "empty": 0,
+     "value": "Company - Resident"
+    }
+   ]
+  }
+ ]
+}
