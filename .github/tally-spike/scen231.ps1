@@ -534,7 +534,7 @@ function S231TdsScreen {
   $lt = [ordered]@{}; $lt[$N.contractExp] = -100000; $lt[$N.tds] = 2000; $lt[$N.contractor] = 98000
   $s5 = [pscustomobject]@{ id = 'S5'; key = 's5-tds-on-screen'; label = 'payment with TDS entered on the screen'; kind = 'tds'; day = '1-1-2027'; date = '20270101'; notesOnly = $false
     truth = [pscustomobject]@{ type = 'Journal'; ledgers = $lt; tds = $s.truth.tds } }
-  Add-Content -Path $resultsFile -Encoding UTF8 -Value ("INFO S5 screen: OCR {0}; TDS row amount {1}; sub-screens after the TDS ledger: {2}; screenshots tds-*" -f $(if ($script:ocrOk) { 'read the screens' } else { 'UNAVAILABLE' }), $(if ($byTally) { "put there by Tally (2,000 seen before Enter)" } else { 'not filled by Tally: 2000 typed' }) $pct, $(if ($sub.Count) { $sub -join ',' } else { 'none' }))
+  Add-Content -Path $resultsFile -Encoding UTF8 -Value ("INFO S5 screen: OCR {0}; TDS row amount {1}; sub-screens after the TDS ledger: {2}; screenshots tds-*" -f $(if ($script:ocrOk) { 'read the screens' } else { 'UNAVAILABLE' }), $(if ($byTally) { "put there by Tally (2,000 seen before Enter) $pct" } else { "not filled by Tally: 2000 typed $pct" }), $(if ($sub.Count) { $sub -join ',' } else { 'none' }))
   if (-not $nv) { Result 'S5 payment with TDS entered on the screen' $false "no entry saved in Tally (see the tds-s5-* screenshots and tds-screen-log.txt)" $true; return $null }
   $s231.ent['S5'] = [ordered]@{ id = 'S5'; guid = $nv.guid; mid = $nv.mid; lines = 0 }
   $g = $nv.guid; $hit = @(WaitLine $m0 ({ $_.guid -eq $g -and $_.xml }.GetNewClosure()) 150)
