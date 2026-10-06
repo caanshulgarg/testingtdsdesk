@@ -9308,6 +9308,7 @@ const TallyRead = {
     return out;
   },
   async raw(path, ms){
+    if (!(await Bridge.ensureProven())) throw new Error("FinCom Bridge on this computer did not prove itself, so nothing was sent to it. Connect it again from the Tally page.");
     const c = Bridge.cfg(), ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), ms || 900000);
     try {
       const r = await fetch(c.url.replace(/\/+$/, "") + path, {headers: {"X-Bridge-Key": c.key}, signal: ctl.signal, cache: "no-store"});
@@ -13796,7 +13797,82 @@ const Bridge = {
   on(){ return !this.blocked() && !!this.cfg().key; },
   up(){ return this.st.state === "ok"; },
   pinQ(){ const pp = this.cfg().port; return pp ? "&port=" + pp : ""; },
-  async call(path, body, ms){
+  // FinCom Bridge 2.3.0: on a shared Windows server each Windows user's bridge takes its own port of 9100..9199 and
+  // answers only programs of its own Windows user. Another user's program may listen on one of those ports and claim
+  // anything, so a bridge is never taken on its word (the owner's condition of 05-Oct-2026): before the bridge key, a
+  // pairing code or a computer key goes to a listener, it proves itself. FinCom sends a fresh random nonce to /ping?n=;
+  // the bridge answers HMAC-SHA256(bridge key, nonce || bridge id || port), which FinCom checks with the key it holds;
+  // not paired yet: HMAC-SHA256(pairing code, nonce || bridge id || port), given only while the bridge's pairing window is open. Review M2
+  // of 2.3.0: a proof is never kept: the bridge proves itself again immediately before EVERY request that carries a secret
+  // (each call carries the key; posting, /cloudlink; /pair goes only after its own pairProof), so a program that takes the
+  // port after the bridge restarts gets nothing; an old proof (another nonce) never passes. A bridge that cannot prove itself (older than 2.3.0, or not a FinCom Bridge) is never sent a secret.
+  PORTS: Array.from({length: 100}, (_, i) => 9100 + i),   // 9100..9199 (the owner's rule of 05-Oct-2026: no limit by number of bridges; was 9100..9119)
+  proven: {},              // address -> when it proved itself with the key held
+  localUrl(u){ const m = String(u || "").match(/^http:\/\/(127\.0\.0\.1|localhost):(\d+)\/*$/); return !!m && this.PORTS.includes(+m[2]); },
+  urlPort(u){ const m = String(u || "").match(/^https?:\/\/[^/:]+:(\d+)/); return m ? +m[1] : 0; },
+  nonce(){ const a = new Uint8Array(24); crypto.getRandomValues(a); return Array.from(a, x => x.toString(16).padStart(2, "0")).join(""); },
+  async hmac(secret, msg){
+    const enc = new TextEncoder(), k = await crypto.subtle.importKey("raw", enc.encode(String(secret)), {name: "HMAC", hash: "SHA-256"}, false, ["sign"]);
+    return Array.from(new Uint8Array(await crypto.subtle.sign("HMAC", k, enc.encode(msg))), x => x.toString(16).padStart(2, "0")).join("");
+  },
+  // /ping?n= at an address (nothing secret is sent), with whether it proved itself: key -> proven (the key's proof, bound
+  // to its id and this port); code -> pairProven (the pairing code's proof, bound to its id and this port as well)
+  async probeUrl(base, ms, key, code){
+    const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), ms || 1500), n = this.nonce(), port = this.urlPort(base);
+    try {
+      const r = await fetch(base.replace(/\/+$/, "") + "/ping?n=" + n, {cache: "no-store", signal: ctl.signal});
+      const j = await r.json().catch(() => null);
+      if (!j || j.ok === false) return null;
+      const o = Object.assign({port, url: base.replace(/\/+$/, "")}, j, {proven: false, pairProven: false});
+      if (key && typeof j.proof === "string" && typeof j.bridgeId === "string" && Number(j.port) === port) o.proven = j.proof === await this.hmac(key, n + j.bridgeId + port);
+      // review M1 of 2.3.0: the pairing code's proof is bound to the bridge's id and this port too
+      if (code && typeof j.pairProof === "string" && typeof j.bridgeId === "string" && Number(j.port) === port) o.pairProven = j.pairProof === await this.hmac(String(code).trim(), n + j.bridgeId + port);
+      return o;
+    } catch (e){ return null; } finally { clearTimeout(t); }
+  },
+  async probe(port, ms, key, code){ return this.probeUrl("http://127.0.0.1:" + port, ms, key, code); },
+  // this user's bridge among 9100..9199: only one that proves itself (with the key held, or with the pairing code given);
+  // among those the one paired with (its id), else the bridge linked to the signed-in member, else the first
+  async find(code){
+    const c = this.cfg();
+    if (!this.localUrl(c.url)) return null;
+    const found = (await Promise.all(this.PORTS.map(p => this.probe(p, 1500, c.key, code)))).filter(Boolean);
+    const ok = found.filter(b => code ? b.pairProven : b.proven);
+    const linked = typeof TCloud === "object" && TCloud.myBridge ? TCloud.myBridge() : "";
+    const pick = (c.bridgeId && ok.find(b => b.bridgeId === c.bridgeId)) || (linked && ok.find(b => b.bridgeId === linked)) || ok[0] || null;
+    this.foundAt = Date.now();
+    this.lastFound = found;
+    if (pick && !code) this.proven[pick.url] = Date.now();
+    return pick ? {url: pick.url, bridgeId: pick.bridgeId || "", port: pick.port} : null;
+  },
+  // the bridge did not answer, did not prove itself, or is another Windows user's: looked for once (at most every 15 s)
+  async refind(){
+    if (this.foundAt && Date.now() - this.foundAt < 15000) return false;
+    const f = await this.find();
+    if (!f || f.url === this.cfg().url.replace(/\/+$/, "")) return false;
+    this.setCfg({url: f.url, bridgeId: f.bridgeId || this.cfg().bridgeId || ""});
+    return true;
+  },
+  // before anything secret goes to the bridge's address: proved there now, with a fresh nonce (review M2 of 2.3.0: no
+  // proof is kept for later; this.proven only says when it last proved itself)
+  async ensureProven(){
+    const c = this.cfg(), u = c.url.replace(/\/+$/, "");
+    const o = c.key ? await this.probeUrl(u, 4000, c.key) : null;
+    if (o && o.proven){ this.proven[u] = Date.now(); if (o.bridgeId && o.bridgeId !== c.bridgeId) this.setCfg({bridgeId: o.bridgeId}); return true; }
+    delete this.proven[u];
+    this.lastProbe = o;
+    return false;
+  },
+  async call(path, body, ms, again){
+    // the owner's condition: no key, no posting, no computer key before the bridge at this address proved itself
+    if (!(await this.ensureProven())){
+      const other = this.lastProbe && this.lastProbe.yours === false;
+      if (!again && await this.refind()) return this.call(path, body, ms, true);
+      if (other) throw {code: "bridge_other_user", message: "The FinCom Bridge at " + this.cfg().url + " is another Windows user's on this computer, and FinCom did not find yours on ports 9100\u20139199. Install FinCom Bridge for your own Windows user (the setup, \u201cJust for me\u201d)."};
+      throw {code: this.lastProbe ? "bridge_unproven" : "bridge_down", message: this.lastProbe
+        ? "The program answering at " + this.cfg().url + " did not prove it is your FinCom Bridge, so nothing was sent to it. Install FinCom Bridge 2.3.0 or later for your Windows user, then connect again (right-click the FinCom Bridge icon \u2192 Connect FinCom on this computer\u2026)."
+        : "FinCom Bridge is not running on this computer (" + this.cfg().url + "). Check the FinCom Bridge icon near the clock (right-click \u2192 Test connection)."};
+    }
     const c = this.cfg();
     if (c.port){ if (body && typeof body === "object" && !Array.isArray(body)) body = Object.assign({port: c.port}, body); }
     // writes to Tally go into the firm's audit trail (who, which company, how many)
@@ -13810,10 +13886,17 @@ const Bridge = {
     try {
       r = await fetch(c.url.replace(/\/+$/, "") + path, {method: body ? "POST" : "GET", headers: Object.assign({"X-Bridge-Key": c.key}, body ? {"Content-Type": "application/json"} : {}), body: body ? JSON.stringify(body) : undefined, signal: ctl.signal, cache: "no-store"});
     } catch (e){
+      delete this.proven[c.url.replace(/\/+$/, "")];
+      if (!again && e && e.name !== "AbortError" && await this.refind()) return this.call(path, body, ms, true);
       throw {code: "bridge_down", message: e && e.name === "AbortError" ? "FinCom Bridge did not answer in time. Check the FinCom Bridge icon near the clock (right-click \u2192 Test connection)." : "FinCom Bridge is not running on this computer (" + c.url + "). Check the FinCom Bridge icon near the clock (right-click \u2192 Test connection)."};
     } finally { clearTimeout(timer); }
     let j = null;
     try { j = await r.json(); } catch (e){ j = null; }
+    if (r.status === 403 && j && j.notYours){
+      delete this.proven[c.url.replace(/\/+$/, "")];
+      if (!again && await this.refind()) return this.call(path, body, ms, true);
+      throw {code: "bridge_other_user", message: "The FinCom Bridge at " + c.url + " is another Windows user's on this computer, and FinCom did not find yours on ports 9100\u20139199. Install FinCom Bridge for your own Windows user (the setup, \u201cJust for me\u201d)."};
+    }
     if (!r.ok || !j || j.ok === false) throw {code: r.status === 401 ? "bridge_key" : "bridge", message: (j && (j.error || j.message)) || ("The bridge answered with error " + r.status + ".")};
     return j;
   },
@@ -13987,14 +14070,29 @@ const Bridge = {
   },
   // ask the bridge on this computer for its key, with the 6-digit code FinCom Bridge shows (tray icon → Connect FinCom on this computer…)
   // (bridge 1.11: only for a few minutes after it starts, once, and never for another web page)
+  // pairing: only with a bridge that proves it shows this code now (its pairing window open), on this address or found
+  // on 9100..9199; the code goes to it only then, and the key it hands over must prove itself before it is kept
   async pair(code){
+    code = String(code || "").trim();
     const c = this.cfg();
-    const base = c.url.replace(/\/+$/, "");
-    const r = await fetch(base + "/pair?code=" + encodeURIComponent(String(code || "").trim()), {cache: "no-store"}).catch(() => null);
-    if (!r) throw {code: "bridge_down", message: "FinCom Bridge is not running on this computer yet. Install FinCom Bridge from the Tally page."};
+    let base = c.url.replace(/\/+$/, ""), hit = await this.probeUrl(base, 2500, "", code);
+    if (!(hit && hit.pairProven) && this.localUrl(base)){ this.foundAt = 0; const f = await this.find(code); hit = f ? {url: f.url, bridgeId: f.bridgeId, pairProven: true} : null; }
+    if (!hit || !hit.pairProven){
+      const any = (this.lastFound || []).length || hit;
+      throw {code: any ? "pair" : "bridge_down", message: any
+        ? "No FinCom Bridge on this computer proved it shows that code, so it was not sent. Check the code in the FinCom Bridge window (it works for 15 minutes); a bridge older than 2.3.0 must be updated first."
+        : "FinCom Bridge is not running on this computer yet. Install FinCom Bridge from the Tally page."};
+    }
+    base = hit.url;
+    const r = await fetch(base + "/pair?code=" + encodeURIComponent(code), {cache: "no-store"}).catch(() => null);
+    if (!r) throw {code: "bridge_down", message: "FinCom Bridge stopped answering while connecting. Try again."};
     const j = await r.json().catch(() => null);
+    if (r.status === 403 && j && j.notYours) throw {code: "pair", message: "That FinCom Bridge is another Windows user's on this computer. Install FinCom Bridge for your own Windows user (the setup, \u201cJust for me\u201d), then connect again."};
     if (!j || !j.ok) throw {code: "pair", message: (j && j.error) || "The bridge would not hand over its key."};
-    this.setCfg({key: j.key, url: base});
+    const chk = await this.probeUrl(base, 2500, j.key);
+    if (!chk || !chk.proven) throw {code: "pair", message: "The bridge's key did not prove itself, so it was not kept. Connect again."};
+    this.proven[base] = Date.now();
+    this.setCfg({key: j.key, url: base, bridgeId: chk.bridgeId || j.bridgeId || ""});
     return j;
   },
   tallyName(co){ const o = this.openFor(co); return o ? o.name : (co.tallyName || co.name); },
@@ -15165,6 +15263,7 @@ const BridgeSeed = {
   add(d, n){ return this.ymd(new Date(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8) + n)); },
   company(){ const co = CO(); return (Bridge.openFor(co) || {}).name || co.tallyName || co.name; },
   async post(path, body, type){
+    if (!(await Bridge.ensureProven())) throw new Error("FinCom Bridge on this computer did not prove itself, so nothing was sent to it. Connect it again from the Tally page.");
     const c = Bridge.cfg();
     const r = await fetch(c.url.replace(/\/+$/, "") + path + Bridge.pinQ(), {method: "POST", headers: {"X-Bridge-Key": c.key, "Content-Type": type}, body, cache: "no-store"});
     const j = await r.json().catch(() => ({}));
@@ -22810,7 +22909,8 @@ const TCloud = {
     const p = this.pane; p.busy = "Loading…"; render();
     try {
       // main_bridge from migration-22 on; without it, the list as before
-      const cols = "id,name,created_at,last_seen,version,info,revoked";
+      // created_by: the member whose page made the computer key (the owner's rule of 05-Oct-2026: their own bridge)
+      const cols = "id,name,created_at,created_by,last_seen,version,info,revoked";
       // round 15 (F3): the posting settings an owner saved for the computer (migration 43: post_only, post_batch_bills,
       // post_batch_bank, post_settings_at, post_settings_by); without the columns the page says they are not available
       const PS = ",post_only,post_batch_bills,post_batch_bank,post_settings_at,post_settings_by", noPS = m => /post_only|post_batch|post_settings/.test(m);
@@ -22834,6 +22934,14 @@ const TCloud = {
         (p.devices || []).forEach(d => { if (by.has(d.id)) d.recorder_source = by.get(d.id) || "addon"; });
         p.noRecorderSource = false;
       } catch (e){ p.noRecorderSource = true; }
+      // FinCom Bridge 2.3.0 (migration 54): "Changes only" per bridge, and the bridge each member posts through; without
+      // the tables (an older cloud) neither is shown and postings go as before
+      try {
+        p.prefs = [].concat(await Cloud.api("tally_bridge_prefs?select=device_id,bridge_id,changes_only") || []);
+        p.links = [].concat(await Cloud.api("tally_member_bridges?select=user_id,device_id,bridge_id") || []);
+        p.noTarget = false;
+      } catch (e){ p.prefs = []; p.links = []; p.noTarget = true; }
+      await this.loadBridgeAlerts();
       p.companies = await this.restAll("tally_companies?select=company,client_id,device_id,gstin,last_seen,linked_at&order=company.asc");
       // migration-35: the stops and resumes from FinCom with who and when (round 4, item 24: the latest 300 rows; the
       // standing stops and the latest resume a computer are taken out here), and the bridge versions on trial, approved
@@ -22843,12 +22951,17 @@ const TCloud = {
         p.stops = all.filter(x => x.action !== "resume" && !x.cleared_at); p.resumes = resumeRows(all); p.noControl = false;
       } catch (e){ p.stops = []; p.resumes = {}; p.noControl = true; }
       const relCols = "version,pilot_device,pilot_started_at,pilot_by,pilot_seen_at,pilot_self_stop,approved_at,approved_by";
-      try { p.releases = [].concat(await Cloud.api("tally_bridge_releases?select=" + relCols + ",withdrawn_at,withdrawn_by,withdrawn_why&order=pilot_started_at.desc") || []); p.noWithdraw = false; }
+      // migration 54: held_* (an owner's hold of a version) and the rollback standing (tally_bridge_rollbacks); without them
+      // (an older cloud) the page offers neither
+      try { p.releases = [].concat(await Cloud.api("tally_bridge_releases?select=" + relCols + ",withdrawn_at,withdrawn_by,withdrawn_why,held_at,held_by,held_why&order=pilot_started_at.desc") || []); p.noWithdraw = false; p.noHold = false; }
+      catch (e){ p.noHold = true; try { p.releases = [].concat(await Cloud.api("tally_bridge_releases?select=" + relCols + ",withdrawn_at,withdrawn_by,withdrawn_why&order=pilot_started_at.desc") || []); p.noWithdraw = false; }
       catch (e){
         // migration 37 not applied: no withdrawal columns yet (the page says FinCom's cloud is not ready for a withdrawal)
         if (/withdrawn|42703/i.test(String(e && e.message))){ p.noWithdraw = true; try { p.releases = [].concat(await Cloud.api("tally_bridge_releases?select=" + relCols + "&order=pilot_started_at.desc") || []); } catch (e2){ p.releases = []; } }
         else p.releases = [];
-      }
+      } }
+      try { p.rollback = ([].concat(await Cloud.api("tally_bridge_rollbacks?select=version,why,set_by,set_at&cleared_at=is.null&order=set_at.desc&limit=1") || []))[0] || null; p.noRollback = false; }
+      catch (e){ p.rollback = null; p.noRollback = true; }
       // migration-37 (item 10): each book's reading state (needs_baseline: since when, why; cleared by whom, with the note)
       // and the books, to list them under their computer. Not readable (an older cloud, no select for members): nothing shown
       try { p.cursors = [].concat(await Cloud.api("tally_sync_cursor?select=book_id,state,state_why,state_at,cleared_at,cleared_by,cleared_note") || []); p.noBaselineClear = false; }
@@ -22869,13 +22982,20 @@ const TCloud = {
     const now = Date.now(), rows = [];
     (this.pane.devices || []).filter(d => !d.revoked).forEach(d => {
       const info = d.info || {}, br = info.bridges || {}, main = d.main_bridge || "";
-      const beat = info.beat || {};
+      const beat = info.beat || {}, wu = (x) => String((x && x.user) || "").trim().toLowerCase();
       Object.keys(br).forEach(id => { const b = br[id] || {}, isMain = main ? id === main : b.mode === "main";
         // 2.1.5: its requests to Tally (last, longest today, over 20 s) and whether it stopped reading: its own entry,
         // else the computer's beat when it is the main bridge
         const mine = (k) => b[k] !== undefined ? b[k] : isMain ? beat[k] : undefined;
+        // 2.3.0: its own port, its Tally's port and data folder, and the owner's "Changes only"
+        const co = this.isChangesOnly(d.id, id);
+        // the owner's rule of 05-Oct-2026 (migration 54's tally_bridge_may_post): the main bridge chosen stops only the other
+        // bridges of its own Windows user; another user's main bridge on a shared key stops nobody
+        const coOn = co === null ? !!b.changesOnly : co;
+        const mayPost = !coOn && (main && br[main] && wu(br[main]) === wu(b) ? id === main : b.mode !== "test");
         rows.push({device: d, id, computer: b.computer || info.computer || d.name, user: b.user || "", version: b.version || "", runMode: b.runMode || "",
-          main: isMain, at: b.at, tally: b.tallyState || (b.tally ? "open" : "closed"), open: b.open || [], go: id !== "v1",
+          port: b.port || null, tallyPort: b.tallyPort || (isMain && beat.tallyPort) || null, dataFolder: b.dataFolder || (isMain && beat.dataFolder) || "", changesOnly: co === null ? !!b.changesOnly : co,
+          main: isMain, mayPost, at: b.at, tally: b.tallyState || (b.tally ? "open" : "closed"), open: b.open || [], go: id !== "v1",
           reqs: mine("reqs") || null, readStopped: mine("readStopped") || null, paused: !!mine("paused"), readStop: info.readStop || null}); });
       if (!br.v1 && info.beat) rows.push({device: d, id: "v1", computer: info.computer || d.name, user: info.user || "", version: info.beat.version || d.version || "",
         main: !main, at: info.beat.at, tally: info.beat.tallyState || (info.beat.tally ? "open" : "closed"), open: info.beat.open || [], go: false});
@@ -22884,6 +23004,134 @@ const TCloud = {
     });
     rows.forEach(r => { r.online = !!r.at && now - Date.parse(r.at) < 3 * 60000; r.read = this.readState(r); });
     return rows.sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
+  },
+  // ---------- FinCom Bridge 2.3.0: one bridge for each Windows user on a shared server (migration 54)
+  // the owner's "Changes only" for a bridge (tally_bridge_prefs): true / false, null when nothing is set
+  isChangesOnly(devId, id){ const x = (this.pane.prefs || []).find(q => q.device_id === devId && q.bridge_id === id); return x ? x.changes_only === true : null; },
+  // a bridge in words: "<PC> · <Windows user> · <company> · <data folder>" (the company given, else those open there)
+  bridgeWords(r, company){
+    if (!r) return "";
+    return [r.computer || "", r.user || "", company || (r.open || []).join(", "), r.dataFolder || ""].filter(Boolean).join(" \u00b7 ");
+  },
+  // the signed-in member
+  me(){ return typeof Cloud === "object" && Cloud.sess ? ((Cloud.sess() || {}).user_id || "") : ""; },
+  // the bridge the signed-in member is linked to (by an owner, or by themselves); "" when none
+  myBridge(){
+    const me = this.me();
+    const l = me && (this.pane.links || []).find(x => x.user_id === me && x.bridge_id);
+    return l ? l.bridge_id : "";
+  },
+  // the members linked to a bridge
+  linkedTo(r){ return (this.pane.links || []).filter(x => x.bridge_id && x.bridge_id === r.id && x.device_id === r.device.id).map(x => x.user_id); },
+  // the owner's rule of 05-Oct-2026 (migration 54's tally_bridge_is_own): a member's own bridge is the one they are linked
+  // to, or one on a computer key they made on which every bridge is of one Windows user
+  isOwn(r){
+    const me = this.me();
+    if (!me || !r || !r.device) return false;
+    if ((this.pane.links || []).some(x => x.user_id === me && x.bridge_id === r.id && x.device_id === r.device.id)) return true;
+    if (r.device.created_by !== me) return false;
+    const u = (x) => String((x && x.user) || "").trim().toLowerCase(), br = (r.device.info && r.device.info.bridges) || {};
+    return Object.keys(br).every(k => u(br[k]) === u(r));
+  },
+  // this browser's own FinCom Bridge (paired here, proved within the last 10 minutes), as a line FinCom has heard from; null
+  localRow(){
+    if (typeof Bridge !== "object" || !Bridge.cfg) return null;
+    const c = Bridge.cfg() || {}, u = String(c.url || "").replace(/\/+$/, ""), at = (Bridge.proven || {})[u];
+    if (!c.key || !c.bridgeId || !at || Date.now() - at > 600000) return null;
+    return this.bridgesHeard().find(r => r.go && !r.old && r.id === c.bridgeId) || null;
+  },
+  // the client's Tally company (its link in FinCom's cloud, else the one it may post to)
+  companyOf(cid){
+    const c = (this.pane.companies || []).find(x => x.client_id === cid && x.company), co = typeof S === "object" && S.companies ? S.companies[cid] : null;
+    return (c && c.company) || (co && (co.postTo || co.tallyName)) || "";
+  },
+  hasOpen(r, company){ const n = (x) => String(x || "").trim().replace(/\s+/g, " ").toLowerCase(); return !company || (r.open || []).some(o => n(o) === n(company)); },
+  // the bridges a posting may be sent through: FinCom Bridge 2.x, allowed to post (the main bridge among its own Windows
+  // user's on its computer, not changes only)
+  postTargets(){ return this.bridgesHeard().filter(r => r.go && !r.old && r.id && r.mayPost); },
+  // the bridge a posting of this client goes through: the one an owner picked on the Post screen, else the POSTER'S OWN
+  // (the owner's rule of 05-Oct-2026, as migration 54 decides it): the linked one (when it may post, and has the company
+  // open or no other of theirs has), else the newest of theirs that may post with the company open, else this browser's
+  // own proven bridge (not linked to another member); "" for none: the cloud then says what to do, and never routes into
+  // another person's Tally
+  postTargetFor(cid){
+    if (this.pane.noTarget) return "";
+    const t = this.postTargets(), pick = (S.postTarget || {})[cid], company = this.companyOf(cid);
+    if (pick && t.some(r => r.id === pick)) return pick;
+    const mine = this.myBridge(), linked = mine && t.find(r => r.id === mine);
+    const own = t.filter(r => this.isOwn(r) && this.hasOpen(r, company)).sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
+    if (linked && (this.hasOpen(linked, company) || !own.length)) return linked.id;
+    if (own.length) return own[0].id;
+    const loc = this.localRow(), me = this.me();
+    // final review M3: this browser's own proven bridge counts as the member's only on a computer key the member made (an
+    // owner may post through any); on another's key it first gets a key of its own (autoOwn)
+    if (loc && t.some(r => r.id === loc.id) && this.hasOpen(loc, company) && !this.linkedTo(loc).some(u => u !== me) && this.mayLinkSelf(loc)) return loc.id;
+    return "";
+  },
+  // final review M3: a member links HIMSELF only to a bridge on a computer key he made (migration 54); an owner links anyone
+  mayLinkSelf(r){ return !!(r && r.device && ((typeof postOwner === "function" && postOwner()) || r.device.created_by === this.me())); },
+  // a posting through this browser's own bridge, not yet linked to the member: linked first (so the cloud knows it is theirs)
+  async linkIfLocal(target){
+    const loc = this.localRow(), me = this.me();
+    if (!loc || loc.id !== target || !me || this.isOwn(loc) || !this.mayLinkSelf(loc)) return;
+    await this.rpc("tally_member_bridge_link", {p_user: me, p_device: loc.device.id, p_bridge: loc.id});
+    this.pane.links = (this.pane.links || []).filter(x => x.user_id !== me).concat([{user_id: me, device_id: loc.device.id, bridge_id: loc.id}]);
+  },
+  // the bridge's line that will post a client's entries: the target's; none (null) when the poster has no bridge of their
+  // own for it (an older cloud without migration 54: the main bridge of the computer keeping the company, as before)
+  postThrough(co){
+    const rows = this.bridgesHeard(), id = co ? this.postTargetFor(co.id) : "";
+    if (id) return rows.find(r => r.id === id) || null;
+    if (!this.pane.noTarget) return null;
+    const c = co && (this.pane.companies || []).find(x => x.client_id === co.id && x.device_id), devId = c && c.device_id;
+    return rows.find(r => r.go && !r.old && r.main && !r.changesOnly && (!devId || r.device.id === devId)) || null;
+  },
+  // why the poster has no bridge of their own for a company, and what to do (migration 54's tally_post_own_words)
+  noTargetWords(company){
+    const own = this.bridgesHeard().filter(r => r.go && !r.old && r.id && this.isOwn(r)), w = (l) => [...new Set(l.map(r => [r.computer, r.user].filter(Boolean).join(" \u00b7 ")))].join(", ");
+    const head = "Nobody can post into " + company + " from your sign-in just now: ";
+    if (!own.length) return head + "FinCom has not heard from a FinCom Bridge of yours. Install FinCom Bridge on the computer where you use Tally, as your own Windows user (\u201cJust for me\u201d), and connect it to FinCom; then open " + company + " in Tally there and post again.";
+    const has = own.filter(r => this.hasOpen(r, company));
+    if (has.length) return head + "your FinCom Bridge (" + w(has) + ") has it open but is set to Changes only or only reads Tally. Ask the firm\u2019s owner to switch Changes only off for it (Tally page), then post again.";
+    const may = own.filter(r => r.mayPost);
+    return head + "your FinCom Bridge (" + w(may.length ? may : own) + ") does not have " + company + " open in Tally. Open " + company + " in Tally there, then post again.";
+  },
+  // an owner switches a bridge to changes only (it never takes a posting) or back -> tally_bridge_changes_only
+  async changesOnly(r, on){
+    if (on){
+      const a = await askConfirm({title: "Changes only for " + this.bridgeWords(r) + "?", ok: "Changes only",
+        body: "<p>This bridge keeps reading Tally\u2019s changes for FinCom but is never given a posting, and the Post screen never offers it. A posting it is running now finishes.</p>"});
+      if (!a || !a.ok) return;
+    }
+    await this.control("tally_bridge_changes_only", {p_device: r.device.id, p_bridge: r.id, p_on: !!on},
+      (on ? "Changes only: " : "Posting allowed again: ") + this.bridgeWords(r) + ".");
+  },
+  // the owner's condition (Fix 2): a computer key refused a bridge id: ONE alert per (id, computer) for the owners, until
+  // read or until the identity is released (tally_bridge_alerts, migration 54); none on an older cloud
+  async loadBridgeAlerts(){
+    const p = this.pane;
+    p.bridgeAlertsAt = Date.now();
+    try { p.bridgeAlerts = [].concat(await Cloud.api("tally_bridge_alerts?select=id,bridge_id,device_id,tried_computer,tried_user,words,at,last_at,read_at&cleared_at=is.null&order=at.desc&limit=50") || []); }
+    catch (e){ p.bridgeAlerts = []; }
+  },
+  async bridgeAlertRead(x){
+    try { await this.rpc("tally_bridge_alert_read", {p_id: x.id}); x.read_at = new Date().toISOString(); } catch (e){ toast((e && e.message) || String(e)); }
+    render();
+  },
+  // Fix 2b: an owner releases a bridge's identity: the next computer that reports the id gets it (kept with who, when, why)
+  async releaseIdentity(r){
+    const a = await askConfirm({title: "Release the identity of " + this.bridgeWords(r) + "?", ok: "Release it",
+      body: "<p>FinCom keeps bridge " + esc(r.id) + " tied to the computer key that reported it first. Released, the next computer that reports this id gets it. Who released it, when and why are kept.</p>" +
+        '<div class="bk-form one"><label><span>Why (kept with the release)</span><input id="releaseWhy" maxlength="300" placeholder="e.g. the computer was set up again"></label></div>',
+      read: () => ({why: ((document.getElementById("releaseWhy") || {}).value || "").trim()}), validate: d => d && d.why ? "" : "Say why the identity is released."});
+    if (!a || !a.ok) return;
+    await this.control("tally_bridge_reset", {p_bridge: r.id, p_why: a.data.why}, "The identity of " + this.bridgeWords(r) + " is released; the next computer that reports it gets it.");
+  },
+  // an owner links a member to the bridge they post through (r null: unlinked) -> tally_member_bridge_link
+  async linkMember(uid, r){
+    const m = ((typeof Cloud === "object" && Cloud.st.members) || []).find(x => x.user_id === uid), who = (m && (m.name || m.email)) || "The member";
+    await this.control("tally_member_bridge_link", {p_user: uid, p_device: r ? r.device.id : null, p_bridge: r ? r.id : null},
+      r ? who + " now posts through " + this.bridgeWords(r) + "." : who + " is no longer linked to a bridge.");
   },
   // the reading state of a bridge's computer (plan item 14): {state: reading | paused | selfstop | fincomstop | offline,
   // text, reason}. A stop from FinCom still standing (tally_read_stops, for this computer or for all of them, or the
@@ -22942,7 +23190,7 @@ const TCloud = {
       toast(done);
     } catch (e){
       const m = String((e && e.message) || e), missing = /PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(m);
-      const mig = {tally_release_withdraw: 37, tally_baseline_clear: 37, tally_device_post_settings: 43, tally_device_trial_tools: 46, tally_device_recorder_source: 47}[fn] || 35;
+      const mig = {tally_bridge_changes_only: 54, tally_member_bridge_link: 54, tally_bridge_reset: 54, tally_release_withdraw: 37, tally_baseline_clear: 37, tally_device_post_settings: 43, tally_device_trial_tools: 46, tally_device_recorder_source: 47}[fn] || 35;
       p.ctl = {err: missing && fn === "tally_device_post_settings" ? "Posting settings are not available until migration 43 runs."
         : missing && fn === "tally_device_trial_tools" ? "Trial tools on this computer: not available until migration 46 runs."
         : missing && fn === "tally_device_recorder_source" ? "Changes come from: not available until migration 47 runs."
@@ -23003,17 +23251,39 @@ const TCloud = {
   async readResume(r){
     await this.control("tally_read_resume", {p_device: r ? r.device.id : null}, "Reading resumes on " + (r ? r.computer : "every computer") + " within 30 seconds.");
   },
-  async releasePilot(v, r){
-    const a = await askConfirm({title: "Try version " + v + " on " + r.computer + "?", ok: "Try it there",
-      body: "<p>FinCom Bridge " + esc(v) + " installs itself on <b>" + esc(r.computer) + "</b> only. Every other computer keeps its version until you approve " + esc(v) + " for all, after a working day on " + esc(r.computer) + ".</p>"});
+  // the owner's rule of 05-Oct-2026 (migration 54): new versions go to every computer by themselves; an owner HOLDS a
+  // version (no bridge takes it; a reason is required, kept with who and when), lets it go again, rolls every bridge back
+  // to an earlier version (until cleared), and clears that rollback
+  async releaseHold(v){
+    const a = await askConfirm({title: "Hold version " + v + "?", ok: "Hold it",
+      body: "<p>No bridge of the firm takes FinCom Bridge " + esc(v) + " until you let it go; the ones running it keep running.</p>" +
+        '<div class="bk-form one"><label><span>Why (kept with the version, shown on this page)</span><input id="holdWhy" maxlength="500" placeholder="What went wrong"></label></div>',
+      read: () => ({why: ((document.getElementById("holdWhy") || {}).value || "").trim()}), validate: d => d && d.why ? "" : "Say why the version is held."});
     if (!a || !a.ok) return;
-    await this.control("tally_release_pilot", {p_version: v, p_device: r.device.id}, "Version " + v + " goes to " + r.computer + " at its next heartbeat.");
+    await this.control("tally_release_hold", {p_version: v, p_why: a.data.why}, "Version " + v + " is held: no bridge takes it.");
   },
-  async releaseApprove(v){
-    const a = await askConfirm({title: "Approve version " + v + " for all computers?", ok: "Approve",
-      body: "<p>Every computer of the firm installs FinCom Bridge " + esc(v) + " at its next check. FinCom\u2019s cloud allows it only after a working day on the pilot computer with no stop by itself.</p>"});
+  async releaseUnhold(v){
+    const a = await askConfirm({title: "Let version " + v + " go?", ok: "Let it go",
+      body: "<p>Every bridge of the firm takes FinCom Bridge " + esc(v) + " by itself again, within a few hours.</p>" +
+        '<div class="bk-form one"><label><span>Note (kept)</span><input id="unholdWhy" maxlength="500" placeholder="What was put right"></label></div>',
+      read: () => ({why: ((document.getElementById("unholdWhy") || {}).value || "").trim()})});
     if (!a || !a.ok) return;
-    await this.control("tally_release_approve", {p_version: v}, "Version " + v + " is approved for all computers.");
+    await this.control("tally_release_unhold", {p_version: v, p_why: (a.data && a.data.why) || ""}, "Version " + v + " goes to every computer again.");
+  },
+  async releaseRollback(){
+    const a = await askConfirm({title: "Roll every bridge back to an earlier version?", ok: "Roll back",
+      body: "<p>Each bridge of the firm that keeps that version from its last update puts it back by itself, and no bridge takes a newer version until you clear the rollback. A bridge that does not keep it stays as it is and says so in its log.</p>" +
+        '<div class="bk-form one"><label><span>Version (like 2.2.4)</span><input id="rollbackVersion" maxlength="20" placeholder="2.2.4"></label>' +
+        '<label><span>Why (kept, shown on this page)</span><input id="rollbackWhy" maxlength="500" placeholder="What went wrong"></label></div>',
+      read: () => ({version: ((document.getElementById("rollbackVersion") || {}).value || "").trim(), why: ((document.getElementById("rollbackWhy") || {}).value || "").trim()}),
+      validate: d => !d || !/^\d{1,4}\.\d{1,4}\.\d{1,4}$/.test(d.version) ? "Give the version, like 2.2.4." : !d.why ? "Say why." : ""});
+    if (!a || !a.ok) return;
+    await this.control("tally_release_rollback", {p_version: a.data.version, p_why: a.data.why}, "Every bridge goes back to version " + a.data.version + " (where it is kept); no newer version until you clear it.");
+  },
+  async releaseRollbackClear(){
+    const a = await askConfirm({title: "Clear the rollback?", ok: "Clear it", body: "<p>Every bridge takes the newest version by itself again, within a few hours.</p>"});
+    if (!a || !a.ok) return;
+    await this.control("tally_release_rollback_clear", {p_why: ""}, "The rollback is cleared; the bridges update themselves again.");
   },
   // round 4, item 23: an owner withdraws a version on trial or approved (a reason is required; the cloud's beat gives it
   // to no computer any more; a new pilot of it is allowed)
@@ -23074,13 +23344,22 @@ const TCloud = {
     if (this.autoBusy || !this.on() || !Bridge.on() || !Bridge.up() || Date.now() < this.autoAt) return;
     this.autoBusy = true; this.autoAt = Date.now() + 60000;
     try {
+      // the owner's condition: a computer key is made, and handed over, only for a bridge that proved itself
+      if (!(await Bridge.ensureProven())) return;
       const s = await Bridge.call("/cloudlink", null, 15000);
       if (!s.connected || s.url !== this.ingestUrl()){
+        // review M2 of 2.3.0: a computer key is made only when the bridge proved itself in this same step (a squatter that
+        // took the port since the call above gets no key made for it); Bridge.call proves it again before handing it over
+        if (!(await Bridge.ensureProven())) return;
         this.autoAt = Date.now() + 30 * 60000;
-        const d = await this.rpc("tally_device_create", {p_name: String(Bridge.st.computer || "Office computer").slice(0, 80)});
+        // 2.3.0: one key per Windows user's bridge: "<PC> · <Windows user>"
+        const d = await this.rpc("tally_device_create", {p_name: String([Bridge.st.computer || "Office computer", Bridge.st.user || ""].filter(Boolean).join(" \u00b7 ")).slice(0, 80)});
         await Bridge.call("/cloudlink", {url: this.ingestUrl(), key: d.key}, 60000);
         this.autoAt = Date.now() + 60000;
       }
+      // the owner's rule of 05-Oct-2026: this browser's own bridge is the member's (self-linked); on a computer key shared
+      // with another Windows user whose bridge is the main one, it gets a key of its own
+      if (await this.autoOwn()) return;
       const co = CO(), o = co && Bridge.openFor(co);
       if (o){
         const row = ((await Cloud.api("tally_companies?select=client_id&company=eq." + encodeURIComponent(o.name))) || [])[0];
@@ -23091,6 +23370,40 @@ const TCloud = {
       this.autoAt = Date.now() + 10 * 60000;
     } catch (e){ this.autoErr = (e && e.message) || String(e); }
     finally { this.autoBusy = false; }
+  },
+  // after pairing (TCloud.auto): #4 the member is linked to this browser's own proven bridge when they are linked to none
+  // (or to one FinCom no longer hears from), unless it posts for another member. Final review M3: a member's own bridge is
+  // one on a computer key that member made; when this browser's bridge reports through a key another member made (1.15.0's
+  // settings carried over), or one whose main bridge is ANOTHER Windows user's (#7), a fresh key is made for this user and
+  // handed to the bridge, which moves its identity to it itself (it holds both keys: tally-ingest's own_key; its postings
+  // and links go with it); no owner, no member move. The member is linked on the next pass. true when a new key was handed
+  // over. An older cloud without migration 54: nothing done
+  async autoOwn(){
+    const me = this.me(), id = (Bridge.cfg() || {}).bridgeId || "";
+    if (!me || !/^go-[0-9a-f]{6,32}$/.test(id)) return false;
+    try {
+      const devs = [].concat(await Cloud.api("tally_devices?select=id,name,main_bridge,info,created_by,revoked") || []).filter(d => !d.revoked);
+      const d = devs.find(x => x.info && x.info.bridges && x.info.bridges[id]);
+      if (!d) return false;                                                  // not reported yet: next time
+      const bs = d.info.bridges, u = (x) => String((x && x.user) || "").trim().toLowerCase();
+      const links = [].concat(await Cloud.api("tally_member_bridges?select=user_id,device_id,bridge_id") || []);
+      const mine = links.find(l => l.user_id === me && l.bridge_id), taken = links.some(l => l.user_id !== me && l.bridge_id === id && l.device_id === d.id);
+      if (taken) return false;
+      const shared = d.main_bridge && d.main_bridge !== id && bs[d.main_bridge] && u(bs[d.main_bridge]) !== u(bs[id]);
+      if (shared || !this.mayLinkSelf({device: d})){
+        this.autoAt = Date.now() + 30 * 60000;                               // one key at a time (no pile of keys if the move is refused)
+        const k = await this.rpc("tally_device_create", {p_name: String([Bridge.st.computer || bs[id].computer || "Office computer", Bridge.st.user || bs[id].user || ""].filter(Boolean).join(" \u00b7 ")).slice(0, 80)});
+        await Bridge.call("/cloudlink", {url: this.ingestUrl(), key: k.key}, 60000);
+        this.autoAt = Date.now() + 60000;
+        return true;
+      }
+      const heard = mine && devs.some(x => x.id === mine.device_id && x.info && x.info.bridges && x.info.bridges[mine.bridge_id]);
+      if (!mine || !heard){
+        await this.rpc("tally_member_bridge_link", {p_user: me, p_device: d.id, p_bridge: id});
+        this.pane.links = links.filter(l => l.user_id !== me).concat([{user_id: me, device_id: d.id, bridge_id: id}]);
+      }
+    } catch (e){ this.autoErr = (e && e.message) || String(e); }
+    return false;
   },
   async revoke(id, name){
     const r = await askConfirm({title: "Remove " + name + "?", ok: "Remove it", danger: true, body: "<p>That computer will not be able to send anything to the cloud any more. What it sent stays. To send again, connect it again.</p>"});
@@ -24086,7 +24399,15 @@ const CloudPost = {
   async run(cid, payload, onProgress, onChecked){
     const id = this.uuid(), sleep = ms => new Promise(r => setTimeout(r, ms));
     const ids = [].concat(payload.masters || [], payload.vouchers || []).map(x => x.id);
-    const r = await TCloud.rpc("tally_post_enqueue", {p_id: id, p_client: cid, p_payload: {masters: payload.masters || [], vouchers: payload.vouchers || [], ledger: payload.ledger || ""}});
+    // FinCom Bridge 2.3.0 (migration 54): the bridge it goes through (the owner's pick, else the member's own): named;
+    // none: the cloud chooses the poster's own bridge, or says what to do
+    const target = typeof TCloud.postTargetFor === "function" ? TCloud.postTargetFor(cid) : "";
+    // the owner's rule of 05-Oct-2026: this browser's own bridge, not linked yet, is linked to the member first
+    if (target && typeof TCloud.linkIfLocal === "function") await TCloud.linkIfLocal(target);
+    const args = {p_id: id, p_client: cid, p_payload: {masters: payload.masters || [], vouchers: payload.vouchers || [], ledger: payload.ledger || ""}};
+    // review M3: the bridge is named with its computer (the cloud checks the bridge id is bound to it)
+    const trow = target ? TCloud.bridgesHeard().find(x => x.id === target) : null;
+    const r = target ? await TCloud.rpc("tally_post_enqueue_to", Object.assign(args, {p_target: target, p_device: trow ? trow.device.id : null})) : await TCloud.rpc("tally_post_enqueue", args);
     // 02-Oct-2026 (B14): the cloud's own check of the company the client may post to: nothing was queued, nothing sent,
     // and it is not Tally's reason; the entries stay waiting
     if (r && !r.ok && r.notAllowed) return {ok: true, company: r.company || payload.company, notAllowed: true, viaCloud: true,
@@ -26296,7 +26617,7 @@ function postStatusFor(co){
       closed: [l.text + ": open TallyPrime there, with " + pl.company + ".", "", null],
       notanswering: [l.text + ": close any message box in Tally there; FinCom carries on by itself.", "", null],
       paused: [l.text + ": resume it from the FinCom Bridge icon there. Update now still reads.", "Update now", () => tallyUpdateNow(co.id)],
-      stopped: [l.text + ". An owner resumes it on the Tally page; posting goes on, Update now does not read until then.", "", null]}[l.state] || [l.text, "", null];
+      stopped: [l.text + ". This is FinCom\u2019s Stop, set by an owner of the firm: an owner resumes it on the Tally page (a bridge that stopped by itself is resumed there by the member whose computer key it is); posting goes on, Update now does not read until then.", "", null]}[l.state] || [l.text, "", null];
     out.problem = p(T[0], T[1], T[2], l.state); return out;
   }
   if (!pl.state && pl.action){ out.problem = p(pl.action + ".", pl.go === "tally" ? "Open the Tally page" : "", pl.go === "tally" ? goTallyPage : null, "bridge"); return out; }
@@ -26694,6 +27015,11 @@ async function postTestCopies(cid, id, n){
 // refuses anyone but an owner, and the page shows the buttons to owners only. A cloud without 36b says so.
 // owners of the firm alone (the cloud accepts only an active member with role owner; a superadmin who is not one is refused there)
 function postOwner(){ return !!(S.account && ((S.account.me || {}).role === "owner")); }
+// the owner's decision B (05-Oct-2026, migration 55): any member of the firm who may post (owner or staff: the cloud's
+// can_write) settles a posting whose result is uncertain: "Mark posted" (a Tally id) and "Not in Tally - post again"
+// (the FinCom Bridge looks in Tally first; nothing is sent until it finds the entry is not there). A reason is required;
+// the name and time are kept. A superadmin who is not a member, or a viewer, does not
+function postCanSettle(){ const r = S.account && (S.account.me || {}).role; return r === "owner" || r === "staff"; }
 // the posting of FinCom's cloud that holds the entry: the newest naming it (by entry_ids, results or items)
 function postJobOf(cid, id){
   const js = postJobStates(cid).get(String(id));
@@ -26703,7 +27029,7 @@ function postJobOf(cid, id){
     .find(j => (CloudJobs.idsOf(j) || []).includes(String(id)) || [].concat(j.results || [], j.items || []).some(x => x && String(x.id) === String(id))) || null;
 }
 const PostOwner = {
-  notReady(m){ return /tally_post_job_mark_posted|tally_post_id_release_owner|PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(String(m || "")); },
+  notReady(m){ return /tally_post_job_mark_posted|tally_post_id_release_owner|tally_post_settle_ask|tally_post_check_withdraw|tally_post_check_confirm|PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(String(m || "")); },
   async call(cid, fn, args, done){
     try {
       const r = await TCloud.rpc(fn, args);
@@ -26711,8 +27037,10 @@ const PostOwner = {
       toast(done);
     } catch (e){
       const m = String((e && e.message) || e);
-      toast(this.notReady(m) ? "FinCom\u2019s cloud is not ready for this yet (migration 36b)." : m.replace(/^ERROR:\s*/i, ""));
+      toast(this.notReady(m) ? "FinCom\u2019s cloud is not ready for this yet (migration " + (fn === "tally_post_settle_ask" || fn === "tally_post_check_withdraw" || fn === "tally_post_check_confirm" ? "55" : "36b") + ")." : m.replace(/^ERROR:\s*/i, ""));
     }
+    if (typeof PostChecks === "object") PostChecks.load(cid, true);
+    if (typeof PostMarks === "object") PostMarks.load(cid, true);
     if (typeof CloudJobs === "object") await CloudJobs.load(true);
     if (typeof PostIds === "object") PostIds.load(cid, true);
     render();
@@ -26728,13 +27056,15 @@ const PostOwner = {
       body: "<p>" + esc("You typed " + v + ", which is the bill number. Tally's id is the number Tally gives the entry (for example 26301). Use " + v + " anyway?") + "</p>"});
     return !!(a && (a === true || a.ok));
   },
-  async askId(e, title, ok, pre, intro){
+  // why: a reason is required (Mark posted, decision B); a correction carries its own ("Correction: the Tally id is ...")
+  async askId(e, title, ok, pre, intro, why){
+    why = why !== false;
     const a = await askConfirm({title, ok,
       body: "<p>" + intro + "</p>" +
         '<div class="bk-form one"><label><span>Tally id</span><input id="markVch" maxlength="20" inputmode="numeric" placeholder="Digits only, as Tally shows it" value="' + esc(pre || "") + '"></label>' +
-        '<label><span>Note (optional)</span><input id="markNote" maxlength="300" placeholder="Where you saw it"></label></div>',
+        '<label><span>' + (why ? "Reason (kept with your name)" : "Note (optional)") + '</span><input id="markNote" maxlength="300" placeholder="Where you saw it in Tally"></label></div>',
       read: () => ({vch: ((document.getElementById("markVch") || {}).value || "").trim(), note: ((document.getElementById("markNote") || {}).value || "").trim()}),
-      validate: d => this.idCheck(d && d.vch)});
+      validate: d => this.idCheck(d && d.vch) || (!why || (d && d.note) ? "" : "Say where you saw it in Tally (kept with your name and the time).")});
     if (!a || !a.ok) return null;
     if (!(await this.sameAsBill(e, a.data.vch))) return null;
     return a.data;
@@ -26762,7 +27092,7 @@ const PostOwner = {
   // (tally_post_job_mark_posted: a new row in tally_post_marks, the result's voucher, the id's accepted_vch)
   async correctId(cid, e, job, suggest, was){
     const no = (e.x && e.x.invoiceNo) || e.id;
-    const d = await this.askId(e, "Correct the Tally id of " + no, "Correct the Tally id", suggest || "", "The Tally id kept for this entry" + (was ? " (" + esc(was) + ")" : "") + " is not Tally's own id. Type the id Tally shows for it; FinCom keeps the correction with who made it and when. Nothing is sent to Tally.");
+    const d = await this.askId(e, "Correct the Tally id of " + no, "Correct the Tally id", suggest || "", "The Tally id kept for this entry" + (was ? " (" + esc(was) + ")" : "") + " is not Tally's own id. Type the id Tally shows for it; FinCom keeps the correction with who made it and when. Nothing is sent to Tally.", false);
     if (!d) return;
     const note = ("Correction: the Tally id is " + d.vch + (was ? ", not " + was : "") + (d.note ? " (" + d.note + ")" : "")).slice(0, 300);
     if (!job){
@@ -26772,20 +27102,49 @@ const PostOwner = {
     }
     await this.call(cid, "tally_post_job_mark_posted", {p_job: job.id, p_id: String(e.id), p_vch: d.vch, p_note: note}, "The Tally id of " + no + " is now " + d.vch + ".");
   },
-  // E: "This entry is not in Tally (undo the posted mark)", owners only, a reason required
+  // the owner's rule (a duplicate entry must never be possible from this button): after the FinCom Bridge did not see the
+  // entry on its day ("notseen"), a member who may post looks in Tally and confirms it is not there, a reason required
+  // (tally_post_check_confirm: the only way it is released and sent again, that entry alone; name and time kept)
+  async confirmNotSeen(cid, e, job){
+    if (!job) return;
+    const no = (e.x && e.x.invoiceNo) || e.id, co = job.company || "the company";
+    const a = await askConfirm({title: no + ": you looked in Tally and it is not there?", ok: "I looked in Tally: not there \u2013 post again", danger: true,
+      body: "<p>" + esc("The FinCom Bridge did not see this entry in " + co + " on its date, but it cannot see other dates. Confirm only after looking in Tally (Day Book, or search the narration TDSDesk:" + String(e.id) + "). It is then sent again, once; your name, the time and the reason are kept.") + "</p>" +
+        '<div class="bk-form one"><label><span>Reason (where you looked in Tally)</span><input id="confirmWhy" maxlength="500" placeholder="Searched TDSDesk:\u2026 in the Day Book"></label></div>',
+      read: () => ({why: ((document.getElementById("confirmWhy") || {}).value || "").trim()}), validate: d => d && d.why ? "" : "Say where you looked in Tally."});
+    if (!a || !a.ok) return;
+    return this.call(cid, "tally_post_check_confirm", {p_job: job.id, p_id: String(e.id), p_why: a.data.why}, no + " is sent again, once.");
+  },
+  // the final review of 2.3.0 (M2): the member who asked for a check, or an owner, withdraws it while it waits
+  // (tally_post_check_withdraw: who, when and why kept); nothing is released or sent
+  async withdrawCheck(cid, ck){
+    if (!ck || !ck.id) return;
+    const a = await askConfirm({title: "Withdraw the check?", ok: "Withdraw the check",
+      body: "<p>The FinCom Bridge stops looking in Tally for this entry. Nothing is released or sent; your name and the time are kept.</p>" +
+        '<div class="bk-form one"><label><span>Reason (optional)</span><input id="withdrawWhy" maxlength="300" placeholder="Found it in Tally myself"></label></div>',
+      read: () => ({why: ((document.getElementById("withdrawWhy") || {}).value || "").trim()})});
+    if (!a || !a.ok) return;
+    return this.call(cid, "tally_post_check_withdraw", {p_check: ck.id, p_why: (a.data && a.data.why) || ""}, "The check is withdrawn; nothing was released or sent.");
+  },
+  // decision B (05-Oct-2026): "Not in Tally - post again", any member who may post, a reason required. With a posting of
+  // FinCom's cloud: tally_post_settle_ask (migration 55): the FinCom Bridge looks in that company in Tally first; found:
+  // marked posted with the voucher found; not there: released and sent again, once; Tally not reachable: it waits and
+  // looks again by itself. Nothing is sent from here. Without one (a bill posted straight to a bridge): undone here
   async release(cid, e, job){
     const no = (e.x && e.x.invoiceNo) || e.id;
-    const a = await askConfirm({title: no + " is not in Tally: undo the posted mark?", ok: "Undo the posted mark", danger: true,
-      body: "<p>You looked in Tally and this entry is not there. FinCom undoes its posted mark and frees its id so it can be posted again; the reason is kept with the entry. Nothing is sent to Tally now.</p>" +
-        '<div class="bk-form one"><label><span>Why (what you saw in Tally)</span><input id="releaseWhy" maxlength="500" placeholder="Not in the Day Book of …"></label></div>',
+    const co = (job && job.company) || "the company";
+    const a = await askConfirm({title: no + ": not in Tally, post it again?", ok: "Not in Tally \u2013 post again", danger: true,
+      body: "<p>" + (job ? "Before anything is sent, the FinCom Bridge looks in " + esc(co) + " in Tally for this entry. If it is there, it is marked posted with Tally\u2019s id; if it is not, it is sent again, once. If Tally cannot be asked now, it waits and looks again by itself. Your name, the time and the reason are kept."
+          : "You looked in Tally and this entry is not there. FinCom undoes its posted mark so it can be posted again; the reason is kept with the entry. Nothing is sent to Tally now.") + "</p>" +
+        '<div class="bk-form one"><label><span>Reason (what you saw in Tally)</span><input id="releaseWhy" maxlength="500" placeholder="Not in the Day Book of …"></label></div>',
       read: () => ({why: ((document.getElementById("releaseWhy") || {}).value || "").trim()}), validate: d => d && d.why ? "" : "Say what you saw in Tally."});
     if (!a || !a.ok) return;
+    if (job) return this.call(cid, "tally_post_settle_ask", {p_job: job.id, p_id: String(e.id), p_why: a.data.why}, "The FinCom Bridge looks in " + co + " in Tally first; " + no + " is sent again only if it is not there.");
     if (!job){
       e.postUndo = {why: a.data.why, at: new Date().toISOString(), by: postMyName()};
       e.exportedAt = null; e.postVerified = false; e.postByReply = false; e.postUnconfirmed = null; e.postError = ""; e.postCheckFailed = null; delete e.goneFromTally;
       Store.saveEntry(cid, e); refreshStats(cid); toast(no + ": the posted mark is undone; it can be posted again."); render(); return;
     }
-    await this.call(cid, "tally_post_id_release_owner", {p_job: job.id, p_id: String(e.id), p_why: a.data.why}, no + " is released; it can be posted again.");
   }
 };
 // one line on the page after a check or a posting ("Already in Tally (voucher no. …)"): S.postNote
@@ -26857,11 +27216,39 @@ async function postPreview(co, rows, opts){
   const items = rows.filter(r => r.xml).map(r => ({kind: r.kind, id: r.id, xml: r.xml, e: r.e}));
   const nWarn = () => document.querySelectorAll("#confirmBox [data-pv-warn] li").length;
   const a = await askConfirm({title: opts.view ? "Preview: " + (rows[0] ? (rows[0].no || rows[0].party) : "") : "Post " + entries(items.length) + " to " + company + "?", ok: opts.view ? "Close" : "Post", wide: true,
-    body: '<div data-post-preview="" style="max-height:60vh;overflow:auto">' + (opts.view ? "" : '<p style="margin:0 0 8px">Each entry exactly as it goes to Tally, into <b>' + esc(company) + "</b>." + (typeof postThroughWords === "function" && postThroughWords(co) ? " " + esc(postThroughWords(co)) : "") + "</p>") + PostGate.html(items, co, masters, company) + "</div>",
-    onReady: box => { if (opts.view){ const no = box.querySelector('[data-cbx="no"]'); if (no) no.remove(); } else { const n = nWarn(); if (n){ const p = document.createElement("p"); p.className = "bk-warn"; p.setAttribute("data-pv-count", ""); p.textContent = n + " warning" + (n === 1 ? "" : "s") + " above: look at them before posting."; box.querySelector(".cbx .row").before(p); } } }});
+    body: '<div data-post-preview="" style="max-height:60vh;overflow:auto">' + (opts.view ? "" : '<p style="margin:0 0 8px">Each entry exactly as it goes to Tally, into <b>' + esc(company) + "</b>." + (typeof postThroughWords === "function" && postThroughWords(co) ? " " + esc(postThroughWords(co)) : "") + "</p>" + postTargetHtml(co, company)) + PostGate.html(items, co, masters, company) + "</div>",
+    onReady: box => { postTargetWire(box, co, company); if (opts.view){ const no = box.querySelector('[data-cbx="no"]'); if (no) no.remove(); } else { const n = nWarn(); if (n){ const p = document.createElement("p"); p.className = "bk-warn"; p.setAttribute("data-pv-count", ""); p.textContent = n + " warning" + (n === 1 ? "" : "s") + " above: look at them before posting."; box.querySelector(".cbx .row").before(p); } } }});
   if (!a || opts.view) return false;
   PostGate.approve(masters.map(m => m.name), company);
   return true;
+}
+// FinCom Bridge 2.3.0: the confirm step names the bridge that posts: computer · Windows user · company · data folder; an
+// owner may pick another bridge that may post (never one set to changes only). Nothing when FinCom's cloud does not know
+// the bridges (no cloud, or none heard from)
+function postTargetHtml(co, company){
+  if (typeof TCloud !== "object" || !TCloud.on() || typeof TCloud.postThrough !== "function") return "";
+  let r = null, list = [];
+  try { r = TCloud.postThrough(co); list = TCloud.postTargets(); } catch (e){ return ""; }
+  if (!r && !list.length && !(TCloud.pane.devices || []).length) return "";
+  const owner = S.account && S.account.me && S.account.me.role === "owner";
+  // the owner's rule of 05-Oct-2026: no bridge of the poster's own for this company: the words say what to do (never
+  // another person's bridge by chance)
+  let h = r || TCloud.pane.noTarget ? '<p data-post-target="' + esc(r ? r.id : "") + '" style="margin:0 0 8px">Through <b data-post-target-words="">' + esc(r ? TCloud.bridgeWords(r, company) : "the main bridge of the computer that keeps " + company) + "</b>.</p>"
+    : '<p data-post-target="" data-post-target-none="" class="bk-warn" style="margin:0 0 8px"><span data-post-target-words="">' + esc(TCloud.noTargetWords(company)) + "</span></p>";
+  if (owner && !TCloud.pane.noTarget && list.length > 1)
+    h += '<p style="margin:0 0 8px"><label class="note">Post through another bridge: <select data-post-target-pick="" aria-label="The bridge that posts">' +
+      list.map(x => '<option value="' + esc(x.id) + '"' + (r && x.id === r.id ? " selected" : "") + ">" + esc(TCloud.bridgeWords(x, company)) + "</option>").join("") + "</select></label></p>";
+  return h;
+}
+function postTargetWire(box, co, company){
+  const sel = box && box.querySelector("[data-post-target-pick]");
+  if (!sel) return;
+  sel.addEventListener("change", () => {
+    S.postTarget = Object.assign({}, S.postTarget, {[co.id]: sel.value});
+    const r = TCloud.bridgesHeard().find(x => x.id === sel.value), w = box.querySelector("[data-post-target-words]"), p = box.querySelector("[data-post-target]");
+    if (w && r) w.textContent = TCloud.bridgeWords(r, company);
+    if (p) p.setAttribute("data-post-target", sel.value);
+  });
 }
 // "Post N to Tally": the bills ready to post (review of 02-Oct-2026: "Ready to post" is approved bills only; bank lines
 // and sales are posted from their own pages), each shown first as it goes to Tally. only: one bill (Retry of one whose
@@ -27045,12 +27432,12 @@ const POST_REASONS = [
     re: /no answer came|not known whether|Checking whether it reached Tally|did not answer|no answer|timed out|could not confirm/i,
     seen: "Sent to Tally, but no answer came · not known whether Tally got it · Checking whether it reached Tally · Tally did not answer",
     reason: "No answer from Tally: it may or may not be in Tally",
-    fix: "Look in Tally's Day Book for the bill's date before anything else. If it is there: mark posted with its Tally id. If not: release it and post again."},
+    fix: "Look in Tally's Day Book for the bill's date before anything else. If it is there: mark posted with its Tally id. If not: press Not in Tally – post again (the FinCom Bridge looks in Tally first)."},
   {id: "incomplete", kind: "review", again: false,
     re: /replied 'created'|cannot be found in|not found yet in|reply needs a look|^Tally's reply: |<RESPONSE>|Tally did not confirm|Tally took it; not read back|not yet read back|accepted it.*being checked/i,
     seen: "Tally replied 'created', but the entry cannot be found … · Tally's reply: … · Tally did not confirm it · not yet read back",
     reason: "Tally's reply was incomplete: it said it took the entry, but FinCom could not find it in Tally",
-    fix: "Look in Tally's Day Book for the bill's date. If it is there: mark posted with its Tally id. If not: release it and post again."},
+    fix: "Look in Tally's Day Book for the bill's date. If it is there: mark posted with its Tally id. If not: press Not in Tally – post again (the FinCom Bridge looks in Tally first)."},
   {id: "exception", kind: "refused", again: true,
     re: /Tally reported an exception|already exists!?$|Voucher Number .* already exists/i,
     seen: "Tally reported an exception. Check the ledger names and the voucher type. · Voucher Number 'X' already exists!",
@@ -27240,10 +27627,16 @@ function postStatus(entry, job, ids, marks, ctx){
     if (releasedByOwner){
       if (bill && e.status === "approved" && !e.exportedAt) return null;              // back in Ready to post
       const why = (ids && ids.released_why) || (r && r.reason) || "";
-      return mk(8, "An owner said it is not in Tally" + (why ? " (" + postReasonText(why).replace(/^Not in Tally: released by the owner on [^(]*\(|\)$/g, "") + ")" : "") + ". It can be posted again.", deleted || !bill ? null : again, {reason: {id: "released", reason: "Released by an owner: not in Tally", fix: "It can be posted again."}, released: true});
+      // decision B (migration 55): who said so and when (tally_post_marks 'released'; any member who may post), and that
+      // the FinCom Bridge looked in Tally first
+      const rm = [].concat(marks || []).filter(x => x && x.action === "released").slice(-1)[0];
+      const rwho = rm && rm.by_user ? (ctx.me && rm.by_user === ctx.me ? "You" : postWhoSay(rm.by_user)) : (r && r.by) || (it && it.by) || "";
+      const rwhen = (rm && rm.at) || (r && r.byOwnerAt) || (it && it.byOwnerAt) || "";
+      const wt = postReasonText(why), wm = /^Not in Tally: released by [^(]* on [^(]*\(([\s\S]*)\)$/.exec(wt);
+      return mk(8, (rwho ? rwho + " said it is not in Tally" + (rwhen ? " on " + postWhenSay(rwhen) : "") : "Marked not in Tally") + (why ? " (" + (wm ? wm[1] : wt) + ")" : "") + ". It can be posted again.", deleted || !bill ? null : again, {reason: {id: "released", reason: "Not in Tally: released", fix: "It can be posted again."}, released: true, markedBy: rm && rm.by_user, markedAt: rwhen});
     }
     if (okR){
-      if (gone) return mk(6, "FinCom's copy of Tally did not show it on " + (typeof fmtDate === "function" ? fmtDate(String(e.goneFromTally).slice(0, 10)) : String(e.goneFromTally).slice(0, 10)) + ". Look in Tally's Day Book for " + (bill ? (typeof fmtDate === "function" ? fmtDate(e.x.invoiceDate) : e.x.invoiceDate) : "the bill's date") + ": if it is there, mark it posted; if not, release it and post again.",
+      if (gone) return mk(6, "FinCom's copy of Tally did not show it on " + (typeof fmtDate === "function" ? fmtDate(String(e.goneFromTally).slice(0, 10)) : String(e.goneFromTally).slice(0, 10)) + ". Look in Tally's Day Book for " + (bill ? (typeof fmtDate === "function" ? fmtDate(e.x.invoiceDate) : e.x.invoiceDate) : "the bill's date") + ": if it is there, mark it posted; if not, press Not in Tally – post again (the FinCom Bridge looks in Tally first).",
         {kind: "settle", label: "It is in Tally: mark posted (Tally id)"}, {reason: {id: "notseen", reason: "FinCom's copy of Tally did not show it", fix: "Look in Tally's Day Book."}, id: tid, posted: at});
       if (deleted) return mk(10, (idSay ? idSay + ". " : "") + (ctx.missing ? "The bill is no longer in FinCom, so there is nothing to restore. The entry stays in Tally." : "Restore the bill in FinCom to keep its record with the entry in Tally."),
         ctx.missing ? null : {kind: "restore", label: "Restore the bill"}, {id: tid, posted: at});
@@ -27269,7 +27662,21 @@ function postStatus(entry, job, ids, marks, ctx){
       const two = tid.ids.length > 1;
       const reason = two ? {id: "twice", reason: "Tally may have this entry twice (Tally ids " + tid.ids.join(" and ") + ")", fix: "Look in Tally's Day Book" + (bill ? " for " + (typeof fmtDate === "function" ? fmtDate(e.x.invoiceDate) : e.x.invoiceDate) : "") + ": keep one entry and delete the other in Tally, then mark this one posted with the Tally id you kept."} : why;
       const acc = (r && r.accepted === true) || (ids && ids.accepted_at);
-      return mk(6, (ctx.differs ? ctx.differs + " " : "") + reason.reason + (tid.ids.length === 1 ? " (Tally id " + tid.ids[0] + ")" : "") + ". " + (reason.fix || "Look in Tally's Day Book: if it is there, mark it posted; if not, release it and post again.") + (deleted ? " The bill is " + (ctx.missing ? "no longer in FinCom." : "deleted in FinCom.") : ""),
+      // decision B (migration 55): "Not in Tally - post again" asked: the FinCom Bridge looks in Tally first; until it has,
+      // the row says so in plain words (who asked, when, why, what the bridge said last); nothing is sent meanwhile
+      const ck = ctx.check && ctx.check.state === "waiting" ? ctx.check : null;
+      // final review: a check given up (10 tries or 24 hours) or withdrawn says so; the person looks in Tally and settles it
+      const ckDone = ctx.check && ctx.check.state === "given_up" ? (postReasonText(ctx.check.words) || "FinCom stopped looking in Tally for this entry by itself. Look in Tally: use Mark posted if it is there, or press Not in Tally \u2013 post again only after checking.") + " "
+        : ctx.check && ctx.check.state === "withdrawn" ? "The check was withdrawn by " + (ctx.me && ctx.check.withdrawn_by === ctx.me ? "you" : postWhoSay(ctx.check.withdrawn_by) || "a member") + (ctx.check.withdrawn_at ? " on " + postWhenSay(ctx.check.withdrawn_at) : "") + (ctx.check.withdrawn_why ? " (" + ctx.check.withdrawn_why + ")" : "") + "; nothing was released or sent. " : "";
+      // the owner's rule: the bridge did not see it on that day ("notseen"): nothing is sent; a person looks in Tally and
+      // confirms "not there" (the only way it is sent again), or marks it posted
+      const ns = ctx.check && ctx.check.state === "notseen" ? ctx.check : null;
+      if (ns) return mk(6, (postReasonText(ns.words) || "Tally has no such voucher on that day. FinCom cannot see other dates, so a person must confirm: look in Tally (Day Book, or search the narration TDSDesk:" + String(e.id) + "); if it is not there, press \u2018I looked in Tally: not there \u2013 post again\u2019 (reason required).")
+          + (ns.checked_at ? " (The FinCom Bridge looked on " + postWhenSay(ns.checked_at) + ".)" : ""),
+        {kind: "settle", label: "It is in Tally: mark posted (Tally id)"}, {reason, id: tid, posted: at, accepted: !!acc, checking: live, notSeen: ns});
+      if (ck) return mk(6, "Checking Tally before it is sent again: " + (postReasonText(ck.last_words) || "waiting for the FinCom Bridge to look in Tally") + ". Asked by " + (ctx.me && ck.asked_by === ctx.me ? "you" : postWhoSay(ck.asked_by) || "a member") + (ck.asked_at ? " on " + postWhenSay(ck.asked_at) : "") + (ck.why ? " (" + ck.why + ")" : "") + ". It is looked in again by itself; nothing is sent until the bridge finds it is not there.",
+        {kind: "settle", label: "It is in Tally: mark posted (Tally id)"}, {reason, id: tid, posted: at, accepted: !!acc, checking: live, check: ck});
+      return mk(6, ckDone + (ctx.differs ? ctx.differs + " " : "") + reason.reason + (tid.ids.length === 1 ? " (Tally id " + tid.ids[0] + ")" : "") + ". " + (reason.fix || "Look in Tally's Day Book: if it is there, mark it posted; if not, press Not in Tally – post again (the FinCom Bridge looks in Tally first).") + (deleted ? " The bill is " + (ctx.missing ? "no longer in FinCom." : "deleted in FinCom.") : ""),
         live && !acc ? null : {kind: "settle", label: "It is in Tally: mark posted (Tally id)"}, {reason, id: tid, posted: at, accepted: !!acc, checking: live});
     }
     if (live){
@@ -27337,6 +27744,30 @@ const PostMarks = {
     finally { delete this.busy[cid]; }
   },
   of(cid, jobId, id){ const s = this.by[cid]; return (s && s.m && s.m.get(jobId + "|" + id)) || []; }
+};
+// decision B (05-Oct-2026, migration 55): the checks "Not in Tally - post again" asked of the FinCom Bridge
+// (tally_post_checks), the newest per posting and entry: waiting (the bridge has not looked yet, or Tally could not be
+// asked: last_words), found, notfound; superseded (a Mark posted closed it), withdrawn (by the asker or an owner) and
+// given_up (10 tries or 24 hours, in words): the final review of 2.3.0. A cloud without 55: none
+const PostChecks = {
+  by: {}, readable: null, busy: {},
+  async load(cid, force){
+    if (!cid || typeof TCloud !== "object" || !TCloud.on() || this.readable === false || this.busy[cid]) return;
+    const key = typeof PostIds === "object" ? PostIds.jobsKey(cid) : "", s = this.by[cid];
+    if (!key || (!force && s && s.key === key && Date.now() - s.at < 20000)) return;
+    this.busy[cid] = true;
+    try {
+      const rows = await TCloud.restAll("tally_post_checks?select=*&job_id=in.(" + key + ")&order=id.asc");
+      const m = new Map();
+      [].concat(rows || []).forEach(x => { if (x && x.job_id) m.set(x.job_id + "|" + x.entry_id, x); });
+      const sig = JSON.stringify([...m.entries()]);
+      const changed = !s || s.sig !== sig;
+      this.by[cid] = {at: Date.now(), key, m, sig}; this.readable = true;
+      if (changed && typeof render === "function") render();
+    } catch (e){ this.readable = false; this.by[cid] = {at: Date.now(), key, m: new Map(), sig: ""}; }
+    finally { delete this.busy[cid]; }
+  },
+  of(cid, jobId, id){ const s = this.by[cid]; return (s && s.m && s.m.get(jobId + "|" + id)) || null; }
 };
 // the voucher a posting sent, for an entry FinCom has no record of (its bill deleted for good, or never kept): read from
 // the posting's payload once, on demand
@@ -27414,7 +27845,7 @@ function postEntryRows(cid){
     const ent = e || bl || {id};
     const held = typeof postIdReleased === "function" ? (postIdReleased(id, cid) === false ? true : postIdReleased(id, cid) === true ? false : null) : null;
     const missing = kind === "other" && !String(id).includes("-") && !(S.sales && (S.sales.list || []).some(v => String(v.id) === id));
-    const c0 = {id, me, held, missing, queue: waiting.findIndex(w => w.id === j.id) + 1 || 0};
+    const c0 = {id, me, held, missing, queue: waiting.findIndex(w => w.id === j.id) + 1 || 0, check: typeof PostChecks === "object" ? PostChecks.of(cid, j.id, id) : null};
     let st = postStatus(kind === "bank" ? Object.assign({}, bl, {x: undefined}) : ent, j, ids, marks, c0);
     // C6 "what differs": an entry that needs review is set beside what the posting sent (its payload, read on demand)
     if (st && st.code === 6 && kind === "bill"){
@@ -29146,6 +29577,15 @@ const AlertHub = {
         else if (beat.notAnsweringSince) out.push(Object.assign(base, {sev: "warn", text: "Tally is not answering on one computer since " + this.when(beat.notAnsweringSince) + ".", fix: "Close any open window or report in Tally on that computer (the details say which)."}));
         else if (quiet || rowsD.length) out.push(Object.assign(base, {sev: "info", text: "No change recorded today on one computer, though Tally was open there.", fix: "Nothing to do if nobody worked in Tally there today."}));
       });
+      // ---- the owner's condition (Fix 2c): a computer key refused a bridge id: one alert per (id, computer), owners only
+      if (S.account && S.account.me && S.account.me.role === "owner"){
+        const tp = TCloud.pane || {};
+        if (!tp.bridgeAlertsAt || Date.now() - tp.bridgeAlertsAt > 300000){ tp.bridgeAlertsAt = Date.now(); TCloud.loadBridgeAlerts().then(() => render()).catch(() => {}); }
+        (tp.bridgeAlerts || []).filter(x => !x.read_at).forEach(x => out.push({key: "bridgeid:" + x.id, sev: "bad", cid: "", selfClear: false, at: x.last_at || x.at,
+          text: [x.tried_computer, x.tried_user].filter(Boolean).join(" \u00b7 ") + " tried to use bridge " + x.bridge_id + ", which belongs to another computer; FinCom refused it.",
+          fix: "Ask that Windows user to install FinCom Bridge again (it makes an id of its own), or release this bridge's identity on the Tally page.",
+          details: x.words || "", act: {label: "Mark read", run: () => TCloud.bridgeAlertRead(x)}}));
+      }
       // ---- what cannot clear itself: the daily summary, until read
       unread.filter(x => x.kind === "summary").forEach(x => out.push({key: "alert:" + x.id, sev: "info", cid: x.client_id || "", text: x.words || "The day's summary.", fix: "", details: x.at ? "At " + fmtDateTime(x.at) : "", at: x.at, selfClear: false, alert: x}));
     }
@@ -29184,6 +29624,11 @@ function heldSheetRows(cid, led, to){ const w = heldWords(cid, led, to); return 
 function postThroughWords(co){
   const s = typeof tallySign === "function" ? tallySign(co) : null;
   if (!s || !s.on) return "";
+  // the owner's rule of 05-Oct-2026: the poster's own bridge, named with its Windows user (a shared computer has one a user)
+  try {
+    const r = typeof TCloud === "object" && TCloud.pane && TCloud.pane.devices && !TCloud.pane.noTarget && typeof TCloud.postThrough === "function" ? TCloud.postThrough(co) : null;
+    if (r) return "This will post through " + [r.computer, r.user].filter(Boolean).join(" \u00b7 ") + ".";
+  } catch (e){}
   if (s.local) return "This will post through this computer.";
   return "This will post through " + (s.through && s.through.length === 1 ? s.through[0] : s.computer) + ".";
 }
