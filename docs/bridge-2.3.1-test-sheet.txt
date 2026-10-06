@@ -1,0 +1,88 @@
+FINCOM BRIDGE 2.3.1 - TEST SHEET (NWS144, staging)
+
+File:        FinComBridge-Setup-2.3.1.exe
+Fingerprint: SHA-256 <SHA-256> (filled in when the setup is built; compare with the .sha256 file next to the setup)
+Link:        https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.3.1.exe
+
+What 2.3.1 changes (the full notes: docs/bridge-2.3.1-notes.md): one thing. A Sales, Purchase, Credit Note or Debit
+Note entered WITH stock items (item invoice mode) now enters the books complete. Tally keeps the sales or purchase
+ledger of such an invoice under its items; 2.3.0 did not ask Tally for it, so FinCom held these entries ("the entry's
+details from Tally are incomplete (its lines do not add up ...)"). 2.3.1 also asks Tally for the ledger lines under the
+items, so the entry arrives with every line: the party, the sales or purchase ledger, CGST and SGST (or IGST).
+Nothing else changed: one entry per request as before, read only, inside the 2-second rule.
+
+The app is not updated with this bridge. Keep the add-on loaded as it is
+(C:\ProgramData\FinCom\addon\FinComRecorder.tdl). 2.3.1 does not change the add-on.
+
+Before you start: you are signed in to FinCom as the owner, TallyPrime 7.1 is open with the add-on loaded, and
+GARG SHEKHAR is open in Tally. In every entry you make for this sheet, start the narration with TRIAL. Use stock items
+and ledgers that already exist in GARG SHEKHAR (any items; a sales ledger and a purchase ledger with GST; the CGST and
+SGST ledgers).
+
+Write down the time (IST) of each check you do; we need it if something fails.
+
+
+INSTALL (over 2.3.0, for your own Windows user)
+   New versions install by themselves on every computer. To install it at once: open the Link, double-click the setup;
+   if Windows warns: More info > Run anyway; "Just for me" (as before); Next.
+   You should see: "FinCom Bridge 2.3.1 is installed and running". Within a minute, FinCom's Tally page shows version
+   2.3.1 for your line ("NWS144 · <your Windows user>").
+   Every Windows user on NWS144 that runs a FinCom Bridge gets 2.3.1 the same way.
+
+
+CHECK 1 - A SALES INVOICE WITH TWO ITEMS AND GST
+   In Tally make a Sales entry in item invoice mode: a party, TWO stock items (for example 2 of one item and 3 of
+   another), the sales ledger with GST, and CGST and SGST on the invoice. Narration "TRIAL 231 sales". Save it. Note its
+   number, the invoice total, the taxable value and the CGST and SGST amounts Tally shows.
+   You should see: within a minute, Sync activity shows it as Created, and it is in the books (not held). Look up shows
+   every line: the party for the invoice total, the sales ledger for the taxable value (the two items together), CGST
+   and SGST for Tally's amounts. The lines add up to the total, as in Tally.
+   If not, send: its type and number, the time you saved it, a picture of the entry in Tally, what Sync activity shows
+   for it, and the Show log lines starting "Recorder:" that name it.
+
+CHECK 2 - A PURCHASE INVOICE WITH ITEMS
+   In Tally make a Purchase entry in item invoice mode: a supplier, one or two stock items, the purchase ledger with
+   GST, CGST and SGST (input). Narration "TRIAL 231 purchase". Save it. Note its number and Tally's figures.
+   You should see: within a minute, Sync activity shows it as Created, and it is in the books with every line: the
+   supplier for the total, the purchase ledger for the taxable value, CGST and SGST input for Tally's amounts.
+   If not, send: its type and number, the time, a picture of the entry in Tally, and the Show log lines starting
+   "Recorder:" that name it.
+
+CHECK 3 - A CREDIT NOTE WITH ITEMS
+   In Tally make a Credit Note in item invoice mode against the party of CHECK 1: one of the items returned, the sales
+   ledger, CGST and SGST. Narration "TRIAL 231 credit note". Save it. Note its number and Tally's figures.
+   You should see: within a minute, Sync activity shows it as Created, and it is in the books with every line: the
+   party, the sales ledger, CGST and SGST, matching Tally.
+   If not, send: its type and number, the time, a picture of the entry in Tally, and the Show log lines starting
+   "Recorder:" that name it.
+
+CHECK 4 - ALTER THE SALES INVOICE
+   Open the Sales entry of CHECK 1 in Tally, change the quantity of one item, and save.
+   You should see: within a minute, Sync activity shows it as Altered, and the books show Tally's new figures for every
+   line (party, sales ledger, CGST, SGST).
+   If not, send: its type and number, the time, and the Show log lines starting "Recorder:" that name it.
+
+CHECK 5 - ITEM INVOICES HELD UNDER 2.3.0 SETTLE BY THEMSELVES
+   Only if an item invoice was held under 2.3.0 with the words "the entry's details from Tally are incomplete (its
+   lines do not add up ...)". Wait up to 15 minutes after installing 2.3.1, with that company open in Tally.
+   You should see: the held entry is in the books with every line, and its held line shows as 'replaced'.
+   If not, send: its type, number and date, and the Show log lines starting "Recorder:" that name it.
+
+CHECK 6 - EVERYTHING ELSE AS IN 2.3.0
+   Make one Receipt of Rs 1, narration "TRIAL 231 receipt". Save it.
+   You should see: within a minute, Sync activity shows it as Created, and it is in the books, as with 2.3.0.
+   If not, send: its number, the time, and the Show log lines starting "Recorder:" that name it.
+
+How to send the log lines: right-click the FinCom icon near the clock > Show log. Each line starting "Recorder:" says
+what the bridge decided for one entry: asking Tally, taken, held (with the reason), or not asked (with the reason).
+On NWS144 each Windows user has their own FinCom icon and their own log: send the log of the Windows user named in the
+check.
+
+
+HOW TO ROLL BACK (go back to 2.3.0)
+   1. Right-click the FinCom icon near the clock > "Roll back to the previous version".
+   2. A question names the version it goes back to (2.3.0). Answer Yes.
+   3. The icon goes away for a few seconds and comes back.
+   You should see: within a minute, FinCom's Tally page shows version 2.3.0 for your line. The app does not change:
+   it trusts 2.3.0 as before. Item invoices are then held again as under 2.3.0 (uploading that day's Day Book settles
+   them). Automatic updates stay off on this computer until FinCom turns them on again.

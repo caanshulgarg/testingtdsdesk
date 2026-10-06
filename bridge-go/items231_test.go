@@ -327,6 +327,35 @@ func TestItems231LinesGoWithBalancedBodies(t *testing.T) {
 	}
 }
 
+// --- 3b. the item invoices the cloud held under 2.3.0 (the balance guard: "its lines do not add up") come back in the
+// beat's refetch list; 2.3.1 asks its own Tally again (by MasterID; the new entry by type and number) and sends each
+// "<line id>:resolved" with a body that balances
+func TestItems231HeldUnder230SettleByRefetch(t *testing.T) {
+	_, f, c := items231Bridge(t)
+	setCfg("RecorderResolveSec", float64(0))
+	row := func(id, mid string, v items231Vch) M {
+		return M{"line_id": id, "company": spikeCo, "company_guid": spikeCoGUID, "event": "created", "master_id": mid, "vch_type": v.typ, "vch_no": v.no, "vch_date": "20261002"}
+	}
+	rows := []any{row("S1", "11", items231Vchs[0]), row("P1", "12", items231Vchs[1]), row("C1", "", items231Vchs[2])}
+	applyRefetch(M{"refetch": rows})
+	b230Turns(6)
+	for i, id := range []string{"S1", "P1", "C1"} {
+		v := items231Vchs[i]
+		r := b230Resolved(c, id)
+		if r == nil || str(r["object_guid"]) != fmt.Sprintf("%s-%08x", spikeCoGUID, toI64(v.mid)) {
+			t.Fatalf("%s not settled: %v (%v)", id, r, f.ids())
+		}
+		if m, sum := items231Totals(str(r["xml"])); sum != 0 || !items231Same(m, v.lines) {
+			t.Fatalf("%s: the body sent: %v (sum %v)", id, m, sum)
+		}
+	}
+	for _, b := range append(f.bodiesOf(vchByMasterID), f.bodiesOf(vchByNumberID)...) {
+		if !strings.Contains(b, "<FETCH>"+liveFetchField+"</FETCH>") {
+			t.Fatalf("a request without the 2.3.1 fetch: %s", b)
+		}
+	}
+}
+
 // --- 4. the 2-second rule holds for the new request: a Tally slow to answer it is left at 2 s
 func TestItems231TwoSecondRule(t *testing.T) {
 	_, f, _ := items231Bridge(t)
