@@ -29,3 +29,18 @@ func TestTallyProgramPrefersTallyExe(t *testing.T) {
 		t.Fatalf("picked %+v, want tally.exe", p)
 	}
 }
+
+// review L2 (06-Oct-2026): the Tally process filter everywhere else (ports, sessions, the Windows helpers) takes the same
+// programs as tallyProgram: tally / TallyPrime, never tallyscheduler or another helper
+func TestReTallyExcludesHelpers(t *testing.T) {
+	for _, n := range []string{"tally", "Tally", "tally.exe", "TALLY.EXE", "TallyPrime", "tallyprime.exe"} {
+		if !reTally.MatchString(n) {
+			t.Fatalf("%q is not taken as Tally", n)
+		}
+	}
+	for _, n := range []string{"tallyscheduler", "tallyscheduler.exe", "TallyGateway", "tally32", "tallyprime-helper", "TallyPrimeEditLog"} {
+		if reTally.MatchString(n) {
+			t.Fatalf("%q is taken as Tally", n)
+		}
+	}
+}

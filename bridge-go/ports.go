@@ -93,7 +93,9 @@ func netState() (bool, []proc, []listener) {
 	return platNetState()
 }
 
-var reTally = regexp.MustCompile(`(?i)^tally`)
+// review L2 (06-Oct-2026): the Tally program alone (tally, TallyPrime; with or without .exe), never tallyscheduler or another
+// helper TallyPrime 7.1 runs from its install folder (as tallyProgram, recorder_probes.go)
+var reTally = regexp.MustCompile(`(?i)^tally(prime)?(\.exe)?$`)
 
 // TallyPrime programs that are listening, with the Windows session they run in; nil when Windows cannot tell
 func tallyListeners() []M {
