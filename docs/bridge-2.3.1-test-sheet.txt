@@ -9,7 +9,10 @@ Note entered WITH stock items (item invoice mode) now enters the books complete.
 ledger of such an invoice under its items; 2.3.0 did not ask Tally for it, so FinCom held these entries ("the entry's
 details from Tally are incomplete (its lines do not add up ...)"). 2.3.1 also asks Tally for the ledger lines under the
 items, so the entry arrives with every line: the party, the sales or purchase ledger, CGST and SGST (or IGST).
-Nothing else changed: one entry per request as before, read only, inside the 2-second rule.
+Nothing else changed: the same entries per request as before (by MasterID up to 50 entries of one day; by type and
+number one entry), read only, inside the 2-second rule. Two limits: a very large invoice (over about 1 MB of details,
+roughly 1,000 items or more) is held with plain words for a Day Book upload; the item lines carry no HSN or GST rate from
+this path (FinCom's reports read the Day Book upload, so they are unaffected).
 
 The app is not updated with this bridge. Keep the add-on loaded as it is
 (C:\ProgramData\FinCom\addon\FinComRecorder.tdl). 2.3.1 does not change the add-on.
@@ -65,7 +68,9 @@ CHECK 4 - ALTER THE SALES INVOICE
 CHECK 5 - ITEM INVOICES HELD UNDER 2.3.0 SETTLE BY THEMSELVES
    Only if an item invoice was held under 2.3.0 with the words "the entry's details from Tally are incomplete (its
    lines do not add up ...)". Wait up to 15 minutes after installing 2.3.1, with that company open in Tally.
-   You should see: the held entry is in the books with every line, and its held line shows as 'replaced'.
+   This includes an item invoice 2.3.0 had already asked Tally for again (held a second time with the same words): it
+   is asked once more and settles the same way (needs FinCom's cloud update of 2.3.1).
+   You should see: the held entry is in the books with every line, once, and its held lines show as 'replaced'.
    If not, send: its type, number and date, and the Show log lines starting "Recorder:" that name it.
 
 CHECK 6 - EVERYTHING ELSE AS IN 2.3.0

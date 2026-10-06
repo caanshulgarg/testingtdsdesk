@@ -380,7 +380,8 @@ async function heldLinesFor(dev: any, firm: string, bridge: string) {
 // 06-Oct-2026 (the owner, NWS144 lines 4, 17 and 18: "the bridge must ask again for held lines of its own user and settle
 // them"): refetch, at most 20 of this bridge's own held lines (the same computer key AND the same bridge id) whose entry's
 // body is missing (body null, {} or without vouchers) or whose GUID is none or a placeholder ("<company GUID>-00000000"),
-// with no "<line id>:resolved" line in FinCom's record yet; the same fields and rules as heldLines (7 days, created /
+// with no "<line id>:resolved" line in FinCom's record yet (2.3.1, review H1: or only one, itself held without a complete body:
+// listed once more, see heldOwnLines); the same fields and rules as heldLines (7 days, created /
 // altered / imported, the company still linked to the same book, the month not locked, oldest first). A bridge
 // built after 2.3.0 asks its own Tally for each again with the allow-listed reads (by MasterID, else by type and number), spaced and
 // within its 2-second stop, never during a posting, and sends "<line id>:resolved" with Tally's GUID, AlterID and body,
@@ -395,6 +396,13 @@ async function refetchFor(dev: any, firm: string, bridge: string) {
   }, "refetch", true);
   return out.length ? out : null;
 }
+// bridge 2.3.1 (review H1): a ":resolved" row held for want of a complete body: the guard's words (guard-230), or no body
+const GUARD_WORDS = "the entry's details from Tally are incomplete";
+function heldIncomplete(x: any): boolean {
+  if (String(x?.state || "") !== "held") return false;
+  const b = x?.body, noBody = !b || typeof b !== "object" || !Array.isArray(b.vouchers) || !b.vouchers.length;
+  return noBody || String(x?.held_why || "").startsWith(GUARD_WORDS);
+}
 async function heldOwnLines(dev: any, firm: string, bridge: string, max: number, want: (r: any) => boolean, what: string, unresolved = false) {
   try {
     if (!bridge) return [];
@@ -406,12 +414,27 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
     let rows = (data as any[]).filter((r) => r && String(r.device_id ?? dev.id) === String(dev.id) && String(r.bridge ?? "") === bridge && Date.parse(String(r.received_at)) > Date.now() - 7 * 86400000 && want(r))
       .sort((a, b) => Date.parse(String(a.received_at)) - Date.parse(String(b.received_at)));
     if (unresolved && rows.length) {
-      // a line whose ":resolved" line already reached FinCom (in any state) is not asked for again
+      // a line whose ":resolved" line already reached FinCom (in any state) is not asked for again. Bridge 2.3.1 (review H1):
+      // except when that ":resolved" line is the ONLY one and is itself held for want of a complete body (the cloud guard's
+      // words "the entry's details from Tally are incomplete ...", or no body at all): a 2.3.0 bridge's refetch of an item
+      // invoice, whose request did not fetch the items' ledger lines. Such a line is listed again, so that a 2.3.1 bridge asks
+      // Tally once more and sends "<line id>:resolved" again (the same id: a second row; no migration). Once two ":resolved"
+      // rows are here it is never listed again (asked once). When the second comes complete it is applied once and, by 50-53's
+      // rules, replaces the held line (by its line id) and the earlier held ":resolved" row (the same GUID at an AlterID not
+      // above its own); the earlier one never had a body, so it is never applied
       const rids = [...new Set(rows.map((r) => String(r.line_id || "") + ":resolved"))].slice(0, 400);
-      const { data: rs, error: re } = await db.from("tally_recorder_lines").select("line_id").eq("firm_id", firm).in("line_id", rids);
+      const { data: rs, error: re } = await db.from("tally_recorder_lines").select("line_id, state, held_why, body").eq("firm_id", firm).in("line_id", rids);
       if (re) return [];
-      const have = new Set(((rs || []) as any[]).map((x) => String(x?.line_id || "")));
-      rows = rows.filter((r) => !have.has(String(r.line_id || "") + ":resolved"));
+      const have = new Map<string, any[]>();
+      for (const x of (rs || []) as any[]) {
+        const k = String(x?.line_id || "");
+        if (!have.has(k)) have.set(k, []);
+        have.get(k)!.push(x);
+      }
+      rows = rows.filter((r) => {
+        const xs = have.get(String(r.line_id || "") + ":resolved") || [];
+        return !xs.length || (xs.length === 1 && heldIncomplete(xs[0]));
+      });
     }
     const books = [...new Set(rows.map((r) => String(r.book_id || "")).filter(Boolean))];
     const locked = new Set<string>();

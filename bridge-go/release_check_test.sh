@@ -17,7 +17,7 @@
 #   red 10   BridgeVersion 2.1.7 with an "allowed for 2.1.7 only" line WITHOUT the owner's decision words -> fails "owner's decision"
 #   red 11   an exception line naming two versions                    -> fails "names more than one version"
 #   green 5  BridgeVersion 2.3.1 with the real decision line of docs/tally-allowlist.md (the owner's decision of 2026-10-06:
-#            the items' ledger lines; "re-measured on 2026-10-06 on the stand"; the 2.3.0 line kept as history) -> passes
+#            the items' ledger lines; "re-measured on 2026-10-06 on the stand (not real Tally)"; the 2.3.0 line kept as history) -> passes
 #   red 14   the same line, but the last release row dated 2026-10-07 (after its "re-measured on") -> fails "before the last release"
 #   pin      every 'go test' line in release-check.sh carries -timeout 20m (Go's default 10 minutes cut a full run at 588 s
 #            on 05-Oct-2026)

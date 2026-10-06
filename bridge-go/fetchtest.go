@@ -15,9 +15,9 @@
 //
 // Every form goes under a measure-only id of its own (FinComFetchTestA..F, allowlist.go): the bridge's own two ids are
 // the narrow dated exceptions (a line waiting on them, within 3 days, a starting point recorded) and never go as a
-// person's; A and C are otherwise byte for byte what voucherByNumberRequest and voucherByMasterRequest build. 2.3.1: every
-// form carries the entry request's fetch as built (liveFetchField, with the ledger lines under an invoice's items), so the
-// forms are the ps1's with that fetch; the ps1 stays the record of what 2.2.2 sent.
+// person's; A and C are otherwise byte for byte what voucherByNumberRequest and voucherByMasterRequest build. 2.3.1: A and
+// C carry the entry request's fetch as built (liveFetchField, with the ledger lines under an invoice's items); B, D, E and
+// F stay byte for byte the ps1's (2.2.2 .. 2.3.0, liveFetchField222), so no other row changed (review M2).
 package main
 
 import (
@@ -83,7 +83,13 @@ func fetchTestRequest(letter, company, date, typ, no, mid string) string {
 		}
 		filter = "$MasterID = " + mid
 	}
-	x := fcCollection(id, company, statics, "Voucher", liveFetchField, filter)
+	// 2.3.1 (review M2): A and C are byte for byte the bridge's two requests, so they carry the entry fetch as built now
+	// (with the ledger lines under an invoice's items); B, D, E and F stay byte for byte as in 2.2.2 .. 2.3.0
+	fetch := liveFetchField222
+	if letter == "A" || letter == "C" {
+		fetch = liveFetchField
+	}
+	x := fcCollection(id, company, statics, "Voucher", fetch, filter)
 	if letter == "B" || letter == "F" {
 		e := esc(filter)
 		i := strings.LastIndex(x, e)

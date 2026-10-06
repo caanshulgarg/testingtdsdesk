@@ -40,13 +40,21 @@ The same for a purchase invoice with items (the supplier, the purchase ledger un
 for a Credit Note or Debit Note with items.
 
 What did not change:
-- **One entry per request, as before.** The request asks for the entry the add-on named (by its MasterID, or a new
-  entry by its type and number on its own date), nothing more.
+- **The same entries per request, as before.** FinComVoucherByMaster asks up to 50 entries of one day per request (the
+  entries the add-on named, by their MasterIDs), as before; FinComVoucherByNumber asks one entry (a new entry by its type
+  and number on its own date). Nothing more.
 - **Read only.** The request reads from Tally; it never writes.
 - **Inside the 2-second rule.** A Tally slow to answer is left at 2 seconds, as before.
 - **Nothing else added to the request.** Only the ledger lines under the items (ledger, amount, debit/credit). Not the
   items' quantities, rates, HSN or GST rates. The allow-list (`docs/tally-allowlist.md`) carries the owner's decision
-  line for 2.3.1 and the two changed requests' new shapes; no other request changed.
+  line for 2.3.1 and the two changed requests' new shapes, with the two trial forms that are byte for byte those
+  requests (FinComFetchTestA and C); the other trial forms (B, D, E, F) are as in 2.3.0; no other request changed.
+
+Two limits, in plain words:
+- **A very large invoice** (over about 1 MB of details from Tally, roughly 1,000 items or more) is not sent with its
+  body: it is held with plain words, and uploading that day's Day Book settles it.
+- **No HSN or GST rate on the item lines from this path.** The ledger lines under the items carry the ledger, amount and
+  debit/credit only. FinCom's reports read the Day Book upload for HSN and rates, so they are unaffected.
 
 ## Which entries enter the books by themselves in 2.3.1 (for your staff)
 
@@ -57,8 +65,11 @@ What did not change:
 - Cancels and deletes, matched by Tally's own GUID, when this computer's Tally shows them.
 
 **Item invoices held under 2.3.0 settle by themselves**: the bridge asks its own Tally again for its held lines (at most
-every 10 minutes, up to 20 tries over 7 days), now with the items' lines, and the entry enters complete. Uploading that
-day's Day Book also settles them.
+every 10 minutes, up to 20 tries over 7 days), now with the items' lines, and the entry enters complete. That includes an
+item invoice 2.3.0 had already asked Tally for again (its second answer, without the items' lines, held by FinCom's
+balance check): FinCom lists it once more, 2.3.1 asks once more and sends it, and it enters once (both held lines show
+as 'replaced'). This needs the FinCom cloud update (tally-ingest) that goes out with 2.3.1; no database change. Uploading
+that day's Day Book also settles them.
 
 **Still held, as before:**
 - Lines written by another Windows user's Tally (each bridge sends only its own user's lines).

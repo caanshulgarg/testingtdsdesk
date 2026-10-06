@@ -690,7 +690,7 @@ try:
     def mem_rows():
         FS.T["tally_recorder_lines"] = [dict(r, device_id=r["device_id"] or None, body=json.loads(r["body"]) if r["body"] else None, object_guid=r["object_guid"] or None) for r in db.rows(
             "select id, line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date::text as vch_date, book_id::text as book_id, firm_id::text as firm_id, "
-            "device_id::text as device_id, bridge, state, object_guid, body::text as body, to_char(received_at at time zone 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') as received_at from tally_recorder_lines order by id")]
+            "device_id::text as device_id, bridge, state, held_why, object_guid, body::text as body, to_char(received_at at time zone 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') as received_at from tally_recorder_lines order by id")]
     mem_rows()
     c, r = call({"kind": "beat", "version": "2.3.1", "bridge": dict(GA, version="2.3.1"), "tally": True, "open": []})
     rf = r.get("refetch") or []
@@ -723,6 +723,52 @@ try:
     c, r = call({"kind": "beat", "version": "2.3.1", "bridge": dict(GA, version="2.3.1"), "tally": True, "open": []})
     ids = [x.get("line_id") for x in (r.get("refetch") or [])]
     ok(c == 200 and "R18" not in ids and "R4" in ids, "refetch. once replaced, R18 is not asked for again (%s)" % ids)
+    # 2.3.1 review H1: an item invoice a 2.3.0 bridge already refetched: its "H1:resolved" came with 2.3.0's body (no items'
+    # ledger lines), the guard held it with its words. FinCom lists H1 again (once): the 2.3.1 bridge sends "H1:resolved" again
+    # (the same id, a second row) with the items' lines -> applied once, H1 and the earlier held H1:resolved 'replaced'
+    TDI = os.path.join(HERE, "..", "bridge-go", "testdata", "typed-like-7.1")
+    ti = open(os.path.join(TDI, "sales-invoice-items.xml")).read()
+    hv = ti[ti.index("<VOUCHER REMOTEID"):ti.index("</VOUCHER>", ti.index("<VOUCHER REMOTEID")) + 10].replace("-0000000b", "-0000001b").replace("> 11</MASTERID>", "> 27</MASTERID>").replace("<VOUCHERNUMBER>101<", "<VOUCHERNUMBER>1101<")
+    hg = re.search(r"<GUID>([^<]+)</GUID>", hv).group(1); hal = int(re.search(r"<ALTERID[^>]*>\s*(\d+)", hv).group(1))
+    hold = re.sub(r"\s*<ALLINVENTORYENTRIES\.LIST>[\s\S]*?</ALLINVENTORYENTRIES\.LIST>", "", hv)
+    hl_ = lambda lid, **kw: dict(base, line_id=lid, event="created", company_guid=hg.rsplit("-", 1)[0], object_guid=hg, master_id="27", alter_id=hal, vch_type="Sales", vch_no="1101", vch_date="20261002", **kw)
+    rows_of = lambda lid: db.rows("select id, state, coalesce(held_why, '') as why from tally_recorder_lines where book_id = %s and line_id = %s order by id" % (q(BI), q(lid)))
+    c, r = reci2([hl_("H1")])
+    ok(c == 200 and st(r) == {"H1": "held"}, "H1. an item invoice's line without its body: held (%s)" % st(r))
+    c, r = reci2([hl_("H1:resolved", xml=hold)])
+    ok(c == 200 and st(r) == {"H1:resolved": "held"} and "incomplete" in (rows_of("H1:resolved") or [{}])[0].get("why", "") and not vrow_b(BI, hg),
+       "H1. the 2.3.0 bridge's H1:resolved without the items' lines: held by the guard, nothing applied (%s)" % rows_of("H1:resolved"))
+    mem_rows()
+    c, r = call({"kind": "beat", "version": "2.3.1", "bridge": dict(GA, version="2.3.1"), "tally": True, "open": []})
+    ids = [x.get("line_id") for x in (r.get("refetch") or [])]
+    ok(c == 200 and "H1" in ids and "R18" not in ids, "H1. under 2.3.1 FinCom lists H1 again: its only :resolved line is held without a complete body (%s)" % ids)
+    n0 = nI()
+    c, r = reci2([hl_("H1:resolved", xml=hv)])
+    h1, h1r = rows_of("H1"), rows_of("H1:resolved")
+    ok(c == 200 and st(r) == {"H1:resolved": "applied"} and [x["state"] for x in h1] == ["replaced"] and [x["state"] for x in h1r] == ["replaced", "applied"]
+       and int(nI()) == int(n0) + 1 and vrow_b(BI, hg).get("alter_id") == str(hal),
+       "H1. the second H1:resolved with the items' lines: applied once, H1 and the earlier held H1:resolved replaced, the entry in the copy once (%s; %s; %s; %s -> %s)" % (st(r), h1, h1r, n0, nI()))
+    c, r = reci2([hl_("H1:resolved", xml=hv)])
+    ok(c == 200 and st(r) == {"H1:resolved": "duplicate"} and int(nI()) == int(n0) + 1, "H1. the same again: duplicate, the books updated once (%s)" % st(r))
+    mem_rows()
+    c, r = call({"kind": "beat", "version": "2.3.1", "bridge": dict(GA, version="2.3.1"), "tally": True, "open": []})
+    ids = [x.get("line_id") for x in (r.get("refetch") or [])]
+    ok(c == 200 and "H1" not in ids, "H1. settled: never listed again (%s)" % ids)
+    # once only, and never past a complete resolution: a held line with TWO held incomplete :resolved rows (asked again already),
+    # one whose :resolved was applied, one whose :resolved is held WITH a body (another reason): none listed
+    def fk(lid, state, why="", body=None, k=0):
+        return {"id": 95000 + k, "line_id": lid, "company": "ZZ IDS", "company_guid": CGI, "event": "created", "master_id": str(31000 + k), "vch_type": "Journal", "vch_no": "",
+                "vch_date": "2026-10-05", "book_id": BI, "firm_id": FIRM, "device_id": DA, "bridge": GA["id"], "state": state, "held_why": why, "object_guid": None, "body": body,
+                "received_at": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())}
+    W_ = "the entry's details from Tally are incomplete (its lines do not add up: an item invoice's sales or purchase ledger may not have come): upload this day's Day Book to settle it"
+    FS.T["tally_recorder_lines"] += [fk("H2", "held", k=1), fk("H2:resolved", "held", W_, k=2), fk("H2:resolved", "held", W_, k=3),
+                                     fk("H3", "held", k=4), fk("H3:resolved", "applied", "", {"vouchers": [{"guid": "x"}]}, k=5),
+                                     fk("H4", "held", k=6), fk("H4:resolved", "held", "the add-on named entry ...", {"vouchers": [{"guid": "x"}]}, k=7),
+                                     fk("H5", "held", k=8), fk("H5:resolved", "held", W_, k=9)]
+    c, r = call({"kind": "beat", "version": "2.3.1", "bridge": dict(GA, version="2.3.1"), "tally": True, "open": []})
+    ids = [x.get("line_id") for x in (r.get("refetch") or [])]
+    ok(c == 200 and not {"H2", "H3", "H4"} & set(ids) and "H5" in ids,
+       "H1. listed again once only (H2: two held :resolved rows, not listed), never past a complete resolution (H3 applied, H4 held with its body: not listed); H5 listed (%s)" % ids)
     FS.T.pop("tally_recorder_lines", None)
     # ---------------------------------------------------------------- guard-230 (review: an item invoice's body may come without
     # its sales / purchase line): the bridge's body read asks ALLLEDGERENTRIES only, and Tally may keep an item invoice's sales or
