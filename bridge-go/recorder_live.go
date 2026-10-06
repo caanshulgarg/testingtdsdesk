@@ -1958,8 +1958,8 @@ func liveRecorderLinesBody(company, guid string, group []*change) M {
 func liveUploadOnce() int {
 	liveUpMu.Lock()
 	defer liveUpMu.Unlock()
-	defer liveMidSave() // 2.3.0: the record of Tally's GUIDs, when Tally gave any this turn
-	liveResolveTurn()   // 2.2.1: lines sent held, resolved once Tally gives their entry
+	defer liveMidSaveSoon() // 2.3.0: the record of Tally's GUIDs, when Tally gave any (2.3.1: at most every 30 s)
+	liveResolveTurn()       // 2.2.1: lines sent held, resolved once Tally gives their entry
 	for i := 0; i < 8; i++ {
 		n, again := liveUploadStep()
 		if !again {

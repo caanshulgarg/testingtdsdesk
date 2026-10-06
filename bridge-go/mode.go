@@ -383,6 +383,7 @@ func runBridge(console bool) int {
 		sleepOrStop(100 * time.Millisecond)
 		bridgeTurn(safe)
 	}
+	liveMidSave() // 2.3.1 (2.3.0 review L2/L3): the record of Tally's GUIDs learnt since its last write
 	time.Sleep(300 * time.Millisecond)
 	return stopCode
 }
