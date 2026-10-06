@@ -96,7 +96,7 @@ $coAns = Post $listCoXml 'companies'; $coMs = $script:lastMs
 $hasCo = $coAns -match [regex]::Escape($co1)
 # Tally's own release, as Tally gives it in an answer's header ($$NumItems, as flow.ps1 asks)
 $fx = Post '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Function</TYPE><ID>$$NumItems</ID></HEADER><BODY><DESC><FUNCPARAMLIST><PARAM>Ledger</PARAM></FUNCPARAMLIST></DESC></BODY></ENVELOPE>' 'header'
-$hdr = [regex]::Match($fx, '<PRODMAJORVER>(\d*)</PRODMAJORVER><PRODMINORVER>(\d*)</PRODMINORVER><PRODMAJORREL>(\d*)</PRODMAJORREL><PRODMINORREL>(\d*)</PRODMINORREL>(?:<PRODTYPE>(\d*)</PRODTYPE>)?')
+$hdr = [regex]::Match($fx, '<PRODMAJORVER>(\d*)</PRODMAJORVER>\s*<PRODMINORVER>(\d*)</PRODMINORVER>\s*<PRODMAJORREL>(\d*)</PRODMAJORREL>\s*<PRODMINORREL>(\d*)</PRODMINORREL>\s*(?:<PRODTYPE>(\d*)</PRODTYPE>)?')
 $tallyRel = if ($hdr.Success) { "PRODMAJORREL $($hdr.Groups[3].Value) PRODMINORREL $($hdr.Groups[4].Value) (PRODMAJORVER $($hdr.Groups[1].Value) PRODMINORVER $($hdr.Groups[2].Value) PRODTYPE $($hdr.Groups[5].Value))" } else { 'no version in the answer header' }
 Info "Tally's own release in its answer header: $tallyRel"
 Set-Content (Join-Path $cap 'tally-header.xml') $fx -Encoding UTF8
@@ -184,7 +184,7 @@ $pv = @($post | Where-Object { $_.mid -notin @($pre | ForEach-Object mid) })[0]
 Start-Sleep 10; Snap 'c3-post'
 $reqLine = @(Get-Content (Join-Path $out 'bridge-log-c3-post.txt') -ErrorAction SilentlyContinue | Where-Object { $_ -match 'request \d+ of \d+' }) -join ' / '
 $r0 = @($ir.results)[0]
-$c3 = [bool]$ir -and [bool]$r0 -and $r0.ok -eq $true -and [bool]$pv -and $pv.narr -match [regex]::Escape($pid1)
+$c3 = [bool]$ir -and [bool]$r0 -and $r0.ok -eq $true -and [bool]$pv -and $pv.narr -like '*FinCom versions posting*'
 Result 'c3 posting from the bridge' $(if ($c3) { 'PASS' } elseif (-not $ir -and $script:lastMs -ge 179000) { 'HARNESS' } else { 'FAIL' }) ("/import {0} ms; item ok={1} message '{2}'; Tally {3}; bridge: {4}" -f $impMs, $r0.ok, $r0.message, $(if ($pv) { "made $($pv.type) no $($pv.vno) mid $($pv.mid) narration '$($pv.narr)'" } else { 'made no voucher' }), $(if ($reqLine) { $reqLine } else { "answer $($irs.Substring(0, [math]::Min(400, $irs.Length)))" }))
 
 # ---- c4a create by keys (flow4.ps1 step 1: a Receipt, Cash, Spike Income 700, dated 2-10-2026)

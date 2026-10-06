@@ -161,23 +161,31 @@ jobs:
         with:
           name: tally-${{ matrix.version }}-${{ github.run_id }}
           path: spike-results/versions/${{ github.run_id }}-${{ matrix.version }}/
+
+  # one commit for all five releases (five jobs pushing at once lost four of them in run 37417702347)
+  collect:
+    needs: [build, tally]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: tally-*-${{ github.run_id }}
+          path: got
       - name: Commit results back to tally-versions
-        if: always()
         run: |
-          Get-Process tally, FinComBridge -ErrorAction SilentlyContinue | Stop-Process -Force
-          if ($env:VMODE -eq 'full' -and (Test-Path "$env:RES\versions\captures")) {
-            $td = "bridge-go/testdata/real-tally-$env:TALLY_REL"; New-Item -ItemType Directory -Force $td | Out-Null
-            Copy-Item "$env:RES\versions\captures\*" $td -Force
-            Copy-Item "$env:RES\versions\results.txt" "$td/results.txt" -Force
-            "run ${{ github.run_id }}, TallyPrime $env:TALLY_REL, bridge ${{ needs.build.outputs.sha }}, $(Get-Date -Format s)" | Set-Content "$td/SOURCE.txt"
-          }
+          for d in got/tally-*-${{ github.run_id }}; do
+            v=$(basename "$d"); v=${v#tally-}; v=${v%-${{ github.run_id }}}
+            mkdir -p "spike-results/versions/${{ github.run_id }}-$v"; cp -r "$d"/. "spike-results/versions/${{ github.run_id }}-$v/"
+            if [ "${{ needs.build.outputs.mode }}" = full ] && [ -d "$d/versions/captures" ]; then
+              td="bridge-go/testdata/real-tally-$v"; mkdir -p "$td"; cp -r "$d/versions/captures"/. "$td/"
+              cp "$d/versions/results.txt" "$td/results.txt"
+              echo "run ${{ github.run_id }}, TallyPrime $v, bridge ${{ needs.build.outputs.sha }}, $(date -u +%FT%TZ)" > "$td/SOURCE.txt"
+            fi
+          done
           git config user.name "tally-versions"; git config user.email "tally-versions@users.noreply.github.com"
-          git add spike-results/versions
-          if (Test-Path bridge-go/testdata) { git add bridge-go/testdata }
-          git commit -q -m "tally versions [skip ci]: results ${{ github.run_id }} TallyPrime ${{ matrix.version }} $env:VMODE (bridge ${{ needs.build.outputs.sha }})`n`nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`nClaude-Session: https://claude.ai/code/session_01LprHoXx2ACgDW2AjxNH8wN"
-          git checkout -- .
-          for ($i = 0; $i -lt 8; $i++) {
-            git pull -q --rebase --autostash origin tally-versions
-            git push -q origin HEAD:refs/heads/tally-versions
-            if ($LASTEXITCODE -eq 0) { break }; Start-Sleep (5 + 5 * $i)
-          }
+          git add spike-results/versions; [ -d bridge-go/testdata ] && git add bridge-go/testdata
+          git commit -q -m "tally versions [skip ci]: results ${{ github.run_id }} ${{ needs.build.outputs.mode }} (bridge ${{ needs.build.outputs.sha }})" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+          Claude-Session: https://claude.ai/code/session_01LprHoXx2ACgDW2AjxNH8wN" || exit 0
+          for i in 1 2 3 4 5; do git pull -q --rebase origin tally-versions && git push -q origin HEAD:refs/heads/tally-versions && break; sleep 10; done
