@@ -223,8 +223,12 @@ function Slow232 {
   $m0 = Mark
   # 1. a small-company entry arrives with its details (baseline)
   $mid1 = (S2Import $co1 (S2Journal '20260401' 'S232-SMALL-1' 'Spike Party' 'slow232 small 1' 11) 'small 1').mid
-  $p1 = { "$($_.mid)" -eq $mid1 -and $_.company -eq $co1 -and $_.xml }.GetNewClosure()
-  $sm1 = WaitLine $m0 $p1 180
+  # (run 37602225971: a closure handed to WaitLine does not see the script's $co1: the entry came, the wait never matched)
+  $sm1 = @()
+  for ($sw = 0; $sw -lt 36 -and -not $sm1.Count; $sw++) {
+    Start-Sleep 5
+    $sm1 = @((StubLines $m0) | Where-Object { "$($_.mid)" -eq $mid1 -and $_.company -eq $co1 -and $_.xml })
+  }
   Result 'slow232 a small entry before' ($sm1.Count -ge 1) $(if ($sm1.Count) { Ev $sm1[0] } else { 'no line with a body in 180 s' })
   # 2. entries in the large company until the bridge marks it (an entry every 2 minutes, at most 6), a small entry between
   $t0 = Get-Date; $marked = $null; $n = 0
