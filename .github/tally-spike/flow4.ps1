@@ -307,7 +307,10 @@ StockNames 9000 $co1 | Out-Null
 . (Join-Path $PSScriptRoot 'scen231.ps1')
 # the busy-Tally measurements A and B (input only=pileup)
 . (Join-Path $PSScriptRoot 'pileup.ps1')
+# bridge 2.3.2 (issue 232, input only=slow232): a large company whose single-entry lookup takes Tally over 2 s
+. (Join-Path $PSScriptRoot 'slow232.ps1')
 try { S231Masters } catch { Write-Host "S231 masters: $_" }
+if ($env:ONLY -eq 'slow232') { try { Slow232Setup } catch { Write-Host "Slow232Setup: $_ $($_.ScriptStackTrace)"; Result 'slow232 setup' $false "the harness stopped: $_" $true } }
 
 # ---- user 2's own Tally (9001), run as fcuser2: a company made by keys, then started again with it and the add-on
 Say '---- user 2''s own Tally (9001), run as fcuser2: a company made by keys, then started again with it and the add-on'
@@ -349,7 +352,10 @@ Write-Host "== user 2's own Tally with its company and the add-on: $tally2"
 Say '---- the bridges, each installed by its own Windows user with the real setup, just for me; the settings seeded first'
 # (FinCom's address = the stub, a made-up computer key, the user's own Tally port), as the setup keeps them
 # in their own sessions each bridge finds its own Tally (TallyPorts auto, as installed); in one shared session the port is set
-function SeedJson($key, [int]$tport) { $tp = if ($rdp) { 'auto' } else { @($tport) }; (@{ CloudUrl = 'http://127.0.0.1:8787/'; CloudKey = "plain:$key"; TallyPorts = $tp } | ConvertTo-Json -Compress) }
+function SeedJson($key, [int]$tport) { $tp = if ($rdp) { 'auto' } else { @($tport) }; $o = @{ CloudUrl = 'http://127.0.0.1:8787/'; CloudKey = "plain:$key"; TallyPorts = $tp }
+  # slow232: bridge 1 talks to Tally 9000 through the timing proxy (slow232proxy.py on 127.0.0.2:9000)
+  if ($tport -eq 9000 -and $env:ONLY -eq 'slow232' -and $S2.ok) { $o.TallyHost = '127.0.0.2' }
+  ($o | ConvertTo-Json -Compress) }
 $h1 = Join-Path $env:LOCALAPPDATA 'TDS Desk Bridge'; New-Item -ItemType Directory -Force $h1 | Out-Null
 Set-Content "$h1\tds-bridge.config.json" (SeedJson 'spike-computer-key-user1' 9000) -Encoding UTF8
 $p = Start-Process -FilePath $setup -ArgumentList '/S', '/CURRENTUSER', '/MODE=sole' -PassThru; $null = $p.Handle
@@ -692,6 +698,7 @@ if ($script:harness) { Add-Content -Path $resultsFile -Encoding UTF8 -Value "HAR
 # ---- the owner's 2.3.1 scenarios S1..S10 (scen231.ps1); or a part of them (input only)
 if ($env:ONLY -eq 's5r1') { try { S231Only } catch { Write-Host "S231Only: $_ $($_.ScriptStackTrace)"; Result 'S5/R1' $false "the harness stopped: $_" $true } }
 elseif ($env:ONLY -eq 'pileup') { try { PileUp } catch { Write-Host "PileUp: $_ $($_.ScriptStackTrace)"; Result 'pile-up measurements' $false "the harness stopped: $_" $true } }
+elseif ($env:ONLY -eq 'slow232') { try { Slow232 } catch { Write-Host "Slow232: $_ $($_.ScriptStackTrace)"; Result 'slow232' $false "the harness stopped: $_" $true } }
 else { try { S231Run } catch { Write-Host "S231: $_ $($_.ScriptStackTrace)"; Result 'S231 scenarios' $false "the harness stopped: $_" $true } }
 
 # ---- what is kept: the bridges' logs, install logs, settings without their keys
@@ -707,6 +714,7 @@ Vouchers 9000 $co1 | Out-Null
 Get-Process tally -ErrorAction SilentlyContinue | Stop-Process -Force
 Get-Process FinComBridge -ErrorAction SilentlyContinue | Stop-Process -Force
 Stop-Process -Id $stub.Id -Force -ErrorAction SilentlyContinue
+if ($S2.proxy) { Stop-Process -Id $S2.proxy.Id -Force -ErrorAction SilentlyContinue }
 Write-Host '== results'; Get-Content $resultsFile | Write-Host
 Get-ChildItem "$fc\shots" -Filter *.png -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName (Join-Path $env:SHOTS "r4u2-$($_.Name)") }
 Write-Host '== round 4 end'

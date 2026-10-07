@@ -17,7 +17,7 @@ on:
         description: 'yes: run probe.ps1 (screens and exports of Tally for the scenario list) instead of round 4'
         default: 'no'
       only:
-        description: 'round 4 in part: s5r1 = S5 by the screens and R1 only (no checks 1-8); pileup = the busy-Tally measurements A and B only'
+        description: 'round 4 in part: s5r1 = S5 by the screens and R1 only (no checks 1-8); pileup = the busy-Tally measurements A and B only; slow232 = bridge 2.3.2: a large company over 2 s marked, no entry request after'
         default: ''
 permissions:
   contents: write
@@ -116,7 +116,7 @@ jobs:
       matrix:
         os: [windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 100
+    timeout-minutes: 160
     env:
       RES: ${{ github.workspace }}\spike-results\${{ github.run_id }}-${{ matrix.os }}
       SHOTS: ${{ github.workspace }}\spike-results\${{ github.run_id }}-${{ matrix.os }}
