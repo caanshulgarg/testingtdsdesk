@@ -17,7 +17,7 @@ on:
         description: 'yes: run probe.ps1 (screens and exports of Tally for the scenario list) instead of round 4; probe233: run probe233.ps1 (bridge 2.3.3 items b and c: the Windows user inside Tally, the master forms)'
         default: 'no'
       only:
-        description: 'round 4 in part: s5r1 = S5 by the screens and R1 only (no checks 1-8); pileup = the busy-Tally measurements A and B (B3: abandoned with the connection kept, next-inflight) only; slow232 = bridge 2.3.2: a large company over 2 s marked, no entry request after'
+        description: 'round 4 in part: s5r1 = S5 by the screens and R1 only (no checks 1-8); pileup = the busy-Tally measurements A and B (B3: abandoned with the connection kept, next-inflight) only; slow232 = bridge 2.3.2: a large company over 2 s marked, no entry request after; userfile = next-userfile: each Windows user''s own recorder file; masterhook = next-masterhook: the master forms'' hooks (userfile,masterhook: both, with a ref holding both)'
         default: ''
 permissions:
   contents: write

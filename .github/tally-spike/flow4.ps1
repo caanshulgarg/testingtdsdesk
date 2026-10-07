@@ -309,6 +309,9 @@ StockNames 9000 $co1 | Out-Null
 . (Join-Path $PSScriptRoot 'pileup.ps1')
 # bridge 2.3.2 (issue 232, input only=slow232): a large company whose single-entry lookup takes Tally over 2 s
 . (Join-Path $PSScriptRoot 'slow232.ps1')
+# next-userfile (input only=userfile): each Windows user's own recorder file; next-masterhook (only=masterhook): the master forms
+. (Join-Path $PSScriptRoot 'userfile233.ps1')
+. (Join-Path $PSScriptRoot 'masterhook233.ps1')
 try { S231Masters } catch { Write-Host "S231 masters: $_" }
 if ($env:ONLY -eq 'slow232') { try { Slow232Setup } catch { Write-Host "Slow232Setup: $_ $($_.ScriptStackTrace)"; Result 'slow232 setup' $false "the harness stopped: $_" $true } }
 
@@ -699,6 +702,11 @@ if ($script:harness) { Add-Content -Path $resultsFile -Encoding UTF8 -Value "HAR
 if ($env:ONLY -eq 's5r1') { try { S231Only } catch { Write-Host "S231Only: $_ $($_.ScriptStackTrace)"; Result 'S5/R1' $false "the harness stopped: $_" $true } }
 elseif ($env:ONLY -eq 'pileup') { try { PileUp } catch { Write-Host "PileUp: $_ $($_.ScriptStackTrace)"; Result 'pile-up measurements' $false "the harness stopped: $_" $true } }
 elseif ($env:ONLY -eq 'slow232') { try { Slow232 } catch { Write-Host "Slow232: $_ $($_.ScriptStackTrace)"; Result 'slow232' $false "the harness stopped: $_" $true } }
+elseif ($env:ONLY -match '^(userfile|masterhook)(,(userfile|masterhook))?$') {
+  # next-userfile / next-masterhook: one or both (only=userfile,masterhook with a ref holding both)
+  if ($env:ONLY -match 'userfile') { try { UF233 } catch { Write-Host "UF233: $_ $($_.ScriptStackTrace)"; Result 'userfile' $false "the harness stopped: $_" $true } }
+  if ($env:ONLY -match 'masterhook') { try { MH233 } catch { Write-Host "MH233: $_ $($_.ScriptStackTrace)"; Result 'masterhook' $false "the harness stopped: $_" $true } }
+}
 else { try { S231Run } catch { Write-Host "S231: $_ $($_.ScriptStackTrace)"; Result 'S231 scenarios' $false "the harness stopped: $_" $true } }
 
 # ---- what is kept: the bridges' logs, install logs, settings without their keys
