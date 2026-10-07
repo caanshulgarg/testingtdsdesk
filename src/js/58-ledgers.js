@@ -112,7 +112,8 @@ const Ledgers = {
       try {
         let took = false, cand = null;
         if (bk && bk.book){
-          if (!opts.force && s && s.src === "cloud" && s.book === bk.book && (s.cloudAt || "") === (bk.ledgersAt || "") && s.list.length) return {ok: true, n: s.list.length, same: true};
+          // next-realtime: fresh (FinCom's copy said its ledgers changed, CopyLive): read again though the cloud's ledger time is the same
+          if (!opts.force && !opts.fresh && s && s.src === "cloud" && s.book === bk.book && (s.cloudAt || "") === (bk.ledgersAt || "") && s.list.length) return {ok: true, n: s.list.length, same: true};
           cand = await this.readCloud(cid, bk);
           took = this.take(cid, cand);
         }

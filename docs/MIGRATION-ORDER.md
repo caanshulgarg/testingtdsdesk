@@ -17,8 +17,8 @@ revoked; `begin; ... commit;`; safe to run twice) and is shown to the owner befo
 
 ## The two valid orders (both end with the same function texts: `tests/run_migration_order.py` asserts it)
 
-- staging: 32 → 33 → 35 → 34 (first) → 36b → 37 → 36 → 38 → 39 (applied 03-Oct, **except 39's tally_ingest_day part**: both forms are still 38's) → 40 → 41 (run 03-Oct, evening; its 8-argument `tally_ingest_day` superseded 39's) → 42 → 43 (run 04-Oct) → 44 (run 04-Oct) → 45 (run 04-Oct) → **46** → **47** → **48** (run by the owner) → **49** → **50** (run by the owner) → 51 → 52 → 53 → 54 → 55 → 56 (live on staging) → 57 → 58 → 59 → 60
-- a fresh database: 32 → 33 → 35 → 34 (reviewed) → 36 → 36b → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 51 → 52 → 53 → 54 → 55 → 56 → 57 → 58 → 59 → 60
+- staging: 32 → 33 → 35 → 34 (first) → 36b → 37 → 36 → 38 → 39 (applied 03-Oct, **except 39's tally_ingest_day part**: both forms are still 38's) → 40 → 41 (run 03-Oct, evening; its 8-argument `tally_ingest_day` superseded 39's) → 42 → 43 (run 04-Oct) → 44 (run 04-Oct) → 45 (run 04-Oct) → **46** → **47** → **48** (run by the owner) → **49** → **50** (run by the owner) → 51 → 52 → 53 → 54 → 55 → 56 (live on staging) → 57 → 58 → 59 → 60 → 64 (next release, not run)
+- a fresh database: 32 → 33 → 35 → 34 (reviewed) → 36 → 36b → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 51 → 52 → 53 → 54 → 55 → 56 → 57 → 58 → 59 → 60 → 64
 
 | # | File | What it adds |
 |---|---|---|
@@ -253,3 +253,12 @@ add-on's placeholder GUID is held as a GUID-less one (R3-L1: twice it broke the 
 applied for its GUID is applied and cancelled again, below a delete 'stale' as before (R3-L2); a GUID-less delete with no
 date promises no Day Book (R3-L3). The owner's "nothing to remove" (08:05) is 57's (`tally_ingest_delete`), not repeated.
 Tested by `run_migration60.py` (on 56 -> 57 -> 58) and `run_migration_order.py` (56 -> 57 -> 58 -> 59 -> 60 in both orders).
+
+Next release (07-Oct-2026, branch next-realtime; NOT run anywhere): `migration-64-pages-live.sql` runs after 60 in both
+orders (... -> 59 -> 60 -> 64; independent of 61, 62 and 63 of other branches; add-only, one transaction, `lock_timeout`
+10 s, no "delete from", safe twice). Look up, the ledgers and Sync activity refresh by themselves: tally_book_changes (one
+row per book; RLS, the firm reads; never deleted), written once per transaction by statement triggers on the copy's five
+tables (tally_book_changed, never failing the write), and the supabase_realtime publication gets tally_book_changes,
+tally_sync_cursor, tally_month_locks and tally_tieouts. The copy's own tables are NOT published: tally_lines has no replica
+identity (its deletes would fail), Realtime sends DELETE events' keys to every firm, and a day read is thousands of rows.
+Tested on pg_stand only: tests/run_migration64.py, tests/run_migration_order.py; the pages: tests/run_pages_live.py.
