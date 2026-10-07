@@ -150,6 +150,9 @@ function Push233Setup {
 
 # one save on the screen: the template of that day, Alt+2 (a new entry) or Enter (the template altered), Ctrl+A timed to the
 # full line in the user's file
+# Esc rule: at most ONE Esc after a step (every next step starts with Alt+G, Go To, which works from any screen). From
+# the Day Book a second Esc puts up Tally's own Quit question and the "y" of the next "Day Book" answers it (runs 37659738263
+# and 37667984727: Tally 9000 quit after P5 and after P1).
 # Tally 9000's window (gone: it quit or crashed; run 37659738263: Esc keys on an empty screen reached the Gateway's Quit
 # question and the "y" of the next "Day Book" answered it)
 function P3Alive { $p = Get-Process -Id $script:tallyPids[9000] -ErrorAction SilentlyContinue; [bool]($p -and $p.MainWindowHandle -ne [IntPtr]::Zero) }
@@ -172,6 +175,7 @@ function P3Save($kind, [switch]$alter, $co = $co1, [switch]$noList) {
   if (-not (P3Alive)) { throw "Tally 9000 has no window (it quit or crashed) before the $kind save: the steps after this are not run" }
   $t = $P233.tpl[$kind]; $before = P3RecLines; $alt0 = P3Alt $co; $vs0 = if ($noList) { @() } else { Vouchers 9000 $co }
   DayBookAt $t.dmy "p233-$kind-daybook"
+  if (-not (P3Alive)) { throw "Tally 9000 has no window (it quit or crashed) while the Day Book for the $kind save opened: the steps after this are not run" }
   if ($alter) { KeysTo 9000 '{END}' 1; KeysTo 9000 '{ENTER}' 4 "p233-$kind-open" } else { KeysTo 9000 '{END}' 1; KeysTo 9000 '%2' 4 "p233-$kind-dup" }
   $p = Get-Process -Id $script:tallyPids[9000] -ErrorAction SilentlyContinue
   [W32F4]::ShowWindow($p.MainWindowHandle, 9) | Out-Null; [W32F4]::SetForegroundWindow($p.MainWindowHandle) | Out-Null; Start-Sleep -Milliseconds 500
@@ -182,7 +186,7 @@ function P3Save($kind, [switch]$alter, $co = $co1, [switch]$noList) {
     if (@($new | Where-Object { $_ -like 'FCR1|ev=voucher_full|*' -and $_ -like '*|end=1|t1=*' }).Count) { $full = $sw.Elapsed.TotalMilliseconds; break }
     Start-Sleep -Milliseconds 25
   }
-  Start-Sleep 2; Shot "p233-$kind-saved"; KeysTo 9000 '{ESC}' 1; KeysTo 9000 '{ESC}' 1
+  Start-Sleep 2; Shot "p233-$kind-saved"; KeysTo 9000 '{ESC}' 1
   $new = @(P3RecLines | Select-Object -Skip $before.Count); $alt1 = P3Alt $co
   # Tally's entry: the one with the MasterID the full line names (else, for a new one, the MasterID Tally has now and had not)
   $lm = [regex]::Match((@($new | Where-Object { $_ -like 'FCR1|ev=voucher_full|*' })[0]), '\|mid=(\d+)\|').Groups[1].Value
@@ -284,14 +288,14 @@ function Push233 {
     $b = P3RecLines; $a0 = P3Alt
     DayBookAt $case.day "p233-p7-$($case.n.Substring(0, 6))-daybook"; KeysTo 9000 '{END}' 1; KeysTo 9000 '{ENTER}' 3 "p233-p7-$($case.n.Substring(0, 6))-open"
     foreach ($k in $case.keys) { KeysTo 9000 $k 2 }
-    Shot "p233-p7-$($case.n.Substring(0, 6))-done"; KeysTo 9000 '{ESC}' 1; KeysTo 9000 '{ESC}' 1; KeysTo 9000 '{ESC}' 1
+    Shot "p233-p7-$($case.n.Substring(0, 6))-done"; KeysTo 9000 '{ESC}' 1
     Start-Sleep 3; $a1 = P3Alt; $n = @(P3RecLines | Select-Object -Skip $b.Count)
     Add-Content -Path $resultsFile -Encoding UTF8 -Value ("MEASURE push233 P7 {0}: the add-on wrote {1}; ALTVCHID {2} -> {3}; the line's irn/ewb fields: {4}" -f $case.n, (P3What $n), $a0.vch, $a1.vch, (($n | ForEach-Object { [regex]::Matches($_, '\|(irn|irnack|irnackdt|ewb)(:\d+)?=[^|]*') | ForEach-Object Value }) -join ' '))
   }
   $b = P3RecLines; $a0 = P3Alt
   KeysTo 9000 '%g' 2; KeysTo 9000 'Bank Reconciliation' 1; KeysTo 9000 '{ENTER}' 3 'p233-p7-brs-select'; KeysTo 9000 'P233 Bank{ENTER}' 4 'p233-p7-brs-open'
   KeysTo 9000 '{DOWN}' 1; KeysTo 9000 '{RIGHT}{RIGHT}{RIGHT}{RIGHT}' 1; KeysTo 9000 '2-11-2026{ENTER}' 2 'p233-p7-brs-date'; KeysTo 9000 '^a' 3 'p233-p7-brs-saved'
-  KeysTo 9000 '{ESC}' 1; KeysTo 9000 '{ESC}' 1; Start-Sleep 3
+  KeysTo 9000 '{ESC}' 1; Start-Sleep 3
   $a1 = P3Alt; $n = @(P3RecLines | Select-Object -Skip $b.Count)
   Add-Content -Path $resultsFile -Encoding UTF8 -Value ("MEASURE push233 P7 bankers date in Bank Reconciliation: the add-on wrote {0}; ALTVCHID {1} -> {2}; the bdt fields: {3}" -f (P3What $n), $a0.vch, $a1.vch, (($n | ForEach-Object { [regex]::Matches($_, 'bdt=[^~|]*') | ForEach-Object Value }) -join ' '))
   $vb = P3Coll 'P3Brs' 'Voucher' 'GUID, MASTERID, ALTERID, ALLLEDGERENTRIES.BANKALLOCATIONS.BANKERSDATE' '$VoucherNumber = "P233-R1"'
@@ -302,7 +306,7 @@ function Push233 {
     @{ n = 'a plain XML import'; f = { $null = P3Imp $co1 'Vouchers' @((S2Receipt '20261231' 'P233-X1' 'P233 Party' 10 'push233 plain import')) 'p8 import' } },
     @{ n = "an XML import tagged as FinCom's posting (TDSDesk:p233x2)"; f = { $null = P3Imp $co1 'Vouchers' @((S2Receipt '20261231' 'P233-X2' 'P233 Party' 20 'push233 posting | TDSDesk:p233x2')) 'p8 posting' } },
     @{ n = 'a ledger renamed on its form (it is on saved entries)'; f = { KeysTo 9000 '%g' 2; KeysTo 9000 'Alter Ledger' 1; KeysTo 9000 '{ENTER}' 3; KeysTo 9000 'P233 Party{ENTER}' 3 'p233-p8-ledger'; KeysTo 9000 '^a' 1; KeysTo 9000 '{HOME}' 1; KeysTo 9000 '+{END}' 1; KeysTo 9000 'P233 Party Renamed{ENTER}' 2; KeysTo 9000 '^a' 3 'p233-p8-renamed'; KeysTo 9000 '{ESC}' 1 } },
-    @{ n = 'multi-alter (Ctrl+H on the Day Book, where this release offers it)'; f = { DayBookAt $P233.tpl.sales50.dmy 'p233-p8-multi-daybook'; KeysTo 9000 '^h' 3 'p233-p8-ctrlh'; KeysTo 9000 '{ENTER}' 2; KeysTo 9000 '^a' 3 'p233-p8-multi-saved'; KeysTo 9000 '{ESC}' 1; KeysTo 9000 '{ESC}' 1 } })
+    @{ n = 'multi-alter (Ctrl+H on the Day Book, where this release offers it)'; f = { DayBookAt $P233.tpl.sales50.dmy 'p233-p8-multi-daybook'; KeysTo 9000 '^h' 3 'p233-p8-ctrlh'; KeysTo 9000 '{ENTER}' 2; KeysTo 9000 '^a' 3 'p233-p8-multi-saved'; KeysTo 9000 '{ESC}' 1 } })
   foreach ($c in $cases) {
     $b = P3RecLines; $a0 = P3Alt; & $c.f; Start-Sleep 4; $a1 = P3Alt; $n = @(P3RecLines | Select-Object -Skip $b.Count)
     Add-Content -Path $resultsFile -Encoding UTF8 -Value ("MEASURE push233 P8 {0}: the add-on wrote {1}; ALTVCHID {2} -> {3}; ALTMSTID {4} -> {5}" -f $c.n, (P3What $n), $a0.vch, $a1.vch, $a0.mst, $a1.mst)
@@ -317,7 +321,7 @@ function Push233 {
   Add-Content -Path $resultsFile -Encoding UTF8 -Value ("MEASURE push233 P9 a new receipt: the line's number '{0}', Tally's export '{1}' ({2})" -f $vno, $r.v.vno, $(if ($vno -eq $r.v.vno) { 'the same' } else { 'DIFFERENT' }))
   $b = P3RecLines; $a0 = P3Alt
   DayBookAt '1-11-2026' 'p233-p9-insert-daybook'; KeysTo 9000 '%i' 3 'p233-p9-insert'; KeysTo 9000 '{F6}' 3 'p233-p9-receipt'
-  KeysTo 9000 'P233 Party{ENTER}' 2; KeysTo 9000 '5{ENTER}' 2; KeysTo 9000 'P233 Bank{ENTER}' 2; KeysTo 9000 '{ENTER}' 2; KeysTo 9000 '^a' 4 'p233-p9-inserted'; KeysTo 9000 '{ESC}' 1; KeysTo 9000 '{ESC}' 1
+  KeysTo 9000 'P233 Party{ENTER}' 2; KeysTo 9000 '5{ENTER}' 2; KeysTo 9000 'P233 Bank{ENTER}' 2; KeysTo 9000 '{ENTER}' 2; KeysTo 9000 '^a' 4 'p233-p9-inserted'; KeysTo 9000 '{ESC}' 1
   Start-Sleep 3; $a1 = P3Alt; $n = @(P3RecLines | Select-Object -Skip $b.Count); $after = Vouchers 9000 $co1
   $lineNo = @{}; foreach ($l in (P3RecLines | Where-Object { $_ -like 'FCR1|ev=voucher_full|*' })) { $lineNo[[regex]::Match($l, '\|mid=(\d+)\|').Groups[1].Value] = [regex]::Match($l, '\|vno=([^|]*)').Groups[1].Value }
   $ren = @($after | Where-Object { $o = $_; $p = @($before | Where-Object mid -eq $o.mid)[0]; $p -and $p.vno -ne $o.vno })
