@@ -20,8 +20,12 @@ held with the words; (2) 16 old lines asked once, 34 never (the company was mark
 (3) 25 requests, none sent while another was at Tally; (4) the large company marked, no request for it after; (5) the
 small company's entries with their bodies; (6) 10 held lines of the small company answered in 1.5 s each (the proxy's
 delay, Tally itself not busy) and a save made while they were asked: in FinCom with its body after 2.8 s; (7) 8 saves
-together at 1.8 s each: every one in FinCom within 10 s, all 8 with their bodies. Check (8), a burst of 8 changed ledgers
-and a voucher at 1.8 s each, is in the run on this exact setup (below). Earlier builds of 2.3.3 (setups 3189a834... and
+together at 1.8 s each: every one in FinCom within 10 s, all 8 with their bodies. On this exact setup (committed, SHA-256 8280206b...),
+run 37637731177 passed all nine checks (1)-(8): (1) the new save in FinCom after 2.0 s; (2) 16 old lines asked once, none
+twice, all 50 ended; (3) 25 requests, no overlap; (4) marked, no request after; (5) the small entries with their bodies;
+(6) the save during the held lines' asks after 2.5 s; (7) the 8 saves each within 10 s, all with bodies; (8) a burst of 8
+changed ledgers and a voucher at 1.8 s each: every line in FinCom 4.8 s after the save (one ledger read with its body;
+the others went without it at the 4 s mark, for the ledger changes to bring). Earlier builds of 2.3.3 (setups 3189a834... and
 71607195..., never published) passed (1)-(5) and (1)-(7) on their committed setups (runs 37620851800, 37629645115); the
 independent review and its re-review found M1, M2 (vouchers, then ledger lines) and L1, each fixed test-first before
 this build.
