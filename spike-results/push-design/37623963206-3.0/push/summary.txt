@@ -1,0 +1,34 @@
+[12:55:29.949] push-design on TallyPrime 3.0: reps 5, heavy 3000 ledgers / 3000 items / up to 30000 vouchers (40 min), postings 1
+[12:55:30.497] system clock step after timeBeginPeriod(1): 0.284 ms (min 0.002, max 3.0248)
+[12:55:30.514] two files written 2 ms apart: NTFS write times 10.3096 ms apart
+[12:55:30.526] light company folder: D:\a\_temp\TallyData\100000
+[12:55:30.558] why22 on TallyPrime 3.0: reps 5; the bridge's request template 2927 chars, 61 fields
+[12:55:33.592] tally.ini: Data D:\a\_temp\why22\grow; Load 100000
+[12:55:59.129] Tally started (b-setup) in 25.5 s; companies open: FinCom Spike Co; wanted all of: FinCom Spike Co -> True
+[12:55:59.259] import light masters 0: 60 sent, created 59, errors 0, 109.3 ms
+[12:56:00.339] import base masters 0: 600 sent, created 600, errors 0, 1023.4 ms
+[12:56:09.279] import FinCom Spike Co vouchers 0-999: 1000 sent, created 1000, errors 0, 8842.2 ms
+[12:56:18.397] import FinCom Spike Co vouchers 1000-1999: 1000 sent, created 1000, errors 0, 9081.7 ms
+[12:56:27.585] import FinCom Spike Co vouchers 2000-2999: 1000 sent, created 1000, errors 0, 9140 ms
+[12:56:36.897] import FinCom Spike Co vouchers 3000-3999: 1000 sent, created 1000, errors 0, 9265.4 ms
+[12:56:36.927] import target A4000: 1 sent, created 1, errors 0, 27 ms
+[12:56:37.165] target A4000 (FinCom Spike Co): MasterID 4002, date 20261001, number 1601 (October vouchers in Tally: 2; the import's LASTVCHID 4002)
+[12:56:40.171] tally.ini: Data D:\a\_temp\why22\grow; Load 100000
+[12:57:06.108] Tally started (b-drift-1) in 25.9 s; companies open: FinCom Spike Co; wanted all of: FinCom Spike Co -> True
+[12:57:06.642] sizes drift 4000 (FinCom Spike Co): vouchers 4002 (MasterID 1-4002), ledgers 311 (30-565), items 350 (216-865), groups 28 (1-28), voucher types 24 (32-88); folder 36.5 MB; Tally 424 MB
+[12:57:33.449] DRIFT 4000 session 1 bymaster x40: 276, 290, 301, 316, 332, 335, 341, 372, 357, 364, 366, 375, 369, 364, 368, 374, 376, 363, 375, 368, 435, 376, 379, 370, 390, 367, 369, 373, 376, 373, 375, 369, 372, 368, 371, 367, 371, 369, 380, 377 ms
+[12:57:36.589] DRIFT 4000 session 1 (after the 40) objid x10: 23, 10, 9, 8, 10, 10, 9, 10, 10, 8 ms
+[12:57:39.597] tally.ini: Data D:\a\_temp\why22\grow; Load 100000
+[12:58:05.529] Tally started (b-drift-2) in 25.9 s; companies open: FinCom Spike Co; wanted all of: FinCom Spike Co -> True
+[12:58:08.558] DRIFT 4000 session 2 (Tally restarted) bymaster x5: 239, 329, 281, 315, 312 ms
+[12:58:15.222] tally.ini: Data D:\a\_temp\why22\s4k; Load 100000
+[12:58:41.145] Tally started (b-local) in 25.9 s; companies open: FinCom Spike Co; wanted all of: FinCom Spike Co -> True
+[12:58:48.692] MEASURE F3/4000-local (FinCom Spike Co, 4000 vouchers, 600 masters, target 4002): bymaster median 311.9 worst 341 ms; objid median 10.6 worst 10.8 ms; daybook median 13 worst 13.3 ms
+[12:58:51.697] tally.ini: Data \\localhost\why22; Load 100000
+[12:59:17.632] Tally started (b-smb) in 25.9 s; companies open: FinCom Spike Co; wanted all of: FinCom Spike Co -> True
+[12:59:25.605] MEASURE F3/4000-smb-unc (FinCom Spike Co, 4000 vouchers, 600 masters, target 4002): bymaster median 381.9 worst 385.7 ms; objid median 16.6 worst 19 ms; daybook median 22.8 worst 25.1 ms
+[12:59:28.611] tally.ini: Data \\localhost\why22; Load 100000
+[12:59:54.585] Tally started (b-smb-held) in 26 s; companies open: FinCom Spike Co; wanted all of: FinCom Spike Co -> True
+[12:59:56.604] holder: held 16
+[13:59:59.807] MEASURE F3/4000-smb-unc-second-opener (FinCom Spike Co, 4000 vouchers, 600 masters, target 4002): bymaster median 300002.5 worst 300003.3 ms; objid median 300002.9 worst 300004 ms; daybook median 296583.1 worst 300003 ms
+[14:00:05.892] done (why22b)

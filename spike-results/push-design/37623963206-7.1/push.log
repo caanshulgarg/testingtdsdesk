@@ -1,0 +1,63 @@
+[12:55:39.895] push-design on TallyPrime 7.1: reps 5, heavy 3000 ledgers / 3000 items / up to 30000 vouchers (40 min), postings 1
+[12:55:40.857] system clock step after timeBeginPeriod(1): 0.434 ms (min 0.0037, max 4.7263)
+[12:55:40.877] two files written 2 ms apart: NTFS write times 10.0044 ms apart
+[12:55:40.898] light company folder: D:\a\_temp\TallyData\100000
+[12:55:40.952] why22 on TallyPrime 7.1: reps 5; the bridge's request template 2927 chars, 61 fields
+[12:55:44.008] tally.ini: Data D:\a\_temp\why22\grow; Load 100000
+[keys] 'a'
+[keys] 't'
+[shot] p-w-b-setup-started (1024x768)
+[12:56:13.721] Tally started (b-setup) in 29.7 s; companies open: FinCom Spike Co; wanted all of: FinCom Spike Co -> True
+[12:56:14.059] import light masters 0: 60 sent, created 59, errors 0, 299.9 ms
+[12:56:16.981] import base masters 0: 600 sent, created 600, errors 0, 2817.3 ms
+[12:56:35.185] import FinCom Spike Co vouchers 0-999: 1000 sent, created 1000, errors 0, 17992.1 ms
+[12:56:54.797] import FinCom Spike Co vouchers 1000-1999: 1000 sent, created 1000, errors 0, 19521.1 ms
+[12:57:14.362] import FinCom Spike Co vouchers 2000-2999: 1000 sent, created 1000, errors 0, 19471.5 ms
+[12:57:34.446] import FinCom Spike Co vouchers 3000-3999: 1000 sent, created 1000, errors 0, 19992.5 ms
+[12:57:34.535] import target A4000: 1 sent, created 1, errors 0, 84.7 ms
+[12:57:35.059] target A4000 (FinCom Spike Co): MasterID 4002, date 20261001, number 1601 (October vouchers in Tally: 2; the import's LASTVCHID 4002)
+[12:57:38.068] tally.ini: Data D:\a\_temp\why22\grow; Load 100000
+[keys] 'a'
+[keys] 't'
+[shot] p-w-b-drift-1-started (1024x768)
+[12:58:07.563] Tally started (b-drift-1) in 29.5 s; companies open: FinCom Spike Co; wanted all of: FinCom Spike Co -> True
+[12:58:08.844] sizes drift 4000 (FinCom Spike Co): vouchers 4002 (MasterID 1-4002), ledgers 311 (30-567), items 350 (218-867), groups 28 (1-28), voucher types 24 (32-88); folder 51.8 MB; Tally 511 MB
+[12:58:46.532] DRIFT 4000 session 1 bymaster x40: 555, 512, 528, 563, 572, 572, 698, 695, 626, 614, 637, 632, 630, 647, 651, 658, 656, 655, 642, 676, 662, 635, 633, 634, 636, 661, 643, 628, 649, 623, 633, 638, 659, 648, 644, 655, 664, 649, 638, 649 ms
+[12:58:49.841] DRIFT 4000 session 1 (after the 40) objid x10: 47, 20, 18, 23, 19, 19, 21, 20, 20, 19 ms
+[12:58:52.848] tally.ini: Data D:\a\_temp\why22\grow; Load 100000
+[keys] 'a'
+[keys] 't'
+[shot] p-w-b-drift-2-started (1024x768)
+[12:59:22.360] Tally started (b-drift-2) in 29.5 s; companies open: FinCom Spike Co; wanted all of: FinCom Spike Co -> True
+[12:59:26.421] DRIFT 4000 session 2 (Tally restarted) bymaster x5: 477, 463, 478, 553, 532 ms
+[12:59:33.622] tally.ini: Data D:\a\_temp\why22\s4k; Load 100000
+[keys] 'a'
+[keys] 't'
+[shot] p-w-b-local-started (1024x768)
+[13:00:03.602] Tally started (b-local) in 30 s; companies open: FinCom Spike Co; wanted all of: FinCom Spike Co -> True
+[13:00:12.618] MEASURE F3/4000-local (FinCom Spike Co, 4000 vouchers, 600 masters, target 4002): bymaster median 558.5 worst 615.2 ms; objid median 18.7 worst 27.4 ms; daybook median 22.8 worst 24.5 ms
+[13:00:15.625] tally.ini: Data \\localhost\why22; Load 100000
+[keys] 'a'
+[keys] 't'
+[shot] p-w-b-smb-started (1024x768)
+[13:00:45.112] Tally started (b-smb) in 29.5 s; companies open: FinCom Spike Co; wanted all of: FinCom Spike Co -> True
+[13:00:55.108] MEASURE F3/4000-smb-unc (FinCom Spike Co, 4000 vouchers, 600 masters, target 4002): bymaster median 654.7 worst 706.9 ms; objid median 36.1 worst 45.3 ms; daybook median 54 worst 58 ms
+[13:00:58.116] tally.ini: Data \\localhost\why22; Load 100000
+[keys] 'a'
+[keys] 't'
+[shot] p-w-b-smb-held-started (1024x768)
+[13:01:27.636] Tally started (b-smb-held) in 29.5 s; companies open: FinCom Spike Co; wanted all of: FinCom Spike Co -> True
+[13:01:29.666] holder: held 27
+[] failed after 300014.5 ms: The request was canceled due to the configured HttpClient.Timeout of 300 seconds elapsing.
+[] failed after 300004.6 ms: The request was canceled due to the configured HttpClient.Timeout of 300 seconds elapsing.
+[] failed after 300004.4 ms: The request was canceled due to the configured HttpClient.Timeout of 300 seconds elapsing.
+[] failed after 300005.4 ms: The request was canceled due to the configured HttpClient.Timeout of 300 seconds elapsing.
+[] failed after 300003.8 ms: The request was canceled due to the configured HttpClient.Timeout of 300 seconds elapsing.
+[] failed after 300003 ms: The request was canceled due to the configured HttpClient.Timeout of 300 seconds elapsing.
+[] failed after 300004.4 ms: The request was canceled due to the configured HttpClient.Timeout of 300 seconds elapsing.
+[] failed after 300003.3 ms: The request was canceled due to the configured HttpClient.Timeout of 300 seconds elapsing.
+[] failed after 300003.5 ms: The request was canceled due to the configured HttpClient.Timeout of 300 seconds elapsing.
+[] failed after 300004 ms: The request was canceled due to the configured HttpClient.Timeout of 300 seconds elapsing.
+[] failed after 300004.5 ms: The request was canceled due to the configured HttpClient.Timeout of 300 seconds elapsing.
+[14:01:34.780] MEASURE F3/4000-smb-unc-second-opener (FinCom Spike Co, 4000 vouchers, 600 masters, target 4002): bymaster median 300004 worst 300005.4 ms; objid median 300003.3 worst 300004.5 ms; daybook median 297913.2 worst 300003.5 ms
+[14:01:40.887] done (why22b)
