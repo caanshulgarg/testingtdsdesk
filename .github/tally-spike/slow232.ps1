@@ -86,8 +86,10 @@ function S2Ini($tdlFile, [string[]]$loads) {
 # runs 37562246809 and 37566575498: the company list (ListCo) answered no company while Tally showed one open; a company's
 # own ledgers are asked instead (a company just made has Cash and Profit & Loss)
 function S2Has([string]$name) {
-  $r = Post 9000 ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCS2L</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + (S2Esc $name) + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCS2L" ISMODIFY="No"><TYPE>Ledger</TYPE><FETCH>Name</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') ''
-  $ok = ("$r" -match '<LEDGER\b') -and ("$r" -notmatch 'Could not find')
+  # an export names the open company whatever company it asks for (run 37579363245); an import says "Could not set
+  # 'SVCurrentCompany'" for a company not open: a one-ledger import (made once, then "exists") tells
+  $r = S2Imp $name 'All Masters' @(S2Led 'Spike Probe' 'Sundry Debtors') "is '$name' open"
+  $ok = $r.raw -match '<ENVELOPE|<RESPONSE' -and $r.raw -notmatch 'Could not set' -and $r.raw -notmatch '^failed'
   Write-Host "[slow232] company '$name' open in Tally 9000: $ok"
   return $ok
 }
@@ -99,15 +101,21 @@ function Slow232Setup {
   Write-Host "[slow232] company folders before: $($before -join ', ')"
   # 1. Tally without a company and without the add-on (its import lines would be 30,000 recorder lines): made by keys
   $null = S2StartTally (S2Ini $null $null)
-  # run 37562246809: Tally 7.1 opened the last company again although tally.ini says Default Companies = No; then the
-  # Gateway is up and {ENTER} is its masters' Create. With a company open: the Company menu (Alt+K), Create
-  # (run 37566575498: the small company is open again by the time the keys go, whatever the check said): always the Company menu
-  KeysTo 9000 '%k' 3 's232-01a-company-menu'; KeysTo 9000 'c' 5 's232-01-create-company'
+  # Tally comes up either at the Gateway with the small company open (runs 37562246809, 37566575498) or at Select Company
+  # with none (run 37579363245). F3 (Company) opens the company list from the Gateway and does nothing on the list itself;
+  # there "Create Company" is typed into the list's search and taken. Made or not is told by a new company folder on disk
+  # (Tally's own answers named the small company for any name, and its company list answered none, in those runs)
+  $newFolder = { @(Get-ChildItem $data1 -Directory | Where-Object { $_.Name -match '^\d+$' -and $_.Name -notin $before }) }
+  KeysTo 9000 '{F3}' 4 's232-01a-company-list'
+  KeysTo 9000 'Create Company' 2 's232-01b-typed'; KeysTo 9000 '{ENTER}' 5 's232-01-create-company'
   KeysTo 9000 $S2.co 2 's232-02-name'; KeysTo 9000 '^a' 8 's232-03-ctrl-a'
-  $have = S2Has $S2.co
-  foreach ($k in @('y', '^a', '{ENTER}', 'y', '{ESC}', 'y')) { if ($have) { break }; KeysTo 9000 $k 6 ''; $have = S2Has $S2.co }
+  $have = (& $newFolder).Count -gt 0
+  foreach ($k in @('y', '^a', '{ENTER}', 'y', '{ESC}', 'y')) { if ($have) { break }; KeysTo 9000 $k 6 ''; $have = (& $newFolder).Count -gt 0 }
   KeysTo 9000 '^a' 5 's232-04-company'
-  if (-not $have) { Result 'slow232 setup: the large company made by keys' $false "Tally lists no '$($S2.co)'" $true; return }
+  $have = (& $newFolder).Count -gt 0
+  Write-Host "[slow232] a new company folder: $((& $newFolder | ForEach-Object Name) -join ', ')"
+  if (-not $have) { Result 'slow232 setup: the large company made by keys' $false "no new company folder in $data1" $true; return }
+  if (-not (S2Has $S2.co)) { Result 'slow232 setup: the large company open in Tally 9000' $false 'the import into it said it is not open' $true; return }
   # 2. its masters and entries by XML (the push-design large company)
   $t0 = Get-Date
   $m = S2Masters
