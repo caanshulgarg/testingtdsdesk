@@ -9,25 +9,24 @@
 #                 heads-only with the bridge stopped / running, full entry with no read-back, full entry with the
 #                 read-back with the bridge stopped / running; the save timed from outside by the company's AltVchID
 #                 (p.csv); then the TDS entry typed on the light company with the full-entry add-on (captures\tds-*)
+# the S5 screen route (tally-real-spike tdslib.ps1 and ocr.ps1: keys with an OCR check of each screen)
+. "$here\..\tdslib.ps1"
+$script:TdsSend = { param([string]$k) KeysTo $k 0 }
+$script:TdsPost = { param([string]$x) Post $x '' 60 }
+$script:TdsCo = $co
+$script:tdsTdls = @()
+$script:TdsRestart = { Start-T $light $script:tdsTdls 'tds-restart' | Out-Null }
 $v3f = Join-Path $out 'f.csv'; $v3p = Join-Path $out 'p.csv'
 function SK([string]$s) { ($s.ToCharArray() | ForEach-Object { if ('+^%~(){}[]'.Contains($_)) { '{' + $_ + '}' } else { "$_" } }) -join '' }
-$script:tdsN = [ordered]@{ nature = 'PD Contract Work'; party = 'PD TDS Contractor'; exp = 'PD Contract Exp'; tds = 'PD TDS Payable' }
+$script:tdsNames = [ordered]@{ nature = 'PD Contract Work'; party = 'PD TDS Contractor'; exp = 'PD Contract Exp'; tds = 'PD TDS Payable' }
 
 function V3TdsMasters {
-  $N = $script:tdsN
+  $N = $script:tdsNames
   $c = '<COMPANY NAME="' + $co + '" ACTION="Alter"><NAME>' + $co + '</NAME><ISTDSON>Yes</ISTDSON><TANUMBER>DELF01234E</TANUMBER><TANREGNO>DELF01234E</TANREGNO><TDSDEDUCTORTYPE>Company</TDSDEDUCTORTYPE></COMPANY>'
   Imp 'All Masters' @($c) 'tds: company TDS on, TAN' | Out-Null
-  $nat = '<TAXCLASSIFICATION NAME="' + $N.nature + '" ACTION="Create"><NAME.LIST><NAME>' + $N.nature + '</NAME></NAME.LIST><TAXTYPE>TDS</TAXTYPE><SECTIONNUMBER>194C</SECTIONNUMBER><PAYMENTCODE>94C</PAYMENTCODE><TDSRATEDETAILS.LIST><APPLICABLEFROM>20260401</APPLICABLEFROM><DEDUCTEETYPE>Company - Resident</DEDUCTEETYPE><TDSRATE>2</TDSRATE><SURCHARGERATE>0</SURCHARGERATE><EDUCESSRATE>0</EDUCESSRATE></TDSRATEDETAILS.LIST></TAXCLASSIFICATION>'
-  Imp 'All Masters' @($nat) 'tds: nature of payment (TAXCLASSIFICATION)' | Out-Null
+  # the nature of payment on its own form (S5: Tally keeps it as a TDS Rate; the XML Tax Classification makes none)
+  $natOk = $false; try { $natOk = TdsNatureScreen $N.nature '194C' '94C' '1' '2' } catch { Say "tds: nature form: $_" }
   $tr = Post (Coll 'FCPTdsRate' 'TDSRate' 'NAME' '' '<NATIVEMETHOD>*</NATIVEMETHOD>') '' 60
-  if ($tr -notmatch [regex]::Escape($N.nature)) {
-    # the nature on its form (tdslib.ps1 TdsNatureScreen, keys without the OCR): Create > TDS Nature of Payments
-    Say 'tds: the import made no TDS Rate: the nature typed on its form'
-    KeysTo '{ESC}' 1; KeysTo 'c' 3 'tds-nat-0'; KeysTo 'TDS Nature of Payments' 2; KeysTo '{ENTER}' 3 'tds-nat-1'
-    foreach ($k in ((SK $N.nature) + '{ENTER}'), '194C{ENTER}', '94C{ENTER}', '{ENTER}', '1{ENTER}', '2{ENTER}', '{ENTER}', '{ENTER}') { KeysTo $k 1.5 }
-    Shot 'tds-nat-2'; KeysTo '^a' 3 'tds-nat-3'; KeysTo '{ESC}' 2; KeysTo '{ESC}' 2
-    $tr = Post (Coll 'FCPTdsRate' 'TDSRate' 'NAME' '' '<NATIVEMETHOD>*</NATIVEMETHOD>') '' 60
-  }
   Set-Content (Join-Path $cap 'tds-nature-tdsrate.xml') $tr -Encoding UTF8
   Say "tds: nature '$($N.nature)' as a TDS Rate in Tally: $($tr -match [regex]::Escape($N.nature))"
   $led = @(
@@ -62,8 +61,6 @@ function FetchForms($t) {
   $o['obj-masterid'] = ObjReq 'MasterID' "$($t.mid)"
   $o['obj-name-id:mid'] = ObjReq 'Name' "ID:$($t.mid)"
   $o['obj-guid-type'] = ObjReq 'GUID' $t.guid
-  if ($t.party) { $o['ledger-vouchers-childof-party'] = CollReq 'FCPLedVch' 'Vouchers : Ledger' $t.date "`$MasterID = $($t.mid)" $t.party }
-  $o['vtype-vouchers-childof-type'] = CollReq 'FCPTypVch' 'Vouchers : VoucherType' $t.date "`$MasterID = $($t.mid)" $t.type
   $o['daybook-export-data'] = DayBookReq $t.date
   return $o
 }
@@ -83,7 +80,7 @@ function FetchProbe($body, $file) {
   $j = Start-ThreadJob -ScriptBlock {
     param($b, $f)
     $t0 = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds(); $sw = [Diagnostics.Stopwatch]::StartNew()
-    try { $c = (Invoke-WebRequest 'http://127.0.0.1:9000' -Method Post -Body ([Text.Encoding]::UTF8.GetBytes($b)) -ContentType 'text/xml;charset=utf-8' -UseBasicParsing -TimeoutSec 300).Content } catch { $c = "FAILED $($_.Exception.Message)" }
+    try { $c = (Invoke-WebRequest 'http://127.0.0.1:9000' -Method Post -Body ([Text.Encoding]::UTF8.GetBytes($b)) -ContentType 'text/xml;charset=utf-8' -UseBasicParsing -TimeoutSec 30).Content } catch { $c = "FAILED $($_.Exception.Message)" }
     $ms = $sw.Elapsed.TotalMilliseconds; [IO.File]::WriteAllText($f, $c); return @($t0, $ms)
   } -ArgumentList $body, $file
   Start-Sleep -Milliseconds 120
@@ -97,7 +94,9 @@ function FetchStage($tag, $targets) {
   Focus | Out-Null; Shot "$tag-fetch-gateway"
   $idle = @(1..5 | ForEach-Object { $x = [PdUi]::KeyLatency($script:probeKey, $false, 5000); $script:probeKey = if ($script:probeKey -eq 0x28) { 0x26 } else { 0x28 }; Start-Sleep -Milliseconds 300; [math]::Round($x, 1) })
   Say "fetch ${tag}: the probe key on an idle Tally: $($idle -join ', ') ms"
+  $script:fetchTimeouts = 0
   foreach ($t in $targets) {
+    if (-not $t.mid -or -not $t.guid) { Say "fetch ${tag}: target $($t.name) not found in Tally: skipped"; continue }
     $forms = FetchForms $t
     foreach ($m in $forms.Keys) {
       for ($i = 1; $i -le 5; $i++) {
@@ -105,11 +104,13 @@ function FetchStage($tag, $targets) {
         $file = Join-Path $cap "fetch-$tag-$($t.name)-$m.xml"
         $p = FetchProbe $forms[$m] $file
         $x = [IO.File]::ReadAllText($file); $fl = Flags $x $t.mid
+        if ($x -like 'FAILED*') { $script:fetchTimeouts++ } else { $script:fetchTimeouts = 0 }
         $row = [pscustomobject]@{ rel = $rel; company = $tag; target = $t.name; mid = $t.mid; form = $m; rep = $i; ms = $p.ms; probe_ms = $p.probe_ms; probe_during = $p.overlap
           bytes = $fl.bytes; vouchers = $fl.vouchers; has_entry = $fl.has_entry; ledger_lines = $fl.ledger_lines; items = $fl.items; taxobj_filled = $fl.taxobj_filled; err = $fl.err }
         $row | Export-Csv $v3f -Append -NoTypeInformation -Encoding UTF8
         if ($i -eq 1) { Say ("fetch {0} {1} {2}: {3} ms, probe {4} ms (during {5}); {6} B, {7} vouchers, entry {8}, ledger lines {9}, items {10}, TDS allocations {11} {12}" -f $tag, $t.name, $m, $p.ms, $p.probe_ms, $p.overlap, $fl.bytes, $fl.vouchers, $fl.has_entry, $fl.ledger_lines, $fl.items, $fl.taxobj_filled, $fl.err) }
         Start-Sleep -Milliseconds 300
+        if ($script:fetchTimeouts -ge 2) { Say "fetch ${tag}: two requests in a row got no answer in 30 s: the fetch stage stopped"; return }
       }
     }
   }
@@ -140,16 +141,6 @@ function V3Pre {
   GuidRule 'heavy after import'
   Post (Coll 'FCPCoNat' 'Company' 'NAME' '' '<NATIVEMETHOD>*</NATIVEMETHOD>') '' 60 | Set-Content (Join-Path $cap 'company-natives-heavy.xml') -Encoding UTF8
   $ax = Post (AltReq); Say "company ALTVCHID / ALTMSTID by XML: $([regex]::Match($ax, '<ALTVCHID[^>]*>[^<]*').Value) / $([regex]::Match($ax, '<ALTMSTID[^>]*>[^<]*').Value)"
-  # a sync: a voucher imported carrying another company's GUID (and REMOTEID)
-  $fg = '7a1e0c55-1111-4222-8333-944455556666-0000abcd'
-  $sx = '<VOUCHER REMOTEID="' + $fg + '" VCHTYPE="Journal" ACTION="Create"><GUID>' + $fg + '</GUID><DATE>20261101</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><VOUCHERNUMBER>SYNC-1</VOUCHERNUMBER><NARRATION>a voucher from another company (sync)</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>Spike Income</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-10.00</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>HDFC Bank</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>10.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>'
-  Imp 'Vouchers' @($sx) 'sync-like voucher with a foreign GUID' | Out-Null
-  $sv = Post (Coll 'FCPSync' 'Voucher' 'GUID, MASTERID, ALTERID, REMOTEID' '$VoucherNumber = "SYNC-1"') '' 300
-  Set-Content (Join-Path $cap 'sync-voucher.xml') $sv -Encoding UTF8
-  $sg = [regex]::Match($sv, '<GUID[^>]*>([^<]*)<').Groups[1].Value; $sm = [regex]::Match($sv, '<MASTERID[^>]*>\s*(\d+)').Groups[1].Value
-  Say "sync-like import: Tally's GUID '$sg', MasterID $sm; rule gives '$cguid-$(if ($sm) { ([int64]$sm).ToString('x8') })'"
-  $targets = @((Target 'sales50-template' '$VoucherNumber = "TS50-1"'), (Target 'heavy-sales-15000' '$VoucherNumber = "HS-015000"'))
-  FetchStage 'heavy' $targets
   Stop-T
 }
 
@@ -200,16 +191,33 @@ function SaveSet($cfg, $large) {
   }
   OctVouchers | ConvertTo-Json -Depth 3 | Set-Content (Join-Path $cap "tally-ids-heavy-$cfg.json") -Encoding UTF8
 }
+function V3Fetch {
+  BridgeStop
+  if (-not (Start-T $heavy @() 'v3-heavy-fetch')) { Say 'HARNESS: heavy did not open for the fetch stage'; return }
+  $ov = @(OctVouchers); $s50 = @($ov | Where-Object { $_.vno -eq 'TS50-1' })[0]
+  $t1 = [pscustomobject]@{ name = 'sales50-template'; guid = "$($s50.guid)"; mid = "$($s50.mid)"; aid = "$($s50.aid)"; date = "$($s50.date)"; type = "$($s50.type)"; vno = 'TS50-1'; party = '' }
+  Say "fetch target sales50-template: mid $($t1.mid) guid $($t1.guid) date $($t1.date)"
+  $t2 = Target 'heavy-receipt-15002' '$VoucherNumber = "HR-015002"'
+  FetchStage 'heavy' @($t1, $t2)
+  Stop-T
+}
+function V3Sync {
+  if (-not (Start-T $heavy @() 'v3-heavy-sync')) { return }
+  $fg = '7a1e0c55-1111-4222-8333-944455556666-0000abcd'
+  $sx = '<VOUCHER REMOTEID="' + $fg + '" VCHTYPE="Journal" ACTION="Create"><GUID>' + $fg + '</GUID><DATE>20261101</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><VOUCHERNUMBER>SYNC-1</VOUCHERNUMBER><NARRATION>a voucher from another company (sync)</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>Spike Income</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-10.00</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>HDFC Bank</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>10.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>'
+  Imp 'Vouchers' @($sx) 'sync-like voucher with a foreign GUID' | Out-Null
+  $sv = @(OctVouchers | Where-Object { $_.vno -eq 'SYNC-1' })[0]
+  Say "sync-like import: Tally's GUID '$($sv.guid)', MasterID $($sv.mid); the rule gives '$cguid-$(if ($sv.mid) { ([int64]$sv.mid).ToString('x8') })'"
+  GuidRule 'heavy at the end (imported, new by Alt+2, altered, the sync-like one)'
+  Stop-T
+}
 function V3Main {
   $tdlNR = "$fc\FCPFullNR.tdl"; Copy-Item "$here\FCPFullNR.tdl" $tdlNR -Force
   $plan = @(
-    @{ cfg = 'none'; tdls = @(); bridge = $false; large = $true; poll = $true },
-    @{ cfg = 'stamp'; tdls = @($tdlStamp); bridge = $false; large = $false; poll = $true },
-    @{ cfg = 'heads-nobridge'; tdls = @($tdlHeads); bridge = $false; large = $true; poll = $false },
-    @{ cfg = 'heads-bridge'; tdls = @($tdlHeads); bridge = $true; large = $false; poll = $false },
-    @{ cfg = 'fullnr-nobridge'; tdls = @($tdlNR); bridge = $false; large = $true; poll = $true },
-    @{ cfg = 'full-nobridge'; tdls = @($tdlFull); bridge = $false; large = $false; poll = $false },
-    @{ cfg = 'full-bridge'; tdls = @($tdlFull); bridge = $true; large = $false; poll = $false })
+    @{ cfg = 'fullnr-nobridge'; tdls = @($tdlNR); bridge = $false; large = $false; poll = $true },
+    @{ cfg = 'none'; tdls = @(); bridge = $false; large = $false; poll = $true },
+    @{ cfg = 'heads-nobridge'; tdls = @($tdlHeads); bridge = $false; large = $false; poll = $false },
+    @{ cfg = 'heads-bridge'; tdls = @($tdlHeads); bridge = $true; large = $false; poll = $false })
   if ($heavyOk) {
     foreach ($p in $plan) {
       Remove-Item "$pd\full-*.txt", "$pd\stamp-*.txt", "$rec\*" -Force -ErrorAction SilentlyContinue; $script:fullSeen = @{}; $script:recSeen = @{}
@@ -217,36 +225,59 @@ function V3Main {
       if (-not (Start-T $heavy $p.tdls "heavy-$($p.cfg)")) { Say "HARNESS: heavy / $($p.cfg) did not open"; continue }
       if ($p.bridge) { BridgeStart; Start-Sleep 5; BodyFetchOn }
       SaveSet $p.cfg $p.large
-      if ($p.poll) { PollSaves $p.cfg $reps }
+      if ($p.poll) { PollSaves $p.cfg $reps; OctVouchers | ConvertTo-Json -Depth 3 | Set-Content (Join-Path $cap "tally-ids-heavy-$($p.cfg)-afterpoll.json") -Encoding UTF8 }
+      if ($p.cfg -eq 'fullnr-nobridge' -and $typeOk['payroll200'].created -ge 1) { SaveBlock $p.cfg 'heavy' 'payroll200' (DMY $TypeDates['payroll200']) 3 'dup' | Out-Null }
       BridgeLog "heavy-$($p.cfg)"
       Get-ChildItem $pd -Filter 'full-*.txt' -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName (Join-Path $cap "fullfile-heavy-$($p.cfg)-$($_.Name)") }
       Get-ChildItem $rec -File -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName (Join-Path $cap "recfile-heavy-$($p.cfg)-$($_.Name)") }
     }
     BridgeStop
     if (Start-T $heavy @() 'heavy-guid-after') { GuidRule 'heavy after the saves (new by Alt+2, altered, imported)'; OctVouchers | ConvertTo-Json -Depth 3 | Set-Content (Join-Path $cap 'tally-ids-heavy-final.json') -Encoding UTF8 }
+    try { V3Fetch } catch { Say "HARNESS: fetch stage stopped: $_" }
   }
   try { V3Tds } catch { Say "HARNESS: TDS stage stopped: $_" }
+  if ($heavyOk) { try { V3Sync } catch { Say "HARNESS: sync stage stopped: $_" } }
 }
 
 # the TDS entry typed on the light company's screen with the full-entry add-on (as S5 of tally-real-spike, scen231.ps1
 # S231TdsScreen, keys without the OCR): Gateway > Vouchers, F7 Journal, F2 date; Dr the expense 100000, To the TDS ledger
 # 2000, To the party 98000; narration; accepted
 function V3Tds {
-  $N = $script:tdsN
+  $N = $script:tdsNames
   Remove-Item "$pd\full-*.txt", "$pd\stamp-*.txt" -Force -ErrorAction SilentlyContinue; $script:fullSeen = @{}
-  if (-not (Start-T $light @($tdlFull) 'tds-full')) { Say 'HARNESS: TDS: light did not open'; return }
+  $script:tdsTdls = @("$fc\FCPFullNR.tdl")
+  if (-not (Start-T $light $script:tdsTdls 'tds-fullnr')) { Say 'HARNESS: TDS: light did not open'; return }
   $day = '2-11-2026'; $date = '20261102'
   $pre = @(OctVouchers | ForEach-Object mid)
-  KeysTo 'v' 3 'tds-01-vouchers'; KeysTo '{F7}' 3 'tds-02-journal'; KeysTo '{F2}' 2; KeysTo "$day{ENTER}" 2 'tds-03-date'
-  KeysTo ((SK $N.exp) + '{ENTER}') 2 'tds-04-exp'; KeysTo '100000{ENTER}' 2 'tds-05-amt'
-  KeysTo 't{ENTER}' 2; KeysTo ((SK $N.tds) + '{ENTER}') 3 'tds-06-tdsled'
-  KeysTo '2000{ENTER}' 2 'tds-07-tdsamt'
-  KeysTo 't{ENTER}' 2; KeysTo ((SK $N.party) + '{ENTER}') 3 'tds-08-party'; KeysTo '{ENTER}' 2 'tds-09-partyamt'
-  KeysTo '{ENTER}' 2 'tds-10-rows-done'; KeysTo ((SK 'PD TDS 194C typed on the screen') + '{ENTER}') 3 'tds-11-narr'
-  KeysTo 'y' 4 'tds-12-accept'
+  # S5's keys (scen231.ps1 S231TdsScreen), each screen read by OCR
+  $null = TdsGateway 'before the TDS entry'
+  $null = TK 'v' 2.5 's5-vouchers' 'Voucher'
+  $null = TK '{F7}' 2.5 's5-journal' 'Journal'
+  $null = TK '{F2}' 1.5 's5-date-box' 'Date'
+  $null = TK "$day{ENTER}" 2 's5-date-set'
+  $null = TK ((SK $N.exp) + '{ENTER}') 2 's5-r1-ledger'
+  $null = TK '100000{ENTER}' 2 's5-r1-amount'
+  $null = TK 't{ENTER}' 1.5 's5-r2-to'
+  $null = TK ((SK $N.tds) + '{ENTER}') 2.5 's5-r2-ledger'
+  for ($j = 1; $j -le 5; $j++) { $t = TdsScreen "s5-r2-sub$j"; if ($t -match 'Details for|Bill-wise|Assessable|Nature of Pay|Nature ef Pay|Deductee|Party Details|Tax Details') { & $script:TdsSend '{ENTER}'; Start-Sleep 2 } else { break } }
+  $t = TdsScreen 's5-r2-amount-shown'; $byTally = $t -match '2,000|2000'
+  if (-not $byTally -and $t -match '\d ?%') { $null = TK '{ENTER}' 2 's5-r2-pct'; $t = TdsScreen 's5-r2-amount-shown2'; $byTally = $t -match '2,000|2000' }
+  if ($byTally) { $null = TK '{ENTER}' 2 's5-r2-amount-tally' } else { $null = TK '2000{ENTER}' 2 's5-r2-amount-typed' }
+  for ($j = 1; $j -le 4; $j++) { $t = TdsScreen "s5-r2-after$j"; if ($t -match 'Details for|Bill-wise|Assessable|Nature of Pay|Nature ef Pay|Party Details|Tax Details') { & $script:TdsSend '{ENTER}'; Start-Sleep 2 } else { break } }
+  $null = TK 't{ENTER}' 1.5 's5-r3-to'
+  $null = TK ((SK $N.party) + '{ENTER}') 2.5 's5-r3-ledger'
+  $t = TdsScreen 's5-r3-amount-shown'
+  if ($t -match '98,000|98000') { $null = TK '{ENTER}' 2 's5-r3-amount' } else { $null = TK '98000{ENTER}' 2 's5-r3-amount-typed' }
+  for ($j = 1; $j -le 4; $j++) { $t = TdsScreen "s5-r3-after$j"; if ($t -match 'Details for|Bill-wise|Assessable|Party Details|Tax Details') { & $script:TdsSend '{ENTER}'; Start-Sleep 2 } else { break } }
+  $t = TdsScreen 's5-before-narration'
+  if ($t -notmatch 'Narration') { $null = TK '{ENTER}' 2 's5-rows-done' }
+  $null = TK ((SK 'PD TDS 194C typed on the screen') + '{ENTER}') 2 's5-narration'
+  $t = TdsScreen 's5-accept-q'
+  if ($t -match 'Accept|Yes or No') { $null = TK 'y' 3 's5-accepted' } else { $null = TK '^a' 3 's5-ctrl-a'; $t = TdsScreen 's5-accept-q2'; if ($t -match 'Accept|Yes or No') { $null = TK 'y' 3 's5-accepted2' } }
+  Say "TDS: TDS row amount $(if ($byTally) { 'put there by Tally' } else { 'typed (2000)' }); OCR $(if ($script:ocrOk) { 'read the screens' } else { 'UNAVAILABLE' })"
+  Set-Content (Join-Path $out 'tds-screen-log.txt') $script:tdsLog -Encoding UTF8
   $sw = [Diagnostics.Stopwatch]::StartNew(); while (-not (Test-Path "$pd\stamp-e.txt") -and $sw.Elapsed.TotalSeconds -lt 20) { Start-Sleep -Milliseconds 250 }
   $nv = @(OctVouchers | Where-Object { $_.mid -notin $pre })
-  if (-not $nv.Count) { KeysTo '^a' 3 'tds-13-ctrl-a'; KeysTo 'y' 3 'tds-14-y'; Start-Sleep 3; $nv = @(OctVouchers | Where-Object { $_.mid -notin $pre }) }
   $lines = NewFullLines
   Set-Content (Join-Path $cap 'tds-addon-lines.txt') $lines -Encoding UTF8
   if (-not $nv.Count) { Say 'TDS: no entry saved (see the tds-* screenshots)'; return }
@@ -264,6 +295,6 @@ function V3Tds {
     $x = Get-Content (Join-Path $cap $f) -Raw
     Say ("TDS: {0}: {1} B, filled TAXOBJECTALLOCATIONS {2}, CATEGORY '{3}', TAX '{4}', ASSESSABLEAMOUNT '{5}', TDSDEDUCTEESECTIONNUMBER '{6}'" -f $f, $x.Length, ([regex]::Matches($x, '<TAXOBJECTALLOCATIONS\.LIST>\s*<[A-Z]')).Count, [regex]::Match($x, '<CATEGORY[^>]*>([^<]+)<').Groups[1].Value, [regex]::Match($x, '<TAX[^A-Z>]*>([^<]+)<').Groups[1].Value, [regex]::Match($x, '<ASSESSABLEAMOUNT[^>]*>([^<]+)<').Groups[1].Value, [regex]::Match($x, '<TDSDEDUCTEESECTIONNUMBER[^>]*>([^<]+)<').Groups[1].Value)
   }
-  FetchStage 'light-tds' @((Target 'tds-journal' "`$MasterID = $($v.mid)"))
+  FetchStage 'light-tds' @([pscustomobject]@{ name = 'tds-journal'; guid = $v.guid; mid = "$($v.mid)"; aid = $v.aid; date = $date; type = $v.type; vno = $v.vno; party = '' })
   Stop-T
 }

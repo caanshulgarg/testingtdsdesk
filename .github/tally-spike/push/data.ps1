@@ -33,7 +33,7 @@ function LightMasters {
 # a Sales invoice (item invoice) with $items items of 2 Nos at 100, CGST and SGST 9 % each; $rich adds the fields the
 # 2.3.1 request reads (HSN and GST rate details on each item, cost centres under the sales ledger, the e-way bill, IRN,
 # reference, party GSTIN and place of supply); $rich = $false is the plain fallback if Tally refuses one of them
-function SalesXml($date, $no, $party, [string[]]$items, $narr, [bool]$rich = $true) {
+function SalesXml($date, $no, $party, [string[]]$items, $narr, [bool]$rich = $true, $godown = '') {
   $per = 200; $sub = $per * $items.Count; $tax = [math]::Round($sub * 0.09, 2); $tot = $sub + 2 * $tax
   $f = '{0:0.00}'
   $x = '<VOUCHER VCHTYPE="Sales" ACTION="Create" OBJVIEW="Invoice Voucher View"><DATE>' + $date + '</DATE><VOUCHERTYPENAME>Sales</VOUCHERTYPENAME><VOUCHERNUMBER>' + $no + '</VOUCHERNUMBER>'
@@ -52,6 +52,9 @@ function SalesXml($date, $no, $party, [string[]]$items, $narr, [bool]$rich = $tr
     if ($rich) { $x += '<GSTHSNNAME>847130</GSTHSNNAME>' }
     $x += '<ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><RATE>100.00/Nos</RATE><AMOUNT>200.00</AMOUNT><ACTUALQTY> 2 Nos</ACTUALQTY><BILLEDQTY> 2 Nos</BILLEDQTY>'
     if ($rich) { foreach ($h in 'CGST', 'SGST') { $x += '<RATEDETAILS.LIST><GSTRATEDUTYHEAD>' + $h + '</GSTRATEDUTYHEAD><GSTRATEVALUATIONTYPE>Based on Value</GSTRATEVALUATIONTYPE><GSTRATE> 9</GSTRATE></RATEDETAILS.LIST>' } }
+    # v3 rerun: the heavy sales carry a godown (run 37556025582: with multiple godowns on, Tally refused every heavy sale
+    # with "Godown '' does not exist!")
+    if ($godown) { $x += BatchLine $godown 'Primary Batch' 2 '200.00' }
     $x += '<ACCOUNTINGALLOCATIONS.LIST><LEDGERNAME>Sales</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>200.00</AMOUNT>'
     if ($rich) { $x += '<CATEGORYALLOCATIONS.LIST><CATEGORY>Primary Cost Category</CATEGORY><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><COSTCENTREALLOCATIONS.LIST><NAME>CC Main</NAME><AMOUNT>200.00</AMOUNT></COSTCENTREALLOCATIONS.LIST></CATEGORYALLOCATIONS.LIST>' }
     $x += '</ACCOUNTINGALLOCATIONS.LIST></ALLINVENTORYENTRIES.LIST>'
@@ -109,7 +112,7 @@ function HeavyVoucher($k, $dates, $nParty, $nExp, $nItem) {
   switch ($k % 5) {
     { $_ -in 0, 1 } {
       $its = @(); for ($j = 0; $j -lt 3; $j++) { $its += ('HItem {0:d5}' -f ((($k * 3 + $j) % $nItem) + 1)) }
-      return SalesXml $date ('HS-{0:d6}' -f $k) $party $its "heavy sales $k" $false
+      return SalesXml $date ('HS-{0:d6}' -f $k) $party $its "heavy sales $k" $false 'PD Godown A'
     }
     { $_ -in 2, 3 } { return ReceiptXml $date ('HR-{0:d6}' -f $k) $party ('HADV-{0:d6}' -f $k) 500 "heavy receipt $k" $false }
     default {
