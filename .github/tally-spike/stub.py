@@ -15,6 +15,8 @@ LOCK = threading.Lock()
 BOOK = {}      # company -> {lower name: name}
 HELD = {}      # base line id -> {line, company, bridge, waits, again, done}
 GUIDS = {}     # company -> {ledger GUID: FinCom's name}  (seeded with the names)
+SEEDHELD = []  # backlog233: rows for the beat's heldLines (seeded by the harness)
+RESOLVED = set()  # line ids whose ":resolved" line came (heldLines stops listing them)
 POSTS = []     # the retry check's posting: {id, company, payload, taken, updates} (a FinCom posting job, as tally-ingest's queue gives it)
 ALIAS = {}     # company -> {lower Tally name: FinCom's name}: a ledger renamed in Tally, kept under FinCom's name (2.3.1, as
                # tally-ingest with migration 59: the GUID FinCom holds, the new name noted)
@@ -44,6 +46,8 @@ def recorder(body):
     for l in body.get('lines', []) or []:
         lid = str(l.get('line_id', ''))
         base = lid[:-9] if lid.endswith(':resolved') else lid
+        if lid != base:
+            RESOLVED.add(base)
         xml = l.get('xml') or ''
         ev = str(l.get('event', ''))
         state, why = 'applied', None
@@ -100,6 +104,9 @@ def beat(body):
         out['ledgersWanted'] = wanted[:20]
     if refetch:
         out['refetch'] = refetch[:20]
+    hl = [r for r in SEEDHELD if str(r.get('line_id')) not in RESOLVED]
+    if hl:
+        out['heldLines'] = hl[:200]
     return out
 
 def ledger_changes(body):
@@ -149,6 +156,11 @@ class H(BaseHTTPRequestHandler):
                 BOOK[str(body.get('company', ''))] = {str(x).strip().lower(): str(x).strip() for x in body.get('names', []) if str(x).strip()}
                 GUIDS[str(body.get('company', ''))] = {str(k): str(v) for k, v in (body.get('guids') or {}).items()}
                 out = {'ok': True, 'seeded': len(BOOK[str(body.get('company', ''))])}
+            elif kind == '_seed_held':
+                # backlog233 (bridge 2.3.3): rows the beat answers as heldLines (FinCom's held lines of this computer), until
+                # their ":resolved" line comes
+                SEEDHELD.extend(body.get('rows') or [])
+                out = {'ok': True, 'seeded': len(SEEDHELD)}
             elif kind == '_queue_post':
                 POSTS.append({'id': str(body.get('id')), 'company': body.get('company'), 'payload': body.get('payload'), 'taken': None, 'updates': []})
                 out = {'ok': True, 'queued': len(POSTS)}

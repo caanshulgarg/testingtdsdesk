@@ -52,6 +52,66 @@ function B233Seed($h1) {
   Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO backlog233: $($B233.n) old held lines of '$($Slow232St.co)' seeded into $f before bridge 1 starts (MasterIDs $($B233.mid0)..$($B233.mid0 + $B233.n - 1), dated $($B233.date), saved yesterday, last asked 2 h ago)"
 }
 
+# review M1 and M2 of 2.3.3 (07-Oct-2026): a company Tally answers in time but slowly. The timing proxy holds each entry
+# request of the SMALL company before forwarding it (1.5 s, then 1.8 s; Tally itself is not busy then: the delay is the
+# proxy's). (6) 10 held lines of it from FinCom (the stub's beat answers heldLines), asked one after another; a new save
+# made while they are asked is in the stub within 10 s. (7) 8 saves together: each in the stub within 10 s, and each with its
+# body in the end
+function B233Delay([int]$ms) { $f = "$($Slow232St.proxyLog).delay.json"; if ($ms -gt 0) { Set-Content $f (@{ $co1 = $ms } | ConvertTo-Json -Compress) -Encoding UTF8 } else { Remove-Item $f -ErrorAction SilentlyContinue } }
+function B233Wait($mid, $sec, [switch]$body) {
+  $t = Get-Date
+  while (((Get-Date) - $t).TotalSeconds -lt $sec) {
+    $h = @((StubLines 0) | Where-Object { "$($_.mid)" -eq "$mid" -and $_.company -eq $co1 -and (-not $body -or $_.xml) })
+    if ($h.Count) { return $h[0] }
+    Start-Sleep -Milliseconds 250
+  }
+  return $null
+}
+function B233Healthy {
+  Say '---- backlog233 (6)-(7): the small company answering in 1.5-1.8 s (a proxy delay): held lines asked while a new save comes; a burst of 8 saves'
+  $cg = S2Guid $co1
+  B233Delay 1500
+  $rows = @(); $hm = @()
+  for ($i = 1; $i -le 10; $i++) { $m = 800000 + $i; $hm += "$m"; $rows += @{ line_id = ('b233hl{0:d2}' -f $i); company = $co1; company_guid = $cg; event = 'created'; master_id = "$m"; vch_type = 'Journal'; vch_no = ''; vch_date = '20260401' } }
+  $null = Invoke-RestMethod 'http://127.0.0.1:8787/' -Method Post -Body (@{ kind = '_seed_held'; rows = $rows } | ConvertTo-Json -Compress -Depth 4) -ContentType 'application/json'
+  # the held lines are taken at the next beat and asked one after another: the new save goes once two of them are asked
+  $t0 = Get-Date; $n0 = 0
+  while (((Get-Date) - $t0).TotalSeconds -lt 180) { $n0 = @(S2Proxy | Where-Object { (S2Entry $_) -and $_.mid -in $hm }).Count; if ($n0 -ge 2) { break }; Start-Sleep 1 }
+  $mid6 = (S2Import $co1 (S2Journal '20260401' 'B233-HEALTHY-1' 'Spike Party' 'backlog233 healthy 1' 71) 'healthy 1').mid
+  $tw = Get-Date
+  $l6 = B233Wait $mid6 20
+  $dt6 = if ($l6) { ((Get-Date) - $tw).TotalSeconds } else { 99 }
+  Start-Sleep 20
+  $px = @(S2Proxy | Where-Object { (S2Entry $_) -and $_.mid -in $hm })
+  $after = @($px | Where-Object { [int64]$_.t0 -gt [int64]([DateTimeOffset]$tw).ToUnixTimeMilliseconds() }).Count
+  Result 'backlog233 (6) a save while held lines are asked at 1.5 s each: in the stub within 10 s' ($l6 -and $dt6 -le 10 -and $n0 -ge 2) ("after {0:0.0} s: {1}; held lines asked before the save {2}, after it {3} (proxy ms: {4}; the delay is the proxy's, Tally answered at once)" -f $dt6, $(if ($l6) { Ev $l6 } else { 'none in 20 s' }), $n0, $after, (($px | ForEach-Object { $_.ms }) -join ', '))
+  # (7) a burst of 8 saves at 1.8 s each
+  B233Delay 1800
+  $burst = @()
+  for ($k = 1; $k -le 8; $k++) { $r = S2Import $co1 (S2Journal '20260401' "B233-BURST-$k" 'Spike Party' "backlog233 burst $k" (80 + $k)) "burst $k"; $burst += [pscustomobject]@{ mid = $r.mid; at = Get-Date } }
+  $res = @()
+  foreach ($b in $burst) {
+    $left = 15 - ((Get-Date) - $b.at).TotalSeconds
+    $l = $null
+    while ($left -gt 0 -and -not $l) { $l = @((StubLines 0) | Where-Object { "$($_.mid)" -eq "$($b.mid)" -and $_.company -eq $co1 })[0]; if (-not $l) { Start-Sleep -Milliseconds 250; $left = 15 - ((Get-Date) - $b.at).TotalSeconds } }
+    $first = @((StubReqs) | Where-Object { $_.kind -eq 'recorder_lines' -and @($_.body.lines | Where-Object { "$($_.master_id)" -eq "$($b.mid)" }).Count } | Select-Object -First 1)
+    $res += [pscustomobject]@{ mid = $b.mid; ok = [bool]$l; line = $l }
+  }
+  # when each first reached the stub: the stub's own time of the request (HH:mm:ss) against the save's time
+  $late = @(); $bodies = 0
+  foreach ($b in $burst) {
+    $l = @((StubLines 0) | Where-Object { "$($_.mid)" -eq "$($b.mid)" -and $_.company -eq $co1 } | Select-Object -First 1)
+    if (-not $l.Count) { $late += "$($b.mid) none"; continue }
+    $sa = [DateTime]::ParseExact(("{0} {1}" -f $b.at.ToString('yyyy-MM-dd'), "$($l[0].at)".Substring([Math]::Max(0, "$($l[0].at)".Length - 8))), 'yyyy-MM-dd HH:mm:ss', $null)
+    $d = ($sa - $b.at).TotalSeconds
+    if ($d -gt 10) { $late += ("{0} after {1:0.0} s" -f $b.mid, $d) }
+  }
+  Start-Sleep 60
+  foreach ($b in $burst) { if (B233Wait $b.mid 1 -body) { $bodies++ } }
+  B233Delay 0
+  Result 'backlog233 (7) a burst of 8 saves at 1.8 s each: each in the stub within 10 s, each with its body in the end' ($late.Count -eq 0 -and $bodies -eq 8) ("late or missing: {0}; with their body: {1} of 8; the first lines: {2}" -f $(if ($late.Count) { $late -join ', ' } else { 'none' }), $bodies, (($burst | ForEach-Object { $m = $_.mid; $x = @((StubLines 0) | Where-Object { "$($_.mid)" -eq "$m" -and $_.company -eq $co1 } | Select-Object -First 1); if ($x.Count) { "$m at $($x[0].at)" } else { "$m none" } }) -join '; '))
+}
+
 function B233OldDone { $l = StubLines 0; @($B233.ids | Where-Object { $id = $_; @($l | Where-Object { $_.lid -eq "${id}:resolved" }).Count -gt 0 }).Count }
 
 function Backlog233 {
@@ -125,6 +185,7 @@ function Backlog233 {
   for ($w = 0; $w -lt 36 -and -not $s2.Count; $w++) { Start-Sleep 5; $s2 = @((StubLines $m0) | Where-Object { "$($_.mid)" -eq "$midS2" -and $_.company -eq $co1 -and $_.xml }) }
   $s1 = @((StubLines $m0) | Where-Object { "$($_.mid)" -eq "$midS1" -and $_.company -eq $co1 -and $_.xml })
   Result 'backlog233 (5) a small fast company''s entry arrives with its body' ($s1.Count -ge 1 -and $s2.Count -ge 1) ("during the backlog: {0}; at the end: {1}" -f $(if ($s1.Count) { Ev $s1[0] } else { "MasterID $midS1 : no line with a body" }), $(if ($s2.Count) { Ev $s2[0] } else { "MasterID $midS2 : no line with a body in 180 s" }))
+  try { B233Healthy } catch { Write-Host "B233Healthy: $_ $($_.ScriptStackTrace)"; Result 'backlog233 (6)-(7)' $false "the harness stopped: $_" $true }
   $bl = S2BridgeLog
   Set-Content (Join-Path $B233.dir 'bridge1-log-backlog233.txt') ($bl | Where-Object { $_ -match 'Recorder: |did not answer in time|answered in time again|entry fetch|earlier request|finished the request' }) -Encoding UTF8
 }

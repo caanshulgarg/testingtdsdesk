@@ -4,9 +4,20 @@
 # and logs one JSON line per request: its id, TALLYREQUEST, company (SVCURRENTCOMPANY), MasterID ($MasterID = n), when it
 # reached the proxy and when Tally's answer was back (epoch ms; ms is Tally's whole time, also after the bridge stopped
 # waiting at 2 s), the sizes, the HTTP status, and whether the bridge was still there for the answer. Nothing is changed.
-import html, json, re, sys, threading, time, http.client
+import html, json, os, re, sys, threading, time, http.client
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 PORT = int(sys.argv[1]); LOG = sys.argv[2]
+# backlog233 (bridge 2.3.3): an optional delay per company for the entry requests (FinComVoucherByMaster / ByNumber), read
+# from <log>.delay.json ({"company": ms}) at each request: the proxy waits that long before forwarding (Tally itself is not
+# busy then; said as such in the results). No file: nothing is delayed
+DELAYS = LOG + '.delay.json'
+def delay_for(i, co):
+    if i not in ('FinComVoucherByMaster', 'FinComVoucherByNumber') or not os.path.exists(DELAYS):
+        return 0
+    try:
+        return int((json.load(open(DELAYS, encoding='utf-8')) or {}).get(co, 0))
+    except Exception:
+        return 0
 LOCK = threading.Lock()
 def info(b):
     s = b[:20000].decode('utf-8', 'replace')
@@ -26,6 +37,9 @@ class H(BaseHTTPRequestHandler):
         body = self.rfile.read(n) if n else b''
         i, tr, co, mid = info(body)
         st, data, err, gone = 0, b'', '', False
+        dl = delay_for(i, co)
+        if dl > 0:
+            time.sleep(dl / 1000.0)
         try:
             c = http.client.HTTPConnection('127.0.0.1', PORT, timeout=900)
             h = {k: v for k, v in self.headers.items() if k.lower() not in ('host', 'connection', 'content-length')}
@@ -48,7 +62,7 @@ class H(BaseHTTPRequestHandler):
         self.close_connection = True
         with LOCK, open(LOG, 'a', encoding='utf-8') as f:
             f.write(json.dumps({'t0': round(t0 * 1000), 't1': round(t1 * 1000), 'ms': round((t1 - t0) * 1000), 'at': time.strftime('%H:%M:%S', time.localtime(t0)),
-                                'id': i, 'req': tr, 'company': co, 'mid': mid, 'in': len(body), 'out': len(data), 'status': st, 'err': err, 'clientGone': gone}) + '\n')
+                                'id': i, 'req': tr, 'company': co, 'mid': mid, 'in': len(body), 'out': len(data), 'status': st, 'err': err, 'clientGone': gone, 'delay': dl}) + '\n')
     def do_POST(self): self.go('POST')
     def do_GET(self): self.go('GET')
     def log_message(self, *a): pass
