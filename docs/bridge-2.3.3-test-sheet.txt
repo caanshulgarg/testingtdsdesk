@@ -9,10 +9,15 @@ Tally page, at least as held with a reason. Silence is not acceptable."
 1. An entry whose details Tally does not give on the first attempt goes up to FinCom at once, held, with words such as
    "waiting: Tally took longer than 2 s; FinCom asks again at 12:15". Its details follow later (the held line is then
    replaced and the entry enters the books once). No line waits unsent more than a few seconds.
-2. The held lines from earlier no longer hold back new saves: the newest are asked first, and the held lines get at
-   most every other try while new lines wait.
+2. A held line is asked of Tally again ONCE (one request). If that ask is not answered in time, or Tally does not give
+   the entry, the line ends at once with "... upload that day's Day Book to settle it" and is never asked again. The
+   held lines from earlier no longer hold back new saves: the newest are asked first.
+   Nothing is sent to Tally while it is still working on an earlier request the bridge stopped waiting for; a posting
+   waits for it (10 minutes at most; in practice a second or two), and the Tally page says "Tally is still finishing an
+   earlier request".
 3. A company slow on every entry (GARG SHEKHAR, about 2.2 s) is now marked "no longer asked" even when only its entries
-   are being asked. A Tally that freezes as a whole still never marks a company.
+   are being asked. A Tally that freezes as a whole still never marks a company. Once marked, none of its lines, old or
+   new, is asked again: new ones go up held at once, held ones end with the same words.
 4. When lines have waited 30 seconds or more, one line on the Tally page says how many and since when.
 No Tally request was added or changed. FinCom's cloud and app are unchanged (no migration). The add-on is unchanged.
 
@@ -42,9 +47,11 @@ CHECK 4 - THE SLOW COMPANY IS MARKED
    one line "GARG SHEKHAR & COMPANY: entry fetch stopped: over 2 s (...)". Its held lines then end with the Day Book
    words; upload its Day Book to settle them.
 
-CHECK 5 - A HELD LINE IS REPLACED BY ITS ENTRY
+CHECK 5 - A HELD LINE IS ASKED AGAIN ONCE
    If a line of the small company shows "waiting: ..." (Tally busy for a moment), wait for the time it names.
-   You should see: the line becomes "Replaced by a later line" and the entry is in the books once.
+   You should see: the line becomes "Replaced by a later line" and the entry is in the books once. If Tally was still
+   busy then, the line instead shows "... upload that day's Day Book to settle it"; upload that day's Day Book.
+   The lines held before you installed 2.3.3 settle the same way within a few minutes: each is asked once.
 
 CHECK 6 - NOTHING SILENT
    Over the day, every journal you saved shows in Sync activity: in the books, or held with a reason. None is missing.

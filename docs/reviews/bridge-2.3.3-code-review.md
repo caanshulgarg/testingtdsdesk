@@ -1,0 +1,97 @@
+# Code review: FinCom Bridge 2.3.3 (a High in 2.3.2: a new save unsent behind the held backlog)
+
+Reviewed: 07-Oct-2026, an adversarial self-review of the diff, by the author (the owner's rule for this release: written
+from the diff after an honest adversarial self-review; any High or Medium fixed before the build).
+
+Range: b1e5858..1203941
+
+Read with `git diff b1e5858 1203941 -- bridge-go/ tests/ docs/tally-allowlist.md`.
+
+## What changed
+
+- `bridge-go/recorder_live.go` `liveFetchBodies` and `bridge-go/recorder_resolve.go` `liveFetchByNumber`: an entry whose
+  body is not there on its first attempt (the retry schedule waiting, a 2 s stop, no answer, a passing reason, the turn's
+  20 s used, not found by its number yet) is sent at once, held, with plain words (`liveHeldNow`, `liveWaitWords`:
+  "waiting: Tally took longer than 2 s; FinCom asks again at HH:MM", or "Tally busy", or "Tally has not shown this new
+  entry yet"). It joins the held list marked fresh (`heldLine.Fresh`), due at the next try (`Last` empty when nothing was
+  asked). A cancel asked for its GUID is held as one this Tally could not be asked about (`liveGuidUnproven`, asked again
+  by itself). The 3-try counting (`again`, `c.tries`) and `waitRetry` are gone.
+- `liveUploadStep`: a company whose first line waits for its first ask by number (`liveYoung`, the few seconds of
+  RecorderNumberWaitMs) does not hold the queue head: the next company goes. A safety net: a line of the group still
+  without its body after RecorderHoldAfterMs (4 s) goes up held ("FinCom is posting to Tally" during a posting), or a
+  ledger goes without its body.
+- `liveUploadOnce`: while live lines wait for their body, the resolver takes at most every other try of the retry
+  schedule (`liveResolverTook`, `retryTakesNow`).
+- `liveResolveTurn`: the newest first (fresh lines, the least asked first, then by when they joined); the owner's rule
+  of 07-Oct-2026 evening: a held line is asked again **at most once** (`heldLine.Allow`, `Asked`; 2 for a new save held
+  before Tally was asked at all), with one request (`liveResolveOne` no longer falls back to the number after the
+  MasterID); an ask that stops, is not answered, or is answered without the entry ends the line at once with the Day
+  Book words (`liveHeldSlowGiveUp`, `liveHeldOnceGiveUp`) as its `:resolved` line. The 1 h / 4 h ladder and the 10-minute /
+  20-try re-asks are no longer reached. Nothing is asked for a company with no starting point yet (the request would be
+  refused before sending): the line waits, its ask not spent.
+- `bridge-go/inflight.go`, `bridge-go/tally.go` (`tallyRaw`, `enterTallyLock`, `invokeTallyNow`, `invokeTally`),
+  `bridge-go/retry.go` (`retryLift`), `bridge-go/jobs.go`: brought in from next-inflight (72c6d36) with its tests
+  (`inflight231_test.go`, `inflight232_test.go`): a request the bridge stops waiting for keeps its connection; its answer
+  is read and discarded; the per-Tally lock is held until then (TallyAbandonMaxSec, 600 s, at most); a background request
+  meanwhile is refused (as a retry wait), a person's read waits 20 s then is refused in plain words, a posting waits and
+  says so. next-inflight's 20 s single-entry wait (`entryTC`) is not brought in.
+- `bridge-go/retry.go` `retryTake(id)`: a small check (FinComCompany, FinComCompanyNumbers, TDSDeskCompanies, FinComFree)
+  that found the schedule waiting has the next try kept for it, 120 s at most (RecorderSmallTrySec), so the slow-company
+  rule sees another request answered in time between two entry stops. `slowco.go`: the window 15 minutes (was 10).
+- `bridge-go/recorder_live.go` `liveBeat` / `liveQueueWaitWords`, `bridge-go/inflight.go` `earlierPageWords`,
+  `bridge-go/cloud.go`: the beat's recorderState carries `heldAsking` per company; recorderWaitWords (already kept by the
+  cloud and shown by the page) also says lines waiting 30 s or more, and "Tally is still finishing an earlier request".
+- `bridge-go/util.go`: 2.3.3. `docs/tally-allowlist.md`: the decision line and a dated note (the table and its hash
+  unchanged).
+- Tests: `backlog233_test.go` (new, red first: 1e4d6c5); 2.3.2 tests changed where the owner's rules changed the
+  behaviour (listed below); `tests/run_recorder_server.py` 2.3.3 (the cloud: a held line with no GUID, its `:resolved`
+  applied once, the held row replaced, a second `:resolved` a duplicate).
+
+## Tests changed, and why
+
+Each encoded the behaviour this release removes on the owner's instructions:
+
+- held at once instead of unsent until 3 stops: `slow232_test.go` (CompanyMarkedAfterTwoStops, FreezeDoesNotMark,
+  FastCompanyUnaffected), `recorder_live_test.go` TestLiveBodyFetch, `recorder_probes_test.go`
+  TestBodyFetchOffAfterSlowAnswer, `review222_test.go` TestR222HardTwoSecondStop, `review222e_test.go` (the decision
+  log's words), `parta231_test.go` TestPartATurnTimeUsedNextTurn, `inflight231_test.go` TestInflightBusyFiveMinutesTenEntries;
+- asked again once instead of 1 h / 4 h or 10 min x 20: `slow232_test.go` (HeldTimedOutBacksOffHours,
+  CloudHeldLineTimedOut), `retry231_test.go` TestRetrySilentThreeMinutesThenAnswers, `review222_test.go`
+  TestR222HeldTwentyTries, `body230_test.go` TestBody230RefetchSpacedAndStopped, `nws144_test.go` (ByNumberNoneOrTwo,
+  HeldResolvedLater), `review222b_test.go` TestR222bPreMismatchFlagged;
+- the version and the decision line: the version pins, `slow232_test.go` VersionAndDecisionLine (2.3.2 kept as
+  history), `release_check_test.sh` green 5 / red 14, the fixtures' version.
+
+## Findings
+
+No High. No Medium open. Checked on purpose:
+
+### Checked and holding
+
+1. **Every save reaches FinCom.** Each path out of `liveFetchBodies` / `liveFetchByNumber` that used to leave a voucher
+   line unsent now sends it held; the only remaining waits are a posting (`gaveWay`, then the 4 s net) and a by-number
+   line's few seconds before its first ask (it holds only its own company). Stand: no line over 5 s, a new save behind 40
+   held lines in under 1 s.
+2. **The cloud keeps the held line and replaces it once.** Verified on the stand cloud (pg_stand, the real migrations):
+   held with the words and no GUID, then `:resolved` applied, held row `replaced`, a second `:resolved` `duplicate`, the
+   entry in the copy once. No cloud change.
+3. **One request per old held line.** `liveResolveOne` asks by MasterID or by number, never both; the end is decided in the
+   same turn's merge, under the held list's lock; an ended id is kept (`*.ended.txt`), so heldLines / refetch never bring
+   it back.
+4. **Nothing sent into a Tally still on an earlier request.** The per-Tally lock is held by the abandoned exchange until
+   its answer (stand: at most 1 request at Tally at once with 40 lines asked; inflight tests: postings wait and are not
+   lost; the 600 s bound releases it with one log line).
+5. **A freeze still never marks.** The small check gets a try, but in a freeze it is not answered in time either, so the
+   stops around it do not count (TestBacklog233FreezeStillDoesNotMark, TestSlow232FreezeDoesNotMark).
+6. **Lock order.** `liveHeldAsking` takes heldMu then live.mu, as the resolver does; `liveBeat` calls it before live.mu.
+
+### Lows (next release)
+
+- L1. The words on a held line name the next try's time; when that ask stops too, the cloud keeps the earlier time until
+  the end line comes (seconds later on a lifted schedule, minutes on a backed-off one).
+- L2. A held line's one ask by MasterID no longer falls back to its number: a line whose MasterID names another, unsaved
+  entry ends with the words instead of being found by number.
+- L3. A voucher line of a source other than the add-on (B / C, unused since 2.3.1) that goes up held is not asked again.
+- L4. `heldLine.Slow`, `liveSlowSpacing` and the 20-try words stay in the code, unreachable; to be removed.
+- L5. The small-check reservation can delay an entry request up to 120 s when the small check that wanted the try does
+  not come back for it (a posting started meanwhile, say).
