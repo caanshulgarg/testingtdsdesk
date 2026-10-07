@@ -684,3 +684,92 @@ func TestBacklog233M2BurstOfEight(t *testing.T) {
 		}
 	}
 }
+
+// --- re-review (b1e5858..a6cfda0): M2 for ledger lines. A burst of 8 changed ledgers (a masters import) at "1.8 s" each,
+// with a voucher in the same group: every line in the cloud within "10 s" (the ledgers not read by then go without their
+// body, FinCom takes them from the ledger changes)
+func TestBacklog233M2LedgerBurst(t *testing.T) {
+	rec, f, c := liveBridge(t, `,"RecorderLimitMs":200,"RecorderHoldAfterMs":400`)
+	td := today()
+	f.alter = 10
+	noteStartPoint(zz, b220CoGUID, 5, 1)
+	v := f.add(td, "Party L", "PL-1", "with ledgers", "-1.00")
+	f.mu.Lock()
+	f.slow = func(id, body string) time.Duration {
+		if id == ledListID {
+			return 180 * time.Millisecond
+		}
+		return 0
+	}
+	f.mu.Unlock()
+	var lines []string
+	var names []string
+	for i := 0; i < 8; i++ {
+		n := fmt.Sprintf("Burst Ledger %d", i)
+		names = append(names, n)
+		l := f.addLed(n, "Sundry Creditors", "0.00")
+		lines = append(lines, lLine("ledger_accept_pre", "", "", "", n, "Sundry Creditors"), lLine("ledger_accept_post", l.guid, fmt.Sprint(l.mid), fmt.Sprint(l.alter), n, "Sundry Creditors"))
+	}
+	lines = append(lines, liveLine("voucher_accept_post", "Voucher", v.guid, v.master, "1", "Journal", "PL-1", td, "", "", "with ledgers"))
+	l := b233Run()
+	defer l.end()
+	t0 := time.Now()
+	liveAppend(t, liveFilePath(rec, ""), lines...)
+	seen := map[string]time.Duration{}
+	for time.Since(t0) < 4*time.Second && len(seen) < 9 {
+		for _, s := range c.recSent() {
+			k := str(s["name"])
+			if str(s["event"]) != "ledger_created" && str(s["event"]) != "ledger_altered" {
+				k = "voucher " + str(s["master_id"])
+			}
+			if _, had := seen[k]; !had {
+				seen[k] = time.Since(t0)
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	want := append(append([]string{}, names...), "voucher "+v.master)
+	for _, k := range want {
+		if d, had := seen[k]; !had || d > time.Second {
+			t.Errorf("%s: in the cloud %v after %s (10 s scaled: 1 s)", k, had, d.Round(time.Millisecond))
+		}
+	}
+}
+
+// --- re-review L1: a held line's ask that never reached Tally (refused by the posting's yield before it was sent) is NOT
+// counted, whatever other requests reached Tally meanwhile (the global request counter moved)
+func TestBacklog233L1UnsentAskNotCounted(t *testing.T) {
+	_, f, c := slow232Bridge(t)
+	heldMu.Lock()
+	all, items := liveHeldLoad()
+	yest := nowFn().Add(-20 * time.Hour).Format(time.RFC3339)
+	items["old-l1"] = heldLine{ID: "old-l1", Company: nwsCo, CGUID: nwsGUID, Type: "Journal", No: "J-L1", Date: "20261005", MID: "25444", At: yest, Added: yest, Last: yest, Ev: "created"}
+	liveHeldSave(all, items)
+	heldMu.Unlock()
+	_, _ = findCompanyPortBg(nwsCo, 0)
+	liveResolveAskHook = func() {
+		tallySent.Add(1)       // another request reached Tally meanwhile (a posting's import, a small check)
+		importsInFlight.Add(1) // and a posting is going: the ask gives way before it is sent
+	}
+	defer func() { liveResolveAskHook = nil; importsInFlight.Store(0) }()
+	n := f.n(vchByMasterID)
+	liveResolveTurn()
+	liveResolveAskHook = nil
+	importsInFlight.Store(0)
+	if f.n(vchByMasterID) != n {
+		t.Fatalf("the ask reached Tally: %v", f.ids())
+	}
+	if s := r222cSentID(c, "old-l1:resolved"); len(s) != 0 {
+		t.Fatalf("a held line never asked was ended: %v", s)
+	}
+	if h, ok := slowHeldItem(t, "old-l1"); !ok || h.Asked != 0 {
+		t.Fatalf("its ask was counted: %+v %v", h, ok)
+	}
+	// then asked, once, after the posting (its next turn: the held list's spacing)
+	at := nowFn().Add(11 * time.Minute)
+	nowFn = func() time.Time { return at }
+	liveResolveTurn()
+	if f.n(vchByMasterID) != n+1 {
+		t.Fatalf("not asked after the posting: %v", f.ids())
+	}
+}

@@ -299,12 +299,14 @@ type liveState struct {
 }
 
 var (
-	live           = &liveState{}
-	liveUpMu       sync.Mutex
-	liveSrc        atomic.Value // the beat's recorderSource ("" : the setting's)
-	liveSendHook   func()       // the tests: called right before a group goes
-	liveComputerFn = computerName
-	liveZone       = time.Local // the add-on's time text is the PC's local time
+	live         = &liveState{}
+	liveUpMu     sync.Mutex
+	liveSrc      atomic.Value // the beat's recorderSource ("" : the setting's)
+	liveSendHook func()       // the tests: called right before a group goes
+	// the tests: called right before each held line's ask (2.3.3 re-review L1)
+	liveResolveAskHook func()
+	liveComputerFn     = computerName
+	liveZone           = time.Local // the add-on's time text is the PC's local time
 )
 
 // a restart, as far as the live recorder is concerned (the tests; the state reloads from disk at its next use)

@@ -1206,6 +1206,9 @@ func liveResolveOne(h heldLine) (x, why string, answered, final bool, err error)
 		return "", "", false, false, err
 	}
 	w := liveWant{company: h.Company, cguid: h.CGUID, typ: h.Type, no: h.No, date: h.Date, mid: h.MID, sp: sp, spOK: spOK, lineAlter: h.LineAlter}
+	if liveResolveAskHook != nil {
+		liveResolveAskHook()
+	}
 	if h.MID != "" {
 		m, err := fetchVouchersByMasterIn(tc, h.Company, port, h.Date, []string{h.MID}, liveBodySec())
 		if err != nil {
