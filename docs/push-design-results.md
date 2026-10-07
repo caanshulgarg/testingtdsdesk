@@ -38,7 +38,7 @@ A freeze is a save whose first screen change came more than 1 s after Ctrl+A (`a
 | Setup | 3.0 | 4.1 | 5.1 | 6.2 | 7.1 | Total | Slowest first screen change |
 |---|---|---|---|---|---|---|---|
 | No add-on, bridge stopped | 0 | 0 | 0 | 0 | 0 | **0 of 85** | 93 ms |
-| Heads-only, bridge stopped | 0 | 0 | 0 | 0 | 0 | **0 of 85** | 77 ms |
+| Heads-only, bridge stopped | 0 | 0 | 0 | 0 | 0 | **0 of 85** | 80 ms |
 | Heads-only, bridge running | 0 | 0 | 0 | 0 | 0 | **0 of 85** | 80 ms |
 | Full entry, no read-back, bridge stopped | 0 | 0 | 0 | 0 | 0 | **0 of 100** | 203 ms |
 
