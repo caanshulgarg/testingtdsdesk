@@ -3,9 +3,9 @@
 Reviewed: 07-Oct-2026, alongside the code review of the same range (bridge-2.3.3-code-review.md), an adversarial
 self-review by the author from the diff.
 
-Range: b1e5858..a6cfda0
+Range: b1e5858..cd5afb7
 
-Read with `git diff b1e5858 a6cfda0 -- bridge-go/ tests/ server/ docs/tally-allowlist.md`.
+Read with `git diff b1e5858 cd5afb7 -- bridge-go/ tests/ server/ docs/tally-allowlist.md`.
 
 ## What 2.3.3 does
 

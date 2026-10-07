@@ -3,9 +3,9 @@
 Reviewed: 07-Oct-2026, an adversarial self-review of the diff, by the author (the owner's rule for this release: written
 from the diff after an honest adversarial self-review; any High or Medium fixed before the build).
 
-Range: b1e5858..a6cfda0
+Range: b1e5858..cd5afb7
 
-Read with `git diff b1e5858 a6cfda0 -- bridge-go/ tests/ docs/tally-allowlist.md`.
+Read with `git diff b1e5858 cd5afb7 -- bridge-go/ tests/ docs/tally-allowlist.md`.
 
 ## What changed
 
@@ -62,7 +62,7 @@ Each encoded the behaviour this release removes on the owner's instructions:
 - the version and the decision line: the version pins, `slow232_test.go` VersionAndDecisionLine (2.3.2 kept as
   history), `release_check_test.sh` green 5 / red 14, the fixtures' version.
 
-## The independent review of b1e5858..ce79426 (07-Oct-2026), and what changed for it
+## The independent review of the first build (07-Oct-2026, its range ending at ce79426), and what changed for it
 
 No High; two Mediums, both against rule c (every line in FinCom within 10 s), fixed test-first (red at 22c7afe, fixed at
 a6cfda0), and one Low fixed:
@@ -80,7 +80,7 @@ a6cfda0), and one Low fixed:
   so Tally never gets two requests for one held line.
 - **L2** (kept, the owner's one-request rule): no by-number fallback after a MasterID miss.
 - The release-check note: the first build (ce79426, setup 3189a834..., never published) is reverted (cd5afb7) and 2.3.3
-  is built again after these fixes, with the reviews' range moved to a6cfda0.
+  is built again after these fixes; the reviews' range ends at that revert (only the assets changed after the fix).
 
 The real-Tally harness (`only=backlog233`) has the two scenarios too: (6) 10 held lines of the small company answered in
 1.5 s (the timing proxy holds each request; Tally itself is not busy then) with a new save made while they are asked, and
