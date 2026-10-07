@@ -310,20 +310,31 @@ func pushAbs(s string) (string, bool) {
 	return s, rePushNum.MatchString(s)
 }
 
-// the sign rule of one entry: neg is Tally's "below 0" (a debit), checked against IsDeemedPositive on the ledger lines
-type pushSign struct{ flip, none bool }
+// the sign rule of one entry. neg is "the amount below 0", checked against IsDeemedPositive on the ledger lines. On a real
+// TallyPrime (tally-versions run 37611204899, 3.0 to 7.1) a voucher form's $Amount is the amount without its sign after
+// Form Accept: $$String gives "700.00" for the Cash debit and "$Amount < 0" is No on every line. A neg that is never Yes on
+// a voucher with amounts says nothing (blind), and the sign is then Tally's own XML rule: IsDeemedPositive Yes is an
+// amount below 0 (a debit), a "(-)" amount the other way. A record without its own IsDeemedPositive (a bill, a bank or
+// cost-centre line, a batch, a tax line) takes its line's. The ledger lines must still add up to zero.
+type pushSign struct{ flip, none, blind bool }
 
 func pushSignOf(e *pushEntry) pushSign {
-	agree, differ := 0, 0
+	agree, differ, yes, any := 0, 0, false, false
 	for k, r := range e.recs {
+		for f, v := range r {
+			if (f == "neg" || strings.HasSuffix(f, "neg")) && v == "Yes" {
+				yes = true
+			}
+		}
 		if !rePushLedRec.MatchString(k) {
 			continue
 		}
 		n, d := r["neg"], r["dp"]
-		if (n != "Yes" && n != "No") || (d != "Yes" && d != "No") {
+		if a, _ := pushAbs(r["amt"]); a == "" || strings.Trim(a, "0.") == "" {
 			continue
 		}
-		if a, _ := pushAbs(r["amt"]); a == "" || strings.Trim(a, "0.") == "" {
+		any = true
+		if (n != "Yes" && n != "No") || (d != "Yes" && d != "No") {
 			continue
 		}
 		if n == d {
@@ -331,6 +342,9 @@ func pushSignOf(e *pushEntry) pushSign {
 		} else {
 			differ++
 		}
+	}
+	if any && !yes {
+		return pushSign{blind: true}
 	}
 	return pushSign{flip: differ > 0 && agree == 0, none: agree+differ == 0}
 }
@@ -349,6 +363,12 @@ func (g pushSign) amt(r map[string]string, amtKey, negKey, dp string) (string, e
 	}
 	neg := false
 	switch n := r[negKey]; {
+	case g.blind && (dp == "Yes" || dp == "No"):
+		neg = (dp == "Yes") != pushMinus(r[amtKey])
+	case g.blind:
+		if strings.Trim(a, "0.") != "" {
+			return "", fmt.Errorf("the sign of the amount %q is not on the line (no IsDeemedPositive to take it from)", r[amtKey])
+		}
 	case n == "Yes" || n == "No":
 		neg = (n == "Yes") != g.flip
 	case dp == "Yes" || dp == "No":
@@ -358,6 +378,15 @@ func (g pushSign) amt(r map[string]string, amtKey, negKey, dp string) (string, e
 		return "-" + a, nil
 	}
 	return a, nil
+}
+
+// an amount as $$String writes one below 0 in a voucher form ("(-)50.00", "-50.00"): the other way from its IsDeemedPositive
+func pushMinus(s string) bool {
+	s = strings.TrimSpace(s)
+	if i := strings.LastIndex(s, "="); i >= 0 {
+		s = strings.TrimSpace(s[i+1:])
+	}
+	return strings.HasPrefix(s, "(-)") || strings.HasPrefix(s, "-")
 }
 
 // the records under a key: key + tag + 1, 2, ... while there is one

@@ -92,6 +92,9 @@
 ;; Proven on a real Tally (tally-versions runs 37606776023 and 37608273503, TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1): this file
 ;; loads, the heads lines and a full line are written, and $$StringLength into a Number variable, $$StringFindAndReplace and
 ;; the "neg" formula evaluate; $$String of a function giving a number does NOT (left unset): never used here.
+;; In a voucher form after Form Accept (run 37611204899) $Amount carries no sign: "neg" was No on every line, the amounts
+;; plain ("700.00"). The bridge then signs each amount by IsDeemedPositive (Tally's XML rule) and refuses an amount that
+;; has none to take a sign from; "neg" is kept for a context where it says something.
 
 ;; ---------------------------------------------------------------- the gate: a company is current
 [System: Formula]

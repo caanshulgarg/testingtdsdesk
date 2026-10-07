@@ -21,6 +21,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf16"
 )
 
 // --- the add-on's lines, from a voucher's XML (the emulator of FCRLiveFull)
@@ -1071,5 +1072,119 @@ func TestPushForgedLineInNarrationAndCapEdges(t *testing.T) {
 		if cap == first && !strings.HasSuffix(strings.SplitN(parts[0], "|len=", 2)[0], "|opt=No") {
 			t.Fatalf("cap %d (exactly the first group): part 1 should end with it: %q", cap, cut(parts[0], 300))
 		}
+	}
+}
+
+// --- the real lines: the add-on's own daily files from tally-versions run 37611204899 (TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1,
+// c4a/c4b/c5/c4c/c4d by keys: a receipt Cash Dr / Spike Income Cr 700, altered to 800, Alt+2 copied at 900, cancelled,
+// deleted), read by the reader as they are (UTF-16): every full entry taken, its GUID by the rule, its ledger lines totalling
+// zero, signed as Tally signs them (IsDeemedPositive: the add-on's neg was No on the debit too)
+func TestPushRealLinesFromFiveReleases(t *testing.T) {
+	for _, rel := range []string{"3.0", "4.1", "5.1", "6.2", "7.1"} {
+		t.Run(rel, func(t *testing.T) {
+			b, err := os.ReadFile(filepath.Join("testdata", "push233", "real", "c8-"+rel+".recorder-file.txt"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			cg := regexp.MustCompile(`\|cguid=([0-9a-f-]{36})\|`).FindStringSubmatch(decodeRecorderText(b))[1]
+			rec, f, c := liveBridge(t, "")
+			ufAs(t, "user", "runneradmin")
+			at := time.Date(2026, 10, 7, 12, 0, 0, 0, liveZone)
+			nowFn = func() time.Time { return at }
+			t.Cleanup(func() { nowFn = time.Now })
+			noteStartPoint("FinCom Spike Co", cg, 1, 1)
+			appendBytes(t, filepath.Join(rec, cg+"-7-Oct-26-runneradmin.txt"), b)
+			readAndUploadAll(t)
+			var push []M
+			for _, l := range c.recSent() {
+				if l["push"] == true {
+					push = append(push, l)
+				}
+			}
+			if len(push) < 3 {
+				t.Fatalf("full entries sent: %d; log:\n%s", len(push), readText(logFile()))
+			}
+			for _, l := range push {
+				x := str(l["xml"])
+				var sum int64
+				for _, a := range tagValues(x, "AMOUNT") {
+					p, _ := paise(a)
+					if strings.HasPrefix(a, "-") {
+						p = -p
+					}
+					sum += p
+				}
+				mid, _ := strconv.ParseInt(str(l["master_id"]), 10, 64)
+				if sum != 0 || str(l["object_guid"]) != fmt.Sprintf("%s-%08x", cg, mid) || len(tagValues(x, "LEDGERNAME")) != 2 || !strings.Contains(x, `<AMOUNT TYPE="Amount">-`) {
+					t.Fatalf("%s: a full entry: total %d, guid %s mid %s:\n%s", rel, sum, str(l["object_guid"]), str(l["master_id"]), x)
+				}
+			}
+			if n := f.n(vchByMasterID) + f.n(vchByNumberID); n > 2 {
+				t.Fatalf("entry requests beyond the cancel's and the delete's: %v", f.ids())
+			}
+		})
+	}
+}
+
+// the sign when the line's neg says nothing (a real Tally's voucher form: "$Amount < 0" No on every line, the amounts
+// without their sign): IsDeemedPositive rules, a "(-)" amount the other way, and an amount with no IsDeemedPositive to take
+// a sign from (a TDS sub-category line, a payroll line) is a reason to ask Tally (the 2.3.2 route); never a guessed sign
+func TestPushSignWhenNegIsBlind(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("testdata", "push233", "real", "c8-7.1.recorder-file.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var real string
+	for _, l := range strings.Split(decodeRecorderText(b), "\r\n") {
+		if strings.Contains(l, "ev=voucher_full") && strings.Contains(l, "amt=800.00") {
+			real, _ = pushPayload(l)
+		}
+	}
+	if real == "" {
+		t.Fatal("the real altered line is not in the file")
+	}
+	// re-frame a payload after its records change: the len is the records' UTF-16 length
+	frame := func(p string) string {
+		i := strings.Index(p, "|len=")
+		head := pushMagic + "|part=1"
+		recs := p[len(head):i]
+		return head + recs + fmt.Sprintf("|len=%d|end=1", len(utf16.Encode([]rune(recs))))
+	}
+	build := func(p string) (string, error) {
+		e, err := pushParse([]string{p})
+		if err != nil {
+			return "", err
+		}
+		return pushEntryXML(e, "g", 0)
+	}
+	x, err := build(real)
+	if err != nil || !strings.Contains(x, `<LEDGERNAME TYPE="String">Cash</LEDGERNAME><GSTHSNNAME TYPE="String"></GSTHSNNAME><ISDEEMEDPOSITIVE TYPE="Logical">Yes</ISDEEMEDPOSITIVE><ISPARTYLEDGER TYPE="Logical">Yes</ISPARTYLEDGER><AMOUNT TYPE="Amount">-800.00</AMOUNT>`) {
+		t.Fatalf("the real line: %v\n%s", err, x)
+	}
+	if a := tagValues(x, "AMOUNT"); len(a) != 2 || a[0] != "800.00" || a[1] != "-800.00" {
+		t.Fatalf("the amounts as Tally signs them: %v", a)
+	}
+	// both IsDeemedPositive No: no sign makes them add up: refused
+	if _, err := build(frame(strings.Replace(real, "~dp=Yes", "~dp=No", 1))); err == nil || !strings.Contains(err.Error(), "zero") {
+		t.Fatalf("a line that does not add up was taken: %v", err)
+	}
+	// a "(-)" amount: the other way from its IsDeemedPositive (Spike Income as a negative debit, "(-)800.00" with
+	// IsDeemedPositive Yes, is still the credit of 800 that balances Cash)
+	m := frame(strings.Replace(real, "amt=800.00~neg=No~dp=No", "amt=(-)800.00~neg=No~dp=Yes", 1))
+	if x, err := build(m); err != nil {
+		t.Fatalf("a (-) amount: %v", err)
+	} else if a := tagValues(x, "AMOUNT"); a[0] != "800.00" || a[1] != "-800.00" {
+		t.Fatalf("a (-) amount: %v", a)
+	}
+	// a TDS sub-category amount: no IsDeemedPositive of its own: refused while neg is blind
+	tds := frame(strings.Replace(real, "|L1C1=cat=", "|L1C1=cat=|L1T1=tt=TDS~cat=~pl=~ref=|L1T1s1=sub=194C~duty=TDS~rate=1~ass=800.00~assneg=No~tax=8.00~taxneg=No", 1))
+	if _, err := build(tds); err == nil || !strings.Contains(err.Error(), "sign") {
+		t.Fatalf("a TDS amount with no sign was taken: %v", err)
+	}
+	// the same with a neg that says something (one Yes): as before, the neg rules
+	if x, err := build(frame(strings.Replace(real, "amt=800.00~neg=No~dp=Yes", "amt=800.00~neg=Yes~dp=Yes", 1))); err != nil {
+		t.Fatalf("a neg that says something: %v", err)
+	} else if a := tagValues(x, "AMOUNT"); a[0] != "800.00" || a[1] != "-800.00" {
+		t.Fatalf("a neg that says something: %v", a)
 	}
 }
