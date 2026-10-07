@@ -1,0 +1,56 @@
+2026-10-07 03:31:35  FinCom Bridge 2.3.1: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+2026-10-07 03:31:35  FinCom Bridge 2.3.1 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+2026-10-07 03:31:35  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+2026-10-07 03:31:35  Recorder: re-scan of the add-on's files for 2.3.1: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+2026-10-07 03:31:35  Check:  - 
+2026-10-07 03:31:35  Nightly catch-up (02:00): Tally is open and nobody has used FinCom for 15 minutes
+2026-10-07 03:31:35  Nightly catch-up: waiting, Tally has just opened; letting it finish loading
+2026-10-07 03:31:38  Tray icon: set to show next to the clock always (Windows 11)
+2026-10-07 03:31:38  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+2026-10-07 03:31:38  Company FinCom Spike Co: its Tally GUID 65021e3b-f5b6-4c7e-b235-9f3474abfc8d is held from now on
+2026-10-07 03:31:38  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=2, ALTMSTID=642 (reading is prospective only: the bridge follows what changes after this)
+2026-10-07 03:31:38  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=2, ALTMSTID=642
+2026-10-07 03:31:38  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=2, ALTMSTID=642)
+2026-10-07 03:31:40  Refused a request from a program of another Windows user (/tray/idle): not your FinCom Bridge
+2026-10-07 03:31:40  Refused a request from a program of another Windows user (/tray/status): not your FinCom Bridge
+2026-10-07 03:31:53  Refused a request from a program of another Windows user (/status): not your FinCom Bridge
+2026-10-07 03:32:25  Keeping FinCom Spike Co in step: its day book from 20260401 is read at Update now (and the nightly run), a month a request
+2026-10-07 03:32:26  Keeping FinCom Spike Co: ledger list MasterID 1-2000, 428 ledger(s) (0.2s); saved
+2026-10-07 03:32:26  Keeping FinCom Spike Co: ledger list MasterID 2001-end, 0 ledger(s) (0.2s); saved
+2026-10-07 03:32:26  Keeping FinCom Spike Co: the ledger list read (428 ledgers, 28 groups, 3 request(s)): 428 new, 0 changed, 0 renamed, 0 gone
+2026-10-07 03:32:26  Keeping FinCom Spike Co: Reading old entries is off (prospective only); FinComCompany ALTVCHID=2 ALTMSTID=645
+2026-10-07 03:32:26  Nightly catch-up: done (8 request(s) to Tally); the bridge is idle again (next: the nightly catch-up at 02:00, or Update now)
+2026-10-07 03:34:20  Recorder: Journal 3 of 01-Jan-2027 (MasterID 3, line 8ae33a70…): asking Tally by MasterID
+2026-10-07 03:34:20  Recorder: Journal 3 of 01-Jan-2027 (MasterID 3, line 8ae33a70…): taken: Tally's GUID 65021e3b-f5b6-4c7e-b235-9f3474abfc8d-00000003, AlterID 3
+2026-10-07 03:35:35  Tally 9000: TDSDeskCompanies took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-07 03:35:35  Tally 9000 did not answer in time at 03:35:35 (TDSDeskCompanies, try 1); trying again by itself at 03:35:50
+2026-10-07 03:35:35  Recorder: Tally took longer than 2 s to list its open companies (limit 2 s); this computer's changes of companies not seen open here yet wait until it answers in time; none is passed over or lost
+2026-10-07 03:35:35  Recorder: Receipt 1 of 01-Aug-2026 (MasterID 4, line 85e1a4e8…): asking Tally by MasterID
+2026-10-07 03:35:35  Recorder: Receipt 1 of 01-Aug-2026 (MasterID 4, line 85e1a4e8…): not asked yet: Tally did not answer in time at 03:35; trying again by itself at 03:35 (nothing was sent); asked then
+2026-10-07 03:35:52  Tally 9000: FinComVoucherByMaster 20260801 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-07 03:35:52  Tally 9000 did not answer in time at 03:35:52 (FinComVoucherByMaster, try 2); trying again by itself at 03:36:22
+2026-10-07 03:35:52  Recorder: Receipt 1 of 01-Aug-2026 (MasterID 4, line 85e1a4e8…): not asked yet: Tally did not answer in time at 03:35; trying again by itself at 03:36 (nothing was sent); asked then
+2026-10-07 03:36:08  Posting job r1-job-1: 1 item(s) for FinCom Spike Co
+2026-10-07 03:36:08  Posting from FinCom's queue: 1 item(s) for FinCom Spike Co (job r1-job-1)
+2026-10-07 03:36:08  Recorder: Receipt 1 of 01-Aug-2026 (MasterID 4, line 85e1a4e8…): not asked: a posting is going on; asked after it
+2026-10-07 03:36:16  Tally 9000 is busy (no answer in 8s); nothing more is sent to it until it answers a small check (the company's name), asked once a minute
+2026-10-07 03:36:16  Tally 9000: TDSDeskCompanies took 8.2s and failed: The operation has timed out
+2026-10-07 03:36:16  Posting job r1-job-1: Waiting for Tally: Tally is busy (a report, a pop-up or another user may be holding it) — finish or close it in TallyPrime; it will be posted automatically
+2026-10-07 03:36:22  Recorder: Receipt 1 of 01-Aug-2026 (MasterID 4, line 85e1a4e8…): not asked yet: Tally (port 9000) is busy: it did not answer a request and may still be working on it; nothing is sent until it answers a small check (next at 03:37:16); asked again shortly
+2026-10-07 03:36:23  Recorder: Receipt 1 of 01-Aug-2026 (MasterID 4, line 85e1a4e8…): held: the entry was not read from Tally: Tally (port 9000) is busy: it did not answer a request and may still be working on it; nothing is sent until it answers a small check (next at 03:37:16)
+2026-10-07 03:36:23  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (Tally (port 9000) is busy: it did not answer a request and may still be working on it; nothing is sent until it answers a small check (next at 03:37:16)); sent without it (FinCom holds the line until a body comes)
+2026-10-07 03:36:38  Recorder: FinCom asks again for 1 held line(s) of this bridge: 0 new in the held list, 0 asked afresh (tries of an older version), 1 there already, 0 resolved already, 0 not this bridge's own Tally's (company not open here or another GUID)
+2026-10-07 03:39:11  Tally 9000 answered the small check; requests go again
+2026-10-07 03:39:12  Tally 9000 answers again (it was busy for 3m4s)
+2026-10-07 03:39:12      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>5</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-07 03:39:12  Posting job r1-job-1: request 1 of 1: 1 vouchers in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 5)
+2026-10-07 03:39:12  Posting job r1-job-1: 1 requests, 1 vouchers, 0.2 s total
+2026-10-07 03:39:12  Posting job r1-job-1: posting window ALTVCHID 4 to 5, 1 voucher(s) and 0 master(s) created
+2026-10-07 03:39:12  Posting job r1-job-1 done: Posted 1 of 1 (Tally's reply)
+2026-10-07 03:39:12  Posting from FinCom's queue r1-job-1: Posted 1 of 1 (Tally's reply)
+2026-10-07 03:39:15  Light update of FinCom Spike Co (after a posting): the entries just posted into the copy; Tally is not read (Update now reads it)
+2026-10-07 03:39:15  Light update: done (0 request(s) to Tally); the bridge is idle again
+2026-10-07 03:42:08  Tally 9000 answered in time again (FinComCompany): the background requests are back to normal
+2026-10-07 03:42:08  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=2; now ALTVCHID=5, ALTMSTID=651
+2026-10-07 03:42:08  Ledger changes for FinCom Spike Co: Tally's master counter 642 -> 651: 1 request(s) for AlterID 643-651, 4 ledger(s) sent to FinCom; the last number is 651
+2026-10-07 03:42:08  Ledger changes for FinCom Spike Co: 4 ledger(s) created or altered in Tally sent to FinCom

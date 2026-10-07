@@ -1,0 +1,51 @@
+{
+  "tags": [
+    {
+      "label": "Tally's own Day Book export (S5 on the screen)",
+      "file": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37565929387-windows-latest\\round4\\scen231\\s5-tds-on-screen.daybook.xml"
+    },
+    {
+      "label": "the bridge's entry request answer (S5 on the screen)",
+      "file": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37565929387-windows-latest\\round4\\captures231\\s5-tds-on-screen.entry.xml"
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "S5",
+      "key": "s5-tds-on-screen",
+      "kind": "tds",
+      "notesOnly": false,
+      "label": "payment with TDS entered on the screen",
+      "guid": "65021e3b-f5b6-4c7e-b235-9f3474abfc8d-00000003",
+      "truth": {
+        "type": "Journal",
+        "ledgers": {
+          "S231 Contract Exp": -100000,
+          "S231 TDS Payable": 2000,
+          "S231 Contractor": 98000
+        },
+        "tds": {
+          "nature": "S231 Contract Work",
+          "rate": 2,
+          "base": 100000,
+          "tax": 2000,
+          "party": "S231 Contractor",
+          "section": "194C",
+          "deductee": "Company - Resident"
+        }
+      },
+      "tally": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37565929387-windows-latest\\round4\\scen231\\s5-tds-on-screen.daybook.xml",
+      "entry": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37565929387-windows-latest\\round4\\captures231\\s5-tds-on-screen.entry.xml",
+      "ledger": "D:\\a\\testingtdsdesk\\testingtdsdesk\\spike-results\\37565929387-windows-latest\\round4\\scen231\\ledger-S231Contractor.full.xml",
+      "lines": [
+        {
+          "ev": "created",
+          "at": "03:34:20",
+          "xml": "<VOUCHER REMOTEID=\"65021e3b-f5b6-4c7e-b235-9f3474abfc8d-00000003\" VCHKEY=\"65021e3b-f5b6-4c7e-b235-9f3474abfc8d-0000b533:00000008\" VCHTYPE=\"Journal\" OBJVIEW=\"Accounting Voucher View\">\r\n     <DATE TYPE=\"Date\">20270101</DATE>\r\n     <REFERENCEDATE TYPE=\"Date\"></REFERENCEDATE>\r\n     <IRNACKDATE TYPE=\"Date\"></IRNACKDATE>\r\n     <GUID>65021e3b-f5b6-4c7e-b235-9f3474abfc8d-00000003</GUID>\r\n     <NARRATION TYPE=\"String\">S5 contract work TDS 194C entered on the screen</NARRATION>\r\n     <REQUESTORRULE/>\r\n     <PARTYGSTIN TYPE=\"String\"></PARTYGSTIN>\r\n     <PLACEOFSUPPLY TYPE=\"String\"></PLACEOFSUPPLY>\r\n     <VOUCHERTYPENAME>Journal</VOUCHERTYPENAME>\r\n     <CMPGSTIN TYPE=\"String\"></CMPGSTIN>\r\n     <PARTYLEDGERNAME TYPE=\"String\">S231 Contractor</PARTYLEDGERNAME>\r\n     <VOUCHERNUMBER>3</VOUCHERNUMBER>\r\n     <REFERENCE TYPE=\"String\"></REFERENCE>\r\n     <IRN TYPE=\"String\"></IRN>\r\n     <IRNACKNO TYPE=\"String\"></IRNACKNO>\r\n     <SERIALMASTER TYPE=\"String\"></SERIALMASTER>\r\n     <ARESERIALMASTER TYPE=\"String\"></ARESERIALMASTER>\r\n     <NUMBERINGSTYLE>Auto Retain</NUMBERINGSTYLE>\r\n     <PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW>\r\n     <ISDELETED>No</ISDELETED>\r\n     <ASORIGINAL>No</ASORIGINAL>\r\n     <ISDEEMEDPOSITIVE TYPE=\"Logical\">Yes</ISDEEMEDPOSITIVE>\r\n     <ISOPTIONAL TYPE=\"Logical\">No</ISOPTIONAL>\r\n     <ISCANCELLED TYPE=\"Logical\">No</ISCANCELLED>\r\n     <ISINVOICE>No</ISINVOICE>\r\n     <ASPAYSLIP>No</ASPAYSLIP>\r\n     <ISDELETEDVCHRETAINED>No</ISDELETEDVCHRETAINED>\r\n     <ISNEGISPOSSET TYPE=\"Logical\">Yes</ISNEGISPOSSET>\r\n     <ALTERID TYPE=\"Number\"> 3</ALTERID>\r\n     <MASTERID TYPE=\"Number\"> 3</MASTERID>\r\n     <VOUCHERKEY TYPE=\"Number\">199230647959560</VOUCHERKEY>\r\n     <VOUCHERRETAINKEY TYPE=\"Number\">9</VOUCHERRETAINKEY>\r\n     <REUSEHOLEID TYPE=\"Number\">0</REUSEHOLEID>\r\n     <VOUCHERNUMBERSERIES TYPE=\"String\">Default</VOUCHERNUMBERSERIES>\r\n     <EWAYBILLDETAILS.LIST>     </EWAYBILLDETAILS.LIST>\r\n     <ALLINVENTORYENTRIES.LIST>     </ALLINVENTORYENTRIES.LIST>\r\n     <ALLLEDGERENTRIES.LIST>\r\n      <LEDGERNAME TYPE=\"String\">S231 Contract Exp</LEDGERNAME>\r\n      <GSTHSNNAME TYPE=\"String\"></GSTHSNNAME>\r\n      <ISDEEMEDPOSITIVE TYPE=\"Logical\">Yes</ISDEEMEDPOSITIVE>\r\n      <ISLASTDEEMEDPOSITIVE TYPE=\"Logical\">Yes</ISLASTDEEMEDPOSITIVE>\r\n      <AMOUNT TYPE=\"Amount\">-100000.00</AMOUNT>\r\n      <VATASSESSABLEVALUE TYPE=\"Amount\"></VATASSESSABLEVALUE>\r\n      <CATEGORYALLOCATIONS.LIST>      </CATEGORYALLOCATIONS.LIST>\r\n      <BANKALLOCATIONS.LIST>      </BANKALLOCATIONS.LIST>\r\n      <BILLALLOCATIONS.LIST>      </BILLALLOCATIONS.LIST>\r\n      <RATEDETAILS.LIST>      </RATEDETAILS.LIST>\r\n      <TAXOBJECTALLOCATIONS.LIST>      </TAXOBJECTALLOCATIONS.LIST>\r\n      <COSTTRACKALLOCATIONS.LIST>      </COSTTRACKALLOCATIONS.LIST>\r\n     </ALLLEDGERENTRIES.LIST>\r\n     <ALLLEDGERENTRIES.LIST>\r\n      <LEDGERNAME TYPE=\"String\">S231 TDS Payable</LEDGERNAME>\r\n      <GSTHSNNAME TYPE=\"String\"></GSTHSNNAME>\r\n      <ISDEEMEDPOSITIVE TYPE=\"Logical\">No</ISDEEMEDPOSITIVE>\r\n      <ISLASTDEEMEDPOSITIVE TYPE=\"Logical\">No</ISLASTDEEMEDPOSITIVE>\r\n      <AMOUNT TYPE=\"Amount\">2000.00</AMOUNT>\r\n      <VATASSESSABLEVALUE TYPE=\"Amount\"></VATASSESSABLEVALUE>\r\n      <CATEGORYALLOCATIONS.LIST>      </CATEGORYALLOCATIONS.LIST>\r\n      <BANKALLOCATIONS.LIST>      </BANKALLOCATIONS.LIST>\r\n      <BILLALLOCATIONS.LIST>      </BILLALLOCATIONS.LIST>\r\n      <RATEDETAILS.LIST>      </RATEDETAILS.LIST>\r\n      <TAXOBJECTALLOCATIONS.LIST>      </TAXOBJECTALLOCATIONS.LIST>\r\n      <COSTTRACKALLOCATIONS.LIST>      </COSTTRACKALLOCATIONS.LIST>\r\n     </ALLLEDGERENTRIES.LIST>\r\n     <ALLLEDGERENTRIES.LIST>\r\n      <LEDGERNAME TYPE=\"String\">S231 Contractor</LEDGERNAME>\r\n      <GSTHSNNAME TYPE=\"String\"></GSTHSNNAME>\r\n      <ISDEEMEDPOSITIVE TYPE=\"Logical\">No</ISDEEMEDPOSITIVE>\r\n      <ISLASTDEEMEDPOSITIVE TYPE=\"Logical\">No</ISLASTDEEMEDPOSITIVE>\r\n      <AMOUNT TYPE=\"Amount\">98000.00</AMOUNT>\r\n      <VATASSESSABLEVALUE TYPE=\"Amount\"></VATASSESSABLEVALUE>\r\n      <CATEGORYALLOCATIONS.LIST>      </CATEGORYALLOCATIONS.LIST>\r\n      <BANKALLOCATIONS.LIST>      </BANKALLOCATIONS.LIST>\r\n      <BILLALLOCATIONS.LIST>      </BILLALLOCATIONS.LIST>\r\n      <RATEDETAILS.LIST>      </RATEDETAILS.LIST>\r\n      <TAXOBJECTALLOCATIONS.LIST>      </TAXOBJECTALLOCATIONS.LIST>\r\n      <COSTTRACKALLOCATIONS.LIST>      </COSTTRACKALLOCATIONS.LIST>\r\n     </ALLLEDGERENTRIES.LIST>\r\n    </VOUCHER>",
+          "state": "applied",
+          "why": ""
+        }
+      ]
+    }
+  ]
+}
