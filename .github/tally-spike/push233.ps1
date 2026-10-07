@@ -68,7 +68,7 @@ function P3Templates {
   $null = P3Imp $co1 'All Masters' $m 'push233 masters'
   $items = @(); for ($i = 1; $i -le 50; $i++) { $items += ('P233 Item {0:d2}' -f $i) }
   $P233.tpl.receipt = @{ date = '20261102'; dmy = '2-11-2026'; xml = ((S2Receipt '20261102' 'P233-R1' 'P233 Party' 1180 'push233 receipt') -replace 'HDFC Bank', 'P233 Bank') }   # P7 reconciles P233 Bank
-  $P233.tpl.sales50 = @{ date = '20261201'; dmy = '1-12-2026'; xml = (S2Sales '20261201' 'P233-S50' 'P233 Party' $items 'push233 50 items') }
+  $P233.tpl.sales50 = @{ date = '20261201'; dmy = '1-12-2026'; xml = ((S2Sales '20261201' 'P233-S50' 'P233 Party' $items 'push233 50 items') -replace '<LEDGERNAME>Sales</LEDGERNAME>', '<LEDGERNAME>P233 Sales</LEDGERNAME>') }   # run 37656269159: with slow232's plain 'Sales' Tally answered EXCEPTIONS 1; the godown invoice with P233 Sales (affects stock) was created
   # the godown invoice: two batch items, each in two godowns x two batches
   $gx = '<VOUCHER VCHTYPE="Sales" ACTION="Create" OBJVIEW="Invoice Voucher View"><DATE>20261202</DATE><VOUCHERTYPENAME>Sales</VOUCHERTYPENAME><VOUCHERNUMBER>P233-G1</VOUCHERNUMBER><PARTYLEDGERNAME>P233 Party</PARTYLEDGERNAME><PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW><ISINVOICE>Yes</ISINVOICE><NARRATION>push233 godowns and batches</NARRATION>'
   $gx += '<LEDGERENTRIES.LIST><LEDGERNAME>P233 Party</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><ISPARTYLEDGER>Yes</ISPARTYLEDGER><AMOUNT>-944.00</AMOUNT><BILLALLOCATIONS.LIST><NAME>P233-G1</NAME><BILLTYPE>New Ref</BILLTYPE><AMOUNT>-944.00</AMOUNT></BILLALLOCATIONS.LIST></LEDGERENTRIES.LIST>'
