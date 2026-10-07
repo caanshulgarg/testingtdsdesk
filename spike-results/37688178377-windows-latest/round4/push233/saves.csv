@@ -1,0 +1,8 @@
+"kind","alter","ms_sendwait","ms_fullline","what","alt0","alt1"
+"receipt","False","36","170","full line","6","7"
+"sales50","False","53","3016","full line","7","8"
+"godown","False","48","648","full line","8","9"
+"receipt","True","64","145","full line","10","11"
+"receipt","False","69","225","full line","16","17"
+"big","False","55","960","full line","100000","100001"
+"receipt","False","70","292","full line","18","19"
