@@ -219,13 +219,21 @@ else {
   $mid8 = if ($new) { "$($new.mid)" } else { '' }
   $heads8 = @($recL | Where-Object { $_ -match '^FCR1\|ev=voucher_accept_(pre|post)\|' })
   $full8 = @($recL | Where-Object { $_ -like 'FCR1|ev=voucher_full|*' -and $_ -match '\|end=1\|t1=[^|]*\|src=live$' -and (-not $mid8 -or $_ -match "\|mid=$mid8\|") })
-  $lp8 = $full8.Count -and $full8[0] -match '\|narr:\d+=' -and $full8[0] -match '\|L1=led:\d+=' -and $full8[0] -match '~neg=(Yes|No)'
+  # the line as the bridge checks it: the narration, the first ledger with its sign, no record repeated, and the part's
+  # length (|len=<n>: the characters between "|part=1" and "|len=") right
+  $len8 = $false; $rep8 = 0
+  if ($full8.Count) {
+    $f0 = $full8[0]; $i0 = $f0.IndexOf('|part=1') + 7; $mL = [regex]::Match($f0, '\|len=(\d+)\|end=1\|t1=')
+    if ($i0 -ge 7 -and $mL.Success) { $len8 = ($f0.Substring($i0, $mL.Index - $i0)).Length -eq [int]$mL.Groups[1].Value }
+    $rep8 = @([regex]::Matches($f0, '\|mid=') ).Count - 2   # the head's mid and the entry's own: anything more is a record repeated
+  }
+  $lp8 = $full8.Count -and $full8[0] -match '\|narr=' -and $full8[0] -match '\|L1=led=[^|~]+~amt=' -and $full8[0] -match '~neg=(Yes|No)' -and $len8 -and $rep8 -le 0
   $err8 = @(Get-ChildItem $dir, $data1 -Recurse -File -Include *tdl*.log, tdlerr* -ErrorAction SilentlyContinue)
   if ($full8.Count) { Set-Content (Join-Path $cap 'full-entry-line.txt') $full8 -Encoding UTF8 }
   $st8 = if (-not $new) { 'HARNESS' } elseif ($heads8.Count -ge 2 -and $full8.Count -ge 1 -and $lp8) { 'PASS' } else { 'FAIL' }
   # branch push-probe: the add-on's FCRProbe line (which string functions this release evaluates), said as it is
   foreach ($pl in @($recL | Where-Object { $_ -like 'FCR1|ev=probe|*' } | Select-Object -First 1)) { Info "c8 probe: $([regex]::Match($pl, '\|narr=(.*)\|t1=').Groups[1].Value)" }
-  Result 'c8 the new add-on loads and writes the full entry' $st8 ("receipt by keys: {0}; heads lines {1}; full lines for it {2} (lengths, the first ledger and neg read: {3}); every recorder line's event: {4}; Tally's TDL error files: {5}; first full line: {6}" -f `
+  Result 'c8 the new add-on loads and writes the full entry' $st8 ("receipt by keys: {0}; heads lines {1}; full lines for it {2} (the narration, the first ledger, neg and the part's length read, no record repeated: {3}); every recorder line's event: {4}; Tally's TDL error files: {5}; first full line: {6}" -f `
       $(if ($new) { "mid $($new.mid)" } else { 'not made (the keys)' }), $heads8.Count, $full8.Count, [bool]$lp8, ((($recL | ForEach-Object { [regex]::Match($_, '^FCR1\|ev=([^|]+)').Groups[1].Value }) | Group-Object | ForEach-Object { "$($_.Name) x$($_.Count)" }) -join ', '),
       $(if ($err8.Count) { ($err8 | ForEach-Object { "$($_.Name): $((Get-Content $_.FullName -Tail 3) -join ' | ')" }) -join '; ' } else { 'none' }), $(if ($full8.Count) { $full8[0].Substring(0, [Math]::Min(700, $full8[0].Length)) } else { '-' }))
 }
