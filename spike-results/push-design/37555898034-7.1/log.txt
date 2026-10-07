@@ -1,0 +1,21 @@
+== TallyPrime 7.1 push-design
+runnervmfi6oq\runneradmin
+
+Caption                                  Version
+-------                                  -------
+Microsoft Windows Server 2025 Datacenter 10.0.26100
+
+
+
+Name                                            NumberOfLogicalProcessors
+----                                            -------------------------
+AMD EPYC 7763 64-Core Processor                                         4
+
+
+GET (first KB) https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe -> 200 len=72090376 modified=Thu, 25 Jun 2026 10:18:19 GMT 
+DOWNLOADED Rel.7.1 from https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe : 72090376 bytes in 8 s, SHA-256 B849B1FB5A93D03C8FABDAEC4447FDCFDF27A5D6C93E3C207BBB320263AB663F, signature Valid CN=Tally Solutions Pvt Ltd, O=Tally Solutions Pvt Ltd, L=Bengaluru, S=Karnataka, C=IN, file version 1.1.7.1 product 1.1.7.1
+::notice::DOWNLOADED Rel.7.1 from https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe : 72090376 bytes in 8 s, SHA-256 B849B1FB5A93D03C8FABDAEC4447FDCFDF27A5D6C93E3C207BBB320263AB663F, signature Valid CN=Tally Solutions Pvt Ltd, O=Tally Solutions Pvt Ltd, L=Bengaluru, S=Karnataka, C=IN, file version 1.1.7.1 product 1.1.7.1
+[shot] install-a-window (1024x768)
+  setup window: TallyPrimeSetup 'TallyPrime Setup Manager'
+  setup window: WindowsTerminal 'C:\ProgramData\GitHub\HostedComputeAgent\hosted-compute-agent'
+[keys] sent 'i' to TallyPrimeSetup 'TallyPrime Setup Manager'

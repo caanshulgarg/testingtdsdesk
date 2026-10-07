@@ -1,0 +1,26 @@
+== TallyPrime 4.1 push-design
+runnervmfi6oq\runneradmin
+
+Caption                                  Version
+-------                                  -------
+Microsoft Windows Server 2025 Datacenter 10.0.26100
+
+
+
+Name                                            NumberOfLogicalProcessors
+----                                            -------------------------
+AMD EPYC 9V74 80-Core Processor                                         4
+
+
+GET (first KB) https://tallymirror.tallysolutions.com/download_centre/Rel.4.1_gold/TP/Full/setup.exe -> 403 len=-1 modified= Exception calling "GetResponse" with "0" argument(s): "The remote server returned an error: (403) Forbidden."
+GET (first KB) https://tallymirror.tallysolutions.com/download_centre/Rel.4.1/TP/Full/setup.exe -> 200 len=44673232 modified=Tue, 12 Mar 2024 09:23:50 GMT 
+DOWNLOADED Rel.4.1 from https://tallymirror.tallysolutions.com/download_centre/Rel.4.1/TP/Full/setup.exe : 44673232 bytes in 6 s, SHA-256 8520B7C0A97BA364E10DE9CEA0AED2E609A7568A0516C89E332F50C781052055, signature Valid CN=Tally Solutions Pvt Ltd, O=Tally Solutions Pvt Ltd, L=Bengaluru, S=Karnataka, C=IN, file version 1.1.4.1 product 1.1.4.1
+::notice::DOWNLOADED Rel.4.1 from https://tallymirror.tallysolutions.com/download_centre/Rel.4.1/TP/Full/setup.exe : 44673232 bytes in 6 s, SHA-256 8520B7C0A97BA364E10DE9CEA0AED2E609A7568A0516C89E332F50C781052055, signature Valid CN=Tally Solutions Pvt Ltd, O=Tally Solutions Pvt Ltd, L=Bengaluru, S=Karnataka, C=IN, file version 1.1.4.1 product 1.1.4.1
+[shot] install-a-window (1024x768)
+  setup window: TallyPrimeSetup 'TallyPrime Setup Manager'
+  setup window: WindowsTerminal 'C:\ProgramData\GitHub\HostedComputeAgent\hosted-compute-agent'
+[keys] sent 'i' to TallyPrimeSetup 'TallyPrime Setup Manager'
+[shot] install-b-010s (1024x768)
+  [10s] window: TallyPrimeSetup 'TallyPrime Setup Manager'
+  [10s] window: WindowsTerminal 'C:\ProgramData\GitHub\HostedComputeAgent\hosted-compute-agent'
+tally.exe appeared after ~10s

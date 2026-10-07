@@ -1,0 +1,27 @@
+== TallyPrime 3.0 push-design
+runnervmfi6oq\runneradmin
+
+Caption                                  Version
+-------                                  -------
+Microsoft Windows Server 2025 Datacenter 10.0.26100
+
+
+
+Name                            NumberOfLogicalProcessors
+----                            -------------------------
+INTEL(R) XEON(R) PLATINUM 8573C                         4
+
+
+GET (first KB) https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_gold/TP/Full/setup.exe -> 403 len=-1 modified= Exception calling "GetResponse" with "0" argument(s): "The remote server returned an error: (403) Forbidden."
+GET (first KB) https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_Gold/TP/Full/setup.exe -> 200 len=43440848 modified=Sun, 11 Jun 2023 01:53:23 GMT 
+GET (first KB) https://tallymirror.tallysolutions.com/download_centre/Rel.3.0/TP/Full/setup.exe -> 200 len=43465936 modified=Mon, 15 May 2023 04:03:04 GMT 
+DOWNLOADED Rel.3.0 from https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_Gold/TP/Full/setup.exe : 43440848 bytes in 1 s, SHA-256 AF4172465A987F1F9FBDA87137EB40DEDAE8478A69FD08D87374C9A38BC81310, signature Valid CN=Tally Solutions Pvt Ltd, O=Tally Solutions Pvt Ltd, L=Bengaluru, S=Karnataka, C=IN, file version 1.1.3.0 product 1.1.3.0
+::notice::DOWNLOADED Rel.3.0 from https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_Gold/TP/Full/setup.exe : 43440848 bytes in 1 s, SHA-256 AF4172465A987F1F9FBDA87137EB40DEDAE8478A69FD08D87374C9A38BC81310, signature Valid CN=Tally Solutions Pvt Ltd, O=Tally Solutions Pvt Ltd, L=Bengaluru, S=Karnataka, C=IN, file version 1.1.3.0 product 1.1.3.0
+[shot] install-a-window (1024x768)
+  setup window: TallyPrimeSetup 'TallyPrime Setup Manager'
+  setup window: WindowsTerminal 'C:\ProgramData\GitHub\HostedComputeAgent\hosted-compute-agent'
+[keys] sent 'i' to TallyPrimeSetup 'TallyPrime Setup Manager'
+[shot] install-b-010s (1024x768)
+  [10s] window: TallyPrimeSetup 'TallyPrime Setup Manager'
+  [10s] window: WindowsTerminal 'C:\ProgramData\GitHub\HostedComputeAgent\hosted-compute-agent'
+tally.exe appeared after ~10s
