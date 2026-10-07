@@ -166,3 +166,7 @@ The same steps are in `docs/bridge-2.3.3-test-sheet.txt`.
 5. On a company Tally answers in time, a line held with "waiting: ..." is replaced by its entry once Tally answers
    (Sync activity: "Replaced by a later line", and the entry in the books once).
 6. Roll back from the tray once, check 2.3.2 starts, then install 2.3.3 again.
+
+## Published
+
+Published to staging on 07-Oct-2026 at 21:37 IST (main 0c869e7, from tax-accuracy 6eb71c2) on the owner's word "Publish it". Setup SHA-256 8280206b1500742b892d41a658fdff809aa7eba219913611d929b7f8e9bee5e5; program 3d9dbb4aae1c01f5ea078d098abe56f2192cc42f39d7f5700e919b4f6d042009. Real-Tally run 37637731177 on this exact setup: checks (1)-(8) all PASS. Install by hand (bridges do not update themselves: no signed update list).
