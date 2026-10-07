@@ -15,12 +15,15 @@
 // bridge takes the entry from what follows "|narr=" (the payload, up to the LAST "|t1="):
 //
 //   - fields: "|key=value"; a record (key starting with a capital: L1, L1B2, I3b1 ...) is "~"-separated sub-fields
-//     "name=value". Free text is written with its length: "name:<n>=<n characters>" ($$StringLength in the add-on, UTF-16
-//     units; code points accepted as well), so a value may hold "|", "~", "=", ":", line breaks or anything else and is
-//     read exactly; only Tally's own words (amounts, dates, Yes/No, rate heads) are written plain, and never hold "|" or "~".
-//   - the size cap: the add-on ends a physical line once it passes FCRCap characters and goes on in a new line with the
-//     same head and "|part=<k>" (each one complete: "...|more=1|t1=...|src=live"); the last part ends "|end=1". A record is
-//     never split. The bridge joins the parts of one entry in order; a part missing or out of order: no full entry.
+//     "name=value". Free text is escaped by the add-on with $$StringFindAndReplace (proven on 3.0, 4.1, 5.1, 6.2 and 7.1 by
+//     tally-versions run 37608273503): "%" -> %25, "|" -> %7C, "~" -> %7E, so a value can never hold a separator, nor start
+//     a physical line with "FCR1|"; a line break inside a value stays as it is and is read from the raw text. Tally's own
+//     words (amounts, dates, Yes/No, rate heads) are written plain and never hold "|" or "~". ($$String of a function giving
+//     a number is left unset by every release (same run): never used; a length goes through a Number variable.)
+//   - the size cap: a record that would take the line past FCRCap characters ends it ("|len=<n>|more=1|t1=...|src=live")
+//     and opens the next part with the same head and "|part=<k>"; the last part ends "|len=<n>|end=1". n is the length of
+//     the part's records ($$StringLength, added up in a Number variable). A record is never split. The bridge joins the
+//     parts of one entry in order; a part missing, out of order, or whose length is not n: no full entry.
 //   - the fields: the entry's own (mid, aid, guid, date, vtype, vno, party, canc, opt, ref, refdt, pgstin, pos, cgstin, irn,
 //     irnack, irnackdt, ewb, view, narr) and the counts nL, nI, nO, nSO, nSI, nCE; the records: L<i> a ledger line (led,
 //     amt, neg, dp, party, hsn) with R<j> GST rate (head, vt, rate), B<j> bill (name, type, amt, neg, cp, tdssec), K<j> bank
@@ -92,170 +95,108 @@ func pushPayload(raw string) (string, bool) {
 	return p, strings.HasPrefix(p, pushMagic+"|part=")
 }
 
-// the length of a text as the add-on counts it: UTF-16 units
+// the length of a text as the add-on counts it ($$StringLength): UTF-16 units (code points accepted too: lenOK)
 func u16len(s string) int { return len(utf16.Encode([]rune(s))) }
 
-// n units (else n code points) of s from i, the value ending where one of seps follows (or the text ends)
-func pushTake(s string, i, n int, seps string) (string, int, bool) {
-	ends := func(j int) bool { return j == len(s) || strings.IndexByte(seps, s[j]) >= 0 }
-	for _, units := range []bool{true, false} {
-		j, c := i, 0
-		for c < n && j < len(s) {
-			r, w := utf8.DecodeRuneInString(s[j:])
-			if units && r >= 0x10000 {
-				c += 2
-			} else {
-				c++
-			}
-			j += w
-		}
-		if c == n && ends(j) {
-			return s[i:j], j, true
-		}
+func lenOK(s string, n int) bool { return u16len(s) == n || utf8.RuneCountInString(s) == n }
+
+// the add-on's escaping undone: %25 %, %7C |, %7E ~ (any %XX; a "%" not followed by two hex digits is not the add-on's)
+func pushUnesc(v string) (string, error) {
+	if !strings.Contains(v, "%") {
+		return v, nil
 	}
-	return "", i, false
+	var b strings.Builder
+	for i := 0; i < len(v); i++ {
+		if v[i] != '%' {
+			b.WriteByte(v[i])
+			continue
+		}
+		if i+2 >= len(v) {
+			return "", fmt.Errorf("a %% without its code in %q", cut(v, 60))
+		}
+		x, err := strconv.ParseUint(v[i+1:i+3], 16, 8)
+		if err != nil {
+			return "", fmt.Errorf("a %% without its code in %q", cut(v, 60))
+		}
+		b.WriteByte(byte(x))
+		i += 2
+	}
+	return b.String(), nil
 }
 
-var rePushKey = regexp.MustCompile(`^[A-Za-z0-9]{1,24}`)
-
-// a key at s[i:] and how its value is written: "key=" (plain) or "key:<n>=" (n characters); the value's start
-func pushKey(s string, i int) (key string, n int, lp bool, j int, err error) {
-	key = rePushKey.FindString(s[i:])
-	if key == "" {
-		return "", 0, false, i, fmt.Errorf("no key at %d", i)
-	}
-	j = i + len(key)
-	if j < len(s) && s[j] == ':' {
-		k := j + 1
-		for k < len(s) && s[k] >= '0' && s[k] <= '9' && k-j <= 9 {
-			k++
-		}
-		if k == j+1 || k >= len(s) || s[k] != '=' {
-			return "", 0, false, i, fmt.Errorf("a length without its value at %d", i)
-		}
-		n, _ = strconv.Atoi(s[j+1 : k])
-		return key, n, true, k + 1, nil
-	}
-	if j >= len(s) || s[j] != '=' {
-		return "", 0, false, i, fmt.Errorf("a key without its value at %d", i)
-	}
-	return key, 0, false, j + 1, nil
-}
+var rePushKey = regexp.MustCompile(`^[A-Za-z0-9]{1,24}$`)
 
 // a record's key: L1, L1C2c3, I4b1, SO2, CE1E3p2 ... (a capital first)
 func pushIsRec(k string) bool { return k != "" && k[0] >= 'A' && k[0] <= 'Z' }
 
-// one part's payload taken into e; want: the part expected (1 for the first)
+var rePushPartEnd = regexp.MustCompile(`\|len=(\d{1,9})\|(end|more)=1$`)
+
+// one part's payload taken into e; want: the part expected (1 for the first). The payload:
+//
+//	FE1|part=<k><records>|len=<n>|end=1   (or |more=1 for a part that is not the last)
+//
+// <records> are "|key=value" (a capital key: "~"-separated "sub=value" fields); n is their length in characters, as the
+// add-on added it up record by record: a record Tally could not evaluate (left out, or a stale value) shows there
 func pushParsePart(p string, e *pushEntry, want int) error {
-	if !strings.HasPrefix(p, pushMagic+"|") {
-		return errors.New("not a full-entry line")
+	head := fmt.Sprintf("%s|part=%d", pushMagic, want)
+	if !strings.HasPrefix(p, head) || (len(p) > len(head) && p[len(head)] != '|') {
+		return fmt.Errorf("not part %d of a full entry", want)
 	}
-	s := p[len(pushMagic):]
-	i := 0
-	part := -1
-	for i < len(s) {
-		if s[i] != '|' {
-			return fmt.Errorf("a field does not start with \"|\" at %d", i)
+	m := rePushPartEnd.FindStringSubmatchIndex(p)
+	if m == nil {
+		return errors.New("the part does not end with its length and end=1 or more=1")
+	}
+	n, _ := strconv.Atoi(p[m[2]:m[3]])
+	body := p[len(head):m[0]]
+	if !lenOK(body, n) {
+		return fmt.Errorf("the part says %d characters, %d came", n, u16len(body))
+	}
+	if p[m[4]:m[5]] == "end" {
+		e.done = true
+	}
+	if body == "" {
+		return nil
+	}
+	for _, f := range strings.Split(body[1:], "|") {
+		key, val, ok := strings.Cut(f, "=")
+		if !ok || !rePushKey.MatchString(key) {
+			return fmt.Errorf("a field without its key: %q", cut(f, 60))
 		}
-		key, n, lp, j, err := pushKey(s, i+1)
-		if err != nil {
-			return err
-		}
-		if pushIsRec(key) {
-			if _, had := e.recs[key]; had {
-				return fmt.Errorf("record %s twice", key)
+		if !pushIsRec(key) {
+			if key == "part" || key == "len" || key == "end" || key == "more" {
+				return fmt.Errorf("%s inside the part", key)
 			}
-			if lp {
-				return fmt.Errorf("record %s written with a length", key)
+			if _, had := e.scal[key]; had {
+				return fmt.Errorf("%s twice", key)
 			}
-			r := map[string]string{}
-			// "L1=led:5=Sales~amt=..." : the record's own "=" is followed by its first sub-field
-			k := j
-			for {
-				sub, sn, slp, sj, err := pushKey(s, k)
-				if err != nil {
-					return fmt.Errorf("record %s: %v", key, err)
-				}
-				var v string
-				var ok bool
-				if slp {
-					v, k, ok = pushTake(s, sj, sn, "~|")
-					if !ok {
-						return fmt.Errorf("record %s: %s is not %d characters long", key, sub, sn)
-					}
-				} else {
-					end := strings.IndexAny(s[sj:], "~|")
-					if end < 0 {
-						end = len(s) - sj
-					}
-					v, k = s[sj:sj+end], sj+end
-				}
-				if _, had := r[sub]; had {
-					return fmt.Errorf("record %s: %s twice", key, sub)
-				}
-				r[sub] = v
-				if k < len(s) && s[k] == '~' {
-					k++
-					continue
-				}
-				break
+			v, err := pushUnesc(val)
+			if err != nil {
+				return err
 			}
-			e.recs[key] = r
-			e.order = append(e.order, key)
-			i = k
+			e.scal[key] = v
 			continue
 		}
-		var v string
-		if lp {
-			var ok bool
-			v, i, ok = pushTake(s, j, n, "|")
-			if !ok {
-				return fmt.Errorf("%s is not %d characters long", key, n)
-			}
-		} else {
-			end := strings.IndexByte(s[j:], '|')
-			if end < 0 {
-				end = len(s) - j
-			}
-			v, i = s[j:j+end], j+end
+		if _, had := e.recs[key]; had {
+			return fmt.Errorf("record %s twice", key)
 		}
-		switch key {
-		case "part":
-			if part >= 0 {
-				return errors.New("part twice")
+		r := map[string]string{}
+		for _, sf := range strings.Split(val, "~") {
+			sk, sv, ok := strings.Cut(sf, "=")
+			if !ok || !rePushKey.MatchString(sk) {
+				return fmt.Errorf("record %s: a field without its key: %q", key, cut(sf, 60))
 			}
-			part, _ = strconv.Atoi(v)
-			if part != want {
-				return fmt.Errorf("part %s where part %d was due", v, want)
+			if _, had := r[sk]; had {
+				return fmt.Errorf("record %s: %s twice", key, sk)
 			}
-			continue
-		case "end":
-			if v != "1" || i != len(s) {
-				return errors.New("end= is not the last field")
+			v, err := pushUnesc(sv)
+			if err != nil {
+				return fmt.Errorf("record %s: %v", key, err)
 			}
-			e.done = true
-			continue
-		case "more":
-			if v != "1" || i != len(s) {
-				return errors.New("more= is not the last field")
-			}
-			continue
+			r[sk] = v
 		}
-		if part < 0 {
-			return errors.New("the part number does not come first")
-		}
-		if _, had := e.scal[key]; had {
-			return fmt.Errorf("%s twice", key)
-		}
-		e.scal[key] = v
+		e.recs[key] = r
+		e.order = append(e.order, key)
 	}
-	if part < 0 {
-		return errors.New("no part number")
-	}
-	if !e.done && !strings.HasSuffix(s, "|more=1") {
-		return errors.New("neither end=1 nor more=1 at the end")
-	}
-	e.parts = want
 	return nil
 }
 
