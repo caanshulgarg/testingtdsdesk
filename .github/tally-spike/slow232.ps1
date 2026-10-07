@@ -62,6 +62,7 @@ function S2Imp($co, $report, [string[]]$objs, $label) {
   $body = '<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>' + $report + '</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>' + (S2Esc $co) + '</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA><TALLYMESSAGE xmlns:UDF="TallyUDF">' + ($objs -join '') + '</TALLYMESSAGE></REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>'
   $t0 = Get-Date
   try { $c = (Invoke-WebRequest 'http://localhost:9000' -Method Post -Body ([Text.Encoding]::UTF8.GetBytes($body)) -ContentType 'text/xml;charset=utf-8' -UseBasicParsing -TimeoutSec 900).Content } catch { $c = "failed: $($_.Exception.Message)" }
+  if ($c -is [byte[]]) { $c = [Text.Encoding]::UTF8.GetString($c) }   # an answer without a charset comes as bytes
   $cr = [int]([regex]::Match("$c", '<CREATED>(\d+)</CREATED>').Groups[1].Value + '0') / 10; $er = [int]([regex]::Match("$c", '<ERRORS>(\d+)</ERRORS>').Groups[1].Value + '0') / 10
   Write-Host ("[slow232 import] {0}: {1} sent, created {2}, errors {3}, {4:0.0} s{5}" -f $label, $objs.Count, $cr, $er, ((Get-Date) - $t0).TotalSeconds, $(if ($er -or -not $cr) { $t = ("$c" -replace '\s+', ' '); ' ' + $t.Substring(0, [Math]::Min(400, $t.Length)) } else { '' }))
   return [pscustomobject]@{ created = $cr; errors = $er; raw = "$c" }
@@ -138,22 +139,34 @@ function Slow232Setup {
     if ((S2Has $co1) -and (S2Has $S2.co)) { $ok = $true; break }
     Write-Host "[slow232] both companies not loaded with: $($variant -join ' | ')"
   }
+  # else the one not open is opened from the company list (F3, its name typed into the list's search): Tally keeps the
+  # companies already open
+  if (-not $ok) {
+    foreach ($name in @($co1, $S2.co)) {
+      if (S2Has $name) { continue }
+      KeysTo 9000 '{F3}' 4 ''; KeysTo 9000 $name 2 's232-05a-select'; KeysTo 9000 '{ENTER}' 8 's232-05b-selected'
+    }
+    $ok = (S2Has $co1) -and (S2Has $S2.co)
+  }
   Shot 's232-05-both-loaded'
   if (-not $ok) { Result 'slow232 setup: both companies loaded in Tally 9000' $false "Tally lists: $(ListCo 9000)" $true; return }
   AddLedger 9000 $co1   # Spike Income in the small company, for its journals
   # the bridge's own entry request (as built at the ref) on one entry of the large company: its time on this Tally
   $req = Join-Path $env:BRIDGE_DIST 'requests\entry.xml'
   if (Test-Path $req) {
-    $vs = @(Vouchers 9000 $S2.co | Select-Object -Last 3)
-    foreach ($v in $vs) {
-      $q = (Get-Content $req -Raw) -replace 'FinCom Spike Co', (S2Esc $S2.co) -replace '99999', "$($v.mid)" -replace '20261001', '20260401'
+    # (listing the large company's 30,000 vouchers would outlast Post's 60 s: MasterIDs across its range instead)
+    foreach ($mid in @(100, [int]($made / 2), [math]::Max(1, $made - 10))) {
+      $q = (Get-Content $req -Raw) -replace 'FinCom Spike Co', (S2Esc $S2.co) -replace '99999', "$mid" -replace '20261001', '20260401'
       $t1 = Get-Date; $a = Post 9000 $q ''; $ms = [int]((Get-Date) - $t1).TotalMilliseconds
-      Add-Content -Path $resultsFile -Encoding UTF8 -Value "MEASURE slow232: the bridge's entry request for MasterID $($v.mid) of the large company took $ms ms on this Tally ($("$a".Length) bytes)"
+      Add-Content -Path $resultsFile -Encoding UTF8 -Value "MEASURE slow232: the bridge's entry request for MasterID $mid of the large company took $ms ms on this Tally ($("$a".Length) bytes, $(([regex]::Matches("$a", '<VOUCHER[ >]')).Count) voucher(s))"
     }
   }
   # bridge 1 talks to Tally 9000 through the timing proxy (its settings get TallyHost 127.0.0.2)
   $S2.proxy = Start-Process python -ArgumentList "`"$PSScriptRoot\slow232proxy.py`"", '9000', "`"$($S2.proxyLog)`"" -PassThru -WindowStyle Hidden
   Start-Sleep 3
+  $g = try { (Invoke-WebRequest 'http://127.0.0.2:9000' -UseBasicParsing -TimeoutSec 10).Content } catch { "failed: $($_.Exception.Message)" }
+  Write-Host "[slow232] the proxy 127.0.0.2:9000 -> Tally: $("$g" -replace '\s+', ' ')"
+  if ("$g" -match '^failed' -or -not (Test-Path $S2.proxyLog)) { Result 'slow232 setup: the timing proxy beside Tally' $false "127.0.0.2:9000 answered: $g" $true; return }
   $S2.ok = $true
 }
 
@@ -185,6 +198,10 @@ function Slow232 {
   }
   $markAt = Get-Date
   $px = S2Proxy
+  $cfgNow = Get-Content "$h1\tds-bridge.config.json" -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json
+  $viaProxy = @($px | Where-Object { $_.id }).Count
+  Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO slow232: bridge 1's TallyHost '$($cfgNow.TallyHost)'; $viaProxy request(s) of the bridge through the timing proxy so far"
+  if (-not $viaProxy) { Result 'slow232 the bridge through the timing proxy' $false "no request of the bridge reached the proxy (TallyHost '$($cfgNow.TallyHost)'): the request counts below would prove nothing" $true; return }
   $bigBefore = @($px | Where-Object { (S2Entry $_) -and $_.company -eq $S2.co })
   $stopsBefore = @($bigBefore | Where-Object { $_.ms -ge 2000 })
   Add-Content -Path $resultsFile -Encoding UTF8 -Value ("INFO slow232: the large company's entry requests before the mark: {0} ({1} took 2 s or more at Tally: {2} ms)" -f $bigBefore.Count, $stopsBefore.Count, (($bigBefore | ForEach-Object { $_.ms }) -join ', '))
