@@ -12,6 +12,8 @@ For the owner. Plain words; times are IST. The steps to try it on NWS144 are in 
 | Replaces | 2.3.1 (kept on the computer, so the tray can roll back to it) |
 | Add-on | unchanged: keep `C:\ProgramData\FinCom\addon\FinComRecorder.tdl` loaded as it is |
 
+**Published 07-Oct-2026 15:48 IST.** Real-Tally run 37602225971 (TallyPrime 7.1, this setup 605cbc4a…): all bridge checks PASS; the one FAIL was the harness's wait (the small company's entry arrived with its body at 10:03:35). Rerun 37606418898: every check PASS (a 30,000-entry company, its lookup 2.5-2.9 s, marked after 3 stops on 2 occasions; no entry request for it after the mark; its lines held with the words and its earlier held line ended with them; a small company's entries arrived with their bodies before and after; Tally never held after the mark, the bridge's slowest request 40 ms).
+
 ## Why
 
 On a large company Tally takes about 5 seconds (13 at worst) to find one entry. The bridge stops waiting after
