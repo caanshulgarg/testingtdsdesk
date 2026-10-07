@@ -50,9 +50,9 @@ function Forms($t) {
   if ($env:PD_MODE -eq 'fast234m') { $o['objfl'] = ObjReq $t.mid $FLs; return $o }
   $o['bynumber'] = ReqBN $t.date $t.type $t.vno
   $o['objfl'] = ObjReq $t.mid $FLs                     # the object export, today's 61 fields as FETCH (why22's objid)
-  $o['objnone'] = ObjReq $t.mid @()                     # no FETCHLIST
   $o['objmid'] = ObjReq $t.mid @('MASTERID')            # one field: what an object export always carries
   $o['objtop'] = ObjReq $t.mid (TopNames)               # the top-level names only
+  $o['objheads'] = ObjReq $t.mid @('GUID', 'MASTERID', 'DATE', 'VOUCHERTYPENAME', 'VOUCHERNUMBER', 'NARRATION') # heads only, no list
   # a Voucher collection keyed by CHILDOF "ID:<MasterID>" (with today's filter, so the answer is right either way: the
   # time says whether the key was used)
   $o['collchildq'] = CollReq 'FCPChildQ' 'Voucher' $FL "`$MasterID = $($t.mid)" ('<CHILDOF>' + (X "`"ID:$($t.mid)`"") + '</CHILDOF>')
@@ -65,6 +65,9 @@ function Forms($t) {
   $o['rptpart'] = RptReq $t.mid 'part'
   # by number: the type's own voucher list (Vouchers : VoucherType, CHILDOF the type) with today's number filter
   $o['numvtype'] = CollReq 'FCPNumVt' 'Vouchers : VoucherType' $FL "`$VoucherNumber = `"$($t.vno)`"" ('<CHILDOF>' + (X "`"$($t.type)`"") + '</CHILDOF>') "<SVFROMDATE>$($t.date)</SVFROMDATE><SVTODATE>$($t.date)</SVTODATE>"
+  # run 37650805764: an object export with NO FETCHLIST got no answer in 120 s on every release, and Tally answered nothing
+  # after it: asked last, alone
+  $o['objnone'] = ObjReq $t.mid @()
   return $o
 }
 
@@ -148,14 +151,25 @@ function FMeasure($case, $t, $nv, $n, [bool]$keep) {
   $forms = Forms $t
   if ($keep) { foreach ($f in $forms.Keys) { Set-Content (Join-Path $cap "fast-request-$($t.name)-$f.xml") $forms[$f] -Encoding UTF8 } }
   $res = [ordered]@{}; foreach ($f in $forms.Keys) { $res[$f] = @() }
+  $dead = @{}
   for ($r = 0; $r -le $n; $r++) {
     foreach ($f in $forms.Keys) {
-      $x = Post $forms[$f] '' 120; $ms = $script:lastMs
+      if ($dead[$f]) { continue }
+      $x = Post $forms[$f] '' 25; $ms = $script:lastMs
+      if (-not $x) {
+        # no answer in 25 s: this form is not asked again; Tally is started again if it no longer answers the company list
+        $dead[$f] = $true
+        [pscustomobject]@{ rel = $rel; case = $case; vouchers = $nv; target = $t.name; mid = $t.mid; form = $f; rep = $r; ms = $ms; bytes = 0; vouchers_in_answer = 0; has_target = $false; err = 'NO ANSWER in 25 s' } | Export-Csv $fcsv -Append -NoTypeInformation -Encoding UTF8
+        $alive = (Post $listCo '' 10) -match '<COMPANY'
+        Say "form $f ($($t.name)): no answer in 25 s; Tally answers the company list after it: $alive"
+        if (-not $alive) { Shot "f-hung-$f"; StartW $script:G @($fA) "after-$f" @($co) | Out-Null }
+        continue
+      }
       $nvch = ([regex]::Matches($x, '<VOUCHER[ >]')).Count
       $hit = $x -match "<MASTERID[^>]*>\s*$($t.mid)\s*<"
       $err = [regex]::Match($x, '<LINEERROR>[^<]*|<ERRORMSG>[^<]*|Unknown Request[^<]*|Could not[^<]*|<ERROR>[^<]*').Value
       [pscustomobject]@{ rel = $rel; case = $case; vouchers = $nv; target = $t.name; mid = $t.mid; form = $f; rep = $r; ms = $ms; bytes = $x.Length; vouchers_in_answer = $nvch; has_target = $hit; err = $err } | Export-Csv $fcsv -Append -NoTypeInformation -Encoding UTF8
-      if ($r -eq 1 -and $keep) { $k = if ($x.Length -gt 3000000) { $x.Substring(0, 3000000) } else { $x }; Set-Content (Join-Path $cap "fast-$($t.name)-$f.xml") $k -Encoding UTF8 }
+      if ($r -eq 0 -and $keep) { $k = if ($x.Length -gt 3000000) { $x.Substring(0, 3000000) } else { $x }; Set-Content (Join-Path $cap "fast-$($t.name)-$f.xml") $k -Encoding UTF8 }
       if ($r -ge 1) { $res[$f] += $ms }
       Start-Sleep -Milliseconds 200
     }
@@ -167,7 +181,7 @@ function FMeasure($case, $t, $nv, $n, [bool]$keep) {
 # ---------------------------------------------------------------- run
 $fA = $script:folder; $script:co = $co
 try {
-  $G = "$W\grow"; Copy-Item $light $G -Recurse
+  $G = "$W\grow"; $script:G = $G; Copy-Item $light $G -Recurse
   if (StartW $G @($fA) 'setup' @($co)) {
     ImpMasters @(LightMasters) 'light masters'
     ImpMasters (HeavyMasters 300 300) 'base masters'

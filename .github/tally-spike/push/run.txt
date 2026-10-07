@@ -13,3 +13,4 @@ mode=fast234p
 
 # fast234p (07-Oct-2026 16:30Z): the form of the owner's fast request 'voucher object by MasterID' with the approved fields only:
 # candidate forms for one voucher on a 4,000-voucher company, every answer kept whole (fast234.ps1)
+# fast234p again (17:20Z): run 37650805764 hung on the object export with no FETCHLIST (every release); each form now 25 s at most, alone, Tally started again after one that hangs it, that form asked last; answers kept from the warm-up
