@@ -92,7 +92,12 @@ const (
 		// UNIQUEREFERENCENUMBER, as Tally's own export of the entry carries them)
 		// the TDS section as Tally keeps it on the entry: the bill-wise detail's section (a stored field TallyPrime 7.1
 		// writes on every bill allocation; the owner asked for the section, 06-Oct-2026)
-		"ALLLEDGERENTRIES.BILLALLOCATIONS.TDSDEDUCTEESECTIONNUMBER"
+		"ALLLEDGERENTRIES.BILLALLOCATIONS.TDSDEDUCTEESECTIONNUMBER" +
+		// the owner's decision of 07-Oct-2026 (option A; tdswild_test.go): every field of the TDS list and its sub-list.
+		// The real TallyPrime 7.1 run 37492981527 (S5, TDS entered on Tally's screen) gave the named TDS fields above as
+		// empty TAXOBJECTALLOCATIONS.LISTs, while these two items returned the whole block (nature, party, the Income Tax
+		// sub-category's rate, assessable amount and tax). One entry per request, read only, nothing else added
+		", ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.*, ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.SUBCATEGORYALLOCATION.*"
 )
 
 // one change, whichever source it came from

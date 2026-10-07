@@ -165,14 +165,22 @@ function takeVoucher(s){
       const subs = blocks(q, "SUBCATEGORYALLOCATION.LIST");
       const nature = one(q, "CATEGORY").slice(0, 200), party = one(q, "PARTYLEDGER").slice(0, 300);
       if (!subs.length && !nature) return;
-      let rate = null, base = null, tax = null;
-      subs.forEach((x) => { const tr = one(x, "TAXRATE"), ab = one(x, "ASSESSABLEAMOUNT"), tx = one(x, "TAX");
-        if (tr && rate == null) rate = num(tr); if (ab && base == null) base = r2(amt(ab)); if (tx) tax = r2((tax || 0) + amt(tx)); });
+      // the owner's decision of 07-Oct-2026: the rate and assessable amount are the Income Tax sub-category's (Tally also
+      // writes Surcharge, Education Cess and Secondary Education Cess sub-blocks, empty when not charged); without
+      // sub-category names (a body fetched before the whole TDS list was asked), the first sub-block with an amount. The
+      // tax is the sum of the sub-blocks (what was deducted). Where Tally stores the rate as 0 (TallyPrime 7.1 on an entry
+      // keyed on its screen), the rate is worked out as tax / assessable amount x 100 and marked rateWorkedOut: true
+      let rate = null, base = null, tax = null, worked = false;
+      const it = subs.find((x) => /^income\s*tax$/i.test(one(x, "SUBCATEGORY").trim())) || subs.find((x) => one(x, "ASSESSABLEAMOUNT") || one(x, "TAX")) || subs[0];
+      if (it){ const tr = one(it, "TAXRATE"), ab = one(it, "ASSESSABLEAMOUNT"); if (tr) rate = num(tr); if (ab) base = r2(amt(ab)); }
+      subs.forEach((x) => { const tx = one(x, "TAX"); if (tx) tax = r2((tax || 0) + amt(tx)); });
+      const itTax = it && one(it, "TAX") ? amt(one(it, "TAX")) : 0;
+      if (!rate && base && itTax){ rate = Math.round(Math.abs(itTax / base) * 100 * 10000) / 10000; worked = true; }
       // the section (the owner, 06-Oct-2026): Tally's own on the line's bill-wise detail (TDSDEDUCTEESECTIONNUMBER), else
       // on another bill-wise detail of the entry (filled in below); else the section written in the nature of payment's
       // name (192 .. 196x, 206C.., the 2025 Act's 393); else blank, never guessed
       const own = blocks(e, "BILLALLOCATIONS.LIST").map((b) => one(b, "TDSDEDUCTEESECTIONNUMBER")).find(Boolean) || "";
-      tds.push({n, ledger, nature, party, rate, base, tax: tax == null ? la : tax, section: own.slice(0, 20), sectionFrom: own ? "Tally's entry" : ""});
+      tds.push({n, ledger, nature, party, rate, base, tax: tax == null ? la : tax, section: own.slice(0, 20), sectionFrom: own ? "Tally's entry" : "", ...(worked ? {rateWorkedOut: true} : {})});
     });
     if (e.indexOf("<BILLALLOCATIONS.LIST") >= 0) blocks(e, "BILLALLOCATIONS.LIST").forEach((q) => {
       const cp = (q.match(/<BILLCREDITPERIOD(?:\s[^<>]*[^/<>])?\s*>([^<]*)<\/BILLCREDITPERIOD>/) || [])[1] || "", due = d8(cp);
