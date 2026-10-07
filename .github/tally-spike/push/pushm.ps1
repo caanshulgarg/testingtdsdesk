@@ -338,6 +338,8 @@ $lt = [ordered]@{ ledgers = (Count 'Ledger'); items = (Count 'StockItem'); vouch
 Say "light company: $($lt.ledgers) ledgers, $($lt.items) stock items, $($lt.vouchers) vouchers"
 Set-Content (Join-Path $out 'sizes.json') (@{ light = $lt; heavy = $hv; templates = $tplKind; cguid = $cguid } | ConvertTo-Json -Depth 4) -Encoding UTF8
 Stop-T
+# tb (07-Oct-2026, branch selfcheck-tb): the trial-balance requests timed on the heavy company, then done (tb.ps1)
+if ($env:PD_MODE -eq 'tb') { . "$here\v3.ps1"; . "$here\tb.ps1"; try { TbStage } catch { Say "HARNESS: tb stopped: $_ $($_.ScriptStackTrace)" }; Stop-T; Say 'done (tb)'; return }
 if ($env:PD_MODE -eq 'v3') { try { V3Pre } catch { Say "HARNESS: v3 fetch stage stopped: $_" } }
 
 # ---------------------------------------------------------------- the bridge (2.3.0 setup), the stub cloud, the proxy

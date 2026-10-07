@@ -1,0 +1,94 @@
+# Self-check TB measure (MEASUREMENT ONLY, branch selfcheck-tb; next release item e, docs/selfcheck-requests-for-approval.md
+# on next-selfcheck): the trial-balance requests proposed for the owner's decision (FinComLedgerClosings, 200 ledgers a
+# request; FinComLedgerClosingByName; Tally's Trial Balance report) timed on the push-design harness's 30,004-voucher
+# company, 5 times each with the freeze probe, on each TallyPrime release. A separate workflow and branch so the push-design
+# runs on tally-versions are never pre-empted. pushm.ps1 with PD_MODE=tb (tb.ps1): no add-on, no bridge.
+# Results are committed back to selfcheck-tb: spike-results/selfcheck-tb/<run>-<release>/.
+name: Self-check TB measure
+on:
+  workflow_dispatch:
+  push:
+    branches: [selfcheck-tb]
+    paths: ['.github/workflows/selfcheck-tb.yml', '.github/tally-spike/push/tb.ps1']
+permissions:
+  contents: write
+concurrency:
+  group: selfcheck-tb-${{ github.run_id }}
+  cancel-in-progress: false
+jobs:
+  tally:
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ["3.0", "4.1", "5.1", "6.2", "7.1"]
+    runs-on: windows-latest
+    timeout-minutes: 180
+    env:
+      TALLY_REL: ${{ matrix.version }}
+      RES: ${{ github.workspace }}\spike-results\selfcheck-tb\${{ github.run_id }}-${{ matrix.version }}
+      SHOTS: ${{ github.workspace }}\spike-results\selfcheck-tb\${{ github.run_id }}-${{ matrix.version }}\shots
+      LOG: ${{ github.workspace }}\spike-results\selfcheck-tb\${{ github.run_id }}-${{ matrix.version }}\log.txt
+      PD_REPS: "5"
+      PD_POSTS: "1"
+      PD_HEAVY_LED: "3000"
+      PD_HEAVY_ITEM: "3000"
+      PD_HEAVY_VCH: "30000"
+      PD_HEAVY_MIN: "60"
+      PD_MODE: tb
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - name: Desktop check
+        run: |
+          New-Item -ItemType Directory -Force $env:RES, $env:SHOTS | Out-Null
+          & { "== TallyPrime $env:TALLY_REL selfcheck-tb"; whoami; Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version | Out-String
+              Get-CimInstance Win32_Processor | Select-Object Name, NumberOfLogicalProcessors | Out-String } *>&1 | Tee-Object -FilePath $env:LOG -Append
+          exit 0
+      - name: 1 Installer from Tally's download centre
+        timeout-minutes: 20
+        run: |
+          & .github/tally-spike/resolvev.ps1 *>&1 | Tee-Object -FilePath $env:LOG -Append; exit $LASTEXITCODE
+      - name: 2 Install
+        timeout-minutes: 15
+        run: |
+          & .github/tally-spike/installv.ps1 *>&1 | Tee-Object -FilePath $env:LOG -Append; exit $LASTEXITCODE
+      - name: 3 Start Tally, company (flow.ps1)
+        timeout-minutes: 15
+        continue-on-error: true
+        run: |
+          & .github/tally-spike/flow.ps1 *>&1 | Tee-Object -FilePath $env:LOG -Append; exit 0
+      - name: 4 Heavy company and the TB requests (pushm.ps1, PD_MODE=tb)
+        timeout-minutes: 130
+        continue-on-error: true
+        run: |
+          & .github/tally-spike/push/pushm.ps1 *>&1 | Tee-Object -FilePath "$env:RES\push.log" -Append; exit 0
+      - name: Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tb-${{ matrix.version }}-${{ github.run_id }}
+          path: spike-results/selfcheck-tb/${{ github.run_id }}-${{ matrix.version }}/
+
+  collect:
+    needs: [tally]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: tb-*-${{ github.run_id }}
+          path: got
+      - name: Commit results back to selfcheck-tb
+        run: |
+          for d in got/tb-*-${{ github.run_id }}; do
+            v=$(basename "$d"); v=${v#tb-}; v=${v%-${{ github.run_id }}}
+            mkdir -p "spike-results/selfcheck-tb/${{ github.run_id }}-$v"; cp -r "$d"/. "spike-results/selfcheck-tb/${{ github.run_id }}-$v/"
+          done
+          git config user.name "selfcheck-tb"; git config user.email "tally-versions@users.noreply.github.com"
+          git add spike-results/selfcheck-tb
+          git commit -q -m "selfcheck tb [skip ci]: results ${{ github.run_id }}" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+          Claude-Session: https://claude.ai/code/session_01LprHoXx2ACgDW2AjxNH8wN" || exit 0
+          for i in 1 2 3 4 5; do git pull -q --rebase origin selfcheck-tb && git push -q origin HEAD:refs/heads/selfcheck-tb && break; sleep 10; done
