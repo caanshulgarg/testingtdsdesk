@@ -30,9 +30,9 @@ function V3TdsMasters {
   Set-Content (Join-Path $cap 'tds-nature-tdsrate.xml') $tr -Encoding UTF8
   Say "tds: nature '$($N.nature)' as a TDS Rate in Tally: $($tr -match [regex]::Escape($N.nature))"
   $led = @(
-    ('<LEDGER NAME="' + $N.party + '" ACTION="Create"><NAME.LIST><NAME>' + $N.party + '</NAME></NAME.LIST><PARENT>Sundry Creditors</PARENT><ISBILLWISEON>No</ISBILLWISEON><INCOMETAXNUMBER>AAACP2310K</INCOMETAXNUMBER><ISTDSAPPLICABLE>Yes</ISTDSAPPLICABLE><TDSAPPLICABLE>Yes</TDSAPPLICABLE><TDSDEDUCTEETYPE>Company - Resident</TDSDEDUCTEETYPE><TDSDEDUCTEEISSPECIALRATE>No</TDSDEDUCTEEISSPECIALRATE><DEDUCTINSAMEVCHRULES.LIST><DATE>20260401</DATE><DEDUCTINSAMEVCH>Yes</DEDUCTINSAMEVCH></DEDUCTINSAMEVCHRULES.LIST></LEDGER>'),
-    ('<LEDGER NAME="' + $N.exp + '" ACTION="Create"><NAME.LIST><NAME>' + $N.exp + '</NAME></NAME.LIST><PARENT>Indirect Expenses</PARENT><ISTDSAPPLICABLE>Yes</ISTDSAPPLICABLE><ISTDSEXPENSE>Yes</ISTDSEXPENSE><TDSAPPLICABLE>' + $N.nature + '</TDSAPPLICABLE><TDSCATEGORYNAME>' + $N.nature + '</TDSCATEGORYNAME><TDSRATENAME>' + $N.nature + '</TDSRATENAME></LEDGER>'),
-    ('<LEDGER NAME="' + $N.tds + '" ACTION="Create"><NAME.LIST><NAME>' + $N.tds + '</NAME></NAME.LIST><PARENT>Duties &amp; Taxes</PARENT><TAXTYPE>TDS</TAXTYPE><TDSRATENAME>' + $N.nature + '</TDSRATENAME><TDSCATEGORYNAME>' + $N.nature + '</TDSCATEGORYNAME><TAXCLASSIFICATIONNAME>' + $N.nature + '</TAXCLASSIFICATIONNAME></LEDGER>'))
+    ('<LEDGER NAME="' + $N.party + '" ACTION="Create"><NAME.LIST><NAME>' + $N.party + '</NAME></NAME.LIST><PARENT>Sundry Creditors</PARENT><ISCOSTCENTRESON>No</ISCOSTCENTRESON><ISBILLWISEON>No</ISBILLWISEON><INCOMETAXNUMBER>AAACP2310K</INCOMETAXNUMBER><ISTDSAPPLICABLE>Yes</ISTDSAPPLICABLE><TDSAPPLICABLE>Yes</TDSAPPLICABLE><TDSDEDUCTEETYPE>Company - Resident</TDSDEDUCTEETYPE><TDSDEDUCTEEISSPECIALRATE>No</TDSDEDUCTEEISSPECIALRATE><DEDUCTINSAMEVCHRULES.LIST><DATE>20260401</DATE><DEDUCTINSAMEVCH>Yes</DEDUCTINSAMEVCH></DEDUCTINSAMEVCHRULES.LIST></LEDGER>'),
+    ('<LEDGER NAME="' + $N.exp + '" ACTION="Create"><NAME.LIST><NAME>' + $N.exp + '</NAME></NAME.LIST><PARENT>Indirect Expenses</PARENT><ISCOSTCENTRESON>No</ISCOSTCENTRESON><ISTDSAPPLICABLE>Yes</ISTDSAPPLICABLE><ISTDSEXPENSE>Yes</ISTDSEXPENSE><TDSAPPLICABLE>' + $N.nature + '</TDSAPPLICABLE><TDSCATEGORYNAME>' + $N.nature + '</TDSCATEGORYNAME><TDSRATENAME>' + $N.nature + '</TDSRATENAME></LEDGER>'),
+    ('<LEDGER NAME="' + $N.tds + '" ACTION="Create"><NAME.LIST><NAME>' + $N.tds + '</NAME></NAME.LIST><PARENT>Duties &amp; Taxes</PARENT><ISCOSTCENTRESON>No</ISCOSTCENTRESON><TAXTYPE>TDS</TAXTYPE><TDSRATENAME>' + $N.nature + '</TDSRATENAME><TDSCATEGORYNAME>' + $N.nature + '</TDSCATEGORYNAME><TAXCLASSIFICATIONNAME>' + $N.nature + '</TAXCLASSIFICATIONNAME></LEDGER>'))
   $r = Imp 'All Masters' $led 'tds: party, expense, TDS ledger'
   if ($r.created -lt 3) { Imp 'All Masters' ($led | ForEach-Object { $_ -replace 'ACTION="Create"', 'ACTION="Alter"' }) 'tds: ledgers again (alter)' | Out-Null }
   Post (Coll 'FCPTdsLed' 'Ledger' 'NAME' '$Name CONTAINS "PD TDS" OR $Name = "PD Contract Exp"' '<NATIVEMETHOD>*</NATIVEMETHOD>') '' 60 | Set-Content (Join-Path $cap 'tds-ledgers.xml') -Encoding UTF8
@@ -194,7 +194,7 @@ function SaveSet($cfg, $large) {
 function V3Fetch {
   BridgeStop
   if (-not (Start-T $heavy @() 'v3-heavy-fetch')) { Say 'HARNESS: heavy did not open for the fetch stage'; return }
-  $ov = @(OctVouchers); $s50 = @($ov | Where-Object { $_.vno -eq 'TS50-1' })[0]
+  $ov = OctVouchers; $s50 = @($ov | Where-Object { $_.vno -eq 'TS50-1' })[0]
   $t1 = [pscustomobject]@{ name = 'sales50-template'; guid = "$($s50.guid)"; mid = "$($s50.mid)"; aid = "$($s50.aid)"; date = "$($s50.date)"; type = "$($s50.type)"; vno = 'TS50-1'; party = '' }
   Say "fetch target sales50-template: mid $($t1.mid) guid $($t1.guid) date $($t1.date)"
   $t2 = Target 'heavy-receipt-15002' '$VoucherNumber = "HR-015002"'
@@ -206,10 +206,40 @@ function V3Sync {
   $fg = '7a1e0c55-1111-4222-8333-944455556666-0000abcd'
   $sx = '<VOUCHER REMOTEID="' + $fg + '" VCHTYPE="Journal" ACTION="Create"><GUID>' + $fg + '</GUID><DATE>20261101</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><VOUCHERNUMBER>SYNC-1</VOUCHERNUMBER><NARRATION>a voucher from another company (sync)</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>Spike Income</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-10.00</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>HDFC Bank</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>10.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>'
   Imp 'Vouchers' @($sx) 'sync-like voucher with a foreign GUID' | Out-Null
-  $sv = @(OctVouchers | Where-Object { $_.vno -eq 'SYNC-1' })[0]
+  $ovs = OctVouchers; $sv = @($ovs | Where-Object { $_.vno -eq 'SYNC-1' })[0]
   Say "sync-like import: Tally's GUID '$($sv.guid)', MasterID $($sv.mid); the rule gives '$cguid-$(if ($sv.mid) { ([int64]$sv.mid).ToString('x8') })'"
   GuidRule 'heavy at the end (imported, new by Alt+2, altered, the sync-like one)'
   Stop-T
+}
+function FetchSim {
+  BridgeStop
+  Remove-Item "$pd\full-*.txt", "$pd\stamp-*.txt", "$rec\*" -Force -ErrorAction SilentlyContinue; $script:fullSeen = @{}; $script:recSeen = @{}
+  if (-not (Start-T $heavy @($tdlHeads) 'heavy-heads-fetchsim')) { Say 'HARNESS: fetchsim: heavy did not open'; return }
+  $ov = OctVouchers; $tv = @($ov | Where-Object { $_.vno -eq 'TS50-1' })[0]
+  if (-not $tv) { Say 'HARNESS: fetchsim: TS50-1 not found'; return }
+  $req = CollReq 'FinComVoucherByMaster' 'Voucher' $tv.date "`$MasterID = $($tv.mid)"
+  $simCsv = Join-Path $out 'sim.csv'
+  foreach ($k in @(@('receipt', '1-10-2026'), @('sales50', '31-10-2026'))) {
+    for ($r = 1; $r -le $reps; $r++) {
+      DayBook $k[1] $(if ($r -eq 1) { "heavy-fetchsim-$($k[0])-daybook" }); KeysTo '{END}' 1; KeysTo '%2' 4
+      Get-ChildItem $pd -Filter 'stamp-*.txt' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+      if (-not (Focus)) { continue }
+      $j = Start-ThreadJob -ScriptBlock { param($b) $t0 = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds(); $sw = [Diagnostics.Stopwatch]::StartNew(); try { $c = (Invoke-WebRequest 'http://127.0.0.1:9000' -Method Post -Body ([Text.Encoding]::UTF8.GetBytes($b)) -ContentType 'text/xml;charset=utf-8' -UseBasicParsing -TimeoutSec 60).Content.Length } catch { $c = -1 }; @($t0, $sw.Elapsed.TotalMilliseconds, $c) } -ArgumentList $req
+      Start-Sleep -Milliseconds 150
+      $k0 = NowMs; $m = ([PdUi]::Measure('^a', 400, 15000)) -split ';'
+      $res = Receive-Job $j -Wait -AutoRemoveJob
+      Start-Sleep 2; $h = Stamps
+      $row = [pscustomobject]@{ rel = $rel; kind = $k[0]; rep = $r; fetch_ms = [math]::Round([double]$res[1], 1); fetch_bytes = $res[2]; ctrl_a_after_fetch_start_ms = $k0 - [long]$res[0]; ui_first_ms = $m[1]; ui_settled_ms = $m[2]; save_bc_ms = (D $h 'b' 'c'); total_ms = (D $h 'a' 'd') }
+      $row | Export-Csv $simCsv -Append -NoTypeInformation -Encoding UTF8
+      Say ("   fetchsim {0} #{1}: fetch {2} ms ({3} B), Ctrl+A {4} ms after it began; first screen change {5} ms; save b-c {6} ms" -f $k[0], $r, $row.fetch_ms, $row.fetch_bytes, $row.ctrl_a_after_fetch_start_ms, $m[1], $row.save_bc_ms)
+    }
+  }
+  Stop-T
+}
+function V3B {
+  $tdlNR = "$fc\FCPFullNR.tdl"; Copy-Item "$here\FCPFullNR.tdl" $tdlNR -Force
+  if ($heavyOk) { try { FetchSim } catch { Say "HARNESS: fetchsim stopped: $_" }; try { V3Fetch } catch { Say "HARNESS: fetch stage stopped: $_" } }
+  try { V3Tds } catch { Say "HARNESS: TDS stage stopped: $_" }
 }
 function V3Main {
   $tdlNR = "$fc\FCPFullNR.tdl"; Copy-Item "$here\FCPFullNR.tdl" $tdlNR -Force
@@ -248,7 +278,7 @@ function V3Tds {
   $script:tdsTdls = @("$fc\FCPFullNR.tdl")
   if (-not (Start-T $light $script:tdsTdls 'tds-fullnr')) { Say 'HARNESS: TDS: light did not open'; return }
   $day = '2-11-2026'; $date = '20261102'
-  $pre = @(OctVouchers | ForEach-Object mid)
+  $o0 = OctVouchers; $pre = @($o0 | ForEach-Object mid)
   # S5's keys (scen231.ps1 S231TdsScreen), each screen read by OCR
   $null = TdsGateway 'before the TDS entry'
   $null = TK 'v' 2.5 's5-vouchers' 'Voucher'
@@ -257,18 +287,19 @@ function V3Tds {
   $null = TK "$day{ENTER}" 2 's5-date-set'
   $null = TK ((SK $N.exp) + '{ENTER}') 2 's5-r1-ledger'
   $null = TK '100000{ENTER}' 2 's5-r1-amount'
+  for ($j = 1; $j -le 4; $j++) { $t = TdsScreen "s5-r1-after$j"; if ($t -match 'Cost Centre Alloc|Cost Allocations|Details for|Bill-wise|Assessable|Nature of Pay|Tax Details') { & $script:TdsSend '{ENTER}'; Start-Sleep 2 } else { break } }
   $null = TK 't{ENTER}' 1.5 's5-r2-to'
   $null = TK ((SK $N.tds) + '{ENTER}') 2.5 's5-r2-ledger'
-  for ($j = 1; $j -le 5; $j++) { $t = TdsScreen "s5-r2-sub$j"; if ($t -match 'Details for|Bill-wise|Assessable|Nature of Pay|Nature ef Pay|Deductee|Party Details|Tax Details') { & $script:TdsSend '{ENTER}'; Start-Sleep 2 } else { break } }
+  for ($j = 1; $j -le 5; $j++) { $t = TdsScreen "s5-r2-sub$j"; if ($t -match 'Details for|Bill-wise|Assessable|Nature of Pay|Nature ef Pay|Deductee|Party Details|Tax Details|Cost Centre Alloc|Cost Allocations') { & $script:TdsSend '{ENTER}'; Start-Sleep 2 } else { break } }
   $t = TdsScreen 's5-r2-amount-shown'; $byTally = $t -match '2,000|2000'
   if (-not $byTally -and $t -match '\d ?%') { $null = TK '{ENTER}' 2 's5-r2-pct'; $t = TdsScreen 's5-r2-amount-shown2'; $byTally = $t -match '2,000|2000' }
   if ($byTally) { $null = TK '{ENTER}' 2 's5-r2-amount-tally' } else { $null = TK '2000{ENTER}' 2 's5-r2-amount-typed' }
-  for ($j = 1; $j -le 4; $j++) { $t = TdsScreen "s5-r2-after$j"; if ($t -match 'Details for|Bill-wise|Assessable|Nature of Pay|Nature ef Pay|Party Details|Tax Details') { & $script:TdsSend '{ENTER}'; Start-Sleep 2 } else { break } }
+  for ($j = 1; $j -le 4; $j++) { $t = TdsScreen "s5-r2-after$j"; if ($t -match 'Details for|Bill-wise|Assessable|Nature of Pay|Nature ef Pay|Party Details|Tax Details|Cost Centre Alloc|Cost Allocations') { & $script:TdsSend '{ENTER}'; Start-Sleep 2 } else { break } }
   $null = TK 't{ENTER}' 1.5 's5-r3-to'
   $null = TK ((SK $N.party) + '{ENTER}') 2.5 's5-r3-ledger'
   $t = TdsScreen 's5-r3-amount-shown'
   if ($t -match '98,000|98000') { $null = TK '{ENTER}' 2 's5-r3-amount' } else { $null = TK '98000{ENTER}' 2 's5-r3-amount-typed' }
-  for ($j = 1; $j -le 4; $j++) { $t = TdsScreen "s5-r3-after$j"; if ($t -match 'Details for|Bill-wise|Assessable|Party Details|Tax Details') { & $script:TdsSend '{ENTER}'; Start-Sleep 2 } else { break } }
+  for ($j = 1; $j -le 4; $j++) { $t = TdsScreen "s5-r3-after$j"; if ($t -match 'Details for|Bill-wise|Assessable|Party Details|Tax Details|Cost Centre Alloc|Cost Allocations') { & $script:TdsSend '{ENTER}'; Start-Sleep 2 } else { break } }
   $t = TdsScreen 's5-before-narration'
   if ($t -notmatch 'Narration') { $null = TK '{ENTER}' 2 's5-rows-done' }
   $null = TK ((SK 'PD TDS 194C typed on the screen') + '{ENTER}') 2 's5-narration'
@@ -277,7 +308,7 @@ function V3Tds {
   Say "TDS: TDS row amount $(if ($byTally) { 'put there by Tally' } else { 'typed (2000)' }); OCR $(if ($script:ocrOk) { 'read the screens' } else { 'UNAVAILABLE' })"
   Set-Content (Join-Path $out 'tds-screen-log.txt') $script:tdsLog -Encoding UTF8
   $sw = [Diagnostics.Stopwatch]::StartNew(); while (-not (Test-Path "$pd\stamp-e.txt") -and $sw.Elapsed.TotalSeconds -lt 20) { Start-Sleep -Milliseconds 250 }
-  $nv = @(OctVouchers | Where-Object { $_.mid -notin $pre })
+  $o1 = OctVouchers; $nv = @($o1 | Where-Object { $_.mid -notin $pre })
   $lines = NewFullLines
   Set-Content (Join-Path $cap 'tds-addon-lines.txt') $lines -Encoding UTF8
   if (-not $nv.Count) { Say 'TDS: no entry saved (see the tds-* screenshots)'; return }

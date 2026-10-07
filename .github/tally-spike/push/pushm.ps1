@@ -310,7 +310,7 @@ foreach ($c in @('$$MachineName', '$$CmpUserName', '$$SysInfo:WindowsUser', '$$S
 }
 Set-Content (Join-Path $cap 'windows-user-candidates.txt') (@("Windows user of this runner: $env:USERNAME ($env:USERDOMAIN), computer $env:COMPUTERNAME") + $who) -Encoding UTF8
 # v3 (07-Oct-2026): the owner's TDS masters on the light company before it is copied (v3.ps1)
-if ($env:PD_MODE -eq 'v3') { . "$here\v3.ps1"; try { V3TdsMasters } catch { Say "HARNESS: TDS masters: $_" } }
+if ($env:PD_MODE -in 'v3', 'v3b') { . "$here\v3.ps1"; try { V3TdsMasters } catch { Say "HARNESS: TDS masters: $_" } }
 Stop-T
 # heavy: the light company's folder copied (same company, same templates), then the bulk by XML
 if (Test-Path $heavy) { Remove-Item $heavy -Recurse -Force }
@@ -556,7 +556,7 @@ function TypesStage {
   Stop-T
 }
 function KeepTallyLogs { Get-ChildItem $dir, $light -Recurse -File -Include *.log, tdlerr*, *.err -ErrorAction SilentlyContinue | Select-Object -First 20 | ForEach-Object { Copy-Item $_.FullName (Join-Path $out "tally-$($_.Directory.Name)-$($_.Name)") -ErrorAction SilentlyContinue } }
-if ($env:PD_MODE -eq 'v3') { try { V3Main } catch { Say "HARNESS: v3 stopped: $_ $($_.ScriptStackTrace)" }; Copy-Item $blog (Join-Path $out 'bridge-full.log') -ErrorAction SilentlyContinue; KeepTallyLogs; Stop-T; Get-Process FinComBridge -ErrorAction SilentlyContinue | Stop-Process -Force; Stop-Proxy; Stop-Process -Id $stub.Id -Force -ErrorAction SilentlyContinue; Say 'done (v3)'; return }
+if ($env:PD_MODE -in 'v3', 'v3b') { try { if ($env:PD_MODE -eq 'v3b') { V3B } else { V3Main } } catch { Say "HARNESS: v3 stopped: $_ $($_.ScriptStackTrace)" }; Copy-Item $blog (Join-Path $out 'bridge-full.log') -ErrorAction SilentlyContinue; KeepTallyLogs; Stop-T; Get-Process FinComBridge -ErrorAction SilentlyContinue | Stop-Process -Force; Stop-Proxy; Stop-Process -Id $stub.Id -Force -ErrorAction SilentlyContinue; Say 'done (v3)'; return }
 if ($env:PD_MODE -eq 'explore') { TypesStage; KeepTallyLogs; Get-Process FinComBridge -ErrorAction SilentlyContinue | Stop-Process -Force; Stop-Process -Id $stub.Id -Force -ErrorAction SilentlyContinue; Say 'done (explore: the voucher-type probe only)'; return }
 foreach ($coTag in 'light', 'heavy') {
   $data = if ($coTag -eq 'light') { $light } else { $heavy }
