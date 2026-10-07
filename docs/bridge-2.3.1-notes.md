@@ -5,10 +5,39 @@ For the owner. Plain words; times are IST. The steps to try it on NWS144 are in 
 | | |
 |---|---|
 | Setup file | FinComBridge-Setup-2.3.1.exe |
-| Fingerprint | SHA-256 `<SHA-256>` (filled in when the setup is built; compare with the .sha256 file next to the setup) |
+| Fingerprint | SHA-256 `7d4a37a93a52dbc55ab9992c7148c7d607485d567fd34e1bde7d607288a216be` (FinComBridge-Setup-2.3.1.exe, built 06-Oct-2026 17:23 IST; compare with the .sha256 file next to the setup) |
 | FinCom app update | the one that goes with 2.3.1 says on the Tally page when Tally did not answer in time and when the bridge tries again; the app of 2.3.0 still works with 2.3.1 (it shows "Reading") |
 | Replaces | 2.3.0 (kept on the computer, so the tray can roll back to it) |
 | Add-on | unchanged: keep `C:\ProgramData\FinCom\addon\FinComRecorder.tdl` loaded as it is |
+
+## Not yet proven on real Tally when this was published (06-Oct-2026)
+
+The owner decided to publish 2.3.1 before two checks had run on a real TallyPrime. They were not proven when it went out:
+
+1. **A payment with TDS.** An imported payment kept no TDS details in Tally, and entering one on Tally's screen did not
+   work in the test run (the test's keystrokes, not the bridge). The payment's ledger amounts and the party's deductee
+   type ("Company - Resident") did arrive correctly; the TDS nature, rate, amount and section on the entry were not seen.
+2. **The retry timings.** That the bridge asks again after 15 s, 30 s, 1 min and 2 min (then every 5 min) when Tally does
+   not answer was not seen on a real Tally (the test receipt opened a cost-centre screen instead of saving). What was
+   seen: with Tally frozen for 3 minutes nothing was switched off, and a posting queued meanwhile went through by itself
+   the moment Tally answered.
+
+Both are being run now on this same build; the result is added here. Every other check passed on real TallyPrime 7.1
+(run 37469732673, this exact setup).
+
+**Result of the follow-up run (06-Oct-2026, 16:16-16:28 UTC, run 37492981527, the published setup 7d4a37a9...16be):**
+both checks failed. Neither is a High, so 2.3.1 stays published and both fixes go into the next release.
+
+1. **TDS on a payment (Medium).** The entry reached FinCom with every ledger amount right (expense -1,00,000, TDS
+   payable 2,000, contractor 98,000). The TDS details did not: Tally's answer to the bridge's entry request has its
+   three TDS lists empty, while Tally's own Day Book export of the same entry holds nature of payment, assessable value
+   1,00,000 and TDS 2,000. The money is right; the TDS details on the entry must come from a Day Book upload until the
+   fix. (This Tally also did not work out the TDS itself and recorded no section; that part is Tally's.)
+2. **Retry timings (Low to Medium).** The 2-second stop worked, the first two retries came at 15 s and 30 s, then the
+   older once-a-minute check took over (sooner than the 1/2/5-minute steps; no harm). Nothing was switched off and a
+   queued posting went through one second after Tally answered. But an entry saved while Tally was frozen was held and
+   is asked again only every 10 minutes, so it reaches FinCom up to about 10 minutes late instead of at the first try
+   after Tally answers. Nothing is lost.
 
 ## What 2.3.1 changes: item invoices enter the books complete
 
