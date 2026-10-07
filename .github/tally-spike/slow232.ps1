@@ -192,9 +192,12 @@ function S2Import($co, $xml, $label) {
   $cg = S2Guid $co
   $aid = 0
   if ($co -eq $co1) {
-    $v = @((Vouchers 9000 $co1) | Where-Object { $_.vno -eq $no } | Select-Object -Last 1)
-    if ($v.Count) { if ($v[0].mid -ne $mid) { Write-Host "[slow232] ${label}: LASTVCHID $mid, Tally's MasterID $($v[0].mid): Tally's taken" }; $mid = $v[0].mid; $aid = $v[0].aid; $cg = (($v[0].guid -split '-')[0..4] -join '-') }
-    Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO slow232 $label ($co1): LASTVCHID $([regex]::Match($r.raw, '<LASTVCHID>(\d+)</LASTVCHID>').Groups[1].Value), Tally's MasterID $mid"
+    # run 37592322441: Tally numbers Journals itself (the imported S232-SMALL-1 became Journal 3): the entry is found in
+    # Tally's list by its MasterID, and its line carries Tally's own number, as the add-on's would
+    $v = @((Vouchers 9000 $co1) | Where-Object { $_.mid -eq $mid } | Select-Object -Last 1)
+    if ($v.Count) { $no = $v[0].vno; $aid = $v[0].aid; $cg = (($v[0].guid -split '-')[0..4] -join '-') }
+    else { Write-Host "[slow232] ${label}: MasterID $mid (LASTVCHID) not in Tally's list of $co1" }
+    Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO slow232 $label ($co1): MasterID $mid (LASTVCHID), Tally's number '$no', AlterID $aid"
   }
   if (-not $cg -or $mid -le 0) { Write-Host "[slow232] ${label}: no line written (company GUID '$cg', MasterID $mid)"; return $r }
   $guid = '{0}-{1:x8}' -f $cg, $mid
@@ -204,7 +207,8 @@ function S2Import($co, $xml, $label) {
   $txt = (('voucher_accept_pre', 'voucher_accept_post') | ForEach-Object { "FCR1|ev=$_|t0=$now|tw=$now|cguid=$cg|cname=$co|user=TALLY User|obj=Voucher|guid=$guid|mid=$mid|aid=$aid|vtype=$typ|vno=$no|vdate=$vd|name=|parent=|narr=|t1=$now|src=live`r`n" }) -join ''
   if (-not (Test-Path $rfile)) { [IO.File]::WriteAllBytes($rfile, [byte[]](0xFF, 0xFE)) }
   [IO.File]::AppendAllText($rfile, $txt, [Text.UnicodeEncoding]::new($false, $false))
-  Write-Host "[slow232] ${label}: its lines written to $rfile (MasterID $mid, GUID $guid)"
+  Write-Host "[slow232] ${label}: its lines written to $rfile (MasterID $mid, GUID $guid, number '$no')"
+  $r | Add-Member -NotePropertyName mid -NotePropertyValue "$mid" -Force
   return $r
 }
 function S2BridgeLog { if (Test-Path $B[1].log) { @(Get-Content $B[1].log) } else { @() } }
@@ -216,8 +220,9 @@ function Slow232 {
   Start-Sleep 60   # the bridge's first looks: both companies' starting points
   $m0 = Mark
   # 1. a small-company entry arrives with its details (baseline)
-  $null = S2Import $co1 (S2Journal '20260401' 'S232-SMALL-1' 'Spike Party' 'slow232 small 1' 11) 'small 1'
-  $sm1 = WaitLine $m0 { $_.vch -like '*S232-SMALL-1*' -and $_.xml } 180
+  $mid1 = (S2Import $co1 (S2Journal '20260401' 'S232-SMALL-1' 'Spike Party' 'slow232 small 1' 11) 'small 1').mid
+  $p1 = { "$($_.mid)" -eq $mid1 -and $_.company -eq $co1 -and $_.xml }.GetNewClosure()
+  $sm1 = WaitLine $m0 $p1 180
   Result 'slow232 a small entry before' ($sm1.Count -ge 1) $(if ($sm1.Count) { Ev $sm1[0] } else { 'no line with a body in 180 s' })
   # 2. entries in the large company until the bridge marks it (an entry every 2 minutes, at most 6), a small entry between
   $t0 = Get-Date; $marked = $null; $n = 0
@@ -248,7 +253,7 @@ function Slow232 {
   $mk = Mark; $pxN = (S2Proxy).Count
   $hung = 0; $worst = 0; $tp = Get-Process -Id $script:tallyPids[9000]; $h = $tp.MainWindowHandle
   for ($j = 1; $j -le 2; $j++) { $null = S2Import $Slow232St.co (S2Journal '20260401' "S232-AFTER-$j" 'HExpense 0002' "slow232 after $j" (40 + $j)) "after $j" }
-  $null = S2Import $co1 (S2Journal '20260401' 'S232-SMALL-2' 'Spike Party' 'slow232 small 2' 12) 'small 2'
+  $mid2 = (S2Import $co1 (S2Journal '20260401' 'S232-SMALL-2' 'Spike Party' 'slow232 small 2' 12) 'small 2').mid
   $tEnd = (Get-Date).AddMinutes(4)
   while ((Get-Date) -lt $tEnd) {
     $s = Get-Date; $r = $true; try { $r = [PuW]::Responds($h, 3000) } catch {}
@@ -266,7 +271,7 @@ function Slow232 {
   $bigNos = @($all | ForEach-Object { ($_.vch -split '/')[1] } | Select-Object -Unique)
   $endNos = @($ended | ForEach-Object { ($_.vch -split '/')[1] } | Select-Object -Unique)
   Result 'slow232 its held lines end with the Day Book words' ($bigNos.Count -ge 1 -and $endNos.Count -eq $bigNos.Count -and -not @($all | Where-Object { $_.xml })) ("entries {0}; ended {1}: {2}" -f ($bigNos -join ', '), ($endNos -join ', '), (($all | ForEach-Object { Ev $_ }) -join ' || '))
-  $sm2 = @((StubLines $mk) | Where-Object { $_.vch -like '*S232-SMALL-2*' -and $_.xml })
+  $sm2 = @((StubLines $mk) | Where-Object { "$($_.mid)" -eq $mid2 -and $_.company -eq $co1 -and $_.xml })
   Result 'slow232 a small entry after the mark' ($sm2.Count -ge 1) $(if ($sm2.Count) { Ev $sm2[0] } else { 'no line with a body' })
   Result 'slow232 Tally never held by the bridge after the mark' ($slowAfter.Count -eq 0 -and $hung -eq 0) ("requests of 2 s or more at Tally after the mark: {0}; Tally's window did not answer {1} time(s) in 4 min (the slowest answer {2} ms); the bridge's slowest request after the mark {3} ms" -f $slowAfter.Count, $hung, $worst, ((@($after | ForEach-Object { [int]$_.ms }) + 0 | Measure-Object -Maximum).Maximum))
   $bl = S2BridgeLog
