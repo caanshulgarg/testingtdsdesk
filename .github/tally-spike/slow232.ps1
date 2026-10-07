@@ -166,7 +166,9 @@ function Slow232Setup {
   Start-Sleep 3
   $g = try { (Invoke-WebRequest 'http://127.0.0.2:9000' -UseBasicParsing -TimeoutSec 10).Content } catch { "failed: $($_.Exception.Message)" }
   Write-Host "[slow232] the proxy 127.0.0.2:9000 -> Tally: $("$g" -replace '\s+', ' ')"
-  if ("$g" -match '^failed' -or -not (Test-Path $Slow232St.proxyLog)) { Result 'slow232 setup: the timing proxy beside Tally' $false "127.0.0.2:9000 answered: $g" $true; return }
+  # (run 37585910960: the proxy writes its line after the answer: its log is not checked here; the request asserts are
+  # guarded by the proxy having seen the bridge's requests)
+  if ("$g" -match '^failed' -or "$g" -notmatch 'TallyPrime') { Result 'slow232 setup: the timing proxy beside Tally' $false "127.0.0.2:9000 answered: $g" $true; return }
   $Slow232St.ok = $true
 }
 
