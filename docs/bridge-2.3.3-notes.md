@@ -50,7 +50,9 @@ before; if Tally has not shown it yet, it goes up held with "waiting: Tally has 
 asks again at ...".
 
 As a safety net, no line waits unsent longer than 4 seconds for its details: if it still has none (a posting going on,
-say), it goes up held with the words.
+or the entries saved just before it still being read, one request each), it goes up held with the words ("waiting: Tally
+busy (reading the entries saved before it); FinCom asks again at ..."). While new lines wait, the held lines are not
+asked: the bridge finishes the one request already at Tally, then the new lines go first.
 
 ### 2. A held line is asked again once, then it ends
 

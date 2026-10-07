@@ -3,9 +3,9 @@
 Reviewed: 07-Oct-2026, an adversarial self-review of the diff, by the author (the owner's rule for this release: written
 from the diff after an honest adversarial self-review; any High or Medium fixed before the build).
 
-Range: b1e5858..1203941
+Range: b1e5858..a6cfda0
 
-Read with `git diff b1e5858 1203941 -- bridge-go/ tests/ docs/tally-allowlist.md`.
+Read with `git diff b1e5858 a6cfda0 -- bridge-go/ tests/ docs/tally-allowlist.md`.
 
 ## What changed
 
@@ -62,6 +62,30 @@ Each encoded the behaviour this release removes on the owner's instructions:
 - the version and the decision line: the version pins, `slow232_test.go` VersionAndDecisionLine (2.3.2 kept as
   history), `release_check_test.sh` green 5 / red 14, the fixtures' version.
 
+## The independent review of b1e5858..ce79426 (07-Oct-2026), and what changed for it
+
+No High; two Mediums, both against rule c (every line in FinCom within 10 s), fixed test-first (red at 22c7afe, fixed at
+a6cfda0), and one Low fixed:
+
+- **M1** (fixed). With Tally healthy the resolver ran before new saves and could ask 10 held lines at up to 2 s each (the
+  every-other-try guard never tripped: `retryTakes` moves only while the schedule is active). Now live lines go first, and
+  the resolver stops before each ask while a line read from the add-on waits (`liveQueueReady`; the resolver's own
+  `:resolved` lines do not count): a save waits for one ask at most. Test: TestBacklog233M1SaveDuringHealthyResolverTurn
+  (12 held lines answered at "1.5 s", a save during the turn, in the cloud within "10 s").
+- **M2** (fixed). The body fetch read the whole group (8 saves at 1.8 s: 15 s for the first) before the safety net ran.
+  Now, before each entry request of a group (by MasterID, by number, the by-number fallback), the lines not asked yet go
+  up held once one of them has waited 4 s (`liveOverdue`); the ones read go with their bodies. Test:
+  TestBacklog233M2BurstOfEight.
+- **L1** (fixed). A held line's ask that a posting stopped after it reached Tally counts as its ask (`tallySent` moved),
+  so Tally never gets two requests for one held line.
+- **L2** (kept, the owner's one-request rule): no by-number fallback after a MasterID miss.
+- The release-check note: the first build (ce79426, setup 3189a834..., never published) is reverted (cd5afb7) and 2.3.3
+  is built again after these fixes, with the reviews' range moved to a6cfda0.
+
+The real-Tally harness (`only=backlog233`) has the two scenarios too: (6) 10 held lines of the small company answered in
+1.5 s (the timing proxy holds each request; Tally itself is not busy then) with a new save made while they are asked, and
+(7) a burst of 8 saves at 1.8 s each.
+
 ## Findings
 
 No High. No Medium open. Checked on purpose:
@@ -69,9 +93,11 @@ No High. No Medium open. Checked on purpose:
 ### Checked and holding
 
 1. **Every save reaches FinCom.** Each path out of `liveFetchBodies` / `liveFetchByNumber` that used to leave a voucher
-   line unsent now sends it held; the only remaining waits are a posting (`gaveWay`, then the 4 s net) and a by-number
-   line's few seconds before its first ask (it holds only its own company). Stand: no line over 5 s, a new save behind 40
-   held lines in under 1 s.
+   line unsent now sends it held; before each entry request the lines not asked yet go up held once one of the group has
+   waited 4 s; the resolver yields before each ask to a waiting line. The only remaining waits are a posting (`gaveWay`,
+   then the 4 s net) and a by-number line's few seconds before its first ask (it holds only its own company). Stand: no
+   line over 5 s; a new save behind 40 held lines in under 1 s; a save during a healthy resolver turn, and 8 saves at
+   "1.8 s", each within "10 s".
 2. **The cloud keeps the held line and replaces it once.** Verified on the stand cloud (pg_stand, the real migrations):
    held with the words and no GUID, then `:resolved` applied, held row `replaced`, a second `:resolved` `duplicate`, the
    entry in the copy once. No cloud change.
