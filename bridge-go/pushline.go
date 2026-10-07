@@ -323,13 +323,14 @@ type pushSign struct{ flip, none, blind bool }
 func pushSignOf(e *pushEntry) pushSign {
 	agree, differ, yes, any := 0, 0, false, false
 	for k, r := range e.recs {
-		for f, v := range r {
-			if (f == "neg" || strings.HasSuffix(f, "neg")) && v == "Yes" {
-				yes = true
-			}
-		}
 		if !rePushLedRec.MatchString(k) {
 			continue
+		}
+		// blind or not is told by the ledger lines alone: a balanced entry has a ledger line below 0, so a neg that says
+		// something says Yes there (tally-real run 37677491784: the form's assneg was Yes on a TDS assessable amount
+		// while every ledger line's neg was No)
+		if r["neg"] == "Yes" {
+			yes = true
 		}
 		n, d := r["neg"], r["dp"]
 		if a, _ := pushAbs(r["amt"]); a == "" || strings.Trim(a, "0.") == "" {
@@ -434,6 +435,11 @@ func pushEntryXML(e *pushEntry, guid string, alter int64) (string, error) {
 	}
 	for _, c := range []struct{ n, p string }{{"nL", "L"}, {"nI", "I"}, {"nO", "O"}, {"nSO", "SO"}, {"nSI", "SI"}, {"nCE", "CE"}} {
 		n := e.n(c.n)
+		if n < 0 && c.n == "nO" {
+			// the invoice order list: no longer written by the add-on (tally-real run 37677491784: its record failed in a
+			// voucher form; not in the entry request's shape, not read by the cloud); none may come without its count
+			n = 0
+		}
 		if n < 0 {
 			return "", fmt.Errorf("the count %s is missing", c.n)
 		}
@@ -651,13 +657,7 @@ func pushEntryXML(e *pushEntry, guid string, alter int64) (string, error) {
 		}
 		b.WriteString("</ALLLEDGERENTRIES.LIST>")
 	}
-	for _, k := range e.list("", "O") {
-		r := e.recs[k]
-		b.WriteString("<INVOICEORDERLIST.LIST>")
-		pushTag(&b, "BASICORDERDATE", "Date", date8(r["dt"]))
-		pushTag(&b, "BASICPURCHASEORDERNO", "String", r["no"])
-		b.WriteString("</INVOICEORDERLIST.LIST>")
-	}
+	// (the invoice order list is not written: Tally's answer to the entry request has none, tally-real run 37677491784)
 	// a stock journal's lines out and in (on an invoice Tally's in-memory lists repeat its items: left out there)
 	if e.n("nI") == 0 {
 		for _, io := range []struct{ p, tag string }{{"SO", "INVENTORYENTRIESOUT.LIST"}, {"SI", "INVENTORYENTRIESIN.LIST"}} {

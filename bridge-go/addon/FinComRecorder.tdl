@@ -80,7 +80,7 @@
 ;; cgstin, irn, irnack, irnackdt, ewb, narr), every ledger line (L<i>) with its GST rates (R), bills (B), bank details (K),
 ;; cost categories and centres (C, c) and TDS (T, its sub-categories s: category, party, assessable amount, tax, sub-category,
 ;; duty ledger), every item line (I<i>: item, quantities, rate, amount, HSN) with its rates, the ledgers under it (A) and its
-;; batches (b: godown, batch, tracking and order numbers), the order list (O), a stock journal's lines out and in (SO, SI),
+;; batches (b: godown, batch, tracking and order numbers), a stock journal's lines out and in (SO, SI),
 ;; payroll and attendance (CE, E, p, a).
 ;; Separators: free text is escaped with $$StringFindAndReplace ("%" -> %25, "|" -> %7C, "~" -> %7E), so a name or
 ;; narration holding a separator is read exactly and a value never starts a line with "FCR1|"; a line break in a value is
@@ -119,7 +119,6 @@
     FCRFIe     : "item=" + ($$StringFindAndReplace:($$StringFindAndReplace:($$StringFindAndReplace:($$String:$StockItemName):"%":"%25"):"|":"%7C"):"~":"%7E") + "~qty=" + ($$StringFindAndReplace:($$StringFindAndReplace:($$StringFindAndReplace:($$String:$BilledQty):"%":"%25"):"|":"%7C"):"~":"%7E") + "~aq=" + ($$StringFindAndReplace:($$StringFindAndReplace:($$StringFindAndReplace:($$String:$ActualQty):"%":"%25"):"|":"%7C"):"~":"%7E") + "~rate=" + ($$StringFindAndReplace:($$StringFindAndReplace:($$StringFindAndReplace:($$String:$Rate):"%":"%25"):"|":"%7C"):"~":"%7E") + "~amt=" + ($$String:$Amount) + "~neg=" + ($$String:@@FCRFNeg) + "~dp=" + ($$String:$IsDeemedPositive) + "~hsn=" + ($$StringFindAndReplace:($$StringFindAndReplace:($$StringFindAndReplace:($$String:$GSTHSNName):"%":"%25"):"|":"%7C"):"~":"%7E")
     FCRFAa     : "led=" + ($$StringFindAndReplace:($$StringFindAndReplace:($$StringFindAndReplace:($$String:$LedgerName):"%":"%25"):"|":"%7C"):"~":"%7E") + "~amt=" + ($$String:$Amount) + "~neg=" + ($$String:@@FCRFNeg) + "~dp=" + ($$String:$IsDeemedPositive)
     FCRFBat    : "god=" + ($$StringFindAndReplace:($$StringFindAndReplace:($$StringFindAndReplace:($$String:$GodownName):"%":"%25"):"|":"%7C"):"~":"%7E") + "~bat=" + ($$StringFindAndReplace:($$StringFindAndReplace:($$StringFindAndReplace:($$String:$BatchName):"%":"%25"):"|":"%7C"):"~":"%7E") + "~trk=" + ($$StringFindAndReplace:($$StringFindAndReplace:($$StringFindAndReplace:($$String:$TrackingNumber):"%":"%25"):"|":"%7C"):"~":"%7E") + "~ord=" + ($$StringFindAndReplace:($$StringFindAndReplace:($$StringFindAndReplace:($$String:$OrderNo):"%":"%25"):"|":"%7C"):"~":"%7E") + "~due=" + ($$String:$OrderDueDate) + "~aq=" + ($$StringFindAndReplace:($$StringFindAndReplace:($$StringFindAndReplace:($$String:$ActualQty):"%":"%25"):"|":"%7C"):"~":"%7E") + "~bq=" + ($$StringFindAndReplace:($$StringFindAndReplace:($$StringFindAndReplace:($$String:$BilledQty):"%":"%25"):"|":"%7C"):"~":"%7E") + "~rate=" + ($$StringFindAndReplace:($$StringFindAndReplace:($$StringFindAndReplace:($$String:$BatchRate):"%":"%25"):"|":"%7C"):"~":"%7E") + "~amt=" + ($$String:$Amount) + "~neg=" + ($$String:@@FCRFNeg)
-    FCRFOrd    : "no=" + ($$StringFindAndReplace:($$StringFindAndReplace:($$StringFindAndReplace:($$String:$BasicPurchaseOrderNo):"%":"%25"):"|":"%7C"):"~":"%7E") + "~dt=" + ($$String:$BasicOrderDate)
     FCRFIo     : "item=" + ($$StringFindAndReplace:($$StringFindAndReplace:($$StringFindAndReplace:($$String:$StockItemName):"%":"%25"):"|":"%7C"):"~":"%7E") + "~aq=" + ($$StringFindAndReplace:($$StringFindAndReplace:($$StringFindAndReplace:($$String:$ActualQty):"%":"%25"):"|":"%7C"):"~":"%7E") + "~bq=" + ($$StringFindAndReplace:($$StringFindAndReplace:($$StringFindAndReplace:($$String:$BilledQty):"%":"%25"):"|":"%7C"):"~":"%7E") + "~rate=" + ($$StringFindAndReplace:($$StringFindAndReplace:($$StringFindAndReplace:($$String:$Rate):"%":"%25"):"|":"%7C"):"~":"%7E") + "~amt=" + ($$String:$Amount) + "~neg=" + ($$String:@@FCRFNeg) + "~dp=" + ($$String:$IsDeemedPositive)
     FCRFCe     : "cat=" + ($$StringFindAndReplace:($$StringFindAndReplace:($$StringFindAndReplace:($$String:$Category):"%":"%25"):"|":"%7C"):"~":"%7E")
     FCRFEmp    : "emp=" + ($$StringFindAndReplace:($$StringFindAndReplace:($$StringFindAndReplace:($$String:$EmployeeName):"%":"%25"):"|":"%7C"):"~":"%7E") + "~amt=" + ($$String:$Amount) + "~neg=" + ($$String:@@FCRFNeg)
@@ -555,9 +554,9 @@
     f377 :    INCREMENT : vI
     f378 : END WHILE
     f379 : SET : vNI : 0
-    f380 : SET : vNI : $$NumItems:InvoiceOrderList
+    f380 : SET : vNI : $$NumItems:InventoryEntriesOut
     f381 : SET : vRec : ""
-    f382 : SET : vRec : "|nO=" + ($$String:##vNI)
+    f382 : SET : vRec : "|nSO=" + ($$String:##vNI)
     f383 : SET : vRL : $$StringLength:##vRec
     f384 : IF : ##vLen > 0 AND ##vLen + ##vRL > @@FCRCap
     f385 :    SET : vT : ($$String:$$MachineDate) + " " + ($$String:$$MachineTime)
@@ -572,7 +571,7 @@
     f394 : SET : vI : 1
     f395 : WHILE : ##vI <= ##vNI
     f396 :    SET : vRec : ""
-    f397 :    SET : vRec : "|O" + ($$String:##vI) + "=" + ($$CollectionField:@@FCRFOrd:##vI:InvoiceOrderList)
+    f397 :    SET : vRec : "|SO" + ($$String:##vI) + "=" + ($$CollectionField:@@FCRFIo:##vI:InventoryEntriesOut)
     f398 :    SET : vRL : $$StringLength:##vRec
     f399 :    IF : ##vLen > 0 AND ##vLen + ##vRL > @@FCRCap
     f400 :       SET : vT : ($$String:$$MachineDate) + " " + ($$String:$$MachineTime)
@@ -584,204 +583,172 @@
     f406 :    END IF
     f407 :    SET : vLen : ##vLen + ##vRL
     f408 :    WRITE FILE : ##vRec
-    f409 :    INCREMENT : vI
-    f410 : END WHILE
-    f411 : SET : vNI : 0
-    f412 : SET : vNI : $$NumItems:InventoryEntriesOut
-    f413 : SET : vRec : ""
-    f414 : SET : vRec : "|nSO=" + ($$String:##vNI)
-    f415 : SET : vRL : $$StringLength:##vRec
-    f416 : IF : ##vLen > 0 AND ##vLen + ##vRL > @@FCRCap
-    f417 :    SET : vT : ($$String:$$MachineDate) + " " + ($$String:$$MachineTime)
-    f418 :    WRITE FILE : "|len=" + ($$String:##vLen)
-    f419 :    WRITE FILE LINE : "|more=1|t1=" + ##vT + "|src=live"
-    f420 :    INCREMENT : vPart
-    f421 :    WRITE FILE : ##vHead + "|part=" + ($$String:##vPart)
-    f422 :    SET : vLen : 0
-    f423 : END IF
-    f424 : SET : vLen : ##vLen + ##vRL
-    f425 : WRITE FILE : ##vRec
-    f426 : SET : vI : 1
-    f427 : WHILE : ##vI <= ##vNI
-    f428 :    SET : vRec : ""
-    f429 :    SET : vRec : "|SO" + ($$String:##vI) + "=" + ($$CollectionField:@@FCRFIo:##vI:InventoryEntriesOut)
-    f430 :    SET : vRL : $$StringLength:##vRec
-    f431 :    IF : ##vLen > 0 AND ##vLen + ##vRL > @@FCRCap
-    f432 :       SET : vT : ($$String:$$MachineDate) + " " + ($$String:$$MachineTime)
-    f433 :       WRITE FILE : "|len=" + ($$String:##vLen)
-    f434 :       WRITE FILE LINE : "|more=1|t1=" + ##vT + "|src=live"
-    f435 :       INCREMENT : vPart
-    f436 :       WRITE FILE : ##vHead + "|part=" + ($$String:##vPart)
-    f437 :       SET : vLen : 0
-    f438 :    END IF
-    f439 :    SET : vLen : ##vLen + ##vRL
-    f440 :    WRITE FILE : ##vRec
-    f441 :    SET : vNJ : 0
-    f442 :    SET : vNJ : $$CollectionField:($$NumItems:BatchAllocations):##vI:InventoryEntriesOut
-    f443 :    SET : vJ : 1
-    f444 :    WHILE : ##vJ <= ##vNJ
-    f445 :       SET : vRec : ""
-    f446 :       SET : vRec : "|SO" + ($$String:##vI) + "b" + ($$String:##vJ) + "=" + ($$CollectionField:(($$CollectionField:@@FCRFBat:##vJ:BatchAllocations)):##vI:InventoryEntriesOut)
-    f447 :       SET : vRL : $$StringLength:##vRec
-    f448 :       IF : ##vLen > 0 AND ##vLen + ##vRL > @@FCRCap
-    f449 :          SET : vT : ($$String:$$MachineDate) + " " + ($$String:$$MachineTime)
-    f450 :          WRITE FILE : "|len=" + ($$String:##vLen)
-    f451 :          WRITE FILE LINE : "|more=1|t1=" + ##vT + "|src=live"
-    f452 :          INCREMENT : vPart
-    f453 :          WRITE FILE : ##vHead + "|part=" + ($$String:##vPart)
-    f454 :          SET : vLen : 0
-    f455 :       END IF
-    f456 :       SET : vLen : ##vLen + ##vRL
-    f457 :       WRITE FILE : ##vRec
-    f458 :       INCREMENT : vJ
-    f459 :    END WHILE
-    f460 :    INCREMENT : vI
-    f461 : END WHILE
-    f462 : SET : vNI : 0
-    f463 : SET : vNI : $$NumItems:InventoryEntriesIn
-    f464 : SET : vRec : ""
-    f465 : SET : vRec : "|nSI=" + ($$String:##vNI)
-    f466 : SET : vRL : $$StringLength:##vRec
-    f467 : IF : ##vLen > 0 AND ##vLen + ##vRL > @@FCRCap
-    f468 :    SET : vT : ($$String:$$MachineDate) + " " + ($$String:$$MachineTime)
-    f469 :    WRITE FILE : "|len=" + ($$String:##vLen)
-    f470 :    WRITE FILE LINE : "|more=1|t1=" + ##vT + "|src=live"
-    f471 :    INCREMENT : vPart
-    f472 :    WRITE FILE : ##vHead + "|part=" + ($$String:##vPart)
-    f473 :    SET : vLen : 0
-    f474 : END IF
-    f475 : SET : vLen : ##vLen + ##vRL
-    f476 : WRITE FILE : ##vRec
-    f477 : SET : vI : 1
-    f478 : WHILE : ##vI <= ##vNI
-    f479 :    SET : vRec : ""
-    f480 :    SET : vRec : "|SI" + ($$String:##vI) + "=" + ($$CollectionField:@@FCRFIo:##vI:InventoryEntriesIn)
-    f481 :    SET : vRL : $$StringLength:##vRec
-    f482 :    IF : ##vLen > 0 AND ##vLen + ##vRL > @@FCRCap
-    f483 :       SET : vT : ($$String:$$MachineDate) + " " + ($$String:$$MachineTime)
-    f484 :       WRITE FILE : "|len=" + ($$String:##vLen)
-    f485 :       WRITE FILE LINE : "|more=1|t1=" + ##vT + "|src=live"
-    f486 :       INCREMENT : vPart
-    f487 :       WRITE FILE : ##vHead + "|part=" + ($$String:##vPart)
-    f488 :       SET : vLen : 0
-    f489 :    END IF
-    f490 :    SET : vLen : ##vLen + ##vRL
-    f491 :    WRITE FILE : ##vRec
-    f492 :    SET : vNJ : 0
-    f493 :    SET : vNJ : $$CollectionField:($$NumItems:BatchAllocations):##vI:InventoryEntriesIn
-    f494 :    SET : vJ : 1
-    f495 :    WHILE : ##vJ <= ##vNJ
-    f496 :       SET : vRec : ""
-    f497 :       SET : vRec : "|SI" + ($$String:##vI) + "b" + ($$String:##vJ) + "=" + ($$CollectionField:(($$CollectionField:@@FCRFBat:##vJ:BatchAllocations)):##vI:InventoryEntriesIn)
-    f498 :       SET : vRL : $$StringLength:##vRec
-    f499 :       IF : ##vLen > 0 AND ##vLen + ##vRL > @@FCRCap
-    f500 :          SET : vT : ($$String:$$MachineDate) + " " + ($$String:$$MachineTime)
-    f501 :          WRITE FILE : "|len=" + ($$String:##vLen)
-    f502 :          WRITE FILE LINE : "|more=1|t1=" + ##vT + "|src=live"
-    f503 :          INCREMENT : vPart
-    f504 :          WRITE FILE : ##vHead + "|part=" + ($$String:##vPart)
-    f505 :          SET : vLen : 0
-    f506 :       END IF
-    f507 :       SET : vLen : ##vLen + ##vRL
-    f508 :       WRITE FILE : ##vRec
-    f509 :       INCREMENT : vJ
-    f510 :    END WHILE
-    f511 :    INCREMENT : vI
-    f512 : END WHILE
-    f513 : SET : vNI : 0
-    f514 : SET : vNI : $$NumItems:CategoryEntry
-    f515 : SET : vRec : ""
-    f516 : SET : vRec : "|nCE=" + ($$String:##vNI)
-    f517 : SET : vRL : $$StringLength:##vRec
-    f518 : IF : ##vLen > 0 AND ##vLen + ##vRL > @@FCRCap
-    f519 :    SET : vT : ($$String:$$MachineDate) + " " + ($$String:$$MachineTime)
-    f520 :    WRITE FILE : "|len=" + ($$String:##vLen)
-    f521 :    WRITE FILE LINE : "|more=1|t1=" + ##vT + "|src=live"
-    f522 :    INCREMENT : vPart
-    f523 :    WRITE FILE : ##vHead + "|part=" + ($$String:##vPart)
-    f524 :    SET : vLen : 0
-    f525 : END IF
-    f526 : SET : vLen : ##vLen + ##vRL
-    f527 : WRITE FILE : ##vRec
-    f528 : SET : vI : 1
-    f529 : WHILE : ##vI <= ##vNI
-    f530 :    SET : vRec : ""
-    f531 :    SET : vRec : "|CE" + ($$String:##vI) + "=" + ($$CollectionField:@@FCRFCe:##vI:CategoryEntry)
-    f532 :    SET : vRL : $$StringLength:##vRec
-    f533 :    IF : ##vLen > 0 AND ##vLen + ##vRL > @@FCRCap
-    f534 :       SET : vT : ($$String:$$MachineDate) + " " + ($$String:$$MachineTime)
-    f535 :       WRITE FILE : "|len=" + ($$String:##vLen)
-    f536 :       WRITE FILE LINE : "|more=1|t1=" + ##vT + "|src=live"
-    f537 :       INCREMENT : vPart
-    f538 :       WRITE FILE : ##vHead + "|part=" + ($$String:##vPart)
-    f539 :       SET : vLen : 0
-    f540 :    END IF
-    f541 :    SET : vLen : ##vLen + ##vRL
-    f542 :    WRITE FILE : ##vRec
-    f543 :    SET : vNJ : 0
-    f544 :    SET : vNJ : $$CollectionField:($$NumItems:EmployeeEntries):##vI:CategoryEntry
-    f545 :    SET : vJ : 1
-    f546 :    WHILE : ##vJ <= ##vNJ
-    f547 :       SET : vRec : ""
-    f548 :       SET : vRec : "|CE" + ($$String:##vI) + "E" + ($$String:##vJ) + "=" + ($$CollectionField:(($$CollectionField:@@FCRFEmp:##vJ:EmployeeEntries)):##vI:CategoryEntry)
-    f549 :       SET : vRL : $$StringLength:##vRec
-    f550 :       IF : ##vLen > 0 AND ##vLen + ##vRL > @@FCRCap
-    f551 :          SET : vT : ($$String:$$MachineDate) + " " + ($$String:$$MachineTime)
-    f552 :          WRITE FILE : "|len=" + ($$String:##vLen)
-    f553 :          WRITE FILE LINE : "|more=1|t1=" + ##vT + "|src=live"
-    f554 :          INCREMENT : vPart
-    f555 :          WRITE FILE : ##vHead + "|part=" + ($$String:##vPart)
-    f556 :          SET : vLen : 0
-    f557 :       END IF
-    f558 :       SET : vLen : ##vLen + ##vRL
-    f559 :       WRITE FILE : ##vRec
-    f560 :       SET : vNK : 0
-    f561 :       SET : vNK : $$CollectionField:($$CollectionField:($$NumItems:PayHeadAllocations):##vJ:EmployeeEntries):##vI:CategoryEntry
-    f562 :       SET : vK : 1
-    f563 :       WHILE : ##vK <= ##vNK
-    f564 :          SET : vRec : ""
-    f565 :          SET : vRec : "|CE" + ($$String:##vI) + "E" + ($$String:##vJ) + "p" + ($$String:##vK) + "=" + ($$CollectionField:($$CollectionField:(($$CollectionField:@@FCRFPh:##vK:PayHeadAllocations)):##vJ:EmployeeEntries):##vI:CategoryEntry)
-    f566 :          SET : vRL : $$StringLength:##vRec
-    f567 :          IF : ##vLen > 0 AND ##vLen + ##vRL > @@FCRCap
-    f568 :             SET : vT : ($$String:$$MachineDate) + " " + ($$String:$$MachineTime)
-    f569 :             WRITE FILE : "|len=" + ($$String:##vLen)
-    f570 :             WRITE FILE LINE : "|more=1|t1=" + ##vT + "|src=live"
-    f571 :             INCREMENT : vPart
-    f572 :             WRITE FILE : ##vHead + "|part=" + ($$String:##vPart)
-    f573 :             SET : vLen : 0
-    f574 :          END IF
-    f575 :          SET : vLen : ##vLen + ##vRL
-    f576 :          WRITE FILE : ##vRec
-    f577 :          INCREMENT : vK
-    f578 :       END WHILE
-    f579 :       SET : vNK : 0
-    f580 :       SET : vNK : $$CollectionField:($$CollectionField:($$NumItems:AttendanceEntries):##vJ:EmployeeEntries):##vI:CategoryEntry
-    f581 :       SET : vK : 1
-    f582 :       WHILE : ##vK <= ##vNK
-    f583 :          SET : vRec : ""
-    f584 :          SET : vRec : "|CE" + ($$String:##vI) + "E" + ($$String:##vJ) + "a" + ($$String:##vK) + "=" + ($$CollectionField:($$CollectionField:(($$CollectionField:@@FCRFAtt:##vK:AttendanceEntries)):##vJ:EmployeeEntries):##vI:CategoryEntry)
-    f585 :          SET : vRL : $$StringLength:##vRec
-    f586 :          IF : ##vLen > 0 AND ##vLen + ##vRL > @@FCRCap
-    f587 :             SET : vT : ($$String:$$MachineDate) + " " + ($$String:$$MachineTime)
-    f588 :             WRITE FILE : "|len=" + ($$String:##vLen)
-    f589 :             WRITE FILE LINE : "|more=1|t1=" + ##vT + "|src=live"
-    f590 :             INCREMENT : vPart
-    f591 :             WRITE FILE : ##vHead + "|part=" + ($$String:##vPart)
-    f592 :             SET : vLen : 0
-    f593 :          END IF
-    f594 :          SET : vLen : ##vLen + ##vRL
-    f595 :          WRITE FILE : ##vRec
-    f596 :          INCREMENT : vK
-    f597 :       END WHILE
-    f598 :       INCREMENT : vJ
-    f599 :    END WHILE
-    f600 :    INCREMENT : vI
-    f601 : END WHILE
-    f602 : SET : vT : ($$String:$$MachineDate) + " " + ($$String:$$MachineTime)
-    f603 : WRITE FILE : "|len=" + ($$String:##vLen)
-    f604 : WRITE FILE LINE : "|end=1|t1=" + ##vT + "|src=live"
-    f605 : CLOSE TARGET FILE
-    f606 : RETURN : Yes
+    f409 :    SET : vNJ : 0
+    f410 :    SET : vNJ : $$CollectionField:($$NumItems:BatchAllocations):##vI:InventoryEntriesOut
+    f411 :    SET : vJ : 1
+    f412 :    WHILE : ##vJ <= ##vNJ
+    f413 :       SET : vRec : ""
+    f414 :       SET : vRec : "|SO" + ($$String:##vI) + "b" + ($$String:##vJ) + "=" + ($$CollectionField:(($$CollectionField:@@FCRFBat:##vJ:BatchAllocations)):##vI:InventoryEntriesOut)
+    f415 :       SET : vRL : $$StringLength:##vRec
+    f416 :       IF : ##vLen > 0 AND ##vLen + ##vRL > @@FCRCap
+    f417 :          SET : vT : ($$String:$$MachineDate) + " " + ($$String:$$MachineTime)
+    f418 :          WRITE FILE : "|len=" + ($$String:##vLen)
+    f419 :          WRITE FILE LINE : "|more=1|t1=" + ##vT + "|src=live"
+    f420 :          INCREMENT : vPart
+    f421 :          WRITE FILE : ##vHead + "|part=" + ($$String:##vPart)
+    f422 :          SET : vLen : 0
+    f423 :       END IF
+    f424 :       SET : vLen : ##vLen + ##vRL
+    f425 :       WRITE FILE : ##vRec
+    f426 :       INCREMENT : vJ
+    f427 :    END WHILE
+    f428 :    INCREMENT : vI
+    f429 : END WHILE
+    f430 : SET : vNI : 0
+    f431 : SET : vNI : $$NumItems:InventoryEntriesIn
+    f432 : SET : vRec : ""
+    f433 : SET : vRec : "|nSI=" + ($$String:##vNI)
+    f434 : SET : vRL : $$StringLength:##vRec
+    f435 : IF : ##vLen > 0 AND ##vLen + ##vRL > @@FCRCap
+    f436 :    SET : vT : ($$String:$$MachineDate) + " " + ($$String:$$MachineTime)
+    f437 :    WRITE FILE : "|len=" + ($$String:##vLen)
+    f438 :    WRITE FILE LINE : "|more=1|t1=" + ##vT + "|src=live"
+    f439 :    INCREMENT : vPart
+    f440 :    WRITE FILE : ##vHead + "|part=" + ($$String:##vPart)
+    f441 :    SET : vLen : 0
+    f442 : END IF
+    f443 : SET : vLen : ##vLen + ##vRL
+    f444 : WRITE FILE : ##vRec
+    f445 : SET : vI : 1
+    f446 : WHILE : ##vI <= ##vNI
+    f447 :    SET : vRec : ""
+    f448 :    SET : vRec : "|SI" + ($$String:##vI) + "=" + ($$CollectionField:@@FCRFIo:##vI:InventoryEntriesIn)
+    f449 :    SET : vRL : $$StringLength:##vRec
+    f450 :    IF : ##vLen > 0 AND ##vLen + ##vRL > @@FCRCap
+    f451 :       SET : vT : ($$String:$$MachineDate) + " " + ($$String:$$MachineTime)
+    f452 :       WRITE FILE : "|len=" + ($$String:##vLen)
+    f453 :       WRITE FILE LINE : "|more=1|t1=" + ##vT + "|src=live"
+    f454 :       INCREMENT : vPart
+    f455 :       WRITE FILE : ##vHead + "|part=" + ($$String:##vPart)
+    f456 :       SET : vLen : 0
+    f457 :    END IF
+    f458 :    SET : vLen : ##vLen + ##vRL
+    f459 :    WRITE FILE : ##vRec
+    f460 :    SET : vNJ : 0
+    f461 :    SET : vNJ : $$CollectionField:($$NumItems:BatchAllocations):##vI:InventoryEntriesIn
+    f462 :    SET : vJ : 1
+    f463 :    WHILE : ##vJ <= ##vNJ
+    f464 :       SET : vRec : ""
+    f465 :       SET : vRec : "|SI" + ($$String:##vI) + "b" + ($$String:##vJ) + "=" + ($$CollectionField:(($$CollectionField:@@FCRFBat:##vJ:BatchAllocations)):##vI:InventoryEntriesIn)
+    f466 :       SET : vRL : $$StringLength:##vRec
+    f467 :       IF : ##vLen > 0 AND ##vLen + ##vRL > @@FCRCap
+    f468 :          SET : vT : ($$String:$$MachineDate) + " " + ($$String:$$MachineTime)
+    f469 :          WRITE FILE : "|len=" + ($$String:##vLen)
+    f470 :          WRITE FILE LINE : "|more=1|t1=" + ##vT + "|src=live"
+    f471 :          INCREMENT : vPart
+    f472 :          WRITE FILE : ##vHead + "|part=" + ($$String:##vPart)
+    f473 :          SET : vLen : 0
+    f474 :       END IF
+    f475 :       SET : vLen : ##vLen + ##vRL
+    f476 :       WRITE FILE : ##vRec
+    f477 :       INCREMENT : vJ
+    f478 :    END WHILE
+    f479 :    INCREMENT : vI
+    f480 : END WHILE
+    f481 : SET : vNI : 0
+    f482 : SET : vNI : $$NumItems:CategoryEntry
+    f483 : SET : vRec : ""
+    f484 : SET : vRec : "|nCE=" + ($$String:##vNI)
+    f485 : SET : vRL : $$StringLength:##vRec
+    f486 : IF : ##vLen > 0 AND ##vLen + ##vRL > @@FCRCap
+    f487 :    SET : vT : ($$String:$$MachineDate) + " " + ($$String:$$MachineTime)
+    f488 :    WRITE FILE : "|len=" + ($$String:##vLen)
+    f489 :    WRITE FILE LINE : "|more=1|t1=" + ##vT + "|src=live"
+    f490 :    INCREMENT : vPart
+    f491 :    WRITE FILE : ##vHead + "|part=" + ($$String:##vPart)
+    f492 :    SET : vLen : 0
+    f493 : END IF
+    f494 : SET : vLen : ##vLen + ##vRL
+    f495 : WRITE FILE : ##vRec
+    f496 : SET : vI : 1
+    f497 : WHILE : ##vI <= ##vNI
+    f498 :    SET : vRec : ""
+    f499 :    SET : vRec : "|CE" + ($$String:##vI) + "=" + ($$CollectionField:@@FCRFCe:##vI:CategoryEntry)
+    f500 :    SET : vRL : $$StringLength:##vRec
+    f501 :    IF : ##vLen > 0 AND ##vLen + ##vRL > @@FCRCap
+    f502 :       SET : vT : ($$String:$$MachineDate) + " " + ($$String:$$MachineTime)
+    f503 :       WRITE FILE : "|len=" + ($$String:##vLen)
+    f504 :       WRITE FILE LINE : "|more=1|t1=" + ##vT + "|src=live"
+    f505 :       INCREMENT : vPart
+    f506 :       WRITE FILE : ##vHead + "|part=" + ($$String:##vPart)
+    f507 :       SET : vLen : 0
+    f508 :    END IF
+    f509 :    SET : vLen : ##vLen + ##vRL
+    f510 :    WRITE FILE : ##vRec
+    f511 :    SET : vNJ : 0
+    f512 :    SET : vNJ : $$CollectionField:($$NumItems:EmployeeEntries):##vI:CategoryEntry
+    f513 :    SET : vJ : 1
+    f514 :    WHILE : ##vJ <= ##vNJ
+    f515 :       SET : vRec : ""
+    f516 :       SET : vRec : "|CE" + ($$String:##vI) + "E" + ($$String:##vJ) + "=" + ($$CollectionField:(($$CollectionField:@@FCRFEmp:##vJ:EmployeeEntries)):##vI:CategoryEntry)
+    f517 :       SET : vRL : $$StringLength:##vRec
+    f518 :       IF : ##vLen > 0 AND ##vLen + ##vRL > @@FCRCap
+    f519 :          SET : vT : ($$String:$$MachineDate) + " " + ($$String:$$MachineTime)
+    f520 :          WRITE FILE : "|len=" + ($$String:##vLen)
+    f521 :          WRITE FILE LINE : "|more=1|t1=" + ##vT + "|src=live"
+    f522 :          INCREMENT : vPart
+    f523 :          WRITE FILE : ##vHead + "|part=" + ($$String:##vPart)
+    f524 :          SET : vLen : 0
+    f525 :       END IF
+    f526 :       SET : vLen : ##vLen + ##vRL
+    f527 :       WRITE FILE : ##vRec
+    f528 :       SET : vNK : 0
+    f529 :       SET : vNK : $$CollectionField:($$CollectionField:($$NumItems:PayHeadAllocations):##vJ:EmployeeEntries):##vI:CategoryEntry
+    f530 :       SET : vK : 1
+    f531 :       WHILE : ##vK <= ##vNK
+    f532 :          SET : vRec : ""
+    f533 :          SET : vRec : "|CE" + ($$String:##vI) + "E" + ($$String:##vJ) + "p" + ($$String:##vK) + "=" + ($$CollectionField:($$CollectionField:(($$CollectionField:@@FCRFPh:##vK:PayHeadAllocations)):##vJ:EmployeeEntries):##vI:CategoryEntry)
+    f534 :          SET : vRL : $$StringLength:##vRec
+    f535 :          IF : ##vLen > 0 AND ##vLen + ##vRL > @@FCRCap
+    f536 :             SET : vT : ($$String:$$MachineDate) + " " + ($$String:$$MachineTime)
+    f537 :             WRITE FILE : "|len=" + ($$String:##vLen)
+    f538 :             WRITE FILE LINE : "|more=1|t1=" + ##vT + "|src=live"
+    f539 :             INCREMENT : vPart
+    f540 :             WRITE FILE : ##vHead + "|part=" + ($$String:##vPart)
+    f541 :             SET : vLen : 0
+    f542 :          END IF
+    f543 :          SET : vLen : ##vLen + ##vRL
+    f544 :          WRITE FILE : ##vRec
+    f545 :          INCREMENT : vK
+    f546 :       END WHILE
+    f547 :       SET : vNK : 0
+    f548 :       SET : vNK : $$CollectionField:($$CollectionField:($$NumItems:AttendanceEntries):##vJ:EmployeeEntries):##vI:CategoryEntry
+    f549 :       SET : vK : 1
+    f550 :       WHILE : ##vK <= ##vNK
+    f551 :          SET : vRec : ""
+    f552 :          SET : vRec : "|CE" + ($$String:##vI) + "E" + ($$String:##vJ) + "a" + ($$String:##vK) + "=" + ($$CollectionField:($$CollectionField:(($$CollectionField:@@FCRFAtt:##vK:AttendanceEntries)):##vJ:EmployeeEntries):##vI:CategoryEntry)
+    f553 :          SET : vRL : $$StringLength:##vRec
+    f554 :          IF : ##vLen > 0 AND ##vLen + ##vRL > @@FCRCap
+    f555 :             SET : vT : ($$String:$$MachineDate) + " " + ($$String:$$MachineTime)
+    f556 :             WRITE FILE : "|len=" + ($$String:##vLen)
+    f557 :             WRITE FILE LINE : "|more=1|t1=" + ##vT + "|src=live"
+    f558 :             INCREMENT : vPart
+    f559 :             WRITE FILE : ##vHead + "|part=" + ($$String:##vPart)
+    f560 :             SET : vLen : 0
+    f561 :          END IF
+    f562 :          SET : vLen : ##vLen + ##vRL
+    f563 :          WRITE FILE : ##vRec
+    f564 :          INCREMENT : vK
+    f565 :       END WHILE
+    f566 :       INCREMENT : vJ
+    f567 :    END WHILE
+    f568 :    INCREMENT : vI
+    f569 : END WHILE
+    f570 : SET : vT : ($$String:$$MachineDate) + " " + ($$String:$$MachineTime)
+    f571 : WRITE FILE : "|len=" + ($$String:##vLen)
+    f572 : WRITE FILE LINE : "|end=1|t1=" + ##vT + "|src=live"
+    f573 : CLOSE TARGET FILE
+    f574 : RETURN : Yes
 
 ;; ---------------------------------------------------------------- the one writer (heads only)
 [Function: FCRLiveLog]

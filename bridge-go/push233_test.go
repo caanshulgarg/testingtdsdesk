@@ -220,11 +220,7 @@ func pushLinesFromXML(t *testing.T, x string, o pushEmu) []string {
 		}
 		batches(p, it)
 	}
-	os := emuList(v, "INVOICEORDERLIST.LIST", true)
-	add("|nO=" + strconv.Itoa(len(os)))
-	for i, or := range os {
-		add(fmt.Sprintf("|O%d=%s~dt=%s", i+1, emuLP("no", text(or, "BASICPURCHASEORDERNO")), emuDate(text(or, "BASICORDERDATE"))))
-	}
+	// (no order list: the add-on does not write it since tally-real run 37677491784)
 	for _, io := range []struct{ p, tag string }{{"SO", "INVENTORYENTRIESOUT.LIST"}, {"SI", "INVENTORYENTRIESIN.LIST"}} {
 		l := emuList(v, io.tag, true)
 		add("|n" + io.p + "=" + strconv.Itoa(len(l)))
@@ -379,9 +375,7 @@ func pushCanon(t *testing.T, x string) M {
 				return M{"led": tx(a, "LEDGERNAME"), "amt": canonAmt(tx(a, "AMOUNT")), "costs": costs(a)}
 			})}
 	})
-	out["orders"] = list(v, "INVOICEORDERLIST.LIST", func(o *Node) M {
-		return M{"no": tx(o, "BASICPURCHASEORDERNO"), "dt": dt(o, "BASICORDERDATE")}
-	})
+	// (the invoice order list: not in the entry request's shape, not compared)
 	for _, io := range []string{"INVENTORYENTRIESOUT.LIST", "INVENTORYENTRIESIN.LIST"} {
 		out[io] = list(v, io, func(i *Node) M {
 			return M{"item": tx(i, "STOCKITEMNAME"), "aq": tx(i, "ACTUALQTY"), "bq": tx(i, "BILLEDQTY"), "rate": tx(i, "RATE"), "amt": canonAmt(tx(i, "AMOUNT")), "batches": batches(i)}
@@ -468,8 +462,11 @@ func TestPushLineEveryBlock(t *testing.T) {
 		t.Fatalf("the line's frame: %q", cut(l, 200))
 	}
 	built, e := pushXMLOf(t, lines)
+	if strings.Contains(built, "INVOICEORDERLIST") {
+		t.Fatal("the invoice order list is written (not in the entry request's shape)")
+	}
 	if e.s("mid") != "42" || e.s("vtype") != "Purchase" || e.s("vno") != "P/42" || e.s("party") != "Rich Supplier | Delhi" || e.s("view") != "Invoice Voucher View" ||
-		e.s("narr") != "made-up purchase: goods a|b~c=d\r\nsecond line: two godowns, 194Q" || e.s("ewb") != "EWB 1234 5678" || e.n("nL") != 5 || e.n("nI") != 2 || e.n("nO") != 1 {
+		e.s("narr") != "made-up purchase: goods a|b~c=d\r\nsecond line: two godowns, 194Q" || e.s("ewb") != "EWB 1234 5678" || e.n("nL") != 5 || e.n("nI") != 2 || e.n("nO") != -1 {
 		t.Fatalf("the entry's own fields: %v", e.scal)
 	}
 	for k, want := range map[string]map[string]string{
@@ -486,7 +483,6 @@ func TestPushLineEveryBlock(t *testing.T) {
 		"I1A1C1c2": {"cc": "South: Zone=2", "amt": "2,000.00"},
 		"I1R3":     {"head": "IGST", "vt": "Based on Value", "rate": "18"},
 		"I2b1":     {"god": "Main Store", "bat": "Lot ~7"},
-		"O1":       {"no": "PO|9", "dt": "1-Oct-26"},
 	} {
 		r := e.rec(k)
 		if r == nil {
@@ -504,7 +500,7 @@ func TestPushLineEveryBlock(t *testing.T) {
 		`<BATCHNAME TYPE="String">Lot ~7</BATCHNAME>`, `<SUBCATEGORY TYPE="String">Income Tax</SUBCATEGORY>`, `<DUTYLEDGER TYPE="String">TDS Payable 194Q</DUTYLEDGER>`,
 		`<ASSESSABLEAMOUNT TYPE="Amount">10000.00</ASSESSABLEAMOUNT>`, `<TAX TYPE="Amount">10.00</TAX>`, `<PARTYLEDGER TYPE="String">Rich Supplier | Delhi</PARTYLEDGER>`,
 		`<TDSDEDUCTEESECTIONNUMBER>194Q</TDSDEDUCTEESECTIONNUMBER>`, `<AMOUNT TYPE="Amount">-10000.00</AMOUNT>`, `<AMOUNT TYPE="Amount">11790.00</AMOUNT>`,
-		`<NAME TYPE="String">South: Zone=2</NAME>`, `<BASICPURCHASEORDERNO TYPE="String">PO|9</BASICPURCHASEORDERNO>`, `a|b~c=d&#13;&#10;second line`} {
+		`<NAME TYPE="String">South: Zone=2</NAME>`, `a|b~c=d&#13;&#10;second line`} {
 		if !strings.Contains(built, s) {
 			t.Errorf("the XML lacks %s", s)
 		}
@@ -982,8 +978,11 @@ func TestPushAddon(t *testing.T) {
 			t.Errorf("the add-on lacks %s", s)
 		}
 	}
+	if strings.Contains(tdl, "InvoiceOrderList") {
+		t.Error("the add-on reads the invoice order list (its record failed in a voucher form: tally-real run 37677491784)")
+	}
 	// the records the bridge reads, each written by the add-on
-	for _, s := range []string{`"|L" +`, `"R" +`, `"B" +`, `"K" +`, `"C" +`, `"c" +`, `"T" +`, `"s" +`, `"|I" +`, `"A" +`, `"b" +`, `"|O" +`, `"|SO" +`, `"|SI" +`, `"|CE" +`, `"E" +`, `"p" +`, `"a" +`,
+	for _, s := range []string{`"|L" +`, `"R" +`, `"B" +`, `"K" +`, `"C" +`, `"c" +`, `"T" +`, `"s" +`, `"|I" +`, `"A" +`, `"b" +`, `"|SO" +`, `"|SI" +`, `"|CE" +`, `"E" +`, `"p" +`, `"a" +`,
 		"SubCategory", "DutyLedger", "GodownName", "BatchName", "PayHeadName", "EmployeeName", "TaxObjectAllocations", "SubCategoryAllocation", "BankAllocations", "BillAllocations"} {
 		if !strings.Contains(fn+tdl[:strings.Index(tdl, "[Function: FCRLiveFull]")], s) {
 			t.Errorf("the add-on does not write %s", s)
@@ -1251,7 +1250,13 @@ func pd591FE1(t *testing.T, rel string) (payload, cguid string) {
 		case regexp.MustCompile(`^L\d+T\d+s\d+$`).MatchString(k):
 			j, _ := strconv.Atoi(k[strings.LastIndex(k, "s")+1:])
 			sn := subNames[j-1]
-			recs = append(recs, k+"=sub="+sn[0]+"~duty="+sn[1]+"~rate="+sub(k, "rate")+"~ass="+sub(k, "ass")+"~assneg=No~tax="+sub(k, "tax")+"~taxneg=No")
+			// assneg as the full-entry add-on reads it in the form: Yes for a "(-)" assessable amount (tally-real run
+			// 37677491784, TallyPrime 7.1: "ass=(-)1,00,000.00~assneg=Yes" with every ledger line's neg No)
+			an := "No"
+			if strings.HasPrefix(sub(k, "ass"), "(-)") {
+				an = "Yes"
+			}
+			recs = append(recs, k+"=sub="+sn[0]+"~duty="+sn[1]+"~rate="+sub(k, "rate")+"~ass="+sub(k, "ass")+"~assneg="+an+"~tax="+sub(k, "tax")+"~taxneg=No")
 		}
 	}
 	for _, c := range []string{"nI", "nO", "nSO", "nSI", "nCE"} {
@@ -1397,5 +1402,125 @@ func TestPushFallbackKeeps233HeldAtOnce(t *testing.T) {
 	}
 	if logLines("the full entry is not taken") < 1 {
 		t.Fatal("the refusal is not said in the log")
+	}
+}
+
+// --- the real lines of tally-real run 37677491784 (TallyPrime 7.1 on the runner, the new add-on loaded, bridge next-push):
+// P2 (Sales, 50 items, three parts), P3 (the TDS journal typed on the screen) and P4 (Sales, two items in two godowns x two
+// batches) were written whole by the add-on but refused by the bridge, and the 2.3.2 route asked Tally: its answers to the
+// entry request (tr677-*.tally.xml, the stub's copy) are the reference here.
+//   - P2, P4: "nO says 1, 0 written": the invoice order list record failed in the form (InvoiceOrderList, not in the entry
+//     request's shape nor read by the cloud) and is no longer written by the add-on; the lines are taken here without their
+//     "|nO=1" (the part's len less its 5 characters), as the add-on now writes them.
+//   - P3: "do not add up to zero (200000.00)": the form gave assneg Yes on the assessable amount while every ledger line's neg
+//     was No; the sign is blind when no LEDGER line says Yes.
+func tr677Payloads(t *testing.T, name string, dropOrder bool) ([]string, string, string) {
+	b, err := os.ReadFile(filepath.Join("testdata", "push233", "real", "tr677-"+name+".lines.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ps []string
+	cg, mid := "", ""
+	for _, l := range strings.Split(strings.ReplaceAll(strings.TrimPrefix(string(b), "\ufeff"), "\r\n", "\n"), "\n") {
+		if !strings.HasPrefix(l, "FCR1|ev=voucher_full|") {
+			continue
+		}
+		if m := regexp.MustCompile(`\|cguid=([0-9a-f-]{36})\|`).FindStringSubmatch(l); m != nil {
+			cg = m[1]
+		}
+		p, ok := pushPayload(l)
+		if !ok {
+			t.Fatalf("%s: a full line the reader cannot frame: %.200s", name, l)
+		}
+		if dropOrder && strings.Contains(p, "|nO=1|") {
+			m := regexp.MustCompile(`\|len=(\d+)\|(end|more)=1$`).FindStringSubmatch(p)
+			n, _ := strconv.Atoi(m[1])
+			p = strings.Replace(strings.Replace(p, "|nO=1|", "|", 1), m[0], fmt.Sprintf("|len=%d|%s=1", n-5, m[2]), 1)
+		}
+		ps = append(ps, p)
+	}
+	if mm := regexp.MustCompile(`\|part=1\|mid=(\d+)\|`).FindStringSubmatch(strings.Join(ps, "")); mm != nil {
+		mid = mm[1]
+	}
+	return ps, cg, mid
+}
+
+// the top-level lines of an entry as "name|amount" (Tally's sign), sorted: a list's own AMOUNT, its sub-lists left out
+func tr677Lines(x, list, nameTag string) []string {
+	var o []string
+	for _, m := range regexp.MustCompile(`(?s)<`+list+`\.LIST>(.*?)</`+list+`\.LIST>`).FindAllStringSubmatch(x, -1) {
+		top := regexp.MustCompile(`(?s)<([A-Z][A-Z0-9.]*)\.LIST(?:\s[^>]*)?>.*?</[A-Z][A-Z0-9.]*\.LIST>`).ReplaceAllString(m[1], "")
+		n, a := tagValues(top, nameTag), tagValues(top, "AMOUNT")
+		if len(n) == 0 || len(a) == 0 {
+			continue
+		}
+		p, _ := paise(a[0])
+		if strings.HasPrefix(strings.TrimSpace(a[0]), "-") {
+			p = -p
+		}
+		o = append(o, fmt.Sprintf("%s|%d", strings.TrimSpace(n[0]), p))
+	}
+	sort.Strings(o)
+	return o
+}
+
+func TestPushRealTallyRun677(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		drop  bool
+		items int
+	}{{"p2-sales50", true, 50}, {"p4-godown", true, 2}, {"p3-tds", false, 0}} {
+		ps, cg, mid := tr677Payloads(t, c.name, c.drop)
+		e, err := pushParse(ps)
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		x, err := pushEntryXML(e, pushGUID(cg, mid), 0)
+		if err != nil {
+			t.Fatalf("%s: refused: %v", c.name, err)
+		}
+		tb, err := os.ReadFile(filepath.Join("testdata", "push233", "real", "tr677-"+c.name+".tally.xml"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		tx := string(tb)
+		if g, w := tr677Lines(x, "ALLLEDGERENTRIES", "LEDGERNAME"), tr677Lines(tx, "ALLLEDGERENTRIES", "LEDGERNAME"); fmt.Sprint(g) != fmt.Sprint(w) || len(g) < 2 {
+			t.Fatalf("%s: ledger lines\n bridge %v\n Tally  %v", c.name, g, w)
+		}
+		if g, w := tr677Lines(x, "ALLINVENTORYENTRIES", "STOCKITEMNAME"), tr677Lines(tx, "ALLINVENTORYENTRIES", "STOCKITEMNAME"); fmt.Sprint(g) != fmt.Sprint(w) || len(g) != c.items {
+			t.Fatalf("%s: item lines (%d)\n bridge %v\n Tally  %v", c.name, c.items, g, w)
+		}
+		// godowns and batches: the entry request does not fetch them (its answer has none; the cloud reads none); the
+		// bridge keeps what the form had: every item line in its godown, P4's in both
+		gd := tagValues(x, "GODOWNNAME")
+		if wd := tagValues(tx, "GODOWNNAME"); len(wd) > 0 && fmt.Sprint(gd) != fmt.Sprint(wd) {
+			t.Fatalf("%s: godowns\n bridge %v\n Tally  %v", c.name, gd, wd)
+		}
+		if want := map[string]string{"p2-sales50": "P233 Main", "p4-godown": "P233 Main P233 Annex"}[c.name]; want != "" {
+			for _, g := range strings.Split(strings.Replace(want, "P233 ", "P233_", -1), " ") {
+				if !strings.Contains(strings.Join(gd, "|"), strings.Replace(g, "_", " ", 1)) {
+					t.Fatalf("%s: godown %s not in the bridge's entry: %v", c.name, g, gd)
+				}
+			}
+		}
+		if strings.Contains(x, "INVOICEORDERLIST") {
+			t.Fatalf("%s: the invoice order list is not in the entry request's shape", c.name)
+		}
+		// the bridge's XML for the cloud's parse.js (tests/run_push233_parse.mjs reads it beside Tally's answer)
+		xf := filepath.Join("testdata", "push233", "real", "tr677-"+c.name+".push.xml")
+		if os.Getenv("PUSH233_UPDATE") == "1" {
+			if err := os.WriteFile(xf, []byte(x), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		} else if old, err := os.ReadFile(xf); err != nil || string(old) != x {
+			t.Errorf("%s: the bridge's XML changed (PUSH233_UPDATE=1 rewrites %s)", c.name, xf)
+		}
+		if c.name == "p3-tds" {
+			// Tally 7.1's answer to the entry request had the TDS lists empty (push-design run 37591395905, here too):
+			// Tally's Day Book export of the same S5 entry is the reference (ASSESSABLEAMOUNT 100000.00, TAX 2000.00)
+			if a, tt := tagValues(x, "ASSESSABLEAMOUNT"), tagValues(x, "TAX"); len(a) != 4 || a[0] != "100000.00" || tt[0] != "2000.00" || !strings.Contains(x, `<CATEGORY TYPE="String">S231 Contract Work</CATEGORY>`) {
+				t.Fatalf("p3-tds: TDS: assessable %v tax %v\n%s", a, tt, x)
+			}
+		}
 	}
 }
