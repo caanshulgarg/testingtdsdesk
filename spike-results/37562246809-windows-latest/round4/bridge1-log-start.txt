@@ -1,0 +1,21 @@
+2026-10-07 02:40:05  FinCom Bridge 2.3.2: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+2026-10-07 02:40:05  FinCom Bridge 2.3.2 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+2026-10-07 02:40:05  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+2026-10-07 02:40:05  Recorder: re-scan of the add-on's files for 2.3.2: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+2026-10-07 02:40:05  Check:  - 
+2026-10-07 02:40:05  Nightly catch-up (02:00): Tally is open and nobody has used FinCom for 15 minutes
+2026-10-07 02:40:05  Company FinCom Spike Co: its Tally GUID 21e6aed8-9b92-4016-94a6-2129af031a18 is held from now on
+2026-10-07 02:40:05  Keeping FinCom Spike Co in step: its day book from 20260401 is read at Update now (and the nightly run), a month a request
+2026-10-07 02:40:06  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=2, ALTMSTID=642 (reading is prospective only: the bridge follows what changes after this)
+2026-10-07 02:40:06  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=2, ALTMSTID=642
+2026-10-07 02:40:06  Keeping FinCom Spike Co: ledger list MasterID 1-2000, 427 ledger(s) (0.2s); saved
+2026-10-07 02:40:06  Keeping FinCom Spike Co: ledger list MasterID 2001-end, 0 ledger(s) (0.2s); saved
+2026-10-07 02:40:07  Keeping FinCom Spike Co: the ledger list read (427 ledgers, 28 groups, 3 request(s)): 427 new, 0 changed, 0 renamed, 0 gone
+2026-10-07 02:40:07  Keeping FinCom Spike Co: Reading old entries is off (prospective only); FinComCompany ALTVCHID=2 ALTMSTID=642
+2026-10-07 02:40:07  Nightly catch-up: done (6 request(s) to Tally); the bridge is idle again (next: the nightly catch-up at 02:00, or Update now)
+2026-10-07 02:40:08  Tray icon: set to show next to the clock always (Windows 11)
+2026-10-07 02:40:08  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+2026-10-07 02:40:08  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=2; now ALTVCHID=2, ALTMSTID=642
+2026-10-07 02:40:12  Refused a request from a program of another Windows user (/tray/idle): not your FinCom Bridge
+2026-10-07 02:40:12  Refused a request from a program of another Windows user (/tray/status): not your FinCom Bridge
+2026-10-07 02:40:27  Refused a request from a program of another Windows user (/status): not your FinCom Bridge
