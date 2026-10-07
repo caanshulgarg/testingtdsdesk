@@ -315,7 +315,9 @@ func pushAbs(s string) (string, bool) {
 // Form Accept: $$String gives "700.00" for the Cash debit and "$Amount < 0" is No on every line. A neg that is never Yes on
 // a voucher with amounts says nothing (blind), and the sign is then Tally's own XML rule: IsDeemedPositive Yes is an
 // amount below 0 (a debit), a "(-)" amount the other way. A record without its own IsDeemedPositive (a bill, a bank or
-// cost-centre line, a batch, a tax line) takes its line's. The ledger lines must still add up to zero.
+// cost-centre line, a batch) takes its line's; a TDS sub-category's assessable amount and tax are magnitudes (pushMagnitude);
+// an amount the cloud signs with nothing to sign it by (an employee's pay heads) refuses the entry. The ledger lines must
+// still add up to zero.
 type pushSign struct{ flip, none, blind bool }
 
 func pushSignOf(e *pushEntry) pushSign {
@@ -363,6 +365,8 @@ func (g pushSign) amt(r map[string]string, amtKey, negKey, dp string) (string, e
 	}
 	neg := false
 	switch n := r[negKey]; {
+	case g.blind && dp == pushMagnitude:
+		// written as Tally writes it: the magnitude
 	case g.blind && (dp == "Yes" || dp == "No"):
 		neg = (dp == "Yes") != pushMinus(r[amtKey])
 	case g.blind:
@@ -379,6 +383,11 @@ func (g pushSign) amt(r map[string]string, amtKey, negKey, dp string) (string, e
 	}
 	return a, nil
 }
+
+// the dp of an amount Tally's XML writes as a plain magnitude whatever the form shows: a TDS sub-category's assessable
+// amount and tax (push-design run 37591395905, all five releases: the form "(-)1,00,000.00", Tally's Day Book export and its
+// answer to the entry request ASSESSABLEAMOUNT 100000.00, TAX 2000.00; the cloud reads them as they are)
+const pushMagnitude = "magnitude"
 
 // an amount as $$String writes one below 0 in a voucher form ("(-)50.00", "-50.00"): the other way from its IsDeemedPositive
 func pushMinus(s string) bool {
@@ -634,8 +643,8 @@ func pushEntryXML(e *pushEntry, guid string, alter int64) (string, error) {
 				pushTag(&b, "SUBCATEGORY", "String", rs["sub"])
 				pushTag(&b, "DUTYLEDGER", "String", rs["duty"])
 				pushTag(&b, "TAXRATE", "Number", rs["rate"])
-				pushTag(&b, "ASSESSABLEAMOUNT", "Amount", money(rs, "ass", "assneg", ""))
-				pushTag(&b, "TAX", "Amount", money(rs, "tax", "taxneg", ""))
+				pushTag(&b, "ASSESSABLEAMOUNT", "Amount", money(rs, "ass", "assneg", pushMagnitude))
+				pushTag(&b, "TAX", "Amount", money(rs, "tax", "taxneg", pushMagnitude))
 				b.WriteString("</SUBCATEGORYALLOCATION.LIST>")
 			}
 			b.WriteString("</TAXOBJECTALLOCATIONS.LIST>")

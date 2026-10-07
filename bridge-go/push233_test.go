@@ -1176,15 +1176,177 @@ func TestPushSignWhenNegIsBlind(t *testing.T) {
 	} else if a := tagValues(x, "AMOUNT"); a[0] != "800.00" || a[1] != "-800.00" {
 		t.Fatalf("a (-) amount: %v", a)
 	}
-	// a TDS sub-category amount: no IsDeemedPositive of its own: refused while neg is blind
-	tds := frame(strings.Replace(real, "|L1C1=cat=", "|L1C1=cat=|L1T1=tt=TDS~cat=~pl=~ref=|L1T1s1=sub=194C~duty=TDS~rate=1~ass=800.00~assneg=No~tax=8.00~taxneg=No", 1))
-	if _, err := build(tds); err == nil || !strings.Contains(err.Error(), "sign") {
-		t.Fatalf("a TDS amount with no sign was taken: %v", err)
+	// a TDS sub-category: Tally's XML has the assessable amount and the tax as plain magnitudes (run 37591395905, all five
+	// releases), so the line's "(-)" is dropped, not read as a sign
+	tds := frame(strings.Replace(real, "|L1C1=cat=", "|L1C1=cat=|L1T1=tt=TDS~cat=~pl=~ref=|L1T1s1=sub=194C~duty=TDS~rate=1~ass=(-)800.00~assneg=No~tax=8.00~taxneg=No", 1))
+	if x, err := build(tds); err != nil {
+		t.Fatalf("a TDS sub-category: %v", err)
+	} else if a, tx := tagValues(x, "ASSESSABLEAMOUNT"), tagValues(x, "TAX"); len(a) != 1 || a[0] != "800.00" || tx[0] != "8.00" {
+		t.Fatalf("a TDS sub-category: %v %v", a, tx)
 	}
 	// the same with a neg that says something (one Yes): as before, the neg rules
 	if x, err := build(frame(strings.Replace(real, "amt=800.00~neg=No~dp=Yes", "amt=800.00~neg=Yes~dp=Yes", 1))); err != nil {
 		t.Fatalf("a neg that says something: %v", err)
 	} else if a := tagValues(x, "AMOUNT"); a[0] != "800.00" || a[1] != "-800.00" {
 		t.Fatalf("a neg that says something: %v", a)
+	}
+}
+
+// --- TDS from a real Tally: push-design run 37591395905 [B] (docs/push-design-results.md on tally-versions, "TDS in the
+// add-on's full-entry line"): the S5 Journal typed on Tally's screen on TallyPrime 3.0, 4.1, 5.1, 6.2 and 7.1 (Dr PD Contract
+// Exp 1,00,000; Cr PD TDS Payable 2,000; Cr PD TDS Contractor 98,000; nature PD Contract Work), with the measurement add-on
+// FCPFullNR.tdl loaded. Its line (testdata/push233/real/pd591-<rel>.tds-addon-lines.txt) holds the same TallyPrime values
+// the full-entry add-on reads ($$String of $Amount, $IsDeemedPositive, $AssessableAmount, $Tax ...), in its own framing; it
+// is put in FE1's framing here with the two things FE1 adds as a real Tally writes them: "neg" No on every amount (the
+// voucher form's amounts carry no sign: run 37611204899) and the sub-category's name and duty ledger (FCPFullNR did not
+// write them; they are Tally's, from its own export of the entry). Tally's own XML for the entry: its Day Book export
+// (pd591-<rel>.tds-tally-daybook.xml) on all five and its answer to the bridge's entry request (pd591-<rel>.tds-bridge-
+// bymaster.xml; on 7.1 the TDS lists came back empty). Tally writes the assessable amount and the tax as plain magnitudes
+// (ASSESSABLEAMOUNT 100000.00 where the form shows "(-)1,00,000.00"), and so must the bridge.
+func pd591FE1(t *testing.T, rel string) (payload, cguid string) {
+	b, err := os.ReadFile(filepath.Join("testdata", "push233", "real", "pd591-"+rel+".tds-addon-lines.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var line string
+	for _, l := range strings.Split(strings.ReplaceAll(string(b), "\r\n", "\n"), "\n") {
+		if strings.HasPrefix(l, "FCF1|ev=voucher_saved|") {
+			line = l
+		}
+	}
+	if line == "" {
+		t.Fatalf("%s: no voucher_saved line", rel)
+	}
+	f := map[string]string{}
+	var order []string
+	for _, p := range strings.Split(line, "|")[1:] {
+		k, v, _ := strings.Cut(p, "=")
+		f[k] = v
+		order = append(order, k)
+	}
+	sub := func(rec, key string) string { // a ~sub-field of a record
+		for _, s := range strings.Split(f[rec], "~")[1:] {
+			if k, v, _ := strings.Cut(s, "="); k == key {
+				return v
+			}
+		}
+		first, _, _ := strings.Cut(f[rec], "~")
+		if k, v, _ := strings.Cut(first, "="); k == key {
+			return v
+		}
+		return ""
+	}
+	// the sub-categories as Tally's export of the entry names them, in its order
+	subNames := [][2]string{{"Income Tax", "PD TDS Payable"}, {"Surcharge", ""}, {"Education Cess", ""}, {"Secondary Education Cess", ""}}
+	recs := []string{"mid=" + f["mid"], "aid=" + f["aid"], "guid=" + f["guid"], "date=" + f["date"], "canc=" + f["canc"], "opt=" + f["opt"],
+		"vtype=" + f["vtype"], "vno=" + f["vno"], "party=" + f["party"], "view=Accounting Voucher View", "narr=" + emuEsc(f["narr"]), "nL=" + f["nL"]}
+	for _, k := range order {
+		switch {
+		case regexp.MustCompile(`^L\d+$`).MatchString(k):
+			recs = append(recs, k+"=led="+emuEsc(sub(k, "led"))+"~amt="+sub(k, "amt")+"~neg=No~dp="+sub(k, "dp")+"~party="+sub(k, "party")+"~hsn="+sub(k, "hsn"))
+		case regexp.MustCompile(`^L\d+C\d+$`).MatchString(k):
+			recs = append(recs, k+"=cat="+emuEsc(sub(k, "cat")))
+		case regexp.MustCompile(`^L\d+T\d+$`).MatchString(k):
+			recs = append(recs, k+"=tt="+sub(k, "tt")+"~cat="+emuEsc(sub(k, "cat"))+"~pl="+emuEsc(sub(k, "pl"))+"~ref=")
+		case regexp.MustCompile(`^L\d+T\d+s\d+$`).MatchString(k):
+			j, _ := strconv.Atoi(k[strings.LastIndex(k, "s")+1:])
+			sn := subNames[j-1]
+			recs = append(recs, k+"=sub="+sn[0]+"~duty="+sn[1]+"~rate="+sub(k, "rate")+"~ass="+sub(k, "ass")+"~assneg=No~tax="+sub(k, "tax")+"~taxneg=No")
+		}
+	}
+	for _, c := range []string{"nI", "nO", "nSO", "nSI", "nCE"} {
+		recs = append(recs, c+"="+f[c])
+	}
+	r := "|" + strings.Join(recs, "|")
+	return pushMagic + "|part=1" + r + fmt.Sprintf("|len=%d|end=1", len(utf16.Encode([]rune(r)))), f["cguid"]
+}
+
+// the amounts of Tally's own XML for the TDS entry: the ledger lines', then each sub-category's assessable amount and tax
+func pd591Amounts(x string) (led, ass, tax []string) {
+	for _, m := range regexp.MustCompile(`(?s)<ALLLEDGERENTRIES\.LIST>.*?</ALLLEDGERENTRIES\.LIST>`).FindAllString(x, -1) {
+		top := regexp.MustCompile(`(?s)<(BILLALLOCATIONS|TAXOBJECTALLOCATIONS|CATEGORYALLOCATIONS|BANKALLOCATIONS)\.LIST>.*`).ReplaceAllString(m, "")
+		led = append(led, tagValues(top, "AMOUNT")...)
+		for _, s := range regexp.MustCompile(`(?s)<SUBCATEGORYALLOCATION\.LIST>.*?</SUBCATEGORYALLOCATION\.LIST>`).FindAllString(m, -1) {
+			a, tx := tagValues(s, "ASSESSABLEAMOUNT"), tagValues(s, "TAX")
+			if len(a) == 0 {
+				a = []string{""}
+			}
+			if len(tx) == 0 {
+				tx = []string{""}
+			}
+			ass, tax = append(ass, a[0]), append(tax, tx[0])
+		}
+	}
+	return
+}
+
+func TestPushTDSFromFiveReleases(t *testing.T) {
+	update := os.Getenv("PUSH233_UPDATE") == "1"
+	for _, rel := range []string{"3.0", "4.1", "5.1", "6.2", "7.1"} {
+		p, cg := pd591FE1(t, rel)
+		e, err := pushParse([]string{p})
+		if err != nil {
+			t.Fatalf("%s: %v\n%s", rel, err, strings.ReplaceAll(p, "|", "\n|"))
+		}
+		x, err := pushEntryXML(e, pushGUID(cg, e.s("mid")), 0)
+		if err != nil {
+			t.Fatalf("%s: the TDS entry is refused: %v", rel, err)
+		}
+		day, err := os.ReadFile(filepath.Join("testdata", "push233", "real", "pd591-"+rel+".tds-tally-daybook.xml"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		gl, ga, gt := pd591Amounts(x)
+		wl, wa, wt := pd591Amounts(string(day))
+		// Tally's export leaves an empty amount out; the line writes 0.00 for an empty tax: the same number
+		norm := func(v []string) []string {
+			o := []string{}
+			for _, s := range v {
+				if s == "" || strings.Trim(s, "0.") == "" {
+					s = "0"
+				}
+				o = append(o, s)
+			}
+			return o
+		}
+		if fmt.Sprint(gl) != fmt.Sprint(wl) || fmt.Sprint(norm(ga)) != fmt.Sprint(norm(wa)) || fmt.Sprint(norm(gt)) != fmt.Sprint(norm(wt)) || len(ga) != 4 || ga[0] != "100000.00" || gt[0] != "2000.00" {
+			t.Fatalf("%s: the bridge's amounts against Tally's export:\n ledger %v / %v\n assessable %v / %v\n tax %v / %v", rel, gl, wl, ga, wa, gt, wt)
+		}
+		if !strings.Contains(x, `<CATEGORY TYPE="String">PD Contract Work</CATEGORY><TAXTYPE TYPE="String">TDS</TAXTYPE><PARTYLEDGER TYPE="String">PD TDS Contractor</PARTYLEDGER>`) {
+			t.Fatalf("%s: the TDS allocation:\n%s", rel, x)
+		}
+		// the bridge's XML for the cloud's parse.js (tests/run_push233_parse.mjs)
+		xf := filepath.Join("testdata", "push233", "real", "pd591-"+rel+".tds.push.xml")
+		if update {
+			if err := os.WriteFile(xf, []byte(x), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		} else if old, err := os.ReadFile(xf); err != nil || string(old) != x {
+			t.Errorf("%s: the bridge's TDS XML changed (PUSH233_UPDATE=1 rewrites %s)", rel, xf)
+		}
+	}
+}
+
+// a payroll entry's pay heads (an employee's pay-head allocations): the cloud signs them (earnings Dr, deductions Cr; the
+// party takes the net), and no real Tally capture shows their sign: with a blind neg, such an entry is asked of Tally (the
+// 2.3.2 route), never written with a guessed sign; with no amount on them it goes
+func TestPushPayHeadsWhenNegIsBlind(t *testing.T) {
+	recs := "|mid=9|aid=9|guid=|date=2-Dec-26|canc=No|opt=No|vtype=Payroll|vno=3|party=Cash|view=PaySlip|narr=|nL=2" +
+		"|L1=led=PD Basic~amt=1,000.00~neg=No~dp=Yes~party=No~hsn=|L1C1=cat=|L2=led=Cash~amt=1,000.00~neg=No~dp=No~party=Yes~hsn=|L2C1=cat=" +
+		"|nI=0|nO=0|nSO=0|nSI=0|nCE=1|CE1=cat=Primary Cost Category|CE1E1=emp=PD Emp 001~amt=%s~neg=No|CE1E1p1=ph=PD Basic~amt=%s~neg=No"
+	for _, c := range []struct {
+		amt  string
+		take bool
+	}{{"1,000.00", false}, {"", true}} {
+		r := fmt.Sprintf(recs, c.amt, c.amt)
+		p := pushMagic + "|part=1" + r + fmt.Sprintf("|len=%d|end=1", len(utf16.Encode([]rune(r))))
+		e, err := pushParse([]string{p})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = pushEntryXML(e, "g", 0)
+		if (err == nil) != c.take || (err != nil && !strings.Contains(err.Error(), "sign")) {
+			t.Fatalf("pay head amount %q: taken %v (%v)", c.amt, err == nil, err)
+		}
 	}
 }
