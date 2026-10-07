@@ -1,7 +1,7 @@
 FINCOM BRIDGE 2.3.3 - TEST SHEET (NWS144, staging)
 
 File:        FinComBridge-Setup-2.3.3.exe
-Fingerprint: SHA-256 (filled in when it is built)
+Fingerprint: SHA-256 3189a834feda34baa4493d34499e36c155550e5481fef1163cedccb239f34974 (FinComBridge-Setup-2.3.3.exe, built 07-Oct-2026 17:54 IST; compare with the .sha256 file next to the setup)
 Link:        https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.3.3.exe
 
 What 2.3.3 changes (the full notes: docs/bridge-2.3.3-notes.md). The owner's rule: "A save must always show on the

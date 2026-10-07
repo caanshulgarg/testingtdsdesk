@@ -6,11 +6,21 @@ For the owner. Plain words; times are IST. The steps to try it on NWS144 are in 
 | | |
 |---|---|
 | Setup file | FinComBridge-Setup-2.3.3.exe |
-| Fingerprint | SHA-256 (filled in when it is built) |
+| Fingerprint | SHA-256 `3189a834feda34baa4493d34499e36c155550e5481fef1163cedccb239f34974` (FinComBridge-Setup-2.3.3.exe, built 07-Oct-2026 17:54 IST; compare with the .sha256 file next to the setup) |
 | FinCom app | unchanged: the app of 2.3.2 shows everything 2.3.3 says |
 | FinCom's cloud | unchanged (no migration; tally-ingest keeps the held line and replaces it with its `:resolved` line as it already does) |
 | Replaces | 2.3.2 (kept on the computer, so the tray can roll back to it) |
 | Add-on | unchanged: keep `C:\ProgramData\FinCom\addon\FinComRecorder.tdl` loaded as it is |
+
+**Not published.** Real-Tally gate (TallyPrime 7.1 on a hosted Windows runner, harness `only=backlog233`: 50 old held
+lines seeded into the bridge's held list before it starts; a large company of 20,000 entries, every entry request 2.0 to
+2.5 s at Tally itself, beside a small company in the same Tally; a timing proxy counting every request): run 37618390907
+(built from source at 1203941) passed all five checks: (1) the new save in FinCom 2.0 s after it, held with "waiting:
+Tally busy; FinCom asks again at 12:24"; (2) 20 old lines asked once, 30 never (the company was marked first), none twice,
+all 50 ended; (3) 30 requests, none sent while another was at Tally; (4) the large company marked, no request for it
+after; (5) the small company's entries with their bodies, during the backlog and at the end. The earlier run 37615287108
+(30,000 entries, 3.5-4.1 s) passed (1)-(4); its (5) failed on the harness (one small entry made, the check wanted two),
+fixed and run again.
 
 ## Why (a High in 2.3.2, seen live on NWS144 on 07-Oct-2026)
 
