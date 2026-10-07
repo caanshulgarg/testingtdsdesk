@@ -1,0 +1,975 @@
+[19:57:39] ---- the bridge built from the ref
+bridge source: 04cbc3c045105a7f507f679a216d083271ccf9e4 next-push test: the fallback route keeps 2.3.3's held-at-once rule (real 7.1 lines, full lines refused, Tally not answering)
+setup origin: BUILT from source dist/FinComBridge-Setup-2.3.3.exe SHA-256 1efe3930fdd8e66cb2e3b48aada8fe21c8f126501270d92dfc10811e57b1440c
+setup: FinComBridge-Setup-2.3.3.exe 3392933 bytes SHA256 1EFE3930FDD8E66CB2E3B48AADA8FE21C8F126501270D92DFC10811E57B1440C
+[19:57:39] ---- the second Windows user (not an administrator)
+user 2: fcuser2 S-1-5-21-1643835476-1616584234-1346609752-1003; administrators: runnervmfi6oq\runneradmin
+user 2's profile: C:\Users\fcuser2
+ SESSIONNAME               USERNAME                 ID  STATE   TYPE        DEVICE 
+ services                                            0  Disc                        
+ rdp-tcp#0                 fcuser2                   1  Active                      
+>console                   runneradmin               2  Active                      
+ 31c5ce94259d4006a9e4                            65536  Listen                      
+ rdp-tcp                                         65537  Listen                      
+
+[19:58:08] user 2's own Windows session by Remote Desktop: True (session 1)
+[shot] r4-03-rdp-session (1024x768)
+task fcu2 registered for fcuser2 (interactive)
+  [as fcuser2] who=runnervmfi6oq\fcuser2 session=1
+  [as fcuser2] no Tally window in session 1; keys '{ENTER}' to the window in front
+  [as fcuser2] shot u2-desktop
+[19:58:42] ---- the stub cloud
+[19:58:45] ---- user 1's Tally (9000) with the add-on; a copy of the program for user 2 first (its own tally.ini and port)
+  still running from the Tally folder: tallyscheduler 9548
+  robocopy:    Bytes :  177.74 m  177.74 m         0         0       512         0
+  robocopy:    Times :   0:00:00   0:00:00                       0:00:00   0:00:00
+  robocopy: 
+  robocopy: 
+  robocopy:    Speed :           2,245,587,915 Bytes/sec.
+  robocopy:    Speed :             128,493.570 MegaBytes/min.
+  robocopy:    Ended : Wednesday, October 7, 2026 7:58:48 PM
+  robocopy: 
+[19:58:48] copy for user 2: robocopy 9, tally.exe there: True
+Tally :9000 answers: True
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[keys] 't' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-00-tally1 (1024x768)
+[ledger Spike Income :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[ledger Salesify Marketing LLP (bill-by-bill) :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[19:59:20] ---- check 8's masters on user 1's Tally: unit, two stock items (GST 18%), Sales/Purchase, CGST/SGST 9%, customer, supplier
+[unit Nos :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[stock item Spike Widget (GST 18%) :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[stock item Spike Gadget (GST 18%) :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[stock items :9000] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>2</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>2</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>1</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[check 8 ledgers :9000] <RESPONSE><CREATED>6</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[stock items :9000] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>8</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>2</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>1</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[19:59:21] ---- 2.3.1 scenarios: the masters (stock items with HSN and GST rate, GST, TDS, cost centre, bank and party ledgers)
+  scen231: 7 master sets, 14 entries -> D:\a\testingtdsdesk\testingtdsdesk\spike-results\37677491784-windows-latest\round4\scen231
+[masters-1-items :9000] 36 ms, 269 bytes: <RESPONSE><CREATED>4</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[masters-2-costs :9000] 23 ms, 269 bytes: <RESPONSE><CREATED>3</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[masters-4-ledgers :9000] 79 ms, 270 bytes: <RESPONSE><CREATED>14</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[masters-6-bulk :9000] 1778 ms, 271 bytes: <RESPONSE><CREATED>400</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[S4 the bill (New Ref S231-BILL-1, a journal) :9000] 41 ms, 269 bytes: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>2</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[ledger master S231 Buyer :9000] 10 ms, 17392 bytes: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>425</LEDGER><COSTCATEGORY>1</COSTCATEGORY><COSTCENTRE>2</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>6</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>1</CURRENCY><UNIT>1</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIF...
+[shot] r4-s231-00-masters (1024x768)
+[19:59:31] ---- push233 setup: the templates by XML, the new add-on's load check, the timing proxy beside Tally 9000, the large company (item 5)
+[slow232 import] push233 masters: 62 sent, created 59, errors 0, 0.3 s
+[slow232 import] push233 template receipt: 1 sent, created 1, errors 0, 0.0 s
+[slow232 import] push233 template sales50: 1 sent, created 1, errors 0, 0.3 s
+[slow232 import] push233 template godown: 1 sent, created 1, errors 0, 0.1 s
+[19:59:32] ---- push233 L0: does the new FinComRecorder.tdl load on this release?
+[shot] r4-p233-L0-start (1024x768)
+  Tally :9000 voucher mid=1 aid=1 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000002 no=2 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000004 no=1 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000005 no=2 cancelled=False
+[keys] '%g' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '2-11-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-receipt-daybook (1024x768)
+[keys] '{END}' -> Tally :9000 'TallyPrime:9000'
+[keys] '%2' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-receipt-dup (1024x768)
+[shot] r4-p233-receipt-saved (1024x768)
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+  Tally :9000 voucher mid=1 aid=1 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000002 no=2 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000006 no=2 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000004 no=1 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000005 no=2 cancelled=False
+######## PASS push233 L0 the new add-on loads and writes the full entry: the TDL from the ref has FCRLiveFull: True; the screen after Tally started: no TDL error seen; Tally's TDL error files: none; one receipt saved on the screen: the add-on wrote voucher_accept_post x1, voucher_accept_pre x1, voucher_full x1; heads (pre and post): True; full line(s) ending |end=1|t1=..|src=live: 1; the narration, neg and the part's length read: True; save 170 ms
+[19:59:59] ---- slow232 setup: a large company 'FinCom Big Co' in Tally 9000 beside 'FinCom Spike Co' (up to 100000 entries, 150 min), before the bridges start
+[slow232] company folders before: 100000
+[slow232] tally.ini: [Tally] | Data = D:\a\_temp\TallyData | Config = C:\Program Files\TallyPrime | LangPath = C:\Program Files\TallyPrime\lang | Client Server = Both | ServerPort = 9000 | Enable ODBC Server = Yes | Ignore TCP Timeout = Yes | User TDL = Yes | Default Companies = No
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[keys] 't' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F3}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-s232-01a-company-list (1024x768)
+[keys] 'Create Company' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-s232-01b-typed (1024x768)
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-s232-01-create-company (1024x768)
+[keys] 'FinCom Big Co' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-s232-02-name (1024x768)
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-s232-03-ctrl-a (1024x768)
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-s232-04-company (1024x768)
+[slow232] a new company folder: 100001
+[slow232 import] is 'FinCom Big Co' open: 1 sent, created 1, errors 0, 0.0 s
+[slow232] company 'FinCom Big Co' open in Tally 9000: True
+[slow232 import] masters 0: 1000 sent, created 1000, errors 0, 4.3 s
+[slow232 import] masters 1000: 1000 sent, created 1000, errors 0, 4.3 s
+[slow232 import] masters 2000: 1000 sent, created 1000, errors 0, 4.3 s
+[slow232 import] masters 3000: 1000 sent, created 1000, errors 0, 4.2 s
+[slow232 import] masters 4000: 1000 sent, created 1000, errors 0, 4.2 s
+[slow232 import] masters 5000: 1000 sent, created 1000, errors 0, 4.2 s
+[slow232 import] masters 6000: 7 sent, created 7, errors 0, 0.0 s
+[slow232 import] entries 0: 1000 sent, created 1000, errors 0, 17.2 s
+[slow232 import] entries 1000: 1000 sent, created 1000, errors 0, 20.2 s
+[slow232 import] entries 2000: 1000 sent, created 1000, errors 0, 19.2 s
+[slow232 import] entries 3000: 1000 sent, created 1000, errors 0, 19.4 s
+[slow232 import] entries 4000: 1000 sent, created 1000, errors 0, 20.8 s
+[slow232 import] entries 5000: 1000 sent, created 1000, errors 0, 20.8 s
+[slow232 import] entries 6000: 1000 sent, created 1000, errors 0, 19.5 s
+[slow232 import] entries 7000: 1000 sent, created 1000, errors 0, 19.7 s
+[slow232 import] entries 8000: 1000 sent, created 1000, errors 0, 19.7 s
+[slow232 import] entries 9000: 1000 sent, created 1000, errors 0, 21.0 s
+[slow232 import] entries 10000: 1000 sent, created 1000, errors 0, 20.5 s
+[slow232 import] entries 11000: 1000 sent, created 1000, errors 0, 20.1 s
+[slow232 import] entries 12000: 1000 sent, created 1000, errors 0, 20.5 s
+[slow232 import] entries 13000: 1000 sent, created 1000, errors 0, 20.1 s
+[slow232 import] entries 14000: 1000 sent, created 1000, errors 0, 20.3 s
+[slow232 import] entries 15000: 1000 sent, created 1000, errors 0, 21.0 s
+[slow232 import] entries 16000: 1000 sent, created 1000, errors 0, 22.8 s
+[slow232 import] entries 17000: 1000 sent, created 1000, errors 0, 24.1 s
+[slow232 import] entries 18000: 1000 sent, created 1000, errors 0, 21.7 s
+[slow232 import] entries 19000: 1000 sent, created 1000, errors 0, 20.9 s
+[slow232 import] entries 20000: 1000 sent, created 1000, errors 0, 35.0 s
+[slow232 import] entries 21000: 1000 sent, created 1000, errors 0, 21.5 s
+[slow232 import] entries 22000: 1000 sent, created 1000, errors 0, 21.1 s
+[slow232 import] entries 23000: 1000 sent, created 1000, errors 0, 21.2 s
+[slow232 import] entries 24000: 1000 sent, created 1000, errors 0, 21.2 s
+[slow232 import] entries 25000: 1000 sent, created 1000, errors 0, 21.0 s
+[slow232 import] entries 26000: 1000 sent, created 1000, errors 0, 21.5 s
+[slow232 import] entries 27000: 1000 sent, created 1000, errors 0, 20.9 s
+[slow232 import] entries 28000: 1000 sent, created 1000, errors 0, 21.0 s
+[slow232 import] entries 29000: 1000 sent, created 1000, errors 0, 23.9 s
+[slow232 import] entries 30000: 1000 sent, created 1000, errors 0, 20.4 s
+[slow232 import] entries 31000: 1000 sent, created 1000, errors 0, 20.3 s
+[slow232 import] entries 32000: 1000 sent, created 1000, errors 0, 20.5 s
+[slow232 import] entries 33000: 1000 sent, created 1000, errors 0, 20.3 s
+[slow232 import] entries 34000: 1000 sent, created 1000, errors 0, 20.3 s
+[slow232 import] entries 35000: 1000 sent, created 1000, errors 0, 21.0 s
+[slow232 import] entries 36000: 1000 sent, created 1000, errors 0, 20.4 s
+[slow232 import] entries 37000: 1000 sent, created 1000, errors 0, 20.4 s
+[slow232 import] entries 38000: 1000 sent, created 1000, errors 0, 20.4 s
+[slow232 import] entries 39000: 1000 sent, created 1000, errors 0, 20.4 s
+[slow232 import] entries 40000: 1000 sent, created 1000, errors 0, 20.4 s
+[slow232 import] entries 41000: 1000 sent, created 1000, errors 0, 20.6 s
+[slow232 import] entries 42000: 1000 sent, created 1000, errors 0, 20.5 s
+[slow232 import] entries 43000: 1000 sent, created 1000, errors 0, 20.4 s
+[slow232 import] entries 44000: 1000 sent, created 1000, errors 0, 20.6 s
+[slow232 import] entries 45000: 1000 sent, created 1000, errors 0, 20.4 s
+[slow232 import] entries 46000: 1000 sent, created 1000, errors 0, 20.6 s
+[slow232 import] entries 47000: 1000 sent, created 1000, errors 0, 21.8 s
+[slow232 import] entries 48000: 1000 sent, created 1000, errors 0, 20.6 s
+[slow232 import] entries 49000: 1000 sent, created 1000, errors 0, 20.8 s
+[slow232 import] entries 50000: 1000 sent, created 1000, errors 0, 20.6 s
+[slow232 import] entries 51000: 1000 sent, created 1000, errors 0, 20.9 s
+[slow232 import] entries 52000: 1000 sent, created 1000, errors 0, 21.0 s
+[slow232 import] entries 53000: 1000 sent, created 1000, errors 0, 20.9 s
+[slow232 import] entries 54000: 1000 sent, created 1000, errors 0, 20.7 s
+[slow232 import] entries 55000: 1000 sent, created 1000, errors 0, 20.9 s
+[slow232 import] entries 56000: 1000 sent, created 1000, errors 0, 21.2 s
+[slow232 import] entries 57000: 1000 sent, created 1000, errors 0, 20.8 s
+[slow232 import] entries 58000: 1000 sent, created 1000, errors 0, 21.1 s
+[slow232 import] entries 59000: 1000 sent, created 1000, errors 0, 20.9 s
+[slow232 import] entries 60000: 1000 sent, created 1000, errors 0, 21.6 s
+[slow232 import] entries 61000: 1000 sent, created 1000, errors 0, 21.0 s
+[slow232 import] entries 62000: 1000 sent, created 1000, errors 0, 21.2 s
+[slow232 import] entries 63000: 1000 sent, created 1000, errors 0, 21.1 s
+[slow232 import] entries 64000: 1000 sent, created 1000, errors 0, 21.2 s
+[slow232 import] entries 65000: 1000 sent, created 1000, errors 0, 20.9 s
+[slow232 import] entries 66000: 1000 sent, created 1000, errors 0, 20.9 s
+[slow232 import] entries 67000: 1000 sent, created 1000, errors 0, 21.0 s
+[slow232 import] entries 68000: 1000 sent, created 1000, errors 0, 21.0 s
+[slow232 import] entries 69000: 1000 sent, created 1000, errors 0, 21.0 s
+[slow232 import] entries 70000: 1000 sent, created 1000, errors 0, 21.0 s
+[slow232 import] entries 71000: 1000 sent, created 1000, errors 0, 21.0 s
+[slow232 import] entries 72000: 1000 sent, created 1000, errors 0, 21.0 s
+[slow232 import] entries 73000: 1000 sent, created 1000, errors 0, 21.3 s
+[slow232 import] entries 74000: 1000 sent, created 1000, errors 0, 21.3 s
+[slow232 import] entries 75000: 1000 sent, created 1000, errors 0, 21.9 s
+[slow232 import] entries 76000: 1000 sent, created 1000, errors 0, 21.0 s
+[slow232 import] entries 77000: 1000 sent, created 1000, errors 0, 21.0 s
+[slow232 import] entries 78000: 1000 sent, created 1000, errors 0, 21.2 s
+[slow232 import] entries 79000: 1000 sent, created 1000, errors 0, 21.2 s
+[slow232 import] entries 80000: 1000 sent, created 1000, errors 0, 21.2 s
+[slow232 import] entries 81000: 1000 sent, created 1000, errors 0, 21.3 s
+[slow232 import] entries 82000: 1000 sent, created 1000, errors 0, 21.2 s
+[slow232 import] entries 83000: 1000 sent, created 1000, errors 0, 21.4 s
+[slow232 import] entries 84000: 1000 sent, created 1000, errors 0, 21.5 s
+[slow232 import] entries 85000: 1000 sent, created 1000, errors 0, 21.5 s
+[slow232 import] entries 86000: 1000 sent, created 1000, errors 0, 21.3 s
+[slow232 import] entries 87000: 1000 sent, created 1000, errors 0, 21.3 s
+[slow232 import] entries 88000: 1000 sent, created 1000, errors 0, 21.2 s
+[slow232 import] entries 89000: 1000 sent, created 1000, errors 0, 21.5 s
+[slow232 import] entries 90000: 1000 sent, created 1000, errors 0, 24.4 s
+[slow232 import] entries 91000: 1000 sent, created 1000, errors 0, 21.3 s
+[slow232 import] entries 92000: 1000 sent, created 1000, errors 0, 21.1 s
+[slow232 import] entries 93000: 1000 sent, created 1000, errors 0, 21.0 s
+[slow232 import] entries 94000: 1000 sent, created 1000, errors 0, 21.0 s
+[slow232 import] entries 95000: 1000 sent, created 1000, errors 0, 21.4 s
+[slow232 import] entries 96000: 1000 sent, created 1000, errors 0, 21.4 s
+[slow232 import] entries 97000: 1000 sent, created 1000, errors 0, 21.0 s
+[slow232 import] entries 98000: 1000 sent, created 1000, errors 0, 21.2 s
+[slow232 import] entries 99000: 1000 sent, created 1000, errors 0, 21.4 s
+[slow232] company folders after: 100000, 100001; 'FinCom Spike Co' 100000, 'FinCom Big Co' 100001
+[slow232] tally.ini: [Tally] | Data = D:\a\_temp\TallyData | Config = C:\Program Files\TallyPrime | LangPath = C:\Program Files\TallyPrime\lang | Client Server = Both | ServerPort = 9000 | Enable ODBC Server = Yes | Ignore TCP Timeout = Yes | User TDL = Yes | Default Companies = Yes | Load = 100000 | Load = 100001 | TDL = C:\fcspike\FinComRecorder.tdl
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[keys] 't' -> Tally :9000 'TallyPrime:9000'
+[slow232 import] is 'FinCom Spike Co' open: 1 sent, created 1, errors 0, 0.0 s
+[slow232] company 'FinCom Spike Co' open in Tally 9000: True
+[slow232 import] is 'FinCom Big Co' open: 1 sent, created 0, errors 0, 0.0 s <RESPONSE> <CREATED>0</CREATED> <ALTERED>1</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+[slow232] company 'FinCom Big Co' open in Tally 9000: True
+[shot] r4-s232-05-both-loaded (1024x768)
+[ledger Spike Income :9000] <RESPONSE><CREATED>0</CREATED><ALTERED>1</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[slow232] the proxy 127.0.0.2:9000 -> Tally: <RESPONSE>TallyPrime Server is Running</RESPONSE> 
+[20:38:06] ---- user 2's own Tally (9001), run as fcuser2: a company made by keys, then started again with it and the add-on
+  [as fcuser2] pid=2272 session=1 user=runnervmfi6oq\fcuser2
+Tally :9001 (pid 2272) answers: True; owner: fcuser2; session 1 (runner's own: 2)
+  [as fcuser2] keys 'a' -> Tally pid 2272 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys 't' -> Tally pid 2272 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01-tally2-start
+  [as fcuser2] keys '{ENTER}' -> Tally pid 2272 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01b-tally2-create-company
+  [as fcuser2] keys 'FinCom Spike U2' -> Tally pid 2272 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys '^a' -> Tally pid 2272 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01c-tally2-ctrl-a
+[companies :9001] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+  [as fcuser2] keys '^a' -> Tally pid 2272 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01d-tally2-company
+user 2's company made: True, folder 100000
+  [as fcuser2] pid=9992 session=1 user=runnervmfi6oq\fcuser2
+  [as fcuser2] keys 'a' -> Tally pid 9992 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys 't' -> Tally pid 9992 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01e-tally2-gateway
+[ledger Spike Income :9001] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[companies :9001] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>1</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[ledger Spike Party :9001] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[journal :9001 :9001] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>1</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+== user 2's own Tally with its company and the add-on: True
+[20:39:41] ---- the bridges, each installed by its own Windows user with the real setup, just for me; the settings seeded first
+setup as runneradmin (just for me) ended with 0
+  install.log 1: 2026-10-07 20:39:41  Install (just for this user, no service): FinCom Bridge 2.3.3 for runnervmfi6oq\runneradmin (S-1-5-21-1643835476-1616584234-1346609752-500), sole mode, folder C:\Users\runneradmin\AppData\Local\TDS Desk Bridge
+  install.log 1: 2026-10-07 20:39:44  Install: the add-on FinComRecorder.tdl written in C:\ProgramData\FinCom\addon
+  install.log 1: 2026-10-07 20:39:44  Install: the add-on FinComRecorderAnyCompany.tdl written in C:\ProgramData\FinCom\addon
+  install.log 1: 2026-10-07 20:39:44  Install: the recorder folder C:\ProgramData\FinCom\recorder and the add-on folder C:\ProgramData\FinCom\addon are ready (just for this user)
+  install.log 1: 2026-10-07 20:39:44  Install: starts when runnervmfi6oq\runneradmin signs in to Windows (HKCU Run)
+  install.log 1: 2026-10-07 20:39:45  Install: done; the bridge answers on 127.0.0.1:9100
+  install.log 1: 2026-10-07 20:39:45  Setup: FinComBridge.exe install: done, the bridge answers
+  install.log 1: 2026-10-07 20:39:45  Setup: Finished: installed and running (sole mode)
+seed as fcuser2: runnervmfi6oq\fcuser2 session 1 C:\Users\fcuser2\AppData\Local
+  [as fcuser2] exit=0 user=runnervmfi6oq\fcuser2 session=1
+setup as fcuser2 (just for me) ended: exit=0 user=runnervmfi6oq\fcuser2 session=1
+  install.log 2: 2026-10-07 20:39:48  Install (just for this user, no service): FinCom Bridge 2.3.3 for runnervmfi6oq\fcuser2 (S-1-5-21-1643835476-1616584234-1346609752-1003), sole mode, folder C:\Users\fcuser2\AppData\Local\TDS Desk Bridge
+  install.log 2: 2026-10-07 20:39:51  Install: the add-on FinComRecorder.tdl was not written in C:\ProgramData\FinCom\addon: remove C:\ProgramData\FinCom\addon\FinComRecorder.tdl: Access is denied.
+  install.log 2: 2026-10-07 20:39:51  Install: the add-on FinComRecorderAnyCompany.tdl was not written in C:\ProgramData\FinCom\addon: remove C:\ProgramData\FinCom\addon\FinComRecorderAnyCompany.tdl: Access is denied.
+  install.log 2: 2026-10-07 20:39:51  Install: the recorder folder C:\ProgramData\FinCom\recorder and the add-on folder C:\ProgramData\FinCom\addon are ready (just for this user)
+  install.log 2: 2026-10-07 20:39:51  Install: starts when runnervmfi6oq\fcuser2 signs in to Windows (HKCU Run)
+  install.log 2: 2026-10-07 20:39:52  Install: done; the bridge answers on 127.0.0.1:9101
+  install.log 2: 2026-10-07 20:39:52  Setup: FinComBridge.exe install: done, the bridge answers
+  install.log 2: 2026-10-07 20:39:52  Setup: Finished: installed and running (sole mode)
+bridge 1: user runneradmin, port 9100, id go-c29641d48604, key 24 chars, Owner runnervmfi6oq\runneradmin, OwnerSid S-1-5-21-1643835476-1616584234-1346609752-500
+bridge 2: user fcuser2, port 9101, id go-63443f404df9, key 24 chars, Owner runnervmfi6oq\fcuser2, OwnerSid S-1-5-21-1643835476-1616584234-1346609752-1003
+[shot] r4-02-bridges (1024x768)
+[20:40:02] ---- 6a: both bridges run at once, on their own ports, as their own users
+  process 7992 as runneradmin in session 2: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" user --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json"
+  process 2100 as runneradmin in session 2: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" worker --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json" --home "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge" --parent 7992
+  process 784 as runneradmin in session 2: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" tray --quiet --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json"
+  process 7852 as fcuser2 in session 1: "C:\Users\fcuser2\AppData\Local\FinCom Bridge\FinComBridge.exe" user --config "C:\Users\fcuser2\AppData\Local\TDS Desk Bridge\tds-bridge.config.json"
+  process 8556 as fcuser2 in session 1: "C:\Users\fcuser2\AppData\Local\FinCom Bridge\FinComBridge.exe" worker --config "C:\Users\fcuser2\AppData\Local\TDS Desk Bridge\tds-bridge.config.json" --home "C:\Users\fcuser2\AppData\Local\TDS Desk Bridge" --parent 7852
+  process 2020 as fcuser2 in session 1: "C:\Users\fcuser2\AppData\Local\FinCom Bridge\FinComBridge.exe" tray
+  listening 127.0.0.1:9101 pid 8556 user fcuser2
+  listening 127.0.0.1:9100 pid 2100 user runneradmin
+  Tally pid 9992 session 1 owner fcuser2
+  Tally pid 10888 session 2 owner runneradmin
+######## PASS 6a two bridges at once: bridge 1 runneradmin on 127.0.0.1:9100 (pid 2100, session 2, go-c29641d48604); bridge 2 fcuser2 on 127.0.0.1:9101 (pid 8556, session 1, go-63443f404df9); both listening at 20:40:03
+[20:40:03] ---- 6b: the /ping proof: HMAC-SHA256(bridge key, nonce || bridge id || port), only to the bridge's own Windows user
+runneradmin -> own bridge, no Origin: {"bridge":"FinCom Tally Bridge","bridgeId":"go-c29641d48604","impl":"go","loopSec":0,"ok":true,"pid":2100,"port":9100,"runMode":"user","testMode":false,"version":"2.3.3","yours":true}
+runneradmin -> own bridge: {"bridge":"FinCom Tally Bridge","bridgeId":"go-c29641d48604","impl":"go","loopSec":0,"ok":true,"pairProof":"42227ecacd1fa771767aeef79ed2d296b38b3b73ea3d17b715d25ab0b2a853e3","pid":2100,"port":9100,"proof":"6e749b98ce12fcf16ecf40556fb8c50ef39aef538de56dfe662fbeba6ede8650","runMode":"user","testMode":false,"version":"2.3.3","yours":true}
+runneradmin -> user 2's bridge: {"bridge":"FinCom Tally Bridge","impl":"go","loopSec":0,"ok":true,"pid":8556,"runMode":"user","testMode":false,"version":"2.3.3","yours":false}
+as fcuser2 (): {"ownStatus":401,"other":{"bridge":"FinCom Tally Bridge","impl":"go","loopSec":0,"ok":true,"pid":2100,"runMode":"user","testMode":false,"version":"2.3.3","yours":false},"session":1,"own":{"bridge":"FinCom Tally Bridge","bridgeId":"go-63443f404df9","impl":"go","loopSec":0,"ok":true,"pairProof":"42e7b86b98b9bdcb14847d55fc9d9a5c922af45add1b3c88b969381b12f172f2","pid":8556,"port":9101,"proof":"d6de91583e3dcb318aa80abf8547c656dc15af16ecdc5953a6469c9ed8468d67","runMode":"user","testMode":false,"version":"2.3.3","yours":true},"otherStatus":403,"who":"runnervmfi6oq\\fcuser2"}
+  ok   bridge 1 proves itself to runneradmin: yours=True bridgeId=go-c29641d48604 port=9100 proof=6e749b98ce12fcf16ecf40556fb8c50ef39aef538de56dfe662fbeba6ede8650
+  ok   bridge 1 proof checked against user 2 identity fails: HMAC(key2, nonce||go-63443f404df9||9101)=6bdba8ddd81c384de8b0d272521c1902613f30aa91d0d651a3f4ba7cda8fa0d3
+  ok   bridge 2 proves itself to fcuser2: yours=True bridgeId=go-63443f404df9 port=9101 proof=d6de91583e3dcb318aa80abf8547c656dc15af16ecdc5953a6469c9ed8468d67
+  ok   bridge 2 proof checked against user 1 identity fails: HMAC(key1, nonce||go-c29641d48604||9100)=4ae332f88c15f50e8e3830c79033c5b48159d76cce50befeefc0280903bb23d9
+  ok   bridge 2 gives runneradmin no proof: yours=False proof= bridgeId=
+  ok   bridge 1 gives fcuser2 no proof: yours=False proof=
+  ok   other users refused 403 beyond /ping: runneradmin: own /status 401, other 403; fcuser2: own /status 401, other 403
+######## PASS 6b /ping proof: bridge 1 proves itself to runneradmin: ok; bridge 1 proof checked against user 2 identity fails: ok; bridge 2 proves itself to fcuser2: ok; bridge 2 proof checked against user 1 identity fails: ok; bridge 2 gives runneradmin no proof: ok; bridge 1 gives fcuser2 no proof: ok; other users refused 403 beyond /ping: ok
+  bridge1 log: 2026-10-07 20:39:44  FinCom Bridge 2.3.3: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+  bridge1 log: 2026-10-07 20:39:44  FinCom Bridge 2.3.3 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+  bridge1 log: 2026-10-07 20:39:44  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+  bridge1 log: 2026-10-07 20:39:44  Recorder: re-scan of the add-on's files for 2.3.3: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+  bridge1 log: 2026-10-07 20:39:45  Check:  - 
+  bridge1 log: 2026-10-07 20:39:47  Tray icon: set to show next to the clock always (Windows 11)
+  bridge1 log: 2026-10-07 20:39:47  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+  bridge1 log: 2026-10-07 20:39:48  Company FinCom Big Co: its Tally GUID 47ef028a-0a91-4af2-8920-7c58df4e3064 is held from now on
+  bridge1 log: 2026-10-07 20:39:48  Company FinCom Spike Co: its Tally GUID 5561ea71-e54c-4b00-bcc9-77fda07df051 is held from now on
+  bridge1 log: 2026-10-07 20:39:48  Company FinCom Big Co: its starting point is recorded: ALTVCHID=100000, ALTMSTID=6216 (reading is prospective only: the bridge follows what changes after this)
+  bridge1 log: 2026-10-07 20:39:48  Company FinCom Big Co: change numbers read with form a: ALTVCHID=100000, ALTMSTID=6216
+  bridge1 log: 2026-10-07 20:39:48  Light check of FinCom Big Co: starting point recorded (ALTVCHID=100000, ALTMSTID=6216)
+  bridge1 log: 2026-10-07 20:39:48  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=6, ALTMSTID=706 (reading is prospective only: the bridge follows what changes after this)
+  bridge1 log: 2026-10-07 20:39:48  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=6, ALTMSTID=706
+  bridge1 log: 2026-10-07 20:39:48  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=6, ALTMSTID=706)
+  bridge1 log: 2026-10-07 20:39:51  Refused a request from a program of another Windows user (/tray/idle): not your FinCom Bridge
+  bridge1 log: 2026-10-07 20:39:51  Refused a request from a program of another Windows user (/tray/status): not your FinCom Bridge
+  bridge1 log: 2026-10-07 20:40:04  Refused a request from a program of another Windows user (/status): not your FinCom Bridge
+  bridge2 log: 2026-10-07 20:39:51  FinCom Bridge 2.3.3: started just for runnervmfi6oq\fcuser2 (no service); it keeps the bridge and its icon running
+  bridge2 log: 2026-10-07 20:39:51  Port 9100 is taken (another Windows user's FinCom Bridge, or another program); this bridge uses port 9101 and remembers it
+  bridge2 log: 2026-10-07 20:39:51  FinCom Bridge 2.3.3 (Go) started on 127.0.0.1:9101: the only bridge on this computer; working for runnervmfi6oq\fcuser2, Windows session 1; runs just for this Windows user (starts at sign-in, no service)
+  bridge2 log: 2026-10-07 20:39:51  Tally is open on port 9001; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+  bridge2 log: 2026-10-07 20:39:51  Recorder: re-scan of the add-on's files for 2.3.3: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+  bridge2 log: 2026-10-07 20:39:51  Check:  - 
+  bridge2 log: 2026-10-07 20:39:54  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+  bridge2 log: 2026-10-07 20:39:54  Tray icon: set to show next to the clock always (Windows 11)
+  bridge2 log: 2026-10-07 20:39:54  Company FinCom Spike U2: its Tally GUID a07beb6a-b22d-4cc4-a7b1-ddbe1f45b39a is held from now on
+  bridge2 log: 2026-10-07 20:39:54  Company FinCom Spike U2: its starting point is recorded: ALTVCHID=1, ALTMSTID=209 (reading is prospective only: the bridge follows what changes after this)
+  bridge2 log: 2026-10-07 20:39:54  Company FinCom Spike U2: change numbers read with form a: ALTVCHID=1, ALTMSTID=209
+  bridge2 log: 2026-10-07 20:39:54  Light check of FinCom Spike U2: starting point recorded (ALTVCHID=1, ALTMSTID=209)
+  bridge2 log: 2026-10-07 20:40:03  Refused a request from a program of another Windows user (/status): not your FinCom Bridge (the program asking has no Windows user)
+[20:40:35] ---- push233: the full entry at save (branch next-push)
+[keys] '{F3}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-co-list (1024x768)
+[keys] 'FinCom Spike Co' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-co-typed (1024x768)
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-co-chosen (1024x768)
+  Tally :9000 voucher mid=1 aid=1 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000002 no=2 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000006 no=2 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000004 no=1 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000005 no=2 cancelled=False
+[keys] '%g' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '2-11-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-receipt-daybook (1024x768)
+[keys] '{END}' -> Tally :9000 'TallyPrime:9000'
+[keys] '%2' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-receipt-dup (1024x768)
+[shot] r4-p233-receipt-saved (1024x768)
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+  Tally :9000 voucher mid=1 aid=1 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000002 no=2 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000006 no=2 cancelled=False
+  Tally :9000 voucher mid=7 aid=7 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000007 no=3 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000004 no=1 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000005 no=2 cancelled=False
+[companies :9000] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>6</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>1</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+######## PASS push233 P1 receipt: Tally mid 7 guid 5561ea71-e54c-4b00-bcc9-77fda07df051-00000007 (the rule: 5561ea71-e54c-4b00-bcc9-77fda07df051-00000007); the stub: stub 20:41:43 recorder_lines event=created guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000007 mid=7 aid= vch=Receipt/3/20261102 user=runnervmfi6oq\runneradmin bridge=go-c29641d48604 port=9100 company=FinCom Spike Co body=yes(1701 chars); push=True full=True alter_id= push_seq=179140570305000; 2 ledger lines totalling 0.00; TDS rows: not asked; entry requests from bridge 1 at the stand since the save: 0; save 155 ms; ledger lines as Tally's: True (bridge P233 Bank|-1180.00; P233 Party|1180.00; Tally P233 Bank|-1180.00; P233 Party|1180.00)
+  Tally :9000 voucher mid=1 aid=1 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000002 no=2 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000006 no=2 cancelled=False
+  Tally :9000 voucher mid=7 aid=7 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000007 no=3 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000004 no=1 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000005 no=2 cancelled=False
+[keys] '%g' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-sales50-daybook (1024x768)
+[keys] '{END}' -> Tally :9000 'TallyPrime:9000'
+[keys] '%2' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-sales50-dup (1024x768)
+Get-Content: D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\push233.ps1:46
+Line |
+  46 |  …  | ForEach-Object { Get-Content $_.FullName -Encoding Unicode } | Whe …
+     |                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | The process cannot access the file
+     | 'C:\ProgramData\FinCom\recorder\5561ea71-e54c-4b00-bcc9-77fda07df051-7-Oct-26-runneradmin.txt' because it is
+     | being used by another process.
+
+[shot] r4-p233-sales50-saved (1024x768)
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+  Tally :9000 voucher mid=1 aid=1 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000002 no=2 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000006 no=2 cancelled=False
+  Tally :9000 voucher mid=7 aid=7 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000007 no=3 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000004 no=1 cancelled=False
+  Tally :9000 voucher mid=8 aid=8 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000008 no=3 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000005 no=2 cancelled=False
+[companies :9000] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>60</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>100</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>50</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>2</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE>...
+######## FAIL push233 P2 50-item invoice: Tally mid 8 guid 5561ea71-e54c-4b00-bcc9-77fda07df051-00000008 (the rule: 5561ea71-e54c-4b00-bcc9-77fda07df051-00000008); the stub: stub 20:42:22 recorder_lines event=created guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000008 mid=8 aid=8 vch=Sales/3/20261201 user=runnervmfi6oq\runneradmin bridge=go-c29641d48604 port=9100 company=FinCom Spike Co body=yes(216734 chars) idsMismatch lineGuid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000004; push= full=True alter_id=8 push_seq=; 4 ledger lines totalling 0.00; TDS rows: not asked; entry requests from bridge 1 at the stand since the save: 1 e.g. {"t0":1791405742488,"t1":1791405742560,"ms":72,"at":"20:42:22","id":"FinComVoucherByMaster","req":"Export","company":"FinCom Spike Co","mid":"8","in":2928,"out":4141,"status":200,"err":"","clientGone":false,"delay":0}; save 3075 ms; ledger lines as Tally's: True (bridge Output CGST|900.00; Output SGST|900.00; P233 Party|-11800.00; P233 Sales|10000.00; Tally Output CGST|900.00; Output SGST|900.00; P233 Party|-11800.00; P233 Sales|10000.00)
+  Tally :9000 voucher mid=1 aid=1 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000002 no=2 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000006 no=2 cancelled=False
+  Tally :9000 voucher mid=7 aid=7 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000007 no=3 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000004 no=1 cancelled=False
+  Tally :9000 voucher mid=8 aid=8 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000008 no=3 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000005 no=2 cancelled=False
+[keys] '%g' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '2-12-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-godown-daybook (1024x768)
+[keys] '{END}' -> Tally :9000 'TallyPrime:9000'
+[keys] '%2' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-godown-dup (1024x768)
+Get-Content: D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\push233.ps1:46
+Line |
+  46 |  …  | ForEach-Object { Get-Content $_.FullName -Encoding Unicode } | Whe …
+     |                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | The process cannot access the file
+     | 'C:\ProgramData\FinCom\recorder\5561ea71-e54c-4b00-bcc9-77fda07df051-7-Oct-26-runneradmin.txt' because it is
+     | being used by another process.
+
+[shot] r4-p233-godown-saved (1024x768)
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+  Tally :9000 voucher mid=1 aid=1 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000002 no=2 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000006 no=2 cancelled=False
+  Tally :9000 voucher mid=7 aid=7 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000007 no=3 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000004 no=1 cancelled=False
+  Tally :9000 voucher mid=8 aid=8 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000008 no=3 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000005 no=2 cancelled=False
+  Tally :9000 voucher mid=9 aid=9 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000009 no=4 cancelled=False
+[companies :9000] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>66</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>116</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>52</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>3</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE>...
+######## FAIL push233 P4 item invoice in two godowns x two batches: Tally mid 9 guid 5561ea71-e54c-4b00-bcc9-77fda07df051-00000009 (the rule: 5561ea71-e54c-4b00-bcc9-77fda07df051-00000009); the stub: stub 20:42:55 recorder_lines event=created guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000009 mid=9 aid=9 vch=Sales/4/20261202 user=runnervmfi6oq\runneradmin bridge=go-c29641d48604 port=9100 company=FinCom Spike Co body=yes(22171 chars) idsMismatch lineGuid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000005; push= full=True alter_id=9 push_seq=; 4 ledger lines totalling 0.00; TDS rows: not asked; entry requests from bridge 1 at the stand since the save: 2 e.g. {"t0":1791405742488,"t1":1791405742560,"ms":72,"at":"20:42:22","id":"FinComVoucherByMaster","req":"Export","company":"FinCom Spike Co","mid":"8","in":2928,"out":4141,"status":200,"err":"","clientGone":false,"delay":0}; save 526 ms; ledger lines as Tally's: True (bridge Output CGST|72.00; Output SGST|72.00; P233 Party|-944.00; P233 Sales|800.00; Tally Output CGST|72.00; Output SGST|72.00; P233 Party|-944.00; P233 Sales|800.00)
+######## FAIL push233 P4 godowns and batches in the entry: godown P233 Annex: False; batch B2: True
+[20:43:04] ---- 2.3.1 scenarios: the company's TDS and cost centre features, the TDS nature of payment and ledgers
+[masters-0-company :9000] 23 ms, 269 bytes: <RESPONSE><CREATED>0</CREATED><ALTERED>1</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[masters-3-nature :9000] 12 ms, 269 bytes: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[masters-5-tds :9000] 24 ms, 350 bytes: <RESPONSE><LINEERROR>TDS Rate &apos;S231 Contract Work&apos; does not exist!</LINEERROR><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>2</EXCEPTIONS></RESPONSE>
+[ledger master S231 Contractor :9000] 13 ms, 16895 bytes: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>1</COMPANY><GROUP>0</GROUP><LEDGER>67</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>116</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>52</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>4</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>1</TAXCLASS...
+[ledger master S231 Contract Exp :9000] 9 ms, 1501 bytes: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>1</COMPANY><GROUP>0</GROUP><LEDGER>67</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>116</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>52</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>4</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>1</TAXCLASS...
+[ledger master S231 TDS Payable :9000] 8 ms, 1501 bytes: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>1</COMPANY><GROUP>0</GROUP><LEDGER>67</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>116</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>52</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>4</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>1</TAXCLASS...
+[stock items :9000] 37 ms, 361712 bytes: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>1</COMPANY><GROUP>0</GROUP><LEDGER>67</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>116</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>52</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>4</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>1</TAXCLASS...
+[company features :9000] 3 ms, 2105 bytes: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>1</COMPANY><GROUP>0</GROUP><LEDGER>67</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>116</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>52</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>4</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>1</TAXCLASS...
+  Tally :9000 voucher mid=1 aid=1 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000002 no=2 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000006 no=2 cancelled=False
+  Tally :9000 voucher mid=7 aid=7 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000007 no=3 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000004 no=1 cancelled=False
+  Tally :9000 voucher mid=8 aid=8 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000008 no=3 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000005 no=2 cancelled=False
+  Tally :9000 voucher mid=9 aid=9 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000009 no=4 cancelled=False
+[20:43:04] ---- S5 on the screen: a journal with TDS typed in Tally (masters by XML)
+[shot] tds-001-gw0 (1024x768)
+[20:43:06] [tds] screen tds-001-gw0 : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data x Find details entered in masters and transactions. Z: Exchange CURRENT OATE Wednesday, 2-Dec-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print Gateway Tally CURRE CURRENT PERIOD I-Apr. I-Apr-26 to 31-Mar-27 NAME NAME OF COMPANY FinC( FinCom Spike Co FinCom Big co FinCom Spike Co (Schedule Backup) (Schedule Backup) (Schedule Backup) Q Search 2-DecQ6 2-Sep-26 2-Dec-26 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Lo...
+[keys] 'c' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-002-create-TDSNatureofPayments (1024x768)
+[20:43:10] [tds] screen tds-002-create-TDSNatureofPayments : 127.0.0.2 - Remote Desktop Connection EDU prim prime Gateway CURR I-Apr NAME FinC Quit Find details entered in masters and transactions. Z: Exchange inCom Spike Master Creation (Alt+F) O: Import K: Company Y: Data Q E: Export M: Share p: print Fl: Help x List of Masters Accounting Masters Group Ledger Cost Category Cost Centre Currency Voucher Type Inventory Masters Stock Group Stock Category Stock Item Unit Location Statutory Masters GST Registration GST Classification TDS Nature of Payments Search Change Company Show More x pany 8:43 PM 10/7/2026
+[keys] '{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'TDS Nature of Payments' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-003-typed-TDSNatureofPayments (1024x768)
+[20:43:15] [tds] screen tds-003-typed-TDSNatureofPayments : 127.0.0.2 - Remote Desktop Connection EDU prim prime Gateway CURR I-Apr NAME FinC Quit Find details entered in masters and transactions. Z: Exchange inCom Spike Master Creation TDS Nature of Pa ments (Alt+F) O: Import K: Company Y: Data Q E: Export M: Share p: print Fl: Help x List of Masters Statutory Masters TDS Nature of Payments Search Change Company Show More x pany 8:43 PM 10/7/2026
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-004-form-TDSNatureofPayments (1024x768)
+[20:43:20] [tds] screen tds-004-form-TDSNatureofPayments : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway LTOS Nature ef Payment Name CURRE I-Apr. Section Payment code NAME Remittance code FinC( Rate for individuals/HUF With PAN Rate for other deductee types With PAN Is zero rated Threshold/exemption limit Quit Q x Find details entered in masters and transactions. Z: Exchange inCom Spike 0% 0% (Alt+F) O: Import E: Export M: Share A Accept Search D: Delete p: print Fl: Help x F2: Period pany Company F7 FIO: Other Masters More Details Helper F12: Configure 8:43 PM 10/7/2026
+[keys] 'S231 Contract Work{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-005-nat-name (1024x768)
+[20:43:24] [tds] screen tds-005-nat-name : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway LTOS Nature ef Payment x Find details entered in masters and transactions. Z: Exchange inCom Spike 0% 0% (Alt+F) O: Import E: Export M: Share Name CURRE I-Apr. Section S231 Contract Work Payment code NAME Remittance code FinC( Rate for individuals/HUF With PAN Rate for other deductee types With PAN Is zero rated Threshold/exemption limit Quit Q A Accept Search D: Delete p: print Fl: Help x F2: Period pany Company F7 FIO: Other Masters More Details Helper F12: Configure 8:43 PM 10/7/2026
+[keys] '194C{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-006-nat-section (1024x768)
+[20:43:27] [tds] screen tds-006-nat-section : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway LTOS Nature ef Payment x Find details entered in masters and transactions. Z: Exchange inCom Spike 194C 0% 0% (Alt+F) O: Import E: Export M: Share Name CURRE I-Apr. Section S231 Contract Work Payment code NAME Remittance code FinC( Rate for individuals/HUF With PAN Rate for other deductee types With PAN Is zero rated Threshold/exemption limit Quit Q A Accept Search D: Delete p: print Fl: Help x F2: Period pany Company F7 FIO: Other Masters More Details Helper F12: Configure 8:43 PM 10/7/2026
+[keys] '94C{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-007-nat-paycode (1024x768)
+[20:43:30] [tds] screen tds-007-nat-paycode : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway LTOS Nature ef Payment x Find details entered in masters and transactions. Z: Exchange inCom Spike 194C 94C 0% 0% (Alt+F) O: Import E: Export M: Share Name CURRE I-Apr. Section S231 Contract Work Payment code NAME Remittance code FinC( Rate for individuals/HUF With PAN Rate for other deductee types With PAN Is zero rated Threshold/exemption limit Quit Q A Accept Search D: Delete p: print Fl: Help x F2: Period pany Company F7 FIO: Other Masters More Details Helper F12: Configure 8:43 PM 10/7/2026
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-008-nat-remit (1024x768)
+[20:43:33] [tds] screen tds-008-nat-remit : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway LTOS Nature ef Payment x Find details entered in masters and transactions. Z: Exchange inCom Spike 194C 94C 0% (Alt+F) O: Import E: Export M: Share Name CURRE I-Apr. Section S231 Contract Work Payment code NAME Remittance code FinC( Rate for individuals/HUF With PAN Rate for other deductee types With PAN Is zero rated Threshold/exemption limit Quit Q A Accept Search D: Delete p: print Fl: Help x F2: Period pany Company F7 FIO: Other Masters More Details Helper F12: Configure 8:43 PM 10/7/2026
+[keys] '1{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-009-nat-rate-ind (1024x768)
+[20:43:36] [tds] screen tds-009-nat-rate-ind : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway LTOS Nature ef Payment x Find details entered in masters and transactions. Z: Exchange inCom Spike 194C 94C (Alt+F) O: Import E: Export M: Share Name CURRE I-Apr. Section S231 Contract Work Payment code NAME Remittance code FinC( Rate for individuals/HUF With PAN Rate for other deductee types With PAN Threshold/exemption limit Quit Q A Accept Search D: Delete p: print Fl: Help x F2: Period pany Company F7 FIO: Other Masters More Details Helper F12: Configure 8:43 PM 10/7/2026
+[keys] '2{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-010-nat-rate-oth (1024x768)
+[20:43:40] [tds] screen tds-010-nat-rate-oth : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway LTOS Nature ef Payment x Find details entered in masters and transactions. Z: Exchange inCom Spike 194C 94C 1% 2% (Alt+F) O: Import E: Export M: Share Name CURRE I-Apr. Section S231 Contract Work Payment code NAME Remittance code FinC( Rate for individuals/HUF With PAN Rate for other deductee types With PAN Threshold/exemption limit Quit Q A Accept Search D: Delete p: print Fl: Help x F2: Period pany Company F7 FIO: Other Masters More Details Helper F12: Configure 8:43 PM 10/7/2026
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-011-nat-zero (1024x768)
+[20:43:43] [tds] screen tds-011-nat-zero : 127.0.0.2 - Remote Desktop Connection EDU prim prime Gateway LTOS Nature ef Payment x Find details entered In masters and transactions K: Company Y: Data S231 Contract Work Z: Exchange A: Accept Search O: Import Accept Q Yes or No D: Delete E: Export M: Share Name CURRE I-Apr. Section Payment code NAME Remittance code FinC( Rate for individuals/HUF With PAN Rate for other deductee types With PAN Threshold/exemption limit Q: Quit inCom Spike 194C 94C 1% 2% Q p: print Fl:Help x F2: Period pany F3: Company F7 FIO: Other Masters l: More Details H: Helper Fl 2: Configure 8:43 PM 10/7/2026
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-012-nat-threshold (1024x768)
+[20:43:47] [tds] screen tds-012-nat-threshold : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway LTOS Nature ef Payment Name CURRE I-Apr. Section Payment code NAME Remittance code FinC( Rate for individuals/HUF With PAN Rate for other deductee types With PAN Is zero rated Threshold/exemption limit Quit Q x Find details entered in masters and transactions. Z: Exchange inCom Spike 0% 0% (Alt+F) O: Import E: Export M: Share A Accept Search D: Delete p: print Fl: Help x F2: Period pany Company F7 FIO: Other Masters More Details Helper F12: Configure 8:43 PM 10/7/2026
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-013-nat-accept (1024x768)
+[20:43:51] [tds] screen tds-013-nat-accept : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway LTOS Nature ef Payment Name CURRE I-Apr. Section Payment code NAME Remittance code FinC( Rate for individuals/HUF With PAN Rate for other deductee types With PAN Is zero rated Threshold/exemption limit Quit Q x Find details entered in masters and transactions. Z: Exchange inCom Spike 0% 0% (Alt+F) O: Import E: Export M: Share A Accept Search D: Delete p: print Fl: Help x F2: Period pany Company F7 FIO: Other Masters More Details Helper F12: Configure 8:43 PM 10/7/2026
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-014-nat-esc1 (1024x768)
+[20:43:54] [tds] screen tds-014-nat-esc1 : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway LTOS Nature ef Payment Name CURRE I-Apr. Section Payment code NAME Remittance code FinC( Rate for individuals/HUF With PAN Rate for other deductee types With PAN Is zero rated Threshold/exemption limit Q: Quit Q x Find details entered In masters and transactions Z: Exchange A: Accept Search O: Import Quito I Yes or No D: Delete E: Export M: Share inCom Spike 0% 0% p: print Fl:Help x F2: Period pany F3: Company F7 FIO: Other Masters l: More Details H: Helper Fl 2: Configure 8:43 PM 10/7/2026
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-015-nat-esc2 (1024x768)
+[20:43:58] [tds] screen tds-015-nat-esc2 : 127.0.0.2 - Remote Desktop Connection EDU prim prime Gateway CURR I-Apr NAME FinC Quit Find details entered in masters and transactions. Z: Exchange inCom Spike Master Creation (Alt+F) O: Import K: Company Y: Data Q E: Export M: Share p: print Fl: Help x List of Masters Accounting Masters Group Ledger Cost Category Cost Centre Currency Voucher Type Inventory Masters Stock Group Stock Category Stock Item Unit Location Statutory Masters GST Registration GST Classification TDS Nature of Payments Search Change Company Show More x pany 8:43 PM 10/7/2026
+[20:43:58] [tds] nature 'S231 Contract Work' in Tally's export (TDSRate): True
+[shot] tds-016-gw0 (1024x768)
+[20:43:59] [tds] screen tds-016-gw0 : 127.0.0.2 - Remote Desktop Connection EDU prim prime Gateway CURR I-Apr NAME FinC Quit Find details entered in masters and transactions. Z: Exchange inCom Spike Master Creation (Alt+F) O: Import K: Company Y: Data Q E: Export M: Share p: print Fl: Help x List of Masters Accounting Masters Group Ledger Cost Category Cost Centre Currency Voucher Type Inventory Masters Stock Group Stock Category Stock Item Unit Location Statutory Masters GST Registration GST Classification TDS Nature of Payments Search Change Company Show More x pany 8:43 PM 10/7/2026
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-017-gw1 (1024x768)
+[20:44:03] [tds] screen tds-017-gw1 : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data x Find details entered in masters and transactions. Z: Exchange CURRENT OATE Wednesday, 2-Dec-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print Gateway Tally CURRE CURRENT PERIOD I-Apr. I-Apr-26 to 31-Mar-27 NAME NAME OF COMPANY FinC( FinCom Spike Co FinCom Big co FinCom Spike Co * (e) Data exceptions exist (Schedule Backup) (Schedule Backup) (e) (Schedule Backup) Q Search 2-DecQ6 2-Sep-26 2-Dec-26 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking R...
+[masters-5-tds again (after the nature on its form) :9000] 40 ms, 269 bytes: <RESPONSE><CREATED>0</CREATED><ALTERED>3</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[S5 party: deduct TDS in the same voucher :9000] 13 ms, 269 bytes: <RESPONSE><CREATED>0</CREATED><ALTERED>1</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[ledger master S231 Contractor :9000] 11 ms, 16895 bytes: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>1</COMPANY><GROUP>0</GROUP><LEDGER>71</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>116</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>52</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>4</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>1</TDSRATE><TAXCLASSIFICATION>1</TAXCLASS...
+[ledger master S231 Contract Exp :9000] 11 ms, 16852 bytes: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>1</COMPANY><GROUP>0</GROUP><LEDGER>71</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>116</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>52</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>4</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>1</TDSRATE><TAXCLASSIFICATION>1</TAXCLASS...
+[ledger master S231 TDS Payable :9000] 8 ms, 16845 bytes: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>1</COMPANY><GROUP>0</GROUP><LEDGER>71</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>116</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>52</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>4</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>1</TDSRATE><TAXCLASSIFICATION>1</TAXCLASS...
+  Tally :9000 voucher mid=1 aid=1 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000002 no=2 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000006 no=2 cancelled=False
+  Tally :9000 voucher mid=7 aid=7 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000007 no=3 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000004 no=1 cancelled=False
+  Tally :9000 voucher mid=8 aid=8 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000008 no=3 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000005 no=2 cancelled=False
+  Tally :9000 voucher mid=9 aid=9 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000009 no=4 cancelled=False
+[shot] tds-018-gw0 (1024x768)
+[20:44:04] [tds] screen tds-018-gw0 : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data x Find details entered in masters and transactions. Z: Exchange CURRENT OATE Wednesday, 2-Dec-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print Gateway Tally CURRE CURRENT PERIOD I-Apr. I-Apr-26 to 31-Mar-27 NAME NAME OF COMPANY FinC( FinCom Spike Co FinCom Big co FinCom Spike Co * (e) Data exceptions exist (Schedule Backup) (Schedule Backup) (e) (Schedule Backup) Q Search 2-DecQ6 2-Sep-26 2-Dec-26 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking R...
+[keys] 'v' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-019-s5-vouchers (1024x768)
+[20:44:08] [tds] screen tds-019-s5-vouchers : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Pa ment No. 1 CURR I-Apr. Account NAME Current balance: Particulars FinC( Narration: Quit Q x Find details entered in masters and transactions. (Alt+F) O: Import Z: Exchange A Accept Search E: Export M: Share inCom Spike p: print 2-Dec-26 Wednesday Amount D: Delete x: Cancel Vch 12 Fl: Help Date Company pany Contra F5: Payment Receipt Journal Purchase FIO: E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure...
+[keys] '{F7}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-020-s5-journal (1024x768)
+[20:44:12] [tds] screen tds-020-s5-journal : 127.0.0.2 - Remote Desktop Connection EDU prim x a Find details entered in masters and transactions. (Alt+F) prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME FinC( By Narration: Quit Z: Exchange A Accept Search M: Share inCom Spike Co O: Import E: Export List of Ledger Accounts Input CGST Input SGST output CGST output SGST P233 Party P233 Sales Profit & Loss A/c S231 Billwise Party S231 Buyer S231 Contract Exp S231 Contractor S231 Freight Charged S231 Office Exp S231 Old Name Party S231 Party 001 S231 Party 002 S231 Party 003 S231 Party 004 S231 P...
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-021-s5-date-box (1024x768)
+[20:44:15] [tds] screen tds-021-s5-date-box : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway Change Voucher Date CURR I-Apr NAME FinC Quit Q Find details entered in masters and transactions. (Alt+F) O: Import Z: Exchange A Accept Search E: Export M: Share p: print Fl: Help x FinCom Spike Co Voucher Date 3-12-2026 x pany 8:44 PM 10/7/2026
+[keys] '1-1-2027{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-022-s5-date-set (1024x768)
+[20:44:19] [tds] screen tds-022-s5-date-set : 127.0.0.2 - Remote Desktop Connection EDU prim x a Find details entered in masters and transactions. (Alt+F) prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME FinC( By Narration: Quit Z: Exchange A Accept Search M: Share inCom Spike Co O: Import E: Export List of Ledger Accounts Input CGST Input SGST output CGST output SGST P233 Party P233 Sales Profit & Loss A/c S231 Billwise Party S231 Buyer S231 Contract Exp S231 Contractor S231 Freight Charged S231 Office Exp S231 Old Name Party S231 Party 001 S231 Party 002 S231 Party 003 S231 Party 004 S231 P...
+[keys] 'S231 Contract Exp{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-023-s5-r1-ledger (1024x768)
+[20:44:23] [tds] screen tds-023-s5-r1-ledger : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME By S231 Contract Exp FinC( Cur Bal: By Narration: Quit Q x Find details entered in masters and transactions. (Alt+F) O: Import Z: Exchange A Accept Search E: Export inCom Spike Co M: Share Debit p: print I-Jana Friday Credit D: Delete x: Cancel Vch 12 Fl: Help Date Company pany Contra F5: payment F6 Receipt F7: Journal Purchase FIO: E: Autofill H: Change = Mode More Details Related o: ¯ Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch N...
+[keys] '100000{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-024-s5-r1-amount (1024x768)
+[20:44:26] [tds] screen tds-024-s5-r1-amount : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME By S231 Contract Exp FinC( CurBal: Dr Narration: Quit Q x Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share p: print I-Jana Friday Credit Debit 1,00 00000 1,00 00000 A Accept Search D: Delete x: Cancel Vch 12 Fl: Help Date Company pany Contra F5: payment F6 Receipt F7: Journal Purchase FIO: E: Autofill H: Change = Mode More Details Related o: ¯ Reports L: Optional post -Dated J: Stat ¯ Adju...
+[keys] 't{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-025-s5-r2-to (1024x768)
+[20:44:30] [tds] screen tds-025-s5-r2-to : 127.0.0.2 - Remote Desktop Connection EDU prim x a Find details entered in masters and transactions. (Alt+F) prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME By S231 Contract Exp FinC( CurBa1: Dr Narration: Quit Z: Exchange A Accept Search M: Share inCom Spike Co O: Import E: Export List of Ledger Accounts Input CGST Input SGST output CGST output SGST P233 Party P233 Sales Profit & Loss A/c S231 Billwise Party S231 Buyer S231 Contract Exp S231 Contractor S231 Freight Charged S231 Office Exp S231 Old Name Party S231 Party 001 S231 Party 002 S231 Pa...
+[keys] 'S231 TDS Payable{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-026-s5-r2-ledger (1024x768)
+[20:44:34] [tds] screen tds-026-s5-r2-ledger : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME By S231 Contract Exp FinC( CurBal: Dr To S231 TDS Payable CurBal: Cr Narration: Quit Q x Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share Debit 1,00 00000 p: print I-Jana Friday Credit 1,00 00000 1,00 00000 A Accept Search D: Delete x: Cancel Vch 12 Fl: Help Date Company pany Contra F5: payment F6 Receipt F7: Journal Purchase FIO: E: Autofill H: Change = Mode More Details Related o: ¯ Repo...
+[shot] tds-027-s5-r2-sub1 (1024x768)
+[20:44:35] [tds] screen tds-027-s5-r2-sub1 : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME By S231 Contract Exp FinC( CurBal: Dr To S231 TDS Payable CurBal: Cr Narration: Quit Q x Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share Debit 1,00 00000 p: print I-Jana Friday Credit 1,00 00000 1,00 00000 A Accept Search D: Delete x: Cancel Vch 12 Fl: Help Date Company pany Contra F5: payment F6 Receipt F7: Journal Purchase FIO: E: Autofill H: Change = Mode More Details Related o: ¯ Repo...
+[shot] tds-028-s5-r2-amount-shown (1024x768)
+[20:44:36] [tds] screen tds-028-s5-r2-amount-shown : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME By S231 Contract Exp FinC( CurBal: Dr To S231 TDS Payable CurBal: Cr Narration: Quit Q x Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share p: print I-Jana Friday Credit Debit 1,00 00000 A Accept Search D: Delete x: Cancel Vch 12 Fl: Help Date Company pany Contra F5: payment F6 Receipt F7: Journal Purchase FIO: E: Autofill H: Change = Mode More Details Related o: ¯ Reports L: Optional post -...
+[keys] '2000{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-029-s5-r2-amount-typed (1024x768)
+[20:44:39] [tds] screen tds-029-s5-r2-amount-typed : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME By S231 Contract Exp FinC( CurBa1: Dr To S231 TDS Payable CurBal: 2,000.00 Cr Narration: Quit Q x Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share Debit 1,00 00000 1,00 00000 p: print I-Jana Friday Credit 2,000.00 2,000.00 A Accept Search D: Delete x: Cancel Vch 12 Fl: Help Date Company pany Contra F5: payment F6 Receipt F7: Journal Purchase FIO: E: Autofill H: Change = Mode More Details R...
+[shot] tds-030-s5-r2-after1 (1024x768)
+[20:44:40] [tds] screen tds-030-s5-r2-after1 : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME By S231 Contract Exp FinC( CurBa1: Dr To S231 TDS Payable CurBal: 2,000.00 Cr Narration: Quit Q x Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share Debit 1,00 00000 1,00 00000 p: print I-Jana Friday Credit 2,000.00 2,000.00 A Accept Search D: Delete x: Cancel Vch 12 Fl: Help Date Company pany Contra F5: payment F6 Receipt F7: Journal Purchase FIO: E: Autofill H: Change = Mode More Details R...
+[keys] 't{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-031-s5-r3-to (1024x768)
+[20:44:43] [tds] screen tds-031-s5-r3-to : 127.0.0.2 - Remote Desktop Connection EDU prim x a Find details entered in masters and transactions. (Alt+F) prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal Z: Exchange A Accept Search M: Share inCom Spike Co CURR I-Apr. NAME By FinC( Particulars S231 Contract Exp CurBa1: Dr S231 TDS Payable CurBa1: 2,000.00 Cr Narration: Quit O: Import E: Export List of Ledger Accounts Input CGST Input SGST output CGST output SGST P233 Party P233 Sales Profit & Loss A/c S231 Billwise Party S231 Buyer S231 Contract Exp S231 Contractor S231 Freight Charged S231 Office Exp S231 Old Name Party ...
+[keys] 'S231 Contractor{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-032-s5-r3-ledger (1024x768)
+[20:44:48] [tds] screen tds-032-s5-r3-ledger : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME By S231 Contract Exp FinC( CurBa1: Dr To S231 TDS Payable CurBal: 2,000.00 Cr To S231 Contractor CurBa1: Cr Narration: Quit Q x Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share Debit 1,00 00000 p: print I-Jana Friday Credit 2,000.00 1,00 00000 A Accept Search D: Delete x: Cancel Vch 12 Fl: Help Date Company pany Contra F5: payment F6 Receipt F7: Journal Purchase FIO: E: Autofill H: Change ...
+[shot] tds-033-s5-r3-amount-shown (1024x768)
+[20:44:49] [tds] screen tds-033-s5-r3-amount-shown : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME By S231 Contract Exp FinC( CurBa1: Dr To S231 TDS Payable CurBal: 2,000.00 Cr To S231 Contractor CurBa1: Cr Narration: Quit Q x Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share Debit 1,00 00000 p: print I-Jana Friday Credit 2,000.00 A Accept Search D: Delete x: Cancel Vch 12 Fl: Help Date Company pany Contra F5: payment F6 Receipt F7: Journal Purchase FIO: E: Autofill H: Change = Mode More...
+[keys] '98000{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-034-s5-r3-amount-typed (1024x768)
+[20:44:52] [tds] screen tds-034-s5-r3-amount-typed : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME By S231 Contract Exp FinC( CurBa1: Dr To S231 TDS Payable CurBal: 2,000.00 Cr To S231 Contractor CurBa1: 98,000.00 Cr Narration: Quit Q x Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share Debit 1,00 00000 p: print I-Jana Friday Credit 2,000.00 98,000.00 A Accept Search D: Delete x: Cancel Vch 12 Fl: Help Date Company pany Contra F5: payment F6 Receipt F7: Journal Purchase FIO: E: Autofill H...
+[shot] tds-035-s5-r3-after1 (1024x768)
+[20:44:53] [tds] screen tds-035-s5-r3-after1 : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME By S231 Contract Exp FinC( CurBa1: Dr To S231 TDS Payable CurBal: 2,000.00 Cr To S231 Contractor CurBa1: 98,000.00 Cr Narration: Quit Q x Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share Debit 1,00 00000 p: print I-Jana Friday Credit 2,000.00 98,000.00 A Accept Search D: Delete x: Cancel Vch 12 Fl: Help Date Company pany Contra F5: payment F6 Receipt F7: Journal Purchase FIO: E: Autofill H...
+[shot] tds-036-s5-before-narration (1024x768)
+[20:44:54] [tds] screen tds-036-s5-before-narration : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME By S231 Contract Exp FinC( CurBa1: Dr To S231 TDS Payable CurBal: 2,000.00 Cr To S231 Contractor CurBa1: 98,000.00 Cr Narration: Quit Q x Find details entered in masters and transactions. Z: Exchange inCom Spike Co (Alt+F) O: Import E: Export M: Share Debit 1,00 00000 p: print I-Jana Friday Credit 2,000.00 98,000.00 A Accept Search D: Delete x: Cancel Vch 12 Fl: Help Date Company pany Contra F5: payment F6 Receipt F7: Journal Purchase FIO: E: Autofill H...
+[keys] 'S5 contract work TDS 194C entered on the screen{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-037-s5-narration (1024x768)
+[20:44:59] [tds] screen tds-037-s5-narration : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME By S231 Contract Exp FinC( CurBa1: Dr To S231 TDS Payable CurBal: 2,000.00 Cr To S231 Contractor CurBa1: 98,000.00 Cr Narration: x Find details entered In masters and transactions Z: Exchange inCom Spike Co O: Import E: Export M: Share Debit 1,00 00000 S5 contract work TDS 194C entered on the screen p: print I-Jana Friday Credit 2,000.00 98,000.00 Accept Q Yes or No Q: Quit Q A: Accept Search D: Delete X: Cancel Vch Fl: Help F2: Date pany F3: Company F4...
+[shot] tds-038-s5-accept-q (1024x768)
+[20:45:00] [tds] screen tds-038-s5-accept-q : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati Journal CURR I-Apr. Particulars NAME By S231 Contract Exp FinC( CurBa1: Dr To S231 TDS Payable CurBal: 2,000.00 Cr To S231 Contractor CurBa1: 98,000.00 Cr Narration: x Find details entered In masters and transactions Z: Exchange inCom Spike Co O: Import E: Export M: Share Debit 1,00 00000 S5 contract work TDS 194C entered on the screen p: print I-Jana Friday Credit 2,000.00 98,000.00 Accept Q Yes or No Q: Quit Q A: Accept Search D: Delete X: Cancel Vch Fl: Help F2: Date pany F3: Company F4...
+[keys] 'y' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-039-s5-accepted (1024x768)
+[20:45:04] [tds] screen tds-039-s5-accepted : 127.0.0.2 - Remote Desktop Connection EDU prim x a Find details entered in masters and transactions. (Alt+F) prime K: Company Y: Data Gateway •ccounting Voucher Creati No. 4 Journal CURR I-Apr. Particulars NAME FinC( Narration: Quit Z: Exchange A Accept Search M: Share inCom Spike Co O: Import E: Export List of Ledger Accounts Input CGST Input SGST output CGST output SGST P233 Party P233 Sales Profit & Loss A/c S231 Billwise Party S231 Buyer S231 Contract Exp S231 Contractor S231 Freight Charged S231 Office Exp S231 Old Name Party S231 Party 001 S231 Party 002 S231 Party 003 S231 Party 004 S23...
+[shot] tds-040-gw0 (1024x768)
+[20:45:05] [tds] screen tds-040-gw0 : 127.0.0.2 - Remote Desktop Connection EDU prim x a Find details entered in masters and transactions. (Alt+F) prime K: Company Y: Data Gateway •ccounting Voucher Creati No. 4 Journal CURR I-Apr. Particulars NAME FinC( Narration: Quit Z: Exchange A Accept Search M: Share inCom Spike Co O: Import E: Export List of Ledger Accounts Input CGST Input SGST output CGST output SGST P233 Party P233 Sales Profit & Loss A/c S231 Billwise Party S231 Buyer S231 Contract Exp S231 Contractor S231 Freight Charged S231 Office Exp S231 Old Name Party S231 Party 001 S231 Party 002 S231 Party 003 S231 Party 004 S23...
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-041-gw1 (1024x768)
+[20:45:09] [tds] screen tds-041-gw1 : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data Gateway •ccounting Voucher Creati No. 4 Journal CURR I-Apr. Particulars NAME FinC( Narration: Q: Quit Q x Find details entered In masters and transactions Z: Exchange inCom Spike Co O: Import E: Export M: Share Debit p: print I-Jana Friday Credit Quit o Yes or No A: Accept Search D: Delete X: Cancel Vch Fl: Help F2: Date pany F3: Company F4: Contra F5: Payment F6: Receipt F7: Journal F8: Sales F9: Purchase Flo: E: Autofill H: Change = Mode l: More = Details O: Related = Reports L: Optional T: post = -Dated J: Stat ¯ Adjust...
+[keys] 'y' -> Tally :9000 'TallyPrime:9000'
+[shot] tds-042-gw2 (1024x768)
+[20:45:12] [tds] screen tds-042-gw2 : 127.0.0.2 - Remote Desktop Connection EDU prim prime K: Company Y: Data x Find details entered in masters and transactions. Z: Exchange CURRENT OATE Friday, I-Jan-2027 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print Gateway Tally CURRE CURRENT PERIOD I-Apr. I-Apr-26 to 31-Mar-27 NAME NAME OF COMPANY FinC( FinCom Spike Co FinCom Big co FinCom Spike Co (Schedule Backup) (Schedule Backup) (Schedule Backup) Q Search I-Jan-27 2-Sep-26 I-Jan-27 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss...
+  Tally :9000 voucher mid=1 aid=1 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000002 no=2 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000006 no=2 cancelled=False
+  Tally :9000 voucher mid=7 aid=7 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000007 no=3 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000004 no=1 cancelled=False
+  Tally :9000 voucher mid=8 aid=8 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000008 no=3 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000005 no=2 cancelled=False
+  Tally :9000 voucher mid=9 aid=9 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000009 no=4 cancelled=False
+  Tally :9000 voucher mid=10 aid=10 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000a no=3 cancelled=False
+[S5 the bridge's entry request :9000] 43 ms, 5885 bytes: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>1</COMPANY><GROUP>0</GROUP><LEDGER>75</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>116</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>52</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>5</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>1</TDSRATE><TAXCLASSIFICATION>1</TAXCLASS...
+  Tally :9000 voucher mid=1 aid=1 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000002 no=2 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000006 no=2 cancelled=False
+  Tally :9000 voucher mid=7 aid=7 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000007 no=3 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000004 no=1 cancelled=False
+  Tally :9000 voucher mid=8 aid=8 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000008 no=3 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000005 no=2 cancelled=False
+  Tally :9000 voucher mid=9 aid=9 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000009 no=4 cancelled=False
+  Tally :9000 voucher mid=10 aid=10 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000a no=3 cancelled=False
+[companies :9000] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>1</COMPANY><GROUP>0</GROUP><LEDGER>75</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>116</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>52</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>5</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>1</TDSRATE><TAXCLASSIFICATION>1</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE>...
+######## FAIL push233 P3 payment with TDS (typed on the screen): Tally mid 10 guid 5561ea71-e54c-4b00-bcc9-77fda07df051-0000000a (the rule: 5561ea71-e54c-4b00-bcc9-77fda07df051-0000000a); the stub: stub 20:45:01 recorder_lines event=created guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000a mid=10 aid=10 vch=Journal/3/20270101 user=runnervmfi6oq\runneradmin bridge=go-c29641d48604 port=9100 company=FinCom Spike Co body=yes(4362 chars); push= full=True alter_id=10 push_seq=; 3 ledger lines totalling 0.00; TDS rows: False; entry requests from bridge 1 at the stand since the save: 1 e.g. {"t0":1791405901620,"t1":1791405901677,"ms":57,"at":"20:45:01","id":"FinComVoucherByMaster","req":"Export","company":"FinCom Spike Co","mid":"10","in":2929,"out":1375,"status":200,"err":"","clientGone":false,"delay":0}; save -1 ms; ledger lines as Tally's: True (bridge S231 Contract Exp|-100000.00; S231 Contractor|98000.00; S231 TDS Payable|2000.00; Tally S231 Contract Exp|-100000.00; S231 Contractor|98000.00; S231 TDS Payable|2000.00)
+  Tally :9000 voucher mid=1 aid=1 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000002 no=2 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000006 no=2 cancelled=False
+  Tally :9000 voucher mid=7 aid=7 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000007 no=3 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000004 no=1 cancelled=False
+  Tally :9000 voucher mid=8 aid=8 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000008 no=3 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000005 no=2 cancelled=False
+  Tally :9000 voucher mid=9 aid=9 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000009 no=4 cancelled=False
+  Tally :9000 voucher mid=10 aid=10 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000a no=3 cancelled=False
+[keys] '%g' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '2-11-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-receipt-daybook (1024x768)
+[keys] '{END}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-receipt-open (1024x768)
+[shot] r4-p233-receipt-saved (1024x768)
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+  Tally :9000 voucher mid=1 aid=1 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000002 no=2 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000006 no=2 cancelled=False
+  Tally :9000 voucher mid=7 aid=11 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000007 no=3 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000004 no=1 cancelled=False
+  Tally :9000 voucher mid=8 aid=8 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000008 no=3 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000005 no=2 cancelled=False
+  Tally :9000 voucher mid=9 aid=9 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000009 no=4 cancelled=False
+  Tally :9000 voucher mid=10 aid=10 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000a no=3 cancelled=False
+[companies :9000] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>1</COMPANY><GROUP>0</GROUP><LEDGER>82</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>116</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>52</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>6</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>1</TDSRATE><TAXCLASSIFICATION>1</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE>...
+######## PASS push233 P5 receipt altered: a full entry again: Tally mid 7 guid 5561ea71-e54c-4b00-bcc9-77fda07df051-00000007 (the rule: 5561ea71-e54c-4b00-bcc9-77fda07df051-00000007); the stub: stub 20:45:46 recorder_lines event=altered guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000007 mid=7 aid= vch=Receipt/3/20261102 user=runnervmfi6oq\runneradmin bridge=go-c29641d48604 port=9100 company=FinCom Spike Co body=yes(1701 chars); push=True full=True alter_id= push_seq=179140594633100; 2 ledger lines totalling 0.00; TDS rows: not asked; entry requests from bridge 1 at the stand since the save: 0; save 140 ms; ledger lines as Tally's: True (bridge P233 Bank|-1180.00; P233 Party|1180.00; Tally P233 Bank|-1180.00; P233 Party|1180.00)
+######## PASS push233 P5 the alteration follows the entry: created push_seq 179140570305000, altered 179140594633100, GUID 5561ea71-e54c-4b00-bcc9-77fda07df051-00000007 / 5561ea71-e54c-4b00-bcc9-77fda07df051-00000007
+[keys] '%g' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '2-11-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-cancel-daybook (1024x768)
+[keys] '{END}' -> Tally :9000 'TallyPrime:9000'
+[keys] '%x' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-cancel-q (1024x768)
+[keys] 'y' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-cancelled (1024x768)
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] '%g' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '2-12-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-delete-daybook (1024x768)
+[keys] '{END}' -> Tally :9000 'TallyPrime:9000'
+[keys] '%d' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-delete-q (1024x768)
+[keys] 'y' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-deleted (1024x768)
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+######## PASS push233 P6 cancel and delete: heads only: the add-on wrote: after_cancel x1, after_delete x1, before_cancel x1, before_delete x1; the stub: stub System.Object[] recorder_lines event=System.Object[] guid=System.Object[] mid=System.Object[] aid=System.Object[] vch=System.Object[] user=System.Object[] bridge=System.Object[] port=System.Object[] company=System.Object[] body=yes(2 chars) idsMismatch lineGuid=  heldWhy= 
+[keys] '%g' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-p7-e-way -daybook (1024x768)
+[keys] '{END}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-p7-e-way -open (1024x768)
+[keys] '%e' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'EWB-P233-1{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-p7-e-way -done (1024x768)
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] '%g' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-p7-e-invo-daybook (1024x768)
+[keys] '{END}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-p7-e-invo-open (1024x768)
+[keys] '%i' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'IRN-P233-0001{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'ACK-P233-1{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-p7-e-invo-done (1024x768)
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] '%g' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Bank Reconciliation' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-p7-brs-select (1024x768)
+[keys] 'P233 Bank{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-p7-brs-open (1024x768)
+[keys] '{DOWN}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{RIGHT}{RIGHT}{RIGHT}{RIGHT}' -> Tally :9000 'TallyPrime:9000'
+[keys] '2-11-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-p7-brs-date (1024x768)
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-p7-brs-saved (1024x768)
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[slow232 import] p8 import: 1 sent, created 1, errors 0, 0.1 s
+[slow232 import] p8 posting: 1 sent, created 1, errors 0, 0.1 s
+[keys] '%g' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Alter Ledger' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'P233 Party{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-p8-ledger (1024x768)
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[keys] '{HOME}' -> Tally :9000 'TallyPrime:9000'
+[keys] '+{END}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'P233 Party Renamed{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-p8-renamed (1024x768)
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] '%g' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-p8-multi-daybook (1024x768)
+[keys] '^h' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-p8-ctrlh (1024x768)
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-p8-multi-saved (1024x768)
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+  Tally :9000 voucher mid=1 aid=1 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000002 no=2 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000006 no=2 cancelled=False
+  Tally :9000 voucher mid=7 aid=12 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000007 no=3 cancelled=True
+  Tally :9000 voucher mid=4 aid=4 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000004 no=1 cancelled=False
+  Tally :9000 voucher mid=8 aid=15 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000008 no=3 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000005 no=2 cancelled=False
+  Tally :9000 voucher mid=12 aid=16 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000c no=4 cancelled=False
+  Tally :9000 voucher mid=13 aid=17 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000d no=5 cancelled=False
+  Tally :9000 voucher mid=10 aid=10 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000a no=3 cancelled=False
+  Tally :9000 voucher mid=1 aid=1 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000002 no=2 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000006 no=2 cancelled=False
+  Tally :9000 voucher mid=7 aid=12 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000007 no=3 cancelled=True
+  Tally :9000 voucher mid=4 aid=4 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000004 no=1 cancelled=False
+  Tally :9000 voucher mid=8 aid=15 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000008 no=3 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000005 no=2 cancelled=False
+  Tally :9000 voucher mid=12 aid=16 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000c no=4 cancelled=False
+  Tally :9000 voucher mid=13 aid=17 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000d no=5 cancelled=False
+  Tally :9000 voucher mid=10 aid=10 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000a no=3 cancelled=False
+[keys] '%g' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '2-11-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-receipt-daybook (1024x768)
+[keys] '{END}' -> Tally :9000 'TallyPrime:9000'
+[keys] '%2' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-receipt-dup (1024x768)
+[shot] r4-p233-receipt-saved (1024x768)
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+  Tally :9000 voucher mid=1 aid=1 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000002 no=2 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000006 no=2 cancelled=False
+  Tally :9000 voucher mid=7 aid=12 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000007 no=3 cancelled=True
+  Tally :9000 voucher mid=14 aid=18 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000e no=6 cancelled=True
+  Tally :9000 voucher mid=4 aid=4 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000004 no=1 cancelled=False
+  Tally :9000 voucher mid=8 aid=15 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000008 no=3 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000005 no=2 cancelled=False
+  Tally :9000 voucher mid=12 aid=16 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000c no=4 cancelled=False
+  Tally :9000 voucher mid=13 aid=17 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000d no=5 cancelled=False
+  Tally :9000 voucher mid=10 aid=10 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000a no=3 cancelled=False
+[keys] '%g' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-p9-insert-daybook (1024x768)
+[keys] '%i' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-p9-insert (1024x768)
+[keys] '{F6}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-p9-receipt (1024x768)
+[keys] 'P233 Party{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '5{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'P233 Bank{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-p9-inserted (1024x768)
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+  Tally :9000 voucher mid=1 aid=1 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000002 no=2 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000006 no=2 cancelled=False
+  Tally :9000 voucher mid=7 aid=12 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000007 no=3 cancelled=True
+  Tally :9000 voucher mid=14 aid=18 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000e no=6 cancelled=True
+  Tally :9000 voucher mid=4 aid=4 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000004 no=1 cancelled=False
+  Tally :9000 voucher mid=8 aid=15 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000008 no=3 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000005 no=2 cancelled=False
+  Tally :9000 voucher mid=12 aid=16 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000c no=4 cancelled=False
+  Tally :9000 voucher mid=13 aid=17 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000d no=5 cancelled=False
+  Tally :9000 voucher mid=10 aid=10 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000a no=3 cancelled=False
+  [as fcuser2] keys 'c' -> Tally pid 9992 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys 'Ledger{ENTER}' -> Tally pid 9992 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys 'P233 Both U2{ENTER}' -> Tally pid 9992 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys '{ENTER}' -> Tally pid 9992 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys 'Sundry Debtors{ENTER}' -> Tally pid 9992 'TallyPrime:9001' session 1 foreground=True
+[keys] '%g' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '2-11-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{END}' -> Tally :9000 'TallyPrime:9000'
+[keys] '%2' -> Tally :9000 'TallyPrime:9000'
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+  [as fcuser2] keys '^a' -> Tally pid 9992 'TallyPrime:9001' session 1 foreground=True
+######## PASS push233 P10 two Windows users at the same moment: user 1 wrote voucher_accept_post x1, voucher_accept_pre x1, voucher_full x1; user 2's file has 2 line(s) naming P233 Both U2; lines in the wrong user's file: 0
+[keys] '{F3}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'FinCom Big Co' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-big-selected (1024x768)
+[keys] '%g' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '1-4-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-big-daybook (1024x768)
+[keys] '{END}' -> Tally :9000 'TallyPrime:9000'
+[keys] '%2' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-big-dup (1024x768)
+[shot] r4-p233-big-saved (1024x768)
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F3}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'FinCom Spike Co' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+  net share: p233share was shared successfully.
+  net share: 
+[slow232] tally.ini: [Tally] | Data = \\localhost\p233share | Config = C:\Program Files\TallyPrime | LangPath = C:\Program Files\TallyPrime\lang | Client Server = Both | ServerPort = 9000 | Enable ODBC Server = Yes | Ignore TCP Timeout = Yes | User TDL = Yes | Default Companies = Yes | Load = 100000 | TDL = C:\fcspike\FinComRecorder.tdl
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[keys] 't' -> Tally :9000 'TallyPrime:9000'
+  Tally :9000 voucher mid=1 aid=1 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000002 no=2 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000006 no=2 cancelled=False
+  Tally :9000 voucher mid=7 aid=12 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000007 no=3 cancelled=True
+  Tally :9000 voucher mid=14 aid=18 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000e no=6 cancelled=True
+  Tally :9000 voucher mid=15 aid=19 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000f no=7 cancelled=True
+  Tally :9000 voucher mid=4 aid=4 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000004 no=1 cancelled=False
+  Tally :9000 voucher mid=8 aid=15 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000008 no=3 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000005 no=2 cancelled=False
+  Tally :9000 voucher mid=12 aid=16 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000c no=4 cancelled=False
+  Tally :9000 voucher mid=13 aid=17 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000d no=5 cancelled=False
+  Tally :9000 voucher mid=10 aid=10 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000a no=3 cancelled=False
+[keys] '%g' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '2-11-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-receipt-daybook (1024x768)
+[keys] '{END}' -> Tally :9000 'TallyPrime:9000'
+[keys] '%2' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-receipt-dup (1024x768)
+[shot] r4-p233-receipt-saved (1024x768)
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+  Tally :9000 voucher mid=1 aid=1 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000002 no=2 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000006 no=2 cancelled=False
+  Tally :9000 voucher mid=7 aid=12 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000007 no=3 cancelled=True
+  Tally :9000 voucher mid=14 aid=18 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000e no=6 cancelled=True
+  Tally :9000 voucher mid=15 aid=19 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000f no=7 cancelled=True
+  Tally :9000 voucher mid=16 aid=20 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000010 no=8 cancelled=True
+  Tally :9000 voucher mid=4 aid=4 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000004 no=1 cancelled=False
+  Tally :9000 voucher mid=8 aid=15 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000008 no=3 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000005 no=2 cancelled=False
+  Tally :9000 voucher mid=12 aid=16 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000c no=4 cancelled=False
+  Tally :9000 voucher mid=13 aid=17 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000d no=5 cancelled=False
+  Tally :9000 voucher mid=10 aid=10 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000a no=3 cancelled=False
+Test-Path: D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\flow4.ps1:402
+Line |
+ 402 |      if (Test-Path $f) { $l = @(Get-Content $f); $new = @($l | Select- …
+     |          ~~~~~~~~~~~~
+     | Value cannot be null. (Parameter 'The provided Path argument was null or an empty collection.')
+
+Test-Path: D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\flow4.ps1:402
+Line |
+ 402 |      if (Test-Path $f) { $l = @(Get-Content $f); $new = @($l | Select- …
+     |          ~~~~~~~~~~~~
+     | Value cannot be null. (Parameter 'The provided Path argument was null or an empty collection.')
+
+[20:53:54] ---- what is kept: the bridges' logs, install logs, settings without their keys
+  Tally :9000 voucher mid=1 aid=1 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000002 no=2 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000006 no=2 cancelled=False
+  Tally :9000 voucher mid=7 aid=12 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000007 no=3 cancelled=True
+  Tally :9000 voucher mid=14 aid=18 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000e no=6 cancelled=True
+  Tally :9000 voucher mid=15 aid=19 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000f no=7 cancelled=True
+  Tally :9000 voucher mid=16 aid=20 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000010 no=8 cancelled=True
+  Tally :9000 voucher mid=4 aid=4 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000004 no=1 cancelled=False
+  Tally :9000 voucher mid=8 aid=15 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000008 no=3 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000005 no=2 cancelled=False
+  Tally :9000 voucher mid=12 aid=16 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000c no=4 cancelled=False
+  Tally :9000 voucher mid=13 aid=17 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000d no=5 cancelled=False
+  Tally :9000 voucher mid=10 aid=10 guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000a no=3 cancelled=False
+== results
+INFO setup origin: BUILT from source dist/FinComBridge-Setup-2.3.3.exe SHA-256 1efe3930fdd8e66cb2e3b48aada8fe21c8f126501270d92dfc10811e57b1440c; on this runner SHA-256 1efe3930fdd8e66cb2e3b48aada8fe21c8f126501270d92dfc10811e57b1440c
+INFO user 2 (fcuser2) works in a Windows session of their own (session 1, by a Remote Desktop connection to 127.0.0.2); runneradmin in session 2
+INFO S231 import masters-1-items: created 4, altered 0, errors 0
+INFO S231 import masters-2-costs: created 3, altered 0, errors 0
+INFO S231 import masters-4-ledgers: created 14, altered 0, errors 0
+INFO S231 import masters-6-bulk: created 400, altered 0, errors 0
+INFO S231 import S4 the bill (New Ref S231-BILL-1, a journal): created 1, altered 0, errors 0
+INFO push233 template receipt: created 1, errors 0
+INFO push233 template sales50: created 1, errors 0
+INFO push233 template godown: created 1, errors 0
+MEASURE push233 save receipt: Ctrl+A to the full line in the user's file 170 ms (Tally's save and the add-on, an upper bound); SendWait 43 ms; the add-on wrote: full line; ALTVCHID 5 -> 6; Tally's entry mid 6 guid 5561ea71-e54c-4b00-bcc9-77fda07df051-00000006 no 2
+PASS push233 L0 the new add-on loads and writes the full entry: the TDL from the ref has FCRLiveFull: True; the screen after Tally started: no TDL error seen; Tally's TDL error files: none; one receipt saved on the screen: the add-on wrote voucher_accept_post x1, voucher_accept_pre x1, voucher_full x1; heads (pre and post): True; full line(s) ending |end=1|t1=..|src=live: 1; the narration, neg and the part's length read: True; save 170 ms
+INFO slow232: the large company 'FinCom Big Co' holds 100000 entries made by XML (35.7 min), 3,000 ledgers, 3,000 items
+MEASURE slow232: the bridge's entry request for MasterID 100 of the large company took 11089 ms on this Tally (5039 bytes, 2 voucher(s))
+MEASURE slow232: the bridge's entry request for MasterID 50000 of the large company took 12672 ms on this Tally (5052 bytes, 2 voucher(s))
+MEASURE slow232: the bridge's entry request for MasterID 99990 of the large company took 14324 ms on this Tally (5052 bytes, 2 voucher(s))
+INFO push233 large company 'FinCom Big Co': 100000 entries made by XML in 35.7 min (asked 100000)
+PASS 6a two bridges at once: bridge 1 runneradmin on 127.0.0.1:9100 (pid 2100, session 2, go-c29641d48604); bridge 2 fcuser2 on 127.0.0.1:9101 (pid 8556, session 1, go-63443f404df9); both listening at 20:40:03
+INFO /ping with a nonce but no Origin (own bridge): proof not given
+PASS 6b /ping proof: bridge 1 proves itself to runneradmin: ok; bridge 1 proof checked against user 2 identity fails: ok; bridge 2 proves itself to fcuser2: ok; bridge 2 proof checked against user 1 identity fails: ok; bridge 2 gives runneradmin no proof: ok; bridge 1 gives fcuser2 no proof: ok; other users refused 403 beyond /ping: ok
+INFO push233 the screens' company: FinCom Big Co -> FinCom Spike Co (wanted FinCom Spike Co)
+MEASURE push233 save receipt: Ctrl+A to the full line in the user's file 155 ms (Tally's save and the add-on, an upper bound); SendWait 60 ms; the add-on wrote: full line; ALTVCHID 6 -> 7; Tally's entry mid 7 guid 5561ea71-e54c-4b00-bcc9-77fda07df051-00000007 no 3
+PASS push233 P1 receipt: Tally mid 7 guid 5561ea71-e54c-4b00-bcc9-77fda07df051-00000007 (the rule: 5561ea71-e54c-4b00-bcc9-77fda07df051-00000007); the stub: stub 20:41:43 recorder_lines event=created guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000007 mid=7 aid= vch=Receipt/3/20261102 user=runnervmfi6oq\runneradmin bridge=go-c29641d48604 port=9100 company=FinCom Spike Co body=yes(1701 chars); push=True full=True alter_id= push_seq=179140570305000; 2 ledger lines totalling 0.00; TDS rows: not asked; entry requests from bridge 1 at the stand since the save: 0; save 155 ms; ledger lines as Tally's: True (bridge P233 Bank|-1180.00; P233 Party|1180.00; Tally P233 Bank|-1180.00; P233 Party|1180.00)
+MEASURE push233 save sales50: Ctrl+A to the full line in the user's file 3075 ms (Tally's save and the add-on, an upper bound); SendWait 63 ms; the add-on wrote: full line; ALTVCHID 7 -> 8; Tally's entry mid 8 guid 5561ea71-e54c-4b00-bcc9-77fda07df051-00000008 no 3
+FAIL push233 P2 50-item invoice: Tally mid 8 guid 5561ea71-e54c-4b00-bcc9-77fda07df051-00000008 (the rule: 5561ea71-e54c-4b00-bcc9-77fda07df051-00000008); the stub: stub 20:42:22 recorder_lines event=created guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000008 mid=8 aid=8 vch=Sales/3/20261201 user=runnervmfi6oq\runneradmin bridge=go-c29641d48604 port=9100 company=FinCom Spike Co body=yes(216734 chars) idsMismatch lineGuid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000004; push= full=True alter_id=8 push_seq=; 4 ledger lines totalling 0.00; TDS rows: not asked; entry requests from bridge 1 at the stand since the save: 1 e.g. {"t0":1791405742488,"t1":1791405742560,"ms":72,"at":"20:42:22","id":"FinComVoucherByMaster","req":"Export","company":"FinCom Spike Co","mid":"8","in":2928,"out":4141,"status":200,"err":"","clientGone":false,"delay":0}; save 3075 ms; ledger lines as Tally's: True (bridge Output CGST|900.00; Output SGST|900.00; P233 Party|-11800.00; P233 Sales|10000.00; Tally Output CGST|900.00; Output SGST|900.00; P233 Party|-11800.00; P233 Sales|10000.00)
+MEASURE push233 save godown: Ctrl+A to the full line in the user's file 526 ms (Tally's save and the add-on, an upper bound); SendWait 47 ms; the add-on wrote: full line; ALTVCHID 8 -> 9; Tally's entry mid 9 guid 5561ea71-e54c-4b00-bcc9-77fda07df051-00000009 no 4
+FAIL push233 P4 item invoice in two godowns x two batches: Tally mid 9 guid 5561ea71-e54c-4b00-bcc9-77fda07df051-00000009 (the rule: 5561ea71-e54c-4b00-bcc9-77fda07df051-00000009); the stub: stub 20:42:55 recorder_lines event=created guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000009 mid=9 aid=9 vch=Sales/4/20261202 user=runnervmfi6oq\runneradmin bridge=go-c29641d48604 port=9100 company=FinCom Spike Co body=yes(22171 chars) idsMismatch lineGuid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000005; push= full=True alter_id=9 push_seq=; 4 ledger lines totalling 0.00; TDS rows: not asked; entry requests from bridge 1 at the stand since the save: 2 e.g. {"t0":1791405742488,"t1":1791405742560,"ms":72,"at":"20:42:22","id":"FinComVoucherByMaster","req":"Export","company":"FinCom Spike Co","mid":"8","in":2928,"out":4141,"status":200,"err":"","clientGone":false,"delay":0}; save 526 ms; ledger lines as Tally's: True (bridge Output CGST|72.00; Output SGST|72.00; P233 Party|-944.00; P233 Sales|800.00; Tally Output CGST|72.00; Output SGST|72.00; P233 Party|-944.00; P233 Sales|800.00)
+FAIL push233 P4 godowns and batches in the entry: godown P233 Annex: False; batch B2: True
+INFO S231 import masters-0-company: created 0, altered 1, errors 0
+INFO S231 import masters-3-nature: created 1, altered 0, errors 0
+INFO S231 import masters-5-tds: created 1, altered 0, errors 0 (TDS Rate &apos;S231 Contract Work&apos; does not exist!)
+INFO S231 company features after the import: ISBILLWISEON=Yes ISCOSTCENTRESON=No ISTDSON=No ISGSTON=Yes ISBILLWISEON=Yes ISCOSTCENTRESON=Yes ISTDSON=Yes ISGSTON=Yes
+INFO S5 screen: the nature of payment 'S231 Contract Work' made on its form: True; Tally's TDS Rate export: GUID=5561ea71-e54c-4b00-bcc9-77fda07df051-000002c1 REMOTEALTGUID=5561ea71-e54c-4b00-bcc9-77fda07df051 ASORIGINAL=No ISACTIVE=Yes MARKFORDELETION=No ISBASEDONREALIZATION=No ERRKEY=0 REMOTEALTERID=0 UPDATEDDATETIME=000000000 NAME=S231 Contract Work APPLICABLEFROM=20260401 TDSRATECHALLANCODE=94C TDSRATESECTION=194C ISABOVEEXEMPTIONLIMIT=No
+INFO S231 import masters-5-tds again (after the nature on its form): created 0, altered 3, errors 0
+INFO S231 import S5 party: deduct TDS in the same voucher: created 0, altered 1, errors 0
+INFO S5 screen: the company's TDS details in Tally: ISTDSON=No TANUMBER=DELF01234E TANREGNO=DELF01234E TDSDEDUCTORTYPE=Company ISTDSON=Yes
+INFO S5 screen: the TDS masters in Tally: S231 Contractor [TDSRATE=1 DEDUCTEETYPE=0 INCOMETAXSLAB=0 INCOMETAXCLASSIFICATION=0 INCOMETAXNUMBER=AAACS2310K TDSAPPLICABLE=Yes TDSDEDUCTEETYPE=Company - Resident IGNORETDSEXEMPT=No ISTDSAPPLICABLE=Yes ISTDSEXPENSE=No INTERESTINCLDAYOFDEDUCTION=No TDSDEDUCTEEISSPECIALRATE=No TDSDEDUCTEESPECIALRATE=0]; S231 Contract Exp [TDSRATE=1 DEDUCTEETYPE=0 INCOMETAXSLAB=0 INCOMETAXCLASSIFICATION=0 TDSRATENAME=S231 Contract Work IGNORETDSEXEMPT=No ISTDSAPPLICABLE=Yes ISTDSEXPENSE=Yes INTERESTINCLDAYOFDEDUCTION=No TDSDEDUCTEEISSPECIALRATE=No TDSDEDUCTEESPECIALRATE=0]; S231 TDS Payable [TDSRATE=1 DEDUCTEETYPE=0 INCOMETAXSLAB=0 INCOMETAXCLASSIFICATION=0 TDSRATENAME=S231 Contract Work IGNORETDSEXEMPT=No ISTDSAPPLICABLE=No ISTDSEXPENSE=No INTERESTINCLDAYOFDEDUCTION=No TDSDEDUCTEEISSPECIALRATE=No TDSDEDUCTEESPECIALRATE=0]
+INFO S5 screen: OCR read the screens; TDS row amount not filled by Tally: 2000 typed ; sub-screens after the TDS ledger: none; screenshots tds-*
+FAIL push233 P3 payment with TDS (typed on the screen): Tally mid 10 guid 5561ea71-e54c-4b00-bcc9-77fda07df051-0000000a (the rule: 5561ea71-e54c-4b00-bcc9-77fda07df051-0000000a); the stub: stub 20:45:01 recorder_lines event=created guid=5561ea71-e54c-4b00-bcc9-77fda07df051-0000000a mid=10 aid=10 vch=Journal/3/20270101 user=runnervmfi6oq\runneradmin bridge=go-c29641d48604 port=9100 company=FinCom Spike Co body=yes(4362 chars); push= full=True alter_id=10 push_seq=; 3 ledger lines totalling 0.00; TDS rows: False; entry requests from bridge 1 at the stand since the save: 1 e.g. {"t0":1791405901620,"t1":1791405901677,"ms":57,"at":"20:45:01","id":"FinComVoucherByMaster","req":"Export","company":"FinCom Spike Co","mid":"10","in":2929,"out":1375,"status":200,"err":"","clientGone":false,"delay":0}; save -1 ms; ledger lines as Tally's: True (bridge S231 Contract Exp|-100000.00; S231 Contractor|98000.00; S231 TDS Payable|2000.00; Tally S231 Contract Exp|-100000.00; S231 Contractor|98000.00; S231 TDS Payable|2000.00)
+MEASURE push233 save receipt (alter): Ctrl+A to the full line in the user's file 140 ms (Tally's save and the add-on, an upper bound); SendWait 45 ms; the add-on wrote: full line; ALTVCHID 10 -> 11; Tally's entry mid 7 guid 5561ea71-e54c-4b00-bcc9-77fda07df051-00000007 no 3
+PASS push233 P5 receipt altered: a full entry again: Tally mid 7 guid 5561ea71-e54c-4b00-bcc9-77fda07df051-00000007 (the rule: 5561ea71-e54c-4b00-bcc9-77fda07df051-00000007); the stub: stub 20:45:46 recorder_lines event=altered guid=5561ea71-e54c-4b00-bcc9-77fda07df051-00000007 mid=7 aid= vch=Receipt/3/20261102 user=runnervmfi6oq\runneradmin bridge=go-c29641d48604 port=9100 company=FinCom Spike Co body=yes(1701 chars); push=True full=True alter_id= push_seq=179140594633100; 2 ledger lines totalling 0.00; TDS rows: not asked; entry requests from bridge 1 at the stand since the save: 0; save 140 ms; ledger lines as Tally's: True (bridge P233 Bank|-1180.00; P233 Party|1180.00; Tally P233 Bank|-1180.00; P233 Party|1180.00)
+PASS push233 P5 the alteration follows the entry: created push_seq 179140570305000, altered 179140594633100, GUID 5561ea71-e54c-4b00-bcc9-77fda07df051-00000007 / 5561ea71-e54c-4b00-bcc9-77fda07df051-00000007
+PASS push233 P6 cancel and delete: heads only: the add-on wrote: after_cancel x1, after_delete x1, before_cancel x1, before_delete x1; the stub: stub System.Object[] recorder_lines event=System.Object[] guid=System.Object[] mid=System.Object[] aid=System.Object[] vch=System.Object[] user=System.Object[] bridge=System.Object[] port=System.Object[] company=System.Object[] body=yes(2 chars) idsMismatch lineGuid=  heldWhy= 
+MEASURE push233 P7 e-way bill number on the saved invoice: the add-on wrote nothing; ALTVCHID 14 -> 14; the line's irn/ewb fields: 
+MEASURE push233 P7 e-invoice details (IRN, ack no, ack date) on the saved invoice: the add-on wrote full line; ALTVCHID 14 -> 15; the line's irn/ewb fields: 
+MEASURE push233 P7 bankers date in Bank Reconciliation: the add-on wrote nothing; ALTVCHID 15 -> 15; the bdt fields: 
+MEASURE push233 P8 a plain XML import: the add-on wrote nothing; ALTVCHID 15 -> 16; ALTMSTID 714 -> 714
+MEASURE push233 P8 an XML import tagged as FinCom's posting (TDSDesk:p233x2): the add-on wrote nothing; ALTVCHID 16 -> 17; ALTMSTID 714 -> 714
+MEASURE push233 P8 a ledger renamed on its form (it is on saved entries): the add-on wrote nothing; ALTVCHID 17 -> 17; ALTMSTID 714 -> 714
+MEASURE push233 P8 multi-alter (Ctrl+H on the Day Book, where this release offers it): the add-on wrote nothing; ALTVCHID 17 -> 17; ALTMSTID 714 -> 714
+MEASURE push233 save receipt: Ctrl+A to the full line in the user's file 142 ms (Tally's save and the add-on, an upper bound); SendWait 76 ms; the add-on wrote: full line; ALTVCHID 17 -> 18; Tally's entry mid 7 guid 5561ea71-e54c-4b00-bcc9-77fda07df051-00000007 no 3
+MEASURE push233 P9 a new receipt: the line's number '6', Tally's export '3' (DIFFERENT)
+MEASURE push233 P9 back-dated insert: the add-on wrote heads only (voucher_accept_pre x1); ALTVCHID 18 -> 18; renumbered by Tally: none; each renumbered entry's last line number: -
+PASS push233 P10 two Windows users at the same moment: user 1 wrote voucher_accept_post x1, voucher_accept_pre x1, voucher_full x1; user 2's file has 2 line(s) naming P233 Both U2; lines in the wrong user's file: 0
+MEASURE push233 save big: Ctrl+A to the full line in the user's file 935 ms (Tally's save and the add-on, an upper bound); SendWait 47 ms; the add-on wrote: full line; ALTVCHID 100000 -> 100001; Tally's entry mid  guid  no 
+MEASURE push233 P10 a save on the large company (100000 entries): Ctrl+A to the full line 935 ms; the add-on wrote full line; the bridge's entry requests for it at the stand: 0
+MEASURE push233 save receipt: Ctrl+A to the full line in the user's file 250 ms (Tally's save and the add-on, an upper bound); SendWait 58 ms; the add-on wrote: full line; ALTVCHID 19 -> 20; Tally's entry mid 15 guid 5561ea71-e54c-4b00-bcc9-77fda07df051-0000000f no 7
+MEASURE push233 P10 a company on a network share (\\localhost\p233share): Ctrl+A to the full line 250 ms; the add-on wrote full line
+MEASURE push233 saves: 7 timed; Ctrl+A to the full line median 526 ms, worst 3075 ms (Tally's own save included: the add-on's own part was measured by the push-design run, 49-57 ms median on 50 items)
+== round 4 end
