@@ -123,8 +123,11 @@ func TestSlow232CompanyMarkedAfterTwoStops(t *testing.T) {
 	if n := f.n(vchByMasterID) + f.n(vchByNumberID); n != 2 {
 		t.Fatalf("entry requests after the mark: %d in all (want the 2 before it): %v", n, f.ids())
 	}
+	// 2.3.3: the line went up held at its first stop ("waiting: ..."), and its one ask again (stopped) ended it with the Day
+	// Book words (2.3.2 kept it unsent until the mark: the silence the owner's rule forbids)
 	s := slowSentOf(c, 25700)
-	if len(s) != 1 || str(s[0]["heldWhy"]) != slowWords || str(s[0]["xml"]) != "" {
+	if len(s) != 2 || !strings.HasPrefix(str(s[0]["heldWhy"]), "waiting: ") || str(s[1]["line_id"]) != str(s[0]["line_id"])+":resolved" ||
+		(str(s[1]["heldWhy"]) != slowWords && str(s[1]["heldWhy"]) != liveHeldSlowGiveUp) || str(s[0]["xml"]) != "" || str(s[1]["xml"]) != "" {
 		t.Fatalf("the line asked twice went up: %v", s)
 	}
 	// a new entry of that company: held at once with the words, nothing asked (by MasterID or by number)
@@ -193,9 +196,9 @@ func TestSlow232FreezeDoesNotMark(t *testing.T) {
 	retryDue()
 	slowLook()
 	retryDue()
-	liveUploadOnce() // the third stop: held
-	if n := f.n(vchByMasterID); n != 3 {
-		t.Fatalf("asks in the freeze: %d (want 3): %v", n, f.ids())
+	liveUploadOnce() // 2.3.3: held at its first stop, asked again once (stopped: ended), then nothing more
+	if n := f.n(vchByMasterID); n != 2 {
+		t.Fatalf("asks in the freeze: %d (want 2: its first fetch and the one ask again): %v", n, f.ids())
 	}
 	slowAll(f, 0)
 	retryDue()
@@ -232,8 +235,9 @@ func TestSlow232FreezeDoesNotMark(t *testing.T) {
 	}
 }
 
-// --- b. a held line whose fetch timed out: asked again after 1 h, then after 4 h, then it ends with the Day Book words
-// (sent to FinCom), never asked again (not for 7 days)
+// --- b, as the owner changed it for 2.3.3 (07-Oct-2026, replacing 2.3.2's 1 h / 4 h ladder): a new entry whose fetch
+// timed out goes up held at once, is asked again ONCE, and when that ask also stops it ends at once with the Day Book words
+// (sent to FinCom); never asked again, whatever FinCom lists
 func TestSlow232HeldTimedOutBacksOffHours(t *testing.T) {
 	p, f, c := slow232Bridge(t)
 	r222Vch(f, 25720, "Journal", "J-25720", "20261005", 54520)
@@ -241,22 +245,14 @@ func TestSlow232HeldTimedOutBacksOffHours(t *testing.T) {
 	base := nowFn()
 	liveAppend(t, p, slowLine(25720, "07:14")...)
 	liveReadOnce()
-	liveUploadOnce()
-	retryDue()
-	liveUploadOnce()
-	retryDue()
-	liveUploadOnce() // the third stop: the line goes up held
-	if n := f.n(vchByMasterID); n != 3 {
-		t.Fatalf("the original fetch: %d asks (want 3)", n)
-	}
+	liveUploadOnce() // the first stop: the line goes up held at once
 	s := slowSentOf(c, 25720)
-	if len(s) != 1 || str(s[0]["xml"]) != "" || str(s[0]["heldWhy"]) == "" {
+	if len(s) != 1 || str(s[0]["xml"]) != "" || !strings.HasPrefix(str(s[0]["heldWhy"]), "waiting: ") {
 		t.Fatalf("the line went up: %v", s)
 	}
 	id := str(s[0]["line_id"])
-	h, ok := slowHeldItem(t, id)
-	if !ok || h.Slow != 1 {
-		t.Fatalf("the held list: %+v %v (want one timed-out try counted)", h, ok)
+	if h, ok := slowHeldItem(t, id); !ok || h.allow() != 1 || h.Asked != 0 {
+		t.Fatalf("the held list: %+v %v (want one ask again)", h, ok)
 	}
 	asks := func() int { return f.n(vchByMasterID) + f.n(vchByNumberID) }
 	step := func(sec, want int) {
@@ -268,18 +264,7 @@ func TestSlow232HeldTimedOutBacksOffHours(t *testing.T) {
 			t.Fatalf("at %s: %d asks (want %d): %v", time.Duration(sec)*time.Second, asks(), want, f.ids())
 		}
 	}
-	step(15, 3)
-	step(5*60, 3)
-	step(11*60, 3) // not the 10-minute spacing any more
-	step(59*60, 3)
-	step(60*60, 4) // after 1 h: asked, stopped
-	if h, _ := slowHeldItem(t, id); h.Slow != 2 {
-		t.Fatalf("after the try at 1 h: %+v", h)
-	}
-	step(60*60+15, 4) // not at the retry schedule's try
-	step(60*60+5*60, 4)
-	step(60*60+4*3600-60, 4)
-	step(60*60+4*3600, 5) // after 4 h more: asked, stopped: the third timed-out try ends it
+	step(15, 2) // its one ask again: stopped: it ends
 	end := slowSentOf(c, 25720)
 	if len(end) != 2 || str(end[1]["line_id"]) != id+":resolved" || str(end[1]["xml"]) != "" || str(end[1]["heldWhy"]) != liveHeldSlowGiveUp ||
 		!strings.Contains(liveHeldSlowGiveUp, "upload that day's Day Book") {
@@ -287,10 +272,10 @@ func TestSlow232HeldTimedOutBacksOffHours(t *testing.T) {
 	}
 	// never asked again: hours and days later, whatever FinCom lists again
 	row := M{"line_id": id, "company": nwsCo, "company_guid": nwsGUID, "event": "created", "master_id": "25720", "vch_type": "Journal", "vch_no": "J-25720", "vch_date": "20261005"}
-	for _, h := range []int{6, 24, 72, 150, 170} {
+	for _, h := range []int{1, 5, 6, 24, 72, 150, 170} {
 		applyHeldLines(M{"heldLines": []any{row}})
 		applyRefetch(M{"refetch": []any{row}})
-		step(h*3600, 5)
+		step(h*3600, 2)
 	}
 	if n := len(slowSentOf(c, 25720)); n != 2 {
 		t.Fatalf("the end went up more than once: %d lines", n)
@@ -300,8 +285,7 @@ func TestSlow232HeldTimedOutBacksOffHours(t *testing.T) {
 	}
 }
 
-// --- b. a held line FinCom lists (heldLines) whose asks time out: 3 timed-out tries in all (at once, after 1 h, after
-// 4 h), then the end
+// --- b (2.3.3): a held line FinCom lists (heldLines) is asked again once; its ask stops: it ends at once, never asked again
 func TestSlow232CloudHeldLineTimedOut(t *testing.T) {
 	_, f, c := slow232Bridge(t)
 	r222Vch(f, 25730, "Journal", "", "20261005", 54530)
@@ -309,7 +293,7 @@ func TestSlow232CloudHeldLineTimedOut(t *testing.T) {
 	base := nowFn()
 	applyHeldLines(M{"heldLines": retryHeldRows("25730")})
 	asks := func() int { return f.n(vchByMasterID) }
-	for _, x := range [][2]int{{0, 1}, {15, 1}, {30 * 60, 1}, {3600 - 1, 1}, {3600, 2}, {3600 + 4*3600 - 1, 2}, {3600 + 4*3600, 3}, {2 * 86400, 3}, {7 * 86400, 3}} {
+	for _, x := range [][2]int{{0, 1}, {15, 1}, {30 * 60, 1}, {3600, 1}, {3600 + 4*3600, 1}, {2 * 86400, 1}, {7 * 86400, 1}} {
 		retryClock(base, x[0])
 		retryDue()
 		liveUploadOnce()
@@ -356,7 +340,9 @@ func TestSlow232FastCompanyUnaffected(t *testing.T) {
 	retryDue()
 	slowLook()
 	readAndUploadAll(t)
-	if s := slowSentOf(c, 25741); len(s) != 1 || str(s[0]["xml"]) == "" {
+	// 2.3.3: held at once at the stop, then its entry as ":resolved" at the retry (2.3.2 kept it unsent meanwhile)
+	if s := slowSentOf(c, 25741); len(s) != 2 || str(s[0]["xml"]) != "" || !strings.HasPrefix(str(s[0]["heldWhy"]), "waiting: ") ||
+		str(s[1]["line_id"]) != str(s[0]["line_id"])+":resolved" || str(s[1]["xml"]) == "" {
 		t.Fatalf("the entry after one stop: %v", s)
 	}
 	if slowMarked(nwsCo, nwsGUID) {
@@ -409,7 +395,7 @@ func TestSlow232MarkSurvivesRestartLiftsOnVersion(t *testing.T) {
 	}
 	// a newer bridge: the mark lifts by itself, the entry is asked again (now answered in time)
 	old := BridgeVersion
-	BridgeVersion = "2.3.3"
+	BridgeVersion = "2.3.4" // 2.3.3: a newer version than this one
 	t.Cleanup(func() { BridgeVersion = old })
 	liveResetState()
 	slowForget()
@@ -446,12 +432,10 @@ func TestSlow232OtherCompanyGoesOn(t *testing.T) {
 // --- the version, the allow-list's decision line (no request added or changed: the table's hash does not move,
 // TestAllowListUnchanged) and the notes with their test sheet
 func TestSlow232VersionAndDecisionLine(t *testing.T) {
-	if BridgeVersion != "2.3.2" {
-		t.Fatalf("BridgeVersion %s", BridgeVersion)
-	}
+	// 2.3.3: the version and the decision line now name 2.3.3 (TestBacklog233VersionAndDecisionLine); 2.3.2's kept as history
 	al := readText("../docs/tally-allowlist.md")
 	line := group(`(?m)^(First table: .*)$`, al, 1)
-	if !strings.Contains(line, "allowed for 2.3.2 by the owner's standing decision of 2026-10-06: no request on the list and no request shape changed") {
+	if !strings.Contains(line, "as for 2.3.2: the same") {
 		t.Fatalf("the decision line: %s", cut(line, 300))
 	}
 	if strings.Contains(al, "allowed for 2.3.1") {

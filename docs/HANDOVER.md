@@ -140,3 +140,10 @@ server/tally-cloud/live-members-fix.sql (md5 fd84f633…) is for the owner to ru
 ## 2.3.1 build (06-Oct 17:23 IST)
 tax-accuracy 09b1b23; setup 7d4a37a93a52dbc55ab9992c7148c7d607485d567fd34e1bde7d607288a216be; program 89668be15577e580f4febad894c234a2c54d1bf104495ccdf8e3b3485c09a829. Review clean (round 3). CI 37459575969 and Windows CI 37459575962 green. To publish: the final real-Tally run on this build passes; then migrations 57 (8aa48ece…), 59 (882de3e6…), 60 (adbec225…) on staging; tally-ingest deploy with a byte check; publish with FINCOM_SHIP_BRIDGE=1. The owner decided: publish this build as it is; the 'one request in flight, really' change (branch next-inflight) goes in the next release with the push design.
 After install: watch NWS144 for a working day (timeouts, retries, longest wait for an entry, any pile-up).
+
+## 07-Oct evening
+- 2.3.2 had a High (new saves stuck unsent behind re-asks of old held lines). 2.3.3 fixes it; published 07-Oct 21:37 IST, setup 8280206b…e5e5. Install by hand on NWS144: owner (go-6b1ba45fbb1d) first, then Ranjeet (go-c5b73700e65a).
+- Bridges never auto-update on staging: no latest.json.sig is published. Holds on 2.3.1 exist for firms ABC and Garg Shekhar & Company (harmless).
+- Owner rule (07-Oct): no field or request is added to anything sent to Tally without his approval, even read-only. 13 fields in 2.3.1/2.3.2 await his decision (see the audit message); BANKALLOCATIONS.NAME approved.
+- Owner rules for held lines (2.3.3): asked again at most once; slow-company lines never asked; every save in FinCom within 10 s; one request in flight per Tally.
+- Next priority: full entry at save (branch next-push). Pending owner decision: the fast request "voucher object by MasterID" (17-22 ms at any size, run why22).

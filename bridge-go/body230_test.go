@@ -215,8 +215,7 @@ func TestBody230RefetchOwnTallyOnly(t *testing.T) {
 	}
 }
 
-// postings first, the 2-second stop, one refetch line a turn, each at most every 10 minutes, 20 tries at most (a try of
-// THIS version counts: no reset)
+// postings first, the 2-second stop, one refetch line a turn; 2.3.3: each asked again once, then it ends
 func TestBody230RefetchSpacedAndStopped(t *testing.T) {
 	_, f, c := b230Bridge(t, "")
 	b230Tally(f)
@@ -246,32 +245,17 @@ func TestBody230RefetchSpacedAndStopped(t *testing.T) {
 	if b230Resolved(c, "L4") == nil || b230Resolved(c, "L18") == nil {
 		t.Fatalf("not resolved: %v", c.recSent())
 	}
-	// LN: asked once; not again within 10 minutes
-	_, items := liveHeldLoad()
-	if items["LN"].Tries != 1 {
-		t.Fatalf("LN tries %d", items["LN"].Tries)
-	}
+	// LN: asked once (2.3.3, the owner's rule: a held line is asked again at most once); Tally answered without it: it ends
+	// at once with the Day Book words, never asked again, whatever FinCom lists (2.3.2: asked every 10 minutes, 20 tries)
 	k := f.n(vchByMasterID) + f.n(vchByNumberID)
-	b230Turns(3)
-	if f.n(vchByMasterID)+f.n(vchByNumberID) != k {
-		t.Fatal("LN asked again within 10 minutes")
+	if s := r222cSentID(c, "LN:resolved"); len(s) != 1 || str(s[0]["xml"]) != "" || str(s[0]["heldWhy"]) != liveHeldOnceGiveUp {
+		t.Fatalf("LN did not end after its one ask: %v", s)
 	}
-	// 20 tries of this version: listed again, not reset, never asked
-	heldMu.Lock()
-	all, items := liveHeldLoad()
-	h := items["LN"]
-	h.Tries, h.Last = liveHeldMaxTries, ""
-	items["LN"] = h
-	liveHeldSave(all, items)
-	heldMu.Unlock()
 	applyRefetch(M{"refetch": rows})
 	at := nowFn().Add(11 * time.Minute)
 	nowFn = func() time.Time { return at }
-	b230Turns(2)
+	b230Turns(3)
 	if f.n(vchByMasterID)+f.n(vchByNumberID) != k {
-		t.Fatal("LN asked after its 20 tries of this version")
-	}
-	if _, items = liveHeldLoad(); items["LN"].Why != liveHeldGiveUp {
-		t.Fatalf("LN's words: %q", items["LN"].Why)
+		t.Fatal("LN asked again after its one ask")
 	}
 }

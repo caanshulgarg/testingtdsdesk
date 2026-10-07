@@ -155,6 +155,14 @@ type change struct {
 	// next-push: the body is the add-on's full entry (recorder_push.go), nothing asked of Tally; its order (push_seq)
 	push    bool
 	pushSeq int64
+	// 2.3.3 (the owner's rule: "A save must always show on the Tally page, at least as held with a reason. Silence is not
+	// acceptable."): sent held at once because its body was not there on its first attempt (fresh: the held list asks it
+	// again at the next try, once; twice when Tally was not asked at all yet); freshTries: the asks so made already;
+	// freshSlow: one of them stopped at the 2 s limit; dueNow: nothing was asked (the schedule waited): due at the next try;
+	// queuedAt: when it was queued (the bridge's own clock, for the 4 s safety net)
+	fresh, freshSlow, dueNow bool
+	freshTries               int
+	queuedAt                 time.Time
 }
 
 // the fields migration 56 keeps for a body that did not ask them (2.3.0's request): the party GSTIN, place of supply,
@@ -301,12 +309,14 @@ type liveState struct {
 }
 
 var (
-	live           = &liveState{}
-	liveUpMu       sync.Mutex
-	liveSrc        atomic.Value // the beat's recorderSource ("" : the setting's)
-	liveSendHook   func()       // the tests: called right before a group goes
-	liveComputerFn = computerName
-	liveZone       = time.Local // the add-on's time text is the PC's local time
+	live         = &liveState{}
+	liveUpMu     sync.Mutex
+	liveSrc      atomic.Value // the beat's recorderSource ("" : the setting's)
+	liveSendHook func()       // the tests: called right before a group goes
+	// the tests: called right before each held line's ask (2.3.3 re-review L1)
+	liveResolveAskHook func()
+	liveComputerFn     = computerName
+	liveZone           = time.Local // the add-on's time text is the PC's local time
 )
 
 // a restart, as far as the live recorder is concerned (the tests; the state reloads from disk at its next use)
@@ -1457,6 +1467,9 @@ func onlyDigits(s string) string { return re(`\D`).ReplaceAllString(s, "") }
 
 // under live.mu
 func liveQueueAdd(c *change) {
+	if c.queuedAt.IsZero() {
+		c.queuedAt = time.Now()
+	}
 	live.queue = append(live.queue, c)
 	live.queued[c.lineId] = true
 	live.qcount[c.companyGuid]++
@@ -1774,6 +1787,15 @@ func fetchVouchersByMasterIn(tc *TC, company string, port int, date string, mids
 	return out, nil
 }
 
+// 2.3.3: the entries of the dates after the di-th
+func byDateAfter(byDate map[string][]*change, dates []string, di int) []*change {
+	var out []*change
+	for _, d := range dates[di+1:] {
+		out = append(out, byDate[d]...)
+	}
+	return out
+}
+
 // one ledger by its MasterID: the ledger list's request with a one-ID range
 func fetchLedgerByMaster(tc *TC, company string, port int, mid int64) (string, error) {
 	raw, err := invokeTally(tc, port, ledgerChunkRequest(company, mid-1, mid), liveBodySec())
@@ -1825,30 +1847,16 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 	passing := func(err error) bool {
 		return err != nil && (errors.Is(err, errBackoff) || re(`(?i)reading .*stopped|left alone|the small check|not answer`).MatchString(err.Error()))
 	}
-	again := func(cs []*change) bool {
-		live.mu.Lock()
-		defer live.mu.Unlock()
-		for _, c := range cs {
-			c.tries++
-			if c.tries >= 3 {
-				return false
-			}
-		}
-		return true
-	}
 	yield := func() bool { return postingGoing() || importsInFlight.Load() > 0 }
 	// 2.3.1 (the owner's last change): a request stopped at 2 s, or not answered, never turns the entry fetch off: the shared
 	// retry schedule (retry.go) asks again by itself, and the entries not asked yet wait for it (never sent without their
 	// body for it); an entry whose own request was stopped 3 times goes without its body (FinCom holds the line, and this
 	// bridge asks for it again as a held line, on the same schedule)
+	// 2.3.3 (the owner's rule: "Silence is not acceptable"): an entry whose body is not there on its first attempt, for any
+	// reason (the schedule waiting, a 2 s stop, a passing reason, the turn's time used), is never kept unsent at the queue
+	// head: it goes up held at once with plain words and joins the held list, due at the next try; its body goes later as
+	// "<line id>:resolved"
 	tc := recorderTC(nil)
-	waitRetry := func(err error, cs []*change) {
-		for _, c := range cs {
-			if !c.isLedger() {
-				liveDecide(c, "not asked yet: "+cutRunes(err.Error(), 160)+"; asked then")
-			}
-		}
-	}
 	failed := func(cs []*change, why string) {
 		live.mu.Lock()
 		for _, c := range cs {
@@ -1953,9 +1961,13 @@ byDay:
 				for _, d2 := range dates[di+1:] {
 					rest = append(rest, byDate[d2]...)
 				}
-				for _, c := range rest {
-					liveDecide(c, fmt.Sprintf("not asked yet: this turn's %d s are used (one entry a request); asked in the next turn", liveBodySec()))
-				}
+				liveHeldNow(rest, fmt.Sprintf("Tally busy (this turn's %d s are used)", liveBodySec()), false, false, true)
+				break byDay
+			}
+			// 2.3.3 (review M2): before each request, a line of the group that has waited 4 s: those not asked yet go up held
+			// now (the ones read go with their bodies), so no line waits behind the others' requests
+			if rest := append(append(append([]*change{}, part...), cs...), byDateAfter(byDate, dates, di)...); liveOverdue(rest) {
+				liveHeldNow(rest, liveBehindWhat, false, false, true)
 				break byDay
 			}
 			var mids []string
@@ -1975,16 +1987,17 @@ byDay:
 				break byDay
 			}
 			if errors.Is(err, errRetryWait) {
+				// nothing was asked: held now, due at the schedule's next try (not counted as an ask)
 				rest := append(append([]*change{}, part...), cs...)
 				for _, d2 := range dates[di+1:] {
 					rest = append(rest, byDate[d2]...)
 				}
-				waitRetry(err, rest)
-				return
+				liveHeldNow(rest, "Tally busy", false, false, true)
+				break byDay
 			}
-			if errors.Is(err, errRecorderStop) && again(part) {
-				waitRetry(&retryErr{nowFn(), retryNext()}, part)
-				return
+			if errors.Is(err, errRecorderStop) {
+				liveHeldNow(part, liveStopWhat(), true, true, false) // a real 2 s stop: one ask of the original fetch
+				continue
 			}
 			if gaveWay(err) {
 				for _, c := range part {
@@ -1992,21 +2005,11 @@ byDay:
 				}
 				return // a posting goes first: asked again after it
 			}
-			if passing(err) && again(part) {
-				for _, c := range part {
-					liveDecide(c, "not asked yet: "+cutRunes(err.Error(), 160)+"; asked again shortly")
-				}
-				return
+			if passing(err) || tallyNoAnswer(err) {
+				liveHeldNow(part, "Tally busy", false, true, false) // asked again once, at the next try
+				continue
 			}
 			if err != nil {
-				if errors.Is(err, errRecorderStop) || tallyNoAnswer(err) {
-					// 2.3.2 (issue 232, b): its asks timed out: one timed-out try counted for the held list
-					live.mu.Lock()
-					for _, c := range part {
-						c.slowHeld = true
-					}
-					live.mu.Unlock()
-				}
 				failed(part, err.Error())
 				continue
 			}
@@ -2050,6 +2053,10 @@ byDay:
 					liveHeldAs(c, m.why+"; not asked by its type and number (20 s passed)", false)
 					continue
 				}
+				if liveOverdue([]*change{c}) {
+					liveHeldNow([]*change{c}, liveBehindWhat, false, true, false) // 2.3.3 (review M2): asked once already
+					continue
+				}
 				w := liveWantOf(c, sp, spOK)
 				w.mid = ""
 				liveDecide(c, "asking Tally by type and number ("+cutRunes(m.why, 120)+")")
@@ -2059,17 +2066,16 @@ byDay:
 					continue
 				}
 				if errors.Is(err, errRetryWait) {
-					waitRetry(err, []*change{c})
-					return
+					liveHeldNow([]*change{c}, "Tally busy", false, false, true) // 2.3.3: held now, due at the next try
+					continue
 				}
-				if errors.Is(err, errRecorderStop) || tallyNoAnswer(err) {
-					live.mu.Lock()
-					c.slowHeld = true // 2.3.2 (b): asked by its number, stopped or not answered: a timed-out try
-					live.mu.Unlock()
+				if errors.Is(err, errRecorderStop) || tallyNoAnswer(err) || passing(err) {
+					liveHeldNow([]*change{c}, map[bool]string{true: liveStopWhat(), false: "Tally busy"}[errors.Is(err, errRecorderStop)], errors.Is(err, errRecorderStop), true, false)
+					continue
 				}
 				if gaveWay(err) {
 					liveDecide(c, "not asked: a posting is going on; asked after it")
-					return // review L5: a posting goes first: asked again after it
+					return // review L5: a posting goes first: asked again after it (the 4 s safety net holds it meanwhile)
 				}
 				if err != nil {
 					why, kind = "asked by its type and number: "+err.Error(), wrongRetry
@@ -2087,10 +2093,23 @@ byDay:
 			}
 		}
 	}
-	for _, c := range ledgers {
+	for li, c := range ledgers {
 		if time.Now().After(deadline) {
 			failed([]*change{c}, "20 s passed")
 			continue
+		}
+		// 2.3.3 (re-review: M2 for ledger lines): before each request, once a line of the group has waited 4 s, the ledgers
+		// not read yet go without their body (as the safety net sends them), so they hold back no line
+		if rest := ledgers[li:]; liveOverdue(rest) {
+			live.mu.Lock()
+			for _, r := range rest {
+				r.bodyTried = true
+				if r.heldWhy == "" {
+					r.heldWhy = liveLedgerLateWhy
+				}
+			}
+			live.mu.Unlock()
+			break
 		}
 		x, err := fetchLedgerByMaster(tc, company, port, toI64(c.masterId))
 		if gaveWay(err) || errors.Is(err, errRetryWait) {
@@ -2245,14 +2264,89 @@ func liveUploadOnce() int {
 	liveUpMu.Lock()
 	defer liveUpMu.Unlock()
 	defer liveMidSaveSoon() // 2.3.0: the record of Tally's GUIDs, when Tally gave any (2.3.1: at most every 30 s)
-	liveResolveTurn()       // 2.2.1: lines sent held, resolved once Tally gives their entry
+	// 2.2.1: lines sent held, resolved once Tally gives their entry. 2.3.3 (fairness; review M1): while live lines wait,
+	// they go first and the resolver after them; the resolver stops before each ask when a live line waits (liveQueueReady),
+	// so a save waits at most for the one ask already at Tally
+	first := !liveQueueReady()
+	if first {
+		liveResolveTurn()
+	}
+	n := 0
 	for i := 0; i < 8; i++ {
-		n, again := liveUploadStep()
+		m, again := liveUploadStep()
+		n = m
 		if !again {
-			return n
+			break
 		}
 	}
-	return 0
+	if !first {
+		liveResolveTurn()
+	}
+	return n
+}
+
+// 2.3.3 (review M1): a line read from Tally's add-on in the queue that can go now (its company not in the cloud's back-off,
+// not a new entry's line still waiting for its first ask by number; the resolver's own ":resolved" lines do not count)
+func liveQueueReady() bool {
+	live.mu.Lock()
+	defer live.mu.Unlock()
+	now := nowFn()
+	for _, c := range live.queue {
+		if b, had := live.back[c.key()]; had && now.Before(b.until) {
+			continue
+		}
+		if strings.HasSuffix(c.lineId, ":resolved") {
+			continue
+		}
+		if liveYoung(c) {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+// 2.3.3 (review M2): one of these lines has waited RecorderHoldAfterMs (4 s) for its body: the ones not asked yet go up
+// held now, before the next request to Tally
+func liveOverdue(cs []*change) bool {
+	live.mu.Lock()
+	defer live.mu.Unlock()
+	for _, c := range cs {
+		if c.needsBody() && !c.queuedAt.IsZero() && time.Since(c.queuedAt) >= liveHoldAfter() {
+			return true
+		}
+	}
+	return false
+}
+
+// the words of a line held because the entries saved before it are being read (review M2)
+const liveBehindWhat = "Tally busy (reading the entries saved before it)"
+
+// a ledger line that goes without its body after the 4 s (the safety net, review M2)
+const liveLedgerLateWhy = "the ledger was not read from Tally in time; FinCom takes it from the next ledger list"
+
+// 2.3.3: a line in the queue still waits for its body (not asked yet)
+func liveQueueWantsBody() bool {
+	live.mu.Lock()
+	defer live.mu.Unlock()
+	for _, c := range live.queue {
+		if c.needsBody() && !c.isLedger() {
+			return true
+		}
+	}
+	return false
+}
+
+// 2.3.3 (under live.mu): a line that waits for its body without blocking anything yet: a new entry's line before its
+// first ask by number (a few seconds after the line: RecorderNumberWaitMs)
+func liveYoung(c *change) bool {
+	return c.needsBody() && c.byNumber && time.Now().Before(c.askAfter)
+}
+
+// 2.3.3: the safety net: no line waits unsent longer than RecorderHoldAfterMs (4 s) for its body, whatever the reason (a
+// posting going on, a ledger Tally did not give): it goes up held with plain words, or (a ledger) without its body
+func liveHoldAfter() time.Duration {
+	return time.Duration(keepNumZero("RecorderHoldAfterMs", 4000)) * time.Millisecond
 }
 
 // under live.mu: a company not linked: its waiting lines leave the queue, counted (review H1)
@@ -2307,8 +2401,16 @@ func liveUploadStep() (int, bool) {
 	}
 	now := nowFn()
 	key, head := "", (*change)(nil)
+	young := map[string]bool{} // 2.3.3: a company whose first line waits for its first ask: the next company goes
 	for _, c := range live.queue {
 		if b, had := live.back[c.key()]; had && now.Before(b.until) {
+			continue
+		}
+		if young[c.key()] {
+			continue
+		}
+		if liveYoung(c) {
+			young[c.key()] = true
 			continue
 		}
 		key, head = c.key(), c
@@ -2384,6 +2486,35 @@ func liveUploadStep() (int, bool) {
 		// own ALTERID only (liveVoucherWrong), never the line's
 		sp, spOK := startPointOf(need[0].company)
 		liveFetchBodies(need, sp, spOK)
+	}
+	// 2.3.3 (the safety net): a line still without its body after RecorderHoldAfterMs goes up now, held with plain words (a
+	// voucher) or without its body (a ledger); never kept unsent at the head
+	var late, lateLed []*change
+	live.mu.Lock()
+	for _, c := range group {
+		if c.needsBody() && !c.queuedAt.IsZero() && time.Since(c.queuedAt) >= liveHoldAfter() {
+			if c.isLedger() {
+				lateLed = append(lateLed, c)
+			} else {
+				late = append(late, c)
+			}
+		}
+	}
+	live.mu.Unlock()
+	if len(late) > 0 {
+		what := "Tally busy"
+		if posting || postingGoing() {
+			what = "FinCom is posting to Tally"
+		}
+		liveHeldNow(late, what, false, false, true)
+	}
+	for _, c := range lateLed {
+		live.mu.Lock()
+		c.bodyTried = true
+		if c.heldWhy == "" {
+			c.heldWhy = liveLedgerLateWhy
+		}
+		live.mu.Unlock()
 	}
 	// a change whose body is still to be asked holds the group there (the order is kept)
 	live.mu.Lock()
@@ -2582,7 +2713,8 @@ func liveTouchedTick() {
 // --- the beat: per company, lines read and sent (this run), waiting, the oldest waiting, the source and the cloud's
 // last refusal
 func liveBeat() M {
-	src := recorderSource() // before live.mu: it takes it to read the owner's choice
+	src := recorderSource()    // before live.mu: it takes it to read the owner's choice
+	asking := liveHeldAsking() // 2.3.3: before live.mu (the held list's lock comes first)
 	live.mu.Lock()
 	defer live.mu.Unlock()
 	liveFresh()
@@ -2603,9 +2735,67 @@ func liveBeat() M {
 		if o, had := oldest[co]; had {
 			e["oldestWaiting"] = o.Format("2006-01-02T15:04:05")
 		}
+		e["heldAsking"] = asking[co] // 2.3.3: the held lines of the company being asked of Tally again
 		out[co] = e
 	}
+	for co, n := range asking {
+		if out[co] == nil {
+			out[co] = M{"read": 0, "sent": 0, "waiting": 0, "oldestWaiting": "", "source": src, "lastSent": "", "lastError": "", "heldAsking": n}
+		}
+	}
 	return out
+}
+
+// 2.3.3: per company, the held lines still being asked of Tally again (not final, not ended)
+func liveHeldAsking() map[string]int {
+	heldMu.Lock()
+	_, items := liveHeldLoad()
+	heldMu.Unlock()
+	live.mu.Lock()
+	liveFresh()
+	out := map[string]int{}
+	for id, h := range items {
+		if h.Final || live.ended[id] || h.Tries >= liveHeldMaxTries || h.Asked >= h.allow() {
+			continue
+		}
+		out[h.Company]++
+	}
+	live.mu.Unlock()
+	return out
+}
+
+// 2.3.3: the Tally page's one line while lines wait to go to FinCom (the oldest read RecorderWaitWordsSec, 30 s, ago or
+// more): "2 changes of X waiting to go to FinCom (oldest since 12:14); 40 held entries being asked of Tally again"; ""
+// when none wait
+func liveQueueWaitWords() string {
+	asking := liveHeldAsking()
+	live.mu.Lock()
+	defer live.mu.Unlock()
+	liveFresh()
+	n, oldest := map[string]int{}, map[string]time.Time{}
+	var cos []string
+	for _, c := range live.queue {
+		if n[c.company] == 0 {
+			cos = append(cos, c.company)
+		}
+		n[c.company]++
+		if o, had := oldest[c.company]; !had || c.readAt.Before(o) {
+			oldest[c.company] = c.readAt
+		}
+	}
+	after := time.Duration(keepNumZero("RecorderWaitWordsSec", 30)) * time.Second
+	var parts []string
+	for _, co := range cos {
+		if nowFn().Sub(oldest[co]) < after {
+			continue
+		}
+		w := fmt.Sprintf("%d change%s of %s waiting to go to FinCom (oldest since %s)", n[co], map[bool]string{true: "", false: "s"}[n[co] == 1], co, oldest[co].Format("15:04"))
+		if a := asking[co]; a > 0 {
+			w += fmt.Sprintf("; %d held entr%s being asked of Tally again", a, map[bool]string{true: "y", false: "ies"}[a == 1])
+		}
+		parts = append(parts, w)
+	}
+	return strings.Join(parts, "; ")
 }
 
 // review M8: the add-on's file names the reader has seen in the last 31 days (at most 50), for the beat

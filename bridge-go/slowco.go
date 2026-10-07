@@ -13,11 +13,17 @@ package main
 // What counts as an occasion (a whole-Tally freeze must not count against one company). Every background request that
 // reached Tally is noted with its port and outcome: answered in time (within the 2 s stop), or not (stopped, or not
 // answered). For one company's entry stop, the other requests on that Tally are looked at: the last one before the stop
-// and the first one after it must both have been answered in time, within RecorderSlowAroundSec (10 minutes). Another
+// and the first one after it must both have been answered in time, within RecorderSlowAroundSec (15 minutes since 2.3.3: the beat's small check comes every 10 minutes a company). Another
 // company's entry stop is neither for nor against (that company may be large too). The stops between the same two
 // answers are ONE occasion; two occasions therefore always have an answer in time of another request between them, and a
 // single freeze (everything stopped, or only this company's entries tried while Tally was frozen) makes one occasion at
 // most. An answer in time to the company's own entry request clears what was counted (it is not slow after all).
+//
+// 2.3.3 (GARG SHEKHAR at 2.1-2.5 s on every entry, NWS144): when the only background traffic is entry requests, every
+// retry try went to an entry request and no other request was ever answered around a stop, so the company was never
+// marked and paid 2 s a try for ever. The beat's small check (the light company check, and the company list) that finds
+// the retry schedule waiting now has the next try kept for it (retry.go retryTake), so its answer in time is seen between
+// two entry stops; the whole-Tally freeze exclusion is unchanged (in a freeze the small check is not answered in time).
 
 import (
 	"errors"
@@ -32,8 +38,8 @@ import (
 // the words a marked company's lines go up held with, and its held lines end with (the owner's words)
 const slowWords = "FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it."
 
-// requirement b: a held line whose asks timed out 3 times (the original fetch's stops counting as one) ends with these words
-const liveHeldSlowGiveUp = "Tally did not answer in time for this entry 3 times; upload that day's Day Book to settle it"
+// requirement b (2.3.3: the owner's rule): a held line whose one ask again timed out ends with these words
+const liveHeldSlowGiveUp = "Tally did not answer in time for this entry when asked again; upload that day's Day Book to settle it"
 
 // the entry request was not sent: the company is marked (no entry request for it)
 var errSlowCompany = errors.New("FinCom does not ask Tally for this company's entries (finding one entry took Tally longer than 2 s)")
@@ -83,7 +89,7 @@ var slowSt = struct {
 
 func slowFile() string { return sp("recorder-slow.json") }
 func slowAround() time.Duration {
-	return time.Duration(keepNum("RecorderSlowAroundSec", 600)) * time.Second
+	return time.Duration(keepNum("RecorderSlowAroundSec", 900)) * time.Second
 }
 
 // a restart, as far as this is concerned (the tests): read again from disk at the next use

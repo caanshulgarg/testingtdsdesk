@@ -55,10 +55,11 @@ func TestR222eDecisionLog(t *testing.T) {
 	if n := logLines("): not asked: a posting is going on; asked after it"); n != 1 {
 		t.Fatalf("the posting reason said %d times", n)
 	}
-	// 2.3.1: waiting for the retry schedule (never a switch-off): said in the decision log too
+	// 2.3.1: waiting for the retry schedule (never a switch-off): said in the decision log too; 2.3.3: the line goes up held
+	// at once with the words
 	retryNote(f.port, vchByMasterID, errRecorderStop)
 	uploadAll(t)
-	if !strings.Contains(r222eLog(), "): not asked yet: Tally did not answer in time at ") || !strings.Contains(r222eLog(), "; trying again by itself at ") {
+	if !strings.Contains(r222eLog(), "): held at once: waiting: Tally busy; FinCom asks again at ") {
 		t.Fatalf("the wait not in the log:\n%s", r222eLog())
 	}
 	// the resolver's turn: one line

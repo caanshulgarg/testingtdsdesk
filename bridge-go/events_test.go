@@ -129,7 +129,11 @@ func bridgeFor(t *testing.T, s *standIn, extra string) string {
 	ConfigPath, Home = filepath.Join(dir, "tds-bridge.config.json"), dir
 	j := func(p string) string { return filepath.ToSlash(filepath.Join(dir, p)) }
 	cfgText := fmt.Sprintf(`{"TallyPorts":[%d],"TallyHost":"127.0.0.1","AllowImport":true,"LogFile":"%s","SyncDir":"%s","JobsDir":"%s","KeepInStep":true,"GentleMs":0,
-		"KeepRestMs":10,"KeepCycleSec":1,"KeepSharePct":100,"KeepNightSharePct":100,"KeepStartSec":60%s}`, s.port, j("b.log"), j("sync"), j("jobs"), extra)
+		"KeepRestMs":10,"KeepCycleSec":1,"KeepSharePct":100,"KeepNightSharePct":100,"KeepStartSec":60,"TallyAbandonMaxSec":0%s}`, s.port, j("b.log"), j("sync"), j("jobs"), extra)
+	// next-inflight: a request Tally does not answer is held as in flight until TallyAbandonMaxSec after the bridge stopped
+	// waiting (10 minutes in use). The tests run with 0 (closed when given up, the behaviour their silent stands were
+	// written for); inflight231_test.go and inflight232_test.go set the bound they test (2.3.3 brings in the
+	// one-request-in-flight part of next-inflight only; the single-entry fetch keeps the 2-second stop)
 	_ = os.WriteFile(ConfigPath, []byte(cfgText), 0o644)
 	loadConfig()
 	_ = os.MkdirAll(syncDir(), 0o755)

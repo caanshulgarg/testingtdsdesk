@@ -389,8 +389,9 @@ func TestPartALinesOneRequestEach(t *testing.T) {
 	}
 }
 
-// --- 4b. one entry a request: when the turn's time (RecorderBodySec) is used, the entries not asked yet wait for the next
-// turn, in order; none is sent without its body for want of time, each is asked once
+// --- 4b. one entry a request: when the turn's time (RecorderBodySec) is used, the entries not asked yet go up held at once
+// (2.3.3, the owner's rule: never unsent meanwhile) and their bodies follow as ":resolved" at the next turns; each entry is
+// asked once
 func TestPartATurnTimeUsedNextTurn(t *testing.T) {
 	p, f, c := partABridge(t)
 	setCfg("RecorderBodySec", float64(1)) // less than the first request takes on the stand: one entry a turn
@@ -410,20 +411,34 @@ func TestPartATurnTimeUsedNextTurn(t *testing.T) {
 			"|user=TALLY User|obj=Voucher|guid="+spikeCoGUID+"-00000000|mid="+v.mid+"|aid=0|vtype="+v.typ+"|vno="+v.no+"|vdate=2-Oct-26|name=|parent=|narr=|t1=2-Oct-26 10:55|src=live")
 	}
 	liveAppend(t, p, ls...)
+	liveReadOnce()
+	liveUploadOnce() // the turn's 1 s: the first entry asked, the others held at once
+	// the held lines' asks: each its own request, its full time (a held line asked once ends if not answered: 2.3.3). The
+	// same turn's resolver asked one held line within the 1 s set above (2.3.3: after the live lines) and timed out: the
+	// stand's 1 s is the test's own, so the schedule and the small check it set are cleared
+	setCfg("RecorderBodySec", float64(20))
+	retryReset()
+	clearProbe(f.port)
 	readAndUploadAll(t)
 	sent := c.recSent()
-	if len(sent) != len(partAVchs) {
-		t.Fatalf("sent %d lines of %d", len(sent), len(partAVchs))
-	}
-	for i, s := range sent {
-		if str(s["heldWhy"]) != "" || str(s["xml"]) == "" || str(s["master_id"]) != partAVchs[i].mid {
-			t.Fatalf("line %d went as %v", i, s)
+	body := map[string]bool{}
+	for _, s := range sent {
+		if str(s["xml"]) != "" && str(s["heldWhy"]) == "" {
+			body[str(s["master_id"])] = true
+		} else if !strings.HasPrefix(str(s["heldWhy"]), "waiting: Tally busy (this turn's 1 s are used)") {
+			t.Fatalf("a line went without its body and the words: %v", s)
 		}
 	}
-	if n := f.n(vchByMasterID); n != len(partAVchs) {
+	for _, v := range partAVchs {
+		if !body[v.mid] {
+			t.Fatalf("entry %s never went with its body: %v", v.mid, sent)
+		}
+	}
+	// 2.3.3: one entry more: the one the first turn's resolver asked within the stand's 1 s (timed out) is asked once again
+	if n := f.n(vchByMasterID); n != len(partAVchs)+1 {
 		t.Fatalf("%d requests for %d entries: %v", n, len(partAVchs), f.ids())
 	}
-	if logLines("this turn's 1 s are used (one entry a request); asked in the next turn") == 0 {
+	if logLines("this turn's 1 s are used") == 0 {
 		t.Fatal("the log does not say why the rest wait")
 	}
 }

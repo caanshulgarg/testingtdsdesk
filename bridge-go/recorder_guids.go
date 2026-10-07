@@ -263,12 +263,13 @@ func liveGuidUnprovenAs(c *change, why string, retry bool) {
 // read: stopped at 2 s, asked again by the shared retry schedule (retry.go); a posting goes first). c: the line to send (id + ":resolved")
 // once proven here (a cancel with Tally's GUID; a delete gone from this Tally, its GUID decided when it is sent as before);
 // final: proven NOT to belong to this Tally (held with words, not asked again); err: not asked this time
-func liveResolveGuid(h heldLine) (c *change, why string, answered, final bool, err error) {
+func liveResolveGuid(h heldLine, sent *bool) (c *change, why string, answered, final bool, err error) {
 	sp, spOK := startPointOf(h.Company)
 	if !spOK {
 		return nil, "", false, false, errors.New("no starting point recorded for this company yet")
 	}
 	tc := recorderTC(nil)
+	tc.sentOut = sent // re-review L1
 	port, err := findCompanyPortBg(h.Company, 0)
 	if err != nil {
 		return nil, "", false, false, err

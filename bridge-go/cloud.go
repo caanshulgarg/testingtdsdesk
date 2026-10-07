@@ -905,6 +905,18 @@ func beatCompanies(sessions []M, open []any) []any {
 	return cos
 }
 
+// 2.3.3: the beat's recorderWaitWords: why this computer's changes wait for a look at its own Tally, and the lines
+// waiting to go to FinCom (one line for the Tally page; FinCom keeps 300 characters)
+func liveWaitWordsAll() string {
+	var ws []string
+	for _, w := range []string{earlierPageWords(), liveOwnWaitWords(), liveQueueWaitWords()} {
+		if w != "" {
+			ws = append(ws, w)
+		}
+	}
+	return cutRunes(strings.Join(ws, "; "), 300)
+}
+
 func beatMissedSince() time.Time { _, f := beatTimes(); return f }
 
 // the heartbeat (2.1.3): also whether background reading is paused, since when Tally has not answered, the hour of the
@@ -935,7 +947,7 @@ func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
 		// review M8: the add-on's file names read; review S4: whether automatic updates are on, and the last rollback
 		"recorderFiles": liveFilesSeen(), "autoUpdate": au, "rolledBack": rb,
 		// review H1 (2.3.1): why this computer's changes wait for a complete look at its own Tally, in plain words ("" when none)
-		"recorderWaitWords": liveOwnWaitWords()}
+		"recorderWaitWords": liveWaitWordsAll()}
 }
 
 // --- the posting queue (build 199): postings queued in FinCom on any computer, taken one at a time

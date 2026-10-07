@@ -253,7 +253,7 @@ func TestR222bNoDateNoMaster(t *testing.T) {
 
 // --- code L4: a pair whose pre carries another entry's GUID is flagged; a resolved line keeps the flag
 func TestR222bPreMismatchFlagged(t *testing.T) {
-	p, f, c := r222bBridge(t, `,"RecorderResolveSec":0`)
+	p, f, c := r222bBridge(t, "") // 2.3.3: its one ask again on the held list's spacing (10 minutes), by when Tally has it
 	src := r222Vch(f, 25414, "Journal", "J-10", "20261005", 51986)
 	liveAppend(t, p,
 		r222Line("voucher_accept_pre", "11:20", src.guid, "25414", "51986", "Journal", "J-95", "5-Oct-2026", "x"),
@@ -264,6 +264,8 @@ func TestR222bPreMismatchFlagged(t *testing.T) {
 		t.Fatalf("the pre's GUID not flagged: %s", jsonText(sent))
 	}
 	r222Vch(f, 25960, "Journal", "J-95", "20261005", 54560)
+	at := nowFn().Add(11 * time.Minute)
+	nowFn = func() time.Time { return at }
 	readAndUploadAll(t)
 	readAndUploadAll(t)
 	sent = c.recSent()
