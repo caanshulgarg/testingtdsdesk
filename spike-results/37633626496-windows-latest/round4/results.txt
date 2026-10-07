@@ -1,0 +1,38 @@
+INFO setup origin: BUILT from source dist/FinComBridge-Setup-2.3.3.exe SHA-256 7df87ad00a8cc250be42d90cbc2dcc8180cf313af0488244f7c86720df61650b; on this runner SHA-256 7df87ad00a8cc250be42d90cbc2dcc8180cf313af0488244f7c86720df61650b
+INFO user 2 (fcuser2) works in a Windows session of their own (session 1, by a Remote Desktop connection to 127.0.0.2); runneradmin in session 2
+INFO S231 import masters-1-items: created 4, altered 0, errors 0
+INFO S231 import masters-2-costs: created 3, altered 0, errors 0
+INFO S231 import masters-4-ledgers: created 14, altered 0, errors 0
+INFO S231 import masters-6-bulk: created 400, altered 0, errors 0
+INFO S231 import S4 the bill (New Ref S231-BILL-1, a journal): created 1, altered 0, errors 0
+INFO slow232: the large company 'FinCom Slow Co' holds 20000 entries made by XML (7.3 min), 3,000 ledgers, 3,000 items
+MEASURE slow232: the bridge's entry request for MasterID 100 of the large company took 2293 ms on this Tally (5039 bytes, 2 voucher(s))
+MEASURE slow232: the bridge's entry request for MasterID 10000 of the large company took 2221 ms on this Tally (5049 bytes, 2 voucher(s))
+MEASURE slow232: the bridge's entry request for MasterID 19990 of the large company took 2474 ms on this Tally (5051 bytes, 2 voucher(s))
+INFO backlog233: the large company's GUID from Tally: '75962f28-2a71-46e2-8103-027aae4655d3'
+INFO backlog233: 50 old held lines of 'FinCom Slow Co' seeded into C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\sync\recorder-held.json before bridge 1 starts (MasterIDs 900001..900050, dated 20260401, saved yesterday, last asked 2 h ago)
+PASS 6a two bridges at once: bridge 1 runneradmin on 127.0.0.1:9100 (pid 7192, session 2, go-cd54fe4cf16e); bridge 2 fcuser2 on 127.0.0.1:9101 (pid 8596, session 1, go-b3a84f31892c); both listening at 14:26:44
+INFO /ping with a nonce but no Origin (own bridge): proof not given
+PASS 6b /ping proof: bridge 1 proves itself to runneradmin: ok; bridge 1 proof checked against user 2 identity fails: ok; bridge 2 proves itself to fcuser2: ok; bridge 2 proof checked against user 1 identity fails: ok; bridge 2 gives runneradmin no proof: ok; bridge 1 gives fcuser2 no proof: ok; other users refused 403 beyond /ping: ok
+INFO backlog233: the old lines' requests seen at the proxy before the new save: 14
+INFO slow232 small 1 (FinCom Spike Co): MasterID 3 (LASTVCHID), Tally's number '3', AlterID 3
+PASS backlog233 (1) the new save in the stub within 10 s, at least held: after 2.6 s (its import took 0.1 s before its lines were written): stub 14:27:19 recorder_lines event=created guid='' mid=20001 aid= vch=Journal/B233-NEW-1/20260401 user=runnervmfi6oq\runneradmin bridge=go-cd54fe4cf16e port=9100 company=FinCom Slow Co body=none heldWhy=waiting: Tally busy; FinCom asks again at 14:32
+INFO slow232 small 2 (FinCom Spike Co): MasterID 4 (LASTVCHID), Tally's number '4', AlterID 4
+MEASURE backlog233: the large company's entry requests at Tally (proxy ms, Tally's whole time): 3433, 3056, 2833, 2851, 2969, 3295, 3000, 3063, 3054, 3073, 3127, 3295, 3248, 3155, 3169, 3304
+PASS backlog233 (2) no more than one request per old held line: 50 old lines; 16 asked once, 34 never asked; asked more than once: none; 50 of them ended (their :resolved line in the stub)
+PASS backlog233 (3) no request while a previous one is unanswered at Tally: 25 requests of bridge 1 at the proxy; overlaps: none
+PASS backlog233 (4a) the slow company is marked: 2026-10-07 14:27:21  Recorder: FinCom Slow Co: entry fetch stopped: over 2 s (stopped 16 times, never answered in time). No entry of it is asked of Tally any more; its lines go up held (upload that day's Day Book to settle them). This lifts when a newer FinCom Bridge is installed
+PASS backlog233 (4b) no requests for it after the mark: 0 entry request(s) for it after the mark (2026-10-07 14:27:21); its new save after the mark: stub 14:29:21 recorder_lines event=created guid='' mid=20002 aid= vch=Journal/B233-AFTER-1/20260401 user=runnervmfi6oq\runneradmin bridge=go-cd54fe4cf16e port=9100 company=FinCom Slow Co body=none heldWhy=FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it.
+INFO slow232 small end (FinCom Spike Co): MasterID 5 (LASTVCHID), Tally's number '5', AlterID 5
+PASS backlog233 (5) a small fast company's entry arrives with its body: during the backlog: stub 14:27:21 recorder_lines event=created guid=f4902223-fd93-48c3-8ea7-b84762f90724-00000003 mid=3 aid=3 vch=Journal/3/20260401 user=runnervmfi6oq\runneradmin bridge=go-cd54fe4cf16e port=9100 company=FinCom Spike Co body=yes(4093 chars); at the end: stub 14:30:22 recorder_lines event=created guid=f4902223-fd93-48c3-8ea7-b84762f90724-00000005 mid=5 aid=5 vch=Journal/5/20260401 user=runnervmfi6oq\runneradmin bridge=go-cd54fe4cf16e port=9100 company=FinCom Spike Co body=yes(4103 chars)
+INFO slow232 healthy 1 (FinCom Spike Co): MasterID 6 (LASTVCHID), Tally's number '6', AlterID 6
+PASS backlog233 (6) a save while held lines are asked at 1.5 s each: in the stub within 10 s: after 2.8 s: stub 14:31:02 recorder_lines event=created guid=f4902223-fd93-48c3-8ea7-b84762f90724-00000006 mid=6 aid=6 vch=Journal/6/20260401 user=runnervmfi6oq\runneradmin bridge=go-cd54fe4cf16e port=9100 company=FinCom Spike Co body=yes(4096 chars); held lines asked before the save 2, after it 7 (proxy ms: 1555, 1536, 1538, 1536, 1541, 1537, 1539, 1551, 1545, 1688; the delay is the proxy's, Tally answered at once)
+INFO slow232 burst 1 (FinCom Spike Co): MasterID 7 (LASTVCHID), Tally's number '7', AlterID 7
+INFO slow232 burst 2 (FinCom Spike Co): MasterID 8 (LASTVCHID), Tally's number '8', AlterID 8
+INFO slow232 burst 3 (FinCom Spike Co): MasterID 9 (LASTVCHID), Tally's number '9', AlterID 9
+INFO slow232 burst 4 (FinCom Spike Co): MasterID 10 (LASTVCHID), Tally's number '10', AlterID 10
+INFO slow232 burst 5 (FinCom Spike Co): MasterID 11 (LASTVCHID), Tally's number '11', AlterID 11
+INFO slow232 burst 6 (FinCom Spike Co): MasterID 12 (LASTVCHID), Tally's number '12', AlterID 12
+INFO slow232 burst 7 (FinCom Spike Co): MasterID 13 (LASTVCHID), Tally's number '13', AlterID 13
+INFO slow232 burst 8 (FinCom Spike Co): MasterID 14 (LASTVCHID), Tally's number '14', AlterID 14
+PASS backlog233 (7) a burst of 8 saves at 1.8 s each: each in the stub within 10 s, each with its body in the end: late or missing: none; with their body: 8 of 8; the first lines: 7 at 14:31:24; 8 at 14:31:28; 9 at 14:31:28; 10 at 14:31:28; 11 at 14:31:28; 12 at 14:31:28; 13 at 14:31:28; 14 at 14:31:28
