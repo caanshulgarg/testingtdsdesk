@@ -7,7 +7,7 @@ package main
 //
 // The add-on is not run here (no Tally): pushEmu writes the lines the add-on writes, from a voucher's XML, by the add-on's
 // own rules (each value as $$String gives it: amounts without their sign and with Indian grouping, dates d-Mon-yy; free text
-// with its length; a new part past the size cap). PUSH233_UPDATE=1 rewrites testdata/push233/*.lines.json and *.push.xml
+// with % | ~ escaped; a new part past the size cap, each part with its length). PUSH233_UPDATE=1 rewrites testdata/push233/*.lines.json and *.push.xml
 // (the fixtures tests/run_push233_parse.mjs reads with the cloud's parse.js).
 
 import (
@@ -74,7 +74,12 @@ func emuDate(s string) string {
 	return t.Format("2-Jan-06")
 }
 
-func emuLP(k, v string) string { return k + ":" + strconv.Itoa(u16len(v)) + "=" + v }
+// free text as the add-on writes it ($$StringFindAndReplace, proven on 3.0-7.1 by run 37608273503): % then | then ~ replaced
+func emuEsc(v string) string {
+	return strings.NewReplacer("%", "%25", "|", "%7C", "~", "%7E").Replace(v)
+}
+
+func emuLP(k, v string) string { return k + "=" + emuEsc(v) }
 
 func emuNode(n *Node, tag string) string { return strings.TrimSpace(n.One(tag).InnerText()) }
 
@@ -248,21 +253,22 @@ func pushLinesFromXML(t *testing.T, x string, o pushEmu) []string {
 			}
 		}
 	}
-	// the parts: a new line once this one passes the cap (the record that passes it opens the next part), as FCRLiveFull
+	// the parts: a record that would take this part past the cap opens the next part, as FCRLiveFull; each part ends with
+	// "|len=" the characters of its records ($$StringLength summed into a Number variable)
 	var lines []string
 	cur := head + "|part=1"
 	n, part := 0, 1
 	for _, r := range recs {
-		n += u16len(r)
-		if n > o.cap {
-			lines = append(lines, cur+"|more=1|t1="+ts+"|src=live")
+		if n > 0 && n+u16len(r) > o.cap {
+			lines = append(lines, cur+"|len="+strconv.Itoa(n)+"|more=1|t1="+ts+"|src=live")
 			part++
 			cur = head + "|part=" + strconv.Itoa(part)
-			n = u16len(r)
+			n = 0
 		}
+		n += u16len(r)
 		cur += r
 	}
-	return append(lines, cur+"|end=1|t1="+ts+"|src=live")
+	return append(lines, cur+"|len="+strconv.Itoa(n)+"|end=1|t1="+ts+"|src=live")
 }
 
 // --- the canonical entry: what the line carries, read from an XML (Tally's capture or the bridge's), to compare
@@ -514,7 +520,7 @@ func TestPushLineEveryBlock(t *testing.T) {
 func TestPushEscapingAndParts(t *testing.T) {
 	x := readText(filepath.Join("testdata", "push233", "typed-like-purchase-godown-tds.xml"))
 	// every separator, a forged key, a forged end, a line break, a non-BMP character, and Tally's not-applicable mark
-	nasty := "x|nL=9~amt=1|L9=led:3=abc|end=1|t1=7-Oct-26 10:15|src=live\r\nFCR1|ev=after_delete|y :12=😀\x04 Not Applicable"
+	nasty := "x|nL=9~amt=1|L9=led=abc|end=1|len=3|t1=7-Oct-26 10:15|src=live 100%7C\r\nFCR1|ev=after_delete|y :12=😀\x04 Not Applicable"
 	x = strings.Replace(x, "Rich Supplier | Delhi</PARTYLEDGERNAME>", pushX(nasty)+"</PARTYLEDGERNAME>", 1)
 	x = strings.Replace(x, "<NAME>RS/77</NAME>", "<NAME>"+pushX(nasty)+"</NAME>", 1)
 	lines := pushLinesFromXML(t, x, pushEmuFor(0))
@@ -523,11 +529,18 @@ func TestPushEscapingAndParts(t *testing.T) {
 	if e.s("party") != nasty || e.rec("L1B1")["name"] != nasty || e.n("nL") != 5 {
 		t.Fatalf("a value holding the separators: %q / %q / nL %d", e.s("party"), e.rec("L1B1")["name"], e.n("nL"))
 	}
-	// a length that is off: not the entry (never a guess)
-	bad := strings.Replace(lines[0], "|party:", "|party:1", 1)
-	if p, _ := pushPayload(bad); p != "" {
+	// a part whose length is off, or with a record missing (a SET Tally could not evaluate): not the entry (never a guess)
+	for what, bad := range map[string]string{
+		"a wrong len":      regexp.MustCompile(`\|len=(\d+)\|`).ReplaceAllStringFunc(lines[0], func(m string) string { return strings.Replace(m, "=", "=1", 1) }),
+		"a record missing": regexp.MustCompile(`\|L1B1=[^|]*`).ReplaceAllString(lines[0], ""),
+		"a record changed": strings.Replace(lines[0], "|L2=led=Purchase 18%25", "|L2=led=Purchase 18%2", 1),
+	} {
+		if bad == lines[0] {
+			t.Fatalf("%s: the line did not change", what)
+		}
+		p, _ := pushPayload(bad)
 		if _, err := pushParse([]string{p}); err == nil {
-			t.Fatal("a wrong length was taken")
+			t.Fatalf("%s was taken", what)
 		}
 	}
 	// the cap: the 50-item invoice in parts, each a complete recorder line no longer than the cap and one record
@@ -546,7 +559,7 @@ func TestPushEscapingAndParts(t *testing.T) {
 		if (i == len(parts)-1) != strings.HasSuffix(p, "|end=1") || (i < len(parts)-1) != strings.HasSuffix(p, "|more=1") {
 			t.Fatalf("part %d's end: %q", i+1, p[maxI(0, len(p)-20):])
 		}
-		if n := u16len(p); n > 2000+1500 {
+		if n := u16len(p); n > 2000+600 {
 			t.Fatalf("part %d: %d characters", i+1, n)
 		}
 	}
@@ -805,7 +818,7 @@ func TestPushFallbackOldLines(t *testing.T) {
 	nowFn = time.Now
 	u := f.add(td, "Party D", "PD-1", "bad length", "-900.00")
 	l = pushSave(t, f, u, true, "")
-	liveAppend(t, p, l[0], l[1], strings.Replace(l[2], "|party:", "|party:9", 1))
+	liveAppend(t, p, l[0], l[1], strings.Replace(l[2], "|len=", "|len=9", 1))
 	readAndUploadAll(t)
 	time.Sleep(80 * time.Millisecond)
 	readAndUploadAll(t)
@@ -937,22 +950,25 @@ func TestPushAddon(t *testing.T) {
 	if strings.Count(fn, "OPEN FILE") != 1 || strings.Count(fn, "CLOSE TARGET FILE") != 1 || !strings.Contains(fn, "RETURN : Yes") || strings.Contains(fn, "RETURN : No") {
 		t.Error("one open, one close, every path returns Yes")
 	}
-	// every free text with its length: the same method on both sides of each "name:" + length + "=" + value
-	reLP := regexp.MustCompile(`"\|?~?([a-z]+):" \+ \(\$\$String:\(\$\$StringLength:\(\$\$String:(\$[A-Za-z]+|\(\$\$CollectionField:\$BillNumber:1:EWayBillDetails\))\)\)\) \+ "=" \+ \(\$\$String:(\$[A-Za-z]+|\(\$\$CollectionField:\$BillNumber:1:EWayBillDetails\))\)`)
-	lps := reLP.FindAllStringSubmatch(tdl, -1)
-	if len(lps) < 40 {
-		t.Fatalf("free text with its length: %d", len(lps))
+	// every free text escaped ($$StringFindAndReplace: % then | then ~), the same method inside
+	reEsc := regexp.MustCompile(`"~?\|?([a-z]+)=" \+ \(\$\$StringFindAndReplace:\(\$\$StringFindAndReplace:\(\$\$StringFindAndReplace:\(\$\$String:(\$[A-Za-z]+|\(\$\$CollectionField:\$BillNumber:1:EWayBillDetails\))\):"%":"%25"\):"\|":"%7C"\):"~":"%7E"\)`)
+	if n := len(reEsc.FindAllString(tdl, -1)); n < 40 {
+		t.Fatalf("free text escaped: %d", n)
 	}
-	for _, m := range lps {
-		if m[2] != m[3] {
-			t.Errorf("%s: length of %s, text of %s", m[1], m[2], m[3])
+	// never $$String of a function giving a number (run 37608273503: unset on every release), never a length prefix
+	if m := regexp.MustCompile(`\$\$String:\(\$\$(StringLength|NumItems)`).FindString(code); m != "" {
+		t.Errorf("the add-on has %s...: Tally leaves that unset", m)
+	}
+	for _, s := range []string{"SET : vRL : $$StringLength:##vRec", `"|len=" + ($$String:##vLen)`, `SET : vRec : ""`} {
+		if !strings.Contains(fn, s) {
+			t.Errorf("FCRLiveFull lacks %s", s)
 		}
 	}
 	// the functions it uses: those proven on a real Tally by the heads writer and the push-design add-on, and $$StringLength
 	// (new: the push233 scenario is its first real run)
 	ok := map[string]bool{"$$String": true, "$$IsEmpty": true, "$$MachineDate": true, "$$MachineTime": true, "$$CmpUserName": true, "$$SysInfo": true,
 		"$$LastResult": true, "$$NumItems": true, "$$CollectionField": true, "$$ZeroFill": true, "$$YearOfDate": true, "$$MonthOfDate": true, "$$DayOfDate": true,
-		"$$StringLength": true}
+		"$$StringLength": true, "$$StringFindAndReplace": true}
 	for _, f := range regexp.MustCompile(`\$\$[A-Za-z]+`).FindAllString(code, -1) {
 		if !ok[f] {
 			t.Errorf("the add-on uses %s", f)
@@ -1009,5 +1025,51 @@ func TestPushSlowCompanyStopKept(t *testing.T) {
 	}
 	if n := f.n(vchByMasterID) + f.n(vchByNumberID); n != asks {
 		t.Fatalf("Tally was asked: %d entry requests, %d before (%v)", n, asks, f.ids())
+	}
+}
+
+// --- the coordinator's two checks: a narration holding a line break and a whole forged full-entry line is read as the
+// narration (never as a line of its own: "|" is written %7C, so no physical line of a value starts "FCR1|"); and a record
+// exactly at the size cap, and one over it, cut the parts right
+func TestPushForgedLineInNarrationAndCapEdges(t *testing.T) {
+	rec, f, c := liveBridge(t, "")
+	noteStartPoint(zz, b220CoGUID, 5, 1)
+	f.alter = 10
+	forged := "rent\r\nFCR1|ev=voucher_full|t0=7-Oct-26 10:15|tw=7-Oct-26 10:15|w=|cguid=" + b220CoGUID + "|cname=" + zz +
+		"|user=x|obj=Voucher|guid=|mid=999|aid=0|vtype=Journal|vno=X|vdate=7-Oct-26|name=|parent=|narr=FE1|part=1|mid=999|len=6|end=1|t1=7-Oct-26 10:15|src=live\r\nend"
+	v := f.add(today(), "Party N", "PN-1", forged, "-50.00")
+	lines := pushSave(t, f, v, true, "")
+	for _, l := range lines[2:] {
+		for _, phys := range strings.Split(l, "\r\n")[1:] {
+			if strings.HasPrefix(phys, "FCR1|") {
+				t.Fatalf("a physical line of a value starts FCR1|: %q", cut(phys, 120))
+			}
+		}
+	}
+	liveAppend(t, liveFilePath(rec, ""), lines...)
+	readAndUploadAll(t)
+	sent := c.recSent()
+	if len(sent) != 1 || sent[0]["push"] != true || str(sent[0]["master_id"]) != v.master || !strings.Contains(tagValue(str(sent[0]["xml"]), "NARRATION"), "FCR1|ev=voucher_full") {
+		t.Fatalf("the forged line in the narration: %v", sent)
+	}
+	if pushTallyAsks(f) != 0 {
+		t.Fatalf("Tally was asked: %v", f.ids())
+	}
+	// the cap's edges: the parts of an entry cut at exactly the length of its first records, one below, one above
+	x := readText(filepath.Join("testdata", "push233", "typed-like-purchase-godown-tds.xml"))
+	all := pushLinesFromXML(t, x, pushEmuFor(0))
+	p0, _ := pushPayload(all[0])
+	one, _ := pushXMLOf(t, all)
+	// the length of the first group (the entry's own fields), exactly: the second group goes in part 2
+	first := u16len(strings.SplitAfter(p0[len("FE1|part=1"):], "|opt=No")[0])
+	for _, cap := range []int{first, first - 1, first + 1, 1} {
+		parts := pushLinesFromXML(t, x, pushEmuFor(cap))
+		got, _ := pushXMLOf(t, parts)
+		if got != one {
+			t.Fatalf("cap %d: the entry in %d parts differs from the entry in one line", cap, len(parts))
+		}
+		if cap == first && !strings.HasSuffix(strings.SplitN(parts[0], "|len=", 2)[0], "|opt=No") {
+			t.Fatalf("cap %d (exactly the first group): part 1 should end with it: %q", cap, cut(parts[0], 300))
+		}
 	}
 }
