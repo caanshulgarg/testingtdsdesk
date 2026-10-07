@@ -4,9 +4,65 @@ This document brings together what two "Push design" workflow runs (`push-design
 
 - **[F]**: the full run, **37464758500**.
 - **[P]**: the probe run, **37488912899**.
-- **[V3]**: run **37556025582** (07-Oct-2026), see the update section below.
+- **[V3]**: run **37556025582** (07-Oct-2026); it failed as a harness, see below.
+- **[R]**: run **37580283590** (07-Oct-2026), the re-run: see "Update of 07-Oct-2026 (2)".
 
 Every number also names the file it came from. Where neither run measured something, or the measurement failed, the document says so. No gap is filled with an estimate.
+
+## Update of 07-Oct-2026 (2): run 37580283590 [R], the large company with 30,012 vouchers, all five releases
+
+**[R]** is run **37580283590** (commit `810e1ed`, `.github/tally-spike/push/v3.ps1` with `FCPFullNR.tdl`; results commit `3517d69`; files `spike-results/push-design/37580283590-<rel>/push/`). The large company held **30,012 vouchers** on every release after the import (heavy Sales now carry a godown), 30,085 after the saves (`summary.txt`, `guid-rule.txt`). Every figure in this section is [R] unless tagged otherwise. Bridge 2.3.0 (the committed setup) was installed.
+
+### 1. Full entry at save WITHOUT the read-back (`FCPFullNR.tdl`), bridge stopped [R]
+
+`FCPFullNR.tdl` is `FCPFull.tdl` with the read-back removed: after Tally's save it writes the whole entry (c→d) and a short line with the form's ids (d→e), and walks no collection. Times in ms, median / worst; "total" is stamp a to stamp e; "add-on" is the add-on's own part, (a→b) + (c→d) + (d→e). Source: `a.csv`, `cfg` = `fullnr-nobridge`. Heads-only (bridge stopped, same company, same saves) is shown for comparison.
+
+| Release | Receipt: total / add-on | 5-item invoice: total / add-on | **50-item invoice: total / add-on** | 50-item alter (n=2): total / add-on | Payroll 200 (n=3): total / add-on | 50-item: heads-only total |
+|---|---|---|---|---|---|---|
+| 3.0 | 15 / 26 · 1.5 / 13.0 | 47 / 58 · 6.0 / 7.5 | 232 / 273 · **49.3 / 70.5** | 284 / 288 · 40.8 / 41.5 | 82 / 95 · 14.0 / 16.1 | 196 / 214 |
+| 4.1 | 26 / 40 · 3.0 / 8.4 | 78 / 303 · 9.8 / 17.0 | 316 / 350 · **55.5 / 56.8** | 415 / 422 · 56.2 / 58.1 | 112 / 118 · 22.8 / 23.1 | 306 / 315 |
+| 5.1 | 21 / 24 · 3.0 / 9.0 | 68 / 76 · 7.0 / 9.0 | 320 / 350 · **49.0 / 50.4** | 428 / 452 · 53.5 / 59.0 | 118 / 121 · 20.6 / 21.0 | 324 / 338 |
+| 6.2 | 12 / 20 · 2.0 / 10.0 | 49 / 62 · 6.0 / 8.0 | 266 / 299 · **50.6 / 60.1** | 311 / 330 · 42.8 / 46.0 | 77 / 79 · 13.7 / 14.0 | 217 / 232 |
+| 7.1 | 61 / 66 · 3.0 / 7.5 | 229 / 262 · 8.5 / 10.0 | 526 / 566 · **56.8 / 59.6** | 549 / 637 · 53.7 / 54.2 | 145 / 150 · 22.1 / 24.0 | 502 / 509 |
+
+n = 5 saves per cell unless stated. Without the read-back, the full entry adds **at most 71 ms** on the 30,012-voucher company, on every release, against the 0.25 s limit: **pass on all five releases.** The ids line (d→e) took 0–3 ms everywhere. The 50-item line was 28,453 bytes (alter 28,543); payroll 200, 32,628 bytes.
+
+**Freezes during these saves: 0 of 100** (20 saves per release; first screen change after Ctrl+A at most 203 ms, `ui_first_ms`).
+
+**The ids in the line against Tally's own export:** on every release, all **25 of 25** saved lines carry a MasterID that Tally holds, and the GUID built by the rule (company GUID + "-" + MasterID as 8 hex digits) equals Tally's GUID for that voucher in **25 of 25** (`captures/fullfile-heavy-fullnr-nobridge-*.txt` against `captures/tally-ids-heavy-*.json`).
+
+### 2. Freezes three ways on the large company [R]
+
+A freeze is a save whose first screen change came more than 1 s after Ctrl+A (`a.csv`, `ui_first_ms`), the detector of [F]. 17 saves per release per setup (receipt ×5, 5-item ×5, 50-item ×5, 50-item alter ×2).
+
+| Setup | 3.0 | 4.1 | 5.1 | 6.2 | 7.1 | Total | Slowest first screen change |
+|---|---|---|---|---|---|---|---|
+| No add-on, bridge stopped | 0 | 0 | 0 | 0 | 0 | **0 of 85** | 93 ms |
+| Heads-only, bridge stopped | 0 | 0 | 0 | 0 | 0 | **0 of 85** | 77 ms |
+| Heads-only, bridge running | 0 | 0 | 0 | 0 | 0 | **0 of 85** | 80 ms |
+| Full entry, no read-back, bridge stopped | 0 | 0 | 0 | 0 | 0 | **0 of 100** | 203 ms |
+
+**Caution on "bridge running":** bridge 2.3.0 fetched only the first saved voucher on each release. That fetch (`FinComVoucherByMaster`) took 2.2–3.6 s (`proxy.jsonl`: 2,289 ms on 3.0, 3,514 on 4.1, 3,100 on 5.1, 2,359 on 6.2, 3,594 on 7.1). Then the bridge's 2-second rule switched its body fetch off for the rest of the run (`bridge-log-heavy-heads-bridge.txt`: "The body fetch off: Tally took 2.0 s"). So the 85 "bridge running" saves had no fetch overlapping them, and **[R] does not show whether a fetch makes Tally pause.** The heads-only add-on itself caused no freeze with the bridge stopped. In [F] (bridge 2.3.1, which kept fetching), the 38 freezes came only with heads-only and full-entry, the two setups that make the bridge fetch. Run 37588508934 (below) fires the same fetch during each save to settle it.
+
+### 5. The company counter straight after a save [R]
+
+The harness sent Ctrl+A and then asked Tally for the company's `ALTVCHID` (a Company collection) until it moved, on the 50-item invoice, 5 saves each with no add-on and with full entry without read-back (`p.csv`).
+
+- **The counter moved by exactly 1 per save, and the new value was the AlterID of a voucher in Tally's own export: 10 of 10 on every release** (50 of 50) (`p.csv` against `captures/tally-ids-heavy-*-afterpoll.json`). With nothing else saving in between, the counter read straight after the save is the saved voucher's AlterID.
+- As an outside save timer it is too coarse: one company request on the 30,012-voucher company took about 0.7–2.6 s, so "seen moved" came 1.9–4.1 s after Ctrl+A, against stamps of 0.23–0.57 s. No-add-on and full-entry readings agree within one request on each release (median: 3.0 1,905 vs 2,143 ms; 4.1 3,370 vs 3,274; 5.1 2,980 vs 2,968; 6.2 1,936 vs 1,969; 7.1 4,037 vs 3,509). **The save time with no TDL at all is therefore still not measured precisely.**
+
+### The GUID rule [R]
+
+- Imported: **30,012 of 30,012** on every release, right after the import.
+- After the saves (new by Alt+2 and altered): **30,085 of 30,085** on every release.
+- **A voucher imported with another company's GUID and REMOTEID (a sync):** Tally created it (created 1), and the count afterwards was **30,086 of 30,086** following the rule on every release. Tally therefore gave it its own GUID by the rule and did not keep the foreign one. The harness's own read of that one voucher failed (a lookup bug), so this rests on the full count only.
+
+### 3, 4. Keyed lookups and TDS: not measured in [R]
+
+- **Keyed lookups:** a harness bug (the lookup of the target voucher returned nothing) made the fetch stage skip itself on the large company. No request was sent.
+- **TDS:** on every release the nature of payment was made on its form (Tally's TDS Rate export: True). The TDS entry, typed by the S5 route with OCR, stopped in a Cost Centre Allocations screen for the expense ledger, so **no TDS entry was saved and the add-on wrote no line** (`tds-screen-log.txt`). The party ledger was refused once with "Tax Classification 'PD Contract Work' does not exist!", and two of the three TDS ledgers were made.
+
+Both are fixed in run **37588508934** (mode `v3b`, started 07:37 UTC, in progress at the time of writing): the voucher lookup fixed, the TDS ledgers made with cost centres off and the Cost Centre screen accepted, and a ByMaster fetch fired by the harness 150 ms before Ctrl+A on 10 heads-only saves per release, with the bridge stopped.
 
 ## Update of 07-Oct-2026: run 37556025582 [V3] and re-analysis of [F]
 
