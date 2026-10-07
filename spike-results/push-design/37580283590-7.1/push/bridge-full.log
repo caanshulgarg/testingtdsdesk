@@ -1,0 +1,95 @@
+2026-10-07 06:33:17  FinCom Bridge 2.3.0: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+2026-10-07 06:33:17  FinCom Bridge 2.3.0 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+2026-10-07 06:33:17  Tally is not open; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+2026-10-07 06:33:17  Recorder: re-scan of the add-on's files for 2.3.0: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+2026-10-07 06:33:17  Recorder: FinCom Spike Co: lines from a Tally this bridge does not read (company not open here): not sent
+2026-10-07 06:33:17  Check:  - 
+2026-10-07 06:33:20  Tray icon: set to show next to the clock always (Windows 11)
+2026-10-07 06:33:20  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+2026-10-07 06:33:20  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+2026-10-07 06:33:33  The tray icon stopped (code 4294967295); it is started again in 5s
+2026-10-07 06:43:21  Company FinCom Spike Co: its Tally GUID cec8aaf9-57c3-44ee-8d6b-a73ced6a4600 is held from now on
+2026-10-07 06:43:21  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=30033, ALTMSTID=6556 (reading is prospective only: the bridge follows what changes after this)
+2026-10-07 06:43:21  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=30033, ALTMSTID=6556
+2026-10-07 06:43:21  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=30033, ALTMSTID=6556)
+2026-10-07 06:44:50  The bridge stopped (code 4294967295); it is started again in 5s
+2026-10-07 06:44:55  FinCom Bridge 2.3.0 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+2026-10-07 06:44:55  Tally is not open; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+2026-10-07 06:44:55  Check:  - 
+2026-10-07 06:44:58  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+2026-10-07 06:45:30  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=30037, ALTMSTID=6556
+2026-10-07 06:45:30  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=30033; now ALTVCHID=30037, ALTMSTID=6556
+2026-10-07 06:54:39  Stopping: the FinCom Bridge supervisor has ended
+2026-10-07 07:03:08  FinCom Bridge 2.3.0: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+2026-10-07 07:03:08  FinCom Bridge 2.3.0 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+2026-10-07 07:03:09  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+2026-10-07 07:03:09  Check:  - 
+2026-10-07 07:03:12  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+2026-10-07 07:03:12  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=30076, ALTMSTID=6556
+2026-10-07 07:03:12  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=30033; now ALTVCHID=30076, ALTMSTID=6556
+2026-10-07 07:03:42  Recorder: FinCom sets where the changes come from on this computer: both
+2026-10-07 07:04:12  Recorder: FinCom sets where the changes come from on this computer: addon
+2026-10-07 07:04:36  Recorder: Receipt 12017 of 01-Oct-2026 (MasterID 30071, line 112ae4c6…): asking Tally by MasterID
+2026-10-07 07:04:42  The body fetch off: Tally took 2.0 s for the entry bodies (limit 2 s) (FinCom Spike Co; on again when the owner switches where the changes come from)
+2026-10-07 07:04:42  Tally 9000: FinComVoucherByMaster 20261001 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-07 07:04:42  Recorder: Receipt 12017 of 01-Oct-2026 (MasterID 30071, line 112ae4c6…): held: the entry was not read from Tally: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-07 07:04:42  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)); sent without it (FinCom holds the line until a body comes)
+2026-10-07 07:04:42  Recorder: Receipt 12017 of 01-Oct-2026 (MasterID 30071, line 112ae4c6…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:04:59  Recorder: Receipt 12018 of 01-Oct-2026 (MasterID 30072, line 680370a2…): not asked: the body fetch is off for this company (Tally took 2.0 s at 07:04)
+2026-10-07 07:04:59  Recorder: Receipt 12018 of 01-Oct-2026 (MasterID 30072, line 680370a2…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:05:21  Recorder: Receipt 12019 of 01-Oct-2026 (MasterID 30073, line 0efff3c1…): not asked: the body fetch is off for this company (Tally took 2.0 s at 07:04)
+2026-10-07 07:05:21  Recorder: Receipt 12019 of 01-Oct-2026 (MasterID 30073, line 0efff3c1…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:05:44  Recorder: Receipt 12020 of 01-Oct-2026 (MasterID 30074, line 9825f8bc…): not asked: the body fetch is off for this company (Tally took 2.0 s at 07:04)
+2026-10-07 07:05:44  Recorder: Receipt 12020 of 01-Oct-2026 (MasterID 30074, line 9825f8bc…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:06:06  Recorder: Receipt 12021 of 01-Oct-2026 (MasterID 30075, line 555fcb76…): not asked: the body fetch is off for this company (Tally took 2.0 s at 07:04)
+2026-10-07 07:06:06  Recorder: Receipt 12021 of 01-Oct-2026 (MasterID 30075, line 555fcb76…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:06:37  Recorder: Sales 12044 of 02-Oct-2026 (MasterID 30076, line 78a8b7e9…): not asked: the body fetch is off for this company (Tally took 2.0 s at 07:04)
+2026-10-07 07:06:37  Recorder: Sales 12044 of 02-Oct-2026 (MasterID 30076, line 78a8b7e9…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:07:00  Recorder: Sales 12045 of 02-Oct-2026 (MasterID 30077, line 0e869e90…): not asked: the body fetch is off for this company (Tally took 2.0 s at 07:04)
+2026-10-07 07:07:00  Recorder: Sales 12045 of 02-Oct-2026 (MasterID 30077, line 0e869e90…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:07:23  Recorder: Sales 12046 of 02-Oct-2026 (MasterID 30078, line 298ce519…): not asked: the body fetch is off for this company (Tally took 2.0 s at 07:04)
+2026-10-07 07:07:23  Recorder: Sales 12046 of 02-Oct-2026 (MasterID 30078, line 298ce519…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:07:46  Recorder: Sales 12047 of 02-Oct-2026 (MasterID 30079, line 6e0ef34c…): not asked: the body fetch is off for this company (Tally took 2.0 s at 07:04)
+2026-10-07 07:07:46  Recorder: Sales 12047 of 02-Oct-2026 (MasterID 30079, line 6e0ef34c…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:08:09  Recorder: Sales 12048 of 02-Oct-2026 (MasterID 30080, line a4f67eae…): not asked: the body fetch is off for this company (Tally took 2.0 s at 07:04)
+2026-10-07 07:08:09  Recorder: Sales 12048 of 02-Oct-2026 (MasterID 30080, line a4f67eae…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:08:44  Recorder: Sales 12049 of 31-Oct-2026 (MasterID 30081, line b1975f78…): not asked: the body fetch is off for this company (Tally took 2.0 s at 07:04)
+2026-10-07 07:08:44  Recorder: Sales 12049 of 31-Oct-2026 (MasterID 30081, line b1975f78…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:09:09  Recorder: Sales 12050 of 31-Oct-2026 (MasterID 30082, line 7456077f…): not asked: the body fetch is off for this company (Tally took 2.0 s at 07:04)
+2026-10-07 07:09:09  Recorder: Sales 12050 of 31-Oct-2026 (MasterID 30082, line 7456077f…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:09:33  Recorder: Sales 12051 of 31-Oct-2026 (MasterID 30083, line 6ba3d261…): not asked: the body fetch is off for this company (Tally took 2.0 s at 07:04)
+2026-10-07 07:09:33  Recorder: Sales 12051 of 31-Oct-2026 (MasterID 30083, line 6ba3d261…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:09:58  Recorder: Sales 12052 of 31-Oct-2026 (MasterID 30084, line 6361281a…): not asked: the body fetch is off for this company (Tally took 2.0 s at 07:04)
+2026-10-07 07:09:58  Recorder: Sales 12052 of 31-Oct-2026 (MasterID 30084, line 6361281a…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:10:21  Recorder: Sales 12053 of 31-Oct-2026 (MasterID 30085, line 0074355b…): not asked: the body fetch is off for this company (Tally took 2.0 s at 07:04)
+2026-10-07 07:10:21  Recorder: Sales 12053 of 31-Oct-2026 (MasterID 30085, line 0074355b…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:10:54  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line 1e5e7c30…): not asked: the body fetch is off for this company (Tally took 2.0 s at 07:04)
+2026-10-07 07:10:54  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line 1e5e7c30…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:11:17  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line fb0983d4…): not asked: the body fetch is off for this company (Tally took 2.0 s at 07:04)
+2026-10-07 07:11:17  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line fb0983d4…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:11:27  The bridge stopped (code 4294967295); it is started again in 5s
+2026-10-07 07:11:32  FinCom Bridge 2.3.0 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+2026-10-07 07:11:32  Tally is not open; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+2026-10-07 07:11:32  Recorder: Sales 12053 of 31-Oct-2026 (MasterID 30085, line 0074355b…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:11:32  Recorder: Sales 12045 of 02-Oct-2026 (MasterID 30077, line 0e869e90…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:11:32  Recorder: Receipt 12019 of 01-Oct-2026 (MasterID 30073, line 0efff3c1…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:11:32  Recorder: Receipt 12017 of 01-Oct-2026 (MasterID 30071, line 112ae4c6…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:11:32  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line 1e5e7c30…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:11:32  Recorder: Sales 12046 of 02-Oct-2026 (MasterID 30078, line 298ce519…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:11:32  Recorder: Receipt 12021 of 01-Oct-2026 (MasterID 30075, line 555fcb76…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:11:32  Recorder: Sales 12052 of 31-Oct-2026 (MasterID 30084, line 6361281a…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:11:32  Recorder: Receipt 12018 of 01-Oct-2026 (MasterID 30072, line 680370a2…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:11:32  Recorder: Sales 12051 of 31-Oct-2026 (MasterID 30083, line 6ba3d261…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:11:32  Recorder: Sales 12047 of 02-Oct-2026 (MasterID 30079, line 6e0ef34c…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:11:32  Recorder: Sales 12050 of 31-Oct-2026 (MasterID 30082, line 7456077f…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:11:32  Recorder: Sales 12044 of 02-Oct-2026 (MasterID 30076, line 78a8b7e9…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:11:32  Recorder: Receipt 12020 of 01-Oct-2026 (MasterID 30074, line 9825f8bc…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:11:32  Recorder: Sales 12048 of 02-Oct-2026 (MasterID 30080, line a4f67eae…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:11:32  Recorder: Sales 12049 of 31-Oct-2026 (MasterID 30081, line b1975f78…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:11:32  Recorder: Sales 2 of 31-Oct-2026 (MasterID 3, line fb0983d4…): not asked: the body fetch is off for this company (the 2 s rule; on again when the owner switches where the changes come from)
+2026-10-07 07:11:32  Check:  - 
+2026-10-07 07:11:35  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+2026-10-07 07:12:12  Tally 9000: FinComCompany took 7.0s
+2026-10-07 07:12:12  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=30093, ALTMSTID=6556
+2026-10-07 07:12:12  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=30033; now ALTVCHID=30093, ALTMSTID=6556
+2026-10-07 07:12:16  Stopping: the FinCom Bridge supervisor has ended

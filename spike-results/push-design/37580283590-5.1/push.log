@@ -1,0 +1,1179 @@
+[06:17:30.893] push-design on TallyPrime 5.1: reps 5, heavy 3000 ledgers / 3000 items / up to 30000 vouchers (40 min), postings 1
+[06:17:31.734] system clock step after timeBeginPeriod(1): 0.439 ms (min 0.003, max 4.5882)
+[06:17:31.749] two files written 2 ms apart: NTFS write times 3.0004 ms apart
+[06:17:31.767] light company folder: D:\a\_temp\TallyData\100000
+[06:17:34.786] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-setup-light-started (1024x768)
+[06:18:02.948] Tally started (setup-light) in 28.2 s; company open: True
+[06:18:02.960] company GUID 43dab00b-d20f-48b0-b964-4ed000021a28
+[06:18:04.986] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[06:18:06.160] import light masters: 60 sent, created 59, errors 0, 140.5 ms
+[06:18:06.278] import template s5 (all fields): 1 sent, created 1, errors 0, 79.7 ms
+[06:18:06.480] import template s50 (all fields): 1 sent, created 1, errors 0, 196.4 ms
+[06:18:06.497] import template rc (all fields): 1 sent, created 1, errors 0, 14.9 ms
+[06:18:06.502] templates: s50 all fields; s5 all fields; rc all fields
+[06:18:06.549]   template Receipt 1 20261001 mid 4 aid 4 43dab00b-d20f-48b0-b964-4ed000021a28-00000004
+[06:18:06.550]   template Sales 1 20261002 mid 2 aid 2 43dab00b-d20f-48b0-b964-4ed000021a28-00000002
+[06:18:06.551]   template Sales 2 20261031 mid 3 aid 3 43dab00b-d20f-48b0-b964-4ed000021a28-00000003
+[06:18:06.751] company feature fields (by name): ISBATCHWISEON=No, PREVISMULTIGODOWNON=No, PREVISTRACKINGON=No, ISPAYROLLON=No, PREVISSALESORDERSON=No, PREVISPURCORDERSON=No, ISEXCISEMFGRTRADERON=No, ISPAYROLLSTATON=No, ISCOSTTRACKINGON=No, NOTIFYOFEXPIRY=No, ISTRACKVOUCHERSON=No, RESETTRACKEDCHANGES=No
+[06:18:06.766] import company features by XML: 1 sent, created 0, errors 0, 11.4 ms
+[06:18:06.777] after the XML alter: ISBATCHWISEON=Yes, PREVISMULTIGODOWNON=Yes, PREVISTRACKINGON=Yes, ISPAYROLLON=Yes, PREVISSALESORDERSON=Yes, PREVISPURCORDERSON=Yes, ISEXCISEMFGRTRADERON=No, ISPAYROLLSTATON=No, ISCOSTTRACKINGON=No, NOTIFYOFEXPIRY=No, ISTRACKVOUCHERSON=No, RESETTRACKEDCHANGES=No
+[keys] '{F11}'
+[shot] p-f11-0 (1024x768)
+[keys] '{UP}'
+[keys] '{UP}'
+[keys] '{UP}'
+[shot] p-f11-1-top (1024x768)
+[keys] 'y'
+[shot] p-f11-2-show-more (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d01 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d02 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d03 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d04 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d05 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d06 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d07 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d08 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d09 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d10 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d11 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d12 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d13 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d14 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d15 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d16 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d17 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d18 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d19 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d20 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d21 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d22 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d23 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d24 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d25 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d26 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d27 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d28 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d29 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d30 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d31 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d32 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d33 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d34 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d35 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d36 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d37 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d38 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d39 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d40 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d41 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d42 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d43 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d44 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d45 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d46 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d47 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d48 (1024x768)
+[keys] '^a'
+[shot] p-f11-accepted (1024x768)
+[06:19:30.343] after F11 (show more features only): ISBATCHWISEON=Yes, PREVISMULTIGODOWNON=Yes, PREVISTRACKINGON=Yes, ISPAYROLLON=Yes, PREVISSALESORDERSON=Yes, PREVISPURCORDERSON=Yes, ISEXCISEMFGRTRADERON=No, ISPAYROLLSTATON=No, ISCOSTTRACKINGON=No, NOTIFYOFEXPIRY=No, ISTRACKVOUCHERSON=No, RESETTRACKEDCHANGES=No
+[06:19:30.361] voucher types: Attendance, Contra, Credit Note, Debit Note, Delivery Note, Job Work In Order, Job Work Out Order, Journal, Material In, Material Out, Memorandum, Payment, Payroll, Physical Stock, Purchase, Purchase Order, Receipt, Receipt Note, Rejections In, Rejections Out, Reversing Journal, Sales, Sales Order, Stock Journal
+[06:19:30.372] voucher type fields: active ISACTIVE; manufacturing ASMFGJRNL
+[06:19:30.401] import voucher types active, manufacturing journal: 9 sent, created 1, errors 0, 26.5 ms
+[06:19:31.025] import type masters (godowns, batch items, employees, pay heads, supplier): 258 sent, created 258, errors 0, 560.3 ms
+[06:19:31.035] import attendance type: 1 sent, created 0, errors 0, 6.5 ms; Tally: Unit &apos;Days&apos; does not exist!
+[06:19:31.042] import attendance type: 1 sent, created 0, errors 0, 5.6 ms; Tally: Unit &apos;Days&apos; does not exist!
+[06:19:31.049] import attendance type: 1 sent, created 0, errors 0, 5.5 ms; Tally: Unit &apos;Days&apos; does not exist!
+[06:19:31.055] import attendance type: 1 sent, created 0, errors 0, 5.2 ms; Tally: Unit &apos;Days&apos; does not exist!
+[06:19:31.061] import attendance type: 1 sent, created 0, errors 0, 5.1 ms; Tally: Unit &apos;Days&apos; does not exist!
+[06:19:31.067] import attendance type: 1 sent, created 0, errors 0, 5.1 ms; Tally: Unit &apos;Days&apos; does not exist!
+[06:19:31.074] import attendance type: 1 sent, created 0, errors 0, 5.6 ms; Tally: Unit &apos;Days&apos; does not exist!
+[06:19:31.080] import attendance type: 1 sent, created 0, errors 0, 5.1 ms; Tally: Unit &apos;Days&apos; does not exist!
+[06:19:31.086] import attendance type: 1 sent, created 0, errors 0, 5.1 ms; Tally: Unit &apos;Days&apos; does not exist!
+[06:19:31.092] import attendance type: 1 sent, created 0, errors 0, 5.2 ms; Tally: Unit &apos;Days&apos; does not exist!
+[06:19:31.099] import attendance type: 1 sent, created 0, errors 0, 5.5 ms; Tally: Unit &apos;Days&apos; does not exist!
+[06:19:31.105] import attendance type: 1 sent, created 0, errors 0, 5.3 ms; Tally: Unit &apos;Days&apos; does not exist!
+[06:19:31.311] import template payroll50 (form 1 of 5): 1 sent, created 0, errors 0, 15.3 ms
+[06:19:31.326] import template payroll50 (form 2 of 5): 1 sent, created 0, errors 0, 13.5 ms
+[06:19:31.344] import template payroll50 (form 3 of 5): 1 sent, created 0, errors 0, 16.7 ms
+[06:19:31.359] import template payroll50 (form 4 of 5): 1 sent, created 0, errors 0, 13.2 ms
+[06:19:31.381] import template payroll50 (form 5 of 5): 1 sent, created 1, errors 0, 20.8 ms
+[06:19:31.403] import template payroll200 (form 1 of 5): 1 sent, created 0, errors 0, 18.6 ms
+[06:19:31.422] import template payroll200 (form 2 of 5): 1 sent, created 0, errors 0, 18.2 ms
+[06:19:31.459] import template payroll200 (form 3 of 5): 1 sent, created 0, errors 0, 34.9 ms
+[06:19:31.480] import template payroll200 (form 4 of 5): 1 sent, created 0, errors 0, 19.2 ms
+[06:19:31.514] import template payroll200 (form 5 of 5): 1 sent, created 1, errors 0, 32.8 ms
+[06:19:31.528] import template attendance (form 1 of 1): 1 sent, created 0, errors 0, 12 ms
+[06:19:31.584] import template stockjournal (form 1 of 1): 1 sent, created 1, errors 0, 54.4 ms
+[06:19:31.606] import template mfgjournal (form 1 of 1): 1 sent, created 1, errors 0, 20.5 ms
+[06:19:31.628] import template salesorder (form 1 of 3): 1 sent, created 0, errors 0, 20.9 ms; Tally: Bad Order Number in Voucher!
+[06:19:31.650] import template salesorder (form 2 of 3): 1 sent, created 0, errors 0, 19.8 ms; Tally: Bad Order Number in Voucher!
+[06:19:31.679] import template salesorder (form 3 of 3): 1 sent, created 0, errors 0, 27.2 ms; Tally: Bad Order Number in Voucher!
+[06:19:31.701] import template purchaseorder (form 1 of 3): 1 sent, created 0, errors 0, 20.5 ms; Tally: Bad Order Number in Voucher!
+[06:19:31.723] import template purchaseorder (form 2 of 3): 1 sent, created 0, errors 0, 19.7 ms; Tally: Bad Order Number in Voucher!
+[06:19:31.743] import template purchaseorder (form 3 of 3): 1 sent, created 0, errors 0, 18.7 ms; Tally: Bad Order Number in Voucher!
+[06:19:31.788] import template deliverynote (form 1 of 1): 1 sent, created 1, errors 0, 43.5 ms
+[06:19:31.834] import template receiptnote (form 1 of 1): 1 sent, created 1, errors 0, 44.8 ms
+[06:19:31.853] import template physicalstock (form 1 of 1): 1 sent, created 1, errors 0, 17.3 ms
+[06:19:32.086] import template salesbatch (form 1 of 1): 1 sent, created 1, errors 0, 230.5 ms
+[06:19:32.450] TDL $$MachineName => '' 
+[06:19:32.454] TDL $$CmpUserName => 'TALLY User' 
+[06:19:32.458] TDL $$SysInfo:WindowsUser => 'runneradmin' 
+[06:19:32.461] TDL $$SysInfo:WindowsUserName => '' 
+[06:19:32.463] TDL $$SysInfo:UserName => '' 
+[06:19:32.466] TDL $$SysInfo:LoginUser => '' 
+[06:19:32.469] TDL $$SysInfo:SystemName => 'runnervmfi6oq' 
+[06:19:32.471] TDL $$SysInfo:ComputerName => '' 
+[06:19:32.474] TDL $$SysInfo:MachineName => '' 
+[06:19:32.479] TDL $$SysInfo:IPAddress => '172.25.96.1,10.1.0.212' 
+[06:19:32.482] TDL $$SysInfo:ApplicationPath => 'C:\Program Files\TallyPrime' 
+[06:19:32.485] TDL $$SysInfo:TempPath => '' 
+[06:19:32.518] import tds: company TDS on, TAN: 1 sent, created 0, errors 0, 10.4 ms
+[shot] tds-001-gw0 (1024x768)
+[06:19:37] [tds] screen tds-001-gw0 : TallyPrime MANAGE Recyc EDU K: Company Gatewa of Tall Y: Data Z: Exchange CURRENT OATE Wednesday, I-Apr-2026 O: Import E: Export M: Share p: print Fl: Help Date 161 36103 Firefo Googl Chro Micros 46 IypÅ Unity CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Q 31-Mar-27 Search Company nt to 6b6c1' 2C749 ' , "tra ubl' , I' c—8dd c749f "trac c178- isten unnin ion_i 4aee...
+[keys] 'c'
+[shot] tds-002-create-TDSNatureofPayments (1024x768)
+[06:19:40] [tds] screen tds-002-create-TDSNatureofPayments : TallyPrime MANAGE Recyc EDU Quit K: Company Y: Data Z: Exchange FinCom • ke Co Master Creation List of Masters Accounting Masters Group Ledger Cost Centre Currency Voucher Type Inventory Masters Stock Group Stock Category Stock Item Unit Location Payroll Masters Employee Group Employee Units (Work) Attendance/Production Type Pay Heads Payroll Voucher Type Statutory Masters GST Registration GST Classification TDS Nature of Payments Statutory Details Company GST Details O: Import Change Company Show More E: Export M: Share p: print Firefo Googl Chron Micros Unity 161 Fl: Help x 36103 nt to 6b6c1...
+[keys] '{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}'
+[keys] 'TDS Nature of Payments'
+[shot] tds-003-typed-TDSNatureofPayments (1024x768)
+[06:19:44] [tds] screen tds-003-typed-TDSNatureofPayments : o Recyc TallyPrime MANAGE Z: Exchange o M: Share p: print x EDU K: Company Y: Data FinCom • ke Co Master Creation TDS Nature of Pa ments List of Masters Statutory Masters TDS Nature of Payments O: Import Change Company Show More E: Export Firefo Googl Chron Micros lyp Unity Quit Fl: Help 36103 nt to 6b6c1' 2C749 ' , "tra ubl' , I' c—8dd c749f "trac : '2.3 c178- isten unnin ion_i 4aee— age" , 8c-8d 'tally Q Search Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 6:19 AM 10/7/2026
+[keys] '{ENTER}'
+[shot] tds-004-form-TDSNatureofPayments (1024x768)
+[06:19:47] [tds] screen tds-004-form-TDSNatureofPayments : TallyPrime MANAGE Recyc EDU K: Company Y: Data v—yment Creation Name Section Firef Payment code Remittance code Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Is zero rated Threshold/exemption limit Micros Unity Quit Z: Exchange Accept Q Search O: Import E: Export M: Share p: print FinCom • ke Co 0% 0% x 161 Fl: Help F2: period 36103 Company FIO: Other Masters nt to 6b6c1' 2C749 ' , "tra ubl' , I' c—8dd c749f "trac c178- isten unnin ion_i 4aee— age" , 8c-8d 'tally p: Delete More Details Helper Configure Windows Server 2025 Datacenter Build 26100.ge_release2...
+[keys] 'PD Contract Work{ENTER}'
+[shot] tds-005-nat-name (1024x768)
+[06:19:50] [tds] screen tds-005-nat-name : TallyPrime MANAGE Recyc EDU K: Company Y: Data TDS Nature of Pa Creation Z: Exchange Accept Q Search O: Import E: Export M: Share p: print FinCom • ke Co 0% 0% x 161 Fl: Help F2: period 36103 Company Name Section Firef Payment code PD Contract Work Remittance code Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Is zero rated Threshold/exemption limit Micros Unity Quit FIO: Other Masters nt to 6b6c1' 2C749 ' , "tra ubl' , I' c—8dd c749f "trac c178- isten unnin ion_i 4aee— age" , 8c-8d 'tally p: Delete More Details Helper Configure Windows Server 2025 Datacent...
+[keys] '194C{ENTER}'
+[shot] tds-006-nat-section (1024x768)
+[06:19:53] [tds] screen tds-006-nat-section : TallyPrime MANAGE Recyc EDU K: Company Y: Data TDS Nature of Pa Creation Z: Exchange Accept Q Search O: Import E: Export M: Share p: print FinCom • ke Co 194C 0% 0% x 161 Fl: Help F2: period 36103 Company Name Section Firef Payment code PD Contract Work Remittance code Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Is zero rated Threshold/exemption limit Micros Unity Quit FIO: Other Masters nt to 6b6c1' 2C749 ' , "tra ubl' , I' c—8dd c749f "trac c178- isten unnin ion_i 4aee— age" , 8c-8d 'tally p: Delete More Details Helper Configure Windows Server 2025 Dat...
+[keys] '94C{ENTER}'
+[shot] tds-007-nat-paycode (1024x768)
+[06:19:56] [tds] screen tds-007-nat-paycode : TallyPrime MANAGE Recyc EDU K: Company Y: Data TDS Nature of Pa Creation Z: Exchange Accept Q Search O: Import E: Export M: Share p: print FinCom • ke Co 194C 94C 0% 0% x 161 Fl: Help F2: period 36103 Company Name Section Firef Payment code PD Contract Work Remittance code Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Is zero rated Threshold/exemption limit Micros Unity Quit FIO: Other Masters nt to 6b6c1' 2C749 ' , "tra ubl' , I' c—8dd c749f "trac c178- isten unnin ion_i 4aee— age" , 8c-8d 'tally p: Delete More Details Helper Configure Windows Server 2025...
+[keys] '{ENTER}'
+[shot] tds-008-nat-remit (1024x768)
+[06:19:59] [tds] screen tds-008-nat-remit : TallyPrime MANAGE Recyc EDU K: Company Y: Data TDS Nature of Pa Creation Z: Exchange Accept Q Search O: Import E: Export M: Share p: print FinCom • ke Co 194C 94C 0% 0% x 161 Fl: Help F2: period 36103 Company Name Section Firef Payment code PD Contract Work Remittance code Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Is zero rated Threshold/exemption limit Micros Unity Quit FIO: Other Masters nt to 6b6c1' 2C749 ' , "tra ubl' , I' c—8dd c749f "trac c178- isten unnin ion_i 4aee— age" , 8c-8d 'tally p: Delete More Details Helper Configure Windows Server 2025...
+[keys] '1{ENTER}'
+[shot] tds-009-nat-rate-ind (1024x768)
+[06:20:01] [tds] screen tds-009-nat-rate-ind : TallyPrime MANAGE Recyc EDU K: Company Y: Data TDS Nature of Pa Creation Z: Exchange Accept Q Search O: Import E: Export M: Share p: print FinCom • ke Co 194C 94C x 161 Fl: Help F2: period 36103 Company Name Section Firef Payment code PD Contract Work Remittance code Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Threshold/exemption limit Micros Unity Quit FIO: Other Masters nt to 6b6c1' 2C749 ' , "tra ubl' , I' c—8dd c749f "trac c178- isten unnin ion_i 4aee— age" , 8c-8d 'tally p: Delete More Details Helper Configure Windows Server 2025 Datacenter Build 26...
+[keys] '2{ENTER}'
+[shot] tds-010-nat-rate-oth (1024x768)
+[06:20:04] [tds] screen tds-010-nat-rate-oth : TallyPrime MANAGE Recyc EDU K: Company Y: Data TDS Nature of Pa Creation Z: Exchange Accept Q Search O: Import E: Export M: Share p: print FinCom • ke Co 194C 94C 1% 2% x 161 Fl: Help F2: period 36103 Company Name Section Firef Payment code PD Contract Work Remittance code Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Threshold/exemption limit Micros Unity Quit FIO: Other Masters nt to 6b6c1' 2C749 ' , "tra ubl' , I' c—8dd c749f "trac c178- isten unnin ion_i 4aee— age" , 8c-8d 'tally p: Delete More Details Helper Configure Windows Server 2025 Datacenter Bu...
+[keys] '{ENTER}'
+[shot] tds-011-nat-zero (1024x768)
+[06:20:07] [tds] screen tds-011-nat-zero : TallyPrime MANAGE Recyc EDU K: Company Y: Data TDS Nature of Pa Creation Z: Exchange A: Accept Q Search FinCom 194C 94C 1% 2% O: Import Accept Q Yes or No p: Delete E: Export M: Share p: print x Name Section Firef Payment code PD Contract Work 161 Fl: Help F2: period 36103 F3: Company nt to 6b6c1' Remittance code Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Threshold/exemption limit Micros Unity Q: Quit FIO : Other Masters l: More Details H: Helper F 12: Configure 2C749 ' , "tra ubl' , I' c—8dd c749f "trac c178- isten unnin ion_i 4aee— age" , 8c-8d 'tally...
+[keys] '{ENTER}'
+[shot] tds-012-nat-threshold (1024x768)
+[06:20:10] [tds] screen tds-012-nat-threshold : TallyPrime MANAGE Recyc EDU K: Company Y: Data v—yment Creation Name Section Firef Payment code Remittance code Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Is zero rated Threshold/exemption limit Micros Unity Quit Z: Exchange Accept Q Search O: Import E: Export M: Share p: print FinCom • ke Co 0% 0% x 161 Fl: Help F2: period 36103 Company FIO: Other Masters nt to 6b6c1' 2C749 ' , "tra ubl' , I' c—8dd c749f "trac c178- isten unnin ion_i 4aee— age" , 8c-8d 'tally p: Delete More Details Helper Configure Windows Server 2025 Datacenter Build 26100.ge_release2...
+[keys] '^a'
+[shot] tds-013-nat-accept (1024x768)
+[06:20:14] [tds] screen tds-013-nat-accept : TallyPrime MANAGE Recyc EDU K: Company Y: Data v—yment Creation Name Section Firef Payment code Remittance code Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Is zero rated Threshold/exemption limit Micros Unity Quit Z: Exchange Accept Q Search O: Import E: Export M: Share p: print FinCom • ke Co 0% 0% x 161 Fl: Help F2: period 36103 Company FIO: Other Masters nt to 6b6c1' 2C749 ' , "tra ubl' , I' c—8dd c749f "trac c178- isten unnin ion_i 4aee— age" , 8c-8d 'tally p: Delete More Details Helper Configure Windows Server 2025 Datacenter Build 26100.ge_release2...
+[keys] '{ESC}'
+[shot] tds-014-nat-esc1 (1024x768)
+[06:20:17] [tds] screen tds-014-nat-esc1 : TallyPrime MANAGE Recyc EDU K: Company Y: Data v—yment Creation Name Section Firef Payment code Remittance code Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Is zero rated Threshold/exemption limit Micros Unity Q: Quit Z: Exchange A: Accept Q Search FinCom 0% 0% O: Import Quit o Yes or No p: Delete E: Export M: Share p: print x 161 Fl: Help F2: period 36103 F3: Company FIO : Other Masters l: More Details H: Helper F 12: Configure nt to 6b6c1' 2C749 ' , "tra ubl' , I' c—8dd c749f "trac c178- isten unnin ion_i 4aee— age" , 8c-8d 'tally Windows Server 2025 Da...
+[keys] '{ESC}'
+[shot] tds-015-nat-esc2 (1024x768)
+[06:20:20] [tds] screen tds-015-nat-esc2 : TallyPrime MANAGE Recyc EDU Quit K: Company Y: Data Z: Exchange FinCom • ke Co Master Creation List of Masters Accounting Masters Group Ledger Cost Centre Currency Voucher Type Inventory Masters Stock Group Stock Category Stock Item Unit Location Payroll Masters Employee Group Employee Units (Work) Attendance/Production Type Pay Heads Payroll Voucher Type Statutory Masters GST Registration GST Classification TDS Nature of Payments Statutory Details Company GST Details O: Import Change Company Show More E: Export M: Share p: print Firefo Googl Chron Micros Unity 161 Fl: Help x 36103 nt to 6b6c1...
+[06:20:20] [tds] nature 'PD Contract Work' in Tally's export (TDSRate): True
+[shot] tds-016-gw0 (1024x768)
+[06:20:21] [tds] screen tds-016-gw0 : TallyPrime MANAGE Recyc EDU Quit K: Company Y: Data Z: Exchange FinCom • ke Co Master Creation List of Masters Accounting Masters Group Ledger Cost Centre Currency Voucher Type Inventory Masters Stock Group Stock Category Stock Item Unit Location Payroll Masters Employee Group Employee Units (Work) Attendance/Production Type Pay Heads Payroll Voucher Type Statutory Masters GST Registration GST Classification TDS Nature of Payments Statutory Details Company GST Details O: Import Change Company Show More E: Export M: Share p: print Firefo Googl Chron Micros Unity 161 Fl: Help x 36103 nt to 6b6c1...
+[keys] '{ESC}'
+[shot] tds-017-gw1 (1024x768)
+[06:20:24] [tds] screen tds-017-gw1 : TallyPrime MANAGE Recyc EDU K: Company Gatewa of Tall Y: Data Z: Exchange CURRENT OATE Wednesday, I-Apr-2026 O: Import E: Export M: Share p: print Fl: Help Date 161 36103 Firefo Googl Chro Micros 46 IypÅ Unity CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co * (e) Data exceptions exist Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Q 31-Mar-27 Search Company nt to 6b6c1' 2C749 ' , "tra ubl' , I' c—8dd c749f "trac ...
+[06:20:24.930] tds: nature 'PD Contract Work' as a TDS Rate in Tally: True
+[06:20:24.946] import tds: party, expense, TDS ledger: 3 sent, created 2, errors 0, 12.6 ms; Tally: Tax Classification &apos;PD Contract Work&apos; does not exist!
+[06:20:24.959] import tds: ledgers again (alter): 3 sent, created 0, errors 0, 11.2 ms; Tally: Tax Classification &apos;PD Contract Work&apos; does not exist!
+[06:20:30.990] tally.ini: Data D:\a\_temp\TallyHeavy; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-setup-heavy-started (1024x768)
+[06:20:58.965] Tally started (setup-heavy) in 28 s; company open: True
+[06:21:00.980] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[06:21:03.435] import heavy masters 0: 1000 sent, created 1000, errors 0, 2217.5 ms
+[06:21:05.625] import heavy masters 1000: 1000 sent, created 1000, errors 0, 2186 ms
+[06:21:07.850] import heavy masters 2000: 1000 sent, created 1000, errors 0, 2221.5 ms
+[06:21:09.997] import heavy masters 3000: 1000 sent, created 1000, errors 0, 2143.9 ms
+[06:21:12.179] import heavy masters 4000: 1000 sent, created 1000, errors 0, 2178.5 ms
+[06:21:14.311] import heavy masters 5000: 1000 sent, created 1000, errors 0, 2128.8 ms
+[06:21:27.686] import heavy vouchers 0: 1000 sent, created 1000, errors 0, 13257.7 ms
+[06:21:42.591] import heavy vouchers 1000: 1000 sent, created 1000, errors 0, 14822.9 ms
+[06:21:57.784] import heavy vouchers 2000: 1000 sent, created 1000, errors 0, 15098.4 ms
+[06:22:13.313] import heavy vouchers 3000: 1000 sent, created 1000, errors 0, 15450.9 ms
+[06:22:29.025] import heavy vouchers 4000: 1000 sent, created 1000, errors 0, 15630 ms
+[06:22:44.168] import heavy vouchers 5000: 1000 sent, created 1000, errors 0, 15060.8 ms
+[06:23:00.515] import heavy vouchers 6000: 1000 sent, created 1000, errors 0, 16269.3 ms
+[06:23:16.758] import heavy vouchers 7000: 1000 sent, created 1000, errors 0, 16155.2 ms
+[06:23:33.525] import heavy vouchers 8000: 1000 sent, created 1000, errors 0, 16674.4 ms
+[06:23:49.166] import heavy vouchers 9000: 1000 sent, created 1000, errors 0, 15556.2 ms
+[06:24:05.547] import heavy vouchers 10000: 1000 sent, created 1000, errors 0, 16305.5 ms
+[06:24:21.712] import heavy vouchers 11000: 1000 sent, created 1000, errors 0, 16087.5 ms
+[06:24:38.031] import heavy vouchers 12000: 1000 sent, created 1000, errors 0, 16236.1 ms
+[06:24:54.355] import heavy vouchers 13000: 1000 sent, created 1000, errors 0, 16240.9 ms
+[06:25:10.566] import heavy vouchers 14000: 1000 sent, created 1000, errors 0, 16110.4 ms
+[06:25:26.876] import heavy vouchers 15000: 1000 sent, created 1000, errors 0, 16226.6 ms
+[06:25:43.225] import heavy vouchers 16000: 1000 sent, created 1000, errors 0, 16263.8 ms
+[06:25:59.635] import heavy vouchers 17000: 1000 sent, created 1000, errors 0, 16325.4 ms
+[06:26:15.835] import heavy vouchers 18000: 1000 sent, created 1000, errors 0, 16118.1 ms
+[06:26:32.138] import heavy vouchers 19000: 1000 sent, created 1000, errors 0, 16220.4 ms
+[06:26:48.217] import heavy vouchers 20000: 1000 sent, created 1000, errors 0, 16001.9 ms
+[06:27:04.371] import heavy vouchers 21000: 1000 sent, created 1000, errors 0, 16077.8 ms
+[06:27:20.648] import heavy vouchers 22000: 1000 sent, created 1000, errors 0, 16181.9 ms
+[06:27:37.977] import heavy vouchers 23000: 1000 sent, created 1000, errors 0, 17244.7 ms
+[06:27:54.347] import heavy vouchers 24000: 1000 sent, created 1000, errors 0, 16290.5 ms
+[06:28:10.429] import heavy vouchers 25000: 1000 sent, created 1000, errors 0, 16001.8 ms
+[06:28:27.061] import heavy vouchers 26000: 1000 sent, created 1000, errors 0, 16551.9 ms
+[06:28:44.093] import heavy vouchers 27000: 1000 sent, created 1000, errors 0, 16949.3 ms
+[06:29:00.699] import heavy vouchers 28000: 1000 sent, created 1000, errors 0, 16522.1 ms
+[06:29:16.987] import heavy vouchers 29000: 1000 sent, created 1000, errors 0, 16206.3 ms
+[06:29:26.251] heavy company: 3018 ledgers, 3100 stock items, 30012 vouchers in Tally (import took 9 min)
+[06:29:33.261] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-count-light-started (1024x768)
+[06:30:01.228] Tally started (count-light) in 28 s; company open: True
+[06:30:03.236] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[06:30:03.271] light company: 18 ledgers, 100 stock items, 12 vouchers
+[06:30:10.282] tally.ini: Data D:\a\_temp\TallyHeavy; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-v3-heavy-fetch-started (1024x768)
+[06:30:38.283] Tally started (v3-heavy-fetch) in 28 s; company open: True
+[06:30:40.291] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[06:30:50.777] GUID rule (heavy after import): 30012 of 30012 vouchers have GUID = company GUID + '-' + 8-hex MasterID; exceptions: 
+[06:30:50.787] company ALTVCHID / ALTMSTID by XML: <ALTVCHID TYPE="Number"> 30012 / <ALTMSTID TYPE="Number"> 6554
+[06:30:56.798] bridge's TallyHost: 127.0.0.2 (through the timing proxy)
+[06:30:56.806] bridge: setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.3.0.exe SHA-256 8e8145693224edf5459836323ce187e87e8dbca6eeac0bde494cf64b2ca6a7b9
+[06:31:17.262] bridge config after setup: TallyHost '127.0.0.2', TallyPorts 9000, port 9100
+[06:31:17.303] bridge on 127.0.0.1:9100, version 2.3.0
+[06:31:19.345] bridge stopped (C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe)
+[06:31:23.352] tally.ini: Data D:\a\_temp\TallyHeavy; TDL: C:\fcspike\FCPFullNR.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-heavy-fullnr-nobridge-started (1024x768)
+[06:31:51.374] Tally started (heavy-fullnr-nobridge) in 28 s; company open: True
+[06:31:53.392] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[06:31:53.401] -- a: heavy / fullnr-nobridge / receipt (dup) x 5
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[shot] p-heavy-fullnr-nobridge-receipt-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-fullnr-nobridge-receipt-dup (1024x768)
+   rep 1: ui sendwait 0.7 first 60.8 settled 207.2; stamps pre 1 save 15 post 7 final 1; line 690 B
+[shot] p-heavy-fullnr-nobridge-receipt-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.3 first 62.4 settled 185.6; stamps pre 1 save 16 post 1 final 1; line 695 B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 3: ui sendwait 0.3 first 29.9 settled 334.3; stamps pre 0 save 19 post 1 final 1; line 695 B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 4: ui sendwait 0.3 first 58.4 settled 234.8; stamps pre 1 save 18 post 1 final 1; line 695 B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 5: ui sendwait 0.3 first 75.0 settled 234.5; stamps pre 0 save 18 post 2 final 0; line 695 B
+[06:33:50.998]    Tally: 5 new, 0 altered (wanted 5)
+[06:33:51.006] -- a: heavy / fullnr-nobridge / sales5 (dup) x 5
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[shot] p-heavy-fullnr-nobridge-sales5-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-fullnr-nobridge-sales5-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 63.9 settled 108.2; stamps pre 0.6 save 66 post 6.4 final 0.6; line 3427 B
+[shot] p-heavy-fullnr-nobridge-sales5-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.4 first 61.2 settled 937.9; stamps pre 0 save 61 post 6 final 1; line 3316 B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 3: ui sendwait 0.3 first 62.8 settled 62.8; stamps pre 0 save 59.2 post 7 final 0; line 3316 B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 4: ui sendwait 0.2 first 62.5 settled 62.5; stamps pre 0 save 51 post 6 final 1; line 3316 B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 5: ui sendwait 0.3 first 62.0 settled 62.0; stamps pre 0 save 67 post 9 final 0; line 3316 B
+[06:35:50.989]    Tally: 5 new, 0 altered (wanted 5)
+[06:35:50.991] -- a: heavy / fullnr-nobridge / sales50 (dup) x 5
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-heavy-fullnr-nobridge-sales50-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-fullnr-nobridge-sales50-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 74.6 settled 74.6; stamps pre 0 save 238 post 48 final 0; line 28453 B
+[shot] p-heavy-fullnr-nobridge-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.3 first 75.6 settled 2204.1; stamps pre 1 save 262.7 post 47.6 final 0.4; line 27267 B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 3: ui sendwait 0.3 first 75.3 settled 2223.0; stamps pre 0 save 271 post 48 final 1; line 27267 B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 4: ui sendwait 0.2 first 62.3 settled 62.3; stamps pre 0 save 287 post 49 final 1; line 27267 B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 5: ui sendwait 0.3 first 93.4 settled 2394.5; stamps pre 0 save 300.2 post 49.4 final 1; line 27267 B
+[06:38:00.516]    Tally: 5 new, 0 altered (wanted 5)
+[06:38:00.521] -- a: heavy / fullnr-nobridge / sales50 (alter) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-heavy-fullnr-nobridge-sales50-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-heavy-fullnr-nobridge-sales50-open (1024x768)
+   rep 1: ui sendwait 0.3 first 76.6 settled 76.6; stamps pre 1 save 393 post 57 final 1; line 28543 B
+[shot] p-heavy-fullnr-nobridge-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{HOME}'
+[keys] '{ENTER}'
+   rep 2: ui sendwait 0.3 first 75.2 settled 75.2; stamps pre 0 save 355 post 47 final 1; line 27356 B
+[06:38:54.562]    Tally: 0 new, 1 altered (wanted 2)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-heavy-fullnr-nobridge-poll-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[06:39:23.122]    poll fullnr-nobridge #1: AltVchID 30029 -> 30030 seen at 2964.3 ms (last unchanged answer 1911.1 ms, 6 asks); stamps a..last 356 ms
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+[06:39:47.443]    poll fullnr-nobridge #2: AltVchID 30030 -> 30031 seen at 2967.6 ms (last unchanged answer 2179.1 ms, 6 asks); stamps a..last 342.1 ms
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+[06:40:11.802]    poll fullnr-nobridge #3: AltVchID 30031 -> 30032 seen at 2986.6 ms (last unchanged answer 1141.7 ms, 5 asks); stamps a..last 354.7 ms
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+[06:40:35.999]    poll fullnr-nobridge #4: AltVchID 30032 -> 30033 seen at 2857.3 ms (last unchanged answer 1869.4 ms, 6 asks); stamps a..last 335.5 ms
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+[06:41:00.389]    poll fullnr-nobridge #5: AltVchID 30033 -> 30034 seen at 3033.9 ms (last unchanged answer 1159.8 ms, 5 asks); stamps a..last 361 ms
+[06:41:04.644] -- a: heavy / fullnr-nobridge / payroll200 (dup) x 3
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-12-2026{ENTER}'
+[shot] p-heavy-fullnr-nobridge-payroll200-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-fullnr-nobridge-payroll200-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 76.1 settled 76.1; stamps pre 0 save 99.7 post 20 final 1; line 32628 B
+[shot] p-heavy-fullnr-nobridge-payroll200-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-12-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.3 first 91.4 settled 91.4; stamps pre 0 save 97 post 20 final 0; line 32632 B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-12-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 3: ui sendwait 0.3 first 62.5 settled 62.5; stamps pre 0.6 save 97.4 post 19.6 final 0.4; line 32632 B
+[06:42:30.580]    Tally: 3 new, 0 altered (wanted 3)
+[06:42:32.593] bridge stopped (C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe)
+[06:42:36.599] tally.ini: Data D:\a\_temp\TallyHeavy; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-heavy-none-started (1024x768)
+[06:43:04.609] Tally started (heavy-none) in 28 s; company open: True
+[06:43:06.617] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[06:43:06.618] -- a: heavy / none / receipt (dup) x 5
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[shot] p-heavy-none-receipt-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-none-receipt-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 44.3 settled 251.8; stamps pre  save  post  final ; line  B
+[shot] p-heavy-none-receipt-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.3 first 30.2 settled 203.6; stamps pre  save  post  final ; line  B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 3: ui sendwait 0.3 first 31.2 settled 219.3; stamps pre  save  post  final ; line  B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 4: ui sendwait 0.3 first 63.2 settled 203.9; stamps pre  save  post  final ; line  B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 5: ui sendwait 0.2 first 63.6 settled 218.9; stamps pre  save  post  final ; line  B
+[06:45:02.550]    Tally: 5 new, 0 altered (wanted 5)
+[06:45:02.552] -- a: heavy / none / sales5 (dup) x 5
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[shot] p-heavy-none-sales5-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-none-sales5-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 31.4 settled 942.3; stamps pre  save  post  final ; line  B
+[shot] p-heavy-none-sales5-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.3 first 74.8 settled 891.9; stamps pre  save  post  final ; line  B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 3: ui sendwait 0.3 first 74.5 settled 907.8; stamps pre  save  post  final ; line  B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 4: ui sendwait 0.3 first 75.2 settled 907.5; stamps pre  save  post  final ; line  B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 5: ui sendwait 0.4 first 60.0 settled 924.3; stamps pre  save  post  final ; line  B
+[06:47:03.310]    Tally: 5 new, 0 altered (wanted 5)
+[06:47:03.312] -- a: heavy / none / sales50 (dup) x 5
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-heavy-none-sales50-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-none-sales50-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 64.0 settled 2112.5; stamps pre  save  post  final ; line  B
+[shot] p-heavy-none-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.2 first 63.1 settled 2030.8; stamps pre  save  post  final ; line  B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 3: ui sendwait 0.3 first 75.3 settled 2157.2; stamps pre  save  post  final ; line  B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 4: ui sendwait 0.3 first 59.1 settled 2140.2; stamps pre  save  post  final ; line  B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 5: ui sendwait 0.3 first 62.5 settled 2206.5; stamps pre  save  post  final ; line  B
+[06:49:11.015]    Tally: 5 new, 0 altered (wanted 5)
+[06:49:11.017] -- a: heavy / none / sales50 (alter) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-heavy-none-sales50-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-heavy-none-sales50-open (1024x768)
+   rep 1: ui sendwait 0.4 first 76.2 settled 76.2; stamps pre  save  post  final ; line  B
+[shot] p-heavy-none-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{HOME}'
+[keys] '{ENTER}'
+   rep 2: ui sendwait 0.3 first 75.4 settled 75.4; stamps pre  save  post  final ; line  B
+[06:50:03.642]    Tally: 0 new, 1 altered (wanted 2)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-heavy-none-poll-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[06:50:32.085]    poll none #1: AltVchID 30054 -> 30055 seen at 2878.3 ms (last unchanged answer 1786.7 ms, 6 asks); stamps a..last  ms
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+[06:50:56.435]    poll none #2: AltVchID 30055 -> 30056 seen at 2979.7 ms (last unchanged answer 1121.2 ms, 5 asks); stamps a..last  ms
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+[06:51:20.732]    poll none #3: AltVchID 30056 -> 30057 seen at 2936.4 ms (last unchanged answer 2044.7 ms, 6 asks); stamps a..last  ms
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+[06:51:45.105]    poll none #4: AltVchID 30057 -> 30058 seen at 3028 ms (last unchanged answer 1154.9 ms, 5 asks); stamps a..last  ms
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+[06:52:09.598]    poll none #5: AltVchID 30058 -> 30059 seen at 3164.2 ms (last unchanged answer 1157.5 ms, 5 asks); stamps a..last  ms
+[06:52:13.897] bridge stopped (C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe)
+[06:52:17.903] tally.ini: Data D:\a\_temp\TallyHeavy; TDL: C:\fcspike\FCPHeads.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-heavy-heads-nobridge-started (1024x768)
+[06:52:45.870] Tally started (heavy-heads-nobridge) in 28 s; company open: True
+[06:52:47.889] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[06:52:47.890] -- a: heavy / heads-nobridge / receipt (dup) x 5
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[shot] p-heavy-heads-nobridge-receipt-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-heads-nobridge-receipt-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 44.4 settled 253.1; stamps pre 3 save 34.6 post 0 final ; line  B
+[shot] p-heavy-heads-nobridge-receipt-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.3 first 30.1 settled 218.5; stamps pre 1 save 25 post 0 final ; line  B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 3: ui sendwait 0.3 first 30.2 settled 188.1; stamps pre 0 save 28 post 0 final ; line  B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 4: ui sendwait 0.3 first 62.0 settled 235.0; stamps pre 1 save 18 post 0 final ; line  B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 5: ui sendwait 0.3 first 63.1 settled 218.5; stamps pre 1 save 23 post 1 final ; line  B
+[06:54:45.305]    Tally: 5 new, 0 altered (wanted 5)
+[06:54:45.307] -- a: heavy / heads-nobridge / sales5 (dup) x 5
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[shot] p-heavy-heads-nobridge-sales5-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-heads-nobridge-sales5-dup (1024x768)
+   rep 1: ui sendwait 0.2 first 30.9 settled 908.8; stamps pre 1 save 94.5 post 1 final ; line  B
+[shot] p-heavy-heads-nobridge-sales5-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.3 first 59.1 settled 843.7; stamps pre 1 save 87.1 post 0 final ; line  B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 3: ui sendwait 0.3 first 75.3 settled 912.2; stamps pre 1 save 85 post 1 final ; line  B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 4: ui sendwait 0.3 first 62.5 settled 922.1; stamps pre 1 save 85.1 post 1 final ; line  B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 5: ui sendwait 0.3 first 63.7 settled 908.5; stamps pre 1 save 73.4 post 1 final ; line  B
+[06:56:47.406]    Tally: 5 new, 0 altered (wanted 5)
+[06:56:47.408] -- a: heavy / heads-nobridge / sales50 (dup) x 5
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-heavy-heads-nobridge-sales50-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-heads-nobridge-sales50-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 64.1 settled 2143.0; stamps pre 1 save 283 post 0 final ; line  B
+[shot] p-heavy-heads-nobridge-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.2 first 62.9 settled 2188.8; stamps pre 0 save 322.5 post 1 final ; line  B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 3: ui sendwait 0.3 first 75.0 settled 2221.1; stamps pre 1 save 335.6 post 1 final ; line  B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 4: ui sendwait 0.3 first 75.2 settled 2209.5; stamps pre 0 save 309.5 post 1 final ; line  B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 5: ui sendwait 0.3 first 74.5 settled 2287.8; stamps pre 1 save 326 post 1 final ; line  B
+[06:58:57.141]    Tally: 5 new, 0 altered (wanted 5)
+[06:58:57.143] -- a: heavy / heads-nobridge / sales50 (alter) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-heavy-heads-nobridge-sales50-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-heavy-heads-nobridge-sales50-open (1024x768)
+   rep 1: ui sendwait 0.3 first 79.5 settled 79.5; stamps pre 1 save 386 post 0 final ; line  B
+[shot] p-heavy-heads-nobridge-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{HOME}'
+[keys] '{ENTER}'
+   rep 2: ui sendwait 0.3 first 74.8 settled 122.6; stamps pre 0.4 save 364.7 post 1 final ; line  B
+[06:59:50.648]    Tally: 0 new, 1 altered (wanted 2)
+[06:59:54.734] bridge stopped (C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe)
+[06:59:58.741] tally.ini: Data D:\a\_temp\TallyHeavy; TDL: C:\fcspike\FCPHeads.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-heavy-heads-bridge-started (1024x768)
+[07:00:26.729] Tally started (heavy-heads-bridge) in 28 s; company open: True
+[07:00:28.747] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[07:00:31.774] bridge running: version 2.3.0
+[07:01:32.825] body fetch: recorderSource both -> addon sent by the stub cloud (nothing was off)
+[07:01:32.826] -- a: heavy / heads-bridge / receipt (dup) x 5
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[shot] p-heavy-heads-bridge-receipt-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-heads-bridge-receipt-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 30.9 settled 269.3; stamps pre 3 save 36.6 post 0.5 final ; line  B
+[shot] p-heavy-heads-bridge-receipt-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.3 first 31.1 settled 219.9; stamps pre 1 save 30.2 post 0 final ; line  B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 3: ui sendwait 0.2 first 59.4 settled 208.2; stamps pre 1 save 27 post 0.5 final ; line  B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 4: ui sendwait 0.3 first 59.1 settled 220.1; stamps pre 1 save 22.6 post 0.7 final ; line  B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '1-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 5: ui sendwait 0.2 first 58.7 settled 251.3; stamps pre 1 save 19 post 1 final ; line  B
+[07:03:30.703]    Tally: 5 new, 0 altered (wanted 5)
+[07:03:30.704] -- a: heavy / heads-bridge / sales5 (dup) x 5
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[shot] p-heavy-heads-bridge-sales5-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-heads-bridge-sales5-dup (1024x768)
+   rep 1: ui sendwait 0.4 first 64.7 settled 977.6; stamps pre 1 save 101.6 post 1 final ; line  B
+[shot] p-heavy-heads-bridge-sales5-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.3 first 31.2 settled 846.5; stamps pre 1 save 86.2 post 0 final ; line  B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 3: ui sendwait 0.3 first 62.7 settled 896.2; stamps pre 0.4 save 84.7 post 0 final ; line  B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 4: ui sendwait 0.3 first 62.4 settled 944.2; stamps pre 0.6 save 83.1 post 1 final ; line  B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '2-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 5: ui sendwait 0.1 first 74.6 settled 973.6; stamps pre 1 save 95.1 post 2 final ; line  B
+[07:05:33.636]    Tally: 5 new, 0 altered (wanted 5)
+[07:05:33.638] -- a: heavy / heads-bridge / sales50 (dup) x 5
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-heavy-heads-bridge-sales50-daybook (1024x768)
+[keys] '{END}'
+[keys] '%2'
+[shot] p-heavy-heads-bridge-sales50-dup (1024x768)
+   rep 1: ui sendwait 0.3 first 48.8 settled 2118.8; stamps pre 1 save 303.5 post 1 final ; line  B
+[shot] p-heavy-heads-bridge-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 2: ui sendwait 0.3 first 73.0 settled 2166.0; stamps pre 2 save 318.9 post 0.6 final ; line  B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 3: ui sendwait 0.3 first 75.2 settled 2172.2; stamps pre 0.5 save 305.4 post 1 final ; line  B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 4: ui sendwait 0.3 first 74.8 settled 2228.0; stamps pre 0 save 314.2 post 1 final ; line  B
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{END}'
+[keys] '%2'
+   rep 5: ui sendwait 0.3 first 75.5 settled 2104.8; stamps pre 1 save 309.5 post 0.5 final ; line  B
+[07:07:43.257]    Tally: 5 new, 0 altered (wanted 5)
+[07:07:43.260] -- a: heavy / heads-bridge / sales50 (alter) x 2
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[shot] p-heavy-heads-bridge-sales50-daybook (1024x768)
+[keys] '{HOME}'
+[keys] '{ENTER}'
+[shot] p-heavy-heads-bridge-sales50-open (1024x768)
+   rep 1: ui sendwait 0.2 first 76.3 settled 76.3; stamps pre 1 save 373.6 post 1 final ; line  B
+[shot] p-heavy-heads-bridge-sales50-saved (1024x768)
+[keys] '%g'
+[keys] 'Day Book'
+[keys] '{ENTER}'
+[keys] '{F2}'
+[keys] '31-10-2026{ENTER}'
+[keys] '{HOME}'
+[keys] '{ENTER}'
+   rep 2: ui sendwait 0.3 first 79.3 settled 79.3; stamps pre 1 save 369.2 post 1 final ; line  B
+[07:08:37.090]    Tally: 0 new, 1 altered (wanted 2)
+[07:08:43.460] bridge stopped (C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe)
+[07:08:47.467] tally.ini: Data D:\a\_temp\TallyHeavy; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-heavy-guid-after-started (1024x768)
+[07:09:15.445] Tally started (heavy-guid-after) in 28 s; company open: True
+[07:09:17.452] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[07:09:27.944] GUID rule (heavy after the saves (new by Alt+2, altered, imported)): 30085 of 30085 vouchers have GUID = company GUID + '-' + 8-hex MasterID; exceptions: 
+[07:09:33.179] bridge stopped (C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe)
+[07:09:37.185] tally.ini: Data D:\a\_temp\TallyHeavy; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-v3-heavy-fetch-started (1024x768)
+[07:10:05.141] Tally started (v3-heavy-fetch) in 28 s; company open: True
+[07:10:07.148] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[07:10:09.806] fetch target sales50-template: mid  guid  date 
+[07:10:12.872] fetch target heavy-receipt-15002: mid  guid  date    party ''
+[shot] p-heavy-fetch-gateway (1024x768)
+[07:10:16.454] fetch heavy: the probe key on an idle Tally: 28.4, 44.1, 44, 28, 16 ms
+[07:10:16.456] fetch heavy: target sales50-template not found in Tally: skipped
+[07:10:16.457] fetch heavy: target heavy-receipt-15002 not found in Tally: skipped
+[07:10:23.470] tally.ini: Data D:\a\_temp\TallyData; TDL: C:\fcspike\FCPFullNR.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-tds-fullnr-started (1024x768)
+[07:10:51.413] Tally started (tds-fullnr) in 27.9 s; company open: True
+[07:10:53.420] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[shot] tds-018-gw0 (1024x768)
+[07:10:54] [tds] screen tds-018-gw0 : TallyPrime MANAGE Recyc EDU K: Company Gatewa of Tall Y: Data Q Z: Exchange CURRENT OATE Wednesday, 31-Mar-2027 31-Mar-27 Search O: Import E: Export M: Share p: print Fl: Help Date 161 36103 Firefo Googl Chro Micros 46 IypÅ Unity CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co * (e) Data exceptions exist Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Company nt to 6b6c1' 2C749 ' , "tra ubl' , I' c—8dd c749f "trac...
+[keys] 'v'
+[shot] tds-019-s5-vouchers (1024x768)
+[07:10:58] [tds] screen tds-019-s5-vouchers : TallyPrime MANAGE Recyc EDU K: Company Accounting Voucher Creation Pa ment No. 1 Firefo Account Current balance: Particulars Googl Chro Micros 46 IypÅ Narration: Unity Quit Y: Data Z: Exchange A Accept Search O: Import E: Export M: Share FinCom • ke Co p: print 31-Mar-27 Wednesday Amount Fl: Help Q: Date Company Ed: Contra F-5: Payment Receipt Journal Sales 161 36103 nt to 6b6c1' Purchase < • Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure 2C749 : ' , "tra ubl' , I' c—8dd c749f "trac c178- isten unnin ion_i 4aee—...
+[keys] '{F7}'
+[shot] tds-020-s5-journal (1024x768)
+[07:11:01] [tds] screen tds-020-s5-journal : TallyPrime MANAGE Recyc EDU K: Company Accounting Voucher Creation Journal No. 2 Firefo Particulars Googl Chro Micros 46 IypÅ Narration: Unity Quit Y: Data Z: Exchange A Accept Search FinCom • ke Co O: Import E: Export List of Led er Accounts output CGST output SGST PD Basic PD Contract Exp PD HRA PD salary Payable PD Supplier PD TDS Contractor Profit & Loss A/c Purchase Sales Spike Income Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Show More Fl: Help Q: Date Company Ed: Contra Payment Receipt F-7: Journal Sales 161 36103 nt to Purchase < • Fl O: OåuVooctgs E: ...
+[keys] '{F2}'
+[shot] tds-021-s5-date-box (1024x768)
+[07:11:04] [tds] screen tds-021-s5-date-box : x Recyc TallyPrime MANAGE EDU K: Company Change Voucher Date Y: Data Z: Exchange A Accept Q Search O: Import E: Export o M: Share p: print o Fl: Help Firefo Googl Chron Micros lyp Unity Quit FinCom Spike Co Voucher Date 14-2027 36103 nt to 6b6c1' 2C749 ' , "tra ubl' , I' c—8dd c749f "trac : '2.3 c178- isten unnin ion_i 4aee— age" , 8c-8d 'tally Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:11 AM 10/7/2026
+[keys] '2-11-2026{ENTER}'
+[shot] tds-022-s5-date-set (1024x768)
+[07:11:07] [tds] screen tds-022-s5-date-set : TallyPrime MANAGE Recyc EDU K: Company Accounting Voucher Creation Journal No. 2 Firefo Particulars Googl Chro Micros 46 IypÅ Narration: Unity Quit Y: Data Z: Exchange A Accept Search FinCom • ke Co O: Import E: Export List of Led er Accounts output CGST output SGST PD Basic PD Contract Exp PD HRA PD salary Payable PD Supplier PD TDS Contractor Profit & Loss A/c Purchase Sales Spike Income Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Show More Fl: Help Q: Date Company Ed: Contra Payment Receipt F-7: Journal Sales 161 36103 nt to Purchase < • Fl O: OåuVooctgs E: ...
+[keys] 'PD Contract Exp{ENTER}'
+[shot] tds-023-s5-r1-ledger (1024x768)
+[07:11:10] [tds] screen tds-023-s5-r1-ledger : TallyPrime MANAGE Recyc EDU K: Company Accounting Voucher Creation Journal No. 2 Y: Data Z: Exchange A Accept Search O: Import E: Export FinCom • ke Co M: Share Debit p: print x 2-Nov-26 Monday Credit Firefo By By Googl Chro Micros 46 IypÅ Particulars PD Contract Exp Cur Bal: Fl: Help Q: Date Company Ed: Contra Payment Receipt F-7: Journal Sales Purchase < • 161 36103 nt to 6b6c1' 2C749 : ' , "tra ubl' , I' c—8dd Narration: Unity Quit Fl O: OåuVooctgs E: Autofill H: Change = Mode More Details o: Related Reports Optional post -Dated J: Stat Adjustment El 2: Configure c749f "trac c178- isten unn...
+[keys] '100000{ENTER}'
+[shot] tds-024-s5-r1-amount (1024x768)
+[07:11:14] [tds] screen tds-024-s5-r1-amount : x Recyc Firefo TallyPrime MANAGE EDU K: Company Cost Centre Allocations Y: Data Z: Exchange O: Import E: Export o M: Share p: print o Fl: Help FinCom Spike Co Cost Allocations for : PD Contract Exp Googl Chron Micros lyp Unity Quit Up to: Dr Name of Cost Centre A Accept Q Search Amount 36103 nt to 6b6c1' 2C749 ' , "tra ubl' , I' c—8dd c749f "trac : '2.3 c178- isten unnin ion_i 4aee— age" , 8c-8d 'tally Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:11 AM 10/7/2026
+[keys] 't{ENTER}'
+[shot] tds-025-s5-r2-to (1024x768)
+[07:11:16] [tds] screen tds-025-s5-r2-to : Recyc Firefo Googl Chron Micros lyp Unity TallyPrime MANAGE EDU K: Company Cost Centre Allocations Q: Quit Y: Data Z: Exchange FinCom Spike Co Cost Allocations for : PD Contract Up to: Dr Name of Cost Centre A: Accept Q Search O: Import E: Export List of Cost Centres PD Staff o M: Share p: print Create Error Oops! Nothing selected o Fl: Help x 36103 nt to 6b6c1' 2C749 ' , "tra ubl' , I' c—8dd c749f "trac : '2.3 c178- isten unnin ion_i 4aee— age" , 8c-8d 'tally Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:11 AM 10/7/2026
+[keys] 'PD TDS Payable{ENTER}'
+[shot] tds-026-s5-r2-ledger (1024x768)
+[07:11:20] [tds] screen tds-026-s5-r2-ledger : Recyc Firefo Googl Chron Micros lyp Unity TallyPrime MANAGE EDU K: Company Cost Centre Allocations Q: Quit Y: Data Z: Exchange FinCom Spike Co Cost Allocations for : PD Contract Up to: Dr Name of Cost Centre ta A: Accept Q Search O: Import E: Export List of Cost Centres PD Staff o M: Share p: print Create Error Oops! Spelling Error o Fl: Help x 36103 nt to 6b6c1' 2C749 ' , "tra ubl' , I' c—8dd c749f "trac : '2.3 c178- isten unnin ion_i 4aee— age" , 8c-8d 'tally Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:11 AM 10/7/2026
+[shot] tds-027-s5-r2-sub1 (1024x768)
+[07:11:21] [tds] screen tds-027-s5-r2-sub1 : Recyc Firefo Googl Chron Micros lyp Unity TallyPrime MANAGE EDU K: Company Cost Centre Allocations Q: Quit Y: Data Z: Exchange FinCom Spike Co Cost Allocations for : PD Contract Up to: Dr Name of Cost Centre ta A: Accept Q Search O: Import E: Export List of Cost Centres PD Staff o M: Share p: print Create Error Oops! Spelling Error o Fl: Help x 36103 nt to 6b6c1' 2C749 ' , "tra ubl' , I' c—8dd c749f "trac : '2.3 c178- isten unnin ion_i 4aee— age" , 8c-8d 'tally Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:11 AM 10/7/2026
+[shot] tds-028-s5-r2-amount-shown (1024x768)
+[07:11:22] [tds] screen tds-028-s5-r2-amount-shown : Recyc Firefo Googl Chron Micros lyp Unity TallyPrime MANAGE EDU K: Company Cost Centre Allocations Q: Quit Y: Data Z: Exchange FinCom Spike Co Cost Allocations for : PD Contract Up to: Dr Name of Cost Centre ta A: Accept Q Search O: Import E: Export List of Cost Centres PD Staff o M: Share p: print Create Error Oops! Spelling Error o Fl: Help x 36103 nt to 6b6c1' 2C749 ' , "tra ubl' , I' c—8dd c749f "trac : '2.3 c178- isten unnin ion_i 4aee— age" , 8c-8d 'tally Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:11 AM 10/7/2026
+[keys] '2000{ENTER}'
+[shot] tds-029-s5-r2-amount-typed (1024x768)
+[07:11:25] [tds] screen tds-029-s5-r2-amount-typed : o Recyc Firefo Googl Chron Micros lyp Unity TallyPrime MANAGE EDU K: Company Cost Centre Allocations Quit Y: Data Z: Exchange FinCom Spike Co Cost Allocations for : PD Contract Up to: Dr Name of Cost Centre ta- A Accept Q Search O: Import E: Export List of Cost Centres PD Staff o M: Share p: print Create x Fl: Help 36103 nt to 6b6c1' 2C749 ' , "tra ubl' , I' c—8dd c749f "trac : '2.3 c178- isten unnin ion_i 4aee— age" , 8c-8d 'tally Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:11 AM 10/7/2026
+[shot] tds-030-s5-r2-after1 (1024x768)
+[07:11:26] [tds] screen tds-030-s5-r2-after1 : o Recyc Firefo Googl Chron Micros lyp Unity TallyPrime MANAGE EDU K: Company Cost Centre Allocations Quit Y: Data Z: Exchange FinCom Spike Co Cost Allocations for : PD Contract Up to: Dr Name of Cost Centre ta- A Accept Q Search O: Import E: Export List of Cost Centres PD Staff o M: Share p: print Create x Fl: Help 36103 nt to 6b6c1' 2C749 ' , "tra ubl' , I' c—8dd c749f "trac : '2.3 c178- isten unnin ion_i 4aee— age" , 8c-8d 'tally Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:11 AM 10/7/2026
+[keys] 't{ENTER}'
+[shot] tds-031-s5-r3-to (1024x768)
+[07:11:28] [tds] screen tds-031-s5-r3-to : Recyc Firefo Googl Chron Micros lyp Unity TallyPrime MANAGE EDU K: Company Cost Centre Allocations Q: Quit Y: Data Z: Exchange FinCom Spike Co Cost Allocations for : PD Contract Up to: Dr Name of Cost Centre ta A: Accept Q Search O: Import E: Export List of Cost Centres PD Staff o M: Share p: print Create Error Oops! Spelling Error o Fl: Help x 36103 nt to 6b6c1' 2C749 ' , "tra ubl' , I' c—8dd c749f "trac : '2.3 c178- isten unnin ion_i 4aee— age" , 8c-8d 'tally Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:11 AM 10/7/2026
+[keys] 'PD TDS Contractor{ENTER}'
+[shot] tds-032-s5-r3-ledger (1024x768)
+[07:11:32] [tds] screen tds-032-s5-r3-ledger : Recyc Firefo Googl Chron Micros lyp Unity TallyPrime MANAGE EDU K: Company Cost Centre Allocations Q: Quit Y: Data Z: Exchange FinCom Spike Co Cost Allocations for : PD Contract Up to: Dr Name of Cost Centre ta A: Accept Q Search O: Import E: Export List of Cost Centres PD Staff o M: Share p: print Create Error Oops! Spelling Error o Fl: Help x 36103 nt to 6b6c1' 2C749 ' , "tra ubl' , I' c—8dd c749f "trac : '2.3 c178- isten unnin ion_i 4aee— age" , 8c-8d 'tally Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:11 AM 10/7/2026
+[shot] tds-033-s5-r3-amount-shown (1024x768)
+[07:11:33] [tds] screen tds-033-s5-r3-amount-shown : Recyc Firefo Googl Chron Micros lyp Unity TallyPrime MANAGE EDU K: Company Cost Centre Allocations Q: Quit Y: Data Z: Exchange FinCom Spike Co Cost Allocations for : PD Contract Up to: Dr Name of Cost Centre ta A: Accept Q Search O: Import E: Export List of Cost Centres PD Staff o M: Share p: print Create Error Oops! Spelling Error o Fl: Help x 36103 nt to 6b6c1' 2C749 ' , "tra ubl' , I' c—8dd c749f "trac : '2.3 c178- isten unnin ion_i 4aee— age" , 8c-8d 'tally Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:11 AM 10/7/2026
+[keys] '98000{ENTER}'
+[shot] tds-034-s5-r3-amount-typed (1024x768)
+[07:11:36] [tds] screen tds-034-s5-r3-amount-typed : Recyc Firefo Googl Chron Micros lyp Unity TallyPrime MANAGE EDU K: Company Cost Centre Allocations Q: Quit Y: Data Z: Exchange FinCom Spike Co Cost Allocations for : PD Contract Up to: Dr Name of Cost Centre ta A: Accept Q Search O: Import E: Export List of Cost Centres PD Staff o M: Share p: print Create Error Oops! Spelling Error o Fl: Help x 36103 nt to 6b6c1' 2C749 ' , "tra ubl' , I' c—8dd c749f "trac : '2.3 c178- isten unnin ion_i 4aee— age" , 8c-8d 'tally Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:11 AM 10/7/2026
+[shot] tds-035-s5-r3-after1 (1024x768)
+[07:11:37] [tds] screen tds-035-s5-r3-after1 : Recyc Firefo Googl Chron Micros lyp Unity TallyPrime MANAGE EDU K: Company Cost Centre Allocations Q: Quit Y: Data Z: Exchange FinCom Spike Co Cost Allocations for : PD Contract Up to: Dr Name of Cost Centre ta A: Accept Q Search O: Import E: Export List of Cost Centres PD Staff o M: Share p: print Create Error Oops! Spelling Error o Fl: Help x 36103 nt to 6b6c1' 2C749 ' , "tra ubl' , I' c—8dd c749f "trac : '2.3 c178- isten unnin ion_i 4aee— age" , 8c-8d 'tally Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:11 AM 10/7/2026
+[shot] tds-036-s5-before-narration (1024x768)
+[07:11:38] [tds] screen tds-036-s5-before-narration : Recyc Firefo Googl Chron Micros lyp Unity TallyPrime MANAGE EDU K: Company Cost Centre Allocations Q: Quit Y: Data Z: Exchange FinCom Spike Co Cost Allocations for : PD Contract Up to: Dr Name of Cost Centre ta A: Accept Q Search O: Import E: Export List of Cost Centres PD Staff o M: Share p: print Create Error Oops! Spelling Error o Fl: Help x 36103 nt to 6b6c1' 2C749 ' , "tra ubl' , I' c—8dd c749f "trac : '2.3 c178- isten unnin ion_i 4aee— age" , 8c-8d 'tally Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:11 AM 10/7/2026
+[keys] '{ENTER}'
+[shot] tds-037-s5-rows-done (1024x768)
+[07:11:41] [tds] screen tds-037-s5-rows-done : o Recyc Firefo Googl Chron Micros lyp Unity TallyPrime MANAGE EDU K: Company Cost Centre Allocations Quit Y: Data Z: Exchange FinCom Spike Co Cost Allocations for : PD Contract Up to: Dr Name of Cost Centre ta- A Accept Q Search O: Import E: Export List of Cost Centres PD Staff o M: Share p: print Create x Fl: Help 36103 nt to 6b6c1' 2C749 ' , "tra ubl' , I' c—8dd c749f "trac : '2.3 c178- isten unnin ion_i 4aee— age" , 8c-8d 'tally Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:11 AM 10/7/2026
+[keys] 'PD TDS 194C typed on the screen{ENTER}'
+[shot] tds-038-s5-narration (1024x768)
+[07:11:44] [tds] screen tds-038-s5-narration : Recyc Firefo Googl Chron Micros lyp Unity TallyPrime MANAGE EDU K: Company Cost Centre Allocations Q: Quit Y: Data Z: Exchange FinCom Spike Co Cost Allocations for : PD Contract Up to: Dr Name of Cost Centre ta A: Accept Q Search O: Import E: Export List of Cost Centres PD Staff o M: Share p: print Create Error Oops! Spelling Error o Fl: Help x 36103 nt to 6b6c1' 2C749 ' , "tra ubl' , I' c—8dd c749f "trac : '2.3 c178- isten unnin ion_i 4aee— age" , 8c-8d 'tally Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:11 AM 10/7/2026
+[shot] tds-039-s5-accept-q (1024x768)
+[07:11:45] [tds] screen tds-039-s5-accept-q : Recyc Firefo Googl Chron Micros lyp Unity TallyPrime MANAGE EDU K: Company Cost Centre Allocations Q: Quit Y: Data Z: Exchange FinCom Spike Co Cost Allocations for : PD Contract Up to: Dr Name of Cost Centre ta A: Accept Q Search O: Import E: Export List of Cost Centres PD Staff o M: Share p: print Create Error Oops! Spelling Error o Fl: Help x 36103 nt to 6b6c1' 2C749 ' , "tra ubl' , I' c—8dd c749f "trac : '2.3 c178- isten unnin ion_i 4aee— age" , 8c-8d 'tally Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:11 AM 10/7/2026
+[keys] 'y'
+[shot] tds-040-s5-accepted (1024x768)
+[07:11:49] [tds] screen tds-040-s5-accepted : Recyc Firefo Googl Chron Micros lyp Unity TallyPrime MANAGE EDU K: Company Cost Centre Allocations Q: Quit Y: Data Z: Exchange FinCom Spike Co Cost Allocations for : PD Contract Up to: Dr Name of Cost Centre ta A: Accept Q Search O: Import E: Export List of Cost Centres PD Staff o M: Share p: print Create Error Oops! Spelling Error o Fl: Help x 36103 nt to 6b6c1' 2C749 ' , "tra ubl' , I' c—8dd c749f "trac : '2.3 c178- isten unnin ion_i 4aee— age" , 8c-8d 'tally Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:11 AM 10/7/2026
+[07:11:49.477] TDS: TDS row amount typed (2000); OCR read the screens
+[07:12:09.561] TDS: entry saved: mid 4 2 3 5 6 7 8 9 10 11 12 Receipt Sales Sales Payroll Payroll Stock Journal PD Manufacturing Journal Delivery Note Receipt Note Physical Stock Sales 1 1 2 1 2 1 MJ-1 1 1 1 3 43dab00b-d20f-48b0-b964-4ed000021a28-00000004 43dab00b-d20f-48b0-b964-4ed000021a28-00000002 43dab00b-d20f-48b0-b964-4ed000021a28-00000003 43dab00b-d20f-48b0-b964-4ed000021a28-00000005 43dab00b-d20f-48b0-b964-4ed000021a28-00000006 43dab00b-d20f-48b0-b964-4ed000021a28-00000007 43dab00b-d20f-48b0-b964-4ed000021a28-00000008 43dab00b-d20f-48b0-b964-4ed000021a28-00000009 43dab00b-d20f-48b0-b964-4ed000021a28-0000000a 43dab00b-d20f-48b0-b964-4ed000021a28-0000000b 43dab00b-d20f-48b0-b964-4ed000021a28-0000000c; add-on lines 0
+[07:12:09.563] TDS: the add-on's line: tax allocations 0: ; bills: 
+[07:12:09.659] TDS: tds-tally-daybook.xml: 366 B, filled TAXOBJECTALLOCATIONS 0, CATEGORY '', TAX '', ASSESSABLEAMOUNT '', TDSDEDUCTEESECTIONNUMBER ''
+[07:12:09.661] TDS: tds-bridge-bymaster.xml: 1513 B, filled TAXOBJECTALLOCATIONS 0, CATEGORY '', TAX '', ASSESSABLEAMOUNT '', TDSDEDUCTEESECTIONNUMBER ''
+[07:12:09.662] TDS: tds-object-star.xml: 554 B, filled TAXOBJECTALLOCATIONS 0, CATEGORY '', TAX '', ASSESSABLEAMOUNT '', TDSDEDUCTEESECTIONNUMBER ''
+[07:12:09.663] TDS: tds-collection-star.xml: 1513 B, filled TAXOBJECTALLOCATIONS 0, CATEGORY '', TAX '', ASSESSABLEAMOUNT '', TDSDEDUCTEESECTIONNUMBER ''
+[07:12:09.664] TDS: tds-collection-native.xml: 1513 B, filled TAXOBJECTALLOCATIONS 0, CATEGORY '', TAX '', ASSESSABLEAMOUNT '', TDSDEDUCTEESECTIONNUMBER ''
+[shot] p-light-tds-fetch-gateway (1024x768)
+[07:12:11.979] fetch light-tds: the probe key on an idle Tally: 44.3, 44.3, 43.7, 44.5, 14.7 ms
+[07:12:12.624] fetch light-tds tds-journal bymaster-bridge: 30.8 ms, probe 44.2 ms (during False); 1511 B, 1 vouchers, entry False, ledger lines 0, items 0, TDS allocations 0 
+[07:12:17.145] fetch light-tds tds-journal bynumber-bridge: 39.7 ms, probe 28.3 ms (during False); 1511 B, 1 vouchers, entry False, ledger lines 0, items 0, TDS allocations 0 
+[07:12:21.662] fetch light-tds tds-journal day-collection-nofilter-midonly: 30.9 ms, probe 28 ms (during False); 15507 B, 13 vouchers, entry False, ledger lines 0, items 0, TDS allocations 0 
+[07:12:26.204] fetch light-tds tds-journal obj-name-guid: 7.7 ms, probe 31.4 ms (during False); 552 B, 0 vouchers, entry False, ledger lines 0, items 0, TDS allocations 0 <ERRORMSG>Could not find Voucher:43dab00b-d20f-48b0-b964-4ed000021a28-00000004 43dab00b-d20f-48b0-b964-4ed000021a28-00000002 43dab00b-d20f-48b0-b964-4ed000021a28-00000003 43dab00b-d20f-48b0-b964-4ed000021a28-00000005 43dab00b-d20f-48b0-b964-4ed000021a28-00000006 43dab00b-d20f-48b0-b964-4ed000021a28-00000007 43dab00b-d20f-48b0-b964-4ed000021a28-00000008 43dab00b-d20f-48b0-b964-4ed000021a28-00000009 43dab00b-d20f-48b0-b964-4ed000021a28-0000000a 43dab00b-d20f-48b0-b964-4ed000021a28-0000000b 43dab00b-d20f-48b0-b964-4ed000021a28-0000000c!
+[07:12:30.772] fetch light-tds tds-journal obj-name-guid-star: 7.1 ms, probe 32.1 ms (during False); 552 B, 0 vouchers, entry False, ledger lines 0, items 0, TDS allocations 0 <ERRORMSG>Could not find Voucher:43dab00b-d20f-48b0-b964-4ed000021a28-00000004 43dab00b-d20f-48b0-b964-4ed000021a28-00000002 43dab00b-d20f-48b0-b964-4ed000021a28-00000003 43dab00b-d20f-48b0-b964-4ed000021a28-00000005 43dab00b-d20f-48b0-b964-4ed000021a28-00000006 43dab00b-d20f-48b0-b964-4ed000021a28-00000007 43dab00b-d20f-48b0-b964-4ed000021a28-00000008 43dab00b-d20f-48b0-b964-4ed000021a28-00000009 43dab00b-d20f-48b0-b964-4ed000021a28-0000000a 43dab00b-d20f-48b0-b964-4ed000021a28-0000000b 43dab00b-d20f-48b0-b964-4ed000021a28-0000000c!
+[07:12:35.317] fetch light-tds tds-journal obj-masterid: 8 ms, probe 30.3 ms (during False); 71 B, 0 vouchers, entry False, ledger lines 0, items 0, TDS allocations 0 <ERRORMSG>Could not find Voucher:4 2 3 5 6 7 8 9 10 11 12!
+[07:12:39.836] fetch light-tds tds-journal obj-name-id:mid: 14.3 ms, probe 17 ms (during False); 67096 B, 2 vouchers, entry False, ledger lines 0, items 0, TDS allocations 0 
+[07:12:44.382] fetch light-tds tds-journal obj-guid-type: 6.9 ms, probe 32.1 ms (during False); 552 B, 0 vouchers, entry False, ledger lines 0, items 0, TDS allocations 0 <ERRORMSG>Could not find Voucher:43dab00b-d20f-48b0-b964-4ed000021a28-00000004 43dab00b-d20f-48b0-b964-4ed000021a28-00000002 43dab00b-d20f-48b0-b964-4ed000021a28-00000003 43dab00b-d20f-48b0-b964-4ed000021a28-00000005 43dab00b-d20f-48b0-b964-4ed000021a28-00000006 43dab00b-d20f-48b0-b964-4ed000021a28-00000007 43dab00b-d20f-48b0-b964-4ed000021a28-00000008 43dab00b-d20f-48b0-b964-4ed000021a28-00000009 43dab00b-d20f-48b0-b964-4ed000021a28-0000000a 43dab00b-d20f-48b0-b964-4ed000021a28-0000000b 43dab00b-d20f-48b0-b964-4ed000021a28-0000000c!
+[07:12:48.961] fetch light-tds tds-journal daybook-export-data: 12 ms, probe 47.4 ms (during False); 364 B, 0 vouchers, entry False, ledger lines 0, items 0, TDS allocations 0 
+[07:12:59.896] tally.ini: Data D:\a\_temp\TallyHeavy; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-v3-heavy-sync-started (1024x768)
+[07:13:27.902] Tally started (v3-heavy-sync) in 28 s; company open: True
+[07:13:29.909] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[07:13:29.954] import sync-like voucher with a foreign GUID: 1 sent, created 1, errors 0, 42 ms
+[07:13:32.735] sync-like import: Tally's GUID '', MasterID ; the rule gives '43dab00b-d20f-48b0-b964-4ed000021a28-'
+[07:13:43.450] GUID rule (heavy at the end (imported, new by Alt+2, altered, the sync-like one)): 30086 of 30086 vouchers have GUID = company GUID + '-' + 8-hex MasterID; exceptions: 
+[07:13:50.473] done (v3)

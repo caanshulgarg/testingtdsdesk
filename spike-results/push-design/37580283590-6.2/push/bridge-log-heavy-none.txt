@@ -1,0 +1,1 @@
+2026-10-07 06:39:30  The tray icon stopped (code 4294967295); it is started again in 5s

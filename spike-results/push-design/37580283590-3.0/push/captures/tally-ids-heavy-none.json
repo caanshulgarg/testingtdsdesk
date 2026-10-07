@@ -1,0 +1,394 @@
+[
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-00000004",
+    "mid": 4,
+    "aid": 4,
+    "date": "20261001",
+    "type": "Receipt",
+    "vno": "1"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-0000753d",
+    "mid": 30013,
+    "aid": 30013,
+    "date": "20261001",
+    "type": "Receipt",
+    "vno": "12002"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-0000753e",
+    "mid": 30014,
+    "aid": 30014,
+    "date": "20261001",
+    "type": "Receipt",
+    "vno": "12003"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-0000753f",
+    "mid": 30015,
+    "aid": 30015,
+    "date": "20261001",
+    "type": "Receipt",
+    "vno": "12004"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-00007540",
+    "mid": 30016,
+    "aid": 30016,
+    "date": "20261001",
+    "type": "Receipt",
+    "vno": "12005"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-00007541",
+    "mid": 30017,
+    "aid": 30017,
+    "date": "20261001",
+    "type": "Receipt",
+    "vno": "12006"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-00007554",
+    "mid": 30036,
+    "aid": 30038,
+    "date": "20261001",
+    "type": "Receipt",
+    "vno": "12007"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-00007555",
+    "mid": 30037,
+    "aid": 30039,
+    "date": "20261001",
+    "type": "Receipt",
+    "vno": "12008"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-00007556",
+    "mid": 30038,
+    "aid": 30040,
+    "date": "20261001",
+    "type": "Receipt",
+    "vno": "12009"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-00007557",
+    "mid": 30039,
+    "aid": 30041,
+    "date": "20261001",
+    "type": "Receipt",
+    "vno": "12010"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-00007558",
+    "mid": 30040,
+    "aid": 30042,
+    "date": "20261001",
+    "type": "Receipt",
+    "vno": "12011"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-00000002",
+    "mid": 2,
+    "aid": 2,
+    "date": "20261002",
+    "type": "Sales",
+    "vno": "1"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-00007542",
+    "mid": 30018,
+    "aid": 30018,
+    "date": "20261002",
+    "type": "Sales",
+    "vno": "12004"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-00007543",
+    "mid": 30019,
+    "aid": 30019,
+    "date": "20261002",
+    "type": "Sales",
+    "vno": "12005"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-00007544",
+    "mid": 30020,
+    "aid": 30020,
+    "date": "20261002",
+    "type": "Sales",
+    "vno": "12006"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-00007545",
+    "mid": 30021,
+    "aid": 30021,
+    "date": "20261002",
+    "type": "Sales",
+    "vno": "12007"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-00007546",
+    "mid": 30022,
+    "aid": 30022,
+    "date": "20261002",
+    "type": "Sales",
+    "vno": "12008"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-00007559",
+    "mid": 30041,
+    "aid": 30043,
+    "date": "20261002",
+    "type": "Sales",
+    "vno": "12019"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-0000755a",
+    "mid": 30042,
+    "aid": 30044,
+    "date": "20261002",
+    "type": "Sales",
+    "vno": "12020"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-0000755b",
+    "mid": 30043,
+    "aid": 30045,
+    "date": "20261002",
+    "type": "Sales",
+    "vno": "12021"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-0000755c",
+    "mid": 30044,
+    "aid": 30046,
+    "date": "20261002",
+    "type": "Sales",
+    "vno": "12022"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-0000755d",
+    "mid": 30045,
+    "aid": 30047,
+    "date": "20261002",
+    "type": "Sales",
+    "vno": "12023"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-00000003",
+    "mid": 3,
+    "aid": 30054,
+    "date": "20261031",
+    "type": "Sales",
+    "vno": "2"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-00007547",
+    "mid": 30023,
+    "aid": 30023,
+    "date": "20261031",
+    "type": "Sales",
+    "vno": "12009"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-00007548",
+    "mid": 30024,
+    "aid": 30024,
+    "date": "20261031",
+    "type": "Sales",
+    "vno": "12010"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-00007549",
+    "mid": 30025,
+    "aid": 30025,
+    "date": "20261031",
+    "type": "Sales",
+    "vno": "12011"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-0000754a",
+    "mid": 30026,
+    "aid": 30026,
+    "date": "20261031",
+    "type": "Sales",
+    "vno": "12012"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-0000754b",
+    "mid": 30027,
+    "aid": 30027,
+    "date": "20261031",
+    "type": "Sales",
+    "vno": "12013"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-0000754c",
+    "mid": 30028,
+    "aid": 30030,
+    "date": "20261031",
+    "type": "Sales",
+    "vno": "12014"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-0000754d",
+    "mid": 30029,
+    "aid": 30031,
+    "date": "20261031",
+    "type": "Sales",
+    "vno": "12015"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-0000754e",
+    "mid": 30030,
+    "aid": 30032,
+    "date": "20261031",
+    "type": "Sales",
+    "vno": "12016"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-0000754f",
+    "mid": 30031,
+    "aid": 30033,
+    "date": "20261031",
+    "type": "Sales",
+    "vno": "12017"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-00007550",
+    "mid": 30032,
+    "aid": 30034,
+    "date": "20261031",
+    "type": "Sales",
+    "vno": "12018"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-0000755e",
+    "mid": 30046,
+    "aid": 30048,
+    "date": "20261031",
+    "type": "Sales",
+    "vno": "12024"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-0000755f",
+    "mid": 30047,
+    "aid": 30049,
+    "date": "20261031",
+    "type": "Sales",
+    "vno": "12025"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-00007560",
+    "mid": 30048,
+    "aid": 30050,
+    "date": "20261031",
+    "type": "Sales",
+    "vno": "12026"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-00007561",
+    "mid": 30049,
+    "aid": 30051,
+    "date": "20261031",
+    "type": "Sales",
+    "vno": "12027"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-00007562",
+    "mid": 30050,
+    "aid": 30052,
+    "date": "20261031",
+    "type": "Sales",
+    "vno": "12028"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-00000005",
+    "mid": 5,
+    "aid": 5,
+    "date": "20261201",
+    "type": "Payroll",
+    "vno": "1"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-00000006",
+    "mid": 6,
+    "aid": 6,
+    "date": "20261202",
+    "type": "Payroll",
+    "vno": "2"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-00007551",
+    "mid": 30033,
+    "aid": 30035,
+    "date": "20261202",
+    "type": "Payroll",
+    "vno": "3"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-00007552",
+    "mid": 30034,
+    "aid": 30036,
+    "date": "20261202",
+    "type": "Payroll",
+    "vno": "4"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-00007553",
+    "mid": 30035,
+    "aid": 30037,
+    "date": "20261202",
+    "type": "Payroll",
+    "vno": "5"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-00000007",
+    "mid": 7,
+    "aid": 7,
+    "date": "20270101",
+    "type": "Stock Journal",
+    "vno": "1"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-00000008",
+    "mid": 8,
+    "aid": 8,
+    "date": "20270102",
+    "type": "PD Manufacturing Journal",
+    "vno": "MJ-1"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-00000009",
+    "mid": 9,
+    "aid": 9,
+    "date": "20270131",
+    "type": "Delivery Note",
+    "vno": "1"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-0000000a",
+    "mid": 10,
+    "aid": 10,
+    "date": "20270201",
+    "type": "Receipt Note",
+    "vno": "1"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-0000000b",
+    "mid": 11,
+    "aid": 11,
+    "date": "20270302",
+    "type": "Physical Stock",
+    "vno": "1"
+  },
+  {
+    "guid": "9b40b837-0bc1-4c98-a061-baba0bdf95d3-0000000c",
+    "mid": 12,
+    "aid": 12,
+    "date": "20270331",
+    "type": "Sales",
+    "vno": "3"
+  }
+]

@@ -1,0 +1,7 @@
+2026-10-07 06:44:50  The bridge stopped (code 4294967295); it is started again in 5s
+2026-10-07 06:44:55  FinCom Bridge 2.3.0 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+2026-10-07 06:44:55  Tally is not open; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+2026-10-07 06:44:55  Check:  - 
+2026-10-07 06:44:58  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+2026-10-07 06:45:29  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=30037, ALTMSTID=6554
+2026-10-07 06:45:29  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=30034; now ALTVCHID=30037, ALTMSTID=6554

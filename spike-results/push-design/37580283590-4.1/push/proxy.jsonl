@@ -1,0 +1,22 @@
+{"t0": 1791354067029, "t1": 1791354067031, "ms": 2, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791354730939, "t1": 1791354730940, "ms": 1, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791354767998, "t1": 1791354767999, "ms": 1, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791354839341, "t1": 1791354839342, "ms": 1, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791355411680, "t1": 1791355411682, "ms": 2, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 641, "status": 200, "err": ""}
+{"t0": 1791355411836, "t1": 1791355411847, "ms": 11, "method": "POST", "id": "TDSDeskCompanyInfo", "req": "Export", "vouchers": 0, "in": 704, "out": 598, "status": 200, "err": ""}
+{"t0": 1791355412003, "t1": 1791355412015, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 634, "status": 200, "err": ""}
+{"t0": 1791355526331, "t1": 1791355526332, "ms": 1, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791355528521, "t1": 1791355529536, "ms": 1015, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 607, "status": 200, "err": ""}
+{"t0": 1791356038621, "t1": 1791356038623, "ms": 2, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 640, "status": 200, "err": ""}
+{"t0": 1791356120110, "t1": 1791356120112, "ms": 2, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791356128630, "t1": 1791356128643, "ms": 13, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 608, "status": 200, "err": ""}
+{"t0": 1791356144305, "t1": 1791356144317, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 621, "status": 200, "err": ""}
+{"t0": 1791356148477, "t1": 1791356151989, "ms": 3512, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 1010, "out": 2677, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791356589922, "t1": 1791356589923, "ms": 1, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791356663789, "t1": 1791356663801, "ms": 12, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 621, "status": 200, "err": ""}
+{"t0": 1791356667962, "t1": 1791356671478, "ms": 3517, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 1010, "out": 2678, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791356728761, "t1": 1791356728773, "ms": 12, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 619, "status": 200, "err": ""}
+{"t0": 1791357111945, "t1": 1791357111947, "ms": 2, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791357160440, "t1": 1791357160441, "ms": 1, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791357206506, "t1": 1791357206507, "ms": 1, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791357369498, "t1": 1791357369499, "ms": 1, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}

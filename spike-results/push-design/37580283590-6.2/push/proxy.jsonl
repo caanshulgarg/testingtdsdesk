@@ -1,0 +1,15 @@
+{"t0": 1791354043301, "t1": 1791354043303, "ms": 1, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791354456243, "t1": 1791354456244, "ms": 1, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791354491228, "t1": 1791354491229, "ms": 1, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791354556984, "t1": 1791354556986, "ms": 2, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791355131308, "t1": 1791355131310, "ms": 2, "method": "POST", "id": "TDSDeskCompanies", "req": "Export", "vouchers": 0, "in": 413, "out": 645, "status": 200, "err": ""}
+{"t0": 1791355131462, "t1": 1791355131463, "ms": 1, "method": "POST", "id": "TDSDeskCompanyInfo", "req": "Export", "vouchers": 0, "in": 704, "out": 602, "status": 200, "err": ""}
+{"t0": 1791355131616, "t1": 1791355131618, "ms": 2, "method": "POST", "id": "FinComCompany", "req": "Export", "vouchers": 0, "in": 658, "out": 639, "status": 200, "err": ""}
+{"t0": 1791355204309, "t1": 1791355204313, "ms": 4, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791355767889, "t1": 1791355767890, "ms": 1, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791355790780, "t1": 1791355793139, "ms": 2359, "method": "POST", "id": "FinComVoucherByMaster", "req": "Export", "vouchers": 0, "in": 1010, "out": 2720, "status": 200, "err": "reply: [WinError 10053] An established connection was aborted by the software in your host machine"}
+{"t0": 1791356218171, "t1": 1791356218172, "ms": 1, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791356926122, "t1": 1791356926123, "ms": 1, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791356965912, "t1": 1791356965913, "ms": 1, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791357007908, "t1": 1791357007910, "ms": 1, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
+{"t0": 1791357157960, "t1": 1791357157961, "ms": 1, "method": "GET", "id": "", "req": "", "vouchers": 0, "in": 0, "out": 64, "status": 200, "err": ""}
