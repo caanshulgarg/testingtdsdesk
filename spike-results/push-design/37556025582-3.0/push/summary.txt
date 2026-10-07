@@ -1,0 +1,142 @@
+[01:18:11.760] push-design on TallyPrime 3.0: reps 5, heavy 3000 ledgers / 3000 items / up to 30000 vouchers (40 min), postings 1
+[01:18:12.690] system clock step after timeBeginPeriod(1): 0.4 ms (min 0.0038, max 4.1828)
+[01:18:12.708] two files written 2 ms apart: NTFS write times 6.9997 ms apart
+[01:18:12.728] light company folder: D:\a\_temp\TallyData\100000
+[01:18:15.759] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[01:18:43.885] Tally started (setup-light) in 28.1 s; company open: True
+[01:18:43.897] company GUID 159db5b6-c6f1-4823-a5ed-ae7a6a763691
+[01:18:45.924] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[01:18:47.159] import light masters: 60 sent, created 59, errors 0, 203 ms
+[01:18:47.305] import template s5 (all fields): 1 sent, created 1, errors 0, 86.5 ms
+[01:18:47.523] import template s50 (all fields): 1 sent, created 1, errors 0, 213.9 ms
+[01:18:47.547] import template rc (all fields): 1 sent, created 1, errors 0, 21.6 ms
+[01:18:47.552] templates: s5 all fields; s50 all fields; rc all fields
+[01:18:47.596]   template Receipt 1 20261001 mid 4 aid 4 159db5b6-c6f1-4823-a5ed-ae7a6a763691-00000004
+[01:18:47.597]   template Sales 1 20261002 mid 2 aid 2 159db5b6-c6f1-4823-a5ed-ae7a6a763691-00000002
+[01:18:47.598]   template Sales 2 20261031 mid 3 aid 3 159db5b6-c6f1-4823-a5ed-ae7a6a763691-00000003
+[01:18:47.786] company feature fields (by name): ISBATCHWISEON=No, PREVISMULTIGODOWNON=No, PREVISTRACKINGON=No, ISPAYROLLON=No, PREVISSALESORDERSON=No, PREVISPURCORDERSON=No, ISEXCISEMFGRTRADERON=No, ISPAYROLLSTATON=No, ISCOSTTRACKINGON=No, NOTIFYOFEXPIRY=No, ISTRACKVOUCHERSON=No, RESETTRACKEDCHANGES=No
+[01:18:47.802] import company features by XML: 1 sent, created 0, errors 0, 12.5 ms
+[01:18:47.814] after the XML alter: ISBATCHWISEON=Yes, PREVISMULTIGODOWNON=Yes, PREVISTRACKINGON=Yes, ISPAYROLLON=Yes, PREVISSALESORDERSON=Yes, PREVISPURCORDERSON=Yes, ISEXCISEMFGRTRADERON=No, ISPAYROLLSTATON=No, ISCOSTTRACKINGON=No, NOTIFYOFEXPIRY=No, ISTRACKVOUCHERSON=No, RESETTRACKEDCHANGES=No
+[01:20:11.785] after F11 (show more features only): ISBATCHWISEON=Yes, PREVISMULTIGODOWNON=Yes, PREVISTRACKINGON=Yes, ISPAYROLLON=Yes, PREVISSALESORDERSON=Yes, PREVISPURCORDERSON=Yes, ISEXCISEMFGRTRADERON=No, ISPAYROLLSTATON=No, ISCOSTTRACKINGON=No, NOTIFYOFEXPIRY=No, ISTRACKVOUCHERSON=No, RESETTRACKEDCHANGES=No
+[01:20:11.804] voucher types: Attendance, Contra, Credit Note, Debit Note, Delivery Note, Job Work In Order, Job Work Out Order, Journal, Material In, Material Out, Memorandum, Payment, Payroll, Physical Stock, Purchase, Purchase Order, Receipt, Receipt Note, Rejections In, Rejections Out, Reversing Journal, Sales, Sales Order, Stock Journal
+[01:20:11.816] voucher type fields: active ISACTIVE; manufacturing ASMFGJRNL
+[01:20:11.853] import voucher types active, manufacturing journal: 9 sent, created 1, errors 0, 33.5 ms
+[01:20:12.712] import type masters (godowns, batch items, employees, pay heads, supplier): 258 sent, created 258, errors 0, 838.6 ms
+[01:20:12.719] import attendance type: 1 sent, created 0, errors 1, 4 ms; Tally: Unit &apos;Days&apos; does not exist!
+[01:20:12.724] import attendance type: 1 sent, created 0, errors 1, 3.5 ms; Tally: Unit &apos;Days&apos; does not exist!
+[01:20:12.729] import attendance type: 1 sent, created 0, errors 1, 3.6 ms; Tally: Unit &apos;Days&apos; does not exist!
+[01:20:12.733] import attendance type: 1 sent, created 0, errors 1, 3.2 ms; Tally: Unit &apos;Days&apos; does not exist!
+[01:20:12.738] import attendance type: 1 sent, created 0, errors 1, 3.3 ms; Tally: Unit &apos;Days&apos; does not exist!
+[01:20:12.742] import attendance type: 1 sent, created 0, errors 1, 3.4 ms; Tally: Unit &apos;Days&apos; does not exist!
+[01:20:12.746] import attendance type: 1 sent, created 0, errors 1, 3.2 ms; Tally: Unit &apos;Days&apos; does not exist!
+[01:20:12.750] import attendance type: 1 sent, created 0, errors 1, 3.1 ms; Tally: Unit &apos;Days&apos; does not exist!
+[01:20:12.754] import attendance type: 1 sent, created 0, errors 1, 3.1 ms; Tally: Unit &apos;Days&apos; does not exist!
+[01:20:12.759] import attendance type: 1 sent, created 0, errors 1, 3.5 ms; Tally: Unit &apos;Days&apos; does not exist!
+[01:20:12.763] import attendance type: 1 sent, created 0, errors 1, 3.1 ms; Tally: Unit &apos;Days&apos; does not exist!
+[01:20:12.767] import attendance type: 1 sent, created 0, errors 1, 3.1 ms; Tally: Unit &apos;Days&apos; does not exist!
+[01:20:12.944] import template payroll50 (form 1 of 5): 1 sent, created 0, errors 1, 9.2 ms; Tally: No Entries in Voucher!
+[01:20:12.953] import template payroll50 (form 2 of 5): 1 sent, created 0, errors 1, 7.8 ms; Tally: No Entries in Voucher!
+[01:20:12.964] import template payroll50 (form 3 of 5): 1 sent, created 0, errors 1, 9.6 ms; Tally: Voucher totals do not match! Dr: 75,000.00 Dr Cr:  Diff: 75,000.00 Dr
+[01:20:12.973] import template payroll50 (form 4 of 5): 1 sent, created 0, errors 1, 7.6 ms; Tally: No Entries in Voucher!
+[01:20:12.996] import template payroll50 (form 5 of 5): 1 sent, created 1, errors 0, 22.1 ms
+[01:20:13.014] import template payroll200 (form 1 of 5): 1 sent, created 0, errors 1, 15.8 ms; Tally: No Entries in Voucher!
+[01:20:13.031] import template payroll200 (form 2 of 5): 1 sent, created 0, errors 1, 15.3 ms; Tally: No Entries in Voucher!
+[01:20:13.058] import template payroll200 (form 3 of 5): 1 sent, created 0, errors 1, 25.7 ms; Tally: Voucher totals do not match! Dr: 3,00,000.00 Dr Cr:  Diff: 3,00,000.00 Dr
+[01:20:13.083] import template payroll200 (form 4 of 5): 1 sent, created 0, errors 1, 24.1 ms; Tally: No Entries in Voucher!
+[01:20:13.123] import template payroll200 (form 5 of 5): 1 sent, created 1, errors 0, 37.9 ms
+[01:20:13.132] import template attendance (form 1 of 1): 1 sent, created 0, errors 1, 7.5 ms; Tally: No Entries in Voucher!
+[01:20:13.197] import template stockjournal (form 1 of 1): 1 sent, created 1, errors 0, 64.2 ms
+[01:20:13.225] import template mfgjournal (form 1 of 1): 1 sent, created 1, errors 0, 25.9 ms
+[01:20:13.242] import template salesorder (form 1 of 3): 1 sent, created 0, errors 1, 15.3 ms; Tally: Bad Order Number in Voucher!
+[01:20:13.261] import template salesorder (form 2 of 3): 1 sent, created 0, errors 1, 17.4 ms; Tally: Bad Order Number in Voucher!
+[01:20:13.279] import template salesorder (form 3 of 3): 1 sent, created 0, errors 1, 16.2 ms; Tally: Bad Order Number in Voucher!
+[01:20:13.296] import template purchaseorder (form 1 of 3): 1 sent, created 0, errors 1, 15.8 ms; Tally: Bad Order Number in Voucher!
+[01:20:13.311] import template purchaseorder (form 2 of 3): 1 sent, created 0, errors 1, 13.7 ms; Tally: Bad Order Number in Voucher!
+[01:20:13.327] import template purchaseorder (form 3 of 3): 1 sent, created 0, errors 1, 13.8 ms; Tally: Bad Order Number in Voucher!
+[01:20:13.381] import template deliverynote (form 1 of 1): 1 sent, created 1, errors 0, 53 ms
+[01:20:13.439] import template receiptnote (form 1 of 1): 1 sent, created 1, errors 0, 56.3 ms
+[01:20:13.465] import template physicalstock (form 1 of 1): 1 sent, created 1, errors 0, 24.4 ms
+[01:20:13.714] import template salesbatch (form 1 of 1): 1 sent, created 1, errors 0, 247.4 ms
+[01:20:14.091] TDL $$MachineName => '' 
+[01:20:14.095] TDL $$CmpUserName => 'TALLY User' 
+[01:20:14.098] TDL $$SysInfo:WindowsUser => 'runneradmin' 
+[01:20:14.101] TDL $$SysInfo:WindowsUserName => '' 
+[01:20:14.103] TDL $$SysInfo:UserName => '' 
+[01:20:14.106] TDL $$SysInfo:LoginUser => '' 
+[01:20:14.109] TDL $$SysInfo:SystemName => 'runnervmfi6oq' 
+[01:20:14.111] TDL $$SysInfo:ComputerName => '' 
+[01:20:14.114] TDL $$SysInfo:MachineName => '' 
+[01:20:14.119] TDL $$SysInfo:IPAddress => '10.1.0.109,172.18.32.1' 
+[01:20:14.122] TDL $$SysInfo:ApplicationPath => 'C:\Program Files\TallyPrime' 
+[01:20:14.125] TDL $$SysInfo:TempPath => '' 
+[01:20:14.151] import tds: company TDS on, TAN: 1 sent, created 0, errors 0, 11.6 ms
+[01:20:14.160] import tds: nature of payment (TAXCLASSIFICATION): 1 sent, created 1, errors 0, 6.6 ms
+[01:20:14.163] tds: the import made no TDS Rate: the nature typed on its form
+[01:20:48.737] tds: nature 'PD Contract Work' as a TDS Rate in Tally: False
+[01:20:48.864] import tds: party, expense, TDS ledger: 3 sent, created 1, errors 1, 123 ms; Tally: TDS Rate &apos;PD Contract Work&apos; does not exist!
+[01:20:49.070] import tds: ledgers again (alter): 3 sent, created 0, errors 1, 204.4 ms; Tally: TDS Rate &apos;PD Contract Work&apos; does not exist!
+[01:20:55.117] tally.ini: Data D:\a\_temp\TallyHeavy; TDL: none
+[01:21:23.098] Tally started (setup-heavy) in 28 s; company open: True
+[01:21:25.115] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[01:21:28.525] import heavy masters 0: 1000 sent, created 1000, errors 0, 3183.4 ms
+[01:21:31.731] import heavy masters 1000: 1000 sent, created 1000, errors 0, 3201 ms
+[01:21:34.971] import heavy masters 2000: 1000 sent, created 1000, errors 0, 3236.9 ms
+[01:21:38.046] import heavy masters 3000: 1000 sent, created 1000, errors 0, 3071 ms
+[01:21:41.134] import heavy masters 4000: 1000 sent, created 1000, errors 0, 3084.7 ms
+[01:21:44.241] import heavy masters 5000: 1000 sent, created 1000, errors 0, 3102.4 ms
+[01:21:44.474] import heavy vouchers 0: 1000 sent, created 0, errors 1, 103.8 ms; Tally: Godown &apos;&apos; does not exist!
+[01:21:44.637] import heavy vouchers 1000: 1000 sent, created 0, errors 1, 78 ms; Tally: Godown &apos;&apos; does not exist!
+[01:21:44.816] import heavy vouchers 2000: 1000 sent, created 0, errors 1, 76.6 ms; Tally: Godown &apos;&apos; does not exist!
+[01:21:44.965] import heavy vouchers 3000: 1000 sent, created 0, errors 1, 69.3 ms; Tally: Godown &apos;&apos; does not exist!
+[01:21:45.123] import heavy vouchers 4000: 1000 sent, created 0, errors 1, 70.7 ms; Tally: Godown &apos;&apos; does not exist!
+[01:21:45.273] import heavy vouchers 5000: 1000 sent, created 0, errors 1, 69 ms; Tally: Godown &apos;&apos; does not exist!
+[01:21:45.428] import heavy vouchers 6000: 1000 sent, created 0, errors 1, 70.6 ms; Tally: Godown &apos;&apos; does not exist!
+[01:21:45.577] import heavy vouchers 7000: 1000 sent, created 0, errors 1, 69.5 ms; Tally: Godown &apos;&apos; does not exist!
+[01:21:45.730] import heavy vouchers 8000: 1000 sent, created 0, errors 1, 69.8 ms; Tally: Godown &apos;&apos; does not exist!
+[01:21:45.878] import heavy vouchers 9000: 1000 sent, created 0, errors 1, 70.2 ms; Tally: Godown &apos;&apos; does not exist!
+[01:21:46.034] import heavy vouchers 10000: 1000 sent, created 0, errors 1, 73.2 ms; Tally: Godown &apos;&apos; does not exist!
+[01:21:46.183] import heavy vouchers 11000: 1000 sent, created 0, errors 1, 69.3 ms; Tally: Godown &apos;&apos; does not exist!
+[01:21:46.338] import heavy vouchers 12000: 1000 sent, created 0, errors 1, 70.4 ms; Tally: Godown &apos;&apos; does not exist!
+[01:21:46.490] import heavy vouchers 13000: 1000 sent, created 0, errors 1, 71.1 ms; Tally: Godown &apos;&apos; does not exist!
+[01:21:46.644] import heavy vouchers 14000: 1000 sent, created 0, errors 1, 70.7 ms; Tally: Godown &apos;&apos; does not exist!
+[01:21:46.793] import heavy vouchers 15000: 1000 sent, created 0, errors 1, 69.5 ms; Tally: Godown &apos;&apos; does not exist!
+[01:21:46.958] import heavy vouchers 16000: 1000 sent, created 0, errors 1, 77.4 ms; Tally: Godown &apos;&apos; does not exist!
+[01:21:47.128] import heavy vouchers 17000: 1000 sent, created 0, errors 1, 70.8 ms; Tally: Godown &apos;&apos; does not exist!
+[01:21:47.296] import heavy vouchers 18000: 1000 sent, created 0, errors 1, 83.5 ms; Tally: Godown &apos;&apos; does not exist!
+[01:21:47.443] import heavy vouchers 19000: 1000 sent, created 0, errors 1, 69.4 ms; Tally: Godown &apos;&apos; does not exist!
+[01:21:47.594] import heavy vouchers 20000: 1000 sent, created 0, errors 1, 70.6 ms; Tally: Godown &apos;&apos; does not exist!
+[01:21:47.820] import heavy vouchers 21000: 1000 sent, created 0, errors 1, 146.3 ms; Tally: Godown &apos;&apos; does not exist!
+[01:21:48.119] import heavy vouchers 22000: 1000 sent, created 0, errors 1, 123.7 ms; Tally: Godown &apos;&apos; does not exist!
+[01:21:48.456] import heavy vouchers 23000: 1000 sent, created 0, errors 1, 137 ms; Tally: Godown &apos;&apos; does not exist!
+[01:21:48.682] import heavy vouchers 24000: 1000 sent, created 0, errors 1, 108.8 ms; Tally: Godown &apos;&apos; does not exist!
+[01:21:48.845] import heavy vouchers 25000: 1000 sent, created 0, errors 1, 81.6 ms; Tally: Godown &apos;&apos; does not exist!
+[01:21:49.004] import heavy vouchers 26000: 1000 sent, created 0, errors 1, 76.8 ms; Tally: Godown &apos;&apos; does not exist!
+[01:21:49.161] import heavy vouchers 27000: 1000 sent, created 0, errors 1, 70.1 ms; Tally: Godown &apos;&apos; does not exist!
+[01:21:49.317] import heavy vouchers 28000: 1000 sent, created 0, errors 1, 72.3 ms; Tally: Godown &apos;&apos; does not exist!
+[01:21:49.466] import heavy vouchers 29000: 1000 sent, created 0, errors 1, 70.7 ms; Tally: Godown &apos;&apos; does not exist!
+[01:21:49.622] heavy company: 3017 ledgers, 3100 stock items, 12 vouchers in Tally (import took 1 min)
+[01:21:56.632] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[01:22:24.615] Tally started (count-light) in 28 s; company open: True
+[01:22:26.624] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[01:22:26.657] light company: 17 ledgers, 100 stock items, 12 vouchers
+[01:22:33.669] tally.ini: Data D:\a\_temp\TallyHeavy; TDL: none
+[01:23:01.684] Tally started (v3-heavy-fetch) in 28 s; company open: True
+[01:23:03.694] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[01:23:03.773] GUID rule (heavy after import): 12 of 12 vouchers have GUID = company GUID + '-' + 8-hex MasterID; exceptions: 
+[01:23:03.781] company ALTVCHID / ALTMSTID by XML: <ALTVCHID TYPE="Number"> 12 / <ALTMSTID TYPE="Number"> 6552
+[01:23:03.815] import sync-like voucher with a foreign GUID: 1 sent, created 1, errors 0, 32.5 ms
+[01:23:03.840] sync-like import: Tally's GUID '', MasterID ; rule gives '159db5b6-c6f1-4823-a5ed-ae7a6a763691-'
+[01:23:03.865] fetch target sales50-template: mid  guid  date    party ''
+[01:23:03.887] fetch target heavy-sales-15000: mid  guid  date    party ''
+[01:23:06.707] fetch heavy: the probe key on an idle Tally: 44.6, 28.8, 28.8, 44.3, 28.2 ms
+[01:28:07.211] fetch heavy sales50-template bymaster-bridge: 300016 ms, probe 1101.1 ms (during True); 97 B, 0 vouchers, entry False, ledger lines 0, items 0, TDS allocations 0 
+[01:53:11.052] fetch heavy sales50-template bynumber-bridge: 300016.8 ms, probe -1 ms (during True); 97 B, 0 vouchers, entry False, ledger lines 0, items 0, TDS allocations 0 
+[02:18:14.852] fetch heavy sales50-template day-collection-nofilter-midonly: 300016.9 ms, probe 10986.4 ms (during True); 97 B, 0 vouchers, entry False, ledger lines 0, items 0, TDS allocations 0 
+[02:43:18.656] fetch heavy sales50-template obj-name-guid: 300032.5 ms, probe -1 ms (during True); 97 B, 0 vouchers, entry False, ledger lines 0, items 0, TDS allocations 0 
+[03:08:22.427] fetch heavy sales50-template obj-name-guid-star: 300009.8 ms, probe -1 ms (during True); 97 B, 0 vouchers, entry False, ledger lines 0, items 0, TDS allocations 0 
+[03:33:26.191] fetch heavy sales50-template obj-masterid: 300012.6 ms, probe -1 ms (during True); 97 B, 0 vouchers, entry False, ledger lines 0, items 0, TDS allocations 0 
+[03:58:29.958] fetch heavy sales50-template obj-name-id:mid: 300011.4 ms, probe -1 ms (during True); 97 B, 0 vouchers, entry False, ledger lines 0, items 0, TDS allocations 0 
+[04:23:33.727] fetch heavy sales50-template obj-guid-type: 300010.8 ms, probe 27094.8 ms (during True); 97 B, 0 vouchers, entry False, ledger lines 0, items 0, TDS allocations 0 
+[04:48:37.489] fetch heavy sales50-template vtype-vouchers-childof-type: 300009.8 ms, probe 23363.3 ms (during True); 97 B, 0 vouchers, entry False, ledger lines 0, items 0, TDS allocations 0 
+[05:13:41.258] fetch heavy sales50-template daybook-export-data: 300012.2 ms, probe 19612.4 ms (during True); 97 B, 0 vouchers, entry False, ledger lines 0, items 0, TDS allocations 0 
+[05:38:45.012] fetch heavy heavy-sales-15000 bymaster-bridge: 300011.3 ms, probe 15881.6 ms (during True); 97 B, 0 vouchers, entry False, ledger lines 0, items 0, TDS allocations 0 
