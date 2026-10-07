@@ -1,0 +1,29 @@
+[17:20:44.767] push-design on TallyPrime 6.2: reps 5, heavy 3000 ledgers / 3000 items / up to 30000 vouchers (40 min), postings 1
+[17:20:45.845] system clock step after timeBeginPeriod(1): 0.438 ms (min 0.0037, max 4.8589)
+[17:20:45.860] two files written 2 ms apart: NTFS write times 4.9937 ms apart
+[17:20:45.882] light company folder: D:\a\_temp\TallyData\100000
+[17:20:45.925] fast234 (fast234p) on TallyPrime 6.2: today's request 2927 chars, 61 fields
+[17:21:17.115] Tally started (setup) in 28.1 s; companies open: FinCom Spike Co -> True
+[17:21:17.331] import light masters 0: 60 sent, created 59, errors 0, 178.4 ms
+[17:21:19.185] import base masters 0: 600 sent, created 600, errors 0, 1750.8 ms
+[17:21:33.984] import vouchers 0-999: 1000 sent, created 1000, errors 0, 14584.7 ms
+[17:21:49.304] import vouchers 1000-1999: 1000 sent, created 1000, errors 0, 15229.9 ms
+[17:22:04.817] import vouchers 2000-2999: 1000 sent, created 1000, errors 0, 15420.6 ms
+[17:22:21.100] import vouchers 3000-3999: 1000 sent, created 1000, errors 0, 16205.3 ms
+[17:22:21.159] import target sales P: 1 sent, created 1, errors 0, 55.8 ms
+[17:22:21.185] import target receipt P: 1 sent, created 1, errors 0, 23.5 ms
+[17:22:21.684] target sales-P: MasterID 4002, date 20261001, Sales 1601
+[17:22:21.686] target receipt-P: MasterID 4003, date 20261001, Receipt 1601
+[17:22:52.690] Tally started (p-4000) in 28 s; companies open: FinCom Spike Co -> True
+[17:22:53.532] sizes p 4000: 4003 vouchers (MasterID up to 4003); Tally 470 MB
+[17:23:32.897] form rptpart (sales-P): no answer in 25 s; Tally answers the company list after it: False
+[17:24:03.912] Tally started (after-rptpart) in 28 s; companies open: FinCom Spike Co -> True
+[17:24:39.378] form objnone (sales-P): no answer in 25 s; Tally answers the company list after it: False
+[17:25:10.390] Tally started (after-objnone) in 27.9 s; companies open: FinCom Spike Co -> True
+[17:25:25.195] MEASURE p4000 sales-P (4003 vouchers, MasterID 4002): bymaster median 489.2 worst 544.7; bynumber median 523.5 worst 565.4; objfl median 19.9 worst 37.9; objmid median 17.7 worst 18; objtop median 17.6 worst 18.1; objheads median 17.7 worst 18.7; collchildq median 548.6 worst 558.2; collchildn median 540.2 worst 565.3; colllines median 2.1 worst 2.3; collpath median 2.6 worst 2.6; rptobj median 39.3 worst 41.3; numvtype median 324.6 worst 338.8 ms
+[17:26:04.759] form rptpart (receipt-P): no answer in 25 s; Tally answers the company list after it: False
+[17:26:35.806] Tally started (after-rptpart) in 28 s; companies open: FinCom Spike Co -> True
+[17:27:11.183] form objnone (receipt-P): no answer in 25 s; Tally answers the company list after it: False
+[17:27:42.206] Tally started (after-objnone) in 28 s; companies open: FinCom Spike Co -> True
+[17:27:57.053] MEASURE p4000 receipt-P (4003 vouchers, MasterID 4003): bymaster median 509.5 worst 565.8; bynumber median 574.2 worst 898; objfl median 15.5 worst 21.4; objmid median 10 worst 14.9; objtop median 9.9 worst 10.4; objheads median 10 worst 10.4; collchildq median 572.5 worst 572.8; collchildn median 581.8 worst 614.1; colllines median 2.2 worst 2.3; collpath median 2.5 worst 2.6; rptobj median 28.4 worst 28.4; numvtype median 192.7 worst 195.7 ms
+[17:28:00.071] done (fast234 fast234p)

@@ -1,0 +1,59 @@
+[17:21:06.558] push-design on TallyPrime 4.1: reps 5, heavy 3000 ledgers / 3000 items / up to 30000 vouchers (40 min), postings 1
+[17:21:08.156] system clock step after timeBeginPeriod(1): 0.305 ms (min 0.0021, max 3.2918)
+[17:21:08.178] two files written 2 ms apart: NTFS write times 14.0007 ms apart
+[17:21:08.191] light company folder: D:\a\_temp\TallyData\100000
+[17:21:08.221] fast234 (fast234p) on TallyPrime 4.1: today's request 2927 chars, 61 fields
+[keys] 'a'
+[keys] 't'
+[shot] p-f-setup-started (1024x768)
+[17:21:37.373] Tally started (setup) in 26.1 s; companies open: FinCom Spike Co -> True
+[17:21:37.508] import light masters 0: 60 sent, created 59, errors 0, 111 ms
+[17:21:38.525] import base masters 0: 600 sent, created 600, errors 0, 961.2 ms
+[17:21:48.000] import vouchers 0-999: 1000 sent, created 1000, errors 0, 9375.8 ms
+[17:21:58.297] import vouchers 1000-1999: 1000 sent, created 1000, errors 0, 10261 ms
+[17:22:09.021] import vouchers 2000-2999: 1000 sent, created 1000, errors 0, 10687 ms
+[17:22:20.432] import vouchers 3000-3999: 1000 sent, created 1000, errors 0, 11364.6 ms
+[17:22:20.466] import target sales P: 1 sent, created 1, errors 0, 30.3 ms
+[17:22:20.480] import target receipt P: 1 sent, created 1, errors 0, 12.7 ms
+[17:22:20.732] target sales-P: MasterID 4002, date 20261001, Sales 1601
+[17:22:20.734] target receipt-P: MasterID 4003, date 20261001, Receipt 1601
+[keys] 'a'
+[keys] 't'
+[shot] p-f-p-4000-started (1024x768)
+[17:22:49.674] Tally started (p-4000) in 25.9 s; companies open: FinCom Spike Co -> True
+[17:22:50.143] sizes p 4000: 4003 vouchers (MasterID up to 4003); Tally 448 MB
+[] failed after 25003.2 ms: The request was canceled due to the configured HttpClient.Timeout of 25 seconds elapsing.
+[] failed after 10001.8 ms: The request was canceled due to the configured HttpClient.Timeout of 10 seconds elapsing.
+[17:23:28.750] form rptpart (sales-P): no answer in 25 s; Tally answers the company list after it: False
+[shot] p-f-hung-rptpart (1024x768)
+[keys] 'a'
+[keys] 't'
+[shot] p-f-after-rptpart-started (1024x768)
+[17:23:57.724] Tally started (after-rptpart) in 25.9 s; companies open: FinCom Spike Co -> True
+[] failed after 25002.3 ms: The request was canceled due to the configured HttpClient.Timeout of 25 seconds elapsing.
+[] failed after 10001.3 ms: The request was canceled due to the configured HttpClient.Timeout of 10 seconds elapsing.
+[17:24:33.077] form objnone (sales-P): no answer in 25 s; Tally answers the company list after it: False
+[shot] p-f-hung-objnone (1024x768)
+[keys] 'a'
+[keys] 't'
+[shot] p-f-after-objnone-started (1024x768)
+[17:25:02.065] Tally started (after-objnone) in 25.9 s; companies open: FinCom Spike Co -> True
+[17:25:14.542] MEASURE p4000 sales-P (4003 vouchers, MasterID 4002): bymaster median 343.8 worst 372; bynumber median 349.3 worst 380.2; objfl median 12.5 worst 27.4; objmid median 11.3 worst 11.6; objtop median 12.1 worst 12.9; objheads median 12 worst 17; collchildq median 378.1 worst 437.2; collchildn median 367.3 worst 418.3; colllines median 2.3 worst 2.5; collpath median 2.5 worst 2.6; rptobj median 28.1 worst 30.2; numvtype median 237.9 worst 241.1 ms
+[] failed after 25001.8 ms: The request was canceled due to the configured HttpClient.Timeout of 25 seconds elapsing.
+[] failed after 10002.4 ms: The request was canceled due to the configured HttpClient.Timeout of 10 seconds elapsing.
+[17:25:53.361] form rptpart (receipt-P): no answer in 25 s; Tally answers the company list after it: False
+[shot] p-f-hung-rptpart (1024x768)
+[keys] 'a'
+[keys] 't'
+[shot] p-f-after-rptpart-started (1024x768)
+[17:26:22.342] Tally started (after-rptpart) in 25.9 s; companies open: FinCom Spike Co -> True
+[] failed after 25000.9 ms: The request was canceled due to the configured HttpClient.Timeout of 25 seconds elapsing.
+[] failed after 10001.4 ms: The request was canceled due to the configured HttpClient.Timeout of 10 seconds elapsing.
+[17:26:57.635] form objnone (receipt-P): no answer in 25 s; Tally answers the company list after it: False
+[shot] p-f-hung-objnone (1024x768)
+[keys] 'a'
+[keys] 't'
+[shot] p-f-after-objnone-started (1024x768)
+[17:27:26.627] Tally started (after-objnone) in 25.9 s; companies open: FinCom Spike Co -> True
+[17:27:38.277] MEASURE p4000 receipt-P (4003 vouchers, MasterID 4003): bymaster median 326.3 worst 349.1; bynumber median 342.1 worst 359.3; objfl median 7 worst 14.3; objmid median 6.5 worst 7; objtop median 6.2 worst 6.5; objheads median 6.2 worst 6.4; collchildq median 349.8 worst 365.4; collchildn median 353 worst 367.8; colllines median 1.9 worst 2; collpath median 2.3 worst 2.4; rptobj median 19.2 worst 19.3; numvtype median 113.7 worst 120.7 ms
+[17:27:41.291] done (fast234 fast234p)
