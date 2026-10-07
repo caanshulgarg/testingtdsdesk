@@ -174,7 +174,39 @@ function Slow232Setup {
 
 function S2Proxy { if (Test-Path $Slow232St.proxyLog) { @(Get-Content $Slow232St.proxyLog -Encoding UTF8 | ForEach-Object { try { $_ | ConvertFrom-Json } catch {} }) } else { @() } }
 function S2Entry($r) { $r.id -in 'FinComVoucherByMaster', 'FinComVoucherByNumber' }
-function S2Import($co, $xml, $label) { S2Imp $co 'Vouchers' @($xml) $label }
+# an entry "saved": imported by XML, then its two lines (voucher_accept_pre and _post) written into the add-on's daily file in
+# the add-on's own format, as scen231 R1 and pileup do (run 37588090724: an XML import makes the add-on write no line).
+# Its MasterID is the import's LASTVCHID (checked against Tally's list on the small company, where listing is quick); its
+# GUID the company's GUID and the MasterID in 8 hex digits, as Tally makes it; the company's GUID as the bridge holds it
+function S2Guid($co) {
+  $l = @(S2BridgeLog | Where-Object { $_ -match ('Company ' + [regex]::Escape($co) + ': its Tally GUID (\S+) is held') } | Select-Object -First 1)
+  if ($l.Count -and $l[0] -match 'its Tally GUID (\S+) is held') { return $Matches[1] }
+  return ''
+}
+function S2Import($co, $xml, $label) {
+  $r = S2Imp $co 'Vouchers' @($xml) $label
+  $mid = [int64]("0" + [regex]::Match($r.raw, '<LASTVCHID>(\d+)</LASTVCHID>').Groups[1].Value)
+  $no = [regex]::Match($xml, '<VOUCHERNUMBER>([^<]+)</VOUCHERNUMBER>').Groups[1].Value
+  $typ = [regex]::Match($xml, '<VOUCHERTYPENAME>([^<]+)</VOUCHERTYPENAME>').Groups[1].Value
+  $d8 = [regex]::Match($xml, '<DATE>(\d{8})</DATE>').Groups[1].Value
+  $cg = S2Guid $co
+  $aid = 0
+  if ($co -eq $co1) {
+    $v = @((Vouchers 9000 $co1) | Where-Object { $_.vno -eq $no } | Select-Object -Last 1)
+    if ($v.Count) { if ($v[0].mid -ne $mid) { Write-Host "[slow232] ${label}: LASTVCHID $mid, Tally's MasterID $($v[0].mid): Tally's taken" }; $mid = $v[0].mid; $aid = $v[0].aid; $cg = (($v[0].guid -split '-')[0..4] -join '-') }
+    Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO slow232 $label ($co1): LASTVCHID $([regex]::Match($r.raw, '<LASTVCHID>(\d+)</LASTVCHID>').Groups[1].Value), Tally's MasterID $mid"
+  }
+  if (-not $cg -or $mid -le 0) { Write-Host "[slow232] ${label}: no line written (company GUID '$cg', MasterID $mid)"; return $r }
+  $guid = '{0}-{1:x8}' -f $cg, $mid
+  $vd = [DateTime]::ParseExact($d8, 'yyyyMMdd', $null).ToString('d-MMM-yy', [Globalization.CultureInfo]::InvariantCulture)
+  $now = (Get-Date).ToString('d-MMM-yy HH:mm', [Globalization.CultureInfo]::InvariantCulture)
+  $rfile = Join-Path $rec ("$cg-" + (Get-Date).ToString('d-MMM-yy', [Globalization.CultureInfo]::InvariantCulture) + '.txt')
+  $txt = (('voucher_accept_pre', 'voucher_accept_post') | ForEach-Object { "FCR1|ev=$_|t0=$now|tw=$now|cguid=$cg|cname=$co|user=TALLY User|obj=Voucher|guid=$guid|mid=$mid|aid=$aid|vtype=$typ|vno=$no|vdate=$vd|name=|parent=|narr=|t1=$now|src=live`r`n" }) -join ''
+  if (-not (Test-Path $rfile)) { [IO.File]::WriteAllBytes($rfile, [byte[]](0xFF, 0xFE)) }
+  [IO.File]::AppendAllText($rfile, $txt, [Text.UnicodeEncoding]::new($false, $false))
+  Write-Host "[slow232] ${label}: its lines written to $rfile (MasterID $mid, GUID $guid)"
+  return $r
+}
 function S2BridgeLog { if (Test-Path $B[1].log) { @(Get-Content $B[1].log) } else { @() } }
 
 # ---- the run, after the bridges start
