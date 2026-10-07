@@ -27,7 +27,7 @@
 #        in its own user's file, none mixed; a company on a network share (\\localhost\p233share); a save on the large company
 #        (100,000+ entries): save time and screen freeze (first screen change more than 1 s after Ctrl+A)
 # MEASURE / INFO lines carry what the coordinator asked recorded; PASS / FAIL only for what the build claims (P1-P6, P10 users).
-$P233 = @{ dir = (Join-Path $out 'push233'); proxyLog = (Join-Path $out 'push233\proxy.jsonl'); ok = $false; tpl = @{}; saves = @()
+$P233 = @{ dir = (Join-Path $out 'push233'); proxyLog = (Join-Path $out 'push233\proxy.jsonl'); ok = $false; loadOk = $false; tpl = @{}; saves = @()
   big = [int]$(if ($env:P233_BIG) { $env:P233_BIG } else { 100000 }); bigCo = 'FinCom Big Co'; share = '\\localhost\p233share' }
 New-Item -ItemType Directory -Force $P233.dir | Out-Null
 
@@ -80,10 +80,41 @@ function P3Templates {
   }
 }
 
+# ---- L0, first of all: the new FinComRecorder.tdl LOADS on this release ($$StringLength and the "neg" formula are new to a
+# real Tally): no TDL error on the screen or in Tally's files, and one save on the screen writes the heads lines AND the full
+# entry. Before the bridges start (the recorder folder is emptied after it, so they never see this save)
+function P3LoadCheck {
+  Say '---- push233 L0: does the new FinComRecorder.tdl load on this release?'
+  $tdlText = Get-Content $tdl -Raw -ErrorAction SilentlyContinue
+  $hasFull = "$tdlText" -match 'FCRLiveFull'
+  Shot 'p233-L0-start'
+  $png = Join-Path $env:SHOTS 'p233-L0-start.png'
+  $ocr = if (Test-Path $png) { ((& powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot\ocr.ps1" $png 2>&1 | Out-String) -replace '\s+', ' ').Trim() } else { 'NO-SHOT' }
+  $errScreen = $ocr -match 'Error in TDL|TDL Error|Unknown Function|Invalid Function|Could not load|errors? in (the )?TDL'
+  $errFiles = @(Get-ChildItem $dir, $data1, (Join-Path $dir 'logs') -Recurse -File -Include 'tdlerr*', '*.tdlerr', 'tdl*.log' -ErrorAction SilentlyContinue)
+  $errFiles | ForEach-Object { Copy-Item $_.FullName (Join-Path $P233.dir "L0-$($_.Name)") -ErrorAction SilentlyContinue }
+  $errText = (($errFiles | ForEach-Object { Get-Content $_.FullName -Raw -ErrorAction SilentlyContinue }) -join ' ') -replace '\s+', ' '
+  $r = P3Save 'receipt'
+  $ev = @($r.lines | ForEach-Object { [regex]::Match($_, '^FCR1\|ev=([^|]+)').Groups[1].Value })
+  $full = @($r.lines | Where-Object { $_ -like 'FCR1|ev=voucher_full|*' -and $_ -match '\|end=1\|t1=[^|]*\|src=live$' })
+  $lenOk = $full.Count -and $full[0] -match '\|narr:\d+=' -and $full[0] -match '~neg=(Yes|No)'
+  $heads = ('voucher_accept_pre' -in $ev) -and ('voucher_accept_post' -in $ev)
+  $P233.loadOk = $hasFull -and $heads -and $full.Count -ge 1 -and -not $errScreen
+  if ($full.Count) { Set-Content (Join-Path $P233.dir 'L0-full-line.txt') $full -Encoding UTF8 }
+  Result 'push233 L0 the new add-on loads and writes the full entry' $P233.loadOk ("the TDL from the ref has FCRLiveFull: {0}; the screen after Tally started: {1}; Tally's TDL error files: {2}; one receipt saved on the screen: the add-on wrote {3}; heads (pre and post): {4}; full line(s) ending |end=1|t1=..|src=live: {5}; lengths and neg read: {6}; save {7} ms" -f `
+      $hasFull, $(if ($errScreen) { 'A TDL ERROR: ' + $ocr.Substring(0, [Math]::Min(300, $ocr.Length)) } else { 'no TDL error seen' }), $(if ($errFiles.Count) { ($errFiles | ForEach-Object Name) -join ', ' + ': ' + $errText.Substring(0, [Math]::Min(300, $errText.Length)) } else { 'none' }), $(P3Kinds $r.lines), $heads, $full.Count, [bool]$lenOk, $r.ms_fullline)
+  if (-not $heads) { Add-Content -Path $resultsFile -Encoding UTF8 -Value 'INFO push233 L0: no heads line either: the whole add-on did not load (a function or formula this release does not know stops the file); the run stops here' }
+  elseif (-not $full.Count) { Add-Content -Path $resultsFile -Encoding UTF8 -Value 'INFO push233 L0: the heads lines were written but no full line: FCRLiveFull failed at run time on this release' }
+  Remove-Item "$rec\*" -Force -ErrorAction SilentlyContinue   # the bridges start on an empty recorder folder
+  $P233.saves = @()
+}
+
 # ---- setup, before the bridges start
 function Push233Setup {
-  Say '---- push233 setup: the templates by XML, the timing proxy beside Tally 9000, the large company (item 5)'
+  Say '---- push233 setup: the templates by XML, the new add-on''s load check, the timing proxy beside Tally 9000, the large company (item 5)'
   P3Templates
+  P3LoadCheck
+  if (-not $P233.loadOk) { Say 'push233: the add-on did not load or wrote no full entry: no large company, no run'; return }
   if ($P233.big -gt 0) {
     # the large company by slow232's generator, extended to $P233.big entries (its own time budget)
     $Slow232St.co = $P233.bigCo; $Slow232St.vch = $P233.big; $Slow232St.budget = [int]$(if ($env:P233_BIG_MIN) { $env:P233_BIG_MIN } else { 150 })
@@ -156,6 +187,7 @@ function P3Check($label, $s, $m0, $p0, [switch]$tds, $ev = 'created') {
 # ---- the run, after the bridges start
 function Push233 {
   Say '---- push233: the full entry at save (branch next-push)'
+  if (-not $P233.loadOk) { Add-Content -Path $resultsFile -Encoding UTF8 -Value 'INFO push233: not run (L0: the add-on did not load or wrote no full entry)'; return }
   if (-not $P233.ok) { Result 'push233' $false 'the setup did not finish (the proxy or the templates)' $true; return }
   Start-Sleep 30   # bridge 1's first light check: its starting point (nothing is taken before it)
   $p0 = @(P3Proxy).Count; $m0 = Mark
