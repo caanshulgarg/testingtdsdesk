@@ -1,0 +1,792 @@
+// Next (branch next-push; the owner's decision of 07-Oct-2026): the voucher is identified and read by "full entry at save
+// without read-back". Evidence: the push-design re-run 37580283590 (branch tally-versions, docs/push-design-results.md, the
+// harness add-on .github/tally-spike/push/FCPFullNR.tdl): on a 30,012-voucher company, on TallyPrime 3.0, 4.1, 5.1, 6.2 and
+// 7.1, writing the whole entry at save took 49-57 ms median and 71 ms worst on a 50-item invoice, payroll for 200 14-23 ms,
+// no freeze in 100 saves; the MasterID of the saved form was right 25 of 25 times; every voucher's GUID was its company's
+// GUID, "-" and its MasterID as 8 lowercase hex digits; the add-on cannot read the change counter.
+//
+// The add-on (addon/FinComRecorder.tdl, FCRLiveFull) writes, in the voucher form's Form Accept AFTER Tally's own save and
+// after the heads lines it always wrote (unchanged, so an older bridge keeps working), ONE full-entry line: the entry as
+// the form holds it in memory (no read-back of any kind). That line is an ordinary recorder line for every reader:
+//
+//	FCR1|ev=voucher_full|t0=|tw=|w=|cguid=|cname=|user=|obj=Voucher|guid=|mid=|aid=|vtype=|vno=|vdate=|name=|parent=|narr=FE1|part=1|<fields>|end=1|t1=|src=live
+//
+// An older bridge reads it as a complete line (it ends "|t1=...|src=live") of an event it does not know and drops it. This
+// bridge takes the entry from what follows "|narr=" (the payload, up to the LAST "|t1="):
+//
+//   - fields: "|key=value"; a record (key starting with a capital: L1, L1B2, I3b1 ...) is "~"-separated sub-fields
+//     "name=value". Free text is written with its length: "name:<n>=<n characters>" ($$StringLength in the add-on, UTF-16
+//     units; code points accepted as well), so a value may hold "|", "~", "=", ":", line breaks or anything else and is
+//     read exactly; only Tally's own words (amounts, dates, Yes/No, rate heads) are written plain, and never hold "|" or "~".
+//   - the size cap: the add-on ends a physical line once it passes FCRCap characters and goes on in a new line with the
+//     same head and "|part=<k>" (each one complete: "...|more=1|t1=...|src=live"); the last part ends "|end=1". A record is
+//     never split. The bridge joins the parts of one entry in order; a part missing or out of order: no full entry.
+//   - the fields: the entry's own (mid, aid, guid, date, vtype, vno, party, canc, opt, ref, refdt, pgstin, pos, cgstin, irn,
+//     irnack, irnackdt, ewb, view, narr) and the counts nL, nI, nO, nSO, nSI, nCE; the records: L<i> a ledger line (led,
+//     amt, neg, dp, party, hsn) with R<j> GST rate (head, vt, rate), B<j> bill (name, type, amt, neg, cp, tdssec), K<j> bank
+//     (date, name, tt, ino, idt, bdt, utr, amt, neg), C<j> cost category (cat) and C<j>c<k> cost centre (cc, amt, neg), T<j>
+//     TDS (tt, cat, pl, ref) and T<j>s<k> its sub-category (sub, duty, rate, ass, assneg, tax, taxneg); I<i> an item line
+//     (item, qty, aq, rate, amt, neg, dp, hsn) with R<j>, A<j> the ledger under it (led, amt, neg, dp) with its C/c, b<j>
+//     its batches (god, bat, trk, ord, due, aq, bq, rate, amt, neg); O<i> the order list (no, dt); SO<i> / SI<i> the lines
+//     out and in of a stock journal with b<j>; CE<i> a payroll category (cat), CE<i>E<j> an employee (emp, amt, neg) with
+//     p<k> pay heads (ph, amt, neg) and a<k> attendance (att, val).
+//   - amounts: Tally's $$String gives the amount without its sign (1,180.00); the sign is the record's neg (Yes: below 0 in
+//     Tally, a debit), its sense checked on the ledger lines against IsDeemedPositive, else IsDeemedPositive itself.
+//
+// The bridge maps the line to the XML Tally gives its entry request (FinComVoucherByMaster) for the same voucher, so FinCom's
+// cloud reads it unchanged (parse.js; tally_ingest_details), and sends it as a full entry ("full": true). The GUID is built
+// by the rule and cross-checked against the GUIDs the lines carry; the line carries no AlterID (the form holds the old one).
+// No entry request goes to Tally for such a line. Lines without a full entry (an older add-on) keep the 2.3.2 route.
+package main
+
+import (
+	"errors"
+	"fmt"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
+	"sync/atomic"
+	"unicode/utf16"
+	"unicode/utf8"
+)
+
+const (
+	pushEv    = "voucher_full" // the add-on's full-entry line
+	pushMagic = "FE1"          // the payload's first word (the format's version)
+)
+
+// one entry as the full-entry line(s) carry it
+type pushEntry struct {
+	scal  map[string]string            // the entry's own fields and the counts
+	recs  map[string]map[string]string // a record by its key: its sub-fields
+	order []string                     // the records in the order written
+	parts int                          // the parts joined
+	done  bool                         // the last part ("|end=1") seen
+}
+
+func newPushEntry() *pushEntry {
+	return &pushEntry{scal: map[string]string{}, recs: map[string]map[string]string{}}
+}
+
+func (e *pushEntry) s(k string) string { return e.scal[k] }
+
+func (e *pushEntry) n(k string) int {
+	v, err := strconv.Atoi(strings.TrimSpace(e.scal[k]))
+	if err != nil || v < 0 {
+		return -1
+	}
+	return v
+}
+
+func (e *pushEntry) rec(k string) map[string]string { return e.recs[k] }
+
+// the payload of one full-entry line: the text after the first "|narr=" up to the last "|t1=" (as written: raw)
+func pushPayload(raw string) (string, bool) {
+	i := strings.Index(raw, "|narr=")
+	j := strings.LastIndex(raw, "|t1=")
+	if i < 0 || j < i+len("|narr=") {
+		return "", false
+	}
+	p := raw[i+len("|narr=") : j]
+	return p, strings.HasPrefix(p, pushMagic+"|part=")
+}
+
+// the length of a text as the add-on counts it: UTF-16 units
+func u16len(s string) int { return len(utf16.Encode([]rune(s))) }
+
+// n units (else n code points) of s from i, the value ending where one of seps follows (or the text ends)
+func pushTake(s string, i, n int, seps string) (string, int, bool) {
+	ends := func(j int) bool { return j == len(s) || strings.IndexByte(seps, s[j]) >= 0 }
+	for _, units := range []bool{true, false} {
+		j, c := i, 0
+		for c < n && j < len(s) {
+			r, w := utf8.DecodeRuneInString(s[j:])
+			if units && r >= 0x10000 {
+				c += 2
+			} else {
+				c++
+			}
+			j += w
+		}
+		if c == n && ends(j) {
+			return s[i:j], j, true
+		}
+	}
+	return "", i, false
+}
+
+var rePushKey = regexp.MustCompile(`^[A-Za-z0-9]{1,24}`)
+
+// a key at s[i:] and how its value is written: "key=" (plain) or "key:<n>=" (n characters); the value's start
+func pushKey(s string, i int) (key string, n int, lp bool, j int, err error) {
+	key = rePushKey.FindString(s[i:])
+	if key == "" {
+		return "", 0, false, i, fmt.Errorf("no key at %d", i)
+	}
+	j = i + len(key)
+	if j < len(s) && s[j] == ':' {
+		k := j + 1
+		for k < len(s) && s[k] >= '0' && s[k] <= '9' && k-j <= 9 {
+			k++
+		}
+		if k == j+1 || k >= len(s) || s[k] != '=' {
+			return "", 0, false, i, fmt.Errorf("a length without its value at %d", i)
+		}
+		n, _ = strconv.Atoi(s[j+1 : k])
+		return key, n, true, k + 1, nil
+	}
+	if j >= len(s) || s[j] != '=' {
+		return "", 0, false, i, fmt.Errorf("a key without its value at %d", i)
+	}
+	return key, 0, false, j + 1, nil
+}
+
+// a record's key: L1, L1C2c3, I4b1, SO2, CE1E3p2 ... (a capital first)
+func pushIsRec(k string) bool { return k != "" && k[0] >= 'A' && k[0] <= 'Z' }
+
+// one part's payload taken into e; want: the part expected (1 for the first)
+func pushParsePart(p string, e *pushEntry, want int) error {
+	if !strings.HasPrefix(p, pushMagic+"|") {
+		return errors.New("not a full-entry line")
+	}
+	s := p[len(pushMagic):]
+	i := 0
+	part := -1
+	for i < len(s) {
+		if s[i] != '|' {
+			return fmt.Errorf("a field does not start with \"|\" at %d", i)
+		}
+		key, n, lp, j, err := pushKey(s, i+1)
+		if err != nil {
+			return err
+		}
+		if pushIsRec(key) {
+			if _, had := e.recs[key]; had {
+				return fmt.Errorf("record %s twice", key)
+			}
+			if lp {
+				return fmt.Errorf("record %s written with a length", key)
+			}
+			r := map[string]string{}
+			// "L1=led:5=Sales~amt=..." : the record's own "=" is followed by its first sub-field
+			k := j
+			for {
+				sub, sn, slp, sj, err := pushKey(s, k)
+				if err != nil {
+					return fmt.Errorf("record %s: %v", key, err)
+				}
+				var v string
+				var ok bool
+				if slp {
+					v, k, ok = pushTake(s, sj, sn, "~|")
+					if !ok {
+						return fmt.Errorf("record %s: %s is not %d characters long", key, sub, sn)
+					}
+				} else {
+					end := strings.IndexAny(s[sj:], "~|")
+					if end < 0 {
+						end = len(s) - sj
+					}
+					v, k = s[sj:sj+end], sj+end
+				}
+				if _, had := r[sub]; had {
+					return fmt.Errorf("record %s: %s twice", key, sub)
+				}
+				r[sub] = v
+				if k < len(s) && s[k] == '~' {
+					k++
+					continue
+				}
+				break
+			}
+			e.recs[key] = r
+			e.order = append(e.order, key)
+			i = k
+			continue
+		}
+		var v string
+		if lp {
+			var ok bool
+			v, i, ok = pushTake(s, j, n, "|")
+			if !ok {
+				return fmt.Errorf("%s is not %d characters long", key, n)
+			}
+		} else {
+			end := strings.IndexByte(s[j:], '|')
+			if end < 0 {
+				end = len(s) - j
+			}
+			v, i = s[j:j+end], j+end
+		}
+		switch key {
+		case "part":
+			if part >= 0 {
+				return errors.New("part twice")
+			}
+			part, _ = strconv.Atoi(v)
+			if part != want {
+				return fmt.Errorf("part %s where part %d was due", v, want)
+			}
+			continue
+		case "end":
+			if v != "1" || i != len(s) {
+				return errors.New("end= is not the last field")
+			}
+			e.done = true
+			continue
+		case "more":
+			if v != "1" || i != len(s) {
+				return errors.New("more= is not the last field")
+			}
+			continue
+		}
+		if part < 0 {
+			return errors.New("the part number does not come first")
+		}
+		if _, had := e.scal[key]; had {
+			return fmt.Errorf("%s twice", key)
+		}
+		e.scal[key] = v
+	}
+	if part < 0 {
+		return errors.New("no part number")
+	}
+	if !e.done && !strings.HasSuffix(s, "|more=1") {
+		return errors.New("neither end=1 nor more=1 at the end")
+	}
+	e.parts = want
+	return nil
+}
+
+// the whole entry from its parts' payloads, in order
+func pushParse(payloads []string) (*pushEntry, error) {
+	e := newPushEntry()
+	for i, p := range payloads {
+		if e.done {
+			return nil, errors.New("a part after the last")
+		}
+		if err := pushParsePart(p, e, i+1); err != nil {
+			return nil, fmt.Errorf("part %d: %v", i+1, err)
+		}
+	}
+	if !e.done {
+		return nil, errors.New("the last part is missing")
+	}
+	return e, nil
+}
+
+// --- the GUID rule (push-design run 37580283590: 30,086 of 30,086 vouchers on every release, imports and a sync-like one
+// included): the company's GUID, "-", and the MasterID in hexadecimal, lower case, 8 digits at least ("-0000000e" for 14)
+func pushGUID(cguid, mid string) string {
+	cg := liveGUID(strings.TrimSpace(cguid))
+	m, err := strconv.ParseInt(strings.TrimSpace(mid), 10, 64)
+	if cg == "" || err != nil || m <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("%s-%08x", cg, m)
+}
+
+// the GUID by the rule, cross-checked against a GUID a line of the same save carries (the form's): "" why when it holds.
+// A placeholder ("<company>-00000000") or none says nothing; the rule's own GUID agrees; a GUID under the company's prefix
+// that is not the MasterID's is the entry the new one was copied from (Alt+2: the form keeps its GUID), right only for a
+// created entry; a GUID under ANOTHER company's prefix (an entry that came by synchronisation keeping a foreign GUID: not
+// seen in the push-design run, never assumed) is a reason to ask Tally instead (the 2.3.2 route)
+func pushGuidCheck(cguid, mid, ev string, lineGuids ...string) (string, string) {
+	g := pushGUID(cguid, mid)
+	if g == "" {
+		if liveGUID(strings.TrimSpace(cguid)) == "" {
+			return "", "the line has no company GUID"
+		}
+		return "", "the line has no MasterID"
+	}
+	cg := strings.ToLower(liveGUID(strings.TrimSpace(cguid)))
+	for _, lg := range lineGuids {
+		lg = strings.TrimSpace(lg)
+		switch {
+		case lg == "" || livePlaceholder(lg) || strings.EqualFold(lg, g):
+		case strings.HasPrefix(strings.ToLower(lg), cg+"-"):
+			if ev != "created" {
+				return "", "the line's GUID " + cut(lg, 80) + " is not the GUID MasterID " + strings.TrimSpace(mid) + " makes, and the entry was not a new one"
+			}
+		default:
+			return "", "the line's GUID " + cut(lg, 80) + " is under another company's GUID"
+		}
+	}
+	return g, ""
+}
+
+// --- the XML: what Tally gives the entry request (FinComVoucherByMaster) for the same voucher, typed as a real TallyPrime
+// 7.1 writes it; nothing the line does not carry
+
+// XML text: escaped as the bridge escapes; a control character as Tally writes it (&#13;&#10; for a line break; the others
+// dropped, as cleanXML drops them from Tally's own answer)
+func pushX(s string) string {
+	var b strings.Builder
+	for _, r := range esc(s) {
+		switch {
+		case r == '\r' || r == '\n' || r == '\t':
+			fmt.Fprintf(&b, "&#%d;", r)
+		case r < 0x20 || r == 0xFFFE || r == 0xFFFF:
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+func pushTag(b *strings.Builder, tag, typ, v string) {
+	if typ != "" {
+		fmt.Fprintf(b, "<%s TYPE=\"%s\">%s</%s>", tag, typ, pushX(v), tag)
+	} else {
+		fmt.Fprintf(b, "<%s>%s</%s>", tag, pushX(v), tag)
+	}
+}
+
+// a date as the line gives it ("1-Oct-26", "1-Oct-2026", yyyymmdd) as yyyymmdd; "" for none; ok false when it is not one
+func pushDate(s string) (string, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", true
+	}
+	d := normDate(s)
+	return d, d != ""
+}
+
+var rePushNum = regexp.MustCompile(`^\d+(\.\d+)?$`)
+
+// an amount as $$String gives it (1,180.00; 2,00,000.00; "(-)50.00"; a foreign amount "$17000.00 @ ₹ 86.40/$ = ₹ 1468800.00")
+// without its sign: the rupee digits
+func pushAbs(s string) (string, bool) {
+	s = strings.TrimSpace(s)
+	if i := strings.LastIndex(s, "="); i >= 0 {
+		s = s[i+1:]
+	}
+	s = strings.NewReplacer(",", "", "(-)", "", "-", "", "₹", "", " ", "", "Dr", "", "Cr", "").Replace(s)
+	if s == "" {
+		return "", true
+	}
+	return s, rePushNum.MatchString(s)
+}
+
+// the sign rule of one entry: neg is Tally's "below 0" (a debit), checked against IsDeemedPositive on the ledger lines
+type pushSign struct{ flip, none bool }
+
+func pushSignOf(e *pushEntry) pushSign {
+	agree, differ := 0, 0
+	for k, r := range e.recs {
+		if !rePushLedRec.MatchString(k) {
+			continue
+		}
+		n, d := r["neg"], r["dp"]
+		if (n != "Yes" && n != "No") || (d != "Yes" && d != "No") {
+			continue
+		}
+		if a, _ := pushAbs(r["amt"]); a == "" || strings.Trim(a, "0.") == "" {
+			continue
+		}
+		if n == d {
+			agree++
+		} else {
+			differ++
+		}
+	}
+	return pushSign{flip: differ > 0 && agree == 0, none: agree+differ == 0}
+}
+
+var rePushLedRec = regexp.MustCompile(`^L\d+$`)
+
+// the amount with Tally's sign (a debit below 0, as Tally's XML has it); dp: the IsDeemedPositive that rules when the
+// record has no usable neg
+func (g pushSign) amt(r map[string]string, amtKey, negKey, dp string) (string, error) {
+	a, ok := pushAbs(r[amtKey])
+	if !ok {
+		return "", fmt.Errorf("the amount %q cannot be read", r[amtKey])
+	}
+	if a == "" {
+		return "", nil
+	}
+	neg := false
+	switch n := r[negKey]; {
+	case n == "Yes" || n == "No":
+		neg = (n == "Yes") != g.flip
+	case dp == "Yes" || dp == "No":
+		neg = dp == "Yes"
+	}
+	if neg && strings.Trim(a, "0.") != "" {
+		return "-" + a, nil
+	}
+	return a, nil
+}
+
+// the records under a key: key + tag + 1, 2, ... while there is one
+func (e *pushEntry) list(prefix, tag string) []string {
+	var o []string
+	for j := 1; ; j++ {
+		k := prefix + tag + strconv.Itoa(j)
+		if e.recs[k] == nil {
+			return o
+		}
+		o = append(o, k)
+	}
+}
+
+// the payroll blocks go only with a payroll or attendance entry: on any other voucher Tally's in-memory CategoryEntry is
+// its cost centres (push-design captures: a receipt's "employee" was its cost centre)
+func (e *pushEntry) payroll() bool {
+	v := strings.ToLower(e.s("view") + " " + e.s("vtype"))
+	return strings.Contains(v, "pay") || strings.Contains(v, "attendance") || (e.n("nL") == 0 && e.n("nCE") > 0)
+}
+
+// the entry as Tally's XML for the entry request, its GUID by the rule; alter: Tally's AlterID when known (the light check's
+// counter, unambiguous), else none (the line has none). Checked: every count against its records, the dates, the amounts,
+// and the ledger lines adding up to zero (an uncancelled entry with ledger lines)
+func pushEntryXML(e *pushEntry, guid string, alter int64) (string, error) {
+	mid := strings.TrimSpace(e.s("mid"))
+	if m, err := strconv.ParseInt(mid, 10, 64); err != nil || m <= 0 {
+		return "", errors.New("no MasterID")
+	}
+	date, ok := pushDate(e.s("date"))
+	if !ok || date == "" {
+		return "", fmt.Errorf("the date %q cannot be read", e.s("date"))
+	}
+	if strings.TrimSpace(e.s("vtype")) == "" {
+		return "", errors.New("no voucher type")
+	}
+	for _, c := range []struct{ n, p string }{{"nL", "L"}, {"nI", "I"}, {"nO", "O"}, {"nSO", "SO"}, {"nSI", "SI"}, {"nCE", "CE"}} {
+		n := e.n(c.n)
+		if n < 0 {
+			return "", fmt.Errorf("the count %s is missing", c.n)
+		}
+		if got := len(e.list("", c.p)); got != n {
+			return "", fmt.Errorf("%s says %d, %d written", c.n, n, got)
+		}
+	}
+	sg := pushSignOf(e)
+	var err error
+	date8 := func(s string) string {
+		d, ok := pushDate(s)
+		if !ok && err == nil {
+			err = fmt.Errorf("the date %q cannot be read", s)
+		}
+		return d
+	}
+	money := func(r map[string]string, ak, nk, dp string) string {
+		a, e2 := sg.amt(r, ak, nk, dp)
+		if e2 != nil && err == nil {
+			err = e2
+		}
+		return a
+	}
+	yes := func(s string) string {
+		if s == "Yes" || s == "No" {
+			return s
+		}
+		return ""
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, `<VOUCHER REMOTEID="%s" VCHTYPE="%s"`, pushX(guid), pushX(e.s("vtype")))
+	if v := e.s("view"); v != "" {
+		fmt.Fprintf(&b, ` OBJVIEW="%s"`, pushX(v))
+	}
+	b.WriteString(">")
+	pushTag(&b, "DATE", "Date", date)
+	pushTag(&b, "REFERENCEDATE", "Date", date8(e.s("refdt")))
+	pushTag(&b, "IRNACKDATE", "Date", date8(e.s("irnackdt")))
+	pushTag(&b, "GUID", "", guid)
+	pushTag(&b, "NARRATION", "String", e.s("narr"))
+	pushTag(&b, "PARTYGSTIN", "String", e.s("pgstin"))
+	pushTag(&b, "PLACEOFSUPPLY", "String", e.s("pos"))
+	pushTag(&b, "VOUCHERTYPENAME", "", e.s("vtype"))
+	pushTag(&b, "CMPGSTIN", "String", e.s("cgstin"))
+	pushTag(&b, "PARTYLEDGERNAME", "String", e.s("party"))
+	pushTag(&b, "VOUCHERNUMBER", "", e.s("vno"))
+	pushTag(&b, "REFERENCE", "String", e.s("ref"))
+	pushTag(&b, "IRN", "String", e.s("irn"))
+	pushTag(&b, "IRNACKNO", "String", e.s("irnack"))
+	if v := e.s("view"); v != "" {
+		pushTag(&b, "PERSISTEDVIEW", "", v)
+	}
+	pushTag(&b, "ISOPTIONAL", "Logical", yes(e.s("opt")))
+	pushTag(&b, "ISCANCELLED", "Logical", yes(e.s("canc")))
+	if alter > 0 {
+		fmt.Fprintf(&b, `<ALTERID TYPE="Number"> %d</ALTERID>`, alter)
+	}
+	fmt.Fprintf(&b, `<MASTERID TYPE="Number"> %s</MASTERID>`, mid)
+	b.WriteString("<EWAYBILLDETAILS.LIST>")
+	if v := e.s("ewb"); v != "" {
+		pushTag(&b, "BILLNUMBER", "String", v)
+	}
+	b.WriteString("</EWAYBILLDETAILS.LIST>")
+	rates := func(p string) {
+		for _, k := range e.list(p, "R") {
+			r := e.recs[k]
+			if r["head"] == "" && r["vt"] == "" && r["rate"] == "" {
+				continue
+			}
+			b.WriteString("<RATEDETAILS.LIST>")
+			pushTag(&b, "GSTRATEDUTYHEAD", "String", r["head"])
+			pushTag(&b, "GSTRATEVALUATIONTYPE", "String", r["vt"])
+			pushTag(&b, "GSTRATE", "Number", r["rate"])
+			b.WriteString("</RATEDETAILS.LIST>")
+		}
+	}
+	costs := func(p, dp string) {
+		for _, k := range e.list(p, "C") {
+			cs := e.list(k, "c")
+			if e.recs[k]["cat"] == "" && len(cs) == 0 {
+				continue
+			}
+			b.WriteString("<CATEGORYALLOCATIONS.LIST>")
+			pushTag(&b, "CATEGORY", "String", e.recs[k]["cat"])
+			for _, c := range cs {
+				r := e.recs[c]
+				b.WriteString("<COSTCENTREALLOCATIONS.LIST>")
+				pushTag(&b, "NAME", "String", r["cc"])
+				pushTag(&b, "AMOUNT", "Amount", money(r, "amt", "neg", dp))
+				b.WriteString("</COSTCENTREALLOCATIONS.LIST>")
+			}
+			b.WriteString("</CATEGORYALLOCATIONS.LIST>")
+		}
+	}
+	batches := func(p, dp string) {
+		for _, k := range e.list(p, "b") {
+			r := e.recs[k]
+			b.WriteString("<BATCHALLOCATIONS.LIST>")
+			pushTag(&b, "GODOWNNAME", "String", r["god"])
+			pushTag(&b, "BATCHNAME", "String", r["bat"])
+			pushTag(&b, "ORDERNO", "String", r["ord"])
+			pushTag(&b, "TRACKINGNUMBER", "String", r["trk"])
+			pushTag(&b, "ORDERDUEDATE", "Date", date8(r["due"]))
+			pushTag(&b, "AMOUNT", "Amount", money(r, "amt", "neg", dp))
+			pushTag(&b, "ACTUALQTY", "Quantity", r["aq"])
+			pushTag(&b, "BILLEDQTY", "Quantity", r["bq"])
+			pushTag(&b, "BATCHRATE", "Rate", r["rate"])
+			b.WriteString("</BATCHALLOCATIONS.LIST>")
+		}
+	}
+	// the items (an invoice's item lines; a stock journal's lines out and in below)
+	for _, k := range e.list("", "I") {
+		r := e.recs[k]
+		dp := yes(r["dp"])
+		b.WriteString("<ALLINVENTORYENTRIES.LIST>")
+		pushTag(&b, "STOCKITEMNAME", "String", r["item"])
+		pushTag(&b, "GSTHSNNAME", "String", r["hsn"])
+		pushTag(&b, "ISDEEMEDPOSITIVE", "Logical", dp)
+		pushTag(&b, "RATE", "Rate", r["rate"])
+		pushTag(&b, "AMOUNT", "Amount", money(r, "amt", "neg", dp))
+		pushTag(&b, "ACTUALQTY", "Quantity", or(r["aq"], r["qty"]))
+		pushTag(&b, "BILLEDQTY", "Quantity", r["qty"])
+		batches(k, dp)
+		for _, a := range e.list(k, "A") {
+			ra := e.recs[a]
+			adp := yes(ra["dp"])
+			b.WriteString("<ACCOUNTINGALLOCATIONS.LIST>")
+			pushTag(&b, "LEDGERNAME", "String", ra["led"])
+			pushTag(&b, "ISDEEMEDPOSITIVE", "Logical", adp)
+			pushTag(&b, "AMOUNT", "Amount", money(ra, "amt", "neg", adp))
+			costs(a, adp)
+			b.WriteString("</ACCOUNTINGALLOCATIONS.LIST>")
+		}
+		rates(k)
+		b.WriteString("</ALLINVENTORYENTRIES.LIST>")
+	}
+	// the ledger lines and what each carries
+	var total int64
+	nl := 0
+	for _, k := range e.list("", "L") {
+		r := e.recs[k]
+		dp := yes(r["dp"])
+		a := money(r, "amt", "neg", dp)
+		if p, ok := paise(a); ok && a != "" {
+			if strings.HasPrefix(a, "-") {
+				total -= p
+			} else {
+				total += p
+			}
+			nl++
+		}
+		b.WriteString("<ALLLEDGERENTRIES.LIST>")
+		pushTag(&b, "LEDGERNAME", "String", r["led"])
+		pushTag(&b, "GSTHSNNAME", "String", r["hsn"])
+		pushTag(&b, "ISDEEMEDPOSITIVE", "Logical", dp)
+		if v := yes(r["party"]); v != "" {
+			pushTag(&b, "ISPARTYLEDGER", "Logical", v)
+		}
+		pushTag(&b, "AMOUNT", "Amount", a)
+		costs(k, dp)
+		for _, q := range e.list(k, "K") {
+			rk := e.recs[q]
+			if rk["date"]+rk["name"]+rk["tt"]+rk["ino"]+rk["idt"]+rk["bdt"]+rk["utr"]+rk["amt"] == "" {
+				continue
+			}
+			b.WriteString("<BANKALLOCATIONS.LIST>")
+			pushTag(&b, "DATE", "Date", date8(rk["date"]))
+			pushTag(&b, "NAME", "String", rk["name"])
+			pushTag(&b, "TRANSACTIONTYPE", "String", rk["tt"])
+			pushTag(&b, "INSTRUMENTNUMBER", "String", rk["ino"])
+			pushTag(&b, "INSTRUMENTDATE", "Date", date8(rk["idt"]))
+			pushTag(&b, "BANKERSDATE", "Date", date8(rk["bdt"]))
+			pushTag(&b, "UNIQUEREFERENCENUMBER", "String", rk["utr"])
+			pushTag(&b, "AMOUNT", "Amount", money(rk, "amt", "neg", dp))
+			b.WriteString("</BANKALLOCATIONS.LIST>")
+		}
+		for _, q := range e.list(k, "B") {
+			rb := e.recs[q]
+			if rb["name"]+rb["type"]+rb["amt"] == "" {
+				continue
+			}
+			b.WriteString("<BILLALLOCATIONS.LIST>")
+			pushTag(&b, "NAME", "", rb["name"])
+			pushTag(&b, "BILLCREDITPERIOD", "", rb["cp"])
+			pushTag(&b, "TDSDEDUCTEESECTIONNUMBER", "", rb["tdssec"])
+			pushTag(&b, "BILLTYPE", "", rb["type"])
+			pushTag(&b, "AMOUNT", "Amount", money(rb, "amt", "neg", dp))
+			b.WriteString("</BILLALLOCATIONS.LIST>")
+		}
+		rates(k)
+		for _, q := range e.list(k, "T") {
+			rt := e.recs[q]
+			subs := e.list(q, "s")
+			if rt["tt"]+rt["cat"]+rt["pl"] == "" && len(subs) == 0 {
+				continue
+			}
+			b.WriteString("<TAXOBJECTALLOCATIONS.LIST>")
+			pushTag(&b, "CATEGORY", "String", rt["cat"])
+			pushTag(&b, "TAXTYPE", "String", rt["tt"])
+			pushTag(&b, "PARTYLEDGER", "String", rt["pl"])
+			if rt["ref"] != "" {
+				pushTag(&b, "REFTYPE", "String", rt["ref"])
+			}
+			for _, s := range subs {
+				rs := e.recs[s]
+				b.WriteString("<SUBCATEGORYALLOCATION.LIST>")
+				pushTag(&b, "SUBCATEGORY", "String", rs["sub"])
+				pushTag(&b, "DUTYLEDGER", "String", rs["duty"])
+				pushTag(&b, "TAXRATE", "Number", rs["rate"])
+				pushTag(&b, "ASSESSABLEAMOUNT", "Amount", money(rs, "ass", "assneg", ""))
+				pushTag(&b, "TAX", "Amount", money(rs, "tax", "taxneg", ""))
+				b.WriteString("</SUBCATEGORYALLOCATION.LIST>")
+			}
+			b.WriteString("</TAXOBJECTALLOCATIONS.LIST>")
+		}
+		b.WriteString("</ALLLEDGERENTRIES.LIST>")
+	}
+	for _, k := range e.list("", "O") {
+		r := e.recs[k]
+		b.WriteString("<INVOICEORDERLIST.LIST>")
+		pushTag(&b, "BASICORDERDATE", "Date", date8(r["dt"]))
+		pushTag(&b, "BASICPURCHASEORDERNO", "String", r["no"])
+		b.WriteString("</INVOICEORDERLIST.LIST>")
+	}
+	// a stock journal's lines out and in (on an invoice Tally's in-memory lists repeat its items: left out there)
+	if e.n("nI") == 0 {
+		for _, io := range []struct{ p, tag string }{{"SO", "INVENTORYENTRIESOUT.LIST"}, {"SI", "INVENTORYENTRIESIN.LIST"}} {
+			for _, k := range e.list("", io.p) {
+				r := e.recs[k]
+				dp := yes(r["dp"])
+				b.WriteString("<" + io.tag + ">")
+				pushTag(&b, "STOCKITEMNAME", "String", r["item"])
+				if dp != "" {
+					pushTag(&b, "ISDEEMEDPOSITIVE", "Logical", dp)
+				}
+				pushTag(&b, "RATE", "Rate", r["rate"])
+				pushTag(&b, "AMOUNT", "Amount", money(r, "amt", "neg", dp))
+				pushTag(&b, "ACTUALQTY", "Quantity", r["aq"])
+				pushTag(&b, "BILLEDQTY", "Quantity", or(r["bq"], r["aq"]))
+				batches(k, dp)
+				b.WriteString("</" + io.tag + ">")
+			}
+		}
+	}
+	if e.payroll() {
+		for _, k := range e.list("", "CE") {
+			b.WriteString("<CATEGORYENTRY.LIST>")
+			pushTag(&b, "CATEGORY", "String", e.recs[k]["cat"])
+			for _, em := range e.list(k, "E") {
+				r := e.recs[em]
+				b.WriteString("<EMPLOYEEENTRIES.LIST>")
+				pushTag(&b, "EMPLOYEENAME", "String", r["emp"])
+				pushTag(&b, "AMOUNT", "Amount", money(r, "amt", "neg", ""))
+				for _, p := range e.list(em, "p") {
+					rp := e.recs[p]
+					b.WriteString("<PAYHEADALLOCATIONS.LIST>")
+					pushTag(&b, "PAYHEADNAME", "String", rp["ph"])
+					pushTag(&b, "AMOUNT", "Amount", money(rp, "amt", "neg", ""))
+					b.WriteString("</PAYHEADALLOCATIONS.LIST>")
+				}
+				for _, a := range e.list(em, "a") {
+					ra := e.recs[a]
+					b.WriteString("<ATTENDANCEENTRIES.LIST>")
+					pushTag(&b, "ATTENDANCETYPE", "String", ra["att"])
+					pushTag(&b, "ATTDTYPEVALUE", "Number", ra["val"])
+					b.WriteString("</ATTENDANCEENTRIES.LIST>")
+				}
+				b.WriteString("</EMPLOYEEENTRIES.LIST>")
+			}
+			b.WriteString("</CATEGORYENTRY.LIST>")
+		}
+	}
+	b.WriteString("</VOUCHER>")
+	if err != nil {
+		return "", err
+	}
+	// every record written is one the XML has a place for (a record of an unknown kind: a newer add-on; not guessed)
+	for _, k := range e.order {
+		if !rePushKnown.MatchString(k) {
+			return "", fmt.Errorf("record %s is of a kind this bridge does not know", k)
+		}
+	}
+	if total != 0 && nl > 0 && e.s("canc") != "Yes" {
+		return "", fmt.Errorf("the ledger lines do not add up to zero (%s)", fmtPaise(total))
+	}
+	return cleanXML(b.String()), nil
+}
+
+var rePushKnown = regexp.MustCompile(`^(L\d+(R\d+|B\d+|K\d+|C\d+(c\d+)?|T\d+(s\d+)?)?|I\d+(R\d+|A\d+(C\d+(c\d+)?)?|b\d+)?|O\d+|S[OI]\d+(b\d+)?|CE\d+(E\d+(p\d+|a\d+)?)?)$`)
+
+func fmtPaise(p int64) string {
+	s := ""
+	if p < 0 {
+		s, p = "-", -p
+	}
+	return fmt.Sprintf("%s%d.%02d", s, p/100, p%100)
+}
+
+// the ALTERID of an entry's XML set (the light check's counter, unambiguous)
+func pushSetAlter(x string, alter int64) string {
+	t := fmt.Sprintf(`<ALTERID TYPE="Number"> %d</ALTERID>`, alter)
+	if loc := re(tagOpenRe("ALTERID") + `[^<]*</ALTERID>`).FindStringIndex(x); loc != nil {
+		return x[:loc[0]] + t + x[loc[1]:]
+	}
+	if i := strings.Index(x, "<MASTERID"); i >= 0 {
+		return x[:i] + t + x[i:]
+	}
+	return x
+}
+
+// --- the version of a full entry: the line carries no AlterID (the form holds the one before the save; the add-on cannot
+// read the company's counter). Each full entry this bridge sends carries push_seq: the time the bridge took the line, to
+// the millisecond, times 100, plus a sequence, never below the last one (one bridge's full entries in the order it took
+// them, the order Tally saved them in its user's file). FinCom keeps it apart from Tally's AlterID (migration 69)
+var pushSeqLast atomic.Int64
+
+func livePushSeq(ms int64) int64 {
+	v := ms * 100
+	for {
+		last := pushSeqLast.Load()
+		if v <= last {
+			v = last + 1
+		}
+		if pushSeqLast.CompareAndSwap(last, v) {
+			return v
+		}
+	}
+}
+
+// the records of an entry in a stable order (the tests)
+func (e *pushEntry) keys() []string {
+	ks := append([]string{}, e.order...)
+	sort.Strings(ks)
+	return ks
+}

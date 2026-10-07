@@ -149,6 +149,9 @@ type change struct {
 	full bool
 	// re-review M-B: a cancel sent without an AlterID: Tally's voucher counter (ALTVCHID) read then (liveCancelCounters)
 	vchCounter int64
+	// next-push: the body is the add-on's full entry (recorder_push.go), nothing asked of Tally; its order (push_seq)
+	push    bool
+	pushSeq int64
 }
 
 // the fields migration 56 keeps for a body that did not ask them (2.3.0's request): the party GSTIN, place of supply,
@@ -282,6 +285,13 @@ type liveState struct {
 	ownBlind  bool                  // review H1: a look was stopped or backed off since the last complete look (kept on disk)
 	ownWant   bool                  // a line waits for a look at the own Tally
 	ownAskAt  time.Time             // when the reader last asked the own Tally's company list
+	// next-push (recorder_push.go): a save's heads waiting for its full entry, a full entry's parts, the light check's last
+	// counter and the saves read since (per company)
+	await     map[string]*liveAwait
+	pushFiles map[string]bool // the files that gave a full entry (the new add-on's)
+	pushBuf   map[string]*livePushBuf
+	pushCnt   map[string]livePushCnt
+	saves     map[string][]liveSaveMark
 }
 
 var (
@@ -321,6 +331,7 @@ func liveFresh() {
 	live.links, live.qcount, live.high, live.windows, live.busyAt = map[string]*liveLinkSt{}, map[string]int{}, map[string]int64{}, map[string][][2]int64{}, map[string]time.Time{}
 	live.touched, live.logged, live.gapSet, live.lastPost = map[string]map[string]bool{}, map[string]bool{}, false, time.Time{}
 	live.created, live.scanned = map[string][2]string{}, false
+	live.await, live.pushBuf, live.pushCnt, live.saves, live.pushFiles = nil, nil, nil, nil, nil
 	o := readObjFile(liveOffsetsFile())
 	for k, v := range obj(o["files"]) {
 		e := obj(v)
@@ -475,6 +486,7 @@ func liveSaveOffsets() {
 				off = c.start
 			}
 		}
+		off = livePushOffset(name, off) // next-push: a save waiting for its full entry, a full entry being joined
 		files[name] = M{"off": off, "gen": st.gen, "enc": st.enc}
 	}
 	bs := M{}
@@ -750,7 +762,7 @@ func liveReadFile(path string, posting bool) int {
 		}
 		n += k
 	}
-	return n
+	return n + livePushReadEnd(name) // next-push: an older add-on's saves are not held past the read that took them
 }
 
 func liveQueueCap() int { return keepNum("RecorderQueueMax", 5000) }
@@ -814,6 +826,7 @@ func liveEncoding(head []byte) (string, int64) {
 type liveLogicalLine struct {
 	text       string
 	start, end int64
+	raw        string // next-push: the text exactly as written (its line breaks, carriage returns included), without its own end
 }
 
 var reLiveDone = regexp.MustCompile(`\|t1=[^|\n]*(\|src=[A-Za-z]+)?\s*$`)
@@ -845,7 +858,7 @@ func liveLogical(b []byte, off int64, wide bool, starts func(open, next string) 
 		} else {
 			t = string(raw)
 		}
-		phys = append(phys, liveLogicalLine{strings.TrimSuffix(t, "\r"), off + int64(start), off + int64(end)})
+		phys = append(phys, liveLogicalLine{strings.TrimSuffix(t, "\r"), off + int64(start), off + int64(end), t})
 		start = end
 	}
 	var out []liveLogicalLine
@@ -882,6 +895,7 @@ func liveLogical(b []byte, off int64, wide bool, starts func(open, next string) 
 			if p.text != "" {
 				cur.text += "\n" + p.text
 			}
+			cur.raw += "\n" + p.raw
 			cur.end = p.end
 			continue
 		}
@@ -890,6 +904,9 @@ func liveLogical(b []byte, off int64, wide bool, starts func(open, next string) 
 	if cur != nil && reLiveDone.MatchString(cur.text) {
 		out = append(out, *cur)
 		upto = cur.end
+	}
+	for i := range out {
+		out[i].raw = strings.TrimSuffix(out[i].raw, "\r")
 	}
 	return out, upto
 }
@@ -966,11 +983,19 @@ func liveTake(file string, gen int, ll liveLogicalLine, posting bool, held map[s
 	}
 	n := 0
 	pk := l.CGUID // review Low 10: the pairs are kept per company (a save across midnight spans two daily files)
+	// next-push: the add-on's full entry (recorder_push.go); any other line takes a save still waiting for one by the 2.3.2 route
+	if l.Ev == pushEv {
+		return liveFullTake(file, gen, ll, l, posting)
+	}
+	n += liveAwaitFlush(pk)
 	if p := live.pending[pk]; p != nil {
 		if livePair[p.l.Ev] == l.Ev {
 			delete(live.pending, pk)
 			m, ev := liveMerge(p.l, l)
-			return liveEmit(m, ev, file, gen, p.start, ll.start, ll.end, posting)
+			if l.Ev == "voucher_accept_post" && (ev == "created" || ev == "altered") && pushWait() > 0 {
+				return n + liveAwaitHold(pk, m, ev, file, gen, p.start, ll.start, ll.end, posting) // next-push: its full entry follows
+			}
+			return n + liveEmit(m, ev, file, gen, p.start, ll.start, ll.end, posting)
 		}
 		delete(live.pending, pk)
 		n += liveFlush(p, posting)
@@ -980,6 +1005,9 @@ func liveTake(file string, gen int, ll liveLogicalLine, posting bool, held map[s
 		return n
 	}
 	m, ev := liveSingle(l)
+	if l.Ev == "voucher_accept_post" && (ev == "created" || ev == "altered") && pushWait() > 0 {
+		return n + liveAwaitHold(pk, m, ev, file, gen, ll.start, ll.start, ll.end, posting) // next-push: its full entry follows
+	}
 	return n + liveEmit(m, ev, file, gen, ll.start, ll.start, ll.end, posting)
 }
 
@@ -1195,7 +1223,7 @@ func liveFlushStale() int {
 			n += liveFlush(p, false)
 		}
 	}
-	return n
+	return n + livePushStale() // next-push: saves whose full entry did not come
 }
 
 var reLiveFid = regexp.MustCompile(`TDSDesk:([A-Za-z0-9._-]{1,80})`)
@@ -1329,6 +1357,9 @@ func liveEmit(l recLine, ev, file string, gen int, start, lineStart, end int64, 
 		if c.isLedger() && c.name != "" {
 			liveTouch(c.company, c.name)
 		}
+	}
+	if !c.isLedger() {
+		livePushSave(c) // next-push: a save read, for the light check's counter
 	}
 	if liveSameSave(c) {
 		return 1
@@ -2077,6 +2108,10 @@ func (c *change) wire() M {
 	}
 	// 2.3.1: FinCom passes the body's blanks as sent (the owner's "full", 06-Oct-2026); false on every other line (one shape)
 	m["full"] = c.full && c.xml != ""
+	// next-push: the add-on's full entry, nothing asked of Tally; its order (FinCom keeps it apart from Tally's AlterID)
+	if c.push && c.xml != "" {
+		m["push"], m["push_seq"] = true, c.pushSeq
+	}
 	if lineFid != "" {
 		m["lineFid"] = lineFid
 	}
@@ -2107,6 +2142,8 @@ func (c *change) wire() M {
 		// second review L-C: no entry ids and no FinCom id with it (nothing of it can be matched or built)
 		m["xml"], m["ledgers"], m["narration"], m["oversize"], m["object_guid"] = "", []any{}, cutRunes(liveNoTag(c.narr), 1000), true, ""
 		m["full"] = false
+		delete(m, "push")
+		delete(m, "push_seq")
 		if fid != "" {
 			m["fid"], m["lineFid"] = "", fid
 		}
@@ -2334,7 +2371,7 @@ func liveUploadStep() (int, bool) {
 		return 0, false
 	}
 	sentIDs := make([]string, 0, len(group))
-	var bodied, items, ledAgain []string
+	var bodied, items, ledAgain, pushed []string
 	gone := map[*change]bool{}
 	var held []*change
 	for _, c := range group {
@@ -2365,6 +2402,9 @@ func liveUploadStep() (int, bool) {
 		}
 		if c.event == "created" && !c.isLedger() && c.vchNo != "" {
 			live.created[c.saveKey()] = [2]string{c.lineId, c.guid}
+		}
+		if c.push && c.xml != "" && c.masterId != "" {
+			pushed = append(pushed, c.companyGuid+"|"+c.masterId) // next-push: an earlier held line of this entry needs no ask
 		}
 		// 2.2.1: sent held (no body, no GUID): resolved later (recorder_resolve.go). 2.2.2: every voucher of the add-on
 		// sent without its entry, not only a new one with a number
@@ -2399,6 +2439,7 @@ func liveUploadStep() (int, bool) {
 	liveSaveIds(ledAgain, liveLedgerSuffix)
 	liveSaveOffsets()
 	liveHeldAdd(held)
+	liveHeldDropPushed(pushed)
 	liveGuidAnswers(group, arr(r.json["results"])) // 2.3.0: what FinCom's record said of a delete / cancel sent without a GUID
 	return len(group), false
 }
