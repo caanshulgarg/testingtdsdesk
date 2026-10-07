@@ -178,3 +178,7 @@ run_parse_parta.mjs                   120
 run_parse_real231.mjs                 120
 run_migration57.py                    120
 run_parta_server.py                   120
+# next release, item e: the nightly self-check (migration 65, tally-ingest's kind selfcheck, the Tally page's line)
+run_migration65.py                    120
+run_selfcheck_server.py               120
+run_tally_selfcheck_ui.py             120  TDSDESK_SITE=../app/dist-test

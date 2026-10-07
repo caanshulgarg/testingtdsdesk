@@ -155,6 +155,20 @@ function Baselines({ r, owner }) {
       : <><span className="tag ok">{company}</span><span className="note" data-baseline-cleared="">{"Cleared by " + who(cur.cleared_by) + " at " + tallyHm(cur.cleared_at) + ": " + (cur.cleared_note || "no note")}</span></>}
   </div>)}</div>;
 }
+// next release (item e, migration 65): under a computer, each company's last nightly self-check in the cloud's own plain
+// words (green: every change in FinCom, or the missing ones fetched; red: entries still missing, not checked, or FinCom's
+// copy not adding up; amber: no check for more than two nights). Nothing to press
+function SelfChecks({ r }) {
+  const list = TCloud.selfChecks ? TCloud.selfChecks(r.device.id, r.id) : [];
+  if (!list.length) return null;
+  return <div style={{ marginLeft: 16 }}>{list.map(({ book, company, row, old }) => {
+    const bad = row.result === "missing" || row.result === "not_checked" || row.copy_ok === false;
+    const words = old ? "Not checked since the night of " + fmtDate(row.night || row.ran_at) + ". The last check: " + (row.words || "") : (row.words || "");
+    return <div key={book || company} className="row" data-selfcheck={book || company} data-selfcheck-result={row.result || ""} style={{ alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+      <span className={"tag " + (old ? "warn" : bad ? "bad" : "ok")}>{company}</span><span className="note" data-selfcheck-words="">{words}</span>
+    </div>;
+  })}</div>;
+}
 // FinCom Bridge 2.1.6 posts only to the companies in its PostOnly setting (the owner's own setting per computer); its
 // heartbeat carries postOnly ([] when unrestricted) and tally-ingest keeps it on the bridge entry (info.bridges[id].postOnly)
 // and on the device record (info.beat.postOnly). The bridge entry first, then the beat; empty or absent: nothing to say.
@@ -314,6 +328,7 @@ function BridgeLines({ rows, latest }) {
         {live && <div className="row" style={{ alignItems: "center", gap: 8, flexWrap: "wrap", marginLeft: 16 }}><TrialTools r={r} owner={owner} /></div>}
         {live && <div className="row" style={{ alignItems: "center", gap: 8, flexWrap: "wrap", marginLeft: 16 }}><RecorderSource r={r} owner={owner} /></div>}
         {live && <Baselines r={r} owner={owner} />}
+        {live && <SelfChecks r={r} />}
       </div>; })}
     {(p.devices || []).filter((d) => !d.revoked && d.info && d.info.idRefused).map((d) => <p key={"refused-" + d.id} className="bk-alert bad" data-id-refused={d.id} style={{ margin: "4px 0" }}>
       <b>{d.name}</b>{": " + d.info.idRefused.words}</p>)}

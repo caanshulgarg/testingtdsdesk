@@ -253,3 +253,16 @@ add-on's placeholder GUID is held as a GUID-less one (R3-L1: twice it broke the 
 applied for its GUID is applied and cancelled again, below a delete 'stale' as before (R3-L2); a GUID-less delete with no
 date promises no Day Book (R3-L3). The owner's "nothing to remove" (08:05) is 57's (`tally_ingest_delete`), not repeated.
 Tested by `run_migration60.py` (on 56 -> 57 -> 58) and `run_migration_order.py` (56 -> 57 -> 58 -> 59 -> 60 in both orders).
+
+Next release (07-Oct-2026, item e: the nightly self-check; `docs/selfcheck-requests-for-approval.md`):
+`migration-65-selfchecks.sql` runs after 60 in both orders (fresh and staging: ... -> 58 -> 59 -> 60 -> 65), and after 61
+(privileges, run on staging), 62 (TDS), 63 (outbox) and 64 (realtime) where they ran: it touches none of their objects. It
+needs 32's `tally_vouchers.deleted_at`, 33's `tally_ledgers.merged_into`, 44's `tally_ledger_day_rebuild` counting and 47's
+`tally_service_or_owner()`; add-only, one transaction, `lock_timeout` 10 s, no "delete from", nothing dropped, safe twice;
+NOT yet run on staging; md5 eabe7dda1e8a12a11e0d9fa71ab46b7f. One new table, `tally_selfchecks` (one row per nightly check,
+never updated; RLS: the firm's members read; written by tally-ingest only; anon nothing, authenticated select only, its
+sequence closed to both), and four new functions, none replacing another: `tally_selfcheck_compare` (which of Tally's
+listed entries the copy lacks), `tally_selfcheck_copy` (the copy's own trial balance against openings and entries),
+`tally_selfcheck_words` and `tally_selfcheck_record`; security definer, search_path public, pg_temp, the service role only.
+Without it tally-ingest's kind `selfcheck` answers 503 notReady and the bridge does not ask again that night; the Tally
+page shows no line. Tested by `run_migration65.py` (on 32 -> ... -> 60) and `run_migration_order.py` (65 in both orders).

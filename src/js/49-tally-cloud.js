@@ -395,6 +395,10 @@ const TCloud = {
         else p.cursors = null;
       }
       try { p.books = p.cursors && p.cursors.length ? [].concat(await this.restAll("tally_books?select=book_id,client_id,company&order=company.asc") || []) : []; } catch (e){ p.books = []; }
+      // next release (item e, migration 65): the nightly self-check of each company, the firm's latest 300 (tally_selfchecks,
+      // as row security gives them); a cloud without the table: none, and nothing said
+      try { p.selfchecks = [].concat(await Cloud.api("tally_selfchecks?select=id,book_id,device_id,bridge,company,ran_at,night,result,words,still_missing,fetched,copy_ok&order=ran_at.desc&limit=300") || []); p.noSelfChecks = false; }
+      catch (e){ p.selfchecks = []; p.noSelfChecks = true; }
       p.err = ""; p.at = Date.now();
       linkByGstin(p.companies);
     } catch (e){ p.err = /tally_devices|does not exist|schema cache/i.test(String(e && e.message)) ? "The cloud copy is not set up in this database yet." : (e && e.message) || String(e); }
@@ -609,6 +613,19 @@ const TCloud = {
       if (cur.state === "needs_baseline" || (cur.cleared_at && Date.parse(cur.cleared_at) > week)) out.push({book: b.book_id, company: b.company, cur});
     });
     return out;
+  },
+  // next release (item e): under a computer, each of its companies' latest nightly self-check (tally_selfchecks):
+  // [{book, company, row, old}], old when it ran more than two nights ago (Tally closed at night, or the bridge off). On a
+  // shared computer key (2.3.0, one bridge per Windows user) each bridge's line shows the checks that bridge made
+  selfChecks(devId, bridgeId){
+    const rows = Array.isArray(this.pane.selfchecks) ? this.pane.selfchecks : [], seen = new Set(), out = [];
+    rows.filter(r => r && r.device_id === devId && (!bridgeId || !r.bridge || r.bridge === bridgeId)).sort((a, b) => String(b.ran_at || "").localeCompare(String(a.ran_at || ""))).forEach(r => {
+      const k = r.book_id || r.company || "";
+      if (!k || seen.has(k)) return;
+      seen.add(k);
+      out.push({book: r.book_id || "", company: String(r.company || ""), row: r, old: !!r.ran_at && Date.now() - Date.parse(r.ran_at) > 2 * 86400000});
+    });
+    return out.sort((a, b) => a.company.localeCompare(b.company));
   },
   // a request's line: "vouchers 1.2 s at 15:34"
   reqSay(q){ if (!q || !q.kind) return ""; const ms = Number(q.ms) || 0; return q.kind + " " + (ms < 1000 ? ms + " ms" : (ms / 1000).toFixed(1) + " s") + (q.at ? " at " + tallyHm(q.at) : ""); },
