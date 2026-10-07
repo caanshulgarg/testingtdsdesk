@@ -1,0 +1,15 @@
+2026-10-07 10:52:08  FinCom Bridge 2.3.1: started just for runnervmfi6oq\fcuser2 (no service); it keeps the bridge and its icon running
+2026-10-07 10:52:09  Port 9100 is taken (another Windows user's FinCom Bridge, or another program); this bridge uses port 9101 and remembers it
+2026-10-07 10:52:09  FinCom Bridge 2.3.1 (Go) started on 127.0.0.1:9101: the only bridge on this computer; working for runnervmfi6oq\fcuser2, Windows session 1; runs just for this Windows user (starts at sign-in, no service)
+2026-10-07 10:52:09  Tally is open on port 9001; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+2026-10-07 10:52:09  Recorder: re-scan of the add-on's files for 2.3.1: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+2026-10-07 10:52:09  Check:  - 
+2026-10-07 10:52:12  Tray icon: set to show next to the clock always (Windows 11)
+2026-10-07 10:52:12  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+2026-10-07 10:52:12  Company FinCom Spike U2: its Tally GUID ed530165-8a8d-41d6-8c59-53b4ae20efa7 is held from now on
+2026-10-07 10:52:12  Company FinCom Spike U2: its starting point is recorded: ALTVCHID=1, ALTMSTID=209 (reading is prospective only: the bridge follows what changes after this)
+2026-10-07 10:52:12  Company FinCom Spike U2: change numbers read with form a: ALTVCHID=1, ALTMSTID=209
+2026-10-07 10:52:12  Light check of FinCom Spike U2: starting point recorded (ALTVCHID=1, ALTMSTID=209)
+2026-10-07 10:52:20  Refused a request from a program of another Windows user (/status): not your FinCom Bridge (the program asking has no Windows user)
+2026-10-07 10:54:30  Recorder: FinCom Spike Co: lines from a Tally this bridge does not read (company not open here): not sent
+2026-10-07 11:02:42  Light check of FinCom Spike U2: unchanged starting point ALTVCHID=1; now ALTVCHID=1, ALTMSTID=209

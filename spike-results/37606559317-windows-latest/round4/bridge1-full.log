@@ -1,0 +1,136 @@
+2026-10-07 10:52:01  FinCom Bridge 2.3.1: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+2026-10-07 10:52:01  FinCom Bridge 2.3.1 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+2026-10-07 10:52:01  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+2026-10-07 10:52:01  Recorder: re-scan of the add-on's files for 2.3.1: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+2026-10-07 10:52:01  Check:  - 
+2026-10-07 10:52:04  Tray icon: set to show next to the clock always (Windows 11)
+2026-10-07 10:52:04  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+2026-10-07 10:52:04  Company FinCom Spike Co: its Tally GUID a69b75fc-e909-448f-8b43-3d55567f8b7c is held from now on
+2026-10-07 10:52:05  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=2, ALTMSTID=642 (reading is prospective only: the bridge follows what changes after this)
+2026-10-07 10:52:05  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=2, ALTMSTID=642
+2026-10-07 10:52:05  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=2, ALTMSTID=642)
+2026-10-07 10:52:08  Refused a request from a program of another Windows user (/tray/idle): not your FinCom Bridge
+2026-10-07 10:52:08  Refused a request from a program of another Windows user (/tray/status): not your FinCom Bridge
+2026-10-07 10:52:08  Refused a request from a program of another Windows user (/tray/idle): not your FinCom Bridge
+2026-10-07 10:52:08  Refused a request from a program of another Windows user (/tray/status): not your FinCom Bridge
+2026-10-07 10:52:09  Refused a request from a program of another Windows user (/tray/idle): not your FinCom Bridge
+2026-10-07 10:52:09  Refused a request from a program of another Windows user (/tray/status): not your FinCom Bridge
+2026-10-07 10:52:09  Refused a request from a program of another Windows user (/tray/idle): not your FinCom Bridge
+2026-10-07 10:52:09  Refused a request from a program of another Windows user (/tray/status): not your FinCom Bridge
+2026-10-07 10:52:09  Refused a request from a program of another Windows user (/tray/idle): not your FinCom Bridge
+2026-10-07 10:52:09  Refused a request from a program of another Windows user (/tray/status): not your FinCom Bridge
+2026-10-07 10:52:09  Refused a request from a program of another Windows user (/tray/idle): not your FinCom Bridge
+2026-10-07 10:52:09  Refused a request from a program of another Windows user (/tray/status): not your FinCom Bridge
+2026-10-07 10:52:09  Refused a request from a program of another Windows user (/tray/idle): not your FinCom Bridge
+2026-10-07 10:52:09  Refused a request from a program of another Windows user (/tray/status): not your FinCom Bridge
+2026-10-07 10:52:09  Refused a request from a program of another Windows user (/tray/idle): not your FinCom Bridge
+2026-10-07 10:52:09  Refused a request from a program of another Windows user (/tray/status): not your FinCom Bridge
+2026-10-07 10:52:09  Refused a request from a program of another Windows user (/tray/idle): not your FinCom Bridge
+2026-10-07 10:52:09  Refused a request from a program of another Windows user (/tray/status): not your FinCom Bridge
+2026-10-07 10:52:21  Refused a request from a program of another Windows user (/status): not your FinCom Bridge
+2026-10-07 10:53:30  Tally 9000: TDSDeskCompanies took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-07 10:53:30  Tally 9000 did not answer in time at 10:53:30 (TDSDeskCompanies, try 1); trying again by itself at 10:53:45
+2026-10-07 10:53:30  Recorder: Tally took longer than 2 s to list its open companies (limit 2 s); this computer's changes of companies not seen open here yet wait until it answers in time; none is passed over or lost
+2026-10-07 10:53:30  Recorder: Receipt 1 of 01-Sep-2026 (MasterID 3, line ee4946d7…): asking Tally by MasterID
+2026-10-07 10:53:30  Recorder: Receipt 1 of 01-Sep-2026 (MasterID 3, line ee4946d7…): not asked yet: Tally did not answer in time at 10:53; trying again by itself at 10:53 (nothing was sent); asked then
+2026-10-07 10:53:30  Recorder: Receipt 2 of 01-Sep-2026 (MasterID 4, line 0df111b1…): not asked yet: Tally did not answer in time at 10:53; trying again by itself at 10:53 (nothing was sent); asked then
+2026-10-07 10:53:30  Recorder: Receipt 3 of 01-Sep-2026 (MasterID 5, line d56d8ae9…): not asked yet: Tally did not answer in time at 10:53; trying again by itself at 10:53 (nothing was sent); asked then
+2026-10-07 10:53:30  Recorder: Receipt 4 of 01-Sep-2026 (MasterID 6, line 916b6527…): not asked yet: Tally did not answer in time at 10:53; trying again by itself at 10:53 (nothing was sent); asked then
+2026-10-07 10:53:30  Recorder: Receipt 5 of 01-Sep-2026 (MasterID 7, line 46ff7823…): not asked yet: Tally did not answer in time at 10:53; trying again by itself at 10:53 (nothing was sent); asked then
+2026-10-07 10:53:30  Recorder: Receipt 6 of 01-Sep-2026 (MasterID 8, line 9e545355…): not asked yet: Tally did not answer in time at 10:53; trying again by itself at 10:53 (nothing was sent); asked then
+2026-10-07 10:53:30  Recorder: Receipt 7 of 01-Sep-2026 (MasterID 9, line 3a7e8c2e…): not asked yet: Tally did not answer in time at 10:53; trying again by itself at 10:53 (nothing was sent); asked then
+2026-10-07 10:53:30  Recorder: Receipt 8 of 01-Sep-2026 (MasterID 10, line 869d0791…): not asked yet: Tally did not answer in time at 10:53; trying again by itself at 10:53 (nothing was sent); asked then
+2026-10-07 10:53:30  Recorder: Receipt 9 of 01-Sep-2026 (MasterID 11, line c10ccc31…): not asked yet: Tally did not answer in time at 10:53; trying again by itself at 10:53 (nothing was sent); asked then
+2026-10-07 10:53:30  Recorder: Receipt 10 of 01-Sep-2026 (MasterID 12, line 976e8161…): not asked yet: Tally did not answer in time at 10:53; trying again by itself at 10:53 (nothing was sent); asked then
+2026-10-07 10:53:48  Tally 9000: FinComVoucherByMaster 20260901 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-07 10:53:48  Tally 9000 did not answer in time at 10:53:48 (FinComVoucherByMaster, try 2); trying again by itself at 10:54:18
+2026-10-07 10:53:48  Recorder: Receipt 1 of 01-Sep-2026 (MasterID 3, line ee4946d7…): not asked yet: Tally did not answer in time at 10:53; trying again by itself at 10:54 (nothing was sent); asked then
+2026-10-07 10:53:48  Recorder: Receipt 2 of 01-Sep-2026 (MasterID 4, line 0df111b1…): not asked yet: Tally did not answer in time at 10:53; trying again by itself at 10:54 (nothing was sent); asked then
+2026-10-07 10:53:48  Recorder: Receipt 3 of 01-Sep-2026 (MasterID 5, line d56d8ae9…): not asked yet: Tally did not answer in time at 10:53; trying again by itself at 10:54 (nothing was sent); asked then
+2026-10-07 10:53:48  Recorder: Receipt 4 of 01-Sep-2026 (MasterID 6, line 916b6527…): not asked yet: Tally did not answer in time at 10:53; trying again by itself at 10:54 (nothing was sent); asked then
+2026-10-07 10:53:48  Recorder: Receipt 5 of 01-Sep-2026 (MasterID 7, line 46ff7823…): not asked yet: Tally did not answer in time at 10:53; trying again by itself at 10:54 (nothing was sent); asked then
+2026-10-07 10:53:48  Recorder: Receipt 6 of 01-Sep-2026 (MasterID 8, line 9e545355…): not asked yet: Tally did not answer in time at 10:53; trying again by itself at 10:54 (nothing was sent); asked then
+2026-10-07 10:53:48  Recorder: Receipt 7 of 01-Sep-2026 (MasterID 9, line 3a7e8c2e…): not asked yet: Tally did not answer in time at 10:53; trying again by itself at 10:54 (nothing was sent); asked then
+2026-10-07 10:53:48  Recorder: Receipt 8 of 01-Sep-2026 (MasterID 10, line 869d0791…): not asked yet: Tally did not answer in time at 10:53; trying again by itself at 10:54 (nothing was sent); asked then
+2026-10-07 10:53:48  Recorder: Receipt 9 of 01-Sep-2026 (MasterID 11, line c10ccc31…): not asked yet: Tally did not answer in time at 10:53; trying again by itself at 10:54 (nothing was sent); asked then
+2026-10-07 10:53:48  Recorder: Receipt 10 of 01-Sep-2026 (MasterID 12, line 976e8161…): not asked yet: Tally did not answer in time at 10:53; trying again by itself at 10:54 (nothing was sent); asked then
+2026-10-07 10:54:20  Tally 9000: TDSDeskCompanies took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-07 10:54:20  Tally 9000 did not answer in time at 10:54:20 (TDSDeskCompanies, try 3); trying again by itself at 10:55:20
+2026-10-07 10:54:20  Recorder: Receipt 1 of 01-Sep-2026 (MasterID 3, line ee4946d7…): not asked yet: Tally did not answer in time at 10:54; trying again by itself at 10:55 (nothing was sent); asked then
+2026-10-07 10:54:20  Recorder: Receipt 2 of 01-Sep-2026 (MasterID 4, line 0df111b1…): not asked yet: Tally did not answer in time at 10:54; trying again by itself at 10:55 (nothing was sent); asked then
+2026-10-07 10:54:20  Recorder: Receipt 3 of 01-Sep-2026 (MasterID 5, line d56d8ae9…): not asked yet: Tally did not answer in time at 10:54; trying again by itself at 10:55 (nothing was sent); asked then
+2026-10-07 10:54:20  Recorder: Receipt 4 of 01-Sep-2026 (MasterID 6, line 916b6527…): not asked yet: Tally did not answer in time at 10:54; trying again by itself at 10:55 (nothing was sent); asked then
+2026-10-07 10:54:20  Recorder: Receipt 5 of 01-Sep-2026 (MasterID 7, line 46ff7823…): not asked yet: Tally did not answer in time at 10:54; trying again by itself at 10:55 (nothing was sent); asked then
+2026-10-07 10:54:20  Recorder: Receipt 6 of 01-Sep-2026 (MasterID 8, line 9e545355…): not asked yet: Tally did not answer in time at 10:54; trying again by itself at 10:55 (nothing was sent); asked then
+2026-10-07 10:54:20  Recorder: Receipt 7 of 01-Sep-2026 (MasterID 9, line 3a7e8c2e…): not asked yet: Tally did not answer in time at 10:54; trying again by itself at 10:55 (nothing was sent); asked then
+2026-10-07 10:54:20  Recorder: Receipt 8 of 01-Sep-2026 (MasterID 10, line 869d0791…): not asked yet: Tally did not answer in time at 10:54; trying again by itself at 10:55 (nothing was sent); asked then
+2026-10-07 10:54:20  Recorder: Receipt 9 of 01-Sep-2026 (MasterID 11, line c10ccc31…): not asked yet: Tally did not answer in time at 10:54; trying again by itself at 10:55 (nothing was sent); asked then
+2026-10-07 10:54:20  Recorder: Receipt 10 of 01-Sep-2026 (MasterID 12, line 976e8161…): not asked yet: Tally did not answer in time at 10:54; trying again by itself at 10:55 (nothing was sent); asked then
+2026-10-07 10:55:22  Tally 9000: TDSDeskCompanies took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-07 10:55:22  Tally 9000 did not answer in time at 10:55:22 (TDSDeskCompanies, try 4); trying again by itself at 10:57:22
+2026-10-07 10:55:22  Recorder: Receipt 1 of 01-Sep-2026 (MasterID 3, line ee4946d7…): not asked yet: Tally did not answer in time at 10:55; trying again by itself at 10:57 (nothing was sent); asked then
+2026-10-07 10:55:22  Recorder: Receipt 2 of 01-Sep-2026 (MasterID 4, line 0df111b1…): not asked yet: Tally did not answer in time at 10:55; trying again by itself at 10:57 (nothing was sent); asked then
+2026-10-07 10:55:22  Recorder: Receipt 3 of 01-Sep-2026 (MasterID 5, line d56d8ae9…): not asked yet: Tally did not answer in time at 10:55; trying again by itself at 10:57 (nothing was sent); asked then
+2026-10-07 10:55:22  Recorder: Receipt 4 of 01-Sep-2026 (MasterID 6, line 916b6527…): not asked yet: Tally did not answer in time at 10:55; trying again by itself at 10:57 (nothing was sent); asked then
+2026-10-07 10:55:22  Recorder: Receipt 5 of 01-Sep-2026 (MasterID 7, line 46ff7823…): not asked yet: Tally did not answer in time at 10:55; trying again by itself at 10:57 (nothing was sent); asked then
+2026-10-07 10:55:22  Recorder: Receipt 6 of 01-Sep-2026 (MasterID 8, line 9e545355…): not asked yet: Tally did not answer in time at 10:55; trying again by itself at 10:57 (nothing was sent); asked then
+2026-10-07 10:55:22  Recorder: Receipt 7 of 01-Sep-2026 (MasterID 9, line 3a7e8c2e…): not asked yet: Tally did not answer in time at 10:55; trying again by itself at 10:57 (nothing was sent); asked then
+2026-10-07 10:55:22  Recorder: Receipt 8 of 01-Sep-2026 (MasterID 10, line 869d0791…): not asked yet: Tally did not answer in time at 10:55; trying again by itself at 10:57 (nothing was sent); asked then
+2026-10-07 10:55:22  Recorder: Receipt 9 of 01-Sep-2026 (MasterID 11, line c10ccc31…): not asked yet: Tally did not answer in time at 10:55; trying again by itself at 10:57 (nothing was sent); asked then
+2026-10-07 10:55:22  Recorder: Receipt 10 of 01-Sep-2026 (MasterID 12, line 976e8161…): not asked yet: Tally did not answer in time at 10:55; trying again by itself at 10:57 (nothing was sent); asked then
+2026-10-07 10:57:24  Tally 9000: TDSDeskCompanies took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-07 10:57:24  Tally 9000 did not answer in time at 10:57:24 (TDSDeskCompanies, try 5); trying again by itself at 11:02:24
+2026-10-07 10:57:24  Recorder: Receipt 1 of 01-Sep-2026 (MasterID 3, line ee4946d7…): not asked yet: Tally did not answer in time at 10:57; trying again by itself at 11:02 (nothing was sent); asked then
+2026-10-07 10:57:24  Recorder: Receipt 2 of 01-Sep-2026 (MasterID 4, line 0df111b1…): not asked yet: Tally did not answer in time at 10:57; trying again by itself at 11:02 (nothing was sent); asked then
+2026-10-07 10:57:24  Recorder: Receipt 3 of 01-Sep-2026 (MasterID 5, line d56d8ae9…): not asked yet: Tally did not answer in time at 10:57; trying again by itself at 11:02 (nothing was sent); asked then
+2026-10-07 10:57:24  Recorder: Receipt 4 of 01-Sep-2026 (MasterID 6, line 916b6527…): not asked yet: Tally did not answer in time at 10:57; trying again by itself at 11:02 (nothing was sent); asked then
+2026-10-07 10:57:24  Recorder: Receipt 5 of 01-Sep-2026 (MasterID 7, line 46ff7823…): not asked yet: Tally did not answer in time at 10:57; trying again by itself at 11:02 (nothing was sent); asked then
+2026-10-07 10:57:24  Recorder: Receipt 6 of 01-Sep-2026 (MasterID 8, line 9e545355…): not asked yet: Tally did not answer in time at 10:57; trying again by itself at 11:02 (nothing was sent); asked then
+2026-10-07 10:57:24  Recorder: Receipt 7 of 01-Sep-2026 (MasterID 9, line 3a7e8c2e…): not asked yet: Tally did not answer in time at 10:57; trying again by itself at 11:02 (nothing was sent); asked then
+2026-10-07 10:57:24  Recorder: Receipt 8 of 01-Sep-2026 (MasterID 10, line 869d0791…): not asked yet: Tally did not answer in time at 10:57; trying again by itself at 11:02 (nothing was sent); asked then
+2026-10-07 10:57:24  Recorder: Receipt 9 of 01-Sep-2026 (MasterID 11, line c10ccc31…): not asked yet: Tally did not answer in time at 10:57; trying again by itself at 11:02 (nothing was sent); asked then
+2026-10-07 10:57:24  Recorder: Receipt 10 of 01-Sep-2026 (MasterID 12, line 976e8161…): not asked yet: Tally did not answer in time at 10:57; trying again by itself at 11:02 (nothing was sent); asked then
+2026-10-07 11:02:25  Tally 9000 answered in time again (TDSDeskCompanies): the background requests are back to normal
+2026-10-07 11:02:25  Recorder: Receipt 1 of 01-Sep-2026 (MasterID 3, line ee4946d7…): asking Tally by type and number (Tally's voucher with MasterID 3 was not saved after this line (its AlterID is still the line's): no save of it happened )
+2026-10-07 11:02:25  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-07 11:02:25  Recorder: Receipt 1 of 01-Sep-2026 (MasterID 3, line ee4946d7…): held: Tally's voucher with MasterID 3 was not saved after this line (its AlterID is still the line's): no save of it happened here; asked by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (sent without its body and GUID; FinCom holds the line until it is resolved)
+2026-10-07 11:02:25  Recorder: Receipt 2 of 01-Sep-2026 (MasterID 4, line 0df111b1…): asking Tally by MasterID
+2026-10-07 11:02:25  Recorder: Receipt 2 of 01-Sep-2026 (MasterID 4, line 0df111b1…): asking Tally by type and number (Tally's voucher with MasterID 4 was not saved after this line (its AlterID is still the line's): no save of it happened )
+2026-10-07 11:02:25  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-07 11:02:25  Recorder: Receipt 2 of 01-Sep-2026 (MasterID 4, line 0df111b1…): held: Tally's voucher with MasterID 4 was not saved after this line (its AlterID is still the line's): no save of it happened here; asked by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (sent without its body and GUID; FinCom holds the line until it is resolved)
+2026-10-07 11:02:25  Recorder: Receipt 3 of 01-Sep-2026 (MasterID 5, line d56d8ae9…): asking Tally by MasterID
+2026-10-07 11:02:25  Recorder: Receipt 3 of 01-Sep-2026 (MasterID 5, line d56d8ae9…): asking Tally by type and number (Tally's voucher with MasterID 5 was not saved after this line (its AlterID is still the line's): no save of it happened )
+2026-10-07 11:02:25  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-07 11:02:25  Recorder: Receipt 3 of 01-Sep-2026 (MasterID 5, line d56d8ae9…): held: Tally's voucher with MasterID 5 was not saved after this line (its AlterID is still the line's): no save of it happened here; asked by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (sent without its body and GUID; FinCom holds the line until it is resolved)
+2026-10-07 11:02:25  Recorder: Receipt 4 of 01-Sep-2026 (MasterID 6, line 916b6527…): asking Tally by MasterID
+2026-10-07 11:02:25  Recorder: Receipt 4 of 01-Sep-2026 (MasterID 6, line 916b6527…): asking Tally by type and number (Tally's voucher with MasterID 6 was not saved after this line (its AlterID is still the line's): no save of it happened )
+2026-10-07 11:02:25  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-07 11:02:25  Recorder: Receipt 4 of 01-Sep-2026 (MasterID 6, line 916b6527…): held: Tally's voucher with MasterID 6 was not saved after this line (its AlterID is still the line's): no save of it happened here; asked by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (sent without its body and GUID; FinCom holds the line until it is resolved)
+2026-10-07 11:02:25  Recorder: Receipt 5 of 01-Sep-2026 (MasterID 7, line 46ff7823…): asking Tally by MasterID
+2026-10-07 11:02:26  Recorder: Receipt 5 of 01-Sep-2026 (MasterID 7, line 46ff7823…): asking Tally by type and number (Tally's voucher with MasterID 7 was not saved after this line (its AlterID is still the line's): no save of it happened )
+2026-10-07 11:02:26  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-07 11:02:26  Recorder: Receipt 5 of 01-Sep-2026 (MasterID 7, line 46ff7823…): held: Tally's voucher with MasterID 7 was not saved after this line (its AlterID is still the line's): no save of it happened here; asked by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (sent without its body and GUID; FinCom holds the line until it is resolved)
+2026-10-07 11:02:26  Recorder: Receipt 6 of 01-Sep-2026 (MasterID 8, line 9e545355…): asking Tally by MasterID
+2026-10-07 11:02:26  Recorder: Receipt 6 of 01-Sep-2026 (MasterID 8, line 9e545355…): asking Tally by type and number (Tally's voucher with MasterID 8 was not saved after this line (its AlterID is still the line's): no save of it happened )
+2026-10-07 11:02:26  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-07 11:02:26  Recorder: Receipt 6 of 01-Sep-2026 (MasterID 8, line 9e545355…): held: Tally's voucher with MasterID 8 was not saved after this line (its AlterID is still the line's): no save of it happened here; asked by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (sent without its body and GUID; FinCom holds the line until it is resolved)
+2026-10-07 11:02:26  Recorder: Receipt 7 of 01-Sep-2026 (MasterID 9, line 3a7e8c2e…): asking Tally by MasterID
+2026-10-07 11:02:26  Recorder: Receipt 7 of 01-Sep-2026 (MasterID 9, line 3a7e8c2e…): asking Tally by type and number (Tally's voucher with MasterID 9 was not saved after this line (its AlterID is still the line's): no save of it happened )
+2026-10-07 11:02:26  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-07 11:02:26  Recorder: Receipt 7 of 01-Sep-2026 (MasterID 9, line 3a7e8c2e…): held: Tally's voucher with MasterID 9 was not saved after this line (its AlterID is still the line's): no save of it happened here; asked by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (sent without its body and GUID; FinCom holds the line until it is resolved)
+2026-10-07 11:02:26  Recorder: Receipt 8 of 01-Sep-2026 (MasterID 10, line 869d0791…): asking Tally by MasterID
+2026-10-07 11:02:26  Recorder: Receipt 8 of 01-Sep-2026 (MasterID 10, line 869d0791…): asking Tally by type and number (Tally's voucher with MasterID 10 was not saved after this line (its AlterID is still the line's): no save of it happened)
+2026-10-07 11:02:26  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-07 11:02:26  Recorder: Receipt 8 of 01-Sep-2026 (MasterID 10, line 869d0791…): held: Tally's voucher with MasterID 10 was not saved after this line (its AlterID is still the line's): no save of it happened here; asked by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (sent without its body and GUID; FinCom holds the line until it is resolved)
+2026-10-07 11:02:26  Recorder: Receipt 9 of 01-Sep-2026 (MasterID 11, line c10ccc31…): asking Tally by MasterID
+2026-10-07 11:02:26  Recorder: Receipt 9 of 01-Sep-2026 (MasterID 11, line c10ccc31…): asking Tally by type and number (Tally's voucher with MasterID 11 was not saved after this line (its AlterID is still the line's): no save of it happened)
+2026-10-07 11:02:26  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-07 11:02:26  Recorder: Receipt 9 of 01-Sep-2026 (MasterID 11, line c10ccc31…): held: Tally's voucher with MasterID 11 was not saved after this line (its AlterID is still the line's): no save of it happened here; asked by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (sent without its body and GUID; FinCom holds the line until it is resolved)
+2026-10-07 11:02:26  Recorder: Receipt 10 of 01-Sep-2026 (MasterID 12, line 976e8161…): asking Tally by MasterID
+2026-10-07 11:02:26  Recorder: Receipt 10 of 01-Sep-2026 (MasterID 12, line 976e8161…): asking Tally by type and number (Tally's voucher with MasterID 12 was not saved after this line (its AlterID is still the line's): no save of it happened)
+2026-10-07 11:02:26  Tally 9000: FinComVoucherByNumber refused before sending: it carries a period and reading old entries is off (ReadDays)
+2026-10-07 11:02:26  Recorder: Receipt 10 of 01-Sep-2026 (MasterID 12, line 976e8161…): held: Tally's voucher with MasterID 12 was not saved after this line (its AlterID is still the line's): no save of it happened here; asked by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (sent without its body and GUID; FinCom holds the line until it is resolved)
+2026-10-07 11:02:34  Recorder: FinCom asks again for 10 held line(s) of this bridge: 0 new in the held list, 0 asked afresh (tries of an older version), 10 there already, 0 resolved already, 0 not this bridge's own Tally's (company not open here or another GUID)
+2026-10-07 11:02:34  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=2; now ALTVCHID=12, ALTMSTID=643
+2026-10-07 11:02:35  Ledger changes for FinCom Spike Co: Tally's master counter 642 -> 643: 1 request(s) for AlterID 643-643, 1 ledger(s) sent to FinCom; the last number is 643
+2026-10-07 11:02:35  Ledger changes for FinCom Spike Co: 1 ledger(s) created or altered in Tally sent to FinCom
