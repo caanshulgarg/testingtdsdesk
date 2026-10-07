@@ -59,7 +59,9 @@ function P3Templates {
   # the parent itself (that run: "Group 'Duties &amp;amp; Taxes' does not exist!")
   $m += S2Led 'HDFC Bank' 'Bank Accounts'; $m += S2Led 'Sales' 'Sales Accounts'
   foreach ($g in 'P233 Main', 'P233 Annex') { $m += '<GODOWN NAME="' + $g + '" ACTION="Create"><NAME.LIST><NAME>' + $g + '</NAME></NAME.LIST><PARENT/><HASNOSPACE>No</HASNOSPACE></GODOWN>' }
-  for ($i = 1; $i -le 50; $i++) { $m += S2Item ('P233 Item {0:d2}' -f $i) }
+  # the 50 items with opening stock in P233 Main (run 37658127942: with godowns in the company, an item line without its
+  # godown allocation is refused, EXCEPTIONS 1; the stock keeps the screen save free of a negative-stock question)
+  for ($i = 1; $i -le 50; $i++) { $n = 'P233 Item {0:d2}' -f $i; $m += '<STOCKITEM NAME="' + $n + '" ACTION="Create"><NAME.LIST><NAME>' + $n + '</NAME></NAME.LIST><BASEUNITS>Nos</BASEUNITS><OPENINGBALANCE> 1000 Nos</OPENINGBALANCE><OPENINGRATE>50.00/Nos</OPENINGRATE><OPENINGVALUE>-50000.00</OPENINGVALUE><BATCHALLOCATIONS.LIST><GODOWNNAME>P233 Main</GODOWNNAME><BATCHNAME>Primary Batch</BATCHNAME><OPENINGBALANCE> 1000 Nos</OPENINGBALANCE><OPENINGRATE>50.00/Nos</OPENINGRATE><OPENINGVALUE>-50000.00</OPENINGVALUE></BATCHALLOCATIONS.LIST></STOCKITEM>' }
   foreach ($n in 'P233 Bat A', 'P233 Bat B') {
     $x = '<STOCKITEM NAME="' + $n + '" ACTION="Create"><NAME.LIST><NAME>' + $n + '</NAME></NAME.LIST><BASEUNITS>Nos</BASEUNITS><ISBATCHWISEON>Yes</ISBATCHWISEON><HASMFGDATE>No</HASMFGDATE><ISPERISHABLEON>No</ISPERISHABLEON>'
     foreach ($g in 'P233 Main', 'P233 Annex') { foreach ($b in 'B1', 'B2') { $x += '<BATCHALLOCATIONS.LIST><GODOWNNAME>' + $g + '</GODOWNNAME><BATCHNAME>' + $b + '</BATCHNAME><OPENINGBALANCE> 1000 Nos</OPENINGBALANCE><OPENINGRATE>50.00/Nos</OPENINGRATE><OPENINGVALUE>-50000.00</OPENINGVALUE></BATCHALLOCATIONS.LIST>' } }
@@ -68,7 +70,7 @@ function P3Templates {
   $null = P3Imp $co1 'All Masters' $m 'push233 masters'
   $items = @(); for ($i = 1; $i -le 50; $i++) { $items += ('P233 Item {0:d2}' -f $i) }
   $P233.tpl.receipt = @{ date = '20261102'; dmy = '2-11-2026'; xml = ((S2Receipt '20261102' 'P233-R1' 'P233 Party' 1180 'push233 receipt') -replace 'HDFC Bank', 'P233 Bank') }   # P7 reconciles P233 Bank
-  $P233.tpl.sales50 = @{ date = '20261201'; dmy = '1-12-2026'; xml = ((S2Sales '20261201' 'P233-S50' 'P233 Party' $items 'push233 50 items') -replace '<LEDGERNAME>Sales</LEDGERNAME>', '<LEDGERNAME>P233 Sales</LEDGERNAME>') }   # run 37656269159: with slow232's plain 'Sales' Tally answered EXCEPTIONS 1; the godown invoice with P233 Sales (affects stock) was created
+  $P233.tpl.sales50 = @{ date = '20261201'; dmy = '1-12-2026'; xml = ((S2Sales '20261201' 'P233-S50' 'P233 Party' $items 'push233 50 items') -replace '<LEDGERNAME>Sales</LEDGERNAME>', '<LEDGERNAME>P233 Sales</LEDGERNAME>' -replace '<ACCOUNTINGALLOCATIONS\.LIST>', '<BATCHALLOCATIONS.LIST><GODOWNNAME>P233 Main</GODOWNNAME><BATCHNAME>Primary Batch</BATCHNAME><AMOUNT>200.00</AMOUNT><ACTUALQTY> 2 Nos</ACTUALQTY><BILLEDQTY> 2 Nos</BILLEDQTY></BATCHALLOCATIONS.LIST><ACCOUNTINGALLOCATIONS.LIST>') }   # run 37656269159: with slow232's plain 'Sales' Tally answered EXCEPTIONS 1; the godown invoice with P233 Sales (affects stock) was created
   # the godown invoice: two batch items, each in two godowns x two batches
   $gx = '<VOUCHER VCHTYPE="Sales" ACTION="Create" OBJVIEW="Invoice Voucher View"><DATE>20261202</DATE><VOUCHERTYPENAME>Sales</VOUCHERTYPENAME><VOUCHERNUMBER>P233-G1</VOUCHERNUMBER><PARTYLEDGERNAME>P233 Party</PARTYLEDGERNAME><PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW><ISINVOICE>Yes</ISINVOICE><NARRATION>push233 godowns and batches</NARRATION>'
   $gx += '<LEDGERENTRIES.LIST><LEDGERNAME>P233 Party</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><ISPARTYLEDGER>Yes</ISPARTYLEDGER><AMOUNT>-944.00</AMOUNT><BILLALLOCATIONS.LIST><NAME>P233-G1</NAME><BILLTYPE>New Ref</BILLTYPE><AMOUNT>-944.00</AMOUNT></BILLALLOCATIONS.LIST></LEDGERENTRIES.LIST>'
