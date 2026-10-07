@@ -1,0 +1,428 @@
+[06:21:11] ---- the bridge built from the ref
+bridge source: c76f8a59857c788c0b8ae34d1f9393c6dfd3e3f4 spike-233-both: without the committed 2.3.1 setup, so the harness builds this ref's bridge from source (run 37568281335 installed the committed 2.3.1 setup)
+setup origin: BUILT from source dist/FinComBridge-Setup-2.3.1.exe SHA-256 440a977058fe2d89f49908a563b63ae7171e76e2ab7a2c725ddfb0a656613d7c
+setup: FinComBridge-Setup-2.3.1.exe 3332565 bytes SHA256 440A977058FE2D89F49908A563B63AE7171E76E2AB7A2C725DDFB0A656613D7C
+[06:21:11] ---- the second Windows user (not an administrator)
+user 2: fcuser2 S-1-5-21-1643835476-1616584234-1346609752-1003; administrators: runnervmfi6oq\runneradmin
+user 2's profile: C:\Users\fcuser2
+ SESSIONNAME               USERNAME                 ID  STATE   TYPE        DEVICE 
+ services                                            0  Disc                        
+ rdp-tcp#0                 fcuser2                   1  Active                      
+>console                   runneradmin               2  Active                      
+ 31c5ce94259d4006a9e4                            65536  Listen                      
+ rdp-tcp                                         65537  Listen                      
+
+[06:21:36] user 2's own Windows session by Remote Desktop: True (session 1)
+[shot] r4-03-rdp-session (1024x768)
+task fcu2 registered for fcuser2 (interactive)
+  [as fcuser2] who=runnervmfi6oq\fcuser2 session=1
+  [as fcuser2] no Tally window in session 1; keys '{ENTER}' to the window in front
+  [as fcuser2] shot u2-desktop
+[06:22:04] ---- the stub cloud
+[06:22:07] ---- user 1's Tally (9000) with the add-on; a copy of the program for user 2 first (its own tally.ini and port)
+  still running from the Tally folder: tallyscheduler 9064
+  robocopy:    Bytes :  177.74 m  177.74 m         0         0       512         0
+  robocopy:    Times :   0:00:00   0:00:00                       0:00:00   0:00:00
+  robocopy: 
+  robocopy: 
+  robocopy:    Speed :           2,245,587,915 Bytes/sec.
+  robocopy:    Speed :             128,493.570 MegaBytes/min.
+  robocopy:    Ended : Wednesday, October 7, 2026 6:22:10 AM
+  robocopy: 
+[06:22:10] copy for user 2: robocopy 9, tally.exe there: True
+Tally :9000 answers: True
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[keys] 't' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-00-tally1 (1024x768)
+[ledger Spike Income :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[ledger Salesify Marketing LLP (bill-by-bill) :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[06:22:42] ---- check 8's masters on user 1's Tally: unit, two stock items (GST 18%), Sales/Purchase, CGST/SGST 9%, customer, supplier
+[unit Nos :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[stock item Spike Widget (GST 18%) :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[stock item Spike Gadget (GST 18%) :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[stock items :9000] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>2</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>2</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>1</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[check 8 ledgers :9000] <RESPONSE><CREATED>6</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[stock items :9000] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>8</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>2</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>1</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[06:22:42] ---- 2.3.1 scenarios: the masters (stock items with HSN and GST rate, GST, TDS, cost centre, bank and party ledgers)
+  scen231: 7 master sets, 14 entries -> D:\a\testingtdsdesk\testingtdsdesk\spike-results\37580509870-windows-latest\round4\scen231
+[masters-1-items :9000] 32 ms, 269 bytes: <RESPONSE><CREATED>4</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[masters-2-costs :9000] 19 ms, 269 bytes: <RESPONSE><CREATED>3</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[masters-4-ledgers :9000] 70 ms, 270 bytes: <RESPONSE><CREATED>14</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[masters-6-bulk :9000] 1766 ms, 271 bytes: <RESPONSE><CREATED>400</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[S4 the bill (New Ref S231-BILL-1, a journal) :9000] 41 ms, 269 bytes: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>2</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[ledger master S231 Buyer :9000] 9 ms, 17392 bytes: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>425</LEDGER><COSTCATEGORY>1</COSTCATEGORY><COSTCENTRE>2</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>6</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>1</CURRENCY><UNIT>1</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIF...
+[shot] r4-s231-00-masters (1024x768)
+[06:22:47] ---- user 2's own Tally (9001), run as fcuser2: a company made by keys, then started again with it and the add-on
+  [as fcuser2] pid=10964 session=1 user=runnervmfi6oq\fcuser2
+Tally :9001 (pid 10964) answers: True; owner: fcuser2; session 1 (runner's own: 2)
+  [as fcuser2] keys 'a' -> Tally pid 10964 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys 't' -> Tally pid 10964 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01-tally2-start
+  [as fcuser2] keys '{ENTER}' -> Tally pid 10964 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01b-tally2-create-company
+  [as fcuser2] keys 'FinCom Spike U2' -> Tally pid 10964 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys '^a' -> Tally pid 10964 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01c-tally2-ctrl-a
+[companies :9001] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+  [as fcuser2] keys '^a' -> Tally pid 10964 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01d-tally2-company
+user 2's company made: True, folder 100000
+  [as fcuser2] pid=9676 session=1 user=runnervmfi6oq\fcuser2
+  [as fcuser2] keys 'a' -> Tally pid 9676 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys 't' -> Tally pid 9676 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01e-tally2-gateway
+[ledger Spike Income :9001] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[companies :9001] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>1</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[ledger Spike Party :9001] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[journal :9001 :9001] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>1</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+== user 2's own Tally with its company and the add-on: True
+[06:24:24] ---- the bridges, each installed by its own Windows user with the real setup, just for me; the settings seeded first
+setup as runneradmin (just for me) ended with 0
+  install.log 1: 2026-10-07 06:24:27  Install (just for this user, no service): FinCom Bridge 2.3.1 for runnervmfi6oq\runneradmin (S-1-5-21-1643835476-1616584234-1346609752-500), sole mode, folder C:\Users\runneradmin\AppData\Local\TDS Desk Bridge
+  install.log 1: 2026-10-07 06:24:30  Install: the add-on FinComRecorder.tdl written in C:\ProgramData\FinCom\addon
+  install.log 1: 2026-10-07 06:24:30  Install: the add-on FinComRecorderAnyCompany.tdl written in C:\ProgramData\FinCom\addon
+  install.log 1: 2026-10-07 06:24:30  Install: the recorder folder C:\ProgramData\FinCom\recorder and the add-on folder C:\ProgramData\FinCom\addon are ready (just for this user)
+  install.log 1: 2026-10-07 06:24:30  Install: starts when runnervmfi6oq\runneradmin signs in to Windows (HKCU Run)
+  install.log 1: 2026-10-07 06:24:31  Install: done; the bridge answers on 127.0.0.1:9100
+  install.log 1: 2026-10-07 06:24:32  Setup: FinComBridge.exe install: done, the bridge answers
+  install.log 1: 2026-10-07 06:24:32  Setup: Finished: installed and running (sole mode)
+seed as fcuser2: runnervmfi6oq\fcuser2 session 1 C:\Users\fcuser2\AppData\Local
+  [as fcuser2] exit=0 user=runnervmfi6oq\fcuser2 session=1
+setup as fcuser2 (just for me) ended: exit=0 user=runnervmfi6oq\fcuser2 session=1
+  install.log 2: 2026-10-07 06:24:34  Install (just for this user, no service): FinCom Bridge 2.3.1 for runnervmfi6oq\fcuser2 (S-1-5-21-1643835476-1616584234-1346609752-1003), sole mode, folder C:\Users\fcuser2\AppData\Local\TDS Desk Bridge
+  install.log 2: 2026-10-07 06:24:37  Install: the add-on FinComRecorder.tdl was not written in C:\ProgramData\FinCom\addon: remove C:\ProgramData\FinCom\addon\FinComRecorder.tdl: Access is denied.
+  install.log 2: 2026-10-07 06:24:37  Install: the add-on FinComRecorderAnyCompany.tdl was not written in C:\ProgramData\FinCom\addon: remove C:\ProgramData\FinCom\addon\FinComRecorderAnyCompany.tdl: Access is denied.
+  install.log 2: 2026-10-07 06:24:37  Install: the recorder folder C:\ProgramData\FinCom\recorder and the add-on folder C:\ProgramData\FinCom\addon are ready (just for this user)
+  install.log 2: 2026-10-07 06:24:37  Install: starts when runnervmfi6oq\fcuser2 signs in to Windows (HKCU Run)
+  install.log 2: 2026-10-07 06:24:38  Install: done; the bridge answers on 127.0.0.1:9101
+  install.log 2: 2026-10-07 06:24:38  Setup: FinComBridge.exe install: done, the bridge answers
+  install.log 2: 2026-10-07 06:24:38  Setup: Finished: installed and running (sole mode)
+bridge 1: user runneradmin, port 9100, id go-4e11135a4a39, key 24 chars, Owner runnervmfi6oq\runneradmin, OwnerSid S-1-5-21-1643835476-1616584234-1346609752-500
+bridge 2: user fcuser2, port 9101, id go-47fe1c8e8ee0, key 24 chars, Owner runnervmfi6oq\fcuser2, OwnerSid S-1-5-21-1643835476-1616584234-1346609752-1003
+[shot] r4-02-bridges (1024x768)
+[06:24:48] ---- 6a: both bridges run at once, on their own ports, as their own users
+  process 6428 as runneradmin in session 2: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" user --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json"
+  process 7804 as runneradmin in session 2: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" tray --quiet --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json"
+  process 9592 as runneradmin in session 2: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" worker --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json" --home "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge" --parent 6428
+  process 7616 as fcuser2 in session 1: "C:\Users\fcuser2\AppData\Local\FinCom Bridge\FinComBridge.exe" user --config "C:\Users\fcuser2\AppData\Local\TDS Desk Bridge\tds-bridge.config.json"
+  process 10368 as fcuser2 in session 1: "C:\Users\fcuser2\AppData\Local\FinCom Bridge\FinComBridge.exe" worker --config "C:\Users\fcuser2\AppData\Local\TDS Desk Bridge\tds-bridge.config.json" --home "C:\Users\fcuser2\AppData\Local\TDS Desk Bridge" --parent 7616
+  process 2104 as fcuser2 in session 1: "C:\Users\fcuser2\AppData\Local\FinCom Bridge\FinComBridge.exe" tray
+  listening 127.0.0.1:9101 pid 10368 user fcuser2
+  listening 127.0.0.1:9100 pid 9592 user runneradmin
+  Tally pid 3992 session 2 owner runneradmin
+  Tally pid 9676 session 1 owner fcuser2
+######## PASS 6a two bridges at once: bridge 1 runneradmin on 127.0.0.1:9100 (pid 9592, session 2, go-4e11135a4a39); bridge 2 fcuser2 on 127.0.0.1:9101 (pid 10368, session 1, go-47fe1c8e8ee0); both listening at 06:24:49
+[06:24:49] ---- 6b: the /ping proof: HMAC-SHA256(bridge key, nonce || bridge id || port), only to the bridge's own Windows user
+runneradmin -> own bridge, no Origin: {"bridge":"FinCom Tally Bridge","bridgeId":"go-4e11135a4a39","impl":"go","loopSec":0,"ok":true,"pid":9592,"port":9100,"runMode":"user","testMode":false,"version":"2.3.1","yours":true}
+runneradmin -> own bridge: {"bridge":"FinCom Tally Bridge","bridgeId":"go-4e11135a4a39","impl":"go","loopSec":0,"ok":true,"pairProof":"a0343b6fb88e7c772141ecb3df545cf582b536659f55862f3f478eab937dfa14","pid":9592,"port":9100,"proof":"dc7addf3d4d845d86e634ebaa15a10bc5299c3616ec3346c7545af6764f43099","runMode":"user","testMode":false,"version":"2.3.1","yours":true}
+runneradmin -> user 2's bridge: {"bridge":"FinCom Tally Bridge","impl":"go","loopSec":0,"ok":true,"pid":10368,"runMode":"user","testMode":false,"version":"2.3.1","yours":false}
+as fcuser2 (): {"ownStatus":401,"other":{"bridge":"FinCom Tally Bridge","impl":"go","loopSec":0,"ok":true,"pid":9592,"runMode":"user","testMode":false,"version":"2.3.1","yours":false},"session":1,"own":{"bridge":"FinCom Tally Bridge","bridgeId":"go-47fe1c8e8ee0","impl":"go","loopSec":0,"ok":true,"pairProof":"31538e76273597ad3a9b4a6d5fbc74c5cb9d5b5e1833f7eae15ab8796920ae9d","pid":10368,"port":9101,"proof":"5b00f3e61ef77beefae1721334efbad4ee4cf3e53c565e1784b30aff968e2643","runMode":"user","testMode":false,"version":"2.3.1","yours":true},"otherStatus":403,"who":"runnervmfi6oq\\fcuser2"}
+  ok   bridge 1 proves itself to runneradmin: yours=True bridgeId=go-4e11135a4a39 port=9100 proof=dc7addf3d4d845d86e634ebaa15a10bc5299c3616ec3346c7545af6764f43099
+  ok   bridge 1 proof checked against user 2 identity fails: HMAC(key2, nonce||go-47fe1c8e8ee0||9101)=0325fdb3ae8cd3c88d87d9a745cbc39faa640b55dacccd156702bf6b49805212
+  ok   bridge 2 proves itself to fcuser2: yours=True bridgeId=go-47fe1c8e8ee0 port=9101 proof=5b00f3e61ef77beefae1721334efbad4ee4cf3e53c565e1784b30aff968e2643
+  ok   bridge 2 proof checked against user 1 identity fails: HMAC(key1, nonce||go-4e11135a4a39||9100)=db7171d9938b01e7c1043f568d7ec3aeba9f8a3fcc2814a8218291d23f79604c
+  ok   bridge 2 gives runneradmin no proof: yours=False proof= bridgeId=
+  ok   bridge 1 gives fcuser2 no proof: yours=False proof=
+  ok   other users refused 403 beyond /ping: runneradmin: own /status 401, other 403; fcuser2: own /status 401, other 403
+######## PASS 6b /ping proof: bridge 1 proves itself to runneradmin: ok; bridge 1 proof checked against user 2 identity fails: ok; bridge 2 proves itself to fcuser2: ok; bridge 2 proof checked against user 1 identity fails: ok; bridge 2 gives runneradmin no proof: ok; bridge 1 gives fcuser2 no proof: ok; other users refused 403 beyond /ping: ok
+  bridge1 log: 2026-10-07 06:24:30  FinCom Bridge 2.3.1: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+  bridge1 log: 2026-10-07 06:24:31  FinCom Bridge 2.3.1 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+  bridge1 log: 2026-10-07 06:24:31  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+  bridge1 log: 2026-10-07 06:24:31  Recorder: re-scan of the add-on's files for 2.3.1: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+  bridge1 log: 2026-10-07 06:24:31  Check:  - 
+  bridge1 log: 2026-10-07 06:24:34  Tray icon: set to show next to the clock always (Windows 11)
+  bridge1 log: 2026-10-07 06:24:34  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+  bridge1 log: 2026-10-07 06:24:34  Company FinCom Spike Co: its Tally GUID 4b704206-c752-4094-913d-6b45232abf76 is held from now on
+  bridge1 log: 2026-10-07 06:24:34  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=2, ALTMSTID=642 (reading is prospective only: the bridge follows what changes after this)
+  bridge1 log: 2026-10-07 06:24:34  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=2, ALTMSTID=642
+  bridge1 log: 2026-10-07 06:24:34  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=2, ALTMSTID=642)
+  bridge1 log: 2026-10-07 06:24:37  Refused a request from a program of another Windows user (/tray/idle): not your FinCom Bridge
+  bridge1 log: 2026-10-07 06:24:37  Refused a request from a program of another Windows user (/tray/status): not your FinCom Bridge
+  bridge1 log: 2026-10-07 06:24:50  Refused a request from a program of another Windows user (/status): not your FinCom Bridge
+  bridge2 log: 2026-10-07 06:24:37  FinCom Bridge 2.3.1: started just for runnervmfi6oq\fcuser2 (no service); it keeps the bridge and its icon running
+  bridge2 log: 2026-10-07 06:24:37  Port 9100 is taken (another Windows user's FinCom Bridge, or another program); this bridge uses port 9101 and remembers it
+  bridge2 log: 2026-10-07 06:24:37  FinCom Bridge 2.3.1 (Go) started on 127.0.0.1:9101: the only bridge on this computer; working for runnervmfi6oq\fcuser2, Windows session 1; runs just for this Windows user (starts at sign-in, no service)
+  bridge2 log: 2026-10-07 06:24:37  Tally is open on port 9001; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+  bridge2 log: 2026-10-07 06:24:37  Recorder: re-scan of the add-on's files for 2.3.1: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+  bridge2 log: 2026-10-07 06:24:37  Check:  - 
+  bridge2 log: 2026-10-07 06:24:40  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+  bridge2 log: 2026-10-07 06:24:40  Tray icon: set to show next to the clock always (Windows 11)
+  bridge2 log: 2026-10-07 06:24:41  Company FinCom Spike U2: its Tally GUID 5747bb36-b0cd-4140-b603-4282637c651d is held from now on
+  bridge2 log: 2026-10-07 06:24:41  Company FinCom Spike U2: its starting point is recorded: ALTVCHID=1, ALTMSTID=209 (reading is prospective only: the bridge follows what changes after this)
+  bridge2 log: 2026-10-07 06:24:41  Company FinCom Spike U2: change numbers read with form a: ALTVCHID=1, ALTMSTID=209
+  bridge2 log: 2026-10-07 06:24:41  Light check of FinCom Spike U2: starting point recorded (ALTVCHID=1, ALTMSTID=209)
+  bridge2 log: 2026-10-07 06:24:49  Refused a request from a program of another Windows user (/status): not your FinCom Bridge (the program asking has no Windows user)
+[06:25:21] ---- UF: each Windows user's own recorder file (next-userfile)
+  recorder folder before: 
+[keys] 'c' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-uf-1-create (1024x768)
+[keys] 'Ledger{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'UF Party One{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Sundry Debtors{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-uf-1-form (1024x768)
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-uf-1-saved (1024x768)
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+  [as fcuser2] keys 'c' -> Tally pid 9676 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot uf-2-create
+  [as fcuser2] keys 'Ledger{ENTER}' -> Tally pid 9676 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys 'UF Party Two{ENTER}' -> Tally pid 9676 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys '{ENTER}' -> Tally pid 9676 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys 'Sundry Debtors{ENTER}' -> Tally pid 9676 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot uf-2-form
+  [as fcuser2] keys '^a' -> Tally pid 9676 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot uf-2-saved
+  [as fcuser2] keys '{ESC}' -> Tally pid 9676 'TallyPrime:9001' session 1 foreground=True
+  file 4b704206-c752-4094-913d-6b45232abf76-7-Oct-26-runneradmin.txt 1120 bytes
+    FCR1|ev=ledger_accept_pre|t0=7-Oct-26 06:25|tw=7-Oct-26 06:25|w=runneradmin|cguid=4b704206-c752-4094-913d-6b45232abf76|cname=FinCom Spike Co|user=TALLY User|obj=Master|guid=|mid=0|aid=0|vtype=|vno=|vdate=|name=UF Party One|parent=Sundry Debtors|narr=|t1=7-Oct-26 06:25|src=live
+    FCR1|ev=ledger_accept_post|t0=7-Oct-26 06:25|tw=7-Oct-26 06:25|w=runneradmin|cguid=4b704206-c752-4094-913d-6b45232abf76|cname=FinCom Spike Co|user=TALLY User|obj=Master|guid=|mid=0|aid=0|vtype=|vno=|vdate=|name=UF Party One|parent=Sundry Debtors|narr=|t1=7-Oct-26 06:25|src=live
+  file 5747bb36-b0cd-4140-b603-4282637c651d-7-Oct-26-fcuser2.txt 1104 bytes
+    FCR1|ev=ledger_accept_pre|t0=7-Oct-26 06:26|tw=7-Oct-26 06:26|w=fcuser2|cguid=5747bb36-b0cd-4140-b603-4282637c651d|cname=FinCom Spike U2|user=TALLY User|obj=Master|guid=|mid=0|aid=0|vtype=|vno=|vdate=|name=UF Party Two|parent=Sundry Debtors|narr=|t1=7-Oct-26 06:26|src=live
+    FCR1|ev=ledger_accept_post|t0=7-Oct-26 06:26|tw=7-Oct-26 06:26|w=fcuser2|cguid=5747bb36-b0cd-4140-b603-4282637c651d|cname=FinCom Spike U2|user=TALLY User|obj=Master|guid=|mid=0|aid=0|vtype=|vno=|vdate=|name=UF Party Two|parent=Sundry Debtors|narr=|t1=7-Oct-26 06:26|src=live
+[companies :9000] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>426</LEDGER><COSTCATEGORY>1</COSTCATEGORY><COSTCENTRE>2</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>6</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>1</CURRENCY><UNIT>1</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><F...
+[companies :9001] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>6</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>1</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+  company GUIDs: FinCom Spike Co 4b704206-c752-4094-913d-6b45232abf76; FinCom Spike U2 5747bb36-b0cd-4140-b603-4282637c651d
+######## PASS UF1 a file per Windows user: runneradmin: 4b704206-c752-4094-913d-6b45232abf76-7-Oct-26-runneradmin.txt; fcuser2: 5747bb36-b0cd-4140-b603-4282637c651d-7-Oct-26-fcuser2.txt; every file now: 4b704206-c752-4094-913d-6b45232abf76-7-Oct-26-runneradmin.txt, 5747bb36-b0cd-4140-b603-4282637c651d-7-Oct-26-fcuser2.txt
+######## PASS UF2 every line names its Windows user: 4 line(s): 4b704206-c752-4094-913d-6b45232abf76-7-Oct-26-runneradmin.txt: ledger_accept_pre w=runneradmin; 4b704206-c752-4094-913d-6b45232abf76-7-Oct-26-runneradmin.txt: ledger_accept_post w=runneradmin; 5747bb36-b0cd-4140-b603-4282637c651d-7-Oct-26-fcuser2.txt: ledger_accept_pre w=fcuser2; 5747bb36-b0cd-4140-b603-4282637c651d-7-Oct-26-fcuser2.txt: ledger_accept_post w=fcuser2; not the file's user (or not ending |t1=..|src=live): none
+  uf: stub 06:25:39 recorder_lines event=ledger_created guid='' mid= aid= vch=// user=runnervmfi6oq\runneradmin bridge=go-4e11135a4a39 port=9100 company=FinCom Spike Co body=none
+  uf: stub 06:26:09 recorder_lines event=ledger_created guid='' mid= aid= vch=// user=runnervmfi6oq\fcuser2 bridge=go-47fe1c8e8ee0 port=9101 company=FinCom Spike U2 body=none
+######## PASS UF3 each bridge sent only its own user's lines: bridge 1: stub 06:25:39 recorder_lines event=ledger_created guid='' mid= aid= vch=// user=runnervmfi6oq\runneradmin bridge=go-4e11135a4a39 port=9100 company=FinCom Spike Co body=none | bridge 2: stub 06:26:09 recorder_lines event=ledger_created guid='' mid= aid= vch=// user=runnervmfi6oq\fcuser2 bridge=go-47fe1c8e8ee0 port=9101 company=FinCom Spike U2 body=none | lines from the other user's bridge: 0
+######## PASS UF4 each bridge read only its own user's files: bridge 1 (runneradmin) recorderFiles: 4b704206-c752-4094-913d-6b45232abf76-7-Oct-26-runneradmin.txt | bridge 2 (fcuser2) recorderFiles: 5747bb36-b0cd-4140-b603-4282637c651d-7-Oct-26-fcuser2.txt
+[06:27:11] ---- MH: the add-on's master forms (next-masterhook)
+[features ISPAYROLLON,PREVISMULTIGODOWNON,ISCOSTCENTRESON :9000] <RESPONSE><CREATED>0</CREATED><ALTERED>1</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[MHN :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[MH Godown A :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[MH Item 1 :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[MH Staff :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[MH Emp 001 :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[MH Basic :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[keys] 't' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-PayHead-fresh (1024x768)
+[companies :9000] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+  Tally :9000 started afresh (PayHead): port True, company open True
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-PayHead-alter (1024x768)
+[keys] 'Pay Head' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-PayHead-form (1024x768)
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'MH5568' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-PayHead-changed (1024x768)
+[keys] '' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-PayHead-after (1024x768)
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'n' -> Tally :9000 'TallyPrime:9000'
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[keys] 't' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-PayHead-fresh (1024x768)
+[companies :9000] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+  Tally :9000 started afresh (PayHead): port True, company open True
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-PayHead-alter (1024x768)
+[keys] 'MH Basic' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-PayHead-form (1024x768)
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'MH3595' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-PayHead-changed (1024x768)
+[keys] '' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-PayHead-after (1024x768)
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'n' -> Tally :9000 'TallyPrime:9000'
+######## FAIL MH-PayHead saves with the hook: Pay Head 'MH Basic': hooked True; saved False (AlterID 652 -> 0, via none); Ctrl+A to a still screen 27.3 ms (first change 27.3 ms); add-on lines: none; bridge 1 sent: event=master_altered master_type=Pay Head name=MH5568 parent=Indirect Expenses guid=4b704206-c752-4094-913d-6b45232abf76-00000287 mid=647 aid=652 xml=none
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[keys] 't' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-StockItem-fresh (1024x768)
+[companies :9000] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+  Tally :9000 started afresh (StockItem): port True, company open True
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-StockItem-alter (1024x768)
+[keys] 'Stock Item' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-StockItem-form (1024x768)
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'MH3777' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-StockItem-changed (1024x768)
+[keys] '' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-StockItem-after (1024x768)
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'n' -> Tally :9000 'TallyPrime:9000'
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[keys] 't' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-StockItem-fresh (1024x768)
+[companies :9000] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+  Tally :9000 started afresh (StockItem): port True, company open True
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-StockItem-alter (1024x768)
+[keys] 'MH Item 1' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-StockItem-form (1024x768)
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'MH8690' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-StockItem-changed (1024x768)
+[keys] '' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-StockItem-after (1024x768)
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'n' -> Tally :9000 'TallyPrime:9000'
+######## FAIL MH-StockItem saves with the hook: Stock Item 'MH Item 1': hooked True; saved False (AlterID 649 -> 0, via none); Ctrl+A to a still screen 30.8 ms (first change 30.8 ms); add-on lines: none; bridge 1 sent: event=master_altered master_type=Stock Item name=MH3777 parent= Primary guid=4b704206-c752-4094-913d-6b45232abf76-00000284 mid=644 aid=649 xml=none
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[keys] 't' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-Unit-fresh (1024x768)
+[companies :9000] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+  Tally :9000 started afresh (Unit): port True, company open True
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-Unit-alter (1024x768)
+[keys] 'Unit' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-Unit-form (1024x768)
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'MH7326' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-Unit-changed (1024x768)
+[keys] '' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-Unit-after (1024x768)
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'n' -> Tally :9000 'TallyPrime:9000'
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[keys] 't' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-Unit-fresh (1024x768)
+[companies :9000] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+  Tally :9000 started afresh (Unit): port True, company open True
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-Unit-alter (1024x768)
+[keys] 'MHN' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-Unit-form (1024x768)
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'MH5074' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-Unit-changed (1024x768)
+[keys] '' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-Unit-after (1024x768)
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'n' -> Tally :9000 'TallyPrime:9000'
+######## FAIL MH-Unit saves with the hook: Unit 'MHN': hooked True; saved False (AlterID 647 -> 647, via none); Ctrl+A to a still screen 93.4 ms (first change 59.0 ms); add-on lines: none; bridge 1 sent: event=master_altered master_type=Unit name=MH7326 parent= guid=4b704206-c752-4094-913d-6b45232abf76-00000282 mid=642 aid=647 xml=none
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[keys] 't' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-Godown-fresh (1024x768)
+[companies :9000] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+  Tally :9000 started afresh (Godown): port True, company open True
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-Godown-alter (1024x768)
+[keys] 'Location' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'MH Godown A' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-Godown-form (1024x768)
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'MH5587' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-Godown-changed (1024x768)
+[keys] '' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-Godown-after (1024x768)
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'n' -> Tally :9000 'TallyPrime:9000'
+######## FAIL MH-Godown saves with the hook: Godown 'MH Godown A': hooked True; saved True (AlterID 648 -> 655, via Location > MH Godown A); Ctrl+A to a still screen 105.5 ms (first change 58.1 ms); add-on lines: none; bridge 1 sent: event=master_altered master_type=Godown name=MH Godown A parent= Primary guid=4b704206-c752-4094-913d-6b45232abf76-00000283 mid=643 aid=648 xml=none
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[keys] 't' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-Employee-fresh (1024x768)
+[companies :9000] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+  Tally :9000 started afresh (Employee): port True, company open True
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-Employee-alter (1024x768)
+[keys] 'Employee' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-Employee-form (1024x768)
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'MH9485' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-Employee-changed (1024x768)
+[keys] '' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-Employee-after (1024x768)
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'n' -> Tally :9000 'TallyPrime:9000'
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[keys] 't' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-Employee-fresh (1024x768)
+[companies :9000] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+  Tally :9000 started afresh (Employee): port True, company open True
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-Employee-alter (1024x768)
+[keys] 'MH Emp 001' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-Employee-form (1024x768)
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'MH9307' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-Employee-changed (1024x768)
+[keys] '' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-Employee-after (1024x768)
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'n' -> Tally :9000 'TallyPrime:9000'
+######## FAIL MH-Employee saves with the hook: Employee 'MH Emp 001': hooked False; saved False (AlterID 651 -> 0, via none); Ctrl+A to a still screen 28.6 ms (first change 28.6 ms); add-on lines: none; bridge 1 sent: nothing
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[keys] 't' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-cu-fresh (1024x768)
+[companies :9000] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+  Tally :9000 started afresh (cu): port True, company open True
+[keys] 'c' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-cu-create (1024x768)
+[keys] 'Unit{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-cu-form (1024x768)
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'MHB{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-cu-typed (1024x768)
+[keys] '' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-mh-cu-after (1024x768)
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'n' -> Tally :9000 'TallyPrime:9000'
+######## PASS MH-create a Unit on the screen: made in Tally: True; Ctrl+A 106.6 ms; bridge 1 sent: event=master_created master_type=Unit name=MHB
+  bridge1 log: 2026-10-07 06:35:06  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=2; now ALTVCHID=2, ALTMSTID=655
+  bridge1 log: 2026-10-07 06:35:06  Ledger changes for FinCom Spike Co: Tally's master counter 642 -> 655: 1 request(s) for AlterID 643-655, 2 ledger(s) sent to FinCom; the last number is 655
+  bridge1 log: 2026-10-07 06:35:06  Ledger changes for FinCom Spike Co: 2 ledger(s) created or altered in Tally sent to FinCom
+  bridge2 log: 2026-10-07 06:35:11  Light check of FinCom Spike U2: unchanged starting point ALTVCHID=1; now ALTVCHID=1, ALTMSTID=210
+  bridge2 log: 2026-10-07 06:35:11  Ledger changes for FinCom Spike U2: Tally's master counter 209 -> 210: 1 request(s) for AlterID 210-210, 1 ledger(s) sent to FinCom; the last number is 210
+  bridge2 log: 2026-10-07 06:35:11  Ledger changes for FinCom Spike U2: 1 ledger(s) created or altered in Tally sent to FinCom
+[06:37:43] ---- what is kept: the bridges' logs, install logs, settings without their keys
+  Tally :9000 voucher mid=1 aid=1 guid=4b704206-c752-4094-913d-6b45232abf76-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=4b704206-c752-4094-913d-6b45232abf76-00000002 no=2 cancelled=False
+== results
+INFO setup origin: BUILT from source dist/FinComBridge-Setup-2.3.1.exe SHA-256 440a977058fe2d89f49908a563b63ae7171e76e2ab7a2c725ddfb0a656613d7c; on this runner SHA-256 440a977058fe2d89f49908a563b63ae7171e76e2ab7a2c725ddfb0a656613d7c
+INFO user 2 (fcuser2) works in a Windows session of their own (session 1, by a Remote Desktop connection to 127.0.0.2); runneradmin in session 2
+INFO S231 import masters-1-items: created 4, altered 0, errors 0
+INFO S231 import masters-2-costs: created 3, altered 0, errors 0
+INFO S231 import masters-4-ledgers: created 14, altered 0, errors 0
+INFO S231 import masters-6-bulk: created 400, altered 0, errors 0
+INFO S231 import S4 the bill (New Ref S231-BILL-1, a journal): created 1, altered 0, errors 0
+PASS 6a two bridges at once: bridge 1 runneradmin on 127.0.0.1:9100 (pid 9592, session 2, go-4e11135a4a39); bridge 2 fcuser2 on 127.0.0.1:9101 (pid 10368, session 1, go-47fe1c8e8ee0); both listening at 06:24:49
+INFO /ping with a nonce but no Origin (own bridge): proof not given
+PASS 6b /ping proof: bridge 1 proves itself to runneradmin: ok; bridge 1 proof checked against user 2 identity fails: ok; bridge 2 proves itself to fcuser2: ok; bridge 2 proof checked against user 1 identity fails: ok; bridge 2 gives runneradmin no proof: ok; bridge 1 gives fcuser2 no proof: ok; other users refused 403 beyond /ping: ok
+PASS UF1 a file per Windows user: runneradmin: 4b704206-c752-4094-913d-6b45232abf76-7-Oct-26-runneradmin.txt; fcuser2: 5747bb36-b0cd-4140-b603-4282637c651d-7-Oct-26-fcuser2.txt; every file now: 4b704206-c752-4094-913d-6b45232abf76-7-Oct-26-runneradmin.txt, 5747bb36-b0cd-4140-b603-4282637c651d-7-Oct-26-fcuser2.txt
+PASS UF2 every line names its Windows user: 4 line(s): 4b704206-c752-4094-913d-6b45232abf76-7-Oct-26-runneradmin.txt: ledger_accept_pre w=runneradmin; 4b704206-c752-4094-913d-6b45232abf76-7-Oct-26-runneradmin.txt: ledger_accept_post w=runneradmin; 5747bb36-b0cd-4140-b603-4282637c651d-7-Oct-26-fcuser2.txt: ledger_accept_pre w=fcuser2; 5747bb36-b0cd-4140-b603-4282637c651d-7-Oct-26-fcuser2.txt: ledger_accept_post w=fcuser2; not the file's user (or not ending |t1=..|src=live): none
+PASS UF3 each bridge sent only its own user's lines: bridge 1: stub 06:25:39 recorder_lines event=ledger_created guid='' mid= aid= vch=// user=runnervmfi6oq\runneradmin bridge=go-4e11135a4a39 port=9100 company=FinCom Spike Co body=none | bridge 2: stub 06:26:09 recorder_lines event=ledger_created guid='' mid= aid= vch=// user=runnervmfi6oq\fcuser2 bridge=go-47fe1c8e8ee0 port=9101 company=FinCom Spike U2 body=none | lines from the other user's bridge: 0
+PASS UF4 each bridge read only its own user's files: bridge 1 (runneradmin) recorderFiles: 4b704206-c752-4094-913d-6b45232abf76-7-Oct-26-runneradmin.txt | bridge 2 (fcuser2) recorderFiles: 5747bb36-b0cd-4140-b603-4282637c651d-7-Oct-26-fcuser2.txt
+INFO MH the add-on at the ref hooks: Pay Head, Stock Item, Unit, Godown
+FAIL MH-PayHead saves with the hook: Pay Head 'MH Basic': hooked True; saved False (AlterID 652 -> 0, via none); Ctrl+A to a still screen 27.3 ms (first change 27.3 ms); add-on lines: none; bridge 1 sent: event=master_altered master_type=Pay Head name=MH5568 parent=Indirect Expenses guid=4b704206-c752-4094-913d-6b45232abf76-00000287 mid=647 aid=652 xml=none
+FAIL MH-StockItem saves with the hook: Stock Item 'MH Item 1': hooked True; saved False (AlterID 649 -> 0, via none); Ctrl+A to a still screen 30.8 ms (first change 30.8 ms); add-on lines: none; bridge 1 sent: event=master_altered master_type=Stock Item name=MH3777 parent= Primary guid=4b704206-c752-4094-913d-6b45232abf76-00000284 mid=644 aid=649 xml=none
+FAIL MH-Unit saves with the hook: Unit 'MHN': hooked True; saved False (AlterID 647 -> 647, via none); Ctrl+A to a still screen 93.4 ms (first change 59.0 ms); add-on lines: none; bridge 1 sent: event=master_altered master_type=Unit name=MH7326 parent= guid=4b704206-c752-4094-913d-6b45232abf76-00000282 mid=642 aid=647 xml=none
+FAIL MH-Godown saves with the hook: Godown 'MH Godown A': hooked True; saved True (AlterID 648 -> 655, via Location > MH Godown A); Ctrl+A to a still screen 105.5 ms (first change 58.1 ms); add-on lines: none; bridge 1 sent: event=master_altered master_type=Godown name=MH Godown A parent= Primary guid=4b704206-c752-4094-913d-6b45232abf76-00000283 mid=643 aid=648 xml=none
+FAIL MH-Employee saves with the hook: Employee 'MH Emp 001': hooked False; saved False (AlterID 651 -> 0, via none); Ctrl+A to a still screen 28.6 ms (first change 28.6 ms); add-on lines: none; bridge 1 sent: nothing
+PASS MH-create a Unit on the screen: made in Tally: True; Ctrl+A 106.6 ms; bridge 1 sent: event=master_created master_type=Unit name=MHB
+== round 4 end
