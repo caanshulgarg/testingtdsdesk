@@ -5,7 +5,9 @@ heavy_led=3000
 heavy_item=3000
 heavy_vch=30000
 heavy_min=40
-mode=why22
+mode=why22b
 # why22 (07-Oct-2026): the owner's question, why one entry takes 2.2 s on NWS144: company size (vouchers, masters), a
 # second company loaded, the data folder on an SMB share, and the request (the bridge's FinComVoucherByMaster / ID:<MasterID> /
 # the one-day Day Book); why22.ps1
+# why22b (07-Oct-2026 13:00Z): the same request 40 times on one running Tally (run 37618958546: each repeat slower than the
+# one before), memory and CPU after each, Tally restarted; the SMB share with a second opener (that case failed in 37618958546)

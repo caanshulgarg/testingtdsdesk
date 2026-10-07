@@ -146,8 +146,55 @@ function WMeasure($factor, $case, $t, $nv, $nm) {
   Say "MEASURE $factor/$case ($script:co, $nv vouchers, $nm masters, target $($t.mid)): $($line -join '; ')"
 }
 
+
+# another process holding every company file open read-write through the share (run 37618958546: the -Command form lost
+# its quotes on the way, so the command goes encoded)
+function Holder($unc) {
+  $hs = Join-Path $out 'why22-holder.txt'
+  $holdCmd = "`$n=0; `$fs=@(); Get-ChildItem '$unc\$fA' -File | ForEach-Object { try { `$fs += [IO.File]::Open(`$_.FullName, 'Open', 'ReadWrite', 'ReadWrite'); `$n++ } catch { Add-Content '$hs' ('no: ' + `$_.Exception.Message) } }; Add-Content '$hs' ('held ' + `$n); Start-Sleep 3600"
+  $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($holdCmd))
+  $h = Start-Process -FilePath (Get-Process -Id $PID).Path -ArgumentList '-NoProfile', '-EncodedCommand', $enc -PassThru -WindowStyle Hidden -RedirectStandardError (Join-Path $out 'why22-holder-err.txt')
+  for ($i = 0; $i -lt 30; $i++) { if ((Test-Path $hs) -and (Select-String -Path $hs -Pattern '^held' -Quiet)) { break }; Start-Sleep 2 }
+  Say "holder: $(if (Test-Path $hs) { (Get-Content $hs | Select-Object -Last 3) -join ' / ' } else { 'no output' })"
+  return $h
+}
+# why22b: the same request many times in a row on one running Tally (run 37618958546: every repeat was slower than the
+# one before), with Tally's CPU time and memory after each; then Tally restarted and asked again
+$wdr = Join-Path $out 'why22-drift.csv'
+function Drift($case, $t, $form, $n) {
+  $req = if ($form -eq 'bymaster') { ReqBM $script:co $t.date $t.mid } else { ReqObj $script:co $t.mid }
+  $ms = @()
+  for ($i = 1; $i -le $n; $i++) {
+    $tp = Get-Process -Id $script:tpid -ErrorAction SilentlyContinue; $cpu0 = $tp.TotalProcessorTime.TotalMilliseconds
+    $x = Post $req '' 300; $m = $script:lastMs; $ms += $m
+    $tp = Get-Process -Id $script:tpid -ErrorAction SilentlyContinue
+    [pscustomobject]@{ rel = $rel; case = $case; form = $form; i = $i; ms = $m; tally_cpu_ms = [math]::Round($tp.TotalProcessorTime.TotalMilliseconds - $cpu0); tally_private_mb = [math]::Round($tp.PrivateMemorySize64 / 1MB, 1); tally_ws_mb = [math]::Round($tp.WorkingSet64 / 1MB, 1); handles = $tp.HandleCount; bytes = $x.Length; has_target = ($x -match "<MASTERID[^>]*>\s*$($t.mid)\s*<") } | Export-Csv $wdr -Append -NoTypeInformation -Encoding UTF8
+    Start-Sleep -Milliseconds 300
+  }
+  Say "DRIFT $case $form x${n}: $(($ms | ForEach-Object { [math]::Round($_) }) -join ', ') ms"
+}
 # ---------------------------------------------------------------- run
 $fA = $script:folder
+if ($env:PD_MODE -eq 'why22b') {
+  try {
+    $G = "$W\grow"; Copy-Item $light $G -Recurse; UseCo $coA
+    if (StartW $G @($fA) 'b-setup' @($coA)) {
+      ImpMasters @(LightMasters) 'light masters'; ImpMasters (WhyMasters 300 300) 'base masters'
+      GrowTo $coA 4000; $t = NewTarget 'A4000'
+      if (StartW $G @($fA) 'b-drift-1' @($coA)) { Sizes 'drift 4000' $G; Drift '4000 session 1' $t 'bymaster' 40; Drift '4000 session 1 (after the 40)' $t 'objid' 10 }
+      if (StartW $G @($fA) 'b-drift-2' @($coA)) { Drift '4000 session 2 (Tally restarted)' $t 'bymaster' 5 }
+      Stop-T
+      Copy-Item "$G\$fA" "$W\s4k\$fA" -Recurse
+      & icacls.exe "$W\s4k" /grant 'Everyone:(OI)(CI)F' /T /Q | Out-Null
+      $sh = New-SmbShare -Name 'why22' -Path "$W\s4k" -FullAccess 'Everyone' -ErrorAction Stop; $unc = '\\localhost\why22'
+      if (StartW "$W\s4k" @($fA) 'b-local' @($coA)) { WMeasure 'F3' '4000-local' $t 4000 600 }
+      if (StartW $unc @($fA) 'b-smb' @($coA)) { WMeasure 'F3' '4000-smb-unc' $t 4000 600 }
+      if (StartW $unc @($fA) 'b-smb-held' @($coA)) { $holder = Holder $unc; WMeasure 'F3' '4000-smb-unc-second-opener' $t 4000 600; if ($holder) { Stop-Process -Id $holder.Id -Force -ErrorAction SilentlyContinue } }
+      Stop-T; Remove-SmbShare -Name 'why22' -Force -ErrorAction SilentlyContinue
+    }
+  } catch { Say "HARNESS: why22b stopped: $_ $($_.ScriptStackTrace)" }
+  Stop-T; Say 'done (why22b)'; return
+}
 try {
   # ---- F1: one company grown in place
   $G = "$W\grow"; Copy-Item $light $G -Recurse
@@ -248,12 +295,9 @@ try {
       Stop-T; & net.exe use W: /delete /y 2>&1 | Out-Null
       # the share with a second opener: another process holds every company file open read-write through the share
       if (StartW $unc @($fA) 'smb-held' @($coA)) {
-        $hs = Join-Path $out 'why22-holder.txt'
-        $holdCmd = "`$n=0; `$fs=@(); Get-ChildItem '$unc\$fA' -File | ForEach-Object { try { `$fs += [IO.File]::Open(`$_.FullName, 'Open', 'ReadWrite', 'ReadWrite'); `$n++ } catch { Add-Content '$hs' (`"no: `" + `$_.Exception.Message) } }; Add-Content '$hs' (`"held `" + `$n); Start-Sleep 3600"
-        $holder = Start-Process -FilePath (Get-Process -Id $PID).Path -ArgumentList '-NoProfile', '-Command', $holdCmd -PassThru -WindowStyle Hidden -RedirectStandardError (Join-Path $out 'why22-holder-err.txt')
-        for ($i = 0; $i -lt 30 -and -not (Select-String -Path $hs -Pattern '^held' -Quiet -ErrorAction SilentlyContinue); $i++) { Start-Sleep 2 }; Say "holder: $((Get-Content $hs -ErrorAction SilentlyContinue | Select-Object -Last 3) -join ' / ')"
+        $holder = Holder $unc
         WMeasure 'F3' '4000-smb-unc-second-opener' $tA4 4000 600
-        Stop-Process -Id $holder.Id -Force -ErrorAction SilentlyContinue
+        if ($holder) { Stop-Process -Id $holder.Id -Force -ErrorAction SilentlyContinue }
       }
       Stop-T
       Remove-SmbShare -Name 'why22' -Force -ErrorAction SilentlyContinue
