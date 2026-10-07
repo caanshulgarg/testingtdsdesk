@@ -516,7 +516,9 @@ type standCloud struct {
 	beatReply M        // added to the heartbeat's answer (readStop, readResume, release)
 	takeJobs  []M      // round 7: jobs posts_take hands out, one per call
 	posts     []M      // round 7: every posts_update body
-	dayPosts  []M      // round 10: every "days" body (per day: day, n, empty / readFailed)
+	// next-outbox: how posts_update is answered (nil: 200 {ok})
+	postsReply func(b M) (int, M)
+	dayPosts   []M // round 10: every "days" body (per day: day, n, empty / readFailed)
 	// 2.2.0: recorder_lines: the bodies answered 200 with results (recBodies) and every body as sent (recRaw); recReply
 	// answers instead (nil: results, every line applied); recDelay: how long each answer takes
 	recBodies []M
@@ -596,6 +598,14 @@ func newStandCloud(t *testing.T) *standCloud {
 			}
 		case "posts_update":
 			c.posts = append(c.posts, o)
+			if c.postsReply != nil {
+				code, ans := c.postsReply(o)
+				if code != 200 {
+					w.WriteHeader(code)
+				}
+				_, _ = w.Write([]byte(jsonText(ans)))
+				return
+			}
 		case "ledger_list":
 			c.ledList = append(c.ledList, o)
 			out["added"], out["renamed"], out["deleted"] = len(arr(o["ledgers"])), len(arr(o["renamed"])), 0
