@@ -63,7 +63,7 @@ function S2Imp($co, $report, [string[]]$objs, $label) {
   $t0 = Get-Date
   try { $c = (Invoke-WebRequest 'http://localhost:9000' -Method Post -Body ([Text.Encoding]::UTF8.GetBytes($body)) -ContentType 'text/xml;charset=utf-8' -UseBasicParsing -TimeoutSec 900).Content } catch { $c = "failed: $($_.Exception.Message)" }
   $cr = [int]([regex]::Match("$c", '<CREATED>(\d+)</CREATED>').Groups[1].Value + '0') / 10; $er = [int]([regex]::Match("$c", '<ERRORS>(\d+)</ERRORS>').Groups[1].Value + '0') / 10
-  Write-Host ("[slow232 import] {0}: {1} sent, created {2}, errors {3}, {4:0.0} s{5}" -f $label, $objs.Count, $cr, $er, ((Get-Date) - $t0).TotalSeconds, $(if ($er -or -not $cr) { ' ' + ("$c" -replace '\s+', ' ').Substring(0, [Math]::Min(300, "$c".Length)) } else { '' }))
+  Write-Host ("[slow232 import] {0}: {1} sent, created {2}, errors {3}, {4:0.0} s{5}" -f $label, $objs.Count, $cr, $er, ((Get-Date) - $t0).TotalSeconds, $(if ($er -or -not $cr) { $t = ("$c" -replace '\s+', ' '); ' ' + $t.Substring(0, [Math]::Min(400, $t.Length)) } else { '' }))
   return [pscustomobject]@{ created = $cr; errors = $er; raw = "$c" }
 }
 function S2StartTally([string[]]$ini) {

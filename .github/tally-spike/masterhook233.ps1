@@ -60,24 +60,33 @@ function MH233 {
   $on = @('ISPAYROLLON', 'PREVISMULTIGODOWNON', 'ISCOSTCENTRESON') | Where-Object { $c0 -match "<$_>" }
   Imp 9000 $co1 'All Masters' ('<COMPANY NAME="' + $co1 + '" ACTION="Alter"><NAME>' + $co1 + '</NAME>' + (($on | ForEach-Object { "<$_>Yes</$_>" }) -join '') + '</COMPANY>') "features $($on -join ',')" | Out-Null
   foreach ($m in @(
-      '<UNIT NAME="MH Nos" ACTION="Create"><NAME>MH Nos</NAME><ISSIMPLEUNIT>Yes</ISSIMPLEUNIT><DECIMALPLACES>0</DECIMALPLACES></UNIT>',
+      '<UNIT NAME="MHN" ACTION="Create"><NAME>MHN</NAME><ISSIMPLEUNIT>Yes</ISSIMPLEUNIT><DECIMALPLACES>0</DECIMALPLACES></UNIT>',
       '<GODOWN NAME="MH Godown A" ACTION="Create"><NAME.LIST><NAME>MH Godown A</NAME></NAME.LIST><PARENT/><HASNOSPACE>No</HASNOSPACE></GODOWN>',
-      '<STOCKITEM NAME="MH Item 1" ACTION="Create"><NAME.LIST><NAME>MH Item 1</NAME></NAME.LIST><BASEUNITS>MH Nos</BASEUNITS></STOCKITEM>',
+      '<STOCKITEM NAME="MH Item 1" ACTION="Create"><NAME.LIST><NAME>MH Item 1</NAME></NAME.LIST><BASEUNITS>MHN</BASEUNITS></STOCKITEM>',
       '<COSTCENTRE NAME="MH Staff" ACTION="Create"><NAME.LIST><NAME>MH Staff</NAME></NAME.LIST><CATEGORY>Primary Cost Category</CATEGORY><ISEMPLOYEEGROUP>Yes</ISEMPLOYEEGROUP><FORPAYROLL>Yes</FORPAYROLL></COSTCENTRE>',
       '<COSTCENTRE NAME="MH Emp 001" ACTION="Create"><NAME.LIST><NAME>MH Emp 001</NAME></NAME.LIST><PARENT>MH Staff</PARENT><CATEGORY>Primary Cost Category</CATEGORY><FORPAYROLL>Yes</FORPAYROLL><DATEOFJOIN>20260401</DATEOFJOIN><DESIGNATION>Clerk</DESIGNATION><EMPLOYEENUMBER>E1</EMPLOYEENUMBER></COSTCENTRE>',
       '<LEDGER NAME="MH Basic" ACTION="Create"><NAME.LIST><NAME>MH Basic</NAME></NAME.LIST><PARENT>Indirect Expenses</PARENT><PAYTYPE>Earnings for Employees</PAYTYPE><CALCULATIONTYPE>As User Defined Value</CALCULATIONTYPE><AFFECTSNETSALARY>Yes</AFFECTSNETSALARY><ISCOSTCENTRESON>Yes</ISCOSTCENTRESON><FORPAYROLL>Yes</FORPAYROLL></LEDGER>')) {
     Imp 9000 $co1 'All Masters' $m ([regex]::Match($m, 'NAME="([^"]+)"').Groups[1].Value) | Out-Null
   }
   $mType = @{ 'Pay Head' = 'Ledger'; 'Stock Item' = 'StockItem'; 'Unit' = 'Unit'; 'Godown' = 'Godown'; 'Employee' = 'CostCentre' }
-  $mName = [ordered]@{ 'Pay Head' = 'MH Basic'; 'Stock Item' = 'MH Item 1'; 'Unit' = 'MH Nos'; 'Godown' = 'MH Godown A'; 'Employee' = 'MH Emp 001' }
+  $mName = [ordered]@{ 'Pay Head' = 'MH Basic'; 'Stock Item' = 'MH Item 1'; 'Unit' = 'MHN'; 'Godown' = 'MH Godown A'; 'Employee' = 'MH Emp 001' }
   $kind = @{ 'Pay Head' = 'payhead'; 'Stock Item' = 'stockitem'; 'Unit' = 'unit'; 'Godown' = 'godown'; 'Employee' = 'employee' }
   function MAid($form, $name) { [int]('0' + [regex]::Match((Post 9000 (MHColl 'MHAid' $mType[$form] 'NAME, ALTERID, MASTERID, GUID' "`$Name = `"$name`"")), '<ALTERID[^>]*>\s*(\d+)').Groups[1].Value) }
   function RecText { (Get-ChildItem $rec -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'failed.txt' } | ForEach-Object { Get-Content $_.FullName -Encoding Unicode }) -join "`n" }
+  # Tally 9000 started afresh before each master (its Gateway in a known state: run 37568281335 found it left in a
+  # Banking menu by the step before); the add-on and the company as round 4 loaded them; bridge 1 keeps running
+  function MHFresh($tag) {
+    Get-Process -Id $script:tallyPids[9000] -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep 3
+    $t = Start-Process -FilePath $exe -WorkingDirectory $dir -PassThru; $script:tallyPids[9000] = $t.Id
+    $up = WaitPort 9000; Start-Sleep 5; KeysTo 9000 'a' 4; KeysTo 9000 't' 8 "mh-$tag-fresh"
+    Write-Host "  Tally :9000 started afresh ($tag): port $up, company open $((ListCo 9000) -match [regex]::Escape($co1))"
+  }
   foreach ($form in $mName.Keys) {
     $name = $mName[$form]; $t = $form -replace ' ', ''
     $paths = if ($form -eq 'Godown') { @(@('Location', $name), @('Godown', $name)) } else { @(@($form, $name)) }
     $m0 = Mark; $a0 = MAid $form $name; $saved = $false; $tm = ''; $how = ''
     foreach ($path in $paths) {
+      MHFresh $t
       $r0 = RecText
       KeysTo 9000 'a' 3 "mh-$t-alter"
       foreach ($k in $path) { KeysTo 9000 $k 2; KeysTo 9000 '{ENTER}' 3 }
@@ -106,6 +115,7 @@ function MH233 {
   }
   # a new Unit made on the screen: master_created (when Unit is hooked)
   if ('Unit' -in $hooked) {
+    MHFresh 'cu'
     $m0 = Mark
     KeysTo 9000 'c' 3 'mh-cu-create'; KeysTo 9000 'Unit{ENTER}' 3 'mh-cu-form'; KeysTo 9000 '{ENTER}' 2; KeysTo 9000 'MHB{ENTER}' 2 'mh-cu-typed'; try { KeysTo 9000 '' 0 } catch {}
     $tm = [MH233T]::CtrlA(600, 15000); Start-Sleep 2; Shot 'mh-cu-after'
