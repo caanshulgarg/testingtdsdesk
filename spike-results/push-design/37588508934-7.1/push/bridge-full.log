@@ -1,0 +1,11 @@
+2026-10-07 07:59:07  FinCom Bridge 2.3.0: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+2026-10-07 07:59:07  FinCom Bridge 2.3.0 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+2026-10-07 07:59:07  Tally is not open; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+2026-10-07 07:59:07  Recorder: re-scan of the add-on's files for 2.3.0: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+2026-10-07 07:59:07  Recorder: FinCom Spike Co: lines from a Tally this bridge does not read (company not open here): not sent
+2026-10-07 07:59:07  Check:  - 
+2026-10-07 07:59:10  Tray icon: set to show next to the clock always (Windows 11)
+2026-10-07 07:59:10  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+2026-10-07 07:59:10  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+2026-10-07 07:59:23  The tray icon stopped (code 4294967295); it is started again in 5s
+2026-10-07 08:00:05  The tray icon stopped (code 4294967295); it is started again in 10s
