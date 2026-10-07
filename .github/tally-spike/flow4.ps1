@@ -312,8 +312,11 @@ StockNames 9000 $co1 | Out-Null
 # next-userfile (input only=userfile): each Windows user's own recorder file; next-masterhook (only=masterhook): the master forms
 . (Join-Path $PSScriptRoot 'userfile233.ps1')
 . (Join-Path $PSScriptRoot 'masterhook233.ps1')
+# next-push (input only=push233): the add-on's full entry at save, no entry request to Tally
+. (Join-Path $PSScriptRoot 'push233.ps1')
 try { S231Masters } catch { Write-Host "S231 masters: $_" }
 if ($env:ONLY -eq 'slow232') { try { Slow232Setup } catch { Write-Host "Slow232Setup: $_ $($_.ScriptStackTrace)"; Result 'slow232 setup' $false "the harness stopped: $_" $true } }
+if ($env:ONLY -eq 'push233') { try { Push233Setup } catch { Write-Host "Push233Setup: $_ $($_.ScriptStackTrace)"; Result 'push233 setup' $false "the harness stopped: $_" $true } }
 
 # ---- user 2's own Tally (9001), run as fcuser2: a company made by keys, then started again with it and the add-on
 Say '---- user 2''s own Tally (9001), run as fcuser2: a company made by keys, then started again with it and the add-on'
@@ -358,6 +361,8 @@ Say '---- the bridges, each installed by its own Windows user with the real setu
 function SeedJson($key, [int]$tport) { $tp = if ($rdp) { 'auto' } else { @($tport) }; $o = @{ CloudUrl = 'http://127.0.0.1:8787/'; CloudKey = "plain:$key"; TallyPorts = $tp }
   # slow232: bridge 1 talks to Tally 9000 through the timing proxy (slow232proxy.py on 127.0.0.2:9000)
   if ($tport -eq 9000 -and $env:ONLY -eq 'slow232' -and $Slow232St.ok) { $o.TallyHost = '127.0.0.2' }
+  # push233: the same proxy, so every entry request bridge 1 sends is counted at the stand
+  if ($tport -eq 9000 -and $env:ONLY -eq 'push233' -and $P233.ok) { $o.TallyHost = '127.0.0.2' }
   ($o | ConvertTo-Json -Compress) }
 $h1 = Join-Path $env:LOCALAPPDATA 'TDS Desk Bridge'; New-Item -ItemType Directory -Force $h1 | Out-Null
 Set-Content "$h1\tds-bridge.config.json" (SeedJson 'spike-computer-key-user1' 9000) -Encoding UTF8
@@ -702,6 +707,7 @@ if ($script:harness) { Add-Content -Path $resultsFile -Encoding UTF8 -Value "HAR
 if ($env:ONLY -eq 's5r1') { try { S231Only } catch { Write-Host "S231Only: $_ $($_.ScriptStackTrace)"; Result 'S5/R1' $false "the harness stopped: $_" $true } }
 elseif ($env:ONLY -eq 'pileup') { try { PileUp } catch { Write-Host "PileUp: $_ $($_.ScriptStackTrace)"; Result 'pile-up measurements' $false "the harness stopped: $_" $true } }
 elseif ($env:ONLY -eq 'slow232') { try { Slow232 } catch { Write-Host "Slow232: $_ $($_.ScriptStackTrace)"; Result 'slow232' $false "the harness stopped: $_" $true } }
+elseif ($env:ONLY -eq 'push233') { try { Push233 } catch { Write-Host "Push233: $_ $($_.ScriptStackTrace)"; Result 'push233' $false "the harness stopped: $_" $true } }
 elseif ($env:ONLY -match '^(userfile|masterhook)(,(userfile|masterhook))?$') {
   # next-userfile / next-masterhook: one or both (only=userfile,masterhook with a ref holding both)
   if ($env:ONLY -match 'userfile') { try { UF233 } catch { Write-Host "UF233: $_ $($_.ScriptStackTrace)"; Result 'userfile' $false "the harness stopped: $_" $true } }
@@ -723,6 +729,8 @@ Get-Process tally -ErrorAction SilentlyContinue | Stop-Process -Force
 Get-Process FinComBridge -ErrorAction SilentlyContinue | Stop-Process -Force
 Stop-Process -Id $stub.Id -Force -ErrorAction SilentlyContinue
 if ($Slow232St.proxy) { Stop-Process -Id $Slow232St.proxy.Id -Force -ErrorAction SilentlyContinue }
+if ($P233.proxy) { Stop-Process -Id $P233.proxy.Id -Force -ErrorAction SilentlyContinue }
+if ($env:ONLY -eq 'push233') { & net.exe share p233share /DELETE /Y 2>&1 | Out-Null }
 Write-Host '== results'; Get-Content $resultsFile | Write-Host
 Get-ChildItem "$fc\shots" -Filter *.png -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName (Join-Path $env:SHOTS "r4u2-$($_.Name)") }
 Write-Host '== round 4 end'
