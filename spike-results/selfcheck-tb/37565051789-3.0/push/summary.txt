@@ -1,0 +1,126 @@
+[03:08:29.997] push-design on TallyPrime 3.0: reps 5, heavy 3000 ledgers / 3000 items / up to 30000 vouchers (60 min), postings 1
+[03:08:30.910] system clock step after timeBeginPeriod(1): 0.407 ms (min 0.0039, max 4.2828)
+[03:08:30.935] two files written 2 ms apart: NTFS write times 13.9883 ms apart
+[03:08:30.955] light company folder: D:\a\_temp\TallyData\100000
+[03:08:33.982] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[03:09:02.112] Tally started (setup-light) in 28.1 s; company open: True
+[03:09:02.123] company GUID 8ec9d6bd-0d8c-4e75-ab1d-a7a416f205a2
+[03:09:04.146] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[03:09:05.382] import light masters: 60 sent, created 59, errors 0, 203.5 ms
+[03:09:05.518] import template s5 (all fields): 1 sent, created 1, errors 0, 78.3 ms
+[03:09:05.725] import template s50 (all fields): 1 sent, created 1, errors 0, 202.9 ms
+[03:09:05.745] import template rc (all fields): 1 sent, created 1, errors 0, 18.3 ms
+[03:09:05.750] templates: rc all fields; s50 all fields; s5 all fields
+[03:09:05.794]   template Receipt 1 20261001 mid 4 aid 4 8ec9d6bd-0d8c-4e75-ab1d-a7a416f205a2-00000004
+[03:09:05.795]   template Sales 1 20261002 mid 2 aid 2 8ec9d6bd-0d8c-4e75-ab1d-a7a416f205a2-00000002
+[03:09:05.796]   template Sales 2 20261031 mid 3 aid 3 8ec9d6bd-0d8c-4e75-ab1d-a7a416f205a2-00000003
+[03:09:05.973] company feature fields (by name): ISBATCHWISEON=No, PREVISMULTIGODOWNON=No, PREVISTRACKINGON=No, ISPAYROLLON=No, PREVISSALESORDERSON=No, PREVISPURCORDERSON=No, ISEXCISEMFGRTRADERON=No, ISPAYROLLSTATON=No, ISCOSTTRACKINGON=No, NOTIFYOFEXPIRY=No, ISTRACKVOUCHERSON=No, RESETTRACKEDCHANGES=No
+[03:09:05.988] import company features by XML: 1 sent, created 0, errors 0, 12 ms
+[03:09:05.999] after the XML alter: ISBATCHWISEON=Yes, PREVISMULTIGODOWNON=Yes, PREVISTRACKINGON=Yes, ISPAYROLLON=Yes, PREVISSALESORDERSON=Yes, PREVISPURCORDERSON=Yes, ISEXCISEMFGRTRADERON=No, ISPAYROLLSTATON=No, ISCOSTTRACKINGON=No, NOTIFYOFEXPIRY=No, ISTRACKVOUCHERSON=No, RESETTRACKEDCHANGES=No
+[03:10:29.947] after F11 (show more features only): ISBATCHWISEON=Yes, PREVISMULTIGODOWNON=Yes, PREVISTRACKINGON=Yes, ISPAYROLLON=Yes, PREVISSALESORDERSON=Yes, PREVISPURCORDERSON=Yes, ISEXCISEMFGRTRADERON=No, ISPAYROLLSTATON=No, ISCOSTTRACKINGON=No, NOTIFYOFEXPIRY=No, ISTRACKVOUCHERSON=No, RESETTRACKEDCHANGES=No
+[03:10:29.965] voucher types: Attendance, Contra, Credit Note, Debit Note, Delivery Note, Job Work In Order, Job Work Out Order, Journal, Material In, Material Out, Memorandum, Payment, Payroll, Physical Stock, Purchase, Purchase Order, Receipt, Receipt Note, Rejections In, Rejections Out, Reversing Journal, Sales, Sales Order, Stock Journal
+[03:10:29.976] voucher type fields: active ISACTIVE; manufacturing ASMFGJRNL
+[03:10:30.019] import voucher types active, manufacturing journal: 9 sent, created 1, errors 0, 39.6 ms
+[03:10:30.906] import type masters (godowns, batch items, employees, pay heads, supplier): 258 sent, created 258, errors 0, 866.6 ms
+[03:10:30.912] import attendance type: 1 sent, created 0, errors 1, 3.7 ms; Tally: Unit &apos;Days&apos; does not exist!
+[03:10:30.917] import attendance type: 1 sent, created 0, errors 1, 3.1 ms; Tally: Unit &apos;Days&apos; does not exist!
+[03:10:30.921] import attendance type: 1 sent, created 0, errors 1, 3.3 ms; Tally: Unit &apos;Days&apos; does not exist!
+[03:10:30.925] import attendance type: 1 sent, created 0, errors 1, 3.1 ms; Tally: Unit &apos;Days&apos; does not exist!
+[03:10:30.929] import attendance type: 1 sent, created 0, errors 1, 3.2 ms; Tally: Unit &apos;Days&apos; does not exist!
+[03:10:30.933] import attendance type: 1 sent, created 0, errors 1, 3.1 ms; Tally: Unit &apos;Days&apos; does not exist!
+[03:10:30.937] import attendance type: 1 sent, created 0, errors 1, 3.1 ms; Tally: Unit &apos;Days&apos; does not exist!
+[03:10:30.941] import attendance type: 1 sent, created 0, errors 1, 3 ms; Tally: Unit &apos;Days&apos; does not exist!
+[03:10:30.945] import attendance type: 1 sent, created 0, errors 1, 3.1 ms; Tally: Unit &apos;Days&apos; does not exist!
+[03:10:30.950] import attendance type: 1 sent, created 0, errors 1, 3.5 ms; Tally: Unit &apos;Days&apos; does not exist!
+[03:10:30.954] import attendance type: 1 sent, created 0, errors 1, 3.3 ms; Tally: Unit &apos;Days&apos; does not exist!
+[03:10:30.958] import attendance type: 1 sent, created 0, errors 1, 3.3 ms; Tally: Unit &apos;Days&apos; does not exist!
+[03:10:31.129] import template payroll50 (form 1 of 5): 1 sent, created 0, errors 1, 8.9 ms; Tally: No Entries in Voucher!
+[03:10:31.138] import template payroll50 (form 2 of 5): 1 sent, created 0, errors 1, 7.4 ms; Tally: No Entries in Voucher!
+[03:10:31.149] import template payroll50 (form 3 of 5): 1 sent, created 0, errors 1, 9.7 ms; Tally: Voucher totals do not match! Dr: 75,000.00 Dr Cr:  Diff: 75,000.00 Dr
+[03:10:31.157] import template payroll50 (form 4 of 5): 1 sent, created 0, errors 1, 7.5 ms; Tally: No Entries in Voucher!
+[03:10:31.181] import template payroll50 (form 5 of 5): 1 sent, created 1, errors 0, 22.1 ms
+[03:10:31.199] import template payroll200 (form 1 of 5): 1 sent, created 0, errors 1, 15.6 ms; Tally: No Entries in Voucher!
+[03:10:31.215] import template payroll200 (form 2 of 5): 1 sent, created 0, errors 1, 14.8 ms; Tally: No Entries in Voucher!
+[03:10:31.242] import template payroll200 (form 3 of 5): 1 sent, created 0, errors 1, 25.7 ms; Tally: Voucher totals do not match! Dr: 3,00,000.00 Dr Cr:  Diff: 3,00,000.00 Dr
+[03:10:31.260] import template payroll200 (form 4 of 5): 1 sent, created 0, errors 1, 17 ms; Tally: No Entries in Voucher!
+[03:10:31.301] import template payroll200 (form 5 of 5): 1 sent, created 1, errors 0, 38.7 ms
+[03:10:31.310] import template attendance (form 1 of 1): 1 sent, created 0, errors 1, 7.2 ms; Tally: No Entries in Voucher!
+[03:10:31.384] import template stockjournal (form 1 of 1): 1 sent, created 1, errors 0, 71.4 ms
+[03:10:31.411] import template mfgjournal (form 1 of 1): 1 sent, created 1, errors 0, 24.8 ms
+[03:10:31.428] import template salesorder (form 1 of 3): 1 sent, created 0, errors 1, 15.4 ms; Tally: Bad Order Number in Voucher!
+[03:10:31.440] import template salesorder (form 2 of 3): 1 sent, created 0, errors 1, 11.1 ms; Tally: Bad Order Number in Voucher!
+[03:10:31.453] import template salesorder (form 3 of 3): 1 sent, created 0, errors 1, 11.9 ms; Tally: Bad Order Number in Voucher!
+[03:10:31.467] import template purchaseorder (form 1 of 3): 1 sent, created 0, errors 1, 12.8 ms; Tally: Bad Order Number in Voucher!
+[03:10:31.479] import template purchaseorder (form 2 of 3): 1 sent, created 0, errors 1, 11 ms; Tally: Bad Order Number in Voucher!
+[03:10:31.491] import template purchaseorder (form 3 of 3): 1 sent, created 0, errors 1, 11.2 ms; Tally: Bad Order Number in Voucher!
+[03:10:31.541] import template deliverynote (form 1 of 1): 1 sent, created 1, errors 0, 48.8 ms
+[03:10:31.613] import template receiptnote (form 1 of 1): 1 sent, created 1, errors 0, 69.5 ms
+[03:10:31.639] import template physicalstock (form 1 of 1): 1 sent, created 1, errors 0, 24.7 ms
+[03:10:31.905] import template salesbatch (form 1 of 1): 1 sent, created 1, errors 0, 265.2 ms
+[03:10:32.265] TDL $$MachineName => '' 
+[03:10:32.268] TDL $$CmpUserName => 'TALLY User' 
+[03:10:32.270] TDL $$SysInfo:WindowsUser => 'runneradmin' 
+[03:10:32.273] TDL $$SysInfo:WindowsUserName => '' 
+[03:10:32.275] TDL $$SysInfo:UserName => '' 
+[03:10:32.278] TDL $$SysInfo:LoginUser => '' 
+[03:10:32.280] TDL $$SysInfo:SystemName => 'runnervmfi6oq' 
+[03:10:32.283] TDL $$SysInfo:ComputerName => '' 
+[03:10:32.285] TDL $$SysInfo:MachineName => '' 
+[03:10:32.290] TDL $$SysInfo:IPAddress => '10.1.0.140,172.21.176.1' 
+[03:10:32.292] TDL $$SysInfo:ApplicationPath => 'C:\Program Files\TallyPrime' 
+[03:10:32.295] TDL $$SysInfo:TempPath => '' 
+[03:10:38.323] tally.ini: Data D:\a\_temp\TallyHeavy; TDL: none
+[03:11:06.289] Tally started (setup-heavy) in 28 s; company open: True
+[03:11:08.302] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[03:11:11.780] import heavy masters 0: 1000 sent, created 1000, errors 0, 3274 ms
+[03:11:15.154] import heavy masters 1000: 1000 sent, created 1000, errors 0, 3369.9 ms
+[03:11:18.480] import heavy masters 2000: 1000 sent, created 1000, errors 0, 3321.6 ms
+[03:11:21.705] import heavy masters 3000: 1000 sent, created 1000, errors 0, 3219.4 ms
+[03:11:24.934] import heavy masters 4000: 1000 sent, created 1000, errors 0, 3225.7 ms
+[03:11:28.150] import heavy masters 5000: 1000 sent, created 1000, errors 0, 3211.8 ms
+[03:11:28.396] import heavy vouchers 0: 1000 sent, created 0, errors 1, 105.9 ms; Tally: Godown &apos;&apos; does not exist!
+[03:11:28.551] import heavy vouchers 1000: 1000 sent, created 0, errors 1, 69.8 ms; Tally: Godown &apos;&apos; does not exist!
+[03:11:28.761] import heavy vouchers 2000: 1000 sent, created 0, errors 1, 84.5 ms; Tally: Godown &apos;&apos; does not exist!
+[03:11:28.932] import heavy vouchers 3000: 1000 sent, created 0, errors 1, 78.2 ms; Tally: Godown &apos;&apos; does not exist!
+[03:11:29.091] import heavy vouchers 4000: 1000 sent, created 0, errors 1, 75.3 ms; Tally: Godown &apos;&apos; does not exist!
+[03:11:29.241] import heavy vouchers 5000: 1000 sent, created 0, errors 1, 69.3 ms; Tally: Godown &apos;&apos; does not exist!
+[03:11:29.410] import heavy vouchers 6000: 1000 sent, created 0, errors 1, 71.8 ms; Tally: Godown &apos;&apos; does not exist!
+[03:11:29.559] import heavy vouchers 7000: 1000 sent, created 0, errors 1, 68.5 ms; Tally: Godown &apos;&apos; does not exist!
+[03:11:29.719] import heavy vouchers 8000: 1000 sent, created 0, errors 1, 75.6 ms; Tally: Godown &apos;&apos; does not exist!
+[03:11:29.867] import heavy vouchers 9000: 1000 sent, created 0, errors 1, 69.1 ms; Tally: Godown &apos;&apos; does not exist!
+[03:11:30.026] import heavy vouchers 10000: 1000 sent, created 0, errors 1, 74 ms; Tally: Godown &apos;&apos; does not exist!
+[03:11:30.179] import heavy vouchers 11000: 1000 sent, created 0, errors 1, 70.1 ms; Tally: Godown &apos;&apos; does not exist!
+[03:11:30.336] import heavy vouchers 12000: 1000 sent, created 0, errors 1, 70.7 ms; Tally: Godown &apos;&apos; does not exist!
+[03:11:30.487] import heavy vouchers 13000: 1000 sent, created 0, errors 1, 70.7 ms; Tally: Godown &apos;&apos; does not exist!
+[03:11:30.645] import heavy vouchers 14000: 1000 sent, created 0, errors 1, 70.6 ms; Tally: Godown &apos;&apos; does not exist!
+[03:11:30.793] import heavy vouchers 15000: 1000 sent, created 0, errors 1, 69.3 ms; Tally: Godown &apos;&apos; does not exist!
+[03:11:30.951] import heavy vouchers 16000: 1000 sent, created 0, errors 1, 71.1 ms; Tally: Godown &apos;&apos; does not exist!
+[03:11:31.101] import heavy vouchers 17000: 1000 sent, created 0, errors 1, 69 ms; Tally: Godown &apos;&apos; does not exist!
+[03:11:31.264] import heavy vouchers 18000: 1000 sent, created 0, errors 1, 80.4 ms; Tally: Godown &apos;&apos; does not exist!
+[03:11:31.428] import heavy vouchers 19000: 1000 sent, created 0, errors 1, 70 ms; Tally: Godown &apos;&apos; does not exist!
+[03:11:31.593] import heavy vouchers 20000: 1000 sent, created 0, errors 1, 81.1 ms; Tally: Godown &apos;&apos; does not exist!
+[03:11:31.760] import heavy vouchers 21000: 1000 sent, created 0, errors 1, 80.3 ms; Tally: Godown &apos;&apos; does not exist!
+[03:11:31.939] import heavy vouchers 22000: 1000 sent, created 0, errors 1, 94 ms; Tally: Godown &apos;&apos; does not exist!
+[03:11:32.089] import heavy vouchers 23000: 1000 sent, created 0, errors 1, 69.7 ms; Tally: Godown &apos;&apos; does not exist!
+[03:11:32.252] import heavy vouchers 24000: 1000 sent, created 0, errors 1, 76.2 ms; Tally: Godown &apos;&apos; does not exist!
+[03:11:32.405] import heavy vouchers 25000: 1000 sent, created 0, errors 1, 69.5 ms; Tally: Godown &apos;&apos; does not exist!
+[03:11:32.564] import heavy vouchers 26000: 1000 sent, created 0, errors 1, 71.9 ms; Tally: Godown &apos;&apos; does not exist!
+[03:11:32.714] import heavy vouchers 27000: 1000 sent, created 0, errors 1, 69.4 ms; Tally: Godown &apos;&apos; does not exist!
+[03:11:32.869] import heavy vouchers 28000: 1000 sent, created 0, errors 1, 70.6 ms; Tally: Godown &apos;&apos; does not exist!
+[03:11:33.020] import heavy vouchers 29000: 1000 sent, created 0, errors 1, 69.1 ms; Tally: Godown &apos;&apos; does not exist!
+[03:11:33.170] heavy company: 3016 ledgers, 3100 stock items, 12 vouchers in Tally (import took 1 min)
+[03:11:40.177] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[03:12:08.170] Tally started (count-light) in 28 s; company open: True
+[03:12:10.177] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[03:12:10.211] light company: 16 ledgers, 100 stock items, 12 vouchers
+[03:12:17.276] tally.ini: Data D:\a\_temp\TallyHeavy; TDL: none
+[03:12:45.268] Tally started (tb-heavy) in 28 s; company open: True
+[03:12:47.275] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[03:12:47.329] tb: heavy company open: 12 vouchers, 3016 ledgers (TallyPrime 3.0)
+[03:12:49.586] tb: the probe key on an idle Tally: 28.8, 28.8, 28.8, 28.7, 28.7 ms
+[03:12:49.637] tb: ledger MasterIDs: 3016, highest 3526
+[03:37:54.404] tb closings 0-200: median 300012.5 ms, worst 300014.1 ms over 5; 97 B, 0 ledgers, 0 closings, 0 TB lines; probe during the request: median 8598.9 ms, worst 10502.1 ms (5 of 5 overlapped) FAILED The request was canceled due to the configured HttpClient.Timeout of 300 seconds elapsing.
+[04:02:59.180] tb closings 200-400: median 300013.5 ms, worst 300043.7 ms over 5; 97 B, 0 ledgers, 0 closings, 0 TB lines; probe during the request: median 3838.1 ms, worst 5762.4 ms (5 of 5 overlapped) FAILED The request was canceled due to the configured HttpClient.Timeout of 300 seconds elapsing.
+[04:28:03.951] tb closings 400-600: median 300014.5 ms, worst 300017.5 ms over 5; 97 B, 0 ledgers, 0 closings, 0 TB lines; probe during the request: median -1 ms, worst 986.5 ms (5 of 5 overlapped) FAILED The request was canceled due to the configured HttpClient.Timeout of 300 seconds elapsing.
+[04:53:08.708] tb closings 600-800: median 300013.6 ms, worst 300016.8 ms over 5; 97 B, 0 ledgers, 0 closings, 0 TB lines; probe during the request: median -1 ms, worst -1 ms (5 of 5 overlapped) FAILED The request was canceled due to the configured HttpClient.Timeout of 300 seconds elapsing.
+[05:18:13.479] tb closings 800-1000: median 300013.2 ms, worst 300013.7 ms over 5; 97 B, 0 ledgers, 0 closings, 0 TB lines; probe during the request: median -1 ms, worst -1 ms (5 of 5 overlapped) FAILED The request was canceled due to the configured HttpClient.Timeout of 300 seconds elapsing.

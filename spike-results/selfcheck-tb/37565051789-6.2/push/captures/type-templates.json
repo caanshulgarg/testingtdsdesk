@@ -1,0 +1,68 @@
+{
+  "payroll50": {
+    "created": 1,
+    "form": 5,
+    "ms": 23.3,
+    "err": "form 1: created 0, exceptions 1  | form 2: created 0, exceptions 1  | form 3: created 0, exceptions 1  | form 4: created 0, exceptions 1  | form 5: created 1, exceptions 0 "
+  },
+  "payroll200": {
+    "created": 1,
+    "form": 5,
+    "ms": 36.4,
+    "err": "form 1: created 0, exceptions 1  | form 2: created 0, exceptions 1  | form 3: created 0, exceptions 1  | form 4: created 0, exceptions 1  | form 5: created 1, exceptions 0 "
+  },
+  "attendance": {
+    "created": 0,
+    "form": 2,
+    "ms": 15.5,
+    "err": "form 1: created 0, exceptions 1 "
+  },
+  "stockjournal": {
+    "created": 1,
+    "form": 1,
+    "ms": 69.1,
+    "err": "form 1: created 1, exceptions 0 "
+  },
+  "mfgjournal": {
+    "created": 1,
+    "form": 1,
+    "ms": 28.0,
+    "err": "form 1: created 1, exceptions 0 "
+  },
+  "salesorder": {
+    "created": 0,
+    "form": 4,
+    "ms": 33.8,
+    "err": "form 1: created 0, exceptions 1 Bad Order Number in Voucher! | form 2: created 0, exceptions 1 Bad Order Number in Voucher! | form 3: created 0, exceptions 1 Bad Order Number in Voucher!"
+  },
+  "purchaseorder": {
+    "created": 0,
+    "form": 4,
+    "ms": 25.9,
+    "err": "form 1: created 0, exceptions 1 Bad Order Number in Voucher! | form 2: created 0, exceptions 1 Bad Order Number in Voucher! | form 3: created 0, exceptions 1 Bad Order Number in Voucher!"
+  },
+  "deliverynote": {
+    "created": 1,
+    "form": 1,
+    "ms": 53.9,
+    "err": "form 1: created 1, exceptions 0 "
+  },
+  "receiptnote": {
+    "created": 1,
+    "form": 1,
+    "ms": 51.3,
+    "err": "form 1: created 1, exceptions 0 "
+  },
+  "physicalstock": {
+    "created": 1,
+    "form": 1,
+    "ms": 23.1,
+    "err": "form 1: created 1, exceptions 0 "
+  },
+  "salesbatch": {
+    "created": 1,
+    "form": 1,
+    "ms": 259.1,
+    "err": "form 1: created 1, exceptions 0 "
+  }
+}

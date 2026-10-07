@@ -1,0 +1,125 @@
+[03:09:54.059] push-design on TallyPrime 7.1: reps 5, heavy 3000 ledgers / 3000 items / up to 30000 vouchers (60 min), postings 1
+[03:09:55.223] system clock step after timeBeginPeriod(1): 0.466 ms (min 0.004, max 5.0596)
+[03:09:55.243] two files written 2 ms apart: NTFS write times 7.6811 ms apart
+[03:09:55.266] light company folder: D:\a\_temp\TallyData\100000
+[03:09:58.302] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[03:10:27.983] Tally started (setup-light) in 29.7 s; company open: True
+[03:10:27.996] company GUID 32bd0d39-061d-4b92-ba90-0ba35ae79206
+[03:10:30.028] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[03:10:31.361] import light masters: 60 sent, created 59, errors 0, 299.5 ms
+[03:10:31.541] import template s5 (all fields): 1 sent, created 1, errors 0, 111.7 ms
+[03:10:31.824] import template s50 (all fields): 1 sent, created 1, errors 0, 278.4 ms
+[03:10:31.855] import template rc (all fields): 1 sent, created 1, errors 0, 28.7 ms
+[03:10:31.860] templates: rc all fields; s50 all fields; s5 all fields
+[03:10:31.918]   template Receipt 1 20261001 mid 4 aid 4 32bd0d39-061d-4b92-ba90-0ba35ae79206-00000004
+[03:10:31.919]   template Sales 1 20261002 mid 2 aid 2 32bd0d39-061d-4b92-ba90-0ba35ae79206-00000002
+[03:10:31.920]   template Sales 2 20261031 mid 3 aid 3 32bd0d39-061d-4b92-ba90-0ba35ae79206-00000003
+[03:10:32.110] company feature fields (by name): ISBATCHWISEON=No, PREVISMULTIGODOWNON=No, PREVISTRACKINGON=No, ISPAYROLLON=No, PREVISSALESORDERSON=No, PREVISPURCORDERSON=No, ISEXCISEMFGRTRADERON=No, ISPAYROLLSTATON=No, ISCOSTTRACKINGON=No, NOTIFYOFEXPIRY=No, ISTRACKVOUCHERSON=No, RESETTRACKEDCHANGES=No
+[03:10:32.131] import company features by XML: 1 sent, created 0, errors 0, 17.3 ms
+[03:10:32.144] after the XML alter: ISBATCHWISEON=Yes, PREVISMULTIGODOWNON=Yes, PREVISTRACKINGON=Yes, ISPAYROLLON=Yes, PREVISSALESORDERSON=Yes, PREVISPURCORDERSON=Yes, ISEXCISEMFGRTRADERON=No, ISPAYROLLSTATON=No, ISCOSTTRACKINGON=No, NOTIFYOFEXPIRY=No, ISTRACKVOUCHERSON=No, RESETTRACKEDCHANGES=No
+[03:11:55.939] after F11 (show more features only): ISBATCHWISEON=Yes, PREVISMULTIGODOWNON=Yes, PREVISTRACKINGON=Yes, ISPAYROLLON=Yes, PREVISSALESORDERSON=Yes, PREVISPURCORDERSON=Yes, ISEXCISEMFGRTRADERON=No, ISPAYROLLSTATON=No, ISCOSTTRACKINGON=No, NOTIFYOFEXPIRY=No, ISTRACKVOUCHERSON=No, RESETTRACKEDCHANGES=No
+[03:11:55.958] voucher types: Attendance, Contra, Credit Note, Debit Note, Delivery Note, Job Work In Order, Job Work Out Order, Journal, Material In, Material Out, Memorandum, Payment, Payroll, Physical Stock, Purchase, Purchase Order, Receipt, Receipt Note, Rejections In, Rejections Out, Reversing Journal, Sales, Sales Order, Stock Journal
+[03:11:55.970] voucher type fields: active ISACTIVE; manufacturing ASMFGJRNL
+[03:11:56.021] import voucher types active, manufacturing journal: 9 sent, created 1, errors 0, 47.4 ms
+[03:11:57.247] import type masters (godowns, batch items, employees, pay heads, supplier): 258 sent, created 258, errors 0, 1207.2 ms
+[03:11:57.259] import attendance type: 1 sent, created 0, errors 0, 8.5 ms; Tally: Unit &apos;Days&apos; does not exist!
+[03:11:57.270] import attendance type: 1 sent, created 0, errors 0, 8.9 ms; Tally: Unit &apos;Days&apos; does not exist!
+[03:11:57.279] import attendance type: 1 sent, created 0, errors 0, 8.2 ms; Tally: Unit &apos;Days&apos; does not exist!
+[03:11:57.288] import attendance type: 1 sent, created 0, errors 0, 8 ms; Tally: Unit &apos;Days&apos; does not exist!
+[03:11:57.298] import attendance type: 1 sent, created 0, errors 0, 8.1 ms; Tally: Unit &apos;Days&apos; does not exist!
+[03:11:57.307] import attendance type: 1 sent, created 0, errors 0, 7.9 ms; Tally: Unit &apos;Days&apos; does not exist!
+[03:11:57.316] import attendance type: 1 sent, created 0, errors 0, 8 ms; Tally: Unit &apos;Days&apos; does not exist!
+[03:11:57.325] import attendance type: 1 sent, created 0, errors 0, 8 ms; Tally: Unit &apos;Days&apos; does not exist!
+[03:11:57.335] import attendance type: 1 sent, created 0, errors 0, 8.4 ms; Tally: Unit &apos;Days&apos; does not exist!
+[03:11:57.347] import attendance type: 1 sent, created 0, errors 0, 10.7 ms; Tally: Unit &apos;Days&apos; does not exist!
+[03:11:57.357] import attendance type: 1 sent, created 0, errors 0, 8.6 ms; Tally: Unit &apos;Days&apos; does not exist!
+[03:11:57.367] import attendance type: 1 sent, created 0, errors 0, 9 ms; Tally: Unit &apos;Days&apos; does not exist!
+[03:11:57.595] import template payroll50 (form 1 of 5): 1 sent, created 0, errors 0, 22.4 ms
+[03:11:57.615] import template payroll50 (form 2 of 5): 1 sent, created 0, errors 0, 18.2 ms
+[03:11:57.640] import template payroll50 (form 3 of 5): 1 sent, created 0, errors 0, 23.5 ms
+[03:11:57.660] import template payroll50 (form 4 of 5): 1 sent, created 0, errors 0, 18.6 ms
+[03:11:57.691] import template payroll50 (form 5 of 5): 1 sent, created 1, errors 0, 29.5 ms
+[03:11:57.720] import template payroll200 (form 1 of 5): 1 sent, created 0, errors 0, 26.3 ms
+[03:11:57.749] import template payroll200 (form 2 of 5): 1 sent, created 0, errors 0, 26.6 ms
+[03:11:57.797] import template payroll200 (form 3 of 5): 1 sent, created 0, errors 0, 46.6 ms
+[03:11:57.833] import template payroll200 (form 4 of 5): 1 sent, created 0, errors 0, 34.4 ms
+[03:11:57.887] import template payroll200 (form 5 of 5): 1 sent, created 1, errors 0, 52.8 ms
+[03:11:57.908] import template attendance (form 1 of 1): 1 sent, created 0, errors 0, 19.4 ms
+[03:11:57.997] import template stockjournal (form 1 of 1): 1 sent, created 1, errors 0, 86.9 ms
+[03:11:58.038] import template mfgjournal (form 1 of 1): 1 sent, created 1, errors 0, 38.8 ms
+[03:11:58.076] import template salesorder (form 1 of 3): 1 sent, created 0, errors 0, 36.4 ms; Tally: Bad Order Number in Voucher!
+[03:11:58.113] import template salesorder (form 2 of 3): 1 sent, created 0, errors 0, 35.3 ms; Tally: Bad Order Number in Voucher!
+[03:11:58.152] import template salesorder (form 3 of 3): 1 sent, created 0, errors 0, 37.7 ms; Tally: Bad Order Number in Voucher!
+[03:11:58.186] import template purchaseorder (form 1 of 3): 1 sent, created 0, errors 0, 32.5 ms; Tally: Bad Order Number in Voucher!
+[03:11:58.218] import template purchaseorder (form 2 of 3): 1 sent, created 0, errors 0, 29.7 ms; Tally: Bad Order Number in Voucher!
+[03:11:58.248] import template purchaseorder (form 3 of 3): 1 sent, created 0, errors 0, 28.4 ms; Tally: Bad Order Number in Voucher!
+[03:11:58.314] import template deliverynote (form 1 of 1): 1 sent, created 1, errors 0, 64.9 ms
+[03:11:58.381] import template receiptnote (form 1 of 1): 1 sent, created 1, errors 0, 65.4 ms
+[03:11:58.414] import template physicalstock (form 1 of 1): 1 sent, created 1, errors 0, 31.5 ms
+[03:11:58.739] import template salesbatch (form 1 of 1): 1 sent, created 1, errors 0, 323.3 ms
+[03:11:59.248] TDL $$MachineName => '' 
+[03:11:59.254] TDL $$CmpUserName => 'TALLY User' 
+[03:11:59.258] TDL $$SysInfo:WindowsUser => 'runneradmin' 
+[03:11:59.262] TDL $$SysInfo:WindowsUserName => '' 
+[03:11:59.265] TDL $$SysInfo:UserName => '' 
+[03:11:59.269] TDL $$SysInfo:LoginUser => '' 
+[03:11:59.272] TDL $$SysInfo:SystemName => 'runnervmfi6oq' 
+[03:11:59.275] TDL $$SysInfo:ComputerName => '' 
+[03:11:59.278] TDL $$SysInfo:MachineName => '' 
+[03:11:59.284] TDL $$SysInfo:IPAddress => '10.1.0.20,192.168.192.1' 
+[03:11:59.287] TDL $$SysInfo:ApplicationPath => 'C:\Program Files\TallyPrime' 
+[03:11:59.290] TDL $$SysInfo:TempPath => '' 
+[03:12:05.330] tally.ini: Data D:\a\_temp\TallyHeavy; TDL: none
+[03:12:34.827] Tally started (setup-heavy) in 29.5 s; company open: True
+[03:12:36.844] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[03:12:41.671] import heavy masters 0: 1000 sent, created 1000, errors 0, 4621.1 ms
+[03:12:46.290] import heavy masters 1000: 1000 sent, created 1000, errors 0, 4614.3 ms
+[03:12:50.941] import heavy masters 2000: 1000 sent, created 1000, errors 0, 4646.5 ms
+[03:12:55.649] import heavy masters 3000: 1000 sent, created 1000, errors 0, 4703.9 ms
+[03:13:00.847] import heavy masters 4000: 1000 sent, created 1000, errors 0, 5193.9 ms
+[03:13:06.196] import heavy masters 5000: 1000 sent, created 1000, errors 0, 5344.3 ms
+[03:13:22.649] import heavy vouchers 0: 1000 sent, created 600, errors 0, 16295.7 ms
+[03:13:39.980] import heavy vouchers 1000: 1000 sent, created 600, errors 0, 17252.4 ms
+[03:13:58.134] import heavy vouchers 2000: 1000 sent, created 600, errors 0, 18066.4 ms
+[03:14:16.384] import heavy vouchers 3000: 1000 sent, created 600, errors 0, 18174.9 ms
+[03:14:35.119] import heavy vouchers 4000: 1000 sent, created 600, errors 0, 18651.2 ms
+[03:14:53.284] import heavy vouchers 5000: 1000 sent, created 600, errors 0, 18085.2 ms
+[03:15:10.272] import heavy vouchers 6000: 1000 sent, created 600, errors 0, 16891.3 ms
+[03:15:27.410] import heavy vouchers 7000: 1000 sent, created 600, errors 0, 17028.7 ms
+[03:15:44.688] import heavy vouchers 8000: 1000 sent, created 600, errors 0, 17194.3 ms
+[03:16:01.432] import heavy vouchers 9000: 1000 sent, created 600, errors 0, 16663.6 ms
+[03:16:17.971] import heavy vouchers 10000: 1000 sent, created 600, errors 0, 16459.3 ms
+[03:16:34.680] import heavy vouchers 11000: 1000 sent, created 600, errors 0, 16626.3 ms
+[03:16:52.212] import heavy vouchers 12000: 1000 sent, created 600, errors 0, 17451.4 ms
+[03:17:10.853] import heavy vouchers 13000: 1000 sent, created 600, errors 0, 18561 ms
+[03:17:29.237] import heavy vouchers 14000: 1000 sent, created 600, errors 0, 18306.4 ms
+[03:17:47.910] import heavy vouchers 15000: 1000 sent, created 600, errors 0, 18589.3 ms
+[03:18:06.475] import heavy vouchers 16000: 1000 sent, created 600, errors 0, 18477 ms
+[03:18:24.504] import heavy vouchers 17000: 1000 sent, created 600, errors 0, 17950.8 ms
+[03:18:42.218] import heavy vouchers 18000: 1000 sent, created 600, errors 0, 17629.5 ms
+[03:19:00.044] import heavy vouchers 19000: 1000 sent, created 600, errors 0, 17747.2 ms
+[03:19:17.580] import heavy vouchers 20000: 1000 sent, created 600, errors 0, 17456.1 ms
+[03:19:35.860] import heavy vouchers 21000: 1000 sent, created 600, errors 0, 18195.2 ms
+[03:19:56.480] import heavy vouchers 22000: 1000 sent, created 600, errors 0, 20523.6 ms
+[03:20:16.463] import heavy vouchers 23000: 1000 sent, created 600, errors 0, 19890.1 ms
+[03:20:34.685] import heavy vouchers 24000: 1000 sent, created 600, errors 0, 18131.5 ms
+[03:20:53.048] import heavy vouchers 25000: 1000 sent, created 600, errors 0, 18288.9 ms
+[03:21:19.448] import heavy vouchers 26000: 1000 sent, created 600, errors 0, 26323.3 ms
+[03:21:38.853] import heavy vouchers 27000: 1000 sent, created 600, errors 0, 19301 ms
+[03:21:57.868] import heavy vouchers 28000: 1000 sent, created 600, errors 0, 18932.4 ms
+[03:22:16.556] import heavy vouchers 29000: 1000 sent, created 600, errors 0, 18601.5 ms
+[03:22:20.568] heavy company: 3016 ledgers, 3100 stock items, 18012 vouchers in Tally (import took 10.3 min)
+[03:22:27.578] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[03:22:57.107] Tally started (count-light) in 29.5 s; company open: True
+[03:22:59.116] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[03:22:59.163] light company: 16 ledgers, 100 stock items, 12 vouchers
+[03:23:06.242] tally.ini: Data D:\a\_temp\TallyHeavy; TDL: none
+[03:23:35.753] Tally started (tb-heavy) in 29.5 s; company open: True
+[03:23:37.762] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[03:23:41.588] tb: heavy company open: 18012 vouchers, 3016 ledgers (TallyPrime 7.1)
+[03:23:43.878] tb: the probe key on an idle Tally: 27.8, 44.2, 44.2, 15.7, 43.9 ms
+[03:23:43.939] tb: ledger MasterIDs: 3016, highest 3529
+[03:48:48.756] tb closings 0-200: median 300013.4 ms, worst 300015.9 ms over 5; 97 B, 0 ledgers, 0 closings, 0 TB lines; probe during the request: median 13885.4 ms, worst 15789.5 ms (5 of 5 overlapped) FAILED The request was canceled due to the configured HttpClient.Timeout of 300 seconds elapsing.
+[04:13:53.541] tb closings 200-400: median 300013.4 ms, worst 300015.1 ms over 5; 97 B, 0 ledgers, 0 closings, 0 TB lines; probe during the request: median 9109.4 ms, worst 11002.2 ms (5 of 5 overlapped) FAILED The request was canceled due to the configured HttpClient.Timeout of 300 seconds elapsing.
+[04:38:58.319] tb closings 400-600: median 300012.7 ms, worst 300023.2 ms over 5; 97 B, 0 ledgers, 0 closings, 0 TB lines; probe during the request: median 4387.3 ms, worst 6260.9 ms (5 of 5 overlapped) FAILED The request was canceled due to the configured HttpClient.Timeout of 300 seconds elapsing.
+[05:04:03.082] tb closings 600-800: median 300013.3 ms, worst 300015.5 ms over 5; 97 B, 0 ledgers, 0 closings, 0 TB lines; probe during the request: median -1 ms, worst 1534.2 ms (5 of 5 overlapped) FAILED The request was canceled due to the configured HttpClient.Timeout of 300 seconds elapsing.

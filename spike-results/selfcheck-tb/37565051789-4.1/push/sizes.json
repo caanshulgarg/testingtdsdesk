@@ -1,0 +1,19 @@
+{
+  "cguid": "76fe220b-9207-4d9f-9210-730118e70e78",
+  "templates": {
+    "rc": "all fields",
+    "s5": "all fields",
+    "s50": "all fields"
+  },
+  "heavy": {
+    "ledgers": 3016,
+    "items": 3100,
+    "vouchers": 18012,
+    "importMin": 5.0
+  },
+  "light": {
+    "ledgers": 16,
+    "items": 100,
+    "vouchers": 12
+  }
+}
