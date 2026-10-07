@@ -32,7 +32,7 @@ function V3TdsMasters {
   $led = @(
     ('<LEDGER NAME="' + $N.party + '" ACTION="Create"><NAME.LIST><NAME>' + $N.party + '</NAME></NAME.LIST><PARENT>Sundry Creditors</PARENT><ISCOSTCENTRESON>No</ISCOSTCENTRESON><ISBILLWISEON>No</ISBILLWISEON><INCOMETAXNUMBER>AAACP2310K</INCOMETAXNUMBER><ISTDSAPPLICABLE>Yes</ISTDSAPPLICABLE><TDSAPPLICABLE>Yes</TDSAPPLICABLE><TDSDEDUCTEETYPE>Company - Resident</TDSDEDUCTEETYPE><TDSDEDUCTEEISSPECIALRATE>No</TDSDEDUCTEEISSPECIALRATE><DEDUCTINSAMEVCHRULES.LIST><DATE>20260401</DATE><DEDUCTINSAMEVCH>Yes</DEDUCTINSAMEVCH></DEDUCTINSAMEVCHRULES.LIST></LEDGER>'),
     ('<LEDGER NAME="' + $N.exp + '" ACTION="Create"><NAME.LIST><NAME>' + $N.exp + '</NAME></NAME.LIST><PARENT>Indirect Expenses</PARENT><ISCOSTCENTRESON>No</ISCOSTCENTRESON><ISTDSAPPLICABLE>Yes</ISTDSAPPLICABLE><ISTDSEXPENSE>Yes</ISTDSEXPENSE><TDSAPPLICABLE>' + $N.nature + '</TDSAPPLICABLE><TDSCATEGORYNAME>' + $N.nature + '</TDSCATEGORYNAME><TDSRATENAME>' + $N.nature + '</TDSRATENAME></LEDGER>'),
-    ('<LEDGER NAME="' + $N.tds + '" ACTION="Create"><NAME.LIST><NAME>' + $N.tds + '</NAME></NAME.LIST><PARENT>Duties &amp; Taxes</PARENT><ISCOSTCENTRESON>No</ISCOSTCENTRESON><TAXTYPE>TDS</TAXTYPE><TDSRATENAME>' + $N.nature + '</TDSRATENAME><TDSCATEGORYNAME>' + $N.nature + '</TDSCATEGORYNAME><TAXCLASSIFICATIONNAME>' + $N.nature + '</TAXCLASSIFICATIONNAME></LEDGER>'))
+    ('<LEDGER NAME="' + $N.tds + '" ACTION="Create"><NAME.LIST><NAME>' + $N.tds + '</NAME></NAME.LIST><PARENT>Duties &amp; Taxes</PARENT><ISCOSTCENTRESON>No</ISCOSTCENTRESON><TAXTYPE>TDS</TAXTYPE><TDSRATENAME>' + $N.nature + '</TDSRATENAME><TDSCATEGORYNAME>' + $N.nature + '</TDSCATEGORYNAME></LEDGER>'))
   $r = Imp 'All Masters' $led 'tds: party, expense, TDS ledger'
   if ($r.created -lt 3) { Imp 'All Masters' ($led | ForEach-Object { $_ -replace 'ACTION="Create"', 'ACTION="Alter"' }) 'tds: ledgers again (alter)' | Out-Null }
   Post (Coll 'FCPTdsLed' 'Ledger' 'NAME' '$Name CONTAINS "PD TDS" OR $Name = "PD Contract Exp"' '<NATIVEMETHOD>*</NATIVEMETHOD>') '' 60 | Set-Content (Join-Path $cap 'tds-ledgers.xml') -Encoding UTF8
@@ -194,10 +194,10 @@ function SaveSet($cfg, $large) {
 function V3Fetch {
   BridgeStop
   if (-not (Start-T $heavy @() 'v3-heavy-fetch')) { Say 'HARNESS: heavy did not open for the fetch stage'; return }
-  $ov = OctVouchers; $s50 = @($ov | Where-Object { $_.vno -eq 'TS50-1' })[0]
-  $t1 = [pscustomobject]@{ name = 'sales50-template'; guid = "$($s50.guid)"; mid = "$($s50.mid)"; aid = "$($s50.aid)"; date = "$($s50.date)"; type = "$($s50.type)"; vno = 'TS50-1'; party = '' }
+  $ov = OctVouchers; $s50 = @($ov | Where-Object { $_.date -eq '20261031' -and $_.type -eq 'Sales' } | Sort-Object mid)[0]
+  $t1 = [pscustomobject]@{ name = 'sales50-template'; guid = "$($s50.guid)"; mid = "$($s50.mid)"; aid = "$($s50.aid)"; date = "$($s50.date)"; type = "$($s50.type)"; vno = "$($s50.vno)"; party = '' }
   Say "fetch target sales50-template: mid $($t1.mid) guid $($t1.guid) date $($t1.date)"
-  $t2 = Target 'heavy-receipt-15002' '$VoucherNumber = "HR-015002"'
+  $t2 = Target 'heavy-voucher-mid-15000' '$MasterID = 15000'
   FetchStage 'heavy' @($t1, $t2)
   Stop-T
 }
@@ -206,7 +206,7 @@ function V3Sync {
   $fg = '7a1e0c55-1111-4222-8333-944455556666-0000abcd'
   $sx = '<VOUCHER REMOTEID="' + $fg + '" VCHTYPE="Journal" ACTION="Create"><GUID>' + $fg + '</GUID><DATE>20261101</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><VOUCHERNUMBER>SYNC-1</VOUCHERNUMBER><NARRATION>a voucher from another company (sync)</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>Spike Income</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-10.00</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>HDFC Bank</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>10.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>'
   Imp 'Vouchers' @($sx) 'sync-like voucher with a foreign GUID' | Out-Null
-  $ovs = OctVouchers; $sv = @($ovs | Where-Object { $_.vno -eq 'SYNC-1' })[0]
+  $ovs = OctVouchers; $sv = @($ovs | Where-Object { $_.date -eq '20261101' -and $_.type -eq 'Journal' })[0]
   Say "sync-like import: Tally's GUID '$($sv.guid)', MasterID $($sv.mid); the rule gives '$cguid-$(if ($sv.mid) { ([int64]$sv.mid).ToString('x8') })'"
   GuidRule 'heavy at the end (imported, new by Alt+2, altered, the sync-like one)'
   Stop-T
@@ -215,8 +215,8 @@ function FetchSim {
   BridgeStop
   Remove-Item "$pd\full-*.txt", "$pd\stamp-*.txt", "$rec\*" -Force -ErrorAction SilentlyContinue; $script:fullSeen = @{}; $script:recSeen = @{}
   if (-not (Start-T $heavy @($tdlHeads) 'heavy-heads-fetchsim')) { Say 'HARNESS: fetchsim: heavy did not open'; return }
-  $ov = OctVouchers; $tv = @($ov | Where-Object { $_.vno -eq 'TS50-1' })[0]
-  if (-not $tv) { Say 'HARNESS: fetchsim: TS50-1 not found'; return }
+  $ov = OctVouchers; $tv = @($ov | Where-Object { $_.date -eq '20261031' -and $_.type -eq 'Sales' } | Sort-Object mid)[0]
+  if (-not $tv) { Say 'HARNESS: fetchsim: the 50-item template (31-10-2026) not found'; return }
   $req = CollReq 'FinComVoucherByMaster' 'Voucher' $tv.date "`$MasterID = $($tv.mid)"
   $simCsv = Join-Path $out 'sim.csv'
   foreach ($k in @(@('receipt', '1-10-2026'), @('sales50', '31-10-2026'))) {

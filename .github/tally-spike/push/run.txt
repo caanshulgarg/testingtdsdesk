@@ -9,3 +9,4 @@ mode=v3b
 # v3 (07-Oct-2026): the owner's ask on the 30,004-voucher company: keyed entry fetches with the freeze probe, freezes with (rerun: godowns on heavy sales, fetch 30 s and after the saves, TDS by the S5 OCR route)
 # the bridge stopped / running, full entry with no read-back, the GUID rule, AltVchID, payroll 200, TDS (v3.ps1)
 # v3b (07-Oct-2026 07:50Z): a fetch fired by the harness during each heads-only save (bridge stopped); the keyed fetches (OctVouchers fix); TDS with the ledgers' cost centres off
+# v3b again (08:10Z): the voucher looked up by date and type (Tally renumbers TS50-1), the TDS ledger without TAXCLASSIFICATIONNAME
