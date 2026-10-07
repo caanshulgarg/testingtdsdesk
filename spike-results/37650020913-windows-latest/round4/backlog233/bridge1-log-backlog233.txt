@@ -1,0 +1,307 @@
+2026-10-07 16:28:27  Recorder: re-scan of the add-on's files for 2.3.3: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+2026-10-07 16:28:30  Recorder: Journal OLD-010 of 01-Apr-2026 (MasterID 900011, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-011 of 01-Apr-2026 (MasterID 900012, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-012 of 01-Apr-2026 (MasterID 900013, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-013 of 01-Apr-2026 (MasterID 900014, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-014 of 01-Apr-2026 (MasterID 900015, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-015 of 01-Apr-2026 (MasterID 900016, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-016 of 01-Apr-2026 (MasterID 900017, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-017 of 01-Apr-2026 (MasterID 900018, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-018 of 01-Apr-2026 (MasterID 900019, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-019 of 01-Apr-2026 (MasterID 900020, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-020 of 01-Apr-2026 (MasterID 900021, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-021 of 01-Apr-2026 (MasterID 900022, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-022 of 01-Apr-2026 (MasterID 900023, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-023 of 01-Apr-2026 (MasterID 900024, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-024 of 01-Apr-2026 (MasterID 900025, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-025 of 01-Apr-2026 (MasterID 900026, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-026 of 01-Apr-2026 (MasterID 900027, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-027 of 01-Apr-2026 (MasterID 900028, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-028 of 01-Apr-2026 (MasterID 900029, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-029 of 01-Apr-2026 (MasterID 900030, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-030 of 01-Apr-2026 (MasterID 900031, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-031 of 01-Apr-2026 (MasterID 900032, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-032 of 01-Apr-2026 (MasterID 900033, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-033 of 01-Apr-2026 (MasterID 900034, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-034 of 01-Apr-2026 (MasterID 900035, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-035 of 01-Apr-2026 (MasterID 900036, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-036 of 01-Apr-2026 (MasterID 900037, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-037 of 01-Apr-2026 (MasterID 900038, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-038 of 01-Apr-2026 (MasterID 900039, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-039 of 01-Apr-2026 (MasterID 900040, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-040 of 01-Apr-2026 (MasterID 900041, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-041 of 01-Apr-2026 (MasterID 900042, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-042 of 01-Apr-2026 (MasterID 900043, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-043 of 01-Apr-2026 (MasterID 900044, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-044 of 01-Apr-2026 (MasterID 900045, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-045 of 01-Apr-2026 (MasterID 900046, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-046 of 01-Apr-2026 (MasterID 900047, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-047 of 01-Apr-2026 (MasterID 900048, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-048 of 01-Apr-2026 (MasterID 900049, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-049 of 01-Apr-2026 (MasterID 900050, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-07 16:28:30  Recorder: Journal OLD-000 of 01-Apr-2026 (MasterID 900001, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:28:32  Recorder: entry fetch of FinCom Slow Co: answered in 1864 ms
+2026-10-07 16:28:32  Recorder: Journal OLD-000 of 01-Apr-2026 (MasterID 900001, line b233old0…): still held: Tally gave no voucher with MasterID 900001 on 01-Apr-2026
+2026-10-07 16:28:32  Recorder: Journal OLD-001 of 01-Apr-2026 (MasterID 900002, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:28:35  Recorder: entry fetch of FinCom Slow Co: answered in 1948 ms
+2026-10-07 16:28:35  Recorder: Journal OLD-001 of 01-Apr-2026 (MasterID 900002, line b233old0…): still held: Tally gave no voucher with MasterID 900002 on 01-Apr-2026
+2026-10-07 16:28:35  Recorder: Journal OLD-002 of 01-Apr-2026 (MasterID 900003, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:28:37  Recorder: entry fetch of FinCom Slow Co: answered in 1987 ms
+2026-10-07 16:28:37  Recorder: Journal OLD-002 of 01-Apr-2026 (MasterID 900003, line b233old0…): still held: Tally gave no voucher with MasterID 900003 on 01-Apr-2026
+2026-10-07 16:28:37  Recorder: Journal OLD-003 of 01-Apr-2026 (MasterID 900004, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:28:39  Tally 9000 did not answer in time at 16:28:39 (FinComVoucherByMaster, try 1); trying again by itself at 16:28:54
+2026-10-07 16:28:39  Recorder: entry fetch of FinCom Slow Co: over 2 s (stopped)
+2026-10-07 16:28:39  Recorder: Journal OLD-003 of 01-Apr-2026 (MasterID 900004, line b233old0…): not answered in time: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s) (ask 1 of 1)
+2026-10-07 16:28:39  Recorder: Journal OLD-003 of 01-Apr-2026 (MasterID 900004, line b233old0…): held: Tally did not answer in time for this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-07 16:28:39  Recorder: Journal OLD-000 of 01-Apr-2026 (MasterID 900001, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-07 16:28:39  Recorder: Journal OLD-001 of 01-Apr-2026 (MasterID 900002, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-07 16:28:39  Recorder: Journal OLD-002 of 01-Apr-2026 (MasterID 900003, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-07 16:28:39  Recorder: held lines: 0 from FinCom, 3 asked, 0 resolved, 50 still held (50 in the list)
+2026-10-07 16:28:39  Tally 9000 finished the request the bridge stopped waiting for (FinComVoucherByMaster) 100ms after the stop; its answer is discarded and the next request goes now
+2026-10-07 16:28:39  Recorder: Journal OLD-004 of 01-Apr-2026 (MasterID 900005, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:28:41  Tally 9000 did not answer in time at 16:28:41 (FinComVoucherByMaster, try 2); trying again by itself at 16:29:11
+2026-10-07 16:28:41  Recorder: Journal OLD-004 of 01-Apr-2026 (MasterID 900005, line b233old0…): not answered in time: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s) (ask 1 of 1)
+2026-10-07 16:28:41  Recorder: Journal OLD-004 of 01-Apr-2026 (MasterID 900005, line b233old0…): held: Tally did not answer in time for this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-07 16:28:41  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 46 still held (46 in the list)
+2026-10-07 16:28:41  Tally 9000 finished the request the bridge stopped waiting for (FinComVoucherByMaster) 100ms after the stop; its answer is discarded and the next request goes now
+2026-10-07 16:28:41  Recorder: Journal OLD-005 of 01-Apr-2026 (MasterID 900006, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:28:44  Tally 9000 did not answer in time at 16:28:44 (FinComVoucherByMaster, try 3); trying again by itself at 16:29:44
+2026-10-07 16:28:44  Recorder: Journal OLD-005 of 01-Apr-2026 (MasterID 900006, line b233old0…): not answered in time: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s) (ask 1 of 1)
+2026-10-07 16:28:44  Recorder: Journal OLD-005 of 01-Apr-2026 (MasterID 900006, line b233old0…): held: Tally did not answer in time for this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-07 16:28:44  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 45 still held (45 in the list)
+2026-10-07 16:28:44  Tally 9000 finished the request the bridge stopped waiting for (FinComVoucherByMaster) 100ms after the stop; its answer is discarded and the next request goes now
+2026-10-07 16:28:44  Recorder: Journal OLD-006 of 01-Apr-2026 (MasterID 900007, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:28:46  Tally 9000 did not answer in time at 16:28:46 (FinComVoucherByMaster, try 4); trying again by itself at 16:30:46
+2026-10-07 16:28:46  Recorder: Journal OLD-006 of 01-Apr-2026 (MasterID 900007, line b233old0…): not answered in time: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s) (ask 1 of 1)
+2026-10-07 16:28:46  Recorder: Journal OLD-006 of 01-Apr-2026 (MasterID 900007, line b233old0…): held: Tally did not answer in time for this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-07 16:28:46  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 44 still held (44 in the list)
+2026-10-07 16:28:46  Tally 9000 finished the request the bridge stopped waiting for (FinComVoucherByMaster) 200ms after the stop; its answer is discarded and the next request goes now
+2026-10-07 16:28:46  Recorder: Journal OLD-007 of 01-Apr-2026 (MasterID 900008, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:28:48  Tally 9000 did not answer in time at 16:28:48 (FinComVoucherByMaster, try 5); trying again by itself at 16:33:48
+2026-10-07 16:28:48  Recorder: Journal OLD-007 of 01-Apr-2026 (MasterID 900008, line b233old0…): not answered in time: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s) (ask 1 of 1)
+2026-10-07 16:28:48  Recorder: Journal OLD-007 of 01-Apr-2026 (MasterID 900008, line b233old0…): held: Tally did not answer in time for this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-07 16:28:48  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 43 still held (43 in the list)
+2026-10-07 16:28:49  Tally 9000 finished the request the bridge stopped waiting for (FinComVoucherByMaster) 300ms after the stop; its answer is discarded and the next request goes now
+2026-10-07 16:28:49  Recorder: Journal OLD-008 of 01-Apr-2026 (MasterID 900009, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:28:51  Tally 9000 did not answer in time at 16:28:51 (FinComVoucherByMaster, try 6); trying again by itself at 16:33:51
+2026-10-07 16:28:51  Recorder: Journal OLD-008 of 01-Apr-2026 (MasterID 900009, line b233old0…): not answered in time: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s) (ask 1 of 1)
+2026-10-07 16:28:51  Recorder: Journal OLD-008 of 01-Apr-2026 (MasterID 900009, line b233old0…): held: Tally did not answer in time for this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-07 16:28:51  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 42 still held (42 in the list)
+2026-10-07 16:28:51  Tally 9000 finished the request the bridge stopped waiting for (FinComVoucherByMaster) 100ms after the stop; its answer is discarded and the next request goes now
+2026-10-07 16:28:51  Recorder: Journal OLD-009 of 01-Apr-2026 (MasterID 900010, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:28:54  Tally 9000 did not answer in time at 16:28:54 (FinComVoucherByMaster, try 7); trying again by itself at 16:33:54
+2026-10-07 16:28:54  Recorder: Journal OLD-009 of 01-Apr-2026 (MasterID 900010, line b233old0…): not answered in time: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s) (ask 1 of 1)
+2026-10-07 16:28:54  Recorder: Journal OLD-009 of 01-Apr-2026 (MasterID 900010, line b233old0…): held: Tally did not answer in time for this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-07 16:28:54  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 41 still held (41 in the list)
+2026-10-07 16:28:54  Tally 9000 finished the request the bridge stopped waiting for (FinComVoucherByMaster) 200ms after the stop; its answer is discarded and the next request goes now
+2026-10-07 16:28:54  Recorder: Journal OLD-010 of 01-Apr-2026 (MasterID 900011, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:28:56  Tally 9000 did not answer in time at 16:28:56 (FinComVoucherByMaster, try 8); trying again by itself at 16:33:56
+2026-10-07 16:28:56  Recorder: Journal OLD-010 of 01-Apr-2026 (MasterID 900011, line b233old0…): not answered in time: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s) (ask 1 of 1)
+2026-10-07 16:28:56  Recorder: Journal OLD-010 of 01-Apr-2026 (MasterID 900011, line b233old0…): held: Tally did not answer in time for this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-07 16:28:56  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 40 still held (40 in the list)
+2026-10-07 16:28:56  Tally 9000 finished the request the bridge stopped waiting for (FinComVoucherByMaster) 200ms after the stop; its answer is discarded and the next request goes now
+2026-10-07 16:28:56  Recorder: Journal OLD-011 of 01-Apr-2026 (MasterID 900012, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:28:58  Tally 9000 did not answer in time at 16:28:58 (FinComVoucherByMaster, try 9); trying again by itself at 16:33:58
+2026-10-07 16:28:58  Recorder: Journal OLD-011 of 01-Apr-2026 (MasterID 900012, line b233old0…): not answered in time: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s) (ask 1 of 1)
+2026-10-07 16:28:58  Recorder: Journal OLD-011 of 01-Apr-2026 (MasterID 900012, line b233old0…): held: Tally did not answer in time for this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-07 16:28:58  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 39 still held (39 in the list)
+2026-10-07 16:28:59  Tally 9000 finished the request the bridge stopped waiting for (FinComVoucherByMaster) 300ms after the stop; its answer is discarded and the next request goes now
+2026-10-07 16:28:59  Recorder: Journal OLD-012 of 01-Apr-2026 (MasterID 900013, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:29:00  Recorder: FinCom asks again for 12 held line(s) of this bridge: 0 new in the held list, 0 asked afresh (tries of an older version), 0 there already, 12 resolved already, 0 not this bridge's own Tally's (company not open here or another GUID)
+2026-10-07 16:29:01  Tally 9000 did not answer in time at 16:29:01 (FinComVoucherByMaster, try 10); trying again by itself at 16:34:01
+2026-10-07 16:29:01  Recorder: Journal OLD-012 of 01-Apr-2026 (MasterID 900013, line b233old0…): not answered in time: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s) (ask 1 of 1)
+2026-10-07 16:29:01  Recorder: Journal OLD-012 of 01-Apr-2026 (MasterID 900013, line b233old0…): held: Tally did not answer in time for this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-07 16:29:01  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 38 still held (38 in the list)
+2026-10-07 16:29:01  Tally 9000 finished the request the bridge stopped waiting for (FinComVoucherByMaster) 300ms after the stop; its answer is discarded and the next request goes now
+2026-10-07 16:29:02  Recorder: Journal OLD-013 of 01-Apr-2026 (MasterID 900014, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:29:02  Tally 9000 answered in time again (TDSDeskCompanies): the background requests are back to normal
+2026-10-07 16:29:04  Tally 9000 did not answer in time at 16:29:04 (FinComVoucherByMaster, try 1); trying again by itself at 16:29:19
+2026-10-07 16:29:04  Recorder: Journal OLD-013 of 01-Apr-2026 (MasterID 900014, line b233old0…): not answered in time: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s) (ask 1 of 1)
+2026-10-07 16:29:04  Recorder: Journal OLD-013 of 01-Apr-2026 (MasterID 900014, line b233old0…): held: Tally did not answer in time for this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-07 16:29:04  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 37 still held (37 in the list)
+2026-10-07 16:29:04  Tally 9000 finished the request the bridge stopped waiting for (FinComVoucherByMaster) 600ms after the stop; its answer is discarded and the next request goes now
+2026-10-07 16:29:05  Recorder: Journal OLD-014 of 01-Apr-2026 (MasterID 900015, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:29:07  Tally 9000 did not answer in time at 16:29:07 (FinComVoucherByMaster, try 2); trying again by itself at 16:29:37
+2026-10-07 16:29:07  Recorder: Journal OLD-014 of 01-Apr-2026 (MasterID 900015, line b233old0…): not answered in time: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s) (ask 1 of 1)
+2026-10-07 16:29:07  Recorder: Journal OLD-014 of 01-Apr-2026 (MasterID 900015, line b233old0…): held: Tally did not answer in time for this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-07 16:29:07  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 36 still held (36 in the list)
+2026-10-07 16:29:07  Tally 9000 finished the request the bridge stopped waiting for (FinComVoucherByMaster) 500ms after the stop; its answer is discarded and the next request goes now
+2026-10-07 16:29:07  Recorder: Journal OLD-015 of 01-Apr-2026 (MasterID 900016, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:29:09  Tally 9000 did not answer in time at 16:29:09 (FinComVoucherByMaster, try 3); trying again by itself at 16:30:09
+2026-10-07 16:29:09  Recorder: Journal OLD-015 of 01-Apr-2026 (MasterID 900016, line b233old0…): not answered in time: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s) (ask 1 of 1)
+2026-10-07 16:29:09  Recorder: Journal OLD-015 of 01-Apr-2026 (MasterID 900016, line b233old0…): held: Tally did not answer in time for this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-07 16:29:09  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 35 still held (35 in the list)
+2026-10-07 16:29:10  Tally 9000 finished the request the bridge stopped waiting for (FinComVoucherByMaster) 700ms after the stop; its answer is discarded and the next request goes now
+2026-10-07 16:29:10  Recorder: Journal OLD-016 of 01-Apr-2026 (MasterID 900017, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:29:12  Tally 9000 did not answer in time at 16:29:12 (FinComVoucherByMaster, try 4); trying again by itself at 16:31:12
+2026-10-07 16:29:12  Recorder: Journal OLD-016 of 01-Apr-2026 (MasterID 900017, line b233old0…): not answered in time: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s) (ask 1 of 1)
+2026-10-07 16:29:12  Recorder: Journal OLD-016 of 01-Apr-2026 (MasterID 900017, line b233old0…): held: Tally did not answer in time for this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-07 16:29:12  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 34 still held (34 in the list)
+2026-10-07 16:29:13  Tally 9000 finished the request the bridge stopped waiting for (FinComVoucherByMaster) 500ms after the stop; its answer is discarded and the next request goes now
+2026-10-07 16:29:13  Recorder: Journal OLD-017 of 01-Apr-2026 (MasterID 900018, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:29:15  Tally 9000 did not answer in time at 16:29:15 (FinComVoucherByMaster, try 5); trying again by itself at 16:34:15
+2026-10-07 16:29:15  Recorder: Journal OLD-017 of 01-Apr-2026 (MasterID 900018, line b233old0…): not answered in time: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s) (ask 1 of 1)
+2026-10-07 16:29:15  Recorder: Journal OLD-017 of 01-Apr-2026 (MasterID 900018, line b233old0…): held: Tally did not answer in time for this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-07 16:29:15  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 33 still held (33 in the list)
+2026-10-07 16:29:15  Tally 9000 finished the request the bridge stopped waiting for (FinComVoucherByMaster) 200ms after the stop; its answer is discarded and the next request goes now
+2026-10-07 16:29:15  Recorder: Journal OLD-018 of 01-Apr-2026 (MasterID 900019, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:29:17  Tally 9000 did not answer in time at 16:29:17 (FinComVoucherByMaster, try 6); trying again by itself at 16:34:17
+2026-10-07 16:29:17  Recorder: Journal OLD-018 of 01-Apr-2026 (MasterID 900019, line b233old0…): not answered in time: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s) (ask 1 of 1)
+2026-10-07 16:29:17  Recorder: Journal OLD-018 of 01-Apr-2026 (MasterID 900019, line b233old0…): held: Tally did not answer in time for this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-07 16:29:17  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 32 still held (32 in the list)
+2026-10-07 16:29:18  Tally 9000 finished the request the bridge stopped waiting for (FinComVoucherByMaster) 200ms after the stop; its answer is discarded and the next request goes now
+2026-10-07 16:29:18  Recorder: Journal OLD-019 of 01-Apr-2026 (MasterID 900020, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:29:20  Tally 9000 did not answer in time at 16:29:20 (FinComVoucherByMaster, try 7); trying again by itself at 16:34:20
+2026-10-07 16:29:20  Recorder: Journal OLD-019 of 01-Apr-2026 (MasterID 900020, line b233old0…): not answered in time: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s) (ask 1 of 1)
+2026-10-07 16:29:20  Recorder: Journal OLD-019 of 01-Apr-2026 (MasterID 900020, line b233old0…): held: Tally did not answer in time for this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-07 16:29:20  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 31 still held (31 in the list)
+2026-10-07 16:29:20  Tally 9000 finished the request the bridge stopped waiting for (FinComVoucherByMaster) 200ms after the stop; its answer is discarded and the next request goes now
+2026-10-07 16:29:20  Recorder: Journal OLD-020 of 01-Apr-2026 (MasterID 900021, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:29:22  Tally 9000 did not answer in time at 16:29:22 (FinComVoucherByMaster, try 8); trying again by itself at 16:34:22
+2026-10-07 16:29:22  Recorder: Journal OLD-020 of 01-Apr-2026 (MasterID 900021, line b233old0…): not answered in time: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s) (ask 1 of 1)
+2026-10-07 16:29:22  Recorder: Journal OLD-020 of 01-Apr-2026 (MasterID 900021, line b233old0…): held: Tally did not answer in time for this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-07 16:29:22  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 30 still held (30 in the list)
+2026-10-07 16:29:22  Recorder: Journal 3 of 01-Apr-2026 (MasterID 3, line e8a9a390…): asking Tally by MasterID
+2026-10-07 16:29:22  Recorder: Journal 3 of 01-Apr-2026 (MasterID 3, line e8a9a390…): held at once: waiting: Tally busy; FinCom asks again at 16:34 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-07 16:29:23  Tally 9000 finished the request the bridge stopped waiting for (FinComVoucherByMaster) 300ms after the stop; its answer is discarded and the next request goes now
+2026-10-07 16:29:23  Recorder: Journal B233-NEW-1 of 01-Apr-2026 (MasterID 20001, line ef2eef98…): asking Tally by MasterID
+2026-10-07 16:29:25  Tally 9000 did not answer in time at 16:29:25 (FinComVoucherByMaster, try 9); trying again by itself at 16:34:25
+2026-10-07 16:29:25  Recorder: Journal B233-NEW-1 of 01-Apr-2026 (MasterID 20001, line ef2eef98…): held at once: waiting: Tally took longer than 2 s; FinCom asks again at 16:34 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-07 16:29:25  Tally 9000 finished the request the bridge stopped waiting for (FinComVoucherByMaster) 200ms after the stop; its answer is discarded and the next request goes now
+2026-10-07 16:29:25  Recorder: Journal 3 of 01-Apr-2026 (MasterID 3, line e8a9a390…): asking Tally again (a held line, ask 1 of 2: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:29:25  Tally 9000 answered in time again (FinComVoucherByMaster): the background requests are back to normal
+2026-10-07 16:29:25  Recorder: entry fetch of FinCom Spike Co: answered in 38 ms
+2026-10-07 16:29:25  Recorder: FinCom Slow Co: entry fetch stopped: over 2 s (stopped 19 times, last answered in 1987 ms). No entry of it is asked of Tally any more; its lines go up held (upload that day's Day Book to settle them). This lifts when a newer FinCom Bridge is installed
+2026-10-07 16:29:25  Recorder: Journal 3 of 01-Apr-2026 (MasterID 3, line e8a9a390…): taken: Tally's GUID 77423973-0753-4d30-8b0f-0136ce724542-00000003, AlterID 3
+2026-10-07 16:29:25  Recorder: Journal 3 of 20260401 in FinCom Spike Co resolved: sent as created with its GUID 77423973-0753-4d30-8b0f-0136ce724542-00000003 and body
+2026-10-07 16:29:25  Recorder: Journal OLD-021 of 01-Apr-2026 (MasterID 900022, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:29:25  Recorder: Journal OLD-022 of 01-Apr-2026 (MasterID 900023, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:29:25  Recorder: Journal OLD-023 of 01-Apr-2026 (MasterID 900024, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:29:25  Recorder: Journal OLD-024 of 01-Apr-2026 (MasterID 900025, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:29:25  Recorder: Journal OLD-025 of 01-Apr-2026 (MasterID 900026, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:29:25  Recorder: Journal OLD-026 of 01-Apr-2026 (MasterID 900027, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:29:25  Recorder: Journal OLD-027 of 01-Apr-2026 (MasterID 900028, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:29:25  Recorder: Journal OLD-028 of 01-Apr-2026 (MasterID 900029, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:29:25  Recorder: Journal OLD-029 of 01-Apr-2026 (MasterID 900030, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:29:25  Recorder: Journal OLD-023 of 01-Apr-2026 (MasterID 900024, line b233old0…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (ended: not asked of Tally again)
+2026-10-07 16:29:25  Recorder: Journal OLD-024 of 01-Apr-2026 (MasterID 900025, line b233old0…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (ended: not asked of Tally again)
+2026-10-07 16:29:25  Recorder: Journal OLD-025 of 01-Apr-2026 (MasterID 900026, line b233old0…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (ended: not asked of Tally again)
+2026-10-07 16:29:25  Recorder: Journal OLD-027 of 01-Apr-2026 (MasterID 900028, line b233old0…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (ended: not asked of Tally again)
+2026-10-07 16:29:25  Recorder: Journal OLD-029 of 01-Apr-2026 (MasterID 900030, line b233old0…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (ended: not asked of Tally again)
+2026-10-07 16:29:25  Recorder: Journal OLD-021 of 01-Apr-2026 (MasterID 900022, line b233old0…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (ended: not asked of Tally again)
+2026-10-07 16:29:25  Recorder: Journal OLD-022 of 01-Apr-2026 (MasterID 900023, line b233old0…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (ended: not asked of Tally again)
+2026-10-07 16:29:25  Recorder: Journal OLD-026 of 01-Apr-2026 (MasterID 900027, line b233old0…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (ended: not asked of Tally again)
+2026-10-07 16:29:25  Recorder: Journal OLD-028 of 01-Apr-2026 (MasterID 900029, line b233old0…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (ended: not asked of Tally again)
+2026-10-07 16:29:25  Recorder: held lines: 0 from FinCom, 10 asked, 1 resolved, 30 still held (31 in the list)
+2026-10-07 16:29:25  Recorder: Journal B233-NEW-1 of 01-Apr-2026 (MasterID 20001, line ef2eef98…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (ended: not asked of Tally again)
+2026-10-07 16:29:25  Recorder: Journal OLD-030 of 01-Apr-2026 (MasterID 900031, line b233old0…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (ended: not asked of Tally again)
+2026-10-07 16:29:25  Recorder: Journal OLD-031 of 01-Apr-2026 (MasterID 900032, line b233old0…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (ended: not asked of Tally again)
+2026-10-07 16:29:25  Recorder: Journal OLD-032 of 01-Apr-2026 (MasterID 900033, line b233old0…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (ended: not asked of Tally again)
+2026-10-07 16:29:25  Recorder: Journal OLD-033 of 01-Apr-2026 (MasterID 900034, line b233old0…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (ended: not asked of Tally again)
+2026-10-07 16:29:25  Recorder: Journal OLD-034 of 01-Apr-2026 (MasterID 900035, line b233old0…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (ended: not asked of Tally again)
+2026-10-07 16:29:25  Recorder: Journal OLD-035 of 01-Apr-2026 (MasterID 900036, line b233old0…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (ended: not asked of Tally again)
+2026-10-07 16:29:25  Recorder: Journal OLD-036 of 01-Apr-2026 (MasterID 900037, line b233old0…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (ended: not asked of Tally again)
+2026-10-07 16:29:25  Recorder: Journal OLD-037 of 01-Apr-2026 (MasterID 900038, line b233old0…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (ended: not asked of Tally again)
+2026-10-07 16:29:25  Recorder: Journal OLD-038 of 01-Apr-2026 (MasterID 900039, line b233old0…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (ended: not asked of Tally again)
+2026-10-07 16:29:25  Recorder: Journal OLD-039 of 01-Apr-2026 (MasterID 900040, line b233old0…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (ended: not asked of Tally again)
+2026-10-07 16:29:25  Recorder: Journal OLD-040 of 01-Apr-2026 (MasterID 900041, line b233old0…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (ended: not asked of Tally again)
+2026-10-07 16:29:25  Recorder: Journal OLD-041 of 01-Apr-2026 (MasterID 900042, line b233old0…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (ended: not asked of Tally again)
+2026-10-07 16:29:25  Recorder: Journal OLD-042 of 01-Apr-2026 (MasterID 900043, line b233old0…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (ended: not asked of Tally again)
+2026-10-07 16:29:25  Recorder: Journal OLD-043 of 01-Apr-2026 (MasterID 900044, line b233old0…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (ended: not asked of Tally again)
+2026-10-07 16:29:25  Recorder: Journal OLD-044 of 01-Apr-2026 (MasterID 900045, line b233old0…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (ended: not asked of Tally again)
+2026-10-07 16:29:25  Recorder: Journal OLD-045 of 01-Apr-2026 (MasterID 900046, line b233old0…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (ended: not asked of Tally again)
+2026-10-07 16:29:25  Recorder: Journal OLD-046 of 01-Apr-2026 (MasterID 900047, line b233old0…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (ended: not asked of Tally again)
+2026-10-07 16:29:25  Recorder: Journal OLD-047 of 01-Apr-2026 (MasterID 900048, line b233old0…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (ended: not asked of Tally again)
+2026-10-07 16:29:25  Recorder: Journal OLD-048 of 01-Apr-2026 (MasterID 900049, line b233old0…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (ended: not asked of Tally again)
+2026-10-07 16:29:25  Recorder: Journal OLD-049 of 01-Apr-2026 (MasterID 900050, line b233old0…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (ended: not asked of Tally again)
+2026-10-07 16:29:26  Recorder: Journal 4 of 01-Apr-2026 (MasterID 4, line ec8547e4…): asking Tally by MasterID
+2026-10-07 16:29:26  Recorder: entry fetch of FinCom Spike Co: answered in 40 ms
+2026-10-07 16:29:26  Recorder: Journal 4 of 01-Apr-2026 (MasterID 4, line ec8547e4…): taken: Tally's GUID 77423973-0753-4d30-8b0f-0136ce724542-00000004, AlterID 4
+2026-10-07 16:29:30  Recorder: FinCom asks again for 20 held line(s) of this bridge: 0 new in the held list, 0 asked afresh (tries of an older version), 0 there already, 20 resolved already, 0 not this bridge's own Tally's (company not open here or another GUID)
+2026-10-07 16:31:26  Recorder: Journal B233-AFTER-1 of 01-Apr-2026 (MasterID 20002, line 5a38d71b…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (sent without its body and GUID; FinCom holds the line until it is resolved)
+2026-10-07 16:32:26  Recorder: Journal 5 of 01-Apr-2026 (MasterID 5, line 3b07e2b1…): asking Tally by MasterID
+2026-10-07 16:32:27  Recorder: entry fetch of FinCom Spike Co: answered in 43 ms
+2026-10-07 16:32:27  Recorder: Journal 5 of 01-Apr-2026 (MasterID 5, line 3b07e2b1…): taken: Tally's GUID 77423973-0753-4d30-8b0f-0136ce724542-00000005, AlterID 5
+2026-10-07 16:33:00  Recorder: FinCom holds 10 line(s) of this computer without their entry: 10 new in the held list, 0 there already, 0 resolved or sent with their body already, 0 not taken (not this company's, no date, or nothing to ask Tally by)
+2026-10-07 16:33:00  Recorder: FinCom holds 10 line(s) of this computer without their entry; each is asked of Tally again (by its MasterID, else its number) and sent with Tally's GUID and body once Tally gives it
+2026-10-07 16:33:00  Recorder: Journal of 01-Apr-2026 (MasterID 800001, line b233hl01…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:33:02  Recorder: entry fetch of FinCom Spike Co: answered in 1609 ms
+2026-10-07 16:33:02  Recorder: Journal of 01-Apr-2026 (MasterID 800001, line b233hl01…): still held: Tally gave no voucher with MasterID 800001 on 01-Apr-2026
+2026-10-07 16:33:02  Recorder: Journal of 01-Apr-2026 (MasterID 800002, line b233hl02…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:33:03  Recorder: entry fetch of FinCom Spike Co: answered in 1541 ms
+2026-10-07 16:33:03  Recorder: Journal of 01-Apr-2026 (MasterID 800002, line b233hl02…): still held: Tally gave no voucher with MasterID 800002 on 01-Apr-2026
+2026-10-07 16:33:03  Recorder: Journal of 01-Apr-2026 (MasterID 800003, line b233hl03…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:33:05  Recorder: entry fetch of FinCom Spike Co: answered in 1519 ms
+2026-10-07 16:33:05  Recorder: Journal of 01-Apr-2026 (MasterID 800003, line b233hl03…): still held: Tally gave no voucher with MasterID 800003 on 01-Apr-2026
+2026-10-07 16:33:05  Recorder: Journal of 01-Apr-2026 (MasterID 800001, line b233hl01…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-07 16:33:05  Recorder: Journal of 01-Apr-2026 (MasterID 800002, line b233hl02…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-07 16:33:05  Recorder: Journal of 01-Apr-2026 (MasterID 800003, line b233hl03…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-07 16:33:05  Recorder: held lines: 10 from FinCom, 3 asked, 0 resolved, 10 still held (10 in the list)
+2026-10-07 16:33:05  Recorder: Journal 6 of 01-Apr-2026 (MasterID 6, line 4a87eebb…): asking Tally by MasterID
+2026-10-07 16:33:07  Recorder: entry fetch of FinCom Spike Co: answered in 1528 ms
+2026-10-07 16:33:07  Recorder: Journal 6 of 01-Apr-2026 (MasterID 6, line 4a87eebb…): taken: Tally's GUID 77423973-0753-4d30-8b0f-0136ce724542-00000006, AlterID 6
+2026-10-07 16:33:07  Recorder: Journal of 01-Apr-2026 (MasterID 800004, line b233hl04…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:33:09  Recorder: Journal of 01-Apr-2026 (MasterID 800004, line b233hl04…): still held: Tally gave no voucher with MasterID 800004 on 01-Apr-2026
+2026-10-07 16:33:09  Recorder: Journal of 01-Apr-2026 (MasterID 800005, line b233hl05…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:33:10  Recorder: entry fetch of FinCom Spike Co: answered in 1520 ms
+2026-10-07 16:33:10  Recorder: Journal of 01-Apr-2026 (MasterID 800005, line b233hl05…): still held: Tally gave no voucher with MasterID 800005 on 01-Apr-2026
+2026-10-07 16:33:10  Recorder: Journal of 01-Apr-2026 (MasterID 800006, line b233hl06…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:33:12  Recorder: Journal of 01-Apr-2026 (MasterID 800006, line b233hl06…): still held: Tally gave no voucher with MasterID 800006 on 01-Apr-2026
+2026-10-07 16:33:12  Recorder: Journal of 01-Apr-2026 (MasterID 800007, line b233hl07…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:33:14  Recorder: entry fetch of FinCom Spike Co: answered in 1538 ms
+2026-10-07 16:33:14  Recorder: Journal of 01-Apr-2026 (MasterID 800007, line b233hl07…): still held: Tally gave no voucher with MasterID 800007 on 01-Apr-2026
+2026-10-07 16:33:14  Recorder: Journal of 01-Apr-2026 (MasterID 800008, line b233hl08…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:33:15  Recorder: Journal of 01-Apr-2026 (MasterID 800008, line b233hl08…): still held: Tally gave no voucher with MasterID 800008 on 01-Apr-2026
+2026-10-07 16:33:15  Recorder: Journal of 01-Apr-2026 (MasterID 800009, line b233hl09…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:33:17  Recorder: entry fetch of FinCom Spike Co: answered in 1521 ms
+2026-10-07 16:33:17  Recorder: Journal of 01-Apr-2026 (MasterID 800009, line b233hl09…): still held: Tally gave no voucher with MasterID 800009 on 01-Apr-2026
+2026-10-07 16:33:17  Recorder: Journal of 01-Apr-2026 (MasterID 800010, line b233hl10…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:33:19  Recorder: entry fetch of FinCom Spike Co: answered in 1531 ms
+2026-10-07 16:33:19  Recorder: Journal of 01-Apr-2026 (MasterID 800010, line b233hl10…): still held: Tally gave no voucher with MasterID 800010 on 01-Apr-2026
+2026-10-07 16:33:19  Recorder: Journal of 01-Apr-2026 (MasterID 800004, line b233hl04…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-07 16:33:19  Recorder: Journal of 01-Apr-2026 (MasterID 800005, line b233hl05…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-07 16:33:19  Recorder: Journal of 01-Apr-2026 (MasterID 800006, line b233hl06…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-07 16:33:19  Recorder: Journal of 01-Apr-2026 (MasterID 800007, line b233hl07…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-07 16:33:19  Recorder: Journal of 01-Apr-2026 (MasterID 800008, line b233hl08…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-07 16:33:19  Recorder: Journal of 01-Apr-2026 (MasterID 800009, line b233hl09…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-07 16:33:19  Recorder: Journal of 01-Apr-2026 (MasterID 800010, line b233hl10…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-07 16:33:19  Recorder: held lines: 7 from FinCom, 7 asked, 0 resolved, 7 still held (7 in the list)
+2026-10-07 16:33:28  Recorder: Journal 7 of 01-Apr-2026 (MasterID 7, line 3ff1fca3…): asking Tally by MasterID
+2026-10-07 16:33:30  Recorder: entry fetch of FinCom Spike Co: answered in 1845 ms
+2026-10-07 16:33:30  Recorder: Journal 7 of 01-Apr-2026 (MasterID 7, line 3ff1fca3…): taken: Tally's GUID 77423973-0753-4d30-8b0f-0136ce724542-00000007, AlterID 7
+2026-10-07 16:33:30  Recorder: Journal 8 of 01-Apr-2026 (MasterID 8, line c5f82b86…): asking Tally by MasterID
+2026-10-07 16:33:32  Recorder: entry fetch of FinCom Spike Co: answered in 1829 ms
+2026-10-07 16:33:32  Recorder: Journal 8 of 01-Apr-2026 (MasterID 8, line c5f82b86…): taken: Tally's GUID 77423973-0753-4d30-8b0f-0136ce724542-00000008, AlterID 8
+2026-10-07 16:33:32  Recorder: Journal 9 of 01-Apr-2026 (MasterID 9, line cc0b3fc2…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 16:33 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-07 16:33:32  Recorder: Journal 10 of 01-Apr-2026 (MasterID 10, line a409039c…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 16:33 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-07 16:33:32  Recorder: Journal 11 of 01-Apr-2026 (MasterID 11, line e13d647d…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 16:33 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-07 16:33:32  Recorder: Journal 12 of 01-Apr-2026 (MasterID 12, line cb7c30c3…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 16:33 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-07 16:33:32  Recorder: Journal 13 of 01-Apr-2026 (MasterID 13, line 2703d712…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 16:33 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-07 16:33:32  Recorder: Journal 14 of 01-Apr-2026 (MasterID 14, line a6063149…): held at once: waiting: Tally busy (reading the entries saved before it); FinCom asks again at 16:33 (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-07 16:33:32  Recorder: Journal 13 of 01-Apr-2026 (MasterID 13, line 2703d712…): asking Tally again (a held line, ask 1 of 2: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:33:34  Recorder: entry fetch of FinCom Spike Co: answered in 1850 ms
+2026-10-07 16:33:34  Recorder: Journal 13 of 01-Apr-2026 (MasterID 13, line 2703d712…): taken: Tally's GUID 77423973-0753-4d30-8b0f-0136ce724542-0000000d, AlterID 13
+2026-10-07 16:33:34  Recorder: Journal 13 of 20260401 in FinCom Spike Co resolved: sent as created with its GUID 77423973-0753-4d30-8b0f-0136ce724542-0000000d and body
+2026-10-07 16:33:34  Recorder: Journal 10 of 01-Apr-2026 (MasterID 10, line a409039c…): asking Tally again (a held line, ask 1 of 2: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:33:36  Recorder: entry fetch of FinCom Spike Co: answered in 1836 ms
+2026-10-07 16:33:36  Recorder: Journal 10 of 01-Apr-2026 (MasterID 10, line a409039c…): taken: Tally's GUID 77423973-0753-4d30-8b0f-0136ce724542-0000000a, AlterID 10
+2026-10-07 16:33:36  Recorder: Journal 10 of 20260401 in FinCom Spike Co resolved: sent as created with its GUID 77423973-0753-4d30-8b0f-0136ce724542-0000000a and body
+2026-10-07 16:33:36  Recorder: Journal 14 of 01-Apr-2026 (MasterID 14, line a6063149…): asking Tally again (a held line, ask 1 of 2: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:33:38  Recorder: entry fetch of FinCom Spike Co: answered in 1840 ms
+2026-10-07 16:33:38  Recorder: Journal 14 of 01-Apr-2026 (MasterID 14, line a6063149…): taken: Tally's GUID 77423973-0753-4d30-8b0f-0136ce724542-0000000e, AlterID 14
+2026-10-07 16:33:38  Recorder: Journal 14 of 20260401 in FinCom Spike Co resolved: sent as created with its GUID 77423973-0753-4d30-8b0f-0136ce724542-0000000e and body
+2026-10-07 16:33:38  Recorder: Journal 12 of 01-Apr-2026 (MasterID 12, line cb7c30c3…): asking Tally again (a held line, ask 1 of 2: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:33:40  Recorder: entry fetch of FinCom Spike Co: answered in 1842 ms
+2026-10-07 16:33:40  Recorder: Journal 12 of 01-Apr-2026 (MasterID 12, line cb7c30c3…): taken: Tally's GUID 77423973-0753-4d30-8b0f-0136ce724542-0000000c, AlterID 12
+2026-10-07 16:33:40  Recorder: Journal 12 of 20260401 in FinCom Spike Co resolved: sent as created with its GUID 77423973-0753-4d30-8b0f-0136ce724542-0000000c and body
+2026-10-07 16:33:40  Recorder: Journal 9 of 01-Apr-2026 (MasterID 9, line cc0b3fc2…): asking Tally again (a held line, ask 1 of 2: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:33:42  Recorder: entry fetch of FinCom Spike Co: answered in 1838 ms
+2026-10-07 16:33:42  Recorder: Journal 9 of 01-Apr-2026 (MasterID 9, line cc0b3fc2…): taken: Tally's GUID 77423973-0753-4d30-8b0f-0136ce724542-00000009, AlterID 9
+2026-10-07 16:33:42  Recorder: Journal 9 of 20260401 in FinCom Spike Co resolved: sent as created with its GUID 77423973-0753-4d30-8b0f-0136ce724542-00000009 and body
+2026-10-07 16:33:42  Recorder: Journal 11 of 01-Apr-2026 (MasterID 11, line e13d647d…): asking Tally again (a held line, ask 1 of 2: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-07 16:33:44  Recorder: Journal 11 of 01-Apr-2026 (MasterID 11, line e13d647d…): taken: Tally's GUID 77423973-0753-4d30-8b0f-0136ce724542-0000000b, AlterID 11
+2026-10-07 16:33:44  Recorder: Journal 11 of 20260401 in FinCom Spike Co resolved: sent as created with its GUID 77423973-0753-4d30-8b0f-0136ce724542-0000000b and body
+2026-10-07 16:33:44  Recorder: held lines: 0 from FinCom, 6 asked, 6 resolved, 0 still held (6 in the list)
+2026-10-07 16:34:33  Recorder: Journal 15 of 01-Apr-2026 (MasterID 15, line 37f0befd…): asking Tally by MasterID
+2026-10-07 16:34:35  Recorder: entry fetch of FinCom Spike Co: answered in 1828 ms
+2026-10-07 16:34:35  Recorder: Journal 15 of 01-Apr-2026 (MasterID 15, line 37f0befd…): taken: Tally's GUID 77423973-0753-4d30-8b0f-0136ce724542-0000000f, AlterID 15
