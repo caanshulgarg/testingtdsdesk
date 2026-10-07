@@ -1,10 +1,10 @@
-"""python3 run_migration61.py - migration-61-tds-rate-worked-out (07-Oct-2026, the owner's decision, option A: "Work out the
+"""python3 run_migration62.py - migration-62-tds-rate-worked-out (07-Oct-2026, the owner's decision, option A: "Work out the
 rate as tax divided by assessable amount where Tally stores 0, and mark it as worked out"). On throwaway PostgreSQL
-(pg_stand, port 30610 unless PG61_PORT; never a real database), built 32 -> ... -> 55 -> 56 -> 57 -> 58 -> 59 -> 60 in
-staging's order, then 61 (twice).
+(pg_stand, port 30620 unless PG62_PORT; never a real database), built 32 -> ... -> 55 -> 56 -> 57 -> 58 -> 59 -> 60 in
+staging's order (and 61, privileges, when that file is in the tree: it is on branch perms-61), then 62 (twice).
   0. the file: one transaction (begin; set local lock_timeout '10s'; ... commit;), no 'delete from' anywhere, add-only (no
      drop, no truncate, no rename; one column added), no real database named; one function, tally_ingest_details: 57's text
-     with only lines marked "61" changed; security definer, search_path public, pg_temp; granted to nobody as in 57.
+     with only lines marked "62" changed; security definer, search_path public, pg_temp; granted to nobody as in 57.
   1. running it (twice) changes no row; tally_tds_lines.rate_worked_out is false on every row there was.
   2. the real S5 capture (run 37492981527, bridge-go/testdata/real-tally-7.1/231/s5-tds-on-screen.daybook.xml, Tally's own
      Day Book export) read by parse.js and stored through tally_ingest_day: the Contractor line's TDS row has nature
@@ -22,7 +22,9 @@ FILES = [os.path.join(SQLDIR, f) for f in ("migration-32-sync-safety.sql", "migr
                                            "migration-46-trial-tools.sql", "migration-47-recorder-queue-alerts.sql", "migration-48-day-cache-once.sql", "migration-49-post-row-flags.sql", "migration-50-recorder-held.sql", "migration-51-recorder-ids-mismatch.sql",
                                            "migration-52-recorder-duplicate-needs-same-entry.sql", "migration-53-recorder-placeholder-settled.sql", "migration-54-post-target-bridge.sql", "migration-55-settle-and-lease.sql", "migration-56-keep-fields.sql",
                                            "migration-57-entry-details.sql", "migration-58-lows.sql", "migration-59-ledger-aliases.sql", "migration-60-recorder-lows.sql")]
-M61 = os.environ.get("M61_FILE") or os.path.join(SQLDIR, "migration-61-tds-rate-worked-out.sql")
+# 61 (privileges, run on staging 06-Oct-2026; branch perms-61): applied before 62 when it is in the tree
+if os.path.exists(os.path.join(SQLDIR, "migration-61-privileges.sql")): FILES.append(os.path.join(SQLDIR, "migration-61-privileges.sql"))
+M62 = os.environ.get("M62_FILE") or os.path.join(SQLDIR, "migration-62-tds-rate-worked-out.sql")
 fails = []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
@@ -33,7 +35,7 @@ def part(path, name):
     s = open(path).read(); i = s.index(name + ' = r"""') if (name + ' = r"""') in s else s.index(name + ' = """')
     i = s.index('"""', i) + 3; return s[i:s.index('"""', i)]
 F, OWNER = "99999999-9999-9999-9999-999999999999", "55555555-5555-5555-5555-555555555555"
-B, D1 = "f79e4bc3-871d-4482-874d-000000000061", "58d73e82-57f3-4f72-9f3d-14cc93a5b2b1"
+B, D1 = "f79e4bc3-871d-4482-874d-000000000062", "58d73e82-57f3-4f72-9f3d-14cc93a5b2b1"
 
 # ---- the entries as tally-ingest sends them (parse.js, mapped as index.ts dayVouchers / dayLines do)
 NODE = r"""
@@ -59,8 +61,8 @@ FX = json.loads(pr.stdout)
 s5, pay = FX["s5-tds-on-screen.daybook.xml"], FX["partA-payment-tds.xml"]
 ok(len(s5["vouchers"]) == 1 and s5["vouchers"][0]["tds"][0].get("rateWorkedOut") is True, "parse.js marks S5's rate worked out (%s)" % s5["vouchers"][0]["tds"])
 
-text = open(M61).read() if os.path.exists(M61) else ""
-ok(bool(text), "the migration file is there (%s)" % os.path.basename(M61))
+text = open(M62).read() if os.path.exists(M62) else ""
+ok(bool(text), "the migration file is there (%s)" % os.path.basename(M62))
 if not text:
     print("\nFAILED: %d" % len(fails)); raise SystemExit(1)
 low = text.lower()
@@ -77,15 +79,15 @@ def block(t, start, end):
 m57 = open(os.path.join(SQLDIR, "migration-57-entry-details.sql")).read()
 S_D = "create or replace function public.tally_ingest_details(p_book uuid, p_vouchers jsonb, p_keep boolean)"
 E_D = "revoke all on function public.tally_ingest_details(uuid, jsonb, boolean) from public, anon, authenticated, service_role;"
-D57, D61 = block(m57, S_D, E_D), block(text, S_D, E_D)
+D57, D62 = block(m57, S_D, E_D), block(text, S_D, E_D)
 hunks, cur = [], None
-for d in difflib.unified_diff(D57.split("\n"), D61.split("\n"), lineterm="", n=0):
+for d in difflib.unified_diff(D57.split("\n"), D62.split("\n"), lineterm="", n=0):
     if d.startswith("@@"): cur = []; hunks.append(cur)
     elif cur is not None and d[:1] in "+-" and not d.startswith(("+++", "---")): cur.append(d)
-unmarked = [h for h in hunks if not any(re.search(r"--.*\b61\b", x) for x in h if x.startswith("+"))]
-ok(D57 != D61 and not unmarked, "0. tally_ingest_details is 57's text but %d changed places, each marked '61' (unmarked: %s)" % (len(hunks), unmarked[:1]))
+unmarked = [h for h in hunks if not any(re.search(r"--.*\b62\b", x) for x in h if x.startswith("+"))]
+ok(D57 != D62 and not unmarked, "0. tally_ingest_details is 57's text but %d changed places, each marked '62' (unmarked: %s)" % (len(hunks), unmarked[:1]))
 
-db = pg_stand.start(int(os.environ.get("PG61_PORT") or 30610))
+db = pg_stand.start(int(os.environ.get("PG62_PORT") or 30620))
 def psql_text(sql):
     return subprocess.run(["runuser", "-u", "postgres", "--", pg_stand.BIN + "/psql", "-h", "127.0.0.1", "-p", str(db.port), "-U", "postgres", "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-q", "-f", "-"], input=sql, capture_output=True, text=True)
 def j(s, uid=None):
@@ -109,13 +111,13 @@ try:
     for path in FILES:
         r = psql_text(open(path).read())
         if r.returncode: ok(False, "%s runs: %s" % (os.path.basename(path), r.stderr[-300:])); raise SystemExit("cannot go on")
-    # a TDS row stored before 61 (the part A payment, under 57)
-    ok(day(B, "2026-10-02", pay["vouchers"], pay["lines"]).get("ok") is True, "before 61: the part A payment stored")
+    # a TDS row stored before 62 (the part A payment, under 57)
+    ok(day(B, "2026-10-02", pay["vouchers"], pay["lines"]).get("ok") is True, "before 62: the part A payment stored")
     before = db.one("select md5(coalesce(string_agg(x::text, '|' order by x::text), '')) from tally_tds_lines x")
 
-    print("== migration 61")
+    print("== migration 62" + (" (after 61, privileges)" if FILES[-1].endswith("migration-61-privileges.sql") else ""))
     for n in (1, 2):
-        rr = psql_text(text); ok(rr.returncode == 0, "migration-61 runs (%d) %s" % (n, rr.stderr.strip()[-600:] if rr.returncode else ""))
+        rr = psql_text(text); ok(rr.returncode == 0, "migration-62 runs (%d) %s" % (n, rr.stderr.strip()[-600:] if rr.returncode else ""))
         if rr.returncode: raise SystemExit("cannot go on without the migration")
     after = db.one("select md5(coalesce(string_agg(row(id, book_id, firm_id, guid, alter_id, day, line_no, ledger, nature, section, rate, assessable, amount, party, deductee_type, at, gone_at, section_from)::text, '|' order by row(id, book_id, firm_id, guid, alter_id, day, line_no, ledger, nature, section, rate, assessable, amount, party, deductee_type, at, gone_at, section_from)::text), '')) from tally_tds_lines")
     ok(after == before and db.one("select count(*) from tally_tds_lines where rate_worked_out") == "0" and db.one("select count(*) from tally_tds_lines") == "1", "1. running it (twice) changes no row; the row there was: rate_worked_out false")
@@ -130,7 +132,7 @@ try:
     ok(got == [("S231 Contractor", "S231 Contract Work", "2", "100000", "2000", "S231 Contractor", "true")], "S5: the Contractor line, rate 2 worked out (%s)" % got)
     print("== 3. a stored rate is not marked")
     pv = pay["vouchers"][0]
-    ok(day(B, "2026-10-02", pay["vouchers"], pay["lines"]).get("ok") is True, "the part A payment stored again under 61")
+    ok(day(B, "2026-10-02", pay["vouchers"], pay["lines"]).get("ok") is True, "the part A payment stored again under 62")
     got = tds(pv["guid"])
     ok(got == [("TDS on Contract", "Payment to Contractors", "2", "100000", "2000", "Spike Contractor", "false")], "the payment: Tally's stored rate 2, not worked out (%s)" % got)
 finally:

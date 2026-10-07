@@ -1,14 +1,14 @@
--- Migration 61 (07-Oct-2026, the owner's decision, option A, for the bridge release after 2.3.1): "Work out the rate as tax
+-- Migration 62 (07-Oct-2026, the owner's decision, option A, for the bridge release after 2.3.1): "Work out the rate as tax
 -- divided by assessable amount where Tally stores 0, and mark it as worked out." TallyPrime 7.1 stores TAXRATE 0 on a TDS
 -- entry keyed on its screen (real run 37492981527, S5); the cloud's reader (parse.js) works the rate out from the Income Tax
 -- sub-category's tax and assessable amount and marks the line rateWorkedOut: true. This file keeps that mark with the line.
--- Runs AFTER 57 (fresh database and staging: ... -> 57 -> 58 -> 59 -> 60 -> 61; independent of 58, 59 and 60). ADD-ONLY: no
+-- Runs AFTER 57 (staging: 58, 59, 60 and 61 have run there; ... -> 57 -> 58 -> 59 -> 60 -> 61 -> 62; independent of 58 .. 61). ADD-ONLY: no
 -- table, column, row or function removed; no statement in this file removes rows, not even in a comment; safe to run twice;
 -- one transaction (lock_timeout 10 s). One column added, tally_tds_lines.rate_worked_out (false on every row there is); one
 -- function replaced: tally_ingest_details (same arguments, security definer, search_path = public, pg_temp, granted to
--- nobody as in 57), 57's text with the lines marked "61" changed (the TDS row carries the mark). tally_tds_details(book) is
+-- nobody as in 57), 57's text with the lines marked "62" changed (the TDS row carries the mark). tally_tds_details(book) is
 -- not replaced (its columns would change: the mark is read from tally_tds_lines, which the firm's members read). Nothing
--- else is touched; no row is changed by running it. Tested on pg_stand only: tests/run_migration61.py. NOT yet run on
+-- else is touched; no row is changed by running it. Tested on pg_stand only: tests/run_migration62.py. NOT yet run on
 -- staging.
 
 begin;
@@ -17,7 +17,7 @@ set local lock_timeout = '10s';     -- never queue long behind a session holding
 -- the rate worked out by FinCom (tax / assessable amount x 100) where Tally stores 0; false: the rate is Tally's own
 alter table public.tally_tds_lines add column if not exists rate_worked_out boolean not null default false;
 
--- ---------------------------------------------------------------- 57's tally_ingest_details with the lines marked "61"
+-- ---------------------------------------------------------------- 57's tally_ingest_details with the lines marked "62"
 create or replace function public.tally_ingest_details(p_book uuid, p_vouchers jsonb, p_keep boolean)
 returns void language plpgsql security definer set search_path = public, pg_temp as $function$
 declare f uuid; k boolean := coalesce(p_keep, false); din jsonb;
@@ -70,12 +70,12 @@ begin
    where jsonb_typeof(b) = 'object';
   update tally_tds_lines t set gone_at = now() from (select z->>'guid' as guid, (z->>'alter')::bigint as alter_id, (z->>'day')::date as day, z->'x' as x from jsonb_array_elements(din) z) d
    where t.book_id = p_book and t.guid = d.guid and t.gone_at is null and not ((k and lower(coalesce(d.x->>'full', '')) <> 'true') and jsonb_array_length(coalesce(d.x->'tds', '[]'::jsonb)) = 0);
-  insert into tally_tds_lines (book_id, firm_id, guid, alter_id, day, line_no, ledger, nature, rate, assessable, amount, party, section, section_from, deductee_type, rate_worked_out)     -- 61: the rate worked out
+  insert into tally_tds_lines (book_id, firm_id, guid, alter_id, day, line_no, ledger, nature, rate, assessable, amount, party, section, section_from, deductee_type, rate_worked_out)     -- 62: the rate worked out
   select p_book, f, d.guid, d.alter_id, d.day, coalesce((t->>'n')::integer, 0), tally_nm(coalesce(t->>'ledger', '')), left(coalesce(t->>'nature', ''), 200),
          nullif(t->>'rate', '')::numeric, nullif(t->>'base', '')::numeric, nullif(t->>'tax', '')::numeric, tally_nm(coalesce(t->>'party', '')),
          left(coalesce(t->>'section', ''), 20), case when coalesce(t->>'section', '') = '' then '' else left(coalesce(t->>'sectionFrom', ''), 40) end,
          coalesce((select l.tds_deductee_type from tally_ledgers l where l.book_id = p_book and l.name = tally_nm(coalesce(t->>'party', '')) limit 1), ''),
-         coalesce(t->>'rateWorkedOut', '') = 'true'     -- 61: parse.js's rateWorkedOut (tax / assessable x 100 where Tally stores the rate as 0)
+         coalesce(t->>'rateWorkedOut', '') = 'true'     -- 62: parse.js's rateWorkedOut (tax / assessable x 100 where Tally stores the rate as 0)
     from (select z->>'guid' as guid, (z->>'alter')::bigint as alter_id, (z->>'day')::date as day, z->'x' as x from jsonb_array_elements(din) z) d, jsonb_array_elements(case when jsonb_typeof(d.x->'tds') = 'array' then d.x->'tds' else '[]'::jsonb end) t
    where jsonb_typeof(t) = 'object';
   -- a due date Tally keeps as a date, on the bill the entry path stored just now (the same ledger, name, type and amount)
