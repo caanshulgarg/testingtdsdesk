@@ -204,6 +204,8 @@ function DayBook($date, $n) { KeysTo '%g' 2; KeysTo 'Day Book' 1; KeysTo '{ENTER
 # ---------------------------------------------------------------- setup: light, then heavy (a copy + bulk)
 $script:folder = (Get-ChildItem $light -Directory | Where-Object { $_.Name -match '^\d+$' } | Select-Object -First 1).Name
 Say "light company folder: $light\$script:folder"
+# fast234 (07-Oct-2026): the owner's fast request "voucher object by MasterID"; nothing else of this script runs (fast234.ps1)
+if ($env:PD_MODE -in 'fast234p', 'fast234m') { . "$here\fast234.ps1"; return }
 $setupOk = Start-T $light @() 'setup-light'
 if (-not $setupOk) { Say 'HARNESS: the light company did not open'; return }
 $cguid = [regex]::Match((Post (Coll 'FCPCo' 'Company' 'NAME, GUID')), '<GUID[^>]*>([^<]+)</GUID>').Groups[1].Value
