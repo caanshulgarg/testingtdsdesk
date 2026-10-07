@@ -1,0 +1,451 @@
+package main
+
+// Bridge 2.3.3 (a High in 2.3.2, seen live on NWS144, 07-Oct-2026): with yesterday's held lines in the backlog and Tally
+// slow, a NEW save sat unsent for 35 minutes and more, nothing of it in the cloud. The resolver ran first in every turn
+// and took the retry schedule's one try for an old held line; the new line's own fetch then found the schedule waiting
+// (errRetryWait, "not counted as a try"), so it never reached its 3-stop limit, and while it still needed its body it held
+// the queue head for every company. The slow-company rule never counted either: only entry requests went, so no other
+// request answered in time around a stop.
+//
+// The owner's rule: "A save must always show on the Tally page, at least as held with a reason. Silence is not
+// acceptable." Written before the code (red first), on the stand Tally in slow mode (the 2 s stop scaled to 200 ms; Tally
+// answering a single entry in 220 ms is "2.2 s").
+//
+//  1. A line whose body is not there on its first attempt, for any reason, goes up held at once with plain words
+//     ("waiting: ... FinCom asks again at HH:MM") and joins the held list due at the next try; its body goes later as
+//     "<line id>:resolved".
+//  2. The held lines cannot starve the new ones: the newest first; the resolver takes at most every other try while live
+//     lines wait for a body; a queue head never blocks the others.
+//  3. A company slow on every entry is marked even when the only background traffic is entry requests: the beat's small
+//     check counts as another request answered in time. A whole-Tally freeze still never marks.
+//  4. The beat says, per company, the lines waiting, the oldest, and the held lines being asked again; the Tally page shows
+//     one line while lines wait.
+
+import (
+	"fmt"
+	"regexp"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+)
+
+// NWS144 with the 2 s stop at 200 ms, Tally answering every single entry in 220 ms ("2.2 s": always stopped)
+func backlog233Bridge(t *testing.T) (string, *standTally, *standCloud) {
+	t.Helper()
+	p, f, c := slow232Bridge(t)
+	slowEntries(f, 220*time.Millisecond)
+	return p, f, c
+}
+
+// yesterday's held lines: n lines of NWS144 sent without their entry the day before, each due to be asked again now
+func backlog233Held(t *testing.T, f *standTally, n int) []string {
+	t.Helper()
+	yest := nowFn().Add(-20 * time.Hour).Format(time.RFC3339)
+	last := nowFn().Add(-2 * time.Hour).Format(time.RFC3339)
+	heldMu.Lock()
+	all, items := liveHeldLoad()
+	var ids []string
+	for i := 0; i < n; i++ {
+		mid := int64(25000 + i)
+		id := fmt.Sprintf("old-%d", mid)
+		ids = append(ids, id)
+		items[id] = heldLine{ID: id, Company: nwsCo, CGUID: nwsGUID, Type: "Journal", No: fmt.Sprintf("J-%d", mid), Date: "20261005", MID: fmt.Sprint(mid),
+			At: yest, Added: yest, Last: last, Ev: "created", Why: "the entry was not read from Tally"}
+	}
+	liveHeldSave(all, items)
+	heldMu.Unlock()
+	for i := 0; i < n; i++ {
+		mid := int64(25000 + i)
+		r222Vch(f, mid, "Journal", fmt.Sprintf("J-%d", mid), "20261005", 54400+int64(i))
+	}
+	return ids
+}
+
+var reAskedMID = regexp.MustCompile(`\$MasterID = (\d+)`)
+
+// the MasterIDs Tally was asked for (by MasterID), in order
+func backlog233Asked(f *standTally) []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var o []string
+	for i, b := range f.bodies {
+		if i < len(f.reqs) && f.reqs[i] == vchByMasterID {
+			if m := reAskedMID.FindStringSubmatch(b); m != nil {
+				o = append(o, m[1])
+			}
+		}
+	}
+	return o
+}
+
+// the first line sent for this MasterID that is not a ":resolved" one
+func backlog233First(c *standCloud, mid int64) M {
+	for _, s := range slowSentOf(c, mid) {
+		if !strings.HasSuffix(str(s["line_id"]), ":resolved") {
+			return s
+		}
+	}
+	return nil
+}
+
+// the words a line goes up held with while Tally is slow or busy
+func backlog233Waiting(t *testing.T, s M) {
+	t.Helper()
+	w := str(s["heldWhy"])
+	if str(s["xml"]) != "" || !strings.HasPrefix(w, "waiting: ") || !strings.Contains(w, "FinCom asks again at ") ||
+		!(strings.Contains(w, "Tally took longer than") || strings.Contains(w, "Tally busy")) {
+		t.Fatalf("not held with the plain words: %q (%v)", w, s)
+	}
+	if !regexp.MustCompile(`FinCom asks again at \d\d:\d\d`).MatchString(w) {
+		t.Fatalf("no time in the words: %q", w)
+	}
+}
+
+// --- 1. with 40 held lines in the backlog and Tally at 2.2 s on every entry, a NEW save reaches the cloud within 5 s, held
+// with the words; once Tally answers in time, its body goes as ":resolved" (the newest first)
+func TestBacklog233NewSaveHeldAtOnceThenResolved(t *testing.T) {
+	p, f, c := backlog233Bridge(t)
+	backlog233Held(t, f, 40)
+	// the resolver's turn: an old held line asked, stopped at the limit; the retry schedule now waits
+	liveUploadOnce()
+	if !retryHeld() {
+		t.Fatalf("the backlog's ask was not stopped: %v", f.ids())
+	}
+	r222Vch(f, 25800, "Journal", "J-25800", "20261005", 54800)
+	liveAppend(t, p, slowLine(25800, "07:16")...)
+	t0 := time.Now()
+	var got M
+	for time.Since(t0) < 5*time.Second && got == nil {
+		liveReadOnce()
+		liveUploadOnce()
+		got = backlog233First(c, 25800)
+	}
+	if got == nil {
+		t.Fatalf("the new save is not in the cloud after %s (silence):\n%s", time.Since(t0).Round(time.Millisecond), cutTail(readText(logFile()), 3000))
+	}
+	backlog233Waiting(t, got)
+	id := str(got["line_id"])
+	if h, ok := slowHeldItem(t, id); !ok || h.Final {
+		t.Fatalf("not in the held list to be asked again: %+v %v", h, ok)
+	}
+	// Tally answers in time again: at the next try the new line is asked first and goes up with its body
+	slowEntries(f, 0)
+	retryDue()
+	n0 := len(backlog233Asked(f))
+	liveUploadOnce()
+	asked := backlog233Asked(f)
+	if len(asked) <= n0 || asked[n0] != "25800" {
+		t.Fatalf("the try did not go to the newest line first: %v (from %d)", asked, n0)
+	}
+	r := r222cSentID(c, id+":resolved")
+	if len(r) != 1 || str(r[0]["xml"]) == "" || str(r[0]["object_guid"]) != r222GUID(25800) || str(r[0]["heldWhy"]) != "" {
+		t.Fatalf("the body did not go as %s:resolved: %v", cut(id, 8), r)
+	}
+	// and the backlog is resolved by itself afterwards (10 a turn)
+	for i := 0; i < 8; i++ {
+		liveUploadOnce()
+	}
+	if n := len(r222cSentID(c, "old-25000:resolved")) + len(r222cSentID(c, "old-25039:resolved")); n != 2 {
+		t.Fatalf("the backlog did not resolve: %d of 2 checked", n)
+	}
+}
+
+// --- 1. no line ever stays unsent more than 5 s: new saves every 300 ms for 4 s, Tally slow, the backlog asked, a new
+// entry without a MasterID (asked by its number a few seconds after its line) among them
+func TestBacklog233NoLineUnsentOver5s(t *testing.T) {
+	p, f, c := backlog233Bridge(t)
+	setCfg("RecorderNumberWaitMs", float64(1500))
+	backlog233Held(t, f, 40)
+	liveUploadOnce()
+	type want struct {
+		at  time.Time
+		key string
+	}
+	var ws []want
+	seen := map[string]time.Time{}
+	look := func() {
+		for _, s := range c.recSent() {
+			for _, k := range []string{str(s["master_id"]), "no:" + str(s["vch_no"])} {
+				if _, had := seen[k]; !had && k != "" && k != "no:" {
+					seen[k] = time.Now()
+				}
+			}
+		}
+	}
+	start := time.Now()
+	next := start
+	for i := 0; time.Since(start) < 9*time.Second; {
+		if i < 12 && !time.Now().Before(next) {
+			mid := int64(25900 + i)
+			if i == 5 {
+				// a new entry: no MasterID on its line (found by its type and number)
+				r222Vch(f, mid, "Journal", "J-NEW5", "20261005", 54900+int64(i))
+				liveAppend(t, p, r222Line("voucher_accept_post", "07:17", nwsGUID+"-00000000", "0", "0", "Journal", "J-NEW5", "5-Oct-2026", "a new one"))
+				ws = append(ws, want{time.Now(), "no:J-NEW5"})
+			} else {
+				r222Vch(f, mid, "Journal", fmt.Sprintf("J-%d", mid), "20261005", 54900+int64(i))
+				liveAppend(t, p, slowLine(mid, "07:17")...)
+				ws = append(ws, want{time.Now(), fmt.Sprint(mid)})
+			}
+			i++
+			next = next.Add(300 * time.Millisecond)
+		}
+		liveReadOnce()
+		liveUploadOnce()
+		look()
+		if i >= 12 {
+			done := true
+			for _, w := range ws {
+				if _, had := seen[w.key]; !had {
+					done = false
+				}
+			}
+			if done {
+				break
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	for _, w := range ws {
+		at, had := seen[w.key]
+		if !had {
+			t.Errorf("line %s never reached the cloud (silence)", w.key)
+			continue
+		}
+		if d := at.Sub(w.at); d > 5*time.Second {
+			t.Errorf("line %s waited %s unsent (over 5 s)", w.key, d.Round(time.Millisecond))
+		}
+	}
+	for _, s := range c.recSent() {
+		if str(s["xml"]) == "" && !strings.HasSuffix(str(s["line_id"]), ":resolved") && str(s["heldWhy"]) == "" && str(s["event"]) == "created" {
+			t.Errorf("a line went without its body and without words: %v", s)
+		}
+	}
+}
+
+// --- 2. the resolver cannot starve new lines: with the backlog due at every try, each new save is asked at the first or
+// second try after it, and is in the cloud (held) before that try
+func TestBacklog233ResolverCannotStarve(t *testing.T) {
+	p, f, c := backlog233Bridge(t)
+	backlog233Held(t, f, 40)
+	liveUploadOnce() // the backlog takes the first ask; stopped
+	for k := 0; k < 4; k++ {
+		mid := int64(25960 + k)
+		r222Vch(f, mid, "Journal", fmt.Sprintf("J-%d", mid), "20261005", 54960+int64(k))
+		liveAppend(t, p, slowLine(mid, "07:18")...)
+		liveReadOnce()
+		liveUploadOnce() // no try due: the line's own fetch waits for the schedule
+		if s := backlog233First(c, mid); s == nil {
+			t.Fatalf("save %d: not sent held while the schedule waits (it sat at the queue head)", mid)
+		} else {
+			backlog233Waiting(t, s)
+		}
+		hit := false
+		for try := 0; try < 2 && !hit; try++ {
+			n0 := len(backlog233Asked(f))
+			retryDue()
+			liveUploadOnce()
+			for _, m := range backlog233Asked(f)[n0:] {
+				if m == fmt.Sprint(mid) {
+					hit = true
+				}
+			}
+		}
+		if !hit {
+			t.Fatalf("save %d was not asked within 2 tries; asked: %v", mid, backlog233Asked(f))
+		}
+	}
+	// the old ones still get their turn: not starved either
+	old := 0
+	for _, m := range backlog233Asked(f) {
+		if strings.HasPrefix(m, "250") {
+			old++
+		}
+	}
+	if old < 2 {
+		t.Fatalf("the backlog got %d tries: %v", old, backlog233Asked(f))
+	}
+}
+
+// --- 2. at most every other try goes to the resolver while live lines wait for a body (the queue's own fetch alternates
+// with it), and a company's line waiting never holds another company's line
+func TestBacklog233EveryOtherTry(t *testing.T) {
+	_, f, _ := backlog233Bridge(t)
+	backlog233Held(t, f, 40)
+	liveUploadOnce()
+	// six live lines of today needing their body, queued at once
+	var mu sync.Mutex
+	took := []string{}
+	n := 0
+	live.mu.Lock()
+	for i := 0; i < 6; i++ {
+		c := &change{company: nwsCo, companyGuid: nwsGUID, event: "created", masterId: fmt.Sprint(26000 + i), vchType: "Journal", vchNo: fmt.Sprintf("J-%d", 26000+i),
+			vchDate: "20261005", source: "addon", lineId: fmt.Sprintf("q-%d", i), saveMs: -1, readAt: nowFn(), at: nowFn().Format(time.RFC3339)}
+		liveQueueAdd(c)
+	}
+	live.mu.Unlock()
+	for try := 0; try < 6; try++ {
+		n0 := len(backlog233Asked(f))
+		retryDue()
+		liveUploadOnce()
+		for _, m := range backlog233Asked(f)[n0:] {
+			mu.Lock()
+			if strings.HasPrefix(m, "250") {
+				took = append(took, "old")
+			} else {
+				took = append(took, "live")
+			}
+			n++
+			mu.Unlock()
+		}
+	}
+	for i := 1; i < len(took); i++ {
+		if took[i] == "old" && took[i-1] == "old" {
+			t.Fatalf("the resolver took two tries in a row while live lines waited: %v", took)
+		}
+	}
+	if n == 0 {
+		t.Fatal("nothing asked")
+	}
+}
+
+// --- 3. a company at 2.2 s on every entry is marked even when the only background requests are its entry requests: the
+// beat's small check (the light company check) answered in time counts as another request; a whole-Tally freeze does not
+func TestBacklog233SlowMarkedWithOnlyEntryRequests(t *testing.T) {
+	p, f, c := backlog233Bridge(t)
+	slowEntries(f, 0)
+	slowLook() // the company list as the reader had it (Tally answering in time)
+	slowEntries(f, 220*time.Millisecond)
+	base := nowFn()
+	f.mu.Lock()
+	reqs0 := len(f.reqs)
+	f.mu.Unlock()
+	marked := -1
+	for s, k := 0, 0; s <= 45*60; s += 60 {
+		retryClock(base, s)
+		if s%180 == 0 {
+			mid := int64(26100 + k)
+			k++
+			r222Vch(f, mid, "Journal", fmt.Sprintf("J-%d", mid), "20261005", 55100+int64(k))
+			liveAppend(t, p, slowLine(mid, "07:20")...)
+			liveReadOnce()
+		}
+		liveUploadOnce()
+		lightCheckOpen(openCompaniesCached()) // the beat's small check (every beat; due every 10 minutes a company)
+		if slowMarked(nwsCo, nwsGUID) {
+			marked = s
+			break
+		}
+	}
+	if marked < 0 {
+		t.Fatalf("a company at 2.2 s on every entry was never marked in 45 minutes:\n%s", cutTail(readText(logFile()), 4000))
+	}
+	f.mu.Lock()
+	for _, id := range f.reqs[reqs0:] {
+		if id != vchByMasterID && id != vchByNumberID && id != "FinComCompany" && id != "FinComCompanyNumbers" && id != "TDSDeskCompanies" {
+			f.mu.Unlock()
+			t.Fatalf("a request other than the entry, the small check and the company list: %s", id)
+		}
+	}
+	f.mu.Unlock()
+	// every line of it is in the cloud: held with words, nothing silent
+	for _, s := range c.recSent() {
+		if str(s["xml"]) == "" && str(s["heldWhy"]) == "" {
+			t.Fatalf("a line without words: %v", s)
+		}
+	}
+}
+
+// --- 3. a whole-Tally freeze (the small check slow too) never marks, whatever only entry requests go
+func TestBacklog233FreezeStillDoesNotMark(t *testing.T) {
+	p, f, _ := backlog233Bridge(t)
+	slowEntries(f, 0)
+	slowLook()
+	slowAll(f, 220*time.Millisecond)
+	base := nowFn()
+	for s, k := 0, 0; s <= 45*60; s += 60 {
+		retryClock(base, s)
+		if s%180 == 0 {
+			mid := int64(26200 + k)
+			k++
+			r222Vch(f, mid, "Journal", fmt.Sprintf("J-%d", mid), "20261005", 55200+int64(k))
+			liveAppend(t, p, slowLine(mid, "07:20")...)
+			liveReadOnce()
+		}
+		liveUploadOnce()
+		lightCheckOpen(openCompaniesCached())
+	}
+	if slowMarked(nwsCo, nwsGUID) {
+		t.Fatalf("marked by a whole-Tally freeze:\n%s", cutTail(readText(logFile()), 3000))
+	}
+}
+
+// --- 4. the beat per company: the lines waiting, the oldest, the held lines being asked again; one plain line for the
+// Tally page while lines wait (none when nothing waits)
+func TestBacklog233BeatWaiting(t *testing.T) {
+	p, f, _ := backlog233Bridge(t)
+	backlog233Held(t, f, 40)
+	b := beatBody(true, "open", "", nil, nil, nil)
+	e := obj(obj(b["recorderState"])[nwsCo])
+	if toInt(e["heldAsking"]) != 40 {
+		t.Fatalf("the held lines being asked again: %v", obj(b["recorderState"]))
+	}
+	if str(b["recorderWaitWords"]) != "" {
+		t.Fatalf("words while nothing waits: %q", b["recorderWaitWords"])
+	}
+	// two lines read a minute ago and not sent yet (the uploader has not turned since)
+	r222Vch(f, 26300, "Journal", "J-26300", "20261005", 55300)
+	liveAppend(t, p, slowLine(26300, "07:21")...)
+	r222Vch(f, 26301, "Journal", "J-26301", "20261005", 55301)
+	liveAppend(t, p, slowLine(26301, "07:21")...)
+	liveReadOnce()
+	live.mu.Lock()
+	for _, c := range live.queue {
+		c.readAt = nowFn().Add(-time.Minute)
+	}
+	live.mu.Unlock()
+	b = beatBody(true, "open", "", nil, nil, nil)
+	e = obj(obj(b["recorderState"])[nwsCo])
+	if toInt(e["waiting"]) != 2 || str(e["oldestWaiting"]) == "" || toInt(e["heldAsking"]) != 40 {
+		t.Fatalf("the beat's recorderState: %v", e)
+	}
+	w := str(b["recorderWaitWords"])
+	if !strings.Contains(w, "2 changes of "+nwsCo+" waiting to go to FinCom") || !strings.Contains(w, "oldest since") || !strings.Contains(w, "40 held") ||
+		strings.Contains(w, "\n") || len(w) > 300 {
+		t.Fatalf("the Tally page's line: %q", w)
+	}
+}
+
+// --- the version, the allow-list's decision line (no request added or changed: TestAllowListUnchanged keeps the table's
+// hash) and the notes with their test sheet
+func TestBacklog233VersionAndDecisionLine(t *testing.T) {
+	if BridgeVersion != "2.3.3" {
+		t.Fatalf("BridgeVersion %s", BridgeVersion)
+	}
+	al := readText("../docs/tally-allowlist.md")
+	line := group(`(?m)^(First table: .*)$`, al, 1)
+	if !strings.Contains(line, "allowed for 2.3.3 by the owner's standing decision of 2026-10-06: no request on the list and no request shape changed") {
+		t.Fatalf("the decision line: %s", cut(line, 300))
+	}
+	if strings.Contains(al, "allowed for 2.3.2 by") {
+		t.Fatal("the 2.3.2 line is still an exception line (release-check accepts one version only)")
+	}
+	if !strings.Contains(al, "1c17806d483e0a31477bc93bcf0646334c156eda88e8a401a8df155d0bca02dd") {
+		t.Fatal("the table's hash moved")
+	}
+	notes := strings.Join(strings.Fields(readText("../docs/bridge-2.3.3-notes.md")), " ")
+	for _, w := range []string{"2.3.3", "Silence is not acceptable", "waiting: ", "FinCom asks again at", ":resolved", "Test sheet", "roll back",
+		"No Tally request was added or changed", "every other try", "the beat's small check"} {
+		if !strings.Contains(notes, w) {
+			t.Errorf("the 2.3.3 notes do not say %q", w)
+		}
+	}
+}
+
+func cutTail(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[len(s)-n:]
+}
