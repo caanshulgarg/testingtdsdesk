@@ -234,6 +234,15 @@ function P3Check($label, $s, $m0, $p0, [switch]$tds, $ev = 'created') {
   $ok = $same -and $l -and $raw.push -eq $true -and $raw.full -eq $true -and $null -eq $raw.alter_id -and [int64]$raw.push_seq -gt 0 -and $g -eq $rule -and "$($raw.master_id)" -eq "$($s.v.mid)" -and $nl -ge 2 -and [math]::Abs($sum) -lt 0.005 -and $tdsOk -and $asks.Count -eq 0
   Result "push233 $label" $ok ("Tally mid {0} guid {1} (the rule: {2}); the stub: {3}; push={4} full={5} alter_id={6} push_seq={7}; {8} ledger lines totalling {9:0.00}; TDS rows: {10}; entry requests from bridge 1 at the stand since the save: {11}{12}; save {13} ms; ledger lines as Tally's: {14} (bridge {15}; Tally {16})" -f `
       $s.v.mid, $g, $rule, (Ev $l), $raw.push, $raw.full, $raw.alter_id, $raw.push_seq, $nl, $sum, $(if ($tds) { $tdsOk } else { 'not asked' }), $asks.Count, $(if ($asks.Count) { ' e.g. ' + ($asks[0] | ConvertTo-Json -Compress) } else { '' }), $s.ms_fullline, $same, ($mine -join '; '), ($theirs -join '; '))
+  # the fields Tally sets as it stores the entry (run 37677491784: the full line is the FORM at Form Accept; a non-invoice
+  # entry made new had no party there, and an Alt+2 copy's bill "New Ref" was stored "Agst Ref"): the bridge's party and
+  # bill types against Tally's stored entry, reported on their own
+  if ($l) {
+    $tx = P3Coll 'P3Stored' 'Voucher' 'MASTERID, PARTYLEDGERNAME, ALLLEDGERENTRIES.LEDGERNAME, ALLLEDGERENTRIES.BILLALLOCATIONS.NAME, ALLLEDGERENTRIES.BILLALLOCATIONS.BILLTYPE' ('$MasterID = ' + [int64]$s.v.mid)
+    $pick = { param($x) [pscustomobject]@{ party = [System.Net.WebUtility]::HtmlDecode([regex]::Match("$x", '<PARTYLEDGERNAME[^>]*>([^<]*)</PARTYLEDGERNAME>').Groups[1].Value).Trim(); bills = (@([regex]::Matches("$x", '<BILLTYPE[^>]*>([^<]*)</BILLTYPE>') | ForEach-Object { $_.Groups[1].Value.Trim() }) -join ',') } }
+    $mineS = & $pick $l.xml; $theirsS = & $pick $tx
+    Result "push233 $label party and bill types as Tally stored them" ($mineS.party -eq $theirsS.party -and $mineS.bills -eq $theirsS.bills) ("party: bridge '{0}', Tally '{1}'; bill types: bridge [{2}], Tally [{3}]" -f $mineS.party, $theirsS.party, $mineS.bills, $theirsS.bills)
+  }
   if ($l) { Set-Content (Join-Path $P233.dir "$label.xml") $l.xml -Encoding UTF8 }
   Set-Content (Join-Path $P233.dir "$label.lines.txt") $s.lines -Encoding UTF8
   return $raw
