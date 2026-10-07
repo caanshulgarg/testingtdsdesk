@@ -1,0 +1,10 @@
+2026-10-07 04:06:17  Recorder: FinCom Spike Co: lines from a Tally this bridge does not read (company not open here): not sent
+2026-10-07 04:06:32  Keeping FinCom Spike U2 in step: its day book from 20260401 is read at Update now (and the nightly run), a month a request
+2026-10-07 04:06:33  Keeping FinCom Spike U2: ledger list MasterID 1-2000, 5 ledger(s) (0.2s); saved
+2026-10-07 04:06:33  Keeping FinCom Spike U2: ledger list MasterID 2001-end, 0 ledger(s) (0.2s); saved
+2026-10-07 04:06:33  Keeping FinCom Spike U2: the ledger list read (5 ledgers, 28 groups, 3 request(s)): 5 new, 0 changed, 0 renamed, 0 gone
+2026-10-07 04:06:33  Keeping FinCom Spike U2: Reading old entries is off (prospective only); FinComCompany ALTVCHID=1 ALTMSTID=210
+2026-10-07 04:06:33  Nightly catch-up: done (11 request(s) to Tally); the bridge is idle again (next: the nightly catch-up at 02:00, or Update now)
+2026-10-07 04:14:45  Light check of FinCom Spike U2: unchanged starting point ALTVCHID=1; now ALTVCHID=1, ALTMSTID=210
+2026-10-07 04:14:45  Ledger changes for FinCom Spike U2: Tally's master counter 209 -> 210: 1 request(s) for AlterID 210-210, 1 ledger(s) sent to FinCom; the last number is 210
+2026-10-07 04:14:45  Ledger changes for FinCom Spike U2: 1 ledger(s) created or altered in Tally sent to FinCom

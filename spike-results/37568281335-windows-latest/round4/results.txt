@@ -1,0 +1,21 @@
+INFO setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.3.1.exe SHA-256 7d4a37a93a52dbc55ab9992c7148c7d607485d567fd34e1bde7d607288a216be; on this runner SHA-256 7d4a37a93a52dbc55ab9992c7148c7d607485d567fd34e1bde7d607288a216be
+INFO user 2 (fcuser2) works in a Windows session of their own (session 1, by a Remote Desktop connection to 127.0.0.2); runneradmin in session 2
+INFO S231 import masters-1-items: created 4, altered 0, errors 0
+INFO S231 import masters-2-costs: created 3, altered 0, errors 0
+INFO S231 import masters-4-ledgers: created 14, altered 0, errors 0
+INFO S231 import masters-6-bulk: created 400, altered 0, errors 0
+INFO S231 import S4 the bill (New Ref S231-BILL-1, a journal): created 1, altered 0, errors 0
+PASS 6a two bridges at once: bridge 1 runneradmin on 127.0.0.1:9100 (pid 6268, session 2, go-9c63edc2784f); bridge 2 fcuser2 on 127.0.0.1:9101 (pid 8088, session 1, go-97c8759a0a33); both listening at 04:04:24
+INFO /ping with a nonce but no Origin (own bridge): proof not given
+PASS 6b /ping proof: bridge 1 proves itself to runneradmin: ok; bridge 1 proof checked against user 2 identity fails: ok; bridge 2 proves itself to fcuser2: ok; bridge 2 proof checked against user 1 identity fails: ok; bridge 2 gives runneradmin no proof: ok; bridge 1 gives fcuser2 no proof: ok; other users refused 403 beyond /ping: ok
+PASS UF1 a file per Windows user: runneradmin: 62a82360-437f-4216-bdcf-a9aeb02d9cb0-7-Oct-26-runneradmin.txt; fcuser2: b77e3fc7-5d33-4887-af21-279d3bacb3c3-7-Oct-26-fcuser2.txt; every file now: 62a82360-437f-4216-bdcf-a9aeb02d9cb0-7-Oct-26-runneradmin.txt, b77e3fc7-5d33-4887-af21-279d3bacb3c3-7-Oct-26-fcuser2.txt
+PASS UF2 every line names its Windows user: 4 line(s): 62a82360-437f-4216-bdcf-a9aeb02d9cb0-7-Oct-26-runneradmin.txt: ledger_accept_pre w=runneradmin; 62a82360-437f-4216-bdcf-a9aeb02d9cb0-7-Oct-26-runneradmin.txt: ledger_accept_post w=runneradmin; b77e3fc7-5d33-4887-af21-279d3bacb3c3-7-Oct-26-fcuser2.txt: ledger_accept_pre w=fcuser2; b77e3fc7-5d33-4887-af21-279d3bacb3c3-7-Oct-26-fcuser2.txt: ledger_accept_post w=fcuser2; not the file's user (or not ending |t1=..|src=live): none
+PASS UF3 each bridge sent only its own user's lines: bridge 1: stub 04:05:17 recorder_lines event=ledger_created guid='' mid= aid= vch=// user=runnervmfi6oq\runneradmin bridge=go-9c63edc2784f port=9100 company=FinCom Spike Co body=none | bridge 2: stub 04:05:47 recorder_lines event=ledger_created guid='' mid= aid= vch=// user=runnervmfi6oq\fcuser2 bridge=go-97c8759a0a33 port=9101 company=FinCom Spike U2 body=none | lines from the other user's bridge: 0
+FAIL UF4 each bridge read only its own user's files: bridge 1 (runneradmin) recorderFiles: 62a82360-437f-4216-bdcf-a9aeb02d9cb0-7-Oct-26-runneradmin.txt, b77e3fc7-5d33-4887-af21-279d3bacb3c3-7-Oct-26-fcuser2.txt | bridge 2 (fcuser2) recorderFiles: 62a82360-437f-4216-bdcf-a9aeb02d9cb0-7-Oct-26-runneradmin.txt, b77e3fc7-5d33-4887-af21-279d3bacb3c3-7-Oct-26-fcuser2.txt
+INFO MH the add-on at the ref hooks: Pay Head, Stock Item, Unit, Godown
+FAIL MH-PayHead saves with the hook: Pay Head 'MH Basic': hooked True; saved False (AlterID 650 -> 650, via none); Ctrl+A to a still screen 94.3 ms (first change 64.1 ms); add-on lines: none; bridge 1 sent: nothing
+FAIL MH-StockItem saves with the hook: Stock Item 'MH Item 1': hooked True; saved False (AlterID 0 -> 0, via none); Ctrl+A to a still screen 9815.4 ms (first change 9815.4 ms); add-on lines: none; bridge 1 sent: nothing
+FAIL MH-Unit saves with the hook: Unit 'MH Nos': hooked True; saved False (AlterID 0 -> 0, via none); Ctrl+A to a still screen -1.0 ms (first change -1.0 ms); add-on lines: none; bridge 1 sent: nothing
+FAIL MH-Godown saves with the hook: Godown 'MH Godown A': hooked True; saved False (AlterID 647 -> 647, via none); Ctrl+A to a still screen -1.0 ms (first change -1.0 ms); add-on lines: none; bridge 1 sent: nothing
+FAIL MH-Employee saves with the hook: Employee 'MH Emp 001': hooked False; saved False (AlterID 649 -> 649, via none); Ctrl+A to a still screen 10321.4 ms (first change 10321.4 ms); add-on lines: none; bridge 1 sent: nothing
+FAIL MH-create a Unit on the screen: made in Tally: False; Ctrl+A 106.9 ms; bridge 1 sent: nothing
