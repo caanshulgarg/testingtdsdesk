@@ -6,8 +6,68 @@ This document brings together what two "Push design" workflow runs (`push-design
 - **[P]**: the probe run, **37488912899**.
 - **[V3]**: run **37556025582** (07-Oct-2026); it failed as a harness, see below.
 - **[R]**: run **37580283590** (07-Oct-2026), the re-run: see "Update of 07-Oct-2026 (2)".
+- **[B]**: run **37591395905** (07-Oct-2026): fetches and TDS, see "Update of 07-Oct-2026 (3)".
 
 Every number also names the file it came from. Where neither run measured something, or the measurement failed, the document says so. No gap is filled with an estimate.
+
+## Update of 07-Oct-2026 (3): run 37591395905 [B], fetches on the large company and TDS, all five releases
+
+**[B]** is run **37591395905** (commit `cd7a881`, mode `v3b`; results commit `e6c7430`; files `spike-results/push-design/37591395905-<rel>/push/`: `sim.csv`, `f.csv`, `summary.txt`, `captures/`). Large company: **30,012 vouchers** on every release. The run before it, 37588508934, made no measurement: it looked the target voucher up by its original number "TS50-1", which Tally had renumbered, and the TDS ledger was refused. [B] is the corrected run.
+
+### 2 (answered). A fetch makes Tally pause [B]
+
+The heads-only add-on was loaded and the bridge stopped. The harness sent the bridge's own request, `FinComVoucherByMaster` (the 2.3.1 field list, one-day period, `$MasterID` filter), and pressed Ctrl+A on a voucher about 140 ms later. It did this on 5 receipts and 5 50-item invoices per release (`sim.csv`).
+
+| Release | Saves | **Freezes (first screen change > 1 s)** | The fetch: median / worst (ms) | First screen change after Ctrl+A: median / worst (ms) |
+|---|---|---|---|---|
+| 3.0 | 10 | **10** | 4,095 / 4,214 | 3,951 / 4,158 |
+| 4.1 | 10 | **10** | 5,326 / 5,828 | 5,092 / 5,742 |
+| 5.1 | 10 | **10** | 5,889 / 6,425 | 5,781 / 6,298 |
+| 6.2 | 10 | **10** | 4,998 / 6,091 | 4,880 / 5,990 |
+| 7.1 | 10 | **10** | 4,275 / 4,498 | 4,159 / 4,399 |
+
+**Every save made during the fetch froze. Tally's screen did not change until the fetch had finished**: the first change came within about 0.1–0.2 s of the fetch's end. The saves themselves were normal once Tally reached them (save b→c, e.g. 7.1 receipt 50–55 ms, 50-item 414–454 ms). With no fetch running, the same company gave 0 freezes in 255 saves [R]. **The 1–6 s freezes the owner sees are Tally answering the bridge's by-MasterID fetch, not the add-on.**
+
+### 3 (answered). The keyed lookups for one voucher [B]
+
+The voucher is the 50-item template (MasterID 3, 31-10-2026) on the 30,012-voucher company, with no TDL loaded and the bridge stopped. Each form was asked 5 times. The freeze probe sent a key to Tally's Gateway 120 ms after the request left, and timed how long until the screen changed (idle: 15–45 ms). Source: `f.csv`; answers in `captures/fetch-heavy-sales50-template-*.xml`.
+
+| Form | 3.0 | 4.1 | 5.1 | 6.2 | 7.1 | Full entry? | Tally frozen while it runs? |
+|---|---|---|---|---|---|---|---|
+| **Today's bridge request**, Collection of Vouchers, one-day SVFROMDATE/SVTODATE, filter `$MasterID = 3` | 3,878 / 4,135 | 4,511 / 4,669 | 5,895 / 11,860 | 4,943 / 5,284 | 3,807 / 4,160 | yes (ledger lines, items, their ledgers) | **yes**: probe 3.5–10.6 s |
+| Bridge's request by number (`$VoucherNumber` and `$VoucherTypeName`) | 4,211 / 4,248 | 5,440 / 12,797 | 5,788 / 6,028 | 5,228 / 5,349 | 4,281 / 4,303 | yes | **yes**: probe 4.1–12.7 s |
+| The same collection with the one-day period and **no filter** (MasterID only) | 8,684 / 9,075 | 10,407 / 10,748 | 10,965 / 11,711 | 10,294 / 10,676 | 7,792 / 8,214 | — | yes |
+| **Object export, `<ID TYPE="Name">ID:3</ID>`** (SUBTYPE Voucher) | **125 / 152** | **150 / 182** | **170 / 178** | **165 / 1,105** | **121 / 140** | **yes**: 53 ledger lines, 50 items | **no**: probe 28–81 ms |
+| Tally's own Day Book export for that one day (Export Data, Day Book, SVFROMDATE = SVTODATE) | 674 / 688 | 735 / 795 | 887 / 920 | 780 / 847 | 738 / 746 | yes: the whole day (5–6 vouchers, 4.7–6.1 MB) | short: probe 0.54–0.78 s |
+| Object export by GUID (`ID TYPE="Name"` = GUID; also `TYPE="GUID"`), by `ID TYPE="MasterID"` | 6–14 | 9–13 | 9–15 | 8–11 | 6–10 | **no**: "Could not find Voucher: …" | — |
+
+Times in ms, median / worst over 5.
+
+- **The bridge's request is a full scan.** With the one-day period and no filter, Tally returned **all 30,022–30,023 vouchers** (35 MB) on every release. The period does not bound a Voucher collection, so the `$MasterID` filter is evaluated over every voucher in the company. That is why it takes 3.8–5.9 s and freezes Tally for all of it.
+- **`ID:<MasterID>` as the object's name is the keyed lookup.** It returns the one voucher with its ledger lines and items in 121–170 ms (median) on every release, and Tally stayed responsive (probe 28–81 ms). It was 13–16 ms on the small company. Its answer is large (1.3–1.4 MB for the 50-item invoice), because the object export carries Tally's full voucher object; a narrower FETCHLIST was not tried. The 1,105 ms worst on 6.2 is a single reading.
+- **The GUID as the remote id does not work** for vouchers, on any release, in any form tried.
+- **Not measured:** a voucher in the middle of the 30,000 (MasterID 15,000; the harness's lookup of it found nothing); TDS completeness of `ID:` on the large company (the TDS entry was on the small company, below).
+
+### 4 (answered). TDS in the add-on's full-entry line [B]
+
+The TDS entry was made by the S5 screen route (`tdslib.ps1`, keys checked by OCR) on the small company, with `FCPFullNR.tdl` loaded, on every release. It is a **Journal**, as in S5: Dr PD Contract Exp 1,00,000; Cr PD TDS Payable 2,000; Cr PD TDS Contractor 98,000. The nature "PD Contract Work" (194C, 2 %) was made on its form, and the party is a "Company - Resident" deductee. The entry was saved on all five releases (MasterID 13).
+
+| What | 3.0 | 4.1 | 5.1 | 6.2 | 7.1 |
+|---|---|---|---|---|---|
+| **Add-on's full-entry line has TDS** | **yes** | **yes** | **yes** | **yes** | **yes** |
+| Tally's own Day Book export has TDS | yes | yes | yes | yes | yes |
+| The bridge's request (`FinComVoucherByMaster`) has TDS | yes | yes | yes | yes | **no: empty lists** |
+| `ID:<mid>` object export has TDS (small company) | yes | yes | yes | yes | yes |
+
+The add-on's line holds the same on every release (`captures/tds-addon-lines.txt`; `summary.txt` "the add-on's line"), on the TDS ledger's line: `tt=TDS`, `cat=PD Contract Work` (nature of payment), `pl=PD TDS Contractor` (party), and sub-allocation `ass=(-)1,00,000.00` (assessable), `tax=2,000.00`, `rate=0`.
+
+- **Not in the line:** the section (194C) and the deductee type. TDSDEDUCTEESECTIONNUMBER is empty in Tally's own export too; both live on the nature and party masters.
+- The rate is 0 in Tally's own export as well.
+- The line also carries 3 empty sub-allocation rows (tax 0).
+- On 3.0–6.2, the bridge's request returned the same TDS allocation: nature, TDS, party, duty ledger, assessable 1,00,000, tax 2,000.
+- **On 7.1 every TAXOBJECTALLOCATIONS.LIST in the bridge's answer was empty**, as in run 37492981527. Tally's own Day Book export and the `ID:` object export had them filled on 7.1.
+
+Not done: a TDS entry as a Payment voucher (S5's Journal was reused); TDS on the large company.
 
 ## Update of 07-Oct-2026 (2): run 37580283590 [R], the large company with 30,012 vouchers, all five releases
 
@@ -42,7 +102,7 @@ A freeze is a save whose first screen change came more than 1 s after Ctrl+A (`a
 | Heads-only, bridge running | 0 | 0 | 0 | 0 | 0 | **0 of 85** | 80 ms |
 | Full entry, no read-back, bridge stopped | 0 | 0 | 0 | 0 | 0 | **0 of 100** | 203 ms |
 
-**Caution on "bridge running":** bridge 2.3.0 fetched only the first saved voucher on each release. That fetch (`FinComVoucherByMaster`) took 2.2–3.6 s (`proxy.jsonl`: 2,289 ms on 3.0, 3,514 on 4.1, 3,100 on 5.1, 2,359 on 6.2, 3,594 on 7.1). Then the bridge's 2-second rule switched its body fetch off for the rest of the run (`bridge-log-heavy-heads-bridge.txt`: "The body fetch off: Tally took 2.0 s"). So the 85 "bridge running" saves had no fetch overlapping them, and **[R] does not show whether a fetch makes Tally pause.** The heads-only add-on itself caused no freeze with the bridge stopped. In [F] (bridge 2.3.1, which kept fetching), the 38 freezes came only with heads-only and full-entry, the two setups that make the bridge fetch. Run 37588508934 (below) fires the same fetch during each save to settle it.
+**Caution on "bridge running":** bridge 2.3.0 fetched only the first saved voucher on each release. That fetch (`FinComVoucherByMaster`) took 2.2–3.6 s (`proxy.jsonl`: 2,289 ms on 3.0, 3,514 on 4.1, 3,100 on 5.1, 2,359 on 6.2, 3,594 on 7.1). Then the bridge's 2-second rule switched its body fetch off for the rest of the run (`bridge-log-heavy-heads-bridge.txt`: "The body fetch off: Tally took 2.0 s"). So the 85 "bridge running" saves had no fetch overlapping them, and **[R] does not show whether a fetch makes Tally pause.** The heads-only add-on itself caused no freeze with the bridge stopped. In [F] (bridge 2.3.1, which kept fetching), the 38 freezes came only with heads-only and full-entry, the two setups that make the bridge fetch. Run 37591395905 [B] fired the same fetch during each save: see section (3) above, where every such save froze.
 
 ### 5. The company counter straight after a save [R]
 
@@ -62,7 +122,7 @@ The harness sent Ctrl+A and then asked Tally for the company's `ALTVCHID` (a Com
 - **Keyed lookups:** a harness bug (the lookup of the target voucher returned nothing) made the fetch stage skip itself on the large company. No request was sent.
 - **TDS:** on every release the nature of payment was made on its form (Tally's TDS Rate export: True). The TDS entry, typed by the S5 route with OCR, stopped in a Cost Centre Allocations screen for the expense ledger, so **no TDS entry was saved and the add-on wrote no line** (`tds-screen-log.txt`). The party ledger was refused once with "Tax Classification 'PD Contract Work' does not exist!", and two of the three TDS ledgers were made.
 
-Both are fixed in run **37588508934** (mode `v3b`, started 07:37 UTC, in progress at the time of writing): the voucher lookup fixed, the TDS ledgers made with cost centres off and the Cost Centre screen accepted, and a ByMaster fetch fired by the harness 150 ms before Ctrl+A on 10 heads-only saves per release, with the bridge stopped.
+Both were measured in run 37591395905 [B]: see "Update of 07-Oct-2026 (3)" above.
 
 ## Update of 07-Oct-2026: run 37556025582 [V3] and re-analysis of [F]
 
