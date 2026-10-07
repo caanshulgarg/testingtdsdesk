@@ -1,0 +1,15 @@
+2026-10-07 13:52:37  Setup: FinCom Bridge 2.3.3 setup started: Windows Server 2025 Datacenter 24H2 build 26100 (Windows 11); user fcuser2; administrator: no; command line: /S /CURRENTUSER /MODE=sole
+2026-10-07 13:52:37  Setup: Silent install: user, sole mode, into C:\Users\fcuser2\AppData\Local\FinCom Bridge
+2026-10-07 13:52:37  Setup: Installing: user, sole mode, into C:\Users\fcuser2\AppData\Local\FinCom Bridge, as fcuser2
+2026-10-07 13:52:37  Setup: Files written in C:\Users\fcuser2\AppData\Local\FinCom Bridge
+2026-10-07 13:52:38  Setup: Shortcuts and the Apps entry (this user) written
+2026-10-07 13:52:38  Setup: Running: "C:\Users\fcuser2\AppData\Local\FinCom Bridge\FinComBridge.exe" install --per-user --mode sole --fincom "https://staging.fincom.live/review/" --postonly "any"
+2026-10-07 13:52:38  Install: Windows Windows Server 2025 Datacenter 24H2 (build 26100), program C:\Users\fcuser2\AppData\Local\FinCom Bridge\FinComBridge.exe
+2026-10-07 13:52:38  Install (just for this user, no service): FinCom Bridge 2.3.3 for runnervmfi6oq\fcuser2 (S-1-5-21-1643835476-1616584234-1346609752-1003), sole mode, folder C:\Users\fcuser2\AppData\Local\TDS Desk Bridge
+2026-10-07 13:52:41  Install: the add-on FinComRecorder.tdl was not written in C:\ProgramData\FinCom\addon: remove C:\ProgramData\FinCom\addon\FinComRecorder.tdl: Access is denied.
+2026-10-07 13:52:41  Install: the add-on FinComRecorderAnyCompany.tdl was not written in C:\ProgramData\FinCom\addon: remove C:\ProgramData\FinCom\addon\FinComRecorderAnyCompany.tdl: Access is denied.
+2026-10-07 13:52:41  Install: the recorder folder C:\ProgramData\FinCom\recorder and the add-on folder C:\ProgramData\FinCom\addon are ready (just for this user)
+2026-10-07 13:52:41  Install: starts when runnervmfi6oq\fcuser2 signs in to Windows (HKCU Run)
+2026-10-07 13:52:42  Install: done; the bridge answers on 127.0.0.1:9101
+2026-10-07 13:52:42  Setup: FinComBridge.exe install: done, the bridge answers
+2026-10-07 13:52:42  Setup: Finished: installed and running (sole mode)
