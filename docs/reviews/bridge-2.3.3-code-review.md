@@ -82,7 +82,7 @@ a6cfda0), and one Low fixed:
 - The release-check note: the first build (ce79426, setup 3189a834..., never published) is reverted (cd5afb7) and 2.3.3
   was built again after these fixes (and once more after the re-review below).
 
-The re-review of the fixes (07-Oct-2026, b1e5858..a6cfda0) confirmed M1, M2 for vouchers and L1, and found two more,
+The re-review of the fixes (07-Oct-2026, its range ending at a6cfda0) confirmed M1, M2 for vouchers and L1, and found two more,
 both fixed test-first (red at 854a2af, fixed at 68d717c):
 
 - **Medium: M2 for ledger lines** (fixed). The ledger loop had no 4 s check: a masters import of several ledgers at about
