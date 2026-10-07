@@ -68,7 +68,8 @@ function S2Imp($co, $report, [string[]]$objs, $label) {
 }
 function S2StartTally([string[]]$ini) {
   Stop-Process -Id $script:tallyPids[9000] -Force -ErrorAction SilentlyContinue
-  Get-Process tally -ErrorAction SilentlyContinue | Where-Object { $_.Path -and (Split-Path $_.Path) -eq $dir } | Stop-Process -Force -ErrorAction SilentlyContinue
+  # (run 37564741475: a tally process without a path stopped the harness here) only this Tally's port is checked
+  for ($i = 0; $i -lt 10; $i++) { try { Invoke-WebRequest 'http://localhost:9000' -UseBasicParsing -TimeoutSec 2 | Out-Null; Start-Sleep 1 } catch { break } }
   Start-Sleep 4
   Set-Content -Path "$dir\tally.ini" -Value $ini -Encoding ASCII
   Write-Host "[slow232] tally.ini: $($ini -join ' | ')"
