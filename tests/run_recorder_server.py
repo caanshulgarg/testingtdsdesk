@@ -1104,6 +1104,31 @@ try:
     c, r = call({"kind": "ledger_changes", "company": "NOT LINKED", "version": "2.3.1", "bridge": dict(GA, version="2.3.1"), "ledgers": []})
     ok(c == 409, "2.3.1-B. a company not linked: 409 (%s)" % c)
     FS.T.pop("tally_recorder_lines", None); FS.T.pop("tally_ledgers", None); FS.T.pop("tally_groups", None)
+    # ---------------------------------------------------------------- FinCom Bridge 2.3.3 (the owner's rule: "A save must always show
+    # on the Tally page, at least as held with a reason. Silence is not acceptable."): a new save whose body is not there on its first
+    # attempt goes up at once HELD with the bridge's words and NO GUID (no AlterID; a MasterID, or none for a new entry found by its
+    # number); its body comes later as "<line id>:resolved". The cloud keeps the held row with the words, applies the :resolved line
+    # once, replaces the held row (50-52's ":resolved" rule, 60's 51 block), and a second :resolved is a duplicate (44's applied_once)
+    W233 = "waiting: Tally took longer than 2 s; FinCom asks again at 12:15"
+    def x233(mid, alt, no):
+        return tx.replace("-00006729", "-%08x" % mid).replace("> 26409<", "> %d<" % mid).replace("> 54493<", "> %d<" % alt).replace("<VOUCHERNUMBER>213<", "<VOUCHERNUMBER>%s<" % no)
+    rows233 = lambda lid: db.rows("select state, coalesce(held_why, '') as why, coalesce(object_guid, '') as g from tally_recorder_lines where book_id = %s and line_id = %s order by id" % (q(BI), q(lid)))
+    for lid, mid, alt, no, mline in (("HN1", 26420, 54510, "224", "26420"), ("HN2", 26421, 54511, "225", "")):
+        g = CGI + "-%08x" % mid
+        n0 = nI()
+        c, r = reci2([dict(base, line_id=lid, event="created", object_guid="", master_id=mline, alter_id=None, vch_type="Receipt", vch_no=no, vch_date="20261006", heldWhy=W233)])
+        h0 = rows233(lid)
+        ok(c == 200 and st(r) == {lid: "held"} and [x["state"] for x in h0] == ["held"] and h0[0]["why"] == W233 and h0[0]["g"] == "" and nI() == n0,
+           "2.3.3. %s sent held at once with no GUID (MasterID %r): held with the bridge's words, nothing applied (%s; %s)" % (lid, mline, st(r), h0))
+        c, r = reci2([dict(base, line_id=lid + ":resolved", event="created", object_guid=g, master_id=str(mid), alter_id=alt, vch_type="Receipt", vch_no=no, vch_date="20261006", xml=x233(mid, alt, no))])
+        h1, hr = rows233(lid), rows233(lid + ":resolved")
+        ok(c == 200 and st(r) == {lid + ":resolved": "applied"} and [x["state"] for x in h1] == ["replaced"] and h1[0]["why"].startswith("replaced by line ")
+           and [x["state"] for x in hr] == ["applied"] and int(nI()) == int(n0) + 1 and vrow_b(BI, g).get("alter_id") == str(alt),
+           "2.3.3. %s:resolved with Tally's body: applied, the held row (no GUID) replaced, the entry in the copy once (%s; %s; %s -> %s)" % (lid, st(r), h1, n0, nI()))
+        c, r = reci2([dict(base, line_id=lid + ":resolved", event="created", object_guid=g, master_id=str(mid), alter_id=alt, vch_type="Receipt", vch_no=no, vch_date="20261006", xml=x233(mid, alt, no))])
+        ok(c == 200 and st(r) == {lid + ":resolved": "duplicate"} and int(nI()) == int(n0) + 1 and vrow_b(BI, g).get("alter_id") == str(alt)
+           and db.one("select count(*) from tally_recorder_lines where book_id = %s and object_guid = %s and state = 'applied'" % (q(BI), q(g))) == "1",
+           "2.3.3. a second %s:resolved: duplicate, applied once, the books not doubled (%s; %s)" % (lid, st(r), nI()))
 finally:
     if fn: fn.terminate()
     db.stop()

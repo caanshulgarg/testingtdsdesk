@@ -43,8 +43,9 @@ func retryHeldRows(mids ...string) []any {
 }
 
 // --- Tally silent for 3 minutes, then answering: nothing switched off; one request at each retry (15 s, 30 s after the
-// last) while a held line is left to ask; 2.3.2 (issue 232, b): each held line asked and not answered in time waits 1 h
-// for its next ask; the first answer in time brings it back and the held lines come in
+// last) while a held line is left to ask; 2.3.3 (the owner's rule of 07-Oct-2026, replacing 2.3.2's 1 h / 4 h): each held
+// line is asked again at most once, and one not answered in time ends at once with the Day Book words; the first answer in
+// time brings the schedule back to normal
 func TestRetrySilentThreeMinutesThenAnswers(t *testing.T) {
 	_, f, c := r222bBridge(t, "")
 	base := time.Date(2026, 10, 5, 12, 14, 50, 0, liveZone)
@@ -89,29 +90,32 @@ func TestRetrySilentThreeMinutesThenAnswers(t *testing.T) {
 			t.Fatalf("the retry at %d s sent %d request(s) (want 1)", at, asks()-n+1)
 		}
 	}
-	// 2.3.2 (issue 232, b): each held line has had one timed-out try (one at each retry try: 0, 15 and 45 s); its next ask
-	// is 1 h after it, not at the retry schedule's later tries (2.3.1 asked again at every try, for 7 days)
-	for _, at := range []int{105, 225, 1800, 3599} {
+	// 2.3.3: each held line has had its one ask (one at each retry try: 0, 15 and 45 s) and ended; never asked again
+	for _, at := range []int{105, 225, 1800, 3599, 3600, 7 * 3600} {
 		retryClock(base, at)
 		liveUploadOnce()
 		if asks() != 3 {
 			t.Fatalf("a held line was asked again at %d s (%d asks, want 3)", at, asks())
 		}
 	}
-	silent.Store(false) // Tally answers again
-	retryClock(base, 3600+45)
+	silent.Store(false) // Tally answers again: the next background request answered in time puts the schedule back
+	retryClock(base, 8*3600)
 	for i := 0; i < 4; i++ {
 		liveUploadOnce()
 	}
+	openCompaniesAsk(bgCompaniesTC(), true)
 	if retryHeld() || retryWords() != "" {
 		t.Fatalf("not back to normal after an answer in time: %q", retryWords())
 	}
+	if asks() != 3 {
+		t.Fatalf("asked again after the end: %d", asks())
+	}
 	for _, mid := range mids {
-		if s := r222cSentID(c, "nws-"+mid+":resolved"); len(s) != 1 || str(s[0]["object_guid"]) != r222GUID(toI64(mid)) || str(s[0]["xml"]) == "" {
-			t.Fatalf("held line %s did not come in: %v", mid, s)
+		if s := r222cSentID(c, "nws-"+mid+":resolved"); len(s) != 1 || str(s[0]["xml"]) != "" || str(s[0]["heldWhy"]) != liveHeldSlowGiveUp {
+			t.Fatalf("held line %s did not end with the Day Book words: %v", mid, s)
 		}
 	}
-	if logLines("trying again by itself at") != 3 { // 2.3.2: three stops (one per held line), then 1 h
+	if logLines("trying again by itself at") != 3 { // three stops (one per held line)
 		t.Fatalf("one log line per retry: %d\n%s", logLines("trying again by itself at"), readText(logFile()))
 	}
 	if logLines(" off: ") != 0 || logLines("Reading from Tally stopped") != 0 || readStop() != nil {

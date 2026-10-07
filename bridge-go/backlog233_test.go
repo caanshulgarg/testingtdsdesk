@@ -23,9 +23,11 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -142,11 +144,12 @@ func TestBacklog233NewSaveHeldAtOnceThenResolved(t *testing.T) {
 	if len(r) != 1 || str(r[0]["xml"]) == "" || str(r[0]["object_guid"]) != r222GUID(25800) || str(r[0]["heldWhy"]) != "" {
 		t.Fatalf("the body did not go as %s:resolved: %v", cut(id, 8), r)
 	}
-	// and the backlog is resolved by itself afterwards (10 a turn)
+	// and the backlog is resolved by itself afterwards (10 a turn; old-25000, whose ask was stopped, waits its hour as
+	// 2.3.2 says)
 	for i := 0; i < 8; i++ {
 		liveUploadOnce()
 	}
-	if n := len(r222cSentID(c, "old-25000:resolved")) + len(r222cSentID(c, "old-25039:resolved")); n != 2 {
+	if n := len(r222cSentID(c, "old-25001:resolved")) + len(r222cSentID(c, "old-25039:resolved")); n != 2 {
 		t.Fatalf("the backlog did not resolve: %d of 2 checked", n)
 	}
 }
@@ -256,7 +259,11 @@ func TestBacklog233ResolverCannotStarve(t *testing.T) {
 			t.Fatalf("save %d was not asked within 2 tries; asked: %v", mid, backlog233Asked(f))
 		}
 	}
-	// the old ones still get their turn: not starved either
+	// the old ones still get their turn once the new ones have had their 3 asks: not starved either
+	for try := 0; try < 12; try++ {
+		retryDue()
+		liveUploadOnce()
+	}
 	old := 0
 	for _, m := range backlog233Asked(f) {
 		if strings.HasPrefix(m, "250") {
@@ -448,4 +455,114 @@ func cutTail(s string, n int) string {
 		return s
 	}
 	return s[len(s)-n:]
+}
+
+// --- the owner's rules of 07-Oct-2026 (evening), replacing 2.3.2's back-off where they differ:
+//
+//	a. an old held line is asked again AT MOST ONCE; if that ask stops or fails it ends at once with the Day Book words;
+//	c. every line reaches FinCom within 10 s of its save, at least held with its reason;
+//	d. nothing is sent to a Tally that has not answered the previous request: after a 2 s stop the request is kept open
+//	   until Tally answers it (inflight.go), and only then does the next one go.
+//
+// With 40 old held lines, Tally at 2.2 s on every entry and the abandoned requests kept open: Tally gets ONE request per
+// old line, never two at once, every old line ends, and a new save is in the cloud within 5 s
+func TestBacklog233OldLinesAskedOnceOneAtATime(t *testing.T) {
+	p, f, c := slow232Bridge(t)
+	setCfg("TallyAbandonMaxSec", float64(600))
+	t.Cleanup(resetEarlier)
+	var now, most atomic.Int32
+	f.mu.Lock()
+	f.slow = nil
+	f.behave = func(w http.ResponseWriter, r *http.Request, id, body string) bool {
+		n := now.Add(1)
+		defer now.Add(-1)
+		for {
+			m := most.Load()
+			if n <= m || most.CompareAndSwap(m, n) {
+				break
+			}
+		}
+		if id == vchByMasterID || id == vchByNumberID {
+			time.Sleep(220 * time.Millisecond) // Tally itself busy 2.2 s (the stop is at 2 s), whether or not anyone waits
+		}
+		return false
+	}
+	f.mu.Unlock()
+	t.Cleanup(func() { earlierQuiet(f.port) })
+	ids := backlog233Held(t, f, 40)
+	r222Vch(f, 25990, "Journal", "J-25990", "20261005", 54990)
+	start := time.Now()
+	var newAt time.Duration
+	saved := false
+	for time.Since(start) < 40*time.Second {
+		if !saved && time.Since(start) > 2*time.Second {
+			liveAppend(t, p, slowLine(25990, "07:30")...)
+			saved = true
+			start2 := time.Now()
+			for newAt == 0 && time.Since(start2) < 10*time.Second {
+				liveReadOnce()
+				liveUploadOnce()
+				if backlog233First(c, 25990) != nil {
+					newAt = time.Since(start2)
+				}
+				time.Sleep(20 * time.Millisecond)
+			}
+			if newAt == 0 {
+				t.Fatalf("the new save is not in the cloud 10 s after it (silence):\n%s", cutTail(readText(logFile()), 3000))
+			}
+		}
+		retryDue()
+		liveReadOnce()
+		liveUploadOnce()
+		ended := 0
+		for _, id := range ids {
+			if len(r222cSentID(c, id+":resolved")) > 0 {
+				ended++
+			}
+		}
+		if ended == len(ids) && saved {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if newAt > 5*time.Second {
+		t.Errorf("the new save took %s to reach the cloud (over 5 s)", newAt.Round(time.Millisecond))
+	}
+	per := map[string]int{}
+	for _, m := range backlog233Asked(f) {
+		per[m]++
+	}
+	for _, id := range ids {
+		mid := strings.TrimPrefix(id, "old-")
+		if per[mid] > 1 {
+			t.Errorf("old held line %s: %d requests (at most one)", mid, per[mid])
+		}
+		s := r222cSentID(c, id+":resolved")
+		if len(s) != 1 || str(s[0]["xml"]) != "" || str(s[0]["heldWhy"]) != liveHeldSlowGiveUp {
+			t.Errorf("old held line %s did not end with the Day Book words: %v", mid, s)
+		}
+	}
+	if most.Load() != 1 {
+		t.Errorf("%d requests at Tally at once (want 1: nothing sent while a stopped request is still at Tally)", most.Load())
+	}
+}
+
+// --- a. an old held line Tally answers without its entry ("not there"): its one ask is used; it ends with the words
+func TestBacklog233OldLineNotFoundEndsAfterOneAsk(t *testing.T) {
+	_, f, c := slow232Bridge(t)
+	heldMu.Lock()
+	all, items := liveHeldLoad()
+	yest := nowFn().Add(-20 * time.Hour).Format(time.RFC3339)
+	items["old-x"] = heldLine{ID: "old-x", Company: nwsCo, CGUID: nwsGUID, Type: "Journal", No: "J-X", Date: "20261005", MID: "25555", At: yest, Added: yest, Last: yest, Ev: "created"}
+	liveHeldSave(all, items)
+	heldMu.Unlock()
+	for i := 0; i < 5; i++ {
+		liveUploadOnce()
+	}
+	if n := f.n(vchByMasterID) + f.n(vchByNumberID); n != 1 {
+		t.Fatalf("asked %d times (want one request): %v", n, f.ids())
+	}
+	if s := r222cSentID(c, "old-x:resolved"); len(s) != 1 || str(s[0]["heldWhy"]) != liveHeldOnceGiveUp {
+		t.Fatalf("the end: %v", s)
+	}
 }
