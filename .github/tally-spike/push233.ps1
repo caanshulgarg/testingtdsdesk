@@ -27,7 +27,7 @@
 #        in its own user's file, none mixed; a company on a network share (\\localhost\p233share); a save on the large company
 #        (100,000+ entries): save time and screen freeze (first screen change more than 1 s after Ctrl+A)
 # MEASURE / INFO lines carry what the coordinator asked recorded; PASS / FAIL only for what the build claims (P1-P6, P10 users).
-$P233 = @{ dir = (Join-Path $out 'push233'); proxyLog = (Join-Path $out 'push233\proxy.jsonl'); ok = $false; loadOk = $false; tpl = @{}; saves = @()
+$P233 = @{ dir = (Join-Path $out 'push233'); proxyLog = (Join-Path $out 'push233\proxy.jsonl'); ok = $false; loadOk = $false; tpl = @{}; tplBad = @(); saves = @()
   big = [int]$(if ($env:P233_BIG) { $env:P233_BIG } else { 100000 }); bigCo = 'FinCom Big Co'; share = '\\localhost\p233share' }
 New-Item -ItemType Directory -Force $P233.dir | Out-Null
 
@@ -48,11 +48,16 @@ function P3Kinds($lines) { (($lines | ForEach-Object { [regex]::Match($_, '^FCR1
 function P3What($lines) { if (@($lines | Where-Object { $_ -like 'FCR1|ev=voucher_full|*' }).Count) { 'full line' } elseif (@($lines).Count) { "heads only ($(P3Kinds $lines))" } else { 'nothing' } }
 function DayBookAt($date, $shot = '') { KeysTo 9000 '%g' 2; KeysTo 9000 'Day Book' 1; KeysTo 9000 '{ENTER}' 3; KeysTo 9000 '{F2}' 2; KeysTo 9000 "$date{ENTER}" 3 $shot }
 
-# the templates (one of each kind) by XML; their numbers and dates chosen so the Day Book of the date shows it last
+# the templates (one of each kind) by XML; their numbers and dates chosen so the Day Book of the date shows it last. Dates:
+# only the 1st, 2nd and 31st of a month (TallyPrime's Educational mode, as S2Dates; run 37653875217: "Voucher date is
+# missing" for the 7th); each its own day, none of scen231's (Aug, Oct, Jan) nor P9's 1-11-2026
 function P3Templates {
   $m = @('<UNIT NAME="Nos" ACTION="Create"><NAME>Nos</NAME><ISSIMPLEUNIT>Yes</ISSIMPLEUNIT></UNIT>')
   $m += S2Led 'P233 Party' 'Sundry Debtors' '<ISBILLWISEON>Yes</ISBILLWISEON>'; $m += S2Led 'P233 Bank' 'Bank Accounts'
-  $m += S2Led 'P233 Sales' 'Sales Accounts' '<AFFECTSSTOCK>Yes</AFFECTSSTOCK>'; $m += S2Led 'Output CGST' 'Duties &amp; Taxes'; $m += S2Led 'Output SGST' 'Duties &amp; Taxes'
+  $m += S2Led 'P233 Sales' 'Sales Accounts' '<AFFECTSSTOCK>Yes</AFFECTSSTOCK>'; $m += S2Led 'Output CGST' 'Duties & Taxes'; $m += S2Led 'Output SGST' 'Duties & Taxes'
+  # the ledgers slow232's S2Receipt and S2Sales name (run 37653875217: "Ledger 'HDFC Bank' does not exist!"); S2Led escapes
+  # the parent itself (that run: "Group 'Duties &amp;amp; Taxes' does not exist!")
+  $m += S2Led 'HDFC Bank' 'Bank Accounts'; $m += S2Led 'Sales' 'Sales Accounts'
   foreach ($g in 'P233 Main', 'P233 Annex') { $m += '<GODOWN NAME="' + $g + '" ACTION="Create"><NAME.LIST><NAME>' + $g + '</NAME></NAME.LIST><PARENT/><HASNOSPACE>No</HASNOSPACE></GODOWN>' }
   for ($i = 1; $i -le 50; $i++) { $m += S2Item ('P233 Item {0:d2}' -f $i) }
   foreach ($n in 'P233 Bat A', 'P233 Bat B') {
@@ -62,10 +67,10 @@ function P3Templates {
   }
   $null = P3Imp $co1 'All Masters' $m 'push233 masters'
   $items = @(); for ($i = 1; $i -le 50; $i++) { $items += ('P233 Item {0:d2}' -f $i) }
-  $P233.tpl.receipt = @{ date = '20261105'; dmy = '5-11-2026'; xml = (S2Receipt '20261105' 'P233-R1' 'P233 Party' 1180 'push233 receipt') }
-  $P233.tpl.sales50 = @{ date = '20261106'; dmy = '6-11-2026'; xml = (S2Sales '20261106' 'P233-S50' 'P233 Party' $items 'push233 50 items') }
+  $P233.tpl.receipt = @{ date = '20261102'; dmy = '2-11-2026'; xml = ((S2Receipt '20261102' 'P233-R1' 'P233 Party' 1180 'push233 receipt') -replace 'HDFC Bank', 'P233 Bank') }   # P7 reconciles P233 Bank
+  $P233.tpl.sales50 = @{ date = '20261201'; dmy = '1-12-2026'; xml = (S2Sales '20261201' 'P233-S50' 'P233 Party' $items 'push233 50 items') }
   # the godown invoice: two batch items, each in two godowns x two batches
-  $gx = '<VOUCHER VCHTYPE="Sales" ACTION="Create" OBJVIEW="Invoice Voucher View"><DATE>20261107</DATE><VOUCHERTYPENAME>Sales</VOUCHERTYPENAME><VOUCHERNUMBER>P233-G1</VOUCHERNUMBER><PARTYLEDGERNAME>P233 Party</PARTYLEDGERNAME><PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW><ISINVOICE>Yes</ISINVOICE><NARRATION>push233 godowns and batches</NARRATION>'
+  $gx = '<VOUCHER VCHTYPE="Sales" ACTION="Create" OBJVIEW="Invoice Voucher View"><DATE>20261202</DATE><VOUCHERTYPENAME>Sales</VOUCHERTYPENAME><VOUCHERNUMBER>P233-G1</VOUCHERNUMBER><PARTYLEDGERNAME>P233 Party</PARTYLEDGERNAME><PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW><ISINVOICE>Yes</ISINVOICE><NARRATION>push233 godowns and batches</NARRATION>'
   $gx += '<LEDGERENTRIES.LIST><LEDGERNAME>P233 Party</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><ISPARTYLEDGER>Yes</ISPARTYLEDGER><AMOUNT>-944.00</AMOUNT><BILLALLOCATIONS.LIST><NAME>P233-G1</NAME><BILLTYPE>New Ref</BILLTYPE><AMOUNT>-944.00</AMOUNT></BILLALLOCATIONS.LIST></LEDGERENTRIES.LIST>'
   foreach ($t in 'Output CGST', 'Output SGST') { $gx += '<LEDGERENTRIES.LIST><LEDGERNAME>' + $t + '</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>72.00</AMOUNT></LEDGERENTRIES.LIST>' }
   foreach ($it in 'P233 Bat A', 'P233 Bat B') {
@@ -73,10 +78,11 @@ function P3Templates {
     foreach ($g in 'P233 Main', 'P233 Annex') { foreach ($b in 'B1', 'B2') { $gx += '<BATCHALLOCATIONS.LIST><GODOWNNAME>' + $g + '</GODOWNNAME><BATCHNAME>' + $b + '</BATCHNAME><AMOUNT>100.00</AMOUNT><ACTUALQTY> 1 Nos</ACTUALQTY><BILLEDQTY> 1 Nos</BILLEDQTY></BATCHALLOCATIONS.LIST>' } }
     $gx += '<ACCOUNTINGALLOCATIONS.LIST><LEDGERNAME>P233 Sales</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>400.00</AMOUNT></ACCOUNTINGALLOCATIONS.LIST></ALLINVENTORYENTRIES.LIST>'
   }
-  $P233.tpl.godown = @{ date = '20261107'; dmy = '7-11-2026'; xml = ($gx + '</VOUCHER>') }
+  $P233.tpl.godown = @{ date = '20261202'; dmy = '2-12-2026'; xml = ($gx + '</VOUCHER>') }
   foreach ($k in 'receipt', 'sales50', 'godown') {
     $r = P3Imp $co1 'Vouchers' @($P233.tpl[$k].xml) "push233 template $k"
     Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO push233 template ${k}: created $($r.created), errors $($r.errors)"
+    if ($r.created -lt 1) { $P233.tplBad += @($k) }
   }
 }
 
@@ -94,7 +100,15 @@ function P3LoadCheck {
   $errFiles = @(Get-ChildItem $dir, $data1, (Join-Path $dir 'logs') -Recurse -File -Include 'tdlerr*', '*.tdlerr', 'tdl*.log' -ErrorAction SilentlyContinue)
   $errFiles | ForEach-Object { Copy-Item $_.FullName (Join-Path $P233.dir "L0-$($_.Name)") -ErrorAction SilentlyContinue }
   $errText = (($errFiles | ForEach-Object { Get-Content $_.FullName -Raw -ErrorAction SilentlyContinue }) -join ' ') -replace '\s+', ' '
+  if ($P233.tplBad.Count) {
+    Result 'push233 setup (harness)' $false ("the template(s) {0} were not imported (see round4.log, '[slow232 import] push233 template'): no save can be made; the add-on is not judged" -f ($P233.tplBad -join ', ')) $true
+    Remove-Item "$rec\*" -Force -ErrorAction SilentlyContinue; return
+  }
   $r = P3Save 'receipt'
+  if ($r.alt0 -eq $r.alt1 -and -not @($r.lines).Count) {
+    Result 'push233 setup (harness)' $false ("L0's receipt was not saved: Tally's ALTVCHID {0} -> {1}, nothing in the recorder file (see the p233-receipt screenshots); the add-on is not judged" -f $r.alt0, $r.alt1) $true
+    Remove-Item "$rec\*" -Force -ErrorAction SilentlyContinue; return
+  }
   $ev = @($r.lines | ForEach-Object { [regex]::Match($_, '^FCR1\|ev=([^|]+)').Groups[1].Value })
   $full = @($r.lines | Where-Object { $_ -like 'FCR1|ev=voucher_full|*' -and $_ -match '\|end=1\|t1=[^|]*\|src=live$' })
   $lenOk = $full.Count -and $full[0] -match '\|narr=' -and $full[0] -match '~neg=(Yes|No)' -and $full[0] -match '\|len=\d+\|end=1\|'
@@ -244,7 +258,7 @@ function Push233 {
   # after; screenshots p233-p7-*
   foreach ($case in @(
       @{ n = 'e-way bill number on the saved invoice'; keys = @('%e', '{ENTER}', 'EWB-P233-1{ENTER}', '^a') ; day = $P233.tpl.sales50.dmy },
-      @{ n = 'e-invoice details (IRN, ack no, ack date) on the saved invoice'; keys = @('%i', '{ENTER}', 'IRN-P233-0001{ENTER}', 'ACK-P233-1{ENTER}', '6-11-2026{ENTER}', '^a'); day = $P233.tpl.sales50.dmy })) {
+      @{ n = 'e-invoice details (IRN, ack no, ack date) on the saved invoice'; keys = @('%i', '{ENTER}', 'IRN-P233-0001{ENTER}', 'ACK-P233-1{ENTER}', '1-12-2026{ENTER}', '^a'); day = $P233.tpl.sales50.dmy })) {
     $b = P3RecLines; $a0 = P3Alt
     DayBookAt $case.day "p233-p7-$($case.n.Substring(0, 6))-daybook"; KeysTo 9000 '{END}' 1; KeysTo 9000 '{ENTER}' 3 "p233-p7-$($case.n.Substring(0, 6))-open"
     foreach ($k in $case.keys) { KeysTo 9000 $k 2 }
@@ -254,7 +268,7 @@ function Push233 {
   }
   $b = P3RecLines; $a0 = P3Alt
   KeysTo 9000 '%g' 2; KeysTo 9000 'Bank Reconciliation' 1; KeysTo 9000 '{ENTER}' 3 'p233-p7-brs-select'; KeysTo 9000 'P233 Bank{ENTER}' 4 'p233-p7-brs-open'
-  KeysTo 9000 '{DOWN}' 1; KeysTo 9000 '{RIGHT}{RIGHT}{RIGHT}{RIGHT}' 1; KeysTo 9000 '5-11-2026{ENTER}' 2 'p233-p7-brs-date'; KeysTo 9000 '^a' 3 'p233-p7-brs-saved'
+  KeysTo 9000 '{DOWN}' 1; KeysTo 9000 '{RIGHT}{RIGHT}{RIGHT}{RIGHT}' 1; KeysTo 9000 '2-11-2026{ENTER}' 2 'p233-p7-brs-date'; KeysTo 9000 '^a' 3 'p233-p7-brs-saved'
   KeysTo 9000 '{ESC}' 1; KeysTo 9000 '{ESC}' 1; Start-Sleep 3
   $a1 = P3Alt; $n = @(P3RecLines | Select-Object -Skip $b.Count)
   Add-Content -Path $resultsFile -Encoding UTF8 -Value ("MEASURE push233 P7 bankers date in Bank Reconciliation: the add-on wrote {0}; ALTVCHID {1} -> {2}; the bdt fields: {3}" -f (P3What $n), $a0.vch, $a1.vch, (($n | ForEach-Object { [regex]::Matches($_, 'bdt=[^~|]*') | ForEach-Object Value }) -join ' '))
@@ -263,8 +277,8 @@ function Push233 {
 
   # P8 (item 2): entries with no save screen
   $cases = @(
-    @{ n = 'a plain XML import'; f = { $null = P3Imp $co1 'Vouchers' @((S2Receipt '20261108' 'P233-X1' 'P233 Party' 10 'push233 plain import')) 'p8 import' } },
-    @{ n = "an XML import tagged as FinCom's posting (TDSDesk:p233x2)"; f = { $null = P3Imp $co1 'Vouchers' @((S2Receipt '20261108' 'P233-X2' 'P233 Party' 20 'push233 posting | TDSDesk:p233x2')) 'p8 posting' } },
+    @{ n = 'a plain XML import'; f = { $null = P3Imp $co1 'Vouchers' @((S2Receipt '20261231' 'P233-X1' 'P233 Party' 10 'push233 plain import')) 'p8 import' } },
+    @{ n = "an XML import tagged as FinCom's posting (TDSDesk:p233x2)"; f = { $null = P3Imp $co1 'Vouchers' @((S2Receipt '20261231' 'P233-X2' 'P233 Party' 20 'push233 posting | TDSDesk:p233x2')) 'p8 posting' } },
     @{ n = 'a ledger renamed on its form (it is on saved entries)'; f = { KeysTo 9000 '%g' 2; KeysTo 9000 'Alter Ledger' 1; KeysTo 9000 '{ENTER}' 3; KeysTo 9000 'P233 Party{ENTER}' 3 'p233-p8-ledger'; KeysTo 9000 '^a' 1; KeysTo 9000 '{HOME}' 1; KeysTo 9000 '+{END}' 1; KeysTo 9000 'P233 Party Renamed{ENTER}' 2; KeysTo 9000 '^a' 3 'p233-p8-renamed'; KeysTo 9000 '{ESC}' 1 } },
     @{ n = 'multi-alter (Ctrl+H on the Day Book, where this release offers it)'; f = { DayBookAt $P233.tpl.sales50.dmy 'p233-p8-multi-daybook'; KeysTo 9000 '^h' 3 'p233-p8-ctrlh'; KeysTo 9000 '{ENTER}' 2; KeysTo 9000 '^a' 3 'p233-p8-multi-saved'; KeysTo 9000 '{ESC}' 1; KeysTo 9000 '{ESC}' 1 } })
   foreach ($c in $cases) {
