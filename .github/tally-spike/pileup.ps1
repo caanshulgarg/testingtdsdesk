@@ -9,6 +9,10 @@
 #      a large ledger import (about 30 s by a timed 500-ledger import first) dropped at 2 s, a one-ledger import queued
 #      behind it (also dropped at 2 s), then a small request timed; Tally's CPU time; then the ledgers counted. The same with
 #      a slow export.
+#   B3 (next-inflight, 07-Oct-2026): the same large import given up at 2 s with the connection KEPT open, as the bridge on
+#      next-inflight does (it waits up to 20 s more for Tally to finish, then backs off, and never sends anything else
+#      before the answer): when Tally answers it on that connection (after the stop), what it made, and how fast the next
+#      request is answered after it.
 $PU = @{ dir = Join-Path $out 'pileup' }
 New-Item -ItemType Directory -Force $PU.dir | Out-Null
 Add-Type @'
@@ -156,6 +160,19 @@ function PuAbandon([string]$body, [int]$ms) {
   $sw.Stop(); $hc.Dispose()
   [pscustomobject]@{ sent = $sent; ms = $sw.ElapsedMilliseconds; result = $a }
 }
+# a request the client stops waiting for but keeps open (next-inflight): sent now, its answer read later
+function PuKeep([string]$body) {
+  $hd = [System.Net.Http.HttpClientHandler]::new(); $hd.UseProxy = $false
+  $hc = [System.Net.Http.HttpClient]::new($hd); $hc.Timeout = [TimeSpan]::FromSeconds(900)
+  $sent = Get-Date; $sw = [Diagnostics.Stopwatch]::StartNew()
+  $task = $hc.PostAsync('http://127.0.0.1:9000/', [System.Net.Http.StringContent]::new($body, [Text.Encoding]::UTF8, 'text/xml'))
+  [pscustomobject]@{ hc = $hc; task = $task; sent = $sent; sw = $sw }
+}
+function PuKeepEnd($k) {
+  try { $r = $k.task.GetAwaiter().GetResult(); $txt = $r.Content.ReadAsStringAsync().GetAwaiter().GetResult(); $a = "answered $([int]$r.StatusCode)" } catch { $txt = ''; $a = "failed ($($_.Exception.GetType().Name))" }
+  $k.sw.Stop(); $k.hc.Dispose()
+  [pscustomobject]@{ ms = $k.sw.ElapsedMilliseconds; result = $a; created = [regex]::Match($txt, '<CREATED>(\d+)</CREATED>').Groups[1].Value }
+}
 function PuTimed([string]$body, [int]$sec = 900) {
   $sw = [Diagnostics.Stopwatch]::StartNew(); $sent = Get-Date
   try { $c = (Invoke-WebRequest 'http://127.0.0.1:9000' -Method Post -Body $body -ContentType 'text/xml;charset=utf-8' -UseBasicParsing -TimeoutSec $sec).Content; $ok = $true } catch { $c = ''; $ok = $false }
@@ -213,6 +230,19 @@ function PileB {
   Start-Sleep 2; Stop-Job $cpu -ErrorAction SilentlyContinue; $smp2 = @(Receive-Job $cpu -ErrorAction SilentlyContinue); Remove-Job $cpu -Force -ErrorAction SilentlyContinue
   PuMeasure ("B2 slow export (every ledger, FETCH *): {0} ms and {1:n0} KB when waited for; given up after {2} ms ({3}); a one-ledger import queued behind it: {4}; a small request sent {5} answered after {6} ms; {7}; the queued ledger in Tally afterwards: {8}" -f `
     $d2.ms, ($d2.text.Length / 1KB), $a2.ms, $a2.result, $q2.result, $p2.sent.ToString('HH:mm:ss.fff'), $p2.ms, (PuCpuText $smp2 $a2.sent $tAns2), $cnt2.queued)
+  # B3: kept open (next-inflight): the client stops waiting at 2 s but keeps the connection; nothing else is sent until
+  # Tally answers it; then the next request
+  $body3 = PuImpLedgers 'PUB3' $n
+  $cpu = PuCpuStart $tp.Id 900
+  $k3 = PuKeep $body3
+  Start-Sleep -Milliseconds 2000; $tStop3 = Get-Date
+  $e3 = PuKeepEnd $k3; $tDone3 = Get-Date
+  $p3 = PuTimed $puSmall 900; $tAns3 = Get-Date
+  $cnt3 = PuCount 'PUB3'
+  Start-Sleep 2; Stop-Job $cpu -ErrorAction SilentlyContinue; $smp3 = @(Receive-Job $cpu -ErrorAction SilentlyContinue); Remove-Job $cpu -Force -ErrorAction SilentlyContinue
+  $after3 = [int]($tDone3 - $tStop3).TotalMilliseconds
+  PuMeasure ("B3 kept open (next-inflight): large import ({0} ledgers) sent {1}; the client stopped waiting at 2 s ({2}) and kept the connection; Tally answered it on that connection after {3} ms ({4}, CREATED {5}), {6} ms after the stop ({7} the bridge's 20 s wait); the next request (small) sent right after was answered in {8} ms (at {9}); {10}; Tally holds {11} of the {0} ledgers" -f `
+    $n, $k3.sent.ToString('HH:mm:ss.fff'), $tStop3.ToString('HH:mm:ss.fff'), $e3.ms, $e3.result, $e3.created, $after3, $(if ($after3 -le 20000) { 'within' } else { 'after' }), $p3.ms, $tAns3.ToString('HH:mm:ss.fff'), (PuCpuText $smp3 $k3.sent $tAns3), $cnt3.numbered)
   Start-Sleep 5; PuLogStop $log
   Copy-Item $log.file (Join-Path $out 'pileup-b-tcp.txt') -ErrorAction SilentlyContinue
   $bc = PuConns $log $a1.sent.AddSeconds(-1) (Get-Date)
