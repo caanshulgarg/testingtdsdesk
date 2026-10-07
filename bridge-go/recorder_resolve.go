@@ -736,6 +736,8 @@ func liveResolveTurn() {
 	var ask []heldLine
 	prevLast := map[string]string{} // the line's last ask before this turn's: put back when Tally did not answer in time
 	refetchAsked := 0
+	// next release, item 2.a: Tally answered again after it did not: a line held for its silence goes at once, one a turn
+	again, againAsked := answeredAgainLast(), 0
 	for _, id := range ids {
 		h := items[id]
 		rid := id + ":resolved"
@@ -769,7 +771,11 @@ func liveResolveTurn() {
 			continue
 		}
 		if last, err := time.Parse(time.RFC3339, h.Last); err == nil && now.Sub(last) < wait {
-			continue
+			if againAsked >= 1 || again.IsZero() || !last.Before(again) || !liveHeldNoAnswer(h.Why) {
+				continue
+			}
+			againAsked++
+			liveSay(h.Type, h.No, h.Date, h.MID, id, "Tally answers again: asked at once (it was held because Tally did not answer)")
 		}
 		// after 2.3.0: a line FinCom asked for again (refetch): only while this bridge's own Tally has its company open (the
 		// own-Tally rule), and one such line a turn
@@ -900,6 +906,9 @@ func liveResolveTurn() {
 		if r.answered {
 			h.Tries++
 			h.TriesVer = BridgeVersion
+			if r.why != "" {
+				h.Why = liveCapWhy(r.why) // item 2.a: Tally answered: held now for what it said, spaced as before
+			}
 		}
 		if r.final {
 			h.Final = true
@@ -911,6 +920,17 @@ func liveResolveTurn() {
 		items[r.id] = h
 	}
 	liveHeldSave(all, items)
+}
+
+// item 2.a: held because Tally did not answer (the 2-second stop, a time-out, a closed connection, the retry schedule's
+// wait, a busy Tally), not for anything Tally said
+func liveHeldNoAnswer(why string) bool {
+	for _, s := range []string{errRecorderStop.Error(), errTimeout.Error(), errClosed.Error(), "did not answer", "is busy"} {
+		if strings.Contains(why, s) {
+			return true
+		}
+	}
+	return false
 }
 
 // under live.mu: a line FinCom listed again because its ":resolved" line waited for a ledger, not yet sent again by this

@@ -72,6 +72,9 @@ func retryReset() {
 	retryMu.Lock()
 	retryN, retryAt, retryUntil, retryGoing = 0, time.Time{}, time.Time{}, false
 	retryMu.Unlock()
+	answeredAgainMu.Lock()
+	answeredAgainAt = time.Time{}
+	answeredAgainMu.Unlock()
 }
 
 // a background request about to be sent: it goes (try: it is the schedule's try), or why it waits
@@ -108,6 +111,7 @@ func retryNote(port int, id string, err error) {
 	case err == nil:
 		if retryN > 0 {
 			writeLog(fmt.Sprintf("Tally %d answered in time again (%s): the background requests are back to normal", port, id))
+			answeredAgainNote()
 		}
 		retryN, retryAt, retryUntil = 0, time.Time{}, time.Time{}
 	case errors.Is(err, errRecorderStop) || tallyNoAnswer(err):
@@ -138,4 +142,26 @@ func retryBeat() any {
 	retryMu.Lock()
 	defer retryMu.Unlock()
 	return M{"words": w, "at": retryAt.Format("2006-01-02T15:04:05"), "next": retryUntil.Format("2006-01-02T15:04:05"), "tries": retryN}
+}
+
+// next release, item 2.a (the owner, 07-Oct-2026): "Re-ask a held entry the moment Tally answers again, not every 10
+// minutes." The moment Tally answers again after it did not (the retry schedule's try answered in time, a busy spell
+// ended, the small check answered): a line held because Tally did not answer, last asked before it, is not spaced by
+// RecorderResolveSec; the resolver takes it at once, one a turn, in order (recorder_resolve.go). Nothing is sent for it
+var (
+	answeredAgainMu sync.Mutex
+	answeredAgainAt time.Time
+)
+
+func answeredAgainNote() {
+	answeredAgainMu.Lock()
+	answeredAgainAt = nowFn()
+	answeredAgainMu.Unlock()
+}
+
+// when Tally last answered again after it did not (zero: not since the bridge started)
+func answeredAgainLast() time.Time {
+	answeredAgainMu.Lock()
+	defer answeredAgainMu.Unlock()
+	return answeredAgainAt
 }
