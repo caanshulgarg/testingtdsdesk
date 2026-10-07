@@ -357,7 +357,7 @@ Say '---- the bridges, each installed by its own Windows user with the real setu
 # in their own sessions each bridge finds its own Tally (TallyPorts auto, as installed); in one shared session the port is set
 function SeedJson($key, [int]$tport) { $tp = if ($rdp) { 'auto' } else { @($tport) }; $o = @{ CloudUrl = 'http://127.0.0.1:8787/'; CloudKey = "plain:$key"; TallyPorts = $tp }
   # slow232: bridge 1 talks to Tally 9000 through the timing proxy (slow232proxy.py on 127.0.0.2:9000)
-  if ($tport -eq 9000 -and $env:ONLY -eq 'slow232' -and $S2.ok) { $o.TallyHost = '127.0.0.2' }
+  if ($tport -eq 9000 -and $env:ONLY -eq 'slow232' -and $Slow232St.ok) { $o.TallyHost = '127.0.0.2' }
   ($o | ConvertTo-Json -Compress) }
 $h1 = Join-Path $env:LOCALAPPDATA 'TDS Desk Bridge'; New-Item -ItemType Directory -Force $h1 | Out-Null
 Set-Content "$h1\tds-bridge.config.json" (SeedJson 'spike-computer-key-user1' 9000) -Encoding UTF8
@@ -722,7 +722,7 @@ Vouchers 9000 $co1 | Out-Null
 Get-Process tally -ErrorAction SilentlyContinue | Stop-Process -Force
 Get-Process FinComBridge -ErrorAction SilentlyContinue | Stop-Process -Force
 Stop-Process -Id $stub.Id -Force -ErrorAction SilentlyContinue
-if ($S2.proxy) { Stop-Process -Id $S2.proxy.Id -Force -ErrorAction SilentlyContinue }
+if ($Slow232St.proxy) { Stop-Process -Id $Slow232St.proxy.Id -Force -ErrorAction SilentlyContinue }
 Write-Host '== results'; Get-Content $resultsFile | Write-Host
 Get-ChildItem "$fc\shots" -Filter *.png -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName (Join-Path $env:SHOTS "r4u2-$($_.Name)") }
 Write-Host '== round 4 end'
