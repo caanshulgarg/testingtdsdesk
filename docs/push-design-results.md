@@ -4,8 +4,96 @@ This document brings together what two "Push design" workflow runs (`push-design
 
 - **[F]**: the full run, **37464758500**.
 - **[P]**: the probe run, **37488912899**.
+- **[V3]**: run **37556025582** (07-Oct-2026), see the update section below.
 
 Every number also names the file it came from. Where neither run measured something, or the measurement failed, the document says so. No gap is filled with an estimate.
+
+## Update of 07-Oct-2026: run 37556025582 [V3] and re-analysis of [F]
+
+**[V3]** is run **37556025582** (commit `738d4da`, harness `.github/tally-spike/push/v3.ps1`, all five releases, results commit `f51bf68`, `spike-results/push-design/37556025582-<rel>/push/`). **It failed as a harness and measured almost nothing it was built for.** What it did and did not give:
+
+- The heavy company was **not** the 30,004-voucher company. With the godown feature switched on during setup, Tally refused every heavy Sales voucher (*Godown '' does not exist!*): 4.1, 5.1, 6.2 and 7.1 got **18,012** vouchers (receipts and journals only); 3.0 got **12** (`summary.txt`, "heavy company").
+- The keyed-fetch stage then hung. Its lookups of the target vouchers came back empty, so every request was sent with an empty MasterID/GUID, and **every request timed out at 300 s** on every release (`f.csv`, `captures/fetch-*.xml`: "HttpClient.Timeout of 300 seconds"). This ate the whole 280-minute step. **No save was made in [V3]**: no freeze counts, no save times, no payroll, no full-entry-without-read-back, no TDS entry.
+- The TDS masters failed on every release: the nature of payment imported as a Tax Classification (created 1) but Tally made no TDS Rate from it, the nature typed on its form by keys was not saved, and the expense and TDS ledgers were refused with *TDS Rate 'PD Contract Work' does not exist!* (`summary.txt`, "tds:").
+
+### 1. How the bridge asks for one entry today
+
+`bridge-go/recorder_live.go` on `origin/tax-accuracy`, `voucherByMasterRequest` / `voucherByNumberRequest`, built by `fcCollection` (`held.go`):
+
+```
+<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FinComVoucherByMaster</ID></HEADER>
+<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>{company}</SVCURRENTCOMPANY>
+<SVFROMDATE>{yyyymmdd}</SVFROMDATE><SVTODATE>{yyyymmdd}</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE>
+<COLLECTION NAME="FinComVoucherByMaster" ISMODIFY="No"><TYPE>Voucher</TYPE><FETCH>{liveFetchField}</FETCH><FILTERS>FinComVoucherByMasterOnly</FILTERS></COLLECTION>
+<SYSTEM TYPE="Formulae" NAME="FinComVoucherByMasterOnly">$MasterID = {mid}</SYSTEM></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>
+```
+
+`FinComVoucherByNumber` is the same with the filter `$VoucherNumber = "{no}" AND $VoucherTypeName = "{type}"`. Both are a **Voucher collection with a filter**; the one-day SVFROMDATE/SVTODATE is sent, but in [F] this request took **4.4–5.3 s (median) on the 30,004-voucher company against about 0.07 s on the light one** (table in (b) below). That scaling with the company's size fits a filter evaluated over all vouchers (a full scan); whether the period bounds a plain Voucher collection was what [V3] was to test, and **it was not measured**.
+
+**The keyed alternatives (object export by GUID, by MasterID, `ID:<mid>`, Vouchers : Ledger / Vouchers : VoucherType with CHILDOF, the Day Book export for the one day): not measured.** [V3] built and sent them, but with empty keys, and Tally answered none of them within 300 s.
+
+### 2. Freezes: no add-on / add-on with the bridge stopped / add-on with the bridge running
+
+**Not measured.** [V3] made no saves. In [F] the bridge was installed and running in all four setups, so [F] has only "no add-on" and "add-on with the bridge running":
+
+### 4. The 38 freezes of [F], by add-on mode
+
+A freeze is a heavy-company save whose first screen change came more than 1 s after Ctrl+A (`a.csv`, `ui_first_ms`; 85 heavy saves per mode, 17 per release). Source: `spike-results/push-design/37464758500-<rel>/push/a.csv` [F].
+
+| Mode (bridge running in all) | 3.0 | 4.1 | 5.1 | 6.2 | 7.1 | Total |
+|---|---|---|---|---|---|---|
+| No add-on | 0 | 0 | 0 | 0 | 0 | **0 of 85** |
+| Stamps only | 0 | 0 | 0 | 0 | 0 | **0 of 85** |
+| Heads-only | 5 | 5 | 5 | 4 | 4 | **23 of 85** |
+| Full-entry (with read-back) | 4 | 4 | 0 | 3 | 4 | **15 of 85** |
+
+Heads-only freezes were 1.1–5.2 s, mostly the first or third save of a block (Sales 5 and Sales 50; Receipt rep 2 on every release). Full-entry freezes were 2.3–5.8 s, on Sales 5 and Sales 50 only [F]. The two modes that make the bridge fetch a body (the add-on writes a recorder line) are the only ones that froze; [F] cannot separate the bridge's fetch from the add-on, because the bridge was never stopped.
+
+### 3. The ids without a read-back
+
+- **MasterID.** The heads-only line takes `$MasterID` from the voucher form in its "voucher_accept_post" call, straight after Tally's own Form Accept (`FCPHeads.tdl`, `FCRLiveLog`). That whole post line (c→d) cost **1.0 ms median, 1.5–2.0 ms worst** on the heavy company on every release [F, `a.csv` `post_ms`, 17 saves each]. The MasterID in the form was right in every case [P].
+- **GUID = company GUID + "-" + MasterID as 8 hex digits.**
+  - Vouchers that came by **import**: **18,012 of 18,012** on 4.1, 5.1, 6.2 and 7.1, and 12 of 12 on 3.0 [V3, `push/guid-rule.txt`].
+  - **New vouchers (Alt+2) and alterations** saved on screen on the heavy company: **17 of 17** per release, all five releases (the read-back's `db_guid` against the rule) [F, `captures/fullfile-heavy-full-*.txt`].
+  - **A voucher imported with another company's GUID (a sync): not established.** [V3] imported one (created 1), but could not read it back. Where it will not hold is therefore not measured.
+- **AlterID from the company's counter.**
+  - By XML, Tally gives the company's `ALTVCHID` (and `ALTMSTID`) on every release: 18,012 after the heavy import on 4.1–7.1, 12 on 3.0 [V3].
+  - **Inside the add-on (TDL), `$AltVchID:Company:##SVCurrentCompany` came back empty in all 85 full-entry lines of [F]** (`cmp_altvchid=` empty, every release). So the add-on cannot read the counter this way; the bridge can read it by XML after the save.
+  - The final AlterIDs in [F] went up by exactly 1 per save (30077, 30078, 30079 …), and the form's AlterID is the old one (that of the voucher copied or altered) [F]. That the counter read straight after a save equals the saved voucher's AlterID was **not measured** (the [V3] outside timer never ran).
+- **Full entry at save with no read-back on the heavy company: not measured as a whole** ([V3] made no saves). The nearest figure is [F]'s full-entry a→d on the heavy company (write the whole entry, no read-back): the add-on's own part was 8–11 ms on the 50-item invoice.
+
+### 5. Heavy-company save times without and with the add-on
+
+**No new figures.** The figures stand as in (a) below, from [F] (stamp-only median 26–67 ms for a receipt, 75–256 ms for a 5-item invoice, 276–502 ms for a 50-item invoice; heads-only adds −10 to +25 ms median). "No add-on" with no TDL at all was **not measured** by any reliable timer: the AltVchID outside timer built for [V3] never ran. The full-entry read-back's exact length on the heavy company is **still not measured**.
+
+### 6. Payroll for 200 employees
+
+Light company only, 3.0 and 7.1, 1 save each [P] (table (d) below): Tally's save 47 ms on both; heads-only add-on 1.6 / 1.0 ms; full-entry add-on 54.6 / 30.7 ms; line 32,626 bytes. **On the heavy company, on 4.1, 5.1 and 6.2, and the stamp-only / no-add-on baseline: not measured.** The payroll-50 full-entry failure of [P] was a harness fault: the heads-only stage had cancelled the payroll-50 voucher, and the full-entry stage then duplicated the cancelled one (the last in the Day Book). Payroll alteration: not re-tried.
+
+### 7. TDS in the add-on's full-entry line
+
+**Not measured on any release.** [V3] could not make the TDS masters (above), so no TDS entry was saved with the add-on loaded.
+
+What is known:
+
+- `FCPFull.tdl` writes, for every ledger line, each `TaxObjectAllocations` row (`tt` tax type, `cat` category = nature of payment, `pl` party ledger) and each `SubCategoryAllocation` row under it (`rate`, `ass` assessable amount, `tax`), and the bill line's `TDSDeducteeSectionNumber`. It does not write the section from the nature master. Whether these hold values for a real TDS entry is untested.
+- Real-Tally run **37492981527** (branch `tally-real-spike`, 7.1, S5: a Journal typed on Tally's screen, Dr expense 1,00,000, To TDS ledger 2,000, To party 98,000, masters by XML plus the nature of payment on its form; `scen231.ps1` `S231TdsScreen`):
+  - **Tally's own Day Book export of the entry has TAXOBJECTALLOCATIONS with values** (nature "S231 Contract Work", tax type TDS, the party, the expense ledger, New Ref) (`results.txt`, TAG line).
+  - **The bridge's collection request (`FinComVoucherByMaster`) returned every TAXOBJECTALLOCATIONS.LIST empty** (`captures231/s5-tds-on-screen.entry.xml`).
+  - Neither carried TDSDEDUCTEESECTIONNUMBER or the deductee type on the entry; the section (194C) and the deductee type live on the nature and party masters.
+
+### Not measured (as of 07-Oct-2026, 06:00 UTC)
+
+- The keyed fetch alternatives: time, completeness and freezes (all five releases).
+- Freezes with the add-on loaded and the bridge stopped.
+- The GUID rule for a voucher that came by sync with another company's GUID.
+- AlterID from the company counter straight after a save; full entry at save with no read-back on the heavy company.
+- Heavy-company saves of any kind in [V3]; "no TDL" save time by an outside timer; the exact length of the full-entry re-read.
+- Payroll 200 / 50, stock journal 50 and the 50-item batch/godown invoice on the heavy company.
+- TDS in the add-on's line, on every release; Tally's export of a TDS entry on 3.0–6.2.
+
+**Harness fixes needed before a re-run:** keep the godown feature off for the heavy import (or give heavy Sales a godown); stop the fetch stage when a target is not found; time out a request at 30 s, not 300 s; make the TDS nature of payment on its form (the S5 OCR route, `tdslib.ps1`) rather than by blind keys.
+
 
 ## What each run covered
 
