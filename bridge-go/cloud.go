@@ -928,8 +928,10 @@ func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
 		"recorderState": liveBeat(), "recorderSource": recorderSource(),
 		// 2.3.1 (the owner's last change): nothing is switched off by the 2-second rule any more: always {} (an older cloud
 		// and page read these per company), and tallyRetry says when a request was not answered in time and when the
-		// bridge tries again by itself (retry.go; null when the background requests go as normal)
-		"recorderSourceB": M{}, "recorderSourceC": M{}, "recorderBodyFetch": M{}, "tallyRetry": retryBeat(),
+		// bridge tries again by itself (retry.go; null when the background requests go as normal). 2.3.2 (issue 232):
+		// recorderBodyFetch carries the companies marked "entry fetch stopped: over 2 s" (slowco.go), per company
+		// {off, seconds, at, why} (FinCom keeps it as recorderOff.bodies) and {company, since, timesOver, lastMs}; {} when none
+		"recorderSourceB": M{}, "recorderSourceC": M{}, "recorderBodyFetch": slowBeat(), "tallyRetry": retryBeat(),
 		// review M8: the add-on's file names read; review S4: whether automatic updates are on, and the last rollback
 		"recorderFiles": liveFilesSeen(), "autoUpdate": au, "rolledBack": rb,
 		// review H1 (2.3.1): why this computer's changes wait for a complete look at its own Tally, in plain words ("" when none)

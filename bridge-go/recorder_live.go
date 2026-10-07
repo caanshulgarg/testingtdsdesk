@@ -149,6 +149,9 @@ type change struct {
 	full bool
 	// re-review M-B: a cancel sent without an AlterID: Tally's voucher counter (ALTVCHID) read then (liveCancelCounters)
 	vchCounter int64
+	// 2.3.2 (issue 232, b): held because its asks were stopped at 2 s or not answered (one timed-out try counted: the held
+	// list asks again after 1 h, then 4 h, then ends it); c: held with slowWords, its company marked (never asked again)
+	slowHeld, slowEnded bool
 	// next-push: the body is the add-on's full entry (recorder_push.go), nothing asked of Tally; its order (push_seq)
 	push    bool
 	pushSeq int64
@@ -277,6 +280,9 @@ type liveState struct {
 	// 2.3.1 (masters): the "<line id>:resolved" ids sent once more after FinCom held them waiting for a ledger (7 days,
 	// sync\recorder-sent\*.ledger.txt): never a third time
 	ledAgain map[string]bool
+	// 2.3.2 (issue 232): the held lines ended with the Day Book words (sent so; never asked or sent again: 7 days,
+	// sync\recorder-sent\*.ended.txt)
+	ended map[string]bool
 	// fix 3 (the owner's spike run 37347773182): what this bridge saw of its OWN Tally's open companies (recorder_owntally.go)
 	own       map[string]*liveOwnSt // company GUID (or "name:" + its name key) -> the times it was open in the own Tally
 	ownAt     time.Time             // the last complete look at the own Tally's company list (kept on disk)
@@ -376,6 +382,10 @@ func liveFresh() {
 	for _, id := range liveLoadIds(liveLedgerSuffix) {
 		live.ledAgain[id] = true
 	}
+	live.ended = map[string]bool{}
+	for _, id := range liveLoadIds(liveEndedSuffix) {
+		live.ended[id] = true
+	}
 	liveOwnLoad()
 }
 
@@ -443,6 +453,16 @@ const liveItemsSuffix = ".items.txt"
 
 // 2.3.1 (masters): the file suffix of the ":resolved" ids sent once more after a ledger FinCom waited for came in
 const liveLedgerSuffix = ".ledger.txt"
+
+// 2.3.2 (issue 232): the file suffix of the held line ids ended with the Day Book words
+const liveEndedSuffix = ".ended.txt"
+
+// 2.3.2: lines ended (under live.mu: noted; the ids written by the caller with liveSaveIds outside it)
+func liveEndedNote(ids ...string) {
+	for _, id := range ids {
+		live.ended[id] = true
+	}
+}
 
 // under live.mu: a held line's resolution went already, as far as this version is concerned: queued, or sent by THIS
 // version (with the items' ledger lines). again: FinCom listed the line again (refetch) after an older bridge's resolution;
@@ -1735,6 +1755,9 @@ func fetchVouchersByMasterIn(tc *TC, company string, port int, date string, mids
 	if x == "" {
 		return nil, fmt.Errorf("not asked: the entry request names exactly one MasterID (%d given)", len(mids))
 	}
+	if slowMarked(company, "") {
+		return nil, errSlowCompany // 2.3.2: no entry request for a company marked "entry fetch stopped: over 2 s"
+	}
 	raw, err := invokeTally(tc, port, x, sec)
 	if err != nil {
 		return nil, err
@@ -1845,6 +1868,37 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 		writeLog(fmt.Sprintf("Recorder: the body of %d entr%s of %s was not read from Tally (%s); sent without it (FinCom holds the line until a body comes)",
 			len(cs), map[bool]string{true: "y", false: "ies"}[len(cs) == 1], company, cutRunes(why, 160)))
 	}
+	// 2.3.2 (issue 232, c): a company marked "entry fetch stopped: over 2 s": none of its entries is asked of Tally; each
+	// goes up held at once with the plain words (a cancel / delete, held as one this Tally could not be asked about)
+	slowHold := func(cs []*change) {
+		for _, c := range cs {
+			if c.isLedger() {
+				continue
+			}
+			if c.guidFetch {
+				live.mu.Lock()
+				liveGuidHold(c, slowWords)
+				live.mu.Unlock()
+				continue
+			}
+			live.mu.Lock()
+			c.slowEnded = true
+			live.mu.Unlock()
+			liveHeldAs(c, slowWords, true)
+		}
+	}
+	if slowMarked(company, need[0].companyGuid) {
+		slowHold(need)
+		var ls []*change
+		for _, c := range need {
+			if c.isLedger() {
+				ls = append(ls, c)
+			}
+		}
+		if need = ls; len(need) == 0 {
+			return
+		}
+	}
 	port, err := findCompanyPortBg(company, 0)
 	if err != nil {
 		if yield() {
@@ -1912,6 +1966,14 @@ byDay:
 				liveDecide(c, "asking Tally by MasterID")
 			}
 			got, err := fetchVouchersByMasterIn(tc, company, port, d, mids, left())
+			if errors.Is(err, errSlowCompany) {
+				rest := append(append([]*change{}, part...), cs...)
+				for _, d2 := range dates[di+1:] {
+					rest = append(rest, byDate[d2]...)
+				}
+				slowHold(rest)
+				break byDay
+			}
 			if errors.Is(err, errRetryWait) {
 				rest := append(append([]*change{}, part...), cs...)
 				for _, d2 := range dates[di+1:] {
@@ -1937,6 +1999,14 @@ byDay:
 				return
 			}
 			if err != nil {
+				if errors.Is(err, errRecorderStop) || tallyNoAnswer(err) {
+					// 2.3.2 (issue 232, b): its asks timed out: one timed-out try counted for the held list
+					live.mu.Lock()
+					for _, c := range part {
+						c.slowHeld = true
+					}
+					live.mu.Unlock()
+				}
 				failed(part, err.Error())
 				continue
 			}
@@ -1984,9 +2054,18 @@ byDay:
 				w.mid = ""
 				liveDecide(c, "asking Tally by type and number ("+cutRunes(m.why, 120)+")")
 				x, why, kind, err := liveOneByNumber(tc, c.company, port, w, left())
+				if errors.Is(err, errSlowCompany) {
+					slowHold([]*change{c})
+					continue
+				}
 				if errors.Is(err, errRetryWait) {
 					waitRetry(err, []*change{c})
 					return
+				}
+				if errors.Is(err, errRecorderStop) || tallyNoAnswer(err) {
+					live.mu.Lock()
+					c.slowHeld = true // 2.3.2 (b): asked by its number, stopped or not answered: a timed-out try
+					live.mu.Unlock()
 				}
 				if gaveWay(err) {
 					liveDecide(c, "not asked: a posting is going on; asked after it")
@@ -2371,7 +2450,7 @@ func liveUploadStep() (int, bool) {
 		return 0, false
 	}
 	sentIDs := make([]string, 0, len(group))
-	var bodied, items, ledAgain, pushed []string
+	var bodied, items, ledAgain, ended, pushed []string
 	gone := map[*change]bool{}
 	var held []*change
 	for _, c := range group {
@@ -2408,6 +2487,15 @@ func liveUploadStep() (int, bool) {
 		}
 		// 2.2.1: sent held (no body, no GUID): resolved later (recorder_resolve.go). 2.2.2: every voucher of the add-on
 		// sent without its entry, not only a new one with a number
+		if c.slowEnded {
+			// 2.3.2 (issue 232): sent held with the Day Book words (its company marked, or its asks timed out 3 times): ended,
+			// never asked or sent again
+			if id := strings.TrimSuffix(c.lineId, ":resolved"); !live.ended[id] {
+				ended = append(ended, id)
+				liveEndedNote(id)
+			}
+			continue
+		}
 		if c.fetchesIds() && c.source == "addon" && c.xml == "" && c.vchDate != "" && !strings.HasSuffix(c.lineId, ":resolved") {
 			held = append(held, c)
 		}
@@ -2437,6 +2525,7 @@ func liveUploadStep() (int, bool) {
 	liveSaveIds(bodied, ".body.txt")
 	liveSaveIds(items, liveItemsSuffix)
 	liveSaveIds(ledAgain, liveLedgerSuffix)
+	liveSaveIds(ended, liveEndedSuffix)
 	liveSaveOffsets()
 	liveHeldAdd(held)
 	liveHeldDropPushed(pushed)

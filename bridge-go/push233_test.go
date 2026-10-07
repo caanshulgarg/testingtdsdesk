@@ -466,20 +466,20 @@ func TestPushLineEveryBlock(t *testing.T) {
 		t.Fatalf("the entry's own fields: %v", e.scal)
 	}
 	for k, want := range map[string]map[string]string{
-		"L1":      {"led": "Rich Supplier | Delhi", "amt": "11,790.00", "neg": "No", "dp": "No", "party": "Yes"},
-		"L1B1":    {"name": "RS/77", "type": "New Ref", "cp": "30 Days", "tdssec": "194Q", "amt": "11,790.00"},
-		"L2":      {"led": "Purchase 18%", "amt": "10,000.00", "neg": "Yes", "dp": "Yes"},
-		"L5T1":    {"tt": "TDS", "cat": "Purchase of Goods", "pl": "Rich Supplier | Delhi", "ref": "New Ref"},
-		"L5T1s1":  {"sub": "Income Tax", "duty": "TDS Payable 194Q", "rate": "0.10", "ass": "10,000.00", "tax": "10.00"},
-		"I1":      {"item": "Widget ~A", "qty": "50 Nos", "rate": "100.00/Nos", "amt": "5,000.00", "neg": "Yes", "hsn": "8471"},
-		"I1b1":    {"god": "Main Store", "bat": "B-01", "trk": "GRN=1", "ord": "PO|9", "due": "10-Oct-26", "aq": "30 Nos", "amt": "3,000.00"},
-		"I1b2":    {"god": "Annex|Store", "bat": "B-02", "amt": "2,000.00"},
-		"I1A1":    {"led": "Purchase 18%", "amt": "5,000.00", "neg": "Yes"},
-		"I1A1C1":  {"cat": "Region"},
+		"L1":       {"led": "Rich Supplier | Delhi", "amt": "11,790.00", "neg": "No", "dp": "No", "party": "Yes"},
+		"L1B1":     {"name": "RS/77", "type": "New Ref", "cp": "30 Days", "tdssec": "194Q", "amt": "11,790.00"},
+		"L2":       {"led": "Purchase 18%", "amt": "10,000.00", "neg": "Yes", "dp": "Yes"},
+		"L5T1":     {"tt": "TDS", "cat": "Purchase of Goods", "pl": "Rich Supplier | Delhi", "ref": "New Ref"},
+		"L5T1s1":   {"sub": "Income Tax", "duty": "TDS Payable 194Q", "rate": "0.10", "ass": "10,000.00", "tax": "10.00"},
+		"I1":       {"item": "Widget ~A", "qty": "50 Nos", "rate": "100.00/Nos", "amt": "5,000.00", "neg": "Yes", "hsn": "8471"},
+		"I1b1":     {"god": "Main Store", "bat": "B-01", "trk": "GRN=1", "ord": "PO|9", "due": "10-Oct-26", "aq": "30 Nos", "amt": "3,000.00"},
+		"I1b2":     {"god": "Annex|Store", "bat": "B-02", "amt": "2,000.00"},
+		"I1A1":     {"led": "Purchase 18%", "amt": "5,000.00", "neg": "Yes"},
+		"I1A1C1":   {"cat": "Region"},
 		"I1A1C1c2": {"cc": "South: Zone=2", "amt": "2,000.00"},
-		"I1R3":    {"head": "IGST", "vt": "Based on Value", "rate": "18"},
-		"I2b1":    {"god": "Main Store", "bat": "Lot ~7"},
-		"O1":      {"no": "PO|9", "dt": "1-Oct-26"},
+		"I1R3":     {"head": "IGST", "vt": "Based on Value", "rate": "18"},
+		"I2b1":     {"god": "Main Store", "bat": "Lot ~7"},
+		"O1":       {"no": "PO|9", "dt": "1-Oct-26"},
 	} {
 		r := e.rec(k)
 		if r == nil {
@@ -976,3 +976,38 @@ func TestPushAddon(t *testing.T) {
 
 // keep the test helpers in use (a stand voucher's XML as Tally's entry request gives it)
 var _ = canonAmt
+
+// --- 6b. (after the merge of 2.3.2) a company 2.3.2 marked slow: an older add-on's line keeps 2.3.2's slow-company stop
+// (held with its words, nothing asked); a full entry of the same company goes in full, nothing asked either
+func TestPushSlowCompanyStopKept(t *testing.T) {
+	p, f, c := slow232Bridge(t)
+	slowMarkIt(t, p, f)
+	retryDue()
+	for i := 0; i < 5; i++ {
+		liveUploadOnce()
+	}
+	asks := f.n(vchByMasterID) + f.n(vchByNumberID)
+	// an older add-on's save: the 2.3.2 route, its stop kept
+	r222Vch(f, 25801, "Journal", "J-25801", "20261005", 54601)
+	liveAppend(t, p, slowLine(25801, "07:30")...)
+	readAndUploadAll(t)
+	if s := slowSentOf(c, 25801); len(s) != 1 || str(s[0]["heldWhy"]) != slowWords || str(s[0]["xml"]) != "" || s[0]["push"] != nil {
+		t.Fatalf("an older add-on's line of the marked company: %v", s)
+	}
+	// the new add-on's save of the same company: its full entry, nothing asked
+	v := r222Vch(f, 25802, "Journal", "J-25802", "20261005", 54602)
+	f.mu.Lock()
+	x := v.xml()
+	f.mu.Unlock()
+	o := pushEmu{cguid: nwsGUID, cname: nwsCo, tuser: "owner", at: nowFn(), formGuid: v.guid, formAid: "54601"}
+	liveAppend(t, p, append([]string{r222Line("voucher_accept_pre", "07:31", v.guid, "25802", "54601", "Journal", "J-25802", "5-Oct-2026", v.narr),
+		r222Line("voucher_accept_post", "07:31", v.guid, "25802", "54601", "Journal", "J-25802", "5-Oct-2026", v.narr)}, pushLinesFromXML(t, x, o)...)...)
+	readAndUploadAll(t)
+	s := slowSentOf(c, 25802)
+	if len(s) != 1 || s[0]["push"] != true || s[0]["full"] != true || str(s[0]["object_guid"]) != v.guid || str(s[0]["heldWhy"]) != "" {
+		t.Fatalf("the full entry of the marked company: %v", s)
+	}
+	if n := f.n(vchByMasterID) + f.n(vchByNumberID); n != asks {
+		t.Fatalf("Tally was asked: %d entry requests, %d before (%v)", n, asks, f.ids())
+	}
+}

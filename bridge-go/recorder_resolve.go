@@ -113,6 +113,9 @@ func fetchVoucherByNumber(tc *TC, company string, port int, date, typ, no string
 	if x == "" {
 		return nil, errors.New("its type or number cannot be asked of Tally (a quote or a line break in it)")
 	}
+	if slowMarked(company, "") {
+		return nil, errSlowCompany // 2.3.2: no entry request for a company marked "entry fetch stopped: over 2 s"
+	}
 	raw, err := invokeTally(tc, port, x, sec)
 	if err != nil {
 		return nil, err
@@ -345,6 +348,19 @@ func liveFetchByNumber(cs []*change, sp int64, spOK bool) {
 		return
 	}
 	company := cs[0].company
+	// 2.3.2 (issue 232, c): a company marked "entry fetch stopped: over 2 s": nothing asked; held at once with the words
+	slowHold := func(c *change) {
+		live.mu.Lock()
+		c.slowEnded = true
+		live.mu.Unlock()
+		liveHeldAs(c, slowWords, true)
+	}
+	if slowMarked(company, cs[0].companyGuid) {
+		for _, c := range cs {
+			slowHold(c)
+		}
+		return
+	}
 	deadline := time.Now().Add(time.Duration(liveBodySec()) * time.Second)
 	yield := func() bool { return postingGoing() || importsInFlight.Load() > 0 }
 	tc := recorderTC(nil)
@@ -375,6 +391,10 @@ func liveFetchByNumber(cs []*change, sp int64, spOK bool) {
 		left := maxI(2, int(time.Until(deadline).Seconds()+0.999))
 		liveDecide(c, "asking Tally by type and number (a new entry: no MasterID on its line)")
 		x, why, kind, err := liveOneByNumber(tc, company, port, liveWantOf(c, sp, spOK), left)
+		if errors.Is(err, errSlowCompany) {
+			slowHold(c)
+			continue
+		}
 		if errors.Is(err, errRetryWait) {
 			liveDecide(c, "not asked yet: "+cutRunes(err.Error(), 160)+"; asked then")
 			return
@@ -401,6 +421,9 @@ func liveFetchByNumber(cs []*change, sp int64, spOK bool) {
 			live.mu.Unlock()
 			liveDecide(c, fmt.Sprintf("not found by its type and number yet (ask %d of 3); asked again shortly", c.numTries))
 			continue
+		}
+		if err != nil && (errors.Is(err, errRecorderStop) || tallyNoAnswer(err)) {
+			c.slowHeld = true // 2.3.2 (b): its last ask timed out: one timed-out try counted for the held list
 		}
 		live.mu.Unlock()
 		why = "not found by its type and number (asked 3 times)"
@@ -434,6 +457,9 @@ type heldLine struct {
 	LineAlter   int64
 	// review H1 (the owner's addition): a delete's own GUID and AlterID, used only once this Tally shows it gone
 	KeepGuid, KeepAlter string
+	// 2.3.2 (issue 232, b): the asks of this line that were stopped at 2 s or not answered (the original fetch's stops count
+	// as one): asked again 1 h after the first, 4 h after the second; the third ends it with the Day Book words
+	Slow int
 }
 
 var heldMu sync.Mutex
@@ -451,7 +477,7 @@ func liveHeldLoad() (M, map[string]heldLine) {
 		items[id] = heldLine{ID: id, Company: str(e["company"]), CGUID: str(e["companyGuid"]), Type: str(e["type"]), No: str(e["no"]), Date: str(e["date"]),
 			MID: str(e["masterId"]), At: str(e["savedAt"]), Added: str(e["added"]), Last: str(e["last"]), Tries: toInt(e["tries"]), Ev: str(e["event"]), Why: str(e["why"]),
 			LineGuid: str(e["lineGuid"]), LineFid: str(e["lineFid"]), Mismatch: truthy(e["idsMismatch"]), Final: truthy(e["final"]), LineAlter: toI64(e["lineAlter"]),
-			Cloud: truthy(e["fromFinCom"]), KeepGuid: str(e["keepGuid"]), KeepAlter: str(e["keepAlter"]), Refetch: truthy(e["refetch"]), TriesVer: str(e["triesVersion"]), Again: truthy(e["again"]), LedgerAgain: truthy(e["ledgerAgain"])}
+			Cloud: truthy(e["fromFinCom"]), KeepGuid: str(e["keepGuid"]), KeepAlter: str(e["keepAlter"]), Refetch: truthy(e["refetch"]), TriesVer: str(e["triesVersion"]), Again: truthy(e["again"]), LedgerAgain: truthy(e["ledgerAgain"]), Slow: toInt(e["slow"])}
 	}
 	return all, items
 }
@@ -462,7 +488,7 @@ func liveHeldSave(all M, items map[string]heldLine) {
 		o[id] = M{"company": h.Company, "companyGuid": h.CGUID, "type": h.Type, "no": h.No, "date": h.Date, "masterId": h.MID, "savedAt": h.At,
 			"added": h.Added, "last": h.Last, "tries": h.Tries, "event": h.Ev, "why": liveCapWhy(h.Why), "lineGuid": h.LineGuid, "lineFid": h.LineFid,
 			"idsMismatch": h.Mismatch, "final": h.Final, "lineAlter": h.LineAlter, "fromFinCom": h.Cloud,
-			"keepGuid": h.KeepGuid, "keepAlter": h.KeepAlter, "refetch": h.Refetch, "triesVersion": h.TriesVer, "again": h.Again, "ledgerAgain": h.LedgerAgain}
+			"keepGuid": h.KeepGuid, "keepAlter": h.KeepAlter, "refetch": h.Refetch, "triesVersion": h.TriesVer, "again": h.Again, "ledgerAgain": h.LedgerAgain, "slow": h.Slow}
 	}
 	all["items"] = o
 	if err := saveFile(liveHeldFile(), jsonText(all)); err != nil {
@@ -480,6 +506,9 @@ func liveHeldAdd(cs []*change) {
 	all, items := liveHeldLoad()
 	now := nowFn().Format(time.RFC3339)
 	for _, c := range cs {
+		if c.slowEnded {
+			continue // 2.3.2: sent with the Day Book words: ended, never asked again
+		}
 		mid := c.masterId
 		if strings.Contains(c.heldWhy, "was not saved after this line") {
 			mid = "" // review H2: the voucher with that MasterID is not this line's entry: asked by its number only
@@ -487,6 +516,11 @@ func liveHeldAdd(cs []*change) {
 		items[c.lineId] = heldLine{ID: c.lineId, Company: c.company, CGUID: c.companyGuid, Type: c.vchType, No: c.vchNo, Date: c.vchDate, MID: mid,
 			At: c.at, Added: now, Last: now, Ev: c.event, Why: c.heldWhy, LineGuid: c.lineGuid, LineFid: c.lineFid, Mismatch: c.idsMismatch,
 			Final: c.heldFinal || (mid == "" && c.vchNo == ""), LineAlter: c.lineAlter, KeepGuid: c.guidKeep, KeepAlter: c.alterKeep}
+		if c.slowHeld {
+			h := items[c.lineId]
+			h.Slow = 1 // 2.3.2 (b): the original fetch's stops: one timed-out try
+			items[c.lineId] = h
+		}
 		if c.guidRetry {
 			h := items[c.lineId]
 			h.Final, h.MID = false, c.masterId // asked again by its MasterID (liveResolveGuid)
@@ -734,6 +768,7 @@ func liveResolveTurn() {
 	}
 	sort.Strings(ids)
 	var ask []heldLine
+	var ends []heldEnd              // 2.3.2: lines ended now with the Day Book words (sent so after the list is saved)
 	prevLast := map[string]string{} // the line's last ask before this turn's: put back when Tally did not answer in time
 	refetchAsked := 0
 	for _, id := range ids {
@@ -742,11 +777,24 @@ func liveResolveTurn() {
 		live.mu.Lock()
 		liveFresh()
 		done := live.sent[rid] && (!h.Again || live.items231[rid]) && !liveLedgerAgainDue(h) // 2.3.1 review H1: an older bridge's resolution is not this one
+		done = done || live.ended[id]                                                        // 2.3.2: ended with the Day Book words
 		waiting := live.queued[rid]
 		ownOpen := !h.Refetch || liveOwnOpenNow(h.CGUID, h.Company)
 		live.mu.Unlock()
 		added, _ := time.Parse(time.RFC3339, h.Added)
 		if done || (!added.IsZero() && now.Sub(added) > 7*24*time.Hour) {
+			delete(items, id)
+			changed = true
+			continue
+		}
+		// 2.3.2 (issue 232, c): its company is marked "entry fetch stopped: over 2 s": it ends with the plain words, nothing
+		// asked of Tally. (b): its asks timed out 3 times: it ends with the Day Book words
+		if !waiting && !h.Final && (slowMarked(h.Company, h.CGUID) || h.Slow >= liveHeldSlowMax) {
+			w := liveHeldSlowGiveUp
+			if slowMarked(h.Company, h.CGUID) {
+				w = slowWords
+			}
+			ends = append(ends, heldEnd{h, w})
 			delete(items, id)
 			changed = true
 			continue
@@ -768,7 +816,12 @@ func liveResolveTurn() {
 			}
 			continue
 		}
-		if last, err := time.Parse(time.RFC3339, h.Last); err == nil && now.Sub(last) < wait {
+		// 2.3.2 (issue 232, b): a line whose asks timed out waits hours, not minutes: 1 h after the first, 4 h after the second
+		spacing := wait
+		if h.Slow > 0 {
+			spacing = liveSlowSpacing(h.Slow)
+		}
+		if last, err := time.Parse(time.RFC3339, h.Last); err == nil && now.Sub(last) < spacing {
 			continue
 		}
 		// after 2.3.0: a line FinCom asked for again (refetch): only while this bridge's own Tally has its company open (the
@@ -793,6 +846,9 @@ func liveResolveTurn() {
 		liveHeldSave(all, items)
 	}
 	heldMu.Unlock()
+	for _, e := range ends {
+		liveHeldEnd(e.h, e.why)
+	}
 	// the asks, outside the lock
 	type res struct {
 		id, x, why      string
@@ -800,6 +856,8 @@ func liveResolveTurn() {
 	}
 	var got []res
 	retryIds := map[string]bool{}
+	timedOut := map[string]bool{} // 2.3.2 (b): asked, and stopped at 2 s or not answered: a timed-out try
+	slowEnd := map[string]bool{}  // 2.3.2 (c): its company was marked meanwhile: ended with the plain words
 	deadline := time.Now().Add(time.Duration(keepNum("RecorderResolveTurnSec", 20)) * time.Second)
 	total, fromFinCom := len(items), 0
 	for _, h := range items {
@@ -834,8 +892,23 @@ func liveResolveTurn() {
 			liveSay(h.Type, h.No, h.Date, h.MID, h.ID, "not asked: a posting is going on; asked after it")
 			break
 		}
-		if errors.Is(err, errRetryWait) || errors.Is(err, errRecorderStop) || tallyNoAnswer(err) {
-			// 2.3.1: Tally did not answer in time: this line and those not asked yet go at the retry schedule's next try
+		if errors.Is(err, errSlowCompany) {
+			slowEnd[h.ID] = true
+			got = append(got, res{id: h.ID})
+			continue
+		}
+		if errors.Is(err, errRecorderStop) || tallyNoAnswer(err) {
+			// 2.3.2 (issue 232, b): Tally had the request and did not answer in time: a timed-out try of this line (asked again
+			// after 1 h, then 4 h; the third ends it); those not asked yet go at the retry schedule's next try, as before
+			timedOut[h.ID] = true
+			for _, r := range ask[len(got)+1:] {
+				retryIds[r.ID] = true
+			}
+			liveSay(h.Type, h.No, h.Date, h.MID, h.ID, fmt.Sprintf("not answered in time: %s (a timed-out try, %d of %d)", cutRunes(err.Error(), 160), h.Slow+1, liveHeldSlowMax))
+			break
+		}
+		if errors.Is(err, errRetryWait) {
+			// 2.3.1: nothing was sent (the retry schedule waits): this line and those not asked yet go at its next try
 			for _, r := range ask[len(got):] {
 				retryIds[r.ID] = true
 			}
@@ -879,22 +952,45 @@ func liveResolveTurn() {
 		resolved++
 		writeLog(fmt.Sprintf("Recorder: %s %s of %s in %s resolved: sent as %s with its GUID %s and body", h.Type, h.No, h.Date, h.Company, c.event, c.guid))
 	}
-	if len(got) == 0 && len(retryIds) == 0 {
+	if len(got) == 0 && len(retryIds) == 0 && len(timedOut) == 0 {
 		return
 	}
 	// the answers merged into the list as it is now
 	heldMu.Lock()
-	defer heldMu.Unlock()
 	all, items = liveHeldLoad()
+	var ends2 []heldEnd
+	defer func() {
+		heldMu.Unlock()
+		for _, e := range ends2 {
+			liveHeldEnd(e.h, e.why)
+		}
+	}()
 	for id := range retryIds {
 		if h, had := items[id]; had {
 			h.Last = prevLast[id]
 			items[id] = h
 		}
 	}
+	for id := range timedOut {
+		if h, had := items[id]; had {
+			h.Slow++ // its Last stays this ask's time: the next after 1 h, then 4 h
+			if h.Slow >= liveHeldSlowMax {
+				ends2 = append(ends2, heldEnd{h, liveHeldSlowGiveUp})
+				delete(items, id)
+				continue
+			}
+			items[id] = h
+		}
+	}
+	for id := range slowEnd {
+		if h, had := items[id]; had {
+			ends2 = append(ends2, heldEnd{h, slowWords})
+			delete(items, id)
+		}
+	}
 	for _, r := range got {
 		h, had := items[r.id]
-		if !had {
+		if !had || slowEnd[r.id] {
 			continue
 		}
 		if r.answered {
@@ -922,7 +1018,41 @@ func liveLedgerAgainDue(h heldLine) bool {
 const (
 	liveHeldMaxTries = 20
 	liveHeldGiveUp   = "Tally did not give this entry after 20 tries; upload that day's Day Book to settle it"
+	liveHeldSlowMax  = 3 // 2.3.2 (issue 232, b): timed-out tries in all, the original fetch's stops counting as one
 )
+
+// 2.3.2 (issue 232, b): how long a line whose asks timed out n times waits for its next ask: 1 h after the first, 4 h after
+// the second (RecorderSlowRetry1Sec, RecorderSlowRetry2Sec)
+func liveSlowSpacing(n int) time.Duration {
+	if n <= 1 {
+		return time.Duration(keepNum("RecorderSlowRetry1Sec", 3600)) * time.Second
+	}
+	return time.Duration(keepNum("RecorderSlowRetry2Sec", 4*3600)) * time.Second
+}
+
+type heldEnd struct {
+	h   heldLine
+	why string
+}
+
+// 2.3.2 (issue 232): a held line ends with the Day Book words: "<line id>:resolved" goes up held with them (no body, no
+// GUID: FinCom keeps it held and says the words), the line is never asked or sent again (sync\recorder-sent\*.ended.txt)
+func liveHeldEnd(h heldLine, words string) {
+	rid := h.ID + ":resolved"
+	ev := or(h.Ev, "created")
+	c := &change{company: h.Company, companyGuid: h.CGUID, event: ev, vchType: h.Type, vchNo: h.No, vchDate: h.Date, masterId: h.MID, source: "addon",
+		lineId: rid, at: h.At, saveMs: -1, readAt: nowFn(), bodyTried: true, heldWhy: liveCapWhy(words), heldFinal: true, slowEnded: true,
+		lineGuid: h.LineGuid, lineFid: h.LineFid, idsMismatch: h.Mismatch, guidHeld: ev == "deleted" || ev == "cancelled"}
+	live.mu.Lock()
+	liveFresh()
+	if !live.sent[rid] && !live.queued[rid] && !live.ended[h.ID] {
+		liveQueueAdd(c)
+	}
+	liveEndedNote(h.ID)
+	live.mu.Unlock()
+	liveSaveIds([]string{h.ID}, liveEndedSuffix)
+	liveSay(h.Type, h.No, h.Date, h.MID, h.ID, "held: "+words+" (ended: not asked of Tally again)")
+}
 
 // one held line's entry asked of Tally: by MasterID when the line had it, else (or when Tally gave nothing with that
 // MasterID) by type, number and date; checked as the body fetch checks it (liveVoucherWrong). Security L3: when the
@@ -1010,7 +1140,7 @@ func applyHeldLines(j M) {
 	var fresh []heldLine
 	for _, h := range cs {
 		rid := h.ID + ":resolved"
-		if live.sent[rid] || live.queued[rid] || live.bodied[h.ID] {
+		if live.sent[rid] || live.queued[rid] || live.bodied[h.ID] || live.ended[h.ID] {
 			continue
 		}
 		fresh = append(fresh, h)
@@ -1099,8 +1229,8 @@ func applyRefetch(j M) {
 		// items' ledger lines: held by the cloud's guard). That earlier mark is not this version's: asked and sent once more,
 		// under the same id (the cloud's rules match it). One this version sent, or queued, is done
 		// 2.3.1 (masters): FinCom held this version's ":resolved" line waiting for a ledger (in now): asked once more
-		if liveResolvedDone(rid, true) && !liveLedgerAgainDue(h) {
-			done++
+		if (liveResolvedDone(rid, true) && !liveLedgerAgainDue(h)) || live.ended[h.ID] {
+			done++ // 2.3.2: or ended with the Day Book words
 			continue
 		}
 		if live.sent[rid] {

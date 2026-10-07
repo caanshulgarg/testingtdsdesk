@@ -123,6 +123,7 @@ run_support_ui.py                     120  TDSDESK_SITE=../app/dist-test
 run_sync_activity.py                  120
 run_tally_computers.py                120
 run_tally_entry_fetch_off.py          120  TDSDESK_SITE=../app/dist-test
+run_tally_slow_company.py             120  TDSDESK_SITE=../app/dist-test
 run_tally_events.py                   120
 run_tally_line_stop.py                120  TDSDESK_SITE=../app/dist-test
 run_tally_states.py                   120

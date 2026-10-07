@@ -42,8 +42,9 @@ func retryHeldRows(mids ...string) []any {
 	return rows
 }
 
-// --- Tally silent for 3 minutes, then answering: nothing switched off; one request at each retry (15 s, 30 s, 1 min,
-// 2 min after the last); the first answer in time brings it back and the held lines come in
+// --- Tally silent for 3 minutes, then answering: nothing switched off; one request at each retry (15 s, 30 s after the
+// last) while a held line is left to ask; 2.3.2 (issue 232, b): each held line asked and not answered in time waits 1 h
+// for its next ask; the first answer in time brings it back and the held lines come in
 func TestRetrySilentThreeMinutesThenAnswers(t *testing.T) {
 	_, f, c := r222bBridge(t, "")
 	base := time.Date(2026, 10, 5, 12, 14, 50, 0, liveZone)
@@ -75,24 +76,30 @@ func TestRetrySilentThreeMinutesThenAnswers(t *testing.T) {
 		t.Fatalf("the words: %q", w)
 	}
 	n := 1
-	for _, at := range []int{15, 45, 105, 225} {
+	for _, at := range []int{15, 45} {
 		retryClock(base, at-1)
 		liveUploadOnce()
 		if asks() != n {
 			t.Fatalf("asked before the retry at %d s (%d asks, want %d)", at, asks(), n)
 		}
-		if at == 225 {
-			silent.Store(false) // 3 minutes and more: Tally answers again
-		}
 		retryClock(base, at)
 		liveUploadOnce()
-		if at < 225 {
-			n++
-			if asks() != n {
-				t.Fatalf("the retry at %d s sent %d request(s) (want 1)", at, asks()-n+1)
-			}
+		n++
+		if asks() != n {
+			t.Fatalf("the retry at %d s sent %d request(s) (want 1)", at, asks()-n+1)
 		}
 	}
+	// 2.3.2 (issue 232, b): each held line has had one timed-out try (one at each retry try: 0, 15 and 45 s); its next ask
+	// is 1 h after it, not at the retry schedule's later tries (2.3.1 asked again at every try, for 7 days)
+	for _, at := range []int{105, 225, 1800, 3599} {
+		retryClock(base, at)
+		liveUploadOnce()
+		if asks() != 3 {
+			t.Fatalf("a held line was asked again at %d s (%d asks, want 3)", at, asks())
+		}
+	}
+	silent.Store(false) // Tally answers again
+	retryClock(base, 3600+45)
 	for i := 0; i < 4; i++ {
 		liveUploadOnce()
 	}
@@ -104,7 +111,7 @@ func TestRetrySilentThreeMinutesThenAnswers(t *testing.T) {
 			t.Fatalf("held line %s did not come in: %v", mid, s)
 		}
 	}
-	if logLines("trying again by itself at") != 4 {
+	if logLines("trying again by itself at") != 3 { // 2.3.2: three stops (one per held line), then 1 h
 		t.Fatalf("one log line per retry: %d\n%s", logLines("trying again by itself at"), readText(logFile()))
 	}
 	if logLines(" off: ") != 0 || logLines("Reading from Tally stopped") != 0 || readStop() != nil {

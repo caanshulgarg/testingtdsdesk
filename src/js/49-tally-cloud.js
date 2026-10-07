@@ -423,7 +423,10 @@ const TCloud = {
           main: isMain, mayPost, at: b.at, tally: b.tallyState || (b.tally ? "open" : "closed"), open: b.open || [], go: id !== "v1",
           reqs: mine("reqs") || null, readStopped: mine("readStopped") || null, paused: !!mine("paused"), readStop: info.readStop || null,
           // bridge 2.3.1: a request not answered in time and when it tries again by itself ({words, at, next, tries})
-          tallyRetry: mine("tallyRetry") || null}); });
+          tallyRetry: mine("tallyRetry") || null,
+          // bridge 2.3.2: the companies whose entries it no longer asks Tally for (over 2 s to find one), as tally-ingest keeps
+          // them on its own entry ({bodies: {company: {off, seconds, at, why}}}); shown only for a 2.3.2 bridge or later
+          recorderOff: b.recorderOff || null}); });
       if (!br.v1 && info.beat) rows.push({device: d, id: "v1", computer: info.computer || d.name, user: info.user || "", version: info.beat.version || d.version || "",
         main: !main, at: info.beat.at, tally: info.beat.tallyState || (info.beat.tally ? "open" : "closed"), open: info.beat.open || [], go: false});
       if (info.shadow && !Object.keys(br).some(id => id !== "v1")) rows.push({device: d, id: "", computer: info.computer || d.name, user: info.user || "", version: info.shadow.version || "",

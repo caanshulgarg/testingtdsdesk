@@ -813,8 +813,17 @@ func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 	}
 	t2 := *tc
 	t2.isTry = try
+	// 2.3.2 (slowco.go): the time Tally had it, told only when the request reached Tally
+	sent, took := false, time.Duration(0)
+	t2.timed = func(sec float64) {
+		sent, took = true, time.Duration(sec*float64(time.Second))
+		if tc.timed != nil {
+			tc.timed(sec)
+		}
+	}
 	r, err := invokeTallyNow(&t2, port, x, timeoutSec)
 	retryNote(port, tallyRequestID(x), err)
+	slowNote(port, x, sent, took, err)
 	return r, err
 }
 
