@@ -119,6 +119,16 @@ func retryNote(port int, id string, err error) {
 	}
 }
 
+// next-inflight: Tally finished the request given up within the 20 s wait after the stop: the next background request
+// may go now (the step count stays: another stop waits longer)
+func retryLift() {
+	retryMu.Lock()
+	defer retryMu.Unlock()
+	if retryN > 0 && !retryGoing && nowFn().Before(retryUntil) {
+		retryUntil = nowFn()
+	}
+}
+
 // the Tally page's words: "Tally did not answer in time at 12:14; trying again by itself at 12:15"; "" when normal
 func retryWords() string {
 	retryMu.Lock()

@@ -22,17 +22,26 @@ import (
 	"time"
 )
 
+// next-inflight (the owner, 07-Oct-2026): after a stop, how long the bridge waits for Tally to finish the request it
+// stopped waiting for before it backs off (nothing is sent meanwhile)
+func abandonWait() time.Duration {
+	return time.Duration(keepNum("TallyAbandonWaitSec", 20)) * time.Second
+}
+
+// next-inflight: 0 closes the request when the bridge gives up on it (the behaviour before: the small check a minute after)
 func abandonMax() time.Duration {
-	return time.Duration(keepNum("TallyAbandonMaxSec", 600)) * time.Second
+	return time.Duration(keepNumZero("TallyAbandonMaxSec", 600)) * time.Second
 }
 
 const earlierWords = "waiting for Tally to finish an earlier request"
 
 // a request given up but still at Tally: set by tallyRaw (done closes when Tally answered or closed it, or the bound)
 type abandonSlot struct {
-	done chan struct{}
-	id   string
-	at   time.Time
+	done  chan struct{}
+	id    string
+	at    time.Time
+	bound bool          // ended by the long bound (Tally taken as not answering), set before done closes
+	took  time.Duration // Tally's time on it when it finished, set before done closes
 }
 type abandonKey struct{}
 
@@ -86,6 +95,14 @@ func holdUntilAnswered(port int, s *abandonSlot, unlock func()) {
 		earlierMu.Unlock()
 		unlock()
 	}()
+}
+
+// next-inflight: after the long bound the small check is owed; the minute before it counts from when the bridge gave up
+// on the request (as for a request closed at once), so after the 10-minute bound it goes at once
+func setProbeFrom(port int, gaveUp time.Time) {
+	probeMu.Lock()
+	probes[port] = &probeState{need: true, last: gaveUp}
+	probeMu.Unlock()
 }
 
 func resetEarlier() {

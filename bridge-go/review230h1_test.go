@@ -241,7 +241,8 @@ func TestH1RetryCopyCompanyStaysHeld(t *testing.T) {
 // retry schedule, goes held after 3 stops, and is asked again by itself (a held line) at the next try, then sent with
 // Tally's GUID
 func TestH1RetryCancelAfterTwoSecondStop(t *testing.T) {
-	rec, f, c := liveBridge(t, `,"RecorderBodySec":2,"RecorderResolveSec":0`)
+	// next-inflight: a single-entry fetch waits up to 20 s (RecorderEntryLimitMs); the stop is tested at 1.5 s (before the 2 s body deadline)
+	rec, f, c := liveBridge(t, `,"RecorderBodySec":2,"RecorderResolveSec":0,"RecorderEntryLimitMs":1500`)
 	td := today()
 	f.alter = 10
 	noteStartPoint(zz, b220CoGUID, 5, 1)

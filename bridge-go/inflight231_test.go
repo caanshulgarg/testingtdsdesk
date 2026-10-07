@@ -77,6 +77,14 @@ func inflightVoucher(f *standTally) string {
 	return f.add(today(), "Party IF", "IF-0", "busy", "-1.00").master
 }
 
+// the cleanup: Tally answers, and its late answer is logged while this test's log is still the log
+func earlierQuiet(port int) {
+	for i := 0; i < 100 && earlierBusy(port); i++ {
+		time.Sleep(20 * time.Millisecond)
+	}
+	time.Sleep(50 * time.Millisecond)
+}
+
 // until the port's earlier request is over (the answer came and was discarded)
 func waitEarlierOver(t *testing.T, port int) {
 	t.Helper()
@@ -93,11 +101,12 @@ func waitEarlierOver(t *testing.T, port int) {
 func TestInflightNothingSentWhileAbandoned(t *testing.T) {
 	td := today()
 	f := newStandTally(t)
-	standBridge(t, f, `,"RecorderEntryLimitMs":1000`)
+	// next-inflight: Tally finishes it after the wait (1 s here), so the late answer is said as such
+	standBridge(t, f, `,"RecorderEntryLimitMs":1000,"TallyAbandonWaitSec":1,"TallyAbandonMaxSec":600`)
 	liveFrom(td)
 	mid := inflightVoucher(f)
 	b := holdBusy(f, func(id string) bool { return id == vchByMasterID })
-	t.Cleanup(b.free)
+	t.Cleanup(func() { b.free(); earlierQuiet(f.port) }) // the held request ends before the test's log goes
 	t0 := time.Now()
 	_, err := fetchVouchersByMasterIn(entryTC(nil), zz, f.port, td, []string{mid}, 20)
 	if !strings.Contains(errText(err), "stopped waiting") || time.Since(t0) > 3*time.Second {
@@ -144,11 +153,11 @@ func TestInflightNothingSentWhileAbandoned(t *testing.T) {
 func TestInflightAbandonBound(t *testing.T) {
 	td := today()
 	f := newStandTally(t)
-	standBridge(t, f, `,"RecorderEntryLimitMs":500,"TallyAbandonMaxSec":2`)
+	standBridge(t, f, `,"RecorderEntryLimitMs":500,"TallyAbandonMaxSec":2,"TallyProbeEverySec":1`) // next-inflight: the minute before the small check counts from the give-up (compressed here with the bound)
 	liveFrom(td)
 	mid := inflightVoucher(f)
 	b := holdBusy(f, func(id string) bool { return id == vchByMasterID })
-	t.Cleanup(b.free)
+	t.Cleanup(func() { b.free(); earlierQuiet(f.port) }) // the held request ends before the test's log goes
 	_, _ = fetchVouchersByMasterIn(entryTC(nil), zz, f.port, td, []string{mid}, 20)
 	if !earlierBusy(f.port) {
 		t.Fatal("not held")
@@ -164,7 +173,7 @@ func TestInflightAbandonBound(t *testing.T) {
 
 // --- a single-entry fetch waits up to 20 s: an answer in 15 s is taken (not abandoned, no retry)
 func TestInflightEntryFetch15sAccepted(t *testing.T) {
-	p, f, c := r222bBridge(t, `,"RecorderBodySec":30`)
+	p, f, c := r222bBridge(t, `,"RecorderBodySec":30,"RecorderEntryLimitMs":20000`)
 	f.mu.Lock()
 	f.slow = func(id, body string) time.Duration {
 		if id == vchByMasterID {
@@ -197,7 +206,7 @@ func TestInflightEntryFetch15sAccepted(t *testing.T) {
 // test's: 1 while busy (the first entry's fetch, given up at its limit and held until Tally answers), then 10 (one per
 // entry, the first asked again), never two at once
 func TestInflightBusyFiveMinutesTenEntries(t *testing.T) {
-	p, f, c := r222bBridge(t, `,"RecorderEntryLimitMs":1000`)
+	p, f, c := r222bBridge(t, `,"RecorderEntryLimitMs":1000,"TallyAbandonMaxSec":600`)
 	base := time.Date(2026, 10, 5, 12, 0, 0, 0, liveZone)
 	retryClock(base, 0)
 	var lines []string
@@ -212,7 +221,7 @@ func TestInflightBusyFiveMinutesTenEntries(t *testing.T) {
 	var busy atomic.Bool
 	busy.Store(true)
 	b := holdBusy(f, func(id string) bool { return busy.Load() && id == vchByMasterID })
-	t.Cleanup(b.free)
+	t.Cleanup(func() { b.free(); earlierQuiet(f.port) }) // the held request ends before the test's log goes
 	n0 := f.n("")
 	for sec := 0; sec <= 300; sec += 5 {
 		retryClock(base, sec)
