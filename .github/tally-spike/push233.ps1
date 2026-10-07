@@ -97,11 +97,11 @@ function P3LoadCheck {
   $r = P3Save 'receipt'
   $ev = @($r.lines | ForEach-Object { [regex]::Match($_, '^FCR1\|ev=([^|]+)').Groups[1].Value })
   $full = @($r.lines | Where-Object { $_ -like 'FCR1|ev=voucher_full|*' -and $_ -match '\|end=1\|t1=[^|]*\|src=live$' })
-  $lenOk = $full.Count -and $full[0] -match '\|narr:\d+=' -and $full[0] -match '~neg=(Yes|No)'
+  $lenOk = $full.Count -and $full[0] -match '\|narr=' -and $full[0] -match '~neg=(Yes|No)' -and $full[0] -match '\|len=\d+\|end=1\|'
   $heads = ('voucher_accept_pre' -in $ev) -and ('voucher_accept_post' -in $ev)
   $P233.loadOk = $hasFull -and $heads -and $full.Count -ge 1 -and -not $errScreen
   if ($full.Count) { Set-Content (Join-Path $P233.dir 'L0-full-line.txt') $full -Encoding UTF8 }
-  Result 'push233 L0 the new add-on loads and writes the full entry' $P233.loadOk ("the TDL from the ref has FCRLiveFull: {0}; the screen after Tally started: {1}; Tally's TDL error files: {2}; one receipt saved on the screen: the add-on wrote {3}; heads (pre and post): {4}; full line(s) ending |end=1|t1=..|src=live: {5}; lengths and neg read: {6}; save {7} ms" -f `
+  Result 'push233 L0 the new add-on loads and writes the full entry' $P233.loadOk ("the TDL from the ref has FCRLiveFull: {0}; the screen after Tally started: {1}; Tally's TDL error files: {2}; one receipt saved on the screen: the add-on wrote {3}; heads (pre and post): {4}; full line(s) ending |end=1|t1=..|src=live: {5}; the narration, neg and the part's length read: {6}; save {7} ms" -f `
       $hasFull, $(if ($errScreen) { 'A TDL ERROR: ' + $ocr.Substring(0, [Math]::Min(300, $ocr.Length)) } else { 'no TDL error seen' }), $(if ($errFiles.Count) { ($errFiles | ForEach-Object Name) -join ', ' + ': ' + $errText.Substring(0, [Math]::Min(300, $errText.Length)) } else { 'none' }), $(P3Kinds $r.lines), $heads, $full.Count, [bool]$lenOk, $r.ms_fullline)
   if (-not $heads) { Add-Content -Path $resultsFile -Encoding UTF8 -Value 'INFO push233 L0: no heads line either: the whole add-on did not load (a function or formula this release does not know stops the file); the run stops here' }
   elseif (-not $full.Count) { Add-Content -Path $resultsFile -Encoding UTF8 -Value 'INFO push233 L0: the heads lines were written but no full line: FCRLiveFull failed at run time on this release' }
@@ -261,13 +261,13 @@ function Push233 {
   # export against the lines of the run
   $before = Vouchers 9000 $co1
   $r = P3Save 'receipt'
-  $vno = [regex]::Match((@($r.lines | Where-Object { $_ -like 'FCR1|ev=voucher_full|*' })[0]), '\|vno:\d+=([^|]*)').Groups[1].Value
+  $vno = [regex]::Match((@($r.lines | Where-Object { $_ -like 'FCR1|ev=voucher_full|*' })[0]), '\|vno=([^|]*)').Groups[1].Value
   Add-Content -Path $resultsFile -Encoding UTF8 -Value ("MEASURE push233 P9 a new receipt: the line's number '{0}', Tally's export '{1}' ({2})" -f $vno, $r.v.vno, $(if ($vno -eq $r.v.vno) { 'the same' } else { 'DIFFERENT' }))
   $b = P3RecLines; $a0 = P3Alt
   DayBookAt '1-11-2026' 'p233-p9-insert-daybook'; KeysTo 9000 '%i' 3 'p233-p9-insert'; KeysTo 9000 '{F6}' 3 'p233-p9-receipt'
   KeysTo 9000 'P233 Party{ENTER}' 2; KeysTo 9000 '5{ENTER}' 2; KeysTo 9000 'P233 Bank{ENTER}' 2; KeysTo 9000 '{ENTER}' 2; KeysTo 9000 '^a' 4 'p233-p9-inserted'; KeysTo 9000 '{ESC}' 1; KeysTo 9000 '{ESC}' 1
   Start-Sleep 3; $a1 = P3Alt; $n = @(P3RecLines | Select-Object -Skip $b.Count); $after = Vouchers 9000 $co1
-  $lineNo = @{}; foreach ($l in (P3RecLines | Where-Object { $_ -like 'FCR1|ev=voucher_full|*' })) { $lineNo[[regex]::Match($l, '\|mid=(\d+)\|').Groups[1].Value] = [regex]::Match($l, '\|vno:\d+=([^|]*)').Groups[1].Value }
+  $lineNo = @{}; foreach ($l in (P3RecLines | Where-Object { $_ -like 'FCR1|ev=voucher_full|*' })) { $lineNo[[regex]::Match($l, '\|mid=(\d+)\|').Groups[1].Value] = [regex]::Match($l, '\|vno=([^|]*)').Groups[1].Value }
   $ren = @($after | Where-Object { $o = $_; $p = @($before | Where-Object mid -eq $o.mid)[0]; $p -and $p.vno -ne $o.vno })
   Add-Content -Path $resultsFile -Encoding UTF8 -Value ("MEASURE push233 P9 back-dated insert: the add-on wrote {0}; ALTVCHID {1} -> {2}; renumbered by Tally: {3}; each renumbered entry's last line number: {4}" -f (P3What $n), $a0.vch, $a1.vch,
     $(if ($ren.Count) { ($ren | ForEach-Object { "mid $($_.mid): $(@($before | Where-Object mid -eq $_.mid)[0].vno) -> $($_.vno)" }) -join ', ' } else { 'none' }), $(if ($ren.Count) { ($ren | ForEach-Object { "mid $($_.mid): line '$($lineNo["$($_.mid)"])' / Tally '$($_.vno)'" }) -join ', ' } else { '-' }))
