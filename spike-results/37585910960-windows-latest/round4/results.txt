@@ -1,0 +1,17 @@
+INFO setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.3.2.exe SHA-256 605cbc4a7c93a308ecc29d2de0bbbfd787821f53d9fae761d76698a77c66c168; on this runner SHA-256 605cbc4a7c93a308ecc29d2de0bbbfd787821f53d9fae761d76698a77c66c168
+INFO user 2 (fcuser2) works in a Windows session of their own (session 1, by a Remote Desktop connection to 127.0.0.2); runneradmin in session 2
+INFO S231 import masters-1-items: created 4, altered 0, errors 0
+INFO S231 import masters-2-costs: created 3, altered 0, errors 0
+INFO S231 import masters-4-ledgers: created 14, altered 0, errors 0
+INFO S231 import masters-6-bulk: created 400, altered 0, errors 0
+INFO S231 import S4 the bill (New Ref S231-BILL-1, a journal): created 1, altered 0, errors 0
+INFO slow232: the large company 'FinCom Slow Co' holds 30000 entries made by XML (8.8 min), 3,000 ledgers, 3,000 items
+MEASURE slow232: the bridge's entry request for MasterID 100 of the large company took 2632 ms on this Tally (5039 bytes, 2 voucher(s))
+MEASURE slow232: the bridge's entry request for MasterID 15000 of the large company took 2831 ms on this Tally (5051 bytes, 2 voucher(s))
+MEASURE slow232: the bridge's entry request for MasterID 29990 of the large company took 3153 ms on this Tally (5051 bytes, 2 voucher(s))
+HARNESS slow232 setup: the timing proxy beside Tally: 127.0.0.2:9000 answered: <RESPONSE>TallyPrime Server is Running</RESPONSE>
+
+PASS 6a two bridges at once: bridge 1 runneradmin on 127.0.0.1:9100 (pid 5760, session 2, go-80105b449cf2); bridge 2 fcuser2 on 127.0.0.1:9101 (pid 6096, session 1, go-c2511f199fa6); both listening at 07:31:40
+INFO /ping with a nonce but no Origin (own bridge): proof not given
+PASS 6b /ping proof: bridge 1 proves itself to runneradmin: ok; bridge 1 proof checked against user 2 identity fails: ok; bridge 2 proves itself to fcuser2: ok; bridge 2 proof checked against user 1 identity fails: ok; bridge 2 gives runneradmin no proof: ok; bridge 1 gives fcuser2 no proof: ok; other users refused 403 beyond /ping: ok
+HARNESS slow232: the setup did not finish (see the HARNESS line above)
