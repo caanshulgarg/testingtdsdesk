@@ -1,0 +1,18 @@
+2026-10-07 09:07:29  FinCom Bridge 2.3.2: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+2026-10-07 09:07:29  FinCom Bridge 2.3.2 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+2026-10-07 09:07:29  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+2026-10-07 09:07:29  Recorder: re-scan of the add-on's files for 2.3.2: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+2026-10-07 09:07:29  Check:  - 
+2026-10-07 09:07:32  Tray icon: set to show next to the clock always (Windows 11)
+2026-10-07 09:07:32  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+2026-10-07 09:07:32  Company FinCom Slow Co: its Tally GUID 68520dcf-c9a0-49ca-ba42-e98a13e77246 is held from now on
+2026-10-07 09:07:33  Company FinCom Spike Co: its Tally GUID ec952e3e-dd19-4848-8168-4af9df5156d9 is held from now on
+2026-10-07 09:07:33  Company FinCom Slow Co: its starting point is recorded: ALTVCHID=30000, ALTMSTID=6216 (reading is prospective only: the bridge follows what changes after this)
+2026-10-07 09:07:33  Company FinCom Slow Co: change numbers read with form a: ALTVCHID=30000, ALTMSTID=6216
+2026-10-07 09:07:33  Light check of FinCom Slow Co: starting point recorded (ALTVCHID=30000, ALTMSTID=6216)
+2026-10-07 09:07:33  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=2, ALTMSTID=644 (reading is prospective only: the bridge follows what changes after this)
+2026-10-07 09:07:33  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=2, ALTMSTID=644
+2026-10-07 09:07:33  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=2, ALTMSTID=644)
+2026-10-07 09:07:35  Refused a request from a program of another Windows user (/tray/idle): not your FinCom Bridge
+2026-10-07 09:07:35  Refused a request from a program of another Windows user (/tray/status): not your FinCom Bridge
+2026-10-07 09:07:49  Refused a request from a program of another Windows user (/status): not your FinCom Bridge
