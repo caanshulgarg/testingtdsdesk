@@ -1325,7 +1325,7 @@ function dbFail(where: string, error: any, words: string) {
 const RECORDER_EVENTS = new Set(["created", "altered", "deleted", "cancelled", "imported", "ledger_created", "ledger_altered", "ledger_renamed", "ledger_deleted"]);
 // next-masterhook (migration 66): the add-on's master forms (Pay Head, Stock Item, Unit, Godown, Employee), HEADS ONLY: kept
 // in tally_recorder_masters by tally_recorder_masters_save, never applied to the books, never with a body
-const MASTER_EVENTS = new Set(["master_created", "master_altered"]);
+const MASTER_EVENTS = new Set(["master_created", "master_altered", "master_deleted"]);
 const MASTER_TYPES = new Set(["Pay Head", "Stock Item", "Unit", "Godown", "Employee"]);
 function cleanMasterLine(x: any, me: { id: string }): { line?: Record<string, unknown>; bad?: string } {
   const s = (v: unknown, n: number) => typeof v === "string" || typeof v === "number" ? String(v).trim().slice(0, n) : "";

@@ -10,8 +10,8 @@
 // of Tally for a master line (no body, no ledger request, no new request of any kind). A Pay Head is a ledger in Tally, but
 // its form's lines go as a master's too (heads only for now; the ledger list keeps its ledger as before).
 //
-// Deletes: the add-on's System Events (Before / After Delete Object) fire for every object and write no master type, so a
-// master's delete stays what it was in 2.3.2 (recorder_live.go liveSingle).
+// Deletes: the add-on's System Events (Before / After Delete Object) fire for every object and write no master type: a
+// master the hooked forms named is sent as master_deleted with its type (below); any other as ledger_deleted, as in 2.3.2.
 package main
 
 import "strings"
@@ -53,4 +53,70 @@ func liveMasterEvent(fresh bool) string {
 		return "master_created"
 	}
 	return "master_altered"
+}
+
+// Open question 1 (the coordinator, 07-Oct-2026): Tally's delete events (Before / After Delete Object) write no master
+// type, so a Stock Item's or a Godown's delete went as ledger_deleted (FinCom's cloud applies a ledger delete only to the
+// ledger holding the line's GUID, so no ledger was ever marked deleted by one; the line was held as an unknown ledger).
+// The bridge remembers the type of every master its add-on's form lines named, by GUID (sync\recorder-master-types.json,
+// kept across restarts, at most 20,000), and sends such a master's delete as master_deleted with that type. A master
+// never seen on a hooked form (a ledger, or one older than the hook) stays ledger_deleted, as before.
+var liveMT struct {
+	dir string
+	m   map[string]string
+}
+
+func liveMasterTypesFile() string { return sp("recorder-master-types.json") }
+
+// under live.mu: the types kept, loaded once per sync folder
+func liveMTLoad() map[string]string {
+	if d := syncDir(); liveMT.m == nil || liveMT.dir != d {
+		liveMT.dir, liveMT.m = d, map[string]string{}
+		for k, v := range obj(readObjFile(liveMasterTypesFile())["types"]) {
+			if t := str(v); t != "" {
+				liveMT.m[k] = t
+			}
+		}
+	}
+	return liveMT.m
+}
+
+func liveMTKey(guid string) string {
+	g := strings.ToLower(strings.TrimSpace(guid))
+	if g == "" || livePlaceholder(g) {
+		return ""
+	}
+	return g
+}
+
+// under live.mu: a master form's line names its master's type
+func liveMTNote(guid, typ string) {
+	k := liveMTKey(guid)
+	if k == "" || typ == "" {
+		return
+	}
+	m := liveMTLoad()
+	if m[k] == typ {
+		return
+	}
+	if len(m) >= 20000 {
+		return
+	}
+	m[k] = typ
+	ts := M{}
+	for g, t := range m {
+		ts[g] = t
+	}
+	if err := saveFile(liveMasterTypesFile(), jsonText(M{"types": ts})); err != nil {
+		writeLog("Recorder: " + liveMasterTypesFile() + " could not be written: " + err.Error())
+	}
+}
+
+// under live.mu: the type of a master seen on a hooked form ("" when never seen)
+func liveMTOf(guid string) string {
+	k := liveMTKey(guid)
+	if k == "" {
+		return ""
+	}
+	return liveMTLoad()[k]
 }

@@ -113,13 +113,13 @@ try:
                          input="do $$ begin if not exists (select 1 from pg_roles where rolname = 'service_role') then create role service_role; end if; end $$;\n" + open(os.path.join(SQLDIR, "migration-66-recorder-masters.sql")).read(), capture_output=True, text=True)
     ok(r66.returncode == 0, "66 runs on the stand: %s" % r66.stderr[-300:])
     c, r = rec([ml("M1", "master_created", "Stock Item", "PD Item 1"), ml("M2", "master_altered", "Unit", "Nos", "2563", 41, "cg-1-00000a03"), ml("M3", "master_altered", "Budget", "B1"),
-                line("V2", "altered", "v1", 42, amt=120)])
-    ok(c == 200 and st(r) == {"M1": "kept", "M2": "kept", "M3": "failed", "V2": "applied"} and r.get("kept") == 2, "2. kept, an unknown type failed, the voucher applied (%s)" % r)
-    rows = db.rows("select line_id, event, master_type, name, parent, coalesce(object_guid, '') as g, master_id, coalesce(alter_id::text, '') as a, bridge, pc, tally_user, company from tally_recorder_masters order by line_id")
+                line("V2", "altered", "v1", 42, amt=120), ml("M4", "master_deleted", "Godown", "Old Store", "2560", 9, "cg-1-00000a00")])
+    ok(c == 200 and st(r) == {"M1": "kept", "M2": "kept", "M3": "failed", "V2": "applied", "M4": "kept"} and r.get("kept") == 3, "2. kept, an unknown type failed, the voucher applied (%s)" % r)
+    rows = db.rows("select line_id, event, master_type, name, parent, coalesce(object_guid, '') as g, master_id, coalesce(alter_id::text, '') as a, bridge, pc, tally_user, company from tally_recorder_masters where line_id <> 'M4' order by line_id")
     ok([(x["line_id"], x["master_type"], x["name"], x["g"], x["a"]) for x in rows] == [("M1", "Stock Item", "PD Item 1", "", ""), ("M2", "Unit", "Nos", "cg-1-00000a03", "41")]
        and all(x["bridge"] == GA["id"] and x["pc"] == "PC-A" and x["company"] == "ZZ CO" for x in rows), "2. the heads kept (%s)" % rows)
     c, r = rec([ml("M2", "master_altered", "Unit", "Nos", "2563", 41, "cg-1-00000a03")])
-    ok(st(r) == {"M2": "duplicate"} and db.one("select count(*) from tally_recorder_masters") == "2", "2. sent again: duplicate (%s)" % r)
+    ok(st(r) == {"M2": "duplicate"} and db.one("select count(*) from tally_recorder_masters") == "3", "2. sent again: duplicate (%s)" % r)
     ok(db.one("select count(*) from tally_recorder_lines where line_id like 'M%'") == "0", "2. nothing of them in tally_recorder_lines")
     args = FS.ARGS.get("tally_recorder_masters_save", [])
     ok(args and all("xml" not in l and "ledgers" not in l for a in args for l in a["p_lines"]), "2. heads only to the database: no body, no ledgers")

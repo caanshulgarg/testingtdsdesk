@@ -103,7 +103,9 @@
 ;;   Employee: no form name tried fires on Tally's "Employee Alteration" (Employee, Cost Centre, Employee Master,
 ;;     Employees, Payroll Employee: probe run 37563133547).
 ;; Deletes: Before / After Delete Object (the System Events above) already fire for these masters (obj=Master, name, GUID,
-;; MasterID, parent; probe run 37563133547), mapped as before (ledger_deleted: the line names no master type).
+;; MasterID, parent; probe run 37563133547). The line names no master type: the bridge sends the delete of a master these
+;; forms' lines named as master_deleted with its type (masterhook.go), any other as ledger_deleted, which FinCom applies only
+;; to the ledger holding the line's GUID.
 
 [#Form: Pay Head]
     On : Form Accept : @@FCRIsLive : Call : FCRLiveLog : "payhead_accept_pre"

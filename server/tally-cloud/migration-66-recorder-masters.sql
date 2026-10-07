@@ -3,7 +3,7 @@
 -- one transaction (lock_timeout 10 s). Independent of 61-65 (any order after 44). NOT RUN by this change: written only.
 --
 -- The add-on now hooks the Pay Head, Stock Item, Unit, Godown and Employee forms as it hooks the Ledger form. The bridge
--- sends each save as a recorder line master_created / master_altered with HEADS ONLY: master_type, name, parent,
+-- sends each save as a recorder line master_created / master_altered (and a known master's delete as master_deleted) with HEADS ONLY: master_type, name, parent,
 -- object_guid, master_id, alter_id (never a body: nothing is asked of Tally for it). tally-ingest's recorder_lines
 -- (index.ts) keeps those lines here instead of in tally_recorder_lines (whose tally_recorder_line knows only vouchers and
 -- ledgers and would mark them failed): nothing is applied to the books from them yet.
@@ -14,7 +14,11 @@
 --     the book must be the firm's (else {ok: false, error}); each line {line_id, event, master_type, name, parent,
 --     object_guid, master_id, alter_id, saved_at, pc, user, company_guid, company, bridge} (strings cut as tally-ingest cuts
 --     them) -> {ok: true, results: [{line_id, state: 'kept' | 'duplicate' | 'failed', why}]}; a line without a line_id, or
---     with an event other than master_created / master_altered, is 'failed' with words and not kept.
+--     with an event other than master_created / master_altered / master_deleted, is 'failed' with words and not kept.
+--   master_deleted (the coordinator's open question 1): the bridge sends a Stock Item's or Godown's delete under its own
+--     type (the type its form lines named) instead of ledger_deleted; kept here, nothing in the books changes. A ledger
+--     delete stays tally_recorder_line's, which applies it ONLY to the ledger holding the line's GUID (never by name):
+--     unchanged, see tests/run_ledger_delete_guid.py.
 
 begin;
 set local lock_timeout = '10s';     -- never queue long behind a session holding a table here (a timeout rolls the whole file back: run it again)
@@ -31,7 +35,7 @@ create table if not exists public.tally_recorder_masters (
   company_guid  text,
   company       text,
   line_id       text not null,
-  event         text not null check (event in ('master_created', 'master_altered')),
+  event         text not null check (event in ('master_created', 'master_altered', 'master_deleted')),
   master_type   text,                                  -- Pay Head | Stock Item | Unit | Godown | Employee
   name          text,
   parent        text,
@@ -73,7 +77,7 @@ begin
       res := res || jsonb_build_array(jsonb_build_object('line_id', '', 'state', 'failed', 'why', 'a master line without its line id is not kept'));
       continue;
     end if;
-    if ev not in ('master_created', 'master_altered') then
+    if ev not in ('master_created', 'master_altered', 'master_deleted') then
       res := res || jsonb_build_array(jsonb_build_object('line_id', lid, 'state', 'failed', 'why', 'not a master line: ' || ev));
       continue;
     end if;

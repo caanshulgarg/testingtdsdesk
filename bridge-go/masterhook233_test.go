@@ -132,3 +132,39 @@ func TestMasterHookAddon(t *testing.T) {
 
 // the master forms the add-on hooks (those proven on a real Tally: masterhook.go)
 func mhForms() []liveMasterForm { return liveMasterHooked }
+
+// open question 1 (the coordinator, 07-Oct-2026): a delete line (Before / After Delete Object) names no master type, so a
+// Stock Item's or Godown's delete went as ledger_deleted. The bridge now remembers the type of every master its add-on's
+// form lines named (by GUID, kept on disk) and sends that master's delete as master_deleted with its type; a delete of a
+// master it never saw stays ledger_deleted (FinCom's cloud applies a ledger delete by the ledger's GUID only)
+func TestMasterHookDeleteKnownType(t *testing.T) {
+	rec, f, c := liveBridge(t, "")
+	p := liveFilePath(rec, "")
+	gi, gg, gl := b220CoGUID+"-00000a20", b220CoGUID+"-00000a21", b220CoGUID+"-00000a22"
+	liveAppend(t, p,
+		mhLine("stockitem_accept_pre", gi, "2592", "60", "Cement", "Primary"),
+		mhLine("stockitem_accept_post", gi, "2592", "61", "Cement", "Primary"),
+		mhLine("godown_accept_pre", gg, "2593", "62", "Store", "Primary"),
+		mhLine("godown_accept_post", gg, "2593", "63", "Store", "Primary"))
+	readAndUploadAll(t)
+	// a restart: the types are kept on disk
+	liveResetState()
+	liveAppend(t, p,
+		mhLine("before_delete", gi, "2592", "61", "Cement", "Primary"),
+		mhLine("after_delete", gi, "2592", "61", "Cement", "Primary"),
+		mhLine("after_delete", gg, "2593", "63", "Store", "Primary"),
+		mhLine("after_delete", gl, "2594", "64", "Cement", "Sundry Creditors"))
+	readAndUploadAll(t)
+	sent := c.recSent()
+	var got []string
+	for _, l := range sent[2:] {
+		got = append(got, str(l["event"])+"/"+str(l["master_type"])+"/"+str(l["name"])+"/"+str(l["object_guid"]))
+	}
+	want := "master_deleted/Stock Item/Cement/" + gi + ",master_deleted/Godown/Store/" + gg + ",ledger_deleted//Cement/" + gl
+	if strings.Join(got, ",") != want {
+		t.Fatalf("deletes sent:\n%v\nwant\n%s", got, want)
+	}
+	if n := f.n("FinComLedgerByName") + f.n("FinComLedgerChanges"); n != 0 {
+		t.Fatalf("a master's delete asked Tally %d times", n)
+	}
+}

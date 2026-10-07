@@ -1005,6 +1005,9 @@ func liveSingle(l recLine) (recLine, string) {
 		}
 		return l, "imported"
 	case "after_delete":
+		if master && liveMTOf(l.GUID) != "" {
+			return l, "master_deleted" // open question 1: a master its add-on's form lines named (masterhook.go)
+		}
 		if master {
 			return l, "ledger_deleted"
 		}
@@ -1232,6 +1235,11 @@ func liveEmit(l recLine, ev, file string, gen int, start, lineStart, end int64, 
 	c.companyGuid = liveGUID(c.companyGuid)
 	if c.isMaster() {
 		c.masterType = liveMasterType(l.Ev) // next-masterhook: heads only (masterhook.go)
+		if c.masterType == "" {
+			c.masterType = liveMTOf(l.GUID) // a delete: the type its form lines named
+		} else {
+			liveMTNote(l.GUID, c.masterType)
+		}
 	}
 	if r := []rune(c.narr); len(r) > liveNarrMax {
 		c.narr = string(r[:liveNarrMax]) // review Low 11

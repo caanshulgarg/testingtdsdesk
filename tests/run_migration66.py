@@ -63,28 +63,30 @@ try:
     can = lambda r: db.one("select has_function_privilege(%s, 'public.tally_recorder_masters_save(uuid, uuid, uuid, jsonb)', 'execute')::text" % q(r))
     ok(can("service_role") == "true" and can("anon") == "false" and can("authenticated") == "false", "0. executed by service_role only (%s)" % [can(r) for r in ("service_role", "anon", "authenticated")])
 
-    print("== 1. kept, heads only; the same line again: duplicate")
+    print("== 1. kept, heads only (a delete too); the same line again: duplicate")
+    r = save([L("m-0", "master_deleted", "Godown", "Old Store", "2560", 9, CG + "-00000a00")])
+    ok([x["state"] for x in r.get("results", [])] == ["kept"] and db.one("select event || '/' || master_type from tally_recorder_masters where line_id = 'm-0'") == "master_deleted/Godown", "1. a master's delete kept with its type (%s)" % r)
     r = save([L("m-1", "master_created", "Stock Item", "PD Item 1"), L("m-2", "master_altered", "Unit", "Nos", "2563", 41, CG + "-00000a03")])
     ok([x["state"] for x in r.get("results", [])] == ["kept", "kept"], "1. two lines kept (%s)" % r)
-    row = db.rows("select event, master_type, name, parent, coalesce(object_guid, '') as g, master_id, coalesce(alter_id::text, '') as a, tally_user, pc, company_guid, client_id from tally_recorder_masters where book_id = %s order by id" % q(B))
+    row = db.rows("select event, master_type, name, parent, coalesce(object_guid, '') as g, master_id, coalesce(alter_id::text, '') as a, tally_user, pc, company_guid, client_id from tally_recorder_masters where book_id = %s and line_id <> 'm-0' order by id" % q(B))
     ok(len(row) == 2 and row[0]["event"] == "master_created" and row[0]["master_type"] == "Stock Item" and row[0]["g"] == "" and row[0]["a"] == "" and row[0]["client_id"] == "c1"
        and row[1]["master_type"] == "Unit" and row[1]["g"] == CG + "-00000a03" and row[1]["master_id"] == "2563" and row[1]["a"] == "41" and row[1]["tally_user"] == "TALLY User", "1. the rows (%s)" % row)
     r = save([L("m-2", "master_altered", "Unit", "Nos", "2563", 41)])
-    ok([x["state"] for x in r.get("results", [])] == ["duplicate"] and db.one("select count(*) from tally_recorder_masters") == "2", "1. sent again: duplicate, kept once (%s)" % r)
+    ok([x["state"] for x in r.get("results", [])] == ["duplicate"] and db.one("select count(*) from tally_recorder_masters") == "3", "1. sent again: duplicate, kept once (%s)" % r)
 
     print("== 2. not a master line")
     r = save([L("v-1", "created", "", "x"), L("", "master_created", "Unit", "Box")])
-    ok([(x["state"], bool(x["why"])) for x in r.get("results", [])] == [("failed", True), ("failed", True)] and db.one("select count(*) from tally_recorder_masters") == "2", "2. failed with words, not kept (%s)" % r)
+    ok([(x["state"], bool(x["why"])) for x in r.get("results", [])] == [("failed", True), ("failed", True)] and db.one("select count(*) from tally_recorder_masters") == "3", "2. failed with words, not kept (%s)" % r)
 
     print("== 3. another firm's book")
     r = save([L("m-3", "master_created", "Godown", "PD Godown A")], firm=F, book=B2)
-    ok(r.get("ok") is False and db.one("select count(*) from tally_recorder_masters") == "2", "3. refused (%s)" % r)
+    ok(r.get("ok") is False and db.one("select count(*) from tally_recorder_masters") == "3", "3. refused (%s)" % r)
 
     print("== 4. RLS")
     db.sql("insert into tally_recorder_masters (firm_id, book_id, line_id, event) values (%s, %s, 'm-o', 'master_created')" % (q(F2), q(B2)))
     db.sql("grant usage on schema auth to authenticated; grant select on members to authenticated")     # the stand's my_firm(), as Supabase's
     mine = db.rows("set role authenticated; select line_id from tally_recorder_masters order by line_id", OWNER)
-    ok([x["line_id"] for x in mine] == ["m-1", "m-2"], "4. the firm reads its own rows only (%s)" % mine)
+    ok([x["line_id"] for x in mine] == ["m-0", "m-1", "m-2"], "4. the firm reads its own rows only (%s)" % mine)
     try:
         db.sql("set role authenticated; insert into tally_recorder_masters (firm_id, book_id, line_id, event) values (%s, %s, 'x', 'master_created')" % (q(F), q(B)), OWNER); w = False
     except RuntimeError: w = True
