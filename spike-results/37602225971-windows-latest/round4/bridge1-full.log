@@ -1,0 +1,48 @@
+2026-10-07 10:01:43  FinCom Bridge 2.3.2: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+2026-10-07 10:01:43  FinCom Bridge 2.3.2 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+2026-10-07 10:01:43  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+2026-10-07 10:01:43  Recorder: re-scan of the add-on's files for 2.3.2: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+2026-10-07 10:01:43  Check:  - 
+2026-10-07 10:01:46  Tray icon: set to show next to the clock always (Windows 11)
+2026-10-07 10:01:46  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+2026-10-07 10:01:46  Company FinCom Slow Co: its Tally GUID 0ce672a5-840c-4f0b-b86b-1fbc96beb927 is held from now on
+2026-10-07 10:01:46  Company FinCom Spike Co: its Tally GUID fd92dccb-656f-46b3-b974-2114d20373ce is held from now on
+2026-10-07 10:01:46  Company FinCom Slow Co: its starting point is recorded: ALTVCHID=30000, ALTMSTID=6216 (reading is prospective only: the bridge follows what changes after this)
+2026-10-07 10:01:46  Company FinCom Slow Co: change numbers read with form a: ALTVCHID=30000, ALTMSTID=6216
+2026-10-07 10:01:46  Light check of FinCom Slow Co: starting point recorded (ALTVCHID=30000, ALTMSTID=6216)
+2026-10-07 10:01:47  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=2, ALTMSTID=644 (reading is prospective only: the bridge follows what changes after this)
+2026-10-07 10:01:47  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=2, ALTMSTID=644
+2026-10-07 10:01:47  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=2, ALTMSTID=644)
+2026-10-07 10:01:51  Refused a request from a program of another Windows user (/tray/idle): not your FinCom Bridge
+2026-10-07 10:01:51  Refused a request from a program of another Windows user (/tray/status): not your FinCom Bridge
+2026-10-07 10:02:04  Refused a request from a program of another Windows user (/status): not your FinCom Bridge
+2026-10-07 10:03:35  Recorder: Journal 3 of 01-Apr-2026 (MasterID 3, line 6a208a1f…): asking Tally by MasterID
+2026-10-07 10:03:35  Recorder: entry fetch of FinCom Spike Co: answered in 49 ms
+2026-10-07 10:03:35  Recorder: Journal 3 of 01-Apr-2026 (MasterID 3, line 6a208a1f…): taken: Tally's GUID fd92dccb-656f-46b3-b974-2114d20373ce-00000003, AlterID 3
+2026-10-07 10:06:36  Recorder: Journal S232-BIG-1 of 01-Apr-2026 (MasterID 30001, line e754321e…): asking Tally by MasterID
+2026-10-07 10:06:38  Tally 9000: FinComVoucherByMaster 20260401 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-07 10:06:38  Tally 9000 did not answer in time at 10:06:38 (FinComVoucherByMaster, try 1); trying again by itself at 10:06:53
+2026-10-07 10:06:38  Recorder: entry fetch of FinCom Slow Co: over 2 s (stopped)
+2026-10-07 10:06:38  Recorder: Journal S232-BIG-1 of 01-Apr-2026 (MasterID 30001, line e754321e…): not asked yet: Tally did not answer in time at 10:06; trying again by itself at 10:06 (nothing was sent); asked then
+2026-10-07 10:06:55  Tally 9000: FinComVoucherByMaster 20260401 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-07 10:06:55  Tally 9000 did not answer in time at 10:06:55 (FinComVoucherByMaster, try 2); trying again by itself at 10:07:25
+2026-10-07 10:06:55  Recorder: Journal S232-BIG-1 of 01-Apr-2026 (MasterID 30001, line e754321e…): not asked yet: Tally did not answer in time at 10:06; trying again by itself at 10:07 (nothing was sent); asked then
+2026-10-07 10:07:26  Tally 9000 answered in time again (TDSDeskCompanies): the background requests are back to normal
+2026-10-07 10:07:28  Tally 9000: FinComVoucherByMaster 20260401 took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-07 10:07:28  Tally 9000 did not answer in time at 10:07:28 (FinComVoucherByMaster, try 1); trying again by itself at 10:07:43
+2026-10-07 10:07:28  Recorder: Journal S232-BIG-1 of 01-Apr-2026 (MasterID 30001, line e754321e…): held: the entry was not read from Tally: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-07 10:07:28  Recorder: the body of 1 entry of FinCom Slow Co was not read from Tally (Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)); sent without it (FinCom holds the line until a body comes)
+2026-10-07 10:07:31  Recorder: Journal 4 of 01-Apr-2026 (MasterID 4, line 96c07f32…): asking Tally by MasterID
+2026-10-07 10:07:31  Recorder: Journal 4 of 01-Apr-2026 (MasterID 4, line 96c07f32…): not asked yet: Tally did not answer in time at 10:07; trying again by itself at 10:07 (nothing was sent); asked then
+2026-10-07 10:07:43  Tally 9000 answered in time again (FinComVoucherByMaster): the background requests are back to normal
+2026-10-07 10:07:43  Recorder: entry fetch of FinCom Spike Co: answered in 51 ms
+2026-10-07 10:07:43  Recorder: FinCom Slow Co: entry fetch stopped: over 2 s (stopped 3 times, never answered in time). No entry of it is asked of Tally any more; its lines go up held (upload that day's Day Book to settle them). This lifts when a newer FinCom Bridge is installed
+2026-10-07 10:07:43  Recorder: Journal 4 of 01-Apr-2026 (MasterID 4, line 96c07f32…): taken: Tally's GUID fd92dccb-656f-46b3-b974-2114d20373ce-00000004, AlterID 4
+2026-10-07 10:07:43  Recorder: Journal S232-BIG-1 of 01-Apr-2026 (MasterID 30001, line e754321e…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (ended: not asked of Tally again)
+2026-10-07 10:07:46  Recorder: FinCom asks again for 1 held line(s) of this bridge: 0 new in the held list, 0 asked afresh (tries of an older version), 0 there already, 1 resolved already, 0 not this bridge's own Tally's (company not open here or another GUID)
+2026-10-07 10:07:52  Recorder: Journal S232-AFTER-1 of 01-Apr-2026 (MasterID 30002, line 8da03721…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (sent without its body and GUID; FinCom holds the line until it is resolved)
+2026-10-07 10:07:52  Recorder: Journal S232-AFTER-2 of 01-Apr-2026 (MasterID 30003, line 708698cf…): held: FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. (sent without its body and GUID; FinCom holds the line until it is resolved)
+2026-10-07 10:07:52  Recorder: Journal 5 of 01-Apr-2026 (MasterID 5, line 2b26c5df…): asking Tally by MasterID
+2026-10-07 10:07:52  Recorder: entry fetch of FinCom Spike Co: answered in 58 ms
+2026-10-07 10:07:52  Recorder: Journal 5 of 01-Apr-2026 (MasterID 5, line 2b26c5df…): taken: Tally's GUID fd92dccb-656f-46b3-b974-2114d20373ce-00000005, AlterID 5
+2026-10-07 10:08:16  Recorder: FinCom asks again for 3 held line(s) of this bridge: 0 new in the held list, 0 asked afresh (tries of an older version), 0 there already, 3 resolved already, 0 not this bridge's own Tally's (company not open here or another GUID)

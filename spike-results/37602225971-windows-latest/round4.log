@@ -1,0 +1,294 @@
+[09:45:14] ---- the bridge built from the ref
+bridge source: 2e72085b5a2aae4666094133a64c06d2fcbd0b4b 2.3.2 release log row: the allow-list file's hash moved only because the decision line changed (request table and shapes unchanged); review L8, docs only, the build unchanged
+setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.3.2.exe SHA-256 605cbc4a7c93a308ecc29d2de0bbbfd787821f53d9fae761d76698a77c66c168
+setup: FinComBridge-Setup-2.3.2.exe 3342330 bytes SHA256 605CBC4A7C93A308ECC29D2DE0BBBFD787821F53D9FAE761D76698A77C66C168
+[09:45:14] ---- the second Windows user (not an administrator)
+user 2: fcuser2 S-1-5-21-1643835476-1616584234-1346609752-1003; administrators: runnervmfi6oq\runneradmin
+user 2's profile: C:\Users\fcuser2
+ SESSIONNAME               USERNAME                 ID  STATE   TYPE        DEVICE 
+ services                                            0  Disc                        
+ rdp-tcp#0                 fcuser2                   1  Active                      
+>console                   runneradmin               2  Active                      
+ 31c5ce94259d4006a9e4                            65536  Listen                      
+ rdp-tcp                                         65537  Listen                      
+
+[09:45:38] user 2's own Windows session by Remote Desktop: True (session 1)
+[shot] r4-03-rdp-session (1024x768)
+task fcu2 registered for fcuser2 (interactive)
+  [as fcuser2] who=runnervmfi6oq\fcuser2 session=1
+  [as fcuser2] no Tally window in session 1; keys '{ENTER}' to the window in front
+  [as fcuser2] shot u2-desktop
+[09:46:08] ---- the stub cloud
+[09:46:11] ---- user 1's Tally (9000) with the add-on; a copy of the program for user 2 first (its own tally.ini and port)
+  still running from the Tally folder: tallyscheduler 8428
+  robocopy:    Bytes :  177.74 m  177.74 m         0         0       512         0
+  robocopy:    Times :   0:00:00   0:00:00                       0:00:00   0:00:00
+  robocopy: 
+  robocopy: 
+  robocopy:    Speed :           2,192,750,552 Bytes/sec.
+  robocopy:    Speed :             125,470.195 MegaBytes/min.
+  robocopy:    Ended : Wednesday, October 7, 2026 9:46:13 AM
+  robocopy: 
+[09:46:13] copy for user 2: robocopy 9, tally.exe there: True
+Tally :9000 answers: True
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[keys] 't' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-00-tally1 (1024x768)
+[ledger Spike Income :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[ledger Salesify Marketing LLP (bill-by-bill) :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[09:46:45] ---- check 8's masters on user 1's Tally: unit, two stock items (GST 18%), Sales/Purchase, CGST/SGST 9%, customer, supplier
+[unit Nos :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[stock item Spike Widget (GST 18%) :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[stock item Spike Gadget (GST 18%) :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[stock items :9000] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>2</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>2</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>1</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[check 8 ledgers :9000] <RESPONSE><CREATED>6</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[stock items :9000] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>8</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>2</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>1</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[09:46:46] ---- 2.3.1 scenarios: the masters (stock items with HSN and GST rate, GST, TDS, cost centre, bank and party ledgers)
+  scen231: 7 master sets, 14 entries -> D:\a\testingtdsdesk\testingtdsdesk\spike-results\37602225971-windows-latest\round4\scen231
+[masters-1-items :9000] 35 ms, 269 bytes: <RESPONSE><CREATED>4</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[masters-2-costs :9000] 21 ms, 269 bytes: <RESPONSE><CREATED>3</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[masters-4-ledgers :9000] 79 ms, 270 bytes: <RESPONSE><CREATED>14</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[masters-6-bulk :9000] 1883 ms, 271 bytes: <RESPONSE><CREATED>400</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[S4 the bill (New Ref S231-BILL-1, a journal) :9000] 46 ms, 269 bytes: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>2</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[ledger master S231 Buyer :9000] 9 ms, 17392 bytes: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>425</LEDGER><COSTCATEGORY>1</COSTCATEGORY><COSTCENTRE>2</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>6</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>1</CURRENCY><UNIT>1</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIF...
+[shot] r4-s231-00-masters (1024x768)
+[09:47:02] ---- slow232 setup: a large company 'FinCom Slow Co' in Tally 9000 beside 'FinCom Spike Co' (up to 30000 entries, 40 min), before the bridges start
+[slow232] company folders before: 100000
+[slow232] tally.ini: [Tally] | Data = D:\a\_temp\TallyData | Config = C:\Program Files\TallyPrime | LangPath = C:\Program Files\TallyPrime\lang | Client Server = Both | ServerPort = 9000 | Enable ODBC Server = Yes | Ignore TCP Timeout = Yes | User TDL = Yes | Default Companies = No
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[keys] 't' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F3}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-s232-01a-company-list (1024x768)
+[keys] 'Create Company' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-s232-01b-typed (1024x768)
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-s232-01-create-company (1024x768)
+[keys] 'FinCom Slow Co' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-s232-02-name (1024x768)
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-s232-03-ctrl-a (1024x768)
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-s232-04-company (1024x768)
+[slow232] a new company folder: 100001
+[slow232 import] is 'FinCom Slow Co' open: 1 sent, created 1, errors 0, 0.0 s
+[slow232] company 'FinCom Slow Co' open in Tally 9000: True
+[slow232 import] masters 0: 1000 sent, created 1000, errors 0, 4.4 s
+[slow232 import] masters 1000: 1000 sent, created 1000, errors 0, 4.4 s
+[slow232 import] masters 2000: 1000 sent, created 1000, errors 0, 4.6 s
+[slow232 import] masters 3000: 1000 sent, created 1000, errors 0, 4.3 s
+[slow232 import] masters 4000: 1000 sent, created 1000, errors 0, 4.4 s
+[slow232 import] masters 5000: 1000 sent, created 1000, errors 0, 4.3 s
+[slow232 import] masters 6000: 7 sent, created 7, errors 0, 0.0 s
+[slow232 import] entries 0: 1000 sent, created 1000, errors 0, 19.0 s
+[slow232 import] entries 1000: 1000 sent, created 1000, errors 0, 19.1 s
+[slow232 import] entries 2000: 1000 sent, created 1000, errors 0, 19.2 s
+[slow232 import] entries 3000: 1000 sent, created 1000, errors 0, 19.9 s
+[slow232 import] entries 4000: 1000 sent, created 1000, errors 0, 21.4 s
+[slow232 import] entries 5000: 1000 sent, created 1000, errors 0, 21.0 s
+[slow232 import] entries 6000: 1000 sent, created 1000, errors 0, 20.8 s
+[slow232 import] entries 7000: 1000 sent, created 1000, errors 0, 20.5 s
+[slow232 import] entries 8000: 1000 sent, created 1000, errors 0, 20.7 s
+[slow232 import] entries 9000: 1000 sent, created 1000, errors 0, 22.0 s
+[slow232 import] entries 10000: 1000 sent, created 1000, errors 0, 20.7 s
+[slow232 import] entries 11000: 1000 sent, created 1000, errors 0, 20.5 s
+[slow232 import] entries 12000: 1000 sent, created 1000, errors 0, 19.7 s
+[slow232 import] entries 13000: 1000 sent, created 1000, errors 0, 20.0 s
+[slow232 import] entries 14000: 1000 sent, created 1000, errors 0, 20.3 s
+[slow232 import] entries 15000: 1000 sent, created 1000, errors 0, 20.0 s
+[slow232 import] entries 16000: 1000 sent, created 1000, errors 0, 20.6 s
+[slow232 import] entries 17000: 1000 sent, created 1000, errors 0, 22.2 s
+[slow232 import] entries 18000: 1000 sent, created 1000, errors 0, 21.3 s
+[slow232 import] entries 19000: 1000 sent, created 1000, errors 0, 22.5 s
+[slow232 import] entries 20000: 1000 sent, created 1000, errors 0, 23.5 s
+[slow232 import] entries 21000: 1000 sent, created 1000, errors 0, 23.2 s
+[slow232 import] entries 22000: 1000 sent, created 1000, errors 0, 21.9 s
+[slow232 import] entries 23000: 1000 sent, created 1000, errors 0, 22.1 s
+[slow232 import] entries 24000: 1000 sent, created 1000, errors 0, 21.5 s
+[slow232 import] entries 25000: 1000 sent, created 1000, errors 0, 21.8 s
+[slow232 import] entries 26000: 1000 sent, created 1000, errors 0, 21.6 s
+[slow232 import] entries 27000: 1000 sent, created 1000, errors 0, 20.8 s
+[slow232 import] entries 28000: 1000 sent, created 1000, errors 0, 20.8 s
+[slow232 import] entries 29000: 1000 sent, created 1000, errors 0, 21.7 s
+[slow232] company folders after: 100000, 100001; 'FinCom Spike Co' 100000, 'FinCom Slow Co' 100001
+[slow232] tally.ini: [Tally] | Data = D:\a\_temp\TallyData | Config = C:\Program Files\TallyPrime | LangPath = C:\Program Files\TallyPrime\lang | Client Server = Both | ServerPort = 9000 | Enable ODBC Server = Yes | Ignore TCP Timeout = Yes | User TDL = Yes | Default Companies = Yes | Load = 100000 | Load = 100001 | TDL = C:\fcspike\FinComRecorder.tdl
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[keys] 't' -> Tally :9000 'TallyPrime:9000'
+[slow232 import] is 'FinCom Spike Co' open: 1 sent, created 1, errors 0, 0.0 s
+[slow232] company 'FinCom Spike Co' open in Tally 9000: True
+[slow232 import] is 'FinCom Slow Co' open: 1 sent, created 0, errors 0, 0.0 s <RESPONSE> <CREATED>0</CREATED> <ALTERED>1</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+[slow232] company 'FinCom Slow Co' open in Tally 9000: True
+[shot] r4-s232-05-both-loaded (1024x768)
+[ledger Spike Income :9000] <RESPONSE><CREATED>0</CREATED><ALTERED>1</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[slow232] the proxy 127.0.0.2:9000 -> Tally: <RESPONSE>TallyPrime Server is Running</RESPONSE> 
+[09:59:59] ---- user 2's own Tally (9001), run as fcuser2: a company made by keys, then started again with it and the add-on
+  [as fcuser2] pid=1732 session=1 user=runnervmfi6oq\fcuser2
+Tally :9001 (pid 1732) answers: True; owner: fcuser2; session 1 (runner's own: 2)
+  [as fcuser2] keys 'a' -> Tally pid 1732 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys 't' -> Tally pid 1732 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01-tally2-start
+  [as fcuser2] keys '{ENTER}' -> Tally pid 1732 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01b-tally2-create-company
+  [as fcuser2] keys 'FinCom Spike U2' -> Tally pid 1732 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys '^a' -> Tally pid 1732 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01c-tally2-ctrl-a
+[companies :9001] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+  [as fcuser2] keys '^a' -> Tally pid 1732 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01d-tally2-company
+user 2's company made: True, folder 100000
+  [as fcuser2] pid=7616 session=1 user=runnervmfi6oq\fcuser2
+  [as fcuser2] keys 'a' -> Tally pid 7616 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys 't' -> Tally pid 7616 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01e-tally2-gateway
+[ledger Spike Income :9001] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[companies :9001] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>1</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[ledger Spike Party :9001] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[journal :9001 :9001] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>1</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+== user 2's own Tally with its company and the add-on: True
+[10:01:38] ---- the bridges, each installed by its own Windows user with the real setup, just for me; the settings seeded first
+setup as runneradmin (just for me) ended with 0
+  install.log 1: 2026-10-07 10:01:39  Install (just for this user, no service): FinCom Bridge 2.3.2 for runnervmfi6oq\runneradmin (S-1-5-21-1643835476-1616584234-1346609752-500), sole mode, folder C:\Users\runneradmin\AppData\Local\TDS Desk Bridge
+  install.log 1: 2026-10-07 10:01:43  Install: the add-on FinComRecorder.tdl written in C:\ProgramData\FinCom\addon
+  install.log 1: 2026-10-07 10:01:43  Install: the add-on FinComRecorderAnyCompany.tdl written in C:\ProgramData\FinCom\addon
+  install.log 1: 2026-10-07 10:01:43  Install: the recorder folder C:\ProgramData\FinCom\recorder and the add-on folder C:\ProgramData\FinCom\addon are ready (just for this user)
+  install.log 1: 2026-10-07 10:01:43  Install: starts when runnervmfi6oq\runneradmin signs in to Windows (HKCU Run)
+  install.log 1: 2026-10-07 10:01:44  Install: done; the bridge answers on 127.0.0.1:9100
+  install.log 1: 2026-10-07 10:01:44  Setup: FinComBridge.exe install: done, the bridge answers
+  install.log 1: 2026-10-07 10:01:44  Setup: Finished: installed and running (sole mode)
+seed as fcuser2: runnervmfi6oq\fcuser2 session 1 C:\Users\fcuser2\AppData\Local
+  [as fcuser2] exit=0 user=runnervmfi6oq\fcuser2 session=1
+setup as fcuser2 (just for me) ended: exit=0 user=runnervmfi6oq\fcuser2 session=1
+  install.log 2: 2026-10-07 10:01:47  Install (just for this user, no service): FinCom Bridge 2.3.2 for runnervmfi6oq\fcuser2 (S-1-5-21-1643835476-1616584234-1346609752-1003), sole mode, folder C:\Users\fcuser2\AppData\Local\TDS Desk Bridge
+  install.log 2: 2026-10-07 10:01:50  Install: the add-on FinComRecorder.tdl was not written in C:\ProgramData\FinCom\addon: remove C:\ProgramData\FinCom\addon\FinComRecorder.tdl: Access is denied.
+  install.log 2: 2026-10-07 10:01:50  Install: the add-on FinComRecorderAnyCompany.tdl was not written in C:\ProgramData\FinCom\addon: remove C:\ProgramData\FinCom\addon\FinComRecorderAnyCompany.tdl: Access is denied.
+  install.log 2: 2026-10-07 10:01:50  Install: the recorder folder C:\ProgramData\FinCom\recorder and the add-on folder C:\ProgramData\FinCom\addon are ready (just for this user)
+  install.log 2: 2026-10-07 10:01:50  Install: starts when runnervmfi6oq\fcuser2 signs in to Windows (HKCU Run)
+  install.log 2: 2026-10-07 10:01:51  Install: done; the bridge answers on 127.0.0.1:9101
+  install.log 2: 2026-10-07 10:01:51  Setup: FinComBridge.exe install: done, the bridge answers
+  install.log 2: 2026-10-07 10:01:51  Setup: Finished: installed and running (sole mode)
+bridge 1: user runneradmin, port 9100, id go-ef78730039cd, key 24 chars, Owner runnervmfi6oq\runneradmin, OwnerSid S-1-5-21-1643835476-1616584234-1346609752-500
+bridge 2: user fcuser2, port 9101, id go-9845e2664efc, key 24 chars, Owner runnervmfi6oq\fcuser2, OwnerSid S-1-5-21-1643835476-1616584234-1346609752-1003
+[shot] r4-02-bridges (1024x768)
+[10:02:02] ---- 6a: both bridges run at once, on their own ports, as their own users
+  process 7248 as runneradmin in session 2: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" user --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json"
+  process 1624 as runneradmin in session 2: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" tray --quiet --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json"
+  process 2516 as runneradmin in session 2: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" worker --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json" --home "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge" --parent 7248
+  process 6548 as fcuser2 in session 1: "C:\Users\fcuser2\AppData\Local\FinCom Bridge\FinComBridge.exe" user --config "C:\Users\fcuser2\AppData\Local\TDS Desk Bridge\tds-bridge.config.json"
+  process 2488 as fcuser2 in session 1: "C:\Users\fcuser2\AppData\Local\FinCom Bridge\FinComBridge.exe" worker --config "C:\Users\fcuser2\AppData\Local\TDS Desk Bridge\tds-bridge.config.json" --home "C:\Users\fcuser2\AppData\Local\TDS Desk Bridge" --parent 6548
+  process 8736 as fcuser2 in session 1: "C:\Users\fcuser2\AppData\Local\FinCom Bridge\FinComBridge.exe" tray
+  listening 127.0.0.1:9101 pid 2488 user fcuser2
+  listening 127.0.0.1:9100 pid 2516 user runneradmin
+  Tally pid 7616 session 1 owner fcuser2
+  Tally pid 8744 session 2 owner runneradmin
+######## PASS 6a two bridges at once: bridge 1 runneradmin on 127.0.0.1:9100 (pid 2516, session 2, go-ef78730039cd); bridge 2 fcuser2 on 127.0.0.1:9101 (pid 2488, session 1, go-9845e2664efc); both listening at 10:02:03
+[10:02:03] ---- 6b: the /ping proof: HMAC-SHA256(bridge key, nonce || bridge id || port), only to the bridge's own Windows user
+runneradmin -> own bridge, no Origin: {"bridge":"FinCom Tally Bridge","bridgeId":"go-ef78730039cd","impl":"go","loopSec":0,"ok":true,"pid":2516,"port":9100,"runMode":"user","testMode":false,"version":"2.3.2","yours":true}
+runneradmin -> own bridge: {"bridge":"FinCom Tally Bridge","bridgeId":"go-ef78730039cd","impl":"go","loopSec":0,"ok":true,"pairProof":"be44766ffde9d2d90e1939ac5f18d3a8bc1b870ef323624c284aec4914eb1496","pid":2516,"port":9100,"proof":"6036c6026712b484ba7266ad003fca7788a6261be081e53bdc539363409304cd","runMode":"user","testMode":false,"version":"2.3.2","yours":true}
+runneradmin -> user 2's bridge: {"bridge":"FinCom Tally Bridge","impl":"go","loopSec":0,"ok":true,"pid":2488,"runMode":"user","testMode":false,"version":"2.3.2","yours":false}
+as fcuser2 (): {"ownStatus":401,"other":{"bridge":"FinCom Tally Bridge","impl":"go","loopSec":0,"ok":true,"pid":2516,"runMode":"user","testMode":false,"version":"2.3.2","yours":false},"session":1,"own":{"bridge":"FinCom Tally Bridge","bridgeId":"go-9845e2664efc","impl":"go","loopSec":0,"ok":true,"pairProof":"72b7d8cd719bec43bba6a3b1d59535e477c9d666ac8321c5d7d9f01797c54216","pid":2488,"port":9101,"proof":"71a835ac8d27c326e820bc26e7addbfe15f1c62f559cc644255a7be3eb4e5e6a","runMode":"user","testMode":false,"version":"2.3.2","yours":true},"otherStatus":403,"who":"runnervmfi6oq\\fcuser2"}
+  ok   bridge 1 proves itself to runneradmin: yours=True bridgeId=go-ef78730039cd port=9100 proof=6036c6026712b484ba7266ad003fca7788a6261be081e53bdc539363409304cd
+  ok   bridge 1 proof checked against user 2 identity fails: HMAC(key2, nonce||go-9845e2664efc||9101)=67e212c425fcf4f6c9c52816b8beb366b0b73e799bd556ec80f4b8e6ac36c1ac
+  ok   bridge 2 proves itself to fcuser2: yours=True bridgeId=go-9845e2664efc port=9101 proof=71a835ac8d27c326e820bc26e7addbfe15f1c62f559cc644255a7be3eb4e5e6a
+  ok   bridge 2 proof checked against user 1 identity fails: HMAC(key1, nonce||go-ef78730039cd||9100)=7a383f97f29c3a1e25d6a07627720cbccfb92b7833017c71331c2d1bec7ab6a9
+  ok   bridge 2 gives runneradmin no proof: yours=False proof= bridgeId=
+  ok   bridge 1 gives fcuser2 no proof: yours=False proof=
+  ok   other users refused 403 beyond /ping: runneradmin: own /status 401, other 403; fcuser2: own /status 401, other 403
+######## PASS 6b /ping proof: bridge 1 proves itself to runneradmin: ok; bridge 1 proof checked against user 2 identity fails: ok; bridge 2 proves itself to fcuser2: ok; bridge 2 proof checked against user 1 identity fails: ok; bridge 2 gives runneradmin no proof: ok; bridge 1 gives fcuser2 no proof: ok; other users refused 403 beyond /ping: ok
+  bridge1 log: 2026-10-07 10:01:43  FinCom Bridge 2.3.2: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+  bridge1 log: 2026-10-07 10:01:43  FinCom Bridge 2.3.2 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+  bridge1 log: 2026-10-07 10:01:43  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+  bridge1 log: 2026-10-07 10:01:43  Recorder: re-scan of the add-on's files for 2.3.2: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+  bridge1 log: 2026-10-07 10:01:43  Check:  - 
+  bridge1 log: 2026-10-07 10:01:46  Tray icon: set to show next to the clock always (Windows 11)
+  bridge1 log: 2026-10-07 10:01:46  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+  bridge1 log: 2026-10-07 10:01:46  Company FinCom Slow Co: its Tally GUID 0ce672a5-840c-4f0b-b86b-1fbc96beb927 is held from now on
+  bridge1 log: 2026-10-07 10:01:46  Company FinCom Spike Co: its Tally GUID fd92dccb-656f-46b3-b974-2114d20373ce is held from now on
+  bridge1 log: 2026-10-07 10:01:46  Company FinCom Slow Co: its starting point is recorded: ALTVCHID=30000, ALTMSTID=6216 (reading is prospective only: the bridge follows what changes after this)
+  bridge1 log: 2026-10-07 10:01:46  Company FinCom Slow Co: change numbers read with form a: ALTVCHID=30000, ALTMSTID=6216
+  bridge1 log: 2026-10-07 10:01:46  Light check of FinCom Slow Co: starting point recorded (ALTVCHID=30000, ALTMSTID=6216)
+  bridge1 log: 2026-10-07 10:01:47  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=2, ALTMSTID=644 (reading is prospective only: the bridge follows what changes after this)
+  bridge1 log: 2026-10-07 10:01:47  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=2, ALTMSTID=644
+  bridge1 log: 2026-10-07 10:01:47  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=2, ALTMSTID=644)
+  bridge1 log: 2026-10-07 10:01:51  Refused a request from a program of another Windows user (/tray/idle): not your FinCom Bridge
+  bridge1 log: 2026-10-07 10:01:51  Refused a request from a program of another Windows user (/tray/status): not your FinCom Bridge
+  bridge1 log: 2026-10-07 10:02:04  Refused a request from a program of another Windows user (/status): not your FinCom Bridge
+  bridge2 log: 2026-10-07 10:01:50  FinCom Bridge 2.3.2: started just for runnervmfi6oq\fcuser2 (no service); it keeps the bridge and its icon running
+  bridge2 log: 2026-10-07 10:01:51  Port 9100 is taken (another Windows user's FinCom Bridge, or another program); this bridge uses port 9101 and remembers it
+  bridge2 log: 2026-10-07 10:01:51  FinCom Bridge 2.3.2 (Go) started on 127.0.0.1:9101: the only bridge on this computer; working for runnervmfi6oq\fcuser2, Windows session 1; runs just for this Windows user (starts at sign-in, no service)
+  bridge2 log: 2026-10-07 10:01:51  Tally is open on port 9001; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+  bridge2 log: 2026-10-07 10:01:51  Recorder: re-scan of the add-on's files for 2.3.2: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+  bridge2 log: 2026-10-07 10:01:51  Check:  - 
+  bridge2 log: 2026-10-07 10:01:54  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+  bridge2 log: 2026-10-07 10:01:54  Tray icon: set to show next to the clock always (Windows 11)
+  bridge2 log: 2026-10-07 10:01:54  Company FinCom Spike U2: its Tally GUID 7687296d-bbe7-4afc-8647-b23a50aa50c3 is held from now on
+  bridge2 log: 2026-10-07 10:01:54  Company FinCom Spike U2: its starting point is recorded: ALTVCHID=1, ALTMSTID=209 (reading is prospective only: the bridge follows what changes after this)
+  bridge2 log: 2026-10-07 10:01:54  Company FinCom Spike U2: change numbers read with form a: ALTVCHID=1, ALTMSTID=209
+  bridge2 log: 2026-10-07 10:01:54  Light check of FinCom Spike U2: starting point recorded (ALTVCHID=1, ALTMSTID=209)
+  bridge2 log: 2026-10-07 10:02:03  Refused a request from a program of another Windows user (/status): not your FinCom Bridge (the program asking has no Windows user)
+[10:02:35] ---- slow232: a small entry, then entries in the large company
+[slow232 import] small 1: 1 sent, created 1, errors 0, 0.1 s
+  Tally :9000 voucher mid=1 aid=1 guid=fd92dccb-656f-46b3-b974-2114d20373ce-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=fd92dccb-656f-46b3-b974-2114d20373ce-00000003 no=3 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=fd92dccb-656f-46b3-b974-2114d20373ce-00000002 no=2 cancelled=False
+[slow232] small 1: its lines written to C:\ProgramData\FinCom\recorder\fd92dccb-656f-46b3-b974-2114d20373ce-7-Oct-26.txt (MasterID 3, GUID fd92dccb-656f-46b3-b974-2114d20373ce-00000003, number '3')
+######## FAIL slow232 a small entry before: no line with a body in 180 s
+[slow232 import] big 1: 1 sent, created 1, errors 0, 0.1 s
+[slow232] big 1: its lines written to C:\ProgramData\FinCom\recorder\0ce672a5-840c-4f0b-b86b-1fbc96beb927-7-Oct-26.txt (MasterID 30001, GUID 0ce672a5-840c-4f0b-b86b-1fbc96beb927-00007531, number 'S232-BIG-1')
+[slow232 import] small between 1: 1 sent, created 1, errors 0, 0.0 s
+  Tally :9000 voucher mid=1 aid=1 guid=fd92dccb-656f-46b3-b974-2114d20373ce-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=fd92dccb-656f-46b3-b974-2114d20373ce-00000003 no=3 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=fd92dccb-656f-46b3-b974-2114d20373ce-00000004 no=4 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=fd92dccb-656f-46b3-b974-2114d20373ce-00000002 no=2 cancelled=False
+[slow232] small between 1: its lines written to C:\ProgramData\FinCom\recorder\fd92dccb-656f-46b3-b974-2114d20373ce-7-Oct-26.txt (MasterID 4, GUID fd92dccb-656f-46b3-b974-2114d20373ce-00000004, number '4')
+######## PASS slow232 the large company is marked: 2026-10-07 10:07:43  Recorder: FinCom Slow Co: entry fetch stopped: over 2 s (stopped 3 times, never answered in time). No entry of it is asked of Tally any more; its lines go up held (upload that day's Day Book to settle them). This lifts when a newer FinCom Bridge is installed; 3 stop(s) of its entry request before it (1 entry saved)
+######## PASS slow232 the beat carries it: {"at":"2026-10-07T10:07:43Z","company":"FinCom Slow Co","off":true,"seconds":2,"since":"2026-10-07T10:07:43Z","timesOver":3,"why":"finding one entry took Tally longer than 2 s: stopped 3 times, on 2 separate occasions while Tally answered other requests in time"}
+[slow232 import] after 1: 1 sent, created 1, errors 0, 0.1 s
+[slow232] after 1: its lines written to C:\ProgramData\FinCom\recorder\0ce672a5-840c-4f0b-b86b-1fbc96beb927-7-Oct-26.txt (MasterID 30002, GUID 0ce672a5-840c-4f0b-b86b-1fbc96beb927-00007532, number 'S232-AFTER-1')
+[slow232 import] after 2: 1 sent, created 1, errors 0, 0.1 s
+[slow232] after 2: its lines written to C:\ProgramData\FinCom\recorder\0ce672a5-840c-4f0b-b86b-1fbc96beb927-7-Oct-26.txt (MasterID 30003, GUID 0ce672a5-840c-4f0b-b86b-1fbc96beb927-00007533, number 'S232-AFTER-2')
+[slow232 import] small 2: 1 sent, created 1, errors 0, 0.0 s
+  Tally :9000 voucher mid=1 aid=1 guid=fd92dccb-656f-46b3-b974-2114d20373ce-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=fd92dccb-656f-46b3-b974-2114d20373ce-00000003 no=3 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=fd92dccb-656f-46b3-b974-2114d20373ce-00000004 no=4 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=fd92dccb-656f-46b3-b974-2114d20373ce-00000005 no=5 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=fd92dccb-656f-46b3-b974-2114d20373ce-00000002 no=2 cancelled=False
+[slow232] small 2: its lines written to C:\ProgramData\FinCom\recorder\fd92dccb-656f-46b3-b974-2114d20373ce-7-Oct-26.txt (MasterID 5, GUID fd92dccb-656f-46b3-b974-2114d20373ce-00000005, number '5')
+######## PASS slow232 no entry request for it after the mark: 0 entry request(s) for 'FinCom Slow Co' after the mark; the bridge's requests after it: FinComVoucherByMaster x1
+######## PASS slow232 its new lines go up held with the words: stub 10:07:52 recorder_lines event=created guid='' mid=30002 aid= vch=Journal/S232-AFTER-1/20260401 user=runnervmfi6oq\runneradmin bridge=go-ef78730039cd port=9100 company=FinCom Slow Co body=none heldWhy=FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. || stub 10:07:52 recorder_lines event=created guid='' mid=30003 aid= vch=Journal/S232-AFTER-2/20260401 user=runnervmfi6oq\runneradmin bridge=go-ef78730039cd port=9100 company=FinCom Slow Co body=none heldWhy=FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it.
+######## PASS slow232 its held lines end with the Day Book words: entries S232-BIG-1; ended S232-BIG-1: stub 10:07:28 recorder_lines event=created guid='' mid=30001 aid= vch=Journal/S232-BIG-1/20260401 user=runnervmfi6oq\runneradmin bridge=go-ef78730039cd port=9100 company=FinCom Slow Co body=none heldWhy=the entry was not read from Tally: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s) || stub 10:07:43 recorder_lines event=created guid='' mid=30001 aid= vch=Journal/S232-BIG-1/20260401 user=runnervmfi6oq\runneradmin bridge=go-ef78730039cd port=9100 company=FinCom Slow Co body=none heldWhy=FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it.
+######## PASS slow232 a small entry after the mark: stub 10:07:52 recorder_lines event=created guid=fd92dccb-656f-46b3-b974-2114d20373ce-00000005 mid=5 aid=5 vch=Journal/5/20260401 user=runnervmfi6oq\runneradmin bridge=go-ef78730039cd port=9100 company=FinCom Spike Co body=yes(4091 chars)
+######## PASS slow232 Tally never held by the bridge after the mark: requests of 2 s or more at Tally after the mark: 0; Tally's window did not answer 0 time(s) in 4 min (the slowest answer 8 ms); the bridge's slowest request after the mark 56 ms
+[10:11:51] ---- what is kept: the bridges' logs, install logs, settings without their keys
+  Tally :9000 voucher mid=1 aid=1 guid=fd92dccb-656f-46b3-b974-2114d20373ce-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=fd92dccb-656f-46b3-b974-2114d20373ce-00000003 no=3 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=fd92dccb-656f-46b3-b974-2114d20373ce-00000004 no=4 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=fd92dccb-656f-46b3-b974-2114d20373ce-00000005 no=5 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=fd92dccb-656f-46b3-b974-2114d20373ce-00000002 no=2 cancelled=False
+== results
+INFO setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.3.2.exe SHA-256 605cbc4a7c93a308ecc29d2de0bbbfd787821f53d9fae761d76698a77c66c168; on this runner SHA-256 605cbc4a7c93a308ecc29d2de0bbbfd787821f53d9fae761d76698a77c66c168
+INFO user 2 (fcuser2) works in a Windows session of their own (session 1, by a Remote Desktop connection to 127.0.0.2); runneradmin in session 2
+INFO S231 import masters-1-items: created 4, altered 0, errors 0
+INFO S231 import masters-2-costs: created 3, altered 0, errors 0
+INFO S231 import masters-4-ledgers: created 14, altered 0, errors 0
+INFO S231 import masters-6-bulk: created 400, altered 0, errors 0
+INFO S231 import S4 the bill (New Ref S231-BILL-1, a journal): created 1, altered 0, errors 0
+INFO slow232: the large company 'FinCom Slow Co' holds 30000 entries made by XML (11 min), 3,000 ledgers, 3,000 items
+MEASURE slow232: the bridge's entry request for MasterID 100 of the large company took 3539 ms on this Tally (5039 bytes, 2 voucher(s))
+MEASURE slow232: the bridge's entry request for MasterID 15000 of the large company took 3430 ms on this Tally (5051 bytes, 2 voucher(s))
+MEASURE slow232: the bridge's entry request for MasterID 29990 of the large company took 3707 ms on this Tally (5051 bytes, 2 voucher(s))
+PASS 6a two bridges at once: bridge 1 runneradmin on 127.0.0.1:9100 (pid 2516, session 2, go-ef78730039cd); bridge 2 fcuser2 on 127.0.0.1:9101 (pid 2488, session 1, go-9845e2664efc); both listening at 10:02:03
+INFO /ping with a nonce but no Origin (own bridge): proof not given
+PASS 6b /ping proof: bridge 1 proves itself to runneradmin: ok; bridge 1 proof checked against user 2 identity fails: ok; bridge 2 proves itself to fcuser2: ok; bridge 2 proof checked against user 1 identity fails: ok; bridge 2 gives runneradmin no proof: ok; bridge 1 gives fcuser2 no proof: ok; other users refused 403 beyond /ping: ok
+INFO slow232 small 1 (FinCom Spike Co): MasterID 3 (LASTVCHID), Tally's number '3', AlterID 3
+FAIL slow232 a small entry before: no line with a body in 180 s
+INFO slow232 small between 1 (FinCom Spike Co): MasterID 4 (LASTVCHID), Tally's number '4', AlterID 4
+INFO slow232: bridge 1's TallyHost '127.0.0.2'; 13 request(s) of the bridge through the timing proxy so far
+INFO slow232: the large company's entry requests before the mark: 3 (3 took 2 s or more at Tally: 4447, 4525, 4662 ms)
+PASS slow232 the large company is marked: 2026-10-07 10:07:43  Recorder: FinCom Slow Co: entry fetch stopped: over 2 s (stopped 3 times, never answered in time). No entry of it is asked of Tally any more; its lines go up held (upload that day's Day Book to settle them). This lifts when a newer FinCom Bridge is installed; 3 stop(s) of its entry request before it (1 entry saved)
+PASS slow232 the beat carries it: {"at":"2026-10-07T10:07:43Z","company":"FinCom Slow Co","off":true,"seconds":2,"since":"2026-10-07T10:07:43Z","timesOver":3,"why":"finding one entry took Tally longer than 2 s: stopped 3 times, on 2 separate occasions while Tally answered other requests in time"}
+INFO slow232 small 2 (FinCom Spike Co): MasterID 5 (LASTVCHID), Tally's number '5', AlterID 5
+PASS slow232 no entry request for it after the mark: 0 entry request(s) for 'FinCom Slow Co' after the mark; the bridge's requests after it: FinComVoucherByMaster x1
+PASS slow232 its new lines go up held with the words: stub 10:07:52 recorder_lines event=created guid='' mid=30002 aid= vch=Journal/S232-AFTER-1/20260401 user=runnervmfi6oq\runneradmin bridge=go-ef78730039cd port=9100 company=FinCom Slow Co body=none heldWhy=FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. || stub 10:07:52 recorder_lines event=created guid='' mid=30003 aid= vch=Journal/S232-AFTER-2/20260401 user=runnervmfi6oq\runneradmin bridge=go-ef78730039cd port=9100 company=FinCom Slow Co body=none heldWhy=FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it.
+PASS slow232 its held lines end with the Day Book words: entries S232-BIG-1; ended S232-BIG-1: stub 10:07:28 recorder_lines event=created guid='' mid=30001 aid= vch=Journal/S232-BIG-1/20260401 user=runnervmfi6oq\runneradmin bridge=go-ef78730039cd port=9100 company=FinCom Slow Co body=none heldWhy=the entry was not read from Tally: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s) || stub 10:07:43 recorder_lines event=created guid='' mid=30001 aid= vch=Journal/S232-BIG-1/20260401 user=runnervmfi6oq\runneradmin bridge=go-ef78730039cd port=9100 company=FinCom Slow Co body=none heldWhy=FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it.
+PASS slow232 a small entry after the mark: stub 10:07:52 recorder_lines event=created guid=fd92dccb-656f-46b3-b974-2114d20373ce-00000005 mid=5 aid=5 vch=Journal/5/20260401 user=runnervmfi6oq\runneradmin bridge=go-ef78730039cd port=9100 company=FinCom Spike Co body=yes(4091 chars)
+PASS slow232 Tally never held by the bridge after the mark: requests of 2 s or more at Tally after the mark: 0; Tally's window did not answer 0 time(s) in 4 min (the slowest answer 8 ms); the bridge's slowest request after the mark 56 ms
+== round 4 end

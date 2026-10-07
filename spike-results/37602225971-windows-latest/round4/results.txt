@@ -1,0 +1,27 @@
+INFO setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.3.2.exe SHA-256 605cbc4a7c93a308ecc29d2de0bbbfd787821f53d9fae761d76698a77c66c168; on this runner SHA-256 605cbc4a7c93a308ecc29d2de0bbbfd787821f53d9fae761d76698a77c66c168
+INFO user 2 (fcuser2) works in a Windows session of their own (session 1, by a Remote Desktop connection to 127.0.0.2); runneradmin in session 2
+INFO S231 import masters-1-items: created 4, altered 0, errors 0
+INFO S231 import masters-2-costs: created 3, altered 0, errors 0
+INFO S231 import masters-4-ledgers: created 14, altered 0, errors 0
+INFO S231 import masters-6-bulk: created 400, altered 0, errors 0
+INFO S231 import S4 the bill (New Ref S231-BILL-1, a journal): created 1, altered 0, errors 0
+INFO slow232: the large company 'FinCom Slow Co' holds 30000 entries made by XML (11 min), 3,000 ledgers, 3,000 items
+MEASURE slow232: the bridge's entry request for MasterID 100 of the large company took 3539 ms on this Tally (5039 bytes, 2 voucher(s))
+MEASURE slow232: the bridge's entry request for MasterID 15000 of the large company took 3430 ms on this Tally (5051 bytes, 2 voucher(s))
+MEASURE slow232: the bridge's entry request for MasterID 29990 of the large company took 3707 ms on this Tally (5051 bytes, 2 voucher(s))
+PASS 6a two bridges at once: bridge 1 runneradmin on 127.0.0.1:9100 (pid 2516, session 2, go-ef78730039cd); bridge 2 fcuser2 on 127.0.0.1:9101 (pid 2488, session 1, go-9845e2664efc); both listening at 10:02:03
+INFO /ping with a nonce but no Origin (own bridge): proof not given
+PASS 6b /ping proof: bridge 1 proves itself to runneradmin: ok; bridge 1 proof checked against user 2 identity fails: ok; bridge 2 proves itself to fcuser2: ok; bridge 2 proof checked against user 1 identity fails: ok; bridge 2 gives runneradmin no proof: ok; bridge 1 gives fcuser2 no proof: ok; other users refused 403 beyond /ping: ok
+INFO slow232 small 1 (FinCom Spike Co): MasterID 3 (LASTVCHID), Tally's number '3', AlterID 3
+FAIL slow232 a small entry before: no line with a body in 180 s
+INFO slow232 small between 1 (FinCom Spike Co): MasterID 4 (LASTVCHID), Tally's number '4', AlterID 4
+INFO slow232: bridge 1's TallyHost '127.0.0.2'; 13 request(s) of the bridge through the timing proxy so far
+INFO slow232: the large company's entry requests before the mark: 3 (3 took 2 s or more at Tally: 4447, 4525, 4662 ms)
+PASS slow232 the large company is marked: 2026-10-07 10:07:43  Recorder: FinCom Slow Co: entry fetch stopped: over 2 s (stopped 3 times, never answered in time). No entry of it is asked of Tally any more; its lines go up held (upload that day's Day Book to settle them). This lifts when a newer FinCom Bridge is installed; 3 stop(s) of its entry request before it (1 entry saved)
+PASS slow232 the beat carries it: {"at":"2026-10-07T10:07:43Z","company":"FinCom Slow Co","off":true,"seconds":2,"since":"2026-10-07T10:07:43Z","timesOver":3,"why":"finding one entry took Tally longer than 2 s: stopped 3 times, on 2 separate occasions while Tally answered other requests in time"}
+INFO slow232 small 2 (FinCom Spike Co): MasterID 5 (LASTVCHID), Tally's number '5', AlterID 5
+PASS slow232 no entry request for it after the mark: 0 entry request(s) for 'FinCom Slow Co' after the mark; the bridge's requests after it: FinComVoucherByMaster x1
+PASS slow232 its new lines go up held with the words: stub 10:07:52 recorder_lines event=created guid='' mid=30002 aid= vch=Journal/S232-AFTER-1/20260401 user=runnervmfi6oq\runneradmin bridge=go-ef78730039cd port=9100 company=FinCom Slow Co body=none heldWhy=FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it. || stub 10:07:52 recorder_lines event=created guid='' mid=30003 aid= vch=Journal/S232-AFTER-2/20260401 user=runnervmfi6oq\runneradmin bridge=go-ef78730039cd port=9100 company=FinCom Slow Co body=none heldWhy=FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it.
+PASS slow232 its held lines end with the Day Book words: entries S232-BIG-1; ended S232-BIG-1: stub 10:07:28 recorder_lines event=created guid='' mid=30001 aid= vch=Journal/S232-BIG-1/20260401 user=runnervmfi6oq\runneradmin bridge=go-ef78730039cd port=9100 company=FinCom Slow Co body=none heldWhy=the entry was not read from Tally: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s) || stub 10:07:43 recorder_lines event=created guid='' mid=30001 aid= vch=Journal/S232-BIG-1/20260401 user=runnervmfi6oq\runneradmin bridge=go-ef78730039cd port=9100 company=FinCom Slow Co body=none heldWhy=FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it.
+PASS slow232 a small entry after the mark: stub 10:07:52 recorder_lines event=created guid=fd92dccb-656f-46b3-b974-2114d20373ce-00000005 mid=5 aid=5 vch=Journal/5/20260401 user=runnervmfi6oq\runneradmin bridge=go-ef78730039cd port=9100 company=FinCom Spike Co body=yes(4091 chars)
+PASS slow232 Tally never held by the bridge after the mark: requests of 2 s or more at Tally after the mark: 0; Tally's window did not answer 0 time(s) in 4 min (the slowest answer 8 ms); the bridge's slowest request after the mark 56 ms
