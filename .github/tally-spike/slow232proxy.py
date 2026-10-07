@@ -12,7 +12,7 @@ PORT = int(sys.argv[1]); LOG = sys.argv[2]
 # busy then; said as such in the results). No file: nothing is delayed
 DELAYS = LOG + '.delay.json'
 def delay_for(i, co):
-    if i not in ('FinComVoucherByMaster', 'FinComVoucherByNumber') or not os.path.exists(DELAYS):
+    if i not in ('FinComVoucherByMaster', 'FinComVoucherByNumber', 'FinComLedgers') or not os.path.exists(DELAYS):
         return 0
     try:
         return int((json.load(open(DELAYS, encoding='utf-8')) or {}).get(co, 0))

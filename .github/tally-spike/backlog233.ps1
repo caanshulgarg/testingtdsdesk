@@ -112,6 +112,43 @@ function B233Healthy {
   Result 'backlog233 (7) a burst of 8 saves at 1.8 s each: each in the stub within 10 s, each with its body in the end' ($late.Count -eq 0 -and $bodies -eq 8) ("late or missing: {0}; with their body: {1} of 8; the first lines: {2}" -f $(if ($late.Count) { $late -join ', ' } else { 'none' }), $bodies, (($burst | ForEach-Object { $m = $_.mid; $x = @((StubLines 0) | Where-Object { "$($_.mid)" -eq "$m" -and $_.company -eq $co1 } | Select-Object -First 1); if ($x.Count) { "$m at $($x[0].at)" } else { "$m none" } }) -join '; '))
 }
 
+# the 2.3.3 re-review (M2 for ledger lines): a burst of 8 changed ledgers (a masters import) and a voucher saved together in
+# the small company, the proxy holding each entry and ledger request 1.8 s: every line in the stub within 10 s
+function B233LedgerBurst {
+  Say '---- backlog233 (8): a burst of 8 changed ledgers and a voucher, each request 1.8 s (a proxy delay)'
+  $cg = S2Guid $co1
+  $names = @(1..8 | ForEach-Object { 'B233 Burst Ledger {0}' -f $_ })
+  $null = S2Imp $co1 'All Masters' @($names | ForEach-Object { S2Led $_ 'Sundry Creditors' }) 'ledger burst'
+  $x = Post 9000 ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCLB</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + (S2Esc $co1) + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCLB" ISMODIFY="No"><TYPE>Ledger</TYPE><FETCH>NAME, GUID, MASTERID, ALTERID, PARENT</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>')
+  $leds = @()
+  foreach ($m in [regex]::Matches("$x", '<LEDGER NAME="([^"]*)"[^>]*>([\s\S]*?)</LEDGER>')) {
+    $n = [Net.WebUtility]::HtmlDecode($m.Groups[1].Value)
+    if ($n -notin $names) { continue }
+    $b = $m.Groups[2].Value
+    $leds += [pscustomobject]@{ name = $n; guid = [regex]::Match($b, '<GUID[^>]*>([^<]*)</GUID>').Groups[1].Value.Trim(); mid = [regex]::Match($b, '<MASTERID[^>]*>\s*(\d+)').Groups[1].Value; aid = [regex]::Match($b, '<ALTERID[^>]*>\s*(\d+)').Groups[1].Value }
+  }
+  if ($leds.Count -ne 8 -or -not $cg) { Result 'backlog233 (8) a ledger burst with a voucher' $false "the harness could not read the 8 ledgers back from Tally ($($leds.Count) found; company GUID '$cg')" $true; return }
+  B233Delay 1800
+  # the voucher: imported, its lines written by S2Import; the ledgers' lines written at once after it (one save each)
+  $rv = S2Import $co1 (S2Journal '20260401' 'B233-LEDBURST-V' 'Spike Party' 'backlog233 ledger burst voucher' 91) 'ledger burst voucher'
+  $now = (Get-Date).ToString('d-MMM-yy HH:mm', [Globalization.CultureInfo]::InvariantCulture)
+  $rfile = Join-Path $rec ("$cg-" + (Get-Date).ToString('d-MMM-yy', [Globalization.CultureInfo]::InvariantCulture) + '.txt')
+  $txt = ($leds | ForEach-Object { "FCR1|ev=ledger_accept_post|t0=$now|tw=$now|cguid=$cg|cname=$co1|user=TALLY User|obj=Master|guid=$($_.guid)|mid=$($_.mid)|aid=$($_.aid)|vtype=|vno=|vdate=|name=$($_.name)|parent=Sundry Creditors|narr=|t1=$now|src=live`r`n" }) -join ''
+  if (-not (Test-Path $rfile)) { [IO.File]::WriteAllBytes($rfile, [byte[]](0xFF, 0xFE)) }
+  [IO.File]::AppendAllText($rfile, $txt, [Text.UnicodeEncoding]::new($false, $false))
+  $tw = Get-Date
+  $want = @($leds | ForEach-Object { "$($_.mid)" }) + @("$($rv.mid)")
+  $seen = @{}
+  while (((Get-Date) - $tw).TotalSeconds -lt 20 -and $seen.Count -lt $want.Count) {
+    foreach ($l in (StubLines 0)) { if ($l.company -eq $co1 -and "$($l.mid)" -in $want -and -not $seen.ContainsKey("$($l.mid)")) { $seen["$($l.mid)"] = ((Get-Date) - $tw).TotalSeconds } }
+    Start-Sleep -Milliseconds 250
+  }
+  B233Delay 0
+  $late = @($want | Where-Object { -not $seen.ContainsKey($_) -or $seen[$_] -gt 10 } | ForEach-Object { "$_ $(if ($seen.ContainsKey($_)) { '{0:0.0} s' -f $seen[$_] } else { 'none' })" })
+  $lr = @(S2Proxy | Where-Object { $_.id -eq 'FinComLedgers' -and $_.delay })
+  Result 'backlog233 (8) a burst of 8 changed ledgers and a voucher at 1.8 s each: every line in the stub within 10 s' ($late.Count -eq 0) ("late or missing: {0}; arrivals (s after the lines were written): {1}; ledger requests held 1.8 s by the proxy: {2}" -f $(if ($late.Count) { $late -join ', ' } else { 'none' }), (($want | ForEach-Object { "$_=$(if ($seen.ContainsKey($_)) { '{0:0.0}' -f $seen[$_] } else { '-' })" }) -join ' '), $lr.Count)
+}
+
 function B233OldDone { $l = StubLines 0; @($B233.ids | Where-Object { $id = $_; @($l | Where-Object { $_.lid -eq "${id}:resolved" }).Count -gt 0 }).Count }
 
 function Backlog233 {
@@ -186,6 +223,7 @@ function Backlog233 {
   $s1 = @((StubLines $m0) | Where-Object { "$($_.mid)" -eq "$midS1" -and $_.company -eq $co1 -and $_.xml })
   Result 'backlog233 (5) a small fast company''s entry arrives with its body' ($s1.Count -ge 1 -and $s2.Count -ge 1) ("during the backlog: {0}; at the end: {1}" -f $(if ($s1.Count) { Ev $s1[0] } else { "MasterID $midS1 : no line with a body" }), $(if ($s2.Count) { Ev $s2[0] } else { "MasterID $midS2 : no line with a body in 180 s" }))
   try { B233Healthy } catch { Write-Host "B233Healthy: $_ $($_.ScriptStackTrace)"; Result 'backlog233 (6)-(7)' $false "the harness stopped: $_" $true }
+  try { B233LedgerBurst } catch { Write-Host "B233LedgerBurst: $_ $($_.ScriptStackTrace)"; Result 'backlog233 (8)' $false "the harness stopped: $_" $true }
   $bl = S2BridgeLog
   Set-Content (Join-Path $B233.dir 'bridge1-log-backlog233.txt') ($bl | Where-Object { $_ -match 'Recorder: |did not answer in time|answered in time again|entry fetch|earlier request|finished the request' }) -Encoding UTF8
 }
