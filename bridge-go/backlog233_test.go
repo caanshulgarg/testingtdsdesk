@@ -566,3 +566,121 @@ func TestBacklog233OldLineNotFoundEndsAfterOneAsk(t *testing.T) {
 		t.Fatalf("the end: %v", s)
 	}
 }
+
+// --- review M1 and M2 of b1e5858..ce79426 (rule c: every line in FinCom within 10 s), scaled as the rest (the stop 200 ms
+// = 2 s; 10 s = 1 s; the 4 s safety net = 400 ms). A loop like the bridge's own (recorderLiveLoop) runs the reader and the
+// uploader while the test saves; each save's first line in the cloud is timed from the save
+type b233Loop struct {
+	stop chan struct{}
+	done chan struct{}
+}
+
+func b233Run() *b233Loop {
+	l := &b233Loop{stop: make(chan struct{}), done: make(chan struct{})}
+	// the reader (the bridge's 1 s watch) and the uploader (recorderLiveLoop) run side by side, as in the bridge
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-l.stop:
+				return
+			default:
+			}
+			liveReadOnce()
+			time.Sleep(20 * time.Millisecond)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-l.stop:
+				return
+			default:
+			}
+			for i := 0; i < 20 && liveUploadOnce() > 0; i++ {
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}()
+	go func() { wg.Wait(); close(l.done) }()
+	return l
+}
+
+func (l *b233Loop) end() { close(l.stop); <-l.done }
+
+// when each MasterID's first line reached the cloud (polled every 10 ms until all are in, or the limit)
+func b233Arrivals(c *standCloud, mids []int64, limit time.Duration) map[int64]time.Time {
+	got := map[int64]time.Time{}
+	until := time.Now().Add(limit)
+	for time.Now().Before(until) && len(got) < len(mids) {
+		for _, m := range mids {
+			if _, had := got[m]; !had && backlog233First(c, m) != nil {
+				got[m] = time.Now()
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return got
+}
+
+// M1: a company answering in 1.5 s (never stopped, never marked) with 10 held lines due: a save made while the resolver
+// asks them reaches the cloud within 10 s (the resolver yields to it, one ask at most while a live line waits)
+func TestBacklog233M1SaveDuringHealthyResolverTurn(t *testing.T) {
+	p, f, c := slow232Bridge(t)
+	setCfg("RecorderHoldAfterMs", float64(400))
+	slowEntries(f, 150*time.Millisecond) // 1.5 s: answered in time
+	backlog233Held(t, f, 12)
+	r222Vch(f, 26500, "Journal", "J-26500", "20261005", 55500)
+	l := b233Run()
+	defer l.end()
+	time.Sleep(60 * time.Millisecond) // the resolver's turn has started
+	t0 := time.Now()
+	liveAppend(t, p, slowLine(26500, "07:40")...)
+	got := b233Arrivals(c, []int64{26500}, 3*time.Second)
+	at, had := got[26500]
+	if !had || at.Sub(t0) > time.Second {
+		t.Fatalf("the save during a healthy resolver turn: in the cloud %v after %s (10 s scaled: 1 s)", had, at.Sub(t0).Round(time.Millisecond))
+	}
+}
+
+// M2: 8 saves together, Tally at 1.8 s each (answered in time): each line in the cloud within 10 s of its save
+func TestBacklog233M2BurstOfEight(t *testing.T) {
+	p, f, c := slow232Bridge(t)
+	setCfg("RecorderHoldAfterMs", float64(400))
+	slowEntries(f, 180*time.Millisecond) // 1.8 s each
+	var mids []int64
+	var lines []string
+	for i := 0; i < 8; i++ {
+		mid := int64(26600 + i)
+		mids = append(mids, mid)
+		r222Vch(f, mid, "Journal", fmt.Sprintf("J-%d", mid), "20261005", 55600+int64(i))
+		lines = append(lines, slowLine(mid, "07:45")...)
+	}
+	l := b233Run()
+	defer l.end()
+	t0 := time.Now()
+	liveAppend(t, p, lines...)
+	got := b233Arrivals(c, mids, 4*time.Second)
+	for _, m := range mids {
+		at, had := got[m]
+		if !had || at.Sub(t0) > time.Second {
+			t.Errorf("save %d: in the cloud %v after %s (10 s scaled: 1 s)", m, had, at.Sub(t0).Round(time.Millisecond))
+		}
+	}
+	// and every entry's body comes, at once or as ":resolved"
+	time.Sleep(1500 * time.Millisecond)
+	for _, m := range mids {
+		ok := false
+		for _, s := range slowSentOf(c, m) {
+			if str(s["xml"]) != "" {
+				ok = true
+			}
+		}
+		if !ok {
+			t.Errorf("save %d never went with its body: %v", m, slowSentOf(c, m))
+		}
+	}
+}
