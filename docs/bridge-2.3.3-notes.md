@@ -6,24 +6,11 @@ For the owner. Plain words; times are IST. The steps to try it on NWS144 are in 
 | | |
 |---|---|
 | Setup file | FinComBridge-Setup-2.3.3.exe |
-| Fingerprint | SHA-256 `71607195c249e4515c0c712887251419d2f8bbce57803f47f3dd328c5e2bec52` (FinComBridge-Setup-2.3.3.exe, built 07-Oct-2026 19:04 IST; compare with the .sha256 file next to the setup) |
+| Fingerprint | SHA-256 (filled in when it is built) |
 | FinCom app | unchanged: the app of 2.3.2 shows everything 2.3.3 says |
 | FinCom's cloud | unchanged (no migration; tally-ingest keeps the held line and replaces it with its `:resolved` line as it already does) |
 | Replaces | 2.3.2 (kept on the computer, so the tray can roll back to it) |
 | Add-on | unchanged: keep `C:\ProgramData\FinCom\addon\FinComRecorder.tdl` loaded as it is |
-
-**Not published.** Real-Tally gate (TallyPrime 7.1 on a hosted Windows runner, harness `only=backlog233`: 50 old held
-lines seeded into the bridge's held list before it starts; a large company of 20,000 entries, its entry requests 2.9 to
-3.5 s at Tally itself, beside a small company in the same Tally; a timing proxy counting every request): run 37626337087
-(built from source at 2f0496b, the code of this build) passed all nine checks: (1) the new save in FinCom 2.1 s after
-it, held with "waiting: Tally busy; FinCom asks again at 13:33"; (2) 16 old lines asked once, 34 never (the company was
-marked first), none twice, all 50 ended; (3) 25 requests, none sent while another was at Tally; (4) the large company
-marked, no request for it after; (5) the small company's entries with their bodies; (6) 10 held lines of the small
-company answered in 1.5 s each (the proxy's delay, Tally itself not busy) and a save made while they were asked: in
-FinCom with its body after 3.4 s; (7) 8 saves together at 1.8 s each: every one in FinCom within 10 s, all 8 with their
-bodies. The first 2.3.3 build (setup 3189a834..., never published) passed (1)-(5) on its committed setup (run
-37620851800); the independent review then found M1 and M2 (a save could wait 12-20 s behind a healthy resolver turn or
-a burst of saves), fixed test-first before this build.
 
 ## Why (a High in 2.3.2, seen live on NWS144 on 07-Oct-2026)
 
