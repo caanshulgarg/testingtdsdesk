@@ -17,6 +17,9 @@ $B233 = @{ n = [int]$(if ($env:B233_N) { $env:B233_N } else { 50 }); mid0 = 9000
 New-Item -ItemType Directory -Force $B233.dir | Out-Null
 
 function B233Setup {
+  # the owner's large company answers one entry in about 2.2 s: 20,000 entries here (30,000 gave 2.6-2.9 s to the harness's
+  # own request and 3.5-4.1 s at the proxy in run 37615287108); B233_VCH overrides
+  $Slow232St.vch = [int]$(if ($env:B233_VCH) { $env:B233_VCH } else { 20000 })
   Slow232Setup
   if (-not $Slow232St.ok) { return }
   # the large company's GUID as Tally gives it (the held lines carry it, as the real file does); none: left empty
@@ -114,11 +117,14 @@ function Backlog233 {
     $la = @((StubLines $mk) | Where-Object { $_.vch -like '*B233-AFTER-1*' })
     Result 'backlog233 (4b) no requests for it after the mark' ($markMs -gt 0 -and $after.Count -eq 0 -and $la.Count -ge 1 -and -not $la[0].xml) ("{0} entry request(s) for it after the mark ({1}); its new save after the mark: {2}" -f $after.Count, $mt, (($la | ForEach-Object { Ev $_ }) -join ' || '))
   }
-  # (5) a small company's entries arrive with their bodies
-  $smalls = @((StubLines $m0) | Where-Object { $_.company -eq $co1 -and $_.vch -like '*/*' })
-  $withBody = @($smalls | Where-Object { $_.xml })
-  $s1 = @($withBody | Where-Object { "$($_.mid)" -eq "$midS1" })
-  Result 'backlog233 (5) a small fast company''s entry arrives with its body' ($s1.Count -ge 1 -and $withBody.Count -ge 2) ("{0} small-company lines with a body of {1} ({2})" -f $withBody.Count, $smalls.Count, $(if ($s1.Count) { Ev $s1[0] } else { 'the first small entry: none with a body' }))
+  # (5) a small company's entries arrive with their bodies: the one saved during the backlog, and one saved now (after the
+  # backlog and the mark), waited for 3 minutes at most (run 37615287108: the backlog and the mark were over before a
+  # second small save was made)
+  $midS2 = (S2Import $co1 (S2Journal '20260401' 'B233-SMALL-END' 'Spike Party' 'backlog233 small at the end' 29) 'small end').mid
+  $s2 = @()
+  for ($w = 0; $w -lt 36 -and -not $s2.Count; $w++) { Start-Sleep 5; $s2 = @((StubLines $m0) | Where-Object { "$($_.mid)" -eq "$midS2" -and $_.company -eq $co1 -and $_.xml }) }
+  $s1 = @((StubLines $m0) | Where-Object { "$($_.mid)" -eq "$midS1" -and $_.company -eq $co1 -and $_.xml })
+  Result 'backlog233 (5) a small fast company''s entry arrives with its body' ($s1.Count -ge 1 -and $s2.Count -ge 1) ("during the backlog: {0}; at the end: {1}" -f $(if ($s1.Count) { Ev $s1[0] } else { "MasterID $midS1 : no line with a body" }), $(if ($s2.Count) { Ev $s2[0] } else { "MasterID $midS2 : no line with a body in 180 s" }))
   $bl = S2BridgeLog
   Set-Content (Join-Path $B233.dir 'bridge1-log-backlog233.txt') ($bl | Where-Object { $_ -match 'Recorder: |did not answer in time|answered in time again|entry fetch|earlier request|finished the request' }) -Encoding UTF8
 }
