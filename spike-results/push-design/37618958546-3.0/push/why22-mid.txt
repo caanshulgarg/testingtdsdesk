@@ -1,0 +1,4 @@
+TallyPrime 3.0
+vouchers before: n 503, MasterID 1-503; probe ledger made after them: MasterID 866
+delete HJ-000004: Tally said created 0 errors 1 <DELETED>0 <LINEERROR>Voucher does not exist!; vouchers after: n 503, MasterID 1-503
+a voucher made after that: MasterID 504; vouchers now n 504, MasterID 1-504
