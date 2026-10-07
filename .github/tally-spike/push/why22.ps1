@@ -91,14 +91,18 @@ function GrowTo($c, $n) {
 # the target: a 3-item sales invoice on 1-Oct-2026 (no bulk voucher lives there), the newest voucher
 function NewTarget($tag) {
   $narr = "why22 target $tag"
-  Imp 'Vouchers' @(SalesXml '20261001' "WT-$tag" 'HParty 00001' @('HItem 00001', 'HItem 00002', 'HItem 00003') $narr $false) "target $tag" | Out-Null
+  $r = Imp 'Vouchers' @(SalesXml '20261001' "WT-$tag" 'HParty 00001' @('HItem 00001', 'HItem 00002', 'HItem 00003') $narr $false) "target $tag"
+  $script:lastVchId = [regex]::Match($r.raw, '<LASTVCHID>\s*(\d+)').Groups[1].Value
   return FindTarget $tag
 }
+# run 37614517809: a $Narration filter found nothing; the October vouchers (the filter OctVouchers uses) are read and the
+# target picked here by its narration; the import's LASTVCHID is kept beside it
 function FindTarget($tag) {
-  $x = Post (Coll 'FCPTgt' 'Voucher' 'GUID, MASTERID, DATE, VOUCHERTYPENAME, VOUCHERNUMBER' "`$Narration = `"why22 target $tag`"") '' 600
-  $m = [regex]::Match($x, '(?s)<VOUCHER[ >].*?</VOUCHER>').Value
-  $t = [pscustomobject]@{ tag = $tag; mid = [regex]::Match($m, '<MASTERID[^>]*>\s*(\d+)').Groups[1].Value; date = [regex]::Match($m, '<DATE[^>]*>(\d{8})').Groups[1].Value; vno = [regex]::Match($m, '<VOUCHERNUMBER[^>]*>([^<]*)').Groups[1].Value }
-  Say "target $tag ($script:co): MasterID $($t.mid), date $($t.date), number $($t.vno)"
+  $x = Post (Coll 'FCPTgt' 'Voucher' 'GUID, MASTERID, DATE, VOUCHERTYPENAME, VOUCHERNUMBER, NARRATION' '$Date >= $$Date:"01-10-2026"') '' 600
+  $m = @([regex]::Matches($x, '(?s)<VOUCHER[ >].*?</VOUCHER>') | Where-Object { $_.Value -match "<NARRATION[^>]*>why22 target $tag<" } | Select-Object -First 1).Value
+  $t = [pscustomobject]@{ tag = $tag; mid = [regex]::Match("$m", '<MASTERID[^>]*>\s*(\d+)').Groups[1].Value; date = [regex]::Match("$m", '<DATE[^>]*>(\d{8})').Groups[1].Value; vno = [regex]::Match("$m", '<VOUCHERNUMBER[^>]*>([^<]*)').Groups[1].Value }
+  Say "target $tag ($script:co): MasterID $($t.mid), date $($t.date), number $($t.vno) (October vouchers in Tally: $(([regex]::Matches($x, '<VOUCHER[ >]')).Count); the import's LASTVCHID $script:lastVchId)"
+  if (-not $t.mid -and $script:lastVchId) { $t.mid = $script:lastVchId; $t.date = '20261001'; Say "target ${tag}: MasterID taken from LASTVCHID" }
   return $t
 }
 # count, lowest and highest MasterID of one object type (the whole collection, MASTERID only)
@@ -160,7 +164,9 @@ try {
         $lx = Imp 'All Masters' @(LedgerXml 'Why22 Probe Ledger' 'Sundry Creditors') 'probe ledger after the vouchers'
         $lm = [regex]::Match((Post (Coll 'FCPProbeL' 'Ledger' 'NAME, MASTERID' '$Name = "Why22 Probe Ledger"')), '<MASTERID[^>]*>\s*(\d+)').Groups[1].Value
         $before = MidStats 'Voucher'
-        $d = Imp 'Vouchers' @('<VOUCHER DATE="20260401" TAGNAME="Voucher Number" TAGVALUE="HJ-000004" VCHTYPE="Journal" ACTION="Delete"><DATE>20260401</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><VOUCHERNUMBER>HJ-000004</VOUCHERNUMBER></VOUCHER>') 'delete HJ-000004'
+        $dd = $wDates[4]; $dt = [DateTime]::ParseExact($dd, 'yyyyMMdd', $null)
+        $d = Imp 'Vouchers' @('<VOUCHER DATE="' + $dt.ToString('d-MMM-yyyy', [Globalization.CultureInfo]::InvariantCulture) + '" TAGNAME="Voucher Number" TAGVALUE="HJ-000004" VCHTYPE="Journal" ACTION="Delete"><DATE>' + $dd + '</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><VOUCHERNUMBER>HJ-000004</VOUCHERNUMBER></VOUCHER>') "delete HJ-000004 ($dd)"
+        if ($d.errors) { $d = Imp 'Vouchers' @('<VOUCHER DATE="' + $dd + '" TAGNAME="Voucher Number" TAGVALUE="HJ-000004" VCHTYPE="Journal" ACTION="Delete"><DATE>' + $dd + '</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><VOUCHERNUMBER>HJ-000004</VOUCHERNUMBER></VOUCHER>') "delete HJ-000004 ($dd, yyyymmdd)" }
         $mid1 = MidStats 'Voucher'
         $t2 = NewTarget 'A500b'
         $mid2 = MidStats 'Voucher'
@@ -244,8 +250,8 @@ try {
       if (StartW $unc @($fA) 'smb-held' @($coA)) {
         $hs = Join-Path $out 'why22-holder.txt'
         $holdCmd = "`$n=0; `$fs=@(); Get-ChildItem '$unc\$fA' -File | ForEach-Object { try { `$fs += [IO.File]::Open(`$_.FullName, 'Open', 'ReadWrite', 'ReadWrite'); `$n++ } catch { Add-Content '$hs' (`"no: `" + `$_.Exception.Message) } }; Add-Content '$hs' (`"held `" + `$n); Start-Sleep 3600"
-        $holder = Start-Process -FilePath (Get-Process -Id $PID).Path -ArgumentList '-NoProfile', '-Command', $holdCmd -PassThru -WindowStyle Hidden
-        Start-Sleep 15; Say "holder: $((Get-Content $hs -ErrorAction SilentlyContinue | Select-Object -Last 3) -join ' / ')"
+        $holder = Start-Process -FilePath (Get-Process -Id $PID).Path -ArgumentList '-NoProfile', '-Command', $holdCmd -PassThru -WindowStyle Hidden -RedirectStandardError (Join-Path $out 'why22-holder-err.txt')
+        for ($i = 0; $i -lt 30 -and -not (Select-String -Path $hs -Pattern '^held' -Quiet -ErrorAction SilentlyContinue); $i++) { Start-Sleep 2 }; Say "holder: $((Get-Content $hs -ErrorAction SilentlyContinue | Select-Object -Last 3) -join ' / ')"
         WMeasure 'F3' '4000-smb-unc-second-opener' $tA4 4000 600
         Stop-Process -Id $holder.Id -Force -ErrorAction SilentlyContinue
       }
