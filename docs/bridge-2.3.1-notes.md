@@ -25,6 +25,20 @@ The owner decided to publish 2.3.1 before two checks had run on a real TallyPrim
 Both are being run now on this same build; the result is added here. Every other check passed on real TallyPrime 7.1
 (run 37469732673, this exact setup).
 
+**Result of the follow-up run (06-Oct-2026, 16:16-16:28 UTC, run 37492981527, the published setup 7d4a37a9...16be):**
+both checks failed. Neither is a High, so 2.3.1 stays published and both fixes go into the next release.
+
+1. **TDS on a payment (Medium).** The entry reached FinCom with every ledger amount right (expense -1,00,000, TDS
+   payable 2,000, contractor 98,000). The TDS details did not: Tally's answer to the bridge's entry request has its
+   three TDS lists empty, while Tally's own Day Book export of the same entry holds nature of payment, assessable value
+   1,00,000 and TDS 2,000. The money is right; the TDS details on the entry must come from a Day Book upload until the
+   fix. (This Tally also did not work out the TDS itself and recorded no section; that part is Tally's.)
+2. **Retry timings (Low to Medium).** The 2-second stop worked, the first two retries came at 15 s and 30 s, then the
+   older once-a-minute check took over (sooner than the 1/2/5-minute steps; no harm). Nothing was switched off and a
+   queued posting went through one second after Tally answered. But an entry saved while Tally was frozen was held and
+   is asked again only every 10 minutes, so it reaches FinCom up to about 10 minutes late instead of at the first try
+   after Tally answers. Nothing is lost.
+
 ## What 2.3.1 changes: item invoices enter the books complete
 
 Two changes, by the owner's decisions of 06-Oct-2026: the entry request (this section) and the masters (the next
