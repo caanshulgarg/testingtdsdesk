@@ -500,6 +500,8 @@ func TestLiveSourceSwitchKeepsUploader(t *testing.T) {
 	}
 	applyRecorderSource(M{"recorderSource": "addon"})
 	setCfg("RecorderSource", "addon")
+	// 2.3.3: the lines here wait several seconds for the test's own steps; the 4 s safety net is not what this test is about
+	setCfg("RecorderHoldAfterMs", float64(60000))
 	// lines read from the add-on, then the source switched: the queued lines still go, by the same uploader
 	liveAppend(t, liveFilePath(rec, ""), vchLine("after_delete", b220CoGUID+"-00000009", "9", "1", "from the add-on"))
 	liveReadOnce()

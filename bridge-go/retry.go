@@ -32,19 +32,11 @@ var (
 	// company list) found the schedule waiting at this time: the next try is kept for it (RecorderSmallTrySec, 120 s at
 	// most), so Tally's answer in time to another request is seen between two entry stops
 	retrySmallWant time.Time
-	retryTakes     int64 // tries taken (the uploader's turn order: the resolver at most every other try, 2.3.3)
 )
 
 // 2.3.3: the small checks a try is kept for (existing requests of the allow-list; none added or changed)
 func retrySmall(id string) bool {
 	return id == "FinComCompany" || id == cnReportID || id == "TDSDeskCompanies" || id == "FinComFree"
-}
-
-// the number of tries taken so far
-func retryTakesNow() int64 {
-	retryMu.Lock()
-	defer retryMu.Unlock()
-	return retryTakes
 }
 
 // a background request held by the schedule (nothing sent): not a posting going first (gaveWay is false), not counted
@@ -116,7 +108,6 @@ func retryTake(id string) (try bool, err error) {
 		retrySmallWant = time.Time{}
 	}
 	retryGoing = true
-	retryTakes++
 	return true, nil
 }
 

@@ -1741,6 +1741,15 @@ func fetchVouchersByMasterIn(tc *TC, company string, port int, date string, mids
 	return out, nil
 }
 
+// 2.3.3: the entries of the dates after the di-th
+func byDateAfter(byDate map[string][]*change, dates []string, di int) []*change {
+	var out []*change
+	for _, d := range dates[di+1:] {
+		out = append(out, byDate[d]...)
+	}
+	return out
+}
+
 // one ledger by its MasterID: the ledger list's request with a one-ID range
 func fetchLedgerByMaster(tc *TC, company string, port int, mid int64) (string, error) {
 	raw, err := invokeTally(tc, port, ledgerChunkRequest(company, mid-1, mid), liveBodySec())
@@ -1909,6 +1918,12 @@ byDay:
 				liveHeldNow(rest, fmt.Sprintf("Tally busy (this turn's %d s are used)", liveBodySec()), false, false, true)
 				break byDay
 			}
+			// 2.3.3 (review M2): before each request, a line of the group that has waited 4 s: those not asked yet go up held
+			// now (the ones read go with their bodies), so no line waits behind the others' requests
+			if rest := append(append(append([]*change{}, part...), cs...), byDateAfter(byDate, dates, di)...); liveOverdue(rest) {
+				liveHeldNow(rest, liveBehindWhat, false, false, true)
+				break byDay
+			}
 			var mids []string
 			for _, c := range part {
 				mids = append(mids, c.masterId)
@@ -1990,6 +2005,10 @@ byDay:
 				}
 				if time.Now().After(deadline) {
 					liveHeldAs(c, m.why+"; not asked by its type and number (20 s passed)", false)
+					continue
+				}
+				if liveOverdue([]*change{c}) {
+					liveHeldNow([]*change{c}, liveBehindWhat, false, true, false) // 2.3.3 (review M2): asked once already
 					continue
 				}
 				w := liveWantOf(c, sp, spOK)
@@ -2180,12 +2199,12 @@ func liveUploadOnce() int {
 	liveUpMu.Lock()
 	defer liveUpMu.Unlock()
 	defer liveMidSaveSoon() // 2.3.0: the record of Tally's GUIDs, when Tally gave any (2.3.1: at most every 30 s)
-	// 2.2.1: lines sent held, resolved once Tally gives their entry. 2.3.3 (fairness): while live lines wait for their body,
-	// the resolver takes at most every other try of the retry schedule: after a turn in which it took one, it goes after
-	// the live lines (which then take the try)
-	first := !liveQueueWantsBody() || !liveResolverTook
+	// 2.2.1: lines sent held, resolved once Tally gives their entry. 2.3.3 (fairness; review M1): while live lines wait,
+	// they go first and the resolver after them; the resolver stops before each ask when a live line waits (liveQueueReady),
+	// so a save waits at most for the one ask already at Tally
+	first := !liveQueueReady()
 	if first {
-		liveResolveTurnCounted()
+		liveResolveTurn()
 	}
 	n := 0
 	for i := 0; i < 8; i++ {
@@ -2196,19 +2215,47 @@ func liveUploadOnce() int {
 		}
 	}
 	if !first {
-		liveResolveTurnCounted()
+		liveResolveTurn()
 	}
 	return n
 }
 
-// 2.3.3: whether the resolver's turn took the retry schedule's try (the next turn then lets the live lines go first)
-var liveResolverTook bool
-
-func liveResolveTurnCounted() {
-	t0 := retryTakesNow()
-	liveResolveTurn()
-	liveResolverTook = retryTakesNow() != t0
+// 2.3.3 (review M1): a line read from Tally's add-on in the queue that can go now (its company not in the cloud's back-off,
+// not a new entry's line still waiting for its first ask by number; the resolver's own ":resolved" lines do not count)
+func liveQueueReady() bool {
+	live.mu.Lock()
+	defer live.mu.Unlock()
+	now := nowFn()
+	for _, c := range live.queue {
+		if b, had := live.back[c.key()]; had && now.Before(b.until) {
+			continue
+		}
+		if strings.HasSuffix(c.lineId, ":resolved") {
+			continue
+		}
+		if liveYoung(c) {
+			continue
+		}
+		return true
+	}
+	return false
 }
+
+// 2.3.3 (review M2): one of these lines has waited RecorderHoldAfterMs (4 s) for its body: the ones not asked yet go up
+// held now, before the next request to Tally
+func liveOverdue(cs []*change) bool {
+	live.mu.Lock()
+	defer live.mu.Unlock()
+	for _, c := range cs {
+		if c.needsBody() && !c.queuedAt.IsZero() && time.Since(c.queuedAt) >= liveHoldAfter() {
+			return true
+		}
+	}
+	return false
+}
+
+// the words of a line held because the entries saved before it are being read (review M2)
+const liveBehindWhat = "Tally busy (reading the entries saved before it)"
 
 // 2.3.3: a line in the queue still waits for its body (not asked yet)
 func liveQueueWantsBody() bool {

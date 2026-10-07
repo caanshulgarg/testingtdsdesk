@@ -413,8 +413,12 @@ func TestPartATurnTimeUsedNextTurn(t *testing.T) {
 	liveAppend(t, p, ls...)
 	liveReadOnce()
 	liveUploadOnce() // the turn's 1 s: the first entry asked, the others held at once
-	// the held lines' asks: each its own request, its full time (a held line asked once ends if not answered: 2.3.3)
+	// the held lines' asks: each its own request, its full time (a held line asked once ends if not answered: 2.3.3). The
+	// same turn's resolver asked one held line within the 1 s set above (2.3.3: after the live lines) and timed out: the
+	// stand's 1 s is the test's own, so the schedule and the small check it set are cleared
 	setCfg("RecorderBodySec", float64(20))
+	retryReset()
+	clearProbe(f.port)
 	readAndUploadAll(t)
 	sent := c.recSent()
 	body := map[string]bool{}
@@ -430,7 +434,8 @@ func TestPartATurnTimeUsedNextTurn(t *testing.T) {
 			t.Fatalf("entry %s never went with its body: %v", v.mid, sent)
 		}
 	}
-	if n := f.n(vchByMasterID); n != len(partAVchs) {
+	// 2.3.3: one entry more: the one the first turn's resolver asked within the stand's 1 s (timed out) is asked once again
+	if n := f.n(vchByMasterID); n != len(partAVchs)+1 {
 		t.Fatalf("%d requests for %d entries: %v", n, len(partAVchs), f.ids())
 	}
 	if logLines("this turn's 1 s are used") == 0 {

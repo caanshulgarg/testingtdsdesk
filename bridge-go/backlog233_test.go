@@ -150,7 +150,7 @@ func TestBacklog233NewSaveHeldAtOnceThenResolved(t *testing.T) {
 		liveUploadOnce()
 	}
 	if n := len(r222cSentID(c, "old-25001:resolved")) + len(r222cSentID(c, "old-25039:resolved")); n != 2 {
-		t.Fatalf("the backlog did not resolve: %d of 2 checked", n)
+		t.Fatalf("the backlog did not resolve: %d of 2 checked (%v / %v)", n, r222cSentID(c, "old-25001:resolved"), r222cSentID(c, "old-25039:resolved"))
 	}
 }
 

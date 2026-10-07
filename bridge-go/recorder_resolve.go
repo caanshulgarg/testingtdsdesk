@@ -442,6 +442,10 @@ func liveFetchByNumber(cs []*change, sp int64, spOK bool) {
 			liveNumberHeld(c, "not found by its type and number (20 s passed)")
 			continue
 		}
+		if liveOverdue([]*change{c}) {
+			liveHeldNow([]*change{c}, liveBehindWhat, false, false, true) // 2.3.3 (review M2): not asked yet
+			continue
+		}
 		left := maxI(2, int(time.Until(deadline).Seconds()+0.999))
 		liveDecide(c, "asking Tally by type and number (a new entry: no MasterID on its line)")
 		x, why, kind, err := liveOneByNumber(tc, company, port, liveWantOf(c, sp, spOK), left)
@@ -980,13 +984,21 @@ func liveResolveTurn() {
 			writeLog(fmt.Sprintf("Recorder: held lines: %d from FinCom, %d asked, %d resolved, %d still held (%d in the list)", fromFinCom, len(got), resolved, total-resolved, total))
 		}
 	}()
-	for _, h := range ask {
+	for i, h := range ask {
 		if time.Now().After(deadline) {
 			for _, r := range ask[len(got):] {
 				liveSay(r.Type, r.No, r.Date, r.MID, r.ID, "not asked this turn: 20 s passed; asked in the next one")
 			}
 			break
 		}
+		// 2.3.3 (review M1): a live line waits: it goes first; this line and the rest are asked at a later turn (not counted)
+		if liveQueueReady() {
+			for _, r := range ask[i:] {
+				retryIds[r.ID] = true
+			}
+			break
+		}
+		sent0 := tallySent.Load()
 		liveSay(h.Type, h.No, h.Date, h.MID, h.ID, fmt.Sprintf("asking Tally again (a held line, ask %d of %d: one request; if it stops or fails the line ends with the Day Book words)", h.Asked+1, h.allow()))
 		var x, why string
 		var answered, final bool
@@ -998,7 +1010,16 @@ func liveResolveTurn() {
 			x, why, answered, final, err = liveResolveOne(h)
 		}
 		if gaveWay(err) {
-			liveSay(h.Type, h.No, h.Date, h.MID, h.ID, "not asked: a posting is going on; asked after it")
+			// review L1: a request a posting stopped after it reached Tally counts as its ask (Tally had it)
+			if tallySent.Load() > sent0 && h.Ev != "deleted" && h.Ev != "cancelled" {
+				timedOut[h.ID] = true
+				liveSay(h.Type, h.No, h.Date, h.MID, h.ID, "stopped for a posting after it reached Tally: its ask is used")
+			} else {
+				liveSay(h.Type, h.No, h.Date, h.MID, h.ID, "not asked: a posting is going on; asked after it")
+			}
+			for _, r := range ask[i+1:] {
+				retryIds[r.ID] = true
+			}
 			break
 		}
 		if errors.Is(err, errSlowCompany) {
