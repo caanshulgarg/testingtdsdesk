@@ -1,0 +1,1453 @@
+== desktop check
+runnervmfi6oq\runneradmin
+ USERNAME              SESSIONNAME        ID  STATE   IDLE TIME  LOGON TIME
+>runneradmin           console             2  Active      none   10/7/2026 4:38 PM
+UserInteractive=True
+session=2
+
+Caption                                  Version
+-------                                  -------
+Microsoft Windows Server 2025 Datacenter 10.0.26100
+
+
+[shot] desktop-0 (1024x768)
+GET https://tallysolutions.com/download/ -> 200 len=209177
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/css/download-page.css
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download-icon.svg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-add-headers-footer-images-to-invoice-print.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-add-watermarks-to-invoice-print.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-fetch-party-name-using-gstin-in-ims-report.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-how-to-create-vouchers-by-importing-documents.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-how-to-create-vouchers-in-tallyprime.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-how-to-get-started-with-docs-by-ira.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-how-to-resolve-documents-and-create-vouchers.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-send-online-payments-from-icici.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-update-terms-and-conditions-in-the-invoice-print.jpg
+   link: https://tallysolutions.com/apac/download/
+   link: https://tallysolutions.com/bd/download/
+   link: https://tallysolutions.com/bd/en/download/
+   link: https://tallysolutions.com/download/
+   link: https://tallysolutions.com/download/support-files/
+   link: https://tallysolutions.com/global/download/
+   link: https://tallysolutions.com/mena/ar/download/
+   link: https://tallysolutions.com/mena/download/
+   link: https://tallysolutions.com/ssa/download/
+   link: https://tallysolutions.com/us/download/
+GET https://tallysolutions.com/download-tallyprime/ FAILED: Response status code does not indicate success: 404 (Not Found).
+GET https://tallysolutions.com/tally-prime-download/ FAILED: Response status code does not indicate success: 404 (Not Found).
+GET https://tallysolutions.com/tallyprime/download/ -> 200 len=209177
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/css/download-page.css
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download-icon.svg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-add-headers-footer-images-to-invoice-print.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-add-watermarks-to-invoice-print.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-fetch-party-name-using-gstin-in-ims-report.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-how-to-create-vouchers-by-importing-documents.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-how-to-create-vouchers-in-tallyprime.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-how-to-get-started-with-docs-by-ira.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-how-to-resolve-documents-and-create-vouchers.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-send-online-payments-from-icici.jpg
+   link: https://resources.tallysolutions.com/wp-content/themes/tally/assets/images/download/7-1-update-terms-and-conditions-in-the-invoice-print.jpg
+   link: https://tallysolutions.com/apac/download/
+   link: https://tallysolutions.com/bd/download/
+   link: https://tallysolutions.com/bd/en/download/
+   link: https://tallysolutions.com/download/
+   link: https://tallysolutions.com/download/support-files/
+   link: https://tallysolutions.com/global/download/
+   link: https://tallysolutions.com/mena/ar/download/
+   link: https://tallysolutions.com/mena/download/
+   link: https://tallysolutions.com/ssa/download/
+   link: https://tallysolutions.com/us/download/
+GET https://tallysolutions.com/utility/js/DownloadUtility-india.js -> 200 len=103358
+   exe-ish: 9.exe
+   exe-ish: Documentation\/Integration_Demo_Samples.zip
+   exe-ish: Documentation\/Samples.zip
+   exe-ish: Export.zip
+   exe-ish: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Shoper9HO/Shoper9HORel13Installer.zip
+   exe-ish: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Shoper9POS/Shoper9POSRel14Installer.zip
+   exe-ish: https:\//tallymirror.tallysolutions.com\/download_centre\/beta\/rel4.0_Beta\/TP\/STAT\/setup.exe
+   exe-ish: https:\//tallymirror.tallysolutions.com\/download_centre\/Rel.3.0\/TP\/STAT\/setup.exe
+   exe-ish: https:\//tallymirror.tallysolutions.com\/download_centre\/Rel.4.0\/TP\/STAT\/setup.exe
+   exe-ish: https:\//tallymirror.tallysolutions.com\/download_centre\/Rel.4.1\/TP\/STAT\/setup.exe
+   exe-ish: https:\//tallymirror.tallysolutions.com\/download_centre\/Rel.5.0\/TP\/STAT\/setup.exe
+   exe-ish: https:\//tallymirror.tallysolutions.com\/download_centre\/Rel.5.1\/TP\/STAT\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/beta\/rel4.0_Beta\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/beta\/rel4.0_Beta\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/beta\/rel4.0_Beta\/TPD\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/beta\/rel4.0_Beta\/TPEL\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/beta\/rel4.0_Beta\/TPS\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_Beta\/Tally.Developer9_R5Beta\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_Beta\/Tally.Developer9_R5Beta\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_Beta\/Tally.Developer9_R5Beta\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_Beta\/Tally.ERP9_R5Beta\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_Beta\/Tally.ERP9_R5Beta\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_Beta\/Tally.ERP9_R5Beta\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_Beta\/Tally.Server9_R5Beta\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_Beta\/Tally.Server9_R5Beta\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_Beta\/Tally.Server9_R5Beta\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_GOLD\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_GOLD\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_GOLD\/TD9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_GOLD\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_GOLD\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_GOLD\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_GOLD\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_GOLD\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_GOLD\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_GOLD\/TS9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_Alpha\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_Alpha\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_Alpha\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_Alpha\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_Alpha\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_Alpha\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_Beta\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_Beta\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_Beta\/TD9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_Beta\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_Beta\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_Beta\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_Beta\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_Beta\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_Beta\/TS9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_GOLD\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_GOLD\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_GOLD\/TD9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_GOLD\/TD9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_GOLD\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_GOLD\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_GOLD\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_GOLD\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_GOLD\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_GOLD\/TS9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.1_Gold\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.1_Gold\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.1_Gold\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.1_Gold\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.2_Gold\/TD9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.2_Gold\/TD9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.2_Gold\/TD9\/online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.2_Gold\/TE9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.2_Gold\/TE9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.2_Gold\/TE9\/online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.2_Gold\/TE9\/sdk\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.2_Gold\/TS9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.2_Gold\/TS9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.2_Gold\/TS9\/online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.3_Gold\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.3_Gold\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.3_Gold\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.3_Gold\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_Alpha\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_Alpha\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_Alpha\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_Alpha\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_Alpha\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_Alpha\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_BETA\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_BETA\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_BETA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_BETA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_BETA\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_BETA\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_GOLD\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_GOLD\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_GOLD\/TD9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_GOLD\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_GOLD\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_GOLD\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_GOLD\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_GOLD\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_GOLD\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_GOLD\/TS9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2.1_Gold\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2.1_Gold\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2.1_Gold\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2.1_Gold\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3_BETA\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3_BETA\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3_GOLD\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3_GOLD\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3_GOLD\/TD9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3_GOLD\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3_GOLD\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3_GOLD\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3_GOLD\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.1_Gold\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.1_Gold\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.1_Gold\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.1_Gold\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.2_Gold\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.2_Gold\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.2_Gold\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.2_Gold\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.3_Gold\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.3_Gold\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.3_Gold\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.3_Gold\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.4_Gold\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.4_Gold\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.4_Gold\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.4_Gold\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.5_Gold\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.5_Gold\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.5_Gold\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.5_Gold\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.6_Gold\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.6_Gold\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.6_Gold\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.6_Gold\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.7_Gold\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.7_Gold\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.7_Gold\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.7_Gold\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.8_Gold\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.8_Gold\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.8_Gold\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.8_Gold\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_Alpha\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_Alpha\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_Alpha\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_Alpha\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_Beta\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_Beta\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_Beta\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_Beta\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_GOLD\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_GOLD\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_GOLD\/TD9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_GOLD\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_GOLD\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_GOLD\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_GOLD\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_GOLD\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_GOLD\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_GOLD\/TS9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.1_Gold\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.1_Gold\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.1_Gold\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.1_Gold\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.2_Gold\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.2_Gold\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.2_Gold\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.2_Gold\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.3_Gold\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.3_Gold\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.3_Gold\/TD9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.3_Gold\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.3_Gold\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.3_Gold\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.3_Gold\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.3_Gold\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.3_Gold\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.3_Gold\/TS9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.4_Gold\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.4_Gold\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.4_Gold\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.4_Gold\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.4_Gold\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.4_Gold\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.4_Gold\/TS9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.5_Gold\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.5_Gold\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.5_Gold\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.5_Gold\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.6_Gold\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.6_Gold\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.6_Gold\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.6_Gold\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.7_Gold\/TE9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.7_Gold\/TE9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.7_Gold\/TE9\/online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.7_Gold\/TE9\/sdk\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.8_Gold\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.8_Gold\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.8_Gold\/TD9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.8_Gold\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.8_Gold\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.8_Gold\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.8_Gold\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.8_Gold\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.8_Gold\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.8_Gold\/TS9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.9_Gold\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.9_Gold\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.9_Gold\/TD9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.9_Gold\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.9_Gold\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.9_Gold\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.9_Gold\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5_Alpha\/TE9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5_Alpha\/TE9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5_Beta\/TE9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5_Beta\/TE9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5_Gold\/TE9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5_Gold\/TE9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5_Gold\/TE9\/online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5_Gold\/TE9\/sdk\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5_Gold\/TS9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5_Gold\/TS9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5_Gold\/TS9\/online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.1_Gold\/TE9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.1_Gold\/TE9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.1_Gold\/TE9\/online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.1_Gold\/TE9\/sdk\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.2_Gold\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.2_Gold\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.2_Gold\/TD9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.2_Gold\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.2_Gold\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.2_Gold\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.2_Gold\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.2_Gold\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.2_Gold\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.2_Gold\/TS9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.3_Gold\/TD9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.3_Gold\/TD9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.3_Gold\/TD9\/online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.3_Gold\/TE9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.3_Gold\/TE9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.3_Gold\/TE9\/online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.3_Gold\/TE9\/sdk\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.3_Gold\/TS9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.3_Gold\/TS9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.3_Gold\/TS9\/online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.4_Gold\/TE9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.4_Gold\/TE9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.4_Gold\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.4_Gold\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.5_Gold\/TD9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.5_Gold\/TD9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.5_Gold\/TD9\/online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.5_Gold\/TE9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.5_Gold\/TE9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.5_Gold\/TE9\/online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.5_Gold\/TE9\/sdk\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.5_Gold\/TS9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.5_Gold\/TS9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.5_Gold\/TS9\/online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.6_Gold\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.6_Gold\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.6_Gold\/TD9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.6_Gold\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.6_Gold\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.6_Gold\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.6_Gold\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.6_Gold\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.6_Gold\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.6_Gold\/TS9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.7_Gold\/TE9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.7_Gold\/TE9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.7_Gold\/TE9\/online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.7_Gold\/TE9\/sdk\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.7_Gold\/TS9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.7_Gold\/TS9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.7_Gold\/TS9\/online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.8_Gold\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.8_Gold\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.8_Gold\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.8_Gold\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0_Beta\/TD9\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0_Beta\/TE9\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0_Beta\/TS9\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0_GA\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0_GA\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0_GA\/TD9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0_GA\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0_GA\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0_GA\/TS9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0.1_GOLD\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0.1_GOLD\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0.1_GOLD\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0.1_GOLD\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0.2_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0.2_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0.2_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0.2_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0.2_GA\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0.2_GA\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0.2_GA\/TS9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0.3_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0.3_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0.3_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0.3_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.1_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.1_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.1_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.1_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.1_Preview\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.1.1_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.1.1_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.1.1_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.1.1_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.2_GA\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.2_GA\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.2_GA\/TD9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.2_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.2_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.2_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.2_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.3_GA\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.3_GA\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.3_GA\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.3_GA\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.3_Preview\/setup.zip
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.3.1_GA\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.3.1_GA\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.3.1_GA\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.3.1_GA\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.3.2_GA\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.3.2_GA\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.3.2_GA\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.3.2_GA\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4_GA\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4_GA\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4_GA\/TS9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4_MOCK\/TE9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.1_GA\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.1_GA\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.1_GA\/TD9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.1_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.1_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.1_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.1_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.2_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.2_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.2_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.2_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.3_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.3_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.3_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.3_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.4_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.4_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.4_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.4_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.5_GA1\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.5_GA1\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.5_GA1\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.5_GA1\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.6_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.6_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.6_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.6_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.6_GA\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.6_GA\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.6_GA\/TS9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.7_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.7_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.7_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.7_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.8_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.8_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.8_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.8_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.9_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.9_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.9_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.9_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.1_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.1_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.1_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.1_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.2_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.2_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.2_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.2_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.3_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.3_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.3_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.3_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.4_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.4_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.4_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.4_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.5_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.5_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.5_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.5_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.1_GA\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.1_GA\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.1_GA\/TD9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.1_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.1_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.1_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.1_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.2_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.2_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.2_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.2_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.3_GA\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.3_GA\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.3_GA\/TD9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.3_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.3_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.3_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.3_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel_2.1\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel_2.1\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel_2.1\/TP\/STAT\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel_2.1\/TPD\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel_2.1\/TPEL\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel_2.1\/TPS\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/REL_TP_1.0.0\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/REL_TP_1.0.0\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/REL_TP_1.0.0\/TP\/Stat\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/REL_TP_1.0.0\/TPD\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/REL_TP_1.0.0\/TPS\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.2.0.1\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.2.0.1\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.2.0.1\/TP\/STAT\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.2.0.1\/TPD\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.2.0.1\/TPS\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.2.0\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.2.0\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.2.0\/TP\/STAT\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.2.0\/TPD\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.2.0\/TPS\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.3.0_Gold\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.3.0_Gold\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.3.0_Gold\/TP\/STAT\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.3.0_Gold\/TPD\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.3.0_Gold\/TPEL\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.3.0_Gold\/TPS\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.3.0.1\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.3.0.1\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.3.0.1\/TPEL\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.3.0\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.3.0\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.3.0\/TPD\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.3.0\/TPEL\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.3.0\/TPS\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.4.0\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.4.0\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.4.0\/TPD\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.4.0\/TPEL\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.4.0\/TPS\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.4.1\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.4.1\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.4.1\/TPEL\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.5.0\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.5.0\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.5.0\/TPD\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.5.0\/TPEL\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.5.0\/TPS\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.5.1\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.5.1\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.5.1\/TPEL\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.6.1\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.6.1\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.6.1\/TP\/STAT\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.6.1\/TPEL\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.7.0\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.7.0\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.7.0\/TP\/STAT\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.7.0\/TPD\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.7.0\/TPEL\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.7.0\/TPS\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.7.1_gold\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.7.1_gold\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.7.1_gold\/TP\/STAT\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.7.1_gold\/TPD\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.7.1_gold\/TPEL\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.7.1_gold\/TPS\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_1.1.1\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_1.1.1\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_1.1.1\/TPS\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_1.1.2\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_1.1.2\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_1.1.3\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_1.1.3\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_1.1.3\/TP\/STAT\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_1.1.3\/TPS\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_1.1.4\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_1.1.4\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_1.1.4\/TP\/STAT\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_1.1\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_1.1\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_1.1\/TPD\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_1.1\/TPS\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_2.0\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_2.0\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_2.0\/TP\/STAT\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_2.0\/TPD\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_2.0\/TPS\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel6.0\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel6.0\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel6.0\/TP\/STAT\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel6.0\/TPD\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel6.0\/TPEL\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel6.0\/TPS\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel6.2\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel6.2\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel6.2\/TP\/STAT\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel6.2\/TPEL\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/stat.zip
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/TallyPrime_Beta\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/TallyPrime_Beta\/TP\/Stat\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/TallyPrime_Beta\/TPD\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/TallyPrime_Beta\/TPS\/Full\/setup.exe
+   exe-ish: Monitor.exe
+   exe-ish: video.exe
+   link: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Shoper9HO/Shoper9HORel13Installer.zip
+   link: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Shoper9POS/Shoper9POSRel14Installer.zip
+GET https://tallysolutions.com/utility/js/DownloadUtility.js -> 200 len=101920
+   exe-ish: 9.exe
+   exe-ish: Documentation\/Integration_Demo_Samples.zip
+   exe-ish: Documentation\/Samples.zip
+   exe-ish: Export.zip
+   exe-ish: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Shoper9HO/Shoper9HORel13Installer.zip
+   exe-ish: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Shoper9POS/Shoper9POSRel14Installer.zip
+   exe-ish: https:\//tallymirror.tallysolutions.com\/download_centre\/beta\/rel4.0_Beta\/TP\/STAT\/setup.exe
+   exe-ish: https:\//tallymirror.tallysolutions.com\/download_centre\/Rel.3.0\/TP\/STAT\/setup.exe
+   exe-ish: https:\//tallymirror.tallysolutions.com\/download_centre\/Rel.4.0\/TP\/STAT\/setup.exe
+   exe-ish: https:\//tallymirror.tallysolutions.com\/download_centre\/Rel.4.1\/TP\/STAT\/setup.exe
+   exe-ish: https:\//tallymirror.tallysolutions.com\/download_centre\/Rel.5.0\/TP\/STAT\/setup.exe
+   exe-ish: https:\//tallymirror.tallysolutions.com\/download_centre\/Rel.5.1\/TP\/STAT\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/beta\/rel4.0_Beta\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/beta\/rel4.0_Beta\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/beta\/rel4.0_Beta\/TPD\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/beta\/rel4.0_Beta\/TPEL\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/beta\/rel4.0_Beta\/TPS\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_Beta\/Tally.Developer9_R5Beta\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_Beta\/Tally.Developer9_R5Beta\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_Beta\/Tally.Developer9_R5Beta\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_Beta\/Tally.ERP9_R5Beta\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_Beta\/Tally.ERP9_R5Beta\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_Beta\/Tally.ERP9_R5Beta\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_Beta\/Tally.Server9_R5Beta\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_Beta\/Tally.Server9_R5Beta\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_Beta\/Tally.Server9_R5Beta\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_GOLD\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_GOLD\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_GOLD\/TD9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_GOLD\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_GOLD\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_GOLD\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_GOLD\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_GOLD\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_GOLD\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5_GOLD\/TS9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_Alpha\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_Alpha\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_Alpha\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_Alpha\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_Alpha\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_Alpha\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_Beta\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_Beta\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_Beta\/TD9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_Beta\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_Beta\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_Beta\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_Beta\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_Beta\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_Beta\/TS9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_GOLD\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_GOLD\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_GOLD\/TD9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_GOLD\/TD9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_GOLD\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_GOLD\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_GOLD\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_GOLD\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_GOLD\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1_GOLD\/TS9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.1_Gold\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.1_Gold\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.1_Gold\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.1_Gold\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.2_Gold\/TD9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.2_Gold\/TD9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.2_Gold\/TD9\/online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.2_Gold\/TE9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.2_Gold\/TE9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.2_Gold\/TE9\/online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.2_Gold\/TE9\/sdk\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.2_Gold\/TS9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.2_Gold\/TS9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.2_Gold\/TS9\/online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.3_Gold\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.3_Gold\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.3_Gold\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.1.3_Gold\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_Alpha\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_Alpha\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_Alpha\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_Alpha\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_Alpha\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_Alpha\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_BETA\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_BETA\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_BETA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_BETA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_BETA\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_BETA\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_GOLD\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_GOLD\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_GOLD\/TD9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_GOLD\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_GOLD\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_GOLD\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_GOLD\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_GOLD\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_GOLD\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2_GOLD\/TS9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2.1_Gold\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2.1_Gold\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2.1_Gold\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.2.1_Gold\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3_BETA\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3_BETA\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3_GOLD\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3_GOLD\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3_GOLD\/TD9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3_GOLD\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3_GOLD\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3_GOLD\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3_GOLD\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.1_Gold\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.1_Gold\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.1_Gold\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.1_Gold\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.2_Gold\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.2_Gold\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.2_Gold\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.2_Gold\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.3_Gold\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.3_Gold\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.3_Gold\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.3_Gold\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.4_Gold\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.4_Gold\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.4_Gold\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.4_Gold\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.5_Gold\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.5_Gold\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.5_Gold\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.5_Gold\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.6_Gold\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.6_Gold\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.6_Gold\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.6_Gold\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.7_Gold\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.7_Gold\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.7_Gold\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.7_Gold\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.8_Gold\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.8_Gold\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.8_Gold\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.3.8_Gold\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_Alpha\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_Alpha\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_Alpha\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_Alpha\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_Beta\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_Beta\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_Beta\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_Beta\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_GOLD\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_GOLD\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_GOLD\/TD9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_GOLD\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_GOLD\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_GOLD\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_GOLD\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_GOLD\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_GOLD\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4_GOLD\/TS9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.1_Gold\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.1_Gold\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.1_Gold\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.1_Gold\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.2_Gold\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.2_Gold\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.2_Gold\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.2_Gold\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.3_Gold\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.3_Gold\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.3_Gold\/TD9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.3_Gold\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.3_Gold\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.3_Gold\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.3_Gold\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.3_Gold\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.3_Gold\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.3_Gold\/TS9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.4_Gold\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.4_Gold\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.4_Gold\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.4_Gold\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.4_Gold\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.4_Gold\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.4_Gold\/TS9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.5_Gold\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.5_Gold\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.5_Gold\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.5_Gold\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.6_Gold\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.6_Gold\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.6_Gold\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.6_Gold\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.7_Gold\/TE9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.7_Gold\/TE9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.7_Gold\/TE9\/online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.7_Gold\/TE9\/sdk\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.8_Gold\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.8_Gold\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.8_Gold\/TD9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.8_Gold\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.8_Gold\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.8_Gold\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.8_Gold\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.8_Gold\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.8_Gold\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.8_Gold\/TS9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.9_Gold\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.9_Gold\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.9_Gold\/TD9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.9_Gold\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.9_Gold\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.9_Gold\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.4.9_Gold\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5_Alpha\/TE9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5_Alpha\/TE9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5_Beta\/TE9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5_Beta\/TE9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5_Gold\/TE9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5_Gold\/TE9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5_Gold\/TE9\/online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5_Gold\/TE9\/sdk\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5_Gold\/TS9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5_Gold\/TS9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5_Gold\/TS9\/online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.1_Gold\/TE9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.1_Gold\/TE9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.1_Gold\/TE9\/online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.1_Gold\/TE9\/sdk\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.2_Gold\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.2_Gold\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.2_Gold\/TD9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.2_Gold\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.2_Gold\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.2_Gold\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.2_Gold\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.2_Gold\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.2_Gold\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.2_Gold\/TS9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.3_Gold\/TD9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.3_Gold\/TD9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.3_Gold\/TD9\/online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.3_Gold\/TE9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.3_Gold\/TE9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.3_Gold\/TE9\/online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.3_Gold\/TE9\/sdk\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.3_Gold\/TS9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.3_Gold\/TS9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.3_Gold\/TS9\/online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.4_Gold\/TE9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.4_Gold\/TE9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.4_Gold\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.4_Gold\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.5_Gold\/TD9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.5_Gold\/TD9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.5_Gold\/TD9\/online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.5_Gold\/TE9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.5_Gold\/TE9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.5_Gold\/TE9\/online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.5_Gold\/TE9\/sdk\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.5_Gold\/TS9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.5_Gold\/TS9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.5_Gold\/TS9\/online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.6_Gold\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.6_Gold\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.6_Gold\/TD9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.6_Gold\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.6_Gold\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.6_Gold\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.6_Gold\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.6_Gold\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.6_Gold\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.6_Gold\/TS9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.7_Gold\/TE9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.7_Gold\/TE9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.7_Gold\/TE9\/online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.7_Gold\/TE9\/sdk\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.7_Gold\/TS9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.7_Gold\/TS9\/help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.7_Gold\/TS9\/online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.8_Gold\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.8_Gold\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.8_Gold\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R5.5.8_Gold\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0_Beta\/TD9\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0_Beta\/TE9\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0_Beta\/TS9\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0_GA\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0_GA\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0_GA\/TD9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0_GA\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0_GA\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0_GA\/TS9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0.1_GOLD\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0.1_GOLD\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0.1_GOLD\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0.1_GOLD\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0.2_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0.2_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0.2_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0.2_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0.2_GA\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0.2_GA\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0.2_GA\/TS9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0.3_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0.3_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0.3_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.0.3_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.1_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.1_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.1_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.1_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.1_Preview\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.1.1_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.1.1_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.1.1_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.1.1_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.2_GA\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.2_GA\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.2_GA\/TD9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.2_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.2_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.2_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.2_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.3_GA\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.3_GA\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.3_GA\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.3_GA\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.3_Preview\/setup.zip
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.3.1_GA\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.3.1_GA\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.3.1_GA\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.3.1_GA\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.3.2_GA\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.3.2_GA\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.3.2_GA\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.3.2_GA\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4_GA\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4_GA\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4_GA\/TS9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4_MOCK\/TE9\/full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.1_GA\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.1_GA\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.1_GA\/TD9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.1_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.1_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.1_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.1_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.2_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.2_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.2_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.2_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.3_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.3_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.3_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.3_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.4_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.4_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.4_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.4_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.5_GA1\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.5_GA1\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.5_GA1\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.5_GA1\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.6_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.6_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.6_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.6_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.6_GA\/TS9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.6_GA\/TS9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.6_GA\/TS9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.7_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.7_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.7_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.7_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.8_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.8_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.8_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.8_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.9_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.9_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.9_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.4.9_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.1_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.1_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.1_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.1_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.2_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.2_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.2_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.2_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.3_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.3_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.3_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.3_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.4_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.4_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.4_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.4_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.5_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.5_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.5_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.5.5_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.1_GA\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.1_GA\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.1_GA\/TD9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.1_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.1_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.1_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.1_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.2_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.2_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.2_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.2_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.3_GA\/TD9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.3_GA\/TD9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.3_GA\/TD9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.3_GA\/TE9\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.3_GA\/TE9\/Help\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.3_GA\/TE9\/Online\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/R6.6.3_GA\/TE9\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel_2.1\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel_2.1\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel_2.1\/TP\/STAT\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel_2.1\/TPD\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel_2.1\/TPEL\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel_2.1\/TPS\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/REL_TP_1.0.0\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/REL_TP_1.0.0\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/REL_TP_1.0.0\/TP\/Stat\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/REL_TP_1.0.0\/TPD\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/REL_TP_1.0.0\/TPS\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.2.0.1\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.2.0.1\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.2.0.1\/TP\/STAT\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.2.0.1\/TPD\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.2.0.1\/TPS\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.2.0\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.2.0\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.2.0\/TP\/STAT\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.2.0\/TPD\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.2.0\/TPS\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.3.0_Gold\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.3.0_Gold\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.3.0_Gold\/TP\/STAT\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.3.0_Gold\/TPD\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.3.0_Gold\/TPEL\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.3.0_Gold\/TPS\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.3.0.1\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.3.0.1\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.3.0.1\/TPEL\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.3.0\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.3.0\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.3.0\/TPD\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.3.0\/TPEL\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.3.0\/TPS\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.4.0\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.4.0\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.4.0\/TPD\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.4.0\/TPEL\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.4.0\/TPS\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.4.1\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.4.1\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.4.1\/TPEL\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.5.0\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.5.0\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.5.0\/TPD\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.5.0\/TPEL\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.5.0\/TPS\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.5.1\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.5.1\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.5.1\/TPEL\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.6.1\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.6.1\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.6.1\/TP\/STAT\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.6.1\/TPEL\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_1.1.1\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_1.1.1\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_1.1.1\/TPS\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_1.1.2\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_1.1.2\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_1.1.3\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_1.1.3\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_1.1.3\/TP\/STAT\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_1.1.3\/TPS\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_1.1.4\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_1.1.4\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_1.1.4\/TP\/STAT\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_1.1\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_1.1\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_1.1\/TPD\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_1.1\/TPS\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_2.0\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_2.0\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_2.0\/TP\/STAT\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_2.0\/TPD\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel.TP_2.0\/TPS\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel6.0\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel6.0\/TP\/SDK\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel6.0\/TP\/STAT\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel6.0\/TPD\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel6.0\/TPEL\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/Rel6.0\/TPS\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/stat.zip
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/TallyPrime_Beta\/TP\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/TallyPrime_Beta\/TP\/Stat\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/TallyPrime_Beta\/TPD\/Full\/setup.exe
+   exe-ish: https:\/\/tallymirror.tallysolutions.com\/download_centre\/TallyPrime_Beta\/TPS\/Full\/setup.exe
+   exe-ish: Monitor.exe
+   exe-ish: video.exe
+   link: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Shoper9HO/Shoper9HORel13Installer.zip
+   link: https://mirror.tallysolutions.com/Downloads/Shoper/Shoper9/Shoper9POS/Shoper9POSRel14Installer.zip
+GET https://help.tallysolutions.com/tally-prime/installation-and-licensing/install-tallyprime/ -> 200 len=182857
+   exe-ish: .exe
+   exe-ish: .zip
+   exe-ish: setup.exe
+   link: https://help.tallysolutions.com/directly-upload-download-file-gstr-1-from-tallyprime/
+   link: https://help.tallysolutions.com/download-claude-desktop-log-in/
+   link: https://help.tallysolutions.com/download-ims-inward-invoices/
+   link: https://help.tallysolutions.com/wp-content/plugins/lightbox-popup/images/contorl_buttons/download_hover.png
+   link: https://help.tallysolutions.com/wp-content/plugins/lightbox-popup/images/contorl_buttons/download.png
+   link: https://tallysolutions.com/download/
+ERP9DownloadLater -> file id 964 -> https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe
+Installer candidates:
+  https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe
+Downloading https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe
+  OK size=72090376
+  SHA256=B849B1FB5A93D03C8FABDAEC4447FDCFDF27A5D6C93E3C207BBB320263AB663F
+
+OriginalFilename  : 
+FileDescription   : Tally Setup
+ProductName       : Tally
+Comments          : 
+CompanyName       : Tally Solutions Pvt. Ltd.
+FileName          : D:\a\_temp\TallyPrimeSetup.exe
+FileVersion       : 1.1.7.1
+ProductVersion    : 1.1.7.1
+IsDebug           : False
+IsPatched         : False
+IsPreRelease      : False
+IsPrivateBuild    : False
+IsSpecialBuild    : False
+Language          : English (United States)
+LegalCopyright    : © Tally Solutions Pvt Ltd., 1988
+LegalTrademarks   : 
+PrivateBuild      : 
+SpecialBuild      : 
+FileVersionRaw    : 1.1.7.1
+ProductVersionRaw : 1.1.7.1
+
+
+
+Status            : Valid
+SignerCertificate : [Subject]
+                      CN=Tally Solutions Pvt Ltd, O=Tally Solutions Pvt Ltd, L=Bengaluru, S=Karnataka, C=IN
+                    
+                    [Issuer]
+                      CN=DigiCert Trusted G4 Code Signing RSA4096 SHA384 2021 CA1, O="DigiCert, Inc.", C=US
+                    
+                    [Serial Number]
+                      08AD1AFB3D0AC9F9C12B11D2AC56FB21
+                    
+                    [Not Before]
+                      3/12/2025 12:00:00 AM
+                    
+                    [Not After]
+                      3/14/2028 11:59:59 PM
+                    
+                    [Thumbprint]
+                      5DEBC59E011C3490C086BCAD00DD2F760AF2F97B
+                    
+
+
+[shot] install-a-window (1024x768)
+[keys] sent 'i' to TallyPrimeSetup 'TallyPrime Setup Manager'
+[shot] install-b-010s (1024x768)
+  [10s] window: TallyPrimeSetup 'TallyPrime Setup Manager'
+  [10s] window: WindowsTerminal 'C:\ProgramData\GitHub\HostedComputeAgent\hosted-compute-agent'
+tally.exe appeared after ~10s
+  [20s] window: TallyPrimeSetup 'TallyPrime Setup Manager'
+  [20s] window: WindowsTerminal 'C:\ProgramData\GitHub\HostedComputeAgent\hosted-compute-agent'
+  [30s] window: TallyPrimeSetup 'TallyPrime Setup Manager'
+  [30s] window: WindowsTerminal 'C:\ProgramData\GitHub\HostedComputeAgent\hosted-compute-agent'
+[shot] install-b-040s (1024x768)
+  [40s] window: TallyPrimeSetup 'TallyPrime Setup Manager'
+  [40s] window: WindowsTerminal 'C:\ProgramData\GitHub\HostedComputeAgent\hosted-compute-agent'
+stopping the wait: setup shows 'Installation Successful' (S: Start TallyPrime) by now
+[shot] install-c-end (1024x768)
+
+Name                   Length   LastWriteTime
+----                   ------   -------------
+appdata                         10/7/2026 4:53:00 PM
+capsules                        10/7/2026 4:52:58 PM
+config                          10/7/2026 4:53:00 PM
+lang                            10/7/2026 4:52:57 PM
+logs                            10/7/2026 4:53:00 PM
+Setup.exe              3362056  10/7/2026 4:52:58 PM
+tally.exe              18405568 10/7/2026 4:52:57 PM
+tally.ini              1490     10/7/2026 4:52:59 PM
+tally.sav              49       10/7/2026 4:52:59 PM
+tallyapp.dat           12708014 10/7/2026 4:52:57 PM
+tallygateway.ini       76       10/7/2026 4:52:58 PM
+tallygatewayserver.exe 4253888  10/7/2026 4:52:57 PM
+tallymigrationtool.exe 21439168 10/7/2026 4:52:58 PM
+tallyres.dat           55566336 10/7/2026 4:52:58 PM
+tallyscheduler.exe     5574336  10/7/2026 4:52:58 PM
+tallywin.dat           2692504  10/7/2026 4:52:57 PM
+
+
+
+FileVersion    : 1.1.7.1
+ProductVersion : 1.1.7.1
+ProductName    : TallyPrime
+
+
+== tally.ini as installed
+;;TallyPrime workstation specific parameters file
+[TALLY]
+
+;;Specify the path of Capsule Folder
+Capsule=
+
+;;Specify location of Data files
+Data=C:\Users\Public\TallyPrime\data
+
+;;Specify location of Config files
+Config=C:\Program Files\TallyPrime
+
+;;Specify location of Language Files
+LangPath=C:\Program Files\TallyPrime\lang
+
+
+;; Specify list of companies to preload,
+;; TO STOP DEFAULT LOADING set the following line to NO
+Default Companies = Yes
+Load = 100000
+
+;; Specify list of TDL files for user defined reports and changes.
+;; TO STOP LOADING TDL FILES, set the following line to NO
+User TDL = Yes
+;;tdl = <tdlfile.1>
+
+;; Specify Color details of local monitor
+Color = Yes
+Sound = Yes
+Client Server = None
+ServerPort = 9000
+Enable ODBC Server = Yes
+Load Buffering = Yes
+Ignore TCP Timeout = Yes
+;; TallyGatewayServer = server:port
+TallyGatewayServer=localhost:9999
+Tally License Serial Number=0
+
+;;Specify the maximum size (in MB) for the incremental backup file (IncrState.1800)
+;;Once this size is reached, the file will be recreated automatically
+;;For example, to set this to 500 MB write IncrementalBackupBufferLimit=500
+;;or for 1 GB write IncrementalBackupBufferLimit=1024
+IncrementalBackupBufferLimit=1024
+
+;;Specify Migration Configurations
+;;Specify Port number of TallyPrime or TallyPrime Edit Log for Migration
+MigrationTallyPrimePort=9009
+;;Specify Port number of Migration Tool
+MigrationToolPort=9509
+
+;; end-of-file
+== tally.ini
+[Tally]
+Data = D:\a\_temp\TallyData
+Config = C:\Program Files\TallyPrime
+LangPath = C:\Program Files\TallyPrime\lang
+Client Server = Both
+ServerPort = 9000
+Enable ODBC Server = Yes
+Ignore TCP Timeout = Yes
+User TDL = Yes
+Default Companies = No
+[A] port 9000 answers after 14s: <RESPONSE>TallyPrime Server is Running</RESPONSE>
+
+[A] window title: 'TallyPrime:9000'
+[shot] A-1-started (1024x768)
+[keys] sent 'a' to tally 'TallyPrime:9000'
+[shot] A-2-after-a (1024x768)
+[keys] sent 't' to tally 'TallyPrime:9000'
+[shot] A-3-after-t-educational (1024x768)
+[list-companies A] -> 200: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBTCATEGORY>0</FBTCATEGORY><FBTASSESSEETYPE>0</FBTASSESSEETYPE><TARIFFCLASSIFICATION>0</TARIFFCLASSIFICATION><EXCISEDUTYCLASSIFICATION>0</EXCISEDUTYCLASSIFICATION><SERIALNUMBER>0</SERIALNUMBER><ADJUSTMENTCLASSIFICATION>0</ADJUSTMENTCLASSIFICATION><INCOMETAXSLAB>0</INCOMETAXSLAB><INCOMETAXCLASSIFICATION>0</INCOMETAXCLASSIFICATION><LBTCLASSIFICATION>0</LBTCLASSIFICATION><TAXUNIT>0</TAXUNIT><RETURNMASTER>0</RETURNMASTER><GSTCLASSIFICATION>0</GSTCLASSIFICATION><VOUCHERNUMBERSERIES>0</VOUCHERNUMBERSERIES><VOUCHER>0</VOUCHER></CMPINFO></DESC><DATA><COLLECTION>   </COLLECTION></DATA></BODY></ENVELOPE>
+[B-import-company] -> 200: <RESPONSE><LINEERROR>Could not find Company &apos;&apos;</LINEERROR></RESPONSE>
+[shot] B-1-after-xml (1024x768)
+[list-companies B] -> 200: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBTCATEGORY>0</FBTCATEGORY><FBTASSESSEETYPE>0</FBTASSESSEETYPE><TARIFFCLASSIFICATION>0</TARIFFCLASSIFICATION><EXCISEDUTYCLASSIFICATION>0</EXCISEDUTYCLASSIFICATION><SERIALNUMBER>0</SERIALNUMBER><ADJUSTMENTCLASSIFICATION>0</ADJUSTMENTCLASSIFICATION><INCOMETAXSLAB>0</INCOMETAXSLAB><INCOMETAXCLASSIFICATION>0</INCOMETAXCLASSIFICATION><LBTCLASSIFICATION>0</LBTCLASSIFICATION><TAXUNIT>0</TAXUNIT><RETURNMASTER>0</RETURNMASTER><GSTCLASSIFICATION>0</GSTCLASSIFICATION><VOUCHERNUMBERSERIES>0</VOUCHERNUMBERSERIES><VOUCHER>0</VOUCHER></CMPINFO></DESC><DATA><COLLECTION>   </COLLECTION></DATA></BODY></ENVELOPE>
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] C-1-enter-create-company (1024x768)
+[keys] sent 'FinCom Spike Co' to tally 'TallyPrime:9000'
+[shot] C-2-name (1024x768)
+[keys] sent '^a' to tally 'TallyPrime:9000'
+[shot] C-3-ctrl-a (1024x768)
+[list-companies C] -> 200: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBTCATEGORY>0</FBTCATEGORY><FBTASSESSEETYPE>0</FBTASSESSEETYPE><TARIFFCLASSIFICATION>0</TARIFFCLASSIFICATION><EXCISEDUTYCLASSIFICATION>0</EXCISEDUTYCLASSIFICATION><SERIALNUMBER>0</SERIALNUMBER><ADJUSTMENTCLASSIFICATION>0</ADJUSTMENTCLASSIFICATION><INCOMETAXSLAB>0</INCOMETAXSLAB><INCOMETAXCLASSIFICATION>0</INCOMETAXCLASSIFICATION><LBTCLASSIFICATION>0</LBTCLASSIFICATION><TAXUNIT>0</TAXUNIT><RETURNMASTER>0</RETURNMASTER><GSTCLASSIFICATION>0</GSTCLASSIFICATION><VOUCHERNUMBERSERIES>0</VOUCHERNUMBERSERIES><VOUCHER>0</VOUCHER></CMPINFO></DESC><DATA><COLLECTION><COMPANY NAME="FinCom Spike Co" RESERVEDNAME=""><STARTINGFROM TYPE="Date">20260401</STARTINGFROM><NAME TYPE="String">FinCom Spike Co</NAME><GUID TYPE="String">d39228f5-210c-4a8d-a463-2e7606e3c7e4</GUID></COMPANY></COLLECTION></DATA></BODY></ENVELOPE>
+[keys] sent '^a' to tally 'TallyPrime:9000'
+[shot] C-9-features-accepted (1024x768)
+== data folder
+
+FullName                                         Length
+--------                                         ------
+D:\a\_temp\TallyData\100000                      
+D:\a\_temp\TallyData\100000\AddlCmp.1800         512
+D:\a\_temp\TallyData\100000\Aggr.1800            512
+D:\a\_temp\TallyData\100000\CmpNotification.1800 1536
+D:\a\_temp\TallyData\100000\CmpSave.1800         4608
+D:\a\_temp\TallyData\100000\CmpSchMetaData.1800  1024
+D:\a\_temp\TallyData\100000\Company.1800         4608
+D:\a\_temp\TallyData\100000\ExtMngr.1800         512
+D:\a\_temp\TallyData\100000\Index.1800           851968
+D:\a\_temp\TallyData\100000\LinkMgr.1800         512
+D:\a\_temp\TallyData\100000\Manager.1800         188928
+D:\a\_temp\TallyData\100000\SecTran.1800         512
+D:\a\_temp\TallyData\100000\StatStatus.1800      512
+D:\a\_temp\TallyData\100000\TACCESS.TSF          512
+D:\a\_temp\TallyData\100000\TCMPSCHACCESS.TSF    512
+D:\a\_temp\TallyData\100000\TCMPSCHEXCL.TSF      0
+D:\a\_temp\TallyData\100000\TCMPSCHMESSAGE.TSF   1024
+D:\a\_temp\TallyData\100000\TCMPSCHSTATE.TSF     5632
+D:\a\_temp\TallyData\100000\TCMPSCHUPDATE.TSF    2560
+D:\a\_temp\TallyData\100000\TEXCL.TSF            0
+D:\a\_temp\TallyData\100000\TINTMSG.TSF          5632
+D:\a\_temp\TallyData\100000\TMESSAGE.TSF         4608
+D:\a\_temp\TallyData\100000\TranMgr.1800         512
+D:\a\_temp\TallyData\100000\TSTATE.TSF           5632
+D:\a\_temp\TallyData\100000\TUPDATE.TSF          18432
+D:\a\_temp\TallyData\100000\VchStatus.1800       512
+
+
+company created: True; company folder: 100000
+== tally.ini
+[Tally]
+Data = D:\a\_temp\TallyData
+Config = C:\Program Files\TallyPrime
+LangPath = C:\Program Files\TallyPrime\lang
+Client Server = Both
+ServerPort = 9000
+Enable ODBC Server = Yes
+Ignore TCP Timeout = Yes
+User TDL = Yes
+Default Companies = Yes
+Load = 100000
+TDL = D:\a\testingtdsdesk\testingtdsdesk\bridge-go\addon\FinComRecorder.tdl
+[D] port 9000 answers after 12s: <RESPONSE>TallyPrime Server is Running</RESPONSE>
+
+[D] window title: 'TallyPrime:9000'
+[shot] D-1-started (1024x768)
+[keys] sent 'a' to tally 'TallyPrime:9000'
+[shot] D-2-after-a (1024x768)
+[keys] sent 't' to tally 'TallyPrime:9000'
+[shot] D-2b-after-t (1024x768)
+[list-companies D] -> 200: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBTCATEGORY>0</FBTCATEGORY><FBTASSESSEETYPE>0</FBTASSESSEETYPE><TARIFFCLASSIFICATION>0</TARIFFCLASSIFICATION><EXCISEDUTYCLASSIFICATION>0</EXCISEDUTYCLASSIFICATION><SERIALNUMBER>0</SERIALNUMBER><ADJUSTMENTCLASSIFICATION>0</ADJUSTMENTCLASSIFICATION><INCOMETAXSLAB>0</INCOMETAXSLAB><INCOMETAXCLASSIFICATION>0</INCOMETAXCLASSIFICATION><LBTCLASSIFICATION>0</LBTCLASSIFICATION><TAXUNIT>0</TAXUNIT><RETURNMASTER>0</RETURNMASTER><GSTCLASSIFICATION>0</GSTCLASSIFICATION><VOUCHERNUMBERSERIES>0</VOUCHERNUMBERSERIES><VOUCHER>0</VOUCHER></CMPINFO></DESC><DATA><COLLECTION><COMPANY NAME="FinCom Spike Co" RESERVEDNAME=""><STARTINGFROM TYPE="Date">20260401</STARTINGFROM><NAME TYPE="String">FinCom Spike Co</NAME><GUID TYPE="String">d39228f5-210c-4a8d-a463-2e7606e3c7e4</GUID></COMPANY></COLLECTION></DATA></BODY></ENVELOPE>
+[D-func] -> 200: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS><PRODMAJORVER>1</PRODMAJORVER><PRODMINORVER>1</PRODMINORVER><PRODMAJORREL>7</PRODMAJORREL><PRODMINORREL>1</PRODMINORREL><PRODTYPE>5</PRODTYPE></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBTCATEGORY>0</FBTCATEGORY><FBTASSESSEETYPE>0</FBTASSESSEETYPE><TARIFFCLASSIFICATION>0</TARIFFCLASSIFICATION><EXCISEDUTYCLASSIFICATION>0</EXCISEDUTYCLASSIFICATION><SERIALNUMBER>0</SERIALNUMBER><ADJUSTMENTCLASSIFICATION>0</ADJUSTMENTCLASSIFICATION><INCOMETAXSLAB>0</INCOMETAXSLAB><INCOMETAXCLASSIFICATION>0</INCOMETAXCLASSIFICATION><LBTCLASSIFICATION>0</LBTCLASSIFICATION><TAXUNIT>0</TAXUNIT><RETURNMASTER>0</RETURNMASTER><GSTCLASSIFICATION>0</GSTCLASSIFICATION><VOUCHERNUMBERSERIES>0</VOUCHERNUMBERSERIES><VOUCHER>0</VOUCHER></CMPINFO></DESC><DATA><RESULT TYPE="Long">2</RESULT></DATA></BODY></ENVELOPE>
+[D-import-ledger] -> 200: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[shot] D-3-after-ledger (1024x768)
+== recorder folder C:\ProgramData\FinCom\recorder (after XML ledger import)
+[D-call-FCRLiveLog] -> 200: <ERRORMSG>Could not find: FCRLiveLog&#10;</ERRORMSG><ERRORMSG>Function Execution Failed!</ERRORMSG>
+[D-call-$$FCRLiveLog] -> 200: <ERRORMSG>Could not find: $$FCRLiveLog&#10;</ERRORMSG><ERRORMSG>Function Execution Failed!</ERRORMSG>
+== recorder folder C:\ProgramData\FinCom\recorder (after calling FCRLiveLog by XML)
+[D-import-ledger2] -> 200: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[D-import-voucher] -> 200: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>1</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+== recorder folder C:\ProgramData\FinCom\recorder (after XML voucher import)
+[keys] sent 'c' to tally 'TallyPrime:9000'
+[shot] D-7-create (1024x768)
+[keys] sent 'Ledger{ENTER}' to tally 'TallyPrime:9000'
+[shot] D-8-ledger-form (1024x768)
+[keys] sent 'UI Party{ENTER}' to tally 'TallyPrime:9000'
+[keys] sent '{ENTER}' to tally 'TallyPrime:9000'
+[shot] D-9-under (1024x768)
+[keys] sent 'Sundry Debtors{ENTER}' to tally 'TallyPrime:9000'
+[shot] D-10-group (1024x768)
+[keys] sent '^a' to tally 'TallyPrime:9000'
+[shot] D-11-saved (1024x768)
+== recorder folder C:\ProgramData\FinCom\recorder (after ledger on screen)
+  d39228f5-210c-4a8d-a463-2e7606e3c7e4-7-Oct-26.txt 1048
+    FCR1|ev=ledger_accept_pre|t0=7-Oct-26 16:55|tw=7-Oct-26 16:55|cguid=d39228f5-210c-4a8d-a463-2e7606e3c7e4|cname=FinCom Spike Co|user=TALLY User|obj=Master|guid=|mid=0|aid=0|vtype=|vno=|vdate=|name=UI Party|parent=Sundry Debtors|narr=|t1=7-Oct-26 16:55|src=live
+    FCR1|ev=ledger_accept_post|t0=7-Oct-26 16:55|tw=7-Oct-26 16:55|cguid=d39228f5-210c-4a8d-a463-2e7606e3c7e4|cname=FinCom Spike Co|user=TALLY User|obj=Master|guid=|mid=0|aid=0|vtype=|vno=|vdate=|name=UI Party|parent=Sundry Debtors|narr=|t1=7-Oct-26 16:55|src=live
+[D-ledgers] -> 200: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>6</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>1</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBTCATEGORY>0</FBTCATEGORY><FBTASSESSEETYPE>0</FBTASSESSEETYPE><TARIFFCLASSIFICATION>0</TARIFFCLASSIFICATION><EXCISEDUTYCLASSIFICATION>0</EXCISEDUTYCLASSIFICATION><SERIALNUMBER>0</SERIALNUMBER><ADJUSTMENTCLASSIFICATION>0</ADJUSTMENTCLASSIFICATION><INCOMETAXSLAB>0</INCOMETAXSLAB><INCOMETAXCLASSIFICATION>0</INCOMETAXCLASSIFICATION><LBTCLASSIFICATION>0</LBTCLASSIFICATION><TAXUNIT>1</TAXUNIT><RETURNMASTER>0</RETURNMASTER><GSTCLASSIFICATION>0</GSTCLASSIFICATION><VOUCHERNUMBERSERIES>1</VOUCHERNUMBERSERIES><VOUCHER>1</VOUCHER></CMPINFO></DESC><DATA><COLLECTION ISMSTDEPTYPE="Yes" MSTDEPTYPE="8"><LEDGER NAME="Cash" RESERVEDNAME=""><PARENT TYPE="String">Cash-in-Hand</PARENT><MASTERID TYPE="Number"> 31</MASTERID><LANGUAGENAME.LIST><NAME.LIST TYPE="String"><NAME>Cash</NAME></NAME.LIST><LANGUAGEID TYPE="Number"> 1033</LANGUAGEID></LANGUAGENAME.LIST></LEDGER><LEDGER NAME="Profit &amp; Loss A/c" RESERVEDNAME="Profit &amp; Loss A/c"><PARENT TYPE="String">&#4; Primary</PARENT><MASTERID TYPE="Number"> 30</MASTERID><LANGUAGENAME.LIST><NAME.LIST TYPE="String"><NAME>Profit &amp; Loss A/c</NAME></NAME.LIST><LANGUAGEID TYPE="Number"> 1033</LANGUAGEID></LANGUAGENAME.LIST></LEDGER><LEDGER NAME="Spike Party" RESERVEDNAME=""><PARENT TYPE="String">Sundry Debtors</PARENT><MASTERID TYPE="Number"> 206</MASTERID><LANGUAGENAME.LIST><NAME.LIST TYPE="String"><NAME>Spike Party</NAME></NAME.LIST><LANGUAGEID TYPE="Number"> 1033</LANGUAGEID></LANGUAGENAME.LIST></LEDGER><LEDGER NAME="Spike Party 2" RESERVEDNAME=""><PARENT TYPE="String">Sundry Debtors</PARENT><MASTERID TYPE="Number"> 207</MASTERID><LANGUAGENAME.LIST><NAME.LIST TYPE="String"><NAME>Spike Party 2</NAME></NAME.LIST><LANGUAGEID TYPE="Number"> 1033</LANGUAGEID></LANGUAGENAME.LIST></LEDGER><LEDGER NAME="UI Party" RESERVEDNAME=""><PARENT TYPE="String">Sundry Debtors</PARENT><MASTERID TYPE="Number"> 208</MASTERID><LANGUAGENAME.LIST><NAME.LIST TYPE="Stri...
+== files changed in the last 40 minutes (Tally dir, data, temp)
+  C:\Program Files\TallyPrime\Setup.exe 3362056
+  C:\Program Files\TallyPrime\tally.exe 18405568
+  C:\Program Files\TallyPrime\tally.imp 1712
+  C:\Program Files\TallyPrime\tally.ini 347
+  C:\Program Files\TallyPrime\tally.sav 49
+  C:\Program Files\TallyPrime\tallyapp.dat 12708014
+  C:\Program Files\TallyPrime\tallygateway.ini 76
+  C:\Program Files\TallyPrime\tallygatewayserver.exe 4253888
+  C:\Program Files\TallyPrime\tallymigrationtool.exe 21439168
+  C:\Program Files\TallyPrime\tallyres.dat 55566336
+  C:\Program Files\TallyPrime\tallyscheduler.exe 5574336
+  C:\Program Files\TallyPrime\tallywin.dat 2692504
+  C:\Program Files\TallyPrime\capsules\tally.tip 62339873
+  C:\Program Files\TallyPrime\logs\tallyscheduler.log 2854
+  C:\Users\runneradmin\AppData\Local\Temp\provjobd.exe2265621136 37560832
+  C:\Users\runneradmin\AppData\Local\Temp\2\NotifyIconGeneratedAumid_66825017807821162.png 399
+  C:\Users\runneradmin\AppData\Local\Temp\2\wmsetup.log 705
+  C:\ProgramData\FinCom\recorder\d39228f5-210c-4a8d-a463-2e7606e3c7e4-7-Oct-26.txt 1048
+== end
+  d39228f5-210c-4a8d-a463-2e7606e3c7e4-7-Oct-26.txt 1048
+    FCR1|ev=ledger_accept_pre|t0=7-Oct-26 16:55|tw=7-Oct-26 16:55|cguid=d39228f5-210c-4a8d-a463-2e7606e3c7e4|cname=FinCom Spike Co|user=TALLY User|obj=Master|guid=|mid=0|aid=0|vtype=|vno=|vdate=|name=UI Party|parent=Sundry Debtors|narr=|t1=7-Oct-26 16:55|src=live
+    FCR1|ev=ledger_accept_post|t0=7-Oct-26 16:55|tw=7-Oct-26 16:55|cguid=d39228f5-210c-4a8d-a463-2e7606e3c7e4|cname=FinCom Spike Co|user=TALLY User|obj=Master|guid=|mid=0|aid=0|vtype=|vno=|vdate=|name=UI Party|parent=Sundry Debtors|narr=|t1=7-Oct-26 16:55|src=live
+== C:\Program Files\TallyPrime\logs\tallyscheduler.log
+Connector error, code = -10061, msg = No connection could be made because the target machine actively refused it.
+.
+
+3488 - Warn 2026/10/07 - 16:55:05:432 
+src/connector/scheduler_server.cpp:31 
+SchedulerConnectorErrorFunc 
+Connector error, code = -9992, msg = No Connector found for given (IP, Port).
+
+3488 - Warn 2026/10/07 - 16:55:07:455 
+src/connector/scheduler_server.cpp:31 
+SchedulerConnectorErrorFunc 
+Connector error, code = -10061, msg = No connection could be made because the target machine actively refused it.
+.
+
+3488 - Warn 2026/10/07 - 16:55:07:455 
+src/connector/scheduler_server.cpp:31 
+SchedulerConnectorErrorFunc 
+Connector error, code = -10061, msg = No connection could be made because the target machine actively refused it.
+.
+
