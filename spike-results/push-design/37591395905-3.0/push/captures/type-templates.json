@@ -1,0 +1,68 @@
+{
+  "payroll50": {
+    "created": 1,
+    "form": 5,
+    "ms": 19.3,
+    "err": "form 1: created 0, exceptions  No Entries in Voucher! | form 2: created 0, exceptions  No Entries in Voucher! | form 3: created 0, exceptions  Voucher totals do not match! Dr: 75,000.00 Dr Cr:  Diff: 75,000.00 Dr | form 4: created 0, exceptions  No Entries in Voucher! | form 5: created 1, exceptions  "
+  },
+  "payroll200": {
+    "created": 1,
+    "form": 5,
+    "ms": 36.8,
+    "err": "form 1: created 0, exceptions  No Entries in Voucher! | form 2: created 0, exceptions  No Entries in Voucher! | form 3: created 0, exceptions  Voucher totals do not match! Dr: 3,00,000.00 Dr Cr:  Diff: 3,00,000.00 Dr | form 4: created 0, exceptions  No Entries in Voucher! | form 5: created 1, exceptions  "
+  },
+  "attendance": {
+    "created": 0,
+    "form": 2,
+    "ms": 6.2,
+    "err": "form 1: created 0, exceptions  No Entries in Voucher!"
+  },
+  "stockjournal": {
+    "created": 1,
+    "form": 1,
+    "ms": 51.1,
+    "err": "form 1: created 1, exceptions  "
+  },
+  "mfgjournal": {
+    "created": 1,
+    "form": 1,
+    "ms": 26.5,
+    "err": "form 1: created 1, exceptions  "
+  },
+  "salesorder": {
+    "created": 0,
+    "form": 4,
+    "ms": 12.1,
+    "err": "form 1: created 0, exceptions  Bad Order Number in Voucher! | form 2: created 0, exceptions  Bad Order Number in Voucher! | form 3: created 0, exceptions  Bad Order Number in Voucher!"
+  },
+  "purchaseorder": {
+    "created": 0,
+    "form": 4,
+    "ms": 9.9,
+    "err": "form 1: created 0, exceptions  Bad Order Number in Voucher! | form 2: created 0, exceptions  Bad Order Number in Voucher! | form 3: created 0, exceptions  Bad Order Number in Voucher!"
+  },
+  "deliverynote": {
+    "created": 1,
+    "form": 1,
+    "ms": 40.8,
+    "err": "form 1: created 1, exceptions  "
+  },
+  "receiptnote": {
+    "created": 1,
+    "form": 1,
+    "ms": 224.0,
+    "err": "form 1: created 1, exceptions  "
+  },
+  "physicalstock": {
+    "created": 1,
+    "form": 1,
+    "ms": 16.9,
+    "err": "form 1: created 1, exceptions  "
+  },
+  "salesbatch": {
+    "created": 1,
+    "form": 1,
+    "ms": 186.1,
+    "err": "form 1: created 1, exceptions  "
+  }
+}
