@@ -525,6 +525,10 @@ type heldLine struct {
 	// ends at once with the Day Book words. Allow: the asks it may have (1; 2 for a new save sent held before Tally was
 	// asked at all: its first fetch, then the one ask again; 0 read as 1); Asked: the asks that reached Tally
 	Allow, Asked int
+	// next-fastfetch (the owner's approval of 07-Oct-2026): a line an earlier bridge ENDED with the Day Book words (its id in
+	// *.ended.txt), listed by FinCom again: asked once more with the fast request; its ":resolved" goes again when Tally gives
+	// the entry (the cloud's second ":resolved" row replaces both held rows); never asked a third time
+	FastAgain bool
 }
 
 // 2.3.3: the asks a held line may have
@@ -551,7 +555,8 @@ func liveHeldLoad() (M, map[string]heldLine) {
 			MID: str(e["masterId"]), At: str(e["savedAt"]), Added: str(e["added"]), Last: str(e["last"]), Tries: toInt(e["tries"]), Ev: str(e["event"]), Why: str(e["why"]),
 			LineGuid: str(e["lineGuid"]), LineFid: str(e["lineFid"]), Mismatch: truthy(e["idsMismatch"]), Final: truthy(e["final"]), LineAlter: toI64(e["lineAlter"]),
 			Cloud: truthy(e["fromFinCom"]), KeepGuid: str(e["keepGuid"]), KeepAlter: str(e["keepAlter"]), Refetch: truthy(e["refetch"]), TriesVer: str(e["triesVersion"]), Again: truthy(e["again"]), LedgerAgain: truthy(e["ledgerAgain"]), Slow: toInt(e["slow"]),
-			Fresh: truthy(e["fresh"]), FreshTries: toInt(e["freshTries"]), FreshSlow: truthy(e["freshSlow"]), Allow: toInt(e["allow"]), Asked: toInt(e["asked"])}
+			Fresh: truthy(e["fresh"]), FreshTries: toInt(e["freshTries"]), FreshSlow: truthy(e["freshSlow"]), Allow: toInt(e["allow"]), Asked: toInt(e["asked"]),
+			FastAgain: truthy(e["fastAgain"])}
 	}
 	return all, items
 }
@@ -563,7 +568,7 @@ func liveHeldSave(all M, items map[string]heldLine) {
 			"added": h.Added, "last": h.Last, "tries": h.Tries, "event": h.Ev, "why": liveCapWhy(h.Why), "lineGuid": h.LineGuid, "lineFid": h.LineFid,
 			"idsMismatch": h.Mismatch, "final": h.Final, "lineAlter": h.LineAlter, "fromFinCom": h.Cloud,
 			"keepGuid": h.KeepGuid, "keepAlter": h.KeepAlter, "refetch": h.Refetch, "triesVersion": h.TriesVer, "again": h.Again, "ledgerAgain": h.LedgerAgain, "slow": h.Slow,
-			"fresh": h.Fresh, "freshTries": h.FreshTries, "freshSlow": h.FreshSlow, "allow": h.Allow, "asked": h.Asked}
+			"fresh": h.Fresh, "freshTries": h.FreshTries, "freshSlow": h.FreshSlow, "allow": h.Allow, "asked": h.Asked, "fastAgain": h.FastAgain}
 	}
 	all["items"] = o
 	if err := saveFile(liveHeldFile(), jsonText(all)); err != nil {
@@ -881,6 +886,10 @@ func liveResolveTurn() {
 		liveFresh()
 		done := live.sent[rid] && (!h.Again || live.items231[rid]) && !liveLedgerAgainDue(h) // 2.3.1 review H1: an older bridge's resolution is not this one
 		done = done || live.ended[id]                                                        // 2.3.2: ended with the Day Book words
+		if h.FastAgain {
+			// next-fastfetch: an earlier bridge's ending is not this one: done once its one fast ask went (or its ":resolved" waits)
+			done = live.fastAsked[id] || live.queued[rid]
+		}
 		waiting := live.queued[rid]
 		ownOpen := !h.Refetch || liveOwnOpenNow(h.CGUID, h.Company)
 		live.mu.Unlock()
@@ -1009,6 +1018,9 @@ func liveResolveTurn() {
 		} else {
 			x, why, answered, final, err = liveResolveOne(h, &reached)
 		}
+		if h.FastAgain && reached {
+			liveFastAskedNote(h.ID) // next-fastfetch: its one fresh ask reached Tally: never asked once more
+		}
 		if gaveWay(err) {
 			// review L1: a request a posting stopped after it reached Tally counts as its ask (Tally had it); one that never
 			// reached Tally (it waited for the lock, or gave way before it was sent) does not (re-review L1)
@@ -1075,7 +1087,7 @@ func liveResolveTurn() {
 		live.mu.Lock()
 		liveFresh()
 		liveTakeBody(c, x)
-		if !liveResolvedDone(rid, h.Again) || (!live.queued[rid] && liveLedgerAgainDue(h)) {
+		if (h.FastAgain && !live.queued[rid]) || !liveResolvedDone(rid, h.Again) || (!live.queued[rid] && liveLedgerAgainDue(h)) {
 			c.ledAgain = h.LedgerAgain
 			liveQueueAdd(c)
 		}
@@ -1193,6 +1205,7 @@ func liveHeldEnd(h heldLine, words string) {
 	liveEndedNote(h.ID)
 	live.mu.Unlock()
 	liveSaveIds([]string{h.ID}, liveEndedSuffix)
+	liveSaveIds([]string{h.ID}, liveFastSuffix)
 	liveSay(h.Type, h.No, h.Date, h.MID, h.ID, "held: "+words+" (ended: not asked of Tally again)")
 }
 
@@ -1284,9 +1297,12 @@ func applyHeldLines(j M) {
 	var fresh []heldLine
 	for _, h := range cs {
 		rid := h.ID + ":resolved"
-		if live.sent[rid] || live.queued[rid] || live.bodied[h.ID] || live.ended[h.ID] {
+		// next-fastfetch: a line an earlier bridge ended with the Day Book words is asked once more with the fast request
+		again := liveFastAgainDue(h.ID)
+		if live.queued[rid] || live.bodied[h.ID] || (!again && (live.sent[rid] || live.ended[h.ID])) {
 			continue
 		}
+		h.FastAgain = again
 		fresh = append(fresh, h)
 	}
 	live.mu.Unlock()
@@ -1294,12 +1310,19 @@ func applyHeldLines(j M) {
 	defer heldMu.Unlock()
 	all, items := liveHeldLoad()
 	added := 0
+	fastN := 0
 	for _, h := range fresh {
 		if _, had := items[h.ID]; had {
 			continue
 		}
+		if h.FastAgain {
+			h.Allow, fastN = 1, fastN+1
+		}
 		items[h.ID] = h
 		added++
+	}
+	if fastN > 0 {
+		writeLog(fmt.Sprintf("Recorder: %d held line(s) an earlier bridge ended with the Day Book words are asked once more with the fast request (one request each); answered, each goes to FinCom with Tally's GUID and body", fastN))
 	}
 	// said whatever the outcome (once in 10 minutes while it stays the same)
 	liveSayOnce(fmt.Sprintf("heldbeat|%d|%d|%d|%d", len(rows), len(cs), len(fresh), added), fmt.Sprintf(
@@ -1373,11 +1396,15 @@ func applyRefetch(j M) {
 		// items' ledger lines: held by the cloud's guard). That earlier mark is not this version's: asked and sent once more,
 		// under the same id (the cloud's rules match it). One this version sent, or queued, is done
 		// 2.3.1 (masters): FinCom held this version's ":resolved" line waiting for a ledger (in now): asked once more
-		if (liveResolvedDone(rid, true) && !liveLedgerAgainDue(h)) || live.ended[h.ID] {
+		if liveFastAgainDue(h.ID) && !live.queued[rid] && !live.bodied[h.ID] {
+			// next-fastfetch: ended by an earlier bridge with the Day Book words: asked once more with the fast request
+			h.FastAgain, h.Allow = true, 1
+			cs[i] = h
+		} else if (liveResolvedDone(rid, true) && !liveLedgerAgainDue(h)) || live.ended[h.ID] {
 			done++ // 2.3.2: or ended with the Day Book words
 			continue
 		}
-		if live.sent[rid] {
+		if live.sent[rid] && !h.FastAgain {
 			h.Again = true
 			cs[i] = h
 		}
@@ -1435,4 +1462,16 @@ func applyRefetch(j M) {
 	}
 	liveHeldCap(items)
 	liveHeldSave(all, items)
+}
+
+// next-fastfetch: a held line's one fresh ask with the fast request reached Tally (noted and kept 7 days)
+func liveFastAskedNote(id string) {
+	live.mu.Lock()
+	liveFresh()
+	had := live.fastAsked[id]
+	live.fastAsked[id] = true
+	live.mu.Unlock()
+	if !had {
+		liveSaveIds([]string{id}, liveFastSuffix)
+	}
 }

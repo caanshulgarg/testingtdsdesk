@@ -288,6 +288,10 @@ type liveState struct {
 	// 2.3.2 (issue 232): the held lines ended with the Day Book words (sent so; never asked or sent again: 7 days,
 	// sync\recorder-sent\*.ended.txt)
 	ended map[string]bool
+	// next-fastfetch (the owner's approval of 07-Oct-2026): the held lines given their one fresh ask with the fast request
+	// "voucher object by MasterID" (7 days, sync\recorder-sent\*.fast.txt), and those this version ended: a line an earlier
+	// bridge ended with the Day Book words is asked once more, never twice
+	fastAsked map[string]bool
 	// fix 3 (the owner's spike run 37347773182): what this bridge saw of its OWN Tally's open companies (recorder_owntally.go)
 	own       map[string]*liveOwnSt // company GUID (or "name:" + its name key) -> the times it was open in the own Tally
 	ownAt     time.Time             // the last complete look at the own Tally's company list (kept on disk)
@@ -385,6 +389,10 @@ func liveFresh() {
 	for _, id := range liveLoadIds(liveEndedSuffix) {
 		live.ended[id] = true
 	}
+	live.fastAsked = map[string]bool{}
+	for _, id := range liveLoadIds(liveFastSuffix) {
+		live.fastAsked[id] = true
+	}
 	liveOwnLoad()
 }
 
@@ -456,11 +464,24 @@ const liveLedgerSuffix = ".ledger.txt"
 // 2.3.2 (issue 232): the file suffix of the held line ids ended with the Day Book words
 const liveEndedSuffix = ".ended.txt"
 
-// 2.3.2: lines ended (under live.mu: noted; the ids written by the caller with liveSaveIds outside it)
+// 2.3.2: lines ended (under live.mu: noted; the ids written by the caller with liveSaveIds outside it). next-fastfetch: a
+// line this version ends has had its chance with the fast request: noted so too (never asked once more)
 func liveEndedNote(ids ...string) {
+	if live.fastAsked == nil {
+		live.fastAsked = map[string]bool{}
+	}
 	for _, id := range ids {
 		live.ended[id] = true
+		live.fastAsked[id] = true
 	}
+}
+
+// next-fastfetch: the file suffix of the held line ids given their one fresh ask with the fast request (or ended by it)
+const liveFastSuffix = ".fast.txt"
+
+// under live.mu: a line an earlier bridge ended with the Day Book words, not yet asked with the fast request: asked once more
+func liveFastAgainDue(id string) bool {
+	return live.ended[id] && !live.fastAsked[id]
 }
 
 // under live.mu: a held line's resolution went already, as far as this version is concerned: queued, or sent by THIS
@@ -2604,6 +2625,7 @@ func liveUploadStep() (int, bool) {
 	liveSaveIds(items, liveItemsSuffix)
 	liveSaveIds(ledAgain, liveLedgerSuffix)
 	liveSaveIds(ended, liveEndedSuffix)
+	liveSaveIds(ended, liveFastSuffix)
 	liveSaveOffsets()
 	liveHeldAdd(held)
 	liveGuidAnswers(group, arr(r.json["results"])) // 2.3.0: what FinCom's record said of a delete / cancel sent without a GUID
@@ -2701,7 +2723,7 @@ func liveHeldAsking() map[string]int {
 	liveFresh()
 	out := map[string]int{}
 	for id, h := range items {
-		if h.Final || live.ended[id] || h.Tries >= liveHeldMaxTries || h.Asked >= h.allow() {
+		if h.Final || (live.ended[id] && !h.FastAgain) || h.Tries >= liveHeldMaxTries || h.Asked >= h.allow() {
 			continue
 		}
 		out[h.Company]++
