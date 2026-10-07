@@ -1,0 +1,77 @@
+FINCOM BRIDGE 2.3.2 - TEST SHEET (NWS144, staging)
+
+File:        FinComBridge-Setup-2.3.2.exe
+Fingerprint: SHA-256 <SHA-256> (filled in when the setup is built; compare with the .sha256 file next to the setup)
+Link:        https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.3.2.exe
+
+What 2.3.2 changes (the full notes: docs/bridge-2.3.2-notes.md): two things, nothing else.
+1. A held line whose entry Tally did not give in time (stopped at 2 seconds, not answered, Tally busy) is asked again
+   after 1 h, then after 4 h more; if that also times out it ends, FinCom shows it held with "Tally did not answer in
+   time for this entry 3 times; upload that day's Day Book to settle it", and the bridge never asks for it again.
+   (2.3.1 asked again at every retry, for 7 days, each ask costing Tally about 5 seconds on a large company.)
+2. A company whose entry request is stopped at 2 seconds on 2 separate occasions, while Tally answered other requests
+   in time around them, is marked: the bridge no longer asks Tally for its entries. Its new entries go up held at once
+   with "FinCom does not ask Tally for this company's entries: finding one entry took Tally longer than 2 s. Upload
+   that day's Day Book to settle it."; its held lines end with the same words. A Tally that froze as a whole does not
+   count. The mark survives a restart and lifts only when a newer FinCom Bridge is installed.
+No Tally request was added or changed. The 2-second stop, the retry schedule, postings first and one request at a time
+are unchanged. FinCom's cloud is unchanged (no migration). The add-on is unchanged.
+
+The app that goes with 2.3.2 shows on the Tally page, on the computer's card, one line per company marked:
+   "<company>: FinCom has stopped asking Tally for this company's entries, because finding one entry took Tally longer
+   than 2 seconds (since 07-Oct 10:05). New entries wait as held lines; upload that day's Day Book to settle them. This
+   lifts when a faster FinCom Bridge is installed."
+
+Before you start: you are signed in to FinCom as the owner, TallyPrime 7.1 is open on NWS144 with the add-on loaded,
+GARG SHEKHAR & COMPANY and IX DESIGNS PRIVATE LIMITED are open in the Tally of the Windows user whose bridge you check.
+In every entry you make for this sheet, start the narration with TRIAL. Write down the time (IST) of each check.
+
+CHECK 1 - THE VERSION
+   Install FinComBridge-Setup-2.3.2.exe and compare its fingerprint with the one above.
+   You should see: the tray says FinCom Bridge 2.3.2; FinCom's Tally page shows version 2.3.2 for your line.
+
+CHECK 2 - A SMALL COMPANY AS BEFORE
+   In GARG SHEKHAR make a Journal of Rs 1, narration "TRIAL 232 small".
+   You should see: within a minute it is in the books with its details, as in 2.3.1. Nothing new on the Tally page.
+   If not, send: the time and the Show log lines starting "Recorder:".
+
+CHECK 3 - THE LARGE COMPANY IS MARKED
+   In IX DESIGNS make a Journal of Rs 1, narration "TRIAL 232 large 1". Wait 5 minutes.
+   You should see: on NWS144's card on the Tally page: "IX DESIGNS PRIVATE LIMITED: FinCom has stopped asking Tally for
+   this company's entries, because finding one entry took Tally longer than 2 seconds (since <date time>). New entries
+   wait as held lines; upload that day's Day Book to settle them. This lifts when a faster FinCom Bridge is installed."
+   The log has one line "IX DESIGNS PRIVATE LIMITED: entry fetch stopped: over 2 s (...)".
+   If it is not marked after 15 minutes, make one more entry there ("TRIAL 232 large 2") and wait again.
+   If not, send: the time, a photo of the Tally page, and the Show log lines starting "Recorder:" and "Tally".
+
+CHECK 4 - NO MORE ASKING FOR IT
+   In IX DESIGNS make another Journal of Rs 1, narration "TRIAL 232 large 3".
+   You should see: it shows in FinCom at once as held, with "FinCom does not ask Tally for this company's entries:
+   finding one entry took Tally longer than 2 s. Upload that day's Day Book to settle it." Tally does not pause.
+   The 9 IX DESIGNS lines held under 2.3.1 end with the same words within a few minutes.
+
+CHECK 5 - THE DAY BOOK SETTLES THEM
+   Upload IX DESIGNS' Day Book for today in FinCom.
+   You should see: the held lines of today settle; the entries are in the books.
+
+CHECK 6 - A RESTART KEEPS IT
+   Right-click the FinCom icon near the clock > Exit, then start FinCom Bridge again (or restart the computer).
+   You should see: the line on the Tally page stays; a new IX DESIGNS entry still goes up held at once.
+
+CHECK 7 - (OPTIONAL) A TIMED-OUT LINE OF A SMALL COMPANY
+   In Tally open a large report (Day Book for the whole year) so that Tally is busy for a few minutes, and meanwhile save
+   a Journal of Rs 1 in GARG SHEKHAR, narration "TRIAL 232 timed out".
+   You should see: the line is held; the bridge asks for it again after 1 h (and in 4 h more if Tally is still busy
+   then); once Tally answers, it is in the books. If it times out 3 times in all, it shows held with "Tally did not
+   answer in time for this entry 3 times; upload that day's Day Book to settle it", and it is never asked again.
+
+How to send the log lines: right-click the FinCom icon near the clock > Show log. On NWS144 each Windows user has their
+own FinCom icon and their own log: send the log of the Windows user named in the check.
+
+HOW TO ROLL BACK (go back to 2.3.1)
+   1. Right-click the FinCom icon near the clock > "Roll back to the previous version".
+   2. A question names the version it goes back to (2.3.1). Answer Yes.
+   3. The icon goes away for a few seconds and comes back.
+   You should see: within a minute, FinCom's Tally page shows version 2.3.1 for your line and the line about IX DESIGNS
+   goes. 2.3.1 asks Tally for IX DESIGNS' entries again (each about 5 seconds), and asks its held lines again at every
+   retry as before. Automatic updates stay off on this computer until FinCom turns them on again.

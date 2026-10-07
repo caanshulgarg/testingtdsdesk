@@ -238,6 +238,25 @@ function RecorderLine({ r }) {
     {open.map((co) => { const x = rc[co]; return <span key={co} className="note" data-recorder-co={co}>{co + ": " + (x.seen ? "recording" + (x.lastAt ? " \u00b7 last line " + tallyHm(x.lastAt) : "") : "not recording")}</span>; })}
   </div>;
 }
+// FinCom Bridge 2.3.2 (issue 232): the companies whose entries this bridge no longer asks Tally for, because finding one
+// entry took Tally longer than 2 seconds (the beat's recorderBodyFetch, kept by tally-ingest as recorderOff.bodies on the
+// bridge's own entry: {company: {off, seconds, at, why}}), one line per company. A 2.2.x bridge's recorderOff (its 2-second
+// switch-off, which 2.3.1 lifted) is never shown: only a bridge of version 2.3.2 or later says it this way
+const verAtLeast = (v, w) => { const a = String(v || "").split(".").map((x) => parseInt(x, 10) || 0), b = w.split(".").map(Number);
+  for (let i = 0; i < 3; i++) if ((a[i] || 0) !== b[i]) return (a[i] || 0) > b[i];
+  return true; };
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+// "07-Oct 10:05": the time as the bridge wrote it (its computer's own clock), never moved to another zone
+const sinceWords = (at) => { const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(at || "")); return m && MONTHS[+m[2] - 1] ? m[3] + "-" + MONTHS[+m[2] - 1] + " " + m[4] + ":" + m[5] : ""; };
+function SlowCompanies({ r }) {
+  const bodies = r.recorderOff && typeof r.recorderOff.bodies === "object" ? r.recorderOff.bodies : null;
+  if (!bodies || !verAtLeast(r.version, "2.3.2")) return null;
+  const names = Object.keys(bodies).filter((co) => co && bodies[co] && bodies[co].off === true).sort();
+  if (!names.length) return null;
+  return <div data-slow-companies="" style={{ marginLeft: 16 }}>{names.map((co) => { const s = sinceWords(bodies[co].at);
+    return <div key={co} className="note" data-slow-company={co}>{co + ": FinCom has stopped asking Tally for this company's entries, because finding one entry took Tally longer than 2 seconds" +
+      (s ? " (since " + s + ")" : "") + ". New entries wait as held lines; upload that day's Day Book to settle them. This lifts when a faster FinCom Bridge is installed."}</div>; })}</div>;
+}
 // FinCom Bridge 2.3.0 (one bridge for each Windows user on a shared server): where this bridge reads and posts: its
 // Tally's port, the companies open there and the data folder, as its heartbeat says them (nothing when it says none)
 function BridgeWhere({ r }) {
@@ -310,6 +329,7 @@ function BridgeLines({ rows, latest }) {
         {live && <div className="row" data-bridge-per-user="" style={{ alignItems: "center", gap: 8, flexWrap: "wrap", marginLeft: 16 }}>
           <BridgeWhere r={r} /><ChangesOnly r={r} owner={owner} /><MemberLink r={r} owner={owner} /></div>}
         {live && <RecorderLine r={r} />}
+        {live && <SlowCompanies r={r} />}
         {live && <div className="row" style={{ alignItems: "center", gap: 8, flexWrap: "wrap", marginLeft: 16 }}><PostSettings r={r} owner={owner} /></div>}
         {live && <div className="row" style={{ alignItems: "center", gap: 8, flexWrap: "wrap", marginLeft: 16 }}><TrialTools r={r} owner={owner} /></div>}
         {live && <div className="row" style={{ alignItems: "center", gap: 8, flexWrap: "wrap", marginLeft: 16 }}><RecorderSource r={r} owner={owner} /></div>}

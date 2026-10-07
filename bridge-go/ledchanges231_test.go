@@ -512,7 +512,7 @@ func TestLed231ResolvedWaitingForLedgerAskedOnceMore(t *testing.T) {
 func TestLed231DecisionLine(t *testing.T) {
 	al := readText("../docs/tally-allowlist.md")
 	line := group(`(?m)^(First table: .*)$`, al, 1)
-	for _, s := range []string{"allowed for 2.3.1 by the owner's decision of 2026-10-06",
+	for _, s := range []string{"as for 2.3.1: the owner's decision of 2026-10-06",
 		"; and ledgers created or altered since Tally's master counter last moved (AlterID above the last number), and a ledger an entry uses that FinCom does not have, fetched before the entry is applied; read only, within the 2-second rule",
 		"FinComLedgerChanges", "FinComLedgerByName", "renames, group moves, groups and deletions are not in 2.3.1"} {
 		if !strings.Contains(line, s) {

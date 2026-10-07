@@ -1189,7 +1189,7 @@ func TestRecorderLogsKept30Days(t *testing.T) {
 
 // --- 8. the version, the sheets and the allow-list decision line
 func TestRecorderVersion220Sheets(t *testing.T) {
-	if BridgeVersion != "2.3.1" { // 2.3.1 (the ledger lines under an invoice's items); the 2.2.0 sheet stays as it was
+	if BridgeVersion != "2.3.2" { // 2.3.1 (the ledger lines under an invoice's items); the 2.2.0 sheet stays as it was
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	sheet := strings.Join(strings.Fields(readText("../docs/bridge-2.2.0-test-sheet.txt")), " ")
@@ -1215,9 +1215,9 @@ func TestRecorderVersion220Sheets(t *testing.T) {
 		t.Error("the 2.2.0 test sheet has neither the fingerprint placeholder nor the setup's SHA-256")
 	}
 	al := readText("../docs/tally-allowlist.md")
-	if !regexp.MustCompile(`not yet measured[^;]*; allowed for 2\.3\.1 (only )?by the owner's (standing )?decision of \d{4}-\d{2}-\d{2}`).MatchString(al) || !strings.Contains(al, vchByMasterID) ||
+	if !regexp.MustCompile(`not yet measured[^;]*; allowed for 2\.3\.2 (only )?by the owner's (standing )?decision of \d{4}-\d{2}-\d{2}`).MatchString(al) || !strings.Contains(al, vchByMasterID) ||
 		!strings.Contains(al, vchByNumberID) {
-		t.Fatal("docs/tally-allowlist.md: no decision line for 2.3.1, or no FinComVoucherByMaster / FinComVoucherByNumber row")
+		t.Fatal("docs/tally-allowlist.md: no decision line for 2.3.2, or no FinComVoucherByMaster / FinComVoucherByNumber row")
 	}
 }
 
