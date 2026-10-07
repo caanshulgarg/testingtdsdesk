@@ -1,0 +1,14 @@
+[#Form: Ledger]
+    On : Form Accept : Yes : Call : P233W03F
+
+[Function: P233W03F]
+    Variable : v : String
+    Returns  : Logical
+    01 : SET : v : $$SysInfo:WindowsUserName
+    02 : OPEN FILE : "C:\fcspike\p233\out-W03.txt" : Text : Write : Unicode
+    03 : IF : NOT $$LastResult
+    04 :    RETURN : Yes
+    05 : END IF
+    06 : WRITE FILE LINE : "SysInfo:WindowsUserName=" + ##v
+    07 : CLOSE TARGET FILE
+    08 : RETURN : Yes

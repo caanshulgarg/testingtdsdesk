@@ -1,0 +1,15 @@
+[#Form: Employee Master]
+    On : Form Accept : Yes : Call : P233H06F : "employeemaster_pre"
+    On : Form Accept : Yes : Form Accept
+    On : Form Accept : Yes : Call : P233H06F : "employeemaster_post"
+
+[Function: P233H06F]
+    Parameter : pEv : String
+    Returns   : Logical
+    01 : OPEN FILE : "C:\fcspike\p233\hook-H06.txt" : Text : Write : Unicode
+    02 : IF : NOT $$LastResult
+    03 :    RETURN : Yes
+    04 : END IF
+    05 : WRITE FILE LINE : "ev=" + ##pEv + "|form=Employee Master|name=" + ($$String:$Name) + "|guid=" + ($$String:$Guid) + "|mid=" + ($$String:$MasterID) + "|aid=" + ($$String:$AlterID) + "|parent=" + ($$String:$Parent) + "|t=" + ($$String:$$MachineTime)
+    06 : CLOSE TARGET FILE
+    07 : RETURN : Yes

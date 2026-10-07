@@ -1,0 +1,2 @@
+ev=stockitem_pre|form=Stock Item|name=PD Item 1|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d5|mid=213|aid=224|parent= Primary|t=02:57
+ev=stockitem_post|form=Stock Item|name=PD Item 1|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d5|mid=213|aid=224|parent= Primary|t=02:57

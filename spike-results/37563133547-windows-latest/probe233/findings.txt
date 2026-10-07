@@ -1,0 +1,95 @@
+company features after the alter: ISPAYROLLON=Yes PREVISMULTIGODOWNON=Yes ISCOSTCENTRESON=Yes
+runner: whoami=runnervmfi6oq\runneradmin USERNAME=runneradmin COMPUTERNAME=runnervmfi6oq
+XML $$SysInfo:UserName -> error: Function Execution Failed!
+XML $$SysInfo:WindowsUser -> result 'runneradmin'
+XML $$SysInfo:WindowsUserName -> error: Function Execution Failed!
+XML $$SysInfo:WinUserName -> error: Function Execution Failed!
+XML $$SysInfo:OSUserName -> error: Function Execution Failed!
+XML $$SysInfo:OSUser -> error: Function Execution Failed!
+XML $$SysInfo:SystemUserName -> error: Function Execution Failed!
+XML $$SysInfo:SystemUser -> error: Function Execution Failed!
+XML $$SysInfo:LoggedInUser -> error: Function Execution Failed!
+XML $$SysInfo:LoginUser -> error: Function Execution Failed!
+XML $$SysInfo:CurrentUser -> error: Function Execution Failed!
+XML $$SysInfo:User -> error: Function Execution Failed!
+XML $$SysInfo:SystemName -> result 'runnervmfi6oq'
+XML $$SysInfo:ComputerName -> error: Function Execution Failed!
+XML $$SysInfo:MachineName -> error: Function Execution Failed!
+XML $$SysInfo:ApplicationPath -> result 'C:\Program Files\TallyPrime'
+XML $$SysInfo:DataPath -> error: Function Execution Failed!
+XML $$SysInfo:SystemDate -> result ''
+XML $$SysInfo:SerialNumber -> error: Function Execution Failed!
+XML $$GetEnv:USERNAME -> error: Could not find: $$GetEnv  / Function Execution Failed!
+XML $$GetEnvVar:USERNAME -> result 'runneradmin'
+XML $$GetEnvironmentVariable:USERNAME -> error: Could not find: $$GetEnvironmentVariable  / Function Execution Failed!
+XML $$EnvVar:USERNAME -> error: Could not find: $$EnvVar  / Function Execution Failed!
+XML $$Env:USERNAME -> error: Could not find: $$Env  / Function Execution Failed!
+XML $$Environment:USERNAME -> error: Could not find: $$Environment  / Function Execution Failed!
+XML $$SysEnv:USERNAME -> error: Could not find: $$SysEnv  / Function Execution Failed!
+XML $$EnvironmentVariable:USERNAME -> error: Could not find: $$EnvironmentVariable  / Function Execution Failed!
+XML $$MachineName -> error: Could not find: $$MachineName  / Function Execution Failed!
+XML $$SystemName -> error: Could not find: $$SystemName  / Function Execution Failed!
+XML $$UserName -> error: Could not find: $$UserName  / Function Execution Failed!
+XML $$WindowsUser -> error: Could not find: $$WindowsUser  / Function Execution Failed!
+XML $$WindowsUserName -> error: Could not find: $$WindowsUserName  / Function Execution Failed!
+XML $$OSUserName -> error: Could not find: $$OSUserName  / Function Execution Failed!
+XML $$CmpUserName -> result 'TALLY User'
+XML $$LoginName -> error: Could not find: $$LoginName  / Function Execution Failed!
+XML $$ComputerName -> error: Could not find: $$ComputerName  / Function Execution Failed!
+XML $$SysUserName -> error: Could not find: $$SysUserName  / Function Execution Failed!
+master Pay Head 'PD Basic' [none]: saved True (AlterID 222 -> 223, via Pay Head > PD Basic); Ctrl+A to a still screen (first;last ms) 45.1;92.8; TDL warning False; hook lines 0: 
+master Stock Item 'PD Item 1' [none]: saved True (AlterID 218 -> 224, via Stock Item > PD Item 1); Ctrl+A to a still screen (first;last ms) 60.8;108.7; TDL warning False; hook lines 0: 
+master Unit 'Nos' [none]: saved True (AlterID 214 -> 225, via Unit > Nos); Ctrl+A to a still screen (first;last ms) 45.7;93.1; TDL warning False; hook lines 0: 
+master Godown 'PD Godown A' [none]: saved False (AlterID 216 -> 216, via none); Ctrl+A to a still screen (first;last ms) 60.5;92.8; TDL warning False; hook lines 0: 
+master Employee 'PD Emp 001' [none]: saved True (AlterID 221 -> 226, via Employee > PD Emp 001); Ctrl+A to a still screen (first;last ms) 45.2;92.9; TDL warning False; hook lines 0: 
+master Unit 'Nos' [none, typed 'Numbers']: saved True (AlterID 225 -> 227, via Unit > Nos); Ctrl+A to a still screen (first;last ms) 33.6;76.9; TDL warning False; hook lines 0: 
+probe files loaded: 54; Tally's TDL-error warning shown: True
+ledger saved on the screen with the probe files: True
+TDL W01 SysInfo:UserName ($$SysInfo:UserName): written: 'SysInfo:UserName='
+TDL W02 SysInfo:WindowsUser ($$SysInfo:WindowsUser): written: 'SysInfo:WindowsUser=runneradmin'
+TDL W03 SysInfo:WindowsUserName ($$SysInfo:WindowsUserName): written: 'SysInfo:WindowsUserName='
+TDL W04 SysInfo:WinUserName ($$SysInfo:WinUserName): written: 'SysInfo:WinUserName='
+TDL W05 SysInfo:OSUserName ($$SysInfo:OSUserName): written: 'SysInfo:OSUserName='
+TDL W06 SysInfo:OSUser ($$SysInfo:OSUser): written: 'SysInfo:OSUser='
+TDL W07 SysInfo:SystemUserName ($$SysInfo:SystemUserName): written: 'SysInfo:SystemUserName='
+TDL W08 SysInfo:SystemUser ($$SysInfo:SystemUser): written: 'SysInfo:SystemUser='
+TDL W09 SysInfo:LoggedInUser ($$SysInfo:LoggedInUser): written: 'SysInfo:LoggedInUser='
+TDL W10 SysInfo:LoginUser ($$SysInfo:LoginUser): written: 'SysInfo:LoginUser='
+TDL W11 SysInfo:CurrentUser ($$SysInfo:CurrentUser): written: 'SysInfo:CurrentUser='
+TDL W12 SysInfo:User ($$SysInfo:User): written: 'SysInfo:User='
+TDL W13 SysInfo:SystemName ($$SysInfo:SystemName): written: 'SysInfo:SystemName=runnervmfi6oq'
+TDL W14 SysInfo:ComputerName ($$SysInfo:ComputerName): written: 'SysInfo:ComputerName='
+TDL W15 SysInfo:MachineName ($$SysInfo:MachineName): written: 'SysInfo:MachineName='
+TDL W16 SysInfo:ApplicationPath ($$SysInfo:ApplicationPath): written: 'SysInfo:ApplicationPath=C:\Program Files\TallyPrime'
+TDL W17 SysInfo:DataPath ($$SysInfo:DataPath): written: 'SysInfo:DataPath='
+TDL W18 SysInfo:SystemDate ($$SysInfo:SystemDate): written: 'SysInfo:SystemDate=7-Oct-26'
+TDL W19 SysInfo:SerialNumber ($$SysInfo:SerialNumber): written: 'SysInfo:SerialNumber='
+TDL W20 GetEnv:USERNAME ($$GetEnv:"USERNAME"): written: 'GetEnv:USERNAME='
+TDL W21 GetEnvVar:USERNAME ($$GetEnvVar:"USERNAME"): written: 'GetEnvVar:USERNAME=runneradmin'
+TDL W22 GetEnvironmentVariable:USERNAME ($$GetEnvironmentVariable:"USERNAME"): written: 'GetEnvironmentVariable:USERNAME='
+TDL W23 EnvVar:USERNAME ($$EnvVar:"USERNAME"): written: 'EnvVar:USERNAME='
+TDL W24 Env:USERNAME ($$Env:"USERNAME"): written: 'Env:USERNAME='
+TDL W25 MachineName ($$MachineName): written: 'MachineName='
+TDL W26 SystemName ($$SystemName): written: 'SystemName='
+TDL W27 UserName ($$UserName): written: 'UserName='
+TDL W28 WindowsUser ($$WindowsUser): written: 'WindowsUser='
+TDL W29 OSUserName ($$OSUserName): written: 'OSUserName='
+TDL W30 CmpUserName ($$CmpUserName): written: 'CmpUserName=TALLY User'
+TDL W31 ComputerName ($$ComputerName): written: 'ComputerName='
+TDL W99 %USERNAME% in a file name: files env-%USERNAME%.txt
+hook lines on the ledger save (none expected): 
+master Pay Head 'PD Basic' [hooks]: saved True (AlterID 223 -> 229, via Pay Head > PD Basic); Ctrl+A to a still screen (first;last ms) 44.7;91.8; TDL warning True; hook lines 2: ev=payhead_pre|form=Pay Head|name=PD Basic|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d9|mid=217|aid=223|parent=Indirect Expenses|t=02:56 || ev=payhead_post|form=Pay Head|name=PD Basic|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d9|mid=217|aid=223|parent=Indirect Expenses|t=02:56
+master Stock Item 'PD Item 1' [hooks]: saved True (AlterID 224 -> 230, via Stock Item > PD Item 1); Ctrl+A to a still screen (first;last ms) 60.4;107.6; TDL warning True; hook lines 2: ev=stockitem_pre|form=Stock Item|name=PD Item 1|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d5|mid=213|aid=224|parent= Primary|t=02:57 || ev=stockitem_post|form=Stock Item|name=PD Item 1|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d5|mid=213|aid=224|parent= Primary|t=02:57
+master Godown 'PD Godown A' [hooks]: saved False (AlterID 216 -> 216, via none); Ctrl+A to a still screen (first;last ms) 45.1;92.0; TDL warning True; hook lines 2: ev=godown_pre|form=Godown|name=PD Godown A|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d3|mid=211|aid=216|parent= Primary|t=03:00 || ev=godown_post|form=Godown|name=PD Godown A|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d3|mid=211|aid=216|parent= Primary|t=03:00
+master Employee 'PD Emp 001' [hooks]: saved True (AlterID 226 -> 231, via Employee > PD Emp 001); Ctrl+A to a still screen (first;last ms) 41.0;88.4; TDL warning True; hook lines 0: 
+master Unit 'Nos' [unit-full]: saved False (AlterID 227 -> 227, via none); Ctrl+A to a still screen (first;last ms) 76.6;76.6; TDL warning False; hook lines 2: ev=unit_pre|form=Unit|name=Nos|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d1|mid=209|aid=227|parent=|t=03:03 || ev=unit_post|form=Unit|name=Nos|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d1|mid=209|aid=227|parent=|t=03:03
+master Unit 'Nos' [unit-full, typed 'Nfull']: saved True (AlterID 227 -> 232, via Unit > Nos); Ctrl+A to a still screen (first;last ms) 47.6;94.8; TDL warning False; hook lines 2: ev=unit_pre|form=Unit|name=Nos|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d1|mid=209|aid=227|parent=|t=03:04 || ev=unit_post|form=Unit|name=Nos|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d1|mid=209|aid=227|parent=|t=03:04
+master Unit 'Nos' [unit-accept]: saved False (AlterID 232 -> 232, via none); Ctrl+A to a still screen (first;last ms) 45.3;92.2; TDL warning False; hook lines 0: 
+master Unit 'Nos' [unit-accept, typed 'Naccept']: saved True (AlterID 232 -> 233, via Unit > Nos); Ctrl+A to a still screen (first;last ms) 48.5;124.5; TDL warning False; hook lines 0: 
+master Unit 'Nos' [unit-pre]: saved False (AlterID 233 -> 233, via none); Ctrl+A to a still screen (first;last ms) 40.2;87.6; TDL warning False; hook lines 1: ev=unit_pre|form=Unit|name=Nos|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d1|mid=209|aid=233|parent=|t=03:08
+master Unit 'Nos' [unit-pre, typed 'Npre']: saved True (AlterID 233 -> 234, via Unit > Nos); Ctrl+A to a still screen (first;last ms) 60.3;94.7; TDL warning False; hook lines 1: ev=unit_pre|form=Unit|name=Nos|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d1|mid=209|aid=233|parent=|t=03:09
+master Unit 'Nos' [unit-post]: saved False (AlterID 234 -> 234, via none); Ctrl+A to a still screen (first;last ms) 75.7;75.7; TDL warning False; hook lines 1: ev=unit_post|form=Unit|name=Nos|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d1|mid=209|aid=234|parent=|t=03:10
+master Unit 'Nos' [unit-post, typed 'Npost']: saved True (AlterID 234 -> 235, via Unit > Nos); Ctrl+A to a still screen (first;last ms) 31.6;77.2; TDL warning False; hook lines 1: ev=unit_post|form=Unit|name=Nos|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d1|mid=209|aid=234|parent=|t=03:11
+delete Stock Item 'PD Item Del' with the live add-on: gone from Tally True
+delete Godown 'PD Godown Del' with the live add-on: gone from Tally True
+live add-on file c6c54225-eb64-410e-9e6c-0b56be9f9100-7-Oct-26.txt: FCR1|ev=before_delete|t0=7-Oct-26 03:12|tw=7-Oct-26 03:12|cguid=c6c54225-eb64-410e-9e6c-0b56be9f9100|cname=FinCom Spike Co|user=TALLY User|obj=Master|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d6|mid=214|aid=219|vtype=|vno=|vdate=|name=PD Item Del|parent= Primary|narr=|t1=7-Oct-26 03:12|src=live || FCR1|ev=after_delete|t0=7-Oct-26 03:12|tw=7-Oct-26 03:12|cguid=c6c54225-eb64-410e-9e6c-0b56be9f9100|cname=FinCom Spike Co|user=TALLY User|obj=Master|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d6|mid=214|aid=219|vtype=|vno=|vdate=|name=PD Item Del|parent= Primary|narr=|t1=7-Oct-26 03:12|src=live || FCR1|ev=before_delete|t0=7-Oct-26 03:13|tw=7-Oct-26 03:13|cguid=c6c54225-eb64-410e-9e6c-0b56be9f9100|cname=FinCom Spike Co|user=TALLY User|obj=Master|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d4|mid=212|aid=217|vtype=|vno=|vdate=|name=PD Godown Del|parent= Primary|narr=|t1=7-Oct-26 03:13|src=live || FCR1|ev=after_delete|t0=7-Oct-26 03:13|tw=7-Oct-26 03:13|cguid=c6c54225-eb64-410e-9e6c-0b56be9f9100|cname=FinCom Spike Co|user=TALLY User|obj=Master|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d4|mid=212|aid=217|vtype=|vno=|vdate=|name=PD Godown Del|parent= Primary|narr=|t1=7-Oct-26 03:13|src=live

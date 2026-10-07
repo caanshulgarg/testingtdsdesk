@@ -1,0 +1,14 @@
+[#Form: Ledger]
+    On : Form Accept : Yes : Call : P233W20F
+
+[Function: P233W20F]
+    Variable : v : String
+    Returns  : Logical
+    01 : SET : v : $$GetEnv:"USERNAME"
+    02 : OPEN FILE : "C:\fcspike\p233\out-W20.txt" : Text : Write : Unicode
+    03 : IF : NOT $$LastResult
+    04 :    RETURN : Yes
+    05 : END IF
+    06 : WRITE FILE LINE : "GetEnv:USERNAME=" + ##v
+    07 : CLOSE TARGET FILE
+    08 : RETURN : Yes

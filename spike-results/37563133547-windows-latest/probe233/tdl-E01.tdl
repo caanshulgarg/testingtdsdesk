@@ -1,0 +1,12 @@
+[System: Events]
+    P233E01 : After Save Object : Yes : Call : P233E01F
+
+[Function: P233E01F]
+    Returns : Logical
+    01 : OPEN FILE : "C:\fcspike\p233\sev-E01.txt" : Text : Write : Unicode
+    02 : IF : NOT $$LastResult
+    03 :    RETURN : Yes
+    04 : END IF
+    05 : WRITE FILE LINE : "After Save Object|name=" + ($$String:$Name) + "|mid=" + ($$String:$MasterID)
+    06 : CLOSE TARGET FILE
+    07 : RETURN : Yes

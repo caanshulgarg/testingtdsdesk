@@ -1,0 +1,503 @@
+[keys] 'a'
+[keys] 't'
+[shot] p233-setup-started (1024x768)
+[02:46:36.415] Tally started (setup; TDL: none): company open True; TDL-error warning False
+[02:46:36.462] import features ISPAYROLLON,PREVISMULTIGODOWNON,ISCOSTCENTRESON: <RESPONSE><CREATED>0</CREATED><ALTERED>1</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+FINDING company features after the alter: ISPAYROLLON=Yes PREVISMULTIGODOWNON=Yes ISCOSTCENTRESON=Yes
+[02:46:36.484] import Nos: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[02:46:36.496] import Box: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[02:46:36.508] import PD Godown A: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[02:46:36.522] import PD Godown Del: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[02:46:36.542] import PD Item 1: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[02:46:36.559] import PD Item Del: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[02:46:36.579] import PD Staff: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[02:46:36.601] import PD Emp 001: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[02:46:36.625] import PD Basic: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[02:46:36.626] ---- b: Tally's own functions asked through the XML port
+FINDING runner: whoami=runnervmfi6oq\runneradmin USERNAME=runneradmin COMPUTERNAME=runnervmfi6oq
+FINDING XML $$SysInfo:UserName -> error: Function Execution Failed!
+FINDING XML $$SysInfo:WindowsUser -> result 'runneradmin'
+FINDING XML $$SysInfo:WindowsUserName -> error: Function Execution Failed!
+FINDING XML $$SysInfo:WinUserName -> error: Function Execution Failed!
+FINDING XML $$SysInfo:OSUserName -> error: Function Execution Failed!
+FINDING XML $$SysInfo:OSUser -> error: Function Execution Failed!
+FINDING XML $$SysInfo:SystemUserName -> error: Function Execution Failed!
+FINDING XML $$SysInfo:SystemUser -> error: Function Execution Failed!
+FINDING XML $$SysInfo:LoggedInUser -> error: Function Execution Failed!
+FINDING XML $$SysInfo:LoginUser -> error: Function Execution Failed!
+FINDING XML $$SysInfo:CurrentUser -> error: Function Execution Failed!
+FINDING XML $$SysInfo:User -> error: Function Execution Failed!
+FINDING XML $$SysInfo:SystemName -> result 'runnervmfi6oq'
+FINDING XML $$SysInfo:ComputerName -> error: Function Execution Failed!
+FINDING XML $$SysInfo:MachineName -> error: Function Execution Failed!
+FINDING XML $$SysInfo:ApplicationPath -> result 'C:\Program Files\TallyPrime'
+FINDING XML $$SysInfo:DataPath -> error: Function Execution Failed!
+FINDING XML $$SysInfo:SystemDate -> result ''
+FINDING XML $$SysInfo:SerialNumber -> error: Function Execution Failed!
+FINDING XML $$GetEnv:USERNAME -> error: Could not find: $$GetEnv  / Function Execution Failed!
+FINDING XML $$GetEnvVar:USERNAME -> result 'runneradmin'
+FINDING XML $$GetEnvironmentVariable:USERNAME -> error: Could not find: $$GetEnvironmentVariable  / Function Execution Failed!
+FINDING XML $$EnvVar:USERNAME -> error: Could not find: $$EnvVar  / Function Execution Failed!
+FINDING XML $$Env:USERNAME -> error: Could not find: $$Env  / Function Execution Failed!
+FINDING XML $$Environment:USERNAME -> error: Could not find: $$Environment  / Function Execution Failed!
+FINDING XML $$SysEnv:USERNAME -> error: Could not find: $$SysEnv  / Function Execution Failed!
+FINDING XML $$EnvironmentVariable:USERNAME -> error: Could not find: $$EnvironmentVariable  / Function Execution Failed!
+FINDING XML $$MachineName -> error: Could not find: $$MachineName  / Function Execution Failed!
+FINDING XML $$SystemName -> error: Could not find: $$SystemName  / Function Execution Failed!
+FINDING XML $$UserName -> error: Could not find: $$UserName  / Function Execution Failed!
+FINDING XML $$WindowsUser -> error: Could not find: $$WindowsUser  / Function Execution Failed!
+FINDING XML $$WindowsUserName -> error: Could not find: $$WindowsUserName  / Function Execution Failed!
+FINDING XML $$OSUserName -> error: Could not find: $$OSUserName  / Function Execution Failed!
+FINDING XML $$CmpUserName -> result 'TALLY User'
+FINDING XML $$LoginName -> error: Could not find: $$LoginName  / Function Execution Failed!
+FINDING XML $$ComputerName -> error: Could not find: $$ComputerName  / Function Execution Failed!
+FINDING XML $$SysUserName -> error: Could not find: $$SysUserName  / Function Execution Failed!
+[02:46:36.890] ---- c: each master altered with no add-on
+[keys] 'a'
+[keys] 't'
+[shot] p233-none-PayHead-started (1024x768)
+[02:47:09.568] Tally started (none-PayHead; TDL: none): company open True; TDL-error warning False
+[keys] 'a'
+[shot] p233-none-PayHead-alter (1024x768)
+[keys] 'Pay Head'
+[keys] '{ENTER}'
+[keys] 'PD Basic'
+[keys] '{ENTER}'
+[shot] p233-none-PayHead-form (1024x768)
+[shot] p233-none-PayHead-after (1024x768)
+FINDING master Pay Head 'PD Basic' [none]: saved True (AlterID 222 -> 223, via Pay Head > PD Basic); Ctrl+A to a still screen (first;last ms) 45.1;92.8; TDL warning False; hook lines 0: 
+[keys] 'a'
+[keys] 't'
+[shot] p233-none-StockItem-started (1024x768)
+[02:48:01.396] Tally started (none-StockItem; TDL: none): company open True; TDL-error warning False
+[keys] 'a'
+[shot] p233-none-StockItem-alter (1024x768)
+[keys] 'Stock Item'
+[keys] '{ENTER}'
+[keys] 'PD Item 1'
+[keys] '{ENTER}'
+[shot] p233-none-StockItem-form (1024x768)
+[shot] p233-none-StockItem-after (1024x768)
+FINDING master Stock Item 'PD Item 1' [none]: saved True (AlterID 218 -> 224, via Stock Item > PD Item 1); Ctrl+A to a still screen (first;last ms) 60.8;108.7; TDL warning False; hook lines 0: 
+[keys] 'a'
+[keys] 't'
+[shot] p233-none-Unit-started (1024x768)
+[02:48:53.128] Tally started (none-Unit; TDL: none): company open True; TDL-error warning False
+[keys] 'a'
+[shot] p233-none-Unit-alter (1024x768)
+[keys] 'Unit'
+[keys] '{ENTER}'
+[keys] 'Nos'
+[keys] '{ENTER}'
+[shot] p233-none-Unit-form (1024x768)
+[shot] p233-none-Unit-after (1024x768)
+FINDING master Unit 'Nos' [none]: saved True (AlterID 214 -> 225, via Unit > Nos); Ctrl+A to a still screen (first;last ms) 45.7;93.1; TDL warning False; hook lines 0: 
+[keys] 'a'
+[keys] 't'
+[shot] p233-none-Godown-started (1024x768)
+[02:49:44.781] Tally started (none-Godown; TDL: none): company open True; TDL-error warning False
+[keys] 'a'
+[shot] p233-none-Godown-alter (1024x768)
+[keys] 'Location'
+[keys] '{ENTER}'
+[keys] 'PD Godown A'
+[keys] '{ENTER}'
+[shot] p233-none-Godown-form (1024x768)
+[shot] p233-none-Godown-after (1024x768)
+[keys] 'a'
+[keys] 't'
+[shot] p233-none-Godown-started (1024x768)
+[02:50:36.463] Tally started (none-Godown; TDL: none): company open True; TDL-error warning False
+[keys] 'a'
+[shot] p233-none-Godown-alter (1024x768)
+[keys] 'Godown'
+[keys] '{ENTER}'
+[keys] 'PD Godown A'
+[keys] '{ENTER}'
+[shot] p233-none-Godown-form (1024x768)
+[shot] p233-none-Godown-after (1024x768)
+[keys] 'a'
+[keys] 't'
+[shot] p233-none-Godown-started (1024x768)
+[02:51:28.190] Tally started (none-Godown; TDL: none): company open True; TDL-error warning False
+[keys] 'a'
+[shot] p233-none-Godown-alter (1024x768)
+[keys] 'PD Godown A'
+[keys] '{ENTER}'
+[shot] p233-none-Godown-form (1024x768)
+[shot] p233-none-Godown-after (1024x768)
+FINDING master Godown 'PD Godown A' [none]: saved False (AlterID 216 -> 216, via none); Ctrl+A to a still screen (first;last ms) 60.5;92.8; TDL warning False; hook lines 0: 
+[keys] 'a'
+[keys] 't'
+[shot] p233-none-Employee-started (1024x768)
+[02:52:14.371] Tally started (none-Employee; TDL: none): company open True; TDL-error warning False
+[keys] 'a'
+[shot] p233-none-Employee-alter (1024x768)
+[keys] 'Employee'
+[keys] '{ENTER}'
+[keys] 'PD Emp 001'
+[keys] '{ENTER}'
+[shot] p233-none-Employee-form (1024x768)
+[shot] p233-none-Employee-after (1024x768)
+FINDING master Employee 'PD Emp 001' [none]: saved True (AlterID 221 -> 226, via Employee > PD Emp 001); Ctrl+A to a still screen (first;last ms) 45.2;92.9; TDL warning False; hook lines 0: 
+[keys] 'a'
+[keys] 't'
+[shot] p233-none-Unit-started (1024x768)
+[02:53:06.120] Tally started (none-Unit; TDL: none): company open True; TDL-error warning False
+[keys] 'a'
+[shot] p233-none-Unit-alter (1024x768)
+[keys] 'Unit'
+[keys] '{ENTER}'
+[keys] 'Nos'
+[keys] '{ENTER}'
+[shot] p233-none-Unit-form (1024x768)
+[keys] '{ENTER}'
+[keys] 'Numbers'
+[shot] p233-none-Unit-changed (1024x768)
+[shot] p233-none-Unit-after (1024x768)
+FINDING master Unit 'Nos' [none, typed 'Numbers']: saved True (AlterID 225 -> 227, via Unit > Nos); Ctrl+A to a still screen (first;last ms) 33.6;76.9; TDL warning False; hook lines 0: 
+[02:53:28.444] ---- b + c: the probe files loaded at once: a ledger on the screen, then each master altered
+[keys] 'a'
+[keys] 't'
+[shot] p233-probe-files-started (1024x768)
+[keys] '{ENTER}'
+[shot] p233-probe-files-key-1 (1024x768)
+[02:54:10.179] Tally started (probe-files; TDL: W00.tdl, W01.tdl, W02.tdl, W03.tdl, W04.tdl, W05.tdl, W06.tdl, W07.tdl, W08.tdl, W09.tdl, W10.tdl, W11.tdl, W12.tdl, W13.tdl, W14.tdl, W15.tdl, W16.tdl, W17.tdl, W18.tdl, W19.tdl, W20.tdl, W21.tdl, W22.tdl, W23.tdl, W24.tdl, W25.tdl, W26.tdl, W27.tdl, W28.tdl, W29.tdl, W30.tdl, W31.tdl, W99.tdl, H01.tdl, H02.tdl, H03.tdl, H04.tdl, H05.tdl, H06.tdl, H07.tdl, H08.tdl, H09.tdl, H10.tdl, H11.tdl, H12.tdl, H13.tdl, H14.tdl, E01.tdl, E02.tdl, E03.tdl, E04.tdl, E05.tdl, E06.tdl, E07.tdl): company open True; TDL-error warning True
+FINDING probe files loaded: 54; Tally's TDL-error warning shown: True
+[keys] '{F1}'
+[shot] p233-help-0 (1024x768)
+[keys] 'TDL'
+[shot] p233-help-1 (1024x768)
+[keys] '{ENTER}'
+[shot] p233-help-2 (1024x768)
+[keys] '{F4}'
+[shot] p233-help-3 (1024x768)
+[keys] '{ESC}'
+[keys] '{ESC}'
+[keys] '{ESC}'
+[shot] p233-help-4 (1024x768)
+[keys] 'a'
+[keys] 't'
+[shot] p233-probe-files-2-started (1024x768)
+[keys] '{ENTER}'
+[shot] p233-probe-files-2-key-1 (1024x768)
+[02:55:14.394] Tally started (probe-files-2; TDL: W00.tdl, W01.tdl, W02.tdl, W03.tdl, W04.tdl, W05.tdl, W06.tdl, W07.tdl, W08.tdl, W09.tdl, W10.tdl, W11.tdl, W12.tdl, W13.tdl, W14.tdl, W15.tdl, W16.tdl, W17.tdl, W18.tdl, W19.tdl, W20.tdl, W21.tdl, W22.tdl, W23.tdl, W24.tdl, W25.tdl, W26.tdl, W27.tdl, W28.tdl, W29.tdl, W30.tdl, W31.tdl, W99.tdl, H01.tdl, H02.tdl, H03.tdl, H04.tdl, H05.tdl, H06.tdl, H07.tdl, H08.tdl, H09.tdl, H10.tdl, H11.tdl, H12.tdl, H13.tdl, H14.tdl, E01.tdl, E02.tdl, E03.tdl, E04.tdl, E05.tdl, E06.tdl, E07.tdl): company open True; TDL-error warning True
+[keys] 'c'
+[shot] p233-w-create (1024x768)
+[keys] 'Ledger{ENTER}'
+[keys] 'P233 User Party{ENTER}'
+[keys] '{ENTER}'
+[keys] 'Sundry Debtors{ENTER}'
+[shot] p233-w-form (1024x768)
+[keys] '^a'
+[shot] p233-w-saved (1024x768)
+FINDING ledger saved on the screen with the probe files: True
+FINDING TDL W01 SysInfo:UserName ($$SysInfo:UserName): written: 'SysInfo:UserName='
+FINDING TDL W02 SysInfo:WindowsUser ($$SysInfo:WindowsUser): written: 'SysInfo:WindowsUser=runneradmin'
+FINDING TDL W03 SysInfo:WindowsUserName ($$SysInfo:WindowsUserName): written: 'SysInfo:WindowsUserName='
+FINDING TDL W04 SysInfo:WinUserName ($$SysInfo:WinUserName): written: 'SysInfo:WinUserName='
+FINDING TDL W05 SysInfo:OSUserName ($$SysInfo:OSUserName): written: 'SysInfo:OSUserName='
+FINDING TDL W06 SysInfo:OSUser ($$SysInfo:OSUser): written: 'SysInfo:OSUser='
+FINDING TDL W07 SysInfo:SystemUserName ($$SysInfo:SystemUserName): written: 'SysInfo:SystemUserName='
+FINDING TDL W08 SysInfo:SystemUser ($$SysInfo:SystemUser): written: 'SysInfo:SystemUser='
+FINDING TDL W09 SysInfo:LoggedInUser ($$SysInfo:LoggedInUser): written: 'SysInfo:LoggedInUser='
+FINDING TDL W10 SysInfo:LoginUser ($$SysInfo:LoginUser): written: 'SysInfo:LoginUser='
+FINDING TDL W11 SysInfo:CurrentUser ($$SysInfo:CurrentUser): written: 'SysInfo:CurrentUser='
+FINDING TDL W12 SysInfo:User ($$SysInfo:User): written: 'SysInfo:User='
+FINDING TDL W13 SysInfo:SystemName ($$SysInfo:SystemName): written: 'SysInfo:SystemName=runnervmfi6oq'
+FINDING TDL W14 SysInfo:ComputerName ($$SysInfo:ComputerName): written: 'SysInfo:ComputerName='
+FINDING TDL W15 SysInfo:MachineName ($$SysInfo:MachineName): written: 'SysInfo:MachineName='
+FINDING TDL W16 SysInfo:ApplicationPath ($$SysInfo:ApplicationPath): written: 'SysInfo:ApplicationPath=C:\Program Files\TallyPrime'
+FINDING TDL W17 SysInfo:DataPath ($$SysInfo:DataPath): written: 'SysInfo:DataPath='
+FINDING TDL W18 SysInfo:SystemDate ($$SysInfo:SystemDate): written: 'SysInfo:SystemDate=7-Oct-26'
+FINDING TDL W19 SysInfo:SerialNumber ($$SysInfo:SerialNumber): written: 'SysInfo:SerialNumber='
+FINDING TDL W20 GetEnv:USERNAME ($$GetEnv:"USERNAME"): written: 'GetEnv:USERNAME='
+FINDING TDL W21 GetEnvVar:USERNAME ($$GetEnvVar:"USERNAME"): written: 'GetEnvVar:USERNAME=runneradmin'
+FINDING TDL W22 GetEnvironmentVariable:USERNAME ($$GetEnvironmentVariable:"USERNAME"): written: 'GetEnvironmentVariable:USERNAME='
+FINDING TDL W23 EnvVar:USERNAME ($$EnvVar:"USERNAME"): written: 'EnvVar:USERNAME='
+FINDING TDL W24 Env:USERNAME ($$Env:"USERNAME"): written: 'Env:USERNAME='
+FINDING TDL W25 MachineName ($$MachineName): written: 'MachineName='
+FINDING TDL W26 SystemName ($$SystemName): written: 'SystemName='
+FINDING TDL W27 UserName ($$UserName): written: 'UserName='
+FINDING TDL W28 WindowsUser ($$WindowsUser): written: 'WindowsUser='
+FINDING TDL W29 OSUserName ($$OSUserName): written: 'OSUserName='
+FINDING TDL W30 CmpUserName ($$CmpUserName): written: 'CmpUserName=TALLY User'
+FINDING TDL W31 ComputerName ($$ComputerName): written: 'ComputerName='
+FINDING TDL W99 %USERNAME% in a file name: files env-%USERNAME%.txt
+FINDING hook lines on the ledger save (none expected): 
+[keys] 'a'
+[keys] 't'
+[shot] p233-hooks-PayHead-started (1024x768)
+[keys] '{ENTER}'
+[shot] p233-hooks-PayHead-key-1 (1024x768)
+[02:56:16.060] Tally started (hooks-PayHead; TDL: W00.tdl, W01.tdl, W02.tdl, W03.tdl, W04.tdl, W05.tdl, W06.tdl, W07.tdl, W08.tdl, W09.tdl, W10.tdl, W11.tdl, W12.tdl, W13.tdl, W14.tdl, W15.tdl, W16.tdl, W17.tdl, W18.tdl, W19.tdl, W20.tdl, W21.tdl, W22.tdl, W23.tdl, W24.tdl, W25.tdl, W26.tdl, W27.tdl, W28.tdl, W29.tdl, W30.tdl, W31.tdl, W99.tdl, H01.tdl, H02.tdl, H03.tdl, H04.tdl, H05.tdl, H06.tdl, H07.tdl, H08.tdl, H09.tdl, H10.tdl, H11.tdl, H12.tdl, H13.tdl, H14.tdl, E01.tdl, E02.tdl, E03.tdl, E04.tdl, E05.tdl, E06.tdl, E07.tdl): company open True; TDL-error warning True
+[keys] 'a'
+[shot] p233-hooks-PayHead-alter (1024x768)
+[keys] 'Pay Head'
+[keys] '{ENTER}'
+[keys] 'PD Basic'
+[keys] '{ENTER}'
+[shot] p233-hooks-PayHead-form (1024x768)
+[shot] p233-hooks-PayHead-after (1024x768)
+FINDING master Pay Head 'PD Basic' [hooks]: saved True (AlterID 223 -> 229, via Pay Head > PD Basic); Ctrl+A to a still screen (first;last ms) 44.7;91.8; TDL warning True; hook lines 2: ev=payhead_pre|form=Pay Head|name=PD Basic|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d9|mid=217|aid=223|parent=Indirect Expenses|t=02:56 || ev=payhead_post|form=Pay Head|name=PD Basic|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d9|mid=217|aid=223|parent=Indirect Expenses|t=02:56
+[keys] 'a'
+[keys] 't'
+[shot] p233-hooks-StockItem-started (1024x768)
+[keys] '{ENTER}'
+[shot] p233-hooks-StockItem-key-1 (1024x768)
+[02:57:18.640] Tally started (hooks-StockItem; TDL: W00.tdl, W01.tdl, W02.tdl, W03.tdl, W04.tdl, W05.tdl, W06.tdl, W07.tdl, W08.tdl, W09.tdl, W10.tdl, W11.tdl, W12.tdl, W13.tdl, W14.tdl, W15.tdl, W16.tdl, W17.tdl, W18.tdl, W19.tdl, W20.tdl, W21.tdl, W22.tdl, W23.tdl, W24.tdl, W25.tdl, W26.tdl, W27.tdl, W28.tdl, W29.tdl, W30.tdl, W31.tdl, W99.tdl, H01.tdl, H02.tdl, H03.tdl, H04.tdl, H05.tdl, H06.tdl, H07.tdl, H08.tdl, H09.tdl, H10.tdl, H11.tdl, H12.tdl, H13.tdl, H14.tdl, E01.tdl, E02.tdl, E03.tdl, E04.tdl, E05.tdl, E06.tdl, E07.tdl): company open True; TDL-error warning True
+[keys] 'a'
+[shot] p233-hooks-StockItem-alter (1024x768)
+[keys] 'Stock Item'
+[keys] '{ENTER}'
+[keys] 'PD Item 1'
+[keys] '{ENTER}'
+[shot] p233-hooks-StockItem-form (1024x768)
+[shot] p233-hooks-StockItem-after (1024x768)
+FINDING master Stock Item 'PD Item 1' [hooks]: saved True (AlterID 224 -> 230, via Stock Item > PD Item 1); Ctrl+A to a still screen (first;last ms) 60.4;107.6; TDL warning True; hook lines 2: ev=stockitem_pre|form=Stock Item|name=PD Item 1|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d5|mid=213|aid=224|parent= Primary|t=02:57 || ev=stockitem_post|form=Stock Item|name=PD Item 1|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d5|mid=213|aid=224|parent= Primary|t=02:57
+[keys] 'a'
+[keys] 't'
+[shot] p233-hooks-Godown-started (1024x768)
+[keys] '{ENTER}'
+[shot] p233-hooks-Godown-key-1 (1024x768)
+[02:58:19.556] Tally started (hooks-Godown; TDL: W00.tdl, W01.tdl, W02.tdl, W03.tdl, W04.tdl, W05.tdl, W06.tdl, W07.tdl, W08.tdl, W09.tdl, W10.tdl, W11.tdl, W12.tdl, W13.tdl, W14.tdl, W15.tdl, W16.tdl, W17.tdl, W18.tdl, W19.tdl, W20.tdl, W21.tdl, W22.tdl, W23.tdl, W24.tdl, W25.tdl, W26.tdl, W27.tdl, W28.tdl, W29.tdl, W30.tdl, W31.tdl, W99.tdl, H01.tdl, H02.tdl, H03.tdl, H04.tdl, H05.tdl, H06.tdl, H07.tdl, H08.tdl, H09.tdl, H10.tdl, H11.tdl, H12.tdl, H13.tdl, H14.tdl, E01.tdl, E02.tdl, E03.tdl, E04.tdl, E05.tdl, E06.tdl, E07.tdl): company open True; TDL-error warning True
+[keys] 'a'
+[shot] p233-hooks-Godown-alter (1024x768)
+[keys] 'Location'
+[keys] '{ENTER}'
+[keys] 'PD Godown A'
+[keys] '{ENTER}'
+[shot] p233-hooks-Godown-form (1024x768)
+[shot] p233-hooks-Godown-after (1024x768)
+[keys] 'a'
+[keys] 't'
+[shot] p233-hooks-Godown-started (1024x768)
+[keys] '{ENTER}'
+[shot] p233-hooks-Godown-key-1 (1024x768)
+[02:59:20.403] Tally started (hooks-Godown; TDL: W00.tdl, W01.tdl, W02.tdl, W03.tdl, W04.tdl, W05.tdl, W06.tdl, W07.tdl, W08.tdl, W09.tdl, W10.tdl, W11.tdl, W12.tdl, W13.tdl, W14.tdl, W15.tdl, W16.tdl, W17.tdl, W18.tdl, W19.tdl, W20.tdl, W21.tdl, W22.tdl, W23.tdl, W24.tdl, W25.tdl, W26.tdl, W27.tdl, W28.tdl, W29.tdl, W30.tdl, W31.tdl, W99.tdl, H01.tdl, H02.tdl, H03.tdl, H04.tdl, H05.tdl, H06.tdl, H07.tdl, H08.tdl, H09.tdl, H10.tdl, H11.tdl, H12.tdl, H13.tdl, H14.tdl, E01.tdl, E02.tdl, E03.tdl, E04.tdl, E05.tdl, E06.tdl, E07.tdl): company open True; TDL-error warning True
+[keys] 'a'
+[shot] p233-hooks-Godown-alter (1024x768)
+[keys] 'Godown'
+[keys] '{ENTER}'
+[keys] 'PD Godown A'
+[keys] '{ENTER}'
+[shot] p233-hooks-Godown-form (1024x768)
+[shot] p233-hooks-Godown-after (1024x768)
+[keys] 'a'
+[keys] 't'
+[shot] p233-hooks-Godown-started (1024x768)
+[keys] '{ENTER}'
+[shot] p233-hooks-Godown-key-1 (1024x768)
+[03:00:22.842] Tally started (hooks-Godown; TDL: W00.tdl, W01.tdl, W02.tdl, W03.tdl, W04.tdl, W05.tdl, W06.tdl, W07.tdl, W08.tdl, W09.tdl, W10.tdl, W11.tdl, W12.tdl, W13.tdl, W14.tdl, W15.tdl, W16.tdl, W17.tdl, W18.tdl, W19.tdl, W20.tdl, W21.tdl, W22.tdl, W23.tdl, W24.tdl, W25.tdl, W26.tdl, W27.tdl, W28.tdl, W29.tdl, W30.tdl, W31.tdl, W99.tdl, H01.tdl, H02.tdl, H03.tdl, H04.tdl, H05.tdl, H06.tdl, H07.tdl, H08.tdl, H09.tdl, H10.tdl, H11.tdl, H12.tdl, H13.tdl, H14.tdl, E01.tdl, E02.tdl, E03.tdl, E04.tdl, E05.tdl, E06.tdl, E07.tdl): company open True; TDL-error warning True
+[keys] 'a'
+[shot] p233-hooks-Godown-alter (1024x768)
+[keys] 'PD Godown A'
+[keys] '{ENTER}'
+[shot] p233-hooks-Godown-form (1024x768)
+[shot] p233-hooks-Godown-after (1024x768)
+FINDING master Godown 'PD Godown A' [hooks]: saved False (AlterID 216 -> 216, via none); Ctrl+A to a still screen (first;last ms) 45.1;92.0; TDL warning True; hook lines 2: ev=godown_pre|form=Godown|name=PD Godown A|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d3|mid=211|aid=216|parent= Primary|t=03:00 || ev=godown_post|form=Godown|name=PD Godown A|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d3|mid=211|aid=216|parent= Primary|t=03:00
+[keys] 'a'
+[keys] 't'
+[shot] p233-hooks-Employee-started (1024x768)
+[keys] '{ENTER}'
+[shot] p233-hooks-Employee-key-1 (1024x768)
+[03:01:17.400] Tally started (hooks-Employee; TDL: W00.tdl, W01.tdl, W02.tdl, W03.tdl, W04.tdl, W05.tdl, W06.tdl, W07.tdl, W08.tdl, W09.tdl, W10.tdl, W11.tdl, W12.tdl, W13.tdl, W14.tdl, W15.tdl, W16.tdl, W17.tdl, W18.tdl, W19.tdl, W20.tdl, W21.tdl, W22.tdl, W23.tdl, W24.tdl, W25.tdl, W26.tdl, W27.tdl, W28.tdl, W29.tdl, W30.tdl, W31.tdl, W99.tdl, H01.tdl, H02.tdl, H03.tdl, H04.tdl, H05.tdl, H06.tdl, H07.tdl, H08.tdl, H09.tdl, H10.tdl, H11.tdl, H12.tdl, H13.tdl, H14.tdl, E01.tdl, E02.tdl, E03.tdl, E04.tdl, E05.tdl, E06.tdl, E07.tdl): company open True; TDL-error warning True
+[keys] 'a'
+[shot] p233-hooks-Employee-alter (1024x768)
+[keys] 'Employee'
+[keys] '{ENTER}'
+[keys] 'PD Emp 001'
+[keys] '{ENTER}'
+[shot] p233-hooks-Employee-form (1024x768)
+[shot] p233-hooks-Employee-after (1024x768)
+FINDING master Employee 'PD Emp 001' [hooks]: saved True (AlterID 226 -> 231, via Employee > PD Emp 001); Ctrl+A to a still screen (first;last ms) 41.0;88.4; TDL warning True; hook lines 0: 
+[03:01:36.969] ---- c: Unit with each hook shape
+[keys] 'a'
+[keys] 't'
+[shot] p233-unit-full-Unit-started (1024x768)
+[03:02:09.705] Tally started (unit-full-Unit; TDL: U_full.tdl): company open True; TDL-error warning False
+[keys] 'a'
+[shot] p233-unit-full-Unit-alter (1024x768)
+[keys] 'Unit'
+[keys] '{ENTER}'
+[keys] 'Nos'
+[keys] '{ENTER}'
+[shot] p233-unit-full-Unit-form (1024x768)
+[shot] p233-unit-full-Unit-after (1024x768)
+[keys] 'a'
+[keys] 't'
+[shot] p233-unit-full-Unit-started (1024x768)
+[03:03:01.745] Tally started (unit-full-Unit; TDL: U_full.tdl): company open True; TDL-error warning False
+[keys] 'a'
+[shot] p233-unit-full-Unit-alter (1024x768)
+[keys] 'Nos'
+[keys] '{ENTER}'
+[shot] p233-unit-full-Unit-form (1024x768)
+[shot] p233-unit-full-Unit-after (1024x768)
+FINDING master Unit 'Nos' [unit-full]: saved False (AlterID 227 -> 227, via none); Ctrl+A to a still screen (first;last ms) 76.6;76.6; TDL warning False; hook lines 2: ev=unit_pre|form=Unit|name=Nos|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d1|mid=209|aid=227|parent=|t=03:03 || ev=unit_post|form=Unit|name=Nos|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d1|mid=209|aid=227|parent=|t=03:03
+[keys] 'a'
+[keys] 't'
+[shot] p233-unit-full-Unit-started (1024x768)
+[03:03:47.547] Tally started (unit-full-Unit; TDL: U_full.tdl): company open True; TDL-error warning False
+[keys] 'a'
+[shot] p233-unit-full-Unit-alter (1024x768)
+[keys] 'Unit'
+[keys] '{ENTER}'
+[keys] 'Nos'
+[keys] '{ENTER}'
+[shot] p233-unit-full-Unit-form (1024x768)
+[keys] '{ENTER}'
+[keys] 'Nfull'
+[shot] p233-unit-full-Unit-changed (1024x768)
+[shot] p233-unit-full-Unit-after (1024x768)
+FINDING master Unit 'Nos' [unit-full, typed 'Nfull']: saved True (AlterID 227 -> 232, via Unit > Nos); Ctrl+A to a still screen (first;last ms) 47.6;94.8; TDL warning False; hook lines 2: ev=unit_pre|form=Unit|name=Nos|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d1|mid=209|aid=227|parent=|t=03:04 || ev=unit_post|form=Unit|name=Nos|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d1|mid=209|aid=227|parent=|t=03:04
+[keys] 'a'
+[keys] 't'
+[shot] p233-unit-accept-Unit-started (1024x768)
+[03:04:42.841] Tally started (unit-accept-Unit; TDL: U_accept.tdl): company open True; TDL-error warning False
+[keys] 'a'
+[shot] p233-unit-accept-Unit-alter (1024x768)
+[keys] 'Unit'
+[keys] '{ENTER}'
+[keys] 'Nos'
+[keys] '{ENTER}'
+[shot] p233-unit-accept-Unit-form (1024x768)
+[shot] p233-unit-accept-Unit-after (1024x768)
+[keys] 'a'
+[keys] 't'
+[shot] p233-unit-accept-Unit-started (1024x768)
+[03:05:34.803] Tally started (unit-accept-Unit; TDL: U_accept.tdl): company open True; TDL-error warning False
+[keys] 'a'
+[shot] p233-unit-accept-Unit-alter (1024x768)
+[keys] 'Nos'
+[keys] '{ENTER}'
+[shot] p233-unit-accept-Unit-form (1024x768)
+[shot] p233-unit-accept-Unit-after (1024x768)
+FINDING master Unit 'Nos' [unit-accept]: saved False (AlterID 232 -> 232, via none); Ctrl+A to a still screen (first;last ms) 45.3;92.2; TDL warning False; hook lines 0: 
+[keys] 'a'
+[keys] 't'
+[shot] p233-unit-accept-Unit-started (1024x768)
+[03:06:20.665] Tally started (unit-accept-Unit; TDL: U_accept.tdl): company open True; TDL-error warning False
+[keys] 'a'
+[shot] p233-unit-accept-Unit-alter (1024x768)
+[keys] 'Unit'
+[keys] '{ENTER}'
+[keys] 'Nos'
+[keys] '{ENTER}'
+[shot] p233-unit-accept-Unit-form (1024x768)
+[keys] '{ENTER}'
+[keys] 'Naccept'
+[shot] p233-unit-accept-Unit-changed (1024x768)
+[shot] p233-unit-accept-Unit-after (1024x768)
+FINDING master Unit 'Nos' [unit-accept, typed 'Naccept']: saved True (AlterID 232 -> 233, via Unit > Nos); Ctrl+A to a still screen (first;last ms) 48.5;124.5; TDL warning False; hook lines 0: 
+[keys] 'a'
+[keys] 't'
+[shot] p233-unit-pre-Unit-started (1024x768)
+[03:07:15.962] Tally started (unit-pre-Unit; TDL: U_pre.tdl): company open True; TDL-error warning False
+[keys] 'a'
+[shot] p233-unit-pre-Unit-alter (1024x768)
+[keys] 'Unit'
+[keys] '{ENTER}'
+[keys] 'Nos'
+[keys] '{ENTER}'
+[shot] p233-unit-pre-Unit-form (1024x768)
+[shot] p233-unit-pre-Unit-after (1024x768)
+[keys] 'a'
+[keys] 't'
+[shot] p233-unit-pre-Unit-started (1024x768)
+[03:08:07.990] Tally started (unit-pre-Unit; TDL: U_pre.tdl): company open True; TDL-error warning False
+[keys] 'a'
+[shot] p233-unit-pre-Unit-alter (1024x768)
+[keys] 'Nos'
+[keys] '{ENTER}'
+[shot] p233-unit-pre-Unit-form (1024x768)
+[shot] p233-unit-pre-Unit-after (1024x768)
+FINDING master Unit 'Nos' [unit-pre]: saved False (AlterID 233 -> 233, via none); Ctrl+A to a still screen (first;last ms) 40.2;87.6; TDL warning False; hook lines 1: ev=unit_pre|form=Unit|name=Nos|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d1|mid=209|aid=233|parent=|t=03:08
+[keys] 'a'
+[keys] 't'
+[shot] p233-unit-pre-Unit-started (1024x768)
+[03:08:53.771] Tally started (unit-pre-Unit; TDL: U_pre.tdl): company open True; TDL-error warning False
+[keys] 'a'
+[shot] p233-unit-pre-Unit-alter (1024x768)
+[keys] 'Unit'
+[keys] '{ENTER}'
+[keys] 'Nos'
+[keys] '{ENTER}'
+[shot] p233-unit-pre-Unit-form (1024x768)
+[keys] '{ENTER}'
+[keys] 'Npre'
+[shot] p233-unit-pre-Unit-changed (1024x768)
+[shot] p233-unit-pre-Unit-after (1024x768)
+FINDING master Unit 'Nos' [unit-pre, typed 'Npre']: saved True (AlterID 233 -> 234, via Unit > Nos); Ctrl+A to a still screen (first;last ms) 60.3;94.7; TDL warning False; hook lines 1: ev=unit_pre|form=Unit|name=Nos|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d1|mid=209|aid=233|parent=|t=03:09
+[keys] 'a'
+[keys] 't'
+[shot] p233-unit-post-Unit-started (1024x768)
+[03:09:48.974] Tally started (unit-post-Unit; TDL: U_post.tdl): company open True; TDL-error warning False
+[keys] 'a'
+[shot] p233-unit-post-Unit-alter (1024x768)
+[keys] 'Unit'
+[keys] '{ENTER}'
+[keys] 'Nos'
+[keys] '{ENTER}'
+[shot] p233-unit-post-Unit-form (1024x768)
+[shot] p233-unit-post-Unit-after (1024x768)
+[keys] 'a'
+[keys] 't'
+[shot] p233-unit-post-Unit-started (1024x768)
+[03:10:40.920] Tally started (unit-post-Unit; TDL: U_post.tdl): company open True; TDL-error warning False
+[keys] 'a'
+[shot] p233-unit-post-Unit-alter (1024x768)
+[keys] 'Nos'
+[keys] '{ENTER}'
+[shot] p233-unit-post-Unit-form (1024x768)
+[shot] p233-unit-post-Unit-after (1024x768)
+FINDING master Unit 'Nos' [unit-post]: saved False (AlterID 234 -> 234, via none); Ctrl+A to a still screen (first;last ms) 75.7;75.7; TDL warning False; hook lines 1: ev=unit_post|form=Unit|name=Nos|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d1|mid=209|aid=234|parent=|t=03:10
+[keys] 'a'
+[keys] 't'
+[shot] p233-unit-post-Unit-started (1024x768)
+[03:11:26.698] Tally started (unit-post-Unit; TDL: U_post.tdl): company open True; TDL-error warning False
+[keys] 'a'
+[shot] p233-unit-post-Unit-alter (1024x768)
+[keys] 'Unit'
+[keys] '{ENTER}'
+[keys] 'Nos'
+[keys] '{ENTER}'
+[shot] p233-unit-post-Unit-form (1024x768)
+[keys] '{ENTER}'
+[keys] 'Npost'
+[shot] p233-unit-post-Unit-changed (1024x768)
+[shot] p233-unit-post-Unit-after (1024x768)
+FINDING master Unit 'Nos' [unit-post, typed 'Npost']: saved True (AlterID 234 -> 235, via Unit > Nos); Ctrl+A to a still screen (first;last ms) 31.6;77.2; TDL warning False; hook lines 1: ev=unit_post|form=Unit|name=Nos|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d1|mid=209|aid=234|parent=|t=03:11
+[03:11:49.173] ---- c: masters deleted with the live add-on loaded
+[keys] 'a'
+[keys] 't'
+[shot] p233-del-StockItem-started (1024x768)
+[03:12:21.958] Tally started (del-StockItem; TDL: FinComRecorder.tdl): company open True; TDL-error warning False
+[keys] 'a'
+[keys] 'Stock Item'
+[keys] '{ENTER}'
+[keys] 'PD Item Del'
+[keys] '{ENTER}'
+[shot] p233-del-StockItem-form (1024x768)
+[keys] '%d'
+[shot] p233-del-StockItem-ask (1024x768)
+[keys] 'y'
+[shot] p233-del-StockItem-done (1024x768)
+FINDING delete Stock Item 'PD Item Del' with the live add-on: gone from Tally True
+[keys] 'a'
+[keys] 't'
+[shot] p233-del-Godown-started (1024x768)
+[03:13:18.148] Tally started (del-Godown; TDL: FinComRecorder.tdl): company open True; TDL-error warning False
+[keys] 'a'
+[keys] 'Location'
+[keys] '{ENTER}'
+[keys] 'PD Godown Del'
+[keys] '{ENTER}'
+[shot] p233-del-Godown-form (1024x768)
+[keys] '%d'
+[shot] p233-del-Godown-ask (1024x768)
+[keys] 'y'
+[shot] p233-del-Godown-done (1024x768)
+FINDING delete Godown 'PD Godown Del' with the live add-on: gone from Tally True
+FINDING live add-on file c6c54225-eb64-410e-9e6c-0b56be9f9100-7-Oct-26.txt: FCR1|ev=before_delete|t0=7-Oct-26 03:12|tw=7-Oct-26 03:12|cguid=c6c54225-eb64-410e-9e6c-0b56be9f9100|cname=FinCom Spike Co|user=TALLY User|obj=Master|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d6|mid=214|aid=219|vtype=|vno=|vdate=|name=PD Item Del|parent= Primary|narr=|t1=7-Oct-26 03:12|src=live || FCR1|ev=after_delete|t0=7-Oct-26 03:12|tw=7-Oct-26 03:12|cguid=c6c54225-eb64-410e-9e6c-0b56be9f9100|cname=FinCom Spike Co|user=TALLY User|obj=Master|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d6|mid=214|aid=219|vtype=|vno=|vdate=|name=PD Item Del|parent= Primary|narr=|t1=7-Oct-26 03:12|src=live || FCR1|ev=before_delete|t0=7-Oct-26 03:13|tw=7-Oct-26 03:13|cguid=c6c54225-eb64-410e-9e6c-0b56be9f9100|cname=FinCom Spike Co|user=TALLY User|obj=Master|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d4|mid=212|aid=217|vtype=|vno=|vdate=|name=PD Godown Del|parent= Primary|narr=|t1=7-Oct-26 03:13|src=live || FCR1|ev=after_delete|t0=7-Oct-26 03:13|tw=7-Oct-26 03:13|cguid=c6c54225-eb64-410e-9e6c-0b56be9f9100|cname=FinCom Spike Co|user=TALLY User|obj=Master|guid=c6c54225-eb64-410e-9e6c-0b56be9f9100-000000d4|mid=212|aid=217|vtype=|vno=|vdate=|name=PD Godown Del|parent= Primary|narr=|t1=7-Oct-26 03:13|src=live
+[03:13:41.604] == probe233 end

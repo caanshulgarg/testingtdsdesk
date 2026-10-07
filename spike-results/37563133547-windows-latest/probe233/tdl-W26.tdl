@@ -1,0 +1,14 @@
+[#Form: Ledger]
+    On : Form Accept : Yes : Call : P233W26F
+
+[Function: P233W26F]
+    Variable : v : String
+    Returns  : Logical
+    01 : SET : v : $$SystemName
+    02 : OPEN FILE : "C:\fcspike\p233\out-W26.txt" : Text : Write : Unicode
+    03 : IF : NOT $$LastResult
+    04 :    RETURN : Yes
+    05 : END IF
+    06 : WRITE FILE LINE : "SystemName=" + ##v
+    07 : CLOSE TARGET FILE
+    08 : RETURN : Yes
