@@ -14,7 +14,7 @@ on:
         description: 'Branch, tag or commit of the bridge to build (bridge-go/)'
         default: per-user-bridge
       probe:
-        description: 'yes: run probe.ps1 (screens and exports of Tally for the scenario list) instead of round 4'
+        description: 'yes: run probe.ps1 (screens and exports of Tally for the scenario list) instead of round 4; probe233: run probe233.ps1 (bridge 2.3.3 items b and c: the Windows user inside Tally, the master forms)'
         default: 'no'
       only:
         description: 'round 4 in part: s5r1 = S5 by the screens and R1 only (no checks 1-8); pileup = the busy-Tally measurements A and B only; slow232 = bridge 2.3.2: a large company over 2 s marked, no entry request after'
@@ -154,8 +154,14 @@ jobs:
         if: inputs.probe == 'yes'
         run: |
           & .github/tally-spike/probe.ps1 *>&1 | Tee-Object -FilePath "$env:RES\probe.log" -Append; exit 0
+      - name: Probe 2.3.3 (the Windows user inside Tally; the master forms' hooks; no bridge)
+        if: inputs.probe == 'probe233'
+        env:
+          BRIDGE_DIST: ${{ github.workspace }}\bridge-dist
+        run: |
+          & .github/tally-spike/probe233.ps1 *>&1 | Tee-Object -FilePath "$env:RES\probe233.log" -Append; exit 0
       - name: Round 4 (the bridge from the ref, two Windows users, a local stub cloud; the 2.3.1 scenarios S1-S10)
-        if: inputs.probe != 'yes'
+        if: inputs.probe != 'yes' && inputs.probe != 'probe233'
         env:
           BRIDGE_DIST: ${{ github.workspace }}\bridge-dist
           ONLY: ${{ inputs.only }}
