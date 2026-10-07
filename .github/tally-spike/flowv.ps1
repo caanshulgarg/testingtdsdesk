@@ -223,6 +223,8 @@ else {
   $err8 = @(Get-ChildItem $dir, $data1 -Recurse -File -Include *tdl*.log, tdlerr* -ErrorAction SilentlyContinue)
   if ($full8.Count) { Set-Content (Join-Path $cap 'full-entry-line.txt') $full8 -Encoding UTF8 }
   $st8 = if (-not $new) { 'HARNESS' } elseif ($heads8.Count -ge 2 -and $full8.Count -ge 1 -and $lp8) { 'PASS' } else { 'FAIL' }
+  # branch push-probe: the add-on's FCRProbe line (which string functions this release evaluates), said as it is
+  foreach ($pl in @($recL | Where-Object { $_ -like 'FCR1|ev=probe|*' } | Select-Object -First 1)) { Info "c8 probe: $([regex]::Match($pl, '\|narr=(.*)\|t1=').Groups[1].Value)" }
   Result 'c8 the new add-on loads and writes the full entry' $st8 ("receipt by keys: {0}; heads lines {1}; full lines for it {2} (lengths, the first ledger and neg read: {3}); every recorder line's event: {4}; Tally's TDL error files: {5}; first full line: {6}" -f `
       $(if ($new) { "mid $($new.mid)" } else { 'not made (the keys)' }), $heads8.Count, $full8.Count, [bool]$lp8, ((($recL | ForEach-Object { [regex]::Match($_, '^FCR1\|ev=([^|]+)').Groups[1].Value }) | Group-Object | ForEach-Object { "$($_.Name) x$($_.Count)" }) -join ', '),
       $(if ($err8.Count) { ($err8 | ForEach-Object { "$($_.Name): $((Get-Content $_.FullName -Tail 3) -join ' | ')" }) -join '; ' } else { 'none' }), $(if ($full8.Count) { $full8[0].Substring(0, [Math]::Min(700, $full8[0].Length)) } else { '-' }))
