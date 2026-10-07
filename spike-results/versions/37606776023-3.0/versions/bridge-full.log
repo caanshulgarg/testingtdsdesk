@@ -1,0 +1,73 @@
+2026-10-07 10:26:28  FinCom Bridge 2.3.2: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+2026-10-07 10:26:28  FinCom Bridge 2.3.2 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+2026-10-07 10:26:28  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+2026-10-07 10:26:28  Recorder: re-scan of the add-on's files for 2.3.2: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+2026-10-07 10:26:28  Check:  - 
+2026-10-07 10:26:31  Tray icon: set to show next to the clock always (Windows 11)
+2026-10-07 10:26:31  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+2026-10-07 10:26:31  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+2026-10-07 10:26:31  Company FinCom Spike Co: its Tally GUID 90116d20-459d-4fc7-bd11-067ff21e2c80 is held from now on
+2026-10-07 10:26:31  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=1, ALTMSTID=209 (reading is prospective only: the bridge follows what changes after this)
+2026-10-07 10:26:31  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=1, ALTMSTID=209
+2026-10-07 10:26:31  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=1, ALTMSTID=209)
+2026-10-07 10:27:14      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>2</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> </RESPONSE> 
+2026-10-07 10:27:14    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 2)
+2026-10-07 10:27:14  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-07 10:27:54  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line cce16453…): asking Tally by MasterID
+2026-10-07 10:27:54  Recorder: entry fetch of FinCom Spike Co: answered in 22 ms
+2026-10-07 10:27:54  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line cce16453…): taken: Tally's GUID 90116d20-459d-4fc7-bd11-067ff21e2c80-00000003, AlterID 3
+2026-10-07 10:28:41  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line 253a16c8…): asking Tally by MasterID
+2026-10-07 10:28:41  Recorder: entry fetch of FinCom Spike Co: answered in 29 ms
+2026-10-07 10:28:41  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line 253a16c8…): taken: Tally's GUID 90116d20-459d-4fc7-bd11-067ff21e2c80-00000003, AlterID 4
+2026-10-07 10:28:45  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: the company's period in Tally: books from 20260401 to 20261002
+2026-10-07 10:28:45  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: A. FinComVoucherByNumber as sent (&#34; quotes, dates yyyymmdd): sent <SVFROMDATE>20261002</SVFROMDATE><SVTODATE>20261002</SVTODATE>: 181 ms, 1 voucher, 14213 bytes
+2026-10-07 10:28:45  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: A vouchers: MASTERID=3 VOUCHERNUMBER=1 DATE=20261002 VOUCHERTYPENAME=Receipt
+2026-10-07 10:28:45  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: A answer starts: <ENVELOPE> <HEADER> <VERSION>1</VERSION> <STATUS>1</STATUS> </HEADER> <BODY> <DESC> <CMPINFO> <COMPANY>0</COMPANY> <GROUP>0</GROUP> <LEDGER>13</LEDGER> <COSTCATEGORY>0</COSTCATEGORY> <COSTCENTRE>0</COSTCENTRE> <GODOWN>0</GODOWN> <STOCKGROUP>0</STOCKGROUP> <STOCKCATEGORY>0</STOCKCATEGORY> <STOCKITEM>0</STOCKITEM> <VOUCHERTYPE>0</V
+2026-10-07 10:28:46  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: B. by number with plain quote marks, dates yyyymmdd: sent <SVFROMDATE>20261002</SVFROMDATE><SVTODATE>20261002</SVTODATE>: 174 ms, 1 voucher, 13605 bytes
+2026-10-07 10:28:46  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: B vouchers: MASTERID=3 VOUCHERNUMBER=1 DATE=20261002 VOUCHERTYPENAME=Receipt
+2026-10-07 10:28:46  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: B answer starts: <ENVELOPE> <HEADER> <VERSION>1</VERSION> <STATUS>1</STATUS> </HEADER> <BODY> <DESC> <CMPINFO> <COMPANY>0</COMPANY> <GROUP>0</GROUP> <LEDGER>13</LEDGER> <COSTCATEGORY>0</COSTCATEGORY> <COSTCENTRE>0</COSTCENTRE> <GODOWN>0</GODOWN> <STOCKGROUP>0</STOCKGROUP> <STOCKCATEGORY>0</STOCKCATEGORY> <STOCKITEM>0</STOCKITEM> <VOUCHERTYPE>0</V
+2026-10-07 10:28:46  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: C. FinComVoucherByMaster as sent, MasterID 3 (dates yyyymmdd): sent <SVFROMDATE>20261002</SVFROMDATE><SVTODATE>20261002</SVTODATE>: 175 ms, 1 voucher, 14213 bytes
+2026-10-07 10:28:46  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: C vouchers: MASTERID=3 VOUCHERNUMBER=1 DATE=20261002 VOUCHERTYPENAME=Receipt
+2026-10-07 10:28:46  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: C answer starts: <ENVELOPE> <HEADER> <VERSION>1</VERSION> <STATUS>1</STATUS> </HEADER> <BODY> <DESC> <CMPINFO> <COMPANY>0</COMPANY> <GROUP>0</GROUP> <LEDGER>13</LEDGER> <COSTCATEGORY>0</COSTCATEGORY> <COSTCENTRE>0</COSTCENTRE> <GODOWN>0</GODOWN> <STOCKGROUP>0</STOCKGROUP> <STOCKCATEGORY>0</STOCKCATEGORY> <STOCKITEM>0</STOCKITEM> <VOUCHERTYPE>0</V
+2026-10-07 10:28:46  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: D. by MasterID 3 with no dates: sent no SVFROMDATE/SVTODATE: 173 ms, 1 voucher, 13605 bytes
+2026-10-07 10:28:46  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: D vouchers: MASTERID=3 VOUCHERNUMBER=1 DATE=20261002 VOUCHERTYPENAME=Receipt
+2026-10-07 10:28:46  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: D answer starts: <ENVELOPE> <HEADER> <VERSION>1</VERSION> <STATUS>1</STATUS> </HEADER> <BODY> <DESC> <CMPINFO> <COMPANY>0</COMPANY> <GROUP>0</GROUP> <LEDGER>13</LEDGER> <COSTCATEGORY>0</COSTCATEGORY> <COSTCENTRE>0</COSTCENTRE> <GODOWN>0</GODOWN> <STOCKGROUP>0</STOCKGROUP> <STOCKCATEGORY>0</STOCKCATEGORY> <STOCKITEM>0</STOCKITEM> <VOUCHERTYPE>0</V
+2026-10-07 10:28:46  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: E. by MasterID 3 with the dates as d-MMM-yyyy TYPE=Date: sent <SVFROMDATE TYPE="Date">2-Oct-2026</SVFROMDATE><SVTODATE TYPE="Date">2-Oct-2026</SVTODATE>: 180 ms, 1 voucher, 13605 bytes
+2026-10-07 10:28:46  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: E vouchers: MASTERID=3 VOUCHERNUMBER=1 DATE=20261002 VOUCHERTYPENAME=Receipt
+2026-10-07 10:28:46  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: E answer starts: <ENVELOPE> <HEADER> <VERSION>1</VERSION> <STATUS>1</STATUS> </HEADER> <BODY> <DESC> <CMPINFO> <COMPANY>0</COMPANY> <GROUP>0</GROUP> <LEDGER>13</LEDGER> <COSTCATEGORY>0</COSTCATEGORY> <COSTCENTRE>0</COSTCENTRE> <GODOWN>0</GODOWN> <STOCKGROUP>0</STOCKGROUP> <STOCKCATEGORY>0</STOCKCATEGORY> <STOCKITEM>0</STOCKITEM> <VOUCHERTYPE>0</V
+2026-10-07 10:28:46  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: F. by number with plain quote marks and no dates: sent no SVFROMDATE/SVTODATE: 175 ms, 1 voucher, 13605 bytes
+2026-10-07 10:28:46  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: F vouchers: MASTERID=3 VOUCHERNUMBER=1 DATE=20261002 VOUCHERTYPENAME=Receipt
+2026-10-07 10:28:46  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: F answer starts: <ENVELOPE> <HEADER> <VERSION>1</VERSION> <STATUS>1</STATUS> </HEADER> <BODY> <DESC> <CMPINFO> <COMPANY>0</COMPANY> <GROUP>0</GROUP> <LEDGER>13</LEDGER> <COSTCATEGORY>0</COSTCATEGORY> <COSTCENTRE>0</COSTCENTRE> <GODOWN>0</GODOWN> <STOCKGROUP>0</STOCKGROUP> <STOCKCATEGORY>0</STOCKCATEGORY> <STOCKITEM>0</STOCKITEM> <VOUCHERTYPE>0</V
+2026-10-07 10:28:46  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: summary: A 1 voucher 181 ms · B 1 voucher 174 ms · C 1 voucher 175 ms · D 1 voucher 173 ms · E 1 voucher 180 ms · F 1 voucher 175 ms
+2026-10-07 10:29:27  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 4, line 2904d904…): asking Tally by MasterID
+2026-10-07 10:29:27  Recorder: entry fetch of FinCom Spike Co: answered in 23 ms
+2026-10-07 10:29:27  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 4, line 2904d904…): taken: Tally's GUID 90116d20-459d-4fc7-bd11-067ff21e2c80-00000004, AlterID 5
+2026-10-07 10:30:14  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line 7cbaf839…): asking Tally by MasterID
+2026-10-07 10:30:14  Recorder: entry fetch of FinCom Spike Co: answered in 15 ms
+2026-10-07 10:30:14  Recorder: FinCom Spike Co: cancel of mid 3: GUID from Tally (asked by MasterID): 90116d20-459d-4fc7-bd11-067ff21e2c80-00000003; the GUID its MasterID makes agrees
+2026-10-07 10:30:46  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 4, line 3e211ed1…): asking Tally by MasterID
+2026-10-07 10:30:46  Recorder: entry fetch of FinCom Spike Co: answered in 16 ms
+2026-10-07 10:30:46  Recorder: FinCom Spike Co: delete of mid 4: not in this Tally (asked by MasterID): proven deleted here
+2026-10-07 10:30:46  Recorder: FinCom Spike Co: delete of mid 4: GUID from the bridge's record: 90116d20-459d-4fc7-bd11-067ff21e2c80-00000004; the GUID its MasterID makes agrees
+2026-10-07 10:30:49  Test reading from Tally: FinCom Spike Co, 20261002: Day Book, dates yyyymmdd: 1 vouchers, 25287 bytes, 0.2 s; head: <ENVELOPE><HEADER><TALLYREQUEST></TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME></REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY></SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><R
+2026-10-07 10:30:50  Test reading from Tally: FinCom Spike Co, 20261002: Day Book, dates yyyymmdd, the empty day 20260930: 1 vouchers (or not answered in full)
+2026-10-07 10:30:50  Test reading from Tally: FinCom Spike Co, 20261002: Day Book, dates yyyymmdd answers the day with exactly its entries: no
+2026-10-07 10:30:50  Test reading from Tally: FinCom Spike Co, 20261002: Day Book, dates d-MMM-yyyy: 1 vouchers, 25287 bytes, 0.2 s; head: <ENVELOPE><HEADER><TALLYREQUEST></TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME></REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY></SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><R
+2026-10-07 10:30:50  Test reading from Tally: FinCom Spike Co, 20261002: Day Book, dates d-MMM-yyyy, the empty day 20260930: 1 vouchers (or not answered in full)
+2026-10-07 10:30:50  Test reading from Tally: FinCom Spike Co, 20261002: Day Book, dates d-MMM-yyyy answers the day with exactly its entries: no
+2026-10-07 10:30:50  Test reading from Tally: FinCom Spike Co, 20261002: Day Book, dates yyyymmdd TYPE=Date: 1 vouchers, 25287 bytes, 0.2 s; head: <ENVELOPE><HEADER><TALLYREQUEST></TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME></REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY></SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><R
+2026-10-07 10:30:50  Test reading from Tally: FinCom Spike Co, 20261002: Day Book, dates yyyymmdd TYPE=Date, the empty day 20260930: 1 vouchers (or not answered in full)
+2026-10-07 10:30:50  Test reading from Tally: FinCom Spike Co, 20261002: Day Book, dates yyyymmdd TYPE=Date answers the day with exactly its entries: no
+2026-10-07 10:30:50  Test reading from Tally: FinCom Spike Co, 20261002: Day Book, dates d-MMM-yyyy TYPE=Date: 1 vouchers, 25287 bytes, 0.2 s; head: <ENVELOPE><HEADER><TALLYREQUEST></TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME></REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY></SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><R
+2026-10-07 10:30:51  Test reading from Tally: FinCom Spike Co, 20261002: Day Book, dates d-MMM-yyyy TYPE=Date, the empty day 20260930: 1 vouchers (or not answered in full)
+2026-10-07 10:30:51  Test reading from Tally: FinCom Spike Co, 20261002: Day Book, dates d-MMM-yyyy TYPE=Date answers the day with exactly its entries: no
+2026-10-07 10:30:51  Test reading from Tally: FinCom Spike Co, 20261002: Dates on this Tally: none of the 4 forms answered 20261002 with exactly its entries
+2026-10-07 10:30:51  Test reading from Tally: FinCom Spike Co, 20261002: FinComTag (the posting read-back's request): 3 vouchers, 5618 bytes, 0.2 s; head: <ENVELOPE><HEADER><VERSION></VERSION><STATUS></STATUS></HEADER><BODY><DESC></DESC><DATA><COLLECTION><VOUCHER><DATE></DATE><GUID></GUID><NARRATION></NARRATION><REQUESTORRULE><VOUCHERTYPENAME></VOUCHERT
+2026-10-07 10:30:51  Test reading from Tally: FinCom Spike Co, 20261002: FinComCompany (change numbers): 0 vouchers, 1746 bytes, 0.2 s; head: <ENVELOPE><HEADER><VERSION></VERSION><STATUS></STATUS></HEADER><BODY><DESC></DESC><DATA><COLLECTION><COMPANY><NAME></NAME><GUID></GUID><ALTVCHID></ALTVCHID><ALTMSTID></ALTMSTID></COMPANY></COLLECTION>
+2026-10-07 10:30:51  Test reading from Tally: FinCom Spike Co, 20261002: change numbers ALTVCHID=8, ALTMSTID=209
+2026-10-07 10:30:51  Test reading from Tally: FinCom Spike Co, 20261002: FinComCompanyNumbers (change numbers, form b: the report): 0 vouchers, 199 bytes, 0.2 s; head: <FINCOMNUMBERS><COMPANY><NAME></NAME><GUID></GUID><ALTVCHID></ALTVCHID><ALTMSTID></ALTMSTID></COMPANY></FINCOMNUMBERS>
+2026-10-07 10:30:51  Test reading from Tally: FinCom Spike Co, 20261002: Entries above the starting point (TDSDeskKeepList, AlterID above 1, no dates): 2 vouchers, 3914 bytes, 0.2 s; head: <ENVELOPE><HEADER><VERSION></VERSION><STATUS></STATUS></HEADER><BODY><DESC></DESC><DATA><COLLECTION><VOUCHER><DATE></DATE><GUID></GUID><REQUESTORRULE><VOUCHERTYPENAME></VOUCHERTYPENAME><VOUCHERNUMBER>
+2026-10-07 10:30:51  Dates (collection): the copy holds no day of a past year; the collection forms are not tried
+2026-10-07 10:30:51  Tally program: tally.exe, 11457160 bytes, 2026-10-07 (C:\Program Files\TallyPrime\tally.exe)
+2026-10-07 10:30:51  Edit Log probe (FinComEditLogProbe, MasterID 3): answered, 2710 bytes, 0.2 s; tags: <ENVELOPE><HEADER><VERSION></VERSION><STATUS></STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY></COMPANY><GROUP></GROUP><LEDGER></LEDGER><COSTCATEGORY></COSTCATEGORY><COSTCENTRE></COSTCENTRE><GODOWN></GODOWN><STOCKGROUP></STOCKGROUP><STOCKCATEGORY></STOCKCATEGORY><STOCKITEM></STOCKITEM><VOUCHERTYPE></
+2026-10-07 10:30:52  Test reading from Tally: FinCom Spike Co, 20261002: FinComCompany sent as UTF-16 and as UTF-8: the same answer (1746 bytes)
