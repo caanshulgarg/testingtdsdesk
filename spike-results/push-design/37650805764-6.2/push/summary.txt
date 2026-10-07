@@ -1,0 +1,18 @@
+[16:27:54.511] push-design on TallyPrime 6.2: reps 5, heavy 3000 ledgers / 3000 items / up to 30000 vouchers (40 min), postings 1
+[16:27:56.334] system clock step after timeBeginPeriod(1): 0.496 ms (min 0.0056, max 5.4355)
+[16:27:56.354] two files written 2 ms apart: NTFS write times 6.0003 ms apart
+[16:27:56.378] light company folder: D:\a\_temp\TallyData\100000
+[16:27:56.431] fast234 (fast234p) on TallyPrime 6.2: today's request 2927 chars, 61 fields
+[16:28:27.655] Tally started (setup) in 28.2 s; companies open: FinCom Spike Co -> True
+[16:28:27.884] import light masters 0: 60 sent, created 59, errors 0, 191.9 ms
+[16:28:29.849] import base masters 0: 600 sent, created 600, errors 0, 1877.1 ms
+[16:28:49.186] import vouchers 0-999: 1000 sent, created 1000, errors 0, 19149.9 ms
+[16:29:08.047] import vouchers 1000-1999: 1000 sent, created 1000, errors 0, 18770 ms
+[16:29:27.159] import vouchers 2000-2999: 1000 sent, created 1000, errors 0, 19015.3 ms
+[16:29:46.392] import vouchers 3000-3999: 1000 sent, created 1000, errors 0, 19146.2 ms
+[16:29:46.457] import target sales P: 1 sent, created 1, errors 0, 62 ms
+[16:29:46.492] import target receipt P: 1 sent, created 1, errors 0, 31.9 ms
+[16:29:46.988] target sales-P: MasterID 4002, date 20261001, Sales 1601
+[16:29:46.990] target receipt-P: MasterID 4003, date 20261001, Receipt 1601
+[16:30:18.006] Tally started (p-4000) in 28 s; companies open: FinCom Spike Co -> True
+[16:30:18.873] sizes p 4000: 4003 vouchers (MasterID up to 4003); Tally 470 MB

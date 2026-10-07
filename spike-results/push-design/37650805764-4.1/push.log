@@ -1,0 +1,46 @@
+[16:26:33.672] push-design on TallyPrime 4.1: reps 5, heavy 3000 ledgers / 3000 items / up to 30000 vouchers (40 min), postings 1
+[16:26:34.702] system clock step after timeBeginPeriod(1): 0.425 ms (min 0.0029, max 4.8738)
+[16:26:34.721] two files written 2 ms apart: NTFS write times 8.9806 ms apart
+[16:26:34.737] light company folder: D:\a\_temp\TallyData\100000
+[16:26:34.764] fast234 (fast234p) on TallyPrime 4.1: today's request 2927 chars, 61 fields
+[keys] 'a'
+[keys] 't'
+[shot] p-f-setup-started (1024x768)
+[16:27:05.951] Tally started (setup) in 28.1 s; companies open: FinCom Spike Co -> True
+[16:27:06.140] import light masters 0: 60 sent, created 59, errors 0, 155.3 ms
+[16:27:07.614] import base masters 0: 600 sent, created 600, errors 0, 1421.2 ms
+[16:27:20.539] import vouchers 0-999: 1000 sent, created 1000, errors 0, 12722 ms
+[16:27:34.010] import vouchers 1000-1999: 1000 sent, created 1000, errors 0, 13395 ms
+[16:27:47.779] import vouchers 2000-2999: 1000 sent, created 1000, errors 0, 13706.4 ms
+[16:28:01.430] import vouchers 3000-3999: 1000 sent, created 1000, errors 0, 13580.1 ms
+[16:28:01.468] import target sales P: 1 sent, created 1, errors 0, 34.3 ms
+[16:28:01.483] import target receipt P: 1 sent, created 1, errors 0, 13.7 ms
+[16:28:01.824] target sales-P: MasterID 4002, date 20261001, Sales 1601
+[16:28:01.826] target receipt-P: MasterID 4003, date 20261001, Receipt 1601
+[keys] 'a'
+[keys] 't'
+[shot] p-f-p-4000-started (1024x768)
+[16:28:32.812] Tally started (p-4000) in 28 s; companies open: FinCom Spike Co -> True
+[16:28:33.542] sizes p 4000: 4003 vouchers (MasterID up to 4003); Tally 448 MB
+[] failed after 120006 ms: The request was canceled due to the configured HttpClient.Timeout of 120 seconds elapsing.
+[] failed after 120003.7 ms: The request was canceled due to the configured HttpClient.Timeout of 120 seconds elapsing.
+[] failed after 120004.9 ms: The request was canceled due to the configured HttpClient.Timeout of 120 seconds elapsing.
+[] failed after 120003.2 ms: The request was canceled due to the configured HttpClient.Timeout of 120 seconds elapsing.
+[] failed after 120003.6 ms: The request was canceled due to the configured HttpClient.Timeout of 120 seconds elapsing.
+[] failed after 120003.2 ms: The request was canceled due to the configured HttpClient.Timeout of 120 seconds elapsing.
+[] failed after 120002.7 ms: The request was canceled due to the configured HttpClient.Timeout of 120 seconds elapsing.
+[] failed after 120003 ms: The request was canceled due to the configured HttpClient.Timeout of 120 seconds elapsing.
+[] failed after 120002.7 ms: The request was canceled due to the configured HttpClient.Timeout of 120 seconds elapsing.
+[] failed after 120003.8 ms: The request was canceled due to the configured HttpClient.Timeout of 120 seconds elapsing.
+[] failed after 120004.4 ms: The request was canceled due to the configured HttpClient.Timeout of 120 seconds elapsing.
+[] failed after 120003.8 ms: The request was canceled due to the configured HttpClient.Timeout of 120 seconds elapsing.
+[] failed after 120003.2 ms: The request was canceled due to the configured HttpClient.Timeout of 120 seconds elapsing.
+[] failed after 120002.9 ms: The request was canceled due to the configured HttpClient.Timeout of 120 seconds elapsing.
+[] failed after 120002.6 ms: The request was canceled due to the configured HttpClient.Timeout of 120 seconds elapsing.
+[] failed after 120003.8 ms: The request was canceled due to the configured HttpClient.Timeout of 120 seconds elapsing.
+[] failed after 120003.5 ms: The request was canceled due to the configured HttpClient.Timeout of 120 seconds elapsing.
+[] failed after 120003.2 ms: The request was canceled due to the configured HttpClient.Timeout of 120 seconds elapsing.
+[] failed after 120002.2 ms: The request was canceled due to the configured HttpClient.Timeout of 120 seconds elapsing.
+[] failed after 120001.9 ms: The request was canceled due to the configured HttpClient.Timeout of 120 seconds elapsing.
+[] failed after 120003.3 ms: The request was canceled due to the configured HttpClient.Timeout of 120 seconds elapsing.
+[] failed after 120003.1 ms: The request was canceled due to the configured HttpClient.Timeout of 120 seconds elapsing.
