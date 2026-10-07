@@ -64,6 +64,8 @@
 ;; TallyPrime 7.1 (tally-real-spike run 37563133547: "runneradmin", the runner's Windows user, both through the XML port
 ;; and inside an add-on; a $$SysInfo parameter a release does not know gives "" there, not an error). When Tally gives
 ;; no user, the file is the shared <company GUID>-<yyyymmdd>.txt as before, and the bridge goes by its 2.3.0 rule.
+;; Proven end to end in run 37580509870 (two Windows users, each with their own Tally, this add-on and this bridge): each
+;; Tally wrote only <GUID>-7-Oct-26-<its user>.txt with w=<its user> on every line; each bridge read and sent only its own.
 
 ;; ---------------------------------------------------------------- the gate: a company is current
 [System: Formula]
