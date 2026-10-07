@@ -1,0 +1,15 @@
+INFO setup origin: BUILT from source dist/FinComBridge-Setup-2.3.3.exe SHA-256 a78aa4a09da3616240ff2700b67ebb33b752eff8e4aeb688d4f8428ed4e9ef50; on this runner SHA-256 a78aa4a09da3616240ff2700b67ebb33b752eff8e4aeb688d4f8428ed4e9ef50
+INFO user 2 (fcuser2) works in a Windows session of their own (session 1, by a Remote Desktop connection to 127.0.0.2); runneradmin in session 2
+INFO S231 import masters-1-items: created 4, altered 0, errors 0
+INFO S231 import masters-2-costs: created 3, altered 0, errors 0
+INFO S231 import masters-4-ledgers: created 14, altered 0, errors 0
+INFO S231 import masters-6-bulk: created 400, altered 0, errors 0
+INFO S231 import S4 the bill (New Ref S231-BILL-1, a journal): created 1, altered 0, errors 0
+INFO push233 template receipt: created 1, errors 0
+INFO push233 template sales50: created 0, errors 0
+INFO push233 template godown: created 1, errors 0
+HARNESS push233 setup (harness): the template(s) sales50 were not imported (see round4.log, '[slow232 import] push233 template'): no save can be made; the add-on is not judged
+PASS 6a two bridges at once: bridge 1 runneradmin on 127.0.0.1:9100 (pid 3144, session 2, go-45de1a0caa72); bridge 2 fcuser2 on 127.0.0.1:9101 (pid 10432, session 1, go-b886cea288d8); both listening at 17:28:33
+INFO /ping with a nonce but no Origin (own bridge): proof not given
+PASS 6b /ping proof: bridge 1 proves itself to runneradmin: ok; bridge 1 proof checked against user 2 identity fails: ok; bridge 2 proves itself to fcuser2: ok; bridge 2 proof checked against user 1 identity fails: ok; bridge 2 gives runneradmin no proof: ok; bridge 1 gives fcuser2 no proof: ok; other users refused 403 beyond /ping: ok
+INFO push233: not run (L0: the add-on did not load or wrote no full entry)
