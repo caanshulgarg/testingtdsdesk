@@ -139,6 +139,7 @@
     On : Form Accept : Yes          : Form Accept
     On : Form Accept : @@FCRIsLive : Call : FCRLiveLog : "voucher_accept_post"
     On : Form Accept : @@FCRIsLive : Call : FCRLiveFull : "voucher_full"
+    On : Form Accept : @@FCRIsLive : Call : FCRProbe : "probe"
 
 [#Form: Ledger]
     On : Form Accept : @@FCRIsLive : Call : FCRLiveLog : "ledger_accept_pre"
@@ -670,6 +671,117 @@
     f501 : WRITE FILE LINE : "|end=1|t1=" + ##vT + "|src=live"
     f502 : CLOSE TARGET FILE
     f503 : RETURN : Yes
+
+;; ---------------------------------------------------------------- PROBE ONLY (branch push-probe, never shipped): which string functions this release evaluates
+[Function: FCRProbe]
+    Parameter : pEvent : String
+    Variable  : plenA : String
+    Variable  : plenB : String
+    Variable  : plenN : Number
+    Variable  : plenC : String
+    Variable  : plenD : String
+    Variable  : plenE : String
+    Variable  : plenF : String
+    Variable  : plenNarr : String
+    Variable  : ppart : String
+    Variable  : pfrep : String
+    Variable  : prep : String
+    Variable  : psrep : String
+    Variable  : pstrrep : String
+    Variable  : pword : String
+    Variable  : pfind : String
+    Variable  : psprintf : String
+    Variable  : pupper : String
+    Variable  : pneg1 : String
+    Variable  : pneg2 : String
+    Variable  : pamt1 : String
+    Variable  : pdp1 : String
+    Variable  : pnl : String
+    Variable  : pGuid : String
+    Variable  : pFile : String
+    Variable  : pT : String
+    Returns   : Logical
+
+    q001 : SET : plenA : "unset"
+    q002 : SET : plenB : "unset"
+    q003 : SET : plenN : -1
+    q004 : SET : plenC : "unset"
+    q005 : SET : plenD : "unset"
+    q006 : SET : plenE : "unset"
+    q007 : SET : plenF : "unset"
+    q008 : SET : plenNarr : "unset"
+    q009 : SET : ppart : "unset"
+    q010 : SET : pfrep : "unset"
+    q011 : SET : prep : "unset"
+    q012 : SET : psrep : "unset"
+    q013 : SET : pstrrep : "unset"
+    q014 : SET : pword : "unset"
+    q015 : SET : pfind : "unset"
+    q016 : SET : psprintf : "unset"
+    q017 : SET : pupper : "unset"
+    q018 : SET : pneg1 : "unset"
+    q019 : SET : pneg2 : "unset"
+    q020 : SET : pamt1 : "unset"
+    q021 : SET : pdp1 : "unset"
+    q022 : SET : pnl : "unset"
+    q023 : SET : plenA : $$StringLength:"abc|d"
+    q024 : SET : plenB : $$String:($$StringLength:"abc|d")
+    q025 : SET : plenN : $$StringLength:"abc|d"
+    q026 : SET : plenC : $$StrLength:"abc|d"
+    q027 : SET : plenD : $$Length:"abc|d"
+    q028 : SET : plenE : $$StringLen:"abc|d"
+    q029 : SET : plenF : $$Len:"abc|d"
+    q030 : SET : plenNarr : $$String:($$StringLength:($$String:$Narration))
+    q031 : SET : ppart : $$StringPart:"abcdef":2:3
+    q032 : SET : pfrep : $$StringFindAndReplace:"a|b|c":"|":"%7C"
+    q033 : SET : prep : $$Replace:"a|b|c":"|":"%7C"
+    q034 : SET : psrep : $$StrReplace:"a|b|c":"|":"%7C"
+    q035 : SET : pstrrep : $$StringReplace:"a|b|c":"|":"%7C"
+    q036 : SET : pword : $$StringWordEx:"a|b|c":"|":2
+    q037 : SET : pfind : $$StringFind:"a|b":"|"
+    q038 : SET : psprintf : $$SprintF:"%s-%s":"a":"b"
+    q039 : SET : pupper : $$UpperCase:"ab"
+    q040 : SET : pneg1 : $$CollectionField:($$String:@@FCRFNeg):1:AllLedgerEntries
+    q041 : SET : pneg2 : $$CollectionField:($$String:($Amount < 0)):1:AllLedgerEntries
+    q042 : SET : pamt1 : $$CollectionField:($$String:$Amount):1:AllLedgerEntries
+    q043 : SET : pdp1 : $$CollectionField:($$String:$IsDeemedPositive):1:AllLedgerEntries
+    q044 : SET : pnl : $$String:($$NumItems:AllLedgerEntries)
+    q045 : SET : pGuid : $Guid:Company:##SVCurrentCompany
+    q046 : SET : pFile : @@FCRFolder + ##pGuid + "-" + @@FCRDay + "-" + @@FCRWinUser + ".txt"
+    q047 : IF : $$IsEmpty:@@FCRWinUser
+    q048 :    SET : pFile : @@FCRFolder + ##pGuid + "-" + @@FCRDay + ".txt"
+    q049 : END IF
+    q050 : SET : pT : ($$String:$$MachineDate) + " " + ($$String:$$MachineTime)
+    q051 : OPEN FILE : ##pFile : Text : Write : Unicode
+    q052 : IF : NOT $$LastResult
+    q053 :    RETURN : Yes
+    q054 : END IF
+    q055 : WRITE FILE : "FCR1|ev=" + ##pEvent + "|t0=" + ##pT + "|tw=" + ##pT + "|w=" + @@FCRWinUser + "|cguid=" + ##pGuid + "|cname=" + ##SVCurrentCompany + "|user=|obj=Voucher|guid=|mid=|aid=|vtype=|vno=|vdate=|name=|parent=|narr="
+    q056 : WRITE FILE : " lenA=[" + ##plenA + "]"
+    q057 : WRITE FILE : " lenB=[" + ##plenB + "]"
+    q058 : WRITE FILE : " lenN=[" + ($$String:##plenN) + "]"
+    q059 : WRITE FILE : " lenC=[" + ##plenC + "]"
+    q060 : WRITE FILE : " lenD=[" + ##plenD + "]"
+    q061 : WRITE FILE : " lenE=[" + ##plenE + "]"
+    q062 : WRITE FILE : " lenF=[" + ##plenF + "]"
+    q063 : WRITE FILE : " lenNarr=[" + ##plenNarr + "]"
+    q064 : WRITE FILE : " part=[" + ##ppart + "]"
+    q065 : WRITE FILE : " frep=[" + ##pfrep + "]"
+    q066 : WRITE FILE : " rep=[" + ##prep + "]"
+    q067 : WRITE FILE : " srep=[" + ##psrep + "]"
+    q068 : WRITE FILE : " strrep=[" + ##pstrrep + "]"
+    q069 : WRITE FILE : " word=[" + ##pword + "]"
+    q070 : WRITE FILE : " find=[" + ##pfind + "]"
+    q071 : WRITE FILE : " sprintf=[" + ##psprintf + "]"
+    q072 : WRITE FILE : " upper=[" + ##pupper + "]"
+    q073 : WRITE FILE : " neg1=[" + ##pneg1 + "]"
+    q074 : WRITE FILE : " neg2=[" + ##pneg2 + "]"
+    q075 : WRITE FILE : " amt1=[" + ##pamt1 + "]"
+    q076 : WRITE FILE : " dp1=[" + ##pdp1 + "]"
+    q077 : WRITE FILE : " nl=[" + ##pnl + "]"
+    q078 : WRITE FILE LINE : "|t1=" + ##pT + "|src=live"
+    q079 : CLOSE TARGET FILE
+    q080 : RETURN : Yes
 
 ;; ---------------------------------------------------------------- the one writer (heads only)
 [Function: FCRLiveLog]
