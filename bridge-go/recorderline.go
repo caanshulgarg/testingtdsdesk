@@ -10,6 +10,11 @@
 // narr is free text from "|narr=" to the LAST "|t1=" (it may hold "|"); a physical line that does not start with
 // "FCR1|" continues the line before it (a narration over several lines). t0, tw and t1 are seconds ($$MachineTime).
 // Read here for the trial's summary; 2.2.0 reads the same lines.
+//
+// Next (next-userfile): the live add-on writes "|w=<Windows user>" right after tw (the Windows user whose Tally wrote the
+// line), in that user's own daily file <company GUID>-<day>-<Windows user>.txt (userfile.go). Optional: older lines have
+// none. After tw, so an older bridge reads it as part of tw (a time it needs only when t0 is missing) and the line still
+// ends "|t1=...|src=live" as its reader requires.
 package main
 
 import (
@@ -19,6 +24,7 @@ import (
 
 type recLine struct {
 	Ev, T0, Tw, CGUID, CName, User, Obj, GUID, MID, AID, VType, VNo, VDate, Name, Parent, Narr, T1 string
+	W                                                                                              string // next-userfile: the Windows user ("" from an older add-on)
 	Src                                                                                            string // 2.2.0: "live" from the live add-on (FinComRecorder.tdl writes "|src=live" after t1); "" from the trial's
 	// 2.2.2 (the bridge's own, never on a line): a pair's first half's GUID and AlterID (the AlterID before the save: a
 	// lower bound for Tally's; the GUID flagged when it is another entry's)
@@ -80,15 +86,29 @@ func parseRecorderLine(l string) (recLine, bool) {
 	}
 	head, narr, t1 := rest[:ni], rest[ni+len("|narr="):ti], rest[ti+len("|t1="):]
 	vals := make([]string, len(recKeys))
-	pos := 0
+	pos, w := 0, ""
 	for i, k := range recKeys {
+		if k == "cguid" && strings.HasPrefix(head[pos:], "w=") {
+			// next-userfile: the Windows user, after tw (its value runs to "|cguid=", as tw's did)
+			j := strings.Index(head[pos:], "|cguid=")
+			if j < 0 {
+				return recLine{}, false
+			}
+			w, pos = head[pos+len("w="):pos+j], pos+j+1
+		}
 		if !strings.HasPrefix(head[pos:], k+"=") {
 			return recLine{}, false
 		}
 		pos += len(k) + 1
 		end := len(head)
 		if i+1 < len(recKeys) {
-			j := strings.Index(head[pos:], "|"+recKeys[i+1]+"=")
+			next := "|" + recKeys[i+1] + "="
+			if k == "tw" && strings.Contains(head[pos:], "|w=") {
+				if j, c := strings.Index(head[pos:], "|w="), strings.Index(head[pos:], next); j >= 0 && (c < 0 || j < c) {
+					next = "|w="
+				}
+			}
+			j := strings.Index(head[pos:], next)
 			if j < 0 {
 				return recLine{}, false
 			}
@@ -105,7 +125,7 @@ func parseRecorderLine(l string) (recLine, bool) {
 		t1, src = t1[:i], strings.TrimSpace(t1[i+len("|src="):])
 	}
 	return recLine{Ev: vals[0], T0: vals[1], Tw: vals[2], CGUID: vals[3], CName: vals[4], User: vals[5], Obj: vals[6], GUID: vals[7], MID: vals[8], AID: vals[9],
-		VType: vals[10], VNo: vals[11], VDate: vals[12], Name: vals[13], Parent: vals[14], Narr: narr, T1: strings.TrimSpace(t1), Src: src}, true
+		VType: vals[10], VNo: vals[11], VDate: vals[12], Name: vals[13], Parent: vals[14], Narr: narr, T1: strings.TrimSpace(t1), Src: src, W: strings.TrimSpace(w)}, true
 }
 
 // every FCR1 line of a recorder file's text

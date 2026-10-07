@@ -56,11 +56,21 @@
 ;; any date form still works; the beat names the files it read. After loading, check once that
 ;; C:\ProgramData\FinCom\recorder\ shows a new file ending in today's yyyymmdd (docs/recorder-live-sheet.txt).
 
+;; Next (branch next-userfile; the owner's item b): every Windows user's Tally on a computer writes into the one
+;; recorder folder, so each line now goes to that Windows user's OWN daily file
+;;     C:\ProgramData\FinCom\recorder\<company GUID>-<yyyymmdd>-<Windows user>.txt
+;; and carries "|w=<Windows user>" right after tw (an older bridge reads it as part of tw, which it does not need, and the
+;; line still ends "|t1=...|src=live"). The Windows user is Tally's own $$SysInfo:WindowsUser, proven on a real
+;; TallyPrime 7.1 (tally-real-spike run 37563133547: "runneradmin", the runner's Windows user, both through the XML port
+;; and inside an add-on; a $$SysInfo parameter a release does not know gives "" there, not an error). When Tally gives
+;; no user, the file is the shared <company GUID>-<yyyymmdd>.txt as before, and the bridge goes by its 2.3.0 rule.
+
 ;; ---------------------------------------------------------------- the gate: a company is current
 [System: Formula]
     FCRIsLive   : NOT $$IsEmpty:##SVCurrentCompany
     FCRFolder   : "C:\ProgramData\FinCom\recorder\"
     FCRDay      : $$String:$$MachineDate:"UniversalDate"
+    FCRWinUser  : $$SysInfo:WindowsUser
 
 ;; ---------------------------------------------------------------- system events (the trial's)
 ;; Syntax: <label> : <event> : <condition> : <action> : <action parameters>
@@ -108,8 +118,12 @@
     03 : IF     : $$IsEmpty:##vGuid
     04 :    SET : vGuid : "noguid"
     05 : END IF
-    ;; the daily file: <company GUID>-<yyyymmdd>.txt
-    06 : SET    : vFile : @@FCRFolder + ##vGuid + "-" + @@FCRDay + ".txt"
+    ;; the daily file: <company GUID>-<yyyymmdd>-<Windows user>.txt (next-userfile), or <company GUID>-<yyyymmdd>.txt
+    ;; when Tally gives no Windows user
+    06 : SET    : vFile : @@FCRFolder + ##vGuid + "-" + @@FCRDay + "-" + @@FCRWinUser + ".txt"
+    06a: IF     : $$IsEmpty:@@FCRWinUser
+    06b:    SET : vFile : @@FCRFolder + ##vGuid + "-" + @@FCRDay + ".txt"
+    06c: END IF
 
     ;; object type: Voucher if it has a voucher type, Master if it has a name, else None
     07 : SET    : vObj  : "None"
@@ -123,7 +137,7 @@
     ;; the line (heads only: the bridge asks Tally for the body)
     14 : SET    : vLine : "FCR1|ev=" + ##pEvent + "|t0=" + ##vT0
     15 : SET    : vTW   : ($$String:$$MachineDate) + " " + ($$String:$$MachineTime)
-    16 : SET    : vLine : ##vLine + "|tw=" + ##vTW
+    16 : SET    : vLine : ##vLine + "|tw=" + ##vTW + "|w=" + @@FCRWinUser
     17 : SET    : vLine : ##vLine + "|cguid=" + ##vGuid + "|cname=" + ##SVCurrentCompany
     18 : SET    : vLine : ##vLine + "|user=" + ($$String:$$CmpUserName) + "|obj=" + ##vObj
     19 : SET    : vLine : ##vLine + "|guid=" + ($$String:$Guid) + "|mid=" + ($$String:$MasterID)

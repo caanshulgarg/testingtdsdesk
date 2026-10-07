@@ -576,8 +576,8 @@ func applyRecorderSource(j M) {
 }
 
 // --- source A: the daily files
-// 2.2.2: on real TallyPrime 7.1 the add-on's @@FCRDay gives "5-Oct-26": <GUID>-5-Oct-26.txt (d-Mon-yy) is read too
-var reLiveFile = regexp.MustCompile(`^(.+)-(\d{8}|\d{4}-\d{2}-\d{2}|\d{1,2}-[A-Za-z]{3}-\d{2})\.txt$`)
+// 2.2.2: on real TallyPrime 7.1 the add-on's @@FCRDay gives "5-Oct-26": <GUID>-5-Oct-26.txt (d-Mon-yy) is read too;
+// next-userfile: <GUID>-<day>-<Windows user>.txt (userfile.go reLiveFileUser)
 
 // the add-on's files to read, oldest first: (review M8) every .txt with a "-" in its name (the date part in any form:
 // a line is taken only when its company GUID starts the name, so the trial's <GUID>.txt gives nothing), dated by its
@@ -607,6 +607,10 @@ func liveFiles() []string {
 			continue
 		}
 		if !strings.Contains(strings.TrimSuffix(n, ".txt"), "-") {
+			continue
+		}
+		// next-userfile: another Windows user's own file is never opened by a bridge that runs for one user (userfile.go)
+		if !liveFileMine(n) {
 			continue
 		}
 		day := fi.ModTime().Format("20060102")
@@ -935,12 +939,21 @@ func liveTake(file string, gen int, ll liveLogicalLine, posting bool, held map[s
 	// a line is taken only when this bridge's OWN Tally had its company open when it was written (recorder_owntally.go).
 	// Else it is passed over, never sent (the Day Book upload stays the fallback for the owner's own entries); written
 	// after the last look at the own Tally: it waits for the next look
-	switch liveOwnVerdict(l) {
-	case liveOwnWait:
-		return -2
-	case liveOwnSkip:
-		liveNotHere(l)
-		return 0
+	// next-userfile: a line that names its Windows user (w=) is taken by that user's bridge alone, without the look
+	// (userfile.go); a line without one (an older add-on), and every line at a bridge that is not one user's, by the rule
+	if me := liveOwnWinUser(); me != "" && strings.TrimSpace(l.W) != "" {
+		if liveUserKey(l.W) != me {
+			liveOtherUser(l)
+			return 0
+		}
+	} else {
+		switch liveOwnVerdict(l) {
+		case liveOwnWait:
+			return -2
+		case liveOwnSkip:
+			liveNotHere(l)
+			return 0
+		}
 	}
 	if live.qcount[liveGUID(l.CGUID)] >= liveQueueCap() {
 		liveSayOnce("cap|"+l.CGUID, fmt.Sprintf("Recorder: %s has %d changes waiting to be sent: the rest of its file is read once they go", strings.TrimSpace(l.CName), liveQueueCap()))
@@ -2499,9 +2512,8 @@ func recorderLiveLoop() {
 }
 
 // the day a daily file's name gives (yyyymmdd; "" when its name carries none): yyyymmdd, yyyy-mm-dd or d-Mon-yy
+// (next-userfile: with or without the Windows user after it, userfile.go)
 func liveFileDay(name string) string {
-	if g := reLiveFile.FindStringSubmatch(name); g != nil {
-		return normDate(g[2])
-	}
-	return ""
+	d, _ := liveFileDayUser(name)
+	return d
 }

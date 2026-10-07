@@ -176,6 +176,10 @@ func TestLiveAddonFile(t *testing.T) {
 	trial := readText(filepath.Join("addon", anyAddonName))
 	body := func(s string) string {
 		s = s[strings.Index(s, "    01 : SET"):]
+		// next-userfile: the Windows user's own file (06a-06c: the shared name when Tally gives no user) and w= after tw
+		s = regexp.MustCompile(`(?m)^    06[abc]:.*\n`).ReplaceAllString(s, "")
+		s = strings.ReplaceAll(s, `@@FCRFolder + ##vGuid + "-" + @@FCRDay + "-" + @@FCRWinUser + ".txt"`, `@@FCRFolder + ##vGuid + ".txt"`)
+		s = strings.ReplaceAll(s, `"|tw=" + ##vTW + "|w=" + @@FCRWinUser`, `"|tw=" + ##vTW`)
 		s = strings.ReplaceAll(s, `@@FCRFolder + ##vGuid + "-" + @@FCRDay + ".txt"`, `@@FCRFolder + ##vGuid + ".txt"`)
 		s = strings.ReplaceAll(s, `"|t1=" + ##vT1 + "|src=live"`, `"|t1=" + ##vT1`)
 		s = strings.ReplaceAll(s, `SET : vGuid : "noguid"`, `SET : vGuid : "name-" + ##SVCurrentCompany`) // review Low 17
