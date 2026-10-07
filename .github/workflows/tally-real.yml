@@ -46,6 +46,9 @@ jobs:
           # committed setup (a-231 / b-231 / items-231 keep 2.3.0's) is built from source
           # push233 (branch next-push, no version bump: it carries 2.3.2's committed setup) is always built from source
           if [ "${{ inputs.only }}" = "push233" ]; then echo "only=push233: building from source (the ref's committed setup is an older build)"; echo "use=no" >> "$GITHUB_OUTPUT"; exit 0; fi
+          # pileup (next-inflight, no version bump: it carries 2.3.1's committed setup; run 37606559317 installed that one) is
+          # always built from source
+          if [ "${{ inputs.only }}" = "pileup" ]; then echo "only=pileup: building from source (the ref's committed setup is an older build)"; echo "use=no" >> "$GITHUB_OUTPUT"; exit 0; fi
           ver=$(grep -oP 'var BridgeVersion = "\K[0-9.]+' bridge-go/util.go || true)
           f=$(ls assets-test/bridge-go/FinComBridge-Setup-$ver.exe 2>/dev/null | head -1 || true)
           echo "the ref's BridgeVersion: $ver; committed setups: $(ls assets-test/bridge-go/FinComBridge-Setup-*.exe 2>/dev/null | tr '\n' ' ')"
