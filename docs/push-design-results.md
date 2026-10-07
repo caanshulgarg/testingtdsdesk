@@ -26,7 +26,7 @@ The heads-only add-on was loaded and the bridge stopped. The harness sent the br
 | 6.2 | 10 | **10** | 4,998 / 6,091 | 4,880 / 5,990 |
 | 7.1 | 10 | **10** | 4,275 / 4,498 | 4,159 / 4,399 |
 
-**Every save made during the fetch froze. Tally's screen did not change until the fetch had finished**: the first change came within about 0.1–0.2 s of the fetch's end. The saves themselves were normal once Tally reached them (save b→c, e.g. 7.1 receipt 50–55 ms, 50-item 414–454 ms). With no fetch running, the same company gave 0 freezes in 255 saves [R]. **The 1–6 s freezes the owner sees are Tally answering the bridge's by-MasterID fetch, not the add-on.**
+**Every save made during the fetch froze. Tally's screen did not change until the fetch had finished**: the first change came about 0.1–0.25 s before the fetch ended (medians). The saves themselves were normal once Tally reached them (save b→c, e.g. 7.1 receipt 50–55 ms, 50-item 414–454 ms). With no fetch running, the same company gave 0 freezes in 255 saves [R]. **The 1–6 s freezes the owner sees are Tally answering the bridge's by-MasterID fetch, not the add-on.**
 
 ### 3 (answered). The keyed lookups for one voucher [B]
 
