@@ -1350,3 +1350,52 @@ func TestPushPayHeadsWhenNegIsBlind(t *testing.T) {
 		}
 	}
 }
+
+// 2.3.3 kept for the fallback route (the owner's rule: a save always shows, at least as held with a reason): the real lines
+// of 7.1 with each full line damaged (its len off by one: refused) and this computer's Tally not answering: every save goes
+// by the 2.3.2/2.3.3 route and is in FinCom at once, held with words; nothing silent, no full entry taken
+func TestPushFallbackKeeps233HeldAtOnce(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("testdata", "push233", "real", "c8-7.1.recorder-file.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	txt := decodeRecorderText(b)
+	cg := regexp.MustCompile(`\|cguid=([0-9a-f-]{36})\|`).FindStringSubmatch(txt)[1]
+	var out []string
+	for _, l := range strings.Split(txt, "\r\n") {
+		if strings.Contains(l, "ev=voucher_full") {
+			m := regexp.MustCompile(`\|len=(\d+)\|end=1`).FindStringSubmatch(l)
+			n, _ := strconv.Atoi(m[1])
+			l = strings.Replace(l, m[0], fmt.Sprintf("|len=%d|end=1", n+1), 1)
+		}
+		out = append(out, l)
+	}
+	rec, f, c := liveBridge(t, `,"RecorderFullWaitMs":50`)
+	ufAs(t, "user", "runneradmin")
+	noteStartPoint("FinCom Spike Co", cg, 1, 1)
+	appendBytes(t, filepath.Join(rec, cg+"-7-Oct-26-runneradmin.txt"), []byte(strings.Join(out, "\r\n")))
+	readAndUploadAll(t)
+	time.Sleep(80 * time.Millisecond)
+	readAndUploadAll(t)
+	saves := 0
+	for _, l := range c.recSent() {
+		if l["push"] == true {
+			t.Fatalf("a damaged full line was taken: %v", l)
+		}
+		if ev := str(l["event"]); ev == "created" || ev == "altered" {
+			saves++
+			if str(l["heldWhy"]) == "" && str(l["xml"]) == "" {
+				t.Fatalf("a save sent with neither its body nor words: %v", l)
+			}
+		}
+	}
+	if saves != 3 {
+		t.Fatalf("saves in FinCom: %d of 3 (%v)", saves, c.recSent())
+	}
+	if f.n(vchByMasterID)+f.n(vchByNumberID) == 0 && logLines("Tally is asked for the entry as before") == 0 {
+		t.Fatal("the fallback was not taken")
+	}
+	if logLines("the full entry is not taken") < 1 {
+		t.Fatal("the refusal is not said in the log")
+	}
+}
