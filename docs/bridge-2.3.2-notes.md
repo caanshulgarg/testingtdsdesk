@@ -6,7 +6,7 @@ For the owner. Plain words; times are IST. The steps to try it on NWS144 are in 
 | | |
 |---|---|
 | Setup file | FinComBridge-Setup-2.3.2.exe |
-| Fingerprint | SHA-256 `<SHA-256>` (filled in when the setup is built; compare with the .sha256 file next to the setup) |
+| Fingerprint | SHA-256 `605cbc4a7c93a308ecc29d2de0bbbfd787821f53d9fae761d76698a77c66c168` (FinComBridge-Setup-2.3.2.exe, built 07-Oct-2026 08:25 IST; compare with the .sha256 file next to the setup) |
 | FinCom app update | the one that goes with 2.3.2 shows the new line on the Tally page (below); the app of 2.3.1 still works with 2.3.2 (it shows nothing for it) |
 | FinCom's cloud | unchanged (tally-ingest keeps the line as it already does; no migration) |
 | Replaces | 2.3.1 (kept on the computer, so the tray can roll back to it) |
