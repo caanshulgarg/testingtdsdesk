@@ -1,0 +1,3 @@
+2026-10-07 11:07:42  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line 8c18eb20…): asking Tally by MasterID
+2026-10-07 11:07:42  Recorder: entry fetch of FinCom Spike Co: answered in 19 ms
+2026-10-07 11:07:42  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line 8c18eb20…): taken: Tally's GUID 137cb1f6-9232-44e2-b842-6c8a1ec04b53-00000003, AlterID 3
