@@ -1,0 +1,233 @@
+[11:35:40.008] push-design on TallyPrime 7.1: reps 5, heavy 3000 ledgers / 3000 items / up to 30000 vouchers (40 min), postings 1
+[11:35:47.259] system clock step after timeBeginPeriod(1): 0.494 ms (min 0.005, max 5.1578)
+[11:35:47.288] two files written 2 ms apart: NTFS write times 15.6385 ms apart
+[11:35:47.310] light company folder: D:\a\_temp\TallyData\100000
+[11:35:47.367] why22 on TallyPrime 7.1: reps 5; the bridge's request template 2927 chars, 61 fields
+[11:35:50.424] tally.ini: Data D:\a\_temp\why22\grow; Load 100000
+[keys] 'a'
+[keys] 't'
+[shot] p-w-grow-setup-started (1024x768)
+[11:36:20.108] Tally started (grow-setup) in 29.7 s; companies open: FinCom Spike Co; wanted all of: FinCom Spike Co -> True
+[11:36:20.445] import light masters 0: 60 sent, created 59, errors 0, 304.9 ms
+[11:36:23.219] import base masters 0: 600 sent, created 600, errors 0, 2686.3 ms
+[11:36:23.330] sizes masters only (FinCom Spike Co): vouchers 1 (MasterID 1-1), ledgers 311 (30-567), items 350 (218-867), groups 28 (1-28), voucher types 24 (32-88); folder 2.3 MB; Tally 394 MB
+[11:36:23.446] import target A0: 1 sent, created 1, errors 0, 95.3 ms
+[11:36:23.489] target A0 (FinCom Spike Co): MasterID , date , number 
+[11:36:29.499] tally.ini: Data D:\a\_temp\why22\grow; Load 100000
+[keys] 'a'
+[keys] 't'
+[shot] p-w-grow-0-started (1024x768)
+[11:36:58.991] Tally started (grow-0) in 29.5 s; companies open: FinCom Spike Co; wanted all of: FinCom Spike Co -> True
+[11:36:59.059] sizes F1 0 (FinCom Spike Co): vouchers 2 (MasterID 1-2), ledgers 311 (30-567), items 350 (218-867), groups 28 (1-28), voucher types 24 (32-88); folder 2.4 MB; Tally 396 MB
+[11:36:59.064] measure F1/0: no target: skipped
+[11:37:08.144] import FinCom Spike Co vouchers 0-499: 500 sent, created 500, errors 0, 8983.2 ms
+[11:37:08.203] import target A500: 1 sent, created 1, errors 0, 57.1 ms
+[11:37:08.290] target A500 (FinCom Spike Co): MasterID , date , number 
+[11:37:08.311] import probe ledger after the vouchers: 1 sent, created 1, errors 0, 19.5 ms
+[11:37:08.559] import delete HJ-000004: 1 sent, created 0, errors 1, 106.2 ms; Tally: Voucher does not exist!
+[11:37:08.770] import target A500b: 1 sent, created 1, errors 0, 63 ms
+[11:37:08.861] target A500b (FinCom Spike Co): MasterID , date , number 
+[11:37:09.029] mid: TallyPrime 7.1
+[11:37:09.030] mid: vouchers before: n 503, MasterID 1-503; probe ledger made after them: MasterID 868
+[11:37:09.030] mid: delete HJ-000004: Tally said created 0 errors 1 <DELETED>0 <LINEERROR>Voucher does not exist!; vouchers after: n 503, MasterID 1-503
+[11:37:09.031] mid: a voucher made after that: MasterID ; vouchers now n 504, MasterID 1-504
+[11:37:15.041] tally.ini: Data D:\a\_temp\why22\grow; Load 100000
+[keys] 'a'
+[keys] 't'
+[shot] p-w-grow-500-started (1024x768)
+[11:37:44.549] Tally started (grow-500) in 29.5 s; companies open: FinCom Spike Co; wanted all of: FinCom Spike Co -> True
+[11:37:44.728] sizes F1 500 (FinCom Spike Co): vouchers 504 (MasterID 1-504), ledgers 312 (30-868), items 350 (218-867), groups 28 (1-28), voucher types 24 (32-88); folder 10.4 MB; Tally 409 MB
+[11:37:44.729] measure F1/500: no target: skipped
+[11:38:03.848] import FinCom Spike Co vouchers 500-1499: 1000 sent, created 1000, errors 0, 19025.9 ms
+[11:38:22.847] import FinCom Spike Co vouchers 1500-2499: 1000 sent, created 1000, errors 0, 18923.1 ms
+[11:38:42.677] import FinCom Spike Co vouchers 2500-3499: 1000 sent, created 1000, errors 0, 19742.4 ms
+[11:38:52.434] import FinCom Spike Co vouchers 3500-3999: 500 sent, created 500, errors 0, 9715.8 ms
+[11:38:52.516] import target A4000: 1 sent, created 1, errors 0, 80.5 ms
+[11:38:53.005] target A4000 (FinCom Spike Co): MasterID , date , number 
+[11:38:59.014] tally.ini: Data D:\a\_temp\why22\grow; Load 100000
+[keys] 'a'
+[keys] 't'
+[shot] p-w-grow-4000-started (1024x768)
+[11:39:28.500] Tally started (grow-4000) in 29.5 s; companies open: FinCom Spike Co; wanted all of: FinCom Spike Co -> True
+[11:39:29.366] sizes F1 4000 (FinCom Spike Co): vouchers 4005 (MasterID 1-4005), ledgers 312 (30-868), items 350 (218-867), groups 28 (1-28), voucher types 24 (32-88); folder 51.8 MB; Tally 511 MB
+[11:39:29.367] measure F1/4000: no target: skipped
+[11:39:32.407] snapshot of the 4,000 company: D:\a\_temp\why22\s4k\100000
+[] failed after 2004.4 ms: No connection could be made because the target machine actively refused it. (127.0.0.1:9000)
+[11:39:37.417] tally.ini: Data D:\a\_temp\why22\grow; Load 100000
+[keys] 'a'
+[keys] 't'
+[shot] p-w-grow-10000-reopen-started (1024x768)
+[11:40:06.912] Tally started (grow-10000-reopen) in 29.5 s; companies open: FinCom Spike Co; wanted all of: FinCom Spike Co -> True
+[11:40:26.135] import FinCom Spike Co vouchers 4000-4999: 1000 sent, created 1000, errors 0, 19140.1 ms
+[11:40:45.552] import FinCom Spike Co vouchers 5000-5999: 1000 sent, created 1000, errors 0, 19321.1 ms
+[11:41:04.290] import FinCom Spike Co vouchers 6000-6999: 1000 sent, created 1000, errors 0, 18658 ms
+[11:41:22.891] import FinCom Spike Co vouchers 7000-7999: 1000 sent, created 1000, errors 0, 18516 ms
+[11:41:41.970] import FinCom Spike Co vouchers 8000-8999: 1000 sent, created 1000, errors 0, 18999.1 ms
+[11:41:59.716] import FinCom Spike Co vouchers 9000-9999: 1000 sent, created 1000, errors 0, 17671.2 ms
+[11:41:59.826] import target A10000: 1 sent, created 1, errors 0, 108.3 ms
+[11:42:00.967] target A10000 (FinCom Spike Co): MasterID , date , number 
+[11:42:06.974] tally.ini: Data D:\a\_temp\why22\grow; Load 100000
+[keys] 'a'
+[keys] 't'
+[shot] p-w-grow-10000-started (1024x768)
+[11:42:36.486] Tally started (grow-10000) in 29.5 s; companies open: FinCom Spike Co; wanted all of: FinCom Spike Co -> True
+[11:42:38.824] sizes F1 10000 (FinCom Spike Co): vouchers 10006 (MasterID 1-10006), ledgers 312 (30-868), items 350 (218-867), groups 28 (1-28), voucher types 24 (32-88); folder 122.2 MB; Tally 664 MB
+[11:42:38.825] measure F1/10000: no target: skipped
+[11:42:57.760] import FinCom Spike Co vouchers 10000-10999: 1000 sent, created 1000, errors 0, 18845.7 ms
+[11:43:16.113] import FinCom Spike Co vouchers 11000-11999: 1000 sent, created 1000, errors 0, 18266.8 ms
+[11:43:34.901] import FinCom Spike Co vouchers 12000-12999: 1000 sent, created 1000, errors 0, 18703.7 ms
+[11:43:53.206] import FinCom Spike Co vouchers 13000-13999: 1000 sent, created 1000, errors 0, 18229.5 ms
+[11:44:11.136] import FinCom Spike Co vouchers 14000-14999: 1000 sent, created 1000, errors 0, 17854.5 ms
+[11:44:29.524] import FinCom Spike Co vouchers 15000-15999: 1000 sent, created 1000, errors 0, 18311.8 ms
+[11:44:48.306] import FinCom Spike Co vouchers 16000-16999: 1000 sent, created 1000, errors 0, 18705.9 ms
+[11:45:07.212] import FinCom Spike Co vouchers 17000-17999: 1000 sent, created 1000, errors 0, 18826.7 ms
+[11:45:26.363] import FinCom Spike Co vouchers 18000-18999: 1000 sent, created 1000, errors 0, 19073.1 ms
+[11:45:45.724] import FinCom Spike Co vouchers 19000-19999: 1000 sent, created 1000, errors 0, 19276.2 ms
+[11:46:04.163] import FinCom Spike Co vouchers 20000-20999: 1000 sent, created 1000, errors 0, 18359.9 ms
+[11:46:23.405] import FinCom Spike Co vouchers 21000-21999: 1000 sent, created 1000, errors 0, 19152.9 ms
+[11:46:43.327] import FinCom Spike Co vouchers 22000-22999: 1000 sent, created 1000, errors 0, 19842.2 ms
+[11:47:02.077] import FinCom Spike Co vouchers 23000-23999: 1000 sent, created 1000, errors 0, 18657.4 ms
+[11:47:20.616] import FinCom Spike Co vouchers 24000-24999: 1000 sent, created 1000, errors 0, 18461.8 ms
+[11:47:20.797] import target A25000: 1 sent, created 1, errors 0, 179.4 ms
+[11:47:23.847] target A25000 (FinCom Spike Co): MasterID , date , number 
+[11:47:29.855] tally.ini: Data D:\a\_temp\why22\grow; Load 100000
+[keys] 'a'
+[keys] 't'
+[shot] p-w-grow-25000-started (1024x768)
+[11:47:59.369] Tally started (grow-25000) in 29.5 s; companies open: FinCom Spike Co; wanted all of: FinCom Spike Co -> True
+[11:48:06.676] sizes F1 25000 (FinCom Spike Co): vouchers 25007 (MasterID 1-25007), ledgers 312 (30-868), items 350 (218-867), groups 28 (1-28), voucher types 24 (32-88); folder 298.6 MB; Tally 807 MB
+[11:48:06.677] measure F1/25000: no target: skipped
+[11:48:12.739] tally.ini: Data D:\a\_temp\why22\big; Load none
+[keys] 'a'
+[keys] 't'
+[shot] p-w-big-edu (1024x768)
+[keys] '{ENTER}'
+[shot] p-w-big-create (1024x768)
+[keys] 'VMS Big Co'
+[shot] p-w-big-name (1024x768)
+[keys] '^a'
+[shot] p-w-big-ctrla (1024x768)
+[11:49:01.184] second company 'VMS Big Co' made on screen: True; folder D:\a\_temp\why22\big\100000
+[11:49:01.475] import B light masters 0: 60 sent, created 60, errors 0, 280.9 ms
+[11:49:04.286] import B base masters 0: 600 sent, created 600, errors 0, 2782.2 ms
+[11:49:18.739] import VMS Big Co vouchers 0-999: 1000 sent, created 1000, errors 0, 14372.6 ms
+[11:49:39.947] import VMS Big Co vouchers 1000-1999: 1000 sent, created 1000, errors 0, 21127.9 ms
+[11:49:58.083] import VMS Big Co vouchers 2000-2999: 1000 sent, created 1000, errors 0, 17457.7 ms
+[11:50:13.110] import VMS Big Co vouchers 3000-3999: 1000 sent, created 1000, errors 0, 14945 ms
+[11:50:27.722] import VMS Big Co vouchers 4000-4999: 1000 sent, created 1000, errors 0, 14534 ms
+[11:50:43.623] import VMS Big Co vouchers 5000-5999: 1000 sent, created 1000, errors 0, 15819 ms
+[11:50:58.987] import VMS Big Co vouchers 6000-6999: 1000 sent, created 1000, errors 0, 15273.9 ms
+[11:51:15.040] import VMS Big Co vouchers 7000-7999: 1000 sent, created 1000, errors 0, 15927.2 ms
+[11:51:31.687] import VMS Big Co vouchers 8000-8999: 1000 sent, created 1000, errors 0, 16562.5 ms
+[11:51:48.235] import VMS Big Co vouchers 9000-9999: 1000 sent, created 1000, errors 0, 16468.5 ms
+[11:52:04.180] import VMS Big Co vouchers 10000-10999: 1000 sent, created 1000, errors 0, 15860.1 ms
+[11:52:20.151] import VMS Big Co vouchers 11000-11999: 1000 sent, created 1000, errors 0, 15880.7 ms
+[11:52:38.999] import VMS Big Co vouchers 12000-12999: 1000 sent, created 1000, errors 0, 18762 ms
+[11:52:55.455] import VMS Big Co vouchers 13000-13999: 1000 sent, created 1000, errors 0, 16376.1 ms
+[11:53:10.943] import VMS Big Co vouchers 14000-14999: 1000 sent, created 1000, errors 0, 15410.6 ms
+[11:53:26.630] import VMS Big Co vouchers 15000-15999: 1000 sent, created 1000, errors 0, 15572.3 ms
+[11:53:42.171] import VMS Big Co vouchers 16000-16999: 1000 sent, created 1000, errors 0, 15441.5 ms
+[11:53:57.292] import VMS Big Co vouchers 17000-17999: 1000 sent, created 1000, errors 0, 15042.1 ms
+[11:54:12.616] import VMS Big Co vouchers 18000-18999: 1000 sent, created 1000, errors 0, 15248 ms
+[11:54:29.066] import VMS Big Co vouchers 19000-19999: 1000 sent, created 1000, errors 0, 16372.5 ms
+[11:54:45.924] import VMS Big Co vouchers 20000-20999: 1000 sent, created 1000, errors 0, 16781.7 ms
+[11:55:04.561] import VMS Big Co vouchers 21000-21999: 1000 sent, created 1000, errors 0, 18526.8 ms
+[11:55:21.194] import VMS Big Co vouchers 22000-22999: 1000 sent, created 1000, errors 0, 16553 ms
+[11:55:37.186] import VMS Big Co vouchers 23000-23999: 1000 sent, created 1000, errors 0, 15913.4 ms
+[11:55:54.132] import VMS Big Co vouchers 24000-24999: 1000 sent, created 1000, errors 0, 16865.2 ms
+[11:56:12.727] import VMS Big Co vouchers 25000-25999: 1000 sent, created 1000, errors 0, 18505.5 ms
+[11:56:31.345] import VMS Big Co vouchers 26000-26999: 1000 sent, created 1000, errors 0, 18536.6 ms
+[11:56:49.163] import VMS Big Co vouchers 27000-27999: 1000 sent, created 1000, errors 0, 17736.9 ms
+[11:57:05.581] import VMS Big Co vouchers 28000-28999: 1000 sent, created 1000, errors 0, 16342 ms
+[11:57:22.062] import VMS Big Co vouchers 29000-29999: 1000 sent, created 1000, errors 0, 16389.8 ms
+[11:57:38.228] import VMS Big Co vouchers 30000-30999: 1000 sent, created 1000, errors 0, 16088.4 ms
+[11:57:54.315] import VMS Big Co vouchers 31000-31999: 1000 sent, created 1000, errors 0, 16007.6 ms
+[11:58:10.814] import VMS Big Co vouchers 32000-32999: 1000 sent, created 1000, errors 0, 16421.4 ms
+[11:58:26.653] import VMS Big Co vouchers 33000-33999: 1000 sent, created 1000, errors 0, 15759.9 ms
+[11:58:41.832] import VMS Big Co vouchers 34000-34999: 1000 sent, created 1000, errors 0, 15103.3 ms
+[11:58:57.328] import VMS Big Co vouchers 35000-35999: 1000 sent, created 1000, errors 0, 15420.1 ms
+[11:59:13.010] import VMS Big Co vouchers 36000-36999: 1000 sent, created 1000, errors 0, 15606.6 ms
+[11:59:28.265] import VMS Big Co vouchers 37000-37999: 1000 sent, created 1000, errors 0, 15178.7 ms
+[11:59:43.337] import VMS Big Co vouchers 38000-38999: 1000 sent, created 1000, errors 0, 14993.4 ms
+[11:59:58.799] import VMS Big Co vouchers 39000-39999: 1000 sent, created 1000, errors 0, 15387.8 ms
+[11:59:58.975] import target B40000: 1 sent, created 1, errors 0, 173.6 ms
+[12:00:03.659] target B40000 (VMS Big Co): MasterID , date , number 
+[12:00:06.665] tally.ini: Data D:\a\_temp\why22\big; Load 100000
+[keys] 'a'
+[keys] 't'
+[shot] p-w-big-alone-started (1024x768)
+[12:00:36.183] Tally started (big-alone) in 29.5 s; companies open: VMS Big Co; wanted all of: VMS Big Co -> True
+[12:00:46.937] sizes F1 40000 (second company alone) (VMS Big Co): vouchers 40001 (MasterID 1-40001), ledgers 309 (30-564), items 350 (215-864), groups 28 (1-28), voucher types 24 (32-88); folder 414.4 MB; Tally 899 MB
+[12:00:46.940] measure F1/40000-second-co: no target: skipped
+[12:00:52.984] tally.ini: Data D:\a\_temp\why22\m4k; Load 100000
+[keys] 'a'
+[keys] 't'
+[shot] p-w-m4k-setup-started (1024x768)
+[12:01:22.470] Tally started (m4k-setup) in 29.5 s; companies open: FinCom Spike Co; wanted all of: FinCom Spike Co -> True
+[12:01:29.024] import extra masters 0: 1000 sent, created 1000, errors 0, 4873.5 ms
+[12:01:33.655] import extra masters 1000: 1000 sent, created 1000, errors 0, 4627.2 ms
+[12:01:38.318] import extra masters 2000: 1000 sent, created 1000, errors 0, 4659.2 ms
+[12:01:43.025] import extra masters 3000: 1000 sent, created 1000, errors 0, 4702 ms
+[12:01:47.853] import extra masters 4000: 1000 sent, created 1000, errors 0, 4755.9 ms
+[12:01:52.698] import extra masters 5000: 1000 sent, created 1000, errors 0, 4840.9 ms
+[12:01:57.692] import extra masters 6000: 1000 sent, created 1000, errors 0, 4990.9 ms
+[12:02:02.668] import extra masters 7000: 1000 sent, created 1000, errors 0, 4972.2 ms
+[12:02:07.770] import extra masters 8000: 1000 sent, created 1000, errors 0, 5098 ms
+[12:02:12.960] import extra masters 9000: 1000 sent, created 1000, errors 0, 5186.5 ms
+[12:02:17.687] import extra masters 10000: 1000 sent, created 1000, errors 0, 4723.1 ms
+[12:02:23.401] import extra masters 11000: 1000 sent, created 1000, errors 0, 5710.4 ms
+[12:02:29.145] import extra masters 12000: 1000 sent, created 1000, errors 0, 5740.5 ms
+[12:02:34.120] import extra masters 13000: 1000 sent, created 1000, errors 0, 4971 ms
+[12:02:38.807] import extra masters 14000: 1000 sent, created 1000, errors 0, 4682.6 ms
+[12:02:43.490] import extra masters 15000: 1000 sent, created 1000, errors 0, 4679.4 ms
+[12:02:48.231] import extra masters 16000: 1000 sent, created 1000, errors 0, 4737.8 ms
+[12:02:53.212] import extra masters 17000: 1000 sent, created 1000, errors 0, 4977 ms
+[12:02:58.155] import extra masters 18000: 1000 sent, created 1000, errors 0, 4939.9 ms
+[12:03:03.226] import extra masters 19000: 1000 sent, created 1000, errors 0, 5066.9 ms
+[12:03:06.231] tally.ini: Data D:\a\_temp\why22\m4k; Load 100000
+[keys] 'a'
+[keys] 't'
+[shot] p-w-m4k-started (1024x768)
+[12:03:35.727] Tally started (m4k) in 29.5 s; companies open: FinCom Spike Co; wanted all of: FinCom Spike Co -> True
+[12:03:36.864] sizes F1 4000 + 20000 masters (FinCom Spike Co): vouchers 4005 (MasterID 1-4005), ledgers 10312 (30-10868), items 10350 (218-20868), groups 28 (1-28), voucher types 24 (32-88); folder 84.4 MB; Tally 630 MB
+[12:03:36.865] measure F1/4000+20000masters: no target: skipped
+[12:03:42.888] tally.ini: Data D:\a\_temp\why22\s4k; Load 100000
+[keys] 'a'
+[keys] 't'
+[shot] p-w-s4k-local-started (1024x768)
+[12:04:12.380] Tally started (s4k-local) in 29.5 s; companies open: FinCom Spike Co; wanted all of: FinCom Spike Co -> True
+[12:04:13.195] sizes F2/F3 4000 local alone (FinCom Spike Co): vouchers 4005 (MasterID 1-4005), ledgers 312 (30-868), items 350 (218-867), groups 28 (1-28), voucher types 24 (32-88); folder 51.8 MB; Tally 511 MB
+[12:04:13.196] measure F2/4000-alone: no target: skipped
+[12:04:16.383] multi folder: 100000 (FinCom Spike Co), 100001 (VMS Big Co, copied from 100000)
+[12:04:19.386] tally.ini: Data D:\a\_temp\why22\multi; Load 100000, 100001
+[keys] 'a'
+[keys] 't'
+[shot] p-w-multi-started (1024x768)
+[12:04:48.891] Tally started (multi) in 29.5 s; companies open: FinCom Spike Co | VMS Big Co; wanted all of: FinCom Spike Co | VMS Big Co -> True
+[12:04:48.892] measure F2/4000-with-40000-loaded: no target: skipped
+[12:04:48.893] measure F2/40000-with-4000-loaded: no target: skipped
+[12:04:52.956] SMB share \\localhost\why22 -> D:\a\_temp\why22\s4k
+[12:04:52.978] share check: 25 files seen through \\localhost\why22\100000
+[12:04:55.982] tally.ini: Data \\localhost\why22; Load 100000
+[keys] 'a'
+[keys] 't'
+[shot] p-w-smb-unc-started (1024x768)
+[12:05:25.490] Tally started (smb-unc) in 29.5 s; companies open: FinCom Spike Co; wanted all of: FinCom Spike Co -> True
+[12:05:25.490] measure F3/4000-smb-unc: no target: skipped
+[12:05:25.533] smb connection:  ServerName ShareName UserName Credential Dialect NumOpens ---------- --------- -------- ---------- ------- -------- localhost why22 runnervmfi6oq\runneradmin runnervmfi6oq\runneradmin 3.1.1 3 
+[12:05:28.595] net use: The command completed successfully.
+[12:05:28.596] net use: 
+[12:05:31.606] tally.ini: Data W:\; Load 100000
+[keys] 'a'
+[keys] 't'
+[shot] p-w-smb-drive-started (1024x768)
+[12:06:01.084] Tally started (smb-drive) in 29.5 s; companies open: FinCom Spike Co; wanted all of: FinCom Spike Co -> True
+[12:06:01.084] measure F3/4000-smb-mapped-drive: no target: skipped
+[12:06:07.110] tally.ini: Data \\localhost\why22; Load 100000
+[keys] 'a'
+[keys] 't'
+[shot] p-w-smb-held-started (1024x768)
+[12:06:36.621] Tally started (smb-held) in 29.5 s; companies open: FinCom Spike Co; wanted all of: FinCom Spike Co -> True
+[12:06:51.650] holder: 
+[12:06:51.651] measure F3/4000-smb-unc-second-opener: no target: skipped
+[12:06:57.755] done (why22)
