@@ -1,0 +1,49 @@
+INFO setup origin: BUILT from source dist/FinComBridge-Setup-2.3.3.exe SHA-256 337fba4fa44598c31668c9710dc5936c257c067016037326862c88f610b2840c; on this runner SHA-256 337fba4fa44598c31668c9710dc5936c257c067016037326862c88f610b2840c
+INFO user 2 (fcuser2) works in a Windows session of their own (session 1, by a Remote Desktop connection to 127.0.0.2); runneradmin in session 2
+INFO S231 import masters-1-items: created 4, altered 0, errors 0
+INFO S231 import masters-2-costs: created 3, altered 0, errors 0
+INFO S231 import masters-4-ledgers: created 14, altered 0, errors 0
+INFO S231 import masters-6-bulk: created 400, altered 0, errors 0
+INFO S231 import S4 the bill (New Ref S231-BILL-1, a journal): created 1, altered 0, errors 0
+INFO push233 template receipt: created 1, errors 0
+INFO push233 template sales50: created 1, errors 0
+INFO push233 template godown: created 1, errors 0
+MEASURE push233 save receipt: Ctrl+A to the full line in the user's file 283 ms (Tally's save and the add-on, an upper bound); SendWait 49 ms; the add-on wrote: full line; ALTVCHID 5 -> 6; Tally's entry mid 6 guid 45186fba-a32e-4e8b-8018-80be14e033f8-00000006 no 2
+PASS push233 L0 the new add-on loads and writes the full entry: the TDL from the ref has FCRLiveFull: True; the screen after Tally started: no TDL error seen; Tally's TDL error files: none; one receipt saved on the screen: the add-on wrote voucher_accept_post x1, voucher_accept_pre x1, voucher_full x1; heads (pre and post): True; full line(s) ending |end=1|t1=..|src=live: 1; the narration, neg and the part's length read: True; save 283 ms
+INFO slow232: the large company 'FinCom Big Co' holds 100000 entries made by XML (35.9 min), 3,000 ledgers, 3,000 items
+MEASURE slow232: the bridge's entry request for MasterID 100 of the large company took 11721 ms on this Tally (5039 bytes, 2 voucher(s))
+MEASURE slow232: the bridge's entry request for MasterID 50000 of the large company took 13403 ms on this Tally (5052 bytes, 2 voucher(s))
+MEASURE slow232: the bridge's entry request for MasterID 99990 of the large company took 14997 ms on this Tally (5052 bytes, 2 voucher(s))
+INFO push233 large company 'FinCom Big Co': 100000 entries made by XML in 35.9 min (asked 100000)
+PASS 6a two bridges at once: bridge 1 runneradmin on 127.0.0.1:9100 (pid 9040, session 2, go-6638b16f672c); bridge 2 fcuser2 on 127.0.0.1:9101 (pid 5016, session 1, go-6493a1921b9c); both listening at 18:19:52
+INFO /ping with a nonce but no Origin (own bridge): proof not given
+PASS 6b /ping proof: bridge 1 proves itself to runneradmin: ok; bridge 1 proof checked against user 2 identity fails: ok; bridge 2 proves itself to fcuser2: ok; bridge 2 proof checked against user 1 identity fails: ok; bridge 2 gives runneradmin no proof: ok; bridge 1 gives fcuser2 no proof: ok; other users refused 403 beyond /ping: ok
+MEASURE push233 save receipt: Ctrl+A to the full line in the user's file -1 ms (Tally's save and the add-on, an upper bound); SendWait 50 ms; the add-on wrote: heads only (voucher_accept_pre x1); ALTVCHID 6 -> 6; Tally's entry mid  guid  no 
+HARNESS push233 P1 receipt: Tally has no new entry after the save (see the p233 screenshots)
+MEASURE push233 save sales50: Ctrl+A to the full line in the user's file -1 ms (Tally's save and the add-on, an upper bound); SendWait 64 ms; the add-on wrote: nothing; ALTVCHID 6 -> 6; Tally's entry mid  guid  no 
+HARNESS push233 P2 50-item invoice: Tally has no new entry after the save (see the p233 screenshots)
+MEASURE push233 save godown: Ctrl+A to the full line in the user's file -1 ms (Tally's save and the add-on, an upper bound); SendWait 64 ms; the add-on wrote: heads only (voucher_accept_pre x1); ALTVCHID 6 -> 6; Tally's entry mid  guid  no 
+HARNESS push233 P4 item invoice in two godowns x two batches: Tally has no new entry after the save (see the p233 screenshots)
+INFO S231 import masters-0-company: created 0, altered 1, errors 0
+INFO S231 import masters-3-nature: created 1, altered 0, errors 0
+INFO S231 import masters-5-tds: created 1, altered 0, errors 0 (TDS Rate &apos;S231 Contract Work&apos; does not exist!)
+INFO S231 company features after the import: ISBILLWISEON=Yes ISCOSTCENTRESON=No ISTDSON=No ISGSTON=Yes ISBILLWISEON=Yes ISCOSTCENTRESON=Yes ISTDSON=Yes ISGSTON=Yes
+INFO S5 screen: the nature of payment 'S231 Contract Work' made on its form: False; Tally's TDS Rate export: not there
+INFO S231 import masters-5-tds again (after the nature on its form): created 0, altered 1, errors 0 (TDS Rate &apos;S231 Contract Work&apos; does not exist!)
+INFO S231 import S5 party: deduct TDS in the same voucher: created 0, altered 1, errors 0
+INFO S5 screen: the company's TDS details in Tally: ISTDSON=No TANUMBER=DELF01234E TANREGNO=DELF01234E TDSDEDUCTORTYPE=Company ISTDSON=Yes
+INFO S5 screen: the TDS masters in Tally: S231 Contractor [TDSRATE=0 DEDUCTEETYPE=0 INCOMETAXSLAB=0 INCOMETAXCLASSIFICATION=0 INCOMETAXNUMBER=AAACS2310K TDSAPPLICABLE=Yes TDSDEDUCTEETYPE=Company - Resident IGNORETDSEXEMPT=No ISTDSAPPLICABLE=Yes ISTDSEXPENSE=No INTERESTINCLDAYOFDEDUCTION=No TDSDEDUCTEEISSPECIALRATE=No TDSDEDUCTEESPECIALRATE=0]; S231 Contract Exp [TDSRATE=0 DEDUCTEETYPE=0 INCOMETAXSLAB=0 INCOMETAXCLASSIFICATION=0]; S231 TDS Payable [TDSRATE=0 DEDUCTEETYPE=0 INCOMETAXSLAB=0 INCOMETAXCLASSIFICATION=0]
+INFO S5 screen: OCR read the screens; TDS row amount put there by Tally (2,000 seen before Enter) ; sub-screens after the TDS ledger: none; screenshots tds-*
+HARNESS S5 payment with TDS entered on the screen: no entry saved in Tally (see the tds-s5-* screenshots and tds-screen-log.txt)
+HARNESS push233 P3 payment with TDS (typed on the screen): Tally has no new entry after the save (see the p233 screenshots)
+MEASURE push233 save receipt (alter): Ctrl+A to the full line in the user's file -1 ms (Tally's save and the add-on, an upper bound); SendWait 61 ms; the add-on wrote: nothing; ALTVCHID 6 -> 6; Tally's entry mid  guid  no 
+HARNESS push233 P5 receipt altered: a full entry again: Tally has no new entry after the save (see the p233 screenshots)
+FAIL push233 P6 cancel and delete: heads only: the add-on wrote: ; the stub: (no line)
+MEASURE push233 P7 e-way bill number on the saved invoice: the add-on wrote nothing; ALTVCHID 0 -> 0; the line's irn/ewb fields: 
+MEASURE push233 P7 e-invoice details (IRN, ack no, ack date) on the saved invoice: the add-on wrote nothing; ALTVCHID 0 -> 0; the line's irn/ewb fields: 
+MEASURE push233 P7 bankers date in Bank Reconciliation: the add-on wrote nothing; ALTVCHID 0 -> 0; the bdt fields: 
+MEASURE push233 P8 a plain XML import: the add-on wrote nothing; ALTVCHID 0 -> 0; ALTMSTID 0 -> 0
+MEASURE push233 P8 an XML import tagged as FinCom's posting (TDSDesk:p233x2): the add-on wrote nothing; ALTVCHID 0 -> 0; ALTMSTID 0 -> 0
+MEASURE push233 P8 a ledger renamed on its form (it is on saved entries): the add-on wrote nothing; ALTVCHID 0 -> 0; ALTMSTID 0 -> 0
+MEASURE push233 P8 multi-alter (Ctrl+H on the Day Book, where this release offers it): the add-on wrote nothing; ALTVCHID 0 -> 0; ALTMSTID 0 -> 0
+HARNESS push233: the harness stopped: Cannot convert argument "h", with value: "", for "ShowWindow" to type "System.IntPtr": "Cannot convert null to type "System.IntPtr"."
