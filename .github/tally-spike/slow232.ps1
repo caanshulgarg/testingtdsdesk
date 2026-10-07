@@ -91,7 +91,11 @@ function Slow232Setup {
   Write-Host "[slow232] company folders before: $($before -join ', ')"
   # 1. Tally without a company and without the add-on (its import lines would be 30,000 recorder lines): made by keys
   $null = S2StartTally (S2Ini $null $null)
-  KeysTo 9000 '{ENTER}' 5 's232-01-create-company'; KeysTo 9000 $S2.co 2 's232-02-name'; KeysTo 9000 '^a' 8 's232-03-ctrl-a'
+  # run 37562246809: Tally 7.1 opened the last company again although tally.ini says Default Companies = No; then the
+  # Gateway is up and {ENTER} is its masters' Create. With a company open: the Company menu (Alt+K), Create
+  if (S2Has $co1) { KeysTo 9000 '%k' 3 's232-01a-company-menu'; KeysTo 9000 'c' 5 's232-01-create-company' }
+  else { KeysTo 9000 '{ENTER}' 5 's232-01-create-company' }
+  KeysTo 9000 $S2.co 2 's232-02-name'; KeysTo 9000 '^a' 8 's232-03-ctrl-a'
   $have = S2Has $S2.co
   foreach ($k in @('y', '^a', '{ENTER}', 'y', '{ESC}', 'y')) { if ($have) { break }; KeysTo 9000 $k 6 ''; $have = S2Has $S2.co }
   KeysTo 9000 '^a' 5 's232-04-company'
