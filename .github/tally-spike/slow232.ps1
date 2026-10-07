@@ -83,7 +83,14 @@ function S2Ini($tdlFile, [string[]]$loads) {
   if ($tdlFile) { $l += "TDL = $tdlFile" }
   return , $l
 }
-function S2Has([string]$name) { ("$(ListCo 9000)") -match [regex]::Escape($name) }
+# runs 37562246809 and 37566575498: the company list (ListCo) answered no company while Tally showed one open; a company's
+# own ledgers are asked instead (a company just made has Cash and Profit & Loss)
+function S2Has([string]$name) {
+  $r = Post 9000 ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCS2L</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + (S2Esc $name) + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCS2L" ISMODIFY="No"><TYPE>Ledger</TYPE><FETCH>Name</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') ''
+  $ok = ("$r" -match '<LEDGER\b') -and ("$r" -notmatch 'Could not find')
+  Write-Host "[slow232] company '$name' open in Tally 9000: $ok"
+  return $ok
+}
 
 # ---- setup, before the bridges start
 function Slow232Setup {
@@ -94,8 +101,8 @@ function Slow232Setup {
   $null = S2StartTally (S2Ini $null $null)
   # run 37562246809: Tally 7.1 opened the last company again although tally.ini says Default Companies = No; then the
   # Gateway is up and {ENTER} is its masters' Create. With a company open: the Company menu (Alt+K), Create
-  if (S2Has $co1) { KeysTo 9000 '%k' 3 's232-01a-company-menu'; KeysTo 9000 'c' 5 's232-01-create-company' }
-  else { KeysTo 9000 '{ENTER}' 5 's232-01-create-company' }
+  # (run 37566575498: the small company is open again by the time the keys go, whatever the check said): always the Company menu
+  KeysTo 9000 '%k' 3 's232-01a-company-menu'; KeysTo 9000 'c' 5 's232-01-create-company'
   KeysTo 9000 $S2.co 2 's232-02-name'; KeysTo 9000 '^a' 8 's232-03-ctrl-a'
   $have = S2Has $S2.co
   foreach ($k in @('y', '^a', '{ENTER}', 'y', '{ESC}', 'y')) { if ($have) { break }; KeysTo 9000 $k 6 ''; $have = S2Has $S2.co }
