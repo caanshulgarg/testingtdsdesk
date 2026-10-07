@@ -209,6 +209,25 @@ Result 'c4a create by keys' (KeysVerdict ([bool]$new) $okA) ("Tally {0}; line af
 if ($x -and $x.xml) { Set-Content (Join-Path $cap 'recorder-created-body.xml') $x.xml -Encoding UTF8; $x.raw | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $cap 'recorder-created-line.json') -Encoding UTF8 }
 $src = $new
 
+# ---- c8 (branch next-push, the owner's "full entry at save"): the add-on of the ref LOADS on this release and, for the
+# receipt c4a saved on the screen, writes the heads lines AND one full-entry line (FCRLiveFull: $$StringLength and the
+# "neg" formula are new to a real Tally). Only when the ref's add-on has FCRLiveFull; the add-on's own file is read
+$tdlHasFull = (Get-Content $tdl -Raw -ErrorAction SilentlyContinue) -match 'FCRLiveFull'
+if (-not $tdlHasFull) { Info 'c8 not run: the add-on of this ref has no full entry (FCRLiveFull)' }
+else {
+  $recL = @(Get-ChildItem $rec -File -ErrorAction SilentlyContinue | ForEach-Object { Get-Content $_.FullName -Encoding Unicode } | Where-Object { $_ -like 'FCR1|*' })
+  $mid8 = if ($new) { "$($new.mid)" } else { '' }
+  $heads8 = @($recL | Where-Object { $_ -match '^FCR1\|ev=voucher_accept_(pre|post)\|' })
+  $full8 = @($recL | Where-Object { $_ -like 'FCR1|ev=voucher_full|*' -and $_ -match '\|end=1\|t1=[^|]*\|src=live$' -and (-not $mid8 -or $_ -match "\|mid=$mid8\|") })
+  $lp8 = $full8.Count -and $full8[0] -match '\|narr:\d+=' -and $full8[0] -match '\|L1=led:\d+=' -and $full8[0] -match '~neg=(Yes|No)'
+  $err8 = @(Get-ChildItem $dir, $data1 -Recurse -File -Include *tdl*.log, tdlerr* -ErrorAction SilentlyContinue)
+  if ($full8.Count) { Set-Content (Join-Path $cap 'full-entry-line.txt') $full8 -Encoding UTF8 }
+  $st8 = if (-not $new) { 'HARNESS' } elseif ($heads8.Count -ge 2 -and $full8.Count -ge 1 -and $lp8) { 'PASS' } else { 'FAIL' }
+  Result 'c8 the new add-on loads and writes the full entry' $st8 ("receipt by keys: {0}; heads lines {1}; full lines for it {2} (lengths, the first ledger and neg read: {3}); every recorder line's event: {4}; Tally's TDL error files: {5}; first full line: {6}" -f `
+      $(if ($new) { "mid $($new.mid)" } else { 'not made (the keys)' }), $heads8.Count, $full8.Count, [bool]$lp8, ((($recL | ForEach-Object { [regex]::Match($_, '^FCR1\|ev=([^|]+)').Groups[1].Value }) | Group-Object | ForEach-Object { "$($_.Name) x$($_.Count)" }) -join ', '),
+      $(if ($err8.Count) { ($err8 | ForEach-Object { "$($_.Name): $((Get-Content $_.FullName -Tail 3) -join ' | ')" }) -join '; ' } else { 'none' }), $(if ($full8.Count) { $full8[0].Substring(0, [Math]::Min(700, $full8[0].Length)) } else { '-' }))
+}
+
 # ---- c4b alter by keys (flow4.ps1 step 2: Day Book, the last entry, the amount 800)
 Say '---- c4b alter by keys'
 $nw0 = $script:noWindow; $m = Mark
