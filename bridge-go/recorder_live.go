@@ -2049,10 +2049,23 @@ byDay:
 			}
 		}
 	}
-	for _, c := range ledgers {
+	for li, c := range ledgers {
 		if time.Now().After(deadline) {
 			failed([]*change{c}, "20 s passed")
 			continue
+		}
+		// 2.3.3 (re-review: M2 for ledger lines): before each request, once a line of the group has waited 4 s, the ledgers
+		// not read yet go without their body (as the safety net sends them), so they hold back no line
+		if rest := ledgers[li:]; liveOverdue(rest) {
+			live.mu.Lock()
+			for _, r := range rest {
+				r.bodyTried = true
+				if r.heldWhy == "" {
+					r.heldWhy = liveLedgerLateWhy
+				}
+			}
+			live.mu.Unlock()
+			break
 		}
 		x, err := fetchLedgerByMaster(tc, company, port, toI64(c.masterId))
 		if gaveWay(err) || errors.Is(err, errRetryWait) {
@@ -2259,6 +2272,9 @@ func liveOverdue(cs []*change) bool {
 // the words of a line held because the entries saved before it are being read (review M2)
 const liveBehindWhat = "Tally busy (reading the entries saved before it)"
 
+// a ledger line that goes without its body after the 4 s (the safety net, review M2)
+const liveLedgerLateWhy = "the ledger was not read from Tally in time; FinCom takes it from the next ledger list"
+
 // 2.3.3: a line in the queue still waits for its body (not asked yet)
 func liveQueueWantsBody() bool {
 	live.mu.Lock()
@@ -2446,7 +2462,7 @@ func liveUploadStep() (int, bool) {
 		live.mu.Lock()
 		c.bodyTried = true
 		if c.heldWhy == "" {
-			c.heldWhy = "the ledger was not read from Tally in time; FinCom takes it from the next ledger list"
+			c.heldWhy = liveLedgerLateWhy
 		}
 		live.mu.Unlock()
 	}

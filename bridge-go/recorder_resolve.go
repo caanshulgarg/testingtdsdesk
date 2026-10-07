@@ -998,20 +998,21 @@ func liveResolveTurn() {
 			}
 			break
 		}
-		sent0 := tallySent.Load()
+		reached := false // re-review L1: this ask's own request was sent to Tally
 		liveSay(h.Type, h.No, h.Date, h.MID, h.ID, fmt.Sprintf("asking Tally again (a held line, ask %d of %d: one request; if it stops or fails the line ends with the Day Book words)", h.Asked+1, h.allow()))
 		var x, why string
 		var answered, final bool
 		var err error
 		var gc *change // review H1 (the owner's addition): a held cancel / delete proven in this Tally now
 		if h.Ev == "deleted" || h.Ev == "cancelled" {
-			gc, why, answered, final, err = liveResolveGuid(h)
+			gc, why, answered, final, err = liveResolveGuid(h, &reached)
 		} else {
-			x, why, answered, final, err = liveResolveOne(h)
+			x, why, answered, final, err = liveResolveOne(h, &reached)
 		}
 		if gaveWay(err) {
-			// review L1: a request a posting stopped after it reached Tally counts as its ask (Tally had it)
-			if tallySent.Load() > sent0 && h.Ev != "deleted" && h.Ev != "cancelled" {
+			// review L1: a request a posting stopped after it reached Tally counts as its ask (Tally had it); one that never
+			// reached Tally (it waited for the lock, or gave way before it was sent) does not (re-review L1)
+			if reached && h.Ev != "deleted" && h.Ev != "cancelled" {
 				timedOut[h.ID] = true
 				liveSay(h.Type, h.No, h.Date, h.MID, h.ID, "stopped for a posting after it reached Tally: its ask is used")
 			} else {
@@ -1198,9 +1199,10 @@ func liveHeldEnd(h heldLine, words string) {
 // one held line's entry asked of Tally: by MasterID when the line had it, else (or when Tally gave nothing with that
 // MasterID) by type, number and date; checked as the body fetch checks it (liveVoucherWrong). Security L3: when the
 // MasterID gave another real voucher, nothing is asked by number (final). answered: Tally answered a request (a try)
-func liveResolveOne(h heldLine) (x, why string, answered, final bool, err error) {
+func liveResolveOne(h heldLine, sent *bool) (x, why string, answered, final bool, err error) {
 	sp, spOK := startPointOf(h.Company)
 	tc := recorderTC(nil)
+	tc.sentOut = sent // re-review L1: whether the ask reached Tally
 	port, err := findCompanyPortBg(h.Company, 0)
 	if err != nil {
 		return "", "", false, false, err

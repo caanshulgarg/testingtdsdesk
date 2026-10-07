@@ -268,6 +268,8 @@ type TC struct {
 	// next-inflight: where invokeTallyNow puts the request it gave up on while Tally is still on it (only invokeTally's own
 	// copy of a TC carries it: a shared TC never does)
 	slotOut **abandonSlot
+	// 2.3.3 (re-review L1): set true when this request was sent to Tally (it reached Tally, whatever came of it)
+	sentOut *bool
 	copier  bool
 	readSec int    // the copier: no read of the day book may hold Tally longer than this
 	enc     string // round 18: "utf-16" or "utf-8" for this request whatever TallyRequestUTF16 says ("": as the setting says)
@@ -1047,6 +1049,9 @@ func invokeTallyNow(tc *TC, port int, x string, timeoutSec int) (string, error) 
 	took := time.Since(t0)
 	if !sentAt.IsZero() {
 		took = time.Since(*sentAt) // the time Tally had the request (a gentle wait is not Tally's)
+		if tc.sentOut != nil {
+			*tc.sentOut = true
+		}
 	}
 	stopped := errors.Is(err, errRecorderStop)
 	if stopped {
