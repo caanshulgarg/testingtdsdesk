@@ -3,9 +3,9 @@
 Reviewed: 07-Oct-2026, an adversarial self-review of the diff, by the author (the owner's rule for this release: written
 from the diff after an honest adversarial self-review; any High or Medium fixed before the build).
 
-Range: b1e5858..cd5afb7
+Range: b1e5858..68d717c
 
-Read with `git diff b1e5858 cd5afb7 -- bridge-go/ tests/ docs/tally-allowlist.md`.
+Read with `git diff b1e5858 68d717c -- bridge-go/ tests/ docs/tally-allowlist.md`.
 
 ## What changed
 
@@ -80,9 +80,23 @@ a6cfda0), and one Low fixed:
   so Tally never gets two requests for one held line.
 - **L2** (kept, the owner's one-request rule): no by-number fallback after a MasterID miss.
 - The release-check note: the first build (ce79426, setup 3189a834..., never published) is reverted (cd5afb7) and 2.3.3
-  is built again after these fixes; the reviews' range ends at that revert (only the assets changed after the fix).
+  was built again after these fixes (and once more after the re-review below).
 
-The real-Tally harness (`only=backlog233`) has the two scenarios too: (6) 10 held lines of the small company answered in
+The re-review of the fixes (07-Oct-2026, b1e5858..a6cfda0) confirmed M1, M2 for vouchers and L1, and found two more,
+both fixed test-first (red at 854a2af, fixed at 68d717c):
+
+- **Medium: M2 for ledger lines** (fixed). The ledger loop had no 4 s check: a masters import of several ledgers at about
+  1.8 s each held back the group's vouchers, bodies already read, for up to 20 s. Now, before each ledger request, once a
+  line of the group has waited 4 s the ledgers not read yet go without their body (`liveLedgerLateWhy`; FinCom takes them
+  from the ledger changes). Test: TestBacklog233M2LedgerBurst (8 ledgers at "1.8 s" with a voucher).
+- **Low: L1 by the global counter** (fixed). "Reached Tally" was read from `tallySent`, which any request moves; an ask that
+  waited for the lock or gave way before it was sent could be counted and its line ended unasked. Now the request itself
+  says it was sent (`TC.sentOut`, set by `invokeTallyNow` once the request went). Test: TestBacklog233L1UnsentAskNotCounted.
+- The second build (96ace3a, setup 71607195..., never published) is reverted (644907a); the reviews' range ends at the last
+  code commit, 68d717c.
+
+The real-Tally harness (`only=backlog233`) has these scenarios too: (8) a burst of 8 changed ledgers and a voucher at 1.8 s
+each, and (6) 10 held lines of the small company answered in
 1.5 s (the timing proxy holds each request; Tally itself is not busy then) with a new save made while they are asked, and
 (7) a burst of 8 saves at 1.8 s each.
 
