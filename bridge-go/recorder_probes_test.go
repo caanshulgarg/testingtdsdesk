@@ -338,7 +338,7 @@ func TestSourceCDatedGuardException(t *testing.T) {
 
 // --- the 2 s stop on the body fetch too (2.3.1: never a switch-off)
 func TestBodyFetchOffAfterSlowAnswer(t *testing.T) {
-	rec, f, c := liveBridge(t, `,"RecorderBodySec":5`)
+	rec, f, c := liveBridge(t, `,"RecorderBodySec":5,"RecorderFreshRetryMs":0`) // 2.3.3: the held line's one ask at the next try
 	td := today()
 	f.alter = 10
 	noteStartPoint(zz, b220CoGUID, 5, 1) // 2.2.2: nothing is taken without a starting point
@@ -359,7 +359,8 @@ func TestBodyFetchOffAfterSlowAnswer(t *testing.T) {
 	if logLines("off: Tally took") != 0 || logLines("(FinComVoucherByMaster, try 1); trying again by itself at") != 1 {
 		t.Fatalf("the log: %s", readText(logFile()))
 	}
-	if st := obj(beatBody(true, "open", "", nil, nil, nil)["recorderBodyFetch"]); len(st) != 0 || len(c.recSent()) != 0 {
+	// 2.3.3 (the owner's rule): the line goes up held at once with the words (2.3.1 kept it unsent until the retry)
+	if st := obj(beatBody(true, "open", "", nil, nil, nil)["recorderBodyFetch"]); len(st) != 0 || len(c.recSent()) != 1 || !strings.HasPrefix(str(c.recSent()[0]["heldWhy"]), "waiting: Tally took longer than 2 s") {
 		t.Fatalf("the beat: %v; sent %v", st, c.recSent())
 	}
 	// Tally answers in time at the next try: both lines go with their body
@@ -370,8 +371,13 @@ func TestBodyFetchOffAfterSlowAnswer(t *testing.T) {
 	liveReadOnce()
 	retryDue()
 	uploadAll(t)
-	if len(c.recSent()) != 2 || str(c.recSent()[0]["xml"]) == "" || str(c.recSent()[1]["xml"]) == "" {
-		t.Fatalf("not sent with their bodies at the retry: %v", c.recSent())
+	// the second line with its body; the first's body as its ":resolved" line (asked again once, at the retry)
+	s := c.recSent()
+	if len(s) != 3 || str(s[1]["xml"]) == "" || str(s[2]["xml"]) == "" || !(strings.HasSuffix(str(s[1]["line_id"]), ":resolved") || strings.HasSuffix(str(s[2]["line_id"]), ":resolved")) {
+		for _, x := range s {
+			t.Logf("%s xml=%d why=%s", str(x["line_id"]), len(str(x["xml"])), str(x["heldWhy"]))
+		}
+		t.Fatalf("not sent with their bodies at the retry: %d", len(s))
 	}
 }
 

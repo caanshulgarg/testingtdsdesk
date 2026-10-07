@@ -154,7 +154,7 @@ type change struct {
 	slowHeld, slowEnded bool
 	// 2.3.3 (the owner's rule: "A save must always show on the Tally page, at least as held with a reason. Silence is not
 	// acceptable."): sent held at once because its body was not there on its first attempt (fresh: the held list asks it
-	// again at the next try, its first 3 asks counted as the original fetch's); freshTries: the asks so counted already;
+	// again at the next try, once; twice when Tally was not asked at all yet); freshTries: the asks so made already;
 	// freshSlow: one of them stopped at the 2 s limit; dueNow: nothing was asked (the schedule waited): due at the next try;
 	// queuedAt: when it was queued (the bridge's own clock, for the 4 s safety net)
 	fresh, freshSlow, dueNow bool
@@ -1945,7 +1945,7 @@ byDay:
 				return // a posting goes first: asked again after it
 			}
 			if passing(err) || tallyNoAnswer(err) {
-				liveHeldNow(part, "Tally busy", false, true, false) // asked again at the next try (3 asks, then the held list's spacing)
+				liveHeldNow(part, "Tally busy", false, true, false) // asked again once, at the next try
 				continue
 			}
 			if err != nil {
@@ -2636,7 +2636,7 @@ func liveHeldAsking() map[string]int {
 	liveFresh()
 	out := map[string]int{}
 	for id, h := range items {
-		if h.Final || live.ended[id] || h.Tries >= liveHeldMaxTries {
+		if h.Final || live.ended[id] || h.Tries >= liveHeldMaxTries || h.Asked >= h.allow() {
 			continue
 		}
 		out[h.Company]++

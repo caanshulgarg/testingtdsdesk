@@ -163,34 +163,26 @@ func TestR222FallbackByNumber(t *testing.T) {
 	}
 }
 
-// --- 6. a held entry is asked again 20 times at most, then left held with plain words (once in the log)
+// --- 6. (2.3.3, the owner's rule of 07-Oct-2026, replacing 2.2.2's 20 tries) a held entry is asked again ONCE: Tally
+// still not giving it, it ends with the Day Book words (sent as its ":resolved" line), never asked again
 func TestR222HeldTwentyTries(t *testing.T) {
 	p, f, c := nwsBridge(t, `,"RecorderResolveSec":0`)
 	liveAppend(t, p, r222Line("voucher_accept_pre", "08:50", nwsGUID+"-00000000", "0", "0", "Receipt", "900", "5-Oct-2026", "never"))
 	liveFlushAll()
 	readAndUploadAll(t)
-	if len(c.recSent()) != 1 {
-		t.Fatalf("held: %v", c.recSent())
-	}
 	for i := 0; i < 30; i++ {
 		liveUploadOnce()
 	}
-	// 3 asks before it went held (2.2.1), then 20 by the held list
-	if got := f.n(vchByNumberID) - 3; got != 20 {
-		t.Fatalf("the held entry was asked %d times again, want 20", got)
+	// its first ask, then the one ask again
+	if got := f.n(vchByNumberID); got != 2 {
+		t.Fatalf("the held entry was asked %d times in all, want 2", got)
 	}
-	const why = "Tally did not give this entry after 20 tries; upload that day's Day Book to settle it"
-	if logLines(why) != 1 {
-		t.Fatalf("the words in the log %d times", logLines(why))
+	s := c.recSent()
+	if len(s) != 2 || str(s[1]["line_id"]) != str(s[0]["line_id"])+":resolved" || str(s[1]["heldWhy"]) != liveHeldOnceGiveUp {
+		t.Fatalf("held, then ended: %v", s)
 	}
-	_, items := liveHeldLoad()
-	if len(items) != 1 {
+	if _, items := liveHeldLoad(); len(items) != 0 {
 		t.Fatalf("held list: %v", items)
-	}
-	for _, h := range items {
-		if h.Why != why || h.Tries != 20 {
-			t.Fatalf("the held entry: %+v", h)
-		}
 	}
 }
 
@@ -221,19 +213,19 @@ func TestR222HardTwoSecondStop(t *testing.T) {
 	if logLines("off: Tally took") != 0 || logLines("(FinComVoucherByMaster, try 1); trying again by itself at") != 1 {
 		t.Fatalf("switched off, or the retry not said: %s", readText(logFile()))
 	}
-	if sent := c.recSent(); len(sent) != 0 {
-		t.Fatalf("sent before the retry: %v", sent)
+	// 2.3.3 (the owner's rule): up held at once with the words, never unsent waiting for the retry
+	if sent := c.recSent(); len(sent) != 1 || str(sent[0]["xml"]) != "" || !strings.HasPrefix(str(sent[0]["heldWhy"]), "waiting: Tally took longer than 2 s") {
+		t.Fatalf("not held at once: %v", sent)
 	}
-	// asked again at each try; an entry whose own request was stopped 3 times goes without its body (FinCom holds it, and
-	// this bridge asks for it again as a held line)
-	for i := 0; i < 2; i++ {
+	// asked again once at the retry's try; stopped again: it ends with the Day Book words, never asked again
+	for i := 0; i < 3; i++ {
 		retryDue()
 		uploadAll(t)
 	}
-	if n := f.n(vchByMasterID); n != 3 {
-		t.Fatalf("asked %d times (one at each try)", n)
+	if n := f.n(vchByMasterID); n != 2 {
+		t.Fatalf("asked %d times (its fetch and one ask again)", n)
 	}
-	if sent := c.recSent(); len(sent) != 1 || str(sent[0]["xml"]) != "" {
+	if sent := c.recSent(); len(sent) != 2 || str(sent[1]["xml"]) != "" || str(sent[1]["heldWhy"]) != liveHeldSlowGiveUp {
 		t.Fatalf("sent: %v", sent)
 	}
 }

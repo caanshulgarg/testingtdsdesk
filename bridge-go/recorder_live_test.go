@@ -646,17 +646,24 @@ func TestLiveBodyFetch(t *testing.T) {
 	if el := time.Since(t0); el > 6*time.Second {
 		t.Fatalf("the body fetch held the line %s", el)
 	}
-	// 2.3.1: stopped at 2 s, asked again at each try of the shared retry schedule; stopped 3 times, it goes without
+	// 2.3.3 (the owner's rule): stopped at 2 s, it goes up held at once with the words; asked again once at the retry's
+	// try, stopped again, it ends with the Day Book words (2.3.1: asked 3 times before it went up at all)
+	sent = c.recSent()
+	if len(sent) != 3 || str(sent[2]["xml"]) != "" || str(sent[2]["event"]) != "altered" || !strings.HasPrefix(str(sent[2]["heldWhy"]), "waiting: ") {
+		t.Fatalf("without a body: %v", sent[len(sent)-1])
+	}
+	// Tally did not answer at all: nothing more is sent to it until it answers the small check (once a minute); the held
+	// line's one ask again waits for that, not spent meanwhile
+	n := f.n(vchByMasterID)
 	for i := 0; i < 2; i++ {
 		retryDue()
 		uploadAll(t)
 	}
-	sent = c.recSent()
-	if len(sent) != 3 || str(sent[2]["xml"]) != "" || str(sent[2]["event"]) != "altered" {
-		t.Fatalf("without a body: %v", sent[len(sent)-1])
+	if sent = c.recSent(); len(sent) != 3 || f.n(vchByMasterID) != n {
+		t.Fatalf("while Tally owes the small check: %v (asked %d more)", sent[2:], f.n(vchByMasterID)-n)
 	}
-	if logLines("Recorder: the body of 1 entr") < 1 {
-		t.Fatal("the failed body fetch is not in the log")
+	if logLines("held at once: waiting: ") < 1 {
+		t.Fatal("the held line is not in the log")
 	}
 }
 
@@ -1215,9 +1222,9 @@ func TestRecorderVersion220Sheets(t *testing.T) {
 		t.Error("the 2.2.0 test sheet has neither the fingerprint placeholder nor the setup's SHA-256")
 	}
 	al := readText("../docs/tally-allowlist.md")
-	if !regexp.MustCompile(`not yet measured[^;]*; allowed for 2\.3\.2 (only )?by the owner's (standing )?decision of \d{4}-\d{2}-\d{2}`).MatchString(al) || !strings.Contains(al, vchByMasterID) ||
+	if !regexp.MustCompile(`not yet measured[^;]*; allowed for 2\.3\.3 (only )?by the owner's (standing )?decision of \d{4}-\d{2}-\d{2}`).MatchString(al) || !strings.Contains(al, vchByMasterID) ||
 		!strings.Contains(al, vchByNumberID) {
-		t.Fatal("docs/tally-allowlist.md: no decision line for 2.3.2, or no FinComVoucherByMaster / FinComVoucherByNumber row")
+		t.Fatal("docs/tally-allowlist.md: no decision line for 2.3.3, or no FinComVoucherByMaster / FinComVoucherByNumber row")
 	}
 }
 

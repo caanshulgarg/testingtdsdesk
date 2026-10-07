@@ -305,7 +305,7 @@ func liveHeldAs(c *change, why string, final bool) {
 // --- 2.3.3 (a High in 2.3.2, NWS144: a new save sat unsent for 35 minutes behind yesterday's held lines). The owner's
 // rule: "A save must always show on the Tally page, at least as held with a reason. Silence is not acceptable." A line
 // whose body is not there on its first attempt goes up held at once with these words, and the held list asks Tally again
-// at the next try (its first 3 asks counted as the original fetch's, as before)
+// at the next try, once (the owner's rule of 07-Oct-2026: a held line is asked again at most once)
 
 // how long a line sent held at once waits before its next ask, at least (RecorderFreshRetryMs; else the by-number
 // spacing, 10 s): the retry schedule's next try comes later anyway after a stop
@@ -470,8 +470,8 @@ func liveFetchByNumber(cs []*change, sp int64, spOK bool) {
 			continue
 		}
 		live.mu.Unlock()
-		// 2.3.3: not found yet, stopped at 2 s, or not answered: held now; the held list asks again by its number (the 3 asks
-		// of the original fetch, RecorderNumberRetryMs apart at least, then the held list's spacing)
+		// 2.3.3: not found yet, stopped at 2 s, or not answered: held now; the held list asks again by its number, once,
+		// RecorderNumberRetryMs after this ask at least
 		switch {
 		case err == nil:
 			liveHeldNow([]*change{c}, "Tally has not shown this new entry yet", false, true, false)
@@ -508,12 +508,12 @@ type heldLine struct {
 	LineAlter   int64
 	// review H1 (the owner's addition): a delete's own GUID and AlterID, used only once this Tally shows it gone
 	KeepGuid, KeepAlter string
-	// 2.3.2 (issue 232, b): the asks of this line that were stopped at 2 s or not answered (the original fetch's stops count
-	// as one): asked again 1 h after the first, 4 h after the second; the third ends it with the Day Book words
+	// 2.3.2 (issue 232, b): the asks of this line that were stopped at 2 s or not answered (2.3.3: kept in the file, no
+	// longer used: a held line is asked again once)
 	Slow int
-	// 2.3.3: sent held at once (its body not there on its first attempt): asked at the next try, RecorderFreshRetryMs apart
-	// at least, its first 3 asks counted as the original fetch's (FreshTries); FreshSlow: one of them stopped at 2 s (then
-	// one timed-out try for the slow back-off when it stops being fresh)
+	// 2.3.3: sent held at once (its body not there on its first attempt): asked at the next try, RecorderFreshRetryMs after
+	// its last ask at least, first among the held lines; FreshTries: the asks made before it was sent; FreshSlow: one of
+	// them stopped at 2 s
 	Fresh      bool
 	FreshTries int
 	FreshSlow  bool
@@ -528,7 +528,7 @@ func (h heldLine) allow() int {
 	if h.Allow < 1 {
 		return 1
 	}
-	return h.Allow
+	return minI(h.Allow, 2) // never more, whatever the file says
 }
 
 var heldMu sync.Mutex
