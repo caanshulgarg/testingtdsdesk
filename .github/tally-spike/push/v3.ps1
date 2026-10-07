@@ -138,6 +138,8 @@ function V3Pre {
   if (-not $heavyOk) { Say 'v3: no heavy company: no fetch stage'; return }
   if (-not (Start-T $heavy @() 'v3-heavy-fetch')) { Say 'HARNESS: v3 heavy did not open'; return }
   GuidRule 'heavy after import'
+  Post (Coll 'FCPCoNat' 'Company' 'NAME' '' '<NATIVEMETHOD>*</NATIVEMETHOD>') '' 60 | Set-Content (Join-Path $cap 'company-natives-heavy.xml') -Encoding UTF8
+  $ax = Post (AltReq); Say "company ALTVCHID / ALTMSTID by XML: $([regex]::Match($ax, '<ALTVCHID[^>]*>[^<]*').Value) / $([regex]::Match($ax, '<ALTMSTID[^>]*>[^<]*').Value)"
   # a sync: a voucher imported carrying another company's GUID (and REMOTEID)
   $fg = '7a1e0c55-1111-4222-8333-944455556666-0000abcd'
   $sx = '<VOUCHER REMOTEID="' + $fg + '" VCHTYPE="Journal" ACTION="Create"><GUID>' + $fg + '</GUID><DATE>20261101</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><VOUCHERNUMBER>SYNC-1</VOUCHERNUMBER><NARRATION>a voucher from another company (sync)</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>Spike Income</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-10.00</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>HDFC Bank</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>10.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>'
@@ -159,6 +161,7 @@ function PollSaves($cfg, $n) {
     DayBook '31-10-2026' $(if ($r -eq 1) { "heavy-$cfg-poll-daybook" }); KeysTo '{END}' 1; KeysTo '%2' 4
     Get-ChildItem $pd -Filter 'stamp-*.txt' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
     $base = Post $req; $a0 = [regex]::Match($base, '<ALTVCHID[^>]*>\s*(\d+)').Groups[1].Value
+    if (-not $a0) { Say "   poll ${cfg}: Tally's company answer has no ALTVCHID value: the outside timer cannot run ($($base -replace '\s+', ' '))"; KeysTo '{ESC}' 1; KeysTo 'y' 1; return }
     if (-not (Focus)) { continue }
     $sw = [Diagnostics.Stopwatch]::StartNew(); [PdUi]::SendCtrl(0x41); $prevEnd = 0.0; $det = -1.0; $polls = 0; $a1 = ''
     while ($sw.Elapsed.TotalSeconds -lt 60) {
