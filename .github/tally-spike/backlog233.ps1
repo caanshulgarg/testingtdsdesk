@@ -147,6 +147,33 @@ function B233LedgerBurst {
   $late = @($want | Where-Object { -not $seen.ContainsKey($_) -or $seen[$_] -gt 10 } | ForEach-Object { "$_ $(if ($seen.ContainsKey($_)) { '{0:0.0} s' -f $seen[$_] } else { 'none' })" })
   $lr = @(S2Proxy | Where-Object { $_.id -eq 'FinComLedgers' -and $_.delay })
   Result 'backlog233 (8) a burst of 8 changed ledgers and a voucher at 1.8 s each: every line in the stub within 10 s' ($late.Count -eq 0) ("late or missing: {0}; arrivals (s after the lines were written): {1}; ledger requests held 1.8 s by the proxy: {2}" -f $(if ($late.Count) { $late -join ', ' } else { 'none' }), (($want | ForEach-Object { "$_=$(if ($seen.ContainsKey($_)) { '{0:0.0}' -f $seen[$_] } else { '-' })" }) -join ' '), $lr.Count)
+  # (8b) the owner's question (07-Oct-2026, after 2.3.3 was published): the ledgers that went up without their details get
+  # them afterwards with no action from anyone. Each burst ledger must reach the stub with its details: a ledger_* line
+  # with its body, or its row (GUID, name, group) in a "ledger_changes" call (the master counter, at the company's next
+  # light check, every 10 minutes); 15 minutes at most, nothing done meanwhile
+  $noBody = @($leds | Where-Object { $m = "$($_.mid)"; -not @((StubLines 0) | Where-Object { $_.company -eq $co1 -and "$($_.mid)" -eq $m -and $_.xml }).Count })
+  $t8 = Get-Date; $got = @{}
+  while (((Get-Date) - $t8).TotalMinutes -lt 15 -and $got.Count -lt $leds.Count) {
+    foreach ($q in (StubReqs)) {
+      if ($q.kind -eq 'ledger_changes' -and $q.body.company -eq $co1) {
+        foreach ($row in @($q.body.ledgers)) {
+          $r = @($row)
+          if ($r.Count -ge 5 -and "$($r[3])" -in $names -and "$($r[0])" -and -not $got.ContainsKey("$($r[3])")) { $got["$($r[3])"] = "ledger_changes at $($q.at) (GUID $($r[0]), MasterID $($r[1]), AlterID $($r[2]), group '$($r[4])', why $($q.body.why))" }
+        }
+      }
+    }
+    foreach ($l in $leds) {
+      if (-not $got.ContainsKey($l.name)) {
+        $x = @((StubLines 0) | Where-Object { $_.company -eq $co1 -and "$($_.mid)" -eq "$($l.mid)" -and $_.xml } | Select-Object -First 1)
+        if ($x.Count) { $got[$l.name] = "a $($x[0].ev) line with its body at $($x[0].at)" }
+      }
+    }
+    if ($got.Count -lt $leds.Count) { Start-Sleep 15 }
+  }
+  $missing = @($leds | Where-Object { -not $got.ContainsKey($_.name) } | ForEach-Object { $_.name })
+  if (-not $noBody.Count) { Add-Content -Path $resultsFile -Encoding UTF8 -Value 'INFO backlog233 (8b): every burst ledger went up with its body this time: the follow-up was not exercised' }
+  $bl = @(S2BridgeLog | Where-Object { $_ -match 'Ledger changes for ' + [regex]::Escape($co1) } | Select-Object -Last 3)
+  Result 'backlog233 (8b) the ledgers sent without their details get them afterwards, with no action' ($missing.Count -eq 0) ("{0} of 8 went up without their body ({1}); each with its details {2:0.0} min after (8) at most: {3}; missing: {4}; the bridge's log: {5}" -f $noBody.Count, (($noBody | ForEach-Object { $_.name }) -join ', '), ((Get-Date) - $t8).TotalMinutes, (($leds | ForEach-Object { "$($_.name): $(if ($got.ContainsKey($_.name)) { $got[$_.name] } else { 'none' })" }) -join ' || '), $(if ($missing.Count) { $missing -join ', ' } else { 'none' }), ($bl -join ' | '))
 }
 
 function B233OldDone { $l = StubLines 0; @($B233.ids | Where-Object { $id = $_; @($l | Where-Object { $_.lid -eq "${id}:resolved" }).Count -gt 0 }).Count }
