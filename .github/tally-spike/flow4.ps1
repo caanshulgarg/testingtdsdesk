@@ -309,6 +309,8 @@ StockNames 9000 $co1 | Out-Null
 . (Join-Path $PSScriptRoot 'pileup.ps1')
 # bridge 2.3.2 (issue 232, input only=slow232): a large company whose single-entry lookup takes Tally over 2 s
 . (Join-Path $PSScriptRoot 'slow232.ps1')
+# bridge 2.3.3 (input only=backlog233): the owner's state: 50 old held lines, a large company over 2 s beside a small one
+. (Join-Path $PSScriptRoot 'backlog233.ps1')
 # next-userfile (input only=userfile): each Windows user's own recorder file; next-masterhook (only=masterhook): the master forms
 . (Join-Path $PSScriptRoot 'userfile233.ps1')
 . (Join-Path $PSScriptRoot 'masterhook233.ps1')
@@ -316,6 +318,7 @@ StockNames 9000 $co1 | Out-Null
 . (Join-Path $PSScriptRoot 'push233.ps1')
 try { S231Masters } catch { Write-Host "S231 masters: $_" }
 if ($env:ONLY -eq 'slow232') { try { Slow232Setup } catch { Write-Host "Slow232Setup: $_ $($_.ScriptStackTrace)"; Result 'slow232 setup' $false "the harness stopped: $_" $true } }
+if ($env:ONLY -eq 'backlog233') { try { B233Setup } catch { Write-Host "B233Setup: $_ $($_.ScriptStackTrace)"; Result 'backlog233 setup' $false "the harness stopped: $_" $true } }
 if ($env:ONLY -eq 'push233') { try { Push233Setup } catch { Write-Host "Push233Setup: $_ $($_.ScriptStackTrace)"; Result 'push233 setup' $false "the harness stopped: $_" $true } }
 
 # ---- user 2's own Tally (9001), run as fcuser2: a company made by keys, then started again with it and the add-on
@@ -360,12 +363,13 @@ Say '---- the bridges, each installed by its own Windows user with the real setu
 # in their own sessions each bridge finds its own Tally (TallyPorts auto, as installed); in one shared session the port is set
 function SeedJson($key, [int]$tport) { $tp = if ($rdp) { 'auto' } else { @($tport) }; $o = @{ CloudUrl = 'http://127.0.0.1:8787/'; CloudKey = "plain:$key"; TallyPorts = $tp }
   # slow232: bridge 1 talks to Tally 9000 through the timing proxy (slow232proxy.py on 127.0.0.2:9000)
-  if ($tport -eq 9000 -and $env:ONLY -eq 'slow232' -and $Slow232St.ok) { $o.TallyHost = '127.0.0.2' }
+  if ($tport -eq 9000 -and ($env:ONLY -in @('slow232', 'backlog233')) -and $Slow232St.ok) { $o.TallyHost = '127.0.0.2' }
   # push233: the same proxy, so every entry request bridge 1 sends is counted at the stand
   if ($tport -eq 9000 -and $env:ONLY -eq 'push233' -and $P233.ok) { $o.TallyHost = '127.0.0.2' }
   ($o | ConvertTo-Json -Compress) }
 $h1 = Join-Path $env:LOCALAPPDATA 'TDS Desk Bridge'; New-Item -ItemType Directory -Force $h1 | Out-Null
 Set-Content "$h1\tds-bridge.config.json" (SeedJson 'spike-computer-key-user1' 9000) -Encoding UTF8
+if ($env:ONLY -eq 'backlog233') { try { B233Seed $h1 } catch { Write-Host "B233Seed: $_"; Result 'backlog233 seed' $false "the harness stopped: $_" $true } }
 $p = Start-Process -FilePath $setup -ArgumentList '/S', '/CURRENTUSER', '/MODE=sole' -PassThru; $null = $p.Handle
 if (-not $p.WaitForExit(300000)) { Write-Host 'setup (user 1) did not end' }
 Write-Host "setup as runneradmin (just for me) ended with $($p.ExitCode)"
@@ -707,6 +711,7 @@ if ($script:harness) { Add-Content -Path $resultsFile -Encoding UTF8 -Value "HAR
 if ($env:ONLY -eq 's5r1') { try { S231Only } catch { Write-Host "S231Only: $_ $($_.ScriptStackTrace)"; Result 'S5/R1' $false "the harness stopped: $_" $true } }
 elseif ($env:ONLY -eq 'pileup') { try { PileUp } catch { Write-Host "PileUp: $_ $($_.ScriptStackTrace)"; Result 'pile-up measurements' $false "the harness stopped: $_" $true } }
 elseif ($env:ONLY -eq 'slow232') { try { Slow232 } catch { Write-Host "Slow232: $_ $($_.ScriptStackTrace)"; Result 'slow232' $false "the harness stopped: $_" $true } }
+elseif ($env:ONLY -eq 'backlog233') { try { Backlog233 } catch { Write-Host "Backlog233: $_ $($_.ScriptStackTrace)"; Result 'backlog233' $false "the harness stopped: $_" $true } }
 elseif ($env:ONLY -eq 'push233') { try { Push233 } catch { Write-Host "Push233: $_ $($_.ScriptStackTrace)"; Result 'push233' $false "the harness stopped: $_" $true } }
 elseif ($env:ONLY -match '^(userfile|masterhook)(,(userfile|masterhook))?$') {
   # next-userfile / next-masterhook: one or both (only=userfile,masterhook with a ref holding both)
