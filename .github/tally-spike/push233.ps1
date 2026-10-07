@@ -162,6 +162,19 @@ function P3Save($kind, [switch]$alter, $co = $co1, [switch]$noList) {
 
 # the stub's line for a save checked: one full entry, its GUID by the rule and Tally's, Tally's MasterID, no AlterID, ledger lines
 # totalling zero (Tally's signed AMOUNTs of the entry's ledger lines), TDS rows when asked; and no entry request at the stand
+# each ledger line of an entry as "ledger|amount" (Tally's sign), sorted: the line's own AMOUNT, its lists (bills, bank,
+# cost centres, TDS) left out. For the bridge's XML and for Tally's own export of the same voucher (read here, on Tally's
+# port directly, never through bridge 1's proxy: the harness's own read, not the bridge's)
+function P3Ledgers($xml) {
+  @(foreach ($m in [regex]::Matches("$xml", '(?s)<ALLLEDGERENTRIES\.LIST>(.*?)</ALLLEDGERENTRIES\.LIST>')) {
+    $top = [regex]::Replace($m.Groups[1].Value, '(?s)<([A-Z][A-Z0-9.]*)\.LIST(?:\s[^>]*)?>.*?</\1\.LIST>', '')
+    $n = [regex]::Match($top, '<LEDGERNAME[^>]*>([^<]*)</LEDGERNAME>').Groups[1].Value
+    $a = [regex]::Match($top, '<AMOUNT[^>]*>([^<]*)</AMOUNT>').Groups[1].Value
+    if ($n -and $a) { '{0}|{1:0.00}' -f [System.Net.WebUtility]::HtmlDecode($n).Trim(), [decimal]$a }
+  }) | Sort-Object
+}
+function P3TallyLedgers($mid, $co = $co1) { P3Ledgers (P3Coll 'P3Led' 'Voucher' 'MASTERID, ALLLEDGERENTRIES.LEDGERNAME, ALLLEDGERENTRIES.AMOUNT' ('$MasterID = ' + [int64]$mid) $co) }
+
 function P3Check($label, $s, $m0, $p0, [switch]$tds, $ev = 'created') {
   if (-not $s.v) { Result "push233 $label" $false 'Tally has no new entry after the save (see the p233 screenshots)' $true; return }
   $cg = P3CGuid; $rule = '{0}-{1:x8}' -f $cg, [int64]$s.v.mid
@@ -176,9 +189,12 @@ function P3Check($label, $s, $m0, $p0, [switch]$tds, $ev = 'created') {
   }
   $tdsOk = -not $tds -or ("$($l.xml)" -match '(?s)<TAXOBJECTALLOCATIONS\.LIST>.*?<CATEGORY[^>]*>[^<]+</CATEGORY>' -and "$($l.xml)" -match '<SUBCATEGORYALLOCATION\.LIST>')
   $asks = @(P3EntryAsks $p0 | Where-Object { $_.company -eq $co1 })
-  $ok = $l -and $raw.push -eq $true -and $raw.full -eq $true -and $null -eq $raw.alter_id -and [int64]$raw.push_seq -gt 0 -and $g -eq $rule -and "$($raw.master_id)" -eq "$($s.v.mid)" -and $nl -ge 2 -and [math]::Abs($sum) -lt 0.005 -and $tdsOk -and $asks.Count -eq 0
-  Result "push233 $label" $ok ("Tally mid {0} guid {1} (the rule: {2}); the stub: {3}; push={4} full={5} alter_id={6} push_seq={7}; {8} ledger lines totalling {9:0.00}; TDS rows: {10}; entry requests from bridge 1 at the stand since the save: {11}{12}; save {13} ms" -f `
-      $s.v.mid, $g, $rule, (Ev $l), $raw.push, $raw.full, $raw.alter_id, $raw.push_seq, $nl, $sum, $(if ($tds) { $tdsOk } else { 'not asked' }), $asks.Count, $(if ($asks.Count) { ' e.g. ' + ($asks[0] | ConvertTo-Json -Compress) } else { '' }), $s.ms_fullline)
+  # the bridge's ledger lines as Tally's own, line by line with Tally's sign (run 37611204899: a form's amounts carry none)
+  $mine = @(P3Ledgers $l.xml); $theirs = @(P3TallyLedgers $s.v.mid)
+  $same = $mine.Count -ge 2 -and ($mine -join ';') -eq ($theirs -join ';')
+  $ok = $same -and $l -and $raw.push -eq $true -and $raw.full -eq $true -and $null -eq $raw.alter_id -and [int64]$raw.push_seq -gt 0 -and $g -eq $rule -and "$($raw.master_id)" -eq "$($s.v.mid)" -and $nl -ge 2 -and [math]::Abs($sum) -lt 0.005 -and $tdsOk -and $asks.Count -eq 0
+  Result "push233 $label" $ok ("Tally mid {0} guid {1} (the rule: {2}); the stub: {3}; push={4} full={5} alter_id={6} push_seq={7}; {8} ledger lines totalling {9:0.00}; TDS rows: {10}; entry requests from bridge 1 at the stand since the save: {11}{12}; save {13} ms; ledger lines as Tally's: {14} (bridge {15}; Tally {16})" -f `
+      $s.v.mid, $g, $rule, (Ev $l), $raw.push, $raw.full, $raw.alter_id, $raw.push_seq, $nl, $sum, $(if ($tds) { $tdsOk } else { 'not asked' }), $asks.Count, $(if ($asks.Count) { ' e.g. ' + ($asks[0] | ConvertTo-Json -Compress) } else { '' }), $s.ms_fullline, $same, ($mine -join '; '), ($theirs -join '; '))
   if ($l) { Set-Content (Join-Path $P233.dir "$label.xml") $l.xml -Encoding UTF8 }
   Set-Content (Join-Path $P233.dir "$label.lines.txt") $s.lines -Encoding UTF8
   return $raw
