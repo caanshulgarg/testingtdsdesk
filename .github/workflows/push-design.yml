@@ -7,6 +7,7 @@
 # bridge-go/testdata/push-design/<release>/.
 name: Push design
 on:
+  workflow_dispatch:
   push:
     branches: [tally-versions]
     paths: ['.github/workflows/push-design.yml', '.github/tally-spike/push/**']
@@ -145,15 +146,9 @@ jobs:
           for d in got/push-*-${{ github.run_id }}; do
             v=$(basename "$d"); v=${v#push-}; v=${v%-${{ github.run_id }}}
             mkdir -p "spike-results/push-design/${{ github.run_id }}-$v"; cp -r "$d"/. "spike-results/push-design/${{ github.run_id }}-$v/"
-            if [ -d "$d/push" ]; then
-              td="bridge-go/testdata/push-design/$v"; rm -rf "$td"; mkdir -p "$td"
-              [ -d "$d/push/captures" ] && cp -r "$d/push/captures"/. "$td/"
-              for f in a.csv b.csv sizes.json summary.txt; do [ -f "$d/push/$f" ] && cp "$d/push/$f" "$td/"; done
-              echo "run ${{ github.run_id }}, TallyPrime $v, bridge ${{ needs.build.outputs.sha }} (tax-accuracy, 2.3.0 setup), $(date -u +%FT%TZ)" > "$td/SOURCE.txt"
-            fi
           done
           git config user.name "push-design"; git config user.email "tally-versions@users.noreply.github.com"
-          git add spike-results/push-design; [ -d bridge-go/testdata/push-design ] && git add bridge-go/testdata/push-design
+          git add spike-results/push-design
           git commit -q -m "push design [skip ci]: results ${{ github.run_id }} (bridge ${{ needs.build.outputs.sha }})" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
           Claude-Session: https://claude.ai/code/session_01LprHoXx2ACgDW2AjxNH8wN" || exit 0
           for i in 1 2 3 4 5; do git pull -q --rebase origin tally-versions && git push -q origin HEAD:refs/heads/tally-versions && break; sleep 10; done

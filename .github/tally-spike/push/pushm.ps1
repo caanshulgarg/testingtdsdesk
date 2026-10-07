@@ -62,6 +62,23 @@ public static class PdUi {
   }
   // keys: "^a" (Ctrl+A) sent by keybd_event. Returns ms until the keys were sent; first change of the screen; last change
   // before the screen stayed the same for stableMs; frames
+  // v3: one key (virtual-key code vk, with Ctrl when ctrl) sent; ms until the screen first changes (-1: no change in maxMs)
+  public static double KeyLatency(byte vk, bool ctrl, int maxMs) {
+    int w = GetSystemMetrics(0), h = GetSystemMetrics(1);
+    IntPtr scr = GetDC(IntPtr.Zero), mem = CreateCompatibleDC(scr), bits;
+    BMIH bi = new BMIH(); bi.biSize = 40; bi.biWidth = w; bi.biHeight = -h; bi.biPlanes = 1; bi.biBitCount = 32;
+    IntPtr dib = CreateDIBSection(scr, ref bi, 0, out bits, IntPtr.Zero, 0), old = SelectObject(mem, dib);
+    try {
+      long prev = Hash(mem, scr, bits, w, h);
+      Stopwatch sw = Stopwatch.StartNew();
+      if (ctrl) keybd_event(0x11, 0, 0, UIntPtr.Zero);
+      keybd_event(vk, 0, 0, UIntPtr.Zero); keybd_event(vk, 0, 2, UIntPtr.Zero);
+      if (ctrl) keybd_event(0x11, 0, 2, UIntPtr.Zero);
+      while (sw.ElapsedMilliseconds < maxMs) { if (Hash(mem, scr, bits, w, h) != prev) return sw.Elapsed.TotalMilliseconds; Thread.Sleep(5); }
+      return -1;
+    } finally { SelectObject(mem, old); DeleteObject(dib); DeleteDC(mem); ReleaseDC(IntPtr.Zero, scr); }
+  }
+  public static void SendCtrl(byte vk) { keybd_event(0x11, 0, 0, UIntPtr.Zero); keybd_event(vk, 0, 0, UIntPtr.Zero); keybd_event(vk, 0, 2, UIntPtr.Zero); keybd_event(0x11, 0, 2, UIntPtr.Zero); }
   public static string Measure(string keys, int stableMs, int maxMs) {
     int w = GetSystemMetrics(0), h = GetSystemMetrics(1);
     IntPtr scr = GetDC(IntPtr.Zero), mem = CreateCompatibleDC(scr), bits;
@@ -292,6 +309,8 @@ foreach ($c in @('$$MachineName', '$$CmpUserName', '$$SysInfo:WindowsUser', '$$S
   $who += "$c => '$v' $e"; Say "TDL $c => '$v' $e"
 }
 Set-Content (Join-Path $cap 'windows-user-candidates.txt') (@("Windows user of this runner: $env:USERNAME ($env:USERDOMAIN), computer $env:COMPUTERNAME") + $who) -Encoding UTF8
+# v3 (07-Oct-2026): the owner's TDS masters on the light company before it is copied (v3.ps1)
+if ($env:PD_MODE -eq 'v3') { . "$here\v3.ps1"; try { V3TdsMasters } catch { Say "HARNESS: TDS masters: $_" } }
 Stop-T
 # heavy: the light company's folder copied (same company, same templates), then the bulk by XML
 if (Test-Path $heavy) { Remove-Item $heavy -Recurse -Force }
@@ -319,6 +338,7 @@ $lt = [ordered]@{ ledgers = (Count 'Ledger'); items = (Count 'StockItem'); vouch
 Say "light company: $($lt.ledgers) ledgers, $($lt.items) stock items, $($lt.vouchers) vouchers"
 Set-Content (Join-Path $out 'sizes.json') (@{ light = $lt; heavy = $hv; templates = $tplKind; cguid = $cguid } | ConvertTo-Json -Depth 4) -Encoding UTF8
 Stop-T
+if ($env:PD_MODE -eq 'v3') { try { V3Pre } catch { Say "HARNESS: v3 fetch stage stopped: $_" } }
 
 # ---------------------------------------------------------------- the bridge (2.3.0 setup), the stub cloud, the proxy
 $stubLog = Join-Path $out 'stub.jsonl'
@@ -395,7 +415,7 @@ function SaveBlock($cfg, $coTag, $kind, $date, $n, $mode) {
     # wait for the add-on's last stamp (run 37464758500: on the heavy company the full add-on's read-back outlasted the
     # fixed 2 s and its stamp was read with the next save)
     $sw2 = [Diagnostics.Stopwatch]::StartNew(); Start-Sleep 2
-    if ($script:lastStamp) { while (-not (Test-Path "$pd\stamp-$($script:lastStamp).txt") -and $sw2.Elapsed.TotalSeconds -lt 120) { Start-Sleep -Milliseconds 250 }; Start-Sleep -Milliseconds 300 }
+    if ($script:lastStamp) { while (-not (Test-Path "$pd\stamp-$($script:lastStamp).txt") -and $sw2.Elapsed.TotalSeconds -lt 180) { Start-Sleep -Milliseconds 250 }; Start-Sleep -Milliseconds 300 }
     $h = Stamps; $lines = NewFullLines; $rl = NewRecLines
     $saved = @($lines | Where-Object { $_ -like 'FCF1|ev=voucher_saved*' })[0]; $final = @($lines | Where-Object { $_ -like 'FCF1|ev=voucher_final*' })[0]
     $row = [pscustomobject]@{ rel = $rel; company = $coTag; cfg = $cfg; kind = $kind; mode = $mode; rep = $r
@@ -536,6 +556,7 @@ function TypesStage {
   Stop-T
 }
 function KeepTallyLogs { Get-ChildItem $dir, $light -Recurse -File -Include *.log, tdlerr*, *.err -ErrorAction SilentlyContinue | Select-Object -First 20 | ForEach-Object { Copy-Item $_.FullName (Join-Path $out "tally-$($_.Directory.Name)-$($_.Name)") -ErrorAction SilentlyContinue } }
+if ($env:PD_MODE -eq 'v3') { try { V3Main } catch { Say "HARNESS: v3 stopped: $_ $($_.ScriptStackTrace)" }; Copy-Item $blog (Join-Path $out 'bridge-full.log') -ErrorAction SilentlyContinue; KeepTallyLogs; Stop-T; Get-Process FinComBridge -ErrorAction SilentlyContinue | Stop-Process -Force; Stop-Proxy; Stop-Process -Id $stub.Id -Force -ErrorAction SilentlyContinue; Say 'done (v3)'; return }
 if ($env:PD_MODE -eq 'explore') { TypesStage; KeepTallyLogs; Get-Process FinComBridge -ErrorAction SilentlyContinue | Stop-Process -Force; Stop-Process -Id $stub.Id -Force -ErrorAction SilentlyContinue; Say 'done (explore: the voucher-type probe only)'; return }
 foreach ($coTag in 'light', 'heavy') {
   $data = if ($coTag -eq 'light') { $light } else { $heavy }

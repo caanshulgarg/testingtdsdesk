@@ -1,0 +1,374 @@
+;; FCPFullNR.tdl  -  FCPFull.tdl with NO read-back (push-design v3): FCPFinal writes the form ids and the company's
+;; AltVchID / AltMstID only; the FCPByMid collection is never walked. MEASUREMENT ONLY (push-design spike, branch tally-versions). Never shipped, never loaded by a customer.
+;;
+;; The owner's "push, do not pull" design, built only to be timed on a real TallyPrime: at the moment an entry is saved
+;; the add-on writes the COMPLETE entry (every field the 2.3.1 entry request fetches, bridge-go/recorder_live.go
+;; liveFetchField on items-231) as one line to a file. One OPEN FILE and one CLOSE per entry.
+;;
+;; Stamps: Tally's TDL clock ($$MachineTime) gives minutes only, so every stage writes a tiny file
+;; C:\fcspike\push\stamp-<x>.txt and the harness reads each file's last-write time (NTFS, the timer raised to 1 ms):
+;;   a  first thing in Form Accept            b  just before Tally's own Form Accept (the save)
+;;   c  just after Tally's own Form Accept     d  after the full entry is written          e  after the final-id read
+;; Tally's save = c - b; the full entry = d - c; the final-id read (a voucher collection filtered by MasterID) = e - d.
+;;
+;; No network, no AI, no message, never blocks a save: every function returns Yes.
+
+[System: Formula]
+    FCPIsLive : NOT $$IsEmpty:##SVCurrentCompany
+    FCPDir    : "C:\fcspike\push\"
+    FCPDay    : $$String:$$MachineDate:"UniversalDate"
+    ;; the voucher's own fields (the head of the 2.3.1 request)
+    FCPVh1    : "|guid=" + ($$String:$Guid) + "|mid=" + ($$String:$MasterID) + "|aid=" + ($$String:$AlterID) + "|date=" + ($$String:$Date) + "|vtype=" + ($$String:$VoucherTypeName) + "|vno=" + ($$String:$VoucherNumber)
+    FCPVh2    : "|party=" + ($$String:$PartyLedgerName) + "|canc=" + ($$String:$IsCancelled) + "|opt=" + ($$String:$IsOptional) + "|ref=" + ($$String:$Reference) + "|refdt=" + ($$String:$ReferenceDate)
+    FCPVh3    : "|pgstin=" + ($$String:$PartyGSTIN) + "|pos=" + ($$String:$PlaceOfSupply) + "|cgstin=" + ($$String:$CmpGSTIN) + "|irn=" + ($$String:$IRN) + "|irnack=" + ($$String:$IRNAckNo) + "|irnackdt=" + ($$String:$IRNAckDate)
+    FCPVh4    : "|ewb=" + ($$String:($$CollectionField:$BillNumber:1:EWayBillDetails)) + "|narr=" + ($$String:$Narration)
+    ;; one ledger entry, one item, and each sub-list's item (evaluated in that item's own context)
+    FCPLe     : "led=" + ($$String:$LedgerName) + "~amt=" + ($$String:$Amount) + "~dp=" + ($$String:$IsDeemedPositive) + "~party=" + ($$String:$IsPartyLedger) + "~hsn=" + ($$String:$GSTHSNName)
+    FCPIe     : "item=" + ($$String:$StockItemName) + "~qty=" + ($$String:$BilledQty) + "~rate=" + ($$String:$Rate) + "~amt=" + ($$String:$Amount) + "~hsn=" + ($$String:$GSTHSNName)
+    FCPRate   : ($$String:$GSTRateDutyHead) + "/" + ($$String:$GSTRateValuationType) + "/" + ($$String:$GSTRate)
+    FCPBill   : "name=" + ($$String:$Name) + "~type=" + ($$String:$BillType) + "~amt=" + ($$String:$Amount) + "~cp=" + ($$String:$BillCreditPeriod) + "~tdssec=" + ($$String:$TDSDeducteeSectionNumber)
+    FCPBank   : "tt=" + ($$String:$TransactionType) + "~ino=" + ($$String:$InstrumentNumber) + "~idt=" + ($$String:$InstrumentDate) + "~bdt=" + ($$String:$BankersDate) + "~utr=" + ($$String:$UniqueReferenceNumber) + "~amt=" + ($$String:$Amount)
+    FCPCat    : "cat=" + ($$String:$Category)
+    FCPCC     : "cc=" + ($$String:$Name) + "~amt=" + ($$String:$Amount)
+    FCPTax    : "tt=" + ($$String:$TaxType) + "~cat=" + ($$String:$Category) + "~pl=" + ($$String:$PartyLedger)
+    FCPSub    : "rate=" + ($$String:$TaxRate) + "~ass=" + ($$String:$AssessableAmount) + "~tax=" + ($$String:$Tax)
+    FCPAa     : "led=" + ($$String:$LedgerName) + "~amt=" + ($$String:$Amount) + "~dp=" + ($$String:$IsDeemedPositive)
+    ;; batches (godown, batch, tracking number, order number and due date, quantities, amount), the order list,
+    ;; payroll (employee, pay head) and attendance lines
+    FCPBat    : "god=" + ($$String:$GodownName) + "~bat=" + ($$String:$BatchName) + "~trk=" + ($$String:$TrackingNumber) + "~ord=" + ($$String:$OrderNo)
+    FCPBat2   : "~due=" + ($$String:$OrderDueDate) + "~aq=" + ($$String:$ActualQty) + "~bq=" + ($$String:$BilledQty) + "~amt=" + ($$String:$Amount)
+    FCPOrd    : "no=" + ($$String:$BasicPurchaseOrderNo) + "~dt=" + ($$String:$BasicOrderDate)
+    FCPEmp    : "emp=" + ($$String:$EmployeeName) + "~amt=" + ($$String:$Amount)
+    FCPPh     : "ph=" + ($$String:$PayHeadName) + "~amt=" + ($$String:$Amount)
+    FCPAtt    : "att=" + ($$String:$AttendanceType) + "~val=" + ($$String:$AttdTypeValue)
+    FCPIo     : "item=" + ($$String:$StockItemName) + "~aq=" + ($$String:$ActualQty) + "~rate=" + ($$String:$Rate) + "~amt=" + ($$String:$Amount)
+    ;; a ledger master
+    FCPLm     : "|guid=" + ($$String:$Guid) + "|mid=" + ($$String:$MasterID) + "|aid=" + ($$String:$AlterID) + "|name=" + ($$String:$Name) + "|parent=" + ($$String:$Parent) + "|gstin=" + ($$String:$PartyGSTIN) + "|state=" + ($$String:$LedStateName) + "|pan=" + ($$String:$IncomeTaxNumber) + "|billwise=" + ($$String:$IsBillWiseOn)
+    ;; the final-id read: the saved voucher by its MasterID
+    FCPByMidF : $MasterID = ##FCPMidVar
+
+[Variable: FCPMidVar]
+    Type : Number
+
+[System: Variable]
+    FCPMidVar : 0
+
+[Collection: FCPByMid]
+    Type   : Voucher
+    Filter : FCPByMidF
+    Fetch  : Guid, MasterID, AlterID
+
+;; ---------------------------------------------------------------- events
+[System: Events]
+    FCPDelB  : Before Delete Object : @@FCPIsLive : Call : FCPHead : "before_delete"
+    FCPDelA  : After Delete Object  : @@FCPIsLive : Call : FCPHead : "after_delete"
+    FCPCanB  : Before Cancel Object : @@FCPIsLive : Call : FCPHead : "before_cancel"
+    FCPCanA  : After Cancel Object  : @@FCPIsLive : Call : FCPHead : "after_cancel"
+    FCPImpS  : Start Import         : Yes : Call : FCPHead : "start_import"
+    FCPImpA  : After Import Object  : Yes : Call : FCPFullVch : "after_import_object"
+    FCPImpE  : End Import           : Yes : Call : FCPHead : "end_import"
+
+[#Form: Voucher]
+    On : Form Accept : Yes          : Call : FCPStamp : "a"
+    On : Form Accept : Yes          : Call : FCPStamp : "b"
+    On : Form Accept : Yes          : Form Accept
+    On : Form Accept : Yes          : Call : FCPStamp : "c"
+    On : Form Accept : @@FCPIsLive  : Call : FCPFullVch : "voucher_saved"
+    On : Form Accept : Yes          : Call : FCPStamp : "d"
+    On : Form Accept : @@FCPIsLive  : Call : FCPFinal : "voucher_final"
+    On : Form Accept : Yes          : Call : FCPStamp : "e"
+
+[#Form: Ledger]
+    On : Form Accept : Yes          : Call : FCPStamp : "la"
+    On : Form Accept : Yes          : Form Accept
+    On : Form Accept : Yes          : Call : FCPStamp : "lc"
+    On : Form Accept : @@FCPIsLive  : Call : FCPFullLed : "ledger_saved"
+    On : Form Accept : Yes          : Call : FCPStamp : "ld"
+
+;; ---------------------------------------------------------------- the stamp
+[Function: FCPStamp]
+    Parameter : pName : String
+    Returns   : Logical
+    01 : OPEN FILE : @@FCPDir + "stamp-" + ##pName + ".txt" : Text : Write : Unicode
+    02 : IF : NOT $$LastResult
+    03 :    RETURN : Yes
+    04 : END IF
+    05 : WRITE FILE LINE : ##pName
+    06 : CLOSE TARGET FILE
+    07 : RETURN : Yes
+
+;; ---------------------------------------------------------------- heads only (delete, cancel, import start / end)
+[Function: FCPHead]
+    Parameter : pEvent : String
+    Variable  : vCG    : String
+    Returns   : Logical
+    01 : SET : vCG : $Guid:Company:##SVCurrentCompany
+    02 : OPEN FILE : @@FCPDir + "full-" + ##vCG + "-" + @@FCPDay + ".txt" : Text : Write : Unicode
+    03 : IF : NOT $$LastResult
+    04 :    RETURN : Yes
+    05 : END IF
+    06 : WRITE FILE      : "FCF1|ev=" + ##pEvent + "|cguid=" + ##vCG + "|cname=" + ##SVCurrentCompany + "|tuser=" + ($$String:$$CmpUserName) + @@FCPVh1
+    07 : WRITE FILE LINE : "|end=1"
+    08 : CLOSE TARGET FILE
+    09 : RETURN : Yes
+
+;; ---------------------------------------------------------------- the complete entry
+[Function: FCPFullVch]
+    Parameter : pEvent : String
+    Variable  : vCG : String
+    Variable  : vI  : Number
+    Variable  : vJ  : Number
+    Variable  : vK  : Number
+    Variable  : vM  : Number
+    Variable  : vNI : Number
+    Variable  : vNJ : Number
+    Variable  : vNK : Number
+    Variable  : vNM : Number
+    Returns   : Logical
+
+    01 : SET : vCG : $Guid:Company:##SVCurrentCompany
+    02 : OPEN FILE : @@FCPDir + "full-" + ##vCG + "-" + @@FCPDay + ".txt" : Text : Write : Unicode
+    03 : IF : NOT $$LastResult
+    04 :    RETURN : Yes
+    05 : END IF
+    06 : WRITE FILE : "FCF1|ev=" + ##pEvent + "|cguid=" + ##vCG + "|cname=" + ##SVCurrentCompany + "|tuser=" + ($$String:$$CmpUserName)
+    0701 : WRITE FILE : "|guid=" + ($$String:$Guid)
+    0702 : WRITE FILE : "|mid=" + ($$String:$MasterID)
+    0703 : WRITE FILE : "|aid=" + ($$String:$AlterID)
+    0704 : WRITE FILE : "|date=" + ($$String:$Date)
+    0705 : WRITE FILE : "|vtype=" + ($$String:$VoucherTypeName)
+    0706 : WRITE FILE : "|vno=" + ($$String:$VoucherNumber)
+    0707 : WRITE FILE : "|party=" + ($$String:$PartyLedgerName)
+    0708 : WRITE FILE : "|canc=" + ($$String:$IsCancelled)
+    0709 : WRITE FILE : "|opt=" + ($$String:$IsOptional)
+    0710 : WRITE FILE : "|ref=" + ($$String:$Reference)
+    0711 : WRITE FILE : "|refdt=" + ($$String:$ReferenceDate)
+    0712 : WRITE FILE : "|pgstin=" + ($$String:$PartyGSTIN)
+    0713 : WRITE FILE : "|pos=" + ($$String:$PlaceOfSupply)
+    0714 : WRITE FILE : "|cgstin=" + ($$String:$CmpGSTIN)
+    0715 : WRITE FILE : "|irn=" + ($$String:$IRN)
+    0716 : WRITE FILE : "|irnack=" + ($$String:$IRNAckNo)
+    0717 : WRITE FILE : "|irnackdt=" + ($$String:$IRNAckDate)
+    0718 : WRITE FILE : "|ewb=" + ($$String:($$CollectionField:$BillNumber:1:EWayBillDetails))
+    0719 : WRITE FILE : "|narr=" + ($$String:$Narration)
+
+    ;; ---- ledger entries
+    10 : SET : vNI : $$NumItems:AllLedgerEntries
+    11 : WRITE FILE : "|nL=" + ($$String:##vNI)
+    12 : SET : vI : 1
+    13 : WHILE : ##vI <= ##vNI
+    14 :    WRITE FILE : "|L" + ($$String:##vI) + "=" + ($$CollectionField:@@FCPLe:##vI:AllLedgerEntries)
+    ;; GST rate details
+    15 :    SET : vNJ : $$CollectionField:($$NumItems:RateDetails):##vI:AllLedgerEntries
+    16 :    SET : vJ : 1
+    17 :    WHILE : ##vJ <= ##vNJ
+    18 :       WRITE FILE : "|L" + ($$String:##vI) + "R" + ($$String:##vJ) + "=" + ($$CollectionField:($$CollectionField:@@FCPRate:##vJ:RateDetails):##vI:AllLedgerEntries)
+    19 :       INCREMENT : vJ
+    20 :    END WHILE
+    ;; bill-wise
+    21 :    SET : vNJ : $$CollectionField:($$NumItems:BillAllocations):##vI:AllLedgerEntries
+    22 :    SET : vJ : 1
+    23 :    WHILE : ##vJ <= ##vNJ
+    24 :       WRITE FILE : "|L" + ($$String:##vI) + "B" + ($$String:##vJ) + "=" + ($$CollectionField:($$CollectionField:@@FCPBill:##vJ:BillAllocations):##vI:AllLedgerEntries)
+    25 :       INCREMENT : vJ
+    26 :    END WHILE
+    ;; bank details
+    27 :    SET : vNJ : $$CollectionField:($$NumItems:BankAllocations):##vI:AllLedgerEntries
+    28 :    SET : vJ : 1
+    29 :    WHILE : ##vJ <= ##vNJ
+    30 :       WRITE FILE : "|L" + ($$String:##vI) + "K" + ($$String:##vJ) + "=" + ($$CollectionField:($$CollectionField:@@FCPBank:##vJ:BankAllocations):##vI:AllLedgerEntries)
+    31 :       INCREMENT : vJ
+    32 :    END WHILE
+    ;; cost categories and cost centres
+    33 :    SET : vNJ : $$CollectionField:($$NumItems:CategoryAllocations):##vI:AllLedgerEntries
+    34 :    SET : vJ : 1
+    35 :    WHILE : ##vJ <= ##vNJ
+    36 :       WRITE FILE : "|L" + ($$String:##vI) + "C" + ($$String:##vJ) + "=" + ($$CollectionField:($$CollectionField:@@FCPCat:##vJ:CategoryAllocations):##vI:AllLedgerEntries)
+    37 :       SET : vNK : $$CollectionField:($$CollectionField:($$NumItems:CostCentreAllocations):##vJ:CategoryAllocations):##vI:AllLedgerEntries
+    38 :       SET : vK : 1
+    39 :       WHILE : ##vK <= ##vNK
+    40 :          WRITE FILE : "|L" + ($$String:##vI) + "C" + ($$String:##vJ) + "c" + ($$String:##vK) + "=" + ($$CollectionField:($$CollectionField:($$CollectionField:@@FCPCC:##vK:CostCentreAllocations):##vJ:CategoryAllocations):##vI:AllLedgerEntries)
+    41 :          INCREMENT : vK
+    42 :       END WHILE
+    43 :       INCREMENT : vJ
+    44 :    END WHILE
+    ;; TDS (tax object allocations and their sub-categories)
+    45 :    SET : vNJ : $$CollectionField:($$NumItems:TaxObjectAllocations):##vI:AllLedgerEntries
+    46 :    SET : vJ : 1
+    47 :    WHILE : ##vJ <= ##vNJ
+    48 :       WRITE FILE : "|L" + ($$String:##vI) + "T" + ($$String:##vJ) + "=" + ($$CollectionField:($$CollectionField:@@FCPTax:##vJ:TaxObjectAllocations):##vI:AllLedgerEntries)
+    49 :       SET : vNK : $$CollectionField:($$CollectionField:($$NumItems:SubCategoryAllocation):##vJ:TaxObjectAllocations):##vI:AllLedgerEntries
+    50 :       SET : vK : 1
+    51 :       WHILE : ##vK <= ##vNK
+    52 :          WRITE FILE : "|L" + ($$String:##vI) + "T" + ($$String:##vJ) + "s" + ($$String:##vK) + "=" + ($$CollectionField:($$CollectionField:($$CollectionField:@@FCPSub:##vK:SubCategoryAllocation):##vJ:TaxObjectAllocations):##vI:AllLedgerEntries)
+    53 :          INCREMENT : vK
+    54 :       END WHILE
+    55 :       INCREMENT : vJ
+    56 :    END WHILE
+    57 :    INCREMENT : vI
+    58 : END WHILE
+
+    ;; ---- inventory entries
+    60 : SET : vNI : $$NumItems:AllInventoryEntries
+    61 : WRITE FILE : "|nI=" + ($$String:##vNI)
+    62 : SET : vI : 1
+    63 : WHILE : ##vI <= ##vNI
+    64 :    WRITE FILE : "|I" + ($$String:##vI) + "=" + ($$CollectionField:@@FCPIe:##vI:AllInventoryEntries)
+    65 :    SET : vNJ : $$CollectionField:($$NumItems:RateDetails):##vI:AllInventoryEntries
+    66 :    SET : vJ : 1
+    67 :    WHILE : ##vJ <= ##vNJ
+    68 :       WRITE FILE : "|I" + ($$String:##vI) + "R" + ($$String:##vJ) + "=" + ($$CollectionField:($$CollectionField:@@FCPRate:##vJ:RateDetails):##vI:AllInventoryEntries)
+    69 :       INCREMENT : vJ
+    70 :    END WHILE
+    ;; the ledger under the item (accounting allocations), its cost categories and cost centres
+    71 :    SET : vNJ : $$CollectionField:($$NumItems:AccountingAllocations):##vI:AllInventoryEntries
+    72 :    SET : vJ : 1
+    73 :    WHILE : ##vJ <= ##vNJ
+    74 :       WRITE FILE : "|I" + ($$String:##vI) + "A" + ($$String:##vJ) + "=" + ($$CollectionField:($$CollectionField:@@FCPAa:##vJ:AccountingAllocations):##vI:AllInventoryEntries)
+    75 :       SET : vNK : $$CollectionField:($$CollectionField:($$NumItems:CategoryAllocations):##vJ:AccountingAllocations):##vI:AllInventoryEntries
+    76 :       SET : vK : 1
+    77 :       WHILE : ##vK <= ##vNK
+    78 :          WRITE FILE : "|I" + ($$String:##vI) + "A" + ($$String:##vJ) + "C" + ($$String:##vK) + "=" + ($$CollectionField:($$CollectionField:($$CollectionField:@@FCPCat:##vK:CategoryAllocations):##vJ:AccountingAllocations):##vI:AllInventoryEntries)
+    79 :          SET : vNM : $$CollectionField:($$CollectionField:($$CollectionField:($$NumItems:CostCentreAllocations):##vK:CategoryAllocations):##vJ:AccountingAllocations):##vI:AllInventoryEntries
+    80 :          SET : vM : 1
+    81 :          WHILE : ##vM <= ##vNM
+    82 :             WRITE FILE : "|I" + ($$String:##vI) + "A" + ($$String:##vJ) + "C" + ($$String:##vK) + "c" + ($$String:##vM) + "=" + ($$CollectionField:($$CollectionField:($$CollectionField:($$CollectionField:@@FCPCC:##vM:CostCentreAllocations):##vK:CategoryAllocations):##vJ:AccountingAllocations):##vI:AllInventoryEntries)
+    83 :             INCREMENT : vM
+    84 :          END WHILE
+    85 :          INCREMENT : vK
+    86 :       END WHILE
+    87 :       INCREMENT : vJ
+    88 :    END WHILE
+    89 :    INCREMENT : vI
+    90 : END WHILE
+
+    ;; ---- the batches of each item line (godown, batch, tracking number, order number)
+    9101 : SET : vI : 1
+    91020 : SET : vNI : 0
+    9102 : SET : vNI : $$NumItems:AllInventoryEntries
+    9103 : WHILE : ##vI <= ##vNI
+    91040 : SET : vNJ : 0
+    9104 :    SET : vNJ : $$CollectionField:($$NumItems:BatchAllocations):##vI:AllInventoryEntries
+    9105 :    SET : vJ : 1
+    9106 :    WHILE : ##vJ <= ##vNJ
+    9107 :       WRITE FILE : "|I" + ($$String:##vI) + "b" + ($$String:##vJ) + "=" + ($$CollectionField:($$CollectionField:@@FCPBat:##vJ:BatchAllocations):##vI:AllInventoryEntries)
+    9108 :       WRITE FILE : ($$CollectionField:($$CollectionField:@@FCPBat2:##vJ:BatchAllocations):##vI:AllInventoryEntries)
+    9109 :       INCREMENT : vJ
+    9110 :    END WHILE
+    9111 :    INCREMENT : vI
+    9112 : END WHILE
+    ;; ---- the order list of an invoice or note
+    92010 : SET : vNI : 0
+    9201 : SET : vNI : $$NumItems:InvoiceOrderList
+    9202 : WRITE FILE : "|nO=" + ($$String:##vNI)
+    9203 : SET : vI : 1
+    9204 : WHILE : ##vI <= ##vNI
+    9205 :    WRITE FILE : "|O" + ($$String:##vI) + "=" + ($$CollectionField:@@FCPOrd:##vI:InvoiceOrderList)
+    9206 :    INCREMENT : vI
+    9207 : END WHILE
+    ;; ---- stock journal, manufacturing journal, physical stock: the lines out (source) and in (destination), each with batches
+    93010 : SET : vNI : 0
+    9301 : SET : vNI : $$NumItems:InventoryEntriesOut
+    9302 : WRITE FILE : "|nSO=" + ($$String:##vNI)
+    9303 : SET : vI : 1
+    9304 : WHILE : ##vI <= ##vNI
+    9305 :    WRITE FILE : "|SO" + ($$String:##vI) + "=" + ($$CollectionField:@@FCPIo:##vI:InventoryEntriesOut)
+    93060 : SET : vNJ : 0
+    9306 :    SET : vNJ : $$CollectionField:($$NumItems:BatchAllocations):##vI:InventoryEntriesOut
+    9307 :    SET : vJ : 1
+    9308 :    WHILE : ##vJ <= ##vNJ
+    9309 :       WRITE FILE : "|SO" + ($$String:##vI) + "b" + ($$String:##vJ) + "=" + ($$CollectionField:($$CollectionField:@@FCPBat:##vJ:BatchAllocations):##vI:InventoryEntriesOut)
+    9310 :       WRITE FILE : ($$CollectionField:($$CollectionField:@@FCPBat2:##vJ:BatchAllocations):##vI:InventoryEntriesOut)
+    9311 :       INCREMENT : vJ
+    9312 :    END WHILE
+    9313 :    INCREMENT : vI
+    9314 : END WHILE
+    93210 : SET : vNI : 0
+    9321 : SET : vNI : $$NumItems:InventoryEntriesIn
+    9322 : WRITE FILE : "|nSI=" + ($$String:##vNI)
+    9323 : SET : vI : 1
+    9324 : WHILE : ##vI <= ##vNI
+    9325 :    WRITE FILE : "|SI" + ($$String:##vI) + "=" + ($$CollectionField:@@FCPIo:##vI:InventoryEntriesIn)
+    93260 : SET : vNJ : 0
+    9326 :    SET : vNJ : $$CollectionField:($$NumItems:BatchAllocations):##vI:InventoryEntriesIn
+    9327 :    SET : vJ : 1
+    9328 :    WHILE : ##vJ <= ##vNJ
+    9329 :       WRITE FILE : "|SI" + ($$String:##vI) + "b" + ($$String:##vJ) + "=" + ($$CollectionField:($$CollectionField:@@FCPBat:##vJ:BatchAllocations):##vI:InventoryEntriesIn)
+    9330 :       WRITE FILE : ($$CollectionField:($$CollectionField:@@FCPBat2:##vJ:BatchAllocations):##vI:InventoryEntriesIn)
+    9331 :       INCREMENT : vJ
+    9332 :    END WHILE
+    9333 :    INCREMENT : vI
+    9334 : END WHILE
+    ;; ---- payroll and attendance: the category, each employee, the pay heads or attendance lines under the employee
+    94010 : SET : vNI : 0
+    9401 : SET : vNI : $$NumItems:CategoryEntry
+    9402 : WRITE FILE : "|nCE=" + ($$String:##vNI)
+    9403 : SET : vI : 1
+    9404 : WHILE : ##vI <= ##vNI
+    9405 :    WRITE FILE : "|CE" + ($$String:##vI) + "=" + ($$String:($$CollectionField:$Category:##vI:CategoryEntry))
+    94060 : SET : vNJ : 0
+    9406 :    SET : vNJ : $$CollectionField:($$NumItems:EmployeeEntries):##vI:CategoryEntry
+    9407 :    WRITE FILE : "|nE=" + ($$String:##vNJ)
+    9408 :    SET : vJ : 1
+    9409 :    WHILE : ##vJ <= ##vNJ
+    9410 :       WRITE FILE : "|E" + ($$String:##vJ) + "=" + ($$CollectionField:($$CollectionField:@@FCPEmp:##vJ:EmployeeEntries):##vI:CategoryEntry)
+    94110 : SET : vNK : 0
+    9411 :       SET : vNK : $$CollectionField:($$CollectionField:($$NumItems:PayHeadAllocations):##vJ:EmployeeEntries):##vI:CategoryEntry
+    9412 :       SET : vK : 1
+    9413 :       WHILE : ##vK <= ##vNK
+    9414 :          WRITE FILE : "|E" + ($$String:##vJ) + "p" + ($$String:##vK) + "=" + ($$CollectionField:($$CollectionField:($$CollectionField:@@FCPPh:##vK:PayHeadAllocations):##vJ:EmployeeEntries):##vI:CategoryEntry)
+    9415 :          INCREMENT : vK
+    9416 :       END WHILE
+    94170 : SET : vNK : 0
+    9417 :       SET : vNK : $$CollectionField:($$CollectionField:($$NumItems:AttendanceEntries):##vJ:EmployeeEntries):##vI:CategoryEntry
+    9418 :       SET : vK : 1
+    9419 :       WHILE : ##vK <= ##vNK
+    9420 :          WRITE FILE : "|E" + ($$String:##vJ) + "a" + ($$String:##vK) + "=" + ($$CollectionField:($$CollectionField:($$CollectionField:@@FCPAtt:##vK:AttendanceEntries):##vJ:EmployeeEntries):##vI:CategoryEntry)
+    9421 :          INCREMENT : vK
+    9422 :       END WHILE
+    9423 :       INCREMENT : vJ
+    9424 :    END WHILE
+    9425 :    INCREMENT : vI
+    9426 : END WHILE
+
+    95 : WRITE FILE LINE : "|end=1"
+    96 : CLOSE TARGET FILE
+    97 : RETURN : Yes
+
+;; ---------------------------------------------------------------- the final ids, read back from the company after the save
+;; the in-form object keeps GUID "<company>-00000000" / AlterID 0 for a new entry (run 37418469212); this reads the saved
+;; voucher by its MasterID (a voucher collection with a filter) and the company's last voucher AlterID
+[Function: FCPFinal]
+    Parameter : pEvent : String
+    Variable  : vCG : String
+    Returns   : Logical
+    02 : SET : vCG : $Guid:Company:##SVCurrentCompany
+    03 : OPEN FILE : @@FCPDir + "full-" + ##vCG + "-" + @@FCPDay + ".txt" : Text : Write : Unicode
+    04 : IF : NOT $$LastResult
+    05 :    RETURN : Yes
+    06 : END IF
+    ;; each field on its own WRITE FILE (run 37450532756: one line holding all of them was dropped whole)
+    07 : WRITE FILE : "FCF1|ev=" + ##pEvent + "|cguid=" + ##vCG
+    08 : WRITE FILE : "|form_guid=" + ($$String:$Guid)
+    09 : WRITE FILE : "|form_mid=" + ($$String:$MasterID)
+    10 : WRITE FILE : "|form_aid=" + ($$String:$AlterID)
+    19 : WRITE FILE : "|cmp_altvchid=" + ($$String:($AltVchID:Company:##SVCurrentCompany))
+    20 : WRITE FILE : "|cmp_altmstid=" + ($$String:($AltMstID:Company:##SVCurrentCompany))
+    21 : WRITE FILE LINE : "|end=1"
+    22 : CLOSE TARGET FILE
+    23 : RETURN : Yes
+
+;; ---------------------------------------------------------------- a ledger created or altered
+[Function: FCPFullLed]
+    Parameter : pEvent : String
+    Variable  : vCG : String
+    Returns   : Logical
+    01 : SET : vCG : $Guid:Company:##SVCurrentCompany
+    02 : OPEN FILE : @@FCPDir + "full-" + ##vCG + "-" + @@FCPDay + ".txt" : Text : Write : Unicode
+    03 : IF : NOT $$LastResult
+    04 :    RETURN : Yes
+    05 : END IF
+    06 : WRITE FILE      : "FCF1|ev=" + ##pEvent + "|cguid=" + ##vCG + "|cname=" + ##SVCurrentCompany + "|tuser=" + ($$String:$$CmpUserName) + @@FCPLm
+    07 : WRITE FILE LINE : "|end=1"
+    08 : CLOSE TARGET FILE
+    09 : RETURN : Yes
