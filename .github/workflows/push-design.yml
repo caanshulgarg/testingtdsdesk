@@ -1,4 +1,4 @@
-# Push-design measurements (MEASUREMENT ONLY, branch tally-versions): the owner's "push, do not pull" design timed on
+# Push-design measurements (MEASUREMENT ONLY; on branch why22 this copy runs why22.ps1 and commits to why22): the owner's "push, do not pull" design timed on
 # real TallyPrime releases. Each release installed as tally-versions.yml does (Tally's own download centre, Educational
 # mode, driven by keys); then .github/tally-spike/push/pushm.ps1: save times with no add-on / stamps / today's heads-only
 # add-on / a full-entry add-on (FCPFull.tdl, never shipped), FinCom's posting through bridge 2.3.0 with each, and the
@@ -9,7 +9,7 @@ name: Push design
 on:
   workflow_dispatch:
   push:
-    branches: [tally-versions]
+    branches: [why22]
     paths: ['.github/workflows/push-design.yml', '.github/tally-spike/push/**']
 permissions:
   contents: write
@@ -141,7 +141,7 @@ jobs:
         with:
           pattern: push-*-${{ github.run_id }}
           path: got
-      - name: Commit results back to tally-versions
+      - name: Commit results back to why22
         run: |
           for d in got/push-*-${{ github.run_id }}; do
             v=$(basename "$d"); v=${v#push-}; v=${v%-${{ github.run_id }}}
@@ -151,4 +151,4 @@ jobs:
           git add spike-results/push-design
           git commit -q -m "push design [skip ci]: results ${{ github.run_id }} (bridge ${{ needs.build.outputs.sha }})" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
           Claude-Session: https://claude.ai/code/session_01LprHoXx2ACgDW2AjxNH8wN" || exit 0
-          for i in 1 2 3 4 5; do git pull -q --rebase origin tally-versions && git push -q origin HEAD:refs/heads/tally-versions && break; sleep 10; done
+          for i in 1 2 3 4 5; do git pull -q --rebase origin why22 && git push -q origin HEAD:refs/heads/why22 && break; sleep 10; done

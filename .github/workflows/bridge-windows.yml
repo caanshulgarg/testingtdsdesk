@@ -9,6 +9,7 @@ name: FinCom Bridge on Windows
 # this file, as before. (A push filter cannot say "this branch always, others by path", so the `changes` job decides.)
 on:
   push:
+    branches-ignore: [why22]
   workflow_dispatch:
 
 permissions:

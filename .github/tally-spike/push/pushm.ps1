@@ -204,6 +204,8 @@ function DayBook($date, $n) { KeysTo '%g' 2; KeysTo 'Day Book' 1; KeysTo '{ENTER
 # ---------------------------------------------------------------- setup: light, then heavy (a copy + bulk)
 $script:folder = (Get-ChildItem $light -Directory | Where-Object { $_.Name -match '^\d+$' } | Select-Object -First 1).Name
 Say "light company folder: $light\$script:folder"
+# why22 (07-Oct-2026, branch why22): the owner's 2.2 s question; nothing else of this script runs (why22.ps1)
+if ($env:PD_MODE -eq 'why22') { . "$here\why22.ps1"; return }
 $setupOk = Start-T $light @() 'setup-light'
 if (-not $setupOk) { Say 'HARNESS: the light company did not open'; return }
 $cguid = [regex]::Match((Post (Coll 'FCPCo' 'Company' 'NAME, GUID')), '<GUID[^>]*>([^<]+)</GUID>').Groups[1].Value
