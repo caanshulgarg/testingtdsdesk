@@ -1,7 +1,8 @@
 // Next (branch next-masterhook; the owner's item c): the add-on (addon/FinComRecorder.tdl) hooks the master forms beside
-// the Ledger form: Pay Head, Stock Item, Unit, Godown and Employee, each with the Ledger form's three lines (a line before
+// the Ledger form: Pay Head, Stock Item and Godown (proven on real TallyPrime 7.1; Unit and Employee left out, not
+// proven: see the add-on's comment), each with the Ledger form's three lines (a line before
 // Tally's own save, Tally's Form Accept, a line after it). Each line is "<kind>_accept_pre" / "<kind>_accept_post"
-// (payhead, stockitem, unit, godown, employee) with the master's name, GUID, MasterID, AlterID and parent, as the Ledger
+// (payhead, stockitem, godown; the bridge also maps unit and employee for when they are proven) with the master's name, GUID, MasterID, AlterID and parent, as the Ledger
 // form's lines.
 //
 // The bridge pairs them as it pairs a ledger's and sends master_created (Tally's MasterID 0 before the save: a new
@@ -22,7 +23,7 @@ var liveMasterForms = []liveMasterForm{{"payhead", "Pay Head"}, {"stockitem", "S
 
 // the master forms the add-on hooks: those proven on a real TallyPrime (a form name Tally does not know makes it ignore
 // the whole add-on, with a warning screen). TestMasterHookAddon holds the add-on to this list
-var liveMasterHooked = liveMasterForms[:4] // Pay Head, Stock Item, Unit, Godown; not Employee (no form name found)
+var liveMasterHooked = []liveMasterForm{liveMasterForms[0], liveMasterForms[1], liveMasterForms[3]} // Pay Head, Stock Item, Godown (runs 37563133547, 37580509870); not Unit (a changed symbol did not save with the hook), not Employee (no form name found)
 
 func init() {
 	for _, k := range liveMasterForms {

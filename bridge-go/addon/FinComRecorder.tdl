@@ -89,16 +89,21 @@
     On : Form Accept : @@FCRIsLive : Call : FCRLiveLog : "ledger_accept_post"
 
 ;; ---------------------------------------------------------------- next-masterhook: the master forms (heads only)
-;; The owner's item c. Each block stands alone: one master's hook is shipped or left out by its own block, never in
-;; one with another (a form name a Tally release does not know makes Tally ignore the WHOLE add-on, with a warning screen).
-;; Only forms proven on a real TallyPrime 7.1 are here (tally-real-spike probe run 37563133547: each hook fired, wrote its
-;; line, and Pay Head and Stock Item saved, AlterID up; Unit and Godown with a change: see below; Ctrl+A to a still screen within the no-add-on time):
-;;   Pay Head (a ledger in Tally), Stock Item, Unit, Godown (7.1 calls it "Location" on the screen; the form is "Godown").
-;; Found there: with ANY On : Form Accept line on the Unit or Godown form, accepting the form WITHOUT a change does not
-;; re-save it (Tally's AlterID stays; without a hook it goes up); with a change it saves as before. Nothing is lost: an
-;; unchanged master has nothing to save. Left out: Employee (no form name tried fires on Tally's "Employee Alteration":
-;; Employee, Cost Centre, Employee Master, Employees, Payroll Employee).
-;; Deletes: Before / After Delete Object (the System Events above) already fire for these masters (obj=Master, name, GUID, MasterID).
+;; The owner's item c. Each block stands alone: one master's hook is shipped or left out by its own block (a form name a
+;; Tally release does not know makes Tally ignore the WHOLE add-on, with a warning screen). Only masters proven on a real
+;; TallyPrime 7.1 to save normally with the hook on are here (tally-real-spike runs 37563133547 and 37580509870):
+;;   Pay Head (a ledger in Tally): saved, AlterID up (probe); renamed on the screen with this add-on: saved, both lines.
+;;   Stock Item: the same.
+;;   Godown (7.1 shows "Location"; the form is "Godown"): alias typed, saved, AlterID 648 -> 655, both lines.
+;;   Ctrl+A to a still screen with the hook 27-106 ms; with no add-on 77-109 ms (probe): no delay added.
+;; Left out (not proven):
+;;   Unit: with any On : Form Accept line on its form, an unchanged Unit is not saved again, and a Unit whose symbol was
+;;     changed on the screen was NOT saved (only the first line came; AlterID unchanged; run 37580509870), though a changed
+;;     formal name saved in the probe. A Unit made new on the screen saved. Not shipped until a Unit saves normally.
+;;   Employee: no form name tried fires on Tally's "Employee Alteration" (Employee, Cost Centre, Employee Master,
+;;     Employees, Payroll Employee: probe run 37563133547).
+;; Deletes: Before / After Delete Object (the System Events above) already fire for these masters (obj=Master, name, GUID,
+;; MasterID, parent; probe run 37563133547), mapped as before (ledger_deleted: the line names no master type).
 
 [#Form: Pay Head]
     On : Form Accept : @@FCRIsLive : Call : FCRLiveLog : "payhead_accept_pre"
@@ -109,11 +114,6 @@
     On : Form Accept : @@FCRIsLive : Call : FCRLiveLog : "stockitem_accept_pre"
     On : Form Accept : Yes          : Form Accept
     On : Form Accept : @@FCRIsLive : Call : FCRLiveLog : "stockitem_accept_post"
-
-[#Form: Unit]
-    On : Form Accept : @@FCRIsLive : Call : FCRLiveLog : "unit_accept_pre"
-    On : Form Accept : Yes          : Form Accept
-    On : Form Accept : @@FCRIsLive : Call : FCRLiveLog : "unit_accept_post"
 
 [#Form: Godown]
     On : Form Accept : @@FCRIsLive : Call : FCRLiveLog : "godown_accept_pre"
