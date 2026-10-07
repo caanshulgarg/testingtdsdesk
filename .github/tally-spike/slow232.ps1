@@ -204,7 +204,9 @@ function S2Import($co, $xml, $label) {
   $vd = [DateTime]::ParseExact($d8, 'yyyyMMdd', $null).ToString('d-MMM-yy', [Globalization.CultureInfo]::InvariantCulture)
   $now = (Get-Date).ToString('d-MMM-yy HH:mm', [Globalization.CultureInfo]::InvariantCulture)
   $rfile = Join-Path $rec ("$cg-" + (Get-Date).ToString('d-MMM-yy', [Globalization.CultureInfo]::InvariantCulture) + '.txt')
-  $txt = (('voucher_accept_pre', 'voucher_accept_post') | ForEach-Object { "FCR1|ev=$_|t0=$now|tw=$now|cguid=$cg|cname=$co|user=TALLY User|obj=Voucher|guid=$guid|mid=$mid|aid=$aid|vtype=$typ|vno=$no|vdate=$vd|name=|parent=|narr=|t1=$now|src=live`r`n" }) -join ''
+  # the pre line carries the AlterID before the save (a new entry: 0), the post line Tally's (run 37596351320: both with
+  # Tally's AlterID, the bridge rightly found no save after the line)
+  $txt = (@(@('voucher_accept_pre', 0), @('voucher_accept_post', $aid)) | ForEach-Object { "FCR1|ev=$($_[0])|t0=$now|tw=$now|cguid=$cg|cname=$co|user=TALLY User|obj=Voucher|guid=$guid|mid=$mid|aid=$($_[1])|vtype=$typ|vno=$no|vdate=$vd|name=|parent=|narr=|t1=$now|src=live`r`n" }) -join ''
   if (-not (Test-Path $rfile)) { [IO.File]::WriteAllBytes($rfile, [byte[]](0xFF, 0xFE)) }
   [IO.File]::AppendAllText($rfile, $txt, [Text.UnicodeEncoding]::new($false, $false))
   Write-Host "[slow232] ${label}: its lines written to $rfile (MasterID $mid, GUID $guid, number '$no')"
@@ -246,7 +248,12 @@ function Slow232 {
   Add-Content -Path $resultsFile -Encoding UTF8 -Value ("INFO slow232: the large company's entry requests before the mark: {0} ({1} took 2 s or more at Tally: {2} ms)" -f $bigBefore.Count, $stopsBefore.Count, (($bigBefore | ForEach-Object { $_.ms }) -join ', '))
   Result 'slow232 the large company is marked' ([bool]$marked) $(if ($marked) { "$marked; $($stopsBefore.Count) stop(s) of its entry request before it ($n entr$(if ($n -eq 1) { 'y' } else { 'ies' }) saved)" } else { "no mark in the bridge's log after $n entries ($([int]((Get-Date) - $t0).TotalMinutes) min)" })
   if (-not $marked) { return }
-  $beat = @(StubReqs | Where-Object { $_.kind -eq 'beat' -and $_.body.recorderBodyFetch -and $_.body.recorderBodyFetch.($Slow232St.co) } | Select-Object -Last 1)
+  # the beat comes every 30 s (run 37596351320 looked before the first beat after the mark): waited for, 90 s at most
+  $beat = @()
+  for ($bw = 0; $bw -lt 18 -and -not $beat.Count; $bw++) {
+    $beat = @(StubReqs | Where-Object { $_.kind -eq 'beat' -and $_.body.recorderBodyFetch -and $_.body.recorderBodyFetch.($Slow232St.co) } | Select-Object -Last 1)
+    if (-not $beat.Count) { Start-Sleep 5 }
+  }
   $bf = if ($beat.Count) { $beat[0].body.recorderBodyFetch.($Slow232St.co) } else { $null }
   Result 'slow232 the beat carries it' ($bf -and $bf.off -eq $true -and $bf.company -eq $Slow232St.co -and $bf.since -and [int]$bf.timesOver -ge 2) $(if ($bf) { ($bf | ConvertTo-Json -Compress) } else { 'no beat with recorderBodyFetch for it' })
   # 3. after the mark: two more large-company entries and a small one; Tally's window watched meanwhile
