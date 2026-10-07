@@ -150,7 +150,26 @@ function Push233Setup {
 
 # one save on the screen: the template of that day, Alt+2 (a new entry) or Enter (the template altered), Ctrl+A timed to the
 # full line in the user's file
+# Tally 9000's window (gone: it quit or crashed; run 37659738263: Esc keys on an empty screen reached the Gateway's Quit
+# question and the "y" of the next "Day Book" answered it)
+function P3Alive { $p = Get-Process -Id $script:tallyPids[9000] -ErrorAction SilentlyContinue; [bool]($p -and $p.MainWindowHandle -ne [IntPtr]::Zero) }
+# the company Tally's screens work in (an export without SVCURRENTCOMPANY reads Tally's current company)
+function P3CurCo {
+  $x = Post 9000 ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>P3Cur</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="P3Cur" ISMODIFY="No"><TYPE>Company</TYPE><FETCH>NAME</FETCH><FILTERS>P3CurF</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="P3CurF">$Name = ##SVCurrentCompany</SYSTEM></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') ''
+  [System.Net.WebUtility]::HtmlDecode([regex]::Match("$x", '<NAME[^>]*>([^<]+)</NAME>').Groups[1].Value).Trim()
+}
+# the screens back on the small company (run 37659738263: the large company, loaded last, was current, so every save of
+# P1-P6 went to its empty Day Book): F3 (Company) from the Gateway, its name, Enter, as slow232 opens one
+function P3UseCo($co = $co1) {
+  $cur0 = P3CurCo
+  if ($cur0 -ne $co) { KeysTo 9000 '{F3}' 4 'p233-co-list'; KeysTo 9000 $co 2 'p233-co-typed'; KeysTo 9000 '{ENTER}' 6 'p233-co-chosen' }
+  $cur1 = P3CurCo
+  Add-Content -Path $resultsFile -Encoding UTF8 -Value ("INFO push233 the screens' company: {0} -> {1} (wanted {2})" -f $(if ($cur0) { $cur0 } else { '?' }), $(if ($cur1) { $cur1 } else { '?' }), $co)
+  return ($cur1 -eq $co -or -not $cur1)   # an empty answer: not told; the saves' own checks judge
+}
+
 function P3Save($kind, [switch]$alter, $co = $co1, [switch]$noList) {
+  if (-not (P3Alive)) { throw "Tally 9000 has no window (it quit or crashed) before the $kind save: the steps after this are not run" }
   $t = $P233.tpl[$kind]; $before = P3RecLines; $alt0 = P3Alt $co; $vs0 = if ($noList) { @() } else { Vouchers 9000 $co }
   DayBookAt $t.dmy "p233-$kind-daybook"
   if ($alter) { KeysTo 9000 '{END}' 1; KeysTo 9000 '{ENTER}' 4 "p233-$kind-open" } else { KeysTo 9000 '{END}' 1; KeysTo 9000 '%2' 4 "p233-$kind-dup" }
@@ -222,6 +241,7 @@ function Push233 {
   if (-not $P233.loadOk) { Add-Content -Path $resultsFile -Encoding UTF8 -Value 'INFO push233: not run (L0: the add-on did not load or wrote no full entry)'; return }
   if (-not $P233.ok) { Result 'push233' $false 'the setup did not finish (the proxy or the templates)' $true; return }
   Start-Sleep 30   # bridge 1's first light check: its starting point (nothing is taken before it)
+  if (-not (P3UseCo)) { Result 'push233 setup (harness)' $false "the screens could not be put on '$co1' (see the p233-co screenshots): no save is judged" $true; return }
   $p0 = @(P3Proxy).Count; $m0 = Mark
   # P1-P4
   $r = P3Save 'receipt'; $x1 = P3Check 'P1 receipt' $r $m0 $p0
