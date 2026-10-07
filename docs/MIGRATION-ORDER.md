@@ -253,3 +253,13 @@ add-on's placeholder GUID is held as a GUID-less one (R3-L1: twice it broke the 
 applied for its GUID is applied and cancelled again, below a delete 'stale' as before (R3-L2); a GUID-less delete with no
 date promises no Day Book (R3-L3). The owner's "nothing to remove" (08:05) is 57's (`tally_ingest_delete`), not repeated.
 Tested by `run_migration60.py` (on 56 -> 57 -> 58) and `run_migration_order.py` (56 -> 57 -> 58 -> 59 -> 60 in both orders).
+
+Branch next-masterhook (07-Oct-2026, the add-on's master forms): `migration-66-recorder-masters.sql` (number assigned by the
+coordinator; 61-65 belong to other branches) runs after 44 in any order relative to 61-65 (add-only, one transaction,
+`lock_timeout` 10 s, no "delete from", safe twice; NOT run anywhere: written only). One new table `tally_recorder_masters`
+(heads only: master_type, name, parent, object_guid, master_id, alter_id, saved_at, pc, tally_user, bridge; unique
+(book_id, line_id); RLS: the firm reads its own rows; nobody writes directly) and one new function
+`tally_recorder_masters_save(p_firm, p_book, p_device, p_lines)` (service role only) that keeps master_created /
+master_altered lines ('kept' / 'duplicate'). tally-ingest's recorder_lines sends those lines there; a cloud without 66
+answers them 'failed' with words and handles the rest of the call as before. Tested by `run_migration66.py` and
+`run_recorder_masters_server.py` (through tally-ingest under Deno).

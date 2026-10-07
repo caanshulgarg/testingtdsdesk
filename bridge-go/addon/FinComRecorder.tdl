@@ -98,6 +98,38 @@
     On : Form Accept : Yes          : Form Accept
     On : Form Accept : @@FCRIsLive : Call : FCRLiveLog : "ledger_accept_post"
 
+;; ---------------------------------------------------------------- next-masterhook: the master forms (heads only)
+;; The owner's item c. Each block stands alone: one master's hook is shipped or left out by its own block, never in
+;; one with another (a form name a Tally release does not know makes Tally ignore the WHOLE add-on, with a warning screen).
+;; Only forms proven on a real TallyPrime 7.1 are here (tally-real-spike probe run 37563133547: each hook fired, wrote its
+;; line, and Pay Head and Stock Item saved, AlterID up; Unit and Godown with a change: see below; Ctrl+A to a still screen within the no-add-on time):
+;;   Pay Head (a ledger in Tally), Stock Item, Unit, Godown (7.1 calls it "Location" on the screen; the form is "Godown").
+;; Found there: with ANY On : Form Accept line on the Unit or Godown form, accepting the form WITHOUT a change does not
+;; re-save it (Tally's AlterID stays; without a hook it goes up); with a change it saves as before. Nothing is lost: an
+;; unchanged master has nothing to save. Left out: Employee (no form name tried fires on Tally's "Employee Alteration":
+;; Employee, Cost Centre, Employee Master, Employees, Payroll Employee).
+;; Deletes: Before / After Delete Object (the System Events above) already fire for these masters (obj=Master, name, GUID, MasterID).
+
+[#Form: Pay Head]
+    On : Form Accept : @@FCRIsLive : Call : FCRLiveLog : "payhead_accept_pre"
+    On : Form Accept : Yes          : Form Accept
+    On : Form Accept : @@FCRIsLive : Call : FCRLiveLog : "payhead_accept_post"
+
+[#Form: Stock Item]
+    On : Form Accept : @@FCRIsLive : Call : FCRLiveLog : "stockitem_accept_pre"
+    On : Form Accept : Yes          : Form Accept
+    On : Form Accept : @@FCRIsLive : Call : FCRLiveLog : "stockitem_accept_post"
+
+[#Form: Unit]
+    On : Form Accept : @@FCRIsLive : Call : FCRLiveLog : "unit_accept_pre"
+    On : Form Accept : Yes          : Form Accept
+    On : Form Accept : @@FCRIsLive : Call : FCRLiveLog : "unit_accept_post"
+
+[#Form: Godown]
+    On : Form Accept : @@FCRIsLive : Call : FCRLiveLog : "godown_accept_pre"
+    On : Form Accept : Yes          : Form Accept
+    On : Form Accept : @@FCRIsLive : Call : FCRLiveLog : "godown_accept_post"
+
 ;; ---------------------------------------------------------------- the one writer (heads only)
 [Function: FCRLiveLog]
     Parameter : pEvent : String
