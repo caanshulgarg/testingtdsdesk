@@ -10,7 +10,7 @@ not in it.
 | Setup file | FinComBridge-Setup-2.3.5.exe |
 | Fingerprint | (filled in when the setup is built) |
 | FinCom app | changed: the simpler Tally pages and Clear notifications (below) |
-| FinCom's cloud | migration 68 (`server/tally-cloud/migration-68-alert-dismissals.sql`, add-only; the owner runs it). Until it runs, the app keeps cleared notifications in each browser, with no error shown. tally-ingest unchanged from 2.3.4 |
+| FinCom's cloud | migration 68 (`server/tally-cloud/migration-68-alert-dismissals.sql`, add-only; already run on staging) and migration 70 (`migration-70-alert-dismissals-tighten.sql`, after 68, add-only: the table written only through `alert_dismiss`, length checks; the owner runs it). Until 68 runs, the app keeps cleared notifications in each browser, with no error shown. tally-ingest unchanged from 2.3.4 |
 | Replaces | 2.3.4 (kept on the computer, so the tray can roll back to it) |
 | Add-on | unchanged: keep `C:\ProgramData\FinCom\addon\FinComRecorder.tdl` loaded as it is |
 | Tally requests | none added, none changed (allow-list table and its hash as in 2.3.4; TestAllowListUnchanged) |
@@ -44,7 +44,8 @@ then that notification should not appear**".
 
 - **In the app** (bell and page lines): Clear on every bell item, Clear all, and Clear on every page line, with Undo.
   A notification is known by its key and a fingerprint of what it says, so a cleared one does not come back; a new
-  problem (other words) shows. Kept per person in FinCom's cloud (migration 68: `app_alert_dismissals`), so it holds on
+  problem (other words, or another occurrence) shows. Kept per person in FinCom's cloud (migrations 68 and 70:
+  `app_alert_dismissals`), so it holds on
   every device; before migration 68 runs, in this browser. Clearing only hides: it never changes the data it speaks of.
   On a phone (360 and 390 px) the line's words have a full-width line, the buttons a row below, no sideways scroll.
 - **In the bridge's tray** (the Windows balloons / toasts): every balloon goes through one gate (`bridge-go/notices.go`).
@@ -87,7 +88,8 @@ stopped); the notifications are the tray's own and ask Tally nothing.
 
 - Bridge: go vet (Linux and Windows); the full go test in both modes; the release check's own test
   (`bridge-go/release_check_test.sh`); the Windows job (`bridge-windows.yml`, including `notices_windows_test.go`).
-- Cloud: the cloud tests; migration 68 twice and in both orders (`tests/run_migration68.py`, `run_migration_order.py`).
+- Cloud: the cloud tests; migrations 68 and 70 twice and in both orders (`tests/run_migration68.py`, `run_migration70.py`,
+  `run_migration_order.py`).
 - App: `run_tally_page_simple.py`, `run_alerts_clear.py`, the alerts, Tally, sync-activity and Post-page tests,
   `run_ui_standards.py`, `run_regress.js`. Screenshots before / after in `docs/ui-pass/tallypage/` and
   `docs/ui-pass/alerts-clear/`.
