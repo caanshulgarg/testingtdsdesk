@@ -15,7 +15,8 @@
 //     the list above the last processed number once, with the 2 s rule; each entry listed that the add-on's own read did
 //     not already take at that AlterID is re-read with FinComVoucherObject (one at a time, a posting and a waiting save
 //     first, BankPerTurn a turn, one turn every BankGapMs; the 2 s rule, and the 2.3.4 rule: an entry whose read was
-//     stopped or not answered is asked once more, never a third time, and is then said in plain words) and sent as an
+//     stopped or not answered is asked once more BankAgainMin (5 minutes) later, never a third time, and is then said in
+//     plain words; an entry waiting for its one more ask holds back nothing else) and sent as an
 //     altered line with Tally's entry (source "bankdate"), so FinCom stores the bank date.
 //   - "Small" is measured, never guessed: a list stopped at the 2 s rule, or answered slower than BankSmallMs (1,500 ms),
 //     moves the company to the nightly route (said once in the log). The stopped list is not asked again by day: no loop.
@@ -58,8 +59,17 @@ func bankNightLimitMs() int {
 type bankCand struct {
 	Mid, GUID, Day string
 	Alter          int64
-	Asks           int  // reads that reached Tally and were stopped or not answered (2 at most: once, and once more)
-	Night          bool // listed by the nightly check: read in the night's window only
+	Asks           int    // reads that reached Tally and were stopped or not answered (2 at most: once, and once more)
+	Night          bool   // listed by the nightly check: read in the night's window only
+	Next           string // after a stopped read: not asked again before this (RFC3339; BankAgainMin, 5 minutes)
+}
+
+func bankAgain() time.Duration { return time.Duration(keepNum("BankAgainMin", 5)) * time.Minute }
+
+// not waiting for its one more ask
+func (c bankCand) due(now time.Time) bool {
+	t, err := time.Parse(time.RFC3339, c.Next)
+	return c.Next == "" || err != nil || !now.Before(t)
 }
 
 // a company's bank route
@@ -108,7 +118,7 @@ func bankFresh() {
 			ListMs: toI64(e["listMs"]), Night: str(e["night"]), addon: map[string]int64{}, listed: map[string]bool{}}
 		for _, x := range arr(e["cands"]) {
 			c := obj(x)
-			st.Cands = append(st.Cands, bankCand{Mid: str(c["mid"]), GUID: str(c["guid"]), Day: str(c["day"]), Alter: toI64(c["alter"]), Asks: toInt(c["asks"]), Night: c["night"] == true})
+			st.Cands = append(st.Cands, bankCand{Mid: str(c["mid"]), GUID: str(c["guid"]), Day: str(c["day"]), Alter: toI64(c["alter"]), Asks: toInt(c["asks"]), Night: c["night"] == true, Next: str(c["next"])})
 		}
 		bank.cos[k] = st
 	}
@@ -125,7 +135,7 @@ func bankSave() {
 	for k, st := range bank.cos {
 		l := []any{}
 		for _, c := range st.Cands {
-			l = append(l, M{"mid": c.Mid, "guid": c.GUID, "day": c.Day, "alter": c.Alter, "asks": c.Asks, "night": c.Night})
+			l = append(l, M{"mid": c.Mid, "guid": c.GUID, "day": c.Day, "alter": c.Alter, "asks": c.Asks, "night": c.Night, "next": c.Next})
 		}
 		cs[k] = M{"company": st.Company, "cguid": st.CGUID, "seen": st.Seen, "route": st.Route, "why": st.Why, "listMs": st.ListMs, "night": st.Night, "cands": l}
 	}
@@ -557,6 +567,9 @@ func bankTurn() int {
 		c := bank.cos[k]
 		var day, nt []bankCand
 		for _, x := range c.Cands {
+			if !x.due(now) {
+				continue // its one more ask comes later; the company's other entries, and other companies, go on
+			}
 			if x.Night {
 				nt = append(nt, x)
 			} else {
@@ -686,6 +699,7 @@ func bankWork(company, guid string, todo []bankCand) int {
 			}
 			if d.asked {
 				c.Asks++
+				c.Next = nowFn().Add(bankAgain()).Format(time.RFC3339) // the 2.3.4 rule: one more ask, 5 minutes later
 			}
 			if d.drop || c.Asks >= 2 {
 				if !d.drop {

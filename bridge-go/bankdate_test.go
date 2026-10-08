@@ -365,8 +365,9 @@ func TestBankDateNoDoubleReadWithRenumber(t *testing.T) {
 	}
 }
 
-// --- 7. the 2 s rule with the 2.3.4 one-more-ask rule: an entry whose read stops at 2 s is asked once more; stopped
-// again it is not asked a third time: said plainly (the log and the beat: upload the Day Book)
+// --- 7. the 2 s rule with the 2.3.4 one-more-ask rule: an entry whose read stops at 2 s is asked once more, 5 minutes
+// later (not before; another entry is not held back meanwhile); stopped again it is not asked a third time: said plainly
+// (the log and the beat: upload the Day Book)
 func TestBankDateOneMoreAsk(t *testing.T) {
 	_, f, _ := bankBridge(t, `,"RecorderLimitMs":300,"RecorderStopCoolSec":0`)
 	f.mu.Lock()
@@ -378,10 +379,23 @@ func TestBankDateOneMoreAsk(t *testing.T) {
 	}
 	f.mu.Unlock()
 	bankSet(f, "26311", "20261007")
+	bankSet(f, "26312", "20261008")
 	bankCheck(t, f)
-	for i := 0; i < 6; i++ {
+	readAndUploadAll(t)
+	if a := bankAsked(f); a["26311"] != 1 {
+		t.Fatalf("first turn: %v", a)
+	}
+	for i := 0; i < 4; i++ { // within the 5 minutes: 26311 not asked again; 26312 goes on
 		retryReset()
 		laterBy(t, time.Minute)
+		readAndUploadAll(t)
+	}
+	if a := bankAsked(f); a["26311"] != 1 || a["26312"] != 1 {
+		t.Fatalf("within 5 minutes: %v (want 26311 once, 26312 read)", a)
+	}
+	for i := 0; i < 6; i++ {
+		retryReset()
+		laterBy(t, 2*time.Minute)
 		readAndUploadAll(t)
 	}
 	if a := bankAsked(f); a["26311"] != 2 {
