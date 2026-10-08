@@ -1,0 +1,375 @@
+[05:10:27.496] push-design on TallyPrime 3.0: reps 5, heavy 3000 ledgers / 3000 items / up to 30000 vouchers (40 min), postings 1
+[05:10:28.255] system clock step after timeBeginPeriod(1): 0.391 ms (min 0.0028, max 4.0762)
+[05:10:28.283] two files written 2 ms apart: NTFS write times 17.3298 ms apart
+[05:10:28.299] light company folder: D:\a\_temp\TallyData\100000
+[05:10:31.319] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-setup-light-started (1024x768)
+[05:10:59.419] Tally started (setup-light) in 28.1 s; company open: True
+[05:10:59.431] company GUID c1a8617f-2321-41e3-b740-e1c59975cee7
+[05:11:01.455] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[05:11:02.642] import light masters: 60 sent, created 59, errors 0, 152.9 ms
+[05:11:02.752] import template s5 (all fields): 1 sent, created 1, errors 0, 71.6 ms
+[05:11:02.920] import template s50 (all fields): 1 sent, created 1, errors 0, 163.4 ms
+[05:11:02.937] import template rc (all fields): 1 sent, created 1, errors 0, 14.3 ms
+[05:11:02.942] templates: s5 all fields; s50 all fields; rc all fields
+[05:11:02.984]   template Receipt 1 20261001 mid 4 aid 4 c1a8617f-2321-41e3-b740-e1c59975cee7-00000004
+[05:11:02.985]   template Sales 1 20261002 mid 2 aid 2 c1a8617f-2321-41e3-b740-e1c59975cee7-00000002
+[05:11:02.986]   template Sales 2 20261031 mid 3 aid 3 c1a8617f-2321-41e3-b740-e1c59975cee7-00000003
+[05:11:03.161] company feature fields (by name): ISBATCHWISEON=No, PREVISMULTIGODOWNON=No, PREVISTRACKINGON=No, ISPAYROLLON=No, PREVISSALESORDERSON=No, PREVISPURCORDERSON=No, ISEXCISEMFGRTRADERON=No, ISPAYROLLSTATON=No, ISCOSTTRACKINGON=No, NOTIFYOFEXPIRY=No, ISTRACKVOUCHERSON=No, RESETTRACKEDCHANGES=No
+[05:11:03.174] import company features by XML: 1 sent, created 0, errors 0, 9.9 ms
+[05:11:03.184] after the XML alter: ISBATCHWISEON=Yes, PREVISMULTIGODOWNON=Yes, PREVISTRACKINGON=Yes, ISPAYROLLON=Yes, PREVISSALESORDERSON=Yes, PREVISPURCORDERSON=Yes, ISEXCISEMFGRTRADERON=No, ISPAYROLLSTATON=No, ISCOSTTRACKINGON=No, NOTIFYOFEXPIRY=No, ISTRACKVOUCHERSON=No, RESETTRACKEDCHANGES=No
+[keys] '{F11}'
+[shot] p-f11-0 (1024x768)
+[keys] '{UP}'
+[keys] '{UP}'
+[keys] '{UP}'
+[shot] p-f11-1-top (1024x768)
+[keys] 'y'
+[shot] p-f11-2-show-more (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d01 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d02 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d03 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d04 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d05 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d06 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d07 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d08 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d09 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d10 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d11 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d12 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d13 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d14 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d15 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d16 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d17 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d18 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d19 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d20 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d21 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d22 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d23 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d24 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d25 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d26 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d27 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d28 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d29 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d30 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d31 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d32 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d33 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d34 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d35 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d36 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d37 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d38 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d39 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d40 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d41 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d42 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d43 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d44 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d45 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d46 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d47 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d48 (1024x768)
+[keys] '^a'
+[shot] p-f11-accepted (1024x768)
+[05:12:26.609] after F11 (show more features only): ISBATCHWISEON=Yes, PREVISMULTIGODOWNON=Yes, PREVISTRACKINGON=Yes, ISPAYROLLON=Yes, PREVISSALESORDERSON=Yes, PREVISPURCORDERSON=Yes, ISEXCISEMFGRTRADERON=No, ISPAYROLLSTATON=No, ISCOSTTRACKINGON=No, NOTIFYOFEXPIRY=No, ISTRACKVOUCHERSON=No, RESETTRACKEDCHANGES=No
+[05:12:26.626] voucher types: Attendance, Contra, Credit Note, Debit Note, Delivery Note, Job Work In Order, Job Work Out Order, Journal, Material In, Material Out, Memorandum, Payment, Payroll, Physical Stock, Purchase, Purchase Order, Receipt, Receipt Note, Rejections In, Rejections Out, Reversing Journal, Sales, Sales Order, Stock Journal
+[05:12:26.635] voucher type fields: active ISACTIVE; manufacturing ASMFGJRNL
+[05:12:26.661] import voucher types active, manufacturing journal: 9 sent, created 1, errors 0, 25.1 ms
+[05:12:27.317] import type masters (godowns, batch items, employees, pay heads, supplier): 258 sent, created 258, errors 0, 599.5 ms
+[05:12:27.324] import attendance type: 1 sent, created 0, errors 1, 3.6 ms; Tally: Unit &apos;Days&apos; does not exist!
+[05:12:27.328] import attendance type: 1 sent, created 0, errors 1, 3.1 ms; Tally: Unit &apos;Days&apos; does not exist!
+[05:12:27.333] import attendance type: 1 sent, created 0, errors 1, 3.4 ms; Tally: Unit &apos;Days&apos; does not exist!
+[05:12:27.336] import attendance type: 1 sent, created 0, errors 1, 2.8 ms; Tally: Unit &apos;Days&apos; does not exist!
+[05:12:27.340] import attendance type: 1 sent, created 0, errors 1, 2.8 ms; Tally: Unit &apos;Days&apos; does not exist!
+[05:12:27.344] import attendance type: 1 sent, created 0, errors 1, 2.9 ms; Tally: Unit &apos;Days&apos; does not exist!
+[05:12:27.348] import attendance type: 1 sent, created 0, errors 1, 2.8 ms; Tally: Unit &apos;Days&apos; does not exist!
+[05:12:27.351] import attendance type: 1 sent, created 0, errors 1, 2.8 ms; Tally: Unit &apos;Days&apos; does not exist!
+[05:12:27.355] import attendance type: 1 sent, created 0, errors 1, 2.7 ms; Tally: Unit &apos;Days&apos; does not exist!
+[05:12:27.359] import attendance type: 1 sent, created 0, errors 1, 3 ms; Tally: Unit &apos;Days&apos; does not exist!
+[05:12:27.363] import attendance type: 1 sent, created 0, errors 1, 2.9 ms; Tally: Unit &apos;Days&apos; does not exist!
+[05:12:27.367] import attendance type: 1 sent, created 0, errors 1, 2.7 ms; Tally: Unit &apos;Days&apos; does not exist!
+[05:12:27.567] import template payroll50 (form 1 of 5): 1 sent, created 0, errors 1, 8 ms; Tally: No Entries in Voucher!
+[05:12:27.575] import template payroll50 (form 2 of 5): 1 sent, created 0, errors 1, 6.9 ms; Tally: No Entries in Voucher!
+[05:12:27.585] import template payroll50 (form 3 of 5): 1 sent, created 0, errors 1, 8.4 ms; Tally: Voucher totals do not match! Dr: 75,000.00 Dr Cr:  Diff: 75,000.00 Dr
+[05:12:27.592] import template payroll50 (form 4 of 5): 1 sent, created 0, errors 1, 6.4 ms; Tally: No Entries in Voucher!
+[05:12:27.611] import template payroll50 (form 5 of 5): 1 sent, created 1, errors 0, 17.7 ms
+[05:12:27.625] import template payroll200 (form 1 of 5): 1 sent, created 0, errors 1, 12 ms; Tally: No Entries in Voucher!
+[05:12:27.637] import template payroll200 (form 2 of 5): 1 sent, created 0, errors 1, 11.3 ms; Tally: No Entries in Voucher!
+[05:12:27.658] import template payroll200 (form 3 of 5): 1 sent, created 0, errors 1, 19.8 ms; Tally: Voucher totals do not match! Dr: 3,00,000.00 Dr Cr:  Diff: 3,00,000.00 Dr
+[05:12:27.671] import template payroll200 (form 4 of 5): 1 sent, created 0, errors 1, 11.7 ms; Tally: No Entries in Voucher!
+[05:12:27.702] import template payroll200 (form 5 of 5): 1 sent, created 1, errors 0, 29.8 ms
+[05:12:27.720] import template attendance (form 1 of 1): 1 sent, created 0, errors 1, 16.6 ms; Tally: No Entries in Voucher!
+[05:12:27.773] import template stockjournal (form 1 of 1): 1 sent, created 1, errors 0, 51.3 ms
+[05:12:27.793] import template mfgjournal (form 1 of 1): 1 sent, created 1, errors 0, 18.7 ms
+[05:12:27.805] import template salesorder (form 1 of 3): 1 sent, created 0, errors 1, 10.8 ms; Tally: Bad Order Number in Voucher!
+[05:12:27.817] import template salesorder (form 2 of 3): 1 sent, created 0, errors 1, 10.8 ms; Tally: Bad Order Number in Voucher!
+[05:12:27.830] import template salesorder (form 3 of 3): 1 sent, created 0, errors 1, 11.2 ms; Tally: Bad Order Number in Voucher!
+[05:12:27.841] import template purchaseorder (form 1 of 3): 1 sent, created 0, errors 1, 9.9 ms; Tally: Bad Order Number in Voucher!
+[05:12:27.852] import template purchaseorder (form 2 of 3): 1 sent, created 0, errors 1, 9.7 ms; Tally: Bad Order Number in Voucher!
+[05:12:27.863] import template purchaseorder (form 3 of 3): 1 sent, created 0, errors 1, 9.9 ms; Tally: Bad Order Number in Voucher!
+[05:12:27.907] import template deliverynote (form 1 of 1): 1 sent, created 1, errors 0, 43.2 ms
+[05:12:27.946] import template receiptnote (form 1 of 1): 1 sent, created 1, errors 0, 37.1 ms
+[05:12:27.964] import template physicalstock (form 1 of 1): 1 sent, created 1, errors 0, 17.1 ms
+[05:12:28.158] import template salesbatch (form 1 of 1): 1 sent, created 1, errors 0, 192.1 ms
+[05:12:28.482] TDL $$MachineName => '' 
+[05:12:28.484] TDL $$CmpUserName => 'TALLY User' 
+[05:12:28.487] TDL $$SysInfo:WindowsUser => 'runneradmin' 
+[05:12:28.490] TDL $$SysInfo:WindowsUserName => '' 
+[05:12:28.492] TDL $$SysInfo:UserName => '' 
+[05:12:28.495] TDL $$SysInfo:LoginUser => '' 
+[05:12:28.497] TDL $$SysInfo:SystemName => 'runnervmfi6oq' 
+[05:12:28.500] TDL $$SysInfo:ComputerName => '' 
+[05:12:28.502] TDL $$SysInfo:MachineName => '' 
+[05:12:28.507] TDL $$SysInfo:IPAddress => '10.1.0.106,172.28.240.1' 
+[05:12:28.510] TDL $$SysInfo:ApplicationPath => 'C:\Program Files\TallyPrime' 
+[05:12:28.512] TDL $$SysInfo:TempPath => '' 
+[05:12:28.552] fast234 (fast234l) on TallyPrime 3.0: today's request 2927 chars, 61 fields
+[05:12:28.578] fast234l on TallyPrime 3.0: the entry kinds (L2) and the 200 / 500-item invoices (M3)
+[05:12:28.591] import credit / debit note types active: 2 sent, created 0, errors 0, 10.6 ms
+[05:12:28.601] import tds: company TDS on, TAN: 1 sent, created 0, errors 0, 8.4 ms
+[shot] tds-001-gw0 (1024x768)
+[05:12:32] [tds] screen tds-001-gw0 : TallyPrime MANAGE Recyc EDU K: Company Gatewa of Tall Y: Data Z: Exchange CURRENT OATE Wednesday, I-Apr-2026 O: Import E: Export M: E-mail p: pnnt Fl: Help Date Company Firefo Googl Chro Micros 46 IypÅ Unity CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports Quit 161 d6Ub9 nt to • a206f 73e14 'trace Hub" , 53-29 2073e ' , "tra .6f3e— isten " : "Oa unnin ion_i 795— age" , 53-29 'tally ...
+[keys] 'c'
+[shot] tds-002-create-TDSNatureofPayments (1024x768)
+[05:12:35] [tds] screen tds-002-create-TDSNatureofPayments : TallyPrime MANAGE Recyc EDU Firefo Googl Chron Micros Unity Quit K: Company Y: Data Z: Exchange FinCom • ke Co Master Creation List of Masters Accounting Masters Group Ledger Cost Centre Currency Voucher Type Inventory Masters Stock Group Stock Category Stock Item Unit Location Payroll Masters Employee Group Employee Units (Work) Attendance/Production Type Pay Heads Payroll Voucher Type Statutory Masters GST Registration GST Classification TDS Nature of Payments Statutory Details Company GST Details O: Import Change Company Show More E: Export M: E-mail Q Search 161 p: pnnt Fl: Help x d6Ub9 nt...
+[keys] '{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}{BACKSPACE}'
+[keys] 'TDS Nature of Payments'
+[shot] tds-003-typed-TDSNatureofPayments (1024x768)
+[05:12:39] [tds] screen tds-003-typed-TDSNatureofPayments : Recyc Firefo Googl Chron Micros lyp Unity TallyPrime MANAGE EDU Quit K: Company Y: Data Z: Exchange FinCom • ke Co Master Creation TDS Nature of Pa ments List of Masters Statutory Masters TDS Nature of Payments O: Import Change Company Show More E: Export M: E-mail p: pnnt x Fl: Help d6Ub9 nt to • a206f 73e14 'trace Hub" , 53-29 2073e ' , "tra : '2.3 .6f3e— isten " : "Oa unnin ion_i 795— age" , 53-29 'tally Q Search Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 5:12 AM 10/8/2026
+[keys] '{ENTER}'
+[shot] tds-004-form-TDSNatureofPayments (1024x768)
+[05:12:45] [tds] screen tds-004-form-TDSNatureofPayments : TallyPrime MANAGE Recyc EDU K: Company Y: Data TDS Nature of Pa Creation Name Section Firef Payment code Remittance code Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Is zero rated Threshold/exemption limit Micros Unity Quit Z: Exchange 0% 0% Accept Q Search O: Import E: Export M: E-mail FinCom • ke Co p: pnnt x 161 Fl: Help F2: period d6Ub9 Company nt to • a206f 73e14 'trace Hub" , 53-29 2073e • ' , "tra .6f3e— FIO: Other Masters p: Delete More Details Helper Configure isten " : "Oa unnin ion_i 795— age" , 53-29 'tally Windows Server 2025 Datacenter Build...
+[keys] 'PD Contract Work{ENTER}'
+[shot] tds-005-nat-name (1024x768)
+[05:12:47] [tds] screen tds-005-nat-name : TallyPrime MANAGE Recyc EDU K: Company Y: Data Z: Exchange O: Import E: Export M: E-mail p: pnnt x TDS Nature of Pa Name Section Firef Payment code Remittance code Creation FinCom • ke Co PD Contract Work Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Is zero rated Threshold/exemption limit Micros Unity Quit 0% 0% Accept Q Search 161 Fl: Help F2: period d6Ub9 Company nt to • a206f 73e14 'trace Hub" , 53-29 2073e • ' , "tra .6f3e— FIO: Other Masters p: Delete More Details Helper Configure isten " : "Oa unnin ion_i 795— age" , 53-29 'tally Windows Server 2025...
+[keys] '194C{ENTER}'
+[shot] tds-006-nat-section (1024x768)
+[05:12:50] [tds] screen tds-006-nat-section : TallyPrime MANAGE Recyc EDU K: Company Y: Data Z: Exchange O: Import E: Export M: E-mail p: pnnt TDS Nature of Pa Name Section Firef Payment code Remittance code Creation FinCom • ke Co x PD Contract Work Fl: Help F2: period Company 161 d6Ub9 nt to • a206f Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Is zero rated Threshold/exemption limit Micros Unity Quit 194C 0% 0% Accept Q Search FIO: 73e14 'trace Hub" , 53-29 2073e • ' , "tra Other Masters .6f3e— p: Delete More Details Helper Configure isten " : "Oa unnin ion_i 795— age" , 53-29 'tally Windows Server...
+[keys] '94C{ENTER}'
+[shot] tds-007-nat-paycode (1024x768)
+[05:12:53] [tds] screen tds-007-nat-paycode : TallyPrime MANAGE Recyc EDU K: Company Y: Data Z: Exchange O: Import E: Export M: E-mail p: pnnt TDS Nature of Pa Name Section Firef Payment code Remittance code Creation FinCom • ke Co x PD Contract Work Fl: Help F2: period Company 161 d6Ub9 nt to • a206f Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Is zero rated Threshold/exemption limit Micros Unity Quit 194C 94C 0% 0% Accept Q Search FIO: 73e14 'trace Hub" , 53-29 2073e • ' , "tra Other Masters .6f3e— p: Delete More Details Helper Configure isten " : "Oa unnin ion_i 795— age" , 53-29 'tally Windows Se...
+[keys] '{ENTER}'
+[shot] tds-008-nat-remit (1024x768)
+[05:12:55] [tds] screen tds-008-nat-remit : TallyPrime MANAGE Recyc EDU K: Company Y: Data Z: Exchange O: Import E: Export M: E-mail p: pnnt TDS Nature of Pa Name Section Firef Payment code Remittance code Creation FinCom • ke Co x PD Contract Work Fl: Help F2: period Company 161 d6Ub9 nt to • a206f Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Is zero rated Threshold/exemption limit Micros Unity Quit 194C 94C 0% 0% Accept Q Search FIO: 73e14 'trace Hub" , 53-29 2073e • ' , "tra Other Masters .6f3e— p: Delete More Details Helper Configure isten " : "Oa unnin ion_i 795— age" , 53-29 'tally Windows Se...
+[keys] '1{ENTER}'
+[shot] tds-009-nat-rate-ind (1024x768)
+[05:12:58] [tds] screen tds-009-nat-rate-ind : TallyPrime MANAGE Recyc EDU K: Company Y: Data Z: Exchange O: Import E: Export M: E-mail p: pnnt TDS Nature of Pa Name Section Firef Payment code Remittance code Creation FinCom • ke Co x Fl: Help F2: period Company PD Contract Work 194C 94C Rate for individuals/HUF With PAN 161 d6Ub9 nt to • a206f 73e14 'trace Hub" , 53-29 2073e Googl Rate for other deductee types Chro With PAN Threshold/exemption limit Micros Unity Quit FIO: • ' , "tra Other Masters .6f3e— isten " : "Oa unnin ion_i 795— age" , 53-29 'tally Accept Q Search p: Delete More Details Helper Configure Windows Server 2025 Datacenter...
+[keys] '2{ENTER}'
+[shot] tds-010-nat-rate-oth (1024x768)
+[05:13:00] [tds] screen tds-010-nat-rate-oth : TallyPrime MANAGE Recyc EDU K: Company Y: Data Z: Exchange O: Import E: Export M: E-mail p: pnnt TDS Nature of Pa Name Section Firef Payment code Remittance code Creation FinCom • ke Co x PD Contract Work Fl: Help F2: period Company 161 d6Ub9 nt to • a206f Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Threshold/exemption limit Micros Unity Quit 194C 94C 1% 2% Accept Q Search FIO: 73e14 'trace Hub" , 53-29 2073e • ' , "tra Other Masters .6f3e— p: Delete More Details Helper Configure isten " : "Oa unnin ion_i 795— age" , 53-29 'tally Windows Server 2025 Data...
+[keys] '{ENTER}'
+[shot] tds-011-nat-zero (1024x768)
+[05:13:03] [tds] screen tds-011-nat-zero : TallyPrime MANAGE Recyc EDU K: Company Y: Data Z: Exchange O: Import E: Export M: E-mail p: print x TDS Nature of Pa Name Section Firef Payment code Remittance code Creation FinCom 161 Fl: Help F2: period d6Ub9 F3: Company Rate for individuals/HUF With PAN PD Contract Work 194C 94C 1% Googl Rate for other deductee types Chro With PAN Threshold/exemption limit Micros Unity Q: Quit : Other nt to • a206f 73e14 'trace Hub" , 53-29 2073e • ' , "tra 2% A: Accept Q Search Accept Q Yes or No FIO Masters l: More Details H: Helper .6f3e— isten " : "Oa unnin ion_i 795— age" , 53-29 'tally p: Delete F 12:...
+[keys] '{ENTER}'
+[shot] tds-012-nat-threshold (1024x768)
+[05:13:06] [tds] screen tds-012-nat-threshold : TallyPrime MANAGE Recyc EDU K: Company Y: Data TDS Nature of Pa Creation Name Section Firef Payment code Remittance code Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Is zero rated Threshold/exemption limit Micros Unity Quit Z: Exchange 0% 0% Accept Q Search O: Import E: Export M: E-mail FinCom • ke Co p: pnnt x 161 Fl: Help F2: period d6Ub9 Company nt to • a206f 73e14 'trace Hub" , 53-29 2073e • ' , "tra .6f3e— FIO: Other Masters p: Delete More Details Helper Configure isten " : "Oa unnin ion_i 795— age" , 53-29 'tally Windows Server 2025 Datacenter Build...
+[keys] '^a'
+[shot] tds-013-nat-accept (1024x768)
+[05:13:10] [tds] screen tds-013-nat-accept : TallyPrime MANAGE Recyc EDU K: Company Y: Data TDS Nature of Pa Creation Name Section Firef Payment code Remittance code Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Is zero rated Threshold/exemption limit Micros Unity Quit Z: Exchange 0% 0% Accept Q Search O: Import E: Export M: E-mail FinCom • ke Co p: pnnt x 161 Fl: Help F2: period d6Ub9 Company nt to • a206f 73e14 'trace Hub" , 53-29 2073e • ' , "tra .6f3e— FIO: Other Masters p: Delete More Details Helper Configure isten " : "Oa unnin ion_i 795— age" , 53-29 'tally Windows Server 2025 Datacenter Build...
+[keys] '{ESC}'
+[shot] tds-014-nat-esc1 (1024x768)
+[05:13:13] [tds] screen tds-014-nat-esc1 : TallyPrime MANAGE Recyc EDU K: Company Y: Data TDS Nature of Pa Creation Name Section Firef Payment code Remittance code Rate for individuals/HUF With PAN Googl Rate for other deductee types Chro With PAN Is zero rated Threshold/exemption limit Micros Unity Q: Quit Z: Exchange 0% 0% A: Accept Q Search O: Import E: Export M: E-mail FinCom p: print x 161 Fl: Help F2: period d6Ub9 F3: Company Quit o Yes or No FIO : Other nt to • a206f 73e14 'trace Hub" , 53-29 2073e • ' , "tra Masters l: More Details H: Helper .6f3e— isten " : "Oa unnin ion_i 795— age" , 53-29 'tally p: Delete F 12: Configure Win...
+[keys] '{ESC}'
+[shot] tds-015-nat-esc2 (1024x768)
+[05:13:16] [tds] screen tds-015-nat-esc2 : TallyPrime MANAGE Recyc EDU Firefo Googl Chron Micros Unity Quit K: Company Y: Data Z: Exchange FinCom • ke Co Master Creation List of Masters Accounting Masters Group Ledger Cost Centre Currency Voucher Type Inventory Masters Stock Group Stock Category Stock Item Unit Location Payroll Masters Employee Group Employee Units (Work) Attendance/Production Type Pay Heads Payroll Voucher Type Statutory Masters GST Registration GST Classification TDS Nature of Payments Statutory Details Company GST Details O: Import Change Company Show More E: Export M: E-mail Q Search 161 p: pnnt Fl: Help x d6Ub9 nt...
+[05:13:16] [tds] nature 'PD Contract Work' in Tally's export (TDSRate): True
+[shot] tds-016-gw0 (1024x768)
+[05:13:17] [tds] screen tds-016-gw0 : TallyPrime MANAGE Recyc EDU Firefo Googl Chron Micros Unity Quit K: Company Y: Data Z: Exchange FinCom • ke Co Master Creation List of Masters Accounting Masters Group Ledger Cost Centre Currency Voucher Type Inventory Masters Stock Group Stock Category Stock Item Unit Location Payroll Masters Employee Group Employee Units (Work) Attendance/Production Type Pay Heads Payroll Voucher Type Statutory Masters GST Registration GST Classification TDS Nature of Payments Statutory Details Company GST Details O: Import Change Company Show More E: Export M: E-mail Q Search 161 p: pnnt Fl: Help x d6Ub9 nt...
+[keys] '{ESC}'
+[shot] tds-017-gw1 (1024x768)
+[05:13:20] [tds] screen tds-017-gw1 : TallyPrime MANAGE Recyc EDU K: Company Gatewa of Tall Y: Data Z: Exchange CURRENT OATE Wednesday, I-Apr-2026 O: Import E: Export M: E-mail p: pnnt Fl: Help Date Company Firefo Googl Chro Micros 46 IypÅ Unity CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports Quit 161 d6Ub9 nt to • a206f 73e14 'trace Hub" , 53-29 2073e ' , "tra .6f3e— isten " : "Oa unnin ion_i 795— age" , 53-29 'tally ...
+[05:13:20.444] tds: nature 'PD Contract Work' as a TDS Rate in Tally: True
+[05:13:20.461] import tds: party, expense, TDS ledger: 3 sent, created 3, errors 0, 13.8 ms
+[05:13:20.513] import extra creditnote: 1 sent, created 1, errors 0, 33.5 ms
+[05:13:20.549] import extra creditnote-items: 1 sent, created 1, errors 0, 34 ms
+[05:13:20.576] import extra debitnote: 1 sent, created 1, errors 0, 25.4 ms
+[05:13:20.600] import extra journal-cc: 1 sent, created 1, errors 0, 23.8 ms
+[05:13:20.616] import extra bank-payment: 1 sent, created 1, errors 0, 14.9 ms
+[05:13:20.633] import extra bank-payment-cheque: 1 sent, created 1, errors 0, 15.3 ms
+[05:13:20.664] import extra voucher-mode-items: 1 sent, created 1, errors 0, 30.5 ms
+[05:13:20.677] import extra voucher-mode-items-nog: 1 sent, created 0, errors 1, 11.6 ms; Tally: Godown &apos;&apos; does not exist!
+[05:13:20.694] import extra deleted: 1 sent, created 1, errors 0, 16 ms
+[05:13:21.508] import invoice BIG200-1: 1 sent, created 1, errors 0, 652 ms
+[05:13:24.016] import invoice BIG500-1: 1 sent, created 1, errors 0, 1635.6 ms
+[05:13:24.019] made: creditnote 1; creditnote-items 1; debitnote 1; journal-cc 1; bank-payment 1; bank-payment-cheque 1; voucher-mode-items 1; voucher-mode-items-nog 0; deleted 1; BIG200-1 1; BIG500-1 1
+[05:13:24.417] import delete DEL-1: 1 sent, created 0, errors 1, 336.5 ms; Tally: Voucher does not exist!
+[05:13:24.455] deleted DEL-1 (MasterID 20): still in Tally True
+[05:13:30.465] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-l-tds-started (1024x768)
+[05:13:58.452] Tally started (l-tds) in 28 s; company open: True
+[05:14:00.464] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[shot] tds-018-gw0 (1024x768)
+[05:14:01] [tds] screen tds-018-gw0 : TallyPrime MANAGE Recyc EDU K: Company Gatewa of Tall Y: Data Z: Exchange CURRENT OATE Wednesday, 31-Mar-2027 O: Import E: Export M: E-mail p: pnnt Fl: Help Date Company Firefo Googl Chro Micros 46 IypÅ Unity CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports Quit 161 d6Ub9 nt to • a206f 73e14 'trace Hub" , 53-29 2073e ' , "tra .6f3e— isten " : "Oa unnin ion_i 795— age" , 53-29 'tally...
+[keys] 'v'
+[shot] tds-019-s5-vouchers (1024x768)
+[05:14:04] [tds] screen tds-019-s5-vouchers : TallyPrime MANAGE Recyc EDU K: Company Accounting Voucher Creation Pa ment Firefo Account Current balance: Particulars Googl Chro Micros 46 IypÅ Narration: Unity Quit 161 Y: Data Z: Exchange A Accept Q Search O: Import E: Export M: E-mail FinCom • ke Co p: print 31-Mar-27 Wednesday Amount Fl: Help Q: Date d6Ub9 Company Ed: Contra F-5: Payment Receipt Journal Sales Purchase < • nt to • a206f 73e14 'trace Hub" , 53-29 2073e ' , "tra .6f3e— isten " : "Oa unnin ion_i 795— age" , 53-29 'tally D: Delete x: Cancel Vch Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional ...
+[keys] '{F7}'
+[shot] tds-020-s5-journal (1024x768)
+[05:14:08] [tds] screen tds-020-s5-journal : TallyPrime MANAGE Recyc EDU K: Company Accounting Voucher Creation Journal No. 4 Firefo Particulars Googl Chro Micros 46 IypÅ Narration: Unity Quit 161 Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts output CGST output SGST PD Basic PD Contract Exp PD HRA PD salary Payable PD Supplier PD TDS Contractor PD TDS Payable Profit & Loss A/c Purchase Sales Spike Income Spike Party Spike Party 2 Template Party Ul Party M: E-mail p: pnnt x Create Show More Fl: Help Q: Date d6Ub9 Company Ed: Contra Payment Receipt F-7: Journal Sales Purchase < • Fl O: Oåu...
+[keys] '{F2}'
+[shot] tds-021-s5-date-box (1024x768)
+[05:14:11] [tds] screen tds-021-s5-date-box : x Recyc TallyPrime MANAGE EDU K: Company Change Voucher Date Y: Data Z: Exchange A Accept Q Search O: Import E: Export M: E-mail p: pnnt Fl: Help Firefo Googl Chron Micros lyp Unity Quit FinCom Spike Co Voucher Date 14-2027 d6Ub9 nt to • a206f 73e14 'trace Hub" , 53-29 2073e ' , "tra : '2.3 .6f3e— isten " : "Oa unnin ion_i 795— age" , 53-29 'tally Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 5:14 AM 10/8/2026
+[keys] '2-11-2026{ENTER}'
+[shot] tds-022-s5-date-set (1024x768)
+[05:14:14] [tds] screen tds-022-s5-date-set : TallyPrime MANAGE Recyc EDU K: Company Accounting Voucher Creation Journal No. 4 Firefo Particulars Googl Chro Micros 46 IypÅ Narration: Unity Quit 161 Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts output CGST output SGST PD Basic PD Contract Exp PD HRA PD salary Payable PD Supplier PD TDS Contractor PD TDS Payable Profit & Loss A/c Purchase Sales Spike Income Spike Party Spike Party 2 Template Party Ul Party M: E-mail p: pnnt x Create Show More Fl: Help Q: Date d6Ub9 Company Ed: Contra Payment Receipt F-7: Journal Sales Purchase < • Fl O: Oåu...
+[keys] 'PD Contract Exp{ENTER}'
+[shot] tds-023-s5-r1-ledger (1024x768)
+[05:14:17] [tds] screen tds-023-s5-r1-ledger : TallyPrime MANAGE Recyc EDU K: Company Accounting Voucher Creation Journal No. 4 161 Y: Data Z: Exchange A Accept Q Search O: Import E: Export FinCom • ke Co M: E-mail Debit p: print x 2-Nov-26 Monday Credit Fl: Help Q: Date d6Ub9 Company Firefo By By Googl Chro Micros 46 IypÅ Particulars PD Contract Exp Cur Bal: Ed: Contra Payment Receipt F-7: Journal Sales Purchase < • Narration: Unity Quit Fl O: OåuVooctgs E: Autofill H: Change = Mode More Details o: Related Reports Optional post -Dated J: Stat Adjustment El 2: Configure nt to • a206f 73e14 'trace Hub" , 53-29 2073e ' , "tra .6f3e— isten " ...
+[keys] '100000{ENTER}'
+[shot] tds-024-s5-r1-amount (1024x768)
+[05:14:20] [tds] screen tds-024-s5-r1-amount : TallyPrime MANAGE Recyc EDU K: Company Accounting Voucher Creation Journal No. 4 161 Y: Data Z: Exchange A Accept Q Search O: Import E: Export M: E-mail FinCom • ke Co p: print x 2-Nov-26 Monday Credit Fl: Help Q: Date d6Ub9 Company Firefo By Goog Chro Micros 46 IypÅ Particulars PD Contract Exp CurBa1: Dr Debit 1,00 00000 1,00 00000 Ed: Contra Payment Receipt F-7: Journal Sales Purchase < • Narration: Unity Quit nt to • a206f 73e14 'trace Hub" , 53-29 2073e ' , "tra .6f3e— isten " : "Oa unnin ion_i 795— age" , 53-29 'tally D: Delete x: Cancel Vch Fl O: OåuVooctgs E: Autofill H: Change = Mode M...
+[shot] tds-025-s5-r1-after1 (1024x768)
+[05:14:21] [tds] screen tds-025-s5-r1-after1 : TallyPrime MANAGE Recyc EDU K: Company Accounting Voucher Creation Journal No. 4 161 Y: Data Z: Exchange A Accept Q Search O: Import E: Export M: E-mail FinCom • ke Co p: print x 2-Nov-26 Monday Credit Fl: Help Q: Date d6Ub9 Company Firefo By Googl Chro Micros 46 IypÅ Particulars PD Contract Exp CurBa1: Dr Debit 1,00 00000 1,00 00000 Ed: Contra Payment Receipt F-7: Journal Sales Purchase < • Narration: Unity Quit nt to • a206f 73e14 'trace Hub" , 53-29 2073e ' , "tra .6f3e— isten " : "Oa unnin ion_i 795— age" , 53-29 'tally D: Delete x: Cancel Vch Fl O: OåuVooctgs E: Autofill H: Change = Mode ...
+[keys] 't{ENTER}'
+[shot] tds-026-s5-r2-to (1024x768)
+[05:14:24] [tds] screen tds-026-s5-r2-to : TallyPrime MANAGE Recyc EDU K: Company Accounting Voucher Creation Journal No. 4 161 Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts output CGST output SGST PD Basic PD Contract Exp PD HRA PD salary Payable PD Supplier PD TDS Contractor PD TDS Payable Profit & Loss A/c Purchase Sales Spike Income Spike Party Spike Party 2 Template Party Ul Party M: E-mail p: pnnt x Create Show More Fl: Help Q: Date d6Ub9 Company Firefo By Googl Chro Micros 46 IypÅ Particulars PD Contract Exp CurBa1: Dr Ed: Contra Payment Receipt F-7: Journal Sales Purchase < • N...
+[keys] 'PD TDS Payable{ENTER}'
+[shot] tds-027-s5-r2-ledger (1024x768)
+[05:14:27] [tds] screen tds-027-s5-r2-ledger : TallyPrime MANAGE Recyc EDU K: Company Accounting Voucher Creation Journal No. 4 161 Y: Data Z: Exchange A Accept Q Search O: Import E: Export M: E-mail FinCom • ke Co p: print x 2-Nov-26 Monday Credit 1,00 00000 1,00 00000 Fl: Help Q: Date d6Ub9 Company Firefo By Googl Chro Micros 46 IypÅ Particulars PD Contract Exp Debit 1,00 00000 CurBa1: Dr To PD TDS Payable CurBal: Cr Narration: Unity Quit Ed: Contra Payment Receipt F-7: Journal Sales Purchase < • nt to • a206f 73e14 'trace Hub" , 53-29 2073e ' , "tra .6f3e— isten " : "Oa unnin ion_i 795— age" , 53-29 'tally D: Delete x: Cancel Vch Fl O: ...
+[shot] tds-028-s5-r2-sub1 (1024x768)
+[05:14:28] [tds] screen tds-028-s5-r2-sub1 : TallyPrime MANAGE Recyc EDU K: Company Accounting Voucher Creation Journal No. 4 161 Y: Data Z: Exchange A Accept Q Search O: Import E: Export M: E-mail FinCom • ke Co p: print x 2-Nov-26 Monday Credit 1,00 00000 1,00 00000 Fl: Help Q: Date d6Ub9 Company Firefo By Googl Chro Micros 46 IypÅ Particulars PD Contract Exp Debit 1,00 00000 CurBa1: Dr To PD TDS Payable CurBal: Cr Narration: Unity Quit Ed: Contra Payment Receipt F-7: Journal Sales Purchase < • nt to • a206f 73e14 'trace Hub" , 53-29 2073e ' , "tra .6f3e— isten " : "Oa unnin ion_i 795— age" , 53-29 'tally D: Delete x: Cancel Vch Fl O: ...
+[shot] tds-029-s5-r2-amount-shown (1024x768)
+[05:14:29] [tds] screen tds-029-s5-r2-amount-shown : TallyPrime MANAGE Recyc EDU K: Company Accounting Voucher Creation Journal No. 4 161 Y: Data Z: Exchange A Accept Q Search O: Import E: Export M: E-mail FinCom • ke Co p: print x 2-Nov-26 Monday Credit 1,00 00000 Fl: Help Q: Date d6Ub9 Company Firefo By Googl Chro Micros 46 IypÅ Particulars PD Contract Exp Debit 1,00 00000 CurBa1: Dr To PD TDS Payable CurBal: Cr Narration: Unity Quit Ed: Contra Payment Receipt F-7: Journal Sales Purchase < • nt to • a206f 73e14 'trace Hub" , 53-29 2073e ' , "tra .6f3e— isten " : "Oa unnin ion_i 795— age" , 53-29 'tally D: Delete x: Cancel Vch Fl O: OåuVooctgs ...
+[keys] '2000{ENTER}'
+[shot] tds-030-s5-r2-amount-typed (1024x768)
+[05:14:32] [tds] screen tds-030-s5-r2-amount-typed : TallyPrime MANAGE Recyc EDU K: Company Accounting Voucher Creation Journal No. 4 161 Y: Data Z: Exchange A Accept Q Search O: Import E: Export M: E-mail FinCom • ke Co p: print x 2-Nov-26 Monday Credit 2,000.00 2,000.00 Fl: Help Q: Date d6Ub9 Company Firefo By Googl Chro Micros 46 IypÅ Particulars PD Contract Exp CurBa1: Dr PD TDS Payable CurBal: 2,000.00 Cr Debit 1,00 00000 1,00 00000 Ed: Contra Payment Receipt F-7: Journal Sales Purchase < • Narration: Unity Quit nt to • a206f 73e14 'trace Hub" , 53-29 2073e ' , "tra .6f3e— isten " : "Oa unnin ion_i 795— age" , 53-29 'tally D: Delete x: Canc...
+[shot] tds-031-s5-r2-after1 (1024x768)
+[05:14:33] [tds] screen tds-031-s5-r2-after1 : TallyPrime MANAGE Recyc EDU K: Company Accounting Voucher Creation Journal No. 4 161 Y: Data Z: Exchange A Accept Q Search O: Import E: Export M: E-mail FinCom • ke Co p: print x 2-Nov-26 Monday Credit 2,000.00 2,000.00 Fl: Help Q: Date d6Ub9 Company Firefo By Googl Chro Micros 46 IypÅ Particulars PD Contract Exp CurBa1: Dr PD TDS Payable CurBal: 2,000.00 Cr Debit 1,00 00000 1,00 00000 Ed: Contra Payment Receipt F-7: Journal Sales Purchase < • Narration: Unity Quit nt to • a206f 73e14 'trace Hub" , 53-29 2073e ' , "tra .6f3e— isten " : "Oa unnin ion_i 795— age" , 53-29 'tally D: Delete x: Canc...
+[keys] 't{ENTER}'
+[shot] tds-032-s5-r3-to (1024x768)
+[05:14:35] [tds] screen tds-032-s5-r3-to : TallyPrime MANAGE Recyc EDU K: Company Accounting Voucher Creation Journal No. 4 161 Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts output CGST output SGST PD Basic PD Contract Exp PD HRA PD salary Payable PD Supplier PD TDS Contractor PD TDS Payable Profit & Loss A/c Purchase Sales Spike Income Spike Party Spike Party 2 Template Party Ul Party M: E-mail p: pnnt x Create Show More Fl: Help Q: Date d6Ub9 Company Firefo By Googl Chro Micros 46 IypÅ Particulars PD Contract Exp CurBa1: Dr PD TDS Payable CurBa1: 2,000.00 Cr Ed: Contra Payment Receip...
+[keys] 'PD TDS Contractor{ENTER}'
+[shot] tds-033-s5-r3-ledger (1024x768)
+[05:14:39] [tds] screen tds-033-s5-r3-ledger : TallyPrime MANAGE Recyc EDU K: Company Accounting Voucher Creation Journal No. 4 161 Y: Data Z: Exchange A Accept Q Search O: Import E: Export M: E-mail FinCom • ke Co p: print x 2-Nov-26 Monday Credit 2,000.00 1,00 00000 Fl: Help Q: Date d6Ub9 Company Firefo By Googl Chro Micros 46 IypÅ Particulars PD Contract Exp CurBa1: Dr PD TDS Payable CurBal: 2,000.00 Cr PD TDS Contractor CurBa1: Cr Debit 1,00 00000 Ed: Contra Payment Receipt F-7: Journal Sales Purchase < • Narration: Unity Quit nt to • a206f 73e14 'trace Hub" , 53-29 2073e ' , "tra .6f3e— isten " : "Oa unnin ion_i 795— age" , 53-29 'tal...
+[shot] tds-034-s5-r3-amount-shown (1024x768)
+[05:14:40] [tds] screen tds-034-s5-r3-amount-shown : TallyPrime MANAGE Recyc EDU K: Company Accounting Voucher Creation Journal No. 4 161 Y: Data Z: Exchange A Accept Q Search O: Import E: Export M: E-mail FinCom • ke Co p: print x 2-Nov-26 Monday Credit 2,000.00 Fl: Help Q: Date d6Ub9 Company Firefo By Googl Chro Micros 46 IypÅ Particulars PD Contract Exp CurBa1: Dr PD TDS Payable CurBal: 2,000.00 Cr PD TDS Contractor CurBa1: Cr Debit 1,00 00000 Ed: Contra Payment Receipt F-7: Journal Sales Purchase < • Narration: Unity Quit nt to • a206f 73e14 'trace Hub" , 53-29 2073e ' , "tra .6f3e— isten " : "Oa unnin ion_i 795— age" , 53-29 'tally D: Delet...
+[keys] '98000{ENTER}'
+[shot] tds-035-s5-r3-amount-typed (1024x768)
+[05:14:43] [tds] screen tds-035-s5-r3-amount-typed : TallyPrime MANAGE Recyc EDU K: Company Accounting Voucher Creation Journal No. 4 161 Y: Data Z: Exchange Accept Q Search O: Import E: Export M: E-mail FinCom • ke Co p: print x 2-Nov-26 Monday Credit 2,000.00 98,000.00 1,00 00000 Fl: Help Q: Date d6Ub9 Company Firefo By Googl Chro Micros 46 IypÅ Particulars PD Contract Exp CurBa1: Dr PD TDS Payable CurBal: 2,000.00 Cr PD TDS Contractor CurBal: 98,000.00 Cr Debit 1,00 00000 Ed: Contra Payment Receipt F-7: Journal Sales Purchase < • Narration: Unity Quit nt to • a206f 73e14 'trace Hub" , 53-29 2073e ' , "tra .6f3e— isten " : "Oa unnin ion_i 795—...
+[shot] tds-036-s5-r3-after1 (1024x768)
+[05:14:44] [tds] screen tds-036-s5-r3-after1 : TallyPrime MANAGE Recyc EDU K: Company Accounting Voucher Creation Journal No. 4 161 Y: Data Z: Exchange Accept Q Search O: Import E: Export M: E-mail FinCom • ke Co p: print x 2-Nov-26 Monday Credit 2,000.00 98,000.00 1,00 00000 Fl: Help Q: Date d6Ub9 Company Firefo By Googl Chro Micros 46 IypÅ Particulars PD Contract Exp CurBa1: Dr PD TDS Payable CurBal: 2,000.00 Cr PD TDS Contractor CurBal: 98,000.00 Cr Debit 1,00 00000 Ed: Contra Payment Receipt F-7: Journal Sales Purchase < • Narration: Unity Quit nt to • a206f 73e14 'trace Hub" , 53-29 2073e ' , "tra .6f3e— isten " : "Oa unnin ion_i 795—...
+[shot] tds-037-s5-before-narration (1024x768)
+[05:14:45] [tds] screen tds-037-s5-before-narration : TallyPrime MANAGE Recyc EDU K: Company Accounting Voucher Creation Journal No. 4 161 Y: Data Z: Exchange Accept Q Search O: Import E: Export M: E-mail FinCom • ke Co p: print x 2-Nov-26 Monday Credit 2,000.00 98,000.00 1,00 00000 Fl: Help Q: Date d6Ub9 Company Firefo By Googl Chro Micros 46 IypÅ Particulars PD Contract Exp CurBa1: Dr PD TDS Payable CurBal: 2,000.00 Cr PD TDS Contractor CurBal: 98,000.00 Cr Debit 1,00 00000 Ed: Contra Payment Receipt F-7: Journal Sales Purchase < • Narration: Unity Quit nt to • a206f 73e14 'trace Hub" , 53-29 2073e ' , "tra .6f3e— isten " : "Oa unnin ion_i 795—...
+[keys] 'fast234l TDS 194C typed on the screen{ENTER}'
+[shot] tds-038-s5-narration (1024x768)
+[05:14:48] [tds] screen tds-038-s5-narration : TallyPrime MANAGE Recyc EDU K: Company Accounting Voucher Creation Journal No. 4 Y: Data Z: Exchange A: Accept Q Search O: Import E: Export M: E-mail FinCom Firefo By Googl Chro Micros 46 IypÅ Particulars PD Contract Exp CurBa1: Dr PD TDS Payable CurBal: 2,000.00 Cr PD TDS Contractor CurBal: 98,000.00 Cr Debit 1,00 00000 Narration: fast2341 TDS 194C typed on the screen Unity Q: Quit p: print x 2-Nov-26 Monday Credit 2,000.00 98,000.00 Accept Q Yes or No Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - D...
+[shot] tds-039-s5-accept-q (1024x768)
+[05:14:49] [tds] screen tds-039-s5-accept-q : TallyPrime MANAGE Recyc EDU K: Company Accounting Voucher Creation Journal No. 4 Y: Data Z: Exchange A: Accept Q Search O: Import E: Export M: E-mail FinCom Firefo By Googl Chro Micros 46 IypÅ Particulars PD Contract Exp CurBa1: Dr PD TDS Payable CurBal: 2,000.00 Cr PD TDS Contractor CurBal: 98,000.00 Cr Debit 1,00 00000 Narration: fast2341 TDS 194C typed on the screen Unity Q: Quit p: print x 2-Nov-26 Monday Credit 2,000.00 98,000.00 Accept Q Yes or No Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - D...
+[keys] 'y'
+[shot] tds-040-s5-accepted (1024x768)
+[05:14:53] [tds] screen tds-040-s5-accepted : TallyPrime MANAGE Recyc EDU K: Company Accounting Voucher Creation Journal Firefo Particulars Googl Chro Micros 46 IypÅ Narration: Unity Quit 161 Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts output CGST output SGST PD Basic PD Contract Exp PD HRA PD salary Payable PD Supplier PD TDS Contractor PD TDS Payable Profit & Loss A/c Purchase Sales Spike Income Spike Party Spike Party 2 Template Party Ul Party M: E-mail p: pnnt x Create Show More Fl: Help Q: Date d6Ub9 Company Ed: Contra Payment Receipt F-7: Journal Sales Purchase < • Fl O: OåuVooctg...
+[05:14:53.996] TDS: entry saved: MasterID 23 Journal 4; TDS amount typed; OCR read the screens
+[keys] '{ESC}'
+[keys] '{ESC}'
+[05:15:00.821] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-l-ask-started (1024x768)
+[05:15:28.813] Tally started (l-ask) in 28 s; company open: True
+[05:15:30.822] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[05:15:30.858] the company holds 24 vouchers:   (), Journal 1 (1), Receipt 1 (4), Sales 1 (2), Sales 2 (3), Credit Note 1 (13), Credit Note 2 (14), Debit Note 1 (15), Journal 2 (16), Payment 1 (17), Payment 2 (18), Sales 4 (19), Journal 3 (20), Sales 5 (21), Sales 6 (22), Journal 4 (23), Payroll 1 (5), Payroll 2 (6), Stock Journal 1 (7), PD Manufacturing Journal MJ-1 (8), Delivery Note 1 (9), Receipt Note 1 (10), Physical Stock 1 (11), Sales 3 (12)
+[] failed after 180004.1 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[05:18:30.885] L small -:    MasterID : object median 1.8 worst 1.8 ms
+[] failed after 180002.5 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[] failed after 180003.4 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[] failed after 180003.9 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[05:27:30.879] L small journal-1: Journal 1 20260401 MasterID 1:  ms
+[] failed after 180003.7 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[] failed after 180003.7 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[] failed after 180003.4 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[05:36:30.874] L small receipt-1: Receipt 1 20261001 MasterID 4:  ms
+[] failed after 180002.3 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[] failed after 180003.4 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[] failed after 180004.1 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[05:45:30.867] L small sales-1: Sales 1 20261002 MasterID 2:  ms
+[] failed after 180002.6 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[] failed after 180003 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[] failed after 180003.7 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[05:54:30.861] L small sales-2: Sales 2 20261031 MasterID 3:  ms
+[] failed after 180002 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[] failed after 180003.2 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[] failed after 180003.5 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[06:03:30.853] L small credit_note-1: Credit Note 1 20261101 MasterID 13:  ms
+[] failed after 180003.9 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[] failed after 180003.8 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[] failed after 180002.9 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[06:12:30.847] L small credit_note-2: Credit Note 2 20261101 MasterID 14:  ms
+[] failed after 180002.4 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[] failed after 180002.8 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[] failed after 180003.4 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[06:21:30.839] L small debit_note-1: Debit Note 1 20261101 MasterID 15:  ms
+[] failed after 180003.3 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[] failed after 180004.1 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[] failed after 180003.1 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[06:30:30.833] L small journal-2: Journal 2 20261101 MasterID 16:  ms
+[] failed after 180003.2 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[] failed after 180002.8 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[] failed after 180002.9 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[06:39:30.825] L small payment-1: Payment 1 20261101 MasterID 17:  ms
+[] failed after 180002.1 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[] failed after 180002.7 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[] failed after 180003.4 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[06:48:30.817] L small payment-2: Payment 2 20261101 MasterID 18:  ms
+[] failed after 180001.5 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[] failed after 180002.4 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[] failed after 180001.8 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[06:57:30.806] L small sales-4: Sales 4 20261101 MasterID 19:  ms
+[] failed after 180002.2 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.
+[] failed after 180002.8 ms: The request was canceled due to the configured HttpClient.Timeout of 180 seconds elapsing.

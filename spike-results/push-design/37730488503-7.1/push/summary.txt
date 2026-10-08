@@ -1,0 +1,111 @@
+[05:10:47.812] push-design on TallyPrime 7.1: reps 5, heavy 3000 ledgers / 3000 items / up to 30000 vouchers (40 min), postings 1
+[05:10:48.731] system clock step after timeBeginPeriod(1): 0.457 ms (min 0.0032, max 4.8973)
+[05:10:48.760] two files written 2 ms apart: NTFS write times 18.0067 ms apart
+[05:10:48.780] light company folder: D:\a\_temp\TallyData\100000
+[05:10:51.802] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[05:11:21.470] Tally started (setup-light) in 29.7 s; company open: True
+[05:11:21.483] company GUID 744e1fe7-04e2-44f2-bdb9-779fe0a7177a
+[05:11:23.510] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[05:11:24.821] import light masters: 60 sent, created 59, errors 0, 275.4 ms
+[05:11:24.965] import template s5 (all fields): 1 sent, created 1, errors 0, 97.8 ms
+[05:11:25.214] import template s50 (all fields): 1 sent, created 1, errors 0, 243.1 ms
+[05:11:25.240] import template rc (all fields): 1 sent, created 1, errors 0, 23.6 ms
+[05:11:25.246] templates: s5 all fields; s50 all fields; rc all fields
+[05:11:25.305]   template Receipt 1 20261001 mid 4 aid 4 744e1fe7-04e2-44f2-bdb9-779fe0a7177a-00000004
+[05:11:25.307]   template Sales 1 20261002 mid 2 aid 2 744e1fe7-04e2-44f2-bdb9-779fe0a7177a-00000002
+[05:11:25.308]   template Sales 2 20261031 mid 3 aid 3 744e1fe7-04e2-44f2-bdb9-779fe0a7177a-00000003
+[05:11:25.511] company feature fields (by name): ISBATCHWISEON=No, PREVISMULTIGODOWNON=No, PREVISTRACKINGON=No, ISPAYROLLON=No, PREVISSALESORDERSON=No, PREVISPURCORDERSON=No, ISEXCISEMFGRTRADERON=No, ISPAYROLLSTATON=No, ISCOSTTRACKINGON=No, NOTIFYOFEXPIRY=No, ISTRACKVOUCHERSON=No, RESETTRACKEDCHANGES=No
+[05:11:25.531] import company features by XML: 1 sent, created 0, errors 0, 16.1 ms
+[05:11:25.543] after the XML alter: ISBATCHWISEON=Yes, PREVISMULTIGODOWNON=Yes, PREVISTRACKINGON=Yes, ISPAYROLLON=Yes, PREVISSALESORDERSON=Yes, PREVISPURCORDERSON=Yes, ISEXCISEMFGRTRADERON=No, ISPAYROLLSTATON=No, ISCOSTTRACKINGON=No, NOTIFYOFEXPIRY=No, ISTRACKVOUCHERSON=No, RESETTRACKEDCHANGES=No
+[05:12:49.453] after F11 (show more features only): ISBATCHWISEON=Yes, PREVISMULTIGODOWNON=Yes, PREVISTRACKINGON=Yes, ISPAYROLLON=Yes, PREVISSALESORDERSON=Yes, PREVISPURCORDERSON=Yes, ISEXCISEMFGRTRADERON=No, ISPAYROLLSTATON=No, ISCOSTTRACKINGON=No, NOTIFYOFEXPIRY=No, ISTRACKVOUCHERSON=No, RESETTRACKEDCHANGES=No
+[05:12:49.472] voucher types: Attendance, Contra, Credit Note, Debit Note, Delivery Note, Job Work In Order, Job Work Out Order, Journal, Material In, Material Out, Memorandum, Payment, Payroll, Physical Stock, Purchase, Purchase Order, Receipt, Receipt Note, Rejections In, Rejections Out, Reversing Journal, Sales, Sales Order, Stock Journal
+[05:12:49.483] voucher type fields: active ISACTIVE; manufacturing ASMFGJRNL
+[05:12:49.534] import voucher types active, manufacturing journal: 9 sent, created 1, errors 0, 49 ms
+[05:12:50.555] import type masters (godowns, batch items, employees, pay heads, supplier): 258 sent, created 258, errors 0, 959.6 ms
+[05:12:50.566] import attendance type: 1 sent, created 0, errors 0, 7.8 ms; Tally: Unit &apos;Days&apos; does not exist!
+[05:12:50.576] import attendance type: 1 sent, created 0, errors 0, 7.8 ms; Tally: Unit &apos;Days&apos; does not exist!
+[05:12:50.585] import attendance type: 1 sent, created 0, errors 0, 7.4 ms; Tally: Unit &apos;Days&apos; does not exist!
+[05:12:50.593] import attendance type: 1 sent, created 0, errors 0, 7 ms; Tally: Unit &apos;Days&apos; does not exist!
+[05:12:50.601] import attendance type: 1 sent, created 0, errors 0, 7 ms; Tally: Unit &apos;Days&apos; does not exist!
+[05:12:50.609] import attendance type: 1 sent, created 0, errors 0, 6.9 ms; Tally: Unit &apos;Days&apos; does not exist!
+[05:12:50.617] import attendance type: 1 sent, created 0, errors 0, 6.8 ms; Tally: Unit &apos;Days&apos; does not exist!
+[05:12:50.625] import attendance type: 1 sent, created 0, errors 0, 7 ms; Tally: Unit &apos;Days&apos; does not exist!
+[05:12:50.633] import attendance type: 1 sent, created 0, errors 0, 7.2 ms; Tally: Unit &apos;Days&apos; does not exist!
+[05:12:50.642] import attendance type: 1 sent, created 0, errors 0, 7.2 ms; Tally: Unit &apos;Days&apos; does not exist!
+[05:12:50.650] import attendance type: 1 sent, created 0, errors 0, 7.2 ms; Tally: Unit &apos;Days&apos; does not exist!
+[05:12:50.658] import attendance type: 1 sent, created 0, errors 0, 7 ms; Tally: Unit &apos;Days&apos; does not exist!
+[05:12:50.865] import template payroll50 (form 1 of 5): 1 sent, created 0, errors 0, 22.8 ms
+[05:12:50.883] import template payroll50 (form 2 of 5): 1 sent, created 0, errors 0, 16.3 ms
+[05:12:50.905] import template payroll50 (form 3 of 5): 1 sent, created 0, errors 0, 20.6 ms
+[05:12:50.923] import template payroll50 (form 4 of 5): 1 sent, created 0, errors 0, 16.5 ms
+[05:12:50.952] import template payroll50 (form 5 of 5): 1 sent, created 1, errors 0, 27 ms
+[05:12:50.982] import template payroll200 (form 1 of 5): 1 sent, created 0, errors 0, 27.1 ms
+[05:12:51.021] import template payroll200 (form 2 of 5): 1 sent, created 0, errors 0, 36.5 ms
+[05:12:51.063] import template payroll200 (form 3 of 5): 1 sent, created 0, errors 0, 41.1 ms
+[05:12:51.089] import template payroll200 (form 4 of 5): 1 sent, created 0, errors 0, 24.2 ms
+[05:12:51.138] import template payroll200 (form 5 of 5): 1 sent, created 1, errors 0, 46.8 ms
+[05:12:51.157] import template attendance (form 1 of 1): 1 sent, created 0, errors 0, 17.7 ms
+[05:12:51.233] import template stockjournal (form 1 of 1): 1 sent, created 1, errors 0, 73.9 ms
+[05:12:51.267] import template mfgjournal (form 1 of 1): 1 sent, created 1, errors 0, 32.6 ms
+[05:12:51.304] import template salesorder (form 1 of 3): 1 sent, created 0, errors 0, 35 ms; Tally: Bad Order Number in Voucher!
+[05:12:51.339] import template salesorder (form 2 of 3): 1 sent, created 0, errors 0, 33.1 ms; Tally: Bad Order Number in Voucher!
+[05:12:51.387] import template salesorder (form 3 of 3): 1 sent, created 0, errors 0, 46 ms; Tally: Bad Order Number in Voucher!
+[05:12:51.414] import template purchaseorder (form 1 of 3): 1 sent, created 0, errors 0, 25.5 ms; Tally: Bad Order Number in Voucher!
+[05:12:51.441] import template purchaseorder (form 2 of 3): 1 sent, created 0, errors 0, 25.5 ms; Tally: Bad Order Number in Voucher!
+[05:12:51.466] import template purchaseorder (form 3 of 3): 1 sent, created 0, errors 0, 23.4 ms; Tally: Bad Order Number in Voucher!
+[05:12:51.527] import template deliverynote (form 1 of 1): 1 sent, created 1, errors 0, 59.9 ms
+[05:12:51.585] import template receiptnote (form 1 of 1): 1 sent, created 1, errors 0, 56.5 ms
+[05:12:51.614] import template physicalstock (form 1 of 1): 1 sent, created 1, errors 0, 26.6 ms
+[05:12:51.908] import template salesbatch (form 1 of 1): 1 sent, created 1, errors 0, 293 ms
+[05:12:52.361] TDL $$MachineName => '' 
+[05:12:52.364] TDL $$CmpUserName => 'TALLY User' 
+[05:12:52.368] TDL $$SysInfo:WindowsUser => 'runneradmin' 
+[05:12:52.371] TDL $$SysInfo:WindowsUserName => '' 
+[05:12:52.375] TDL $$SysInfo:UserName => '' 
+[05:12:52.378] TDL $$SysInfo:LoginUser => '' 
+[05:12:52.381] TDL $$SysInfo:SystemName => 'runnervmfi6oq' 
+[05:12:52.384] TDL $$SysInfo:ComputerName => '' 
+[05:12:52.387] TDL $$SysInfo:MachineName => '' 
+[05:12:52.393] TDL $$SysInfo:IPAddress => '10.1.0.20' 
+[05:12:52.396] TDL $$SysInfo:ApplicationPath => 'C:\Program Files\TallyPrime' 
+[05:12:52.400] TDL $$SysInfo:TempPath => '' 
+[05:12:52.439] fast234 (fast234l) on TallyPrime 7.1: today's request 2927 chars, 61 fields
+[05:12:52.486] fast234l on TallyPrime 7.1: the entry kinds (L2) and the 200 / 500-item invoices (M3)
+[05:12:52.504] import credit / debit note types active: 2 sent, created 0, errors 0, 16.1 ms
+[05:12:52.519] import tds: company TDS on, TAN: 1 sent, created 0, errors 0, 12.5 ms
+[05:13:45.822] tds: nature 'PD Contract Work' as a TDS Rate in Tally: True
+[05:13:45.868] import tds: party, expense, TDS ledger: 3 sent, created 3, errors 0, 41.8 ms
+[05:13:45.947] import extra creditnote: 1 sent, created 1, errors 0, 56.6 ms
+[05:13:46.022] import extra creditnote-items: 1 sent, created 1, errors 0, 72.5 ms
+[05:13:46.093] import extra debitnote: 1 sent, created 1, errors 0, 69 ms
+[05:13:46.178] import extra journal-cc: 1 sent, created 1, errors 0, 84 ms
+[05:13:46.220] import extra bank-payment: 1 sent, created 1, errors 0, 40.1 ms
+[05:13:46.265] import extra bank-payment-cheque: 1 sent, created 1, errors 0, 43.7 ms
+[05:13:46.326] import extra voucher-mode-items: 1 sent, created 1, errors 0, 59.8 ms
+[05:13:46.353] import extra voucher-mode-items-nog: 1 sent, created 0, errors 0, 25.7 ms
+[05:13:46.378] import extra deleted: 1 sent, created 1, errors 0, 23.7 ms
+[05:13:47.515] import invoice BIG200-1: 1 sent, created 1, errors 0, 932.1 ms
+[05:13:50.823] import invoice BIG500-1: 1 sent, created 1, errors 0, 2366.6 ms
+[05:13:50.825] made: creditnote 1; creditnote-items 1; debitnote 1; journal-cc 1; bank-payment 1; bank-payment-cheque 1; voucher-mode-items 1; voucher-mode-items-nog 0; deleted 1; BIG200-1 1; BIG500-1 1
+[05:13:51.322] import delete DEL-1: 1 sent, created 0, errors 1, 431.7 ms; Tally: Voucher does not exist!
+[05:13:51.382] deleted DEL-1 (MasterID 20): still in Tally True
+[05:13:57.391] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[05:14:26.870] Tally started (l-tds) in 29.5 s; company open: True
+[05:14:29.642] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[05:15:28.484] TDS: entry saved: MasterID 23 Journal 4; TDS amount typed; OCR read the screens
+[05:15:35.303] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[05:16:04.807] Tally started (l-ask) in 29.5 s; company open: True
+[05:16:06.816] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[05:16:06.862] the company holds 24 vouchers:   (), Journal 1 (1), Receipt 1 (4), Sales 1 (2), Sales 2 (3), Credit Note 1 (13), Credit Note 2 (14), Debit Note 1 (15), Journal 2 (16), Payment 1 (17), Payment 2 (18), Sales 4 (19), Journal 3 (20), Sales 5 (21), Sales 6 (22), Journal 4 (23), Payroll 1 (5), Payroll 2 (6), Stock Journal 1 (7), PD Manufacturing Journal MJ-1 (8), Delivery Note 1 (9), Receipt Note 1 (10), Physical Stock 1 (11), Sales 3 (12)
+[05:19:06.895] L small -:    MasterID : object median 2.3 worst 2.3 ms
+[05:28:06.898] L small journal-1: Journal 1 20260401 MasterID 1:  ms
+[05:37:06.897] L small receipt-1: Receipt 1 20261001 MasterID 4:  ms
+[05:46:06.901] L small sales-1: Sales 1 20261002 MasterID 2:  ms
+[05:55:06.899] L small sales-2: Sales 2 20261031 MasterID 3:  ms
+[06:04:06.901] L small credit_note-1: Credit Note 1 20261101 MasterID 13:  ms
+[06:13:06.898] L small credit_note-2: Credit Note 2 20261101 MasterID 14:  ms
+[06:22:06.903] L small debit_note-1: Debit Note 1 20261101 MasterID 15:  ms
+[06:31:06.903] L small journal-2: Journal 2 20261101 MasterID 16:  ms
+[06:40:06.906] L small payment-1: Payment 1 20261101 MasterID 17:  ms
+[06:49:06.903] L small payment-2: Payment 2 20261101 MasterID 18:  ms
+[06:58:06.905] L small sales-4: Sales 4 20261101 MasterID 19:  ms
