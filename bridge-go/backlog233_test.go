@@ -32,11 +32,12 @@ import (
 	"time"
 )
 
-// NWS144 with the 2 s stop at 200 ms, Tally answering every single entry in 220 ms ("2.2 s": always stopped)
+// NWS144 with the 2 s stop at 200 ms, Tally answering every single entry in 500 ms ("5 s": always stopped; 220 ms left
+// only 20 ms between the stop and the answer, which a loaded machine could read first: the 2.3.4 coordinator, 08-Oct-2026)
 func backlog233Bridge(t *testing.T) (string, *standTally, *standCloud) {
 	t.Helper()
 	p, f, c := slow232Bridge(t)
-	slowEntries(f, 220*time.Millisecond)
+	slowEntries(f, 500*time.Millisecond)
 	return p, f, c
 }
 
@@ -324,7 +325,7 @@ func TestBacklog233SlowMarkedWithOnlyEntryRequests(t *testing.T) {
 	p, f, c := backlog233Bridge(t)
 	slowEntries(f, 0)
 	slowLook() // the company list as the reader had it (Tally answering in time)
-	slowEntries(f, 220*time.Millisecond)
+	slowEntries(f, 500*time.Millisecond)
 	base := nowFn()
 	f.mu.Lock()
 	reqs0 := len(f.reqs)
@@ -384,7 +385,7 @@ func TestBacklog233FreezeStillDoesNotMark(t *testing.T) {
 	p, f, _ := backlog233Bridge(t)
 	slowEntries(f, 0)
 	slowLook()
-	slowAll(f, 220*time.Millisecond)
+	slowAll(f, 500*time.Millisecond)
 	base := nowFn()
 	for s, k := 0, 0; s <= 45*60; s += 60 {
 		retryClock(base, s)
@@ -499,7 +500,10 @@ func TestBacklog233OldLinesAskedOnceOneAtATime(t *testing.T) {
 			}
 		}
 		if id == vchObjectID || id == vchByNumberID {
-			time.Sleep(220 * time.Millisecond) // Tally itself busy 2.2 s (the stop is at 2 s), whether or not anyone waits
+			// Tally itself busy 5 s (the stop is at 2 s), whether or not anyone waits. Not 2.2 s: the 20 ms between the stop
+			// and the answer let a loaded machine read the answer before the stop fired (line 25014 sent with its body,
+			// the 2.3.4 coordinator, 08-Oct-2026)
+			time.Sleep(500 * time.Millisecond)
 		}
 		return false
 	}
@@ -696,7 +700,10 @@ func TestBacklog233M1SaveDuringHealthyResolverTurn(t *testing.T) {
 func TestBacklog233M2BurstOfEight(t *testing.T) {
 	p, f, c := slow232Bridge(t)
 	setCfg("RecorderHoldAfterMs", float64(400))
-	slowEntries(f, 180*time.Millisecond) // 1.8 s each
+	// 1.2 s each, scaled (under the 2 s stop with room: 1.8 s left 20 ms between the answer and the stop, which a loaded
+	// machine crossed: a stop, then the one more ask 5 minutes on, and the body not in this test's time; with 2.3.4's
+	// company list before each entry request the 20 ms are gone)
+	slowEntries(f, 120*time.Millisecond)
 	var mids []int64
 	var lines []string
 	for i := 0; i < 8; i++ {

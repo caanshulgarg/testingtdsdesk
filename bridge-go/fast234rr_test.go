@@ -266,15 +266,15 @@ func TestFast234RRNotFoundNeedsCompanyOpen(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		objs  []string // the object export's answers in turn
-		lists []string // the company list's answers in turn ("" the stand's own)
+		lists []string // the company list's answers in turn ("" the stand's own; the first: before the first ask)
 		gone  bool
 	}{
-		{"open before and after", []string{nf, nf}, []string{"", ""}, true},
-		{"closed (another company open)", []string{nf, nf}, []string{coList("FinCom Other Co", "other-guid"), ""}, false},
-		{"closed after the second ask", []string{nf, nf}, []string{"", coList("FinCom Other Co", "other-guid")}, false},
-		{"another company of that name", []string{nf, nf}, []string{coList(nwsCo, "co-guid-other"), coList(nwsCo, "co-guid-other")}, false},
-		{"no company open", []string{nf, nf}, []string{`<ENVELOPE><BODY><DATA><COLLECTION></COLLECTION></DATA></BODY></ENVELOPE>`, ""}, false},
-		{"the second ask finds it", []string{nf, ""}, []string{"", ""}, false},
+		{"open before and after", []string{nf, nf}, []string{"", "", ""}, true},
+		{"closed (another company open)", []string{nf, nf}, []string{"", coList("FinCom Other Co", "other-guid"), ""}, false},
+		{"closed after the second ask", []string{nf, nf}, []string{"", "", coList("FinCom Other Co", "other-guid")}, false},
+		{"another company of that name", []string{nf, nf}, []string{"", coList(nwsCo, "co-guid-other"), coList(nwsCo, "co-guid-other")}, false},
+		{"no company open", []string{nf, nf}, []string{"", `<ENVELOPE><BODY><DATA><COLLECTION></COLLECTION></DATA></BODY></ENVELOPE>`, ""}, false},
+		{"the second ask finds it", []string{nf, ""}, []string{"", "", ""}, false},
 	} {
 		var objN, listN int
 		f.mu.Lock()
@@ -313,11 +313,52 @@ func TestFast234RRNotFoundNeedsCompanyOpen(t *testing.T) {
 		if !tc.gone && perr == nil {
 			t.Fatalf("%s: proven gone", tc.name)
 		}
-		if tc.gone && (objN != 2 || listN != 2) {
-			t.Fatalf("%s: %d object asks, %d company lists (want 2 and 2)", tc.name, objN, listN)
+		if tc.gone && (objN != 2 || listN != 3) {
+			t.Fatalf("%s: %d object asks, %d company lists (want 2 and 3)", tc.name, objN, listN)
 		}
 	}
 	if s := heldGUID(nwsCo); s != held {
 		t.Fatalf("the held GUID changed: %s -> %s", held, s)
+	}
+}
+
+// L-d on real Tally (push-design runs 37791747092 and 37802765912, TallyPrime 3.0 .. 7.1): FinComVoucherObject naming a
+// company that is not open (closed, or never there) is never answered, and Tally then shows "Internal Error ...
+// Software Exception c0000005 (Memory Access Violation)" and answers nothing more. So the object export is sent only
+// right after Tally's company list on that port names the company; a company not named there: nothing is sent, the
+// line waits (asked again later)
+func TestFast234ObjectOnlyForAListedCompany(t *testing.T) {
+	_, f, _ := r222bBridge(t, "")
+	port, err := findCompanyPortBg(nwsCo, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r222Vch(f, 25795, "Journal", "", "20261005", 54595)
+	other := `<ENVELOPE><BODY><DATA><COLLECTION><COMPANY NAME="FinCom Other Co"><NAME>FinCom Other Co</NAME><GUID>other-guid</GUID></COMPANY></COLLECTION></DATA></BODY></ENVELOPE>`
+	var closed bool
+	f.mu.Lock()
+	f.behave = func(w http.ResponseWriter, r *http.Request, id, body string) bool {
+		if id == "TDSDeskCompanies" && closed {
+			fmt.Fprint(w, other)
+			return true
+		}
+		return false
+	}
+	f.mu.Unlock()
+	closed = true
+	n0 := f.n(vchObjectID)
+	if got, err := fetchVouchersByMasterIn(recorderTC(nil), nwsCo, port, "20261005", []string{"25795"}, 5); err == nil {
+		t.Fatalf("asked of a Tally that does not have the company open: %v", got)
+	}
+	if f.n(vchObjectID) != n0 {
+		t.Fatalf("the object export was sent for a company not open: %v", f.ids())
+	}
+	closed = false
+	if got, err := fetchVouchersByMasterIn(recorderTC(nil), nwsCo, port, "20261005", []string{"25795"}, 5); err != nil || got["25795"] == "" {
+		t.Fatalf("the company open: %v %v", got, err)
+	}
+	ids := f.ids()
+	if len(ids) < 2 || ids[len(ids)-1] != vchObjectID || ids[len(ids)-2] != "TDSDeskCompanies" {
+		t.Fatalf("the company list is not asked right before the object export: %v", ids)
 	}
 }

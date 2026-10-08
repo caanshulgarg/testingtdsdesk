@@ -175,9 +175,10 @@ func TestSlow232FreezeDoesNotMark(t *testing.T) {
 	retryDue()
 	slowLook()
 	retryDue()
-	liveUploadOnce() // 2.3.4 (option (a)): ended at its first stop with the Day Book words, never asked again
-	if n := f.n(vchObjectID); n != 1 {
-		t.Fatalf("asks in the freeze: %d (want 1: its fetch, stopped, ends the line): %v", n, f.ids())
+	liveUploadOnce()
+	// 2.3.4 (L-d): the company list right before each entry request is stopped too: no entry request goes to a frozen Tally
+	if n := f.n(vchObjectID); n != 0 {
+		t.Fatalf("asks in the freeze: %d (want 0: the company list before it is stopped): %v", n, f.ids())
 	}
 	slowAll(f, 0)
 	retryDue()

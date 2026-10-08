@@ -76,3 +76,28 @@ that covers them (until then release-check check 5 names the files changed after
   (TestFast234RRNotFoundAnswer). Real Tally: tally-real fast234 (6), tally-versions c4d. Needs the owner's sign-off.
 - TestCancelGUIDTallySilentFallsBack (flaky): a cancel / delete check stopped at 2 s now keeps the could-not-be-asked
   words and its ask again whichever came first, the stop or no answer: one outcome, not the timing's.
+
+## The re-review of the fixes (08-Oct-2026), range a107af85..2bf4011d
+
+0 High, 1 Medium, 5 Low. Fixed test first (red, then green) in the commits after it (6e759e66, 8acd8eb9, e08ffc7f,
+bad58bcb, 9b7f20af, 3f0344d0); L-c and L-e left as they are (safe side). With them, the owner's answers of 08-Oct-2026 ("Delete fix: yes";
+"A, 'slow company' marking ends: yes"; "B: one more ask"). Those commits are NOT yet independently reviewed: the
+coordinator's third review writes the range that covers them.
+- N-M1: an older bridge's held cancel / delete proven by its one fast ask: exactly one ":resolved" (the :resolved ids
+  this version sends are kept, .mine.txt) (TestFast234RROldDeleteProvenOnce, TestFast234RROldCancelProvenOnce: the
+  reviewer's probe made permanent).
+- L-a: tally-ingest's 30-day read takes created / altered / imported rows only (run_recorder_held30.py: 900 held
+  cancels and deletes with the slow words).
+- L-b: a MasterID with a leading zero is never asked (TestFast234RRNotFoundAnswer).
+- L-d: a delete is proven by "Could not find Voucher" only asked a second time with the company open (its held GUID)
+  right before and after (fastProveGone; TestFast234RRNotFoundNeedsCompanyOpen). Real Tally (push-design runs
+  37791747092 and 37802765912, 3.0 to 7.1): a company not open is never answered "Could not find"; Tally crashes
+  ("Software Exception c0000005") and answers nothing more. Every object export now goes only right after a fresh
+  company list names the company (fastCompanyListed; TestFast234ObjectOnlyForAListedCompany). A HIGH found by the
+  measurement, fixed in 3f0344d0; for the third review.
+- Tests made deterministic (the coordinator's flaky reports): TestBacklog233OldLinesAskedOnceOneAtATime (a 20 ms margin
+  between the stop and the stand's answer), TestH1RetryCancelAfterTwoSecondStop and TestH1DeleteTallyCannotBeAskedHeld
+  (the turn's deadline at the same 2 s as the stop), TestLedgerListGivesWayToPosting (the stands' TallyAbandonMaxSec 0:
+  the closed request counted by the stand until it noticed; the shipped 600 holds the lock, now tested).
+- B: a stopped fast request: held ("FinCom asks once more at HH:MM"), asked once more 5 minutes later, a second stop
+  ends it; two fast asks a line at most, across a restart (fast234b_test.go).
