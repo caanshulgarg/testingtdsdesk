@@ -73,7 +73,7 @@ function Status({ b, days }) {
   if (k) bits.push(k + (k === 1 ? " day needs" : " days need") + " a Day Book");
   // Update now where it already was (the bridge here, or the firm's Tally computer through the cloud): nothing new is asked
   const can = n > 0 && ((typeof Bridge === "object" && Bridge.on() && Bridge.up()) || (typeof TCloud === "object" && S.coId && TCloud.has(S.coId)));
-  return <p className="up-status" style={{ margin: "0 0 12px" }}><b data-up-status="">{bits.join(" · ")}</b>
+  return <p className="up-status" style={{ margin: "10px 0 12px" }}><b data-up-status="">{bits.join(" · ")}</b>
     {can && <>{" "}<button className="linkbtn" data-update-now="" onClick={() => doAct("keepNow")}>Update now</button></>}</p>;
 }
 
