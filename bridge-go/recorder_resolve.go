@@ -529,7 +529,14 @@ type heldLine struct {
 	// *.ended.txt), listed by FinCom again: asked once more with the fast request; its ":resolved" goes again when Tally gives
 	// the entry (the cloud's second ":resolved" row replaces both held rows); never asked a third time
 	FastAgain bool
+	// 2.3.4 (a live finding on NWS144, 08-Oct-2026: lines an older bridge left at 20 tries or final were never asked and
+	// never ended): set on every line this version keeps; a line without it came from an older bridge and gets exactly
+	// one ask with the fast request on the upgrade, whatever its old tries or final
+	V234 bool
 }
+
+// 2.3.4: the words a held line ends with when Tally's voucher is not its entry or there is nothing to ask Tally by
+const liveHeldFinalEnd = "; upload that day's Day Book to settle it"
 
 // 2.3.3: the asks a held line may have
 func (h heldLine) allow() int {
@@ -556,7 +563,7 @@ func liveHeldLoad() (M, map[string]heldLine) {
 			LineGuid: str(e["lineGuid"]), LineFid: str(e["lineFid"]), Mismatch: truthy(e["idsMismatch"]), Final: truthy(e["final"]), LineAlter: toI64(e["lineAlter"]),
 			Cloud: truthy(e["fromFinCom"]), KeepGuid: str(e["keepGuid"]), KeepAlter: str(e["keepAlter"]), Refetch: truthy(e["refetch"]), TriesVer: str(e["triesVersion"]), Again: truthy(e["again"]), LedgerAgain: truthy(e["ledgerAgain"]), Slow: toInt(e["slow"]),
 			Fresh: truthy(e["fresh"]), FreshTries: toInt(e["freshTries"]), FreshSlow: truthy(e["freshSlow"]), Allow: toInt(e["allow"]), Asked: toInt(e["asked"]),
-			FastAgain: truthy(e["fastAgain"])}
+			FastAgain: truthy(e["fastAgain"]), V234: truthy(e["v234"])}
 	}
 	return all, items
 }
@@ -568,7 +575,7 @@ func liveHeldSave(all M, items map[string]heldLine) {
 			"added": h.Added, "last": h.Last, "tries": h.Tries, "event": h.Ev, "why": liveCapWhy(h.Why), "lineGuid": h.LineGuid, "lineFid": h.LineFid,
 			"idsMismatch": h.Mismatch, "final": h.Final, "lineAlter": h.LineAlter, "fromFinCom": h.Cloud,
 			"keepGuid": h.KeepGuid, "keepAlter": h.KeepAlter, "refetch": h.Refetch, "triesVersion": h.TriesVer, "again": h.Again, "ledgerAgain": h.LedgerAgain, "slow": h.Slow,
-			"fresh": h.Fresh, "freshTries": h.FreshTries, "freshSlow": h.FreshSlow, "allow": h.Allow, "asked": h.Asked, "fastAgain": h.FastAgain}
+			"fresh": h.Fresh, "freshTries": h.FreshTries, "freshSlow": h.FreshSlow, "allow": h.Allow, "asked": h.Asked, "fastAgain": h.FastAgain, "v234": h.V234}
 	}
 	all["items"] = o
 	if err := saveFile(liveHeldFile(), jsonText(all)); err != nil {
@@ -593,7 +600,7 @@ func liveHeldAdd(cs []*change) {
 		if strings.Contains(c.heldWhy, "was not saved after this line") {
 			mid = "" // review H2: the voucher with that MasterID is not this line's entry: asked by its number only
 		}
-		items[c.lineId] = heldLine{ID: c.lineId, Company: c.company, CGUID: c.companyGuid, Type: c.vchType, No: c.vchNo, Date: c.vchDate, MID: mid,
+		items[c.lineId] = heldLine{V234: true, ID: c.lineId, Company: c.company, CGUID: c.companyGuid, Type: c.vchType, No: c.vchNo, Date: c.vchDate, MID: mid,
 			At: c.at, Added: now, Last: now, Ev: c.event, Why: c.heldWhy, LineGuid: c.lineGuid, LineFid: c.lineFid, Mismatch: c.idsMismatch,
 			Final: c.heldFinal || (mid == "" && c.vchNo == ""), LineAlter: c.lineAlter, KeepGuid: c.guidKeep, KeepAlter: c.alterKeep}
 		if c.slowHeld {
@@ -745,7 +752,7 @@ func liveRescanFiles(scannedBefore bool) []heldLine {
 		} else if mismatch {
 			lg = m.PreGUID
 		}
-		out = append(out, heldLine{ID: id, Company: strings.TrimSpace(m.CName), CGUID: liveGUID(strings.TrimSpace(m.CGUID)), Type: cutRunes(strings.TrimSpace(m.VType), 200),
+		out = append(out, heldLine{V234: true, ID: id, Company: strings.TrimSpace(m.CName), CGUID: liveGUID(strings.TrimSpace(m.CGUID)), Type: cutRunes(strings.TrimSpace(m.VType), 200),
 			No: cutRunes(strings.TrimSpace(m.VNo), 200), Date: normDate(m.VDate), MID: mid, At: at.Format(time.RFC3339), Ev: ev, Mismatch: mismatch,
 			LineGuid: cut(cleanGUID(lg), 80), LineAlter: toI64(onlyDigits(m.PreAID))})
 	}
@@ -879,9 +886,19 @@ func liveResolveTurn() {
 	prevLast := map[string]string{} // the line's last ask before this turn's: put back when Tally did not answer in time
 	refetchAsked := 0
 	spKnown := map[string]bool{}
+	upgraded := 0
 	for _, id := range ids {
 		h := items[id]
 		rid := id + ":resolved"
+		if !h.V234 {
+			// 2.3.4: a line an older bridge kept (tries 20, final, refetch, any ask count): one ask with the fast request now
+			// (FastAgain: its one ask is this version's, whatever an older bridge sent or ended; Added now: not dropped as 7 days old)
+			h.V234, h.FastAgain, h.Tries, h.Final, h.Asked, h.Allow, h.Slow, h.Last, h.Why = true, true, 0, false, 0, 1, 0, "", ""
+			h.Added = now.Format(time.RFC3339)
+			items[id] = h
+			changed = true
+			upgraded++
+		}
 		live.mu.Lock()
 		liveFresh()
 		done := live.sent[rid] && (!h.Again || live.items231[rid]) && !liveLedgerAgainDue(h) // 2.3.1 review H1: an older bridge's resolution is not this one
@@ -911,20 +928,17 @@ func liveResolveTurn() {
 			changed = true
 			continue
 		}
-		if waiting || h.Final || len(ask) >= 10 {
-			switch {
-			case len(ask) >= 10 && !waiting && !h.Final:
-				liveSay(h.Type, h.No, h.Date, h.MID, id, "not asked this turn: 10 held lines asked already; asked in a later turn")
-			}
+		// 2.3.4: never left for ever: a line that used its tries ends now with the Day Book words (an older bridge's line
+		// at 20 tries was asked once above first)
+		if !waiting && !h.Final && h.Tries >= liveHeldMaxTries {
+			ends = append(ends, heldEnd{h, liveHeldGiveUp})
+			delete(items, id)
+			changed = true
 			continue
 		}
-		// 2.2.2 (the owner's condition a): asked again 20 times at most, then left held with plain words
-		if h.Tries >= liveHeldMaxTries {
-			if h.Why != liveHeldGiveUp {
-				h.Why = liveHeldGiveUp
-				items[id] = h
-				changed = true
-				liveSay(h.Type, h.No, h.Date, h.MID, id, "held: "+liveHeldGiveUp)
+		if waiting || h.Final || len(ask) >= 10 {
+			if len(ask) >= 10 && !waiting && !h.Final {
+				liveSay(h.Type, h.No, h.Date, h.MID, id, "not asked this turn: 10 held lines asked already; asked in a later turn")
 			}
 			continue
 		}
@@ -968,6 +982,9 @@ func liveResolveTurn() {
 		liveHeldSave(all, items)
 	}
 	heldMu.Unlock()
+	if upgraded > 0 {
+		writeLog(fmt.Sprintf("Recorder: %d held line(s) kept by an earlier bridge are asked once with the fast request (whatever their earlier tries): answered, each goes to FinCom with Tally's body; else it ends with the Day Book words", upgraded))
+	}
 	for _, e := range ends {
 		liveHeldEnd(e.h, e.why)
 	}
@@ -1149,6 +1166,14 @@ func liveResolveTurn() {
 				continue
 			}
 		}
+		if r.final && h.FastAgain {
+			// 2.3.4: its one ask again (an older bridge's line, or one 2.3.3 ended) found Tally's voucher is not its entry:
+			// it ends now with the Day Book words, never left held unasked
+			w := or(liveCapWhy(r.why), "Tally's voucher is not this line's entry")
+			ends2 = append(ends2, heldEnd{h, strings.TrimSuffix(w, liveHeldFinalEnd) + liveHeldFinalEnd})
+			delete(items, r.id)
+			continue
+		}
 		if r.final {
 			h.Final = true
 			if r.why != "" {
@@ -1199,7 +1224,9 @@ func liveHeldEnd(h heldLine, words string) {
 		lineGuid: h.LineGuid, lineFid: h.LineFid, idsMismatch: h.Mismatch, guidHeld: ev == "deleted" || ev == "cancelled"}
 	live.mu.Lock()
 	liveFresh()
-	if !live.sent[rid] && !live.queued[rid] && !live.ended[h.ID] {
+	// 2.3.4 (review L4): a line asked once more (an earlier bridge ended it, or kept it) whose ask fails sends its
+	// ":resolved" with the Day Book words again: FinCom then holds two and stops listing it
+	if !live.queued[rid] && (h.FastAgain || (!live.sent[rid] && !live.ended[h.ID])) {
 		liveQueueAdd(c)
 	}
 	liveEndedNote(h.ID)
@@ -1287,7 +1314,7 @@ func applyHeldLines(j M) {
 		if mid == "" && (no == "" || !liveNumberText(no) || !liveNumberText(typ)) {
 			continue // nothing to ask Tally by
 		}
-		cs = append(cs, heldLine{ID: id, Company: co, CGUID: cg, Type: typ, No: no, Date: date, MID: mid, At: now, Added: now, Ev: ev, Cloud: true})
+		cs = append(cs, heldLine{V234: true, ID: id, Company: co, CGUID: cg, Type: typ, No: no, Date: date, MID: mid, At: now, Added: now, Ev: ev, Cloud: true})
 	}
 	if len(cs) == 0 {
 		return
@@ -1383,7 +1410,7 @@ func applyRefetch(j M) {
 		if mid == "" && (no == "" || !liveNumberText(no) || !liveNumberText(typ)) {
 			continue // nothing to ask Tally by
 		}
-		cs = append(cs, heldLine{ID: id, Company: co, CGUID: cg, Type: typ, No: no, Date: date, MID: mid, At: now, Added: now, Ev: ev, Cloud: true, Refetch: true,
+		cs = append(cs, heldLine{V234: true, ID: id, Company: co, CGUID: cg, Type: typ, No: no, Date: date, MID: mid, At: now, Added: now, Ev: ev, Cloud: true, Refetch: true,
 			LedgerAgain: truthy(e["ledgerAgain"])})
 	}
 	live.mu.Lock()

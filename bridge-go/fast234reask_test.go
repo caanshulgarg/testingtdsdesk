@@ -114,8 +114,8 @@ func TestFast234EndedLineRefetchOnce(t *testing.T) {
 	}
 }
 
-// --- its one ask is not answered in time: nothing more goes up (its held ":resolved" row is FinCom's already), and it is
-// never asked again, whatever FinCom lists
+// --- its one ask is not answered in time: its ":resolved" goes up once more, held with the Day Book words and no body
+// (review L4: FinCom then holds two and stops listing it), and it is never asked again, whatever FinCom lists
 func TestFast234EndedLineReaskTimesOut(t *testing.T) {
 	_, f, c := r222bBridge(t, `,"RecorderLimitMs":200`)
 	retryReset()
@@ -132,8 +132,11 @@ func TestFast234EndedLineReaskTimesOut(t *testing.T) {
 			t.Fatalf("round %d: %d asks (want 1)", i, n)
 		}
 	}
-	if n, _ := fastBodied(c, "nws-25732:resolved"); n != 0 {
-		t.Fatalf("a second held row went up: %d", n)
+	if n, b := fastBodied(c, "nws-25732:resolved"); n != 1 || b != 0 {
+		t.Fatalf("the second held row: %d sent, %d with body (want 1, 0)", n, b)
+	}
+	if s := r222cSentID(c, "nws-25732:resolved"); len(s) != 1 || !strings.Contains(str(s[0]["heldWhy"]), "upload that day's Day Book to settle it") {
+		t.Fatalf("its words: %v", s)
 	}
 }
 
@@ -260,5 +263,59 @@ func TestFast234ByNumberStopsDoNotMark(t *testing.T) {
 	readAndUploadAll(t)
 	if s := slowSentOf(c, 25770); len(s) == 0 || str(s[len(s)-1]["xml"]) == "" {
 		t.Fatalf("the entry by MasterID: %v", s)
+	}
+}
+
+// --- 2.3.4 (a live finding on NWS144, 08-Oct-2026: of ~53 held lines only 8 were asked in the first hour): a held line
+// from an older bridge (2.3.2's file: tries 20, final, refetch) is never skipped for ever. On the upgrade each gets exactly
+// one ask with FinComVoucherObject whatever its old tries or final: Tally gives the entry, it goes as ":resolved" with its
+// body; else (or nothing to ask by) it ends with the Day Book words. Asked once, never again, after a restart too
+func TestFast234OlderHeldLinesAskedOnce(t *testing.T) {
+	_, f, c := r222bBridge(t, "")
+	r222Vch(f, 25780, "Journal", "", "20261005", 54580)
+	r222Vch(f, 25781, "Journal", "", "20261005", 54581)
+	r222Vch(f, 25782, "Journal", "", "20261005", 54582)
+	yest := nowFn().Add(-20 * time.Hour).Format(time.RFC3339)
+	last := nowFn().Add(-2 * time.Hour).Format(time.RFC3339)
+	item := func(mid string, tries int, final, refetch bool, why string) M {
+		return M{"company": nwsCo, "companyGuid": nwsGUID, "type": "Journal", "no": "", "date": "20261005", "masterId": mid, "savedAt": yest, "added": yest,
+			"last": last, "tries": tries, "event": "created", "why": why, "lineGuid": "", "lineFid": "", "idsMismatch": false, "final": final, "lineAlter": 0,
+			"fromFinCom": refetch, "keepGuid": "", "keepAlter": "", "refetch": refetch, "triesVersion": "2.3.2", "again": false, "ledgerAgain": false, "slow": 1}
+	}
+	items := M{
+		"old-tries20": item("25780", 20, false, false, liveHeldGiveUp),
+		"old-final":   item("25781", 3, true, false, "Tally gave no voucher with MasterID 25781 of 05-Oct-2026"),
+		"old-refetch": item("25782", 20, false, true, "the entry was not read from Tally"),
+		"old-nothing": item("", 0, true, false, "the line has no MasterID, so Tally cannot be asked for its entry"),
+	}
+	if err := saveFile(liveHeldFile(), jsonText(M{"items": items})); err != nil {
+		t.Fatal(err)
+	}
+	fastRestart()
+	for i := 0; i < 6; i++ {
+		fastTurns(2)
+	}
+	if n := f.n(vchObjectID); n != 3 {
+		t.Fatalf("asked %d times by the fast request (want 3: one each): %v", n, f.ids())
+	}
+	for _, id := range []string{"old-tries20", "old-final", "old-refetch"} {
+		if n, b := fastBodied(c, id+":resolved"); n != 1 || b != 1 {
+			t.Fatalf("%s: %d sent, %d with Tally's body", id, n, b)
+		}
+	}
+	if s := r222cSentID(c, "old-nothing:resolved"); len(s) != 1 || !strings.Contains(str(s[0]["heldWhy"]), "Day Book") {
+		t.Fatalf("the line with nothing to ask by is not ended with the Day Book words: %v", s)
+	}
+	for _, restart := range []bool{false, true} {
+		if restart {
+			fastRestart()
+		}
+		fastTurns(3)
+	}
+	if n := f.n(vchObjectID); n != 3 {
+		t.Fatalf("asked again: %d", n)
+	}
+	if _, left := liveHeldLoad(); len(left) != 0 {
+		t.Fatalf("lines left in the held list (skipped, never ended): %v", left)
 	}
 }
