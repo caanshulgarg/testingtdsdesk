@@ -1338,6 +1338,16 @@ table.lt tfoot td.lt-count b{color:var(--ink)}
 .alert-line .al-dot{margin-top:0}
 .al-line-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .alert-line .btn{flex:none}
+.alert-line .linkbtn{flex:none}
+/* Clear (08-Oct-2026): on every notification, the bell's Clear all, and the Undo after it */
+.al-clear{min-height:28px;padding:0 6px;color:var(--muted)}
+.al-clear:hover{color:var(--ink)}
+.al-acts .al-clear{margin-left:auto}
+.al-snack{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:120;display:flex;gap:8px;align-items:center;background:var(--ink);color:var(--paper);border-radius:8px;padding:8px 10px 8px 14px;font-size:14px;box-shadow:0 6px 20px rgb(var(--shade) / .25);max-width:calc(100vw - 32px);white-space:nowrap}
+.al-snack .linkbtn{color:var(--brand-tint);min-height:28px;font-weight:600}
+/* a phone: the bell's list across the screen (16 px each side), whatever the bell's place in the top bar; the Undo above
+   the bottom bar */
+@media (max-width:640px){.alerts-panel{position:fixed;left:16px;right:16px;top:64px;width:auto;max-height:calc(100vh - 190px)}.al-acts{flex-wrap:wrap}.al-snack{bottom:112px}}
 /* round 3, part 2: the Tally sign says which computer; on a phone the dot and the computer's name */
 .tsign .tsign-long{max-width:440px;overflow:hidden;text-overflow:ellipsis}
 .tsign .tsign-short{display:none}

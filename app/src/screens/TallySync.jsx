@@ -5,6 +5,7 @@
 import Msg from "../parts/Msg.jsx";
 import ListTable from "../parts/ListTable.jsx";
 import UnknownLedgers from "../parts/UnknownLedgers.jsx";
+import { ClearBtn } from "../parts/Bell.jsx";
 
 const FILTERS = [["all", "All"], ["waiting", "Waiting"], ["held", "Held"], ["mismatch", "Mismatch"], ["today", "Today"]];
 // round 20 (d.4): "queued": the cloud queued the line (over 50 at once); its drain fills the state later
@@ -18,18 +19,25 @@ const STATE_CLS = { applied: "ok", duplicate: "no", stale: "no", replaced: "no",
 //   Being fetched (quiet, grey): FinCom or the bridge is still at it; they enter the books by themselves;
 //   nothing at all when nothing waits.
 const n = (k) => k + (k === 1 ? " entry" : " entries");
+// Clear (08-Oct-2026): each "Needs you" group and the "being fetched" note has a Clear; cleared (by this person: their
+// lines, AlertClear in src/js/63-alerts.js) they are not shown again, until another line comes. The table below keeps
+// every line, with its Apply now: clearing hides the notification only, it never applies or releases a line.
 function SyncFlow({ flow, canApply, busy }) {
-  const { needs, fetching } = flow;
+  const AC = typeof AlertClear === "object" ? AlertClear : null;
+  const needs = flow.needs.map((g) => ({ g, clr: AC ? AC.item("needs:" + g.key, g.lines.map((r) => AlertHub.lineAtom(r)), g.text) : null })).filter(({ clr }) => !clr || !AC.cleared(clr));
+  const fclr = AC && flow.fetching.length ? AC.item("fetching:" + (S.syncClient || "all"), flow.fetching.map(({ r }) => AlertHub.lineAtom(r)), n(flow.fetching.length) + " being fetched from Tally") : null;
+  const fetching = fclr && AC.cleared(fclr) ? [] : flow.fetching;
   if (!needs.length && !fetching.length) return null;
   const reasons = [...new Set(fetching.map((w) => w.why).filter((w) => / is offline$|^Tally not open on /.test(w)))];
   return <>
     {needs.length > 0 && <div className="bk-alert warn" data-sync-needs="" style={{ margin: "0 0 8px" }}>
       <b>Needs you</b>
-      {needs.map((g) => <div key={g.key} data-needs-group={g.key} style={{ margin: "6px 0 0" }}>
+      {needs.map(({ g, clr }) => <div key={g.key} data-needs-group={g.key} style={{ margin: "6px 0 0" }}>
         <span data-needs-text="">{g.text}</span>{" "}
         {g.kind === "daybook" ? (canApply && g.cid && <button className="btn small" data-needs-daybook="" onClick={() => Rec.uploadDay(g.cid, g.day)}>{"Upload the Day Book for " + (g.day ? fmtDate(g.day) : "that day")}</button>)
           : canApply && <button className="btn small" data-needs-apply="" disabled={busy} title={busy ? "Applying the lines already asked for" : undefined} onClick={() => Rec.releaseAll(g.lines)}>Apply now</button>}
         {!canApply && <span className="note">{" (a member of the firm who may write does this)"}</span>}
+        {" "}<ClearBtn x={clr} />
         <details style={{ margin: "2px 0 0" }}><summary className="note" style={{ cursor: "pointer" }}>Which entries</summary>
           {g.lines.map((r) => <div key={r.id} className="note" data-sync-needs-line={String(r.id)}>{Rec.entry(r) + (r.pc ? " from " + r.pc : "") + ", received " + tallyHm(r.received_at) + (r.held_why ? ": " + r.held_why : "")}</div>)}</details>
       </div>)}
@@ -38,6 +46,7 @@ function SyncFlow({ flow, canApply, busy }) {
       {n(fetching.length) + " being fetched from Tally; " + (fetching.length === 1 ? "it enters" : "they enter") + " the books by themselves" + (reasons.length ? " (now: " + reasons.join("; ") + ")" : "") + ". "}
       <details style={{ display: "inline" }}><summary style={{ cursor: "pointer", display: "inline" }}>Which entries</summary>
         {fetching.map(({ r, why }) => <div key={r.id} data-sync-fetching-line={String(r.id)}>{Rec.entry(r) + (r.pc ? " from " + r.pc : "") + ", received " + tallyHm(r.received_at) + (r.state === "held" && r.held_why ? ", not yet entered in the books: " + r.held_why : ": " + why)}</div>)}</details>
+      {" "}<ClearBtn x={fclr} />
     </div>}
   </>;
 }

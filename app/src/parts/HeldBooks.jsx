@@ -6,9 +6,14 @@
 // ledger's view (led) adds the lines for it: "1 entry of 05-Oct-2026 for this ledger is waiting: <reason>", and, for the
 // lines whose ledgers are not known (no entry body), "N entries of <dates> waiting; the ledger is not yet known, so this
 // balance may be incomplete." The words are AlertHub.booksHeld / ledgerHeld (src/js/63-alerts.js), the same as printed.
+// Clear (08-Oct-2026): the banner has a Clear; cleared (by this person: its lines, AlertClear in src/js/63-alerts.js) it
+// is not shown again, until another line is held. Printed reports keep their words (a record, not a notification).
+import { ClearBtn } from "./Bell.jsx";
 export default function HeldBooks({ cid, led, to, where }) {
   const h = typeof booksHeld === "function" ? booksHeld(cid) : null;
   if (!h) return null;
+  const clr = typeof AlertClear === "object" ? AlertClear.item("held:" + cid, (h.lines || []).map((l) => AlertHub.lineAtom(l)), h.text) : null;
+  if (clr && AlertClear.cleared(clr)) return null;
   const go = () => Rec.openActivity(cid, "held");
   const lines = led ? AlertHub.ledgerHeld(cid, led, to) : [];
   // FinCom 2.3.5, one flow with Sync activity (Rec.needKind, src/js/61): yellow and "Needs you" only when a person must
@@ -20,5 +25,6 @@ export default function HeldBooks({ cid, led, to, where }) {
       ? <>{h.text}{" · "}<button className="linkbtn" data-books-held-link="" onClick={go}>See them in Sync activity</button></>
       : <>{h.text.replace(/Sync activity$/, "")}<button className="linkbtn" data-books-held-link="" onClick={go}>Sync activity</button></>}</div>
     {lines.map((x) => <div key={x.kind} data-books-held-led={x.kind}>{x.text}</div>)}
+    <ClearBtn x={clr} />
   </div>;
 }

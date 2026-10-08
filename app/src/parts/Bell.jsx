@@ -2,7 +2,31 @@
 // the count, and the list it opens; and the ONE slim line the Tally page and a client's Books page show. The alerts
 // themselves (one a problem, plain words, the advice that matches the cause, clearing themselves) are AlertHub.list()
 // (src/js/63-alerts.js).
+// Clear (08-Oct-2026, the owner: "There should be option to clear notifications everywhere.. in the bell of desktop even
+// we dont have that option"): a Clear on every notification, Clear all at the top of the bell, and the same Clear on every
+// slim line of the pages (ClearBtn, exported). What is cleared is kept per person (AlertClear, src/js/63-alerts.js: the
+// cloud, migration 68; this browser when not signed in) and never shown again; it changes no data. After a Clear, for a
+// few seconds: "Cleared N notifications · Undo" (UndoSnack).
 import { useState } from "react";
+import { createPortal } from "react-dom";
+
+// the Clear of one notification ({key, fp, text}: an AlertHub alert, or AlertClear.item(...) for a page's own line)
+export function ClearBtn({ x, label = "Clear" }) {
+  if (typeof AlertClear !== "object" || !x || !x.fp) return null;
+  return <button className="linkbtn al-clear" data-alert-clear="" title="Clear: not shown again to you"
+    onClick={(ev) => { ev.stopPropagation(); AlertClear.clear([x]); }}>{label}</button>;
+}
+
+// "Cleared N notifications · Undo", for a few seconds after a Clear
+function UndoSnack() {
+  const u = typeof AlertClear === "object" ? AlertClear.undoShown() : null;
+  if (!u) return null;
+  // on the page's body (above the top bar's layer, the bottom bar and a message at the bottom)
+  return createPortal(<div className="al-snack" role="status" data-alerts-undo="">
+    <span>{"Cleared " + u.n + (u.n === 1 ? " notification" : " notifications") + " · "}</span>
+    <button className="linkbtn" data-alerts-undo-btn="" onClick={() => AlertClear.undoLast()}>Undo</button>
+  </div>, document.body);
+}
 
 const SEV = { bad: "Needs action", warn: "Attention", info: "Information" };
 
@@ -17,6 +41,7 @@ function Item({ x }) {
         {x.act && <button className="btn small" data-alert-act="" onClick={() => { S.alertsOpen = false; x.act.run(); }}>{x.act.label}</button>}
         {!x.selfClear && x.alert && <button className="linkbtn" data-alert-read="" onClick={() => AlertHub.read(x)}>Mark read</button>}
         {x.details && <button className="linkbtn al-more" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Hide details" : "Details"}</button>}
+        <ClearBtn x={x} />
       </div>
       {x.details && <div className="al-details note" data-alert-details="" hidden={!open}>{x.details}</div>}
     </div>
@@ -37,12 +62,17 @@ export default function Bell() {
     {S.alertsOpen && <>
       <button className="menu-scrim" onClick={close} aria-label="Close" />
       <div className="alerts-panel" role="dialog" aria-label="Alerts" data-alerts-panel="">
-        <div className="fm-head"><b>Alerts</b><button className="icon" onClick={close} aria-label="Close">✕</button></div>
+        <div className="fm-head"><b>Alerts</b>
+          <span className="row" style={{ gap: 6, alignItems: "center" }}>
+            {n > 0 && typeof AlertClear === "object" && <button className="btn small" data-alerts-clear-all="" title="Clear every notification here: they are not shown again to you"
+              onClick={() => AlertClear.clear(list)}>Clear all</button>}
+            <button className="icon" onClick={close} aria-label="Close">✕</button></span></div>
         {typeof Rec === "object" && Rec.alerts && Rec.alerts.msg && Rec.alerts.msg.err && <p className="note bad" data-alerts-msg="" style={{ padding: "8px 14px", margin: 0 }}>{Rec.alerts.msg.err}</p>}
         {n ? <ul className="al-list">{list.map((x) => <Item key={x.key} x={x} />)}</ul>
           : <p className="note" style={{ padding: "8px 14px" }}>Nothing needs your attention.</p>}
       </div>
     </>}
+    <UndoSnack />
   </span>;
 }
 
@@ -58,5 +88,6 @@ export function AlertLine({ cid }) {
     <span className="al-line-text">{x.text + (x.fix ? " " + x.fix : "")}</span>
     {x.act && <button className="btn small" data-alert-act="" onClick={() => x.act.run()}>{x.act.label}</button>}
     {all.length > 1 && <button className="linkbtn" onClick={() => { S.alertsOpen = true; render(); }}>{"+" + (all.length - 1) + " more"}</button>}
+    <ClearBtn x={x} />
   </div>;
 }
