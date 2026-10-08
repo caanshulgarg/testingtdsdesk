@@ -316,9 +316,12 @@ StockNames 9000 $co1 | Out-Null
 . (Join-Path $PSScriptRoot 'masterhook233.ps1')
 # next-push (input only=push233): the add-on's full entry at save, no entry request to Tally
 . (Join-Path $PSScriptRoot 'push233.ps1')
+# next-fastfetch (input only=fast234): the fast entry request, two companies from an SMB share, a held backlog
+. (Join-Path $PSScriptRoot 'fast234.ps1')
 try { S231Masters } catch { Write-Host "S231 masters: $_" }
 if ($env:ONLY -eq 'slow232') { try { Slow232Setup } catch { Write-Host "Slow232Setup: $_ $($_.ScriptStackTrace)"; Result 'slow232 setup' $false "the harness stopped: $_" $true } }
 if ($env:ONLY -eq 'backlog233') { try { B233Setup } catch { Write-Host "B233Setup: $_ $($_.ScriptStackTrace)"; Result 'backlog233 setup' $false "the harness stopped: $_" $true } }
+if ($env:ONLY -eq 'fast234') { try { F234Setup } catch { Write-Host "F234Setup: $_ $($_.ScriptStackTrace)"; Result 'fast234 setup' $false "the harness stopped: $_" $true } }
 if ($env:ONLY -eq 'push233') { try { Push233Setup } catch { Write-Host "Push233Setup: $_ $($_.ScriptStackTrace)"; Result 'push233 setup' $false "the harness stopped: $_" $true } }
 
 # ---- user 2's own Tally (9001), run as fcuser2: a company made by keys, then started again with it and the add-on
@@ -366,9 +369,12 @@ function SeedJson($key, [int]$tport) { $tp = if ($rdp) { 'auto' } else { @($tpor
   if ($tport -eq 9000 -and ($env:ONLY -in @('slow232', 'backlog233')) -and $Slow232St.ok) { $o.TallyHost = '127.0.0.2' }
   # push233: the same proxy, so every entry request bridge 1 sends is counted at the stand
   if ($tport -eq 9000 -and $env:ONLY -eq 'push233' -and $P233.ok) { $o.TallyHost = '127.0.0.2' }
+  # fast234: the same proxy (every request of bridge 1 timed and counted)
+  if ($tport -eq 9000 -and $env:ONLY -eq 'fast234' -and $F234.ok) { $o.TallyHost = '127.0.0.2' }
   ($o | ConvertTo-Json -Compress) }
 $h1 = Join-Path $env:LOCALAPPDATA 'TDS Desk Bridge'; New-Item -ItemType Directory -Force $h1 | Out-Null
 Set-Content "$h1\tds-bridge.config.json" (SeedJson 'spike-computer-key-user1' 9000) -Encoding UTF8
+if ($env:ONLY -eq 'fast234') { try { F234Seed $h1 } catch { Write-Host "F234Seed: $_"; Result 'fast234 seed' $false "the harness stopped: $_" $true } }
 if ($env:ONLY -eq 'backlog233') { try { B233Seed $h1 } catch { Write-Host "B233Seed: $_"; Result 'backlog233 seed' $false "the harness stopped: $_" $true } }
 $p = Start-Process -FilePath $setup -ArgumentList '/S', '/CURRENTUSER', '/MODE=sole' -PassThru; $null = $p.Handle
 if (-not $p.WaitForExit(300000)) { Write-Host 'setup (user 1) did not end' }
@@ -712,6 +718,7 @@ if ($env:ONLY -eq 's5r1') { try { S231Only } catch { Write-Host "S231Only: $_ $(
 elseif ($env:ONLY -eq 'pileup') { try { PileUp } catch { Write-Host "PileUp: $_ $($_.ScriptStackTrace)"; Result 'pile-up measurements' $false "the harness stopped: $_" $true } }
 elseif ($env:ONLY -eq 'slow232') { try { Slow232 } catch { Write-Host "Slow232: $_ $($_.ScriptStackTrace)"; Result 'slow232' $false "the harness stopped: $_" $true } }
 elseif ($env:ONLY -eq 'backlog233') { try { Backlog233 } catch { Write-Host "Backlog233: $_ $($_.ScriptStackTrace)"; Result 'backlog233' $false "the harness stopped: $_" $true } }
+elseif ($env:ONLY -eq 'fast234') { try { Fast234 } catch { Write-Host "Fast234: $_ $($_.ScriptStackTrace)"; Result 'fast234' $false "the harness stopped: $_" $true } }
 elseif ($env:ONLY -eq 'push233') { try { Push233 } catch { Write-Host "Push233: $_ $($_.ScriptStackTrace)"; Result 'push233' $false "the harness stopped: $_" $true } }
 elseif ($env:ONLY -match '^(userfile|masterhook)(,(userfile|masterhook))?$') {
   # next-userfile / next-masterhook: one or both (only=userfile,masterhook with a ref holding both)
@@ -736,6 +743,7 @@ Stop-Process -Id $stub.Id -Force -ErrorAction SilentlyContinue
 if ($Slow232St.proxy) { Stop-Process -Id $Slow232St.proxy.Id -Force -ErrorAction SilentlyContinue }
 if ($P233.proxy) { Stop-Process -Id $P233.proxy.Id -Force -ErrorAction SilentlyContinue }
 if ($env:ONLY -eq 'push233') { & net.exe share p233share /DELETE /Y 2>&1 | Out-Null }
+if ($env:ONLY -eq 'fast234') { & net.exe share fast234share /DELETE /Y 2>&1 | Out-Null }
 Write-Host '== results'; Get-Content $resultsFile | Write-Host
 Get-ChildItem "$fc\shots" -Filter *.png -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName (Join-Path $env:SHOTS "r4u2-$($_.Name)") }
 Write-Host '== round 4 end'

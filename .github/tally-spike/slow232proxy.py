@@ -12,7 +12,7 @@ PORT = int(sys.argv[1]); LOG = sys.argv[2]
 # busy then; said as such in the results). No file: nothing is delayed
 DELAYS = LOG + '.delay.json'
 def delay_for(i, co):
-    if i not in ('FinComVoucherByMaster', 'FinComVoucherByNumber', 'FinComLedgers') or not os.path.exists(DELAYS):
+    if i not in ('FinComVoucherByMaster', 'FinComVoucherByNumber', 'FinComVoucherObject', 'FinComLedgers') or not os.path.exists(DELAYS):
         return 0
     try:
         return int((json.load(open(DELAYS, encoding='utf-8')) or {}).get(co, 0))
@@ -25,10 +25,12 @@ def info(b):
         try: s = b[:40000].decode('utf-16', 'replace')
         except Exception: pass
     m = re.search(r'<ID>([^<]*)</ID>', s) or re.search(r'<REPORTNAME>([^<]*)</REPORTNAME>', s)
+    # next-fastfetch (fast234): the object export of one voucher carries no collection ID: named as the bridge names it
+    obj = '<TYPE>Object</TYPE>' in s and '<SUBTYPE>Voucher</SUBTYPE>' in s
     t = re.search(r'<TALLYREQUEST>([^<]*)</TALLYREQUEST>', s)
     c = re.search(r'<SVCURRENTCOMPANY>([^<]*)</SVCURRENTCOMPANY>', s)
-    mid = re.search(r'\$MasterID = (\d+)', s)
-    return (m.group(1) if m else ''), (t.group(1) if t else ''), (html.unescape(c.group(1)) if c else ''), (mid.group(1) if mid else '')
+    mid = re.search(r'\$MasterID = (\d+)', s) or re.search(r'<ID TYPE="Name">ID:(\d+)</ID>', s)
+    return ('FinComVoucherObject' if obj else (m.group(1) if m else '')), (t.group(1) if t else ''), (html.unescape(c.group(1)) if c else ''), (mid.group(1) if mid else '')
 class H(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
     def go(self, method):

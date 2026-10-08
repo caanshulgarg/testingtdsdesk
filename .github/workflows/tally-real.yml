@@ -17,7 +17,7 @@ on:
         description: 'yes: run probe.ps1 (screens and exports of Tally for the scenario list) instead of round 4; probe233: run probe233.ps1 (bridge 2.3.3 items b and c: the Windows user inside Tally, the master forms)'
         default: 'no'
       only:
-        description: 'round 4 in part: s5r1 = S5 by the screens and R1 only (no checks 1-8); pileup = the busy-Tally measurements A and B (B3: abandoned with the connection kept, next-inflight) only; slow232 = bridge 2.3.2: a large company over 2 s marked, no entry request after; backlog233 = bridge 2.3.3: 50 old held lines seeded, a large company over 2 s beside a small one, a new save held within 10 s, one request per old line, none while one is at Tally, the mark, the small entry with its body; userfile = next-userfile: each Windows user''s own recorder file; masterhook = next-masterhook: the master forms'' hooks (userfile,masterhook: both, with a ref holding both); push233 = next-push: the full entry at save, no entry request to Tally (P233_BIG entries in a large company, default 100000)'
+        description: 'round 4 in part: s5r1 = S5 by the screens and R1 only (no checks 1-8); pileup = the busy-Tally measurements A and B (B3: abandoned with the connection kept, next-inflight) only; slow232 = bridge 2.3.2: a large company over 2 s marked, no entry request after; backlog233 = bridge 2.3.3: 50 old held lines seeded, a large company over 2 s beside a small one, a new save held within 10 s, one request per old line, none while one is at Tally, the mark, the small entry with its body; userfile = next-userfile: each Windows user''s own recorder file; masterhook = next-masterhook: the master forms'' hooks (userfile,masterhook: both, with a ref holding both); push233 = next-push: the full entry at save, no entry request to Tally (P233_BIG entries in a large company, default 100000); fast234 = next-fastfetch: the fast entry request (FinComVoucherObject), two companies from an SMB share, a held backlog (F234_VCH entries in the large company, default 40000)'
         default: ''
 permissions:
   contents: write
@@ -46,6 +46,8 @@ jobs:
           # committed setup (a-231 / b-231 / items-231 keep 2.3.0's) is built from source
           # push233 (branch next-push, no version bump: it carries 2.3.2's committed setup) is always built from source
           if [ "${{ inputs.only }}" = "push233" ]; then echo "only=push233: building from source (the ref's committed setup is an older build)"; echo "use=no" >> "$GITHUB_OUTPUT"; exit 0; fi
+          # fast234 (branch next-fastfetch, no version bump: it carries 2.3.3's committed setup) is always built from source
+          if [ "${{ inputs.only }}" = "fast234" ]; then echo "only=fast234: building from source (the ref's committed setup is 2.3.3's)"; echo "use=no" >> "$GITHUB_OUTPUT"; exit 0; fi
           # pileup (next-inflight, no version bump: it carries 2.3.1's committed setup; run 37606559317 installed that one) is
           # always built from source
           if [ "${{ inputs.only }}" = "pileup" ]; then echo "only=pileup: building from source (the ref's committed setup is an older build)"; echo "use=no" >> "$GITHUB_OUTPUT"; exit 0; fi
@@ -92,6 +94,7 @@ jobs:
             rm -f zz_fcspike_req_test.go
           }
           one entry 'voucherByMasterRequest("FinCom Spike Co", "20261001", []string{"99999"})'
+          one entry-object 'voucherObjectRequest("FinCom Spike Co", "99999")'
           one ledger-changes 'ledgerChangesRequest("FinCom Spike Co", 77777, 88888)'
           one ledger-by-name 'ledgerByNameRequest("FinCom Spike Co", "FCSPIKENAME")'
           one ledger-list 'ledgerChunkRequest("FinCom Spike Co", 0, 2000)'
@@ -121,7 +124,7 @@ jobs:
       matrix:
         os: [windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: ${{ inputs.only == 'push233' && 350 || 160 }}
+    timeout-minutes: ${{ (inputs.only == 'push233' || inputs.only == 'fast234') && 350 || 160 }}
     env:
       RES: ${{ github.workspace }}\spike-results\${{ github.run_id }}-${{ matrix.os }}
       SHOTS: ${{ github.workspace }}\spike-results\${{ github.run_id }}-${{ matrix.os }}

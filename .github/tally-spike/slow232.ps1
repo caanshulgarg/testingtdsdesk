@@ -173,7 +173,7 @@ function Slow232Setup {
 }
 
 function S2Proxy { if (Test-Path $Slow232St.proxyLog) { @(Get-Content $Slow232St.proxyLog -Encoding UTF8 | ForEach-Object { try { $_ | ConvertFrom-Json } catch {} }) } else { @() } }
-function S2Entry($r) { $r.id -in 'FinComVoucherByMaster', 'FinComVoucherByNumber' }
+function S2Entry($r) { $r.id -in 'FinComVoucherByMaster', 'FinComVoucherByNumber', 'FinComVoucherObject' }
 # an entry "saved": imported by XML, then its two lines (voucher_accept_pre and _post) written into the add-on's daily file in
 # the add-on's own format, as scen231 R1 and pileup do (run 37588090724: an XML import makes the add-on write no line).
 # Its MasterID is the import's LASTVCHID (checked against Tally's list on the small company, where listing is quick); its
