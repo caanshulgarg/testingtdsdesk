@@ -13,6 +13,7 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -366,5 +367,65 @@ func TestRenumberBelowStartPoint(t *testing.T) {
 	words := "2 entries may have been renumbered in " + nwsCo + "; upload the Day Book from 06-Oct-2026"
 	if !strings.Contains(readText(logFile()), words) {
 		t.Fatalf("the log does not say %q:\n%s", words, readText(logFile()))
+	}
+}
+
+// --- 10. as TallyPrime 3.0 and 7.1 do it (tally-versions run 37765133379): the add-on's delete line carries no GUID, and
+// Tally answers the entry request for a MasterID it no longer has with a bare <ERRORMSG>Could not find Voucher:ID:n!</ERRORMSG>
+// (no envelope), which 2.3.4 took as an answer it could not read (the delete went up held). That answer is "no such voucher" now; and a
+// held delete is a sign as well: the later receipts are read again and sent; an entry
+// FinCom lists that Tally no longer has is passed over (never asked again in a loop)
+func TestRenumberDeleteHeldAsOnRealTally(t *testing.T) {
+	p, f, c := renumBridge(t, "")
+	f.mu.Lock()
+	f.behave = func(w http.ResponseWriter, r *http.Request, id, body string) bool {
+		if id != vchObjectID {
+			return false
+		}
+		want := group(`ID:(\d+)</ID>`, body, 1)
+		for _, v := range f.vch {
+			if v.master == want {
+				return false
+			}
+		}
+		_, _ = w.Write([]byte("<ERRORMSG>Could not find Voucher:ID:" + want + "!</ERRORMSG> ")) // as TallyPrime 3.0 / 7.1 answer it
+		return true
+	}
+	var keep []*tVch
+	for _, v := range f.vch {
+		if v.master == "26312" {
+			continue
+		}
+		if v.typ == "Receipt" && toI64(v.no) > 192 {
+			v.no = fmt.Sprint(toI64(v.no) - 1)
+		}
+		keep = append(keep, v)
+	}
+	f.vch = keep
+	f.mu.Unlock()
+	c.mu.Lock()
+	c.renumReply = func(b M) (int, M) {
+		e := renumCopy(f, str(b["from"]), str(b["no"]), str(b["mid"]))
+		e = append([]any{M{"mid": "26399", "guid": r222GUID(26399), "day": "20261005", "no": "192", "alter": 54399}}, e...) // gone from Tally
+		return 200, M{"ok": true, "entries": e, "more": false}
+	}
+	c.mu.Unlock()
+	liveAppend(t, p, "FCR1|ev=after_delete|t0=5-Oct-2026 07:20|tw=5-Oct-2026 07:20|cguid="+nwsGUID+"|cname="+nwsCo+"|user=owner|obj=Voucher|guid="+
+		"|mid=26312|aid=|vtype=Receipt|vno=192|vdate=5-Oct-2026|name=|parent=|narr=Received again|t1=5-Oct-2026 07:20|src=live")
+	for i := 0; i < 6; i++ {
+		readAndUploadAll(t)
+	}
+	if n := c.count("renumber_list"); n != 1 {
+		t.Fatalf("FinCom asked %d times (want once, the held delete being the sign)", n)
+	}
+	alt := renumAltered(c)
+	if len(alt) != 2 || str(alt["26313"][0]["vch_no"]) != "192" || str(alt["26314"][0]["vch_no"]) != "193" {
+		t.Fatalf("sent %v", alt)
+	}
+	if n := renumAsked(f)["26399"]; n != 1 {
+		t.Fatalf("the entry gone from Tally asked %d times (want once, then passed over)", n)
+	}
+	if !strings.Contains(readText(logFile()), "delete of mid 26312: not in this Tally (asked by MasterID): proven deleted here") {
+		t.Fatalf("Tally's ERRORMSG for a MasterID it has not was not taken as \"no such voucher\":\n%s", readText(logFile()))
 	}
 }

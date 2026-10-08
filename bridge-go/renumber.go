@@ -187,7 +187,9 @@ func renumSignOf(c *change) *renumJob {
 	case c.event == "created" && c.xml != "":
 		// Tally's own type, date, number and MasterID (the body was taken as this line's entry)
 		typ, date, no, mid = tagValue(c.xml, "VOUCHERTYPENAME"), normDate(tagValue(c.xml, "DATE")), tagValue(c.xml, "VOUCHERNUMBER"), onlyDigits(tagNum(c.xml, "MASTERID"))
-	case c.event == "deleted" && !c.guidHeld:
+	case c.event == "deleted":
+		// held or not (a delete this computer's Tally could not prove went up held): its type, date and number are the
+		// line's, and every entry read again is checked against Tally itself, so nothing is sent on the line's word
 		typ, date, no, mid = c.vchType, c.vchDate, c.vchNo, c.masterId
 	default:
 		return nil

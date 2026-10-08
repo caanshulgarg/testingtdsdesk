@@ -1727,6 +1727,12 @@ func fetchVouchersByMasterIn(tc *TC, company string, port int, date string, mids
 	if err != nil {
 		return nil, err
 	}
+	// next-renumber (tally-versions run 37765133379, TallyPrime 3.0 and 7.1): for a MasterID it does not have (a deleted
+	// voucher) Tally answers the object request with a bare <ERRORMSG>Could not find Voucher:ID:n!</ERRORMSG>, no envelope:
+	// that is "no such voucher", as an empty answer is, never an answer that could not be read
+	if !strings.Contains(raw, "<ENVELOPE") && strings.Contains(raw, "Could not find Voucher:ID:"+mids[0]+"!") {
+		return map[string]string{}, nil
+	}
 	if !strings.Contains(raw, "<ENVELOPE") {
 		return nil, errors.New("Tally's answer could not be read: " + cut(flat(raw), 120))
 	}
