@@ -1148,6 +1148,7 @@ func liveResolveTurn() {
 		liveTakeBody(c, x)
 		if (h.FastAgain && !live.queued[rid]) || !liveResolvedDone(rid, h.Again) || (!live.queued[rid] && liveLedgerAgainDue(h)) {
 			c.ledAgain = h.LedgerAgain
+			c.again = liveAgainOf(h) // next-outbox: a deliberate resend says so (FinCom never takes it for a repeat)
 			liveQueueAdd(c)
 		}
 		live.mu.Unlock()
@@ -1251,6 +1252,19 @@ func liveHeldNoAnswer(why string) bool {
 		}
 	}
 	return false
+}
+
+// next-outbox: why a resolution is sent although FinCom has a ":resolved" line of it: "ledger" (FinCom held it waiting for
+// a ledger, now in), "items" (FinCom asked again after an older bridge's resolution, its request without the items'
+// ledger lines); "" otherwise. FinCom keys a repeat by the line id AND this marker (migration 63)
+func liveAgainOf(h heldLine) string {
+	switch {
+	case h.LedgerAgain:
+		return "ledger"
+	case h.Again:
+		return "items"
+	}
+	return ""
 }
 
 // under live.mu: a line FinCom listed again because its ":resolved" line waited for a ledger, not yet sent again by this

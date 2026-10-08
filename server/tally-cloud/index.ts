@@ -92,6 +92,11 @@
 //    alter_id, vch_type, vch_no, vch_date, xml?, ledgers?, save_ms, name?, from?, to?}]} -> {ok, results:[{line_id, state,
 //                                                       why}], applied, held, duplicate, stale, failed}: the add-on's lines
 //                                                       (at most 500 a call; the bridge marks a line sent only on this answer).
+//                                                       next-outbox (migration 63): again ("" | "items" | "ledger", a
+//                                                       bridge after 2.3.1) kept; a repeat of a line FinCom has (the same
+//                                                       computer, line id and again) is answered state duplicate,
+//                                                       already: true, was (the first row's state), never stored again;
+//                                                       the answer counts them in already.
 //                                                       event: created|altered|deleted|cancelled|imported|ledger_created|
 //                                                       ledger_altered|ledger_renamed|ledger_deleted (another: failed here, not
 //                                                       stored); xml: the whole <VOUCHER ...>...</VOUCHER> when the add-on can
@@ -1416,6 +1421,10 @@ function cleanRecorderLine(x: any, me: { id: string }): { line?: Record<string, 
   // bridge 2.3.0 review H1: a cancel / delete the bridge's own Tally does not show happened there (guidHeld): kept held,
   // never resolved from FinCom's record (guidsFromRecord)
   if (x?.guidHeld === true && (event === "deleted" || event === "cancelled")) line.guidHeld = true;
+  // next-outbox (migration 63): a bridge after 2.3.1 sends "again" on every line ("" on a first send, "items" / "ledger" on
+  // a deliberate resend of a ":resolved" line): kept as sent (in the payload too); the database answers a repeat of the
+  // same line id and marker "already have", never storing it twice. An older bridge sends no key: none is added
+  if (typeof x?.again === "string") line.again = s(x.again, 20);
   line.payload = { ...line, xmlBytes: xml.length || undefined };
   if (xml && ["created", "altered", "imported"].includes(event)) {
     if (xml.length > MAX_RECORDER_XML) return { bad: "the entry's XML is larger than FinCom takes (" + xml.length + " characters)" };
@@ -1707,11 +1716,14 @@ async function recorderLines(dev: any, firm: string, book: string, body: any) {
     ((data as any)?.results || []).forEach((r: any, k: number) => {
       if (k >= at.length) return;
       const lid = String(r?.line_id ?? send[k].line_id ?? "");
-      results[at[k]] = { line_id: lid, state: String(r?.state || "failed"), why: r?.why ?? null, ...(found.has(lid) ? { guid: found.get(lid) } : {}) };
+      results[at[k]] = { line_id: lid, state: String(r?.state || "failed"), why: r?.why ?? null, ...(found.has(lid) ? { guid: found.get(lid) } : {}),
+        // migration 63: a repeat of a line FinCom has (the same computer, line id and marker): not stored again
+        ...(r?.already === true ? { already: true, was: String(r?.was || "") } : {}) };
     });
   }
   const out: Record<string, unknown> = { ok: true, results };
   for (const k of ["applied", "held", "duplicate", "stale", "failed"]) out[k] = results.filter((r) => r?.state === k).length;
+  out.already = results.filter((r: any) => r?.already === true).length;     // migration 63: of the duplicates, repeats of lines FinCom had
   if (out.held || out.failed) console.log("tally-ingest recorder_lines", book, JSON.stringify({ n: results.length, held: out.held, failed: out.failed, why: results.filter((r) => r && r.state !== "applied" && r.state !== "duplicate").slice(0, 3).map((r) => r.why) }));
   return reply(200, out);
 }

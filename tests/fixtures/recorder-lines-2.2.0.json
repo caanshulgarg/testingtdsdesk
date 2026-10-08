@@ -12,6 +12,7 @@
   "kind": "recorder_lines",
   "lines": [
     {
+      "again": "",
       "alter_id": 9001,
       "company_guid": "co-guid-1",
       "event": "created",
@@ -43,6 +44,7 @@
       "xml": "<VOUCHER REMOTEID=\"co-guid-1-00001005\" VCHTYPE=\"Payment\"><DATE>20261004</DATE><GUID>co-guid-1-00001005</GUID><MASTERID>4101</MASTERID><ALTERID> 9001</ALTERID><VOUCHERTYPENAME>Payment</VOUCHERTYPENAME><VOUCHERNUMBER>17</VOUCHERNUMBER><PARTYLEDGERNAME>Landlord A</PARTYLEDGERNAME><NARRATION>Rent for October</NARRATION><ISOPTIONAL>No</ISOPTIONAL><ISCANCELLED>No</ISCANCELLED><ALLLEDGERENTRIES.LIST><LEDGERNAME>Landlord A</LEDGERNAME><AMOUNT>25000.00</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>HDFC Bank</LEDGERNAME><AMOUNT>-25000.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>"
     },
     {
+      "again": "",
       "alter_id": 9002,
       "company_guid": "co-guid-1",
       "event": "imported",
@@ -65,6 +67,7 @@
       "xml": ""
     },
     {
+      "again": "",
       "alter_id": 9003,
       "company_guid": "co-guid-1",
       "event": "deleted",
@@ -87,6 +90,7 @@
       "xml": ""
     },
     {
+      "again": "",
       "alter_id": 1,
       "company_guid": "co-guid-1",
       "event": "ledger_created",

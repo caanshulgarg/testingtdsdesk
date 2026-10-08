@@ -164,6 +164,19 @@ type change struct {
 	fresh, freshSlow, dueNow bool
 	freshTries               int
 	queuedAt                 time.Time
+	// next-outbox: every place in the add-on's files this change was read from (a pair's two halves may sit in two daily
+	// files; a line taken in with another of the same save adds its own): each file's offset kept waits for all of them
+	holds []liveAt
+	// next-outbox: a deliberate resend of a ":resolved" line ("items": FinCom asked again after an older bridge's
+	// resolution; "ledger": after a ledger FinCom waited for came in); "" on every other send. FinCom answers a repeat of
+	// the same line id and marker "already have" (migration 63), never stores it twice
+	again string
+}
+
+// a place in the add-on's files: the file and the byte offset a line starts at
+type liveAt struct {
+	file  string
+	start int64
 }
 
 // the fields migration 56 keeps for a body that did not ask them (2.3.0's request): the party GSTIN, place of supply,
@@ -307,6 +320,9 @@ type liveState struct {
 	ownBlind  bool                  // review H1: a look was stopped or backed off since the last complete look (kept on disk)
 	ownWant   bool                  // a line waits for a look at the own Tally
 	ownAskAt  time.Time             // when the reader last asked the own Tally's company list
+	// next-outbox: the day (yyyymmdd) of the oldest daily file read past a line not yet confirmed ("": none): the sent ids
+	// are rotated after 7 days, but never from that day on (kept in sync\recorder-offsets.json)
+	keepFrom string
 }
 
 var (
@@ -349,6 +365,7 @@ func liveFresh() {
 	live.touched, live.logged, live.gapSet, live.lastPost = map[string]map[string]bool{}, map[string]bool{}, false, time.Time{}
 	live.created, live.scanned = map[string][2]string{}, false
 	o := readObjFile(liveOffsetsFile())
+	live.keepFrom = str(o["keepFrom"])
 	for k, v := range obj(o["files"]) {
 		e := obj(v)
 		live.files[k] = &liveFileSt{off: toI64(e["off"]), gen: toInt(e["gen"]), enc: str(e["enc"])}
@@ -410,10 +427,21 @@ func liveFresh() {
 func liveOffsetsFile() string { return sp("recorder-offsets.json") }
 func liveSentDir() string     { return filepath.Join(syncDir(), "recorder-sent") }
 
-// the sent ids of the last 7 days (sync\recorder-sent\<yyyymmdd>.txt, the bridge's own folder); older files removed
+// the oldest day whose sent ids are kept: 7 days back, but (next-outbox) never past the day of a file read past a line
+// not yet confirmed (live.keepFrom, under live.mu)
+func liveSentCut() string {
+	cut := nowFn().AddDate(0, 0, -7).Format("20060102")
+	if live.keepFrom != "" && live.keepFrom < cut {
+		cut = live.keepFrom
+	}
+	return cut
+}
+
+// the sent ids of the last 7 days (sync\recorder-sent\<yyyymmdd>.txt, the bridge's own folder); older files removed, and
+// (next-outbox) only once every line before them is confirmed
 func liveLoadSent() []string {
 	var ids []string
-	cut := nowFn().AddDate(0, 0, -7).Format("20060102")
+	cut := liveSentCut()
 	m, _ := filepath.Glob(filepath.Join(liveSentDir(), "*.txt"))
 	for _, f := range m {
 		day := strings.TrimSuffix(filepath.Base(f), ".txt")
@@ -443,6 +471,9 @@ func liveLoadIds(suffix string) []string {
 		days = liveFastKeepDays
 	}
 	cut := nowFn().AddDate(0, 0, -days).Format("20060102")
+	if c := liveSentCut(); c < cut {
+		cut = c // next-outbox: never past a file still read past a line not yet confirmed
+	}
 	m, _ := filepath.Glob(filepath.Join(liveSentDir(), "*"+suffix))
 	for _, f := range m {
 		day := strings.TrimSuffix(filepath.Base(f), suffix)
@@ -536,7 +567,7 @@ func liveSaveOffsets() {
 		live.mu.Unlock()
 		return
 	}
-	files := M{}
+	files, keepFrom := M{}, ""
 	for name, st := range live.files {
 		off := st.off
 		for _, p := range live.pending {
@@ -545,11 +576,25 @@ func liveSaveOffsets() {
 			}
 		}
 		for _, c := range live.queue {
-			if c.file == name && c.start < off {
-				off = c.start
+			for _, h := range c.liveHolds() {
+				if h.file == name && h.start < off {
+					off = h.start
+				}
 			}
 		}
 		files[name] = M{"off": off, "gen": st.gen, "enc": st.enc}
+		// next-outbox: a file read past a line not yet confirmed: the sent ids from its day on are kept (a restart reads it
+		// again from that line, and every line after it that went must be known as sent). A file without a day in its name
+		// (failed.txt): every sent id is kept until it is confirmed
+		if off < st.off {
+			d := liveFileDay(name)
+			if d == "" {
+				d = "00000000"
+			}
+			if keepFrom == "" || d < keepFrom {
+				keepFrom = d
+			}
+		}
 	}
 	bs := M{}
 	for k, st := range live.b {
@@ -577,8 +622,13 @@ func liveSaveOffsets() {
 		cs[k] = e
 	}
 	path := liveOffsetsFile()
+	live.keepFrom = keepFrom
 	live.mu.Unlock()
-	if err := saveFile(path, jsonText(M{"files": files, "alterid": bs, "slices": cs, "at": nowS()})); err != nil {
+	o := M{"files": files, "alterid": bs, "slices": cs, "at": nowS()}
+	if keepFrom != "" {
+		o["keepFrom"] = keepFrom
+	}
+	if err := saveFile(path, jsonText(o)); err != nil {
 		writeLog("Recorder: " + path + " could not be written: " + err.Error())
 	}
 }
@@ -691,7 +741,8 @@ func liveFiles() []string {
 		if d := liveFileDay(n); d != "" {
 			day = d
 		}
-		if day > to || day < oldest || (day < from && !liveUnread(n, fi.Size())) {
+		// next-outbox: a file read before and not read to its end (a line in it not yet confirmed) is read whatever its age
+		if day > to || (day < oldest && !liveHeldBack(n, fi.Size())) || (day < from && !liveUnread(n, fi.Size())) {
 			continue
 		}
 		out = append(out, df{day, f})
@@ -716,6 +767,26 @@ func liveUnread(name string, size int64) bool {
 	liveFresh()
 	st := live.files[name]
 	return st == nil || size > st.off
+}
+
+// next-outbox: a file the reader has read before whose offset kept is below its size (a line in it not yet confirmed)
+func liveHeldBack(name string, size int64) bool {
+	live.mu.Lock()
+	defer live.mu.Unlock()
+	liveFresh()
+	st := live.files[name]
+	return st != nil && size > st.off
+}
+
+// the places a change holds in the add-on's files (a change made by the bridge itself holds none)
+func (c *change) liveHolds() []liveAt {
+	if len(c.holds) > 0 {
+		return c.holds
+	}
+	if c.file != "" {
+		return []liveAt{{c.file, c.start}}
+	}
+	return nil
 }
 
 // one turn of the reader (the 1 s watch): the new complete lines of each daily file; the changes found
@@ -1044,7 +1115,7 @@ func liveTake(file string, gen int, ll liveLogicalLine, posting bool, held map[s
 		if livePair[p.l.Ev] == l.Ev {
 			delete(live.pending, pk)
 			m, ev := liveMerge(p.l, l)
-			return liveEmit(m, ev, file, gen, p.start, ll.start, ll.end, posting)
+			return liveEmitFrom(m, ev, file, gen, p.file, p.start, ll.start, ll.end, posting)
 		}
 		delete(live.pending, pk)
 		n += liveFlush(p, posting)
@@ -1292,6 +1363,12 @@ func liveTime(s string) time.Time {
 
 // one change queued (under live.mu): its line id; nothing when it was sent before or is queued already
 func liveEmit(l recLine, ev, file string, gen int, start, lineStart, end int64, posting bool) int {
+	return liveEmitFrom(l, ev, file, gen, file, start, lineStart, end, posting)
+}
+
+// liveEmit with the file start lies in (next-outbox: a pair's first half may be in the day before's file; both files'
+// offsets wait for the change)
+func liveEmitFrom(l recLine, ev, file string, gen int, startFile string, start, lineStart, end int64, posting bool) int {
 	if ev == "" {
 		return 0
 	}
@@ -1303,6 +1380,10 @@ func liveEmit(l recLine, ev, file string, gen int, start, lineStart, end int64, 
 		alterId: onlyDigits(l.AID), vchType: cutRunes(strings.TrimSpace(l.VType), 200), vchNo: cutRunes(strings.TrimSpace(l.VNo), 200), vchDate: normDate(l.VDate),
 		name: strings.TrimSpace(l.Name), parent: strings.TrimSpace(l.Parent), narr: l.Narr, user: cutRunes(strings.TrimSpace(l.User), 200), source: "addon", lineId: id,
 		file: file, start: start, saveMs: -1, readAt: nowFn(), during: posting, lineAlter: toI64(onlyDigits(l.PreAID))}
+	c.holds = []liveAt{{startFile, start}}
+	if startFile != file {
+		c.holds = append(c.holds, liveAt{file, lineStart})
+	}
 	c.companyGuid = liveGUID(c.companyGuid)
 	if r := []rune(c.narr); len(r) > liveNarrMax {
 		c.narr = string(r[:liveNarrMax]) // review Low 11
@@ -1441,6 +1522,7 @@ func liveSameSave(c *change) bool {
 			}
 		}
 		q.also = append(q.also, c.lineId)
+		q.holds = append(q.holds, c.holds...) // next-outbox: c's place waits for q's send too
 		live.queued[c.lineId] = true
 		liveDecide(c, "goes with line "+cut(q.lineId, 8)+"… (the other line of the same save)")
 		return true
@@ -2274,7 +2356,9 @@ func (c *change) wire() M {
 	}
 	m := M{"line_id": c.lineId, "event": c.event, "object_guid": c.guid, "master_id": c.masterId, "alter_id": alter, "vch_type": c.vchType, "vch_no": c.vchNo,
 		"vch_date": c.vchDate, "saved_at": c.at, "pc": liveComputerFn(), "user": c.user, "company_guid": c.companyGuid, "ledgers": ls, "narration": narr,
-		"fid": fid, "xml": c.xml, "source": c.source}
+		"fid": fid, "xml": c.xml, "source": c.source,
+		// next-outbox: always there (FinCom knows by it that this bridge marks its deliberate resends): "" on a first send
+		"again": c.again}
 	if c.event == "cancelled" && alter == nil && c.vchCounter > 0 {
 		m["vch_counter"] = c.vchCounter // re-review M-B: FinCom cancels again only a body at or below it
 	}
@@ -2325,6 +2409,17 @@ func liveRecorderLinesBody(company, guid string, group []*change) M {
 		lines = append(lines, c.wire())
 	}
 	return M{"kind": "recorder_lines", "company": company, "company_guid": guid, "lines": lines}
+}
+
+// next-outbox: the results FinCom answered "already have" (a repeat of a line it holds: migration 63)
+func liveAlreadyCount(res []any) int {
+	n := 0
+	for _, x := range res {
+		if truthy(obj(x)["already"]) {
+			n++
+		}
+	}
+	return n
 }
 
 // one step of the uploader: one group sent (its number of lines), or 0
@@ -2656,6 +2751,10 @@ func liveUploadStep() (int, bool) {
 			writeLog(fmt.Sprintf("Recorder: %d line(s) of %s not taken by FinCom (%s); tried again in %ds, nothing is lost", len(group), company, cutRunes(why, 160), int(w)))
 		}
 		return 0, false
+	}
+	// next-outbox: lines FinCom had already (sent before a restart, its answer lost): marked sent like the rest
+	if n := liveAlreadyCount(arr(r.json["results"])); n > 0 {
+		writeLog(fmt.Sprintf("Recorder: %d line(s) of %s FinCom had already (sent before, its answer not kept here): marked sent, not stored again", n, company))
 	}
 	sentIDs := make([]string, 0, len(group))
 	var bodied, items, ledAgain, ended, mine []string
