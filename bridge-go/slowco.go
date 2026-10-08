@@ -1,7 +1,7 @@
 package main
 
 // Bridge 2.3.2 (the owner's requirement c of 07-Oct-2026, issue 232): on a large company Tally takes about 5 s (worst 13 s)
-// to find one entry (FinComVoucherByMaster / FinComVoucherByNumber), so every ask is stopped at 2 s and costs Tally its
+// to find one entry (2.3.4: the fast request FinComVoucherObject replaced FinComVoucherByMaster; only its stops count), so every ask is stopped at 2 s and costs Tally its
 // full time all the same. The bridge measures each company's entry fetch: the time Tally took when it answered, "over
 // 2 s" when the 2 s stop ended it. A company whose entry fetch is stopped on 2 separate occasions while Tally answered
 // other requests in time around each of them is marked "entry fetch stopped: over 2 s": no entry request is sent for it
@@ -216,7 +216,13 @@ func slowNote(port int, x string, sent bool, took time.Duration, err error) {
 		return
 	}
 	id := tallyRequestID(x)
-	entry := id == vchObjectID || id == vchByNumberID
+	// 2.3.4 (the owner's goal, 08-Oct-2026: no company should need marking slow): only the fast entry request
+	// (FinComVoucherObject) counts toward the mark. A line with no MasterID is asked by type and number, a scan of the
+	// company: its stops are neither for nor against (it gets its one try plus one ask again, then the Day Book words)
+	if id == vchByNumberID {
+		return
+	}
+	entry := id == vchObjectID
 	co := ""
 	name := ""
 	if entry {

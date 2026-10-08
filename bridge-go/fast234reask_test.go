@@ -9,6 +9,7 @@ package main
 // is never asked again. A line this version ended is never asked again. Written before the code (red first).
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -218,5 +219,46 @@ func TestFast234EndedKept31Days(t *testing.T) {
 	}
 	if liveFastKeepDays != 31 {
 		t.Fatalf("kept %d days", liveFastKeepDays)
+	}
+}
+
+// --- 2.3.4 (the owner's goal, 08-Oct-2026: no company should need marking slow): only the fast entry request's stops count
+// toward the slow mark. Lines with no MasterID are asked by type and number (FinComVoucherByNumber, a scan of the company):
+// stopped at the limit again and again on separate occasions, they never mark the company; each gets its one try plus one
+// ask again, then ends with the Day Book words; the company's entries by MasterID still go (the fast request)
+func TestFast234ByNumberStopsDoNotMark(t *testing.T) {
+	p, f, c := slow232Bridge(t)
+	f.mu.Lock()
+	f.slow = func(id, body string) time.Duration {
+		if id == vchByNumberID {
+			return 700 * time.Millisecond
+		}
+		return 0
+	}
+	f.mu.Unlock()
+	for i, no := range []string{"N-1", "N-2", "N-3"} {
+		r222Vch(f, int64(25760+i), "Journal", no, "20261005", int64(54560+i))
+		slowLook()
+		liveAppend(t, p, r222Line("voucher_accept_pre", "07:1"+fmt.Sprint(i), nwsGUID+"-00000000", "0", "0", "Journal", no, "5-Oct-2026", "no mid "+no),
+			r222Line("voucher_accept_post", "07:1"+fmt.Sprint(i), nwsGUID+"-00000000", "0", "0", "Journal", no, "5-Oct-2026", "no mid "+no))
+		for k := 0; k < 4; k++ {
+			liveReadOnce()
+			liveUploadOnce()
+			retryDue()
+			slowLook()
+		}
+	}
+	if slowMarked(nwsCo, nwsGUID) {
+		t.Fatalf("marked by the by-number stops (%d by-number asks)", f.n(vchByNumberID))
+	}
+	if f.n(vchByNumberID) < 3 {
+		t.Fatalf("the lines were not asked by number: %v", f.ids())
+	}
+	// the company's entry by MasterID still goes, with its body
+	r222Vch(f, 25770, "Journal", "J-25770", "20261005", 54570)
+	liveAppend(t, p, slowLine(25770, "07:30")...)
+	readAndUploadAll(t)
+	if s := slowSentOf(c, 25770); len(s) == 0 || str(s[len(s)-1]["xml"]) == "" {
+		t.Fatalf("the entry by MasterID: %v", s)
 	}
 }
