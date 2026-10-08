@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -333,7 +332,8 @@ func recorderHolding(company, guid string) (bool, string) {
 	// least one valid recorder line of that GUID (review L6, security L7). The folder is listed at most once in 10 s
 	if plainFileName(guid) {
 		for _, f := range liveDailyFiles(dir) {
-			if g := reLiveFileAnyCase.FindStringSubmatch(filepath.Base(f.name)); g != nil && strings.EqualFold(g[1], guid) && f.mod.After(newest) && dailyHasLine(dir, f, guid) {
+			// next-userfile: <GUID>-<day>-<Windows user>.txt too, this bridge's own user's (userfile.go)
+			if g := reLiveFileUser.FindStringSubmatch(filepath.Base(f.name)); g != nil && strings.EqualFold(g[1], guid) && liveFileMine(filepath.Base(f.name)) && f.mod.After(newest) && dailyHasLine(dir, f, guid) {
 				newest = f.mod
 			}
 		}
@@ -350,13 +350,12 @@ func recorderHolding(company, guid string) (bool, string) {
 }
 
 var (
-	reLiveFileAnyCase = regexp.MustCompile(`(?i)^(.+)-(\d{8}|\d{4}-\d{2}-\d{2}|\d{1,2}-[a-z]{3}-\d{2})\.txt$`) // 2.2.2: d-Mon-yy too
-	dailyMu           sync.Mutex
-	dailyAt           time.Time
-	dailyDirMod       time.Time
-	dailyDir          string
-	dailyList         []dailyFile
-	dailyValid        = map[string]bool{} // name|size|time|guid -> it holds a valid line of that GUID
+	dailyMu     sync.Mutex
+	dailyAt     time.Time
+	dailyDirMod time.Time
+	dailyDir    string
+	dailyList   []dailyFile
+	dailyValid  = map[string]bool{} // name|size|time|guid -> it holds a valid line of that GUID
 )
 
 type dailyFile struct {
