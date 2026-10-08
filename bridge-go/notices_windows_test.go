@@ -25,14 +25,14 @@ func TestNoticesWindowsBalloonDismissedThroughWindowProc(t *testing.T) {
 	tr.gate = g
 	defer func() { tr.gate = old }()
 	id := problemKey{Kind: "offline", Day: "2026-10-08", Computer: "PC-ONE"}.id()
-	wait := func() noticeRec {
+	wait := func(s *noticeStore) noticeRec {
 		for i := 0; i < 100; i++ {
-			if r, _ := g.store.Get(id); r.Dismissed != "" {
+			if r, _ := s.Get(id); r.Dismissed != "" {
 				return r
 			}
 			time.Sleep(10 * time.Millisecond)
 		}
-		r, _ := g.store.Get(id)
+		r, _ := s.Get(id)
 		return r
 	}
 
@@ -45,7 +45,7 @@ func TestNoticesWindowsBalloonDismissedThroughWindowProc(t *testing.T) {
 		t.Fatalf("taken away by the program counted as dismissed: %+v", r)
 	}
 	wndProc(0, wmTray, 0, ninBalloonUserClick)
-	if r := wait(); r.How != "clicked" {
+	if r := wait(g.store); r.How != "clicked" {
 		t.Fatalf("clicked: %+v", r)
 	}
 	// after a restart of the icon: not shown again
@@ -59,7 +59,7 @@ func TestNoticesWindowsBalloonDismissedThroughWindowProc(t *testing.T) {
 	id = problemKey{Kind: "tally", Day: "2026-10-08", Computer: "PC-ONE"}.id()
 	g2.Check(trayProblem{Kind: "tally", Cond: true, Title: "Tally not open", Text: "x"})
 	wndProc(0, wmTray, 0, ninBalloonTimeout)
-	if r := wait(); r.How != "closed" {
+	if r := wait(g2.store); r.How != "closed" {
 		t.Fatalf("closed: %+v", r)
 	}
 }
