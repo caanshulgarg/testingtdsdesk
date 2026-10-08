@@ -274,14 +274,17 @@ func (g *noticeGate) BalloonEvent(code uintptr) {
 	g.store.dismiss(map[string]string{id: strings.SplitN(id, ":", 2)[0]}, how)
 }
 
-// "Clear notifications": every current one (the problems there now, shown or still waiting their while, and the
-// balloon on screen) marked cleared; one already dismissed is not counted again, the balloon on screen taken away; how many
+// "Clear notifications": every current one shown (the problems there now whose notification was shown, and the balloon
+// on screen) marked cleared; one already dismissed is not counted again. A problem still waiting its while was never
+// seen: it is left alone and still shows, once, when due (review Low, 08-Oct), the balloon on screen taken away; how many
 func (g *noticeGate) ClearAll() int {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	ids := map[string]string{}
 	for kind, id := range g.current {
-		ids[id] = kind
+		if g.store.Has(id) { // shown (a problem still waiting its while was never seen: it still shows when due)
+			ids[id] = kind
+		}
 	}
 	if g.showing != "" {
 		ids[g.showing] = strings.SplitN(g.showing, ":", 2)[0]
