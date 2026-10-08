@@ -147,6 +147,9 @@ try {
   }
   Start-Sleep 20
   $lines = StubLines 0
+  # flowv's StubLines has no line id nor held words (dry run 37820758173: every end read as missing): taken from the line
+  foreach ($x in $lines) { $x | Add-Member -NotePropertyName lid -NotePropertyValue "$($x.raw.line_id)" -Force; $x | Add-Member -NotePropertyName held -NotePropertyValue "$($x.raw.heldWhy)" -Force }
+  $ends = @{}; foreach ($x in $lines) { if ($x.lid -like '*:resolved') { $ends[$x.lid -replace ':resolved$', ''] = 1 + [int]$ends[$x.lid -replace ':resolved$', ''] } }
   $after = @($lines | Where-Object { $_.i -ge $mUp })
   $px = UProxy; $pxA = @($px | Where-Object { [int64]$_.t0 -ge $tUp })
   # u2
@@ -169,7 +172,7 @@ try {
   $res = @($res)
   $bad = @($res | Where-Object { $_.asks -ne 1 -or $_.obj -ne 1 -or $_.ended -lt 1 -or ($_.kind -eq 'real' -and $_.body -lt 1) })
   $seededIds = @($script:upgOdd.Keys)
-  $lost = @($seededIds | Where-Object { $_ -notin $held0Ids -and -not @($lines | Where-Object { $_.lid -eq "${_}:resolved" }).Count -and $_ -notin $script:upgEnded })
+  $lost = @(foreach ($sid in $seededIds) { if ($sid -notin $held0Ids -and -not $ends.ContainsKey($sid) -and $sid -notin $script:upgEnded) { $sid } })
   $byKind = ($res | Group-Object kind | ForEach-Object { "$($_.Name) $($_.Count)" }) -join ', '
   URes $CU3 $(if ($res.Count -and -not $bad.Count -and -not $lost.Count) { 'PASS' } elseif (-not $res.Count) { 'HARNESS' } else { 'FAIL' }) ("{0} lines held at the upgrade ({1}); asked once by 2.4.0 and ended: {2}; not so: {3}; seeded lines neither held at the upgrade nor ended (lost): {4}; e.g. {5}" -f `
       $res.Count, $byKind, ($res.Count - $bad.Count), $(if ($bad.Count) { ($bad | Select-Object -First 8 | ForEach-Object { "$($_.id) ($($_.kind), mid $($_.mid)) asks $($_.asks) object $($_.obj) ended $($_.ended) body $($_.body)" }) -join '; ' } else { 'none' }), $(if ($lost.Count) { $lost -join ', ' } else { 'none' }), (($res | Select-Object -First 2 | ForEach-Object { "$($_.id): $(if ($_.body) { 'with its body' } else { $_.words })" }) -join ' | '))
