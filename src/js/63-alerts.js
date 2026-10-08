@@ -99,10 +99,9 @@ const AlertHub = {
   // a line waiting because of FinCom's side: no body, the add-on's placeholder GUID ("<company GUID>-00000000"), no GUID,
   // FinCom's own posting coming back, or the queue; then FinCom fetches the details itself and nothing is to be done
   oursHeld(l){
-    const why = String(l.held_why || "");
-    if (/^month locked/i.test(why)) return false;
-    return l.state === "queued" || l.state === "received" || l.state === "failed" && /queue|timeout|server/i.test(why) ||
-      /no entry body|waiting for the entry's details|no GUID|placeholder|FinCom (posting|id) /i.test(why) || /-0{8}$/.test(String(l.object_guid || ""));
+    // review of f0f1531f: the one classifier (Rec.needKind, src/js/61): "ours" = being fetched, settles by itself; the
+    // page and the bell can never disagree. A line a person must settle is never "nothing to do"
+    return typeof Rec === "object" && Rec.needKind ? !Rec.needKind(l) : false;
   },
   // "1 entry", "3 entries"
   n(k){ return k + (k === 1 ? " entry" : " entries"); },
@@ -203,7 +202,9 @@ const AlertHub = {
           out.push(Object.assign(base, {sev: "warn", text: who + ": " + (hd.length === b.other.length ? this.heldSay(hd, true) + "."
               : (b.other.length === 1 ? "1 change" : b.other.length + " changes") + " from Tally " + (b.other.length === 1 ? "is" : "are") + " waiting, not yet in the books" + (locked.length === b.other.length ? " (the month is locked)." : ".")),
             // FinCom 2.3.5: lines the bridge gave up on say the one thing to do (Sync activity's "Needs you" has each day's button)
-            fix: locked.length === b.other.length ? "Apply them on Sync activity, or unlock the month." : b.other.every(l => typeof Rec === "object" && Rec.needKind && Rec.needKind(l) === "daybook")
+            fix: locked.length === b.other.length ? "Apply them on Sync activity, or unlock the month." : b.other.every(l => Rec.needKind(l) === "readstop")
+              ? "Needs you: reading from Tally is stopped from FinCom on that computer; an owner resumes it on the Tally page."
+              : b.other.every(l => ["daybook", "dupid"].includes(Rec.needKind(l)))
               ? "Needs you: upload the Day Book for " + [...new Set(b.other.map(l => this.heldDay(l)).filter(Boolean))].sort().map(d => fmtDate(tallyDate(d))).join(", ") + " (Sync activity has each day's button)."
               : hd.length === b.other.length ? "See them on Sync activity." : "See why on Sync activity.", act: {label: "Sync activity", run: () => Rec.openActivity(b.cid)}}));
         } else if (b.off.length){
@@ -248,17 +249,20 @@ const AlertHub = {
     }
     // ---- the app's own warnings
     const a = S.account, bal = a && a.firm ? num(a.firm.balance) : 0, warnAt = a && a.firm ? num(a.firm.warn_at) : 0;
+    // the review of 08-Oct (M1): a low credit is one episode from when this browser saw it go low until a top-up above
+    // the warning ends it; low again is a new notification
+    if (!(a && a.firm) || bal > warnAt) AlertClear.episode("credit-low", false);
     if (a && a.firm){
       if (S.creditStop && Date.now() - S.creditStop.at < 6 * 3600e3 && bal <= 0) out.push({key: "app:credit", fp: AlertClear.fp(["credit:stop:" + istDay(S.creditStop.at)]), sev: "bad", text: "Credit finished: reading new bills, bank statements and invoices is paused.", fix: "Ask the administrator to add credit. Everything already in FinCom still works.", selfClear: true});
-      else if (bal <= warnAt) out.push({key: "app:credit", fp: AlertClear.fp(["credit:low:" + warnAt]), sev: "warn", text: "Credit left: " + money(bal) + ".", fix: "Ask the administrator to top it up before it runs out.", selfClear: true});
+      else if (bal <= warnAt) out.push({key: "app:credit", fp: AlertClear.fp(["credit:low:" + warnAt + ":" + AlertClear.episode("credit-low", true)]), sev: "warn", text: "Credit left: " + money(bal) + ".", fix: "Ask the administrator to top it up before it runs out.", selfClear: true});
     }
     if (!(S.storeKind === "db" || (typeof Cloud === "object" && Cloud.on() && Cloud.st && !Cloud.st.error))){
       const kept = S.storeKind === "local" || S.storeKind === "idb";
-      out.push({key: "app:store", fp: AlertClear.fp(["store:" + (kept ? "browser" : "unsaved")]), sev: kept ? "info" : "bad", text: kept ? "Your work is saved in this browser only." : "Your work is not being saved.",
+      out.push({key: "app:store", fp: kept ? AlertClear.fp(["store:browser:" + AlertClear.device()]) : "", sev: kept ? "info" : "bad", text: kept ? "Your work is saved in this browser only." : "Your work is not being saved.",
         fix: kept ? "Clearing browser data would remove it. Sign in from Settings to keep it in the firm account." : "It will be lost when this page closes. Sign in from Settings to keep it.", selfClear: true});
     }
     const st = typeof selfTestSummary === "function" ? selfTestSummary() : {state: "none"};
-    if (st.state === "fail") out.push({key: "app:selftest", fp: AlertClear.fp(["selftest:" + st.fails.slice().sort().join(",")]), sev: "warn", text: "Bill reading has a problem on this computer.", fix: "See the self-test in Settings.",
+    if (st.state === "fail") out.push({key: "app:selftest", fp: AlertClear.fp(["selftest:" + AlertClear.device() + ":" + st.fails.slice().sort().join(",") + ":" + istDay(Date.now())]), sev: "warn", text: "Bill reading has a problem on this computer.", fix: "See the self-test in Settings.",
       details: st.fails.map(k => (k === "pdf" ? "PDF reading: " : "Photo OCR: ") + st.r[k].msg).join(" "), act: {label: "Self-test", run: () => doAct("goSelfTest")}, selfClear: true});
     const rank = {bad: 0, warn: 1, info: 2};
     return out.sort((x, y) => rank[x.sev] - rank[y.sev] || String(y.at || "").localeCompare(String(x.at || "")));
@@ -295,9 +299,14 @@ const AlertHub = {
 //                                                                                  :notanswering:<since> | :silent:<IST day>  (the computer + the kind)
 //   bridgeid:<id>                the bell (owners)                               bridgeid:<id>
 //   alert:<id>                   the bell (the daily summary)                    alert:<id>  (Clear also marks it read, as Mark read)
-//   app:credit                   the bell; the alert line                        credit:stop:<IST day it stopped> | credit:low:<the warning level> (not the balance)
-//   app:store                    the bell                                        store:browser | store:unsaved
-//   app:selftest                 the bell; the alert line                        selftest:<the failed checks>
+//   app:credit                   the bell; the alert line                        credit:stop:<IST day it stopped> | credit:low:<the warning level>:<when this browser saw it go
+//                                                                                  low (the episode; a top-up above the warning ends it)> (never the balance)
+//   app:store                    the bell                                        store:browser:<this browser>. "Your work is not being saved" (bad: the work is being
+//                                                                                  lost) has NO fingerprint: it cannot be cleared, and Clear all leaves it
+//   app:selftest                 the bell; the alert line                        selftest:<this browser>:<the failed checks>:<IST day>
+// <this browser>: AlertClear.device(), a random id kept in this browser (localStorage "fincom:device-id"). The credit's
+// episode is this browser's too: another computer that saw it go low at another time shows it once more (never fewer).
+// (the review of 08-Oct, M1: every fingerprint names an occurrence, so a cleared notification can come back as a new one)
 // line:<id>:need|wait: AlertHub.lineAtom ("need" when a person must act: Rec.needKind), the same in every place, so a
 // line cleared in the bell is cleared on the books' banner and in Sync activity too.
 // Where it is kept: signed in to the firm account, in FinCom's cloud (migration 68: app_alert_dismissals, the person's own
@@ -319,7 +328,22 @@ const AlertClear = {
   saveLocal(){ const st = this.st; try { localStorage.setItem(this.lsKey(st.who), JSON.stringify(st.rows.slice(0, 5000))); } catch (e){} },
   cloud(){ return this.firmOn() && !this.st.none; },
   rpc(fn, a){ return typeof TCloud === "object" && TCloud.rpc ? TCloud.rpc(fn, a) : Cloud.api("rpc/" + fn, {method: "POST", body: a || {}}); },
-  missing(e){ return /PGRST20[0-9]|does not exist|Could not find|schema cache|\b404\b/i.test(String((e && e.message) || e)); },
+  // "migration 68 not run": only the dismissal functions missing (the review of 08-Oct, L(c)); a network fault, another
+  // 404 or another missing object is not that, and the clears are kept to send again
+  missing(e){ const m = String((e && e.message) || e); return /alert_dismiss/i.test(m) && /PGRST202|does not exist|Could not find the function/i.test(m); },
+  // this browser's own id (a self-test failure is this computer's; "saved in this browser only" is this browser's)
+  device(){
+    try { let d = localStorage.getItem("fincom:device-id"); if (!d){ d = "dev-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); localStorage.setItem("fincom:device-id", d); } return d; }
+    catch (e){ return this.memDev || (this.memDev = "dev-" + Math.random().toString(36).slice(2, 10)); }
+  },
+  // an episode of a condition seen in this browser: on -> when it began (kept), off -> ended (forgotten)
+  episode(name, on){
+    const k = "fincom:alert-episode:" + this.who() + ":" + name;
+    try {
+      if (!on){ localStorage.removeItem(k); return ""; }
+      let t = localStorage.getItem(k); if (!t){ t = new Date().toISOString(); localStorage.setItem(k, t); } return t;
+    } catch (e){ const m = this.memEp || (this.memEp = {}); if (!on){ delete m[k]; return ""; } return m[k] || (m[k] = new Date().toISOString()); }
+  },
   // the person's cleared rows now ({key, fp, batch, lb, pending}); the cloud's list read at most once a minute
   rowsNow(){
     if (!this.st) this.reset();
@@ -333,14 +357,18 @@ const AlertClear = {
     const st = this.st;
     if (!st) return;
     st.busy = true;
+    const t0 = Date.now();
     try {
       const pend = st.rows.filter(r => r.pending);         // what could not be sent before goes first
       if (pend.length) await this.send(pend);
       if (!st.none){
         const list = [].concat(await this.rpc("alert_dismissals_list", {}) || []);
         const lbOf = new Map(st.rows.filter(r => r.batch && r.lb).map(r => [r.batch, r.lb]));
-        st.rows = list.map(x => ({key: String(x.key || ""), fp: String(x.fp || ""), batch: String(x.batch || ""), lb: lbOf.get(String(x.batch || "")) || ""}))
-          .filter(r => r.fp).concat(st.rows.filter(r => r.pending));
+        const rows = list.map(x => ({key: String(x.key || ""), fp: String(x.fp || ""), batch: String(x.batch || ""), lb: lbOf.get(String(x.batch || "")) || ""}))
+          .filter(r => r.fp);
+        // the review of 08-Oct, L(b): what was cleared here while the list was on its way (or not yet sent) is kept
+        const have = new Set(rows.map(r => r.key + "\n" + r.fp));
+        st.rows = rows.concat(st.rows.filter(r => (r.pending || (r.t || 0) >= t0) && !have.has(r.key + "\n" + r.fp)));
       }
     } catch (e){ if (this.missing(e)) st.none = true; }
     st.busy = false; st.at = Date.now(); st.ver++;
@@ -367,7 +395,7 @@ const AlertClear = {
     if (!items.length) return;
     this.rowsNow();
     const st = this.st, lb = "L" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-    const rows = items.map(x => ({key: x.key, fp: x.fp, words: String(x.text || "").slice(0, 500), lb, batch: "", pending: true}));
+    const rows = items.map(x => ({key: x.key, fp: x.fp, words: String(x.text || "").slice(0, 500), lb, batch: "", pending: true, t: Date.now()}));
     st.rows = rows.concat(st.rows); st.ver++; this.saveLocal();
     this.undo = {lb, n: items.length, until: Date.now() + 6000};
     clearTimeout(this.undoT); this.undoT = setTimeout(() => { if (this.undo && this.undo.lb === lb){ this.undo = null; if (typeof render === "function") render(); } }, 6100);

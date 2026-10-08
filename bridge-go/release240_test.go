@@ -81,7 +81,7 @@ func TestRelease240VersionAndDecisionLine(t *testing.T) {
 		}
 	}
 	mo := readText(filepath.Join("..", "docs", "MIGRATION-ORDER.md"))
-	if !strings.Contains(mo, "→ 60 → 68 → 62 → 63 → 64 → 65 → 66 → 67") || !strings.Contains(mo, "→ 60 → 68 → 62 → 67 → 63 → 64 → 65 → 66") {
+	if !strings.Contains(mo, "→ 60 → 68 → 70 → 62 → 63 → 64 → 65 → 66 → 67") || !strings.Contains(mo, "→ 60 → 68 → 70 → 62 → 67 → 63 → 64 → 65 → 66") {
 		t.Error("docs/MIGRATION-ORDER.md does not give both orders with 63 and 67 swapped")
 	}
 }

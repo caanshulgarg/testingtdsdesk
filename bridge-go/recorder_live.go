@@ -163,7 +163,10 @@ type change struct {
 	// queuedAt: when it was queued (the bridge's own clock, for the 4 s safety net)
 	fresh, freshSlow, dueNow bool
 	freshTries               int
-	queuedAt                 time.Time
+	// 2.3.4 (the owner's answer B, 08-Oct-2026): its fast request was stopped at the limit: asked once more after
+	// RecorderStopRetrySec (5 minutes), never sooner
+	stopWait bool
+	queuedAt time.Time
 	// next-outbox: every place in the add-on's files this change was read from (a pair's two halves may sit in two daily
 	// files; a line taken in with another of the same save adds its own): each file's offset kept waits for all of them
 	holds []liveAt
@@ -1846,6 +1849,55 @@ func fetchVouchersByMaster(tc *TC, company string, port int, date string, mids [
 	return fetchVouchersByMasterIn(tc, company, port, date, mids, liveBodySec())
 }
 
+// Tally's whole answer for a MasterID it does not have (testdata/fast234/notfound, 3.0 .. 7.1)
+func fastNotFound(mid string) string {
+	return "<ERRORMSG>Could not find Voucher:ID:" + mid + "!</ERRORMSG>"
+}
+
+// 2.3.4 (re-review 2 L-d; the owner's answer of 08-Oct-2026: "Delete fix: yes. The leading-zero refusal and the company
+// check close real ways a delete could be proven wrongly"): a delete whose MasterID Tally did not find is proven gone only
+// when Tally, asked a second time, gives exactly the same "Could not find Voucher" answer, with the company open in this
+// Tally (the GUID held for it) right before and right after that ask; else not proven now (asked again later). Entry
+// fetches are not asked twice (a delete only)
+func fastProveGone(tc *TC, company string, port int, mid string, sec int) error {
+	if err := fastCompanyOpen(tc, company, port, sec); err != nil {
+		return err
+	}
+	x := voucherObjectRequest(company, mid)
+	if x == "" {
+		return errors.New("not asked: MasterID " + mid + " is not one Tally gives")
+	}
+	raw, err := invokeTally(tc, port, x, sec)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(raw) != fastNotFound(mid) {
+		return errors.New("Tally's answer for MasterID " + mid + " was not 'Could not find' when asked again (not proven now)")
+	}
+	return fastCompanyOpen(tc, company, port, sec)
+}
+
+// 2.3.4 (re-review 2 L-d): the company is open in the Tally on this port now, with the GUID this bridge holds for it (a
+// company of that name with another GUID, or none held yet: not proven)
+func fastCompanyOpen(tc *TC, company string, port, sec int) error {
+	raw, err := invokeTally(tc, port, companiesRequest(), minI(maxI(sec, 2), 8))
+	if err != nil {
+		return err
+	}
+	want := heldGUID(company)
+	for _, c := range xmlDoc(raw).All("COMPANY") {
+		if companyKey(nameOf(c)) != companyKey(company) {
+			continue
+		}
+		g := strings.TrimSpace(html.UnescapeString(nt(c, "GUID")))
+		if want != "" && strings.EqualFold(g, want) {
+			return nil
+		}
+		return errors.New("the company " + company + " is open in this Tally with another GUID (" + cutRunes(g, 60) + "); not proven now")
+	}
+	return errors.New("the company " + company + " is not open in this Tally (not proven now)")
+}
+
 func fetchVouchersByMasterIn(tc *TC, company string, port int, date string, mids []string, sec int) (map[string]string, error) {
 	x := ""
 	if len(mids) == 1 {
@@ -1865,8 +1917,8 @@ func fetchVouchersByMasterIn(tc *TC, company string, port int, date string, mids
 	// not have (a deleted voucher, an id never used) Tally answers a bare <ERRORMSG>Could not find Voucher:ID:n!</ERRORMSG>,
 	// no envelope. Exactly that, for the MasterID asked and nothing else, is "no such voucher"; any other answer without an
 	// envelope stays one that could not be read
-	if strings.TrimSpace(raw) == "<ERRORMSG>Could not find Voucher:ID:"+mids[0]+"!</ERRORMSG>" {
-		return map[string]string{}, nil
+	if strings.TrimSpace(raw) == fastNotFound(mids[0]) {
+		return map[string]string{}, nil // a delete is proven by it only with fastProveGone (re-review 2 L-d)
 	}
 	if !strings.Contains(raw, "<ENVELOPE") {
 		return nil, errors.New("Tally's answer could not be read: " + cut(flat(raw), 120))
@@ -2006,18 +2058,10 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 			liveHeldAs(c, slowWords, true)
 		}
 	}
-	// 2.3.4 (option (a)): a line whose fast request was stopped at 2 s: held, ended with the Day Book words
-	stopEnd := func(cs []*change) {
-		w := liveStopEndWords()
-		for _, c := range cs {
-			if c.isLedger() {
-				continue
-			}
-			live.mu.Lock()
-			c.slowEnded = true
-			live.mu.Unlock()
-			liveHeldAs(c, w, true)
-		}
+	// 2.3.4 (the owner's answer B, 08-Oct-2026: "one more ask"): a line whose fast request was stopped at 2 s goes up held
+	// with the once-more words and is asked ONE more time by the held list after 5 minutes; a second stop ends it
+	stopOnce := func(cs []*change) {
+		liveHeldStopOnce(cs)
 	}
 	if slowMarked(company, need[0].companyGuid) {
 		slowHold(need)
@@ -2131,9 +2175,10 @@ byDay:
 				break byDay
 			}
 			if errors.Is(err, errRecorderStop) {
-				// 2.3.4 (the owner's decision of 08-Oct-2026, option (a)): the fast request for this entry took more than 2 s
-				// (the stop itself unchanged): its line goes up held, ended with the Day Book words, never asked again; the
-				// company is not marked (slowNote) and its other entries go on being fetched
+				// 2.3.4 (the owner's decisions of 08-Oct-2026, option (a) and answer B): the fast request for this entry took
+				// more than 2 s (the stop itself unchanged): its line goes up held ("FinCom asks once more at HH:MM") and is
+				// asked once more 5 minutes later, a second stop ending it with the Day Book words; the company is not marked
+				// (slowNote) and its other entries go on being fetched
 				// a cancel / delete check (it asks Tally whether the entry is still there, no entry is fetched): as before, held
 				// with the words of a Tally it could not ask, and asked again by the held list; the same whether the stop or no
 				// answer at all came first (TestCancelGUIDTallySilentFallsBack: one outcome, never the timing's)
@@ -2148,7 +2193,7 @@ byDay:
 				if len(gf) > 0 {
 					liveHeldNow(gf, liveStopWhat(), true, true, false)
 				}
-				stopEnd(en)
+				stopOnce(en)
 				continue
 			}
 			if gaveWay(err) {
@@ -2189,9 +2234,23 @@ byDay:
 				why, kind string
 			}
 			var missing []miss
+			// 2.3.4 (re-review 2 L-d): a delete Tally did not find: proven only by fastProveGone (asked again, the company
+			// checked around it); not proven now: held as one this Tally could not be asked about (asked again by itself)
+			unproven := map[*change]string{}
+			for _, c := range part {
+				if c.guidFetch && c.event == "deleted" && got[c.masterId] == "" {
+					if perr := fastProveGone(tc, company, port, c.masterId, left()); perr != nil {
+						unproven[c] = perr.Error()
+					}
+				}
+			}
 			live.mu.Lock()
 			for _, c := range part {
 				x := got[c.masterId]
+				if why, ok := unproven[c]; ok {
+					liveGuidUnproven(c, why)
+					continue
+				}
 				if c.guidFetch && c.event == "deleted" {
 					liveDeleteAnswer(c, got) // review H1: still in this Tally: held; not there: proven deleted here
 					continue

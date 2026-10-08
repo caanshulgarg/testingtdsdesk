@@ -359,10 +359,11 @@ function statusOf(r, latest, owner, allStopped) {
   const base = { head: r.main ? "Connected" : "Connected · reads only", tally };
   if (rd.state === "fincomstop") return { ...base, level: "bad", problem: "read", read: rd.text,
     fix: !owner ? "An owner of the firm can resume reading." : allStopped ? "Resume reading on all computers, at the top of this page." : "", action: owner && !allStopped ? "resume" : "" };
-  if (!r.main) return { ...base, level: "warn", problem: "head", fix: st.act, action: st.makeMain ? "makeMain" : "" };
   if (rd.state === "retrying") return { ...base, level: "warn", problem: "read", read: rd.text };
   if (rd.state === "paused") return { ...base, level: "warn", problem: "read", read: "Reading paused", fix: "Resume it from the FinCom icon near the clock on " + r.computer + "." };
-  if (r.tally === "busy" || r.tally !== "open") return { ...base, level: "warn", problem: "tally", fix: st.act };
+  // review of f0f1531f: a reads-only bridge says Tally's state (and the retry / pause words above) too
+  if (r.tally === "busy" || r.tally !== "open") return { ...base, level: "warn", problem: "tally", fix: r.tally === "busy" ? "It carries on when Tally is free." : "Open TallyPrime and the company on " + r.computer + "." };
+  if (!r.main) return { ...base, level: "warn", problem: "head", fix: st.act, action: st.makeMain ? "makeMain" : "" };
   const bodies = r.recorderOff && typeof r.recorderOff.bodies === "object" && verAtLeast(r.version, "2.3.2") ? r.recorderOff.bodies : {};
   const slow = Object.keys(bodies).filter((co) => co && bodies[co] && bodies[co].off === true);
   const base2 = (TCloud.baselines ? TCloud.baselines(r.device.id) : []).filter((x) => x.cur && x.cur.state === "needs_baseline").map((x) => x.company);
@@ -458,7 +459,10 @@ function PageMore({ rows, latest, m }) {
 // "FinCom Bridge on this computer", [data-connect-section]).
 function TallyGuide({ rows, m, connectStep }) {
   const p = TCloud.pane;
-  if (!TCloud.on() || p.devices == null || (p.companies || []).some((c) => c.client_id)) return null;
+  if (!TCloud.on() || p.devices == null) return null;
+  // review of f0f1531f: once a company is linked the guide folds to one link, "Connect another computer", that opens it again
+  const linked = (p.companies || []).some((c) => c.client_id), again = linked && moreOpen("guide");
+  if (linked && !again) return <p className="note" style={{ margin: "0 0 10px" }}><button className="linkbtn" data-guide-again="" onClick={() => moreFlip("guide")}>Connect another computer</button></p>;
   const devs = (p.devices || []).filter((d) => !d.revoked), heard = rows.filter((r) => r.go && !r.old && r.at).sort((a, b) => String(b.at).localeCompare(String(a.at)));
   const seen = p.companies || [];
   const done = { install: devs.length > 0, connect: heard.length > 0, link: false };
@@ -469,11 +473,11 @@ function TallyGuide({ rows, m, connectStep }) {
     <span className="tguide-mark" aria-hidden="true">{done[k] ? "✔" : n}</span>
     <div><b>{title}</b>{done[k] && <span className="tag ok" style={{ marginLeft: 8 }}>Done</span>}<div className="note">{children}</div></div></li>;
   return <div className="pane tguide" data-tally-guide="">
-    <h3 style={{ margin: "0 0 4px" }}>Connect Tally in three steps</h3>
+    <h3 style={{ margin: "0 0 4px" }}>{again ? "Connect another computer" : "Connect Tally in three steps"}{again && <>{" "}<button className="linkbtn note" data-guide-hide="" onClick={() => moreFlip("guide")}>Hide</button></>}</h3>
     <ul className="tguide-steps">
-      <Step k="install" n={1} title="Install FinCom Bridge">{done.install ? "Installed: " + devs.map((d) => (d.info && d.info.computer) || d.name).join(", ") + "."
+      <Step k="install" n={1} title="Install FinCom Bridge">{done.install && !again ? "Installed: " + devs.map((d) => (d.info && d.info.computer) || d.name).join(", ") + "."
         : <>On the computer where TallyPrime runs. <DownloadBtn m={m} primary={next === "install"} /> If Windows says “Windows protected your PC”, press More info, then Run anyway (more help under More, below).</>}</Step>
-      <Step k="connect" n={2} title="Connect it to FinCom">{done.connect ? "FinCom Bridge on " + heard[0].computer + " is talking to FinCom (last heard " + agoWords(heard[0].at) + ")."
+      <Step k="connect" n={2} title="Connect it to FinCom">{done.connect && !again ? "FinCom Bridge on " + heard[0].computer + " is talking to FinCom (last heard " + agoWords(heard[0].at) + ")."
         : <span data-guide-connect-slot="">{connectStep || <>Right-click the FinCom icon near the clock → <b>Connect FinCom on this computer…</b> and type the 6-digit code here. <button className={"btn small" + (next === "connect" ? " primary" : "")} data-guide-connect="" onClick={openConnect}>Open the connect steps</button></>}</span>}</Step>
       <Step k="link" n={3} title="Link a Tally company to its client">{seen.length ? "Tally companies seen: " + seen.map((c) => c.company).join(", ") + ". Choose the client for each. "
         : "Open the company in TallyPrime; it shows up within a minute. "}

@@ -12,7 +12,7 @@ in it.
 | Setup file | FinComBridge-Setup-2.4.0.exe |
 | Fingerprint | (filled in when the setup is built) |
 | FinCom app | changed: pages refresh by themselves (Realtime), the nightly self-check's line on the Tally page |
-| FinCom's cloud | migrations 62, 63, 64, 65, 66 and 67 (`server/tally-cloud/`, each add-only; NOT run; the owner runs them, after 2.3.5's 68): staging ... -> 60 -> 68 -> 62 -> 63 -> 64 -> 65 -> 66 -> 67 (`docs/MIGRATION-ORDER.md`). tally-ingest changed (below); until a migration runs, its part waits (each item says how) |
+| FinCom's cloud | migrations 62, 63, 64, 65, 66 and 67 (`server/tally-cloud/`, each add-only; NOT run; the owner runs them, after 2.3.5's 68 and 70): staging ... -> 60 -> 68 -> 70 -> 62 -> 63 -> 64 -> 65 -> 66 -> 67 (`docs/MIGRATION-ORDER.md`). tally-ingest changed (below); until a migration runs, its part waits (each item says how) |
 | Replaces | 2.3.5 (kept on the computer, so the tray can roll back to it) |
 | Add-on | changed: load the new `FinComRecorder.tdl` (each Windows user's own file; the Pay Head, Stock Item and Godown forms) |
 | Tally requests | ONE changed, with the owner's approval (item 2): FinComVoucherByNumber also asks for the whole TDS list. None added. FinComVoucherObject unchanged byte for byte |

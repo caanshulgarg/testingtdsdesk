@@ -12,7 +12,7 @@ What 2.4.0 changes (the full notes: docs/bridge-2.4.0-notes.md; next-inflight an
 5. The nightly self-check, existing requests only (migration 65).
 6. Master hooks: Pay Head, Stock Item and Godown (Unit and Employee left out; migration 66).
 7. Renumbered entries take Tally's new number (the owner: "renumbering yes"; migration 67).
-FinCom's cloud: migrations 62 to 67 (add-only; the owner runs them, after 2.3.5's 68), and tally-ingest.
+FinCom's cloud: migrations 62 to 67 (add-only; the owner runs them, after 2.3.5's 68 and 70), and tally-ingest.
 
 Migration files (md5):
    migration-62-tds-rate-worked-out.sql    c33ca8099d2b3799197d3d7631c25949

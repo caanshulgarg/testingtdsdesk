@@ -11,7 +11,7 @@ What 2.3.5 changes (the full notes: docs/bridge-2.3.5-notes.md):
    any notification is cleared then that notification should not appear" (the owner).
 3. Held lines under FinCom's read stop: a held delete keeps its entry id; the line says reading is stopped; a refused
    request is not a try, a real Tally failure still is.
-No Tally request added or changed. FinCom's cloud: migration 68 (the owner runs it). The add-on is unchanged.
+No Tally request added or changed. FinCom's cloud: migration 68 (run on staging) and migration 70 (the owner runs it). The add-on is unchanged.
 
 Before you start: you are signed in to FinCom as the owner, TallyPrime 7.1 is open on NWS144 with the add-on loaded,
 GARG SHEKHAR & COMPANY and IX DESIGNS open in the Tally of the Windows user whose bridge you check. In every entry you
