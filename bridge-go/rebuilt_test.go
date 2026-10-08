@@ -28,7 +28,8 @@ type tVch struct {
 	guid, master, date, typ, no, narr, party string
 	alter                                    int64
 	lines                                    [][2]string
-	cancelled                                bool // review H1 (2.3.0): this Tally answers ISCANCELLED Yes for it
+	cancelled                                bool   // review H1 (2.3.0): this Tally answers ISCANCELLED Yes for it
+	extra                                    string // 2.3.4 review: more of the voucher as Tally holds it (fields outside the approved list, other lists)
 }
 
 // review H1 (2.3.0): ISCANCELLED as this stand Tally gives it
@@ -197,7 +198,7 @@ func (v *tVch) xml() string {
 	for _, l := range v.lines {
 		fmt.Fprintf(&b, `<ALLLEDGERENTRIES.LIST><LEDGERNAME>%s</LEDGERNAME><AMOUNT>%s</AMOUNT></ALLLEDGERENTRIES.LIST>`, esc(l[0]), l[1])
 	}
-	b.WriteString("</VOUCHER>")
+	b.WriteString(v.extra + "</VOUCHER>")
 	return b.String()
 }
 
@@ -216,7 +217,7 @@ func (v *tVch) xmlTyped() string {
 		b.WriteString(nl + "<ALLLEDGERENTRIES.LIST>" + nl + " " + standField("LEDGERNAME", "String", esc(l[0])) + nl + " " + standField("ISDEEMEDPOSITIVE", "Logical", "No") +
 			nl + " " + standField("AMOUNT", "Amount", l[1]) + nl + " <BILLALLOCATIONS.LIST>      </BILLALLOCATIONS.LIST>" + nl + "</ALLLEDGERENTRIES.LIST>")
 	}
-	b.WriteString("\r\n    </VOUCHER>\r\n    ")
+	b.WriteString(v.extra + "\r\n    </VOUCHER>\r\n    ")
 	return b.String()
 }
 
@@ -247,6 +248,9 @@ func newStandTally(t *testing.T) *standTally {
 		}
 		if strings.Contains(body, "Import Data") {
 			id = "Import"
+		}
+		if oid, ok := objectRequestID(body); ok {
+			id = oid // next-fastfetch: the object export of one voucher
 		}
 		f.mu.Lock()
 		f.reqs = append(f.reqs, id)
@@ -380,15 +384,20 @@ func newStandTally(t *testing.T) *standTally {
 					o.WriteString(v.xml())
 				}
 			}
-		case vchByMasterID: // 2.2.0: the recorder's body fetch, every MasterID named (one day)
-			want := map[string]bool{}
-			for _, m := range regexp.MustCompile(`\$MasterID = (\d+)`).FindAllStringSubmatch(body, -1) {
-				want[m[1]] = true
-			}
+		case vchObjectID: // next-fastfetch: the object export "ID:<MasterID>": that one voucher, whatever its date
+			want := group(`<ID TYPE="Name">ID:(\d+)</ID>`, body, 1)
+			found := false
 			for _, v := range f.vch {
-				if inDates(v) && want[v.master] {
+				if v.master == want {
 					o.WriteString(v.xml())
+					found = true
 				}
+			}
+			if !found {
+				// as a real Tally answers a MasterID it does not have (3.0 .. 7.1, testdata/fast234/notfound): bare, no envelope
+				f.mu.Unlock()
+				_, _ = w.Write([]byte("<ERRORMSG>Could not find Voucher:ID:" + want + "!</ERRORMSG>\r\n"))
+				return
 			}
 		case vchByNumberID: // 2.2.1: a new entry by its type and number (one day)
 			no := html.UnescapeString(group(`\$VoucherNumber = &#34;(.*?)&#34; AND`, body, 1))

@@ -147,7 +147,7 @@ func checkReadsOnly(t *testing.T, f *standTally) {
 	t.Helper()
 	for _, id := range f.ids() {
 		switch id {
-		case "FinComCompany", "TDSDeskCompanies", "TDSDeskCompanyInfo", "FinComFree", cnReportID, vchByNumberID, vchByMasterID:
+		case "FinComCompany", "TDSDeskCompanies", "TDSDeskCompanyInfo", "FinComFree", cnReportID, vchByNumberID, vchObjectID:
 		default:
 			t.Fatalf("the check sent %s (only one voucher may be read): %v", id, f.ids())
 		}
@@ -227,7 +227,7 @@ func TestSettleCheckNoNumber(t *testing.T) {
 	if r := lastReport(t, c); str(r["result"]) != "found" || str(r["master"]) != v.master {
 		t.Fatalf("by Tally's voucher id: %v", r)
 	}
-	if f.n(vchByMasterID) != 1 || f.n(vchByNumberID) != 0 {
+	if f.n(vchObjectID) != 1 || f.n(vchByNumberID) != 0 {
 		t.Fatalf("the requests: %v", f.ids())
 	}
 	// Tally's id names no voucher on that date: "notseen" (one day only: a person confirms)
@@ -250,7 +250,7 @@ func TestSettleCheckNoNumber(t *testing.T) {
 		t.Fatalf("no number, no id: %v", r)
 	}
 	for _, id := range f.ids()[n:] {
-		if id == vchByNumberID || id == vchByMasterID {
+		if id == vchByNumberID || id == vchObjectID {
 			t.Fatalf("a voucher was asked for with nothing to ask by: %v", f.ids()[n:])
 		}
 	}

@@ -64,7 +64,7 @@ func backlog233Held(t *testing.T, f *standTally, n int) []string {
 	return ids
 }
 
-var reAskedMID = regexp.MustCompile(`\$MasterID = (\d+)`)
+var reAskedMID = regexp.MustCompile(`(?:\$MasterID = |<ID TYPE="Name">ID:)(\d+)`)
 
 // the MasterIDs Tally was asked for (by MasterID), in order
 func backlog233Asked(f *standTally) []string {
@@ -72,7 +72,7 @@ func backlog233Asked(f *standTally) []string {
 	defer f.mu.Unlock()
 	var o []string
 	for i, b := range f.bodies {
-		if i < len(f.reqs) && f.reqs[i] == vchByMasterID {
+		if i < len(f.reqs) && f.reqs[i] == vchObjectID {
 			if m := reAskedMID.FindStringSubmatch(b); m != nil {
 				o = append(o, m[1])
 			}
@@ -317,8 +317,9 @@ func TestBacklog233EveryOtherTry(t *testing.T) {
 	}
 }
 
-// --- 3. a company at 2.2 s on every entry is marked even when the only background requests are its entry requests: the
-// beat's small check (the light company check) answered in time counts as another request; a whole-Tally freeze does not
+// --- 3. a company at 2.2 s on every entry, the only background requests its entry requests and the beat's small check:
+// 2.3.3 marked it; 2.3.4 (the owner's decision of 08-Oct-2026, option (a)) never marks it: each entry's line ends with the
+// Day Book words, asked once
 func TestBacklog233SlowMarkedWithOnlyEntryRequests(t *testing.T) {
 	p, f, c := backlog233Bridge(t)
 	slowEntries(f, 0)
@@ -345,22 +346,25 @@ func TestBacklog233SlowMarkedWithOnlyEntryRequests(t *testing.T) {
 			break
 		}
 	}
-	if marked < 0 {
-		t.Fatalf("a company at 2.2 s on every entry was never marked in 45 minutes:\n%s", cutTail(readText(logFile()), 4000))
+	if marked >= 0 {
+		t.Fatalf("a company at 2.2 s on every entry was marked after %d s:\n%s", marked, cutTail(readText(logFile()), 4000))
 	}
 	f.mu.Lock()
 	for _, id := range f.reqs[reqs0:] {
-		if id != vchByMasterID && id != vchByNumberID && id != "FinComCompany" && id != "FinComCompanyNumbers" && id != "TDSDeskCompanies" {
+		if id != vchObjectID && id != vchByNumberID && id != "FinComCompany" && id != "FinComCompanyNumbers" && id != "TDSDeskCompanies" {
 			f.mu.Unlock()
 			t.Fatalf("a request other than the entry, the small check and the company list: %s", id)
 		}
 	}
 	f.mu.Unlock()
-	// every line of it is in the cloud: held with words, nothing silent
+	// every line of it is in the cloud: held, ended with the Day Book words, each entry asked once
 	for _, s := range c.recSent() {
-		if str(s["xml"]) == "" && str(s["heldWhy"]) == "" {
-			t.Fatalf("a line without words: %v", s)
+		if str(s["xml"]) != "" || str(s["heldWhy"]) != liveStopEndWords() {
+			t.Fatalf("a line: %v", s)
 		}
+	}
+	if n := f.n(vchObjectID); n != 16 || len(c.recSent()) != 16 {
+		t.Fatalf("16 entries: %d asks, %d lines", n, len(c.recSent()))
 	}
 }
 
@@ -427,18 +431,19 @@ func TestBacklog233BeatWaiting(t *testing.T) {
 // --- the version, the allow-list's decision line (no request added or changed: TestAllowListUnchanged keeps the table's
 // hash) and the notes with their test sheet
 func TestBacklog233VersionAndDecisionLine(t *testing.T) {
-	if BridgeVersion != "2.3.3" {
+	if BridgeVersion != "2.3.4" {
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	al := readText("../docs/tally-allowlist.md")
 	line := group(`(?m)^(First table: .*)$`, al, 1)
-	if !strings.Contains(line, "allowed for 2.3.3 by the owner's standing decision of 2026-10-06: no request on the list and no request shape changed") {
+	if !strings.Contains(line, "as for 2.3.3: the owner's standing decision of 2026-10-06: no request on the list and no request shape changed") {
 		t.Fatalf("the decision line: %s", cut(line, 300))
 	}
 	if strings.Contains(al, "allowed for 2.3.2 by") {
 		t.Fatal("the 2.3.2 line is still an exception line (release-check accepts one version only)")
 	}
-	if !strings.Contains(al, "1c17806d483e0a31477bc93bcf0646334c156eda88e8a401a8df155d0bca02dd") {
+	// 2.3.4: the table changed with the entry request (FinComVoucherObject), said in the doc
+	if !strings.Contains(al, "1c17806d483e0a31477bc93bcf0646334c156eda88e8a401a8df155d0bca02dd") && !strings.Contains(al, "(2.3.4, from branch next-fastfetch, 08-Oct-2026") {
 		t.Fatal("the table's hash moved")
 	}
 	notes := strings.Join(strings.Fields(readText("../docs/bridge-2.3.3-notes.md")), " ")
@@ -482,7 +487,7 @@ func TestBacklog233OldLinesAskedOnceOneAtATime(t *testing.T) {
 				break
 			}
 		}
-		if id == vchByMasterID || id == vchByNumberID {
+		if id == vchObjectID || id == vchByNumberID {
 			time.Sleep(220 * time.Millisecond) // Tally itself busy 2.2 s (the stop is at 2 s), whether or not anyone waits
 		}
 		return false
@@ -538,7 +543,7 @@ func TestBacklog233OldLinesAskedOnceOneAtATime(t *testing.T) {
 			t.Errorf("old held line %s: %d requests (at most one)", mid, per[mid])
 		}
 		s := r222cSentID(c, id+":resolved")
-		if len(s) != 1 || str(s[0]["xml"]) != "" || str(s[0]["heldWhy"]) != liveHeldSlowGiveUp {
+		if len(s) != 1 || str(s[0]["xml"]) != "" || str(s[0]["heldWhy"]) != liveStopEndWords() { // 2.3.4 (option (a)): the stop words
 			t.Errorf("old held line %s did not end with the Day Book words: %v", mid, s)
 		}
 	}
@@ -559,7 +564,7 @@ func TestBacklog233OldLineNotFoundEndsAfterOneAsk(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		liveUploadOnce()
 	}
-	if n := f.n(vchByMasterID) + f.n(vchByNumberID); n != 1 {
+	if n := f.n(vchObjectID) + f.n(vchByNumberID); n != 1 {
 		t.Fatalf("asked %d times (want one request): %v", n, f.ids())
 	}
 	if s := r222cSentID(c, "old-x:resolved"); len(s) != 1 || str(s[0]["heldWhy"]) != liveHeldOnceGiveUp {
@@ -752,11 +757,11 @@ func TestBacklog233L1UnsentAskNotCounted(t *testing.T) {
 		importsInFlight.Add(1) // and a posting is going: the ask gives way before it is sent
 	}
 	defer func() { liveResolveAskHook = nil; importsInFlight.Store(0) }()
-	n := f.n(vchByMasterID)
+	n := f.n(vchObjectID)
 	liveResolveTurn()
 	liveResolveAskHook = nil
 	importsInFlight.Store(0)
-	if f.n(vchByMasterID) != n {
+	if f.n(vchObjectID) != n {
 		t.Fatalf("the ask reached Tally: %v", f.ids())
 	}
 	if s := r222cSentID(c, "old-l1:resolved"); len(s) != 0 {
@@ -769,7 +774,7 @@ func TestBacklog233L1UnsentAskNotCounted(t *testing.T) {
 	at := nowFn().Add(11 * time.Minute)
 	nowFn = func() time.Time { return at }
 	liveResolveTurn()
-	if f.n(vchByMasterID) != n+1 {
+	if f.n(vchObjectID) != n+1 {
 		t.Fatalf("not asked after the posting: %v", f.ids())
 	}
 }

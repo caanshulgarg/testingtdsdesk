@@ -390,8 +390,8 @@ async function bookForBeat(firm: string, name: string) {
 // Bridge 2.3.1 (2.2.2 review L-F): a line whose "<line id>:resolved" already reached FinCom is left out, as refetch does
 // (a 2.2.1 bridge resolved it and kept no mark, so a later bridge asked Tally again and sent a duplicate ":resolved"); the
 // same exception as refetch (2.3.1 H1: the only ":resolved" row held for want of a complete body) keeps it listed
-async function heldLinesFor(dev: any, firm: string, bridge: string) {
-  const out = await heldOwnLines(dev, firm, bridge, 200, () => true, "held lines", true);
+async function heldLinesFor(dev: any, firm: string, bridge: string, version = "") {
+  const out = await heldOwnLines(dev, firm, bridge, 200, () => true, "held lines", true, fastBridge(version));
   return out.length ? out : null;
 }
 // 06-Oct-2026 (the owner, NWS144 lines 4, 17 and 18: "the bridge must ask again for held lines of its own user and settle
@@ -405,12 +405,12 @@ async function heldLinesFor(dev: any, firm: string, bridge: string) {
 // which the database applies once and marks the held line 'replaced' (migrations 50-52). An older bridge ignores the
 // field. Left out when none or on any error: the beat never fails for it
 const REFETCH_MAX = 20;
-async function refetchFor(dev: any, firm: string, bridge: string) {
+async function refetchFor(dev: any, firm: string, bridge: string, version = "") {
   const out = await heldOwnLines(dev, firm, bridge, REFETCH_MAX, (r) => {
     const g = String(r?.object_guid ?? "").trim(), b = r?.body;
     const noBody = !b || typeof b !== "object" || !Array.isArray(b.vouchers) || !b.vouchers.length;
     return noBody || !g || /-0{8}$/.test(g);
-  }, "refetch", true);
+  }, "refetch", true, fastBridge(version));
   return out.length ? out : null;
 }
 // bridge 2.3.1, part B (masters): ledgersWanted, the ledgers this bridge's own held lines wait for (held with the words
@@ -467,16 +467,70 @@ function heldIncomplete(x: any): boolean {
   const b = x?.body, noBody = !b || typeof b !== "object" || !Array.isArray(b.vouchers) || !b.vouchers.length;
   return noBody || String(x?.held_why || "").startsWith(GUARD_WORDS);
 }
-async function heldOwnLines(dev: any, firm: string, bridge: string, max: number, want: (r: any) => boolean, what: string, unresolved = false) {
+// FinCom Bridge 2.3.4 (the owner, 08-Oct-2026: "30-day window for lines ended by the slow-company rule: YES"): a held line
+// received 7 to 30 days ago is listed too (heldLines / refetch, after the last 7 days' lines) when the slow-company rule
+// ended it: its own held words, or those of its only ":resolved" row (held, no body), are the bridge's slow words (2.3.2 /
+// 2.3.3: the company marked "entry fetch stopped: over 2 s", or the line's one ask again not answered in time). The bridge
+// (2.3.4, its fast entry request) asks it once more. Any other held line keeps the 7 days. No migration: the rows and their
+// words are what migrations 44-60 keep
+const HELD_SLOW_DAYS = 30;
+const SLOW_END_WORDS = ["FinCom does not ask Tally for this company's entries", "Tally did not answer in time for this entry when asked again"];
+function slowEnded(why: unknown): boolean { const w = String(why ?? ""); return SLOW_END_WORDS.some((x) => w.includes(x)); }
+// 2.3.4 (review M1): those lines go to a bridge of 2.3.4 or later only (the beat's version): an older one has no fast entry
+// request (it would ask the slow way, or end the line again at once); it gets its last 7 days' lines as before
+function fastBridge(version: unknown): boolean {
+  const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(String(version ?? "").trim());
+  return !!m && newer(m[1] + "." + m[2] + "." + m[3], "2.3.4") >= 0;
+}
+async function heldOwnLines(dev: any, firm: string, bridge: string, max: number, want: (r: any) => boolean, what: string, unresolved = false, fast = false) {
   try {
     if (!bridge) return [];
     const since = new Date(Date.now() - 7 * 86400000).toISOString();
     const { data, error } = await db.from("tally_recorder_lines").select("line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date, book_id, received_at, bridge, device_id, object_guid, body, held_why, payload")
       .eq("firm_id", firm).eq("device_id", dev.id).eq("bridge", bridge).eq("state", "held").in("event", ["created", "altered", "imported"]).gt("received_at", since)
       .order("received_at", { ascending: true }).limit(400);
-    if (error || !Array.isArray(data) || !data.length) return [];
+    if (error || !Array.isArray(data)) return [];
     let rows = (data as any[]).filter((r) => r && String(r.device_id ?? dev.id) === String(dev.id) && String(r.bridge ?? "") === bridge && Date.parse(String(r.received_at)) > Date.now() - 7 * 86400000 && want(r))
       .sort((a, b) => Date.parse(String(a.received_at)) - Date.parse(String(b.received_at)));
+    // 2.3.4: the slow-ended lines of 7 to 30 days ago (kept only below, once their ":resolved" rows are read), after these
+    if (unresolved && fast) {
+      // 2.3.4 (re-review M3): only the slow-ended lines are read, never the oldest 400 held rows of any kind: the lines
+      // whose own held words are the slow words, and the lines whose ":resolved" row carries them (read by their ids)
+      const since30 = new Date(Date.now() - HELD_SLOW_DAYS * 86400000).toISOString();
+      const cols = "line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date, book_id, received_at, bridge, device_id, object_guid, body, held_why, payload";
+      // 2.3.4 re-review 2 (L-a): created / altered / imported only (a line's ":resolved" row carries its line's event), so
+      // held cancels, deletes and other rows never take the slots of the lines listed
+      const base = () => db.from("tally_recorder_lines").select(cols).eq("firm_id", firm).eq("device_id", dev.id).eq("bridge", bridge).eq("state", "held").in("event", ["created", "altered", "imported"]);
+      const got: any[] = [];
+      let bad = "";
+      const ids = new Set<string>();
+      for (const w of SLOW_END_WORDS) {
+        const { data: d1, error: e1 } = await base().ilike("held_why", "%" + w + "%").gt("received_at", since30).order("received_at", { ascending: true }).limit(400);
+        if (e1) { bad = String(e1.message || ""); break; }
+        for (const r of (d1 || []) as any[]) {
+          const lid = String(r?.line_id || "");
+          if (lid.endsWith(":resolved")) ids.add(lid.slice(0, -":resolved".length)); else got.push(r);
+        }
+      }
+      // the ":resolved" rows read above came with the slow words: their own lines, 60 ids a call
+      const need = [...ids].filter((x) => x && !got.some((r) => String(r.line_id) === x));
+      for (let i = 0; !bad && i < need.length; i += 60) {
+        const { data: d2, error: e2 } = await base().in("line_id", need.slice(i, i + 60));
+        if (e2) { bad = String(e2.message || ""); break; }
+        got.push(...((d2 || []) as any[]));
+      }
+      if (bad) console.log("tally-ingest beat: " + what + ": the slow-ended lines of the last " + HELD_SLOW_DAYS + " days not read:", bad.slice(0, 200));
+      else {
+        const seen = new Set(rows.map((r) => String(r.line_id || "")));
+        const old = got.filter((r) => r && String(r.device_id ?? dev.id) === String(dev.id) && String(r.bridge ?? "") === bridge && String(r.state ?? "held") === "held" && !String(r.line_id || "").endsWith(":resolved")
+          && ["created", "altered", "imported"].includes(String(r.event || "")) && !seen.has(String(r.line_id || ""))
+          && Date.parse(String(r.received_at)) > Date.now() - HELD_SLOW_DAYS * 86400000 && Date.parse(String(r.received_at)) <= Date.now() - 7 * 86400000 && want(r))
+          .sort((a, b) => Date.parse(String(a.received_at)) - Date.parse(String(b.received_at)));
+        const once = new Set<string>();
+        for (const r of old) { const k = String(r.line_id); if (once.has(k)) continue; once.add(k); r._old = true; rows.push(r); }
+      }
+    }
+    if (!rows.length) return [];
     if (unresolved && rows.length) {
       // a line whose ":resolved" line already reached FinCom (in any state) is not asked for again. Bridge 2.3.1 (review H1):
       // except when that ":resolved" line is the ONLY one and is itself held for want of a complete body (the cloud guard's
@@ -486,7 +540,8 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
       // rows are here it is never listed again (asked once). When the second comes complete it is applied once and, by 50-53's
       // rules, replaces the held line (by its line id) and the earlier held ":resolved" row (the same GUID at an AlterID not
       // above its own); the earlier one never had a body, so it is never applied
-      const rids = [...new Set(rows.map((r) => String(r.line_id || "") + ":resolved"))].slice(0, 400);
+      // 2.3.4 (review L4): every listed line's id (up to 400 of the last 7 days and 400 older), 60 at a time
+      const rids = [...new Set(rows.map((r) => String(r.line_id || "") + ":resolved"))];
       // 2.3.1 (2.3.0 review round 3 L2): asked 60 ids at a time (400 in one URL could pass a gateway's limit and fail
       // quietly to an empty list); a failure is logged. 2.3.1 (masters): id, payload and received_at for the ledger wait
       const rs: any[] = [];
@@ -503,6 +558,9 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
       }
       rows = rows.filter((r) => {
         const xs = have.get(String(r.line_id || "") + ":resolved") || [];
+        // 2.3.4: a line of 7 to 30 days ago only when the slow-company rule ended it (its own words, or its only ":resolved"
+        // row's, held without a body): listed once more; never once a second ":resolved" row is here
+        if (r._old) return xs.length === 0 ? slowEnded(r.held_why) : xs.length === 1 && heldIncomplete(xs[0]) && slowEnded(xs[0].held_why);
         // bridge 2.3.1 (masters): the newest ":resolved" line held waiting for a ledger FinCom did not have (and the only one so
         // held): listed again with ledgerAgain once the ledger is in (below), so that the bridge asks Tally for the entry once
         // more and sends "<line id>:resolved" again (the same id), applied then; it replaces both held rows (50-53's rules)
@@ -2588,9 +2646,9 @@ Deno.serve(async (req) => {
         // alterid or both; left out when the cloud has no column (the bridge keeps its own default)
         const rs = (dev as any).recorder_source, recorderSource = rs === "addon" || rs === "alterid" || rs === "both" ? rs : null;
         // FinCom Bridge 2.2.2: the lines held without their entry, asked of Tally again by the bridge (left out when none)
-        const heldLines = await heldLinesFor(dev, firm, me.id);
+        const heldLines = await heldLinesFor(dev, firm, me.id, me.entry.version);
         // 06-Oct-2026: this bridge's own held lines without their entry's body or with a placeholder GUID, at most 20
-        const refetch = await refetchFor(dev, firm, me.id);
+        const refetch = await refetchFor(dev, firm, me.id, me.entry.version);
         // bridge 2.3.1 (masters): the ledgers this bridge's held lines wait for, fetched by the bridge before the entry
         const ledgersWanted = await ledgersWantedFor(dev, firm, me.id);
         return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(heldLines ? { heldLines } : {}), ...(refetch ? { refetch } : {}), ...(ledgersWanted ? { ledgersWanted } : {}), ...(co ? { notMain: true, changesOnly: true, error: CHANGES_ONLY } : may ? {} : { notMain: true }), ...ctl.out });

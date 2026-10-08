@@ -16,9 +16,9 @@
 #   green 3  BridgeVersion 2.1.7 with the owner's decision line naming 2.1.7 (round 13) -> passes check 4
 #   red 10   BridgeVersion 2.1.7 with an "allowed for 2.1.7 only" line WITHOUT the owner's decision words -> fails "owner's decision"
 #   red 11   an exception line naming two versions                    -> fails "names more than one version"
-#   green 5  BridgeVersion 2.3.3 with the real decision line of docs/tally-allowlist.md (the owner's standing decision of
-#            2026-10-06; "re-measured on 2026-10-06 on the stand (not real Tally)"; the 2.3.2, 2.3.1 and 2.3.0 lines kept as history) -> passes
-#   red 14   the same line, but the last release row dated 2026-10-07 (after its "re-measured on") -> fails "before the last release"
+#   green 5  BridgeVersion 2.3.4 with the real decision line of docs/tally-allowlist.md (the owner's decision of 2026-10-08;
+#            "re-measured on 2026-10-08"; the 2.3.3, 2.3.2, 2.3.1 and 2.3.0 lines kept as history) -> passes
+#   red 14   the same line, but the last release row dated 2026-10-09 (after its "re-measured on") -> fails "before the last release"
 #   pin      every 'go test' line in release-check.sh carries -timeout 20m (Go's default 10 minutes cut a full run at 588 s
 #            on 05-Oct-2026)
 # Nothing outside the temp folder is touched. Run: bash bridge-go/release_check_test.sh
@@ -145,11 +145,13 @@ expect "red 13: a standing line and an older decision line together name two ver
 # bridge 2.3.1 (the owner's decision of 06-Oct-2026), then 2.3.2 (the owner's standing decision, 2.3.1's line kept as
 # history: "as for 2.3.1: ..."): the real decision line, as docs/tally-allowlist.md carries it
 L231="$(grep -m1 '^First table:' "$HERE/../docs/tally-allowlist.md")"
-setup; withver 2.3.3; unmeasured "$L231"
-expect "green 5: 2.3.3 with the real decision line (2.3.2's and 2.3.1's kept as history, re-measured on 2026-10-06) passes check 4" 0 "allowed for 2.3.3 by the owner's decision of 2026-10-06"
+setup; withver 2.3.4; unmeasured "$L231
+(re-measured on 2026-10-08 on real TallyPrime 3.0 to 7.1, for 2.3.4)"
+expect "green 5: 2.3.4 with the real decision line (2.3.3's, 2.3.2's and 2.3.1's kept as history, re-measured on 2026-10-08) passes check 4" 0 "allowed for 2.3.4 by the owner's decision of 2026-10-08"
 
-setup; withver 2.3.3; unmeasured "$L231"
-sed -i 's/| 9.9.8 | 2026-09-30 |/| 9.9.8 | 2026-10-07 |/' "$R/docs/RELEASE-CHECKLIST.md"; g add -A; g commit -qm "a later release row"
+setup; withver 2.3.4; unmeasured "$L231
+(re-measured on 2026-10-08 on real TallyPrime 3.0 to 7.1, for 2.3.4)"
+sed -i 's/| 9.9.8 | 2026-09-30 |/| 9.9.8 | 2026-10-09 |/' "$R/docs/RELEASE-CHECKLIST.md"; g add -A; g commit -qm "a later release row"
 expect "red 14: the line re-measured before the last release row's date" 1 "before the last release"
 
 setup; printf '# Tally allow-list\n\nre-measured on 2026-10-02\n| id | purpose | worst case (s) | measured on |\n|---|---|---|---|\nledgers | ledger list | 4 | 2026-09-30\n' >"$R/docs/tally-allowlist.md"; g add -A; g commit -qm "no rows"

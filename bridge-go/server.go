@@ -667,7 +667,7 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		}
 		return readTestStatus(), nil
 	case "/tray/fetchtest":
-		// 2.2.3 (the owner's request): "Test fetching an entry": the six forms of the fetch check for one voucher, one at
+		// 2.2.3 (the owner's request): "Test fetching an entry": the forms of the fetch check (2.3.4: B, D, E and F) for one voucher, one at
 		// a time (fetchtest.go). Started by a person only, as Test reading from Tally is: a web page, FinCom's own
 		// included, is refused; the tray icon sends no Origin and no Sec-Fetch header
 		if r.Header.Get("Origin") != "" || r.Header.Get("Sec-Fetch-Site") != "" || r.Header.Get("Sec-Fetch-Mode") != "" || r.Header.Get("Sec-Fetch-Dest") != "" {

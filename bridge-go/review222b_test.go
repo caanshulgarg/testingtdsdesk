@@ -130,7 +130,7 @@ func TestR222bStopHoldsBackgroundOnly(t *testing.T) {
 		}
 	}
 	f.slow = func(id, body string) time.Duration {
-		if id == vchByMasterID {
+		if id == vchObjectID {
 			return 4 * time.Second
 		}
 		return 0
@@ -140,7 +140,7 @@ func TestR222bStopHoldsBackgroundOnly(t *testing.T) {
 		r222Line("voucher_accept_pre", "10:40", r222GUID(26311), "26311", "54391", "Receipt", "191", "5-Oct-2026", "a"),
 		r222Line("voucher_accept_post", "10:40", r222GUID(26311), "26311", "54395", "Receipt", "191", "5-Oct-2026", "a"))
 	readAndUploadAll(t)
-	n := f.n(vchByMasterID)
+	n := f.n(vchObjectID)
 	if n != 1 {
 		t.Fatalf("asked %d", n)
 	}
@@ -148,8 +148,8 @@ func TestR222bStopHoldsBackgroundOnly(t *testing.T) {
 	if readStop() != nil || !retryHeld() {
 		t.Fatalf("after the stop: reading %v, retry pending %v", readStop(), retryHeld())
 	}
-	if _, err := fetchVouchersByMasterIn(recorderTC(nil), nwsCo, f.port, "20261005", []string{"26312"}, 5); err == nil || f.n(vchByMasterID) != n {
-		t.Fatalf("a background read sent into Tally right after the stop: %v (%d requests)", err, f.n(vchByMasterID))
+	if _, err := fetchVouchersByMasterIn(recorderTC(nil), nwsCo, f.port, "20261005", []string{"26312"}, 5); err == nil || f.n(vchObjectID) != n {
+		t.Fatalf("a background read sent into Tally right after the stop: %v (%d requests)", err, f.n(vchObjectID))
 	}
 	f.mu.Lock()
 	f.slow = nil
@@ -218,7 +218,7 @@ func TestR222bLimitAfterGentleWait(t *testing.T) {
 		}
 	}
 	f.slow = func(id, body string) time.Duration {
-		if id == vchByMasterID {
+		if id == vchObjectID {
 			return time.Second
 		}
 		return 0
@@ -311,7 +311,7 @@ func TestR222bBelowStartGeneric(t *testing.T) {
 	if w != "Tally's voucher with that MasterID is not a change after the starting point" || strings.Contains(jsonText(s[0]), "P-SECRET") || strings.Contains(jsonText(s[0]), "Payment") {
 		t.Fatalf("the words: %q", w)
 	}
-	if err := datedRefused(&TC{copier: true}, voucherByMasterRequest("NO START CO", "20261005", []string{"1"})); err == nil {
+	if err := datedRefused(&TC{copier: true}, voucherObjectRequest("NO START CO", "1")); err == nil {
 		t.Fatal("a request by MasterID for a company with no starting point passes the guard")
 	}
 }

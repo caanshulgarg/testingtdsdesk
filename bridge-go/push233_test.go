@@ -696,7 +696,7 @@ func pushSave(t *testing.T, f *standTally, v *tVch, created bool, win string) []
 	return append([]string{h("voucher_accept_pre", pre, preMid, aid), h("voucher_accept_post", post, mid, aid)}, pushLinesFromXML(t, x, o)...)
 }
 
-func pushTallyAsks(f *standTally) int { return f.n(vchByMasterID) + f.n(vchByNumberID) }
+func pushTallyAsks(f *standTally) int { return f.n(vchObjectID) + f.n(vchByNumberID) }
 
 // --- 5. a full line: NO entry request at the stand; the cloud gets the entry in full, its GUID by the rule, ledger
 // totals zero; the heads go with it, never on their own; an alteration is a full entry again
@@ -791,7 +791,7 @@ func TestPushFallbackOldLines(t *testing.T) {
 		t.Fatal("an older add-on's save waited: its file never gave a full entry, so today's timing is kept")
 	}
 	readAndUploadAll(t)
-	if f.n(vchByMasterID) != 1 {
+	if f.n(vchObjectID) != 1 {
 		t.Fatalf("the entry request: %v", f.ids())
 	}
 	sent := c.recSent()
@@ -819,8 +819,8 @@ func TestPushFallbackOldLines(t *testing.T) {
 	readAndUploadAll(t)
 	time.Sleep(80 * time.Millisecond)
 	readAndUploadAll(t)
-	if f.n(vchByMasterID) != 3 {
-		t.Fatalf("entry requests: %d (%v)", f.n(vchByMasterID), f.ids())
+	if f.n(vchObjectID) != 3 {
+		t.Fatalf("entry requests: %d (%v)", f.n(vchObjectID), f.ids())
 	}
 	sent = c.recSent()
 	if len(sent) != 3 || sent[1]["push"] != nil || sent[2]["push"] != nil || str(sent[1]["object_guid"]) != w.guid || str(sent[2]["object_guid"]) != u.guid {
@@ -1019,7 +1019,7 @@ func TestPushSlowCompanyStopKept(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		liveUploadOnce()
 	}
-	asks := f.n(vchByMasterID) + f.n(vchByNumberID)
+	asks := f.n(vchObjectID) + f.n(vchByNumberID)
 	// an older add-on's save: the 2.3.2 route, its stop kept
 	r222Vch(f, 25801, "Journal", "J-25801", "20261005", 54601)
 	liveAppend(t, p, slowLine(25801, "07:30")...)
@@ -1040,7 +1040,7 @@ func TestPushSlowCompanyStopKept(t *testing.T) {
 	if len(s) != 1 || s[0]["push"] != true || s[0]["full"] != true || str(s[0]["object_guid"]) != v.guid || str(s[0]["heldWhy"]) != "" {
 		t.Fatalf("the full entry of the marked company: %v", s)
 	}
-	if n := f.n(vchByMasterID) + f.n(vchByNumberID); n != asks {
+	if n := f.n(vchObjectID) + f.n(vchByNumberID); n != asks {
 		t.Fatalf("Tally was asked: %d entry requests, %d before (%v)", n, asks, f.ids())
 	}
 }
@@ -1137,7 +1137,7 @@ func TestPushRealLinesFromFiveReleases(t *testing.T) {
 					t.Fatalf("%s: a full entry: total %d, guid %s mid %s:\n%s", rel, sum, str(l["object_guid"]), str(l["master_id"]), x)
 				}
 			}
-			if n := f.n(vchByMasterID) + f.n(vchByNumberID); n > 2 {
+			if n := f.n(vchObjectID) + f.n(vchByNumberID); n > 2 {
 				t.Fatalf("entry requests beyond the cancel's and the delete's: %v", f.ids())
 			}
 		})
@@ -1421,7 +1421,7 @@ func TestPushFallbackKeeps233HeldAtOnce(t *testing.T) {
 	if saves != 3 {
 		t.Fatalf("saves in FinCom: %d of 3 (%v)", saves, c.recSent())
 	}
-	if f.n(vchByMasterID)+f.n(vchByNumberID) == 0 && logLines("Tally is asked for the entry as before") == 0 {
+	if f.n(vchObjectID)+f.n(vchByNumberID) == 0 && logLines("Tally is asked for the entry as before") == 0 {
 		t.Fatal("the fallback was not taken")
 	}
 	if logLines("the full entry is not taken") < 1 {

@@ -1,23 +1,20 @@
 // 2.2.3 (05-Oct-2026, the owner's request): "Test fetching an entry", a tray item. On NWS144 the entry fetch (by type and
-// number, then by MasterID) finds nothing, and PowerShell cannot be run there, so the six forms of
+// number, then by MasterID) finds nothing, and PowerShell cannot be run there, so the forms of
 // docs/diagnostics/2.2.2-fetch-check.ps1 are sent by the bridge itself, for ONE voucher the person names (type, number,
 // date), one at a time, through the same gate as every request (invokeTally: one request to Tally at a time), each capped
 // at 25 s, never during a posting. Per form the log holds its letter and description, the period sent, the time taken,
 // the number of vouchers, the ids of each (5 at most) and the first 400 characters of Tally's answer. Nothing is kept,
 // nothing goes to the cloud.
 //
-//	A  FinComVoucherByNumber as the bridge sends it (&#34; quotes, SVFROMDATE/SVTODATE yyyymmdd)
-//	B  A with plain " quote marks
-//	C  FinComVoucherByMaster as the bridge sends it, for the MasterID found by B (else A, else F; else the person's)
-//	D  C with no dates
-//	E  C with the dates as d-MMM-yyyy TYPE="Date"
+//	B  by type and number with plain " quote marks, SVFROMDATE/SVTODATE yyyymmdd
+//	D  by MasterID (the MasterID found by B, else F; else the person's) with no dates
+//	E  by MasterID with the dates as d-MMM-yyyy TYPE="Date"
 //	F  B with no dates
 //
-// Every form goes under a measure-only id of its own (FinComFetchTestA..F, allowlist.go): the bridge's own two ids are
-// the narrow dated exceptions (a line waiting on them, within 3 days, a starting point recorded) and never go as a
-// person's; A and C are otherwise byte for byte what voucherByNumberRequest and voucherByMasterRequest build. 2.3.1: A and
-// C carry the entry request's fetch as built (liveFetchField, with the ledger lines under an invoice's items); B, D, E and
-// F stay byte for byte the ps1's (2.2.2 .. 2.3.0, liveFetchField222), so no other row changed (review M2).
+// Every form goes under a measure-only id of its own (FinComFetchTestB, D, E, F, allowlist.go), byte for byte the ps1's
+// (2.2.2 .. 2.3.0, liveFetchField222). 2.3.4 (the owner's decision of 08-Oct-2026: "Remove test forms A and C from the
+// release unless FinCom uses them in normal working"; nothing in normal working used them): forms A (FinComVoucherByNumber
+// as built, under its own id) and C (the entry request as built) are gone, with their allow-list rows.
 package main
 
 import (
@@ -31,9 +28,7 @@ import (
 )
 
 const (
-	fetchTestA   = "FinComFetchTestA"
 	fetchTestB   = "FinComFetchTestB"
-	fetchTestC   = "FinComFetchTestC"
 	fetchTestD   = "FinComFetchTestD"
 	fetchTestE   = "FinComFetchTestE"
 	fetchTestF   = "FinComFetchTestF"
@@ -44,22 +39,20 @@ const (
 var fetchTestTC = &TC{person: true}
 
 var fetchTestWhat = map[string]string{
-	"A": "FinComVoucherByNumber as sent (&#34; quotes, dates yyyymmdd)",
 	"B": "by number with plain quote marks, dates yyyymmdd",
-	"C": "FinComVoucherByMaster as sent, MasterID %s (dates yyyymmdd)",
 	"D": "by MasterID %s with no dates",
 	"E": "by MasterID %s with the dates as d-MMM-yyyy TYPE=Date",
 	"F": "by number with plain quote marks and no dates",
 }
 
 // one form's request ("" when its inputs cannot go: a type or number that cannot be in a TDL string, a date that is not
-// yyyymmdd for a dated form, a MasterID that is not a number for C, D, E)
+// yyyymmdd for a dated form, a MasterID that is not a number for D, E)
 func fetchTestRequest(letter, company, date, typ, no, mid string) string {
 	id := "FinComFetchTest" + letter
-	byNumber := letter == "A" || letter == "B" || letter == "F"
+	byNumber := letter == "B" || letter == "F"
 	statics := ""
 	switch letter {
-	case "A", "B", "C", "E":
+	case "B", "E":
 		if !isTallyDate(date) || normDate(tallyDMY(date)) != date {
 			return ""
 		}
@@ -83,13 +76,8 @@ func fetchTestRequest(letter, company, date, typ, no, mid string) string {
 		}
 		filter = "$MasterID = " + mid
 	}
-	// 2.3.1 (review M2): A and C are byte for byte the bridge's two requests, so they carry the entry fetch as built now
-	// (with the ledger lines under an invoice's items); B, D, E and F stay byte for byte as in 2.2.2 .. 2.3.0
-	fetch := liveFetchField222
-	if letter == "A" || letter == "C" {
-		fetch = liveFetchField
-	}
-	x := fcCollection(id, company, statics, "Voucher", fetch, filter)
+	// B, D, E and F stay byte for byte as in 2.2.2 .. 2.3.0
+	x := fcCollection(id, company, statics, "Voucher", liveFetchField222, filter)
 	if letter == "B" || letter == "F" {
 		e := esc(filter)
 		i := strings.LastIndex(x, e)
@@ -188,11 +176,11 @@ func fetchTestPeriod(company string) string {
 
 type fetchTestOpts struct {
 	company, typ, no, date string // date: yyyymmdd
-	master                 string // used for C, D, E when no form found a MasterID ("" : ask, else skip)
+	master                 string // used for D, E when no form found a MasterID ("" : ask, else skip)
 }
 
-// the six forms, one at a time. ask (the tray's question, nil when run directly) gives a MasterID when none was found,
-// "" to skip C, D and E
+// the four forms (B, D, E, F), one at a time. ask (the tray's question, nil when run directly) gives a MasterID when none was found,
+// "" to skip D and E
 func runFetchTest(o fetchTestOpts, ask func() string) (M, error) {
 	if o.company == "" {
 		o.company = trayMeasureCompany()
@@ -200,7 +188,7 @@ func runFetchTest(o fetchTestOpts, ask func() string) (M, error) {
 	if o.company == "" {
 		return nil, errors.New("No company is open in Tally: open the company to test, then try again.")
 	}
-	if fetchTestRequest("A", o.company, o.date, o.typ, o.no, "") == "" {
+	if fetchTestRequest("B", o.company, o.date, o.typ, o.no, "") == "" {
 		return nil, errors.New("The voucher type, number or date cannot be asked of Tally (a type and a number with no quote mark, a date as 05-Oct-2026).")
 	}
 	if fetchTestPosting() {
@@ -259,9 +247,7 @@ func runFetchTest(o fetchTestOpts, ask func() string) (M, error) {
 		}
 		return ""
 	}
-	mA := send("A", "")
-	mB := send("B", "")
-	mid, fSent := or(mB, mA), false
+	mid, fSent := send("B", ""), false
 	if mid == "" && stopped == "" {
 		mid, fSent = send("F", ""), true
 	}
@@ -273,14 +259,13 @@ func runFetchTest(o fetchTestOpts, ask func() string) (M, error) {
 			mid = ask()
 		}
 		if mid != "" {
-			writeLog(pre + "no MasterID found by A, B or F; C, D and E use MasterID " + mid + " (given by the person)")
+			writeLog(pre + "no MasterID found by B or F; D and E use MasterID " + mid + " (given by the person)")
 		} else {
-			writeLog(pre + "C, D and E not sent: no MasterID found by A, B or F, and none given")
-			parts = append(parts, "C, D, E skipped (no MasterID)")
+			writeLog(pre + "D and E not sent: no MasterID found by B or F, and none given")
+			parts = append(parts, "D, E skipped (no MasterID)")
 		}
 	}
 	if mid != "" {
-		send("C", mid)
 		send("D", mid)
 		send("E", mid)
 	}
@@ -324,7 +309,7 @@ func startFetchTest(o fetchTestOpts) M {
 	if o.company == "" {
 		return M{"ok": false, "error": "No company is open in Tally: open the company to test, then try again."}
 	}
-	if fetchTestRequest("A", o.company, o.date, o.typ, o.no, "") == "" {
+	if fetchTestRequest("B", o.company, o.date, o.typ, o.no, "") == "" {
 		return M{"ok": false, "error": "The voucher type, number or date cannot be asked of Tally (a type and a number with no quote mark, a date as 05-Oct-2026). Nothing was sent."}
 	}
 	if fetchTestPosting() {

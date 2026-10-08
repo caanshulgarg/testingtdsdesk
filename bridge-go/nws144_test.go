@@ -113,8 +113,8 @@ func TestNWS144RealLines(t *testing.T) {
 	}
 	// 191 (MasterID 0) by its type and number, once, for its own day; 192 by its MasterID; review H1 of 2.3.0: the cancel
 	// of 190 and the delete of 189 are asked of this Tally by their MasterIDs too (proof they happened here)
-	asked := strings.Join(f.bodiesOf(vchByMasterID), " ")
-	if f.n(vchByNumberID) != 1 || f.n(vchByMasterID) < 2 || f.n(vchByMasterID) > 3 || !strings.Contains(asked, "$MasterID = 26309") || !strings.Contains(asked, "$MasterID = 26305") {
+	asked := strings.Join(f.bodiesOf(vchObjectID), " ")
+	if f.n(vchByNumberID) != 1 || f.n(vchObjectID) < 2 || f.n(vchObjectID) > 3 || !strings.Contains(asked, "ID:26309</ID>") || !strings.Contains(asked, "ID:26305</ID>") {
 		t.Fatalf("requests: %v", f.ids())
 	}
 	b := f.bodiesOf(vchByNumberID)[0]
@@ -125,7 +125,7 @@ func TestNWS144RealLines(t *testing.T) {
 	if b != voucherByNumberRequest(nwsCo, "20261005", "Receipt", "191") {
 		t.Fatal("the request by number is not as built")
 	}
-	if !strings.Contains(asked, "$MasterID = 26312") {
+	if !strings.Contains(asked, "ID:26312</ID>") {
 		t.Fatalf("the body by MasterID: %s", asked)
 	}
 }

@@ -52,7 +52,7 @@ func TestBody230BridgeSendsWholeTypedVoucher(t *testing.T) {
 	ans := b230Answer(t)
 	f.mu.Lock()
 	f.behave = func(w http.ResponseWriter, r *http.Request, id, body string) bool {
-		if id == vchByMasterID && strings.Contains(body, "$MasterID = 26409") {
+		if id == vchObjectID && strings.Contains(body, "ID:26409</ID>") {
 			_, _ = w.Write([]byte(ans))
 			return true
 		}
@@ -71,21 +71,22 @@ func TestBody230BridgeSendsWholeTypedVoucher(t *testing.T) {
 	if s == nil {
 		t.Fatalf("Receipt 213 not sent: %v", c.recSent())
 	}
-	x, want := str(s["xml"]), cleanXML(b230Element(ans))
+	// next-fastfetch (the owner, 08-Oct-2026): Tally's whole voucher element, stripped to the approved fields (fastvch.go)
+	x, want := str(s["xml"]), fastStripVoucher(cleanXML(b230Element(ans)))
 	if str(s["event"]) != "created" || str(s["object_guid"]) != g || toI64(s["alter_id"]) != 54493 || str(s["master_id"]) != "26409" {
 		t.Fatalf("Receipt 213's ids: %v %v %v %v", s["event"], s["object_guid"], s["alter_id"], s["master_id"])
 	}
 	if x != want {
-		t.Fatalf("the XML sent is not Tally's whole voucher element (%d characters, Tally's %d):\n%s", len(x), len(want), x)
+		t.Fatalf("the XML sent is not Tally's voucher stripped to the approved fields (%d characters, %d):\n%s", len(x), len(want), x)
 	}
-	for _, part := range []string{`<LEDGERNAME TYPE="String">Salesify Marketing LLP</LEDGERNAME>`, `<LEDGERNAME TYPE="String">Cash</LEDGERNAME>`,
-		`<AMOUNT TYPE="Amount">59000.00</AMOUNT>`, `<AMOUNT TYPE="Amount">-59000.00</AMOUNT>`, "<NAME>GSC/2026-27/118</NAME>", `<BILLTYPE TYPE="String">Agst Ref</BILLTYPE>`,
-		"<AMOUNT>59000.00</AMOUNT>", "</BILLALLOCATIONS.LIST>", "</VOUCHER>"} {
+	for _, part := range []string{`<LEDGERNAME>Salesify Marketing LLP</LEDGERNAME>`, `<LEDGERNAME>Cash</LEDGERNAME>`,
+		`<AMOUNT>59000.00</AMOUNT>`, `<AMOUNT>-59000.00</AMOUNT>`, "<NAME>GSC/2026-27/118</NAME>", `<BILLTYPE>Agst Ref</BILLTYPE>`,
+		"</BILLALLOCATIONS.LIST>", "</VOUCHER>"} {
 		if !strings.Contains(x, part) {
 			t.Fatalf("the XML sent lacks %q", part)
 		}
 	}
-	if n := strings.Count(x, "<ALLLEDGERENTRIES.LIST>"); n != 2 || len(x) < 2900 {
+	if n := strings.Count(x, "<ALLLEDGERENTRIES.LIST>"); n != 2 {
 		t.Fatalf("%d ledger lines, %d characters", n, len(x))
 	}
 }
@@ -171,15 +172,15 @@ func TestBody230RefetchSettlesLines4_17_18(t *testing.T) {
 	if s18 == nil || str(s18["event"]) != "created" || str(s18["object_guid"]) != r222GUID(26409) || toI64(s18["alter_id"]) != 54493 || !strings.Contains(str(s18["xml"]), "Salesify Marketing LLP") {
 		t.Fatalf("line 18: %v", s18)
 	}
-	if f.n(vchByNumberID) < 1 || f.n(vchByMasterID) < 2 {
-		t.Fatalf("asked by number %d, by MasterID %d", f.n(vchByNumberID), f.n(vchByMasterID))
+	if f.n(vchByNumberID) < 1 || f.n(vchObjectID) < 2 {
+		t.Fatalf("asked by number %d, by MasterID %d", f.n(vchByNumberID), f.n(vchObjectID))
 	}
 	// once: listed again (the cloud has not answered yet), nothing more is asked or sent
-	k := f.n(vchByMasterID) + f.n(vchByNumberID)
+	k := f.n(vchObjectID) + f.n(vchByNumberID)
 	applyRefetch(M{"refetch": rows})
 	b230Turns(3)
-	if f.n(vchByMasterID)+f.n(vchByNumberID) != k || len(r222cSentID(c, "L4:resolved")) != 1 || len(r222cSentID(c, "L17:resolved")) != 1 || len(r222cSentID(c, "L18:resolved")) != 1 {
-		t.Fatalf("asked or sent again: %d -> %d asks", k, f.n(vchByMasterID)+f.n(vchByNumberID))
+	if f.n(vchObjectID)+f.n(vchByNumberID) != k || len(r222cSentID(c, "L4:resolved")) != 1 || len(r222cSentID(c, "L17:resolved")) != 1 || len(r222cSentID(c, "L18:resolved")) != 1 {
+		t.Fatalf("asked or sent again: %d -> %d asks", k, f.n(vchObjectID)+f.n(vchByNumberID))
 	}
 }
 
@@ -210,7 +211,7 @@ func TestBody230RefetchOwnTallyOnly(t *testing.T) {
 	applyRefetch(M{"refetch": []any{other, wrongGUID}})
 	b230Turns(3)
 	_, items := liveHeldLoad()
-	if items["LO"].ID != "" || items["LG"].ID != "" || b230Resolved(c, "LO") != nil || b230Resolved(c, "LG") != nil || f.n(vchByMasterID) != 0 || f.n(vchByNumberID) != 0 {
+	if items["LO"].ID != "" || items["LG"].ID != "" || b230Resolved(c, "LO") != nil || b230Resolved(c, "LG") != nil || f.n(vchObjectID) != 0 || f.n(vchByNumberID) != 0 {
 		t.Fatalf("another user's line taken: %v / asked %v", items, f.ids()[n:])
 	}
 }
@@ -226,19 +227,19 @@ func TestBody230RefetchSpacedAndStopped(t *testing.T) {
 	postTaking.Store(true)
 	b230Turns(2)
 	postTaking.Store(false)
-	if f.n(vchByMasterID)+f.n(vchByNumberID) != 0 {
+	if f.n(vchObjectID)+f.n(vchByNumberID) != 0 {
 		t.Fatalf("asked during a posting: %v", f.ids())
 	}
 	// the 2-second stop (2.3.1: never a switch-off): nothing asked until the shared retry schedule's next try
-	retryNote(f.port, vchByMasterID, errRecorderStop)
+	retryNote(f.port, vchObjectID, errRecorderStop)
 	b230Turns(2)
-	if f.n(vchByMasterID)+f.n(vchByNumberID) != 0 {
+	if f.n(vchObjectID)+f.n(vchByNumberID) != 0 {
 		t.Fatalf("asked before the retry: %v", f.ids())
 	}
 	retryDue() // the retry's time: it goes by itself
 	// one refetch line a turn
 	liveResolveTurn()
-	if n := f.n(vchByMasterID) + f.n(vchByNumberID); n != 1 {
+	if n := f.n(vchObjectID) + f.n(vchByNumberID); n != 1 {
 		t.Fatalf("%d asks in one turn (one refetch line a turn)", n)
 	}
 	b230Turns(4)
@@ -247,7 +248,7 @@ func TestBody230RefetchSpacedAndStopped(t *testing.T) {
 	}
 	// LN: asked once (2.3.3, the owner's rule: a held line is asked again at most once); Tally answered without it: it ends
 	// at once with the Day Book words, never asked again, whatever FinCom lists (2.3.2: asked every 10 minutes, 20 tries)
-	k := f.n(vchByMasterID) + f.n(vchByNumberID)
+	k := f.n(vchObjectID) + f.n(vchByNumberID)
 	if s := r222cSentID(c, "LN:resolved"); len(s) != 1 || str(s[0]["xml"]) != "" || str(s[0]["heldWhy"]) != liveHeldOnceGiveUp {
 		t.Fatalf("LN did not end after its one ask: %v", s)
 	}
@@ -255,7 +256,7 @@ func TestBody230RefetchSpacedAndStopped(t *testing.T) {
 	at := nowFn().Add(11 * time.Minute)
 	nowFn = func() time.Time { return at }
 	b230Turns(3)
-	if f.n(vchByMasterID)+f.n(vchByNumberID) != k {
+	if f.n(vchObjectID)+f.n(vchByNumberID) != k {
 		t.Fatal("LN asked again after its one ask")
 	}
 }

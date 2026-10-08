@@ -7,7 +7,7 @@ package main
 // of Before/After Delete Object and Before/After Cancel Object, and no other method of that context is confirmed on a real
 // Tally (a method Tally does not know stops the whole add-on from loading), so the add-on is not changed. The bridge finds
 // Tally's GUID itself:
-//   - a cancel: the voucher is still in Tally: asked by its MasterID (the allow-listed FinComVoucherByMaster, a background
+//   - a cancel: the voucher is still in Tally: asked by its MasterID (the allow-listed FinComVoucherObject since 2.3.4, a background
 //     read with the 2 s stop, the body fetch's path); Tally's GUID is taken (its AlterID too when Tally gives it cancelled);
 //     when Tally cannot be asked, the bridge's own record, as for a delete;
 //   - a delete: the voucher is gone: the bridge's own record of MasterID -> GUID per company (sync\recorder-guids.json,
@@ -26,7 +26,7 @@ package main
 // (with or without the add-on's GUID) takes a GUID only with proof from THIS bridge's own Tally:
 //   - a cancel: Tally's answer by MasterID shows that voucher ISCANCELLED Yes (typed or not): Tally's GUID; anything
 //     else (not cancelled there, not there, another voucher, Tally not asked): held, never a record's GUID;
-//   - a delete: this bridge's Tally is asked by MasterID first (FinComVoucherByMaster, the line's date, a background read
+//   - a delete: this bridge's Tally is asked by MasterID first (FinComVoucherObject since 2.3.4, a background read
 //     with the 2 s stop that gives way to a posting): Tally still holds a voucher with that MasterID (or the GUID a record
 //     names): held; Tally answers it is not there: the line's own GUID, else the bridge's record, else FinCom's, as before;
 //     Tally cannot be asked (off, timeout, no starting point, no MasterID or date): held, never sent unproven;
@@ -275,6 +275,10 @@ func liveResolveGuid(h heldLine, sent *bool) (c *change, why string, answered, f
 		return nil, "", false, false, err
 	}
 	got, err := fetchVouchersByMasterIn(tc, h.Company, port, h.Date, []string{h.MID}, liveBodySec())
+	if errors.Is(err, errFastShape) {
+		// 2.3.4 (re-review L2): the same answer would come again: held for good with the words, not asked every turn
+		return nil, map[bool]string{true: liveCancelHeldWords, false: liveDeleteHeldWords}[h.Ev == "cancelled"] + " (" + cutRunes(err.Error(), 160) + ")", true, true, nil
+	}
 	if err != nil {
 		return nil, "", false, false, err
 	}

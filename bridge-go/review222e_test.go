@@ -57,7 +57,7 @@ func TestR222eDecisionLog(t *testing.T) {
 	}
 	// 2.3.1: waiting for the retry schedule (never a switch-off): said in the decision log too; 2.3.3: the line goes up held
 	// at once with the words
-	retryNote(f.port, vchByMasterID, errRecorderStop)
+	retryNote(f.port, vchObjectID, errRecorderStop)
 	uploadAll(t)
 	if !strings.Contains(r222eLog(), "): held at once: waiting: Tally busy; FinCom asks again at ") {
 		t.Fatalf("the wait not in the log:\n%s", r222eLog())

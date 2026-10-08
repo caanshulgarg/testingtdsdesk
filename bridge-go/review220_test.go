@@ -56,7 +56,7 @@ func TestUnlinkedCompanyNoBodyNoStall(t *testing.T) {
 	liveAppend(t, po, otherLine("voucher_accept_pre", "", "", "", "private"), otherLine("voucher_accept_post", "o-1", "5", "6", "private"),
 		otherLine("after_delete", "o-2", "7", "8", "private"))
 	readAndUploadAll(t)
-	if f.n(vchByMasterID) != 0 {
+	if f.n(vchObjectID) != 0 {
 		t.Fatal("a body of a company not linked was asked of Tally")
 	}
 	c.mu.Lock()
@@ -245,12 +245,12 @@ func TestForgedLineDropped(t *testing.T) {
 	uploadAll(t)
 	// (review H1 of 2.3.0: the cancel line above is asked of this Tally by its MasterID too, on its own date)
 	var bs []string
-	for _, b := range f.bodiesOf(vchByMasterID) {
-		if strings.Contains(b, "<SVFROMDATE>"+td+"</SVFROMDATE>") {
+	for _, b := range f.bodiesOf(vchObjectID) {
+		if strings.Contains(b, "ID:"+v.master+"<") || strings.Contains(b, "ID:"+w.master+"<") { // next-fastfetch: no period; by its MasterID
 			bs = append(bs, b)
 		}
 	}
-	if len(bs) != 2 || strings.Count(strings.Join(bs, " "), "$MasterID = ") != 2 || !strings.Contains(bs[0]+bs[1], "$MasterID = "+v.master+"<") || !strings.Contains(bs[0]+bs[1], "$MasterID = "+w.master+"<") {
+	if len(bs) != 2 || strings.Count(strings.Join(bs, " "), "<ID TYPE=\"Name\">ID:") != 2 || !strings.Contains(bs[0]+bs[1], "ID:"+v.master+"<") || !strings.Contains(bs[0]+bs[1], "ID:"+w.master+"<") {
 		t.Fatalf("asked: %v", bs)
 	}
 	for _, l := range c.recSent() {

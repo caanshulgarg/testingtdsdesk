@@ -75,12 +75,12 @@ func TestCancelGUIDFromTally(t *testing.T) {
 			realLine("before_cancel", "", v.master, "", "Receipt", "1", addonDate(td)),
 			realLine("after_cancel", "", v.master, "", "Receipt", "1", addonDate(td)))
 		liveReadOnce()
-		n0 := f.n(vchByMasterID)
+		n0 := f.n(vchObjectID)
 		uploadAll(t)
-		if f.n(vchByMasterID) != n0+1 {
+		if f.n(vchObjectID) != n0+1 {
 			t.Fatalf("the cancel's entry is asked of Tally once by MasterID: %v", f.ids())
 		}
-		if b := f.bodiesOf(vchByMasterID); !strings.Contains(b[len(b)-1], "$MasterID = "+v.master) {
+		if b := f.bodiesOf(vchObjectID); !strings.Contains(b[len(b)-1], "ID:"+v.master+"</ID>") {
 			t.Fatalf("the request: %s", b[len(b)-1])
 		}
 		got := sentEvent(c, "cancelled")
@@ -93,13 +93,13 @@ func TestCancelGUIDFromTally(t *testing.T) {
 		// and the bridge keeps it: a delete of the same entry later (gone from this Tally) asks Tally only whether it is
 		// still there (review H1), and takes the GUID from the bridge's record
 		f.remove(v)
-		n1 := f.n(vchByMasterID)
+		n1 := f.n(vchObjectID)
 		liveAppend(t, liveFilePath(rec, ""),
 			realLine("before_delete", "", v.master, "", "Receipt", "1", addonDate(td)),
 			realLine("after_delete", "", v.master, "", "Receipt", "1", addonDate(td)))
 		liveReadOnce()
 		uploadAll(t)
-		if f.n(vchByMasterID) != n1+1 {
+		if f.n(vchObjectID) != n1+1 {
 			t.Fatalf("a delete asks this Tally once by MasterID whether it is still there: %v", f.ids())
 		}
 		got = sentEvent(c, "deleted")
@@ -137,13 +137,13 @@ func TestDeleteGUIDFromBridgeRecordAfterRestart(t *testing.T) {
 		// the restart: everything in memory forgotten; the entry deleted in this Tally
 		liveResetState()
 		f.remove(v)
-		n1 := f.n(vchByMasterID)
+		n1 := f.n(vchObjectID)
 		liveAppend(t, liveFilePath(rec, ""),
 			realLine("before_delete", "", v.master, "", "Receipt", "2", addonDate(td)),
 			realLine("after_delete", "", v.master, "", "Receipt", "2", addonDate(td)))
 		liveReadOnce()
 		uploadAll(t)
-		if f.n(vchByMasterID) != n1+1 {
+		if f.n(vchObjectID) != n1+1 {
 			t.Fatalf("a delete asks this Tally once by MasterID whether it is still there (review H1): %v", f.ids())
 		}
 		got := sentEvent(c, "deleted")
@@ -181,7 +181,7 @@ func TestDeleteGUIDUnknownHeldWithWords(t *testing.T) {
 			return 200, M{"ok": true, "results": res}
 		}
 		c.mu.Unlock()
-		n0 := f.n(vchByMasterID)
+		n0 := f.n(vchObjectID)
 		liveAppend(t, liveFilePath(rec, ""),
 			realLine("before_delete", "", "40", "", "Receipt", "9", addonDate(td)),
 			realLine("after_delete", "", "40", "", "Receipt", "9", addonDate(td)),
@@ -189,7 +189,7 @@ func TestDeleteGUIDUnknownHeldWithWords(t *testing.T) {
 		liveReadOnce()
 		uploadAll(t)
 		// 2.3.1: one request per MasterID (40 and 41), each asked once
-		if f.n(vchByMasterID) != n0+2 || f.n(vchByNumberID) != 0 {
+		if f.n(vchObjectID) != n0+2 || f.n(vchByNumberID) != 0 {
 			t.Fatalf("the deletes are asked of this Tally once each, by MasterID only: %v", f.ids())
 		}
 		var del []M
@@ -250,7 +250,7 @@ func TestCancelGUIDTallySilentFallsBack(t *testing.T) {
 	noteStartPoint(zz, b220CoGUID, 5, 1)
 	liveMidNote(b220CoGUID, "12", "cccc-imported-00000777", "Receipt", "4", td)
 	f.mu.Lock()
-	f.behave = silentFor(isID(vchByMasterID), nil)
+	f.behave = silentFor(isID(vchObjectID), nil)
 	f.mu.Unlock()
 	liveAppend(t, liveFilePath(rec, ""),
 		realLine("after_cancel", "", "12", "", "Receipt", "4", addonDate(td)),

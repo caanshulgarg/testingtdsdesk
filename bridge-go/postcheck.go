@@ -3,7 +3,7 @@
 // company in Tally for the ONE voucher it may be, and tells FinCom's cloud what it saw:
 //
 //	found     the voucher with the entry's type and number on its date (FinComVoucherByNumber), or with Tally's own id
-//	          from its reply (FinComVoucherByMaster), carries the entry's FinCom id (TDSDesk:<id>) in its narration: the
+//	          from its reply (FinComVoucherObject since 2.3.4), carries the entry's FinCom id (TDSDesk:<id>) in its narration: the
 //	          cloud marks it posted with the voucher found; nothing is sent;
 //	notseen   Tally answered for that exact company (its GUID the one held) and has no such voucher ON THAT DAY. Both
 //	          reads are one-day reads (Tally may also have numbered the entry itself: Automatic numbering), so this is
@@ -25,6 +25,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"html"
 	"path/filepath"
@@ -172,6 +173,9 @@ func checkPostedEntry(c M) M {
 	}
 	// Tally's own id from its reply: the one voucher with that id
 	got, err := fetchVouchersByMasterIn(checkTC(), name, port, date, []string{mid}, 2)
+	if errors.Is(err, errFastShape) {
+		return unable(postCheckShapeWords(name, mid, date, err)) // 2.3.4 (re-review L2): a person looks, never "busy"
+	}
 	if err != nil {
 		return busy(err)
 	}
@@ -182,8 +186,8 @@ func checkPostedEntry(c M) M {
 		}
 		return other(v, byID) // anything else Tally gave is dropped
 	}
-	// FinComVoucherByMaster asks ONE day (the entry's date as its period, as approved; the allow-list unchanged): the entry
-	// may have been redated in Tally
+	// Tally has no voucher with that id (2.3.4: FinComVoucherObject asks the one voucher by its id, whatever its date; the
+	// entry may have been deleted, or the id is another voucher's)
 	what := "with Tally's id " + mid
 	if byNumberWords != "" {
 		what = vtype + " " + no + " / Tally's id " + mid
@@ -225,4 +229,11 @@ func runPostChecks(list []any) bool {
 		}
 	}
 	return resent
+}
+
+// 2.3.4 (re-review L2): Tally keeps the voucher with that id in a form FinCom's entry request does not read whole: the check
+// cannot read it by itself; a person looks in Tally
+func postCheckShapeWords(name, mid, date string, err error) string {
+	return fmt.Sprintf("In %s, Tally's voucher id %s of %s is kept in a form FinCom does not read by itself (%s): a person must look in Tally; use Mark posted if it is this entry, post again only if it is not",
+		name, mid, ddmmyyyy(date), cutRunes(err.Error(), 200))
 }

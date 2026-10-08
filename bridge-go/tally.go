@@ -304,12 +304,12 @@ type TC struct {
 // round 19 (review finding 1, the owner's rule "reading is prospective only", by any route): a request carrying a period
 // (SVFROMDATE / SVTODATE, any date form) goes to Tally only when ReadDays is on or a person started it
 //
-// 2.2.0 (the owner's rule, prospective only): one narrow exception, the recorder's body fetch (FinComVoucherByMaster):
-// it asks only the entries just changed, by MasterID, with the line's own date as the period; it passes only when it is
-// exactly what voucherByMasterRequest builds for one day and exactly one MasterID (2.3.1; recorder_live.go). Never a day's list
+// 2.2.0 (the owner's rule, prospective only): one narrow exception, the recorder's body fetch: it asks only the entry just
+// changed, by MasterID; it passes only when it is exactly what its builder makes for exactly one MasterID (next-fastfetch:
+// voucherObjectRequest, the object export "ID:<MasterID>", no period; fastvch.go). Never a day's list
 //
 // Round 3 R3-1: the two exceptions are checked by their id, always (whatever ReadDays says, whatever date form they use):
-// a FinComVoucherByMaster or FinComSlice that is not exactly as built, with its values in bounds, never goes.
+// an entry request or FinComSlice that is not exactly as built, with its values in bounds, never goes.
 // Round 4 R4-1: with ReadDays off the guard decides by the request's id, not by how its dates are spelt: an id that
 // reads by date is refused; TDSDeskKeepList goes only exactly as keepListAboveRequest builds it (its undated form); an
 // undated id goes unless it carries dates in any spelling (a normalised copy, lower-cased with character references
@@ -318,7 +318,7 @@ var requestClass = map[string]string{
 	"Day Book": "dated", "TDSDeskVchHeads": "dated", dupCheckID: "dated", tagCheckID: "dated", masterCheckID: "dated",
 	"FinComMeasureB": "dated", "FinComMeasureC": "dated", "FinComMeasureYear": "dated", "FinComMeasureD": "dated",
 	"FinComMeasureE": "dated", "FinComSnapshot": "dated", datesProbeID: "dated",
-	vchByMasterID: "exception", sliceID: "exception", vchByNumberID: "exception",
+	vchObjectID: "exception", sliceID: "exception", vchByNumberID: "exception",
 	"TDSDeskKeepList":  "keepAbove",
 	"Import":           "import",
 	"TDSDeskCompanies": "undated", "TDSDeskCompanyInfo": "undated", "FinComCompany": "undated", "FinComFree": "undated",
@@ -327,14 +327,15 @@ var requestClass = map[string]string{
 	editLogProbeID: "undated", cnReportID: "undated",
 	ledChangesID: "undated", ledByNameID: "undated", // 2.3.1 (masters): no period, ever
 	// 2.2.3: "Test fetching an entry" (measure-only, a person's): its dated forms and its undated ones
-	fetchTestA: "dated", fetchTestB: "dated", fetchTestC: "dated", fetchTestE: "dated", fetchTestD: "undated", fetchTestF: "undated",
+	fetchTestB: "dated", fetchTestE: "dated", fetchTestD: "undated", fetchTestF: "undated",
 }
 
 func datedRefused(tc *TC, x string) error {
 	id := tallyRequestID(x)
 	switch id {
-	case vchByMasterID:
-		if voucherByMasterExact(x) {
+	case vchObjectID:
+		// next-fastfetch: the entry request (no period), exactly as built, for a company whose starting point is recorded
+		if voucherObjectExact(x) {
 			return nil
 		}
 		return readsOffErr()

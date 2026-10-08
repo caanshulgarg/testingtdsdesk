@@ -139,6 +139,8 @@ run_enqueue_held_id.py                180
 run_migration44.py                    120
 run_migration45.py                    120
 run_recorder_server.py                120
+run_recorder_held30.py                120
+run_fast234_store.py                  600
 run_recorder_typed_xml.mjs            120
 run_parse_lows.mjs                    60
 run_recorder_guid_server.py           120
@@ -179,5 +181,7 @@ run_bridge_per_user_ui.py             120  TDSDESK_SITE=../app/dist-test
 run_parse_parta.mjs                   120
 run_parse_real231.mjs                 120
 run_push233_parse.mjs                 120
+run_parse_fast234.mjs                 120
+run_parse_fast234_kinds.mjs           120
 run_migration57.py                    120
 run_parta_server.py                   120

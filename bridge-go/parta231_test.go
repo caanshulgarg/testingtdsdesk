@@ -156,7 +156,7 @@ func partAFilter(voucher, fetch string) string {
 
 // Tally's answer to this request for this fixture: the envelope with the voucher as the request's fetch gives it
 func partAAnswer(fixture, request string) string {
-	fetch := group(`<FETCH>([^<]*)</FETCH>`, request, 1)
+	fetch := testFetchOf(request)
 	a, z := strings.Index(fixture, "    <VOUCHER REMOTEID"), strings.Index(fixture, "   </COLLECTION>")
 	return fixture[:a] + partAFilter(fixture[a:z], fetch) + "\n" + fixture[z:]
 }
@@ -171,12 +171,12 @@ func partABridge(t *testing.T) (string, *standTally, *standCloud) {
 	}
 	f.mu.Lock()
 	f.behave = func(w http.ResponseWriter, r *http.Request, id, body string) bool {
-		if id != vchByMasterID && id != vchByNumberID {
+		if id != vchObjectID && id != vchByNumberID {
 			return false
 		}
 		var hit []string
 		for _, v := range partAVchs {
-			byMid := id == vchByMasterID && regexp.MustCompile(`\$MasterID = `+v.mid+`\b`).MatchString(body)
+			byMid := id == vchObjectID && strings.Contains(body, `<ID TYPE="Name">ID:`+v.mid+`</ID>`)
 			byNo := id == vchByNumberID && pinQuoted(body, "$VoucherTypeName") == v.typ && strings.Contains(body, "$VoucherNumber = &#34;"+v.no+"&#34;")
 			if byMid || byNo {
 				hit = append(hit, partAAnswer(fx[v.mid], body))
@@ -218,27 +218,19 @@ func TestPartAFetchExactly(t *testing.T) {
 	if n := len(strings.Split(partAAdded, ", ")) - 1; n != 41 {
 		t.Errorf("part A adds %d fields, want 41", n)
 	}
-	byMaster := voucherByMasterRequest(spikeCo, "20261002", []string{"21"})
-	byNumber := voucherByNumberRequest(spikeCo, "20261002", "Sales", "201")
-	for name, x := range map[string]string{"by MasterID": byMaster, "by number": byNumber} {
-		id, filter := vchByMasterID, "$MasterID = 21"
-		if name == "by number" {
-			id, filter = vchByNumberID, `$VoucherNumber = "201" AND $VoucherTypeName = "Sales"`
-		}
-		// the request diff: only the fetch moved
-		if strings.Replace(x, "<FETCH>"+liveFetchField+"</FETCH>", "<FETCH>"+partABefore+"</FETCH>", 1) != fcCollection(id, spikeCo, periodVars("20261002", "20261002"), "Voucher", partABefore, filter) {
-			t.Fatalf("%s: more than the fetch changed:\n%s", name, x)
-		}
-		if !strings.Contains(x, "<TALLYREQUEST>Export</TALLYREQUEST>") || strings.Count(x, "<COLLECTION ") != 1 || !strings.Contains(x, `ISMODIFY="No"`) || isImportRequest(x) {
-			t.Fatalf("%s: not a read: %s", name, x)
-		}
-		if err := checkAllowed(x); err != nil {
-			t.Fatalf("%s refused: %v", name, err)
-		}
+	// next-fastfetch: by MasterID the object export, its FETCHLIST exactly these fields (fast234form_test.go)
+	if testFetchOf(voucherObjectRequest(spikeCo, "21")) != liveFetchField {
+		t.Fatal("the entry request does not name exactly the approved fields")
 	}
-	if strings.ReplaceAll(fetchTestRequest("A", spikeCo, "20261002", "Sales", "201", ""), fetchTestA, vchByNumberID) != byNumber ||
-		strings.ReplaceAll(fetchTestRequest("C", spikeCo, "20261002", "", "", "21"), fetchTestC, vchByMasterID) != byMaster {
-		t.Fatal("the test forms A and C are no longer the two requests as built")
+	byNumber := voucherByNumberRequest(spikeCo, "20261002", "Sales", "201")
+	if strings.Replace(byNumber, "<FETCH>"+liveFetchField+"</FETCH>", "<FETCH>"+partABefore+"</FETCH>", 1) != fcCollection(vchByNumberID, spikeCo, periodVars("20261002", "20261002"), "Voucher", partABefore, `$VoucherNumber = "201" AND $VoucherTypeName = "Sales"`) {
+		t.Fatalf("by number: more than the fetch changed:\n%s", byNumber)
+	}
+	if err := checkAllowed(byNumber); err != nil {
+		t.Fatalf("by number refused: %v", err)
+	}
+	if fetchTestRequest("A", spikeCo, "20261002", "Sales", "201", "") != "" || fetchTestRequest("C", spikeCo, "20261002", "", "", "21") != "" {
+		t.Fatal("the trial forms A and C are still built (2.3.4: removed)")
 	}
 	for _, l := range []string{"B", "D", "E", "F"} {
 		if x := fetchTestRequest(l, spikeCo, "20261002", "Sales", "201", "21"); !strings.Contains(x, "<FETCH>"+liveFetchField222+"</FETCH>") {
@@ -252,28 +244,23 @@ func TestPartAOneMasterIDPerRequest(t *testing.T) {
 	if liveMaxIDs != 1 {
 		t.Fatalf("liveMaxIDs %d", liveMaxIDs)
 	}
-	if x := voucherByMasterRequest(spikeCo, "20261002", []string{"21", "22"}); x != "" {
-		t.Fatalf("two MasterIDs built a request: %s", x)
-	}
-	if x := voucherByMasterRequest(spikeCo, "20261002", nil); x != "" {
-		t.Fatalf("no MasterID built a request: %s", x)
-	}
+	// next-fastfetch: the object export names one MasterID, nothing else can be built or sent
 	_, f, _ := partABridge(t) // its starting point recorded
-	two := fcCollection(vchByMasterID, spikeCo, periodVars("20261002", "20261002"), "Voucher", liveFetchField, "$MasterID = 21 OR $MasterID = 22")
-	if voucherByMasterExact(two) || checkAllowed(two) == nil {
+	two := strings.Replace(voucherObjectRequest(spikeCo, "21"), "ID:21<", "ID:21 ID:22<", 1)
+	if voucherObjectExact(two) || checkAllowed(two) == nil {
 		t.Fatal("a request naming two MasterIDs passes")
 	}
-	if !voucherByMasterExact(voucherByMasterRequest(spikeCo, "20261002", []string{"21"})) {
+	if !voucherObjectExact(voucherObjectRequest(spikeCo, "21")) {
 		t.Fatal("the one-MasterID request does not pass")
 	}
-	if s := allowListSamples()[vchByMasterID]; strings.Count(s, "$MasterID = ") != 1 {
-		t.Fatalf("the allow-list sample names %d MasterIDs", strings.Count(s, "$MasterID = "))
+	if s := allowListSamples()[vchObjectID]; strings.Count(s, `<ID TYPE="Name">ID:`) != 1 {
+		t.Fatalf("the allow-list sample: %s", s)
 	}
 	n := tallySent.Load()
 	if _, err := fetchVouchersByMasterIn(recorderTC(nil), spikeCo, f.port, "20261002", []string{"21", "22"}, 5); err == nil {
 		t.Fatal("two MasterIDs were asked")
 	}
-	if tallySent.Load() != n || f.n(vchByMasterID) != 0 {
+	if tallySent.Load() != n || f.n(vchObjectID) != 0 {
 		t.Fatal("a request went for two MasterIDs")
 	}
 }
@@ -288,7 +275,7 @@ func TestPartAStandBothForms(t *testing.T) {
 			t.Fatalf("%s: the fixture's lines sum to %v", v.file, sum)
 		}
 		// the 2.3.1 fetch before part A drops what the owner asked for
-		old := partAAnswer(fx, fcCollection(vchByMasterID, spikeCo, "", "Voucher", partABefore, ""))
+		old := partAAnswer(fx, fcCollection(vchObjectID, spikeCo, "", "Voucher", partABefore, ""))
 		lost := 0
 		for _, w := range v.want {
 			if !strings.Contains(old, w) {
@@ -303,15 +290,16 @@ func TestPartAStandBothForms(t *testing.T) {
 				t.Fatalf("%s %s: the body's lines sum to %v", v.file, how, sum)
 			}
 			for _, w := range v.want {
+				w = regexp.MustCompile(` TYPE="[^"]*"`).ReplaceAllString(w, "") // 2.3.4: both forms stripped, no attributes (review M2)
 				if !strings.Contains(x, w) {
 					t.Errorf("%s %s: the body lacks %s", v.file, how, w)
 				}
 			}
 		}
-		n := f.n(vchByMasterID)
+		n := f.n(vchObjectID)
 		got, err := fetchVouchersByMasterIn(recorderTC(nil), spikeCo, f.port, "20261002", []string{v.mid}, 5)
-		if err != nil || got[v.mid] == "" || f.n(vchByMasterID) != n+1 {
-			t.Fatalf("%s by MasterID: %v %v (%d requests)", v.file, mapKeys(got), err, f.n(vchByMasterID)-n)
+		if err != nil || got[v.mid] == "" || f.n(vchObjectID) != n+1 {
+			t.Fatalf("%s by MasterID: %v %v (%d requests)", v.file, mapKeys(got), err, f.n(vchObjectID)-n)
 		}
 		w := spikeWant
 		w.typ, w.no, w.mid = v.typ, v.no, v.mid
@@ -362,12 +350,13 @@ func TestPartALinesOneRequestEach(t *testing.T) {
 				t.Fatalf("by number %v, %s: went as %v", byNumber, v.file, g)
 			}
 			for _, w := range v.want {
+				w = regexp.MustCompile(` TYPE="[^"]*"`).ReplaceAllString(w, "") // 2.3.4: both forms stripped, no attributes (review M2)
 				if !strings.Contains(str(g["xml"]), w) {
 					t.Errorf("by number %v, %s: the body sent lacks %s", byNumber, v.file, w)
 				}
 			}
 		}
-		id := vchByMasterID
+		id := vchObjectID
 		if byNumber {
 			id = vchByNumberID
 		}
@@ -377,10 +366,10 @@ func TestPartALinesOneRequestEach(t *testing.T) {
 		}
 		var mids []string
 		for _, b := range bs {
-			if byNumber && strings.Count(b, "$VoucherNumber = ") != 1 || !byNumber && strings.Count(b, "$MasterID = ") != 1 {
+			if byNumber && strings.Count(b, "$VoucherNumber = ") != 1 || !byNumber && strings.Count(b, `<ID TYPE="Name">ID:`) != 1 {
 				t.Fatalf("more than one entry in a request: %s", b)
 			}
-			mids = append(mids, group(`\$MasterID = (\d+)`, b, 1))
+			mids = append(mids, group(`<ID TYPE="Name">ID:(\d+)</ID>`, b, 1))
 		}
 		sort.Strings(mids)
 		if !byNumber && strings.Join(mids, ",") != "21,22,23,24,25,26,27" {
@@ -399,7 +388,7 @@ func TestPartATurnTimeUsedNextTurn(t *testing.T) {
 	// and no longer the slow part of a turn: the time is now the entry requests' own, as on a real Tally)
 	f.mu.Lock()
 	f.slow = func(id, body string) time.Duration {
-		if id == vchByMasterID {
+		if id == vchObjectID {
 			return 1100 * time.Millisecond
 		}
 		return 0
@@ -435,7 +424,7 @@ func TestPartATurnTimeUsedNextTurn(t *testing.T) {
 		}
 	}
 	// 2.3.3: one entry more: the one the first turn's resolver asked within the stand's 1 s (timed out) is asked once again
-	if n := f.n(vchByMasterID); n != len(partAVchs)+1 {
+	if n := f.n(vchObjectID); n != len(partAVchs)+1 {
 		t.Fatalf("%d requests for %d entries: %v", n, len(partAVchs), f.ids())
 	}
 	if logLines("this turn's 1 s are used") == 0 {
@@ -452,7 +441,7 @@ func TestPartAFiftyItemInvoice(t *testing.T) {
 			"<BILLEDQTY TYPE=\"Quantity\"> 50 Kg</BILLEDQTY>", "<GSTHSNNAME TYPE=\"String\">1050</GSTHSNNAME>"}})
 	defer func() { partAVchs = old }()
 	p, f, c := partABridge(t)
-	req := voucherByMasterRequest(spikeCo, "20261002", []string{"28"})
+	req := voucherObjectRequest(spikeCo, "28")
 	answer := partAAnswer(items231Fixture(t, "partA-sales-50-items.xml"), req)
 	t0 := time.Now()
 	got, err := fetchVouchersByMasterIn(recorderTC(nil), spikeCo, f.port, "20261002", []string{"28"}, 20)
@@ -472,7 +461,7 @@ func TestPartAFiftyItemInvoice(t *testing.T) {
 	if len(sent) != 1 || str(sent[0]["heldWhy"]) != "" || strings.Count(str(sent[0]["xml"]), "<STOCKITEMNAME") != 50 || len(jsonText(sent[0])) >= liveMaxBytes {
 		t.Fatalf("the line went as %d lines, held %q, %d items", len(sent), str(sent[0]["heldWhy"]), strings.Count(str(sent[0]["xml"]), "<STOCKITEMNAME"))
 	}
-	if bs := f.bodiesOf(vchByMasterID); len(bs) != 2 || strings.Count(bs[1], "$MasterID = ") != 1 { // the direct ask above, then the line's
+	if bs := f.bodiesOf(vchObjectID); len(bs) != 2 || bs[1] != req { // the direct ask above, then the line's
 		t.Fatalf("asked: %v", f.ids())
 	}
 }
@@ -482,7 +471,7 @@ func TestPartATwoSecondRule(t *testing.T) {
 	_, f, _ := partABridge(t)
 	f.mu.Lock()
 	f.slow = func(id, body string) time.Duration {
-		if id == vchByMasterID {
+		if id == vchObjectID {
 			return 5 * time.Second
 		}
 		return 0

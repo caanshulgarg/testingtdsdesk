@@ -105,7 +105,7 @@ func TestInflightNothingSentWhileAbandoned(t *testing.T) {
 	standBridge(t, f, `,"RecorderLimitMs":1000,"TallyAbandonWaitSec":1,"TallyAbandonMaxSec":600`)
 	liveFrom(td)
 	mid := inflightVoucher(f)
-	b := holdBusy(f, func(id string) bool { return id == vchByMasterID })
+	b := holdBusy(f, func(id string) bool { return id == vchObjectID })
 	t.Cleanup(func() { b.free(); earlierQuiet(f.port) }) // the held request ends before the test's log goes
 	t0 := time.Now()
 	_, err := fetchVouchersByMasterIn(recorderTC(nil), zz, f.port, td, []string{mid}, 20)
@@ -156,7 +156,7 @@ func TestInflightAbandonBound(t *testing.T) {
 	standBridge(t, f, `,"RecorderLimitMs":500,"TallyAbandonMaxSec":2,"TallyProbeEverySec":1`) // next-inflight: the minute before the small check counts from the give-up (compressed here with the bound)
 	liveFrom(td)
 	mid := inflightVoucher(f)
-	b := holdBusy(f, func(id string) bool { return id == vchByMasterID })
+	b := holdBusy(f, func(id string) bool { return id == vchObjectID })
 	t.Cleanup(func() { b.free(); earlierQuiet(f.port) }) // the held request ends before the test's log goes
 	_, _ = fetchVouchersByMasterIn(recorderTC(nil), zz, f.port, td, []string{mid}, 20)
 	if !earlierBusy(f.port) {
@@ -190,7 +190,7 @@ func TestInflightBusyFiveMinutesTenEntries(t *testing.T) {
 	_, _ = findCompanyPortBg(nwsCo, 0) // the company looked for once before (its list answered in time)
 	var busy atomic.Bool
 	busy.Store(true)
-	b := holdBusy(f, func(id string) bool { return busy.Load() && id == vchByMasterID })
+	b := holdBusy(f, func(id string) bool { return busy.Load() && id == vchObjectID })
 	t.Cleanup(func() { b.free(); earlierQuiet(f.port) }) // the held request ends before the test's log goes
 	n0 := f.n("")
 	for sec := 0; sec <= 300; sec += 5 {
@@ -200,22 +200,27 @@ func TestInflightBusyFiveMinutesTenEntries(t *testing.T) {
 	}
 	during := f.n("") - n0
 	t.Logf("Tally busy 5 minutes, 10 entries waiting: %d request(s) sent (%v)", during, f.ids()[n0:])
-	if during != 1 || f.n(vchByMasterID) != 1 {
+	if during != 1 || f.n(vchObjectID) != 1 {
 		t.Fatalf("requests while Tally is busy: %d (%v), want 1", during, f.ids()[n0:])
 	}
 	busy.Store(false)
 	b.free()
 	waitEarlierOver(t, f.port)
 	// 2.3.3 (the owner's rule: silence is not acceptable): while Tally was busy, the 10 lines went up held at once with
-	// their words; once Tally answers, each entry comes as "<line id>:resolved" with its body
-	held := 0
+	// their words; once Tally answers, each entry comes as "<line id>:resolved" with its body. 2.3.4 (the owner's
+	// decision of 08-Oct-2026, option (a)): the one entry whose fast request was stopped at the limit is ended with the
+	// Day Book words (never asked again); the 9 others were never asked while Tally was busy
+	held, ended := 0, 0
 	for _, s := range c.recSent() {
 		if str(s["xml"]) == "" && strings.HasPrefix(str(s["heldWhy"]), "waiting: ") {
 			held++
 		}
+		if str(s["xml"]) == "" && str(s["heldWhy"]) == liveStopEndWords() {
+			ended++
+		}
 	}
-	if held != 10 {
-		t.Fatalf("held at once while Tally was busy: %d of 10 (%v)", held, c.recSent())
+	if held != 9 || ended != 1 {
+		t.Fatalf("held at once while Tally was busy: %d of 9, ended %d of 1 (%v)", held, ended, c.recSent())
 	}
 	resolved := func() int {
 		n := 0
@@ -226,13 +231,13 @@ func TestInflightBusyFiveMinutesTenEntries(t *testing.T) {
 		}
 		return n
 	}
-	for sec := 305; sec <= 900 && resolved() < 10; sec += 5 {
+	for sec := 305; sec <= 900 && resolved() < 9; sec += 5 {
 		retryClock(base, sec)
 		liveUploadOnce()
 	}
-	after := f.n(vchByMasterID) - 1
+	after := f.n(vchObjectID) - 1
 	t.Logf("after Tally answered: %d entry fetch(es), one after another (most at once: %d)", after, b.most.Load())
-	if resolved() != 10 || after != 10 || b.most.Load() != 1 {
+	if resolved() != 9 || after != 9 || b.most.Load() != 1 {
 		t.Fatalf("after Tally answered: resolved %d, fetched %d, at once %d", resolved(), after, b.most.Load())
 	}
 }

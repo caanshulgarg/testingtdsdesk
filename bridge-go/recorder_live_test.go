@@ -549,14 +549,15 @@ func TestLiveSourceSwitchKeepsUploader(t *testing.T) {
 	}
 }
 
-// --- 3a. the one dated exception: FinComVoucherByMaster, one day, MasterIDs only, exactly as built; nothing else dated
+// --- 3a. the entry request's exception: next-fastfetch, the object export of ONE voucher (no period), exactly as built,
+// for a company whose starting point is recorded, whatever ReadDays says; nothing else dated passes
 func TestLiveDatedGuardException(t *testing.T) {
 	f := newStandTally(t)
 	standBridge(t, f, "")
 	if readDaysOn() {
 		t.Fatal("ReadDays is on by default")
 	}
-	ok := voucherByMasterRequest(zz, "20261004", []string{"5"}) // 2.3.1: exactly one MasterID
+	ok := voucherObjectRequest(zz, "5")
 	// 2.2.2 security review: only for a company whose starting point is recorded
 	if datedRefused(fin, ok) == nil {
 		t.Fatal("the body fetch passes for a company with no starting point")
@@ -569,29 +570,28 @@ func TestLiveDatedGuardException(t *testing.T) {
 		t.Fatalf("the body fetch: %v", err)
 	}
 	bad := map[string]string{
-		"two days":       strings.Replace(ok, "<SVTODATE>20261004</SVTODATE>", "<SVTODATE>20261005</SVTODATE>", 1),
-		"two ids":        strings.Replace(ok, "$MasterID = 5", "$MasterID = 5 OR $MasterID = 9", 1), // 2.3.1: strictly one
-		"another filter": strings.Replace(ok, "$MasterID = 5", "$AlterID &gt; 0", 1),
-		"no filter":      strings.Replace(ok, "$MasterID = 5", "", 1),
-		"more fields":    strings.Replace(ok, "<FETCH>", "<FETCH>LEDGERENTRIES.*, ", 1),
-		"another id":     strings.ReplaceAll(ok, vchByMasterID, tagCheckID),
+		"a period":    strings.Replace(ok, "</SVCURRENTCOMPANY>", "</SVCURRENTCOMPANY><SVFROMDATE>20261004</SVFROMDATE><SVTODATE>20261004</SVTODATE>", 1),
+		"two ids":     strings.Replace(ok, "ID:5<", "ID:5,9<", 1),
+		"no id":       strings.Replace(ok, "ID:5<", "<", 1),
+		"no fetch":    regexp.MustCompile(`<FETCHLIST>.*</FETCHLIST>`).ReplaceAllString(ok, ""),
+		"more fields": strings.Replace(ok, "<FETCHLIST>", "<FETCHLIST><FETCH>LEDGERENTRIES.*</FETCH>", 1),
 	}
 	for name, x := range bad {
-		if datedRefused(fin, x) == nil {
-			t.Errorf("%s: passes the dated guard", name)
+		if datedRefused(fin, x) == nil && checkAllowed(x) == nil {
+			t.Errorf("%s: passes", name)
 		}
 	}
-	// every other dated request the bridge can build stays refused with ReadDays off
+	// every dated request the bridge can build stays refused with ReadDays off
 	for id, x := range allowListSamples() {
-		if id == vchByMasterID || (!strings.Contains(x, "<SVFROMDATE") && !strings.Contains(x, "<SVTODATE")) {
+		if id == vchObjectID || (!strings.Contains(x, "<SVFROMDATE") && !strings.Contains(x, "<SVTODATE")) {
 			continue
 		}
 		if datedRefused(fin, x) == nil {
 			t.Errorf("%s passes the dated guard with ReadDays off", id)
 		}
 	}
-	if !strings.Contains(allowListSamples()[vchByMasterID], "<SVFROMDATE") {
-		t.Fatal("the body fetch's sample carries no period")
+	if strings.Contains(allowListSamples()[vchObjectID], "<SVFROMDATE") {
+		t.Fatal("the entry request's sample carries a period")
 	}
 }
 
@@ -619,11 +619,11 @@ func TestLiveBodyFetch(t *testing.T) {
 		t.Fatalf("during a posting: %v, %d sent", f.ids()[n0:], len(c.recSent()))
 	}
 	uploadAll(t)
-	if f.n(vchByMasterID) != 1 {
+	if f.n(vchObjectID) != 1 {
 		t.Fatalf("body fetches: %v", f.ids()[n0:])
 	}
-	body := f.bodiesOf(vchByMasterID)[0]
-	if !strings.Contains(body, "$MasterID = "+v.master) || !strings.Contains(body, "<SVFROMDATE>"+td+"</SVFROMDATE>") || strings.Contains(body, "$MasterID = 77") {
+	body := f.bodiesOf(vchObjectID)[0]
+	if body != voucherObjectRequest(zz, v.master) {
 		t.Fatalf("the request: %s", body)
 	}
 	sent := c.recSent()
@@ -642,7 +642,7 @@ func TestLiveBodyFetch(t *testing.T) {
 	}
 	// Tally not answering: the line goes without its body within the cap
 	f.mu.Lock()
-	f.behave = silentFor(isID(vchByMasterID), nil)
+	f.behave = silentFor(isID(vchObjectID), nil)
 	f.mu.Unlock()
 	liveAppend(t, p, liveLine("voucher_accept_pre", "Voucher", v.guid, v.master, "99", "Journal", "PA-1", td, "", "", "rent 2"),
 		liveLine("voucher_accept_post", "Voucher", v.guid, v.master, "100", "Journal", "PA-1", td, "", "", "rent 2"))
@@ -660,13 +660,13 @@ func TestLiveBodyFetch(t *testing.T) {
 	}
 	// Tally did not answer at all: nothing more is sent to it until it answers the small check (once a minute); the held
 	// line's one ask again waits for that, not spent meanwhile
-	n := f.n(vchByMasterID)
+	n := f.n(vchObjectID)
 	for i := 0; i < 2; i++ {
 		retryDue()
 		uploadAll(t)
 	}
-	if sent = c.recSent(); len(sent) != 3 || f.n(vchByMasterID) != n {
-		t.Fatalf("while Tally owes the small check: %v (asked %d more)", sent[2:], f.n(vchByMasterID)-n)
+	if sent = c.recSent(); len(sent) != 3 || f.n(vchObjectID) != n {
+		t.Fatalf("while Tally owes the small check: %v (asked %d more)", sent[2:], f.n(vchObjectID)-n)
 	}
 	if logLines("held at once: waiting: ") < 1 {
 		t.Fatal("the held line is not in the log")
@@ -1202,7 +1202,7 @@ func TestRecorderLogsKept30Days(t *testing.T) {
 
 // --- 8. the version, the sheets and the allow-list decision line
 func TestRecorderVersion220Sheets(t *testing.T) {
-	if BridgeVersion != "2.3.3" { // 2.3.1 (the ledger lines under an invoice's items); the 2.2.0 sheet stays as it was
+	if BridgeVersion != "2.3.4" { // 2.3.1 (the ledger lines under an invoice's items); the 2.2.0 sheet stays as it was
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	sheet := strings.Join(strings.Fields(readText("../docs/bridge-2.2.0-test-sheet.txt")), " ")
@@ -1228,7 +1228,7 @@ func TestRecorderVersion220Sheets(t *testing.T) {
 		t.Error("the 2.2.0 test sheet has neither the fingerprint placeholder nor the setup's SHA-256")
 	}
 	al := readText("../docs/tally-allowlist.md")
-	if !regexp.MustCompile(`not yet measured[^;]*; allowed for 2\.3\.3 (only )?by the owner's (standing )?decision of \d{4}-\d{2}-\d{2}`).MatchString(al) || !strings.Contains(al, vchByMasterID) ||
+	if !regexp.MustCompile(`not yet measured[^;]*; allowed for 2\.3\.4 (only )?by the owner's (standing )?decision of \d{4}-\d{2}-\d{2}`).MatchString(al) || !strings.Contains(al, vchObjectID) ||
 		!strings.Contains(al, vchByNumberID) {
 		t.Fatal("docs/tally-allowlist.md: no decision line for 2.3.3, or no FinComVoucherByMaster / FinComVoucherByNumber row")
 	}

@@ -1,0 +1,58 @@
+FINCOM BRIDGE 2.3.4 - TEST SHEET (NWS144, staging)
+
+File:        FinComBridge-Setup-2.3.4.exe
+Fingerprint: (filled in when the setup is built)
+Link:        https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.3.4.exe
+
+What 2.3.4 changes (the full notes: docs/bridge-2.3.4-notes.md; the exact request: docs/fast-request-form.md):
+1. One entry is asked of Tally by its MasterID with Tally's keyed object export (FinComVoucherObject): milliseconds,
+   whatever the company's size (GARG SHEKHAR's 2.2 s, VMS EVENTS' larger company the same). The old request is gone.
+2. Exactly the approved fields are kept; everything else Tally sends is dropped before anything is logged or sent.
+3. No company should be marked "no longer asked"; a company 2.3.3 marked is asked again.
+4. Held lines 2.3.3 ended with the Day Book words are asked once more (FinCom lists them for 30 days).
+5. "Test fetching an entry" has forms B, D, E and F only.
+6. A deleted entry is proven gone from Tally's one-line "Could not find Voucher" answer (exactly that line only).
+FinCom's cloud: tally-ingest is deployed with this release (no migration). The add-on is unchanged.
+
+Before you start: you are signed in to FinCom as the owner, TallyPrime 7.1 is open on NWS144 with the add-on loaded,
+GARG SHEKHAR & COMPANY, IX DESIGNS and VMS EVENTS open in the Tally of the Windows user whose bridge you check. In every
+entry you make for this sheet, start the narration with TRIAL. Write down the time (IST) of each check.
+
+CHECK 1 - THE VERSION
+   Install FinComBridge-Setup-2.3.4.exe and compare its fingerprint with the one above.
+   You should see: the tray says FinCom Bridge 2.3.4; FinCom's Tally page shows version 2.3.4 for your line. The log
+   says the entry fetch of GARG SHEKHAR & COMPANY (marked by 2.3.3) is lifted.
+
+CHECK 2 - A SAVE IN THE LARGE COMPANY ENTERS AT ONCE
+   In GARG SHEKHAR make a Journal of Rs 1, narration "TRIAL 234 big 1". Open FinCom's Sync activity for it.
+   You should see: within a few seconds the entry is in the books with its details (not held). Repeat in VMS EVENTS.
+   If not, send: the time, a photo of Sync activity, and the Show log lines starting "Recorder:".
+
+CHECK 3 - NO COMPANY MARKED
+   Over an hour of normal work, NWS144's card on the Tally page never says "FinCom has stopped asking Tally for this
+   company's entries". An entry Tally takes over 2 s to give shows held with "Tally took longer than 2 s for this entry;
+   upload that day's Day Book to settle it"; the next entries of the same company still come in with their details.
+
+CHECK 4 - THE HELD LINES OF 2.3.3 SETTLE
+   Within half an hour of installing, GARG SHEKHAR's, IX DESIGNS' and VMS EVENTS' held lines (the 29 Journals of 06-Oct
+   among them) become "Replaced by a later line" and their entries are in the books once. A line Tally still does not
+   give says "... upload that day's Day Book to settle it": upload that day's Day Book.
+
+CHECK 5 - NOTHING SILENT
+   Over the day, every journal you saved shows in Sync activity: in the books, or held with a reason. None is missing.
+
+CHECK 6 - A DELETE SETTLES
+   In IX DESIGNS make a Journal of Rs 1, narration "TRIAL 234 delete", wait until it is in the books, then delete it in
+   Tally (Day Book, select it, Alt+D, Yes).
+   You should see: within a minute the entry is gone from FinCom's books; Sync activity shows the delete, not held.
+   If it shows held, send: the time, a photo of Sync activity, and the Show log lines with "delete of mid".
+
+How to send the log lines: right-click the FinCom icon near the clock > Show log. On NWS144 each Windows user has their
+own FinCom icon and their own log: send the log of the Windows user named in the check.
+
+HOW TO ROLL BACK (go back to 2.3.3)
+   1. Right-click the FinCom icon near the clock > "Roll back to the previous version".
+   2. A question names the version it goes back to (2.3.3). Answer Yes.
+   3. The icon goes away for a few seconds and comes back.
+   You should see: within a minute, FinCom's Tally page shows version 2.3.3 for your line. Automatic updates stay off on
+   this computer until FinCom turns them on again.

@@ -64,7 +64,7 @@ var spikeWant = liveWant{company: spikeCo, cguid: spikeCoGUID, typ: "Receipt", n
 
 // --- 1. the body by MasterID (fetch-C): found under MasterID 2, and the CMPINFO counter is no voucher
 func TestRealTally71ByMaster(t *testing.T) {
-	_, f, _ := realTallyBridge(t, "", map[string]string{vchByMasterID: realTally(t, "fetch-C.xml")})
+	_, f, _ := realTallyBridge(t, "", map[string]string{vchObjectID: realTally(t, "fetch-C.xml")})
 	got, err := fetchVouchersByMasterIn(recorderTC(nil), spikeCo, f.port, "20261002", []string{"2"}, 5)
 	if err != nil {
 		t.Fatal(err)
@@ -83,7 +83,7 @@ func TestRealTally71ByMaster(t *testing.T) {
 
 // --- 2. a MasterID Tally does not have (fetch-H): nothing, so "no voucher"; the counter <VOUCHER>4</VOUCHER> is not one
 func TestRealTally71ByMasterMissing(t *testing.T) {
-	_, f, _ := realTallyBridge(t, "", map[string]string{vchByMasterID: realTally(t, "fetch-H.xml")})
+	_, f, _ := realTallyBridge(t, "", map[string]string{vchObjectID: realTally(t, "fetch-H.xml")})
 	got, err := fetchVouchersByMasterIn(recorderTC(nil), spikeCo, f.port, "20261002", []string{"52"}, 5)
 	if err != nil {
 		t.Fatal(err)
@@ -262,7 +262,7 @@ func TestRealTally71HeldCopy(t *testing.T) {
 // --- 9. end to end: a line of the real add-on for Receipt 212 (MasterID 2), the body fetch answered by the real Tally's
 // own answer: the line goes with Tally's GUID, MasterID, AlterID and body (2.2.2 sent it held, "no voucher")
 func TestRealTally71LineTakesBody(t *testing.T) {
-	p, f, c := realTallyBridge(t, "", map[string]string{vchByMasterID: realTally(t, "fetch-C.xml")})
+	p, f, c := realTallyBridge(t, "", map[string]string{vchObjectID: realTally(t, "fetch-C.xml")})
 	liveAppend(t, p, "FCR1|ev=voucher_accept_post|t0=2-Oct-26 10:55|tw=2-Oct-26 10:55|cguid="+spikeCoGUID+"|cname="+spikeCo+
 		"|user=TALLY User|obj=Voucher|guid="+spikeCoGUID+"-00000000|mid=2|aid=0|vtype=Receipt|vno=1|vdate=2-Oct-26|name=|parent=|narr=spike receipt 212|t1=2-Oct-26 10:55|src=live")
 	readAndUploadAll(t)
@@ -274,10 +274,10 @@ func TestRealTally71LineTakesBody(t *testing.T) {
 	if str(g["object_guid"]) != spikeCoGUID+"-00000002" || str(g["master_id"]) != "2" || toI64(g["alter_id"]) != 4 || str(g["heldWhy"]) != "" {
 		t.Fatalf("the line went as %v", g)
 	}
-	if !strings.Contains(str(g["xml"]), `<MASTERID TYPE="Number"> 2</MASTERID>`) {
+	if !strings.Contains(str(g["xml"]), `<MASTERID> 2</MASTERID>`) { // next-fastfetch: stripped, no attributes
 		t.Fatalf("the body: %s", cut(str(g["xml"]), 300))
 	}
-	if f.n(vchByMasterID) != 1 {
+	if f.n(vchObjectID) != 1 {
 		t.Fatalf("requests: %v", f.ids())
 	}
 }

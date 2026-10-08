@@ -4,7 +4,7 @@
 // can no longer widen an id: another TYPE, field, filter, report or one character more is refused before anything is
 // sent. Import (a posting, free content) is held to its fixed envelope: the Import Data header, one of the bridge's two
 // reports, the company, and one TALLYMESSAGE holding VOUCHER and LEDGER objects only. The id-based ReadDays-off guard
-// and the value checks (tally.go datedRefused, sliceExact, voucherByMasterExact, keepAboveExact) stay on top.
+// and the value checks (tally.go datedRefused, sliceExact, voucherObjectExact, keepAboveExact) stay on top.
 package main
 
 import (
@@ -99,14 +99,7 @@ var requestRebuild = map[string]func(x string) []string{
 		a, z := pinDates(x)
 		return masterCheckRequest(pinCo(x), a, z, group(`\$MasterID = (\d+)`, x, 1))
 	}),
-	vchByMasterID: pinOne(func(x string) string {
-		a, _ := pinDates(x)
-		var ids []string
-		for _, m := range regexp.MustCompile(`\$MasterID = (\d+)`).FindAllStringSubmatch(x, -1) {
-			ids = append(ids, m[1])
-		}
-		return voucherByMasterRequest(pinCo(x), a, ids)
-	}),
+	vchObjectID: pinOne(voucherObjectRebuild), // next-fastfetch: the object export of one voucher (fastvch.go)
 	vchByNumberID: pinOne(func(x string) string {
 		a, _ := pinDates(x)
 		no := html.UnescapeString(group(`\$VoucherNumber = &#34;(.*?)&#34; AND`, x, 1))
@@ -152,7 +145,7 @@ var requestRebuild = map[string]func(x string) []string{
 	"FinComMeasureLedO":  pinOne(func(x string) string { return measureReqLedO(pinCo(x), pinQuoted(x, "$Name")) }),
 	"FinComSnapshot":     pinOne(func(x string) string { a, z := pinDates(x); return snapshotRequest(pinCo(x), a, z) }),
 	// 2.2.3: "Test fetching an entry" (fetchtest.go)
-	fetchTestA: fetchTestRebuild("A"), fetchTestB: fetchTestRebuild("B"), fetchTestC: fetchTestRebuild("C"),
+	fetchTestB: fetchTestRebuild("B"),
 	fetchTestD: fetchTestRebuild("D"), fetchTestE: fetchTestRebuild("E"), fetchTestF: fetchTestRebuild("F"),
 }
 

@@ -17,8 +17,8 @@
 //   - RecorderSource addon | alterid | both (setting, default addon), overridden by the beat's recorderSource.
 //
 // The body fetch: a created, altered or imported entry that is not FinCom's own is asked of Tally by MasterID
-// (FinComVoucherByMaster: exactly one MasterID a request since 2.3.1, the line's own date as the period; the one dated request allowed with
-// ReadDays off, tally.go); a ledger created or altered by the ledger list's request with a one-ID range. A background
+// (2.3.4: FinComVoucherObject, Tally's object export of that one voucher, stripped to the approved fields: fastvch.go;
+// it replaces FinComVoucherByMaster); a ledger created or altered by the ledger list's request with a one-ID range. A background
 // read: it gives way to a posting, 20 s at most; without a body the line still goes (the cloud holds it).
 //
 // The uploader: recorder_lines (server/tally-cloud/index.ts), groups of at most 500 lines or 1 MB of one company; a
@@ -47,7 +47,6 @@ import (
 
 const (
 	liveAddonName = "FinComRecorder.tdl"    // the live add-on (addon/), written beside the trial's by the install step
-	vchByMasterID = "FinComVoucherByMaster" // the body fetch's request id (allowlist.go)
 	vchByNumberID = "FinComVoucherByNumber" // 2.2.1: a new entry's body by its type and number on its date (allowlist.go)
 	liveMaxIDs    = 1                       // 2.3.1 (the owner, 06-Oct-2026): strictly ONE MasterID per body fetch
 	liveMaxLines  = 500                     // lines per recorder_lines call (the cloud's MAX_RECORDER_LINES)
@@ -291,6 +290,13 @@ type liveState struct {
 	// 2.3.2 (issue 232): the held lines ended with the Day Book words (sent so; never asked or sent again: 7 days,
 	// sync\recorder-sent\*.ended.txt)
 	ended map[string]bool
+	// next-fastfetch (the owner's approval of 07-Oct-2026): the held lines given their one fresh ask with the fast request
+	// "voucher object by MasterID" (7 days, sync\recorder-sent\*.fast.txt), and those this version ended: a line an earlier
+	// bridge ended with the Day Book words is asked once more, never twice
+	fastAsked map[string]bool
+	// 2.3.4 re-review 2 (N-M1): the ":resolved" ids THIS version sent, with or without a body (a cancel / delete proven by
+	// its GUID goes with none): a line resolved here is done, never ended once more with the Day Book words
+	mine map[string]bool
 	// fix 3 (the owner's spike run 37347773182): what this bridge saw of its OWN Tally's open companies (recorder_owntally.go)
 	own       map[string]*liveOwnSt // company GUID (or "name:" + its name key) -> the times it was open in the own Tally
 	ownAt     time.Time             // the last complete look at the own Tally's company list (kept on disk)
@@ -396,6 +402,14 @@ func liveFresh() {
 	for _, id := range liveLoadIds(liveEndedSuffix) {
 		live.ended[id] = true
 	}
+	live.fastAsked = map[string]bool{}
+	for _, id := range liveLoadIds(liveFastSuffix) {
+		live.fastAsked[id] = true
+	}
+	live.mine = map[string]bool{}
+	for _, id := range liveLoadIds(liveMineSuffix) {
+		live.mine[id] = true
+	}
 	liveOwnLoad()
 }
 
@@ -425,10 +439,16 @@ func liveLoadSent() []string {
 	return ids
 }
 
-// 2.2.2 review M1: the ids kept beside the sent ones in files <yyyymmdd><suffix> (7 days)
+// 2.2.2 review M1: the ids kept beside the sent ones in files <yyyymmdd><suffix> (7 days). 2.3.4 (the owner's 30-day
+// window for lines ended by the slow-company rule, 08-Oct-2026): the ended ids and those given their one fresh ask are kept
+// 31 days, as long as FinCom lists such a line (30 days), so it is asked once more and never a third time
 func liveLoadIds(suffix string) []string {
 	var ids []string
-	cut := nowFn().AddDate(0, 0, -7).Format("20060102")
+	days := 7
+	if suffix == liveEndedSuffix || suffix == liveFastSuffix || suffix == liveMineSuffix {
+		days = liveFastKeepDays
+	}
+	cut := nowFn().AddDate(0, 0, -days).Format("20060102")
 	m, _ := filepath.Glob(filepath.Join(liveSentDir(), "*"+suffix))
 	for _, f := range m {
 		day := strings.TrimSuffix(filepath.Base(f), suffix)
@@ -467,11 +487,30 @@ const liveLedgerSuffix = ".ledger.txt"
 // 2.3.2 (issue 232): the file suffix of the held line ids ended with the Day Book words
 const liveEndedSuffix = ".ended.txt"
 
-// 2.3.2: lines ended (under live.mu: noted; the ids written by the caller with liveSaveIds outside it)
+// 2.3.2: lines ended (under live.mu: noted; the ids written by the caller with liveSaveIds outside it). next-fastfetch: a
+// line this version ends has had its chance with the fast request: noted so too (never asked once more)
 func liveEndedNote(ids ...string) {
+	if live.fastAsked == nil {
+		live.fastAsked = map[string]bool{}
+	}
 	for _, id := range ids {
 		live.ended[id] = true
+		live.fastAsked[id] = true
 	}
+}
+
+// next-fastfetch: the file suffix of the held line ids given their one fresh ask with the fast request (or ended by it)
+const liveFastSuffix = ".fast.txt"
+
+// 2.3.4 re-review 2 (N-M1): the file suffix of the ":resolved" ids this version sent (kept as long as the ended ones)
+const liveMineSuffix = ".mine.txt"
+
+// 2.3.4: how long the ended and fresh-ask ids are kept (FinCom lists a slow-ended line 30 days)
+const liveFastKeepDays = 31
+
+// under live.mu: a line an earlier bridge ended with the Day Book words, not yet asked with the fast request: asked once more
+func liveFastAgainDue(id string) bool {
+	return live.ended[id] && !live.fastAsked[id]
 }
 
 // under live.mu: a held line's resolution went already, as far as this version is concerned: queued, or sent by THIS
@@ -1700,45 +1739,9 @@ func liveInWindow(key string, a int64) bool {
 }
 
 // --- the body fetch
-// FinComVoucherByMaster: the voucher with this one MasterID (2.3.1), the date's period (one day), the fields the
-// cloud's day parse reads (parse.js parseDay; 2.3.1: with the ledger lines under an item invoice's items), nothing Tally
-// works out
-// 2.3.1 (the owner, 06-Oct-2026: "one entry per request: strictly one, asked for by Tally's own id"): exactly ONE MasterID;
-// "" (nothing can be sent) for none, more than one, or one that is not a number
-func voucherByMasterRequest(company, date string, mids []string) string {
-	if len(mids) != 1 || mids[0] == "" || onlyDigits(mids[0]) != mids[0] || len(mids[0]) > 18 {
-		return ""
-	}
-	return fcCollection(vchByMasterID, company, periodVars(date, date), "Voucher", liveFetchField, "$MasterID = "+mids[0])
-}
-
-// the one narrow exception to "no dated request while ReadDays is off" (tally.go): exactly the body fetch as built
-// above, for one day and exactly one MasterID (2.3.1)
-func voucherByMasterExact(x string) bool {
-	if tallyRequestID(x) != vchByMasterID {
-		return false
-	}
-	a, z := requestFrom(x)
-	if a == "" || a != z {
-		return false
-	}
-	var ids []string
-	for _, m := range re(`\$MasterID = (\d+)`).FindAllStringSubmatch(x, -1) {
-		ids = append(ids, m[1])
-	}
-	if len(ids) != 1 {
-		return false
-	}
-	co := html.UnescapeString(group(`<SVCURRENTCOMPANY>([^<]*)</SVCURRENTCOMPANY>`, x, 1))
-	if x != voucherByMasterRequest(co, a, ids) {
-		return false
-	}
-	// 2.2.2 security review (M1 / L6): as for the request by number, only for a company whose starting point is recorded.
-	// The day is NOT bounded by the starting point's day or today: an entry keyed today may carry any date (a September
-	// bill entered in October, a post-dated cheque); what is taken is bounded by Tally's ALTERID instead (liveVoucherWrong)
-	_, ok := startPointOf(co)
-	return ok
-}
+// next-fastfetch: the voucher with this one MasterID by the object export "ID:<MasterID>" (fastvch.go), keyed (it does not
+// read every voucher of the company as FinComVoucherByMaster did, which it replaces), stripped to the approved fields
+// before anything else sees it
 
 // FinComVoucherByNumber (2.2.1, the owner's NWS144 result): a new entry Tally wrote before its save (MasterID 0, GUID
 // "<company GUID>-00000000") found after the save by its type and number on its own date: one day, the body fetch's
@@ -1764,7 +1767,10 @@ func fetchVouchersByMaster(tc *TC, company string, port int, date string, mids [
 }
 
 func fetchVouchersByMasterIn(tc *TC, company string, port int, date string, mids []string, sec int) (map[string]string, error) {
-	x := voucherByMasterRequest(company, date, mids)
+	x := ""
+	if len(mids) == 1 {
+		x = voucherObjectRequest(company, mids[0]) // next-fastfetch: one voucher by its MasterID; the date is the line's, checked on the answer
+	}
 	if x == "" {
 		return nil, fmt.Errorf("not asked: the entry request names exactly one MasterID (%d given)", len(mids))
 	}
@@ -1775,13 +1781,36 @@ func fetchVouchersByMasterIn(tc *TC, company string, port int, date string, mids
 	if err != nil {
 		return nil, err
 	}
+	// 2.3.4 (the renumbering helper's finding, 08-Oct-2026; testdata/fast234/notfound, 3.0 .. 7.1): for a MasterID it does
+	// not have (a deleted voucher, an id never used) Tally answers a bare <ERRORMSG>Could not find Voucher:ID:n!</ERRORMSG>,
+	// no envelope. Exactly that, for the MasterID asked and nothing else, is "no such voucher"; any other answer without an
+	// envelope stays one that could not be read
+	if strings.TrimSpace(raw) == "<ERRORMSG>Could not find Voucher:ID:"+mids[0]+"!</ERRORMSG>" {
+		return map[string]string{}, nil
+	}
 	if !strings.Contains(raw, "<ENVELOPE") {
 		return nil, errors.New("Tally's answer could not be read: " + cut(flat(raw), 120))
 	}
 	out := map[string]string{}
-	for _, m := range reVchBlock.FindAllString(raw, -1) {
-		if id := tagNum(m, "MASTERID"); id != "" {
-			out[id] = cleanXML(m)
+	blocks := reVchBlock.FindAllString(raw, -1)
+	if len(blocks) == 0 && (strings.Contains(raw, "<MASTERID") || strings.Contains(raw, "<ERRORMSG") || strings.Contains(raw, "<LINEERROR")) {
+		// 2.3.4 (re-review L5): Tally answered with a voucher the bridge cannot read: never taken as "no such voucher" (a
+		// delete check would take the entry as gone); held, as an answer it cannot read
+		return nil, fastShapeError{"an answer FinCom cannot read"}
+	}
+	for _, m := range blocks {
+		// next-fastfetch (the owner, 08-Oct-2026): Tally sends the whole voucher; only the approved fields are kept, here,
+		// before anything is logged, stored or sent. 2.3.4 review L2: one whose lines cannot be kept whole is held
+		c := cleanXML(m)
+		v, why := fastStripWhy(c)
+		if why == "" && v == "" {
+			why = "an answer FinCom cannot read" // 2.3.4 (re-review L5): never taken as "no such voucher"
+		}
+		if why != "" && (tagNum(c, "MASTERID") != "" || strings.Contains(c, "<MASTERID")) {
+			return nil, fastShapeError{why}
+		}
+		if id := tagNum(v, "MASTERID"); id != "" && v != "" {
+			out[id] = v
 		}
 	}
 	return out, nil
@@ -1895,6 +1924,19 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 			liveHeldAs(c, slowWords, true)
 		}
 	}
+	// 2.3.4 (option (a)): a line whose fast request was stopped at 2 s: held, ended with the Day Book words
+	stopEnd := func(cs []*change) {
+		w := liveStopEndWords()
+		for _, c := range cs {
+			if c.isLedger() {
+				continue
+			}
+			live.mu.Lock()
+			c.slowEnded = true
+			live.mu.Unlock()
+			liveHeldAs(c, w, true)
+		}
+	}
 	if slowMarked(company, need[0].companyGuid) {
 		slowHold(need)
 		var ls []*change
@@ -1996,7 +2038,24 @@ byDay:
 				break byDay
 			}
 			if errors.Is(err, errRecorderStop) {
-				liveHeldNow(part, liveStopWhat(), true, true, false) // a real 2 s stop: one ask of the original fetch
+				// 2.3.4 (the owner's decision of 08-Oct-2026, option (a)): the fast request for this entry took more than 2 s
+				// (the stop itself unchanged): its line goes up held, ended with the Day Book words, never asked again; the
+				// company is not marked (slowNote) and its other entries go on being fetched
+				// a cancel / delete check (it asks Tally whether the entry is still there, no entry is fetched): as before, held
+				// with the words of a Tally it could not ask, and asked again by the held list; the same whether the stop or no
+				// answer at all came first (TestCancelGUIDTallySilentFallsBack: one outcome, never the timing's)
+				var gf, en []*change
+				for _, c := range part {
+					if c.guidFetch {
+						gf = append(gf, c)
+					} else {
+						en = append(en, c)
+					}
+				}
+				if len(gf) > 0 {
+					liveHeldNow(gf, liveStopWhat(), true, true, false)
+				}
+				stopEnd(en)
 				continue
 			}
 			if gaveWay(err) {
@@ -2009,12 +2068,29 @@ byDay:
 				liveHeldNow(part, "Tally busy", false, true, false) // asked again once, at the next try
 				continue
 			}
+			if errors.Is(err, errFastShape) {
+				// 2.3.4 (the independent review, L2): Tally keeps the entry in a form the strip cannot keep whole: held for
+				// good with the place named (a cancel / delete: not proven here), never sent short, never asked by number
+				live.mu.Lock()
+				for _, c := range part {
+					if c.guidFetch {
+						liveGuidHold(c, map[bool]string{true: liveCancelHeldWords, false: liveDeleteHeldWords}[c.event == "cancelled"]+" ("+cutRunes(err.Error(), 160)+")")
+					}
+				}
+				live.mu.Unlock()
+				for _, c := range part {
+					if !c.guidHeld {
+						liveHeldAs(c, err.Error(), true)
+					}
+				}
+				continue
+			}
 			if err != nil {
 				failed(part, err.Error())
 				continue
 			}
-			// 2.2.2 (the owner's rule): Tally's voucher is the line's only as liveVoucherWrong says; else it is asked by its
-			// type, number and date (not for a voucher whose GUID Tally did not make: the same voucher would come), or held
+			// 2.2.2 (the owner's rule): Tally's voucher is the line's only as liveVoucherWrong says; else the line is held
+			// (2.3.4: never asked by its type and number, below)
 			type miss struct {
 				c         *change
 				why, kind string
@@ -2045,7 +2121,13 @@ byDay:
 			live.mu.Unlock()
 			for _, m := range missing {
 				c := m.c
-				if c.vchNo == "" || !liveNumberText(c.vchNo) || !liveNumberText(c.vchType) || strings.Contains(m.why, "not a change after the starting point") {
+				// 2.3.4 (the independent review, L5; docs/fast-request-form.md section 5): a line whose MasterID is its entry's
+				// is never asked by its type and number (a scan of the company: 12-17 s at 100,000 vouchers, Tally busy
+				// meanwhile): held, as the answer said (Tally may still give it: asked again by its MasterID; another entry:
+				// held for good). Only a line whose MasterID is proven NOT its entry's (review H2: Tally's voucher with it was
+				// not saved after the line; the line carries the copied source's ids) is asked by its number, as a line
+				// with no MasterID is
+				if m.kind != wrongNoSave || c.vchNo == "" || !liveNumberText(c.vchNo) || !liveNumberText(c.vchType) || strings.Contains(m.why, "not a change after the starting point") {
 					liveHeldAs(c, m.why, m.kind != wrongRetry)
 					continue
 				}
@@ -2581,7 +2663,7 @@ func liveUploadStep() (int, bool) {
 		return 0, false
 	}
 	sentIDs := make([]string, 0, len(group))
-	var bodied, items, ledAgain, ended, pushed []string
+	var bodied, items, ledAgain, ended, mine, pushed []string
 	gone := map[*change]bool{}
 	var held []*change
 	for _, c := range group {
@@ -2594,6 +2676,13 @@ func liveUploadStep() (int, bool) {
 			live.sent[a] = true
 			delete(live.queued, a)
 			sentIDs = append(sentIDs, a)
+		}
+		if strings.HasSuffix(c.lineId, ":resolved") {
+			if live.mine == nil {
+				live.mine = map[string]bool{}
+			}
+			mine = append(mine, c.lineId) // 2.3.4 re-review 2 (N-M1): resolved by this version, body or not
+			live.mine[c.lineId] = true
 		}
 		if c.xml != "" && !c.isLedger() && strings.HasSuffix(c.lineId, ":resolved") {
 			items = append(items, c.lineId) // 2.3.1 review H1: a resolution sent by this version
@@ -2657,6 +2746,8 @@ func liveUploadStep() (int, bool) {
 	liveSaveIds(items, liveItemsSuffix)
 	liveSaveIds(ledAgain, liveLedgerSuffix)
 	liveSaveIds(ended, liveEndedSuffix)
+	liveSaveIds(ended, liveFastSuffix)
+	liveSaveIds(mine, liveMineSuffix)
 	liveSaveOffsets()
 	liveHeldAdd(held)
 	liveHeldDropPushed(pushed)
@@ -2755,7 +2846,7 @@ func liveHeldAsking() map[string]int {
 	liveFresh()
 	out := map[string]int{}
 	for id, h := range items {
-		if h.Final || live.ended[id] || h.Tries >= liveHeldMaxTries || h.Asked >= h.allow() {
+		if h.Final || (live.ended[id] && !h.FastAgain) || h.Tries >= liveHeldMaxTries || h.Asked >= h.allow() {
 			continue
 		}
 		out[h.Company]++
