@@ -98,7 +98,10 @@ function ShareSubs($tag) {
 # rows @(ledger, amount or '' for Tally's own, bill @(type, name) or $null), the narration, Ctrl+A (and "Yes" if asked)
 function ShareEntry($tag, [string[]]$keys, $typeWords, $account, $rows, $narr, [switch]$byTo) {
   $null = TdsGateway "before $tag"
-  if (-not (TK 'v' 2.5 "$tag-vouchers" 'Voucher')) { return }
+  # (run 37725649024, 3.0: a blank creation form left by the save before stayed up and "v" went into its fields; the type
+  # keys switch from inside a creation form)
+  $t0s = TdsScreen "$tag-start"
+  if ($t0s -notmatch 'cher Creati') { if (-not (TK 'v' 2.5 "$tag-vouchers" 'Voucher|ucher')) { return } }
   foreach ($k in $keys) { $null = TK $k 2.5 "$tag-type" }
   $null = TK '{F2}' 1.5 "$tag-date-box" 'Date'
   $null = TK ((SK $shareDate) + '{ENTER}') 2 "$tag-date"
@@ -115,7 +118,11 @@ function ShareEntry($tag, [string[]]$keys, $typeWords, $account, $rows, $narr, [
     ShareBills $row[2] "$tag-row$r"
     ShareSubs "$tag-row$r-b"
   }
-  if ($byTo) { ShareAccept $tag $null; return }   # (run 37722273938: As Voucher's empty row Enter opened Ledger Creation)
+  if ($byTo) {
+    # (run 37725649024: in As Voucher mode the next row's ledger list was open and Ctrl+A there opened Ledger Creation)
+    $t = TdsScreen "$tag-last-row"; if ($t -match 'List of Ledger') { $null = TK '{ESC}' 1.5 "$tag-list-closed" }
+    ShareAccept $tag $null; return
+  }   # (run 37722273938: As Voucher's empty row Enter opened Ledger Creation)
   $null = TK '{ENTER}' 2 "$tag-rows-done"
   # (run 37719717293: a contra's Bank Allocations came up here and took the narration)
   ShareSubs "$tag-done"
@@ -140,7 +147,10 @@ function ShareAccept($tag, $bill) {
 # purchase ledger, one item row, Ctrl+A with the bill
 function ShareInvoice($tag, [string[]]$keys, $party, $ledger, $head, $qty, $rate, $bill, $narr) {
   $null = TdsGateway "before $tag"
-  if (-not (TK 'v' 2.5 "$tag-vouchers" 'Voucher')) { return }
+  # (run 37725649024, 3.0: a blank creation form left by the save before stayed up and "v" went into its fields; the type
+  # keys switch from inside a creation form)
+  $t0s = TdsScreen "$tag-start"
+  if ($t0s -notmatch 'cher Creati') { if (-not (TK 'v' 2.5 "$tag-vouchers" 'Voucher|ucher')) { return } }
   foreach ($k in $keys) { $null = TK $k 2.5 "$tag-type" }
   $null = TK '^h' 2 "$tag-mode" 'Mode|Invoice|Voucher'
   $null = TK 'Item Invoice{ENTER}' 2 "$tag-item-mode"
@@ -162,7 +172,7 @@ function ShareDayBookLast($tag, $type, $date = $shareDate) {
   $null = TdsGateway "before $tag"
   $null = TK '%g' 2 "$tag-goto"; $null = TK 'Day Book' 1.5; $null = TK '{ENTER}' 3 "$tag-daybook" 'Day Book'
   $null = TK '{F2}' 1.5 "$tag-db-date"; $null = TK ((SK $date) + '{ENTER}') 3 "$tag-db-dated"
-  $null = TK '{F4}' 2 "$tag-db-type"; $null = TK ((SK $type) + '{ENTER}') 3 "$tag-db-typed"
+  if ($type) { $null = TK '{F4}' 2 "$tag-db-type"; $null = TK ((SK $type) + '{ENTER}') 3 "$tag-db-typed" }
   $null = TK '{END}' 1.5 "$tag-db-last"
 }
 
@@ -235,9 +245,12 @@ if ($R1) {
   $null = ShareCase 'alter-receipt-agst' 'alteration: the receipt against SB-1 saved again unchanged (opened, Ctrl+A)' { ShareDayBookLast 'A2' 'Receipt'; $null = TK '{HOME}' 1.5 'A2-first'; $null = TK '{ENTER}' 3 'A2-open'; ShareAccept 'A2' $null } $R1.mid
 }
 
-$PT = @(Vouchers | Where-Object { $_.vno -eq 'SH-PR1' })[0]
-$null = ShareCase 'copy-payroll' 'Alt+2 copy of the payroll entry (five employees, two pay heads)' { ShareDayBookLast 'Y1' 'Payroll' '1-10-2026'; $null = TK '%2' 3 'Y1-copy'; ShareAccept 'Y1' $null }
-if ($PT) { $null = ShareCase 'alter-payroll' 'alteration: the payroll entry saved again unchanged (opened, Ctrl+A)' { ShareDayBookLast 'Y2' 'Payroll' '1-10-2026'; $null = TK '{HOME}' 1.5 'Y2-first'; $null = TK '{ENTER}' 3 'Y2-open'; ShareAccept 'Y2' $null } $PT.mid }
+# (run 37725649024: the Day Book's voucher type list had no Payroll and the number SH-PR1 was not kept: found by narration,
+# the template the last entry of 1-10-2026; the alteration first, then the copy, so the template stays the last of the day)
+$PT = @(Vouchers | Where-Object { $_.narr -like 'share payroll template*' })[0]
+if ($PT) { $null = ShareCase 'alter-payroll' 'alteration: the payroll entry saved again unchanged (opened, Ctrl+A)' { ShareDayBookLast 'Y2' '' '1-10-2026'; $null = TK '{ENTER}' 3 'Y2-open'; ShareAccept 'Y2' $null } $PT.mid }
+else { Add-Content -Path $resultsFile -Value 'HARNESS share alter-payroll: the payroll template is not in Tally''s list' -Encoding UTF8 }
+$null = ShareCase 'copy-payroll' 'Alt+2 copy of the payroll entry (five employees, two pay heads)' { ShareDayBookLast 'Y1' '' '1-10-2026'; $null = TK '%2' 3 'Y1-copy'; ShareAccept 'Y1' $null }
 
 # ---- P7 and P9 of push233 (moved here from tally-real, the owner's queue order of 08-Oct-2026), judged by what the add-on
 # writes: FinCom gets an entry live only through the add-on's line (the bridge has no other live path for an entry)
@@ -253,14 +266,14 @@ try {
     '<ALLLEDGERENTRIES.LIST><LEDGERNAME>Share Sales</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>150.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>'
   $null = Imp 'Vouchers' $inv 'p7 invoice SH-E1'
   # (run 37722273938: a lookup by $VoucherNumber found nothing; Tally's own list, then the entry by its MasterID)
-  $eid = @(Vouchers | Where-Object { $_.vno -eq 'SH-E1' })[0]
+  $eid = @(Vouchers | Where-Object { $_.narr -like 'share e-invoice*' })[0]   # (its number SH-E1 may not be kept: automatic numbering)
   $e7 = { if ($eid) { $a = & $coll 'ShareE' $f7 ('$MasterID = ' + $eid.mid); Add-Content (Join-Path $cap 'p7a-answers.xml') $a -Encoding UTF8; @(& $vlist $a)[0] } }
   $e0 = & $e7
   $l0 = (& $recLines).Count
   $irn = '<IRN>IRN-SHARE-0001</IRN><IRNACKNO>ACK-SHARE-1</IRNACKNO><IRNACKDATE>20261002</IRNACKDATE><EWAYBILLDETAILS.LIST><BILLDATE>20261002</BILLDATE><BILLNUMBER>381101234299</BILLNUMBER><DOCUMENTTYPE>Tax Invoice</DOCUMENTTYPE></EWAYBILLDETAILS.LIST>'
   $how = 'neither form of XML alteration took'; $e1 = $e0
   if ($e0) {
-    foreach ($hdr in @(('<VOUCHER REMOTEID="' + $e0.guid + '" VCHTYPE="Sales" ACTION="Alter"'), '<VOUCHER DATE="20261002" TAGNAME="Voucher Number" TAGVALUE="SH-E1" VCHTYPE="Sales" ACTION="Alter"')) {
+    foreach ($hdr in @(('<VOUCHER REMOTEID="' + $e0.guid + '" VCHTYPE="Sales" ACTION="Alter"'), ('<VOUCHER DATE="20261002" TAGNAME="Voucher Number" TAGVALUE="' + $(if ($e0) { $e0.vno } else { 'SH-E1' }) + '" VCHTYPE="Sales" ACTION="Alter"'))) {
       $null = Imp 'Vouchers' (($inv -replace '<VOUCHER VCHTYPE="Sales" ACTION="Create"', $hdr) -replace '<NARRATION>', ($irn + '<NARRATION>')) 'p7a IRN and e-way bill by a tool'
       $e1 = & $e7
       if ((& $tg $e1.x 'IRN') -eq 'IRN-SHARE-0001') { $how = $hdr -replace '^<VOUCHER ', ''; break }
@@ -276,7 +289,7 @@ try {
     $l0 = (& $recLines).Count
     ShareDayBookLast 'P7b' 'Sales'; $null = TK '{HOME}' 1.5 'P7b-first'
     # SH-E1 is the first sales entry of the day only if it sorts first; find it by moving down until its number shows
-    for ($i = 0; $i -lt 8; $i++) { $t = TdsScreen "P7b-row$i"; if ($t -match 'SH-E1') { break }; $null = TK '{DOWN}' 1 }
+    for ($i = 0; $i -lt 8; $i++) { $t = TdsScreen "P7b-row$i"; if ($t -match [regex]::Escape("$($e1.vno)") -and $t -match 'share e-invoice|Share Party') { break }; $null = TK '{DOWN}' 1 }
     $null = TK '{ENTER}' 3 'P7b-open'; ShareAccept 'P7b' $null
     $n7 = @(& $recLines | Select-Object -Skip $l0); $fl = @($n7 | Where-Object { $_ -like 'FCR1|ev=voucher_full|*' -and $_ -match "\|mid=$($e1.mid)\|" })
     $lf = { param($k) if ($fl.Count) { [regex]::Match($fl[0], "\|part=1\|.*?\|$k=([^|]*)").Groups[1].Value } else { $null } }
@@ -303,7 +316,7 @@ try {
   $r0 = & $vlist (& $coll 'ShareR' $rf '$VoucherTypeName = "Receipt"'); $l0 = (& $recLines).Count
   ShareDayBookLast 'P9b' 'Receipt'; $null = TK '{HOME}' 1.5 'P9b-first'
   $null = TK '%i' 3 'P9b-insert' 'Receipt|Creation|Insert'
-  $null = TK 'Cash{ENTER}' 2 'P9b-account'; $null = TK 'Spike Income{ENTER}' 2 'P9b-ledger'; $null = TK '60{ENTER}' 2 'P9b-amount'
+  $null = TK 'Cash{ENTER}' 2 'P9b-account'; $null = TK 'Spike Income{ENTER}' 2 'P9b-ledger'; ShareSubs 'P9b-led'; $null = TK '60{ENTER}' 2 'P9b-amount'; ShareSubs 'P9b-amt'
   $null = TK '{ENTER}' 2 'P9b-rows-done'; ShareSubs 'P9b-done'; $null = TK 'share insert{ENTER}' 2 'P9b-narr'; ShareAccept 'P9b' $null
   $r1 = & $vlist (& $coll 'ShareR' $rf '$VoucherTypeName = "Receipt"')
   $mx = (@($r0 | ForEach-Object mid) + 0 | Measure-Object -Maximum).Maximum
@@ -343,7 +356,7 @@ try {
     ShareDayBookLast "P9r-$step" 'Receipt'; $null = TK '{HOME}' 1.5 "P9r-$step-first"
     if ($step -eq 'insert') {
       $null = TK '%i' 3 'P9r-insert' 'Receipt|Creation|Insert'
-      $null = TK 'Cash{ENTER}' 2 'P9r-account'; $null = TK 'Spike Income{ENTER}' 2 'P9r-ledger'; $null = TK '70{ENTER}' 2 'P9r-amount'
+      $null = TK 'Cash{ENTER}' 2 'P9r-account'; $null = TK 'Spike Income{ENTER}' 2 'P9r-ledger'; ShareSubs 'P9r-led'; $null = TK '70{ENTER}' 2 'P9r-amount'; ShareSubs 'P9r-amt'
       $null = TK '{ENTER}' 2 'P9r-rows-done'; ShareSubs 'P9r-done'; $null = TK 'share insert renumbering{ENTER}' 2 'P9r-narr'; ShareAccept 'P9r-ins' $null
     } else {
       $null = TK '{DOWN}' 1.5 'P9r-down1'; $null = TK '{DOWN}' 1.5 'P9r-middle'
