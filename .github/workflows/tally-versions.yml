@@ -39,7 +39,7 @@ jobs:
       - id: mode
         run: |
           m="${{ inputs.mode }}"; [ -n "$m" ] || m=$(head -1 harness/.github/tally-spike/versions-mode.txt 2>/dev/null | tr -d '[:space:]')
-          [ "$m" = full ] || m=quick
+          case "$m" in full|share) ;; *) m=quick ;; esac
           echo "mode=$m" | tee -a "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
         with:
