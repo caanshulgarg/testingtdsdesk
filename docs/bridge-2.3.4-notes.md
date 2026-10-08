@@ -70,7 +70,10 @@ exact request and the field comparison are in `docs/fast-request-form.md`.
    Software Exception c0000005 (Memory Access Violation)", and answers nothing more (not even its company list or the
    open company's own voucher) until it is restarted. The same for a company name that was never there, and with no
    company open. So 2.3.4 sends the entry request only right after Tally's company list on that port, asked that moment,
-   names the company; a company not listed: nothing is sent and the line waits (asked again later).
+   names the company; a company not listed: nothing is sent and the line waits (asked again later). 2.3.3's own entry
+   requests (by MasterID, by number) crash Tally the same way (run 37816340452): it is not new in 2.3.4, and 2.3.4 guards
+   the by-number request too. The other requests that name a company (ledger lists, day book reads, the posting) were
+   not measured this way: for the owner.
 8. **After the second independent review** (0 High, 4 Medium, 7 Low; fixed test-first, L3 / L4 / L7 left as they were
    for the owner):
    - a held line an older bridge kept that gets an unreadable answer on its one ask ends with the Day Book words; it
