@@ -284,6 +284,9 @@ func pushTag(b *strings.Builder, tag, typ, v string) {
 	}
 }
 
+// the entry's own fields every full line carries (each its own record since tally-real run 37677491784)
+var pushHeadKeys = []string{"mid", "aid", "guid", "date", "canc", "opt", "vtype", "vno", "party", "view", "ref", "refdt", "pgstin", "pos", "cgstin", "irn", "irnack", "irnackdt", "ewb", "narr"}
+
 // a date as the line gives it ("1-Oct-26", "1-Oct-2026", yyyymmdd) as yyyymmdd; "" for none; ok false when it is not one
 func pushDate(s string) (string, bool) {
 	s = strings.TrimSpace(s)
@@ -432,6 +435,18 @@ func pushEntryXML(e *pushEntry, guid string, alter int64) (string, error) {
 	}
 	if strings.TrimSpace(e.s("vtype")) == "" {
 		return "", errors.New("no voucher type")
+	}
+	// every field of the entry's own head: one whose record failed in the voucher form is missing, and the cloud would
+	// store a blank where Tally may hold a value (tally-real run 37677491784: no real line had the reference, GST and
+	// e-invoice fields); such a line is not taken
+	var lack []string
+	for _, k := range pushHeadKeys {
+		if _, ok := e.scal[k]; !ok {
+			lack = append(lack, k)
+		}
+	}
+	if len(lack) > 0 {
+		return "", fmt.Errorf("the line lacks %s (its record failed in the voucher form: what Tally holds there is not known)", strings.Join(lack, ", "))
 	}
 	for _, c := range []struct{ n, p string }{{"nL", "L"}, {"nI", "I"}, {"nO", "O"}, {"nSO", "SO"}, {"nSI", "SI"}, {"nCE", "CE"}} {
 		n := e.n(c.n)

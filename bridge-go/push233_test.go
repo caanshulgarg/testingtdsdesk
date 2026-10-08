@@ -978,6 +978,12 @@ func TestPushAddon(t *testing.T) {
 			t.Errorf("the add-on lacks %s", s)
 		}
 	}
+	// each field of the entry's own head is its own record (a field that fails then goes alone, and the bridge sees which)
+	for _, k := range pushHeadKeys {
+		if !strings.Contains(tdl, `SET : vRec : "|`+k+`=`) {
+			t.Errorf("the add-on does not write %s as its own record", k)
+		}
+	}
 	if strings.Contains(tdl, "InvoiceOrderList") {
 		t.Error("the add-on reads the invoice order list (its record failed in a voucher form: tally-real run 37677491784)")
 	}
@@ -1092,7 +1098,9 @@ func TestPushRealLinesFromFiveReleases(t *testing.T) {
 			nowFn = func() time.Time { return at }
 			t.Cleanup(func() { nowFn = time.Now })
 			noteStartPoint("FinCom Spike Co", cg, 1, 1)
-			appendBytes(t, filepath.Join(rec, cg+"-7-Oct-26-runneradmin.txt"), b)
+			// the old add-on's lines lack the reference / GST / e-invoice head fields (two records that failed in the form;
+			// TestPushHeadFieldsRequired: such a line is refused): put back as Tally stored these receipts (empty)
+			appendBytes(t, filepath.Join(rec, cg+"-7-Oct-26-runneradmin.txt"), rawWithHead(t, b))
 			readAndUploadAll(t)
 			var push []M
 			for _, l := range c.recSent() {
@@ -1137,6 +1145,7 @@ func TestPushSignWhenNegIsBlind(t *testing.T) {
 	for _, l := range strings.Split(decodeRecorderText(b), "\r\n") {
 		if strings.Contains(l, "ev=voucher_full") && strings.Contains(l, "amt=800.00") {
 			real, _ = pushPayload(l)
+			real = pushWithHead(t, []string{real}, "")[0] // its head fields back (TestPushHeadFieldsRequired)
 		}
 	}
 	if real == "" {
@@ -1238,7 +1247,11 @@ func pd591FE1(t *testing.T, rel string) (payload, cguid string) {
 	// the sub-categories as Tally's export of the entry names them, in its order
 	subNames := [][2]string{{"Income Tax", "PD TDS Payable"}, {"Surcharge", ""}, {"Education Cess", ""}, {"Secondary Education Cess", ""}}
 	recs := []string{"mid=" + f["mid"], "aid=" + f["aid"], "guid=" + f["guid"], "date=" + f["date"], "canc=" + f["canc"], "opt=" + f["opt"],
-		"vtype=" + f["vtype"], "vno=" + f["vno"], "party=" + f["party"], "view=Accounting Voucher View", "narr=" + emuEsc(f["narr"]), "nL=" + f["nL"]}
+		"vtype=" + f["vtype"], "vno=" + f["vno"], "party=" + f["party"], "view=Accounting Voucher View",
+		// FCPFullNR's own head fields; refdt, irnackdt and ewb it did not write (empty, as Tally's export of the entry has them)
+		"ref=" + emuEsc(f["ref"]), "refdt=", "pgstin=" + emuEsc(f["pgstin"]), "pos=" + emuEsc(f["pos"]), "cgstin=" + emuEsc(f["cgstin"]),
+		"irn=" + emuEsc(f["irn"]), "irnack=" + emuEsc(f["irnack"]), "irnackdt=", "ewb=",
+		"narr=" + emuEsc(f["narr"]), "nL=" + f["nL"]}
 	for _, k := range order {
 		switch {
 		case regexp.MustCompile(`^L\d+$`).MatchString(k):
@@ -1336,7 +1349,7 @@ func TestPushTDSFromFiveReleases(t *testing.T) {
 // party takes the net), and no real Tally capture shows their sign: with a blind neg, such an entry is asked of Tally (the
 // 2.3.2 route), never written with a guessed sign; with no amount on them it goes
 func TestPushPayHeadsWhenNegIsBlind(t *testing.T) {
-	recs := "|mid=9|aid=9|guid=|date=2-Dec-26|canc=No|opt=No|vtype=Payroll|vno=3|party=Cash|view=PaySlip|narr=|nL=2" +
+	recs := "|mid=9|aid=9|guid=|date=2-Dec-26|canc=No|opt=No|vtype=Payroll|vno=3|party=Cash|view=PaySlip|ref=|refdt=|pgstin=|pos=|cgstin=|irn=|irnack=|irnackdt=|ewb=|narr=|nL=2" +
 		"|L1=led=PD Basic~amt=1,000.00~neg=No~dp=Yes~party=No~hsn=|L1C1=cat=|L2=led=Cash~amt=1,000.00~neg=No~dp=No~party=Yes~hsn=|L2C1=cat=" +
 		"|nI=0|nO=0|nSO=0|nSI=0|nCE=1|CE1=cat=Primary Cost Category|CE1E1=emp=PD Emp 001~amt=%s~neg=No|CE1E1p1=ph=PD Basic~amt=%s~neg=No"
 	for _, c := range []struct {
@@ -1471,6 +1484,7 @@ func TestPushRealTallyRun677(t *testing.T) {
 		items int
 	}{{"p2-sales50", true, 50}, {"p4-godown", true, 2}, {"p3-tds", false, 0}} {
 		ps, cg, mid := tr677Payloads(t, c.name, c.drop)
+		ps = pushWithHead(t, ps, "") // the head fields the old add-on's failed records left out, as Tally stored them (empty)
 		e, err := pushParse(ps)
 		if err != nil {
 			t.Fatalf("%s: %v", c.name, err)
@@ -1523,4 +1537,87 @@ func TestPushRealTallyRun677(t *testing.T) {
 			}
 		}
 	}
+}
+
+// every field of the entry's own head is required: a field whose record failed in the voucher form is missing from the
+// line, and the line cannot say what Tally holds there (tally-real run 37677491784 and tally-versions run 37611204899: no
+// real line had ref, refdt, pgstin, pos, cgstin, irn, irnack, irnackdt or ewb, the two records that carried them having
+// failed in the form). Such a line is not taken (the cloud would store blanks where Tally may hold a value)
+func TestPushHeadFieldsRequired(t *testing.T) {
+	ps, cg, mid := tr677Payloads(t, "p1-receipt", false)
+	e, err := pushParse(ps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pushEntryXML(e, pushGUID(cg, mid), 0); err == nil || !strings.Contains(err.Error(), "lacks") || !strings.Contains(err.Error(), "ref") || !strings.Contains(err.Error(), "irn") {
+		t.Fatalf("the real line without its reference / GST / e-invoice fields was taken: %v", err)
+	}
+	// with them (as Tally stored this receipt: all empty), it is taken
+	full := pushWithHead(t, ps, "")
+	e, err = pushParse(full)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pushEntryXML(e, pushGUID(cg, mid), 0); err != nil {
+		t.Fatalf("with every head field: %v", err)
+	}
+	// one missing field is enough
+	for _, k := range pushAddedHead {
+		one := pushWithHead(t, ps, k)
+		e, err := pushParse(one)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pushEntryXML(e, pushGUID(cg, mid), 0); err == nil || !strings.Contains(err.Error(), "lacks "+k) {
+			t.Fatalf("a line without %s was taken: %v", k, err)
+		}
+	}
+}
+
+// the head fields the old add-on's two failed records left out of every real line
+var pushAddedHead = []string{"ref", "refdt", "pgstin", "pos", "cgstin", "irn", "irnack", "irnackdt", "ewb"}
+
+// the first part with those head fields put back before the narration, empty (as Tally stored the entries of those runs:
+// tr677-*.tally.xml, c8's receipts), all but skip; the part's len grows by what is added
+func pushWithHead(t *testing.T, ps []string, skip string) []string {
+	add := ""
+	for _, k := range pushAddedHead {
+		if k != skip {
+			add += "|" + k + "="
+		}
+	}
+	out := append([]string{}, ps...)
+	p := out[0]
+	if strings.Contains(p, "|ref=") {
+		t.Fatalf("the line has its head fields already")
+	}
+	i := strings.Index(p, "|narr=")
+	m := regexp.MustCompile(`\|len=(\d+)\|(end|more)=1$`).FindStringSubmatch(p)
+	n, _ := strconv.Atoi(m[1])
+	p = p[:i] + add + p[i:]
+	out[0] = strings.Replace(p, m[0], fmt.Sprintf("|len=%d|%s=1", n+len(utf16.Encode([]rune(add))), m[2]), 1)
+	return out
+}
+
+// a recorder file (UTF-16) with every full line's head fields put back (pushWithHead on its first part), re-encoded
+func rawWithHead(t *testing.T, b []byte) []byte {
+	var out []string
+	for _, l := range strings.Split(decodeRecorderText(b), "\r\n") {
+		if strings.HasPrefix(l, "FCR1|ev=voucher_full|") && strings.Contains(l, "|narr=FE1|part=1|") {
+			i := strings.Index(l, "|narr=FE1|") + len("|narr=")
+			p, ok := pushPayload(l)
+			if !ok {
+				t.Fatalf("a full line the reader cannot frame: %.200s", l)
+			}
+			q := pushWithHead(t, []string{p}, "")[0]
+			l = l[:i] + q + l[i+len(p):]
+		}
+		out = append(out, l)
+	}
+	u := utf16.Encode([]rune(strings.Join(out, "\r\n")))
+	r := []byte{0xFF, 0xFE}
+	for _, c := range u {
+		r = append(r, byte(c), byte(c>>8))
+	}
+	return r
 }
