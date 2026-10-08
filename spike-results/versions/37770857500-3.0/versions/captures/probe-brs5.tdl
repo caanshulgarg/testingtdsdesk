@@ -1,0 +1,15 @@
+;; probe-brs5.tdl (bank-date probe, harness only)
+[#Form: Bank Recon Manual]
+    Add : Button : FCRPB5
+    On : Form Accept : Yes : Call : FCRPWrite : "brs5_pre"
+    On : Form Accept : Yes : Form Accept
+    On : Form Accept : Yes : Call : FCRPWrite : "brs5_post"
+
+[Button: FCRPB5]
+    Key    : Ctrl+Alt+E
+    Title  : "Coral Mark"
+    Action : Display : Day Book
+
+[Collection: FCRPAlivebrs5]
+    Type : Company
+

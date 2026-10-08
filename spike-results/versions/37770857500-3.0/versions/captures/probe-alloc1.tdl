@@ -1,0 +1,9 @@
+;; probe-alloc1.tdl (bank-date probe, harness only)
+[#Form: VCH BankAllocations]
+    On : Form Accept : Yes : Call : FCRPWrite : "alloc1_pre"
+    On : Form Accept : Yes : Form Accept
+    On : Form Accept : Yes : Call : FCRPWrite : "alloc1_post"
+
+[Collection: FCRPAlivealloc1]
+    Type : Company
+

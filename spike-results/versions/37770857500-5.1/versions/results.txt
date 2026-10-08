@@ -1,0 +1,90 @@
+INFO TallyPrime 5.1, mode bank, runner GitHub Actions 1000005419, 2026-10-08T11:43:16
+INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 15643264 bytes, 2026-10-08, FileVersion 1.1.5.1, ProductVersion 1.1.5.1, ProductName TallyPrime
+INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+INFO Tally's own release in its answer header: PRODMAJORREL 5 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+PASS c1 install and open the company: installed tally.exe 15643264 bytes, 2026-10-08, FileVersion 1.1.5.1, ProductVersion 1.1.5.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 18 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 7 ms, 'FinCom Spike Co' in it: True
+INFO bank masters: <CREATED>2</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>
+INFO bank contras with bank allocations (C1-C6 2-10-2026 Share Bank, A1-A2 1-10-2026 Zprobe Bank): created 8 of 8; <ERRORS>0</ERRORS> 
+INFO contra 'bank probe A1' mid 8 aid 8 no 7 bank date ''
+INFO contra 'bank probe A2' mid 9 aid 9 no 8 bank date ''
+INFO contra 'bank probe C1' mid 2 aid 2 no 1 bank date ''
+INFO contra 'bank probe C2' mid 3 aid 3 no 2 bank date ''
+INFO contra 'bank probe C3' mid 4 aid 4 no 3 bank date ''
+INFO contra 'bank probe C4' mid 5 aid 5 no 4 bank date ''
+INFO contra 'bank probe C5' mid 6 aid 6 no 5 bank date ''
+INFO contra 'bank probe C6' mid 7 aid 7 no 6 bank date ''
+INFO discovery yardstick (a report that is not there): <ENVELOPE> <HEADER> <VERSION>1</VERSION> <STATUS>0</STATUS> </HEADER> <BODY> <DATA> <LINEERROR>Could not find Report &apos;<N>&apos;!</LINEERROR> </DATA> </BODY> </ENVELOPE> 
+INFO discovery control 'Day Book': 42580 chars, known: True
+INFO discovery 'Bank Recon': known True (9 ms; <ENVELOPE></ENVELOPE> )
+INFO discovery 'Bank Reconciliation': known False (3 ms; <ENVELOPE> <HEADER> <VERSION>1</VERSION> <STATUS>0</STATUS> </HEADER> <BODY> <DATA> <LINEERROR>Could not find Report &apos;<N>&apos;!</LINEERROR> </DATA> </BODY)
+INFO discovery 'BankRecon': known True (5 ms; <ENVELOPE></ENVELOPE> )
+INFO discovery 'Bank Recon Summary': known False (3 ms; <ENVELOPE> <HEADER> <VERSION>1</VERSION> <STATUS>0</STATUS> </HEADER> <BODY> <DATA> <LINEERROR>Could not find Report &apos;<N>&apos;!</LINEERROR> </DATA> </BODY)
+INFO discovery 'Bank Reconciliation Summary': known False (3 ms; <ENVELOPE> <HEADER> <VERSION>1</VERSION> <STATUS>0</STATUS> </HEADER> <BODY> <DATA> <LINEERROR>Could not find Report &apos;<N>&apos;!</LINEERROR> </DATA> </BODY)
+INFO discovery 'Manual Bank Recon': known False (3 ms; <ENVELOPE> <HEADER> <VERSION>1</VERSION> <STATUS>0</STATUS> </HEADER> <BODY> <DATA> <LINEERROR>Could not find Report &apos;<N>&apos;!</LINEERROR> </DATA> </BODY)
+INFO discovery 'Bank Recon Manual': known False (3 ms; <ENVELOPE> <HEADER> <VERSION>1</VERSION> <STATUS>0</STATUS> </HEADER> <BODY> <DATA> <LINEERROR>Could not find Report &apos;<N>&apos;!</LINEERROR> </DATA> </BODY)
+INFO discovery 'BRS': known False (3 ms; <ENVELOPE> <HEADER> <VERSION>1</VERSION> <STATUS>0</STATUS> </HEADER> <BODY> <DATA> <LINEERROR>Could not find Report &apos;<N>&apos;!</LINEERROR> </DATA> </BODY)
+INFO discovery 'Bank Allocations': known False (2 ms; <ENVELOPE> <HEADER> <VERSION>1</VERSION> <STATUS>0</STATUS> </HEADER> <BODY> <DATA> <LINEERROR>Could not find Report &apos;<N>&apos;!</LINEERROR> </DATA> </BODY)
+INFO discovery 'VCH BankAllocations': known True (7 ms; <ENVELOPE></ENVELOPE> )
+INFO discovery 'Bank Allocation': known False (3 ms; <ENVELOPE> <HEADER> <VERSION>1</VERSION> <STATUS>0</STATUS> </HEADER> <BODY> <DATA> <LINEERROR>Could not find Report &apos;<N>&apos;!</LINEERROR> </DATA> </BODY)
+INFO discovery 'VCH Bank Allocations': known True (4 ms; <ENVELOPE></ENVELOPE> )
+INFO discovery 'BankAllocations': known False (3 ms; <ENVELOPE> <HEADER> <VERSION>1</VERSION> <STATUS>0</STATUS> </HEADER> <BODY> <DATA> <LINEERROR>Could not find Report &apos;<N>&apos;!</LINEERROR> </DATA> </BODY)
+INFO discovery 'VCH BankAllocation': known False (3 ms; <ENVELOPE> <HEADER> <VERSION>1</VERSION> <STATUS>0</STATUS> </HEADER> <BODY> <DATA> <LINEERROR>Could not find Report &apos;<N>&apos;!</LINEERROR> </DATA> </BODY)
+INFO discovery 'Voucher Bank Allocations': known False (3 ms; <ENVELOPE> <HEADER> <VERSION>1</VERSION> <STATUS>0</STATUS> </HEADER> <BODY> <DATA> <LINEERROR>Could not find Report &apos;<N>&apos;!</LINEERROR> </DATA> </BODY)
+INFO BRS form names probed: Bank Recon / BankRecon; Bank Allocations form names probed: VCH BankAllocations / VCH Bank Allocations
+INFO BK0-alloc voucher altered through its Bank Allocations: Bank Allocations seen True, a Bank Date field on it False; saved 'bank probe A2' (mid 9, bank date now ''); AlterID 9 -> 10; company AltVchId 9 -> 10; Ctrl+A to a still screen 160 ms (60.1;160.1); add-on FCR1 lines: voucher_accept_pre x1, voucher_accept_post x1, voucher_full x1 (for its MasterID: 3); probe lines: none; the sub-screen read: Unity TallyPrime MANAGE EDU K: Company Bank Allocations Quit Y: Data Z: Exchange O: Import E: Export M: Share p: print Fl: Help x FinCom Spike Co Bank Allocations for: Zprobe Bank For: 202.00 Inst Date Transacion Type Cash Inst No. Bank Name: Accept Amount 202.00 I-OctQ6 a3f2a o run 154—c 5e3-a acep
+INFO BK0-brs the dated contra stored whole: every date field: DATE=20261002, VCHSTATUSDATE=20261002, EFFECTIVEDATE=20261002, INSTRUMENTDATE=20261002, BANKERSDATE=20261002
+INFO BK0-brs bank date in Bank Reconciliation: direct: Tally bank-dated 'bank probe C1' (mid 2, bank date '20261002'); AlterID 2 -> 11; company AltVchId 10 -> 11, AltMstId 210 -> 210; Ctrl+A to a still screen 4372 ms (47.5;4371.6); add-on FCR1 lines: none (for its MasterID: 0); probe lines: none
+INFO probe brs1 = [#Form: Bank Recon] (its button 'Zebra Mark' on the screen = attached)
+INFO probe brs2 = [#Form: BankRecon] (its button 'Lotus Mark' on the screen = attached)
+INFO probe brs3 = [#Form: Bank Reconciliation] (its button 'Tiger Mark' on the screen = attached)
+INFO probe brs4 = [#Form: Bank Recon Summary] (its button 'Maple Mark' on the screen = attached)
+INFO probe brs5 = [#Form: Bank Recon Manual] (its button 'Coral Mark' on the screen = attached)
+INFO probe brs6 = [#Form: Manual Bank Recon] (its button 'Amber Mark' on the screen = attached)
+INFO probe brs7 = [#Form: BRS] (its button 'Cedar Mark' on the screen = attached)
+INFO probe brs8 = [#Form: Bank Recon Details] (its button 'Delta Mark' on the screen = attached)
+INFO probe alloc1 = [#Form: VCH BankAllocations]
+INFO probe alloc2 = [#Form: VCH Bank Allocations]
+INFO tally.ini TDL lines: FinComRecorder.tdl, probe-common.tdl, probe-sys-afteralter.tdl, probe-sys-beforealter.tdl, probe-sys-onalter.tdl, probe-sys-beforesave.tdl, probe-sys-aftersave.tdl, probe-control-voucher.tdl, probe-brs1.tdl, probe-brs2.tdl, probe-brs3.tdl, probe-brs4.tdl, probe-brs5.tdl, probe-brs6.tdl, probe-brs7.tdl, probe-brs8.tdl, probe-alloc1.tdl, probe-alloc2.tdl
+INFO Tally started afresh (BK1: the probe variant loaded)
+INFO a Tally request took 30005 ms with no answer: Tally started afresh before the next step
+INFO a Tally request took 30016 ms with no answer: Tally started afresh before the next step
+INFO a Tally request took 30004 ms with no answer: Tally started afresh before the next step
+INFO a Tally request took 30002 ms with no answer: Tally started afresh before the next step
+HARNESS BK1-alloc voucher altered through its Bank Allocations: Bank Allocations seen False, a Bank Date field on it False; the control button (Kiwi Mark) on the voucher screen: False; no contra saved (see tds-*-BK1-alloc-* screenshots); AlterID  -> ; company AltVchId  -> ; Ctrl+A to a still screen -1 ms (); add-on FCR1 lines: none (for its MasterID: 0); probe lines: none; the sub-screen read: 
+INFO Tally started afresh (before BK1-brs)
+INFO a Tally request took 30012 ms with no answer: Tally started afresh before the next step
+INFO a Tally request took 30011 ms with no answer: Tally started afresh before the next step
+INFO a Tally request took 30005 ms with no answer: Tally started afresh before the next step
+INFO a Tally request took 30005 ms with no answer: Tally started afresh before the next step
+HARNESS BK1-brs bank date in Bank Reconciliation: none; probe markers on the screen: none: no contra got a bank date (see tds-*-BK1-brs-* screenshots); AlterID  -> ; company AltVchId  -> , AltMstId  -> ; Ctrl+A to a still screen -1 ms (); add-on FCR1 lines: none (for its MasterID: 0); probe lines: none
+INFO Tally started afresh (before BK1-brs2)
+INFO a Tally request took 30001 ms with no answer: Tally started afresh before the next step
+INFO a Tally request took 30004 ms with no answer: Tally started afresh before the next step
+INFO a Tally request took 30004 ms with no answer: Tally started afresh before the next step
+INFO a Tally request took 30007 ms with no answer: Tally started afresh before the next step
+HARNESS BK1-brs2 bank date in Bank Reconciliation: none; probe markers on the screen: none: no contra got a bank date (see tds-*-BK1-brs2-* screenshots); AlterID  -> ; company AltVchId  -> , AltMstId  -> ; Ctrl+A to a still screen -1 ms (); add-on FCR1 lines: none (for its MasterID: 0); probe lines: none
+INFO tally.ini TDL lines: FinComRecorder.tdl
+INFO Tally started afresh (BK3: the add-on of the ref only)
+INFO a Tally request took 30002 ms with no answer: Tally started afresh before the next step
+INFO a Tally request took 30000 ms with no answer: Tally started afresh before the next step
+INFO a Tally request took 30055 ms with no answer: Tally started afresh before the next step
+INFO a Tally request took 30006 ms with no answer: Tally started afresh before the next step
+HARNESS BK3-brs bank date in Bank Reconciliation: none; probe markers on the screen: none: no contra got a bank date (see tds-*-BK3-brs-* screenshots); AlterID  -> ; company AltVchId  -> , AltMstId  -> ; Ctrl+A to a still screen -1 ms (); add-on FCR1 lines: none (for its MasterID: 0); probe lines: none
+INFO a Tally request took 30003 ms with no answer: Tally started afresh before the next step
+INFO bank: probe files loaded: control-voucher=Kiwi Mark, brs1=Zebra Mark, brs2=Lotus Mark, brs3=Tiger Mark, brs4=Maple Mark, brs5=Coral Mark, brs6=Amber Mark, brs7=Cedar Mark, brs8=Delta Mark
+INFO installer: Tally's download page lists TallyPrime setups for: Rel_2.1, REL_TP_1.0.0, Rel.2.0.1, Rel.2.0, Rel.3.0_Gold, Rel.3.0.1, Rel.3.0, Rel.4.0, Rel.4.1, Rel.5.0, Rel.5.1, Rel.6.1, Rel.7.0, Rel.7.1_gold, Rel.TP_1.1.1, Rel.TP_1.1.2, Rel.TP_1.1.3, Rel.TP_1.1.4, Rel.TP_1.1, Rel.TP_2.0, Rel6.0, Rel6.2, TallyPrime_Beta
+INFO installer: NO(403) -1 bytes, Last-Modified : https://tallymirror.tallysolutions.com/download_centre/Rel.5.1_gold/TP/Full/setup.exe
+INFO installer: AVAILABLE 45651144 bytes, Last-Modified Sun, 01 Dec 2024 05:56:26 GMT: https://tallymirror.tallysolutions.com/download_centre/Rel.5.1/TP/Full/setup.exe
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_Gold/TP/Full/setup.exe (43440848 bytes)
+INFO installer: AVAILABLE other release 3.0.1: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0.1/TP/Full/setup.exe (43476688 bytes)
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0/TP/Full/setup.exe (43465936 bytes)
+INFO installer: AVAILABLE other release 4.0: https://tallymirror.tallysolutions.com/download_centre/Rel.4.0/TP/Full/setup.exe (44497616 bytes)
+INFO installer: AVAILABLE other release 4.1: https://tallymirror.tallysolutions.com/download_centre/Rel.4.1/TP/Full/setup.exe (44673232 bytes)
+INFO installer: AVAILABLE other release 5.0: https://tallymirror.tallysolutions.com/download_centre/Rel.5.0/TP/Full/setup.exe (45592784 bytes)
+INFO installer: AVAILABLE other release 6.1: https://tallymirror.tallysolutions.com/download_centre/Rel.6.1/TP/Full/setup.exe (46460616 bytes)
+INFO installer: AVAILABLE other release 7.0: https://tallymirror.tallysolutions.com/download_centre/Rel.7.0/TP/Full/setup.exe (70912776 bytes)
+INFO installer: AVAILABLE other release 7.1: https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe (72090376 bytes)
+INFO installer: AVAILABLE other release 6.0: https://tallymirror.tallysolutions.com/download_centre/Rel6.0/TP/Full/setup.exe (46324936 bytes)
+INFO installer: AVAILABLE other release 6.2: https://tallymirror.tallysolutions.com/download_centre/Rel6.2/TP/Full/setup.exe (47408904 bytes)
+INFO installer: DOWNLOADED Rel.5.1 from https://tallymirror.tallysolutions.com/download_centre/Rel.5.1/TP/Full/setup.exe : 45651144 bytes in 1 s, SHA-256 05EF11D4542CF420223D327C733C479105ECF7BBD660331F126CFD71A5CA367B, signature Valid CN=Tally Solutions Pvt Ltd, O=Tally Solutions Pvt Ltd, L=Bengaluru, S=Karnataka, C=IN, file version 1.1.5.1 product 1.1.5.1

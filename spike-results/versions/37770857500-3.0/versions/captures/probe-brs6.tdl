@@ -1,0 +1,15 @@
+;; probe-brs6.tdl (bank-date probe, harness only)
+[#Form: Manual Bank Recon]
+    Add : Button : FCRPB6
+    On : Form Accept : Yes : Call : FCRPWrite : "brs6_pre"
+    On : Form Accept : Yes : Form Accept
+    On : Form Accept : Yes : Call : FCRPWrite : "brs6_post"
+
+[Button: FCRPB6]
+    Key    : Ctrl+Alt+F
+    Title  : "Amber Mark"
+    Action : Display : Day Book
+
+[Collection: FCRPAlivebrs6]
+    Type : Company
+

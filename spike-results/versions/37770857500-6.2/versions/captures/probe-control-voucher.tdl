@@ -1,0 +1,12 @@
+;; probe-control-voucher.tdl (bank-date probe, harness only)
+[#Form: Voucher]
+    Add : Button : FCRPBV
+
+[Button: FCRPBV]
+    Key    : Ctrl+Alt+F11
+    Title  : "Kiwi Mark"
+    Action : Display : Day Book
+
+[Collection: FCRPAlivecontrolvoucher]
+    Type : Company
+

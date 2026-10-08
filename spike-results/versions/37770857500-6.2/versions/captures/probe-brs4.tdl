@@ -1,0 +1,15 @@
+;; probe-brs4.tdl (bank-date probe, harness only)
+[#Form: Bank Recon Summary]
+    Add : Button : FCRPB4
+    On : Form Accept : Yes : Call : FCRPWrite : "brs4_pre"
+    On : Form Accept : Yes : Form Accept
+    On : Form Accept : Yes : Call : FCRPWrite : "brs4_post"
+
+[Button: FCRPB4]
+    Key    : Ctrl+Alt+D
+    Title  : "Maple Mark"
+    Action : Display : Day Book
+
+[Collection: FCRPAlivebrs4]
+    Type : Company
+

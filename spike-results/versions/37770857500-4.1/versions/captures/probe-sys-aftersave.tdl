@@ -1,0 +1,7 @@
+;; probe-sys-aftersave.tdl (bank-date probe, harness only)
+[System: Events]
+    FCRPsysaftersave : After Save Object : Yes : Call : FCRPWrite : "sys-aftersave"
+
+[Collection: FCRPAlivesysaftersave]
+    Type : Company
+

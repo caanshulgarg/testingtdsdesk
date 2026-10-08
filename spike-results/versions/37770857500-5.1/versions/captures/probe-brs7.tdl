@@ -1,0 +1,15 @@
+;; probe-brs7.tdl (bank-date probe, harness only)
+[#Form: BRS]
+    Add : Button : FCRPB7
+    On : Form Accept : Yes : Call : FCRPWrite : "brs7_pre"
+    On : Form Accept : Yes : Form Accept
+    On : Form Accept : Yes : Call : FCRPWrite : "brs7_post"
+
+[Button: FCRPB7]
+    Key    : Ctrl+Alt+G
+    Title  : "Cedar Mark"
+    Action : Display : Day Book
+
+[Collection: FCRPAlivebrs7]
+    Type : Company
+

@@ -1,0 +1,15 @@
+;; probe-brs8.tdl (bank-date probe, harness only)
+[#Form: Bank Recon Details]
+    Add : Button : FCRPB8
+    On : Form Accept : Yes : Call : FCRPWrite : "brs8_pre"
+    On : Form Accept : Yes : Form Accept
+    On : Form Accept : Yes : Call : FCRPWrite : "brs8_post"
+
+[Button: FCRPB8]
+    Key    : Ctrl+Alt+H
+    Title  : "Delta Mark"
+    Action : Display : Day Book
+
+[Collection: FCRPAlivebrs8]
+    Type : Company
+

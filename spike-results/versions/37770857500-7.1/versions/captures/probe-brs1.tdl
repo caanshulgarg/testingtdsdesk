@@ -1,0 +1,15 @@
+;; probe-brs1.tdl (bank-date probe, harness only)
+[#Form: Bank Recon]
+    Add : Button : FCRPB1
+    On : Form Accept : Yes : Call : FCRPWrite : "brs1_pre"
+    On : Form Accept : Yes : Form Accept
+    On : Form Accept : Yes : Call : FCRPWrite : "brs1_post"
+
+[Button: FCRPB1]
+    Key    : Ctrl+Alt+A
+    Title  : "Zebra Mark"
+    Action : Display : Day Book
+
+[Collection: FCRPAlivebrs1]
+    Type : Company
+

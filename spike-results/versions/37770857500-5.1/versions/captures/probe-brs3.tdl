@@ -1,0 +1,15 @@
+;; probe-brs3.tdl (bank-date probe, harness only)
+[#Form: Bank Reconciliation]
+    Add : Button : FCRPB3
+    On : Form Accept : Yes : Call : FCRPWrite : "brs3_pre"
+    On : Form Accept : Yes : Form Accept
+    On : Form Accept : Yes : Call : FCRPWrite : "brs3_post"
+
+[Button: FCRPB3]
+    Key    : Ctrl+Alt+C
+    Title  : "Tiger Mark"
+    Action : Display : Day Book
+
+[Collection: FCRPAlivebrs3]
+    Type : Company
+
