@@ -1,0 +1,50 @@
+INFO TallyPrime 7.1, mode mhook, runner GitHub Actions 1000005675, 2026-10-08T16:29:42
+INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 18405568 bytes, 2026-10-08, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime
+INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+INFO Tally's own release in its answer header: PRODMAJORREL 7 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+PASS c1 install and open the company: installed tally.exe 18405568 bytes, 2026-10-08, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+PASS c2 port and company list: port 9000 answered 11.6 s after start, GET 1531 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 10 ms, 'FinCom Spike Co' in it: True
+INFO mh company features after the XML alter: ISPAYROLLON=Yes, ISBATCHWISEON=Yes, PREVISMULTIGODOWNON=Yes, ISCOSTCENTRESON=Yes, ISGSTON=Yes, ISINVENTORYON=Yes
+INFO mh attendance type MH Present made by XML (ATTENDANCEPRODUCTIONTYPE)
+INFO mh production type MH Pieces made by XML (ATTENDANCEPRODUCTIONTYPE)
+INFO mh attendance/production types made by XML: attendance True, production True
+INFO mh the add-on loaded in phase A (C:\fcspike\FinComRecorder.tdl, SHA-256 F45FB164FBFB225B...) hooks: Voucher, Ledger, Pay Head, Stock Item, Godown
+INFO tally.ini TDL lines: FinComRecorder.tdl
+INFO Tally started afresh (phase A: the add-on from the ref)
+INFO mh A G1-create: stored as typed False (missing: not in Tally by name; NAME=MA\ G1); error 'no save'; Ctrl+A -1 ms; add-on lines: none
+INFO mh A G2-alter-alias: stored as typed False (missing: not in Tally by name; NAME=MA\ G1X); error 'no save'; Ctrl+A -1 ms; add-on lines: none
+INFO mh A G3-rename: stored as typed False (missing: not in Tally by name); error 'no save'; Ctrl+A -1 ms; add-on lines: none
+INFO mh A G4-create-under: stored as typed False (missing: not in Tally by name; PARENT=MA\ Godown\ 1R); error 'no save'; Ctrl+A -1 ms; add-on lines: none
+INFO mh A G5-alter-under: stored as typed False (missing: not in Tally by name; PARENT=(&#4; )?Primary|); error 'no save'; Ctrl+A -1 ms; add-on lines: none
+INFO mh A S1-create: stored as typed False (missing: not in Tally by name; NAME=MA\ I1; BASEUNITS=Nos); error 'no save'; Ctrl+A -1 ms; add-on lines: none
+INFO mh A S2-alter-alias: stored as typed False (missing: not in Tally by name; NAME=MA\ I1X); error 'no save'; Ctrl+A -1 ms; add-on lines: none
+INFO mh A S3-rename: stored as typed False (missing: not in Tally by name); error 'no save'; Ctrl+A -1 ms; add-on lines: none
+INFO mh A S4-gst-hsn: stored as typed False (missing: not in Tally by name; [A-Z.]*HSN[A-Z.]*=84713010; [A-Z.]*RATE[A-Z.]*=18(\.0+)?( ?%)?); error 'no save'; Ctrl+A -1 ms; add-on lines: none
+INFO mh A S5-unit-change: stored as typed False (missing: not in Tally by name; BASEUNITS=Kgs); error 'no save'; Ctrl+A -1 ms; add-on lines: none
+INFO mh A S6-opening-batches: stored as typed False (missing: not in Tally by name; ISBATCHWISEON=Yes; BATCHNAME=MA\ B1; BATCHNAME=MA\ B2; OPENINGBALANCE=15 Nos; [A-Z.]*OPENINGBALANCE=10 Nos; [A-Z.]*OPENINGBALANCE=5 Nos); error 'no save'; Ctrl+A -1 ms; add-on lines: none
+INFO mh A S7-create-in-voucher: stored as typed False (missing: not in Tally by name; BASEUNITS=Nos); error 'Alt+C did not open Stock Item Creation'; Ctrl+A -1 ms; add-on lines: none
+INFO mh A P1-create-user-defined: stored as typed False (missing: not in Tally by name; PAYTYPE=Earnings for Employees; PARENT=Indirect Expenses; AFFECTSNETSALARY=Yes; CALCULATIONTYPE=As User Defined Value); error ''; Ctrl+A 77.5 ms; add-on lines: none
+INFO mh A P2-create-computed-slab: stored as typed False (missing: not in Tally by name; CALCULATIONTYPE=As Computed Value; [A-Z.]*=On Specified Formula; [A-Z.]*=MA\ Basic; [A-Z.]*=40(\.0+)?( ?%)?); error ''; Ctrl+A 74.6 ms; add-on lines: none
+INFO mh A P3-create-attendance: stored as typed False (missing: not in Tally by name; CALCULATIONTYPE=On Attendance; [A-Z.]*=MH Present; [A-Z.]*PERIOD[A-Z.]*=Months); error ''; Ctrl+A -1 ms; add-on lines: none
+INFO mh A P4-create-production: stored as typed False (missing: not in Tally by name; CALCULATIONTYPE=On Production; [A-Z.]*=MH Pieces); error ''; Ctrl+A -1 ms; add-on lines: none
+INFO mh A P5-alter-net-salary: stored as typed False (missing: not in Tally by name; AFFECTSNETSALARY=No; [A-Z.]*=MA\ Basic\ Pay); error 'no save'; Ctrl+A -1 ms; add-on lines: none
+INFO mh A P6-alter-slab: stored as typed False (missing: not in Tally by name; [A-Z.]*=50(\.0+)?( ?%)?); error 'no save'; Ctrl+A -1 ms; add-on lines: none
+INFO mh A D1-delete-godown: stored as typed True; error 'alteration form not reached'; Ctrl+A -1 ms; add-on lines: none
+INFO mh A D2-delete-stock-item: stored as typed True; error 'alteration form not reached'; Ctrl+A -1 ms; add-on lines: none
+INFO mh A D3-delete-pay-head: stored as typed True; error 'alteration form not reached'; Ctrl+A -1 ms; add-on lines: none
+INFO mh A save time Godown (alter, Ctrl+A to a still screen): -1, -1, -1, -1, -1 ms
+INFO mh A save time Stock Item (alter, Ctrl+A to a still screen): -1, -1, -1, -1, -1 ms
+INFO installer: Tally's download page lists TallyPrime setups for: Rel_2.1, REL_TP_1.0.0, Rel.2.0.1, Rel.2.0, Rel.3.0_Gold, Rel.3.0.1, Rel.3.0, Rel.4.0, Rel.4.1, Rel.5.0, Rel.5.1, Rel.6.1, Rel.7.0, Rel.7.1_gold, Rel.TP_1.1.1, Rel.TP_1.1.2, Rel.TP_1.1.3, Rel.TP_1.1.4, Rel.TP_1.1, Rel.TP_2.0, Rel6.0, Rel6.2, TallyPrime_Beta
+INFO installer: AVAILABLE 72090376 bytes, Last-Modified Thu, 25 Jun 2026 10:18:19 GMT: https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_Gold/TP/Full/setup.exe (43440848 bytes)
+INFO installer: AVAILABLE other release 3.0.1: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0.1/TP/Full/setup.exe (43476688 bytes)
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0/TP/Full/setup.exe (43465936 bytes)
+INFO installer: AVAILABLE other release 4.0: https://tallymirror.tallysolutions.com/download_centre/Rel.4.0/TP/Full/setup.exe (44497616 bytes)
+INFO installer: AVAILABLE other release 4.1: https://tallymirror.tallysolutions.com/download_centre/Rel.4.1/TP/Full/setup.exe (44673232 bytes)
+INFO installer: AVAILABLE other release 5.0: https://tallymirror.tallysolutions.com/download_centre/Rel.5.0/TP/Full/setup.exe (45592784 bytes)
+INFO installer: AVAILABLE other release 5.1: https://tallymirror.tallysolutions.com/download_centre/Rel.5.1/TP/Full/setup.exe (45651144 bytes)
+INFO installer: AVAILABLE other release 6.1: https://tallymirror.tallysolutions.com/download_centre/Rel.6.1/TP/Full/setup.exe (46460616 bytes)
+INFO installer: AVAILABLE other release 7.0: https://tallymirror.tallysolutions.com/download_centre/Rel.7.0/TP/Full/setup.exe (70912776 bytes)
+INFO installer: AVAILABLE other release 6.0: https://tallymirror.tallysolutions.com/download_centre/Rel6.0/TP/Full/setup.exe (46324936 bytes)
+INFO installer: AVAILABLE other release 6.2: https://tallymirror.tallysolutions.com/download_centre/Rel6.2/TP/Full/setup.exe (47408904 bytes)
+INFO installer: DOWNLOADED Rel.7.1 from https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe : 72090376 bytes in 2 s, SHA-256 B849B1FB5A93D03C8FABDAEC4447FDCFDF27A5D6C93E3C207BBB320263AB663F, signature Valid CN=Tally Solutions Pvt Ltd, O=Tally Solutions Pvt Ltd, L=Bengaluru, S=Karnataka, C=IN, file version 1.1.7.1 product 1.1.7.1
