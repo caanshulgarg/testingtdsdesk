@@ -163,10 +163,13 @@ function FormUp($f) { if ($f.text -match 'Gateway ?of Tally' -and -not $f.left) 
 # head above) types its keys; otherwise Enter. Ends when every rule is used ($stop), the form is gone, or after $max fields.
 # Returns the labels seen (the log keeps them). A rule: @{ l = 'regex'; h = 'regex'; k = 'keys' }
 function Walk([string]$tag, [object[]]$rules, [int]$max = 30, [switch]$stop) {
+  $script:lastSig = ''; $script:sameN = 0
   $used = @{}; $seen = @(); $need = 0; foreach ($r in $rules) { if (-not $r.opt) { $need++ } }
   for ($i = 1; $i -le $max; $i++) {
     $f = FieldNow "$tag-w$i"
     $seen += "[$($f.left)|$($f.head)]"
+    $sig = "$($f.box)|$($f.value)|$($f.left)"; if ($sig -eq $script:lastSig) { $script:sameN++ } else { $script:sameN = 0 }; $script:lastSig = $sig
+    if ($script:sameN -ge 4) { Write-Host "[mh] $tag the same field 5 times: stop"; break }
     if ($f.text -match 'Accept \?|Yes or No') { Write-Host "[mh] $tag a question is up: stop"; break }
     if (-not (FormUp $f)) { Write-Host "[mh] $tag the form is gone: stop"; break }
     $hit = $null
@@ -182,6 +185,8 @@ function Walk([string]$tag, [object[]]$rules, [int]$max = 30, [switch]$stop) {
       $kk = "$($rules[$hit].k)"
       # the text first, then Enter on its own (run 37816773600: a list given the text and Enter in one go said 'Nothing selected')
       if ($kk -match '^(.+?)\{ENTER\}$' -and $Matches[1] -notmatch '[{}%^]') { KeysTo $Matches[1] 0.8; KeysTo '{ENTER}' 1.2 } else { KeysTo $kk 1.2 }
+      # fields the box finder does not see on 3.0-6.2 (Units, the slab row): the keys that follow, one by one
+      foreach ($q in @($rules[$hit].seq)) { if ($q) { KeysTo $q 0.9 } }
       if ($rules[$hit].last) { break }
       $done = 0; foreach ($k in $used.Keys) { if (-not $rules[$k].opt) { $done++ } }
       if ($stop -and $done -ge $need) { break }
@@ -224,7 +229,7 @@ function MhPairs([string]$xml) {
   $p = @()
   foreach ($m in [regex]::Matches($xml, '<(?<t>[A-Z][A-Z0-9.]*)(?: [^>]*)?>(?<v>[^<]*)</\k<t>>')) {
     $t = $m.Groups['t'].Value
-    if ($t -match '^(GUID|MASTERID|ALTERID|ALTEREDON|ENTEREDBY|ALTEREDBY|CREATEDBY|CREATEDDATE|ALTEREDDATE|LASTVCHID|LASTSAVED.*|SORTPOSITION|REQUESTORRULE|.*TIME|.*ID|OLDAUDITENTRYIDS|AUDITENTRIES.*|UPDATEDDATETIME)$') { continue }
+    if ($t -match '^(GUID|MASTERID|ALTERID|ALTEREDON|ENTEREDBY|ALTEREDBY|CREATEDBY|CREATEDDATE|ALTEREDDATE|LASTVCHID|LASTSAVED.*|SORTPOSITION|REQUESTORRULE|.*TIME|.*ID|OLDAUDITENTRYIDS|AUDITENTRIES.*|UPDATEDDATETIME|LEDGER|GODOWN|STOCKITEM|COLLECTION|ERRORMSG)$') { continue }
     $v = ($m.Groups['v'].Value.Trim() -replace '\bM[AB] ', 'MX ')
     $p += "$t=$v"
   }
@@ -427,7 +432,7 @@ function MhPhase([string]$phase) {
   # ---------------- Stock Item
   MhCase $phase 'S1-create' 'Stock Item' "$P Item 1" {
     if (-not (MhOpenCreate 'Stock Item' 'S1')) { return }
-    MhFill 'S1' @(@{ l = '(^|\W)Name$'; k = (SK "$P Item 1") + '{ENTER}' }, @{ l = 'alias'; h = (HRe "$P Item 1"); k = (SK "$P I1") + '{ENTER}' }, @{ l = '(^|\W)Under$'; k = 'Primary{ENTER}'; opt = $true }, @{ l = '(^|\W)Units$'; k = 'Nos{ENTER}' })
+    MhFill 'S1' @(@{ l = '(^|\W)Name$'; k = (SK "$P Item 1") + '{ENTER}' }, @{ l = 'alias'; h = (HRe "$P Item 1"); k = (SK "$P I1") + '{ENTER}' }, @{ l = '(^|\W)Under$'; k = 'Primary{ENTER}'; seq = @('Nos', '{ENTER}') })
   } @(@('NAME', [regex]::Escape("$P I1")), @('BASEUNITS', 'Nos')) $(if ($line) { 'stockitem_accept_post' })
   MhCase $phase 'S2-alter-alias' 'Stock Item' "$P Item 1" {
     if (-not (MhOpenAlter 'Stock Item' "$P Item 1" 'S2')) { return }
@@ -443,20 +448,20 @@ function MhPhase([string]$phase) {
     if (-not (MhOpenAlter 'Stock Item' "$P Item 1R" 'S4')) { return }
     MhFill 'S4' @(
       @{ l = 'HS.{0,3}SAC (&|and) Related|HS.{0,3}SAC Details$'; k = 'Specify Details Here{ENTER}' },
-      @{ l = '(^|\W)HS.{0,3}SAC$|HS.{0,3}SAC Code'; k = '84713010{ENTER}' },
+      @{ l = '(^|\W)HS.{0,3}SAC$|HS.{0,3}SAC Code|N.?SAC$'; k = '84713010{ENTER}' },
       @{ l = 'GST Rate (&|and) Related|GST Rate Details$|Set.?Alter GST'; k = 'Specify Details Here{ENTER}' },
       @{ l = 'Taxability'; k = 'Taxable{ENTER}'; opt = $true },
       @{ l = '(^|\W)GST Rate$|Integrated Tax|(^|\W)IGST'; k = '18{ENTER}' }) 45
   } @(@('[A-Z.]*HSN[A-Z.]*', '84713010'), @('[A-Z.]*RATE[A-Z.]*', '18(\.0+)?( ?%)?')) $(if ($line) { 'stockitem_accept_post' })
   MhCase $phase 'S5-unit-change' 'Stock Item' "$P Item 1R" {
     if (-not (MhOpenAlter 'Stock Item' "$P Item 1R" 'S5')) { return }
-    MhFill 'S5' @(@{ l = '(^|\W)Units$'; k = 'Kgs{ENTER}' })
+    MhFill 'S5' @(@{ l = '(^|\W)Under$'; k = '{ENTER}'; seq = @('Kgs', '{ENTER}') })
   } @(, @('BASEUNITS', 'Kgs')) $(if ($line) { 'stockitem_accept_post' })
   if ($batchOn) {
     MhCase $phase 'S6-opening-batches' 'Stock Item' "$P Item B" {
       if (-not (MhOpenCreate 'Stock Item' 'S6')) { return }
       MhFill 'S6' @(
-        @{ l = '(^|\W)Name$'; k = (SK "$P Item B") + '{ENTER}' }, @{ l = '(^|\W)Units$'; k = 'Nos{ENTER}' }, @{ l = 'Maintain in batches'; k = 'y{ENTER}' },
+        @{ l = '(^|\W)Name$'; k = (SK "$P Item B") + '{ENTER}' }, @{ l = '(^|\W)Under$'; k = 'Primary{ENTER}'; seq = @('Nos', '{ENTER}') }, @{ l = 'Maintain in batches'; k = 'y{ENTER}' },
         @{ l = 'Opening Balance'; k = '15{ENTER}' },
         @{ h = 'Godown|Location'; k = 'MH Main{ENTER}' }, @{ h = 'Batch'; k = (SK "$P B1") + '{ENTER}' }, @{ h = '^Quantity'; k = '10{ENTER}' }, @{ h = '^Rate'; k = '50{ENTER}' },
         @{ h = 'Godown|Location'; k = 'MH Main{ENTER}' }, @{ h = 'Batch'; k = (SK "$P B2") + '{ENTER}' }, @{ h = '^Quantity'; k = '5{ENTER}' }, @{ h = '^Rate'; k = '50{ENTER}' },
@@ -476,7 +481,7 @@ function MhPhase([string]$phase) {
     Start-Sleep 2
     $f = FieldNow 'S7-item-form' -keep
     if ($f.text -notmatch 'Stock Item Creation') { return [pscustomobject]@{ ms = -1; err = 'Alt+C did not open Stock Item Creation'; walk = ($w.seen -join ' ') } }
-    $s = MhFill 'S7' @(@{ l = '(^|\W)Name$'; k = (SK "$P Item V") + '{ENTER}' }, @{ l = '(^|\W)Units$'; k = 'Nos{ENTER}' })
+    $s = MhFill 'S7' @(@{ l = '(^|\W)Name$'; k = (SK "$P Item V") + '{ENTER}' }, @{ l = '(^|\W)Under$'; k = 'Primary{ENTER}'; seq = @('Nos', '{ENTER}') })
     $null = FieldNow 'S7-back-in-voucher' -keep
     $s.walk = "voucher: $($w.seen -join ' ') | item: $($s.walk)"
     return $s
@@ -494,8 +499,7 @@ function MhPhase([string]$phase) {
     MhFill 'P2' @(
       @{ l = '(^|\W)Name$'; k = (SK "$P HRA") + '{ENTER}' }, @{ l = 'Pay ?head type'; k = 'Earnings for Employees{ENTER}' },
       @{ l = '(^|\W)Under$'; k = 'Indirect Expenses{ENTER}' }, @{ l = 'Affect net salary'; k = 'y{ENTER}' },
-      @{ l = 'Calculation type'; k = 'As Computed Value{ENTER}' }, @{ l = '(^|\W)Compute$'; k = '{ENTER}' },
-      @{ l = 'Effective From'; h = 'Effective From'; k = '1-4-2026{ENTER}' }, @{ h = 'Slab Type'; k = 'Percentage{ENTER}' }, @{ h = '^Value|Percent'; k = '40{ENTER}' }) 45
+      @{ l = 'Calculation type'; k = 'As Computed Value{ENTER}' }, @{ l = '(^|\W)Compute$'; k = '{ENTER}'; seq = @('{ENTER}', '{ENTER}', 'Percentage', '{ENTER}', '40', '{ENTER}') }) 45
   } @(@('CALCULATIONTYPE', 'As Computed Value'), @('[A-Z.]*', '40(\.0+)?( ?%)?')) $(if ($line) { 'payhead_accept_post' })
   if ($att) {
     MhCase $phase 'P3-create-attendance' 'Pay Head' "$P Attend" {
@@ -527,7 +531,7 @@ function MhPhase([string]$phase) {
   } @(, @('SHOWINPAYSLIP', 'No')) $(if ($line) { 'payhead_accept_post' })
   MhCase $phase 'P6-alter-slab' 'Pay Head' "$P HRA" {
     if (-not (MhOpenAlter 'Pay Head' "$P HRA" 'P6')) { return }
-    MhFill 'P6' @(@{ l = '(^|\W)Compute$'; k = '{ENTER}' }, @{ h = '^Value|Percent'; k = '50{ENTER}' }) 40
+    MhFill 'P6' @(, @{ l = '(^|\W)Compute$'; k = '{ENTER}'; seq = @('{ENTER}', '{ENTER}', '{ENTER}', '50', '{ENTER}') }) 40
   } @(, @('[A-Z.]*', '50(\.0+)?( ?%)?')) $(if ($line) { 'payhead_accept_post' })
   # ---------------- deletes (Alter, Alt+D, y): the master gone; before_delete / after_delete lines
   MhCase $phase 'D1-delete-godown' 'Godown' "$P Godown 2" { MhDelete 'Godown' "$P Godown 2" 'D1' } @() $(if ($line) { 'after_delete|before_delete' }) -gone
