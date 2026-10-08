@@ -28,3 +28,4 @@ mode=fast234c
 # fast234r again (11:30Z): godown on the invoice's items; RVch (rv is Remove-Variable); the payroll Account field: the bank
 # fast234c (08-Oct-2026): the 2.3.4 re-review 2 L-d: FinComVoucherObject naming a company that is closed while another is open (MasterIDs of the other only, of the closed one only, of neither); no company open (fast234c.ps1)
 # fast234c again (15:20Z): run 37791747092 (3.0-7.1): no 'Could not find' for a closed company: no answer in 30 s, and every request after it unanswered (even the open company's); now each closed ask in a FRESH Tally with a control ask of the open company before and after, the company list after, a screenshot; A given MasterIDs of its own
+# fast234c v3 (17:30Z): run 37802765912: Tally 3.0 and 7.1 crash (Internal Error, c0000005) on the object export naming a closed company; now also 2.3.3's FinComVoucherByMaster and FinComVoucherByNumber naming it, each in a fresh Tally; B's control by a MasterID B has

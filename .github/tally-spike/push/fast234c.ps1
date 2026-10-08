@@ -90,11 +90,31 @@ try {
     Say ("C {0}: after it, Tally's company list answered: {1} ({2} chars, {3} ms)" -f $case, $(if ($l) { 'yes' } else { 'NO' }), "$l".Length, $script:lastMs)
     if ($ctlMid) { $null = CAsk $ctlCo $ctlMid "$case-control-after" }
   }
-  CClosed @($fB) @($coB) $coB $bOnly $coA $aOnly 'closedA-A-aonly'
-  CClosed @($fB) @($coB) $coB $bOnly $coA $bOnly 'closedA-A-bonly'
-  CClosed @($fB) @($coB) $coB $bOnly $coA $none 'closedA-A-none'
-  if ($both) { CClosed @($fB) @($coB) $coB $bOnly $coA $both 'closedA-A-both' }
-  CClosed @($fB) @($coB) $coB $bOnly 'FinCom No Such Co' $bOnly 'closedA-nosuch-bonly'
+  # v3: the same with the requests of 2.3.3 and before (FinComVoucherByMaster, FinComVoucherByNumber) naming the closed
+  # company: does the crash come with the object export only?
+  function CClosedReq($loads, $want, $ctlCo, $ctlMid, $req, $case) {
+    if (-not (StartW $light $loads "c-$case" $want)) { Say "HARNESS: fast234c ${case}: not open"; return }
+    if ($ctlMid) { $null = CAsk $ctlCo $ctlMid "$case-control-before" }
+    $a = Post $req '' 20
+    Set-Content (Join-Path $cap "c-$case.xml") $a -Encoding UTF8
+    $s0 = ("$a" -replace '\s+', ' ').Trim(); if ($s0.Length -gt 300) { $s0 = $s0.Substring(0, 300) + '...' }
+    Say ("C {0}: {1} chars in {2} ms: {3}" -f $case, "$a".Length, $script:lastMs, $s0)
+    Shot "c-$case-after"
+    $l = Post $listCo '' 15
+    Say ("C {0}: after it, Tally's company list answered: {1} ({2} ms)" -f $case, $(if ($l) { 'yes' } else { 'NO' }), $script:lastMs)
+    if ($ctlMid) { $null = CAsk $ctlCo $ctlMid "$case-control-after" }
+  }
+  $ctlB = if ($bOnly) { $bOnly } else { $both }   # a voucher of B to ask while B is open (the control)
+  $keepCo = $script:co; $script:co = $coA
+  $rBM = ReqBM $cDate $aOnly; $rBN = ReqBN $cDate 'Journal' '1'
+  $script:co = $keepCo
+  CClosedReq @($fB) @($coB) $coB $ctlB $rBM 'closedA-bymaster233'
+  CClosedReq @($fB) @($coB) $coB $ctlB $rBN 'closedA-bynumber'
+  CClosed @($fB) @($coB) $coB $ctlB $coA $aOnly 'closedA-A-aonly'
+  CClosed @($fB) @($coB) $coB $ctlB $coA $bOnly 'closedA-A-bonly'
+  CClosed @($fB) @($coB) $coB $ctlB $coA $none 'closedA-A-none'
+  if ($both) { CClosed @($fB) @($coB) $coB $ctlB $coA $both 'closedA-A-both' }
+  CClosed @($fB) @($coB) $coB $ctlB 'FinCom No Such Co' $bOnly 'closedA-nosuch-bonly'
   CClosed @($fA) @($coA) $coA $aOnly $coB $bOnly 'closedB-B-bonly'
   CClosed @($fA) @($coA) $coA $aOnly $coB $aOnly 'closedB-B-aonly'
   CClosed @() @() $null $null $coA $aOnly 'noneopen-A-aonly'
