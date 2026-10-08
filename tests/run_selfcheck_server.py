@@ -71,6 +71,15 @@ try:
     ok(a.get("p_firm") == FIRM and a.get("p_book") == BOOK and a.get("p_device") == "d-1" and a.get("p_bridge") == "go-aaaaaa111111", "firm, book, the computer key and the bridge id passed (%s)" % {k: a.get(k) for k in ("p_firm", "p_book", "p_device", "p_bridge")})
     ok(p.get("listed") == 3 and p.get("missing") == 1 and p.get("fetched") == 1 and p.get("altvchid") == 40 and p.get("night") == "20261006" and p.get("since") == "20261005"
        and p.get("gapDays") == ["20261003", "20261005"] and len(p.get("fetchOff", "")) == 300 and p.get("company_guid") == CG, "the result's fields, cut and checked (%s)" % p)
+    # 2.4.0 review: a restore from a backup and a month slice reach the database as the bridge says them, checked
+    c, r = call(sc("record", night="20261006", altvchid=4, after=50, stopped="Tally was restored from a backup", restored=True, restoredFrom="20261003",
+                   sliceFrom="20261001", sliceTo="20261031x"))
+    p = (GOT.get("tally_selfcheck_record") or [{}])[-1].get("p_r") or {}
+    ok(c == 200 and p.get("restored") is True and p.get("restoredFrom") == "20261003" and p.get("sliceFrom") == "20261001" and p.get("sliceTo") == "",
+       "2.4.0: restored, the night to re-check from and the slice's dates passed, a date not yyyymmdd empty (%s)" % {k: p.get(k) for k in ("restored", "restoredFrom", "sliceFrom", "sliceTo")})
+    c, r = call(sc("record", restored="yes"))
+    p = (GOT.get("tally_selfcheck_record") or [{}])[-1].get("p_r") or {}
+    ok(c == 200 and p.get("restored") is False, "2.4.0: restored only when true (%s)" % p.get("restored"))
     c, r = call(sc("record", listed=-1, missing=1.5, altvchid=1e16, night="2026-10-06"))
     p = (GOT.get("tally_selfcheck_record") or [{}])[-1].get("p_r") or {}
     ok(c == 200 and p.get("listed") is None and p.get("missing") is None and p.get("altvchid") is None and p.get("night") == "", "numbers out of range null, a night not yyyymmdd empty (%s)" % p)
@@ -86,8 +95,8 @@ try:
     F.NO_FN.difference_update({"tally_selfcheck_compare", "tally_selfcheck_record"})
     print("== at most 30 a minute from one computer")
     codes = [call(sc("record", listed=0))[0] for _ in range(30)]
-    # this computer sent 5 counted calls above (2 compares and a refused one, 2 records): 25 more go, then 429
-    ok(codes.count(200) == 25 and codes[25:] == [429] * 5, "429 once the computer has sent thirty in a minute (%s)" % codes)
+    # this computer sent 7 counted calls above (2 compares and a refused one, 4 records): 23 more go, then 429
+    ok(codes.count(200) == 23 and codes[23:] == [429] * 7, "429 once the computer has sent thirty in a minute (%s)" % codes)
     ok(call(sc("record", listed=0, bridge=BR2), key=KEY2)[0] == 200, "another computer is not held by it")
 finally:
     fn.terminate()

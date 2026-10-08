@@ -29,8 +29,8 @@ func scBridge(t *testing.T, extra string) (*standTally, *standCloud) {
 	}
 	scAt(t, time.Date(2026, 10, 6, 23, 10, 0, 0, time.Local))
 	t.Cleanup(func() {
-		entryFetchOffFor = func(string, string) string { return "" }
 		selfCheckHoldFn, selfCheckIdleFn = keepHold, idleSec
+		slowForget()
 	})
 	// the company list is fresh at night (the light check asks it every 10 minutes): asked here once, not counted below
 	if _, why := ledOwnPort(zz, b220CoGUID, f.port); why != "" {
@@ -77,7 +77,7 @@ func scOnlyListed(t *testing.T, f *standTally) {
 	bodies, ids := append([]string{}, f.bodies...), append([]string{}, f.reqs...)
 	f.mu.Unlock()
 	for i, b := range bodies {
-		if !contains([]string{"FinComCompany", "TDSDeskKeepList", vchByMasterID, vchByNumberID, "TDSDeskCompanies", "TDSDeskCompanyInfo"}, ids[i]) {
+		if !contains([]string{"FinComCompany", "TDSDeskKeepList", sliceID, vchByMasterID, vchByNumberID, "TDSDeskCompanies", "TDSDeskCompanyInfo"}, ids[i]) {
 			t.Fatalf("request %d is %s: not one the nightly check uses", i, ids[i])
 		}
 		if err := checkAllowed(b); err != nil {
@@ -267,20 +267,19 @@ func TestSelfCheckListStoppedAt2s(t *testing.T) {
 	}
 }
 
-// --- 4. 2.3.2's stop of the entry fetch for a company: nothing fetched; the missing entries' days listed for a Day Book
-// upload; recorded as still missing with the reason
+// --- 4. 2.3.2's mark "entry fetch stopped: over 2 s" for the company (slowco.go; 2.4.0 review: the dead stub
+// entryFetchOffFor is gone): nothing fetched; the missing entries' days listed for a Day Book upload; recorded as still
+// missing with the reason
 func TestSelfCheckEntryFetchOff(t *testing.T) {
 	f, c := scBridge(t, "")
 	v2 := f.add("20261003", "Party B", "2", "", "50.00")
 	v3 := f.add("20261005", "Party C", "3", "", "60.00")
 	v4 := f.add("20261003", "Party D", "4", "", "70.00")
 	led231Numbers(t, f)
-	entryFetchOffFor = func(co, guid string) string {
-		if co == zz {
-			return "Tally took 3.1 s for one entry (2-second rule)"
-		}
-		return ""
-	}
+	slowSt.mu.Lock()
+	slowFresh()
+	slowSt.marks[companyKey(zz)] = &slowMark{Company: zz, GUID: b220CoGUID, LastMs: -1}
+	slowSt.mu.Unlock()
 	c.scReply = func(b M) (int, M) {
 		if str(b["step"]) == "compare" {
 			return 200, M{"ok": true, "missing": []any{M{"guid": v2.guid, "why": "absent"}, M{"guid": v3.guid, "why": "absent"}, M{"guid": v4.guid, "why": "absent"}}}
@@ -299,14 +298,15 @@ func TestSelfCheckEntryFetchOff(t *testing.T) {
 	_ = selfCheckFinish(r)
 	x := scSteps(c, "record")[0]
 	gd := arr(x["gapDays"])
-	if toI64(x["still"]) != 3 || toI64(x["fetched"]) != 0 || len(gd) != 2 || str(gd[0]) != "20261003" || str(gd[1]) != "20261005" || !strings.Contains(str(x["fetchOff"]), "2-second") {
+	if toI64(x["still"]) != 3 || toI64(x["fetched"]) != 0 || len(gd) != 2 || str(gd[0]) != "20261003" || str(gd[1]) != "20261005" || !strings.Contains(str(x["fetchOff"]), "longer than 2 s") {
 		t.Fatalf("the record: %v", x)
 	}
 	scOnlyListed(t, f)
 }
 
-// --- 5. more changes since the mark than one list may carry: no list asked; recorded not checked; a counter that went
-// back: not checked, the mark kept
+// --- 5. more changes since the mark than one list may carry: 2.4.0 review: no longer "not checked" for ever: month
+// slices when the date form is kept (selfcheck240_test.go), else the one list asked all the same; a counter that went
+// back: restored from a backup, the mark reset (selfcheck240_test.go)
 func TestSelfCheckLargeAndRewound(t *testing.T) {
 	f, c := scBridge(t, `,"SelfCheckMaxSpan":2`)
 	for i := 0; i < 3; i++ {
@@ -315,17 +315,20 @@ func TestSelfCheckLargeAndRewound(t *testing.T) {
 	led231Numbers(t, f)
 	n0 := scN(f)
 	r, _ := selfCheckStart(zz, f.port)
-	if r == nil || !strings.Contains(r.stopped, "too many changes") || scN(f) != n0 {
-		t.Fatalf("listed past the span: %v %v", r, f.ids()[n0:])
+	// no date form kept for the company (source C never probed): the one undated list is asked all the same (the 2-second
+	// stop guards Tally), never "not checked" without asking
+	if r == nil || r.stopped != "" || r.listed != 3 || f.n("TDSDeskKeepList") != 1 || requestDated(f.bodiesOf("TDSDeskKeepList")[0]) {
+		t.Fatalf("not the undated list past the span: %+v %v", r, f.ids()[n0:])
 	}
 	_ = selfCheckFinish(r)
-	if x := scSteps(c, "record")[0]; str(x["stopped"]) == "" {
+	if x := scSteps(c, "record")[0]; str(x["stopped"]) != "" || toI64(x["listed"]) != 3 {
 		t.Fatalf("the record: %v", x)
 	}
+	n0 = scN(f)
 	scAt(t, time.Date(2026, 10, 7, 23, 0, 0, 0, time.Local))
 	scSave(zz, b220CoGUID, M{"mark": 50})
 	r, _ = selfCheckStart(zz, f.port)
-	if r == nil || !strings.Contains(r.stopped, "went back") || scN(f) != n0 {
+	if r == nil || !strings.Contains(r.stopped, "restored from a backup") || scN(f) != n0 {
 		t.Fatalf("a counter below the mark: %v", r)
 	}
 }

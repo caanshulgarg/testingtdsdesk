@@ -141,7 +141,8 @@
 //                                                       lacks, and the highest AlterID it holds (tally_selfcheck_compare; at most
 //                                                       5000 a call, 413 above). Reads only
 //   {kind:"selfcheck", step:"record", company, company_guid, night, ran_at, altvchid, altmstid, after, listed, missing, fetched,
-//    still, deleted, mastersBehind, stopped, fetchOff, gapDays:[yyyymmdd], since} -> {ok, id, result, words, copy}: the check
+//    still, deleted, mastersBehind, stopped, fetchOff, gapDays:[yyyymmdd], since, restored, restoredFrom, sliceFrom, sliceTo}
+//                                                    -> {ok, id, result, words, copy}: the check
 //                                                       kept in tally_selfchecks with FinCom's own copy check and its plain words
 //                                                       (tally_selfcheck_record). Without migration 65 both answer 503 {notReady}
 //                                                       and the bridge does not ask again that night; at most 30 calls a minute
@@ -1843,7 +1844,11 @@ async function selfCheck(dev: any, firm: string, book: string, body: any) {
     listed: whole(body.listed, 1e6), missing: whole(body.missing, 1e6), fetched: whole(body.fetched, 1e6), still: whole(body.still, 1e6), deleted: whole(body.deleted, 1e6),
     mastersBehind: whole(body.mastersBehind, 1e15 - 1), stopped: text(body.stopped, 300), fetchOff: text(body.fetchOff, 300),
     gapDays: (Array.isArray(body.gapDays) ? body.gapDays : []).filter((d: unknown) => typeof d === "string" && /^\d{8}$/.test(d)).slice(0, 400),
-    since: /^\d{8}$/.test(String(body.since || "")) ? String(body.since) : "" };
+    since: /^\d{8}$/.test(String(body.since || "")) ? String(body.since) : "",
+    // 2.4.0 review: Tally restored from a backup (its counter below the mark: the bridge reset its mark) and the night to
+    // re-check from; the month slice a check covered (more changes than one list may carry)
+    restored: body.restored === true, restoredFrom: /^\d{8}$/.test(String(body.restoredFrom || "")) ? String(body.restoredFrom) : "",
+    sliceFrom: /^\d{8}$/.test(String(body.sliceFrom || "")) ? String(body.sliceFrom) : "", sliceTo: /^\d{8}$/.test(String(body.sliceTo || "")) ? String(body.sliceTo) : "" };
   const { data, error } = await db.rpc("tally_selfcheck_record", { p_firm: firm, p_book: book, p_device: dev.id, p_bridge: me.id, p_r: r });
   if (error && notReady65(error)) return reply(503, { ok: false, notReady: true, error: "FinCom's cloud does not keep the nightly check yet (migration 65)." });
   if (error) throw new Error(error.message);
