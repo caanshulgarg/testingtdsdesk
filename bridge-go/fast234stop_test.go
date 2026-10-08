@@ -29,9 +29,9 @@ func stopSlowMids(f *standTally, d time.Duration, mids ...int64) {
 }
 
 // --- a large entry stopped at the limit, again and again on separate occasions (Tally answering everything else in
-// time around each): each such line goes up held at once, ended with the Day Book words, asked ONCE (never again, by
-// the retry schedule, the held list or FinCom's listing); the company is never marked; its other entries come with
-// their bodies
+// time around each): each such line goes up held at once (the owner's answer B: "FinCom asks once more at HH:MM"), is
+// asked ONCE more 5 minutes later, stopped again, and ends with the Day Book words (never a third ask, by the retry
+// schedule, the held list or FinCom's listing); the company is never marked; its other entries come with their bodies
 func TestFast234ObjectStopEndsLineOnly(t *testing.T) {
 	p, f, c := slow232Bridge(t)
 	big := []int64{25810, 25811, 25812, 25813}
@@ -50,10 +50,11 @@ func TestFast234ObjectStopEndsLineOnly(t *testing.T) {
 			slowLook()
 		}
 	}
-	// FinCom lists the held lines again, hours later: never asked again
+	// FinCom lists the held lines again, 6 minutes and hours later: asked once more, never a third time
 	base := nowFn()
-	for _, h := range []int{1, 5, 30} {
-		retryClock(base, h*3600)
+	for _, h := range []int{0, 1, 5, 30} {
+		retryClock(base, 360+h*3600)
+		fastTurns(2)
 		for _, mid := range big {
 			for _, s := range slowSentOf(c, mid) {
 				applyHeldLines(M{"heldLines": []any{M{"line_id": str(s["line_id"]), "company": nwsCo, "company_guid": nwsGUID, "event": "created", "master_id": fmt.Sprint(mid),
@@ -74,11 +75,12 @@ func TestFast234ObjectStopEndsLineOnly(t *testing.T) {
 			}
 		}
 		f.mu.Unlock()
-		if n != 1 {
-			t.Fatalf("entry %d asked %d times (want once)", mid, n)
+		if n != 2 {
+			t.Fatalf("entry %d asked %d times (want twice: its first fetch and one more)", mid, n)
 		}
 		s := slowSentOf(c, mid)
-		if len(s) != 1 || str(s[0]["xml"]) != "" || !strings.HasSuffix(str(s[0]["heldWhy"]), "upload that day's Day Book to settle it") || !strings.Contains(str(s[0]["heldWhy"]), "longer than") {
+		if len(s) != 2 || str(s[0]["xml"]) != "" || !strings.Contains(str(s[0]["heldWhy"]), "FinCom asks once more at") ||
+			str(s[1]["heldWhy"]) != liveStopEndWords() || !strings.HasSuffix(str(s[1]["line_id"]), ":resolved") {
 			t.Fatalf("entry %d went up: %v", mid, s)
 		}
 		if s := slowSentOf(c, mid+100); len(s) == 0 || str(s[len(s)-1]["xml"]) == "" {

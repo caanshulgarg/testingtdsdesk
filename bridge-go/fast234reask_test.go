@@ -114,8 +114,9 @@ func TestFast234EndedLineRefetchOnce(t *testing.T) {
 	}
 }
 
-// --- its one ask is not answered in time: its ":resolved" goes up once more, held with the Day Book words and no body
-// (review L4: FinCom then holds two and stops listing it), and it is never asked again, whatever FinCom lists
+// --- its one ask is not answered in time: asked once more 5 minutes later (the owner's answer B, 08-Oct-2026), stopped
+// again: its ":resolved" goes up once more, held with the Day Book words and no body (review L4: FinCom then holds two
+// and stops listing it), and it is never asked a third time, whatever FinCom lists
 func TestFast234EndedLineReaskTimesOut(t *testing.T) {
 	_, f, c := r222bBridge(t, `,"RecorderLimitMs":200`)
 	retryReset()
@@ -128,8 +129,12 @@ func TestFast234EndedLineReaskTimesOut(t *testing.T) {
 		retryClock(base, sec)
 		applyHeldLines(M{"heldLines": retryHeldRows("25732")})
 		fastTurns(2)
-		if n := f.n(vchObjectID); n != 1 {
-			t.Fatalf("round %d: %d asks (want 1)", i, n)
+		want := 1
+		if sec >= 300 {
+			want = 2 // its one more ask after a stop
+		}
+		if n := f.n(vchObjectID); n != want {
+			t.Fatalf("round %d: %d asks (want %d)", i, n, want)
 		}
 	}
 	if n, b := fastBodied(c, "nws-25732:resolved"); n != 1 || b != 0 {

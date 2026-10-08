@@ -112,9 +112,10 @@ func TestNWS144RealLines(t *testing.T) {
 		}
 	}
 	// 191 (MasterID 0) by its type and number, once, for its own day; 192 by its MasterID; review H1 of 2.3.0: the cancel
-	// of 190 and the delete of 189 are asked of this Tally by their MasterIDs too (proof they happened here)
+	// of 190 and the delete of 189 are asked of this Tally by their MasterIDs too (proof they happened here); 2.3.4
+	// (re-review 2 L-d): the delete Tally did not find asked once more, the company checked around it
 	asked := strings.Join(f.bodiesOf(vchObjectID), " ")
-	if f.n(vchByNumberID) != 1 || f.n(vchObjectID) < 2 || f.n(vchObjectID) > 3 || !strings.Contains(asked, "ID:26309</ID>") || !strings.Contains(asked, "ID:26305</ID>") {
+	if f.n(vchByNumberID) != 1 || f.n(vchObjectID) < 2 || f.n(vchObjectID) > 4 || !strings.Contains(asked, "ID:26309</ID>") || !strings.Contains(asked, "ID:26305</ID>") {
 		t.Fatalf("requests: %v", f.ids())
 	}
 	b := f.bodiesOf(vchByNumberID)[0]
