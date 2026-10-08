@@ -17,7 +17,6 @@ import (
 	"net/http"
 	"strings"
 	"testing"
-	"time"
 )
 
 // the stand Tally no longer holds this voucher (deleted in this Tally)
@@ -110,7 +109,8 @@ func TestH1DeleteStillInThisTallyHeld(t *testing.T) {
 
 // this bridge's Tally cannot be asked (it does not answer within the 2 s stop): the delete is never sent unproven
 func TestH1DeleteTallyCannotBeAskedHeld(t *testing.T) {
-	rec, f, c := liveBridge(t, `,"RecorderBodySec":2`)
+	// the turn's time well above the 2 s stop: the stop alone ends the request (no race with the turn's deadline)
+	rec, f, c := liveBridge(t, `,"RecorderBodySec":5`)
 	td := today()
 	f.alter = 10
 	noteStartPoint(zz, b220CoGUID, 5, 1)
@@ -121,11 +121,7 @@ func TestH1DeleteTallyCannotBeAskedHeld(t *testing.T) {
 	liveAppend(t, liveFilePath(rec, ""), realLine("after_delete", "", "12", "", "Receipt", "4", addonDate(td)))
 	liveReadOnce()
 	uploadAll(t)
-	// 2.3.1: stopped at 2 s, asked again at each try of the shared retry schedule; stopped 3 times, it goes held
-	for i := 0; i < 2; i++ {
-		retryDue()
-		uploadAll(t)
-	}
+	// stopped at 2 s: up held at once, unproven (asked again by the held list later, TestH1RetryCancelAfterTwoSecondStop)
 	got := sentEvent(c, "deleted")
 	if len(got) != 1 || str(got[0]["object_guid"]) != "" || got[0]["guidHeld"] != true || !strings.HasPrefix(str(got[0]["heldWhy"]), liveDeleteUnprovenWords) {
 		t.Fatalf("held, the bridge's record not used: %v", got)
@@ -242,7 +238,9 @@ func TestH1RetryCopyCompanyStaysHeld(t *testing.T) {
 // retry schedule, goes held after 3 stops, and is asked again by itself (a held line) 1 h later (2.3.2, issue 232: a
 // held line whose asks timed out waits hours), then sent with Tally's GUID
 func TestH1RetryCancelAfterTwoSecondStop(t *testing.T) {
-	rec, f, c := liveBridge(t, `,"RecorderBodySec":2,"RecorderResolveSec":0`)
+	// the turn's time (RecorderBodySec) well above the 2 s stop: the stop alone ends the request, never the turn's
+	// deadline racing it at the same 2 s (it failed once under load: the 2.3.4 coordinator, 08-Oct-2026)
+	rec, f, c := liveBridge(t, `,"RecorderBodySec":5,"RecorderResolveSec":0`)
 	td := today()
 	f.alter = 10
 	noteStartPoint(zz, b220CoGUID, 5, 1)
@@ -255,34 +253,27 @@ func TestH1RetryCancelAfterTwoSecondStop(t *testing.T) {
 	liveAppend(t, liveFilePath(rec, ""), realLine("after_cancel", "", v.master, "", "Receipt", "9", addonDate(td)))
 	liveReadOnce()
 	uploadAll(t)
-	// 2.3.1: stopped at 2 s, asked again at each try of the retry schedule; stopped 3 times, it goes held for now
-	for i := 0; i < 2; i++ {
-		retryDue()
-		uploadAll(t)
-	}
+	// stopped at 2 s: up held for now, as one this Tally could not be asked about (asked again by itself)
 	if got := sentEvent(c, "cancelled"); len(got) != 1 || got[0]["guidHeld"] != true {
 		t.Fatalf("held for now: %v", got)
+	}
+	if f.n(vchObjectID) != 1 {
+		t.Fatalf("asked %d times at the save (want 1)", f.n(vchObjectID))
 	}
 	f.mu.Lock()
 	f.behave = nil
 	f.mu.Unlock()
-	n := f.n(vchObjectID)
+	// not before the retry schedule's next try (the stop set it)
 	liveResolveTurn()
-	if f.n(vchObjectID) != n {
+	if f.n(vchObjectID) != 1 {
 		t.Fatalf("asked before the retry's time: %v", f.ids())
 	}
-	retryDue() // the next try, by itself
-	liveResolveTurn()
-	if f.n(vchObjectID) != n {
-		t.Fatalf("2.3.2 (issue 232, b): a line whose asks timed out was asked again before 1 h: %v", f.ids())
-	}
-	// 2.3.2 (b): its asks timed out (one timed-out try): asked again after 1 h
-	at := time.Now().Add(time.Hour + time.Minute)
-	nowFn = func() time.Time { return at }
-	t.Cleanup(func() { nowFn = time.Now })
-	retryDue()
+	retryDue() // the next try, by itself: Tally answers now
 	liveResolveTurn()
 	uploadAll(t)
+	if f.n(vchObjectID) != 2 {
+		t.Fatalf("asked %d times in all (want 2: the save's, and once again)", f.n(vchObjectID))
+	}
 	r := h1Resolved(c, "cancelled")
 	if len(r) != 1 || str(r[0]["object_guid"]) != v.guid || r[0]["guidHeld"] != nil {
 		t.Fatalf("sent with Tally's GUID once on again: %v", sentEvent(c, "cancelled"))

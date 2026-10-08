@@ -1774,6 +1774,34 @@ func fastCompanyOpen(tc *TC, company string, port, sec int) error {
 	return errors.New("the company " + company + " is not open in this Tally (not proven now)")
 }
 
+// 2.3.4 (L-d): Tally's company list on this port, asked now, names the company (open there). It rides with the entry
+// request it guards: asked only when that request could go now (the retry schedule not waiting, Tally not still on an
+// earlier request), and never itself the schedule's try or its end (an answer in time here does not put the schedule
+// back: the entry request after it does that, or steps it on)
+func fastCompanyListed(tc *TC, company string, port, sec int) error {
+	if err := retryWaiting(); err != nil {
+		return err
+	}
+	if err := earlierRefusal(port); err != nil {
+		return err
+	}
+	t2 := *tc
+	t2.bg, t2.light = false, true // the tiny open-company list: not held by the cool-down after a stop (the entry request is)
+	raw, err := invokeTally(&t2, port, companiesRequest(), minI(maxI(sec, 2), 8))
+	if errors.Is(err, errRecorderStop) || tallyNoAnswer(err) {
+		retryNote(port, "TDSDeskCompanies", err) // a frozen Tally steps the shared schedule on, as the entry request would
+	}
+	if err != nil {
+		return err
+	}
+	for _, c := range xmlDoc(raw).All("COMPANY") {
+		if companyKey(nameOf(c)) == companyKey(company) {
+			return nil
+		}
+	}
+	return errors.New("not asked: the company " + company + " is not open in this Tally now (its entry request would stop Tally)")
+}
+
 func fetchVouchersByMasterIn(tc *TC, company string, port int, date string, mids []string, sec int) (map[string]string, error) {
 	x := ""
 	if len(mids) == 1 {
@@ -1784,6 +1812,13 @@ func fetchVouchersByMasterIn(tc *TC, company string, port int, date string, mids
 	}
 	if slowMarked(company, "") {
 		return nil, errSlowCompany // 2.3.2: no entry request for a company marked "entry fetch stopped: over 2 s"
+	}
+	// 2.3.4 (re-review 2 L-d, push-design runs 37791747092 and 37802765912, TallyPrime 3.0 .. 7.1): the object export naming
+	// a company that is not open is never answered: Tally shows "Internal Error ... Software Exception c0000005 (Memory
+	// Access Violation)" and answers nothing more. So it is sent only right after Tally's company list on this port names
+	// the company (a list asked now, never one held from before); else nothing is sent and the line waits
+	if err := fastCompanyListed(tc, company, port, sec); err != nil {
+		return nil, err
 	}
 	raw, err := invokeTally(tc, port, x, sec)
 	if err != nil {
