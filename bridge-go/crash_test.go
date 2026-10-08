@@ -128,7 +128,10 @@ func TestCrashReportCarriesNoBusinessData(t *testing.T) {
 	if !crashStart(s.dsn()) {
 		t.Fatal("not started")
 	}
-	// the log has business data in it; none of it may go with a report
+	// the log has business data in it; none of it may go with a report (the log in a folder of the test's own)
+	oldLog := cfg("LogFile")
+	setCfg("LogFile", t.TempDir()+"/tds-bridge.log")
+	t.Cleanup(func() { setCfg("LogFile", oldLog) })
 	for _, x := range fx.Texts {
 		writeLog("Tally answered: " + x)
 	}
