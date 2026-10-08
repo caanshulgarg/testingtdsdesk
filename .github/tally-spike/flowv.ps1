@@ -346,7 +346,11 @@ $del = @($after4 | Where-Object { $_.mid -notin @($after5 | ForEach-Object mid) 
 $hit = WaitLine $m { $_.ev -eq 'deleted' -and $_.company -eq $co1 } $t0
 Snap 'c4d-delete'
 $x = @($hit)[0]
-Result 'c4d delete by keys' (KeysVerdict ([bool]$del) ([bool]$x -and $x.guid -and $x.guid -eq $del.guid)) ("Tally deleted {0}; line after {1} s; {2}" -f $(if ($del) { "$($del.type) no $($del.vno) mid $($del.mid) guid $($del.guid)" } else { 'nothing (the keys)' }), $script:lineSec, (Ev $x))
+# the line proven deleted on this Tally (no held words): Tally answers a MasterID it no longer has with a bare
+# <ERRORMSG>Could not find Voucher:ID:n!</ERRORMSG> (the renumbering helper's finding, 08-Oct-2026), which must read as gone
+$heldW = if ($x) { "$($x.raw.heldWhy)" } else { '' }
+$saidDel = @($(if (Test-Path $blog) { Get-Content $blog }) | Where-Object { $del -and $_ -match ('delete of mid ' + $del.mid + ':') } | Select-Object -Last 3)
+Result 'c4d delete by keys' (KeysVerdict ([bool]$del) ([bool]$x -and $x.guid -and $x.guid -eq $del.guid -and -not $heldW)) ("Tally deleted {0}; line after {1} s; {2}; held words: {3}; bridge log: {4}" -f $(if ($del) { "$($del.type) no $($del.vno) mid $($del.mid) guid $($del.guid)" } else { 'nothing (the keys)' }), $script:lineSec, (Ev $x), $(if ($heldW) { $heldW } else { 'none' }), $(if ($saidDel.Count) { $saidDel -join ' | ' } else { 'none' }))
 
 # ---- c7 the Tally version string the bridge reads: the read test's "Tally program: ..." line (recorder_probes.go
 # tallyProgram: the running tally.exe's name, size and date; the bridge asks Tally for no release number)

@@ -21,6 +21,12 @@ on:
       mode:
         description: 'quick (install and port), full (every check) share (next-push: the full line against the stored entry, per kind typed on the screen; no bridge) or big (the add-on''s own share of a save on a 100,000-entry company) or hang (the hang of run 37729166801 isolated, each probe in a fresh Tally) or hang2 (the share company, then each entry asked in a fresh Tally) or hang3 (the share session, the published requests after every step) or hang4 (the harness''s malformed filter against the correct one) or bank (the bank-date probe: does any event an add-on can hook fire when a bank date is set; bankv.ps1, a probe variant of the add-on in the harness only) or renum (next-renumber: an insert and a delete with renumbering on, the bridge built from source with stubr.py as the cloud; FinCom ends with Tally''s numbers; 3.0 and 7.1 only)'
         default: quick
+      from_source:
+        description: 'yes: build the bridge from bridge_ref''s source even when a setup is committed there (a branch whose committed setup is an older release)'
+        default: 'no'
+      versions:
+        description: 'Releases to run, comma separated (e.g. 3.0,7.1); empty: the mode''s own list'
+        default: ''
 permissions:
   contents: write
 concurrency:
@@ -43,7 +49,9 @@ jobs:
           case "$m" in full|share|big|hang|hang2|hang3|hang4|bank|renum) ;; *) m=quick ;; esac
           echo "mode=$m" | tee -a "$GITHUB_OUTPUT"
           # renum (next-renumber): the oldest and the newest release only
-          if [ "$m" = renum ]; then echo 'versions=["3.0","7.1"]'; else echo 'versions=["3.0","4.1","5.1","6.2","7.1"]'; fi | tee -a "$GITHUB_OUTPUT"
+          v="${{ inputs.versions }}"
+          if [ -n "$v" ]; then echo "versions=[\"$(echo "$v" | tr -d '[:space:]' | sed 's/,/","/g')\"]"
+          elif [ "$m" = renum ]; then echo 'versions=["3.0","7.1"]'; else echo 'versions=["3.0","4.1","5.1","6.2","7.1"]'; fi | tee -a "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.bridge_ref || 'tax-accuracy' }}
@@ -57,6 +65,8 @@ jobs:
           f=$(ls assets-test/bridge-go/FinComBridge-Setup-*.exe 2>/dev/null | head -1 || true)
           # renum: the ref's own code, never a setup committed at it (next-renumber still carries 2.3.3's)
           if [ "${{ steps.mode.outputs.mode }}" = renum ]; then f=""; fi
+          # from_source=yes: the ref's own code (a branch whose committed setup is the release before it)
+          if [ "${{ inputs.from_source }}" = yes ]; then f=""; fi
           if [ -z "$f" ]; then echo "no committed setup at the ref: building from source"; echo "use=no" >> "$GITHUB_OUTPUT"; exit 0; fi
           [ -f "$f.sha256" ] || { echo "::error::$f has no $f.sha256 next to it"; exit 1; }
           want=$(awk '{print tolower($1); exit}' "$f.sha256"); got=$(sha256sum "$f" | awk '{print $1}')
