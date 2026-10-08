@@ -184,8 +184,17 @@ jobs:
         shell: pwsh
     steps:
       - uses: actions/checkout@v4
+        if: matrix.mode != 'mhook' && matrix.mode != 'ledlist'
         with:
           fetch-depth: 0
+      # mhook / ledlist need only the harness and the add-on folder: the whole history took 47-60 min on 08-Oct-2026
+      - uses: actions/checkout@v4
+        if: matrix.mode == 'mhook' || matrix.mode == 'ledlist'
+        with:
+          fetch-depth: 1
+          sparse-checkout: |
+            .github
+            bridge-go/addon
       - uses: actions/download-artifact@v4
         with:
           name: bridge-dist
