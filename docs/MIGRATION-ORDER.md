@@ -271,9 +271,13 @@ tests/run_migration63.py, tests/run_recorder_repeat_server.py, tests/run_migrati
   never two of these files over each other. Tested: run_migration63.py section 8.
 - **M1 (the bridge).** A group FinCom answers 200 is no longer marked sent whole: a line answered 'failed' (a lock
   timeout, a deadlock, a line tally-ingest could not read) or left without a result stays on the PC (its offsets held) and
-  goes again after RecorderRetrySec x 2^n (30 minutes at most), RecorderFailedTries times (default 12, about 3.5 hours);
-  then it is given up, said in the log ("answered failed N times ... not sent again"); FinCom's record keeps its failed
-  row where it stored one (Sync activity). The other lines of the group are marked sent. A resend is stored once (63's repeat check: a failed
+  goes again after RecorderRetrySec x 2^n (30 minutes at most). It is NEVER given up (the coordinator, 08-Oct-2026, the
+  owner's "nothing lost"): after RecorderFailedTries failed answers (default 12, about 3.5 hours) it stays on the PC (its
+  offset held, failed.txt kept), is sent every 30 minutes and no more often, and the beat carries it per company
+  (recorderState: stuck, stuckSince, stuckDay); tally-ingest keeps that as tally_devices.info.beat.recorderStuck
+  [{company, n, since, day}] and FinCom shows it under Needs you ("N saves from <PC> could not be stored in FinCom since
+  HH:MM; FinCom keeps trying - if it continues, upload the Day Book for <day>"; the app part sits on the shared classifier
+  of next-tallypage, branch next-outbox-app). After a restart the line is read again and its tries count from 1. The other lines of the group are marked sent. A resend is stored once (63's repeat check: a failed
   row is no repeat, so the resend is applied; an applied one is answered "already have"). A cloud answer {queued: n}
   with no results at all (before round 20) is taken as before. Tests: outbox_failed_test.go.
 - **L2.** failed.txt (no day in its name) read past a line not yet confirmed no longer keeps every sent id for ever

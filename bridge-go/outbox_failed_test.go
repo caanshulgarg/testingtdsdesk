@@ -2,7 +2,7 @@ package main
 
 // 2.4.0 part 2 review (08-Oct-2026). M1: FinCom answers 200 for a group but 'failed' for one of its lines (a lock timeout,
 // a deadlock) or no result at all for it: that line is NOT marked sent; it stays on the PC and goes again after a wait
-// (RecorderRetrySec doubling, at most 30 minutes), a bounded number of times (RecorderFailedTries); the other lines of the
+// (RecorderRetrySec doubling, at most 30 minutes), never given up (every 30 minutes from RecorderFailedTries on); the other lines of the
 // group are marked sent. FinCom's repeat check (migration 63) keeps a resend from being stored twice. L2: a line held in
 // failed.txt (no day in its name) keeps the sent ids from the day it was first held, not from "00000000" (for ever).
 // Written before the code.
@@ -118,32 +118,68 @@ func TestOutboxFailedLineResent(t *testing.T) {
 	}
 }
 
-// --- M1 (bounded): a line FinCom always answers failed goes RecorderFailedTries times, the wait growing to 30 minutes at
-// most; then it is no longer sent, said in the log; the lines after it were never held up
-func TestOutboxFailedLineBounded(t *testing.T) {
+// --- M1 (the coordinator, 08-Oct-2026: "nothing lost"): a line FinCom always answers failed is NEVER given up. After
+// RecorderFailedTries it stays on the PC (not marked sent, its offset held), is sent again every 30 minutes and no more
+// often, and the beat carries it per company: how many, since when, and the oldest one's day. A restart keeps it
+func TestOutboxFailedLineKeptAtCap(t *testing.T) {
 	rec, _, c := liveBridge(t, `,"RecorderFailedTries":4`)
 	o := obFailModel(c)
 	p := liveFilePath(rec, "")
 	liveAppend(t, p, obImport(zz, 0xb0, "fi0")...)
 	o.fail[itoa(0xb0)] = 1000
 	readAndUploadAll(t)
+	first := nowFn()
 	liveAppend(t, p, obImport(zz, 0xb1, "fi1")...)
 	readAndUploadAll(t)
 	if o.sends[itoa(0xb1)] != 1 || len(o.stored) != 1 {
 		t.Fatalf("the line after the failed one waited for it: %v", o.sends)
 	}
-	for i := 0; i < 12; i++ {
+	if b := obj(liveBeat()[zz]); toInt(b["stuck"]) != 0 {
+		t.Fatalf("counted before RecorderFailedTries: %v", b)
+	}
+	for i := 0; i < 6; i++ {
 		laterBy(t, 31*time.Minute)
 		uploadAll(t)
 	}
-	if o.sends[itoa(0xb0)] != 4 {
-		t.Fatalf("a line always failed went %d times (want RecorderFailedTries, 4)", o.sends[itoa(0xb0)])
+	if o.sends[itoa(0xb0)] != 7 {
+		t.Fatalf("a line always failed went %d times in 6 x 31 minutes (want 7: kept, every 30 minutes at most)", o.sends[itoa(0xb0)])
 	}
-	if len(liveQueue()) != 0 {
-		t.Fatalf("still waiting after the last try: %d", len(liveQueue()))
+	q := liveQueue()
+	if len(q) != 1 || liveSentHas(q[0].lineId) {
+		t.Fatalf("the line was given up after RecorderFailedTries: waiting %d", len(q))
 	}
-	if lg := readText(logFile()); !strings.Contains(lg, "answered failed 4 times") {
-		t.Fatalf("the log does not say the line was given up: %s", lastLines(lg, 5))
+	// at the cap: not more often than every 30 minutes
+	laterBy(t, 10*time.Minute)
+	uploadAll(t)
+	laterBy(t, 10*time.Minute)
+	uploadAll(t)
+	if o.sends[itoa(0xb0)] != 7 {
+		t.Fatalf("sent again within 30 minutes at the cap: %d", o.sends[itoa(0xb0)])
+	}
+	laterBy(t, 11*time.Minute)
+	uploadAll(t)
+	if o.sends[itoa(0xb0)] != 8 {
+		t.Fatalf("not sent again after 30 minutes at the cap: %d", o.sends[itoa(0xb0)])
+	}
+	// the beat: one line of ZZ TEST that FinCom could not store, since the first failure, and the day of its entry
+	b := obj(liveBeat()[zz])
+	if toInt(b["stuck"]) != 1 || str(b["stuckSince"]) != first.In(liveZone).Format("2006-01-02T15:04:05") || str(b["stuckDay"]) == "" {
+		t.Fatalf("the beat does not carry the line kept: %v", b)
+	}
+	if lg := readText(logFile()); !strings.Contains(lg, "could not be stored in FinCom") || strings.Contains(lg, "not sent again") {
+		t.Fatalf("the log: %s", lastLines(lg, 5))
+	}
+	// a restart: still there, still not marked sent; once FinCom takes it, it is stored once and the beat clears
+	liveResetState()
+	o.fail[itoa(0xb0)] = 0
+	readAndUploadAll(t)
+	laterBy(t, 31*time.Minute)
+	uploadAll(t)
+	if len(liveQueue()) != 0 || len(o.stored) != 2 || len(o.repeat) != 0 {
+		t.Fatalf("after FinCom took it: waiting %d, stored %d, repeats %d", len(liveQueue()), len(o.stored), len(o.repeat))
+	}
+	if b := obj(liveBeat()[zz]); toInt(b["stuck"]) != 0 {
+		t.Fatalf("the beat still counts it: %v", b)
 	}
 }
 

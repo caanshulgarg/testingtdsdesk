@@ -316,6 +316,19 @@ function atOf(v: unknown) {
 // bridge's own starting point (startPoint) when it is of that GUID. at: the check's time, changeNumbers' only (2.1.10's
 // companies[].at is the company's last update, never the check's: review 46 L2; none: now). At most 50 companies; names cut to 200
 type BeatChange = { name: string; altvchid: number | null; altmstid: number | null; at: string; guid: string; recorderSeen?: boolean; recorderLastAt: string; start: { altvchid: number; altmstid: number | null } | null };
+// bridge 2.4.0: the beat's recorderState {company: {stuck, stuckSince, stuckDay, ...}} -> the companies with lines FinCom
+// could not store (stuck > 0): [{company, n, since (the PC's local time, yyyy-mm-ddThh:mm:ss), day (yyyy-mm-dd)}], 50 at most
+function stuckOf(st: any): { company: string; n: number; since: string; day: string }[] {
+  const out: { company: string; n: number; since: string; day: string }[] = [];
+  for (const [company, v] of Object.entries(st || {}).slice(0, 200)) {
+    const x: any = v, n = Math.max(0, Math.min(1e6, Math.floor(Number(x?.stuck) || 0)));
+    if (!n) continue;
+    const since = typeof x?.stuckSince === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(x.stuckSince) ? x.stuckSince : "";
+    const day = typeof x?.stuckDay === "string" && /^\d{4}-\d{2}-\d{2}$/.test(x.stuckDay) ? x.stuckDay : "";
+    out.push({ company: String(company).slice(0, 200), n, since, day });
+  }
+  return out.slice(0, 50);
+}
 function beatChanges(body: any): BeatChange[] {
   const o = (x: any) => x && typeof x === "object" && !Array.isArray(x) ? x : null;
   const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
@@ -2522,6 +2535,9 @@ Deno.serve(async (req) => {
           ...(s(b.recorderWaitWords, 300) ? { recorderWaitWords: s(b.recorderWaitWords, 300) } : {}),
           // bridge 2.3.1 (the owner's last change): a request not answered in time, and when it tries again by itself
           ...tallyRetryOf(b),
+          // bridge 2.4.0 (next-outbox; the coordinator, 08-Oct-2026: nothing lost, shown): per company, the lines FinCom answered
+          // 'failed' RecorderFailedTries times or more, kept on the PC and sent every 30 minutes: [{company, n, since, day}]
+          ...(b.recorderState && typeof b.recorderState === "object" ? { recorderStuck: stuckOf(b.recorderState) } : {}),
           windowsUser: s(b.windowsUser, 60), bridgePort: Math.max(0, Math.min(65535, Math.floor(Number(b.bridgePort) || 0))), tallyPort: Math.max(0, Math.min(65535, Math.floor(Number(b.tallyPort) || 0))), dataFolder: s(b.dataFolder, 260) };
         const prevInfo = ((dev as any).info && typeof (dev as any).info === "object") ? (dev as any).info : {};
         const me = bridgeOf(dev, body, false);
@@ -2543,7 +2559,7 @@ Deno.serve(async (req) => {
         // instead of when a page next looks at tally_devices. Only the times and states, nothing of the books or keys
         const pb = (prevInfo.beat && typeof prevInfo.beat === "object") ? prevInfo.beat : {};
         const said = (x: any, stop: unknown) => JSON.stringify([x.lastRead || "", !!x.updating, x.tallyState || "", !!x.paused, x.notAnsweringSince || "",
-          (Array.isArray(x.companies) ? x.companies : []).map((c: any) => [c.name, c.lastRead || "", c.at || ""]), x.reqs ?? null, x.readStopped ?? null, stop ?? null, x.postOnly ?? null, x.postBatchBills ?? null, x.postBatchBank ?? null, x.settingsAt ?? null, x.tallyRetry?.words ?? null]);
+          (Array.isArray(x.companies) ? x.companies : []).map((c: any) => [c.name, c.lastRead || "", c.at || ""]), x.reqs ?? null, x.readStopped ?? null, stop ?? null, x.postOnly ?? null, x.postBatchBills ?? null, x.postBatchBank ?? null, x.settingsAt ?? null, x.tallyRetry?.words ?? null, x.recorderStuck ?? null]);
         if (said(pb, prevInfo.readStop) !== said(beat, (info as any).readStop)) {
           await broadcast("fincom-tally-" + firm, "beat", { device: dev.id, beat: { at: beat.at, every: beat.every, lastRead: beat.lastRead, updating: beat.updating, tallyState: beat.tallyState,
             tally: beat.tally, paused: beat.paused, notAnsweringSince: beat.notAnsweringSince, busySince: beat.busySince, open: beat.open,
@@ -2551,7 +2567,7 @@ Deno.serve(async (req) => {
             bridge: me.id, reqs: beat.reqs, readStopped: beat.readStopped, readStop: (info as any).readStop ?? null, postOnly: (beat as any).postOnly ?? null,
             postBatchBills: (beat as any).postBatchBills ?? null, postBatchBank: (beat as any).postBatchBank ?? null, settingsAt: (beat as any).settingsAt ?? null,
             // bridge 2.3.1: a request not answered in time and when it tries again by itself (null: as normal)
-            tallyRetry: (beat as any).tallyRetry ?? null } });
+            tallyRetry: (beat as any).tallyRetry ?? null, recorderStuck: (beat as any).recorderStuck ?? null } });
         }
         // 2.1.8 (round 15, migration 43): the owner's per-computer posting settings (tally_device_post_settings), read from the
         // device's row: postOnly (null = no restriction, [] = any company, else the names), the batch sizes, and when they were
