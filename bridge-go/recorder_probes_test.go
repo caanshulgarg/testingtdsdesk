@@ -327,7 +327,7 @@ func TestSourceCDatedGuardException(t *testing.T) {
 		}
 	}
 	for id, x := range allowListSamples() {
-		if id == sliceID || id == vchByMasterID || (!strings.Contains(x, "<SVFROMDATE") && !strings.Contains(x, "<SVTODATE")) {
+		if id == sliceID || id == vchObjectID || (!strings.Contains(x, "<SVFROMDATE") && !strings.Contains(x, "<SVTODATE")) {
 			continue
 		}
 		if datedRefused(fin, x) == nil {
@@ -345,7 +345,7 @@ func TestBodyFetchOffAfterSlowAnswer(t *testing.T) {
 	v := f.add(td, "Party S", "PS-1", "slow", "-1.00")
 	f.mu.Lock()
 	f.slow = func(id, body string) time.Duration {
-		if id == vchByMasterID {
+		if id == vchObjectID {
 			return 2500 * time.Millisecond
 		}
 		return 0
@@ -356,7 +356,7 @@ func TestBodyFetchOffAfterSlowAnswer(t *testing.T) {
 	liveReadOnce()
 	uploadAll(t)
 	// 2.2.2: the hard stop at 2 s; 2.3.1: never switched off, the line waits for the retry schedule (retry.go)
-	if logLines("off: Tally took") != 0 || logLines("(FinComVoucherByMaster, try 1); trying again by itself at") != 1 {
+	if logLines("off: Tally took") != 0 || logLines("(FinComVoucherObject, try 1); trying again by itself at") != 1 {
 		t.Fatalf("the log: %s", readText(logFile()))
 	}
 	// 2.3.3 (the owner's rule): the line goes up held at once with the words (2.3.1 kept it unsent until the retry)

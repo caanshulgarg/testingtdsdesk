@@ -73,7 +73,7 @@ func TestCheckIdKnownAbsentNotFound(t *testing.T) {
 	if r := lastReport(t, c); str(r["result"]) != "notseen" || !strings.Contains(str(r["words"]), "TDSDesk:k12") {
 		t.Fatalf("id known, absent on that day: %v", r)
 	}
-	if f.n(vchByNumberID) != 1 || f.n(vchByMasterID) != 1 || f.n("Import") != 0 {
+	if f.n(vchByNumberID) != 1 || f.n(vchObjectID) != 1 || f.n("Import") != 0 {
 		t.Fatalf("the requests: %v", f.ids())
 	}
 	checkReadsOnly(t, f)
@@ -141,7 +141,7 @@ func TestChecksFivePerTurnNotDuringPosting(t *testing.T) {
 		t.Fatalf("a check was answered while a posting was going on: %d -> %d", n, n2)
 	}
 	for _, id := range f.ids()[before:] {
-		if id == vchByNumberID || id == vchByMasterID {
+		if id == vchByNumberID || id == vchObjectID {
 			t.Fatalf("Tally was asked for a voucher during a posting: %v", f.ids()[before:])
 		}
 	}

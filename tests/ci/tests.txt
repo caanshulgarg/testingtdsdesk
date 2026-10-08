@@ -177,5 +177,6 @@ run_post_target_server.py             120
 run_bridge_per_user_ui.py             120  TDSDESK_SITE=../app/dist-test
 run_parse_parta.mjs                   120
 run_parse_real231.mjs                 120
+run_parse_fast234.mjs                 120
 run_migration57.py                    120
 run_parta_server.py                   120

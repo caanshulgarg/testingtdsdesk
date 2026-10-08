@@ -58,14 +58,14 @@ func TestRetrySilentThreeMinutesThenAnswers(t *testing.T) {
 	silent.Store(true)
 	f.mu.Lock()
 	f.behave = func(w http.ResponseWriter, r *http.Request, id, body string) bool {
-		if silent.Load() && id == vchByMasterID {
+		if silent.Load() && id == vchObjectID {
 			return silentFor(func(string, string) bool { return true }, nil)(w, r, id, body)
 		}
 		return false
 	}
 	f.mu.Unlock()
 	applyHeldLines(M{"heldLines": retryHeldRows(mids...)})
-	asks := func() int { return f.n(vchByMasterID) }
+	asks := func() int { return f.n(vchObjectID) }
 	liveUploadOnce()
 	if asks() != 1 {
 		t.Fatalf("the first turn asked %d times (want 1: stopped at 2 s, the rest wait for the retry)", asks())
@@ -138,7 +138,7 @@ func TestRetryScheduleSteps(t *testing.T) {
 	at := 0
 	for i, want := range []int{15, 30, 60, 120, 300, 300, 300} {
 		retryClock(base, at)
-		retryNote(9000, "FinComVoucherByMaster", errRecorderStop)
+		retryNote(9000, vchObjectID, errRecorderStop)
 		if until := retryNext(); !until.Equal(base.Add(time.Duration(at+want) * time.Second)) {
 			t.Fatalf("failure %d: next at %s, want %d s later", i+1, until.Format("15:04:05"), want)
 		}
@@ -148,12 +148,12 @@ func TestRetryScheduleSteps(t *testing.T) {
 	if retryHeld() {
 		t.Fatal("held at the retry time")
 	}
-	retryNote(9000, "FinComVoucherByMaster", nil)
+	retryNote(9000, vchObjectID, nil)
 	if retryHeld() || !retryNext().IsZero() {
 		t.Fatal("an answer in time did not end the schedule")
 	}
 	// another failure (a refusal, a posting going first) is not Tally's silence: no change
-	retryNote(9000, "FinComVoucherByMaster", errPreempted)
+	retryNote(9000, vchObjectID, errPreempted)
 	if retryHeld() {
 		t.Fatal("a request stopped for a posting started the schedule")
 	}
@@ -216,7 +216,7 @@ func TestRetryOwnerStopStillStops(t *testing.T) {
 		t.Fatalf("the owner's stop: %v", st)
 	}
 	readsRefused(t, f)
-	retryNote(f.port, "FinComVoucherByMaster", nil) // an answer in time does not lift it either
+	retryNote(f.port, vchObjectID, nil) // an answer in time does not lift it either
 	if readStop() == nil {
 		t.Fatal("lifted by the retry schedule")
 	}
@@ -229,7 +229,7 @@ func TestRetryPostingsNotHeld(t *testing.T) {
 	standBridge(t, f, "")
 	liveFrom(td)
 	t.Cleanup(retryReset)
-	retryNote(f.port, "FinComVoucherByMaster", errRecorderStop)
+	retryNote(f.port, vchObjectID, errRecorderStop)
 	if !retryHeld() {
 		t.Fatal("no retry pending")
 	}

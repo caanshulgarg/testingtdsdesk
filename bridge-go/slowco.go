@@ -216,7 +216,7 @@ func slowNote(port int, x string, sent bool, took time.Duration, err error) {
 		return
 	}
 	id := tallyRequestID(x)
-	entry := id == vchByMasterID || id == vchByNumberID
+	entry := id == vchObjectID || id == vchByNumberID
 	co := ""
 	name := ""
 	if entry {

@@ -46,10 +46,10 @@ func ps1Forms(t *testing.T, company string) map[string]string {
 // the stand answers the fetch test's forms: hit(letter) says which give the one voucher (MasterID 26312)
 func fetchTestStand(hit func(letter string) bool, then func(letter string)) func(w http.ResponseWriter, r *http.Request, id, body string) bool {
 	return func(w http.ResponseWriter, r *http.Request, id, body string) bool {
-		if !strings.HasPrefix(id, "FinComFetchTest") {
+		l, ok := ftLetter(id)
+		if !ok {
 			return false
 		}
-		l := strings.TrimPrefix(id, "FinComFetchTest")
 		if then != nil {
 			defer then(l)
 		}
@@ -92,12 +92,23 @@ func fetchTestBodies(f *standTally) ([]string, []string) {
 	defer f.mu.Unlock()
 	var ids, bodies []string
 	for i, id := range f.reqs {
-		if strings.HasPrefix(id, "FinComFetchTest") {
-			ids = append(ids, strings.TrimPrefix(id, "FinComFetchTest"))
+		if l, ok := ftLetter(id); ok {
+			ids = append(ids, l)
 			bodies = append(bodies, f.bodies[i])
 		}
 	}
 	return ids, bodies
+}
+
+// next-fastfetch: form C is the bridge's own entry request (the object export, id FinComVoucherObject)
+func ftLetter(id string) (string, bool) {
+	if id == vchObjectID {
+		return "C", true
+	}
+	if strings.HasPrefix(id, "FinComFetchTest") {
+		return strings.TrimPrefix(id, "FinComFetchTest"), true
+	}
+	return "", false
 }
 
 // --- 1. the route: the tray only (no Origin, no Sec-Fetch header), the owner's trial tools on; nothing sent otherwise
@@ -137,7 +148,11 @@ func TestFetchTestRoutePersonOnly(t *testing.T) {
 		t.Fatalf("the preview sent %v", ids)
 	}
 	// the variants are measure-only: never sent outside the test
-	for _, l := range []string{"A", "B", "C", "D", "E", "F"} {
+	// next-fastfetch: C is the bridge's own entry request as built (FinComVoucherObject, not measure-only)
+	if fetchTestRequest("C", zz, "20261005", "Receipt", "212", "26312") != voucherObjectRequest(zz, "26312") {
+		t.Fatal("form C is not the entry request as built")
+	}
+	for _, l := range []string{"A", "B", "D", "E", "F"} {
 		x := fetchTestRequest(l, zz, "20261005", "Receipt", "212", "26312")
 		if x == "" {
 			t.Fatalf("form %s not built", l)
@@ -177,6 +192,8 @@ func TestFetchTestSixFormsInOrder(t *testing.T) {
 		t.Fatalf("the forms sent: %v", ids)
 	}
 	want := ps1Forms(t, gsc)
+	// next-fastfetch: C is the entry request as built now (the ps1 keeps 2.2.2's record of FinComVoucherByMaster)
+	want["C"] = voucherObjectRequest(gsc, "26312")
 	for i, l := range ids {
 		if bodies[i] != want[l] {
 			t.Errorf("form %s:\n got %s\nwant %s", l, bodies[i], want[l])
@@ -186,8 +203,8 @@ func TestFetchTestSixFormsInOrder(t *testing.T) {
 	if strings.ReplaceAll(bodies[0], "FinComFetchTestA", vchByNumberID) != voucherByNumberRequest(gsc, "20261005", "Receipt", "212") {
 		t.Error("A is not voucherByNumberRequest as sent")
 	}
-	if strings.ReplaceAll(bodies[2], "FinComFetchTestC", vchByMasterID) != voucherByMasterRequest(gsc, "20261005", []string{"26312"}) {
-		t.Error("C is not voucherByMasterRequest as sent")
+	if bodies[2] != voucherObjectRequest(gsc, "26312") {
+		t.Error("C is not the entry request as sent")
 	}
 	sum := str(res["summary"])
 	if !regexp.MustCompile(`^A 0 vouchers \d+ ms · B 1 voucher \d+ ms · C 0 vouchers \d+ ms · D 1 voucher \d+ ms · E 0 vouchers \d+ ms · F 1 voucher \d+ ms$`).MatchString(sum) {
@@ -202,7 +219,7 @@ func TestFetchTestSixFormsInOrder(t *testing.T) {
 	for _, w := range []string{
 		"A. FinComVoucherByNumber as sent (&#34; quotes, dates yyyymmdd): ",
 		"B. by number with plain quote marks, dates yyyymmdd: ",
-		"C. FinComVoucherByMaster as sent, MasterID 26312 (dates yyyymmdd): ",
+		"C. the entry request as sent (the object export ID:26312, next-fastfetch): ",
 		"D. by MasterID 26312 with no dates: ",
 		"E. by MasterID 26312 with the dates as d-MMM-yyyy TYPE=Date: ",
 		"F. by number with plain quote marks and no dates: ",
@@ -278,7 +295,7 @@ func TestFetchTestMasterFromFOrAsked(t *testing.T) {
 	callLocal(t, "POST", "/tray/fetchtest", "", `{"masterId":"777"}`)
 	res = fetchTestWait(t, "done")
 	ids, bodies := fetchTestBodies(f)
-	if strings.Join(ids, "") != "ABFCDE" || !strings.Contains(bodies[3], "$MasterID = 777</SYSTEM>") {
+	if strings.Join(ids, "") != "ABFCDE" || bodies[3] != voucherObjectRequest(zz, "777") {
 		t.Fatalf("with the MasterID typed: %v", ids)
 	}
 	// skipped

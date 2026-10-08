@@ -8,7 +8,9 @@
 //
 //	A  FinComVoucherByNumber as the bridge sends it (&#34; quotes, SVFROMDATE/SVTODATE yyyymmdd)
 //	B  A with plain " quote marks
-//	C  FinComVoucherByMaster as the bridge sends it, for the MasterID found by B (else A, else F; else the person's)
+//	C  the entry request as the bridge sends it (next-fastfetch: the object export "ID:<MasterID>", FinComVoucherObject,
+//	   replacing FinComVoucherByMaster), for the MasterID found by B (else A, else F; else the person's); its answer is
+//	   stripped to the approved fields before it is logged, as the bridge's own fetch does
 //	D  C with no dates
 //	E  C with the dates as d-MMM-yyyy TYPE="Date"
 //	F  B with no dates
@@ -33,7 +35,6 @@ import (
 const (
 	fetchTestA   = "FinComFetchTestA"
 	fetchTestB   = "FinComFetchTestB"
-	fetchTestC   = "FinComFetchTestC"
 	fetchTestD   = "FinComFetchTestD"
 	fetchTestE   = "FinComFetchTestE"
 	fetchTestF   = "FinComFetchTestF"
@@ -46,7 +47,7 @@ var fetchTestTC = &TC{person: true}
 var fetchTestWhat = map[string]string{
 	"A": "FinComVoucherByNumber as sent (&#34; quotes, dates yyyymmdd)",
 	"B": "by number with plain quote marks, dates yyyymmdd",
-	"C": "FinComVoucherByMaster as sent, MasterID %s (dates yyyymmdd)",
+	"C": "the entry request as sent (the object export ID:%s, next-fastfetch)",
 	"D": "by MasterID %s with no dates",
 	"E": "by MasterID %s with the dates as d-MMM-yyyy TYPE=Date",
 	"F": "by number with plain quote marks and no dates",
@@ -55,11 +56,14 @@ var fetchTestWhat = map[string]string{
 // one form's request ("" when its inputs cannot go: a type or number that cannot be in a TDL string, a date that is not
 // yyyymmdd for a dated form, a MasterID that is not a number for C, D, E)
 func fetchTestRequest(letter, company, date, typ, no, mid string) string {
+	if letter == "C" {
+		return voucherObjectRequest(company, mid) // next-fastfetch: the bridge's own entry request, as built
+	}
 	id := "FinComFetchTest" + letter
 	byNumber := letter == "A" || letter == "B" || letter == "F"
 	statics := ""
 	switch letter {
-	case "A", "B", "C", "E":
+	case "A", "B", "E":
 		if !isTallyDate(date) || normDate(tallyDMY(date)) != date {
 			return ""
 		}
@@ -86,7 +90,7 @@ func fetchTestRequest(letter, company, date, typ, no, mid string) string {
 	// 2.3.1 (review M2): A and C are byte for byte the bridge's two requests, so they carry the entry fetch as built now
 	// (with the ledger lines under an invoice's items); B, D, E and F stay byte for byte as in 2.2.2 .. 2.3.0
 	fetch := liveFetchField222
-	if letter == "A" || letter == "C" {
+	if letter == "A" {
 		fetch = liveFetchField
 	}
 	x := fcCollection(id, company, statics, "Voucher", fetch, filter)
@@ -238,6 +242,14 @@ func runFetchTest(o fetchTestOpts, ask func() string) (M, error) {
 		measuring.Add(1)
 		raw, err := invokeTally(fetchTestTC, port, x, fetchTestSec)
 		measuring.Add(-1)
+		if l == "C" && err == nil {
+			// next-fastfetch: Tally's whole voucher, stripped to the approved fields before anything is logged
+			var vs []string
+			for _, v := range reVchBlock.FindAllString(raw, -1) {
+				vs = append(vs, fastStripVoucher(cleanXML(v)))
+			}
+			raw = "<ENVELOPE>" + strings.Join(vs, "") + "</ENVELOPE>"
+		}
 		ms := time.Since(t0).Milliseconds()
 		head := fmt.Sprintf("%s%s. %s: sent %s: %d ms", pre, l, what, fetchTestPeriodSent(x), ms)
 		if err != nil {

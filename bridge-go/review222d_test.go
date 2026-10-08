@@ -33,10 +33,10 @@ func TestR222dQueuedCopierHeldAfterStop(t *testing.T) {
 		_, err = fetchVouchersByMasterIn(recorderTC(nil), nwsCo, f.port, "20261005", []string{"26312"}, 10)
 	}()
 	time.Sleep(300 * time.Millisecond)
-	retryNote(f.port, vchByMasterID, errRecorderStop) // a recorder read was stopped meanwhile (2.3.1: the retry schedule)
+	retryNote(f.port, vchObjectID, errRecorderStop) // a recorder read was stopped meanwhile (2.3.1: the retry schedule)
 	wg.Wait()
-	if !errors.Is(err, errRetryWait) || f.n(vchByMasterID) != 0 {
-		t.Fatalf("the queued background read went into the busy Tally: %v (%d requests)", err, f.n(vchByMasterID))
+	if !errors.Is(err, errRetryWait) || f.n(vchObjectID) != 0 {
+		t.Fatalf("the queued background read went into the busy Tally: %v (%d requests)", err, f.n(vchObjectID))
 	}
 }
 
@@ -96,7 +96,7 @@ func TestR222dImportExemptOnlyOwnGUID(t *testing.T) {
 		r222Line("after_import_object", "13:10", foreign, "26500", "54700", "Journal", "J-400", "5-Oct-2026", "Bill | TDSDesk:fp2"))
 	readAndUploadAll(t)
 	s := r222bSent(c, "J-400")
-	if f.n(vchByMasterID) != 1 || len(s) != 1 || str(s[0]["xml"]) == "" || str(s[0]["object_guid"]) != foreign || str(s[0]["fid"]) != "fp2" {
+	if f.n(vchObjectID) != 1 || len(s) != 1 || str(s[0]["xml"]) == "" || str(s[0]["object_guid"]) != foreign || str(s[0]["fid"]) != "fp2" {
 		t.Fatalf("an import with a GUID Tally did not make for that MasterID: %v (%v)", s, f.ids())
 	}
 }

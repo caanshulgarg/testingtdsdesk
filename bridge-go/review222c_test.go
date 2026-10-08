@@ -66,14 +66,14 @@ func TestR222cHeldLinesFromBeat(t *testing.T) {
 		t.Fatalf("the forged row: %+v", forged)
 	}
 	// once: asked no more, and a row already resolved is not taken again
-	n := f.n(vchByMasterID)
+	n := f.n(vchObjectID)
 	for i := 0; i < 3; i++ {
 		liveUploadOnce()
 	}
 	applyHeldLines(j)
 	liveUploadOnce()
-	if f.n(vchByMasterID) != n {
-		t.Fatalf("asked again: %d -> %d", n, f.n(vchByMasterID))
+	if f.n(vchObjectID) != n {
+		t.Fatalf("asked again: %d -> %d", n, f.n(vchObjectID))
 	}
 	if len(r222cSentID(c, "st-9:resolved")) != 1 {
 		t.Fatal("line 9 resolved twice")
@@ -92,7 +92,7 @@ func TestR222cOwnPostingAlteredLater(t *testing.T) {
 		r222Line("after_import_object", "12:00", v.guid, "26400", "54600", "Journal", "J-300", "5-Oct-2026", "Bill | TDSDesk:fp1"))
 	readAndUploadAll(t)
 	s := r222bSent(c, "J-300")
-	if len(s) != 1 || str(s[0]["event"]) != "imported" || str(s[0]["fid"]) != "fp1" || str(s[0]["xml"]) != "" || str(s[0]["object_guid"]) != v.guid || f.n(vchByMasterID) != 0 {
+	if len(s) != 1 || str(s[0]["event"]) != "imported" || str(s[0]["fid"]) != "fp1" || str(s[0]["xml"]) != "" || str(s[0]["object_guid"]) != v.guid || f.n(vchObjectID) != 0 {
 		t.Fatalf("FinCom's own posting: %v (%v)", s, f.ids())
 	}
 	f.mu.Lock()
@@ -103,7 +103,7 @@ func TestR222cOwnPostingAlteredLater(t *testing.T) {
 		r222Line("voucher_accept_post", "12:05", v.guid, "26400", "54610", "Journal", "J-300", "5-Oct-2026", "Bill | TDSDesk:fp1"))
 	readAndUploadAll(t)
 	s = r222bSent(c, "J-300")
-	if len(s) != 2 || str(s[1]["event"]) != "altered" || str(s[1]["xml"]) == "" || toI64(s[1]["alter_id"]) != 54610 || str(s[1]["fid"]) != "fp1" || f.n(vchByMasterID) != 1 {
+	if len(s) != 2 || str(s[1]["event"]) != "altered" || str(s[1]["xml"]) == "" || toI64(s[1]["alter_id"]) != 54610 || str(s[1]["fid"]) != "fp1" || f.n(vchObjectID) != 1 {
 		t.Fatalf("the alteration in a form: %v", s)
 	}
 }

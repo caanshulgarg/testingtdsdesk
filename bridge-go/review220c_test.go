@@ -60,11 +60,12 @@ func TestSliceGuardEveryForm(t *testing.T) {
 	if datedRefused(fin, x) == nil {
 		t.Error("a $Date filter passes the dated guard")
 	}
-	// the body fetch always goes through its own check, with or without dates
-	vb := voucherByMasterRequest(zz, "20261004", []string{"5"})
-	noDates := strings.Replace(vb, "<SVFROMDATE>20261004</SVFROMDATE><SVTODATE>20261004</SVTODATE>", "", 1)
-	if noDates == vb || datedRefused(fin, noDates) == nil {
-		t.Error("a FinComVoucherByMaster without its period passes the guard")
+	// the body fetch always goes through its own check (next-fastfetch: the object export, undated; one with a period
+	// added is not as built)
+	vb := voucherObjectRequest(zz, "5")
+	withDates := strings.Replace(vb, "</SVCURRENTCOMPANY>", "</SVCURRENTCOMPANY><SVFROMDATE>20261004</SVFROMDATE><SVTODATE>20261004</SVTODATE>", 1)
+	if withDates == vb || datedRefused(fin, withDates) == nil {
+		t.Error("the entry request with a period added passes the guard")
 	}
 }
 

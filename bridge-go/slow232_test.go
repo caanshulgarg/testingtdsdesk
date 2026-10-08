@@ -37,7 +37,7 @@ func slow232Bridge(t *testing.T) (string, *standTally, *standCloud) {
 func slowEntries(f *standTally, d time.Duration) {
 	f.mu.Lock()
 	f.slow = func(id, body string) time.Duration {
-		if id == vchByMasterID || id == vchByNumberID {
+		if id == vchObjectID || id == vchByNumberID {
 			return d
 		}
 		return 0
@@ -92,7 +92,7 @@ func slowMarkIt(t *testing.T, p string, f *standTally) {
 	liveAppend(t, p, slowLine(25700, "07:14")...)
 	liveReadOnce()
 	liveUploadOnce() // the first ask: stopped at the limit
-	if n := f.n(vchByMasterID); n != 1 {
+	if n := f.n(vchObjectID); n != 1 {
 		t.Fatalf("the first turn asked %d times (want 1): %v", n, f.ids())
 	}
 	if slowMarked(nwsCo, nwsGUID) {
@@ -101,7 +101,7 @@ func slowMarkIt(t *testing.T, p string, f *standTally) {
 	retryDue()
 	slowLook()       // the retry's try: the company list answered in time
 	liveUploadOnce() // the second ask: stopped again
-	if n := f.n(vchByMasterID); n != 2 {
+	if n := f.n(vchObjectID); n != 2 {
 		t.Fatalf("the second turn: %d asks (want 2): %v", n, f.ids())
 	}
 	retryDue()
@@ -120,7 +120,7 @@ func TestSlow232CompanyMarkedAfterTwoStops(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		liveUploadOnce()
 	}
-	if n := f.n(vchByMasterID) + f.n(vchByNumberID); n != 2 {
+	if n := f.n(vchObjectID) + f.n(vchByNumberID); n != 2 {
 		t.Fatalf("entry requests after the mark: %d in all (want the 2 before it): %v", n, f.ids())
 	}
 	// 2.3.3: the line went up held at its first stop ("waiting: ..."), and its one ask again (stopped) ended it with the Day
@@ -136,7 +136,7 @@ func TestSlow232CompanyMarkedAfterTwoStops(t *testing.T) {
 	liveAppend(t, p, slowLine(25701, "07:20")...)
 	liveAppend(t, p, r222Line("voucher_accept_post", "07:21", nwsGUID+"-00000000", "0", "0", "Journal", "J-NEW", "5-Oct-2026", "a new one"))
 	readAndUploadAll(t)
-	if n := f.n(vchByMasterID) + f.n(vchByNumberID); n != 2 {
+	if n := f.n(vchObjectID) + f.n(vchByNumberID); n != 2 {
 		t.Fatalf("a new line of the marked company was asked of Tally: %v", f.ids())
 	}
 	for _, mid := range []int64{25701} {
@@ -155,7 +155,7 @@ func TestSlow232CompanyMarkedAfterTwoStops(t *testing.T) {
 		retryDue()
 		liveUploadOnce()
 	}
-	if n := f.n(vchByMasterID) + f.n(vchByNumberID); n != 2 {
+	if n := f.n(vchObjectID) + f.n(vchByNumberID); n != 2 {
 		t.Fatalf("the resolver asked Tally for a marked company's line: %v", f.ids())
 	}
 	// the beat: per company {company, since, timesOver, lastMs, why}, in the recorderBodyFetch shape FinCom keeps
@@ -197,7 +197,7 @@ func TestSlow232FreezeDoesNotMark(t *testing.T) {
 	slowLook()
 	retryDue()
 	liveUploadOnce() // 2.3.3: held at its first stop, asked again once (stopped: ended), then nothing more
-	if n := f.n(vchByMasterID); n != 2 {
+	if n := f.n(vchObjectID); n != 2 {
 		t.Fatalf("asks in the freeze: %d (want 2: its first fetch and the one ask again): %v", n, f.ids())
 	}
 	slowAll(f, 0)
@@ -254,7 +254,7 @@ func TestSlow232HeldTimedOutBacksOffHours(t *testing.T) {
 	if h, ok := slowHeldItem(t, id); !ok || h.allow() != 1 || h.Asked != 0 {
 		t.Fatalf("the held list: %+v %v (want one ask again)", h, ok)
 	}
-	asks := func() int { return f.n(vchByMasterID) + f.n(vchByNumberID) }
+	asks := func() int { return f.n(vchObjectID) + f.n(vchByNumberID) }
 	step := func(sec, want int) {
 		t.Helper()
 		retryClock(base, sec)
@@ -292,7 +292,7 @@ func TestSlow232CloudHeldLineTimedOut(t *testing.T) {
 	slowEntries(f, 700*time.Millisecond)
 	base := nowFn()
 	applyHeldLines(M{"heldLines": retryHeldRows("25730")})
-	asks := func() int { return f.n(vchByMasterID) }
+	asks := func() int { return f.n(vchObjectID) }
 	for _, x := range [][2]int{{0, 1}, {15, 1}, {30 * 60, 1}, {3600, 1}, {3600 + 4*3600, 1}, {2 * 86400, 1}, {7 * 86400, 1}} {
 		retryClock(base, x[0])
 		retryDue()
@@ -324,7 +324,7 @@ func TestSlow232FastCompanyUnaffected(t *testing.T) {
 	n := 0
 	f.mu.Lock()
 	f.slow = func(id, body string) time.Duration {
-		if id == vchByMasterID {
+		if id == vchObjectID {
 			n++
 			if n == 1 {
 				return 700 * time.Millisecond
@@ -372,11 +372,11 @@ func TestSlow232MarkSurvivesRestartLiftsOnVersion(t *testing.T) {
 	r222Vch(f, 25750, "Journal", "", "20261005", 54550)
 	r222Vch(f, 25751, "Journal", "", "20261005", 54551)
 	applyHeldLines(M{"heldLines": retryHeldRows("25750", "25751")})
-	before := f.n(vchByMasterID) + f.n(vchByNumberID)
+	before := f.n(vchObjectID) + f.n(vchByNumberID)
 	for i := 0; i < 3; i++ {
 		liveUploadOnce()
 	}
-	if n := f.n(vchByMasterID) + f.n(vchByNumberID); n != before {
+	if n := f.n(vchObjectID) + f.n(vchByNumberID); n != before {
 		t.Fatalf("asked Tally for a marked company's held lines: %v", f.ids())
 	}
 	for _, mid := range []string{"25750", "25751"} {
@@ -390,7 +390,7 @@ func TestSlow232MarkSurvivesRestartLiftsOnVersion(t *testing.T) {
 	applyHeldLines(M{"heldLines": retryHeldRows("25750", "25751")})
 	applyRefetch(M{"refetch": retryHeldRows("25750", "25751")})
 	liveUploadOnce()
-	if len(c.recSent()) != n0 || f.n(vchByMasterID)+f.n(vchByNumberID) != before {
+	if len(c.recSent()) != n0 || f.n(vchObjectID)+f.n(vchByNumberID) != before {
 		t.Fatal("an ended line went again or was asked")
 	}
 	// a newer bridge: the mark lifts by itself, the entry is asked again (now answered in time)

@@ -1,0 +1,244 @@
+package main
+
+// next-fastfetch (the owner's decision of 08-Oct-2026, "Allow, strip in bridge"): the entry request is the object export
+// "ID:<MasterID>" (one voucher, read only, keyed: 7-57 ms at every company size on 3.0 .. 7.1, run 37657679690), its
+// FETCHLIST the approved fields (Tally ignores it and sends the whole voucher). The bridge keeps EXACTLY the approved
+// fields of FinComVoucherByMaster (liveFetchFields: the 13 the owner is still deciding on in one place) and turns
+// LEDGERENTRIES.LIST into ALLLEDGERENTRIES.LIST; everything else is dropped before anything is logged, stored or sent.
+// FinComVoucherByMaster is gone (no fallback). The object export with NO FETCHLIST and the TDL report over the voucher
+// object froze Tally on every release: refused before anything is sent. Written before the code (red first).
+
+import (
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
+	"testing"
+)
+
+// --- the request, byte for byte
+func TestFast234RequestShape(t *testing.T) {
+	var fl strings.Builder
+	for _, f := range liveFetchFields() {
+		fl.WriteString("<FETCH>" + f + "</FETCH>")
+	}
+	want := `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Object</TYPE><SUBTYPE>Voucher</SUBTYPE>` +
+		`<ID TYPE="Name">ID:4002</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>` +
+		`<SVCURRENTCOMPANY>ZZ &amp; Co</SVCURRENTCOMPANY></STATICVARIABLES><FETCHLIST>` + fl.String() + `</FETCHLIST></DESC></BODY></ENVELOPE>`
+	if got := voucherObjectRequest("ZZ & Co", "4002"); got != want {
+		t.Fatalf("the request:\n got %s\nwant %s", got, want)
+	}
+	if len(liveFetchFields()) != 61 {
+		t.Fatalf("%d fields (today's request fetches 61)", len(liveFetchFields()))
+	}
+	// one MasterID, a number: nothing else can be built
+	for _, mid := range []string{"", "0", "12a", "1 2", "1234567890123456789", "-5"} {
+		if x := voucherObjectRequest("ZZ", mid); x != "" {
+			t.Fatalf("built for MasterID %q: %s", mid, x)
+		}
+	}
+	if tallyRequestID(voucherObjectRequest("ZZ", "7")) != vchObjectID {
+		t.Fatalf("its id: %q", tallyRequestID(voucherObjectRequest("ZZ", "7")))
+	}
+}
+
+// --- the 13 fields the owner is still deciding on: in liveFetchFields, listed in ONE place (liveFetchUndecided)
+func TestFast234UndecidedFieldsInOnePlace(t *testing.T) {
+	want := []string{"PARTYGSTIN", "PLACEOFSUPPLY", "CMPGSTIN", "IRNACKDATE", "ALLLEDGERENTRIES.GSTHSNNAME",
+		"ALLLEDGERENTRIES.RATEDETAILS.GSTRATEDUTYHEAD", "ALLLEDGERENTRIES.RATEDETAILS.GSTRATEVALUATIONTYPE", "ALLLEDGERENTRIES.RATEDETAILS.GSTRATE",
+		"ALLLEDGERENTRIES.BANKALLOCATIONS.DATE", "ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.TAXTYPE", "ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.PARTYLEDGER",
+		"ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.SUBCATEGORYALLOCATION.ASSESSABLEAMOUNT", "ALLINVENTORYENTRIES.RATEDETAILS.GSTRATEVALUATIONTYPE"}
+	if strings.Join(liveFetchUndecided, ",") != strings.Join(want, ",") {
+		t.Fatalf("the undecided fields: %v", liveFetchUndecided)
+	}
+	all := map[string]bool{}
+	for _, f := range liveFetchFields() {
+		all[f] = true
+	}
+	for _, f := range want {
+		if !all[f] {
+			t.Fatalf("%s not fetched (kept until the owner decides)", f)
+		}
+	}
+	// dropped in one place: the request and the strip both follow
+	liveFetchUndecidedKept = false
+	defer func() { liveFetchUndecidedKept = true }()
+	if n := len(liveFetchFields()); n != 61-13 {
+		t.Fatalf("with the 13 dropped: %d fields", n)
+	}
+	if x := voucherObjectRequest("ZZ", "1"); strings.Contains(x, "<FETCH>PARTYGSTIN</FETCH>") {
+		t.Fatal("the request still names PARTYGSTIN")
+	}
+	if s := fastStripVoucher(`<VOUCHER REMOTEID="g-1" VCHTYPE="Sales"><GUID>g-1</GUID><PARTYGSTIN>07AAA</PARTYGSTIN></VOUCHER>`); strings.Contains(s, "PARTYGSTIN") {
+		t.Fatalf("the strip kept PARTYGSTIN: %s", s)
+	}
+}
+
+// --- the two forms that froze Tally on every release are never sent; nor anything but the request exactly as built
+func TestFast234RefusesFormsThatFreezeTally(t *testing.T) {
+	f := newStandTally(t)
+	standBridge(t, f, "")
+	noFetchList := regexp.MustCompile(`<FETCHLIST>.*</FETCHLIST>`).ReplaceAllString(voucherObjectRequest("ZZ TEST", "5"), "")
+	reportOnObject := `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>FCPRpt</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>ZZ TEST</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE><REPORT NAME="FCPRpt"><FORMS>FCPRpt</FORMS></REPORT><FORM NAME="FCPRpt"><TOPPARTS>FCPRpt</TOPPARTS><XMLTAG>"FCPVCH"</XMLTAG></FORM><PART NAME="FCPRpt"><TOPLINES>FCPRpt</TOPLINES><OBJECT>Voucher : &quot;ID:5&quot;</OBJECT></PART><LINE NAME="FCPRpt"><LEFTFIELDS>FCPMid</LEFTFIELDS></LINE><FIELD NAME="FCPMid"><SET>$MasterID</SET><XMLTAG>"MASTERID"</XMLTAG></FIELD></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>`
+	oneField := strings.Replace(voucherObjectRequest("ZZ TEST", "5"), "<FETCHLIST><FETCH>GUID</FETCH>", "<FETCHLIST><FETCH>NAME</FETCH><FETCH>GUID</FETCH>", 1)
+	twoIds := strings.Replace(voucherObjectRequest("ZZ TEST", "5"), "ID:5", "ID:5,6", 1)
+	other := strings.Replace(voucherObjectRequest("ZZ TEST", "5"), "<SUBTYPE>Voucher</SUBTYPE>", "<SUBTYPE>Ledger</SUBTYPE>", 1)
+	for name, x := range map[string]string{"no FETCHLIST": noFetchList, "report on the voucher object": reportOnObject, "a field more": oneField, "two ids": twoIds, "another object type": other} {
+		if err := checkAllowed(x); err == nil {
+			t.Fatalf("%s: allowed", name)
+		}
+		n := len(f.ids())
+		if _, err := invokeTally(recorderTC(nil), f.port, x, 5); err == nil {
+			t.Fatalf("%s: sent", name)
+		}
+		if len(f.ids()) != n {
+			t.Fatalf("%s: reached Tally: %v", name, f.ids())
+		}
+	}
+	if !strings.Contains(fastNeverForms, "no FETCHLIST") || !strings.Contains(fastNeverForms, "report") {
+		t.Fatal("the reason is not written beside the guard")
+	}
+}
+
+// --- FinComVoucherByMaster is gone: no builder, no id, no allow-list row; the bridge's code never builds a voucher
+// collection filtered by MasterID
+func TestFast234NoOldRequest(t *testing.T) {
+	fs, _ := filepath.Glob("*.go")
+	for _, f := range fs {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		b := readText(f)
+		for _, bad := range []string{`"FinComVoucherByMaster"`, "voucherByMasterRequest(", "voucherByMasterExact("} {
+			if strings.Contains(b, bad) {
+				t.Errorf("%s still has %s", f, bad)
+			}
+		}
+	}
+	if _, ok := tallyAllowList["FinComVoucherByMaster"]; ok {
+		t.Error("FinComVoucherByMaster is still on the allow-list")
+	}
+	doc := readText(filepath.Join("..", "docs", "tally-allowlist.md"))
+	if strings.Contains(doc, "| FinComVoucherByMaster |") || !strings.Contains(doc, "| "+vchObjectID+" |") {
+		t.Error("docs/tally-allowlist.md: the old row is there or the new one is not")
+	}
+	// the entry fetch, the held resolver, the cancel / delete check and the posting check all ask by the new request
+	f := newStandTally(t)
+	standBridge(t, f, "")
+	f.mu.Lock()
+	f.vch = append(f.vch, &tVch{guid: "co-guid-1-00000005", master: "5", date: "20261001", typ: "Receipt", no: "1", narr: "x", party: "Customer A", alter: 9,
+		lines: [][2]string{{"Customer A", "10.00"}, {"Bank", "-10.00"}}})
+	f.mu.Unlock()
+	noteStartPoint(zz, "co-guid-1", 1, 1)
+	got, err := fetchVouchersByMasterIn(recorderTC(nil), zz, f.port, "20261001", []string{"5"}, 5)
+	if err != nil || got["5"] == "" {
+		t.Fatalf("the fetch: %v %v", got, err)
+	}
+	if ids := f.ids(); len(ids) == 0 || ids[len(ids)-1] != vchObjectID || !strings.Contains(f.bodiesOf(vchObjectID)[0], `<ID TYPE="Name">ID:5</ID>`) {
+		t.Fatalf("asked by: %v", ids)
+	}
+}
+
+// --- the strip on Tally's real answers (run 37657679690, five releases): only approved fields, the ledger lines as
+// ALLLEDGERENTRIES.LIST; the result kept beside the captures for parse.js's comparison (tests/run_parse_fast234.mjs), run
+// here when node is on this computer
+func TestFast234StripCaptures(t *testing.T) {
+	ok := fastApprovedPaths()
+	rels, _ := filepath.Glob(filepath.Join("testdata", "fast234", "*.*"))
+	n := 0
+	for _, d := range rels {
+		if fi, err := os.Stat(d); err != nil || !fi.IsDir() {
+			continue
+		}
+		for _, tgt := range []string{"sales", "receipt"} {
+			raw := readText(filepath.Join(d, tgt+"-objfl.xml"))
+			vs := reVchBlock.FindAllString(raw, -1)
+			if len(vs) != 1 {
+				t.Fatalf("%s %s: %d vouchers in Tally's answer", d, tgt, len(vs))
+			}
+			s := fastStripVoucher(cleanXML(vs[0]))
+			for _, p := range fastLeafPaths(s) {
+				if !ok[p] {
+					t.Errorf("%s %s: %s kept (not an approved field)", d, tgt, p)
+				}
+			}
+			if strings.Contains(s, "<LEDGERENTRIES.LIST") || strings.Contains(s, "UDF:") || len(s)*3 > len(vs[0]) {
+				t.Errorf("%s %s: not stripped (%d of %d bytes)", d, tgt, len(s), len(vs[0]))
+			}
+			if !strings.Contains(s, "<ALLLEDGERENTRIES.LIST>") || !strings.HasPrefix(s, `<VOUCHER VCHTYPE="`) {
+				t.Errorf("%s %s: shape: %.200s", d, tgt, s)
+			}
+			out := filepath.Join(d, tgt+"-stripped.xml")
+			if os.Getenv("FAST234_GOLDEN") != "" {
+				if err := os.WriteFile(out, []byte(s), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if readText(out) != s {
+				t.Errorf("%s: not what the strip makes now (FAST234_GOLDEN=1 rewrites it)", out)
+			}
+			n++
+		}
+	}
+	if n != 10 {
+		t.Fatalf("%d captures (want 5 releases x 2)", n)
+	}
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Log("node not found: tests/run_parse_fast234.mjs not run here (CI runs it)")
+		return
+	}
+	o, err := exec.Command(node, filepath.Join("..", "tests", "run_parse_fast234.mjs")).CombinedOutput()
+	if err != nil {
+		t.Fatalf("parse.js comparison:\n%s", o)
+	}
+}
+
+// --- everything else dropped: UDF fields, attributes, unapproved fields and lists; LEDGERENTRIES becomes the list
+func TestFast234StripDropsEverythingElse(t *testing.T) {
+	in := `<VOUCHER REMOTEID="g-9" VCHKEY="k" VCHTYPE="Sales" ACTION="Create" OBJVIEW="Invoice Voucher View"><DATE TYPE="Date">20261001</DATE>` +
+		`<GUID TYPE="String">g-9</GUID><MASTERID>9</MASTERID><ALTERID>12</ALTERID><VOUCHERTYPENAME>Sales</VOUCHERTYPENAME><VOUCHERNUMBER>S-1</VOUCHERNUMBER>` +
+		`<NARRATION>a &amp; b</NARRATION><BASICBUYERADDRESS.LIST><BASICBUYERADDRESS>Secret Street 1</BASICBUYERADDRESS></BASICBUYERADDRESS.LIST>` +
+		`<UDF:SECRET.LIST DESC="x"><UDF:SECRET>hidden</UDF:SECRET></UDF:SECRET.LIST><CONSIGNEEMAILINGNAME>Mr X</CONSIGNEEMAILINGNAME>` +
+		`<LEDGERENTRIES.LIST><LEDGERNAME>Party</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-100.00</AMOUNT><VATEXPAMOUNT>1</VATEXPAMOUNT>` +
+		`<BILLALLOCATIONS.LIST><NAME>S-1</NAME><BILLTYPE>New Ref</BILLTYPE><AMOUNT>-100.00</AMOUNT><INTERESTCOLLECTION.LIST>q</INTERESTCOLLECTION.LIST></BILLALLOCATIONS.LIST></LEDGERENTRIES.LIST>` +
+		`<ALLINVENTORYENTRIES.LIST><STOCKITEMNAME>Item</STOCKITEMNAME><AMOUNT>100.00</AMOUNT><BATCHALLOCATIONS.LIST><GODOWNNAME>Main</GODOWNNAME></BATCHALLOCATIONS.LIST>` +
+		`<ACCOUNTINGALLOCATIONS.LIST><LEDGERNAME>Sales</LEDGERNAME><AMOUNT>100.00</AMOUNT><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE></ACCOUNTINGALLOCATIONS.LIST></ALLINVENTORYENTRIES.LIST></VOUCHER>`
+	want := `<VOUCHER REMOTEID="g-9" VCHTYPE="Sales"><DATE>20261001</DATE><GUID>g-9</GUID><MASTERID>9</MASTERID><ALTERID>12</ALTERID>` +
+		`<VOUCHERTYPENAME>Sales</VOUCHERTYPENAME><VOUCHERNUMBER>S-1</VOUCHERNUMBER><NARRATION>a &amp; b</NARRATION>` +
+		`<ALLLEDGERENTRIES.LIST><LEDGERNAME>Party</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-100.00</AMOUNT>` +
+		`<BILLALLOCATIONS.LIST><NAME>S-1</NAME><BILLTYPE>New Ref</BILLTYPE><AMOUNT>-100.00</AMOUNT></BILLALLOCATIONS.LIST></ALLLEDGERENTRIES.LIST>` +
+		`<ALLINVENTORYENTRIES.LIST><STOCKITEMNAME>Item</STOCKITEMNAME><AMOUNT>100.00</AMOUNT>` +
+		`<ACCOUNTINGALLOCATIONS.LIST><LEDGERNAME>Sales</LEDGERNAME><AMOUNT>100.00</AMOUNT><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE></ACCOUNTINGALLOCATIONS.LIST></ALLINVENTORYENTRIES.LIST></VOUCHER>`
+	if got := fastStripVoucher(in); got != want {
+		t.Fatalf("the strip:\n got %s\nwant %s", got, want)
+	}
+	// both lists in Tally's answer: ALLLEDGERENTRIES is the entry's list; LEDGERENTRIES dropped
+	both := `<VOUCHER REMOTEID="g"><ALLLEDGERENTRIES.LIST><LEDGERNAME>A</LEDGERNAME></ALLLEDGERENTRIES.LIST><LEDGERENTRIES.LIST><LEDGERNAME>B</LEDGERNAME></LEDGERENTRIES.LIST></VOUCHER>`
+	if got := fastStripVoucher(both); got != `<VOUCHER REMOTEID="g"><ALLLEDGERENTRIES.LIST><LEDGERNAME>A</LEDGERNAME></ALLLEDGERENTRIES.LIST></VOUCHER>` {
+		t.Fatalf("both lists: %s", got)
+	}
+	// the approved paths are exactly today's fetch
+	var ps []string
+	for p := range fastApprovedPaths() {
+		ps = append(ps, p)
+	}
+	sort.Strings(ps)
+	if len(ps) != 61 {
+		t.Fatalf("%d approved paths: %v", len(ps), ps)
+	}
+}
+
+// a request's fetch as one list: a collection's <FETCH>a, b</FETCH>, or the object export's <FETCHLIST><FETCH>a</FETCH>...
+func testFetchOf(request string) string {
+	if strings.Contains(request, "<FETCHLIST>") {
+		var o []string
+		for _, m := range regexp.MustCompile(`<FETCH>([^<]*)</FETCH>`).FindAllStringSubmatch(group(`<FETCHLIST>(.*?)</FETCHLIST>`, request, 1), -1) {
+			o = append(o, m[1])
+		}
+		return strings.Join(o, ", ")
+	}
+	return group(`<FETCH>([^<]*)</FETCH>`, request, 1)
+}

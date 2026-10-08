@@ -68,7 +68,7 @@ var reItems231Inv = regexp.MustCompile(`\s*<ALLINVENTORYENTRIES\.LIST>[\s\S]*?</
 // Tally's answer to this request for this voucher, as a collection export gives it: the items (and the ledger lines
 // under them) only when the request fetches ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS
 func items231Answer(fixture, request string) string {
-	fetch := group(`<FETCH>([^<]*)</FETCH>`, request, 1)
+	fetch := testFetchOf(request)
 	if strings.Contains(fetch, "ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.") {
 		return fixture
 	}
@@ -117,12 +117,12 @@ func items231Bridge(t *testing.T) (string, *standTally, *standCloud) {
 	}
 	f.mu.Lock()
 	f.behave = func(w http.ResponseWriter, r *http.Request, id, body string) bool {
-		if id != vchByMasterID && id != vchByNumberID {
+		if id != vchObjectID && id != vchByNumberID {
 			return false
 		}
 		var hit []string
 		for _, v := range items231Vchs {
-			byMid := id == vchByMasterID && regexp.MustCompile(`\$MasterID = `+v.mid+`\b`).MatchString(body)
+			byMid := id == vchObjectID && strings.Contains(body, `<ID TYPE="Name">ID:`+v.mid+`</ID>`)
 			byNo := id == vchByNumberID && pinQuoted(body, "$VoucherTypeName") == v.typ && strings.Contains(body, "$VoucherNumber = &#34;"+v.no+"&#34;")
 			if byMid || byNo {
 				hit = append(hit, items231Answer(fx[v.mid], body))
@@ -167,55 +167,33 @@ func TestItems231RequestAddsOnlyTheItemsLedgerLines(t *testing.T) {
 	if strings.Join(added, " ") != "ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.AMOUNT ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.ISDEEMEDPOSITIVE ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.LEDGERNAME" {
 		t.Fatalf("added: %v", added)
 	}
-	byMaster := voucherByMasterRequest(spikeCo, "20261002", []string{"11"})
+	// next-fastfetch: by MasterID the object export (fast234form_test.go); by number the 2.3.0 request with the fetch added
 	byNumber := voucherByNumberRequest(spikeCo, "20261002", "Sales", "101")
-	for name, x := range map[string]string{"by MasterID": byMaster, "by number": byNumber} {
-		o := items231Old(x)
-		if o == x {
-			t.Fatalf("%s: the 2.3.1 fetch is not in the request", name)
-		}
-		// nothing else differs: the period, the filter, the company, the id, the envelope are 2.3.0's
-		id, filter := vchByMasterID, "$MasterID = 11"
-		if name == "by number" {
-			id, filter = vchByNumberID, `$VoucherNumber = "101" AND $VoucherTypeName = "Sales"`
-		}
-		want := fcCollection(id, spikeCo, periodVars("20261002", "20261002"), "Voucher", items231OldFetch, filter)
-		if o != want {
-			t.Fatalf("%s: more than the fetch changed:\n%s\n%s", name, o, want)
-		}
-		// read only: an Export of one collection, never modified, nothing imported
-		if !strings.Contains(x, "<TALLYREQUEST>Export</TALLYREQUEST>") || strings.Count(x, "<COLLECTION ") != 1 || !strings.Contains(x, `ISMODIFY="No"`) ||
-			isImportRequest(x) || strings.Contains(x, "<IMPORTDATA") || strings.Contains(x, "TALLYMESSAGE") {
-			t.Fatalf("%s: not a read: %s", name, x)
-		}
-		if err := checkAllowed(x); err != nil {
-			t.Fatalf("%s: the 2.3.1 request is refused: %v", name, err)
-		}
-		// the 2.3.0 request is no longer what the bridge builds: refused before a byte goes (the pin)
-		if err := checkAllowed(o); err == nil {
-			t.Fatalf("%s: the 2.3.0 request still passes", name)
-		}
+	o := items231Old(byNumber)
+	if o == byNumber || o != fcCollection(vchByNumberID, spikeCo, periodVars("20261002", "20261002"), "Voucher", items231OldFetch, `$VoucherNumber = "101" AND $VoucherTypeName = "Sales"`) {
+		t.Fatalf("by number: more than the fetch changed:\n%s", o)
 	}
-	// one entry: by number names one type and one number; by MasterID, the MasterIDs asked and no other
-	if strings.Count(byNumber, "$VoucherNumber = ") != 1 || strings.Count(byNumber, "$VoucherTypeName = ") != 1 || strings.Count(byMaster, "$MasterID = ") != 1 {
-		t.Fatalf("not one entry:\n%s\n%s", byMaster, byNumber)
+	if !strings.Contains(byNumber, "<TALLYREQUEST>Export</TALLYREQUEST>") || strings.Count(byNumber, "<COLLECTION ") != 1 || !strings.Contains(byNumber, `ISMODIFY="No"`) || isImportRequest(byNumber) {
+		t.Fatalf("by number: not a read: %s", byNumber)
 	}
-	// the 2.3.0 shapes are what 2.3.0 shipped (docs/tally-allowlist.md of 2.3.0): only the fetch moved them
+	if err := checkAllowed(byNumber); err != nil {
+		t.Fatalf("by number refused: %v", err)
+	}
+	if err := checkAllowed(o); err == nil {
+		t.Fatal("by number: the 2.3.0 request still passes")
+	}
+	if strings.Count(byNumber, "$VoucherNumber = ") != 1 || strings.Count(byNumber, "$VoucherTypeName = ") != 1 {
+		t.Fatalf("not one entry: %s", byNumber)
+	}
 	s := allowListSamples()
-	// part A: FinComVoucherByMaster names exactly one MasterID now; 2.3.0's sample named two
-	s[vchByMasterID] = strings.Replace(s[vchByMasterID], "$MasterID = 1", "$MasterID = 1 OR $MasterID = 2", 1)
-	for id, sh := range map[string]string{vchByMasterID: "b6b4d3b5f221", vchByNumberID: "42ccf0c70605", fetchTestA: "8f9370ab51b7", fetchTestC: "63bfa3fbbe2a"} {
+	for id, sh := range map[string]string{vchByNumberID: "42ccf0c70605", fetchTestA: "8f9370ab51b7"} {
 		if got := shapeOf(items231Old(s[id])); got != sh {
 			t.Errorf("%s without the added fields has shape %s, not 2.3.0's %s", id, got, sh)
 		}
-		if shapeOf(s[id]) == sh {
-			t.Errorf("%s: the shape did not change", id)
-		}
 	}
-	// the test forms A and C stay byte for byte the two forms as built (under their own ids)
 	if strings.ReplaceAll(fetchTestRequest("A", spikeCo, "20261002", "Sales", "101", ""), fetchTestA, vchByNumberID) != byNumber ||
-		strings.ReplaceAll(fetchTestRequest("C", spikeCo, "20261002", "", "", "11"), fetchTestC, vchByMasterID) != byMaster {
-		t.Fatal("the test forms A and C are no longer the two forms as built")
+		fetchTestRequest("C", spikeCo, "20261002", "", "", "11") != voucherObjectRequest(spikeCo, "11") {
+		t.Fatal("the test forms A and C are no longer the requests as built")
 	}
 }
 
@@ -230,20 +208,20 @@ func TestItems231StandItemInvoicesBalance(t *testing.T) {
 			t.Fatalf("%s: the fixture's lines %v (sum %v)", v.file, m, sum)
 		}
 		// 2.3.0's request: the items' lines never came, so the body did not balance (what 2.3.1 fixes)
-		if _, sum := items231Totals(items231Answer(fx, items231Old(voucherByMasterRequest(spikeCo, "20261002", []string{v.mid})))); sum == 0 {
+		if _, sum := items231Totals(items231Answer(fx, items231Old(voucherByNumberRequest(spikeCo, "20261002", v.typ, v.no)))); sum == 0 {
 			t.Fatalf("%s: the 2.3.0 request's body balances on the stand: the stand does not tell the two apart", v.file)
 		}
 
 		// by MasterID
-		n := f.n(vchByMasterID)
+		n := f.n(vchObjectID)
 		got, err := fetchVouchersByMasterIn(recorderTC(nil), spikeCo, f.port, "20261002", []string{v.mid}, 5)
 		if err != nil || len(got) != 1 || got[v.mid] == "" {
 			t.Fatalf("%s by MasterID: %v %v", v.file, mapKeys(got), err)
 		}
-		if f.n(vchByMasterID) != n+1 {
-			t.Fatalf("%s by MasterID: %d requests for one entry", v.file, f.n(vchByMasterID)-n)
+		if f.n(vchObjectID) != n+1 {
+			t.Fatalf("%s by MasterID: %d requests for one entry", v.file, f.n(vchObjectID)-n)
 		}
-		if b := f.bodiesOf(vchByMasterID); strings.Count(b[len(b)-1], "$MasterID = ") != 1 || !strings.Contains(b[len(b)-1], "<FETCH>"+liveFetchField+"</FETCH>") {
+		if b := f.bodiesOf(vchObjectID); b[len(b)-1] != voucherObjectRequest(spikeCo, v.mid) {
 			t.Fatalf("%s by MasterID: the request sent: %s", v.file, b[len(b)-1])
 		}
 		w := spikeWant
@@ -312,7 +290,7 @@ func TestItems231LinesGoWithBalancedBodies(t *testing.T) {
 			}
 		}
 		if byNumber {
-			if f.n(vchByNumberID) != 3 || f.n(vchByMasterID) != 0 {
+			if f.n(vchByNumberID) != 3 || f.n(vchObjectID) != 0 {
 				t.Fatalf("asked: %v", f.ids())
 			}
 			for _, b := range f.bodiesOf(vchByNumberID) {
@@ -322,12 +300,12 @@ func TestItems231LinesGoWithBalancedBodies(t *testing.T) {
 			}
 		} else {
 			// part A (the owner, 06-Oct-2026): strictly one entry per request, by Tally's own id: three requests, one MasterID each
-			bs := f.bodiesOf(vchByMasterID)
+			bs := f.bodiesOf(vchObjectID)
 			if len(bs) != 3 || f.n(vchByNumberID) != 0 {
 				t.Fatalf("asked: %v", f.ids())
 			}
 			for _, b := range bs {
-				if strings.Count(b, "$MasterID = ") != 1 {
+				if strings.Count(b, `<ID TYPE="Name">ID:`) != 1 {
 					t.Fatalf("more than one entry in a request: %s", b)
 				}
 			}
@@ -357,8 +335,8 @@ func TestItems231HeldUnder230SettleByRefetch(t *testing.T) {
 			t.Fatalf("%s: the body sent: %v (sum %v)", id, m, sum)
 		}
 	}
-	for _, b := range append(f.bodiesOf(vchByMasterID), f.bodiesOf(vchByNumberID)...) {
-		if !strings.Contains(b, "<FETCH>"+liveFetchField+"</FETCH>") {
+	for _, b := range append(f.bodiesOf(vchObjectID), f.bodiesOf(vchByNumberID)...) {
+		if testFetchOf(b) != liveFetchField {
 			t.Fatalf("a request without the 2.3.1 fetch: %s", b)
 		}
 	}
@@ -406,7 +384,7 @@ func TestItems231RefetchAfter230Resolved(t *testing.T) {
 		}
 	}
 	// once: listed again (the cloud's answer not in yet), and again after a restart (the state read from disk)
-	k := f.n(vchByMasterID) + f.n(vchByNumberID)
+	k := f.n(vchObjectID) + f.n(vchByNumberID)
 	for _, restart := range []bool{false, true} {
 		if restart {
 			live.mu.Lock()
@@ -415,8 +393,8 @@ func TestItems231RefetchAfter230Resolved(t *testing.T) {
 		}
 		applyRefetch(M{"refetch": rows})
 		b230Turns(3)
-		if f.n(vchByMasterID)+f.n(vchByNumberID) != k || len(r222cSentID(c, "S1:resolved")) != 1 || len(r222cSentID(c, "P1:resolved")) != 1 {
-			t.Fatalf("restart %v: asked or sent again: %d -> %d asks; %v", restart, k, f.n(vchByMasterID)+f.n(vchByNumberID), f.ids())
+		if f.n(vchObjectID)+f.n(vchByNumberID) != k || len(r222cSentID(c, "S1:resolved")) != 1 || len(r222cSentID(c, "P1:resolved")) != 1 {
+			t.Fatalf("restart %v: asked or sent again: %d -> %d asks; %v", restart, k, f.n(vchObjectID)+f.n(vchByNumberID), f.ids())
 		}
 	}
 	// a line no older bridge resolved, which this version resolved: never asked again (the rule before 2.3.1)
@@ -430,7 +408,7 @@ func TestItems231TwoSecondRule(t *testing.T) {
 	_, f, _ := items231Bridge(t)
 	f.mu.Lock()
 	f.slow = func(id, body string) time.Duration {
-		if id == vchByMasterID || id == vchByNumberID {
+		if id == vchObjectID || id == vchByNumberID {
 			return 5 * time.Second
 		}
 		return 0

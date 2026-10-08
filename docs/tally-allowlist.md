@@ -36,6 +36,8 @@ First table: re-measured on 2026-10-06 on the stand (not real Tally); not yet me
 
 (2.1.9, 04-Oct-2026: every dated request now renders its dates through one function, `dateVars` in `bridge-go/dates.go`, with the same yyyymmdd text as before, so no shape changed and the table is unchanged. The person-started "Test reading from Tally" also sends the Day Book with the dates as d-MMM-yyyy and with TYPE="Date" (still the "Day Book" id), and TDSDeskKeepList with its AlterID filter and no dates (the entries above the company's starting point, measurement only; the measuring tool sends the same as its item a2). The light FinComCompany request now also goes once when a company is first seen open in a run and at most every 10 minutes while it stays open. Reading old days is off in normal running (ReadDays, the owner's rule of 04-Oct-2026).)
 
+(next-fastfetch, 08-Oct-2026, not released: the owner's approval of 07-Oct-2026 and decision of 08-Oct-2026 ("Allow, strip in bridge"). FinComVoucherByMaster is gone (no fallback). Its place is taken by FinComVoucherObject: Tally's object export of ONE voucher by its MasterID (`<TYPE>Object</TYPE><SUBTYPE>Voucher</SUBTYPE><ID TYPE="Name">ID:<MasterID></ID>`, no period), its FETCHLIST the 61 fields FinComVoucherByMaster fetched (`liveFetchFields`, the 13 fields the owner is still deciding on listed in `liveFetchUndecided`). Tally ignores the FETCHLIST and sends the whole voucher; the bridge keeps exactly those fields (LEDGERENTRIES.LIST read as ALLLEDGERENTRIES.LIST) and drops the rest before anything is logged, stored or sent (`bridge-go/fastvch.go`; the exact form and the field comparison: `docs/fast-request-form.md`). Measured keyed on TallyPrime 3.0 .. 7.1 (push-design run 37657679690: 7-57 ms at 4,003 vouchers, where FinComVoucherByMaster took 326-671 ms). The trial form FinComFetchTestC is gone: the trial's form C is FinComVoucherObject as built. The object export with no FETCHLIST and a TDL report over the voucher object froze Tally on every release and are refused. The id FinComVoucherObject is the request's TYPE and SUBTYPE (an object export carries no collection ID).)
+
 <!-- allowlist:begin -->
 | id | purpose | shape | worst case (s) | measured on | used by |
 |---|---|---|---|---|---|
@@ -47,7 +49,6 @@ First table: re-measured on 2026-10-06 on the stand (not real Tally); not yet me
 | FinComEditLogProbe | measure (the read test): one entry by MasterID with its edit-log sub-collection (candidate names) | 5bc0e4c16b77 | not yet measured | - | measure-only |
 | FinComFetchTestA | measure (Test fetching an entry): form A, FinComVoucherByNumber as built (one voucher by type and number, one day, yyyymmdd), under its own id | 695e040c7274 | not yet measured | - | measure-only |
 | FinComFetchTestB | measure (Test fetching an entry): form B, form A with plain quote marks in the filter | 2d905711230e | not yet measured | - | measure-only |
-| FinComFetchTestC | measure (Test fetching an entry): form C, FinComVoucherByMaster as built (one MasterID, one day, yyyymmdd), under its own id | 4692878ad37b | not yet measured | - | measure-only |
 | FinComFetchTestD | measure (Test fetching an entry): form D, form C with no dates | 96da1903f282 | not yet measured | - | measure-only |
 | FinComFetchTestE | measure (Test fetching an entry): form E, form C with the dates as d-MMM-yyyy TYPE=Date | ad966bf1dffa | not yet measured | - | measure-only |
 | FinComFetchTestF | measure (Test fetching an entry): form F, form B with no dates | 624561c5f62e | not yet measured | - | measure-only |
@@ -67,8 +68,8 @@ First table: re-measured on 2026-10-06 on the stand (not real Tally); not yet me
 | FinComSlice | the recorder's source C (2.2.0, off by default): one month's entries above an AlterID as GUID, MasterID, AlterID and date, in the date form the read test kept | 4ae8c3aa2577 | not yet measured | - | bridge |
 | FinComSnapshot | measure: one month's entries as GUID, AlterID, date, type and number | c48421c1f84f | not yet measured | - | measure-only |
 | FinComTag | the FinCom id check: one date's entries, heads and narration only | c6adb1e0d825 | not yet measured | - | bridge |
-| FinComVoucherByMaster | the recorder's body fetch (2.2.0): the entry just changed, by its MasterID (exactly one a request since 2.3.1), the line's own date as the period, the fields FinCom's day parse reads (2.3.1: the whole entry: items, the ledger lines under them, bill-wise, cost centres, bank, TDS, GST, e-invoice and e-way bill details) | 9708f011f6ce | not yet measured | - | bridge |
 | FinComVoucherByNumber | the recorder's new entry (2.2.1): one entry by its voucher type and number, the line's own date as the period, the body fetch's fields (2.3.1: the whole entry, as the body fetch) | 111afcb61eb9 | not yet measured | - | bridge |
+| FinComVoucherObject | the entry request (next-fastfetch, replacing FinComVoucherByMaster): ONE voucher by its MasterID, Tally's object export ID:<MasterID> (keyed: it does not read every voucher of the company), its FETCHLIST the approved fields of FinComVoucherByMaster; Tally sends the whole voucher and the bridge keeps exactly those fields (ledger lines as ALLLEDGERENTRIES), dropping the rest before anything is logged, stored or sent; read only, no period | ce0e72f74e72 | not yet measured | - | bridge |
 | Import | a posting or a deletion (Import Data) | 907a02740d6e | not yet measured | - | bridge |
 | TDSDeskCompanies | the companies loaded in Tally (name, books' period, GUID) | a1fe973a9650 | not yet measured | - | bridge |
 | TDSDeskCompanyInfo | one company's GSTIN and PAN, once when it is first seen | cacb15508aea | not yet measured | - | bridge |
@@ -81,4 +82,4 @@ First table: re-measured on 2026-10-06 on the stand (not real Tally); not yet me
 | TDSDeskVchHeads | voucher heads (Optional ones too) of one company for one month at most, no ledger lines | 53fc675a1641 | not yet measured | - | bridge |
 <!-- allowlist:end -->
 
-Table hash (SHA-256): 1c17806d483e0a31477bc93bcf0646334c156eda88e8a401a8df155d0bca02dd
+Table hash (SHA-256): 695b19bbf68b7e3501c4fa22eee2fbad7031f807d9a2a6cbb3614b29a22fed95

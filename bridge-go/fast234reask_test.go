@@ -70,7 +70,7 @@ func TestFast234EndedLineAskedOnceMore(t *testing.T) {
 	rows := M{"heldLines": retryHeldRows("25730")}
 	applyHeldLines(rows)
 	fastTurns(3)
-	if n := f.n(vchByMasterID); n != 1 {
+	if n := f.n(vchObjectID); n != 1 {
 		t.Fatalf("asked %d times (want once): %v", n, f.ids())
 	}
 	if n, b := fastBodied(c, "nws-25730:resolved"); n != 1 || b != 1 {
@@ -83,7 +83,7 @@ func TestFast234EndedLineAskedOnceMore(t *testing.T) {
 		applyHeldLines(rows)
 		applyRefetch(M{"refetch": retryHeldRows("25730")})
 		fastTurns(3)
-		if n := f.n(vchByMasterID); n != 1 {
+		if n := f.n(vchObjectID); n != 1 {
 			t.Fatalf("restart %v: asked again (%d asks)", restart, n)
 		}
 		if n, _ := fastBodied(c, "nws-25730:resolved"); n != 1 {
@@ -105,7 +105,7 @@ func TestFast234EndedLineRefetchOnce(t *testing.T) {
 		applyHeldLines(M{"heldLines": retryHeldRows("25731")})
 		fastTurns(2)
 	}
-	if n := f.n(vchByMasterID); n != 1 {
+	if n := f.n(vchObjectID); n != 1 {
 		t.Fatalf("asked %d times (want once)", n)
 	}
 	if n, b := fastBodied(c, "nws-25731:resolved"); n != 1 || b != 1 {
@@ -127,7 +127,7 @@ func TestFast234EndedLineReaskTimesOut(t *testing.T) {
 		retryClock(base, sec)
 		applyHeldLines(M{"heldLines": retryHeldRows("25732")})
 		fastTurns(2)
-		if n := f.n(vchByMasterID); n != 1 {
+		if n := f.n(vchObjectID); n != 1 {
 			t.Fatalf("round %d: %d asks (want 1)", i, n)
 		}
 	}
@@ -146,7 +146,7 @@ func TestFast234SlowWordsLineAskedOnce(t *testing.T) {
 		applyHeldLines(M{"heldLines": retryHeldRows("25733")})
 		fastTurns(2)
 	}
-	if n := f.n(vchByMasterID); n != 1 {
+	if n := f.n(vchObjectID); n != 1 {
 		t.Fatalf("asked %d times (want once)", n)
 	}
 	if n, b := fastBodied(c, "nws-25733:resolved"); n != 1 || b != 1 {
@@ -163,7 +163,7 @@ func TestFast234LineEndedByThisVersionNotReasked(t *testing.T) {
 	slowEntries(f, 700*time.Millisecond)
 	applyHeldLines(M{"heldLines": retryHeldRows("25734")})
 	fastTurns(2)
-	if n := f.n(vchByMasterID); n != 1 {
+	if n := f.n(vchObjectID); n != 1 {
 		t.Fatalf("first: %d asks", n)
 	}
 	slowEntries(f, 0)
@@ -174,7 +174,7 @@ func TestFast234LineEndedByThisVersionNotReasked(t *testing.T) {
 		applyHeldLines(M{"heldLines": retryHeldRows("25734")})
 		applyRefetch(M{"refetch": retryHeldRows("25734")})
 		fastTurns(2)
-		if n := f.n(vchByMasterID); n != 1 {
+		if n := f.n(vchObjectID); n != 1 {
 			t.Fatalf("restart %v: asked again (%d asks)", restart, n)
 		}
 	}

@@ -492,7 +492,7 @@ func TestLed231ResolvedWaitingForLedgerAskedOnceMore(t *testing.T) {
 	if s := r222cSentID(c, "N2:resolved"); len(s) != 1 || str(s[0]["object_guid"]) != v.guid {
 		t.Fatalf("not sent once more: %v", c.recSent())
 	}
-	k := f.n(vchByMasterID)
+	k := f.n(vchObjectID)
 	for _, restart := range []bool{false, true} {
 		if restart {
 			live.mu.Lock()
@@ -501,7 +501,7 @@ func TestLed231ResolvedWaitingForLedgerAskedOnceMore(t *testing.T) {
 		}
 		applyRefetch(M{"refetch": []any{row}})
 		b230Turns(3)
-		if len(r222cSentID(c, "N2:resolved")) != 1 || f.n(vchByMasterID) != k {
+		if len(r222cSentID(c, "N2:resolved")) != 1 || f.n(vchObjectID) != k {
 			t.Fatalf("restart %v: asked or sent again", restart)
 		}
 	}

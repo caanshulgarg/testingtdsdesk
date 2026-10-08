@@ -47,7 +47,6 @@ import (
 
 const (
 	liveAddonName = "FinComRecorder.tdl"    // the live add-on (addon/), written beside the trial's by the install step
-	vchByMasterID = "FinComVoucherByMaster" // the body fetch's request id (allowlist.go)
 	vchByNumberID = "FinComVoucherByNumber" // 2.2.1: a new entry's body by its type and number on its date (allowlist.go)
 	liveMaxIDs    = 1                       // 2.3.1 (the owner, 06-Oct-2026): strictly ONE MasterID per body fetch
 	liveMaxLines  = 500                     // lines per recorder_lines call (the cloud's MAX_RECORDER_LINES)
@@ -1677,45 +1676,9 @@ func liveInWindow(key string, a int64) bool {
 }
 
 // --- the body fetch
-// FinComVoucherByMaster: the voucher with this one MasterID (2.3.1), the date's period (one day), the fields the
-// cloud's day parse reads (parse.js parseDay; 2.3.1: with the ledger lines under an item invoice's items), nothing Tally
-// works out
-// 2.3.1 (the owner, 06-Oct-2026: "one entry per request: strictly one, asked for by Tally's own id"): exactly ONE MasterID;
-// "" (nothing can be sent) for none, more than one, or one that is not a number
-func voucherByMasterRequest(company, date string, mids []string) string {
-	if len(mids) != 1 || mids[0] == "" || onlyDigits(mids[0]) != mids[0] || len(mids[0]) > 18 {
-		return ""
-	}
-	return fcCollection(vchByMasterID, company, periodVars(date, date), "Voucher", liveFetchField, "$MasterID = "+mids[0])
-}
-
-// the one narrow exception to "no dated request while ReadDays is off" (tally.go): exactly the body fetch as built
-// above, for one day and exactly one MasterID (2.3.1)
-func voucherByMasterExact(x string) bool {
-	if tallyRequestID(x) != vchByMasterID {
-		return false
-	}
-	a, z := requestFrom(x)
-	if a == "" || a != z {
-		return false
-	}
-	var ids []string
-	for _, m := range re(`\$MasterID = (\d+)`).FindAllStringSubmatch(x, -1) {
-		ids = append(ids, m[1])
-	}
-	if len(ids) != 1 {
-		return false
-	}
-	co := html.UnescapeString(group(`<SVCURRENTCOMPANY>([^<]*)</SVCURRENTCOMPANY>`, x, 1))
-	if x != voucherByMasterRequest(co, a, ids) {
-		return false
-	}
-	// 2.2.2 security review (M1 / L6): as for the request by number, only for a company whose starting point is recorded.
-	// The day is NOT bounded by the starting point's day or today: an entry keyed today may carry any date (a September
-	// bill entered in October, a post-dated cheque); what is taken is bounded by Tally's ALTERID instead (liveVoucherWrong)
-	_, ok := startPointOf(co)
-	return ok
-}
+// next-fastfetch: the voucher with this one MasterID by the object export "ID:<MasterID>" (fastvch.go), keyed (it does not
+// read every voucher of the company as FinComVoucherByMaster did, which it replaces), stripped to the approved fields
+// before anything else sees it
 
 // FinComVoucherByNumber (2.2.1, the owner's NWS144 result): a new entry Tally wrote before its save (MasterID 0, GUID
 // "<company GUID>-00000000") found after the save by its type and number on its own date: one day, the body fetch's
@@ -1741,7 +1704,10 @@ func fetchVouchersByMaster(tc *TC, company string, port int, date string, mids [
 }
 
 func fetchVouchersByMasterIn(tc *TC, company string, port int, date string, mids []string, sec int) (map[string]string, error) {
-	x := voucherByMasterRequest(company, date, mids)
+	x := ""
+	if len(mids) == 1 {
+		x = voucherObjectRequest(company, mids[0]) // next-fastfetch: one voucher by its MasterID; the date is the line's, checked on the answer
+	}
 	if x == "" {
 		return nil, fmt.Errorf("not asked: the entry request names exactly one MasterID (%d given)", len(mids))
 	}
@@ -1757,8 +1723,11 @@ func fetchVouchersByMasterIn(tc *TC, company string, port int, date string, mids
 	}
 	out := map[string]string{}
 	for _, m := range reVchBlock.FindAllString(raw, -1) {
-		if id := tagNum(m, "MASTERID"); id != "" {
-			out[id] = cleanXML(m)
+		// next-fastfetch (the owner, 08-Oct-2026): Tally sends the whole voucher; only the approved fields are kept, here,
+		// before anything is logged, stored or sent
+		v := fastStripVoucher(cleanXML(m))
+		if id := tagNum(v, "MASTERID"); id != "" && v != "" {
+			out[id] = v
 		}
 	}
 	return out, nil

@@ -65,7 +65,7 @@ func TestR222DuplicatedVoucherPair(t *testing.T) {
 	if strings.Contains(jsonText(s), "51986") {
 		t.Fatalf("the source's AlterID went: %s", jsonText(s))
 	}
-	if f.n(vchByMasterID) != 1 || !strings.Contains(f.bodiesOf(vchByMasterID)[0], "$MasterID = 25683") || f.n(vchByNumberID) != 0 {
+	if f.n(vchObjectID) != 1 || !strings.Contains(f.bodiesOf(vchObjectID)[0], "ID:25683</ID>") || f.n(vchByNumberID) != 0 {
 		t.Fatalf("requests: %v", f.ids())
 	}
 }
@@ -158,7 +158,7 @@ func TestR222FallbackByNumber(t *testing.T) {
 		!strings.Contains(str(sent[0]["xml"]), "<VOUCHERNUMBER>J-77</VOUCHERNUMBER>") {
 		t.Fatalf("by number: %v", sent)
 	}
-	if f.n(vchByMasterID) != 1 || f.n(vchByNumberID) != 1 {
+	if f.n(vchObjectID) != 1 || f.n(vchByNumberID) != 1 {
 		t.Fatalf("requests: %v", f.ids())
 	}
 }
@@ -193,7 +193,7 @@ func TestR222HardTwoSecondStop(t *testing.T) {
 	setCfg("RecorderBodySec", float64(20))
 	f.mu.Lock()
 	f.slow = func(id, body string) time.Duration {
-		if id == vchByMasterID {
+		if id == vchObjectID {
 			return 5 * time.Second
 		}
 		return 0
@@ -210,7 +210,7 @@ func TestR222HardTwoSecondStop(t *testing.T) {
 		t.Fatalf("the recorder read took %s (a hard stop at 2 s)", el)
 	}
 	// 2.3.1 (the owner's last change): never switched off; the line waits for the shared retry schedule (retry.go)
-	if logLines("off: Tally took") != 0 || logLines("(FinComVoucherByMaster, try 1); trying again by itself at") != 1 {
+	if logLines("off: Tally took") != 0 || logLines("(FinComVoucherObject, try 1); trying again by itself at") != 1 {
 		t.Fatalf("switched off, or the retry not said: %s", readText(logFile()))
 	}
 	// 2.3.3 (the owner's rule): up held at once with the words, never unsent waiting for the retry
@@ -222,7 +222,7 @@ func TestR222HardTwoSecondStop(t *testing.T) {
 		retryDue()
 		uploadAll(t)
 	}
-	if n := f.n(vchByMasterID); n != 2 {
+	if n := f.n(vchObjectID); n != 2 {
 		t.Fatalf("asked %d times (its fetch and one ask again)", n)
 	}
 	if sent := c.recSent(); len(sent) != 2 || str(sent[1]["xml"]) != "" || str(sent[1]["heldWhy"]) != liveHeldSlowGiveUp {

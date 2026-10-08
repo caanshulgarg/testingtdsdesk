@@ -248,6 +248,9 @@ func newStandTally(t *testing.T) *standTally {
 		if strings.Contains(body, "Import Data") {
 			id = "Import"
 		}
+		if oid, ok := objectRequestID(body); ok {
+			id = oid // next-fastfetch: the object export of one voucher
+		}
 		f.mu.Lock()
 		f.reqs = append(f.reqs, id)
 		f.bodies = append(f.bodies, body)
@@ -380,13 +383,10 @@ func newStandTally(t *testing.T) *standTally {
 					o.WriteString(v.xml())
 				}
 			}
-		case vchByMasterID: // 2.2.0: the recorder's body fetch, every MasterID named (one day)
-			want := map[string]bool{}
-			for _, m := range regexp.MustCompile(`\$MasterID = (\d+)`).FindAllStringSubmatch(body, -1) {
-				want[m[1]] = true
-			}
+		case vchObjectID: // next-fastfetch: the object export "ID:<MasterID>": that one voucher, whatever its date
+			want := group(`<ID TYPE="Name">ID:(\d+)</ID>`, body, 1)
 			for _, v := range f.vch {
-				if inDates(v) && want[v.master] {
+				if v.master == want {
 					o.WriteString(v.xml())
 				}
 			}

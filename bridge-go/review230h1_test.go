@@ -52,9 +52,9 @@ func TestH1CancelNotCancelledHereHeld(t *testing.T) {
 		liveMidNote(b220CoGUID, v.master, v.guid, "Receipt", "1", td)
 		liveAppend(t, liveFilePath(rec, ""), realLine("after_cancel", "", v.master, "", "Receipt", "1", addonDate(td)))
 		liveReadOnce()
-		n0 := f.n(vchByMasterID)
+		n0 := f.n(vchObjectID)
 		uploadAll(t)
-		if f.n(vchByMasterID) != n0+1 {
+		if f.n(vchObjectID) != n0+1 {
 			t.Fatalf("the cancel is asked of this Tally once by MasterID: %v", f.ids())
 		}
 		got := sentEvent(c, "cancelled")
@@ -89,12 +89,12 @@ func TestH1DeleteStillInThisTallyHeld(t *testing.T) {
 		liveMidNote(b220CoGUID, v.master, v.guid, "Receipt", "2", td) // the bridge's record has its GUID
 		liveAppend(t, liveFilePath(rec, ""), realLine("after_delete", "", v.master, "", "Receipt", "2", addonDate(td)))
 		liveReadOnce()
-		n0 := f.n(vchByMasterID)
+		n0 := f.n(vchObjectID)
 		uploadAll(t)
-		if f.n(vchByMasterID) != n0+1 {
+		if f.n(vchObjectID) != n0+1 {
 			t.Fatalf("the delete is asked of this Tally once by MasterID: %v", f.ids())
 		}
-		if b := f.bodiesOf(vchByMasterID); !strings.Contains(b[len(b)-1], "$MasterID = "+v.master) {
+		if b := f.bodiesOf(vchObjectID); !strings.Contains(b[len(b)-1], "ID:"+v.master+"</ID>") {
 			t.Fatalf("the request: %s", b[len(b)-1])
 		}
 		got := sentEvent(c, "deleted")
@@ -116,7 +116,7 @@ func TestH1DeleteTallyCannotBeAskedHeld(t *testing.T) {
 	noteStartPoint(zz, b220CoGUID, 5, 1)
 	liveMidNote(b220CoGUID, "12", "cccc-imported-00000777", "Receipt", "4", td)
 	f.mu.Lock()
-	f.behave = silentFor(isID(vchByMasterID), nil)
+	f.behave = silentFor(isID(vchObjectID), nil)
 	f.mu.Unlock()
 	liveAppend(t, liveFilePath(rec, ""), realLine("after_delete", "", "12", "", "Receipt", "4", addonDate(td)))
 	liveReadOnce()
@@ -149,7 +149,7 @@ func h1Resolved(c *standCloud, ev string) []M {
 
 // Tally busy: it answers the request by MasterID with something that is not an answer (no envelope)
 func h1Busy(w http.ResponseWriter, r *http.Request, id, body string) bool {
-	if id != vchByMasterID {
+	if id != vchObjectID {
 		return false
 	}
 	_, _ = w.Write([]byte("busy"))
@@ -191,10 +191,10 @@ func TestH1RetryDeleteTallyBusyThenFree(t *testing.T) {
 			t.Fatalf("the decision:\n%s", readText(logFile()))
 		}
 		// resolved once: asked no more
-		n := f.n(vchByMasterID)
+		n := f.n(vchObjectID)
 		liveResolveTurn()
 		uploadAll(t)
-		if f.n(vchByMasterID) != n || len(h1Resolved(c, "deleted")) != 1 {
+		if f.n(vchObjectID) != n || len(h1Resolved(c, "deleted")) != 1 {
 			t.Fatalf("asked again after it was resolved: %v", f.ids())
 		}
 	})
@@ -230,9 +230,9 @@ func TestH1RetryCopyCompanyStaysHeld(t *testing.T) {
 		if logLines("held: "+liveDeleteHeldWords+" (not asked again)") != 1 || logLines("held: "+liveCancelHeldWords+" (not asked again)") != 1 {
 			t.Fatalf("one line per outcome:\n%s", readText(logFile()))
 		}
-		n := f.n(vchByMasterID)
+		n := f.n(vchObjectID)
 		liveResolveTurn()
-		if f.n(vchByMasterID) != n {
+		if f.n(vchObjectID) != n {
 			t.Fatalf("a line proven not this Tally's is asked again: %v", f.ids())
 		}
 	})
@@ -250,7 +250,7 @@ func TestH1RetryCancelAfterTwoSecondStop(t *testing.T) {
 	v.typ = "Receipt"
 	v.cancelled = true
 	f.mu.Lock()
-	f.behave = silentFor(isID(vchByMasterID), nil)
+	f.behave = silentFor(isID(vchObjectID), nil)
 	f.mu.Unlock()
 	liveAppend(t, liveFilePath(rec, ""), realLine("after_cancel", "", v.master, "", "Receipt", "9", addonDate(td)))
 	liveReadOnce()
@@ -266,14 +266,14 @@ func TestH1RetryCancelAfterTwoSecondStop(t *testing.T) {
 	f.mu.Lock()
 	f.behave = nil
 	f.mu.Unlock()
-	n := f.n(vchByMasterID)
+	n := f.n(vchObjectID)
 	liveResolveTurn()
-	if f.n(vchByMasterID) != n {
+	if f.n(vchObjectID) != n {
 		t.Fatalf("asked before the retry's time: %v", f.ids())
 	}
 	retryDue() // the next try, by itself
 	liveResolveTurn()
-	if f.n(vchByMasterID) != n {
+	if f.n(vchObjectID) != n {
 		t.Fatalf("2.3.2 (issue 232, b): a line whose asks timed out was asked again before 1 h: %v", f.ids())
 	}
 	// 2.3.2 (b): its asks timed out (one timed-out try): asked again after 1 h
