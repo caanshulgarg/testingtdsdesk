@@ -1,0 +1,2 @@
+FCR1|ev=stockitem_accept_pre|t0=8-Oct-26 22:48|tw=8-Oct-26 22:48|cguid=cc808ec0-759b-48b3-b670-0795ebcb8018|cname=FinCom Spike Co|user=TALLY User|obj=Master|guid=|mid=0|aid=0|vtype=|vno=|vdate=|name=MA Item B|parent= Primary|narr=|t1=8-Oct-26 22:48|src=live
+FCR1|ev=stockitem_accept_post|t0=8-Oct-26 22:48|tw=8-Oct-26 22:48|cguid=cc808ec0-759b-48b3-b670-0795ebcb8018|cname=FinCom Spike Co|user=TALLY User|obj=Master|guid=|mid=0|aid=0|vtype=|vno=|vdate=|name=MA Item B|parent= Primary|narr=|t1=8-Oct-26 22:48|src=live
