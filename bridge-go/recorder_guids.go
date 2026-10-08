@@ -275,8 +275,18 @@ func liveResolveGuid(h heldLine, sent *bool) (c *change, why string, answered, f
 		return nil, "", false, false, err
 	}
 	got, err := fetchVouchersByMasterIn(tc, h.Company, port, h.Date, []string{h.MID}, liveBodySec())
+	if errors.Is(err, errFastShape) {
+		// 2.3.4 (re-review L2): the same answer would come again: held for good with the words, not asked every turn
+		return nil, map[bool]string{true: liveCancelHeldWords, false: liveDeleteHeldWords}[h.Ev == "cancelled"] + " (" + cutRunes(err.Error(), 160) + ")", true, true, nil
+	}
 	if err != nil {
 		return nil, "", false, false, err
+	}
+	if h.Ev == "deleted" && got[h.MID] == "" {
+		// 2.3.4 (re-review 2 L-d): proven gone only asked again with the company open around it; else not asked this time
+		if err := fastProveGone(tc, h.Company, port, h.MID, liveBodySec()); err != nil {
+			return nil, "", false, false, err
+		}
 	}
 	c = &change{company: h.Company, companyGuid: h.CGUID, event: h.Ev, masterId: h.MID, vchType: h.Type, vchNo: h.No, vchDate: h.Date, source: "addon",
 		lineId: h.ID + ":resolved", at: h.At, saveMs: -1, readAt: nowFn(), guidKeep: h.KeepGuid, alterKeep: h.KeepAlter}

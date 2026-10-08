@@ -207,15 +207,20 @@ func TestInflightBusyFiveMinutesTenEntries(t *testing.T) {
 	b.free()
 	waitEarlierOver(t, f.port)
 	// 2.3.3 (the owner's rule: silence is not acceptable): while Tally was busy, the 10 lines went up held at once with
-	// their words; once Tally answers, each entry comes as "<line id>:resolved" with its body
-	held := 0
+	// their words; once Tally answers, each entry comes as "<line id>:resolved" with its body. 2.3.4 (the owner's
+	// answer B, 08-Oct-2026): the one entry whose fast request was stopped at the limit is held with the once-more words
+	// and asked once more 5 minutes later; the 9 others were never asked while Tally was busy
+	held, ended := 0, 0
 	for _, s := range c.recSent() {
 		if str(s["xml"]) == "" && strings.HasPrefix(str(s["heldWhy"]), "waiting: ") {
 			held++
 		}
+		if str(s["xml"]) == "" && str(s["heldWhy"]) == liveStopEndWords() {
+			ended++
+		}
 	}
-	if held != 10 {
-		t.Fatalf("held at once while Tally was busy: %d of 10 (%v)", held, c.recSent())
+	if held != 10 || ended != 0 {
+		t.Fatalf("held at once while Tally was busy: %d of 10, ended %d of 0 (%v)", held, ended, c.recSent())
 	}
 	resolved := func() int {
 		n := 0

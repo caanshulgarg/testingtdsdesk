@@ -170,3 +170,22 @@ The same steps are in `docs/bridge-2.3.3-test-sheet.txt`.
 ## Published
 
 Published to staging on 07-Oct-2026 at 21:37 IST (main 0c869e7, from tax-accuracy 6eb71c2) on the owner's word "Publish it". Setup SHA-256 8280206b1500742b892d41a658fdff809aa7eba219913611d929b7f8e9bee5e5; program 3d9dbb4aae1c01f5ea078d098abe56f2192cc42f39d7f5700e919b4f6d042009. Real-Tally run 37637731177 on this exact setup: checks (1)-(8) all PASS. Install by hand (bridges do not update themselves: no signed update list).
+
+## Stop 08-Oct (reading stopped on both NWS144 computers)
+
+Set from staging on the owner's instruction while a Tally hang was investigated; the hang was later shown to be a harness
+bug (hang4 run 37750287012: only a malformed 24-id filter the harness built hangs Tally; the bridge's one-id requests
+answer on 3.0-7.1). Lifted on the owner's instruction.
+
+| | Office computer (anshul, 2.3.3) | NWS144 · Ranjeet (2.3.0) |
+|---|---|---|
+| Stop written (tally_read_stops) | row 2, 13:37:44 IST | row 3, 13:37:44 IST |
+| Bridge confirmed readStopped | 13:38:25 | 13:38:43 |
+| Stop cleared / resume row | 15:41:34 (row 5) | 15:41:34 (row 4) |
+| Recorder lines received during the stop | 0 | 0 |
+| Deletes/cancels held without a GUID (need a Day Book) | 0 | 0 |
+| Requests to Tally during the stop | only the exempt company list (TDSDeskCompanies) | same |
+
+Cost: none. No save reached FinCom in the window, so nothing waits for a re-ask or a Day Book upload. Known gap, for the
+next release: a delete saved while reading is stopped (or while Tally cannot be asked) loses its GUID and needs that
+day's Day Book (stand-in test on 2.3.3 and 2.3.0, 08-Oct).

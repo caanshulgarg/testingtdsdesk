@@ -120,7 +120,7 @@ func TestFast234StripHoldsBothLists(t *testing.T) {
 }
 
 // --- L2: the shapes whose lines the strip would drop (a stock item under a ledger line: voucher mode; a stock journal's
-// lines in and out; the items in INVENTORYENTRIES; pay heads by employee): held, with the place named
+// lines in and out; the items in INVENTORYENTRIES): held, with the place named; pay heads by employee: written as ledger lines (L1)
 func TestFast234StripHoldsUnreadShapes(t *testing.T) {
 	head := `<VOUCHER REMOTEID="g-1" VCHTYPE="X"><MASTERID>5</MASTERID><DATE>20261005</DATE>`
 	item := `<STOCKITEMNAME>Item T03</STOCKITEMNAME><AMOUNT>300.00</AMOUNT>`
@@ -128,13 +128,20 @@ func TestFast234StripHoldsUnreadShapes(t *testing.T) {
 		"voucher mode":        `<ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales</LEDGERNAME><AMOUNT>300.00</AMOUNT><INVENTORYALLOCATIONS.LIST>` + item + `</INVENTORYALLOCATIONS.LIST></ALLLEDGERENTRIES.LIST>`,
 		"voucher mode mapped": `<LEDGERENTRIES.LIST><LEDGERNAME>Sales</LEDGERNAME><AMOUNT>300.00</AMOUNT><INVENTORYALLOCATIONS.LIST>` + item + `</INVENTORYALLOCATIONS.LIST></LEDGERENTRIES.LIST>`,
 		"inventory entries":   `<INVENTORYENTRIES.LIST>` + item + `</INVENTORYENTRIES.LIST>`,
-		"payroll":             `<ALLLEDGERENTRIES.LIST><LEDGERNAME>Salary Payable</LEDGERNAME><AMOUNT>1500.00</AMOUNT></ALLLEDGERENTRIES.LIST><CATEGORYENTRY.LIST><EMPLOYEEENTRIES.LIST><EMPLOYEENAME>E1</EMPLOYEENAME><PAYHEADALLOCATIONS.LIST><PAYHEADNAME>Basic</PAYHEADNAME><AMOUNT>-1500.00</AMOUNT></PAYHEADALLOCATIONS.LIST></EMPLOYEEENTRIES.LIST></CATEGORYENTRY.LIST>`,
 	} {
 		v := head + body + `</VOUCHER>`
 		got, why := fastStripWhy(v)
 		if got != "" || why == "" || fastStripVoucher(v) != "" {
 			t.Fatalf("%s: not held (%q):\n%s", name, why, got)
 		}
+	}
+	// pay heads by employee (the second review's L1, 08-Oct-2026): no longer held; each pay head's total written as a
+	// ledger line with the employees as its cost centres, as the collection's answer gave them (real captures:
+	// TestFast234KindsStrip, payroll-typed-on-screen)
+	pv := head + `<ALLLEDGERENTRIES.LIST><LEDGERNAME>Salary Payable</LEDGERNAME><AMOUNT>1500.00</AMOUNT></ALLLEDGERENTRIES.LIST><CATEGORYENTRY.LIST><EMPLOYEEENTRIES.LIST><EMPLOYEENAME>E1</EMPLOYEENAME><PAYHEADALLOCATIONS.LIST><PAYHEADNAME>Basic</PAYHEADNAME><AMOUNT>-1500.00</AMOUNT></PAYHEADALLOCATIONS.LIST></EMPLOYEEENTRIES.LIST></CATEGORYENTRY.LIST></VOUCHER>`
+	if got, why := fastStripWhy(pv); why != "" || !strings.Contains(got, "<LEDGERNAME>Basic</LEDGERNAME><AMOUNT>-1500.00</AMOUNT>") ||
+		!strings.Contains(got, "<NAME>E1</NAME><AMOUNT>-1500.00</AMOUNT>") || !strings.Contains(got, "<LEDGERNAME>Salary Payable</LEDGERNAME>") || strings.Contains(got, "PAYHEAD") {
+		t.Fatalf("payroll: %q\n%s", why, got)
 	}
 	// a stock journal's lines in and out (stock journal, manufacturing journal, physical stock): not held. FinCom stores
 	// nothing of them from either request (run 37741662830, 3.0 .. 7.1: parse.js reads no entry from today's answer for

@@ -386,10 +386,18 @@ func newStandTally(t *testing.T) *standTally {
 			}
 		case vchObjectID: // next-fastfetch: the object export "ID:<MasterID>": that one voucher, whatever its date
 			want := group(`<ID TYPE="Name">ID:(\d+)</ID>`, body, 1)
+			found := false
 			for _, v := range f.vch {
 				if v.master == want {
 					o.WriteString(v.xml())
+					found = true
 				}
+			}
+			if !found {
+				// as a real Tally answers a MasterID it does not have (3.0 .. 7.1, testdata/fast234/notfound): bare, no envelope
+				f.mu.Unlock()
+				_, _ = w.Write([]byte("<ERRORMSG>Could not find Voucher:ID:" + want + "!</ERRORMSG>\r\n"))
+				return
 			}
 		case vchByNumberID: // 2.2.1: a new entry by its type and number (one day)
 			no := html.UnescapeString(group(`\$VoucherNumber = &#34;(.*?)&#34; AND`, body, 1))

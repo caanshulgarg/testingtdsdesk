@@ -259,9 +259,11 @@ func slowNote(port int, x string, sent bool, took time.Duration, err error) {
 			st.lastMs, st.lastAt = took.Milliseconds(), now
 			st.stops, st.occ = nil, 0 // answered in time: not slow after all
 		case stopped:
+			// 2.3.4 (the owner's decision of 08-Oct-2026, option (a)): "The slow answer does not count towards marking the
+			// company slow": the stop is said (timesOver, the log) and ends that entry's line (recorder_live.go stopEnd),
+			// never a stop toward the mark
 			st.over++
 			st.overAt = now
-			st.stops = append(st.stops, slowStop{ev.seq, now, port})
 			save = true
 		}
 	}
