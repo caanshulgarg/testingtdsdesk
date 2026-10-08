@@ -1,0 +1,41 @@
+INFO TallyPrime 5.1, mode share, runner GitHub Actions 1000005122, 2026-10-08T02:53:34
+INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 15643264 bytes, 2026-10-08, FileVersion 1.1.5.1, ProductVersion 1.1.5.1, ProductName TallyPrime
+INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+INFO Tally's own release in its answer header: PRODMAJORREL 5 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+PASS c1 install and open the company: installed tally.exe 15643264 bytes, 2026-10-08, FileVersion 1.1.5.1, ProductVersion 1.1.5.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 24 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 7 ms, 'FinCom Spike Co' in it: True
+INFO share masters: <CREATED>9</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>
+INFO share bills to settle (SB-1, PB-1, ADVS-1, ADVP-1): <CREATED>4</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>5</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>
+INFO share receipt-agst (receipt from a party against its bill (Agst Ref SB-1)): Tally Receipt 1 mid 6; stored party 'Share Party' bills [Agst Ref]; the line party '' bills [Agst Ref]; lines voucher_accept_post x1, voucher_full x1
+INFO share receipt-plain (receipt with no party (Cash / Spike Income)): Tally Receipt 2 mid 7; stored party 'Cash' bills []; the line party '' bills []; lines voucher_accept_post x1, voucher_full x1
+INFO share payment-agst (payment to a supplier against its bill (Agst Ref PB-1)): Tally Payment 1 mid 8; stored party 'Share Supplier' bills [Agst Ref]; the line party '' bills [Agst Ref]; lines voucher_accept_post x1, voucher_full x1
+INFO share payment-expense (payment of an expense (no party)): Tally Payment 2 mid 9; stored party 'Cash' bills []; the line party '' bills []; lines voucher_accept_post x1, voucher_full x1
+HARNESS share contra: the keys made no entry (contra: cash into the bank); see the tds-*-contra-* screenshots
+HARNESS share journal-party: the keys made no entry (journal with a party (Share Expense Dr / Share Supplier Cr, New Ref JN-1)); see the tds-*-journal-party-* screenshots
+INFO share journal-plain (journal with no party (Share Expense Dr / Spike Income Cr)): Tally Journal 6 mid 10; stored party '' bills []; the line party '' bills []; lines voucher_accept_post x1, voucher_full x1
+INFO share sales-new (sales item invoice, New Ref bill (SI-1)): Tally Sales 1 mid 11; stored party 'Share Party' bills [New Ref,New Ref]; the line party 'Share Party' bills []; lines voucher_accept_post x1, voucher_full x1
+INFO share copy-sales-new (Alt+2 copy of the New Ref sales invoice (its bill as the copy carries it)): Tally Sales 2 mid 12; stored party 'Share Party' bills [Agst Ref,Agst Ref]; the line party 'Share Party' bills [New Ref]; lines voucher_accept_post x1, voucher_full x1
+INFO share sales-agst (sales item invoice, Agst Ref bill (the advance ADVS-1)): Tally Sales 3 mid 13; stored party 'Share Party' bills [New Ref,New Ref]; the line party 'Share Party' bills []; lines voucher_accept_post x1, voucher_full x1
+INFO share purchase-new (purchase item invoice, New Ref bill (PI-1)): Tally Purchase 1 mid 14; stored party 'Share Supplier' bills [New Ref,New Ref]; the line party 'Share Supplier' bills []; lines voucher_accept_post x1, voucher_full x1
+HARNESS share purchase-agst: the keys made no entry (purchase item invoice, Agst Ref bill (the advance ADVP-1)); see the tds-*-purchase-agst-* screenshots
+HARNESS share credit-note: the keys made no entry (credit note, item invoice, Agst Ref the sales bill SB-1); see the tds-*-credit-note-* screenshots
+INFO share copy-journal-party (Alt+2 copy of the journal with a party (its New Ref JN-1 as the copy carries it)): Tally Journal 7 mid 15; stored party '' bills []; the line party '' bills []; lines voucher_accept_post x1, voucher_full x1
+INFO share copy-receipt-plain (Alt+2 copy of the receipt with no party): Tally Receipt 3 mid 16; stored party 'Cash' bills []; the line party 'Cash' bills []; lines voucher_accept_post x1, voucher_full x1
+INFO share alter-receipt-plain (alteration: the receipt with no party, its amount 700 -> 800): Tally Receipt 2 mid 7; stored party 'Cash' bills []; the line party 'Cash' bills []; lines voucher_accept_post x1, voucher_accept_pre x1, voucher_full x1
+INFO share alter-receipt-agst (alteration: the receipt against SB-1 saved again unchanged (opened, Ctrl+A)): Tally Receipt 1 mid 6; stored party 'Share Party' bills [Agst Ref]; the line party 'Share Party' bills [Agst Ref]; lines voucher_accept_post x1, voucher_accept_pre x1, voucher_full x1
+INFO share: 13 of 17 cases made by keys: receipt-agst=mid 6; receipt-plain=mid 7; payment-agst=mid 8; payment-expense=mid 9; contra=NOT MADE; journal-party=NOT MADE; journal-plain=mid 10; sales-new=mid 11; copy-sales-new=mid 12; sales-agst=mid 13; purchase-new=mid 14; purchase-agst=NOT MADE; credit-note=NOT MADE; copy-journal-party=mid 15; copy-receipt-plain=mid 16; alter-receipt-plain=mid 7; alter-receipt-agst=mid 6
+INFO installer: Tally's download page lists TallyPrime setups for: Rel_2.1, REL_TP_1.0.0, Rel.2.0.1, Rel.2.0, Rel.3.0_Gold, Rel.3.0.1, Rel.3.0, Rel.4.0, Rel.4.1, Rel.5.0, Rel.5.1, Rel.6.1, Rel.7.0, Rel.7.1_gold, Rel.TP_1.1.1, Rel.TP_1.1.2, Rel.TP_1.1.3, Rel.TP_1.1.4, Rel.TP_1.1, Rel.TP_2.0, Rel6.0, Rel6.2, TallyPrime_Beta
+INFO installer: NO(403) -1 bytes, Last-Modified : https://tallymirror.tallysolutions.com/download_centre/Rel.5.1_gold/TP/Full/setup.exe
+INFO installer: AVAILABLE 45651144 bytes, Last-Modified Sun, 01 Dec 2024 05:56:26 GMT: https://tallymirror.tallysolutions.com/download_centre/Rel.5.1/TP/Full/setup.exe
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_Gold/TP/Full/setup.exe (43440848 bytes)
+INFO installer: AVAILABLE other release 3.0.1: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0.1/TP/Full/setup.exe (43476688 bytes)
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0/TP/Full/setup.exe (43465936 bytes)
+INFO installer: AVAILABLE other release 4.0: https://tallymirror.tallysolutions.com/download_centre/Rel.4.0/TP/Full/setup.exe (44497616 bytes)
+INFO installer: AVAILABLE other release 4.1: https://tallymirror.tallysolutions.com/download_centre/Rel.4.1/TP/Full/setup.exe (44673232 bytes)
+INFO installer: AVAILABLE other release 5.0: https://tallymirror.tallysolutions.com/download_centre/Rel.5.0/TP/Full/setup.exe (45592784 bytes)
+INFO installer: AVAILABLE other release 6.1: https://tallymirror.tallysolutions.com/download_centre/Rel.6.1/TP/Full/setup.exe (46460616 bytes)
+INFO installer: AVAILABLE other release 7.0: https://tallymirror.tallysolutions.com/download_centre/Rel.7.0/TP/Full/setup.exe (70912776 bytes)
+INFO installer: AVAILABLE other release 7.1: https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe (72090376 bytes)
+INFO installer: AVAILABLE other release 6.0: https://tallymirror.tallysolutions.com/download_centre/Rel6.0/TP/Full/setup.exe (46324936 bytes)
+INFO installer: AVAILABLE other release 6.2: https://tallymirror.tallysolutions.com/download_centre/Rel6.2/TP/Full/setup.exe (47408904 bytes)
+INFO installer: DOWNLOADED Rel.5.1 from https://tallymirror.tallysolutions.com/download_centre/Rel.5.1/TP/Full/setup.exe : 45651144 bytes in 1 s, SHA-256 05EF11D4542CF420223D327C733C479105ECF7BBD660331F126CFD71A5CA367B, signature Valid CN=Tally Solutions Pvt Ltd, O=Tally Solutions Pvt Ltd, L=Bengaluru, S=Karnataka, C=IN, file version 1.1.5.1 product 1.1.5.1

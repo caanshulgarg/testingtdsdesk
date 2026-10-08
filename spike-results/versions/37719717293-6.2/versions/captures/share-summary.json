@@ -1,0 +1,219 @@
+[
+  {
+    "case": "receipt-agst",
+    "what": "receipt from a party against its bill (Agst Ref SB-1)",
+    "made": true,
+    "mid": 6,
+    "type": "Receipt",
+    "vno": "1",
+    "sec": 70.0,
+    "lines": [
+      "voucher_accept_post",
+      "voucher_full"
+    ]
+  },
+  {
+    "case": "receipt-plain",
+    "what": "receipt with no party (Cash / Spike Income)",
+    "made": true,
+    "mid": 7,
+    "type": "Receipt",
+    "vno": "2",
+    "sec": 52.0,
+    "lines": [
+      "voucher_accept_post",
+      "voucher_full"
+    ]
+  },
+  {
+    "case": "payment-agst",
+    "what": "payment to a supplier against its bill (Agst Ref PB-1)",
+    "made": true,
+    "mid": 8,
+    "type": "Payment",
+    "vno": "1",
+    "sec": 67.0,
+    "lines": [
+      "voucher_accept_post",
+      "voucher_full"
+    ]
+  },
+  {
+    "case": "payment-expense",
+    "what": "payment of an expense (no party)",
+    "made": true,
+    "mid": 9,
+    "type": "Payment",
+    "vno": "2",
+    "sec": 51.0,
+    "lines": [
+      "voucher_accept_post",
+      "voucher_full"
+    ]
+  },
+  {
+    "case": "contra",
+    "what": "contra: cash into the bank",
+    "made": false,
+    "mid": null,
+    "type": "",
+    "vno": "",
+    "sec": 54.0,
+    "lines": []
+  },
+  {
+    "case": "journal-party",
+    "what": "journal with a party (Share Expense Dr / Share Supplier Cr, New Ref JN-1)",
+    "made": false,
+    "mid": null,
+    "type": "",
+    "vno": "",
+    "sec": 64.0,
+    "lines": []
+  },
+  {
+    "case": "journal-plain",
+    "what": "journal with no party (Share Expense Dr / Spike Income Cr)",
+    "made": true,
+    "mid": 10,
+    "type": "Journal",
+    "vno": "6",
+    "sec": 57.0,
+    "lines": [
+      "voucher_accept_post",
+      "voucher_full"
+    ]
+  },
+  {
+    "case": "sales-new",
+    "what": "sales item invoice, New Ref bill (SI-1)",
+    "made": true,
+    "mid": 11,
+    "type": "Sales",
+    "vno": "1",
+    "sec": 73.0,
+    "lines": [
+      "voucher_accept_post",
+      "voucher_full"
+    ]
+  },
+  {
+    "case": "copy-sales-new",
+    "what": "Alt+2 copy of the New Ref sales invoice (its bill as the copy carries it)",
+    "made": true,
+    "mid": 12,
+    "type": "Sales",
+    "vno": "2",
+    "sec": 46.0,
+    "lines": [
+      "voucher_accept_post",
+      "voucher_full"
+    ]
+  },
+  {
+    "case": "sales-agst",
+    "what": "sales item invoice, Agst Ref bill (the advance ADVS-1)",
+    "made": true,
+    "mid": 13,
+    "type": "Sales",
+    "vno": "3",
+    "sec": 72.0,
+    "lines": [
+      "voucher_accept_post",
+      "voucher_full"
+    ]
+  },
+  {
+    "case": "purchase-new",
+    "what": "purchase item invoice, New Ref bill (PI-1)",
+    "made": true,
+    "mid": 14,
+    "type": "Purchase",
+    "vno": "1",
+    "sec": 78.0,
+    "lines": [
+      "voucher_accept_post",
+      "voucher_full"
+    ]
+  },
+  {
+    "case": "purchase-agst",
+    "what": "purchase item invoice, Agst Ref bill (the advance ADVP-1)",
+    "made": true,
+    "mid": 15,
+    "type": "Purchase",
+    "vno": "2",
+    "sec": 78.0,
+    "lines": [
+      "voucher_accept_post",
+      "voucher_full"
+    ]
+  },
+  {
+    "case": "credit-note",
+    "what": "credit note, item invoice, Agst Ref the sales bill SB-1",
+    "made": true,
+    "mid": 16,
+    "type": "Credit Note",
+    "vno": "1",
+    "sec": 98.0,
+    "lines": [
+      "voucher_accept_post",
+      "voucher_full"
+    ]
+  },
+  {
+    "case": "copy-journal-party",
+    "what": "Alt+2 copy of the journal with a party (its New Ref JN-1 as the copy carries it)",
+    "made": true,
+    "mid": 17,
+    "type": "Journal",
+    "vno": "7",
+    "sec": 46.0,
+    "lines": [
+      "voucher_accept_post",
+      "voucher_full"
+    ]
+  },
+  {
+    "case": "copy-receipt-plain",
+    "what": "Alt+2 copy of the receipt with no party",
+    "made": true,
+    "mid": 18,
+    "type": "Receipt",
+    "vno": "3",
+    "sec": 47.0,
+    "lines": [
+      "voucher_accept_post",
+      "voucher_full"
+    ]
+  },
+  {
+    "case": "alter-receipt-plain",
+    "what": "alteration: the receipt with no party, its amount 700 -> 800",
+    "made": true,
+    "mid": 7,
+    "type": "Receipt",
+    "vno": "2",
+    "sec": 61.0,
+    "lines": [
+      "voucher_accept_pre",
+      "voucher_accept_post",
+      "voucher_full"
+    ]
+  },
+  {
+    "case": "alter-receipt-agst",
+    "what": "alteration: the receipt against SB-1 saved again unchanged (opened, Ctrl+A)",
+    "made": true,
+    "mid": 6,
+    "type": "Receipt",
+    "vno": "1",
+    "sec": 50.0,
+    "lines": [
+      "voucher_accept_pre",
+      "voucher_accept_post",
+      "voucher_full"
+    ]
+  }
+]
