@@ -208,3 +208,7 @@ run_migration66.py                    120
 run_recorder_masters_server.py        180
 run_ledger_delete_guid.py             120
 run_tds_rate_words.py                 120  TDSDESK_SITE=../app/dist-test
+run_bankdate_cloud.py                 120
+run_sentry_scrub.mjs                  120
+run_sentry_cloud.mjs                  180
+run_sentry_ui.py                      180  TDSDESK_SITE=../app/dist-test

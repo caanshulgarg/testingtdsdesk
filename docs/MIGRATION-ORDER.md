@@ -355,7 +355,9 @@ is merged.
   (recorderState: stuck, stuckSince, stuckDay); tally-ingest keeps that as tally_devices.info.beat.recorderStuck
   [{company, n, since, day}] and FinCom shows it under Needs you ("N saves from <PC> could not be stored in FinCom since
   HH:MM; FinCom keeps trying - if it continues, upload the Day Book for <day>"; the app part sits on the shared classifier
-  of next-tallypage, branch next-outbox-app). After a restart the line is read again and its tries count from 1. The other lines of the group are marked sent. A resend is stored once (63's repeat check: a failed
+  of next-tallypage, branch next-outbox-app). Its tries, first failure, next try and words are kept with the held offset
+  (sync\recorder-offsets.json "fails", written whole and atomically), so after a restart it keeps its count, its
+  30-minute cap and its Needs you entry; the record goes when the line is taken. The other lines of the group are marked sent. A resend is stored once (63's repeat check: a failed
   row is no repeat, so the resend is applied; an applied one is answered "already have"). A cloud answer {queued: n}
   with no results at all (before round 20) is taken as before. Tests: outbox_failed_test.go.
 - **L2.** failed.txt (no day in its name) read past a line not yet confirmed no longer keeps every sent id for ever
@@ -379,15 +381,18 @@ is merged.
   (Supabase's default privileges grant every new table in public to anon). Test: run_migration66.py section 5.
 - **L2 (the bridge, the rule of next-outbox's M1).** A line FinCom answers 'failed' (a master line on a cloud without 66,
   a lock timeout, a deadlock) or leaves without a result is not marked sent: it goes again after RecorderRetrySec x 2^n
-  (30 minutes at most), RecorderFailedTries times (default 12); the other lines of the group are marked sent. The code is
-  next-outbox's, the same text. Test: TestMasterHookFailedNotMarkedSent.
+  (30 minutes at most), never given up: from RecorderFailedTries (12) on it is sent every 30 minutes and the beat carries
+  it per company (recorderState stuck / stuckSince / stuckDay; tally-ingest's part and FinCom's Needs you are on
+  next-outbox and next-outbox-app); the other lines of the group are marked sent. Its tries, first failure and next try are kept with the offsets
+  (sync\recorder-offsets.json "fails"), so a restart keeps its count, its 30-minute cap and its Needs you entry. The code
+  is next-outbox's, the same text (without next-outbox's keepFrom). Test: TestMasterHookFailedNotMarkedSent.
 - **L3.** tally-ingest keeps only the types the add-on hooks (Pay Head, Stock Item, Godown); a Unit or Employee line is
   'failed', "unknown master type", not kept. Stale comments put right. Test: run_recorder_masters_server.py.
 - **L4.** 66 is in run_migration_order.py (after 60, both orders, twice) and in tests/ci/tests.txt with
   run_recorder_masters_server.py and run_ledger_delete_guid.py; run_migration66.py has its own port (30666; 62's test
   has 30620).
 - Deploy order: run 66 before the tally-ingest of this branch and before the 2.4.0 bridge goes out (without 66 every
-  master line is answered 'failed' and, with L2, sent again up to RecorderFailedTries times, then given up).
+  master line is answered 'failed' and, with L2, kept on the PC and sent again every 30 minutes, shown under Needs you).
 
 2.4.0 part 2 review (08-Oct-2026), on 62 (still NOT run on staging, so changed in place; add-only and safe twice as
 before): **M1** the TDS details as the firm's members read them now carry the mark: `tally_tds_details_marked(book)`, a new

@@ -136,8 +136,9 @@ with sync_playwright() as p:
     E("async () => { window.__view = true; TCloud.hasView = null; await TallyRead.openings(S.books, S.coId, '20250401', '20260331'); S.booksTab = 'import'; render(); }"); pg.wait_for_timeout(500)
     tb = E("({src: S.books.tb.src, n: Object.keys(S.books.tb.led).length, icici: S.books.tb.led['ICICI Bank'].open, line: S.books.tb.line})")
     ok(tb["src"] == "copy" and tb["n"] == 4 and tb["icici"] == -350458.92 and tb["line"].startswith(LINE), "2. opening balances from FinCom's copy: 4 ledgers, ICICI Bank 3,50,458.92 Dr (%s)" % tb)
-    step = pg.inner_text("#app .dash-card >> nth=0")
-    ok("4 ledgers, from FinCom's copy" in step and LINE in step and "read from Tally" not in step, "2. Books → Setting up, step 2: \"4 ledgers, from FinCom's copy\" with the line (%s)" % step[step.find("2. Opening"):][:160].replace("\n", " "))
+    # 2.4.0 (the upload page simpler): From Tally shows no balance, only whether opening balances are still to come
+    step = pg.inner_text("#app [data-upload-page]")
+    ok("opening balances not uploaded" not in step and "read from Tally" not in step, "2. Books → From Tally: the openings from the copy count as there, nothing said of Tally (%s)" % pg.inner_text("#app [data-up-status]"))
     au = E("Audit.balances('20250401', '20260331').src")
     ok("FinCom's copy" in au, "2. the audit and MIS say where the openings came from: " + au)
     # no copy in the cloud: the openings here stay, no error

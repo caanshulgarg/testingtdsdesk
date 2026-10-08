@@ -294,6 +294,7 @@ func startJob(id, dir string, p M) {
 		defer func() {
 			if r := recover(); r != nil {
 				writeLog(fmt.Sprint("Posting job stopped: ", r))
+				crashReport("posting_job", r)
 			}
 			jobsMu.Lock()
 			delete(jobsRunning, id)

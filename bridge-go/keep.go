@@ -1150,6 +1150,7 @@ func keepWorker(r runReq) {
 	defer func() {
 		if x := recover(); x != nil {
 			writeLog(fmt.Sprint("Keeping copies in step stopped: ", x))
+			crashReport("keep_in_step", x)
 		}
 		if strings.TrimSpace(readText(pidf)) == fmt.Sprint(os.Getpid()) {
 			_ = os.WriteFile(pidf, nil, 0o644)

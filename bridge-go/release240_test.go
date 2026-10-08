@@ -42,7 +42,7 @@ func TestRelease240VersionAndDecisionLine(t *testing.T) {
 	notes := strings.Join(strings.Fields(readText(filepath.Join("..", "docs", "bridge-2.4.0-notes.md"))), " ")
 	for _, w := range []string{"2.4.0", "next-inflight", "next-reask", "next-userfile", "next-tds", "next-outbox", "next-realtime",
 		"next-selfcheck", "next-masterhook", "next-renumber", "next-push", "next-connect",
-		"Its merge is reverted", "NOT in it",
+		"Its merge is reverted", "NOT in it", "One combined release", "from 2.3.3 straight to 2.4.0", "next-bankdate", "next-ledpage", "next-uploadpage", "next-sentry", "next-outbox-app",
 		"Ask for all fields of the TDS list and its sub-list on FinComVoucherByMaster, FinComVoucherByNumber and test forms A and C.",
 		"renumbering yes", "The 2-second stop itself is unchanged", "Unit and Employee are left out", "Pay Head, Stock Item and Godown",
 		"$$SysInfo:WindowsUser", "migrations 62, 63, 64, 65, 66 and 67", "ONE combined text", "NOT built", "No AI in the bridge"} {
@@ -51,7 +51,7 @@ func TestRelease240VersionAndDecisionLine(t *testing.T) {
 		}
 	}
 	sheet := strings.Join(strings.Fields(readText(filepath.Join("..", "docs", "bridge-2.4.0-test-sheet.txt"))), " ")
-	for _, w := range []string{"2.4.0", "FinComBridge-Setup-2.4.0.exe", "HOW TO ROLL BACK (go back to 2.3.5)", "|w=", "TRIAL 240",
+	for _, w := range []string{"2.4.0", "FinComBridge-Setup-2.4.0.exe", "HOW TO ROLL BACK (go back to 2.3.3)", "docs/bridge-2.3.4-test-sheet.txt", "docs/bridge-2.3.5-test-sheet.txt", "|w=", "TRIAL 240",
 		"migration-63-recorder-repeat.sql", "migration-67-recorder-renumbered.sql", "Unit sends nothing"} {
 		if !strings.Contains(sheet, w) {
 			t.Errorf("the 2.4.0 test sheet does not say %q", w)

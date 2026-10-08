@@ -350,6 +350,16 @@ type liveState struct {
 	pushBuf   map[string]*livePushBuf
 	pushCnt   map[string]livePushCnt
 	saves     map[string][]liveSaveMark
+	// the coordinator (08-Oct-2026): the lines FinCom answered 'failed', by line id: tries, first failure, next try, why;
+	// kept with the offsets (sync\recorder-offsets.json, "fails"), so a restart keeps a stuck line's count, its 30-minute
+	// cap and its place in the beat (Needs you); dropped when the line is marked sent
+	fails map[string]liveFail
+}
+
+type liveFail struct {
+	n           int
+	since, next time.Time
+	why         string
 }
 
 var (
@@ -394,6 +404,16 @@ func liveFresh() {
 	live.await, live.pushBuf, live.pushCnt, live.saves, live.pushFiles = nil, nil, nil, nil, nil
 	o := readObjFile(liveOffsetsFile())
 	live.keepFrom = str(o["keepFrom"])
+	live.fails = map[string]liveFail{}
+	for id, v := range obj(o["fails"]) {
+		e := obj(v)
+		f := liveFail{n: toInt(e["n"]), why: str(e["why"])}
+		f.since, _ = time.Parse(time.RFC3339Nano, str(e["since"]))
+		f.next, _ = time.Parse(time.RFC3339Nano, str(e["next"]))
+		if f.n > 0 && !f.since.IsZero() {
+			live.fails[id] = f
+		}
+	}
 	for k, v := range obj(o["files"]) {
 		e := obj(v)
 		live.files[k] = &liveFileSt{off: toI64(e["off"]), gen: toInt(e["gen"]), enc: str(e["enc"]), keep: str(e["keep"])}
@@ -660,10 +680,17 @@ func liveSaveOffsets() {
 	}
 	path := liveOffsetsFile()
 	live.keepFrom = keepFrom
+	fails := M{}
+	for id, f := range live.fails {
+		fails[id] = M{"n": f.n, "since": f.since.Format(time.RFC3339Nano), "next": f.next.Format(time.RFC3339Nano), "why": cutRunes(f.why, 200)}
+	}
 	live.mu.Unlock()
 	o := M{"files": files, "alterid": bs, "slices": cs, "at": nowS()}
 	if keepFrom != "" {
 		o["keepFrom"] = keepFrom
+	}
+	if len(fails) > 0 {
+		o["fails"] = fails
 	}
 	if err := saveFile(path, jsonText(o)); err != nil {
 		writeLog("Recorder: " + path + " could not be written: " + err.Error())
@@ -1474,6 +1501,7 @@ func liveEmitFrom(l recLine, ev, file string, gen int, startFile string, start, 
 		if m := reLiveFid.FindStringSubmatch(c.narr); m != nil {
 			c.fid = m[1]
 		}
+		bankNoteAddon(c) // next-bankdate: a save the add-on wrote a line for explains one move of ALTVCHID
 	}
 	// 2.2.1: a placeholder GUID is never sent: rebuilt from the MasterID (a Tally GUID is the company's GUID and the
 	// MasterID as 8 hex digits), or left empty and the entry found by its type and number; MasterID / AlterID 0 are not
@@ -1642,6 +1670,9 @@ func onlyDigits(s string) string { return re(`\D`).ReplaceAllString(s, "") }
 func liveQueueAdd(c *change) {
 	if c.queuedAt.IsZero() {
 		c.queuedAt = time.Now()
+	}
+	if f, had := live.fails[c.lineId]; had && c.failN == 0 {
+		c.failN, c.failSince, c.retryAt, c.failWhy = f.n, f.since, f.next, f.why // kept across a restart
 	}
 	live.queue = append(live.queue, c)
 	live.queued[c.lineId] = true
@@ -1911,12 +1942,16 @@ func fastNotFound(mid string) string {
 // Tally (the GUID held for it) right before and right after that ask; else not proven now (asked again later). Entry
 // fetches are not asked twice (a delete only)
 func fastProveGone(tc *TC, company string, port int, mid string, sec int) error {
-	if err := fastCompanyOpen(tc, company, port, sec); err != nil {
-		return err
-	}
 	x := voucherObjectRequest(company, mid)
 	if x == "" {
 		return errors.New("not asked: MasterID " + mid + " is not one Tally gives")
+	}
+	// release-235 (2.3.5's read stop): refused before the (stop-exempt) company list, so nothing reaches Tally
+	if err := readStopRefuses(x); err != nil {
+		return err
+	}
+	if err := fastCompanyOpen(tc, company, port, sec); err != nil {
+		return err
 	}
 	raw, err := invokeTally(tc, port, x, sec)
 	if err != nil {
@@ -1949,6 +1984,34 @@ func fastCompanyOpen(tc *TC, company string, port, sec int) error {
 	return errors.New("the company " + company + " is not open in this Tally (not proven now)")
 }
 
+// 2.3.4 (L-d): Tally's company list on this port, asked now, names the company (open there). It rides with the entry
+// request it guards: asked only when that request could go now (the retry schedule not waiting, Tally not still on an
+// earlier request), and never itself the schedule's try or its end (an answer in time here does not put the schedule
+// back: the entry request after it does that, or steps it on)
+func fastCompanyListed(tc *TC, company string, port, sec int) error {
+	if err := retryWaiting(); err != nil {
+		return err
+	}
+	if err := earlierRefusal(port); err != nil {
+		return err
+	}
+	t2 := *tc
+	t2.bg, t2.light = false, true // the tiny open-company list: not held by the cool-down after a stop (the entry request is)
+	raw, err := invokeTally(&t2, port, companiesRequest(), minI(maxI(sec, 2), 8))
+	if errors.Is(err, errRecorderStop) || tallyNoAnswer(err) {
+		retryNote(port, "TDSDeskCompanies", err) // a frozen Tally steps the shared schedule on, as the entry request would
+	}
+	if err != nil {
+		return err
+	}
+	for _, c := range xmlDoc(raw).All("COMPANY") {
+		if companyKey(nameOf(c)) == companyKey(company) {
+			return nil
+		}
+	}
+	return errors.New("not asked: the company " + company + " is not open in this Tally now (its entry request would stop Tally)")
+}
+
 func fetchVouchersByMasterIn(tc *TC, company string, port int, date string, mids []string, sec int) (map[string]string, error) {
 	x := ""
 	if len(mids) == 1 {
@@ -1959,6 +2022,18 @@ func fetchVouchersByMasterIn(tc *TC, company string, port int, date string, mids
 	}
 	if slowMarked(company, "") {
 		return nil, errSlowCompany // 2.3.2: no entry request for a company marked "entry fetch stopped: over 2 s"
+	}
+	// 2.3.4 (re-review 2 L-d, push-design runs 37791747092 and 37802765912, TallyPrime 3.0 .. 7.1): the object export naming
+	// a company that is not open is never answered: Tally shows "Internal Error ... Software Exception c0000005 (Memory
+	// Access Violation)" and answers nothing more. So it is sent only right after Tally's company list on this port names
+	// the company (a list asked now, never one held from before); else nothing is sent and the line waits
+	// release-235 (2.3.5's read stop with 2.3.4's L-d): FinCom's read stop refuses the entry request; the company list is
+	// exempt from the stop, so it is not asked first: nothing reaches Tally and the refusal is not a try (liveStopRefused)
+	if err := readStopRefuses(x); err != nil {
+		return nil, err
+	}
+	if err := fastCompanyListed(tc, company, port, sec); err != nil {
+		return nil, err
 	}
 	raw, err := invokeTally(tc, port, x, sec)
 	if err != nil {
@@ -2595,6 +2670,10 @@ func liveUploadOnce() int {
 	if !liveQueueReady() {
 		n += renumTurn()
 	}
+	// next-bankdate: the entries Tally changed with no add-on line (a bank date set), when no save waits (bankdate.go)
+	if !liveQueueReady() {
+		n += bankTurn()
+	}
 	return n
 }
 
@@ -2608,7 +2687,7 @@ func liveQueueReady() bool {
 		if b, had := live.back[c.key()]; had && now.Before(b.until) {
 			continue
 		}
-		if strings.HasSuffix(c.lineId, ":resolved") || c.source == "renumber" {
+		if strings.HasSuffix(c.lineId, ":resolved") || c.source == "renumber" || c.source == "bankdate" {
 			continue
 		}
 		if liveYoung(c) {
@@ -2678,6 +2757,7 @@ func liveDropCompany(key string) int {
 	for _, c := range live.queue {
 		if c.key() == key {
 			n++
+			delete(live.fails, c.lineId)
 			delete(live.queued, c.lineId)
 			live.qcount[c.companyGuid]--
 			liveCo(c.company).skipped++
@@ -2944,6 +3024,9 @@ func liveUploadStep() (int, bool) {
 			if c.failN >= maxTries {
 				w = 1800 // kept, never given up: every 30 minutes, no more often
 			}
+			if live.fails != nil && (len(live.fails) < 5000 || live.fails[c.lineId].n > 0) {
+				live.fails[c.lineId] = liveFail{n: c.failN, since: c.failSince, next: nowFn().Add(time.Duration(w) * time.Second), why: c.failWhy}
+			}
 			c.retryAt = nowFn().Add(time.Duration(w) * time.Second)
 			keep = append(keep, c)
 		}
@@ -2956,6 +3039,7 @@ func liveUploadStep() (int, bool) {
 	var held []*change
 	for _, c := range group {
 		gone[c] = true
+		delete(live.fails, c.lineId) // taken: its kept failures go with it
 		live.sent[c.lineId] = true
 		delete(live.queued, c.lineId)
 		live.qcount[c.companyGuid]--
@@ -3237,11 +3321,13 @@ func recorderLiveLoop() {
 			defer func() {
 				if r := recover(); r != nil {
 					writeLog(fmt.Sprint("Recorder: ", r))
+					crashReport("recorder_upload", r)
 				}
 			}()
 			for i := 0; i < 20 && liveUploadOnce() > 0; i++ {
 			}
 			liveTouchedTick()
+			bankNightTurn() // next-bankdate: the nightly check (nothing outside the night's window)
 		}()
 		sleepOrStop(250 * time.Millisecond)
 	}

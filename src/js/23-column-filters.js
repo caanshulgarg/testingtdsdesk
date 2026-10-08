@@ -1025,9 +1025,12 @@ async function companyGate(fc, b, co, fname, quiet){
   return r && r.ok ? {ok: true} : {ok: false, why: "not taken: it is from " + fc.name};
 }
 // build 195: a day book file for the client open (S.books): its company checked, then only the dates chosen replaced.
-// opts.quiet: from the upload for several clients (the mapping was confirmed there; the answer is returned, not shown)
+// opts.quiet: from the upload for several clients (the mapping was confirmed there; the answer is returned, not shown).
+// opts.toast === false (2.4.0, the one Upload Tally data on From Tally): the questions are asked as always, but the
+// result is returned for the page to say instead of a toast
 async function bringDayBookFile(f, from0, to0, opts){
   opts = opts || {};
+  const loud = !opts.quiet && opts.toast !== false;
   const b = S.books; b.busy = "Opening " + f.name + "\u2026"; render();
   const who = {client: S.coId, company: BridgeSeed.company()};           // fixed now: the background sends below keep to this client
   let fc = null; try { fc = await Books.fileCompany(f); } catch (e){}
@@ -1035,11 +1038,18 @@ async function bringDayBookFile(f, from0, to0, opts){
   if (!gate.ok){ b.busy = ""; render(); return {refused: gate.why}; }
     return Books.importDayBook(f, m => { b.busy = m; softRender(); }).then(async res => {
       const bad = notThisClient((res.meta || {}).gstins);
-      if (bad.length){ b.busy = ""; render(); if (opts.quiet) return {refused: panRefusal("The day book " + f.name, bad)}; askConfirm({title: "This day book is not this client\u2019s", ok: "Close", body: '<p class="note">' + esc(panRefusal("The day book " + f.name, bad)) + " Choose the day book exported from this client\u2019s company in Tally, or correct the client\u2019s GSTIN and PAN in Client setup.</p>"}); return; }
+      if (bad.length){ b.busy = ""; render(); if (opts.quiet) return {refused: panRefusal("The day book " + f.name, bad)}; askConfirm({title: "This day book is not this client\u2019s", ok: "Close", body: '<p class="note">' + esc(panRefusal("The day book " + f.name, bad)) + " Choose the day book exported from this client\u2019s company in Tally, or correct the client\u2019s GSTIN and PAN in Client setup.</p>"}); return {refused: panRefusal("The day book " + f.name, bad)}; }
       // a part: the dates chosen (or the file's own first and last date); only those dates are replaced, the rest stays
       const ds = res.vouchers.map(v => v.date).filter(Boolean).sort();
-      const from = from0 || ds[0], to = to0 || ds[ds.length - 1];
-      if (!from || !to){ b.busy = ""; render(); if (!opts.quiet) toast("There are no entries in " + f.name + "."); return {refused: "no entries in the file"}; }
+      if (!ds.length){ b.busy = ""; render(); if (loud) toast("There are no entries in " + f.name + "."); return {refused: "there are no entries in " + f.name}; }
+      // 2.4.0: dates asked for (a day that needs its Day Book, the month between two files) are met with the file's own
+      // first and last entry, so a day the file does not cover is never emptied (a file of the wrong period used to wipe
+      // every day asked for). A file whose entries run past both ends covers them all (days with no entries in Tally are
+      // then empty here too); a file with no entry inside them that does not run past them is refused, nothing changes
+      const from = from0 && from0 > ds[0] ? from0 : ds[0], to = to0 && to0 < ds[ds.length - 1] ? to0 : ds[ds.length - 1];
+      if (from > to){ b.busy = ""; render(); const asked = fmtDate(tallyDate(from0 || to0)) + (from0 && to0 && from0 !== to0 ? " to " + fmtDate(tallyDate(to0)) : "");
+        const why = "there are no entries for " + asked + " in " + f.name + " (it has " + fmtDate(tallyDate(ds[0])) + " to " + fmtDate(tallyDate(ds[ds.length - 1])) + "). Export the Day Book of " + asked + " from Tally";
+        if (loud) toast(why.charAt(0).toUpperCase() + why.slice(1) + "."); return {refused: why}; }
       const inside = res.vouchers.filter(v => v.date >= from && v.date <= to), outside = res.vouchers.length - inside.length;
       if (!(b.vouchers || []).length){ b.vouchers = inside; b.meta = Object.assign(res.meta, {from, to}); }
       else TallyRead.merge(b, {vouchers: inside, meta: res.meta}, from, to);
@@ -1050,7 +1060,7 @@ async function bringDayBookFile(f, from0, to0, opts){
       TallyRead.after(b, "after the day book was read", {from: b.meta.from, to: b.meta.to});
       if (fc && (fc.name || fc.guid) && !b.tallyCo) b.tallyCo = {name: fc.name, guid: fc.guid};
       await saveBooks();
-      if (!opts.quiet) toast(inside.length + " entries of " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + " brought in" + (outside ? " (" + outside + " outside those dates left out)" : "") + ". Choose the next part, or check the ledgers, then TDS and GST.");
+      if (loud) toast(inside.length + " entries of " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + " brought in" + (outside ? " (" + outside + " outside those dates left out)" : "") + ". Choose the next part, or check the ledgers, then TDS and GST.");
       // the same file fills the bridge's copy for these dates (the bridge never reads them from Tally itself) and FinCom's
       // cloud (everyone in the firm sees the same books)
       (async () => {
@@ -1081,10 +1091,140 @@ async function bringDayBookFile(f, from0, to0, opts){
         b.busy = ""; await saveBooks(null, b); render();          // these books, even if another client is open by now
       })();
       render();
-      return {n: inside.length, from, to};
-    }, e => { b.busy = ""; if (!opts.quiet) toast("Could not read that file: " + (e && e.message || e)); render(); return {refused: "could not read it: " + ((e && e.message) || e)}; });
+      return {n: inside.length, from, to, outside};
+    }, e => { b.busy = ""; if (loud) toast("Could not read that file: " + (e && e.message || e)); render(); return {refused: "could not read it: " + ((e && e.message) || e)}; });
 }
+// opening balances from a trial balance exported from Tally, as on `on` (yyyymmdd): its closing balances are the
+// opening balances of the next day. {text} or {refused}; opts.toast === false: said by the page, not a toast
+async function bringTbFile(f, on, opts){
+  opts = opts || {}; const loud = opts.toast !== false, b = S.books;
+  const no = why => { if (loud) toast(why); return {refused: why}; };
+  if (!/^\d{8}$/.test(on)) return no("Give the date of the trial balance (the day before the first date of the books) first.");
+  let text; try { text = await f.text(); } catch (e){ return no("Could not read that file: " + ((e && e.message) || e)); }
+  const r = TBFile.read(text, b);
+  const odd = TBFile.foreign(r, b); if (odd){ askConfirm({title: "This trial balance does not look like this client’s", ok: "Close", body: '<p class="note">' + esc(odd) + "</p>"}); return {refused: odd}; }
+  if (!r.rows.length) return no(r.groupsSeen ? "This trial balance shows only groups. In Tally, press Alt+F5 (detailed) so each ledger is shown, then export it again." : "No ledger balances found in " + f.name + ". Export the Trial Balance from Tally as XML.");
+  const next = (t => t.getFullYear() + String(t.getMonth() + 1).padStart(2, "0") + String(t.getDate()).padStart(2, "0"))(new Date(+on.slice(0, 4), +on.slice(4, 6) - 1, +on.slice(6, 8) + 1));
+  const to = (b.meta || {}).to || next;
+  const j = {from: next, to, ledgers: r.rows.map(x => ({name: x.name, parent: (b.under || {})[x.name] || "", open: String(x.open), close: ""}))};
+  TallyRead.balances(b, j, next, to);
+  b.tb.source = "the trial balance file " + f.name; b.tb.openAsOn = on;
+  // the closing figures follow from the opening and the entries brought in
+  if (typeof MIS === "object"){ const mv = MIS.moves(b.tb.from, b.tb.to); Object.entries(b.tb.led).forEach(([l, x]) => { x.close = r2(num(x.open) + ((mv[l] || {}).t || 0)); }); }
+  TallyRead.after(b, "after the trial balance was read", {from: next, to});
+  await saveBooks(); render();
+  const tot = r2(r.rows.reduce((s2, x) => s2 + num(x.open), 0));
+  const said = r.rows.length + " opening balances as on " + fmtDate(tallyDate(on)) + " brought in" + (Math.abs(tot) >= 1 ? "; they do not add up to nil (difference " + INR.format(tot) + "): check the trial balance was exported with every ledger" : "") + ".";
+  if (loud) toast(said);
+  if (Bridge.on()) BridgeSeed.opening(on, b.tb.led).then(x => { b.tb.bridge = x && x.skipped ? "not taken: " + x.skipped : "taken"; saveBooks(); render(); if (x && x.skipped) toast("The bridge’s copy was not given the balances: " + x.skipped); }, e => toast("The bridge could not take the balances: " + ((e && e.message) || e)));
+  if (TCloudUp.on()) TCloudUp.opening(next, on, b.tb.led).then(() => { b.tb.cloud = "in the cloud"; saveBooks(); render(); }, e => toast("The balances are here, but the cloud did not take them: " + ((e && e.message) || e)));
+  return {text: said, n: r.rows.length};
+}
+// the books checked against Tally's own trial balance as on `on` (TBCheck.run, src/js/24)
+async function checkTbFile(f, on, opts){
+  opts = opts || {}; const loud = opts.toast !== false, b = S.books;
+  const no = why => { if (loud) toast(why); return {refused: why}; };
+  if (!/^\d{8}$/.test(on)) return no("Give the date of the trial balance first.");
+  let text; try { text = await f.text(); } catch (e){ return no("Could not read that file: " + ((e && e.message) || e)); }
+  const r = TBFile.read(text, b);
+  const odd = TBFile.foreign(r, b); if (odd){ askConfirm({title: "This trial balance does not look like this client’s", ok: "Close", body: '<p class="note">' + esc(odd) + "</p>"}); return {refused: odd}; }
+  if (!r.rows.length) return no(r.groupsSeen ? "This trial balance shows only groups. In Tally, press Alt+F5 (detailed) so each ledger is shown, then export it again." : "No ledger balances found in " + f.name + ".");
+  b.tbCheck = TBCheck.run(b, r.rows, on, f.name);
+  await saveBooks(); render();
+  const said = b.tbCheck.ok ? "Ready: every ledger agrees with Tally’s trial balance as on " + fmtDate(tallyDate(on)) + "." : b.tbCheck.why || (b.tbCheck.n + " ledger" + (b.tbCheck.n === 1 ? " differs" : "s differ") + " from Tally’s trial balance as on " + fmtDate(tallyDate(on)) + ".");
+  if (loud) toast(said);
+  return b.tbCheck.ok || !b.tbCheck.why ? {text: said} : {refused: said};
+}
+// the ledger masters (Display > List of Accounts, or All Masters, exported as XML): groups, PAN, GSTIN of each ledger
+async function bringMastersFile(f, opts){
+  opts = opts || {}; const loud = opts.toast !== false, b = S.books;
+  b.busy = "Opening " + f.name + "…"; render();
+  let fc = null; try { fc = await Books.fileCompany(f); } catch (e){}
+  const g = await companyGate(fc, b, CO(), f.name);
+  if (!g.ok){ b.busy = ""; render(); return {refused: g.why || "not taken"}; }
+  if (fc && (fc.name || fc.guid) && !b.tallyCo) b.tallyCo = {name: fc.name, guid: fc.guid};
+  let res;
+  try { res = await Books.importMasters(f, m => { b.busy = m; softRender(); }); }
+  catch (e){ b.busy = ""; const why = "Could not read that file: " + ((e && e.message) || e); if (loud) toast(why); render(); return {refused: why}; }
+  b.pans = res.pans; b.gstins = res.gstins; b.under = res.under; b.states = res.states; b.groups = res.groups; b.groupInfo = res.groupInfo; b.busy = ""; TallyRead.yearOpen(b);
+  b.ledInfo = res.info; b.ledInfoAt = new Date().toISOString(); LedMaster.refresh(b);
+  await saveBooks();
+  const rows = TDS.rows(), withPan = rows.filter(r => r.pan).length;
+  if (loud) toast(res.count + " ledgers read. " + Object.keys(res.pans).length + " carry a PAN; " + withPan + " of " + rows.length + " deductions now have one.");
+  render();
+  return {count: res.count, pans: Object.keys(res.pans).length, gstins: Object.keys(res.gstins || {}).length, withPan, deductions: rows.length};
+}
+// 2.4.0 (the owner, 08-Oct-2026: "change the data xml upload page.. it is too much crowded.. simplify it"): the one
+// Upload Tally data on Books -> From Tally (#tallyIn, the top bar's button and the drop area). Which file it is comes
+// from its content, never asked: a Day Book (vouchers), the ledger masters (groups and ledgers) or a trial balance
+// (Tally's report lines; its date is not in the file, so only that is asked, on the page). Refused, changing nothing:
+// an empty file, a file cut short (a Tally export ends with </ENVELOPE>), a file of no known kind.
+async function tallyFileKind(f){
+  if (!f || !f.size) return {kind: "", why: (f ? f.name : "The file") + " is empty. Export it again from Tally."};
+  const dec = await Books.decoder(f), wide = /utf-16/.test(dec.encoding);
+  const head = dec.decode(new Uint8Array(await f.slice(0, 262144).arrayBuffer()));
+  let at = Math.max(0, f.size - 4096); if (wide && at % 2) at++;
+  const tail = new TextDecoder(dec.encoding).decode(new Uint8Array(await f.slice(at).arrayBuffer()));
+  const kind = /<VOUCHER[\s>]/.test(head) ? "daybook" : /<(LEDGER|GROUP) NAME=/.test(head) ? "masters" : /<DSPACCNAME>/.test(head) ? "tb" : "";
+  if (!kind) return {kind, why: f.name + " is not a Tally Day Book, ledger masters or trial balance XML. In Tally, export the report with Ctrl+E as XML."};
+  if (!/<\/ENVELOPE>\s*$/.test(tail)) return {kind: "", why: f.name + " looks cut short: it does not end as a Tally export does. Export it again from Tally and upload the whole file."};
+  return {kind};
+}
+const TALLY_KINDS = {daybook: "Day Book", masters: "ledger masters", tb: "trial balance"};
+// the files chosen or dropped: the masters first (the PANs and groups the day book's figures use), then the day books,
+// then a trial balance (asked its date on the page). S.tallyUp = {cid, at, busy, lines: [{kind, name, ok, text}]}
+async function tallyFiles(files){
+  const b = S.books, cid = S.coId;
+  if (!b || b.cid !== cid || !(files || []).length) return;
+  const u = S.tallyUp = {cid, at: Date.now(), busy: true, lines: []}; render();
+  const said = l => { u.lines.push(l); render(); };
+  const seen = [];
+  for (const f of files){ let k; try { k = await tallyFileKind(f); } catch (e){ k = {kind: "", why: "Could not read " + f.name + ": " + ((e && e.message) || e)}; } seen.push([f, k]); }
+  const order = {masters: 0, daybook: 1, tb: 2, "": 3};
+  seen.sort((x, y) => order[x[1].kind] - order[y[1].kind]);
+  const iso8 = v => String(v || "").replace(/-/g, "");
+  for (const [f, k] of seen){
+    if (!k.kind){ said({kind: "", name: f.name, ok: false, text: k.why}); continue; }
+    if (k.kind === "masters"){
+      const r = await bringMastersFile(f, {toast: false});
+      said(r.refused ? {kind: "masters", name: f.name, ok: false, text: "The ledger masters were not taken: " + r.refused}
+        : {kind: "masters", name: f.name, ok: true, text: "Read the ledger masters: " + r.count.toLocaleString("en-IN") + " ledgers (" + r.pans + " with PAN, " + r.gstins + " with GSTIN)" + (r.deductions ? "; " + r.withPan + " of " + r.deductions + " deductions now have a PAN" : "") + "."});
+      continue;
+    }
+    if (k.kind === "daybook"){
+      const lim = [iso8(S.dbFrom), iso8(S.dbTo)];
+      const r = await bringDayBookFile(f, lim[0], lim[1], {toast: false}) || {refused: "not taken"};
+      if (r.refused){ said({kind: "daybook", name: f.name, ok: false, text: "The Day Book was not taken: " + r.refused + "."}); continue; }
+      let days = 0; for (let d = r.from; d <= r.to; d = BridgeSeed.add(d, 1)) days++;
+      if (lim[0] || lim[1]){ S.dbFrom = ""; S.dbTo = ""; }
+      said({kind: "daybook", name: f.name, ok: true, text: "Read " + r.n.toLocaleString("en-IN") + (r.n === 1 ? " entry" : " entries") + " for " + fmtDate(tallyDate(r.from)) + " to " + fmtDate(tallyDate(r.to)) + "; " + days + (days === 1 ? " day" : " days") + " updated" + (r.outside ? " (" + r.outside + " outside those dates left out)" : "") + "."});
+      continue;
+    }
+    // a trial balance: its date is asked on the page (the books' last date for a check, the day before them for openings)
+    const m = b.meta || {}, open = !(b.tb && b.tb.source) && !!(b.vouchers || []).length;
+    S.tbAsk = {cid, f, name: f.name, on: open ? tbDefaultOn(b) : tallyDate(m.to || "") || tbDefaultOn(b)};
+    said({kind: "tb", name: f.name, ok: true, text: f.name + " is a trial balance. Tally does not write its date in the file: give it below."});
+  }
+  u.busy = false; render();
+}
+// the trial balance asked about on the page: as opening balances, or to check the books against
+async function tbAskUse(how){
+  const a = S.tbAsk; if (!a || a.cid !== S.coId) return;
+  const on = String(a.on || "").replace(/-/g, "");
+  const r = how === "open" ? await bringTbFile(a.f, on, {toast: false}) : await checkTbFile(a.f, on, {toast: false});
+  if (r.refused && /date/.test(r.refused) && !/^\d{8}$/.test(on)){ toast(r.refused); return; }
+  S.tbAsk = null;
+  S.tallyUp = {cid: S.coId, at: Date.now(), busy: false, lines: [{kind: "tb", name: a.name, ok: !r.refused, text: r.refused ? "The trial balance was not taken: " + r.refused : r.text}]};
+  render();
+}
+// a day (or the dates between two files) that needs its Day Book: the one file box, for those dates only (yyyy-mm-dd)
+function tallyPickFor(from, to){ S.dbFrom = from || ""; S.dbTo = to || from || ""; render(); const i = document.getElementById("tallyIn"); if (i){ i.value = ""; i.click(); } }
 function booksChange(t){
+  if (t.id === "tallyIn"){
+    const files = Array.from(t.files || []); t.value = "";
+    if (files.length) tallyFiles(files);
+    return true;
+  }
   if (t.id === "booksIn"){
     const f = (t.files || [])[0]; t.value = "";
     if (!f) return true;
@@ -1094,61 +1234,18 @@ function booksChange(t){
   }
   if (t.id === "tbIn"){
     const f = (t.files || [])[0]; t.value = "";
-    if (!f) return true;
-    const b = S.books, on = String(S.tbOn || tbDefaultOn(b) || "").replace(/-/g, "");
-    if (!/^\d{8}$/.test(on)){ toast("Give the date of the trial balance (the day before the first date of the books) first."); return true; }
-    f.text().then(async text => {
-      const r = TBFile.read(text, b);
-      const odd = TBFile.foreign(r, b); if (odd){ askConfirm({title: "This trial balance does not look like this client\u2019s", ok: "Close", body: '<p class="note">' + esc(odd) + "</p>"}); return; }
-      if (!r.rows.length){ toast(r.groupsSeen ? "This trial balance shows only groups. In Tally, press Alt+F5 (detailed) so each ledger is shown, then export it again." : "No ledger balances found in " + f.name + ". Export the Trial Balance from Tally as XML."); return; }
-      const next = (t => t.getFullYear() + String(t.getMonth() + 1).padStart(2, "0") + String(t.getDate()).padStart(2, "0"))(new Date(+on.slice(0, 4), +on.slice(4, 6) - 1, +on.slice(6, 8) + 1));
-      const to = (b.meta || {}).to || next;
-      const j = {from: next, to, ledgers: r.rows.map(x => ({name: x.name, parent: (b.under || {})[x.name] || "", open: String(x.open), close: ""}))};
-      TallyRead.balances(b, j, next, to);
-      b.tb.source = "the trial balance file " + f.name; b.tb.openAsOn = on;
-      // the closing figures follow from the opening and the entries brought in
-      if (typeof MIS === "object"){ const mv = MIS.moves(b.tb.from, b.tb.to); Object.entries(b.tb.led).forEach(([l, x]) => { x.close = r2(num(x.open) + ((mv[l] || {}).t || 0)); }); }
-      TallyRead.after(b, "after the trial balance was read", {from: next, to});
-      await saveBooks(); render();
-      const tot = r2(r.rows.reduce((s2, x) => s2 + num(x.open), 0));
-      toast(r.rows.length + " opening balances as on " + fmtDate(tallyDate(on)) + " brought in" + (Math.abs(tot) >= 1 ? "; they do not add up to nil (difference " + INR.format(tot) + "): check the trial balance was exported with every ledger" : "") + ".");
-      if (Bridge.on()) BridgeSeed.opening(on, b.tb.led).then(x => { b.tb.bridge = x && x.skipped ? "not taken: " + x.skipped : "taken"; saveBooks(); render(); if (x && x.skipped) toast("The bridge\u2019s copy was not given the balances: " + x.skipped); }, e => toast("The bridge could not take the balances: " + ((e && e.message) || e)));
-      if (TCloudUp.on()) TCloudUp.opening(next, on, b.tb.led).then(() => { b.tb.cloud = "in the cloud"; saveBooks(); render(); }, e => toast("The balances are here, but the cloud did not take them: " + ((e && e.message) || e)));
-    }, e => toast("Could not read that file: " + ((e && e.message) || e)));
+    if (f) bringTbFile(f, String(S.tbOn || tbDefaultOn(S.books) || "").replace(/-/g, ""));
     return true;
   }
   if (t.dataset && t.dataset.tbcheckon !== undefined){ S.tbCheckOn = t.value; render(); return true; }
   if (t.id === "tbCheckIn"){
     const f = (t.files || [])[0]; t.value = "";
-    if (!f) return true;
-    const b = S.books, on = String(S.tbCheckOn || tallyDate((b.meta || {}).to) || "").replace(/-/g, "");
-    if (!/^\d{8}$/.test(on)){ toast("Give the date of the trial balance first."); return true; }
-    f.text().then(async text => {
-      const r = TBFile.read(text, b);
-      const odd = TBFile.foreign(r, b); if (odd){ askConfirm({title: "This trial balance does not look like this client\u2019s", ok: "Close", body: '<p class="note">' + esc(odd) + "</p>"}); return; }
-      if (!r.rows.length){ toast(r.groupsSeen ? "This trial balance shows only groups. In Tally, press Alt+F5 (detailed) so each ledger is shown, then export it again." : "No ledger balances found in " + f.name + "."); return; }
-      b.tbCheck = TBCheck.run(b, r.rows, on, f.name);
-      await saveBooks(); render();
-      toast(b.tbCheck.ok ? "Ready: every ledger agrees with Tally\u2019s trial balance as on " + fmtDate(tallyDate(on)) + "." : b.tbCheck.why || (b.tbCheck.n + " ledger" + (b.tbCheck.n === 1 ? " differs" : "s differ") + " from Tally\u2019s trial balance; they are listed under step 5."));
-    }, e => toast("Could not read that file: " + ((e && e.message) || e)));
+    if (f) checkTbFile(f, String(S.tbCheckOn || tallyDate((S.books.meta || {}).to) || "").replace(/-/g, ""));
     return true;
   }
   if (t.id === "mastersIn"){
     const f = (t.files || [])[0]; t.value = "";
-    if (!f) return true;
-    const b = S.books; b.busy = "Opening " + f.name + "\u2026"; render();
-    (async () => { let fc = null; try { fc = await Books.fileCompany(f); } catch (e){} return companyGate(fc, b, CO(), f.name).then(g => ({g, fc})); })().then(({g, fc}) => {
-    if (!g.ok){ b.busy = ""; render(); return; }
-    if (fc && (fc.name || fc.guid) && !b.tallyCo) b.tallyCo = {name: fc.name, guid: fc.guid};
-    Books.importMasters(f, m => { b.busy = m; softRender(); }).then(async res => {
-      b.pans = res.pans; b.gstins = res.gstins; b.under = res.under; b.states = res.states; b.groups = res.groups; b.groupInfo = res.groupInfo; b.busy = ""; TallyRead.yearOpen(b);
-      b.ledInfo = res.info; b.ledInfoAt = new Date().toISOString(); LedMaster.refresh(b);
-      await saveBooks();
-      const rows = TDS.rows(), withPan = rows.filter(r => r.pan).length;
-      toast(res.count + " ledgers read. " + Object.keys(res.pans).length + " carry a PAN; " + withPan + " of " + rows.length + " deductions now have one.");
-      render();
-    }, e => { b.busy = ""; toast("Could not read that file: " + (e && e.message || e)); render(); });
-    });
+    if (f) bringMastersFile(f);
     return true;
   }
   if (t.id === "filedIn"){

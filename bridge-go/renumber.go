@@ -454,8 +454,19 @@ func renumWork(j *renumJob) (int, bool) {
 			j.Cands = j.Cands[1:]
 			continue
 		}
-		got, err := fetchVouchersByMasterIn(tc, j.Company, port, c.Day, []string{c.Mid}, liveBodySec())
-		asked++
+		// next-bankdate: an entry the bank route read since this sign was noted is not read again (bankdate.go)
+		var got map[string]string
+		var err error
+		shared := false
+		if e, ok := vchReadGet(j.CGUID, c.Mid); ok && renumReadAfter(j, e.at) {
+			got, shared = map[string]string{c.Mid: e.x}, e.sent
+		} else {
+			got, err = fetchVouchersByMasterIn(tc, j.Company, port, c.Day, []string{c.Mid}, liveBodySec())
+			asked++
+			if err == nil {
+				vchReadPut(j.CGUID, c.Mid, got[c.Mid], false)
+			}
+		}
 		switch {
 		case err == nil:
 		case errors.Is(err, errSlowCompany):
@@ -524,7 +535,10 @@ func renumWork(j *renumJob) (int, bool) {
 			}
 			continue
 		}
-		renumQueue(j, x)
+		if !shared {
+			renumQueue(j, x) // (a line the bank route sent carries this entry, its number with it)
+			vchReadPut(j.CGUID, c.Mid, x, true)
+		}
 		j.Sent++
 		queued++
 		writeLog(fmt.Sprintf("Renumbering: %s %s of %s in %s is %s %s in Tally now (renumbered); sent to FinCom with Tally's entry", j.Type, c.No, liveDay(c.Day), j.Company, j.Type, no))
@@ -608,4 +622,11 @@ func renumQueue(j *renumJob, x string) {
 		narr: html.UnescapeString(tagRaw(x, "NARRATION")), source: "renumber", lineId: id, saveMs: -1, readAt: nowFn(), at: nowFn().In(liveZone).Format(time.RFC3339)}
 	liveTakeBody(c, x)
 	liveQueueAdd(c)
+}
+
+// next-bankdate: what was read at or after the sign was noted (its time, the bridge's clock as nowS writes it) is Tally's
+// entry after the renumbering
+func renumReadAfter(j *renumJob, at time.Time) bool {
+	t, err := time.ParseInLocation("2006-01-02T15:04:05", j.At, time.Local)
+	return err == nil && !at.Before(t)
 }

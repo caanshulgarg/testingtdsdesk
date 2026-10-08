@@ -601,6 +601,8 @@ func lightCheckOpen(sessions []M) {
 			livePushCounter(name, companyAlter(name))
 			// 2.2.0: the recorder's source B (Tally's change list), when it is the source or one of them
 			liveAfterLightCheck(name, port)
+			// next-bankdate: Tally's voucher counter moved with no add-on line to explain it (a bank date set, bankdate.go)
+			bankAfterLightCheck(name, port)
 			// 2.3.1 (masters): the master counter moved: the ledgers created or altered since the last number (ledchanges.go)
 			ledChangesAfterLightCheck(name, port)
 			// next release (item e): the nightly self-check, once a night after hours while Tally is idle (selfcheck.go)

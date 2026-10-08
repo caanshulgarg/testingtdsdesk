@@ -135,6 +135,7 @@ func switchToMain(tellCloud bool) error {
 		defer func() {
 			if r := recover(); r != nil {
 				writeLog(fmt.Sprint("Switching to the main bridge: ", r))
+				crashReport("switch_main", r)
 				switching.Store(false)
 			}
 		}()
