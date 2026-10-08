@@ -15,6 +15,7 @@ import (
 )
 
 func TestNoticesWindowsBalloonDismissedThroughWindowProc(t *testing.T) {
+	noticeTestHome(t)
 	f := filepath.Join(t.TempDir(), "notifications-cleared.json")
 	now := time.Date(2026, 10, 8, 11, 0, 0, 0, time.Local)
 	clock := func() time.Time { return now }

@@ -21,9 +21,20 @@ type noticeShown struct {
 	warn        bool
 }
 
+// the bridge's settings and log in a temporary folder: the gate's log lines never land in the package folder
+func noticeTestHome(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	oldC, oldH := ConfigPath, Home
+	ConfigPath, Home = filepath.Join(dir, "tds-bridge.config.json"), dir
+	loadConfigRO()
+	t.Cleanup(func() { ConfigPath, Home = oldC, oldH; loadConfigRO() })
+}
+
 // a gate on a file in a temporary folder, its clock the test's
 func noticeTestGate(t *testing.T, file string, now *time.Time) (*noticeGate, *[]noticeShown, *int) {
 	t.Helper()
+	noticeTestHome(t)
 	var shown []noticeShown
 	hides := 0
 	clock := func() time.Time { return *now }
