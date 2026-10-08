@@ -1727,12 +1727,19 @@ func fetchVouchersByMasterIn(tc *TC, company string, port int, date string, mids
 	if err != nil {
 		return nil, err
 	}
+	// 2.3.4 (the renumbering helper's finding, 08-Oct-2026; testdata/fast234/notfound, 3.0 .. 7.1): for a MasterID it does
+	// not have (a deleted voucher, an id never used) Tally answers a bare <ERRORMSG>Could not find Voucher:ID:n!</ERRORMSG>,
+	// no envelope. Exactly that, for the MasterID asked and nothing else, is "no such voucher"; any other answer without an
+	// envelope stays one that could not be read
+	if strings.TrimSpace(raw) == "<ERRORMSG>Could not find Voucher:ID:"+mids[0]+"!</ERRORMSG>" {
+		return map[string]string{}, nil
+	}
 	if !strings.Contains(raw, "<ENVELOPE") {
 		return nil, errors.New("Tally's answer could not be read: " + cut(flat(raw), 120))
 	}
 	out := map[string]string{}
 	blocks := reVchBlock.FindAllString(raw, -1)
-	if len(blocks) == 0 && strings.Contains(raw, "<MASTERID") {
+	if len(blocks) == 0 && (strings.Contains(raw, "<MASTERID") || strings.Contains(raw, "<ERRORMSG") || strings.Contains(raw, "<LINEERROR")) {
 		// 2.3.4 (re-review L5): Tally answered with a voucher the bridge cannot read: never taken as "no such voucher" (a
 		// delete check would take the entry as gone); held, as an answer it cannot read
 		return nil, fastShapeError{"an answer FinCom cannot read"}
@@ -1873,11 +1880,6 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 				continue
 			}
 			live.mu.Lock()
-			if c.guidFetch {
-				liveGuidHold(c, w)
-				live.mu.Unlock()
-				continue
-			}
 			c.slowEnded = true
 			live.mu.Unlock()
 			liveHeldAs(c, w, true)
@@ -1998,7 +2000,21 @@ byDay:
 				// 2.3.4 (the owner's decision of 08-Oct-2026, option (a)): the fast request for this entry took more than 2 s
 				// (the stop itself unchanged): its line goes up held, ended with the Day Book words, never asked again; the
 				// company is not marked (slowNote) and its other entries go on being fetched
-				stopEnd(part)
+				// a cancel / delete check (it asks Tally whether the entry is still there, no entry is fetched): as before, held
+				// with the words of a Tally it could not ask, and asked again by the held list; the same whether the stop or no
+				// answer at all came first (TestCancelGUIDTallySilentFallsBack: one outcome, never the timing's)
+				var gf, en []*change
+				for _, c := range part {
+					if c.guidFetch {
+						gf = append(gf, c)
+					} else {
+						en = append(en, c)
+					}
+				}
+				if len(gf) > 0 {
+					liveHeldNow(gf, liveStopWhat(), true, true, false)
+				}
+				stopEnd(en)
 				continue
 			}
 			if gaveWay(err) {

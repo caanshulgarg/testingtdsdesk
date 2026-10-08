@@ -17,7 +17,9 @@ package main
 import (
 	"errors"
 	"html"
+	"math"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -253,6 +255,93 @@ func fastStrip(v string, hold bool) (string, string) {
 			}
 		}
 	}
+	// 2.3.4 (re-review L1; push-design run 37770938549: a payroll voucher typed on Tally's Payroll screen, 3.0 and 7.1):
+	// its pay heads sit under each employee (CATEGORYENTRY / EMPLOYEEENTRIES / PAYHEADALLOCATIONS), where today's request
+	// read them as ledger lines of their totals (ALLLEDGERENTRIES: the pay head, its total). The same lines are written
+	// here, one a pay head (approved fields only: LEDGERNAME, ISDEEMEDPOSITIVE, AMOUNT); a pay head already a ledger line
+	// is not written again
+	have := map[string]bool{}
+	for _, k := range root.kids {
+		if k.name == "ALLLEDGERENTRIES.LIST" || k.name == "LEDGERENTRIES.LIST" {
+			for _, q := range k.kids {
+				if q.name == "LEDGERNAME" {
+					have[strings.ToLower(strings.TrimSpace(html.UnescapeString(q.text)))] = true
+				}
+			}
+		}
+	}
+	type payCC struct {
+		cat, emp string
+		amt      float64
+	}
+	type payHead struct {
+		name, pos string
+		amt       float64
+		ccs       []payCC
+	}
+	var heads []*payHead
+	byHead := map[string]*payHead{}
+	payBad := false
+	childText := func(e *fastEl, name string) string {
+		for _, q := range e.kids {
+			if q.name == name {
+				return q.text
+			}
+		}
+		return ""
+	}
+	var pay func(e *fastEl, cat, emp string)
+	pay = func(e *fastEl, cat, emp string) {
+		switch e.name {
+		case "CATEGORYENTRY.LIST":
+			cat = childText(e, "CATEGORY")
+		case "EMPLOYEEENTRIES.LIST":
+			emp = childText(e, "EMPLOYEENAME")
+		}
+		if e.name == "PAYHEADALLOCATIONS.LIST" {
+			var n, pos, a string
+			for _, q := range e.kids {
+				switch q.name {
+				case "PAYHEADNAME":
+					n = q.text
+				case "ISDEEMEDPOSITIVE":
+					pos = q.text
+				case "AMOUNT":
+					a = q.text
+				}
+			}
+			key := strings.ToLower(strings.TrimSpace(html.UnescapeString(n)))
+			if key == "" {
+				return
+			}
+			v, err := strconv.ParseFloat(strings.ReplaceAll(strings.TrimSpace(a), ",", ""), 64)
+			if err != nil && strings.TrimSpace(a) != "" {
+				payBad = true
+				return
+			}
+			h := byHead[key]
+			if h == nil {
+				h = &payHead{name: strings.TrimSpace(n), pos: strings.TrimSpace(pos)}
+				byHead[key] = h
+				heads = append(heads, h)
+			}
+			h.amt += v
+			// the employee as the pay head's cost centre, as today's request read it (the payroll's cost category)
+			if strings.TrimSpace(emp) != "" {
+				h.ccs = append(h.ccs, payCC{strings.TrimSpace(cat), strings.TrimSpace(emp), v})
+			}
+			return
+		}
+		for _, k := range e.kids {
+			pay(k, cat, emp)
+		}
+	}
+	for _, k := range root.kids {
+		if k.name == "CATEGORYENTRY.LIST" {
+			pay(k, "", "")
+		}
+	}
+	payOK := len(heads) > 0 && !payBad
 	ok0 := fastApprovedPaths()
 	var lost string
 	var walk func(e *fastEl, prefix string)
@@ -281,6 +370,9 @@ func fastStrip(v string, hold bool) (string, string) {
 		if k.name == "INVENTORYENTRIESIN.LIST" || k.name == "INVENTORYENTRIESOUT.LIST" {
 			continue
 		}
+		if k.name == "CATEGORYENTRY.LIST" && payOK {
+			continue // its pay heads are written as ledger lines below
+		}
 		walk(k, "")
 	}
 	if lost != "" && hold {
@@ -292,6 +384,27 @@ func fastStrip(v string, hold bool) (string, string) {
 		b.WriteString(" " + a[1] + `="` + a[2] + `"`)
 	}
 	b.WriteString(">")
+	if payOK {
+		for _, h := range heads {
+			if have[strings.ToLower(strings.TrimSpace(html.UnescapeString(h.name)))] || h.amt > -0.005 && h.amt < 0.005 {
+				continue
+			}
+			b.WriteString("<ALLLEDGERENTRIES.LIST><LEDGERNAME>" + h.name + "</LEDGERNAME>")
+			if h.pos != "" {
+				b.WriteString("<ISDEEMEDPOSITIVE>" + h.pos + "</ISDEEMEDPOSITIVE>")
+			}
+			b.WriteString("<AMOUNT>" + strconv.FormatFloat(math.Round(h.amt*100)/100, 'f', 2, 64) + "</AMOUNT>")
+			for i := 0; i < len(h.ccs); {
+				cat := h.ccs[i].cat
+				b.WriteString("<CATEGORYALLOCATIONS.LIST><CATEGORY>" + cat + "</CATEGORY>")
+				for ; i < len(h.ccs) && h.ccs[i].cat == cat; i++ {
+					b.WriteString("<COSTCENTREALLOCATIONS.LIST><NAME>" + h.ccs[i].emp + "</NAME><AMOUNT>" + strconv.FormatFloat(math.Round(h.ccs[i].amt*100)/100, 'f', 2, 64) + "</AMOUNT></COSTCENTREALLOCATIONS.LIST>")
+				}
+				b.WriteString("</CATEGORYALLOCATIONS.LIST>")
+			}
+			b.WriteString("</ALLLEDGERENTRIES.LIST>")
+		}
+	}
 	for _, k := range root.kids {
 		name := k.name
 		if name == "LEDGERENTRIES.LIST" && !hasAll {

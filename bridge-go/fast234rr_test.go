@@ -5,6 +5,7 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -131,5 +132,56 @@ func TestFast234RRUnreadableBlockNotGone(t *testing.T) {
 	got, err := fetchVouchersByMasterIn(recorderTC(nil), nwsCo, port, "20261005", []string{"25794"}, 5)
 	if err == nil || len(got) != 0 {
 		t.Fatalf("taken as not there: %v %v", got, err)
+	}
+}
+
+// --- the renumbering helper's finding (08-Oct-2026): for a MasterID Tally does not have (a deleted voucher, a ledger's
+// id, one never used) the object export answers a bare <ERRORMSG>Could not find Voucher:ID:n!</ERRORMSG>, no envelope,
+// on every release (testdata/fast234/notfound: push-design runs 37741662830, 37747408916). Exactly that answer, for the
+// MasterID asked, is "no such voucher"; anything else stays an answer that could not be read
+func TestFast234RRNotFoundAnswer(t *testing.T) {
+	_, f, _ := r222bBridge(t, "")
+	var answer string
+	f.mu.Lock()
+	f.behave = func(w http.ResponseWriter, r *http.Request, id, body string) bool {
+		if id == vchObjectID {
+			fmt.Fprint(w, answer)
+			return true
+		}
+		return false
+	}
+	f.mu.Unlock()
+	port, err := findCompanyPortBg(nwsCo, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ask := func(mid string) (map[string]string, error) {
+		return fetchVouchersByMasterIn(recorderTC(nil), nwsCo, port, "20261005", []string{mid}, 5)
+	}
+	files, _ := filepath.Glob(filepath.Join("testdata", "fast234", "notfound", "*.xml"))
+	if len(files) < 12 {
+		t.Fatalf("%d captures", len(files))
+	}
+	for _, fl := range files {
+		answer = readText(fl)
+		mid := group(`Could not find Voucher:ID:(\d+)!`, answer, 1)
+		if got, err := ask(mid); err != nil || len(got) != 0 {
+			t.Fatalf("%s: not taken as no such voucher: %v %v", fl, got, err)
+		}
+		if _, err := ask(mid + "1"); err == nil {
+			t.Fatalf("%s: another MasterID's answer taken as no such voucher", fl)
+		}
+	}
+	for _, a := range []string{
+		"<ERRORMSG>Could not find Voucher:ID:777!</ERRORMSG> and more",
+		"<ERRORMSG>Could not find Voucher:ID:777!</ERRORMSG><ERRORMSG>Could not find Voucher:ID:778!</ERRORMSG>",
+		"<ENVELOPE><ERRORMSG>Could not find Voucher:ID:777!</ERRORMSG></ENVELOPE>",
+		"<ERRORMSG>Could not find Voucher:ID:7777!</ERRORMSG>",
+		"<ERRORMSG>Could not find Ledger:ID:777!</ERRORMSG>",
+	} {
+		answer = a
+		if got, err := ask("777"); err == nil {
+			t.Fatalf("%q taken as no such voucher: %v", a, got)
+		}
 	}
 }

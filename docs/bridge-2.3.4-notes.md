@@ -49,6 +49,26 @@ exact request and the field comparison are in `docs/fast-request-form.md`.
 6. **The trial forms A and C** of "Test fetching an entry" are removed (the owner's decision; nothing in normal working
    used them). The tray item keeps forms B, D, E and F.
 
+7. **A deleted entry is proven gone exactly as before.** Tally answers the new request for a MasterID it no longer has
+   with one bare line, `<ERRORMSG>Could not find Voucher:ID:<n>!</ERRORMSG>` (not an empty answer; seen on all five
+   releases). The bridge takes it as "not in this Tally" only when it is exactly that line for the MasterID it asked;
+   anything else is an answer it cannot read, and the delete is held with words, never taken as proven.
+   **This changes how deletes are settled and needs the owner's sign-off before the build.**
+8. **After the second independent review** (0 High, 4 Medium, 7 Low; fixed test-first, L3 / L4 / L7 left as they were
+   for the owner):
+   - a held line an older bridge kept that gets an unreadable answer on its one ask ends with the Day Book words; it
+     no longer vanishes from FinCom's list (M1);
+   - an item invoice whose sales ledger is also a line of its own is stored as today (M2);
+   - FinCom's 30-day list of ended lines reads every such line of the company, not the 400 oldest of any kind (M3);
+   - a held line whose ask takes over 2 s is ended at once with the Day Book words (option (a) in the held list too, M4);
+   - a payroll voucher typed on the Payroll screen is stored as today, no longer held (L1);
+   - a cancel / delete check or posting check meeting a voucher the bridge cannot read says so in words and is not
+     asked every turn; the posting check says a person must look in Tally, never "busy" (L2);
+   - an answer carrying a voucher the bridge cannot read is held, never taken as "no such voucher" (L5);
+   - the allow-list row of the new request carries its measured worst case (1.7 s, a 500-item invoice) (L6).
+   A cancel / delete check stopped at 2 s keeps its "could not be asked" words and is asked again, as before: the owner's
+   option (a) applies to the entry requests, not to these checks.
+
 Two request forms froze Tally on every release when tried (the object export with no field list; a TDL report over the
 voucher object): the bridge refuses both before anything is sent.
 
