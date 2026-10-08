@@ -6,7 +6,7 @@
 #         test, A..F, its answers captured), c7 the Tally version string the bridge reads (the read test's "Tally program")
 # One line per check in versions\results.txt: PASS / FAIL / HARNESS (the harness, not the bridge or Tally) with the times.
 $ErrorActionPreference = 'Continue'
-$rel = $env:TALLY_REL; $full = ($env:VMODE -eq 'full'); $share = ($env:VMODE -eq 'share'); $big = ($env:VMODE -eq 'big')   # share / big: sharev.ps1 / bigv.ps1 after c2 (no bridge)
+$rel = $env:TALLY_REL; $full = ($env:VMODE -eq 'full'); $share = ($env:VMODE -eq 'share'); $big = ($env:VMODE -eq 'big'); $hang = ($env:VMODE -eq 'hang')   # share / big / hang: sharev.ps1 / bigv.ps1 / hangv.ps1 after c2 (no bridge)
 $dir = $env:TALLY_DIR; $exe = $env:TALLY_EXE
 $data1 = "$env:RUNNER_TEMP\TallyData"; $rec = 'C:\ProgramData\FinCom\recorder'
 $co1 = 'FinCom Spike Co'
@@ -79,7 +79,7 @@ Get-Process tally -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sle
 $tdlSrc = if ($env:BRIDGE_DIST -and (Test-Path (Join-Path $env:BRIDGE_DIST 'FinComRecorder.tdl'))) { Join-Path $env:BRIDGE_DIST 'FinComRecorder.tdl' } else { Join-Path $env:GITHUB_WORKSPACE 'bridge-go\addon\FinComRecorder.tdl' }
 $tdl = "$fc\FinComRecorder.tdl"; Copy-Item $tdlSrc $tdl -Force
 Remove-Item "$rec\*" -Force -ErrorAction SilentlyContinue
-Write-TallyIni $(if ($full -or $share -or $big) { $tdl } else { $null }) $(if ($folder) { $folder.Name } else { $null })
+Write-TallyIni $(if ($full -or $share -or $big -or $hang) { $tdl } else { $null }) $(if ($folder) { $folder.Name } else { $null })
 $swStart = [Diagnostics.Stopwatch]::StartNew()
 $t1 = Start-Process -FilePath $exe -WorkingDirectory $dir -PassThru; $script:tpid = $t1.Id
 $portMs = -1; $getAns = ''
@@ -109,6 +109,10 @@ Result 'c2 port and company list' $(if ($c2ok) { 'PASS' } elseif ($portMs -lt 0 
 
 if ($big) {
   if ($c2ok) { . (Join-Path $PSScriptRoot 'bigv.ps1') } else { Add-Content -Path $resultsFile -Value 'HARNESS big: not run (c2: Tally or the company not up)' -Encoding UTF8 }
+  Get-Process tally -ErrorAction SilentlyContinue | Stop-Process -Force; return
+}
+if ($hang) {
+  if ($c2ok) { . (Join-Path $PSScriptRoot 'hangv.ps1') } else { Add-Content -Path $resultsFile -Value 'HARNESS hang: not run (c2: Tally or the company not up)' -Encoding UTF8 }
   Get-Process tally -ErrorAction SilentlyContinue | Stop-Process -Force; return
 }
 if ($share) {
