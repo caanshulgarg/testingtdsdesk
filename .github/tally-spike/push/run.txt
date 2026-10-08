@@ -1,11 +1,11 @@
-versions=7.1,3.0
+versions=3.0,4.1,5.1,6.2,7.1
 reps=5
 posts=1
 heavy_led=3000
 heavy_item=3000
 heavy_vch=30000
 heavy_min=40
-mode=fast234r
+mode=fast234c
 # v3 (07-Oct-2026): the owner's ask on the 30,004-voucher company: keyed entry fetches with the freeze probe, freezes with (rerun: godowns on heavy sales, fetch 30 s and after the saves, TDS by the S5 OCR route)
 # the bridge stopped / running, full entry with no read-back, the GUID rule, AltVchID, payroll 200, TDS (v3.ps1)
 # v3b (07-Oct-2026 07:50Z): a fetch fired by the harness during each heads-only save (bridge stopped); the keyed fetches (OctVouchers fix); TDS with the ledgers' cost centres off
@@ -26,3 +26,4 @@ mode=fast234r
 # fast234d (08:20Z): a bill-wise party's line with no bill: 'On Account' in the Voucher collection, none in the object export: what does the Day Book export give? (fast234d.ps1)
 # fast234r (10:40Z): the re-review's M2 (an item invoice with a direct Sales line) and L1 (a payroll voucher typed on the Payroll screen), asked three ways (fast234r.ps1)
 # fast234r again (11:30Z): godown on the invoice's items; RVch (rv is Remove-Variable); the payroll Account field: the bank
+# fast234c (08-Oct-2026): the 2.3.4 re-review 2 L-d: FinComVoucherObject naming a company that is closed while another is open (MasterIDs of the other only, of the closed one only, of neither); no company open (fast234c.ps1)

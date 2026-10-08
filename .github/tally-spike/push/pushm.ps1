@@ -209,6 +209,8 @@ if ($env:PD_MODE -in 'fast234p', 'fast234m') { . "$here\fast234.ps1"; return }
 # fast234g (08-Oct-2026): the 2.3.4 entry request on sales invoices in a GST-ON and a GST-OFF company, each probe in a fresh Tally
 if ($env:PD_MODE -eq 'fast234g') { . "$here\fast234g.ps1"; return }
 if ($env:PD_MODE -eq 'fast234d') { . "$here\fast234d.ps1"; return }
+# fast234c (08-Oct-2026): the 2.3.4 re-review 2 L-d: the entry request naming a company that is closed while another is open
+if ($env:PD_MODE -eq 'fast234c') { . "$here\fast234c.ps1"; return }
 $setupOk = Start-T $light @() 'setup-light'
 if (-not $setupOk) { Say 'HARNESS: the light company did not open'; return }
 $cguid = [regex]::Match((Post (Coll 'FCPCo' 'Company' 'NAME, GUID')), '<GUID[^>]*>([^<]+)</GUID>').Groups[1].Value
