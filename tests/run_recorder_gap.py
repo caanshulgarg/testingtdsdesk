@@ -84,7 +84,12 @@ with sync_playwright() as p:
     since = E("(() => { const d = new Date('2026-10-02T08:35:00Z'); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); })()")
     ok(E("S.tab") == "books" and E("booksTab()") == "import", "the button opens Books -> From Tally (%s / %s)" % (E("S.tab"), E("booksTab()")))
     ok(E("S.dbFrom") == since and E("S.dbTo") == today, "the Day Book dates filled in: from %s (gap.since) to %s (today) (%s .. %s)" % (since, today, E("S.dbFrom"), E("S.dbTo")))
-    ok(pg.input_value('#app input[aria-label="Day book from"]') == since and pg.input_value('#app input[aria-label="Day book to"]') == today, "the Day Book's date boxes show them")
+    # 2.4.0 (the upload page simpler): no date boxes; the upload part says those dates are the ones taken, and the gap is a
+    # row of "Days that need a Day Book" with its own Upload
+    lim = txt("#app [data-up-limit]"); fd = lambda x: E("(x) => fmtDate(x)", x)
+    ok(fd(since) in lim and fd(today) in lim, "the upload part says only those dates are taken from the Day Book (%s)" % lim)
+    row = txt('#app [data-need-day="%s"]' % since)
+    ok("12 entries made in Tally since then are not in FinCom" in row and row.endswith("Upload"), "the gap is a day row with its Upload (%s)" % row)
     # ---- the Tally page: the one slim line
     E("() => navHome('tally')"); pg.wait_for_timeout(1500)
     tl = txt("#app [data-alert-line]")
