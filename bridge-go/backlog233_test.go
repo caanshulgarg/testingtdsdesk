@@ -700,7 +700,10 @@ func TestBacklog233M1SaveDuringHealthyResolverTurn(t *testing.T) {
 func TestBacklog233M2BurstOfEight(t *testing.T) {
 	p, f, c := slow232Bridge(t)
 	setCfg("RecorderHoldAfterMs", float64(400))
-	slowEntries(f, 180*time.Millisecond) // 1.8 s each
+	// 1.2 s each, scaled (under the 2 s stop with room: 1.8 s left 20 ms between the answer and the stop, which a loaded
+	// machine crossed: a stop, then the one more ask 5 minutes on, and the body not in this test's time; with 2.3.4's
+	// company list before each entry request the 20 ms are gone)
+	slowEntries(f, 120*time.Millisecond)
 	var mids []int64
 	var lines []string
 	for i := 0; i < 8; i++ {
