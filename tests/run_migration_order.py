@@ -1,6 +1,6 @@
 """python3 run_migration_order.py - the order the cloud migrations run in on a fresh database (03-Oct-2026, round 4 items
 1-3; docs/MIGRATION-ORDER.md): BOTH valid orders, each applied TWICE on its own database: staging's (32 -> 33 -> 35 -> 34 as FIRST run there, commit 2105b2d
--> 36b -> 37 -> 36 -> 38 -> 39 -> 40 -> 41 -> 42 -> 43 -> 44 -> 45 -> 46 -> 47 -> 48 -> 49 -> 50 -> 51 -> 52 -> 53 -> 54 -> 55 -> 56 -> 57 -> 58 -> 59 -> 60) and a fresh database's (32 -> 33 -> 35 -> 34 reviewed -> 36 -> 36b -> 37 -> 38 -> 39 -> 40 -> 41 -> 42 -> 43 -> 44 -> 45 -> 46 -> 47 -> 48 -> 49 -> 50 -> 51 -> 52 -> 53 -> 54 -> 55 -> 56 -> 57 -> 58 -> 59 -> 60); the function texts
+-> 36b -> 37 -> 36 -> 38 -> 39 -> 40 -> 41 -> 42 -> 43 -> 44 -> 45 -> 46 -> 47 -> 48 -> 49 -> 50 -> 51 -> 52 -> 53 -> 54 -> 55 -> 56 -> 57 -> 58 -> 59 -> 60 -> 66) and a fresh database's (32 -> 33 -> 35 -> 34 reviewed -> 36 -> 36b -> 37 -> 38 -> 39 -> 40 -> 41 -> 42 -> 43 -> 44 -> 45 -> 46 -> 47 -> 48 -> 49 -> 50 -> 51 -> 52 -> 53 -> 54 -> 55 -> 56 -> 57 -> 58 -> 59 -> 60); the function texts
 the two orders end with are compared and must be identical (round 9), on a throwaway PostgreSQL (pg_stand)
 with the tables as on staging (run_migration33's schema, tally_devices, tally_bills) and made-up rows; never on staging.
 Checks: every file runs, twice, and deletes nothing; after the run the release functions are migration-34's
@@ -37,7 +37,12 @@ READERS = ["tally_tb", "tally_period", "tally_mis", "tally_gst_summary", "tally_
            # 06-Oct-2026 (migration 56: a recorder line keeps the fields its request does not fetch; the repair, not run)
            "tally_ingest_entries/5", "tally_recorder_keep_vouchers", "tally_recorder_keep_lines", "tally_recorder_blanked", "tally_recorder_restore_fields", "tally_recorder_restore_fields/2", "tally_unknown_ledger_entries", "tally_recorder_pair_lines",
            # 06-Oct-2026 (migration 57, bridge 2.3.1 part A: the entry's details, written by the entry path for both paths)
-           "tally_ingest_details", "tally_tds_details"]
+           "tally_ingest_details", "tally_tds_details",
+           # 07-Oct-2026 (migration 66, next-masterhook: the add-on's master lines kept, heads only; review L4 of 2.4.0 part 2)
+           "tally_recorder_masters_save"]
+# 66 (next-masterhook): after 60 in both orders (it needs only 44's tables; independent of 61-65)
+for _o in ORDERS.values():
+    _o.append((66, "migration-66-recorder-masters.sql"))
 texts = {}
 fails = []
 def ok(c, w):

@@ -1,7 +1,7 @@
 package main
 
-// Next (branch next-masterhook; the owner's item c): the add-on hooks the Pay Head, Stock Item, Unit, Godown and Employee
-// forms as it hooks the Ledger form (On Form Accept: a line before Tally's own save and one after it). The bridge maps
+// Next (branch next-masterhook; the owner's item c): the add-on hooks the Pay Head, Stock Item and Godown forms (Unit and
+// Employee not hooked: not proven on real Tally; the bridge still pairs their lines, FinCom refuses them) as it hooks the Ledger form (On Form Accept: a line before Tally's own save and one after it). The bridge maps
 // each pair to master_created / master_altered and sends it as HEADS ONLY: the master's type, name, GUID, MasterID,
 // AlterID and parent; nothing is ever asked of Tally for it. Tests written before the code; both stand modes.
 
@@ -141,11 +141,14 @@ func TestMasterHookDeleteKnownType(t *testing.T) {
 	rec, f, c := liveBridge(t, "")
 	p := liveFilePath(rec, "")
 	gi, gg, gl := b220CoGUID+"-00000a20", b220CoGUID+"-00000a21", b220CoGUID+"-00000a22"
+	gp := b220CoGUID + "-00000a23" // review M1 of 2.4.0 part 2: a Pay Head (a ledger in FinCom)
 	liveAppend(t, p,
 		mhLine("stockitem_accept_pre", gi, "2592", "60", "Cement", "Primary"),
 		mhLine("stockitem_accept_post", gi, "2592", "61", "Cement", "Primary"),
 		mhLine("godown_accept_pre", gg, "2593", "62", "Store", "Primary"),
-		mhLine("godown_accept_post", gg, "2593", "63", "Store", "Primary"))
+		mhLine("godown_accept_post", gg, "2593", "63", "Store", "Primary"),
+		mhLine("payhead_accept_pre", gp, "2595", "65", "Basic Pay", "Indirect Expenses"),
+		mhLine("payhead_accept_post", gp, "2595", "66", "Basic Pay", "Indirect Expenses"))
 	readAndUploadAll(t)
 	// a restart: the types are kept on disk
 	liveResetState()
@@ -153,18 +156,69 @@ func TestMasterHookDeleteKnownType(t *testing.T) {
 		mhLine("before_delete", gi, "2592", "61", "Cement", "Primary"),
 		mhLine("after_delete", gi, "2592", "61", "Cement", "Primary"),
 		mhLine("after_delete", gg, "2593", "63", "Store", "Primary"),
-		mhLine("after_delete", gl, "2594", "64", "Cement", "Sundry Creditors"))
+		mhLine("after_delete", gl, "2594", "64", "Cement", "Sundry Creditors"),
+		mhLine("after_delete", gp, "2595", "66", "Basic Pay", "Indirect Expenses"))
 	readAndUploadAll(t)
 	sent := c.recSent()
 	var got []string
-	for _, l := range sent[2:] {
+	for _, l := range sent[3:] {
 		got = append(got, str(l["event"])+"/"+str(l["master_type"])+"/"+str(l["name"])+"/"+str(l["object_guid"]))
 	}
-	want := "master_deleted/Stock Item/Cement/" + gi + ",master_deleted/Godown/Store/" + gg + ",ledger_deleted//Cement/" + gl
+	// a Pay Head's delete goes on the ledger path (ledger_deleted, applied by FinCom to the ledger holding its GUID, as
+	// before the hook), never as master_deleted: FinCom's ledger is marked deleted
+	want := "master_deleted/Stock Item/Cement/" + gi + ",master_deleted/Godown/Store/" + gg + ",ledger_deleted//Cement/" + gl + ",ledger_deleted//Basic Pay/" + gp
 	if strings.Join(got, ",") != want {
 		t.Fatalf("deletes sent:\n%v\nwant\n%s", got, want)
 	}
 	if n := f.n("FinComLedgerByName") + f.n("FinComLedgerChanges"); n != 0 {
 		t.Fatalf("a master's delete asked Tally %d times", n)
+	}
+}
+
+// --- review L2 of 2.4.0 part 2 (the rule of next-outbox's M1): a master line FinCom answers 'failed' (a cloud without
+// migration 66: "FinCom does not keep master lines yet") is not marked sent; it goes again after the wait and is kept
+// once 66 is there; the voucher beside it in the same group is marked sent at once
+func TestMasterHookFailedNotMarkedSent(t *testing.T) {
+	rec, _, c := liveBridge(t, "")
+	has66 := false
+	sends := map[string]int{}
+	c.mu.Lock()
+	c.recReply = func(b M) (int, M) {
+		res := []any{}
+		for _, x := range arr(b["lines"]) {
+			l := obj(x)
+			id, ev := str(l["line_id"]), str(l["event"])
+			sends[ev]++
+			if strings.HasPrefix(ev, "master_") && !has66 {
+				res = append(res, M{"line_id": id, "state": "failed", "why": "FinCom does not keep master lines yet (migration 66)"})
+				continue
+			}
+			res = append(res, M{"line_id": id, "state": map[bool]string{true: "kept", false: "applied"}[strings.HasPrefix(ev, "master_")], "why": nil})
+		}
+		return 200, M{"ok": true, "results": res}
+	}
+	c.mu.Unlock()
+	p := liveFilePath(rec, "")
+	g := b220CoGUID + "-00000a30"
+	liveAppend(t, p, mhLine("godown_accept_pre", g, "2600", "70", "Yard", "Primary"), mhLine("godown_accept_post", g, "2600", "71", "Yard", "Primary"))
+	// FinCom's own import coming back (its FinCom id): never asked of Tally, so it goes at once
+	gv := b220CoGUID + "-000000d0"
+	liveAppend(t, p, vchLine("import_object", gv, "208", "308", "Bill | TDSDesk:fk0"), vchLine("after_import_object", gv, "208", "308", "Bill | TDSDesk:fk0"))
+	readAndUploadAll(t)
+	if q := liveQueue(); len(q) != 1 || q[0].event != "master_altered" {
+		t.Fatalf("waiting after FinCom answered the master line failed: %+v", q)
+	}
+	if sends["master_altered"] != 1 || sends["imported"] != 1 {
+		t.Fatalf("first send: %v", sends)
+	}
+	has66 = true
+	uploadAll(t)
+	if sends["master_altered"] != 1 {
+		t.Fatal("the failed master line went again before its wait")
+	}
+	laterBy(t, 2*time.Minute)
+	uploadAll(t)
+	if len(liveQueue()) != 0 || sends["master_altered"] != 2 || sends["imported"] != 1 {
+		t.Fatalf("after the wait: waiting %d, sends %v (want the master line twice, the entry once)", len(liveQueue()), sends)
 	}
 }

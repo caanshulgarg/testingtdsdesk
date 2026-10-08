@@ -94,8 +94,9 @@
 //                                                       (at most 500 a call; the bridge marks a line sent only on this answer).
 //                                                       event: created|altered|deleted|cancelled|imported|ledger_created|
 //                                                       ledger_altered|ledger_renamed|ledger_deleted (another: failed here, not
-//                                                       stored); next-masterhook (migration 66): master_created|master_altered
-//                                                       {master_type, name, parent, object_guid, master_id, alter_id} heads only,
+//                                                       stored); next-masterhook (migration 66): master_created|master_altered|
+//                                                       master_deleted {master_type (Pay Head, Stock Item or Godown; any other
+//                                                       'failed'), name, parent, object_guid, master_id, alter_id} heads only,
 //                                                       kept by tally_recorder_masters_save ('kept' / 'duplicate'); xml: the whole <VOUCHER ...>...</VOUCHER> when the add-on can
 //                                                       give it, read with parse.js (parseDay) into the days path's vouchers
 //                                                       and lines; vch_date yyyymmdd (or yyyy-mm-dd); ledgers [{name, guid}];
@@ -1323,10 +1324,11 @@ function dbFail(where: string, error: any, words: string) {
   return new Error(words);
 }
 const RECORDER_EVENTS = new Set(["created", "altered", "deleted", "cancelled", "imported", "ledger_created", "ledger_altered", "ledger_renamed", "ledger_deleted"]);
-// next-masterhook (migration 66): the add-on's master forms (Pay Head, Stock Item, Unit, Godown, Employee), HEADS ONLY: kept
-// in tally_recorder_masters by tally_recorder_masters_save, never applied to the books, never with a body
+// next-masterhook (migration 66): the add-on's master forms (Pay Head, Stock Item, Godown: the ones it hooks, proven on real
+// TallyPrime 7.1), HEADS ONLY: kept in tally_recorder_masters by tally_recorder_masters_save, never applied to the books, never
+// with a body. Review L3 of 2.4.0 part 2: a Unit or Employee line (not hooked, not proven) is refused, 'failed' with words
 const MASTER_EVENTS = new Set(["master_created", "master_altered", "master_deleted"]);
-const MASTER_TYPES = new Set(["Pay Head", "Stock Item", "Unit", "Godown", "Employee"]);
+const MASTER_TYPES = new Set(["Pay Head", "Stock Item", "Godown"]);
 function cleanMasterLine(x: any, me: { id: string }): { line?: Record<string, unknown>; bad?: string } {
   const s = (v: unknown, n: number) => typeof v === "string" || typeof v === "number" ? String(v).trim().slice(0, n) : "";
   const mt = s(x?.master_type, 40);

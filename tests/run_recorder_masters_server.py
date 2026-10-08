@@ -1,12 +1,12 @@
 """python3 run_recorder_masters_server.py - (07-Oct-2026, branch next-masterhook, Migration 66) tally-ingest's "recorder_lines"
-with the add-on's master lines (master_created / master_altered from the Pay Head, Stock Item, Unit, Godown and Employee
-forms), through the real cloud function (server/tally-cloud/index.ts) under Deno against the stand-in for Supabase
+with the add-on's master lines (master_created / master_altered from the Pay Head, Stock Item and Godown forms, the ones
+the add-on hooks; review L3 of 2.4.0 part 2: a Unit or Employee line is refused, 'failed' with words, never kept), through the real cloud function (server/tally-cloud/index.ts) under Deno against the stand-in for Supabase
 (fake_supabase.py) and a throwaway PostgreSQL (pg_stand) built 32 -> ... -> 51 as run_recorder_server.py builds it.
   1. before 66: a voucher line beside two master lines: the voucher applied as before; the master lines 'failed' with the
      words "Migration 66", nothing else of the call changed.
   2. after 66 (run here on the stand only): the master lines 'kept' with their heads in tally_recorder_masters (heads only:
      type, name, parent, GUID, MasterID, AlterID; no body), sent again 'duplicate'; an unknown master type 'failed', not kept;
-     nothing of them in tally_recorder_lines.
+     nothing of them in tally_recorder_lines; a Unit and an Employee line 'failed' ("unknown master type"), not kept.
 Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno)."""
 import os, sys, json, time, hashlib, subprocess, urllib.request, shutil, threading, re
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -105,20 +105,23 @@ try:
         return {"line_id": lid, "event": ev, "master_type": mt, "name": name, "parent": "Primary", "object_guid": guid, "master_id": mid, "alter_id": alter,
                 "saved_at": "2026-10-07T10:00:00+05:30", "pc": "PC-A", "user": "TALLY User", "company_guid": "cg-1", "xml": "<STOCKITEM/>", "ledgers": [{"name": "x"}]}
     print("== 1. before 66")
-    c, r = rec([line("V1", "created", "v1", 41, amt=100), ml("M1", "master_created", "Stock Item", "PD Item 1"), ml("M2", "master_altered", "Unit", "Nos", "2563", 41, "cg-1-00000a03")])
+    c, r = rec([line("V1", "created", "v1", 41, amt=100), ml("M1", "master_created", "Stock Item", "PD Item 1"), ml("M2", "master_altered", "Pay Head", "Basic Pay", "2563", 41, "cg-1-00000a03")])
     ok(c == 200 and st(r) == {"V1": "applied", "M1": "failed", "M2": "failed"} and "migration 66" in (why(r, "M1") or ""), "1. the voucher applied, the master lines failed with words (%s %s)" % (c, r))
     ok(db.one("select count(*) from tally_recorder_lines where line_id in ('M1', 'M2')") == "0", "1. no master line in tally_recorder_lines")
     print("== 2. after 66")
     r66 = subprocess.run(["runuser", "-u", "postgres", "--", pg_stand.BIN + "/psql", "-h", "127.0.0.1", "-p", str(db.port), "-U", "postgres", "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-q", "-f", "-"],
                          input="do $$ begin if not exists (select 1 from pg_roles where rolname = 'service_role') then create role service_role; end if; end $$;\n" + open(os.path.join(SQLDIR, "migration-66-recorder-masters.sql")).read(), capture_output=True, text=True)
     ok(r66.returncode == 0, "66 runs on the stand: %s" % r66.stderr[-300:])
-    c, r = rec([ml("M1", "master_created", "Stock Item", "PD Item 1"), ml("M2", "master_altered", "Unit", "Nos", "2563", 41, "cg-1-00000a03"), ml("M3", "master_altered", "Budget", "B1"),
-                line("V2", "altered", "v1", 42, amt=120), ml("M4", "master_deleted", "Godown", "Old Store", "2560", 9, "cg-1-00000a00")])
-    ok(c == 200 and st(r) == {"M1": "kept", "M2": "kept", "M3": "failed", "V2": "applied", "M4": "kept"} and r.get("kept") == 3, "2. kept, an unknown type failed, the voucher applied (%s)" % r)
+    c, r = rec([ml("M1", "master_created", "Stock Item", "PD Item 1"), ml("M2", "master_altered", "Pay Head", "Basic Pay", "2563", 41, "cg-1-00000a03"), ml("M3", "master_altered", "Budget", "B1"),
+                line("V2", "altered", "v1", 42, amt=120), ml("M4", "master_deleted", "Godown", "Old Store", "2560", 9, "cg-1-00000a00"),
+                ml("M5", "master_altered", "Unit", "Nos", "2564", 42, "cg-1-00000a04"), ml("M6", "master_created", "Employee", "A. Kumar")])
+    ok(c == 200 and st(r) == {"M1": "kept", "M2": "kept", "M3": "failed", "V2": "applied", "M4": "kept", "M5": "failed", "M6": "failed"} and r.get("kept") == 3, "2. kept, an unknown type failed, the voucher applied (%s)" % r)
+    ok("unknown master type: Unit" in (why(r, "M5") or "") and "unknown master type: Employee" in (why(r, "M6") or "")
+       and db.one("select count(*) from tally_recorder_masters where master_type in ('Unit', 'Employee')") == "0", "2. review L3: Unit and Employee refused with words, not kept (%s / %s)" % (why(r, "M5"), why(r, "M6")))
     rows = db.rows("select line_id, event, master_type, name, parent, coalesce(object_guid, '') as g, master_id, coalesce(alter_id::text, '') as a, bridge, pc, tally_user, company from tally_recorder_masters where line_id <> 'M4' order by line_id")
-    ok([(x["line_id"], x["master_type"], x["name"], x["g"], x["a"]) for x in rows] == [("M1", "Stock Item", "PD Item 1", "", ""), ("M2", "Unit", "Nos", "cg-1-00000a03", "41")]
+    ok([(x["line_id"], x["master_type"], x["name"], x["g"], x["a"]) for x in rows] == [("M1", "Stock Item", "PD Item 1", "", ""), ("M2", "Pay Head", "Basic Pay", "cg-1-00000a03", "41")]
        and all(x["bridge"] == GA["id"] and x["pc"] == "PC-A" and x["company"] == "ZZ CO" for x in rows), "2. the heads kept (%s)" % rows)
-    c, r = rec([ml("M2", "master_altered", "Unit", "Nos", "2563", 41, "cg-1-00000a03")])
+    c, r = rec([ml("M2", "master_altered", "Pay Head", "Basic Pay", "2563", 41, "cg-1-00000a03")])
     ok(st(r) == {"M2": "duplicate"} and db.one("select count(*) from tally_recorder_masters") == "3", "2. sent again: duplicate (%s)" % r)
     ok(db.one("select count(*) from tally_recorder_lines where line_id like 'M%'") == "0", "2. nothing of them in tally_recorder_lines")
     args = FS.ARGS.get("tally_recorder_masters_save", [])

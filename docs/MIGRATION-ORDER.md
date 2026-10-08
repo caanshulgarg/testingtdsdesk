@@ -263,3 +263,21 @@ coordinator; 61-65 belong to other branches) runs after 44 in any order relative
 master_altered lines ('kept' / 'duplicate'). tally-ingest's recorder_lines sends those lines there; a cloud without 66
 answers them 'failed' with words and handles the rest of the call as before. Tested by `run_migration66.py` and
 `run_recorder_masters_server.py` (through tally-ingest under Deno).
+
+2.4.0 part 2 review (08-Oct-2026), next-masterhook (66 still NOT run anywhere, so changed in place; add-only, safe twice):
+- **M1.** A Pay Head is a ledger in FinCom: its delete goes as `ledger_deleted` again (the ledger path: tally_recorder_line
+  applies it to the ledger holding the line's GUID, as before the hook), never `master_deleted`; a Stock Item's or a
+  Godown's delete goes as `master_deleted` with its type. Test: TestMasterHookDeleteKnownType (a Pay Head's delete).
+- **L1.** `revoke all on public.tally_recorder_masters from anon` and on its id sequence from anon and authenticated
+  (Supabase's default privileges grant every new table in public to anon). Test: run_migration66.py section 5.
+- **L2 (the bridge, the rule of next-outbox's M1).** A line FinCom answers 'failed' (a master line on a cloud without 66,
+  a lock timeout, a deadlock) or leaves without a result is not marked sent: it goes again after RecorderRetrySec x 2^n
+  (30 minutes at most), RecorderFailedTries times (default 12); the other lines of the group are marked sent. The code is
+  next-outbox's, the same text. Test: TestMasterHookFailedNotMarkedSent.
+- **L3.** tally-ingest keeps only the types the add-on hooks (Pay Head, Stock Item, Godown); a Unit or Employee line is
+  'failed', "unknown master type", not kept. Stale comments put right. Test: run_recorder_masters_server.py.
+- **L4.** 66 is in run_migration_order.py (after 60, both orders, twice) and in tests/ci/tests.txt with
+  run_recorder_masters_server.py and run_ledger_delete_guid.py; run_migration66.py has its own port (30666; 62's test
+  has 30620).
+- Deploy order: run 66 before the tally-ingest of this branch and before the 2.4.0 bridge goes out (without 66 every
+  master line is answered 'failed' and, with L2, sent again up to RecorderFailedTries times, then given up).

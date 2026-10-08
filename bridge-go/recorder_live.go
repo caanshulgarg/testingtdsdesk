@@ -151,6 +151,12 @@ type change struct {
 	vchCounter int64
 	// next-masterhook: a master form's line (master_created / master_altered): the master's type ("Stock Item" ...)
 	masterType string
+	// 2.4.0 part 2 review M1: FinCom answered 200 but 'failed' for this line (a lock timeout, a deadlock) or gave no result
+	// for it: not marked sent; sent again from retryAt (RecorderRetrySec doubling, 30 minutes at most), failN times so far,
+	// RecorderFailedTries at most (FinCom's repeat check, migration 63, keeps a resend from being stored twice)
+	failN   int
+	retryAt time.Time
+	failWhy string
 }
 
 // the fields migration 56 keeps for a body that did not ask them (2.3.0's request): the party GSTIN, place of supply,
@@ -1005,8 +1011,10 @@ func liveSingle(l recLine) (recLine, string) {
 		}
 		return l, "imported"
 	case "after_delete":
-		if master && liveMTOf(l.GUID) != "" {
-			return l, "master_deleted" // open question 1: a master its add-on's form lines named (masterhook.go)
+		// open question 1: a master its add-on's form lines named (masterhook.go); review M1 of 2.4.0 part 2: not a Pay Head,
+		// a ledger in FinCom: its delete stays ledger_deleted (applied by FinCom to the ledger holding its GUID, as before)
+		if t := liveMTOf(l.GUID); master && t != "" && t != "Pay Head" {
+			return l, "master_deleted"
 		}
 		if master {
 			return l, "ledger_deleted"
@@ -2209,6 +2217,9 @@ func liveUploadStep() (int, bool) {
 		if b, had := live.back[c.key()]; had && now.Before(b.until) {
 			continue
 		}
+		if now.Before(c.retryAt) {
+			continue // 2.4.0 part 2 review M1: answered failed, sent again after its wait
+		}
 		key, head = c.key(), c
 		break
 	}
@@ -2247,7 +2258,7 @@ func liveUploadStep() (int, bool) {
 	var group []*change
 	size := 600
 	for _, c := range live.queue {
-		if c.key() != key {
+		if c.key() != key || now.Before(c.retryAt) {
 			continue
 		}
 		s := len(jsonText(c.wire())) + 1
@@ -2347,6 +2358,42 @@ func liveUploadStep() (int, bool) {
 		}
 		return 0, false
 	}
+	// 2.4.0 part 2 review M1: a line FinCom answered 'failed' (a lock timeout, a deadlock), or left without a result, is
+	// not marked sent: it stays on the PC and goes again after its wait, RecorderFailedTries times at most; the other lines
+	// of the group are marked sent
+	res := map[string]M{}
+	for _, x := range arr(r.json["results"]) {
+		if id := str(obj(x)["line_id"]); id != "" {
+			res[id] = obj(x)
+		}
+	}
+	maxTries := keepNum("RecorderFailedTries", 12)
+	var keep, giveUp []*change
+	// an answer {queued: n} with no results at all (a cloud before round 20 answered so): every line queued, as before
+	if r.json["results"] != nil || r.json["queued"] == nil {
+		g2 := group[:0:0]
+		for _, c := range group {
+			x, had := res[c.lineId]
+			if st := str(x["state"]); had && st != "" && st != "failed" {
+				g2 = append(g2, c)
+				continue
+			}
+			c.failN++
+			c.failWhy = "no result for the line"
+			if had {
+				c.failWhy = or(str(x["why"]), "failed")
+			}
+			if c.failN >= maxTries {
+				giveUp = append(giveUp, c)
+				g2 = append(g2, c)
+				continue
+			}
+			w := math.Min(1800, float64(keepNum("RecorderRetrySec", 30))*math.Pow(2, float64(c.failN)))
+			c.retryAt = nowFn().Add(time.Duration(w) * time.Second)
+			keep = append(keep, c)
+		}
+		group = g2
+	}
 	sentIDs := make([]string, 0, len(group))
 	var bodied, items, ledAgain []string
 	gone := map[*change]bool{}
@@ -2403,6 +2450,9 @@ func liveUploadStep() (int, bool) {
 	delete(live.back, key)
 	cs.sent += len(group)
 	cs.lastError, cs.last = "", nowS()
+	if len(keep) > 0 {
+		cs.lastError = fmt.Sprintf("%d line(s) answered failed by FinCom (%s); sent again", len(keep), cutRunes(keep[0].failWhy, 120))
+	}
 	if posting {
 		live.gapSet, live.gap = true, gap
 	}
@@ -2414,6 +2464,14 @@ func liveUploadStep() (int, bool) {
 	liveSaveOffsets()
 	liveHeldAdd(held)
 	liveGuidAnswers(group, arr(r.json["results"])) // 2.3.0: what FinCom's record said of a delete / cancel sent without a GUID
+	for _, c := range keep {
+		writeLog(fmt.Sprintf("Recorder: line %s of %s: FinCom answered %s (try %d of %d); kept here and sent again at %s, nothing is lost",
+			cutRunes(c.lineId, 40), company, cutRunes(c.failWhy, 160), c.failN, maxTries, c.retryAt.Format("15:04:05")))
+	}
+	for _, c := range giveUp {
+		writeLog(fmt.Sprintf("Recorder: line %s of %s: FinCom answered failed %d times (%s); not sent again: FinCom's record keeps it as failed (Sync activity)",
+			cutRunes(c.lineId, 40), company, c.failN, cutRunes(c.failWhy, 160)))
+	}
 	return len(group), false
 }
 
