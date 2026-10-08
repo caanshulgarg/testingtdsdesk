@@ -87,6 +87,7 @@ public static class MHT {
     for (int y = 0; y < h; y += 5) for (int x = 0; x < w; x += 5) { int v = Marshal.ReadInt32(bits, (y * w + x) * 4); s = (s ^ v) * 1099511628211L; }
     return s;
   }
+  public static void CtrlA() { keybd_event(0x11, 0, 0, UIntPtr.Zero); keybd_event(0x41, 0, 0, UIntPtr.Zero); keybd_event(0x41, 0, 2, UIntPtr.Zero); keybd_event(0x11, 0, 2, UIntPtr.Zero); }
   public static string Press(byte mod, byte vk, int stableMs, int maxMs) {
     int w = GetSystemMetrics(0), h = GetSystemMetrics(1);
     IntPtr scr = GetDC(IntPtr.Zero), mem = CreateCompatibleDC(scr), bits;
@@ -130,7 +131,7 @@ function FieldNow([string]$tag, [switch]$keep) {
   # (nearest first: a table's column head is among them), the text inside it
   $cands = @()
   foreach ($b in $boxes) {
-    if ($b.h -lt 10 -or $b.h -gt 40 -or $b.w -lt 20 -or $b.w -gt 700) { continue }
+    if ($b.h -lt 7 -or $b.h -gt 40 -or $b.w -lt 20 -or $b.w -gt 700) { continue }
     $cy = $b.y + $b.h / 2; $lx = -1; $left = ''; $val = ''
     foreach ($l in $lines) {
       $ly = $l.y + $l.h / 2
@@ -155,7 +156,9 @@ function FieldNow([string]$tag, [switch]$keep) {
   Write-Host ("[mh] {0}: field {1} left '{2}' heads '{3}' value '{4}' (boxes: {5}) | {6}" -f $n, $o.box, $o.left, (($o.heads | Select-Object -First 3) -join ' / '), $o.value, $all, $short)
   return $o
 }
-function FormUp($f) { if ($f.text -match 'Gateway ?of Tally' -and -not $f.left) { return $false }; if ($f.left) { return $true }; return ($f.box -ne 'none' -and $f.text -match '\bAccept\b' -and (($f.heads -join ' ') -notmatch 'Master (Creation|Alteration)')) }
+# a column-head / line-above regex for a master's name as OCR reads it (1 / l / I alike)
+function HRe([string]$n) { '^' + (([regex]::Escape($n)) -replace '[1lIi]', '[1lIi|]' -replace '\\ ', '\s*') + '$' }
+function FormUp($f) { if ($f.text -match 'Gateway ?of Tally' -and -not $f.left) { return $false }; if ($f.left) { return $true }; return ($f.text -match '\bAccept\b' -and (($f.heads -join ' ') -notmatch 'Master (Creation|Alteration)')) }
 # Walk a form: at each field, the first rule not yet used whose label regex matches (l: the label on the left; h: the column
 # head above) types its keys; otherwise Enter. Ends when every rule is used ($stop), the form is gone, or after $max fields.
 # Returns the labels seen (the log keeps them). A rule: @{ l = 'regex'; h = 'regex'; k = 'keys' }
@@ -176,7 +179,9 @@ function Walk([string]$tag, [object[]]$rules, [int]$max = 30, [switch]$stop) {
     if ($null -ne $hit) {
       $used[$hit] = $true
       Write-Host "[mh] $tag rule $hit ($($rules[$hit].l)$($rules[$hit].h)$($rules[$hit].t)) on '$($f.left)|$($f.head)': keys '$($rules[$hit].k)'"
-      KeysTo $rules[$hit].k 1.2
+      $kk = "$($rules[$hit].k)"
+      # the text first, then Enter on its own (run 37816773600: a list given the text and Enter in one go said 'Nothing selected')
+      if ($kk -match '^(.+?)\{ENTER\}$' -and $Matches[1] -notmatch '[{}%^]') { KeysTo $Matches[1] 0.8; KeysTo '{ENTER}' 1.2 } else { KeysTo $kk 1.2 }
       if ($rules[$hit].last) { break }
       $done = 0; foreach ($k in $used.Keys) { if (-not $rules[$k].opt) { $done++ } }
       if ($stop -and $done -ge $need) { break }
@@ -193,7 +198,7 @@ $mhSub = @{ 'Stock Item' = 'StockItem'; 'Godown' = 'Godown'; 'Pay Head' = 'Ledge
 $mhFetch = @{
   'Stock Item' = 'NAME, PARENT, BASEUNITS, ADDITIONALUNITS, ISBATCHWISEON, OPENINGBALANCE, OPENINGRATE, OPENINGVALUE, GSTAPPLICABLE, GSTTYPEOFSUPPLY, MASTERID, ALTERID, LANGUAGENAME.*, BATCHALLOCATIONS.*, GSTDETAILS.*, GSTDETAILS.STATEWISEDETAILS.*, GSTDETAILS.STATEWISEDETAILS.RATEDETAILS.*, HSNDETAILS.*'
   'Godown'     = 'NAME, PARENT, MASTERID, ALTERID, LANGUAGENAME.*'
-  'Pay Head'   = 'NAME, PARENT, PAYTYPE, CALCULATIONTYPE, AFFECTSNETSALARY, PAYSLIPNAME, CALCULATIONPERIOD, ATTENDANCETYPE, MASTERID, ALTERID, LANGUAGENAME.*'
+  'Pay Head'   = 'NAME, PARENT, PAYTYPE, CALCULATIONTYPE, SHOWINPAYSLIP, PAYSLIPNAME, CALCULATIONPERIOD, ATTENDANCETYPE, MASTERID, ALTERID, LANGUAGENAME.*'
 }
 # the master as Tally keeps it: a collection by name (its own fields, NATIVEMETHOD *, and the lists named) and the object
 # export by name; both kept, the check reads both
@@ -259,6 +264,20 @@ function MhGateway([string]$why = '') {
   & $script:TdsRestart
   return $true
 }
+# the save timed by Tally's own counter (run 37816773600: on 3.0 the screen never stays still, so "Ctrl+A to a still
+# screen" gave seconds with and without the add-on): Ctrl+A sent, then the company's ALTMSTID asked until it moves (each
+# ask a few ms; Tally answers when the save is done). Returns ms, -1 when it did not move in 10 s
+function MhAltM { $r = Post ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>MHAm</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + (SE $co1) + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="MHAm" ISMODIFY="No"><TYPE>Company</TYPE><FETCH>NAME, ALTMSTID</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') '' 10; return [int64]('0' + [regex]::Match("$r", '<ALTMSTID[^>]*>\s*(\d+)').Groups[1].Value) }
+function MhSaveT([string]$tag) {
+  $a0 = MhAltM
+  KeysTo '' 0
+  $sw = [Diagnostics.Stopwatch]::StartNew(); [MHT]::CtrlA(); $ms = -1
+  while ($sw.Elapsed.TotalSeconds -lt 10) { if ((MhAltM) -gt $a0) { $ms = [math]::Round($sw.Elapsed.TotalMilliseconds, 1); break } }
+  $f = FieldNow "$tag-savedT" -keep
+  if ($f.text -match 'Accept \?|Yes or No') { KeysTo 'y' 1 }
+  Write-Host "[mh] $tag Ctrl+A to ALTMSTID moved ($a0 ->): $ms ms"
+  return $ms
+}
 # Create -> <kind>: the Master Creation box, the kind typed, its form (7.x calls a godown Location: both tried)
 function MhOpenCreate([string]$kind, [string]$tag) {
   $names = if ($kind -eq 'Godown') { if ($script:gdKind) { @($script:gdKind) } else { @('Location', 'Godown') } } else { @($kind) }
@@ -281,7 +300,12 @@ function MhOpenAlter([string]$kind, [string]$name, [string]$tag) {
     KeysTo ('{BACKSPACE}' * 20) 0.3; KeysTo (SK $k) 1.5; KeysTo '{ENTER}' 2.5
     KeysTo (SK $name) 1.5; KeysTo '{ENTER}' 2.5
     $f = FieldNow "$tag-form"
-    if ($f.left -match '(^|\W)Name$' -and $f.value) { return $true }
+    if ($f.left -match '(^|\W)Name$' -and $f.value) {
+      $nz = { param($x) ("$x".ToLower() -replace '[1l|i]', 'i' -replace '0', 'o' -replace '[^a-z0-9]', '') }
+      if ((& $nz $f.value) -eq (& $nz $name)) { return $true }
+      Write-Host "[mh] $tag the alteration form open is '$($f.value)', not '$name': left"
+      return $false
+    }
     Write-Host "[mh] $tag no alteration form of '$name' after Alter > $k"
   }
   return $false
@@ -382,11 +406,11 @@ function MhPhase([string]$phase) {
   # ---------------- Godown
   MhCase $phase 'G1-create' 'Godown' "$P Godown 1" {
     if (-not (MhOpenCreate 'Godown' 'G1')) { return }
-    MhFill 'G1' @(@{ l = '(^|\W)Name$'; k = (SK "$P Godown 1") + '{ENTER}' }, @{ l = 'alias'; k = (SK "$P G1") + '{ENTER}' }, @{ l = '(^|\W)Under$'; k = 'Primary{ENTER}' })
+    MhFill 'G1' @(@{ l = '(^|\W)Name$'; k = (SK "$P Godown 1") + '{ENTER}' }, @{ l = 'alias'; h = (HRe "$P Godown 1"); k = (SK "$P G1") + '{ENTER}' }, @{ l = '(^|\W)Under$'; k = 'Primary{ENTER}' })
   } @(, @('NAME', [regex]::Escape("$P G1"))) $(if ($line) { 'godown_accept_post' })
   MhCase $phase 'G2-alter-alias' 'Godown' "$P Godown 1" {
     if (-not (MhOpenAlter 'Godown' "$P Godown 1" 'G2')) { return }
-    MhFill 'G2' @(@{ l = 'alias'; k = (SK "$P G1X") + '{ENTER}' })
+    MhFill 'G2' @(@{ l = 'alias'; h = (HRe "$P Godown 1"); k = (SK "$P G1X") + '{ENTER}' })
   } @(, @('NAME', [regex]::Escape("$P G1X"))) $(if ($line) { 'godown_accept_post' })
   MhCase $phase 'G3-rename' 'Godown' "$P Godown 1R" {
     if (-not (MhOpenAlter 'Godown' "$P Godown 1" 'G3')) { return }
@@ -403,11 +427,11 @@ function MhPhase([string]$phase) {
   # ---------------- Stock Item
   MhCase $phase 'S1-create' 'Stock Item' "$P Item 1" {
     if (-not (MhOpenCreate 'Stock Item' 'S1')) { return }
-    MhFill 'S1' @(@{ l = '(^|\W)Name$'; k = (SK "$P Item 1") + '{ENTER}' }, @{ l = 'alias'; k = (SK "$P I1") + '{ENTER}' }, @{ l = '(^|\W)Under$'; k = 'Primary{ENTER}'; opt = $true }, @{ l = '(^|\W)Units$'; k = 'Nos{ENTER}' })
+    MhFill 'S1' @(@{ l = '(^|\W)Name$'; k = (SK "$P Item 1") + '{ENTER}' }, @{ l = 'alias'; h = (HRe "$P Item 1"); k = (SK "$P I1") + '{ENTER}' }, @{ l = '(^|\W)Under$'; k = 'Primary{ENTER}'; opt = $true }, @{ l = '(^|\W)Units$'; k = 'Nos{ENTER}' })
   } @(@('NAME', [regex]::Escape("$P I1")), @('BASEUNITS', 'Nos')) $(if ($line) { 'stockitem_accept_post' })
   MhCase $phase 'S2-alter-alias' 'Stock Item' "$P Item 1" {
     if (-not (MhOpenAlter 'Stock Item' "$P Item 1" 'S2')) { return }
-    MhFill 'S2' @(@{ l = 'alias'; k = (SK "$P I1X") + '{ENTER}' })
+    MhFill 'S2' @(@{ l = 'alias'; h = (HRe "$P Item 1"); k = (SK "$P I1X") + '{ENTER}' })
   } @(, @('NAME', [regex]::Escape("$P I1X"))) $(if ($line) { 'stockitem_accept_post' })
   MhCase $phase 'S3-rename' 'Stock Item' "$P Item 1R" {
     if (-not (MhOpenAlter 'Stock Item' "$P Item 1" 'S3')) { return }
@@ -418,7 +442,6 @@ function MhPhase([string]$phase) {
   MhCase $phase 'S4-gst-hsn' 'Stock Item' "$P Item 1R" {
     if (-not (MhOpenAlter 'Stock Item' "$P Item 1R" 'S4')) { return }
     MhFill 'S4' @(
-      @{ l = 'GST Applicab'; k = 'Applicable{ENTER}'; opt = $true },
       @{ l = 'HS.{0,3}SAC (&|and) Related|HS.{0,3}SAC Details$'; k = 'Specify Details Here{ENTER}' },
       @{ l = '(^|\W)HS.{0,3}SAC$|HS.{0,3}SAC Code'; k = '84713010{ENTER}' },
       @{ l = 'GST Rate (&|and) Related|GST Rate Details$|Set.?Alter GST'; k = 'Specify Details Here{ENTER}' },
@@ -434,7 +457,7 @@ function MhPhase([string]$phase) {
       if (-not (MhOpenCreate 'Stock Item' 'S6')) { return }
       MhFill 'S6' @(
         @{ l = '(^|\W)Name$'; k = (SK "$P Item B") + '{ENTER}' }, @{ l = '(^|\W)Units$'; k = 'Nos{ENTER}' }, @{ l = 'Maintain in batches'; k = 'y{ENTER}' },
-        @{ l = 'Opening Balance'; k = '{ENTER}' },
+        @{ l = 'Opening Balance'; k = '15{ENTER}' },
         @{ h = 'Godown|Location'; k = 'MH Main{ENTER}' }, @{ h = 'Batch'; k = (SK "$P B1") + '{ENTER}' }, @{ h = '^Quantity'; k = '10{ENTER}' }, @{ h = '^Rate'; k = '50{ENTER}' },
         @{ h = 'Godown|Location'; k = 'MH Main{ENTER}' }, @{ h = 'Batch'; k = (SK "$P B2") + '{ENTER}' }, @{ h = '^Quantity'; k = '5{ENTER}' }, @{ h = '^Rate'; k = '50{ENTER}' },
         @{ h = 'Godown|Location'; k = 'End of List{ENTER}' }) 60
@@ -465,16 +488,15 @@ function MhPhase([string]$phase) {
       @{ l = '(^|\W)Name$'; k = (SK "$P Basic") + '{ENTER}' }, @{ l = 'Pay ?head type'; k = 'Earnings for Employees{ENTER}' },
       @{ l = '(^|\W)Under$'; k = 'Indirect Expenses{ENTER}' }, @{ l = 'Affect net salary'; k = 'y{ENTER}' },
       @{ l = 'Calculation type'; k = 'As User Defined Value{ENTER}' }) 30
-  } @(@('PAYTYPE', 'Earnings for Employees'), @('PARENT', 'Indirect Expenses'), @('AFFECTSNETSALARY', 'Yes'), @('CALCULATIONTYPE', 'As User Defined Value')) $(if ($line) { 'payhead_accept_post' })
+  } @(@('PAYTYPE', 'Earnings for Employees'), @('PARENT', 'Indirect Expenses'), @('SHOWINPAYSLIP', 'Yes'), @('CALCULATIONTYPE', 'As User Defined Value')) $(if ($line) { 'payhead_accept_post' })
   MhCase $phase 'P2-create-computed-slab' 'Pay Head' "$P HRA" {
     if (-not (MhOpenCreate 'Pay Head' 'P2')) { return }
     MhFill 'P2' @(
       @{ l = '(^|\W)Name$'; k = (SK "$P HRA") + '{ENTER}' }, @{ l = 'Pay ?head type'; k = 'Earnings for Employees{ENTER}' },
       @{ l = '(^|\W)Under$'; k = 'Indirect Expenses{ENTER}' }, @{ l = 'Affect net salary'; k = 'y{ENTER}' },
-      @{ l = 'Calculation type'; k = 'As Computed Value{ENTER}' }, @{ l = '(^|\W)Compute$'; k = 'On Specified Formula{ENTER}' },
-      @{ h = '^Function'; k = 'Add Pay Head{ENTER}' }, @{ h = '^Pay ?Head$'; k = (SK "$P Basic") + '{ENTER}' }, @{ h = '^Function'; k = 'End of List{ENTER}' },
-      @{ l = 'Effective From'; h = 'Effective From'; k = '1-4-2026{ENTER}' }, @{ h = 'Amount Upto|Upto'; k = '{ENTER}' }, @{ h = 'Slab Type'; k = 'Percentage{ENTER}' }, @{ h = '^Value'; k = '40{ENTER}' }) 45
-  } @(@('CALCULATIONTYPE', 'As Computed Value'), @('[A-Z.]*', 'On Specified Formula'), @('[A-Z.]*', [regex]::Escape("$P Basic")), @('[A-Z.]*', '40(\.0+)?( ?%)?')) $(if ($line) { 'payhead_accept_post' })
+      @{ l = 'Calculation type'; k = 'As Computed Value{ENTER}' }, @{ l = '(^|\W)Compute$'; k = '{ENTER}' },
+      @{ l = 'Effective From'; h = 'Effective From'; k = '1-4-2026{ENTER}' }, @{ h = 'Slab Type'; k = 'Percentage{ENTER}' }, @{ h = '^Value|Percent'; k = '40{ENTER}' }) 45
+  } @(@('CALCULATIONTYPE', 'As Computed Value'), @('[A-Z.]*', '40(\.0+)?( ?%)?')) $(if ($line) { 'payhead_accept_post' })
   if ($att) {
     MhCase $phase 'P3-create-attendance' 'Pay Head' "$P Attend" {
       if (-not (MhOpenCreate 'Pay Head' 'P3')) { return }
@@ -494,13 +516,18 @@ function MhPhase([string]$phase) {
         @{ l = 'Calculation type'; k = 'On Production{ENTER}' }, @{ l = 'Production type'; k = 'MH Pieces{ENTER}' }) 35
     } @(@('CALCULATIONTYPE', 'On Production'), @('[A-Z.]*', 'MH Pieces')) $(if ($line) { 'payhead_accept_post' })
   }
-  MhCase $phase 'P5-alter-net-salary' 'Pay Head' "$P Basic" {
+  MhCase $phase 'P5-alter-payslip-name' 'Pay Head' "$P Basic" {
     if (-not (MhOpenAlter 'Pay Head' "$P Basic" 'P5')) { return }
-    MhFill 'P5' @(@{ l = 'Affect net salary'; k = 'n{ENTER}' }, @{ l = 'displayed in payslip'; k = (SK "$P Basic Pay") + '{ENTER}' })
-  } @(@('AFFECTSNETSALARY', 'No'), @('[A-Z.]*', [regex]::Escape("$P Basic Pay"))) $(if ($line) { 'payhead_accept_post' })
+    MhFill 'P5' @(, @{ l = 'displayed in payslip'; k = (SK "$P Basic Pay") + '{ENTER}' })
+  } @(, @('PAYSLIPNAME', [regex]::Escape("$P Basic Pay"))) $(if ($line) { 'payhead_accept_post' })
+  # "Affect net salary" is SHOWINPAYSLIP in Tally's export (run 37816773600)
+  MhCase $phase 'P5b-alter-net-salary' 'Pay Head' "$P Basic" {
+    if (-not (MhOpenAlter 'Pay Head' "$P Basic" 'P5b')) { return }
+    MhFill 'P5b' @(, @{ l = 'Affect net salary'; k = 'n{ENTER}' })
+  } @(, @('SHOWINPAYSLIP', 'No')) $(if ($line) { 'payhead_accept_post' })
   MhCase $phase 'P6-alter-slab' 'Pay Head' "$P HRA" {
     if (-not (MhOpenAlter 'Pay Head' "$P HRA" 'P6')) { return }
-    MhFill 'P6' @(@{ l = '(^|\W)Compute$'; k = '{ENTER}' }, @{ h = '^Function'; k = 'End of List{ENTER}' }, @{ h = '^Value'; k = '50{ENTER}' }) 40
+    MhFill 'P6' @(@{ l = '(^|\W)Compute$'; k = '{ENTER}' }, @{ h = '^Value|Percent'; k = '50{ENTER}' }) 40
   } @(, @('[A-Z.]*', '50(\.0+)?( ?%)?')) $(if ($line) { 'payhead_accept_post' })
   # ---------------- deletes (Alter, Alt+D, y): the master gone; before_delete / after_delete lines
   MhCase $phase 'D1-delete-godown' 'Godown' "$P Godown 2" { MhDelete 'Godown' "$P Godown 2" 'D1' } @() $(if ($line) { 'after_delete|before_delete' }) -gone
@@ -512,12 +539,12 @@ function MhPhase([string]$phase) {
       $ms = @()
       for ($i = 1; $i -le 5; $i++) {
         if (-not (MhOpenAlter $tm[0] $tm[1] "T-$($tm[0] -replace ' ', '')$i")) { $ms += -1; continue }
-        $w = Walk "T$i" @(@{ l = 'alias'; k = (SK "$P T$i") + '{ENTER}' }) 4 -stop
-        $s = MhSave "T-$($tm[0] -replace ' ', '')$i"; $ms += $s.ms
+        $w = Walk "T$i" @(@{ l = 'alias'; h = (HRe $tm[1]); k = (SK "$P T$i") + '{ENTER}' }) 4 -stop
+        $ms += (MhSaveT "T-$($tm[0] -replace ' ', '')$i")
       }
       $null = MhGateway 'after the timing'
       $script:mh["$phase|T-$($tm[0])"] = [pscustomobject]@{ phase = $phase; case = "T-$($tm[0])"; kind = $tm[0]; ms = $ms }
-      Info "mh $phase save time $($tm[0]) (alter, Ctrl+A to a still screen): $($ms -join ', ') ms"
+      Info "mh $phase save time $($tm[0]) (alter, Ctrl+A to Tally's ALTMSTID moved): $($ms -join ', ') ms"
     }
   }
 }
@@ -560,6 +587,6 @@ foreach ($kd in 'Godown', 'Stock Item', 'Pay Head') {
   if (-not $ta -or -not $tb) { continue }
   $ma = & $med $ta.ms; $mb = & $med $tb.ms
   $rows += [pscustomobject]@{ rel = $rel; kind = $kd; case = 'T-save-time'; state = 'MEASURE'; msA = $ma; msB = $mb; diff = "A $($ta.ms -join ',') / B $($tb.ms -join ',')" }
-  Add-Content -Path $resultsFile -Encoding UTF8 -Value ("MEASURE mh {0} save time (alter, Ctrl+A to a still screen, 5 each): with the add-on {1} ms (median {2}); no TDL {3} ms (median {4}); added {5} ms" -f $kd, ($ta.ms -join ', '), $ma, ($tb.ms -join ', '), $mb, $(if ($ma -ge 0 -and $mb -ge 0) { $ma - $mb } else { '-' }))
+  Add-Content -Path $resultsFile -Encoding UTF8 -Value ("MEASURE mh {0} save time (alter, Ctrl+A to Tally's ALTMSTID moved, 5 each): with the add-on {1} ms (median {2}); no TDL {3} ms (median {4}); added {5} ms" -f $kd, ($ta.ms -join ', '), $ma, ($tb.ms -join ', '), $mb, $(if ($ma -ge 0 -and $mb -ge 0) { $ma - $mb } else { '-' }))
 }
 $rows | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $out 'mh-summary.json') -Encoding UTF8
