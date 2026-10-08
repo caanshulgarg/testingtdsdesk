@@ -491,17 +491,38 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
       .sort((a, b) => Date.parse(String(a.received_at)) - Date.parse(String(b.received_at)));
     // 2.3.4: the slow-ended lines of 7 to 30 days ago (kept only below, once their ":resolved" rows are read), after these
     if (unresolved && fast) {
+      // 2.3.4 (re-review M3): only the slow-ended lines are read, never the oldest 400 held rows of any kind: the lines
+      // whose own held words are the slow words, and the lines whose ":resolved" row carries them (read by their ids)
       const since30 = new Date(Date.now() - HELD_SLOW_DAYS * 86400000).toISOString();
-      const { data: d30, error: e30 } = await db.from("tally_recorder_lines").select("line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date, book_id, received_at, bridge, device_id, object_guid, body, held_why, payload")
-        .eq("firm_id", firm).eq("device_id", dev.id).eq("bridge", bridge).eq("state", "held").in("event", ["created", "altered", "imported"]).gt("received_at", since30).lte("received_at", since)
-        .order("received_at", { ascending: true }).limit(400);
-      if (e30) console.log("tally-ingest beat: " + what + ": the slow-ended lines of the last " + HELD_SLOW_DAYS + " days not read:", String(e30.message || "").slice(0, 200));
-      else if (Array.isArray(d30)) {
-        const old = (d30 as any[]).filter((r) => r && String(r.device_id ?? dev.id) === String(dev.id) && String(r.bridge ?? "") === bridge && !String(r.line_id || "").endsWith(":resolved")
+      const cols = "line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date, book_id, received_at, bridge, device_id, object_guid, body, held_why, payload";
+      const base = () => db.from("tally_recorder_lines").select(cols).eq("firm_id", firm).eq("device_id", dev.id).eq("bridge", bridge).eq("state", "held");
+      const got: any[] = [];
+      let bad = "";
+      const ids = new Set<string>();
+      for (const w of SLOW_END_WORDS) {
+        const { data: d1, error: e1 } = await base().ilike("held_why", "%" + w + "%").gt("received_at", since30).order("received_at", { ascending: true }).limit(400);
+        if (e1) { bad = String(e1.message || ""); break; }
+        for (const r of (d1 || []) as any[]) {
+          const lid = String(r?.line_id || "");
+          if (lid.endsWith(":resolved")) ids.add(lid.slice(0, -":resolved".length)); else got.push(r);
+        }
+      }
+      // the ":resolved" rows read above came with the slow words: their own lines, 60 ids a call
+      const need = [...ids].filter((x) => x && !got.some((r) => String(r.line_id) === x));
+      for (let i = 0; !bad && i < need.length; i += 60) {
+        const { data: d2, error: e2 } = await base().in("line_id", need.slice(i, i + 60));
+        if (e2) { bad = String(e2.message || ""); break; }
+        got.push(...((d2 || []) as any[]));
+      }
+      if (bad) console.log("tally-ingest beat: " + what + ": the slow-ended lines of the last " + HELD_SLOW_DAYS + " days not read:", bad.slice(0, 200));
+      else {
+        const seen = new Set(rows.map((r) => String(r.line_id || "")));
+        const old = got.filter((r) => r && String(r.device_id ?? dev.id) === String(dev.id) && String(r.bridge ?? "") === bridge && String(r.state ?? "held") === "held" && !String(r.line_id || "").endsWith(":resolved")
+          && ["created", "altered", "imported"].includes(String(r.event || "")) && !seen.has(String(r.line_id || ""))
           && Date.parse(String(r.received_at)) > Date.now() - HELD_SLOW_DAYS * 86400000 && Date.parse(String(r.received_at)) <= Date.now() - 7 * 86400000 && want(r))
           .sort((a, b) => Date.parse(String(a.received_at)) - Date.parse(String(b.received_at)));
-        for (const r of old) r._old = true;
-        rows = [...rows, ...old];
+        const once = new Set<string>();
+        for (const r of old) { const k = String(r.line_id); if (once.has(k)) continue; once.add(k); r._old = true; rows.push(r); }
       }
     }
     if (!rows.length) return [];
