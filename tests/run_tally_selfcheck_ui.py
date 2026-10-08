@@ -82,7 +82,9 @@ with sync_playwright() as p:
     ok({l["co"]: l["words"] for l in lines()} == {CO: W_OK, CO2: W_MISS}, "staff: the same lines")
     # ---- 4. a cloud without migration 65: nothing shown, no error, the computer's line as before
     scene(ROWS, missing_table=True)
-    ok(lines() == [] and pg.locator('#app [data-computer="%s"] [data-read-text]' % D1).count() == 1 and not pg.locator("#app [data-control-err]").count(),
+    # release-240: 2.3.5's card says the computer's state in its one status line ([data-status-line]; plain reading has no
+    # [data-read-text] of its own any more)
+    ok(lines() == [] and pg.locator('#app [data-computer="%s"] [data-status-line]' % D1).count() == 1 and not pg.locator("#app [data-control-err]").count(),
        "no table: no line, the rest of the page as before")
     ok(not errors, "no page errors " + str(errors[:2]))
     br.close()
