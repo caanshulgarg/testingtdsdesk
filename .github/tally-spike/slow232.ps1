@@ -199,6 +199,15 @@ function S2Import($co, $xml, $label) {
     else { Write-Host "[slow232] ${label}: MasterID $mid (LASTVCHID) not in Tally's list of $co1" }
     Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO slow232 $label ($co1): MasterID $mid (LASTVCHID), Tally's number '$no', AlterID $aid"
   }
+  elseif ($env:ONLY -eq 'fast234' -and $mid -gt 0) {
+    # fast234 run 37720646660: Tally numbers the large company's Journals itself too (F234-BIG-1 became 8001) and listing
+    # 40,000 entries is slow: its number and AlterID read by the object export of that one voucher (keyed, harness only)
+    $q = '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Object</TYPE><SUBTYPE>Voucher</SUBTYPE><ID TYPE="Name">ID:' + $mid + '</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + (S2Esc $co) + '</SVCURRENTCOMPANY></STATICVARIABLES><FETCHLIST><FETCH>VOUCHERNUMBER</FETCH><FETCH>ALTERID</FETCH></FETCHLIST></DESC></BODY></ENVELOPE>'
+    $a = "$(Post 9000 $q '')"
+    $n2 = [regex]::Match($a, '<VOUCHERNUMBER[^>]*>([^<]*)</VOUCHERNUMBER>').Groups[1].Value; $a2 = [regex]::Match($a, '<ALTERID[^>]*>\s*(\d+)').Groups[1].Value
+    if ($n2) { $no = $n2 }; if ($a2) { $aid = [int64]$a2 }
+    Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO fast234 $label ($co): MasterID $mid (LASTVCHID), Tally's number '$no', AlterID $aid"
+  }
   if (-not $cg -or $mid -le 0) { Write-Host "[slow232] ${label}: no line written (company GUID '$cg', MasterID $mid)"; return $r }
   $guid = '{0}-{1:x8}' -f $cg, $mid
   $vd = [DateTime]::ParseExact($d8, 'yyyyMMdd', $null).ToString('d-MMM-yy', [Globalization.CultureInfo]::InvariantCulture)
