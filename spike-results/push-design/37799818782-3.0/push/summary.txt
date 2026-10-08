@@ -1,0 +1,60 @@
+[15:58:07.420] push-design on TallyPrime 3.0: reps 5, heavy 3000 ledgers / 3000 items / up to 30000 vouchers (40 min), postings 1
+[15:58:10.092] system clock step after timeBeginPeriod(1): 1.233 ms (min 0.0033, max 20.2068)
+[15:58:10.126] two files written 2 ms apart: NTFS write times 8.0006 ms apart
+[15:58:10.146] light company folder: D:\a\_temp\TallyData\100000
+[15:58:10.194] fast234 (fast234c) on TallyPrime 3.0: today's request 2927 chars, 61 fields
+[15:58:10.224] fast234c on TallyPrime 3.0: company A 'FinCom Spike Co' in folder 100000; folders: 100000
+[15:58:41.444] Tally started (c-create) in 28.2 s; companies open:  -> True
+[15:59:06.880] company B 'FinCom Other Co' made in folder 100001 (key path 1)
+[15:59:37.873] Tally started (c-both) in 28 s; companies open: FinCom Other Co | FinCom Spike Co -> True
+[15:59:37.940] import B ledgers: 2 sent, created 2, errors 0, 22.1 ms
+[15:59:38.005] import B journals: 3 sent, created 3, errors 0, 56.1 ms
+[15:59:38.045] import A journals: 6 sent, created 6, errors 0, 36 ms
+[15:59:38.098] A's vouchers: 7 (MasterIDs 1,2,3,4,5,6,7)
+[15:59:38.099] B's vouchers: 3 (MasterIDs 1,2,3)
+[15:59:38.103] cases: A only 7; B only ; both 1; neither 987654
+[15:59:38.108] both open: Tally's company list: FinCom Other Co FinCom Spike Co
+[15:59:38.131] C open-A-aonly: SVCURRENTCOMPANY 'FinCom Spike Co' ID:7 -> 46802 chars in 9.6 ms; voucher MasterID '7' narration 'fast234c A journal 6'; starts: <ENVELOPE> <HEADER> <VERSION>1</VERSION> <STATUS>1</STATUS> <PRODMAJORVER>1</PRODMAJORVER> <PRODMINORVER>1</PRODMINORVER> <PRODMAJORREL>3</PRODMAJORREL> <PRODMINORREL>0</PRODMINORREL> <PRODTYPE>5</PRO
+[15:59:38.137] C open-A-bonly: SVCURRENTCOMPANY 'FinCom Spike Co' ID: -> 50 chars in 3.2 ms; voucher MasterID '' narration ''; answer: <ERRORMSG>Could not find Voucher:ID:!</ERRORMSG>
+[15:59:38.142] C open-B-bonly: SVCURRENTCOMPANY 'FinCom Other Co' ID: -> 50 chars in 2.5 ms; voucher MasterID '' narration ''; answer: <ERRORMSG>Could not find Voucher:ID:!</ERRORMSG>
+[15:59:38.146] C open-B-aonly: SVCURRENTCOMPANY 'FinCom Other Co' ID:7 -> 51 chars in 2.5 ms; voucher MasterID '' narration ''; answer: <ERRORMSG>Could not find Voucher:ID:7!</ERRORMSG>
+[15:59:38.150] C open-A-none: SVCURRENTCOMPANY 'FinCom Spike Co' ID:987654 -> 56 chars in 2.5 ms; voucher MasterID '' narration ''; answer: <ERRORMSG>Could not find Voucher:ID:987654!</ERRORMSG>
+[15:59:38.163] C open-A-both: SVCURRENTCOMPANY 'FinCom Spike Co' ID:1 -> 46803 chars in 8.4 ms; voucher MasterID '1' narration 'spike TDSDesk:test-1'; starts: <ENVELOPE> <HEADER> <VERSION>1</VERSION> <STATUS>1</STATUS> <PRODMAJORVER>1</PRODMAJORVER> <PRODMINORVER>1</PRODMINORVER> <PRODMAJORREL>3</PRODMAJORREL> <PRODMINORREL>0</PRODMINORREL> <PRODTYPE>5</PRO
+[15:59:38.175] C open-B-both: SVCURRENTCOMPANY 'FinCom Other Co' ID:1 -> 46787 chars in 8.9 ms; voucher MasterID '1' narration 'fast234c B journal 1'; starts: <ENVELOPE> <HEADER> <VERSION>1</VERSION> <STATUS>1</STATUS> <PRODMAJORVER>1</PRODMAJORVER> <PRODMINORVER>1</PRODMINORVER> <PRODMAJORREL>3</PRODMAJORREL> <PRODMINORREL>0</PRODMINORREL> <PRODTYPE>5</PRO
+[16:00:09.180] Tally started (c-closedA-A-aonly) in 28 s; companies open: FinCom Other Co -> True
+[16:00:09.184] C closedA-A-aonly: Tally's company list before: FinCom Other Co
+[16:00:29.203] C closedA-A-aonly: SVCURRENTCOMPANY 'FinCom Spike Co' ID:7 -> 0 chars in 20011.6 ms; voucher MasterID '' narration ''; answer: 
+[16:00:44.262] C closedA-A-aonly: after it, Tally's company list answered: NO (0 chars, 15002.8 ms)
+[16:01:15.258] Tally started (c-closedA-A-bonly) in 28 s; companies open: FinCom Other Co -> True
+[16:01:15.262] C closedA-A-bonly: Tally's company list before: FinCom Other Co
+[16:01:35.268] C closedA-A-bonly: SVCURRENTCOMPANY 'FinCom Spike Co' ID: -> 0 chars in 20003.1 ms; voucher MasterID '' narration ''; answer: 
+[16:01:50.333] C closedA-A-bonly: after it, Tally's company list answered: NO (0 chars, 15002 ms)
+[16:02:21.356] Tally started (c-closedA-A-none) in 28 s; companies open: FinCom Other Co -> True
+[16:02:21.360] C closedA-A-none: Tally's company list before: FinCom Other Co
+[16:02:41.366] C closedA-A-none: SVCURRENTCOMPANY 'FinCom Spike Co' ID:987654 -> 0 chars in 20002.7 ms; voucher MasterID '' narration ''; answer: 
+[16:02:56.422] C closedA-A-none: after it, Tally's company list answered: NO (0 chars, 15001.8 ms)
+[16:03:27.400] Tally started (c-closedA-A-both) in 28 s; companies open: FinCom Other Co -> True
+[16:03:27.404] C closedA-A-both: Tally's company list before: FinCom Other Co
+[16:03:47.408] C closedA-A-both: SVCURRENTCOMPANY 'FinCom Spike Co' ID:1 -> 0 chars in 20001.8 ms; voucher MasterID '' narration ''; answer: 
+[16:04:02.463] C closedA-A-both: after it, Tally's company list answered: NO (0 chars, 15001.4 ms)
+[16:04:33.455] Tally started (c-closedA-nosuch-bonly) in 28 s; companies open: FinCom Other Co -> True
+[16:04:33.460] C closedA-nosuch-bonly: Tally's company list before: FinCom Other Co
+[16:04:53.465] C closedA-nosuch-bonly: SVCURRENTCOMPANY 'FinCom No Such Co' ID: -> 0 chars in 20002.3 ms; voucher MasterID '' narration ''; answer: 
+[16:05:08.522] C closedA-nosuch-bonly: after it, Tally's company list answered: NO (0 chars, 15003.2 ms)
+[16:05:39.526] Tally started (c-closedB-B-bonly) in 28 s; companies open: FinCom Spike Co -> True
+[16:05:39.530] C closedB-B-bonly: Tally's company list before: FinCom Spike Co
+[16:05:39.554] C closedB-B-bonly-control-before: SVCURRENTCOMPANY 'FinCom Spike Co' ID:7 -> 46801 chars in 21.3 ms; voucher MasterID '7' narration 'fast234c A journal 6'; starts: <ENVELOPE> <HEADER> <VERSION>1</VERSION> <STATUS>1</STATUS> <PRODMAJORVER>1</PRODMAJORVER> <PRODMINORVER>1</PRODMINORVER> <PRODMAJORREL>3</PRODMAJORREL> <PRODMINORREL>0</PRODMINORREL> <PRODTYPE>5</PRO
+[16:05:59.558] C closedB-B-bonly: SVCURRENTCOMPANY 'FinCom Other Co' ID: -> 0 chars in 20001.3 ms; voucher MasterID '' narration ''; answer: 
+[16:06:14.620] C closedB-B-bonly: after it, Tally's company list answered: NO (0 chars, 15002.3 ms)
+[16:06:34.625] C closedB-B-bonly-control-after: SVCURRENTCOMPANY 'FinCom Spike Co' ID:7 -> 0 chars in 20002.1 ms; voucher MasterID '' narration ''; answer: 
+[16:07:05.619] Tally started (c-closedB-B-aonly) in 28 s; companies open: FinCom Spike Co -> True
+[16:07:05.624] C closedB-B-aonly: Tally's company list before: FinCom Spike Co
+[16:07:05.654] C closedB-B-aonly-control-before: SVCURRENTCOMPANY 'FinCom Spike Co' ID:7 -> 46801 chars in 27.2 ms; voucher MasterID '7' narration 'fast234c A journal 6'; starts: <ENVELOPE> <HEADER> <VERSION>1</VERSION> <STATUS>1</STATUS> <PRODMAJORVER>1</PRODMAJORVER> <PRODMINORVER>1</PRODMINORVER> <PRODMAJORREL>3</PRODMAJORREL> <PRODMINORREL>0</PRODMINORREL> <PRODTYPE>5</PRO
+[16:07:25.660] C closedB-B-aonly: SVCURRENTCOMPANY 'FinCom Other Co' ID:7 -> 0 chars in 20002.5 ms; voucher MasterID '' narration ''; answer: 
+[16:07:40.713] C closedB-B-aonly: after it, Tally's company list answered: NO (0 chars, 15001.9 ms)
+[16:08:00.718] C closedB-B-aonly-control-after: SVCURRENTCOMPANY 'FinCom Spike Co' ID:7 -> 0 chars in 20002.4 ms; voucher MasterID '' narration ''; answer: 
+[16:08:31.701] Tally started (c-noneopen-A-aonly) in 28 s; companies open:  -> True
+[16:08:31.705] C noneopen-A-aonly: Tally's company list before: 
+[16:08:51.709] C noneopen-A-aonly: SVCURRENTCOMPANY 'FinCom Spike Co' ID:7 -> 0 chars in 20001.6 ms; voucher MasterID '' narration ''; answer: 
+[16:09:06.763] C noneopen-A-aonly: after it, Tally's company list answered: NO (0 chars, 15002.2 ms)
+[16:09:09.767] done (fast234 fast234c)
