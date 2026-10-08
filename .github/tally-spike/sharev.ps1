@@ -118,7 +118,7 @@ function ShareEntry($tag, [string[]]$keys, $typeWords, $account, $rows, $narr, [
     # (run 37754251128, S3 on 3.0-6.2: after an invoice-type row's bills Tally put the cursor in the next row's LEDGER
     # field, To and the ledger already filled, its list open; 'To' went into the ledger field and Ledger Creation came
     # up) To only where the row starts in its By / To field (no ledger list up)
-    if ($byTo -and $r -gt 1) { $tb = TdsScreen "$tag-row$r-before"; if ($tb -notmatch 'List of Led') { $null = TK 'To{ENTER}' 1.5 "$tag-row$r-to" } }
+    if ($byTo -and $r -gt 1) { $tb = TdsScreen "$tag-row$r-before"; if ($tb -notmatch 'List of Led') { $side = if ($row.Count -gt 3 -and $row[3]) { $row[3] } else { 'To' }; $null = TK "$side{ENTER}" 1.5 "$tag-row$r-to" } }
     $null = TK ((SK $row[0]) + '{ENTER}') 2 "$tag-row$r"
     ShareSubs "$tag-row$r-a"
     if ($row[1]) { $null = TK ((SK "$($row[1])") + '{ENTER}') 2 "$tag-row$r-amt" } else { $null = TK '{ENTER}' 2 "$tag-row$r-amt" }
@@ -243,9 +243,11 @@ $null = ShareCase 'copy-sales-new' 'Alt+2 copy of the New Ref sales invoice (its
 $null = ShareCase 'sales-new2' 'sales item invoice, a second one (Tally allocates its bill at the save: no bill-wise screen in item invoice mode, run 37719717293)' { ShareInvoice 'S2' @('{F8}') 'Share Party' 'Share Sales' @() 3 100 @('Agst Ref', 'ADVS-1') 'share sales agst' }
 $null = ShareCase 'purchase-new' 'purchase item invoice, New Ref bill (PI-1)' { ShareInvoice 'U1' @('{F9}') 'Share Supplier' 'Share Purchase' @('SUP-1{ENTER}', '{ENTER}') 2 80 @('New Ref', 'PI-1') 'share purchase new' }
 $null = ShareCase 'purchase-new2' 'purchase item invoice, a second one (Tally allocates its bill at the save)' { ShareInvoice 'U2' @('{F9}') 'Share Supplier' 'Share Purchase' @('SUP-2{ENTER}', '{ENTER}') 3 80 @('Agst Ref', 'ADVP-1') 'share purchase agst' }
+# (run 37795355169, U3 on every release: a purchase in As Voucher mode starts with "To" and a list of party ledgers only;
+# "Share Purchase" there was a spelling error) the supplier first (Cr, with its bill), then the purchase ledger (By)
 # an invoice's Agst Ref is typed where Tally asks for it: "As Voucher" mode (Ctrl+H), the party row's bill-wise screen
 $null = ShareCase 'sales-agst' 'sales in As Voucher mode, the party Dr with an Agst Ref bill (the advance ADVS-1)' { ShareEntry 'S3' @('{F8}', '^h', 'As Voucher{ENTER}') 'Sales' $null @(@('Share Party', '300', @('Agst Ref', 'ADVS-1')), @('Share Sales', '', $null)) 'share sales agst' -byTo }
-$null = ShareCase 'purchase-agst' 'purchase in As Voucher mode, the supplier Cr with an Agst Ref bill (the advance ADVP-1)' { ShareEntry 'U3' @('{F9}', '^h', 'As Voucher{ENTER}') 'Purchase' $null @(@('Share Purchase', '240', $null), @('Share Supplier', '', @('Agst Ref', 'ADVP-1'))) 'share purchase agst' -byTo -head @('SUP-3{ENTER}', '{ENTER}') }
+$null = ShareCase 'purchase-agst' 'purchase in As Voucher mode, the supplier Cr with an Agst Ref bill (the advance ADVP-1)' { ShareEntry 'U3' @('{F9}', '^h', 'As Voucher{ENTER}') 'Purchase' $null @(@('Share Supplier', '240', @('Agst Ref', 'ADVP-1')), @('Share Purchase', '', $null, 'By')) 'share purchase agst' -byTo -head @('SUP-3{ENTER}', '{ENTER}') }
 $null = ShareCase 'credit-note' 'credit note, item invoice, Agst Ref the sales bill SB-1' { ShareInvoice 'N1' @('{F10}', 'Credit Note{ENTER}') 'Share Party' 'Share Sales' @() 1 100 @('Agst Ref', 'SB-1') 'share credit note' }
 $null = ShareCase 'copy-journal-party' 'Alt+2 copy of the journal with a party (its New Ref JN-1 as the copy carries it)' { ShareDayBookLast 'D2' 'Journal'; $null = TK '%2' 3 'D2-copy'; ShareAccept 'D2' $null }
 $null = ShareCase 'copy-receipt-plain' 'Alt+2 copy of the receipt with no party' { ShareDayBookLast 'D3' 'Receipt'; $null = TK '%2' 3 'D3-copy'; ShareAccept 'D3' $null }
@@ -296,6 +298,9 @@ try {
       # (7.1: a "Want to save your time?" box over Manual Recon; D: Don't Show Again closes it)
       for ($q7 = 0; $q7 -lt 3 -and $t7 -match 'save your time|Know More|Show Again'; $q7++) { $null = TK $(if ($q7 -lt 2) { 'd' } else { '{ESC}' }) 2.5 'P7c-popup'; $t7 = TdsScreen 'P7c-popup-closed' }
       if ($t7 -match 'Bank Date') { break } } }
+  # (run 37795355169: the payroll's alteration took Share Bank as its Account, so the payroll of 1-10-2026 is the first row
+  # and the contra of 2-10-2026 the second) the contra's row
+  if ($t7 -match 'Bank Date' -and $t7 -match 'Payroll') { $null = TK '{DOWN}' 1.5 'P7c-contra-row' }
   if ($t7 -match 'Bank Date') { $null = TK '2-10-2026{ENTER}' 2 'P7c-date' } else { Write-Host 'P7c: no screen with a Bank Date column' }
   $null = TK '^a' 3 'P7c-accept'; $t = TdsScreen 'P7c-after'; if ($t -match 'Yes or No') { & $script:TdsSend 'y'; Start-Sleep 3 }
   $null = TdsGateway 'after P7c'
