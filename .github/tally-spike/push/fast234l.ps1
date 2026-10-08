@@ -13,6 +13,8 @@
 . "$here\v3.ps1"        # the S5 screen route (tdslib.ps1) and the TDS masters
 $lcsv = Join-Path $out 'fast234l.csv'
 $keepBig = $rel -in '7.1', '3.0'
+# fast234lb: only the large invoices (small and at 100,000) and the deleted voucher: the other kinds were asked in run 37741662830
+$lBigOnly = $env:PD_MODE -eq 'fast234lb'
 function SaveCap($name, [string]$x) {
   $p = Join-Path $cap $name
   if ($x.Length -le 3000000) { Set-Content $p $x -Encoding UTF8; return }
@@ -152,7 +154,11 @@ try {
   $del = @($all | Where-Object { $_.narr -eq 'fast234l to be deleted' })[0]
   if ($del) {
     # (run 37730488503: by its number it stayed; by its GUID, as an Alter by REMOTEID works)
-    $r = Imp 'Vouchers' @('<VOUCHER REMOTEID="' + $del.guid + '" VCHTYPE="Journal" ACTION="Delete"><DATE>' + $lD + '</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><VOUCHERNUMBER>' + $del.vno + '</VOUCHERNUMBER></VOUCHER>') 'delete DEL-1'
+    # (runs 37730488503, 37741662830: neither the number DEL-1 (Tally numbers Journals itself) nor the GUID alone deleted it)
+    foreach ($h in @(('<VOUCHER DATE="' + $lD + '" TAGNAME="Voucher Number" TAGVALUE="' + $del.vno + '" VCHTYPE="Journal" ACTION="Delete">'), ('<VOUCHER REMOTEID="' + $del.guid + '" DATE="' + $lD + '" TAGNAME="Voucher Number" TAGVALUE="' + $del.vno + '" VCHTYPE="Journal" ACTION="Delete">'), ('<VOUCHER DATE="' + $lD + '" TAGNAME="MasterID" TAGVALUE="' + $del.mid + '" VCHTYPE="Journal" ACTION="Delete">'))) {
+      $r = Imp 'Vouchers' @($h + '<DATE>' + $lD + '</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><VOUCHERNUMBER>' + $del.vno + '</VOUCHERNUMBER></VOUCHER>') "delete DEL-1 ($h)"
+      if (-not (ById (AllV) $del.mid)) { break }
+    }
     Say "deleted DEL-1 (MasterID $($del.mid)): still in Tally $([bool](ById (AllV) $del.mid))"
   }
   Stop-T
@@ -167,7 +173,8 @@ try {
   $all = @($all | Where-Object { $_.mid -match '^\d+$' })
   foreach ($v in $all) {
     $kind = (("$($v.type)-$($v.vno)" -replace '[^\w-]', '_').ToLower())
-    $n = if ($v.vno -like 'BIG*') { 5 } else { 1 }
+    $n = if ($v.narr -like 'fast234l sales *') { 5 } else { 1 }
+    if ($lBigOnly -and $n -eq 1) { continue }
     Ask3 'small' $v $kind $n
   }
   # the object export for a MasterID that is no voucher: the deleted one, a ledger's, one never used
@@ -194,7 +201,8 @@ try {
     $nAll = Count 'Voucher'
     $all = AllV '$Date >= $$Date:"01-10-2026"'
     Say "grown: $nAll vouchers"
-    foreach ($v in @($all | Where-Object { $_.vno -like 'BIG*' -or $_.vno -in 'TS5-1', 'TR-1' })) { Ask3 'big' $v (("$($v.type)-$($v.vno)" -replace '[^\w-]', '_').ToLower()) 5 }
+    # (run 37741662830: Tally numbers the invoices itself: found by their narration)
+    foreach ($v in @($all | Where-Object { $_.narr -like 'fast234l sales *' -or $_.narr -in 'template sales 5 items', 'template receipt' })) { Ask3 'big' $v (("$($v.type)-$($v.vno)" -replace '[^\w-]', '_').ToLower()) 5 }
   }
 } catch { Say "HARNESS: fast234l stopped: $_ $($_.ScriptStackTrace)" }
 Stop-T
