@@ -1,0 +1,19 @@
+2026-10-08 12:32:19  FinCom Bridge 2.3.4: started just for runnervmfi6oq\fcuser2 (no service); it keeps the bridge and its icon running
+2026-10-08 12:32:19  Port 9100 is taken (another Windows user's FinCom Bridge, or another program); this bridge uses port 9101 and remembers it
+2026-10-08 12:32:19  FinCom Bridge 2.3.4 (Go) started on 127.0.0.1:9101: the only bridge on this computer; working for runnervmfi6oq\fcuser2, Windows session 1; runs just for this Windows user (starts at sign-in, no service)
+2026-10-08 12:32:19  Tally is open on port 9001; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+2026-10-08 12:32:19  Recorder: re-scan of the add-on's files for 2.3.4: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+2026-10-08 12:32:19  Check:  - 
+2026-10-08 12:32:22  Tray icon: set to show next to the clock always (Windows 11)
+2026-10-08 12:32:22  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+2026-10-08 12:32:22  Company FinCom Spike U2: its Tally GUID 3683c190-9068-479b-b3a1-bd2f44e07056 is held from now on
+2026-10-08 12:32:22  Company FinCom Spike U2: its starting point is recorded: ALTVCHID=1, ALTMSTID=209 (reading is prospective only: the bridge follows what changes after this)
+2026-10-08 12:32:22  Company FinCom Spike U2: change numbers read with form a: ALTVCHID=1, ALTMSTID=209
+2026-10-08 12:32:22  Light check of FinCom Spike U2: starting point recorded (ALTVCHID=1, ALTMSTID=209)
+2026-10-08 12:32:31  Refused a request from a program of another Windows user (/status): not your FinCom Bridge (the program asking has no Windows user)
+2026-10-08 12:34:04  Recorder: FinCom Big Co: lines from a Tally this bridge does not read (company not open here): not sent
+2026-10-08 12:34:04  Recorder: FinCom Spike Co: lines from a Tally this bridge does not read (company not open here): not sent
+2026-10-08 12:35:22  Recorder: FinCom holds 10 line(s) of this computer without their entry: 10 new in the held list, 0 there already, 0 resolved or sent with their body already, 0 not taken (not this company's, no date, or nothing to ask Tally by)
+2026-10-08 12:35:22  Recorder: FinCom holds 10 line(s) of this computer without their entry; each is asked of Tally again (by its MasterID, else its number) and sent with Tally's GUID and body once Tally gives it
+2026-10-08 12:35:52  Recorder: FinCom holds 10 line(s) of this computer without their entry: 0 new in the held list, 10 there already, 0 resolved or sent with their body already, 0 not taken (not this company's, no date, or nothing to ask Tally by)
+2026-10-08 12:42:52  Light check of FinCom Spike U2: unchanged starting point ALTVCHID=1; now ALTVCHID=1, ALTMSTID=209
