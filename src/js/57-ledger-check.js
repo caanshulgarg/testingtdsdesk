@@ -148,6 +148,9 @@ const LedCheck = {
       const hint = typeof LedMaster.tplFor === "function" ? LedMaster.tplFor(b, n) : null, s = this.suggest(b, n, u[n], hint), it = c.items[n] = c.items[n] || {};
       const ai = it.ai && !s.ev.some(e => e.src === "master") ? it.ai : null;
       it.s = s; it.use = u[n] ? {n: u[n].n, say: this.sayUse(u[n]), samples: u[n].samples} : {n: 0, say: "not used in the day book"}; it.sig = this.sig(u[n]); it.at = at;
+      // kept with the books (BOOKS_KEYS): a suggestion is "pending" and counts in no figure until the ledger is
+      // confirmed (then it is in the ledger master, b.map, which is what the returns read)
+      it.state = ((b.map || {})[n] || {}).ok ? "confirmed" : "pending";
       if (ai) it.ai = ai;
     });
     c.ranAt = at; c.names = names;
@@ -176,7 +179,7 @@ const LedCheck = {
       if (LedMaster.isTds(p.what)){ m.section = p.section || ""; if (p.rate) m.rate = p.rate; }
       m.why = p.ev.map(e => this.SRC[e.src] + ": " + e.say).join("; ") + (p.fromAi ? "; AI: " + (it.ai.reason || "") : "");
       m.src = Array.from(new Set(p.ev.map(e => e.src).concat(p.fromAi ? ["ai"] : [])));
-      it.okSig = this.sig(u[n]); it.okAt = new Date().toISOString(); it.okBy = whoAmI(); it.tick = undefined; done.push(n); });
+      it.okSig = this.sig(u[n]); it.okAt = new Date().toISOString(); it.okBy = whoAmI(); it.tick = undefined; it.state = "confirmed"; done.push(n); });
     LedMaster.confirm(b, done, true);
     c.savedAt = new Date().toISOString(); c.savedBy = whoAmI(); c.strict = true;
     return done.length;
@@ -235,7 +238,11 @@ const LedPage = {
   key(b){ return (b.vouchers || []).length + "|" + (b.ledInfoAt || "") + "|" + Object.keys(b.map || {}).length + "|" + Object.keys(b.ledInfo || {}).length; },
   ensure(b){
     const k = this.key(b);
-    if (!b.ledCheck || !b.ledCheck.ranAt || b.ledCheck.autoKey !== k){ LedCheck.run(b); b.ledCheck.autoKey = k; }
+    if (!b.ledCheck || !b.ledCheck.ranAt || b.ledCheck.autoKey !== k){
+      LedCheck.run(b); b.ledCheck.autoKey = k;
+      // kept with the books, its suggestions pending (they count in nothing until confirmed)
+      if (typeof saveBooks === "function" && b.cid) setTimeout(() => { if (S.books === b) saveBooks(); }, 0);
+    }
     return b.ledCheck;
   },
   rows(b){
@@ -293,7 +300,7 @@ const LedPage = {
         m.why = (p.ev || []).map(e => LedCheck.SRC[e.src] + ": " + e.say).join("; "); });
       const names2 = rows.map(r => r.n), u = LedCheck.usage(b, names2);
       LedMaster.confirm(b, names2, true);
-      names2.forEach(n => { const it = ((b.ledCheck || {}).items || {})[n]; if (it){ it.okSig = LedCheck.sig(u[n]); it.okAt = new Date().toISOString(); it.okBy = whoAmI(); } });
+      names2.forEach(n => { const it = ((b.ledCheck || {}).items || {})[n]; if (it){ it.okSig = LedCheck.sig(u[n]); it.okAt = new Date().toISOString(); it.okBy = whoAmI(); it.state = "confirmed"; } });
       b.reco = null; saveBooks();
     }, {bypass: true});
     render();

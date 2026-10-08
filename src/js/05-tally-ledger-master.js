@@ -187,7 +187,10 @@ const LedMaster = {
     if (m.what === "tds_payable" && !m.section) out.push("no section: choose one; if it only collects the month's TDS from the section ledgers and is paid from the bank, it is a TDS clearing account");
     return out;
   },
-  confirm(b, names, yes){ names.forEach(n => { const m = b.map[n]; if (m){ m.ok = !!yes; m.byHand = true; m.okAt = yes ? new Date().toISOString() : undefined; } }); b.mapV = (b.mapV || 0) + 1;
+  // who confirmed and when are kept on the ledger (shown on the ledgers page, on every computer); the check's own
+  // record of the ledger (b.ledCheck, kept with the books) says confirmed or pending with it
+  confirm(b, names, yes){ const who = typeof whoAmI === "function" ? whoAmI() : "", items = (b.ledCheck || {}).items || {};
+    names.forEach(n => { const m = b.map[n]; if (m){ m.ok = !!yes; m.byHand = true; m.okAt = yes ? new Date().toISOString() : undefined; m.okBy = yes ? who : undefined; if (items[n]) items[n].state = yes ? "confirmed" : "pending"; } }); b.mapV = (b.mapV || 0) + 1;
     if (yes && typeof this.tplLearn === "function"){ this.tplLearn(b, names); try { const co = CO(); if (co && co.id === b.cid) this.applyPosting(b, co, "empty"); } catch (e){} } }
 };
 

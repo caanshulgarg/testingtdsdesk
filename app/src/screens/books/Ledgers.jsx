@@ -88,7 +88,9 @@ function RowAct({ b, r }) {
   return <span className="led-act"><button className="btn small" data-led-confirm={r.n} onClick={() => LedPage.confirm(b, [r.n])}>Confirm</button>{change}</span>;
 }
 function Name({ r }) {
-  return <><b className="led-name">{r.n}</b>{r.group && <div className="nr">{r.group}</div>}</>;
+  const m = r.m || {};
+  return <><b className="led-name">{r.n}</b>{r.group && <div className="nr">{r.group}</div>}
+    {r.ok && m.okAt && <div className="nr ok" data-led-okby="">{"Confirmed" + (m.okBy ? " by " + m.okBy : "") + " · " + fmtDateTime(m.okAt)}</div>}</>;
 }
 const tag = (r) => r.alt ? <span className="tag warn" title={"FinCom’s ledger check reads it as " + r.alt}>check differs</span> : r.p && r.p.fromAi ? <span className="tag warn" title="AI’s answer: check it">AI</span> : !r.ok && r.p && r.p.conf === "medium" ? <span className="tag" title="FinCom is fairly but not fully sure">likely</span> : null;
 
