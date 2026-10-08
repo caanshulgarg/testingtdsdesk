@@ -8,7 +8,8 @@ slow-ended line older than 30 days; one whose ":resolved" came twice (asked once
 bridge's. The last 7 days are as before. Through the real cloud function (server/tally-cloud/index.ts) under Deno against
 the stand-in for Supabase (fake_supabase.py); no database change (no migration).
 Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno). RED before the change: S1-S3 not listed. Review M1 (08-Oct-2026): listed only to a bridge of 2.3.4 or later (the beat's
-version); an older bridge gets its last 7 days' lines only."""
+version); an older bridge gets its last 7 days' lines only. Re-review M3: found behind 900 older held rows of other kinds
+(the database stopping at its limit)."""
 import os, sys, json, time, hashlib, subprocess, urllib.request, shutil, threading
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import fake_supabase as FS
@@ -59,6 +60,13 @@ FS.T["tally_recorder_lines"] = [
     # R1: the last 7 days, as before (any held words)
     row("R1", 2, WAIT, mid="25699"),
 ]
+# 2.3.4 re-review M3: 900 decoys older than the slow-ended lines (8-29 days): held lines ended by another rule and their
+# ":resolved" rows; the database answers in order and stops at the limit (as PostgREST does): the slow-ended lines are
+# still listed
+for i in range(450):
+    FS.T["tally_recorder_lines"].append(row("D%03d" % i, 29 - (i % 20) * 0.05, WAIT, mid=str(30000 + i)))
+    FS.T["tally_recorder_lines"].append(row("D%03d:resolved" % i, 28.9 - (i % 20) * 0.05, ONCE, mid=str(30000 + i)))
+FS.HONOR_LIMIT[0] = True
 FS.T["tally_month_locks"] = []
 FS.start()
 env = dict(os.environ, SUPABASE_URL="http://127.0.0.1:%d" % FS.PORT, SUPABASE_SERVICE_ROLE_KEY=FS.SERVICE, SUPABASE_ANON_KEY="anon-key")
