@@ -7,7 +7,7 @@
 //
 // Its FETCHLIST names the approved fields (it documents the intent; Tally ignores it and sends the whole stored voucher:
 // 1,000-1,500 fields, 3-7 times the bytes). So the bridge keeps EXACTLY the approved fields (liveFetchFields: today's
-// FinComVoucherByMaster FETCH, the 13 the owner is still deciding on listed in liveFetchUndecided) and turns the voucher's
+// FinComVoucherByMaster FETCH, every field approved by the owner: the last 13 on 08-Oct-2026) and turns the voucher's
 // LEDGERENTRIES.LIST into ALLLEDGERENTRIES.LIST (an item invoice's object holds its party and tax lines there, the
 // collection answer held them in ALLLEDGERENTRIES); every other field, list, attribute and user-defined field is dropped
 // in fetchVouchersByMasterIn, before the answer is logged, stored or sent (fastStripVoucher). FinCom's reader (parse.js)
@@ -26,26 +26,20 @@ const vchObjectID = "FinComVoucherObject" // the allow-list's id of the object e
 // two got no answer and Tally answered nothing more until it was restarted
 const fastNeverForms = "the object export with no FETCHLIST, and a TDL report whose part's object is the voucher: both froze Tally on 3.0 .. 7.1"
 
-// the 13 fields of today's request the owner has not decided on yet (07-Oct-2026): kept until the owner decides; set
-// liveFetchUndecidedKept to false and the request and the strip both drop them
-var liveFetchUndecided = []string{"PARTYGSTIN", "PLACEOFSUPPLY", "CMPGSTIN", "IRNACKDATE", "ALLLEDGERENTRIES.GSTHSNNAME",
+// the 13 fields of the entry request the owner approved on 08-Oct-2026 ("13 fields: all approved. They are read only, inside
+// requests already made, and needed for GST, TDS and bank accuracy."; docs/tally-allowlist.md). Kept here as the record of
+// that approval; the one place the request's fields (and so the strip's) change is liveFetchField (recorder_live.go)
+var liveFetchApproved0810 = []string{"PARTYGSTIN", "PLACEOFSUPPLY", "CMPGSTIN", "IRNACKDATE", "ALLLEDGERENTRIES.GSTHSNNAME",
 	"ALLLEDGERENTRIES.RATEDETAILS.GSTRATEDUTYHEAD", "ALLLEDGERENTRIES.RATEDETAILS.GSTRATEVALUATIONTYPE", "ALLLEDGERENTRIES.RATEDETAILS.GSTRATE",
 	"ALLLEDGERENTRIES.BANKALLOCATIONS.DATE", "ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.TAXTYPE", "ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.PARTYLEDGER",
 	"ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.SUBCATEGORYALLOCATION.ASSESSABLEAMOUNT", "ALLINVENTORYENTRIES.RATEDETAILS.GSTRATEVALUATIONTYPE"}
 
-var liveFetchUndecidedKept = true
-
-// the approved fields, in today's order (liveFetchField, the FETCH of FinComVoucherByMaster at 2.3.3)
+// the approved fields, in today's order (liveFetchField, the FETCH of FinComVoucherByMaster at 2.3.3): the request's
+// FETCHLIST and the fields the strip keeps
 func liveFetchFields() []string {
-	drop := map[string]bool{}
-	if !liveFetchUndecidedKept {
-		for _, f := range liveFetchUndecided {
-			drop[f] = true
-		}
-	}
 	var o []string
 	for _, f := range strings.Split(liveFetchField, ",") {
-		if f = strings.TrimSpace(f); f != "" && !drop[f] {
+		if f = strings.TrimSpace(f); f != "" {
 			o = append(o, f)
 		}
 	}

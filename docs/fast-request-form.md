@@ -97,7 +97,7 @@ One voucher, by its MasterID. The company and MasterID below are examples. This 
   - When it has both, `LEDGERENTRIES.LIST` is dropped.
 - **Dropped:** everything else. That means every other field, list and attribute, and user-defined (`UDF:`) fields.
 
-The 13 fields the owner has not decided on are listed in one place, `liveFetchUndecided` (`bridge-go/fastvch.go`). Setting `liveFetchUndecidedKept = false` drops them from both the request and the strip; `TestFast234UndecidedFieldsInOnePlace` covers this.
+All 61 fields are approved by the owner. The last 13 were approved on 08-Oct-2026: "13 fields: all approved. They are read only, inside requests already made, and needed for GST, TDS and bank accuracy." (`liveFetchApproved0810` in `bridge-go/fastvch.go` records them; `TestFast234ApprovedFields0810`.) `ALLLEDGERENTRIES.BANKALLOCATIONS.NAME` was approved on 07-Oct-2026. The one place the fields change is `liveFetchField` (`bridge-go/recorder_live.go`): the request's FETCHLIST and the strip both follow it. The request's bytes did not change with these approvals.
 
 | # | Field kept (fetch path) | Status |
 |---|---|---|
@@ -123,32 +123,32 @@ The 13 fields the owner has not decided on are listed in one place, `liveFetchUn
 | 20 | `ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.ISDEEMEDPOSITIVE` | approved |
 | 21 | `REFERENCE` | approved |
 | 22 | `REFERENCEDATE` | approved |
-| 23 | `PARTYGSTIN` | **not yet decided by the owner** |
-| 24 | `PLACEOFSUPPLY` | **not yet decided by the owner** |
-| 25 | `CMPGSTIN` | **not yet decided by the owner** |
+| 23 | `PARTYGSTIN` | approved 08-Oct-2026 |
+| 24 | `PLACEOFSUPPLY` | approved 08-Oct-2026 |
+| 25 | `CMPGSTIN` | approved 08-Oct-2026 |
 | 26 | `IRN` | approved |
 | 27 | `IRNACKNO` | approved |
-| 28 | `IRNACKDATE` | **not yet decided by the owner** |
+| 28 | `IRNACKDATE` | approved 08-Oct-2026 |
 | 29 | `EWAYBILLDETAILS.BILLNUMBER` | approved |
-| 30 | `ALLLEDGERENTRIES.GSTHSNNAME` | **not yet decided by the owner** |
-| 31 | `ALLLEDGERENTRIES.RATEDETAILS.GSTRATEDUTYHEAD` | **not yet decided by the owner** |
-| 32 | `ALLLEDGERENTRIES.RATEDETAILS.GSTRATEVALUATIONTYPE` | **not yet decided by the owner** |
-| 33 | `ALLLEDGERENTRIES.RATEDETAILS.GSTRATE` | **not yet decided by the owner** |
+| 30 | `ALLLEDGERENTRIES.GSTHSNNAME` | approved 08-Oct-2026 |
+| 31 | `ALLLEDGERENTRIES.RATEDETAILS.GSTRATEDUTYHEAD` | approved 08-Oct-2026 |
+| 32 | `ALLLEDGERENTRIES.RATEDETAILS.GSTRATEVALUATIONTYPE` | approved 08-Oct-2026 |
+| 33 | `ALLLEDGERENTRIES.RATEDETAILS.GSTRATE` | approved 08-Oct-2026 |
 | 34 | `ALLLEDGERENTRIES.CATEGORYALLOCATIONS.CATEGORY` | approved |
 | 35 | `ALLLEDGERENTRIES.CATEGORYALLOCATIONS.COSTCENTREALLOCATIONS.NAME` | approved |
 | 36 | `ALLLEDGERENTRIES.CATEGORYALLOCATIONS.COSTCENTREALLOCATIONS.AMOUNT` | approved |
-| 37 | `ALLLEDGERENTRIES.BANKALLOCATIONS.DATE` | **not yet decided by the owner** |
-| 38 | `ALLLEDGERENTRIES.BANKALLOCATIONS.NAME` | approved |
+| 37 | `ALLLEDGERENTRIES.BANKALLOCATIONS.DATE` | approved 08-Oct-2026 |
+| 38 | `ALLLEDGERENTRIES.BANKALLOCATIONS.NAME` | approved 07-Oct-2026 |
 | 39 | `ALLLEDGERENTRIES.BANKALLOCATIONS.TRANSACTIONTYPE` | approved |
 | 40 | `ALLLEDGERENTRIES.BANKALLOCATIONS.INSTRUMENTNUMBER` | approved |
 | 41 | `ALLLEDGERENTRIES.BANKALLOCATIONS.INSTRUMENTDATE` | approved |
 | 42 | `ALLLEDGERENTRIES.BANKALLOCATIONS.BANKERSDATE` | approved |
 | 43 | `ALLLEDGERENTRIES.BANKALLOCATIONS.UNIQUEREFERENCENUMBER` | approved |
-| 44 | `ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.TAXTYPE` | **not yet decided by the owner** |
+| 44 | `ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.TAXTYPE` | approved 08-Oct-2026 |
 | 45 | `ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.CATEGORY` | approved |
-| 46 | `ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.PARTYLEDGER` | **not yet decided by the owner** |
+| 46 | `ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.PARTYLEDGER` | approved 08-Oct-2026 |
 | 47 | `ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.SUBCATEGORYALLOCATION.TAXRATE` | approved |
-| 48 | `ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.SUBCATEGORYALLOCATION.ASSESSABLEAMOUNT` | **not yet decided by the owner** |
+| 48 | `ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.SUBCATEGORYALLOCATION.ASSESSABLEAMOUNT` | approved 08-Oct-2026 |
 | 49 | `ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.SUBCATEGORYALLOCATION.TAX` | approved |
 | 50 | `ALLINVENTORYENTRIES.STOCKITEMNAME` | approved |
 | 51 | `ALLINVENTORYENTRIES.BILLEDQTY` | approved |
@@ -156,7 +156,7 @@ The 13 fields the owner has not decided on are listed in one place, `liveFetchUn
 | 53 | `ALLINVENTORYENTRIES.AMOUNT` | approved |
 | 54 | `ALLINVENTORYENTRIES.GSTHSNNAME` | approved |
 | 55 | `ALLINVENTORYENTRIES.RATEDETAILS.GSTRATEDUTYHEAD` | approved |
-| 56 | `ALLINVENTORYENTRIES.RATEDETAILS.GSTRATEVALUATIONTYPE` | **not yet decided by the owner** |
+| 56 | `ALLINVENTORYENTRIES.RATEDETAILS.GSTRATEVALUATIONTYPE` | approved 08-Oct-2026 |
 | 57 | `ALLINVENTORYENTRIES.RATEDETAILS.GSTRATE` | approved |
 | 58 | `ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.CATEGORYALLOCATIONS.CATEGORY` | approved |
 | 59 | `ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS.CATEGORYALLOCATIONS.COSTCENTREALLOCATIONS.NAME` | approved |

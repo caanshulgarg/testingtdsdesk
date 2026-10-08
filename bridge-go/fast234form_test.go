@@ -3,7 +3,7 @@ package main
 // next-fastfetch (the owner's decision of 08-Oct-2026, "Allow, strip in bridge"): the entry request is the object export
 // "ID:<MasterID>" (one voucher, read only, keyed: 7-57 ms at every company size on 3.0 .. 7.1, run 37657679690), its
 // FETCHLIST the approved fields (Tally ignores it and sends the whole voucher). The bridge keeps EXACTLY the approved
-// fields of FinComVoucherByMaster (liveFetchFields: the 13 the owner is still deciding on in one place) and turns
+// fields of FinComVoucherByMaster (liveFetchFields: all approved, the last 13 on 08-Oct-2026) and turns
 // LEDGERENTRIES.LIST into ALLLEDGERENTRIES.LIST; everything else is dropped before anything is logged, stored or sent.
 // FinComVoucherByMaster is gone (no fallback). The object export with NO FETCHLIST and the TDL report over the voucher
 // object froze Tally on every release: refused before anything is sent. Written before the code (red first).
@@ -44,35 +44,33 @@ func TestFast234RequestShape(t *testing.T) {
 	}
 }
 
-// --- the 13 fields the owner is still deciding on: in liveFetchFields, listed in ONE place (liveFetchUndecided)
-func TestFast234UndecidedFieldsInOnePlace(t *testing.T) {
+// --- the 13 fields the owner approved on 08-Oct-2026: in the request and kept by the strip; the request's bytes unchanged
+func TestFast234ApprovedFields0810(t *testing.T) {
 	want := []string{"PARTYGSTIN", "PLACEOFSUPPLY", "CMPGSTIN", "IRNACKDATE", "ALLLEDGERENTRIES.GSTHSNNAME",
 		"ALLLEDGERENTRIES.RATEDETAILS.GSTRATEDUTYHEAD", "ALLLEDGERENTRIES.RATEDETAILS.GSTRATEVALUATIONTYPE", "ALLLEDGERENTRIES.RATEDETAILS.GSTRATE",
 		"ALLLEDGERENTRIES.BANKALLOCATIONS.DATE", "ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.TAXTYPE", "ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.PARTYLEDGER",
 		"ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.SUBCATEGORYALLOCATION.ASSESSABLEAMOUNT", "ALLINVENTORYENTRIES.RATEDETAILS.GSTRATEVALUATIONTYPE"}
-	if strings.Join(liveFetchUndecided, ",") != strings.Join(want, ",") {
-		t.Fatalf("the undecided fields: %v", liveFetchUndecided)
+	if strings.Join(liveFetchApproved0810, ",") != strings.Join(want, ",") {
+		t.Fatalf("the fields approved on 08-Oct: %v", liveFetchApproved0810)
 	}
-	all := map[string]bool{}
-	for _, f := range liveFetchFields() {
-		all[f] = true
-	}
-	for _, f := range want {
-		if !all[f] {
-			t.Fatalf("%s not fetched (kept until the owner decides)", f)
+	ok := fastApprovedPaths()
+	x := voucherObjectRequest("ZZ", "1")
+	for _, f := range append(want, "ALLLEDGERENTRIES.BANKALLOCATIONS.NAME") { // and BANKALLOCATIONS.NAME, approved 07-Oct
+		if !ok[f] || !strings.Contains(x, "<FETCH>"+f+"</FETCH>") {
+			t.Fatalf("%s not in the request or not kept by the strip", f)
 		}
 	}
-	// dropped in one place: the request and the strip both follow
-	liveFetchUndecidedKept = false
-	defer func() { liveFetchUndecidedKept = true }()
-	if n := len(liveFetchFields()); n != 61-13 {
-		t.Fatalf("with the 13 dropped: %d fields", n)
+	if s := fastStripVoucher(`<VOUCHER REMOTEID="g-1" VCHTYPE="Sales"><GUID>g-1</GUID><PARTYGSTIN>07AAA</PARTYGSTIN></VOUCHER>`); !strings.Contains(s, "<PARTYGSTIN>07AAA</PARTYGSTIN>") {
+		t.Fatalf("the strip dropped PARTYGSTIN: %s", s)
 	}
-	if x := voucherObjectRequest("ZZ", "1"); strings.Contains(x, "<FETCH>PARTYGSTIN</FETCH>") {
-		t.Fatal("the request still names PARTYGSTIN")
+	// the request's bytes are the ones measured and proven on real Tally (push-design 37718386662, tally-real 37723589664)
+	if shapeOf(voucherObjectRequest("SAMPLE CO", "1")) != shapeOf(allowListSamples()[vchObjectID]) || shapeOf(allowListSamples()[vchObjectID]) != "ce0e72f74e72" {
+		t.Fatalf("the request's shape moved: %s", shapeOf(allowListSamples()[vchObjectID]))
 	}
-	if s := fastStripVoucher(`<VOUCHER REMOTEID="g-1" VCHTYPE="Sales"><GUID>g-1</GUID><PARTYGSTIN>07AAA</PARTYGSTIN></VOUCHER>`); strings.Contains(s, "PARTYGSTIN") {
-		t.Fatalf("the strip kept PARTYGSTIN: %s", s)
+	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))
+	if !strings.Contains(al, `"13 fields: all approved. They are read only, inside requests already made, and needed for GST, TDS and bank accuracy."`) ||
+		!strings.Contains(al, "ALLLEDGERENTRIES.BANKALLOCATIONS.NAME approved") || strings.Contains(al, "and the ledger lines' GST fields the Day Book path reads; one entry") {
+		t.Fatal("docs/tally-allowlist.md: the 08-Oct approval is not quoted, or the 2.3.1 line still credits the owner with the 13 fields")
 	}
 }
 
