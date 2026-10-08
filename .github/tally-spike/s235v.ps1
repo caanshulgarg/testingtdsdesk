@@ -23,7 +23,7 @@ $script:TdsSend = { param([string]$k) KeysTo $k 0 }
 $script:TdsPost = { param([string]$x) Post $x '' 30 }
 $script:TdsCo = $co1
 $script:freshTally = 0
-$S1, $S2, $S3, $S4, $S5 = $s235Checks
+$CK1, $CK2, $CK3, $CK4, $CK5 = $s235Checks
 $stopWords = 'reading from Tally is stopped from FinCom'
 $vchRe = 'FinComVoucher|ByMaster|VchHeads|ByNumber'
 Add-Type @'
@@ -65,11 +65,16 @@ function VList {
 function ByMid($list, [string]$mid) { foreach ($v in $list) { if ("$($v.mid)" -eq $mid) { return $v } }; return $null }
 function NewOnes($before, $after) { $bm = @{}; foreach ($v in $before) { $bm["$($v.mid)"] = 1 }; $n = @(foreach ($v in $after) { if (-not $bm.ContainsKey("$($v.mid)")) { $v } }); return , $n }
 function VDesc($v) { if (-not $v) { return '(none)' }; "$($v.type) no $($v.vno) of $($v.day) mid $($v.mid) AlterID $($v.aid) guid $($v.guid)" }
-# a voucher still in Tally by its MasterID (the request built only through TdsMid)
-function InTally([string]$mid) {
-  $x = TdsExport 'Voucher' 'GUID, MASTERID' ('$MasterID = ' + (TdsMid $mid))
-  if ("$x" -notmatch '<ENVELOPE') { return $null }
-  return ("$x" -match '<VOUCHER[ >]')
+# a voucher still in Tally by its MasterID: Tally's whole voucher list read (run 37792499702: a filtered export on
+# $MasterID answered a voucher for a deleted MasterID on 3.0 and 7.1, its answer kept in captures); the MasterID only
+# through TdsMid
+function InTally([string]$mid, [string]$tag) {
+  $m = TdsMid $mid
+  $x = TdsExport 'Voucher' 'GUID, MASTERID' ('$MasterID = ' + $m)
+  Set-Content (Join-Path $cap "s235-$tag-bymaster-$m.xml") "$x" -Encoding UTF8
+  $vs = VList
+  if ($null -eq $vs -or $vs.Count -eq 0) { return $null }
+  return [bool](ByMid $vs $m)
 }
 
 # ---- the stub cloud: its lines (with the time each reached it), its control
@@ -236,7 +241,7 @@ try {
   if (-not $A -or -not $D1 -or -not $D2) { throw "prep: the keys did not make the three receipts (A $([bool]$A), D1 $([bool]$D1), D2 $([bool]$D2))" }
 
   # ================================================================ s1: the stop; create, alter, delete on the screen
-  Say "---- $S1"
+  Say "---- $CK1"
   $script:altMid = TdsMid $A.mid; $script:delMid = TdsMid $D1.mid
   $ln1 = (LogLines).Count
   if (-not (SetStop 's1')) { throw 'stop: the bridge did not take FinCom''s stop from the beat answer within 30 s' }
@@ -269,7 +274,7 @@ try {
   Snap 's235-s1'
   $didAll = $C -and $A2 -and ($wd.did -eq $true)
   $st1 = if (-not $didAll) { 'HARNESS' } elseif (@($lines1 | Where-Object { $_ }).Count -eq 3 -and $heldOk -and $pvV.Count -eq 0 -and $noTry) { 'PASS' } else { 'FAIL' }
-  SRes $S1 $st1 ("Tally: created {0}; altered mid {1} AlterID {2} -> {3}; deleted {4}. Stub lines (seconds from each save, 10 s at most): created {5} s {6}; altered {7} s {8}; deleted {9} s {10}{11}. Held with the stop's words, no body: {12}; the delete held for its proof with no GUID: {13}. Voucher requests that reached Tally during the stop (proxy): {14}; every request the bridge sent Tally then: {15}. Held list (no try counted: {16}; the delete's keepGuid is its GUID: {17}): created {18}; altered {19}; deleted {20}. Bridge log: {21}" -f `
+  SRes $CK1 $st1 ("Tally: created {0}; altered mid {1} AlterID {2} -> {3}; deleted {4}. Stub lines (seconds from each save, 10 s at most): created {5} s {6}; altered {7} s {8}; deleted {9} s {10}{11}. Held with the stop's words, no body: {12}; the delete held for its proof with no GUID: {13}. Voucher requests that reached Tally during the stop (proxy): {14}; every request the bridge sent Tally then: {15}. Held list (no try counted: {16}; the delete's keepGuid is its GUID: {17}): created {18}; altered {19}; deleted {20}. Bridge log: {21}" -f `
       (VDesc $C), $A.mid, $A.aid, $(if ($A2) { $A2.aid } else { '(unchanged: the keys)' }), $(if ($wd.did -eq $true) { VDesc $D1 } else { 'nothing (the keys)' }),
       $wc.sec, (LDesc $wc.line), $wa.sec, (LDesc $wa.line), $wd.sec, (LDesc $wd.line),
       $(if ($late.Count) { '; LATE (after 10 s): ' + (($late.GetEnumerator() | ForEach-Object { "$($_.Key) $(LDesc $_.Value)" }) -join '; ') } else { '' }),
@@ -277,27 +282,27 @@ try {
       $noTry, $keep1, (HDesc $hd[0]), (HDesc $hd[1]), (HDesc $hd[2]), (KeyLog $ln1 'stopped|held at once|reading from Tally|of mid'))
 
   # ================================================================ s2: the lift
-  Say "---- $S2"
+  Say "---- $CK2"
   $ln2 = (LogLines).Count
-  if (-not $didAll -or -not $wc.line -or -not $wa.line -or -not $wd.line) { SRes $S2 'HARNESS' "not run: s1 did not give the three held lines (keys or lines missing)"; $null = Lift 's2'; throw 'skip-s2' }
+  if (-not $didAll -or -not $wc.line -or -not $wa.line -or -not $wd.line) { SRes $CK2 'HARNESS' "not run: s1 did not give the three held lines (keys or lines missing)"; $null = Lift 's2'; throw 'skip-s2' }
   if (-not (Lift 's2')) { throw 'lift: the bridge did not take the lift from the beat answer within 30 s' }
   $p2 = NowMs
   $s = WaitSettled @(@{ line = $wc.line; guid = $C.guid; body = $true }, @{ line = $wa.line; guid = $A.guid; body = $true }, @{ line = $wd.line; guid = $D1.guid; body = $false }) 780
   $p2e = NowMs
-  $gone = InTally $script:delMid
+  $gone = InTally $script:delMid 's2'
   $sc, $sa, $sd = $s
   $aidOk = $sa.first -and "$($sa.first.aid)" -eq "$($A2.aid)"
   $pv2 = ProxyIn $p2 $p2e
   Snap 's235-s2'
   $ok2 = $sc.ok -and $sa.ok -and $aidOk -and $sd.ok -and $sd.first.ev -eq 'deleted' -and $gone -eq $false -and ($sc.dayBook + $sa.dayBook + $sd.dayBook) -eq 0
   $st2 = if ($null -eq $gone) { 'HARNESS' } elseif ($ok2) { 'PASS' } else { 'FAIL' }
-  SRes $S2 $st2 ("created (Tally guid {0}): {1}. altered (Tally guid {2}, AlterID {3}; the line's AlterID is Tally's: {4}): {5}. deleted (its GUID {6}; still in Tally by MasterID {7}: {8}): {9}. Requests the bridge sent Tally after the lift: {10}. Bridge log: {11}" -f `
+  SRes $CK2 $st2 ("created (Tally guid {0}): {1}. altered (Tally guid {2}, AlterID {3}; the line's AlterID is Tally's: {4}): {5}. deleted (its GUID {6}; still in Tally by MasterID {7}: {8}): {9}. Requests the bridge sent Tally after the lift: {10}. Bridge log: {11}" -f `
       $C.guid, (SDesc $sc), $A.guid, $A2.aid, [bool]$aidOk, (SDesc $sa), $D1.guid, $script:delMid, $(if ($null -eq $gone) { '(Tally did not answer)' } else { $gone }), (SDesc $sd), (ProxyIds $pv2), (KeyLog $ln2 'resumed|resolved|GUID|of mid|proven|gone'))
-} catch { if ("$_" -ne 'skip-s2') { Write-Host "s235 stopped: $_ $($_.ScriptStackTrace)"; foreach ($c in @($S1, $S2)) { if (-not $done[$c]) { SRes $c 'HARNESS' "the harness stopped: $_" } } } }
+} catch { if ("$_" -ne 'skip-s2') { Write-Host "s235 stopped: $_ $($_.ScriptStackTrace)"; foreach ($c in @($CK1, $CK2)) { if (-not $done[$c]) { SRes $c 'HARNESS' "the harness stopped: $_" } } } }
 
 # ================================================================ s3: the restart variant
 try {
-  Say "---- $S3"
+  Say "---- $CK3"
   if (-not $D2) { throw 'prep did not make D2' }
   $script:delMid = TdsMid $D2.mid
   $null = Lift 's3-pre'
@@ -326,17 +331,17 @@ try {
   $stillStopped = Bridge GET '/tray/status'
   if (-not (Lift 's3')) { throw 'lift: the bridge did not take the lift within 30 s' }
   $s3 = WaitSettled @(@{ line = $w3.line; guid = $D2.guid; body = $false }) 780
-  $g3 = InTally $script:delMid
+  $g3 = InTally $script:delMid 's3'
   Snap 's235-s3'
   $x3 = $s3[0]
-  $st3 = if ($null -eq $g3) { 'HARNESS' } elseif ($w3.line.held -match [regex]::Escape($stopWords) -and $ha -and "$($ha.keepGuid)" -eq $D2.guid -and $x3.ok -and $x3.first.ev -eq 'deleted' -and $g3 -eq $false -and $x3.dayBook -eq 0) { 'PASS' } else { 'FAIL' }
-  SRes $S3 $st3 ("Tally deleted {0}; the held line after {1} s {2}; held list before the restart: {3}; after it: {4}; the stop after the restart: {5}; after the lift: {6}; still in Tally by MasterID: {7}. Bridge log: {8}" -f `
+  $st3 = if ($null -eq $g3) { 'HARNESS' } elseif ($w3.line.held -match [regex]::Escape($stopWords) -and $x3.ok -and $x3.first.ev -eq 'deleted' -and $g3 -eq $false -and $x3.dayBook -eq 0) { 'PASS' } else { 'FAIL' }
+  SRes $CK3 $st3 ("Tally deleted {0}; the held line after {1} s {2}; held list before the restart: {3}; after it: {4}; the stop after the restart: {5}; after the lift: {6}; still in Tally by MasterID: {7}. Bridge log: {8}" -f `
       (VDesc $D2), $w3.sec, (LDesc $w3.line), (HDesc $hb), (HDesc $ha), ($stillStopped.readStopped | ConvertTo-Json -Compress), (SDesc $x3), $(if ($null -eq $g3) { '(Tally did not answer)' } else { $g3 }), (KeyLog $ln3 'Restarting|stopped|resumed|of mid|GUID|resolved'))
-} catch { Write-Host "s3 stopped: $_ $($_.ScriptStackTrace)"; if (-not $done[$S3]) { SRes $S3 'HARNESS' "the harness stopped: $_" }; $null = Lift 's3-after' }
+} catch { Write-Host "s3 stopped: $_ $($_.ScriptStackTrace)"; if (-not $done[$CK3]) { SRes $CK3 'HARNESS' "the harness stopped: $_" }; $null = Lift 's3-after' }
 
 # ================================================================ s4: a real failure still counts
 try {
-  Say "---- $S4"
+  Say "---- $CK4"
   $null = Lift 's4-pre'
   $ln4 = (LogLines).Count
   $p4 = NowMs
@@ -375,16 +380,16 @@ try {
   $oneMore = $resE.Count -ge 1 -and $vAsks.Count -ge 2
   Snap 's235-s4'
   $st4 = if (-not $reached -or -not $first) { 'HARNESS' } elseif (-not $stopWrong -and ($counted -or $oneMore)) { 'PASS' } else { 'FAIL' }
-  SRes $S4 $st4 ("Tally made {0}; the proxy: {1}; the suspended request: {2}; voucher requests for mid {3}: {4}. The line {5}; its ':resolved' line(s): {6}; ended with the Day Book words: {7}; held list: {8}; one more ask that settled it: {9}; held with the stop's words (wrong): {10}. Bridge log: {11}" -f `
+  SRes $CK4 $st4 ("Tally made {0}; the proxy: {1}; the suspended request: {2}; voucher requests for mid {3}: {4}. The line {5}; its ':resolved' line(s): {6}; ended with the Day Book words: {7}; held list: {8}; one more ask that settled it: {9}; held with the stop's words (wrong): {10}. Bridge log: {11}" -f `
       (VDesc $E), $(if ($sus.Count) { ($sus | ForEach-Object { "$($_.event) $($_.id) pid $($_.pid) status $($_.status) at $($_.t)" }) -join ', ' } else { 'no suspend (the bridge sent no voucher request)' }),
       $(if ($susReq.Count) { ($susReq | ForEach-Object { "$($_.id) mid $($_.mid) $($_.ms) ms status $($_.status) err '$($_.err)'" }) -join ', ' } else { 'none' }), $eMid,
       $(if ($vAsks.Count) { ($vAsks | ForEach-Object { "$($_.id) at $($_.t0) $($_.ms) ms" }) -join ', ' } else { 'none' }),
       (LDesc $first), $(if ($resE.Count) { ($resE | ForEach-Object { LDesc $_ }) -join '; ' } else { 'none' }), [bool]$endedDB, (HDesc $hE), [bool]$oneMore, [bool]$stopWrong, (KeyLog $ln4 'of mid|held at once|stopped at|2 s|Day Book|asking Tally|resolved'))
-} catch { Write-Host "s4 stopped: $_ $($_.ScriptStackTrace)"; ResumeTally; if (-not $done[$S4]) { SRes $S4 'HARNESS' "the harness stopped: $_" } }
+} catch { Write-Host "s4 stopped: $_ $($_.ScriptStackTrace)"; ResumeTally; if (-not $done[$CK4]) { SRes $CK4 'HARNESS' "the harness stopped: $_" } }
 
 # ================================================================ s5: Tally not open: one notification a day
 try {
-  Say "---- $S5"
+  Say "---- $CK5"
   $nf = Join-Path $env:LOCALAPPDATA 'FinCom Bridge\notifications-cleared.json'
   $trays = @(Get-CimInstance Win32_Process -Filter "Name='FinComBridge.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match '\btray\b' })
   Info "s235 s5: tray icon process(es): $(($trays | ForEach-Object { "pid $($_.ProcessId) $($_.CommandLine)" }) -join ' | ')"
@@ -422,9 +427,9 @@ try {
   $nShown = $sh2.Count - $n0
   Shot 's235-s5-end'
   $st5 = if (-not $closedSeen -or -not $up -or -not $seenOpen) { 'HARNESS' } elseif ($first5 -and $first5 -ge 170 -and $nShown -eq 1 -and $tallyIds2.Count -eq 1) { 'PASS' } else { 'FAIL' }
-  SRes $S5 $st5 ("1st close: the bridge saw Tally closed after {0} s; the notification after {1} s; notifications-cleared.json: {2}. Reopened (Tally up {3}, the bridge saw it open {4}), closed again {10} s: '{5}' lines in all since the start of s5: {6}; the file's tally entries: {7} ({8}). Log: {9}" -f `
+  SRes $CK5 $st5 ("1st close: the bridge saw Tally closed after {0} s; the notification after {1} s; notifications-cleared.json: {2}. Reopened (Tally up {3}, the bridge saw it open {4}), closed again {10} s: '{5}' lines in all since the start of s5: {6}; the file's tally entries: {7} ({8}). Log: {9}" -f `
       $closedSeen, $(if ($first5) { $first5 } else { 'none in 360 s' }), (($file1 | ConvertTo-Json -Compress -Depth 4)), $up, $seenOpen, $shownRe, $nShown, $tallyIds2.Count, (($file2 | ConvertTo-Json -Compress -Depth 4)), $(if ($sh2.Count) { ($sh2 | ForEach-Object { Cut $_ 240 }) -join ' | ' } else { '(none)' }), $wait2)
-} catch { Write-Host "s5 stopped: $_ $($_.ScriptStackTrace)"; if (-not $done[$S5]) { SRes $S5 'HARNESS' "the harness stopped: $_" } }
+} catch { Write-Host "s5 stopped: $_ $($_.ScriptStackTrace)"; if (-not $done[$CK5]) { SRes $CK5 'HARNESS' "the harness stopped: $_" } }
 
 # ---- what is kept
 foreach ($c in $s235Checks) { if (-not $done[$c]) { SRes $c 'HARNESS' 'not run: the harness stopped before it' } }
