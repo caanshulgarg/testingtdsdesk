@@ -17,14 +17,27 @@
 #      proxy) and ended (its ":resolved" line: with Tally's entry for the ten Journals); none asked twice; none lost
 #   u4 S2 (after the upgrade, 2.4.0's add-on) in FinCom with its body
 . (Join-Path $PSScriptRoot 'tdslib.ps1')
+
+# Tally's whole voucher list for the year (flowv's Vouchers asks without a period: Tally's own current period, which ends
+# at the last date typed on the screen; dry run 37820758173 missed journals dated after the Receipt typed by keys)
+function VAll {
+  $x = Post ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCVA</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY><SVFROMDATE>20260401</SVFROMDATE><SVTODATE>20270331</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCVA" ISMODIFY="No"><TYPE>Voucher</TYPE><FETCH>GUID, MASTERID, ALTERID, DATE, VOUCHERTYPENAME, VOUCHERNUMBER, ISCANCELLED, NARRATION</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') '' 30
+  $l = @()
+  try { $d = [xml]($x -replace '&#4;', '')
+    foreach ($v in $d.ENVELOPE.BODY.DATA.COLLECTION.VOUCHER) { $l += [pscustomobject]@{ guid = Val $v.GUID; mid = [int](Val $v.MASTERID); aid = [int](Val $v.ALTERID); cancelled = ((Val $v.ISCANCELLED) -eq 'Yes'); vno = Val $v.VOUCHERNUMBER; type = Val $v.VOUCHERTYPENAME; date = Val $v.DATE; narr = Val $v.NARRATION } }
+  } catch { Write-Host "VAll parse: $_" }
+  Write-Host "[VAll] $($l.Count) vouchers: $(($l | ForEach-Object { "$($_.mid)/$($_.aid)/$($_.type)/$($_.date)/$($_.narr)" }) -join ', ')"
+  return , $l
+}
 if ($upgPhase -eq 'seed') {
   Say '---- upg seed: ten Journals by XML, the sync folder as 2.3.3 left it on NWS144'
   $script:upgJ = @()
-  $v0 = Vouchers
+  $v0 = VAll
   foreach ($i in 1..10) {
-    $null = Imp 'Vouchers' ('<VOUCHER VCHTYPE="Journal" ACTION="Create"><DATE>20261004</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><NARRATION>upg held ' + $i + '</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>Cash</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-' + (30 + $i) + '.00</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>Spike Income</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>' + (30 + $i) + '.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>') "upg journal $i"
+    $ir = Imp 'Vouchers' ('<VOUCHER VCHTYPE="Journal" ACTION="Create"><DATE>20261004</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><NARRATION>upg held ' + $i + '</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>Cash</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-' + (30 + $i) + '.00</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>Spike Income</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>' + (30 + $i) + '.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>') "upg journal $i"
+    Info "upg journal ${i}: Tally answered $((([regex]::Match("$ir", '<CREATED>\d+</CREATED>.*?<ERRORS>\d+</ERRORS>', 'Singleline').Value) -replace '\s+', ' '))$(if ("$ir" -match '<LINEERROR>([^<]*)') { ' ' + $matches[1] })"
   }
-  $v1 = Vouchers
+  $v1 = VAll
   $script:upgJ = @(foreach ($v in $v1) { if ($v.narr -like 'upg held *') { $null = TdsMid $v.mid; $v } })
   $cl = Post $listCoXml 'companies'
   $script:upgCg = ''
@@ -84,11 +97,11 @@ function UpgTally([string]$tdlFile, [string]$tag) {
 # a Receipt by keys (flowv c4a's keys), its voucher in Tally
 function UpgReceipt([string]$tag, [int]$amt) {
   $null = TdsGateway "before $tag"
-  $b = Vouchers
+  $b = VAll
   KeysTo 'v' 4 "upg-$tag-vouchers"; KeysTo '{F6}' 3; KeysTo '{F2}' 3; KeysTo '2-10-2026{ENTER}' 3
   KeysTo 'Cash{ENTER}' 3; KeysTo 'Spike Income{ENTER}' 3; KeysTo "$amt{ENTER}" 3; KeysTo '^a' 5 "upg-$tag-saved"
   $null = TdsGateway "after $tag"
-  $a = Vouchers
+  $a = VAll
   $n = @(foreach ($v in $a) { if ("$($v.mid)" -notin @($b | ForEach-Object { "$($_.mid)" })) { $v } })
   if ($n.Count) { $null = TdsMid $n[0].mid; return $n[0] }
   return $null

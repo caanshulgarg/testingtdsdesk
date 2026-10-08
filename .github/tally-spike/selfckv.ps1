@@ -22,6 +22,18 @@ $script:TdsCo = $co1
 $script:TdsRestart = { Write-Host 'selfck: the Gateway not reached (no fresh Tally in this mode)' }
 $CN1 = 'n1 nightly check: Tally''s changes compared, the missing fetched'; $CN2 = 'n2 nightly check: the words recorded'; $CN3 = 'n3 nightly check: once a night'
 $scDone = @{}
+
+# Tally's whole voucher list for the year (flowv's Vouchers asks without a period: Tally's own current period, which ends
+# at the last date typed on the screen; dry run 37820758173 missed journals dated after the Receipt typed by keys)
+function VAll {
+  $x = Post ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FCVA</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY><SVFROMDATE>20260401</SVFROMDATE><SVTODATE>20270331</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FCVA" ISMODIFY="No"><TYPE>Voucher</TYPE><FETCH>GUID, MASTERID, ALTERID, DATE, VOUCHERTYPENAME, VOUCHERNUMBER, ISCANCELLED, NARRATION</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') '' 30
+  $l = @()
+  try { $d = [xml]($x -replace '&#4;', '')
+    foreach ($v in $d.ENVELOPE.BODY.DATA.COLLECTION.VOUCHER) { $l += [pscustomobject]@{ guid = Val $v.GUID; mid = [int](Val $v.MASTERID); aid = [int](Val $v.ALTERID); cancelled = ((Val $v.ISCANCELLED) -eq 'Yes'); vno = Val $v.VOUCHERNUMBER; type = Val $v.VOUCHERTYPENAME; date = Val $v.DATE; narr = Val $v.NARRATION } }
+  } catch { Write-Host "VAll parse: $_" }
+  Write-Host "[VAll] $($l.Count) vouchers: $(($l | ForEach-Object { "$($_.mid)/$($_.aid)/$($_.type)/$($_.date)/$($_.narr)" }) -join ', ')"
+  return , $l
+}
 function ScRes($c, $st, $ev) { if (-not $scDone[$c]) { Result $c $st $ev; $scDone[$c] = $true } }
 function ScCtl($b) { try { Invoke-RestMethod -Uri 'http://127.0.0.1:8787/' -Method Post -Body ($b | ConvertTo-Json -Depth 5 -Compress) -ContentType 'application/json' -TimeoutSec 10 } catch { Write-Host "stub ctl: $_"; $null } }
 function ScSteps([string]$step) { $r = StubReqs; $o = @(foreach ($q in $r) { if ($q.kind -eq 'selfcheck' -and $q.body.step -eq $step -and $q.body.company -eq $co1) { $q } }); return , $o }
@@ -32,20 +44,21 @@ try {
   $t = Get-Date; $sp = $false
   while (((Get-Date) - $t).TotalMinutes -lt 5) { $l = ScLog; if (@($l | Where-Object { $_ -match ('Company ' + [regex]::Escape($co1) + ': its starting point is recorded') }).Count) { $sp = $true; break }; Start-Sleep 5 }
   Info "selfck: the starting point recorded: $sp"
-  $v0 = Vouchers
+  $v0 = VAll
   # a Receipt by keys (flowv c4a's keys): the add-on's line, FinCom's copy has it
   KeysTo 'v' 4 'sc-10-vouchers'; KeysTo '{F6}' 3; KeysTo '{F2}' 3; KeysTo '2-10-2026{ENTER}' 3
   KeysTo 'Cash{ENTER}' 3; KeysTo 'Spike Income{ENTER}' 3 'sc-11-particular'; KeysTo '710{ENTER}' 3; KeysTo '^a' 5 'sc-12-saved'
   $null = TdsGateway 'after the Receipt'
-  $v1 = Vouchers
+  $v1 = VAll
   $kv = @(foreach ($v in $v1) { if ("$($v.mid)" -notin @($v0 | ForEach-Object { "$($_.mid)" })) { $v } })
   if (-not $kv.Count) { throw 'the keys made no Receipt (see the sc-1* screens)' }
   $k = $kv[0]; $null = TdsMid $k.mid
   # three Journals by XML: no add-on line
   foreach ($i in 1..3) {
-    $null = Imp 'Vouchers' ('<VOUCHER VCHTYPE="Journal" ACTION="Create"><DATE>20261003</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><NARRATION>selfck missing ' + $i + '</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>Cash</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-' + (20 + $i) + '.00</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>Spike Income</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>' + (20 + $i) + '.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>') "selfck journal $i"
+    $ir = Imp 'Vouchers' ('<VOUCHER VCHTYPE="Journal" ACTION="Create"><DATE>20261003</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><NARRATION>selfck missing ' + $i + '</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>Cash</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-' + (20 + $i) + '.00</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>Spike Income</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>' + (20 + $i) + '.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>') "selfck journal $i"
+    Info "selfck journal ${i}: Tally answered $((([regex]::Match("$ir", '<CREATED>\d+</CREATED>.*?<ERRORS>\d+</ERRORS>', 'Singleline').Value) -replace '\s+', ' '))$(if ("$ir" -match '<LINEERROR>([^<]*)') { ' ' + $matches[1] })"
   }
-  $v2 = Vouchers
+  $v2 = VAll
   $xv = @(foreach ($v in $v2) { if ($v.narr -like 'selfck missing *') { $v } })
   if ($xv.Count -ne 3) { throw "the three journals by XML: $($xv.Count) made" }
   # the Receipt's line with its body in FinCom's copy (2 minutes at most), then the copy made to lack the journals
@@ -77,7 +90,7 @@ try {
   # n1: the compare's entries against Tally's own list above the mark; what FinCom lacked; fetched with Tally's entry
   $c1 = $cmp[-1].body; $r1 = $rec[-1].body; $ra = $rec[-1].answer
   $after = [int64]$c1.after
-  $tv = Vouchers
+  $tv = VAll
   $want = @($tv | Where-Object { [int64]$_.aid -gt $after -and $_.guid } | ForEach-Object { $_.guid })
   $got = @(@($c1.entries) | ForEach-Object { "$($_[0])" })
   $gotMiss = @(@($cmp[-1].answer.missing) | ForEach-Object { "$($_.guid)" })
