@@ -309,6 +309,10 @@ $fA = @($fr | Where-Object form -eq 'A')[0]; $fC = @($fr | Where-Object form -eq
 $forms = ($fr | ForEach-Object { "$($_.form) $($_.vouchers) voucher(s) $($_.ms) ms$(if ($_.error) { " ($($_.error))" })" }) -join '; '
 if (-not $srcNow) { Result 'c6 entry request' 'HARNESS' 'not run: no entry was made by keys (c4a)' }
 elseif (-not $ft -or $ft.state -ne 'done') { Result 'c6 entry request' $(if ($ftStart.ok -eq $false) { 'FAIL' } else { 'HARNESS' }) "fetch test did not finish: start $($ftStart | ConvertTo-Json -Compress); last $($ft | ConvertTo-Json -Compress -Depth 5)" }
+elseif (-not $fA -and -not $fC) {
+  # bridge 2.3.4 removed the trial forms A and C (the owner's decision): every form the bridge has must give the one entry
+  $bad = @($fr | Where-Object { [int]$_.vouchers -ne 1 -or $_.error })
+  Result 'c6 entry request' $(if ($fr.Count -gt 0 -and $bad.Count -eq 0) { 'PASS' } else { 'FAIL' }) ("Receipt {0} of {1} (mid {2}): this bridge has no forms A and C (removed in 2.3.4); its {3} form(s): {4}; MasterID found {5}" -f $srcNow.vno, $d, $srcNow.mid, $fr.Count, $forms, $ft.masterId) }
 else { Result 'c6 entry request' $(if ($fA.vouchers -eq 1 -and $fC.vouchers -eq 1) { 'PASS' } else { 'FAIL' }) ("Receipt {0} of {1} (mid {2}): by number (A) {3} voucher(s) in {4} ms, by MasterID (C) {5} in {6} ms; all forms: {7}; MasterID found {8}" -f $srcNow.vno, $d, $srcNow.mid, $fA.vouchers, $fA.ms, $fC.vouchers, $fC.ms, $forms, $ft.masterId) }
 
 # ---- c5 Alt+2 duplicate (flow4.ps1 step 3: Day Book, the last entry, Alt+2, the amount 900)
