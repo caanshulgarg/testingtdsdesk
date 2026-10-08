@@ -1,6 +1,6 @@
 # The fast entry request: its exact form and what the bridge keeps
 
-Branch `next-fastfetch` (from tax-accuracy 2.3.3). **Not released**: no version bump, no build. This page is what the owner sees before it ships.
+FinCom Bridge 2.3.4 (branch `next-fastfetch`, from tax-accuracy 2.3.3). The owner approved the form on 08-Oct-2026: "1. Fast request form (FinComVoucherObject): YES."
 
 The owner's approval (07-Oct-2026): "Fast request 'voucher object by MasterID': approved to build and prove, on these conditions: one entry per request, read only, same fields as the approved entry request, nothing added; show me its exact form before it ships ...". The owner's decision (08-Oct-2026), after it was shown that Tally always sends the whole voucher for this request: **"Allow, strip in bridge."**
 

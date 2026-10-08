@@ -240,3 +240,31 @@ func testFetchOf(request string) string {
 	}
 	return group(`<FETCH>([^<]*)</FETCH>`, request, 1)
 }
+
+// --- 2.3.4: the version, the allow-list's decision line naming FinComVoucherObject with the owner's words of 08-Oct-2026,
+// the notes and the test sheet
+func TestFast234VersionAndDecisionLine(t *testing.T) {
+	if BridgeVersion != "2.3.4" {
+		t.Fatalf("BridgeVersion %s", BridgeVersion)
+	}
+	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))
+	line := group(`(?m)^(First table: .*)$`, al, 1)
+	for _, w := range []string{"allowed for 2.3.4 by the owner's decision of 2026-10-08: the entry request is FinComVoucherObject",
+		`"Allow, strip in bridge."`, `"1. Fast request form (FinComVoucherObject): YES. 2. The 13 fields: all approved, keep all 13.`,
+		"the trial forms FinComFetchTestA and FinComFetchTestC removed", "as for 2.3.3: the owner's standing decision of 2026-10-06"} {
+		if !strings.Contains(line, w) {
+			t.Errorf("the decision line does not say %q", w)
+		}
+	}
+	if !strings.Contains(al, "(re-measured on 2026-10-08 on real TallyPrime 3.0, 4.1, 5.1, 6.2 and 7.1") {
+		t.Error("no re-measured line for 2.3.4")
+	}
+	for _, f := range []string{"bridge-2.3.4-notes.md", "bridge-2.3.4-test-sheet.txt"} {
+		s := strings.Join(strings.Fields(readText(filepath.Join("..", "docs", f))), " ")
+		for _, w := range []string{"2.3.4", "FinComVoucherObject", "30 days", "B, D, E and F", "Roll", "2.3.3"} {
+			if !strings.Contains(strings.ToLower(s), strings.ToLower(w)) {
+				t.Errorf("%s does not say %q", f, w)
+			}
+		}
+	}
+}

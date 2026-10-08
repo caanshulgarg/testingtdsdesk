@@ -427,19 +427,19 @@ func TestBacklog233BeatWaiting(t *testing.T) {
 // --- the version, the allow-list's decision line (no request added or changed: TestAllowListUnchanged keeps the table's
 // hash) and the notes with their test sheet
 func TestBacklog233VersionAndDecisionLine(t *testing.T) {
-	if BridgeVersion != "2.3.3" {
+	if BridgeVersion != "2.3.4" {
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	al := readText("../docs/tally-allowlist.md")
 	line := group(`(?m)^(First table: .*)$`, al, 1)
-	if !strings.Contains(line, "allowed for 2.3.3 by the owner's standing decision of 2026-10-06: no request on the list and no request shape changed") {
+	if !strings.Contains(line, "as for 2.3.3: the owner's standing decision of 2026-10-06: no request on the list and no request shape changed") {
 		t.Fatalf("the decision line: %s", cut(line, 300))
 	}
 	if strings.Contains(al, "allowed for 2.3.2 by") {
 		t.Fatal("the 2.3.2 line is still an exception line (release-check accepts one version only)")
 	}
-	// next-fastfetch (not released): the table changed with the entry request (FinComVoucherObject), said in the doc
-	if !strings.Contains(al, "1c17806d483e0a31477bc93bcf0646334c156eda88e8a401a8df155d0bca02dd") && !strings.Contains(al, "(next-fastfetch, 08-Oct-2026, not released") {
+	// 2.3.4: the table changed with the entry request (FinComVoucherObject), said in the doc
+	if !strings.Contains(al, "1c17806d483e0a31477bc93bcf0646334c156eda88e8a401a8df155d0bca02dd") && !strings.Contains(al, "(2.3.4, from branch next-fastfetch, 08-Oct-2026") {
 		t.Fatal("the table's hash moved")
 	}
 	notes := strings.Join(strings.Fields(readText("../docs/bridge-2.3.3-notes.md")), " ")
