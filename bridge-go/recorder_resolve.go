@@ -644,6 +644,9 @@ func liveHeldAdd(cs []*change) {
 			h := items[c.lineId]
 			h.Final, h.MID = false, c.masterId // asked again by its MasterID (liveResolveGuid)
 			h.KeepGuid, h.KeepAlter = c.guidKeep, c.alterKeep
+			if strings.Contains(c.heldWhy, liveReadStopWhat) {
+				h.Last = "" // 2.3.5 (review L1): held by FinCom's read stop: due at the first turn after the resume
+			}
 			items[c.lineId] = h
 		}
 	}
@@ -880,6 +883,7 @@ func liveResolveTurn() {
 	}
 	changed := false
 	now := nowFn()
+	stopped, kept := readStopped(), 0 // 2.3.5 (review L2)
 	wait := time.Duration(keepNumZero("RecorderResolveSec", 600)) * time.Second
 	var ids []string
 	for id := range items {
@@ -941,6 +945,15 @@ func liveResolveTurn() {
 			continue
 		}
 		added, _ := time.Parse(time.RFC3339, h.Added)
+		if !done && !added.IsZero() && now.Sub(added) > 7*24*time.Hour && stopped {
+			// 2.3.5 (review L2): never dropped while FinCom's read stop is on (FinCom shows it waiting, and it is not asked):
+			// its 7 days start again from now, so it is asked after the resume and settles or ends with the Day Book words
+			h.Added = now.Format(time.RFC3339)
+			items[id] = h
+			changed = true
+			kept++
+			added = now
+		}
 		if done || (!added.IsZero() && now.Sub(added) > 7*24*time.Hour) {
 			delete(items, id)
 			changed = true
@@ -1012,6 +1025,9 @@ func liveResolveTurn() {
 		liveHeldSave(all, items)
 	}
 	heldMu.Unlock()
+	if kept > 0 {
+		writeLog(fmt.Sprintf("Recorder: %d held line(s) 7 days in the list are kept while reading is stopped from FinCom (not asked meanwhile): asked when it is resumed", kept))
+	}
 	if upgraded > 0 {
 		writeLog(fmt.Sprintf("Recorder: %d held line(s) kept by an earlier bridge are asked once with the fast request (whatever their earlier tries): answered, each goes to FinCom with Tally's body; else it ends with the Day Book words", upgraded))
 	}
@@ -1099,6 +1115,15 @@ func liveResolveTurn() {
 				retryIds[r.ID] = true
 			}
 			liveSay(h.Type, h.No, h.Date, h.MID, h.ID, fmt.Sprintf("not answered in time: %s (ask %d of %d)", cutRunes(err.Error(), 160), h.Asked+1, h.allow()))
+			break
+		}
+		if liveStopRefused(err, reached) {
+			// 2.3.5 (review L1): FinCom's read stop refused it, nothing sent: not a try, and its last ask is put back, so this
+			// line and those not asked yet are asked at the first turn after the resume
+			for _, r := range ask[len(got):] {
+				retryIds[r.ID] = true
+			}
+			liveSay(h.Type, h.No, h.Date, h.MID, h.ID, "not asked this time: "+cutRunes(err.Error(), 160)+"; asked when reading is resumed (not counted as a try)")
 			break
 		}
 		if errors.Is(err, errRetryWait) {
