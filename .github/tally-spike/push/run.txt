@@ -5,7 +5,7 @@ heavy_led=3000
 heavy_item=3000
 heavy_vch=30000
 heavy_min=40
-mode=fast234l
+mode=fast234g
 # v3 (07-Oct-2026): the owner's ask on the 30,004-voucher company: keyed entry fetches with the freeze probe, freezes with (rerun: godowns on heavy sales, fetch 30 s and after the saves, TDS by the S5 OCR route)
 # the bridge stopped / running, full entry with no read-back, the GUID rule, AltVchID, payroll 200, TDS (v3.ps1)
 # v3b (07-Oct-2026 07:50Z): a fetch fired by the harness during each heads-only save (bridge stopped); the keyed fetches (OctVouchers fix); TDS with the ledgers' cost centres off
@@ -18,3 +18,5 @@ mode=fast234l
 # fast234l (08-Oct-2026): the 2.3.4 review: every entry kind asked three ways (today's request, the 2.3.4 object export, by number) with the
 # TDS entry by S5's screens, credit / debit notes, cost centres, the UTR, voucher-mode items, a deleted / a ledger's / an unused MasterID;
 # 200- and 500-item invoices timed on the small company and (3.0, 7.1) at 100,000 vouchers (fast234l.ps1)
+# fast234g (08-Oct-2026): the push helper's hang (run 37729166801): FinComVoucherObject and FinComVoucherByNumber on sales invoices (XML item, XML accounting,
+# XML with IRN written back, typed on the screen) in a GST-ON and a GST-OFF copy, each probe in a fresh Tally, 30 s, recovery recorded; the helper's collection last (fast234g.ps1)
