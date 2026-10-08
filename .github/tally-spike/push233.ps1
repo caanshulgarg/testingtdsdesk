@@ -229,7 +229,14 @@ function P3Ledgers($xml) {
     if ($n -and $a) { '{0}|{1:0.00}' -f [System.Net.WebUtility]::HtmlDecode($n).Trim(), [decimal]$a }
   }) | Sort-Object
 }
-function P3TallyLedgers($mid, $co = $co1) { P3Ledgers (P3Coll 'P3Led' 'Voucher' 'MASTERID, ALLLEDGERENTRIES.LEDGERNAME, ALLLEDGERENTRIES.AMOUNT' ('$MasterID = ' + [int64]$mid) $co) }
+# a MasterID for a request: digits only (1 to 18) or the step stops loudly before anything is sent (tally-versions runs
+# 37729166801 / 37734533866: a whole list piped as one object made '$MasterID = 1 2 3 ...', which hung Tally)
+function P3Mid($mid) {
+  $s = "$mid".Trim()
+  if ($s -notmatch '^\d{1,18}$') { $m = "HARNESS GUARD: a MasterID that is not digits only was refused before it reached Tally: '$s'"; Write-Host "::error::$m"; throw $m }
+  return $s
+}
+function P3TallyLedgers($mid, $co = $co1) { P3Ledgers (P3Coll 'P3Led' 'Voucher' 'MASTERID, ALLLEDGERENTRIES.LEDGERNAME, ALLLEDGERENTRIES.AMOUNT' ('$MasterID = ' + (P3Mid $mid)) $co) }
 
 function P3Check($label, $s, $m0, $p0, [switch]$tds, $ev = 'created') {
   if (-not $s.v) { Result "push233 $label" $false 'Tally has no new entry after the save (see the p233 screenshots)' $true; return }
@@ -255,7 +262,7 @@ function P3Check($label, $s, $m0, $p0, [switch]$tds, $ev = 'created') {
   # entry made new had no party there, and an Alt+2 copy's bill "New Ref" was stored "Agst Ref"): the bridge's party and
   # bill types against Tally's stored entry, reported on their own
   if ($l) {
-    $tx = P3Coll 'P3Stored' 'Voucher' 'MASTERID, PARTYLEDGERNAME, ALLLEDGERENTRIES.LEDGERNAME, ALLLEDGERENTRIES.BILLALLOCATIONS.NAME, ALLLEDGERENTRIES.BILLALLOCATIONS.BILLTYPE' ('$MasterID = ' + [int64]$s.v.mid)
+    $tx = P3Coll 'P3Stored' 'Voucher' 'MASTERID, PARTYLEDGERNAME, ALLLEDGERENTRIES.LEDGERNAME, ALLLEDGERENTRIES.BILLALLOCATIONS.NAME, ALLLEDGERENTRIES.BILLALLOCATIONS.BILLTYPE' ('$MasterID = ' + (P3Mid $s.v.mid))
     $pick = { param($x) [pscustomobject]@{ party = [System.Net.WebUtility]::HtmlDecode([regex]::Match("$x", '<PARTYLEDGERNAME[^>]*>([^<]*)</PARTYLEDGERNAME>').Groups[1].Value).Trim(); bills = (@([regex]::Matches("$x", '<BILLTYPE[^>]*>([^<]*)</BILLTYPE>') | ForEach-Object { $_.Groups[1].Value.Trim() }) -join ',') } }
     $mineS = & $pick $l.xml; $theirsS = & $pick $tx
     Result "push233 $label party and bill types as Tally stored them" ($mineS.party -eq $theirsS.party -and $mineS.bills -eq $theirsS.bills) ("party: bridge '{0}', Tally '{1}'; bill types: bridge [{2}], Tally [{3}]" -f $mineS.party, $theirsS.party, $mineS.bills, $theirsS.bills)
