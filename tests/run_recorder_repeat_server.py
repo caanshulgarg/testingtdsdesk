@@ -144,6 +144,18 @@ try:
     for _ in range(4): db.one("select tally_recorder_drain(15000)::text")
     n = int(db.one("select count(*) from tally_recorder_lines where book_id = %s and line_id like 'm-%%'" % q(BOOK)))
     ok(n == 51, "5. after the drain: one row per line (%d rows for 51 lines)" % n)
+
+    print("== 6. the beat carries the lines FinCom could not store (the coordinator, 08-Oct-2026: nothing lost, shown)")
+    st = {"ZZ CO": {"read": 9, "sent": 8, "waiting": 1, "stuck": 2, "stuckSince": "2026-10-08T09:15:00", "stuckDay": "2026-05-10", "lastError": "1 line(s) answered failed"},
+          "ZZ OTHER": {"read": 1, "sent": 1, "waiting": 0, "stuck": 0}}
+    c, r = call({"kind": "beat", "version": "2.4.0", "bridge": GO, "every": 30, "tally": True, "tallyState": "open", "open": ["ZZ CO"], "recorderState": st})
+    dev = [d for d in FS.T["tally_devices"] if d["id"] == DA][0]
+    got = ((dev.get("info") or {}).get("beat") or {}).get("recorderStuck")
+    ok(c == 200 and got == [{"company": "ZZ CO", "n": 2, "since": "2026-10-08T09:15:00", "day": "2026-05-10"}],
+       "6. tally_devices.info.beat.recorderStuck: one company, 2 lines since 09:15, the day 10-May-2026 (%s %s)" % (c, got))
+    c, r = call({"kind": "beat", "version": "2.4.0", "bridge": GO, "every": 30, "tally": True, "tallyState": "open", "open": ["ZZ CO"], "recorderState": {"ZZ CO": {"stuck": 0}}})
+    dev = [d for d in FS.T["tally_devices"] if d["id"] == DA][0]
+    ok(((dev.get("info") or {}).get("beat") or {}).get("recorderStuck") == [], "6. none left: an empty list (%s)" % ((dev.get("info") or {}).get("beat") or {}).get("recorderStuck"))
 finally:
     if fn: fn.terminate()
     db.stop()

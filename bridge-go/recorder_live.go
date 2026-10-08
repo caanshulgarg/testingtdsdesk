@@ -177,11 +177,14 @@ type change struct {
 	// next-masterhook: a master form's line (master_created / master_altered): the master's type ("Stock Item" ...)
 	masterType string
 	// 2.4.0 part 2 review M1: FinCom answered 200 but 'failed' for this line (a lock timeout, a deadlock) or gave no result
-	// for it: not marked sent; sent again from retryAt (RecorderRetrySec doubling, 30 minutes at most), failN times so far,
-	// RecorderFailedTries at most (FinCom's repeat check, migration 63, keeps a resend from being stored twice)
-	failN   int
-	retryAt time.Time
-	failWhy string
+	// for it: not marked sent; sent again from retryAt (RecorderRetrySec doubling, 30 minutes at most), failN times so far
+	// (FinCom's repeat check, migration 63, keeps a resend from being stored twice). Never given up (the coordinator, 08-Oct-
+	// 2026, the owner's "nothing lost"): from RecorderFailedTries on it is sent every 30 minutes and the beat carries it
+	// (stuck, stuckSince, stuckDay) so FinCom shows it under Needs you; failSince: its first failed answer
+	failN     int
+	retryAt   time.Time
+	failWhy   string
+	failSince time.Time
 }
 
 // a place in the add-on's files: the file and the byte offset a line starts at
@@ -2525,6 +2528,9 @@ func liveAlreadyCount(res []any) int {
 	return n
 }
 
+// the failed answers after which a line counts as "could not be stored in FinCom" (sent every 30 minutes, in the beat)
+func liveFailedTries() int { return keepNum("RecorderFailedTries", 12) }
+
 // one step of the uploader: one group sent (its number of lines), or 0
 func liveUploadOnce() int {
 	liveUpMu.Lock()
@@ -2867,16 +2873,16 @@ func liveUploadStep() (int, bool) {
 		writeLog(fmt.Sprintf("Recorder: %d line(s) of %s FinCom had already (sent before, its answer not kept here): marked sent, not stored again", n, company))
 	}
 	// 2.4.0 part 2 review M1: a line FinCom answered 'failed' (a lock timeout, a deadlock), or left without a result, is
-	// not marked sent: it stays on the PC and goes again after its wait, RecorderFailedTries times at most; the other lines
-	// of the group are marked sent
+	// not marked sent: it stays on the PC and goes again after its wait (every 30 minutes from RecorderFailedTries on, never
+	// given up, carried by the beat); the other lines of the group are marked sent
 	res := map[string]M{}
 	for _, x := range arr(r.json["results"]) {
 		if id := str(obj(x)["line_id"]); id != "" {
 			res[id] = obj(x)
 		}
 	}
-	maxTries := keepNum("RecorderFailedTries", 12)
-	var keep, giveUp []*change
+	maxTries := liveFailedTries()
+	var keep, stuck []*change
 	// an answer {queued: n} with no results at all (a cloud before round 20 answered so): every line queued, as before
 	if r.json["results"] != nil || r.json["queued"] == nil {
 		g2 := group[:0:0]
@@ -2887,16 +2893,20 @@ func liveUploadStep() (int, bool) {
 				continue
 			}
 			c.failN++
+			if c.failN == 1 {
+				c.failSince = nowFn()
+			}
 			c.failWhy = "no result for the line"
 			if had {
 				c.failWhy = or(str(x["why"]), "failed")
 			}
-			if c.failN >= maxTries {
-				giveUp = append(giveUp, c)
-				g2 = append(g2, c)
-				continue
+			if c.failN == maxTries {
+				stuck = append(stuck, c)
 			}
 			w := math.Min(1800, float64(keepNum("RecorderRetrySec", 30))*math.Pow(2, float64(c.failN)))
+			if c.failN >= maxTries {
+				w = 1800 // kept, never given up: every 30 minutes, no more often
+			}
 			c.retryAt = nowFn().Add(time.Duration(w) * time.Second)
 			keep = append(keep, c)
 		}
@@ -2997,12 +3007,14 @@ func liveUploadStep() (int, bool) {
 	liveGuidAnswers(group, arr(r.json["results"])) // 2.3.0: what FinCom's record said of a delete / cancel sent without a GUID
 	renumNote(signs)
 	for _, c := range keep {
-		writeLog(fmt.Sprintf("Recorder: line %s of %s: FinCom answered %s (try %d of %d); kept here and sent again at %s, nothing is lost",
-			cutRunes(c.lineId, 40), company, cutRunes(c.failWhy, 160), c.failN, maxTries, c.retryAt.Format("15:04:05")))
+		if c.failN < maxTries {
+			writeLog(fmt.Sprintf("Recorder: line %s of %s: FinCom answered %s (try %d); kept here and sent again at %s, nothing is lost",
+				cutRunes(c.lineId, 40), company, cutRunes(c.failWhy, 160), c.failN, c.retryAt.Format("15:04:05")))
+		}
 	}
-	for _, c := range giveUp {
-		writeLog(fmt.Sprintf("Recorder: line %s of %s: FinCom answered failed %d times (%s); not sent again: FinCom's record keeps it as failed (Sync activity)",
-			cutRunes(c.lineId, 40), company, c.failN, cutRunes(c.failWhy, 160)))
+	for _, c := range stuck {
+		writeLog(fmt.Sprintf("Recorder: line %s of %s could not be stored in FinCom since %s (%d tries: %s); kept here, sent again every 30 minutes, shown in FinCom under Needs you",
+			cutRunes(c.lineId, 40), company, c.failSince.In(liveZone).Format("15:04"), c.failN, cutRunes(c.failWhy, 160)))
 	}
 	return len(group), false
 }
@@ -3063,10 +3075,26 @@ func liveBeat() M {
 	liveFresh()
 	out := M{}
 	waiting, oldest := map[string]int{}, map[string]time.Time{}
+	stuckN, stuckAt, stuckDay := map[string]int{}, map[string]time.Time{}, map[string]string{}
+	maxTries := liveFailedTries()
 	for _, c := range live.queue {
 		waiting[c.company]++
 		if o, had := oldest[c.company]; !had || c.readAt.Before(o) {
 			oldest[c.company] = c.readAt
+		}
+		// the coordinator, 08-Oct-2026: the lines FinCom answered failed RecorderFailedTries times or more (kept, sent every
+		// 30 minutes): how many, since when (the oldest's first failed answer), and that one's day (its entry's date)
+		if c.failN >= maxTries {
+			stuckN[c.company]++
+			if o, had := stuckAt[c.company]; !had || c.failSince.Before(o) {
+				stuckAt[c.company] = c.failSince
+				d := onlyDigits(c.vchDate)
+				if len(d) == 8 {
+					stuckDay[c.company] = d[:4] + "-" + d[4:6] + "-" + d[6:]
+				} else {
+					stuckDay[c.company] = c.readAt.In(liveZone).Format("2006-01-02")
+				}
+			}
 		}
 	}
 	for co, cs := range live.co {
@@ -3079,6 +3107,10 @@ func liveBeat() M {
 			e["oldestWaiting"] = o.Format("2006-01-02T15:04:05")
 		}
 		e["heldAsking"] = asking[co] // 2.3.3: the held lines of the company being asked of Tally again
+		e["stuck"] = stuckN[co]
+		if n := stuckN[co]; n > 0 {
+			e["stuckSince"], e["stuckDay"] = stuckAt[co].In(liveZone).Format("2006-01-02T15:04:05"), stuckDay[co]
+		}
 		out[co] = e
 	}
 	for co, n := range asking {
