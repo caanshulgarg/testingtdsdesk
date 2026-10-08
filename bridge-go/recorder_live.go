@@ -1774,9 +1774,23 @@ func fastCompanyOpen(tc *TC, company string, port, sec int) error {
 	return errors.New("the company " + company + " is not open in this Tally (not proven now)")
 }
 
-// 2.3.4 (L-d): Tally's company list on this port, asked now, names the company (open there)
+// 2.3.4 (L-d): Tally's company list on this port, asked now, names the company (open there). It rides with the entry
+// request it guards: asked only when that request could go now (the retry schedule not waiting, Tally not still on an
+// earlier request), and never itself the schedule's try or its end (an answer in time here does not put the schedule
+// back: the entry request after it does that, or steps it on)
 func fastCompanyListed(tc *TC, company string, port, sec int) error {
-	raw, err := invokeTally(tc, port, companiesRequest(), minI(maxI(sec, 2), 8))
+	if err := retryWaiting(); err != nil {
+		return err
+	}
+	if err := earlierRefusal(port); err != nil {
+		return err
+	}
+	t2 := *tc
+	t2.bg, t2.light = false, true // the tiny open-company list: not held by the cool-down after a stop (the entry request is)
+	raw, err := invokeTally(&t2, port, companiesRequest(), minI(maxI(sec, 2), 8))
+	if errors.Is(err, errRecorderStop) || tallyNoAnswer(err) {
+		retryNote(port, "TDSDeskCompanies", err) // a frozen Tally steps the shared schedule on, as the entry request would
+	}
 	if err != nil {
 		return err
 	}

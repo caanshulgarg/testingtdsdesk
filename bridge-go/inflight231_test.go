@@ -112,8 +112,9 @@ func TestInflightNothingSentWhileAbandoned(t *testing.T) {
 	if !strings.Contains(errText(err), "stopped waiting") || time.Since(t0) > 3*time.Second {
 		t.Fatalf("the entry fetch was not given up at its limit: %v after %s", err, time.Since(t0))
 	}
-	if !earlierBusy(f.port) || f.n("") != 1 {
-		t.Fatalf("the abandoned request is not held as in flight (%v, %d requests)", earlierBusy(f.port), f.n(""))
+	// 2.3.4 (L-d): the company list right before the entry request, then the entry request
+	if !earlierBusy(f.port) || f.n("") != 2 || f.n(vchObjectID) != 1 {
+		t.Fatalf("the abandoned request is not held as in flight (%v, %d requests: %v)", earlierBusy(f.port), f.n(""), f.ids())
 	}
 	// a background read at the retry's time: not sent
 	retryDue()
@@ -124,7 +125,7 @@ func TestInflightNothingSentWhileAbandoned(t *testing.T) {
 	done := make(chan M, 1)
 	go func() { done <- postOne(t, "if1", finVoucher("if1", fgParty, "IF-1", td, "5.00")) }()
 	time.Sleep(1500 * time.Millisecond)
-	if f.n("") != 1 || f.n("Import") != 0 {
+	if f.n("") != 2 || f.n("Import") != 0 {
 		t.Fatalf("sent while Tally is still on the earlier request: %v", f.ids())
 	}
 	if logLines("waiting for Tally to finish an earlier request") < 1 {
@@ -200,8 +201,9 @@ func TestInflightBusyFiveMinutesTenEntries(t *testing.T) {
 	}
 	during := f.n("") - n0
 	t.Logf("Tally busy 5 minutes, 10 entries waiting: %d request(s) sent (%v)", during, f.ids()[n0:])
-	if during != 1 || f.n(vchObjectID) != 1 {
-		t.Fatalf("requests while Tally is busy: %d (%v), want 1", during, f.ids()[n0:])
+	// 2.3.4 (L-d): the entry request, with the company list asked right before it
+	if during != 2 || f.n(vchObjectID) != 1 || f.ids()[n0] != "TDSDeskCompanies" {
+		t.Fatalf("requests while Tally is busy: %d (%v), want the company list and one entry request", during, f.ids()[n0:])
 	}
 	busy.Store(false)
 	b.free()
