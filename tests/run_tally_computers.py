@@ -90,13 +90,15 @@ with sync_playwright() as p:
     pg.goto("http://localhost:8273/"); pg.wait_for_timeout(2500)
     pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
     E = lambda js, *a: pg.evaluate(js, *a)
+    # FinCom 2.3.5, the simpler Tally page: the rest of a computer's card (and of the page) is under More; open them all
+    more = lambda: (pg.evaluate("() => document.querySelectorAll('#app [data-more-toggle][aria-expanded=\"false\"]').forEach(b => b.click())"), pg.wait_for_timeout(500))
     txt = lambda sel: pg.inner_text(sel).replace("\n", " ").strip() if pg.locator(sel).count() else ""
     line = lambda d: txt('#app [data-computer="%s"]' % d)
     E(SETUP, [DEVS, STOPS, [], "owner"]); pg.wait_for_timeout(600)
     # ---- reachable as All clients -> Tally
     side = pg.locator('#side button[aria-label="Tally"]')
     ok(E("S.view") == "home" and E("S.homeTab") == "clients" and side.count() >= 1, "All clients has Tally in its menu")
-    side.first.click(); pg.wait_for_timeout(1500)
+    side.first.click(); pg.wait_for_timeout(1500); more()
     ok(E("S.homeTab") == "tally" and E("location.hash") == "#/tally" and pg.locator("#app [data-computers]").count() == 1, "All clients -> Tally: the page with one line a computer (%s)" % E("location.hash"))
     ok(pg.locator("#app [data-computer]").count() == 5, "one line a computer (%d)" % pg.locator("#app [data-computer]").count())
     hm = lambda m: E("(m) => tallyHm(Date.now() - m * 60000)", m)
@@ -106,10 +108,11 @@ with sync_playwright() as p:
     hmIn = lambda text, m: any(("at %s" % hm(x)) in text for x in (m - 1, m, m + 1))   # the fixture and the page read the clock seconds apart: a minute either way
     # ---- each state
     l1 = line(D1)
-    ok("NWS144" in l1 and "FinCom Bridge 2.1.4" in l1 and "Reading" in l1 and pg.get_attribute('#app [data-computer="%s"]' % D1, "data-read-state") == "reading", "Reading: NWS144, version 2.1.4 (%s)" % l1)
+    # 2.3.5: plain reading is said by the line's "Connected" (no word "Reading"); the card keeps data-read-state
+    ok("NWS144" in l1 and "FinCom Bridge 2.1.4" in l1 and "Connected" in l1 and pg.locator('#app [data-computer="%s"] [data-read-text]' % D1).count() == 0 and pg.get_attribute('#app [data-computer="%s"]' % D1, "data-read-state") == "reading", "Reading: NWS144, version 2.1.4 (%s)" % l1)
     ok("Last request: vouchers 1.2 s" in l1 and hmIn(l1, 2) and "Longest today: ledgers 8.4 s" in l1 and hmIn(l1, 120), "the last request (kind, time, when) and the longest today (%s)" % l1)
     l2 = line(D2)
-    ok("Paused" in l2 and pg.get_attribute('#app [data-computer="%s"]' % D2, "data-read-state") == "paused", "Paused (beat.paused) (%s)" % l2)
+    ok("Reading paused" in l2 and pg.get_attribute('#app [data-computer="%s"]' % D2, "data-read-state") == "paused", "Paused (beat.paused) (%s)" % l2)
     l3 = line(D3)
     ok("Tally did not answer in time at " in l3 and "once FinCom Bridge 2.3.1 is on that computer" in l3 and "Stopped by itself" not in l3
        and pg.get_attribute('#app [data-computer="%s"]' % D3, "data-read-state") == "retrying" and "1 over 20 s" in l3 and pg.locator('#app [data-read-resume="%s"]' % D3).count() == 0,
@@ -164,16 +167,16 @@ with sync_playwright() as p:
     ok("not available until migration 43 runs" in txt("#app [data-control-err]") + txt(PS(D1)), "F3. the RPC missing: 'not available until migration 43 runs' (%s)" % (txt("#app [data-control-err]") or txt(PS(D1)))[-120:])
     E("() => { window.__fail = null; }")
     # a member: the values, no editor
-    E(SETUP, [DEVS, STOPS, [], "member"]); pg.wait_for_timeout(600); side.first.click(); pg.wait_for_timeout(1200)
+    E(SETUP, [DEVS, STOPS, [], "member"]); pg.wait_for_timeout(600); side.first.click(); pg.wait_for_timeout(1200); more()
     ok(pg.locator(PS(D1)).count() == 1 and "10 bills per request" in txt(PS(D1)) and pg.locator(PS(D1) + " [data-ps-edit], " + PS(D1) + " input, " + PS(D1) + " [data-ps-save]").count() == 0, "F3. a member sees the values, no editor (%s)" % txt(PS(D1)))
     # the columns missing (migration 43 not run): the page still works, and says so
     E("""() => { window.__api0 = Cloud.api; Cloud.api = async (path) => { if (/^tally_devices/.test(path) && /post_only/.test(path)) throw new Error("column tally_devices.post_only does not exist (42703)"); return window.__api0(path); }; TCloud.pane.at = 0; }""")
     E(SETUP, [DEVS, STOPS, [], "owner"]); pg.wait_for_timeout(400)
     E("() => { Cloud.api = async (path) => { if (/^tally_devices/.test(path) && /post_only/.test(path)) throw new Error('column tally_devices.post_only does not exist (42703)'); window.__asked.push(path); if (/^tally_devices/.test(path)) return JSON.parse(JSON.stringify(window.__devs)); return []; }; TCloud.pane.devices = null; TCloud.pane.at = 0; TCloud.pane.busy = ''; }")
-    side.first.click(); pg.wait_for_timeout(1500)
+    side.first.click(); pg.wait_for_timeout(1500); more()
     ok(pg.locator("#app [data-computer]").count() == 5 and "not available until migration 43 runs" in txt(PS(D1)) and pg.locator(PS(D1) + " [data-ps-edit]").count() == 0 and "Posts only to: ZZ TEST" in line(D1),
        "F3. without the columns: one line a computer still, 'not available until migration 43 runs', the applied Posts only to stays (%s)" % txt(PS(D1)))
-    E(SETUP, [DEVS, STOPS, [], "owner"]); pg.wait_for_timeout(300); side.first.click(); pg.wait_for_timeout(1200)
+    E(SETUP, [DEVS, STOPS, [], "owner"]); pg.wait_for_timeout(300); side.first.click(); pg.wait_for_timeout(1200); more()
     # ---- the owner's buttons
     sel = lambda s: pg.locator("#app " + s)
     ok(sel('[data-read-stop="%s"]' % D1).count() == 1 and sel('[data-read-stop="%s"]' % D2).count() == 1 and sel('[data-read-resume="%s"]' % D3).count() == 0 and sel('[data-read-stop="%s"]' % D3).count() == 1 and sel('[data-read-resume="%s"]' % D4).count() == 1
@@ -216,7 +219,7 @@ with sync_playwright() as p:
     E("() => { window.__fail = null; }")
     # ---- every computer stopped from FinCom: only Resume reading on all computers
     E(SETUP, [DEVS, STOPS + [{"id": 8, "device_id": None, "action": "stop", "reason": "Bridge update", "stopped_at": "ago:1", "cleared_at": None}], [], "owner"]); pg.wait_for_timeout(300)
-    E("() => navHome('tally')"); pg.wait_for_timeout(1500)
+    E("() => navHome('tally')"); pg.wait_for_timeout(1500); more()
     l1 = line(D1)
     ok("Stopped from FinCom: Bridge update" in l1 and sel("[data-read-resume]").count() == 0 and sel("[data-read-resume-all]").count() == 1 and sel("[data-read-stop]").count() == 0,
        "all computers stopped: every line says so, and only Resume reading on all computers (%s)" % l1)
@@ -224,14 +227,14 @@ with sync_playwright() as p:
     ok(["tally_read_resume", {"p_device": None}] in E("window.__calls"), "Resume reading on all computers -> tally_read_resume(null)")
     # ---- A: a version held, then let go; a rollback standing, then cleared
     E(SETUP, [DEVS, [], [{"version": "2.1.5", "held_at": "ago:30", "held_by": "u-1", "held_why": "posting broke on NWS144", "withdrawn_at": None}], "owner"]); pg.wait_for_timeout(300)
-    E("() => navHome('tally')"); pg.wait_for_timeout(1500)
+    E("() => navHome('tally')"); pg.wait_for_timeout(1500); more()
     rl = txt("#app [data-release]")
     ok("Version 2.1.5 is held" in rl and "posting broke on NWS144" in rl and sel("[data-release-hold]").count() == 0 and txt("#app [data-release-unhold]") == "Let version 2.1.5 go", "A. held: said with why; Let version 2.1.5 go (%s)" % rl)
     sel("[data-release-unhold]").click(); pg.wait_for_timeout(400)
     if pg.locator('#confirmBox [data-cbx="yes"]').count(): pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(600)
     ok(any(c[0] == "tally_release_unhold" and c[1].get("p_version") == "2.1.5" for c in E("window.__calls")), "A. Let it go -> tally_release_unhold")
     E(SETUP, [DEVS, [], [], "owner", {"rollbacks": [{"version": "2.1.4", "why": "posting broke", "set_by": "u-1", "set_at": "ago:20"}]}]); pg.wait_for_timeout(300)
-    E("() => navHome('tally')"); pg.wait_for_timeout(1500)
+    E("() => navHome('tally')"); pg.wait_for_timeout(1500); more()
     rl = txt("#app [data-release]")
     ok("Rolled back to version 2.1.4" in rl and "posting broke" in rl and txt("#app [data-release-rollback-clear]") == "Clear the rollback", "A. a rollback standing: said, with Clear the rollback (%s)" % rl)
     sel("[data-release-rollback-clear]").click(); pg.wait_for_timeout(400)
@@ -239,7 +242,7 @@ with sync_playwright() as p:
     ok(any(c[0] == "tally_release_rollback_clear" for c in E("window.__calls")), "A. Clear the rollback -> tally_release_rollback_clear")
     # ---- a member: the lines, no buttons
     E(SETUP, [DEVS, STOPS, [], "member"]); pg.wait_for_timeout(300)
-    E("() => navHome('tally')"); pg.wait_for_timeout(1500)
+    E("() => navHome('tally')"); pg.wait_for_timeout(1500); more()
     ok(pg.locator("#app [data-computer]").count() == 5 and "Stopped from FinCom: Tally hangs on the bank ledger" in line(D4), "a member sees the lines")
     ok("Posts only to: ZZ TEST" in line(D1), "a member sees Posts only to: ZZ TEST too (information, not a control)")
     ok(sel("[data-read-stop], [data-read-stop-all], [data-read-resume], [data-read-resume-all], [data-release-pilot], [data-release-approve], [data-release-hold], [data-release-rollback]").count() == 0, "a member sees none of the owner's buttons")
@@ -268,7 +271,7 @@ with sync_playwright() as p:
     CUR = [{"book_id": BOOKS[0]["book_id"], "state": "needs_baseline", "state_why": "AlterID went backwards (a restore in Tally?)", "state_at": "ago:50", "cleared_at": None, "cleared_by": None, "cleared_note": None}]
     X = {"members": MEMBERS, "books": BOOKS, "companies": COS, "cursors": CUR}
     E(SETUP, [DEVS, STOPS2, REL, "owner", X]); pg.wait_for_timeout(300)
-    E("() => navHome('tally')"); pg.wait_for_timeout(1500)
+    E("() => navHome('tally')"); pg.wait_for_timeout(1500); more()
     l4, l2, l1 = line(D4), line(D2), line(D1)
     ok("Stopped by Anshul at" in l4 and hmIn(l4, 40) and ": Tally hangs on the bank ledger" in l4, "24. a computer stopped from FinCom: Stopped by <name> at <time>: <reason> (%s)" % l4)
     ok("Resumed by neha@fincom.in at" in l2 and hmIn(l2, 100), "24. a computer resumed: Resumed by <name> at <time>, the member's e-mail when there is no name (%s)" % l2)
@@ -284,7 +287,7 @@ with sync_playwright() as p:
     # withdrawn (after an approval): said with who, when and why; no Approve, no Withdraw; a new pilot is allowed
     REL_W = [dict(REL[0], approved_at="ago:10", approved_by="u-neha", withdrawn_at="ago:1", withdrawn_by="u-anshul", withdrawn_why="Crashes on NWS144 at the bank ledger")]
     E(SETUP, [DEVS, STOPS2, REL_W, "owner", X]); pg.wait_for_timeout(300)
-    E("() => navHome('tally')"); pg.wait_for_timeout(1500)
+    E("() => navHome('tally')"); pg.wait_for_timeout(1500); more()
     rel = txt("#app [data-release]")
     ok(any(("Withdrawn by Anshul at %s: Crashes on NWS144 at the bank ledger" % hm(x)) in rel for x in (0, 1, 2)) and "withdrawn" in rel.lower(), "23. withdrawn: Withdrawn by <name> at <time>: <why> (%s)" % rel)
     ok(sel("[data-release-approve], [data-release-pilot], [data-release-withdraw]").count() == 0, "23. withdrawn: no Withdraw (and no pilot or approval)")
@@ -298,18 +301,18 @@ with sync_playwright() as p:
     ok(["tally_baseline_clear", {"p_book": BOOKS[0]["book_id"], "p_note": "Tally restored from the 30-Sep backup; read it afresh"}] in E("window.__calls"), "10. Clear -> tally_baseline_clear(p_book, p_note)")
     CUR_OK = [dict(CUR[0], state="ok", cleared_at="ago:0.5", cleared_by="u-anshul", cleared_note="Tally restored from the 30-Sep backup; read it afresh")]
     E(SETUP, [DEVS, STOPS2, REL, "owner", dict(X, cursors=CUR_OK)]); pg.wait_for_timeout(300)
-    E("() => navHome('tally')"); pg.wait_for_timeout(1500)
+    E("() => navHome('tally')"); pg.wait_for_timeout(1500); more()
     bl = txt('#app [data-computer="%s"] [data-baseline="%s"]' % (D1, BOOKS[0]["book_id"]))
     ok(inAny("Cleared by Anshul at %s: Tally restored from the 30-Sep backup; read it afresh", 0.5, bl) and sel("[data-baseline-clear]").count() == 0, "10. afterwards: Cleared by <name> at <time>: <note>, no button (%s)" % bl)
     # a member sees the words, none of the buttons
     E(SETUP, [DEVS, STOPS2, REL_A, "member", X]); pg.wait_for_timeout(300)
-    E("() => navHome('tally')"); pg.wait_for_timeout(1500)
+    E("() => navHome('tally')"); pg.wait_for_timeout(1500); more()
     ok(inAny("Stopped by Anshul at %s", 40, line(D4)) and "goes to every computer by itself" in txt("#app [data-release]") and "Needs a fresh baseline since" in txt('#app [data-baseline="%s"]' % BOOKS[0]["book_id"]),
        "a member sees who and when, the withdrawal and the baseline words")
     ok(sel("[data-release-withdraw], [data-baseline-clear]").count() == 0, "a member has no Withdraw and no Clear")
     # an older cloud (migration 37 not applied): the page works, and says FinCom's cloud is not ready for what it cannot do
     E(SETUP, [DEVS, STOPS2, REL, "owner", dict(X, old=True)]); pg.wait_for_timeout(300)
-    E("() => navHome('tally')"); pg.wait_for_timeout(1500)
+    E("() => navHome('tally')"); pg.wait_for_timeout(1500); more()
     rel = txt("#app [data-release]")
     ok(pg.locator("#app [data-computer]").count() == 5 and "Stopped by Anshul" in line(D4), "older cloud: the lines, who and when still shown (%s)" % rel)
     nr = txt("#app [data-release] [data-not-ready]")
@@ -317,7 +320,7 @@ with sync_playwright() as p:
     ok(sel("[data-baseline]").count() == 0 and not txt("#app [data-bridge-lines]").count("permission denied"), "older cloud: no baseline rows and no error from tally_sync_cursor")
     E("() => { window.__fail = 'Could not find the function public.tally_release_withdraw(p_version, p_why) in the schema cache'; }")
     E(SETUP, [DEVS, STOPS2, REL, "owner", X]); E("() => { window.__fail = 'Could not find the function public.tally_release_withdraw(p_version, p_why) in the schema cache'; }"); pg.wait_for_timeout(300)
-    E("() => navHome('tally')"); pg.wait_for_timeout(1500)
+    E("() => navHome('tally')"); pg.wait_for_timeout(1500); more()
     sel("[data-release-withdraw]").click(); pg.wait_for_timeout(400)
     pg.fill("#confirmBox #withdrawWhy", "x"); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(600)
     err = txt("#app [data-control-err]")
