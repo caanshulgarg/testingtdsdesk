@@ -49,8 +49,9 @@ then that notification should not appear**".
   On a phone (360 and 390 px) the line's words have a full-width line, the buttons a row below, no sideways scroll.
 - **In the bridge's tray** (the Windows balloons / toasts): every balloon goes through one gate (`bridge-go/notices.go`).
   Each problem (kind, company, day, computer) is shown at most once; clicked or closed, it is never shown again, also
-  after a restart; a new problem still shows once. The tray menu has **Clear notifications**: every current one is
-  cleared and the balloon taken away. The record is per Windows user
+  after a restart; a new problem still shows once. The tray menu has **Clear notifications**: every current one that
+  was shown is cleared and the balloon taken away (a problem still waiting its 2-3 minutes was never seen and still
+  shows once when due). The record is per Windows user
   (`%LOCALAPPDATA%\FinCom Bridge\notifications-cleared.json`, 90 days). The icon's colour and tooltip still always show
   the bridge's state. Answers to the person's own menu clicks still come once per click. Details:
   `docs/bridge-notifications.md`.
