@@ -1183,8 +1183,10 @@ func liveSingle(l recLine) (recLine, string) {
 		}
 		return l, "imported"
 	case "after_delete":
-		if master && liveMTOf(l.GUID) != "" {
-			return l, "master_deleted" // open question 1: a master its add-on's form lines named (masterhook.go)
+		// open question 1: a master its add-on's form lines named (masterhook.go); review M1 of 2.4.0 part 2: not a Pay Head,
+		// a ledger in FinCom: its delete stays ledger_deleted (applied by FinCom to the ledger holding its GUID, as before)
+		if t := liveMTOf(l.GUID); master && t != "" && t != "Pay Head" {
+			return l, "master_deleted"
 		}
 		if master {
 			return l, "ledger_deleted"

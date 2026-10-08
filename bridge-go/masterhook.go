@@ -2,8 +2,9 @@
 // the Ledger form: Pay Head, Stock Item and Godown (proven on real TallyPrime 7.1; Unit and Employee left out, not
 // proven: see the add-on's comment), each with the Ledger form's three lines (a line before
 // Tally's own save, Tally's Form Accept, a line after it). Each line is "<kind>_accept_pre" / "<kind>_accept_post"
-// (payhead, stockitem, godown; the bridge also maps unit and employee for when they are proven) with the master's name, GUID, MasterID, AlterID and parent, as the Ledger
-// form's lines.
+// (payhead, stockitem, godown) with the master's name, GUID, MasterID, AlterID and parent, as the Ledger form's lines.
+// The bridge still pairs unit_* / employee_* lines should an add-on write them, but this add-on does not, and FinCom's
+// cloud refuses them (tally-ingest: 'failed', "unknown master type"; review L3 of 2.4.0 part 2).
 //
 // The bridge pairs them as it pairs a ledger's and sends master_created (Tally's MasterID 0 before the save: a new
 // master) or master_altered, HEADS ONLY: master_type, name, parent, object_guid, master_id, alter_id. Nothing is ever asked
@@ -11,7 +12,9 @@
 // its form's lines go as a master's too (heads only for now; the ledger list keeps its ledger as before).
 //
 // Deletes: the add-on's System Events (Before / After Delete Object) fire for every object and write no master type: a
-// master the hooked forms named is sent as master_deleted with its type (below); any other as ledger_deleted, as in 2.3.2.
+// Stock Item or Godown the hooked forms named is sent as master_deleted with its type (below); any other, a Pay Head
+// included (a ledger in FinCom: review M1 of 2.4.0 part 2), as ledger_deleted, as in 2.3.2: FinCom applies it to the
+// ledger holding the line's GUID.
 package main
 
 import "strings"
@@ -59,8 +62,9 @@ func liveMasterEvent(fresh bool) string {
 // type, so a Stock Item's or a Godown's delete went as ledger_deleted (FinCom's cloud applies a ledger delete only to the
 // ledger holding the line's GUID, so no ledger was ever marked deleted by one; the line was held as an unknown ledger).
 // The bridge remembers the type of every master its add-on's form lines named, by GUID (sync\recorder-master-types.json,
-// kept across restarts, at most 20,000), and sends such a master's delete as master_deleted with that type. A master
-// never seen on a hooked form (a ledger, or one older than the hook) stays ledger_deleted, as before.
+// kept across restarts, at most 20,000), and sends such a master's delete as master_deleted with that type, except a Pay
+// Head's (a ledger in FinCom, review M1 of 2.4.0 part 2): ledger_deleted, so FinCom's ledger is marked deleted by its
+// GUID. A master never seen on a hooked form (a ledger, or one older than the hook) stays ledger_deleted, as before.
 var liveMT struct {
 	dir string
 	m   map[string]string

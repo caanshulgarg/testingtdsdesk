@@ -1,5 +1,5 @@
 """python3 run_migration66.py - migration-66-recorder-masters (07-Oct-2026, branch next-masterhook: the add-on's master
-forms, heads only). On throwaway PostgreSQL (pg_stand, port 30620 unless PG66_PORT; never a real database), with pg_stand's
+forms, heads only). On throwaway PostgreSQL (pg_stand, port 30666 unless PG66_PORT; never a real database), with pg_stand's
 stand-in tables, then 66 (twice).
   0. the file: one transaction (begin; set local lock_timeout '10s'; ... commit;), no 'delete from', no drop, truncate or
      change of an existing table, no real database named; one new table, one new function (security definer, search_path
@@ -9,6 +9,8 @@ stand-in tables, then 66 (twice).
   2. a line of another event, or without a line id: 'failed' with words, not kept.
   3. another firm's book: refused, nothing kept.
   4. the firm reads its own rows only (RLS); nobody inserts directly.
+  5. review L1 of 2.4.0 part 2 (08-Oct-2026): anon holds nothing on the new table or its id sequence, even where the
+     schema's default privileges grant every new table to anon (as Supabase's do).
 RED: before the file exists it stops at the first check."""
 import os, re, sys, json, subprocess
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -39,7 +41,7 @@ FNS = sorted(set(re.findall(r"create or replace function public\.(\w+)\s*\(", te
 ok(FNS == ["tally_recorder_masters_save"], "0. one new function (%s)" % FNS)
 ok(not re.search(r"supabase\.co|\.supabase\.|project[_ ]ref|qbocskaiewaxqcvaunzc", low), "0. names no real database")
 
-db = pg_stand.start(int(os.environ.get("PG66_PORT") or 30620))
+db = pg_stand.start(int(os.environ.get("PG66_PORT") or 30666))     # its own port (review L4; 62's test has 30620)
 def run(sql): return subprocess.run(["runuser", "-u", "postgres", "--", pg_stand.BIN + "/psql", "-h", "127.0.0.1", "-p", str(db.port), "-U", "postgres", "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-q", "-f", "-"], input=sql, capture_output=True, text=True)
 def j(s, uid=None):
     try: x = db.one(s, uid)
@@ -56,6 +58,8 @@ try:
       insert into members values (%(O)s, %(F)s, 'Owner', 'owner', true), (%(X)s, %(F2)s, 'Other', 'owner', true);
       insert into tally_books (book_id, firm_id, client_id, company, from_date, open_as_on) values (%(B)s, %(F)s, 'c1', 'GARG SHEKHAR & COMPANY', '2025-04-01', '2025-03-31'),
         (%(B2)s, %(F2)s, 'c9', 'OTHER', '2025-04-01', '2025-03-31');""" % {"F": q(F), "F2": q(F2), "O": q(OWNER), "X": q(OTHER), "B": q(B), "B2": q(B2)})
+    # as Supabase: every new table and sequence in public granted to anon, authenticated and service_role by default
+    db.sql("alter default privileges in schema public grant all on tables to anon, authenticated, service_role; alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;")
     for i in (1, 2):
         r = run(text)
         ok(r.returncode == 0, "66 runs (%s time): %s" % ("first" if i == 1 else "second", r.stderr[-300:]))
@@ -91,6 +95,14 @@ try:
         db.sql("set role authenticated; insert into tally_recorder_masters (firm_id, book_id, line_id, event) values (%s, %s, 'x', 'master_created')" % (q(F), q(B)), OWNER); w = False
     except RuntimeError: w = True
     ok(w, "4. a signed-in person cannot insert")
+
+    print("== 5. anon holds nothing on the new table")
+    tp = lambda r, pv: db.one("select has_table_privilege(%s, 'public.tally_recorder_masters', %s)::text" % (q(r), q(pv)))
+    PV = ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER")
+    ok([tp("anon", pv) for pv in PV] == ["false"] * len(PV), "5. anon: no privilege on tally_recorder_masters (%s)" % [tp("anon", pv) for pv in PV])
+    sq = [db.one("select has_sequence_privilege('anon', 'public.tally_recorder_masters_id_seq', %s)::text" % q(pv)) for pv in ("USAGE", "SELECT", "UPDATE")]
+    ok(sq == ["false"] * 3, "5. anon: no privilege on its id sequence (%s)" % sq)
+    ok(tp("authenticated", "SELECT") == "true" and tp("authenticated", "INSERT") == "false", "5. members still read (RLS), never write")
 finally:
     db.stop()
 print("\nFAILED: %d" % len(fails) if fails else "\nALL OK")

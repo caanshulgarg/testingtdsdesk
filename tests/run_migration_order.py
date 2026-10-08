@@ -49,7 +49,10 @@ READERS = ["tally_tb", "tally_period", "tally_mis", "tally_gst_summary", "tally_
            # 06-Oct-2026 (migration 57, bridge 2.3.1 part A: the entry's details, written by the entry path for both paths)
            "tally_ingest_details", "tally_tds_details",
            # 07-Oct-2026 (migration 65: the nightly self-check)
-           "tally_selfcheck_compare", "tally_selfcheck_copy", "tally_selfcheck_words", "tally_selfcheck_record"]
+           "tally_selfcheck_compare", "tally_selfcheck_copy", "tally_selfcheck_words", "tally_selfcheck_record",
+           # 07-Oct-2026 (migration 66, next-masterhook: the add-on's master lines kept, heads only; review L4 of 2.4.0 part 2;
+           # 66 runs in NEXT240 above)
+           "tally_recorder_masters_save"]
 texts = {}
 fails = []
 def ok(c, w):

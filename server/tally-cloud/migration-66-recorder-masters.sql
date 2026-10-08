@@ -2,8 +2,9 @@
 -- table and one new function; no existing table, column, row, function or grant is changed or removed; safe to run twice;
 -- one transaction (lock_timeout 10 s). Independent of 61-65 (any order after 44). NOT RUN by this change: written only.
 --
--- The add-on now hooks the Pay Head, Stock Item, Unit, Godown and Employee forms as it hooks the Ledger form. The bridge
--- sends each save as a recorder line master_created / master_altered (and a known master's delete as master_deleted) with HEADS ONLY: master_type, name, parent,
+-- The add-on now hooks the Pay Head, Stock Item and Godown forms (proven on real TallyPrime 7.1; Unit and Employee are not
+-- hooked, and tally-ingest refuses their lines) as it hooks the Ledger form. The bridge sends each save as a recorder line
+-- master_created / master_altered (and a known Stock Item's or Godown's delete as master_deleted) with HEADS ONLY: master_type, name, parent,
 -- object_guid, master_id, alter_id (never a body: nothing is asked of Tally for it). tally-ingest's recorder_lines
 -- (index.ts) keeps those lines here instead of in tally_recorder_lines (whose tally_recorder_line knows only vouchers and
 -- ledgers and would mark them failed): nothing is applied to the books from them yet.
@@ -18,7 +19,8 @@
 --   master_deleted (the coordinator's open question 1): the bridge sends a Stock Item's or Godown's delete under its own
 --     type (the type its form lines named) instead of ledger_deleted; kept here, nothing in the books changes. A ledger
 --     delete stays tally_recorder_line's, which applies it ONLY to the ledger holding the line's GUID (never by name):
---     unchanged, see tests/run_ledger_delete_guid.py.
+--     unchanged, see tests/run_ledger_delete_guid.py. A Pay Head is a ledger in FinCom: its delete goes as ledger_deleted
+--     (review M1 of 2.4.0 part 2), so FinCom's ledger is marked deleted by its GUID as before.
 
 begin;
 set local lock_timeout = '10s';     -- never queue long behind a session holding a table here (a timeout rolls the whole file back: run it again)
@@ -36,7 +38,7 @@ create table if not exists public.tally_recorder_masters (
   company       text,
   line_id       text not null,
   event         text not null check (event in ('master_created', 'master_altered', 'master_deleted')),
-  master_type   text,                                  -- Pay Head | Stock Item | Unit | Godown | Employee
+  master_type   text,                                  -- Pay Head | Stock Item | Godown (tally-ingest refuses Unit and Employee)
   name          text,
   parent        text,
   object_guid   text,
@@ -57,6 +59,10 @@ do $$ begin
 end $$;
 grant select on public.tally_recorder_masters to authenticated;
 revoke insert, update, delete, truncate on public.tally_recorder_masters from anon, authenticated;
+-- review L1 of 2.4.0 part 2 (08-Oct-2026): anon holds nothing on the new table or its id sequence (Supabase's default
+-- privileges grant every new table in public to anon)
+revoke all on public.tally_recorder_masters from anon;
+revoke all on sequence public.tally_recorder_masters_id_seq from anon, authenticated;
 
 create or replace function public.tally_recorder_masters_save(p_firm uuid, p_book uuid, p_device uuid, p_lines jsonb)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
