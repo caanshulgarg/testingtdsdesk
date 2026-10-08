@@ -10,7 +10,7 @@ $coA = $co; $coB = 'FinCom Other Co'
 $cDate = '20261002'
 function CAsk($coName, $mid, $case) {
   $q = $tplOBJ.Replace('@@CO@@', (X $coName)).Replace('987654321', "$mid")
-  $a = Post $q '' 30
+  $a = Post $q '' 20
   Set-Content (Join-Path $cap "c-$case.xml") $a -Encoding UTF8
   $s = ($a -replace '\s+', ' ').Trim(); if ($s.Length -gt 400) { $s = $s.Substring(0, 400) + '...' }
   $vm = [regex]::Match($a, '<MASTERID[^>]*>\s*(\d+)').Groups[1].Value; $vn = [regex]::Match($a, '<NARRATION[^>]*>([^<]*)').Groups[1].Value
@@ -64,31 +64,40 @@ try {
   $null = CImp $coB 'All Masters' @((LedgerXml 'C Party' 'Sundry Debtors' ''), (LedgerXml 'C Income' 'Indirect Incomes' '')) 'B ledgers'
   $jv = @(1..3 | ForEach-Object { '<VOUCHER VCHTYPE="Journal" ACTION="Create"><DATE>' + $cDate + '</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><NARRATION>fast234c B journal ' + $_ + '</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>C Party</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-' + (10 * $_) + '.00</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>C Income</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>' + (10 * $_) + '.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>' })
   $null = CImp $coB 'Vouchers' $jv 'B journals'
+  # A's own vouchers beyond B's MasterIDs (so a MasterID of A only exists)
+  $ja = @(1..6 | ForEach-Object { '<VOUCHER VCHTYPE="Journal" ACTION="Create"><DATE>' + $cDate + '</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><NARRATION>fast234c A journal ' + $_ + '</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>Spike Party</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-' + (10 * $_) + '.00</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>Spike Party 2</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>' + (10 * $_) + '.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>' })
+  $null = CImp $coA 'Vouchers' $ja 'A journals'
   $vA = CVch $coA; $vB = CVch $coB
-  $mA = @($vA | ForEach-Object mid); $mB = @($vB | ForEach-Object mid)
-  Say "A's vouchers: $($vA.Count) (MasterIDs $(($mA | Select-Object -First 20) -join ','))"
-  Say "B's vouchers: $($vB.Count) (MasterIDs $($mB -join ','))"
-  $aOnly = @($mA | Where-Object { $_ -notin $mB })[0]; $bOnly = @($mB | Where-Object { $_ -notin $mA })[0]; $both = @($mA | Where-Object { $_ -in $mB })[0]
+  $mA = @($vA | ForEach-Object mid | Where-Object { $_ }); $mB = @($vB | ForEach-Object mid | Where-Object { $_ })
+  Say "A's vouchers: $($mA.Count) (MasterIDs $($mA -join ','))"
+  Say "B's vouchers: $($mB.Count) (MasterIDs $($mB -join ','))"
+  $aOnly = @($mA | Where-Object { $_ -notin $mB } | Select-Object -Last 1)[0]; $bOnly = @($mB | Where-Object { $_ -notin $mA })[0]; $both = @($mA | Where-Object { $_ -in $mB })[0]
   $none = '987654'
   Say "cases: A only $aOnly; B only $bOnly; both $(if ($both) { $both } else { '(none)' }); neither $none"
-  if (-not $aOnly -or -not $bOnly) { Say 'HARNESS: fast234c: no MasterID of one company only' }
+  if (-not $aOnly) { Say 'HARNESS: fast234c: no MasterID of A only' }
   Say "both open: Tally's company list: $(Cos -join ' | ')"
   $null = CAsk $coA $aOnly 'open-A-aonly'; $null = CAsk $coA $bOnly 'open-A-bonly'; $null = CAsk $coB $bOnly 'open-B-bonly'; $null = CAsk $coB $aOnly 'open-B-aonly'; $null = CAsk $coA $none 'open-A-none'
   if ($both) { $null = CAsk $coA $both 'open-A-both'; $null = CAsk $coB $both 'open-B-both' }
-  # 3. A closed (not loaded), B open: the same asks naming A
-  if (-not (StartW $light @($fB) 'c-bonly' @($coB))) { Say "HARNESS: fast234c: B not open alone ($(Cos -join ' | '))" }
-  Say "A closed: Tally's company list: $(Cos -join ' | ')"
-  $null = CAsk $coA $aOnly 'closedA-A-aonly'; $null = CAsk $coA $bOnly 'closedA-A-bonly'; $null = CAsk $coA $none 'closedA-A-none'
-  if ($both) { $null = CAsk $coA $both 'closedA-A-both' }
-  $null = CAsk 'FinCom No Such Co' $aOnly 'closedA-nosuch-aonly'; $null = CAsk 'FinCom No Such Co' $bOnly 'closedA-nosuch-bonly'
-  $null = CAsk $coB $bOnly 'closedA-B-bonly'
-  # 4. A open alone (B closed): the asks naming B (the mirror)
-  if (-not (StartW $light @($fA) 'c-aonly' @($coA))) { Say "HARNESS: fast234c: A not open alone ($(Cos -join ' | '))" }
-  $null = CAsk $coB $bOnly 'closedB-B-bonly'; $null = CAsk $coB $aOnly 'closedB-B-aonly'; $null = CAsk $coA $aOnly 'closedB-A-aonly'
-  # 5. no company open at all
-  $null = StartW $light @() 'c-none' @()
-  Say "none open: Tally's company list: $(Cos -join ' | ')"
-  $null = CAsk $coA $aOnly 'noneopen-A-aonly'; $null = CAsk $coA $none 'noneopen-A-none'
+  # each ask naming a closed company in a FRESH Tally: a control ask of the open company first, the ask, a screenshot,
+  # then whether Tally still answers (its company list, the control again)
+  function CClosed($loads, $want, $ctlCo, $ctlMid, $askCo, $askMid, $case) {
+    if (-not (StartW $light $loads "c-$case" $want)) { Say "HARNESS: fast234c ${case}: $($want -join ', ') not open ($(Cos -join ' | '))"; return }
+    Say "C ${case}: Tally's company list before: $(Cos -join ' | ')"
+    if ($ctlMid) { $null = CAsk $ctlCo $ctlMid "$case-control-before" }
+    $null = CAsk $askCo $askMid $case
+    Shot "c-$case-after"
+    $l = Post $listCo '' 15
+    Say ("C {0}: after it, Tally's company list answered: {1} ({2} chars, {3} ms)" -f $case, $(if ($l) { 'yes' } else { 'NO' }), "$l".Length, $script:lastMs)
+    if ($ctlMid) { $null = CAsk $ctlCo $ctlMid "$case-control-after" }
+  }
+  CClosed @($fB) @($coB) $coB $bOnly $coA $aOnly 'closedA-A-aonly'
+  CClosed @($fB) @($coB) $coB $bOnly $coA $bOnly 'closedA-A-bonly'
+  CClosed @($fB) @($coB) $coB $bOnly $coA $none 'closedA-A-none'
+  if ($both) { CClosed @($fB) @($coB) $coB $bOnly $coA $both 'closedA-A-both' }
+  CClosed @($fB) @($coB) $coB $bOnly 'FinCom No Such Co' $bOnly 'closedA-nosuch-bonly'
+  CClosed @($fA) @($coA) $coA $aOnly $coB $bOnly 'closedB-B-bonly'
+  CClosed @($fA) @($coA) $coA $aOnly $coB $aOnly 'closedB-B-aonly'
+  CClosed @() @() $null $null $coA $aOnly 'noneopen-A-aonly'
 } catch { Say "HARNESS: fast234c stopped: $_ $($_.ScriptStackTrace)" }
 Stop-T
 Say 'done (fast234 fast234c)'
