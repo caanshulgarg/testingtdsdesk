@@ -113,8 +113,12 @@ function B233Healthy {
     $d = ($sa - $b.at).TotalSeconds
     if ($d -gt 10) { $late += ("{0} after {1:0.0} s" -f $b.mid, $d) }
   }
-  Start-Sleep 60
-  foreach ($b in $burst) { if (B233Wait $b.mid 1 -body) { $bodies++ } }
+  # "in the end": 1.8 s at the proxy plus Tally's own time can pass the 2 s rule (run 37818870452: 2071 ms); 2.4.0 then
+  # holds that save and asks it ONCE more 5 minutes later (option B): the bodies are waited for 7 minutes at most
+  $tb = Get-Date
+  do { Start-Sleep 15; $bodies = 0; foreach ($b in $burst) { if (B233Wait $b.mid 1 -body) { $bodies++ } } } while ($bodies -lt 8 -and ((Get-Date) - $tb).TotalMinutes -lt 7)
+  $once = @(@(S2Proxy) | Where-Object { (S2Entry $_) -and $_.company -eq $co1 -and "$($_.mid)" -in @($burst | ForEach-Object { "$($_.mid)" }) -and [double]$_.ms -ge 2000 } | ForEach-Object { "$($_.mid) $([int]$_.ms) ms" })
+  if ($once.Count) { Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO backlog233 (7): burst saves whose request passed 2 s (delay plus Tally), asked once more by option B: $($once -join ', '); all bodies after $([int]((Get-Date) - $tb).TotalSeconds) s" }
   B233Delay 0
   Result 'backlog233 (7) a burst of 8 saves at 1.8 s each: each in the stub within 10 s, each with its body in the end' ($late.Count -eq 0 -and $bodies -eq 8) ("late or missing: {0}; with their body: {1} of 8; the first lines: {2}" -f $(if ($late.Count) { $late -join ', ' } else { 'none' }), $bodies, (($burst | ForEach-Object { $m = $_.mid; $x = @((StubLines 0) | Where-Object { "$($_.mid)" -eq "$m" -and $_.company -eq $co1 } | Select-Object -First 1); if ($x.Count) { "$m at $($x[0].at)" } else { "$m none" } }) -join '; '))
 }

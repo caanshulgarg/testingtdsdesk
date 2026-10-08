@@ -25,6 +25,13 @@ OPEN = {'n': 0, 'max': 0}
 OPEN_LOCK = threading.Lock()
 # fast234 (6) on 2.4.0's gate: whether Tally's answer is its bare 'Could not find Voucher' (a MasterID it no longer has)
 def notfound(d):
+    # run 37818870452: the bridge asks with gzip and Tally answers gzipped (1f 8b): read unzipped
+    if d[:2] == b'\x1f\x8b':
+        try:
+            import gzip, zlib
+            d = zlib.decompressobj(16 + zlib.MAX_WBITS).decompress(d, 200000)
+        except Exception:
+            pass
     s = d[:4000].decode('utf-8', 'replace')
     if d[:2] in (b'\xff\xfe', b'\xfe\xff'):
         try: s = d[:8000].decode('utf-16', 'replace')

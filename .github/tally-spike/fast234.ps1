@@ -150,6 +150,12 @@ function Fast234 {
   Result 'fast234 (4) no request while a previous one is unanswered at Tally' ($ov.Count -eq 0 -and $s.Count -gt 0) ("{0} requests of bridge 1 at the proxy; overlaps: {1}" -f $s.Count, $(if ($ov.Count) { ($ov | Select-Object -First 5) -join ' | ' } else { 'none' }))
   $bl = S2BridgeLog
   $marked = @($bl | Where-Object { $_ -match 'entry fetch stopped: over 2 s|entry fetch of .*: over 2 s' })
+  # option B's invoice is stopped at 2 s on purpose (run 37818870452: its stop logged as "entry fetch of <small>: over 2 s
+  # (stopped)"): as many such lines for the small company as its asks over 2 s are its own, not a mark
+  $obStops = @(F234Proxy | Where-Object { $F234.obMid -and $_.id -eq 'FinComVoucherObject' -and "$($_.mid)" -eq "$($F234.obMid)" -and $_.company -eq $co1 -and [double]$_.ms -ge 2000 }).Count
+  $small = @($marked | Where-Object { $_ -match ('entry fetch of ' + [regex]::Escape($co1) + ': over 2 s') })
+  $marked = @($marked | Where-Object { $_ -notmatch ('entry fetch of ' + [regex]::Escape($co1) + ': over 2 s') }) + @($small | Select-Object -Skip $obStops)
+  if ($small.Count) { Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO fast234 (5): $($small.Count) stop line(s) of '$co1' in the log, $obStops of them option B's invoice (asked over 2 s at the proxy)" }
   $sj = Join-Path $h1 'sync\recorder-slow.json'
   $marks = if (Test-Path $sj) { try { @((Get-Content $sj -Raw | ConvertFrom-Json).marks.PSObject.Properties).Count } catch { -1 } } else { 0 }
   Result 'fast234 (5) no company marked slow' ($marked.Count -eq 0 -and $marks -eq 0) ("the bridge's log lines on a stopped entry fetch: {0}; marks in recorder-slow.json: {1}" -f $(if ($marked.Count) { ($marked | Select-Object -First 3) -join ' | ' } else { 'none' }), $marks)
