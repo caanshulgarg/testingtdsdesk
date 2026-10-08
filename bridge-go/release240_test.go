@@ -23,7 +23,6 @@ func TestRelease240VersionAndDecisionLine(t *testing.T) {
 		`"Ask for all fields of the TDS list and its sub-list on FinComVoucherByMaster, FinComVoucherByNumber and test forms A and C. One entry per request, read only, nothing else added. Work out the rate as tax divided by assessable amount where Tally stores 0, and mark it as worked out."`,
 		"FinComVoucherByNumber's fetch adds the two items (its shape 111afcb61eb9 -> 2167477221dc",
 		"FinComVoucherObject is unchanged byte for byte (ce0e72f74e72",
-		`"Re-ask a held entry the moment Tally answers again, not every 10 minutes."`,
 		`"renumbering yes"`,
 		"as for 2.3.5: the owner's standing decision of 2026-10-06: no request on the list and no request shape changed",
 		"as for 2.3.4: the owner's decision of 2026-10-08: the entry request is FinComVoucherObject"} {
@@ -43,7 +42,7 @@ func TestRelease240VersionAndDecisionLine(t *testing.T) {
 	notes := strings.Join(strings.Fields(readText(filepath.Join("..", "docs", "bridge-2.4.0-notes.md"))), " ")
 	for _, w := range []string{"2.4.0", "next-inflight", "next-reask", "next-userfile", "next-tds", "next-outbox", "next-realtime",
 		"next-selfcheck", "next-masterhook", "next-renumber", "next-push", "next-connect",
-		"Re-ask a held entry the moment Tally answers again, not every 10 minutes.",
+		"Its merge is reverted", "NOT in it",
 		"Ask for all fields of the TDS list and its sub-list on FinComVoucherByMaster, FinComVoucherByNumber and test forms A and C.",
 		"renumbering yes", "The 2-second stop itself is unchanged", "Unit and Employee are left out", "Pay Head, Stock Item and Godown",
 		"$$SysInfo:WindowsUser", "migrations 62, 63, 64, 65, 66 and 67", "ONE combined text", "NOT built", "No AI in the bridge"} {

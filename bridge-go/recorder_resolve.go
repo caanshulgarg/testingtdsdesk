@@ -906,8 +906,6 @@ func liveResolveTurn() {
 	refetchAsked := 0
 	spKnown := map[string]bool{}
 	upgraded := 0
-	// next release, item 2.a: Tally answered again after it did not: a line held for its silence goes at once, one a turn
-	again, againAsked := answeredAgainLast(), 0
 	for _, id := range ids {
 		h := items[id]
 		rid := id + ":resolved"
@@ -990,13 +988,7 @@ func liveResolveTurn() {
 			spacing = liveFreshSpacing() // 2.3.3: sent held at once: asked at the next try
 		}
 		if last, err := time.Parse(time.RFC3339, h.Last); err == nil && now.Sub(last) < spacing {
-			// next release, item 2.a: Tally answered again after it did not: a line held because Tally did not answer, last
-			// asked before that moment, is not spaced: asked at once (one a turn; its one ask, 2.3.3, is the one spent)
-			if againAsked >= 1 || again.IsZero() || !last.Before(again) || !liveHeldNoAnswer(h.Why) {
-				continue
-			}
-			againAsked++
-			liveSay(h.Type, h.No, h.Date, h.MID, id, "Tally answers again: asked at once (it was held because Tally did not answer)")
+			continue
 		}
 		// after 2.3.0: a line FinCom asked for again (refetch): only while this bridge's own Tally has its company open (the
 		// own-Tally rule), and one such line a turn
@@ -1205,9 +1197,6 @@ func liveResolveTurn() {
 		if r.answered {
 			h.Tries++
 			h.TriesVer = BridgeVersion
-			if r.why != "" {
-				h.Why = liveCapWhy(r.why) // item 2.a: Tally answered: held now for what it said, spaced as before
-			}
 		}
 		if r.answered && !r.ok && !r.final {
 			// 2.3.3: Tally answered without the entry: its ask is used; the last one ends it with the Day Book words
@@ -1236,22 +1225,6 @@ func liveResolveTurn() {
 		items[r.id] = h
 	}
 	liveHeldSave(all, items)
-}
-
-// item 2.a: held because Tally did not answer (the 2-second stop, a time-out, a closed connection, the retry schedule's
-// wait, a busy Tally), not for anything Tally said. release-240 (with 2.3.3-2.3.5's words): "Tally busy" and the 2 s stop's
-// "Tally took longer than 2 s" in a "waiting: ..." line or a cancel / delete this Tally could not be asked about count
-// too; a line waiting for FinCom's read stop (2.3.5, "asked again when it is resumed") does not: the resume decides it
-func liveHeldNoAnswer(why string) bool {
-	if strings.Contains(why, "asked again when it is resumed") {
-		return false
-	}
-	for _, s := range []string{errRecorderStop.Error(), errTimeout.Error(), errClosed.Error(), "did not answer", "is busy", "Tally busy", liveStopWhat()} {
-		if strings.Contains(why, s) {
-			return true
-		}
-	}
-	return false
 }
 
 // next-outbox: why a resolution is sent although FinCom has a ":resolved" line of it: "ledger" (FinCom held it waiting for

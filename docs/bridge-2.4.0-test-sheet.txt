@@ -4,17 +4,14 @@ File:        FinComBridge-Setup-2.4.0.exe
 Fingerprint: (filled in when the setup is built)
 Link:        https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.4.0.exe
 
-What 2.4.0 changes (the full notes: docs/bridge-2.4.0-notes.md):
-1. One request in flight per Tally (as in 2.3.3; the 2-second stop unchanged).
-2. A held entry is asked again the moment Tally answers again (the owner: "Re-ask a held entry the moment Tally
-   answers again, not every 10 minutes.").
-3. Each Windows user's own recorder file (|w= on every line).
-4. TDS details: the whole TDS list (the owner's decision of 07-Oct-2026; FinComVoucherByNumber changed, nothing added).
-5. Nothing lost between the bridge and FinCom; a repeat is not stored twice (migration 63).
-6. Look up, the ledgers and Sync activity refresh by themselves (migration 64).
-7. The nightly self-check, existing requests only (migration 65).
-8. Master hooks: Pay Head, Stock Item and Godown (Unit and Employee left out; migration 66).
-9. Renumbered entries take Tally's new number (the owner: "renumbering yes"; migration 67).
+What 2.4.0 changes (the full notes: docs/bridge-2.4.0-notes.md; next-inflight and next-reask are not in it):
+1. Each Windows user's own recorder file (|w= on every line).
+2. TDS details: the whole TDS list (the owner's decision of 07-Oct-2026; FinComVoucherByNumber changed, nothing added).
+3. Nothing lost between the bridge and FinCom; a repeat is not stored twice (migration 63).
+4. Look up, the ledgers and Sync activity refresh by themselves (migration 64).
+5. The nightly self-check, existing requests only (migration 65).
+6. Master hooks: Pay Head, Stock Item and Godown (Unit and Employee left out; migration 66).
+7. Renumbered entries take Tally's new number (the owner: "renumbering yes"; migration 67).
 FinCom's cloud: migrations 62 to 67 (add-only; the owner runs them, after 2.3.5's 68), and tally-ingest.
 
 Migration files (md5):
@@ -45,32 +42,25 @@ CHECK 3 - TDS ON A PAYMENT
    You should see: in FinCom the entry's TDS details with the nature of payment, the party, the section, the assessable
    amount, the tax and the rate (marked "worked out" where Tally stores 0, once migration 62 has run).
 
-CHECK 4 - TALLY BUSY, THEN BACK
-   Make Tally busy (open a large report, e.g. Stock Summary for the year), and while it works delete an entry made for
-   this sheet ("TRIAL 240 user 1": Day Book, select it, Alt+D, Yes). Close the report.
-   You should see: Sync activity shows the delete waiting; within a few seconds of Tally answering again (not 10
-   minutes) it is gone from FinCom's books.
-   If not, send: the time, a photo of Sync activity, and the Show log lines with "Tally answers again".
-
-CHECK 5 - NOTHING LOST ON A RESTART
+CHECK 4 - NOTHING LOST ON A RESTART
    Make a Journal of Rs 1, narration "TRIAL 240 outbox", and right away right-click the FinCom icon > Restart.
    You should see: the entry in FinCom's books once, never twice.
 
-CHECK 6 - PAGES REFRESH BY THEMSELVES (after migration 64)
+CHECK 5 - PAGES REFRESH BY THEMSELVES (after migration 64)
    Open Look up on one ledger in FinCom. In Tally make a Journal of Rs 1 on that ledger, narration "TRIAL 240 live".
    You should see: within a few seconds Look up shows the entry without reloading the page.
 
-CHECK 7 - THE NIGHTLY SELF-CHECK (after migration 65)
+CHECK 6 - THE NIGHTLY SELF-CHECK (after migration 65)
    Leave Tally open with both companies overnight (no one using the computer after 22:00).
    You should see: next morning, on FinCom's Tally page, the card of NWS144 has a line per company with last night's
    check in plain words (green: every change in FinCom; red: what is missing).
 
-CHECK 8 - A STOCK ITEM, A PAY HEAD AND A GODOWN (after migration 66)
+CHECK 7 - A STOCK ITEM, A PAY HEAD AND A GODOWN (after migration 66)
    In IX DESIGNS alter a Stock Item's name (add " TRIAL"), then alter it back. Do the same for a Godown and a Pay Head.
    You should see: Sync activity lists them as master changes; nothing in the books changes. Altering a Unit sends
    nothing (left out).
 
-CHECK 9 - RENUMBERING (after migration 67)
+CHECK 8 - RENUMBERING (after migration 67)
    In GARG SHEKHAR make three Receipts of Rs 1 (narrations "TRIAL 240 r1", "r2", "r3"). Delete the first.
    You should see: FinCom's books show the other two with Tally's new numbers ("renumbered in Tally" in Sync activity).
 
