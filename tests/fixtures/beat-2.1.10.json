@@ -65,6 +65,7 @@
   "recorderSourceC": {},
   "recorderState": {},
   "recorderWaitWords": "",
+  "renumberAlerts": [],
   "reqs": {
     "day": "2026-10-04",
     "last": {
@@ -96,6 +97,6 @@
   "tallyState": "open",
   "trialTools": false,
   "updating": false,
-  "version": "2.3.5",
+  "version": "2.4.0",
   "windowsUser": ""
 }
