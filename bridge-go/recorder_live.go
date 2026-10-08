@@ -1989,11 +1989,14 @@ func fastCompanyOpen(tc *TC, company string, port, sec int) error {
 // earlier request), and never itself the schedule's try or its end (an answer in time here does not put the schedule
 // back: the entry request after it does that, or steps it on)
 func fastCompanyListed(tc *TC, company string, port, sec int) error {
-	if err := retryWaiting(); err != nil {
-		return err
-	}
-	if err := earlierRefusal(port); err != nil {
-		return err
+	if tc.bg {
+		// a background request: the list only when the request it guards could go now (a posting's check waits as it does)
+		if err := retryWaiting(); err != nil {
+			return err
+		}
+		if err := earlierRefusal(port); err != nil {
+			return err
+		}
 	}
 	t2 := *tc
 	t2.bg, t2.light = false, true // the tiny open-company list: not held by the cool-down after a stop (the entry request is)

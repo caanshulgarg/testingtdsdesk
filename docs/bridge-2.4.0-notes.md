@@ -36,8 +36,9 @@ part `next-outbox-app`), `next-realtime`, `next-selfcheck`, `next-masterhook`, `
 4. Lines 2.3.3 ended get one more ask (FinCom lists them 30 days; the owner: "30-day window ... YES").
 5. **A deleted entry is proven gone only when Tally says so twice**, with the company open before and after; a MasterID
    with a leading zero is never proof. The owner: "Delete fix: yes. The leading-zero refusal and the company check close
-   real ways a delete could be proven wrongly, and both have tests." The entry request goes only right after Tally's
-   company list on that port names the company (Tally crashes on an object export naming a company that is not open).
+   real ways a delete could be proven wrongly, and both have tests." The entry requests (FinComVoucherObject and
+   FinComVoucherByNumber) go only right after Tally's company list on that port names the company (Tally crashes on an
+   entry request naming a company that is not open); FinCom's read stop refuses both before the list too.
 6. The trial forms A and C of "Test fetching an entry" are removed (the owner's decision).
 
 ## B. From 2.3.5 (not published on its own)
