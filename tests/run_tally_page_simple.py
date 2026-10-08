@@ -309,6 +309,21 @@ def main():
         ok(pg.locator("#app [data-sync-needs], #app [data-sync-fetching], #app [data-sync-waiting]").count() == 0, "a line under 2 minutes: nothing said")
         E(SYNC, []); pg.wait_for_timeout(1800)
         ok(pg.locator("#app [data-sync-needs], #app [data-sync-fetching], #app [data-sync-waiting]").count() == 0, "nothing waiting: no box")
+        # ---- 7. saves FinCom could not store (bridge 2.4.0, next-outbox; the coordinator, 08-Oct-2026: "nothing lost", shown):
+        # the bridge keeps a line FinCom keeps answering 'failed' and sends it every 30 minutes; the beat says how many, since
+        # when and the oldest's day (tally_devices.info.beat.recorderStuck). Needs you, through the one classifier (daybook)
+        sd = dev(1, "NWS144", "anshul", beat={"recorderStuck": [{"company": "GARG SHEKHAR", "n": 2, "since": "2026-10-08T09:15:00", "day": "2026-10-07"}]})
+        scene([sd], LINKED)
+        cid = E(SYNC, []); pg.wait_for_timeout(1800)
+        sg = E("() => [...document.querySelectorAll('#app [data-sync-needs] [data-needs-group]')].map(g => [g.getAttribute('data-needs-group'), g.querySelector('[data-needs-text]').innerText.trim(), [...g.querySelectorAll('button')].map(b => b.getAttribute('data-needs-act'))])")
+        want = "GARG SHEKHAR · 07-Oct-2026: 2 saves from NWS144 could not be stored in FinCom since 09:15; FinCom keeps trying \u2014 if it continues, upload the Day Book for 07-Oct-2026"
+        ok(len(sg) == 1 and sg[0][1] == want and sg[0][2] == ["daybook"], "saves FinCom could not store: Needs you, one sentence, the Day Book upload (%s)" % sg)
+        ok(E("() => Rec.needKind(Rec.stuckRow({n: 2}))") == "daybook" and not E("() => AlertHub.oursHeld(Rec.stuckRow({n: 2}))"), "the one classifier: daybook (Needs you), the bell agrees")
+        pg.click('#app [data-sync-needs] [data-needs-daybook]'); pg.wait_for_timeout(1500)
+        ok(E("[S.view, S.coId, S.dbFrom, S.dbTo]") == ["company", cid, "2026-10-07", "2026-10-07"], "the action opens the client's Day Book upload for that day (%s)" % E("[S.view, S.coId, S.dbFrom, S.dbTo]"))
+        scene([dev(1, "NWS144", "anshul", beat={"recorderStuck": []})], LINKED)
+        E(SYNC, []); pg.wait_for_timeout(1800)
+        ok(pg.locator("#app [data-sync-needs]").count() == 0, "none left: nothing said")
         ok(not errors, "no page errors " + str(errors[:2]))
         br.close()
     srv.shutdown()
