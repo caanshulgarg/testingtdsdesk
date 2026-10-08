@@ -1,0 +1,4 @@
+2026-10-08 12:28:17  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 4, line a8457de4…): asking Tally by MasterID
+2026-10-08 12:28:17  Recorder: entry fetch of FinCom Spike Co: answered in 2 ms
+2026-10-08 12:28:17  Recorder: FinCom Spike Co: delete of mid 4: not in this Tally (asked by MasterID): proven deleted here
+2026-10-08 12:28:17  Recorder: FinCom Spike Co: delete of mid 4: GUID from the bridge's record: 5e39c128-8887-4608-ab00-815a02ebd759-00000004; the GUID its MasterID makes agrees
