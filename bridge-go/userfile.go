@@ -12,8 +12,9 @@
 //   - its own user's files (a file of another user is never opened), and
 //   - the shared files of an older add-on (no user in the name),
 //
-// and takes a line with w= only when w= is its own user (then without the own-Tally look of 2.3.0: the line says whose
-// Tally wrote it); a line without w= (an older add-on) keeps the 2.3.0 rule (recorder_owntally.go). A bridge that is not
+// and takes a line with w= only when w= is its own user (2.4.0 review: compared whole, DOMAIN\user, liveUserSame) AND its
+// company is open in this bridge's own Tally (the 2.3.0 look, cached: 2.4.0 review MEDIUM, w= alone is not enough); a
+// line without w= (an older add-on) keeps the 2.3.0 rule (recorder_owntally.go). A bridge that is not
 // one user's (the Windows service, a window) reads every file and takes every line by the 2.3.0 rule, as before.
 //
 // Compatibility: a bridge before this one reads the new files too (any <GUID>-*.txt; its day from the file's time) and the
@@ -35,6 +36,27 @@ func liveUserKey(s string) string {
 		s = s[i+1:]
 	}
 	return strings.ToLower(strings.TrimSpace(s))
+}
+
+// 2.4.0 review LOW: whether two Windows user names are the same user: compared whole, DOMAIN\user without regard to case
+// (NWS144\anshul and FINCOM\anshul are two users). A name without its domain or computer (Tally's $$SysInfo:WindowsUser
+// gives the bare name, and a daily file's name cannot hold "\") is compared by the name alone; the own-Tally look
+// (recorder_owntally.go) still decides whether such a line is this bridge's (recorder_live.go liveTake)
+func liveUserSame(a, b string) bool {
+	a, b = strings.TrimSpace(a), strings.TrimSpace(b)
+	if liveUserKey(a) == "" || liveUserKey(a) != liveUserKey(b) {
+		return false
+	}
+	da, db := liveUserDomain(a), liveUserDomain(b)
+	return da == "" || db == "" || strings.EqualFold(da, db)
+}
+
+// the domain or computer part of DOMAIN\user ("" when none)
+func liveUserDomain(s string) string {
+	if i := strings.LastIndexAny(s, `\/`); i >= 0 {
+		return strings.TrimSpace(s[:i])
+	}
+	return ""
 }
 
 // the Windows user whose lines this bridge reads alone: its own when it runs just for one user, else "" (every user's)
@@ -66,7 +88,7 @@ func liveFileMine(name string) bool {
 		return true
 	}
 	_, u := liveFileDayUser(name)
-	return u == "" || liveUserKey(u) == me
+	return u == "" || liveUserSame(u, liveWinUserFn())
 }
 
 // under live.mu: a line of another Windows user (its w= not this bridge's user): counted with the lines not taken here;

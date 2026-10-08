@@ -1106,21 +1106,19 @@ func liveTake(file string, gen int, ll liveLogicalLine, posting bool, held map[s
 	// a line is taken only when this bridge's OWN Tally had its company open when it was written (recorder_owntally.go).
 	// Else it is passed over, never sent (the Day Book upload stays the fallback for the owner's own entries); written
 	// after the last look at the own Tally: it waits for the next look
-	// next-userfile: a line that names its Windows user (w=) is taken by that user's bridge alone, without the look
-	// (userfile.go); a line without one (an older add-on), and every line at a bridge that is not one user's, by the rule
-	if me := liveOwnWinUser(); me != "" && strings.TrimSpace(l.W) != "" {
-		if liveUserKey(l.W) != me {
-			liveOtherUser(l)
-			return 0
-		}
-	} else {
-		switch liveOwnVerdict(l) {
-		case liveOwnWait:
-			return -2
-		case liveOwnSkip:
-			liveNotHere(l)
-			return 0
-		}
+	// next-userfile: a line that names another Windows user (w=) is never taken by a bridge running for one user
+	// (userfile.go; DOMAIN\user compared whole, 2.4.0 review LOW). 2.4.0 review MEDIUM: a line naming this bridge's own
+	// user is still taken only when its company is open in the bridge's own Tally (the cached look), as every other line
+	if me := liveOwnWinUser(); me != "" && strings.TrimSpace(l.W) != "" && !liveUserSame(l.W, liveWinUserFn()) {
+		liveOtherUser(l)
+		return 0
+	}
+	switch liveOwnVerdict(l) {
+	case liveOwnWait:
+		return -2
+	case liveOwnSkip:
+		liveNotHere(l)
+		return 0
 	}
 	if live.qcount[liveGUID(l.CGUID)] >= liveQueueCap() {
 		liveSayOnce("cap|"+l.CGUID, fmt.Sprintf("Recorder: %s has %d changes waiting to be sent: the rest of its file is read once they go", strings.TrimSpace(l.CName), liveQueueCap()))
