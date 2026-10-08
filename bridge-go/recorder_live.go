@@ -2258,6 +2258,10 @@ func liveUploadOnce() int {
 	if !first {
 		liveResolveTurn()
 	}
+	// next-renumber: the entries Tally renumbered after an insert or a delete (renumber.go), when no save waits
+	if !liveQueueReady() {
+		n += renumTurn()
+	}
 	return n
 }
 
@@ -2271,7 +2275,7 @@ func liveQueueReady() bool {
 		if b, had := live.back[c.key()]; had && now.Before(b.until) {
 			continue
 		}
-		if strings.HasSuffix(c.lineId, ":resolved") {
+		if strings.HasSuffix(c.lineId, ":resolved") || c.source == "renumber" {
 			continue
 		}
 		if liveYoung(c) {
@@ -2558,6 +2562,7 @@ func liveUploadStep() (int, bool) {
 	}
 	sentIDs := make([]string, 0, len(group))
 	var bodied, items, ledAgain, ended []string
+	var signs []*renumJob // next-renumber: an insert's or a delete's line FinCom took (renumber.go)
 	gone := map[*change]bool{}
 	var held []*change
 	for _, c := range group {
@@ -2588,6 +2593,9 @@ func liveUploadStep() (int, bool) {
 		}
 		if c.event == "created" && !c.isLedger() && c.vchNo != "" {
 			live.created[c.saveKey()] = [2]string{c.lineId, c.guid}
+		}
+		if j := renumSignOf(c); j != nil {
+			signs = append(signs, j)
 		}
 		// 2.2.1: sent held (no body, no GUID): resolved later (recorder_resolve.go). 2.2.2: every voucher of the add-on
 		// sent without its entry, not only a new one with a number
@@ -2634,6 +2642,7 @@ func liveUploadStep() (int, bool) {
 	liveSaveOffsets()
 	liveHeldAdd(held)
 	liveGuidAnswers(group, arr(r.json["results"])) // 2.3.0: what FinCom's record said of a delete / cancel sent without a GUID
+	renumNote(signs)
 	return len(group), false
 }
 

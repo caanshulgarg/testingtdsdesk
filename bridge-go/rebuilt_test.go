@@ -535,6 +535,9 @@ type standCloud struct {
 	// 2.3.1 (masters): every ledger_changes body, and how it is answered (nil: 200 {ok, added})
 	ledChanges []M
 	ledChReply func(b M) (int, M)
+	// next-renumber: every renumber_list body, and how it is answered (nil: 200 {ok, entries: []})
+	renumAsks  []M
+	renumReply func(b M) (int, M)
 }
 
 func newStandCloud(t *testing.T) *standCloud {
@@ -612,6 +615,17 @@ func newStandCloud(t *testing.T) *standCloud {
 				return
 			}
 			out["added"], out["updated"] = len(arr(o["ledgers"])), 0
+		case "renumber_list":
+			c.renumAsks = append(c.renumAsks, o)
+			if c.renumReply != nil {
+				code, ans := c.renumReply(o)
+				if code != 200 {
+					w.WriteHeader(code)
+				}
+				_, _ = w.Write([]byte(jsonText(ans)))
+				return
+			}
+			out["entries"] = []any{}
 		case "recorder_lines":
 			c.recRaw = append(c.recRaw, string(b))
 			if c.recDelay > 0 {
