@@ -397,7 +397,8 @@ func TestBankDateOneMoreAsk(t *testing.T) {
 }
 
 // --- 8. no request but the allow-list's three: FinComCompany, the undated TDSDeskKeepList above an AlterID, and
-// FinComVoucherObject (and nothing else in the bank route's whole run)
+// FinComVoucherObject (besides the company lookup every background read makes to find the company's Tally: TDSDeskCompanies,
+// and TDSDeskCompanyInfo once when a company is first seen)
 func TestBankDateOnlyApprovedRequests(t *testing.T) {
 	_, f, _ := bankBridge(t, "")
 	n0 := f.n("")
@@ -411,7 +412,7 @@ func TestBankDateOnlyApprovedRequests(t *testing.T) {
 	f.mu.Unlock()
 	for i, id := range got {
 		switch id {
-		case "FinComCompany":
+		case "FinComCompany", "TDSDeskCompanies", "TDSDeskCompanyInfo":
 		case "TDSDeskKeepList":
 			if bodies[i] != keepListAboveRequest(nwsCo, 54392) {
 				t.Fatalf("the list is not as built: %s", bodies[i])

@@ -286,6 +286,7 @@ func liveTakeBody(c *change, x string) {
 	// 2.3.0 (cancel/delete GUID): Tally's GUID of this MasterID kept for a later delete of the entry
 	liveMidNote(c.companyGuid, c.masterId, c.guid, tagValue(x, "VOUCHERTYPENAME"), tagValue(x, "VOUCHERNUMBER"), normDate(tagValue(x, "DATE")))
 	c.ledgers = voucherLedgerNames(x)
+	bankNoteTaken(c) // next-bankdate: the add-on's line took Tally's entry at this AlterID
 	if c.during {
 		for _, n := range c.ledgers {
 			liveTouch(c.company, n)

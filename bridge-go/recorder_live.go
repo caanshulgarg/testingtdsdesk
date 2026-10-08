@@ -1290,6 +1290,7 @@ func liveEmit(l recLine, ev, file string, gen int, start, lineStart, end int64, 
 		if m := reLiveFid.FindStringSubmatch(c.narr); m != nil {
 			c.fid = m[1]
 		}
+		bankNoteAddon(c) // next-bankdate: a save the add-on wrote a line for explains one move of ALTVCHID
 	}
 	// 2.2.1: a placeholder GUID is never sent: rebuilt from the MasterID (a Tally GUID is the company's GUID and the
 	// MasterID as 8 hex digits), or left empty and the entry found by its type and number; MasterID / AlterID 0 are not
@@ -2268,6 +2269,10 @@ func liveUploadOnce() int {
 	if !liveQueueReady() {
 		n += renumTurn()
 	}
+	// next-bankdate: the entries Tally changed with no add-on line (a bank date set), when no save waits (bankdate.go)
+	if !liveQueueReady() {
+		n += bankTurn()
+	}
 	return n
 }
 
@@ -2281,7 +2286,7 @@ func liveQueueReady() bool {
 		if b, had := live.back[c.key()]; had && now.Before(b.until) {
 			continue
 		}
-		if strings.HasSuffix(c.lineId, ":resolved") || c.source == "renumber" {
+		if strings.HasSuffix(c.lineId, ":resolved") || c.source == "renumber" || c.source == "bankdate" {
 			continue
 		}
 		if liveYoung(c) {
@@ -2814,6 +2819,7 @@ func recorderLiveLoop() {
 			for i := 0; i < 20 && liveUploadOnce() > 0; i++ {
 			}
 			liveTouchedTick()
+			bankNightTurn() // next-bankdate: the nightly check (nothing outside the night's window)
 		}()
 		sleepOrStop(250 * time.Millisecond)
 	}
