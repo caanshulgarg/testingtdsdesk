@@ -912,13 +912,23 @@ func liveResolveTurn() {
 		liveFresh()
 		done := live.sent[rid] && (!h.Again || live.items231[rid]) && !liveLedgerAgainDue(h) // 2.3.1 review H1: an older bridge's resolution is not this one
 		done = done || live.ended[id]                                                        // 2.3.2: ended with the Day Book words
+		endNow := false
 		if h.FastAgain {
-			// next-fastfetch: an earlier bridge's ending is not this one: done once its one fast ask went (or its ":resolved" waits)
+			// next-fastfetch: an earlier bridge's ending is not this one: done once its one fast ask went (or its ":resolved" waits).
+			// 2.3.4 (re-review M1): its ask went but nothing came of it (an answer that could not be read, another error, a
+			// posting stopping it, no entry): it ends now with the Day Book words, never dropped without its ":resolved"
 			done = live.fastAsked[id] || live.queued[rid]
+			endNow = live.fastAsked[id] && !live.queued[rid] && !live.bodied[rid]
 		}
 		waiting := live.queued[rid]
 		ownOpen := !h.Refetch || liveOwnOpenNow(h.CGUID, h.Company)
 		live.mu.Unlock()
+		if endNow {
+			ends = append(ends, heldEnd{h, liveHeldOnceGiveUp})
+			delete(items, id)
+			changed = true
+			continue
+		}
 		added, _ := time.Parse(time.RFC3339, h.Added)
 		if done || (!added.IsZero() && now.Sub(added) > 7*24*time.Hour) {
 			delete(items, id)
@@ -1005,6 +1015,7 @@ func liveResolveTurn() {
 	var got []res
 	retryIds := map[string]bool{}
 	timedOut := map[string]bool{} // asked, and stopped at 2 s or not answered
+	objStop := map[string]bool{}  // 2.3.4 (option (a)): of them, its FinComVoucherObject stopped at the limit
 	slowEnd := map[string]bool{}  // 2.3.2 (c): its company was marked meanwhile: ended with the plain words
 	deadline := time.Now().Add(time.Duration(keepNum("RecorderResolveTurnSec", 20)) * time.Second)
 	total, fromFinCom := len(items), 0
@@ -1070,6 +1081,9 @@ func liveResolveTurn() {
 			// Tally had the request and did not answer in time: its ask is used (2.3.3: the line ends when it was its last);
 			// those not asked yet go at the retry schedule's next try, as before
 			timedOut[h.ID] = true
+			if errors.Is(err, errRecorderStop) && h.MID != "" {
+				objStop[h.ID] = true // 2.3.4 (option (a)): the fast request stopped at the limit: the line ends now, whatever its asks left
+			}
 			for _, r := range ask[len(got)+1:] {
 				retryIds[r.ID] = true
 			}
@@ -1143,6 +1157,12 @@ func liveResolveTurn() {
 	for id := range timedOut {
 		if h, had := items[id]; had {
 			h.Asked++ // 2.3.3: its ask is used; the last one ends it with the Day Book words
+			if objStop[id] {
+				// 2.3.4 (the owner's decision of 08-Oct-2026, option (a); re-review M4): ended at its first stop, whatever it had left
+				ends2 = append(ends2, heldEnd{h, liveStopEndWords()})
+				delete(items, id)
+				continue
+			}
 			if h.Asked >= h.allow() {
 				ends2 = append(ends2, heldEnd{h, liveHeldSlowGiveUp})
 				delete(items, id)

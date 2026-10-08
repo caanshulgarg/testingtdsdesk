@@ -543,7 +543,7 @@ func TestBacklog233OldLinesAskedOnceOneAtATime(t *testing.T) {
 			t.Errorf("old held line %s: %d requests (at most one)", mid, per[mid])
 		}
 		s := r222cSentID(c, id+":resolved")
-		if len(s) != 1 || str(s[0]["xml"]) != "" || str(s[0]["heldWhy"]) != liveHeldSlowGiveUp {
+		if len(s) != 1 || str(s[0]["xml"]) != "" || str(s[0]["heldWhy"]) != liveStopEndWords() { // 2.3.4 (option (a)): the stop words
 			t.Errorf("old held line %s did not end with the Day Book words: %v", mid, s)
 		}
 	}

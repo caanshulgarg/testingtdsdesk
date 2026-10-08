@@ -269,7 +269,7 @@ func TestSlow232CloudHeldLineTimedOut(t *testing.T) {
 			t.Fatalf("at %s: %d asks (want %d)", time.Duration(x[0])*time.Second, asks(), x[1])
 		}
 	}
-	if s := r222cSentID(c, "nws-25730:resolved"); len(s) != 1 || str(s[0]["heldWhy"]) != liveHeldSlowGiveUp {
+	if s := r222cSentID(c, "nws-25730:resolved"); len(s) != 1 || str(s[0]["heldWhy"]) != liveStopEndWords() { // 2.3.4 (option (a)): the stop words
 		t.Fatalf("the end: %v", s)
 	}
 }

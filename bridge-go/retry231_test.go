@@ -111,7 +111,8 @@ func TestRetrySilentThreeMinutesThenAnswers(t *testing.T) {
 		t.Fatalf("asked again after the end: %d", asks())
 	}
 	for _, mid := range mids {
-		if s := r222cSentID(c, "nws-"+mid+":resolved"); len(s) != 1 || str(s[0]["xml"]) != "" || str(s[0]["heldWhy"]) != liveHeldSlowGiveUp {
+		// 2.3.4 (option (a)): a stop of the fast request ends it with the stop's words; no answer at all, as before
+		if s := r222cSentID(c, "nws-"+mid+":resolved"); len(s) != 1 || str(s[0]["xml"]) != "" || (str(s[0]["heldWhy"]) != liveHeldSlowGiveUp && str(s[0]["heldWhy"]) != liveStopEndWords()) {
 			t.Fatalf("held line %s did not end with the Day Book words: %v", mid, s)
 		}
 	}
