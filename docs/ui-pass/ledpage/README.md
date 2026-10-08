@@ -35,8 +35,8 @@ Screenshots of the made-up client from `tests/ledpage_setup.py`. It uses the fix
     lines.
 
 Found along the way (not about layout): the ledger check's own state (`b.ledCheck`: the suggestions, the
-"only confirmed ledgers count" switch and each ledger's confirmed use) is not in `BOOKS_KEYS`. It is lost when the books
-are opened again.
+"only confirmed ledgers count" switch and each ledger's confirmed use) was not in `BOOKS_KEYS`. It was lost when the
+books were opened again. This is fixed (see below).
 
 ## The page now (after)
 
@@ -73,3 +73,20 @@ are opened again.
 8. **Phone.** The tables become plain stacked rows. They opt out of the generic cards, which showed empty boxes here.
 
 Permissions are the same as before. Only an owner can confirm a rename. Staff can confirm and change ledgers.
+
+## The owner's decisions of 08-Oct-2026
+
+1. **Reverse charge.** The check called a ledger reverse charge when *any* of its entries had an RCM ledger on it. A
+   regular input ledger also takes the credit of the reverse-charge purchases, so 07 CGST, SGST and IGST INPUT were
+   flagged. Now a ledger is reverse charge in two cases:
+   - its name says so (RCM, reverse charge);
+   - by use, when 80% or more of its entries are reverse-charge entries, and its name does not say input or ITC.
+
+   `tests/run_ledcheck_rcm.py` prints the before and after table for every fixture ledger.
+2. **The check is kept with the books.** `ledCheck` is now in `BOOKS_KEYS` and syncs through the existing generic
+   `client_book_items`, so there is no database change. Each suggestion is kept as `pending` and counts in no figure
+   until the ledger is confirmed into the ledger master. Who confirmed and when are kept on the ledger (`okBy`, `okAt`)
+   and shown on the row in IST. `tests/run_ledcheck_saved.py` checks these points:
+   - every return figure is the same after a reload;
+   - the comparison catches pending suggestions that start counting;
+   - a second computer sees the same confirmations.

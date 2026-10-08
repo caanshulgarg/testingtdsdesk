@@ -949,7 +949,8 @@ function lmSet(name, key, val){
   if (key === "gstRate") m.gstRate = val ? num(val) : null;
   if (key === "section") m.section = String(val).toUpperCase().replace(/\s+/g, "");
   if (key === "rate") m.rate = val === "" ? null : num(val);
-  m.byHand = true; m.ok = true; m.okAt = new Date().toISOString();
+  m.byHand = true; m.ok = true; m.okAt = new Date().toISOString(); m.okBy = whoAmI();
+  const it = ((b.ledCheck || {}).items || {})[name]; if (it) it.state = "confirmed";
   LedMaster.tplLearn(b, [name]); try { LedMaster.applyPosting(b, CO(), "empty"); } catch (e){}
   b.mapV = (b.mapV || 0) + 1; b.reco = null; saveBooks(); render();
 }
