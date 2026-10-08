@@ -1,0 +1,23 @@
+mid=1 aid=1 Journal/1/20260401 narr=spike TDSDesk:test-1
+mid=2 aid=2 Journal/2/20261001 narr=share open SB-1
+mid=3 aid=3 Journal/3/20261001 narr=share open PB-1
+mid=4 aid=4 Journal/4/20261001 narr=share open ADVS-1
+mid=5 aid=5 Journal/5/20261001 narr=share open ADVP-1
+mid=6 aid=6 Payroll/1/20261001 narr=share payroll template
+mid=22 aid=25 Payroll/2/20261001 narr=share payroll template
+mid=7 aid=24 Receipt/1/20261002 narr=share receipt agst
+mid=8 aid=22 Receipt/2/20261002 narr=share receipt plain
+mid=9 aid=9 Payment/1/20261002 narr=share payment agst
+mid=10 aid=10 Payment/2/20261002 narr=share payment expense
+mid=11 aid=11 Contra/1/20261002 narr=
+mid=12 aid=12 Journal/6/20261002 narr=
+mid=13 aid=13 Journal/7/20261002 narr=
+mid=14 aid=23 Sales/1/20261002 narr=
+mid=15 aid=15 Sales/2/20261002 narr=
+mid=16 aid=16 Sales/3/20261002 narr=
+mid=17 aid=17 Purchase/1/20261002 narr=
+mid=18 aid=18 Purchase/2/20261002 narr=
+mid=19 aid=19 Credit Note/1/20261002 narr=
+mid=20 aid=20 Journal/8/20261002 narr=
+mid=21 aid=21 Receipt/3/20261002 narr=share receipt plain
+mid=23 aid=26 Sales/4/20261002 narr=share e-invoice
