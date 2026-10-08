@@ -65,5 +65,17 @@ for (const j of dirs) {
       (diff.length ? "; differ: " + diff.slice(0, 10).map((k) => k + " line " + a[k] + " Tally " + b[k]).join(" | ") : ""));
   }
 }
+// the TDS journal typed on the screen (tally-versions run 37826941207, mode tds240, 3.0 and 7.1): the bridge's XML from the
+// add-on's own line (bridge-go TestPush240TDSExemptRealLines) against Tally's own export of the entry: the TDS list (exempt,
+// the rate as stored) and the ledger lines
+const TD = path.join(HERE, "..", "bridge-go", "testdata", "push240", "tds240");
+if (!process.argv.slice(2).length && fs.existsSync(TD)) for (const rel of ["3.0", "7.1"]) {
+  const p = parseDay(fs.readFileSync(path.join(TD, rel + ".push.xml"), "utf8"));
+  const t = parseDay(fs.readFileSync(path.join(TD, rel + "-tds240-tally-entry.xml"), "utf8"));
+  const pv = p.vouchers[0], tv = t.vouchers.find((v) => v.tds && v.tds.length);
+  const L = (d, g) => JSON.stringify(d.lines.filter((l) => l[0] === g).map((l) => l.slice(1, 3)).sort());
+  ok(!!pv && !!tv && JSON.stringify(pv.tds) === JSON.stringify(tv.tds) && pv.tds.length === 1 && pv.tds[0].exempt === true && !pv.tds[0].rateWorkedOut && L(p, pv.guid) === L(t, tv.guid),
+    "run 37826941207 " + rel + " TDS typed on the screen: the line's TDS " + JSON.stringify(pv && pv.tds) + (tv && JSON.stringify(pv.tds) === JSON.stringify(tv.tds) ? " as Tally's" : "; Tally " + JSON.stringify(tv && tv.tds)) + "; ledger lines " + (pv && tv && L(p, pv.guid) === L(t, tv.guid) ? "as Tally's" : "differ"));
+}
 console.log((fails ? "FAILED: " : "all passed: ") + passes + " PASS, " + fails + " FAIL, " + tally.harness + " not made by the keys");
 process.exit(fails ? 1 : 0);
