@@ -8,6 +8,8 @@
 #   - renumber_list: tally-ingest's read-only kind (server/tally-cloud/index.ts renumberList), the same filter: that type, from the
 #     date on, on that date only those numbered from the given number up, the given MasterID left out, at most `limit`
 #   - GET /copy: the copy as JSON (the harness compares it with Tally's own list)
+#   - next-bankdate (mode bankb): each entry of the copy also keeps its bank date (bdate: the first BANKERSDATE of the entry's XML;
+#     seeded with the harness's value)
 import json, re, sys, threading, time, html
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 LOG = sys.argv[2]
@@ -17,6 +19,11 @@ COPY = {}   # guid -> {mid, guid, day, no, alter, type}
 def tag(x, t):
     m = re.search(r'<' + t + r'(?:\s[^>]*)?>([^<]*)</' + t + '>', x or '')
     return html.unescape(m.group(1)).strip() if m else ''
+
+# next-bankdate (mode bankb): the bank date Tally keeps on the entry's bank line (BANKALLOCATIONS.BANKERSDATE), '' when none
+def bankers(x):
+    m = re.search(r'<BANKERSDATE(?:\s[^>]*)?>\s*(\d+)\s*<', x or '')
+    return m.group(1) if m else ''
 
 def numcmp(a, b):
     a, b = (a or '').strip(), (b or '').strip()
@@ -49,7 +56,8 @@ def take_lines(b):
             g, a = tag(x, 'GUID'), int(re.sub(r'\D', '', tag(x, 'ALTERID')) or 0)
             old = COPY.get(g)
             if g and (old is None or a >= old['alter']):
-                COPY[g] = {'mid': int(re.sub(r'\D', '', tag(x, 'MASTERID')) or 0), 'guid': g, 'day': tag(x, 'DATE'), 'no': tag(x, 'VOUCHERNUMBER'), 'alter': a, 'type': tag(x, 'VOUCHERTYPENAME')}
+                COPY[g] = {'mid': int(re.sub(r'\D', '', tag(x, 'MASTERID')) or 0), 'guid': g, 'day': tag(x, 'DATE'), 'no': tag(x, 'VOUCHERNUMBER'), 'alter': a, 'type': tag(x, 'VOUCHERTYPENAME'),
+                           'bdate': bankers(x)}
         elif ev == 'deleted':
             g = l.get('object_guid', '')
             mid = str(l.get('master_id', ''))
@@ -76,7 +84,7 @@ class H(BaseHTTPRequestHandler):
                 out = {'ok': True, 'results': res, 'applied': len(res), 'held': 0, 'duplicate': 0, 'stale': 0, 'failed': 0}
             elif kind == '_seed':
                 for e in body.get('entries', []):
-                    COPY[e['guid']] = {'mid': int(e['mid']), 'guid': e['guid'], 'day': e['day'], 'no': e['no'], 'alter': int(e['alter']), 'type': e['type']}
+                    COPY[e['guid']] = {'mid': int(e['mid']), 'guid': e['guid'], 'day': e['day'], 'no': e['no'], 'alter': int(e['alter']), 'type': e['type'], 'bdate': e.get('bdate', '')}
                 out = {'ok': True, 'n': len(COPY)}
             elif kind == 'renumber_list':
                 out = renumber_list(body)

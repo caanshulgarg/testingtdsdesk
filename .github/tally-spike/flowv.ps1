@@ -6,7 +6,7 @@
 #         test, A..F, its answers captured), c7 the Tally version string the bridge reads (the read test's "Tally program")
 # One line per check in versions\results.txt: PASS / FAIL / HARNESS (the harness, not the bridge or Tally) with the times.
 $ErrorActionPreference = 'Continue'
-$rel = $env:TALLY_REL; $full = ($env:VMODE -eq 'full'); $share = ($env:VMODE -eq 'share'); $big = ($env:VMODE -eq 'big'); $hang = ($env:VMODE -eq 'hang'); $hang2 = ($env:VMODE -eq 'hang2'); $hang3 = ($env:VMODE -eq 'hang3'); $hang4 = ($env:VMODE -eq 'hang4'); $bank = ($env:VMODE -eq 'bank'); $renum = ($env:VMODE -eq 'renum'); $s235 = ($env:VMODE -eq 's235')   # s235: s235v.ps1 after the bridge's setup (bridge 2.3.5: FinCom's read stop and held lines, a real failure, the Tally-not-open notification; stub235.py as the cloud, proxy235.py between the bridge and Tally); renum: renumv.ps1 after the bridge's setup (stubr.py as the cloud; branch next-renumber); bank: bankv.ps1 (the bank-date probe); share / big / hang / hang2..4: sharev.ps1 / bigv.ps1 / hangv.ps1 / hang2v..hang4v.ps1 after c2 (no bridge)
+$rel = $env:TALLY_REL; $full = ($env:VMODE -eq 'full'); $share = ($env:VMODE -eq 'share'); $big = ($env:VMODE -eq 'big'); $hang = ($env:VMODE -eq 'hang'); $hang2 = ($env:VMODE -eq 'hang2'); $hang3 = ($env:VMODE -eq 'hang3'); $hang4 = ($env:VMODE -eq 'hang4'); $bank = ($env:VMODE -eq 'bank'); $bankb = ($env:VMODE -eq 'bankb'); $renum = ($env:VMODE -eq 'renum'); $s235 = ($env:VMODE -eq 's235')   # bankb: bankv.ps1's bridge part after the bridge's setup (next-bankdate; stubr.py as the cloud, the contras made before the bridge starts); s235: s235v.ps1 after the bridge's setup (bridge 2.3.5: FinCom's read stop and held lines, a real failure, the Tally-not-open notification; stub235.py as the cloud, proxy235.py between the bridge and Tally); renum: renumv.ps1 after the bridge's setup (stubr.py as the cloud; branch next-renumber); bank: bankv.ps1 (the bank-date probe); share / big / hang / hang2..4: sharev.ps1 / bigv.ps1 / hangv.ps1 / hang2v..hang4v.ps1 after c2 (no bridge)
 $dir = $env:TALLY_DIR; $exe = $env:TALLY_EXE
 $data1 = "$env:RUNNER_TEMP\TallyData"; $rec = 'C:\ProgramData\FinCom\recorder'
 $co1 = 'FinCom Spike Co'
@@ -79,7 +79,7 @@ Get-Process tally -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sle
 $tdlSrc = if ($env:BRIDGE_DIST -and (Test-Path (Join-Path $env:BRIDGE_DIST 'FinComRecorder.tdl'))) { Join-Path $env:BRIDGE_DIST 'FinComRecorder.tdl' } else { Join-Path $env:GITHUB_WORKSPACE 'bridge-go\addon\FinComRecorder.tdl' }
 $tdl = "$fc\FinComRecorder.tdl"; Copy-Item $tdlSrc $tdl -Force
 Remove-Item "$rec\*" -Force -ErrorAction SilentlyContinue
-Write-TallyIni $(if ($full -or $renum -or $s235 -or $share -or $big -or $hang -or $hang2 -or $hang3 -or $hang4 -or $bank) { $tdl } else { $null }) $(if ($folder) { $folder.Name } else { $null })
+Write-TallyIni $(if ($full -or $renum -or $bankb -or $s235 -or $share -or $big -or $hang -or $hang2 -or $hang3 -or $hang4 -or $bank) { $tdl } else { $null }) $(if ($folder) { $folder.Name } else { $null })
 $swStart = [Diagnostics.Stopwatch]::StartNew()
 $t1 = Start-Process -FilePath $exe -WorkingDirectory $dir -PassThru; $script:tpid = $t1.Id
 $portMs = -1; $getAns = ''
@@ -135,9 +135,10 @@ if ($share) {
   if ($c2ok) { . (Join-Path $PSScriptRoot 'sharev.ps1') } else { Add-Content -Path $resultsFile -Value 'HARNESS share: not run (c2: Tally or the company not up)' -Encoding UTF8 }
   Get-Process tally -ErrorAction SilentlyContinue | Stop-Process -Force; return
 }
-if (-not $full -and -not $renum -and -not $s235) { Say 'quick mode: done'; Get-Process tally -ErrorAction SilentlyContinue | Stop-Process -Force; return }
+if (-not $full -and -not $renum -and -not $bankb -and -not $s235) { Say 'quick mode: done'; Get-Process tally -ErrorAction SilentlyContinue | Stop-Process -Force; return }
 $s235Checks = @('s1 stop: three lines held, nothing asked', 's2 lift: bodies and the delete with its GUID', 's3 restart: the held delete keeps its GUID', 's4 a real failure still counts', 's5 Tally not open: one notification a day')
 if (-not $c2ok -and $s235) { foreach ($c in $s235Checks) { Result $c 'HARNESS' 'not run: Tally did not come up with the company (c1/c2)' }; return }
+if (-not $c2ok -and $bankb) { Result 'b1 bank dates set in Bank Reconciliation reach FinCom' 'HARNESS' 'not run: Tally did not come up with the company (c1/c2)'; return }
 if (-not $c2ok -and $renum) { foreach ($c in 'r1 insert with renumbering on', 'r2 delete with renumbering on') { Result $c 'HARNESS' 'not run: Tally did not come up with the company (c1/c2)' }; return }
 if (-not $c2ok) {
   foreach ($c in 'c3 posting from the bridge', 'c4a create by keys', 'c4b alter by keys', 'c6 entry request', 'c5 Alt+2 duplicate', 'c4c cancel by keys', 'c4d delete by keys', 'c7 version string the bridge reads') { Result $c 'HARNESS' 'not run: Tally did not come up with the company (c1/c2)' }
@@ -148,13 +149,24 @@ if (-not $c2ok) {
 Say '---- the stub cloud and the bridge'
 $stubLog = Join-Path $out 'stub-requests.jsonl'
 $py = (Get-Command python).Source
-$stubPy = if ($renum) { 'stubr.py' } elseif ($s235) { 'stub235.py' } else { 'stubv.py' }   # s235: the stub whose beat answer carries FinCom's read stop   # renum: the stub that keeps FinCom's copy and answers renumber_list
+$stubPy = if ($renum -or $bankb) { 'stubr.py' } elseif ($s235) { 'stub235.py' } else { 'stubv.py' }   # s235: the stub whose beat answer carries FinCom's read stop   # renum: the stub that keeps FinCom's copy and answers renumber_list
 $stub = Start-Process -FilePath $py -ArgumentList "`"$PSScriptRoot\$stubPy`" 8787 `"$stubLog`"" -PassThru -WindowStyle Hidden
 Start-Sleep 3
 # masters the steps need (as flow4.ps1): Spike Income for the Receipt by keys
 Imp 'All Masters' '<LEDGER NAME="Spike Income" ACTION="Create"><NAME.LIST><NAME>Spike Income</NAME></NAME.LIST><PARENT>Indirect Incomes</PARENT></LEDGER>' 'ledger Spike Income' | Out-Null
 # renum: one entry before the bridge starts, so its starting point is recorded at its first look (ALTVCHID 0 is never one)
-if ($renum -or $s235) { Imp 'Vouchers' '<VOUCHER VCHTYPE="Journal" ACTION="Create"><DATE>20261001</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><NARRATION>renum before the bridge</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>Cash</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-10.00</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>Spike Income</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>10.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>' 'renum journal' | Out-Null }
+if ($renum -or $s235 -or $bankb) { Imp 'Vouchers' '<VOUCHER VCHTYPE="Journal" ACTION="Create"><DATE>20261001</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><NARRATION>renum before the bridge</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>Cash</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-10.00</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>Spike Income</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>10.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>' 'renum journal' | Out-Null }
+# bankb (next-bankdate): the bank ledger and four contras with bank allocations (2-10-2026, Share Bank) made by XML before
+# the bridge starts, so its starting point and the bank route's first number are above them (no add-on line for an import)
+if ($bankb) {
+  $null = Imp 'All Masters' '<LEDGER NAME="Share Bank" ACTION="Create"><NAME.LIST><NAME>Share Bank</NAME></NAME.LIST><PARENT>Bank Accounts</PARENT></LEDGER>' 'bankb ledger Share Bank'
+  $bx = ''; foreach ($i in 1..4) { $a = '{0:0.00}' -f (100 + $i)
+    $bx += '<VOUCHER VCHTYPE="Contra" ACTION="Create"><DATE>20261002</DATE><VOUCHERTYPENAME>Contra</VOUCHERTYPENAME><NARRATION>bank probe C' + $i + '</NARRATION>' +
+      '<ALLLEDGERENTRIES.LIST><LEDGERNAME>Share Bank</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-' + $a + '</AMOUNT><BANKALLOCATIONS.LIST><DATE>20261002</DATE><INSTRUMENTDATE>20261002</INSTRUMENTDATE><TRANSACTIONTYPE>Cash</TRANSACTIONTYPE><PAYMENTFAVOURING>Share Bank</PAYMENTFAVOURING><AMOUNT>-' + $a + '</AMOUNT></BANKALLOCATIONS.LIST></ALLLEDGERENTRIES.LIST>' +
+      '<ALLLEDGERENTRIES.LIST><LEDGERNAME>Cash</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>' + $a + '</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>' }
+  $bxr = Imp 'Vouchers' $bx 'bankb contras'
+  Info "bankb: four contras with bank allocations (2-10-2026, Share Bank): $(([regex]::Match("$bxr", '<CREATED>\d+</CREATED>.*?<ERRORS>\d+</ERRORS>', 'Singleline').Value) -replace '\s+', ' ')"
+}
 $setupSrc = Get-ChildItem $env:BRIDGE_DIST -Filter 'FinComBridge-Setup-*.exe' | Select-Object -First 1
 Info "$(Get-Content (Join-Path $env:BRIDGE_DIST 'setup-origin.txt') -ErrorAction SilentlyContinue); $(Get-Content (Join-Path $env:BRIDGE_DIST 'bridge-source.txt') -ErrorAction SilentlyContinue)"
 $setup = "$fc\FinComBridge-Setup.exe"; Copy-Item $setupSrc.FullName $setup -Force
@@ -218,6 +230,10 @@ foreach ($f in $tdlErr) { Info "Tally file $($f.FullName): $((Get-Content $f.Ful
 if ($s235) {
   . (Join-Path $PSScriptRoot 's235v.ps1')
   Stop-S235Proxy; if ($script:tpid) { Stop-Process -Id $script:tpid -Force -ErrorAction SilentlyContinue }; Stop-Process -Id $stub.Id -Force -ErrorAction SilentlyContinue; return
+}
+if ($bankb) {
+  . (Join-Path $PSScriptRoot 'bankv.ps1')
+  Get-Process tally -ErrorAction SilentlyContinue | Stop-Process -Force; Stop-Process -Id $stub.Id -Force -ErrorAction SilentlyContinue; return
 }
 if ($renum) {
   . (Join-Path $PSScriptRoot 'renumv.ps1')

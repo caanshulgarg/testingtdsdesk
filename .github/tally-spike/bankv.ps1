@@ -1,4 +1,5 @@
-# bankv.ps1 - mode "bank" (the owner's decision of 08-Oct-2026: "bank date: probe first, then fallback as agreed").
+# bankv.ps1 - mode "bank" (the owner's decision of 08-Oct-2026: "bank date: probe first, then fallback as agreed"), and
+# mode "bankb" (next-bankdate: the fallback with the bridge built from the ref; its part is "---- bankb" below).
 # MEASUREMENT ONLY, nothing here ships. Dot-sourced by flowv.ps1 after c1-c2 (Tally started with the ref's
 # FinComRecorder.tdl, the company open; no bridge). The question: when a bank date is set on Tally's screen, does any
 # event an add-on can hook fire, what does it carry, and what does it cost on the save?
@@ -134,6 +135,7 @@ function BkEvs($lines) { $h = [ordered]@{}; foreach ($l in $lines) { $e = [regex
 
 # ---- masters and the contras by XML (no add-on event fires for an import: the lines start after)
 function SE([string]$s) { [Security.SecurityElement]::Escape($s) }
+if (-not $bankb) {
 $ms = '<LEDGER NAME="Share Bank" ACTION="Create"><NAME.LIST><NAME>Share Bank</NAME></NAME.LIST><PARENT>Bank Accounts</PARENT></LEDGER>' +
       '<LEDGER NAME="Zprobe Bank" ACTION="Create"><NAME.LIST><NAME>Zprobe Bank</NAME></NAME.LIST><PARENT>Bank Accounts</PARENT></LEDGER>'
 $mr = Imp 'All Masters' $ms 'bank masters'
@@ -178,6 +180,7 @@ $brsUse = @($brsNames | Where-Object { $known[$_] }); if (-not $brsUse.Count) { 
 $allocUse = @($allocNames | Where-Object { $known[$_] }); if (-not $allocUse.Count) { $allocUse = @('Bank Allocations', 'VCH BankAllocations') }
 Info "BRS form names probed: $($brsUse -join ' / '); Bank Allocations form names probed: $($allocUse -join ' / ')"
 if ($script:bkStuck) { BkFresh 'after discovery' }
+}   # (bankb: the contras are made by flowv.ps1 before the bridge starts; no discovery)
 
 # ---- the steps
 $script:bkRows = @()
@@ -267,6 +270,71 @@ function BkAlloc($tag, [int]$ups) {
   $row = [pscustomobject]@{ tag = $tag; path = 'alloc'; how = "Bank Allocations seen $seen, a Bank Date field on it $hasBD$(if ($script:bkMarks.Count) { "; the control button (Kiwi Mark) on the voucher screen: $([bool]$script:kiwi)" })"; dated = $(if ($tgt) { $tgt.narr } else { '' }); mid = $(if ($tgt) { $tgt.mid } else { 0 }); aid0 = $(if ($p) { $p.aid } else { '' }); aid1 = $(if ($tgt) { $tgt.aid } else { '' }); vch0 = $co0.vch; vch1 = $co1n.vch; mst0 = $co0.mst; mst1 = $co1n.mst; ms = $(if ($sv) { $sv.ms } else { -1 }); raw = $(if ($sv) { $sv.raw } else { '' }); fcr1 = (BkEvs $nr); fcr1mid = $mine; probe = (BkEvs $np) }
   $script:bkRows += $row
   Result "$tag voucher altered through its Bank Allocations" $(if ($tgt) { 'INFO' } else { 'HARNESS' }) ("{0}; {1}; AlterID {2} -> {3}; company AltVchId {4} -> {5}; Ctrl+A to a still screen {6} ms ({7}); add-on FCR1 lines: {8} (for its MasterID: {9}); probe lines: {10}; the sub-screen read: {11}" -f $row.how, $(if ($tgt) { "saved '$($tgt.narr)' (mid $($tgt.mid), bank date now '$($tgt.bdate)')" } else { 'no contra saved (see tds-*-' + $tag + '-* screenshots)' }), $row.aid0, $row.aid1, $row.vch0, $row.vch1, $row.ms, $row.raw, $(if ($row.fcr1) { $row.fcr1 } else { 'none' }), $mine, $(if ($row.probe) { $row.probe } else { 'none' }), $(if ($atxt.Length -gt 300) { $atxt.Substring(0, 300) } else { $atxt }))
+}
+
+# ---- bankb (branch next-bankdate, the owner's agreed fallback; the bridge built from the ref, stubr.py as FinCom's cloud,
+# flowv.ps1 made the contras C1-C4 of 2-10-2026 before the bridge started). Two bank dates set in Bank Reconciliation (no
+# add-on line is written for them); within 14 minutes (the bridge's light check comes every 10 minutes a company) FinCom's
+# copy must hold, for every contra, Tally's bank date (as Tally's own object export of the voucher gives it) at Tally's
+# AlterID. Evidence: the bridge's "Bank dates:" log lines, its altered lines with source "bankdate" (one per bank-dated
+# contra), the stub's copy before and after. A contra Tally did not bank-date (keys that did not reach the screen): HARNESS.
+if ($bankb) {
+  Say '---- bankb: bank dates set in Bank Reconciliation reach FinCom (the bridge from the ref, stubr.py as the cloud)'
+  $check = 'b1 bank dates set in Bank Reconciliation reach FinCom'
+  function StubCopy { try { $j = (Invoke-WebRequest 'http://127.0.0.1:8787/copy' -UseBasicParsing -TimeoutSec 20).Content; return , @(($j | ConvertFrom-Json) | ForEach-Object { $_ }) } catch { return , @() } }
+  function StubPost($o) { try { Invoke-RestMethod -Uri 'http://127.0.0.1:8787/' -Method Post -Body ($o | ConvertTo-Json -Depth 6 -Compress) -ContentType 'application/json' -TimeoutSec 20 } catch { Write-Host "stub: $_" } }
+  # Tally's own whole voucher (the object export, as the bridge's FinComVoucherObject; a FETCHLIST always: without one Tally froze)
+  function BkObj($mid) {
+    $x = BkPost ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Object</TYPE><SUBTYPE>Voucher</SUBTYPE><ID TYPE="Name">ID:' + $mid + '</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + (SE $co1) + '</SVCURRENTCOMPANY></STATICVARIABLES><FETCHLIST><FETCH>GUID</FETCH><FETCH>MASTERID</FETCH><FETCH>ALTERID</FETCH><FETCH>ALLLEDGERENTRIES.BANKALLOCATIONS.BANKERSDATE</FETCH></FETCHLIST></DESC></BODY></ENVELOPE>')
+    [pscustomobject]@{ mid = $mid; guid = (& $tg $x 'GUID'); aid = [int64]('0' + [regex]::Match("$x", '<ALTERID[^>]*>\s*(\d+)').Groups[1].Value); bdate = [regex]::Match("$x", '<BANKERSDATE[^>]*>\s*(\d+)\s*<').Groups[1].Value }
+  }
+  function BkTally { $o = @(); foreach ($v in @(BkContras)) { $b = BkObj $v.mid; $o += [pscustomobject]@{ mid = $v.mid; guid = $v.guid; narr = $v.narr; vno = $v.vno; aid = $b.aid; bdate = $b.bdate } }; return , $o }
+  function BkList($l) { ($l | Sort-Object mid | ForEach-Object { "mid $($_.mid) '$($_.narr)' AlterID $($_.aid) bank date '$($_.bdate)'" }) -join '; ' }
+  try {
+    # 0. the bridge's first light check: its starting point and the bank route's first number (the contras are below them)
+    $bkSeen = $false
+    for ($i = 0; $i -lt 80 -and -not $bkSeen; $i++) { if (Test-Path $blog) { $bkSeen = [bool](Select-String -Path $blog -Pattern 'Bank dates: .*following' -Quiet) }; if (-not $bkSeen) { Start-Sleep 3 } }
+    Info "bankb: the bridge's bank route started (its first light check) before the bank dates: $bkSeen"
+    $t0l = BkTally
+    $null = StubPost @{ kind = '_seed'; entries = @($t0l | ForEach-Object { @{ mid = $_.mid; guid = $_.guid; day = '20261002'; no = $_.vno; alter = $_.aid; type = 'Contra'; bdate = $_.bdate } }) }
+    Info "bankb: Tally's contras (FinCom's copy seeded with them, as from a Day Book upload): $(BkList $t0l)"
+    Snap 'bankb-seeded'
+    $m0 = Mark
+    # 1. two bank dates on the screen (the first unreconciled row each time)
+    BkBrs 'B1-brs'
+    BkBrs 'B2-brs'
+    $t0 = Get-Date
+    $t1l = BkTally
+    $dated = @($t1l | Where-Object { $o = $_; $p = @($t0l | Where-Object mid -eq $o.mid)[0]; $_.bdate -and $p -and -not $p.bdate })
+    Info "bankb: Tally after the bank dates: $(BkList $t1l)"
+    # 2. FinCom's copy until it holds Tally's bank date and AlterID for every contra (14 minutes at most)
+    $cp = @(); $miss = @($t1l)
+    $until = (Get-Date).AddMinutes(14)
+    while ((Get-Date) -lt $until) {
+      $cp = StubCopy
+      $miss = @($t1l | Where-Object { $o = $_; $c = @($cp | Where-Object { $_.guid -eq $o.guid })[0]; -not $c -or "$($c.bdate)" -ne "$($o.bdate)" -or [int64]$c.alter -ne $o.aid })
+      if ($dated.Count -and -not $miss.Count) { break }
+      Start-Sleep 10
+    }
+    $sec = [math]::Round(((Get-Date) - $t0).TotalSeconds, 0)
+    Snap 'bankb-after'
+    $reqs = @(StubReqs | Select-Object -Skip $m0)
+    $bl = @($reqs | Where-Object kind -eq 'recorder_lines' | ForEach-Object { @($_.body.lines) } | Where-Object { $_.source -eq 'bankdate' })
+    $per = @($bl | Group-Object master_id | ForEach-Object { "mid $($_.Name) x$($_.Count)" })
+    $twice = @($bl | Group-Object master_id | Where-Object Count -gt 1)
+    $logl = @(Get-Content $blog -ErrorAction SilentlyContinue | Where-Object { $_ -match 'Bank dates:' })
+    $st = if (-not $dated.Count) { 'HARNESS' } elseif ($miss.Count -or $twice.Count) { 'FAIL' } else { 'PASS' }
+    Result $check $st ("Tally bank-dated {0} contra(s): {1}; FinCom's copy {2} after {3} s; {4} altered line(s) from the bridge (source bankdate): {5}; bridge log: {6}" -f
+      $dated.Count, $(if ($dated.Count) { BkList $dated } else { '-' }),
+      $(if ($miss.Count) { "differs from Tally for $($miss.Count) contra(s): Tally $(BkList $miss); FinCom $((@($cp) | ForEach-Object { "mid $($_.mid) AlterID $($_.alter) bank date '$($_.bdate)'" }) -join '; ')" } else { "holds Tally's bank date and AlterID for every contra ($($t1l.Count))" }),
+      $sec, $bl.Count, $(if ($per.Count) { $per -join ', ' } else { '-' }), $(if ($logl.Count) { ($logl | ForEach-Object { ($_ -replace '^.*?Bank dates: ', '') }) -join ' | ' } else { '(no Bank dates line)' }))
+    StubCopy | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $cap 'bankb-fincom-copy.json') -Encoding UTF8
+    $t1l | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $cap 'bankb-tally.json') -Encoding UTF8
+  } catch { Result $check 'HARNESS' "the harness stopped: $_" }
+  Copy-Item $blog (Join-Path $out 'bridge-full.log') -ErrorAction SilentlyContinue
+  Copy-Item $stubLog (Join-Path $cap 'stub-requests.jsonl') -ErrorAction SilentlyContinue
+  Set-Content (Join-Path $out 'tds-screens.log') $script:tdsLog -Encoding UTF8
+  return
 }
 
 # ---- BK0: the ref's add-on only (Tally as flowv.ps1 started it)

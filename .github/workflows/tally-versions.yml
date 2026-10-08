@@ -19,7 +19,7 @@ on:
         description: 'Branch, tag or commit of the bridge (bridge-go/); tax-accuracy is the published 2.3.0'
         default: tax-accuracy
       mode:
-        description: 'quick (install and port), full (every check) share (next-push: the full line against the stored entry, per kind typed on the screen; no bridge) or big (the add-on''s own share of a save on a 100,000-entry company) or hang (the hang of run 37729166801 isolated, each probe in a fresh Tally) or hang2 (the share company, then each entry asked in a fresh Tally) or hang3 (the share session, the published requests after every step) or hang4 (the harness''s malformed filter against the correct one) or bank (the bank-date probe: does any event an add-on can hook fire when a bank date is set; bankv.ps1, a probe variant of the add-on in the harness only) or renum (next-renumber: an insert and a delete with renumbering on, the bridge built from source with stubr.py as the cloud; FinCom ends with Tally''s numbers; 3.0 and 7.1 only) or s235 (bridge 2.3.5 built from source: FinCom''s read stop from the beat answer with a create / alter / delete on the screen, the lift, a bridge restart, a real failure that counts, the Tally-not-open notification once a day; s235v.ps1, stub235.py, proxy235.py; 3.0 and 7.1 only)'
+        description: 'quick (install and port), full (every check) share (next-push: the full line against the stored entry, per kind typed on the screen; no bridge) or big (the add-on''s own share of a save on a 100,000-entry company) or hang (the hang of run 37729166801 isolated, each probe in a fresh Tally) or hang2 (the share company, then each entry asked in a fresh Tally) or hang3 (the share session, the published requests after every step) or hang4 (the harness''s malformed filter against the correct one) or bank (the bank-date probe: does any event an add-on can hook fire when a bank date is set; bankv.ps1, a probe variant of the add-on in the harness only) or bankb (next-bankdate: bank dates set in Bank Reconciliation with the bridge built from source and stubr.py as the cloud; FinCom''s copy ends with Tally''s bank dates; bankv.ps1; 3.0 and 7.1 only) or renum (next-renumber: an insert and a delete with renumbering on, the bridge built from source with stubr.py as the cloud; FinCom ends with Tally''s numbers; 3.0 and 7.1 only) or s235 (bridge 2.3.5 built from source: FinCom''s read stop from the beat answer with a create / alter / delete on the screen, the lift, a bridge restart, a real failure that counts, the Tally-not-open notification once a day; s235v.ps1, stub235.py, proxy235.py; 3.0 and 7.1 only)'
         default: quick
       from_source:
         description: 'yes: build the bridge from bridge_ref''s source even when a setup is committed there (a branch whose committed setup is an older release)'
@@ -46,12 +46,12 @@ jobs:
       - id: mode
         run: |
           m="${{ inputs.mode }}"; [ -n "$m" ] || m=$(head -1 harness/.github/tally-spike/versions-mode.txt 2>/dev/null | tr -d '[:space:]')
-          case "$m" in full|share|big|hang|hang2|hang3|hang4|bank|renum|s235) ;; *) m=quick ;; esac
+          case "$m" in full|share|big|hang|hang2|hang3|hang4|bank|bankb|renum|s235) ;; *) m=quick ;; esac
           echo "mode=$m" | tee -a "$GITHUB_OUTPUT"
           # renum (next-renumber): the oldest and the newest release only
           v="${{ inputs.versions }}"
           if [ -n "$v" ]; then echo "versions=[\"$(echo "$v" | tr -d '[:space:]' | sed 's/,/","/g')\"]"
-          elif [ "$m" = renum ] || [ "$m" = s235 ]; then echo 'versions=["3.0","7.1"]'; else echo 'versions=["3.0","4.1","5.1","6.2","7.1"]'; fi | tee -a "$GITHUB_OUTPUT"
+          elif [ "$m" = renum ] || [ "$m" = s235 ] || [ "$m" = bankb ]; then echo 'versions=["3.0","7.1"]'; else echo 'versions=["3.0","4.1","5.1","6.2","7.1"]'; fi | tee -a "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.bridge_ref || 'tax-accuracy' }}
@@ -67,6 +67,8 @@ jobs:
           if [ "${{ steps.mode.outputs.mode }}" = renum ]; then f=""; fi
           # s235: the ref's own code (bridge 2.3.5 branches)
           if [ "${{ steps.mode.outputs.mode }}" = s235 ]; then f=""; fi
+          # bankb: the ref's own code (branch next-bankdate)
+          if [ "${{ steps.mode.outputs.mode }}" = bankb ]; then f=""; fi
           # from_source=yes: the ref's own code (a branch whose committed setup is the release before it)
           if [ "${{ inputs.from_source }}" = yes ]; then f=""; fi
           if [ -z "$f" ]; then echo "no committed setup at the ref: building from source"; echo "use=no" >> "$GITHUB_OUTPUT"; exit 0; fi
@@ -107,7 +109,7 @@ jobs:
       matrix:
         version: ${{ fromJSON(needs.build.outputs.versions) }}
     runs-on: windows-latest
-    timeout-minutes: ${{ needs.build.outputs.mode == 'hang2' && 220 || ((needs.build.outputs.mode == 'share' || needs.build.outputs.mode == 'big' || needs.build.outputs.mode == 'hang' || needs.build.outputs.mode == 'hang3' || needs.build.outputs.mode == 'bank' || needs.build.outputs.mode == 'renum' || needs.build.outputs.mode == 's235') && 130 || 75) }}
+    timeout-minutes: ${{ needs.build.outputs.mode == 'hang2' && 220 || ((needs.build.outputs.mode == 'share' || needs.build.outputs.mode == 'big' || needs.build.outputs.mode == 'hang' || needs.build.outputs.mode == 'hang3' || needs.build.outputs.mode == 'bank' || needs.build.outputs.mode == 'bankb' || needs.build.outputs.mode == 'renum' || needs.build.outputs.mode == 's235') && 130 || 75) }}
     env:
       TALLY_REL: ${{ matrix.version }}
       VMODE: ${{ needs.build.outputs.mode }}
@@ -149,7 +151,7 @@ jobs:
           & .github/tally-spike/flow.ps1 *>&1 | Tee-Object -FilePath $env:LOG -Append; exit 0
       - name: 4 Checks (flowv.ps1)
         id: checks
-        timeout-minutes: ${{ needs.build.outputs.mode == 'hang2' && 190 || ((needs.build.outputs.mode == 'share' || needs.build.outputs.mode == 'big' || needs.build.outputs.mode == 'hang' || needs.build.outputs.mode == 'hang3' || needs.build.outputs.mode == 'bank' || needs.build.outputs.mode == 'renum' || needs.build.outputs.mode == 's235') && 105 || 40) }}
+        timeout-minutes: ${{ needs.build.outputs.mode == 'hang2' && 190 || ((needs.build.outputs.mode == 'share' || needs.build.outputs.mode == 'big' || needs.build.outputs.mode == 'hang' || needs.build.outputs.mode == 'hang3' || needs.build.outputs.mode == 'bank' || needs.build.outputs.mode == 'bankb' || needs.build.outputs.mode == 'renum' || needs.build.outputs.mode == 's235') && 105 || 40) }}
         env:
           BRIDGE_DIST: ${{ github.workspace }}\bridge-dist
         run: |
@@ -161,6 +163,7 @@ jobs:
           $r = Join-Path $dir 'results.txt'; if (-not (Test-Path $r)) { Set-Content $r "INFO TallyPrime $env:TALLY_REL, mode $env:VMODE" }
           $want = @('c1 install and open the company', 'c2 port and company list')
           if ($env:VMODE -eq 'renum') { $want += @('r1 insert with renumbering on', 'r2 delete with renumbering on') }
+          if ($env:VMODE -eq 'bankb') { $want += @('b1 bank dates set in Bank Reconciliation reach FinCom') }
           if ($env:VMODE -eq 's235') { $want += @('s1 stop: three lines held, nothing asked', 's2 lift: bodies and the delete with its GUID', 's3 restart: the held delete keeps its GUID', 's4 a real failure still counts', 's5 Tally not open: one notification a day') }
           if ($env:VMODE -eq 'full') { $want += @('c3 posting from the bridge', 'c4a create by keys', 'c4b alter by keys', 'c6 entry request', 'c5 Alt+2 duplicate', 'c4c cancel by keys', 'c4d delete by keys', 'c7 version string the bridge reads') }
           $have = Get-Content $r
