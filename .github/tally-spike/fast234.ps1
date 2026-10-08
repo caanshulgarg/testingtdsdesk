@@ -14,7 +14,10 @@
 #     (2) every seeded held line (the ended ones too) resolved with its body, each asked ONCE, by FinComVoucherObject;
 #     (3) no FinComVoucherByMaster seen at the proxy;
 #     (4) no request sent while a previous one was unanswered at Tally;
-#     (5) no company marked slow (the bridge's log and its recorder-slow.json).
+#     (5) no company marked slow (the bridge's log and its recorder-slow.json);
+#     (6) the last entry of the small company's day deleted on the screen (Day Book, End, Alt+D, as flow4 step 5): its line
+#         in the stub with the GUID Tally deleted, NOT held (Tally's bare 'Could not find Voucher:ID:n' read as gone), its
+#         MasterID asked by FinComVoucherObject at the proxy.
 $F234 = @{ dir = (Join-Path $out 'fast234'); vch = [int]$(if ($env:F234_VCH) { $env:F234_VCH } else { 40000 }); nHeld = 10; nEnd = 10; date = '20260401'
   shareName = 'fast234share'; share = '\\localhost\fast234share'; ok = $false; bigCo = 'FinCom Big Co'; endIds = @(); heldIds = @() }
 New-Item -ItemType Directory -Force $F234.dir | Out-Null
@@ -144,5 +147,30 @@ function Fast234 {
   Add-Content -Path $resultsFile -Encoding UTF8 -Value ("MEASURE fast234: FinComVoucherObject at Tally (proxy ms): median {0}, worst {1}, n {2}; the small company {3}; the large company ({4} entries) {5}" -f `
       $(if ($obj.Count) { ($obj | ForEach-Object { [double]$_.ms } | Sort-Object)[[int][math]::Floor(($obj.Count - 1) / 2)] } else { '-' }), $(if ($obj.Count) { ($obj | ForEach-Object { [double]$_.ms } | Measure-Object -Maximum).Maximum } else { '-' }), $obj.Count,
       (($obj | Where-Object { $_.company -eq $co1 } | ForEach-Object { [int]$_.ms }) -join ','), $Slow232St.made, (($obj | Where-Object { $_.company -eq $F234.bigCo } | ForEach-Object { [int]$_.ms }) -join ','))
+  # (6) the coordinator, 08-Oct-2026 (the renumbering helper's finding: Tally answers a MasterID it no longer has with a bare
+  # <ERRORMSG>Could not find Voucher:ID:n!</ERRORMSG>): an entry deleted on the screen is settled as before, its line proven
+  # deleted on this Tally (no held words) with the GUID of the entry Tally deleted, asked by FinComVoucherObject
+  try { F234Delete } catch { Write-Host "F234Delete: $_ $($_.ScriptStackTrace)"; Result 'fast234 (6) an entry deleted on the screen: its line proven deleted here' $false "the harness stopped: $_" $true }
+  Copy-Item $Slow232St.proxyLog (Join-Path $F234.dir 'proxy-copy.jsonl') -ErrorAction SilentlyContinue
+  $bl = S2BridgeLog
   Set-Content (Join-Path $F234.dir 'bridge1-log-fast234.txt') ($bl | Where-Object { $_ -match 'Recorder: |did not answer in time|answered in time again|entry fetch|FinComVoucher' }) -Encoding UTF8
+}
+
+# (6) a delete on the screen (flow4 step 5's keys) in the small company, made the current one first (F3, its name)
+function F234Delete {
+  $before = Vouchers 9000 $co1
+  $m = Mark; $p0 = @(F234Proxy).Count
+  KeysTo 9000 '{ESC}' 1; KeysTo 9000 '{ESC}' 1; KeysTo 9000 '{F3}' 4; KeysTo 9000 $co1 2; KeysTo 9000 '{ENTER}' 6 'f234-6-company'
+  DayBook 'f234-6' '1-4-2026'; KeysTo 9000 '{END}' 2; KeysTo 9000 '%d' 3; KeysTo 9000 'y' 4 'f234-6-deleted'
+  KeysTo 9000 '{ESC}' 1; KeysTo 9000 '{ESC}' 1
+  $after = Vouchers 9000 $co1
+  $del = @($before | Where-Object { $_.mid -notin @($after | ForEach-Object mid) })[0]
+  if (-not $del) { Result 'fast234 (6) an entry deleted on the screen: its line proven deleted here' $false ("the keys deleted nothing in '{0}' ({1} entries before, {2} after; see the f234-6 screens)" -f $co1, @($before).Count, @($after).Count) $true; return }
+  $hit = WaitLine $m { $_.ev -eq 'deleted' -and $_.company -eq $co1 -and "$($_.mid)" -eq "$($del.mid)" } 180
+  $x = @($hit | Where-Object bid -eq $B[1].id)[0]
+  Start-Sleep 5
+  $asked = @(@(F234Proxy) | Select-Object -Skip $p0 | Where-Object { $_.id -eq 'FinComVoucherObject' -and "$($_.mid)" -eq "$($del.mid)" })
+  $said = @(S2BridgeLog | Where-Object { $_ -match ('delete of mid ' + $del.mid + ':') } | Select-Object -Last 3)
+  Result 'fast234 (6) an entry deleted on the screen: its line proven deleted here' ([bool]$x -and $x.guid -eq $del.guid -and -not $x.held -and $asked.Count -gt 0) `
+    ("Tally deleted mid {0} guid {1} no {2}; {3}; FinComVoucherObject for mid {0} at the proxy: {4} ({5} ms); bridge log: {6}" -f $del.mid, $del.guid, $del.vno, (Ev $x), $asked.Count, (($asked | ForEach-Object { [int]$_.ms }) -join ','), $(if ($said.Count) { $said -join ' | ' } else { 'none' }))
 }
