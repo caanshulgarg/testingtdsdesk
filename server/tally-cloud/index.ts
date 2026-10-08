@@ -187,10 +187,17 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { parseDay, amt, cleanName } from "./parse.js";
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
+import { cloudReporter } from "../_shared/sentry.ts";   // error reports to Sentry, staging only, scrubbed (docs/sentry.md)
 
 const URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const db = createClient(URL, SERVICE, { auth: { persistSession: false } });
+// 2.4.0 (the owner's conditions of 08-Oct-2026, docs/sentry.md): the failures logged below also go to Sentry, on the
+// staging database only (SUPABASE_URL; the secret FINCOM_SENTRY=off stops it): where in the code, the error's type and
+// scrubbed words, its stack, the request's kind and the firm as a hash. Never the request, Tally's XML or any id
+const sentry = cloudReporter({ release: "tally-ingest-2.4.0" });
+sentry.listen();
+const fail = (where: string, e: unknown, kind?: unknown, firm?: unknown) => sentry.report(where, e, { kind, firm });
 const MAX_BODY = 25 * 1024 * 1024;          // one request
 const MAX_DAY = 60 * 1024 * 1024;           // one day's day book, unzipped
 const MAX_UNZIP = 200 * 1024 * 1024;        // all the days of one request, unzipped
@@ -207,7 +214,7 @@ async function sha256(s: string) {
 function b64bytes(s: string) { const bin = atob(s); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; }
 // unzipped a piece at a time, and stopped past a limit (a small file that unzips to gigabytes is refused)
 async function gunzip(u: Uint8Array, max: number) {
-  const r = new Blob([u]).stream().pipeThrough(new DecompressionStream("gzip")).getReader();
+  const r = new Blob([u as BlobPart]).stream().pipeThrough(new DecompressionStream("gzip")).getReader();
   const parts: Uint8Array[] = []; let n = 0;
   for (;;) {
     const { done, value } = await r.read();
@@ -220,7 +227,7 @@ async function gunzip(u: Uint8Array, max: number) {
   return { text: new TextDecoder("utf-8").decode(all), size: n };
 }
 async function gzipBytes(u: Uint8Array) {
-  const b = await new Response(new Blob([u]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer();
+  const b = await new Response(new Blob([u as BlobPart]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer();
   return new Uint8Array(b);
 }
 // the body read a piece at a time, whatever the request says its length is
@@ -380,10 +387,10 @@ function beatFail(fn: string, company: string, e: unknown) {
   if (missingFn(m)) {
     if (missingSaid.has(fn)) return;
     missingSaid.add(fn);
-    console.error(`tally-ingest beat: ${fn} is not in the database (migration 44 not run?), first for ${company}: ${m}. Said once until tally-ingest restarts`);
+    fail(fn, m); console.error(`tally-ingest beat: ${fn} is not in the database (migration 44 not run?), first for ${company}: ${m}. Said once until tally-ingest restarts`);
     return;
   }
-  console.error(`tally-ingest beat: ${fn} failed for ${company}: ${m}`);
+  fail(fn, m); console.error(`tally-ingest beat: ${fn} failed for ${company}: ${m}`);
 }
 // round 19: the starting points asked in this run (book and company GUID): tally_start_point keeps it once in the database
 // anyway, so it is called once per company per 5 minutes, not every beat (it takes the cursor's lock and writes). Review 46 H1
@@ -487,7 +494,7 @@ async function ledgersWantedFor(dev: any, firm: string, bridge: string) {
     }
     return out.length ? out : null;
   } catch (e) {
-    console.log("tally-ingest beat: ledgers wanted not read:", String((e as Error)?.message || e).slice(0, 200));
+    fail("ledgers_wanted", e); console.log("tally-ingest beat: ledgers wanted not read:", String((e as Error)?.message || e).slice(0, 200));
     return null;
   }
 }
@@ -550,7 +557,7 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
         if (e2) { bad = String(e2.message || ""); break; }
         got.push(...((d2 || []) as any[]));
       }
-      if (bad) console.log("tally-ingest beat: " + what + ": the slow-ended lines of the last " + HELD_SLOW_DAYS + " days not read:", bad.slice(0, 200));
+      if (bad) { fail("held_slow", bad); console.log("tally-ingest beat: " + what + ": the slow-ended lines of the last " + HELD_SLOW_DAYS + " days not read:", bad.slice(0, 200)); }
       else {
         const seen = new Set(rows.map((r) => String(r.line_id || "")));
         const old = got.filter((r) => r && String(r.device_id ?? dev.id) === String(dev.id) && String(r.bridge ?? "") === bridge && String(r.state ?? "held") === "held" && !String(r.line_id || "").endsWith(":resolved")
@@ -578,7 +585,7 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
       const rs: any[] = [];
       for (let i = 0; i < rids.length; i += 60) {
         const { data: d, error: re } = await db.from("tally_recorder_lines").select("id, line_id, state, held_why, body, payload, received_at").eq("firm_id", firm).in("line_id", rids.slice(i, i + 60));
-        if (re) { console.log("tally-ingest beat: " + what + ": the lines already resolved not read:", String(re.message || "").slice(0, 200)); return []; }
+        if (re) { fail("held_resolved", re); console.log("tally-ingest beat: " + what + ": the lines already resolved not read:", String(re.message || "").slice(0, 200)); return []; }
         rs.push(...(d || []));
       }
       const have = new Map<string, any[]>();
@@ -641,7 +648,7 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
     }
     return out;
   } catch (e) {
-    console.log("tally-ingest beat: " + what + " not read:", String((e as Error)?.message || e).slice(0, 200));
+    fail("held_lines", e); console.log("tally-ingest beat: " + what + " not read:", String((e as Error)?.message || e).slice(0, 200));
     return [];
   }
 }
@@ -735,7 +742,7 @@ const CHANGES_ONLY = "This bridge is set to changes only in FinCom (Tally page):
 async function changesOnly(dev: any, id: string) {
   const { data, error } = await db.from("tally_bridge_prefs").select("changes_only").eq("device_id", dev.id).eq("bridge_id", id).maybeSingle();
   // 2.3.1 (2.3.0 review, cloud Lows): an error is logged (a cloud without the table says nothing, as before)
-  if (error && !missingRel(error)) console.error("tally-ingest: tally_bridge_prefs (changes only) not read", dev.id, id, String(error.message || "").slice(0, 200));
+  if (error && !missingRel(error)) { fail("tally_bridge_prefs", error); console.error("tally-ingest: tally_bridge_prefs (changes only) not read", dev.id, id, String(error.message || "").slice(0, 200)); }
   return !error && data?.changes_only === true;
 }
 // a cloud without the table or column asked (an older migration): PostgREST's PGRST204/205, PostgreSQL's 42P01/42703
@@ -746,7 +753,7 @@ const missingRel = (e: any) => ["PGRST204", "PGRST205", "42P01", "42703"].includ
 // the function: as before
 async function rescuePosts(dev: any) {
   const { error } = await db.rpc("tally_post_rescue", { p_device: dev.id });
-  if (error && error.code !== "PGRST202" && !missingFn(String(error.message || ""))) console.error("tally-ingest: tally_post_rescue", dev.id, error.message);
+  if (error && error.code !== "PGRST202" && !missingFn(String(error.message || ""))) { fail("tally_post_rescue", error); console.error("tally-ingest: tally_post_rescue", dev.id, error.message); }
 }
 // the waiting postings this bridge may take: those naming it (tally_post_jobs.target_bridge), and those naming none when it
 // is the computer's main bridge; a cloud without migration 54 (no column): every waiting posting of the computer, when main
@@ -874,11 +881,11 @@ async function bridgeControl(dev: any, firm: string, me: { id: string; entry: an
             delete upd.pilot_allowlist_measured; delete upd.pilot_allowlist_hash;
             if (Object.keys(upd).length) ({ error } = await write());
           }
-          if (error) console.error("tally-ingest pilot evidence", error.message);
+          if (error) { fail("pilot_evidence", error); console.error("tally-ingest pilot evidence", error.message); }
         }
       }
     }
-  } catch (e) { console.error("tally-ingest bridge control", (e as Error).message); }
+  } catch (e) { fail("bridge_control", e); console.error("tally-ingest bridge control", (e as Error).message); }
   return { out, info };
 }
 // a support pack (the bridge's log, or its install log) for FinCom support; readable only by the platform's admins
@@ -1193,7 +1200,7 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
         // migration-36: the rename was rolled back (the trial balance would not tie, or the book's does not); said,
         // the batch goes on, and the next round asks again (the GUID is still under the old name)
         notes.push(("rename " + from + " -> " + to + " not made: " + String(error.message || "")).slice(0, 300));
-        console.log("tally-ingest ledger_list: rename rolled back", book, from, "->", to, String(error.message || "").slice(0, 200));
+        fail("ledger_rename", error); console.log("tally-ingest ledger_list: rename rolled back", book, from, "->", to, String(error.message || "").slice(0, 200));
         return;
       }
       if (!missing34(error)) throw new Error(error.message);
@@ -1385,7 +1392,7 @@ async function applyLedgerChanges(firm: string, book: string, body: any) {
   await endStaleAliases(book, rows);     // review H2: before the new ones are recorded
   if (aliases.length) {
     const { error } = await db.from("tally_ledger_aliases").upsert(aliases, { onConflict: "book_id,tally_name" });
-    if (error) console.log("tally-ingest ledger_changes: the new names not recorded (migration 59):", book, String(error.message || "").slice(0, 200));
+    if (error) { fail("ledger_changes", error); console.log("tally-ingest ledger_changes: the new names not recorded (migration 59):", book, String(error.message || "").slice(0, 200)); }
     else for (const a of aliases) kept.push(("entries using '" + a.tally_name + "' are applied under '" + a.fincom_name + "' until 2.3.2 renames it").slice(0, 300));
   }
   if (fresh.length || opened.length) {
@@ -1411,9 +1418,9 @@ async function postWindow(firm: string, dev: any, job: string, w: any) {
   try {
     const guid = typeof w.guid === "string" ? w.guid.trim().slice(0, 100) : typeof w.companyGuid === "string" ? w.companyGuid.trim().slice(0, 100) : "";
     const { data, error } = await db.rpc("tally_post_window_save", { p_firm: firm, p_job: job, p_device: dev.id, p_a0: a0, p_a1: a1, p_vch: vch, p_mst: mst, p_guid: guid || null });
-    if (error) { if (!/could not find|does not exist|schema cache|no such function/i.test(String(error.message || ""))) console.log("tally-ingest posts_update: posting window", job, String(error.message || "").slice(0, 200)); return; }
-    if ((data as any)?.ok === false) console.log("tally-ingest posts_update: posting window not kept", job, String((data as any)?.error || "").slice(0, 200));
-  } catch (e) { console.log("tally-ingest posts_update: posting window", job, (e as Error).message); }
+    if (error) { if (!/could not find|does not exist|schema cache|no such function/i.test(String(error.message || ""))) { fail("posting_window", error); console.log("tally-ingest posts_update: posting window", job, String(error.message || "").slice(0, 200)); } return; }
+    if ((data as any)?.ok === false) { fail("posting_window", String((data as any)?.error || "")); console.log("tally-ingest posts_update: posting window not kept", job, String((data as any)?.error || "").slice(0, 200)); }
+  } catch (e) { fail("posting_window", e); console.log("tally-ingest posts_update: posting window", job, (e as Error).message); }
 }
 // Phase 2 (migration 44): the recorder's lines. Each line is cleaned (strings cut, known events only, the voucher's XML
 // read with parse.js into the days path's shape: [{guid, alter, type, no, party, narr, cancel, opt, gstin, pos, ref,
@@ -1421,7 +1428,7 @@ async function postWindow(firm: string, dev: any, job: string, w: any) {
 // and applies it once (the same change from two computers: 'duplicate'). A line with no GUID is held there, never a new row
 // review 47/48 L5: a database error's own text goes to the function's log only; the caller gets plain words
 function dbFail(where: string, error: any, words: string) {
-  console.error("tally-ingest " + where + ":", String(error?.code || ""), String(error?.message || error || "").slice(0, 500));
+  fail(where, error); console.error("tally-ingest " + where + ":", String(error?.code || ""), String(error?.message || error || "").slice(0, 500));
   return new Error(words);
 }
 const RECORDER_EVENTS = new Set(["created", "altered", "deleted", "cancelled", "imported", "ledger_created", "ledger_altered", "ledger_renamed", "ledger_deleted"]);
@@ -1582,7 +1589,7 @@ async function ledgerAliases(book: string, names: string[]): Promise<Map<string,
     const rows: any[] = [];
     for (let i = 0; i < want.length; i += 150) {
       const { data, error } = await db.from("tally_ledger_aliases").select("tally_name, fincom_name, confirmed_at, ended_at").eq("book_id", book).in("tally_name", want.slice(i, i + 150));
-      if (error) { console.log("tally-ingest: the renamed ledgers not read (migration 59):", book, String(error.message || "").slice(0, 200)); return out; }
+      if (error) { fail("renamed_ledgers", error); console.log("tally-ingest: the renamed ledgers not read (migration 59):", book, String(error.message || "").slice(0, 200)); return out; }
       rows.push(...(data || []));
     }
     // review H2 (06-Oct-2026): only a valid alias: confirmed by a fetch by its name (confirmed_at) and not ended (ended_at).
@@ -1595,7 +1602,7 @@ async function ledgerAliases(book: string, names: string[]): Promise<Map<string,
     if (!gone) return out;
     for (const [a, b, t] of pairs) if (!gone.has(b)) out.set(a, { fincom: b, at: t });
   } catch (e) {
-    console.log("tally-ingest: the renamed ledgers not read:", book, String((e as Error)?.message || e).slice(0, 200));
+    fail("renamed_ledgers", e); console.log("tally-ingest: the renamed ledgers not read:", book, String((e as Error)?.message || e).slice(0, 200));
   }
   return out;
 }
@@ -1636,11 +1643,11 @@ async function endStaleAliases(book: string, rows: { guid: string; name: string 
       (byName.has(String(a.tally_name)) && byName.get(String(a.tally_name)) && byName.get(String(a.tally_name)) !== String(a.tally_guid)))).map((a: any) => String(a.tally_name)))];
     for (let i = 0; i < end.length; i += 150) {
       const { error } = await db.from("tally_ledger_aliases").update({ ended_at: new Date().toISOString() }).eq("book_id", book).in("tally_name", end.slice(i, i + 150));
-      if (error) { console.log("tally-ingest: stale ledger aliases not ended:", book, String(error.message || "").slice(0, 200)); return; }
+      if (error) { fail("ledger_aliases", error); console.log("tally-ingest: stale ledger aliases not ended:", book, String(error.message || "").slice(0, 200)); return; }
     }
     if (end.length) console.log("tally-ingest: ledger aliases ended (renamed again, or the name now another ledger's):", book, JSON.stringify(end.slice(0, 10)));
   } catch (e) {
-    console.log("tally-ingest: stale ledger aliases not read:", book, String((e as Error)?.message || e).slice(0, 200));
+    fail("ledger_aliases", e); console.log("tally-ingest: stale ledger aliases not read:", book, String((e as Error)?.message || e).slice(0, 200));
   }
 }
 async function ledgersMissingRaw(book: string, names: string[]): Promise<Set<string> | null> {
@@ -1658,7 +1665,7 @@ async function ledgersMissingRaw(book: string, names: string[]): Promise<Set<str
     }
     return new Set(miss.filter((n) => !have.has(n)));
   } catch (e) {
-    console.log("tally-ingest: the ledger list not read for the ledgers an entry uses:", book, String((e as Error)?.message || e).slice(0, 200));
+    fail("entry_ledgers", e); console.log("tally-ingest: the ledger list not read for the ledgers an entry uses:", book, String((e as Error)?.message || e).slice(0, 200));
     return null;
   }
 }
@@ -1718,7 +1725,7 @@ async function ledgerHoldTimes(book: string, ids: string[]): Promise<Map<string,
       }
     }
   } catch (e) {
-    console.log("tally-ingest: the holds for a ledger not read:", book, String((e as Error)?.message || e).slice(0, 200));
+    fail("ledger_holds", e); console.log("tally-ingest: the holds for a ledger not read:", book, String((e as Error)?.message || e).slice(0, 200));
   }
   return out;
 }
@@ -1872,7 +1879,7 @@ async function keepMasters(firm: string, book: string, dev: any, masters: Record
     console.log("tally-ingest recorder_lines: " + masters.length + " master line(s) not kept: no migration 66 in this cloud", book);
     return none("FinCom does not keep master lines yet (migration 66)");
   }
-  if (error) { console.error("tally-ingest recorder_lines masters:", String(error?.message || "").slice(0, 300)); return none("FinCom could not keep this master line just now"); }
+  if (error) { fail("recorder_masters", error, "recorder_lines"); console.error("tally-ingest recorder_lines masters:", String(error?.message || "").slice(0, 300)); return none("FinCom could not keep this master line just now"); }
   if ((data as any)?.ok === false) return none(String((data as any)?.error || "not kept").slice(0, 200));
   ((data as any)?.results || []).forEach((r: any, k: number) => {
     if (k < mat.length) results[mat[k]] = { line_id: String(r?.line_id ?? masters[k].line_id ?? ""), state: String(r?.state || "failed"), why: r?.why ?? null };
@@ -1905,7 +1912,7 @@ async function guidsFromRecord(book: string, send: Record<string, any>[], device
       for (let i = 0; i < mids.length; i += 100) {
         const { data: d, error } = await db.from("tally_recorder_lines").select("id, object_guid, master_id, company_guid, state, event, body, payload, device_id, bridge")
           .eq("book_id", book).eq("device_id", device).eq("bridge", bridge).ilike("company_guid", cg).in("master_id", mids.slice(i, i + 100)).in("state", ["applied", "duplicate"]).in("event", ["created", "altered", "imported"]).order("id", { ascending: false }).limit(2000);
-        if (error || !Array.isArray(d)) { console.log("tally-ingest recorder_lines: cancel/delete GUID: FinCom's record not read", book, String(error?.message || "").slice(0, 200)); return found; }
+        if (error || !Array.isArray(d)) { fail("cancel_delete_guid", error || "not a list"); console.log("tally-ingest recorder_lines: cancel/delete GUID: FinCom's record not read", book, String(error?.message || "").slice(0, 200)); return found; }
         data.push(...d);
       }
     }
@@ -1944,7 +1951,7 @@ async function guidsFromRecord(book: string, send: Record<string, any>[], device
         (g.toLowerCase() === made.toLowerCase() ? "; the GUID its MasterID makes agrees" : "; not the GUID its MasterID makes"), book);
     }
   } catch (e) {
-    console.log("tally-ingest recorder_lines: cancel/delete GUID: FinCom's record not read", book, String((e as Error)?.message || e).slice(0, 200));
+    fail("cancel_delete_guid", e); console.log("tally-ingest recorder_lines: cancel/delete GUID: FinCom's record not read", book, String((e as Error)?.message || e).slice(0, 200));
   }
   return found;
 }
@@ -1969,7 +1976,7 @@ async function shortBodies(firm: string, book: string, send: Record<string, any>
   const want = send.filter((l) => l.short === true && l.fid && l.object_guid && ["created", "imported"].includes(String(l.event)));
   if (!want.length) return;
   const { data, error } = await db.rpc("tally_post_xml_for", { p_firm: firm, p_book: book, p_fids: [...new Set(want.map((l) => String(l.fid)))].slice(0, 1000) });
-  if (error) { if (!/could not find|does not exist|schema cache|no such function/i.test(String(error.message || ""))) console.log("tally-ingest recorder_lines: posted XML", book, String(error.message || "").slice(0, 200)); return; }
+  if (error) { if (!/could not find|does not exist|schema cache|no such function/i.test(String(error.message || ""))) { fail("posted_xml", error); console.log("tally-ingest recorder_lines: posted XML", book, String(error.message || "").slice(0, 200)); } return; }
   const byFid = new Map<string, string>();
   for (const p of ((data as any)?.posts || []) as any[]) if (p && typeof p.fid === "string" && typeof p.xml === "string" && p.xml.length <= MAX_RECORDER_XML) byFid.set(p.fid, p.xml);
   let unread = 0;
@@ -2256,13 +2263,13 @@ const later = (p: Promise<unknown>) => { const er = (globalThis as any).EdgeRunt
 // job would never end. The stop leaves its own entry in bad (no day); a later step that finds it puts "failed" back.
 async function jobStep(job: string, units: number, bad: unknown[], failed?: string) {
   const { error } = await db.rpc("tally_job_step", { p_job: job, p_done: units, p_bad: bad || [], p_failed: failed || null });
-  if (error) { console.error("tally-ingest job step", job, error.message); return; }
+  if (error) { fail("job_step", error); console.error("tally-ingest job step", job, error.message); return; }
   if (failed) return;
   const { data: j } = await db.from("tally_jobs").select("status, bad").eq("id", job).maybeSingle();
   // deno-lint-ignore no-explicit-any
   if (j && j.status !== "failed" && Array.isArray(j.bad) && j.bad.some((b: any) => b && typeof b === "object" && !b.day && b.error)) {
     const { error: e2 } = await db.from("tally_jobs").update({ status: "failed" }).eq("id", job).neq("status", "failed");
-    if (e2) console.error("tally-ingest job step (kept stopped)", job, e2.message);
+    if (e2) { fail("job_step", e2); console.error("tally-ingest job step (kept stopped)", job, e2.message); }
   }
 }
 // review 47/48 M4, M5, L2: a piece that can never succeed (another file, an entry too large, a Storage that ignores Range):
@@ -2318,7 +2325,7 @@ async function storageRange(path: string, from: number, to: number): Promise<{ b
   if (r.status === 404 || r.status === 400) { await r.body?.cancel(); return null; }
   if (r.status === 416) { await r.body?.cancel(); return { bytes: new Uint8Array(0), size: total(r.headers.get("content-range")) }; }
   if (!r.ok) {
-    console.error("tally-ingest storage", r.status, path, (await r.text().catch(() => "")).slice(0, 300));
+    fail("storage", "storage " + r.status); console.error("tally-ingest storage", r.status, path, (await r.text().catch(() => "")).slice(0, 300));
     throw new Error("FinCom's storage answered " + r.status + " for the uploaded Day Book; it is tried again.");
   }
   const want = to - from + 1;
@@ -2453,7 +2460,7 @@ async function work(budgetMs: number) {
     try { await workPiece(x.message); await db.rpc("tally_work_done", { p_msg: x.msg_id }); n++; }
     catch (e) {
       const why = String((e as Error)?.message || e).slice(0, 300);
-      console.error("tally-ingest work", x.msg_id, x.read_ct, why);
+      fail("work", why); console.error("tally-ingest work", x.msg_id, x.read_ct, why);
       const fatal = e instanceof Fatal;
       if (fatal || x.read_ct >= TRIES) { await db.rpc("tally_work_done", { p_msg: x.msg_id }); if (x.message?.job) await jobStep(String(x.message.job), 0, [{ error: why }], fatal ? why : "Stopped after " + TRIES + " tries: " + why); }
     }
@@ -2666,12 +2673,12 @@ async function userUpload(req: Request, auth: string) {
     }
     return reply(400, { ok: false, error: "unknown kind" });
   } catch (e) {
-    console.error("tally-ingest upload", body?.kind, (e as Error).message);
+    fail("upload", e, body?.kind, firm); console.error("tally-ingest upload", body?.kind, (e as Error).message);
     return reply(500, { ok: false, error: (e as Error).message });
   }
 }
 
-Deno.serve(async (req) => {
+Deno.serve(sentry.wrap(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return reply(405, { ok: false, error: "POST only" });
   // the database's timer: the queue's pieces (migration-13); its key is kept in the vault
@@ -2679,7 +2686,7 @@ Deno.serve(async (req) => {
   if (workKey) {
     const { data: okKey } = await db.rpc("tally_work_key_ok", { p_key: workKey });
     if (okKey !== true) return reply(401, { ok: false, error: "not allowed" });
-    try { return reply(200, { ok: true, done: await work(100000) }); } catch (e) { console.error("tally-ingest work", (e as Error).message); return reply(500, { ok: false, error: (e as Error).message }); }
+    try { return reply(200, { ok: true, done: await work(100000) }); } catch (e) { fail("work", e); console.error("tally-ingest work", (e as Error).message); return reply(500, { ok: false, error: (e as Error).message }); }
   }
   const key = (req.headers.get("x-fincom-device") || "").trim();
   const auth = req.headers.get("authorization") || "";
@@ -2700,7 +2707,7 @@ Deno.serve(async (req) => {
   // body holds the OLD key the bridge id is bound to: only a program holding both keys can ask (a member alone cannot move
   // a bridge, and no owner is needed for one's own). Answered before the id is bound to the new key
   if (body?.kind === "own_key") {
-    try { return await ownKey(dev, firm, body); } catch (e) { console.error("tally-ingest own_key", (e as Error).message); return reply(500, { ok: false, error: (e as Error).message }); }
+    try { return await ownKey(dev, firm, body); } catch (e) { fail("own_key", e, "own_key", firm); console.error("tally-ingest own_key", (e as Error).message); return reply(500, { ok: false, error: (e as Error).message }); }
   }
   // migration 54 (review M3): a bridge id ("go-…", which the bridge reports itself) belongs to the first computer key that
   // reported it (tally_bridge_ids); another key naming it (an id copied from another Windows user's settings) is refused,
@@ -2715,7 +2722,7 @@ Deno.serve(async (req) => {
       // 2.3.1 (2.3.0 review round 1 L1): only a cloud without the function (PGRST202) goes on unchecked; any other error
       // refuses the call (the bridge asks again) and is logged, never passes as "own"
       if (be && be.code !== "PGRST202" && !missingFn(String(be.message || ""))) {
-        console.error("tally-ingest: tally_bridge_bind", dev.id, bid, String(be.message || "").slice(0, 200));
+        fail("tally_bridge_bind", be, undefined, firm); console.error("tally-ingest: tally_bridge_bind", dev.id, bid, String(be.message || "").slice(0, 200));
         return reply(503, { ok: false, error: "FinCom's cloud could not check this bridge just now; it asks again by itself." });
       }
       if (!be && bound && typeof bound === "object" && bound.own === false) {
@@ -2727,7 +2734,7 @@ Deno.serve(async (req) => {
   }
   // go-bridge (FinCom Bridge 2.0.0 in test mode, beside bridge 1.15.0 on the same computer and key): compared, never kept
   if (body?.shadow === true) {
-    try { return await shadowCall(dev, firm, body); } catch (e) { console.error("tally-ingest shadow", body?.kind, (e as Error).message); return reply(500, { ok: false, error: (e as Error).message }); }
+    try { return await shadowCall(dev, firm, body); } catch (e) { fail("shadow", e, body?.kind, firm); console.error("tally-ingest shadow", body?.kind, (e as Error).message); return reply(500, { ok: false, error: (e as Error).message }); }
   }
   const seen = { last_seen: new Date().toISOString() } as Record<string, unknown>;
   if (body.version) seen.version = String(body.version).slice(0, 40);
@@ -2911,7 +2918,7 @@ Deno.serve(async (req) => {
         // A bridge switched to changes only still reports a posting it took before the switch
         {
           const { data: tj, error: te } = await db.from("tally_post_jobs").select("target_bridge").eq("id", String(body.id || "")).eq("device_id", dev.id).maybeSingle();
-          if (te && !missingRel(te)) console.error("tally-ingest: posts_update target check not read", dev.id, String(body.id || "").slice(0, 60), String(te.message || "").slice(0, 200));     // 2.3.1: logged
+          if (te && !missingRel(te)) { fail("posts_update_target", te, "posts_update"); console.error("tally-ingest: posts_update target check not read", dev.id, String(body.id || "").slice(0, 60), String(te.message || "").slice(0, 200)); }     // 2.3.1: logged
           if (!te && tj?.target_bridge && tj.target_bridge !== meU) return reply(403, { ok: false, error: "This posting is for another bridge on this computer; this one does not report it." });
         }
         const st = ["taken", "running", "done", "failed"].includes(body.status) ? body.status : "running";
@@ -3092,7 +3099,7 @@ Deno.serve(async (req) => {
             if (accErr && /tally_post_id_accept_reply|could not find|does not exist|schema cache/i.test(String(accErr.message || ""))) fnName = "tally_post_id_accept";
           }
           if (fnName === "tally_post_id_accept") ({ data: accData, error: accErr } = await db.rpc("tally_post_id_accept", { p_job: id, p_id: a, p_vch: r0.alreadySent === true ? vchOf(r0) : (vchOf(r0) || vchOf(x0)) }));
-          if (accErr && !/tally_post_id_accept|schema cache|does not exist/i.test(accErr.message)) console.error(fnName, accErr.message);
+          if (accErr && !/tally_post_id_accept|schema cache|does not exist/i.test(accErr.message)) { fail("tally_post_id_accept", accErr, "posts_update"); console.error(fnName, accErr.message); }
           else if (!accErr && accData && typeof accData === "object" && (accData as any).stamped === 0) console.warn(fnName + ": stamped 0 for " + a + " (" + s(r0.id || x0.id, 60) + ") in posting " + id + ": no id of the posting matches");
         }
         let { error } = await db.from("tally_post_jobs").update(row).eq("id", id).eq("device_id", dev.id).neq("status", "cancelled");
@@ -3118,14 +3125,14 @@ Deno.serve(async (req) => {
           if (known && k && k.released_at) continue;
           releasedNow.add(fid(r.id));
           const { error: relErr } = await db.rpc("tally_post_id_release", { p_job: id, p_id: r.id, p_why: ("needs review: " + String(r.message || r.reason || r.lineError || "")).slice(0, 500) });
-          if (relErr && !/tally_post_id_release|schema cache|does not exist/i.test(relErr.message)) console.error("tally_post_id_release", relErr.message);
+          if (relErr && !/tally_post_id_release|schema cache|does not exist/i.test(relErr.message)) { fail("tally_post_id_release", relErr, "posts_update"); console.error("tally_post_id_release", relErr.message); }
         }
         for (const x of (items || []) as any[]) {
           if (!x.id || !(x.state === "failed" || x.state === "notfound") || accepted.has(fid(x.id)) || releasedNow.has(fid(x.id))) continue;
           const k = rowOf(fid(x.id));
           if (known && k && k.released_at) continue;
           const { error: relErr } = await db.rpc("tally_post_id_release", { p_job: id, p_id: x.id, p_why: String(x.reason || x.state).slice(0, 500) });
-          if (relErr && !/tally_post_id_release|schema cache|does not exist/i.test(relErr.message)) console.error("tally_post_id_release", relErr.message);
+          if (relErr && !/tally_post_id_release|schema cache|does not exist/i.test(relErr.message)) { fail("tally_post_id_release", relErr, "posts_update"); console.error("tally_post_id_release", relErr.message); }
         }
         return reply(200, stale ? { ok: true, stale: true, status } : { ok: true });
       }
@@ -3215,7 +3222,7 @@ Deno.serve(async (req) => {
         return reply(400, { ok: false, error: "unknown kind" });
     }
   } catch (e) {
-    console.error("tally-ingest", body?.kind, (e as Error).message);
+    fail("tally_ingest", e, body?.kind, firm); console.error("tally-ingest", body?.kind, (e as Error).message);
     return reply(500, { ok: false, error: (e as Error).message });
   }
-});
+}));

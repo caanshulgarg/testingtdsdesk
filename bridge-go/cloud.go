@@ -674,6 +674,7 @@ func beatLoop() {
 			defer func() {
 				if r := recover(); r != nil {
 					writeLog(fmt.Sprint("Heartbeat: ", r))
+					crashReport("heartbeat", r)
 				}
 			}()
 			if cloudOn() {
@@ -813,6 +814,7 @@ func startLightCheck(sessions []M) {
 		defer func() {
 			if r := recover(); r != nil {
 				writeLog(fmt.Sprint("Light check: ", r))
+				crashReport("light_check", r)
 			}
 			lightBusy.Store(false)
 			lightWG.Done()
