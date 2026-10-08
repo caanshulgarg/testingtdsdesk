@@ -387,8 +387,8 @@ async function bookForBeat(firm: string, name: string) {
 // Bridge 2.3.1 (2.2.2 review L-F): a line whose "<line id>:resolved" already reached FinCom is left out, as refetch does
 // (a 2.2.1 bridge resolved it and kept no mark, so a later bridge asked Tally again and sent a duplicate ":resolved"); the
 // same exception as refetch (2.3.1 H1: the only ":resolved" row held for want of a complete body) keeps it listed
-async function heldLinesFor(dev: any, firm: string, bridge: string) {
-  const out = await heldOwnLines(dev, firm, bridge, 200, () => true, "held lines", true);
+async function heldLinesFor(dev: any, firm: string, bridge: string, version = "") {
+  const out = await heldOwnLines(dev, firm, bridge, 200, () => true, "held lines", true, fastBridge(version));
   return out.length ? out : null;
 }
 // 06-Oct-2026 (the owner, NWS144 lines 4, 17 and 18: "the bridge must ask again for held lines of its own user and settle
@@ -402,12 +402,12 @@ async function heldLinesFor(dev: any, firm: string, bridge: string) {
 // which the database applies once and marks the held line 'replaced' (migrations 50-52). An older bridge ignores the
 // field. Left out when none or on any error: the beat never fails for it
 const REFETCH_MAX = 20;
-async function refetchFor(dev: any, firm: string, bridge: string) {
+async function refetchFor(dev: any, firm: string, bridge: string, version = "") {
   const out = await heldOwnLines(dev, firm, bridge, REFETCH_MAX, (r) => {
     const g = String(r?.object_guid ?? "").trim(), b = r?.body;
     const noBody = !b || typeof b !== "object" || !Array.isArray(b.vouchers) || !b.vouchers.length;
     return noBody || !g || /-0{8}$/.test(g);
-  }, "refetch", true);
+  }, "refetch", true, fastBridge(version));
   return out.length ? out : null;
 }
 // bridge 2.3.1, part B (masters): ledgersWanted, the ledgers this bridge's own held lines wait for (held with the words
@@ -473,7 +473,13 @@ function heldIncomplete(x: any): boolean {
 const HELD_SLOW_DAYS = 30;
 const SLOW_END_WORDS = ["FinCom does not ask Tally for this company's entries", "Tally did not answer in time for this entry when asked again"];
 function slowEnded(why: unknown): boolean { const w = String(why ?? ""); return SLOW_END_WORDS.some((x) => w.includes(x)); }
-async function heldOwnLines(dev: any, firm: string, bridge: string, max: number, want: (r: any) => boolean, what: string, unresolved = false) {
+// 2.3.4 (review M1): those lines go to a bridge of 2.3.4 or later only (the beat's version): an older one has no fast entry
+// request (it would ask the slow way, or end the line again at once); it gets its last 7 days' lines as before
+function fastBridge(version: unknown): boolean {
+  const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(String(version ?? "").trim());
+  return !!m && newer(m[1] + "." + m[2] + "." + m[3], "2.3.4") >= 0;
+}
+async function heldOwnLines(dev: any, firm: string, bridge: string, max: number, want: (r: any) => boolean, what: string, unresolved = false, fast = false) {
   try {
     if (!bridge) return [];
     const since = new Date(Date.now() - 7 * 86400000).toISOString();
@@ -484,7 +490,7 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
     let rows = (data as any[]).filter((r) => r && String(r.device_id ?? dev.id) === String(dev.id) && String(r.bridge ?? "") === bridge && Date.parse(String(r.received_at)) > Date.now() - 7 * 86400000 && want(r))
       .sort((a, b) => Date.parse(String(a.received_at)) - Date.parse(String(b.received_at)));
     // 2.3.4: the slow-ended lines of 7 to 30 days ago (kept only below, once their ":resolved" rows are read), after these
-    if (unresolved) {
+    if (unresolved && fast) {
       const since30 = new Date(Date.now() - HELD_SLOW_DAYS * 86400000).toISOString();
       const { data: d30, error: e30 } = await db.from("tally_recorder_lines").select("line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date, book_id, received_at, bridge, device_id, object_guid, body, held_why, payload")
         .eq("firm_id", firm).eq("device_id", dev.id).eq("bridge", bridge).eq("state", "held").in("event", ["created", "altered", "imported"]).gt("received_at", since30).lte("received_at", since)
@@ -508,7 +514,8 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
       // rows are here it is never listed again (asked once). When the second comes complete it is applied once and, by 50-53's
       // rules, replaces the held line (by its line id) and the earlier held ":resolved" row (the same GUID at an AlterID not
       // above its own); the earlier one never had a body, so it is never applied
-      const rids = [...new Set(rows.map((r) => String(r.line_id || "") + ":resolved"))].slice(0, 400);
+      // 2.3.4 (review L4): every listed line's id (up to 400 of the last 7 days and 400 older), 60 at a time
+      const rids = [...new Set(rows.map((r) => String(r.line_id || "") + ":resolved"))];
       // 2.3.1 (2.3.0 review round 3 L2): asked 60 ids at a time (400 in one URL could pass a gateway's limit and fail
       // quietly to an empty list); a failure is logged. 2.3.1 (masters): id, payload and received_at for the ledger wait
       const rs: any[] = [];
@@ -2605,9 +2612,9 @@ Deno.serve(async (req) => {
         // alterid or both; left out when the cloud has no column (the bridge keeps its own default)
         const rs = (dev as any).recorder_source, recorderSource = rs === "addon" || rs === "alterid" || rs === "both" ? rs : null;
         // FinCom Bridge 2.2.2: the lines held without their entry, asked of Tally again by the bridge (left out when none)
-        const heldLines = await heldLinesFor(dev, firm, me.id);
+        const heldLines = await heldLinesFor(dev, firm, me.id, me.entry.version);
         // 06-Oct-2026: this bridge's own held lines without their entry's body or with a placeholder GUID, at most 20
-        const refetch = await refetchFor(dev, firm, me.id);
+        const refetch = await refetchFor(dev, firm, me.id, me.entry.version);
         // bridge 2.3.1 (masters): the ledgers this bridge's held lines wait for, fetched by the bridge before the entry
         const ledgersWanted = await ledgersWantedFor(dev, firm, me.id);
         return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(heldLines ? { heldLines } : {}), ...(refetch ? { refetch } : {}), ...(ledgersWanted ? { ledgersWanted } : {}), ...(co ? { notMain: true, changesOnly: true, error: CHANGES_ONLY } : may ? {} : { notMain: true }), ...ctl.out });

@@ -7,7 +7,8 @@ other held line older than 7 days (its words not the slow rule's, e.g. "Tally di
 slow-ended line older than 30 days; one whose ":resolved" came twice (asked once more already) or came with a body; another
 bridge's. The last 7 days are as before. Through the real cloud function (server/tally-cloud/index.ts) under Deno against
 the stand-in for Supabase (fake_supabase.py); no database change (no migration).
-Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno). RED before the change: S1-S3 not listed."""
+Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno). RED before the change: S1-S3 not listed. Review M1 (08-Oct-2026): listed only to a bridge of 2.3.4 or later (the beat's
+version); an older bridge gets its last 7 days' lines only."""
 import os, sys, json, time, hashlib, subprocess, urllib.request, shutil, threading
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import fake_supabase as FS
@@ -84,6 +85,19 @@ try:
     s3 = next((x for x in r.get("heldLines") or [] if x.get("line_id") == "S3"), {})
     ok(set(s3) == {"line_id", "company", "company_guid", "event", "master_id", "vch_type", "vch_no", "vch_date"} and s3.get("master_id") == "25692" and s3.get("vch_date") == "20261006",
        "each row: the same fields as before, nothing added (%s)" % s3)
+    # review M1: a bridge before 2.3.4 (no fast request; it would ask such a line the slow way, or end it again at once): the
+    # 7-30-day lines are not listed to it; its last 7 days' lines are, as before. Read again with 2.3.4
+    for ver in ("2.3.3", "2.2.2", ""):
+        g = dict(GA, version=ver)
+        c, r = call({"kind": "beat", "version": ver, "bridge": g, "tally": True, "open": []})
+        h3 = [x.get("line_id") for x in (r.get("heldLines") or [])]
+        f3 = [x.get("line_id") for x in (r.get("refetch") or [])]
+        ok(c == 200 and "R1" in h3 and not {"S1", "S2", "S3"} & set(h3 + f3), "bridge %r: only its last 7 days' lines (%s / %s)" % (ver, h3, f3))
+    for ver in ("2.3.4", "2.3.10", "2.4.0", "3.0.0"):
+        g = dict(GA, version=ver)
+        c, r = call({"kind": "beat", "version": ver, "bridge": g, "tally": True, "open": []})
+        h3 = [x.get("line_id") for x in (r.get("heldLines") or [])]
+        ok(c == 200 and {"S1", "S2", "S3"} <= set(h3), "bridge %r: the slow-ended lines of 7 to 30 days listed (%s)" % (ver, h3))
     c, r = call({"kind": "beat", "version": "2.3.4", "bridge": GO, "tally": True, "open": []})
     ok([x.get("line_id") for x in (r.get("heldLines") or [])] == ["N5"], "the other bridge gets its own slow-ended line only (%s)" % [x.get("line_id") for x in (r.get("heldLines") or [])])
 finally:
