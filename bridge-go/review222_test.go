@@ -213,11 +213,11 @@ func TestR222HardTwoSecondStop(t *testing.T) {
 	if logLines("off: Tally took") != 0 || logLines("(FinComVoucherObject, try 1); trying again by itself at") != 1 {
 		t.Fatalf("switched off, or the retry not said: %s", readText(logFile()))
 	}
-	// 2.3.4 (the owner's decision of 08-Oct-2026, option (a)): up held at once, ended with the Day Book words
-	if sent := c.recSent(); len(sent) != 1 || str(sent[0]["xml"]) != "" || str(sent[0]["heldWhy"]) != "Tally took longer than 2 s for this entry; upload that day's Day Book to settle it" {
+	// 2.3.4 (the owner's answer B, 08-Oct-2026): up held at once, asked once more 5 minutes later
+	if sent := c.recSent(); len(sent) != 1 || str(sent[0]["xml"]) != "" || !strings.HasPrefix(str(sent[0]["heldWhy"]), "waiting: Tally took longer than 2 s; FinCom asks once more at ") {
 		t.Fatalf("not held at once: %v", sent)
 	}
-	// never asked again
+	// not asked again before those 5 minutes
 	for i := 0; i < 3; i++ {
 		retryDue()
 		uploadAll(t)

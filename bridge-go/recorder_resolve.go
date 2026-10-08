@@ -317,6 +317,45 @@ func liveFreshSpacing() time.Duration {
 	return time.Duration(keepNumZero("RecorderFreshRetryMs", keepNumZero("RecorderNumberRetryMs", 10000))) * time.Millisecond
 }
 
+// 2.3.4 (the owner's answer B, 08-Oct-2026): how long a line whose fast request was stopped waits for its one more ask
+// (RecorderStopRetrySec, 5 minutes)
+func liveStopRetry() time.Duration {
+	return time.Duration(keepNum("RecorderStopRetrySec", 300)) * time.Second
+}
+
+// 2.3.4 (answer B): the most FinComVoucherObject asks a line gets in all (its first and one more)
+const liveObjAsksMax = 2
+
+// "waiting: Tally took longer than 2 s; FinCom asks once more at HH:MM" (5 minutes on, or the retry schedule's next try
+// when that is later)
+func liveStopOnceWords() string {
+	next := nowFn().Add(liveStopRetry())
+	if r := retryNext(); r.After(next) {
+		next = r
+	}
+	return "waiting: " + liveStopWhat() + "; FinCom asks once more at " + next.Format("15:04")
+}
+
+// 2.3.4 (answer B): the live lines whose first fast request was stopped: sent held now with the once-more words, joining
+// the held list with that one ask used (asked once more after liveStopRetry; a second stop ends them). A cancel / delete
+// check is not here (held as one this Tally could not be asked about, as before)
+func liveHeldStopOnce(cs []*change) {
+	words := liveCapWhy(liveStopOnceWords())
+	for _, c := range cs {
+		if c.isLedger() {
+			continue
+		}
+		live.mu.Lock()
+		c.bodyTried, c.heldWhy = true, words
+		if c.fetchesIds() && c.source == "addon" && c.vchDate != "" {
+			c.fresh, c.dueNow, c.freshSlow, c.stopWait = true, false, true, true
+			c.freshTries++
+		}
+		live.mu.Unlock()
+		liveDecide(c, "held at once: "+words+" (sent now without its body; FinCom shows it held, and this bridge asks Tally once more)")
+	}
+}
+
 // 2.3.4 (option (a)): the words a line ends with when its fast request was stopped at the limit
 func liveStopEndWords() string {
 	return liveStopWhat() + " for this entry; upload that day's Day Book to settle it"
@@ -552,6 +591,11 @@ type heldLine struct {
 	// never ended): set on every line this version keeps; a line without it came from an older bridge and gets exactly
 	// one ask with the fast request on the upgrade, whatever its old tries or final
 	V234 bool
+	// 2.3.4 (the owner's answer B, 08-Oct-2026): ObjAsks: the FinComVoucherObject asks of this line that reached Tally in
+	// this version (its first fetch included; never more than liveObjAsksMax); StopWait: its last one was stopped at the
+	// limit: its one more ask waits liveStopRetry after it
+	ObjAsks  int
+	StopWait bool
 }
 
 // 2.3.4: the words a held line ends with when Tally's voucher is not its entry or there is nothing to ask Tally by
@@ -582,7 +626,7 @@ func liveHeldLoad() (M, map[string]heldLine) {
 			LineGuid: str(e["lineGuid"]), LineFid: str(e["lineFid"]), Mismatch: truthy(e["idsMismatch"]), Final: truthy(e["final"]), LineAlter: toI64(e["lineAlter"]),
 			Cloud: truthy(e["fromFinCom"]), KeepGuid: str(e["keepGuid"]), KeepAlter: str(e["keepAlter"]), Refetch: truthy(e["refetch"]), TriesVer: str(e["triesVersion"]), Again: truthy(e["again"]), LedgerAgain: truthy(e["ledgerAgain"]), Slow: toInt(e["slow"]),
 			Fresh: truthy(e["fresh"]), FreshTries: toInt(e["freshTries"]), FreshSlow: truthy(e["freshSlow"]), Allow: toInt(e["allow"]), Asked: toInt(e["asked"]),
-			FastAgain: truthy(e["fastAgain"]), V234: truthy(e["v234"])}
+			FastAgain: truthy(e["fastAgain"]), V234: truthy(e["v234"]), ObjAsks: toInt(e["objAsks"]), StopWait: truthy(e["stopWait"])}
 	}
 	return all, items
 }
@@ -594,7 +638,8 @@ func liveHeldSave(all M, items map[string]heldLine) {
 			"added": h.Added, "last": h.Last, "tries": h.Tries, "event": h.Ev, "why": liveCapWhy(h.Why), "lineGuid": h.LineGuid, "lineFid": h.LineFid,
 			"idsMismatch": h.Mismatch, "final": h.Final, "lineAlter": h.LineAlter, "fromFinCom": h.Cloud,
 			"keepGuid": h.KeepGuid, "keepAlter": h.KeepAlter, "refetch": h.Refetch, "triesVersion": h.TriesVer, "again": h.Again, "ledgerAgain": h.LedgerAgain, "slow": h.Slow,
-			"fresh": h.Fresh, "freshTries": h.FreshTries, "freshSlow": h.FreshSlow, "allow": h.Allow, "asked": h.Asked, "fastAgain": h.FastAgain, "v234": h.V234}
+			"fresh": h.Fresh, "freshTries": h.FreshTries, "freshSlow": h.FreshSlow, "allow": h.Allow, "asked": h.Asked, "fastAgain": h.FastAgain, "v234": h.V234,
+			"objAsks": h.ObjAsks, "stopWait": h.StopWait}
 	}
 	all["items"] = o
 	if err := saveFile(liveHeldFile(), jsonText(all)); err != nil {
@@ -631,6 +676,10 @@ func liveHeldAdd(cs []*change) {
 			// 2.3.3: sent held at once: asked again at the next try (due at once when nothing was asked yet)
 			h := items[c.lineId]
 			h.Fresh, h.FreshTries, h.FreshSlow = true, c.freshTries, c.freshSlow
+			if mid != "" {
+				h.ObjAsks = c.freshTries // 2.3.4 (answer B): its first fetch's asks, by its MasterID (the fast request)
+			}
+			h.StopWait = c.stopWait
 			if c.dueNow {
 				h.Last = ""
 			}
@@ -913,6 +962,7 @@ func liveResolveTurn() {
 			// 2.3.4: a line an older bridge kept (tries 20, final, refetch, any ask count): one ask with the fast request now
 			// (FastAgain: its one ask is this version's, whatever an older bridge sent or ended; Added now: not dropped as 7 days old)
 			h.V234, h.FastAgain, h.Tries, h.Final, h.Asked, h.Allow, h.Slow, h.Last, h.Why = true, true, 0, false, 0, 1, 0, "", ""
+			h.ObjAsks, h.StopWait = 0, false // 2.3.4 (answer B): its asks in this version: the upgrade ask, and one more after a stop
 			h.Added = now.Format(time.RFC3339)
 			items[id] = h
 			changed = true
@@ -923,7 +973,10 @@ func liveResolveTurn() {
 		done := live.sent[rid] && (!h.Again || live.items231[rid]) && !liveLedgerAgainDue(h) // 2.3.1 review H1: an older bridge's resolution is not this one
 		done = done || live.ended[id]                                                        // 2.3.2: ended with the Day Book words
 		endNow := false
-		if h.FastAgain {
+		if h.FastAgain && h.StopWait {
+			// 2.3.4 (answer B): its one fast ask was stopped: its one more ask is still owed (done only once resolved here)
+			done = live.queued[rid] || live.mine[rid]
+		} else if h.FastAgain {
 			// next-fastfetch: an earlier bridge's ending is not this one: done once its one fast ask went (or its ":resolved" waits).
 			// 2.3.4 (re-review M1): its ask went but nothing came of it (an answer that could not be read, another error, a
 			// posting stopping it, no entry): it ends now with the Day Book words, never dropped without its ":resolved"
@@ -948,7 +1001,8 @@ func liveResolveTurn() {
 		}
 		// 2.3.2 (issue 232, c): its company is marked "entry fetch stopped: over 2 s": it ends with the plain words, nothing
 		// asked of Tally (2.3.3: every held line of it, old or new). 2.3.3: its one ask again is used: it ends with the Day Book words
-		if !waiting && !h.Final && (slowMarked(h.Company, h.CGUID) || h.Asked >= h.allow()) {
+		// 2.3.4 (answer B): never a third fast ask, whatever came back (an answer that could not be read is not a try)
+		if !waiting && !h.Final && (slowMarked(h.Company, h.CGUID) || h.Asked >= h.allow() || h.ObjAsks >= liveObjAsksMax) {
 			w := liveHeldOnceGiveUp
 			if slowMarked(h.Company, h.CGUID) {
 				w = slowWords
@@ -986,6 +1040,9 @@ func liveResolveTurn() {
 		spacing := wait
 		if h.Fresh {
 			spacing = liveFreshSpacing() // 2.3.3: sent held at once: asked at the next try
+		}
+		if h.StopWait {
+			spacing = liveStopRetry() // 2.3.4 (answer B): its fast request was stopped: its one more ask 5 minutes on
 		}
 		if last, err := time.Parse(time.RFC3339, h.Last); err == nil && now.Sub(last) < spacing {
 			continue
@@ -1027,6 +1084,7 @@ func liveResolveTurn() {
 	retryIds := map[string]bool{}
 	timedOut := map[string]bool{} // asked, and stopped at 2 s or not answered
 	objStop := map[string]bool{}  // 2.3.4 (option (a)): of them, its FinComVoucherObject stopped at the limit
+	objAsked := map[string]bool{} // 2.3.4 (answer B): its FinComVoucherObject request reached Tally this turn
 	slowEnd := map[string]bool{}  // 2.3.2 (c): its company was marked meanwhile: ended with the plain words
 	deadline := time.Now().Add(time.Duration(keepNum("RecorderResolveTurnSec", 20)) * time.Second)
 	total, fromFinCom := len(items), 0
@@ -1069,6 +1127,9 @@ func liveResolveTurn() {
 		if h.FastAgain && reached {
 			liveFastAskedNote(h.ID) // next-fastfetch: its one fresh ask reached Tally: never asked once more
 		}
+		if reached && h.MID != "" && h.Ev != "deleted" && h.Ev != "cancelled" {
+			objAsked[h.ID] = true
+		}
 		if gaveWay(err) {
 			// review L1: a request a posting stopped after it reached Tally counts as its ask (Tally had it); one that never
 			// reached Tally (it waited for the lock, or gave way before it was sent) does not (re-review L1)
@@ -1093,7 +1154,7 @@ func liveResolveTurn() {
 			// those not asked yet go at the retry schedule's next try, as before
 			timedOut[h.ID] = true
 			if errors.Is(err, errRecorderStop) && h.MID != "" && h.Ev != "deleted" && h.Ev != "cancelled" {
-				objStop[h.ID] = true // 2.3.4 (option (a)): the fast request stopped at the limit: the line ends now, whatever its asks left
+				objStop[h.ID] = true // 2.3.4 (option (a), answer B): the fast request stopped at the limit
 			}
 			for _, r := range ask[len(got)+1:] {
 				retryIds[r.ID] = true
@@ -1165,13 +1226,29 @@ func liveResolveTurn() {
 			items[id] = h
 		}
 	}
+	for id := range objAsked {
+		if h, had := items[id]; had {
+			h.ObjAsks++ // 2.3.4 (answer B): one more of its fast asks; its one more ask after a stop is now spent
+			h.StopWait = false
+			items[id] = h
+		}
+	}
 	for id := range timedOut {
 		if h, had := items[id]; had {
 			h.Asked++ // 2.3.3: its ask is used; the last one ends it with the Day Book words
 			if objStop[id] {
-				// 2.3.4 (the owner's decision of 08-Oct-2026, option (a); re-review M4): ended at its first stop, whatever it had left
-				ends2 = append(ends2, heldEnd{h, liveStopEndWords()})
-				delete(items, id)
+				// 2.3.4 (the owner's answer B, 08-Oct-2026; re-review M4): a stop of its fast request: asked once more after
+				// 5 minutes when it had one fast ask only; its second ends it with the Day Book words. Never more than two
+				if h.ObjAsks >= liveObjAsksMax {
+					ends2 = append(ends2, heldEnd{h, liveStopEndWords()})
+					delete(items, id)
+					continue
+				}
+				h.StopWait = true
+				h.Allow = minI(maxI(h.allow(), h.Asked+1), 2)
+				h.Why = liveCapWhy(liveStopOnceWords())
+				liveSay(h.Type, h.No, h.Date, h.MID, h.ID, "held: "+h.Why+" (its fast request stopped; asked once more, never again after that)")
+				items[id] = h
 				continue
 			}
 			if h.Asked >= h.allow() {
