@@ -13,6 +13,9 @@ repeat of a recorder line. On throwaway PostgreSQL (pg_stand, port 30630 unless 
   5. a bridge that marks: "ledger" after "" is stored; "ledger" again is a repeat; "items" is stored; "" again is a repeat.
   6. a row ended 'failed' is no repeat: the line is taken again.
   7. the queued path (tally_recorder_enqueue, then the drain): the same lines queued twice end in one row each.
+  8. review M2 of 2.4.0 part 2 (08-Oct-2026): 63, 67 (next-renumber) and 69 (next-push) each replace tally_recorder_line.
+     Where the installed text carries "-- 67" or "-- 69" (67 or 69 has run), 63 STOPS: it raises, the transaction is
+     rolled back, nothing changed (the line's text and the index as they were); on 60's text it runs as before.
 Prints md5(prosrc) of tally_recorder_line before and after 63, and the file's md5.
 RED: before the file exists it stops at the first check; with 60's text sections 1, 2, 4, 5 and 7 fail."""
 import os, re, sys, json, hashlib, subprocess, difflib
@@ -111,6 +114,17 @@ try:
     db.sql("insert into tally_sync_cursor (book_id, firm_id, last_voucher_alterid, start_at, start_guid) values (%s, %s, %d, '2026-10-04 10:00+05:30', %s)" % (q(B), q(F), START, q(CG)))
     before = prosrc()
     print("  tally_recorder_line prosrc md5 under 60: %s" % before)
+    print("== 8. 63 refuses to run over 67's or 69's line")
+    def60 = db.one("select pg_get_functiondef('public.tally_recorder_line(uuid, uuid, jsonb, bigint)'::regprocedure)")
+    for mk in ("67", "69"):
+        ok("$function$\ndeclare" in def60, "8. 60's text as the database gives it")
+        r0 = psql_text(def60.replace("$function$\ndeclare", "$function$\n-- %s (a stand-in for migration %s's text over 60's)\ndeclare" % (mk, mk), 1) + ";")
+        ok(r0.returncode == 0, "8. a line carrying '-- %s' installed: %s" % (mk, r0.stderr[-200:]))
+        was = prosrc()
+        rr = psql_text(text)
+        ok(rr.returncode != 0 and ("migration " + mk) in rr.stderr and "nothing changed" in rr.stderr, "8. 63 over a line with '-- %s': refused (%s)" % (mk, (rr.stderr.strip().splitlines() or [""])[-1][:200]))
+        ok(prosrc() == was and db.one("select count(*) from pg_class where relname = 'tally_recorder_lines_line'") == "0", "8. nothing changed (the line's text as it was, no index)")
+    ok(psql_text(def60 + ";").returncode == 0 and prosrc() == before, "8. 60's line put back")
     if os.environ.get("RED_WITHOUT_63") != "1":
         for i in (1, 2):
             r = psql_text(text)

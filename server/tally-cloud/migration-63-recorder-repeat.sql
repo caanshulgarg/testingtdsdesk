@@ -19,9 +19,23 @@
 --   2. An index on (book_id, line_id) for that look-up (not unique, for the reason above).
 -- Nothing else is touched; no row is changed by running it. Tested on pg_stand only: tests/run_migration63.py and
 -- tests/run_recorder_repeat_server.py (the real tally-ingest under Deno).
+-- Order with 67 (branch next-renumber) and 69 (branch next-push), which also replace tally_recorder_line on 60's text
+-- (review M2 of 2.4.0 part 2, 08-Oct-2026): this file STOPS (raises, the transaction rolled back, nothing changed) where
+-- the installed line carries "-- 67" or "-- 69" (67 or 69 has run), so their changes are never dropped silently; there run
+-- the one combined definition of the release instead (69 stops likewise where 63 has run).
 
 begin;
 set local lock_timeout = '10s';     -- never queue long behind a session holding a table here (a timeout rolls the whole file back: run it again)
+
+do $guard$
+declare m text;
+begin
+  select case when p.prosrc like '%-- 67%' then '67' else '69' end into m from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public' and p.proname = 'tally_recorder_line' and (p.prosrc like '%-- 67%' or p.prosrc like '%-- 69%') limit 1;
+  if m is not null then
+    raise exception 'migration 63 is written on 60''s tally_recorder_line, and migration % has run here: run the release''s combined tally_recorder_line instead (nothing changed)', m;
+  end if;
+end $guard$;
 
 -- ---------------------------------------------------------------- 2. the look-up's index
 create index if not exists tally_recorder_lines_line on public.tally_recorder_lines (book_id, line_id);
