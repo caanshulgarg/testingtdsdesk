@@ -99,10 +99,9 @@ const AlertHub = {
   // a line waiting because of FinCom's side: no body, the add-on's placeholder GUID ("<company GUID>-00000000"), no GUID,
   // FinCom's own posting coming back, or the queue; then FinCom fetches the details itself and nothing is to be done
   oursHeld(l){
-    const why = String(l.held_why || "");
-    if (/^month locked/i.test(why)) return false;
-    return l.state === "queued" || l.state === "received" || l.state === "failed" && /queue|timeout|server/i.test(why) ||
-      /no entry body|waiting for the entry's details|no GUID|placeholder|FinCom (posting|id) /i.test(why) || /-0{8}$/.test(String(l.object_guid || ""));
+    // review of f0f1531f: the one classifier (Rec.needKind, src/js/61): "ours" = being fetched, settles by itself; the
+    // page and the bell can never disagree. A line a person must settle is never "nothing to do"
+    return typeof Rec === "object" && Rec.needKind ? !Rec.needKind(l) : false;
   },
   // "1 entry", "3 entries"
   n(k){ return k + (k === 1 ? " entry" : " entries"); },
@@ -203,7 +202,9 @@ const AlertHub = {
           out.push(Object.assign(base, {sev: "warn", text: who + ": " + (hd.length === b.other.length ? this.heldSay(hd, true) + "."
               : (b.other.length === 1 ? "1 change" : b.other.length + " changes") + " from Tally " + (b.other.length === 1 ? "is" : "are") + " waiting, not yet in the books" + (locked.length === b.other.length ? " (the month is locked)." : ".")),
             // FinCom 2.3.5: lines the bridge gave up on say the one thing to do (Sync activity's "Needs you" has each day's button)
-            fix: locked.length === b.other.length ? "Apply them on Sync activity, or unlock the month." : b.other.every(l => typeof Rec === "object" && Rec.needKind && Rec.needKind(l) === "daybook")
+            fix: locked.length === b.other.length ? "Apply them on Sync activity, or unlock the month." : b.other.every(l => Rec.needKind(l) === "readstop")
+              ? "Needs you: reading from Tally is stopped from FinCom on that computer; an owner resumes it on the Tally page."
+              : b.other.every(l => ["daybook", "dupid"].includes(Rec.needKind(l)))
               ? "Needs you: upload the Day Book for " + [...new Set(b.other.map(l => this.heldDay(l)).filter(Boolean))].sort().map(d => fmtDate(tallyDate(d))).join(", ") + " (Sync activity has each day's button)."
               : hd.length === b.other.length ? "See them on Sync activity." : "See why on Sync activity.", act: {label: "Sync activity", run: () => Rec.openActivity(b.cid)}}));
         } else if (b.off.length){

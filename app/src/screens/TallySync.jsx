@@ -22,6 +22,26 @@ const n = (k) => k + (k === 1 ? " entry" : " entries");
 // Clear (08-Oct-2026): each "Needs you" group and the "being fetched" note has a Clear; cleared (by this person: their
 // lines, AlertClear in src/js/63-alerts.js) they are not shown again, until another line comes. The table below keeps
 // every line, with its Apply now: clearing hides the notification only, it never applies or releases a line.
+// the ONE action of a "Needs you" group (Rec.needKind, src/js/61): who may do it, else the words say who does
+function NeedAction({ g, canApply, busy }) {
+  const owner = Rec.owner(), day = g.day ? fmtDate(g.day) : "that day";
+  const b = (act, label, go, extra) => <button className="btn small" data-needs-act={act} {...extra} onClick={go}>{label}</button>;
+  switch (g.kind) {
+    case "daybook": case "dupid":
+      return canApply && g.cid ? b("daybook", "Upload the Day Book for " + day, () => Rec.uploadDay(g.cid, g.day), { "data-needs-daybook": "" }) : <span className="note">{" (a member of the firm who may write does this)"}</span>;
+    case "readstop":
+      return owner ? b("resume", "Resume reading", () => Rec.resumeOn(g), { "data-needs-resume": "" }) : null;
+    case "baseline":
+      return b("tally", "Open the Tally page", () => Rec.openTallyPage());
+    case "masters":
+      return g.cid ? b("masters", "Open From Tally", () => Rec.openClientTab(g.cid, "books:import")) : null;
+    case "locked":
+      return g.cid ? b("tieout", "Open Tie-out", () => Rec.openClientTab(g.cid, "books:tieout")) : null;
+    default:
+      return canApply ? b("apply", "Apply now", () => Rec.releaseAll(g.lines), { "data-needs-apply": "", disabled: busy, title: busy ? "Applying the lines already asked for" : undefined })
+        : <span className="note">{" (a member of the firm who may write does this)"}</span>;
+  }
+}
 function SyncFlow({ flow, canApply, busy }) {
   const AC = typeof AlertClear === "object" ? AlertClear : null;
   const needs = flow.needs.map((g) => ({ g, clr: AC ? AC.item("needs:" + g.key, g.lines.map((r) => AlertHub.lineAtom(r)), g.text) : null })).filter(({ clr }) => !clr || !AC.cleared(clr));
@@ -34,9 +54,7 @@ function SyncFlow({ flow, canApply, busy }) {
       <b>Needs you</b>
       {needs.map(({ g, clr }) => <div key={g.key} data-needs-group={g.key} style={{ margin: "6px 0 0" }}>
         <span data-needs-text="">{g.text}</span>{" "}
-        {g.kind === "daybook" ? (canApply && g.cid && <button className="btn small" data-needs-daybook="" onClick={() => Rec.uploadDay(g.cid, g.day)}>{"Upload the Day Book for " + (g.day ? fmtDate(g.day) : "that day")}</button>)
-          : canApply && <button className="btn small" data-needs-apply="" disabled={busy} title={busy ? "Applying the lines already asked for" : undefined} onClick={() => Rec.releaseAll(g.lines)}>Apply now</button>}
-        {!canApply && <span className="note">{" (a member of the firm who may write does this)"}</span>}
+        <NeedAction g={g} canApply={canApply} busy={busy} />
         {" "}<ClearBtn x={clr} />
         <details style={{ margin: "2px 0 0" }}><summary className="note" style={{ cursor: "pointer" }}>Which entries</summary>
           {g.lines.map((r) => <div key={r.id} className="note" data-sync-needs-line={String(r.id)}>{Rec.entry(r) + (r.pc ? " from " + r.pc : "") + ", received " + tallyHm(r.received_at) + (r.held_why ? ": " + r.held_why : "")}</div>)}</details>
