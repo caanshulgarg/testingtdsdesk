@@ -1,0 +1,9 @@
+;; probe-brs2.tdl (bank-date probe, harness only)
+[#Form: BankRecon]
+    On : Form Accept : Yes : Call : FCRPWrite : "brs2_pre"
+    On : Form Accept : Yes : Form Accept
+    On : Form Accept : Yes : Call : FCRPWrite : "brs2_post"
+
+[Collection: FCRPAlivebrs2]
+    Type : Company
+

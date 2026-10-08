@@ -1,0 +1,7 @@
+;; probe-sys-beforesave.tdl (bank-date probe, harness only)
+[System: Events]
+    FCRPsysbeforesave : Before Save Object : Yes : Call : FCRPWrite : "sys-beforesave"
+
+[Collection: FCRPAlivesysbeforesave]
+    Type : Company
+
