@@ -29,7 +29,8 @@ CHECK 2 - A SAVE IN THE LARGE COMPANY ENTERS AT ONCE
 
 CHECK 3 - NO COMPANY MARKED
    Over an hour of normal work, NWS144's card on the Tally page never says "FinCom has stopped asking Tally for this
-   company's entries".
+   company's entries". An entry Tally takes over 2 s to give shows held with "Tally took longer than 2 s for this entry;
+   upload that day's Day Book to settle it"; the next entries of the same company still come in with their details.
 
 CHECK 4 - THE HELD LINES OF 2.3.3 SETTLE
    Within half an hour of installing, GARG SHEKHAR's, IX DESIGNS' and VMS EVENTS' held lines (the 29 Journals of 06-Oct

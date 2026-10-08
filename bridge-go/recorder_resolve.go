@@ -317,6 +317,11 @@ func liveFreshSpacing() time.Duration {
 	return time.Duration(keepNumZero("RecorderFreshRetryMs", keepNumZero("RecorderNumberRetryMs", 10000))) * time.Millisecond
 }
 
+// 2.3.4 (option (a)): the words a line ends with when its fast request was stopped at the limit
+func liveStopEndWords() string {
+	return liveStopWhat() + " for this entry; upload that day's Day Book to settle it"
+}
+
 // "Tally took longer than 2 s" (the stop as configured)
 func liveStopWhat() string {
 	return "Tally took longer than " + strconv.FormatFloat(liveLimitSec(), 'f', -1, 64) + " s"

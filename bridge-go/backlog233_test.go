@@ -317,8 +317,9 @@ func TestBacklog233EveryOtherTry(t *testing.T) {
 	}
 }
 
-// --- 3. a company at 2.2 s on every entry is marked even when the only background requests are its entry requests: the
-// beat's small check (the light company check) answered in time counts as another request; a whole-Tally freeze does not
+// --- 3. a company at 2.2 s on every entry, the only background requests its entry requests and the beat's small check:
+// 2.3.3 marked it; 2.3.4 (the owner's decision of 08-Oct-2026, option (a)) never marks it: each entry's line ends with the
+// Day Book words, asked once
 func TestBacklog233SlowMarkedWithOnlyEntryRequests(t *testing.T) {
 	p, f, c := backlog233Bridge(t)
 	slowEntries(f, 0)
@@ -345,8 +346,8 @@ func TestBacklog233SlowMarkedWithOnlyEntryRequests(t *testing.T) {
 			break
 		}
 	}
-	if marked < 0 {
-		t.Fatalf("a company at 2.2 s on every entry was never marked in 45 minutes:\n%s", cutTail(readText(logFile()), 4000))
+	if marked >= 0 {
+		t.Fatalf("a company at 2.2 s on every entry was marked after %d s:\n%s", marked, cutTail(readText(logFile()), 4000))
 	}
 	f.mu.Lock()
 	for _, id := range f.reqs[reqs0:] {
@@ -356,11 +357,14 @@ func TestBacklog233SlowMarkedWithOnlyEntryRequests(t *testing.T) {
 		}
 	}
 	f.mu.Unlock()
-	// every line of it is in the cloud: held with words, nothing silent
+	// every line of it is in the cloud: held, ended with the Day Book words, each entry asked once
 	for _, s := range c.recSent() {
-		if str(s["xml"]) == "" && str(s["heldWhy"]) == "" {
-			t.Fatalf("a line without words: %v", s)
+		if str(s["xml"]) != "" || str(s["heldWhy"]) != liveStopEndWords() {
+			t.Fatalf("a line: %v", s)
 		}
+	}
+	if n := f.n(vchObjectID); n != 16 || len(c.recSent()) != 16 {
+		t.Fatalf("16 entries: %d asks, %d lines", n, len(c.recSent()))
 	}
 }
 

@@ -30,8 +30,10 @@ exact request and the field comparison are in `docs/fast-request-form.md`.
    An entry Tally keeps in a form whose lines the strip cannot keep whole (an invoice made in voucher mode: stock under
    the sales line) is held with the Day Book words, never sent with lines missing. Every kind of entry was compared on
    real answers of all five releases (docs/fast-request-form.md section 9).
-3. **No company should need marking slow.** Only the new request's stops count toward the mark. A company 2.3.3 marked is
-   asked again (the mark lifts with the new version).
+3. **No company is marked slow.** The owner's decision of 08-Oct-2026: "When FinCom's fast request for one entry takes more than 2 seconds, the bridge stops waiting as today, sends that entry's line to FinCom as held, and ends it with 'upload that day's Day Book to settle it'. The slow answer does not count towards marking the company slow; the company's other entries keep being fetched normally. The 2-second stop itself is unchanged."
+   So an entry Tally takes over 2 s to give (a very large invoice: about 600 items or more; or Tally busy at that moment)
+   goes to FinCom held with "Tally took longer than 2 s for this entry; upload that day's Day Book to settle it" and is not
+   asked again; nothing marks the company. A company 2.3.3 marked is asked again (the mark lifts with the new version).
 4. **Lines 2.3.3 ended get one more ask.** A held line 2.3.3 ended with the Day Book words (a slow company's) is asked
    once more with the new request when FinCom lists it; if Tally gives the entry it enters the books, replacing the held
    line; if not, it ends again with the Day Book words and FinCom stops listing it; it is never asked a third time.
