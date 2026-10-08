@@ -76,6 +76,7 @@ with sync_playwright() as p:
     pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
     E = lambda js, *a: pg.evaluate(js, *a)
     txt = lambda sel: pg.inner_text(sel).replace("\n", " ").strip() if pg.locator(sel).count() else ""
+    tc = lambda sel: (pg.text_content(sel) or "").replace("\n", " ").strip() if pg.locator(sel).count() else ""   # 2.3.5: the lines under "Which entries" are folded
     hm = lambda m: E("(m) => tallyHm(Date.now() - m * 60000)", m)
     cid = E(SETUP, ["owner", DEVS, LINES, ""]); pg.wait_for_timeout(300)
     E("() => navHome('tally')"); pg.wait_for_timeout(1500)
@@ -97,13 +98,15 @@ with sync_playwright() as p:
     ok("ABC Traders Pvt Ltd" in r(104) and "Ledger renamed" in r(104) and "Already in the books" in r(104), "a ledger line: the ledger's name, Ledger renamed, Already in the books (%s)" % r(104))
     ok("Not entered: no such entry" in r(105) and "Deleted" in r(105), "failed, with why (%s)" % r(105))
     ok("Received, not yet entered in the books" in r(103), "received, not entered yet (%s)" % r(103))
-    # ---- the strip: waiting over 2 minutes, with the reason
-    st = txt("#app [data-sync-waiting]")
-    wl = pg.locator("#app [data-sync-waiting] [data-sync-waiting-line]")
-    wids = sorted(wl.nth(i).get_attribute("data-sync-waiting-line") for i in range(wl.count()))
-    ok(wids == ["102", "103", "106"], "the strip: the lines received or held over 2 minutes ago, not the one of a minute ago (%s)" % wids)
-    ok("OFFICEPC is offline" in txt('#app [data-sync-waiting-line="103"]') and "Tally is closed on TALLYSRV" in txt('#app [data-sync-waiting-line="106"]') and "month locked: 2026-04" in txt('#app [data-sync-waiting-line="102"]'),
-       "each with its reason: the PC offline, Tally closed there, the held why (%s)" % st)
+    # ---- 2.3.5, the flow: waiting over 2 minutes, with the reason: "Needs you" (yellow; a person settles it) and
+    # "being fetched" (quiet; it enters the books by itself). No "waiting over 2 minutes" box any more
+    st = txt("#app [data-sync-needs]") + " | " + txt("#app [data-sync-fetching]")
+    ids = lambda a: sorted(E("(a) => [...document.querySelectorAll('#app [' + a + ']')].map(e => e.getAttribute(a))", a))
+    ok(ids("data-sync-needs-line") == ["102"] and ids("data-sync-fetching-line") == ["103", "106"] and pg.locator("#app [data-sync-waiting]").count() == 0,
+       "the flow: the lines received or held over 2 minutes ago, not the one of a minute ago: the locked month needs a person, the rest are being fetched (%s | %s)" % (ids("data-sync-needs-line"), ids("data-sync-fetching-line")))
+    ok("OFFICEPC is offline" in tc('#app [data-sync-fetching-line="103"]') and "Tally not open on TALLYSRV" in tc('#app [data-sync-fetching-line="106"]') and "month locked: 2026-04" in tc('#app [data-sync-needs-line="102"]')
+       and "warn" not in (pg.get_attribute("#app [data-sync-fetching]", "class") or "") and "OFFICEPC is offline" in txt("#app [data-sync-fetching]"),
+       "each with its reason: the PC offline, Tally closed there (said quietly), the held why (%s)" % st)
     # ---- filters
     pg.click('#app [data-sync-filter="waiting"]'); pg.wait_for_timeout(400)
     ids = [rows.nth(i).get_attribute("data-sync-line") for i in range(rows.count())]

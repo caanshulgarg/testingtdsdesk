@@ -98,7 +98,7 @@ with sync_playwright() as p:
     on = lambda: pg.get_attribute('#app [data-post-tab][aria-selected="true"]', "data-post-tab")
     # ---- 1. the status line, and the read time after an event-driven read
     line = txt("#app [data-post-line]")
-    ok(line == "Posting into GARG SHEKHAR & COMPANY · Tally open on NWS144 · read %s · Update now" % hm(E("window.__read0")) and pg.locator("#app [data-post-problem]").count() == 0,
+    ok(line == "Posting into GARG SHEKHAR & COMPANY · Connected · Tally open on NWS144 · read %s · Update now" % hm(E("window.__read0")) and pg.locator("#app [data-post-problem]").count() == 0,
        "1. one status line, nothing else: %r" % line)
     E("() => { Live.tallyTopic = 'realtime:fincom-tally-f-1'; Live.got({topic: Live.tallyTopic, event: 'broadcast', payload: {type: 'broadcast', event: 'beat', payload: {device: 'd-1', beat: {updating: true}}}}); }")
     pg.wait_for_timeout(300)
@@ -107,7 +107,7 @@ with sync_playwright() as p:
       beat: {updating: false, lastRead: window.__read1, companies: [{name: 'GARG SHEKHAR & COMPANY', open: true, at: window.__read1, lastRead: window.__read1}]}}}}); }""")
     pg.wait_for_timeout(300)
     r1 = hm(E("window.__read1"))
-    ok(txt("#app [data-post-line]") == "Posting into GARG SHEKHAR & COMPANY · Tally open on NWS144 · read %s · Update now" % r1, "7. right after the read: 'read %s' (%s)" % (r1, txt("#app [data-post-line]")))
+    ok(txt("#app [data-post-line]") == "Posting into GARG SHEKHAR & COMPANY · Connected · Tally open on NWS144 · read %s · Update now" % r1, "7. right after the read: 'read %s' (%s)" % (r1, txt("#app [data-post-line]")))
     pg.click("#app [data-post-line] [data-update-now]"); pg.wait_for_timeout(300)
     ok("· Reading now…" in txt("#app [data-post-line]") and any(r[0] == "tally_want_update" for r in E("window.__rpc")), "7. Update now: asked, and 'Reading now…' until a newer read comes in")
     E("""() => { window.__read2 = window.__ago(0); Live.got({topic: Live.tallyTopic, event: 'broadcast', payload: {type: 'broadcast', event: 'beat', payload: {device: 'd-1',

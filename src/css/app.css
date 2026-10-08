@@ -618,6 +618,15 @@ ol.setup{margin:6px 0 0 18px;padding:0;line-height:1.6}
 ol.setup li{margin:6px 0}
 ol.setup li.done{color:var(--ok)}
 ol.setup li div{color:var(--ink);font-weight:400;margin-top:2px}
+/* FinCom 2.3.5, the simpler Tally page: one card a computer, the three steps until the first company is linked */
+.tcard{border:1px solid var(--rule);border-radius:8px;padding:10px 14px;margin:0 0 10px;background:var(--sheet)}
+.tcard:last-of-type{margin-bottom:4px}
+.tguide-steps{list-style:none;margin:8px 0 0;padding:0}
+.tguide-steps li{display:flex;gap:10px;align-items:flex-start;margin:8px 0}
+.tguide-steps li .note{margin-top:2px;line-height:1.6}
+.tguide-mark{flex:none;width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:600;font-size:13px;border:1px solid var(--rule);color:var(--ink-2,var(--ink))}
+.tguide-steps li.now .tguide-mark{border-color:var(--st-attention);color:var(--st-attention)}
+.tguide-steps li.done .tguide-mark{background:var(--st-done-soft);border-color:var(--st-done);color:var(--st-done)}
 .bdiag{margin-top:14px;padding:12px 14px;border:1px solid var(--rule);border-radius:8px;background:var(--sheet)}
 .bd-f{padding:8px 10px;border-radius:6px;margin:6px 0;font-size:14px}
 .bd-f.ok{background:var(--ok-soft);color:var(--ok)}

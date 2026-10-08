@@ -64,13 +64,13 @@ with sync_playwright() as p:
     # 1. Tally open, with the last read
     line = lambda sel="#app [data-post-problem]": pg.inner_text(sel).replace("\n", " ").strip() if pg.locator(sel).count() else ""
     pline = lambda: line("#app [data-post-line]")
-    ok(pline() == "Posting into ZZ TEST · Tally open on NWS144 · read 15:34 IST · Update now" and line() == "", "Post page: one line: %r" % pline())
+    ok(pline() == "Posting into ZZ TEST · Connected · Tally open on NWS144 · read 15:34 IST · Update now" and line() == "", "Post page: one line: %r" % pline())
     ok(pg.locator("#app [data-post-line] [data-update-now]").count() == 1, "Post page: in it, one button: Update now")
     pg.click("#app [data-post-line] [data-update-now]"); pg.wait_for_timeout(400)
     ok(["tally_want_update", {"p_client": cid}] in E("window.__rpc"), "Update now sends the event (tally_want_update for the client)")
     # 2. Tally closed
     E(STATE, {"beat": {"tallyState": "closed", "tally": False}}); pg.wait_for_timeout(300)
-    ok(line().startswith("Tally is closed on NWS144: open TallyPrime there"), "Tally closed: %r" % line())
+    ok(line().startswith("Tally not open on NWS144: open TallyPrime there"), "Tally closed: %r" % line())
     # 3. the computer offline (three heartbeats missed)
     E(STATE, {"ageMin": 10}); pg.wait_for_timeout(300)
     ok(line().startswith("NWS144 is offline: start that computer"), "the computer offline: %r" % line())
@@ -80,12 +80,12 @@ with sync_playwright() as p:
     ok(l4.startswith("Tally is not answering on NWS144 since ") and "12:28" in l4, "Tally not answering: %r" % l4)
     # 5. background reading paused in the tray
     E(STATE, {"beat": {"paused": True}}); pg.wait_for_timeout(300)
-    ok(line().startswith("Background reading paused on NWS144: resume it") and pg.locator("#app [data-post-problem] [data-post-action]").inner_text() == "Update now", "paused: %r" % line())
+    ok(line().startswith("Reading paused on NWS144: resume it") and pg.locator("#app [data-post-problem] [data-post-action]").inner_text() == "Update now", "paused: %r" % line())
     E(STATE, {}); pg.wait_for_timeout(300)
     # the Tally panel of the top bar says the same line
     E("() => doAct('tallyPanel')"); pg.wait_for_timeout(400)
     pl = line("[data-panel-tally-line] [data-tally-line-text]")
-    ok(pl == "Tally open on NWS144 · last read 15:34 IST", "the Tally panel: %r" % pl)
+    ok(pl == "Connected · Tally open on NWS144 · last read 15:34 IST", "the Tally panel: %r" % pl)
     E("() => doAct('tallyPanelClose')"); pg.wait_for_timeout(300)
     # the Tally page: one line a client, each with Update now
     E("() => navHome('tally')"); pg.wait_for_timeout(800)

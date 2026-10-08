@@ -242,11 +242,86 @@ const Rec = {
     return this.sorted().filter(r => (r.state === "received" || r.state === "held") && r.received_at && now - Date.parse(r.received_at) > 120000).map(r => {
       const d = this.devOf(r.device_id), pc = r.pc || (d && ((d.info || {}).computer || d.name)) || "the Tally computer";
       let why = r.held_why || "";
-      if (!why && d){ const ds = devState(d, now); why = ds.bridge === "offline" || ds.bridge === "none" ? pc + " is offline" : ds.tally === "closed" ? "Tally is closed on " + pc : ""; }
-      else if (d && r.state === "received"){ const ds = devState(d, now); if (ds.bridge === "offline" || ds.bridge === "none") why = pc + " is offline"; else if (ds.tally === "closed") why = "Tally is closed on " + pc; }
+      if (!why && d){ const ds = devState(d, now); why = ds.bridge === "offline" || ds.bridge === "none" ? pc + " is offline" : ds.tally === "closed" ? "Tally not open on " + pc : ""; }
+      else if (d && r.state === "received"){ const ds = devState(d, now); if (ds.bridge === "offline" || ds.bridge === "none") why = pc + " is offline"; else if (ds.tally === "closed") why = "Tally not open on " + pc; }
       return {r, why: why || "not yet entered in the books"};
     });
   },
+  // FinCom 2.3.5 (the owner: "in tally sync there is a yellow field coming all the time.. there should be clear flow"):
+  // the lines waiting over 2 minutes (waiting(), above) by what will actually happen to them - THE one classifier, used by
+  // Sync activity, the books' held banner and the bell (AlertHub.oursHeld), so they never disagree (review of f0f1531f).
+  //   "" = being fetched: FinCom Bridge or the cloud settles it by itself (said quietly);
+  //   any other kind = Needs you: nothing happens until a person acts, with ONE action:
+  //     daybook  - upload that day's Day Book (the bridge gave up; no entry GUID; a Day Book of the day incomplete...)
+  //     dupid    - FinCom's id is on a second Tally entry: check Tally for a double posting, then upload that day's Day Book
+  //     readstop - reading is stopped from FinCom on that computer: an owner resumes it (Resume reading)
+  //     baseline - the company's starting point is not recorded: the Tally page (the computer's More, Baselines)
+  //     masters  - a ledger line with no GUID: read the ledgers from Tally (Books -> From Tally)
+  //     locked   - the month is locked in FinCom: unlock it in Tie-out (then it applies)
+  //     other    - any other held reason: Apply now (tally_recorder_release_held), once it is settled
+  // Every reason the bridge (bridge-go) and the cloud (server/tally-cloud, migration 60) write is in
+  // tests/run_tally_page_simple.py (KINDS), each with its kind. The cloud's words are not changed.
+  FETCHED: [/waiting for the entry's details/i, /^waiting: /i, /FinCom asks again at/i, /matches no posting of this firm/i,
+    /held until FinCom Bridge( [\d.]+)? sends/i, /next (ledger list|day read|full line)/i, /^unknown (entry|ledger)\b/i, /^applied when |^replaced by /i,
+    /could not be asked whether it was (deleted|cancelled) here/i, /^the entry was not read from Tally/i, /queue/i, /not read from Tally in time/i],
+  needKind(r){
+    if (!r) return "";
+    const why = String(r.held_why || "").trim(), st = String(r.state || "");
+    if (st === "received" || st === "queued") return "";
+    if (st === "failed") return /queue|timeout|server/i.test(why) ? "" : "other";
+    if (st !== "held") return "";
+    if (/reading from Tally is stopped|stopped from FinCom/i.test(why)) return "readstop";
+    if (/starting point/i.test(why)) return "baseline";
+    if (/^FinCom id .* is matched to another Tally entry/i.test(why)) return "dupid";
+    if (/no MasterID or no date/i.test(why)) return "daybook";
+    if (this.FETCHED.some(x => x.test(why))) return "";
+    if (/Day Book|could not tell which entry|cannot tell which entry|cannot be asked for its entry/i.test(why)) return "daybook";
+    if (/^no GUID on the line/i.test(why)) return "masters";
+    if (/^month locked/i.test(why)) return "locked";
+    if (!why && /-0{8}$/.test(String(r.object_guid || ""))) return "";     // the add-on's placeholder, no words yet: the bridge asks for it
+    return "other";
+  },
+  // {needs: [{key, kind, cid, company, day (yyyy-mm-dd), lines, text}], fetching: [{r, why}]}
+  flow(){
+    const needs = new Map(), fetching = [];
+    this.waiting().forEach(w => {
+      const r = w.r, kind = this.needKind(r);
+      if (!kind){ fetching.push(w); return; }
+      const company = r.company || (((S.companies || {})[r.client_id] || {}).name) || "a company";
+      const day = /^\d{4}-\d{2}-\d{2}/.test(String(r.vch_date || "")) ? String(r.vch_date).slice(0, 10) : istDay(r.received_at) || "";
+      const dev = this.devOf(r.device_id), pc = r.pc || (dev && ((dev.info || {}).computer || dev.name)) || "the Tally computer";
+      const key = kind + "|" + company + "|" + (kind === "readstop" ? pc : kind === "masters" || kind === "baseline" ? "" : day) + (kind === "other" ? "|" + String(r.held_why || "") : "");
+      if (!needs.has(key)) needs.set(key, {key, kind, cid: r.client_id || "", company, day: kind === "readstop" || kind === "masters" || kind === "baseline" ? "" : day, pc, deviceId: r.device_id || "", lines: []});
+      needs.get(key).lines.push(r);
+    });
+    const n = (k) => k + (k === 1 ? " entry" : " entries"), out = [...needs.values()].sort((a, b) => a.company.localeCompare(b.company) || b.day.localeCompare(a.day));
+    out.forEach(g => {
+      const k = g.lines.length, d = g.day ? fmtDate(g.day) : "", head = g.company + (d ? " · " + d : "") + ": ";
+      const w = String(g.lines[0].held_why || ""), m = /^FinCom id (\S+)/.exec(w);
+      g.text = head + (g.kind === "daybook" ? n(k) + " could not be read from Tally \u2014 upload the Day Book for " + (d || "that day")
+        : g.kind === "dupid" ? n(k) + " carry FinCom id " + (m ? m[1] : "") + ", which is on another Tally entry already \u2014 check Tally for a double posting, then upload the Day Book for " + (d || "that day")
+        : g.kind === "readstop" ? n(k) + " waiting: reading from Tally is stopped on " + g.pc + " \u2014 " + (this.role() === "owner" ? "Resume reading" : "an owner of the firm resumes it on the Tally page")
+        : g.kind === "baseline" ? n(k) + " waiting: the company's starting point is not recorded \u2014 see the Tally page (the computer's More)"
+        : g.kind === "masters" ? n(k) + " of a ledger with no GUID \u2014 read the ledgers again: Books \u2192 From Tally"
+        : g.kind === "locked" ? n(k) + (k === 1 ? " falls" : " fall") + " in a month locked in FinCom (" + w + ") \u2014 unlock the month in Tie-out; " + (k === 1 ? "it applies" : "they apply") + " then"
+        : n(k) + " not yet entered in the books (" + (w || "held") + ") \u2014 Apply now once it is settled");
+    });
+    return {needs: out, fetching};
+  },
+  // the Day Book upload for one day: Books -> From Tally with that day (Rec.uploadDays does it from a day to today)
+  async uploadDay(cid, day){
+    if (!cid || !day) return;
+    S.dbFrom = day; S.dbTo = day;
+    if (S.view !== "company" || S.coId !== cid) await openCompany(cid);
+    S.dbFrom = day; S.dbTo = day;
+    goClient("books:import");
+  },
+  // a client's Tie-out (unlocking a month), its From Tally (the ledgers), the Tally page, Resume reading on one computer
+  async openClientTab(cid, tab){ if (!cid) return; if (S.view !== "company" || S.coId !== cid) await openCompany(cid); goClient(tab); },
+  openTallyPage(){ S.tallyTab = "computers"; navHome("tally"); },
+  resumeOn(g){ if (typeof TCloud === "object" && g && g.deviceId) TCloud.readResume({device: {id: g.deviceId}, computer: g.pc}); },
+  // Apply now on every line of a group, one after another (the list's own Apply now, line by line)
+  async releaseAll(lines){ for (const r of [].concat(lines || [])) if (r.state === "held") await this.release(r); },
   async release(r){
     const a = this.act;
     a.msg = {busy: true, id: r.id}; render();

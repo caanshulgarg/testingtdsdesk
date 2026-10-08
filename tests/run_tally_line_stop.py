@@ -59,7 +59,7 @@ with sync_playwright() as p:
     cid, oid = E(SETUP, ["owner"]); pg.wait_for_timeout(900)
     # the line as before while nothing is stopped
     pl = lambda: txt("#app [data-post-line]")
-    ok(pl().startswith("Posting into ZZ TEST · Tally open on NWS144") and "Update now" in pl(), "no stop: the line as before (%s)" % pl())
+    ok(pl().startswith("Posting into ZZ TEST · Connected · Tally open on NWS144") and "Update now" in pl(), "no stop: the line as before (%s)" % pl())
     # ---- FinCom stopped reading on the computer (tally_read_stops, with who and when; the beat's readStop too)
     E("""() => { window.__stops = [{id: 7, device_id: window.__dev.id, action: "stop", reason: "Tally hangs on the bank ledger", stopped_at: new Date(Date.now() - 40 * 60000).toISOString(), stopped_by: "u-anshul", cleared_at: null, cleared_by: null}];
       window.__dev.info.readStop = {by: "fincom", reason: "Tally hangs on the bank ledger", at: new Date(Date.now() - 40 * 60000).toISOString()}; }""")
