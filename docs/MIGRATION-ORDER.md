@@ -337,3 +337,29 @@ and neither one's behaviour is lost. `run_migration_order.py` runs them 63 -> 67
 identical function texts; `run_migration63.py` and `run_migration67.py` check their own marked lines and that the other file
 carries the same text. 69 (next-push, not in 2.4.0 yet) is to carry the same combined text with its lines marked "69" when it
 is merged.
+
+2.4.0 part 2 review (08-Oct-2026), next-outbox (63 still NOT run anywhere, so changed in place; add-only, safe twice):
+- **M2, order with 67 and 69.** 63 (this branch), 67 (next-renumber) and 69 (next-push) each replace `tally_recorder_line`
+  on 60's text. 63 now STOPS where the installed line carries "-- 67" or "-- 69" (raises "migration 63 is written on 60's
+  tally_recorder_line, and migration 67 / 69 has run here ... (nothing changed)", the transaction rolled back, the index not
+  made); 69 stops likewise where 63 has run. The release runs ONE combined definition (made by release-240's integrator),
+  never two of these files over each other. Tested: run_migration63.py section 8.
+- **M1 (the bridge).** A group FinCom answers 200 is no longer marked sent whole: a line answered 'failed' (a lock
+  timeout, a deadlock, a line tally-ingest could not read) or left without a result stays on the PC (its offsets held) and
+  goes again after RecorderRetrySec x 2^n (30 minutes at most), RecorderFailedTries times (default 12, about 3.5 hours);
+  then it is given up, said in the log ("answered failed N times ... not sent again"); FinCom's record keeps its failed
+  row where it stored one (Sync activity). The other lines of the group are marked sent. A resend is stored once (63's repeat check: a failed
+  row is no repeat, so the resend is applied; an applied one is answered "already have"). A cloud answer {queued: n}
+  with no results at all (before round 20) is taken as before. Tests: outbox_failed_test.go.
+- **L2.** failed.txt (no day in its name) read past a line not yet confirmed no longer keeps every sent id for ever
+  (keepFrom "00000000"): the day that first happened is kept with the file's offset (`keep` in recorder-offsets.json)
+  and the sent ids are kept from that day on. Test: TestOutboxFailedTxtKeepsFromItsDay.
+- **L5.** run_migration63.py and run_recorder_repeat_server.py are in tests/ci/tests.txt (the latter on its own
+  PostgreSQL port, 55463; run_enqueue_held_id.py has 55461).
+- **Notes (L1, L3, L4).** Deploy order: run 63 BEFORE the tally-ingest of this branch (it reads `already` / `was` from 63's
+  answers; on a cloud without 63 a repeat is stored again, as before) and before the 2.4.0 bridge goes out (the bridge
+  resends every line not confirmed; without 63 such a resend is a second row). A line resent after a 'failed' answer
+  reaches FinCom AFTER the lines that followed it in its group (the order of one book's lines is kept only among the
+  lines that went together); FinCom's per-entry AlterID rules decide a late alter as for any line. The repeat check's
+  index is not unique, and the look-up runs under the book's lock (tally_recorder_apply and the drain); its cost on
+  staging's tally_recorder_lines is to be measured in the 2.4.0 gate (not measured here).

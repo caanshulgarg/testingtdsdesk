@@ -176,6 +176,12 @@ type change struct {
 	again string
 	// next-masterhook: a master form's line (master_created / master_altered): the master's type ("Stock Item" ...)
 	masterType string
+	// 2.4.0 part 2 review M1: FinCom answered 200 but 'failed' for this line (a lock timeout, a deadlock) or gave no result
+	// for it: not marked sent; sent again from retryAt (RecorderRetrySec doubling, 30 minutes at most), failN times so far,
+	// RecorderFailedTries at most (FinCom's repeat check, migration 63, keeps a resend from being stored twice)
+	failN   int
+	retryAt time.Time
+	failWhy string
 }
 
 // a place in the add-on's files: the file and the byte offset a line starts at
@@ -239,6 +245,9 @@ type liveFileSt struct {
 	off int64  // read up to here (this run)
 	gen int    // the file's generation (a file shorter than what was read is a new one)
 	enc string // "utf16" or "utf8"
+	// 2.4.0 part 2 review L2: a file without a day in its name (failed.txt) read past a line not yet confirmed: the day
+	// (yyyymmdd) that first happened, kept on disk; the sent ids are kept from that day on (not from "00000000", for ever)
+	keep string
 }
 
 type livePending struct {
@@ -373,7 +382,7 @@ func liveFresh() {
 	live.keepFrom = str(o["keepFrom"])
 	for k, v := range obj(o["files"]) {
 		e := obj(v)
-		live.files[k] = &liveFileSt{off: toI64(e["off"]), gen: toInt(e["gen"]), enc: str(e["enc"])}
+		live.files[k] = &liveFileSt{off: toI64(e["off"]), gen: toInt(e["gen"]), enc: str(e["enc"]), keep: str(e["keep"])}
 	}
 	for k, v := range obj(o["alterid"]) {
 		e := obj(v)
@@ -587,19 +596,27 @@ func liveSaveOffsets() {
 				}
 			}
 		}
-		files[name] = M{"off": off, "gen": st.gen, "enc": st.enc}
+		e := M{"off": off, "gen": st.gen, "enc": st.enc}
 		// next-outbox: a file read past a line not yet confirmed: the sent ids from its day on are kept (a restart reads it
-		// again from that line, and every line after it that went must be known as sent). A file without a day in its name
-		// (failed.txt): every sent id is kept until it is confirmed
+		// again from that line, and every line after it that went must be known as sent). 2.4.0 part 2 review L2: a file
+		// without a day in its name (failed.txt): from the day it was first read past such a line (kept with the file's
+		// offset), no longer "00000000" (every sent id kept for ever); every line after the held one went that day or later
 		if off < st.off {
 			d := liveFileDay(name)
 			if d == "" {
-				d = "00000000"
+				if st.keep == "" {
+					st.keep = nowFn().Format("20060102")
+				}
+				d = st.keep
+				e["keep"] = d
 			}
 			if keepFrom == "" || d < keepFrom {
 				keepFrom = d
 			}
+		} else {
+			st.keep = ""
 		}
+		files[name] = e
 	}
 	bs := M{}
 	for k, st := range live.b {
@@ -2675,6 +2692,9 @@ func liveUploadStep() (int, bool) {
 			young[c.key()] = true
 			continue
 		}
+		if now.Before(c.retryAt) {
+			continue // 2.4.0 part 2 review M1: answered failed, sent again after its wait
+		}
 		key, head = c.key(), c
 		break
 	}
@@ -2713,7 +2733,7 @@ func liveUploadStep() (int, bool) {
 	var group []*change
 	size := 600
 	for _, c := range live.queue {
-		if c.key() != key {
+		if c.key() != key || now.Before(c.retryAt) {
 			continue
 		}
 		s := len(jsonText(c.wire())) + 1
@@ -2846,6 +2866,42 @@ func liveUploadStep() (int, bool) {
 	if n := liveAlreadyCount(arr(r.json["results"])); n > 0 {
 		writeLog(fmt.Sprintf("Recorder: %d line(s) of %s FinCom had already (sent before, its answer not kept here): marked sent, not stored again", n, company))
 	}
+	// 2.4.0 part 2 review M1: a line FinCom answered 'failed' (a lock timeout, a deadlock), or left without a result, is
+	// not marked sent: it stays on the PC and goes again after its wait, RecorderFailedTries times at most; the other lines
+	// of the group are marked sent
+	res := map[string]M{}
+	for _, x := range arr(r.json["results"]) {
+		if id := str(obj(x)["line_id"]); id != "" {
+			res[id] = obj(x)
+		}
+	}
+	maxTries := keepNum("RecorderFailedTries", 12)
+	var keep, giveUp []*change
+	// an answer {queued: n} with no results at all (a cloud before round 20 answered so): every line queued, as before
+	if r.json["results"] != nil || r.json["queued"] == nil {
+		g2 := group[:0:0]
+		for _, c := range group {
+			x, had := res[c.lineId]
+			if st := str(x["state"]); had && st != "" && st != "failed" {
+				g2 = append(g2, c)
+				continue
+			}
+			c.failN++
+			c.failWhy = "no result for the line"
+			if had {
+				c.failWhy = or(str(x["why"]), "failed")
+			}
+			if c.failN >= maxTries {
+				giveUp = append(giveUp, c)
+				g2 = append(g2, c)
+				continue
+			}
+			w := math.Min(1800, float64(keepNum("RecorderRetrySec", 30))*math.Pow(2, float64(c.failN)))
+			c.retryAt = nowFn().Add(time.Duration(w) * time.Second)
+			keep = append(keep, c)
+		}
+		group = g2
+	}
 	sentIDs := make([]string, 0, len(group))
 	var bodied, items, ledAgain, ended, mine []string
 	var signs []*renumJob // next-renumber: an insert's or a delete's line FinCom took (renumber.go)
@@ -2922,6 +2978,9 @@ func liveUploadStep() (int, bool) {
 	delete(live.back, key)
 	cs.sent += len(group)
 	cs.lastError, cs.last = "", nowS()
+	if len(keep) > 0 {
+		cs.lastError = fmt.Sprintf("%d line(s) answered failed by FinCom (%s); sent again", len(keep), cutRunes(keep[0].failWhy, 120))
+	}
 	if posting {
 		live.gapSet, live.gap = true, gap
 	}
@@ -2937,6 +2996,14 @@ func liveUploadStep() (int, bool) {
 	liveHeldAdd(held)
 	liveGuidAnswers(group, arr(r.json["results"])) // 2.3.0: what FinCom's record said of a delete / cancel sent without a GUID
 	renumNote(signs)
+	for _, c := range keep {
+		writeLog(fmt.Sprintf("Recorder: line %s of %s: FinCom answered %s (try %d of %d); kept here and sent again at %s, nothing is lost",
+			cutRunes(c.lineId, 40), company, cutRunes(c.failWhy, 160), c.failN, maxTries, c.retryAt.Format("15:04:05")))
+	}
+	for _, c := range giveUp {
+		writeLog(fmt.Sprintf("Recorder: line %s of %s: FinCom answered failed %d times (%s); not sent again: FinCom's record keeps it as failed (Sync activity)",
+			cutRunes(c.lineId, 40), company, c.failN, cutRunes(c.failWhy, 160)))
+	}
 	return len(group), false
 }
 

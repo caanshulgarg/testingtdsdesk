@@ -1,7 +1,7 @@
 """python3 run_recorder_repeat_server.py - (07-Oct-2026, next release, branch next-outbox; migration 63) FinCom ignores a
 repeat of a recorder line. The real cloud function (server/tally-cloud/index.ts) under Deno against the stand-in for Supabase
 (fake_supabase.py), whose recorder functions (tally_recorder_send / _apply / _enqueue) are answered by a throwaway PostgreSQL
-(pg_stand, port 55461; never a real database) built in staging's order 32 -> ... -> 60 -> 63.
+(pg_stand, port 55463; never a real database) built in staging's order 32 -> ... -> 60 -> 63.
 The bridge keeps every line until FinCom answers, so a bridge stopped after FinCom stored a group, before it wrote its marks,
 sends that group again after its restart. Checks:
   1. a group (an entry with its XML, a line without a GUID, a delete) from a bridge after 2.3.1 (again ""): applied / held;
@@ -44,7 +44,7 @@ DA = "d1000000-0000-0000-0000-000000000061"
 KA = "fcd_" + "6" * 48
 CG = "c0c0c0c0-6161-4161-8161-616161616161"
 GO = {"id": "go-aaaaaa616161", "computer": "PC-A", "user": "anshul", "mode": "main", "runMode": "user", "version": "2.3.2"}
-db = pg_stand.start(55461)
+db = pg_stand.start(55463)
 fn = None
 try:
     db.sql(part(os.path.join(HERE, "run_migration33.py"), "SCHEMA")); db.sql(part(os.path.join(HERE, "run_migration35.py"), "SCHEMA")); db.sql(part(os.path.join(HERE, "run_migration37.py"), "SCHEMA_X"))

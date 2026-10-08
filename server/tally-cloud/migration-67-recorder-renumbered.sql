@@ -17,9 +17,22 @@
 -- lines marked "67" (a renumbered entry applied), so whichever of the two runs last leaves the same function and neither
 -- one's behaviour is lost, in either order (tests/run_migration_order.py runs staging 63 -> 67 and a fresh database
 -- 67 -> 63 and compares the texts). Each also makes 63's look-up index (if not there), so either file alone is complete.
+-- Each STOPS (raises, nothing changed) over a tally_recorder_line written on 60's text by another of 63 / 67 / 69 (its marker
+-- without this file's own): such a change is never dropped silently (review M2 of 2.4.0 part 2).
 
 begin;
 set local lock_timeout = '10s';     -- never queue long behind a session holding a table here (a timeout rolls the whole file back: run it again)
+
+do $guard$
+declare m text;
+begin
+  select case when p.prosrc like '%-- 63%' then '63' else '69' end into m from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public' and p.proname = 'tally_recorder_line' and (p.prosrc like '%-- 63%' or p.prosrc like '%-- 69%')
+     and p.prosrc not like '%-- 67%' limit 1;     -- release-240: the combined text (67's lines with 63's) is this file's own: not refused
+  if m is not null then
+    raise exception 'migration 67 is the combined tally_recorder_line of release-240, and a migration % written on 60''s text has run here: run the release''s combined definition (nothing changed)', m;
+  end if;
+end $guard$;
 
 -- ---------------------------------------------------------------- the repeat look-up's index (63's; release-240: in 67 too)
 create index if not exists tally_recorder_lines_line on public.tally_recorder_lines (book_id, line_id);

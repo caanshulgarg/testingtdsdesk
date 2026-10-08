@@ -19,6 +19,12 @@
 --   2. An index on (book_id, line_id) for that look-up (not unique, for the reason above).
 -- Nothing else is touched; no row is changed by running it. Tested on pg_stand only: tests/run_migration63.py and
 -- tests/run_recorder_repeat_server.py (the real tally-ingest under Deno).
+-- Order with 67 (branch next-renumber) and 69 (branch next-push), which also replace tally_recorder_line on 60's text
+-- (review M2 of 2.4.0 part 2, 08-Oct-2026): this file STOPS (raises, the transaction rolled back, nothing changed) where
+-- the installed line carries "-- 67" or "-- 69" (67 or 69 has run), so their changes are never dropped silently; there run
+-- the one combined definition of the release instead (69 stops likewise where 63 has run). release-240: this file IS that
+-- combined definition (63's and 67's lines), so it stops only over a 67 or 69 written on 60's text (no "-- 63" line), never
+-- over the combined text 67 of release-240 installs.
 
 -- release-240 (FinCom Bridge 2.4.0, 08-Oct-2026): 63 (next-outbox) and 67 (next-renumber) both replace tally_recorder_line on
 -- 60's text. Each now carries the SAME combined text: 60's with the lines marked "63" (a repeat of a line FinCom has) AND the
@@ -28,6 +34,17 @@
 
 begin;
 set local lock_timeout = '10s';     -- never queue long behind a session holding a table here (a timeout rolls the whole file back: run it again)
+
+do $guard$
+declare m text;
+begin
+  select case when p.prosrc like '%-- 67%' then '67' else '69' end into m from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public' and p.proname = 'tally_recorder_line' and (p.prosrc like '%-- 67%' or p.prosrc like '%-- 69%')
+     and p.prosrc not like '%-- 63%' limit 1;     -- release-240: the combined text (63's lines with 67's) is this file's own: not refused
+  if m is not null then
+    raise exception 'migration 63 is written on 60''s tally_recorder_line, and migration % has run here: run the release''s combined tally_recorder_line instead (nothing changed)', m;
+  end if;
+end $guard$;
 
 -- ---------------------------------------------------------------- 2. the look-up's index
 create index if not exists tally_recorder_lines_line on public.tally_recorder_lines (book_id, line_id);

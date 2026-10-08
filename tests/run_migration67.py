@@ -108,6 +108,16 @@ try:
     db.sql("insert into tally_sync_cursor (book_id, firm_id, last_voucher_alterid, start_at, start_guid) values (%s, %s, %d, '2026-10-04 10:00+05:30', %s)" % (q(B), q(F), START, q(CG)))
     before = prosrc()
     print("  tally_recorder_line prosrc md5 under 60: %s" % before)
+    # release-240 (review M2 of 2.4.0 part 2, as 63's section 8): 67 stops over a 63 or 69 written on 60's text
+    def60 = db.one("select pg_get_functiondef('public.tally_recorder_line(uuid, uuid, jsonb, bigint)'::regprocedure)")
+    for mk in ("63", "69"):
+        r0 = psql_text(def60.replace("$function$\ndeclare", "$function$\n-- %s (a stand-in for migration %s's text over 60's)\ndeclare" % (mk, mk), 1) + ";")
+        ok(r0.returncode == 0, "guard: a line carrying '-- %s' installed: %s" % (mk, r0.stderr[-200:]))
+        was = prosrc()
+        rr = psql_text(text)
+        ok(rr.returncode != 0 and ("migration " + mk) in rr.stderr and "nothing changed" in rr.stderr and prosrc() == was,
+           "guard: 67 over a line with '-- %s' only: refused, nothing changed (%s)" % (mk, (rr.stderr.strip().splitlines() or [""])[-1][:200]))
+    ok(psql_text(def60 + ";").returncode == 0 and prosrc() == before, "guard: 60's line put back")
     for i in (1, 2):
         r = psql_text(text)
         ok(r.returncode == 0, "67 runs (%s time): %s" % ("first" if i == 1 else "second", r.stderr[-300:]))
