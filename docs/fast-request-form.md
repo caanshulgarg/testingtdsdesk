@@ -321,16 +321,16 @@ Run 37723589664 of `tally-real.yml` (branch tally-real-spike, input `only=fast23
 - **Held by the bridge:** the invoice in voucher mode (its item sits under the sales line, `ALLLEDGERENTRIES.INVENTORYALLOCATIONS`; today's answer gave it as an item): the line goes held with the Day Book words (5 of 5 releases).
 - **Stock, manufacturing and physical stock journals:** parse.js reads no entry from either answer; both go held alike, nothing stored either way.
 - **200 / 500-item invoices:** today's answer (2.2-2.7 million characters) is larger than FinCom takes in one line and was never stored; the stripped object (0.3-0.7 million) is stored whole.
-- **MasterIDs that are no voucher:** a ledger's MasterID and one never used: an empty answer (no voucher), 1.6-3.1 ms. A deleted voucher could not be made by XML in these runs (asked again in run 37747408916).
+- **MasterIDs that are no voucher:** a deleted voucher's MasterID (run 37747408916, 3.0 and 7.1), a ledger's MasterID and one never used: an empty answer (no voucher), 1.6-3.1 ms: what the cancel / delete check takes as "not in this Tally".
 
 **A sales invoice in a GST-ON and a GST-OFF company** (the push helper's hang of run 37729166801; runs 37735320482, 37740175973, 37743008576, `fast234g.ps1`): an item invoice and an accounting sales voucher made by XML, the same with its IRN and e-way bill written back by an XML alteration, and an item invoice typed on the screen; ISGSTON set by an XML alteration and read back (Yes / No). FinComVoucherObject and FinComVoucherByNumber each asked in a fresh Tally with 30 s at most, with no TDL and with the FinCom add-on loaded, and the helper's own year-long collection last: **200 probes, every one answered (17-121 ms), Tally answered after every one.** The helper later traced its hang to its harness (a malformed `$MasterID = 1 2 3 ... 24` formula).
 
-**Timing of large invoices** (M3; the bridge's own request, a warm-up and timed asks; the small company):
+**Timing of large invoices** (M3; the bridge's own request, a warm-up and 5 timed asks, median / worst; push-design run 37747408916; the 100,000-voucher company is the same company grown, with two more such invoices made at the end):
 
-| Invoice | TallyPrime 3.0 | TallyPrime 7.1 | Today's request (3.0 / 7.1) |
-|---|---|---|---|
-| 200 items | 439 ms | 478 ms | 236 / 119 ms |
-| 500 items | 1,381 ms | 1,520 ms | 639 / 222 ms |
+| Invoice | 3.0 small | 3.0 at 100,000 | 7.1 small | 7.1 at 100,000 | Today's request, 100,000 |
+|---|---|---|---|---|---|
+| 3-5 items, receipt | 9-23 ms | 11-52 ms | 9-22 ms | 9-22 ms | 16.5-18.2 s |
+| 200 items | 500 / 510 ms | 566 / 589 ms; made last 562 / 578 ms | 538 / 566 ms | 576 / 592 ms; made last 586 / 606 ms | 17.5-18.1 s |
+| 500 items | 1,385 / 1,418 ms | 1,539 / 1,615 ms; made last 1,600 / 1,620 ms | 1,560 / 1,619 ms | 1,641 / 1,669 ms; made last 1,657 / 1,676 ms | 17.4-18.5 s |
 
-The 500-item object answer is about 13.7 MB; the bridge's strip of it took 2 s with the first scanner and 0.09 s now (`TestFast234TagScanMatchesRegexp`). At 100,000 vouchers: run 37747408916.
-
+The object's time grows with the voucher's own size (about 3 ms an item), not with the company's. A 500-item invoice's answer is about 13.7 MB and takes 1.4-1.7 s at Tally; the bridge's strip adds 0.1 s (2 s with the first scanner; `TestFast234TagScanMatchesRegexp`). **This approaches the owner's 2-second rule**: an invoice of about 600 items or more would be stopped at 2 s, held, and its stops would count toward the company's slow mark. The proposal is in the report to the owner; nothing is built for it.
