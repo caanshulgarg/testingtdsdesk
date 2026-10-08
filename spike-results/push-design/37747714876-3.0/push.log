@@ -1,0 +1,21 @@
+[08:17:26.067] push-design on TallyPrime 3.0: reps 5, heavy 3000 ledgers / 3000 items / up to 30000 vouchers (40 min), postings 1
+[08:17:26.992] system clock step after timeBeginPeriod(1): 0.401 ms (min 0.0037, max 4.1606)
+[08:17:27.018] two files written 2 ms apart: NTFS write times 15.9991 ms apart
+[08:17:27.038] light company folder: D:\a\_temp\TallyData\100000
+[08:17:27.088] fast234 (fast234d) on TallyPrime 3.0: today's request 2927 chars, 61 fields
+[08:17:30.122] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-d-setup-started (1024x768)
+[08:17:58.263] Tally started (d-setup) in 28.1 s; company open: True
+[08:17:58.501] import light masters: 60 sent, created 59, errors 0, 206 ms
+[08:17:58.518] import d parties: 2 sent, created 2, errors 0, 13.7 ms
+[08:17:58.551] import d journal-billwise-nobill: 1 sent, created 1, errors 0, 26.5 ms
+[08:17:58.567] import d journal-notbillwise: 1 sent, created 1, errors 0, 13 ms
+[08:17:58.582] import d journal-billwise-newref: 1 sent, created 1, errors 0, 14.2 ms
+[08:17:58.598] import d receipt-billwise-nobill: 1 sent, created 1, errors 0, 13.9 ms
+[08:17:58.769] D journal-billwise-nobill (MasterID 2, Journal 2): Day Book 0 On Account, 0 filled bill lists; collection by MasterID 1 On Account, 1 filled bill lists; by number 1 On Account, 1 filled bill lists; object 0 On Account, 0 filled bill lists
+[08:17:58.832] D journal-notbillwise (MasterID 3, Journal 3): Day Book 0 On Account, 0 filled bill lists; collection by MasterID 0 On Account, 0 filled bill lists; by number 0 On Account, 0 filled bill lists; object 0 On Account, 0 filled bill lists
+[08:17:58.897] D journal-billwise-newref (MasterID 4, Journal 4): Day Book 0 On Account, 1 filled bill lists; collection by MasterID 0 On Account, 1 filled bill lists; by number 0 On Account, 1 filled bill lists; object 0 On Account, 1 filled bill lists
+[08:17:58.966] D receipt-billwise-nobill (MasterID 5, Receipt 1): Day Book 0 On Account, 0 filled bill lists; collection by MasterID 1 On Account, 1 filled bill lists; by number 1 On Account, 1 filled bill lists; object 0 On Account, 0 filled bill lists
+[08:18:01.973] done (fast234 fast234d)
