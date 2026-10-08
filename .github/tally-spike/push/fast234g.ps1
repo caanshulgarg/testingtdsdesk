@@ -84,17 +84,17 @@ function ScreenInvoice($tag, $narr) {
 
 # ---------------------------------------------------------------- one probe in a fresh Tally
 function GProbe($gst, $t, $form, $body) {
-  $fresh = Start-T $script:gcur @() "g-$gst-$($t.kind)-$form"
+  $fresh = Start-T $script:gcur $script:gtdls "g-$gst-$($t.kind)-$form"
   $x = if ($fresh) { Post $body '' 30 } else { '' }; $ms = $script:lastMs
   $alive = Alive
   $again = $alive
-  if (-not $alive) { Shot "g-hung-$gst-$($t.kind)-$form"; $again = Start-T $script:gcur @() "g-$gst-$($t.kind)-$form-again" }
+  if (-not $alive) { Shot "g-hung-$gst-$($t.kind)-$form"; $again = Start-T $script:gcur $script:gtdls "g-$gst-$($t.kind)-$form-again" }
   $hit = $x -match "<MASTERID[^>]*>\s*$($t.mid)\s*<"
   $err = [regex]::Match($x, '<LINEERROR>[^<]*|<ERRORMSG>[^<]*|Unknown Request[^<]*|<ERROR>[^<]*').Value
-  [pscustomobject]@{ rel = $rel; gst = $gst; isgston = $script:gstNow; kind = $t.kind; made = $t.how; type = $t.type; vno = $t.vno; mid = $t.mid; form = $form; fresh = $fresh
+  [pscustomobject]@{ rel = $rel; tdl = $script:gtv; gst = $gst; isgston = $script:gstNow; kind = $t.kind; made = $t.how; type = $t.type; vno = $t.vno; mid = $t.mid; form = $form; fresh = $fresh
     answered = [bool]$x; ms = $ms; bytes = $x.Length; has_target = $hit; alive_after = $alive; restart_answers = $again; err = $err } | Export-Csv $gcsv -Append -NoTypeInformation -Encoding UTF8
-  if ($x) { Set-Content (Join-Path $cap "g-$gst-$($t.kind)-$form.xml") $(if ($x.Length -gt 3000000) { $x.Substring(0, 3000000) } else { $x }) -Encoding UTF8 }
-  Say ("G {0} {1} ({2} {3} {4}, MasterID {5}) {6}: {7}, {8} ms, {9} chars, the entry {10}; Tally answers after it: {11}; a fresh start answers: {12} {13}" -f $gst, $t.kind, $t.how, $t.type, $t.vno, $t.mid, $form,
+  if ($x) { Set-Content (Join-Path $cap "g-$($script:gtv)-$gst-$($t.kind)-$form.xml") $(if ($x.Length -gt 3000000) { $x.Substring(0, 3000000) } else { $x }) -Encoding UTF8 }
+  Say ("G [$($script:gtv)] {0} {1} ({2} {3} {4}, MasterID {5}) {6}: {7}, {8} ms, {9} chars, the entry {10}; Tally answers after it: {11}; a fresh start answers: {12} {13}" -f $gst, $t.kind, $t.how, $t.type, $t.vno, $t.mid, $form,
       $(if ($x) { 'ANSWERED' } else { 'NO ANSWER in 30 s' }), $ms, $x.Length, $(if ($hit) { 'in it' } else { 'NOT in it' }), $alive, $again, $err)
   return $again
 }
@@ -133,6 +133,12 @@ try {
       $ts += [pscustomobject]@{ kind = $k[0]; how = $k[2]; mid = $v.mid; date = $v.date; type = $v.type; vno = $v.vno }
       Say "GST $gst $($k[0]): MasterID $($v.mid), $($v.type) $($v.vno) of $($v.date)"
     }
+    # 08-Oct-2026 07:40Z (run 37740175973: every probe answered with no TDL loaded): each probe again with the FinCom add-on
+    # loaded (FinComRecorder.tdl, as on a client's Tally and in the push helper's run)
+    $tdlSrc = if ($env:BRIDGE_DIST -and (Test-Path (Join-Path $env:BRIDGE_DIST 'FinComRecorder.tdl'))) { Join-Path $env:BRIDGE_DIST 'FinComRecorder.tdl' } else { Join-Path $env:GITHUB_WORKSPACE 'bridge-go\addon\FinComRecorder.tdl' }
+    $gtdl = "$W\FinComRecorder.tdl"; Copy-Item $tdlSrc $gtdl -Force
+    foreach ($tv in 'none', 'addon') {
+    $script:gtv = $tv; $script:gtdls = if ($tv -eq 'addon') { @($gtdl) } else { @() }
     $ok = $true
     foreach ($t in $ts) {
       if ($ok) { $ok = GProbe $gst $t 'object' ($tplOBJ.Replace('@@CO@@', (X $co)).Replace('987654321', "$($t.mid)")) }
@@ -144,6 +150,7 @@ try {
     foreach ($t in @($ts | Where-Object { $_.kind -like 'xml-acct*' })) {
       if (-not $ok) { break }
       $ok = GProbe $gst $t 'helper-collection' (CollReq 'FCPHelperP7' 'Voucher' $f7 "`$MasterID = $($t.mid)" '' '<SVFROMDATE>20260401</SVFROMDATE><SVTODATE>20270331</SVTODATE>')
+    }
     }
     Stop-T
   }
