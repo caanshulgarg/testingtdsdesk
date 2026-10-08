@@ -545,6 +545,10 @@ type standCloud struct {
 	// 2.3.1 (masters): every ledger_changes body, and how it is answered (nil: 200 {ok, added})
 	ledChanges []M
 	ledChReply func(b M) (int, M)
+	// the nightly self-check (selfcheck.go): every selfcheck body, and how it is answered (nil: compare finds nothing
+	// missing, record answers ok)
+	selfchecks []M
+	scReply    func(b M) (int, M)
 }
 
 func newStandCloud(t *testing.T) *standCloud {
@@ -630,6 +634,21 @@ func newStandCloud(t *testing.T) *standCloud {
 				return
 			}
 			out["added"], out["updated"] = len(arr(o["ledgers"])), 0
+		case "selfcheck":
+			c.selfchecks = append(c.selfchecks, o)
+			if c.scReply != nil {
+				code, ans := c.scReply(o)
+				if code != 200 {
+					w.WriteHeader(code)
+				}
+				_, _ = w.Write([]byte(jsonText(ans)))
+				return
+			}
+			if str(o["step"]) == "compare" {
+				out["missing"], out["received"] = []any{}, toI64(o["altvchid"])
+			} else {
+				out["result"], out["words"] = "ok", "checked (stand)"
+			}
 		case "recorder_lines":
 			c.recRaw = append(c.recRaw, string(b))
 			if c.recDelay > 0 {

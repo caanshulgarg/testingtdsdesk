@@ -20,8 +20,8 @@ ORDERS = {"staging": BASE + [("34 (first, as on staging)", os.path.join("..", ".
 # both orders. 61 (privileges, run on staging 06-Oct-2026; branch perms-61) before 62 when that file is in the tree; 62 the TDS
 # rate worked out; 63 (outbox) and 67 (renumbering) both replace tally_recorder_line with ONE combined text: staging's order
 # runs them 63 -> 67, a fresh database's 67 -> 63, and the two must end with identical function texts (the check below)
-NEXT240 = {"staging": [(62, "migration-62-tds-rate-worked-out.sql"), (63, "migration-63-recorder-repeat.sql"), (64, "migration-64-pages-live.sql")],
-           "fresh": [(62, "migration-62-tds-rate-worked-out.sql"), (63, "migration-63-recorder-repeat.sql"), (64, "migration-64-pages-live.sql")]}
+NEXT240 = {"staging": [(62, "migration-62-tds-rate-worked-out.sql"), (63, "migration-63-recorder-repeat.sql"), (64, "migration-64-pages-live.sql"), (65, "migration-65-selfchecks.sql")],
+           "fresh": [(62, "migration-62-tds-rate-worked-out.sql"), (63, "migration-63-recorder-repeat.sql"), (64, "migration-64-pages-live.sql"), (65, "migration-65-selfchecks.sql")]}
 for _k, _o in ORDERS.items():
     if os.path.exists(os.path.join(SQLDIR, "migration-61-privileges.sql")) and (61, "migration-61-privileges.sql") not in _o: _o.append((61, "migration-61-privileges.sql"))
     _o.extend(NEXT240[_k])
@@ -46,7 +46,9 @@ READERS = ["tally_tb", "tally_period", "tally_mis", "tally_gst_summary", "tally_
            # 06-Oct-2026 (migration 56: a recorder line keeps the fields its request does not fetch; the repair, not run)
            "tally_ingest_entries/5", "tally_recorder_keep_vouchers", "tally_recorder_keep_lines", "tally_recorder_blanked", "tally_recorder_restore_fields", "tally_recorder_restore_fields/2", "tally_unknown_ledger_entries", "tally_recorder_pair_lines",
            # 06-Oct-2026 (migration 57, bridge 2.3.1 part A: the entry's details, written by the entry path for both paths)
-           "tally_ingest_details", "tally_tds_details"]
+           "tally_ingest_details", "tally_tds_details",
+           # 07-Oct-2026 (migration 65: the nightly self-check)
+           "tally_selfcheck_compare", "tally_selfcheck_copy", "tally_selfcheck_words", "tally_selfcheck_record"]
 texts = {}
 fails = []
 def ok(c, w):

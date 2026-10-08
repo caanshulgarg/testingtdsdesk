@@ -286,3 +286,16 @@ tables (tally_book_changed, never failing the write), and the supabase_realtime 
 tally_sync_cursor, tally_month_locks and tally_tieouts. The copy's own tables are NOT published: tally_lines has no replica
 identity (its deletes would fail), Realtime sends DELETE events' keys to every firm, and a day read is thousands of rows.
 Tested on pg_stand only: tests/run_migration64.py, tests/run_migration_order.py; the pages: tests/run_pages_live.py.
+
+Next release (07-Oct-2026, item e: the nightly self-check; `docs/selfcheck-requests-for-approval.md`):
+`migration-65-selfchecks.sql` runs after 60 in both orders (fresh and staging: ... -> 58 -> 59 -> 60 -> 65), and after 61
+(privileges, run on staging), 62 (TDS), 63 (outbox) and 64 (realtime) where they ran: it touches none of their objects. It
+needs 32's `tally_vouchers.deleted_at`, 33's `tally_ledgers.merged_into`, 44's `tally_ledger_day_rebuild` counting and 47's
+`tally_service_or_owner()`; add-only, one transaction, `lock_timeout` 10 s, no "delete from", nothing dropped, safe twice;
+NOT yet run on staging; md5 eabe7dda1e8a12a11e0d9fa71ab46b7f. One new table, `tally_selfchecks` (one row per nightly check,
+never updated; RLS: the firm's members read; written by tally-ingest only; anon nothing, authenticated select only, its
+sequence closed to both), and four new functions, none replacing another: `tally_selfcheck_compare` (which of Tally's
+listed entries the copy lacks), `tally_selfcheck_copy` (the copy's own trial balance against openings and entries),
+`tally_selfcheck_words` and `tally_selfcheck_record`; security definer, search_path public, pg_temp, the service role only.
+Without it tally-ingest's kind `selfcheck` answers 503 notReady and the bridge does not ask again that night; the Tally
+page shows no line. Tested by `run_migration65.py` (on 32 -> ... -> 60) and `run_migration_order.py` (65 in both orders).

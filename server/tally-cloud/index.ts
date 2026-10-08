@@ -139,6 +139,18 @@
 //   {kind:"start_point", company, guid?, altvchid, altmstid, at} -> {set, startVoucher, startMaster, guid, at, state}: the
 //                                                       bridge's starting point (reading is prospective), kept once per book
 //                                                       and company GUID on tally_sync_cursor (tally_start_point)
+//   {kind:"selfcheck", step:"compare", company, company_guid, after, altvchid, entries:[[guid, alter, masterId, yyyymmdd]]}
+//                                                    -> {ok, n, missing:[{guid, why: absent | older | deleted, alter, have}], received}:
+//                                                       next release, item e (the nightly self-check, migration 65): which of the
+//                                                       entries Tally listed (changed since the last good check) FinCom's copy
+//                                                       lacks, and the highest AlterID it holds (tally_selfcheck_compare; at most
+//                                                       5000 a call, 413 above). Reads only
+//   {kind:"selfcheck", step:"record", company, company_guid, night, ran_at, altvchid, altmstid, after, listed, missing, fetched,
+//    still, deleted, mastersBehind, stopped, fetchOff, gapDays:[yyyymmdd], since} -> {ok, id, result, words, copy}: the check
+//                                                       kept in tally_selfchecks with FinCom's own copy check and its plain words
+//                                                       (tally_selfcheck_record). Without migration 65 both answer 503 {notReady}
+//                                                       and the bridge does not ask again that night; at most 30 calls a minute
+//                                                       from one computer (429)
 //   {kind:"make_main", bridge}                        -> this bridge (FinCom Bridge 2.x, its menu) is the main one: only it posts
 //   every call of FinCom Bridge 2.x carries bridge:{id, computer, user, mode, runMode, version} (bridgeOf); the beat's
 //   answer says makeMain (made the main one on FinCom's Tally page) or notMain (another bridge posts on this computer)
@@ -1866,6 +1878,48 @@ async function startPoint(dev: any, firm: string, book: string, body: any) {
   if (error) throw new Error(error.message);
   return reply(200, data);
 }
+// Next release, item e (docs/selfcheck-requests-for-approval.md, migration 65): the bridge's nightly self-check. "compare":
+// the entries Tally listed above the last good check ([guid, alter, ...], at most 5000), answered with those FinCom's copy
+// lacks; "record": the result kept in tally_selfchecks with the cloud's own check of its copy and the words for the Tally
+// page. Numbers and texts are cut to size here and checked again in the database. A cloud without 65: 503 {notReady}
+// at most 30 selfcheck calls a minute from one computer (two a company a night are what a bridge sends)
+const selfCheckAt = new Map<string, number[]>();
+function selfCheckAllowed(devId: string) {
+  const now = Date.now(), had = (selfCheckAt.get(devId) || []).filter((t) => now - t < 60000);
+  if (had.length >= 30) { selfCheckAt.set(devId, had); return false; }
+  had.push(now); selfCheckAt.set(devId, had);
+  return true;
+}
+const notReady65 = (e: { message?: string } | null) => !!e && /tally_selfcheck|schema cache|does not exist|Could not find the function/i.test(String(e.message || ""));
+async function selfCheck(dev: any, firm: string, book: string, body: any) {
+  const step = body.step === "compare" || body.step === "record" ? body.step : "";
+  if (!step) return reply(400, { ok: false, error: "step: compare or record" });
+  if (!selfCheckAllowed(String(dev.id))) return reply(429, { ok: false, error: "This computer has sent thirty nightly checks in the last minute; try again in a minute." });
+  const whole = (v: unknown, max: number) => { const n = Number(v); return Number.isInteger(n) && n >= 0 && n <= max ? n : null; };
+  const text = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
+  if (step === "compare") {
+    if (!Array.isArray(body.entries)) return reply(400, { ok: false, error: "entries: a list of [guid, alter, masterId, date]" });
+    if (body.entries.length > 5000) return reply(413, { ok: false, error: "At most 5000 entries a call." });
+    const entries = body.entries.filter((x: unknown) => Array.isArray(x) && typeof x[0] === "string" && x[0].trim())
+      .map((x: any[]) => [x[0].trim().slice(0, 100), whole(x[1], 1e15 - 1)]);
+    const { data, error } = await db.rpc("tally_selfcheck_compare", { p_book: book, p_entries: entries });
+    if (error && notReady65(error)) return reply(503, { ok: false, notReady: true, error: "FinCom's cloud does not keep the nightly check yet (migration 65)." });
+    if (error) throw new Error(error.message);
+    return reply(200, data);
+  }
+  const me = bridgeOf(dev, body, false);
+  const r: Record<string, unknown> = { company: text(body.company, 200), company_guid: text(body.company_guid, 100), night: /^\d{8}$/.test(String(body.night || "")) ? String(body.night) : "",
+    ran_at: text(body.ran_at, 40), altvchid: whole(body.altvchid, 1e15 - 1), altmstid: whole(body.altmstid, 1e15 - 1), after: whole(body.after, 1e15 - 1),
+    listed: whole(body.listed, 1e6), missing: whole(body.missing, 1e6), fetched: whole(body.fetched, 1e6), still: whole(body.still, 1e6), deleted: whole(body.deleted, 1e6),
+    mastersBehind: whole(body.mastersBehind, 1e15 - 1), stopped: text(body.stopped, 300), fetchOff: text(body.fetchOff, 300),
+    gapDays: (Array.isArray(body.gapDays) ? body.gapDays : []).filter((d: unknown) => typeof d === "string" && /^\d{8}$/.test(d)).slice(0, 400),
+    since: /^\d{8}$/.test(String(body.since || "")) ? String(body.since) : "" };
+  const { data, error } = await db.rpc("tally_selfcheck_record", { p_firm: firm, p_book: book, p_device: dev.id, p_bridge: me.id, p_r: r });
+  if (error && notReady65(error)) return reply(503, { ok: false, notReady: true, error: "FinCom's cloud does not keep the nightly check yet (migration 65)." });
+  if (error) throw new Error(error.message);
+  console.log("tally-ingest selfcheck", book, (data as any)?.result, String((data as any)?.words || "").slice(0, 200));
+  return reply(200, data);
+}
 // a few days of the day book (each gzipped), into a book: stored, and read into entries, lines and ready totals
 async function ingestDays(firm: string, book: string, daysIn: unknown) {
   const r = await ingestDaysRaw(firm, book, daysIn);
@@ -2991,6 +3045,11 @@ Deno.serve(async (req) => {
         const { error } = await db.rpc("tally_ingest_state", { p_book: book, p_state: st });
         if (error) throw new Error(error.message);
         return reply(200, { ok: true });
+      }
+      case "selfcheck": {
+        const book = await bookFor(firm, String(body.company || ""));
+        if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
+        return await selfCheck(dev, firm, book, body);
       }
       case "recorder_lines": case "start_point": {
         const book = await bookFor(firm, String(body.company || ""));
