@@ -1,0 +1,6 @@
+2026-10-08 11:00:00  Recorder: Receipt 4 of 02-Oct-2026 (MasterID 5, line e7562091…): asking Tally by MasterID
+2026-10-08 11:00:00  Recorder: entry fetch of FinCom Spike Co: answered in 1 ms
+2026-10-08 11:00:00  Recorder: FinCom Spike Co: delete of mid 5: held: this computer's Tally could not be asked whether it was deleted here (Tally's answer could not be read: <ERRORMSG>Could not find Voucher:ID:5!</ERRORMSG> ); not sent as a delete: held
+2026-10-08 11:00:00  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (Tally's answer could not be read: <ERRORMSG>Could not find Voucher:ID:5!</ERRORMSG> ); sent without it (FinCom holds the line until a body comes)
+2026-10-08 11:02:59  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=2; now ALTVCHID=9, ALTMSTID=211
+2026-10-08 11:02:59  Ledger changes for FinCom Spike Co: Tally's master counter 209 -> 211: 1 request(s) for AlterID 210-211, 0 ledger(s); the last number is 211
