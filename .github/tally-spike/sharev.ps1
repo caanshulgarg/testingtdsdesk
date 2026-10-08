@@ -272,9 +272,12 @@ try {
   $null = TK 'Share Bank{ENTER}' 3 'P7c-brs' 'Reconcil|Bank Date|Bankers'
   # (run 37754251128, 6.2 / 7.1: the bank opens a Bank Reconciliation SUMMARY with no Bank Date column; the date typed
   # there and Enter drilled into Ledger Vouchers. Its "Manual Recon" button opens the screen with the Bank Date column:
-  # Ctrl+R, else Alt+R, the screen read after each)
+  # Alt+R (run 37763910797: 6.2), else Ctrl+R, the screen read after each)
   $t7 = TdsScreen 'P7c-screen'
-  if ($t7 -notmatch 'Bank Date') { foreach ($k7 in @('^r', '%r')) { $null = TK $k7 3 'P7c-manual'; $t7 = TdsScreen 'P7c-manual-screen'; if ($t7 -match 'Bank Date') { break } } }
+  if ($t7 -notmatch 'Bank Date') { foreach ($k7 in @('%r', '^r')) { $null = TK $k7 5 'P7c-manual'; $t7 = TdsScreen 'P7c-manual-screen'
+      # (7.1: a "Want to save your time?" box over Manual Recon; D: Don't Show Again closes it)
+      for ($q7 = 0; $q7 -lt 3 -and $t7 -match 'save your time|Know More|Show Again'; $q7++) { $null = TK $(if ($q7 -lt 2) { 'd' } else { '{ESC}' }) 2.5 'P7c-popup'; $t7 = TdsScreen 'P7c-popup-closed' }
+      if ($t7 -match 'Bank Date') { break } } }
   if ($t7 -match 'Bank Date') { $null = TK '2-10-2026{ENTER}' 2 'P7c-date' } else { Write-Host 'P7c: no screen with a Bank Date column' }
   $null = TK '^a' 3 'P7c-accept'; $t = TdsScreen 'P7c-after'; if ($t -match 'Yes or No') { & $script:TdsSend 'y'; Start-Sleep 3 }
   $null = TdsGateway 'after P7c'

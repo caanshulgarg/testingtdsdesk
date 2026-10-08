@@ -168,6 +168,7 @@ if ($script:bkStuck) { BkFresh 'after discovery' }
 
 # ---- the steps
 $script:bkRows = @()
+$script:bkMarks = [ordered]@{}   # probe file -> the button title its [#Form] adds (seen on the screen = the hook attached to that form)
 # Bank Reconciliation (Share Bank): the first unreconciled row's Bank Date typed; 6.x / 7.x open a summary first, whose
 # "Manual Recon" button (Ctrl+R or Alt+R: both tried, the screen read) opens the screen with the Bank Date column
 function BkBrs($tag) {
@@ -176,14 +177,18 @@ function BkBrs($tag) {
   $null = TdsGateway "before $tag"
   $null = TK '%g' 2 "$tag-goto"; $null = TK 'Bank Reconciliation' 1.5 "$tag-typed"; $null = TK '{ENTER}' 3 "$tag-select"
   $null = TK 'Share Bank{ENTER}' 3 "$tag-bank"
-  $t = TdsScreen "$tag-screen"; $how = 'direct'
+  $t = TdsScreen "$tag-screen"; $how = 'direct'; $tFirst = $t
   if ($t -notmatch 'Bank Date') {
     $how = 'none'
-    foreach ($k in @('^r', '%r')) {
-      $null = TK $k 3 "$tag-manual"; $t = TdsScreen "$tag-manual-screen"
+    foreach ($k in @('%r', '^r')) {
+      $null = TK $k 5 "$tag-manual"; $t = TdsScreen "$tag-manual-screen"
+      # (run 37763910797, 7.1: Manual Recon opens under a "Want to save your time? ... K: Know More / D: Don't Show
+      # Again" box; D closes it)
+      for ($q = 0; $q -lt 3 -and $t -match 'save your time|Know More|Show Again'; $q++) { $null = TK $(if ($q -lt 2) { 'd' } else { '{ESC}' }) 2.5 "$tag-popup"; $t = TdsScreen "$tag-popup-closed" }
       if ($t -match 'Bank Date') { $how = $(if ($k -eq '^r') { 'Ctrl+R Manual Recon' } else { 'Alt+R Manual Recon' }); break }
     }
   }
+  $mk = @(foreach ($m in $script:bkMarks.Keys) { if ("$tFirst $t" -match $script:bkMarks[$m]) { $m } }); if ($script:bkMarks.Count) { $how += "; probe markers on the screen: $(if ($mk.Count) { $mk -join ', ' } else { 'none' })" }
   $sv = $null
   if ($t -match 'Bank Date') {
     $null = TK '2-10-2026{ENTER}' 2 "$tag-date"
@@ -272,7 +277,10 @@ Set-Content (Join-Path $pd 'probe-common.tdl') $common -Encoding ASCII
 $probes = [ordered]@{}
 $sysEv = [ordered]@{ 'sys-afteralter' = 'After Alter Object'; 'sys-beforealter' = 'Before Alter Object'; 'sys-onalter' = 'On Alter'; 'sys-beforesave' = 'Before Save Object'; 'sys-aftersave' = 'After Save Object' }
 foreach ($k in $sysEv.Keys) { $probes[$k] = "[System: Events]`r`n    FCRP$($k -replace '\W', '') : $($sysEv[$k]) : Yes : Call : FCRPWrite : `"$k`"`r`n" }
-$i = 0; foreach ($n in $brsUse) { $i++; $probes["brs$i"] = "[#Form: $n]`r`n    On : Form Accept : Yes : Call : FCRPWrite : `"brs${i}_pre`"`r`n    On : Form Accept : Yes : Form Accept`r`n    On : Form Accept : Yes : Call : FCRPWrite : `"brs${i}_post`"`r`n"; Info "probe brs$i = [#Form: $n]" }
+$markWords = @('Zebra Mark', 'Lotus Mark', 'Tiger Mark', 'Maple Mark', 'Coral Mark', 'Amber Mark', 'Cedar Mark', 'Delta Mark')
+$i = 0; foreach ($n in $brsUse) { $i++; $w = $markWords[($i - 1) % $markWords.Count]; $script:bkMarks["brs$i"] = $w
+  $probes["brs$i"] = "[#Form: $n]`r`n    Add : Button : FCRPB$i`r`n    On : Form Accept : Yes : Call : FCRPWrite : `"brs${i}_pre`"`r`n    On : Form Accept : Yes : Form Accept`r`n    On : Form Accept : Yes : Call : FCRPWrite : `"brs${i}_post`"`r`n`r`n[Button: FCRPB$i]`r`n    Key    : Ctrl+Alt+F$([math]::Min(12, 2 + $i))`r`n    Title  : `"$w`"`r`n    Action : Display : Day Book`r`n"
+  Info "probe brs$i = [#Form: $n] (its button '$w' on the screen = attached)" }
 $i = 0; foreach ($n in $allocUse) { $i++; $probes["alloc$i"] = "[#Form: $n]`r`n    On : Form Accept : Yes : Call : FCRPWrite : `"alloc${i}_pre`"`r`n    On : Form Accept : Yes : Form Accept`r`n    On : Form Accept : Yes : Call : FCRPWrite : `"alloc${i}_post`"`r`n"; Info "probe alloc$i = [#Form: $n]" }
 $files = @($tdl, (Join-Path $pd 'probe-common.tdl'))
 foreach ($k in $probes.Keys) {
@@ -286,11 +294,16 @@ $script:bkIni = $files; BkIni
 BkFresh 'BK1: the probe variant loaded'
 # which probe files Tally loaded: its answer to each file's own collection
 $alive = [ordered]@{}
+# (run 37763910797: every collection asked, defined or not, came back with the same header-only answer; the answer for a
+# collection that is surely not defined is now the yardstick)
+$askC = { param($id) "$(BkPost ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>' + $id + '</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + (SE $co1) + '</SVCURRENTCOMPANY></STATICVARIABLES></DESC></BODY></ENVELOPE>'))" -replace '\s+', ' ' }
+$negC = (& $askC 'FCRPAliveNoSuch77') -replace 'FCRPAliveNoSuch77', '<N>'
+Info "probe-file yardstick (a collection not defined): $(if ($negC.Length -gt 200) { $negC.Substring(0, 200) } else { $negC })"
 foreach ($k in @('Common') + @($probes.Keys)) {
   $id = "FCRPAlive$($k -replace '\W', '')"
-  $a = BkPost ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>' + $id + '</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></DESC></BODY></ENVELOPE>')
-  $alive[$k] = "$a" -match '<COMPANY[ >]'
-  $s = ("$a" -replace '\s+', ' '); Info ("probe file {0}: loaded {1} ({2})" -f $k, $alive[$k], $(if ($s.Length -gt 140) { $s.Substring(0, 140) } else { $s }))
+  $a = & $askC $id
+  $alive[$k] = ($a -ne '') -and (($a -replace [regex]::Escape($id), '<N>') -ne $negC)
+  $s = $a; Info ("probe file {0}: loaded {1} ({2})" -f $k, $alive[$k], $(if ($s.Length -gt 140) { $s.Substring(0, 140) } else { $s }))
 }
 $err = @(Get-ChildItem $dir, $data1 -Recurse -File -Include *tdl*.log, tdlerr*, *error*.log -ErrorAction SilentlyContinue)
 foreach ($f in $err) { Info "Tally file $($f.FullName): $((Get-Content $f.FullName -Tail 12) -join ' | ')"; Copy-Item $f.FullName (Join-Path $cap "tally-$($f.Name)") -ErrorAction SilentlyContinue }
