@@ -15,7 +15,7 @@ What 2.4.0 changes (the full notes: docs/bridge-2.4.0-notes.md; next-inflight an
 FinCom's cloud: migrations 62 to 67 (add-only; the owner runs them, after 2.3.5's 68 and 70), and tally-ingest.
 
 Migration files (md5):
-   migration-62-tds-rate-worked-out.sql    c33ca8099d2b3799197d3d7631c25949
+   migration-62-tds-rate-worked-out.sql    bcdfd7b72b1d69b429e6b15a5e9652c6
    migration-63-recorder-repeat.sql        ff8011351b8856025710b68bad0b690c
    migration-64-pages-live.sql             0a91d37ab313331399dffdaf677de9e6
    migration-65-selfchecks.sql             eabe7dda1e8a12a11e0d9fa71ab46b7f

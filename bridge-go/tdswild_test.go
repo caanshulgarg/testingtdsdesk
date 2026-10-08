@@ -108,13 +108,20 @@ func TestTDSWildAllowListShapes(t *testing.T) {
 	if got := shapeOf(samples[vchObjectID]); got != tdsWildObjectShape {
 		t.Errorf("%s: shape %s, not the proven %s", vchObjectID, got, tdsWildObjectShape)
 	}
-	// the owner's decision of 2026-10-07 is quoted in the allow-list's decision line
+	// review L4 of 2.4.0 part 2 (08-Oct-2026): the 2.4.0 line is IN FORCE (the decision line release-check reads, not a
+	// draft), names the change and quotes the owner's approval of 2026-10-07 (option A); 2.3.1's decisions kept as history
 	al := readText("../docs/tally-allowlist.md")
-	for _, w := range []string{"the owner's decision of 2026-10-07", "ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.* and ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.SUBCATEGORYALLOCATION.*",
-		"one entry per request, read only, nothing else added", "Ask for all fields of the TDS list and its sub-list on FinComVoucherByMaster, FinComVoucherByNumber and test forms A and C."} {
-		if !strings.Contains(al, w) {
-			t.Errorf("docs/tally-allowlist.md has no line saying %q", w)
+	line := group(`(?m)^(First table: .*)$`, al, 1)
+	for _, w := range []string{"allowed for 2.4.0 by the owner's decision of 2026-10-07 (option A", "ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.* and ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.SUBCATEGORYALLOCATION.*",
+		"one entry per request, read only, nothing else added",
+		`the owner's words: "Ask for all fields of the TDS list and its sub-list on FinComVoucherByMaster, FinComVoucherByNumber and test forms A and C. One entry per request, read only, nothing else added. Work out the rate as tax divided by assessable amount where Tally stores 0, and mark it as worked out."`,
+		"as for 2.3.1: the owner's decision of 2026-10-06"} {
+		if !strings.Contains(line, w) {
+			t.Errorf("the decision line in force does not say %q", w)
 		}
+	}
+	if strings.Contains(al, "Draft of the next release's line") || strings.Contains(al, "<next>") {
+		t.Error("docs/tally-allowlist.md still holds the draft line: the 2.4.0 line is to be in force")
 	}
 	rows, _ := docAllowList(t)
 	for id, old := range tdsWildOldShapes {
@@ -145,7 +152,9 @@ func TestTDSWildRealCapture(t *testing.T) {
 	now := partAFilter(vch, liveFetchField)
 	for _, w := range []string{"<CATEGORY>S231 Contract Work</CATEGORY>", "<TAXTYPE>TDS</TAXTYPE>", "<PARTYLEDGER>S231 Contractor</PARTYLEDGER>",
 		"<SUBCATEGORY>Income Tax</SUBCATEGORY>", "<DUTYLEDGER>S231 TDS Payable</DUTYLEDGER>", "<TAXRATE>0</TAXRATE>",
-		"<ASSESSABLEAMOUNT>100000.00</ASSESSABLEAMOUNT>", "<TAX>2000.00</TAX>", "<SUBCATEGORY>Surcharge</SUBCATEGORY>"} {
+		"<ASSESSABLEAMOUNT>100000.00</ASSESSABLEAMOUNT>", "<TAX>2000.00</TAX>", "<SUBCATEGORY>Surcharge</SUBCATEGORY>",
+		// review L2 of 2.4.0 part 2: Tally's exempt mark on the line reaches the cloud (parse.js keeps it; no rate is worked out)
+		"<EXEMPTED>Yes</EXEMPTED>"} {
 		if !strings.Contains(now, w) {
 			t.Errorf("the body as the request now fetches it lacks %s", w)
 		}

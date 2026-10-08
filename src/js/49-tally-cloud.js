@@ -148,6 +148,17 @@ const TCloud = {
       .finally(() => { x.busy = false; x.at = Date.now(); render(); });
     return x;
   },
+  // review M1 of 2.4.0 part 2: the TDS details of Tally's entries in the client's book (migration 62,
+  // tally_tds_details_marked: each line with rate_worked_out and exempt), kept for the page's life, asked again after a minute
+  tdsl: {},
+  tdsLines(cid){
+    const bk = this.book(cid), x = this.tdsl[cid] = this.tdsl[cid] || {};
+    if (!bk || !bk.book || !this.on() || x.busy || (x.at && Date.now() - x.at < 60000)) return x;
+    x.busy = true; x.err = "";
+    this.rpc("tally_tds_details_marked", {p_book: bk.book}).then(j => { x.rows = [].concat(j || []); }, e => { x.err = (e && e.message) || String(e); if (/tally_tds_details_marked|does not exist|PGRST202|schema cache/i.test(x.err)) x.missing = true; })
+      .finally(() => { x.busy = false; x.at = Date.now(); render(); });
+    return x;
+  },
   // fast-sync (migration-13): the server's jobs for a client (a day book handed over, the kept day books read again),
   // the latest five; changes come live (Live.joinJobs), else every few seconds while one is going
   jobs: {}, jobsOk: null,

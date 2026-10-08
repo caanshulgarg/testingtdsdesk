@@ -52,7 +52,10 @@ READERS = ["tally_tb", "tally_period", "tally_mis", "tally_gst_summary", "tally_
            "tally_selfcheck_compare", "tally_selfcheck_copy", "tally_selfcheck_words", "tally_selfcheck_record",
            # 07-Oct-2026 (migration 66, next-masterhook: the add-on's master lines kept, heads only; review L4 of 2.4.0 part 2;
            # 66 runs in NEXT240 above)
-           "tally_recorder_masters_save"]
+           "tally_recorder_masters_save",
+           # 08-Oct-2026 (migration 62, review M1 of 2.4.0 part 2: the TDS details with the rate-worked-out and exempt marks)
+           "tally_tds_details_marked"]
+
 texts = {}
 fails = []
 def ok(c, w):

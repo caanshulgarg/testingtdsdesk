@@ -204,3 +204,4 @@ run_pages_live.py                     120  TDSDESK_SITE=../app/dist-test
 run_migration66.py                    120
 run_recorder_masters_server.py        180
 run_ledger_delete_guid.py             120
+run_tds_rate_words.py                 120  TDSDESK_SITE=../app/dist-test

@@ -434,6 +434,7 @@ func TestItems231VersionAndDecisionLine(t *testing.T) {
 	// the stand named as not real Tally; review M2: the four other trial forms unchanged, so "no other row changed" holds
 	for _, s := range []string{"re-measured on 2026-10-06 on the stand (not real Tally)", "not yet measured on NWS144",
 		// part A (the owner's decisions of 06-Oct-2026): the whole entry, strictly one entry per request
+		// review L4 of 2.4.0 part 2: 2.4.0's line is in force, 2.3.1's decisions kept in it as history ("as for 2.3.1: ...")
 		"as for 2.3.1: the owner's decision of 2026-10-06: FinComVoucherByMaster and FinComVoucherByNumber fetch the whole entry: the ledger lines kept under an invoice's items (ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS); the items",
 		"one entry per request, by Tally's own id (FinComVoucherByMaster) or by type and number (FinComVoucherByNumber); read only, within the 2-second rule, after postings, nothing else added, each bridge on its own Windows user's Tally only",
 		"TDSDeskCompanies, when asked in the background (the recorder's own-Tally look, the light check), stops hard at 2 seconds too",
