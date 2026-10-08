@@ -232,6 +232,48 @@ with sync_playwright() as p:
     b = pg.evaluate(BELL)
     ok([x for x in b["items"] if x["key"].startswith("pc:")] and not [x for x in b["items"] if "GARG" in x["text"]], "the owner: the computer's still there, the book's gone (each their own) (%s)" % [x["key"] for x in b["items"]])
     pg.evaluate(CLOSE)
+    # ---------------------------------------------------------------- 7b. the review of 08-Oct: an occurrence in every fingerprint
+    # credit low: the episode it went low; a top-up above the warning ends it; low again is a new notification
+    pg.evaluate("() => { S.account.firm = {balance: 50, warn_at: 100}; S.creditStop = null; AlertHub.list(); render(); }"); pg.wait_for_timeout(300)
+    b = pg.evaluate(BELL); cr = [x for x in b["items"] if x["key"] == "app:credit"]
+    ok(cr and cr[0]["clear"], "credit low: in the bell with its Clear (%s)" % [x["key"] for x in b["items"]])
+    pg.evaluate("() => { window.__w.calls = []; }")
+    ok(pg.evaluate(CLEAR_IN_BELL, "Credit left"), "credit low: Clear pressed"); pg.wait_for_timeout(700)
+    fp = [c[1]["p_items"][0]["fp"] for c in calls(pg) if c[0] == "alert_dismiss"]
+    ok(fp and re.match(r"^credit:low:100:\d{4}-\d{2}-\d{2}T", fp[0]), "credit low: the fingerprint names the episode (when it went low), not the balance (%s)" % fp)
+    b = pg.evaluate(BELL); ok(not [x for x in b["items"] if x["key"] == "app:credit"], "credit low: gone")
+    pg.evaluate("() => { S.account.firm.balance = 40; AlertHub.list(); render(); }"); pg.wait_for_timeout(300)
+    b = pg.evaluate(BELL); ok(not [x for x in b["items"] if x["key"] == "app:credit"], "credit low: the balance ticking down (same episode) does not bring it back")
+    pg.evaluate(CLOSE)
+    pg.evaluate("() => { S.account.firm.balance = 500; AlertHub.list(); render(); }"); pg.wait_for_timeout(1100)
+    pg.evaluate("() => { S.account.firm.balance = 30; AlertHub.list(); render(); }"); pg.wait_for_timeout(300)
+    b = pg.evaluate(BELL); ok([x for x in b["items"] if x["key"] == "app:credit"], "credit: topped up above the warning, then low again: a new notification, it shows (%s)" % [x["key"] for x in b["items"]])
+    pg.evaluate(CLOSE)
+    pg.evaluate("() => { S.account.firm = null; render(); }")
+    # self-test: this computer + the failing checks + the day
+    pg.evaluate("() => { window.selfTestSummary = () => ({state: 'fail', fails: window.__fails || ['pdf'], r: {pdf: {msg: 'no PDF reader'}, ocr: {msg: 'no OCR'}}}); render(); }"); pg.wait_for_timeout(300)
+    ok(pg.evaluate(CLEAR_IN_BELL, "Bill reading"), "self-test: Clear pressed"); pg.wait_for_timeout(700)
+    b = pg.evaluate(BELL); ok(not [x for x in b["items"] if x["key"] == "app:selftest"], "self-test: gone on this computer")
+    pg.evaluate(CLOSE)
+    pg.evaluate("() => { window.__fails = ['ocr', 'pdf']; render(); }"); pg.wait_for_timeout(300)
+    b = pg.evaluate(BELL); ok([x for x in b["items"] if x["key"] == "app:selftest"], "self-test: another check failing too: a new notification")
+    pg.evaluate(CLOSE)
+    pg.evaluate("() => { window.__fails = ['pdf']; localStorage.setItem('fincom:device-id', 'another-computer'); render(); }"); pg.wait_for_timeout(300)
+    b = pg.evaluate(BELL); ok([x for x in b["items"] if x["key"] == "app:selftest"], "self-test: on another computer the same failure shows (it is that computer's)")
+    pg.evaluate(CLOSE)
+    pg.evaluate("() => { window.selfTestSummary = () => ({state: 'none'}); render(); }")
+    # L(b): a list read before a Clear and answered after it never brings the cleared one back
+    race = pg.evaluate("""async () => { const base = TCloud.rpc; let release; const gate = new Promise(r => release = r);
+      TCloud.rpc = async (fn, a) => { if (fn === 'alert_dismissals_list'){ const list = await base(fn, a); await gate; return list; } return base(fn, a); };
+      AlertClear.st.busy = false; const p = AlertClear.load(); await new Promise(r => setTimeout(r, 150));
+      const x = {key: 'test:race', fp: 'race:1', text: 'race'}; await AlertClear.clear([x]);
+      release(); await p; TCloud.rpc = base; return AlertClear.cleared(x); }""")
+    ok(race, "a list read before a Clear and answered after it: the cleared one stays cleared")
+    # L(c): only the missing function means "no migration 68"
+    mis = pg.evaluate("""() => [AlertClear.missing(new Error('Could not find the function public.alert_dismissals_list without parameters in the schema cache (PGRST202)')),
+      AlertClear.missing(new Error('function public.alert_dismiss(jsonb) does not exist')), AlertClear.missing(new Error('Could not find the requested resource (404)')),
+      AlertClear.missing(new Error('HTTP 404')), AlertClear.missing(new Error('relation "public.tally_alerts" does not exist'))]""")
+    ok(mis == [True, True, False, False, False], "only 'the dismissal function does not exist' is taken as 'migration 68 not run' (%s)" % mis)
     # ---------------------------------------------------------------- 8. phone width
     c3 = context(390, 800); pg3 = open_page(c3)
     cid3 = sign_in(pg3, STAFF, "staff", scene=dict(SCENE, alerts=[]))
@@ -282,6 +324,14 @@ with sync_playwright() as p:
     b = pg4.evaluate(BELL)
     ok(not [x for x in b["items"] if "browser" in x["text"].lower()], "not signed in: gone")
     pg4.evaluate(CLOSE)
+    # store:unsaved is "bad" (the work is being lost): it has no Clear, and Clear all leaves it
+    pg4.evaluate("() => { S.storeKind = ''; render(); }"); pg4.wait_for_timeout(300)
+    b = pg4.evaluate(BELL); un = [x for x in b["items"] if "not being saved" in x["text"]]
+    ok(un and not un[0]["clear"], "'Your work is not being saved': no Clear (%s)" % un)
+    if b["clearAll"]: pg4.click("[data-alerts-panel] [data-alerts-clear-all]"); pg4.wait_for_timeout(500)
+    b = pg4.evaluate(BELL); ok([x for x in b["items"] if "not being saved" in x["text"]], "and Clear all leaves it")
+    pg4.evaluate(CLOSE)
+    pg4.evaluate("() => { S.storeKind = 'local'; render(); }"); pg4.wait_for_timeout(300)
     n_before = len(DB["rows"])
     pg4.reload(); pg4.wait_for_timeout(2500)
     if pg4.locator('button[data-act="useOffline"]').count(): pg4.click('button[data-act="useOffline"]'); pg4.wait_for_timeout(800)
