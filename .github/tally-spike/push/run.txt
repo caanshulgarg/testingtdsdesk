@@ -5,7 +5,7 @@ heavy_led=3000
 heavy_item=3000
 heavy_vch=30000
 heavy_min=40
-mode=fast234d
+mode=fast234r
 # v3 (07-Oct-2026): the owner's ask on the 30,004-voucher company: keyed entry fetches with the freeze probe, freezes with (rerun: godowns on heavy sales, fetch 30 s and after the saves, TDS by the S5 OCR route)
 # the bridge stopped / running, full entry with no read-back, the GUID rule, AltVchID, payroll 200, TDS (v3.ps1)
 # v3b (07-Oct-2026 07:50Z): a fetch fired by the harness during each heads-only save (bridge stopped); the keyed fetches (OctVouchers fix); TDS with the ledgers' cost centres off
@@ -24,3 +24,4 @@ mode=fast234d
 # fast234g again (07:45Z): run 37740175973 answered all 100 probes on 3.0-7.1 (GST on and off, XML and screen, no TDL); now each probe also with the FinCom add-on loaded
 # fast234lb (08:05Z): run 37741662830 asked every kind on 3.0-7.1; its 100,000 part asked nothing (Tally renumbered the invoices: found by narration now); the 200 / 500-item invoices small and at 100,000, and a voucher deleted (by number, GUID or MasterID) on 7.1 and 3.0
 # fast234d (08:20Z): a bill-wise party's line with no bill: 'On Account' in the Voucher collection, none in the object export: what does the Day Book export give? (fast234d.ps1)
+# fast234r (10:40Z): the re-review's M2 (an item invoice with a direct Sales line) and L1 (a payroll voucher typed on the Payroll screen), asked three ways (fast234r.ps1)

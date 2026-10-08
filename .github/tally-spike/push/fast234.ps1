@@ -183,7 +183,7 @@ function FMeasure($case, $t, $nv, $n, [bool]$keep) {
 
 # ---------------------------------------------------------------- run
 # fast234l (fast234l.ps1) uses the requests and helpers above, not this run
-if ($env:PD_MODE -in 'fast234l', 'fast234lb', 'fast234g', 'fast234d') { return }
+if ($env:PD_MODE -in 'fast234l', 'fast234lb', 'fast234g', 'fast234d', 'fast234r') { return }
 $fA = $script:folder; $script:co = $co
 try {
   $G = "$W\grow"; $script:G = $G; Copy-Item $light $G -Recurse

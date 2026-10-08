@@ -318,6 +318,7 @@ Set-Content (Join-Path $cap 'windows-user-candidates.txt') (@("Windows user of t
 if ($env:PD_MODE -in 'v3', 'v3b') { . "$here\v3.ps1"; try { V3TdsMasters } catch { Say "HARNESS: TDS masters: $_" } }
 # fast234l (08-Oct-2026): the 2.3.4 review's entry kinds and 200 / 500-item invoices on this light company; nothing after runs
 if ($env:PD_MODE -in 'fast234l', 'fast234lb') { . "$here\fast234l.ps1"; return }
+if ($env:PD_MODE -eq 'fast234r') { . "$here\fast234r.ps1"; return }
 Stop-T
 # heavy: the light company's folder copied (same company, same templates), then the bulk by XML
 if (Test-Path $heavy) { Remove-Item $heavy -Recurse -Force }
