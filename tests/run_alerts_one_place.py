@@ -104,7 +104,8 @@ with sync_playwright() as p:
     b = E(BELL); garg = [x for x in b["items"] if "GARG" in x["text"]]
     g = garg[0] if garg else {"text": "", "fix": "", "act": "", "sev": ""}
     ok(len(garg) == 1 and "fetching the entry" in g["fix"] and "nothing to do" in g["fix"].lower() and "Day Book" not in g["fix"] + g["act"], "a line held by FinCom's own fault (the placeholder GUID, no body): FinCom is fetching it, nothing to do, never upload a Day Book (%s | %s)" % (g["fix"], g["act"]))
-    ok(g["sev"] == "warn", "and amber, not red (%s)" % g["sev"])
+    # 2.3.5 (the owner: "a yellow field coming all the time"): nothing to do is information, said quietly; yellow is for "Needs you"
+    ok(g["sev"] == "info", "and quiet (information), not amber or red (%s)" % g["sev"])
     E(CLOSE)
     E("() => { window.__w.lines = window.__w.lines.map(l => Object.assign(l, {state: 'applied', held_why: null})); window.__w.cursor = []; AlertHub.refresh(true); Rec.gaps.at = 0; }"); pg.wait_for_timeout(1500)
     b = E(BELL)

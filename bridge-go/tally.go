@@ -265,6 +265,11 @@ func collectionRequest(id, typ, fetch, company, extra string) string {
 // read), which always gives way: 2.1.3 stops a background read at once (its request to Tally is closed) when FinCom's
 // request comes, and the read goes on from where it was afterwards
 type TC struct {
+	// next-inflight: where invokeTallyNow puts the request it gave up on while Tally is still on it (only invokeTally's own
+	// copy of a TC carries it: a shared TC never does)
+	slotOut **abandonSlot
+	// 2.3.3 (re-review L1): set true when this request was sent to Tally (it reached Tally, whatever came of it)
+	sentOut *bool
 	copier  bool
 	readSec int    // the copier: no read of the day book may hold Tally longer than this
 	enc     string // round 18: "utf-16" or "utf-8" for this request whatever TallyRequestUTF16 says ("": as the setting says)
@@ -492,40 +497,108 @@ func tallyRaw(ctx context.Context, port int, x string, timeoutSec int) (string, 
 	}
 	// a deliberate stop (the caller's deadline): not Tally's silence, never noted as such
 	stoppedHere := func() bool { return parent.Err() == nil && errors.Is(ctx.Err(), context.DeadlineExceeded) }
-	cl := &http.Client{Timeout: time.Duration(timeoutSec) * time.Second, Transport: &http.Transport{DisableKeepAlives: true, Proxy: nil}}
+	// 2.3.1 (one request in flight per Tally, inflight.go): the exchange itself runs on its own, bounded only by
+	// TallyAbandonMaxSec; the caller waits for it until its timeout, its stop or its cancel. Given up, the connection is
+	// not closed: Tally is still on it, so its answer is read and discarded, and the caller's lock is held until then
+	// next-inflight: TallyAbandonMaxSec counts from the moment the bridge stopped waiting (an import's own long timeout
+	// is never cut by it)
+	xctx, xdone := context.WithCancel(context.Background())
+	var bounded atomic.Bool
+	cl := &http.Client{Transport: &http.Transport{DisableKeepAlives: true, Proxy: nil}}
 	body, ctype := tallyBody(x, wantUTF16(ctx))
-	req, _ := http.NewRequestWithContext(ctx, "POST", fmt.Sprintf("http://%s:%d", host, port), bytes.NewReader(body))
+	req, _ := http.NewRequestWithContext(xctx, "POST", fmt.Sprintf("http://%s:%d", host, port), bytes.NewReader(body))
 	req.Header.Set("Content-Type", ctype)
 	tallySent.Add(1)
 	tallySentAt.Store(time.Now().Unix())
 	if at, _ := ctx.Value(sentKey{}).(*time.Time); at != nil {
 		*at = time.Now()
 	}
-	resp, err := cl.Do(req)
-	if err != nil {
-		if stoppedHere() {
-			return "", fmt.Errorf("%w (%g s)", errRecorderStop, ctx.Value(stopKey{}).(time.Duration).Seconds())
-		}
-		if errors.Is(ctx.Err(), context.Canceled) {
-			return "", errPreempted
-		}
-		return "", plainNetErr(err)
+	type answer struct {
+		b   []byte
+		err error
 	}
-	defer resp.Body.Close()
-	b, err := io.ReadAll(resp.Body)
-	if err != nil {
+	got := make(chan answer, 1)
+	go func() {
+		defer xdone()
+		resp, err := cl.Do(req)
+		if err != nil {
+			if bounded.Load() {
+				err = errTimeout
+			}
+			got <- answer{nil, err}
+			return
+		}
+		b, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil && bounded.Load() {
+			err = errTimeout
+		}
+		got <- answer{b, err}
+	}()
+	wait := time.NewTimer(time.Duration(timeoutSec) * time.Second)
+	defer wait.Stop()
+	var why error
+	select {
+	case a := <-got:
+		if a.err != nil {
+			return "", plainNetErr(a.err)
+		}
+		return textFromBytes(a.b), nil
+	case <-ctx.Done():
 		if stoppedHere() {
-			return "", fmt.Errorf("%w (%g s)", errRecorderStop, ctx.Value(stopKey{}).(time.Duration).Seconds())
+			why = fmt.Errorf("%w (%g s)", errRecorderStop, ctx.Value(stopKey{}).(time.Duration).Seconds())
+		} else {
+			why = errPreempted
 		}
-		if errors.Is(ctx.Err(), context.Canceled) {
-			return "", errPreempted
-		}
-		return "", plainNetErr(err)
+	case <-wait.C:
+		why = errTimeout
 	}
-	return textFromBytes(b), nil
+	// TallyAbandonMaxSec 0: the request is closed now (as before); invokeTallyNow owes the small check after a minute
+	if abandonMax() <= 0 {
+		xdone()
+		<-got
+		return "", why
+	}
+	// given up: Tally is still on it. The answer is read in the background and discarded; the lock goes when it ends
+	id, t0, gaveUp := tallyRequestID(x), time.Now(), nowFn()
+	done := make(chan struct{})
+	slot, _ := parent.Value(abandonKey{}).(*abandonSlot)
+	if slot == nil {
+		slot = &abandonSlot{}
+	}
+	slot.done, slot.id, slot.at = done, id, t0
+	bound := time.AfterFunc(abandonMax(), func() { bounded.Store(true); xdone() })
+	go func() {
+		defer close(done)
+		a := <-got
+		bound.Stop()
+		if errors.Is(a.err, errTimeout) && bounded.Load() {
+			// next-inflight: the long bound. The bridge closes the connection; whether Tally is free is not known, so the
+			// small check goes first, at once (setProbeNow: no minute's wait, nothing was sent since), and the request
+			// after it when Tally answers it
+			slot.bound = true
+			writeLog(fmt.Sprintf("Tally %d did not answer an earlier request (%s, sent at %s) in %s: taken as not answering; the next request may go (the small check first)",
+				port, id, t0.Format("15:04:05"), abandonMax().Round(time.Second)))
+			setProbeFrom(port, gaveUp)
+			setTallyStuck(port)
+			return
+		}
+		// next-inflight: Tally finished it (answered, or closed it): Tally is free, no small check is owed. Within the 20 s wait
+		// after the stop the next request goes at once (invokeTally lifts the retry schedule's wait); later, the schedule stands
+		slot.took = time.Since(t0)
+		clearProbe(port)
+		clearTallyStuck(port)
+		if slot.took <= abandonWait() {
+			writeLog(fmt.Sprintf("Tally %d finished the request the bridge stopped waiting for (%s) %s after the stop; its answer is discarded and the next request goes now",
+				port, id, slot.took.Round(100*time.Millisecond)))
+		} else {
+			writeLog(fmt.Sprintf("Tally %d answered the earlier request (%s) %s after the bridge stopped waiting (over the %s wait); its answer is discarded and the next request goes at the retry schedule's time",
+				port, id, slot.took.Round(100*time.Millisecond), abandonWait().Round(time.Second)))
+		}
+	}()
+	return "", why
 }
 
-// the words Windows uses, which the rest of the bridge (and FinCom) read
 func plainNetErr(err error) error {
 	var ne net.Error
 	s := err.Error()
@@ -618,6 +691,10 @@ func enterTallyLock(tc *TC, port int, cancel context.CancelFunc, post bool) (fun
 			case <-stopCh:
 				return nil, errPreempted
 			case <-time.After(200 * time.Millisecond):
+				// 2.3.1: Tally still on an earlier request given up: not waited for here (the retry schedule)
+				if err := earlierRefusal(port); err != nil && !tc.person {
+					return nil, err
+				}
 				continue
 			}
 			if userWaiting(port) { // FinCom came meanwhile: it goes first
@@ -642,8 +719,21 @@ func enterTallyLock(tc *TC, port int, cancel context.CancelFunc, post bool) (fun
 			}
 			g.mu.Unlock()
 		}()
-		t0, told := time.Now(), false
+		t0, told, toldEarlier := time.Now(), false, false
 		for got := false; !got; {
+			// 2.3.1 (inflight.go): Tally still on an earlier request the bridge stopped waiting for: this one waits, said once
+			if e := earlierRefusal(port); e != nil {
+				s := e.(*earlierErr).s
+				if !toldEarlier {
+					toldEarlier = true
+					writeLog(fmt.Sprintf("Tally %d: %s (%s, sent at %s); this one goes when Tally has answered it", port, earlierWords, s.id, s.at.Format("15:04:05")))
+				}
+				// next-inflight: a person's read waits up to TallyAbandonWaitSec (20 s), then backs off in plain words, nothing
+				// sent; a posting waits on (it says so, and is never lost)
+				if !post && time.Since(t0) >= abandonWait() {
+					return nil, fmt.Errorf("Tally (port %d) is still working on an earlier request (%s, sent at %s); nothing was sent (%s), try again in a moment", port, s.id, s.at.Format("15:04:05"), earlierWords)
+				}
+			}
 			// postings jump the queue: another FinCom request waits while a posting waits
 			g.mu.Lock()
 			held := !post && g.posts > 0
@@ -807,14 +897,39 @@ func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 		return invokeTallyNow(tc, port, x, timeoutSec)
 	}
 	// 2.3.1: a background request waits for the shared retry schedule (retry.go); nothing is sent before its time
-	try, err := retryTake()
+	try, err := retryTake(tallyRequestID(x))
 	if err != nil {
 		return "", err
 	}
 	t2 := *tc
 	t2.isTry = try
+	// 2.3.2 (slowco.go): the time Tally had it, told only when the request reached Tally
+	sent, took := false, time.Duration(0)
+	t2.timed = func(sec float64) {
+		sent, took = true, time.Duration(sec*float64(time.Second))
+		if tc.timed != nil {
+			tc.timed(sec)
+		}
+	}
+	var given *abandonSlot
+	t2.slotOut = &given
 	r, err := invokeTallyNow(&t2, port, x, timeoutSec)
 	retryNote(port, tallyRequestID(x), err)
+	slowNote(port, x, sent, took, err)
+	// next-inflight (the owner, 07-Oct-2026): after a stop the bridge waits up to TallyAbandonWaitSec (20 s) for Tally to
+	// finish that request, sending nothing; finished in time, the retry schedule's wait is lifted and the next request
+	// goes at once; not finished, the schedule's back-off stands
+	if s := given; s != nil && s.done != nil && err != nil {
+		go func() {
+			select {
+			case <-s.done:
+				if !s.bound && s.took <= abandonWait() {
+					retryLift()
+				}
+			case <-time.After(abandonWait() + time.Second):
+			}
+		}()
+	}
 	return r, err
 }
 
@@ -855,9 +970,25 @@ func invokeTallyNow(tc *TC, port int, x string, timeoutSec int) (string, error) 
 	if tc.enc != "" {
 		ctx = context.WithValue(ctx, encKey{}, tc.enc)
 	}
-	unlock, err := enterTallyLock(tc, port, cancel, isPostingRequest(x))
+	// 2.3.1 (inflight.go): a background read is not sent into a Tally still on an earlier request it was given up on
+	if tc.copier && !tc.person {
+		if err := earlierRefusal(port); err != nil {
+			return "", err
+		}
+	}
+	unlock0, err := enterTallyLock(tc, port, cancel, isPostingRequest(x))
 	if err != nil {
 		return "", err
+	}
+	// 2.3.1: a request given up while Tally is still on it keeps the lock until Tally answered or closed it
+	slot := &abandonSlot{}
+	ctx = context.WithValue(ctx, abandonKey{}, slot)
+	unlock := func() {
+		if slot.done != nil {
+			holdUntilAnswered(port, slot, unlock0)
+			return
+		}
+		unlock0()
 	}
 	if tc.copier && !tc.bg && !bgBackoffUntil(port).IsZero() {
 		unlock()
@@ -908,10 +1039,19 @@ func invokeTallyNow(tc *TC, port int, x string, timeoutSec int) (string, error) 
 	t0 := time.Now()
 	setInflight(port, true)
 	r, err := tallyRaw(ctx, port, x, timeoutSec)
+	// next-inflight: a request given up is held as in flight (the lock kept) until Tally finishes it; its end decides the
+	// small check (none when Tally finished it; first, after the long bound) and, within the 20 s wait, lifts the retry wait
+	held := slot.done != nil
+	if tc.slotOut != nil {
+		*tc.slotOut = slot
+	}
 	setInflight(port, false)
 	took := time.Since(t0)
 	if !sentAt.IsZero() {
 		took = time.Since(*sentAt) // the time Tally had the request (a gentle wait is not Tally's)
+		if tc.sentOut != nil {
+			*tc.sentOut = true
+		}
 	}
 	stopped := errors.Is(err, errRecorderStop)
 	if stopped {
@@ -955,7 +1095,11 @@ func invokeTallyNow(tc *TC, port int, x string, timeoutSec int) (string, error) 
 	} else {
 		fail = err.Error()
 		if re(`timed out|was closed|unexpected error occurred on a receive|forcibly closed`).MatchString(fail) {
-			setProbeAfterTimeout(port)
+			// next-inflight: a request held as in flight (Tally still on it) owes no small check here: its end decides
+			// (finished: none; the long bound: the check first). One Tally closed is checked as before
+			if !held {
+				setProbeAfterTimeout(port)
+			}
 			setTallyStuck(port)
 			// said once a busy spell; the next tries are quiet
 			busyMu.Lock()

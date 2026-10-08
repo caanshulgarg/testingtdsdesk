@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 // the stand Tally no longer holds this voucher (deleted in this Tally)
@@ -238,8 +239,8 @@ func TestH1RetryCopyCompanyStaysHeld(t *testing.T) {
 }
 
 // the 2 s stop: 2.3.1 (the owner's last change) switches nothing off; the cancel is asked again at each try of the shared
-// retry schedule, goes held after 3 stops, and is asked again by itself (a held line) at the next try, then sent with
-// Tally's GUID
+// retry schedule, goes held after 3 stops, and is asked again by itself (a held line) 1 h later (2.3.2, issue 232: a
+// held line whose asks timed out waits hours), then sent with Tally's GUID
 func TestH1RetryCancelAfterTwoSecondStop(t *testing.T) {
 	rec, f, c := liveBridge(t, `,"RecorderBodySec":2,"RecorderResolveSec":0`)
 	td := today()
@@ -271,6 +272,15 @@ func TestH1RetryCancelAfterTwoSecondStop(t *testing.T) {
 		t.Fatalf("asked before the retry's time: %v", f.ids())
 	}
 	retryDue() // the next try, by itself
+	liveResolveTurn()
+	if f.n(vchByMasterID) != n {
+		t.Fatalf("2.3.2 (issue 232, b): a line whose asks timed out was asked again before 1 h: %v", f.ids())
+	}
+	// 2.3.2 (b): its asks timed out (one timed-out try): asked again after 1 h
+	at := time.Now().Add(time.Hour + time.Minute)
+	nowFn = func() time.Time { return at }
+	t.Cleanup(func() { nowFn = time.Now })
+	retryDue()
 	liveResolveTurn()
 	uploadAll(t)
 	r := h1Resolved(c, "cancelled")

@@ -427,7 +427,10 @@ const TCloud = {
           main: isMain, mayPost, at: b.at, tally: b.tallyState || (b.tally ? "open" : "closed"), open: b.open || [], go: id !== "v1",
           reqs: mine("reqs") || null, readStopped: mine("readStopped") || null, paused: !!mine("paused"), readStop: info.readStop || null,
           // bridge 2.3.1: a request not answered in time and when it tries again by itself ({words, at, next, tries})
-          tallyRetry: mine("tallyRetry") || null}); });
+          tallyRetry: mine("tallyRetry") || null,
+          // bridge 2.3.2: the companies whose entries it no longer asks Tally for (over 2 s to find one), as tally-ingest keeps
+          // them on its own entry ({bodies: {company: {off, seconds, at, why}}}); shown only for a 2.3.2 bridge or later
+          recorderOff: b.recorderOff || null}); });
       if (!br.v1 && info.beat) rows.push({device: d, id: "v1", computer: info.computer || d.name, user: info.user || "", version: info.beat.version || d.version || "",
         main: !main, at: info.beat.at, tally: info.beat.tallyState || (info.beat.tally ? "open" : "closed"), open: info.beat.open || [], go: false});
       if (info.shadow && !Object.keys(br).some(id => id !== "v1")) rows.push({device: d, id: "", computer: info.computer || d.name, user: info.user || "", version: info.shadow.version || "",
@@ -573,8 +576,8 @@ const TCloud = {
   readState(r){
     if (!r.online) return {state: "offline", text: "Offline" + (r.at ? " since " + fmtDateTime(r.at) : "")};
     const st = this.stopFor(r.device.id), rs = r.readStopped || {};
-    if (st) return {state: "fincomstop", text: "Stopped from FinCom: " + (st.reason || "no reason given"), reason: st.reason || ""};
-    if (rs.by === "fincom") return {state: "fincomstop", text: "Stopped from FinCom: " + (rs.reason || "no reason given"), reason: rs.reason || ""};
+    if (st) return {state: "fincomstop", text: "Reading stopped from FinCom: " + (st.reason || "no reason given"), reason: st.reason || ""};
+    if (rs.by === "fincom") return {state: "fincomstop", text: "Reading stopped from FinCom: " + (rs.reason || "no reason given"), reason: rs.reason || ""};
     if (r.paused) return {state: "paused", text: "Paused"};
     const tr = r.tallyRetry || {};
     if (tr.words) return {state: "retrying", text: String(tr.words), reason: ""};
@@ -1266,8 +1269,8 @@ const TLight = {
 // FinCom Bridge 2.1.3 reads Tally only after an event (a client opened here, Update now, a posting, the nightly catch-up):
 // Tally cannot send changes by itself, so FinCom says in one line a client how its Tally stands, from the bridge's
 // heartbeat, with one button, Update now:
-//   "Tally open on NWS144 · last read 15:34" | "Tally is closed on NWS144" | "NWS144 is offline" |
-//   "Tally is not answering on NWS144 since 12:28" | "Background reading paused on NWS144"
+//   "Connected · Tally open on NWS144 · last read 15:34" | "Tally not open on NWS144" | "NWS144 is offline" |
+//   "Tally is not answering on NWS144 since 12:28" | "Reading paused on NWS144" (FinCom 2.3.5: the cards' words)
 // {state: open | closed | offline | notanswering | paused, level, text, computer, read}; null when no Tally computer
 // keeps this client's company (and the bridge here does not have it open)
 function tallyHm(t){
@@ -1298,15 +1301,16 @@ function tallyLine(co){
   const ask = TallyAsk[co.id], updating = !!(beat && beat.updating);
   const reading = updating || !!(ask && now - ask.at < 180000 && !((Date.parse(read || 0) || 0) > ask.before));
   const o = (state, level, text) => ({state, level, text, computer: comp, read, reading});
+  // FinCom 2.3.5: the same words as the Tally page's cards (Connected / Offline / Tally not open / Reading stopped / paused)
   if (bridge === "offline" || bridge === "none") return o("offline", "bad", comp + " is offline");
   // round 4, item 25: a stop from FinCom on the client's computer (or on all computers) comes before everything but
   // offline: "Reading stopped by <name> at <time>: <reason>"; the line's Resume (owners) and Update now look at .stop
   const stop = dev ? tallyStopOn(dev) : null;
   if (stop) return Object.assign(o("stopped", "bad", "Reading stopped " + (stop.who ? "by " + stop.who : "from FinCom") + (stop.at ? " at " + tallyHm(stop.at) : "") + ": " + (stop.reason || "no reason given")), {stop});
-  if (tally === "closed") return o("closed", "warn", "Tally is closed on " + comp);
+  if (tally === "closed") return o("closed", "warn", "Tally not open on " + comp);
   if (since) return o("notanswering", "bad", "Tally is not answering on " + comp + " since " + tallyHm(since));
-  if (paused) return o("paused", "warn", "Background reading paused on " + comp);
-  return o("open", "ok", "Tally open on " + comp + (read ? " \u00b7 last read " + tallyHm(read) : ""));
+  if (paused) return o("paused", "warn", "Reading paused on " + comp);
+  return o("open", "ok", "Connected \u00b7 Tally open on " + comp + (read ? " \u00b7 last read " + tallyHm(read) : ""));
 }
 // the stop from FinCom standing on a computer, as the per-client line needs it: the one for all computers, else the
 // computer's own (tally_read_stops read by TLight, or by the Tally page), else the computer's info.readStop from its

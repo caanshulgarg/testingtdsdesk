@@ -445,7 +445,7 @@ func TestItems231TwoSecondRule(t *testing.T) {
 
 // --- 5. the version and the allow-list's decision line for 2.3.1
 func TestItems231VersionAndDecisionLine(t *testing.T) {
-	if BridgeVersion != "2.3.1" {
+	if BridgeVersion != "2.3.3" {
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	al := readText("../docs/tally-allowlist.md")
@@ -454,7 +454,7 @@ func TestItems231VersionAndDecisionLine(t *testing.T) {
 	// the stand named as not real Tally; review M2: the four other trial forms unchanged, so "no other row changed" holds
 	for _, s := range []string{"re-measured on 2026-10-06 on the stand (not real Tally)", "not yet measured on NWS144",
 		// part A (the owner's decisions of 06-Oct-2026): the whole entry, strictly one entry per request
-		"allowed for 2.3.1 by the owner's decision of 2026-10-06: FinComVoucherByMaster and FinComVoucherByNumber fetch the whole entry: the ledger lines kept under an invoice's items (ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS); the items",
+		"as for 2.3.1: the owner's decision of 2026-10-06: FinComVoucherByMaster and FinComVoucherByNumber fetch the whole entry: the ledger lines kept under an invoice's items (ALLINVENTORYENTRIES.ACCOUNTINGALLOCATIONS); the items",
 		"one entry per request, by Tally's own id (FinComVoucherByMaster) or by type and number (FinComVoucherByNumber); read only, within the 2-second rule, after postings, nothing else added, each bridge on its own Windows user's Tally only",
 		"TDSDeskCompanies, when asked in the background (the recorder's own-Tally look, the light check), stops hard at 2 seconds too",
 		"FinComFetchTestB, D, E and F stay byte for byte as in 2.3.0; no other row changed",

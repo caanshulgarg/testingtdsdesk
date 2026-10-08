@@ -63,12 +63,14 @@ with sync_playwright() as p:
     pg.goto("http://localhost:8343/"); pg.wait_for_timeout(2500)
     pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
     E = lambda js, *a: pg.evaluate(js, *a)
+    # FinCom 2.3.5, the simpler Tally page: the rest of a computer's card (and of the page) is under More; open them all
+    more = lambda: (pg.evaluate("() => document.querySelectorAll('#app [data-more-toggle][aria-expanded=\"false\"]').forEach(b => b.click())"), pg.wait_for_timeout(500))
     txt = lambda sel: pg.inner_text(sel).replace("\n", " ").strip() if pg.locator(sel).count() else ""
     RS = lambda d: '#app [data-computer="%s"] [data-recorder-source]' % d
     PICK = lambda d: RS(d) + " select[data-recorder-source-pick]"
     side = pg.locator('#side button[aria-label="Tally"]')
     def page(role, lines=None):
-        E(SETUP, [DEVS, role, lines]); pg.wait_for_timeout(500); side.first.click(); pg.wait_for_timeout(1500)
+        E(SETUP, [DEVS, role, lines]); pg.wait_for_timeout(500); side.first.click(); pg.wait_for_timeout(1500); more()
     page("owner")
     ok(pg.locator("#app [data-computer]").count() == 3, "three computers on the Tally page")
     t1, t2, t3 = txt(RS(D1)), txt(RS(D2)), txt(RS(D3))

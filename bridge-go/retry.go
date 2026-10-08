@@ -28,7 +28,16 @@ var (
 	retryAt    time.Time // when Tally last did not answer in time
 	retryUntil time.Time // no background request before this
 	retryGoing bool      // the try is at Tally now: the other background requests wait for its answer
+	// 2.3.3 (the slow-company rule with only entry requests going): a small check (the beat's light company check, the
+	// company list) found the schedule waiting at this time: the next try is kept for it (RecorderSmallTrySec, 120 s at
+	// most), so Tally's answer in time to another request is seen between two entry stops
+	retrySmallWant time.Time
 )
+
+// 2.3.3: the small checks a try is kept for (existing requests of the allow-list; none added or changed)
+func retrySmall(id string) bool {
+	return id == "FinComCompany" || id == cnReportID || id == "TDSDeskCompanies" || id == "FinComFree"
+}
 
 // a background request held by the schedule (nothing sent): not a posting going first (gaveWay is false), not counted
 // as a try of anything
@@ -71,18 +80,32 @@ func retryNext() time.Time {
 func retryReset() {
 	retryMu.Lock()
 	retryN, retryAt, retryUntil, retryGoing = 0, time.Time{}, time.Time{}, false
+	retrySmallWant = time.Time{}
 	retryMu.Unlock()
 }
 
-// a background request about to be sent: it goes (try: it is the schedule's try), or why it waits
-func retryTake() (try bool, err error) {
+// a background request about to be sent (id: its request id): it goes (try: it is the schedule's try), or why it waits.
+// 2.3.3: a small check that found the schedule waiting has the next try kept for it, 120 s at most after it is due
+func retryTake(id string) (try bool, err error) {
 	retryMu.Lock()
 	defer retryMu.Unlock()
 	if retryN == 0 {
 		return false, nil
 	}
-	if nowFn().Before(retryUntil) || retryGoing {
+	now := nowFn()
+	small := retrySmall(id)
+	if now.Before(retryUntil) || retryGoing {
+		if small {
+			retrySmallWant = now
+		}
 		return false, &retryErr{retryAt, retryUntil}
+	}
+	keep := time.Duration(keepNum("RecorderSmallTrySec", 120)) * time.Second
+	if !small && !retrySmallWant.IsZero() && now.Sub(retrySmallWant) <= keep && now.Sub(retryUntil) <= keep {
+		return false, &retryErr{retryAt, retryUntil} // the try is kept for the small check waiting for it
+	}
+	if small {
+		retrySmallWant = time.Time{}
 	}
 	retryGoing = true
 	return true, nil
@@ -116,6 +139,16 @@ func retryNote(port int, id string, err error) {
 		retryUntil = retryAt.Add(retryStep(retryN))
 		writeLog(fmt.Sprintf("Tally %d did not answer in time at %s (%s, try %d); trying again by itself at %s",
 			port, retryAt.Format("15:04:05"), id, retryN, retryUntil.Format("15:04:05")))
+	}
+}
+
+// next-inflight: Tally finished the request given up within the 20 s wait after the stop: the next background request
+// may go now (the step count stays: another stop waits longer)
+func retryLift() {
+	retryMu.Lock()
+	defer retryMu.Unlock()
+	if retryN > 0 && !retryGoing && nowFn().Before(retryUntil) {
+		retryUntil = nowFn()
 	}
 }
 
