@@ -314,8 +314,10 @@ func TestNoticeClearAll(t *testing.T) {
 	g.Check(trayProblem{Kind: "tally", Cond: true, After: 3 * time.Minute, Title: "t", Text: "t"}) // not yet due
 	g.Check(trayProblem{Kind: "idrefused", Cond: true, Title: "i", Text: "i"})                     // shown, then dismissed
 	g.BalloonEvent(ninBalloonUserClick)
-	if n := g.ClearAll(); n != 2 {
-		t.Fatalf("cleared %d, want 2 (offline shown, tally waiting; idrefused was dismissed already)", n)
+	// review Low (08-Oct): only what was shown is cleared; a problem still waiting its while was never seen and still
+	// shows when due
+	if n := g.ClearAll(); n != 1 {
+		t.Fatalf("cleared %d, want 1 (offline shown; tally still waiting, never seen; idrefused dismissed already)", n)
 	}
 	if *hides != 2 {
 		t.Fatalf("the balloon on screen not taken away: hides %d", *hides)
@@ -326,16 +328,30 @@ func TestNoticeClearAll(t *testing.T) {
 	if w := clearedWords(1); !strings.Contains(w, "1 notification ") {
 		t.Fatalf("words: %q", w)
 	}
+	s := openNoticeStore(f, func() time.Time { return now })
+	if r, _ := s.Get(problemKey{Kind: "offline", Day: "2026-10-08", Computer: "PC-ONE"}.id()); r.How != "cleared" {
+		t.Fatalf("offline: %+v", r)
+	}
+	if s.Has(problemKey{Kind: "tally", Day: "2026-10-08", Computer: "PC-ONE"}.id()) {
+		t.Fatal("tally, never shown, recorded by Clear notifications")
+	}
+	// the waiting one shows when due, once; then a clear takes it too
 	now = now.Add(10 * time.Minute)
 	g.Check(trayProblem{Kind: "tally", Cond: true, After: 3 * time.Minute, Title: "t", Text: "t"})
+	if len(*shown) != 3 || (*shown)[2].title != "t" {
+		t.Fatalf("tally when due after a clear: shown %v", *shown)
+	}
+	if n := g.ClearAll(); n != 1 {
+		t.Fatalf("second clear: %d, want 1 (tally)", n)
+	}
 	g2, shown2, _ := noticeTestGate(t, f, &now)
 	for _, k := range []string{"offline", "tally", "idrefused"} {
 		g2.Check(trayProblem{Kind: k, Cond: true, Title: k, Text: k})
 	}
-	if len(*shown) != 2 || len(*shown2) != 0 {
-		t.Fatalf("after clearing: shown %v then %v", *shown, *shown2)
+	if len(*shown2) != 0 {
+		t.Fatalf("after clearing and a restart: shown %v", *shown2)
 	}
-	s := openNoticeStore(f, func() time.Time { return now })
+	s = openNoticeStore(f, func() time.Time { return now })
 	if r, _ := s.Get(problemKey{Kind: "tally", Day: "2026-10-08", Computer: "PC-ONE"}.id()); r.How != "cleared" {
 		t.Fatalf("tally: %+v", r)
 	}
