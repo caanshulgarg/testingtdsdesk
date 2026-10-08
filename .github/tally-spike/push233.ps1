@@ -171,6 +171,23 @@ function P3UseCo($co = $co1) {
   return ($cur1 -eq $co -or -not $cur1)   # an empty answer: not told; the saves' own checks judge
 }
 
+# one save on the large company timed as P3Save times it (Ctrl+A to a new line in a file): the add-on's full line, or with
+# $stampFile a stamp-only TDL's line (item 5); Alt+2 of the last entry of 1-4-2026
+function P3TimeBig($label, $stampFile) {
+  if (-not (P3Alive)) { throw "Tally 9000 has no window before the timed save $label" }
+  DayBookAt $P233.tpl.big.dmy "p233-t-$label-daybook"; KeysTo 9000 '{END}' 1; KeysTo 9000 '%2' 4 "p233-t-$label-dup"
+  $c0 = if ($stampFile) { @(Get-Content $stampFile -Encoding Unicode -ErrorAction SilentlyContinue).Count } else { @(P3RecLines).Count }
+  $p = Get-Process -Id $script:tallyPids[9000] -ErrorAction SilentlyContinue
+  [W32F4]::ShowWindow($p.MainWindowHandle, 9) | Out-Null; [W32F4]::SetForegroundWindow($p.MainWindowHandle) | Out-Null; Start-Sleep -Milliseconds 500
+  $sw = [Diagnostics.Stopwatch]::StartNew(); [System.Windows.Forms.SendKeys]::SendWait('^a'); $ms = -1
+  while ($sw.Elapsed.TotalSeconds -lt 30) {
+    if ($stampFile) { if (@(Get-Content $stampFile -Encoding Unicode -ErrorAction SilentlyContinue).Count -gt $c0) { $ms = [int]$sw.Elapsed.TotalMilliseconds; break } }
+    elseif (@(P3RecLines | Select-Object -Skip $c0 | Where-Object { $_ -like 'FCR1|ev=voucher_full|*' -and $_ -like '*|end=1|t1=*' }).Count) { $ms = [int]$sw.Elapsed.TotalMilliseconds; break }
+    Start-Sleep -Milliseconds 25
+  }
+  Start-Sleep 2; Shot "p233-t-$label-saved"; KeysTo 9000 '{ESC}' 1
+  return $ms
+}
 function P3Save($kind, [switch]$alter, $co = $co1, [switch]$noList) {
   if (-not (P3Alive)) { throw "Tally 9000 has no window (it quit or crashed) before the $kind save: the steps after this are not run" }
   $t = $P233.tpl[$kind]; $before = P3RecLines; $alt0 = P3Alt $co; $vs0 = if ($noList) { @() } else { Vouchers 9000 $co }
@@ -287,28 +304,80 @@ function Push233 {
   $hc = @(WaitLine $m6 { $_.ev -in 'cancelled', 'deleted' } 120)
   Result 'push233 P6 cancel and delete: heads only' (@($new | Where-Object { $_ -like 'FCR1|ev=voucher_full|*' }).Count -eq 0 -and @($new | Where-Object { $_ -match '^FCR1\|ev=after_(cancel|delete)\|' }).Count -ge 1) ("the add-on wrote: {0}; the stub: {1}" -f (P3Kinds $new), (($hc | ForEach-Object { Ev $_ }) -join ' | '))
 
-  # P7 (item 1): after-save details. The e-way bill number and the e-invoice details on the saved 50-item invoice (Alt+2's copy
-  # opened again, its e-way bill / e-invoice details screen by the voucher's Alt+... keys as this release offers them), and the
-  # bankers date of the receipt in Bank Reconciliation. Per case: the line written (full / heads / nothing), ALTVCHID before and
-  # after; screenshots p233-p7-*
-  foreach ($case in @(
-      @{ n = 'e-way bill number on the saved invoice'; keys = @('%e', '{ENTER}', 'EWB-P233-1{ENTER}', '^a') ; day = $P233.tpl.sales50.dmy },
-      @{ n = 'e-invoice details (IRN, ack no, ack date) on the saved invoice'; keys = @('%i', '{ENTER}', 'IRN-P233-0001{ENTER}', 'ACK-P233-1{ENTER}', '1-12-2026{ENTER}', '^a'); day = $P233.tpl.sales50.dmy })) {
-    $b = P3RecLines; $a0 = P3Alt
-    DayBookAt $case.day "p233-p7-$($case.n.Substring(0, 6))-daybook"; KeysTo 9000 '{END}' 1; KeysTo 9000 '{ENTER}' 3 "p233-p7-$($case.n.Substring(0, 6))-open"
-    foreach ($k in $case.keys) { KeysTo 9000 $k 2 }
-    Shot "p233-p7-$($case.n.Substring(0, 6))-done"; KeysTo 9000 '{ESC}' 1
-    Start-Sleep 3; $a1 = P3Alt; $n = @(P3RecLines | Select-Object -Skip $b.Count)
-    Add-Content -Path $resultsFile -Encoding UTF8 -Value ("MEASURE push233 P7 {0}: the add-on wrote {1}; ALTVCHID {2} -> {3}; the line's irn/ewb fields: {4}" -f $case.n, (P3What $n), $a0.vch, $a1.vch, (($n | ForEach-Object { [regex]::Matches($_, '\|(irn|irnack|irnackdt|ewb)(:\d+)?=[^|]*') | ForEach-Object Value }) -join ' '))
-  }
-  $b = P3RecLines; $a0 = P3Alt
-  KeysTo 9000 '%g' 2; KeysTo 9000 'Bank Reconciliation' 1; KeysTo 9000 '{ENTER}' 3 'p233-p7-brs-select'; KeysTo 9000 'P233 Bank{ENTER}' 4 'p233-p7-brs-open'
-  KeysTo 9000 '{DOWN}' 1; KeysTo 9000 '{RIGHT}{RIGHT}{RIGHT}{RIGHT}' 1; KeysTo 9000 '2-11-2026{ENTER}' 2 'p233-p7-brs-date'; KeysTo 9000 '^a' 3 'p233-p7-brs-saved'
-  KeysTo 9000 '{ESC}' 1; Start-Sleep 3
-  $a1 = P3Alt; $n = @(P3RecLines | Select-Object -Skip $b.Count)
-  Add-Content -Path $resultsFile -Encoding UTF8 -Value ("MEASURE push233 P7 bankers date in Bank Reconciliation: the add-on wrote {0}; ALTVCHID {1} -> {2}; the bdt fields: {3}" -f (P3What $n), $a0.vch, $a1.vch, (($n | ForEach-Object { [regex]::Matches($_, 'bdt=[^~|]*') | ForEach-Object Value }) -join ' '))
-  $vb = P3Coll 'P3Brs' 'Voucher' 'GUID, MASTERID, ALTERID, ALLLEDGERENTRIES.BANKALLOCATIONS.BANKERSDATE' '$VoucherNumber = "P233-R1"'
-  Set-Content (Join-Path $P233.dir 'p7-brs-export.xml') $vb -Encoding UTF8
+  # P7 (item 1): details set after the save. Run 37688178377's keys made nothing (Alt+E is Tally's Export menu; this company
+  # has no GST, so its invoices have no e-way bill / e-invoice fields on the form; the bank-date keys opened a ledger's
+  # vouchers). By the routes this company has, each change MADE and checked in Tally's stored entry, then judged by what
+  # FinCom got (the stub, 120 s):
+  #   P7a the IRN and e-way bill written back after the save by a tool (an XML alteration of the saved invoice, as e-invoice
+  #       and e-way bill utilities write them back): no form, so no line is expected from the add-on
+  #   P7b that invoice saved again on its form: the full line's irn / irnack / irnackdt / ewb against the stored values
+  #   P7c the bank date set in Bank Reconciliation (the user's own screen)
+  . (Join-Path $PSScriptRoot 'tdslib.ps1')
+  $script:TdsSend = { param([string]$k) KeysTo 9000 $k 0 | Out-Null }
+  $script:TdsPost = { param([string]$x) Post 9000 $x }
+  $script:TdsRestart = { Stop-Process -Id $script:tallyPids[9000] -Force -ErrorAction SilentlyContinue; Start-Sleep 4
+    $t = Start-Process -FilePath $exe -WorkingDirectory $dir -PassThru; $script:tallyPids[9000] = $t.Id
+    $null = WaitPort 9000; Start-Sleep 5; KeysTo 9000 'a' 4; KeysTo 9000 't' 10; $null = P3UseCo }
+  $script:TdsCo = $co1
+  $f7 = 'GUID, MASTERID, ALTERID, VOUCHERNUMBER, DATE, IRN, IRNACKNO, IRNACKDATE, EWAYBILLDETAILS.BILLNUMBER, ALLLEDGERENTRIES.LEDGERNAME, ALLLEDGERENTRIES.AMOUNT, ALLLEDGERENTRIES.BANKALLOCATIONS.BANKERSDATE, LEDGERENTRIES.LEDGERNAME'
+  $tg = { param($x, $t) [System.Net.WebUtility]::HtmlDecode([regex]::Match("$x", "<$t(?:\s[^>]*)?>([^<]*)</$t>").Groups[1].Value).Trim() }
+  $nLed = { param($x) [regex]::Matches("$x", '<LEDGERNAME[^>]*>[^<]+</LEDGERNAME>').Count }
+  $got = { param($from, $guid, $pat) @((StubLines $from) | Where-Object { $_.guid -eq $guid -and "$($_.xml)" -match $pat }) }
+  try {
+    # P7a
+    $sv0 = P3Coll 'P3Seven' 'Voucher' $f7 '$VoucherNumber = "P233-S50"'
+    $g7 = & $tg $sv0 'GUID'; $aid70 = & $tg $sv0 'ALTERID'; $nl0 = & $nLed $sv0
+    $irnTags = '<IRN>IRN-P233-0001</IRN><IRNACKNO>ACK-P233-1</IRNACKNO><IRNACKDATE>20261201</IRNACKDATE><EWAYBILLDETAILS.LIST><BILLDATE>20261201</BILLDATE><BILLNUMBER>381101234233</BILLNUMBER><DOCUMENTTYPE>Tax Invoice</DOCUMENTTYPE></EWAYBILLDETAILS.LIST>'
+    $b = P3RecLines; $a0 = P3Alt; $m7 = Mark; $how = 'neither form of XML alteration took'; $sv1 = $sv0
+    foreach ($hdr in @(('<VOUCHER REMOTEID="' + $g7 + '" VCHTYPE="Sales" ACTION="Alter"'), '<VOUCHER DATE="20261201" TAGNAME="Voucher Number" TAGVALUE="P233-S50" VCHTYPE="Sales" ACTION="Alter"')) {
+      $ax = ($P233.tpl.sales50.xml -replace '<VOUCHER VCHTYPE="Sales" ACTION="Create"', $hdr) -replace '<NARRATION>', ($irnTags + '<NARRATION>')
+      $null = P3Imp $co1 'Vouchers' @($ax) 'p7a IRN and e-way bill by a tool'
+      $sv1 = P3Coll 'P3Seven' 'Voucher' $f7 '$VoucherNumber = "P233-S50"'
+      if ((& $tg $sv1 'IRN') -eq 'IRN-P233-0001') { $how = $hdr -replace '^<VOUCHER ', ''; break }
+    }
+    Set-Content (Join-Path $P233.dir 'p7a-stored.xml') $sv1 -Encoding UTF8
+    $made7a = (& $tg $sv1 'IRN') -eq 'IRN-P233-0001' -and (& $tg $sv1 'BILLNUMBER') -eq '381101234233' -and (& $nLed $sv1) -eq $nl0
+    Start-Sleep 120
+    $a1 = P3Alt; $n = @(P3RecLines | Select-Object -Skip $b.Count); $hit = & $got $m7 $g7 'IRN-P233-0001'
+    if (-not $made7a) { Result 'push233 P7a IRN and e-way bill written back after the save by a tool' $false ("not made: {0}; stored IRN '{1}' e-way bill '{2}', ledger names {3} -> {4}" -f $how, (& $tg $sv1 'IRN'), (& $tg $sv1 'BILLNUMBER'), $nl0, (& $nLed $sv1)) $true }
+    else { Result 'push233 P7a IRN and e-way bill written back after the save by a tool' ($hit.Count -ge 1) ("made by an XML alteration ({0}): Tally stored IRN '{1}', ack '{2}' {3}, e-way bill '{4}', AlterID {5} -> {6}; the add-on wrote {7}; ALTVCHID {8} -> {9}; FinCom got the IRN for that entry within 120 s: {10}{11}" -f `
+        $how, (& $tg $sv1 'IRN'), (& $tg $sv1 'IRNACKNO'), (& $tg $sv1 'IRNACKDATE'), (& $tg $sv1 'BILLNUMBER'), $aid70, (& $tg $sv1 'ALTERID'), (P3What $n), $a0.vch, $a1.vch, $hit.Count, $(if ($hit.Count) { ' (' + (Ev $hit[-1]) + ')' } else { ' (an alteration with no form writes no line; FinCom has it from the Day Book only)' })) }
+    # P7b
+    if ($made7a) {
+      $b = P3RecLines; $m7b = Mark
+      $null = TdsGateway 'p7b'
+      DayBookAt '1-12-2026' 'p233-p7b-daybook'; $null = TK '{HOME}' 1.5 'p7b-first'; $null = TK '{ENTER}' 3 'p7b-open' 'Alteration'
+      for ($i = 1; $i -le 3; $i++) { $null = TK '^a' 3 "p7b-accept$i"; $t = TdsScreen "p7b-after$i"; if ($t -match 'Bill-wise|Type of Ref|Dispatch|Party Details|Receipt Details') { continue }; if ($t -match 'Yes or No') { & $script:TdsSend 'y'; Start-Sleep 3; continue }; break }
+      $null = TdsGateway 'after p7b'
+      Start-Sleep 5
+      $n = @(P3RecLines | Select-Object -Skip $b.Count); $fl = @($n | Where-Object { $_ -like 'FCR1|ev=voucher_full|*' -and $_ -match "\|mid=$(& $tg $sv1 'MASTERID')\|" })
+      $lf = { param($k) if ($fl.Count) { [regex]::Match($fl[0], "\|$k=([^|]*)").Groups[1].Value } else { $null } }
+      $ackd = & $lf 'irnackdt'; $ackd8 = try { [datetime]::ParseExact($ackd, @('d-MMM-yy', 'd-MMM-yyyy'), [Globalization.CultureInfo]::InvariantCulture, 0).ToString('yyyyMMdd') } catch { $ackd }
+      $ok7b = $fl.Count -and (& $lf 'irn') -eq 'IRN-P233-0001' -and (& $lf 'irnack') -eq 'ACK-P233-1' -and $ackd8 -eq '20261201' -and (& $lf 'ewb') -eq '381101234233'
+      $hb = & $got $m7b $g7 'IRN-P233-0001'
+      Result 'push233 P7b IRN and e-way bill in the full line of the form save' $ok7b ("the add-on wrote {0}; the line: irn '{1}' irnack '{2}' irnackdt '{3}' ewb '{4}'; Tally stored IRN-P233-0001 / ACK-P233-1 / 20261201 / 381101234233; FinCom got it: {5}" -f (P3What $n), (& $lf 'irn'), (& $lf 'irnack'), $ackd, (& $lf 'ewb'), $(if ($hb.Count) { Ev $hb[-1] } else { 'no' }))
+    }
+    # P7c
+    $b = P3RecLines; $a0 = P3Alt; $m7c = Mark
+    $bf = 'GUID, MASTERID, ALTERID, VOUCHERNUMBER, ALLLEDGERENTRIES.LEDGERNAME, ALLLEDGERENTRIES.BANKALLOCATIONS.BANKERSDATE'
+    $bx0 = P3Coll 'P3Brs' 'Voucher' $bf '$VoucherTypeName = "Receipt"'
+    $null = TdsGateway 'p7c'
+    $null = TK '%g' 2 'p7c-goto'; $null = TK 'Bank Reconciliation' 1.5 'p7c-typed'; $null = TK '{ENTER}' 3 'p7c-select' 'Bank|Ledger|Select|List'
+    $null = TK 'P233 Bank{ENTER}' 3 'p7c-brs' 'Reconcil|Bank Date|Bankers'
+    $null = TK '2-11-2026{ENTER}' 2 'p7c-date'
+    $null = TK '^a' 3 'p7c-accept'; $t = TdsScreen 'p7c-after'; if ($t -match 'Yes or No') { & $script:TdsSend 'y'; Start-Sleep 3 }
+    $null = TdsGateway 'after p7c'
+    $bx1 = P3Coll 'P3Brs' 'Voucher' $bf '$VoucherTypeName = "Receipt"'
+    Set-Content (Join-Path $P233.dir 'p7c-before.xml') $bx0 -Encoding UTF8; Set-Content (Join-Path $P233.dir 'p7c-after.xml') $bx1 -Encoding UTF8
+    $dated = @(foreach ($v in [regex]::Matches("$bx1", '(?s)<VOUCHER [^>]*>.*?</VOUCHER>')) { if ($v.Value -match '<BANKERSDATE[^>]*>\s*20261102\s*<') { [pscustomobject]@{ guid = (& $tg $v.Value 'GUID'); mid = (& $tg $v.Value 'MASTERID'); aid = (& $tg $v.Value 'ALTERID'); vno = (& $tg $v.Value 'VOUCHERNUMBER') } } })
+    $was = @(foreach ($v in [regex]::Matches("$bx0", '(?s)<VOUCHER [^>]*>.*?</VOUCHER>')) { if ($v.Value -match '<BANKERSDATE[^>]*>\s*20261102\s*<') { & $tg $v.Value 'GUID' } })
+    $newDated = @($dated | Where-Object { $_.guid -notin $was })
+    Start-Sleep 120
+    $a1 = P3Alt; $n = @(P3RecLines | Select-Object -Skip $b.Count)
+    $hc = if ($newDated.Count) { & $got $m7c $newDated[0].guid '20261102' } else { @() }
+    if (-not $newDated.Count) { Result 'push233 P7c bank date set in Bank Reconciliation' $false 'not made: no receipt has the bank date 2-11-2026 after the keys (see tds-*-p7c-* screenshots)' $true }
+    else { Result 'push233 P7c bank date set in Bank Reconciliation' ($hc.Count -ge 1) ("made: receipt {0} (mid {1}, AlterID now {2}) has bank date 20261102; the add-on wrote {3}; ALTVCHID {4} -> {5}; FinCom got the bank date for that entry within 120 s: {6}" -f $newDated[0].vno, $newDated[0].mid, $newDated[0].aid, (P3What $n), $a0.vch, $a1.vch, $(if ($hc.Count) { Ev $hc[-1] } else { 'no (Bank Reconciliation is not a voucher form: no line; FinCom has it from the Day Book only)' })) }
+  } catch { Result 'push233 P7' $false "the harness stopped in P7: $_" $true }
 
   # P8 (item 2): entries with no save screen
   $cases = @(
@@ -321,21 +390,52 @@ function Push233 {
     Add-Content -Path $resultsFile -Encoding UTF8 -Value ("MEASURE push233 P8 {0}: the add-on wrote {1}; ALTVCHID {2} -> {3}; ALTMSTID {4} -> {5}" -f $c.n, (P3What $n), $a0.vch, $a1.vch, $a0.mst, $a1.mst)
   }
 
-  # P9 (item 3): automatic numbering. A new receipt (Alt+2): its number in the line against Tally's export. A back-dated insert:
-  # a receipt dated before the others (Day Book of an earlier date, Alt+I / Alt+2 there), then every receipt's number in Tally's
-  # export against the lines of the run
-  $before = Vouchers 9000 $co1
-  $r = P3Save 'receipt'
-  $vno = [regex]::Match((@($r.lines | Where-Object { $_ -like 'FCR1|ev=voucher_full|*' })[0]), '\|vno=([^|]*)').Groups[1].Value
-  Add-Content -Path $resultsFile -Encoding UTF8 -Value ("MEASURE push233 P9 a new receipt: the line's number '{0}', Tally's export '{1}' ({2})" -f $vno, $r.v.vno, $(if ($vno -eq $r.v.vno) { 'the same' } else { 'DIFFERENT' }))
-  $b = P3RecLines; $a0 = P3Alt
-  DayBookAt '1-11-2026' 'p233-p9-insert-daybook'; KeysTo 9000 '%i' 3 'p233-p9-insert'; KeysTo 9000 '{F6}' 3 'p233-p9-receipt'
-  KeysTo 9000 'P233 Party{ENTER}' 2; KeysTo 9000 '5{ENTER}' 2; KeysTo 9000 'P233 Bank{ENTER}' 2; KeysTo 9000 '{ENTER}' 2; KeysTo 9000 '^a' 4 'p233-p9-inserted'; KeysTo 9000 '{ESC}' 1
-  Start-Sleep 3; $a1 = P3Alt; $n = @(P3RecLines | Select-Object -Skip $b.Count); $after = Vouchers 9000 $co1
-  $lineNo = @{}; foreach ($l in (P3RecLines | Where-Object { $_ -like 'FCR1|ev=voucher_full|*' })) { $lineNo[[regex]::Match($l, '\|mid=(\d+)\|').Groups[1].Value] = [regex]::Match($l, '\|vno=([^|]*)').Groups[1].Value }
-  $ren = @($after | Where-Object { $o = $_; $p = @($before | Where-Object mid -eq $o.mid)[0]; $p -and $p.vno -ne $o.vno })
-  Add-Content -Path $resultsFile -Encoding UTF8 -Value ("MEASURE push233 P9 back-dated insert: the add-on wrote {0}; ALTVCHID {1} -> {2}; renumbered by Tally: {3}; each renumbered entry's last line number: {4}" -f (P3What $n), $a0.vch, $a1.vch,
-    $(if ($ren.Count) { ($ren | ForEach-Object { "mid $($_.mid): $(@($before | Where-Object mid -eq $_.mid)[0].vno) -> $($_.vno)" }) -join ', ' } else { 'none' }), $(if ($ren.Count) { ($ren | ForEach-Object { "mid $($_.mid): line '$($lineNo["$($_.mid)"])' / Tally '$($_.vno)'" }) -join ', ' } else { '-' }))
+  # P9 (item 3): automatic numbering, on receipts typed on the screen (run 37688178377: the copy picked the receipt P6 had
+  # cancelled, and the insert's keys typed into the wrong fields). P9a a new receipt: its number in its line against
+  # Tally's. P9b a receipt inserted before the first receipt of 2-11-2026 (Day Book, Alt+I): Tally renumbers the receipts
+  # after it without a form; each renumbered entry's number in FinCom (the stub's last line for it, 120 s) against Tally's
+  try {
+    if (-not $script:TdsSend) { . (Join-Path $PSScriptRoot 'tdslib.ps1') }
+    $rx = { P3Coll 'P3Rcpt' 'Voucher' 'GUID, MASTERID, ALTERID, VOUCHERNUMBER, DATE' '$VoucherTypeName = "Receipt"' }
+    $rv = { param($x) @(foreach ($v in [regex]::Matches("$x", '(?s)<VOUCHER [^>]*>.*?</VOUCHER>')) { [pscustomobject]@{ guid = (& $tg $v.Value 'GUID'); mid = [int64]('0' + (& $tg $v.Value 'MASTERID')); vno = (& $tg $v.Value 'VOUCHERNUMBER'); date = (& $tg $v.Value 'DATE') } }) }
+    $typeReceipt = { param($tag, $amount)
+      if (-not (TK 'v' 2.5 "$tag-vouchers" 'Voucher')) { return }
+      $null = TK '{F6}' 2.5 "$tag-receipt" 'Receipt'
+      $null = TK '{F2}' 1.5 "$tag-date-box" 'Date'; $null = TK '2-11-2026{ENTER}' 2 "$tag-date"
+      $null = TK 'Cash{ENTER}' 2 "$tag-account"; $null = TK 'Spike Income{ENTER}' 2 "$tag-ledger"; $null = TK "$amount{ENTER}" 2 "$tag-amount"
+      $null = TK '{ENTER}' 2 "$tag-rows-done"; $null = TK "push233 $tag{ENTER}" 2 "$tag-narr"
+      for ($i = 1; $i -le 3; $i++) { $null = TK '^a' 3 "$tag-accept$i"; $t = TdsScreen "$tag-after$i"; if ($t -match 'Yes or No') { & $script:TdsSend 'y'; Start-Sleep 3; continue }; if ($t -match 'Cost Centre|Bill-wise') { continue }; break }
+    }
+    # P9a
+    $null = TdsGateway 'p9a'; $r0 = & $rv (& $rx); $b = P3RecLines
+    & $typeReceipt 'p9a' 50
+    $null = TdsGateway 'after p9a'; Start-Sleep 3
+    $r1 = & $rv (& $rx); $nv = @($r1 | Where-Object { $_.mid -gt (@($r0 | ForEach-Object mid) + 0 | Measure-Object -Maximum).Maximum } | Sort-Object mid -Descending)[0]
+    $n = @(P3RecLines | Select-Object -Skip $b.Count); $fl = if ($nv) { @($n | Where-Object { $_ -like 'FCR1|ev=voucher_full|*' -and $_ -match "\|mid=$($nv.mid)\|" }) } else { @() }
+    $lv = if ($fl.Count) { [regex]::Match($fl[0], '\|part=1\|.*?\|vno=([^|]*)\|').Groups[1].Value } else { '' }
+    if (-not $nv) { Result 'push233 P9a a new receipt''s number in its line' $false 'not made by the keys (see tds-*-p9a-* screenshots)' $true }
+    else { Result 'push233 P9a a new receipt''s number in its line' ($lv -eq $nv.vno) ("Tally made receipt {0} (mid {1}); the line's number '{2}'; the add-on wrote {3}" -f $nv.vno, $nv.mid, $lv, (P3What $n)) }
+    # P9b
+    $r0 = & $rv (& $rx); $b = P3RecLines; $m9 = Mark; $a0 = P3Alt
+    $null = TdsGateway 'p9b'
+    DayBookAt '2-11-2026' 'p233-p9b-daybook'; $null = TK '{F4}' 2 'p9b-type'; $null = TK 'Receipt{ENTER}' 3 'p9b-receipts'; $null = TK '{HOME}' 1.5 'p9b-first'
+    $null = TK '%i' 3 'p9b-insert' 'Receipt|Creation|Insert'
+    $null = TK 'Cash{ENTER}' 2 'p9b-account'; $null = TK 'Spike Income{ENTER}' 2 'p9b-ledger'; $null = TK '60{ENTER}' 2 'p9b-amount'
+    $null = TK '{ENTER}' 2 'p9b-rows-done'; $null = TK 'push233 p9b insert{ENTER}' 2 'p9b-narr'
+    for ($i = 1; $i -le 3; $i++) { $null = TK '^a' 3 "p9b-accept$i"; $t = TdsScreen "p9b-after$i"; if ($t -match 'Yes or No') { & $script:TdsSend 'y'; Start-Sleep 3; continue }; break }
+    $null = TdsGateway 'after p9b'
+    $r1 = & $rv (& $rx)
+    $ins = @($r1 | Where-Object { $_.mid -gt (@($r0 | ForEach-Object mid) + 0 | Measure-Object -Maximum).Maximum })[0]
+    $ren = @($r1 | Where-Object { $o = $_; $p = @($r0 | Where-Object mid -eq $o.mid)[0]; $p -and $p.vno -ne $o.vno })
+    Start-Sleep 120
+    $a1 = P3Alt; $n = @(P3RecLines | Select-Object -Skip $b.Count)
+    $sl = StubLines 0
+    $fin = @(foreach ($e in $ren) { $last = @($sl | Where-Object { $_.guid -eq $e.guid -and $_.xml } | Select-Object -Last 1)[0]; $fv = if ($last) { [regex]::Match("$($last.xml)", '<VOUCHERNUMBER[^>]*>([^<]*)<').Groups[1].Value } else { '(none)' }
+      [pscustomobject]@{ mid = $e.mid; was = @($r0 | Where-Object mid -eq $e.mid)[0].vno; now = $e.vno; fincom = $fv } })
+    if (-not $ins) { Result 'push233 P9b back-dated insert: the renumbered entries in FinCom' $false 'not made: no receipt inserted (see tds-*-p9b-* screenshots)' $true }
+    elseif (-not $ren.Count) { Result 'push233 P9b back-dated insert: the renumbered entries in FinCom' $false ("receipt {0} (mid {1}) inserted; Tally renumbered none (this release's numbering kept the others' numbers); the add-on wrote {2}" -f $ins.vno, $ins.mid, (P3What $n)) $true }
+    else { Result 'push233 P9b back-dated insert: the renumbered entries in FinCom' (@($fin | Where-Object { $_.fincom -ne $_.now }).Count -eq 0) ("receipt {0} (mid {1}) inserted; Tally renumbered {2}; the add-on wrote {3}; ALTVCHID {4} -> {5}; each renumbered entry: {6}" -f $ins.vno, $ins.mid, $ren.Count, (P3What $n), $a0.vch, $a1.vch, (($fin | ForEach-Object { "mid $($_.mid) $($_.was) -> $($_.now), FinCom '$($_.fincom)'" }) -join '; ')) }
+  } catch { Result 'push233 P9' $false "the harness stopped in P9: $_" $true }
 
   # P10 (item 5): two Windows users saving at the same moment (user 2's Tally saves a ledger: the per-user file is the point)
   if ($tally2) {
@@ -355,6 +455,31 @@ function Push233 {
     KeysTo 9000 '{F3}' 3; KeysTo 9000 $P233.bigCo 2; KeysTo 9000 '{ENTER}' 6 'p233-big-selected'
     $r = P3Save 'big' -co $P233.bigCo -noList
     Add-Content -Path $resultsFile -Encoding UTF8 -Value ("MEASURE push233 P10 a save on the large company ({0} entries): Ctrl+A to the full line {1} ms; the add-on wrote {2}; the bridge's entry requests for it at the stand: {3}" -f $Slow232St.made, $r.ms_fullline, $r.what, @(P3EntryAsks | Where-Object company -eq $P233.bigCo).Count)
+    # item 5 (the owner, 08-Oct-2026): the add-on's own share of a save on the large company, by the same method (Ctrl+A to
+    # a new line in a file): 5 saves with the add-on (Ctrl+A to its full line), then Tally started again with a stamp-only
+    # TDL (one line written right after Tally's own Form Accept, nothing else: MEASUREMENT ONLY, never shipped) and 5 saves
+    # (Ctrl+A to the stamp line). The add-on's share is the difference of the medians
+    try {
+      $tAdd = @(); for ($i = 1; $i -le 4; $i++) { $tAdd += P3TimeBig "addon$i" '' }
+      $tAdd = @($r.ms_fullline) + $tAdd
+      $stampFile = 'C:\fcspike\p233-stamp.txt'; Remove-Item $stampFile -Force -ErrorAction SilentlyContinue
+      $stampTdl = 'C:\fcspike\P233Stamp.tdl'
+      Set-Content $stampTdl -Encoding ASCII -Value @(
+        ';; P233Stamp.tdl - MEASUREMENT ONLY (tally-real push233, item 5): one line right after Tally''s own Form Accept',
+        '[#Form: Voucher]', '    On : Form Accept : Yes : Form Accept', '    On : Form Accept : Yes : Call : P233Stamp', '',
+        '[Function: P233Stamp]', '    01 : OPEN FILE : "C:\fcspike\p233-stamp.txt" : Text : Write : Unicode', '    02 : IF : NOT $$LastResult',
+        '    03 :    RETURN', '    04 : END IF', '    05 : WRITE FILE LINE : "d"', '    06 : CLOSE TARGET FILE')
+      $folders = @(Get-ChildItem $data1 -Directory | Where-Object { $_.Name -match '^\d+$' } | ForEach-Object { "Load = $($_.Name)" })
+      $null = S2StartTally (S2Ini $stampTdl $folders)
+      KeysTo 9000 '{F3}' 3; KeysTo 9000 $P233.bigCo 2; KeysTo 9000 '{ENTER}' 6 'p233-t-stamp-big'
+      $tStamp = @(); for ($i = 1; $i -le 5; $i++) { $tStamp += P3TimeBig "stamp$i" $stampFile }
+      $med = { param($a) $s = @($a | Where-Object { $_ -ge 0 } | Sort-Object); if ($s.Count) { $s[[int][math]::Floor(($s.Count - 1) / 2)] } else { -1 } }
+      $mA = & $med $tAdd; $mS = & $med $tStamp
+      Add-Content -Path $resultsFile -Encoding UTF8 -Value ("MEASURE push233 item 5 the large company ({0} entries), Ctrl+A to a new line in a file: with the add-on (its full line) {1} ms, median {2}; without it (a stamp-only TDL right after Tally's own Form Accept) {3} ms, median {4}; the add-on's own share: {5} ms" -f `
+          $Slow232St.made, ($tAdd -join ', '), $mA, ($tStamp -join ', '), $mS, $(if ($mA -ge 0 -and $mS -ge 0) { $mA - $mS } else { '-' }))
+      # Tally back with the add-on, the small company current
+      $null = S2StartTally (S2Ini $tdl $folders); $null = P3UseCo
+    } catch { Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO push233 item 5 timing: the harness stopped: $_" }
     KeysTo 9000 '{F3}' 3; KeysTo 9000 $co1 2; KeysTo 9000 '{ENTER}' 6
   }
   # a company on a network share: Tally 9000 started on \\localhost\p233share holding a copy of the small company's folder
