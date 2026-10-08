@@ -1347,6 +1347,11 @@ table.lt tfoot td.lt-count b{color:var(--ink)}
 .al-snack .linkbtn{color:var(--brand-tint);min-height:28px;font-weight:600}
 /* a phone: the bell's list across the screen (16 px each side), whatever the bell's place in the top bar; the Undo above
    the bottom bar */
+/* a phone: the alert line's words on their own full-width line (never cut to a few letters), its buttons on a row below */
+@media (max-width:640px){.alert-line{flex-wrap:wrap;height:auto;white-space:normal;overflow:visible;padding:8px 12px;row-gap:6px;column-gap:10px}
+  .alert-line .al-dot{align-self:flex-start;margin-top:4px}
+  .al-line-text{flex:1 1 calc(100% - 20px);overflow:visible;text-overflow:clip;white-space:normal;overflow-wrap:break-word}
+  .tally-line{max-width:100%}.tally-line .tag{white-space:normal;max-width:100%;overflow-wrap:anywhere}}
 @media (max-width:640px){.alerts-panel{position:fixed;left:16px;right:16px;top:64px;width:auto;max-height:calc(100vh - 190px)}.al-acts{flex-wrap:wrap}.al-snack{bottom:112px}}
 /* round 3, part 2: the Tally sign says which computer; on a phone the dot and the computer's name */
 .tsign .tsign-long{max-width:440px;overflow:hidden;text-overflow:ellipsis}

@@ -33,7 +33,7 @@ H = functools.partial(http.server.SimpleHTTPRequestHandler, directory=SITE); H.l
 srv = http.server.ThreadingHTTPServer(("localhost", 8358), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
 with sync_playwright() as p:
     br = p.chromium.launch()
-    for label, w, h in (("desktop", 1366, 800), ("phone", 390, 844)):
+    for label, w, h in [x for x in (("desktop", 1366, 800), ("phone", 390, 844), ("phone360", 360, 780)) if x[0] in (os.environ.get("SHOTS") or "desktop,phone,phone360").split(",")]:
         pg = br.new_page(viewport={"width": w, "height": h})
         pg.goto("http://localhost:8358/"); pg.wait_for_timeout(2500)
         if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1000)

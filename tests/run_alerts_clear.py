@@ -253,6 +253,21 @@ with sync_playwright() as p:
     pg3.evaluate(CLOSE)
     pg3.evaluate("() => { window.__w.cursor[0].gap.since = new Date(Date.now() - 2 * 86400e3).toISOString(); Rec.gaps.at = 0; AlertHub.reset(); AlertHub.refresh(true); }"); pg3.wait_for_timeout(1500)
     go(pg3, cid3, "tally")
+    # the alert line at phone width (360 and 390): the sentence on its own full-width line, the buttons on a row below;
+    # nothing cut off, no sideways scroll
+    LINE = """() => { const l = document.querySelector('#app [data-alert-line]'); if (!l) return null; const t = l.querySelector('.al-line-text');
+      const lr = l.getBoundingClientRect(), tr = t.getBoundingClientRect(), bs = [...l.querySelectorAll('button')].map(b => b.getBoundingClientRect());
+      return {lineW: lr.width, textW: tr.width, cut: t.scrollWidth > t.clientWidth + 1 || t.scrollHeight > t.clientHeight + 1, text: t.innerText, below: bs.every(b => b.top >= tr.bottom - 1),
+        inside: bs.every(b => b.left >= lr.left - 1 && b.right <= lr.right + 1), scroll: document.documentElement.scrollWidth > innerWidth}; }"""
+    for W in (360, 390):
+        pg3.set_viewport_size({"width": W, "height": 800}); pg3.wait_for_timeout(500)
+        go(pg3, cid3, "tally")
+        g = pg3.evaluate(LINE)
+        ok(g and g["textW"] >= 0.8 * g["lineW"], "phone %d: the alert's words get the line's width (%s)" % (W, g and (round(g["textW"]), round(g["lineW"]))))
+        ok(g and not g["cut"] and re.search(r"GARG SHEKHAR & COMPANY: .+ not yet in FinCom\. Upload the Day Book for .+\.", g["text"]), "phone %d: the whole sentence shown, nothing cut off (%r)" % (W, g and g["text"]))
+        ok(g and g["below"] and g["inside"], "phone %d: the buttons (action, Clear, +more) on a row below the words, inside the line" % W)
+        ok(g and not g["scroll"], "phone %d: no sideways scroll (%s)" % (W, g and g["scroll"] and pg3.evaluate("() => [document.documentElement.scrollWidth, ...[...document.querySelectorAll('#app *, header *')].filter(e => e.getBoundingClientRect().right > innerWidth + 1).slice(0, 6).map(e => e.tagName + '.' + e.className + ' ' + Math.round(e.getBoundingClientRect().right))]")))
+    pg3.set_viewport_size({"width": 390, "height": 800}); pg3.wait_for_timeout(400)
     line = pg3.evaluate("() => { const e = document.querySelector('#app [data-alert-line] [data-alert-clear]'); if (!e) return null; const r = e.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.right), r.width > 0]; }")
     ok(line and line[0] >= 0 and line[1] <= 390 and line[2], "phone: the alert line's Clear inside the screen (%s)" % line)
     if line: pg3.click("#app [data-alert-line] [data-alert-clear]"); pg3.wait_for_timeout(900)
