@@ -48,9 +48,9 @@ export default function Bell() {
 
 // the ONE slim line (one row, never wrapping) on the Tally page (every client) and on a client's Books page (its own):
 // the first alert, its button, and how many more are in the bell
-export function AlertLine({ cid }) {
+export function AlertLine({ cid, skip }) {
   if (typeof AlertHub !== "object") return null;
-  const all = AlertHub.list().filter((x) => x.sev !== "info" && (!cid || x.cid === cid));
+  const all = AlertHub.list().filter((x) => x.sev !== "info" && (!cid || x.cid === cid) && !(skip && skip(x)));
   if (!all.length) return null;
   const x = all[0];
   return <div className={"alert-line al-" + x.sev} data-alert-line="" data-sev={x.sev} title={x.text + " " + (x.fix || "")}>

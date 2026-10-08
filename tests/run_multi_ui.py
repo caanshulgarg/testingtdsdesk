@@ -74,14 +74,18 @@ with sync_playwright() as p:
     for i in range(40):
         pg.wait_for_timeout(250)
         if pg.evaluate("S.books && !S.books.loading && (S.books.vouchers || []).length === 24"): break
-    pg.set_input_files("#booksIn", paths["other.xml"]); pg.wait_for_timeout(2500)
+    pg.set_input_files("#tallyIn", paths["other.xml"]); pg.wait_for_timeout(2500)
     ok("another Tally company" in pg.inner_text("body") and pg.evaluate("S.books.vouchers.length") == 24, "the other client's file chosen here by mistake is refused, and nothing changes")
     pg.evaluate("() => { const b = document.querySelector('#confirmBox button'); if (b) b.click(); }"); pg.wait_for_timeout(300)
     # opening balances (31 March), then the check against Tally's trial balance on 24 April
     opening = {n: -100.0 * (i + 1) for i, n in enumerate(PARTIES)}; opening["Capital Account X"] = sum(-v for v in opening.values())
     fo = os.path.join(OUT, "tb-open.xml"); open(fo, "w").write(tb(opening))
-    pg.fill('input[aria-label="Balances as on"]', "2025-03-31"); pg.wait_for_timeout(200)
-    pg.set_input_files("#tbIn", fo); pg.wait_for_timeout(2000)
+    # 2.4.0: through the one Upload Tally data (#tallyIn): the file is told to be a trial balance; only its date is asked
+    def tb_up(path, how, on=None):
+        pg.set_input_files("#tallyIn", path); pg.wait_for_timeout(1200)
+        if on: pg.fill('#app [data-tb-ask] input[type=date]', on); pg.wait_for_timeout(200)
+        pg.click("#app [data-tb-ask] button:has-text('%s')" % how); pg.wait_for_timeout(1500)
+    tb_up(fo, "Use as opening balances", "2025-03-31")
     ok(pg.evaluate("Object.keys(S.books.tb.led).length") == 13, "opening balances taken")
     moves = {}
     for i, d in enumerate(days):
@@ -90,15 +94,16 @@ with sync_playwright() as p:
     good = os.path.join(OUT, "tb-close.xml"); open(good, "w").write(tb(closing))
     bad = dict(closing); bad["PARTY 03"] -= 777; fb = os.path.join(OUT, "tb-close-bad.xml"); open(fb, "w").write(tb(bad))
     pg.evaluate("S.booksTab = 'import'; render()"); pg.wait_for_timeout(300)
-    pg.set_input_files("#tbCheckIn", fb); pg.wait_for_timeout(1500)
+    tb_up(fb, "Check the books against it")
     ck = pg.evaluate("S.books.tbCheck")
     ok(not ck["ok"] and ck["n"] == 1 and ck["list"][0][0] == "PARTY 03" and abs(ck["list"][0][3] - 777) < 0.01, "a trial balance that differs: Mismatch, with the ledger and the difference: " + json.dumps(ck["list"][:1]))
-    ok("5. Mismatch" in pg.inner_text("#app") and "PARTY 03" in pg.inner_text("#app"), "the setup list shows Mismatch and the ledger")
-    pg.set_input_files("#tbCheckIn", good); pg.wait_for_timeout(1500)
-    ok(pg.evaluate("S.books.tbCheck.ok") and "5. Ready" in pg.inner_text("#app"), "the right trial balance: Ready, every ledger agrees")
+    pg.evaluate("document.querySelector('#app details[data-tieout]').open = true"); pg.wait_for_timeout(200)
+    ok("Tie-out: 1 ledger differs" in pg.inner_text("#app") and "PARTY 03" in pg.inner_text("#app [data-tieout]"), "the tie-out line shows the ledger that differs")
+    tb_up(good, "Check the books against it")
+    ok(pg.evaluate("S.books.tbCheck.ok") and "Tie-out: every ledger" in pg.inner_text("#app"), "the right trial balance: every ledger agrees")
     # a trial balance of another company's ledgers
     alien = os.path.join(OUT, "tb-alien.xml"); open(alien, "w").write(tb({"ALIEN %02d" % i: -10.0 for i in range(15)}))
-    pg.set_input_files("#tbCheckIn", alien); pg.wait_for_timeout(1200)
+    tb_up(alien, "Check the books against it")
     ok("does not look like this client" in pg.inner_text("body") and pg.evaluate("S.books.tbCheck.ok"), "a trial balance of another company's ledgers is refused")
     pg.screenshot(path=os.path.join(OUT, "tbcheck.png"), full_page=True)
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0][:300]))

@@ -29,7 +29,8 @@ const UPLOADS = {
   bills: ["Upload bills", "Upload purchase bills (PDF, photo) for this client", () => doAct("uploadHere")],
   bank: ["Upload statement", "Upload a bank statement (Excel, CSV, PDF) for this client", () => doAct("uploadHere")],
   sales: ["Upload invoices", "Upload the sales invoices this client issued (PDF, photo)", () => salesAct("salesPick")],
-  daybook: ["Upload Day Book", "Upload the Day Book exported from Tally as XML (the dates on the page, if chosen, limit it)", () => doAct("booksPick")],
+  // 2.4.0: one Upload for the Tally data (a Day Book, the ledger masters or a trial balance): which it is comes from the file
+  daybook: ["Upload Tally data", "Upload a Day Book or ledger masters XML exported from Tally: FinCom reads which it is, and its dates, from the file", () => doAct("tallyPick")],
 };
 export function uploadKind() {
   if (S.view !== "company" || !CO() || isSetupTab(S.tab)) return "";

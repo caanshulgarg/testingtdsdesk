@@ -8,7 +8,7 @@
 import { BusyCard } from "../parts/Reading.jsx";
 import { Return26, Return24, CertsPage } from "./TdsReturn.jsx";
 import Gst from "./Gst.jsx";
-import FromTally from "./books/FromTally.jsx";
+import FromTally, { needDays } from "./books/FromTally.jsx";
 import Ledgers from "./books/Ledgers.jsx";
 import MisTab from "./books/Mis.jsx";
 import { ServerMis, ServerTds, ServerGst } from "./books/ServerReports.jsx";
@@ -200,7 +200,10 @@ function EmptyTab({ tab }) {
 // slim line, the client's first alert and its button (the rest in the bell)
 export default function Books() {
   const co = CO();
-  return <>{co && <AlertLine cid={co.id} />}<BooksPage /></>;
+  // 2.4.0: on From Tally, the book's alert (lines waiting, the cloud's gap) is not said twice: the page lists those days,
+  // each with its Upload (needDays); the bell keeps it
+  const days = co && booksTab() === "import" && S.books && S.books.cid === co.id ? needDays(S.books, co.id) : [];
+  return <>{co && <AlertLine cid={co.id} skip={days.length ? (x) => String(x.key || "").startsWith("book:") : null} />}<BooksPage /></>;
 }
 
 function BooksPage() {
@@ -244,9 +247,10 @@ function BooksPage() {
   return <>
     <nav className="sbar" aria-label="Books">{tabs.map(([id, label, c]) =>
       <button key={id} aria-selected={tab === id} onClick={() => booksTabGo(id)}>{label}{c != null && <> <span className="sbar-n">{c}</span></>}</button>)}</nav>
-    <SyncNote cid={co.id} tab={tab} /><JobsNote cid={co.id} /><GstDriftNote b={b} />
-    {tab !== "import" && <FreshLine b={b} unknown={tab !== "ledgers" || !n} />}
-    {busy}
+    <SyncNote cid={co.id} tab={tab} />
+    {/* From Tally (2.4.0) says the upload's progress and the reading of the books in its own upload part */}
+    {tab !== "import" && <><JobsNote cid={co.id} /><GstDriftNote b={b} /><FreshLine b={b} unknown={tab !== "ledgers" || !n} /></>}
+    {tab !== "import" && busy}
     {body}
   </>;
 }
