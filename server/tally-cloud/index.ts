@@ -755,6 +755,18 @@ function cleanTallyRetry(x: any) {
   return { words: x.words.slice(0, 200), at: t(x.at), next: t(x.next), tries: Math.max(0, Math.min(1e6, Math.floor(Number(x.tries) || 0))) };
 }
 const tallyRetryOf = (b: any) => { const r = cleanTallyRetry(b?.tallyRetry); return r ? { tallyRetry: r } : {}; };
+// 2.4.0 review MEDIUM (next-renumber): entries Tally may have renumbered that the bridge did not read again
+// (renumberAlerts [{company, words, n, more, from, type, at}], the last 7 days, renumber.go): kept on the beat so FinCom
+// shows each as a "Needs you" item ("Upload the Day Book from <date>"); absent when none (or an older bridge)
+function cleanRenumberAlerts(x: any) {
+  if (!Array.isArray(x)) return null;
+  const t = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
+  const out = x.filter((a: any) => a && typeof a === "object" && !Array.isArray(a) && t(a.company, 200).trim() && t(a.words, 300).trim()).slice(0, 20).map((a: any) => ({
+    company: t(a.company, 200), words: t(a.words, 300), n: Math.max(0, Math.min(1e6, Math.floor(Number(a.n)) || 0)), more: a.more === true,
+    from: /^[0-9]{8}$/.test(String(a.from ?? "")) ? String(a.from) : "", type: t(a.type, 60), at: t(a.at, 30) }));
+  return out.length ? out : null;
+}
+const renumberAlertsOf = (b: any) => { const r = cleanRenumberAlerts(b?.renumberAlerts); return r ? { renumberAlerts: r } : {}; };
 function cleanReadStopped(x: any) {
   if (!x || typeof x !== "object" || !["self", "fincom"].includes(x.by)) return null;
   return { by: x.by as string, reason: typeof x.reason === "string" ? x.reason.slice(0, 300) : "", at: typeof x.at === "string" ? x.at.slice(0, 30) : "" };
@@ -2640,6 +2652,8 @@ Deno.serve(async (req) => {
           ...(s(b.recorderWaitWords, 300) ? { recorderWaitWords: s(b.recorderWaitWords, 300) } : {}),
           // bridge 2.3.1 (the owner's last change): a request not answered in time, and when it tries again by itself
           ...tallyRetryOf(b),
+          // 2.4.0 review MEDIUM (next-renumber): the renumbering alerts, for "Needs you"
+          ...renumberAlertsOf(b),
           windowsUser: s(b.windowsUser, 60), bridgePort: Math.max(0, Math.min(65535, Math.floor(Number(b.bridgePort) || 0))), tallyPort: Math.max(0, Math.min(65535, Math.floor(Number(b.tallyPort) || 0))), dataFolder: s(b.dataFolder, 260) };
         const prevInfo = ((dev as any).info && typeof (dev as any).info === "object") ? (dev as any).info : {};
         const me = bridgeOf(dev, body, false);
