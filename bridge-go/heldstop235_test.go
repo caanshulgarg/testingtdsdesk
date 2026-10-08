@@ -515,3 +515,66 @@ func TestHeldStop235OnlyTheStopsRefusalIsExempt(t *testing.T) {
 		}
 	}
 }
+
+// --- review L1 (the words' promise, "asked again when it is resumed"): a held delete, and lines whose ask again the stop
+// refused, are asked at the first turn after the resume, not after the held list's 10-minute spacing; no try is spent
+func TestHeldStop235AskedAtOnceAfterResume(t *testing.T) {
+	h := hs235Bridge(t, `,"RecorderBodySec":2`, false)
+	h.stop(t)
+	h.write(t)
+	h.drain(t, 3)
+	// the resolver's turns while stopped: every ask refused (nothing sent to Tally)
+	h.turns(15 * time.Minute)
+	if n := h.entryAsks(); n != 0 {
+		t.Fatalf("asked while stopped: %v", h.f.ids())
+	}
+	for _, ev := range []string{"created", "altered", "deleted"} {
+		if hd := hs235Held(t, str(hs235First(h.c.recSent(), ev, false)["line_id"])); hd.Asked != 0 || hd.Tries != 0 || hd.FreshTries != 0 {
+			t.Fatalf("%s: a refused ask was counted: %+v", ev, hd)
+		}
+	}
+	n0 := len(h.c.recSent())
+	h.lift(t)
+	h.turns(15*time.Minute + 30*time.Second) // the first turn after the resume: well inside the 10-minute spacing
+	after := h.c.recSent()[n0:]
+	for _, ev := range []string{"created", "altered", "deleted"} {
+		m := hs235First(after, ev, true)
+		if m == nil || str(m["heldWhy"]) != "" || str(m["object_guid"]) == "" {
+			t.Fatalf("%s not settled at the first turn after the resume: %v\nall: %v\n%s", ev, m, after, cutTail(readText(logFile()), 2500))
+		}
+	}
+	if dl := hs235First(after, "deleted", true); str(dl["object_guid"]) != h.vDel.guid {
+		t.Fatalf("the delete went without its own GUID: %v", dl)
+	}
+	hs235NoBareDelete(t, h.c.recSent())
+}
+
+// --- review L2: a read stop longer than 7 days never drops the held lines silently (FinCom shows them waiting): they are
+// kept while the stop is on, and settle after the resume (the delete with its GUID)
+func TestHeldStop235KeptOverSevenDaysWhileStopped(t *testing.T) {
+	h := hs235Bridge(t, `,"RecorderBodySec":2`, false)
+	h.stop(t)
+	h.write(t)
+	h.drain(t, 3)
+	n0 := len(h.c.recSent())
+	h.turns(8 * 24 * time.Hour)
+	h.turns(15 * 24 * time.Hour)
+	if _, items := liveHeldLoad(); len(items) != 3 {
+		t.Fatalf("held lines dropped during a long stop: %d left: %v", len(items), items)
+	}
+	if s := h.c.recSent()[n0:]; len(s) != 0 {
+		t.Fatalf("sent while stopped: %v", s)
+	}
+	h.lift(t)
+	h.turns(15*24*time.Hour + time.Minute)
+	after := h.c.recSent()[n0:]
+	for _, ev := range []string{"created", "altered", "deleted"} {
+		if m := hs235First(after, ev, true); m == nil || str(m["heldWhy"]) != "" || str(m["object_guid"]) == "" {
+			t.Fatalf("%s did not settle after a long stop: %v\nall: %v", ev, m, after)
+		}
+	}
+	if dl := hs235First(after, "deleted", true); str(dl["object_guid"]) != h.vDel.guid {
+		t.Fatalf("the delete went without its own GUID: %v", dl)
+	}
+	hs235NoBareDelete(t, h.c.recSent())
+}
