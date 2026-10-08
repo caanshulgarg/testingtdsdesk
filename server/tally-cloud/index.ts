@@ -1865,7 +1865,7 @@ async function keepMasters(firm: string, book: string, dev: any, masters: Record
     console.log("tally-ingest recorder_lines: " + masters.length + " master line(s) not kept: no migration 66 in this cloud", book);
     return none("FinCom does not keep master lines yet (migration 66)");
   }
-  if (error) { console.error("tally-ingest recorder_lines masters:", String(error?.message || "").slice(0, 300)); return none("FinCom could not keep this master line just now"); }
+  if (error) { fail("recorder_masters", error, "recorder_lines"); console.error("tally-ingest recorder_lines masters:", String(error?.message || "").slice(0, 300)); return none("FinCom could not keep this master line just now"); }
   if ((data as any)?.ok === false) return none(String((data as any)?.error || "not kept").slice(0, 200));
   ((data as any)?.results || []).forEach((r: any, k: number) => {
     if (k < mat.length) results[mat[k]] = { line_id: String(r?.line_id ?? masters[k].line_id ?? ""), state: String(r?.state || "failed"), why: r?.why ?? null };
