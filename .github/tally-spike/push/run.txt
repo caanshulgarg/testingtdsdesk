@@ -25,3 +25,4 @@ mode=fast234r
 # fast234lb (08:05Z): run 37741662830 asked every kind on 3.0-7.1; its 100,000 part asked nothing (Tally renumbered the invoices: found by narration now); the 200 / 500-item invoices small and at 100,000, and a voucher deleted (by number, GUID or MasterID) on 7.1 and 3.0
 # fast234d (08:20Z): a bill-wise party's line with no bill: 'On Account' in the Voucher collection, none in the object export: what does the Day Book export give? (fast234d.ps1)
 # fast234r (10:40Z): the re-review's M2 (an item invoice with a direct Sales line) and L1 (a payroll voucher typed on the Payroll screen), asked three ways (fast234r.ps1)
+# fast234r again (11:30Z): godown on the invoice's items; RVch (rv is Remove-Variable); the payroll Account field: the bank

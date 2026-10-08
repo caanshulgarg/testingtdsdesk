@@ -8,7 +8,7 @@
 . "$here\v3.ps1"        # the screen route (tdslib.ps1: TK, TdsScreen, TdsGateway, SK)
 $script:co = $co
 $rD = '20261101'; $rDay = '1-11-2026'
-function RV {
+function RVch {
   $x = Post (Coll 'FCPRV' 'Voucher' 'GUID, MASTERID, DATE, VOUCHERTYPENAME, VOUCHERNUMBER, NARRATION' '$Date = $$Date:"01-11-2026"') '' 120
   $o = @()
   foreach ($m in [regex]::Matches($x, '(?s)<VOUCHER[ >].*?</VOUCHER>')) {
@@ -34,7 +34,8 @@ function R3($kind, $v) {
 try {
   # M2: an item invoice (5 items, CGST and SGST) whose sales ledger also carries a direct line (freight 50 to Sales)
   $its = @(1..5 | ForEach-Object { 'Item T{0:d2}' -f $_ })
-  $inv = (SalesXml $rD 'R-M2' 'Template Party' $its 'fast234r sales with a direct Sales line') -replace '<NARRATION>', '<NARRATION>'
+  # (run 37768375307: "Godown '' does not exist!": multiple godowns are on here: the items' godown given)
+  $inv = SalesXml $rD 'R-M2' 'Template Party' $its 'fast234r sales with a direct Sales line' $true 'PD Godown A'
   $f = '{0:0.00}'
   # the direct line: Sales credited 50 more; the party debited 50 more (its line and bill)
   $tot = 1000 + 2 * 90 + 50
@@ -51,7 +52,8 @@ try {
   $null = TK '{F2}' 1.5 'pr-date-box' 'Date'
   $null = TK ((SK $rDay) + '{ENTER}') 2 'pr-date'
   $t = TdsScreen 'pr-first-field'
-  if ($t -match 'Account') { $null = TK ((SK 'PD Salary Payable') + '{ENTER}') 2 'pr-account' }
+  # (run 37768375307: the Account field's list did not take the payable; the employee names went into it: the bank)
+  if ($t -match 'Account') { $null = TK ((SK 'HDFC Bank') + '{ENTER}') 2.5 'pr-account' }
   foreach ($e in 'PD Emp 001', 'PD Emp 002') {
     $null = TK ((SK $e) + '{ENTER}') 2.5 "pr-emp-$e"
     foreach ($ph in @(@('PD Basic', '1000'), @('PD HRA', '400'))) {
@@ -72,7 +74,7 @@ try {
   }
   $null = TdsGateway 'after the payroll entry'
   Set-Content (Join-Path $out 'pr-screen-log.txt') $script:tdsLog -Encoding UTF8
-  $all = RV
+  $all = RVch
   Say "1-Nov-2026 holds: $(($all | ForEach-Object { "$($_.type) $($_.vno) ($($_.mid)) '$($_.narr)'" }) -join '; ')"
   R3 'm2-sales-direct-line' @($all | Where-Object { $_.narr -like 'fast234r sales*' })[0]
   R3 'payroll-screen' @($all | Where-Object { $_.type -eq 'Payroll' })[0]
