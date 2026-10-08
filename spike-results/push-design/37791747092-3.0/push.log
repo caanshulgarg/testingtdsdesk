@@ -1,0 +1,74 @@
+[14:50:55.103] push-design on TallyPrime 3.0: reps 5, heavy 3000 ledgers / 3000 items / up to 30000 vouchers (40 min), postings 1
+[14:50:55.857] system clock step after timeBeginPeriod(1): 0.345 ms (min 0.0022, max 3.883)
+[14:50:55.874] two files written 2 ms apart: NTFS write times 7.4214 ms apart
+[14:50:55.890] light company folder: D:\a\_temp\TallyData\100000
+[14:50:55.935] fast234 (fast234c) on TallyPrime 3.0: today's request 2927 chars, 61 fields
+[14:50:55.949] fast234c on TallyPrime 3.0: company A 'FinCom Spike Co' in folder 100000; folders: 100000
+[keys] 'a'
+[keys] 't'
+[shot] p-f-c-create-started (1024x768)
+[14:51:25.009] Tally started (c-create) in 26 s; companies open:  -> True
+[c-company-xml] 3.1 ms: <RESPONSE><LINEERROR>Could not find Company &apos;&apos;</LINEERROR></RESPONSE>
+[keys] 'Create Company'
+[keys] '{ENTER}'
+[shot] p-c-create-1-form (1024x768)
+[keys] 'FinCom Other Co'
+[shot] p-c-create-1-name (1024x768)
+[keys] '^a'
+[shot] p-c-create-1-accept (1024x768)
+[keys] '^a'
+[shot] p-c-create-1-after (1024x768)
+[14:51:50.387] company B 'FinCom Other Co' made in folder 100001 (key path 1)
+[keys] 'a'
+[keys] 't'
+[shot] p-f-c-both-started (1024x768)
+[14:52:21.766] Tally started (c-both) in 28.4 s; companies open: FinCom Other Co | FinCom Spike Co -> True
+[14:52:21.793] import B ledgers: 2 sent, created 2, errors 0, 9 ms
+[14:52:21.821] import B journals: 3 sent, created 3, errors 0, 22.4 ms
+[14:52:21.873] A's vouchers: 2 (MasterIDs ,1)
+[14:52:21.875] B's vouchers: 4 (MasterIDs ,1,2,3)
+[14:52:21.878] cases: A only ; B only 2; both (none); neither 987654
+[14:52:21.879] HARNESS: fast234c: no MasterID of one company only
+[14:52:21.900] both open: Tally's company list: FinCom Other Co FinCom Spike Co
+[14:52:21.909] C open-A-aonly: SVCURRENTCOMPANY 'FinCom Spike Co' ID: -> 50 chars in 2.2 ms; voucher MasterID '' narration ''; answer: <ERRORMSG>Could not find Voucher:ID:!</ERRORMSG>
+[14:52:21.912] C open-A-bonly: SVCURRENTCOMPANY 'FinCom Spike Co' ID:2 -> 51 chars in 2.1 ms; voucher MasterID '' narration ''; answer: <ERRORMSG>Could not find Voucher:ID:2!</ERRORMSG>
+[14:52:21.921] C open-B-bonly: SVCURRENTCOMPANY 'FinCom Other Co' ID:2 -> 46787 chars in 5.4 ms; voucher MasterID '2' narration 'fast234c B journal 2'; starts: <ENVELOPE> <HEADER> <VERSION>1</VERSION> <STATUS>1</STATUS> <PRODMAJORVER>1</PRODMAJORVER> <PRODMINORVER>1</PRODMINORVER> <PRODMAJORREL>3</PRODMAJORREL> <PRODMINORREL>0</PRODMINORREL> <PRODTYPE>5</PRO
+[14:52:21.924] C open-B-aonly: SVCURRENTCOMPANY 'FinCom Other Co' ID: -> 50 chars in 1.5 ms; voucher MasterID '' narration ''; answer: <ERRORMSG>Could not find Voucher:ID:!</ERRORMSG>
+[14:52:21.926] C open-A-none: SVCURRENTCOMPANY 'FinCom Spike Co' ID:987654 -> 56 chars in 1.5 ms; voucher MasterID '' narration ''; answer: <ERRORMSG>Could not find Voucher:ID:987654!</ERRORMSG>
+[keys] 'a'
+[keys] 't'
+[shot] p-f-c-bonly-started (1024x768)
+[14:52:50.910] Tally started (c-bonly) in 26 s; companies open: FinCom Other Co -> True
+[14:52:50.912] A closed: Tally's company list: FinCom Other Co
+[] failed after 30003 ms: The request was canceled due to the configured HttpClient.Timeout of 30 seconds elapsing.
+[14:53:20.919] C closedA-A-aonly: SVCURRENTCOMPANY 'FinCom Spike Co' ID: -> 0 chars in 30003 ms; voucher MasterID '' narration ''; answer: 
+[] failed after 30001.4 ms: The request was canceled due to the configured HttpClient.Timeout of 30 seconds elapsing.
+[14:53:50.923] C closedA-A-bonly: SVCURRENTCOMPANY 'FinCom Spike Co' ID:2 -> 0 chars in 30001.4 ms; voucher MasterID '' narration ''; answer: 
+[] failed after 30001.9 ms: The request was canceled due to the configured HttpClient.Timeout of 30 seconds elapsing.
+[14:54:20.927] C closedA-A-none: SVCURRENTCOMPANY 'FinCom Spike Co' ID:987654 -> 0 chars in 30001.9 ms; voucher MasterID '' narration ''; answer: 
+[] failed after 30002.7 ms: The request was canceled due to the configured HttpClient.Timeout of 30 seconds elapsing.
+[14:54:50.932] C closedA-nosuch-aonly: SVCURRENTCOMPANY 'FinCom No Such Co' ID: -> 0 chars in 30002.7 ms; voucher MasterID '' narration ''; answer: 
+[] failed after 30002.7 ms: The request was canceled due to the configured HttpClient.Timeout of 30 seconds elapsing.
+[14:55:20.937] C closedA-nosuch-bonly: SVCURRENTCOMPANY 'FinCom No Such Co' ID:2 -> 0 chars in 30002.7 ms; voucher MasterID '' narration ''; answer: 
+[] failed after 30001.4 ms: The request was canceled due to the configured HttpClient.Timeout of 30 seconds elapsing.
+[14:55:50.940] C closedA-B-bonly: SVCURRENTCOMPANY 'FinCom Other Co' ID:2 -> 0 chars in 30001.4 ms; voucher MasterID '' narration ''; answer: 
+[keys] 'a'
+[keys] 't'
+[shot] p-f-c-aonly-started (1024x768)
+[14:56:19.909] Tally started (c-aonly) in 26 s; companies open: FinCom Spike Co -> True
+[] failed after 30002.7 ms: The request was canceled due to the configured HttpClient.Timeout of 30 seconds elapsing.
+[14:56:49.914] C closedB-B-bonly: SVCURRENTCOMPANY 'FinCom Other Co' ID:2 -> 0 chars in 30002.7 ms; voucher MasterID '' narration ''; answer: 
+[] failed after 30002 ms: The request was canceled due to the configured HttpClient.Timeout of 30 seconds elapsing.
+[14:57:19.919] C closedB-B-aonly: SVCURRENTCOMPANY 'FinCom Other Co' ID: -> 0 chars in 30002 ms; voucher MasterID '' narration ''; answer: 
+[] failed after 30002.4 ms: The request was canceled due to the configured HttpClient.Timeout of 30 seconds elapsing.
+[14:57:49.924] C closedB-A-aonly: SVCURRENTCOMPANY 'FinCom Spike Co' ID: -> 0 chars in 30002.4 ms; voucher MasterID '' narration ''; answer: 
+[keys] 'a'
+[keys] 't'
+[shot] p-f-c-none-started (1024x768)
+[14:58:18.870] Tally started (c-none) in 25.9 s; companies open:  -> True
+[14:58:18.872] none open: Tally's company list: 
+[] failed after 30002.6 ms: The request was canceled due to the configured HttpClient.Timeout of 30 seconds elapsing.
+[14:58:48.881] C noneopen-A-aonly: SVCURRENTCOMPANY 'FinCom Spike Co' ID: -> 0 chars in 30002.6 ms; voucher MasterID '' narration ''; answer: 
+[] failed after 30002.5 ms: The request was canceled due to the configured HttpClient.Timeout of 30 seconds elapsing.
+[14:59:18.886] C noneopen-A-none: SVCURRENTCOMPANY 'FinCom Spike Co' ID:987654 -> 0 chars in 30002.5 ms; voucher MasterID '' narration ''; answer: 
+[14:59:21.889] done (fast234 fast234c)
