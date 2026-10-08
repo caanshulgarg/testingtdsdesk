@@ -1,0 +1,117 @@
+[02:58:34] ---- the bridge built from the ref
+bridge source: 4d55ae8815ddb85d1a07ec53017613e659d85471 next-push: every head field its own record; a line lacking one is not taken
+setup origin: BUILT from source dist/FinComBridge-Setup-2.3.3.exe SHA-256 18fd9d8926dc1187f1432605820cd0fe23d4afc9c05efef330d12bc74d16d43c
+setup: FinComBridge-Setup-2.3.3.exe 3395372 bytes SHA256 18FD9D8926DC1187F1432605820CD0FE23D4AFC9C05EFEF330D12BC74D16D43C
+[02:58:34] ---- the second Windows user (not an administrator)
+user 2: fcuser2 S-1-5-21-1643835476-1616584234-1346609752-1003; administrators: runnervmfi6oq\runneradmin
+user 2's profile: C:\Users\fcuser2
+ SESSIONNAME               USERNAME                 ID  STATE   TYPE        DEVICE 
+ services                                            0  Disc                        
+ rdp-tcp#0                 fcuser2                   1  Active                      
+>console                   runneradmin               2  Active                      
+ 31c5ce94259d4006a9e4                            65536  Listen                      
+ rdp-tcp                                         65537  Listen                      
+
+[02:58:58] user 2's own Windows session by Remote Desktop: True (session 1)
+[shot] r4-03-rdp-session (1024x768)
+task fcu2 registered for fcuser2 (interactive)
+  [as fcuser2] who=runnervmfi6oq\fcuser2 session=1
+  [as fcuser2] no Tally window in session 1; keys '{ENTER}' to the window in front
+  [as fcuser2] shot u2-desktop
+[02:59:28] ---- the stub cloud
+[02:59:31] ---- user 1's Tally (9000) with the add-on; a copy of the program for user 2 first (its own tally.ini and port)
+  still running from the Tally folder: tallyscheduler 2220
+  robocopy:    Bytes :  177.74 m  177.74 m         0         0       512         0
+  robocopy:    Times :   0:00:00   0:00:00                       0:00:00   0:00:00
+  robocopy: 
+  robocopy: 
+  robocopy:    Speed :           2,329,797,462 Bytes/sec.
+  robocopy:    Speed :             133,312.078 MegaBytes/min.
+  robocopy:    Ended : Thursday, October 8, 2026 2:59:34 AM
+  robocopy: 
+[02:59:34] copy for user 2: robocopy 9, tally.exe there: True
+Tally :9000 answers: True
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[keys] 't' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-00-tally1 (1024x768)
+[ledger Spike Income :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[ledger Salesify Marketing LLP (bill-by-bill) :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[03:00:06] ---- check 8's masters on user 1's Tally: unit, two stock items (GST 18%), Sales/Purchase, CGST/SGST 9%, customer, supplier
+[unit Nos :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[stock item Spike Widget (GST 18%) :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[stock item Spike Gadget (GST 18%) :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[stock items :9000] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>2</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>2</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>1</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[check 8 ledgers :9000] <RESPONSE><CREATED>6</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[stock items :9000] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>8</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>2</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>1</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[03:00:07] ---- 2.3.1 scenarios: the masters (stock items with HSN and GST rate, GST, TDS, cost centre, bank and party ledgers)
+  scen231: 7 master sets, 14 entries -> D:\a\testingtdsdesk\testingtdsdesk\spike-results\37720046609-windows-latest\round4\scen231
+[masters-1-items :9000] 32 ms, 269 bytes: <RESPONSE><CREATED>4</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[masters-2-costs :9000] 19 ms, 269 bytes: <RESPONSE><CREATED>3</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[masters-4-ledgers :9000] 69 ms, 270 bytes: <RESPONSE><CREATED>14</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[masters-6-bulk :9000] 1728 ms, 271 bytes: <RESPONSE><CREATED>400</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[S4 the bill (New Ref S231-BILL-1, a journal) :9000] 40 ms, 269 bytes: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>2</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[ledger master S231 Buyer :9000] 9 ms, 17392 bytes: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>425</LEDGER><COSTCATEGORY>1</COSTCATEGORY><COSTCENTRE>2</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>6</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>1</CURRENCY><UNIT>1</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIF...
+[shot] r4-s231-00-masters (1024x768)
+[03:00:12] ---- push233 setup: the templates by XML, the new add-on's load check, the timing proxy beside Tally 9000, the large company (item 5)
+[slow232 import] push233 masters: 62 sent, created 59, errors 0, 0.3 s
+[slow232 import] push233 template receipt: 1 sent, created 1, errors 0, 0.0 s
+[slow232 import] push233 template sales50: 1 sent, created 1, errors 0, 0.3 s
+[slow232 import] push233 template godown: 1 sent, created 1, errors 0, 0.1 s
+[03:00:13] ---- push233 L0: does the new FinComRecorder.tdl load on this release?
+[shot] r4-p233-L0-start (1024x768)
+  Tally :9000 voucher mid=1 aid=1 guid=4713b23c-a382-4186-a7a3-2e88a4bb0e42-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=4713b23c-a382-4186-a7a3-2e88a4bb0e42-00000002 no=2 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=4713b23c-a382-4186-a7a3-2e88a4bb0e42-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=4713b23c-a382-4186-a7a3-2e88a4bb0e42-00000004 no=1 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=4713b23c-a382-4186-a7a3-2e88a4bb0e42-00000005 no=2 cancelled=False
+[keys] '%g' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '2-11-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-receipt-daybook (1024x768)
+[keys] '{END}' -> Tally :9000 'TallyPrime:9000'
+[keys] '%2' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-p233-receipt-dup (1024x768)
+[shot] r4-p233-receipt-saved (1024x768)
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+  Tally :9000 voucher mid=1 aid=1 guid=4713b23c-a382-4186-a7a3-2e88a4bb0e42-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=4713b23c-a382-4186-a7a3-2e88a4bb0e42-00000002 no=2 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=4713b23c-a382-4186-a7a3-2e88a4bb0e42-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=4713b23c-a382-4186-a7a3-2e88a4bb0e42-00000006 no=2 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=4713b23c-a382-4186-a7a3-2e88a4bb0e42-00000004 no=1 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=4713b23c-a382-4186-a7a3-2e88a4bb0e42-00000005 no=2 cancelled=False
+######## PASS push233 L0 the new add-on loads and writes the full entry: the TDL from the ref has FCRLiveFull: True; the screen after Tally started: no TDL error seen; Tally's TDL error files: none; one receipt saved on the screen: the add-on wrote voucher_accept_post x1, voucher_accept_pre x1, voucher_full x1; heads (pre and post): True; full line(s) ending |end=1|t1=..|src=live: 1; the narration, neg and the part's length read: True; save 145 ms
+[03:00:39] ---- slow232 setup: a large company 'FinCom Big Co' in Tally 9000 beside 'FinCom Spike Co' (up to 100000 entries, 150 min), before the bridges start
+[slow232] company folders before: 100000
+[slow232] tally.ini: [Tally] | Data = D:\a\_temp\TallyData | Config = C:\Program Files\TallyPrime | LangPath = C:\Program Files\TallyPrime\lang | Client Server = Both | ServerPort = 9000 | Enable ODBC Server = Yes | Ignore TCP Timeout = Yes | User TDL = Yes | Default Companies = No
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[keys] 't' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F3}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-s232-01a-company-list (1024x768)
+[keys] 'Create Company' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-s232-01b-typed (1024x768)
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-s232-01-create-company (1024x768)
+[keys] 'FinCom Big Co' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-s232-02-name (1024x768)
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-s232-03-ctrl-a (1024x768)
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-s232-04-company (1024x768)
+[slow232] a new company folder: 100001
+[slow232 import] is 'FinCom Big Co' open: 1 sent, created 1, errors 0, 0.0 s
+[slow232] company 'FinCom Big Co' open in Tally 9000: True
+[slow232 import] masters 0: 1000 sent, created 1000, errors 0, 4.3 s
+[slow232 import] masters 1000: 1000 sent, created 1000, errors 0, 4.4 s
+[slow232 import] masters 2000: 1000 sent, created 1000, errors 0, 4.4 s
+[slow232 import] masters 3000: 1000 sent, created 1000, errors 0, 4.2 s
+[slow232 import] masters 4000: 1000 sent, created 1000, errors 0, 4.6 s
+[slow232 import] masters 5000: 1000 sent, created 1000, errors 0, 4.4 s
+[slow232 import] masters 6000: 7 sent, created 7, errors 0, 0.1 s
+[slow232 import] entries 0: 1000 sent, created 1000, errors 0, 18.9 s
+[slow232 import] entries 1000: 1000 sent, created 1000, errors 0, 17.9 s
+[slow232 import] entries 2000: 1000 sent, created 1000, errors 0, 19.0 s
+[slow232 import] entries 3000: 1000 sent, created 1000, errors 0, 18.5 s
+[slow232 import] entries 4000: 1000 sent, created 1000, errors 0, 19.0 s
+[slow232 import] entries 5000: 1000 sent, created 1000, errors 0, 20.7 s
