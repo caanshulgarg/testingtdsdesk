@@ -1,0 +1,2 @@
+FCR1|ev=payhead_accept_pre|t0=8-Oct-26 21:11|tw=8-Oct-26 21:11|cguid=2f5ac04a-f57d-4006-8c5b-b7de3fac995c|cname=FinCom Spike Co|user=TALLY User|obj=Master|guid=|mid=0|aid=0|vtype=|vno=|vdate=|name=MA Piece|parent=Indirect Expenses|narr=|t1=8-Oct-26 21:11|src=live
+FCR1|ev=payhead_accept_post|t0=8-Oct-26 21:11|tw=8-Oct-26 21:11|cguid=2f5ac04a-f57d-4006-8c5b-b7de3fac995c|cname=FinCom Spike Co|user=TALLY User|obj=Master|guid=|mid=0|aid=0|vtype=|vno=|vdate=|name=MA Piece|parent=Indirect Expenses|narr=|t1=8-Oct-26 21:11|src=live

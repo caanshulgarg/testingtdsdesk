@@ -1,0 +1,2 @@
+FCR1|ev=godown_accept_pre|t0=8-Oct-26 20:46|tw=8-Oct-26 20:46|cguid=e3ba9acb-d696-4569-a2b4-cb894930d748|cname=FinCom Spike Co|user=TALLY User|obj=Master|guid=|mid=0|aid=0|vtype=|vno=|vdate=|name=MA Godown 1|parent= Primary|narr=|t1=8-Oct-26 20:46|src=live
+FCR1|ev=godown_accept_post|t0=8-Oct-26 20:46|tw=8-Oct-26 20:46|cguid=e3ba9acb-d696-4569-a2b4-cb894930d748|cname=FinCom Spike Co|user=TALLY User|obj=Master|guid=|mid=0|aid=0|vtype=|vno=|vdate=|name=MA Godown 1|parent= Primary|narr=|t1=8-Oct-26 20:46|src=live
