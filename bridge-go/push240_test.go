@@ -334,3 +334,33 @@ func TestPush240TDSExempt(t *testing.T) {
 		t.Fatal("the add-on does not write the TDS list's Exempted")
 	}
 }
+
+// tally-versions run 37826941207 (mode tds240, TallyPrime 3.0 and 7.1, this add-on): a TDS journal typed on Tally's own
+// screens; the add-on's own full line carries ex=Yes as Tally stored EXEMPTED. The bridge builds the entry from that line
+// (testdata/push240/tds240/<rel>.push.xml, kept current here); tests/run_push240_share.mjs reads it with parse.js against
+// Tally's own export of the entry: the TDS row exempt, its rate as stored, never worked out
+func TestPush240TDSExemptRealLines(t *testing.T) {
+	for _, rel := range []string{"3.0", "7.1"} {
+		b, err := os.ReadFile(filepath.Join("testdata", "push240", "tds240", rel+"-tds240-addon-lines.txt"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var ps []string
+		var head string
+		for _, l := range strings.Split(strings.ReplaceAll(strings.TrimPrefix(decodeRecorderText(b), "\ufeff"), "\r\n", "\n"), "\n") {
+			if p, ok := pushPayload(l); ok && strings.HasPrefix(l, "FCR1|ev=voucher_full|") {
+				ps, head = append(ps, p), l
+			}
+		}
+		e, err := pushParse(ps)
+		if err != nil {
+			t.Fatalf("%s: %v", rel, err)
+		}
+		cg := regexp.MustCompile(`\|cguid=([^|]*)\|`).FindStringSubmatch(head)[1]
+		x, err := pushEntryXML(e, pushGUID(cg, e.s("mid")), 0)
+		if err != nil || !strings.Contains(x, `<EXEMPTED TYPE="Logical">Yes</EXEMPTED>`) {
+			t.Fatalf("%s: %v %s", rel, err, x)
+		}
+		_ = os.WriteFile(filepath.Join("testdata", "push240", "tds240", rel+".push.xml"), []byte(x), 0o644)
+	}
+}
