@@ -1644,6 +1644,78 @@ function waitsFor(r: any): string[] {
   const w = r?.payload && typeof r.payload === "object" ? r.payload.waitLedgers : null;
   return Array.isArray(w) ? w.map((n: any) => String(n || "").slice(0, 300)).filter(Boolean).slice(0, 10) : [];
 }
+// next-renumber (the owner's decision of 08-Oct-2026, "renumbering yes"): a voucher inserted or deleted in Tally, of a type
+// that renumbers, makes Tally renumber every later voucher of that type with no line for them and no AlterID moved (tally-versions
+// P9r, runs 37734533866 and 37754251128). FinCom Bridge asks here which entries FinCom holds of that type from that date on, reads
+// each again from Tally by its MasterID (FinComVoucherObject, the approved entry request) and sends those Tally renumbered as
+// altered recorder lines. READ-ONLY: this firm's book of that company only (bookFor), that voucher type exactly, not deleted, from
+// the date on; on that date only those numbered from the given number up (the series' prefix and suffix set aside: a number not
+// comparable is listed); the given MasterID left out; in date and number order; at most `limit` (500 at most), `more` when there
+// were more. The MasterID: the one a Tally GUID carries ("<company GUID>-<MasterID in hex>"), else the latest recorder line of
+// the book under that GUID; an entry with neither is counted (unknown), not listed: it cannot be asked for by MasterID
+const RENUMBER_MAX = 500;
+function renumNumCmp(a: string, b: string): number | null {
+  a = String(a || "").trim(); b = String(b || "").trim();
+  if (!a || !b) return null;
+  if (a === b) return 0;
+  const dig = (c: string) => c >= "0" && c <= "9";
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i++;
+  while (i > 0 && dig(a[i - 1])) i--;
+  const ra = a.slice(i), rb = b.slice(i);
+  let j = 0;
+  while (j < ra.length && j < rb.length && ra[ra.length - 1 - j] === rb[rb.length - 1 - j]) j++;
+  while (j > 0 && dig(ra[ra.length - j])) j--;
+  const da = ra.slice(0, ra.length - j), db_ = rb.slice(0, rb.length - j);
+  if (!/^[0-9]{1,18}$/.test(da) || !/^[0-9]{1,18}$/.test(db_)) return null;
+  const x = BigInt(da), y = BigInt(db_);
+  return x < y ? -1 : x > y ? 1 : 0;
+}
+async function renumberList(book: string, body: any) {
+  const vt = String(body.vtype ?? "").trim().slice(0, 60), from = String(body.from ?? "").trim();
+  if (!vt) return reply(400, { ok: false, error: "renumber_list: no voucher type" });
+  if (!/^[0-9]{8}$/.test(from)) return reply(400, { ok: false, error: "renumber_list: no date (yyyymmdd)" });
+  const day = from.slice(0, 4) + "-" + from.slice(4, 6) + "-" + from.slice(6, 8);
+  const no = String(body.no ?? "").trim().slice(0, 60), skip = /^[0-9]{1,18}$/.test(String(body.mid ?? "")) ? String(body.mid) : "";
+  const cg = /^[0-9A-Za-z-]{1,100}$/.test(String(body.company_guid ?? "")) ? String(body.company_guid).toLowerCase() : "";
+  const lim = Math.max(1, Math.min(RENUMBER_MAX, Number.isInteger(Number(body.limit)) && Number(body.limit) > 0 ? Number(body.limit) : RENUMBER_MAX));
+  const cols = "guid, day, vno, alter_id";
+  const { data: same, error: e1 } = await db.from("tally_vouchers").select(cols).eq("book_id", book).eq("vtype", vt).eq("day", day).is("deleted_at", null).order("vno").limit(5000);
+  if (e1) throw dbFail("renumber_list", e1, "The cloud could not list the entries just now; the bridge asks again.");
+  const { data: later, error: e2 } = await db.from("tally_vouchers").select(cols).eq("book_id", book).eq("vtype", vt).gt("day", day).is("deleted_at", null).order("day").order("vno").limit(lim + 50);
+  if (e2) throw dbFail("renumber_list", e2, "The cloud could not list the entries just now; the bridge asks again.");
+  const midOf = new Map<string, string>();
+  const rows = [...((same || []) as any[]).filter((r) => { const k = no ? renumNumCmp(String(r.vno || ""), no) : null; return k === null || k >= 0; }), ...((later || []) as any[])];
+  const need: string[] = [];
+  for (const r of rows) {
+    const g = String(r.guid || ""), m = /^(.+)-([0-9a-fA-F]{8})$/.exec(g);
+    if (m && cg && m[1].toLowerCase() === cg && parseInt(m[2], 16) > 0) midOf.set(g, String(parseInt(m[2], 16)));
+    else need.push(g);
+  }
+  for (let i = 0; i < need.length; i += 100) {
+    const { data: ls, error } = await db.from("tally_recorder_lines").select("id, object_guid, master_id").eq("book_id", book).in("object_guid", need.slice(i, i + 100)).order("id", { ascending: false }).limit(2000);
+    if (error) throw dbFail("renumber_list", error, "The cloud could not list the entries just now; the bridge asks again.");
+    for (const l of (ls || []) as any[]) {
+      const g = String(l.object_guid || ""), m = String(l.master_id || "");
+      if (!midOf.has(g) && /^[0-9]{1,18}$/.test(m) && Number(m) > 0) midOf.set(g, m);
+    }
+  }
+  const d8 = (d: string) => String(d || "").slice(0, 10).replace(/-/g, "");
+  const listed: any[] = []; let unknown = 0;
+  const sorted = rows.map((r, k) => ({ r, k })).sort((a, b) => {
+    if (a.r.day !== b.r.day) return String(a.r.day) < String(b.r.day) ? -1 : 1;
+    const c = renumNumCmp(String(a.r.vno || ""), String(b.r.vno || ""));
+    return c !== null && c !== 0 ? c : a.k - b.k;
+  });
+  for (const { r } of sorted) {
+    const g = String(r.guid || ""), mid = midOf.get(g);
+    if (!mid) { unknown++; continue; }
+    if (mid === skip) continue;
+    listed.push({ mid, guid: g, day: d8(r.day), no: String(r.vno || ""), alter: Number(r.alter_id || 0) });
+  }
+  const more = listed.length > lim || (later || []).length > lim + 49;
+  return reply(200, { ok: true, entries: listed.slice(0, lim), more, unknown });
+}
 async function recorderLines(dev: any, firm: string, book: string, body: any) {
   const me = bridgeOf(dev, body, false);
   const company = String(body.company || "").slice(0, 200);
@@ -2961,6 +3033,11 @@ Deno.serve(async (req) => {
         const book = await bookFor(firm, String(body.company || ""));
         if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
         return body.kind === "recorder_lines" ? await recorderLines(dev, firm, book, body) : await startPoint(dev, firm, book, body);
+      }
+      case "renumber_list": {
+        const book = await bookFor(firm, String(body.company || ""));
+        if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
+        return await renumberList(book, body);
       }
       case "support": return await supportPack(firm, dev, body);
       case "lease_take": case "lease_release": case "read_guard": return await bridgeSafety(dev, firm, body);
