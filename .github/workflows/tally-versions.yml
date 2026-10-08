@@ -19,7 +19,7 @@ on:
         description: 'Branch, tag or commit of the bridge (bridge-go/); tax-accuracy is the published 2.3.0'
         default: tax-accuracy
       mode:
-        description: 'quick (install and port), full (every check) share (next-push: the full line against the stored entry, per kind typed on the screen; no bridge) or big (the add-on''s own share of a save on a 100,000-entry company) or hang (the hang of run 37729166801 isolated, each probe in a fresh Tally) or hang2 (the share company, then each entry asked in a fresh Tally) or hang3 (the share session, the published requests after every step) or hang4 (the harness''s malformed filter against the correct one) or bank (the bank-date probe: does any event an add-on can hook fire when a bank date is set; bankv.ps1, a probe variant of the add-on in the harness only)'
+        description: 'quick (install and port), full (every check) share (next-push: the full line against the stored entry, per kind typed on the screen; no bridge) or big (the add-on''s own share of a save on a 100,000-entry company) or hang (the hang of run 37729166801 isolated, each probe in a fresh Tally) or hang2 (the share company, then each entry asked in a fresh Tally) or hang3 (the share session, the published requests after every step) or hang4 (the harness''s malformed filter against the correct one) or bank (the bank-date probe: does any event an add-on can hook fire when a bank date is set; bankv.ps1, a probe variant of the add-on in the harness only) or renum (next-renumber: an insert and a delete with renumbering on, the bridge built from source with stubr.py as the cloud; FinCom ends with Tally''s numbers; 3.0 and 7.1 only)'
         default: quick
 permissions:
   contents: write
@@ -32,6 +32,7 @@ jobs:
     outputs:
       sha: ${{ steps.sha.outputs.sha }}
       mode: ${{ steps.mode.outputs.mode }}
+      versions: ${{ steps.mode.outputs.versions }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,8 +40,10 @@ jobs:
       - id: mode
         run: |
           m="${{ inputs.mode }}"; [ -n "$m" ] || m=$(head -1 harness/.github/tally-spike/versions-mode.txt 2>/dev/null | tr -d '[:space:]')
-          case "$m" in full|share|big|hang|hang2|hang3|hang4|bank) ;; *) m=quick ;; esac
+          case "$m" in full|share|big|hang|hang2|hang3|hang4|bank|renum) ;; *) m=quick ;; esac
           echo "mode=$m" | tee -a "$GITHUB_OUTPUT"
+          # renum (next-renumber): the oldest and the newest release only
+          if [ "$m" = renum ]; then echo 'versions=["3.0","7.1"]'; else echo 'versions=["3.0","4.1","5.1","6.2","7.1"]'; fi | tee -a "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.bridge_ref || 'tax-accuracy' }}
@@ -52,6 +55,8 @@ jobs:
         id: committed
         run: |
           f=$(ls assets-test/bridge-go/FinComBridge-Setup-*.exe 2>/dev/null | head -1 || true)
+          # renum: the ref's own code, never a setup committed at it (next-renumber still carries 2.3.3's)
+          if [ "${{ steps.mode.outputs.mode }}" = renum ]; then f=""; fi
           if [ -z "$f" ]; then echo "no committed setup at the ref: building from source"; echo "use=no" >> "$GITHUB_OUTPUT"; exit 0; fi
           [ -f "$f.sha256" ] || { echo "::error::$f has no $f.sha256 next to it"; exit 1; }
           want=$(awk '{print tolower($1); exit}' "$f.sha256"); got=$(sha256sum "$f" | awk '{print $1}')
@@ -88,9 +93,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: ['3.0', '4.1', '5.1', '6.2', '7.1']
+        version: ${{ fromJSON(needs.build.outputs.versions) }}
     runs-on: windows-latest
-    timeout-minutes: ${{ needs.build.outputs.mode == 'hang2' && 220 || ((needs.build.outputs.mode == 'share' || needs.build.outputs.mode == 'big' || needs.build.outputs.mode == 'hang' || needs.build.outputs.mode == 'hang3' || needs.build.outputs.mode == 'bank') && 130 || 75) }}
+    timeout-minutes: ${{ needs.build.outputs.mode == 'hang2' && 220 || ((needs.build.outputs.mode == 'share' || needs.build.outputs.mode == 'big' || needs.build.outputs.mode == 'hang' || needs.build.outputs.mode == 'hang3' || needs.build.outputs.mode == 'bank' || needs.build.outputs.mode == 'renum') && 130 || 75) }}
     env:
       TALLY_REL: ${{ matrix.version }}
       VMODE: ${{ needs.build.outputs.mode }}
@@ -132,7 +137,7 @@ jobs:
           & .github/tally-spike/flow.ps1 *>&1 | Tee-Object -FilePath $env:LOG -Append; exit 0
       - name: 4 Checks (flowv.ps1)
         id: checks
-        timeout-minutes: ${{ needs.build.outputs.mode == 'hang2' && 190 || ((needs.build.outputs.mode == 'share' || needs.build.outputs.mode == 'big' || needs.build.outputs.mode == 'hang' || needs.build.outputs.mode == 'hang3' || needs.build.outputs.mode == 'bank') && 105 || 40) }}
+        timeout-minutes: ${{ needs.build.outputs.mode == 'hang2' && 190 || ((needs.build.outputs.mode == 'share' || needs.build.outputs.mode == 'big' || needs.build.outputs.mode == 'hang' || needs.build.outputs.mode == 'hang3' || needs.build.outputs.mode == 'bank' || needs.build.outputs.mode == 'renum') && 105 || 40) }}
         env:
           BRIDGE_DIST: ${{ github.workspace }}\bridge-dist
         run: |
@@ -143,6 +148,7 @@ jobs:
           $dir = Join-Path $env:RES 'versions'; New-Item -ItemType Directory -Force $dir | Out-Null
           $r = Join-Path $dir 'results.txt'; if (-not (Test-Path $r)) { Set-Content $r "INFO TallyPrime $env:TALLY_REL, mode $env:VMODE" }
           $want = @('c1 install and open the company', 'c2 port and company list')
+          if ($env:VMODE -eq 'renum') { $want += @('r1 insert with renumbering on', 'r2 delete with renumbering on') }
           if ($env:VMODE -eq 'full') { $want += @('c3 posting from the bridge', 'c4a create by keys', 'c4b alter by keys', 'c6 entry request', 'c5 Alt+2 duplicate', 'c4c cancel by keys', 'c4d delete by keys', 'c7 version string the bridge reads') }
           $have = Get-Content $r
           foreach ($c in $want) {
