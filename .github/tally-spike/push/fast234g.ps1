@@ -69,8 +69,7 @@ function ScreenInvoice($tag, $narr) {
   $null = TK '2{ENTER}' 1.5 "$tag-qty"; $null = TK '100{ENTER}' 1.5 "$tag-rate"; $null = TK '{ENTER}' 1.5 "$tag-amount"
   GSubs "$tag-item-b"
   $null = TK '{ENTER}' 1.5 "$tag-items-done"
-  $t = TdsScreen "$tag-narr-q"
-  if ($t -match 'Narration') { $null = TK ((SK $narr) + '{ENTER}') 2 "$tag-narr" }
+  # (run 37737309045: the narration typed here went into a second item row: none typed; the entry is found as the new Sales of the day)
   for ($a = 1; $a -le 3; $a++) {
     $null = TK '^a' 3 "$tag-accept$a"
     $t = TdsScreen "$tag-after$a"
