@@ -987,7 +987,7 @@ func TestPushAddon(t *testing.T) {
 	// an empty date writes its record empty (tally-versions run 37719717293, every release: "$$String" of an empty
 	// ReferenceDate / IRNAckDate failed in the form and left the record absent, so every line lacked refdt and irnackdt)
 	for _, k := range []string{"refdt", "irnackdt"} {
-		if !regexp.MustCompile(`(?m)SET : vRec : "\|`+k+`="\s*$`).MatchString(tdl) {
+		if !regexp.MustCompile(`(?m)SET : vRec : "\|` + k + `="\s*$`).MatchString(tdl) {
 			t.Errorf("the add-on writes no empty %s record for an entry without that date", k)
 		}
 	}
@@ -1661,6 +1661,63 @@ func TestPushHeadEmptyVersusAbsent(t *testing.T) {
 		}
 		if _, err := pushEntryXML(e, pushGUID(cg, mid), 0); err == nil || !strings.Contains(err.Error(), "lacks "+k) {
 			t.Fatalf("a line whose %s record is absent was taken: %v", k, err)
+		}
+	}
+}
+
+// --- which full lines can be trusted (the owner's decision of 08-Oct-2026: an entry whose line cannot be trusted is
+// confirmed by the fast request by MasterID; never a bill type that may be wrong). From tally-versions run 37722273938
+// (each kind typed on Tally's own screens, 3.0-7.1; testdata/push233/real/share722-<rel>-<case>.*: the add-on's lines and
+// Tally's stored entry), the narrowest rule that catches every mismatch seen:
+//   - an invoice made new (Invoice Voucher View): its line has no bills; Tally allocates the bill as it stores the entry
+//     (no bill-wise screen in item invoice mode), every release
+//   - an Alt+2 copy (its line's GUID is the entry it was copied from) carrying a New Ref bill: Tally stores Agst Ref
+//     (sales invoice and journal, every release)
+//
+// Everything else matched Tally's stored party (or one derived from the ledger lines) and every bill field: receipts and
+// payments against a bill, a journal with a party, alterations (of an invoice too), a copy without a New Ref bill
+func TestPushTrustRuleShare722(t *testing.T) {
+	for _, c := range []struct {
+		rel, cas, ev string
+		trusted      bool
+	}{
+		{"7.1", "sales-new", "created", false}, {"7.1", "purchase-new", "created", false}, {"7.1", "credit-note", "created", false},
+		{"7.1", "copy-sales-new", "created", false}, {"5.1", "copy-journal-party", "created", false},
+		{"7.1", "receipt-agst", "created", true}, {"7.1", "journal-party", "created", true}, {"7.1", "copy-receipt-plain", "created", true},
+		{"7.1", "alter-sales-new", "altered", true}, {"7.1", "alter-receipt-agst", "altered", true},
+	} {
+		b, err := os.ReadFile(filepath.Join("testdata", "push233", "real", "share722-"+c.rel+"-"+c.cas+".lines.txt"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var ps []string
+		var head string
+		for _, l := range strings.Split(strings.ReplaceAll(strings.TrimPrefix(string(b), "\ufeff"), "\r\n", "\n"), "\n") {
+			if !strings.HasPrefix(l, "FCR1|ev=voucher_full|") {
+				continue
+			}
+			p, ok := pushPayload(l)
+			if !ok {
+				t.Fatalf("%s %s: a line the reader cannot frame", c.rel, c.cas)
+			}
+			if strings.HasPrefix(p, pushMagic+"|part=1|") {
+				ps, head = nil, l
+			}
+			ps = append(ps, p)
+		}
+		hf := func(k string) string { return regexp.MustCompile(`\|` + k + `=([^|]*)\|`).FindStringSubmatch(head)[1] }
+		e, err := pushParse(ps)
+		if err != nil {
+			t.Fatalf("%s %s: %v", c.rel, c.cas, err)
+		}
+		why := pushTrust(e, c.ev, hf("cguid"), e.s("mid"), hf("guid"))
+		if (why == "") != c.trusted {
+			t.Fatalf("%s %s: trusted %v, want %v (%s)", c.rel, c.cas, why == "", c.trusted, why)
+		}
+		if c.trusted {
+			if _, err := pushEntryXML(e, pushGUID(hf("cguid"), e.s("mid")), 0); err != nil {
+				t.Fatalf("%s %s: a trusted line not built: %v", c.rel, c.cas, err)
+			}
 		}
 	}
 }

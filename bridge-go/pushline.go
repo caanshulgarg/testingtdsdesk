@@ -257,6 +257,35 @@ func pushGuidCheck(cguid, mid, ev string, lineGuids ...string) (string, string) 
 	return g, ""
 }
 
+// whether a full line can be trusted for the cloud: "" when it can, else why not (the entry is then confirmed from Tally's
+// own record: the fast request by MasterID, the owner's decision of 08-Oct-2026; until then the 2.3.2 route). The line is
+// the voucher FORM at Form Accept; tally-versions run 37722273938 (each kind typed on Tally's screens, 3.0-7.1, the line
+// against Tally's stored entry) showed the two cases where the form is not what Tally stores, and only those:
+//   - an invoice made new (Invoice Voucher View): no bills in the line; Tally allocates the bill as it stores the entry
+//   - an Alt+2 copy (the line's GUID is the entry it was copied from) carrying a New Ref bill: Tally stores Agst Ref
+//
+// A bill type that may be wrong is never sent. Alterations, receipts / payments / journals made new and copies without a
+// New Ref bill matched every bill field (their empty party is Tally's to fill from the ledger lines: the same run's rule)
+func pushTrust(e *pushEntry, ev, cguid, mid, lineGuid string) string {
+	if ev != "created" {
+		return ""
+	}
+	if strings.EqualFold(strings.TrimSpace(e.s("view")), "Invoice Voucher View") {
+		return "an invoice made new: Tally allocates its bills as it stores the entry, after the form the line is read from"
+	}
+	g, lg := pushGUID(cguid, mid), strings.TrimSpace(lineGuid)
+	if lg != "" && g != "" && !livePlaceholder(lg) && !strings.EqualFold(lg, g) {
+		for k, r := range e.recs {
+			if rePushBillRec.MatchString(k) && strings.EqualFold(strings.TrimSpace(r["type"]), "New Ref") {
+				return "an Alt+2 copy with a New Ref bill: Tally stores it as Agst Ref"
+			}
+		}
+	}
+	return ""
+}
+
+var rePushBillRec = regexp.MustCompile(`^L\d+B\d+$`)
+
 // --- the XML: what Tally gives the entry request (FinComVoucherByMaster) for the same voucher, typed as a real TallyPrime
 // 7.1 writes it; nothing the line does not carry
 

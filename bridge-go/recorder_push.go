@@ -203,6 +203,9 @@ func livePushDone(pk string, b *livePushBuf, posting bool) int {
 	if why != "" {
 		return fail(why)
 	}
+	if why := pushTrust(e, ev, post.CGUID, mid, post.GUID); why != "" {
+		return fail(why)
+	}
 	x, err := pushEntryXML(e, guid, 0)
 	if err != nil {
 		return fail(err.Error())
