@@ -313,7 +313,8 @@ const AlertHub = {
 // <this browser>: AlertClear.device(), a random id kept in this browser (localStorage "fincom:device-id"). The credit's
 // episode is this browser's too: another computer that saw it go low at another time shows it once more (never fewer).
 // (the review of 08-Oct, M1: every fingerprint names an occurrence, so a cleared notification can come back as a new one)
-// line:<id>:need|wait: AlertHub.lineAtom ("need" when a person must act: Rec.needKind), the same in every place, so a
+// line:<id>:need|wait: AlertHub.lineAtom ("need" when a person must act: Rec.needKind, THE one shared classifier of
+// Sync activity, the books' banner and the bell, src/js/61), the same in every place, so a
 // line cleared in the bell is cleared on the books' banner and in Sync activity too.
 // Where it is kept: signed in to the firm account, in FinCom's cloud (migration 68: app_alert_dismissals, the person's own
 // rows, through alert_dismiss / alert_dismiss_undo / alert_dismissals_list), with a copy in this browser so a reload hides
