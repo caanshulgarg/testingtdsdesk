@@ -1,0 +1,38 @@
+INFO TallyPrime 3.0, mode ledlist, runner GitHub Actions 1000005786, 2026-10-08T17:19:10
+INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 11457160 bytes, 2026-10-08, FileVersion 1.1.3.0, ProductVersion 1.1.3.0, ProductName TallyPrime
+INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+INFO Tally's own release in its answer header: PRODMAJORREL 3 PRODMINORREL 0 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+PASS c1 install and open the company: installed tally.exe 11457160 bytes, 2026-10-08, FileVersion 1.1.3.0, ProductVersion 1.1.3.0, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 18 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 6 ms, 'FinCom Spike Co' in it: True
+INFO ledlist: request templates from the ref's source: ledchanges.xml 01BAE0D30695, ledgroups.xml ADC42019E8FC, ledlist-chunk.xml 5D146FC4384F, ledlist-tail.xml 79B6226A170A
+INFO ledlist: Tally's ledgers before: 5
+INFO ledlist: company at ~2000 ledgers: Tally has 2000, ALTMSTID 2203
+PASS ledlist L1 2000: Tally's ledgers 2000, ALTMSTID 2203; 3 FinComLedgers requests (2,000 MasterIDs each, the last with no upper end): median 23 ms, worst 139.5 ms, sum 171 ms; the whole round (groups 5.6 ms, the bridge's rests included) 625 ms; ledgers read 2000 (distinct GUIDs); requests at or over 2 s: 0; timeouts 0; between chunks the company list answered in median 3 ms, worst 3.2 ms, Tally's window not responding 0 times
+PASS ledlist L2 2000 after 1 ledger(s) altered (XML, 1 altered): ALTMSTID 2203 -> 2204; 1 FinComLedgerChanges request(s): 21.2 ms (worst 21.2); ledgers answered 1, of the altered ones 1 of 1
+PASS ledlist L2 2000 after 50 ledger(s) altered (XML, 50 altered): ALTMSTID 2204 -> 2254; 1 FinComLedgerChanges request(s): 25.3 ms (worst 25.3); ledgers answered 50, of the altered ones 50 of 50
+PASS ledlist L1 2000-again: Tally's ledgers 2000, ALTMSTID 2254; 3 FinComLedgers requests (2,000 MasterIDs each, the last with no upper end): median 22.1 ms, worst 129.3 ms, sum 160 ms; the whole round (groups 5.8 ms, the bridge's rests included) 616 ms; ledgers read 2000 (distinct GUIDs); requests at or over 2 s: 0; timeouts 0; between chunks the company list answered in median 2.8 ms, worst 3.3 ms, Tally's window not responding 0 times
+INFO ledlist: company at ~5000 ledgers: Tally has 5000, ALTMSTID 5254
+PASS ledlist L1 5000: Tally's ledgers 5000, ALTMSTID 5254; 4 FinComLedgers requests (2,000 MasterIDs each, the last with no upper end): median 102.4 ms, worst 159.1 ms, sum 422 ms; the whole round (groups 5.7 ms, the bridge's rests included) 1092 ms; ledgers read 5000 (distinct GUIDs); requests at or over 2 s: 0; timeouts 0; between chunks the company list answered in median 3.3 ms, worst 3.5 ms, Tally's window not responding 0 times
+PASS ledlist L2 5000 after 1 ledger(s) altered (XML, 1 altered): ALTMSTID 5254 -> 5255; 1 FinComLedgerChanges request(s): 43.2 ms (worst 43.2); ledgers answered 1, of the altered ones 1 of 1
+PASS ledlist L2 5000 after 50 ledger(s) altered (XML, 50 altered): ALTMSTID 5255 -> 5305; 1 FinComLedgerChanges request(s): 48 ms (worst 48); ledgers answered 50, of the altered ones 50 of 50
+PASS ledlist L1 5000-again: Tally's ledgers 5000, ALTMSTID 5305; 4 FinComLedgers requests (2,000 MasterIDs each, the last with no upper end): median 82.1 ms, worst 151.6 ms, sum 388 ms; the whole round (groups 6.8 ms, the bridge's rests included) 1067 ms; ledgers read 5000 (distinct GUIDs); requests at or over 2 s: 0; timeouts 0; between chunks the company list answered in median 2.8 ms, worst 18.7 ms, Tally's window not responding 0 times
+INFO ledlist: company at ~20000 ledgers: Tally has 20000, ALTMSTID 20305
+PASS ledlist L1 20000: Tally's ledgers 20000, ALTMSTID 20305; 12 FinComLedgers requests (2,000 MasterIDs each, the last with no upper end): median 157.3 ms, worst 173.4 ms, sum 1662 ms; the whole round (groups 5.2 ms, the bridge's rests included) 4103 ms; ledgers read 20000 (distinct GUIDs); requests at or over 2 s: 0; timeouts 0; between chunks the company list answered in median 2.6 ms, worst 3.8 ms, Tally's window not responding 0 times
+PASS ledlist L2 20000 after 1 ledger(s) altered (XML, 1 altered): ALTMSTID 20305 -> 20306; 1 FinComLedgerChanges request(s): 160.1 ms (worst 160.1); ledgers answered 1, of the altered ones 1 of 1
+PASS ledlist L2 20000 after 50 ledger(s) altered (XML, 50 altered): ALTMSTID 20306 -> 20356; 1 FinComLedgerChanges request(s): 168.9 ms (worst 168.9); ledgers answered 50, of the altered ones 50 of 50
+PASS ledlist L1 20000-again: Tally's ledgers 20000, ALTMSTID 20356; 12 FinComLedgers requests (2,000 MasterIDs each, the last with no upper end): median 149.3 ms, worst 164.7 ms, sum 1583 ms; the whole round (groups 4.7 ms, the bridge's rests included) 3967 ms; ledgers read 20000 (distinct GUIDs); requests at or over 2 s: 0; timeouts 0; between chunks the company list answered in median 2.9 ms, worst 5.2 ms, Tally's window not responding 0 times
+INFO installer: Tally's download page lists TallyPrime setups for: Rel_2.1, REL_TP_1.0.0, Rel.2.0.1, Rel.2.0, Rel.3.0_Gold, Rel.3.0.1, Rel.3.0, Rel.4.0, Rel.4.1, Rel.5.0, Rel.5.1, Rel.6.1, Rel.7.0, Rel.7.1_gold, Rel.TP_1.1.1, Rel.TP_1.1.2, Rel.TP_1.1.3, Rel.TP_1.1.4, Rel.TP_1.1, Rel.TP_2.0, Rel6.0, Rel6.2, TallyPrime_Beta
+INFO installer: NO(403) -1 bytes, Last-Modified : https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_gold/TP/Full/setup.exe
+INFO installer: AVAILABLE 43440848 bytes, Last-Modified Sun, 11 Jun 2023 01:53:23 GMT: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_Gold/TP/Full/setup.exe
+INFO installer: AVAILABLE 43465936 bytes, Last-Modified Mon, 15 May 2023 04:03:04 GMT: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0/TP/Full/setup.exe
+INFO installer: AVAILABLE other release 3.0.1: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0.1/TP/Full/setup.exe (43476688 bytes)
+INFO installer: AVAILABLE other release 4.0: https://tallymirror.tallysolutions.com/download_centre/Rel.4.0/TP/Full/setup.exe (44497616 bytes)
+INFO installer: AVAILABLE other release 4.1: https://tallymirror.tallysolutions.com/download_centre/Rel.4.1/TP/Full/setup.exe (44673232 bytes)
+INFO installer: AVAILABLE other release 5.0: https://tallymirror.tallysolutions.com/download_centre/Rel.5.0/TP/Full/setup.exe (45592784 bytes)
+INFO installer: AVAILABLE other release 5.1: https://tallymirror.tallysolutions.com/download_centre/Rel.5.1/TP/Full/setup.exe (45651144 bytes)
+INFO installer: AVAILABLE other release 6.1: https://tallymirror.tallysolutions.com/download_centre/Rel.6.1/TP/Full/setup.exe (46460616 bytes)
+INFO installer: AVAILABLE other release 7.0: https://tallymirror.tallysolutions.com/download_centre/Rel.7.0/TP/Full/setup.exe (70912776 bytes)
+INFO installer: AVAILABLE other release 7.1: https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe (72090376 bytes)
+INFO installer: AVAILABLE other release 6.0: https://tallymirror.tallysolutions.com/download_centre/Rel6.0/TP/Full/setup.exe (46324936 bytes)
+INFO installer: AVAILABLE other release 6.2: https://tallymirror.tallysolutions.com/download_centre/Rel6.2/TP/Full/setup.exe (47408904 bytes)
+INFO installer: DOWNLOADED Rel.3.0 from https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_Gold/TP/Full/setup.exe : 43440848 bytes in 1 s, SHA-256 AF4172465A987F1F9FBDA87137EB40DEDAE8478A69FD08D87374C9A38BC81310, signature Valid CN=Tally Solutions Pvt Ltd, O=Tally Solutions Pvt Ltd, L=Bengaluru, S=Karnataka, C=IN, file version 1.1.3.0 product 1.1.3.0

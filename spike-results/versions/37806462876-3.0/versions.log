@@ -1,0 +1,81 @@
+[17:19:11] ---- c1 install and open the company (TallyPrime 3.0)
+  INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 11457160 bytes, 2026-10-08, FileVersion 1.1.3.0, ProductVersion 1.1.3.0, ProductName TallyPrime
+  INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-00-started (1024x768)
+[companies] 6 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[header] 6 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS><PRODMAJORVER>1</PRODMAJORVER><PRODMINORVER>1</PRODMINORVER><PRODMAJORREL>3</PRODMAJORREL><PRODMINORREL>0</PRODMINORREL><PRODTYPE>5</PRODTYPE></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</...
+  INFO Tally's own release in its answer header: PRODMAJORREL 3 PRODMINORREL 0 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+######## PASS c1 install and open the company: installed tally.exe 11457160 bytes, 2026-10-08, FileVersion 1.1.3.0, ProductVersion 1.1.3.0, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+######## PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 18 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 6 ms, 'FinCom Spike Co' in it: True
+[17:19:44] ---- ledlist: the bridge's ledger list and ledger changes requests on 2,000 / 5,000 / 20,000 ledgers
+  INFO ledlist: request templates from the ref's source: ledchanges.xml 01BAE0D30695, ledgroups.xml ADC42019E8FC, ledlist-chunk.xml 5D146FC4384F, ledlist-tail.xml 79B6226A170A
+  INFO ledlist: Tally's ledgers before: 5
+[ledlist] import of 1000 ledgers: created 1000 in 3183.2 ms
+[ledlist] import of 995 ledgers: created 995 in 3135.2 ms
+  INFO ledlist: company at ~2000 ledgers: Tally has 2000, ALTMSTID 2203
+[ledlist] 2000 FinComLedgers 1-2000: 139.5 ms, 1799 ledgers, 1149402 bytes; then the company list 3.2 ms, window responding True
+[ledlist] 2000 FinComLedgers 2001-4000: 23 ms, 201 ledgers, 129907 bytes; then the company list 3 ms, window responding True
+[ledlist] 2000 FinComLedgers from 4001: 8.7 ms, 0 ledgers, 1500 bytes; then the company list 2.7 ms, window responding True
+[ledlist] 2000 FinComLedgerChanges AlterID 2204-2204: 21.2 ms, 1 ledgers
+[ledlist] 2000 FinComLedgerChanges AlterID 2205-2254: 25.3 ms, 50 ledgers
+[ledlist] 2000-again FinComLedgers 1-2000: 129.3 ms, 1799 ledgers, 1151053 bytes; then the company list 3.3 ms, window responding True
+[ledlist] 2000-again FinComLedgers 2001-4000: 22.1 ms, 201 ledgers, 129907 bytes; then the company list 2.8 ms, window responding True
+[ledlist] 2000-again FinComLedgers from 4001: 9 ms, 0 ledgers, 1500 bytes; then the company list 2.7 ms, window responding True
+[ledlist] import of 1000 ledgers: created 1000 in 3220.7 ms
+[ledlist] import of 1000 ledgers: created 1000 in 3222.5 ms
+[ledlist] import of 1000 ledgers: created 1000 in 3302.8 ms
+  INFO ledlist: company at ~5000 ledgers: Tally has 5000, ALTMSTID 5254
+[ledlist] 5000 FinComLedgers 1-2000: 159.1 ms, 1799 ledgers, 1151053 bytes; then the company list 3.3 ms, window responding True
+[ledlist] 5000 FinComLedgers 2001-4000: 149.2 ms, 2000 ledgers, 1279502 bytes; then the company list 3.3 ms, window responding True
+[ledlist] 5000 FinComLedgers 4001-6000: 102.4 ms, 1201 ledgers, 768907 bytes; then the company list 3.5 ms, window responding True
+[ledlist] 5000 FinComLedgers from 6001: 11.6 ms, 0 ledgers, 1500 bytes; then the company list 2.5 ms, window responding True
+[ledlist] 5000 FinComLedgerChanges AlterID 5255-5255: 43.2 ms, 1 ledgers
+[ledlist] 5000 FinComLedgerChanges AlterID 5256-5305: 48 ms, 50 ledgers
+[ledlist] 5000-again FinComLedgers 1-2000: 141.5 ms, 1799 ledgers, 1151054 bytes; then the company list 18.7 ms, window responding True
+[ledlist] 5000-again FinComLedgers 2001-4000: 151.6 ms, 2000 ledgers, 1279502 bytes; then the company list 4 ms, window responding True
+[ledlist] 5000-again FinComLedgers 4001-6000: 82.1 ms, 1201 ledgers, 768907 bytes; then the company list 2.8 ms, window responding True
+[ledlist] 5000-again FinComLedgers from 6001: 12.3 ms, 0 ledgers, 1500 bytes; then the company list 2.1 ms, window responding True
+[ledlist] import of 1000 ledgers: created 1000 in 3357.5 ms
+[ledlist] import of 1000 ledgers: created 1000 in 3343.7 ms
+[ledlist] import of 1000 ledgers: created 1000 in 3355.7 ms
+[ledlist] import of 1000 ledgers: created 1000 in 3413.4 ms
+[ledlist] import of 1000 ledgers: created 1000 in 3442.8 ms
+[ledlist] import of 1000 ledgers: created 1000 in 3476.6 ms
+[ledlist] import of 1000 ledgers: created 1000 in 3573.2 ms
+[ledlist] import of 1000 ledgers: created 1000 in 3583.3 ms
+[ledlist] import of 1000 ledgers: created 1000 in 3752.1 ms
+[ledlist] import of 1000 ledgers: created 1000 in 3618.3 ms
+[ledlist] import of 1000 ledgers: created 1000 in 3574.9 ms
+[ledlist] import of 1000 ledgers: created 1000 in 3630.7 ms
+[ledlist] import of 1000 ledgers: created 1000 in 3772.1 ms
+[ledlist] import of 1000 ledgers: created 1000 in 3666 ms
+[ledlist] import of 1000 ledgers: created 1000 in 3715.5 ms
+  INFO ledlist: company at ~20000 ledgers: Tally has 20000, ALTMSTID 20305
+[ledlist] 20000 FinComLedgers 1-2000: 154.2 ms, 1799 ledgers, 1151055 bytes; then the company list 2.7 ms, window responding True
+[ledlist] 20000 FinComLedgers 2001-4000: 155.2 ms, 2000 ledgers, 1279503 bytes; then the company list 3.4 ms, window responding True
+[ledlist] 20000 FinComLedgers 4001-6000: 173.4 ms, 2000 ledgers, 1279503 bytes; then the company list 2.6 ms, window responding True
+[ledlist] 20000 FinComLedgers 6001-8000: 160.8 ms, 2000 ledgers, 1279503 bytes; then the company list 2.5 ms, window responding True
+[ledlist] 20000 FinComLedgers 8001-10000: 158.5 ms, 2000 ledgers, 1279609 bytes; then the company list 2.6 ms, window responding True
+[ledlist] 20000 FinComLedgers 10001-12000: 157.3 ms, 2000 ledgers, 1283503 bytes; then the company list 2.8 ms, window responding True
+[ledlist] 20000 FinComLedgers 12001-14000: 160.4 ms, 2000 ledgers, 1283503 bytes; then the company list 3.8 ms, window responding True
+[ledlist] 20000 FinComLedgers 14001-16000: 157.7 ms, 2000 ledgers, 1283503 bytes; then the company list 2.8 ms, window responding True
+[ledlist] 20000 FinComLedgers 16001-18000: 157.7 ms, 2000 ledgers, 1283503 bytes; then the company list 2.6 ms, window responding True
+[ledlist] 20000 FinComLedgers 18001-20000: 157.3 ms, 2000 ledgers, 1283503 bytes; then the company list 3.5 ms, window responding True
+[ledlist] 20000 FinComLedgers 20001-22000: 41.6 ms, 201 ledgers, 130310 bytes; then the company list 2.5 ms, window responding True
+[ledlist] 20000 FinComLedgers from 22001: 28.3 ms, 0 ledgers, 1501 bytes; then the company list 2.3 ms, window responding True
+[ledlist] 20000 FinComLedgerChanges AlterID 20306-20306: 160.1 ms, 1 ledgers
+[ledlist] 20000 FinComLedgerChanges AlterID 20307-20356: 168.9 ms, 50 ledgers
+[ledlist] 20000-again FinComLedgers 1-2000: 138.2 ms, 1799 ledgers, 1151107 bytes; then the company list 5.2 ms, window responding True
+[ledlist] 20000-again FinComLedgers 2001-4000: 151.7 ms, 2000 ledgers, 1279503 bytes; then the company list 2.9 ms, window responding True
+[ledlist] 20000-again FinComLedgers 4001-6000: 153.3 ms, 2000 ledgers, 1279503 bytes; then the company list 2.9 ms, window responding True
+[ledlist] 20000-again FinComLedgers 6001-8000: 151.9 ms, 2000 ledgers, 1279503 bytes; then the company list 2.7 ms, window responding True
+[ledlist] 20000-again FinComLedgers 8001-10000: 153 ms, 2000 ledgers, 1279609 bytes; then the company list 2.6 ms, window responding True
+[ledlist] 20000-again FinComLedgers 10001-12000: 149.3 ms, 2000 ledgers, 1283503 bytes; then the company list 3 ms, window responding True
+[ledlist] 20000-again FinComLedgers 12001-14000: 153.8 ms, 2000 ledgers, 1283503 bytes; then the company list 3.1 ms, window responding True
+[ledlist] 20000-again FinComLedgers 14001-16000: 164.7 ms, 2000 ledgers, 1283503 bytes; then the company list 3.3 ms, window responding True
+[ledlist] 20000-again FinComLedgers 16001-18000: 148.6 ms, 2000 ledgers, 1283503 bytes; then the company list 2.9 ms, window responding True
+[ledlist] 20000-again FinComLedgers 18001-20000: 148.5 ms, 2000 ledgers, 1283503 bytes; then the company list 3.1 ms, window responding True
+[ledlist] 20000-again FinComLedgers 20001-22000: 41.5 ms, 201 ledgers, 130310 bytes; then the company list 2.1 ms, window responding True
+[ledlist] 20000-again FinComLedgers from 22001: 28.6 ms, 0 ledgers, 1501 bytes; then the company list 2 ms, window responding True
