@@ -1856,6 +1856,24 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 			liveHeldAs(c, slowWords, true)
 		}
 	}
+	// 2.3.4 (option (a)): a line whose fast request was stopped at 2 s: held, ended with the Day Book words
+	stopEnd := func(cs []*change) {
+		w := liveStopEndWords()
+		for _, c := range cs {
+			if c.isLedger() {
+				continue
+			}
+			live.mu.Lock()
+			if c.guidFetch {
+				liveGuidHold(c, w)
+				live.mu.Unlock()
+				continue
+			}
+			c.slowEnded = true
+			live.mu.Unlock()
+			liveHeldAs(c, w, true)
+		}
+	}
 	if slowMarked(company, need[0].companyGuid) {
 		slowHold(need)
 		var ls []*change
@@ -1968,7 +1986,10 @@ byDay:
 				break byDay
 			}
 			if errors.Is(err, errRecorderStop) {
-				liveHeldNow(part, liveStopWhat(), true, true, false) // a real 2 s stop: one ask of the original fetch
+				// 2.3.4 (the owner's decision of 08-Oct-2026, option (a)): the fast request for this entry took more than 2 s
+				// (the stop itself unchanged): its line goes up held, ended with the Day Book words, never asked again; the
+				// company is not marked (slowNote) and its other entries go on being fetched
+				stopEnd(part)
 				continue
 			}
 			if gaveWay(err) {

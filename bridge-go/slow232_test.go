@@ -83,36 +83,25 @@ func slowHeldItem(t *testing.T, id string) (heldLine, bool) {
 	return h, ok
 }
 
-// marks NWS144: two separate stops of its entry fetch, Tally answering the company list in time around each
+// marks NWS144 as the bridge's file keeps a mark (recorder-slow.json, this version). 2.3.4 (the owner's decision of
+// 08-Oct-2026, option (a)): no stop of the fast request marks a company any more (TestFast234ObjectStopEndsLineOnly);
+// a mark is planted here so what a marked company means stays tested
 func slowMarkIt(t *testing.T, p string, f *standTally) {
 	t.Helper()
 	r222Vch(f, 25700, "Journal", "J-25700", "20261005", 54500)
-	slowEntries(f, 700*time.Millisecond)
-	slowLook() // Tally answers other requests in time
-	liveAppend(t, p, slowLine(25700, "07:14")...)
-	liveReadOnce()
-	liveUploadOnce() // the first ask: stopped at the limit
-	if n := f.n(vchObjectID); n != 1 {
-		t.Fatalf("the first turn asked %d times (want 1): %v", n, f.ids())
-	}
-	if slowMarked(nwsCo, nwsGUID) {
-		t.Fatal("marked after one stop")
-	}
-	retryDue()
-	slowLook()       // the retry's try: the company list answered in time
-	liveUploadOnce() // the second ask: stopped again
-	if n := f.n(vchObjectID); n != 2 {
-		t.Fatalf("the second turn: %d asks (want 2): %v", n, f.ids())
-	}
-	retryDue()
-	slowLook() // Tally answers other requests in time after it: the second occasion
+	slowSt.mu.Lock()
+	slowFresh()
+	slowSt.marks[companyKey(nwsCo)] = &slowMark{Company: nwsCo, GUID: heldGUID(nwsCo), Since: nowFn().In(liveZone).Format(time.RFC3339), TimesOver: 2, LastMs: -1,
+		Why: "finding one entry took Tally longer than 2 s: stopped 2 times, on 2 separate occasions while Tally answered other requests in time"}
+	slowSaveLocked()
+	slowSt.mu.Unlock()
 	if !slowMarked(nwsCo, nwsGUID) {
-		t.Fatalf("not marked after 2 stops on separate occasions:\n%s", readText(logFile()))
+		t.Fatal("the planted mark is not read")
 	}
 }
 
-// --- c. a company whose single entry takes Tally 5 s: marked after 2 stops; then no entry request for it at all; its
-// lines go up held with the plain words; the beat carries the mark; the log says it
+// --- c. a marked company (a mark the bridge's file keeps; 2.3.4: no stop makes one any more): no entry request for it at
+// all; its lines go up held with the plain words; the beat carries the mark
 func TestSlow232CompanyMarkedAfterTwoStops(t *testing.T) {
 	p, f, c := slow232Bridge(t)
 	slowMarkIt(t, p, f)
@@ -120,15 +109,8 @@ func TestSlow232CompanyMarkedAfterTwoStops(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		liveUploadOnce()
 	}
-	if n := f.n(vchObjectID) + f.n(vchByNumberID); n != 2 {
-		t.Fatalf("entry requests after the mark: %d in all (want the 2 before it): %v", n, f.ids())
-	}
-	// 2.3.3: the line went up held at its first stop ("waiting: ..."), and its one ask again (stopped) ended it with the Day
-	// Book words (2.3.2 kept it unsent until the mark: the silence the owner's rule forbids)
-	s := slowSentOf(c, 25700)
-	if len(s) != 2 || !strings.HasPrefix(str(s[0]["heldWhy"]), "waiting: ") || str(s[1]["line_id"]) != str(s[0]["line_id"])+":resolved" ||
-		(str(s[1]["heldWhy"]) != slowWords && str(s[1]["heldWhy"]) != liveHeldSlowGiveUp) || str(s[0]["xml"]) != "" || str(s[1]["xml"]) != "" {
-		t.Fatalf("the line asked twice went up: %v", s)
+	if n := f.n(vchObjectID) + f.n(vchByNumberID); n != 0 {
+		t.Fatalf("entry requests for a marked company: %v", f.ids())
 	}
 	// a new entry of that company: held at once with the words, nothing asked (by MasterID or by number)
 	r222Vch(f, 25701, "Journal", "J-25701", "20261005", 54501)
@@ -136,7 +118,7 @@ func TestSlow232CompanyMarkedAfterTwoStops(t *testing.T) {
 	liveAppend(t, p, slowLine(25701, "07:20")...)
 	liveAppend(t, p, r222Line("voucher_accept_post", "07:21", nwsGUID+"-00000000", "0", "0", "Journal", "J-NEW", "5-Oct-2026", "a new one"))
 	readAndUploadAll(t)
-	if n := f.n(vchObjectID) + f.n(vchByNumberID); n != 2 {
+	if n := f.n(vchObjectID) + f.n(vchByNumberID); n != 0 {
 		t.Fatalf("a new line of the marked company was asked of Tally: %v", f.ids())
 	}
 	for _, mid := range []int64{25701} {
@@ -155,7 +137,7 @@ func TestSlow232CompanyMarkedAfterTwoStops(t *testing.T) {
 		retryDue()
 		liveUploadOnce()
 	}
-	if n := f.n(vchObjectID) + f.n(vchByNumberID); n != 2 {
+	if n := f.n(vchObjectID) + f.n(vchByNumberID); n != 0 {
 		t.Fatalf("the resolver asked Tally for a marked company's line: %v", f.ids())
 	}
 	// the beat: per company {company, since, timesOver, lastMs, why}, in the recorderBodyFetch shape FinCom keeps
@@ -167,9 +149,6 @@ func TestSlow232CompanyMarkedAfterTwoStops(t *testing.T) {
 	}
 	if _, had := e["lastMs"]; had && e["lastMs"] != nil {
 		t.Fatalf("lastMs without an answer: %v", e)
-	}
-	if logLines("entry fetch stopped: over 2 s") < 1 {
-		t.Fatalf("the mark is not in the log:\n%s", readText(logFile()))
 	}
 	if len(obj(b["recorderSourceB"])) != 0 || len(obj(b["recorderSourceC"])) != 0 || b["readStopped"] != nil {
 		t.Fatalf("something else is said off: %v %v %v", b["recorderSourceB"], b["recorderSourceC"], b["readStopped"])
@@ -196,9 +175,9 @@ func TestSlow232FreezeDoesNotMark(t *testing.T) {
 	retryDue()
 	slowLook()
 	retryDue()
-	liveUploadOnce() // 2.3.3: held at its first stop, asked again once (stopped: ended), then nothing more
-	if n := f.n(vchObjectID); n != 2 {
-		t.Fatalf("asks in the freeze: %d (want 2: its first fetch and the one ask again): %v", n, f.ids())
+	liveUploadOnce() // 2.3.4 (option (a)): ended at its first stop with the Day Book words, never asked again
+	if n := f.n(vchObjectID); n != 1 {
+		t.Fatalf("asks in the freeze: %d (want 1: its fetch, stopped, ends the line): %v", n, f.ids())
 	}
 	slowAll(f, 0)
 	retryDue()
@@ -235,9 +214,9 @@ func TestSlow232FreezeDoesNotMark(t *testing.T) {
 	}
 }
 
-// --- b, as the owner changed it for 2.3.3 (07-Oct-2026, replacing 2.3.2's 1 h / 4 h ladder): a new entry whose fetch
-// timed out goes up held at once, is asked again ONCE, and when that ask also stops it ends at once with the Day Book words
-// (sent to FinCom); never asked again, whatever FinCom lists
+// --- b, as the owner changed it for 2.3.4 (08-Oct-2026, option (a); 2.3.3 asked it again once): a new entry whose fast
+// request is stopped at the limit goes up held at once, ended with the Day Book words; never asked again, whatever
+// FinCom lists, hours and days later
 func TestSlow232HeldTimedOutBacksOffHours(t *testing.T) {
 	p, f, c := slow232Bridge(t)
 	r222Vch(f, 25720, "Journal", "J-25720", "20261005", 54520)
@@ -245,43 +224,32 @@ func TestSlow232HeldTimedOutBacksOffHours(t *testing.T) {
 	base := nowFn()
 	liveAppend(t, p, slowLine(25720, "07:14")...)
 	liveReadOnce()
-	liveUploadOnce() // the first stop: the line goes up held at once
+	liveUploadOnce() // the stop: the line goes up held at once, ended
 	s := slowSentOf(c, 25720)
-	if len(s) != 1 || str(s[0]["xml"]) != "" || !strings.HasPrefix(str(s[0]["heldWhy"]), "waiting: ") {
+	if len(s) != 1 || str(s[0]["xml"]) != "" || str(s[0]["heldWhy"]) != liveStopEndWords() || !strings.HasSuffix(liveStopEndWords(), "upload that day's Day Book to settle it") {
 		t.Fatalf("the line went up: %v", s)
 	}
 	id := str(s[0]["line_id"])
-	if h, ok := slowHeldItem(t, id); !ok || h.allow() != 1 || h.Asked != 0 {
-		t.Fatalf("the held list: %+v %v (want one ask again)", h, ok)
+	if _, ok := slowHeldItem(t, id); ok {
+		t.Fatal("an ended line is in the held list")
 	}
 	asks := func() int { return f.n(vchObjectID) + f.n(vchByNumberID) }
-	step := func(sec, want int) {
-		t.Helper()
-		retryClock(base, sec)
-		retryDue()
-		liveUploadOnce()
-		if asks() != want {
-			t.Fatalf("at %s: %d asks (want %d): %v", time.Duration(sec)*time.Second, asks(), want, f.ids())
-		}
-	}
-	step(15, 2) // its one ask again: stopped: it ends
-	end := slowSentOf(c, 25720)
-	if len(end) != 2 || str(end[1]["line_id"]) != id+":resolved" || str(end[1]["xml"]) != "" || str(end[1]["heldWhy"]) != liveHeldSlowGiveUp ||
-		!strings.Contains(liveHeldSlowGiveUp, "upload that day's Day Book") {
-		t.Fatalf("the end went up: %v", end)
-	}
-	// never asked again: hours and days later, whatever FinCom lists again
 	row := M{"line_id": id, "company": nwsCo, "company_guid": nwsGUID, "event": "created", "master_id": "25720", "vch_type": "Journal", "vch_no": "J-25720", "vch_date": "20261005"}
-	for _, h := range []int{1, 5, 6, 24, 72, 150, 170} {
+	for _, h := range []int{0, 1, 5, 6, 24, 72, 150, 170} {
+		retryClock(base, 15+h*3600)
 		applyHeldLines(M{"heldLines": []any{row}})
 		applyRefetch(M{"refetch": []any{row}})
-		step(h*3600, 2)
+		retryDue()
+		liveUploadOnce()
+		if asks() != 1 {
+			t.Fatalf("at %d h: %d asks (want 1): %v", h, asks(), f.ids())
+		}
 	}
-	if n := len(slowSentOf(c, 25720)); n != 2 {
-		t.Fatalf("the end went up more than once: %d lines", n)
+	if n := len(slowSentOf(c, 25720)); n != 1 {
+		t.Fatalf("more went up for it: %d lines", n)
 	}
 	if slowMarked(nwsCo, nwsGUID) {
-		t.Fatal("marked: no request was answered in time around the stops")
+		t.Fatal("marked")
 	}
 }
 
@@ -307,7 +275,7 @@ func TestSlow232CloudHeldLineTimedOut(t *testing.T) {
 }
 
 // --- a fast company is unaffected: its entries come with their bodies, its outcome is measured (ms), nothing is marked;
-// one stop alone (Tally busy for a moment) marks nothing and the entry comes at the retry
+// one stop (2.3.4, option (a)) ends that entry's line with the Day Book words and marks nothing; the next entry comes
 func TestSlow232FastCompanyUnaffected(t *testing.T) {
 	p, f, c := slow232Bridge(t)
 	r222Vch(f, 25740, "Journal", "J-25740", "20261005", 54540)
@@ -340,10 +308,15 @@ func TestSlow232FastCompanyUnaffected(t *testing.T) {
 	retryDue()
 	slowLook()
 	readAndUploadAll(t)
-	// 2.3.3: held at once at the stop, then its entry as ":resolved" at the retry (2.3.2 kept it unsent meanwhile)
-	if s := slowSentOf(c, 25741); len(s) != 2 || str(s[0]["xml"]) != "" || !strings.HasPrefix(str(s[0]["heldWhy"]), "waiting: ") ||
-		str(s[1]["line_id"]) != str(s[0]["line_id"])+":resolved" || str(s[1]["xml"]) == "" {
+	// 2.3.4 (option (a)): held at once at the stop, ended with the Day Book words; not asked again
+	if s := slowSentOf(c, 25741); len(s) != 1 || str(s[0]["xml"]) != "" || str(s[0]["heldWhy"]) != liveStopEndWords() {
 		t.Fatalf("the entry after one stop: %v", s)
+	}
+	r222Vch(f, 25742, "Journal", "J-25742", "20261005", 54542)
+	liveAppend(t, p, slowLine(25742, "07:25")...)
+	readAndUploadAll(t)
+	if s := slowSentOf(c, 25742); len(s) != 1 || str(s[0]["xml"]) == "" {
+		t.Fatalf("the next entry: %v", s)
 	}
 	if slowMarked(nwsCo, nwsGUID) {
 		t.Fatal("marked after one stop")
