@@ -1,0 +1,15 @@
+2026-10-08 15:06:43  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 3 still held (3 in the list)
+2026-10-08 15:06:43  Reading from Tally resumed from FinCom (it was stopped: Stopped by the owner from FinCom (harness s1))
+2026-10-08 15:06:46  Recorder: Receipt 4 of 02-Oct-2026 (MasterID 6, line e8527755…): taken: Tally's GUID 7abde31c-3663-410e-ac28-942266a9043c-00000006, AlterID 6
+2026-10-08 15:06:46  Recorder: Receipt 4 of 20261002 in FinCom Spike Co resolved: sent as created with its GUID 7abde31c-3663-410e-ac28-942266a9043c-00000006 and body
+2026-10-08 15:06:46  Recorder: held lines: 0 from FinCom, 1 asked, 1 resolved, 2 still held (3 in the list)
+2026-10-08 15:06:53  Recorder: Receipt 1 of 31-Oct-2026 (MasterID 3, line c7c48eb6…): taken: Tally's GUID 7abde31c-3663-410e-ac28-942266a9043c-00000003, AlterID 7
+2026-10-08 15:06:53  Recorder: Receipt 1 of 20261031 in FinCom Spike Co resolved: sent as altered with its GUID 7abde31c-3663-410e-ac28-942266a9043c-00000003 and body
+2026-10-08 15:06:53  Recorder: held lines: 0 from FinCom, 1 asked, 1 resolved, 1 still held (2 in the list)
+2026-10-08 15:12:14  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=2; now ALTVCHID=9, ALTMSTID=209
+2026-10-08 15:16:34  Recorder: Receipt 2 of 01-Nov-2026 (MasterID 4, line faefe5d4…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-08 15:16:34  Recorder: entry fetch of FinCom Spike Co: answered in 18 ms
+2026-10-08 15:16:34  Recorder: FinCom Spike Co: delete of mid 4: not in this Tally (asked by MasterID): proven deleted here
+2026-10-08 15:16:34  Recorder: Receipt 2 of 01-Nov-2026 (MasterID 4, line faefe5d4…): proven in this Tally now: the delete goes as faefe5d475427cc8c19ec80d8d6eea4c:resolved
+2026-10-08 15:16:34  Recorder: held lines: 0 from FinCom, 1 asked, 1 resolved, 0 still held (1 in the list)
+2026-10-08 15:16:34  Recorder: FinCom Spike Co: delete of mid 4: GUID from the bridge's record: 7abde31c-3663-410e-ac28-942266a9043c-00000004; the GUID its MasterID makes agrees

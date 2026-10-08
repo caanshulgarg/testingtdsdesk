@@ -1,0 +1,14 @@
+2026-10-08 14:59:20  Reading from Tally resumed from FinCom (it was stopped: Stopped by the owner from FinCom (harness s1))
+2026-10-08 14:59:21  Recorder: Receipt 1 of 31-Oct-2026 (MasterID 3, line 7687294c…): taken: Tally's GUID 1826e920-3322-44f2-839d-ffe1d623b21f-00000003, AlterID 7
+2026-10-08 14:59:21  Recorder: Receipt 1 of 20261031 in FinCom Spike Co resolved: sent as altered with its GUID 1826e920-3322-44f2-839d-ffe1d623b21f-00000003 and body
+2026-10-08 14:59:21  Recorder: held lines: 0 from FinCom, 1 asked, 1 resolved, 2 still held (3 in the list)
+2026-10-08 14:59:23  Recorder: Receipt 4 of 02-Oct-2026 (MasterID 6, line 126107c4…): taken: Tally's GUID 1826e920-3322-44f2-839d-ffe1d623b21f-00000006, AlterID 6
+2026-10-08 14:59:23  Recorder: Receipt 4 of 20261002 in FinCom Spike Co resolved: sent as created with its GUID 1826e920-3322-44f2-839d-ffe1d623b21f-00000006 and body
+2026-10-08 14:59:23  Recorder: held lines: 0 from FinCom, 1 asked, 1 resolved, 1 still held (2 in the list)
+2026-10-08 15:04:41  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=2; now ALTVCHID=9, ALTMSTID=211
+2026-10-08 15:09:12  Recorder: Receipt 2 of 01-Nov-2026 (MasterID 4, line a869ee41…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-08 15:09:12  Recorder: entry fetch of FinCom Spike Co: answered in 14 ms
+2026-10-08 15:09:12  Recorder: FinCom Spike Co: delete of mid 4: not in this Tally (asked by MasterID): proven deleted here
+2026-10-08 15:09:12  Recorder: Receipt 2 of 01-Nov-2026 (MasterID 4, line a869ee41…): proven in this Tally now: the delete goes as a869ee41d52bc46ee012bfeeeef71433:resolved
+2026-10-08 15:09:12  Recorder: held lines: 0 from FinCom, 1 asked, 1 resolved, 0 still held (1 in the list)
+2026-10-08 15:09:12  Recorder: FinCom Spike Co: delete of mid 4: GUID from the bridge's record: 1826e920-3322-44f2-839d-ffe1d623b21f-00000004; the GUID its MasterID makes agrees

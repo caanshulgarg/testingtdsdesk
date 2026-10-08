@@ -1,0 +1,90 @@
+2026-10-08 15:02:10  FinCom Bridge 2.3.4: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+2026-10-08 15:02:10  FinCom Bridge 2.3.4 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+2026-10-08 15:02:10  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+2026-10-08 15:02:10  Recorder: re-scan of the add-on's files for 2.3.4: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+2026-10-08 15:02:10  Check:  - 
+2026-10-08 15:02:13  Tray icon: set to show next to the clock always (Windows 11)
+2026-10-08 15:02:13  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+2026-10-08 15:02:13  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+2026-10-08 15:02:13  Company FinCom Spike Co: its Tally GUID 7abde31c-3663-410e-ac28-942266a9043c is held from now on
+2026-10-08 15:02:14  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=2, ALTMSTID=209 (reading is prospective only: the bridge follows what changes after this)
+2026-10-08 15:02:14  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=2, ALTMSTID=209
+2026-10-08 15:02:14  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=2, ALTMSTID=209)
+2026-10-08 15:03:27  Recorder: Receipt 1 of 31-Oct-2026 (MasterID 3, line 9699e9d9…): asking Tally by MasterID
+2026-10-08 15:03:27  Recorder: entry fetch of FinCom Spike Co: answered in 18 ms
+2026-10-08 15:03:27  Recorder: Receipt 1 of 31-Oct-2026 (MasterID 3, line 9699e9d9…): taken: Tally's GUID 7abde31c-3663-410e-ac28-942266a9043c-00000003, AlterID 3
+2026-10-08 15:04:02  Recorder: Receipt 2 of 01-Nov-2026 (MasterID 4, line afda3365…): asking Tally by MasterID
+2026-10-08 15:04:02  Recorder: entry fetch of FinCom Spike Co: answered in 28 ms
+2026-10-08 15:04:02  Recorder: Receipt 2 of 01-Nov-2026 (MasterID 4, line afda3365…): taken: Tally's GUID 7abde31c-3663-410e-ac28-942266a9043c-00000004, AlterID 4
+2026-10-08 15:04:36  Recorder: Receipt 3 of 02-Nov-2026 (MasterID 5, line 9e47c163…): asking Tally by MasterID
+2026-10-08 15:04:36  Recorder: entry fetch of FinCom Spike Co: answered in 24 ms
+2026-10-08 15:04:36  Recorder: Receipt 3 of 02-Nov-2026 (MasterID 5, line 9e47c163…): taken: Tally's GUID 7abde31c-3663-410e-ac28-942266a9043c-00000005, AlterID 5
+2026-10-08 15:04:48  Reading from Tally stopped on this computer from FinCom: Stopped by the owner from FinCom (harness s1). Postings still go; reading starts again only from FinCom
+2026-10-08 15:04:53  Light check: skipped: reading is stopped from FinCom (Stopped by the owner from FinCom (harness s1))
+2026-10-08 15:05:16  Recorder: Receipt 4 of 02-Oct-2026 (MasterID 6, line e8527755…): asking Tally by MasterID
+2026-10-08 15:05:16  Recorder: Receipt 4 of 02-Oct-2026 (MasterID 6, line e8527755…): held at once: waiting: reading from Tally is stopped from FinCom; asked again when it is resumed (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-08 15:05:16  Recorder: Receipt 4 of 02-Oct-2026 (MasterID 6, line e8527755…): asking Tally again (a held line, ask 1 of 2: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-08 15:05:16  Recorder: Receipt 4 of 02-Oct-2026 (MasterID 6, line e8527755…): not asked this time: Reading from Tally is stopped on this computer from FinCom (Stopped by the owner from FinCom (harness s1), 2026-10-08 15:04:44); nothing was sent to Tally. Post (not counted as a try)
+2026-10-08 15:05:16  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 1 still held (1 in the list)
+2026-10-08 15:05:26  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 1 still held (1 in the list)
+2026-10-08 15:05:36  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 1 still held (1 in the list)
+2026-10-08 15:05:46  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 1 still held (1 in the list)
+2026-10-08 15:05:56  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 1 still held (1 in the list)
+2026-10-08 15:06:03  Recorder: Receipt 1 of 31-Oct-2026 (MasterID 3, line c7c48eb6…): asking Tally by MasterID
+2026-10-08 15:06:03  Recorder: Receipt 1 of 31-Oct-2026 (MasterID 3, line c7c48eb6…): held at once: waiting: reading from Tally is stopped from FinCom; asked again when it is resumed (sent now without its body; FinCom shows it held, and this bridge asks Tally again)
+2026-10-08 15:06:03  Recorder: Receipt 1 of 31-Oct-2026 (MasterID 3, line c7c48eb6…): asking Tally again (a held line, ask 1 of 2: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-08 15:06:03  Recorder: Receipt 1 of 31-Oct-2026 (MasterID 3, line c7c48eb6…): not asked this time: Reading from Tally is stopped on this computer from FinCom (Stopped by the owner from FinCom (harness s1), 2026-10-08 15:04:44); nothing was sent to Tally. Post (not counted as a try)
+2026-10-08 15:06:03  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 2 still held (2 in the list)
+2026-10-08 15:06:06  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 2 still held (2 in the list)
+2026-10-08 15:06:13  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 2 still held (2 in the list)
+2026-10-08 15:06:16  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 2 still held (2 in the list)
+2026-10-08 15:06:23  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 2 still held (2 in the list)
+2026-10-08 15:06:26  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 2 still held (2 in the list)
+2026-10-08 15:06:33  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 2 still held (2 in the list)
+2026-10-08 15:06:34  Recorder: Receipt 2 of 01-Nov-2026 (MasterID 4, line faefe5d4…): asking Tally by MasterID
+2026-10-08 15:06:34  Recorder: FinCom Spike Co: delete of mid 4: held: this computer's Tally could not be asked whether it was deleted here (waiting: reading from Tally is stopped from FinCom; asked again when it is resumed); not sent as a delete: held
+2026-10-08 15:06:36  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 3 still held (3 in the list)
+2026-10-08 15:06:43  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 3 still held (3 in the list)
+2026-10-08 15:06:43  Reading from Tally resumed from FinCom (it was stopped: Stopped by the owner from FinCom (harness s1))
+2026-10-08 15:06:46  Recorder: Receipt 4 of 02-Oct-2026 (MasterID 6, line e8527755…): taken: Tally's GUID 7abde31c-3663-410e-ac28-942266a9043c-00000006, AlterID 6
+2026-10-08 15:06:46  Recorder: Receipt 4 of 20261002 in FinCom Spike Co resolved: sent as created with its GUID 7abde31c-3663-410e-ac28-942266a9043c-00000006 and body
+2026-10-08 15:06:46  Recorder: held lines: 0 from FinCom, 1 asked, 1 resolved, 2 still held (3 in the list)
+2026-10-08 15:06:53  Recorder: Receipt 1 of 31-Oct-2026 (MasterID 3, line c7c48eb6…): taken: Tally's GUID 7abde31c-3663-410e-ac28-942266a9043c-00000003, AlterID 7
+2026-10-08 15:06:53  Recorder: Receipt 1 of 20261031 in FinCom Spike Co resolved: sent as altered with its GUID 7abde31c-3663-410e-ac28-942266a9043c-00000003 and body
+2026-10-08 15:06:53  Recorder: held lines: 0 from FinCom, 1 asked, 1 resolved, 1 still held (2 in the list)
+2026-10-08 15:12:14  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=2; now ALTVCHID=9, ALTMSTID=209
+2026-10-08 15:16:34  Recorder: Receipt 2 of 01-Nov-2026 (MasterID 4, line faefe5d4…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-08 15:16:34  Recorder: entry fetch of FinCom Spike Co: answered in 18 ms
+2026-10-08 15:16:34  Recorder: FinCom Spike Co: delete of mid 4: not in this Tally (asked by MasterID): proven deleted here
+2026-10-08 15:16:34  Recorder: Receipt 2 of 01-Nov-2026 (MasterID 4, line faefe5d4…): proven in this Tally now: the delete goes as faefe5d475427cc8c19ec80d8d6eea4c:resolved
+2026-10-08 15:16:34  Recorder: held lines: 0 from FinCom, 1 asked, 1 resolved, 0 still held (1 in the list)
+2026-10-08 15:16:34  Recorder: FinCom Spike Co: delete of mid 4: GUID from the bridge's record: 7abde31c-3663-410e-ac28-942266a9043c-00000004; the GUID its MasterID makes agrees
+2026-10-08 15:16:44  Reading from Tally stopped on this computer from FinCom: Stopped by the owner from FinCom (harness s3). Postings still go; reading starts again only from FinCom
+2026-10-08 15:16:49  Light check: skipped: reading is stopped from FinCom (Stopped by the owner from FinCom (harness s3))
+2026-10-08 15:17:11  Recorder: Receipt 3 of 02-Nov-2026 (MasterID 5, line 116b6bc8…): asking Tally by MasterID
+2026-10-08 15:17:11  Recorder: FinCom Spike Co: delete of mid 5: held: this computer's Tally could not be asked whether it was deleted here (waiting: reading from Tally is stopped from FinCom; asked again when it is resumed); not sent as a delete: held
+2026-10-08 15:17:19  Restarting: asked from the tray icon
+2026-10-08 15:17:20  FinCom Bridge 2.3.4 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+2026-10-08 15:17:20  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+2026-10-08 15:17:20  Check:  - 
+2026-10-08 15:17:23  Light check of FinCom Spike Co: skipped: reading is stopped from FinCom (Stopped by the owner from FinCom (harness s3))
+2026-10-08 15:17:23  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+2026-10-08 15:17:48  Reading from Tally resumed from FinCom (it was stopped: Stopped by the owner from FinCom (harness s3))
+2026-10-08 15:17:53  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=11, ALTMSTID=209
+2026-10-08 15:17:53  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=2; now ALTVCHID=11, ALTMSTID=209
+2026-10-08 15:27:11  Recorder: Receipt 3 of 02-Nov-2026 (MasterID 5, line 116b6bc8…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-08 15:27:11  Recorder: entry fetch of FinCom Spike Co: answered in 12 ms
+2026-10-08 15:27:11  Recorder: FinCom Spike Co: delete of mid 5: not in this Tally (asked by MasterID): proven deleted here
+2026-10-08 15:27:11  Recorder: Receipt 3 of 02-Nov-2026 (MasterID 5, line 116b6bc8…): proven in this Tally now: the delete goes as 116b6bc8b8916a198b2a30df7d5768b2:resolved
+2026-10-08 15:27:11  Recorder: held lines: 0 from FinCom, 1 asked, 1 resolved, 0 still held (1 in the list)
+2026-10-08 15:27:11  Recorder: FinCom Spike Co: delete of mid 5: GUID from the bridge's record: 7abde31c-3663-410e-ac28-942266a9043c-00000005; the GUID its MasterID makes agrees
+2026-10-08 15:27:49  Recorder: Receipt 5 of 01-Dec-2026 (MasterID 9, line 838b083d…): asking Tally by MasterID
+2026-10-08 15:27:51  Tally 9000: Other took 2.2s and failed: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)
+2026-10-08 15:27:51  Tally 9000 did not answer in time at 15:27:51 (FinComVoucherObject, try 1); trying again by itself at 15:28:06
+2026-10-08 15:27:51  Recorder: entry fetch of FinCom Spike Co: over 2 s (stopped)
+2026-10-08 15:27:51  Recorder: Receipt 5 of 01-Dec-2026 (MasterID 9, line 838b083d…): held: Tally took longer than 2 s for this entry; upload that day's Day Book to settle it (sent without its body and GUID; FinCom holds the line until it is resolved)
+2026-10-08 15:27:54  Light check of FinCom Spike Co: skipped: Tally did not answer (Tally did not answer in time at 15:27; trying again by itself at 15:28 (nothing was sent))
+2026-10-08 15:28:09  Light check of FinCom Spike Co: skipped: Tally did not answer (Tally did not answer in time; waiting for Tally to finish an earlier request (FinComVoucherObject, sent at 15:27:51); nothing was sent)
+2026-10-08 15:28:09  Tally 9000 finished the request the bridge stopped waiting for (FinComVoucherObject) 18s after the stop; its answer is discarded and the next request goes now
+2026-10-08 15:28:14  Tally 9000 answered in time again (FinComCompany): the background requests are back to normal
+2026-10-08 15:31:30  Notification shown: Tally not open (tally:71c60cddd415f4bf; not shown again for this problem)
