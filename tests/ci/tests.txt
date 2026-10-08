@@ -185,3 +185,4 @@ run_migration57.py                    120
 run_parta_server.py                   120
 run_renumber_list.py                  120
 run_migration67.py                    120
+run_bankdate_cloud.py                 120
