@@ -1,0 +1,28 @@
+{
+  "mid": [
+    3,
+    4,
+    5,
+    6
+  ],
+  "guid": [
+    "cbecd4fc-4d08-4679-968b-f0ef0461a4a3-00000003",
+    "cbecd4fc-4d08-4679-968b-f0ef0461a4a3-00000004",
+    "cbecd4fc-4d08-4679-968b-f0ef0461a4a3-00000005",
+    "cbecd4fc-4d08-4679-968b-f0ef0461a4a3-00000006"
+  ],
+  "narr": [
+    "bank probe C1",
+    "bank probe C2",
+    "bank probe C3",
+    "bank probe C4"
+  ],
+  "vno": [
+    "1",
+    "2",
+    "3",
+    "4"
+  ],
+  "aid": 7,
+  "bdate": "20261002"
+}
