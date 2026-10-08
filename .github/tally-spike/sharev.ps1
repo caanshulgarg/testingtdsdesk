@@ -77,7 +77,7 @@ function ShareSubs($tag) {
 }
 # an entry from the Gateway: its type ($keys), the date, the Account (single-entry receipt / payment / contra) and its
 # rows @(ledger, amount or '' for Tally's own, bill @(type, name) or $null), the narration, Ctrl+A (and "Yes" if asked)
-function ShareEntry($tag, [string[]]$keys, $typeWords, $account, $rows, $narr) {
+function ShareEntry($tag, [string[]]$keys, $typeWords, $account, $rows, $narr, [switch]$byTo) {
   $null = TdsGateway "before $tag"
   if (-not (TK 'v' 2.5 "$tag-vouchers" 'Voucher')) { return }
   foreach ($k in $keys) { $null = TK $k 2.5 "$tag-type" }
@@ -87,6 +87,9 @@ function ShareEntry($tag, [string[]]$keys, $typeWords, $account, $rows, $narr) {
   $r = 0
   foreach ($row in $rows) {
     $r++
+    # a journal-style row after the first starts in its By / To field (run 37719717293: the ledger's first letters went
+    # there and Tally took the wrong side and ledger): To, then the ledger
+    if ($byTo -and $r -gt 1) { $null = TK 'To{ENTER}' 1.5 "$tag-row$r-to" }
     $null = TK ((SK $row[0]) + '{ENTER}') 2 "$tag-row$r"
     ShareSubs "$tag-row$r-a"
     if ($row[1]) { $null = TK ((SK "$($row[1])") + '{ENTER}') 2 "$tag-row$r-amt" } else { $null = TK '{ENTER}' 2 "$tag-row$r-amt" }
@@ -94,6 +97,8 @@ function ShareEntry($tag, [string[]]$keys, $typeWords, $account, $rows, $narr) {
     ShareSubs "$tag-row$r-b"
   }
   $null = TK '{ENTER}' 2 "$tag-rows-done"
+  # (run 37719717293: a contra's Bank Allocations came up here and took the narration)
+  ShareSubs "$tag-done"
   $null = TK ((SK $narr) + '{ENTER}') 2 "$tag-narr"
   ShareAccept $tag $null
 }
@@ -182,13 +187,16 @@ $R2 = ShareCase 'receipt-plain' 'receipt with no party (Cash / Spike Income)' { 
 $null = ShareCase 'payment-agst' 'payment to a supplier against its bill (Agst Ref PB-1)' { ShareEntry 'P1' @('{F5}') 'Payment' 'Cash' @(, @('Share Supplier', '400', @('Agst Ref', 'PB-1'))) 'share payment agst' }
 $null = ShareCase 'payment-expense' 'payment of an expense (no party)' { ShareEntry 'P2' @('{F5}') 'Payment' 'Cash' @(, @('Share Expense', '300', $null)) 'share payment expense' }
 $null = ShareCase 'contra' 'contra: cash into the bank' { ShareEntry 'C1' @('{F4}') 'Contra' 'Share Bank' @(, @('Cash', '200', $null)) 'share contra' }
-$null = ShareCase 'journal-party' 'journal with a party (Share Expense Dr / Share Supplier Cr, New Ref JN-1)' { ShareEntry 'J1' @('{F7}') 'Journal' $null @(@('Share Expense', '600', $null), @('Share Supplier', '', @('New Ref', 'JN-1'))) 'share journal party' }
-$null = ShareCase 'journal-plain' 'journal with no party (Share Expense Dr / Spike Income Cr)' { ShareEntry 'J2' @('{F7}') 'Journal' $null @(@('Share Expense', '250', $null), @('Spike Income', '', $null)) 'share journal plain' }
+$null = ShareCase 'journal-party' 'journal with a party (Share Expense Dr / Share Supplier Cr, New Ref JN-1)' { ShareEntry 'J1' @('{F7}') 'Journal' $null @(@('Share Expense', '600', $null), @('Share Supplier', '', @('New Ref', 'JN-1'))) 'share journal party' -byTo }
+$null = ShareCase 'journal-plain' 'journal with no party (Share Expense Dr / Spike Income Cr)' { ShareEntry 'J2' @('{F7}') 'Journal' $null @(@('Share Expense', '250', $null), @('Spike Income', '', $null)) 'share journal plain' -byTo }
 $S1 = ShareCase 'sales-new' 'sales item invoice, New Ref bill (SI-1)' { ShareInvoice 'S1' @('{F8}') 'Share Party' 'Share Sales' @() 2 100 @('New Ref', 'SI-1') 'share sales new' }
 $null = ShareCase 'copy-sales-new' 'Alt+2 copy of the New Ref sales invoice (its bill as the copy carries it)' { ShareDayBookLast 'D1' 'Sales'; $null = TK '%2' 3 'D1-copy'; ShareAccept 'D1' $null }
-$null = ShareCase 'sales-agst' 'sales item invoice, Agst Ref bill (the advance ADVS-1)' { ShareInvoice 'S2' @('{F8}') 'Share Party' 'Share Sales' @() 3 100 @('Agst Ref', 'ADVS-1') 'share sales agst' }
+$null = ShareCase 'sales-new2' 'sales item invoice, a second one (Tally allocates its bill at the save: no bill-wise screen in item invoice mode, run 37719717293)' { ShareInvoice 'S2' @('{F8}') 'Share Party' 'Share Sales' @() 3 100 @('Agst Ref', 'ADVS-1') 'share sales agst' }
 $null = ShareCase 'purchase-new' 'purchase item invoice, New Ref bill (PI-1)' { ShareInvoice 'U1' @('{F9}') 'Share Supplier' 'Share Purchase' @('SUP-1{ENTER}', '{ENTER}') 2 80 @('New Ref', 'PI-1') 'share purchase new' }
-$null = ShareCase 'purchase-agst' 'purchase item invoice, Agst Ref bill (the advance ADVP-1)' { ShareInvoice 'U2' @('{F9}') 'Share Supplier' 'Share Purchase' @('SUP-2{ENTER}', '{ENTER}') 3 80 @('Agst Ref', 'ADVP-1') 'share purchase agst' }
+$null = ShareCase 'purchase-new2' 'purchase item invoice, a second one (Tally allocates its bill at the save)' { ShareInvoice 'U2' @('{F9}') 'Share Supplier' 'Share Purchase' @('SUP-2{ENTER}', '{ENTER}') 3 80 @('Agst Ref', 'ADVP-1') 'share purchase agst' }
+# an invoice's Agst Ref is typed where Tally asks for it: "As Voucher" mode (Ctrl+H), the party row's bill-wise screen
+$null = ShareCase 'sales-agst' 'sales in As Voucher mode, the party Dr with an Agst Ref bill (the advance ADVS-1)' { ShareEntry 'S3' @('{F8}', '^h', 'As Voucher{ENTER}') 'Sales' $null @(@('Share Party', '300', @('Agst Ref', 'ADVS-1')), @('Share Sales', '', $null)) 'share sales agst' -byTo }
+$null = ShareCase 'purchase-agst' 'purchase in As Voucher mode, the supplier Cr with an Agst Ref bill (the advance ADVP-1)' { ShareEntry 'U3' @('{F9}', '^h', 'As Voucher{ENTER}') 'Purchase' $null @(@('Share Purchase', '240', $null), @('Share Supplier', '', @('Agst Ref', 'ADVP-1'))) 'share purchase agst' -byTo }
 $null = ShareCase 'credit-note' 'credit note, item invoice, Agst Ref the sales bill SB-1' { ShareInvoice 'N1' @('{F10}', 'Credit Note{ENTER}') 'Share Party' 'Share Sales' @() 1 100 @('Agst Ref', 'SB-1') 'share credit note' }
 $null = ShareCase 'copy-journal-party' 'Alt+2 copy of the journal with a party (its New Ref JN-1 as the copy carries it)' { ShareDayBookLast 'D2' 'Journal'; $null = TK '%2' 3 'D2-copy'; ShareAccept 'D2' $null }
 $null = ShareCase 'copy-receipt-plain' 'Alt+2 copy of the receipt with no party' { ShareDayBookLast 'D3' 'Receipt'; $null = TK '%2' 3 'D3-copy'; ShareAccept 'D3' $null }
@@ -198,9 +206,87 @@ if ($R2) {
   $null = ShareCase 'alter-receipt-plain' 'alteration: the receipt with no party, its amount 700 -> 800' { ShareDayBookLast 'A1' 'Receipt'; $null = TK '{UP}' 1.5 'A1-up'; $null = TK '{ENTER}' 3 'A1-open'
     $null = TK '{ENTER}' 1.5; $null = TK '{ENTER}' 1.5; $null = TK '{ENTER}' 1.5 'A1-at-amount'; $null = TK '800{ENTER}' 2 'A1-amount'; ShareAccept 'A1' $null } $R2.mid
 }
+if ($S1) {
+  $null = ShareCase 'alter-sales-new' 'alteration: the New Ref sales invoice saved again unchanged (opened, Ctrl+A)' { ShareDayBookLast 'A3' 'Sales'; $null = TK '{HOME}' 1.5 'A3-first'; $null = TK '{ENTER}' 3 'A3-open'; ShareAccept 'A3' $null } $S1.mid
+}
 if ($R1) {
   $null = ShareCase 'alter-receipt-agst' 'alteration: the receipt against SB-1 saved again unchanged (opened, Ctrl+A)' { ShareDayBookLast 'A2' 'Receipt'; $null = TK '{HOME}' 1.5 'A2-first'; $null = TK '{ENTER}' 3 'A2-open'; ShareAccept 'A2' $null } $R1.mid
 }
+
+# ---- P7 and P9 of push233 (moved here from tally-real, the owner's queue order of 08-Oct-2026), judged by what the add-on
+# writes: FinCom gets an entry live only through the add-on's line (the bridge has no other live path for an entry)
+$tg = { param($x, $t) [System.Net.WebUtility]::HtmlDecode([regex]::Match("$x", "<$t(?:\s[^>]*)?>([^<]*)</$t>").Groups[1].Value).Trim() }
+$coll = { param($id, $fetch, $filter) Post ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>' + $id + '</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY><SVFROMDATE>20260401</SVFROMDATE><SVTODATE>20270331</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="' + $id + '" ISMODIFY="No"><TYPE>Voucher</TYPE><FETCH>' + $fetch + '</FETCH><FILTERS>' + $id + 'F</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="' + $id + 'F">' + $filter + '</SYSTEM></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') '' }
+$vlist = { param($x) @(foreach ($v in [regex]::Matches("$x", '(?s)<VOUCHER [^>]*>.*?</VOUCHER>')) { [pscustomobject]@{ guid = (& $tg $v.Value 'GUID'); mid = [int64]('0' + (& $tg $v.Value 'MASTERID')); vno = (& $tg $v.Value 'VOUCHERNUMBER'); aid = (& $tg $v.Value 'ALTERID'); x = $v.Value } }) }
+try {
+  # P7a: an invoice imported (as a bill would be), then its IRN and e-way bill written back by an XML alteration (as e-invoice
+  # and e-way bill utilities do after the save)
+  $f7 = 'GUID, MASTERID, ALTERID, VOUCHERNUMBER, IRN, IRNACKNO, IRNACKDATE, EWAYBILLDETAILS.BILLNUMBER, ALLLEDGERENTRIES.LEDGERNAME'
+  $inv = '<VOUCHER VCHTYPE="Sales" ACTION="Create"><DATE>20261002</DATE><VOUCHERTYPENAME>Sales</VOUCHERTYPENAME><VOUCHERNUMBER>SH-E1</VOUCHERNUMBER><PARTYLEDGERNAME>Share Party</PARTYLEDGERNAME><NARRATION>share e-invoice</NARRATION>' +
+    '<ALLLEDGERENTRIES.LIST><LEDGERNAME>Share Party</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><ISPARTYLEDGER>Yes</ISPARTYLEDGER><AMOUNT>-150.00</AMOUNT><BILLALLOCATIONS.LIST><NAME>SH-E1</NAME><BILLTYPE>New Ref</BILLTYPE><AMOUNT>-150.00</AMOUNT></BILLALLOCATIONS.LIST></ALLLEDGERENTRIES.LIST>' +
+    '<ALLLEDGERENTRIES.LIST><LEDGERNAME>Share Sales</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>150.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>'
+  $null = Imp 'Vouchers' $inv 'p7 invoice SH-E1'
+  $e0 = @(& $vlist (& $coll 'ShareE' $f7 '$VoucherNumber = "SH-E1"'))[0]
+  $l0 = (& $recLines).Count
+  $irn = '<IRN>IRN-SHARE-0001</IRN><IRNACKNO>ACK-SHARE-1</IRNACKNO><IRNACKDATE>20261002</IRNACKDATE><EWAYBILLDETAILS.LIST><BILLDATE>20261002</BILLDATE><BILLNUMBER>381101234299</BILLNUMBER><DOCUMENTTYPE>Tax Invoice</DOCUMENTTYPE></EWAYBILLDETAILS.LIST>'
+  $how = 'neither form of XML alteration took'; $e1 = $e0
+  if ($e0) {
+    foreach ($hdr in @(('<VOUCHER REMOTEID="' + $e0.guid + '" VCHTYPE="Sales" ACTION="Alter"'), '<VOUCHER DATE="20261002" TAGNAME="Voucher Number" TAGVALUE="SH-E1" VCHTYPE="Sales" ACTION="Alter"')) {
+      $null = Imp 'Vouchers' (($inv -replace '<VOUCHER VCHTYPE="Sales" ACTION="Create"', $hdr) -replace '<NARRATION>', ($irn + '<NARRATION>')) 'p7a IRN and e-way bill by a tool'
+      $e1 = @(& $vlist (& $coll 'ShareE' $f7 '$VoucherNumber = "SH-E1"'))[0]
+      if ((& $tg $e1.x 'IRN') -eq 'IRN-SHARE-0001') { $how = $hdr -replace '^<VOUCHER ', ''; break }
+    }
+  }
+  Set-Content (Join-Path $cap 'p7a-stored.xml') $e1.x -Encoding UTF8
+  $n7 = @(& $recLines | Select-Object -Skip $l0)
+  $made7 = $e1 -and (& $tg $e1.x 'IRN') -eq 'IRN-SHARE-0001' -and (& $tg $e1.x 'BILLNUMBER') -eq '381101234299'
+  if (-not $made7) { Result 'P7a IRN and e-way bill written back after the save by a tool' 'HARNESS' "not made: $how" }
+  else { Result 'P7a IRN and e-way bill written back after the save by a tool' $(if (@($n7 | Where-Object { $_ -match 'IRN-SHARE-0001' }).Count) { 'PASS' } else { 'FAIL' }) ("made by an XML alteration ({0}): Tally stored IRN '{1}' ack '{2}' {3} e-way bill '{4}', AlterID {5} -> {6}; the add-on wrote {7} line(s) (an alteration with no form: FinCom has it from the Day Book only)" -f $how, (& $tg $e1.x 'IRN'), (& $tg $e1.x 'IRNACKNO'), (& $tg $e1.x 'IRNACKDATE'), (& $tg $e1.x 'BILLNUMBER'), $e0.aid, $e1.aid, $n7.Count) }
+  # P7b: that invoice saved again on its form: the full line's irn / irnack / irnackdt / ewb against Tally's
+  if ($made7) {
+    $l0 = (& $recLines).Count
+    ShareDayBookLast 'P7b' 'Sales'; $null = TK '{HOME}' 1.5 'P7b-first'
+    # SH-E1 is the first sales entry of the day only if it sorts first; find it by moving down until its number shows
+    for ($i = 0; $i -lt 8; $i++) { $t = TdsScreen "P7b-row$i"; if ($t -match 'SH-E1') { break }; $null = TK '{DOWN}' 1 }
+    $null = TK '{ENTER}' 3 'P7b-open'; ShareAccept 'P7b' $null
+    $n7 = @(& $recLines | Select-Object -Skip $l0); $fl = @($n7 | Where-Object { $_ -like 'FCR1|ev=voucher_full|*' -and $_ -match "\|mid=$($e1.mid)\|" })
+    $lf = { param($k) if ($fl.Count) { [regex]::Match($fl[0], "\|part=1\|.*?\|$k=([^|]*)").Groups[1].Value } else { $null } }
+    $ad = & $lf 'irnackdt'; $ad8 = try { [datetime]::ParseExact($ad, @('d-MMM-yy', 'd-MMM-yyyy'), [Globalization.CultureInfo]::InvariantCulture, 0).ToString('yyyyMMdd') } catch { $ad }
+    $ok = $fl.Count -and (& $lf 'irn') -eq 'IRN-SHARE-0001' -and (& $lf 'irnack') -eq 'ACK-SHARE-1' -and $ad8 -eq '20261002' -and (& $lf 'ewb') -eq '381101234299'
+    Result 'P7b IRN and e-way bill in the full line of the form save' $(if (-not $fl.Count) { 'HARNESS' } elseif ($ok) { 'PASS' } else { 'FAIL' }) ("the line: irn '{0}' irnack '{1}' irnackdt '{2}' ewb '{3}'; Tally: IRN-SHARE-0001 / ACK-SHARE-1 / 20261002 / 381101234299; lines {4}" -f (& $lf 'irn'), (& $lf 'irnack'), $ad, (& $lf 'ewb'), $n7.Count)
+  }
+  # P7c: the bank date set in Bank Reconciliation (Share Bank: the contra's deposit of 2-10-2026)
+  $bf = 'GUID, MASTERID, ALTERID, VOUCHERNUMBER, ALLLEDGERENTRIES.LEDGERNAME, ALLLEDGERENTRIES.BANKALLOCATIONS.BANKERSDATE'
+  $b0 = & $vlist (& $coll 'ShareB' $bf '$VoucherTypeName = "Contra"'); $l0 = (& $recLines).Count
+  $null = TdsGateway 'P7c'
+  $null = TK '%g' 2 'P7c-goto'; $null = TK 'Bank Reconciliation' 1.5 'P7c-typed'; $null = TK '{ENTER}' 3 'P7c-select'
+  $null = TK 'Share Bank{ENTER}' 3 'P7c-brs' 'Reconcil|Bank Date|Bankers'
+  $null = TK '2-10-2026{ENTER}' 2 'P7c-date'
+  $null = TK '^a' 3 'P7c-accept'; $t = TdsScreen 'P7c-after'; if ($t -match 'Yes or No') { & $script:TdsSend 'y'; Start-Sleep 3 }
+  $null = TdsGateway 'after P7c'
+  $b1 = & $vlist (& $coll 'ShareB' $bf '$VoucherTypeName = "Contra"')
+  $dated = @($b1 | Where-Object { $_.x -match '<BANKERSDATE[^>]*>\s*20261002\s*<' -and $_.guid -notin @($b0 | Where-Object { $_.x -match '<BANKERSDATE[^>]*>\s*20261002\s*<' } | ForEach-Object guid) })
+  $n7 = @(& $recLines | Select-Object -Skip $l0)
+  if (-not $dated.Count) { Result 'P7c bank date set in Bank Reconciliation' 'HARNESS' 'not made: no contra has the bank date 2-10-2026 after the keys (see tds-*-P7c-* screenshots)' }
+  else { Result 'P7c bank date set in Bank Reconciliation' $(if (@($n7 | Where-Object { $_ -match "\|mid=$($dated[0].mid)\|" -and $_ -like 'FCR1|ev=voucher_full|*' }).Count) { 'PASS' } else { 'FAIL' }) ("made: contra {0} (mid {1}, AlterID {2} -> {3}) has bank date 20261002; the add-on wrote {4} line(s) (Bank Reconciliation is not a voucher form: FinCom has it from the Day Book only)" -f $dated[0].vno, $dated[0].mid, @($b0 | Where-Object mid -eq $dated[0].mid)[0].aid, $dated[0].aid, $n7.Count) }
+  # P9b: a receipt inserted (Alt+I) before the first receipt of 2-10-2026: each receipt Tally renumbers (no form, so no line)
+  $rf = 'GUID, MASTERID, ALTERID, VOUCHERNUMBER'
+  $r0 = & $vlist (& $coll 'ShareR' $rf '$VoucherTypeName = "Receipt"'); $l0 = (& $recLines).Count
+  ShareDayBookLast 'P9b' 'Receipt'; $null = TK '{HOME}' 1.5 'P9b-first'
+  $null = TK '%i' 3 'P9b-insert' 'Receipt|Creation|Insert'
+  $null = TK 'Cash{ENTER}' 2 'P9b-account'; $null = TK 'Spike Income{ENTER}' 2 'P9b-ledger'; $null = TK '60{ENTER}' 2 'P9b-amount'
+  $null = TK '{ENTER}' 2 'P9b-rows-done'; ShareSubs 'P9b-done'; $null = TK 'share insert{ENTER}' 2 'P9b-narr'; ShareAccept 'P9b' $null
+  $r1 = & $vlist (& $coll 'ShareR' $rf '$VoucherTypeName = "Receipt"')
+  $mx = (@($r0 | ForEach-Object mid) + 0 | Measure-Object -Maximum).Maximum
+  $ins = @($r1 | Where-Object { $_.mid -gt $mx })[0]
+  $ren = @($r1 | Where-Object { $o = $_; $p = @($r0 | Where-Object mid -eq $o.mid)[0]; $p -and $p.vno -ne $o.vno })
+  $n9 = @(& $recLines | Select-Object -Skip $l0)
+  $lined = @($ren | Where-Object { $e = $_; @($n9 | Where-Object { $_ -like 'FCR1|ev=voucher_full|*' -and $_ -match "\|mid=$($e.mid)\|" -and $_ -match "\|part=1\|.*?\|vno=$([regex]::Escape($e.vno))\|" }).Count })
+  $ilv = if ($ins) { [regex]::Match((@($n9 | Where-Object { $_ -like 'FCR1|ev=voucher_full|*' -and $_ -match "\|mid=$($ins.mid)\|" })[0]), '\|part=1\|.*?\|vno=([^|]*)\|').Groups[1].Value } else { '' }
+  if (-not $ins) { Result 'P9b back-dated insert: the renumbered entries' 'HARNESS' 'not made: no receipt inserted (see tds-*-P9b-* screenshots)' }
+  elseif (-not $ren.Count) { Result 'P9b back-dated insert: the renumbered entries' 'HARNESS' ("receipt {0} (mid {1}, its line's number '{2}') inserted; Tally renumbered none" -f $ins.vno, $ins.mid, $ilv) }
+  else { Result 'P9b back-dated insert: the renumbered entries' $(if ($lined.Count -eq $ren.Count) { 'PASS' } else { 'FAIL' }) ("receipt {0} (mid {1}, its line's number '{2}') inserted; Tally renumbered {3}: {4}; a line with the new number for {5} of them (renumbering is not a form: FinCom keeps the old numbers until the Day Book)" -f $ins.vno, $ins.mid, $ilv, $ren.Count, (($ren | ForEach-Object { $o = $_; "mid $($o.mid) $(@($r0 | Where-Object mid -eq $o.mid)[0].vno) -> $($o.vno)" }) -join ', '), $lined.Count) }
+} catch { Result 'P7 / P9' 'HARNESS' "the harness stopped: $_" }
 
 # ---- the ledgers and groups (a party derived from the ledger lines is checked against the stored party offline)
 $lx = Post ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>ShareLed</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="ShareLed" ISMODIFY="No"><TYPE>Ledger</TYPE><FETCH>NAME, PARENT, ISBILLWISEON</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') ''
