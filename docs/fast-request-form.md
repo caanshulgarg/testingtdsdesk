@@ -289,3 +289,27 @@ Push-design run 37718386662 (tally-versions, mode fast234m, 08-Oct-2026). The re
 - **The new request's time does not grow with the company.** It is 9–23 ms median on every release at every size; the worst single rep is 61 ms.
 - **Today's request grows in a straight line.** It takes 0.12–0.17 ms per voucher: 16–17.5 s at 100,000 vouchers.
 - These are GitHub runners. NWS144's CPU sets its own scale for today's request; the new request is keyed, so its time does not depend on the company's size.
+
+## 8. Real Tally: two companies, an SMB share, a held backlog
+
+Run 37723589664 of `tally-real.yml` (branch tally-real-spike, input `only=fast234`, the bridge built from next-fastfetch 37ebe88). TallyPrime 7.1 on a GitHub windows-latest runner.
+
+**Setup**
+- **One Tally, two companies open:** the small company and "FinCom Big Co" with 40,000 entries.
+- **The data folder:** `\\localhost\fast234share`, an SMB share. Both client and server were on one machine, so SMB was exercised but no real network.
+- **Bridge 1's requests:** all went through a timing proxy that logs each one.
+- **A seeded held backlog of 20 lines:**
+  - 10 held lines FinCom lists;
+  - 10 lines 2.3.3 had ended with the Day Book words (their ids in `*.ended.txt`, their `:resolved` already sent).
+
+| Check | Result |
+|---|---|
+| (1) New saves in both companies arrive in the stub with Tally's body; each entry request answered in under 2 s | PASS: 26 FinComVoucherObject requests, 20–46 ms at Tally (median 32) |
+| (2) Every seeded held line resolved with its body, asked once by the new request; the 10 ended ones asked once more | PASS: 20 of 20 |
+| (3) No FinComVoucherByMaster seen at the proxy | PASS: 0 (and 0 FinComVoucherByNumber) |
+| (4) No request sent while a previous one was unanswered at Tally | PASS: 45 requests, no overlap |
+| (5) No company marked slow | PASS: no stopped entry fetch, no mark |
+
+**The direct request on the 40,000-entry company, over the share:** 17–31 ms, with a 53 kB answer before the bridge's strip.
+
+**The run before it (37720646660)** failed check (1) because of a harness fault, not the bridge. The harness wrote the large company's save lines with its own voucher numbers, but Tally had renumbered the Journals (F234-BIG-1 became 8001). The bridge rightly held those lines as "not this line's entry". The harness now reads Tally's number.
