@@ -252,6 +252,8 @@ if ($PT) { $null = ShareCase 'alter-payroll' 'alteration: the payroll entry save
 else { Add-Content -Path $resultsFile -Value 'HARNESS share alter-payroll: the payroll template is not in Tally''s list' -Encoding UTF8 }
 $null = ShareCase 'copy-payroll' 'Alt+2 copy of the payroll entry (five employees, two pay heads)' { ShareDayBookLast 'Y1' '' '1-10-2026'; $null = TK '%2' 3 'Y1-copy'; ShareAccept 'Y1' $null }
 
+# hang2v.ps1 (the hang, 08-Oct-2026): the cases only, then its own probes
+if ($script:shareCasesOnly) { return }
 # ---- P7 and P9 of push233 (moved here from tally-real, the owner's queue order of 08-Oct-2026), judged by what the add-on
 # writes: FinCom gets an entry live only through the add-on's line (the bridge has no other live path for an entry)
 $tg = { param($x, $t) [System.Net.WebUtility]::HtmlDecode([regex]::Match("$x", "<$t(?:\s[^>]*)?>([^<]*)</$t>").Groups[1].Value).Trim() }

@@ -57,7 +57,7 @@ function Req233($mid, $date) { $tBM.Replace('@@CO@@', (SE $co1)).Replace('209912
 function Req234($mid) { $tOB.Replace('@@CO@@', (SE $co1)).Replace('987654321', "$mid") }
 
 # ---- one probe
-$script:hHung = @()
+$script:hHung = @(); $script:hObs = 0
 function HProbe($snapName, $ent, $form, $body, [switch]$noAddon, [switch]$same) {
   $tag = "$($ent.gst)-$($ent.kind)-$form"
   $fresh = $true
@@ -71,8 +71,9 @@ function HProbe($snapName, $ent, $form, $body, [switch]$noAddon, [switch]$same) 
   $err = [regex]::Match($x, '<LINEERROR>[^<]*|<ERRORMSG>[^<]*|Unknown Request[^<]*').Value
   $alive = if ($fresh) { HAlive } else { $false }
   $later = $alive; $cpu = ''
-  if ($fresh -and -not $alive) {
-    Shot "hang-$tag-hung"
+  $obs = $fresh -and -not $alive -and $script:hObs -lt 3
+  if ($fresh -and -not $alive) { $script:hObs++; Shot "hang-$tag-hung" }
+  if ($obs) {
     $p = Get-Process -Id $script:tpid -ErrorAction SilentlyContinue; $c0 = if ($p) { $p.CPU } else { $null }
     Start-Sleep 60
     $later = HAlive
@@ -82,9 +83,9 @@ function HProbe($snapName, $ent, $form, $body, [switch]$noAddon, [switch]$same) 
   }
   # started again on the same data (not put back): does it answer, is the entry still listed
   $again = ''; $listed = ''
-  if ($fresh -and -not $later) {
+  if ($obs -and -not $later) {
     $again = HStart "$tag-again"
-    $listed = if ($again) { [bool]@(Vouchers | Where-Object { $_.mid -eq [int]$ent.mid }).Count } else { '' }
+    $listed = if ($again) { $lv = Vouchers; [bool]@($lv | Where-Object { $_.mid -eq [int]$ent.mid }).Count } else { '' }
     Shot "hang-$tag-again"
   }
   if ($noAddon) { Write-TallyIni $tdl $fn }
@@ -105,8 +106,7 @@ function SLed($n, $p, $x = '') { '<LEDGER NAME="' + (SE $n) + '" ACTION="Create"
 $ms = '<UNIT NAME="Nos" ACTION="Create"><NAME>Nos</NAME><ISSIMPLEUNIT>Yes</ISSIMPLEUNIT></UNIT>' +
   (SLed 'Spike Income' 'Indirect Incomes') + (SLed 'Share Party' 'Sundry Debtors' $bw) + (SLed 'Share Sales' 'Sales Accounts') +
   '<STOCKITEM NAME="Share Item" ACTION="Create"><NAME.LIST><NAME>Share Item</NAME></NAME.LIST><BASEUNITS>Nos</BASEUNITS><OPENINGBALANCE> 100 Nos</OPENINGBALANCE><OPENINGRATE>50.00/Nos</OPENINGRATE><OPENINGVALUE>-5000.00</OPENINGVALUE></STOCKITEM>'
-$mr = Imp 'All Masters' $ms 'hang masters'
-Info "hang masters: $(([regex]::Match("$mr", '<CREATED>\d+</CREATED>.*?<ERRORS>\d+</ERRORS>', 'Singleline').Value) -replace '\s+', ' ')"
+if (-not $script:hangLib) { $mr = Imp 'All Masters' $ms 'hang masters'; Info "hang masters: $(([regex]::Match("$mr", '<CREATED>\d+</CREATED>.*?<ERRORS>\d+</ERRORS>', 'Singleline').Value) -replace '\s+', ' ')" }
 function HInv($narr) {
   '<VOUCHER VCHTYPE="Sales" ACTION="Create"><DATE>20261002</DATE><VOUCHERTYPENAME>Sales</VOUCHERTYPENAME><VOUCHERNUMBER>SH-E1</VOUCHERNUMBER><PARTYLEDGERNAME>Share Party</PARTYLEDGERNAME><NARRATION>' + $narr + '</NARRATION>' +
   '<ALLLEDGERENTRIES.LIST><LEDGERNAME>Share Party</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><ISPARTYLEDGER>Yes</ISPARTYLEDGER><AMOUNT>-150.00</AMOUNT><BILLALLOCATIONS.LIST><NAME>SH-E1</NAME><BILLTYPE>New Ref</BILLTYPE><AMOUNT>-150.00</AMOUNT></BILLALLOCATIONS.LIST></ALLLEDGERENTRIES.LIST>' +
@@ -152,13 +152,14 @@ function HScreenInvoice($tag) {
   $null = TdsGateway "after $tag"
 }
 
+if ($script:hangLib) { return }   # hang2v.ps1: the functions only
 HSave 'base'
 $ents = @{}
 foreach ($gst in 'off', 'on') {
   HRestore 'base'; Write-TallyIni $tdl $fn
   if (-not (HStart "setup-$gst")) { Result "hang setup GST $gst" 'HARNESS' 'the company did not open'; continue }
   $before = GstNow
-  if ($gst -eq 'on') { $null = Imp 'All Masters' ('<COMPANY NAME="' + (SE $co1) + '" ACTION="Alter"><NAME>' + (SE $co1) + '</NAME><ISGSTON>Yes</ISGSTON></COMPANY>') 'company GST on' }
+  $null = Imp 'All Masters' ('<COMPANY NAME="' + (SE $co1) + '" ACTION="Alter"><NAME>' + (SE $co1) + '</NAME><ISGSTON>' + $(if ($gst -eq 'on') { 'Yes' } else { 'No' }) + '</ISGSTON></COMPANY>') "company GST $gst"
   $isg = GstNow
   Info "hang GST ${gst}: ISGSTON before '$before', now '$isg'"
   $r = Imp 'Vouchers' (HInv 'share e-invoice') "xml invoice GST $gst"
@@ -197,14 +198,14 @@ if ($e) {
   HRestore 'gstoff'; Write-TallyIni $tdl $fn
   if (HStart 'same') {
     $null = Imp 'Vouchers' (HInv 'share e-invoice 2') 'xml invoice 2'
-    $v2 = @(Vouchers | Where-Object { $_.narr -eq 'share e-invoice 2' })[0]
+    $l2 = Vouchers; $v2 = @($l2 | Where-Object { $_.narr -eq 'share e-invoice 2' })[0]
     if ($v2) {
       $e2 = [pscustomobject]@{ gst = 'off'; isgston = $e.isgston; kind = 'xml2'; how = 'XML import, then the request in the same session'; mid = $v2.mid; vno = $v2.vno; date = $v2.date }
       HProbe 'gstoff' $e2 'hanging-same-session' (HReq $e2.mid) -same
       HRestore 'gstoff'; Write-TallyIni $tdl $fn
       if (HStart 'same233') {
         $null = Imp 'Vouchers' (HInv 'share e-invoice 2') 'xml invoice 2 (233)'
-        $v3 = @(Vouchers | Where-Object { $_.narr -eq 'share e-invoice 2' })[0]
+        $l3 = Vouchers; $v3 = @($l3 | Where-Object { $_.narr -eq 'share e-invoice 2' })[0]
         if ($v3) { $e3 = [pscustomobject]@{ gst = 'off'; isgston = $e.isgston; kind = 'xml2'; how = 'XML import, then the request in the same session'; mid = $v3.mid; vno = $v3.vno; date = $v3.date }
           HProbe 'gstoff' $e3 'published-233-same-session' (Req233 $e3.mid $e3.date) -same }
       }
