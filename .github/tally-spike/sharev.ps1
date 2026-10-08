@@ -141,9 +141,10 @@ function ShareAccept($tag, $bill) {
   for ($a = 1; $a -le 4; $a++) {
     $null = TK '^a' 3 "$tag-accept$a"
     $t = TdsScreen "$tag-after$a"
-    # (run 37754251128, alter-payroll on every release: the payroll entry made by XML has no Account; its alteration's
-    # Ctrl+A stops in the Account field, "List of Payroll Ledgers", "Nothing selected"; the Alt+2 copy took Cash there)
-    if ($t -match 'List of Payroll Led') { $null = TK ((SK 'Cash') + '{ENTER}') 2 "$tag-payroll-account$a"; continue }
+    # (run 37754251128, alter-payroll on every release, before the Payroll feature was on: Ctrl+A stopped in the next
+    # empty row's "List of Payroll Ledgers", "Oops! Nothing selected") the list closed (Esc), a quit question refused
+    # (n), then Ctrl+A again; nothing typed into the entry
+    if ($t -match 'List of Payroll Led|Nothing selected') { $null = TK '{ESC}' 2 "$tag-list-esc$a"; $tq = TdsScreen "$tag-list-esc-after$a"; if ($tq -match 'Quit|Yes or No') { & $script:TdsSend 'n'; Start-Sleep 2 }; continue }
     if ($t -match 'Bill-wise|Bill wise|Type of Ref') { ShareBills $bill "$tag-at$a"; continue }
     if ($t -match 'Accept \?|Yes or No') { & $script:TdsSend 'y'; Start-Sleep 3; continue }
     if ($t -match 'Dispatch|Receipt Details|Party Details|Supplier Details|Bank Allocation') { continue }
@@ -266,9 +267,12 @@ if ($R1) {
 # (Vouchers gives its list as ONE object: piped straight into Where-Object the whole list passed, its .mid every MasterID:
 # runs 37729166801 / 37734533866's P7a filter became '$MasterID = 1 2 3 ...' and hung Tally; the list is taken first)
 $lvPT = Vouchers; $PT = @($lvPT | Where-Object { $_.narr -like 'share payroll template*' })[0]
-if ($PT) { $null = ShareCase 'alter-payroll' 'alteration: the payroll entry saved again unchanged (opened, Ctrl+A)' { ShareDayBookLast 'Y2' '' '1-10-2026'; $null = TK '{ENTER}' 3 'Y2-open'; ShareAccept 'Y2' $null } $PT.mid }
-else { Add-Content -Path $resultsFile -Value 'HARNESS share alter-payroll: the payroll template is not in Tally''s list' -Encoding UTF8 }
+# (run 37754251128: the Alt+2 copy asked to switch the Payroll feature on, and with it on the copy saved at Ctrl+A; the
+# alteration made before it stopped in a payroll ledger list) the copy first (the template the last of 1-10-2026), then
+# the alteration of the template (now the one above the copy)
 $null = ShareCase 'copy-payroll' 'Alt+2 copy of the payroll entry (five employees, two pay heads)' { ShareDayBookLast 'Y1' '' '1-10-2026'; $null = TK '%2' 3 'Y1-copy'; ShareAccept 'Y1' $null }
+if ($PT) { $null = ShareCase 'alter-payroll' 'alteration: the payroll entry saved again unchanged (opened, Ctrl+A)' { ShareDayBookLast 'Y2' '' '1-10-2026'; $null = TK '{UP}' 1.5 'Y2-up'; $null = TK '{ENTER}' 3 'Y2-open'; ShareAccept 'Y2' $null } $PT.mid }
+else { Add-Content -Path $resultsFile -Value 'HARNESS share alter-payroll: the payroll template is not in Tally''s list' -Encoding UTF8 }
 
 # hang2v.ps1 (the hang, 08-Oct-2026): the cases only, then its own probes
 if ($script:shareCasesOnly) { return }
