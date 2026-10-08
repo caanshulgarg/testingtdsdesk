@@ -440,7 +440,7 @@ func TestHeldStop235RefusedFetchNotATry(t *testing.T) {
 	h.drain(t, 3)
 	for _, ev := range []string{"created", "altered"} {
 		hd := hs235Held(t, str(hs235First(h.c.recSent(), ev, false)["line_id"]))
-		if hd.FreshTries != 0 || hd.allow() != 2 || hd.Asked != 0 || !hd.Fresh {
+		if hd.FreshTries != 0 || hd.allow() != 2 || hd.Asked != 0 || !hd.Fresh || hd.ObjAsks != 0 {
 			t.Errorf("%s: the refused fetch counted as a try: %+v", ev, hd)
 		}
 	}
@@ -479,16 +479,15 @@ func TestHeldStop235RealFailuresStillCount(t *testing.T) {
 			if w := str(m["heldWhy"]); w == "" || strings.Contains(w, "stopped from FinCom") {
 				t.Fatalf("held with the wrong words: %q", w)
 			}
+			hd := hs235Held(t, str(m["line_id"]))
 			if tc.name == "2 s stop" {
-				// 2.3.4, the owner's answer B (08-Oct-2026, merged from next-fastfetch; option (a) before): held with "FinCom asks
-				// once more", the stopped ask counted as one of its two fast asks (liveObjAsksMax), its one more ask due
-				hd, had := slowHeldItem(t, str(m["line_id"]))
-				if !had || !strings.Contains(str(m["heldWhy"]), "FinCom asks once more") || hd.ObjAsks != 1 || !hd.StopWait {
-					t.Fatalf("a 2 s stop was not counted as a fast ask: %v (in the held list: %v, %+v)", m, had, hd)
+				// 2.3.4 answer B: one fast ask used, one more allowed (a second stop ends it with the Day Book words); held with
+				// "FinCom asks once more", its one more ask due (StopWait)
+				if hd.ObjAsks != 1 || !hd.StopWait || !strings.Contains(str(m["heldWhy"]), "Tally took longer than") || !strings.Contains(str(m["heldWhy"]), "FinCom asks once more") {
+					t.Fatalf("a 2 s stop was not counted: %+v %v", hd, m)
 				}
 				return
 			}
-			hd := hs235Held(t, str(m["line_id"]))
 			if hd.allow() != 1 || (hd.Fresh && hd.FreshTries != 1) {
 				t.Fatalf("the failed ask was not counted: %+v", hd)
 			}
@@ -529,7 +528,7 @@ func TestHeldStop235AskedAtOnceAfterResume(t *testing.T) {
 		t.Fatalf("asked while stopped: %v", h.f.ids())
 	}
 	for _, ev := range []string{"created", "altered", "deleted"} {
-		if hd := hs235Held(t, str(hs235First(h.c.recSent(), ev, false)["line_id"])); hd.Asked != 0 || hd.Tries != 0 || hd.FreshTries != 0 {
+		if hd := hs235Held(t, str(hs235First(h.c.recSent(), ev, false)["line_id"])); hd.Asked != 0 || hd.Tries != 0 || hd.FreshTries != 0 || hd.ObjAsks != 0 {
 			t.Fatalf("%s: a refused ask was counted: %+v", ev, hd)
 		}
 	}
