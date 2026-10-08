@@ -179,3 +179,44 @@ func TestFast234LineEndedByThisVersionNotReasked(t *testing.T) {
 		}
 	}
 }
+
+// --- 2.3.4 (the owner's 30-day window for lines ended by the slow-company rule): FinCom lists such a line up to 30 days;
+// the ended id and the one fresh ask are kept 31 days, so a line 2.3.3 ended 20 days ago is asked once more, then never
+// again; the sent ids keep their 7 days
+func TestFast234EndedKept31Days(t *testing.T) {
+	_, f, c := r222bBridge(t, "")
+	r222Vch(f, 25740, "Journal", "", "20261005", 54540)
+	base := nowFn()
+	old := base.AddDate(0, 0, -20).Format("20060102")
+	if err := os.MkdirAll(liveSentDir(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_ = appendText(filepath.Join(liveSentDir(), old+liveEndedSuffix), "nws-25740\n")
+	_ = appendText(filepath.Join(liveSentDir(), old+".txt"), "nws-25740:resolved\n")
+	fastRestart()
+	for i := 0; i < 3; i++ {
+		retryClock(base, i*86400)
+		applyHeldLines(M{"heldLines": retryHeldRows("25740")})
+		fastTurns(2)
+		fastRestart()
+	}
+	if n := f.n(vchObjectID); n != 1 {
+		t.Fatalf("asked %d times (want once)", n)
+	}
+	if n, b := fastBodied(c, "nws-25740:resolved"); n != 1 || b != 1 {
+		t.Fatalf("the resolution: %d sent, %d with body", n, b)
+	}
+	// 32 days on: the files are gone (FinCom no longer lists such a line after 30)
+	retryClock(base, 32*86400)
+	fastRestart()
+	live.mu.Lock()
+	liveFresh()
+	gone := !live.ended["nws-25740"] && !live.fastAsked["nws-25740"]
+	live.mu.Unlock()
+	if !gone {
+		t.Fatal("the ended and fresh-ask ids are kept beyond 31 days")
+	}
+	if liveFastKeepDays != 31 {
+		t.Fatalf("kept %d days", liveFastKeepDays)
+	}
+}

@@ -421,10 +421,16 @@ func liveLoadSent() []string {
 	return ids
 }
 
-// 2.2.2 review M1: the ids kept beside the sent ones in files <yyyymmdd><suffix> (7 days)
+// 2.2.2 review M1: the ids kept beside the sent ones in files <yyyymmdd><suffix> (7 days). 2.3.4 (the owner's 30-day
+// window for lines ended by the slow-company rule, 08-Oct-2026): the ended ids and those given their one fresh ask are kept
+// 31 days, as long as FinCom lists such a line (30 days), so it is asked once more and never a third time
 func liveLoadIds(suffix string) []string {
 	var ids []string
-	cut := nowFn().AddDate(0, 0, -7).Format("20060102")
+	days := 7
+	if suffix == liveEndedSuffix || suffix == liveFastSuffix {
+		days = liveFastKeepDays
+	}
+	cut := nowFn().AddDate(0, 0, -days).Format("20060102")
 	m, _ := filepath.Glob(filepath.Join(liveSentDir(), "*"+suffix))
 	for _, f := range m {
 		day := strings.TrimSuffix(filepath.Base(f), suffix)
@@ -477,6 +483,9 @@ func liveEndedNote(ids ...string) {
 
 // next-fastfetch: the file suffix of the held line ids given their one fresh ask with the fast request (or ended by it)
 const liveFastSuffix = ".fast.txt"
+
+// 2.3.4: how long the ended and fresh-ask ids are kept (FinCom lists a slow-ended line 30 days)
+const liveFastKeepDays = 31
 
 // under live.mu: a line an earlier bridge ended with the Day Book words, not yet asked with the fast request: asked once more
 func liveFastAgainDue(id string) bool {

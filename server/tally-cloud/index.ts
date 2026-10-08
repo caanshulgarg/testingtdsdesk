@@ -464,6 +464,15 @@ function heldIncomplete(x: any): boolean {
   const b = x?.body, noBody = !b || typeof b !== "object" || !Array.isArray(b.vouchers) || !b.vouchers.length;
   return noBody || String(x?.held_why || "").startsWith(GUARD_WORDS);
 }
+// FinCom Bridge 2.3.4 (the owner, 08-Oct-2026: "30-day window for lines ended by the slow-company rule: YES"): a held line
+// received 7 to 30 days ago is listed too (heldLines / refetch, after the last 7 days' lines) when the slow-company rule
+// ended it: its own held words, or those of its only ":resolved" row (held, no body), are the bridge's slow words (2.3.2 /
+// 2.3.3: the company marked "entry fetch stopped: over 2 s", or the line's one ask again not answered in time). The bridge
+// (2.3.4, its fast entry request) asks it once more. Any other held line keeps the 7 days. No migration: the rows and their
+// words are what migrations 44-60 keep
+const HELD_SLOW_DAYS = 30;
+const SLOW_END_WORDS = ["FinCom does not ask Tally for this company's entries", "Tally did not answer in time for this entry when asked again"];
+function slowEnded(why: unknown): boolean { const w = String(why ?? ""); return SLOW_END_WORDS.some((x) => w.includes(x)); }
 async function heldOwnLines(dev: any, firm: string, bridge: string, max: number, want: (r: any) => boolean, what: string, unresolved = false) {
   try {
     if (!bridge) return [];
@@ -471,9 +480,25 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
     const { data, error } = await db.from("tally_recorder_lines").select("line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date, book_id, received_at, bridge, device_id, object_guid, body, held_why, payload")
       .eq("firm_id", firm).eq("device_id", dev.id).eq("bridge", bridge).eq("state", "held").in("event", ["created", "altered", "imported"]).gt("received_at", since)
       .order("received_at", { ascending: true }).limit(400);
-    if (error || !Array.isArray(data) || !data.length) return [];
+    if (error || !Array.isArray(data)) return [];
     let rows = (data as any[]).filter((r) => r && String(r.device_id ?? dev.id) === String(dev.id) && String(r.bridge ?? "") === bridge && Date.parse(String(r.received_at)) > Date.now() - 7 * 86400000 && want(r))
       .sort((a, b) => Date.parse(String(a.received_at)) - Date.parse(String(b.received_at)));
+    // 2.3.4: the slow-ended lines of 7 to 30 days ago (kept only below, once their ":resolved" rows are read), after these
+    if (unresolved) {
+      const since30 = new Date(Date.now() - HELD_SLOW_DAYS * 86400000).toISOString();
+      const { data: d30, error: e30 } = await db.from("tally_recorder_lines").select("line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date, book_id, received_at, bridge, device_id, object_guid, body, held_why, payload")
+        .eq("firm_id", firm).eq("device_id", dev.id).eq("bridge", bridge).eq("state", "held").in("event", ["created", "altered", "imported"]).gt("received_at", since30).lte("received_at", since)
+        .order("received_at", { ascending: true }).limit(400);
+      if (e30) console.log("tally-ingest beat: " + what + ": the slow-ended lines of the last " + HELD_SLOW_DAYS + " days not read:", String(e30.message || "").slice(0, 200));
+      else if (Array.isArray(d30)) {
+        const old = (d30 as any[]).filter((r) => r && String(r.device_id ?? dev.id) === String(dev.id) && String(r.bridge ?? "") === bridge && !String(r.line_id || "").endsWith(":resolved")
+          && Date.parse(String(r.received_at)) > Date.now() - HELD_SLOW_DAYS * 86400000 && Date.parse(String(r.received_at)) <= Date.now() - 7 * 86400000 && want(r))
+          .sort((a, b) => Date.parse(String(a.received_at)) - Date.parse(String(b.received_at)));
+        for (const r of old) r._old = true;
+        rows = [...rows, ...old];
+      }
+    }
+    if (!rows.length) return [];
     if (unresolved && rows.length) {
       // a line whose ":resolved" line already reached FinCom (in any state) is not asked for again. Bridge 2.3.1 (review H1):
       // except when that ":resolved" line is the ONLY one and is itself held for want of a complete body (the cloud guard's
@@ -500,6 +525,9 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
       }
       rows = rows.filter((r) => {
         const xs = have.get(String(r.line_id || "") + ":resolved") || [];
+        // 2.3.4: a line of 7 to 30 days ago only when the slow-company rule ended it (its own words, or its only ":resolved"
+        // row's, held without a body): listed once more; never once a second ":resolved" row is here
+        if (r._old) return xs.length === 0 ? slowEnded(r.held_why) : xs.length === 1 && heldIncomplete(xs[0]) && slowEnded(xs[0].held_why);
         // bridge 2.3.1 (masters): the newest ":resolved" line held waiting for a ledger FinCom did not have (and the only one so
         // held): listed again with ledgerAgain once the ledger is in (below), so that the bridge asks Tally for the entry once
         // more and sends "<line id>:resolved" again (the same id), applied then; it replaces both held rows (50-53's rules)

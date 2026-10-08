@@ -139,6 +139,7 @@ run_enqueue_held_id.py                180
 run_migration44.py                    120
 run_migration45.py                    120
 run_recorder_server.py                120
+run_recorder_held30.py                120
 run_recorder_typed_xml.mjs            120
 run_parse_lows.mjs                    60
 run_recorder_guid_server.py           120
