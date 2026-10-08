@@ -693,6 +693,18 @@ func pushSave(t *testing.T, f *standTally, v *tVch, created bool, win string) []
 		preMid = "0"
 	}
 	o := pushEmu{cguid: b220CoGUID, cname: zz, tuser: "owner", winUser: win, at: ts, formGuid: post, formAid: aid}
+	if pushSaveHoldsLists {
+		// 2.4.0: the keep's ledger round holds the stand company's ledgers (pushparty.go: the derived party, the bank rule)
+		var ls [][2]string
+		for _, l := range v.lines {
+			g := "Sundry Debtors"
+			if l[0] == "Sales" {
+				g = "Sales Accounts"
+			}
+			ls = append(ls, [2]string{l[0], g})
+		}
+		addHeldLedgers(t, zz, ls)
+	}
 	return append([]string{h("voucher_accept_pre", pre, preMid, aid), h("voucher_accept_post", post, mid, aid)}, pushLinesFromXML(t, x, o)...)
 }
 

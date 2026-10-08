@@ -525,7 +525,13 @@ func pushEntryXML(e *pushEntry, guid string, alter int64) (string, error) {
 	pushTag(&b, "GUID", "", guid)
 	pushTag(&b, "NARRATION", "String", e.s("narr"))
 	pushTag(&b, "PARTYGSTIN", "String", e.s("pgstin"))
-	pushTag(&b, "PLACEOFSUPPLY", "String", e.s("pos"))
+	// share run 37795355169: the form holds Tally's "not applicable" mark (\x04 Not Applicable) where Tally stores no place
+	// of supply
+	pos := e.s("pos")
+	if strings.EqualFold(strings.TrimSpace(strings.TrimLeft(pos, "\x04 ")), "Not Applicable") {
+		pos = ""
+	}
+	pushTag(&b, "PLACEOFSUPPLY", "String", pos)
 	pushTag(&b, "VOUCHERTYPENAME", "", e.s("vtype"))
 	pushTag(&b, "CMPGSTIN", "String", e.s("cgstin"))
 	pushTag(&b, "PARTYLEDGERNAME", "String", e.s("party"))

@@ -112,3 +112,42 @@ func pushPartyListsOf(company string) (map[string]string, map[string]string) {
 	pushPartyCache.m[dir] = &pushPartyLists{stamp, leds, grps}
 	return leds, grps
 }
+
+// the bank groups: a ledger under one of them is a bank line (Cash-in-Hand is not: Tally makes no bank allocation for it)
+var pushBankGroups = []string{"bank accounts", "bank od a/c", "bank occ a/c"}
+
+// whether a group (lower case or not) is one of set or under one of them, by the groups held
+func pushUnder(group string, set []string, grps map[string]string) bool {
+	g := strings.ToLower(strings.TrimSpace(group))
+	for i := 0; g != "" && i < 30; i++ {
+		for _, s := range set {
+			if g == s {
+				return true
+			}
+		}
+		g = strings.ToLower(strings.TrimSpace(grps[g]))
+	}
+	return false
+}
+
+// share run 37795355169 (3.0 .. 7.1): an entry made new with a line under a bank group is stored with a bank allocation
+// Tally makes as it stores it (the transaction type, a unique reference of its own, the date), which the form at Form
+// Accept does not hold. Such a line without its bank details (K records) is not taken; nor is a new entry whose ledger the
+// lists held here do not have (whether it is a bank line cannot be told). An alteration's form holds the stored details.
+// "" when the line can be taken
+func pushBankCheck(e *pushEntry, ev string, leds, grps map[string]string) string {
+	if ev != "created" {
+		return ""
+	}
+	for _, k := range e.list("", "L") {
+		n := e.recs[k]["led"]
+		g, ok := leds[strings.ToLower(strings.TrimSpace(n))]
+		if !ok {
+			return "a new entry whose ledger " + cutRunes(n, 80) + " is not in the ledger list held here (whether it is a bank line, whose details Tally makes as it stores the entry, is not known)"
+		}
+		if pushUnder(g, pushBankGroups, grps) && len(e.list(k, "K")) == 0 {
+			return "a new entry with a bank line (" + cutRunes(n, 80) + ") and no bank details: Tally makes them as it stores the entry"
+		}
+	}
+	return ""
+}

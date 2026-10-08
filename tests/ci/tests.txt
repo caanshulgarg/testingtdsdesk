@@ -181,6 +181,7 @@ run_bridge_per_user_ui.py             120  TDSDESK_SITE=../app/dist-test
 run_parse_parta.mjs                   120
 run_parse_real231.mjs                 120
 run_push233_parse.mjs                 120
+run_push240_share.mjs                 120
 run_parse_fast234.mjs                 120
 run_parse_fast234_kinds.mjs           120
 run_migration57.py                    120

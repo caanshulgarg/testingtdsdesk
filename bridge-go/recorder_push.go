@@ -213,6 +213,9 @@ func livePushDone(pk string, b *livePushBuf, posting bool) int {
 		return fail(why)
 	}
 	e.scal["party"] = party
+	if why := pushBankCheck(e, ev, leds, grps); why != "" {
+		return fail(why)
+	}
 	x, err := pushEntryXML(e, guid, 0)
 	if err != nil {
 		return fail(err.Error())

@@ -119,6 +119,9 @@ func TestPush240ShareCaptures(t *testing.T) {
 					why = w
 				} else if party, w := pushDeriveParty(e, leds, grps); w != "" {
 					why = w
+				} else if w := pushBankCheck(e, ev, leds, grps); w != "" {
+					e.scal["party"] = party
+					why = w
 				} else {
 					e.scal["party"] = party
 					x, err := pushEntryXML(e, g, 0)

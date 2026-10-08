@@ -163,6 +163,8 @@ func TestPush240DerivedPartyAtTheStand(t *testing.T) {
 	}
 	w := f.add(td, "", "R-2", "a ledger this bridge does not hold", "-300.00")
 	w.lines[0][0] = "Party New"
+	pushSaveHoldsLists = false
+	t.Cleanup(func() { pushSaveHoldsLists = true })
 	liveAppend(t, p, pushSave(t, f, w, true, "")...)
 	readAndUploadAll(t)
 	if f.n(vchObjectID) != 1 {
@@ -186,6 +188,104 @@ func holdLedgerLists(t *testing.T, company string, leds [][2]string) {
 	for i, l := range leds {
 		g := fmt.Sprintf("g%d", i)
 		m[g] = ledRow{guid: g, name: l[0], parent: l[1]}
+		gs[l[1]] = true
+	}
+	saveLedList(dir, m)
+	var gl []any
+	for g := range gs {
+		gl = append(gl, []any{g, ""})
+	}
+	_ = saveFile(filepath.Join(dir, "group-list.json"), jsonText(gl))
+}
+
+// share run 37795355169 (3.0 .. 7.1, every release the same): a contra made new on the screen is stored with a bank
+// allocation Tally makes as it stores the entry (transaction type, its own unique reference, the date); the form at Form
+// Accept has none. A new entry with a line under a bank group and no bank details on that line is not taken (the fast
+// request confirms it); a line whose ledger the lists held here do not have cannot be told either way: not taken. A line
+// with its bank details, or an alteration (the form holds the stored details), is taken
+func TestPush240BankLineMadeNew(t *testing.T) {
+	leds := map[string]string{"cash": "Cash-in-Hand", "share bank": "Bank Accounts", "od": "Bank OD A/c", "spike income": "Indirect Incomes"}
+	grps := map[string]string{"bank od a/c": "Loans (Liability)"}
+	ent := func(withK bool, led ...string) *pushEntry {
+		e := newPushEntry()
+		for i, l := range led {
+			e.recs[fmt.Sprintf("L%d", i+1)] = map[string]string{"led": l}
+			if withK && strings.EqualFold(l, "Share Bank") {
+				e.recs[fmt.Sprintf("L%dK1", i+1)] = map[string]string{"tt": "Cheque"}
+			}
+		}
+		return e
+	}
+	for _, c := range []struct {
+		e     *pushEntry
+		ev    string
+		taken bool
+	}{
+		{ent(false, "Cash", "Share Bank"), "created", false},
+		{ent(false, "Spike Income", "OD"), "created", false},
+		{ent(true, "Cash", "Share Bank"), "created", true},
+		{ent(false, "Cash", "Share Bank"), "altered", true},
+		{ent(false, "Cash", "Spike Income"), "created", true},
+		{ent(false, "Cash", "Unknown Ledger"), "created", false},
+	} {
+		why := pushBankCheck(c.e, c.ev, leds, grps)
+		if (why == "") != c.taken {
+			t.Fatalf("%v %s: taken %v (%s)", c.e.recs, c.ev, why == "", why)
+		}
+	}
+	if why := pushBankCheck(ent(false, "Cash"), "created", nil, nil); why == "" {
+		t.Fatal("no ledger list held: a new entry cannot be told")
+	}
+}
+
+// the same run: a sales invoice's form says "Not Applicable" for its place of supply where Tally stores none
+func TestPush240PlaceOfSupplyNotApplicable(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("testdata", "push240", "share", "37795355169", "7.1", "share-sales-agst.lines.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ps []string
+	for _, l := range strings.Split(strings.ReplaceAll(strings.TrimPrefix(decodeRecorderText(b), "\ufeff"), "\r\n", "\n"), "\n") {
+		if p, ok := pushPayload(l); ok && strings.HasPrefix(l, "FCR1|ev=voucher_full|") {
+			ps = append(ps, p)
+		}
+	}
+	e, err := pushParse(ps)
+	if err != nil || !strings.HasSuffix(e.s("pos"), "Not Applicable") {
+		t.Fatalf("the real line: %v %q", err, e.s("pos"))
+	}
+	x, err := pushEntryXML(e, "g-00000013", 0)
+	if err != nil || tagValue(x, "PLACEOFSUPPLY") != "" || !strings.Contains(x, "<PLACEOFSUPPLY") {
+		t.Fatalf("the place of supply: %v %s", err, x)
+	}
+}
+
+// whether pushSave puts the voucher's ledgers in the stand company's held lists (as a kept company has them)
+var pushSaveHoldsLists = true
+
+// the keep's lists for a company with these ledgers added (each with its group; the groups primary)
+func addHeldLedgers(t *testing.T, company string, leds [][2]string) {
+	t.Helper()
+	dir, err := companyDir(company)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = os.MkdirAll(dir, 0o755)
+	m := loadLedList(dir)
+	have := map[string]bool{}
+	for _, r := range m {
+		have[strings.ToLower(r.name)] = true
+	}
+	gs := map[string]bool{}
+	for _, x := range arr(readJSONFile(filepath.Join(dir, "group-list.json"))) {
+		gs[str(at(arr(x), 0))] = true
+	}
+	for _, l := range leds {
+		if !have[strings.ToLower(l[0])] {
+			g := fmt.Sprintf("held-%d", len(m)+1)
+			m[g] = ledRow{guid: g, name: l[0], parent: l[1]}
+			have[strings.ToLower(l[0])] = true
+		}
 		gs[l[1]] = true
 	}
 	saveLedList(dir, m)
