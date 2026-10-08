@@ -270,18 +270,27 @@ func TestHeldStop235DeleteGuidSurvivesRestart(t *testing.T) {
 	hs235NoBareDelete(t, h.c.recSent())
 }
 
+// Tally drops the connection of every entry request (no answer)
+func hs235Drop(w http.ResponseWriter, r *http.Request, id, body string) bool {
+	if id != vchObjectID {
+		return false
+	}
+	if hj, ok := w.(http.Hijacker); ok {
+		if conn, _, err := hj.Hijack(); err == nil {
+			conn.Close()
+		}
+	}
+	return true
+}
+
 // --- 1: Tally not answering (not the stop) at the delete's first ask: held with its GUID kept; Tally answers later and
 // proves it gone: it goes with its GUID. Then the delete whose GUID nobody knows (a real TallyPrime 7.1's line has
-// none, and the bridge's record has no entry): held with the Day Book words, never sent as a delete
+// none, and the bridge's record has no entry): held with the Day Book words, never sent as a delete. (A 2 s stop of
+// the delete's own request ends it held for good, 2.3.4 option (a): TestHeldStop235DeleteEndsHeldNeverBare)
 func TestHeldStop235DeleteNotAnsweredThenProven(t *testing.T) {
-	h := hs235Bridge(t, `,"RecorderBodySec":2,"RecorderLimitMs":200`, false)
+	h := hs235Bridge(t, `,"RecorderBodySec":2`, false)
 	h.f.mu.Lock()
-	h.f.slow = func(id, body string) time.Duration {
-		if id == vchObjectID {
-			return 400 * time.Millisecond
-		}
-		return 0
-	}
+	h.f.behave = hs235Drop
 	h.f.mu.Unlock()
 	td := h.td
 	liveAppend(t, liveFilePath(h.rec, ""),
@@ -295,7 +304,7 @@ func TestHeldStop235DeleteNotAnsweredThenProven(t *testing.T) {
 		t.Fatalf("the held delete lost its GUID: %+v", hd)
 	}
 	h.f.mu.Lock()
-	h.f.slow = nil
+	h.f.behave = nil
 	h.f.mu.Unlock()
 	n0 := len(h.c.recSent())
 	h.turns(16 * time.Minute)
@@ -452,19 +461,7 @@ func TestHeldStop235RealFailuresStillCount(t *testing.T) {
 				return 0
 			}
 		}},
-		{"connection closed", "", func(f *standTally) {
-			f.behave = func(w http.ResponseWriter, r *http.Request, id, body string) bool {
-				if id != vchObjectID {
-					return false
-				}
-				if hj, ok := w.(http.Hijacker); ok {
-					if conn, _, err := hj.Hijack(); err == nil {
-						conn.Close()
-					}
-				}
-				return true
-			}
-		}},
+		{"connection closed", "", func(f *standTally) { f.behave = hs235Drop }},
 		{"empty answer", "", func(f *standTally) { f.vch = nil }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -481,6 +478,13 @@ func TestHeldStop235RealFailuresStillCount(t *testing.T) {
 			m := h.c.recSent()[0] // a lone post line goes as altered
 			if w := str(m["heldWhy"]); w == "" || strings.Contains(w, "stopped from FinCom") {
 				t.Fatalf("held with the wrong words: %q", w)
+			}
+			if tc.name == "2 s stop" {
+				// 2.3.4 option (a): ended at once with the Day Book words, never asked again (more than counted)
+				if _, had := slowHeldItem(t, str(m["line_id"])); had || !strings.Contains(str(m["heldWhy"]), "Day Book") {
+					t.Fatalf("a 2 s stop did not end the line: %v (in the held list: %v)", m, had)
+				}
+				return
 			}
 			hd := hs235Held(t, str(m["line_id"]))
 			if hd.allow() != 1 || (hd.Fresh && hd.FreshTries != 1) {
