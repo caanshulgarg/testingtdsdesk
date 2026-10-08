@@ -208,3 +208,128 @@ const LedCheck = {
     return n;
   }
 };
+
+/* ================================================================== */
+/* The GST and TDS ledgers page, simpler (FinCom 2.4.0; the owner of  */
+/* 08-Oct-2026: "there should be simple page of tds & gst tally ledger */
+/* import page"): one row a ledger with one answer and one action     */
+/* ================================================================== */
+// The screen is app/src/screens/books/Ledgers.jsx. One list of the client's tax-like ledgers (the map's GST and TDS ledgers
+// and the check's), each with ONE answer: the check's suggestion while the ledger is not confirmed and not set by hand,
+// else the ledger master's (b.map) - so the page never shows two answers for one ledger. The rows go to three places:
+//   GST ledgers / TDS ledgers - FinCom can tell what it is: Confirm, or Change;
+//   Needs you - FinCom could not tell (or a TDS ledger without its section, a GST ledger without its head or side), and
+//     the rest a person must act on: a ledger renamed in Tally (an owner confirms), entries naming a ledger FinCom does
+//     not have (migration 56), ledger lines without a GUID (Rec.needKind "masters", the shared classifier), a confirmed
+//     ledger now used differently, ledgers changed after returns were made, two ledgers with one GSTIN, a PAN that is
+//     not the one in the ledger's GSTIN - each with its one action.
+// Nothing new is asked of Tally: the ledger list is the bridge's (Ledgers, src/js/58) and the masters read as before.
+const LedPage = {
+  // the check worked out by itself when the books, the masters or the ledgers change (it was a button: "Run the ledger
+  // check"; "Check again" under More still runs it on demand)
+  key(b){ return (b.vouchers || []).length + "|" + (b.ledInfoAt || "") + "|" + Object.keys(b.map || {}).length + "|" + Object.keys(b.ledInfo || {}).length; },
+  ensure(b){
+    const k = this.key(b);
+    if (!b.ledCheck || !b.ledCheck.ranAt || b.ledCheck.autoKey !== k){ LedCheck.run(b); b.ledCheck.autoKey = k; }
+    return b.ledCheck;
+  },
+  rows(b){
+    const c = this.ensure(b), info = b.ledInfo || {}, names = new Set();
+    Object.entries(b.map || {}).forEach(([n, m]) => { if (LedMaster.taxLike(n, m, info[n])) names.add(n); });
+    (c.names || []).forEach(n => names.add(n));
+    return Array.from(names).sort((x, y) => x.localeCompare(y)).map(n => this.row(b, n));
+  },
+  row(b, n){
+    const has = !!(b.map && b.map[n]), m = has ? b.map[n] : {}, it = ((b.ledCheck || {}).items || {})[n], ok = !!m.ok, cp = it ? LedCheck.pick(it) : null;
+    // the ledger master's answer (what the returns use) wherever it has one; the check's for a ledger it alone found, or
+    // one the master has no answer for
+    const fromCheck = !!(cp && (!has || (!m.what && !ok)));
+    const p = fromCheck ? cp : {what: m.what || "", side: m.side || "", tax: m.tax || "", rate: LedMaster.isGst(m.what) ? m.gstRate : m.rate, section: m.section || "",
+      conf: ok ? "high" : cp && this.same(cp, m) ? cp.conf : "medium", ev: cp ? cp.ev : [], fromAi: false};
+    // the check reads it otherwise: said under Why (its answer is taken only with "Confirm the check's sure answers")
+    const alt = cp && has && !ok && !this.same(cp, m) ? this.says(cp) : "";
+    const kind = LedMaster.isGst(p.what) ? "gst" : LedMaster.isTds(p.what) ? "tds" : "none";
+    let unclear = "";
+    if (!ok){
+      if (!p.what || (p.what === "none" && LedMaster.taxLike(n, null, (b.ledInfo || {})[n]) && !(cp && cp.what === "none" && cp.conf !== "low")) || (fromCheck && p.conf === "low" && !p.fromAi)) unclear = "FinCom could not tell what this ledger is";
+      else if ((p.what === "tds_payable" || p.what === "tcs_payable") && !p.section) unclear = "a TDS ledger without its section";
+      else if (/^(gst|gst_rcm|gst_import)$/.test(p.what) && (!p.tax || !p.side)) unclear = "a GST ledger whose head (CGST, SGST, IGST) or side (input, output) is not known";
+    }
+    return {n, m, it, ok, fromCheck, p, alt, kind, unclear, group: ((b.ledInfo || {})[n] || {}).group || (b.under || {})[n] || "", why: m.why || ""};
+  },
+  same(cp, m){ return (cp.what || "") === (m.what || "") && (!LedMaster.isGst(cp.what) || ((cp.tax || "") === (m.tax || "") && (cp.side || "") === (m.side || ""))) && (!LedMaster.isTds(cp.what) || !cp.section || cp.section === (m.section || "")); },
+  // "CGST input · 9%", "IGST output, reverse charge", "Not a tax ledger"
+  says(p){
+    if (!p || !p.what) return "Not known yet";
+    if (p.what === "none") return "Not a tax ledger";
+    if (/^(gst|gst_rcm|gst_import)$/.test(p.what))
+      return String(p.tax || "GST").replace("+", " + ") + (p.side ? " " + p.side : "") + (p.what === "gst_rcm" ? ", reverse charge" : p.what === "gst_import" ? ", on imports" : "") + (num(p.rate) ? " · " + num(p.rate) + "%" : "");
+    return LedMaster.label(p.what) + (LedMaster.isTds(p.what) && p.section ? " · " + LedCheck.secLabel(p.section) : "") + (num(p.rate) ? " · " + num(p.rate) + "%" : "");
+  },
+  // the nature of payment: Tally's own (the master's), else the payments FinCom's rules know for the section
+  nature(b, n, sec){
+    const t = ((b.ledInfo || {})[n] || {}).tdsNature; if (t) return String(t);
+    const k = String(sec || "").toUpperCase().replace(/[^0-9A-Z]/g, "");
+    if (!k || typeof RULE_DEFAULTS === "undefined") return "";
+    return Array.from(new Set(RULE_DEFAULTS.filter(r => String(r.old || "").toUpperCase().replace(/[^0-9A-Z]/g, "") === k).map(r => r.label))).slice(0, 3).join(" / ");
+  },
+  // Confirm on a row: the ledger confirmed as the row says (the master's answer, as its Confirm did); a ledger only the
+  // check found goes into the master with the check's answer. A confirm is its own step: saved at once. The check's
+  // "only confirmed ledgers count" switch is still set only by "Confirm the check's sure answers" (lcConfirm)
+  confirm(b, names){
+    const rows = [].concat(names || []).map(n => this.row(b, n)).filter(r => !r.ok && (r.fromCheck || (b.map && b.map[r.n])));
+    if (!rows.length) return 0;
+    Drafts.direct(() => {
+      b.map = b.map || {};
+      rows.filter(r => r.fromCheck).forEach(r => { const p = r.p, m = b.map[r.n] = b.map[r.n] || {n: 0};
+        LedMaster.applyWhat(m, p.what || "none");
+        if (LedMaster.isGst(p.what)){ m.tax = p.tax || m.tax; m.side = p.side || m.side; if (p.rate) m.gstRate = p.rate; }
+        if (LedMaster.isTds(p.what)){ m.section = p.section || ""; if (p.rate) m.rate = p.rate; }
+        m.why = (p.ev || []).map(e => LedCheck.SRC[e.src] + ": " + e.say).join("; "); });
+      const names2 = rows.map(r => r.n), u = LedCheck.usage(b, names2);
+      LedMaster.confirm(b, names2, true);
+      names2.forEach(n => { const it = ((b.ledCheck || {}).items || {})[n]; if (it){ it.okSig = LedCheck.sig(u[n]); it.okAt = new Date().toISOString(); it.okBy = whoAmI(); } });
+      b.reco = null; saveBooks();
+    }, {bypass: true});
+    render();
+    return rows.length;
+  },
+  // two ledgers with one GSTIN; a PAN that is not the one inside the ledger's GSTIN. From the masters read and the
+  // bridge's ledger list; "Fine as it is" (b.ledOk) puts one away
+  conflicts(b, cid){
+    const all = {}, ok = b.ledOk || {}, out = [];
+    const add = (n, g, p) => { if (!n) return; const x = all[n] = all[n] || {n, gstin: "", pan: ""}; g = String(g || "").toUpperCase().trim(); p = String(p || "").toUpperCase().trim(); if (g && !x.gstin) x.gstin = g; if (p && !x.pan) x.pan = p; };
+    Object.entries(b.ledInfo || {}).forEach(([n, i]) => add(n, i && i.gstin, i && i.pan));
+    Object.entries(b.gstins || {}).forEach(([n, g]) => add(n, g, ""));
+    Object.entries(b.pans || {}).forEach(([n, p]) => add(n, "", p));
+    if (typeof Ledgers === "object" && cid) Ledgers.list(cid).forEach(l => { if (l) add(l.name, l.gstin, l.pan); });
+    const own = new Set([].concat((typeof GSTR === "object" && GSTR.gstins ? GSTR.gstins(b) : []) || [], [((CO(cid) || {}).gstin || "")]).map(g => String(g || "").toUpperCase()));
+    const by = {};
+    Object.values(all).forEach(x => { if (GSTIN_RE.test(x.gstin) && !own.has(x.gstin)) (by[x.gstin] = by[x.gstin] || []).push(x.n); });
+    Object.keys(by).sort().forEach(g => { const ns = by[g].sort((x, y) => x.localeCompare(y)); if (ns.length < 2 || ok["gstin:" + g]) return;
+      out.push({key: "gstin:" + g, kind: "gstin", names: ns, text: "GSTIN " + g + " is on " + ns.length + " ledgers: " + ns.join(", ") + ". If they are one party, merge them in Tally; if not, correct the GSTIN in Tally."}); });
+    Object.values(all).sort((x, y) => x.n.localeCompare(y.n)).forEach(x => {
+      if (!GSTIN_RE.test(x.gstin) || !PAN_RE.test(x.pan) || x.gstin.slice(2, 12) === x.pan || ok["pan:" + x.n]) return;
+      out.push({key: "pan:" + x.n, kind: "pan", names: [x.n], text: x.n + ": PAN " + x.pan + " is not the PAN inside its GSTIN " + x.gstin + " (" + x.gstin.slice(2, 12) + "). Correct it in Tally; the TDS returns use the PAN."}); });
+    return out;
+  },
+  fine(b, key){ Drafts.direct(() => { (b.ledOk = b.ledOk || {})[key] = {by: whoAmI(), at: new Date().toISOString()}; saveBooks(); }, {bypass: true}); render(); },
+  // entries naming a ledger FinCom does not have yet (migration 56, Rec.unkOf), one item a ledger
+  unknown(cid){
+    if (typeof Rec !== "object" || !Rec.unkOf || typeof TCloud !== "object" || !TCloud.on() || !cid) return [];
+    const bks = Rec.unkBooks(cid), rows = (Rec.unkOf(bks.length ? bks : null).rows || []).filter(r => String(r.client_id || "") === String(cid)), by = {};
+    rows.forEach(r => { const names = Array.isArray(r.ledgers) ? r.ledgers : String(r.ledgers || "").replace(/^\{|\}$/g, "").split(",").map(x => x.replace(/^"|"$/g, "")).filter(Boolean);
+      names.forEach(n => { (by[n] = by[n] || []).push(r); }); });
+    const one = r => [r.vtype, r.vno].map(x => String(x || "").trim()).filter(Boolean).join(" ") + (r.day ? " of " + fmtDate(String(r.day).slice(0, 10)) : "");
+    return Object.keys(by).sort().map(n => { const rs = by[n];
+      return {key: "unk:" + n, n, text: "'" + n + "' is used by " + rs.length + (rs.length === 1 ? " entry" : " entries") + " (" + rs.slice(0, 3).map(one).join(", ") + (rs.length > 3 ? ", …" : "") + "), but FinCom does not have this ledger yet. The entries are in the books; its group comes with the next ledger list."}; });
+  },
+  // a confirmed ledger now used differently: kept as confirmed, with its use now (the warning goes)
+  keepUse(b, n){ const it = ((b.ledCheck || {}).items || {})[n]; if (it){ it.okSig = LedCheck.sig(LedCheck.usage(b, [n])[n]); it.okAt = new Date().toISOString(); it.okBy = whoAmI(); } render(); },
+  // "2 min ago", "3 h ago", "on 07-Oct-2026 10:05"
+  ago(at){
+    const t = Date.parse(String(at || "")); if (!t) return "";
+    const min = Math.max(0, Math.round((Date.now() - t) / 60000));
+    return min < 1 ? "just now" : min < 60 ? min + " min ago" : min < 24 * 60 ? Math.floor(min / 60) + " h ago" : "on " + fmtDateTime(t);
+  }
+};

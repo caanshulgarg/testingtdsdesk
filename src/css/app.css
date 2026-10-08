@@ -627,6 +627,44 @@ ol.setup li div{color:var(--ink);font-weight:400;margin-top:2px}
 .tguide-mark{flex:none;width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:600;font-size:13px;border:1px solid var(--rule);color:var(--ink-2,var(--ink))}
 .tguide-steps li.now .tguide-mark{border-color:var(--st-attention);color:var(--st-attention)}
 .tguide-steps li.done .tguide-mark{background:var(--st-done-soft);border-color:var(--st-done);color:var(--st-done)}
+/* FinCom 2.4.0, the simpler GST and TDS ledgers page (Books -> Tally ledgers): a status line, Needs you, two short tables */
+.ledpage{max-width:1100px}
+.led-status{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:0 0 12px;padding:10px 14px;border:1px solid var(--rule);border-radius:8px;background:var(--sheet)}
+.led-status-line{flex:1 1 320px;font-size:15px}
+.led-need-n{color:var(--st-attention)}
+.led-upload{flex:1 1 100%;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.led-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px}
+.led-tools input[type=search]{flex:1 1 240px;max-width:360px}
+.led-tools select{flex:0 1 auto;max-width:100%}
+.led-needs{margin:0 0 14px;padding:10px 14px;border-left:4px solid var(--st-attention);border-radius:6px;background:var(--st-attention-soft)}
+.led-needs h3,.led-sec h3{margin:0;font-size:15px}
+.led-sec{margin:0 0 14px}
+.led-sec-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:0 0 6px}
+table.led-t{width:100%;border-collapse:collapse;font-size:14px}
+table.led-t th{text-align:left;font-weight:600;font-size:12px;color:var(--ink-2,var(--ink));padding:6px 8px;border-bottom:1px solid var(--rule)}
+table.led-t td{padding:8px;border-bottom:1px solid var(--rule);vertical-align:top}
+table.led-t td.ac{text-align:right;white-space:nowrap;width:1%}
+table.led-t tr[data-ok="1"] td{opacity:.85}
+.led-needs table.led-t td{border-bottom-color:rgba(0,0,0,.08)}
+.led-name{word-break:break-word}
+.led-says{font-weight:600}
+.led-act{display:inline-flex;gap:10px;align-items:center}
+.led-why summary{cursor:pointer;font-size:12px;color:var(--ink-2,var(--ink));margin-top:2px}
+.led-edit{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-width:0;max-width:100%}
+.led-edit select,.led-edit input{max-width:100%}
+.led-sels{display:inline-flex;gap:4px;flex-wrap:wrap}
+.led-done{margin:4px 0 12px}
+.led-nottax{margin:0 0 12px}
+.led-more{margin:8px 0 0;padding-top:8px;border-top:1px solid var(--rule)}
+@media (max-width:640px){
+  .led-status{padding:8px 10px}
+  table.led-t thead{display:none}
+  table.led-t,table.led-t tbody,table.led-t tr,table.led-t td{display:block;width:100%}
+  table.led-t tr{border-bottom:1px solid var(--rule);padding:6px 0}
+  table.led-t td{border:0;padding:2px 0}
+  table.led-t td.ac{text-align:left;width:auto;white-space:normal;padding-top:6px}
+  .led-tools input[type=search]{max-width:none}
+}
 .bdiag{margin-top:14px;padding:12px 14px;border:1px solid var(--rule);border-radius:8px;background:var(--sheet)}
 .bd-f{padding:8px 10px;border-radius:6px;margin:6px 0;font-size:14px}
 .bd-f.ok{background:var(--ok-soft);color:var(--ok)}
