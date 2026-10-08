@@ -1,0 +1,15 @@
+;; probe-brs2.tdl (bank-date probe, harness only)
+[#Form: BankRecon]
+    Add : Button : FCRPB2
+    On : Form Accept : Yes : Call : FCRPWrite : "brs2_pre"
+    On : Form Accept : Yes : Form Accept
+    On : Form Accept : Yes : Call : FCRPWrite : "brs2_post"
+
+[Button: FCRPB2]
+    Key    : Ctrl+Alt+F4
+    Title  : "Lotus Mark"
+    Action : Display : Day Book
+
+[Collection: FCRPAlivebrs2]
+    Type : Company
+

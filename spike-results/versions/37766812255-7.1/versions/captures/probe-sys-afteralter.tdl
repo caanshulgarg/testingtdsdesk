@@ -1,0 +1,7 @@
+;; probe-sys-afteralter.tdl (bank-date probe, harness only)
+[System: Events]
+    FCRPsysafteralter : After Alter Object : Yes : Call : FCRPWrite : "sys-afteralter"
+
+[Collection: FCRPAlivesysafteralter]
+    Type : Company
+

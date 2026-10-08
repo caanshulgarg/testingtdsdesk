@@ -1,0 +1,39 @@
+{
+  "discovery": {
+    "Bank Allocations": false,
+    "Bank Reconciliation": false,
+    "Manual Bank Recon": false,
+    "Bank Recon": true,
+    "VCH BankAllocation": false,
+    "Bank Reconciliation Summary": false,
+    "VCH Bank Allocations": true,
+    "VCH BankAllocations": true,
+    "BRS": false,
+    "BankRecon": true,
+    "Bank Recon Manual": false,
+    "Bank Allocation": false,
+    "BankAllocations": false,
+    "Bank Recon Summary": false,
+    "Voucher Bank Allocations": false
+  },
+  "brsProbed": [
+    "Bank Recon",
+    "BankRecon"
+  ],
+  "allocProbed": [
+    "VCH BankAllocations",
+    "VCH Bank Allocations"
+  ],
+  "loaded": {
+    "Common": false,
+    "sys-afteralter": false,
+    "sys-beforealter": false,
+    "sys-onalter": false,
+    "sys-beforesave": false,
+    "sys-aftersave": false,
+    "brs1": false,
+    "brs2": false,
+    "alloc1": false,
+    "alloc2": false
+  }
+}

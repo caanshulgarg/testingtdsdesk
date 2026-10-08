@@ -1,0 +1,4 @@
+FCRP|ev=alloc1_pre|t=11:17|guid=1e04d28f-4a28-4712-b537-8df58a3ef858-00000008|mid=8|aid=8|vtype=Contra|vno=7|vdate=1-Oct-26
+FCRP|ev=alloc1_post|t=11:17|guid=1e04d28f-4a28-4712-b537-8df58a3ef858-00000008|mid=8|aid=8|vtype=Contra|vno=7|vdate=1-Oct-26
+FCRP|ev=alloc2_pre|t=11:17|guid=1e04d28f-4a28-4712-b537-8df58a3ef858-00000008|mid=8|aid=8|vtype=Contra|vno=7|vdate=1-Oct-26
+FCRP|ev=alloc2_post|t=11:17|guid=1e04d28f-4a28-4712-b537-8df58a3ef858-00000008|mid=8|aid=8|vtype=Contra|vno=7|vdate=1-Oct-26
