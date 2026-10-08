@@ -4,6 +4,7 @@
     "measured": false
   },
   "autoUpdate": true,
+  "bankAlerts": [],
   "bridgePort": 9100,
   "busySince": "",
   "changeNumbers": {

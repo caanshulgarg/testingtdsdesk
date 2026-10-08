@@ -30,6 +30,15 @@ type tVch struct {
 	lines                                    [][2]string
 	cancelled                                bool   // review H1 (2.3.0): this Tally answers ISCANCELLED Yes for it
 	extra                                    string // 2.3.4 review: more of the voucher as Tally holds it (fields outside the approved list, other lists)
+	bank                                     string // next-bankdate: the bank date set in Bank Reconciliation (BANKALLOCATIONS.BANKERSDATE on its "Bank" line)
+}
+
+// next-bankdate: the bank allocation Tally keeps on the "Bank" line once a bank date is set (yyyymmdd)
+func (v *tVch) bankAlloc(name string) string {
+	if v.bank == "" || name != "Bank" {
+		return ""
+	}
+	return "<BANKALLOCATIONS.LIST>" + standField("DATE", "Date", v.date) + standField("TRANSACTIONTYPE", "String", "Cheque") + standField("BANKERSDATE", "Date", v.bank) + "</BANKALLOCATIONS.LIST>"
 }
 
 // review H1 (2.3.0): ISCANCELLED as this stand Tally gives it
@@ -196,7 +205,7 @@ func (v *tVch) xml() string {
 		`<VOUCHERNUMBER>%s</VOUCHERNUMBER><PARTYLEDGERNAME>%s</PARTYLEDGERNAME><NARRATION>%s</NARRATION><ISOPTIONAL>No</ISOPTIONAL><ISCANCELLED>%s</ISCANCELLED>`,
 		v.guid, v.typ, v.date, v.guid, v.master, v.alter, v.typ, v.no, esc(v.party), esc(v.narr), v.isCancelled())
 	for _, l := range v.lines {
-		fmt.Fprintf(&b, `<ALLLEDGERENTRIES.LIST><LEDGERNAME>%s</LEDGERNAME><AMOUNT>%s</AMOUNT></ALLLEDGERENTRIES.LIST>`, esc(l[0]), l[1])
+		fmt.Fprintf(&b, `<ALLLEDGERENTRIES.LIST><LEDGERNAME>%s</LEDGERNAME><AMOUNT>%s</AMOUNT>%s</ALLLEDGERENTRIES.LIST>`, esc(l[0]), l[1], v.bankAlloc(l[0]))
 	}
 	b.WriteString(v.extra + "</VOUCHER>")
 	return b.String()
@@ -215,7 +224,7 @@ func (v *tVch) xmlTyped() string {
 	}
 	for _, l := range v.lines {
 		b.WriteString(nl + "<ALLLEDGERENTRIES.LIST>" + nl + " " + standField("LEDGERNAME", "String", esc(l[0])) + nl + " " + standField("ISDEEMEDPOSITIVE", "Logical", "No") +
-			nl + " " + standField("AMOUNT", "Amount", l[1]) + nl + " <BILLALLOCATIONS.LIST>      </BILLALLOCATIONS.LIST>" + nl + "</ALLLEDGERENTRIES.LIST>")
+			nl + " " + standField("AMOUNT", "Amount", l[1]) + nl + " <BILLALLOCATIONS.LIST>      </BILLALLOCATIONS.LIST>" + v.bankAlloc(l[0]) + nl + "</ALLLEDGERENTRIES.LIST>")
 	}
 	b.WriteString(v.extra + "\r\n    </VOUCHER>\r\n    ")
 	return b.String()

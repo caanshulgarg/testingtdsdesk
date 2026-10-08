@@ -949,7 +949,9 @@ func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
 		// review H1 (2.3.1): why this computer's changes wait for a complete look at its own Tally, in plain words ("" when none)
 		"recorderWaitWords": liveWaitWordsAll(),
 		// next-renumber: entries Tally may have renumbered that the bridge did not read again, in plain words (renumber.go)
-		"renumberAlerts": renumBeat()}
+		"renumberAlerts": renumBeat(),
+		// next-bankdate: bank dates set in Tally that may not have reached FinCom, in plain words (bankdate.go)
+		"bankAlerts": bankBeat()}
 }
 
 // --- the posting queue (build 199): postings queued in FinCom on any computer, taken one at a time

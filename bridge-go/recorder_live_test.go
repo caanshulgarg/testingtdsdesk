@@ -1288,8 +1288,15 @@ func TestSourceBNotDefault(t *testing.T) {
 	spChecked = map[string]time.Time{}
 	spMu.Unlock()
 	lightCheckOpen(sessions)
-	if f.n("TDSDeskKeepList") != 0 {
-		t.Fatal("source B ran without the owner's switch")
+	// next-bankdate (2.4.0, the owner's agreed fallback): a move of ALTVCHID with no add-on line to explain it (ND-2 here) is
+	// listed once by the bank route (bankdate.go), never by source B: no change of source "alterid" is made
+	for _, c := range liveQueue() {
+		if c.source == "alterid" {
+			t.Fatalf("source B ran without the owner's switch: %+v", c)
+		}
+	}
+	if n := f.n("TDSDeskKeepList"); n > 1 || (n == 1 && !strings.Contains(readText(logFile()), "Bank dates:")) {
+		t.Fatalf("the list asked %d times (the bank route's once at most)", n)
 	}
 	if b := beatBody(true, "open", "", nil, nil, nil); str(b["recorderSource"]) != "addon" {
 		t.Fatalf("beat: %v", b["recorderSource"])
