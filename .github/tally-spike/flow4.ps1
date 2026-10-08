@@ -721,6 +721,8 @@ elseif ($env:ONLY -eq 'backlog233') { try { Backlog233 } catch { Write-Host "Bac
 elseif ($env:ONLY -eq 'fast234') {
   try { Fast234 } catch { Write-Host "Fast234: $_ $($_.ScriptStackTrace)"; Result 'fast234' $false "the harness stopped: $_" $true }
   try { Backlog233 } catch { Write-Host "Backlog233: $_ $($_.ScriptStackTrace)"; Result 'backlog233' $false "the harness stopped: $_" $true }
+  try { F234OptionB } catch { Write-Host "F234OptionB: $_ $($_.ScriptStackTrace)"; Result 'fast234 option B' $false "the harness stopped: $_" $true }
+  try { F234Concurrency } catch { Write-Host "F234Concurrency: $_ $($_.ScriptStackTrace)"; Result 'fast234 one request in flight over the whole run' $false "the harness stopped: $_" $true }
 }
 elseif ($env:ONLY -eq 'push233') { try { Push233 } catch { Write-Host "Push233: $_ $($_.ScriptStackTrace)"; Result 'push233' $false "the harness stopped: $_" $true } }
 elseif ($env:ONLY -match '^(userfile|masterhook)(,(userfile|masterhook))?$') {

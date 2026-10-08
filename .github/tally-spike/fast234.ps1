@@ -17,7 +17,11 @@
 #     (5) no company marked slow (the bridge's log and its recorder-slow.json);
 #     (6) the last entry of the small company's day deleted on the screen (Day Book, End, Alt+D, as flow4 step 5): its line
 #         in the stub with the GUID Tally deleted, NOT held (Tally's bare 'Could not find Voucher:ID:n' read as gone), its
-#         MasterID asked by FinComVoucherObject at the proxy.
+#         MasterID asked by FinComVoucherObject at the proxy, and Tally's answer to it its bare 'Could not find Voucher'.
+#   2.4.0's gate adds: option B (a sales invoice of 1000+ items in the small company, its size calibrated so the request
+#     takes Tally over 2 s: asked, held with "FinCom asks once more at", asked ONE more time 5 minutes later, ended, never a
+#     third ask in the 7 minutes after) and one request in flight over the WHOLE run (the proxy counts the requests open
+#     when each arrives: never another); backlog233's old held lines include refetch ones (20 tries / final / refetch).
 $F234 = @{ dir = (Join-Path $out 'fast234'); vch = [int]$(if ($env:F234_VCH) { $env:F234_VCH } else { 40000 }); nHeld = 10; nEnd = 10; date = '20260401'
   shareName = 'fast234share'; share = '\\localhost\fast234share'; ok = $false; bigCo = 'FinCom Big Co'; endIds = @(); heldIds = @() }
 New-Item -ItemType Directory -Force $F234.dir | Out-Null
@@ -46,12 +50,14 @@ function F234Setup {
   $req = Join-Path $env:BRIDGE_DIST 'requests\entry-object.xml'
   if (Test-Path $req) {
     foreach ($mid in @(100, [int]($Slow232St.made / 2), [math]::Max(1, $Slow232St.made - 10))) {
-      $q = (Get-Content $req -Raw) -replace 'FinCom Spike Co', (S2Esc $F234.bigCo) -replace 'ID:99999<', "ID:$mid<"
+      $q = (Get-Content $req -Raw) -replace 'FinCom Spike Co', (S2Esc $F234.bigCo) -replace 'ID:99999<', "ID:$(P3Mid $mid)<"
       $t1 = Get-Date; $a = Post 9000 $q ''; $ms = [int]((Get-Date) - $t1).TotalMilliseconds
       Add-Content -Path $resultsFile -Encoding UTF8 -Value "MEASURE fast234: the bridge's entry request for MasterID $mid of the large company ($($Slow232St.made) entries, on the share) took $ms ms ($("$a".Length) bytes before the bridge's strip)"
     }
   } else { Add-Content -Path $resultsFile -Encoding UTF8 -Value 'INFO fast234: no requests\entry-object.xml from the build: the direct timing is skipped' }
   $F234.ok = $true
+  # 2.4.0's gate, option B: the invoice size that takes Tally over 2 s (calibrated before the bridges start)
+  F234ObSetup
   # 2.3.4's gate (the coordinator, 08-Oct-2026): the backlog233 checks (1)-(8) in the same run, on the same two companies
   $B233.cguid = [regex]::Match((ListCo 9000), '(?s)NAME="' + [regex]::Escape($F234.bigCo) + '".*?<GUID[^>]*>([^<]+)</GUID>').Groups[1].Value.Trim()
   if (-not $B233.cguid) {
@@ -95,6 +101,8 @@ function Fast234 {
     Start-Sleep 5
   }
   $cgBig = S2Guid $F234.bigCo
+  # 2.4.0's gate, option B: the large invoice saved first (its two asks are judged at the end, F234OptionB)
+  try { F234ObStart } catch { Write-Host "F234ObStart: $_ $($_.ScriptStackTrace)" }
   # (1) new saves in both companies, their lines written: each with its body, each entry request under 2 s at Tally
   $saves = @()
   for ($k = 1; $k -le 3; $k++) {
@@ -123,7 +131,8 @@ function Fast234 {
   if (-not @($px | Where-Object { $_.id }).Count) { Result 'fast234 the bridge through the timing proxy' $false 'no request of the bridge reached the proxy: the counts would prove nothing' $true; return }
   $ent = @($px | Where-Object { F234Entry $_ })
   $obj = @($ent | Where-Object { $_.id -eq 'FinComVoucherObject' })
-  $slowReq = @($obj | Where-Object { [double]$_.ms -ge 2000 })
+  # (the option B invoice is over 2 s on purpose: judged by F234OptionB, not here)
+  $slowReq = @($obj | Where-Object { [double]$_.ms -ge 2000 -and -not ($F234.obMid -and "$($_.mid)" -eq "$($F234.obMid)" -and $_.company -eq $co1) })
   $saveMids = @($saves | ForEach-Object { "$($_.mid)" })
   $late = @($res1 | Where-Object { -not $_.ok })
   Result 'fast234 (1) each new save in both companies in the stub with its body; each entry request answered in under 2 s' ($late.Count -eq 0 -and $slowReq.Count -eq 0 -and $obj.Count -gt 0) ("saves: {0}; FinComVoucherObject requests at the proxy: {1}, ms {2}; 2 s or more: {3}" -f (($res1 | ForEach-Object { "$($_.co)/$($_.mid) $(if ($_.ok) { "body after $($_.s) s" } else { 'NO BODY in 30 s' })" }) -join '; '), $obj.Count, (($obj | ForEach-Object { [int]$_.ms }) -join ','), $slowReq.Count)
@@ -165,12 +174,108 @@ function F234Delete {
   KeysTo 9000 '{ESC}' 1; KeysTo 9000 '{ESC}' 1
   $after = Vouchers 9000 $co1
   $del = @($before | Where-Object { $_.mid -notin @($after | ForEach-Object mid) })[0]
+  if ($del) { $null = P3Mid $del.mid }
   if (-not $del) { Result 'fast234 (6) an entry deleted on the screen: its line proven deleted here' $false ("the keys deleted nothing in '{0}' ({1} entries before, {2} after; see the f234-6 screens)" -f $co1, @($before).Count, @($after).Count) $true; return }
   $hit = WaitLine $m { $_.ev -eq 'deleted' -and $_.company -eq $co1 -and "$($_.mid)" -eq "$($del.mid)" } 180
   $x = @($hit | Where-Object bid -eq $B[1].id)[0]
   Start-Sleep 5
   $asked = @(@(F234Proxy) | Select-Object -Skip $p0 | Where-Object { $_.id -eq 'FinComVoucherObject' -and "$($_.mid)" -eq "$($del.mid)" })
   $said = @(S2BridgeLog | Where-Object { $_ -match ('delete of mid ' + $del.mid + ':') } | Select-Object -Last 3)
-  Result 'fast234 (6) an entry deleted on the screen: its line proven deleted here' ([bool]$x -and $x.guid -eq $del.guid -and -not $x.held -and $asked.Count -gt 0) `
-    ("Tally deleted mid {0} guid {1} no {2}; {3}; FinComVoucherObject for mid {0} at the proxy: {4} ({5} ms); bridge log: {6}" -f $del.mid, $del.guid, $del.vno, (Ev $x), $asked.Count, (($asked | ForEach-Object { [int]$_.ms }) -join ','), $(if ($said.Count) { $said -join ' | ' } else { 'none' }))
+  # 2.4.0's gate: proven by Tally's own answer to that ask: its bare 'Could not find Voucher' (the proxy reads the answer)
+  $nf = @($asked | Where-Object { $_.nf })
+  Result 'fast234 (6) an entry deleted on the screen: its line proven deleted here (Tally answered "Could not find Voucher")' ([bool]$x -and $x.guid -eq $del.guid -and -not $x.held -and $asked.Count -gt 0 -and $nf.Count -gt 0) `
+    ("Tally deleted mid {0} guid {1} no {2}; {3}; FinComVoucherObject for mid {0} at the proxy: {4} ({5} ms); Tally's answer 'Could not find Voucher': {6} ('{7}'); bridge log: {8}" -f $del.mid, $del.guid, $del.vno, (Ev $x), $asked.Count, (($asked | ForEach-Object { [int]$_.ms }) -join ','), $nf.Count, $(@($asked | ForEach-Object { $_.ans })[0]), $(if ($said.Count) { $said -join ' | ' } else { 'none' }))
+}
+
+# ---- 2.4.0's gate, option B (the owner's answer B of 08-Oct-2026, in 2.3.4/2.3.5): an entry whose fast request takes over
+# 2 s at Tally is held with "FinCom asks once more at HH:MM", asked ONE more time 5 minutes (RecorderStopRetrySec) later,
+# then ended; never a third ask. The entry: a sales invoice of $F234.obItems items (600 or more; Tally's object export
+# takes about 3 ms an item, by the voucher's own size, not the company's) in the SMALL company, so the stop cannot be
+# confused with the large company. The size is calibrated in the setup (before the bridges start) by timing the bridge's
+# own request (requests\entry-object.xml) on a calibration invoice: the first size from 1000 whose answer takes 2.6 s or
+# more at Tally directly (1000, 1600, 2400, 3000 items)
+$F234.obItems = 0; $F234.obMid = ''; $F234.obT0 = $null; $F234.obDate = '20260402'
+function F234ObMasters {
+  $m = @('<UNIT NAME="Nos" ACTION="Create"><NAME>Nos</NAME><ISSIMPLEUNIT>Yes</ISSIMPLEUNIT></UNIT>')
+  $m += S2Led 'Sales' 'Sales Accounts'; $m += S2Led 'Output CGST' 'Duties & Taxes'; $m += S2Led 'Output SGST' 'Duties & Taxes'
+  $m += S2Led 'OB Party' 'Sundry Debtors' '<ISBILLWISEON>Yes</ISBILLWISEON>'
+  for ($i = 1; $i -le 3000; $i++) { $m += S2Item ('OBItem {0:d4}' -f $i) }
+  for ($i = 0; $i -lt $m.Count; $i += 1000) { $null = S2Imp $co1 'All Masters' $m[$i..([math]::Min($i + 999, $m.Count - 1))] "option B masters $i" }
+}
+function F234ObInvoice([int]$n, [string]$no, [string]$narr) {
+  $its = @(1..$n | ForEach-Object { 'OBItem {0:d4}' -f $_ })
+  S2Sales $F234.obDate $no 'OB Party' $its $narr
+}
+function F234ObTime($mid) {
+  $req = Join-Path $env:BRIDGE_DIST 'requests\entry-object.xml'
+  if (-not (Test-Path $req)) { return -1 }
+  $q = (Get-Content $req -Raw) -replace 'ID:99999<', "ID:$(P3Mid $mid)<"
+  $t1 = Get-Date
+  try { $a = (Invoke-WebRequest 'http://localhost:9000' -Method Post -Body $q -ContentType 'text/xml;charset=utf-8' -UseBasicParsing -TimeoutSec 120).RawContentLength } catch { $a = -1 }
+  $ms = [int]((Get-Date) - $t1).TotalMilliseconds
+  Write-Host "[optB] the bridge's entry request for MasterID $mid of '$co1': $ms ms, $a bytes"
+  return $ms
+}
+function F234ObSetup {
+  try {
+    F234ObMasters
+    foreach ($n in 1000, 1600, 2400, 3000) {
+      $r = S2Imp $co1 'Vouchers' @(F234ObInvoice $n ("OBCAL-$n") "option B calibration $n items") "option B calibration $n"
+      $mid = [regex]::Match($r.raw, '<LASTVCHID>(\d+)</LASTVCHID>').Groups[1].Value
+      if (-not $mid -or $r.created -lt 1) { Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO fast234 option B: the $n-item calibration invoice was not made ($(("$($r.raw)" -replace '\s+', ' ').Substring(0, [math]::Min(300, "$($r.raw)".Length))))"; continue }
+      $ms = @(F234ObTime $mid; F234ObTime $mid)
+      Add-Content -Path $resultsFile -Encoding UTF8 -Value "MEASURE fast234 option B: the bridge's entry request for a $n-item invoice of '$co1' (MasterID $mid) took $($ms -join ', ') ms at Tally directly"
+      if (($ms | Measure-Object -Minimum).Minimum -ge 2600) { $F234.obItems = $n; break }
+    }
+  } catch { Write-Host "F234ObSetup: $_ $($_.ScriptStackTrace)" }
+  if (-not $F234.obItems) { Add-Content -Path $resultsFile -Encoding UTF8 -Value 'INFO fast234 option B: no invoice size up to 3000 items took 2.6 s at Tally: option B cannot be shown here' }
+  else { Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO fast234 option B: a $($F234.obItems)-item invoice will be saved in '$co1' after the bridges start" }
+}
+# after the bridges' first looks: the invoice saved (its add-on lines written), the clock started
+function F234ObStart {
+  if (-not $F234.obItems) { return }
+  $F234.obT0 = Get-Date
+  $s = S2Import $co1 (F234ObInvoice $F234.obItems 'OB-GATE-1' "option B gate $($F234.obItems) items") 'option B gate'
+  $F234.obMid = "$($s.mid)"
+  Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO fast234 option B: the $($F234.obItems)-item invoice saved in '$co1' at $($F234.obT0.ToString('HH:mm:ss')), MasterID $($F234.obMid)"
+}
+function F234OptionB {
+  $nm = "fast234 option B: an entry over 2 s at Tally is asked once more after 5 min, then ended; never a third ask"
+  if (-not $F234.obItems) { Result $nm $false 'no invoice of up to 3000 items took 2.6 s at Tally in the calibration: not shown (see the MEASURE lines)' $true; return }
+  if ($F234.obMid -notmatch '^\d+$' -or $F234.obMid -eq '0') { Result $nm $false "the invoice was not saved (MasterID '$($F234.obMid)')" $true; return }
+  $mid = P3Mid $F234.obMid
+  $ask = { @(F234Proxy | Where-Object { $_.id -eq 'FinComVoucherObject' -and "$($_.mid)" -eq $mid -and $_.company -eq $co1 } | Sort-Object { [int64]$_.t0 }) }
+  # the second ask: due 5 minutes after the first (RecorderStopRetrySec), or later with the retry schedule; 15 min at most
+  $until = $F234.obT0.AddMinutes(15)
+  while ((Get-Date) -lt $until -and @(& $ask).Count -lt 2) { Start-Sleep 10 }
+  $a = @(& $ask)
+  # never a third: watched 7 more minutes after the second ask (more than one more 5-minute wait)
+  if ($a.Count -ge 2) { $end = [DateTimeOffset]::FromUnixTimeMilliseconds([int64]$a[1].t0).LocalDateTime.AddMinutes(7); while ((Get-Date) -lt $end) { Start-Sleep 15 } }
+  else { Start-Sleep 60 }
+  $a = @(& $ask)
+  $l = @((StubLines 0) | Where-Object { "$($_.mid)" -eq $mid -and $_.company -eq $co1 })
+  $held1 = @($l | Where-Object { $_.held -match 'asks once more at' })
+  $ends = @($l | Where-Object { $_.lid -like '*:resolved' })
+  $gap = if ($a.Count -ge 2) { [math]::Round(([int64]$a[1].t0 - [int64]$a[0].t0) / 1000.0, 1) } else { -1 }
+  $slow1 = $a.Count -ge 1 -and [double]$a[0].ms -ge 2000
+  $ok = $slow1 -and $a.Count -eq 2 -and $gap -ge 290 -and $held1.Count -ge 1 -and $ends.Count -ge 1
+  Result $nm $ok ("invoice of {0} items, MasterID {1}, saved {2}; FinComVoucherObject asks at the proxy: {3} ({4}); between the first and the second {5} s; held with the once-more words: {6}; ended (a :resolved line): {7}" -f `
+      $F234.obItems, $mid, $F234.obT0.ToString('HH:mm:ss'), $a.Count, (($a | ForEach-Object { "$($_.at) $([int]$_.ms) ms" }) -join ', '), $gap,
+      $(if ($held1.Count) { "'$($held1[0].held)' at $($held1[0].at)" } else { "no ($(@($l | ForEach-Object { "$($_.at) $($_.ev) lid $($_.lid) held '$($_.held)' body $([bool]$_.xml)" }) -join ' | '))" }),
+      $(if ($ends.Count) { ($ends | ForEach-Object { "$($_.at) $(if ($_.xml) { 'with its body' } else { "'$($_.held)'" })" }) -join ' | ' } else { 'none' }))
+}
+
+# ---- 2.4.0's gate: one request in flight over the WHOLE run: the proxy never had two of bridge 1's requests open at once
+# (each proxy line says how many others were open when it arrived; and by the times: none arrived before every earlier
+# one had its answer back)
+function F234Concurrency {
+  $px = @(F234Proxy | Where-Object { $_.t0 } | Sort-Object { [int64]$_.t0 })
+  if (-not $px.Count) { Result 'fast234 one request in flight over the whole run' $false 'no request of the bridge at the proxy' $true; return }
+  $byOpen = @($px | Where-Object { [int]$_.open -gt 0 })
+  $ov = @(); $maxT1 = [int64]0; $prev = $null
+  foreach ($r in $px) { if ($prev -and [int64]$r.t0 -lt $maxT1) { $ov += ('{0} {1}(mid {2}) arrived while {3}(mid {4}) was open' -f $r.at, $r.id, $r.mid, $prev.id, $prev.mid) }; if ([int64]$r.t1 -gt $maxT1) { $maxT1 = [int64]$r.t1; $prev = $r } }
+  $mo = ($px | ForEach-Object { [int]$_.maxOpen } | Measure-Object -Maximum).Maximum
+  $span = '{0}..{1}' -f $px[0].at, $px[-1].at
+  Result 'fast234 one request in flight over the whole run (the proxy never saw two of the bridge''s requests at once)' ($byOpen.Count -eq 0 -and $ov.Count -eq 0 -and [int]$mo -eq 0) `
+    ("{0} requests of bridge 1 at the proxy, {1}; arrived while another was open (the proxy's count): {2}; by the times: {3}; most others open at once: {4}" -f $px.Count, $span, $byOpen.Count, $(if ($ov.Count) { "$($ov.Count): " + (($ov | Select-Object -First 5) -join ' | ') } else { 'none' }), $mo)
 }

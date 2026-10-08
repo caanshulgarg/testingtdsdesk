@@ -202,7 +202,7 @@ function S2Import($co, $xml, $label) {
   elseif ($env:ONLY -eq 'fast234' -and $mid -gt 0) {
     # fast234 run 37720646660: Tally numbers the large company's Journals itself too (F234-BIG-1 became 8001) and listing
     # 40,000 entries is slow: its number and AlterID read by the object export of that one voucher (keyed, harness only)
-    $q = '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Object</TYPE><SUBTYPE>Voucher</SUBTYPE><ID TYPE="Name">ID:' + $mid + '</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + (S2Esc $co) + '</SVCURRENTCOMPANY></STATICVARIABLES><FETCHLIST><FETCH>VOUCHERNUMBER</FETCH><FETCH>ALTERID</FETCH></FETCHLIST></DESC></BODY></ENVELOPE>'
+    $q = '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Object</TYPE><SUBTYPE>Voucher</SUBTYPE><ID TYPE="Name">ID:' + (P3Mid $mid) + '</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + (S2Esc $co) + '</SVCURRENTCOMPANY></STATICVARIABLES><FETCHLIST><FETCH>VOUCHERNUMBER</FETCH><FETCH>ALTERID</FETCH></FETCHLIST></DESC></BODY></ENVELOPE>'
     $a = "$(Post 9000 $q '')"
     $n2 = [regex]::Match($a, '<VOUCHERNUMBER[^>]*>([^<]*)</VOUCHERNUMBER>').Groups[1].Value; $a2 = [regex]::Match($a, '<ALTERID[^>]*>\s*(\d+)').Groups[1].Value
     if ($n2) { $no = $n2 }; if ($a2) { $aid = [int64]$a2 }

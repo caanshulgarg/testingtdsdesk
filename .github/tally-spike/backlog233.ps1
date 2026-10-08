@@ -43,18 +43,19 @@ function B233Seed($h1) {
   for ($i = 0; $i -lt $B233.n; $i++) {
     $mid = $B233.mid0 + $i; $id = 'b233old{0:d3}' -f $i
     # 2.3.4 (a live finding on NWS144, 08-Oct-2026): some lines as an older bridge left them: at 20 tries (never asked
-    # again by 2.3.3) or final (not asked again); 2.3.4 asks each once with the fast request
-    $kind = if ($env:ONLY -eq 'fast234') { @('plain', 'tries20', 'final', 'plain')[$i % 4] } else { 'plain' }
+    # again by 2.3.3) or final (not asked again); 2.3.4 asks each once with the fast request. 2.4.0's gate: also lines FinCom
+    # listed again (refetch, after 2.3.0), each asked once and ended like the others
+    $kind = if ($env:ONLY -eq 'fast234') { @('plain', 'tries20', 'final', 'refetch', 'plain')[$i % 5] } else { 'plain' }
     $items[$id] = [ordered]@{ company = $Slow232St.co; companyGuid = $B233.cguid; type = 'Journal'; no = ('OLD-{0:d3}' -f $i); date = $B233.date; masterId = "$mid"
       savedAt = $yest; added = $yest; last = $last; tries = $(if ($kind -eq 'tries20') { 20 } else { 0 }); event = 'created'
-      why = $(if ($kind -eq 'tries20') { 'Tally did not give this entry after 20 tries' } elseif ($kind -eq 'final') { "Tally's voucher with that MasterID is not this line's entry" } else { "the entry was not read from Tally: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)" })
-      lineGuid = ''; lineFid = ''; idsMismatch = $false; final = ($kind -eq 'final'); lineAlter = 0; fromFinCom = $false; keepGuid = ''; keepAlter = ''; refetch = $false; triesVersion = '2.3.2'; again = $false; ledgerAgain = $false; slow = 1 }
+      why = $(if ($kind -eq 'tries20') { 'Tally did not give this entry after 20 tries' } elseif ($kind -eq 'refetch') { 'FinCom asked for this entry again' } elseif ($kind -eq 'final') { "Tally's voucher with that MasterID is not this line's entry" } else { "the entry was not read from Tally: Tally took longer than the recorder's limit; the bridge stopped waiting (2 s)" })
+      lineGuid = ''; lineFid = ''; idsMismatch = $false; final = ($kind -eq 'final'); lineAlter = 0; fromFinCom = $false; keepGuid = ''; keepAlter = ''; refetch = ($kind -eq 'refetch'); triesVersion = '2.3.2'; again = $false; ledgerAgain = $false; slow = 1 }
     if ($kind -ne 'plain') { $B233.odd += $id }
   }
   $f = Join-Path $sync 'recorder-held.json'
   [IO.File]::WriteAllText($f, (@{ items = $items } | ConvertTo-Json -Depth 5 -Compress), [Text.UTF8Encoding]::new($false))
   $B233.ids = @($items.Keys)
-  if ($B233.odd.Count) { Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO backlog233: of them, as an older bridge left them: $($B233.odd.Count) at 20 tries or final ($($B233.odd -join ', '))" }
+  if ($B233.odd.Count) { Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO backlog233: of them, as an older bridge left them: $($B233.odd.Count) at 20 tries, final or refetch ($($B233.odd -join ', '))" }
   Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO backlog233: $($B233.n) old held lines of '$($Slow232St.co)' seeded into $f before bridge 1 starts (MasterIDs $($B233.mid0)..$($B233.mid0 + $B233.n - 1), dated $($B233.date), saved yesterday, last asked 2 h ago)"
 }
 
@@ -241,7 +242,7 @@ function Backlog233 {
       [pscustomobject]@{ id = $id; asks = [int]$per[$m]; obj = $obj; ended = $rl.Count; words = "$(@($rl | ForEach-Object { if ($_.xml) { 'body' } else { $_.held } }) -join ' / ')" }
     }
     $bad = @($oddRes | Where-Object { $_.asks -ne 1 -or $_.obj -ne 1 -or $_.ended -lt 1 })
-    Result 'backlog233 fast234: the old lines at 20 tries or final each asked once by FinComVoucherObject and ended' ($bad.Count -eq 0) ("{0} such lines; their ends: {1}; not so: {2}" -f $oddRes.Count, (($oddRes | Select-Object -First 3 | ForEach-Object { "$($_.id): $($_.words)" }) -join ' | '), $(if ($bad.Count) { ($bad | ForEach-Object { "$($_.id) asks $($_.asks) object $($_.obj) ended $($_.ended)" }) -join ', ' } else { 'none' }))
+    Result 'backlog233 fast234: the old held lines (20 tries / final / refetch) each asked once by FinComVoucherObject and ended' ($bad.Count -eq 0) ("{0} such lines; their ends: {1}; not so: {2}" -f $oddRes.Count, (($oddRes | Select-Object -First 3 | ForEach-Object { "$($_.id): $($_.words)" }) -join ' | '), $(if ($bad.Count) { ($bad | ForEach-Object { "$($_.id) asks $($_.asks) object $($_.obj) ended $($_.ended)" }) -join ', ' } else { 'none' }))
   }
   Result 'backlog233 (2) no more than one request per old held line' ($over.Count -eq 0) ("{0} old lines; {1} asked once, {2} never asked; asked more than once: {3}; {4} of them ended (their :resolved line in the stub)" -f $B233.n, $per.Count, ($B233.n - $per.Count), $(if ($over.Count) { $over -join ', ' } else { 'none' }), $done)
   # (3) nothing sent while a previous request was still at Tally: each request reached the proxy after the one before it

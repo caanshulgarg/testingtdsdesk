@@ -19,6 +19,17 @@ def delay_for(i, co):
     except Exception:
         return 0
 LOCK = threading.Lock()
+# 2.4.0's gate (one request in flight): how many of the bridge's requests are open at the proxy (arrived, answer not yet
+# given back) when each one arrives; each line carries 'open' (the others open then, 0 when alone) and 'maxOpen' so far
+OPEN = {'n': 0, 'max': 0}
+OPEN_LOCK = threading.Lock()
+# fast234 (6) on 2.4.0's gate: whether Tally's answer is its bare 'Could not find Voucher' (a MasterID it no longer has)
+def notfound(d):
+    s = d[:4000].decode('utf-8', 'replace')
+    if d[:2] in (b'\xff\xfe', b'\xfe\xff'):
+        try: s = d[:8000].decode('utf-16', 'replace')
+        except Exception: pass
+    return ('Could not find Voucher' in s), (s.strip()[:200] if len(d) < 600 else '')
 def info(b):
     s = b[:20000].decode('utf-8', 'replace')
     if b[:2] in (b'\xff\xfe', b'\xfe\xff'):
@@ -35,6 +46,15 @@ class H(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
     def go(self, method):
         t0 = time.time()
+        with OPEN_LOCK:
+            others = OPEN['n']; OPEN['n'] += 1; OPEN['max'] = max(OPEN['max'], OPEN['n'] - 1)
+            mx = OPEN['max']
+        try:
+            self.go2(method, t0, others, mx)
+        finally:
+            with OPEN_LOCK:
+                OPEN['n'] -= 1
+    def go2(self, method, t0, others, mx):
         n = int(self.headers.get('Content-Length') or 0)
         body = self.rfile.read(n) if n else b''
         i, tr, co, mid = info(body)
@@ -62,9 +82,10 @@ class H(BaseHTTPRequestHandler):
         except Exception as e:
             gone = True
         self.close_connection = True
+        nf, small = notfound(data) if data else (False, '')
         with LOCK, open(LOG, 'a', encoding='utf-8') as f:
             f.write(json.dumps({'t0': round(t0 * 1000), 't1': round(t1 * 1000), 'ms': round((t1 - t0) * 1000), 'at': time.strftime('%H:%M:%S', time.localtime(t0)),
-                                'id': i, 'req': tr, 'company': co, 'mid': mid, 'in': len(body), 'out': len(data), 'status': st, 'err': err, 'clientGone': gone, 'delay': dl}) + '\n')
+                                'id': i, 'req': tr, 'company': co, 'mid': mid, 'in': len(body), 'out': len(data), 'status': st, 'err': err, 'clientGone': gone, 'delay': dl, 'open': others, 'maxOpen': mx, 'nf': nf, 'ans': small}) + '\n')
     def do_POST(self): self.go('POST')
     def do_GET(self): self.go('GET')
     def log_message(self, *a): pass
