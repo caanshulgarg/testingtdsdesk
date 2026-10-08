@@ -1,0 +1,233 @@
+[07:17:29.738] push-design on TallyPrime 7.1: reps 5, heavy 3000 ledgers / 3000 items / up to 30000 vouchers (40 min), postings 1
+[07:17:30.813] system clock step after timeBeginPeriod(1): 0.571 ms (min 0.004, max 7.3694)
+[07:17:30.836] two files written 2 ms apart: NTFS write times 12.995 ms apart
+[07:17:30.855] light company folder: D:\a\_temp\TallyData\100000
+[07:17:33.888] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[07:18:03.552] Tally started (setup-light) in 29.7 s; company open: True
+[07:18:03.563] company GUID 731803af-a55f-4dda-87cd-d1677a1f2cf0
+[07:18:05.627] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[07:18:06.984] import light masters: 60 sent, created 59, errors 0, 321 ms
+[07:18:07.166] import template s5 (all fields): 1 sent, created 1, errors 0, 113.3 ms
+[07:18:07.475] import template s50 (all fields): 1 sent, created 1, errors 0, 303.2 ms
+[07:18:07.509] import template rc (all fields): 1 sent, created 1, errors 0, 32.1 ms
+[07:18:07.515] templates: s5 all fields; rc all fields; s50 all fields
+[07:18:07.571]   template Receipt 1 20261001 mid 4 aid 4 731803af-a55f-4dda-87cd-d1677a1f2cf0-00000004
+[07:18:07.572]   template Sales 1 20261002 mid 2 aid 2 731803af-a55f-4dda-87cd-d1677a1f2cf0-00000002
+[07:18:07.573]   template Sales 2 20261031 mid 3 aid 3 731803af-a55f-4dda-87cd-d1677a1f2cf0-00000003
+[07:18:07.746] company feature fields (by name): ISBATCHWISEON=No, PREVISMULTIGODOWNON=No, PREVISTRACKINGON=No, ISPAYROLLON=No, PREVISSALESORDERSON=No, PREVISPURCORDERSON=No, ISEXCISEMFGRTRADERON=No, ISPAYROLLSTATON=No, ISCOSTTRACKINGON=No, NOTIFYOFEXPIRY=No, ISTRACKVOUCHERSON=No, RESETTRACKEDCHANGES=No
+[07:18:07.764] import company features by XML: 1 sent, created 0, errors 0, 14.8 ms
+[07:18:07.775] after the XML alter: ISBATCHWISEON=Yes, PREVISMULTIGODOWNON=Yes, PREVISTRACKINGON=Yes, ISPAYROLLON=Yes, PREVISSALESORDERSON=Yes, PREVISPURCORDERSON=Yes, ISEXCISEMFGRTRADERON=No, ISPAYROLLSTATON=No, ISCOSTTRACKINGON=No, NOTIFYOFEXPIRY=No, ISTRACKVOUCHERSON=No, RESETTRACKEDCHANGES=No
+[07:19:31.822] after F11 (show more features only): ISBATCHWISEON=Yes, PREVISMULTIGODOWNON=Yes, PREVISTRACKINGON=Yes, ISPAYROLLON=Yes, PREVISSALESORDERSON=Yes, PREVISPURCORDERSON=Yes, ISEXCISEMFGRTRADERON=No, ISPAYROLLSTATON=No, ISCOSTTRACKINGON=No, NOTIFYOFEXPIRY=No, ISTRACKVOUCHERSON=No, RESETTRACKEDCHANGES=No
+[07:19:31.840] voucher types: Attendance, Contra, Credit Note, Debit Note, Delivery Note, Job Work In Order, Job Work Out Order, Journal, Material In, Material Out, Memorandum, Payment, Payroll, Physical Stock, Purchase, Purchase Order, Receipt, Receipt Note, Rejections In, Rejections Out, Reversing Journal, Sales, Sales Order, Stock Journal
+[07:19:31.853] voucher type fields: active ISACTIVE; manufacturing ASMFGJRNL
+[07:19:31.902] import voucher types active, manufacturing journal: 9 sent, created 1, errors 0, 47.1 ms
+[07:19:33.092] import type masters (godowns, batch items, employees, pay heads, supplier): 258 sent, created 258, errors 0, 1170.8 ms
+[07:19:33.104] import attendance type: 1 sent, created 0, errors 0, 9.1 ms; Tally: Unit &apos;Days&apos; does not exist!
+[07:19:33.115] import attendance type: 1 sent, created 0, errors 0, 9 ms; Tally: Unit &apos;Days&apos; does not exist!
+[07:19:33.125] import attendance type: 1 sent, created 0, errors 0, 8.5 ms; Tally: Unit &apos;Days&apos; does not exist!
+[07:19:33.134] import attendance type: 1 sent, created 0, errors 0, 8.4 ms; Tally: Unit &apos;Days&apos; does not exist!
+[07:19:33.144] import attendance type: 1 sent, created 0, errors 0, 8.4 ms; Tally: Unit &apos;Days&apos; does not exist!
+[07:19:33.153] import attendance type: 1 sent, created 0, errors 0, 8.3 ms; Tally: Unit &apos;Days&apos; does not exist!
+[07:19:33.162] import attendance type: 1 sent, created 0, errors 0, 7.9 ms; Tally: Unit &apos;Days&apos; does not exist!
+[07:19:33.171] import attendance type: 1 sent, created 0, errors 0, 8.2 ms; Tally: Unit &apos;Days&apos; does not exist!
+[07:19:33.180] import attendance type: 1 sent, created 0, errors 0, 8.1 ms; Tally: Unit &apos;Days&apos; does not exist!
+[07:19:33.190] import attendance type: 1 sent, created 0, errors 0, 8.2 ms; Tally: Unit &apos;Days&apos; does not exist!
+[07:19:33.199] import attendance type: 1 sent, created 0, errors 0, 8.3 ms; Tally: Unit &apos;Days&apos; does not exist!
+[07:19:33.208] import attendance type: 1 sent, created 0, errors 0, 8.6 ms; Tally: Unit &apos;Days&apos; does not exist!
+[07:19:33.393] import template payroll50 (form 1 of 5): 1 sent, created 0, errors 0, 20.3 ms
+[07:19:33.413] import template payroll50 (form 2 of 5): 1 sent, created 0, errors 0, 18.5 ms
+[07:19:33.436] import template payroll50 (form 3 of 5): 1 sent, created 0, errors 0, 21.8 ms
+[07:19:33.460] import template payroll50 (form 4 of 5): 1 sent, created 0, errors 0, 22.3 ms
+[07:19:33.490] import template payroll50 (form 5 of 5): 1 sent, created 1, errors 0, 28.4 ms
+[07:19:33.528] import template payroll200 (form 1 of 5): 1 sent, created 0, errors 0, 35.9 ms
+[07:19:33.559] import template payroll200 (form 2 of 5): 1 sent, created 0, errors 0, 28.3 ms
+[07:19:33.608] import template payroll200 (form 3 of 5): 1 sent, created 0, errors 0, 47.5 ms
+[07:19:33.637] import template payroll200 (form 4 of 5): 1 sent, created 0, errors 0, 26.9 ms
+[07:19:33.685] import template payroll200 (form 5 of 5): 1 sent, created 1, errors 0, 46.6 ms
+[07:19:33.705] import template attendance (form 1 of 1): 1 sent, created 0, errors 0, 18.6 ms
+[07:19:33.791] import template stockjournal (form 1 of 1): 1 sent, created 1, errors 0, 84.9 ms
+[07:19:33.832] import template mfgjournal (form 1 of 1): 1 sent, created 1, errors 0, 38.5 ms
+[07:19:33.869] import template salesorder (form 1 of 3): 1 sent, created 0, errors 0, 35.5 ms; Tally: Bad Order Number in Voucher!
+[07:19:33.901] import template salesorder (form 2 of 3): 1 sent, created 0, errors 0, 30.8 ms; Tally: Bad Order Number in Voucher!
+[07:19:33.934] import template salesorder (form 3 of 3): 1 sent, created 0, errors 0, 31.2 ms; Tally: Bad Order Number in Voucher!
+[07:19:33.963] import template purchaseorder (form 1 of 3): 1 sent, created 0, errors 0, 27.1 ms; Tally: Bad Order Number in Voucher!
+[07:19:33.992] import template purchaseorder (form 2 of 3): 1 sent, created 0, errors 0, 28 ms; Tally: Bad Order Number in Voucher!
+[07:19:34.021] import template purchaseorder (form 3 of 3): 1 sent, created 0, errors 0, 27.6 ms; Tally: Bad Order Number in Voucher!
+[07:19:34.088] import template deliverynote (form 1 of 1): 1 sent, created 1, errors 0, 64.8 ms
+[07:19:34.155] import template receiptnote (form 1 of 1): 1 sent, created 1, errors 0, 65.9 ms
+[07:19:34.193] import template physicalstock (form 1 of 1): 1 sent, created 1, errors 0, 36.9 ms
+[07:19:34.494] import template salesbatch (form 1 of 1): 1 sent, created 1, errors 0, 298.9 ms
+[07:19:34.941] TDL $$MachineName => '' 
+[07:19:34.945] TDL $$CmpUserName => 'TALLY User' 
+[07:19:34.948] TDL $$SysInfo:WindowsUser => 'runneradmin' 
+[07:19:34.952] TDL $$SysInfo:WindowsUserName => '' 
+[07:19:34.954] TDL $$SysInfo:UserName => '' 
+[07:19:34.957] TDL $$SysInfo:LoginUser => '' 
+[07:19:34.960] TDL $$SysInfo:SystemName => 'runnervmfi6oq' 
+[07:19:34.963] TDL $$SysInfo:ComputerName => '' 
+[07:19:34.965] TDL $$SysInfo:MachineName => '' 
+[07:19:34.970] TDL $$SysInfo:IPAddress => '10.1.0.10,192.168.160.1' 
+[07:19:34.973] TDL $$SysInfo:ApplicationPath => 'C:\Program Files\TallyPrime' 
+[07:19:34.977] TDL $$SysInfo:TempPath => '' 
+[07:19:35.011] fast234 (fast234l) on TallyPrime 7.1: today's request 2927 chars, 61 fields
+[07:19:35.049] fast234l on TallyPrime 7.1: the entry kinds (L2) and the 200 / 500-item invoices (M3)
+[07:19:35.070] import credit / debit note types active: 2 sent, created 0, errors 0, 17.8 ms
+[07:19:35.088] import tds: company TDS on, TAN: 1 sent, created 0, errors 0, 15.5 ms
+[07:20:29.060] tds: nature 'PD Contract Work' as a TDS Rate in Tally: True
+[07:20:29.103] import tds: party, expense, TDS ledger: 3 sent, created 3, errors 0, 38.5 ms
+[07:20:29.184] import extra creditnote: 1 sent, created 1, errors 0, 51.2 ms
+[07:20:29.239] import extra creditnote-items: 1 sent, created 1, errors 0, 52.5 ms
+[07:20:29.285] import extra debitnote: 1 sent, created 1, errors 0, 44.6 ms
+[07:20:29.325] import extra journal-cc: 1 sent, created 1, errors 0, 38.7 ms
+[07:20:29.354] import extra bank-payment: 1 sent, created 1, errors 0, 27.7 ms
+[07:20:29.382] import extra bank-payment-cheque: 1 sent, created 1, errors 0, 27.7 ms
+[07:20:29.432] import extra voucher-mode-items: 1 sent, created 1, errors 0, 48.2 ms
+[07:20:29.467] import extra voucher-mode-items-nog: 1 sent, created 0, errors 0, 34.1 ms
+[07:20:29.503] import extra deleted: 1 sent, created 1, errors 0, 33.2 ms
+[07:20:30.591] import invoice BIG200-1: 1 sent, created 1, errors 0, 951.8 ms
+[07:20:33.476] import invoice BIG500-1: 1 sent, created 1, errors 0, 2309.8 ms
+[07:20:33.477] made: creditnote 1; creditnote-items 1; debitnote 1; journal-cc 1; bank-payment 1; bank-payment-cheque 1; voucher-mode-items 1; voucher-mode-items-nog 0; deleted 1; BIG200-1 1; BIG500-1 1
+[07:20:33.549] import delete DEL-1: 1 sent, created 0, errors 1, 6.7 ms; Tally: Voucher does not exist!
+[07:20:33.592] deleted DEL-1 (MasterID 20): still in Tally True
+[07:20:39.605] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[07:21:09.087] Tally started (l-tds) in 29.5 s; company open: True
+[07:21:11.092] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[07:22:08.575] TDS: entry saved: MasterID 23 Journal 4; TDS amount typed; OCR read the screens
+[07:22:15.390] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[07:22:45.393] Tally started (l-ask) in 30 s; company open: True
+[07:22:49.477] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[07:22:49.522] the company holds 24 vouchers:   (), Journal 1 (1), Receipt 1 (4), Sales 1 (2), Sales 2 (3), Credit Note 1 (13), Credit Note 2 (14), Debit Note 1 (15), Journal 2 (16), Payment 1 (17), Payment 2 (18), Sales 4 (19), Journal 3 (20), Sales 5 (21), Sales 6 (22), Journal 4 (23), Payroll 1 (5), Payroll 2 (6), Stock Journal 1 (7), PD Manufacturing Journal MJ-1 (8), Delivery Note 1 (9), Receipt Note 1 (10), Physical Stock 1 (11), Sales 3 (12)
+[07:22:50.616] L small journal-1: Journal 1 20260401 MasterID 1: object median 8.6 worst 8.6; bymaster median 42.8 worst 42.8; bynumber median 44.8 worst 44.8 ms
+[07:22:50.963] L small receipt-1: Receipt 1 20261001 MasterID 4: object median 10.5 worst 10.5; bymaster median 45.4 worst 45.4; bynumber median 56.6 worst 56.6 ms
+[07:22:51.299] L small sales-1: Sales 1 20261002 MasterID 2: object median 34.1 worst 34.1; bymaster median 67 worst 67; bynumber median 57.1 worst 57.1 ms
+[07:22:51.891] L small sales-2: Sales 2 20261031 MasterID 3: object median 119 worst 119; bymaster median 69.6 worst 69.6; bynumber median 69.9 worst 69.9 ms
+[07:22:52.131] L small credit_note-1: Credit Note 1 20261101 MasterID 13: object median 15.8 worst 15.8; bymaster median 46.4 worst 46.4; bynumber median 47 worst 47 ms
+[07:22:52.398] L small credit_note-2: Credit Note 2 20261101 MasterID 14: object median 13.4 worst 13.4; bymaster median 55.6 worst 55.6; bynumber median 58.3 worst 58.3 ms
+[07:22:52.626] L small debit_note-1: Debit Note 1 20261101 MasterID 15: object median 8.2 worst 8.2; bymaster median 46.2 worst 46.2; bynumber median 46.5 worst 46.5 ms
+[07:22:52.841] L small journal-2: Journal 2 20261101 MasterID 16: object median 7.5 worst 7.5; bymaster median 45 worst 45; bynumber median 48.2 worst 48.2 ms
+[07:22:53.067] L small payment-1: Payment 1 20261101 MasterID 17: object median 9.5 worst 9.5; bymaster median 49.2 worst 49.2; bynumber median 49 worst 49 ms
+[07:22:53.295] L small payment-2: Payment 2 20261101 MasterID 18: object median 8.1 worst 8.1; bymaster median 48.8 worst 48.8; bynumber median 50.1 worst 50.1 ms
+[07:22:53.654] L small sales-4: Sales 4 20261101 MasterID 19: object median 12.8 worst 12.8; bymaster median 58.2 worst 58.2; bynumber median 101 worst 101 ms
+[07:22:53.869] L small journal-3: Journal 3 20261101 MasterID 20: object median 6.8 worst 6.8; bymaster median 46 worst 46; bynumber median 47.1 worst 47.1 ms
+[07:22:55.943] L small sales-5: Sales 5 20261101 MasterID 21: object median 477.5 worst 477.5; bymaster median 119.3 worst 119.3; bynumber median 127.2 worst 127.2 ms
+[07:23:00.388] L small sales-6: Sales 6 20261101 MasterID 22: object median 1519.6 worst 1519.6; bymaster median 221.5 worst 221.5; bynumber median 233.6 worst 233.6 ms
+[07:23:00.615] L small journal-4: Journal 4 20261102 MasterID 23: object median 8.9 worst 8.9; bymaster median 47.8 worst 47.8; bynumber median 48.9 worst 48.9 ms
+[07:23:00.855] L small payroll-1: Payroll 1 20261201 MasterID 5: object median 11.4 worst 11.4; bymaster median 50.5 worst 50.5; bynumber median 50.8 worst 50.8 ms
+[07:23:01.140] L small payroll-2: Payroll 2 20261202 MasterID 6: object median 22.7 worst 22.7; bymaster median 55.9 worst 55.9; bynumber median 58.3 worst 58.3 ms
+[07:23:01.929] L small stock_journal-1: Stock Journal 1 20270101 MasterID 7: object median 196.2 worst 196.2; bymaster median 75.6 worst 75.6; bynumber median 85.1 worst 85.1 ms
+[07:23:02.262] L small pd_manufacturing_journal-mj-1: PD Manufacturing Journal MJ-1 20270102 MasterID 8: object median 25.4 worst 25.4; bymaster median 62.3 worst 62.3; bynumber median 71.4 worst 71.4 ms
+[07:23:02.580] L small delivery_note-1: Delivery Note 1 20270131 MasterID 9: object median 18.4 worst 18.4; bymaster median 65.4 worst 65.4; bynumber median 65.8 worst 65.8 ms
+[07:23:02.899] L small receipt_note-1: Receipt Note 1 20270201 MasterID 10: object median 17.6 worst 17.6; bymaster median 64.4 worst 64.4; bynumber median 64.6 worst 64.6 ms
+[07:23:03.161] L small physical_stock-1: Physical Stock 1 20270302 MasterID 11: object median 13.1 worst 13.1; bymaster median 50.8 worst 50.8; bynumber median 56.9 worst 56.9 ms
+[07:23:03.783] L small sales-3: Sales 3 20270331 MasterID 12: object median 121.9 worst 121.9; bymaster median 76.2 worst 76.2; bynumber median 80.9 worst 80.9 ms
+[07:23:03.804] L small deleted-mid (20): 8.2 ms, 53320 chars, vouchers 2, MasterID in the answer '20', type 'Journal'; 
+[07:23:03.809] L small ledger-mid (212): 3.1 ms, 53 chars, vouchers 0, MasterID in the answer '', type ''; 
+[07:23:03.813] L small never-mid (5023): 2.6 ms, 54 chars, vouchers 0, MasterID in the answer '', type ''; 
+[07:23:06.561] import heavy masters 0: 600 sent, created 600, errors 0, 2712.2 ms
+[07:23:24.008] import vouchers 0-999: 1000 sent, created 1000, errors 0, 17302.4 ms
+[07:23:42.362] import vouchers 1000-1999: 1000 sent, created 1000, errors 0, 18250 ms
+[07:24:01.864] import vouchers 2000-2999: 1000 sent, created 1000, errors 0, 19391.4 ms
+[07:24:20.499] import vouchers 3000-3999: 1000 sent, created 1000, errors 0, 18538.1 ms
+[07:24:40.533] import vouchers 4000-4999: 1000 sent, created 1000, errors 0, 19919.7 ms
+[07:25:00.549] import vouchers 5000-5999: 1000 sent, created 1000, errors 0, 19897.1 ms
+[07:25:19.591] import vouchers 6000-6999: 1000 sent, created 1000, errors 0, 18946.3 ms
+[07:25:38.269] import vouchers 7000-7999: 1000 sent, created 1000, errors 0, 18580.1 ms
+[07:25:56.770] import vouchers 8000-8999: 1000 sent, created 1000, errors 0, 18403.3 ms
+[07:26:16.908] import vouchers 9000-9999: 1000 sent, created 1000, errors 0, 20039.9 ms
+[07:26:37.257] import vouchers 10000-10999: 1000 sent, created 1000, errors 0, 20246.1 ms
+[07:26:57.258] import vouchers 11000-11999: 1000 sent, created 1000, errors 0, 19904.2 ms
+[07:27:18.111] import vouchers 12000-12999: 1000 sent, created 1000, errors 0, 20725.1 ms
+[07:27:37.291] import vouchers 13000-13999: 1000 sent, created 1000, errors 0, 19070.9 ms
+[07:27:56.786] import vouchers 14000-14999: 1000 sent, created 1000, errors 0, 19384.4 ms
+[07:28:18.166] import vouchers 15000-15999: 1000 sent, created 1000, errors 0, 21255.8 ms
+[07:28:38.831] import vouchers 16000-16999: 1000 sent, created 1000, errors 0, 20555.9 ms
+[07:29:00.105] import vouchers 17000-17999: 1000 sent, created 1000, errors 0, 21169.2 ms
+[07:29:23.233] import vouchers 18000-18999: 1000 sent, created 1000, errors 0, 23006.2 ms
+[07:29:43.687] import vouchers 19000-19999: 1000 sent, created 1000, errors 0, 20322.5 ms
+[07:30:02.303] import vouchers 20000-20999: 1000 sent, created 1000, errors 0, 18515.6 ms
+[07:30:20.790] import vouchers 21000-21999: 1000 sent, created 1000, errors 0, 18390.4 ms
+[07:30:49.349] import vouchers 22000-22999: 1000 sent, created 1000, errors 0, 28460.7 ms
+[07:31:08.872] import vouchers 23000-23999: 1000 sent, created 1000, errors 0, 19421.6 ms
+[07:31:28.237] import vouchers 24000-24999: 1000 sent, created 1000, errors 0, 19263.4 ms
+[07:31:47.691] import vouchers 25000-25999: 1000 sent, created 1000, errors 0, 19336.1 ms
+[07:32:06.998] import vouchers 26000-26999: 1000 sent, created 1000, errors 0, 19210.5 ms
+[07:32:26.314] import vouchers 27000-27999: 1000 sent, created 1000, errors 0, 19202.4 ms
+[07:32:45.607] import vouchers 28000-28999: 1000 sent, created 1000, errors 0, 19190.1 ms
+[07:33:04.907] import vouchers 29000-29999: 1000 sent, created 1000, errors 0, 19203.2 ms
+[07:33:26.563] import vouchers 30000-30999: 1000 sent, created 1000, errors 0, 21554.7 ms
+[07:33:45.749] import vouchers 31000-31999: 1000 sent, created 1000, errors 0, 18857.8 ms
+[07:34:04.287] import vouchers 32000-32999: 1000 sent, created 1000, errors 0, 18441.1 ms
+[07:34:22.819] import vouchers 33000-33999: 1000 sent, created 1000, errors 0, 18435.9 ms
+[07:34:41.303] import vouchers 34000-34999: 1000 sent, created 1000, errors 0, 18389.1 ms
+[07:34:59.821] import vouchers 35000-35999: 1000 sent, created 1000, errors 0, 18423.5 ms
+[07:35:18.386] import vouchers 36000-36999: 1000 sent, created 1000, errors 0, 18466.8 ms
+[07:35:37.315] import vouchers 37000-37999: 1000 sent, created 1000, errors 0, 18833.4 ms
+[07:35:56.031] import vouchers 38000-38999: 1000 sent, created 1000, errors 0, 18620.4 ms
+[07:36:14.765] import vouchers 39000-39999: 1000 sent, created 1000, errors 0, 18640.5 ms
+[07:36:33.482] import vouchers 40000-40999: 1000 sent, created 1000, errors 0, 18620.1 ms
+[07:36:52.220] import vouchers 41000-41999: 1000 sent, created 1000, errors 0, 18643.2 ms
+[07:37:11.055] import vouchers 42000-42999: 1000 sent, created 1000, errors 0, 18738.8 ms
+[07:37:29.929] import vouchers 43000-43999: 1000 sent, created 1000, errors 0, 18780.4 ms
+[07:37:48.812] import vouchers 44000-44999: 1000 sent, created 1000, errors 0, 18785.2 ms
+[07:38:07.694] import vouchers 45000-45999: 1000 sent, created 1000, errors 0, 18788.3 ms
+[07:38:26.547] import vouchers 46000-46999: 1000 sent, created 1000, errors 0, 18754.7 ms
+[07:38:45.546] import vouchers 47000-47999: 1000 sent, created 1000, errors 0, 18903.4 ms
+[07:39:04.757] import vouchers 48000-48999: 1000 sent, created 1000, errors 0, 19112.6 ms
+[07:39:23.902] import vouchers 49000-49999: 1000 sent, created 1000, errors 0, 19047.8 ms
+[07:39:42.796] import vouchers 50000-50999: 1000 sent, created 1000, errors 0, 18798.8 ms
+[07:40:01.794] import vouchers 51000-51999: 1000 sent, created 1000, errors 0, 18903.3 ms
+[07:40:20.628] import vouchers 52000-52999: 1000 sent, created 1000, errors 0, 18735.9 ms
+[07:40:39.607] import vouchers 53000-53999: 1000 sent, created 1000, errors 0, 18884 ms
+[07:40:58.556] import vouchers 54000-54999: 1000 sent, created 1000, errors 0, 18852.6 ms
+[07:41:17.550] import vouchers 55000-55999: 1000 sent, created 1000, errors 0, 18898.4 ms
+[07:41:36.526] import vouchers 56000-56999: 1000 sent, created 1000, errors 0, 18880 ms
+[07:41:55.603] import vouchers 57000-57999: 1000 sent, created 1000, errors 0, 18983.4 ms
+[07:42:14.733] import vouchers 58000-58999: 1000 sent, created 1000, errors 0, 19033.6 ms
+[07:42:33.689] import vouchers 59000-59999: 1000 sent, created 1000, errors 0, 18860.6 ms
+[07:42:52.738] import vouchers 60000-60999: 1000 sent, created 1000, errors 0, 18951.6 ms
+[07:43:11.731] import vouchers 61000-61999: 1000 sent, created 1000, errors 0, 18899.4 ms
+[07:43:30.673] import vouchers 62000-62999: 1000 sent, created 1000, errors 0, 18847.7 ms
+[07:43:49.688] import vouchers 63000-63999: 1000 sent, created 1000, errors 0, 18920.8 ms
+[07:44:08.752] import vouchers 64000-64999: 1000 sent, created 1000, errors 0, 18966.9 ms
+[07:44:27.734] import vouchers 65000-65999: 1000 sent, created 1000, errors 0, 18886.9 ms
+[07:44:46.830] import vouchers 66000-66999: 1000 sent, created 1000, errors 0, 18999.5 ms
+[07:45:05.874] import vouchers 67000-67999: 1000 sent, created 1000, errors 0, 18949.7 ms
+[07:45:24.859] import vouchers 68000-68999: 1000 sent, created 1000, errors 0, 18888.3 ms
+[07:45:44.092] import vouchers 69000-69999: 1000 sent, created 1000, errors 0, 19137.6 ms
+[07:46:03.447] import vouchers 70000-70999: 1000 sent, created 1000, errors 0, 19258.5 ms
+[07:46:22.653] import vouchers 71000-71999: 1000 sent, created 1000, errors 0, 19111.2 ms
+[07:46:41.724] import vouchers 72000-72999: 1000 sent, created 1000, errors 0, 18975 ms
+[07:47:01.033] import vouchers 73000-73999: 1000 sent, created 1000, errors 0, 19214.2 ms
+[07:47:20.211] import vouchers 74000-74999: 1000 sent, created 1000, errors 0, 19080.7 ms
+[07:47:39.527] import vouchers 75000-75999: 1000 sent, created 1000, errors 0, 19220.4 ms
+[07:47:58.764] import vouchers 76000-76999: 1000 sent, created 1000, errors 0, 19141.3 ms
+[07:48:18.392] import vouchers 77000-77999: 1000 sent, created 1000, errors 0, 19533 ms
+[07:48:37.842] import vouchers 78000-78999: 1000 sent, created 1000, errors 0, 19354.7 ms
+[07:48:57.264] import vouchers 79000-79999: 1000 sent, created 1000, errors 0, 19328.8 ms
+[07:49:16.766] import vouchers 80000-80999: 1000 sent, created 1000, errors 0, 19406.8 ms
+[07:49:36.216] import vouchers 81000-81999: 1000 sent, created 1000, errors 0, 19354.9 ms
+[07:49:55.650] import vouchers 82000-82999: 1000 sent, created 1000, errors 0, 19338.8 ms
+[07:50:14.725] import vouchers 83000-83999: 1000 sent, created 1000, errors 0, 18981.9 ms
+[07:50:33.914] import vouchers 84000-84999: 1000 sent, created 1000, errors 0, 19093.5 ms
+[07:50:52.990] import vouchers 85000-85999: 1000 sent, created 1000, errors 0, 18979.8 ms
+[07:51:12.210] import vouchers 86000-86999: 1000 sent, created 1000, errors 0, 19123.4 ms
+[07:51:31.489] import vouchers 87000-87999: 1000 sent, created 1000, errors 0, 19184.2 ms
+[07:51:50.912] import vouchers 88000-88999: 1000 sent, created 1000, errors 0, 19325.2 ms
+[07:52:10.082] import vouchers 89000-89999: 1000 sent, created 1000, errors 0, 19074.2 ms
+[07:52:29.294] import vouchers 90000-90999: 1000 sent, created 1000, errors 0, 19116.5 ms
+[07:52:48.417] import vouchers 91000-91999: 1000 sent, created 1000, errors 0, 19030.3 ms
+[07:53:07.743] import vouchers 92000-92999: 1000 sent, created 1000, errors 0, 19229.6 ms
+[07:53:26.947] import vouchers 93000-93999: 1000 sent, created 1000, errors 0, 19111.4 ms
+[07:53:46.205] import vouchers 94000-94999: 1000 sent, created 1000, errors 0, 19160.6 ms
+[07:54:05.438] import vouchers 95000-95999: 1000 sent, created 1000, errors 0, 19139 ms
+[07:54:24.646] import vouchers 96000-96999: 1000 sent, created 1000, errors 0, 19112 ms
+[07:54:44.084] import vouchers 97000-97999: 1000 sent, created 1000, errors 0, 19339.6 ms
+[07:55:03.267] import vouchers 98000-98999: 1000 sent, created 1000, errors 0, 19086.7 ms
+[07:55:22.566] import vouchers 99000-99999: 1000 sent, created 1000, errors 0, 19203.5 ms
+[07:55:23.895] import invoice BIG200-2 (at 100,000): 1 sent, created 1, errors 0, 1220 ms
+[07:55:27.066] import invoice BIG500-2 (at 100,000): 1 sent, created 1, errors 0, 2679 ms
+[07:55:31.072] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[07:56:00.617] Tally started (l-100k) in 29.5 s; company open: True
+[07:56:02.626] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[07:56:57.749] grown: 100025 vouchers
+[07:57:00.755] done (fast234 fast234l)
