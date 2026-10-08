@@ -2,7 +2,7 @@
 Each line: the bridge's version, its last request to Tally (kind, time taken, when) and its longest today, from the
 heartbeat (info.beat.reqs / info.bridges[id].reqs), and the reading state: Reading / Paused / (bridge 2.3.1, the owner's
 last change: never a stop by itself) "Tally did not answer in time at 12:14; trying again by itself at 12:15" / a 2.3.0
-bridge's stop by itself in plain words, no Resume / Stopped from FinCom: <why> / Offline since ... . An owner has Stop reading on this computer, Stop reading on all
+bridge's stop by itself in plain words, no Resume / Reading stopped from FinCom: <why> / Offline since ... . An owner has Stop reading on this computer, Stop reading on all
 computers, Resume reading, and (the owner's rule of 05-Oct-2026: new versions go to every computer by themselves, no
 pilot, no approval) Hold version X, Let version X go, Roll back to <version>, Clear the rollback and Withdraw version X
 (X: the setup on this site, assets/bridge-go/latest.json); a member sees none of them. Each button calls its RPC (migration-35) with the right
@@ -118,7 +118,7 @@ with sync_playwright() as p:
        and pg.get_attribute('#app [data-computer="%s"]' % D3, "data-read-state") == "retrying" and "1 over 20 s" in l3 and pg.locator('#app [data-read-resume="%s"]' % D3).count() == 0,
        "a 2.3.0 bridge's stop by itself in plain words, no Resume, and the requests over 20 s (%s)" % l3)
     l4 = line(D4)
-    ok("Stopped from FinCom: Tally hangs on the bank ledger" in l4 and pg.get_attribute('#app [data-computer="%s"]' % D4, "data-read-state") == "fincomstop", "Stopped from FinCom, with its reason (%s)" % l4)
+    ok("Reading stopped from FinCom: Tally hangs on the bank ledger" in l4 and pg.get_attribute('#app [data-computer="%s"]' % D4, "data-read-state") == "fincomstop", "Reading stopped from FinCom, with its reason (%s)" % l4)
     l5 = line(D5)
     ok("Offline since" in l5 and pg.get_attribute('#app [data-computer="%s"]' % D5, "data-read-state") == "offline" and "FinCom Bridge 2.1.3" in l5, "Offline since ... (%s)" % l5)
     # ---- 2.1.6: the bridge posts only to the companies in its PostOnly setting (info.bridges[id].postOnly, else info.beat.postOnly)
@@ -221,7 +221,7 @@ with sync_playwright() as p:
     E(SETUP, [DEVS, STOPS + [{"id": 8, "device_id": None, "action": "stop", "reason": "Bridge update", "stopped_at": "ago:1", "cleared_at": None}], [], "owner"]); pg.wait_for_timeout(300)
     E("() => navHome('tally')"); pg.wait_for_timeout(1500); more()
     l1 = line(D1)
-    ok("Stopped from FinCom: Bridge update" in l1 and sel("[data-read-resume]").count() == 0 and sel("[data-read-resume-all]").count() == 1 and sel("[data-read-stop]").count() == 0,
+    ok("Reading stopped from FinCom: Bridge update" in l1 and sel("[data-read-resume]").count() == 0 and sel("[data-read-resume-all]").count() == 1 and sel("[data-read-stop]").count() == 0,
        "all computers stopped: every line says so, and only Resume reading on all computers (%s)" % l1)
     sel("[data-read-resume-all]").click(); pg.wait_for_timeout(600)
     ok(["tally_read_resume", {"p_device": None}] in E("window.__calls"), "Resume reading on all computers -> tally_read_resume(null)")
@@ -243,7 +243,7 @@ with sync_playwright() as p:
     # ---- a member: the lines, no buttons
     E(SETUP, [DEVS, STOPS, [], "member"]); pg.wait_for_timeout(300)
     E("() => navHome('tally')"); pg.wait_for_timeout(1500); more()
-    ok(pg.locator("#app [data-computer]").count() == 5 and "Stopped from FinCom: Tally hangs on the bank ledger" in line(D4), "a member sees the lines")
+    ok(pg.locator("#app [data-computer]").count() == 5 and "Reading stopped from FinCom: Tally hangs on the bank ledger" in line(D4), "a member sees the lines")
     ok("Posts only to: ZZ TEST" in line(D1), "a member sees Posts only to: ZZ TEST too (information, not a control)")
     ok(sel("[data-read-stop], [data-read-stop-all], [data-read-resume], [data-read-resume-all], [data-release-pilot], [data-release-approve], [data-release-hold], [data-release-rollback]").count() == 0, "a member sees none of the owner's buttons")
     # ---- live: a beat passed on by FinCom's cloud changes the line at once

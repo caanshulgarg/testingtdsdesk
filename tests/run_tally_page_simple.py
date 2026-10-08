@@ -55,6 +55,7 @@ SETUP = """([devs, stops, companies, role]) => {
     if (/^tally_devices/.test(path)) return copy(window.__devs);
     if (/^tally_read_stops/.test(path)) return copy(window.__stops);
     if (/^tally_companies/.test(path)) return copy(window.__companies);
+    if (/^tally_recorder_lines/.test(path)) return copy(window.__lines || []);
     return [];
   };
   TCloud.restAll = async (u) => Cloud.api(u);
@@ -64,6 +65,23 @@ SETUP = """([devs, stops, companies, role]) => {
   document.body.classList.add("is-test"); S.firm.firmName = S.firm.firmName || "Test Firm";
   S.tallyOld = false; S.tallyTab = "computers"; S.tallyMore = {}; navHome("tally");
 }"""
+# Sync activity's flow (the owner: "in tally sync there is a yellow field coming all the time"): lines Tally sent, as
+# tally_recorder_lines keeps them. ENDED: the bridge gave up, a person must upload that day's Day Book; FRESH: still
+# being fetched (received a few minutes ago); NEW: under 2 minutes, nothing to say yet
+ENDED_WHY = "Tally did not give this entry when asked again; upload that day's Day Book to settle it"
+def rline(i, company, day, state="held", why=ENDED_WHY, rec="ago:600", d=D1):
+    return {"id": i, "client_id": "CID", "book_id": "b1", "device_id": d, "pc": "NWS144", "company": company, "line_id": "L%d" % i, "event": "created", "object_guid": "g-%d" % i,
+            "alter_id": 900 + i, "vch_type": "Sales", "vch_no": str(i), "vch_date": day, "saved_at": rec, "received_at": rec, "applied_at": None, "state": state, "held_why": why, "ledgers": []}
+ENDED = [rline(1, "GARG SHEKHAR", "2026-10-07"), rline(2, "GARG SHEKHAR", "2026-10-07"), rline(3, "GARG SHEKHAR", "2026-10-07"),
+         rline(4, "GARG SHEKHAR", "2026-10-06", why="deleted in Tally; FinCom could not tell which entry: upload that day's Day Book to settle it"),
+         rline(5, "ABC LTD", "2026-10-07", why="the entry is larger than FinCom takes in one line; upload that day's Day Book to settle it")]
+FRESH = [rline(11, "GARG SHEKHAR", "2026-10-08", state="received", why=None, rec="ago:5")]
+NEW = [rline(21, "GARG SHEKHAR", "2026-10-08", state="received", why=None, rec="ago:0.5")]
+SYNC = """(lines) => { let c = Object.values(S.companies).find(x => x.name === "ZZ Test Client");
+  if (!c){ c = newCompany({name: "ZZ Test Client", gstin: ""}); c.tallyName = "GARG SHEKHAR"; S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {}; }
+  const now = Date.now(), ago = m => new Date(now - m * 60000).toISOString();
+  window.__lines = JSON.parse(JSON.stringify(lines), (k, v) => typeof v === "string" && v.startsWith("ago:") ? ago(Number(v.slice(4))) : v).map(l => Object.assign(l, {client_id: c.id}));
+  Rec.act = {}; S.syncClient = ""; S.syncFilter = "all"; S.view = "home"; S.tallyTab = "activity"; navHome("tally"); return c.id; }"""
 OWNER_HOOKS = ["data-read-stop", "data-read-resume", "data-read-stop-all", "data-read-resume-all", "data-release-hold", "data-release-unhold", "data-release-rollback",
     "data-release-rollback-clear", "data-release-withdraw", "data-trial-tools-switch", "data-recorder-source-pick", "data-ps-edit", "data-changes-only-switch",
     "data-make-main", "data-release-identity", "data-member-link-pick", "data-baseline-clear"]
@@ -128,7 +146,7 @@ def main():
         l2, l3, l4 = line(D2), line(D3), line(D4)
         ok(l2.startswith("Offline since ") and " IST" in l2 and "LAPTOP" in l2 and "sign in to Windows as ravi" in l2 and pg.get_attribute(card(D2) + " [data-status-line]", "data-level") == "bad", "offline: the problem and the fix (%s)" % l2)
         ok(l3.startswith("Connected · Tally not open") and "Open TallyPrime and the company on FRONTDESK" in l3 and pg.get_attribute(card(D3) + " [data-status-line]", "data-level") == "warn", "Tally not open: the fix (%s)" % l3)
-        ok("Stopped from FinCom: Tally hangs on the bank ledger" in l4 and pg.locator(card(D4) + " [data-status-line] button").count() == 1 and txt(card(D4) + " [data-status-line] button") == "Resume reading",
+        ok("Reading stopped from FinCom: Tally hangs on the bank ledger" in l4 and pg.locator(card(D4) + " [data-status-line] button").count() == 1 and txt(card(D4) + " [data-status-line] button") == "Resume reading",
            "stopped from FinCom: the owner's one action, Resume reading (%s)" % l4)
         ok(all(pg.locator(card(d) + " [data-status-line] button").count() <= 1 for d in (D1, D2, D3, D4)), "never more than one action on a line")
         ok(not re.search(r"(?<![\d-])\d{2}:\d{2}(?! IST)", pg.inner_text("#app [data-computers]")), "no bare 14:05: every time in IST")
@@ -165,12 +183,40 @@ def main():
 
         # ---- 5. staff: the same lines, no owner button anywhere, More open or not
         scene(DEVS, LINKED, role="member")
-        ok(line(D1) == l1 and "Stopped from FinCom" in line(D4) and pg.locator(card(D4) + " [data-status-line] button").count() == 0 and "owner" in line(D4), "staff: the same lines; the stop names who can resume it (%s)" % line(D4))
+        ok(line(D1) == l1 and "Reading stopped from FinCom" in line(D4) and pg.locator(card(D4) + " [data-status-line] button").count() == 0 and "owner" in line(D4), "staff: the same lines; the stop names who can resume it (%s)" % line(D4))
         open_all()
         ok(pg.locator("#app [data-page-more] [data-bridges]").count() == 1 and "Posting settings" in txt(card(D1)), "staff: More opens too")
         found = [h for h in OWNER_HOOKS if pg.locator("#app [%s]" % h).count()]
         ok(not found, "staff: no owner button (%s)" % found)
         shot("staff-more-open")
+        # ---- 6. Sync activity: one clear flow. Only ended lines -> "Needs you", one group per company and day, each with
+        # the Day Book upload; no "waiting" box
+        scene(DEVS, LINKED)
+        cid = E(SYNC, ENDED); pg.wait_for_timeout(1800)
+        ok(pg.locator("#app [data-sync-waiting]").count() == 0, "ended lines: no 'waiting over 2 minutes' box")
+        nd = "#app [data-sync-needs]"
+        ok(pg.locator(nd).count() == 1 and "warn" in (pg.get_attribute(nd, "class") or ""), "ended lines: one 'Needs you' box, yellow")
+        groups = E("() => [...document.querySelectorAll('#app [data-sync-needs] [data-needs-group]')].map(g => [g.getAttribute('data-needs-group'), g.querySelector('[data-needs-text]').innerText.trim(), g.querySelectorAll('button').length])")
+        want = {"GARG SHEKHAR · 07-Oct-2026: 3 entries could not be read from Tally — upload the Day Book for 07-Oct-2026",
+                "GARG SHEKHAR · 06-Oct-2026: 1 entry could not be read from Tally — upload the Day Book for 06-Oct-2026",
+                "ABC LTD · 07-Oct-2026: 1 entry could not be read from Tally — upload the Day Book for 07-Oct-2026"}
+        ok(len(groups) == 3 and {g[1] for g in groups} == want, "one plain sentence per company and day (%s)" % [g[1] for g in groups])
+        ok(all(g[2] == 1 for g in groups) and pg.locator(nd + " [data-needs-daybook]").count() == 3, "each group: ONE action, the Day Book upload")
+        ok(txt(nd + " [data-needs-daybook]") == "Upload the Day Book for 07-Oct-2026" or "Upload the Day Book for" in txt(nd + " [data-needs-daybook]"), "the action says which day (%s)" % txt(nd + " [data-needs-daybook]"))
+        ok(pg.locator("#app [data-sync-fetching]").count() == 0, "ended lines: nothing 'being fetched'")
+        shot("sync-needs-you")
+        pg.click(nd + ' [data-needs-group^="daybook|GARG SHEKHAR|2026-10-06"] [data-needs-daybook]'); pg.wait_for_timeout(1500)
+        ok(E("[S.view, S.coId, S.dbFrom, S.dbTo]") == ["company", cid, "2026-10-06", "2026-10-06"], "the action opens the client's Day Book upload for that day (%s)" % E("[S.view, S.coId, S.dbFrom, S.dbTo]"))
+        # a fresh line (still being fetched): quiet, no yellow, no 'Needs you'
+        E(SYNC, FRESH); pg.wait_for_timeout(1800)
+        fe = "#app [data-sync-fetching]"
+        ok(pg.locator(fe).count() == 1 and "warn" not in (pg.get_attribute(fe, "class") or "") and "being fetched" in txt(fe), "a fresh line: a quiet 'being fetched' (%s)" % txt(fe))
+        ok(pg.locator("#app [data-sync-needs], #app [data-sync-waiting], #app [data-sync-activity] .bk-alert.warn").count() == 0, "a fresh line: no yellow box")
+        # a line of a minute ago, or none: no box at all
+        E(SYNC, NEW); pg.wait_for_timeout(1800)
+        ok(pg.locator("#app [data-sync-needs], #app [data-sync-fetching], #app [data-sync-waiting]").count() == 0, "a line under 2 minutes: nothing said")
+        E(SYNC, []); pg.wait_for_timeout(1800)
+        ok(pg.locator("#app [data-sync-needs], #app [data-sync-fetching], #app [data-sync-waiting]").count() == 0, "nothing waiting: no box")
         ok(not errors, "no page errors " + str(errors[:2]))
         br.close()
     srv.shutdown()

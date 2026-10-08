@@ -170,10 +170,12 @@ const AlertHub = {
         const recFix = "Turn on FinCom's recorder in Tally on that computer (the details say which).";
         const base = {key: "book:" + k, cid: b.cid, details: det.join(" · "), at, selfClear: true};
         const waiting = b.ours.length + b.other.length;
-        if (b.ours.length && (!gapN || b.ours.length >= gapN)){
-          // FinCom's own side: the details are on their way, nothing to do
+        // 2.3.5: lines a person must settle (b.other) are said first; "nothing to do" only when nothing else waits
+        if (b.ours.length && !b.other.length && (!gapN || b.ours.length >= gapN)){
+          // FinCom's own side: the details are on their way, nothing to do. FinCom 2.3.5 (the owner: "a yellow field coming
+          // all the time"): information, said quietly (the bell lists it; no yellow line on the pages): yellow is for "Needs you"
           const k2 = Math.max(gapN, b.ours.length), hd = b.ours.filter(l => l.state === "held");
-          out.push(Object.assign(base, {sev: "warn", text: hd.length === b.ours.length && k2 === hd.length ? who + ": " + this.heldSay(hd, true) + "."
+          out.push(Object.assign(base, {sev: "info", text: hd.length === b.ours.length && k2 === hd.length ? who + ": " + this.heldSay(hd, true) + "."
             : who + ": " + this.n(k2) + " made in Tally" + (since ? " since " + this.when(since) : "") + (k2 === 1 ? " is" : " are") + " not yet in FinCom.",
             fix: "FinCom is fetching the entry's details from Tally; nothing to do."}));
         } else if (gapN || (b.rows.length && !b.gap && !waiting)){
@@ -188,7 +190,10 @@ const AlertHub = {
           const hd = b.other.filter(l => l.state === "held");
           out.push(Object.assign(base, {sev: "warn", text: who + ": " + (hd.length === b.other.length ? this.heldSay(hd, true) + "."
               : (b.other.length === 1 ? "1 change" : b.other.length + " changes") + " from Tally " + (b.other.length === 1 ? "is" : "are") + " waiting, not yet in the books" + (locked.length === b.other.length ? " (the month is locked)." : ".")),
-            fix: locked.length === b.other.length ? "Apply them on Sync activity, or unlock the month." : hd.length === b.other.length ? "See them on Sync activity." : "See why on Sync activity.", act: {label: "Sync activity", run: () => Rec.openActivity(b.cid)}}));
+            // FinCom 2.3.5: lines the bridge gave up on say the one thing to do (Sync activity's "Needs you" has each day's button)
+            fix: locked.length === b.other.length ? "Apply them on Sync activity, or unlock the month." : b.other.every(l => typeof Rec === "object" && Rec.needKind && Rec.needKind(l) === "daybook")
+              ? "Needs you: upload the Day Book for " + [...new Set(b.other.map(l => this.heldDay(l)).filter(Boolean))].sort().map(d => fmtDate(tallyDate(d))).join(", ") + " (Sync activity has each day's button)."
+              : hd.length === b.other.length ? "See them on Sync activity." : "See why on Sync activity.", act: {label: "Sync activity", run: () => Rec.openActivity(b.cid)}}));
         } else if (b.off.length){
           out.push(Object.assign(base, {sev: "warn", text: who + ": Tally is not recording its changes for FinCom, so entries made there reach FinCom only with the next Day Book.",
             fix: recFix}));

@@ -9,7 +9,7 @@ words and offers nothing to press:
     bridge's entry) are never shown, on the page or in the bell;
   - a 2.3.0 bridge that stopped reading by itself is said in plain words (it reads again once 2.3.1 is on it), with no
     Resume button for anyone (the computer key's member included);
-  - the owner's stop from FinCom is as before: Stopped from FinCom, and the owner's Resume reading.
+  - the owner's stop from FinCom is as before: Reading stopped from FinCom, and the owner's Resume reading.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tally_entry_fetch_off.py"""
 import os, re, sys, threading, functools, http.server, datetime, copy
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -109,7 +109,7 @@ with sync_playwright() as p:
     # ---- 5. the owner's stop from FinCom: as before
     scene([devOff(fincom=True)], "owner")
     t = readText() or ""
-    ok(t.startswith("Stopped from FinCom") and resumes() == 1, "FinCom's stop: Stopped from FinCom and the owner's Resume reading (%s, %d)" % (t, resumes()))
+    ok(t.startswith("Reading stopped from FinCom") and resumes() == 1, "FinCom's stop: Reading stopped from FinCom and the owner's Resume reading (%s, %d)" % (t, resumes()))
     ok(not errors, "no page errors " + str(errors[:2]))
     br.close()
 srv.shutdown()

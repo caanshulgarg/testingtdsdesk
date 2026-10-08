@@ -28,5 +28,17 @@ with sync_playwright() as p:
     scene("3-owner-four-computers", T.DEVS, T.LINKED)
     scene("4-owner-everything-open", T.DEVS, T.LINKED, more=True)
     scene("5-staff-four-computers", T.DEVS, T.LINKED, role="member")
+    # the other Tally pages: Sync activity (lines the bridge gave up on + one still being fetched), Everything sent, a
+    # client's books with held lines, and Post to Tally (pages that exist before the change too)
+    def snap(name, js, wait=1800):
+        pg.evaluate(js); pg.wait_for_timeout(wait); pg.evaluate("() => { if (typeof toastHide === 'function') toastHide(); }"); pg.wait_for_timeout(300)
+        pg.screenshot(path=os.path.join(OUT, name + ".png"), full_page=True); print("  " + os.path.join(OUT, name + ".png"))
+    pg.evaluate(T.SETUP, [T.DEVS, T.STOPS, T.LINKED, "owner"]); pg.wait_for_timeout(1200)
+    cid = pg.evaluate(T.SYNC, T.ENDED + T.FRESH); pg.wait_for_timeout(600)
+    snap("6-sync-activity", "() => { Rec.act.at = 0; if (typeof AlertHub === 'object') AlertHub.refresh(true); render(); }")
+    snap("7-everything-sent", "() => { S.tallyTab = 'sent'; render(); }")
+    snap("8-client-books-held", "async () => { await openCompany(window.__cid || Object.values(S.companies).find(x => x.name === 'ZZ Test Client').id); goClient('books:reports'); }", 2500)
+    snap("10-books-tieout", "() => { goClient('books:tieout'); }", 2000)
+    snap("9-post-to-tally", "() => { goStep('post', 'bills'); }", 2000)
     br.close()
 srv.shutdown()
