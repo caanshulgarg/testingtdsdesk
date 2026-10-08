@@ -71,10 +71,28 @@ for ($k = 0; $k -lt $bigN; $k += 1000) {
   $made += BigImp 'Vouchers' $batch "entries $k"
 }
 Info ("big: {0} masters and {1} entries made by XML in {2:0.0} min" -f $mm, $made, ((Get-Date) - $t0).TotalMinutes)
+# payroll for 200 employees (the owner's ask, 08-Oct-2026: the heavy company and payroll 200): push-design data.ps1's
+# form 5 (the pay heads as ledger lines allocated to each employee, the payable credited), alone on 31-10-2026
+$pm = '<COMPANY NAME="' + (S2Esc $co1) + '" ACTION="Alter"><NAME>' + (S2Esc $co1) + '</NAME><ISCOSTCENTRESON>Yes</ISCOSTCENTRESON></COMPANY>'
+$null = BigImp 'All Masters' @($pm) 'big cost centres on'
+$pm = @('<COSTCENTRE NAME="Big Staff" ACTION="Create"><NAME.LIST><NAME>Big Staff</NAME></NAME.LIST><CATEGORY>Primary Cost Category</CATEGORY><ISEMPLOYEEGROUP>Yes</ISEMPLOYEEGROUP><FORPAYROLL>Yes</FORPAYROLL></COSTCENTRE>')
+for ($i = 1; $i -le 200; $i++) { $pm += '<COSTCENTRE NAME="Big Emp ' + $i + '" ACTION="Create"><NAME.LIST><NAME>Big Emp ' + $i + '</NAME></NAME.LIST><PARENT>Big Staff</PARENT><CATEGORY>Primary Cost Category</CATEGORY><FORPAYROLL>Yes</FORPAYROLL><DATEOFJOIN>20260401</DATEOFJOIN></COSTCENTRE>' }
+foreach ($ph in 'Big Basic', 'Big HRA') { $pm += S2Led $ph 'Indirect Expenses' '<PAYTYPE>Earnings for Employees</PAYTYPE><CALCULATIONTYPE>As User Defined Value</CALCULATIONTYPE><AFFECTSNETSALARY>Yes</AFFECTSNETSALARY><ISCOSTCENTRESON>Yes</ISCOSTCENTRESON><FORPAYROLL>Yes</FORPAYROLL>' }
+$pm += S2Led 'Big Salary Payable' 'Current Liabilities' '<PAYTYPE>Not Applicable</PAYTYPE>'
+$pmc = BigImp 'All Masters' $pm 'big payroll masters'
+$px = '<VOUCHER VCHTYPE="Payroll" ACTION="Create" OBJVIEW="Accounting Voucher View"><DATE>20261031</DATE><VOUCHERTYPENAME>Payroll</VOUCHERTYPENAME><VOUCHERNUMBER>BIG-PR200</VOUCHERNUMBER><PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW><NARRATION>big payroll 200</NARRATION>'
+foreach ($ph in @(@('Big Basic', 1000), @('Big HRA', 500))) {
+  $px += '<ALLLEDGERENTRIES.LIST><LEDGERNAME>' + $ph[0] + '</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-' + ('{0:0.00}' -f ($ph[1] * 200)) + '</AMOUNT><CATEGORYALLOCATIONS.LIST><CATEGORY>Primary Cost Category</CATEGORY><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>'
+  for ($i = 1; $i -le 200; $i++) { $px += '<COSTCENTREALLOCATIONS.LIST><NAME>Big Emp ' + $i + '</NAME><AMOUNT>-' + ('{0:0.00}' -f $ph[1]) + '</AMOUNT></COSTCENTREALLOCATIONS.LIST>' }
+  $px += '</CATEGORYALLOCATIONS.LIST></ALLLEDGERENTRIES.LIST>'
+}
+$px += '<ALLLEDGERENTRIES.LIST><LEDGERNAME>Big Salary Payable</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>300000.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>'
+$prc = BigImp 'Vouchers' @($px) 'big payroll 200'
+Info ("big payroll 200: {0} masters, {1} entry (31-10-2026)" -f $pmc, $prc)
 
 $recAll = { @(Get-ChildItem $rec -File -ErrorAction SilentlyContinue | Sort-Object Name | ForEach-Object { Get-Content $_.FullName -Encoding Unicode } | Where-Object { $_ -like 'FCR1|*' }) }
-function BigSave($label, $stampFile) {
-  KeysTo '%g' 3; KeysTo 'Day Book' 2; KeysTo '{ENTER}' 6; KeysTo '{F2}' 3; KeysTo '1-4-2026{ENTER}' 8 "big-$label-daybook"
+function BigSave($label, $stampFile, $day = '1-4-2026') {
+  KeysTo '%g' 3; KeysTo 'Day Book' 2; KeysTo '{ENTER}' 6; KeysTo '{F2}' 3; KeysTo "$day{ENTER}" 8 "big-$label-daybook"
   KeysTo '{END}' 3; KeysTo '%2' 6 "big-$label-dup"
   $c0 = if ($stampFile) { @(Get-Content $stampFile -Encoding Unicode -ErrorAction SilentlyContinue).Count } else { @(& $recAll).Count }
   $p = Get-Process -Id $script:tpid -ErrorAction SilentlyContinue
@@ -89,7 +107,12 @@ function BigSave($label, $stampFile) {
   Start-Sleep 2; Shot "big-$label-saved"; KeysTo '{ESC}' 2
   return $ms
 }
+function BigWarmPayroll($label) {
+  KeysTo '%g' 3; KeysTo 'Day Book' 2; KeysTo '{ENTER}' 6; KeysTo '{F2}' 3; KeysTo '31-10-2026{ENTER}' 8 "big-$label-daybook"
+  KeysTo '{END}' 3; KeysTo '%2' 6 "big-$label-dup"; KeysTo '^a' 5 "big-$label-answer"; KeysTo '^a' 8 "big-$label-saved"; KeysTo '{ESC}' 2; KeysTo '{ESC}' 2
+}
 $tAdd = @(); for ($i = 1; $i -le 5; $i++) { $tAdd += BigSave "addon$i" '' }
+$tAddP = @(); if ($prc) { BigWarmPayroll 'addon-pr-warm'; for ($i = 1; $i -le 5; $i++) { $tAddP += BigSave "addon-pr$i" '' '31-10-2026' } }
 $stampFile = "$fc\big-stamp.txt"; Remove-Item $stampFile -Force -ErrorAction SilentlyContinue
 $stampTdl = "$fc\BigStamp.tdl"
 Set-Content $stampTdl -Encoding ASCII -Value @(
@@ -103,8 +126,14 @@ $t2 = Start-Process -FilePath $exe -WorkingDirectory $dir -PassThru; $script:tpi
 for ($i = 0; $i -lt 60; $i++) { Start-Sleep 3; try { Invoke-WebRequest 'http://localhost:9000' -UseBasicParsing -TimeoutSec 5 | Out-Null; break } catch {} }
 Start-Sleep 5; KeysTo 'a' 4; KeysTo 't' 15 'big-stamp-started'
 $tStamp = @(); for ($i = 1; $i -le 5; $i++) { $tStamp += BigSave "stamp$i" $stampFile }
+$tStampP = @(); if ($prc) { for ($i = 1; $i -le 5; $i++) { $tStampP += BigSave "stamp-pr$i" $stampFile '31-10-2026' } }
 $med = { param($a) $s = @($a | Where-Object { $_ -ge 0 } | Sort-Object); if ($s.Count) { $s[[int][math]::Floor(($s.Count - 1) / 2)] } else { -1 } }
 $mA = & $med $tAdd; $mS = & $med $tStamp
 $state = if ($made -lt $bigN -or $mA -lt 0 -or $mS -lt 0) { 'HARNESS' } else { 'MEASURE' }
 Add-Content -Path $resultsFile -Encoding UTF8 -Value ("{0} big: {1} entries; Ctrl+A to a new line in a file: with the add-on (its full line) {2} ms, median {3}; without it (a stamp-only TDL right after Tally's own Form Accept) {4} ms, median {5}; the add-on's own share: {6} ms" -f `
     $state, $made, ($tAdd -join ', '), $mA, ($tStamp -join ', '), $mS, $(if ($mA -ge 0 -and $mS -ge 0) { $mA - $mS } else { '-' }))
+# payroll 200 (each copy saved with every employee; the add-on's full line in parts)
+$mAP = & $med $tAddP; $mSP = & $med $tStampP
+$stP = if (-not $prc -or $mAP -lt 0 -or $mSP -lt 0) { 'HARNESS' } else { 'MEASURE' }
+Add-Content -Path $resultsFile -Encoding UTF8 -Value ("{0} big payroll 200: {1} entries; Ctrl+A to a new line in a file: with the add-on (its full line) {2} ms, median {3}; without it (a stamp-only TDL right after Tally's own Form Accept) {4} ms, median {5}; the add-on's own share: {6} ms" -f `
+    $stP, $made, ($tAddP -join ', '), $mAP, ($tStampP -join ', '), $mSP, $(if ($mAP -ge 0 -and $mSP -ge 0) { $mAP - $mSP } else { '-' }))
