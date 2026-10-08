@@ -2885,6 +2885,7 @@ func recorderLiveLoop() {
 			defer func() {
 				if r := recover(); r != nil {
 					writeLog(fmt.Sprint("Recorder: ", r))
+					crashReport("recorder_upload", r)
 				}
 			}()
 			for i := 0; i < 20 && liveUploadOnce() > 0; i++ {

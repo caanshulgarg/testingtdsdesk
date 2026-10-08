@@ -309,6 +309,19 @@ func showDiagnosis() {
 // runBridge runs until it is asked to stop; returns the exit code (non-zero: start me again)
 func runBridge(console bool) int {
 	loadConfig()
+	// 2.4.0: crash reports to Sentry, only when the settings say "CrashReports": true and the bridge is connected to the
+	// staging cloud (crash.go, docs/sentry.md). A panic of the bridge itself is reported, then goes on as before
+	if crashStart(bridgeDSN) {
+		writeLog("Crash reports to FinCom's error tracker are on (CrashReports in the settings; staging only)")
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			crashReport("bridge", r)
+			crashStop()
+			panic(r)
+		}
+		crashStop()
+	}()
 	_ = os.MkdirAll(syncDir(), 0o755)
 	pausedB = cfgB("Paused")
 	if testMode() {
@@ -373,6 +386,7 @@ func runBridge(console bool) int {
 		defer func() {
 			if r := recover(); r != nil {
 				writeLog(fmt.Sprintf("%s: %v", name, r))
+				crashReport("main_loop", r)
 			}
 		}()
 		f()

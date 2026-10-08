@@ -187,3 +187,6 @@ run_parse_fast234.mjs                 120
 run_parse_fast234_kinds.mjs           120
 run_migration57.py                    120
 run_parta_server.py                   120
+run_sentry_scrub.mjs                  120
+run_sentry_cloud.mjs                  180
+run_sentry_ui.py                      180  TDSDESK_SITE=../app/dist-test
