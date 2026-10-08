@@ -11,6 +11,7 @@ What 2.3.4 changes (the full notes: docs/bridge-2.3.4-notes.md; the exact reques
 3. No company should be marked "no longer asked"; a company 2.3.3 marked is asked again.
 4. Held lines 2.3.3 ended with the Day Book words are asked once more (FinCom lists them for 30 days).
 5. "Test fetching an entry" has forms B, D, E and F only.
+6. A deleted entry is proven gone from Tally's one-line "Could not find Voucher" answer (exactly that line only).
 FinCom's cloud: tally-ingest is deployed with this release (no migration). The add-on is unchanged.
 
 Before you start: you are signed in to FinCom as the owner, TallyPrime 7.1 is open on NWS144 with the add-on loaded,
@@ -39,6 +40,12 @@ CHECK 4 - THE HELD LINES OF 2.3.3 SETTLE
 
 CHECK 5 - NOTHING SILENT
    Over the day, every journal you saved shows in Sync activity: in the books, or held with a reason. None is missing.
+
+CHECK 6 - A DELETE SETTLES
+   In IX DESIGNS make a Journal of Rs 1, narration "TRIAL 234 delete", wait until it is in the books, then delete it in
+   Tally (Day Book, select it, Alt+D, Yes).
+   You should see: within a minute the entry is gone from FinCom's books; Sync activity shows the delete, not held.
+   If it shows held, send: the time, a photo of Sync activity, and the Show log lines with "delete of mid".
 
 How to send the log lines: right-click the FinCom icon near the clock > Show log. On NWS144 each Windows user has their
 own FinCom icon and their own log: send the log of the Windows user named in the check.

@@ -928,7 +928,8 @@ func liveResolveTurn() {
 			// 2.3.4 (re-review M1): its ask went but nothing came of it (an answer that could not be read, another error, a
 			// posting stopping it, no entry): it ends now with the Day Book words, never dropped without its ":resolved"
 			done = live.fastAsked[id] || live.queued[rid]
-			endNow = live.fastAsked[id] && !live.queued[rid] && !live.bodied[rid]
+			// 2.3.4 re-review 2 (N-M1): nor a line this version resolved with no body (a cancel / delete proven by its GUID)
+			endNow = live.fastAsked[id] && !live.queued[rid] && !live.bodied[rid] && !live.mine[rid]
 		}
 		waiting := live.queued[rid]
 		ownOpen := !h.Refetch || liveOwnOpenNow(h.CGUID, h.Company)
@@ -1091,7 +1092,7 @@ func liveResolveTurn() {
 			// Tally had the request and did not answer in time: its ask is used (2.3.3: the line ends when it was its last);
 			// those not asked yet go at the retry schedule's next try, as before
 			timedOut[h.ID] = true
-			if errors.Is(err, errRecorderStop) && h.MID != "" {
+			if errors.Is(err, errRecorderStop) && h.MID != "" && h.Ev != "deleted" && h.Ev != "cancelled" {
 				objStop[h.ID] = true // 2.3.4 (option (a)): the fast request stopped at the limit: the line ends now, whatever its asks left
 			}
 			for _, r := range ask[len(got)+1:] {

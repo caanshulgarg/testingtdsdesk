@@ -221,6 +221,9 @@ try:
         td = []
         if "tally_tds_lines" in b and not a.get("tally_tds_lines"):
             td, b["tally_tds_lines"] = b["tally_tds_lines"], []
+        cmore = []
+        if kind == "sales-5-items-direct-sales-line" and b.get("tally_cost_allocs") and not a.get("tally_cost_allocs"):
+            cmore, b["tally_cost_allocs"] = b["tally_cost_allocs"], []   # 7.1's collection left them out (re-review M2)
         oa_n += len(oa); tds_n += 1 if td else 0; kn += 1
         # today's answer of a 200 / 500-item invoice is larger than FinCom takes in one line (2.2-2.7 million characters):
         # FinCom stored nothing from it; the stripped object (0.3-0.7 million) is stored: said, not compared
