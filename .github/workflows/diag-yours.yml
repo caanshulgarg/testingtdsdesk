@@ -1,0 +1,46 @@
+name: diag-yours
+# Diagnostic only: why FinCom Bridge 2.3.3 answers /ping to the user's own browser with "yours": false
+on:
+  workflow_dispatch:
+  push:
+    branches: [diag-yours]
+concurrency:
+  group: diag-yours
+  cancel-in-progress: false
+jobs:
+  diag:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: bridge-go/go.mod
+          cache-dependency-path: bridge-go/go.sum
+      - name: Build the bridge and the diag program
+        run: |
+          New-Item -ItemType Directory -Force C:\fcdiag\bin | Out-Null
+          Push-Location bridge-go; go build -trimpath -o C:\fcdiag\bin\FinComBridge.exe .; Pop-Location
+          Push-Location diag; go build -o C:\fcdiag\bin\diag.exe .; Pop-Location
+          Copy-Item diag\*.ps1 C:\fcdiag\bin\
+      - name: As the runner user (administrator)
+        run: C:\fcdiag\bin\run.ps1 -Who admin -Here C:\fcdiag\bin
+      - name: As a standard (non-administrator) user
+        if: always()
+        run: C:\fcdiag\bin\run.ps1 -Who std -Here C:\fcdiag\bin
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: diag-yours
+          path: |
+            C:\fcdiag\admin\*.txt
+            C:\fcdiag\admin\*.log
+            C:\fcdiag\admin\*.out
+            C:\fcdiag\admin\*.err
+            C:\fcdiag\std\*.txt
+            C:\fcdiag\std\*.log
+            C:\fcdiag\std\*.out
+            C:\fcdiag\std\*.err
