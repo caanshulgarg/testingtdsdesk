@@ -117,6 +117,11 @@ func fetchVoucherByNumber(tc *TC, company string, port int, date, typ, no string
 	if slowMarked(company, "") {
 		return nil, errSlowCompany // 2.3.2: no entry request for a company marked "entry fetch stopped: over 2 s"
 	}
+	// 2.3.4 (L-d, push-design run 37816340452): a request naming a company that is not open crashes Tally (c0000005),
+	// this one too: sent only right after Tally's company list on this port names the company
+	if err := fastCompanyListed(tc, company, port, sec); err != nil {
+		return nil, err
+	}
 	raw, err := invokeTally(tc, port, x, sec)
 	if err != nil {
 		return nil, err
