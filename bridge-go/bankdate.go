@@ -23,7 +23,7 @@
 //   - Large companies (the route "night"): one list a night, in the nightly catch-up's window (KeepDailyAt, for
 //     NightlyWindowMin) and outside office hours (KeepOfficeFrom .. KeepOfficeTo, never on a Sunday counted as office), not
 //     while FinCom is in use (NightlyQuietMin), never while the tray's pause or FinCom's read stop is on, never during a
-//     posting; the list stopped at BankNightLimitMs (KeepNightTargetSec, 10 s); at most BankMax (500) entries a night (the
+//     posting; the list stopped at BankNightLimitMs (2,000 ms: the owner's 2-second rule; release-240); at most BankMax (500) entries a night (the
 //     rest the next night), read one a turn every BankNightGapMs; a list stopped even then: one plain alert, not asked again
 //     that night.
 //   - Renumbering (renumber.go) and this route share what each read from Tally (vchReadPut / vchReadGet): an entry read by
@@ -51,8 +51,11 @@ func bankNightGap() time.Duration {
 func bankPerTurn() int   { return keepNum("BankPerTurn", 10) }
 func bankMax() int       { return keepNum("BankMax", 500) }
 func bankSmallMs() int64 { return int64(keepNum("BankSmallMs", 1500)) }
+
+// release-240 (the coordinator, 08-Oct-2026, pending the owner's answer): the owner's 2-second rule holds for the nightly list
+// too: 2,000 ms by default (was KeepNightTargetSec, 10 s); stopped then, one plain alert, not asked again that night
 func bankNightLimitMs() int {
-	return keepNum("BankNightLimitMs", keepNum("KeepNightTargetSec", 10)*1000)
+	return keepNum("BankNightLimitMs", 2000)
 }
 
 // one entry to read again

@@ -443,3 +443,55 @@ func TestBankDateOnlyApprovedRequests(t *testing.T) {
 		}
 	}
 }
+
+// --- release-240 (the owner's 2-second rule, pending the owner's answer on 10 s for the nightly list): the nightly list
+// stops at 2 s by default; a large company's nightly list stopped then raises the one plain alert and is not asked again
+// that night
+func TestBankDateNightListStoppedAt2s(t *testing.T) {
+	if bankNightLimitMs() != 2000 {
+		t.Fatalf("BankNightLimitMs default %d ms, want 2000 (the 2-second rule)", bankNightLimitMs())
+	}
+	_, f, c := bankBridge(t, `,"RecorderLimitMs":300,"RecorderStopCoolSec":0`)
+	_ = c
+	slowMs := 800 * time.Millisecond
+	f.mu.Lock()
+	f.slow = func(id, body string) time.Duration {
+		if id == "TDSDeskKeepList" {
+			return slowMs
+		}
+		return 0
+	}
+	f.mu.Unlock()
+	bankSet(f, "26311", "20261007")
+	bankCheck(t, f)
+	if bankRoute(nwsCo) != "night" {
+		t.Fatalf("route %q after the list stopped at the limit", bankRoute(nwsCo))
+	}
+	// at night Tally takes 2.5 s for the list: stopped at the default 2 s
+	f.mu.Lock()
+	slowMs = 2500 * time.Millisecond
+	f.mu.Unlock()
+	night := time.Date(2026, 10, 6, 2, 30, 0, 0, liveZone)
+	nowFn = func() time.Time { return night }
+	retryReset()
+	bankCheck(t, f)
+	bankNightTurn()
+	if n := len(bankLists(f)); n != 2 {
+		t.Fatalf("lists %d (want the one nightly list)", n)
+	}
+	lg := readText(logFile())
+	if !strings.Contains(lg, "the nightly list of changed entries took longer than 2000 ms; not asked again tonight") ||
+		!strings.Contains(lg, "may not have reached FinCom for "+nwsCo) {
+		t.Fatalf("no alert / no words for the stopped nightly list:\n%s", cutTail(lg, 2000))
+	}
+	// the same night: not asked again
+	retryReset()
+	night = night.Add(30 * time.Minute)
+	bankCheck(t, f)
+	bankNightTurn()
+	readAndUploadAll(t)
+	bankNightTurn()
+	if n := len(bankLists(f)); n != 2 || len(bankAsked(f)) != 0 {
+		t.Fatalf("asked again the same night: %d lists, entries %v", n, bankAsked(f))
+	}
+}
