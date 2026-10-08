@@ -362,3 +362,42 @@ func TestFast234ObjectOnlyForAListedCompany(t *testing.T) {
 		t.Fatalf("the company list is not asked right before the object export: %v", ids)
 	}
 }
+
+// the same for 2.3.3's by-number request (push-design run 37816340452, 3.0 and 7.1: FinComVoucherByMaster and
+// FinComVoucherByNumber naming a company that is not open crash Tally the same way): FinComVoucherByNumber is sent only
+// right after the company list names the company
+func TestFast234ByNumberOnlyForAListedCompany(t *testing.T) {
+	_, f, _ := r222bBridge(t, "")
+	port, err := findCompanyPortBg(nwsCo, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r222Vch(f, 25796, "Journal", "J-9", "20261005", 54596)
+	other := `<ENVELOPE><BODY><DATA><COLLECTION><COMPANY NAME="FinCom Other Co"><NAME>FinCom Other Co</NAME><GUID>other-guid</GUID></COMPANY></COLLECTION></DATA></BODY></ENVELOPE>`
+	var closed bool
+	f.mu.Lock()
+	f.behave = func(w http.ResponseWriter, r *http.Request, id, body string) bool {
+		if id == "TDSDeskCompanies" && closed {
+			fmt.Fprint(w, other)
+			return true
+		}
+		return false
+	}
+	f.mu.Unlock()
+	closed = true
+	n0 := f.n(vchByNumberID)
+	if got, err := fetchVoucherByNumber(recorderTC(nil), nwsCo, port, "20261005", "Journal", "J-9", 5); err == nil {
+		t.Fatalf("asked of a Tally that does not have the company open: %v", got)
+	}
+	if f.n(vchByNumberID) != n0 {
+		t.Fatalf("the by-number request was sent for a company not open: %v", f.ids())
+	}
+	closed = false
+	if got, err := fetchVoucherByNumber(recorderTC(nil), nwsCo, port, "20261005", "Journal", "J-9", 5); err != nil || len(got) != 1 {
+		t.Fatalf("the company open: %v %v", got, err)
+	}
+	ids := f.ids()
+	if ids[len(ids)-1] != vchByNumberID || ids[len(ids)-2] != "TDSDeskCompanies" {
+		t.Fatalf("the company list is not asked right before the by-number request: %v", ids)
+	}
+}
