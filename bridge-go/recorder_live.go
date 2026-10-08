@@ -1736,12 +1736,16 @@ func fastNotFound(mid string) string {
 // Tally (the GUID held for it) right before and right after that ask; else not proven now (asked again later). Entry
 // fetches are not asked twice (a delete only)
 func fastProveGone(tc *TC, company string, port int, mid string, sec int) error {
-	if err := fastCompanyOpen(tc, company, port, sec); err != nil {
-		return err
-	}
 	x := voucherObjectRequest(company, mid)
 	if x == "" {
 		return errors.New("not asked: MasterID " + mid + " is not one Tally gives")
+	}
+	// release-235 (2.3.5's read stop): refused before the (stop-exempt) company list, so nothing reaches Tally
+	if err := readStopRefuses(x); err != nil {
+		return err
+	}
+	if err := fastCompanyOpen(tc, company, port, sec); err != nil {
+		return err
 	}
 	raw, err := invokeTally(tc, port, x, sec)
 	if err != nil {
@@ -1817,6 +1821,11 @@ func fetchVouchersByMasterIn(tc *TC, company string, port int, date string, mids
 	// a company that is not open is never answered: Tally shows "Internal Error ... Software Exception c0000005 (Memory
 	// Access Violation)" and answers nothing more. So it is sent only right after Tally's company list on this port names
 	// the company (a list asked now, never one held from before); else nothing is sent and the line waits
+	// release-235 (2.3.5's read stop with 2.3.4's L-d): FinCom's read stop refuses the entry request; the company list is
+	// exempt from the stop, so it is not asked first: nothing reaches Tally and the refusal is not a try (liveStopRefused)
+	if err := readStopRefuses(x); err != nil {
+		return nil, err
+	}
 	if err := fastCompanyListed(tc, company, port, sec); err != nil {
 		return nil, err
 	}
