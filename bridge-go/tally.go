@@ -327,7 +327,7 @@ var requestClass = map[string]string{
 	editLogProbeID: "undated", cnReportID: "undated",
 	ledChangesID: "undated", ledByNameID: "undated", // 2.3.1 (masters): no period, ever
 	// 2.2.3: "Test fetching an entry" (measure-only, a person's): its dated forms and its undated ones
-	fetchTestA: "dated", fetchTestB: "dated", fetchTestE: "dated", fetchTestD: "undated", fetchTestF: "undated",
+	fetchTestB: "dated", fetchTestE: "dated", fetchTestD: "undated", fetchTestF: "undated",
 }
 
 func datedRefused(tc *TC, x string) error {
@@ -335,8 +335,7 @@ func datedRefused(tc *TC, x string) error {
 	switch id {
 	case vchObjectID:
 		// next-fastfetch: the entry request (no period), exactly as built, for a company whose starting point is recorded
-		// the trial's form C (a person's "Test fetching an entry"): the request exactly as built, starting point or not
-		if voucherObjectExact(x) || (tc != nil && tc.person && x == voucherObjectRebuild(x)) {
+		if voucherObjectExact(x) {
 			return nil
 		}
 		return readsOffErr()

@@ -67,7 +67,7 @@ var tallyAllowList = map[string]allowedReq{
 	"FinComSnapshot":     {purpose: "measure: one month's entries as GUID, AlterID, date, type and number", measureOnly: true},
 	// 2.2.3 (the owner's request, 05-Oct-2026): "Test fetching an entry" (fetchtest.go), the forms of
 	// docs/diagnostics/2.2.2-fetch-check.ps1 for one voucher, a person's tray item only
-	fetchTestA: {purpose: "measure (Test fetching an entry): form A, FinComVoucherByNumber as built (one voucher by type and number, one day, yyyymmdd), under its own id", measureOnly: true},
+	// 2.3.4 (the owner, 08-Oct-2026): forms A and C removed; B, D, E and F as before (their purposes name the 2.2.2 forms)
 	fetchTestB: {purpose: "measure (Test fetching an entry): form B, form A with plain quote marks in the filter", measureOnly: true},
 	fetchTestD: {purpose: "measure (Test fetching an entry): form D, form C with no dates", measureOnly: true},
 	fetchTestE: {purpose: "measure (Test fetching an entry): form E, form C with the dates as d-MMM-yyyy TYPE=Date", measureOnly: true},
@@ -198,7 +198,6 @@ func allowListSamples() map[string]string {
 		"FinComMeasureLedF":  measureReqLedF(c, "SAMPLE LEDGER"),
 		"FinComMeasureLedO":  measureReqLedO(c, "SAMPLE LEDGER"),
 		"FinComSnapshot":     snapshotRequest(c, a, z),
-		fetchTestA:           fetchTestRequest("A", c, a, "Receipt", "1", ""),
 		fetchTestB:           fetchTestRequest("B", c, a, "Receipt", "1", ""),
 		fetchTestD:           fetchTestRequest("D", c, "", "", "", "1"),
 		fetchTestE:           fetchTestRequest("E", c, a, "", "", "1"),

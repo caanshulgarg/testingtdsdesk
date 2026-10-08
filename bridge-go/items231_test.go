@@ -186,14 +186,14 @@ func TestItems231RequestAddsOnlyTheItemsLedgerLines(t *testing.T) {
 		t.Fatalf("not one entry: %s", byNumber)
 	}
 	s := allowListSamples()
-	for id, sh := range map[string]string{vchByNumberID: "42ccf0c70605", fetchTestA: "8f9370ab51b7"} {
+	for id, sh := range map[string]string{vchByNumberID: "42ccf0c70605"} {
 		if got := shapeOf(items231Old(s[id])); got != sh {
 			t.Errorf("%s without the added fields has shape %s, not 2.3.0's %s", id, got, sh)
 		}
 	}
-	if strings.ReplaceAll(fetchTestRequest("A", spikeCo, "20261002", "Sales", "101", ""), fetchTestA, vchByNumberID) != byNumber ||
-		fetchTestRequest("C", spikeCo, "20261002", "", "", "11") != voucherObjectRequest(spikeCo, "11") {
-		t.Fatal("the test forms A and C are no longer the requests as built")
+	// 2.3.4 (the owner, 08-Oct-2026): the trial forms A and C are removed
+	if fetchTestRequest("A", spikeCo, "20261002", "Sales", "101", "") != "" || fetchTestRequest("C", spikeCo, "20261002", "", "", "11") != "" {
+		t.Fatal("the trial forms A and C are still built")
 	}
 }
 

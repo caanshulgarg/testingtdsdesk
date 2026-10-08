@@ -229,9 +229,8 @@ func TestPartAFetchExactly(t *testing.T) {
 	if err := checkAllowed(byNumber); err != nil {
 		t.Fatalf("by number refused: %v", err)
 	}
-	if strings.ReplaceAll(fetchTestRequest("A", spikeCo, "20261002", "Sales", "201", ""), fetchTestA, vchByNumberID) != byNumber ||
-		fetchTestRequest("C", spikeCo, "20261002", "", "", "21") != voucherObjectRequest(spikeCo, "21") {
-		t.Fatal("the test forms A and C are no longer the requests as built")
+	if fetchTestRequest("A", spikeCo, "20261002", "Sales", "201", "") != "" || fetchTestRequest("C", spikeCo, "20261002", "", "", "21") != "" {
+		t.Fatal("the trial forms A and C are still built (2.3.4: removed)")
 	}
 	for _, l := range []string{"B", "D", "E", "F"} {
 		if x := fetchTestRequest(l, spikeCo, "20261002", "Sales", "201", "21"); !strings.Contains(x, "<FETCH>"+liveFetchField222+"</FETCH>") {

@@ -145,7 +145,7 @@ var requestRebuild = map[string]func(x string) []string{
 	"FinComMeasureLedO":  pinOne(func(x string) string { return measureReqLedO(pinCo(x), pinQuoted(x, "$Name")) }),
 	"FinComSnapshot":     pinOne(func(x string) string { a, z := pinDates(x); return snapshotRequest(pinCo(x), a, z) }),
 	// 2.2.3: "Test fetching an entry" (fetchtest.go)
-	fetchTestA: fetchTestRebuild("A"), fetchTestB: fetchTestRebuild("B"),
+	fetchTestB: fetchTestRebuild("B"),
 	fetchTestD: fetchTestRebuild("D"), fetchTestE: fetchTestRebuild("E"), fetchTestF: fetchTestRebuild("F"),
 }
 

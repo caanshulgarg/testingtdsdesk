@@ -669,7 +669,7 @@ func (t *tray) command(id int, st M) {
 		lines = append(lines, "", "The full lines, with the answer heads, are in Show log. Send that log to FinCom.")
 		msgBox("FinCom Bridge - Test reading from Tally", str(r["company"])+", "+str(r["day"])+"\n\n"+strings.Join(lines, "\n"), mbIconInfo)
 	case 24:
-		// 2.2.2 (the owner's request; NWS144 cannot run PowerShell): the six forms of the fetch check for one voucher, one
+		// 2.2.2 (the owner's request; NWS144 cannot run PowerShell): the forms of the fetch check (2.3.4: B, D, E and F; A and C removed) for one voucher, one
 		// at a time (fetchtest.go). It asks the voucher's type, number and date, then a yes/no naming the company
 		title := "FinCom Bridge - Test fetching an entry"
 		pv := trayCall("POST", "/tray/fetchtest", M{"preview": true})
@@ -706,7 +706,7 @@ func (t *tray) command(id int, st M) {
 			msgBox(title, why, mbIconWarning)
 			return
 		}
-		t.balloon("FinCom Bridge", "Test fetching an entry: "+company+", "+typ+" "+no+": six requests, one at a time. The result opens when it is done.", false)
+		t.balloon("FinCom Bridge", "Test fetching an entry: "+company+", "+typ+" "+no+": four requests, one at a time. The result opens when it is done.", false)
 		for i := 0; i < 450; i++ {
 			time.Sleep(2 * time.Second)
 			s := trayCall("GET", "/tray/fetchtest", nil)
