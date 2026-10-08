@@ -1,0 +1,210 @@
+[12:49:22] ---- c1 install and open the company (TallyPrime 3.0)
+  INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 11457160 bytes, 2026-10-08, FileVersion 1.1.3.0, ProductVersion 1.1.3.0, ProductName TallyPrime
+  INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-00-started (1024x768)
+[companies] 7 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[header] 7 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS><PRODMAJORVER>1</PRODMAJORVER><PRODMINORVER>1</PRODMINORVER><PRODMAJORREL>3</PRODMAJORREL><PRODMINORREL>0</PRODMINORREL><PRODTYPE>5</PRODTYPE></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</...
+  INFO Tally's own release in its answer header: PRODMAJORREL 3 PRODMINORREL 0 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+######## PASS c1 install and open the company: installed tally.exe 11457160 bytes, 2026-10-08, FileVersion 1.1.3.0, ProductVersion 1.1.3.0, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+######## PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 18 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 7 ms, 'FinCom Spike Co' in it: True
+[12:49:55] ---- the stub cloud and the bridge
+[ledger Spike Income] 13 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+  INFO setup origin: BUILT from source dist/FinComBridge-Setup-2.3.4.exe SHA-256 3cd3c70f36a1e5e7d3bfc94afcee2afe2800f07fa080199b1b298bd5fecb0280; bridge source: 2bf4011df3ddf68a82c1677a15fae593552715ae 2.3.4 test: TestFast234StripHoldsUnreadShapes's payroll case follows L1 (pay heads by employee are written as ledger lines with the employees as cost centres, no longer held); the other unread shapes still held
+bridge setup ended with 0
+  INFO bridge on 127.0.0.1:9100, version 2.3.4, allowImport True, readOnly '', testMode False
+  bridge log: 2026-10-08 12:50:05  FinCom Bridge 2.3.4: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+  bridge log: 2026-10-08 12:50:05  FinCom Bridge 2.3.4 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+  bridge log: 2026-10-08 12:50:05  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+  bridge log: 2026-10-08 12:50:05  Recorder: re-scan of the add-on's files for 2.3.4: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+  bridge log: 2026-10-08 12:50:05  Check:  - 
+  bridge log: 2026-10-08 12:50:08  Tray icon: set to show next to the clock always (Windows 11)
+  bridge log: 2026-10-08 12:50:08  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+  bridge log: 2026-10-08 12:50:08  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+  bridge log: 2026-10-08 12:50:08  Company FinCom Spike Co: its Tally GUID 4936f560-959e-4135-b301-4804b8e59629 is held from now on
+  bridge log: 2026-10-08 12:50:08  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=1, ALTMSTID=209 (reading is prospective only: the bridge follows what changes after this)
+  bridge log: 2026-10-08 12:50:08  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=1, ALTMSTID=209
+  bridge log: 2026-10-08 12:50:08  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=1, ALTMSTID=209)
+  INFO add-on: recorder files after start: none
+[12:50:51] ---- c3 posting from the bridge
+  voucher mid=1 aid=1 Journal/1/20260401 guid=4936f560-959e-4135-b301-4804b8e59629-00000001 cancelled=False
+  voucher mid=1 aid=1 Journal/1/20260401 guid=4936f560-959e-4135-b301-4804b8e59629-00000001 cancelled=False
+  voucher mid=2 aid=2 Journal/2/20261001 guid=4936f560-959e-4135-b301-4804b8e59629-00000002 cancelled=False
+  bridge log: 2026-10-08 12:50:52      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>2</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> </RESPONSE> 
+  bridge log: 2026-10-08 12:50:52    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 2)
+  bridge log: 2026-10-08 12:50:52  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+######## PASS c3 posting from the bridge: /import 506 ms; item ok=True message ''; Tally made Journal no 2 mid 2 narration 'TDSDesk:fcv30eb31991d | FinCom versions posting'; bridge: 2026-10-08 12:50:52    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 2)
+[12:51:02] ---- c4a create by keys
+  voucher mid=1 aid=1 Journal/1/20260401 guid=4936f560-959e-4135-b301-4804b8e59629-00000001 cancelled=False
+  voucher mid=2 aid=2 Journal/2/20261001 guid=4936f560-959e-4135-b301-4804b8e59629-00000002 cancelled=False
+[keys] 'v' -> Tally 'TallyPrime:9000'
+[shot] v-10-vouchers (1024x768)
+[keys] '{F6}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] 'Cash{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] 'Spike Income{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-11-particular (1024x768)
+[keys] '700{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] v-12-created (1024x768)
+  voucher mid=1 aid=1 Journal/1/20260401 guid=4936f560-959e-4135-b301-4804b8e59629-00000001 cancelled=False
+  voucher mid=2 aid=2 Journal/2/20261001 guid=4936f560-959e-4135-b301-4804b8e59629-00000002 cancelled=False
+  voucher mid=3 aid=3 Receipt/1/20261002 guid=4936f560-959e-4135-b301-4804b8e59629-00000003 cancelled=False
+  bridge log: 2026-10-08 12:51:31  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line 24197916…): asking Tally by MasterID
+  bridge log: 2026-10-08 12:51:31  Recorder: entry fetch of FinCom Spike Co: answered in 8 ms
+  bridge log: 2026-10-08 12:51:31  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line 24197916…): taken: Tally's GUID 4936f560-959e-4135-b301-4804b8e59629-00000003, AlterID 3
+######## PASS c4a create by keys: Tally made Receipt no 1 mid 3 guid 4936f560-959e-4135-b301-4804b8e59629-00000003; line after 5.2 s; stub 12:51:31 recorder line event=created guid=4936f560-959e-4135-b301-4804b8e59629-00000003 mid=3 aid=3 vch=Receipt/1/20261002 body=yes(876 chars)
+  INFO c8 not run: the add-on of this ref has no full entry (FCRLiveFull)
+[12:51:35] ---- c4b alter by keys
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-13-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-14-open (1024x768)
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-15-at-amount (1024x768)
+[keys] '800{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] v-16-altered (1024x768)
+  voucher mid=1 aid=1 Journal/1/20260401 guid=4936f560-959e-4135-b301-4804b8e59629-00000001 cancelled=False
+  voucher mid=2 aid=2 Journal/2/20261001 guid=4936f560-959e-4135-b301-4804b8e59629-00000002 cancelled=False
+  voucher mid=3 aid=4 Receipt/1/20261002 guid=4936f560-959e-4135-b301-4804b8e59629-00000003 cancelled=False
+  bridge log: 2026-10-08 12:52:15  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line 53ded2ce…): asking Tally by MasterID
+  bridge log: 2026-10-08 12:52:16  Recorder: entry fetch of FinCom Spike Co: answered in 6 ms
+  bridge log: 2026-10-08 12:52:16  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line 53ded2ce…): taken: Tally's GUID 4936f560-959e-4135-b301-4804b8e59629-00000003, AlterID 4
+######## PASS c4b alter by keys: Tally: mid 3 AlterID 3 -> 4; line after 5.1 s; stub 12:52:16 recorder line event=altered guid=4936f560-959e-4135-b301-4804b8e59629-00000003 mid=3 aid=4 vch=Receipt/1/20261002 body=yes(876 chars)
+[12:52:20] ---- c6 entry request (fetch test) for the Receipt
+fetch test start: {"company":"FinCom Spike Co","date":"20261002","number":"1","ok":true,"started":true,"type":"Receipt"}
+  bridge log: 2026-10-08 12:52:20  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: the company's period in Tally: books from 20260401 to 20261002
+  bridge log: 2026-10-08 12:52:20  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: B. by number with plain quote marks, dates yyyymmdd: sent <SVFROMDATE>20261002</SVFROMDATE><SVTODATE>20261002</SVTODATE>: 173 ms, 1 voucher, 13605 bytes
+  bridge log: 2026-10-08 12:52:20  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: B vouchers: MASTERID=3 VOUCHERNUMBER=1 DATE=20261002 VOUCHERTYPENAME=Receipt
+  bridge log: 2026-10-08 12:52:20  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: B answer starts: <ENVELOPE> <HEADER> <VERSION>1</VERSION> <STATUS>1</STATUS> </HEADER> <BODY> <DESC> <CMPINFO> <COMPANY>0</COMPANY> <GROUP>0</GROUP> <LEDGER>13</LEDGER> <COSTCATEGORY>0</COSTCATEGORY> <COSTCENTRE>0</COSTCENTRE> <GODOWN>0</GODOWN> <STOCKGROUP>0</STOCKGROUP> <STOCKCATEGORY>0</STOCKCATEGORY> <STOCKITEM>0</STOCKITEM> <VOUCHERTYPE>0</V
+  bridge log: 2026-10-08 12:52:20  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: D. by MasterID 3 with no dates: sent no SVFROMDATE/SVTODATE: 176 ms, 1 voucher, 13605 bytes
+  bridge log: 2026-10-08 12:52:20  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: D vouchers: MASTERID=3 VOUCHERNUMBER=1 DATE=20261002 VOUCHERTYPENAME=Receipt
+  bridge log: 2026-10-08 12:52:20  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: D answer starts: <ENVELOPE> <HEADER> <VERSION>1</VERSION> <STATUS>1</STATUS> </HEADER> <BODY> <DESC> <CMPINFO> <COMPANY>0</COMPANY> <GROUP>0</GROUP> <LEDGER>13</LEDGER> <COSTCATEGORY>0</COSTCATEGORY> <COSTCENTRE>0</COSTCENTRE> <GODOWN>0</GODOWN> <STOCKGROUP>0</STOCKGROUP> <STOCKCATEGORY>0</STOCKCATEGORY> <STOCKITEM>0</STOCKITEM> <VOUCHERTYPE>0</V
+  bridge log: 2026-10-08 12:52:21  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: E. by MasterID 3 with the dates as d-MMM-yyyy TYPE=Date: sent <SVFROMDATE TYPE="Date">2-Oct-2026</SVFROMDATE><SVTODATE TYPE="Date">2-Oct-2026</SVTODATE>: 172 ms, 1 voucher, 13605 bytes
+  bridge log: 2026-10-08 12:52:21  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: E vouchers: MASTERID=3 VOUCHERNUMBER=1 DATE=20261002 VOUCHERTYPENAME=Receipt
+  bridge log: 2026-10-08 12:52:21  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: E answer starts: <ENVELOPE> <HEADER> <VERSION>1</VERSION> <STATUS>1</STATUS> </HEADER> <BODY> <DESC> <CMPINFO> <COMPANY>0</COMPANY> <GROUP>0</GROUP> <LEDGER>13</LEDGER> <COSTCATEGORY>0</COSTCATEGORY> <COSTCENTRE>0</COSTCENTRE> <GODOWN>0</GODOWN> <STOCKGROUP>0</STOCKGROUP> <STOCKCATEGORY>0</STOCKCATEGORY> <STOCKITEM>0</STOCKITEM> <VOUCHERTYPE>0</V
+  bridge log: 2026-10-08 12:52:21  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: F. by number with plain quote marks and no dates: sent no SVFROMDATE/SVTODATE: 174 ms, 1 voucher, 13605 bytes
+  bridge log: 2026-10-08 12:52:21  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: F vouchers: MASTERID=3 VOUCHERNUMBER=1 DATE=20261002 VOUCHERTYPENAME=Receipt
+  bridge log: 2026-10-08 12:52:21  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: F answer starts: <ENVELOPE> <HEADER> <VERSION>1</VERSION> <STATUS>1</STATUS> </HEADER> <BODY> <DESC> <CMPINFO> <COMPANY>0</COMPANY> <GROUP>0</GROUP> <LEDGER>13</LEDGER> <COSTCATEGORY>0</COSTCATEGORY> <COSTCENTRE>0</COSTCENTRE> <GODOWN>0</GODOWN> <STOCKGROUP>0</STOCKGROUP> <STOCKCATEGORY>0</STOCKCATEGORY> <STOCKITEM>0</STOCKITEM> <VOUCHERTYPE>0</V
+  bridge log: 2026-10-08 12:52:21  Test fetching an entry: FinCom Spike Co, Receipt 1, 2-Oct-2026: summary: B 1 voucher 173 ms · D 1 voucher 176 ms · E 1 voucher 172 ms · F 1 voucher 174 ms
+######## PASS c6 entry request: Receipt 1 of 02-Oct-2026 (mid 3): this bridge has no forms A and C (removed in 2.3.4); its 4 form(s): B 1 voucher(s) 173 ms; D 1 voucher(s) 176 ms; E 1 voucher(s) 172 ms; F 1 voucher(s) 174 ms; MasterID found 3
+[12:52:23] ---- c5 Alt+2 duplicate
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-17-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-18-duplicate (1024x768)
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-19-dup-at-amount (1024x768)
+[keys] '900{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] v-20-dup-saved (1024x768)
+  voucher mid=1 aid=1 Journal/1/20260401 guid=4936f560-959e-4135-b301-4804b8e59629-00000001 cancelled=False
+  voucher mid=2 aid=2 Journal/2/20261001 guid=4936f560-959e-4135-b301-4804b8e59629-00000002 cancelled=False
+  voucher mid=3 aid=4 Receipt/1/20261002 guid=4936f560-959e-4135-b301-4804b8e59629-00000003 cancelled=False
+  voucher mid=4 aid=5 Receipt/2/20261002 guid=4936f560-959e-4135-b301-4804b8e59629-00000004 cancelled=False
+  bridge log: 2026-10-08 12:53:01  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 4, line 253739b5…): asking Tally by MasterID
+  bridge log: 2026-10-08 12:53:01  Recorder: entry fetch of FinCom Spike Co: answered in 7 ms
+  bridge log: 2026-10-08 12:53:01  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 4, line 253739b5…): taken: Tally's GUID 4936f560-959e-4135-b301-4804b8e59629-00000004, AlterID 5
+######## PASS c5 Alt+2 duplicate: Tally made Receipt no 2 mid 4 guid 4936f560-959e-4135-b301-4804b8e59629-00000004; source AlterID 4 -> 4, lines for the source 0; line after 5.1 s; stub 12:53:01 recorder line event=created guid=4936f560-959e-4135-b301-4804b8e59629-00000004 mid=4 aid=5 vch=Receipt/2/20261002 body=yes(876 chars)
+[12:53:20] ---- c4c cancel by keys
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-21-daybook (1024x768)
+[keys] '{HOME}' -> Tally 'TallyPrime:9000'
+[keys] '%x' -> Tally 'TallyPrime:9000'
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[shot] v-22-cancelled (1024x768)
+  voucher mid=1 aid=1 Journal/1/20260401 guid=4936f560-959e-4135-b301-4804b8e59629-00000001 cancelled=False
+  voucher mid=2 aid=2 Journal/2/20261001 guid=4936f560-959e-4135-b301-4804b8e59629-00000002 cancelled=False
+  voucher mid=3 aid=6 Receipt/1/20261002 guid=4936f560-959e-4135-b301-4804b8e59629-00000003 cancelled=True
+  voucher mid=4 aid=5 Receipt/2/20261002 guid=4936f560-959e-4135-b301-4804b8e59629-00000004 cancelled=False
+  bridge log: 2026-10-08 12:53:48  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line 2ad8c078…): asking Tally by MasterID
+  bridge log: 2026-10-08 12:53:49  Recorder: entry fetch of FinCom Spike Co: answered in 5 ms
+  bridge log: 2026-10-08 12:53:49  Recorder: FinCom Spike Co: cancel of mid 3: GUID from Tally (asked by MasterID): 4936f560-959e-4135-b301-4804b8e59629-00000003; the GUID its MasterID makes agrees
+######## PASS c4c cancel by keys: Tally cancelled mid 3 guid 4936f560-959e-4135-b301-4804b8e59629-00000003; line after 4.1 s; stub 12:53:49 recorder line event=cancelled guid=4936f560-959e-4135-b301-4804b8e59629-00000003 mid=3 aid=6 vch=Receipt/1/20261002 body=none
+[12:53:52] ---- c4d delete by keys
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-23-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%d' -> Tally 'TallyPrime:9000'
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[shot] v-24-deleted (1024x768)
+  voucher mid=1 aid=1 Journal/1/20260401 guid=4936f560-959e-4135-b301-4804b8e59629-00000001 cancelled=False
+  voucher mid=2 aid=2 Journal/2/20261001 guid=4936f560-959e-4135-b301-4804b8e59629-00000002 cancelled=False
+  voucher mid=3 aid=6 Receipt/1/20261002 guid=4936f560-959e-4135-b301-4804b8e59629-00000003 cancelled=True
+  bridge log: 2026-10-08 12:54:20  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 4, line ea3b64ba…): asking Tally by MasterID
+  bridge log: 2026-10-08 12:54:20  Recorder: entry fetch of FinCom Spike Co: answered in 1 ms
+  bridge log: 2026-10-08 12:54:20  Recorder: FinCom Spike Co: delete of mid 4: not in this Tally (asked by MasterID): proven deleted here
+  bridge log: 2026-10-08 12:54:20  Recorder: FinCom Spike Co: delete of mid 4: GUID from the bridge's record: 4936f560-959e-4135-b301-4804b8e59629-00000004; the GUID its MasterID makes agrees
+######## PASS c4d delete by keys: Tally deleted Receipt no 2 mid 4 guid 4936f560-959e-4135-b301-4804b8e59629-00000004; line after 4.1 s; stub 12:54:20 recorder line event=deleted guid=4936f560-959e-4135-b301-4804b8e59629-00000004 mid=4 aid= vch=Receipt/2/20261002 body=none; held words: none; bridge log: 2026-10-08 12:54:20  Recorder: FinCom Spike Co: delete of mid 4: not in this Tally (asked by MasterID): proven deleted here | 2026-10-08 12:54:20  Recorder: FinCom Spike Co: delete of mid 4: GUID from the bridge's record: 4936f560-959e-4135-b301-4804b8e59629-00000004; the GUID its MasterID makes agrees
+[12:54:23] ---- c7 version string the bridge reads (read test)
+read test start: {"company":"FinCom Spike Co","day":"20261008","ok":true,"started":true}
+  bridge log: 2026-10-08 12:54:23  Test reading from Tally: FinCom Spike Co, 20261002: Day Book, dates yyyymmdd: 1 vouchers, 25287 bytes, 0.2 s; head: <ENVELOPE><HEADER><TALLYREQUEST></TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME></REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY></SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><R
+  bridge log: 2026-10-08 12:54:24  Test reading from Tally: FinCom Spike Co, 20261002: Day Book, dates yyyymmdd, the empty day 20260930: 1 vouchers (or not answered in full)
+  bridge log: 2026-10-08 12:54:24  Test reading from Tally: FinCom Spike Co, 20261002: Day Book, dates yyyymmdd answers the day with exactly its entries: no
+  bridge log: 2026-10-08 12:54:24  Test reading from Tally: FinCom Spike Co, 20261002: Day Book, dates d-MMM-yyyy: 1 vouchers, 25287 bytes, 0.2 s; head: <ENVELOPE><HEADER><TALLYREQUEST></TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME></REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY></SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><R
+  bridge log: 2026-10-08 12:54:24  Test reading from Tally: FinCom Spike Co, 20261002: Day Book, dates d-MMM-yyyy, the empty day 20260930: 1 vouchers (or not answered in full)
+  bridge log: 2026-10-08 12:54:24  Test reading from Tally: FinCom Spike Co, 20261002: Day Book, dates d-MMM-yyyy answers the day with exactly its entries: no
+  bridge log: 2026-10-08 12:54:24  Test reading from Tally: FinCom Spike Co, 20261002: Day Book, dates yyyymmdd TYPE=Date: 1 vouchers, 25287 bytes, 0.2 s; head: <ENVELOPE><HEADER><TALLYREQUEST></TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME></REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY></SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><R
+  bridge log: 2026-10-08 12:54:24  Test reading from Tally: FinCom Spike Co, 20261002: Day Book, dates yyyymmdd TYPE=Date, the empty day 20260930: 1 vouchers (or not answered in full)
+  bridge log: 2026-10-08 12:54:24  Test reading from Tally: FinCom Spike Co, 20261002: Day Book, dates yyyymmdd TYPE=Date answers the day with exactly its entries: no
+  bridge log: 2026-10-08 12:54:24  Test reading from Tally: FinCom Spike Co, 20261002: Day Book, dates d-MMM-yyyy TYPE=Date: 1 vouchers, 25287 bytes, 0.2 s; head: <ENVELOPE><HEADER><TALLYREQUEST></TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME></REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY></SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><R
+  bridge log: 2026-10-08 12:54:25  Test reading from Tally: FinCom Spike Co, 20261002: Day Book, dates d-MMM-yyyy TYPE=Date, the empty day 20260930: 1 vouchers (or not answered in full)
+  bridge log: 2026-10-08 12:54:25  Test reading from Tally: FinCom Spike Co, 20261002: Day Book, dates d-MMM-yyyy TYPE=Date answers the day with exactly its entries: no
+  bridge log: 2026-10-08 12:54:25  Test reading from Tally: FinCom Spike Co, 20261002: Dates on this Tally: none of the 4 forms answered 20261002 with exactly its entries
+  bridge log: 2026-10-08 12:54:25  Test reading from Tally: FinCom Spike Co, 20261002: FinComTag (the posting read-back's request): 3 vouchers, 5618 bytes, 0.2 s; head: <ENVELOPE><HEADER><VERSION></VERSION><STATUS></STATUS></HEADER><BODY><DESC></DESC><DATA><COLLECTION><VOUCHER><DATE></DATE><GUID></GUID><NARRATION></NARRATION><REQUESTORRULE><VOUCHERTYPENAME></VOUCHERT
+  bridge log: 2026-10-08 12:54:25  Test reading from Tally: FinCom Spike Co, 20261002: FinComCompany (change numbers): 0 vouchers, 1746 bytes, 0.2 s; head: <ENVELOPE><HEADER><VERSION></VERSION><STATUS></STATUS></HEADER><BODY><DESC></DESC><DATA><COLLECTION><COMPANY><NAME></NAME><GUID></GUID><ALTVCHID></ALTVCHID><ALTMSTID></ALTMSTID></COMPANY></COLLECTION>
+  bridge log: 2026-10-08 12:54:25  Test reading from Tally: FinCom Spike Co, 20261002: change numbers ALTVCHID=8, ALTMSTID=209
+  bridge log: 2026-10-08 12:54:25  Test reading from Tally: FinCom Spike Co, 20261002: FinComCompanyNumbers (change numbers, form b: the report): 0 vouchers, 199 bytes, 0.2 s; head: <FINCOMNUMBERS><COMPANY><NAME></NAME><GUID></GUID><ALTVCHID></ALTVCHID><ALTMSTID></ALTMSTID></COMPANY></FINCOMNUMBERS>
+  bridge log: 2026-10-08 12:54:25  Test reading from Tally: FinCom Spike Co, 20261002: Entries above the starting point (TDSDeskKeepList, AlterID above 1, no dates): 2 vouchers, 3914 bytes, 0.2 s; head: <ENVELOPE><HEADER><VERSION></VERSION><STATUS></STATUS></HEADER><BODY><DESC></DESC><DATA><COLLECTION><VOUCHER><DATE></DATE><GUID></GUID><REQUESTORRULE><VOUCHERTYPENAME></VOUCHERTYPENAME><VOUCHERNUMBER>
+  bridge log: 2026-10-08 12:54:25  Dates (collection): the copy holds no day of a past year; the collection forms are not tried
+  bridge log: 2026-10-08 12:54:25  Tally program: tally.exe, 11457160 bytes, 2026-10-08 (C:\Program Files\TallyPrime\tally.exe)
+  bridge log: 2026-10-08 12:54:25  Edit Log probe (FinComEditLogProbe, MasterID 3): answered, 2710 bytes, 0.2 s; tags: <ENVELOPE><HEADER><VERSION></VERSION><STATUS></STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY></COMPANY><GROUP></GROUP><LEDGER></LEDGER><COSTCATEGORY></COSTCATEGORY><COSTCENTRE></COSTCENTRE><GODOWN></GODOWN><STOCKGROUP></STOCKGROUP><STOCKCATEGORY></STOCKCATEGORY><STOCKITEM></STOCKITEM><VOUCHERTYPE></
+  bridge log: 2026-10-08 12:54:26  Test reading from Tally: FinCom Spike Co, 20261002: FinComCompany sent as UTF-16 and as UTF-8: the same answer (1746 bytes)
+######## PASS c7 version string the bridge reads: bridge: 'tally.exe, 11457160 bytes, 2026-10-08 (C:\Program Files\TallyPrime\tally.exe)'; read test state done; Tally's header: PRODMAJORREL 3 PRODMINORREL 0 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5); file: tally.exe 11457160 bytes, 2026-10-08, FileVersion 1.1.3.0, ProductVersion 1.1.3.0, ProductName TallyPrime
+[12:54:26] ---- what is kept
+  voucher mid=1 aid=1 Journal/1/20260401 guid=4936f560-959e-4135-b301-4804b8e59629-00000001 cancelled=False
+  voucher mid=2 aid=2 Journal/2/20261001 guid=4936f560-959e-4135-b301-4804b8e59629-00000002 cancelled=False
+  voucher mid=3 aid=6 Receipt/1/20261002 guid=4936f560-959e-4135-b301-4804b8e59629-00000003 cancelled=True
+== results
+INFO TallyPrime 3.0, mode full, runner GitHub Actions 1000005487, 2026-10-08T12:49:22
+INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 11457160 bytes, 2026-10-08, FileVersion 1.1.3.0, ProductVersion 1.1.3.0, ProductName TallyPrime
+INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+INFO Tally's own release in its answer header: PRODMAJORREL 3 PRODMINORREL 0 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+PASS c1 install and open the company: installed tally.exe 11457160 bytes, 2026-10-08, FileVersion 1.1.3.0, ProductVersion 1.1.3.0, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 18 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 7 ms, 'FinCom Spike Co' in it: True
+INFO setup origin: BUILT from source dist/FinComBridge-Setup-2.3.4.exe SHA-256 3cd3c70f36a1e5e7d3bfc94afcee2afe2800f07fa080199b1b298bd5fecb0280; bridge source: 2bf4011df3ddf68a82c1677a15fae593552715ae 2.3.4 test: TestFast234StripHoldsUnreadShapes's payroll case follows L1 (pay heads by employee are written as ledger lines with the employees as cost centres, no longer held); the other unread shapes still held
+INFO bridge on 127.0.0.1:9100, version 2.3.4, allowImport True, readOnly '', testMode False
+INFO add-on: recorder files after start: none
+PASS c3 posting from the bridge: /import 506 ms; item ok=True message ''; Tally made Journal no 2 mid 2 narration 'TDSDesk:fcv30eb31991d | FinCom versions posting'; bridge: 2026-10-08 12:50:52    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 2)
+PASS c4a create by keys: Tally made Receipt no 1 mid 3 guid 4936f560-959e-4135-b301-4804b8e59629-00000003; line after 5.2 s; stub 12:51:31 recorder line event=created guid=4936f560-959e-4135-b301-4804b8e59629-00000003 mid=3 aid=3 vch=Receipt/1/20261002 body=yes(876 chars)
+INFO c8 not run: the add-on of this ref has no full entry (FCRLiveFull)
+PASS c4b alter by keys: Tally: mid 3 AlterID 3 -> 4; line after 5.1 s; stub 12:52:16 recorder line event=altered guid=4936f560-959e-4135-b301-4804b8e59629-00000003 mid=3 aid=4 vch=Receipt/1/20261002 body=yes(876 chars)
+PASS c6 entry request: Receipt 1 of 02-Oct-2026 (mid 3): this bridge has no forms A and C (removed in 2.3.4); its 4 form(s): B 1 voucher(s) 173 ms; D 1 voucher(s) 176 ms; E 1 voucher(s) 172 ms; F 1 voucher(s) 174 ms; MasterID found 3
+PASS c5 Alt+2 duplicate: Tally made Receipt no 2 mid 4 guid 4936f560-959e-4135-b301-4804b8e59629-00000004; source AlterID 4 -> 4, lines for the source 0; line after 5.1 s; stub 12:53:01 recorder line event=created guid=4936f560-959e-4135-b301-4804b8e59629-00000004 mid=4 aid=5 vch=Receipt/2/20261002 body=yes(876 chars)
+PASS c4c cancel by keys: Tally cancelled mid 3 guid 4936f560-959e-4135-b301-4804b8e59629-00000003; line after 4.1 s; stub 12:53:49 recorder line event=cancelled guid=4936f560-959e-4135-b301-4804b8e59629-00000003 mid=3 aid=6 vch=Receipt/1/20261002 body=none
+PASS c4d delete by keys: Tally deleted Receipt no 2 mid 4 guid 4936f560-959e-4135-b301-4804b8e59629-00000004; line after 4.1 s; stub 12:54:20 recorder line event=deleted guid=4936f560-959e-4135-b301-4804b8e59629-00000004 mid=4 aid= vch=Receipt/2/20261002 body=none; held words: none; bridge log: 2026-10-08 12:54:20  Recorder: FinCom Spike Co: delete of mid 4: not in this Tally (asked by MasterID): proven deleted here | 2026-10-08 12:54:20  Recorder: FinCom Spike Co: delete of mid 4: GUID from the bridge's record: 4936f560-959e-4135-b301-4804b8e59629-00000004; the GUID its MasterID makes agrees
+PASS c7 version string the bridge reads: bridge: 'tally.exe, 11457160 bytes, 2026-10-08 (C:\Program Files\TallyPrime\tally.exe)'; read test state done; Tally's header: PRODMAJORREL 3 PRODMINORREL 0 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5); file: tally.exe 11457160 bytes, 2026-10-08, FileVersion 1.1.3.0, ProductVersion 1.1.3.0, ProductName TallyPrime
