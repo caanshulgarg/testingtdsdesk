@@ -198,6 +198,16 @@ function BkBrs($tag) {
   Start-Sleep 2
   $post = BkContras; $co1n = BkCo
   $dated = $null; foreach ($v in $post) { $p = BkFindMid $pre $v.mid; if ($v.bdate -and $p -and -not $p.bdate) { $dated = $v; break } }
+  # (run 37766812255, 7.1: the screen showed the bank date and the contra's AlterID moved, but ALLLEDGERENTRIES.BANKALLOCATIONS
+  # .BANKERSDATE stayed empty: the contra whose AlterID moved is taken, and its whole stored form kept to see where 7.1 keeps it)
+  $byAid = $false
+  if (-not $dated) { foreach ($v in $post) { $p = BkFindMid $pre $v.mid; if ($p -and $v.aid -ne $p.aid -and $v.narr -like 'bank probe C*') { $dated = $v; $byAid = $true; break } } }
+  if ($dated) {
+    $full = BkPost ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>BkW</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY><SVFROMDATE>20260401</SVFROMDATE><SVTODATE>20270331</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="BkW" ISMODIFY="No"><TYPE>Voucher</TYPE><FETCH>*, ALLLEDGERENTRIES.*, ALLLEDGERENTRIES.BANKALLOCATIONS.*</FETCH><FILTERS>BkWF</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="BkWF">$MasterID = ' + (TdsMid $dated.mid) + '</SYSTEM></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>')
+    Set-Content (Join-Path $cap "$tag.dated-voucher.xml") $full -Encoding UTF8
+    $dt = @([regex]::Matches("$full", '<([A-Z.]*DATE[A-Z]*)[^>]*>\s*(2026\d{4})\s*<') | ForEach-Object { "$($_.Groups[1].Value)=$($_.Groups[2].Value)" } | Select-Object -Unique)
+    Info "$tag the dated contra stored whole: every date field: $($dt -join ', ')"
+  }
   $p = if ($dated) { BkFindMid $pre $dated.mid } else { $null }
   $allR = BkRec; $allP = BkProbe; $nr = @($allR | Select-Object -Skip $r0); $np = @($allP | Select-Object -Skip $p0)
   $mine = if ($dated) { @($nr | Where-Object { $_ -match "\|mid=$($dated.mid)\|" }).Count } else { 0 }
@@ -205,7 +215,7 @@ function BkBrs($tag) {
   $state = if (-not $dated) { 'HARNESS' } else { 'INFO' }
   $row = [pscustomobject]@{ tag = $tag; path = 'brs'; how = $how; dated = $(if ($dated) { $dated.narr } else { '' }); mid = $(if ($dated) { $dated.mid } else { 0 }); aid0 = $(if ($p) { $p.aid } else { '' }); aid1 = $(if ($dated) { $dated.aid } else { '' }); vch0 = $co0.vch; vch1 = $co1n.vch; mst0 = $co0.mst; mst1 = $co1n.mst; ms = $(if ($sv) { $sv.ms } else { -1 }); raw = $(if ($sv) { $sv.raw } else { '' }); fcr1 = (BkEvs $nr); fcr1mid = $mine; probe = (BkEvs $np) }
   $script:bkRows += $row
-  Result "$tag bank date in Bank Reconciliation" $state ("{0}: {1}; AlterID {2} -> {3}; company AltVchId {4} -> {5}, AltMstId {6} -> {7}; Ctrl+A to a still screen {8} ms ({9}); add-on FCR1 lines: {10} (for its MasterID: {11}); probe lines: {12}" -f $how, $(if ($dated) { "Tally bank-dated '$($dated.narr)' (mid $($dated.mid), bank date $($dated.bdate))" } else { 'no contra got a bank date (see tds-*-' + $tag + '-* screenshots)' }), $row.aid0, $row.aid1, $row.vch0, $row.vch1, $row.mst0, $row.mst1, $row.ms, $row.raw, $(if ($row.fcr1) { $row.fcr1 } else { 'none' }), $mine, $(if ($row.probe) { $row.probe } else { 'none' }))
+  Result "$tag bank date in Bank Reconciliation" $state ("{0}: {1}; AlterID {2} -> {3}; company AltVchId {4} -> {5}, AltMstId {6} -> {7}; Ctrl+A to a still screen {8} ms ({9}); add-on FCR1 lines: {10} (for its MasterID: {11}); probe lines: {12}" -f $how, $(if ($dated) { "Tally bank-dated '$($dated.narr)' (mid $($dated.mid), bank date '$($dated.bdate)'$(if ($byAid) { ', found by its AlterID: no BANKERSDATE in the export' }))" } else { 'no contra got a bank date (see tds-*-' + $tag + '-* screenshots)' }), $row.aid0, $row.aid1, $row.vch0, $row.vch1, $row.mst0, $row.mst1, $row.ms, $row.raw, $(if ($row.fcr1) { $row.fcr1 } else { 'none' }), $mine, $(if ($row.probe) { $row.probe } else { 'none' }))
 }
 # a contra of 1-10-2026 (Zprobe Bank) opened from the Day Book ({END}, then $ups x {UP}), Enter through it to its Bank
 # Allocations sub-screen (read: is there a Bank Date field?), the sub-screen accepted, the entry saved (timed)
@@ -220,6 +230,7 @@ function BkAlloc($tag, [int]$ups) {
   $seen = $false; $hasBD = $false; $atxt = ''
   for ($j = 1; $j -le 10; $j++) {
     $t = TdsScreen "$tag-walk$j"
+    if ($t -match 'Kiwi Mark') { $script:kiwi = $true }
     if ($t -match 'Bank Allocation|Bank Details') { $seen = $true; $hasBD = $t -match 'Bank Date'; $atxt = $t; break }
     if ($t -match 'Accept \?|Yes or No') { break }
     KeysTo '{ENTER}' 1.5
@@ -240,7 +251,7 @@ function BkAlloc($tag, [int]$ups) {
   $allR = BkRec; $allP = BkProbe; $nr = @($allR | Select-Object -Skip $r0); $np = @($allP | Select-Object -Skip $p0)
   $mine = if ($tgt) { @($nr | Where-Object { $_ -match "\|mid=$($tgt.mid)\|" }).Count } else { 0 }
   Set-Content (Join-Path $cap "$tag.fcr1.txt") $nr -Encoding UTF8; Set-Content (Join-Path $cap "$tag.probe.txt") $np -Encoding UTF8
-  $row = [pscustomobject]@{ tag = $tag; path = 'alloc'; how = "Bank Allocations seen $seen, a Bank Date field on it $hasBD"; dated = $(if ($tgt) { $tgt.narr } else { '' }); mid = $(if ($tgt) { $tgt.mid } else { 0 }); aid0 = $(if ($p) { $p.aid } else { '' }); aid1 = $(if ($tgt) { $tgt.aid } else { '' }); vch0 = $co0.vch; vch1 = $co1n.vch; mst0 = $co0.mst; mst1 = $co1n.mst; ms = $(if ($sv) { $sv.ms } else { -1 }); raw = $(if ($sv) { $sv.raw } else { '' }); fcr1 = (BkEvs $nr); fcr1mid = $mine; probe = (BkEvs $np) }
+  $row = [pscustomobject]@{ tag = $tag; path = 'alloc'; how = "Bank Allocations seen $seen, a Bank Date field on it $hasBD$(if ($script:bkMarks.Count) { "; the control button (Kiwi Mark) on the voucher screen: $([bool]$script:kiwi)" })"; dated = $(if ($tgt) { $tgt.narr } else { '' }); mid = $(if ($tgt) { $tgt.mid } else { 0 }); aid0 = $(if ($p) { $p.aid } else { '' }); aid1 = $(if ($tgt) { $tgt.aid } else { '' }); vch0 = $co0.vch; vch1 = $co1n.vch; mst0 = $co0.mst; mst1 = $co1n.mst; ms = $(if ($sv) { $sv.ms } else { -1 }); raw = $(if ($sv) { $sv.raw } else { '' }); fcr1 = (BkEvs $nr); fcr1mid = $mine; probe = (BkEvs $np) }
   $script:bkRows += $row
   Result "$tag voucher altered through its Bank Allocations" $(if ($tgt) { 'INFO' } else { 'HARNESS' }) ("{0}; {1}; AlterID {2} -> {3}; company AltVchId {4} -> {5}; Ctrl+A to a still screen {6} ms ({7}); add-on FCR1 lines: {8} (for its MasterID: {9}); probe lines: {10}; the sub-screen read: {11}" -f $row.how, $(if ($tgt) { "saved '$($tgt.narr)' (mid $($tgt.mid), bank date now '$($tgt.bdate)')" } else { 'no contra saved (see tds-*-' + $tag + '-* screenshots)' }), $row.aid0, $row.aid1, $row.vch0, $row.vch1, $row.ms, $row.raw, $(if ($row.fcr1) { $row.fcr1 } else { 'none' }), $mine, $(if ($row.probe) { $row.probe } else { 'none' }), $(if ($atxt.Length -gt 300) { $atxt.Substring(0, 300) } else { $atxt }))
 }
@@ -261,14 +272,17 @@ $common = @'
     Returns   : Logical
     01 : SET : vL : "FCRP|ev=" + ##pEv + "|t=" + ($$String:$$MachineTime) + "|guid=" + ($$String:$Guid) + "|mid=" + ($$String:$MasterID) + "|aid=" + ($$String:$AlterID)
     02 : SET : vL : ##vL + "|vtype=" + ($$String:$VoucherTypeName) + "|vno=" + ($$String:$VoucherNumber) + "|vdate=" + ($$String:$Date)
-    03 : SET : vL : ##vL + "|name=" + ($$String:$Name) + "|parent=" + ($$String:$Parent) + "|ledger=" + ($$String:$LedgerName) + "|bdate=" + ($$String:$BankersDate) + "|idate=" + ($$String:$InstrumentDate)
-    04 : OPEN FILE : "C:\ProgramData\FinCom\recorder\probe.txt" : Text : Write : Unicode
-    05 : IF : NOT $$LastResult
-    06 :    RETURN : Yes
-    07 : END IF
-    08 : WRITE FILE LINE : ##vL
-    09 : CLOSE TARGET FILE
-    10 : RETURN : Yes
+    03 : SET : vL : ##vL + "|name=" + ($$String:$Name) + "|parent=" + ($$String:$Parent)
+    04 : SET : vL : ##vL + "|ledger=" + ($$String:$LedgerName)
+    05 : SET : vL : ##vL + "|bdate=" + ($$String:$BankersDate)
+    06 : SET : vL : ##vL + "|idate=" + ($$String:$InstrumentDate)
+    07 : OPEN FILE : "C:\ProgramData\FinCom\recorder\probe.txt" : Text : Write : Unicode
+    08 : IF : NOT $$LastResult
+    09 :    RETURN : Yes
+    10 : END IF
+    11 : WRITE FILE LINE : ##vL
+    12 : CLOSE TARGET FILE
+    13 : RETURN : Yes
 
 [Collection: FCRPAliveCommon]
     Type : Company
@@ -278,8 +292,16 @@ $probes = [ordered]@{}
 $sysEv = [ordered]@{ 'sys-afteralter' = 'After Alter Object'; 'sys-beforealter' = 'Before Alter Object'; 'sys-onalter' = 'On Alter'; 'sys-beforesave' = 'Before Save Object'; 'sys-aftersave' = 'After Save Object' }
 foreach ($k in $sysEv.Keys) { $probes[$k] = "[System: Events]`r`n    FCRP$($k -replace '\W', '') : $($sysEv[$k]) : Yes : Call : FCRPWrite : `"$k`"`r`n" }
 $markWords = @('Zebra Mark', 'Lotus Mark', 'Tiger Mark', 'Maple Mark', 'Coral Mark', 'Amber Mark', 'Cedar Mark', 'Delta Mark')
+# (runs 37763910797 / 37766812255: Tally knows the REPORTS Bank Recon and BankRecon on every release, but a button added
+# to [#Form: Bank Recon] / [#Form: BankRecon] never showed on the reconciliation screen: more form names, each its own file)
+$brsUse = @('Bank Recon', 'BankRecon', 'Bank Reconciliation', 'Bank Recon Summary', 'Bank Recon Manual', 'Manual Bank Recon', 'BRS', 'Bank Recon Details')
+$markWords = @('Zebra Mark', 'Lotus Mark', 'Tiger Mark', 'Maple Mark', 'Coral Mark', 'Amber Mark', 'Cedar Mark', 'Delta Mark')
+# the control: a button on the Voucher form (no Form Accept line: the add-on's own hook stays the only one), seen on the
+# voucher alteration screen of the allocation step = the button mechanism works on this release
+$script:bkMarks['control-voucher'] = 'Kiwi Mark'
+$probes['control-voucher'] = "[#Form: Voucher]`r`n    Add : Button : FCRPBV`r`n`r`n[Button: FCRPBV]`r`n    Key    : Ctrl+Alt+F11`r`n    Title  : `"Kiwi Mark`"`r`n    Action : Display : Day Book`r`n"
 $i = 0; foreach ($n in $brsUse) { $i++; $w = $markWords[($i - 1) % $markWords.Count]; $script:bkMarks["brs$i"] = $w
-  $probes["brs$i"] = "[#Form: $n]`r`n    Add : Button : FCRPB$i`r`n    On : Form Accept : Yes : Call : FCRPWrite : `"brs${i}_pre`"`r`n    On : Form Accept : Yes : Form Accept`r`n    On : Form Accept : Yes : Call : FCRPWrite : `"brs${i}_post`"`r`n`r`n[Button: FCRPB$i]`r`n    Key    : Ctrl+Alt+F$([math]::Min(12, 2 + $i))`r`n    Title  : `"$w`"`r`n    Action : Display : Day Book`r`n"
+  $probes["brs$i"] = "[#Form: $n]`r`n    Add : Button : FCRPB$i`r`n    On : Form Accept : Yes : Call : FCRPWrite : `"brs${i}_pre`"`r`n    On : Form Accept : Yes : Form Accept`r`n    On : Form Accept : Yes : Call : FCRPWrite : `"brs${i}_post`"`r`n`r`n[Button: FCRPB$i]`r`n    Key    : Ctrl+Alt+$([char](64 + $i))`r`n    Title  : `"$w`"`r`n    Action : Display : Day Book`r`n"
   Info "probe brs$i = [#Form: $n] (its button '$w' on the screen = attached)" }
 $i = 0; foreach ($n in $allocUse) { $i++; $probes["alloc$i"] = "[#Form: $n]`r`n    On : Form Accept : Yes : Call : FCRPWrite : `"alloc${i}_pre`"`r`n    On : Form Accept : Yes : Form Accept`r`n    On : Form Accept : Yes : Call : FCRPWrite : `"alloc${i}_post`"`r`n"; Info "probe alloc$i = [#Form: $n]" }
 $files = @($tdl, (Join-Path $pd 'probe-common.tdl'))
@@ -292,19 +314,10 @@ foreach ($k in $probes.Keys) {
 Copy-Item (Join-Path $pd 'probe-common.tdl') (Join-Path $cap 'probe-common.tdl')
 $script:bkIni = $files; BkIni
 BkFresh 'BK1: the probe variant loaded'
-# which probe files Tally loaded: its answer to each file's own collection
-$alive = [ordered]@{}
-# (run 37763910797: every collection asked, defined or not, came back with the same header-only answer; the answer for a
-# collection that is surely not defined is now the yardstick)
-$askC = { param($id) "$(BkPost ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>' + $id + '</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + (SE $co1) + '</SVCURRENTCOMPANY></STATICVARIABLES></DESC></BODY></ENVELOPE>'))" -replace '\s+', ' ' }
-$negC = (& $askC 'FCRPAliveNoSuch77') -replace 'FCRPAliveNoSuch77', '<N>'
-Info "probe-file yardstick (a collection not defined): $(if ($negC.Length -gt 200) { $negC.Substring(0, 200) } else { $negC })"
-foreach ($k in @('Common') + @($probes.Keys)) {
-  $id = "FCRPAlive$($k -replace '\W', '')"
-  $a = & $askC $id
-  $alive[$k] = ($a -ne '') -and (($a -replace [regex]::Escape($id), '<N>') -ne $negC)
-  $s = $a; Info ("probe file {0}: loaded {1} ({2})" -f $k, $alive[$k], $(if ($s.Length -gt 140) { $s.Substring(0, 140) } else { $s }))
-}
+# which probe files attached: each form probe adds a button whose title is read on the screen (run 37766812255: asking
+# Tally for a collection that is not defined, with the company set, got no answer in 30 s on every release, so files are
+# no longer checked by a collection; run 37763910797: without the company every such ask got the same answer)
+$alive = $script:bkMarks
 $err = @(Get-ChildItem $dir, $data1 -Recurse -File -Include *tdl*.log, tdlerr*, *error*.log -ErrorAction SilentlyContinue)
 foreach ($f in $err) { Info "Tally file $($f.FullName): $((Get-Content $f.FullName -Tail 12) -join ' | ')"; Copy-Item $f.FullName (Join-Path $cap "tally-$($f.Name)") -ErrorAction SilentlyContinue }
 BkAlloc 'BK1-alloc' 1
