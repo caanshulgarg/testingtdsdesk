@@ -1,0 +1,34 @@
+2026-10-08 19:00:35  FinCom Bridge 2.4.0: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+2026-10-08 19:00:35  FinCom Bridge 2.4.0 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+2026-10-08 19:00:35  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+2026-10-08 19:00:35  Recorder: re-scan of the add-on's files for 2.4.0: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+2026-10-08 19:00:35  Check:  - 
+2026-10-08 19:00:38  Tray icon: set to show next to the clock always (Windows 11)
+2026-10-08 19:00:38  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+2026-10-08 19:00:38  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+2026-10-08 19:00:38  Company FinCom Spike Co: its Tally GUID dc332f74-fd1d-4662-bfbc-0b37e9da4100 is held from now on
+2026-10-08 19:00:38  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=2, ALTMSTID=209 (reading is prospective only: the bridge follows what changes after this)
+2026-10-08 19:00:38  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=2, ALTMSTID=209
+2026-10-08 19:00:38  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=2, ALTMSTID=209)
+2026-10-08 19:03:09  Recorder: Receipt 3 of 02-Oct-2026 (MasterID 8, line 9de98b02…): asking Tally by MasterID
+2026-10-08 19:03:09  Recorder: entry fetch of FinCom Spike Co: answered in 7 ms
+2026-10-08 19:03:09  Recorder: Receipt 3 of 02-Oct-2026 (MasterID 8, line 9de98b02…): taken: Tally's GUID dc332f74-fd1d-4662-bfbc-0b37e9da4100-00000008, AlterID 8
+2026-10-08 19:03:09  Renumbering: made Receipt 3 of 02-Oct-2026 in FinCom Spike Co: FinCom holds 3 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
+2026-10-08 19:03:10  Recorder: Receipt 4 of 02-Oct-2026 (MasterID 5, line 64f86502…): taken: Tally's GUID dc332f74-fd1d-4662-bfbc-0b37e9da4100-00000005, AlterID 5
+2026-10-08 19:03:10  Renumbering: Receipt 3 of 02-Oct-2026 in FinCom Spike Co is Receipt 4 in Tally now (renumbered); sent to FinCom with Tally's entry
+2026-10-08 19:03:10  Recorder: entry fetch of FinCom Spike Co: answered in 6 ms
+2026-10-08 19:03:10  Recorder: Receipt 5 of 02-Oct-2026 (MasterID 6, line 704ce1b4…): taken: Tally's GUID dc332f74-fd1d-4662-bfbc-0b37e9da4100-00000006, AlterID 6
+2026-10-08 19:03:10  Renumbering: Receipt 4 of 02-Oct-2026 in FinCom Spike Co is Receipt 5 in Tally now (renumbered); sent to FinCom with Tally's entry
+2026-10-08 19:03:10  Recorder: Receipt 6 of 31-Oct-2026 (MasterID 7, line 30a63201…): taken: Tally's GUID dc332f74-fd1d-4662-bfbc-0b37e9da4100-00000007, AlterID 7
+2026-10-08 19:03:10  Renumbering: Receipt 5 of 31-Oct-2026 in FinCom Spike Co is Receipt 6 in Tally now (renumbered); sent to FinCom with Tally's entry
+2026-10-08 19:03:10  Renumbering: 3 Receipt entries of FinCom Spike Co renumbered by Tally after the entry of Receipt 3 (02-Oct-2026): sent to FinCom with Tally's numbers
+2026-10-08 19:03:56  Recorder: Receipt 4 of 02-Oct-2026 (MasterID 5, line 6ce49474…): asking Tally by MasterID
+2026-10-08 19:03:56  Recorder: entry fetch of FinCom Spike Co: answered in 1 ms
+2026-10-08 19:03:57  Recorder: FinCom Spike Co: delete of mid 5: not in this Tally (asked by MasterID): proven deleted here
+2026-10-08 19:03:57  Recorder: FinCom Spike Co: delete of mid 5: GUID from the bridge's record: dc332f74-fd1d-4662-bfbc-0b37e9da4100-00000005; the GUID its MasterID makes agrees
+2026-10-08 19:03:57  Renumbering: deleted Receipt 4 of 02-Oct-2026 in FinCom Spike Co: FinCom holds 2 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
+2026-10-08 19:03:57  Recorder: Receipt 4 of 02-Oct-2026 (MasterID 6, line eb626972…): taken: Tally's GUID dc332f74-fd1d-4662-bfbc-0b37e9da4100-00000006, AlterID 6
+2026-10-08 19:03:57  Renumbering: Receipt 5 of 02-Oct-2026 in FinCom Spike Co is Receipt 4 in Tally now (renumbered); sent to FinCom with Tally's entry
+2026-10-08 19:03:57  Recorder: Receipt 5 of 31-Oct-2026 (MasterID 7, line 49f39d32…): taken: Tally's GUID dc332f74-fd1d-4662-bfbc-0b37e9da4100-00000007, AlterID 7
+2026-10-08 19:03:57  Renumbering: Receipt 6 of 31-Oct-2026 in FinCom Spike Co is Receipt 5 in Tally now (renumbered); sent to FinCom with Tally's entry
+2026-10-08 19:03:57  Renumbering: 2 Receipt entries of FinCom Spike Co renumbered by Tally after the delete of Receipt 4 (02-Oct-2026): sent to FinCom with Tally's numbers

@@ -1,0 +1,4 @@
+2026-10-08 18:51:49  Recorder: Journal 3 of 02-Nov-2026 (MasterID 3, line f671cf3c…): asking Tally by MasterID
+2026-10-08 18:51:49  Recorder: entry fetch of FinCom Spike Co: answered in 7 ms
+2026-10-08 18:51:49  Recorder: Journal 3 of 02-Nov-2026 (MasterID 3, line f671cf3c…): taken: Tally's GUID 0bacb718-4af3-4793-8cf4-d78f87fc6652-00000003, AlterID 3
+2026-10-08 18:51:49  Renumbering: made Journal 3 of 02-Nov-2026 in FinCom Spike Co: FinCom holds 0 later Journal entries; each is read again from Tally to see whether Tally renumbered it

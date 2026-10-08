@@ -1,0 +1,12 @@
+2026-10-08 18:49:36  Recorder: Receipt 1 of 31-Oct-2026 (MasterID 3, line 9856c330…): asking Tally by MasterID
+2026-10-08 18:49:36  Recorder: entry fetch of FinCom Spike Co: answered in 20 ms
+2026-10-08 18:49:36  Recorder: Receipt 1 of 31-Oct-2026 (MasterID 3, line 9856c330…): taken: Tally's GUID c3c819ef-9d4c-421d-a5b1-0721a31def91-00000003, AlterID 3
+2026-10-08 18:49:36  Renumbering: made Receipt 1 of 31-Oct-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
+2026-10-08 18:50:13  Recorder: Receipt 2 of 01-Nov-2026 (MasterID 4, line 783937ed…): asking Tally by MasterID
+2026-10-08 18:50:13  Recorder: entry fetch of FinCom Spike Co: answered in 34 ms
+2026-10-08 18:50:13  Recorder: Receipt 2 of 01-Nov-2026 (MasterID 4, line 783937ed…): taken: Tally's GUID c3c819ef-9d4c-421d-a5b1-0721a31def91-00000004, AlterID 4
+2026-10-08 18:50:13  Renumbering: made Receipt 2 of 01-Nov-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
+2026-10-08 18:50:52  Recorder: Receipt 3 of 02-Nov-2026 (MasterID 5, line 7779e901…): asking Tally by MasterID
+2026-10-08 18:50:52  Recorder: entry fetch of FinCom Spike Co: answered in 8 ms
+2026-10-08 18:50:52  Recorder: Receipt 3 of 02-Nov-2026 (MasterID 5, line 7779e901…): taken: Tally's GUID c3c819ef-9d4c-421d-a5b1-0721a31def91-00000005, AlterID 5
+2026-10-08 18:50:52  Renumbering: made Receipt 3 of 02-Nov-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it

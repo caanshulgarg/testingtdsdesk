@@ -1,0 +1,75 @@
+[19:14:52] ---- c1 install and open the company (TallyPrime 3.0)
+  INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 11457160 bytes, 2026-10-08, FileVersion 1.1.3.0, ProductVersion 1.1.3.0, ProductName TallyPrime
+  INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-00-started (1024x768)
+[companies] 6 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[header] 6 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS><PRODMAJORVER>1</PRODMAJORVER><PRODMINORVER>1</PRODMINORVER><PRODMAJORREL>3</PRODMAJORREL><PRODMINORREL>0</PRODMINORREL><PRODTYPE>5</PRODTYPE></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</...
+  INFO Tally's own release in its answer header: PRODMAJORREL 3 PRODMINORREL 0 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+######## PASS c1 install and open the company: installed tally.exe 11457160 bytes, 2026-10-08, FileVersion 1.1.3.0, ProductVersion 1.1.3.0, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+######## PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 15 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 6 ms, 'FinCom Spike Co' in it: True
+[19:15:25] ---- the stub cloud and the bridge
+  INFO selfck: PostgreSQL (postgresql-x64-17) with migration 65's tally_selfcheck_words (the ref's file, 5399 chars)
+[ledger Spike Income] 10 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[renum journal] 22 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>2</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+  INFO setup origin: BUILT from source dist/FinComBridge-Setup-2.4.0.exe SHA-256 9614692eab70fb6abfbfc9503df07ab65dc58e834881e05016f9202901f9c434; bridge source: 312d95f304d02b7c0a0a7df33e5d0acc785aab3f release-240: merge origin/next-ledpage (6002c7b8): the owner's two decisions of 08-Oct-2026 (a regular input ledger is not reverse charge; the ledger check kept with the books, pending, no schema change, no migration 71)
+  INFO selfck: the window seeded 01:15-02:15 (the runner's clock 19:15)
+bridge setup ended with 0
+  INFO bridge on 127.0.0.1:9100, version 2.4.0, allowImport True, readOnly '', testMode False
+  bridge log: 2026-10-08 19:15:49  FinCom Bridge 2.4.0: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+  bridge log: 2026-10-08 19:15:49  FinCom Bridge 2.4.0 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+  bridge log: 2026-10-08 19:15:49  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+  bridge log: 2026-10-08 19:15:49  Recorder: re-scan of the add-on's files for 2.4.0: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+  bridge log: 2026-10-08 19:15:49  Check:  - 
+  bridge log: 2026-10-08 19:15:52  Tray icon: set to show next to the clock always (Windows 11)
+  bridge log: 2026-10-08 19:15:52  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+  bridge log: 2026-10-08 19:15:52  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+  bridge log: 2026-10-08 19:15:52  Company FinCom Spike Co: its Tally GUID 26d108e3-9b24-4625-93ac-8906f8b319f1 is held from now on
+  bridge log: 2026-10-08 19:15:52  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=2, ALTMSTID=209 (reading is prospective only: the bridge follows what changes after this)
+  bridge log: 2026-10-08 19:15:52  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=2, ALTMSTID=209
+  bridge log: 2026-10-08 19:15:52  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=2, ALTMSTID=209)
+  INFO add-on: recorder files after start: none
+[19:16:35] ---- selfck: the nightly self-check forced, FinCom's copy missing three entries
+  INFO selfck: the starting point recorded: True
+  voucher mid=1 aid=1 Journal/1/20260401 guid=26d108e3-9b24-4625-93ac-8906f8b319f1-00000001 cancelled=False
+  voucher mid=2 aid=2 Journal/2/20261001 guid=26d108e3-9b24-4625-93ac-8906f8b319f1-00000002 cancelled=False
+[keys] 'v' -> Tally 'TallyPrime:9000'
+[shot] v-sc-10-vouchers (1024x768)
+[keys] '{F6}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] 'Cash{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] 'Spike Income{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-sc-11-particular (1024x768)
+[keys] '710{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] v-sc-12-saved (1024x768)
+[shot] tds-001-gw0 (1024x768)
+[19:17:27] [tds] screen tds-001-gw0 : TallyPrime MANAGE Recyc EDU K: Company Accounting Voucher Creation Recei t No. 2 Firefo Account Current balance: Particulars Googl Chro Micros 46 IypÅ Narration: Unity Quit Y: Data Z: Exchange A Accept Search O: Import E: Export M: E-mail FinCom • ke Co p: print x 2-Oct-26 Friday Amount Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure 161 t to •elati 29ffLJ 55d29 e—2b1 Hub" , 55d29 e—2b1 '2.33 tion_ fUddd steni corre 009e2 unnin 051' , l' 35878 age" , ...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-002-gw1 (1024x768)
+[19:17:31] [tds] screen tds-002-gw1 : TallyPrime MANAGE Recyc EDU K: Company Accounting Voucher Creation Recei t No. 2 Firefo Account Current balance: Particulars Googl Chro Micros 46 IypÅ Narration: Unity Q: Quit Y: Data Q Z: Exchange A: Accept Search O: Import E: Export M: E-mail FinCom p: print x 2-Oct-26 Friday Amount Quit o Yes or No Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated J: Stat ¯ Adjustment F-12: Configure 161 t to •elati 29ffLJ 55d29 e—2b1 Hub" , 55d29 e—2b1 '2.33 ti...
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[shot] tds-003-gw2 (1024x768)
+[19:17:35] [tds] screen tds-003-gw2 : TallyPrime MANAGE Recyc EDU K: Company Gatewa of Tall Y: Data Q Z: Exchange CURRENT OATE Friday, 2-Oct-2026 2-Oct-26 Search O: Import E: Export M: E-mail p: pnnt Fl: Help Date Company Firefo Googl Chro Micros 46 IypÅ Unity CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports Quit 161 t to •elati 29ffLJ 55d29 e—2b1 Hub" , 55d29 e—2b1 '2.33 tion_ fUddd steni corre 009e2 unnin 051' , l' 35...
+  voucher mid=1 aid=1 Journal/1/20260401 guid=26d108e3-9b24-4625-93ac-8906f8b319f1-00000001 cancelled=False
+  voucher mid=2 aid=2 Journal/2/20261001 guid=26d108e3-9b24-4625-93ac-8906f8b319f1-00000002 cancelled=False
+  voucher mid=3 aid=3 Receipt/1/20261002 guid=26d108e3-9b24-4625-93ac-8906f8b319f1-00000003 cancelled=False
+[selfck journal 1] 5 ms: <RESPONSE><LINEERROR/><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>1</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[selfck journal 2] 4 ms: <RESPONSE><LINEERROR/><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>1</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[selfck journal 3] 4 ms: <RESPONSE><LINEERROR/><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>1</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+  voucher mid=1 aid=1 Journal/1/20260401 guid=26d108e3-9b24-4625-93ac-8906f8b319f1-00000001 cancelled=False
+  voucher mid=2 aid=2 Journal/2/20261001 guid=26d108e3-9b24-4625-93ac-8906f8b319f1-00000002 cancelled=False
+  voucher mid=3 aid=3 Receipt/1/20261002 guid=26d108e3-9b24-4625-93ac-8906f8b319f1-00000003 cancelled=False
+selfck stopped: the three journals by XML: 0 made at <ScriptBlock>, D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\selfckv.ps1: line 50
+at <ScriptBlock>, D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\flowv.ps1: line 294
+at <ScriptBlock>, D:\a\_temp\ab06b782-3dd2-42ee-903a-509dfcaba2f4.ps1: line 2
+at <ScriptBlock>, <No file>: line 1
+######## HARNESS n1 nightly check: Tally's changes compared, the missing fetched: the harness stopped: the three journals by XML: 0 made
+######## HARNESS n2 nightly check: the words recorded: the harness stopped: the three journals by XML: 0 made
+######## HARNESS n3 nightly check: once a night: the harness stopped: the three journals by XML: 0 made
+  bridge log: 2026-10-08 19:17:14  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line 6048d34e…): asking Tally by MasterID
+  bridge log: 2026-10-08 19:17:14  Recorder: entry fetch of FinCom Spike Co: answered in 7 ms
+  bridge log: 2026-10-08 19:17:14  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line 6048d34e…): taken: Tally's GUID 26d108e3-9b24-4625-93ac-8906f8b319f1-00000003, AlterID 3
+  bridge log: 2026-10-08 19:17:14  Renumbering: made Receipt 1 of 02-Oct-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
