@@ -288,7 +288,9 @@ if ($bankb) {
     $x = BkPost ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Object</TYPE><SUBTYPE>Voucher</SUBTYPE><ID TYPE="Name">ID:' + $mid + '</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + (SE $co1) + '</SVCURRENTCOMPANY></STATICVARIABLES><FETCHLIST><FETCH>GUID</FETCH><FETCH>MASTERID</FETCH><FETCH>ALTERID</FETCH><FETCH>ALLLEDGERENTRIES.BANKALLOCATIONS.BANKERSDATE</FETCH></FETCHLIST></DESC></BODY></ENVELOPE>')
     [pscustomobject]@{ mid = $mid; guid = (& $tg $x 'GUID'); aid = [int64]('0' + [regex]::Match("$x", '<ALTERID[^>]*>\s*(\d+)').Groups[1].Value); bdate = [regex]::Match("$x", '<BANKERSDATE[^>]*>\s*(\d+)\s*<').Groups[1].Value }
   }
-  function BkTally { $o = @(); foreach ($v in @(BkContras)) { $b = BkObj $v.mid; $o += [pscustomobject]@{ mid = $v.mid; guid = $v.guid; narr = $v.narr; vno = $v.vno; aid = $b.aid; bdate = $b.bdate } }; return , $o }
+  # (run 37796385020: @(BkContras) wrapped the list BkContras returns whole into ONE item, so every contra read as one: the
+  # list is taken whole into a variable first, as everywhere in this file)
+  function BkTally { $o = @(); $cl = BkContras; foreach ($v in $cl) { $b = BkObj $v.mid; $o += [pscustomobject]@{ mid = $v.mid; guid = $v.guid; narr = $v.narr; vno = $v.vno; aid = $b.aid; bdate = $b.bdate } }; return , $o }
   function BkList($l) { ($l | Sort-Object mid | ForEach-Object { "mid $($_.mid) '$($_.narr)' AlterID $($_.aid) bank date '$($_.bdate)'" }) -join '; ' }
   try {
     # 0. the bridge's first light check: its starting point and the bank route's first number (the contras are below them)
