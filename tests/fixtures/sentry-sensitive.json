@@ -1,0 +1,30 @@
+{
+  "_": "Made-up business data (no real client) fed to every Sentry scrubber (app, cloud, bridge) and the browser test: none of 'strings' and none of 'tokens' may be in anything sent to Sentry (docs/sentry.md). 'texts' are realistic error messages carrying them.",
+  "strings": [
+    "09AANFG3202D1ZR", "27AAACZ9876K1Z3", "AAAPA1234A", "ABCPK7777Q",
+    "1,25,000.00", "2,500.50", "118000", "7080.00", "-125000.00",
+    "ALPHA TRADERS", "Zeta Supplies Ltd", "Kappa Labs", "OMEGA HOLDINGS & CO", "Priya Sharma",
+    "being rent paid for september to landlord", "NEFT TO ZETA SUPPLIES LTD / UTR N12345",
+    "AB/101", "ZC/77", "INV-2026-0042",
+    "<PARTYLEDGERNAME>", "PARTYLEDGERNAME", "<VOUCHER",
+    "priya.sharma@alphatraders.in", "owner@omega-holdings.example",
+    "cmufksrrqjub2g", "00000004-1111-4111-8111-000000000000", "client_id=eq.", "?id=eq.", "#client=",
+    "Alpha_Traders_Invoice_AB-101.pdf", "C:\\Users\\priya", "/home/priya"
+  ],
+  "tokens": [
+    "ALPHA", "Alpha", "Zeta", "ZETA", "Kappa", "OMEGA", "Omega", "Priya", "priya", "Sharma",
+    "landlord", "september", "N12345", "UTR", "09AANFG", "AAAPA", "1,25,000", "125000", "2,500", "118000",
+    "alphatraders", "omega-holdings", "@alphatraders", "@omega", "cmufksrrqjub2g", "4111-8111", "Invoice_AB", ".pdf", "AB/101", "ZC/77", "INV-2026"
+  ],
+  "texts": [
+    "Party ALPHA TRADERS (GSTIN 09AANFG3202D1ZR, PAN AAAPA1234A) owes ₹1,25,000.00 on bill AB/101",
+    "Ledger 'Zeta Supplies Ltd' does not exist; TDS of 2,500.50 on INV-2026-0042 not posted",
+    "Cannot read properties of undefined (reading 'vendorName') for Kappa Labs ABCPK7777Q 118000",
+    "Tally said: <ENVELOPE><BODY><VOUCHER VCHTYPE=\"Purchase\"><PARTYLEDGERNAME>ALPHA TRADERS</PARTYLEDGERNAME><NARRATION>being rent paid for september to landlord</NARRATION><AMOUNT>-125000.00</AMOUNT></VOUCHER></BODY></ENVELOPE>",
+    "Bank line NEFT TO ZETA SUPPLIES LTD / UTR N12345 of 7080.00 matched to ZC/77",
+    "Failed to fetch https://qbocskaiewaxqcvaunzc.supabase.co/rest/v1/tally_post_jobs?id=eq.00000004-1111-4111-8111-000000000000&client_id=eq.cmufksrrqjub2g",
+    "Upload of Alpha_Traders_Invoice_AB-101.pdf by priya.sharma@alphatraders.in (Priya Sharma) failed",
+    "duplicate key value violates unique constraint \"tally_ledgers_pkey\" Key (book, name)=(cmufksrrqjub2g, OMEGA HOLDINGS & CO) already exists; mail owner@omega-holdings.example",
+    "open C:\\Users\\priya\\AppData\\Local\\FinCom Bridge\\27AAACZ9876K1Z3.xml: access denied; /home/priya/fincom #client=cmufksrrqjub2g"
+  ]
+}
