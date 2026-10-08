@@ -1,0 +1,330 @@
+[07:02:08.478] push-design on TallyPrime 7.1: reps 5, heavy 3000 ledgers / 3000 items / up to 30000 vouchers (40 min), postings 1
+[07:02:09.506] system clock step after timeBeginPeriod(1): 0.421 ms (min 0.0038, max 4.3557)
+[07:02:09.528] two files written 2 ms apart: NTFS write times 10.0107 ms apart
+[07:02:09.549] light company folder: D:\a\_temp\TallyData\100000
+[07:02:09.603] fast234 (fast234g) on TallyPrime 7.1: today's request 2927 chars, 61 fields
+[07:02:09.646] ---- fast234g: GST on (D:\a\_temp\fast234g\on)
+[07:02:12.666] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-setup-started (1024x768)
+[07:02:42.334] Tally started (g-on-setup) in 29.7 s; company open: True
+[07:02:42.374] import company GST on: 1 sent, created 0, errors 0, 19.1 ms
+[07:02:42.381] GST on: ISGSTON before 'Yes', after the alteration 'Yes'
+[07:02:42.716] import light masters: 60 sent, created 59, errors 0, 316 ms
+[07:02:42.856] import xml item invoice: 1 sent, created 1, errors 0, 95.5 ms
+[07:02:42.891] import xml accounting sales: 1 sent, created 1, errors 0, 32.3 ms
+[07:02:42.925] import xml accounting sales (IRN to come): 1 sent, created 1, errors 0, 31.5 ms
+[07:02:43.004] import IRN and e-way bill written back (alter): 1 sent, created 1, errors 0, 32.3 ms
+[shot] tds-001-gw0 (1024x768)
+[07:03:01] [tds] screen tds-001-gw0 : EDU c prime K: Company Y: Data Gatewayof Tally Find details entered in masters and transactions. Z: Exchange CURRENT OATE Wednesday, I-Apr-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print Fl: Help Date 685+8 CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co (Schedule Backup) upr-26 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Q Search to ru Company aOf4- acep 68bc— acep .337. 4—e68 ning...
+[shot] tds-002-g-on-screen-start (1024x768)
+[07:03:02] [tds] screen tds-002-g-on-screen-start : EDU c prime K: Company Y: Data Gatewayof Tally Find details entered in masters and transactions. Z: Exchange CURRENT OATE Wednesday, I-Apr-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print Fl: Help Date 685+8 CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co (Schedule Backup) upr-26 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Q Search to ru Company aOf4- acep 68bc— acep .337. 4—e68 ning...
+[keys] 'v'
+[shot] tds-003-g-on-screen-vouchers (1024x768)
+[07:03:06] [tds] screen tds-003-g-on-screen-vouchers : Find details entered in masters and transactions. EDU c prime K: Company Y: Data Accounting Voucher Creati Pa ment No. 1 Account Cument balance: Particulars Narration: Unity Quit (Alt+F) O: Import Z: Exchange A Accept Q Search E: Export M: Share inCom Spike p: print upr-26 Wednesday Amount Fl: Help Date 685+8 Company to ru D: Delete x: Cancel Vch Contra F5: Payment Receipt Journal Purchase FIO: E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure aOf4- acep 68bc— acep .337. 4—e68 ning 51aaO ing j _id" : -01" 68b...
+[keys] '{F8}'
+[shot] tds-004-g-on-screen-type (1024x768)
+[07:03:10] [tds] screen tds-004-g-on-screen-type : a Find details entered in masters and transactions. (Alt+F) EDU c prime K: Company Y: Data Accounting Voucher Creati Sales Party Alc name Current balance: Sales ledger: Current balance: Name of Item Narration: Unity Quit Z: Exchange A Accept Q Search M: Share inCom Spike O: Import E: Export List of Ledger Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party p: print x Create Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: D: Delete Cancel Vch Related Reports Optional post -Dated Unused Vch No. Configure 685+...
+[keys] '^h'
+[shot] tds-005-g-on-screen-mode (1024x768)
+[07:03:13] [tds] screen tds-005-g-on-screen-mode : a Find details entered in masters and transactions. (Alt+F) EDU c prime Change Mode Unity Quit K: Company Y: Data Z: Exchange O: Import E: Export M: Share p: print Fl: Help inCom Spike Change Voucher Mode Item Invoice List of Modes/Usages Item Invoice Accounting Invoice As Voucher A Accept Q Search 685+8 to ru aOf4- acep 68bc— acep .337. 4—e68 ning 51aaO ing j _id" : -01" 68bc— Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:03 AM 10/8/2026
+[keys] 'Item Invoice{ENTER}'
+[shot] tds-006-g-on-screen-item-mode (1024x768)
+[07:03:16] [tds] screen tds-006-g-on-screen-item-mode : a Find details entered in masters and transactions. (Alt+F) EDU c prime K: Company Y: Data Accounting Voucher Creati Sales Party Alc name Current balance: Sales ledger: Current balance: Name of Item Narration: Unity Quit Z: Exchange A Accept Q Search M: Share inCom Spike O: Import E: Export List of Ledger Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party p: print x Create Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: D: Delete Cancel Vch Related Reports Optional post -Dated Unused Vch No. Configure 685+...
+[keys] '{F2}'
+[shot] tds-007-g-on-screen-date-box (1024x768)
+[07:03:19] [tds] screen tds-007-g-on-screen-date-box : a Find details entered in masters and transactions. (Alt+F) EDU c prime K: Company Y: Data Change Voucher Date Unity Quit Z: Exchange A Accept Q Search O: Import E: Export M: Share p: print Fl: Help FinCom Spike Co Voucher Date 24-2026 685+8 to ru aOf4- acep 68bc— acep .337. 4—e68 ning 51aaO ing j _id" : -01" 68bc— Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:03 AM 10/8/2026
+[keys] '2-10-2026{ENTER}'
+[shot] tds-008-g-on-screen-date (1024x768)
+[07:03:23] [tds] screen tds-008-g-on-screen-date : a Find details entered in masters and transactions. (Alt+F) EDU c prime K: Company Y: Data Accounting Voucher Creati Sales Party Alc name Current balance: Sales ledger: Current balance: Name of Item Narration: Unity Quit Z: Exchange A Accept Q Search M: Share inCom Spike O: Import E: Export List of Ledger Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party p: print x Create Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: D: Delete Cancel Vch Related Reports Optional post -Dated Unused Vch No. Configure 685+...
+[keys] 'Template Party{ENTER}'
+[shot] tds-009-g-on-screen-party (1024x768)
+[07:03:26] [tds] screen tds-009-g-on-screen-party : EDU c prime Details K: Company Y: Data Find details entered in masters and transactions. Z: Exchange FinCom Spike Co Dispatch Details Dispatch Doc No. Dispatched through Destination Carrier Name/Agent Bill of No. Motor Vehicle No. Accept Q Search (Alt+F) O: Import E: Export M: Share p: print Fl: Help x Delivery Note No(s) Date: Unity Quit 685+8 to ru aOf4- acep 68bc— acep .337. 4—e68 ning 51aaO ing j _id" : -01" 68bc— Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:03 AM 10/8/2026
+[shot] tds-010-g-on-screen-party-sub1 (1024x768)
+[07:03:27] [tds] screen tds-010-g-on-screen-party-sub1 : EDU c prime Details K: Company Y: Data Find details entered in masters and transactions. Z: Exchange FinCom Spike Co Dispatch Details Dispatch Doc No. Dispatched through Destination Carrier Name/Agent Bill of No. Motor Vehicle No. Accept Q Search (Alt+F) O: Import E: Export M: Share p: print Fl: Help x Delivery Note No(s) Date: Unity Quit 685+8 to ru aOf4- acep 68bc— acep .337. 4—e68 ning 51aaO ing j _id" : -01" 68bc— Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:03 AM 10/8/2026
+[keys] '^a'
+[shot] tds-011-g-on-screen-party-sub-accept (1024x768)
+[07:03:31] [tds] screen tds-011-g-on-screen-party-sub-accept : EDU c prime Details Unity Quit K: Company Y: Data Find details entered in masters and transactions. Z: Exchange (Alt+F) O: Import Create New Party E: Export M: Share p: print Fl: Help Buyer (Bill to) Mailing Name Address State Country GST Registration type GSTIN/UIN Place of Supply Accept Q Search FinCom Spike Co Party Details Dem late Pa List of Ledger Accounts Spike Party Spike Party 2 Template Party Ul Party x L: Fetch Details Using 685+8 to ru aOf4- acep 68bc— acep .337. 4—e68 ning 51aaO GSTIN/UIN ing j _id" : -01" 68bc— Configure Mode Windows Server 2025 Datacenter Build 26100.ge_release2...
+[shot] tds-012-g-on-screen-party-sub2 (1024x768)
+[07:03:32] [tds] screen tds-012-g-on-screen-party-sub2 : EDU c prime Details Unity Quit K: Company Y: Data Find details entered in masters and transactions. Z: Exchange (Alt+F) O: Import Create New Party E: Export M: Share p: print Fl: Help Buyer (Bill to) Mailing Name Address State Country GST Registration type GSTIN/UIN Place of Supply Accept Q Search FinCom Spike Co Party Details Tem late Pa List of Ledger Accounts Spike Party Spike Party 2 Template Party Ul Party x L: Fetch Details Using 685+8 to ru aOf4- acep 68bc— acep .337. 4—e68 ning 51aaO GSTIN/UIN ing j _id" : -01" 68bc— Configure Mode Windows Server 2025 Datacenter Build 26100.ge_release2...
+[keys] '^a'
+[shot] tds-013-g-on-screen-party-sub-accept (1024x768)
+[07:03:35] [tds] screen tds-013-g-on-screen-party-sub-accept : a Find details entered in masters and transactions. (Alt+F) EDU c prime K: Company Y: Data Accounting Voucher Creati Sales Party Alc name: Template Party Current balance: 922.00 Dr Sales ledger: Current balance: Name of Item Narration: Unity Quit Z: Exchange A Accept Q Search inCom Spike O: Import E: Export List of Ledger Accounts Sales M: Share p: print x Create Show More Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: D: Delete Cancel Vch Related Reports Optional post -Dated Unused Vch No. Configure 685+8 to ru aOf4- acep 68bc...
+[shot] tds-014-g-on-screen-party-sub3 (1024x768)
+[07:03:36] [tds] screen tds-014-g-on-screen-party-sub3 : a Find details entered in masters and transactions. (Alt+F) EDU c prime K: Company Y: Data Accounting Voucher Creati Sales Party Alc name: Template Party Current balance: 922.00 Dr Sales ledger: Current balance: Name of Item Narration: Unity Quit Z: Exchange A Accept Q Search inCom Spike O: Import E: Export List of Ledger Accounts Sales M: Share p: print x Create Show More Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: D: Delete Cancel Vch Related Reports Optional post -Dated Unused Vch No. Configure 685+8 to ru aOf4- acep 68bc...
+[keys] 'Sales{ENTER}'
+[shot] tds-015-g-on-screen-ledger (1024x768)
+[07:03:39] [tds] screen tds-015-g-on-screen-ledger : EDU c prime K: Company Y: Data Accounting Voucher Creati Sales Party Alc name: Template Party Current balance: 922.00 Dr Sales ledger: Sales Current balance: 850.00 Cr Name of Item Narration: Unity Quit Find details entered in masters and transactions. Z: Exchange inCom Spike (Alt+F) O: Import Quantity E: Export Rate M: Share per p: print 2-Oct-26 Friday Amount Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: Related Reports Optional post -Dated Unused Vch No. 685+8 to ru aOf4- acep 68bc— acep .337. 4—e68 ning 51aaO ing j _id" : ...
+[keys] 'Item T03{ENTER}'
+[shot] tds-016-g-on-screen-item (1024x768)
+[07:03:43] [tds] screen tds-016-g-on-screen-item : EDU c prime K: Company Y: Data Accounting Voucher Creati Sales Party Alc name: Template Party Current balance: 922.00 Dr Sales ledger: Sales Current balance: 850.00 Cr Name of Item - Item T03 Narration: Unity Quit Find details entered in masters and transactions. Z: Exchange inCom Spike (Alt+F) O: Import Quantity E: Export Rate M: Share per p: print 2-Oct-26 Friday Amount Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: Related Reports Optional post -Dated Unused Vch No. 685+8 to ru aOf4- acep 68bc— acep .337. 4—e68 ning 51aaO in...
+[shot] tds-017-g-on-screen-item-sub1 (1024x768)
+[07:03:44] [tds] screen tds-017-g-on-screen-item-sub1 : EDU c prime K: Company Y: Data Accounting Voucher Creati Sales Party Alc name: Template Party Current balance: 922.00 Dr Sales ledger: Sales Current balance: 850.00 Cr Name of Item - Item T03 Narration: Unity Quit Find details entered in masters and transactions. Z: Exchange inCom Spike (Alt+F) O: Import Quantity E: Export Rate M: Share per p: print 2-Oct-26 Friday Amount Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: Related Reports Optional post -Dated Unused Vch No. 685+8 to ru aOf4- acep 68bc— acep .337. 4—e68 ning 51aaO in...
+[keys] '2{ENTER}'
+[shot] tds-018-g-on-screen-qty (1024x768)
+[07:03:46] [tds] screen tds-018-g-on-screen-qty : EDU c prime K: Company Y: Data Accounting Voucher Creati Sales Party Alc name: Template Party Current balance: 922.00 Dr Sales ledger: Sales Current balance: 850.00 Cr Name of Item - Item T03 Narration: Unity Quit Find details entered in masters and transactions. Z: Exchange inCom Spike (Alt+F) O: Import Quantity 2 Nos 2 Nos E: Export Rate M: Share per p: print 2-Oct-26 Friday Amount Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: Related Reports Optional post -Dated Unused Vch No. 685+8 to ru aOf4- acep 68bc— acep .337. 4—e68 n...
+[keys] '100{ENTER}'
+[shot] tds-019-g-on-screen-rate (1024x768)
+[07:03:49] [tds] screen tds-019-g-on-screen-rate : EDU c prime K: Company Y: Data Accounting Voucher Creati Sales Party Alc name: Template Party Current balance: 922.00 Dr Sales ledger: Sales Current balance: 850.00 Cr Name of Item - Item T03 Narration: Unity Quit Find details entered in masters and transactions. Z: Exchange inCom Spike (Alt+F) O: Import Quantity 2 Nos 2 Nos E: Export Rate 100.00 M: Share per Nos p: print 2-Oct-26 Friday Amount 200.00 Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: 200.00 Related Reports Optional post -Dated Unused Vch No. 685+8 to ru aOf4- acep...
+[keys] '{ENTER}'
+[shot] tds-020-g-on-screen-amount (1024x768)
+[07:03:52] [tds] screen tds-020-g-on-screen-amount : EDU c prime K: Company Y: Data Accounting Voucher Creati Sales Party Alc name: Template Party Current balance: 922.00 Dr Sales ledger: Sales Current balance: 850.00 Cr Name of Item - Item T03 Narration: Unity Quit Find details entered in masters and transactions. Z: Exchange inCom Spike (Alt+F) O: Import Quantity 2 Nos 2 Nos E: Export Rate 100.00 M: Share per Nos p: print 2-Oct-26 Friday Amount 200.00 Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: 200.00 Related Reports Optional post -Dated Unused Vch No. 685+8 to ru aOf4- acep...
+[shot] tds-021-g-on-screen-item-b-sub1 (1024x768)
+[07:03:53] [tds] screen tds-021-g-on-screen-item-b-sub1 : EDU c prime K: Company Y: Data Accounting Voucher Creati Sales Party Alc name: Template Party Current balance: 922.00 Dr Sales ledger: Sales Current balance: 850.00 Cr Name of Item - Item T03 Narration: Unity Quit Find details entered in masters and transactions. Z: Exchange inCom Spike (Alt+F) O: Import Quantity 2 Nos 2 Nos E: Export Rate 100.00 M: Share per Nos p: print 2-Oct-26 Friday Amount 200.00 Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: 200.00 Related Reports Optional post -Dated Unused Vch No. 685+8 to ru aOf4- acep...
+[keys] '{ENTER}'
+[shot] tds-022-g-on-screen-items-done (1024x768)
+[07:03:56] [tds] screen tds-022-g-on-screen-items-done : EDU c prime K: Company Y: Data Accounting Voucher Creati Sales Party Alc name: Template Party Current balance: 922.00 Dr Sales ledger: Sales Current balance: 850.00 Cr Name of Item - Item T03 Narration: Unity Quit Find details entered in masters and transactions. Z: Exchange inCom Spike (Alt+F) O: Import Quantity 2 Nos 2 Nos E: Export Rate 100.00 M: Share per Nos p: print 2-Oct-26 Friday Amount 200.00 Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs 200.00 E: Autofill Change Mode More Details o: 200.00 Related Reports Optional post -Dated Unused Vch No. 685+8 to ru aOf...
+[keys] '^a'
+[shot] tds-023-g-on-screen-accept1 (1024x768)
+[07:04:00] [tds] screen tds-023-g-on-screen-accept1 : EDU c prime K: Company Y: Data Accounting Voucher Creati Sales Party Alc name: Template Party Current balance: 922.00 Dr Sales ledger: Sales Current balance: 850.00 Cr Name of Item - Item T03 Narration: Unity Quit Find details entered in masters and transactions. Z: Exchange inCom Spike (Alt+F) O: Import Quantity 2 Nos 2 Nos E: Export Rate 100.00 M: Share per Nos p: print Fl: Help 2-Oct-26 F3: Shut Friday = Amount 685+8 to ru Company aOf4- E_4: Payroll F5: Rejections Out F6: Rejections acep In 68bc— physical 200.00 200.00 200.00 — Stock Sales Order E_2: Purchase E: Autofill Change Mode More De...
+[shot] tds-024-g-on-screen-after1 (1024x768)
+[07:04:01] [tds] screen tds-024-g-on-screen-after1 : EDU c prime K: Company Y: Data Accounting Voucher Creati Sales Party Alc name: Template Party Current balance: 922.00 Dr Sales ledger: Sales Current balance: 850.00 Cr Name of Item - Item T03 Narration: Unity Quit Find details entered in masters and transactions. Z: Exchange inCom Spike (Alt+F) O: Import Quantity 2 Nos 2 Nos E: Export Rate 100.00 M: Share per Nos p: print Fl: Help 2-Oct-26 F3: Shut Friday = Amount 685+8 to ru Company aOf4- E_4: Payroll F5: Rejections Out F6: Rejections acep In 68bc— physical 200.00 200.00 200.00 — Stock Sales Order E_2: Purchase E: Autofill Change Mode More De...
+[keys] '^a'
+[shot] tds-025-g-on-screen-accept2 (1024x768)
+[07:04:05] [tds] screen tds-025-g-on-screen-accept2 : Find details entered In masters and transactions EDU c prime K: Company Y: Data Accounting Voucher Creation Q: Quit Z: Exchange A: Accept Q Search O: Import E: Export M: Share FinCom Spike Co p: print x Error Oops! No Entries in Voucher! Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated • Unused = vch No. 685+8 to ru aOf4- acep 68bc— acep .337. 4—e68 ning 51aaO ing j _id" : -01" 68bc— Unity p: Delete , cancel vch F-12: Configure Mode Windows Server...
+[shot] tds-026-g-on-screen-after2 (1024x768)
+[07:04:06] [tds] screen tds-026-g-on-screen-after2 : Find details entered In masters and transactions EDU c prime K: Company Y: Data Accounting Voucher Creation Q: Quit Z: Exchange A: Accept Q Search O: Import E: Export M: Share FinCom Spike Co p: print x Error Oops! No Entries in Voucher! Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated • Unused = vch No. 685+8 to ru aOf4- acep 68bc— acep .337. 4—e68 ning 51aaO ing j _id" : -01" 68bc— Unity p: Delete , cancel vch F-12: Configure Mode Windows Server...
+[keys] '^a'
+[shot] tds-027-g-on-screen-accept3 (1024x768)
+[07:04:11] [tds] screen tds-027-g-on-screen-accept3 : a Find details entered in masters and transactions. (Alt+F) EDU c prime K: Company Y: Data Accounting Voucher Creati Sales No. 6 Party Alc name: Cash Current balance: Sales ledger: Sales Current balance: 1,050.00 Cr Name of Item - End of List End of List Narration: Unity Quit Z: Exchange A Accept Q Search inCom Spike O: Import E: Export List of Ledger Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: D: Delete Cancel Vch Related Re...
+[shot] tds-028-g-on-screen-after3 (1024x768)
+[07:04:12] [tds] screen tds-028-g-on-screen-after3 : a Find details entered in masters and transactions. (Alt+F) EDU c prime K: Company Y: Data Accounting Voucher Creati Sales No. 6 Party A/cname: Cash Current balance: Sales ledger: Sales Current balance: 1,050.00 Cr Name of Item - End of List End of List Narration: Unity Quit Z: Exchange A Accept Q Search M: Share inCom Spike O: Import E: Export List of Ledger Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party p: print x Create Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: D: Delete Cancel Vch Related Rep...
+[shot] tds-029-gw0 (1024x768)
+[07:04:12] [tds] screen tds-029-gw0 : a Find details entered in masters and transactions. (Alt+F) EDU c prime K: Company Y: Data Accounting Voucher Creati Sales No. 6 Party A/cname: Cash Current balance: Sales ledger: Sales Current balance: 1,050.00 Cr Name of Item - End of List End of List Narration: Unity Quit Z: Exchange A Accept Q Search M: Share inCom Spike O: Import E: Export List of Ledger Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party p: print x Create Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: D: Delete Cancel Vch Related Rep...
+[keys] '{ESC}'
+[shot] tds-030-gw1 (1024x768)
+[07:04:16] [tds] screen tds-030-gw1 : a Find details entered in masters and transactions. (Alt+F) EDU c prime K: Company Y: Data Accounting Voucher Creati Sales No. 6 Party Alc name Current balance: Sales ledger: Sales Current balance: 1,050.00 Cr Name of Item - End of List End of List Narration: Unity Quit Z: Exchange A Accept Q Search M: Share inCom Spike O: Import E: Export List of Ledger Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party p: print x Create Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: D: Delete Cancel Vch Related Reports ...
+[keys] '{ESC}'
+[shot] tds-031-gw2 (1024x768)
+[07:04:19] [tds] screen tds-031-gw2 : Find details entered In masters and transactions EDU c prime K: Company Y: Data Accounting Voucher Creati Sales No. 6 Party Alc name Current balance: Sales ledger: Sales Current balance: 1,050.00 Cr Name of Item - End of List End of List Narration: Unity Q: Quit Z: Exchange A: Accept Q Search inCom Spike O: Import Quantity E: Export Rate M: Share per p: print 2-Oct-26 Friday Amount Quit o Yes or No Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated ...
+[keys] 'y'
+[shot] tds-032-gw3 (1024x768)
+[07:04:22] [tds] screen tds-032-gw3 : EDU c prime K: Company Y: Data Gatewayof Tally Find details entered in masters and transactions. Z: Exchange CURRENT OATE Friday, 2-Oct-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print Fl: Help Date 685+8 CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co (Schedule Backup) 2-OctQ6 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Q Search to ru Company aOf4- acep 68bc— acep .337. 4—e68 ning 5...
+[07:04:23.032] GST on xml-item: MasterID 2, Sales 1 of 20261002
+[07:04:23.033] GST on xml-acct: MasterID 3, Sales 2 of 20261002
+[07:04:23.034] GST on xml-acct-irn: MasterID 4, Sales 3 of 20261002
+[07:04:23.036] GST on screen-item: MasterID 6, Sales 5 of 20261002
+[07:04:26.049] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-xml-item-object-started (1024x768)
+[07:04:55.545] Tally started (g-on-xml-item-object) in 29.5 s; company open: True
+[07:04:55.595] G on xml-item (XML Sales 1, MasterID 2) object: ANSWERED, 38.4 ms, 123239 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:04:58.601] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-xml-item-bynumber-started (1024x768)
+[07:05:28.090] Tally started (g-on-xml-item-bynumber) in 29.5 s; company open: True
+[07:05:28.142] G on xml-item (XML Sales 1, MasterID 2) bynumber: ANSWERED, 47.3 ms, 17304 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:05:31.149] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-xml-acct-object-started (1024x768)
+[07:06:00.649] Tally started (g-on-xml-acct-object) in 29.5 s; company open: True
+[07:06:00.691] G on xml-acct (XML Sales 2, MasterID 3) object: ANSWERED, 35.9 ms, 55896 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:06:03.697] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-xml-acct-bynumber-started (1024x768)
+[07:06:33.165] Tally started (g-on-xml-acct-bynumber) in 29.5 s; company open: True
+[07:06:33.204] G on xml-acct (XML Sales 2, MasterID 3) bynumber: ANSWERED, 33.9 ms, 6313 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:06:36.212] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-xml-acct-irn-object-started (1024x768)
+[07:07:05.718] Tally started (g-on-xml-acct-irn-object) in 29.5 s; company open: True
+[07:07:05.750] G on xml-acct-irn (XML, then IRN by an XML alteration Sales 3, MasterID 4) object: ANSWERED, 26.1 ms, 55900 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:07:08.755] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-xml-acct-irn-bynumber-started (1024x768)
+[07:07:38.255] Tally started (g-on-xml-acct-irn-bynumber) in 29.5 s; company open: True
+[07:07:38.295] G on xml-acct-irn (XML, then IRN by an XML alteration Sales 3, MasterID 4) bynumber: ANSWERED, 34.1 ms, 6317 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:07:41.300] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-screen-item-object-started (1024x768)
+[07:08:10.759] Tally started (g-on-screen-item-object) in 29.5 s; company open: True
+[07:08:10.799] G on screen-item (screen keys Sales 5, MasterID 6) object: ANSWERED, 34.3 ms, 68744 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:08:13.805] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-screen-item-bynumber-started (1024x768)
+[07:08:43.286] Tally started (g-on-screen-item-bynumber) in 29.5 s; company open: True
+[07:08:43.338] G on screen-item (screen keys Sales 5, MasterID 6) bynumber: ANSWERED, 46.4 ms, 9748 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:08:46.347] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-xml-acct-helper-collection-started (1024x768)
+[07:09:15.849] Tally started (g-on-xml-acct-helper-collection) in 29.5 s; company open: True
+[07:09:15.886] G on xml-acct (XML Sales 2, MasterID 3) helper-collection: ANSWERED, 31.9 ms, 3973 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:09:18.893] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-xml-acct-irn-helper-collection-started (1024x768)
+[07:09:48.394] Tally started (g-on-xml-acct-irn-helper-collection) in 29.5 s; company open: True
+[07:09:48.437] G on xml-acct-irn (XML, then IRN by an XML alteration Sales 3, MasterID 4) helper-collection: ANSWERED, 35.9 ms, 3973 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:09:51.457] ---- fast234g: GST off (D:\a\_temp\fast234g\off)
+[07:09:54.460] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-setup-started (1024x768)
+[07:10:23.962] Tally started (g-off-setup) in 29.5 s; company open: True
+[07:10:23.981] import company GST off: 1 sent, created 0, errors 0, 15.9 ms
+[07:10:23.985] GST off: ISGSTON before 'Yes', after the alteration 'No'
+[07:10:24.277] import light masters: 60 sent, created 59, errors 0, 289.3 ms
+[07:10:24.325] import xml item invoice: 1 sent, created 1, errors 0, 46.4 ms
+[07:10:24.347] import xml accounting sales: 1 sent, created 1, errors 0, 19.9 ms
+[07:10:24.369] import xml accounting sales (IRN to come): 1 sent, created 1, errors 0, 20.5 ms
+[07:10:24.422] import IRN and e-way bill written back (alter): 1 sent, created 1, errors 0, 22.9 ms
+[shot] tds-033-gw0 (1024x768)
+[07:10:25] [tds] screen tds-033-gw0 : EDU c prime K: Company Y: Data Gatewayof Tally Find details entered in masters and transactions. Z: Exchange CURRENT OATE Wednesday, I-Apr-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print Fl: Help Date 685+8 CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co (Schedule Backup) upr-26 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Q Search to ru Company aOf4- acep 68bc— acep .337. 4—e68 ning...
+[shot] tds-034-g-off-screen-start (1024x768)
+[07:10:26] [tds] screen tds-034-g-off-screen-start : EDU c prime K: Company Y: Data Gatewayof Tally Find details entered in masters and transactions. Z: Exchange CURRENT OATE Wednesday, I-Apr-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print Fl: Help Date 685+8 CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co (Schedule Backup) upr-26 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Q Search to ru Company aOf4- acep 68bc— acep .337. 4—e68 ning...
+[keys] 'v'
+[shot] tds-035-g-off-screen-vouchers (1024x768)
+[07:10:30] [tds] screen tds-035-g-off-screen-vouchers : Find details entered in masters and transactions. EDU c prime K: Company Y: Data Accounting Voucher Creati Pa ment No. 1 Account Cument balance: Particulars Narration: Unity Quit (Alt+F) O: Import Z: Exchange A Accept Q Search E: Export M: Share inCom Spike p: print upr-26 Wednesday Amount D: Delete x: Cancel Vch Fl: Help Date Company F4: Contra F-5: Payment Receipt Journal Sales Purchase Vouctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated Unused Vch No. El 2: Configure 685+8 to ru aOf4- acep 68bc— acep .337. 4—e68 ning 51aaO ing j _id" : -01" 68bc— Mode Windo...
+[keys] '{F8}'
+[shot] tds-036-g-off-screen-type (1024x768)
+[07:10:34] [tds] screen tds-036-g-off-screen-type : a Find details entered in masters and transactions. (Alt+F) EDU c prime K: Company Y: Data Accounting Voucher Creati Sales Party Alc name Current balance: Sales ledger: Current balance: Name of Item Narration: Unity Quit Z: Exchange A Accept Q Search M: Share inCom Spike O: Import E: Export List of Ledger Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party p: print x Create Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: D: Delete Cancel Vch Related Reports Optional post -Dated Unused Vch No. Configure 685+...
+[keys] '^h'
+[shot] tds-037-g-off-screen-mode (1024x768)
+[07:10:37] [tds] screen tds-037-g-off-screen-mode : a Find details entered in masters and transactions. (Alt+F) EDU c prime Change Mode Unity Quit K: Company Y: Data Z: Exchange O: Import E: Export M: Share p: print Fl: Help inCom Spike Change Voucher Mode Item Invoice List of Modes/Usages Item Invoice Accounting Invoice As Voucher A Accept Q Search 685+8 to ru aOf4- acep 68bc— acep .337. 4—e68 ning 51aaO ing j _id" : -01" 68bc— Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:10 AM 10/8/2026
+[keys] 'Item Invoice{ENTER}'
+[shot] tds-038-g-off-screen-item-mode (1024x768)
+[07:10:40] [tds] screen tds-038-g-off-screen-item-mode : a Find details entered in masters and transactions. (Alt+F) EDU c prime K: Company Y: Data Accounting Voucher Creati Sales Party Alc name Current balance: Sales ledger: Current balance: Name of Item Narration: Unity Quit Z: Exchange A Accept Q Search M: Share inCom Spike O: Import E: Export List of Ledger Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party p: print x Create Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: D: Delete Cancel Vch Related Reports Optional post -Dated Unused Vch No. Configure 685+...
+[keys] '{F2}'
+[shot] tds-039-g-off-screen-date-box (1024x768)
+[07:10:43] [tds] screen tds-039-g-off-screen-date-box : a Find details entered in masters and transactions. (Alt+F) EDU c prime K: Company Y: Data Change Voucher Date Unity Quit Z: Exchange A Accept Q Search O: Import E: Export M: Share p: print Fl: Help FinCom Spike Co Voucher Date 24-2026 685+8 to ru aOf4- acep 68bc— acep .337. 4—e68 ning 51aaO ing j _id" : -01" 68bc— Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:10 AM 10/8/2026
+[keys] '2-10-2026{ENTER}'
+[shot] tds-040-g-off-screen-date (1024x768)
+[07:10:47] [tds] screen tds-040-g-off-screen-date : a Find details entered in masters and transactions. (Alt+F) EDU c prime K: Company Y: Data Accounting Voucher Creati Sales Party Alc name Current balance: Sales ledger: Current balance: Name of Item Narration: Unity Quit Z: Exchange A Accept Q Search M: Share inCom Spike O: Import E: Export List of Ledger Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party p: print x Create Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: D: Delete Cancel Vch Related Reports Optional post -Dated Unused Vch No. Configure 685+...
+[keys] 'Template Party{ENTER}'
+[shot] tds-041-g-off-screen-party (1024x768)
+[07:10:50] [tds] screen tds-041-g-off-screen-party : EDU c prime Details K: Company Y: Data Find details entered in masters and transactions. Z: Exchange FinCom Spike Co Dispatch Details Dispatch Doc No. Dispatched through Destination Carrier Name/Agent Bill of No. Motor Vehicle No. Accept Q Search (Alt+F) O: Import E: Export M: Share p: print Fl: Help x Delivery Note No(s) Date: Unity Quit 685+8 to ru aOf4- acep 68bc— acep .337. 4—e68 ning 51aaO ing j _id" : -01" 68bc— Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:10 AM 10/8/2026
+[shot] tds-042-g-off-screen-party-sub1 (1024x768)
+[07:10:51] [tds] screen tds-042-g-off-screen-party-sub1 : EDU c prime Details K: Company Y: Data Find details entered in masters and transactions. Z: Exchange FinCom Spike Co Dispatch Details Dispatch Doc No. Dispatched through Destination Carrier Name/Agent Bill of No. Motor Vehicle No. Accept Q Search (Alt+F) O: Import E: Export M: Share p: print Fl: Help x Delivery Note No(s) Date: Unity Quit 685+8 to ru aOf4- acep 68bc— acep .337. 4—e68 ning 51aaO ing j _id" : -01" 68bc— Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:10 AM 10/8/2026
+[keys] '^a'
+[shot] tds-043-g-off-screen-party-sub-accept (1024x768)
+[07:10:54] [tds] screen tds-043-g-off-screen-party-sub-accept : EDU c prime Details Unity Quit K: Company Y: Data Find details entered in masters and transactions. Z: Exchange (Alt+F) O: Import Create New Party E: Export M: Share p: print Fl: Help x Buyer (Bill to) Mailing Name Address State Country Accept Q Search FinCom Spike Co Party Details nem late Pa List of Ledger Accounts Spike Party Spike Party 2 Template Party Ul Party 685+8 to ru aOf4- acep 68bc— acep .337. 4—e68 ning 51aaO ing j _id" : -01" 68bc— Configure Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:10 AM 10/8/2026
+[shot] tds-044-g-off-screen-party-sub2 (1024x768)
+[07:10:55] [tds] screen tds-044-g-off-screen-party-sub2 : EDU c prime Details Unity Quit K: Company Y: Data Find details entered in masters and transactions. Z: Exchange (Alt+F) O: Import Create New Party E: Export M: Share p: print Fl: Help x Buyer (Bill to) Mailing Name Address State Country Accept Q Search FinCom Spike Co Party Details nem late Pa List of Ledger Accounts Spike Party Spike Party 2 Template Party Ul Party 685+8 to ru aOf4- acep 68bc— acep .337. 4—e68 ning 51aaO ing j _id" : -01" 68bc— Configure Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:10 AM 10/8/2026
+[keys] '^a'
+[shot] tds-045-g-off-screen-party-sub-accept (1024x768)
+[07:10:59] [tds] screen tds-045-g-off-screen-party-sub-accept : a Find details entered in masters and transactions. (Alt+F) EDU c prime K: Company Y: Data Accounting Voucher Creati Sales Party Alc name: Template Party Current balance: 922.00 Dr Sales ledger: Current balance: Name of Item Narration: Unity Quit Z: Exchange A Accept Q Search inCom Spike O: Import E: Export List of Ledger Accounts Sales M: Share p: print x Create Show More Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: D: Delete Cancel Vch Related Reports Optional post -Dated Unused Vch No. Configure 685+8 to ru aOf4- acep 68bc...
+[shot] tds-046-g-off-screen-party-sub3 (1024x768)
+[07:11:00] [tds] screen tds-046-g-off-screen-party-sub3 : a Find details entered in masters and transactions. (Alt+F) EDU c prime K: Company Y: Data Accounting Voucher Creati Sales Party Alc name: Template Party Current balance: 922.00 Dr Sales ledger: Current balance: Name of Item Narration: Unity Quit Z: Exchange A Accept Q Search inCom Spike O: Import E: Export List of Ledger Accounts Sales M: Share p: print x Create Show More Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: D: Delete Cancel Vch Related Reports Optional post -Dated Unused Vch No. Configure 685+8 to ru aOf4- acep 68bc...
+[keys] 'Sales{ENTER}'
+[shot] tds-047-g-off-screen-ledger (1024x768)
+[07:11:03] [tds] screen tds-047-g-off-screen-ledger : EDU c prime K: Company Y: Data Accounting Voucher Creati Sales Party Alc name: Template Party Current balance: 922.00 Dr Sales ledger: Sales Current balance: 850.00 Cr Name of Item Narration: Unity Quit Find details entered in masters and transactions. Z: Exchange inCom Spike (Alt+F) O: Import Quantity E: Export Rate M: Share per p: print 2-Oct-26 Friday Amount Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: Related Reports Optional post -Dated Unused Vch No. 685+8 to ru aOf4- acep 68bc— acep .337. 4—e68 ning 51aaO ing j _id" : ...
+[keys] 'Item T03{ENTER}'
+[shot] tds-048-g-off-screen-item (1024x768)
+[07:11:06] [tds] screen tds-048-g-off-screen-item : EDU c prime K: Company Y: Data Accounting Voucher Creati Sales Party Alc name: Template Party Current balance: 922.00 Dr Sales ledger: Sales Current balance: 850.00 Cr Name of Item - Item T03 Narration: Unity Quit Find details entered in masters and transactions. Z: Exchange inCom Spike (Alt+F) O: Import Quantity E: Export Rate M: Share per p: print 2-Oct-26 Friday Amount Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: Related Reports Optional post -Dated Unused Vch No. 685+8 to ru aOf4- acep 68bc— acep .337. 4—e68 ning 51aaO in...
+[shot] tds-049-g-off-screen-item-sub1 (1024x768)
+[07:11:07] [tds] screen tds-049-g-off-screen-item-sub1 : EDU c prime K: Company Y: Data Accounting Voucher Creati Sales Party Alc name: Template Party Current balance: 922.00 Dr Sales ledger: Sales Current balance: 850.00 Cr Name of Item - Item T03 Narration: Unity Quit Find details entered in masters and transactions. Z: Exchange inCom Spike (Alt+F) O: Import Quantity E: Export Rate M: Share per p: print 2-Oct-26 Friday Amount Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: Related Reports Optional post -Dated Unused Vch No. 685+8 to ru aOf4- acep 68bc— acep .337. 4—e68 ning 51aaO in...
+[keys] '2{ENTER}'
+[shot] tds-050-g-off-screen-qty (1024x768)
+[07:11:10] [tds] screen tds-050-g-off-screen-qty : EDU c prime K: Company Y: Data Accounting Voucher Creati Sales Party Alc name: Template Party Current balance: 922.00 Dr Sales ledger: Sales Current balance: 850.00 Cr Name of Item - Item T03 Narration: Unity Quit Find details entered in masters and transactions. Z: Exchange inCom Spike (Alt+F) O: Import Quantity 2 Nos 2 Nos E: Export Rate M: Share per p: print 2-Oct-26 Friday Amount Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: Related Reports Optional post -Dated Unused Vch No. 685+8 to ru aOf4- acep 68bc— acep .337. 4—e68 n...
+[keys] '100{ENTER}'
+[shot] tds-051-g-off-screen-rate (1024x768)
+[07:11:13] [tds] screen tds-051-g-off-screen-rate : EDU c prime K: Company Y: Data Accounting Voucher Creati Sales Party Alc name: Template Party Current balance: 922.00 Dr Sales ledger: Sales Current balance: 850.00 Cr Name of Item - Item T03 Narration: Unity Quit Find details entered in masters and transactions. Z: Exchange inCom Spike (Alt+F) O: Import Quantity 2 Nos 2 Nos E: Export Rate 100.00 M: Share per Nos p: print 2-Oct-26 Friday Amount 200.00 Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: 200.00 Related Reports Optional post -Dated Unused Vch No. 685+8 to ru aOf4- acep...
+[keys] '{ENTER}'
+[shot] tds-052-g-off-screen-amount (1024x768)
+[07:11:16] [tds] screen tds-052-g-off-screen-amount : EDU c prime K: Company Y: Data Accounting Voucher Creati Sales Party Alc name: Template Party Current balance: 922.00 Dr Sales ledger: Sales Current balance: 850.00 Cr Name of Item - Item T03 Narration: Unity Quit Find details entered in masters and transactions. Z: Exchange inCom Spike (Alt+F) O: Import Quantity 2 Nos 2 Nos E: Export Rate 100.00 M: Share per Nos p: print 2-Oct-26 Friday Amount 200.00 Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: 200.00 Related Reports Optional post -Dated Unused Vch No. 685+8 to ru aOf4- acep...
+[shot] tds-053-g-off-screen-item-b-sub1 (1024x768)
+[07:11:17] [tds] screen tds-053-g-off-screen-item-b-sub1 : EDU c prime K: Company Y: Data Accounting Voucher Creati Sales Party Alc name: Template Party Current balance: 922.00 Dr Sales ledger: Sales Current balance: 850.00 Cr Name of Item - Item T03 Narration: Unity Quit Find details entered in masters and transactions. Z: Exchange inCom Spike (Alt+F) O: Import Quantity 2 Nos 2 Nos E: Export Rate 100.00 M: Share per Nos p: print 2-Oct-26 Friday Amount 200.00 Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: 200.00 Related Reports Optional post -Dated Unused Vch No. 685+8 to ru aOf4- acep...
+[keys] '{ENTER}'
+[shot] tds-054-g-off-screen-items-done (1024x768)
+[07:11:19] [tds] screen tds-054-g-off-screen-items-done : EDU c prime K: Company Y: Data Accounting Voucher Creati Sales Party Alc name: Template Party Current balance: 922.00 Dr Sales ledger: Sales Current balance: 850.00 Cr Name of Item - Item T03 Narration: Unity Quit Find details entered in masters and transactions. Z: Exchange inCom Spike (Alt+F) O: Import Quantity 2 Nos 2 Nos E: Export Rate 100.00 M: Share per Nos p: print 2-Oct-26 Friday Amount 200.00 Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs 200.00 E: Autofill Change Mode More Details o: 200.00 Related Reports Optional post -Dated Unused Vch No. 685+8 to ru aOf...
+[keys] '^a'
+[shot] tds-055-g-off-screen-accept1 (1024x768)
+[07:11:24] [tds] screen tds-055-g-off-screen-accept1 : a Find details entered in masters and transactions. (Alt+F) EDU c prime K: Company Y: Data Accounting Voucher Creati Sales No. 6 Party Alc name Current balance: Sales ledger: Current balance: Name of Item Narration: Unity Quit Z: Exchange A Accept Q Search M: Share inCom Spike O: Import E: Export List of Ledger Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party p: print x Create Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: D: Delete Cancel Vch Related Reports Optional post -Dated Unused Vch No. Configur...
+[shot] tds-056-g-off-screen-after1 (1024x768)
+[07:11:25] [tds] screen tds-056-g-off-screen-after1 : a Find details entered in masters and transactions. (Alt+F) EDU c prime K: Company Y: Data Accounting Voucher Creati Sales No. 6 Party Alc name Current balance: Sales ledger: Current balance: Name of Item Narration: Unity Quit Z: Exchange A Accept Q Search M: Share inCom Spike O: Import E: Export List of Ledger Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party p: print x Create Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: D: Delete Cancel Vch Related Reports Optional post -Dated Unused Vch No. Configur...
+[keys] '^a'
+[shot] tds-057-g-off-screen-accept2 (1024x768)
+[07:11:29] [tds] screen tds-057-g-off-screen-accept2 : Find details entered In masters and transactions EDU c prime K: Company Y: Data Accounting Voucher Creation Q: Quit Z: Exchange A: Accept Q Search O: Import E: Export M: Share FinCom Spike Co p: print x Error Oops! No Entries in Voucher! Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated • Unused = vch No. 685+8 to ru aOf4- acep 68bc— acep .337. 4—e68 ning 51aaO ing j _id" : -01" 68bc— Unity p: Delete , cancel vch F-12: Configure Mode Windows Server...
+[shot] tds-058-g-off-screen-after2 (1024x768)
+[07:11:30] [tds] screen tds-058-g-off-screen-after2 : Find details entered In masters and transactions EDU c prime K: Company Y: Data Accounting Voucher Creation Q: Quit Z: Exchange A: Accept Q Search O: Import E: Export M: Share FinCom Spike Co p: print x Error Oops! No Entries in Voucher! Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated • Unused = vch No. 685+8 to ru aOf4- acep 68bc— acep .337. 4—e68 ning 51aaO ing j _id" : -01" 68bc— Unity p: Delete , cancel vch F-12: Configure Mode Windows Server...
+[keys] '^a'
+[shot] tds-059-g-off-screen-accept3 (1024x768)
+[07:11:34] [tds] screen tds-059-g-off-screen-accept3 : a Find details entered in masters and transactions. (Alt+F) EDU c prime K: Company Y: Data Accounting Voucher Creati Sales No. 6 Party Alc name: Cash Current balance: Sales ledger: Sales Current balance: 1,050.00 Cr Name of Item - End of List End of List Narration: Unity Quit Z: Exchange A Accept Q Search inCom Spike O: Import E: Export List of Ledger Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: D: Delete Cancel Vch Related Re...
+[shot] tds-060-g-off-screen-after3 (1024x768)
+[07:11:35] [tds] screen tds-060-g-off-screen-after3 : a Find details entered in masters and transactions. (Alt+F) EDU c prime K: Company Y: Data Accounting Voucher Creati Sales No. 6 Party A/cname: Cash Current balance: Sales ledger: Sales Current balance: 1,050.00 Cr Name of Item - End of List End of List Narration: Unity Quit Z: Exchange A Accept Q Search M: Share inCom Spike O: Import E: Export List of Ledger Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party p: print x Create Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: D: Delete Cancel Vch Related Rep...
+[shot] tds-061-gw0 (1024x768)
+[07:11:36] [tds] screen tds-061-gw0 : a Find details entered in masters and transactions. (Alt+F) EDU c prime K: Company Y: Data Accounting Voucher Creati Sales No. 6 Party A/cname: Cash Current balance: Sales ledger: Sales Current balance: 1,050.00 Cr Name of Item - End of List End of List Narration: Unity Quit Z: Exchange A Accept Q Search M: Share inCom Spike O: Import E: Export List of Ledger Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party p: print x Create Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: D: Delete Cancel Vch Related Rep...
+[keys] '{ESC}'
+[shot] tds-062-gw1 (1024x768)
+[07:11:40] [tds] screen tds-062-gw1 : a Find details entered in masters and transactions. (Alt+F) EDU c prime K: Company Y: Data Accounting Voucher Creati Sales No. 6 Party Alc name Current balance: Sales ledger: Sales Current balance: 1,050.00 Cr Name of Item - End of List End of List Narration: Unity Quit Z: Exchange A Accept Q Search M: Share inCom Spike O: Import E: Export List of Ledger Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party p: print x Create Fl: Help Date Company F4: Contra Payment Receipt Journal Purchase Vouctgs E: Autofill Change Mode More Details o: D: Delete Cancel Vch Related Reports ...
+[keys] '{ESC}'
+[shot] tds-063-gw2 (1024x768)
+[07:11:43] [tds] screen tds-063-gw2 : Find details entered In masters and transactions EDU c prime K: Company Y: Data Accounting Voucher Creati Sales No. 6 Party Alc name Current balance: Sales ledger: Sales Current balance: 1,050.00 Cr Name of Item - End of List End of List Narration: Unity Q: Quit Z: Exchange A: Accept Q Search inCom Spike O: Import Quantity E: Export Rate M: Share per p: print 2-Oct-26 Friday Amount Quit o Yes or No Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated ...
+[keys] 'y'
+[shot] tds-064-gw3 (1024x768)
+[07:11:46] [tds] screen tds-064-gw3 : EDU c prime K: Company Y: Data Gatewayof Tally Find details entered in masters and transactions. Z: Exchange CURRENT OATE Friday, 2-Oct-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print Fl: Help Date 685+8 CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co (Schedule Backup) 2-OctQ6 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Q Search to ru Company aOf4- acep 68bc— acep .337. 4—e68 ning 5...
+[07:11:46.782] GST off xml-item: MasterID 2, Sales 1 of 20261002
+[07:11:46.783] GST off xml-acct: MasterID 3, Sales 2 of 20261002
+[07:11:46.784] GST off xml-acct-irn: MasterID 4, Sales 3 of 20261002
+[07:11:46.785] GST off screen-item: MasterID 6, Sales 5 of 20261002
+[07:11:49.790] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-xml-item-object-started (1024x768)
+[07:12:19.281] Tally started (g-off-xml-item-object) in 29.5 s; company open: True
+[07:12:19.319] G off xml-item (XML Sales 1, MasterID 2) object: ANSWERED, 33.1 ms, 120495 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:12:22.325] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-xml-item-bynumber-started (1024x768)
+[07:12:51.826] Tally started (g-off-xml-item-bynumber) in 29.5 s; company open: True
+[07:12:51.872] G off xml-item (XML Sales 1, MasterID 2) bynumber: ANSWERED, 40.4 ms, 15514 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:12:54.877] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-xml-acct-object-started (1024x768)
+[07:13:24.365] Tally started (g-off-xml-acct-object) in 29.5 s; company open: True
+[07:13:24.393] G off xml-acct (XML Sales 2, MasterID 3) object: ANSWERED, 23 ms, 54165 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:13:27.398] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-xml-acct-bynumber-started (1024x768)
+[07:13:56.863] Tally started (g-off-xml-acct-bynumber) in 29.5 s; company open: True
+[07:13:56.900] G off xml-acct (XML Sales 2, MasterID 3) bynumber: ANSWERED, 31.7 ms, 5222 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:13:59.906] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-xml-acct-irn-object-started (1024x768)
+[07:14:29.401] Tally started (g-off-xml-acct-irn-object) in 29.5 s; company open: True
+[07:14:29.430] G off xml-acct-irn (XML, then IRN by an XML alteration Sales 3, MasterID 4) object: ANSWERED, 23.2 ms, 54169 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:14:32.435] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-xml-acct-irn-bynumber-started (1024x768)
+[07:15:01.939] Tally started (g-off-xml-acct-irn-bynumber) in 29.5 s; company open: True
+[07:15:01.976] G off xml-acct-irn (XML, then IRN by an XML alteration Sales 3, MasterID 4) bynumber: ANSWERED, 32.6 ms, 5226 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:15:04.981] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-screen-item-object-started (1024x768)
+[07:15:34.483] Tally started (g-off-screen-item-object) in 29.5 s; company open: True
+[07:15:34.516] G off screen-item (screen keys Sales 5, MasterID 6) object: ANSWERED, 28.5 ms, 67013 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:15:37.521] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-screen-item-bynumber-started (1024x768)
+[07:16:07.048] Tally started (g-off-screen-item-bynumber) in 29.5 s; company open: True
+[07:16:07.096] G off screen-item (screen keys Sales 5, MasterID 6) bynumber: ANSWERED, 43 ms, 8657 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:16:10.103] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-xml-acct-helper-collection-started (1024x768)
+[07:16:39.589] Tally started (g-off-xml-acct-helper-collection) in 29.5 s; company open: True
+[07:16:39.635] G off xml-acct (XML Sales 2, MasterID 3) helper-collection: ANSWERED, 41 ms, 3973 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:16:42.642] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-xml-acct-irn-helper-collection-started (1024x768)
+[07:17:12.157] Tally started (g-off-xml-acct-irn-helper-collection) in 29.5 s; company open: True
+[07:17:12.194] G off xml-acct-irn (XML, then IRN by an XML alteration Sales 3, MasterID 4) helper-collection: ANSWERED, 33.3 ms, 3973 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:17:18.200] done (fast234 fast234g)

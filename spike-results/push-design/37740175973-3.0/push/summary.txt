@@ -1,0 +1,94 @@
+[07:02:12.271] push-design on TallyPrime 3.0: reps 5, heavy 3000 ledgers / 3000 items / up to 30000 vouchers (40 min), postings 1
+[07:02:21.284] system clock step after timeBeginPeriod(1): 0.405 ms (min 0.0044, max 4.0673)
+[07:02:21.316] two files written 2 ms apart: NTFS write times 20.0022 ms apart
+[07:02:21.338] light company folder: D:\a\_temp\TallyData\100000
+[07:02:21.397] fast234 (fast234g) on TallyPrime 3.0: today's request 2927 chars, 61 fields
+[07:02:21.439] ---- fast234g: GST on (D:\a\_temp\fast234g\on)
+[07:02:24.459] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[07:02:52.633] Tally started (g-on-setup) in 28.2 s; company open: True
+[07:02:52.662] import company GST on: 1 sent, created 0, errors 0, 11.8 ms
+[07:02:52.667] GST on: ISGSTON before 'Yes', after the alteration 'Yes'
+[07:02:52.881] import light masters: 60 sent, created 59, errors 0, 201.2 ms
+[07:02:52.989] import xml item invoice: 1 sent, created 1, errors 0, 69.1 ms
+[07:02:53.015] import xml accounting sales: 1 sent, created 1, errors 0, 23.9 ms
+[07:02:53.039] import xml accounting sales (IRN to come): 1 sent, created 1, errors 0, 22.3 ms
+[07:02:53.098] import IRN and e-way bill written back (alter): 1 sent, created 1, errors 0, 23.3 ms
+[07:04:18.328] GST on xml-item: MasterID 2, Sales 1 of 20261002
+[07:04:18.329] GST on xml-acct: MasterID 3, Sales 2 of 20261002
+[07:04:18.330] GST on xml-acct-irn: MasterID 4, Sales 3 of 20261002
+[07:04:18.332] GST on screen-item: MasterID 6, Sales 5 of 20261002
+[07:04:21.344] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[07:04:49.353] Tally started (g-on-xml-item-object) in 28 s; company open: True
+[07:04:49.399] G on xml-item (XML Sales 1, MasterID 2) object: ANSWERED, 34.5 ms, 108896 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:04:52.406] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[07:05:20.425] Tally started (g-on-xml-item-bynumber) in 28 s; company open: True
+[07:05:20.467] G on xml-item (XML Sales 1, MasterID 2) bynumber: ANSWERED, 36.8 ms, 69606 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:05:23.473] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[07:05:51.462] Tally started (g-on-xml-acct-object) in 28 s; company open: True
+[07:05:51.490] G on xml-acct (XML Sales 2, MasterID 3) object: ANSWERED, 22.9 ms, 49476 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:05:54.496] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[07:06:22.473] Tally started (g-on-xml-acct-bynumber) in 28 s; company open: True
+[07:06:22.505] G on xml-acct (XML Sales 2, MasterID 3) bynumber: ANSWERED, 26.7 ms, 15423 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:06:25.511] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[07:06:53.521] Tally started (g-on-xml-acct-irn-object) in 28 s; company open: True
+[07:06:53.550] G on xml-acct-irn (XML, then IRN by an XML alteration Sales 3, MasterID 4) object: ANSWERED, 22.5 ms, 49480 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:06:56.556] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[07:07:24.545] Tally started (g-on-xml-acct-irn-bynumber) in 28 s; company open: True
+[07:07:24.577] G on xml-acct-irn (XML, then IRN by an XML alteration Sales 3, MasterID 4) bynumber: ANSWERED, 27.4 ms, 15427 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:07:27.583] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[07:07:55.551] Tally started (g-on-screen-item-object) in 28 s; company open: True
+[07:07:55.583] G on screen-item (screen keys Sales 5, MasterID 6) object: ANSWERED, 26.7 ms, 60808 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:07:58.589] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[07:08:26.604] Tally started (g-on-screen-item-bynumber) in 28 s; company open: True
+[07:08:26.648] G on screen-item (screen keys Sales 5, MasterID 6) bynumber: ANSWERED, 38.5 ms, 33640 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:08:29.655] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[07:08:57.624] Tally started (g-on-xml-acct-helper-collection) in 28 s; company open: True
+[07:08:57.655] G on xml-acct (XML Sales 2, MasterID 3) helper-collection: ANSWERED, 25 ms, 14492 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:09:00.661] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[07:09:28.652] Tally started (g-on-xml-acct-irn-helper-collection) in 28 s; company open: True
+[07:09:28.681] G on xml-acct-irn (XML, then IRN by an XML alteration Sales 3, MasterID 4) helper-collection: ANSWERED, 23.6 ms, 14492 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:09:31.701] ---- fast234g: GST off (D:\a\_temp\fast234g\off)
+[07:09:34.706] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[07:10:02.679] Tally started (g-off-setup) in 28 s; company open: True
+[07:10:02.694] import company GST off: 1 sent, created 0, errors 0, 12 ms
+[07:10:02.697] GST off: ISGSTON before 'Yes', after the alteration 'No'
+[07:10:02.912] import light masters: 60 sent, created 59, errors 0, 210.7 ms
+[07:10:02.949] import xml item invoice: 1 sent, created 1, errors 0, 34.8 ms
+[07:10:02.966] import xml accounting sales: 1 sent, created 1, errors 0, 15.2 ms
+[07:10:02.982] import xml accounting sales (IRN to come): 1 sent, created 1, errors 0, 14.8 ms
+[07:10:03.019] import IRN and e-way bill written back (alter): 1 sent, created 1, errors 0, 16.2 ms
+[07:11:24.823] GST off xml-item: MasterID 2, Sales 1 of 20261002
+[07:11:24.824] GST off xml-acct: MasterID 3, Sales 2 of 20261002
+[07:11:24.825] GST off xml-acct-irn: MasterID 4, Sales 3 of 20261002
+[07:11:24.825] GST off screen-item: MasterID 6, Sales 5 of 20261002
+[07:11:27.831] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[07:11:55.825] Tally started (g-off-xml-item-object) in 28 s; company open: True
+[07:11:55.858] G off xml-item (XML Sales 1, MasterID 2) object: ANSWERED, 27.6 ms, 106139 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:11:58.864] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[07:12:26.856] Tally started (g-off-xml-item-bynumber) in 28 s; company open: True
+[07:12:26.897] G off xml-item (XML Sales 1, MasterID 2) bynumber: ANSWERED, 35.5 ms, 65422 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:12:29.903] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[07:12:57.878] Tally started (g-off-xml-acct-object) in 28 s; company open: True
+[07:12:57.903] G off xml-acct (XML Sales 2, MasterID 3) object: ANSWERED, 19.8 ms, 47650 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:13:00.908] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[07:13:28.900] Tally started (g-off-xml-acct-bynumber) in 28 s; company open: True
+[07:13:28.931] G off xml-acct (XML Sales 2, MasterID 3) bynumber: ANSWERED, 26.9 ms, 14906 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:13:31.939] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[07:13:59.919] Tally started (g-off-xml-acct-irn-object) in 28 s; company open: True
+[07:13:59.943] G off xml-acct-irn (XML, then IRN by an XML alteration Sales 3, MasterID 4) object: ANSWERED, 19.1 ms, 47654 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:14:02.949] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[07:14:30.925] Tally started (g-off-xml-acct-irn-bynumber) in 28 s; company open: True
+[07:14:30.955] G off xml-acct-irn (XML, then IRN by an XML alteration Sales 3, MasterID 4) bynumber: ANSWERED, 25.3 ms, 14910 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:14:33.961] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[07:15:01.944] Tally started (g-off-screen-item-object) in 28 s; company open: True
+[07:15:01.972] G off screen-item (screen keys Sales 5, MasterID 6) object: ANSWERED, 22.9 ms, 59078 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:15:04.977] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[07:15:32.944] Tally started (g-off-screen-item-bynumber) in 28 s; company open: True
+[07:15:32.982] G off screen-item (screen keys Sales 5, MasterID 6) bynumber: ANSWERED, 32.6 ms, 31246 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:15:35.989] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[07:16:04.009] Tally started (g-off-xml-acct-helper-collection) in 28 s; company open: True
+[07:16:04.037] G off xml-acct (XML Sales 2, MasterID 3) helper-collection: ANSWERED, 23.6 ms, 14237 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:16:07.042] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[07:16:35.027] Tally started (g-off-xml-acct-irn-helper-collection) in 28 s; company open: True
+[07:16:35.055] G off xml-acct-irn (XML, then IRN by an XML alteration Sales 3, MasterID 4) helper-collection: ANSWERED, 23.7 ms, 14237 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:16:41.060] done (fast234 fast234g)

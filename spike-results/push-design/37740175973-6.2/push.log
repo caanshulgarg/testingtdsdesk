@@ -1,0 +1,330 @@
+[07:01:56.378] push-design on TallyPrime 6.2: reps 5, heavy 3000 ledgers / 3000 items / up to 30000 vouchers (40 min), postings 1
+[07:01:57.003] system clock step after timeBeginPeriod(1): 0.318 ms (min 0.0022, max 3.3925)
+[07:01:57.015] two files written 2 ms apart: NTFS write times 3.9889 ms apart
+[07:01:57.028] light company folder: D:\a\_temp\TallyData\100000
+[07:01:57.071] fast234 (fast234g) on TallyPrime 6.2: today's request 2927 chars, 61 fields
+[07:01:57.100] ---- fast234g: GST on (D:\a\_temp\fast234g\on)
+[07:02:00.116] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-setup-started (1024x768)
+[07:02:26.225] Tally started (g-on-setup) in 26.1 s; company open: True
+[07:02:26.253] import company GST on: 1 sent, created 0, errors 0, 10.5 ms
+[07:02:26.258] GST on: ISGSTON before 'Yes', after the alteration 'Yes'
+[07:02:26.369] import light masters: 60 sent, created 59, errors 0, 101.6 ms
+[07:02:26.432] import xml item invoice: 1 sent, created 1, errors 0, 54.1 ms
+[07:02:26.483] import xml accounting sales: 1 sent, created 1, errors 0, 21.4 ms
+[07:02:26.503] import xml accounting sales (IRN to come): 1 sent, created 1, errors 0, 18.5 ms
+[07:02:26.560] import IRN and e-way bill written back (alter): 1 sent, created 1, errors 0, 19 ms
+[shot] tds-001-gw0 (1024x768)
+[07:02:31] [tds] screen tds-001-gw0 : EDU Recyc Prime Gatewa of Tall CURRENT PERIOD K: Company Y: Data Z: Exchange CURRENT OATE Wednesday, I-Apr-2026 O: Import E: Export M: Share p: print Fl: Help Date 161 e2968 Firefo Googl Chro Micros 46 IypÅ Unity I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Q upr-26 Search Company nt to 21a71 bf7d "trac Hub" , 24-12 44bf7 ' , "tra 713 isten l' : l'e2 unnin ion_i 4115- age" , 24-...
+[shot] tds-002-g-on-screen-start (1024x768)
+[07:02:31] [tds] screen tds-002-g-on-screen-start : EDU Recyc Prime Gatewa of Tall CURRENT PERIOD K: Company Y: Data Z: Exchange CURRENT OATE Wednesday, I-Apr-2026 O: Import E: Export M: Share p: print Fl: Help Date 161 e2968 Firefo Googl Chro Micros 46 IypÅ Unity I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Q upr-26 Search Company nt to 21a71 bf7d "trac Hub" , 24-12 44bf7 ' , "tra 713 isten l' : l'e2 unnin ion_i 4115- age" , 24-...
+[keys] 'v'
+[shot] tds-003-g-on-screen-vouchers (1024x768)
+[07:02:35] [tds] screen tds-003-g-on-screen-vouchers : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Pa ment No. 1 Firefo Account Current balance: Particulars Googl Chro Micros 46 IypÅ Narration: Unity Quit Z: Exchange A Accept Q Search O: Import E: Export M: Share FinCom • ke Co p: print upr-26 Wednesday Amount Fl: Help Q: Date Company : Ed: Contra F-5: Payment Receipt Journal Sales Purchase < • 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 44bf7 ' , "tra 713 isten l' : l'e2 unnin ion_i 4115- age" , 24-12 'tally D: Delete x: Cancel Vch Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated ...
+[keys] '{F8}'
+[shot] tds-004-g-on-screen-type (1024x768)
+[07:02:39] [tds] screen tds-004-g-on-screen-type : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Firef Googl Chro Micros 46 IypÅ Unity Sales Party Alc narne. Current balance: Sales ledger: Current balance: Name of Item Narration: Quit Fl: Help Date Company ( • F4: Contra F5: Payment Receipt Journal F8: Sales Purchase 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: 44bf7 ' , "tra 713 isten l'...
+[keys] '^h'
+[shot] tds-005-g-on-screen-mode (1024x768)
+[07:02:42] [tds] screen tds-005-g-on-screen-mode : o Recyc Firefo Googl Chron Micros lyp Unity EDU Prime Change Mode Quit K: Company Y: Data Z: Exchange O: Import E: Export o M: Share p: print x FinCom • ke Co Change Voucher Mode Item Invoice List of Modes/Usa es Item Invoice Accounting Invoice As Voucher A Accept Q Search Fl: Help e2968 nt to 21a71 bf7d "trac Hub" , 24-12 44bf7 ' , "tra : '2.3 713 isten l' : l'e2 unnin ion_i 4115- age" , 24-12 'tally Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 702 AM 10/8/2026
+[keys] 'Item Invoice{ENTER}'
+[shot] tds-006-g-on-screen-item-mode (1024x768)
+[07:02:45] [tds] screen tds-006-g-on-screen-item-mode : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Firef Googl Chro Micros 46 IypÅ Unity Sales Party Alc narne. Current balance: Sales ledger: Current balance: Name of Item Narration: Quit Fl: Help Date Company ( • F4: Contra F5: Payment Receipt Journal F8: Sales Purchase 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: 44bf7 ' , "tra 713 isten l'...
+[keys] '{F2}'
+[shot] tds-007-g-on-screen-date-box (1024x768)
+[07:02:47] [tds] screen tds-007-g-on-screen-date-box : x Recyc Firefo EDU Prime Change Voucher Date K: Company Y: Data Z: Exchange A Accept Q Search O: Import E: Export o M: Share p: print o Fl: Help Googl Chron Micros lyp Unity Quit FinCom Spike Co Voucher Date 24-2026 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 44bf7 ' , "tra : '2.3 713 isten l' : l'e2 unnin ion_i 4115- age" , 24-12 'tally Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 702 AM 10/8/2026
+[keys] '2-10-2026{ENTER}'
+[shot] tds-008-g-on-screen-date (1024x768)
+[07:02:50] [tds] screen tds-008-g-on-screen-date : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Firef Googl Chro Micros 46 IypÅ Unity Sales Party Alc narne. Current balance: Sales ledger: Current balance: Name of Item Narration: Quit Fl: Help Date Company ( • F4: Contra F5: Payment Receipt Journal F8: Sales Purchase 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: 44bf7 ' , "tra 713 isten l'...
+[keys] 'Template Party{ENTER}'
+[shot] tds-009-g-on-screen-party (1024x768)
+[07:02:55] [tds] screen tds-009-g-on-screen-party : o Recyc Firefo Googl Chron EDU Prime Details K: Company Y: Data Z: Exchange A Accept Q Search O: Import E: Export o M: Share p: print x FinCom Spike Co Dispatch Details Dispatch Doc No. Dispatched through Destination Carrier Name/Agent Bill of No. Motor Vehicle No. Delivery Note No(s) Micros lyp Unity Quit Date: Fl: Help e2968 nt to 21a71 bf7d "trac Hub" , 24-12 44bf7 ' , "tra : '2.3 713 isten l' : l'e2 unnin ion_i 4115- age" , 24-12 'tally Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 702 AM 10/8/2026
+[shot] tds-010-g-on-screen-party-sub1 (1024x768)
+[07:02:56] [tds] screen tds-010-g-on-screen-party-sub1 : o Recyc Firefo Googl Chron EDU Prime Details K: Company Y: Data Z: Exchange A Accept Q Search O: Import E: Export o M: Share p: print x FinCom Spike Co Dispatch Details Dispatch Doc No. Dispatched through Destination Carrier Name/Agent Bill of No. Motor Vehicle No. Delivery Note No(s) Micros lyp Unity Quit Date: Fl: Help e2968 nt to 21a71 bf7d "trac Hub" , 24-12 44bf7 ' , "tra : '2.3 713 isten l' : l'e2 unnin ion_i 4115- age" , 24-12 'tally Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 702 AM 10/8/2026
+[keys] '^a'
+[shot] tds-011-g-on-screen-party-sub-accept (1024x768)
+[07:02:59] [tds] screen tds-011-g-on-screen-party-sub-accept : EDU Recyc Prime Details Firefo Googl Chron Micros Unity Quit K: Company Y: Data Z: Exchange FinCom Spike Co Party Details Dem late Pa List of Led er Accounts Spike Party Spike Party 2 Template Party Ul Party O: Import Create New Party E: Export M: Share p: print Fl: Help Buyer (Bill to) Mailing Name Address State Country GST Registration type GSTIN/UIN Place of Supply Accept Q Search x L: Fetch Details Using 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 44bf7 ' , "tra 713 isten GSTIN/UIN l' : l'e2 unnin ion_i 4115- age" , 24-12 'tally Configure Windows Server 2025 Datacenter Build 26100.ge_rel...
+[shot] tds-012-g-on-screen-party-sub2 (1024x768)
+[07:02:59] [tds] screen tds-012-g-on-screen-party-sub2 : EDU Recyc Prime Details Firefo Googl Chron Micros Unity Quit K: Company Y: Data Z: Exchange FinCom Spike Co Party Details Tem late Pa List of Led er Accounts Spike Party Spike Party 2 Template Party Ul Party O: Import Create New Party E: Export M: Share p: print Fl: Help Buyer (Bill to) Mailing Name Address State Country GST Registration type GSTIN/UIN Place of Supply Accept Q Search x L: Fetch Details Using 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 44bf7 ' , "tra 713 isten GSTIN/UIN l' : l'e2 unnin ion_i 4115- age" , 24-12 'tally Configure Windows Server 2025 Datacenter Build 26100.ge_rel...
+[keys] '^a'
+[shot] tds-013-g-on-screen-party-sub-accept (1024x768)
+[07:03:02] [tds] screen tds-013-g-on-screen-party-sub-accept : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Sales M: Share p: print Create Show More x Firef Googl Chro Micros 46 IypÅ Unity Sales Party Alc narne. Current balance: Sales ledger: Current balance: Template Party 922.00 Dr Fl: Help Date Company ( • F4: Contra F5: Payment Receipt Journal F8: Sales Purchase 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 Name of Item Narration: Quit Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: 44bf7 ' , "tra 713 isten l' : l'e2 unnin ion_i 4115...
+[shot] tds-014-g-on-screen-party-sub3 (1024x768)
+[07:03:03] [tds] screen tds-014-g-on-screen-party-sub3 : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Sales M: Share p: print Create Show More x Firef Googl Chro Micros 46 IypÅ Unity Sales Party Alc narne. Current balance: Sales ledger: Current balance: Template Party 922.00 Dr Fl: Help Date Company ( • F4: Contra F5: Payment Receipt Journal F8: Sales Purchase 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 Name of Item Narration: Quit Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: 44bf7 ' , "tra 713 isten l' : l'e2 unnin ion_i 4115...
+[keys] 'Sales{ENTER}'
+[shot] tds-015-g-on-screen-ledger (1024x768)
+[07:03:06] [tds] screen tds-015-g-on-screen-ledger : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co O: Import Quantity E: Export Rate M: Share per p: print 2-Oct-26 Friday Amount Fl: Help Date Company ( • Sales Firef Party Alc narne. Current balance: Sales ledger: Current balance: Template Party 922.00 Dr Sales 850.00 Cr 161 e2968 nt to 21a71 bf7d "trac Name of Item Googl Chron Micros 46 IypÅ Narration: Unity Quit F4: Contra F5: Payment Receipt Journal F8: Sales Purchase Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related Reports Optional post -Dated Hub" , 24-12 44bf7...
+[keys] 'Item T03{ENTER}'
+[shot] tds-016-g-on-screen-item (1024x768)
+[07:03:09] [tds] screen tds-016-g-on-screen-item : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co O: Import Quantity E: Export Rate M: Share per p: print 2-Oct-26 Friday Amount Fl: Help Date Company ( • Sales Firef Party Alc narne. Current balance: Sales ledger: Current balance: Template Party 922.00 Dr Sales 850.00 Cr 161 e2968 nt to 21a71 bf7d "trac Name of Item Googl Chro Item T03 Micros 46 IypÅ Narration: Unity Quit F4: Contra F5: Payment Receipt Journal F8: Sales Purchase Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related Reports Optional post -Dated Hub" , 24-...
+[shot] tds-017-g-on-screen-item-sub1 (1024x768)
+[07:03:10] [tds] screen tds-017-g-on-screen-item-sub1 : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co O: Import Quantity E: Export Rate M: Share per p: print 2-Oct-26 Friday Amount Fl: Help Date Company ( • Sales Firef Party Alc narne. Current balance: Sales ledger: Current balance: Template Party 922.00 Dr Sales 850.00 Cr 161 e2968 nt to 21a71 bf7d "trac Name of Item Googl Chro Item T03 Micros 46 IypÅ Narration: Unity Quit F4: Contra F5: Payment Receipt Journal F8: Sales Purchase Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related Reports Optional post -Dated Hub" , 24-...
+[keys] '2{ENTER}'
+[shot] tds-018-g-on-screen-qty (1024x768)
+[07:03:12] [tds] screen tds-018-g-on-screen-qty : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co O: Import Quantity 2 Nos 2 Nos E: Export Rate M: Share per p: print 2-Oct-26 Friday Amount Fl: Help Date Company ( • Sales Firef Party Alc narne. Current balance: Sales ledger: Current balance: Template Party 922.00 Dr Sales 850.00 Cr 161 e2968 nt to 21a71 bf7d "trac Name of Item Googl Chro Item T03 Micros 46 IypÅ Narration: Unity Quit F4: Contra F5: Payment Receipt Journal F8: Sales Purchase Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related Reports Optional post -Date...
+[keys] '100{ENTER}'
+[shot] tds-019-g-on-screen-rate (1024x768)
+[07:03:15] [tds] screen tds-019-g-on-screen-rate : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co Sales Firef Party Alc narne. Current balance: Sales ledger: Current balance: Template Party 922.00 Dr Sales 850.00 Cr O: Import Quantity 2 Nos 2 Nos E: Export Rate 100.00 M: Share per Nos p: print 2-Oct-26 Friday Amount 200.00 Fl: Help Date Company ( • F4: Contra F5: Payment Receipt Journal F8: Sales Purchase 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 Name of Item Googl Chro Item T03 Micros 46 IypÅ Narration: Unity Quit Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: 200....
+[keys] '{ENTER}'
+[shot] tds-020-g-on-screen-amount (1024x768)
+[07:03:17] [tds] screen tds-020-g-on-screen-amount : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co Sales Firef Party Alc narne. Current balance: Sales ledger: Current balance: Template Party 922.00 Dr Sales 850.00 Cr O: Import Quantity 2 Nos 2 Nos E: Export Rate 100.00 M: Share per Nos p: print 2-Oct-26 Friday Amount 200.00 Fl: Help Date Company ( • F4: Contra F5: Payment Receipt Journal F8: Sales Purchase 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 Name of Item Googl Chro Item T03 Micros 46 IypÅ Narration: Unity Quit Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: 200....
+[shot] tds-021-g-on-screen-item-b-sub1 (1024x768)
+[07:03:18] [tds] screen tds-021-g-on-screen-item-b-sub1 : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co Sales Firef Party Alc narne. Current balance: Sales ledger: Current balance: Template Party 922.00 Dr Sales 850.00 Cr O: Import Quantity 2 Nos 2 Nos E: Export Rate 100.00 M: Share per Nos p: print 2-Oct-26 Friday Amount 200.00 Fl: Help Date Company ( • F4: Contra F5: Payment Receipt Journal F8: Sales Purchase 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 Name of Item Googl Chro Item T03 Micros 46 IypÅ Narration: Unity Quit Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: 200....
+[keys] '{ENTER}'
+[shot] tds-022-g-on-screen-items-done (1024x768)
+[07:03:20] [tds] screen tds-022-g-on-screen-items-done : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co Sales Firef Party Alc narne. Current balance: Sales ledger: Current balance: Template Party 922.00 Dr Sales 850.00 Cr O: Import Quantity 2 Nos 2 Nos E: Export Rate 100.00 M: Share per Nos p: print 2-Oct-26 Friday Amount 200.00 200.00 Fl: Help Date Company ( • F4: Contra F5: Payment Receipt Journal F8: Sales Purchase 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 Name of Item Googl Chro Item T03 Micros 46 IypÅ Narration: Unity Quit Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: ...
+[keys] '^a'
+[shot] tds-023-g-on-screen-accept1 (1024x768)
+[07:03:24] [tds] screen tds-023-g-on-screen-accept1 : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Firef Googl Chro Micros 46 IypÅ Unity Sales No. 6 Party Alc narne. Current balance: Sales ledger: Current balance: Name of Item Narration: Quit Fl: Help Date Company ( • F4: Contra F5: Payment Receipt Journal F8: Sales Purchase 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: 44bf7 ' , "tra 713 is...
+[shot] tds-024-g-on-screen-after1 (1024x768)
+[07:03:25] [tds] screen tds-024-g-on-screen-after1 : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Firef Googl Chro Micros 46 IypÅ Unity Sales No. 6 Party Alc narne. Current balance: Sales ledger: Current balance: Name of Item Narration: Quit Fl: Help Date Company ( • F4: Contra F5: Payment Receipt Journal F8: Sales Purchase 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: 44bf7 ' , "tra 713 is...
+[keys] '^a'
+[shot] tds-025-g-on-screen-accept2 (1024x768)
+[07:03:29] [tds] screen tds-025-g-on-screen-accept2 : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Firefo Googl Chron Micros Unity Q: Quit Z: Exchange A: Accept Q Search O: Import E: Export M: Share FinCom Spike Co p: print Fl: Help x F2: Date F3: Company F4: Contra F5: Payment t F6: Receipt F7: Journal F8: Sales F9: Purchase F: Autofill H: Change Mode l: More Details Error Oops! No Entries in Voucher! 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 44bf7 ' , "tra 713 isten l' : l'e2 unnin ion_i 4115- age" , 24-12 'tally p: Delete , cancel vch O: Related Reports k: Optional T: post -Dated Fl 2: Configure Windows Server 2025 Datace...
+[shot] tds-026-g-on-screen-after2 (1024x768)
+[07:03:30] [tds] screen tds-026-g-on-screen-after2 : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Firefo Googl Chron Micros Unity Q: Quit Z: Exchange A: Accept Q Search O: Import E: Export M: Share FinCom Spike Co p: print Fl: Help x F2: Date F3: Company F4: Contra F5: Payment t F6: Receipt F7: Journal F8: Sales F9: Purchase F: Autofill H: Change Mode l: More Details Error Oops! No Entries in Voucher! 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 44bf7 ' , "tra 713 isten l' : l'e2 unnin ion_i 4115- age" , 24-12 'tally p: Delete , cancel vch O: Related Reports k: Optional T: post -Dated Fl 2: Configure Windows Server 2025 Datace...
+[keys] '^a'
+[shot] tds-027-g-on-screen-accept3 (1024x768)
+[07:03:34] [tds] screen tds-027-g-on-screen-accept3 : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Firef Googl Chro Micros 46 IypÅ Unity Sales No. 6 PartyA/c narne: Cash Current balance: Sales ledger: Sales Current balance: 1,050.00 Cr Name of Item End of List End of List Narration: Quit Fl: Help Date Company ( • F4: Contra F5: Payment Receipt Journal F8: Sales Purchase 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 Fl 0: 0åHVouctg•s F: Autofill Change...
+[shot] tds-028-g-on-screen-after3 (1024x768)
+[07:03:34] [tds] screen tds-028-g-on-screen-after3 : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Firef Googl Chro Micros 46 IypÅ Unity Sales No. 6 PartyA/c narne: Cash Current balance: Sales ledger: Sales Current balance: 1,050.00 Cr Name of Item End of List End of List Narration: Quit Fl: Help Date Company ( • F4: Contra F5: Payment Receipt Journal F8: Sales Purchase 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 Fl 0: 0åHVouctg•s F: Autofill Change...
+[shot] tds-029-gw0 (1024x768)
+[07:03:35] [tds] screen tds-029-gw0 : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Firef Googl Chro Micros 46 IypÅ Unity Sales No. 6 Party A/c narne: Cash Current balance: Sales ledger: Sales Current balance: 1,050.00 Cr Name of Item End of List End of List Narration: Quit Fl: Help Date Company ( • F4: Contra F5: Payment Receipt Journal F8: Sales Purchase 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 Fl 0: 0åHVouctg•s F: Autofill Chang...
+[keys] '{ESC}'
+[shot] tds-030-gw1 (1024x768)
+[07:03:38] [tds] screen tds-030-gw1 : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share FinCom • ke Co p: print x Create Firef Googl Chro Micros 46 IypÅ Unity Sales No. 6 Party Alc narne. Current balance: Sales ledger: Sales Current balance: 1,050.00 Cr Name of Item End of List End of List Narration: Quit Fl: Help Date Company ( • F4: Contra F5: Payment Receipt Journal F8: Sales Purchase 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 Fl 0: 0åHVouctg•s F: Autofill Change Mod...
+[keys] '{ESC}'
+[shot] tds-031-gw2 (1024x768)
+[07:03:41] [tds] screen tds-031-gw2 : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A: Accept Q Search FinCom Firef Googl Chro Micros 46 IypÅ Unity Sales No. 6 Party Alc narne. Current balance: Sales ledger: Sales Current balance: 1,050.00 Cr Name of Item End of List End of List Narration: Q: Quit O: Import Quantity E: Export Rate M: Share per p: print 2-Oct-26 Friday Amount Quit o Yes or No 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 44bf7 ' , "tra 713 isten l' : l'e2 unnin ion_i 4115- age" , 24-12 'tally D: Delete X: Cancel Vch Fl: Help F2: Date F3: Company F4: Contra F5: Payment F6: Receipt F7: Jo...
+[keys] 'y'
+[shot] tds-032-gw3 (1024x768)
+[07:03:44] [tds] screen tds-032-gw3 : EDU Recyc Prime Gatewa of Tall CURRENT PERIOD K: Company Y: Data Z: Exchange O: Import E: Export M: Share p: print Fl: Help Date 161 e2968 Firefo Googl Chro Micros 46 IypÅ Unity I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Q CURRENT OATE Friday, 2-Oct-2026 2-Oct-26 Search Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Company nt to 21a71 bf7d "trac Hub" , 24-12 44bf7 ' , "tra 713 isten l' : l'e2 unnin ion_i 4115- age" , 24-1...
+[07:03:44.561] GST on xml-item: MasterID 2, Sales 1 of 20261002
+[07:03:44.562] GST on xml-acct: MasterID 3, Sales 2 of 20261002
+[07:03:44.563] GST on xml-acct-irn: MasterID 4, Sales 3 of 20261002
+[07:03:44.565] GST on screen-item: MasterID 6, Sales 5 of 20261002
+[07:03:47.575] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-xml-item-object-started (1024x768)
+[07:04:13.522] Tally started (g-on-xml-item-object) in 25.9 s; company open: True
+[07:04:13.557] G on xml-item (XML Sales 1, MasterID 2) object: ANSWERED, 24.8 ms, 115071 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:04:16.562] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-xml-item-bynumber-started (1024x768)
+[07:04:42.527] Tally started (g-on-xml-item-bynumber) in 26 s; company open: True
+[07:04:42.562] G on xml-item (XML Sales 1, MasterID 2) bynumber: ANSWERED, 30 ms, 69606 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:04:45.567] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-xml-acct-object-started (1024x768)
+[07:05:11.517] Tally started (g-on-xml-acct-object) in 25.9 s; company open: True
+[07:05:11.539] G on xml-acct (XML Sales 2, MasterID 3) object: ANSWERED, 18.3 ms, 52575 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:05:14.543] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-xml-acct-bynumber-started (1024x768)
+[07:05:40.499] Tally started (g-on-xml-acct-bynumber) in 26 s; company open: True
+[07:05:40.525] G on xml-acct (XML Sales 2, MasterID 3) bynumber: ANSWERED, 22.3 ms, 15423 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:05:43.531] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-xml-acct-irn-object-started (1024x768)
+[07:06:09.530] Tally started (g-on-xml-acct-irn-object) in 26 s; company open: True
+[07:06:09.556] G on xml-acct-irn (XML, then IRN by an XML alteration Sales 3, MasterID 4) object: ANSWERED, 20.5 ms, 52579 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:06:12.562] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-xml-acct-irn-bynumber-started (1024x768)
+[07:06:38.475] Tally started (g-on-xml-acct-irn-bynumber) in 25.9 s; company open: True
+[07:06:38.509] G on xml-acct-irn (XML, then IRN by an XML alteration Sales 3, MasterID 4) bynumber: ANSWERED, 29.8 ms, 15427 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:06:41.515] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-screen-item-object-started (1024x768)
+[07:07:07.469] Tally started (g-on-screen-item-object) in 26 s; company open: True
+[07:07:07.496] G on screen-item (screen keys Sales 5, MasterID 6) object: ANSWERED, 22.4 ms, 64331 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:07:10.502] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-screen-item-bynumber-started (1024x768)
+[07:07:36.458] Tally started (g-on-screen-item-bynumber) in 26 s; company open: True
+[07:07:36.504] G on screen-item (screen keys Sales 5, MasterID 6) bynumber: ANSWERED, 38.5 ms, 33640 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:07:39.513] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-xml-acct-helper-collection-started (1024x768)
+[07:08:05.468] Tally started (g-on-xml-acct-helper-collection) in 26 s; company open: True
+[07:08:05.494] G on xml-acct (XML Sales 2, MasterID 3) helper-collection: ANSWERED, 21.5 ms, 14492 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:08:08.499] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-xml-acct-irn-helper-collection-started (1024x768)
+[07:08:34.487] Tally started (g-on-xml-acct-irn-helper-collection) in 26 s; company open: True
+[07:08:34.516] G on xml-acct-irn (XML, then IRN by an XML alteration Sales 3, MasterID 4) helper-collection: ANSWERED, 21.6 ms, 14492 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:08:37.527] ---- fast234g: GST off (D:\a\_temp\fast234g\off)
+[07:08:40.531] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-setup-started (1024x768)
+[07:09:06.488] Tally started (g-off-setup) in 26 s; company open: True
+[07:09:06.501] import company GST off: 1 sent, created 0, errors 0, 9.4 ms
+[07:09:06.503] GST off: ISGSTON before 'Yes', after the alteration 'No'
+[07:09:06.610] import light masters: 60 sent, created 59, errors 0, 104.9 ms
+[07:09:06.641] import xml item invoice: 1 sent, created 1, errors 0, 29 ms
+[07:09:06.653] import xml accounting sales: 1 sent, created 1, errors 0, 10.6 ms
+[07:09:06.666] import xml accounting sales (IRN to come): 1 sent, created 1, errors 0, 11.7 ms
+[07:09:06.701] import IRN and e-way bill written back (alter): 1 sent, created 1, errors 0, 15.1 ms
+[shot] tds-033-gw0 (1024x768)
+[07:09:07] [tds] screen tds-033-gw0 : EDU Recyc Prime Gatewa of Tall CURRENT PERIOD K: Company Y: Data Z: Exchange CURRENT OATE Wednesday, I-Apr-2026 O: Import E: Export M: Share p: print Fl: Help Date 161 e2968 Firefo Googl Chro Micros 46 IypÅ Unity I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Q upr-26 Search Company nt to 21a71 bf7d "trac Hub" , 24-12 44bf7 ' , "tra 713 isten l' : l'e2 unnin ion_i 4115- age" , 24-...
+[shot] tds-034-g-off-screen-start (1024x768)
+[07:09:07] [tds] screen tds-034-g-off-screen-start : EDU Recyc Prime Gatewa of Tall CURRENT PERIOD K: Company Y: Data Z: Exchange CURRENT OATE Wednesday, I-Apr-2026 O: Import E: Export M: Share p: print Fl: Help Date 161 e2968 Firefo Googl Chro Micros 46 IypÅ Unity I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Q upr-26 Search Company nt to 21a71 bf7d "trac Hub" , 24-12 44bf7 ' , "tra 713 isten l' : l'e2 unnin ion_i 4115- age" , 24-...
+[keys] 'v'
+[shot] tds-035-g-off-screen-vouchers (1024x768)
+[07:09:11] [tds] screen tds-035-g-off-screen-vouchers : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Pa ment No. 1 Firefo Account Current balance: Particulars Googl Chro Micros 46 IypÅ Narration: Unity Quit Z: Exchange A Accept Q Search O: Import E: Export M: Share FinCom • ke Co p: print upr-26 Wednesday Amount Fl: Help Date Company ( • F4: Contra F5: Payment F6 Receipt Journal Sales Purchase 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 D: Delete x: Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details O: Related Reports L: Optional post -Dated F12: Configure 44bf7 ' , "tra 713 isten l' : l'e2 unnin ion_i 4115- age" , 24-12 'ta...
+[keys] '{F8}'
+[shot] tds-036-g-off-screen-type (1024x768)
+[07:09:14] [tds] screen tds-036-g-off-screen-type : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Firef Googl Chro Micros 46 IypÅ Unity Sales Party Alc narne. Current balance: Sales ledger: Current balance: Name of Item Narration: Quit Fl: Help Date Company ( • F4: Contra F5: Payment Receipt Journal F8: Sales Purchase 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: 44bf7 ' , "tra 713 isten l'...
+[keys] '^h'
+[shot] tds-037-g-off-screen-mode (1024x768)
+[07:09:18] [tds] screen tds-037-g-off-screen-mode : o Recyc Firefo Googl Chron Micros lyp Unity EDU Prime Change Mode Quit K: Company Y: Data Z: Exchange O: Import E: Export o M: Share p: print x FinCom • ke Co Change Voucher Mode Item Invoice List of Modes/Usa es Item Invoice Accounting Invoice As Voucher A Accept Q Search Fl: Help e2968 nt to 21a71 bf7d "trac Hub" , 24-12 44bf7 ' , "tra : '2.3 713 isten l' : l'e2 unnin ion_i 4115- age" , 24-12 'tally Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:09 AM 10/8/2026
+[keys] 'Item Invoice{ENTER}'
+[shot] tds-038-g-off-screen-item-mode (1024x768)
+[07:09:21] [tds] screen tds-038-g-off-screen-item-mode : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Firef Googl Chro Micros 46 IypÅ Unity Sales Party Alc narne. Current balance: Sales ledger: Current balance: Name of Item Narration: Quit Fl: Help Date Company ( • F4: Contra F5: Payment Receipt Journal F8: Sales Purchase 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: 44bf7 ' , "tra 713 isten l'...
+[keys] '{F2}'
+[shot] tds-039-g-off-screen-date-box (1024x768)
+[07:09:23] [tds] screen tds-039-g-off-screen-date-box : x Recyc Firefo EDU Prime Change Voucher Date K: Company Y: Data Z: Exchange A Accept Q Search O: Import E: Export o M: Share p: print o Fl: Help Googl Chron Micros lyp Unity Quit FinCom Spike Co Voucher Date 24-2026 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 44bf7 ' , "tra : '2.3 713 isten l' : l'e2 unnin ion_i 4115- age" , 24-12 'tally Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:09 AM 10/8/2026
+[keys] '2-10-2026{ENTER}'
+[shot] tds-040-g-off-screen-date (1024x768)
+[07:09:26] [tds] screen tds-040-g-off-screen-date : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Firef Googl Chro Micros 46 IypÅ Unity Sales Party Alc narne. Current balance: Sales ledger: Current balance: Name of Item Narration: Quit Fl: Help Date Company ( • F4: Contra F5: Payment Receipt Journal F8: Sales Purchase 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: 44bf7 ' , "tra 713 isten l'...
+[keys] 'Template Party{ENTER}'
+[shot] tds-041-g-off-screen-party (1024x768)
+[07:09:30] [tds] screen tds-041-g-off-screen-party : o Recyc Firefo Googl Chron EDU Prime Details K: Company Y: Data Z: Exchange A Accept Q Search O: Import E: Export o M: Share p: print x FinCom Spike Co Dispatch Details Dispatch Doc No. Dispatched through Destination Carrier Name/Agent Bill of No. Motor Vehicle No. Delivery Note No(s) Micros lyp Unity Quit Date: Fl: Help e2968 nt to 21a71 bf7d "trac Hub" , 24-12 44bf7 ' , "tra : '2.3 713 isten l' : l'e2 unnin ion_i 4115- age" , 24-12 'tally Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:09 AM 10/8/2026
+[shot] tds-042-g-off-screen-party-sub1 (1024x768)
+[07:09:30] [tds] screen tds-042-g-off-screen-party-sub1 : o Recyc Firefo Googl Chron EDU Prime Details K: Company Y: Data Z: Exchange A Accept Q Search O: Import E: Export o M: Share p: print x FinCom Spike Co Dispatch Details Dispatch Doc No. Dispatched through Destination Carrier Name/Agent Bill of No. Motor Vehicle No. Delivery Note No(s) Micros lyp Unity Quit Date: Fl: Help e2968 nt to 21a71 bf7d "trac Hub" , 24-12 44bf7 ' , "tra : '2.3 713 isten l' : l'e2 unnin ion_i 4115- age" , 24-12 'tally Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:09 AM 10/8/2026
+[keys] '^a'
+[shot] tds-043-g-off-screen-party-sub-accept (1024x768)
+[07:09:33] [tds] screen tds-043-g-off-screen-party-sub-accept : o Recyc Firefo EDU Prime Details o M: Share p: print x K: Company Y: Data Z: Exchange FinCom Spike Co Party Details Dem late Pa List of Led er Accounts Spike Party Spike Party 2 Template Party Ul Party O: Import Create New Party E: Export Googl Chron Micros lyp Unity Quit Buyer (Bill to) Mailing Name Address State Country A Accept Q Search Fl: Help e2968 nt to 21a71 bf7d "trac Hub" , 24-12 44bf7 ' , "tra : '2.3 713 isten l' : l'e2 unnin ion_i 4115- age" , 24-12 'tally Configure Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:09 AM 10/8/2026
+[shot] tds-044-g-off-screen-party-sub2 (1024x768)
+[07:09:34] [tds] screen tds-044-g-off-screen-party-sub2 : o Recyc Firefo EDU Prime Details o M: Share p: print x K: Company Y: Data Z: Exchange FinCom Spike Co Party Details Dem late Pa List of Led er Accounts Spike Party Spike Party 2 Template Party Ul Party O: Import Create New Party E: Export Googl Chron Micros lyp Unity Quit Buyer (Bill to) Mailing Name Address State Country A Accept Q Search Fl: Help e2968 nt to 21a71 bf7d "trac Hub" , 24-12 44bf7 ' , "tra : '2.3 713 isten l' : l'e2 unnin ion_i 4115- age" , 24-12 'tally Configure Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:09 AM 10/8/2026
+[keys] '^a'
+[shot] tds-045-g-off-screen-party-sub-accept (1024x768)
+[07:09:37] [tds] screen tds-045-g-off-screen-party-sub-accept : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Sales M: Share p: print Create Show More x Firef Googl Chro Micros 46 IypÅ Unity Sales Party Alc narne. Current balance: Sales ledger: Current balance: Template Party 922.00 Dr Fl: Help Date Company ( • F4: Contra F5: Payment Receipt Journal F8: Sales Purchase 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 Name of Item Narration: Quit Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: 44bf7 ' , "tra 713 isten l' : l'e2 unnin ion_i 4115...
+[shot] tds-046-g-off-screen-party-sub3 (1024x768)
+[07:09:38] [tds] screen tds-046-g-off-screen-party-sub3 : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Sales M: Share p: print Create Show More x Firef Googl Chro Micros 46 IypÅ Unity Sales Party Alc narne. Current balance: Sales ledger: Current balance: Template Party 922.00 Dr Fl: Help Date Company ( • F4: Contra F5: Payment Receipt Journal F8: Sales Purchase 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 Name of Item Narration: Quit Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: 44bf7 ' , "tra 713 isten l' : l'e2 unnin ion_i 4115...
+[keys] 'Sales{ENTER}'
+[shot] tds-047-g-off-screen-ledger (1024x768)
+[07:09:41] [tds] screen tds-047-g-off-screen-ledger : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co O: Import Quantity E: Export Rate M: Share per p: print 2-Oct-26 Friday Amount Fl: Help Date Company ( • Sales Firef Party Alc narne. Current balance: Sales ledger: Current balance: Template Party 922.00 Dr Sales 850.00 Cr 161 e2968 nt to 21a71 bf7d "trac Name of Item Googl Chron Micros 46 IypÅ Narration: Unity Quit F4: Contra F5: Payment Receipt Journal F8: Sales Purchase Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related Reports Optional post -Dated Hub" , 24-12 44bf7...
+[keys] 'Item T03{ENTER}'
+[shot] tds-048-g-off-screen-item (1024x768)
+[07:09:44] [tds] screen tds-048-g-off-screen-item : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co O: Import Quantity E: Export Rate M: Share per p: print 2-Oct-26 Friday Amount Fl: Help Date Company ( • Sales Firef Party Alc narne. Current balance: Sales ledger: Current balance: Template Party 922.00 Dr Sales 850.00 Cr 161 e2968 nt to 21a71 bf7d "trac Name of Item Googl Chro Item T03 Micros 46 IypÅ Narration: Unity Quit F4: Contra F5: Payment Receipt Journal F8: Sales Purchase Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related Reports Optional post -Dated Hub" , 24-...
+[shot] tds-049-g-off-screen-item-sub1 (1024x768)
+[07:09:47] [tds] screen tds-049-g-off-screen-item-sub1 : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co O: Import Quantity E: Export Rate M: Share per p: print 2-Oct-26 Friday Amount Fl: Help Date Company ( • Sales Firef Party Alc narne. Current balance: Sales ledger: Current balance: Template Party 922.00 Dr Sales 850.00 Cr 161 e2968 nt to 21a71 bf7d "trac Name of Item Googl Chro Item T03 Micros 46 IypÅ Narration: Unity Quit F4: Contra F5: Payment Receipt Journal F8: Sales Purchase Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related Reports Optional post -Dated Hub" , 24-...
+[keys] '2{ENTER}'
+[shot] tds-050-g-off-screen-qty (1024x768)
+[07:09:49] [tds] screen tds-050-g-off-screen-qty : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co O: Import Quantity 2 Nos 2 Nos E: Export Rate M: Share per p: print 2-Oct-26 Friday Amount Fl: Help Date Company ( • Sales Firef Party Alc narne. Current balance: Sales ledger: Current balance: Template Party 922.00 Dr Sales 850.00 Cr 161 e2968 nt to 21a71 bf7d "trac Name of Item Googl Chro Item T03 Micros 46 IypÅ Narration: Unity Quit F4: Contra F5: Payment Receipt Journal F8: Sales Purchase Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related Reports Optional post -Date...
+[keys] '100{ENTER}'
+[shot] tds-051-g-off-screen-rate (1024x768)
+[07:09:52] [tds] screen tds-051-g-off-screen-rate : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co Sales Firef Party Alc narne. Current balance: Sales ledger: Current balance: Template Party 922.00 Dr Sales 850.00 Cr O: Import Quantity 2 Nos 2 Nos E: Export Rate 100.00 M: Share per Nos p: print 2-Oct-26 Friday Amount 200.00 Fl: Help Date Company ( • F4: Contra F5: Payment Receipt Journal F8: Sales Purchase 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 Name of Item Googl Chro Item T03 Micros 46 IypÅ Narration: Unity Quit Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: 200....
+[keys] '{ENTER}'
+[shot] tds-052-g-off-screen-amount (1024x768)
+[07:09:54] [tds] screen tds-052-g-off-screen-amount : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co Sales Firef Party Alc narne. Current balance: Sales ledger: Current balance: Template Party 922.00 Dr Sales 850.00 Cr O: Import Quantity 2 Nos 2 Nos E: Export Rate 100.00 M: Share per Nos p: print 2-Oct-26 Friday Amount 200.00 Fl: Help Date Company ( • F4: Contra F5: Payment Receipt Journal F8: Sales Purchase 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 Name of Item Googl Chro Item T03 Micros 46 IypÅ Narration: Unity Quit Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: 200....
+[shot] tds-053-g-off-screen-item-b-sub1 (1024x768)
+[07:09:55] [tds] screen tds-053-g-off-screen-item-b-sub1 : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co Sales Firef Party Alc narne. Current balance: Sales ledger: Current balance: Template Party 922.00 Dr Sales 850.00 Cr O: Import Quantity 2 Nos 2 Nos E: Export Rate 100.00 M: Share per Nos p: print 2-Oct-26 Friday Amount 200.00 Fl: Help Date Company ( • F4: Contra F5: Payment Receipt Journal F8: Sales Purchase 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 Name of Item Googl Chro Item T03 Micros 46 IypÅ Narration: Unity Quit Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: 200....
+[keys] '{ENTER}'
+[shot] tds-054-g-off-screen-items-done (1024x768)
+[07:09:57] [tds] screen tds-054-g-off-screen-items-done : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co Sales Firef Party Alc narne. Current balance: Sales ledger: Current balance: Template Party 922.00 Dr Sales 850.00 Cr O: Import Quantity 2 Nos 2 Nos E: Export Rate 100.00 M: Share per Nos p: print 2-Oct-26 Friday Amount 200.00 200.00 Fl: Help Date Company ( • F4: Contra F5: Payment Receipt Journal F8: Sales Purchase 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 Name of Item Googl Chro Item T03 Micros 46 IypÅ Narration: Unity Quit Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: ...
+[keys] '^a'
+[shot] tds-055-g-off-screen-accept1 (1024x768)
+[07:10:01] [tds] screen tds-055-g-off-screen-accept1 : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Firef Googl Chro Micros 46 IypÅ Unity Sales No. 6 Party Alc narne. Current balance: Sales ledger: Current balance: Name of Item Narration: Quit Fl: Help Date Company ( • F4: Contra F5: Payment Receipt Journal F8: Sales Purchase 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: 44bf7 ' , "tra 713 is...
+[shot] tds-056-g-off-screen-after1 (1024x768)
+[07:10:02] [tds] screen tds-056-g-off-screen-after1 : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Firef Googl Chro Micros 46 IypÅ Unity Sales No. 6 Party Alc narne. Current balance: Sales ledger: Current balance: Name of Item Narration: Quit Fl: Help Date Company ( • F4: Contra F5: Payment Receipt Journal F8: Sales Purchase 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: 44bf7 ' , "tra 713 is...
+[keys] '^a'
+[shot] tds-057-g-off-screen-accept2 (1024x768)
+[07:10:06] [tds] screen tds-057-g-off-screen-accept2 : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Firefo Googl Chron Micros Unity Q: Quit Z: Exchange A: Accept Q Search O: Import E: Export M: Share FinCom Spike Co p: print Fl: Help x F2: Date F3: Company F4: Contra F5: Payment t F6: Receipt F7: Journal F8: Sales F9: Purchase F: Autofill H: Change Mode l: More Details Error Oops! No Entries in Voucher! 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 44bf7 ' , "tra 713 isten l' : l'e2 unnin ion_i 4115- age" , 24-12 'tally p: Delete , cancel vch O: Related Reports k: Optional T: post -Dated Fl 2: Configure Windows Server 2025 Datace...
+[shot] tds-058-g-off-screen-after2 (1024x768)
+[07:10:07] [tds] screen tds-058-g-off-screen-after2 : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Firefo Googl Chron Micros Unity Q: Quit Z: Exchange A: Accept Q Search O: Import E: Export M: Share FinCom Spike Co p: print Fl: Help x F2: Date F3: Company F4: Contra F5: Payment t F6: Receipt F7: Journal F8: Sales F9: Purchase F: Autofill H: Change Mode l: More Details Error Oops! No Entries in Voucher! 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 44bf7 ' , "tra 713 isten l' : l'e2 unnin ion_i 4115- age" , 24-12 'tally p: Delete , cancel vch O: Related Reports k: Optional T: post -Dated Fl 2: Configure Windows Server 2025 Datace...
+[keys] '^a'
+[shot] tds-059-g-off-screen-accept3 (1024x768)
+[07:10:11] [tds] screen tds-059-g-off-screen-accept3 : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Firef Googl Chro Micros 46 IypÅ Unity Sales No. 6 Party A/c narne: Cash Current balance: Sales ledger: Sales Current balance: 1,050.00 Cr Name of Item End of List End of List Narration: Quit Fl: Help Date Company ( • F4: Contra F5: Payment Receipt Journal F8: Sales Purchase 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 Fl 0: 0åHVouctg•s F: Autofill Chang...
+[shot] tds-060-g-off-screen-after3 (1024x768)
+[07:10:11] [tds] screen tds-060-g-off-screen-after3 : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Firef Googl Chro Micros 46 IypÅ Unity Sales No. 6 PartyA/c narne: Cash Current balance: Sales ledger: Sales Current balance: 1,050.00 Cr Name of Item End of List End of List Narration: Quit Fl: Help Date Company ( • F4: Contra F5: Payment Receipt Journal F8: Sales Purchase 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 Fl 0: 0åHVouctg•s F: Autofill Change...
+[shot] tds-061-gw0 (1024x768)
+[07:10:12] [tds] screen tds-061-gw0 : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Firef Googl Chro Micros 46 IypÅ Unity Sales No. 6 Party A/c narne: Cash Current balance: Sales ledger: Sales Current balance: 1,050.00 Cr Name of Item End of List End of List Narration: Quit Fl: Help Date Company ( • F4: Contra F5: Payment Receipt Journal F8: Sales Purchase 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 Fl 0: 0åHVouctg•s F: Autofill Chang...
+[keys] '{ESC}'
+[shot] tds-062-gw1 (1024x768)
+[07:10:15] [tds] screen tds-062-gw1 : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A Accept Q Search O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share FinCom • ke Co p: print x Create Firef Googl Chro Micros 46 IypÅ Unity Sales No. 6 Party Alc narne. Current balance: Sales ledger: Sales Current balance: 1,050.00 Cr Name of Item End of List End of List Narration: Quit Fl: Help Date Company ( • F4: Contra F5: Payment Receipt Journal F8: Sales Purchase 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 Fl 0: 0åHVouctg•s F: Autofill Change Mod...
+[keys] '{ESC}'
+[shot] tds-063-gw2 (1024x768)
+[07:10:18] [tds] screen tds-063-gw2 : EDU Recyc Prime K: Company Y: Data Accounting Voucher Creation Z: Exchange A: Accept Q Search FinCom Firef Googl Chro Micros 46 IypÅ Unity Sales No. 6 Party Alc narne. Current balance: Sales ledger: Sales Current balance: 1,050.00 Cr Name of Item End of List End of List Narration: Q: Quit O: Import Quantity E: Export Rate M: Share per p: print 2-Oct-26 Friday Amount Quit o Yes or No 161 e2968 nt to 21a71 bf7d "trac Hub" , 24-12 44bf7 ' , "tra 713 isten l' : l'e2 unnin ion_i 4115- age" , 24-12 'tally D: Delete X: Cancel Vch Fl: Help F2: Date F3: Company F4: Contra F5: Payment F6: Receipt F7: Jo...
+[keys] 'y'
+[shot] tds-064-gw3 (1024x768)
+[07:10:21] [tds] screen tds-064-gw3 : EDU Recyc Prime Gatewa of Tall CURRENT PERIOD K: Company Y: Data Z: Exchange O: Import E: Export M: Share p: print Fl: Help Date 161 e2968 Firefo Googl Chro Micros 46 IypÅ Unity I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Q CURRENT OATE Friday, 2-Oct-2026 2-Oct-26 Search Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Company nt to 21a71 bf7d "trac Hub" , 24-12 44bf7 ' , "tra 713 isten l' : l'e2 unnin ion_i 4115- age" , 24-1...
+[07:10:21.573] GST off xml-item: MasterID 2, Sales 1 of 20261002
+[07:10:21.574] GST off xml-acct: MasterID 3, Sales 2 of 20261002
+[07:10:21.575] GST off xml-acct-irn: MasterID 4, Sales 3 of 20261002
+[07:10:21.575] GST off screen-item: MasterID 6, Sales 5 of 20261002
+[07:10:24.581] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-xml-item-object-started (1024x768)
+[07:10:50.543] Tally started (g-off-xml-item-object) in 26 s; company open: True
+[07:10:50.569] G off xml-item (XML Sales 1, MasterID 2) object: ANSWERED, 21.9 ms, 112313 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:10:53.574] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-xml-item-bynumber-started (1024x768)
+[07:11:19.531] Tally started (g-off-xml-item-bynumber) in 26 s; company open: True
+[07:11:19.566] G off xml-item (XML Sales 1, MasterID 2) bynumber: ANSWERED, 30.7 ms, 65422 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:11:22.575] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-xml-acct-object-started (1024x768)
+[07:11:48.507] Tally started (g-off-xml-acct-object) in 25.9 s; company open: True
+[07:11:48.527] G off xml-acct (XML Sales 2, MasterID 3) object: ANSWERED, 15.9 ms, 50748 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:11:51.534] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-xml-acct-bynumber-started (1024x768)
+[07:12:17.454] Tally started (g-off-xml-acct-bynumber) in 25.9 s; company open: True
+[07:12:17.479] G off xml-acct (XML Sales 2, MasterID 3) bynumber: ANSWERED, 21.3 ms, 14906 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:12:20.483] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-xml-acct-irn-object-started (1024x768)
+[07:12:46.416] Tally started (g-off-xml-acct-irn-object) in 25.9 s; company open: True
+[07:12:46.436] G off xml-acct-irn (XML, then IRN by an XML alteration Sales 3, MasterID 4) object: ANSWERED, 15.9 ms, 50752 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:12:49.441] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-xml-acct-irn-bynumber-started (1024x768)
+[07:13:15.387] Tally started (g-off-xml-acct-irn-bynumber) in 25.9 s; company open: True
+[07:13:15.415] G off xml-acct-irn (XML, then IRN by an XML alteration Sales 3, MasterID 4) bynumber: ANSWERED, 23 ms, 14910 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:13:18.422] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-screen-item-object-started (1024x768)
+[07:13:44.355] Tally started (g-off-screen-item-object) in 25.9 s; company open: True
+[07:13:44.379] G off screen-item (screen keys Sales 5, MasterID 6) object: ANSWERED, 19.3 ms, 62600 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:13:47.386] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-screen-item-bynumber-started (1024x768)
+[07:14:13.305] Tally started (g-off-screen-item-bynumber) in 25.9 s; company open: True
+[07:14:13.338] G off screen-item (screen keys Sales 5, MasterID 6) bynumber: ANSWERED, 28.4 ms, 31246 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:14:16.345] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-xml-acct-helper-collection-started (1024x768)
+[07:14:42.282] Tally started (g-off-xml-acct-helper-collection) in 25.9 s; company open: True
+[07:14:42.308] G off xml-acct (XML Sales 2, MasterID 3) helper-collection: ANSWERED, 20.8 ms, 14237 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:14:45.315] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-xml-acct-irn-helper-collection-started (1024x768)
+[07:15:11.262] Tally started (g-off-xml-acct-irn-helper-collection) in 25.9 s; company open: True
+[07:15:11.287] G off xml-acct-irn (XML, then IRN by an XML alteration Sales 3, MasterID 4) helper-collection: ANSWERED, 21.2 ms, 14237 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:15:17.292] done (fast234 fast234g)
