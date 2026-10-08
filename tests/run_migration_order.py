@@ -1,6 +1,7 @@
 """python3 run_migration_order.py - the order the cloud migrations run in on a fresh database (03-Oct-2026, round 4 items
 1-3; docs/MIGRATION-ORDER.md): BOTH valid orders, each applied TWICE on its own database: staging's (32 -> 33 -> 35 -> 34 as FIRST run there, commit 2105b2d
--> 36b -> 37 -> 36 -> 38 -> 39 -> 40 -> 41 -> 42 -> 43 -> 44 -> 45 -> 46 -> 47 -> 48 -> 49 -> 50 -> 51 -> 52 -> 53 -> 54 -> 55 -> 56 -> 57 -> 58 -> 59 -> 60 -> 68) and a fresh database's (32 -> 33 -> 35 -> 34 reviewed -> 36 -> 36b -> 37 -> 38 -> 39 -> 40 -> 41 -> 42 -> 43 -> 44 -> 45 -> 46 -> 47 -> 48 -> 49 -> 50 -> 51 -> 52 -> 53 -> 54 -> 55 -> 56 -> 57 -> 58 -> 59 -> 60 -> 68); the function texts
+-> 36b -> 37 -> 36 -> 38 -> 39 -> 40 -> 41 -> 42 -> 43 -> 44 -> 45 -> 46 -> 47 -> 48 -> 49 -> 50 -> 51 -> 52 -> 53 -> 54 -> 55 -> 56 -> 57 -> 58 -> 59 -> 60 -> 68, then
+2.4.0's NEXT240: 62 -> 63 -> 64 -> 65 -> 66 -> 67) and a fresh database's (32 -> 33 -> 35 -> 34 reviewed -> 36 -> 36b -> 37 -> 38 -> 39 -> 40 -> 41 -> 42 -> 43 -> 44 -> 45 -> 46 -> 47 -> 48 -> 49 -> 50 -> 51 -> 52 -> 53 -> 54 -> 55 -> 56 -> 57 -> 58 -> 59 -> 60 -> 68, then 62 -> 67 -> 63 -> 64 -> 65 -> 66); the function texts
 the two orders end with are compared and must be identical (round 9), on a throwaway PostgreSQL (pg_stand)
 with the tables as on staging (run_migration33's schema, tally_devices, tally_bills) and made-up rows; never on staging.
 Checks: every file runs, twice, and deletes nothing; after the run the release functions are migration-34's
@@ -20,8 +21,8 @@ ORDERS = {"staging": BASE + [("34 (first, as on staging)", os.path.join("..", ".
 # both orders. 61 (privileges, run on staging 06-Oct-2026; branch perms-61) before 62 when that file is in the tree; 62 the TDS
 # rate worked out; 63 (outbox) and 67 (renumbering) both replace tally_recorder_line with ONE combined text: staging's order
 # runs them 63 -> 67, a fresh database's 67 -> 63, and the two must end with identical function texts (the check below)
-NEXT240 = {"staging": [(62, "migration-62-tds-rate-worked-out.sql"), (63, "migration-63-recorder-repeat.sql"), (64, "migration-64-pages-live.sql"), (65, "migration-65-selfchecks.sql"), (66, "migration-66-recorder-masters.sql")],
-           "fresh": [(62, "migration-62-tds-rate-worked-out.sql"), (63, "migration-63-recorder-repeat.sql"), (64, "migration-64-pages-live.sql"), (65, "migration-65-selfchecks.sql"), (66, "migration-66-recorder-masters.sql")]}
+NEXT240 = {"staging": [(62, "migration-62-tds-rate-worked-out.sql"), (63, "migration-63-recorder-repeat.sql"), (64, "migration-64-pages-live.sql"), (65, "migration-65-selfchecks.sql"), (66, "migration-66-recorder-masters.sql"), (67, "migration-67-recorder-renumbered.sql")],
+           "fresh": [(62, "migration-62-tds-rate-worked-out.sql"), (67, "migration-67-recorder-renumbered.sql"), (63, "migration-63-recorder-repeat.sql"), (64, "migration-64-pages-live.sql"), (65, "migration-65-selfchecks.sql"), (66, "migration-66-recorder-masters.sql")]}
 for _k, _o in ORDERS.items():
     if os.path.exists(os.path.join(SQLDIR, "migration-61-privileges.sql")) and (61, "migration-61-privileges.sql") not in _o: _o.append((61, "migration-61-privileges.sql"))
     _o.extend(NEXT240[_k])
@@ -197,6 +198,10 @@ def run_order(label, ORDER):
            and db.one("select has_function_privilege('anon', 'public.alert_dismiss_undo(uuid)', 'execute')::text") == "false"
            and "undone_at = now()" in fdef("alert_dismiss_undo"),
            "68: app_alert_dismissals (a person's cleared notifications), row security on, no delete; alert_dismiss / _undo (stamps undone_at) / alert_dismissals_list (in force in this order)")
+        ok("already have this line" in fdef("tally_recorder_line") and "renumbered in Tally" in fdef("tally_recorder_line")
+           and db.one("select count(*) from pg_indexes where indexname = 'tally_recorder_lines_line'") == "1"
+           and db.one("select has_function_privilege('service_role', 'public.tally_recorder_line(uuid, uuid, jsonb, bigint)', 'execute')") == "f",
+           "63 + 67 (release-240, one combined tally_recorder_line, whichever ran last): a repeat of a line FinCom has answered 'duplicate' (63) and a renumbered entry applied (67); 63's index; granted to nobody (in force in this order)")
         ok("tally_ledger_carry_choices" in fdef("tally_ledger_rename") and db.one("select count(*) from information_schema.columns where table_name = 'tally_ledgers' and column_name = 'needs_confirm'") == "1", "39: the rename carries the choices; tally_ledgers.needs_confirm")
         ok(db.one("select string_agg(confdeltype::text, '') from pg_constraint where conrelid = 'public.tally_post_marks'::regclass and contype = 'f'") == "rr", "38: tally_post_marks' foreign keys restrict (no cascade)")
         for fn in ("tally_tb", "tally_period", "tally_balances_on"): ok("d.merged_into is null" in fdef(fn), "%s hides the twins" % fn)

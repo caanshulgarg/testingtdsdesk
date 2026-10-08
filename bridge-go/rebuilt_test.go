@@ -549,6 +549,9 @@ type standCloud struct {
 	// missing, record answers ok)
 	selfchecks []M
 	scReply    func(b M) (int, M)
+	// next-renumber: every renumber_list body, and how it is answered (nil: 200 {ok, entries: []})
+	renumAsks  []M
+	renumReply func(b M) (int, M)
 }
 
 func newStandCloud(t *testing.T) *standCloud {
@@ -649,6 +652,17 @@ func newStandCloud(t *testing.T) *standCloud {
 			} else {
 				out["result"], out["words"] = "ok", "checked (stand)"
 			}
+		case "renumber_list":
+			c.renumAsks = append(c.renumAsks, o)
+			if c.renumReply != nil {
+				code, ans := c.renumReply(o)
+				if code != 200 {
+					w.WriteHeader(code)
+				}
+				_, _ = w.Write([]byte(jsonText(ans)))
+				return
+			}
+			out["entries"] = []any{}
 		case "recorder_lines":
 			c.recRaw = append(c.recRaw, string(b))
 			if c.recDelay > 0 {

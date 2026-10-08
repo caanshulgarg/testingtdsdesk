@@ -191,3 +191,5 @@ run_migration62.py                    120
 run_migration65.py                    120
 run_selfcheck_server.py               120
 run_tally_selfcheck_ui.py             120  TDSDESK_SITE=../app/dist-test
+run_renumber_list.py                  120
+run_migration67.py                    120

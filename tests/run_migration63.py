@@ -65,8 +65,14 @@ hunks, cur = [], None
 for d in difflib.unified_diff(L60.split("\n"), L63.split("\n"), lineterm="", n=0):
     if d.startswith("@@"): cur = []; hunks.append(cur)
     elif cur is not None and d[:1] in "+-" and not d.startswith(("+++", "---")): cur.append(d)
-unmarked = [h for h in hunks if not all(re.search(r"--.*\b63\b", x) for x in h if x.startswith("+") and x[1:].strip() and not x[1:].strip().startswith("--"))]
-ok(L60 != L63 and not unmarked, "0. tally_recorder_line is 60's text but %d changed places, every added line marked '63' (unmarked: %s)" % (len(hunks), unmarked[:1]))
+# release-240: 63, 67 (and 69) carry ONE combined text: every added line is marked by the migration it belongs to (63, 67 or 69),
+# 63's own lines are there, and the text is the same in each of those files present in the tree
+unmarked = [h for h in hunks if not all(re.search(r"--.*\b(63|67|69)\b", x) for x in h if x.startswith("+") and x[1:].strip() and not x[1:].strip().startswith("--"))]
+ok(L60 != L63 and not unmarked and any(re.search(r"--.*\b63\b", x) for h in hunks for x in h), "0. tally_recorder_line is 60's text but %d changed places, every added line marked '63' (or, the combined text, '67' / '69') (unmarked: %s)" % (len(hunks), unmarked[:1]))
+for _o in ("migration-67-recorder-renumbered.sql", "migration-69-recorder-push.sql"):
+    if os.path.exists(os.path.join(SQLDIR, _o)):
+        ok(block(open(os.path.join(SQLDIR, _o)).read(), "create or replace function public.tally_recorder_line(", "revoke all on function public.tally_recorder_line(uuid, uuid, jsonb, bigint)") == L63,
+           "0. %s carries the same tally_recorder_line text (release-240: one combined text)" % _o)
 ok(L63.rstrip().endswith("revoke all on function public.tally_recorder_line(uuid, uuid, jsonb, bigint) from public, anon, authenticated, service_role;"), "0. granted to nobody, as in 60")
 
 db = pg_stand.start(int(os.environ.get("PG63_PORT") or 30630))

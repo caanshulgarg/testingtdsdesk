@@ -17,8 +17,8 @@ revoked; `begin; ... commit;`; safe to run twice) and is shown to the owner befo
 
 ## The two valid orders (both end with the same function texts: `tests/run_migration_order.py` asserts it)
 
-- staging: 32 → 33 → 35 → 34 (first) → 36b → 37 → 36 → 38 → 39 (applied 03-Oct, **except 39's tally_ingest_day part**: both forms are still 38's) → 40 → 41 (run 03-Oct, evening; its 8-argument `tally_ingest_day` superseded 39's) → 42 → 43 (run 04-Oct) → 44 (run 04-Oct) → 45 (run 04-Oct) → **46** → **47** → **48** (run by the owner) → **49** → **50** (run by the owner) → 51 → 52 → 53 → 54 → 55 → 56 (live on staging) → 57 → 58 → 59 → 60 → 68 → 62 → 63 → 64 → 65 → 66 (2.4.0, not run)
-- a fresh database: 32 → 33 → 35 → 34 (reviewed) → 36 → 36b → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 51 → 52 → 53 → 54 → 55 → 56 → 57 → 58 → 59 → 60 → 68 → 62 → 63 → 64 → 65 → 66
+- staging: 32 → 33 → 35 → 34 (first) → 36b → 37 → 36 → 38 → 39 (applied 03-Oct, **except 39's tally_ingest_day part**: both forms are still 38's) → 40 → 41 (run 03-Oct, evening; its 8-argument `tally_ingest_day` superseded 39's) → 42 → 43 (run 04-Oct) → 44 (run 04-Oct) → 45 (run 04-Oct) → **46** → **47** → **48** (run by the owner) → **49** → **50** (run by the owner) → 51 → 52 → 53 → 54 → 55 → 56 (live on staging) → 57 → 58 → 59 → 60 → 68 → 62 → 63 → 64 → 65 → 66 → 67 (2.4.0, not run)
+- a fresh database: 32 → 33 → 35 → 34 (reviewed) → 36 → 36b → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 51 → 52 → 53 → 54 → 55 → 56 → 57 → 58 → 59 → 60 → 68 → 62 → 67 → 63 → 64 → 65 → 66
 
 | # | File | What it adds |
 |---|---|---|
@@ -309,3 +309,24 @@ coordinator; 61-65 belong to other branches) runs after 44 in any order relative
 master_altered lines ('kept' / 'duplicate'). tally-ingest's recorder_lines sends those lines there; a cloud without 66
 answers them 'failed' with words and handles the rest of the call as before. Tested by `run_migration66.py` and
 `run_recorder_masters_server.py` (through tally-ingest under Deno).
+
+next-renumber (08-Oct-2026, the owner's "renumbering yes"; a later release than 2.3.4): `migration-67-recorder-renumbered.sql`
+runs after 60 in both orders (... -> 58 -> 59 -> 60 -> 67; add-only, one transaction, `lock_timeout` 10 s, no "delete from",
+safe twice; NOT run on staging or production). One function replaced, `tally_recorder_line` (60's text, the lines marked "67"
+changed; granted to nobody): an altered line WITH Tally's entry at exactly the AlterID the copy holds, numbered otherwise than
+the copy, is applied (Tally renumbered the entry after an insert or delete: its AlterID does not move, tally-versions P9r),
+instead of 'duplicate'; its words "renumbered in Tally: <type> <old> is <type> <new> now (the same AlterID n)". The numbers 61
+to 66 and 69 are taken on other branches (61 perms-61, 62 next-tds, 63 next-outbox, 64 next-realtime, 65 next-selfcheck, 66
+next-masterhook, 69 next-push); 63 and 69 replace `tally_recorder_line` too, so whichever of 63, 67, 69 lands later carries the
+others' marked lines. Tested by `run_migration67.py` (on ... -> 58 -> 60) and `run_migration_order.py` (60 -> 67 in both orders).
+
+FinCom Bridge 2.4.0 (release-240, 08-Oct-2026; NOT run anywhere): the next release's migrations run after 2.3.5's 68 (independent
+of it): staging ... -> 60 -> 68 -> 62 -> 63 -> 64 -> 65 -> 66 -> 67, a fresh database ... -> 60 -> 68 -> 62 -> 67 -> 63 -> 64 ->
+65 -> 66 (61, privileges, before 62 wherever its file is in the tree). **63 and 67 each replace `tally_recorder_line`: both files
+carry ONE combined, add-only text** (60's text with the lines marked "63", a repeat of a line FinCom has answered 'duplicate'
+with already: true, AND the lines marked "67", a renumbered entry applied), and each makes 63's index
+`tally_recorder_lines_line` if it is not there; so whichever of the two runs last leaves the same function, in either order,
+and neither one's behaviour is lost. `run_migration_order.py` runs them 63 -> 67 (staging) and 67 -> 63 (fresh) and requires
+identical function texts; `run_migration63.py` and `run_migration67.py` check their own marked lines and that the other file
+carries the same text. 69 (next-push, not in 2.4.0 yet) is to carry the same combined text with its lines marked "69" when it
+is merged.

@@ -1,24 +1,16 @@
--- Migration 63 (07-Oct-2026, next release, branch next-outbox): FinCom ignores a repeat of a recorder line. Runs AFTER 60
--- (fresh database and staging: ... -> 58 -> 59 -> 60 -> 63). ADD-ONLY: no table, column, row or function removed; no statement
--- in this file removes rows, not even in a comment; safe to run twice; one transaction (lock_timeout 10 s).
---   Why: the bridge keeps every line on the PC until FinCom's answer, so a bridge stopped after FinCom stored a group but
---   before it wrote its marks sends that group again. Until 63 every arrival was a row: the same line twice was two rows
---   (a change with a GUID and AlterID ended 'duplicate' by applied_once's rule, but a line without them - held - was held
---   twice, listed twice for the bridge to ask again, and could block FinCom's own "asked once" counts). tally_recorder_lines
---   has no unique key on the line id, and none can be added: the rows of every computer since 44 hold such repeats, and a
---   ":resolved" line is sent again ON PURPOSE (2.3.1: after an older bridge's resolution, and once a ledger FinCom waited
---   for is in).
---   1. tally_recorder_line (same arguments, security definer, search_path = public, pg_temp, granted to nobody as before):
---      60's text with the lines marked "63" added: a NEW arrival (no p_row) whose book, computer (device_id) and line id
---      match a row already here - and, when the line carries the key "again" (a bridge after 2.3.1, "" on a first send,
---      "items" / "ledger" on a deliberate resend), whose payload's "again" is the same - is not stored and not applied: it is
---      answered state 'duplicate', already: true, was: the first row's state, why: "already have this line (row N, ...)".
---      The bridge marks it sent on that answer. Not a repeat: a row ended 'failed'; and, a line without the key (bridge 2.3.1
---      or older), a ":resolved" line whose last row is 'held' (2.3.1's deliberate resend, as today). Runs under the book's
---      lock (tally_recorder_apply), the queued path's drain included. A cut payload keeps "again".
---   2. An index on (book_id, line_id) for that look-up (not unique, for the reason above).
--- Nothing else is touched; no row is changed by running it. Tested on pg_stand only: tests/run_migration63.py and
--- tests/run_recorder_repeat_server.py (the real tally-ingest under Deno).
+-- Migration 67 (08-Oct-2026, next-renumber: the owner's decision "renumbering yes"). Runs AFTER 60 (fresh database and
+-- staging: ... -> 57 -> 58 -> 60 -> 67). NOTE: 63 (next-outbox) and 69 (next-push) replace tally_recorder_line as well; whichever
+-- lands later must carry the other's marked lines. ADD-ONLY: no table, column, row or function removed; no statement in this file
+-- removes rows; safe to run twice; one transaction (lock_timeout 10 s). One function replaced: tally_recorder_line (same arguments,
+-- security definer, search_path = public, pg_temp, granted to nobody as before), 60's text with the lines marked "67" changed:
+--   A voucher inserted or deleted in Tally, of a voucher type that renumbers, makes Tally renumber every later voucher of that
+--   type; their AlterIDs do not move (tally-versions P9r, TallyPrime 3.0 and 7.1, runs 37734533866 and 37754251128: every
+--   renumbered receipt kept its AlterID). FinCom Bridge (next-renumber) reads each such entry again from Tally and sends it as an
+--   altered line WITH Tally's entry. Before 67 such a line was 'duplicate' (the copy holds that AlterID already, or the same change
+--   came as another line at that AlterID) and the copy kept the old number. 67: an altered line with Tally's entry (its own GUID,
+--   ids together) at exactly the AlterID the copy holds, whose number differs from the copy's, is applied (the copy takes Tally's
+--   number), its words "renumbered in Tally: <type> <old> is <type> <new> now (the same AlterID n)". Every other line as under 60.
+-- Nothing else is touched; no row is changed by running it. Tested on pg_stand only: tests/run_migration67.py.
 
 -- release-240 (FinCom Bridge 2.4.0, 08-Oct-2026): 63 (next-outbox) and 67 (next-renumber) both replace tally_recorder_line on
 -- 60's text. Each now carries the SAME combined text: 60's with the lines marked "63" (a repeat of a line FinCom has) AND the
@@ -29,10 +21,10 @@
 begin;
 set local lock_timeout = '10s';     -- never queue long behind a session holding a table here (a timeout rolls the whole file back: run it again)
 
--- ---------------------------------------------------------------- 2. the look-up's index
+-- ---------------------------------------------------------------- the repeat look-up's index (63's; release-240: in 67 too)
 create index if not exists tally_recorder_lines_line on public.tally_recorder_lines (book_id, line_id);
 
--- ---------------------------------------------------------------- 1. 60's line with the repeat check (lines marked "63") and the renumbered entry (lines marked "67")
+-- ---------------------------------------------------------------- 60's line with the renumbered entry (lines marked "67") and the repeat check (lines marked "63")
 create or replace function public.tally_recorder_line(p_book uuid, p_device uuid, p_line jsonb, p_row bigint)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
 declare b tally_books%rowtype; rid bigint := p_row; ev text := left(btrim(coalesce(p_line->>'event', '')), 40);
