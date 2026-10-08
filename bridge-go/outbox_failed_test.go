@@ -227,3 +227,50 @@ func TestOutboxFailedTxtKeepsFromItsDay(t *testing.T) {
 		t.Fatal("keepFrom is 00000000")
 	}
 }
+
+// --- the coordinator (08-Oct-2026): a stuck line keeps its tries, its first failure and its next try across a restart
+// (kept with the held offset in sync\recorder-offsets.json): still in the beat's stuck count at once, and sent again at
+// the 30-minute cap, not at the short waits of a fresh line
+func TestOutboxStuckSurvivesRestart(t *testing.T) {
+	rec, _, c := liveBridge(t, `,"RecorderFailedTries":12`)
+	o := obFailModel(c)
+	p := liveFilePath(rec, "")
+	liveAppend(t, p, obImport(zz, 0xe0, "fl0")...)
+	o.fail[itoa(0xe0)] = 1000
+	readAndUploadAll(t)
+	first := nowFn()
+	for i := 0; i < 11; i++ {
+		laterBy(t, 31*time.Minute)
+		uploadAll(t)
+	}
+	if o.sends[itoa(0xe0)] != 12 || toInt(obj(liveBeat()[zz])["stuck"]) != 1 {
+		t.Fatalf("before the restart: %d sends, beat %v (want 12 and stuck 1)", o.sends[itoa(0xe0)], liveBeat()[zz])
+	}
+	// the restart, 1 minute after the last try
+	laterBy(t, time.Minute)
+	liveResetState()
+	readAndUploadAll(t)
+	b := obj(liveBeat()[zz])
+	if toInt(b["stuck"]) != 1 || str(b["stuckSince"]) != first.In(liveZone).Format("2006-01-02T15:04:05") {
+		t.Fatalf("after the restart the line is not in the beat's stuck count at once: %v", b)
+	}
+	laterBy(t, 10*time.Minute)
+	uploadAll(t)
+	if o.sends[itoa(0xe0)] != 12 {
+		t.Fatalf("after the restart it went at a short wait (%d sends), not at the 30-minute cap", o.sends[itoa(0xe0)])
+	}
+	laterBy(t, 20*time.Minute)
+	uploadAll(t)
+	if o.sends[itoa(0xe0)] != 13 || len(liveQueue()) != 1 {
+		t.Fatalf("not sent at the cap after the restart: %d sends, waiting %d", o.sends[itoa(0xe0)], len(liveQueue()))
+	}
+	// taken at last: the kept record goes with it (a further restart counts nothing)
+	o.fail[itoa(0xe0)] = 0
+	laterBy(t, 31*time.Minute)
+	uploadAll(t)
+	liveResetState()
+	readAndUploadAll(t)
+	if len(liveQueue()) != 0 || toInt(obj(liveBeat()[zz])["stuck"]) != 0 || strings.Contains(readText(sp("recorder-offsets.json")), `"fails"`) {
+		t.Fatalf("after FinCom took it: waiting %d, beat %v", len(liveQueue()), liveBeat()[zz])
+	}
+}

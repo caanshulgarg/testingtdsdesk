@@ -352,7 +352,9 @@ is merged.
   (recorderState: stuck, stuckSince, stuckDay); tally-ingest keeps that as tally_devices.info.beat.recorderStuck
   [{company, n, since, day}] and FinCom shows it under Needs you ("N saves from <PC> could not be stored in FinCom since
   HH:MM; FinCom keeps trying - if it continues, upload the Day Book for <day>"; the app part sits on the shared classifier
-  of next-tallypage, branch next-outbox-app). After a restart the line is read again and its tries count from 1. The other lines of the group are marked sent. A resend is stored once (63's repeat check: a failed
+  of next-tallypage, branch next-outbox-app). Its tries, first failure, next try and words are kept with the held offset
+  (sync\recorder-offsets.json "fails", written whole and atomically), so after a restart it keeps its count, its
+  30-minute cap and its Needs you entry; the record goes when the line is taken. The other lines of the group are marked sent. A resend is stored once (63's repeat check: a failed
   row is no repeat, so the resend is applied; an applied one is answered "already have"). A cloud answer {queued: n}
   with no results at all (before round 20) is taken as before. Tests: outbox_failed_test.go.
 - **L2.** failed.txt (no day in its name) read past a line not yet confirmed no longer keeps every sent id for ever

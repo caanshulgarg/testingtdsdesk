@@ -340,6 +340,16 @@ type liveState struct {
 	// next-outbox: the day (yyyymmdd) of the oldest daily file read past a line not yet confirmed ("": none): the sent ids
 	// are rotated after 7 days, but never from that day on (kept in sync\recorder-offsets.json)
 	keepFrom string
+	// the coordinator (08-Oct-2026): the lines FinCom answered 'failed', by line id: tries, first failure, next try, why;
+	// kept with the offsets (sync\recorder-offsets.json, "fails"), so a restart keeps a stuck line's count, its 30-minute
+	// cap and its place in the beat (Needs you); dropped when the line is marked sent
+	fails map[string]liveFail
+}
+
+type liveFail struct {
+	n           int
+	since, next time.Time
+	why         string
 }
 
 var (
@@ -383,6 +393,16 @@ func liveFresh() {
 	live.created, live.scanned = map[string][2]string{}, false
 	o := readObjFile(liveOffsetsFile())
 	live.keepFrom = str(o["keepFrom"])
+	live.fails = map[string]liveFail{}
+	for id, v := range obj(o["fails"]) {
+		e := obj(v)
+		f := liveFail{n: toInt(e["n"]), why: str(e["why"])}
+		f.since, _ = time.Parse(time.RFC3339Nano, str(e["since"]))
+		f.next, _ = time.Parse(time.RFC3339Nano, str(e["next"]))
+		if f.n > 0 && !f.since.IsZero() {
+			live.fails[id] = f
+		}
+	}
 	for k, v := range obj(o["files"]) {
 		e := obj(v)
 		live.files[k] = &liveFileSt{off: toI64(e["off"]), gen: toInt(e["gen"]), enc: str(e["enc"]), keep: str(e["keep"])}
@@ -648,10 +668,17 @@ func liveSaveOffsets() {
 	}
 	path := liveOffsetsFile()
 	live.keepFrom = keepFrom
+	fails := M{}
+	for id, f := range live.fails {
+		fails[id] = M{"n": f.n, "since": f.since.Format(time.RFC3339Nano), "next": f.next.Format(time.RFC3339Nano), "why": cutRunes(f.why, 200)}
+	}
 	live.mu.Unlock()
 	o := M{"files": files, "alterid": bs, "slices": cs, "at": nowS()}
 	if keepFrom != "" {
 		o["keepFrom"] = keepFrom
+	}
+	if len(fails) > 0 {
+		o["fails"] = fails
 	}
 	if err := saveFile(path, jsonText(o)); err != nil {
 		writeLog("Recorder: " + path + " could not be written: " + err.Error())
@@ -1612,6 +1639,9 @@ func onlyDigits(s string) string { return re(`\D`).ReplaceAllString(s, "") }
 func liveQueueAdd(c *change) {
 	if c.queuedAt.IsZero() {
 		c.queuedAt = time.Now()
+	}
+	if f, had := live.fails[c.lineId]; had && c.failN == 0 {
+		c.failN, c.failSince, c.retryAt, c.failWhy = f.n, f.since, f.next, f.why // kept across a restart
 	}
 	live.queue = append(live.queue, c)
 	live.queued[c.lineId] = true
@@ -2646,6 +2676,7 @@ func liveDropCompany(key string) int {
 	for _, c := range live.queue {
 		if c.key() == key {
 			n++
+			delete(live.fails, c.lineId)
 			delete(live.queued, c.lineId)
 			live.qcount[c.companyGuid]--
 			liveCo(c.company).skipped++
@@ -2912,6 +2943,9 @@ func liveUploadStep() (int, bool) {
 			if c.failN >= maxTries {
 				w = 1800 // kept, never given up: every 30 minutes, no more often
 			}
+			if live.fails != nil && (len(live.fails) < 5000 || live.fails[c.lineId].n > 0) {
+				live.fails[c.lineId] = liveFail{n: c.failN, since: c.failSince, next: nowFn().Add(time.Duration(w) * time.Second), why: c.failWhy}
+			}
 			c.retryAt = nowFn().Add(time.Duration(w) * time.Second)
 			keep = append(keep, c)
 		}
@@ -2924,6 +2958,7 @@ func liveUploadStep() (int, bool) {
 	var held []*change
 	for _, c := range group {
 		gone[c] = true
+		delete(live.fails, c.lineId) // taken: its kept failures go with it
 		live.sent[c.lineId] = true
 		delete(live.queued, c.lineId)
 		live.qcount[c.companyGuid]--
