@@ -27,8 +27,9 @@ exact request and the field comparison are in `docs/fast-request-form.md`.
    difference: an item invoice's ledger lines are numbered in the order Tally's Day Book gives them (harmless: an entry
    2.3.3 stored and 2.3.4 sends again ends with exactly the new rows live). The by-number request's answers are stripped
    to the same fields too: no entry's body leaves the bridge with a field outside the approved list.
-   An entry Tally keeps in a form whose lines the strip cannot keep whole (stock under a ledger line, a stock journal's
-   lines in and out, pay heads by employee) is held with the Day Book words, never sent with lines missing.
+   An entry Tally keeps in a form whose lines the strip cannot keep whole (an invoice made in voucher mode: stock under
+   the sales line) is held with the Day Book words, never sent with lines missing. Every kind of entry was compared on
+   real answers of all five releases (docs/fast-request-form.md section 9).
 3. **No company should need marking slow.** Only the new request's stops count toward the mark. A company 2.3.3 marked is
    asked again (the mark lifts with the new version).
 4. **Lines 2.3.3 ended get one more ask.** A held line 2.3.3 ended with the Day Book words (a slow company's) is asked

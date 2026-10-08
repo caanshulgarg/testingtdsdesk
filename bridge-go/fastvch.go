@@ -221,8 +221,8 @@ func fastStripVoucher(v string) string {
 
 // 2.3.4 (the independent review, L1 and L2): the names of a voucher's lines FinCom stores (a ledger line, an item, a pay
 // head). One of them, filled, at a place the strip does not keep (a stock item under a ledger line: voucher mode; a stock
-// journal's lines in and out; items in INVENTORYENTRIES; pay heads by employee; ledger lines in both LEDGERENTRIES and
-// ALLLEDGERENTRIES) would be dropped, the body sent short and its stored rows marked gone (migration 57): such a voucher
+// journal's lines in and out are the exception below; items in INVENTORYENTRIES; pay heads by employee; ledger lines in
+// both LEDGERENTRIES and ALLLEDGERENTRIES) would be dropped, the body sent short and its stored rows marked gone (migration 57): such a voucher
 // is held instead ("" and the place, in plain words)
 var fastLineNames = map[string]bool{"LEDGERNAME": true, "STOCKITEMNAME": true, "PAYHEADNAME": true}
 
@@ -276,6 +276,11 @@ func fastStrip(v string, hold bool) (string, string) {
 		}
 	}
 	for _, k := range root.kids {
+		// a stock journal's lines in and out: FinCom stores nothing of them from either request (parse.js reads no entry
+		// from them; run 37741662830, 3.0 .. 7.1): dropped as any other field, not held
+		if k.name == "INVENTORYENTRIESIN.LIST" || k.name == "INVENTORYENTRIESOUT.LIST" {
+			continue
+		}
 		walk(k, "")
 	}
 	if lost != "" && hold {

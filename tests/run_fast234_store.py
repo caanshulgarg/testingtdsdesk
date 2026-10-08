@@ -9,6 +9,11 @@ keeps of the object export) into a twin book. Every row stored for the entry, in
 (tally_vouchers, tally_lines and the entry-detail tables of migration 57: items, bills, cost centres, bank, TDS), is compared
 column by column (the book, row ids and times left out). The ledger lines' order (line_no) is compared too and said apart:
 an item invoice's object answer gives the party and tax lines before the lines under the items (as Tally's Day Book does).
+2.3.4 (the independent review, L2 / L3): every kind of entry too (bridge-go/testdata/fast234kinds, push-design run
+37741662830: TDS by S5, credit and debit notes, journals with a party and with cost centres, bank payments with the UTR and
+by cheque, payroll, notes, stock journals, invoices with godowns and batches and with 200 / 500 items): the rows stored from
+today's answer and from the stripped object equal, but for the two differences towards Tally's Day Book export
+(run_parse_fast234_kinds.mjs): an "On Account" bill row only from today's answer, TDS rows only from the object.
 Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno)."""
 import os, re, sys, json, time, hashlib, subprocess, urllib.request, shutil, threading, tempfile
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -38,6 +43,18 @@ FIRM, OWNER = "99999999-9999-9999-9999-999999999999", "55555555-5555-5555-5555-5
 DA, KA = "d1000000-0000-0000-0000-000000000001", "fcd_" + "a" * 48
 GA = {"id": "go-aaaaaa234234", "computer": "PC-A", "user": "anshul", "mode": "main", "runMode": "user", "version": "2.3.4"}
 RELS = sorted(d for d in os.listdir(TD) if re.match(r"^\d+\.\d+$", d))
+import gzip
+TK = os.path.join(HERE, "..", "bridge-go", "testdata", "fast234kinds")
+KINDS = []   # (rel, kind, today's voucher, the stripped object)
+for rel in RELS:
+    d = os.path.join(TK, rel)
+    for f in sorted(os.listdir(d)) if os.path.isdir(d) else []:
+        if not f.endswith("-object-stripped.xml"): continue
+        k = f[:-len("-object-stripped.xml")]
+        fast = open(os.path.join(d, f), encoding="utf-8").read()
+        if fast.startswith("HELD: "): continue
+        today = gzip.open(os.path.join(d, k + "-bymaster.xml.gz"), "rt", encoding="utf-8-sig").read()
+        KINDS.append((rel, k, today, fast))
 SIDES = ("today", "fast", "bynumber", "upgrade")  # 2.3.4 review M2: the by-number answer stripped too (<target>-bynumber-stripped.xml);
 # L3: "upgrade", an entry 2.3.3 stored sent again by 2.3.4 (its rows numbered in the object's order)
 def vblock(x):
@@ -46,7 +63,13 @@ def book_of(rel, side): return "%08d-0000-4000-8000-%012d" % (int(rel.replace(".
 def co_of(rel, side): return "FAST %s %s" % (rel, side.upper())
 LEDGERS = [["Template Party", "Sundry Debtors", "0"], ["Output CGST", "Duties & Taxes", "0"], ["Output SGST", "Duties & Taxes", "0"], ["Sales", "Sales Accounts", "0"],
            ["HDFC Bank", "Bank Accounts", "0"], ["Spike Income", "Indirect Incomes", "0"], ["Capital", "Capital Account", "0"]]
-GROUPS = [["Sundry Debtors", ""], ["Duties & Taxes", ""], ["Sales Accounts", ""], ["Bank Accounts", ""], ["Indirect Incomes", ""], ["Capital Account", ""]]
+GROUPS = [["Sundry Debtors", ""], ["Duties & Taxes", ""], ["Sales Accounts", ""], ["Bank Accounts", ""], ["Indirect Incomes", ""], ["Capital Account", ""], ["Indirect Expenses", ""]]
+# every ledger the kinds' entries name (so none waits for its ledger), under one group: the same on both sides
+_have = {l[0] for l in LEDGERS}
+for _r, _k, _t, _f in KINDS:
+    for _n in re.findall(r"<LEDGERNAME[^>]*>([^<]+)</LEDGERNAME>", _t + _f):
+        _n = _n.replace("&amp;", "&").strip()
+        if _n and _n not in _have: _have.add(_n); LEDGERS.append([_n, "Indirect Expenses", "0"])
 db = pg_stand.start(30586)
 fn, tmp = None, tempfile.mkdtemp(prefix="fincom-fast234-")
 try:
@@ -177,6 +200,43 @@ try:
             ao, bo = stored(book_of(rel, "today"), guid, True), stored(book_of(rel, "fast"), guid, True)
             od = [t for t in tables if ao[t] != bo[t]]
             print("  info %s %s: the ledger lines' order (line_no): %s" % (rel, tgt, "the same" if not od else "differs in " + ", ".join(od) + " (the object gives the party and tax lines first, as Tally's Day Book)"))
+    # 2.3.4 (L2 / L3): every kind of entry, today's answer and the stripped object, each into its own book
+    oa_n = tds_n = kn = 0
+    for rel, kind, todayx, fast in KINDS:
+        today = vblock(todayx)
+        guid, mid, alt = tag("GUID", today), tag("MASTERID", today), int(tag("ALTERID", today) or 0)
+        cg = guid.rsplit("-", 1)[0]
+        res = {}
+        for side, xml in (("today", today), ("fast", fast)):
+            call({"kind": "start_point", "company": co_of(rel, side), "guid": cg, "altvchid": 1, "altmstid": 1, "at": "2026-10-01T09:00:00+05:30", "bridge": GA})
+            line = {"line_id": "%s-%s-%s" % (rel, kind, side), "event": "created", "saved_at": "2026-10-07T10:00:00+05:30", "pc": "PC-A", "user": "anshul", "company_guid": cg, "object_guid": guid,
+                    "master_id": mid, "alter_id": alt, "vch_type": tag("VOUCHERTYPENAME", today), "vch_no": tag("VOUCHERNUMBER", today), "vch_date": tag("DATE", today), "ledgers": [], "save_ms": 8,
+                    "xml": xml, "full": True}
+            c, r = call({"kind": "recorder_lines", "company": co_of(rel, side), "version": "2.3.4", "bridge": GA, "lines": [line]})
+            res[side] = (c, [(x.get("state"), x.get("why")) for x in (r.get("results") or [])])
+        a, b = stored(book_of(rel, "today"), guid, False), stored(book_of(rel, "fast"), guid, False)
+        # the two differences towards the Day Book: On Account bill rows only today's; TDS rows only the object's
+        oa = [x for x in a.get("tally_bills", []) if x not in b.get("tally_bills", []) and json.loads(x).get("type") == "On Account" and not json.loads(x).get("name")]
+        a["tally_bills"] = [x for x in a.get("tally_bills", []) if x not in oa]
+        td = []
+        if "tally_tds_lines" in b and not a.get("tally_tds_lines"):
+            td, b["tally_tds_lines"] = b["tally_tds_lines"], []
+        oa_n += len(oa); tds_n += 1 if td else 0; kn += 1
+        # today's answer of a 200 / 500-item invoice is larger than FinCom takes in one line (2.2-2.7 million characters):
+        # FinCom stored nothing from it; the stripped object (0.3-0.7 million) is stored: said, not compared
+        big = [x for x, _ in res["today"][1]] == ["failed"] and "larger than FinCom takes" in str(res["today"][1]) and [x for x, _ in res["fast"][1]] == ["applied"]
+        if big:
+            ok(True, "%s %s: today's answer too large for FinCom (%s); the stripped object stored (%d rows)" % (rel, kind, res["today"][1][0][1], sum(len(b[t]) for t in tables)))
+            continue
+        diff = [t for t in tables if a[t] != b[t]]
+        n = sum(len(a[t]) for t in tables)
+        same_state = [x for x, _ in res["today"][1]] == [x for x, _ in res["fast"][1]]
+        if n == 0 and same_state and [x for x, _ in res["today"][1]] == ["held"]:
+            n = -1   # a stock journal: parse.js reads no entry from either answer: both held alike, nothing stored
+        detail = "; ".join("%s: today %s / fast %s" % (t, [x for x in a[t] if x not in b[t]][:2], [x for x in b[t] if x not in a[t]][:2]) for t in diff)
+        ok(res["today"][0] == 200 and res["fast"][0] == 200 and same_state and n != 0 and not diff,
+           "%s %s: %s; the %d rows stored equal%s%s%s" % (rel, kind, res["today"][1], n, (", %d On Account bill row(s) only from today's" % len(oa)) if oa else "", ", TDS rows only from the object" if td else "", ("; DIFFER " + detail + " " + str(res)) if diff or not same_state else ""))
+    ok(kn >= 100, "%d entries of every kind stored both ways (5 releases); %d On Account bill rows only from today's answer, %d entries with TDS rows only from the object" % (kn, oa_n, tds_n))
 finally:
     if fn: fn.terminate()
     if fails and fn: print("".join(log[-30:]))

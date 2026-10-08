@@ -5,6 +5,9 @@ package main
 // so migration 57 never marks its rows gone); a line WITH a MasterID is never asked by its number (a scan of the company)
 
 import (
+	"compress/gzip"
+	"io"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -124,8 +127,6 @@ func TestFast234StripHoldsUnreadShapes(t *testing.T) {
 	for name, body := range map[string]string{
 		"voucher mode":        `<ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales</LEDGERNAME><AMOUNT>300.00</AMOUNT><INVENTORYALLOCATIONS.LIST>` + item + `</INVENTORYALLOCATIONS.LIST></ALLLEDGERENTRIES.LIST>`,
 		"voucher mode mapped": `<LEDGERENTRIES.LIST><LEDGERNAME>Sales</LEDGERNAME><AMOUNT>300.00</AMOUNT><INVENTORYALLOCATIONS.LIST>` + item + `</INVENTORYALLOCATIONS.LIST></LEDGERENTRIES.LIST>`,
-		"stock journal in":    `<INVENTORYENTRIESIN.LIST>` + item + `</INVENTORYENTRIESIN.LIST>`,
-		"stock journal out":   `<INVENTORYENTRIESOUT.LIST>` + item + `</INVENTORYENTRIESOUT.LIST>`,
 		"inventory entries":   `<INVENTORYENTRIES.LIST>` + item + `</INVENTORYENTRIES.LIST>`,
 		"payroll":             `<ALLLEDGERENTRIES.LIST><LEDGERNAME>Salary Payable</LEDGERNAME><AMOUNT>1500.00</AMOUNT></ALLLEDGERENTRIES.LIST><CATEGORYENTRY.LIST><EMPLOYEEENTRIES.LIST><EMPLOYEENAME>E1</EMPLOYEENAME><PAYHEADALLOCATIONS.LIST><PAYHEADNAME>Basic</PAYHEADNAME><AMOUNT>-1500.00</AMOUNT></PAYHEADALLOCATIONS.LIST></EMPLOYEEENTRIES.LIST></CATEGORYENTRY.LIST>`,
 	} {
@@ -133,6 +134,15 @@ func TestFast234StripHoldsUnreadShapes(t *testing.T) {
 		got, why := fastStripWhy(v)
 		if got != "" || why == "" || fastStripVoucher(v) != "" {
 			t.Fatalf("%s: not held (%q):\n%s", name, why, got)
+		}
+	}
+	// a stock journal's lines in and out (stock journal, manufacturing journal, physical stock): not held. FinCom stores
+	// nothing of them from either request (run 37741662830, 3.0 .. 7.1: parse.js reads no entry from today's answer for
+	// them either), so the strip sends the voucher as today's request did, without them
+	for _, l := range []string{"INVENTORYENTRIESIN", "INVENTORYENTRIESOUT"} {
+		v := head + `<` + l + `.LIST>` + item + `</` + l + `.LIST></VOUCHER>`
+		if got, why := fastStripWhy(v); why != "" || got == "" || strings.Contains(got, "STOCKITEMNAME") {
+			t.Fatalf("%s: %q %q", l, why, got)
 		}
 	}
 	// empty lists Tally writes everywhere hold nothing
@@ -236,5 +246,65 @@ func TestFast234TagScanMatchesRegexp(t *testing.T) {
 	t.Logf("a 501-item invoice's object: %d bytes in, %d out, stripped in %v", len(big), len(s), d)
 	if why != "" || strings.Count(s, "<ALLINVENTORYENTRIES.LIST>") != 501 || d > 1500*time.Millisecond {
 		t.Fatalf("the 501-item strip: %q, %d items, %v", why, strings.Count(s, "<ALLINVENTORYENTRIES.LIST>"), d)
+	}
+}
+
+// --- L2 (the independent review; the coordinator's L3 of 08-Oct-2026): real answers of every kind of entry on TallyPrime
+// 3.0 .. 7.1 (push-design run 37741662830, testdata/fast234kinds): the object export stripped, golden next to it; only
+// the invoice made in voucher mode (stock under the sales line) is held. tests/run_parse_fast234_kinds.mjs compares what
+// FinCom reads from each with today's answer (FAST234_GOLDEN=1 rewrites the goldens)
+func TestFast234KindsStrip(t *testing.T) {
+	gz := func(p string) string {
+		f, err := os.Open(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer f.Close()
+		r, err := gzip.NewReader(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := io.ReadAll(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	files, _ := filepath.Glob(filepath.Join("testdata", "fast234kinds", "*", "*-object.xml.gz"))
+	ok := fastApprovedPaths()
+	held, n := 0, 0
+	for _, f := range files {
+		vs := reVchBlock.FindAllString(gz(f), -1)
+		if len(vs) == 0 {
+			t.Fatalf("%s: no voucher", f)
+		}
+		s, why := fastStripWhy(cleanXML(vs[0]))
+		kind := strings.TrimSuffix(filepath.Base(f), "-object.xml.gz")
+		out := strings.TrimSuffix(f, "-object.xml.gz") + "-object-stripped.xml"
+		if why != "" {
+			s = "HELD: " + why
+			held++
+			if kind != "sales-voucher-mode-items" {
+				t.Errorf("%s: held (%s)", f, why)
+			}
+		} else {
+			for _, p := range fastLeafPaths(s) {
+				if !ok[p] {
+					t.Errorf("%s: %s kept", f, p)
+				}
+			}
+		}
+		if os.Getenv("FAST234_GOLDEN") != "" {
+			if err := os.WriteFile(out, []byte(s), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if readText(out) != s {
+			t.Errorf("%s: not what the strip makes now (FAST234_GOLDEN=1 rewrites it)", out)
+		}
+		n++
+	}
+	if n < 100 || held != 5 {
+		t.Fatalf("%d answers, %d held (want every release's voucher-mode invoice held, 5)", n, held)
 	}
 }
