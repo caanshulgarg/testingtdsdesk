@@ -1,0 +1,41 @@
+{
+  "Port": 9100,
+  "TallyHost": "127.0.0.2",
+  "TallyPorts": "auto",
+  "OnlyMySession": true,
+  "PairWindowMin": 15,
+  "GentleMs": 150,
+  "StatusCacheSec": 30,
+  "FallbackPorts": [
+    9000,
+    9001,
+    9002,
+    9003,
+    9004,
+    9005
+  ],
+  "TallyTimeoutSec": 120,
+  "Key": "(kept out)",
+  "LogFile": "C:\\Users\\runneradmin\\AppData\\Local\\TDS Desk Bridge\\tds-bridge.log",
+  "AllowImport": true,
+  "SyncDir": "",
+  "SyncCompanies": [],
+  "AllowedOrigins": [
+    "https://app.fincom.live",
+    "https://staging.fincom.live",
+    "https://caanshulgarg.github.io",
+    "http://localhost",
+    "null"
+  ],
+  "KeepInStep": null,
+  "CloudUrl": "http://127.0.0.1:8787/",
+  "CloudKey": "(kept out)",
+  "KeepSchedule": "",
+  "KeepDailyAt": "",
+  "InstanceId": "d400607804d5",
+  "Mode": "",
+  "ClaimMain": false,
+  "Owner": "runnervmfi6oq\\runneradmin",
+  "OwnerSid": "S-1-5-21-1643835476-1616584234-1346609752-500",
+  "FinComUrl": "https://staging.fincom.live/review/"
+}
