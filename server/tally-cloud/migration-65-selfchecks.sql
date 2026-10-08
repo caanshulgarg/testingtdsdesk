@@ -21,7 +21,11 @@
 --                                 Tally request): live entries whose lines do not add up to zero, ledgers whose ready totals
 --                                 (tally_ledger_day) differ from their entries' lines, the movement over all ledgers, the
 --                                 openings' total, ledgers named by entries but not in the ledger list. Reads only.
---   tally_selfcheck_words(...)    the plain words of a check (one text for the record and the tests).
+--   tally_selfcheck_words(...)    the plain words of a check (one text for the record and the tests). 2.4.0 review MEDIUM 2:
+--                                 they say exactly what is checked: every entry that EXISTS in Tally with a change number
+--                                 above the one checked from is in FinCom; deletes made in Tally are not checked (a delete
+--                                 is not in Tally's list); a month slice names its dates; a restore from a backup (Tally's
+--                                 counter below the mark: the bridge resets its mark) says the night to re-check from.
 --   tally_selfcheck_record(firm, book, device, bridge, result)   the bridge's result checked and kept with the copy check
 --                                 and the words; answers {ok, id, result, words, copy}.
 -- The functions: security definer, search_path public, pg_temp; tally_service_or_owner() checked first; executable by the
@@ -145,12 +149,21 @@ begin
 end $function$;
 
 -- the words of a check, as the Tally page shows them
+-- p_x (2.4.0 review): {after, altvchid, sliceFrom, sliceTo} as the record keeps them
 create or replace function public.tally_selfcheck_words(p_result text, p_ran_at timestamptz, p_night date, p_since date, p_listed integer, p_missing integer,
-  p_fetched integer, p_still integer, p_deleted integer, p_masters bigint, p_stopped text, p_fetch_off text, p_gap date[], p_copy jsonb)
+  p_fetched integer, p_still integer, p_deleted integer, p_masters bigint, p_stopped text, p_fetch_off text, p_gap date[], p_copy jsonb, p_x jsonb)
 returns text language plpgsql stable security definer set search_path = public, pg_temp as $function$
 declare w text; hm text := to_char(p_ran_at at time zone 'Asia/Kolkata', 'HH24:MI'); nt text := to_char(p_night, 'DD-Mon-YYYY');
   days text := ''; probs text[] := '{}'; ent text;
+  aft text := case when coalesce(p_x->>'after', '') ~ '^[0-9]{1,15}$' then p_x->>'after' end;
+  alt text := case when coalesce(p_x->>'altvchid', '') ~ '^[0-9]{1,15}$' then p_x->>'altvchid' end;
+  sf date := case when coalesce(p_x->>'sliceFrom', '') ~ '^[0-9]{8}$' then to_date(p_x->>'sliceFrom', 'YYYYMMDD') end;
+  st date := case when coalesce(p_x->>'sliceTo', '') ~ '^[0-9]{8}$' then to_date(p_x->>'sliceTo', 'YYYYMMDD') end;
+  what text;
 begin
+  -- what is checked, exactly: the entries that exist in Tally above the change number checked from (of a month slice: its dates)
+  what := 'every entry' || case when sf is not null and st is not null then ' dated ' || to_char(sf, 'DD-Mon-YYYY') || ' to ' || to_char(st, 'DD-Mon-YYYY') else '' end
+    || ' that exists in Tally with a change number above ' || coalesce(aft, 'the last check''s');
   if coalesce(array_length(p_gap, 1), 0) > 0 then
     select string_agg(to_char(d, 'DD-Mon-YYYY'), ', ' order by d) into days from (select distinct d from unnest(p_gap) d order by d limit 31) g;
     if array_length(p_gap, 1) > 31 then days := days || ' and later days'; end if;
@@ -163,8 +176,10 @@ begin
   w := 'Checked on the night of ' || nt || ' at ' || hm || ' IST: ';
   ent := case when p_missing = 1 then ' entry' else ' entries' end;
   if p_missing = 0 then
-    w := w || case when p_listed = 0 then 'nothing changed in Tally since the last check'
-                   else 'every change Tally made since ' || coalesce('the night of ' || to_char(p_since, 'DD-Mon-YYYY'), 'the starting point') || ' is in FinCom (' || p_listed || ' checked)' end || '.';
+    w := w || case when p_listed = 0 and sf is null and alt is not null and alt = aft then 'nothing changed in Tally since the last check (its change counter has not moved).'
+                   when p_listed = 0 and sf is null then 'no entry that exists in Tally has a change number above ' || coalesce(aft, 'the last check''s') || '. Deletes made in Tally are not checked.'
+                   else what || ' (changed since ' || coalesce('the night of ' || to_char(p_since, 'DD-Mon-YYYY'), 'the starting point') || ') is in FinCom (' || p_listed || ' checked'
+                     || case when sf is not null then '; checked month by month, the rest on the next nights' else '' end || '). Deletes made in Tally are not checked.' end;
   elsif p_still = 0 then
     w := w || p_missing || ent || ' missing from FinCom; ' || case when p_fetched = 1 then 'fetched' else 'all ' || p_fetched || ' fetched' end || ' from Tally.';
   else
@@ -219,23 +234,26 @@ begin
   res := case when stopped <> '' then 'not_checked' when still > 0 then 'missing' when fetched > 0 then 'fetched' else 'ok' end;
   cp := tally_selfcheck_copy(p_book);
   select max(v.alter_id) into rec from tally_vouchers v where v.book_id = p_book;
-  w := tally_selfcheck_words(res, ran, night, since, listed, missing, fetched, still, deleted, masters, stopped, foff, gap, cp);
+  w := tally_selfcheck_words(res, ran, night, since, listed, missing, fetched, still, deleted, masters, stopped, foff, gap, cp,
+    jsonb_build_object('after', p_r->>'after', 'altvchid', p_r->>'altvchid', 'sliceFrom', p_r->>'sliceFrom', 'sliceTo', p_r->>'sliceTo'));
   insert into tally_selfchecks (firm_id, book_id, device_id, bridge, company, company_guid, ran_at, night, tally_altvchid, tally_altmstid, received_altvchid, checked_from,
       listed, missing_found, fetched, still_missing, masters_behind, stopped, fetch_off, gap_days, since_night, copy, copy_ok, result, words, data)
     values (p_firm, p_book, p_device, left(coalesce(p_bridge, ''), 80), left(coalesce(p_r->>'company', b.company, ''), 200), left(coalesce(p_r->>'company_guid', ''), 100), ran, night,
       case when (p_r->>'altvchid') ~ '^[0-9]{1,15}$' then (p_r->>'altvchid')::bigint end, case when (p_r->>'altmstid') ~ '^[0-9]{1,15}$' then (p_r->>'altmstid')::bigint end, rec,
       case when (p_r->>'after') ~ '^[0-9]{1,15}$' then (p_r->>'after')::bigint end,
       listed, missing, fetched, still, masters, stopped, foff, gap, since, cp, (cp->>'ok')::boolean, res, w,
-      jsonb_build_object('deleted', deleted))
+      jsonb_build_object('deleted', deleted, 'restored', (p_r->>'restored') = 'true',
+        'restoredFrom', case when (p_r->>'restoredFrom') ~ '^[0-9]{8}$' then p_r->>'restoredFrom' end,
+        'sliceFrom', case when (p_r->>'sliceFrom') ~ '^[0-9]{8}$' then p_r->>'sliceFrom' end, 'sliceTo', case when (p_r->>'sliceTo') ~ '^[0-9]{8}$' then p_r->>'sliceTo' end))
     returning id into rid;
   return jsonb_build_object('ok', true, 'id', rid, 'result', res, 'words', w, 'copy', cp, 'received', rec);
 end $function$;
 
 revoke all on function public.tally_selfcheck_compare(uuid, jsonb), public.tally_selfcheck_copy(uuid),
-  public.tally_selfcheck_words(text, timestamptz, date, date, integer, integer, integer, integer, integer, bigint, text, text, date[], jsonb),
+  public.tally_selfcheck_words(text, timestamptz, date, date, integer, integer, integer, integer, integer, bigint, text, text, date[], jsonb, jsonb),
   public.tally_selfcheck_record(uuid, uuid, uuid, text, jsonb) from public, anon, authenticated;
 grant execute on function public.tally_selfcheck_compare(uuid, jsonb), public.tally_selfcheck_copy(uuid),
-  public.tally_selfcheck_words(text, timestamptz, date, date, integer, integer, integer, integer, integer, bigint, text, text, date[], jsonb),
+  public.tally_selfcheck_words(text, timestamptz, date, date, integer, integer, integer, integer, integer, bigint, text, text, date[], jsonb, jsonb),
   public.tally_selfcheck_record(uuid, uuid, uuid, text, jsonb) to service_role;
 
 commit;

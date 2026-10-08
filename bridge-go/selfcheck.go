@@ -13,10 +13,23 @@ package main
 //
 // The rules: after hours (SelfCheckFrom..SelfCheckTo, 22:00..06:00), once a night per company, Tally idle (no posting,
 // no import, nobody at the computer for SelfCheckIdleSec, keepHold's reasons, the retry schedule not waiting), one company
-// at a time, a background request with the 2-second hard stop that gives way to a posting; a list stopped at 2 s, or too
-// many changes for one list (SelfCheckMaxSpan), is not asked again that night and is recorded with words for a Day Book
-// upload; while 2.3.2's per-company stop of the entry fetch holds (entryFetchOffFor) nothing is fetched and the missing
-// entries' days are listed for a Day Book upload.
+// at a time, a background request with the 2-second hard stop that gives way to a posting; never while reading is stopped
+// from FinCom (keepHold); a list stopped at 2 s is not asked again that night and is recorded with words for a Day Book
+// upload; while 2.3.2's mark "entry fetch stopped: over 2 s" holds for the company (slowMarked) nothing is fetched and
+// the missing entries' days are listed for a Day Book upload.
+//
+// What is checked, exactly (2.4.0 review MEDIUM 2): every entry that EXISTS in Tally with a change number (AlterID) above
+// the mark is in FinCom's copy at that change. A delete made in Tally is not in Tally's list, so a delete that never
+// reached FinCom is not seen here (the words say "deletes are not checked"). Tally's counter below the mark (the company
+// restored from a backup): the mark is reset to the counter and the record says "Tally was restored from a backup:
+// re-check from <date>" (the night of the last good check at or below the counter, kept in the mark's history).
+// 2.4.0 review: an entry whose line is still in the recorder's queue (an earlier run of the night) stays unconfirmed, and
+// the mark never moves past an unconfirmed entry. More changes than one list may carry (SelfCheckMaxSpan, 2000): checked
+// in month slices across nights (SelfCheckSlicesPerNight, 2), each source C's month list above the mark (FinComSlice, as
+// sliceRequest builds it in the date form kept for the company: the one dated list the guard lets go while reading old
+// days is off; months from the starting point's to now); the mark moves when the last month is done (not when a month
+// was stopped at 2 s: that month is said for a Day Book upload). No date form kept: the one undated list is asked all
+// the same, the 2-second stop guarding Tally.
 
 import (
 	"errors"
@@ -27,10 +40,6 @@ import (
 	"sync/atomic"
 	"time"
 )
-
-// 2.3.2 stops the entry fetch for a company whose entry took over 2 s: it says why here ("" : the fetch is on). The
-// self-check never fetches while it says something
-var entryFetchOffFor = func(company, guid string) string { return "" }
 
 // on unless the settings say "SelfCheck": false; off in test mode (and in the package's tests) unless asked for
 var selfCheckDefault = true
@@ -76,8 +85,11 @@ func selfCheckNight(t time.Time) (string, bool) {
 }
 
 func selfCheckMaxSpan() int64 { return int64(keepNum("SelfCheckMaxSpan", 2000)) }
-func selfCheckFetchMax() int  { return keepNum("SelfCheckFetchMax", 200) }
-func selfCheckWaitSec() int   { return keepNum("SelfCheckWaitSec", 900) }
+func selfCheckSlicesNight() int {
+	return keepNum("SelfCheckSlicesPerNight", 2)
+}
+func selfCheckFetchMax() int { return keepNum("SelfCheckFetchMax", 200) }
+func selfCheckWaitSec() int  { return keepNum("SelfCheckWaitSec", 900) }
 
 // --- the state per company and Tally GUID (sync\selfcheck.json): {night, mark, since, tries}
 var scMu sync.Mutex
@@ -167,6 +179,12 @@ type scRun struct {
 	fetchOff             string // why nothing was fetched
 	mastersBehind        int64
 	since                string // yyyymmdd of the last good check (the Day Book's first day when not checked)
+	// 2.4.0 review: restored (Tally's counter below the mark) and the night to re-check from; a slice of dates checked
+	// (sliceFrom..sliceTo, yyyymmdd) when there are more changes than one list may carry, slice its state
+	restored           bool
+	restoredFrom       string
+	sliceFrom, sliceTo string
+	slice              M
 }
 
 var (
@@ -254,18 +272,100 @@ func selfCheckStart(company string, port int) (*scRun, error) {
 	if after, ok := ledChangesAfter(company, guid); ok && r.altM > after {
 		r.mastersBehind = r.altM - after
 	}
+	sl := obj(st["slice"])
+	if sl != nil && toI64(sl["after"]) != r.after {
+		sl = nil // the mark moved under it (a restore): a new cycle
+	}
 	switch {
 	case r.altV < r.after:
-		r.stopped = fmt.Sprintf("Tally's change counter went back (from %d to %d): the company may have been restored from a backup", r.after, r.altV)
+		// 2.4.0 review MEDIUM 2: restored from a backup. The mark is reset to the counter (selfCheckFinish); re-check from
+		// the night of the last good check at or below the counter
+		r.restored, r.restoredFrom = true, scRestoredFrom(st, r.altV)
+		from := "the starting point"
+		if r.restoredFrom != "" {
+			from = liveDay(r.restoredFrom)
+		}
+		r.stopped = fmt.Sprintf("Tally was restored from a backup (its change counter went back from %d to %d): re-check from %s", r.after, r.altV, from)
 		return r, nil
-	case r.altV == r.after:
+	case r.altV == r.after && sl == nil:
 		return r, nil // nothing changed since the last good check: nothing is asked of Tally
-	case r.altV-r.after > selfCheckMaxSpan():
-		r.stopped = fmt.Sprintf("too many changes since the last check (%d) for Tally to list within 2 s", r.altV-r.after)
-		return r, nil
+	case sl == nil && r.altV-r.after > selfCheckMaxSpan():
+		// 2.4.0 review LOW: too many for one list: a cycle of month slices across nights (source C's list, in the date form
+		// kept for the company), up to the counter of now. No date form kept (source C never probed here): the one list
+		// above the mark is asked all the same (the 2-second stop guards Tally); stopped: not checked, with its words
+		if dateFormFor(company) != "" && startPointMonth(company) != "" {
+			sl = M{"after": r.after, "upto": r.altV, "next": startPointMonth(company), "low": r.altV}
+		}
+	}
+	if sl != nil {
+		return selfCheckSlices(r, sl, port)
 	}
 	// b. Tally's list of the entries changed above the mark (source B's request, the 2-second hard stop)
 	raw, err := invokeTally(recorderTC(nil), port, keepListAboveRequest(company, r.after), keepNum("RecorderBTimeoutSec", 5))
+	return selfCheckListed(r, raw, err)
+}
+
+// 2.4.0 review LOW: the month slices due tonight (SelfCheckSlicesPerNight at most), each source C's month list above the
+// mark exactly as sliceRequest builds it, in the date form kept for the company (FinComSlice: the one dated list the
+// guard lets go while reading old days is off, months from the starting point's to now); the entries of every slice
+// compared together. A month stopped at 2 s: tonight ends there, recorded not checked for that month (its Day Book), the
+// cycle goes on with the next month and the mark does not move at its end
+func selfCheckSlices(r *scRun, sl M, port int) (*scRun, error) {
+	r.slice = sl
+	form, now := dateFormFor(r.company), nowFn().Format("200601")
+	var raws []string
+	for i := 0; i < selfCheckSlicesNight() && str(sl["next"]) <= now; i++ {
+		ym := str(sl["next"])
+		raw, err := invokeTally(recorderTC(nil), port, sliceRequest(r.company, form, ym, r.after), keepNum("RecorderBTimeoutSec", 5))
+		if errors.Is(err, errRecorderStop) {
+			sl["next"], sl["skipped"] = nextYm(ym), true
+			if len(raws) == 0 {
+				r.stopped = fmt.Sprintf("Tally took longer than 2 s to list the changes of the entries dated %s to %s (the next month is checked the next night)", liveDay(ym+"01"), liveDay(monthEnd(ym)))
+				r.since = ym + "01"
+				return r, nil
+			}
+			break
+		}
+		if err != nil {
+			if gaveWay(err) || errors.Is(err, errRetryWait) {
+				if len(raws) == 0 {
+					return nil, nil
+				}
+				break
+			}
+			return nil, err
+		}
+		if !strings.Contains(raw, "<ENVELOPE") {
+			return nil, errors.New("Tally's answer could not be read: " + cut(flat(raw), 120))
+		}
+		raws = append(raws, raw)
+		if r.sliceFrom == "" {
+			r.sliceFrom = ym + "01"
+		}
+		r.sliceTo = monthEnd(ym)
+		sl["next"] = nextYm(ym)
+	}
+	if len(raws) == 0 {
+		return r, nil
+	}
+	return selfCheckListed(r, strings.Join(raws, ""), nil)
+}
+
+// 2.4.0 review MEDIUM 2: the night of the last good check whose mark is at or below the counter ("" : none kept)
+func scRestoredFrom(st M, alt int64) string {
+	best := ""
+	for _, x := range arr(st["hist"]) {
+		h := obj(x)
+		if n := str(h["night"]); isTallyDate(n) && h["mark"] != nil && toI64(h["mark"]) <= alt && n > best {
+			best = n
+		}
+	}
+	return best
+}
+
+// b, c. Tally's list (one answer, or the slices' answers together) compared by the cloud; the missing entries queued
+func selfCheckListed(r *scRun, raw string, err error) (*scRun, error) {
+	company, guid, night := r.company, r.guid, r.night
 	switch {
 	case errors.Is(err, errRecorderStop):
 		r.stopped = "Tally took longer than 2 s to list its changes"
@@ -320,9 +420,10 @@ func selfCheckStart(company string, port int) (*scRun, error) {
 	if len(r.missing) == 0 {
 		return r, nil
 	}
-	// c. the missing entries fetched through the live recorder (its body fetch, one entry a request), or listed
-	if why := entryFetchOffFor(company, guid); why != "" {
-		r.fetchOff = why
+	// c. the missing entries fetched through the live recorder (its body fetch, one entry a request), or listed. 2.3.2's
+	// mark "entry fetch stopped: over 2 s" (slowco.go): nothing fetched
+	if slowMarked(company, guid) {
+		r.fetchOff = "finding one entry took Tally longer than 2 s"
 		r.notQueued = append(r.notQueued, r.missing...)
 		return r, nil
 	}
@@ -339,6 +440,20 @@ func selfCheckStart(company string, port int) (*scRun, error) {
 		}
 		id := liveLineID("selfcheck", night, guid, m.guid, fmt.Sprint(m.alter))
 		if live.queued[id] {
+			// 2.4.0 review MEDIUM 1: its line from an earlier run tonight is still queued: waited for and counted as this
+			// run's (fetched only once sent with Tally's entry); never left out
+			var had *change
+			for _, q := range live.queue {
+				if q.lineId == id {
+					had = q
+					break
+				}
+			}
+			if had != nil {
+				r.queued[had] = m
+			} else {
+				r.notQueued = append(r.notQueued, m)
+			}
 			continue
 		}
 		c := &change{company: company, companyGuid: guid, event: ev, guid: m.guid, masterId: fmt.Sprint(m.mid), alterId: fmt.Sprint(m.alter), vchDate: m.date,
@@ -351,6 +466,22 @@ func selfCheckStart(company string, port int) (*scRun, error) {
 		writeLog(fmt.Sprintf("Nightly check of %s: %d entr%s missing from FinCom's copy asked of Tally (one a request)", company, n, map[bool]string{true: "y", false: "ies"}[n == 1]))
 	}
 	return r, nil
+}
+
+// the mark's history: {night, mark} of the last 120 nights the mark was set (a restore's re-check night is found in it)
+func scHist(company, guid, night string, mark int64) []any {
+	h := arr(scState(company, guid)["hist"])
+	var out []any
+	for _, x := range h {
+		if str(obj(x)["night"]) != night {
+			out = append(out, x)
+		}
+	}
+	out = append(out, M{"night": night, "mark": mark})
+	if len(out) > 120 {
+		out = out[len(out)-120:]
+	}
+	return out
 }
 
 // the cloud could not take the step: tried again at the next light check (three times a night at most); a cloud without
@@ -430,7 +561,12 @@ func selfCheckFinish(r *scRun) error {
 	body := M{"kind": "selfcheck", "step": "record", "company": r.company, "company_guid": r.guid, "night": r.night,
 		"ran_at": r.ranAt.In(liveZone).Format(time.RFC3339), "altvchid": r.altV, "altmstid": r.altM, "after": r.after,
 		"listed": r.listed, "missing": len(r.missing), "fetched": fetched, "still": len(still), "deleted": deleted,
-		"mastersBehind": r.mastersBehind, "stopped": r.stopped, "fetchOff": r.fetchOff, "gapDays": gap, "since": r.since}
+		"mastersBehind": r.mastersBehind, "stopped": r.stopped, "fetchOff": r.fetchOff, "gapDays": gap, "since": r.since,
+		// 2.4.0 review: restored from a backup (and the night to re-check from); the slice of dates this check covered
+		"restored": r.restored, "restoredFrom": r.restoredFrom, "sliceFrom": r.sliceFrom, "sliceTo": r.sliceTo}
+	if r.restored && r.restoredFrom != "" {
+		body["since"] = r.restoredFrom // the Day Book from that night
+	}
 	if gap == nil {
 		body["gapDays"] = []any{}
 	}
@@ -439,23 +575,51 @@ func selfCheckFinish(r *scRun) error {
 		return scCloudErr(r, ans)
 	}
 	set := M{"night": r.night, "tries": 0}
+	// 2.4.0 review MEDIUM 1: the mark never moves past an entry not confirmed in FinCom (missing tonight, fetched or not,
+	// or still queued): at most just below the lowest of them
+	low := r.altV
+	for _, m := range append(append([]scMiss{}, r.missing...), still...) {
+		if m.alter-1 < low {
+			low = m.alter - 1
+		}
+	}
+	if low < r.after {
+		low = r.after
+	}
 	switch {
+	case r.restored:
+		// 2.4.0 review MEDIUM 2: restored from a backup: the mark reset to Tally's counter; a cycle of slices ends
+		set["mark"], set["slice"] = r.altV, nil
+	case r.slice != nil:
+		sl := r.slice
+		if l := toI64(sl["low"]); low < l {
+			sl["low"] = low
+		}
+		if str(sl["next"]) > nowFn().Format("200601") {
+			// the last slice done: the mark moves to the counter the cycle began at (or below what was missing)
+			m := toI64(sl["low"])
+			if u := toI64(sl["upto"]); u < m {
+				m = u
+			}
+			if m < r.after || sl["skipped"] == true {
+				m = r.after // a month not listed: nothing proven past the mark
+			}
+			set["mark"], set["slice"] = m, nil
+			if m == toI64(sl["upto"]) {
+				set["since"] = r.night
+			}
+		} else {
+			set["slice"] = sl
+		}
 	case r.stopped != "":
 		// not checked: the mark stays, the Day Book covers it
-	case len(still) == 0 && fetched == 0:
+	case len(r.missing) == 0 && len(still) == 0:
 		set["mark"], set["since"] = r.altV, r.night
 	default:
-		low := r.altV
-		for _, m := range r.missing {
-			if m.alter-1 < low {
-				low = m.alter - 1
-			}
-		}
-		if low > r.after {
-			set["mark"] = low
-		} else {
-			set["mark"] = r.after
-		}
+		set["mark"] = low
+	}
+	if m, ok := set["mark"]; ok && m != nil {
+		set["hist"] = scHist(r.company, r.guid, r.night, toI64(m))
 	}
 	scSave(r.company, r.guid, set)
 	writeLog("Nightly check of " + r.company + ": " + or(str(ans.json["words"]), fmt.Sprintf("%d listed, %d missing, %d fetched, %d still missing", r.listed, len(r.missing), fetched, len(still))))

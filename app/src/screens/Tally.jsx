@@ -160,7 +160,7 @@ function Baselines({ r, owner }) {
 function SelfChecks({ r }) {
   const list = TCloud.selfChecks ? TCloud.selfChecks(r.device.id, r.id) : [];
   if (!list.length) return null;
-  return <div style={{ marginLeft: 16 }}>{list.map(({ book, company, row, old }) => {
+  return <div data-selfchecks="">{list.map(({ book, company, row, old }) => {
     const bad = row.result === "missing" || row.result === "not_checked" || row.copy_ok === false;
     const words = old ? "Not checked since the night of " + fmtDate(row.night || row.ran_at) + ". The last check: " + (row.words || "") : (row.words || "");
     return <div key={book || company} className="row" data-selfcheck={book || company} data-selfcheck-result={row.result || ""} style={{ alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -424,8 +424,9 @@ function BridgeLines({ rows, latest, m }) {
           <div className="row" style={ROW}><TrialTools r={r} owner={owner} /></div>
           <div className="row" style={ROW}><RecorderSource r={r} owner={owner} /></div>
           <Baselines r={r} owner={owner} />
+          {/* next release (item e): each company's nightly self-check, under the card's More (2.3.5's simpler page) */}
+          <SelfChecks r={r} />
         </div>}
-        {live && <SelfChecks r={r} />}
       </div>; })}
     {(p.devices || []).filter((d) => !d.revoked && d.info && d.info.idRefused).map((d) => <p key={"refused-" + d.id} className="bk-alert bad" data-id-refused={d.id} style={{ margin: "4px 0" }}>
       <b>{d.name}</b>{": " + d.info.idRefused.words}</p>)}

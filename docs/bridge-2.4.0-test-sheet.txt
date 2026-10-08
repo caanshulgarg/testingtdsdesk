@@ -18,7 +18,7 @@ Migration files (md5):
    migration-62-tds-rate-worked-out.sql    bcdfd7b72b1d69b429e6b15a5e9652c6
    migration-63-recorder-repeat.sql        ff8011351b8856025710b68bad0b690c
    migration-64-pages-live.sql             0a91d37ab313331399dffdaf677de9e6
-   migration-65-selfchecks.sql             eabe7dda1e8a12a11e0d9fa71ab46b7f
+   migration-65-selfchecks.sql             51a224cf8e00b7a46da42da4694e8993
    migration-66-recorder-masters.sql       fea953435146ec8bdc3e77c5808e1714
    migration-67-recorder-renumbered.sql    78676805ebdaf9b24e41bc2708ed0a90
 

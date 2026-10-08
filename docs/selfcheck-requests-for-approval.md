@@ -9,8 +9,12 @@ Tally request** (Tally's own trial balance, a ledger's closing balance) is writt
 
 ## 1. The check, in short
 
-Once a night, for each company open in this bridge's own Tally, while nobody is using Tally, FinCom Bridge asks: *did
-every change Tally made since the last good check reach FinCom's copy?* It compares Tally's change counter and Tally's
+Once a night, for each company open in this bridge's own Tally, while nobody is using Tally, FinCom Bridge asks: *is
+every entry that exists in Tally with a change number (AlterID) above the last good check in FinCom's copy, at that
+change?* (2.4.0 review: that is exactly what is checked. A delete made in Tally is not in Tally's list, so a delete that
+never reached FinCom is not seen: the words say "Deletes made in Tally are not checked". Tally's change counter below the
+mark means the company was restored from a backup: the mark is reset to the counter and the check says "Tally was
+restored from a backup: re-check from <night>", the night of the last good check at or below the counter.) It compares Tally's change counter and Tally's
 own list of changed entries with what FinCom's cloud holds, fetches what is missing (one entry a request, as the live
 recorder does), and records the result in plain words for the Tally page. FinCom's cloud adds a check of its own copy
 (the copy's trial balance against the ledger openings and the entries received), with no Tally request at all.
@@ -75,11 +79,18 @@ just fetched) it moves to just below the lowest of them, so the next night prove
 - **The list's own limit:** TDSDeskKeepList above an AlterID goes with the 2-second hard stop. A list stopped at 2 s is
   not asked again that night; the check is recorded *not checked*, with words for a Day Book upload from the date of the
   last good check, and the mark stays.
-- **Too many changes for one list:** more than 2,000 AlterIDs since the mark (`SelfCheckMaxSpan`) is not listed at all
-  (same words). This mirrors source B's own cap.
-- **2.3.2 stops entry fetches for a company over 2 s.** The self-check asks one hook, `entryFetchOffFor(company, guid)`,
-  before fetching (2.3.2 wires its per-company stop to it; today it says nothing). While the entry fetch is off for a
-  company, nothing is fetched: the missing entries are listed by their dates for a Day Book upload ("upload the Day Book
+- **Too many changes for one list** (more than 2,000 AlterIDs since the mark, `SelfCheckMaxSpan`; 2.4.0 review: no
+  longer "not checked" night after night): checked in month slices across nights (`SelfCheckSlicesPerNight`, 2 a night),
+  each source C's month list above the mark (`FinComSlice`, exactly as `sliceRequest` builds it in the date form kept
+  for the company: the one dated list the guard lets go while reading old days is off; months from the starting point's
+  to now). The mark moves to the counter the cycle began at when the last month is done (not past an entry missing, and
+  not at all when a month was stopped at 2 s: that month is said for a Day Book upload). No date form kept for the
+  company: the one undated list is asked all the same (the 2-second stop guards Tally).
+- **An entry whose line is still in the recorder's queue** (an earlier run of the night) is waited for and counted as
+  this run's; the mark never moves past an entry not confirmed in FinCom (2.4.0 review).
+- **Never while reading is stopped from FinCom** (keepHold), never during a posting; on by default (`SelfCheck`).
+- **2.3.2's mark "entry fetch stopped: over 2 s"** (`slowMarked`; the 2.4.0 review removed the old stub hook). While a
+  company is so marked, nothing is fetched: the missing entries are listed by their dates for a Day Book upload ("upload the Day Book
   for 03-Oct-2026 and 05-Oct-2026"). The list request (b) is one request a night and stays within the 2-second rule.
 - On ZZ BIG TEST (30,004 entries) the list's time is Tally's filter over every entry, whatever the number listed: it is
   measured there before release with the existing request (it is source B's request; not a new measurement of shape).
@@ -95,7 +106,8 @@ behind, why it stopped, the days for a Day Book upload, the copy check, the resu
 
 The Tally page, under each computer, one line per company: the last check's words, e.g.
 
-- "Checked last night at 23:10: every change Tally made since 06-Oct-2026 is in FinCom (42 checked). FinCom's copy adds up."
+- "Checked on the night of 06-Oct-2026 at 23:10 IST: every entry that exists in Tally with a change number above 54389 (changed since the night of 05-Oct-2026) is in FinCom (42 checked). Deletes made in Tally are not checked. FinCom's copy adds up."
+- "Not checked on the night of 06-Oct-2026 (23:10 IST): Tally was restored from a backup (its change counter went back from 54500 to 54420): re-check from 03-Oct-2026. Upload the Day Book from 03-Oct-2026 to today to be sure nothing is missing."
 - "Checked last night at 23:10: 3 entries were missing from FinCom; all 3 fetched from Tally."
 - "Checked last night at 23:10: 5 entries are missing from FinCom; upload the Day Book for 03-Oct-2026 and 05-Oct-2026."
 - "Not checked last night (23:10): Tally took longer than 2 s to list its changes. Upload the Day Book from 06-Oct-2026 to today to be sure nothing is missing."

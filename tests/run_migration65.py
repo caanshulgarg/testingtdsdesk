@@ -31,7 +31,7 @@ FILES = [os.path.join(SQLDIR, f) for f in ("migration-32-sync-safety.sql", "migr
 M65 = os.environ.get("M65_FILE") or os.path.join(SQLDIR, "migration-65-selfchecks.sql")
 FNS = ["tally_selfcheck_compare", "tally_selfcheck_copy", "tally_selfcheck_record", "tally_selfcheck_words"]
 SIGS = {"tally_selfcheck_compare": "uuid, jsonb", "tally_selfcheck_copy": "uuid", "tally_selfcheck_record": "uuid, uuid, uuid, text, jsonb",
-        "tally_selfcheck_words": "text, timestamptz, date, date, integer, integer, integer, integer, integer, bigint, text, text, date[], jsonb"}
+        "tally_selfcheck_words": "text, timestamptz, date, date, integer, integer, integer, integer, integer, bigint, text, text, date[], jsonb, jsonb"}
 fails = []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
@@ -158,7 +158,7 @@ try:
     ok(cp.get("totalsOff") == 1 and (cp.get("totalsOffSome") or [{}])[0].get("ledger") == "Sales", "5. a ready total out of step with its entries: found (%s)" % cp.get("totalsOffSome"))
     ok(cp.get("unknownLedgers") == 1 and cp.get("unknownSome") == ["Rent"], "5. a ledger named by entries, not in the list: found (%s)" % cp.get("unknownSome"))
     ok(float(cp.get("openings")) == 10 and float(cp.get("movement")) == -5 and float(cp.get("tb")) == 5, "5. the openings' total and the movement (%s %s %s)" % (cp.get("openings"), cp.get("movement"), cp.get("tb")))
-    words = db.one("select tally_selfcheck_words('ok', '2026-10-06 17:40+00', '2026-10-06', '2026-10-05', 3, 0, 0, 0, 0, 0, '', '', '{}', tally_selfcheck_copy(%s))" % q(B))
+    words = db.one("select tally_selfcheck_words('ok', '2026-10-06 17:40+00', '2026-10-06', '2026-10-05', 3, 0, 0, 0, 0, 0, '', '', '{}', tally_selfcheck_copy(%s), '{}')" % q(B))
     ok("FinCom's copy: 1 entry does not add up to zero; the totals of 1 ledger differ from their entries; the year's entries total Rs 5.00 instead of zero; the openings differ by Rs 10.00 (Tally's difference in opening balances); 1 ledger named by entries is not in the ledger list." in words,
        "5. the copy's problems in plain words (%s)" % words)
     # put the copy right again for section 6
@@ -172,10 +172,21 @@ try:
     def rec(r, book=B, firm=F): return j("select tally_selfcheck_record(%s, %s, %s, 'go-1', %s)::text" % (q(firm), q(book), q(D1), js(r)))
     base = {"company": "GARG SHEKHAR & COMPANY", "company_guid": CG, "night": "20261006", "ran_at": "2026-10-06T23:10:00+05:30", "altvchid": 40, "altmstid": 9, "after": 1}
     a = rec(dict(base, listed=3, missing=0, fetched=0, still=0, since="20261005", gapDays=[]))
-    ok(a.get("result") == "ok" and a.get("words", "").startswith("Checked on the night of 06-Oct-2026 at 23:10 IST: every change Tally made since the night of 05-Oct-2026 is in FinCom (3 checked).")
-       and a.get("words", "").endswith("FinCom's copy adds up.") and a.get("received") == 40, "6. ok, in plain words (%s)" % a.get("words"))
+    # 2.4.0 review MEDIUM 2: the words say exactly what is checked: the entries that exist in Tally above the change
+    # number checked from; deletes are not (a delete is not in Tally's list)
+    ok(a.get("result") == "ok" and a.get("words", "").startswith("Checked on the night of 06-Oct-2026 at 23:10 IST: every entry that exists in Tally with a change number above 1 (changed since the night of 05-Oct-2026) is in FinCom (3 checked). Deletes made in Tally are not checked.")
+       and a.get("words", "").endswith("FinCom's copy adds up.") and a.get("received") == 40 and "every change Tally made" not in a.get("words", ""), "6. ok, in plain words (%s)" % a.get("words"))
+    a = rec(dict(base, listed=0, missing=0, fetched=0, still=0, altvchid=1))
+    ok(a.get("result") == "ok" and "nothing changed in Tally since the last check (its change counter has not moved)." in a.get("words", ""), "6. nothing changed (%s)" % a.get("words"))
     a = rec(dict(base, listed=0, missing=0, fetched=0, still=0))
-    ok(a.get("result") == "ok" and "nothing changed in Tally since the last check." in a.get("words", ""), "6. nothing changed (%s)" % a.get("words"))
+    ok(a.get("result") == "ok" and "no entry that exists in Tally has a change number above 1. Deletes made in Tally are not checked." in a.get("words", ""), "6. the counter moved, nothing listed: deletes not checked (%s)" % a.get("words"))
+    a = rec(dict(base, listed=3, missing=0, fetched=0, still=0, since="20261005", sliceFrom="20261001", sliceTo="20261031"))
+    ok("every entry dated 01-Oct-2026 to 31-Oct-2026 that exists in Tally with a change number above 1" in a.get("words", "") and "checked month by month" in a.get("words", ""), "6. a month slice: its dates said (%s)" % a.get("words"))
+    a = rec(dict(base, listed=0, missing=0, fetched=0, still=0, restored=True, restoredFrom="20261003", since="20261003",
+                 stopped="Tally was restored from a backup (its change counter went back from 50 to 40): re-check from 03-Oct-2026"))
+    rr = db.rows("select data::text from tally_selfchecks where id = %s" % a.get("id"))[0] if a.get("id") else {}
+    ok(a.get("result") == "not_checked" and a.get("words", "").startswith("Not checked on the night of 06-Oct-2026 (23:10 IST): Tally was restored from a backup (its change counter went back from 50 to 40): re-check from 03-Oct-2026. Upload the Day Book from 03-Oct-2026 to today")
+       and '"restored": true' in rr.get("data", "") and '"restoredFrom": "20261003"' in rr.get("data", ""), "6. restored from a backup: flagged, re-check from that night (%s %s)" % (a.get("words"), rr))
     a = rec(dict(base, listed=3, missing=2, fetched=2, still=0, mastersBehind=1))
     ok(a.get("result") == "fetched" and "2 entries missing from FinCom; all 2 fetched from Tally. 1 master change in Tally not yet taken by FinCom." in a.get("words", ""), "6. fetched (%s)" % a.get("words"))
     a = rec(dict(base, listed=3, missing=3, fetched=0, still=3, deleted=1, fetchOff="Tally took 3.1 s for one entry", gapDays=["20261005", "20261003", "20261003", "bad"]))
@@ -191,14 +202,14 @@ try:
     ok(row.get("listed") == "0" and row.get("fetched") == "2" and row.get("still_missing") == "0" and row.get("tally_altvchid") == "" and row.get("result") == "fetched", "6. bad numbers: 0 / null, fetched never above missing (%s)" % row)
     a = rec(dict(base, listed=1), book=B2)
     ok("not a book of this firm" in json.dumps(a), "6. another firm's book refused (%s)" % str(a)[:100])
-    ok(int(db.one("select count(*) from tally_selfchecks")) == n0 + 7, "6. every call a new row")
+    ok(int(db.one("select count(*) from tally_selfchecks")) == n0 + 10, "6. every call a new row")
     ok(tables_hash() == before, "6. nothing but tally_selfchecks written")
     r = db.rows("select night::text, since_night::text, gap_days::text, copy_ok::text, checked_from::text, bridge, device_id::text from tally_selfchecks where result = 'missing' order by id desc limit 1")[0]
     ok(r["night"] == "2026-10-06" and r["gap_days"] == "{2026-10-03,2026-10-05}" and r["copy_ok"] == "true" and r["checked_from"] == "1" and r["bridge"] == "go-1" and r["device_id"] == D1, "6. the row's fields (%s)" % r)
     # members read their own firm's rows only
     db.sql("insert into tally_selfchecks (firm_id, book_id, result, words) values (%s, %s, 'ok', 'another firm')" % (q(F2), q(B2)))
     mine = db.rows("set role authenticated; select count(*) as n, count(*) filter (where firm_id <> %s) as other from public.tally_selfchecks" % q(F), uid=OWNER)
-    ok(mine and mine[0]["n"] == str(n0 + 7) and mine[0]["other"] == "0", "3. a member reads their own firm's rows only (%s)" % mine)
+    ok(mine and mine[0]["n"] == str(n0 + 10) and mine[0]["other"] == "0", "3. a member reads their own firm's rows only (%s)" % mine)
 finally:
     db.stop()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); raise SystemExit(1 if fails else 0)

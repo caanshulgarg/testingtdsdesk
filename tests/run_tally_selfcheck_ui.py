@@ -1,5 +1,6 @@
 """python3 run_tally_selfcheck_ui.py - next release, item e (07-Oct-2026; docs/selfcheck-requests-for-approval.md, migration
-65): the Tally page says each company's last nightly self-check in plain words, under its computer:
+65): the Tally page says each company's last nightly self-check in plain words, under its computer (FinCom 2.3.5's simpler
+page: under the computer's card, behind its More; nothing of it on the card itself until More is opened):
   - the latest row per company of tally_selfchecks (the firm's rows, as row security gives them), the words as the cloud
     wrote them; an older row of the same company is not shown;
   - ok / fetched: a green tag; missing / not checked / the copy not adding up: a red tag; the words name the days for a Day
@@ -53,11 +54,16 @@ with sync_playwright() as p:
           TCloud.restAll = async (u) => Cloud.api(u); }""", [rows, missing_table])
         E("() => navHome('tally')"); pg.wait_for_timeout(1200)
         E("() => TCloud.refreshPane()"); pg.wait_for_timeout(1200)
+    def more():
+        E("() => document.querySelectorAll('#app [data-computer] [data-more-toggle][aria-expanded=\"false\"]').forEach(b => b.click())"); pg.wait_for_timeout(500)
     lines = lambda devid=D1: E("""(d) => [...document.querySelectorAll('#app [data-computer="' + d + '"] [data-selfcheck]')].map(e => ({key: e.getAttribute('data-selfcheck'),
         result: e.getAttribute('data-selfcheck-result'), tag: (e.querySelector('.tag') || {className: ''}).className, co: (e.querySelector('.tag') || {innerText: ''}).innerText.trim(),
         words: (e.querySelector('[data-selfcheck-words]') || {innerText: ''}).innerText.trim(), buttons: e.querySelectorAll('button').length}))""", devid)
-    # ---- 1. the owner: one line per company, the latest check, in the cloud's words
+    # ---- 1. the owner: one line per company, the latest check, in the cloud's words; under the card's More
     scene(ROWS)
+    ok(lines() == [] and pg.locator('#app [data-computer="%s"] [data-more-toggle]' % D1).count() == 1, "2.3.5: nothing on the card until its More is opened")
+    more()
+    ok(pg.locator('#app [data-computer="%s"] [data-card-more] [data-selfcheck]' % D1).count() == 2, "the nightly checks are under the card's More")
     ok(any(re.match(r"^tally_selfchecks\?select=.*order=ran_at\.desc", a) for a in E("() => window.__w.asked")), "the page asks the firm's nightly checks, the latest first")
     ls = lines()
     by = {l["co"]: l for l in ls}
@@ -73,17 +79,18 @@ with sync_playwright() as p:
     ok(not re.search(r"still_missing|copy_ok|ran_at|tally_selfchecks|not_checked|book_id", page), "plain words: no field names on the page")
     # ---- 2. not checked for more than two nights; a not-checked night; the copy not adding up
     scene([row(5, "b1", CO, ago(80), "not_checked", W_NOT), row(6, "b2", CO2, ago(6), "ok", W_OK, copy_ok=False)])
+    more()
     by = {l["co"]: l for l in lines()}
     w = by.get(CO, {}).get("words", "")
     ok(w.startswith("Not checked since the night of ") and W_NOT in w and "tag warn" in by.get(CO, {}).get("tag", ""), "a last check over two nights ago: 'Not checked since', amber (%s)" % w)
     ok("tag bad" in by.get(CO2, {}).get("tag", ""), "the copy not adding up: red (%s)" % by.get(CO2))
     # ---- 3. staff see the same
     scene(ROWS, role="member")
+    more()
     ok({l["co"]: l["words"] for l in lines()} == {CO: W_OK, CO2: W_MISS}, "staff: the same lines")
     # ---- 4. a cloud without migration 65: nothing shown, no error, the computer's line as before
     scene(ROWS, missing_table=True)
-    # release-240: 2.3.5's card says the computer's state in its one status line ([data-status-line]; plain reading has no
-    # [data-read-text] of its own any more)
+    more()
     ok(lines() == [] and pg.locator('#app [data-computer="%s"] [data-status-line]' % D1).count() == 1 and not pg.locator("#app [data-control-err]").count(),
        "no table: no line, the rest of the page as before")
     ok(not errors, "no page errors " + str(errors[:2]))
