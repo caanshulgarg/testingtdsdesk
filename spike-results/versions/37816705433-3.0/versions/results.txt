@@ -1,0 +1,25 @@
+INFO TallyPrime 3.0, mode big, runner GitHub Actions 1000005852, 2026-10-08T17:47:55
+INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 11457160 bytes, 2026-10-08, FileVersion 1.1.3.0, ProductVersion 1.1.3.0, ProductName TallyPrime
+INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+INFO Tally's own release in its answer header: PRODMAJORREL 3 PRODMINORREL 0 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+PASS c1 install and open the company: installed tally.exe 11457160 bytes, 2026-10-08, FileVersion 1.1.3.0, ProductVersion 1.1.3.0, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 19 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 7 ms, 'FinCom Spike Co' in it: True
+INFO big: 6006 masters and 100000 entries made by XML in 36.1 min
+INFO big payroll 200: 204 masters, 1 entry (31-10-2026)
+MEASURE big: 100000 entries; Ctrl+A to a new line in a file: with the add-on (its full line) 924, 712, 700, 748, 735 ms, median 735; without it (a stamp-only TDL right after Tally's own Form Accept) 739, 672, 720, 700, 703 ms, median 703; the add-on's own share: 32 ms
+MEASURE big payroll 200: 100000 entries; Ctrl+A to a new line in a file: with the add-on (its full line) 6688, 6575, 6510, 6538, 6676 ms, median 6575; without it (a stamp-only TDL right after Tally's own Form Accept) 6380, 6393, 6394, 6622, 6769 ms, median 6394; the add-on's own share: 181 ms
+INFO installer: Tally's download page lists TallyPrime setups for: Rel_2.1, REL_TP_1.0.0, Rel.2.0.1, Rel.2.0, Rel.3.0_Gold, Rel.3.0.1, Rel.3.0, Rel.4.0, Rel.4.1, Rel.5.0, Rel.5.1, Rel.6.1, Rel.7.0, Rel.7.1_gold, Rel.TP_1.1.1, Rel.TP_1.1.2, Rel.TP_1.1.3, Rel.TP_1.1.4, Rel.TP_1.1, Rel.TP_2.0, Rel6.0, Rel6.2, TallyPrime_Beta
+INFO installer: NO(403) -1 bytes, Last-Modified : https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_gold/TP/Full/setup.exe
+INFO installer: AVAILABLE 43440848 bytes, Last-Modified Sun, 11 Jun 2023 01:53:23 GMT: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_Gold/TP/Full/setup.exe
+INFO installer: AVAILABLE 43465936 bytes, Last-Modified Mon, 15 May 2023 04:03:04 GMT: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0/TP/Full/setup.exe
+INFO installer: AVAILABLE other release 3.0.1: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0.1/TP/Full/setup.exe (43476688 bytes)
+INFO installer: AVAILABLE other release 4.0: https://tallymirror.tallysolutions.com/download_centre/Rel.4.0/TP/Full/setup.exe (44497616 bytes)
+INFO installer: AVAILABLE other release 4.1: https://tallymirror.tallysolutions.com/download_centre/Rel.4.1/TP/Full/setup.exe (44673232 bytes)
+INFO installer: AVAILABLE other release 5.0: https://tallymirror.tallysolutions.com/download_centre/Rel.5.0/TP/Full/setup.exe (45592784 bytes)
+INFO installer: AVAILABLE other release 5.1: https://tallymirror.tallysolutions.com/download_centre/Rel.5.1/TP/Full/setup.exe (45651144 bytes)
+INFO installer: AVAILABLE other release 6.1: https://tallymirror.tallysolutions.com/download_centre/Rel.6.1/TP/Full/setup.exe (46460616 bytes)
+INFO installer: AVAILABLE other release 7.0: https://tallymirror.tallysolutions.com/download_centre/Rel.7.0/TP/Full/setup.exe (70912776 bytes)
+INFO installer: AVAILABLE other release 7.1: https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe (72090376 bytes)
+INFO installer: AVAILABLE other release 6.0: https://tallymirror.tallysolutions.com/download_centre/Rel6.0/TP/Full/setup.exe (46324936 bytes)
+INFO installer: AVAILABLE other release 6.2: https://tallymirror.tallysolutions.com/download_centre/Rel6.2/TP/Full/setup.exe (47408904 bytes)
+INFO installer: DOWNLOADED Rel.3.0 from https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_Gold/TP/Full/setup.exe : 43440848 bytes in 1 s, SHA-256 AF4172465A987F1F9FBDA87137EB40DEDAE8478A69FD08D87374C9A38BC81310, signature Valid CN=Tally Solutions Pvt Ltd, O=Tally Solutions Pvt Ltd, L=Bengaluru, S=Karnataka, C=IN, file version 1.1.3.0 product 1.1.3.0
