@@ -1083,6 +1083,7 @@ func invokeTallyNow(tc *TC, port int, x string, timeoutSec int) (string, error) 
 		busyMu.Unlock()
 		if was {
 			writeLog(fmt.Sprintf("Tally %d answers again (it was busy for %s)", port, time.Since(since).Round(time.Second)))
+			answeredAgainNote()
 		}
 		clearTallyStuck(port)
 		// something was posted to Tally: the posted entries go into the copy (and the cloud) once the posting is done
@@ -1358,6 +1359,7 @@ func freeProbe(ctx context.Context, port int, company string) (string, error) {
 			noteCompanyAlts(company, raw)
 		}
 		writeLog(fmt.Sprintf("Tally %d answered the small check; requests go again", port))
+		answeredAgainNote()
 		return raw, nil
 	}
 	if errors.Is(err, errPreempted) {
