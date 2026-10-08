@@ -1,0 +1,9 @@
+2026-10-08 17:39:20  Recorder: Receipt 1 of 31-Oct-2026 (MasterID 3, line b04013ef…): asking Tally by MasterID
+2026-10-08 17:39:20  Recorder: entry fetch of FinCom Spike Co: answered in 9 ms
+2026-10-08 17:39:20  Recorder: Receipt 1 of 31-Oct-2026 (MasterID 3, line b04013ef…): taken: Tally's GUID c6ff66fc-9f4d-4d2b-8136-36d7048865f9-00000003, AlterID 3
+2026-10-08 17:39:59  Recorder: Receipt 2 of 01-Nov-2026 (MasterID 4, line 0747b47e…): asking Tally by MasterID
+2026-10-08 17:40:00  Recorder: entry fetch of FinCom Spike Co: answered in 31 ms
+2026-10-08 17:40:00  Recorder: Receipt 2 of 01-Nov-2026 (MasterID 4, line 0747b47e…): taken: Tally's GUID c6ff66fc-9f4d-4d2b-8136-36d7048865f9-00000004, AlterID 4
+2026-10-08 17:40:37  Recorder: Receipt 3 of 02-Nov-2026 (MasterID 5, line 745d4512…): asking Tally by MasterID
+2026-10-08 17:40:38  Recorder: entry fetch of FinCom Spike Co: answered in 14 ms
+2026-10-08 17:40:38  Recorder: Receipt 3 of 02-Nov-2026 (MasterID 5, line 745d4512…): taken: Tally's GUID c6ff66fc-9f4d-4d2b-8136-36d7048865f9-00000005, AlterID 5
