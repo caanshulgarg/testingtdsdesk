@@ -138,23 +138,59 @@ func TestUserFileEachBridgeReadsOnlyItsOwn(t *testing.T) {
 	}
 }
 
-// the new add-on's own line is taken without the own-Tally look (the company need not be open in the bridge's own Tally:
-// the Windows user says whose Tally wrote it); another user's line in this user's file (never the add-on's way) is not
-func TestUserFileOwnLineNeedsNoLook(t *testing.T) {
+// 2.4.0 review MEDIUM (recorder_live.go): the new add-on's own line is taken only when its company is open in the
+// bridge's own Tally too (the cached look, as for an older add-on's line): w= alone is not enough (the add-on's Windows
+// user is Tally's own word, and two users may share one name). Another user's line in this user's file (never the
+// add-on's way) is not read
+func TestUserFileOwnLineNeedsTheLook(t *testing.T) {
 	rec, f, c := ownBridge(t, "", b220CoGUID, zz)
 	ufAs(t, "user", "anshul")
 	base := time.Now().Truncate(time.Second)
 	ownAt(base)
-	// a company the own Tally does not list (the stand Tally lists only ZZ)
-	liveAppend(t, ufFile(rec, ownOtherGUID, "anshul"), ufLine(ownOtherGUID, ownOtherName, "mine", "anshul", "21", base.Add(-20*time.Second)),
+	// a company the own Tally does not list (the stand Tally lists only ZZ), and ZZ, which it does
+	liveAppend(t, ufFile(rec, ownOtherGUID, "anshul"), ufLine(ownOtherGUID, ownOtherName, "mine-not-open", "anshul", "21", base.Add(-20*time.Second)),
 		ufLine(ownOtherGUID, ownOtherName, "intruder", "Ranjeet", "22", base.Add(-10*time.Second)))
+	liveAppend(t, ufFile(rec, b220CoGUID, "anshul"), ufLine(b220CoGUID, zz, "mine-open", "anshul", "23", base.Add(-20*time.Second)))
 	readAndUploadAll(t)
-	if got := sortedUsers(c); got != "mine@"+ownOtherGUID {
-		t.Fatalf("sent %q: only the own user's line", got)
+	if got := sortedUsers(c); got != "mine-open@"+b220CoGUID {
+		t.Fatalf("sent %q: only the own user's line of a company open in the own Tally", got)
 	}
 	_ = f
 	if !strings.Contains(r222eLog(), "Recorder: Other Co: lines of another Windows user (Ranjeet) are not read by this bridge") {
 		t.Fatalf("the log does not say another user's line was passed over:\n%s", r222eLog())
+	}
+}
+
+// 2.4.0 review LOW (userfile.go): the Windows user is compared whole, DOMAIN\user without regard to case: a user of the
+// same name in another domain (or on another computer) is another user. A name without its domain (as Tally's
+// $$SysInfo:WindowsUser gives it, and a file name, which cannot hold "\\") is compared by the name alone
+func TestUserFileFullDomainUser(t *testing.T) {
+	for _, c := range []struct {
+		a, b string
+		same bool
+	}{
+		{`NWS144\anshul`, `nws144\ANSHUL`, true},
+		{`NWS144\anshul`, `FINCOM\anshul`, false},
+		{`NWS144\anshul`, `anshul`, true},
+		{`anshul`, ` Anshul `, true},
+		{`NWS144\anshul`, `NWS144\ranjeet`, false},
+		{``, `anshul`, false},
+	} {
+		if got := liveUserSame(c.a, c.b); got != c.same {
+			t.Errorf("liveUserSame(%q, %q) = %v, want %v", c.a, c.b, got, c.same)
+		}
+	}
+	rec, _, cl := ownBridge(t, "", b220CoGUID, zz)
+	ufAs(t, "user", `NWS144\anshul`)
+	base := time.Now().Truncate(time.Second)
+	ownAt(base)
+	liveAppend(t, ufFile(rec, b220CoGUID, "anshul"),
+		ufLine(b220CoGUID, zz, "other-domain", `FINCOM\anshul`, "51", base.Add(-30*time.Second)),
+		ufLine(b220CoGUID, zz, "same-whole", `nws144\ANSHUL`, "52", base.Add(-25*time.Second)),
+		ufLine(b220CoGUID, zz, "bare", "anshul", "53", base.Add(-20*time.Second)))
+	readAndUploadAll(t)
+	if got := sortedUsers(cl); got != "bare@"+b220CoGUID+",same-whole@"+b220CoGUID {
+		t.Fatalf("sent %q: FINCOM\\anshul is another Windows user", got)
 	}
 }
 
