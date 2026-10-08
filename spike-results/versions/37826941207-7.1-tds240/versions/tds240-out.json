@@ -1,0 +1,22 @@
+{
+ "ok": true,
+ "vouchers": 1,
+ "guid": "7660ba38-02ef-4f42-a9ae-7b92dda6ead4-00000003",
+ "type": "Journal",
+ "no": "3",
+ "tds": [
+  {
+   "n": 2,
+   "ledger": "GT TDS Contractor",
+   "nature": "GT Contract Work",
+   "party": "GT TDS Contractor",
+   "rate": 0,
+   "base": 100000,
+   "tax": 2000,
+   "section": "",
+   "sectionFrom": "",
+   "exempt": true
+  }
+ ],
+ "checks": []
+}

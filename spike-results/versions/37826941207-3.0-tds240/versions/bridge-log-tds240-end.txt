@@ -1,0 +1,5 @@
+2026-10-08 19:32:00  Recorder: Journal 3 of 02-Nov-2026: the full entry is not taken (the form names no party and no ledger list is held here to tell Tally's); Tally is asked for the entry as before
+2026-10-08 19:32:00  Recorder: Journal 3 of 02-Nov-2026 (MasterID 3, line 9a36b701…): asking Tally by MasterID
+2026-10-08 19:32:00  Recorder: entry fetch of FinCom Spike Co: answered in 7 ms
+2026-10-08 19:32:00  Recorder: Journal 3 of 02-Nov-2026 (MasterID 3, line 9a36b701…): taken: Tally's GUID 9a972a2b-b03d-469f-8af0-413087ca1df5-00000003, AlterID 3
+2026-10-08 19:32:00  Renumbering: made Journal 3 of 02-Nov-2026 in FinCom Spike Co: FinCom holds 0 later Journal entries; each is read again from Tally to see whether Tally renumbered it
