@@ -253,3 +253,13 @@ add-on's placeholder GUID is held as a GUID-less one (R3-L1: twice it broke the 
 applied for its GUID is applied and cancelled again, below a delete 'stale' as before (R3-L2); a GUID-less delete with no
 date promises no Day Book (R3-L3). The owner's "nothing to remove" (08:05) is 57's (`tally_ingest_delete`), not repeated.
 Tested by `run_migration60.py` (on 56 -> 57 -> 58) and `run_migration_order.py` (56 -> 57 -> 58 -> 59 -> 60 in both orders).
+
+next-renumber (08-Oct-2026, the owner's "renumbering yes"; a later release than 2.3.4): `migration-67-recorder-renumbered.sql`
+runs after 60 in both orders (... -> 58 -> 59 -> 60 -> 67; add-only, one transaction, `lock_timeout` 10 s, no "delete from",
+safe twice; NOT run on staging or production). One function replaced, `tally_recorder_line` (60's text, the lines marked "67"
+changed; granted to nobody): an altered line WITH Tally's entry at exactly the AlterID the copy holds, numbered otherwise than
+the copy, is applied (Tally renumbered the entry after an insert or delete: its AlterID does not move, tally-versions P9r),
+instead of 'duplicate'; its words "renumbered in Tally: <type> <old> is <type> <new> now (the same AlterID n)". The numbers 61
+to 66 and 69 are taken on other branches (61 perms-61, 62 next-tds, 63 next-outbox, 64 next-realtime, 65 next-selfcheck, 66
+next-masterhook, 69 next-push); 63 and 69 replace `tally_recorder_line` too, so whichever of 63, 67, 69 lands later carries the
+others' marked lines. Tested by `run_migration67.py` (on ... -> 58 -> 60) and `run_migration_order.py` (60 -> 67 in both orders).
