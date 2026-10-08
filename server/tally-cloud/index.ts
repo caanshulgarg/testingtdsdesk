@@ -107,6 +107,9 @@
 //                                                       and lines; vch_date yyyymmdd (or yyyy-mm-dd); ledgers [{name, guid}];
 //                                                       name (ledger_*), from / to (ledger_renamed); save_ms the delay added
 //                                                       to saving. tally_recorder_apply(firm, book, device, lines)
+//    FinCom Bridge next (branch next-push): a line with push: true and push_seq (a whole number below 10^16) is the add-on's
+//    full entry, its body the XML the bridge built from it (read here as any entry body, "full": true), no AlterID: push and
+//    push_seq are kept in the line and its payload for migration 69 (the same change, the order); left out otherwise
 //    migration 45 (docs/recorder-bulk-posting.md 4): a SHORT line, FinCom's own entry (the add-on writes only company_guid,
 //    object_guid, master_id, alter_id, fid (or narration carrying "TDSDesk:<id>"), event, saved_at; no xml): the posted XML
 //    of its FinCom id is fetched for a created / imported line only (tally_post_xml_for(firm, book, fids): the live,
@@ -1481,6 +1484,14 @@ function cleanRecorderLine(x: any, me: { id: string }): { line?: Record<string, 
   // a deliberate resend of a ":resolved" line): kept as sent (in the payload too); the database answers a repeat of the
   // same line id and marker "already have", never storing it twice. An older bridge sends no key: none is added
   if (typeof x?.again === "string") line.again = s(x.again, 20);
+  // FinCom Bridge next (branch next-push, the owner's decision of 07-Oct-2026): the add-on's full entry at save, sent with NO
+  // AlterID (the form holds the one before the save) and its order push_seq; kept in the line and its payload, apart from
+  // Tally's AlterID: migration 69 makes a full entry the same change only as the same push_seq, and an older one 'stale'.
+  // Without 69 the field is stored and unused. Never on a line with an AlterID, a delete or a cancel
+  const ps = Number(x?.push_seq);
+  if (x?.push === true && xml && alter === null && (event === "created" || event === "altered") && Number.isSafeInteger(ps) && ps > 0 && ps < 1e16) {
+    line.push = true; line.push_seq = ps;
+  }
   line.payload = { ...line, xmlBytes: xml.length || undefined };
   if (xml && ["created", "altered", "imported"].includes(event)) {
     if (xml.length > MAX_RECORDER_XML) return { bad: "the entry's XML is larger than FinCom takes (" + xml.length + " characters)" };

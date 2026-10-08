@@ -1,0 +1,181 @@
+{
+ "alter-payroll": {
+  "event": "altered",
+  "made": true,
+  "mid": 6,
+  "object": true,
+  "trusted": false,
+  "why": "not built: the sign of the amount \"1,500.00\" is not on the line (no IsDeemedPositive to take it from)"
+ },
+ "alter-receipt-agst": {
+  "event": "altered",
+  "made": true,
+  "mid": 7,
+  "object": true,
+  "trusted": true,
+  "why": ""
+ },
+ "alter-receipt-plain": {
+  "event": "altered",
+  "made": true,
+  "mid": 8,
+  "object": true,
+  "trusted": true,
+  "why": ""
+ },
+ "alter-sales-new": {
+  "event": "altered",
+  "made": true,
+  "mid": 14,
+  "object": true,
+  "trusted": true,
+  "why": ""
+ },
+ "contra": {
+  "event": "created",
+  "made": true,
+  "mid": 11,
+  "object": true,
+  "trusted": false,
+  "why": "a new entry with a bank line (Share Bank) and no bank details: Tally makes them as it stores the entry"
+ },
+ "copy-journal-party": {
+  "event": "created",
+  "made": true,
+  "mid": 21,
+  "object": true,
+  "trusted": true,
+  "why": ""
+ },
+ "copy-payroll": {
+  "event": "created",
+  "made": true,
+  "mid": 23,
+  "object": true,
+  "trusted": true,
+  "why": ""
+ },
+ "copy-receipt-plain": {
+  "event": "created",
+  "made": true,
+  "mid": 22,
+  "object": true,
+  "trusted": true,
+  "why": ""
+ },
+ "copy-sales-new": {
+  "event": "created",
+  "made": true,
+  "mid": 15,
+  "object": true,
+  "trusted": false,
+  "why": "an invoice made new: Tally allocates its bills as it stores the entry, after the form the line is read from"
+ },
+ "credit-note": {
+  "event": "created",
+  "made": true,
+  "mid": 20,
+  "object": true,
+  "trusted": false,
+  "why": "an invoice made new: Tally allocates its bills as it stores the entry, after the form the line is read from"
+ },
+ "einvoice-save": {
+  "event": "altered",
+  "made": true,
+  "mid": 26,
+  "object": true,
+  "trusted": false,
+  "why": "not built: the line lacks ewb (its record failed in the voucher form: what Tally holds there is not known)"
+ },
+ "journal-party": {
+  "event": "created",
+  "made": true,
+  "mid": 12,
+  "object": true,
+  "trusted": true,
+  "why": ""
+ },
+ "journal-plain": {
+  "event": "created",
+  "made": true,
+  "mid": 13,
+  "object": true,
+  "trusted": true,
+  "why": ""
+ },
+ "payment-agst": {
+  "event": "created",
+  "made": true,
+  "mid": 9,
+  "object": true,
+  "trusted": true,
+  "why": ""
+ },
+ "payment-expense": {
+  "event": "created",
+  "made": true,
+  "mid": 10,
+  "object": true,
+  "trusted": true,
+  "why": ""
+ },
+ "purchase-agst": {
+  "made": false
+ },
+ "purchase-new": {
+  "event": "created",
+  "made": true,
+  "mid": 17,
+  "object": true,
+  "trusted": false,
+  "why": "an invoice made new: Tally allocates its bills as it stores the entry, after the form the line is read from"
+ },
+ "purchase-new2": {
+  "event": "created",
+  "made": true,
+  "mid": 18,
+  "object": true,
+  "trusted": false,
+  "why": "an invoice made new: Tally allocates its bills as it stores the entry, after the form the line is read from"
+ },
+ "receipt-agst": {
+  "event": "created",
+  "made": true,
+  "mid": 7,
+  "object": true,
+  "trusted": true,
+  "why": ""
+ },
+ "receipt-plain": {
+  "event": "created",
+  "made": true,
+  "mid": 8,
+  "object": true,
+  "trusted": true,
+  "why": ""
+ },
+ "sales-agst": {
+  "event": "created",
+  "made": true,
+  "mid": 19,
+  "object": true,
+  "trusted": true,
+  "why": ""
+ },
+ "sales-new": {
+  "event": "created",
+  "made": true,
+  "mid": 14,
+  "object": true,
+  "trusted": false,
+  "why": "an invoice made new: Tally allocates its bills as it stores the entry, after the form the line is read from"
+ },
+ "sales-new2": {
+  "event": "created",
+  "made": true,
+  "mid": 16,
+  "object": true,
+  "trusted": false,
+  "why": "an invoice made new: Tally allocates its bills as it stores the entry, after the form the line is read from"
+ }
+}

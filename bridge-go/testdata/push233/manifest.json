@@ -1,0 +1,112 @@
+{
+ "real231-check8-credit": {
+  "capture": "real-tally-7.1/231/check8-credit.entry.xml",
+  "lines": "real231-check8-credit.lines.json",
+  "push": "real231-check8-credit.push.xml"
+ },
+ "real231-check8-purchase": {
+  "capture": "real-tally-7.1/231/check8-purchase.entry.xml",
+  "lines": "real231-check8-purchase.lines.json",
+  "push": "real231-check8-purchase.push.xml"
+ },
+ "real231-check8-sales": {
+  "capture": "real-tally-7.1/231/check8-sales.entry.xml",
+  "lines": "real231-check8-sales.lines.json",
+  "push": "real231-check8-sales.push.xml"
+ },
+ "real231-s1-sales-two-rates": {
+  "capture": "real-tally-7.1/231/s1-sales-two-rates.entry.xml",
+  "lines": "real231-s1-sales-two-rates.lines.json",
+  "push": "real231-s1-sales-two-rates.push.xml"
+ },
+ "real231-s10-sales-50-items": {
+  "capture": "real-tally-7.1/231/s10-sales-50-items.entry.xml",
+  "lines": "real231-s10-sales-50-items.lines.json",
+  "push": "real231-s10-sales-50-items.push.xml"
+ },
+ "real231-s11-sales-freight-gst": {
+  "capture": "real-tally-7.1/231/s11-sales-freight-gst.entry.xml",
+  "lines": "real231-s11-sales-freight-gst.lines.json",
+  "push": "real231-s11-sales-freight-gst.push.xml"
+ },
+ "real231-s12-sales-round-off": {
+  "capture": "real-tally-7.1/231/s12-sales-round-off.entry.xml",
+  "lines": "real231-s12-sales-round-off.lines.json",
+  "push": "real231-s12-sales-round-off.push.xml"
+ },
+ "real231-s13-sales-discount": {
+  "capture": "real-tally-7.1/231/s13-sales-discount.entry.xml",
+  "lines": "real231-s13-sales-discount.lines.json",
+  "push": "real231-s13-sales-discount.push.xml"
+ },
+ "real231-s14-sales-tax-inclusive": {
+  "capture": "real-tally-7.1/231/s14-sales-tax-inclusive.entry.xml",
+  "lines": "real231-s14-sales-tax-inclusive.lines.json",
+  "push": "real231-s14-sales-tax-inclusive.push.xml"
+ },
+ "real231-s15-renamed-party": {
+  "capture": "real-tally-7.1/231/s15-renamed-party.entry.xml",
+  "lines": "real231-s15-renamed-party.lines.json",
+  "push": "real231-s15-renamed-party.push.xml"
+ },
+ "real231-s2-purchase-items": {
+  "capture": "real-tally-7.1/231/s2-purchase-items.entry.xml",
+  "lines": "real231-s2-purchase-items.lines.json",
+  "push": "real231-s2-purchase-items.push.xml"
+ },
+ "real231-s3-credit-note-items": {
+  "capture": "real-tally-7.1/231/s3-credit-note-items.entry.xml",
+  "lines": "real231-s3-credit-note-items.lines.json",
+  "push": "real231-s3-credit-note-items.push.xml"
+ },
+ "real231-s4-receipt-against-bill": {
+  "capture": "real-tally-7.1/231/s4-receipt-against-bill.entry.xml",
+  "lines": "real231-s4-receipt-against-bill.lines.json",
+  "push": "real231-s4-receipt-against-bill.push.xml"
+ },
+ "real231-s5-payment-tds": {
+  "capture": "real-tally-7.1/231/s5-payment-tds.entry.xml",
+  "lines": "real231-s5-payment-tds.lines.json",
+  "push": "real231-s5-payment-tds.push.xml"
+ },
+ "real231-s5-tds-on-screen": {
+  "capture": "real-tally-7.1/231/s5-tds-on-screen.entry.xml",
+  "lines": "real231-s5-tds-on-screen.lines.json",
+  "push": "real231-s5-tds-on-screen.push.xml"
+ },
+ "real231-s6-journal-cost-centres": {
+  "capture": "real-tally-7.1/231/s6-journal-cost-centres.entry.xml",
+  "lines": "real231-s6-journal-cost-centres.lines.json",
+  "push": "real231-s6-journal-cost-centres.push.xml"
+ },
+ "real231-s7-bank-payment-utr": {
+  "capture": "real-tally-7.1/231/s7-bank-payment-utr.entry.xml",
+  "lines": "real231-s7-bank-payment-utr.lines.json",
+  "push": "real231-s7-bank-payment-utr.push.xml"
+ },
+ "real231-s8-new-party": {
+  "capture": "real-tally-7.1/231/s8-new-party.entry.xml",
+  "lines": "real231-s8-new-party.lines.json",
+  "push": "real231-s8-new-party.push.xml"
+ },
+ "typed-like-payroll": {
+  "capture": "push233/typed-like-payroll.xml",
+  "lines": "typed-like-payroll.lines.json",
+  "push": "typed-like-payroll.push.xml"
+ },
+ "typed-like-purchase-godown-tds": {
+  "capture": "push233/typed-like-purchase-godown-tds.xml",
+  "lines": "typed-like-purchase-godown-tds.lines.json",
+  "push": "typed-like-purchase-godown-tds.push.xml"
+ },
+ "typed-like-stock-journal": {
+  "capture": "push233/typed-like-stock-journal.xml",
+  "lines": "typed-like-stock-journal.lines.json",
+  "push": "typed-like-stock-journal.push.xml"
+ },
+ "typed-partA-payment-tds": {
+  "capture": "typed-like-7.1/partA-payment-tds.xml",
+  "lines": "typed-partA-payment-tds.lines.json",
+  "push": "typed-partA-payment-tds.push.xml"
+ }
+}

@@ -597,6 +597,8 @@ func lightCheckOpen(sessions []M) {
 				continue
 			}
 			lightLogResult(name, had)
+			// next-push: the counter names a full entry's AlterID only when unambiguous (recorder_push.go); no request of its own
+			livePushCounter(name, companyAlter(name))
 			// 2.2.0: the recorder's source B (Tally's change list), when it is the source or one of them
 			liveAfterLightCheck(name, port)
 			// 2.3.1 (masters): the master counter moved: the ledgers created or altered since the last number (ledchanges.go)

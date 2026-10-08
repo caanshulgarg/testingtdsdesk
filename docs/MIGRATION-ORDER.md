@@ -20,6 +20,9 @@ revoked; `begin; ... commit;`; safe to run twice) and is shown to the owner befo
 - staging: 32 → 33 → 35 → 34 (first) → 36b → 37 → 36 → 38 → 39 (applied 03-Oct, **except 39's tally_ingest_day part**: both forms are still 38's) → 40 → 41 (run 03-Oct, evening; its 8-argument `tally_ingest_day` superseded 39's) → 42 → 43 (run 04-Oct) → 44 (run 04-Oct) → 45 (run 04-Oct) → **46** → **47** → **48** (run by the owner) → **49** → **50** (run by the owner) → 51 → 52 → 53 → 54 → 55 → 56 (live on staging) → 57 → 58 → 59 → 60 → 68 → 70 → 62 → 63 → 64 → 65 → 66 → 67 (2.4.0, not run)
 - a fresh database: 32 → 33 → 35 → 34 (reviewed) → 36 → 36b → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 51 → 52 → 53 → 54 → 55 → 56 → 57 → 58 → 59 → 60 → 68 → 70 → 62 → 67 → 63 → 64 → 65 → 66
 
+- staging: 32 → 33 → 35 → 34 (first) → 36b → 37 → 36 → 38 → 39 (applied 03-Oct, **except 39's tally_ingest_day part**: both forms are still 38's) → 40 → 41 (run 03-Oct, evening; its 8-argument `tally_ingest_day` superseded 39's) → 42 → 43 (run 04-Oct) → 44 (run 04-Oct) → 45 (run 04-Oct) → **46** → **47** → **48** (run by the owner) → **49** → **50** (run by the owner) → 51 → 52 → 53 → 54 → 55 → 56 (live on staging) → 57 → 58 → 59 → 60 → 69 (branch next-push, not run)
+- a fresh database: 32 → 33 → 35 → 34 (reviewed) → 36 → 36b → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 51 → 52 → 53 → 54 → 55 → 56 → 57 → 58 → 59 → 60 → 69
+
 | # | File | What it adds |
 |---|---|---|
 | 32 | `migration-32-sync-safety.sql` | the posting ids (`tally_post_ids`), the company lease, the sync cursor and rewind guard, `deleted_at` / `origin` / `tally_guid` / `alter_id` on entries and ledgers, voucher versions, the `tally_balances` view |
@@ -402,3 +405,14 @@ rate_worked_out and exempt false until their entry is read again). **L3, timing:
 (ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.*, .SUBCATEGORYALLOCATION.*) on FinComVoucherByNumber and the time 62's
 `tally_ingest_details` adds per entry are NOT measured here; both are to be measured in the 2.4.0 gate (real Tally, and
 staging after 62), the allow-list rows staying "not yet measured" until then.
+
+Branch next-push (07-Oct-2026, the add-on's full entry at save; NOT run anywhere): `migration-69-recorder-push.sql` runs after
+60 in both orders (... -> 59 -> 60 -> 69; add-only, one transaction, `lock_timeout` 10 s, no "delete from", safe twice). One
+function replaced, `tally_recorder_line` (60's text, the lines marked "69" changed; granted to nobody): a created / altered /
+imported line WITHOUT an AlterID that carries `push_seq` (the bridge's full entry; tally-ingest keeps it in the payload) is the
+same change only as the same `push_seq` (before 69 a second alteration without an AlterID was 'duplicate' of the first and lost
+until a Day Book), 'stale' below the highest `push_seq` applied for its GUID, 'stale' when a delete of its GUID is applied,
+applied and cancelled again when a cancel is; its body keeps the copy's AlterID. A line with an AlterID: exactly 60. `push_seq`
+never reaches an AlterID column, the cursor, the gap check or a delete bound. **Order with 63** (next-outbox, also on 60's
+text): 69 stops with an error (nothing changed) where 63's function has run; a 69 rebased on 63 is needed there. Tested by
+`run_migration69.py` (red on 60, then 69 twice; the 63 stop simulated) and `run_migration_order.py` (69 last in both orders).

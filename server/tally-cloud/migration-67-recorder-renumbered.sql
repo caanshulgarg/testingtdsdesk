@@ -12,10 +12,10 @@
 --   number), its words "renumbered in Tally: <type> <old> is <type> <new> now (the same AlterID n)". Every other line as under 60.
 -- Nothing else is touched; no row is changed by running it. Tested on pg_stand only: tests/run_migration67.py.
 
--- release-240 (FinCom Bridge 2.4.0, 08-Oct-2026): 63 (next-outbox) and 67 (next-renumber) both replace tally_recorder_line on
--- 60's text. Each now carries the SAME combined text: 60's with the lines marked "63" (a repeat of a line FinCom has) AND the
--- lines marked "67" (a renumbered entry applied), so whichever of the two runs last leaves the same function and neither
--- one's behaviour is lost, in either order (tests/run_migration_order.py runs staging 63 -> 67 and a fresh database
+-- release-240 (FinCom Bridge 2.4.0, 08-Oct-2026): 63 (next-outbox), 67 (next-renumber) and 69 (next-push) each replace
+-- tally_recorder_line on 60's text. Each now carries the SAME combined text: 60's with the lines marked "63" (a repeat of a
+-- line FinCom has), "67" (a renumbered entry applied) and "69" (a full entry without an AlterID, ordered by push_seq), so
+-- whichever runs last leaves the same function and none of the three is lost, in any order (tests/run_migration_order.py runs staging 63 -> 67 and a fresh database
 -- 67 -> 63 and compares the texts). Each also makes 63's look-up index (if not there), so either file alone is complete.
 -- Each STOPS (raises, nothing changed) over a tally_recorder_line written on 60's text by another of 63 / 67 / 69 (its marker
 -- without this file's own): such a change is never dropped silently (review M2 of 2.4.0 part 2).
@@ -78,6 +78,9 @@ declare b tally_books%rowtype; rid bigint := p_row; ev text := left(btrim(coales
   -- 67 (next-renumber): Tally renumbered the entry (an insert or delete before it, the voucher type renumbering): its body under
   -- the same AlterID with another number than the copy's
   renum boolean := false;     -- 67
+  -- 69: a full entry from the add-on (FinCom Bridge next-push: no AlterID on the line, its order in push_seq); the highest order
+  -- applied for its GUID
+  pv bigint := case when coalesce(p_line->>'push_seq', '') ~ '^[0-9]{1,16}$' then (p_line->>'push_seq')::bigint end; pv_max bigint;     -- 69
 begin
   select * into b from tally_books where book_id = p_book;
   if b.book_id is null then raise exception 'no such book'; end if;
@@ -102,7 +105,9 @@ begin
   if rid is not null then
     select coalesce(lt, r.vch_type), coalesce(lcg, r.company_guid), r.received_at, coalesce(mid, nullif(r.master_id, '')), r.payload, r.held_why
       into lt, lcg, r_at, mid, rp, r_why from tally_recorder_lines r where r.id = rid;     -- 51: its payload and words too
+    pv := coalesce(pv, case when coalesce(rp->>'push_seq', '') ~ '^[0-9]{1,16}$' then (rp->>'push_seq')::bigint end);     -- 69: a held line run again
   end if;
+  if alt is not null or ev not in ('created', 'altered', 'imported') then pv := null; end if;     -- 69: an AlterID, when the line has one, rules as before
   -- 51: the bridge's plain reason for a line without the entry's body, and the add-on's GUID (words only, never looked up)
   hw := nullif(left(btrim(coalesce(p_line->>'heldWhy', p_line->'payload'->>'heldWhy', rp->>'heldWhy', '')), 300), '');
   lg := nullif(left(btrim(coalesce(p_line->>'lineGuid', p_line->'payload'->>'lineGuid', rp->>'lineGuid', '')), 100), '');
@@ -201,7 +206,11 @@ begin
     -- the same change already here: another arrival applied or held (owner items 26, 102)
     if stt is null and og is not null and not ph and not mm then     -- 50: the placeholder GUID is no entry's: never the same change by it; 51: nor a line whose ids did not belong together
       select 'line ' || r.id || ' (' || r.state || coalesce(', from ' || nullif(r.pc, ''), '') || ')' into t from tally_recorder_lines r
-       where r.book_id = p_book and r.object_guid = og and r.alter_id is not distinct from alt and r.event = ev and r.id <> rid
+       where r.book_id = p_book and r.object_guid = og and r.event = ev and r.id <> rid     -- 69
+         -- 69: a full entry is the same change only as the same full entry (its push_seq): two alterations of one entry carry no
+         -- AlterID, and the second is never 'duplicate' of the first; a line without an AlterID of the 2.3.2 route never matches one
+         and case when pv is not null then coalesce(r.payload->>'push_seq', '') = pv::text     -- 69
+                  else r.alter_id is not distinct from alt and (alt is not null or coalesce(r.payload->>'push_seq', '') = '') end     -- 69
          -- a held arrival is the original only when a release can apply it (review M1): an entry line with its body, a
          -- delete / cancel held for a locked month; a held line without a body never swallows the same change sent with one
          and (r.state = 'applied' or (r.state = 'held' and case when ev in ('created', 'altered', 'imported') then coalesce(r.body ? 'vouchers', false)
@@ -263,6 +272,25 @@ begin
         select r.alter_id, r.event into del_alt, del_ev from tally_recorder_lines r where r.book_id = p_book and r.object_guid = og and r.event in ('deleted', 'cancelled') and r.state = 'applied'
          order by r.alter_id desc nulls last limit 1;
         then_cancel := alt is not null and del_alt > alt and del_ev = 'cancelled';     -- 60 (R3-L2)
+        -- 69: a full entry (no AlterID; its order push_seq, kept apart from Tally's AlterID): one older than the full entry applied for
+        -- its GUID is 'stale'; one of a GUID whose delete is applied is 'stale' (Tally never brings a deleted voucher's GUID back, so
+        -- the save came before the delete); one of a GUID whose cancel is applied is applied and cancelled again (as 60's R3-L2: a
+        -- cancelled voucher stays cancelled in Tally). Its body keeps the copy's AlterID (the line has none: never 0 over a known one)
+        if pv is not null and stt is null then     -- 69
+          select max((r.payload->>'push_seq')::bigint) into pv_max from tally_recorder_lines r     -- 69
+           where r.book_id = p_book and r.object_guid = og and r.id <> rid and r.state = 'applied' and r.event in ('created', 'altered', 'imported')     -- 69
+             and coalesce(r.payload->>'push_seq', '') ~ '^[0-9]{1,16}$';     -- 69
+          if pv_max is not null and pv_max > pv then     -- 69
+            stt := 'stale'; wy := format('an older full entry (order %s) than the one applied (order %s): not applied', pv, pv_max);     -- 69
+          elsif exists (select 1 from tally_recorder_lines r where r.book_id = p_book and r.object_guid = og and r.event = 'deleted' and r.state = 'applied') then     -- 69
+            stt := 'stale'; wy := 'a delete of this entry is applied: Tally never brings a deleted entry back, so this save came before it; not applied';     -- 69
+          else     -- 69
+            then_cancel := del_ev = 'cancelled' or exists (select 1 from tally_recorder_lines r where r.book_id = p_book and r.object_guid = og and r.event = 'cancelled' and r.state = 'applied');     -- 69
+            if c_found then     -- 69
+              select coalesce(jsonb_agg(x || jsonb_build_object('alter', c_alter)), '[]'::jsonb) into vs from jsonb_array_elements(vs) x;     -- 69
+            end if;     -- 69
+          end if;     -- 69
+        end if;     -- 69
         if stt is null then
           lk := tally_month_locked(p_book, array(select tally_d8(replace(coalesce(x->>'day', ''), '-', '')) from jsonb_array_elements(vs) x) || array[c_day, vd]);
           if lk is not null then
@@ -500,7 +528,7 @@ begin
     end if;     -- 67
     if stt = 'applied' and then_cancel then
       res3 := tally_ingest_delete(p_book, og, del_alt, true, 'recorder ' || coalesce(left(p_line->>'pc', 60), ''));
-      wy := concat_ws('; ', wy, format('then cancelled, as the cancel applied at AlterID %s says (%s)', del_alt, coalesce(res3->>'state', 'not done')));
+      wy := concat_ws('; ', wy, format('then cancelled, as the cancel applied%s says (%s)', coalesce(' at AlterID ' || del_alt, ''), coalesce(res3->>'state', 'not done')));     -- 69: a cancel without an AlterID named plainly
     end if;
     -- 51: the line carrying the held line's entry (its line_id + ":resolved") that ends 'duplicate' (the copy holds Tally's entry
     -- already) or, review L1, 'stale' (the copy holds a newer version): the entry is in, so the held line is replaced as by an
