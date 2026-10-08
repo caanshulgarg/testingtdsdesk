@@ -37,7 +37,20 @@ $script:TdsRestart = {
   Get-Process tally -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep 3
   $t = Start-Process -FilePath $exe -WorkingDirectory $dir -PassThru; $script:tpid = $t.Id
   for ($i = 0; $i -lt 40; $i++) { Start-Sleep 3; try { Invoke-WebRequest 'http://localhost:9000' -UseBasicParsing -TimeoutSec 5 | Out-Null; break } catch {} }
-  Start-Sleep 5; $null = TdsScreen 'bk-start-1'; KeysTo 'a' 4; KeysTo 't' 10; $null = TdsScreen 'bk-start-2'
+  Start-Sleep 5; $null = TdsScreen 'bk-start-1'; KeysTo 'a' 4; KeysTo 't' 10
+  # (run 37770857500: after an Internal Error Tally came up on its Startup Report, a TDL-error warning ("Press any key")
+  # or its License screen, and 'a' went to "Activate New License": each read and answered)
+  for ($s = 0; $s -lt 6; $s++) {
+    $t = TdsScreen "bk-start-$($s + 2)"
+    if ($t -match 'ignore the TDLs') { Add-Content -Path $resultsFile -Value 'INFO at start Tally said: TallyPrime will ignore the TDLs that have errors' -Encoding UTF8 }
+    if ($t -match 'Internal Error') { Add-Content -Path $resultsFile -Value 'INFO at start Tally showed an Internal Error' -Encoding UTF8 }
+    if ($t -match 'Press any key') { KeysTo '{ENTER}' 3; continue }
+    if ($t -match 'Activate License|Serial Number') { KeysTo '{ESC}' 3; continue }
+    if ($t -match 'Try It For Free|Welcome to TallyPrime') { KeysTo 't' 8; continue }
+    if ($t -match 'Startup Report|Application Startup') { KeysTo '^a' 5; continue }
+    if ($t -match 'Internal Error') { KeysTo '{ENTER}' 3; continue }
+    break
+  }
 }
 $script:bkStuck = $false
 function BkPost($x) { $a = Post $x '' 30; if (-not $a -and ($script:lastMs -ge 29000 -or -not (Get-Process -Id $script:tpid -ErrorAction SilentlyContinue))) { $script:bkStuck = $true; Write-Host '::warning::a Tally request took 30 s (or Tally is gone): Tally will be started afresh'; Add-Content -Path $resultsFile -Value "INFO a Tally request took $($script:lastMs) ms with no answer: Tally started afresh before the next step" -Encoding UTF8 }; return $a }
@@ -294,15 +307,21 @@ foreach ($k in $sysEv.Keys) { $probes[$k] = "[System: Events]`r`n    FCRP$($k -r
 $markWords = @('Zebra Mark', 'Lotus Mark', 'Tiger Mark', 'Maple Mark', 'Coral Mark', 'Amber Mark', 'Cedar Mark', 'Delta Mark')
 # (runs 37763910797 / 37766812255: Tally knows the REPORTS Bank Recon and BankRecon on every release, but a button added
 # to [#Form: Bank Recon] / [#Form: BankRecon] never showed on the reconciliation screen: more form names, each its own file)
-$brsUse = @('Bank Recon', 'BankRecon', 'Bank Reconciliation', 'Bank Recon Summary', 'Bank Recon Manual', 'Manual Bank Recon', 'BRS', 'Bank Recon Details')
+# (run 37770857500: six form names Tally does not know brought "TallyPrime will ignore the TDLs that have errors" and then an
+# Internal Error c0000005 on every release: only the two names that loaded with no warning in runs 37763910797 /
+# 37766812255; and each REPORT Tally answers to (XML) gets its window title replaced, so the title read on the screen shows
+# whether the reconciliation screen is that report)
+$brsUse = @('Bank Recon', 'BankRecon')
 $markWords = @('Zebra Mark', 'Lotus Mark', 'Tiger Mark', 'Maple Mark', 'Coral Mark', 'Amber Mark', 'Cedar Mark', 'Delta Mark')
 # the control: a button on the Voucher form (no Form Accept line: the add-on's own hook stays the only one), seen on the
 # voucher alteration screen of the allocation step = the button mechanism works on this release
 $script:bkMarks['control-voucher'] = 'Kiwi Mark'
 $probes['control-voucher'] = "[#Form: Voucher]`r`n    Add : Button : FCRPBV`r`n`r`n[Button: FCRPBV]`r`n    Key    : Ctrl+Alt+F11`r`n    Title  : `"Kiwi Mark`"`r`n    Action : Display : Day Book`r`n"
 $i = 0; foreach ($n in $brsUse) { $i++; $w = $markWords[($i - 1) % $markWords.Count]; $script:bkMarks["brs$i"] = $w
-  $probes["brs$i"] = "[#Form: $n]`r`n    Add : Button : FCRPB$i`r`n    On : Form Accept : Yes : Call : FCRPWrite : `"brs${i}_pre`"`r`n    On : Form Accept : Yes : Form Accept`r`n    On : Form Accept : Yes : Call : FCRPWrite : `"brs${i}_post`"`r`n`r`n[Button: FCRPB$i]`r`n    Key    : Ctrl+Alt+$([char](64 + $i))`r`n    Title  : `"$w`"`r`n    Action : Display : Day Book`r`n"
+  $probes["brs$i"] = "[#Form: $n]`r`n    Add : Button : FCRPB$i`r`n    On : Form Accept : Yes : Call : FCRPWrite : `"brs${i}_pre`"`r`n    On : Form Accept : Yes : Form Accept`r`n    On : Form Accept : Yes : Call : FCRPWrite : `"brs${i}_post`"`r`n`r`n[Button: FCRPB$i]`r`n    Key    : Ctrl+Alt+F$(2 + $i)`r`n    Title  : `"$w`"`r`n    Action : Display : Day Book`r`n"
   Info "probe brs$i = [#Form: $n] (its button '$w' on the screen = attached)" }
+$i = 0; foreach ($n in @($brsNames | Where-Object { $known[$_] })) { $i++; $w = @('Tiger Mark', 'Maple Mark', 'Coral Mark', 'Amber Mark')[($i - 1) % 4]; $script:bkMarks["rep$i"] = $w
+  $probes["rep$i"] = "[#Report: $n]`r`n    Title : `"$w`"`r`n"; Info "probe rep$i = [#Report: $n] (its title '$w' on the screen = this report)" }
 $i = 0; foreach ($n in $allocUse) { $i++; $probes["alloc$i"] = "[#Form: $n]`r`n    On : Form Accept : Yes : Call : FCRPWrite : `"alloc${i}_pre`"`r`n    On : Form Accept : Yes : Form Accept`r`n    On : Form Accept : Yes : Call : FCRPWrite : `"alloc${i}_post`"`r`n"; Info "probe alloc$i = [#Form: $n]" }
 $files = @($tdl, (Join-Path $pd 'probe-common.tdl'))
 foreach ($k in $probes.Keys) {
