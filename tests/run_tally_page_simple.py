@@ -271,7 +271,7 @@ def main():
         ok([c for c in E("window.__calls") if c[0] == "tally_read_resume" and c[1].get("p_device") == D1], "Resume reading asks tally_read_resume for that computer (%s)" % E("window.__calls"))
         scene(DEVS, LINKED, role="member")
         E(SYNC, [mk(32, "the entry was not read from Tally: reading from Tally is stopped on this computer (x)")]); pg.wait_for_timeout(1800)
-        ok(pg.locator(G("readstop") + " button").count() == 0 and "owner" in txt(G("readstop")), "staff: no Resume, the words say an owner resumes it (%s)" % txt(G("readstop")))
+        ok(pg.locator(G("readstop") + " button:not([data-alert-clear])").count() == 0 and "owner" in txt(G("readstop")), "staff: no Resume (only its Clear), the words say an owner resumes it (%s)" % txt(G("readstop")))
         # ---- 5c. a reads-only bridge says Tally's state too; the guide leaves a way to connect another computer
         ro = dev(6, "RO-PC", "tally", tally="closed", opened=()); ro["main_bridge"] = "go-other"
         scene([ro], LINKED)
