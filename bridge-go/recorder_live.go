@@ -17,8 +17,8 @@
 //   - RecorderSource addon | alterid | both (setting, default addon), overridden by the beat's recorderSource.
 //
 // The body fetch: a created, altered or imported entry that is not FinCom's own is asked of Tally by MasterID
-// (FinComVoucherByMaster: exactly one MasterID a request since 2.3.1, the line's own date as the period; the one dated request allowed with
-// ReadDays off, tally.go); a ledger created or altered by the ledger list's request with a one-ID range. A background
+// (2.3.4: FinComVoucherObject, Tally's object export of that one voucher, stripped to the approved fields: fastvch.go;
+// it replaces FinComVoucherByMaster); a ledger created or altered by the ledger list's request with a one-ID range. A background
 // read: it gives way to a posting, 20 s at most; without a body the line still goes (the cloud holds it).
 //
 // The uploader: recorder_lines (server/tally-cloud/index.ts), groups of at most 500 lines or 1 MB of one company; a
@@ -1733,8 +1733,12 @@ func fetchVouchersByMasterIn(tc *TC, company string, port int, date string, mids
 	out := map[string]string{}
 	for _, m := range reVchBlock.FindAllString(raw, -1) {
 		// next-fastfetch (the owner, 08-Oct-2026): Tally sends the whole voucher; only the approved fields are kept, here,
-		// before anything is logged, stored or sent
-		v := fastStripVoucher(cleanXML(m))
+		// before anything is logged, stored or sent. 2.3.4 review L2: one whose lines cannot be kept whole is held
+		c := cleanXML(m)
+		v, why := fastStripWhy(c)
+		if why != "" && tagNum(c, "MASTERID") != "" {
+			return nil, fastShapeError{why}
+		}
 		if id := tagNum(v, "MASTERID"); id != "" && v != "" {
 			out[id] = v
 		}
@@ -1964,12 +1968,29 @@ byDay:
 				liveHeldNow(part, "Tally busy", false, true, false) // asked again once, at the next try
 				continue
 			}
+			if errors.Is(err, errFastShape) {
+				// 2.3.4 (the independent review, L2): Tally keeps the entry in a form the strip cannot keep whole: held for
+				// good with the place named (a cancel / delete: not proven here), never sent short, never asked by number
+				live.mu.Lock()
+				for _, c := range part {
+					if c.guidFetch {
+						liveGuidHold(c, map[bool]string{true: liveCancelHeldWords, false: liveDeleteHeldWords}[c.event == "cancelled"]+" ("+cutRunes(err.Error(), 160)+")")
+					}
+				}
+				live.mu.Unlock()
+				for _, c := range part {
+					if !c.guidHeld {
+						liveHeldAs(c, err.Error(), true)
+					}
+				}
+				continue
+			}
 			if err != nil {
 				failed(part, err.Error())
 				continue
 			}
-			// 2.2.2 (the owner's rule): Tally's voucher is the line's only as liveVoucherWrong says; else it is asked by its
-			// type, number and date (not for a voucher whose GUID Tally did not make: the same voucher would come), or held
+			// 2.2.2 (the owner's rule): Tally's voucher is the line's only as liveVoucherWrong says; else the line is held
+			// (2.3.4: never asked by its type and number, below)
 			type miss struct {
 				c         *change
 				why, kind string
@@ -2000,7 +2021,13 @@ byDay:
 			live.mu.Unlock()
 			for _, m := range missing {
 				c := m.c
-				if c.vchNo == "" || !liveNumberText(c.vchNo) || !liveNumberText(c.vchType) || strings.Contains(m.why, "not a change after the starting point") {
+				// 2.3.4 (the independent review, L5; docs/fast-request-form.md section 5): a line whose MasterID is its entry's
+				// is never asked by its type and number (a scan of the company: 12-17 s at 100,000 vouchers, Tally busy
+				// meanwhile): held, as the answer said (Tally may still give it: asked again by its MasterID; another entry:
+				// held for good). Only a line whose MasterID is proven NOT its entry's (review H2: Tally's voucher with it was
+				// not saved after the line; the line carries the copied source's ids) is asked by its number, as a line
+				// with no MasterID is
+				if m.kind != wrongNoSave || c.vchNo == "" || !liveNumberText(c.vchNo) || !liveNumberText(c.vchType) || strings.Contains(m.why, "not a change after the starting point") {
 					liveHeldAs(c, m.why, m.kind != wrongRetry)
 					continue
 				}

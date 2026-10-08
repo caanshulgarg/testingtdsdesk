@@ -67,10 +67,10 @@ var tallyAllowList = map[string]allowedReq{
 	"FinComSnapshot":     {purpose: "measure: one month's entries as GUID, AlterID, date, type and number", measureOnly: true},
 	// 2.2.3 (the owner's request, 05-Oct-2026): "Test fetching an entry" (fetchtest.go), the forms of
 	// docs/diagnostics/2.2.2-fetch-check.ps1 for one voucher, a person's tray item only
-	// 2.3.4 (the owner, 08-Oct-2026): forms A and C removed; B, D, E and F as before (their purposes name the 2.2.2 forms)
-	fetchTestB: {purpose: "measure (Test fetching an entry): form B, form A with plain quote marks in the filter", measureOnly: true},
-	fetchTestD: {purpose: "measure (Test fetching an entry): form D, form C with no dates", measureOnly: true},
-	fetchTestE: {purpose: "measure (Test fetching an entry): form E, form C with the dates as d-MMM-yyyy TYPE=Date", measureOnly: true},
+	// 2.3.4 (the owner, 08-Oct-2026): forms A and C removed; B, D, E and F as before (their purposes name the 2.2.2 requests they vary)
+	fetchTestB: {purpose: "measure (Test fetching an entry): form B, the 2.2.2 by-number entry request with plain quote marks in the filter", measureOnly: true},
+	fetchTestD: {purpose: "measure (Test fetching an entry): form D, the 2.2.2 by-MasterID entry request with no dates", measureOnly: true},
+	fetchTestE: {purpose: "measure (Test fetching an entry): form E, the 2.2.2 by-MasterID entry request with the dates as d-MMM-yyyy TYPE=Date", measureOnly: true},
 	fetchTestF: {purpose: "measure (Test fetching an entry): form F, form B with no dates", measureOnly: true},
 }
 

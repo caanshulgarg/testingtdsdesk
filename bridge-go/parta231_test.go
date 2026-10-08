@@ -290,9 +290,7 @@ func TestPartAStandBothForms(t *testing.T) {
 				t.Fatalf("%s %s: the body's lines sum to %v", v.file, how, sum)
 			}
 			for _, w := range v.want {
-				if strings.Contains(how, "MasterID") {
-					w = regexp.MustCompile(` TYPE="[^"]*"`).ReplaceAllString(w, "") // next-fastfetch: stripped, no attributes
-				}
+				w = regexp.MustCompile(` TYPE="[^"]*"`).ReplaceAllString(w, "") // 2.3.4: both forms stripped, no attributes (review M2)
 				if !strings.Contains(x, w) {
 					t.Errorf("%s %s: the body lacks %s", v.file, how, w)
 				}
@@ -352,9 +350,7 @@ func TestPartALinesOneRequestEach(t *testing.T) {
 				t.Fatalf("by number %v, %s: went as %v", byNumber, v.file, g)
 			}
 			for _, w := range v.want {
-				if !byNumber {
-					w = regexp.MustCompile(` TYPE="[^"]*"`).ReplaceAllString(w, "") // next-fastfetch: stripped, no attributes
-				}
+				w = regexp.MustCompile(` TYPE="[^"]*"`).ReplaceAllString(w, "") // 2.3.4: both forms stripped, no attributes (review M2)
 				if !strings.Contains(str(g["xml"]), w) {
 					t.Errorf("by number %v, %s: the body sent lacks %s", byNumber, v.file, w)
 				}

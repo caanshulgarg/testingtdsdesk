@@ -28,7 +28,8 @@ type tVch struct {
 	guid, master, date, typ, no, narr, party string
 	alter                                    int64
 	lines                                    [][2]string
-	cancelled                                bool // review H1 (2.3.0): this Tally answers ISCANCELLED Yes for it
+	cancelled                                bool   // review H1 (2.3.0): this Tally answers ISCANCELLED Yes for it
+	extra                                    string // 2.3.4 review: more of the voucher as Tally holds it (fields outside the approved list, other lists)
 }
 
 // review H1 (2.3.0): ISCANCELLED as this stand Tally gives it
@@ -197,7 +198,7 @@ func (v *tVch) xml() string {
 	for _, l := range v.lines {
 		fmt.Fprintf(&b, `<ALLLEDGERENTRIES.LIST><LEDGERNAME>%s</LEDGERNAME><AMOUNT>%s</AMOUNT></ALLLEDGERENTRIES.LIST>`, esc(l[0]), l[1])
 	}
-	b.WriteString("</VOUCHER>")
+	b.WriteString(v.extra + "</VOUCHER>")
 	return b.String()
 }
 
@@ -216,7 +217,7 @@ func (v *tVch) xmlTyped() string {
 		b.WriteString(nl + "<ALLLEDGERENTRIES.LIST>" + nl + " " + standField("LEDGERNAME", "String", esc(l[0])) + nl + " " + standField("ISDEEMEDPOSITIVE", "Logical", "No") +
 			nl + " " + standField("AMOUNT", "Amount", l[1]) + nl + " <BILLALLOCATIONS.LIST>      </BILLALLOCATIONS.LIST>" + nl + "</ALLLEDGERENTRIES.LIST>")
 	}
-	b.WriteString("\r\n    </VOUCHER>\r\n    ")
+	b.WriteString(v.extra + "\r\n    </VOUCHER>\r\n    ")
 	return b.String()
 }
 

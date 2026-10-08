@@ -38,10 +38,11 @@ FIRM, OWNER = "99999999-9999-9999-9999-999999999999", "55555555-5555-5555-5555-5
 DA, KA = "d1000000-0000-0000-0000-000000000001", "fcd_" + "a" * 48
 GA = {"id": "go-aaaaaa234234", "computer": "PC-A", "user": "anshul", "mode": "main", "runMode": "user", "version": "2.3.4"}
 RELS = sorted(d for d in os.listdir(TD) if re.match(r"^\d+\.\d+$", d))
-SIDES = ("today", "fast")
+SIDES = ("today", "fast", "bynumber", "upgrade")  # 2.3.4 review M2: the by-number answer stripped too (<target>-bynumber-stripped.xml);
+# L3: "upgrade", an entry 2.3.3 stored sent again by 2.3.4 (its rows numbered in the object's order)
 def vblock(x):
     return [b for b in re.findall(r"(?s)<VOUCHER[ >].*?</VOUCHER>", x) if "<MASTERID" in b][0]
-def book_of(rel, side): return "%08d-0000-4000-8000-%012d" % (int(rel.replace(".", "")), 1 if side == "today" else 2)
+def book_of(rel, side): return "%08d-0000-4000-8000-%012d" % (int(rel.replace(".", "")), SIDES.index(side) + 1)
 def co_of(rel, side): return "FAST %s %s" % (rel, side.upper())
 LEDGERS = [["Template Party", "Sundry Debtors", "0"], ["Output CGST", "Duties & Taxes", "0"], ["Output SGST", "Duties & Taxes", "0"], ["Sales", "Sales Accounts", "0"],
            ["HDFC Bank", "Bank Accounts", "0"], ["Spike Income", "Indirect Incomes", "0"], ["Capital", "Capital Account", "0"]]
@@ -122,23 +123,57 @@ try:
         for tgt in ("sales", "receipt"):
             today = vblock(open(os.path.join(TD, rel, tgt + "-bymaster.xml"), encoding="utf-8-sig").read())
             fast = open(os.path.join(TD, rel, tgt + "-stripped.xml"), encoding="utf-8").read()
+            bynum = open(os.path.join(TD, rel, tgt + "-bynumber-stripped.xml"), encoding="utf-8").read()
             guid, mid, alt = tag("GUID", today), tag("MASTERID", today), int(tag("ALTERID", today) or 0)
             cg = guid.rsplit("-", 1)[0]
             res = {}
-            for side, xml in (("today", today), ("fast", fast)):
+            for side, xml in (("today", today), ("fast", fast), ("bynumber", bynum)):
                 call({"kind": "start_point", "company": co_of(rel, side), "guid": cg, "altvchid": 1, "altmstid": 1, "at": "2026-10-01T09:00:00+05:30", "bridge": GA})
                 line = {"line_id": "%s-%s-%s" % (rel, tgt, side), "event": "created", "saved_at": "2026-10-07T10:00:00+05:30", "pc": "PC-A", "user": "anshul", "company_guid": cg, "object_guid": guid,
                         "master_id": mid, "alter_id": alt, "vch_type": tag("VOUCHERTYPENAME", today), "vch_no": tag("VOUCHERNUMBER", today), "vch_date": tag("DATE", today), "ledgers": [], "save_ms": 8,
                         "xml": xml, "full": True}
                 c, r = call({"kind": "recorder_lines", "company": co_of(rel, side), "version": "2.3.4", "bridge": GA, "lines": [line]})
                 res[side] = (c, [(x.get("state"), x.get("why")) for x in (r.get("results") or [])])
-            ok(res["today"][0] == 200 and res["fast"][0] == 200 and [s for s, _ in res["today"][1]] == ["applied"] and [s for s, _ in res["fast"][1]] == ["applied"],
-               "%s %s: applied from today's answer and from the stripped one (%s)" % (rel, tgt, res))
+            ok(all(res[s][0] == 200 and [x for x, _ in res[s][1]] == ["applied"] for s in res),
+               "%s %s: applied from today's answer, the stripped object and the stripped by-number answer (%s)" % (rel, tgt, res))
             a, b = stored(book_of(rel, "today"), guid, False), stored(book_of(rel, "fast"), guid, False)
             diff = [t for t in tables if a[t] != b[t]]
             n = sum(len(a[t]) for t in tables)
             detail = "; ".join("%s: today %s / fast %s" % (t, [x for x in a[t] if x not in b[t]][:2], [x for x in b[t] if x not in a[t]][:2]) for t in diff)
             ok(n > 0 and not diff, "%s %s: the %d rows stored for the entry are equal, column by column (%s)" % (rel, tgt, n, ", ".join("%s %d" % (t, len(a[t])) for t in tables if a[t]) + ("; DIFFER " + detail if diff else "")))
+            c3 = stored(book_of(rel, "bynumber"), guid, True)
+            ao2 = stored(book_of(rel, "today"), guid, True)
+            d3 = [t for t in tables if c3[t] != ao2[t]]
+            ok(not d3, "%s %s: by number (stripped): the rows stored equal today's, line_no included%s" % (rel, tgt, ("; DIFFER " + "; ".join("%s: today %s / by number %s" % (t, [x for x in ao2[t] if x not in c3[t]][:2], [x for x in c3[t] if x not in ao2[t]][:2]) for t in d3)) if d3 else ""))
+            # L3 (the independent review: line_no): the entry as 2.3.3 stored it (today's answer), then sent again by 2.3.4
+            # (the stripped object, a later AlterID: altered): the rows now are exactly the 2.3.4 ones (line_no included),
+            # equal to today's but for line_no, the earlier rows kept as history (gone_at), none left live twice
+            up = book_of(rel, "upgrade")
+            r1 = call({"kind": "start_point", "company": co_of(rel, "upgrade"), "guid": cg, "altvchid": 1, "altmstid": 1, "at": "2026-10-01T09:00:00+05:30", "bridge": GA})
+            ups = []
+            for k, (ev, xml, a2) in enumerate((("created", today, alt), ("altered", re.sub(r"(<ALTERID[^>]*>)\s*\d+", lambda m: m.group(1) + str(alt + 1), fast, 1), alt + 1))):
+                line = {"line_id": "%s-%s-upgrade-%d" % (rel, tgt, k), "event": ev, "saved_at": "2026-10-07T10:0%d:00+05:30" % k, "pc": "PC-A", "user": "anshul", "company_guid": cg, "object_guid": guid,
+                        "master_id": mid, "alter_id": a2, "vch_type": tag("VOUCHERTYPENAME", today), "vch_no": tag("VOUCHERNUMBER", today), "vch_date": tag("DATE", today), "ledgers": [], "save_ms": 8,
+                        "xml": xml, "full": True}
+                c, r = call({"kind": "recorder_lines", "company": co_of(rel, "upgrade"), "version": "2.3.4", "bridge": GA, "lines": [line]})
+                ups.append((c, [x.get("state") for x in (r.get("results") or [])]))
+            def live(book, with_order):
+                out = {}
+                for t in tables:
+                    allc = [r["column_name"] for r in db.rows("select column_name from information_schema.columns where table_schema = 'public' and table_name = %s order by ordinal_position" % q(t))]
+                    cols = [c for c in allc if c not in SKIP and not c.endswith("_at") and c not in ("alter_id", "alterid") and (with_order or c != "line_no")]
+                    wh = (" and gone_at is null" if "gone_at" in allc else "") + (" and deleted_at is null" if "deleted_at" in allc else "")
+                    rows = db.rows("select %s from %s where book_id = %s and guid = %s%s" % (", ".join('"%s"::text as "%s"' % (c, c) for c in cols), t, q(book), q(guid), wh))
+                    out[t] = sorted(json.dumps(r, sort_keys=True) for r in rows)
+                return out
+            lu, lt, lf = live(up, True), live(book_of(rel, "today"), False), live(book_of(rel, "fast"), True)
+            lu0 = live(up, False)
+            gone = sum(int(db.one("select count(*)::text from %s where book_id = %s and guid = %s and gone_at is not null" % (t, q(up), q(guid))) or 0)
+                       for t in tables if "gone_at" in [r["column_name"] for r in db.rows("select column_name from information_schema.columns where table_schema = 'public' and table_name = %s" % q(t))])
+            du = [t for t in tables if lu[t] != lf[t]] + [t + " (but for line_no)" for t in tables if lu0[t] != lt[t]]
+            ok([u[1] for u in ups] == [["applied"], ["applied"]] and not du,
+               "%s %s: stored by 2.3.3, sent again by 2.3.4: the live rows are the 2.3.4 ones (line_no included) and today's but for line_no; %d earlier rows kept as history (gone_at)%s"
+               % (rel, tgt, gone, ("; DIFFER " + ", ".join(du) + " " + str(ups)) if du else ""))
             ao, bo = stored(book_of(rel, "today"), guid, True), stored(book_of(rel, "fast"), guid, True)
             od = [t for t in tables if ao[t] != bo[t]]
             print("  info %s %s: the ledger lines' order (line_no): %s" % (rel, tgt, "the same" if not od else "differs in " + ", ".join(od) + " (the object gives the party and tax lines first, as Tally's Day Book)"))

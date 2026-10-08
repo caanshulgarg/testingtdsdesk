@@ -9,3 +9,6 @@ bill-wise) and a receipt (MasterID 4003: bank details, a cost centre, bill-wise)
                          TestFast234StripCaptures (FAST234_GOLDEN=1 rewrites them); tests/run_parse_fast234.mjs compares
                          parse.js on it with parse.js on the bymaster answer, field by field
 Every file is Tally's answer as the harness's PowerShell kept it (Set-Content: UTF-8, CRLF line ends).
+
+  <target>-bynumber.xml          Tally's answer to FinComVoucherByNumber for the same voucher (2.3.4 review M2)
+  <target>-bynumber-stripped.xml its strip (fastStripCollection), compared by run_parse_fast234.mjs and run_fast234_store.py

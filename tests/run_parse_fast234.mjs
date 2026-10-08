@@ -48,8 +48,15 @@ for (const rel of fs.readdirSync(TD).filter((d) => /^\d+\.\d+$/.test(d)).sort())
     n++;
     ok(today.n === 1 && diff.length === 0, rel + " " + tgt + ": " + keys.length + " fields of parse.js's output, all the same" + moved +
       (diff.length ? "; differ: " + diff.slice(0, 12).map((k) => k + " today " + a[k] + " fast " + b[k]).join(" | ") : ""));
+    // 2.3.4 (the independent review, M2): the by-number answer stripped (fastStripCollection) reads exactly as today's,
+    // the lines in the same order
+    const bn = parseDay(fs.readFileSync(f("bynumber-stripped"), "utf8"));
+    const c = flat(bn, "", {}), t0 = flat(today, "", {});
+    const k2 = [...new Set([...Object.keys(t0), ...Object.keys(c)])].sort(), d2 = k2.filter((k) => t0[k] !== c[k]);
+    ok(bn.n === 1 && d2.length === 0, rel + " " + tgt + " by number (stripped): " + k2.length + " fields, all the same, in the same order" +
+      (d2.length ? "; differ: " + d2.slice(0, 12).map((k) => k + " today " + t0[k] + " by number " + c[k]).join(" | ") : ""));
   }
 }
-ok(n === 10, "10 vouchers compared (5 releases x 2): " + n);
+ok(n === 10, "10 vouchers compared (5 releases x 2), each from the object and by number: " + n);
 console.log(fails ? fails + " FAILED" : "all ok");
 process.exit(fails ? 1 : 0);

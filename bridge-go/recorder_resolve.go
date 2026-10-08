@@ -127,7 +127,11 @@ func fetchVoucherByNumber(tc *TC, company string, port int, date, typ, no string
 	var out []string
 	for _, m := range reVchBlock.FindAllString(raw, -1) {
 		if tagValue(m, "VOUCHERTYPENAME") == typ && tagValue(m, "VOUCHERNUMBER") == no && normDate(tagValue(m, "DATE")) == normDate(date) {
-			out = append(out, cleanXML(m))
+			// 2.3.4 (the independent review, M2): the same approved fields as the entry request, nothing more (Tally's
+			// collection answer adds fields of its own)
+			if v := fastStripCollection(cleanXML(m)); v != "" {
+				out = append(out, v)
+			}
 		}
 	}
 	return out, nil
@@ -1253,6 +1257,9 @@ func liveResolveOne(h heldLine, sent *bool) (x, why string, answered, final bool
 	}
 	if h.MID != "" {
 		m, err := fetchVouchersByMasterIn(tc, h.Company, port, h.Date, []string{h.MID}, liveBodySec())
+		if errors.Is(err, errFastShape) {
+			return "", err.Error(), true, true, nil // 2.3.4: held for good (the same answer would come again)
+		}
 		if err != nil {
 			return "", "", false, false, err
 		}

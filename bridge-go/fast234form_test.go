@@ -177,6 +177,32 @@ func TestFast234StripCaptures(t *testing.T) {
 			if readText(out) != s {
 				t.Errorf("%s: not what the strip makes now (FAST234_GOLDEN=1 rewrites it)", out)
 			}
+			if fastStripVoucher(s) != s {
+				t.Errorf("%s %s: the strip of the strip is not the same", d, tgt)
+			}
+			// 2.3.4 (the independent review, M2): the by-number answer (a collection, the same FETCH) to the same fields
+			bn := reVchBlock.FindAllString(readText(filepath.Join(d, tgt+"-bynumber.xml")), -1)
+			if len(bn) != 1 {
+				t.Fatalf("%s %s: %d vouchers in the by-number answer", d, tgt, len(bn))
+			}
+			sb := fastStripCollection(cleanXML(bn[0]))
+			for _, p := range fastLeafPaths(sb) {
+				if !ok[p] {
+					t.Errorf("%s %s by number: %s kept (not an approved field)", d, tgt, p)
+				}
+			}
+			if sb == "" || fastStripCollection(sb) != sb || strings.Contains(sb, "<LEDGERENTRIES.LIST") || strings.Contains(sb, "INVENTORYALLOCATIONS") {
+				t.Errorf("%s %s by number: %.300s", d, tgt, sb)
+			}
+			outN := filepath.Join(d, tgt+"-bynumber-stripped.xml")
+			if os.Getenv("FAST234_GOLDEN") != "" {
+				if err := os.WriteFile(outN, []byte(sb), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if readText(outN) != sb {
+				t.Errorf("%s: not what the strip makes now (FAST234_GOLDEN=1 rewrites it)", outN)
+			}
 			n++
 		}
 	}
@@ -213,9 +239,10 @@ func TestFast234StripDropsEverythingElse(t *testing.T) {
 	if got := fastStripVoucher(in); got != want {
 		t.Fatalf("the strip:\n got %s\nwant %s", got, want)
 	}
-	// both lists in Tally's answer: ALLLEDGERENTRIES is the entry's list; LEDGERENTRIES dropped
+	// both lists in Tally's answer with ledger lines: held, nothing dropped (the independent review, L1;
+	// TestFast234StripHoldsBothLists)
 	both := `<VOUCHER REMOTEID="g"><ALLLEDGERENTRIES.LIST><LEDGERNAME>A</LEDGERNAME></ALLLEDGERENTRIES.LIST><LEDGERENTRIES.LIST><LEDGERNAME>B</LEDGERNAME></LEDGERENTRIES.LIST></VOUCHER>`
-	if got := fastStripVoucher(both); got != `<VOUCHER REMOTEID="g"><ALLLEDGERENTRIES.LIST><LEDGERNAME>A</LEDGERNAME></ALLLEDGERENTRIES.LIST></VOUCHER>` {
+	if got := fastStripVoucher(both); got != "" {
 		t.Fatalf("both lists: %s", got)
 	}
 	// the approved paths are exactly today's fetch

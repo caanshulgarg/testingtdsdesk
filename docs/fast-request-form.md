@@ -90,12 +90,14 @@ One voucher, by its MasterID. The company and MasterID below are examples. This 
 
 **Tally ignores the FETCHLIST and sends the whole stored voucher.** On every release the answer was the same, byte for byte, whether the FETCHLIST named 61 fields, 6, or only MASTERID. The bridge therefore strips the answer itself (`fastStripVoucher`, `bridge-go/fastvch.go`). This happens inside the fetch, **before the answer is logged, stored or sent**:
 
-- **Kept:** exactly the 61 fields below, as their fetch paths, and only those that have a value.
+- **Kept:** exactly the 61 fields below, as their fetch paths, as Tally wrote them (an approved field Tally gives empty is kept empty, as today's answer gave it).
 - **Kept on the VOUCHER element:** its `REMOTEID` and `VCHTYPE` attributes only. These are the entry's GUID and voucher type, both approved fields.
 - **Ledger lines:**
   - When the voucher has no `ALLLEDGERENTRIES.LIST` (an item invoice keeps its party and tax lines in `LEDGERENTRIES.LIST`), those lines are kept as `ALLLEDGERENTRIES.LIST`.
-  - When it has both, `LEDGERENTRIES.LIST` is dropped.
+  - When it has both, each with ledger lines, the entry is **held** (below), never sent with one list dropped.
 - **Dropped:** everything else. That means every other field, list and attribute, and user-defined (`UDF:`) fields.
+- **Held, never sent short** (2.3.4 review, L1 and L2; `fastStripWhy`): when a ledger, stock item or pay head name sits at a place the strip does not keep, the entry is not sent with those lines missing (migration 57 would mark its stored rows gone). The line goes held with the place named and the Day Book words ("Tally keeps this entry with its lines in ALLLEDGERENTRIES.INVENTORYALLOCATIONS, which FinCom's entry request does not read; upload that day's Day Book to settle it"), and is not asked again (the same answer would come). The shapes: a stock item under a ledger line (an invoice made in voucher mode), a stock journal's lines in and out (`INVENTORYENTRIESIN` / `OUT`), items in `INVENTORYENTRIES`, pay heads by employee (payroll), ledger lines in both lists. It is never taken as "not found" or "deleted". `TestFast234StripHoldsUnreadShapes`, `TestFast234UnreadShapeHeld`. Real answers of each kind on 3.0-7.1: section 9.
+- **The by-number answer too** (2.3.4 review, M2): FinComVoucherByNumber's answer (a Voucher collection, the same 61 fields) is stripped to the same fields (`fastStripCollection`): Tally's collection adds fields of its own (`PERSISTEDVIEW`, `VOUCHERKEY`, `ISDELETED`, `BANKALLOCATIONS.PAYMENTFAVOURING`, `BATCHALLOCATIONS.GODOWNNAME`, `BILLALLOCATIONS.BILLID` among them). Not held there: the collection's `ALLLEDGERENTRIES` is the entry's whole ledger list. No body leaves the bridge with a field outside the list, whatever brought it (`TestFast234NoBodyLeavesUnapproved`, Tally answering plain and typed). On the five releases' captures parse.js reads the stripped by-number answer exactly as today's (every field, the lines in the same order: `tests/run_parse_fast234.mjs`) and FinCom stores the same rows, `line_no` included (`tests/run_fast234_store.py`).
 
 All 61 fields are approved by the owner. The last 13 were approved on 08-Oct-2026: "13 fields: all approved. They are read only, inside requests already made, and needed for GST, TDS and bank accuracy." (`liveFetchApproved0810` in `bridge-go/fastvch.go` records them; `TestFast234ApprovedFields0810`.) `ALLLEDGERENTRIES.BANKALLOCATIONS.NAME` was approved on 07-Oct-2026. The one place the fields change is `liveFetchField` (`bridge-go/recorder_live.go`): the request's FETCHLIST and the strip both follow it. The request's bytes did not change with these approvals.
 
@@ -196,7 +198,7 @@ The captures are in `bridge-go/testdata/fast234/<release>/`.
 **FinCom's reader (parse.js) reads the stripped voucher exactly as it reads today's answer for the same voucher**, on all five releases and both entries (`tests/run_parse_fast234.mjs`, also run by `TestFast234StripCaptures`).
 - **Compared:** every field of its output — the entry, its ledger lines and amounts, the items (quantity, rate, taxable value, HSN, GST and tax per line), bill-wise details, cost centres, bank details and the accuracy notes.
 - **Result:** 134 fields for the invoice, 69 for the receipt, all the same.
-- **One difference, line order.** On the item invoice the ledger lines come in another order: the party and tax lines first, then the lines under the items. This is the order Tally's own Day Book export gives. The comparison sorts the lines (and renumbers the cost-centre, bank, TDS and due-date references with them), and states when it did so.
+- **One difference, line order.** On the item invoice the ledger lines come in another order: the party and tax lines first, then the lines under the items. This is the order Tally's own Day Book export gives. The comparison sorts the lines (and renumbers the cost-centre, bank, TDS and due-date references with them), and states when it did so. In the stored rows only `tally_cost_allocs.line_no` differs (the line a cost centre belongs to, numbered in that order). It does no harm (2.3.4 review, L3; `tests/run_fast234_store.py`, "stored by 2.3.3, sent again by 2.3.4"): an entry 2.3.3 stored and 2.3.4 sends again (a later AlterID) ends with exactly the 2.3.4 rows live, equal to 2.3.3's but for `line_no`, the earlier rows kept as history (`gone_at`), none live twice. Each cost-centre row carries its ledger's name; nothing in FinCom reads `tally_cost_allocs` by `line_no` (no reader of the table outside migration 57 today).
 
 **Where the raw fields differ before parse.js** (sales invoice, every release; the receipt does not differ at all):
 1. **The aggregated sales line is not in the object.** Today's answer carries Tally's aggregated sales line (`ALLLEDGERENTRIES`: Sales 600.00); the object does not. The same amounts come from the items' `ACCOUNTINGALLOCATIONS` (3 × 200.00), which are approved fields. parse.js reads them either way and gives the same lines.
@@ -222,35 +224,29 @@ At 4,000, 25,000, 40,000 and 100,000 vouchers: see section 7 (push-design run 37
 
 ## 5. Lines with no MasterID
 
-A new entry's line written at Form Accept, before the save, has MasterID 0. It is the only line still asked by type and number, with **FinComVoucherByNumber**: unchanged, one day, the same 61 fields, and a full scan as before.
+A new entry's line written at Form Accept, before the save, has MasterID 0. It is the only line still asked by type and number, with **FinComVoucherByNumber**: unchanged, one day, the same 61 fields (its answer stripped to them, section 2), and a full scan as before.
+
+A line **with** a MasterID is never asked by its number (2.3.4 review, L5): when Tally's voucher with it is another entry, or not given yet, the line is held as the answer said (not given yet: asked again by its MasterID, once; another entry: held for good with the Day Book words). The one exception is a line whose MasterID is proven **not** its entry's (review H2 of 2.2.2: Tally's voucher with that MasterID was not saved after the line; the add-on wrote the copied source's ids): it is asked by its number as a line with no MasterID is. `TestFast234MasterIDLineNeverByNumber`, `TestR222FallbackByNumber`, `TestR222bH2LonePreSourceIds`.
 
 - Such a line is rare. A save writes the post line with the MasterID, and the post line is asked by the new request.
 - No fast by-number form exists. The by-number form tried (the voucher type's own list, `Vouchers : VoucherType`) took 224–360 ms at 4,000 vouchers and grows with the type's size.
 - "Do not keep both" applies to the MasterID path. There, FinComVoucherByMaster is gone.
 
-## 6. Held lines after the upgrade, and the cloud's 7-day window
+## 6. Held lines after the upgrade, and the 30-day window
 
 **The one fresh ask** (built; `bridge-go/fast234reask_test.go`):
-- **Which lines.** A held line that 2.3.3 ended with the Day Book words, or sent at once with the "marked slow" words. Its id is kept 7 days in `sync\recorder-sent\*.ended.txt`.
+- **Which lines.** A held line that 2.3.3 ended with the Day Book words, or sent at once with the "marked slow" words. Its id is kept **31 days** in `sync\recorder-sent\*.ended.txt`.
 - **When.** When FinCom lists it again (the beat's `heldLines` or `refetch`), it is asked **once more** with the new request.
 - **If Tally gives the entry,** `<line id>:resolved` goes again with Tally's GUID and the stripped body. This is the cloud's second `:resolved` row, which replaces the held line and the held `:resolved` row.
-- **If not,** nothing more goes to FinCom.
-- **Never a third ask.** The lines given that ask, and the lines this version ends, are kept 7 days in `*.fast.txt`.
+- **If not** (2.3.4 review, L4), its `:resolved` goes again held with the Day Book words and no body: FinCom then holds two `:resolved` rows and stops listing the line.
+- **Never a third ask.** The lines given that ask, and the lines this version ends, are kept 31 days in `*.fast.txt`.
 - **The slow mark lifts** when the bridge's version changes (2.3.3's rule), so companies marked by 2.3.3 are asked again by the released build.
 
-**Does the cloud still offer them?** Yes. `heldOwnLines` (`server/tally-cloud/index.ts`) lists a held line whose only `:resolved` row is itself held without a body, and stops listing it once a second `:resolved` arrives.
+**Lines an older bridge kept in its held list** (a live finding on NWS144, 08-Oct-2026: lines at 20 tries or marked final were never asked and never ended). On the upgrade every such line gets exactly one ask with the new request, whatever its old tries, final mark or refetch flag: answered, it goes with Tally's body; not, it ends with the Day Book words. A line of this version at 20 tries ends with the Day Book words; none is left unasked. `TestFast234OlderHeldLinesAskedOnce` (a 2.3.2-format held file).
 
-**The 7-day window.** The cloud lists only held lines received in the last 7 days. The bridge's own `.ended.txt` / `.sent` ids also last 7 days.
-- GARG SHEKHAR's 29 Journal lines of 06-Oct drop out of the listing on **13-Oct**.
-- After that, a Day Book upload is the only way they settle.
-
-**Proposal (not applied; for the owner to decide):** the smallest add-only cloud change that widens the window for lines ended by the slow rule. It is one extra query in `heldOwnLines`; nothing is removed, no migration, no column.
-- **What it adds:** rows that are both:
-  - received in the last **30 days** and older than 7;
-  - such that their only `:resolved` row is held with one of the bridge's Day Book end words: "FinCom does not ask Tally for this company's entries", "Tally did not answer in time for this entry when asked again", or "Tally did not give this entry when asked again". Or the line itself is held with the "does not ask Tally" words.
-- **The same rules otherwise:** the same computer key and bridge, the company still linked to the same book, the month not locked, and at most 200 lines.
-- **Bridge side:** for such a line, the bridge needs the ended id it no longer keeps after 7 days. It would treat a `heldLines` row carrying a new flag (`endedSlow: true`) the same as an ended id: asked once more, then noted in `*.fast.txt`.
-- **Size:** about 25 lines in `index.ts` and 5 in the bridge.
+**The 30-day window** (the owner, 08-Oct-2026: "30-day window for lines ended by the slow-company rule: YES"; `server/tally-cloud/index.ts` `heldOwnLines`, no migration). The cloud lists, after the last 7 days' held lines, a held line received 7 to 30 days ago when the slow-company rule ended it: its own held words, or those of its only `:resolved` row (held, no body), are "FinCom does not ask Tally for this company's entries" or "Tally did not answer in time for this entry when asked again". Any other held line keeps the 7 days. The same rules otherwise: the same computer key and bridge, the company still linked to the same book, the month not locked.
+- **Only to a bridge of 2.3.4 or later** (2.3.4 review, M1): the beat's version decides. A 2.3.3 bridge (rolled back) gets its last 7 days' lines only: it would end such a line again at once, or ask it the slow way. `tests/run_recorder_held30.py` (2.3.3, 2.2.2 and no version against 2.3.4, 2.3.10, 2.4.0 and 3.0.0).
+- **Every listed line's `:resolved` rows are read** (2.3.4 review, L4: the 400-id cap removed), 60 ids a call.
 
 ## 7. Measurements at size
 

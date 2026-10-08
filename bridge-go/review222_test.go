@@ -143,22 +143,22 @@ func TestR222UnnumberedJournalByMaster(t *testing.T) {
 	}
 }
 
-// --- 5. the MasterID gives another voucher: the fallback by type, number and date finds the line's own
+// --- 5. the MasterID gives another voucher (a Payment, not this Journal): 2.3.4 (the independent review, L5) held for
+// good, never asked by its type, number and date (a scan of the company); Tally's own voucher J-77 is not taken
 func TestR222FallbackByNumber(t *testing.T) {
 	p, f, c := nwsBridge(t, "")
 	setCfg("RecorderBodySec", float64(20)) // the background read waits its turn behind the company lookup (about 4 s here)
 	r222Vch(f, 25683, "Payment", "P-4", "20261005", 54502)
-	nv := r222Vch(f, 25800, "Journal", "J-77", "20261005", 54520)
+	r222Vch(f, 25800, "Journal", "J-77", "20261005", 54520)
 	liveAppend(t, p,
 		r222Line("voucher_accept_pre", "08:40", nwsGUID+"-00000000", "0", "0", "Journal", "J-77", "5-Oct-2026", "j77"),
 		r222Line("voucher_accept_post", "08:40", nwsGUID+"-00000000", "25683", "0", "Journal", "J-77", "5-Oct-2026", "j77"))
 	readAndUploadAll(t)
 	sent := c.recSent()
-	if len(sent) != 1 || str(sent[0]["object_guid"]) != nv.guid || str(sent[0]["master_id"]) != "25800" || toI64(sent[0]["alter_id"]) != 54520 ||
-		!strings.Contains(str(sent[0]["xml"]), "<VOUCHERNUMBER>J-77</VOUCHERNUMBER>") {
-		t.Fatalf("by number: %v", sent)
+	if len(sent) != 1 || str(sent[0]["xml"]) != "" || !strings.Contains(str(sent[0]["heldWhy"]), "is a Payment of 05-Oct-2026, not this Journal") {
+		t.Fatalf("held: %v", sent)
 	}
-	if f.n(vchObjectID) != 1 || f.n(vchByNumberID) != 1 {
+	if f.n(vchObjectID) != 1 || f.n(vchByNumberID) != 0 {
 		t.Fatalf("requests: %v", f.ids())
 	}
 }

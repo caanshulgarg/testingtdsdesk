@@ -15,6 +15,7 @@
 package main
 
 import (
+	"errors"
 	"html"
 	"regexp"
 	"strings"
@@ -104,16 +105,79 @@ type fastEl struct {
 
 var reFastTag = regexp.MustCompile(`<(/?)([A-Za-z_][\w.:\-]*)((?:\s(?:[^>"']|"[^"]*"|'[^']*')*?)?)(/?)>`)
 
+// 2.3.4 (the independent review, M3: a 500-item invoice's object is about 13 MB; the regular expression above took 2 s
+// on it): the same tags as reFastTag finds, by a plain scan (TestFast234TagScanMatchesRegexp): at each "<", an optional
+// "/", a name, then either nothing or white space and attributes (quoted values may hold ">") up to ">" or "/>"
+func fastScan(v string, each func(start, end int, closing bool, name, attrs string, self bool) bool) {
+	word := func(c byte) bool {
+		return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_'
+	}
+	space := func(c byte) bool { return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' }
+	for i := 0; i < len(v); {
+		j := strings.IndexByte(v[i:], '<')
+		if j < 0 {
+			return
+		}
+		p := i + j
+		k := p + 1
+		closing := k < len(v) && v[k] == '/'
+		if closing {
+			k++
+		}
+		if k >= len(v) || !(word(v[k]) && (v[k] < '0' || v[k] > '9')) {
+			i = p + 1
+			continue
+		}
+		ns := k
+		for k++; k < len(v) && (word(v[k]) || v[k] == '.' || v[k] == ':' || v[k] == '-'); k++ {
+		}
+		name, attrs, self, end := v[ns:k], "", false, -1
+		switch {
+		case k < len(v) && space(v[k]):
+			q := k + 1
+			for q < len(v) && v[q] != '>' {
+				if c := v[q]; c == '"' || c == '\'' {
+					e := strings.IndexByte(v[q+1:], c)
+					if e < 0 {
+						q = len(v)
+						break
+					}
+					q += e + 2
+					continue
+				}
+				q++
+			}
+			if q < len(v) {
+				ae := q
+				if v[q-1] == '/' && q-1 > k {
+					ae, self = q-1, true
+				}
+				attrs, end = v[k:ae], q+1
+			}
+		case k+1 < len(v) && v[k] == '/' && v[k+1] == '>':
+			self, end = true, k+2
+		case k < len(v) && v[k] == '>':
+			end = k + 1
+		}
+		if end < 0 {
+			i = p + 1
+			continue
+		}
+		if !each(p, end, closing, name, attrs, self) {
+			return
+		}
+		i = end
+	}
+}
+
 // one <VOUCHER ...>...</VOUCHER> as a tree (its text kept as Tally wrote it); nil when it is not one
 func fastTree(v string) *fastEl {
 	var root *fastEl
 	var st []*fastEl
 	last := 0
-	for _, m := range reFastTag.FindAllStringSubmatchIndex(v, -1) {
-		text := v[last:m[0]]
-		last = m[1]
-		closing, name := v[m[2]:m[3]] == "/", v[m[4]:m[5]]
-		attrs, self := v[m[6]:m[7]], v[m[8]:m[9]] == "/"
+	fastScan(v, func(start, end int, closing bool, name, attrs string, self bool) bool {
+		text := v[last:start]
+		last = end
 		if len(st) > 0 && !st[len(st)-1].hasKids {
 			st[len(st)-1].text += text
 		}
@@ -121,12 +185,12 @@ func fastTree(v string) *fastEl {
 			if len(st) > 0 && st[len(st)-1].name == name {
 				st = st[:len(st)-1]
 			}
-			continue
+			return true
 		}
 		e := &fastEl{name: name, attrs: attrs}
 		if len(st) == 0 {
 			if root != nil {
-				break
+				return false
 			}
 			root = e
 		} else {
@@ -137,7 +201,8 @@ func fastTree(v string) *fastEl {
 		if !self {
 			st = append(st, e)
 		}
-	}
+		return true
+	})
 	if root == nil || root.name != "VOUCHER" {
 		return nil
 	}
@@ -147,11 +212,35 @@ func fastTree(v string) *fastEl {
 var reFastAttr = regexp.MustCompile(`\s(REMOTEID|VCHTYPE)="([^"]*)"`)
 
 // Tally's whole voucher -> only the approved fields, LEDGERENTRIES.LIST as ALLLEDGERENTRIES.LIST, the VOUCHER element's
-// REMOTEID and VCHTYPE (its GUID and type, both approved fields) and nothing else; "" when it is not a voucher
+// REMOTEID and VCHTYPE (its GUID and type, both approved fields) and nothing else; "" when it is not a voucher, or when
+// its lines cannot be kept whole (fastStripWhy)
 func fastStripVoucher(v string) string {
+	x, _ := fastStripWhy(v)
+	return x
+}
+
+// 2.3.4 (the independent review, L1 and L2): the names of a voucher's lines FinCom stores (a ledger line, an item, a pay
+// head). One of them, filled, at a place the strip does not keep (a stock item under a ledger line: voucher mode; a stock
+// journal's lines in and out; items in INVENTORYENTRIES; pay heads by employee; ledger lines in both LEDGERENTRIES and
+// ALLLEDGERENTRIES) would be dropped, the body sent short and its stored rows marked gone (migration 57): such a voucher
+// is held instead ("" and the place, in plain words)
+var fastLineNames = map[string]bool{"LEDGERNAME": true, "STOCKITEMNAME": true, "PAYHEADNAME": true}
+
+func fastStripWhy(v string) (string, string) { return fastStrip(v, true) }
+
+// 2.3.4 (the independent review, M2): a Voucher collection's answer (FinComVoucherByNumber) to the same approved fields.
+// Not held: the collection gives what its FETCH names (its ALLLEDGERENTRIES the entry's every ledger line, the items'
+// sales lines with their INVENTORYALLOCATIONS among them, and LEDGERENTRIES beside: parse.js reads ALLLEDGERENTRIES), so
+// only the extra fields Tally adds go
+func fastStripCollection(v string) string {
+	x, _ := fastStrip(v, false)
+	return x
+}
+
+func fastStrip(v string, hold bool) (string, string) {
 	root := fastTree(v)
 	if root == nil {
-		return ""
+		return "", ""
 	}
 	ok := fastApprovedPaths()
 	hasAll := false
@@ -163,6 +252,34 @@ func fastStripVoucher(v string) string {
 				}
 			}
 		}
+	}
+	ok0 := fastApprovedPaths()
+	var lost string
+	var walk func(e *fastEl, prefix string)
+	walk = func(e *fastEl, prefix string) {
+		seg := strings.TrimSuffix(e.name, ".LIST")
+		if prefix == "" && seg == "LEDGERENTRIES" && !hasAll {
+			seg = "ALLLEDGERENTRIES"
+		}
+		p := seg
+		if prefix != "" {
+			p = prefix + "." + seg
+		}
+		if !e.hasKids {
+			if lost == "" && fastLineNames[seg] && strings.TrimSpace(e.text) != "" && !ok0[p] {
+				lost = strings.TrimSuffix(p, "."+seg)
+			}
+			return
+		}
+		for _, k := range e.kids {
+			walk(k, p)
+		}
+	}
+	for _, k := range root.kids {
+		walk(k, "")
+	}
+	if lost != "" && hold {
+		return "", "its lines in " + lost + ", which FinCom's entry request does not read"
 	}
 	var b strings.Builder
 	b.WriteString("<VOUCHER")
@@ -178,8 +295,19 @@ func fastStripVoucher(v string) string {
 		fastEmit(&b, k, name, "", ok)
 	}
 	b.WriteString("</VOUCHER>")
-	return b.String()
+	return b.String(), ""
 }
+
+// 2.3.4: an entry Tally keeps in a form the strip cannot keep whole (fastStripWhy): held, never sent short, never taken
+// as not found or deleted; the same answer would come again, so it is not asked again
+var errFastShape = errors.New("Tally keeps this entry in a form FinCom does not read")
+
+type fastShapeError struct{ why string }
+
+func (e fastShapeError) Error() string {
+	return "Tally keeps this entry with " + e.why + "; upload that day's Day Book to settle it"
+}
+func (e fastShapeError) Is(t error) bool { return t == errFastShape }
 
 func fastEmit(b *strings.Builder, e *fastEl, name, prefix string, ok map[string]bool) bool {
 	seg := strings.TrimSuffix(name, ".LIST")

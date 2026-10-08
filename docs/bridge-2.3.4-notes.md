@@ -24,15 +24,25 @@ exact request and the field comparison are in `docs/fast-request-form.md`.
    field list). The bridge keeps exactly the 61 approved fields of the entry request (the 13 approved on 08-Oct-2026
    among them) and drops everything else before anything is logged, stored or sent. FinCom stores the same rows from it
    as from the old request (tested on real answers of all five releases, `tests/run_fast234_store.py`); the one
-   difference: an item invoice's ledger lines are numbered in the order Tally's Day Book gives them.
+   difference: an item invoice's ledger lines are numbered in the order Tally's Day Book gives them (harmless: an entry
+   2.3.3 stored and 2.3.4 sends again ends with exactly the new rows live). The by-number request's answers are stripped
+   to the same fields too: no entry's body leaves the bridge with a field outside the approved list.
+   An entry Tally keeps in a form whose lines the strip cannot keep whole (stock under a ledger line, a stock journal's
+   lines in and out, pay heads by employee) is held with the Day Book words, never sent with lines missing.
 3. **No company should need marking slow.** Only the new request's stops count toward the mark. A company 2.3.3 marked is
    asked again (the mark lifts with the new version).
 4. **Lines 2.3.3 ended get one more ask.** A held line 2.3.3 ended with the Day Book words (a slow company's) is asked
    once more with the new request when FinCom lists it; if Tally gives the entry it enters the books, replacing the held
-   line; it is never asked a third time. FinCom lists such lines for 30 days (other held lines: 7 days, as before).
+   line; if not, it ends again with the Day Book words and FinCom stops listing it; it is never asked a third time.
+   FinCom lists such lines for 30 days (other held lines: 7 days, as before), to a 2.3.4 bridge only (a bridge rolled
+   back to 2.3.3 gets its last 7 days' lines as before).
+   Every line an older bridge kept in its held list (at 20 tries, or marked "not asked again") is asked once with the
+   new request on the upgrade: answered, it enters the books; not, it ends with the Day Book words. None is left unasked.
 5. **Lines with no MasterID** (a new entry whose line carries MasterID 0; 2 of 82 on staging in 30 days) are still asked
    by type and number (FinComVoucherByNumber, unchanged): one try and one ask again, then the Day Book words. Their stops
-   no longer mark a company.
+   no longer mark a company. A line WITH a MasterID is never asked by its number (a scan of the whole company): when
+   Tally's voucher with it is another entry the line is held with the Day Book words (only a line whose MasterID is
+   proven not its entry's, the copied source's, is asked by number).
 6. **The trial forms A and C** of "Test fetching an entry" are removed (the owner's decision; nothing in normal working
    used them). The tray item keeps forms B, D, E and F.
 
