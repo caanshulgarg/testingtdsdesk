@@ -58,8 +58,8 @@ const LedCheck = {
       const party = String(v.gstin || gst[v.party] || "").slice(0, 2);
       const taxLines = v.ent.filter(e => want.has(e.l)), setoff = !inc && !exp && v.ent.every(e => want.has(e.l) || LedMaster.bankByGroup(e.l, (b.ledInfo || {})[e.l]));
       taxLines.forEach(e => {
-        const x = u[e.l] = u[e.l] || {n: 0, dr: 0, cr: 0, sale: 0, purch: 0, cn: 0, dn: 0, pay: 0, setoff: 0, other: 0, inter: 0, intra: 0, ratios: [], with: {}, samples: [], months: new Set()};
-        x.n++; if (e.a < 0) x.dr++; else x.cr++;
+        const x = u[e.l] = u[e.l] || {n: 0, dr: 0, cr: 0, sale: 0, purch: 0, cn: 0, dn: 0, pay: 0, setoff: 0, other: 0, inter: 0, intra: 0, rcmN: 0, ratios: [], with: {}, samples: [], months: new Set()};
+        x.n++; if (v.ent.some(z => z !== e && /\bRCM\b|REVERSE/i.test(z.l))) x.rcmN++; if (e.a < 0) x.dr++; else x.cr++;
         if (cn) x.cn++; else if (dn) x.dn++; else if (setoff) x.setoff++; else if (sale) x.sale++; else if (purch) x.purch++; else if (pay) x.pay++; else x.other++;
         if (party && reg) { if (party === reg) x.intra++; else x.inter++; }
         if (base) x.ratios.push(Math.round(Math.abs(e.a) / base * 10000) / 100);
@@ -90,7 +90,12 @@ const LedCheck = {
     ms.ev.forEach(s => add("master", s));
     if (x && x.n) add("usage", this.sayUse(x));
     const notTaxName = /NON[\s-]*GST|NOT\s+GST|EXEMPT/.test(up), payish = /\b(PENA?LTY|PANELTY|FEES?|LOAN|PAYMENTS?|REFUND|DEPOSIT|INTEREST|CLIENT|REFUNDABLE)\b/.test(up);
-    const rcmLike = /\bRCM\b|REVERSE\s*CHARGE/.test(up) || Object.keys((x && x.with) || {}).some(w => /\bRCM\b|REVERSE/i.test(w));
+    // reverse charge: the name says so; or by use, when (almost) every entry of the ledger is a reverse-charge entry
+    // (another ledger on it is named RCM / reverse charge) - never for a ledger named input or ITC without RCM in its
+    // name: a regular input ledger takes the credit of the reverse-charge purchases too (Dr expense, Dr 07 CGST INPUT,
+    // Cr 07 RCM CGST PAYABLE), and was called reverse charge when ANY of its entries was one (08-Oct-2026)
+    const rcmName = /\bRCM\b|REVERSE\s*CHARGE/.test(up), inputName = /\bINPUT\b|\bITC\b/.test(up);
+    const rcmLike = rcmName || (!inputName && !!(x && x.n && x.rcmN / x.n >= 0.8));
     if (hint && hint.what) add("firm", "confirmed as " + LedMaster.label(hint.what) + (hint.section ? " " + this.secLabel(hint.section) : "") + (hint.tax ? " " + hint.tax : "") + (hint.side ? " " + hint.side : "") + " for " + hint.others + " other client" + (hint.others === 1 ? "" : "s"));
     // not tax: the master says so (tax type Others away from Duties & Taxes, or a tax before GST), or the name says non-GST
     if (ms.none || (notTaxName && !ms.gst)){ Object.assign(S2, {what: "none", conf: "high"}); if (notTaxName && !ms.none) add("name", "the name says it is not GST"); return Object.assign(S2, {ev}); }
