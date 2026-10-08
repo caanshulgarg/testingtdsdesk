@@ -218,7 +218,7 @@ Probe run 37657679690, 4,003 vouchers, median / worst of 3 in ms:
 | 6.2 | 489 / 545 | 20 / 38 | 510 / 566 | 16 / 21 |
 | 7.1 | 603 / 610 | 21 / 57 | 570 / 672 | 12 / 27 |
 
-At 4,000, 25,000, 40,000 and 100,000 vouchers: see section 7 (run push-design 37718386662, pending).
+At 4,000, 25,000, 40,000 and 100,000 vouchers: see section 7 (push-design run 37718386662).
 
 ## 5. Lines with no MasterID
 
@@ -254,4 +254,38 @@ A new entry's line written at Form Accept, before the save, has MasterID 0. It i
 
 ## 7. Measurements at size
 
-Pending: push-design run 37718386662 (tally-versions, mode fast234m): the request above against FinComVoucherByMaster at 4,000, 25,000, 40,000 and 100,000 vouchers on 3.0, 4.1, 5.1, 6.2 and 7.1, a sales invoice and a receipt each, median and worst of 5. This section is filled from its results.
+Push-design run 37718386662 (tally-versions, mode fast234m, 08-Oct-2026). The request is the one above, byte for byte (`fast234-object.xml`, dumped from `voucherObjectRequest`), against today's FinComVoucherByMaster.
+
+**Setup**
+- One company grown in place to 4,003 / 25,005 / 40,007 / 100,009 vouchers, no godowns. Masters: 300 ledgers and 300 items, plus the light company's ~60.
+- The targets: a new sales invoice and a new receipt at each size.
+- Timing: a warm-up and 5 timed reps each, in ms. Each request is the HTTP round trip to Tally on 127.0.0.1:9000 (no bridge).
+- Every answer held the target. No errors.
+
+| Vouchers | Release | Sales: today median / worst | Sales: new median / worst | Receipt: today median / worst | Receipt: new median / worst |
+|---|---|---|---|---|---|
+| 4,003 | 3.0 | 525 / 565 | **23 / 26** | 580 / 710 | **12 / 16** |
+| 4,003 | 4.1 | 362 / 384 | **15 / 17** | 410 / 424 | **9 / 12** |
+| 4,003 | 5.1 | 501 / 535 | **19 / 19** | 548 / 556 | **11 / 17** |
+| 4,003 | 6.2 | 498 / 521 | **19 / 19** | 543 / 550 | **12 / 13** |
+| 4,003 | 7.1 | 488 / 509 | **20 / 20** | 529 / 539 | **12 / 16** |
+| 25,005 | 3.0 | 3,686 / 3,929 | **20 / 27** | 4,069 / 4,082 | **12 / 13** |
+| 25,005 | 4.1 | 2,772 / 3,015 | **15 / 16** | 3,234 / 3,371 | **9 / 10** |
+| 25,005 | 5.1 | 3,474 / 3,788 | **19 / 20** | 3,874 / 3,994 | **11 / 12** |
+| 25,005 | 6.2 | 3,551 / 3,762 | **19 / 21** | 3,839 / 4,107 | **11 / 12** |
+| 25,005 | 7.1 | 3,442 / 3,607 | **20 / 21** | 3,764 / 3,785 | **12 / 12** |
+| 40,007 | 3.0 | 6,433 / 6,495 | **19 / 19** | 6,567 / 6,639 | **11 / 11** |
+| 40,007 | 4.1 | 4,803 / 5,186 | **16 / 17** | 5,297 / 5,318 | **10 / 10** |
+| 40,007 | 5.1 | 6,182 / 6,404 | **19 / 20** | 6,379 / 6,424 | **11 / 12** |
+| 40,007 | 6.2 | 6,174 / 6,711 | **18 / 21** | 6,322 / 6,379 | **11 / 24** |
+| 40,007 | 7.1 | 5,930 / 6,186 | **20 / 22** | 6,363 / 6,403 | **13 / 61** |
+| 100,009 | 3.0 | 16,220 / 17,043 | **19 / 20** | 17,462 / 17,734 | **12 / 13** |
+| 100,009 | 4.1 | 11,867 / 13,173 | **16 / 17** | 13,945 / 14,743 | **10 / 12** |
+| 100,009 | 5.1 | 15,525 / 16,176 | **19 / 20** | 16,226 / 16,317 | **11 / 11** |
+| 100,009 | 6.2 | 15,401 / 15,961 | **19 / 19** | 16,330 / 16,773 | **11 / 12** |
+| 100,009 | 7.1 | 15,327 / 16,085 | **20 / 49** | 16,236 / 16,353 | **12 / 13** |
+
+**Results**
+- **The new request's time does not grow with the company.** It is 9–23 ms median on every release at every size; the worst single rep is 61 ms.
+- **Today's request grows in a straight line.** It takes 0.12–0.17 ms per voucher: 16–17.5 s at 100,000 vouchers.
+- These are GitHub runners. NWS144's CPU sets its own scale for today's request; the new request is keyed, so its time does not depend on the company's size.
