@@ -257,3 +257,43 @@ func TestMasterHookFailedKeptAtCap(t *testing.T) {
 		t.Fatalf("the beat does not carry the master line kept: %v", b)
 	}
 }
+
+// --- the coordinator (08-Oct-2026): a stuck master line keeps its tries and next try across a restart (kept with the
+// offsets): still in the beat's stuck count at once, sent again at the 30-minute cap, not at a short wait
+func TestMasterHookStuckSurvivesRestart(t *testing.T) {
+	rec, _, c := liveBridge(t, `,"RecorderFailedTries":12`)
+	sends := 0
+	c.mu.Lock()
+	c.recReply = func(b M) (int, M) {
+		res := []any{}
+		for _, x := range arr(b["lines"]) {
+			sends++
+			res = append(res, M{"line_id": str(obj(x)["line_id"]), "state": "failed", "why": "FinCom does not keep master lines yet (migration 66)"})
+		}
+		return 200, M{"ok": true, "results": res}
+	}
+	c.mu.Unlock()
+	g := b220CoGUID + "-00000a50"
+	liveAppend(t, liveFilePath(rec, ""), mhLine("godown_accept_pre", g, "2620", "90", "Shed", "Primary"), mhLine("godown_accept_post", g, "2620", "91", "Shed", "Primary"))
+	readAndUploadAll(t)
+	for i := 0; i < 11; i++ {
+		laterBy(t, 31*time.Minute)
+		uploadAll(t)
+	}
+	laterBy(t, time.Minute)
+	liveResetState()
+	readAndUploadAll(t)
+	if toInt(obj(liveBeat()[zz])["stuck"]) != 1 || sends != 12 {
+		t.Fatalf("after the restart: beat %v, sends %d (want stuck 1, 12 sends)", liveBeat()[zz], sends)
+	}
+	laterBy(t, 10*time.Minute)
+	uploadAll(t)
+	if sends != 12 {
+		t.Fatalf("sent at a short wait after the restart: %d", sends)
+	}
+	laterBy(t, 20*time.Minute)
+	uploadAll(t)
+	if sends != 13 {
+		t.Fatalf("not sent at the cap after the restart: %d", sends)
+	}
+}
