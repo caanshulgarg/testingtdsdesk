@@ -196,12 +196,12 @@ def main():
         ok(pg.locator("#app [data-sync-waiting]").count() == 0, "ended lines: no 'waiting over 2 minutes' box")
         nd = "#app [data-sync-needs]"
         ok(pg.locator(nd).count() == 1 and "warn" in (pg.get_attribute(nd, "class") or ""), "ended lines: one 'Needs you' box, yellow")
-        groups = E("() => [...document.querySelectorAll('#app [data-sync-needs] [data-needs-group]')].map(g => [g.getAttribute('data-needs-group'), g.querySelector('[data-needs-text]').innerText.trim(), g.querySelectorAll('button').length])")
+        groups = E("() => [...document.querySelectorAll('#app [data-sync-needs] [data-needs-group]')].map(g => [g.getAttribute('data-needs-group'), g.querySelector('[data-needs-text]').innerText.trim(), g.querySelectorAll('button:not([data-alert-clear])').length, g.querySelectorAll('[data-alert-clear]').length])")
         want = {"GARG SHEKHAR · 07-Oct-2026: 3 entries could not be read from Tally — upload the Day Book for 07-Oct-2026",
                 "GARG SHEKHAR · 06-Oct-2026: 1 entry could not be read from Tally — upload the Day Book for 06-Oct-2026",
                 "ABC LTD · 07-Oct-2026: 1 entry could not be read from Tally — upload the Day Book for 07-Oct-2026"}
         ok(len(groups) == 3 and {g[1] for g in groups} == want, "one plain sentence per company and day (%s)" % [g[1] for g in groups])
-        ok(all(g[2] == 1 for g in groups) and pg.locator(nd + " [data-needs-daybook]").count() == 3, "each group: ONE action, the Day Book upload")
+        ok(all(g[2] == 1 and g[3] == 1 for g in groups) and pg.locator(nd + " [data-needs-daybook]").count() == 3, "each group: ONE action, the Day Book upload (besides its Clear, 08-Oct-2026: hides the notification only)")
         ok(txt(nd + " [data-needs-daybook]") == "Upload the Day Book for 07-Oct-2026" or "Upload the Day Book for" in txt(nd + " [data-needs-daybook]"), "the action says which day (%s)" % txt(nd + " [data-needs-daybook]"))
         ok(pg.locator("#app [data-sync-fetching]").count() == 0, "ended lines: nothing 'being fetched'")
         shot("sync-needs-you")
