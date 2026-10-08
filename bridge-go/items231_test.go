@@ -148,13 +148,14 @@ func items231Bridge(t *testing.T) (string, *standTally, *standCloud) {
 // --- 1. the request: the 2.3.0 request with exactly the items' ledger lines added to its fetch; read only; one entry;
 // the same filters and period; the test forms A and C still byte for byte the two forms
 func TestItems231RequestAddsOnlyTheItemsLedgerLines(t *testing.T) {
-	// part A (the owner's later decision of 06-Oct-2026) adds the rest of the entry (parta231_test.go)
-	if liveFetchField != items231OldFetch+items231Added+partAAdded {
+	// part A (the owner's later decision of 06-Oct-2026) adds the rest of the entry (parta231_test.go); the owner's decision
+	// of 07-Oct-2026 the TDS list and its sub-list whole (tdswild_test.go)
+	if liveFetchField != items231OldFetch+items231Added+partAAdded+tdsWildAdded {
 		t.Fatalf("the entry request's fetch is not the 2.3.0 fetch plus the items' ledger lines and part A:\n%s", liveFetchField)
 	}
 	// the added fields before part A: exactly three, all under the items' accounting allocations
 	old := map[string]bool{}
-	for _, f := range strings.Split(items231OldFetch+partAAdded, ", ") {
+	for _, f := range strings.Split(items231OldFetch+partAAdded+tdsWildAdded, ", ") {
 		old[f] = true
 	}
 	var added []string
@@ -336,7 +337,8 @@ func TestItems231HeldUnder230SettleByRefetch(t *testing.T) {
 		}
 	}
 	for _, b := range append(f.bodiesOf(vchObjectID), f.bodiesOf(vchByNumberID)...) {
-		if testFetchOf(b) != liveFetchField {
+		// release-240: the object export's FETCHLIST names the fields, not the TDS list's "LIST.*" (kept by the strip)
+		if want := map[bool]string{true: strings.Join(liveFetchFields(), ", "), false: liveFetchField}[strings.Contains(b, "<FETCHLIST>")]; testFetchOf(b) != want {
 			t.Fatalf("a request without the 2.3.1 fetch: %s", b)
 		}
 	}

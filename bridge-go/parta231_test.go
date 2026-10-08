@@ -129,7 +129,8 @@ func partAFilter(voucher, fetch string) string {
 			p = path + "." + p
 		}
 		if n.leaf {
-			if !want[p] {
+			// "LIST.*" (the owner's 07-Oct decision: the TDS list and its sub-list) fetches every field of that list
+			if !want[p] && !(path != "" && want[path+".*"]) {
 				return ""
 			}
 			if strings.HasSuffix(n.open, "/>") {
@@ -201,7 +202,8 @@ func partABridge(t *testing.T) (string, *standTally, *standCloud) {
 // --- 1. the fetch: exactly the 2.3.1 fetch plus the part A fields; each a stored field of the voucher (nothing Tally
 // works out); the request otherwise as before; A and C byte for byte the two requests; B, D, E, F as in 2.3.0
 func TestPartAFetchExactly(t *testing.T) {
-	if liveFetchField != partABefore+partAAdded {
+	// (and the owner's decision of 07-Oct-2026: the TDS list and its sub-list whole, tdswild_test.go)
+	if liveFetchField != partABefore+partAAdded+tdsWildAdded {
 		t.Fatalf("the entry request's fetch is not the 2.3.1 fetch plus part A's fields:\n%s", liveFetchField)
 	}
 	seen := map[string]bool{}
@@ -210,7 +212,7 @@ func TestPartAFetchExactly(t *testing.T) {
 			t.Errorf("fetched twice: %s", f)
 		}
 		seen[f] = true
-		if !regexp.MustCompile(`^[A-Z]+(\.[A-Z]+)*$`).MatchString(f) || strings.Contains(f, "$") || strings.Contains(f, "CLOSING") || strings.Contains(f, "OPENING") {
+		if !regexp.MustCompile(`^[A-Z]+(\.[A-Z]+)*(\.\*)?$`).MatchString(f) || strings.Contains(f, "$") || strings.Contains(f, "CLOSING") || strings.Contains(f, "OPENING") {
 			t.Errorf("not a plain stored field: %q", f)
 		}
 	}
@@ -219,7 +221,8 @@ func TestPartAFetchExactly(t *testing.T) {
 		t.Errorf("part A adds %d fields, want 41", n)
 	}
 	// next-fastfetch: by MasterID the object export, its FETCHLIST exactly these fields (fast234form_test.go)
-	if testFetchOf(voucherObjectRequest(spikeCo, "21")) != liveFetchField {
+	// (release-240: the TDS list's "LIST.*" items are kept by the strip, not named in the FETCHLIST: tdswild_test.go)
+	if testFetchOf(voucherObjectRequest(spikeCo, "21")) != strings.TrimSuffix(liveFetchField, tdsWildAdded) {
 		t.Fatal("the entry request does not name exactly the approved fields")
 	}
 	byNumber := voucherByNumberRequest(spikeCo, "20261002", "Sales", "201")

@@ -254,3 +254,17 @@ add-on's placeholder GUID is held as a GUID-less one (R3-L1: twice it broke the 
 applied for its GUID is applied and cancelled again, below a delete 'stale' as before (R3-L2); a GUID-less delete with no
 date promises no Day Book (R3-L3). The owner's "nothing to remove" (08:05) is 57's (`tally_ingest_delete`), not repeated.
 Tested by `run_migration60.py` (on 56 -> 57 -> 58) and `run_migration_order.py` (56 -> 57 -> 58 -> 59 -> 60 in both orders).
+
+Next bridge release after 2.3.1 (07-Oct-2026, the owner's decision, option A: "Work out the rate as tax divided by
+assessable amount where Tally stores 0, and mark it as worked out"): `migration-62-tds-rate-worked-out.sql` runs after 57
+(staging, where 58, 59, 60 and 61 have run: ... -> 57 -> 58 -> 59 -> 60 -> 61 -> 62; a fresh database the same; it needs
+only 57 and touches nothing of 58 .. 61; add-only, one transaction, `lock_timeout` 10 s, no "delete from", safe twice; NOT
+yet run on staging). One column, `tally_tds_lines.rate_worked_out` (boolean, default false: the rate is Tally's own), and
+one function replaced, `tally_ingest_details` (57's text with the lines marked "62" changed; granted to nobody): a TDS row
+keeps parse.js's `rateWorkedOut` (Tally 7.1 stores TAXRATE 0 on an entry keyed on its screen; the reader works the rate
+out from the Income Tax sub-category's tax and assessable amount). `tally_tds_details(book)` is not replaced (its columns
+would change); the mark is read from `tally_tds_lines`, which the firm's members read. tally-ingest needs no change (it
+passes each TDS detail's fields on as they are); a cloud without 62 stores the worked-out rate without the mark. Tested by
+`run_migration62.py` (on the real S5 capture of run 37492981527) and `run_migration_order.py` (62 in both orders, after 61,
+privileges, when that file is in the tree). Numbers taken on other branches: 61 privileges (perms-61), 63 outbox, 64
+realtime, 65 selfcheck, 66 masterhook.
