@@ -249,7 +249,9 @@ if ($R1) {
 
 # (run 37725649024: the Day Book's voucher type list had no Payroll and the number SH-PR1 was not kept: found by narration,
 # the template the last entry of 1-10-2026; the alteration first, then the copy, so the template stays the last of the day)
-$PT = @(Vouchers | Where-Object { $_.narr -like 'share payroll template*' })[0]
+# (Vouchers gives its list as ONE object: piped straight into Where-Object the whole list passed, its .mid every MasterID:
+# runs 37729166801 / 37734533866's P7a filter became '$MasterID = 1 2 3 ...' and hung Tally; the list is taken first)
+$lvPT = Vouchers; $PT = @($lvPT | Where-Object { $_.narr -like 'share payroll template*' })[0]
 if ($PT) { $null = ShareCase 'alter-payroll' 'alteration: the payroll entry saved again unchanged (opened, Ctrl+A)' { ShareDayBookLast 'Y2' '' '1-10-2026'; $null = TK '{ENTER}' 3 'Y2-open'; ShareAccept 'Y2' $null } $PT.mid }
 else { Add-Content -Path $resultsFile -Value 'HARNESS share alter-payroll: the payroll template is not in Tally''s list' -Encoding UTF8 }
 $null = ShareCase 'copy-payroll' 'Alt+2 copy of the payroll entry (five employees, two pay heads)' { ShareDayBookLast 'Y1' '' '1-10-2026'; $null = TK '%2' 3 'Y1-copy'; ShareAccept 'Y1' $null }
@@ -349,7 +351,7 @@ try {
     '<ALLLEDGERENTRIES.LIST><LEDGERNAME>Share Sales</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>150.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>'
   $null = Imp 'Vouchers' $inv 'p7 invoice SH-E1'
   # (run 37722273938: a lookup by $VoucherNumber found nothing; Tally's own list, then the entry by its MasterID)
-  $eid = @(Vouchers | Where-Object { $_.narr -like 'share e-invoice*' })[0]   # (its number SH-E1 may not be kept: automatic numbering)
+  $lvE = Vouchers; $eid = @($lvE | Where-Object { $_.narr -like 'share e-invoice*' })[0]   # (its number SH-E1 may not be kept: automatic numbering)
   # (run 37729166801, every release: a Voucher collection over 2026-27 fetching IRN / IRNACKNO / IRNACKDATE /
   # EWAYBILLDETAILS.BILLNUMBER filtered by this MasterID hung Tally past 60 s, and Tally did not recover; the bridge's own
   # entry request, dated to the entry's day, fetches the same fields: that one is used, byte for byte)

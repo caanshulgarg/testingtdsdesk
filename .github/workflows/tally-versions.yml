@@ -19,7 +19,7 @@ on:
         description: 'Branch, tag or commit of the bridge (bridge-go/); tax-accuracy is the published 2.3.0'
         default: tax-accuracy
       mode:
-        description: 'quick (install and port), full (every check) share (next-push: the full line against the stored entry, per kind typed on the screen; no bridge) or big (the add-on''s own share of a save on a 100,000-entry company) or hang (the hang of run 37729166801 isolated, each probe in a fresh Tally) or hang2 (the share company, then each entry asked in a fresh Tally) or hang3 (the share session, the published requests after every step)'
+        description: 'quick (install and port), full (every check) share (next-push: the full line against the stored entry, per kind typed on the screen; no bridge) or big (the add-on''s own share of a save on a 100,000-entry company) or hang (the hang of run 37729166801 isolated, each probe in a fresh Tally) or hang2 (the share company, then each entry asked in a fresh Tally) or hang3 (the share session, the published requests after every step) or hang4 (the harness''s malformed filter against the correct one)'
         default: quick
 permissions:
   contents: write
@@ -39,7 +39,7 @@ jobs:
       - id: mode
         run: |
           m="${{ inputs.mode }}"; [ -n "$m" ] || m=$(head -1 harness/.github/tally-spike/versions-mode.txt 2>/dev/null | tr -d '[:space:]')
-          case "$m" in full|share|big|hang|hang2|hang3) ;; *) m=quick ;; esac
+          case "$m" in full|share|big|hang|hang2|hang3|hang4) ;; *) m=quick ;; esac
           echo "mode=$m" | tee -a "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
         with:
