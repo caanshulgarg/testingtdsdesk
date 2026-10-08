@@ -5,6 +5,7 @@
 import Msg from "../parts/Msg.jsx";
 import ListTable from "../parts/ListTable.jsx";
 import UnknownLedgers from "../parts/UnknownLedgers.jsx";
+import NeedAction from "../parts/NeedAction.jsx";
 
 const FILTERS = [["all", "All"], ["waiting", "Waiting"], ["held", "Held"], ["mismatch", "Mismatch"], ["today", "Today"]];
 // round 20 (d.4): "queued": the cloud queued the line (over 50 at once); its drain fills the state later
@@ -18,26 +19,6 @@ const STATE_CLS = { applied: "ok", duplicate: "no", stale: "no", replaced: "no",
 //   Being fetched (quiet, grey): FinCom or the bridge is still at it; they enter the books by themselves;
 //   nothing at all when nothing waits.
 const n = (k) => k + (k === 1 ? " entry" : " entries");
-// the ONE action of a "Needs you" group (Rec.needKind, src/js/61): who may do it, else the words say who does
-function NeedAction({ g, canApply, busy }) {
-  const owner = Rec.owner(), day = g.day ? fmtDate(g.day) : "that day";
-  const b = (act, label, go, extra) => <button className="btn small" data-needs-act={act} {...extra} onClick={go}>{label}</button>;
-  switch (g.kind) {
-    case "daybook": case "dupid":
-      return canApply && g.cid ? b("daybook", "Upload the Day Book for " + day, () => Rec.uploadDay(g.cid, g.day), { "data-needs-daybook": "" }) : <span className="note">{" (a member of the firm who may write does this)"}</span>;
-    case "readstop":
-      return owner ? b("resume", "Resume reading", () => Rec.resumeOn(g), { "data-needs-resume": "" }) : null;
-    case "baseline":
-      return b("tally", "Open the Tally page", () => Rec.openTallyPage());
-    case "masters":
-      return g.cid ? b("masters", "Open From Tally", () => Rec.openClientTab(g.cid, "books:import")) : null;
-    case "locked":
-      return g.cid ? b("tieout", "Open Tie-out", () => Rec.openClientTab(g.cid, "books:tieout")) : null;
-    default:
-      return canApply ? b("apply", "Apply now", () => Rec.releaseAll(g.lines), { "data-needs-apply": "", disabled: busy, title: busy ? "Applying the lines already asked for" : undefined })
-        : <span className="note">{" (a member of the firm who may write does this)"}</span>;
-  }
-}
 function SyncFlow({ flow, canApply, busy }) {
   const { needs, fetching } = flow;
   if (!needs.length && !fetching.length) return null;
