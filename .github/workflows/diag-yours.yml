@@ -31,6 +31,13 @@ jobs:
       - name: As a standard (non-administrator) user
         if: always()
         run: C:\fcdiag\bin\run.ps1 -Who std -Here C:\fcdiag\bin
+      - name: As the standard user, with the browsers' NetworkServiceSandboxEnabled policy on
+        if: always()
+        run: |
+          foreach ($k in 'HKLM:\SOFTWARE\Policies\Google\Chrome', 'HKLM:\SOFTWARE\Policies\Microsoft\Edge') {
+            New-Item -Force $k | Out-Null; New-ItemProperty -Force $k -Name NetworkServiceSandboxEnabled -PropertyType DWord -Value 1 | Out-Null
+          }
+          C:\fcdiag\bin\run.ps1 -Who stdpol -Here C:\fcdiag\bin
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -44,3 +51,5 @@ jobs:
             C:\fcdiag\std\*.log
             C:\fcdiag\std\*.out
             C:\fcdiag\std\*.err
+            C:\fcdiag\stdpol\*.txt
+            C:\fcdiag\stdpol\*.log

@@ -1,13 +1,14 @@
 # Diagnostic only: start FinCom Bridge (worker, runMode "user") as $Who, then ask it /ping and /status from curl,
 # Invoke-WebRequest, Edge and Chrome (headless and headed) of the same Windows user; print what it says and logs.
-param([string]$Who = 'admin', [string]$Bin = 'C:\fcdiag\bin', [string]$Here = $PSScriptRoot)
+param([string]$Who = 'admin', [string]$Bin = 'C:\fcdiag\bin', [string]$Here = $PSScriptRoot, [string]$Only = '')
 $ErrorActionPreference = 'Continue'
 $root = "C:\fcdiag\$Who"
 New-Item -ItemType Directory -Force $root | Out-Null
 $cred = $null
-if ($Who -eq 'std') {
+if ($Who -like 'std*') {
   $pw = 'Fc!' + [guid]::NewGuid().ToString('N').Substring(0, 16) + 'aA1'
-  net user fcdiag $pw /add /y | Out-Null
+  net user fcdiag $pw /add /y 2>$null | Out-Null
+  net user fcdiag $pw | Out-Null
   $cred = New-Object System.Management.Automation.PSCredential("$env:COMPUTERNAME\fcdiag", (ConvertTo-SecureString $pw -AsPlainText -Force))
   icacls $root /grant 'fcdiag:(OI)(CI)F' | Out-Null
   icacls $Bin /grant 'fcdiag:(OI)(CI)RX' | Out-Null
@@ -51,8 +52,12 @@ $clients = @(
   @{ l = 'chrome-headless'; e = $chrome; a = '--headless=new' },
   @{ l = 'chrome-headed'; e = $chrome; a = '--window-size=800,600' },
   @{ l = 'chrome-headless-nosandbox'; e = $chrome; a = '--headless=new --no-sandbox' },
-  @{ l = 'chrome-headed-netsvc-inproc'; e = $chrome; a = '--enable-features=NetworkServiceInProcess2 --disable-features=NetworkServiceSandbox --window-size=800,600' }
+  @{ l = 'chrome-headed-netsvc-inproc'; e = $chrome; a = '--enable-features=NetworkServiceInProcess2 --disable-features=NetworkServiceSandbox --window-size=800,600' },
+  @{ l = 'edge-headed-netsandbox'; e = $edge; a = '--enable-features=NetworkServiceSandbox --window-size=800,600' },
+  @{ l = 'chrome-headed-netsandbox'; e = $chrome; a = '--enable-features=NetworkServiceSandbox --window-size=800,600' },
+  @{ l = 'chrome-headless-netsandbox'; e = $chrome; a = '--headless=new --enable-features=NetworkServiceSandbox' }
 )
+if ($Only) { $clients = $clients | Where-Object { $_.l -like $Only } }
 foreach ($c in $clients) {
   $l = $c.l; $udd = "$root\udd-$l"
   Write-Host "--- $l"
