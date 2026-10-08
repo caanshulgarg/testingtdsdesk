@@ -32,8 +32,11 @@ time.. there should be clear flow".
   owner-only rules are unchanged.
 - **Sync activity has one clear flow**: the permanent yellow "N lines waiting over 2 minutes" box is gone. "Needs you"
   (yellow, the only yellow) lists only lines nothing settles until a person acts, one sentence per company and day with
-  ONE action (Upload the Day Book for that day, or Apply now). Lines FinCom or the bridge is still fetching show quietly
-  as "being fetched". Nothing waiting shows nothing.
+  ONE action, by what will actually happen to the line: Upload the Day Book for that day; a FinCom id on another Tally
+  entry (check for a double posting, then the Day Book); Resume reading (owner); Open the Tally page; Open From Tally;
+  Open Tie-out; or Apply now. Lines FinCom or the bridge is still fetching (and that settle by themselves) show quietly
+  as "being fetched". Nothing waiting shows nothing. The page and the bell use the same classifier, so they never
+  disagree.
 - **One vocabulary** on every Tally page, the Books held banner, the bell and the Post page ("Connected", "Tally not
   open on ...", "Reading paused on ...", "Reading stopped from FinCom").
 
