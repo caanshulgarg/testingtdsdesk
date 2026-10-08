@@ -175,12 +175,15 @@ function takeVoucher(s){
       if (it){ const tr = one(it, "TAXRATE"), ab = one(it, "ASSESSABLEAMOUNT"); if (tr) rate = num(tr); if (ab) base = r2(amt(ab)); }
       subs.forEach((x) => { const tx = one(x, "TAX"); if (tx) tax = r2((tax || 0) + amt(tx)); });
       const itTax = it && one(it, "TAX") ? amt(one(it, "TAX")) : 0;
-      if (!rate && base && itTax){ rate = Math.round(Math.abs(itTax / base) * 100 * 10000) / 10000; worked = true; }
+      // review L2 (2.4.0 part 2): a line Tally marked exempt (EXEMPTED Yes) keeps the rate as Tally stored it, never worked
+      // out, and carries exempt: true (the real S5 capture of run 37492981527 is such a line)
+      const exempt = /^yes$/i.test(one(q, "EXEMPTED").trim());
+      if (!rate && base && itTax && !exempt){ rate = Math.round(Math.abs(itTax / base) * 100 * 10000) / 10000; worked = true; }
       // the section (the owner, 06-Oct-2026): Tally's own on the line's bill-wise detail (TDSDEDUCTEESECTIONNUMBER), else
       // on another bill-wise detail of the entry (filled in below); else the section written in the nature of payment's
       // name (192 .. 196x, 206C.., the 2025 Act's 393); else blank, never guessed
       const own = blocks(e, "BILLALLOCATIONS.LIST").map((b) => one(b, "TDSDEDUCTEESECTIONNUMBER")).find(Boolean) || "";
-      tds.push({n, ledger, nature, party, rate, base, tax: tax == null ? la : tax, section: own.slice(0, 20), sectionFrom: own ? "Tally's entry" : "", ...(worked ? {rateWorkedOut: true} : {})});
+      tds.push({n, ledger, nature, party, rate, base, tax: tax == null ? la : tax, section: own.slice(0, 20), sectionFrom: own ? "Tally's entry" : "", ...(worked ? {rateWorkedOut: true} : {}), ...(exempt ? {exempt: true} : {})});
     });
     if (e.indexOf("<BILLALLOCATIONS.LIST") >= 0) blocks(e, "BILLALLOCATIONS.LIST").forEach((q) => {
       const cp = (q.match(/<BILLCREDITPERIOD(?:\s[^<>]*[^/<>])?\s*>([^<]*)<\/BILLCREDITPERIOD>/) || [])[1] || "", due = d8(cp);

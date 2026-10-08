@@ -16,7 +16,7 @@
 #   green 3  BridgeVersion 2.1.7 with the owner's decision line naming 2.1.7 (round 13) -> passes check 4
 #   red 10   BridgeVersion 2.1.7 with an "allowed for 2.1.7 only" line WITHOUT the owner's decision words -> fails "owner's decision"
 #   red 11   an exception line naming two versions                    -> fails "names more than one version"
-#   green 5  BridgeVersion 2.3.1 with the real decision line of docs/tally-allowlist.md (the owner's decision of 2026-10-06:
+#   green 5  BridgeVersion 2.4.0 (was 2.3.1) with the real decision line of docs/tally-allowlist.md (the owner's decision of 2026-10-06:
 #            the items' ledger lines; "re-measured on 2026-10-06 on the stand (not real Tally)"; the 2.3.0 line kept as history) -> passes
 #   red 14   the same line, but the last release row dated 2026-10-07 (after its "re-measured on") -> fails "before the last release"
 #   pin      every 'go test' line in release-check.sh carries -timeout 20m (Go's default 10 minutes cut a full run at 588 s
@@ -144,10 +144,11 @@ expect "red 13: a standing line and an older decision line together name two ver
 
 # bridge 2.3.1 (the owner's decision of 06-Oct-2026): the real decision line, as docs/tally-allowlist.md carries it
 L231="$(grep -m1 '^First table:' "$HERE/../docs/tally-allowlist.md")"
-setup; withver 2.3.1; unmeasured "$L231"
-expect "green 5: 2.3.1 with the real decision line (the items' ledger lines, re-measured on 2026-10-06) passes check 4" 0 "allowed for 2.3.1 by the owner's decision of 2026-10-06"
+# 2.4.0 (review L4 of 2.4.0 part 2, 08-Oct-2026): the 2.4.0 line is in force, 2.3.1's kept inside it ("as for 2.3.1: ...")
+setup; withver 2.4.0; unmeasured "$L231"
+expect "green 5: 2.4.0 with the real decision line (TDS option A; 2.3.1's kept as history; re-measured on 2026-10-06) passes check 4" 0 "allowed for 2.4.0 by the owner's decision of 2026-10-07"
 
-setup; withver 2.3.1; unmeasured "$L231"
+setup; withver 2.4.0; unmeasured "$L231"
 sed -i 's/| 9.9.8 | 2026-09-30 |/| 9.9.8 | 2026-10-07 |/' "$R/docs/RELEASE-CHECKLIST.md"; g add -A; g commit -qm "a later release row"
 expect "red 14: the line re-measured before the last release row's date" 1 "before the last release"
 

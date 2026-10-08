@@ -180,3 +180,4 @@ run_migration57.py                    120
 run_parta_server.py                   120
 run_parse_tds.mjs                     120
 run_migration62.py                    120
+run_tds_rate_words.py                 120  TDSDESK_SITE=../app/dist-test

@@ -267,3 +267,20 @@ passes each TDS detail's fields on as they are); a cloud without 62 stores the w
 `run_migration62.py` (on the real S5 capture of run 37492981527) and `run_migration_order.py` (62 in both orders, after 61,
 privileges, when that file is in the tree). Numbers taken on other branches: 61 privileges (perms-61), 63 outbox, 64
 realtime, 65 selfcheck, 66 masterhook.
+
+2.4.0 part 2 review (08-Oct-2026), on 62 (still NOT run on staging, so changed in place; add-only and safe twice as
+before): **M1** the TDS details as the firm's members read them now carry the mark: `tally_tds_details_marked(book)`, a new
+function (57's `tally_tds_details` with two columns more, `rate_worked_out` and `exempt`; security definer, `search_path =
+public, pg_temp`; members and the service role, not anon); 57's `tally_tds_details` is left as it is. The TDS tab lists
+the lines under "TDS on Tally's entries" with the rate in words: "2% · rate worked out: Tally stored 0 (TDS ÷ assessable
+amount)", "0% · exempt in Tally: no rate worked out", or Tally's own rate alone (`TDS.tallyRateWords`;
+`tests/run_tds_rate_words.py`). **L2** Tally's EXEMPTED Yes on a TDS line is kept: a second column,
+`tally_tds_lines.exempt` (default false), and parse.js never works a rate out on such a line (it keeps Tally's stored rate
+and marks `exempt: true`). The real S5 capture of run 37492981527 is such a line (EXEMPTED Yes, TAXRATE 0, tax 2,000 on
+1,00,000): it now reads rate 0, exempt, not worked out; the working out is tested on the same capture with EXEMPTED set to
+No. **L1, deploy order:** run 62 on staging BEFORE deploying the tally-ingest that carries this parse.js (a tally-ingest
+deployed first would store each line through 57's text, without either mark, until 62 runs; the lines it stored keep
+rate_worked_out and exempt false until their entry is read again). **L3, timing:** the cost of the wildcard TDS fetch
+(ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.*, .SUBCATEGORYALLOCATION.*) on FinComVoucherByNumber and the time 62's
+`tally_ingest_details` adds per entry are NOT measured here; both are to be measured in the 2.4.0 gate (real Tally, and
+staging after 62), the allow-list rows staying "not yet measured" until then.

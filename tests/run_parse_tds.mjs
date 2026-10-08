@@ -7,6 +7,9 @@
 // harness's voucher collection of the entry with every field. The Contractor line carries nature "S231 Contract Work",
 // Income Tax at TAXRATE 0 on 100000.00 assessable, tax 2000.00, and three empty sub-blocks (Surcharge, Education Cess,
 // Secondary Education Cess). Written before the code.
+// Review L2 (2.4.0 part 2, 08-Oct-2026): the line also carries EXEMPTED Yes (Tally marked it exempt). A rate is NEVER
+// worked out on a line Tally marked exempt: the rate stays as Tally stored it (0), the line carries exempt: true and no
+// rateWorkedOut. The working out itself is checked on the same capture with EXEMPTED set to No (marked as made up below).
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -24,11 +27,24 @@ const vchOf = (t) => t.slice(t.indexOf("<VOUCHER REMOTEID"), t.lastIndexOf("</VO
 const noTds = (t) => t.replace(/<TAXOBJECTALLOCATIONS\.LIST>[\s\S]*?<\/TAXOBJECTALLOCATIONS\.LIST>/g, "<TAXOBJECTALLOCATIONS.LIST>      </TAXOBJECTALLOCATIONS.LIST>");
 const WANT = {n: 2, ledger: "S231 Contractor", nature: "S231 Contract Work", party: "S231 Contractor", rate: 2, base: 100000, tax: 2000, rateWorkedOut: true};
 const pick = (t) => t && Object.fromEntries(Object.keys(WANT).map((k) => [k, t[k]]));
+// made up from the real capture: Tally's EXEMPTED Yes set to No (the one change), so the rate is worked out
+const notExempt = (t) => t.replace("<EXEMPTED>Yes</EXEMPTED>", "<EXEMPTED>No</EXEMPTED>");
+
+// ---- 0. review L2: the REAL capture as Tally wrote it: EXEMPTED Yes on the Contractor line, so the rate is not worked
+// out: rate 0 as stored, exempt: true, no rateWorkedOut
+ok((ALL.match(/<EXEMPTED>Yes<\/EXEMPTED>/g) || []).length === 2, "the real capture: EXEMPTED Yes on the Contractor line (in the Day Book and in the collection)");
+const WANT_EX = {n: 2, ledger: "S231 Contractor", nature: "S231 Contract Work", party: "S231 Contractor", rate: 0, base: 100000, tax: 2000, exempt: true};
+for (const [how, x] of [["Tally's Day Book export", DAYBOOK], ["the collection with every field", COLL], ["the voucher element alone", vchOf(COLL)]]) {
+  const t = (parseDay(x).vouchers[0] || {}).tds || [];
+  const got = t[0] && Object.fromEntries(Object.keys(WANT_EX).map((k) => [k, t[0][k]]));
+  ok(t.length === 1 && J(got) === J(WANT_EX) && !("rateWorkedOut" in t[0]), "real capture, " + how + ": exempt in Tally, rate 0 as stored, not worked out (" + J(t[0]) + ")");
+}
 
 // ---- 1. the Contractor line, from Tally's Day Book export and from the collection with every field: the TDS detail of
 // the Day Book, the rate worked out (2000 / 100000 x 100 = 2) and marked so
-for (const [how, x] of [["Tally's Day Book export", DAYBOOK], ["the collection with every field", COLL], ["the voucher element alone", vchOf(COLL)]]) {
+for (const [how, x] of [["Tally's Day Book export", notExempt(DAYBOOK)], ["the collection with every field", notExempt(COLL)], ["the voucher element alone", notExempt(vchOf(COLL))]]) {
   const r = parseDay(x), v = r.vouchers[0] || {};
+  ok(!("exempt" in ((v.tds || [])[0] || {})), how + " (EXEMPTED No): not marked exempt");
   ok(r.vouchers.length === 1 && Math.abs(r.lines.reduce((a, l) => a + l[2], 0)) < 0.005, how + ": one entry, adds to zero");
   ok((v.tds || []).length === 1, how + ": one TDS detail, on the Contractor line only (" + J(v.tds) + ")");
   ok(J(pick((v.tds || [])[0])) === J(WANT), how + ": " + J(WANT) + (J(pick((v.tds || [])[0])) === J(WANT) ? "" : " -- got " + J((v.tds || [])[0])));
@@ -45,7 +61,7 @@ ok(J(dTds) === J(cTds), "the Day Book's TDS detail and the collection's are the 
 // ---- 3. the empty Surcharge / Cess sub-blocks are ignored, wherever they stand: the rate, base and tax are the Income
 // Tax sub-category's
 {
-  const v = vchOf(COLL);
+  const v = notExempt(vchOf(COLL));
   const subs = v.match(/<SUBCATEGORYALLOCATION\.LIST>[\s\S]*?<\/SUBCATEGORYALLOCATION\.LIST>/g);
   ok(subs.length === 4 && /Income Tax/.test(subs[0]), "the capture holds four sub-blocks, Income Tax first");
   const swapped = v.replace(subs.join("\n       "), [subs[1], subs[2], subs[3], subs[0]].join("\n       "));
@@ -58,6 +74,9 @@ ok(J(dTds) === J(cTds), "the Day Book's TDS detail and the collection's are the 
   const noBase = v.replace(subs[0], subs[0].replace("<ASSESSABLEAMOUNT>100000.00</ASSESSABLEAMOUNT>", "<ASSESSABLEAMOUNT/>"));
   const nb = parseDay(noBase).vouchers[0].tds[0] || {};
   ok(nb.rate === 0 && !("rateWorkedOut" in nb), "no assessable amount: rate 0 as stored, not worked out (" + J(nb) + ")");
+  // review L2: exempt with a stored rate: the rate as stored, marked exempt, never worked out
+  const exStored = stored.replace("<EXEMPTED>No</EXEMPTED>", "<EXEMPTED>Yes</EXEMPTED>"), es = parseDay(exStored).vouchers[0].tds[0] || {};
+  ok(exStored !== stored && es.rate === 2 && es.exempt === true && !("rateWorkedOut" in es), "exempt with Tally's stored rate 2: rate 2, exempt, not worked out (" + J(es) + ")");
 }
 
 // ---- 4. the entry request's fetch (bridge-go/recorder_live.go) carries the whole block: the voucher cut down to the
@@ -88,7 +107,7 @@ ok(J(dTds) === J(cTds), "the Day Book's TDS detail and the collection's are the 
   };
   const cut = root.kids[0].open + root.kids[0].kids.map((k) => emit(k, "")).join("") + "</VOUCHER>";
   const got = parseDay(cut).vouchers[0] || {};
-  ok(J(got.tds) === J(cTds), "the body as the request fetches it: the same TDS detail (" + J(got.tds) + ")");
+  ok(J(got.tds) === J(cTds) && got.tds[0] && got.tds[0].exempt === true, "the body as the request fetches it: the same TDS detail, the exempt mark with it (" + J(got.tds) + ")");
   ok(J(parseDay(read("s5-tds-on-screen.entry.xml")).vouchers[0].tds) === "[]", "2.3.1's request on real Tally: the TDS lists came back empty (no detail)");
 }
 

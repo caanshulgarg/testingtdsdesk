@@ -4,18 +4,23 @@
 -- sub-category's tax and assessable amount and marks the line rateWorkedOut: true. This file keeps that mark with the line.
 -- Runs AFTER 57 (staging: 58, 59, 60 and 61 have run there; ... -> 57 -> 58 -> 59 -> 60 -> 61 -> 62; independent of 58 .. 61). ADD-ONLY: no
 -- table, column, row or function removed; no statement in this file removes rows, not even in a comment; safe to run twice;
--- one transaction (lock_timeout 10 s). One column added, tally_tds_lines.rate_worked_out (false on every row there is); one
--- function replaced: tally_ingest_details (same arguments, security definer, search_path = public, pg_temp, granted to
--- nobody as in 57), 57's text with the lines marked "62" changed (the TDS row carries the mark). tally_tds_details(book) is
--- not replaced (its columns would change: the mark is read from tally_tds_lines, which the firm's members read). Nothing
--- else is touched; no row is changed by running it. Tested on pg_stand only: tests/run_migration62.py. NOT yet run on
--- staging.
+-- one transaction (lock_timeout 10 s). Two columns added, tally_tds_lines.rate_worked_out and tally_tds_lines.exempt (false
+-- on every row there is); one function replaced: tally_ingest_details (same arguments, security definer, search_path =
+-- public, pg_temp, granted to nobody as in 57), 57's text with the lines marked "62" changed (the TDS row carries the
+-- marks); one function added: tally_tds_details_marked(book) (review M1 of 08-Oct-2026: the TDS details as the firm's
+-- members read them, 57's tally_tds_details with the two marks as columns more, lines marked "62"; 57's own function is
+-- not replaced, its columns would change). Review L2: Tally's EXEMPTED Yes on a TDS line is kept (exempt) and no rate is
+-- ever worked out on such a line (parse.js). Nothing else is touched; no row is changed by running it. Tested on pg_stand
+-- only: tests/run_migration62.py. NOT yet run on staging. Deploy order (review L1): run this file BEFORE deploying the
+-- tally-ingest that carries the new parse.js (an older 57 text would store the lines without the marks).
 
 begin;
 set local lock_timeout = '10s';     -- never queue long behind a session holding a table here (a timeout rolls the whole file back: run it again)
 
 -- the rate worked out by FinCom (tax / assessable amount x 100) where Tally stores 0; false: the rate is Tally's own
 alter table public.tally_tds_lines add column if not exists rate_worked_out boolean not null default false;
+-- Tally marked the TDS line exempt (EXEMPTED Yes on the line's TDS block); the rate is then never worked out
+alter table public.tally_tds_lines add column if not exists exempt boolean not null default false;
 
 -- ---------------------------------------------------------------- 57's tally_ingest_details with the lines marked "62"
 create or replace function public.tally_ingest_details(p_book uuid, p_vouchers jsonb, p_keep boolean)
@@ -70,12 +75,13 @@ begin
    where jsonb_typeof(b) = 'object';
   update tally_tds_lines t set gone_at = now() from (select z->>'guid' as guid, (z->>'alter')::bigint as alter_id, (z->>'day')::date as day, z->'x' as x from jsonb_array_elements(din) z) d
    where t.book_id = p_book and t.guid = d.guid and t.gone_at is null and not ((k and lower(coalesce(d.x->>'full', '')) <> 'true') and jsonb_array_length(coalesce(d.x->'tds', '[]'::jsonb)) = 0);
-  insert into tally_tds_lines (book_id, firm_id, guid, alter_id, day, line_no, ledger, nature, rate, assessable, amount, party, section, section_from, deductee_type, rate_worked_out)     -- 62: the rate worked out
+  insert into tally_tds_lines (book_id, firm_id, guid, alter_id, day, line_no, ledger, nature, rate, assessable, amount, party, section, section_from, deductee_type, rate_worked_out, exempt)     -- 62: the rate worked out, Tally's exempt mark
   select p_book, f, d.guid, d.alter_id, d.day, coalesce((t->>'n')::integer, 0), tally_nm(coalesce(t->>'ledger', '')), left(coalesce(t->>'nature', ''), 200),
          nullif(t->>'rate', '')::numeric, nullif(t->>'base', '')::numeric, nullif(t->>'tax', '')::numeric, tally_nm(coalesce(t->>'party', '')),
          left(coalesce(t->>'section', ''), 20), case when coalesce(t->>'section', '') = '' then '' else left(coalesce(t->>'sectionFrom', ''), 40) end,
          coalesce((select l.tds_deductee_type from tally_ledgers l where l.book_id = p_book and l.name = tally_nm(coalesce(t->>'party', '')) limit 1), ''),
-         coalesce(t->>'rateWorkedOut', '') = 'true'     -- 62: parse.js's rateWorkedOut (tax / assessable x 100 where Tally stores the rate as 0)
+         coalesce(t->>'rateWorkedOut', '') = 'true',     -- 62: parse.js's rateWorkedOut (tax / assessable x 100 where Tally stores the rate as 0)
+         coalesce(t->>'exempt', '') = 'true'     -- 62: parse.js's exempt (Tally's EXEMPTED Yes; never a rate worked out)
     from (select z->>'guid' as guid, (z->>'alter')::bigint as alter_id, (z->>'day')::date as day, z->'x' as x from jsonb_array_elements(din) z) d, jsonb_array_elements(case when jsonb_typeof(d.x->'tds') = 'array' then d.x->'tds' else '[]'::jsonb end) t
    where jsonb_typeof(t) = 'object';
   -- a due date Tally keeps as a date, on the bill the entry path stored just now (the same ledger, name, type and amount)
@@ -86,5 +92,32 @@ begin
      and b.due is distinct from tally_d8(u->>'due');
 end $function$;
 revoke all on function public.tally_ingest_details(uuid, jsonb, boolean) from public, anon, authenticated, service_role;
+
+-- ---------------------------------------------------------------- 57's tally_tds_details with the marks: tally_tds_details_marked
+-- the TDS details as members read them (as 56's tally_unknown_ledger_entries: the caller's firm, my_firm(); the service
+-- role or owner names the book): the deductee type the party ledger has now (the ledger master's TDSDEDUCTEETYPE, part B),
+-- else the one stored with the line; the section and where it came from
+create or replace function public.tally_tds_details_marked(p_book uuid)
+returns table (book_id uuid, guid text, day date, line_no integer, ledger text, nature text, section text, section_from text, rate numeric,
+               assessable numeric, amount numeric, party text, deductee_type text, rate_worked_out boolean, exempt boolean)     -- 62: the two marks
+language plpgsql stable security definer set search_path = public, pg_temp as $function$
+#variable_conflict use_column
+declare f uuid := my_firm(); svc boolean := tally_service_or_owner();
+begin
+  if f is null and not svc then raise exception 'not allowed' using errcode = '42501'; end if;
+  if svc and f is null and p_book is null then raise exception 'which book?'; end if;
+  return query
+    select t.book_id, t.guid, t.day, t.line_no, t.ledger, t.nature, t.section, t.section_from, t.rate, t.assessable, t.amount, t.party,
+           coalesce(nullif((select x.tds_deductee_type from tally_ledgers x where x.book_id = t.book_id and x.name = t.party and x.deleted_at is null limit 1), ''), t.deductee_type),
+           t.rate_worked_out, t.exempt     -- 62: the rate FinCom worked out (Tally stored 0), Tally's exempt mark
+      from tally_tds_lines t
+      join tally_books b on b.book_id = t.book_id
+      join tally_vouchers v on v.book_id = t.book_id and v.guid = t.guid and v.deleted_at is null
+     where t.gone_at is null and (p_book is null or t.book_id = p_book) and (b.firm_id = f or (svc and f is null))
+     order by t.day, t.guid, t.line_no
+     limit 5000;
+end $function$;
+revoke all on function public.tally_tds_details_marked(uuid) from public, anon;
+grant execute on function public.tally_tds_details_marked(uuid) to authenticated, service_role;
 
 commit;

@@ -41,7 +41,9 @@ READERS = ["tally_tb", "tally_period", "tally_mis", "tally_gst_summary", "tally_
            # 06-Oct-2026 (migration 56: a recorder line keeps the fields its request does not fetch; the repair, not run)
            "tally_ingest_entries/5", "tally_recorder_keep_vouchers", "tally_recorder_keep_lines", "tally_recorder_blanked", "tally_recorder_restore_fields", "tally_recorder_restore_fields/2", "tally_unknown_ledger_entries", "tally_recorder_pair_lines",
            # 06-Oct-2026 (migration 57, bridge 2.3.1 part A: the entry's details, written by the entry path for both paths)
-           "tally_ingest_details", "tally_tds_details"]
+           "tally_ingest_details", "tally_tds_details",
+           # 08-Oct-2026 (migration 62, review M1 of 2.4.0 part 2: the TDS details with the rate-worked-out and exempt marks)
+           "tally_tds_details_marked"]
 texts = {}
 fails = []
 def ok(c, w):
