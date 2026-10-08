@@ -306,7 +306,41 @@ const Rec = {
         : g.kind === "locked" ? n(k) + (k === 1 ? " falls" : " fall") + " in a month locked in FinCom (" + w + ") \u2014 unlock the month in Tie-out; " + (k === 1 ? "it applies" : "they apply") + " then"
         : n(k) + " not yet entered in the books (" + (w || "held") + ") \u2014 Apply now once it is settled");
     });
-    return {needs: out, fetching};
+    // 2.4.0 review MEDIUM (next-renumber): the bridges' renumbering alerts are "Needs you" too (kind renumber), first
+    const rn = this.renumberNeeds().filter(g => !S.syncClient || g.cid === S.syncClient);
+    return {needs: rn.concat(out), fetching};
+  },
+  // 2.4.0 review MEDIUM (next-renumber): an entry inserted or deleted in Tally makes Tally renumber the later entries of
+  // that voucher type with no line for them; FinCom Bridge reads them again, and says the ones it could not
+  // (renumber.go: below the starting point, Tally too slow twice, an answer it cannot read, more than 500, or not
+  // listable by MasterID) on its beat (info.beat.renumberAlerts, kept by tally-ingest; the last 7 days). One item a
+  // company, the earliest date of every computer's alerts: [{key, kind: "renumber", cid, company, day, n, more, text}];
+  // its one action: Upload the Day Book from that day (Rec.uploadFrom)
+  renumberNeeds(){
+    const tl = (typeof TLight === "object" && TLight.st) || {}, by = new Map();
+    (tl.devs || []).filter(d => d && !d.revoked).forEach(d => {
+      [].concat((((d.info || {}).beat) || {}).renumberAlerts || []).forEach(a => {
+        const f = String((a && a.from) || "");
+        if (!a || !a.company || !/^\d{8}$/.test(f)) return;
+        const day = f.slice(0, 4) + "-" + f.slice(4, 6) + "-" + f.slice(6, 8), k = norm(a.company);
+        const co = (tl.cos || []).find(c => c.client_id && norm(c.company) === k)
+          || Object.values(S.companies || {}).map(c => ({client_id: c.id, company: c.tallyName || c.name})).find(c => !(S.companies[c.client_id] || {}).deleted && norm(c.company) === k);
+        if (!by.has(k)) by.set(k, {key: "renumber|" + a.company, kind: "renumber", cid: co ? co.client_id : "", company: a.company, day, n: 0, more: false, pc: this.pcOf(d), deviceId: d.id, lines: []});
+        const g = by.get(k);
+        if (day < g.day) g.day = day;
+        g.n += Math.max(0, Number(a.n) || 0); g.more = g.more || a.more === true;
+      });
+    });
+    return [...by.values()].sort((a, b) => a.company.localeCompare(b.company)).map(g => Object.assign(g, {
+      text: g.company + " \u00b7 " + fmtDate(g.day) + ": " + (g.more ? "more than " : "") + g.n + (g.n === 1 && !g.more ? " entry" : " entries") +
+        " may have been renumbered in Tally (an entry was inserted or deleted there) and could not be read again \u2014 upload the Day Book from " + fmtDate(g.day)}));
+  },
+  // the Day Book upload from a day to today: Books -> From Tally
+  async uploadFrom(cid, day){
+    if (!cid || !day) return;
+    if (S.view !== "company" || S.coId !== cid) await openCompany(cid);
+    S.dbFrom = day; S.dbTo = this.ymdLocal(Date.now());
+    goClient("books:import");
   },
   // the Day Book upload for one day: Books -> From Tally with that day (Rec.uploadDays does it from a day to today)
   async uploadDay(cid, day){

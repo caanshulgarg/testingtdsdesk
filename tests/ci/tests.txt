@@ -194,6 +194,7 @@ run_migration65.py                    120
 run_selfcheck_server.py               120
 run_tally_selfcheck_ui.py             120  TDSDESK_SITE=../app/dist-test
 run_renumber_list.py                  120
+run_renumber_needs.py                 120  TDSDESK_SITE=../app/dist-test
 run_migration67.py                    120
 # FinCom 2.4.0 (release-240): the branches' cloud and page tests that were not listed (each passes locally without tests/data)
 run_migration63.py                    120

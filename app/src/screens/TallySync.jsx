@@ -31,6 +31,8 @@ function NeedAction({ g, canApply, busy }) {
       return canApply && g.cid ? b("daybook", "Upload the Day Book for " + day, () => Rec.uploadDay(g.cid, g.day), { "data-needs-daybook": "" }) : <span className="note">{" (a member of the firm who may write does this)"}</span>;
     case "readstop":
       return owner ? b("resume", "Resume reading", () => Rec.resumeOn(g), { "data-needs-resume": "" }) : null;
+    case "renumber": // 2.4.0 review (next-renumber): entries Tally may have renumbered: the Day Book from that day to today
+      return canApply && g.cid ? b("daybook-from", "Upload the Day Book from " + day, () => Rec.uploadFrom(g.cid, g.day), { "data-needs-daybook": "" }) : <span className="note">{" (a member of the firm who may write does this)"}</span>;
     case "baseline":
       return b("tally", "Open the Tally page", () => Rec.openTallyPage());
     case "masters":
@@ -56,8 +58,8 @@ function SyncFlow({ flow, canApply, busy }) {
         <span data-needs-text="">{g.text}</span>{" "}
         <NeedAction g={g} canApply={canApply} busy={busy} />
         {" "}<ClearBtn x={clr} />
-        <details style={{ margin: "2px 0 0" }}><summary className="note" style={{ cursor: "pointer" }}>Which entries</summary>
-          {g.lines.map((r) => <div key={r.id} className="note" data-sync-needs-line={String(r.id)}>{Rec.entry(r) + (r.pc ? " from " + r.pc : "") + ", received " + tallyHm(r.received_at) + (r.held_why ? ": " + r.held_why : "")}</div>)}</details>
+        {g.lines.length > 0 && <details style={{ margin: "2px 0 0" }}><summary className="note" style={{ cursor: "pointer" }}>Which entries</summary>
+          {g.lines.map((r) => <div key={r.id} className="note" data-sync-needs-line={String(r.id)}>{Rec.entry(r) + (r.pc ? " from " + r.pc : "") + ", received " + tallyHm(r.received_at) + (r.held_why ? ": " + r.held_why : "")}</div>)}</details>}
       </div>)}
     </div>}
     {fetching.length > 0 && <div className="note" data-sync-fetching="" style={{ margin: "0 0 8px" }}>

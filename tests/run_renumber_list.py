@@ -12,6 +12,10 @@ against the stand-in for Supabase (fake_supabase.py), as run_main_bridge_server.
   3. capped: at most `limit` entries (500 at most whatever is asked), `more` when there were more.
   4. read-only: no table changes but the computer's last_seen (every call's), no database function but tally_book_for.
   5. refused: a company not linked (409), no voucher type or no date (400).
+  6. (2.4.0 review MEDIUM) the bridge's renumbering alerts ride on its beat (renumberAlerts: [{company, words, n, more,
+     from, type, at}]): tally-ingest keeps them on the computer's beat (info.beat.renumberAlerts), cleaned (at most 20, the
+     words 300 characters, from a yyyymmdd date), so FinCom shows each as a "Needs you" item: "Upload the Day Book from
+     <date>"; a beat without them: gone.
 RED: before the kind exists every call answers 400 "unknown kind"."""
 import os, sys, json, time, copy, hashlib, subprocess, urllib.request, shutil, threading
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -90,6 +94,19 @@ try:
     ok(c == 400, "5. no voucher type: 400 (%s)" % c)
     c, r = call(dict(ASK, **{"from": "5-Oct"}))
     ok(c == 400, "5. no date: 400 (%s)" % c)
+    # 6. the alerts on the beat
+    RA = [{"company": "ZZ CO", "words": "1 entry may have been renumbered in ZZ CO; upload the Day Book from 05-Oct-2026", "n": 1, "more": False,
+           "from": "20261005", "type": "Receipt", "at": "2026-10-08T10:00:00", "junk": "x" * 50}]
+    BEAT = {"kind": "beat", "version": "2.4.0", "bridge": "b" * 32, "tally": True, "tallyState": "open", "open": ["ZZ CO"]}
+    c, r = call(dict(BEAT, renumberAlerts=RA + [{"company": "", "words": ""}, "x", {"company": "Y", "words": "w" * 900, "n": -5, "from": "5-Oct", "more": "yes"}] + RA * 30))
+    bt = ((F.T["tally_devices"][0].get("info") or {}).get("beat") or {})
+    ra = bt.get("renumberAlerts") or []
+    ok(c == 200 and ra[:1] == [{k: v for k, v in RA[0].items() if k != "junk"}], "6. the beat keeps the bridge's renumbering alert, its fields only (%s)" % ra[:1])
+    ok(len(ra) == 20 and ra[1]["company"] == "Y" and len(ra[1]["words"]) == 300 and ra[1]["n"] == 0 and ra[1]["from"] == "" and ra[1]["more"] is False,
+       "6. cleaned: at most 20, an empty one left out, the words cut at 300, n never below 0, a date not yyyymmdd dropped (%s %s)" % (len(ra), ra[1:2]))
+    c, r = call(BEAT)
+    bt = ((F.T["tally_devices"][0].get("info") or {}).get("beat") or {})
+    ok(c == 200 and "renumberAlerts" not in bt, "6. a beat without them: gone (%s)" % bt.get("renumberAlerts"))
 finally:
     fn.terminate()
 print("\n%d failure(s)" % len(fails) if fails else "\nall ok")
