@@ -209,6 +209,7 @@ function Backlog233 {
   while (((Get-Date) - $t0).TotalMinutes -lt 30) {
     $marked = @(S2BridgeLog | Where-Object { $_ -match [regex]::Escape($Slow232St.co) + ': entry fetch stopped: over 2 s' })[0]
     if ($marked -and (B233OldDone) -ge $B233.n) { break }
+    if ($env:ONLY -eq 'fast234' -and (B233OldDone) -ge $B233.n) { break }   # 2.3.4: the fast request marks no company
     $k++; $null = S2Import $co1 (S2Journal '20260401' "B233-SMALL-$k" 'Spike Party' "backlog233 small $k" (13 + $k)) "small $k"
     Start-Sleep 120
   }
@@ -229,7 +230,16 @@ function Backlog233 {
   $ov = @()
   for ($i = 1; $i -lt $s.Count; $i++) { if ([int64]$s[$i].t0 -lt [int64]$s[$i - 1].t1) { $ov += ('{0} {1}(mid {2}) sent at +{3} ms while {4}(mid {5}) was at Tally until +{6} ms' -f $s[$i].at, $s[$i].id, $s[$i].mid, ([int64]$s[$i].t0 - [int64]$s[0].t0), $s[$i - 1].id, $s[$i - 1].mid, ([int64]$s[$i - 1].t1 - [int64]$s[0].t0)) } }
   Result 'backlog233 (3) no request while a previous one is unanswered at Tally' ($ov.Count -eq 0 -and $s.Count -gt 0) ("{0} requests of bridge 1 at the proxy; overlaps: {1}" -f $s.Count, $(if ($ov.Count) { ($ov | Select-Object -First 5) -join ' | ' } else { 'none' }))
-  # (4) the slow company marked, then no requests for it
+  # (4) the slow company marked, then no requests for it. 2.3.4 (the owner's goal: no company should need marking slow; only
+  # the fast request's stops count): the large company is NOT marked, and its new save comes with its body by
+  # FinComVoucherObject
+  if ($env:ONLY -eq 'fast234') {
+    $mk = Mark
+    $ra = S2Import $Slow232St.co (S2Journal '20260401' 'B233-AFTER-1' 'HExpense 0004' 'backlog233 after 1' 61) 'after 1'
+    $la = $null; for ($w = 0; $w -lt 30 -and -not $la; $w++) { Start-Sleep 1; $la = @((StubLines $mk) | Where-Object { "$($_.mid)" -eq "$($ra.mid)" -and $_.xml })[0] }
+    $objAfter = @(S2Proxy | Where-Object { $_.id -eq 'FinComVoucherObject' -and $_.company -eq $Slow232St.co -and "$($_.mid)" -eq "$($ra.mid)" })
+    Result 'backlog233 (4) 2.3.4: the large company is not marked; its new save comes with its body by FinComVoucherObject' (-not $marked -and $la -and $objAfter.Count -ge 1) ("marked: {0}; the save after the backlog: {1}; FinComVoucherObject for it at the proxy: {2} ({3} ms)" -f $(if ($marked) { "$marked" } else { 'no' }), $(if ($la) { Ev $la } else { 'no line with a body in 30 s' }), $objAfter.Count, (($objAfter | ForEach-Object { [int]$_.ms }) -join ','))
+  } else {
   Result 'backlog233 (4a) the slow company is marked' ([bool]$marked) $(if ($marked) { "$marked" } else { "no mark in the bridge's log in $([int]((Get-Date) - $t0).TotalMinutes) min" })
   if ($marked) {
     $mt = [regex]::Match("$marked", '^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})').Groups[1].Value
@@ -240,6 +250,7 @@ function Backlog233 {
     $after = @(S2Proxy | Where-Object { [int64]$_.t0 -gt $markMs -and (S2Entry $_) -and $_.company -eq $Slow232St.co })
     $la = @((StubLines $mk) | Where-Object { $_.vch -like '*B233-AFTER-1*' })
     Result 'backlog233 (4b) no requests for it after the mark' ($markMs -gt 0 -and $after.Count -eq 0 -and $la.Count -ge 1 -and -not $la[0].xml) ("{0} entry request(s) for it after the mark ({1}); its new save after the mark: {2}" -f $after.Count, $mt, (($la | ForEach-Object { Ev $_ }) -join ' || '))
+  }
   }
   # (5) a small company's entries arrive with their bodies: the one saved during the backlog, and one saved now (after the
   # backlog and the mark), waited for 3 minutes at most (run 37615287108: the backlog and the mark were over before a

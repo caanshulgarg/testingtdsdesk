@@ -49,6 +49,13 @@ function F234Setup {
     }
   } else { Add-Content -Path $resultsFile -Encoding UTF8 -Value 'INFO fast234: no requests\entry-object.xml from the build: the direct timing is skipped' }
   $F234.ok = $true
+  # 2.3.4's gate (the coordinator, 08-Oct-2026): the backlog233 checks (1)-(8) in the same run, on the same two companies
+  $B233.cguid = [regex]::Match((ListCo 9000), '(?s)NAME="' + [regex]::Escape($F234.bigCo) + '".*?<GUID[^>]*>([^<]+)</GUID>').Groups[1].Value.Trim()
+  if (-not $B233.cguid) {
+    foreach ($m in [regex]::Matches("$(ListCo 9000)", '<COMPANY[^>]*>([\s\S]*?)</COMPANY>')) { if ([regex]::Match($m.Groups[1].Value, '<NAME[^>]*>([^<]*)</NAME>').Groups[1].Value -eq $F234.bigCo) { $B233.cguid = [regex]::Match($m.Groups[1].Value, '<GUID[^>]*>([^<]*)</GUID>').Groups[1].Value.Trim() } }
+  }
+  Add-Content -Path $resultsFile -Encoding UTF8 -Value "INFO fast234: the backlog233 checks run too (the large company's GUID '$($B233.cguid)')"
+  $B233.ok = $true
 }
 
 # bridge 1's sync folder before it starts: the ids 2.3.3 ENDED (their ":resolved" held line sent with the Day Book words)
