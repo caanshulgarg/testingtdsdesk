@@ -193,7 +193,7 @@ async function sha256(s: string) {
 function b64bytes(s: string) { const bin = atob(s); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; }
 // unzipped a piece at a time, and stopped past a limit (a small file that unzips to gigabytes is refused)
 async function gunzip(u: Uint8Array, max: number) {
-  const r = new Blob([u]).stream().pipeThrough(new DecompressionStream("gzip")).getReader();
+  const r = new Blob([u as BlobPart]).stream().pipeThrough(new DecompressionStream("gzip")).getReader();
   const parts: Uint8Array[] = []; let n = 0;
   for (;;) {
     const { done, value } = await r.read();
@@ -206,7 +206,7 @@ async function gunzip(u: Uint8Array, max: number) {
   return { text: new TextDecoder("utf-8").decode(all), size: n };
 }
 async function gzipBytes(u: Uint8Array) {
-  const b = await new Response(new Blob([u]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer();
+  const b = await new Response(new Blob([u as BlobPart]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer();
   return new Uint8Array(b);
 }
 // the body read a piece at a time, whatever the request says its length is
