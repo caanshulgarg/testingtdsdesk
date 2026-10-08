@@ -495,7 +495,9 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
       // whose own held words are the slow words, and the lines whose ":resolved" row carries them (read by their ids)
       const since30 = new Date(Date.now() - HELD_SLOW_DAYS * 86400000).toISOString();
       const cols = "line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date, book_id, received_at, bridge, device_id, object_guid, body, held_why, payload";
-      const base = () => db.from("tally_recorder_lines").select(cols).eq("firm_id", firm).eq("device_id", dev.id).eq("bridge", bridge).eq("state", "held");
+      // 2.3.4 re-review 2 (L-a): created / altered / imported only (a line's ":resolved" row carries its line's event), so
+      // held cancels, deletes and other rows never take the slots of the lines listed
+      const base = () => db.from("tally_recorder_lines").select(cols).eq("firm_id", firm).eq("device_id", dev.id).eq("bridge", bridge).eq("state", "held").in("event", ["created", "altered", "imported"]);
       const got: any[] = [];
       let bad = "";
       const ids = new Set<string>();
