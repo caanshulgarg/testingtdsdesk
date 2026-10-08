@@ -1,0 +1,62 @@
+FINCOM 2.3.5 - TEST SHEET (NWS144, staging)
+
+File:        FinComBridge-Setup-2.3.5.exe
+Fingerprint: (filled in when the setup is built)
+Link:        https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.3.5.exe
+
+What 2.3.5 changes (the full notes: docs/bridge-2.3.5-notes.md):
+1. The Tally pages are simpler: one card per computer with one status line, three steps, the rest under More; Sync
+   activity shows "Needs you" only when a person must act.
+2. Clear notifications everywhere: in FinCom (bell and page lines, with Undo) and in the bridge's tray. "if one time
+   any notification is cleared then that notification should not appear" (the owner).
+3. Held lines under FinCom's read stop: a held delete keeps its entry id; the line says reading is stopped; a refused
+   request is not a try, a real Tally failure still is.
+No Tally request added or changed. FinCom's cloud: migration 68 (the owner runs it). The add-on is unchanged.
+
+Before you start: you are signed in to FinCom as the owner, TallyPrime 7.1 is open on NWS144 with the add-on loaded,
+GARG SHEKHAR & COMPANY and IX DESIGNS open in the Tally of the Windows user whose bridge you check. In every entry you
+make for this sheet, start the narration with TRIAL. Write down the time (IST) of each check.
+
+CHECK 1 - THE VERSION
+   Install FinComBridge-Setup-2.3.5.exe and compare its fingerprint with the one above.
+   You should see: the tray says FinCom Bridge 2.3.5; FinCom's Tally page shows version 2.3.5 for your computer (under
+   More if it is not on the card).
+
+CHECK 2 - THE TALLY PAGE
+   Open FinCom's Tally page.
+   You should see: one card for NWS144 and your Windows user with one status line ("Connected · Tally open: ...");
+   everything else under More. Close Tally: within a few minutes the line says Tally is not open on NWS144. Open it
+   again: the line says Connected.
+
+CHECK 3 - SYNC ACTIVITY
+   In GARG SHEKHAR make a Journal of Rs 1, narration "TRIAL 235 sync 1". Open Sync activity.
+   You should see: no permanent yellow box; the entry in the books within a few seconds. A yellow "Needs you" appears
+   only for lines a person must settle, one sentence per company and day with one button.
+
+CHECK 4 - CLEAR NOTIFICATIONS IN FINCOM
+   Open the bell. Clear one item, then reload the page and open FinCom on your phone.
+   You should see: the cleared item does not come back, on either. Clear all, then Undo: they are back. On the phone
+   the line's words are readable on their own line, the buttons below, nothing scrolls sideways.
+
+CHECK 5 - CLEAR NOTIFICATIONS IN THE TRAY
+   Close Tally for 3 minutes: the tray shows "Tally not open" once. Close it with X. Open and close Tally again, and
+   restart the icon (right-click > Restart).
+   You should see: the same notification is not shown again today. Right-click the icon > Clear notifications: it says
+   how many were cleared. The icon's colour and tooltip still show the state.
+
+CHECK 6 - A DELETE WHILE READING IS STOPPED
+   In IX DESIGNS make a Journal of Rs 1, narration "TRIAL 235 delete", wait until it is in the books. On FinCom's Tally
+   page (More) stop reading from Tally for NWS144, then delete the entry in Tally (Day Book, select it, Alt+D, Yes).
+   You should see: Sync activity shows the delete waiting with "reading from Tally is stopped from FinCom; asked again
+   when it is resumed". Resume reading: within a minute the entry is gone from FinCom's books, not held.
+   If not, send: the time, a photo of Sync activity, and the Show log lines with "delete of mid".
+
+How to send the log lines: right-click the FinCom icon near the clock > Show log. On NWS144 each Windows user has their
+own FinCom icon and their own log: send the log of the Windows user named in the check.
+
+HOW TO ROLL BACK (go back to 2.3.4)
+   1. Right-click the FinCom icon near the clock > "Roll back to the previous version".
+   2. A question names the version it goes back to (2.3.4). Answer Yes.
+   3. The icon goes away for a few seconds and comes back.
+   You should see: within a minute, FinCom's Tally page shows version 2.3.4 for your line. Automatic updates stay off on
+   this computer until FinCom turns them on again.

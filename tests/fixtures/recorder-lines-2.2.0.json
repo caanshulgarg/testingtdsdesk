@@ -5,7 +5,7 @@
     "mode": "main",
     "runMode": "service",
     "user": "owner",
-    "version": "2.3.4"
+    "version": "2.3.5"
   },
   "company": "ZZ TEST",
   "company_guid": "co-guid-1",
@@ -111,5 +111,5 @@
       "xml": "<LEDGER NAME=\"Landlord B\" RESERVEDNAME=\"\"><GUID>led-1</GUID><MASTERID> 1</MASTERID><ALTERID> 1</ALTERID><PARENT>Sundry Creditors</PARENT><OPENINGBALANCE>0.00</OPENINGBALANCE><PARTYGSTIN></PARTYGSTIN><INCOMETAXNUMBER></INCOMETAXNUMBER><LEDSTATENAME></LEDSTATENAME></LEDGER>"
     }
   ],
-  "version": "2.3.4"
+  "version": "2.3.5"
 }

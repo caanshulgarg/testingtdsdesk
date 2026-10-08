@@ -271,12 +271,12 @@ func testFetchOf(request string) string {
 // --- 2.3.4: the version, the allow-list's decision line naming FinComVoucherObject with the owner's words of 08-Oct-2026,
 // the notes and the test sheet
 func TestFast234VersionAndDecisionLine(t *testing.T) {
-	if BridgeVersion != "2.3.4" {
+	if BridgeVersion != "2.3.5" {
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))
 	line := group(`(?m)^(First table: .*)$`, al, 1)
-	for _, w := range []string{"allowed for 2.3.4 by the owner's decision of 2026-10-08: the entry request is FinComVoucherObject",
+	for _, w := range []string{"as for 2.3.4: the owner's decision of 2026-10-08: the entry request is FinComVoucherObject",
 		`"Allow, strip in bridge."`, `"1. Fast request form (FinComVoucherObject): YES. 2. The 13 fields: all approved, keep all 13.`,
 		"the trial forms FinComFetchTestA and FinComFetchTestC removed", "as for 2.3.3: the owner's standing decision of 2026-10-06"} {
 		if !strings.Contains(line, w) {
