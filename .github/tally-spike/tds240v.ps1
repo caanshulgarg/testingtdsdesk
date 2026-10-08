@@ -109,6 +109,15 @@ try {
       if (-not $x.rateWorkedOut -or $null -eq $want -or [math]::Abs([double]$x.rate - $want) -gt 0.0001) { $bad += "Tally stored 0, not worked out right: $(& $desc $x)" } }
     else { $cases += "Tally stored $stored`: kept"; if ($x.rateWorkedOut -or [math]::Abs([double]$x.rate - [double]$stored) -gt 0.0001) { $bad += "Tally's rate $stored not kept: $(& $desc $x)" } }
   }
+  # t3 (2.4.0, next-push: the add-on's full entry carries the TDS list's $Exempted): the add-on's own voucher_full line for
+  # this entry, its T record's ex against Tally's EXEMPTED (kept: captures/tds240-addon-lines.txt, judged offline too)
+  $al = @(Get-ChildItem $rec -File -ErrorAction SilentlyContinue | ForEach-Object { Get-Content $_.FullName -Encoding Unicode } | Where-Object { $_ -like 'FCR1|ev=voucher_full|*' -and $_ -match "\|mid=$mid\|" })
+  Set-Content (Join-Path $cap 'tds240-addon-lines.txt') $al -Encoding UTF8
+  $lex = @($al | ForEach-Object { [regex]::Matches($_, '\|L\d+T\d+=[^|]*') | ForEach-Object { $_.Value } })
+  $exs = @($lex | ForEach-Object { [regex]::Match($_, '~ex=([^~|]*)').Groups[1].Value })
+  $tex = @($ta | ForEach-Object { $_.exempt })
+  $st3 = if (-not $al.Count) { 'HARNESS' } elseif (-not $lex.Count) { 'FAIL' } elseif (@($lex | Where-Object { $_ -notmatch '~ex=' }).Count) { 'FAIL' } elseif (($exs -join ',') -eq ($tex -join ',')) { 'PASS' } else { 'FAIL' }
+  Result 't3 the add-on''s full line carries the TDS exempt mark (2.4.0)' $st3 ("the add-on's T record(s): {0}; Tally's EXEMPTED: {1}; full lines {2}" -f ($lex -join ' | '), ($tex -join ','), $al.Count)
   $anyEx = @($ft | Where-Object { $_.exempt }).Count
   TdRes $CT2 $(if ($ft.Count -and -not $bad.Count) { 'PASS' } elseif (-not $ft.Count) { 'FAIL' } else { 'FAIL' }) ("{0} TDS line(s): {1}; an exempt line on this release: {2}; wrong: {3}" -f $ft.Count, ($cases -join ' | '), $(if ($anyEx) { "yes ($anyEx)" } else { 'no (Tally did not mark the typed line exempt)' }), $(if ($bad.Count) { $bad -join ' | ' } else { 'none' }))
 } catch {
