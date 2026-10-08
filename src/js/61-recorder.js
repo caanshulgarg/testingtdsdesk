@@ -306,6 +306,17 @@ const Rec = {
         : g.kind === "locked" ? n(k) + (k === 1 ? " falls" : " fall") + " in a month locked in FinCom (" + w + ") \u2014 unlock the month in Tie-out; " + (k === 1 ? "it applies" : "they apply") + " then"
         : n(k) + " not yet entered in the books (" + (w || "held") + ") \u2014 Apply now once it is settled");
     });
+    // bridge 2.4.0 (next-outbox; the coordinator, 08-Oct-2026: "nothing lost", shown): saves FinCom answered 'failed' again
+    // and again; the bridge keeps them and sends them every 30 minutes, its beat says how many, since when and the oldest's
+    // day. Through the one classifier (a held row in the bridge's words: daybook), one group per computer and company
+    this.stuck().forEach(x => {
+      const kind = this.needKind(this.stuckRow(x));
+      if (!kind) return;
+      const d = x.day ? fmtDate(x.day) : "", hm = /T(\d{2}:\d{2})/.exec(String(x.since || "")), k = num(x.n);
+      out.push({key: kind + "|" + x.company + "|" + (x.day || "") + "|stuck|" + x.deviceId, kind, cid: this.clientOf(x.company), company: x.company, day: x.day || "", pc: x.pc, deviceId: x.deviceId, lines: [], stuck: true,
+        text: x.company + (d ? " \u00b7 " + d : "") + ": " + k + (k === 1 ? " save" : " saves") + " from " + x.pc + " could not be stored in FinCom" + (hm ? " since " + hm[1] : "") +
+          "; FinCom keeps trying \u2014 if it continues, upload the Day Book for " + (d || "that day")});
+    });
     // 2.4.0 review MEDIUM (next-renumber): the bridges' renumbering alerts are "Needs you" too (kind renumber), first
     const rn = this.renumberNeeds().filter(g => !S.syncClient || g.cid === S.syncClient);
     return {needs: rn.concat(out), fetching};
@@ -341,6 +352,26 @@ const Rec = {
     if (S.view !== "company" || S.coId !== cid) await openCompany(cid);
     S.dbFrom = day; S.dbTo = this.ymdLocal(Date.now());
     goClient("books:import");
+  },
+  // the lines a computer's bridge keeps because FinCom could not store them (its beat's recorderStuck), each
+  // {company, n, since, day, pc, deviceId}
+  stuck(){
+    const seen = new Set(), out = [];
+    [].concat((typeof TCloud === "object" && TCloud.pane.devices) || [], (typeof TLight === "object" && TLight.st.devs) || []).forEach(d => {
+      if (!d || d.revoked || seen.has(d.id)) return;
+      seen.add(d.id);
+      const info = d.info || {}, b = info.beat || {};
+      [].concat(b.recorderStuck || []).forEach(x => { if (x && x.company && num(x.n) > 0) out.push({company: String(x.company), n: num(x.n), since: x.since || "", day: x.day || "", pc: info.computer || d.name || "the Tally computer", deviceId: d.id}); });
+    });
+    return out;
+  },
+  // a stuck group as a held row in the bridge's words, so the one classifier (needKind) decides it
+  stuckRow(x){ return {state: "held", object_guid: "", stuck: x, held_why: "could not be stored in FinCom; FinCom Bridge keeps it and sends it again every 30 minutes; if it continues, upload that day's Day Book"}; },
+  // the FinCom client a Tally company is linked to (its Tally name, else its name), "" when none here
+  clientOf(company){
+    const k = String(company || "").trim().toLowerCase(), c = Object.values(S.companies || {}).find(x => x && String(x.tallyName || "").trim().toLowerCase() === k)
+      || Object.values(S.companies || {}).find(x => x && String(x.name || "").trim().toLowerCase() === k);
+    return c ? c.id : "";
   },
   // the Day Book upload for one day: Books -> From Tally with that day (Rec.uploadDays does it from a day to today)
   async uploadDay(cid, day){
