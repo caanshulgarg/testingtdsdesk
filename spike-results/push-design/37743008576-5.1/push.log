@@ -1,0 +1,450 @@
+[07:30:52.687] push-design on TallyPrime 5.1: reps 5, heavy 3000 ledgers / 3000 items / up to 30000 vouchers (40 min), postings 1
+[07:30:53.604] system clock step after timeBeginPeriod(1): 0.995 ms (min 0.0038, max 16.0643)
+[07:30:53.623] two files written 2 ms apart: NTFS write times 7.58 ms apart
+[07:30:53.643] light company folder: D:\a\_temp\TallyData\100000
+[07:30:53.693] fast234 (fast234g) on TallyPrime 5.1: today's request 2927 chars, 61 fields
+[07:30:53.739] ---- fast234g: GST on (D:\a\_temp\fast234g\on)
+[07:30:56.765] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-setup-started (1024x768)
+[07:31:24.983] Tally started (g-on-setup) in 28.2 s; company open: True
+[07:31:25.019] import company GST on: 1 sent, created 0, errors 0, 13.5 ms
+[07:31:25.025] GST on: ISGSTON before 'Yes', after the alteration 'Yes'
+[07:31:25.217] import light masters: 60 sent, created 59, errors 0, 170.1 ms
+[07:31:25.314] import xml item invoice: 1 sent, created 1, errors 0, 82.3 ms
+[07:31:25.353] import xml accounting sales: 1 sent, created 1, errors 0, 36.4 ms
+[07:31:25.383] import xml accounting sales (IRN to come): 1 sent, created 1, errors 0, 27.9 ms
+[07:31:25.456] import IRN and e-way bill written back (alter): 1 sent, created 1, errors 0, 27.7 ms
+[shot] tds-001-gw0 (1024x768)
+[07:31:29] [tds] screen tds-001-gw0 : TallyPrime MANAGE EDU K: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Y: Data Z: Exchange CURRENT OATE Wednesday, I-Apr-2026 O: Import E: Export M: Share p: print Fl: Help Date c2bec Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Q upr-26 Search Company to ru 9a96- acep ad35— 9a96- acep .337.0 UOe1 ening ' 4746d ing j _id" : 2-01" ad35— Mode Windows Server 2025 Datacenter Build 261...
+[shot] tds-002-g-on-screen-start (1024x768)
+[07:31:30] [tds] screen tds-002-g-on-screen-start : TallyPrime MANAGE EDU K: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Y: Data Z: Exchange CURRENT OATE Wednesday, I-Apr-2026 O: Import E: Export M: Share p: print Fl: Help Date c2bec Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Q upr-26 Search Company to ru 9a96- acep ad35— 9a96- acep .337.0 UOe1 ening ' 4746d ing j _id" : 2-01" ad35— Mode Windows Server 2025 Datacenter Build 261...
+[keys] 'v'
+[shot] tds-003-g-on-screen-vouchers (1024x768)
+[07:31:34] [tds] screen tds-003-g-on-screen-vouchers : TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Pa ment No. 1 Account Current balance: Particulars Narration: Unity Quit Y: Data Z: Exchange A Accept Q Search O: Import E: Export M: Share FinCom • ke Co p: print upr-26 Wednesday Amount Fl: Help Q: Date Company Ed: Contra F-5: Payment Receipt Journal Sales c2bec to ru 9a96- acep ad35— Purchase 9a96- Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat acep .337.0 UOe1 ening ' 4746d ing j _id" : 2-01" ad35— D: Delete x: Cancel Vch Adjustment El 2: Configure Mode Windows Server 2025 D...
+[keys] '{F8}'
+[shot] tds-004-g-on-screen-type (1024x768)
+[07:31:38] [tds] screen tds-004-g-on-screen-type : Unity TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Sales Party Alc narne. Current balance: Sales ledger: • Current balance: Name of Item Narration: Quit Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Fl: Help Date c2bec Company to ru F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related Reports Optional post -Dated .337.0 UOe1 ening ' 4746...
+[keys] '^h'
+[shot] tds-005-g-on-screen-mode (1024x768)
+[07:31:42] [tds] screen tds-005-g-on-screen-mode : TallyPrime MANAGE EDU K: Company Change Mode Unity Quit Y: Data Z: Exchange O: Import E: Export M: Share p: print Fl: Help FinCom • ke Co Change Voucher Mode Item Invoice List of Modes/Usa es Item Invoice Accounting Invoice As Voucher A Accept Q Search c2bec to ru 9a96- acep ad35— 9a96- acep .337.0 UOe1 ening ' 4746d ing j _id" : 2-01" ad35— Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:31 AM 10/8/2026
+[keys] 'Item Invoice{ENTER}'
+[shot] tds-006-g-on-screen-item-mode (1024x768)
+[07:31:45] [tds] screen tds-006-g-on-screen-item-mode : Unity TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Sales Party Alc narne. Current balance: Sales ledger: • Current balance: Name of Item Narration: Quit Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Fl: Help Date c2bec Company to ru F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related Reports Optional post -Dated .337.0 UOe1 ening ' 4746...
+[keys] '{F2}'
+[shot] tds-007-g-on-screen-date-box (1024x768)
+[07:31:48] [tds] screen tds-007-g-on-screen-date-box : TallyPrime MANAGE EDU K: Company Change Voucher Date Unity Quit Y: Data Z: Exchange A Accept Q Search O: Import E: Export M: Share p: print Fl: Help FinCom Spike Co Voucher Date 24-2026 c2bec to ru 9a96- acep ad35— 9a96- acep .337.0 UOe1 ening ' 4746d ing j _id" : 2-01" ad35— Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:31 AM 10/8/2026
+[keys] '2-10-2026{ENTER}'
+[shot] tds-008-g-on-screen-date (1024x768)
+[07:31:51] [tds] screen tds-008-g-on-screen-date : Unity TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Sales Party Alc narne. Current balance: Sales ledger: • Current balance: Name of Item Narration: Quit Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Fl: Help Date c2bec Company to ru F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related Reports Optional post -Dated .337.0 UOe1 ening ' 4746...
+[keys] 'Template Party{ENTER}'
+[shot] tds-009-g-on-screen-party (1024x768)
+[07:31:55] [tds] screen tds-009-g-on-screen-party : R CEDU Details TallyPrime MANAGE K: Company Y: Data Z: Exchange Accept Q Search O: Import E: Export M: Share p: print Fl: Help x Delivery Note No(s) FinCom Spike Co Dispatch Details Dispatch Doc No. Dispatched through Destination Carrier Name/Agent Bill of No. Motor Vehicle No. Date: Unity Quit c2bec to ru 9a96- acep ad35— 9a96- acep .337.0 UOe1 ening ' 4746d ing j _id" : 2-01" ad35— Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:31 AM 10/8/2026
+[shot] tds-010-g-on-screen-party-sub1 (1024x768)
+[07:31:56] [tds] screen tds-010-g-on-screen-party-sub1 : R CEDU Details TallyPrime MANAGE K: Company Y: Data Z: Exchange Accept Q Search O: Import E: Export M: Share p: print Fl: Help x Delivery Note No(s) FinCom Spike Co Dispatch Details Dispatch Doc No. Dispatched through Destination Carrier Name/Agent Bill of No. Motor Vehicle No. Date: Unity Quit c2bec to ru 9a96- acep ad35— 9a96- acep .337.0 UOe1 ening ' 4746d ing j _id" : 2-01" ad35— Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:31 AM 10/8/2026
+[keys] '^a'
+[shot] tds-011-g-on-screen-party-sub-accept (1024x768)
+[07:31:59] [tds] screen tds-011-g-on-screen-party-sub-accept : R CEDU TallyPrime MANAGE K: Company Y: Data Z: Exchange FinCom Spike Co Party Details Dem late Pa List of Led er Accounts Spike Party Spike Party 2 Template Party Ul Party O: Import Create New Party E: Export M: Share p: print Fl: Help Details Quit Buyer (Bill to) Mailing Name Address State Country GST Registration type GSTIN/UIN Place of Supply Accept Q Search x L: Unity Fetch Details Using GSTIN/UIN Configure c2bec to ru 9a96- acep ad35— 9a96- acep .337.0 UOe1 ening ' 4746d ing j _id" : 2-01" ad35— Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:31 AM 10/8/2026
+[shot] tds-012-g-on-screen-party-sub2 (1024x768)
+[07:32:00] [tds] screen tds-012-g-on-screen-party-sub2 : R CEDU TallyPrime MANAGE K: Company Y: Data Z: Exchange FinCom Spike Co Party Details Dem late Pa List of Led er Accounts Spike Party Spike Party 2 Template Party Ul Party O: Import Create New Party E: Export M: Share p: print Fl: Help Details Quit Buyer (Bill to) Mailing Name Address State Country GST Registration type GSTIN/UIN Place of Supply Accept Q Search x L: Unity Fetch Details Using GSTIN/UIN Configure c2bec to ru 9a96- acep ad35— 9a96- acep .337.0 UOe1 ening ' 4746d ing j _id" : 2-01" ad35— Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:31 AM 10/8/2026
+[keys] '^a'
+[shot] tds-013-g-on-screen-party-sub-accept (1024x768)
+[07:32:03] [tds] screen tds-013-g-on-screen-party-sub-accept : TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Sales M: Share p: print x Create Show More Fl: Help Date c2bec Sales Party Alc narne. Current balance: Sales ledger: • Current balance: Company to ru Template Party 922.00 Dr Name of Item Narration: Quit F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related Reports Optional post -Dated .337.0 UOe1 ening ' 4746d ing j _id" : 2-01" ad35— Uni...
+[shot] tds-014-g-on-screen-party-sub3 (1024x768)
+[07:32:04] [tds] screen tds-014-g-on-screen-party-sub3 : TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Sales M: Share p: print x Create Show More Fl: Help Date c2bec Sales Party Alc narne. Current balance: Sales ledger: • Current balance: Company to ru Template Party 922.00 Dr Name of Item Narration: Quit F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related Reports Optional post -Dated .337.0 UOe1 ening ' 4746d ing j _id" : 2-01" ad35— Uni...
+[keys] 'Sales{ENTER}'
+[shot] tds-015-g-on-screen-ledger (1024x768)
+[07:32:08] [tds] screen tds-015-g-on-screen-ledger : TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import Quantity E: Export Rate M: Share per p: print 2-Oct-26 Friday Amount Fl: Help Date c2bec Sales Party Alc narne. Current balance: Sales ledger: • Current balance: Company to ru Template Party 922.00 Dr Sales 850.00 Cr Name of Item Narration: Quit F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— Ch Unity 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related Reports Optional post -Dated .337.0 UOe1 ening ' 4746d ing j _id" ...
+[keys] 'Item T03{ENTER}'
+[shot] tds-016-g-on-screen-item (1024x768)
+[07:32:11] [tds] screen tds-016-g-on-screen-item : TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import Quantity E: Export Rate M: Share per p: print 2-Oct-26 Friday Amount Fl: Help Date c2bec Sales Party Alc narne. Current balance: Sales ledger: • Current balance: Company to ru Template Party 922.00 Dr Sales 850.00 Cr Name of Item Item T03 Narration: Quit F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related Reports Optional post -Dated .337.0 UOe1 ening ' 4746d ing j _id" ...
+[shot] tds-017-g-on-screen-item-sub1 (1024x768)
+[07:32:12] [tds] screen tds-017-g-on-screen-item-sub1 : TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import Quantity E: Export Rate M: Share per p: print 2-Oct-26 Friday Amount Fl: Help Date c2bec Sales Party Alc narne. Current balance: Sales ledger: • Current balance: Company to ru Template Party 922.00 Dr Sales 850.00 Cr Name of Item Item T03 Narration: Quit F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related Reports Optional post -Dated .337.0 UOe1 ening ' 4746d ing j _id" ...
+[keys] '2{ENTER}'
+[shot] tds-018-g-on-screen-qty (1024x768)
+[07:32:15] [tds] screen tds-018-g-on-screen-qty : TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import Quantity 2 Nos 2 Nos E: Export Rate M: Share per p: print 2-Oct-26 Friday Amount Fl: Help Date c2bec Sales Party Alc narne. Current balance: Sales ledger: • Current balance: Company to ru Template Party 922.00 Dr Sales 850.00 Cr Name of Item Item T03 Narration: Quit F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related Reports Optional post -Dated .337.0 UOe1 ening ' 4746d...
+[keys] '100{ENTER}'
+[shot] tds-019-g-on-screen-rate (1024x768)
+[07:32:17] [tds] screen tds-019-g-on-screen-rate : TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import Quantity 2 Nos 2 Nos E: Export Rate 100.00 M: Share per Nos p: print 2-Oct-26 Friday Amount 200.00 Fl: Help Date c2bec Sales Party Alc narne. Current balance: Sales ledger: • Current balance: Company to ru Template Party 922.00 Dr Sales 850.00 Cr Name of Item Item T03 Narration: Quit F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: 200.00 Related Reports Optional post -Dated ...
+[keys] '{ENTER}'
+[shot] tds-020-g-on-screen-amount (1024x768)
+[07:32:20] [tds] screen tds-020-g-on-screen-amount : TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import Quantity 2 Nos 2 Nos E: Export Rate 100.00 M: Share per Nos p: print 2-Oct-26 Friday Amount 200.00 Fl: Help Date c2bec Sales Party Alc narne. Current balance: Sales ledger: • Current balance: Company to ru Template Party 922.00 Dr Sales 850.00 Cr Name of Item Item T03 Narration: Quit F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: 200.00 Related Reports Optional post -Dated ...
+[shot] tds-021-g-on-screen-item-b-sub1 (1024x768)
+[07:32:21] [tds] screen tds-021-g-on-screen-item-b-sub1 : TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import Quantity 2 Nos 2 Nos E: Export Rate 100.00 M: Share per Nos p: print 2-Oct-26 Friday Amount 200.00 Fl: Help Date c2bec Sales Party Alc narne. Current balance: Sales ledger: • Current balance: Company to ru Template Party 922.00 Dr Sales 850.00 Cr Name of Item Item T03 Narration: Quit F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: 200.00 Related Reports Optional post -Dated ...
+[keys] '{ENTER}'
+[shot] tds-022-g-on-screen-items-done (1024x768)
+[07:32:24] [tds] screen tds-022-g-on-screen-items-done : TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import Quantity 2 Nos 2 Nos E: Export Rate 100.00 M: Share per Nos p: print 2-Oct-26 Friday Amount 200.00 200.00 Fl: Help Date c2bec Sales Party Alc narne. Current balance: Sales ledger: • Current balance: Company to ru Template Party 922.00 Dr Sales 850.00 Cr Name of Item Item T03 Narration: Quit F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: 200.00 Related Reports Optional post -Date...
+[keys] '^a'
+[shot] tds-023-g-on-screen-accept1 (1024x768)
+[07:32:28] [tds] screen tds-023-g-on-screen-accept1 : Unity TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Sales No. 6 Party Alc narne. Current balance: Sales ledger: • Current balance: Name of Item Narration: Quit Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Fl: Help Date c2bec Company to ru F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related Reports Optional post -Dated .337.0 UOe1 ening ...
+[shot] tds-024-g-on-screen-after1 (1024x768)
+[07:32:29] [tds] screen tds-024-g-on-screen-after1 : Unity TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Sales No. 6 Party Alc narne. Current balance: Sales ledger: • Current balance: Name of Item Narration: Quit Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Fl: Help Date c2bec Company to ru F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related Reports Optional post -Dated .337.0 UOe1 ening ...
+[keys] '^a'
+[shot] tds-025-g-on-screen-accept2 (1024x768)
+[07:32:35] [tds] screen tds-025-g-on-screen-accept2 : Unity TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Q: Quit Y: Data Z: Exchange A: Accept Q Search O: Import E: Export M: Share FinCom Spike Co p: print Fl: Help x F2: Date F3: Company F4: Contra F5: Payment t F6: Receipt F7: Journal F8: Sales F9: Purchase F: Autofill H: Change Mode l: More Details Error Oops! No Entries in Voucher! O: Related Reports k: Optional T: post -Dated c2bec to ru 9a96- acep ad35— 9a96- acep .337.0 UOe1 ening ' 4746d ing j _id" : 2-01" ad35— p: Delete , cancel vch Fl 2: Configure Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7•.3...
+[shot] tds-026-g-on-screen-after2 (1024x768)
+[07:32:36] [tds] screen tds-026-g-on-screen-after2 : Unity TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Q: Quit Y: Data Z: Exchange A: Accept Q Search O: Import E: Export M: Share FinCom Spike Co p: print Fl: Help x F2: Date F3: Company F4: Contra F5: Payment t F6: Receipt F7: Journal F8: Sales F9: Purchase F: Autofill H: Change Mode l: More Details Error Oops! No Entries in Voucher! O: Related Reports k: Optional T: post -Dated c2bec to ru 9a96- acep ad35— 9a96- acep .337.0 UOe1 ening ' 4746d ing j _id" : 2-01" ad35— p: Delete , cancel vch Fl 2: Configure Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7•.3...
+[keys] '^a'
+[shot] tds-027-g-on-screen-accept3 (1024x768)
+[07:32:40] [tds] screen tds-027-g-on-screen-accept3 : Unity TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Sales No. 6 Party A/c narne: Cash Current balance: Sales ledger: Sales • Current balance: 1,050.00 Cr Name of Item End of List End of List Narration: Quit Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Fl: Help Date c2bec Company to ru F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related ...
+[shot] tds-028-g-on-screen-after3 (1024x768)
+[07:32:41] [tds] screen tds-028-g-on-screen-after3 : Unity TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Sales No. 6 Party A/c narne: Cash Current balance: Sales ledger: Sales • Current balance: 1,050.00 Cr Name of Item End of List End of List Narration: Quit Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Fl: Help Date c2bec Company to ru F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related ...
+[shot] tds-029-gw0 (1024x768)
+[07:32:42] [tds] screen tds-029-gw0 : Unity TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Sales No. 6 Party A/c narne: Cash Current balance: Sales ledger: Sales • Current balance: 1,050.00 Cr Name of Item End of List End of List Narration: Quit Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Fl: Help Date c2bec Company to ru F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related ...
+[keys] '{ESC}'
+[shot] tds-030-gw1 (1024x768)
+[07:32:46] [tds] screen tds-030-gw1 : Unity TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Sales No. 6 Party Alc narne. Current balance: Sales ledger: Sales • Current balance: 1,050.00 Cr Name of Item End of List End of List Narration: Quit Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Fl: Help Date c2bec Company to ru F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related Repor...
+[keys] '{ESC}'
+[shot] tds-031-gw2 (1024x768)
+[07:32:49] [tds] screen tds-031-gw2 : Unity TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Sales No. 6 Party Alc narne. Current balance: Sales ledger: Sales • Current balance: 1,050.00 Cr Name of Item End of List End of List Narration: Q: Quit Y: Data Z: Exchange A: Accept Q Search FinCom O: Import Quantity E: Export Rate M: Share per p: print 2-Oct-26 Friday Amount Quit o Yes or No Fl: Help F2: Date F3: Company F4: Contra F5: Payment F6: Receipt F7: Journal F8: Sales F9: Purchase F: Autofill H: Change Mode l: More Details O: Related Reports k: Optional T: post -Dated c2bec to ru 9a96- acep ad35— 9a96- acep .337.0 UO...
+[keys] 'y'
+[shot] tds-032-gw3 (1024x768)
+[07:32:52] [tds] screen tds-032-gw3 : TallyPrime MANAGE EDU K: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Y: Data Z: Exchange O: Import E: Export M: Share p: print Fl: Help Date c2bec Q CURRENT OATE Friday, 2-Oct-2026 2-Oct-26 Search Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Company to ru 9a96- acep ad35— 9a96- acep .337.0 UOe1 ening ' 4746d ing j _id" : 2-01" ad35— Mode Windows Server 2025 Datacenter Build 2610...
+[07:32:52.788] GST on xml-item: MasterID 2, Sales 1 of 20261002
+[07:32:52.789] GST on xml-acct: MasterID 3, Sales 2 of 20261002
+[07:32:52.790] GST on xml-acct-irn: MasterID 4, Sales 3 of 20261002
+[07:32:52.793] GST on screen-item: MasterID 6, Sales 5 of 20261002
+[07:32:55.809] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-xml-item-object-started (1024x768)
+[07:33:23.792] Tally started (g-on-xml-item-object) in 28 s; company open: True
+[07:33:23.840] G [none] on xml-item (XML Sales 1, MasterID 2) object: ANSWERED, 34 ms, 114546 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:33:26.854] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-xml-item-bynumber-started (1024x768)
+[07:33:54.853] Tally started (g-on-xml-item-bynumber) in 28 s; company open: True
+[07:33:54.907] G [none] on xml-item (XML Sales 1, MasterID 2) bynumber: ANSWERED, 44.6 ms, 69606 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:33:57.915] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-xml-acct-object-started (1024x768)
+[07:34:25.929] Tally started (g-on-xml-acct-object) in 28 s; company open: True
+[07:34:25.963] G [none] on xml-acct (XML Sales 2, MasterID 3) object: ANSWERED, 28 ms, 52070 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:34:28.967] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-xml-acct-bynumber-started (1024x768)
+[07:34:56.976] Tally started (g-on-xml-acct-bynumber) in 28 s; company open: True
+[07:34:57.013] G [none] on xml-acct (XML Sales 2, MasterID 3) bynumber: ANSWERED, 30.2 ms, 15423 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:35:00.020] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-xml-acct-irn-object-started (1024x768)
+[07:35:28.000] Tally started (g-on-xml-acct-irn-object) in 28 s; company open: True
+[07:35:28.045] G [none] on xml-acct-irn (XML, then IRN by an XML alteration Sales 3, MasterID 4) object: ANSWERED, 37.4 ms, 52074 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:35:31.050] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-xml-acct-irn-bynumber-started (1024x768)
+[07:35:59.037] Tally started (g-on-xml-acct-irn-bynumber) in 28 s; company open: True
+[07:35:59.082] G [none] on xml-acct-irn (XML, then IRN by an XML alteration Sales 3, MasterID 4) bynumber: ANSWERED, 37 ms, 15427 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:36:02.090] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-screen-item-object-started (1024x768)
+[07:36:30.045] Tally started (g-on-screen-item-object) in 28 s; company open: True
+[07:36:30.079] G [none] on screen-item (screen keys Sales 5, MasterID 6) object: ANSWERED, 29 ms, 63826 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:36:33.085] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-screen-item-bynumber-started (1024x768)
+[07:37:01.086] Tally started (g-on-screen-item-bynumber) in 28 s; company open: True
+[07:37:01.134] G [none] on screen-item (screen keys Sales 5, MasterID 6) bynumber: ANSWERED, 42.8 ms, 33640 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:37:04.141] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-xml-acct-helper-collection-started (1024x768)
+[07:37:32.137] Tally started (g-on-xml-acct-helper-collection) in 28 s; company open: True
+[07:37:32.169] G [none] on xml-acct (XML Sales 2, MasterID 3) helper-collection: ANSWERED, 27.2 ms, 14492 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:37:35.180] tally.ini: Data D:\a\_temp\fast234g\on; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-xml-acct-irn-helper-collection-started (1024x768)
+[07:38:03.178] Tally started (g-on-xml-acct-irn-helper-collection) in 28 s; company open: True
+[07:38:03.211] G [none] on xml-acct-irn (XML, then IRN by an XML alteration Sales 3, MasterID 4) helper-collection: ANSWERED, 27.9 ms, 14492 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:38:06.217] tally.ini: Data D:\a\_temp\fast234g\on; TDL: D:\a\_temp\fast234g\FinComRecorder.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-xml-item-object-started (1024x768)
+[07:38:34.219] Tally started (g-on-xml-item-object) in 28 s; company open: True
+[07:38:34.264] G [addon] on xml-item (XML Sales 1, MasterID 2) object: ANSWERED, 37.8 ms, 114546 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:38:37.271] tally.ini: Data D:\a\_temp\fast234g\on; TDL: D:\a\_temp\fast234g\FinComRecorder.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-xml-item-bynumber-started (1024x768)
+[07:39:05.326] Tally started (g-on-xml-item-bynumber) in 28.1 s; company open: True
+[07:39:05.374] G [addon] on xml-item (XML Sales 1, MasterID 2) bynumber: ANSWERED, 41.2 ms, 69606 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:39:08.383] tally.ini: Data D:\a\_temp\fast234g\on; TDL: D:\a\_temp\fast234g\FinComRecorder.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-xml-acct-object-started (1024x768)
+[07:39:36.375] Tally started (g-on-xml-acct-object) in 28 s; company open: True
+[07:39:36.405] G [addon] on xml-acct (XML Sales 2, MasterID 3) object: ANSWERED, 23.2 ms, 52070 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:39:39.410] tally.ini: Data D:\a\_temp\fast234g\on; TDL: D:\a\_temp\fast234g\FinComRecorder.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-xml-acct-bynumber-started (1024x768)
+[07:40:07.390] Tally started (g-on-xml-acct-bynumber) in 28 s; company open: True
+[07:40:07.423] G [addon] on xml-acct (XML Sales 2, MasterID 3) bynumber: ANSWERED, 27.7 ms, 15423 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:40:10.429] tally.ini: Data D:\a\_temp\fast234g\on; TDL: D:\a\_temp\fast234g\FinComRecorder.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-xml-acct-irn-object-started (1024x768)
+[07:40:38.465] Tally started (g-on-xml-acct-irn-object) in 28 s; company open: True
+[07:40:38.494] G [addon] on xml-acct-irn (XML, then IRN by an XML alteration Sales 3, MasterID 4) object: ANSWERED, 23.1 ms, 52074 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:40:41.499] tally.ini: Data D:\a\_temp\fast234g\on; TDL: D:\a\_temp\fast234g\FinComRecorder.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-xml-acct-irn-bynumber-started (1024x768)
+[07:41:09.529] Tally started (g-on-xml-acct-irn-bynumber) in 28 s; company open: True
+[07:41:09.565] G [addon] on xml-acct-irn (XML, then IRN by an XML alteration Sales 3, MasterID 4) bynumber: ANSWERED, 30 ms, 15427 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:41:12.571] tally.ini: Data D:\a\_temp\fast234g\on; TDL: D:\a\_temp\fast234g\FinComRecorder.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-screen-item-object-started (1024x768)
+[07:41:40.558] Tally started (g-on-screen-item-object) in 28 s; company open: True
+[07:41:40.597] G [addon] on screen-item (screen keys Sales 5, MasterID 6) object: ANSWERED, 29 ms, 63826 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:41:43.605] tally.ini: Data D:\a\_temp\fast234g\on; TDL: D:\a\_temp\fast234g\FinComRecorder.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-screen-item-bynumber-started (1024x768)
+[07:42:11.595] Tally started (g-on-screen-item-bynumber) in 28 s; company open: True
+[07:42:11.650] G [addon] on screen-item (screen keys Sales 5, MasterID 6) bynumber: ANSWERED, 49 ms, 33640 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:42:14.658] tally.ini: Data D:\a\_temp\fast234g\on; TDL: D:\a\_temp\fast234g\FinComRecorder.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-xml-acct-helper-collection-started (1024x768)
+[07:42:42.682] Tally started (g-on-xml-acct-helper-collection) in 28 s; company open: True
+[07:42:42.721] G [addon] on xml-acct (XML Sales 2, MasterID 3) helper-collection: ANSWERED, 33.4 ms, 14492 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:42:45.726] tally.ini: Data D:\a\_temp\fast234g\on; TDL: D:\a\_temp\fast234g\FinComRecorder.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-g-on-xml-acct-irn-helper-collection-started (1024x768)
+[07:43:13.758] Tally started (g-on-xml-acct-irn-helper-collection) in 28 s; company open: True
+[07:43:13.791] G [addon] on xml-acct-irn (XML, then IRN by an XML alteration Sales 3, MasterID 4) helper-collection: ANSWERED, 27.9 ms, 14492 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:43:16.813] ---- fast234g: GST off (D:\a\_temp\fast234g\off)
+[07:43:19.819] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-setup-started (1024x768)
+[07:43:47.800] Tally started (g-off-setup) in 28 s; company open: True
+[07:43:47.817] import company GST off: 1 sent, created 0, errors 0, 12.4 ms
+[07:43:47.821] GST off: ISGSTON before 'Yes', after the alteration 'No'
+[07:43:48.000] import light masters: 60 sent, created 59, errors 0, 173.6 ms
+[07:43:48.041] import xml item invoice: 1 sent, created 1, errors 0, 38.7 ms
+[07:43:48.059] import xml accounting sales: 1 sent, created 1, errors 0, 16.5 ms
+[07:43:48.082] import xml accounting sales (IRN to come): 1 sent, created 1, errors 0, 21 ms
+[07:43:48.128] import IRN and e-way bill written back (alter): 1 sent, created 1, errors 0, 20.4 ms
+[shot] tds-033-gw0 (1024x768)
+[07:43:49] [tds] screen tds-033-gw0 : TallyPrime MANAGE EDU K: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Y: Data Z: Exchange CURRENT OATE Wednesday, I-Apr-2026 O: Import E: Export M: Share p: print Fl: Help Date c2bec Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Q upr-26 Search Company to ru 9a96- acep ad35— 9a96- acep .337.0 UOe1 ening ' 4746d ing j _id" : 2-01" ad35— Mode Windows Server 2025 Datacenter Build 261...
+[shot] tds-034-g-off-screen-start (1024x768)
+[07:43:50] [tds] screen tds-034-g-off-screen-start : TallyPrime MANAGE EDU K: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Y: Data Z: Exchange CURRENT OATE Wednesday, I-Apr-2026 O: Import E: Export M: Share p: print Fl: Help Date c2bec Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Q upr-26 Search Company to ru 9a96- acep ad35— 9a96- acep .337.0 UOe1 ening ' 4746d ing j _id" : 2-01" ad35— Mode Windows Server 2025 Datacenter Build 261...
+[keys] 'v'
+[shot] tds-035-g-off-screen-vouchers (1024x768)
+[07:43:53] [tds] screen tds-035-g-off-screen-vouchers : TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Pa ment No. 1 Account Current balance: Particulars Narration: Unity Quit Y: Data Z: Exchange A Accept Q Search O: Import E: Export M: Share FinCom • ke Co p: print upr-26 Wednesday Amount Fl: Help Date c2bec Company to ru F4: Contra 9a96- F5: Payment acep F6 Receipt Journal ad35— Sales 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details O: Related Reports L: Optional post -Dated .337.0 UOe1 ening ' 4746d ing j _id" : 2-01" ad35— D: Delete x: Cancel Vch F12: Configure Mode Windows Server 2025 Datacenter Build 26...
+[keys] '{F8}'
+[shot] tds-036-g-off-screen-type (1024x768)
+[07:43:57] [tds] screen tds-036-g-off-screen-type : Unity TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Sales Party Alc narne. Current balance: Sales ledger: • Current balance: Name of Item Narration: Quit Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Fl: Help Date c2bec Company to ru F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related Reports Optional post -Dated .337.0 UOe1 ening ' 4746...
+[keys] '^h'
+[shot] tds-037-g-off-screen-mode (1024x768)
+[07:44:01] [tds] screen tds-037-g-off-screen-mode : TallyPrime MANAGE EDU K: Company Change Mode Unity Quit Y: Data Z: Exchange O: Import E: Export M: Share p: print Fl: Help FinCom • ke Co Change Voucher Mode Item Invoice List of Modes/Usa es Item Invoice Accounting Invoice As Voucher A Accept Q Search c2bec to ru 9a96- acep ad35— 9a96- acep .337.0 UOe1 ening ' 4746d ing j _id" : 2-01" ad35— Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7:43 AM 10/8/2026
+[keys] 'Item Invoice{ENTER}'
+[shot] tds-038-g-off-screen-item-mode (1024x768)
+[07:44:04] [tds] screen tds-038-g-off-screen-item-mode : Unity TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Sales Party Alc narne. Current balance: Sales ledger: • Current balance: Name of Item Narration: Quit Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Fl: Help Date c2bec Company to ru F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related Reports Optional post -Dated .337.0 UOe1 ening ' 4746...
+[keys] '{F2}'
+[shot] tds-039-g-off-screen-date-box (1024x768)
+[07:44:07] [tds] screen tds-039-g-off-screen-date-box : TallyPrime MANAGE EDU K: Company Change Voucher Date Unity Quit Y: Data Z: Exchange A Accept Q Search O: Import E: Export M: Share p: print Fl: Help FinCom Spike Co Voucher Date 24-2026 c2bec to ru 9a96- acep ad35— 9a96- acep .337.0 UOe1 ening ' 4746d ing j _id" : 2-01" ad35— Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7•.44 AM 10/8/2026
+[keys] '2-10-2026{ENTER}'
+[shot] tds-040-g-off-screen-date (1024x768)
+[07:44:10] [tds] screen tds-040-g-off-screen-date : Unity TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Sales Party Alc narne. Current balance: Sales ledger: • Current balance: Name of Item Narration: Quit Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Fl: Help Date c2bec Company to ru F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related Reports Optional post -Dated .337.0 UOe1 ening ' 4746...
+[keys] 'Template Party{ENTER}'
+[shot] tds-041-g-off-screen-party (1024x768)
+[07:44:14] [tds] screen tds-041-g-off-screen-party : R CEDU Details TallyPrime MANAGE K: Company Y: Data Z: Exchange Accept Q Search O: Import E: Export M: Share p: print Fl: Help x Delivery Note No(s) FinCom Spike Co Dispatch Details Dispatch Doc No. Dispatched through Destination Carrier Name/Agent Bill of No. Motor Vehicle No. Date: Unity Quit c2bec to ru 9a96- acep ad35— 9a96- acep .337.0 UOe1 ening ' 4746d ing j _id" : 2-01" ad35— Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7•.44 AM 10/8/2026
+[shot] tds-042-g-off-screen-party-sub1 (1024x768)
+[07:44:15] [tds] screen tds-042-g-off-screen-party-sub1 : R CEDU Details TallyPrime MANAGE K: Company Y: Data Z: Exchange Accept Q Search O: Import E: Export M: Share p: print Fl: Help x Delivery Note No(s) FinCom Spike Co Dispatch Details Dispatch Doc No. Dispatched through Destination Carrier Name/Agent Bill of No. Motor Vehicle No. Date: Unity Quit c2bec to ru 9a96- acep ad35— 9a96- acep .337.0 UOe1 ening ' 4746d ing j _id" : 2-01" ad35— Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7•.44 AM 10/8/2026
+[keys] '^a'
+[shot] tds-043-g-off-screen-party-sub-accept (1024x768)
+[07:44:18] [tds] screen tds-043-g-off-screen-party-sub-accept : R CEDU TallyPrime MANAGE K: Company Y: Data Z: Exchange FinCom Spike Co Party Details Dem late Pa List of Led er Accounts Spike Party Spike Party 2 Template Party Ul Party O: Import Create New Party E: Export M: Share p: print Fl: Help x Details Quit Buyer (Bill to) Mailing Name Address State Country Accept Q Search c2bec to ru 9a96- acep ad35— 9a96- acep .337.0 UOe1 ening ' 4746d ing j _id" : 2-01" ad35— Unity Configure Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7•.44 AM 10/8/2026
+[shot] tds-044-g-off-screen-party-sub2 (1024x768)
+[07:44:19] [tds] screen tds-044-g-off-screen-party-sub2 : R CEDU TallyPrime MANAGE K: Company Y: Data Z: Exchange FinCom Spike Co Party Details Dem late Pa List of Led er Accounts Spike Party Spike Party 2 Template Party Ul Party O: Import Create New Party E: Export M: Share p: print Fl: Help x Details Quit Buyer (Bill to) Mailing Name Address State Country Accept Q Search c2bec to ru 9a96- acep ad35— 9a96- acep .337.0 UOe1 ening ' 4746d ing j _id" : 2-01" ad35— Unity Configure Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7•.44 AM 10/8/2026
+[keys] '^a'
+[shot] tds-045-g-off-screen-party-sub-accept (1024x768)
+[07:44:22] [tds] screen tds-045-g-off-screen-party-sub-accept : TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Sales M: Share p: print x Create Show More Fl: Help Date c2bec Sales Party Alc narne. Current balance: Sales ledger: • Current balance: Company to ru Template Party 922.00 Dr Name of Item Narration: Quit F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related Reports Optional post -Dated .337.0 UOe1 ening ' 4746d ing j _id" : 2-01" ad35— Uni...
+[shot] tds-046-g-off-screen-party-sub3 (1024x768)
+[07:44:23] [tds] screen tds-046-g-off-screen-party-sub3 : TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Sales M: Share p: print x Create Show More Fl: Help Date c2bec Sales Party Alc narne. Current balance: Sales ledger: • Current balance: Company to ru Template Party 922.00 Dr Name of Item Narration: Quit F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related Reports Optional post -Dated .337.0 UOe1 ening ' 4746d ing j _id" : 2-01" ad35— Uni...
+[keys] 'Sales{ENTER}'
+[shot] tds-047-g-off-screen-ledger (1024x768)
+[07:44:27] [tds] screen tds-047-g-off-screen-ledger : TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import Quantity E: Export Rate M: Share per p: print 2-Oct-26 Friday Amount Fl: Help Date c2bec Sales Party Alc narne. Current balance: Sales ledger: • Current balance: Company to ru Template Party 922.00 Dr Sales 850.00 Cr Name of Item Narration: Quit F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— Ch Unity 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related Reports Optional post -Dated .337.0 UOe1 ening ' 4746d ing j _id" ...
+[keys] 'Item T03{ENTER}'
+[shot] tds-048-g-off-screen-item (1024x768)
+[07:44:30] [tds] screen tds-048-g-off-screen-item : TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import Quantity E: Export Rate M: Share per p: print 2-Oct-26 Friday Amount Fl: Help Date c2bec Sales Party Alc narne. Current balance: Sales ledger: • Current balance: Company to ru Template Party 922.00 Dr Sales 850.00 Cr Name of Item Item T03 Narration: Quit F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related Reports Optional post -Dated .337.0 UOe1 ening ' 4746d ing j _id" ...
+[shot] tds-049-g-off-screen-item-sub1 (1024x768)
+[07:44:31] [tds] screen tds-049-g-off-screen-item-sub1 : TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import Quantity E: Export Rate M: Share per p: print 2-Oct-26 Friday Amount Fl: Help Date c2bec Sales Party Alc narne. Current balance: Sales ledger: • Current balance: Company to ru Template Party 922.00 Dr Sales 850.00 Cr Name of Item Item T03 Narration: Quit F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related Reports Optional post -Dated .337.0 UOe1 ening ' 4746d ing j _id" ...
+[keys] '2{ENTER}'
+[shot] tds-050-g-off-screen-qty (1024x768)
+[07:44:34] [tds] screen tds-050-g-off-screen-qty : TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import Quantity 2 Nos 2 Nos E: Export Rate M: Share per p: print 2-Oct-26 Friday Amount Fl: Help Date c2bec Sales Party Alc narne. Current balance: Sales ledger: • Current balance: Company to ru Template Party 922.00 Dr Sales 850.00 Cr Name of Item Item T03 Narration: Quit F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related Reports Optional post -Dated .337.0 UOe1 ening ' 4746d...
+[keys] '100{ENTER}'
+[shot] tds-051-g-off-screen-rate (1024x768)
+[07:44:37] [tds] screen tds-051-g-off-screen-rate : TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import Quantity 2 Nos 2 Nos E: Export Rate 100.00 M: Share per Nos p: print 2-Oct-26 Friday Amount 200.00 Fl: Help Date c2bec Sales Party Alc narne. Current balance: Sales ledger: • Current balance: Company to ru Template Party 922.00 Dr Sales 850.00 Cr Name of Item Item T03 Narration: Quit F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: 200.00 Related Reports Optional post -Dated ...
+[keys] '{ENTER}'
+[shot] tds-052-g-off-screen-amount (1024x768)
+[07:44:40] [tds] screen tds-052-g-off-screen-amount : TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import Quantity 2 Nos 2 Nos E: Export Rate 100.00 M: Share per Nos p: print 2-Oct-26 Friday Amount 200.00 Fl: Help Date c2bec Sales Party Alc narne. Current balance: Sales ledger: • Current balance: Company to ru Template Party 922.00 Dr Sales 850.00 Cr Name of Item Item T03 Narration: Quit F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: 200.00 Related Reports Optional post -Dated ...
+[shot] tds-053-g-off-screen-item-b-sub1 (1024x768)
+[07:44:41] [tds] screen tds-053-g-off-screen-item-b-sub1 : TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import Quantity 2 Nos 2 Nos E: Export Rate 100.00 M: Share per Nos p: print 2-Oct-26 Friday Amount 200.00 Fl: Help Date c2bec Sales Party Alc narne. Current balance: Sales ledger: • Current balance: Company to ru Template Party 922.00 Dr Sales 850.00 Cr Name of Item Item T03 Narration: Quit F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: 200.00 Related Reports Optional post -Dated ...
+[keys] '{ENTER}'
+[shot] tds-054-g-off-screen-items-done (1024x768)
+[07:44:43] [tds] screen tds-054-g-off-screen-items-done : TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import Quantity 2 Nos 2 Nos E: Export Rate 100.00 M: Share per Nos p: print 2-Oct-26 Friday Amount 200.00 200.00 Fl: Help Date c2bec Sales Party Alc narne. Current balance: Sales ledger: • Current balance: Company to ru Template Party 922.00 Dr Sales 850.00 Cr Name of Item Item T03 Narration: Quit F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: 200.00 Related Reports Optional post -Date...
+[keys] '^a'
+[shot] tds-055-g-off-screen-accept1 (1024x768)
+[07:44:48] [tds] screen tds-055-g-off-screen-accept1 : Unity TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Sales No. 6 Party Alc narne. Current balance: Sales ledger: • Current balance: Name of Item Narration: Quit Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Fl: Help Date c2bec Company to ru F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related Reports Optional post -Dated .337.0 UOe1 ening ...
+[shot] tds-056-g-off-screen-after1 (1024x768)
+[07:44:49] [tds] screen tds-056-g-off-screen-after1 : Unity TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Sales No. 6 Party Alc narne. Current balance: Sales ledger: • Current balance: Name of Item Narration: Quit Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Fl: Help Date c2bec Company to ru F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related Reports Optional post -Dated .337.0 UOe1 ening ...
+[keys] '^a'
+[shot] tds-057-g-off-screen-accept2 (1024x768)
+[07:44:53] [tds] screen tds-057-g-off-screen-accept2 : Unity TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Q: Quit Y: Data Z: Exchange A: Accept Q Search O: Import E: Export M: Share FinCom Spike Co p: print Fl: Help x F2: Date F3: Company F4: Contra F5: Payment t F6: Receipt F7: Journal F8: Sales F9: Purchase F: Autofill H: Change Mode l: More Details Error Oops! No Entries in Voucher! O: Related Reports k: Optional T: post -Dated c2bec to ru 9a96- acep ad35— 9a96- acep .337.0 UOe1 ening ' 4746d ing j _id" : 2-01" ad35— p: Delete , cancel vch Fl 2: Configure Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7•.4...
+[shot] tds-058-g-off-screen-after2 (1024x768)
+[07:44:54] [tds] screen tds-058-g-off-screen-after2 : Unity TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Q: Quit Y: Data Z: Exchange A: Accept Q Search O: Import E: Export M: Share FinCom Spike Co p: print Fl: Help x F2: Date F3: Company F4: Contra F5: Payment t F6: Receipt F7: Journal F8: Sales F9: Purchase F: Autofill H: Change Mode l: More Details Error Oops! No Entries in Voucher! O: Related Reports k: Optional T: post -Dated c2bec to ru 9a96- acep ad35— 9a96- acep .337.0 UOe1 ening ' 4746d ing j _id" : 2-01" ad35— p: Delete , cancel vch Fl 2: Configure Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 7•.4...
+[keys] '^a'
+[shot] tds-059-g-off-screen-accept3 (1024x768)
+[07:44:58] [tds] screen tds-059-g-off-screen-accept3 : Unity TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Sales No. 6 Party A/c narne: Cash Current balance: Sales ledger: Sales • Current balance: 1,050.00 Cr Name of Item End of List End of List Narration: Quit Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Fl: Help Date c2bec Company to ru F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related ...
+[shot] tds-060-g-off-screen-after3 (1024x768)
+[07:44:59] [tds] screen tds-060-g-off-screen-after3 : Unity TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Sales No. 6 Party A/c narne: Cash Current balance: Sales ledger: Sales • Current balance: 1,050.00 Cr Name of Item End of List End of List Narration: Quit Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Fl: Help Date c2bec Company to ru F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related ...
+[shot] tds-061-gw0 (1024x768)
+[07:45:00] [tds] screen tds-061-gw0 : Unity TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Sales No. 6 Party A/c narne: Cash Current balance: Sales ledger: Sales • Current balance: 1,050.00 Cr Name of Item End of List End of List Narration: Quit Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Fl: Help Date c2bec Company to ru F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related ...
+[keys] '{ESC}'
+[shot] tds-062-gw1 (1024x768)
+[07:45:04] [tds] screen tds-062-gw1 : Unity TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Sales No. 6 Party Alc narne. Current balance: Sales ledger: Sales • Current balance: 1,050.00 Cr Name of Item End of List End of List Narration: Quit Y: Data Z: Exchange A Accept Q Search FinCom • ke Co O: Import E: Export List of Led er Accounts Cash HDFC Bank Spike Party Spike Party 2 Template Party Ul Party M: Share p: print x Create Fl: Help Date c2bec Company to ru F4: Contra F5: Payment Receipt Journal F8: Sales 9a96- acep ad35— 9a96- Purchase acep Fl 0: 0åHVouctg•s F: Autofill Change Mode More Details o: L: Related Repor...
+[keys] '{ESC}'
+[shot] tds-063-gw2 (1024x768)
+[07:45:07] [tds] screen tds-063-gw2 : Unity TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Sales No. 6 Party Alc narne. Current balance: Sales ledger: Sales • Current balance: 1,050.00 Cr Name of Item End of List End of List Narration: Q: Quit Y: Data Z: Exchange A: Accept Q Search FinCom O: Import Quantity E: Export Rate M: Share per p: print 2-Oct-26 Friday Amount Quit o Yes or No Fl: Help F2: Date F3: Company F4: Contra F5: Payment F6: Receipt F7: Journal F8: Sales F9: Purchase F: Autofill H: Change Mode l: More Details O: Related Reports k: Optional T: post -Dated c2bec to ru 9a96- acep ad35— 9a96- acep .337.0 UO...
+[keys] 'y'
+[shot] tds-064-gw3 (1024x768)
+[07:45:10] [tds] screen tds-064-gw3 : TallyPrime MANAGE EDU K: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Y: Data Z: Exchange O: Import E: Export M: Share p: print Fl: Help Date c2bec Q CURRENT OATE Friday, 2-Oct-2026 2-Oct-26 Search Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Company to ru 9a96- acep ad35— 9a96- acep .337.0 UOe1 ening ' 4746d ing j _id" : 2-01" ad35— Mode Windows Server 2025 Datacenter Build 2610...
+[07:45:10.953] GST off xml-item: MasterID 2, Sales 1 of 20261002
+[07:45:10.954] GST off xml-acct: MasterID 3, Sales 2 of 20261002
+[07:45:10.955] GST off xml-acct-irn: MasterID 4, Sales 3 of 20261002
+[07:45:10.956] GST off screen-item: MasterID 6, Sales 5 of 20261002
+[07:45:13.968] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-xml-item-object-started (1024x768)
+[07:45:42.011] Tally started (g-off-xml-item-object) in 28 s; company open: True
+[07:45:42.049] G [none] off xml-item (XML Sales 1, MasterID 2) object: ANSWERED, 32.5 ms, 111789 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:45:45.054] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-xml-item-bynumber-started (1024x768)
+[07:46:13.041] Tally started (g-off-xml-item-bynumber) in 28 s; company open: True
+[07:46:13.085] G [none] off xml-item (XML Sales 1, MasterID 2) bynumber: ANSWERED, 38.8 ms, 65422 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:46:16.091] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-xml-acct-object-started (1024x768)
+[07:46:44.081] Tally started (g-off-xml-acct-object) in 28 s; company open: True
+[07:46:44.108] G [none] off xml-acct (XML Sales 2, MasterID 3) object: ANSWERED, 21.8 ms, 50244 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:46:47.113] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-xml-acct-bynumber-started (1024x768)
+[07:47:15.106] Tally started (g-off-xml-acct-bynumber) in 28 s; company open: True
+[07:47:15.139] G [none] off xml-acct (XML Sales 2, MasterID 3) bynumber: ANSWERED, 28.4 ms, 14906 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:47:18.145] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-xml-acct-irn-object-started (1024x768)
+[07:47:46.189] Tally started (g-off-xml-acct-irn-object) in 28 s; company open: True
+[07:47:46.214] G [none] off xml-acct-irn (XML, then IRN by an XML alteration Sales 3, MasterID 4) object: ANSWERED, 20 ms, 50248 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:47:49.219] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-xml-acct-irn-bynumber-started (1024x768)
+[07:48:17.205] Tally started (g-off-xml-acct-irn-bynumber) in 28 s; company open: True
+[07:48:17.238] G [none] off xml-acct-irn (XML, then IRN by an XML alteration Sales 3, MasterID 4) bynumber: ANSWERED, 27.9 ms, 14910 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:48:20.244] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-screen-item-object-started (1024x768)
+[07:48:48.276] Tally started (g-off-screen-item-object) in 28 s; company open: True
+[07:48:48.316] G [none] off screen-item (screen keys Sales 5, MasterID 6) object: ANSWERED, 32 ms, 62096 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:48:51.323] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-screen-item-bynumber-started (1024x768)
+[07:49:19.327] Tally started (g-off-screen-item-bynumber) in 28 s; company open: True
+[07:49:19.385] G [none] off screen-item (screen keys Sales 5, MasterID 6) bynumber: ANSWERED, 46.7 ms, 31246 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:49:22.398] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-xml-acct-helper-collection-started (1024x768)
+[07:49:50.427] Tally started (g-off-xml-acct-helper-collection) in 28 s; company open: True
+[07:49:50.472] G [none] off xml-acct (XML Sales 2, MasterID 3) helper-collection: ANSWERED, 37.6 ms, 14237 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:49:53.479] tally.ini: Data D:\a\_temp\fast234g\off; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-xml-acct-irn-helper-collection-started (1024x768)
+[07:50:21.494] Tally started (g-off-xml-acct-irn-helper-collection) in 28 s; company open: True
+[07:50:21.526] G [none] off xml-acct-irn (XML, then IRN by an XML alteration Sales 3, MasterID 4) helper-collection: ANSWERED, 26.7 ms, 14237 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:50:24.532] tally.ini: Data D:\a\_temp\fast234g\off; TDL: D:\a\_temp\fast234g\FinComRecorder.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-xml-item-object-started (1024x768)
+[07:50:52.829] Tally started (g-off-xml-item-object) in 28.3 s; company open: True
+[07:50:52.896] G [addon] off xml-item (XML Sales 1, MasterID 2) object: ANSWERED, 55 ms, 111789 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:50:55.920] tally.ini: Data D:\a\_temp\fast234g\off; TDL: D:\a\_temp\fast234g\FinComRecorder.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-xml-item-bynumber-started (1024x768)
+[07:51:23.899] Tally started (g-off-xml-item-bynumber) in 28 s; company open: True
+[07:51:23.944] G [addon] off xml-item (XML Sales 1, MasterID 2) bynumber: ANSWERED, 39.5 ms, 65422 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:51:26.951] tally.ini: Data D:\a\_temp\fast234g\off; TDL: D:\a\_temp\fast234g\FinComRecorder.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-xml-acct-object-started (1024x768)
+[07:51:55.005] Tally started (g-off-xml-acct-object) in 28.1 s; company open: True
+[07:51:55.031] G [addon] off xml-acct (XML Sales 2, MasterID 3) object: ANSWERED, 20.1 ms, 50244 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:51:58.035] tally.ini: Data D:\a\_temp\fast234g\off; TDL: D:\a\_temp\fast234g\FinComRecorder.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-xml-acct-bynumber-started (1024x768)
+[07:52:26.028] Tally started (g-off-xml-acct-bynumber) in 28 s; company open: True
+[07:52:26.063] G [addon] off xml-acct (XML Sales 2, MasterID 3) bynumber: ANSWERED, 30.2 ms, 14906 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:52:29.077] tally.ini: Data D:\a\_temp\fast234g\off; TDL: D:\a\_temp\fast234g\FinComRecorder.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-xml-acct-irn-object-started (1024x768)
+[07:52:57.046] Tally started (g-off-xml-acct-irn-object) in 28 s; company open: True
+[07:52:57.070] G [addon] off xml-acct-irn (XML, then IRN by an XML alteration Sales 3, MasterID 4) object: ANSWERED, 19.8 ms, 50248 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:53:00.077] tally.ini: Data D:\a\_temp\fast234g\off; TDL: D:\a\_temp\fast234g\FinComRecorder.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-xml-acct-irn-bynumber-started (1024x768)
+[07:53:28.088] Tally started (g-off-xml-acct-irn-bynumber) in 28 s; company open: True
+[07:53:28.124] G [addon] off xml-acct-irn (XML, then IRN by an XML alteration Sales 3, MasterID 4) bynumber: ANSWERED, 29.9 ms, 14910 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:53:31.130] tally.ini: Data D:\a\_temp\fast234g\off; TDL: D:\a\_temp\fast234g\FinComRecorder.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-screen-item-object-started (1024x768)
+[07:53:59.139] Tally started (g-off-screen-item-object) in 28 s; company open: True
+[07:53:59.174] G [addon] off screen-item (screen keys Sales 5, MasterID 6) object: ANSWERED, 29 ms, 62096 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:54:02.180] tally.ini: Data D:\a\_temp\fast234g\off; TDL: D:\a\_temp\fast234g\FinComRecorder.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-screen-item-bynumber-started (1024x768)
+[07:54:30.170] Tally started (g-off-screen-item-bynumber) in 28 s; company open: True
+[07:54:30.210] G [addon] off screen-item (screen keys Sales 5, MasterID 6) bynumber: ANSWERED, 35.8 ms, 31246 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:54:33.216] tally.ini: Data D:\a\_temp\fast234g\off; TDL: D:\a\_temp\fast234g\FinComRecorder.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-xml-acct-helper-collection-started (1024x768)
+[07:55:01.211] Tally started (g-off-xml-acct-helper-collection) in 28 s; company open: True
+[07:55:01.242] G [addon] off xml-acct (XML Sales 2, MasterID 3) helper-collection: ANSWERED, 26.9 ms, 14237 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:55:04.248] tally.ini: Data D:\a\_temp\fast234g\off; TDL: D:\a\_temp\fast234g\FinComRecorder.tdl
+[keys] 'a'
+[keys] 't'
+[shot] p-g-off-xml-acct-irn-helper-collection-started (1024x768)
+[07:55:32.257] Tally started (g-off-xml-acct-irn-helper-collection) in 28 s; company open: True
+[07:55:32.295] G [addon] off xml-acct-irn (XML, then IRN by an XML alteration Sales 3, MasterID 4) helper-collection: ANSWERED, 31.8 ms, 14237 chars, the entry in it; Tally answers after it: True; a fresh start answers: True 
+[07:55:38.302] done (fast234 fast234g)
