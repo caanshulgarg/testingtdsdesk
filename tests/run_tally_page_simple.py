@@ -258,20 +258,21 @@ def main():
                  mk(35, "the company's starting point is not recorded yet, so its entries are not taken from Tally", "2026-10-04"),
                  mk(36, "waiting: Tally busy; FinCom asks again at 14:05", "2026-10-03")]); pg.wait_for_timeout(1800)
         G = lambda k: '#app [data-sync-needs] [data-needs-group^="%s|"]' % k
-        acts = E("() => [...document.querySelectorAll('#app [data-sync-needs] [data-needs-group]')].map(g => [g.getAttribute('data-needs-group').split('|')[0], [...g.querySelectorAll('button')].map(b => b.getAttribute('data-needs-act') + ':' + b.innerText.trim())])")
+        acts = E("() => [...document.querySelectorAll('#app [data-sync-needs] [data-needs-group]')].map(g => [g.getAttribute('data-needs-group').split('|')[0], [...g.querySelectorAll('button:not([data-alert-clear])')].map(b => b.getAttribute('data-needs-act') + ':' + b.innerText.trim()), g.querySelectorAll('[data-alert-clear]').length])")
         ok(sorted(a[0] for a in acts) == ["baseline", "dupid", "locked", "masters", "readstop"] and all(len(a[1]) == 1 for a in acts), "each kind its group, ONE action each (%s)" % acts)
-        A = dict(acts)
+        ok(all(a[2] == 1 for a in acts), "each group: its Clear besides its ONE action (next-alerts-clear, 08-Oct-2026: hides the notification only) (%s)" % [a[2] for a in acts])
+        A = {a[0]: a[1] for a in acts}
         ok(A.get("dupid") == ["daybook:Upload the Day Book for 07-Oct-2026"] and "double posting" in txt(G("dupid") + " [data-needs-text]"), "FinCom id on two entries: check Tally for a double posting, then the Day Book (%s)" % txt(G("dupid")))
         ok(A.get("readstop") == ["resume:Resume reading"] and "stopped" in txt(G("readstop") + " [data-needs-text]"), "reading stopped: the owner's Resume reading, not Apply now (%s)" % A.get("readstop"))
         ok(A.get("locked") == ["tieout:Open Tie-out"], "a locked month: Open Tie-out (unlock it there) (%s)" % A.get("locked"))
         ok(A.get("masters") == ["masters:Open From Tally"], "a ledger line with no GUID: read the ledgers from Tally (%s)" % A.get("masters"))
         ok(A.get("baseline") == ["tally:Open the Tally page"], "no starting point: the Tally page (%s)" % A.get("baseline"))
         ok(E("() => [...document.querySelectorAll('#app [data-sync-fetching-line]')].map(e => e.getAttribute('data-sync-fetching-line'))") == ["36"], "waiting: Tally busy: being fetched")
-        E("() => { window.__calls = []; }"); pg.click(G("readstop") + " button"); pg.wait_for_timeout(500)
+        E("() => { window.__calls = []; }"); pg.click(G("readstop") + " button:not([data-alert-clear])"); pg.wait_for_timeout(500)
         ok([c for c in E("window.__calls") if c[0] == "tally_read_resume" and c[1].get("p_device") == D1], "Resume reading asks tally_read_resume for that computer (%s)" % E("window.__calls"))
         scene(DEVS, LINKED, role="member")
         E(SYNC, [mk(32, "the entry was not read from Tally: reading from Tally is stopped on this computer (x)")]); pg.wait_for_timeout(1800)
-        ok(pg.locator(G("readstop") + " button").count() == 0 and "owner" in txt(G("readstop")), "staff: no Resume, the words say an owner resumes it (%s)" % txt(G("readstop")))
+        ok(pg.locator(G("readstop") + " button:not([data-alert-clear])").count() == 0 and "owner" in txt(G("readstop")), "staff: no Resume, the words say an owner resumes it (%s)" % txt(G("readstop")))
         # ---- 5c. a reads-only bridge says Tally's state too; the guide leaves a way to connect another computer
         ro = dev(6, "RO-PC", "tally", tally="closed", opened=()); ro["main_bridge"] = "go-other"
         scene([ro], LINKED)
