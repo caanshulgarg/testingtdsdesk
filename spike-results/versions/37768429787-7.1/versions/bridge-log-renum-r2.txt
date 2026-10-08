@@ -1,0 +1,11 @@
+2026-10-08 11:25:16  Recorder: Receipt 4 of 02-Oct-2026 (MasterID 5, line a7951cf0…): asking Tally by MasterID
+2026-10-08 11:25:16  Recorder: entry fetch of FinCom Spike Co: answered in 2 ms
+2026-10-08 11:25:16  Recorder: FinCom Spike Co: delete of mid 5: not in this Tally (asked by MasterID): proven deleted here
+2026-10-08 11:25:16  Recorder: FinCom Spike Co: delete of mid 5: GUID from the bridge's record: 5fe79fcd-4df2-4ffa-907d-1c27853b77d6-00000005; the GUID its MasterID makes agrees
+2026-10-08 11:25:16  Renumbering: deleted Receipt 4 of 02-Oct-2026 in FinCom Spike Co: FinCom holds 2 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
+2026-10-08 11:25:16  Recorder: Receipt 4 of 02-Oct-2026 (MasterID 6, line 87f2869a…): taken: Tally's GUID 5fe79fcd-4df2-4ffa-907d-1c27853b77d6-00000006, AlterID 6
+2026-10-08 11:25:16  Renumbering: Receipt 5 of 02-Oct-2026 in FinCom Spike Co is Receipt 4 in Tally now (renumbered); sent to FinCom with Tally's entry
+2026-10-08 11:25:17  Recorder: entry fetch of FinCom Spike Co: answered in 8 ms
+2026-10-08 11:25:17  Recorder: Receipt 5 of 31-Oct-2026 (MasterID 7, line e43c6efd…): taken: Tally's GUID 5fe79fcd-4df2-4ffa-907d-1c27853b77d6-00000007, AlterID 7
+2026-10-08 11:25:17  Renumbering: Receipt 6 of 31-Oct-2026 in FinCom Spike Co is Receipt 5 in Tally now (renumbered); sent to FinCom with Tally's entry
+2026-10-08 11:25:17  Renumbering: 2 Receipt entries of FinCom Spike Co renumbered by Tally after the delete of Receipt 4 (02-Oct-2026): sent to FinCom with Tally's numbers

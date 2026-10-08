@@ -1,0 +1,50 @@
+[
+  {
+    "mid": 3,
+    "guid": "5fe79fcd-4df2-4ffa-907d-1c27853b77d6-00000003",
+    "day": "20261001",
+    "no": "1",
+    "alter": 3,
+    "type": "Receipt"
+  },
+  {
+    "mid": 4,
+    "guid": "5fe79fcd-4df2-4ffa-907d-1c27853b77d6-00000004",
+    "day": "20261001",
+    "no": "2",
+    "alter": 4,
+    "type": "Receipt"
+  },
+  {
+    "mid": 5,
+    "guid": "5fe79fcd-4df2-4ffa-907d-1c27853b77d6-00000005",
+    "day": "20261002",
+    "no": "4",
+    "alter": 5,
+    "type": "Receipt"
+  },
+  {
+    "mid": 6,
+    "guid": "5fe79fcd-4df2-4ffa-907d-1c27853b77d6-00000006",
+    "day": "20261002",
+    "no": "5",
+    "alter": 6,
+    "type": "Receipt"
+  },
+  {
+    "mid": 8,
+    "guid": "5fe79fcd-4df2-4ffa-907d-1c27853b77d6-00000008",
+    "day": "20261002",
+    "no": "3",
+    "alter": 8,
+    "type": "Receipt"
+  },
+  {
+    "mid": 7,
+    "guid": "5fe79fcd-4df2-4ffa-907d-1c27853b77d6-00000007",
+    "day": "20261031",
+    "no": "6",
+    "alter": 7,
+    "type": "Receipt"
+  }
+]
