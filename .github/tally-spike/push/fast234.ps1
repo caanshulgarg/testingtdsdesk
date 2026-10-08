@@ -12,6 +12,8 @@ $fcsv = Join-Path $out 'fast234.csv'; $fsz = Join-Path $out 'fast234-sizes.csv'
 $W = "$env:RUNNER_TEMP\fast234"; if (Test-Path $W) { Remove-Item $W -Recurse -Force }; New-Item -ItemType Directory -Force $W | Out-Null
 $tplBM = [IO.File]::ReadAllText("$here\fast234-bymaster.xml").Trim()
 $tplBN = [IO.File]::ReadAllText("$here\fast234-bynumber.xml").Trim()
+# the bridge's own entry request of branch next-fastfetch (voucherObjectRequest, dumped by a Go test): only company and MasterID substituted
+$tplOBJ = [IO.File]::ReadAllText("$here\fast234-object.xml").Trim()
 $FL = [regex]::Match($tplBM, '<FETCH>([^<]+)</FETCH>').Groups[1].Value
 $FLs = @($FL -split ',\s*')
 Say "fast234 ($env:PD_MODE) on TallyPrime ${rel}: today's request $($tplBM.Length) chars, $($FLs.Count) fields"
@@ -47,7 +49,7 @@ function TopNames { $t = @(); foreach ($f in $FLs) { $h = ($f -split '\.')[0]; i
 function Forms($t) {
   $o = [ordered]@{}
   $o['bymaster'] = ReqBM $t.date $t.mid
-  if ($env:PD_MODE -eq 'fast234m') { $o['objfl'] = ObjReq $t.mid $FLs; return $o }
+  if ($env:PD_MODE -eq 'fast234m') { $o['object'] = $tplOBJ.Replace('@@CO@@', (X $script:co)).Replace('987654321', "$($t.mid)"); return $o }
   $o['bynumber'] = ReqBN $t.date $t.type $t.vno
   $o['objfl'] = ObjReq $t.mid $FLs                     # the object export, today's 61 fields as FETCH (why22's objid)
   $o['objmid'] = ObjReq $t.mid @('MASTERID')            # one field: what an object export always carries
@@ -155,13 +157,14 @@ function FMeasure($case, $t, $nv, $n, [bool]$keep) {
   for ($r = 0; $r -le $n; $r++) {
     foreach ($f in $forms.Keys) {
       if ($dead[$f]) { continue }
-      $x = Post $forms[$f] '' 25; $ms = $script:lastMs
+      $lim = if ($env:PD_MODE -eq 'fast234m') { 180 } else { 25 }
+      $x = Post $forms[$f] '' $lim; $ms = $script:lastMs
       if (-not $x) {
-        # no answer in 25 s: this form is not asked again; Tally is started again if it no longer answers the company list
+        # no answer in time: this form is not asked again; Tally is started again if it no longer answers the company list
         $dead[$f] = $true
-        [pscustomobject]@{ rel = $rel; case = $case; vouchers = $nv; target = $t.name; mid = $t.mid; form = $f; rep = $r; ms = $ms; bytes = 0; vouchers_in_answer = 0; has_target = $false; err = 'NO ANSWER in 25 s' } | Export-Csv $fcsv -Append -NoTypeInformation -Encoding UTF8
+        [pscustomobject]@{ rel = $rel; case = $case; vouchers = $nv; target = $t.name; mid = $t.mid; form = $f; rep = $r; ms = $ms; bytes = 0; vouchers_in_answer = 0; has_target = $false; err = "NO ANSWER in $lim s" } | Export-Csv $fcsv -Append -NoTypeInformation -Encoding UTF8
         $alive = (Post $listCo '' 10) -match '<COMPANY'
-        Say "form $f ($($t.name)): no answer in 25 s; Tally answers the company list after it: $alive"
+        Say "form $f ($($t.name)): no answer in $lim s; Tally answers the company list after it: $alive"
         if (-not $alive) { Shot "f-hung-$f"; StartW $script:G @($fA) "after-$f" @($co) | Out-Null }
         continue
       }

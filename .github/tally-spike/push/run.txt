@@ -5,7 +5,7 @@ heavy_led=3000
 heavy_item=3000
 heavy_vch=30000
 heavy_min=40
-mode=fast234p
+mode=fast234m
 # v3 (07-Oct-2026): the owner's ask on the 30,004-voucher company: keyed entry fetches with the freeze probe, freezes with (rerun: godowns on heavy sales, fetch 30 s and after the saves, TDS by the S5 OCR route)
 # the bridge stopped / running, full entry with no read-back, the GUID rule, AltVchID, payroll 200, TDS (v3.ps1)
 # v3b (07-Oct-2026 07:50Z): a fetch fired by the harness during each heads-only save (bridge stopped); the keyed fetches (OctVouchers fix); TDS with the ledgers' cost centres off
@@ -14,3 +14,4 @@ mode=fast234p
 # fast234p (07-Oct-2026 16:30Z): the form of the owner's fast request 'voucher object by MasterID' with the approved fields only:
 # candidate forms for one voucher on a 4,000-voucher company, every answer kept whole (fast234.ps1)
 # fast234p again (17:20Z): run 37650805764 hung on the object export with no FETCHLIST (every release); each form now 25 s at most, alone, Tally started again after one that hangs it, that form asked last; answers kept from the warm-up
+# fast234m (08-Oct-2026): the owner's decision "Allow, strip in bridge": the object export ID:<MasterID> against today's FinComVoucherByMaster at 4,000 / 25,000 / 40,000 / 100,000 vouchers (grown in place, no godowns), a sales invoice and a receipt each, a warm-up and 5 timed reps, median and worst
