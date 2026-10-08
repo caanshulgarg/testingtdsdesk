@@ -1,0 +1,7 @@
+;; probe-sys-onalter.tdl (bank-date probe, harness only)
+[System: Events]
+    FCRPsysonalter : On Alter : Yes : Call : FCRPWrite : "sys-onalter"
+
+[Collection: FCRPAlivesysonalter]
+    Type : Company
+

@@ -1,0 +1,4 @@
+FCRP|ev=alloc1_pre|t=12:40|guid=5167762d-c826-4679-abb3-95f9f44360e0-00000008|mid=8|aid=8|vtype=Contra|vno=7|vdate=1-Oct-26|name=|parent=|ledger=Zprobe Bank|idate=
+FCRP|ev=alloc1_post|t=12:40|guid=5167762d-c826-4679-abb3-95f9f44360e0-00000008|mid=8|aid=8|vtype=Contra|vno=7|vdate=1-Oct-26|name=|parent=|ledger=Zprobe Bank|idate=
+FCRP|ev=alloc2_pre|t=12:40|guid=5167762d-c826-4679-abb3-95f9f44360e0-00000008|mid=8|aid=8|vtype=Contra|vno=7|vdate=1-Oct-26|name=|parent=|ledger=Zprobe Bank|idate=
+FCRP|ev=alloc2_post|t=12:40|guid=5167762d-c826-4679-abb3-95f9f44360e0-00000008|mid=8|aid=8|vtype=Contra|vno=7|vdate=1-Oct-26|name=|parent=|ledger=Zprobe Bank|idate=

@@ -1,0 +1,34 @@
+{
+  "discovery": {
+    "Bank Recon Manual": false,
+    "VCH BankAllocations": true,
+    "Bank Reconciliation": false,
+    "BRS": false,
+    "Bank Allocation": false,
+    "BankRecon": true,
+    "BankAllocations": false,
+    "Bank Recon": true,
+    "Bank Recon Summary": false,
+    "VCH Bank Allocations": true,
+    "Bank Allocations": false,
+    "VCH BankAllocation": false,
+    "Bank Reconciliation Summary": false,
+    "Manual Bank Recon": false,
+    "Voucher Bank Allocations": false
+  },
+  "brsProbed": [
+    "Bank Recon",
+    "BankRecon"
+  ],
+  "allocProbed": [
+    "VCH BankAllocations",
+    "VCH Bank Allocations"
+  ],
+  "loaded": {
+    "control-voucher": "Kiwi Mark",
+    "brs1": "Zebra Mark",
+    "brs2": "Lotus Mark",
+    "rep1": "Tiger Mark",
+    "rep2": "Maple Mark"
+  }
+}

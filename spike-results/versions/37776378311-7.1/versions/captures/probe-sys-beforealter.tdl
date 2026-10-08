@@ -1,0 +1,7 @@
+;; probe-sys-beforealter.tdl (bank-date probe, harness only)
+[System: Events]
+    FCRPsysbeforealter : Before Alter Object : Yes : Call : FCRPWrite : "sys-beforealter"
+
+[Collection: FCRPAlivesysbeforealter]
+    Type : Company
+

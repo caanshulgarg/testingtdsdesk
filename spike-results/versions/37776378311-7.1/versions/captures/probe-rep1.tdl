@@ -1,0 +1,7 @@
+;; probe-rep1.tdl (bank-date probe, harness only)
+[#Report: Bank Recon]
+    Title : "Tiger Mark"
+
+[Collection: FCRPAliverep1]
+    Type : Company
+

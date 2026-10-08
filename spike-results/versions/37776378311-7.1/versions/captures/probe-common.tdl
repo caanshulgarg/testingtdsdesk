@@ -1,0 +1,21 @@
+;; probe-common.tdl (bank-date probe, harness only): the one writer of the probe files
+[Function: FCRPWrite]
+    Parameter : pEv : String
+    Variable  : vL  : String
+    Returns   : Logical
+    01 : SET : vL : "FCRP|ev=" + ##pEv + "|t=" + ($$String:$$MachineTime) + "|guid=" + ($$String:$Guid) + "|mid=" + ($$String:$MasterID) + "|aid=" + ($$String:$AlterID)
+    02 : SET : vL : ##vL + "|vtype=" + ($$String:$VoucherTypeName) + "|vno=" + ($$String:$VoucherNumber) + "|vdate=" + ($$String:$Date)
+    03 : SET : vL : ##vL + "|name=" + ($$String:$Name) + "|parent=" + ($$String:$Parent)
+    04 : SET : vL : ##vL + "|ledger=" + ($$String:$LedgerName)
+    05 : SET : vL : ##vL + "|bdate=" + ($$String:$BankersDate)
+    06 : SET : vL : ##vL + "|idate=" + ($$String:$InstrumentDate)
+    07 : OPEN FILE : "C:\ProgramData\FinCom\recorder\probe.txt" : Text : Write : Unicode
+    08 : IF : NOT $$LastResult
+    09 :    RETURN : Yes
+    10 : END IF
+    11 : WRITE FILE LINE : ##vL
+    12 : CLOSE TARGET FILE
+    13 : RETURN : Yes
+
+[Collection: FCRPAliveCommon]
+    Type : Company

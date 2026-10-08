@@ -1,0 +1,7 @@
+;; probe-rep2.tdl (bank-date probe, harness only)
+[#Report: BankRecon]
+    Title : "Maple Mark"
+
+[Collection: FCRPAliverep2]
+    Type : Company
+
