@@ -1,0 +1,1 @@
+Written by a go test at next-masterhook adc07d1f (bridge-go: ledgerChunkRequest("@@CO@@", 111111, 222222), ledgerChunkRequest(.., 111111, 0), groupListRequest, ledgerChangesRequest(.., 111111, 222222)); ledv.ps1 puts in the company and the numbers.
