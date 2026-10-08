@@ -984,6 +984,10 @@ func TestPushAddon(t *testing.T) {
 			t.Errorf("the add-on does not write %s as its own record", k)
 		}
 	}
+	// an entry with no e-way bill still gets its (empty) ewb record: absent means failed, never "none"
+	if !regexp.MustCompile(`(?m)SET : vRec : "\|ewb="\s*$`).MatchString(tdl) {
+		t.Error("the add-on writes no empty ewb record for an entry without an e-way bill")
+	}
 	if strings.Contains(tdl, "InvoiceOrderList") {
 		t.Error("the add-on reads the invoice order list (its record failed in a voucher form: tally-real run 37677491784)")
 	}
@@ -1620,4 +1624,36 @@ func rawWithHead(t *testing.T, b []byte) []byte {
 		r = append(r, byte(c), byte(c>>8))
 	}
 	return r
+}
+
+// a head field written EMPTY ("|irn=": an entry with no IRN, e-way bill or reference, the usual case) is a real blank and
+// is taken; only a head field whose record is ABSENT (it failed in the form) makes the line untrusted
+func TestPushHeadEmptyVersusAbsent(t *testing.T) {
+	ps, cg, mid := tr677Payloads(t, "p1-receipt", false)
+	empty := pushWithHead(t, ps, "")
+	e, err := pushParse(empty)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range pushAddedHead {
+		if v, ok := e.scal[k]; !ok || v != "" {
+			t.Fatalf("the empty record %s= is not read as a present, empty field: %q %v", k, v, ok)
+		}
+	}
+	x, err := pushEntryXML(e, pushGUID(cg, mid), 0)
+	if err != nil {
+		t.Fatalf("a line whose IRN, e-way bill and reference are written empty was refused: %v", err)
+	}
+	if !strings.Contains(x, `<IRN TYPE="String"></IRN>`) || !strings.Contains(x, `<REFERENCE TYPE="String"></REFERENCE>`) {
+		t.Fatalf("the empty fields are not sent as Tally's blanks:\n%s", x)
+	}
+	for _, k := range []string{"irn", "ewb", "ref"} {
+		e, err := pushParse(pushWithHead(t, ps, k))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pushEntryXML(e, pushGUID(cg, mid), 0); err == nil || !strings.Contains(err.Error(), "lacks "+k) {
+			t.Fatalf("a line whose %s record is absent was taken: %v", k, err)
+		}
+	}
 }
