@@ -17,8 +17,8 @@ revoked; `begin; ... commit;`; safe to run twice) and is shown to the owner befo
 
 ## The two valid orders (both end with the same function texts: `tests/run_migration_order.py` asserts it)
 
-- staging: 32 → 33 → 35 → 34 (first) → 36b → 37 → 36 → 38 → 39 (applied 03-Oct, **except 39's tally_ingest_day part**: both forms are still 38's) → 40 → 41 (run 03-Oct, evening; its 8-argument `tally_ingest_day` superseded 39's) → 42 → 43 (run 04-Oct) → 44 (run 04-Oct) → 45 (run 04-Oct) → **46** → **47** → **48** (run by the owner) → **49** → **50** (run by the owner) → 51 → 52 → 53 → 54 → 55 → 56 (live on staging) → 57 → 58 → 59 → 60 → 68 → 62 → 63 → 64 (2.4.0, not run)
-- a fresh database: 32 → 33 → 35 → 34 (reviewed) → 36 → 36b → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 51 → 52 → 53 → 54 → 55 → 56 → 57 → 58 → 59 → 60 → 68 → 62 → 63 → 64
+- staging: 32 → 33 → 35 → 34 (first) → 36b → 37 → 36 → 38 → 39 (applied 03-Oct, **except 39's tally_ingest_day part**: both forms are still 38's) → 40 → 41 (run 03-Oct, evening; its 8-argument `tally_ingest_day` superseded 39's) → 42 → 43 (run 04-Oct) → 44 (run 04-Oct) → 45 (run 04-Oct) → **46** → **47** → **48** (run by the owner) → **49** → **50** (run by the owner) → 51 → 52 → 53 → 54 → 55 → 56 (live on staging) → 57 → 58 → 59 → 60 → 68 → 62 → 63 → 64 → 65 → 66 (2.4.0, not run)
+- a fresh database: 32 → 33 → 35 → 34 (reviewed) → 36 → 36b → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 51 → 52 → 53 → 54 → 55 → 56 → 57 → 58 → 59 → 60 → 68 → 62 → 63 → 64 → 65 → 66
 
 | # | File | What it adds |
 |---|---|---|
@@ -299,3 +299,13 @@ listed entries the copy lacks), `tally_selfcheck_copy` (the copy's own trial bal
 `tally_selfcheck_words` and `tally_selfcheck_record`; security definer, search_path public, pg_temp, the service role only.
 Without it tally-ingest's kind `selfcheck` answers 503 notReady and the bridge does not ask again that night; the Tally
 page shows no line. Tested by `run_migration65.py` (on 32 -> ... -> 60) and `run_migration_order.py` (65 in both orders).
+
+Branch next-masterhook (07-Oct-2026, the add-on's master forms): `migration-66-recorder-masters.sql` (number assigned by the
+coordinator; 61-65 belong to other branches) runs after 44 in any order relative to 61-65 (add-only, one transaction,
+`lock_timeout` 10 s, no "delete from", safe twice; NOT run anywhere: written only). One new table `tally_recorder_masters`
+(heads only: master_type, name, parent, object_guid, master_id, alter_id, saved_at, pc, tally_user, bridge; unique
+(book_id, line_id); RLS: the firm reads its own rows; nobody writes directly) and one new function
+`tally_recorder_masters_save(p_firm, p_book, p_device, p_lines)` (service role only) that keeps master_created /
+master_altered lines ('kept' / 'duplicate'). tally-ingest's recorder_lines sends those lines there; a cloud without 66
+answers them 'failed' with words and handles the rest of the call as before. Tested by `run_migration66.py` and
+`run_recorder_masters_server.py` (through tally-ingest under Deno).

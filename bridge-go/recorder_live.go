@@ -171,6 +171,8 @@ type change struct {
 	// resolution; "ledger": after a ledger FinCom waited for came in); "" on every other send. FinCom answers a repeat of
 	// the same line id and marker "already have" (migration 63), never stores it twice
 	again string
+	// next-masterhook: a master form's line (master_created / master_altered): the master's type ("Stock Item" ...)
+	masterType string
 }
 
 // a place in the add-on's files: the file and the byte offset a line starts at
@@ -1161,12 +1163,19 @@ func liveSingle(l recLine) (recLine, string) {
 		}
 		return l, "imported"
 	case "after_delete":
+		if master && liveMTOf(l.GUID) != "" {
+			return l, "master_deleted" // open question 1: a master its add-on's form lines named (masterhook.go)
+		}
 		if master {
 			return l, "ledger_deleted"
 		}
 		return l, "deleted"
 	case "after_cancel":
 		return l, "cancelled"
+	}
+	// next-masterhook: a master form's second line on its own (masterhook.go)
+	if strings.HasSuffix(l.Ev, "_accept_post") && liveMasterType(l.Ev) != "" {
+		return l, liveMasterEvent(liveIsNew(l))
 	}
 	return l, "" // before_*, start/end_import, write_failed, anything else: dropped
 }
@@ -1285,6 +1294,10 @@ func liveMerge(pre, post recLine) (recLine, string) {
 		}
 		return m, "ledger_altered"
 	}
+	// next-masterhook: a master form's pair (masterhook.go)
+	if liveMasterPre(pre.Ev) {
+		return m, liveMasterEvent(fresh)
+	}
 	if strings.EqualFold(pre.Obj, "Master") {
 		if fresh {
 			return m, "ledger_created"
@@ -1318,9 +1331,12 @@ func liveFlush(p *livePending, posting bool) int {
 		if l.Ev == "ledger_accept_pre" {
 			ev = "ledger_" + ev
 		}
+		if liveMasterPre(l.Ev) {
+			ev = liveMasterEvent(liveIsNew(l)) // next-masterhook
+		}
 		return liveEmit(l, ev, file, gen, p.start, p.start, p.end, posting)
 	}
-	if l.Ev == "voucher_accept_pre" || l.Ev == "ledger_accept_pre" {
+	if l.Ev == "voucher_accept_pre" || l.Ev == "ledger_accept_pre" || liveMasterPre(l.Ev) {
 		liveSayOnce("unsaved|"+l.CGUID+"|"+l.VType+"|"+l.VNo+"|"+l.T0, fmt.Sprintf("Recorder: %s of %s opened in a form and not saved (no GUID, no second line): nothing to send",
 			or(strings.TrimSpace(l.VType+" "+l.VNo), or(strings.TrimSpace(l.Name), "an entry")), liveDay(normDate(l.VDate))))
 	}
@@ -1385,6 +1401,14 @@ func liveEmitFrom(l recLine, ev, file string, gen int, startFile string, start, 
 		c.holds = append(c.holds, liveAt{file, lineStart})
 	}
 	c.companyGuid = liveGUID(c.companyGuid)
+	if c.isMaster() {
+		c.masterType = liveMasterType(l.Ev) // next-masterhook: heads only (masterhook.go)
+		if c.masterType == "" {
+			c.masterType = liveMTOf(l.GUID) // a delete: the type its form lines named
+		} else {
+			liveMTNote(l.GUID, c.masterType)
+		}
+	}
 	if r := []rune(c.narr); len(r) > liveNarrMax {
 		c.narr = string(r[:liveNarrMax]) // review Low 11
 	}
@@ -1395,7 +1419,7 @@ func liveEmitFrom(l recLine, ev, file string, gen int, startFile string, start, 
 		liveSayOnce("notlinked|"+c.key(), "Recorder: "+c.company+" is not linked to a FinCom client: its lines are skipped, nothing of them is asked of Tally (asked again in an hour)")
 		return 0
 	}
-	if !c.isLedger() {
+	if !c.isLedger() && !c.isMaster() {
 		if m := reLiveFid.FindStringSubmatch(c.narr); m != nil {
 			c.fid = m[1]
 		}
@@ -1412,7 +1436,7 @@ func liveEmitFrom(l recLine, ev, file string, gen int, startFile string, start, 
 	// 2.2.2 (the owner's rule): the line's GUID and AlterID are not trusted. A voucher whose body is asked of Tally takes
 	// Tally's GUID, MasterID and AlterID (none until then); a line whose GUID is not its MasterID in hex keeps its GUID
 	// only as lineGuid (idsMismatch), never as the entry's
-	if !c.isLedger() {
+	if !c.isLedger() && !c.isMaster() {
 		c.idsMismatch = liveIdsMismatch(c.guid, c.companyGuid, c.masterId)
 		if c.idsMismatch {
 			c.lineGuid = c.guid
@@ -1457,7 +1481,7 @@ func liveEmitFrom(l recLine, ev, file string, gen int, startFile string, start, 
 		c.guid = ""
 		// a voucher only: the rule is proven for vouchers (NWS144); a new ledger's GUID stays empty until Tally gives it
 		// (its body fetch), never built (2.2.1 review)
-		if mid := toI64(c.masterId); mid > 0 && c.companyGuid != "" && !c.isLedger() {
+		if mid := toI64(c.masterId); mid > 0 && c.companyGuid != "" && !c.isLedger() && !c.isMaster() {
 			c.guid = fmt.Sprintf("%s-%08x", c.companyGuid, mid)
 		}
 	}
@@ -2373,8 +2397,11 @@ func (c *change) wire() M {
 	if c.saveMs >= 0 {
 		m["save_ms"] = c.saveMs
 	}
-	if c.isLedger() {
+	if c.isLedger() || c.isMaster() {
 		m["name"], m["parent"] = c.name, c.parent
+	}
+	if c.isMaster() {
+		m["master_type"] = c.masterType // next-masterhook: heads only
 	}
 	// 2.2.2: the line's GUID that is not its MasterID's, for information only (never the entry's: the cloud must not mark
 	// the line duplicate on it); why the line goes without its entry

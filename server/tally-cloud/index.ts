@@ -99,7 +99,9 @@
 //                                                       the answer counts them in already.
 //                                                       event: created|altered|deleted|cancelled|imported|ledger_created|
 //                                                       ledger_altered|ledger_renamed|ledger_deleted (another: failed here, not
-//                                                       stored); xml: the whole <VOUCHER ...>...</VOUCHER> when the add-on can
+//                                                       stored); next-masterhook (migration 66): master_created|master_altered
+//                                                       {master_type, name, parent, object_guid, master_id, alter_id} heads only,
+//                                                       kept by tally_recorder_masters_save ('kept' / 'duplicate'); xml: the whole <VOUCHER ...>...</VOUCHER> when the add-on can
 //                                                       give it, read with parse.js (parseDay) into the days path's vouchers
 //                                                       and lines; vch_date yyyymmdd (or yyyy-mm-dd); ledgers [{name, guid}];
 //                                                       name (ledger_*), from / to (ledger_renamed); save_ms the delay added
@@ -1396,6 +1398,20 @@ function dbFail(where: string, error: any, words: string) {
   return new Error(words);
 }
 const RECORDER_EVENTS = new Set(["created", "altered", "deleted", "cancelled", "imported", "ledger_created", "ledger_altered", "ledger_renamed", "ledger_deleted"]);
+// next-masterhook (migration 66): the add-on's master forms (Pay Head, Stock Item, Unit, Godown, Employee), HEADS ONLY: kept
+// in tally_recorder_masters by tally_recorder_masters_save, never applied to the books, never with a body
+const MASTER_EVENTS = new Set(["master_created", "master_altered", "master_deleted"]);
+const MASTER_TYPES = new Set(["Pay Head", "Stock Item", "Unit", "Godown", "Employee"]);
+function cleanMasterLine(x: any, me: { id: string }): { line?: Record<string, unknown>; bad?: string } {
+  const s = (v: unknown, n: number) => typeof v === "string" || typeof v === "number" ? String(v).trim().slice(0, n) : "";
+  const mt = s(x?.master_type, 40);
+  if (!MASTER_TYPES.has(mt)) return { bad: "unknown master type: " + (mt || "(none)") };
+  const alterN = Number(x?.alter_id), alter = x?.alter_id !== null && x?.alter_id !== "" && Number.isInteger(alterN) && alterN >= 0 && alterN < 1e15 ? alterN : null;
+  const at = Date.parse(s(x?.saved_at, 40));
+  return { line: { line_id: s(x?.line_id, 80), event: s(x?.event, 40), master_type: mt, name: cleanName(s(x?.name, 300)) || null, parent: cleanName(s(x?.parent, 300)) || null,
+    object_guid: s(x?.object_guid, 100) || null, master_id: s(x?.master_id, 40), alter_id: alter, saved_at: isNaN(at) ? null : new Date(at).toISOString(),
+    pc: s(x?.pc, 60), user: s(x?.user, 60), company_guid: s(x?.company_guid, 100), bridge: me.id } };
+}
 const MAX_RECORDER_LINES = 500, MAX_RECORDER_XML = 2 * 1024 * 1024, QUEUE_OVER = 50;
 const notReady44 = (e: any) => !!e && /tally_recorder_apply|tally_start_point|could not find|does not exist|schema cache/i.test(String(e.message || ""));
 function cleanRecorderLine(x: any, me: { id: string }): { line?: Record<string, unknown>; bad?: string } {
@@ -1694,11 +1710,19 @@ async function recorderLines(dev: any, firm: string, book: string, body: any) {
   const given = (Array.isArray(body.lines) ? body.lines : []).slice(0, MAX_RECORDER_LINES);
   const results: { line_id: string; state: string; why: string | null }[] = new Array(given.length);
   const send: Record<string, unknown>[] = [], at: number[] = [];
+  const masters: Record<string, unknown>[] = [], mat: number[] = [];
   given.forEach((x: any, i: number) => {
+    if (MASTER_EVENTS.has(String(x?.event ?? "").trim())) {
+      const m = cleanMasterLine(x, me);
+      if (m.bad) results[i] = { line_id: String(x?.line_id ?? "").slice(0, 80), state: "failed", why: m.bad };
+      else { masters.push({ ...m.line, company }); mat.push(i); }
+      return;
+    }
     const c = cleanRecorderLine(x, me);
     if (c.bad) results[i] = { line_id: String(x?.line_id ?? "").slice(0, 80), state: "failed", why: c.bad };
     else { send.push({ ...c.line, company }); at.push(i); }
   });
+  if (masters.length) await keepMasters(firm, book, dev, masters, mat, results);
   if (send.length) await shortBodies(firm, book, send);
   if (send.length) await ledgerWait(book, send);     // bridge 2.3.1 (masters): an entry naming a ledger FinCom does not have waits for it
   const found = send.length ? await guidsFromRecord(book, send, String(dev?.id || ""), me.id) : new Map<string, string>();     // bridge 2.3.0: cancel/delete GUID
@@ -1734,10 +1758,25 @@ async function recorderLines(dev: any, firm: string, book: string, body: any) {
     });
   }
   const out: Record<string, unknown> = { ok: true, results };
-  for (const k of ["applied", "held", "duplicate", "stale", "failed"]) out[k] = results.filter((r) => r?.state === k).length;
+  for (const k of ["applied", "held", "duplicate", "stale", "failed", "kept"]) out[k] = results.filter((r) => r?.state === k).length;
   out.already = results.filter((r: any) => r?.already === true).length;     // migration 63: of the duplicates, repeats of lines FinCom had
   if (out.held || out.failed) console.log("tally-ingest recorder_lines", book, JSON.stringify({ n: results.length, held: out.held, failed: out.failed, why: results.filter((r) => r && r.state !== "applied" && r.state !== "duplicate").slice(0, 3).map((r) => r.why) }));
   return reply(200, out);
+}
+// next-masterhook (migration 66): the master lines of one call kept (heads only); a cloud without 66 answers them 'failed'
+// with words (the voucher and ledger lines of the call go on as before)
+async function keepMasters(firm: string, book: string, dev: any, masters: Record<string, unknown>[], mat: number[], results: { line_id: string; state: string; why: string | null }[]) {
+  const { data, error } = await db.rpc("tally_recorder_masters_save", { p_firm: firm, p_book: book, p_device: dev.id, p_lines: masters });
+  const none = (why: string) => masters.forEach((m, k) => { results[mat[k]] = { line_id: String(m.line_id ?? ""), state: "failed", why }; });
+  if (error && /tally_recorder_masters_save|could not find|does not exist|schema cache/i.test(String(error.message || ""))) {
+    console.log("tally-ingest recorder_lines: " + masters.length + " master line(s) not kept: no migration 66 in this cloud", book);
+    return none("FinCom does not keep master lines yet (migration 66)");
+  }
+  if (error) { console.error("tally-ingest recorder_lines masters:", String(error?.message || "").slice(0, 300)); return none("FinCom could not keep this master line just now"); }
+  if ((data as any)?.ok === false) return none(String((data as any)?.error || "not kept").slice(0, 200));
+  ((data as any)?.results || []).forEach((r: any, k: number) => {
+    if (k < mat.length) results[mat[k]] = { line_id: String(r?.line_id ?? masters[k].line_id ?? ""), state: String(r?.state || "failed"), why: r?.why ?? null };
+  });
 }
 // FinCom Bridge 2.3.0 (cancel/delete GUID): a real TallyPrime 7.1 writes no GUID on a voucher's delete or cancel line (the
 // add-on's Before/After Delete / Cancel Object), and the bridge sends one only when Tally (a cancel, asked by its MasterID) or
