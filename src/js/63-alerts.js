@@ -99,10 +99,9 @@ const AlertHub = {
   // a line waiting because of FinCom's side: no body, the add-on's placeholder GUID ("<company GUID>-00000000"), no GUID,
   // FinCom's own posting coming back, or the queue; then FinCom fetches the details itself and nothing is to be done
   oursHeld(l){
-    const why = String(l.held_why || "");
-    if (/^month locked/i.test(why)) return false;
-    return l.state === "queued" || l.state === "received" || l.state === "failed" && /queue|timeout|server/i.test(why) ||
-      /no entry body|waiting for the entry's details|no GUID|placeholder|FinCom (posting|id) /i.test(why) || /-0{8}$/.test(String(l.object_guid || ""));
+    // review of f0f1531f: the one classifier (Rec.needKind, src/js/61): "ours" = being fetched, settles by itself; the
+    // page and the bell can never disagree. A line a person must settle is never "nothing to do"
+    return typeof Rec === "object" && Rec.needKind ? !Rec.needKind(l) : false;
   },
   // "1 entry", "3 entries"
   n(k){ return k + (k === 1 ? " entry" : " entries"); },
@@ -170,10 +169,12 @@ const AlertHub = {
         const recFix = "Turn on FinCom's recorder in Tally on that computer (the details say which).";
         const base = {key: "book:" + k, cid: b.cid, details: det.join(" · "), at, selfClear: true};
         const waiting = b.ours.length + b.other.length;
-        if (b.ours.length && (!gapN || b.ours.length >= gapN)){
-          // FinCom's own side: the details are on their way, nothing to do
+        // 2.3.5: lines a person must settle (b.other) are said first; "nothing to do" only when nothing else waits
+        if (b.ours.length && !b.other.length && (!gapN || b.ours.length >= gapN)){
+          // FinCom's own side: the details are on their way, nothing to do. FinCom 2.3.5 (the owner: "a yellow field coming
+          // all the time"): information, said quietly (the bell lists it; no yellow line on the pages): yellow is for "Needs you"
           const k2 = Math.max(gapN, b.ours.length), hd = b.ours.filter(l => l.state === "held");
-          out.push(Object.assign(base, {sev: "warn", text: hd.length === b.ours.length && k2 === hd.length ? who + ": " + this.heldSay(hd, true) + "."
+          out.push(Object.assign(base, {sev: "info", text: hd.length === b.ours.length && k2 === hd.length ? who + ": " + this.heldSay(hd, true) + "."
             : who + ": " + this.n(k2) + " made in Tally" + (since ? " since " + this.when(since) : "") + (k2 === 1 ? " is" : " are") + " not yet in FinCom.",
             fix: "FinCom is fetching the entry's details from Tally; nothing to do."}));
         } else if (gapN || (b.rows.length && !b.gap && !waiting)){
@@ -188,12 +189,23 @@ const AlertHub = {
           const hd = b.other.filter(l => l.state === "held");
           out.push(Object.assign(base, {sev: "warn", text: who + ": " + (hd.length === b.other.length ? this.heldSay(hd, true) + "."
               : (b.other.length === 1 ? "1 change" : b.other.length + " changes") + " from Tally " + (b.other.length === 1 ? "is" : "are") + " waiting, not yet in the books" + (locked.length === b.other.length ? " (the month is locked)." : ".")),
-            fix: locked.length === b.other.length ? "Apply them on Sync activity, or unlock the month." : hd.length === b.other.length ? "See them on Sync activity." : "See why on Sync activity.", act: {label: "Sync activity", run: () => Rec.openActivity(b.cid)}}));
+            // FinCom 2.3.5: lines the bridge gave up on say the one thing to do (Sync activity's "Needs you" has each day's button)
+            fix: locked.length === b.other.length ? "Apply them on Sync activity, or unlock the month." : b.other.every(l => Rec.needKind(l) === "readstop")
+              ? "Needs you: reading from Tally is stopped from FinCom on that computer; an owner resumes it on the Tally page."
+              : b.other.every(l => ["daybook", "dupid"].includes(Rec.needKind(l)))
+              ? "Needs you: upload the Day Book for " + [...new Set(b.other.map(l => this.heldDay(l)).filter(Boolean))].sort().map(d => fmtDate(tallyDate(d))).join(", ") + " (Sync activity has each day's button)."
+              : hd.length === b.other.length ? "See them on Sync activity." : "See why on Sync activity.", act: {label: "Sync activity", run: () => Rec.openActivity(b.cid)}}));
         } else if (b.off.length){
           out.push(Object.assign(base, {sev: "warn", text: who + ": Tally is not recording its changes for FinCom, so entries made there reach FinCom only with the next Day Book.",
             fix: recFix}));
         }
       });
+      // ---- 2.4.0 review MEDIUM (next-renumber): entries Tally may have renumbered that FinCom Bridge could not read again
+      // (Rec.renumberNeeds: one a company, from every computer's beat): Needs you, the Day Book from that day
+      if (Rec.renumberNeeds) Rec.renumberNeeds().forEach(g => out.push({key: "renumber:" + g.company, sev: "warn", cid: g.cid, selfClear: true, details: g.pc,
+        text: g.text.replace(/ \u2014 upload the Day Book from .*$/, "."),
+        fix: "Needs you: upload the Day Book from " + fmtDate(g.day) + " so FinCom has Tally's numbers.",
+        ...(g.cid ? {act: {label: "Upload the Day Book from " + fmtDate(g.day), run: () => Rec.uploadFrom(g.cid, g.day)}} : {})}));
       // ---- one problem a computer: not answering, tried again by itself, silent today
       const devs = ((typeof TLight === "object" && TLight.st.devs) || []).filter(d => d && !d.revoked);
       const silent = Rec.silentOf();

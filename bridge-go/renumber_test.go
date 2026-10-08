@@ -180,7 +180,8 @@ func TestRenumberNoLaterEntries(t *testing.T) {
 	}
 }
 
-// --- 4. more entries than the cap: nothing re-read, one plain alert (the log and the beat), never a loop
+// --- 4. more entries than the cap: the first later entry is checked first (2.4.0 review LOW: a type that keeps its numbers
+// raises nothing); renumbered: one plain alert (the log and the beat), never a loop, and the listed ones are still sent
 func TestRenumberOverCapAlert(t *testing.T) {
 	p, f, c := renumBridge(t, `,"RenumberMax":3`)
 	renumInsert(f, 26400, "20261005", "191")
@@ -193,8 +194,8 @@ func TestRenumberOverCapAlert(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		readAndUploadAll(t)
 	}
-	if asked := renumAsked(f); fmt.Sprint(asked) != fmt.Sprint(map[string]int{"26400": 1}) {
-		t.Fatalf("Tally asked %v (want the new entry only)", asked)
+	if asked := renumAsked(f); fmt.Sprint(asked) != fmt.Sprint(map[string]int{"26400": 1, "26311": 1, "26312": 1, "26313": 1}) {
+		t.Fatalf("Tally asked %v (want the new entry and the three listed, each once)", asked)
 	}
 	if n := c.count("renumber_list"); n != 1 {
 		t.Fatalf("FinCom asked %d times", n)
@@ -210,8 +211,8 @@ func TestRenumberOverCapAlert(t *testing.T) {
 	if len(b) != 1 || !strings.Contains(str(obj(b[0])["words"]), words) {
 		t.Fatalf("the beat: %v", b)
 	}
-	if alt := renumAltered(c); len(alt) != 0 {
-		t.Fatalf("sent %v", alt)
+	if alt := renumAltered(c); len(alt) != 3 {
+		t.Fatalf("sent %v (want the three listed)", alt)
 	}
 }
 

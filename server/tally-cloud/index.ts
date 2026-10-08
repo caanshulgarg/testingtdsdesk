@@ -491,17 +491,40 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
       .sort((a, b) => Date.parse(String(a.received_at)) - Date.parse(String(b.received_at)));
     // 2.3.4: the slow-ended lines of 7 to 30 days ago (kept only below, once their ":resolved" rows are read), after these
     if (unresolved && fast) {
+      // 2.3.4 (re-review M3): only the slow-ended lines are read, never the oldest 400 held rows of any kind: the lines
+      // whose own held words are the slow words, and the lines whose ":resolved" row carries them (read by their ids)
       const since30 = new Date(Date.now() - HELD_SLOW_DAYS * 86400000).toISOString();
-      const { data: d30, error: e30 } = await db.from("tally_recorder_lines").select("line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date, book_id, received_at, bridge, device_id, object_guid, body, held_why, payload")
-        .eq("firm_id", firm).eq("device_id", dev.id).eq("bridge", bridge).eq("state", "held").in("event", ["created", "altered", "imported"]).gt("received_at", since30).lte("received_at", since)
-        .order("received_at", { ascending: true }).limit(400);
-      if (e30) console.log("tally-ingest beat: " + what + ": the slow-ended lines of the last " + HELD_SLOW_DAYS + " days not read:", String(e30.message || "").slice(0, 200));
-      else if (Array.isArray(d30)) {
-        const old = (d30 as any[]).filter((r) => r && String(r.device_id ?? dev.id) === String(dev.id) && String(r.bridge ?? "") === bridge && !String(r.line_id || "").endsWith(":resolved")
+      const cols = "line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date, book_id, received_at, bridge, device_id, object_guid, body, held_why, payload";
+      // 2.3.4 re-review 2 (L-a): created / altered / imported only (a line's ":resolved" row carries its line's event), so
+      // held cancels, deletes and other rows never take the slots of the lines listed
+      const base = () => db.from("tally_recorder_lines").select(cols).eq("firm_id", firm).eq("device_id", dev.id).eq("bridge", bridge).eq("state", "held").in("event", ["created", "altered", "imported"]);
+      const got: any[] = [];
+      let bad = "";
+      const ids = new Set<string>();
+      for (const w of SLOW_END_WORDS) {
+        const { data: d1, error: e1 } = await base().ilike("held_why", "%" + w + "%").gt("received_at", since30).order("received_at", { ascending: true }).limit(400);
+        if (e1) { bad = String(e1.message || ""); break; }
+        for (const r of (d1 || []) as any[]) {
+          const lid = String(r?.line_id || "");
+          if (lid.endsWith(":resolved")) ids.add(lid.slice(0, -":resolved".length)); else got.push(r);
+        }
+      }
+      // the ":resolved" rows read above came with the slow words: their own lines, 60 ids a call
+      const need = [...ids].filter((x) => x && !got.some((r) => String(r.line_id) === x));
+      for (let i = 0; !bad && i < need.length; i += 60) {
+        const { data: d2, error: e2 } = await base().in("line_id", need.slice(i, i + 60));
+        if (e2) { bad = String(e2.message || ""); break; }
+        got.push(...((d2 || []) as any[]));
+      }
+      if (bad) console.log("tally-ingest beat: " + what + ": the slow-ended lines of the last " + HELD_SLOW_DAYS + " days not read:", bad.slice(0, 200));
+      else {
+        const seen = new Set(rows.map((r) => String(r.line_id || "")));
+        const old = got.filter((r) => r && String(r.device_id ?? dev.id) === String(dev.id) && String(r.bridge ?? "") === bridge && String(r.state ?? "held") === "held" && !String(r.line_id || "").endsWith(":resolved")
+          && ["created", "altered", "imported"].includes(String(r.event || "")) && !seen.has(String(r.line_id || ""))
           && Date.parse(String(r.received_at)) > Date.now() - HELD_SLOW_DAYS * 86400000 && Date.parse(String(r.received_at)) <= Date.now() - 7 * 86400000 && want(r))
           .sort((a, b) => Date.parse(String(a.received_at)) - Date.parse(String(b.received_at)));
-        for (const r of old) r._old = true;
-        rows = [...rows, ...old];
+        const once = new Set<string>();
+        for (const r of old) { const k = String(r.line_id); if (once.has(k)) continue; once.add(k); r._old = true; rows.push(r); }
       }
     }
     if (!rows.length) return [];
@@ -732,6 +755,18 @@ function cleanTallyRetry(x: any) {
   return { words: x.words.slice(0, 200), at: t(x.at), next: t(x.next), tries: Math.max(0, Math.min(1e6, Math.floor(Number(x.tries) || 0))) };
 }
 const tallyRetryOf = (b: any) => { const r = cleanTallyRetry(b?.tallyRetry); return r ? { tallyRetry: r } : {}; };
+// 2.4.0 review MEDIUM (next-renumber): entries Tally may have renumbered that the bridge did not read again
+// (renumberAlerts [{company, words, n, more, from, type, at}], the last 7 days, renumber.go): kept on the beat so FinCom
+// shows each as a "Needs you" item ("Upload the Day Book from <date>"); absent when none (or an older bridge)
+function cleanRenumberAlerts(x: any) {
+  if (!Array.isArray(x)) return null;
+  const t = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
+  const out = x.filter((a: any) => a && typeof a === "object" && !Array.isArray(a) && t(a.company, 200).trim() && t(a.words, 300).trim()).slice(0, 20).map((a: any) => ({
+    company: t(a.company, 200), words: t(a.words, 300), n: Math.max(0, Math.min(1e6, Math.floor(Number(a.n)) || 0)), more: a.more === true,
+    from: /^[0-9]{8}$/.test(String(a.from ?? "")) ? String(a.from) : "", type: t(a.type, 60), at: t(a.at, 30) }));
+  return out.length ? out : null;
+}
+const renumberAlertsOf = (b: any) => { const r = cleanRenumberAlerts(b?.renumberAlerts); return r ? { renumberAlerts: r } : {}; };
 function cleanReadStopped(x: any) {
   if (!x || typeof x !== "object" || !["self", "fincom"].includes(x.by)) return null;
   return { by: x.by as string, reason: typeof x.reason === "string" ? x.reason.slice(0, 300) : "", at: typeof x.at === "string" ? x.at.slice(0, 30) : "" };
@@ -2617,6 +2652,8 @@ Deno.serve(async (req) => {
           ...(s(b.recorderWaitWords, 300) ? { recorderWaitWords: s(b.recorderWaitWords, 300) } : {}),
           // bridge 2.3.1 (the owner's last change): a request not answered in time, and when it tries again by itself
           ...tallyRetryOf(b),
+          // 2.4.0 review MEDIUM (next-renumber): the renumbering alerts, for "Needs you"
+          ...renumberAlertsOf(b),
           windowsUser: s(b.windowsUser, 60), bridgePort: Math.max(0, Math.min(65535, Math.floor(Number(b.bridgePort) || 0))), tallyPort: Math.max(0, Math.min(65535, Math.floor(Number(b.tallyPort) || 0))), dataFolder: s(b.dataFolder, 260) };
         const prevInfo = ((dev as any).info && typeof (dev as any).info === "object") ? (dev as any).info : {};
         const me = bridgeOf(dev, body, false);

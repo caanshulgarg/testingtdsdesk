@@ -83,7 +83,7 @@ with sync_playwright() as p:
     E("() => { S.account = window.__acct; goStep('post', 'bills'); }"); pg.wait_for_timeout(500)
     E("() => { choiceConfirm(CO(), 'postTo', 'GARG SHEKHAR & COMPANY'); render(); }"); pg.wait_for_timeout(300)
     # C15: one line
-    ok(pg.locator("#app [data-post-line]").count() == 1 and line() == "Posting into GARG SHEKHAR & COMPANY · Tally open on NWS144 · Update now" and prob() == "", "C15. one line, nothing else: '%s'" % line())
+    ok(pg.locator("#app [data-post-line]").count() == 1 and line() == "Posting into GARG SHEKHAR & COMPANY · Connected · Tally open on NWS144 · Update now" and prob() == "", "C15. one line, nothing else: '%s'" % line())
     E("document.querySelector(\"#app details[data-more='post']\").open = true")
     ok(pg.inner_text("#app [data-post-bridge]") == "FinCom Bridge 2.1.1 · Ready", "C15. the bridge's version and Ready under More")
     E("document.querySelector(\"#app details[data-more='post']\").open = false")

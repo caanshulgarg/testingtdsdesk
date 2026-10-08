@@ -18,10 +18,20 @@
 //     FinCom stores Tally's number (migration 61: the same AlterID with another number is applied, never "duplicate").
 //
 // The first later entry unchanged (the type keeps its numbers, Tally's default "Auto Retain"): no renumbering, nothing more
-// asked. An entry at or below the starting point is never named (security M1): after renumbering is seen, such entries are
-// not read and are counted. More entries than the cap, or any so counted: one plain alert (the log and the beat), never a
-// loop: "N entries may have been renumbered in <company>; upload the Day Book from <date>". A company marked slow (its entry
-// fetch over 2 s, slowco.go) is not asked at all. Nothing is added to the allow-list: FinComVoucherObject only.
+// asked, no alert (2.4.0 review LOW: also when FinCom holds more entries than the cap: the first is checked first). An
+// entry at or below the starting point is never named (security M1): after renumbering is seen, such entries are not read
+// and are counted. More entries than the cap, or any so counted: one plain alert (the log and the beat; tally-ingest keeps
+// it on the computer's beat and FinCom shows it under "Needs you"), never a loop: "N entries may have been renumbered in
+// <company>; upload the Day Book from <date>". A company marked slow (its entry fetch over 2 s, slowco.go) is not asked at
+// all. Nothing is added to the allow-list: FinComVoucherObject only.
+//
+// 2.4.0 review HIGH (an entry asked for ever, one job blocking every company's): no entry is asked without end. A 2 s stop
+// (or Tally not answering) on an entry: the job waits and that entry is asked ONE more time RecorderStopRetrySec (5
+// minutes) later (the owner's answer B, as for 2.3.4's lines); a second stop drops it into the alert. An answer that
+// cannot be read, a form FinCom does not read (errFastShape) or an entry that cannot be asked: dropped into the alert at
+// once. The company not open in Tally (or Tally's company list not answering): that job waits RenumberPauseSec (5 minutes),
+// nothing dropped. While a job waits, the others run. 2.4.0 review MEDIUM: the entries the cloud could not list by
+// MasterID (its "unknown") are counted into the alert too, unless the type is seen to keep its numbers.
 package main
 
 import (
@@ -37,6 +47,9 @@ import (
 
 func renumMax() int     { return keepNum("RenumberMax", 500) }
 func renumPerTurn() int { return keepNum("RenumberPerTurn", 10) }
+func renumPause() time.Duration {
+	return time.Duration(keepNum("RenumberPauseSec", 300)) * time.Second
+}
 func renumGap() time.Duration {
 	return time.Duration(keepNumZero("RenumberGapMs", 1000)) * time.Millisecond
 }
@@ -55,13 +68,23 @@ type renumJob struct {
 	Probed                                                    bool // Tally renumbered one: the rest are read without stopping
 	Sent, Same, Below                                         int
 	BelowFrom                                                 string
+	// 2.4.0 review: Wait: not worked on before this time (RFC3339; a stop's one more ask, or the company not open); Stops:
+	// the head entry's stops so far; Missed: entries dropped unread (stopped twice, an answer that cannot be read, a form
+	// FinCom does not read), from MissedFrom on; Unknown: entries the cloud could not list by MasterID; More: FinCom held
+	// more than the cap
+	Wait       string
+	Stops      int
+	Missed     int
+	MissedFrom string
+	Unknown    int
+	More       bool
 }
 
 var renum = struct {
 	mu     sync.Mutex
 	dir    string
 	pend   map[string]*renumJob // company|GUID|type -> the earliest sign not worked on yet
-	job    *renumJob            // the one worked on
+	jobs   []*renumJob          // the ones started (2.4.0 review: one waiting never blocks the others), oldest first
 	alerts map[string]M         // company key -> the last alert {company, words, n, from, at}
 	lastAt time.Time
 	said   map[string]bool
@@ -75,7 +98,7 @@ func renumFresh() {
 	if renum.dir == syncDir() && renum.pend != nil {
 		return
 	}
-	renum.dir, renum.pend, renum.job, renum.alerts, renum.said = syncDir(), map[string]*renumJob{}, nil, map[string]M{}, map[string]bool{}
+	renum.dir, renum.pend, renum.jobs, renum.alerts, renum.said = syncDir(), map[string]*renumJob{}, nil, map[string]M{}, map[string]bool{}
 	renum.lastAt = time.Time{}
 	o := readObjFile(renumFile())
 	if o == nil {
@@ -86,7 +109,14 @@ func renumFresh() {
 			renum.pend[k] = j
 		}
 	}
-	renum.job = renumJobOf(obj(o["job"]))
+	if j := renumJobOf(obj(o["job"])); j != nil { // a file written before 2.4.0: its one job
+		renum.jobs = append(renum.jobs, j)
+	}
+	for _, x := range arr(o["jobs"]) {
+		if j := renumJobOf(obj(x)); j != nil {
+			renum.jobs = append(renum.jobs, j)
+		}
+	}
 	for k, v := range obj(o["alerts"]) {
 		if e := obj(v); e != nil {
 			renum.alerts[k] = e
@@ -100,7 +130,8 @@ func renumJobOf(e M) *renumJob {
 	}
 	j := &renumJob{Key: str(e["key"]), Company: str(e["company"]), CGUID: str(e["cguid"]), Type: str(e["type"]), Date: str(e["date"]), No: str(e["no"]),
 		Mid: str(e["mid"]), Event: str(e["event"]), Line: str(e["line"]), At: str(e["at"]), Asked: e["asked"] == true, Probed: e["probed"] == true,
-		Sent: toInt(e["sent"]), Same: toInt(e["same"]), Below: toInt(e["below"]), BelowFrom: str(e["belowFrom"])}
+		Sent: toInt(e["sent"]), Same: toInt(e["same"]), Below: toInt(e["below"]), BelowFrom: str(e["belowFrom"]),
+		Wait: str(e["wait"]), Stops: toInt(e["stops"]), Missed: toInt(e["missed"]), MissedFrom: str(e["missedFrom"]), Unknown: toInt(e["unknown"]), More: e["more"] == true}
 	for _, x := range arr(e["cands"]) {
 		c := obj(x)
 		j.Cands = append(j.Cands, renumCand{Mid: str(c["mid"]), GUID: str(c["guid"]), Day: str(c["day"]), No: str(c["no"]), Alter: toI64(c["alter"])})
@@ -114,7 +145,8 @@ func (j *renumJob) m() M {
 		cs = append(cs, M{"mid": c.Mid, "guid": c.GUID, "day": c.Day, "no": c.No, "alter": c.Alter})
 	}
 	return M{"key": j.Key, "company": j.Company, "cguid": j.CGUID, "type": j.Type, "date": j.Date, "no": j.No, "mid": j.Mid, "event": j.Event, "line": j.Line,
-		"at": j.At, "asked": j.Asked, "probed": j.Probed, "sent": j.Sent, "same": j.Same, "below": j.Below, "belowFrom": j.BelowFrom, "cands": cs}
+		"at": j.At, "asked": j.Asked, "probed": j.Probed, "sent": j.Sent, "same": j.Same, "below": j.Below, "belowFrom": j.BelowFrom, "cands": cs,
+		"wait": j.Wait, "stops": j.Stops, "missed": j.Missed, "missedFrom": j.MissedFrom, "unknown": j.Unknown, "more": j.More}
 }
 
 // under renum.mu
@@ -123,15 +155,15 @@ func renumSave() {
 	for k, j := range renum.pend {
 		p[k] = j.m()
 	}
-	var job any
-	if renum.job != nil {
-		job = renum.job.m()
+	jobs := []any{}
+	for _, j := range renum.jobs {
+		jobs = append(jobs, j.m())
 	}
 	a := M{}
 	for k, e := range renum.alerts {
 		a[k] = e
 	}
-	if err := saveFile(renumFile(), jsonText(M{"pending": p, "job": job, "alerts": a})); err != nil {
+	if err := saveFile(renumFile(), jsonText(M{"pending": p, "jobs": jobs, "alerts": a})); err != nil {
 		writeLog("Renumbering: " + renumFile() + " could not be written: " + err.Error())
 	}
 }
@@ -252,6 +284,16 @@ func renumBeat() []any {
 
 // under renum.mu: the plain alert, said in the log and carried by the beat
 func renumAlert(j *renumJob, n int, more bool, from string) {
+	// 2.4.0 review: another job's alert for the company within the 7 days is added to, never overwritten
+	if old := renum.alerts[companyKey(j.Company)]; old != nil {
+		if at, err := time.Parse("2006-01-02T15:04:05", str(old["at"])); err == nil && nowFn().Sub(at) <= 7*24*time.Hour {
+			n += toInt(old["n"])
+			more = more || old["more"] == true
+			if f := str(old["from"]); f != "" && f < from {
+				from = f
+			}
+		}
+	}
 	what := fmt.Sprintf("%d entries may have been renumbered", n)
 	if n == 1 {
 		what = "1 entry may have been renumbered"
@@ -271,23 +313,35 @@ func renumTurn() int {
 	}
 	renum.mu.Lock()
 	renumFresh()
-	if renum.busy || (renum.job == nil && len(renum.pend) == 0) || (!renum.lastAt.IsZero() && time.Since(renum.lastAt) < renumGap()) {
+	if renum.busy || (len(renum.jobs) == 0 && len(renum.pend) == 0) || (!renum.lastAt.IsZero() && time.Since(renum.lastAt) < renumGap()) {
 		renum.mu.Unlock()
 		return 0
 	}
-	if renum.job == nil {
-		var pick *renumJob
-		for _, j := range renum.pend {
-			if pick == nil || j.At < pick.At || (j.At == pick.At && j.Key < pick.Key) {
-				pick = j
+	// 2.4.0 review HIGH: the oldest job not waiting; none: the earliest sign starts a new one (a job waiting never blocks)
+	var j *renumJob
+	now := nowFn()
+	for _, x := range renum.jobs {
+		if w, err := time.Parse(time.RFC3339, x.Wait); x.Wait == "" || err != nil || !now.Before(w) {
+			j = x
+			break
+		}
+	}
+	if j == nil && len(renum.pend) > 0 {
+		for _, x := range renum.pend {
+			if j == nil || x.At < j.At || (x.At == j.At && x.Key < j.Key) {
+				j = x
 			}
 		}
-		delete(renum.pend, pick.Key)
-		renum.job = pick
+		delete(renum.pend, j.Key)
+		renum.jobs = append(renum.jobs, j)
 		renumSave()
 	}
+	if j == nil {
+		renum.mu.Unlock()
+		return 0
+	}
+	j.Wait = ""
 	renum.busy, renum.lastAt = true, time.Now()
-	j := renum.job
 	renum.mu.Unlock()
 	defer func() {
 		renum.mu.Lock()
@@ -296,8 +350,13 @@ func renumTurn() int {
 	}()
 	n, done := renumWork(j)
 	renum.mu.Lock()
-	if done && renum.job == j {
-		renum.job = nil
+	if done {
+		for i, x := range renum.jobs {
+			if x == j {
+				renum.jobs = append(renum.jobs[:i:i], renum.jobs[i+1:]...)
+				break
+			}
+		}
 	}
 	renumSave()
 	renum.mu.Unlock()
@@ -349,12 +408,12 @@ func renumWork(j *renumJob) (int, bool) {
 			}
 			cs = append(cs, c)
 		}
+		// 2.4.0 review LOW: more than the cap is said only once the first later entry shows Tally renumbered (a type that keeps
+		// its numbers raises nothing); MEDIUM: the entries the cloud could not list by MasterID are counted the same way
 		if truthy(r.json["more"]) || len(cs) > renumMax() {
-			renum.mu.Lock()
-			renumAlert(j, renumMax(), true, j.Date)
-			renum.mu.Unlock()
-			return 0, true
+			j.More = true
 		}
+		j.Unknown = toInt(r.json["unknown"])
 		sort.SliceStable(cs, func(a, b int) bool {
 			if cs[a].Day != cs[b].Day {
 				return cs[a].Day < cs[b].Day
@@ -364,6 +423,9 @@ func renumWork(j *renumJob) (int, bool) {
 			}
 			return cs[a].No < cs[b].No
 		})
+		if len(cs) > renumMax() {
+			cs = cs[:renumMax()]
+		}
 		j.Cands, j.Asked = cs, true
 		writeLog(fmt.Sprintf("Renumbering: %s %s %s of %s in %s: FinCom holds %d later %s entr%s; each is read again from Tally to see whether Tally renumbered it",
 			map[bool]string{true: "deleted", false: "made"}[j.Event == "deleted"], j.Type, or(j.No, "(no number)"), liveDay(j.Date), j.Company, len(cs), j.Type, map[bool]string{true: "y", false: "ies"}[len(cs) == 1]))
@@ -373,6 +435,7 @@ func renumWork(j *renumJob) (int, bool) {
 	}
 	port, err := findCompanyPortBg(j.Company, 0)
 	if err != nil {
+		renumWaitJob(j, renumPause(), "Renumbering: "+j.Company+" is not open in Tally ("+cutRunes(err.Error(), 120)+"); its renumbering check waits, the other companies' go on")
 		return 0, false
 	}
 	tc := recorderTC(nil)
@@ -405,18 +468,51 @@ func renumWork(j *renumJob) (int, bool) {
 			}
 		}
 		switch {
+		case err == nil:
 		case errors.Is(err, errSlowCompany):
-			return asked + queued, true
-		case errors.Is(err, errFastShape):
-			j.Cands = j.Cands[1:] // Tally keeps it in a form FinCom does not read: left to the Day Book
-			continue
-		case err != nil:
-			// a 2 s stop, the retry schedule waiting, a posting, Tally not answering: this turn ends here; the retry
-			// schedule (retry.go) says when Tally is asked again
+			// marked slow meanwhile: the entries not read are left to the Day Book, and said
+			for _, r := range j.Cands {
+				renumMiss(j, r)
+			}
+			j.Cands = nil
+			return asked + queued + renumFinish(j), true
+		case errors.Is(err, errRetryWait) || errors.Is(err, errPreempted) || errors.Is(err, errReadStopped):
+			// nothing reached Tally (the retry schedule waiting, a posting first, reading stopped from FinCom): this turn ends
+			// here, nothing counted; the schedule says when Tally is asked again
 			return asked + queued, false
+		case errors.Is(err, errRecorderStop) || tallyNoAnswer(err):
+			// 2.4.0 review HIGH (the owner's answer B): stopped at 2 s, or not answered: asked ONE more time 5 minutes later
+			// (the job waits; the others run); a second time: dropped into the alert
+			j.Stops++
+			if j.Stops < liveObjAsksMax {
+				renumWaitJob(j, liveStopRetry(), "")
+				writeLog(fmt.Sprintf("Renumbering: %s %s of %s in %s: Tally took longer than 2 s; FinCom asks once more at %s",
+					j.Type, c.No, liveDay(c.Day), j.Company, nowFn().Add(liveStopRetry()).Format("15:04")))
+				return asked + queued, false
+			}
+			writeLog(fmt.Sprintf("Renumbering: %s %s of %s in %s: Tally took longer than 2 s again; not asked any more (counted in the alert: upload the Day Book)",
+				j.Type, c.No, liveDay(c.Day), j.Company))
+			renumMiss(j, c)
+			j.Cands = j.Cands[1:]
+			continue
+		default:
+			// an answer that cannot be read, a form FinCom does not read, an entry that cannot be asked: the same would come
+			// again. Unless the company is no longer open (then the job waits, nothing dropped): dropped into the alert
+			if !errors.Is(err, errFastShape) {
+				if _, perr := findCompanyPortBg(j.Company, 0); perr != nil {
+					renumWaitJob(j, renumPause(), "Renumbering: "+j.Company+" is not open in Tally ("+cutRunes(perr.Error(), 120)+"); its renumbering check waits, the other companies' go on")
+					return asked + queued, false
+				}
+			}
+			writeLog(fmt.Sprintf("Renumbering: %s %s of %s in %s could not be read from Tally (%s); counted in the alert: upload the Day Book",
+				j.Type, c.No, liveDay(c.Day), j.Company, cutRunes(err.Error(), 120)))
+			renumMiss(j, c)
+			j.Cands = j.Cands[1:]
+			continue
 		}
 		x := got[c.Mid]
 		j.Cands = j.Cands[1:]
+		j.Stops = 0
 		if x == "" || !strings.EqualFold(tagValue(x, "GUID"), c.GUID) || tagValue(x, "VOUCHERTYPENAME") != j.Type {
 			continue // gone from Tally, or not the entry FinCom holds under that MasterID
 		}
@@ -463,14 +559,47 @@ func renumProbe(j *renumJob, c renumCand) bool {
 	return ok && k >= 0
 }
 
+// 2.4.0 review: the job waits d (its company not open, or a stop's one more ask); said once per company when words given
+func renumWaitJob(j *renumJob, d time.Duration, words string) {
+	j.Wait = nowFn().Add(d).Format(time.RFC3339)
+	if words != "" {
+		renum.mu.Lock()
+		renumSayOnce("closed|"+companyKey(j.Company), words)
+		renum.mu.Unlock()
+	}
+}
+
+// 2.4.0 review: an entry dropped unread, counted into the alert
+func renumMiss(j *renumJob, c renumCand) {
+	j.Missed++
+	j.Stops = 0
+	if j.MissedFrom == "" || c.Day < j.MissedFrom {
+		j.MissedFrom = c.Day
+	}
+}
+
 func renumFinish(j *renumJob) int {
 	if j.Sent > 0 {
 		writeLog(fmt.Sprintf("Renumbering: %d %s entr%s of %s renumbered by Tally after the %s of %s %s (%s): sent to FinCom with Tally's numbers",
 			j.Sent, j.Type, map[bool]string{true: "y", false: "ies"}[j.Sent == 1], j.Company, map[bool]string{true: "delete", false: "entry"}[j.Event == "deleted"], j.Type, or(j.No, "(no number)"), liveDay(j.Date)))
 	}
-	if j.Below > 0 {
+	// what was not read (below the starting point, dropped unread, not listed by MasterID, over the cap): one alert. The
+	// job ends here only when renumbering was seen or could not be ruled out (a type that keeps its numbers returns earlier)
+	n, from := j.Below+j.Missed+j.Unknown, ""
+	for _, f := range []string{j.BelowFrom, j.MissedFrom} {
+		if f != "" && (from == "" || f < from) {
+			from = f
+		}
+	}
+	if j.Unknown > 0 || j.More || from == "" {
+		from = j.Date
+	}
+	if j.More {
+		n = renumMax()
+	}
+	if n > 0 || j.More {
 		renum.mu.Lock()
-		renumAlert(j, j.Below, false, j.BelowFrom)
+		renumAlert(j, n, j.More, from)
 		renum.mu.Unlock()
 	}
 	return 0

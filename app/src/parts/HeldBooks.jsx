@@ -11,7 +11,11 @@ export default function HeldBooks({ cid, led, to, where }) {
   if (!h) return null;
   const go = () => Rec.openActivity(cid, "held");
   const lines = led ? AlertHub.ledgerHeld(cid, led, to) : [];
-  return <div className="bk-alert warn" role="status" data-books-held={where || ""} style={{ margin: "6px 0" }}>
+  // FinCom 2.3.5, one flow with Sync activity (Rec.needKind, src/js/61): yellow and "Needs you" only when a person must
+  // act (upload that day's Day Book, add a ledger, a locked month...); lines FinCom is still fetching are said quietly
+  const needs = typeof Rec === "object" && Rec.needKind ? (h.lines || []).some((l) => Rec.needKind(l)) : true;
+  return <div className={needs ? "bk-alert warn" : "note"} role="status" data-books-held={where || ""} data-books-held-needs={needs ? "" : undefined} style={{ margin: "6px 0" }}>
+    {needs && <b>{"Needs you"}</b>}
     <div data-books-held-text="">{h.why
       ? <>{h.text}{" · "}<button className="linkbtn" data-books-held-link="" onClick={go}>See them in Sync activity</button></>
       : <>{h.text.replace(/Sync activity$/, "")}<button className="linkbtn" data-books-held-link="" onClick={go}>Sync activity</button></>}</div>

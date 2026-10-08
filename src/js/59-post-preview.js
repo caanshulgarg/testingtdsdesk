@@ -372,7 +372,7 @@ function postStatusFor(co){
   const pl = postLineFor(co), l = typeof tallyLine === "function" ? tallyLine(co) : null;
   const out = {company: pl.company, where: "", read: "", reading: false, more: [pl.bridge, pl.state].filter(Boolean).join(" · "), problem: null};
   if (l && l.state === "open"){ out.where = l.text.replace(/ · last read .*$/, ""); out.read = l.read; out.reading = !!l.reading; }
-  else if (!l && (pl.tally === "open" || pl.tally === "busy") && pl.computer) out.where = "Tally open on " + pl.computer;
+  else if (!l && (pl.tally === "open" || pl.tally === "busy") && pl.computer) out.where = "Connected \u00b7 Tally open on " + pl.computer;   // 2.3.5: the cards' words
   const p = (text, button, go, kind) => ({text, button: button || "", go: go || null, kind: kind || ""});
   let st = S.postStop && S.postStop.cid === co.id ? S.postStop : null;
   // a stop that no longer holds goes by itself: the company confirmed since, or no bill waits on a guessed ledger now

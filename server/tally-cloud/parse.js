@@ -201,8 +201,29 @@ function takeVoucher(s){
     });
   });
   const ofTag = (t) => found.filter((f) => f.tag === t);
-  const fromAll = ofTag("ALLLEDGERENTRIES.LIST"), fromLed = ofTag("LEDGERENTRIES.LIST"), under = ofTag("ACCOUNTINGALLOCATIONS.LIST");
-  let take = found;
+  let fromAll = ofTag("ALLLEDGERENTRIES.LIST"), fromLed = ofTag("LEDGERENTRIES.LIST");
+  const under = ofTag("ACCOUNTINGALLOCATIONS.LIST");
+  // FinCom Bridge 2.3.4 (re-review M2): the bridge's entry request now gives Tally's stored voucher, its party and tax lines
+  // (Tally's LEDGERENTRIES) as ALLLEDGERENTRIES and no LEDGERENTRIES. When a ledger under the items is ALSO a line of its
+  // own there (freight booked to the sales ledger), that list is not the entry's whole list: it is read as the Voucher
+  // collection's answer was (the entry's whole list: those lines with each ledger under the items as one line of its
+  // total, after the party's line; those lines again as LEDGERENTRIES), so FinCom stores what it stored from that answer.
+  // The total line carries the cost centres of the lines under the items (as TallyPrime 3.0's answer did; 7.1's left them out)
+  if (fromAll.length && !fromLed.length && under.length){
+    const tu0 = new Map(); under.forEach((u) => tu0.set(u.name, r2((tu0.get(u.name) || 0) + u.la)));
+    // the partial list is told by its sum: it balances only with the lines under the items (a whole list balances alone)
+    const sa = r2(fromAll.reduce((t, f) => t + f.la, 0)), su = r2(under.reduce((t, f) => t + f.la, 0));
+    if (fromAll.some((f) => tu0.has(f.name)) && Math.abs(sa) > 0.005 && Math.abs(r2(sa + su)) < 0.005){
+      const agg = [...tu0].map(([name, la]) => ({tag: "ALLLEDGERENTRIES.LIST", name, it: null, la,
+        e: "<ALLLEDGERENTRIES.LIST><LEDGERNAME>" + String(name).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") + "</LEDGERNAME><AMOUNT>" + la.toFixed(2) + "</AMOUNT>" +
+          under.filter((u) => u.name === name).map((u) => blocks(u.e, "CATEGORYALLOCATIONS.LIST").map((b) => "<CATEGORYALLOCATIONS.LIST>" + b + "</CATEGORYALLOCATIONS.LIST>").join("")).join("") +
+          "</ALLLEDGERENTRIES.LIST>"}));
+      const party = one(s, "PARTYLEDGERNAME");
+      fromLed = fromAll.map((f) => ({...f, tag: "LEDGERENTRIES.LIST"}));
+      fromAll = party && fromAll[0].name === party ? [fromAll[0], ...agg, ...fromAll.slice(1)] : [...agg, ...fromAll];
+    }
+  }
+  let take = [...fromAll, ...fromLed, ...under];
   if (fromAll.length && (fromLed.length || under.length)){
     const tot = (xs) => { const m = new Map(); xs.forEach((f) => m.set(f.name, r2((m.get(f.name) || 0) + f.la))); return m; };
     const zero = (xs) => Math.abs(xs.reduce((t, f) => t + f.la, 0)) < 0.005;

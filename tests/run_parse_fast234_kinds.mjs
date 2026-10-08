@@ -13,6 +13,10 @@
 //   - TDS: the object, like the Day Book, carries the TDS details of an entry typed on the screen that today's answer
 //     left empty (the S5 payment on 7.1): more, never less
 // The voucher-mode invoice (stock under the sales line) is held by the bridge (its golden says HELD): not compared.
+// 2.3.4 re-review (push-design run 37770938549, 3.0 and 7.1): an item invoice whose sales ledger is also a line of its own
+// (M2: read as the collection's answer was, by parse.js) and a payroll voucher typed on Tally's Payroll screen (L1: its pay
+// heads under each employee written as ledger lines with the employees as cost centres, by the bridge): stored as today,
+// but for 7.1's collection leaving the M2 invoice's cost centres out (the object keeps them, as 3.0's answer did)
 import fs from "fs";
 import path from "path";
 import zlib from "zlib";
@@ -20,7 +24,7 @@ import { fileURLToPath } from "url";
 import { parseDay } from "../server/tally-cloud/parse.js";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TD = path.join(HERE, "..", "bridge-go", "testdata", "fast234kinds");
-let fails = 0, n = 0, onAcc = 0, tdsMore = 0, held = 0;
+let fails = 0, n = 0, onAcc = 0, tdsMore = 0, held = 0, costMore = 0;
 const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const flat = (o, p, out) => { if (o === null || typeof o !== "object") { out[p] = JSON.stringify(o); return out; } if (Array.isArray(o)) { out[p + ".length"] = String(o.length); o.forEach((x, i) => flat(x, p + "[" + i + "]", out)); return out; } for (const k of Object.keys(o).sort()) flat(o[k], p ? p + "." + k : k, out); return out; };
 // lines in one order (the object gives an item invoice's party and tax lines first, as the Day Book), references renumbered
@@ -35,14 +39,19 @@ for (const rel of fs.readdirSync(TD).filter((d) => /^\d+\.\d+$/.test(d)).sort())
     let oa = 0, tm = 0;
     today.lines = today.lines.map((l) => { const b = l[5]; if (Array.isArray(b) && b.length === 1 && b[0][0] === "" && b[0][1] === "On Account") { oa++; return [...l.slice(0, 5), []]; } return l; });
     today.vouchers.forEach((v, i) => { const g = got.vouchers[i]; if (g && Array.isArray(g.tds) && g.tds.length && (!v.tds || !v.tds.length)) { tm++; v.tds = g.tds; } });
+    // re-review M2: an item invoice whose sales ledger is also a line of its own: TallyPrime 7.1's collection answer left
+    // the cost centres of the lines under the items out of the entry's list (3.0's kept them); the object keeps them
+    let cm = 0;
+    today.vouchers.forEach((v, i) => { const g = got.vouchers[i]; if (g && Array.isArray(g.costs) && g.costs.length && (!v.costs || !v.costs.length) && kind === "sales-5-items-direct-sales-line") { cm++; v.costs = g.costs; } });
+    costMore += cm;
     onAcc += oa; tdsMore += tm;
     const a = flat(canon(today), "", {}), b = flat(canon(got), "", {});
     const keys = [...new Set([...Object.keys(a), ...Object.keys(b)])].sort(), diff = keys.filter((k) => a[k] !== b[k]);
     n++;
-    ok(diff.length === 0, rel + " " + kind + ": " + keys.length + " fields of parse.js's output the same" + (oa ? "; " + oa + " On Account bill(s) only in today's" : "") + (tm ? "; TDS details only in the object" : "") +
+    ok(diff.length === 0, rel + " " + kind + ": " + keys.length + " fields of parse.js's output the same" + (oa ? "; " + oa + " On Account bill(s) only in today's" : "") + (tm ? "; TDS details only in the object" : "") + (cm ? "; cost centres only in the object" : "") +
       (diff.length ? "; differ: " + diff.slice(0, 8).map((k) => k + " today " + a[k] + " fast " + b[k]).join(" | ") : ""));
   }
 }
-ok(n >= 100 && held === 5, n + " entries compared on five releases, " + held + " held; " + onAcc + " On Account bills only in today's answer; " + tdsMore + " entries with TDS details only in the object");
+ok(n >= 100 && held === 5, n + " entries compared on five releases, " + held + " held; " + onAcc + " On Account bills only in today's answer; " + tdsMore + " entries with TDS details only in the object; " + costMore + " with cost centres only in the object");
 console.log(fails ? fails + " FAILED" : "all ok");
 process.exit(fails ? 1 : 0);

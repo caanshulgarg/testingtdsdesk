@@ -213,19 +213,19 @@ func TestR222HardTwoSecondStop(t *testing.T) {
 	if logLines("off: Tally took") != 0 || logLines("(FinComVoucherObject, try 1); trying again by itself at") != 1 {
 		t.Fatalf("switched off, or the retry not said: %s", readText(logFile()))
 	}
-	// 2.3.3 (the owner's rule): up held at once with the words, never unsent waiting for the retry
-	if sent := c.recSent(); len(sent) != 1 || str(sent[0]["xml"]) != "" || !strings.HasPrefix(str(sent[0]["heldWhy"]), "waiting: Tally took longer than 2 s") {
+	// 2.3.4 (the owner's answer B, 08-Oct-2026): up held at once, asked once more 5 minutes later
+	if sent := c.recSent(); len(sent) != 1 || str(sent[0]["xml"]) != "" || !strings.HasPrefix(str(sent[0]["heldWhy"]), "waiting: Tally took longer than 2 s; FinCom asks once more at ") {
 		t.Fatalf("not held at once: %v", sent)
 	}
-	// asked again once at the retry's try; stopped again: it ends with the Day Book words, never asked again
+	// not asked again before those 5 minutes
 	for i := 0; i < 3; i++ {
 		retryDue()
 		uploadAll(t)
 	}
-	if n := f.n(vchObjectID); n != 2 {
-		t.Fatalf("asked %d times (its fetch and one ask again)", n)
+	if n := f.n(vchObjectID); n != 1 {
+		t.Fatalf("asked %d times (its fetch only)", n)
 	}
-	if sent := c.recSent(); len(sent) != 2 || str(sent[1]["xml"]) != "" || str(sent[1]["heldWhy"]) != liveHeldSlowGiveUp {
+	if sent := c.recSent(); len(sent) != 1 {
 		t.Fatalf("sent: %v", sent)
 	}
 }

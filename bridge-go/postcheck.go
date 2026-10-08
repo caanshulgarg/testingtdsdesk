@@ -25,6 +25,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"html"
 	"path/filepath"
@@ -172,6 +173,9 @@ func checkPostedEntry(c M) M {
 	}
 	// Tally's own id from its reply: the one voucher with that id
 	got, err := fetchVouchersByMasterIn(checkTC(), name, port, date, []string{mid}, 2)
+	if errors.Is(err, errFastShape) {
+		return unable(postCheckShapeWords(name, mid, date, err)) // 2.3.4 (re-review L2): a person looks, never "busy"
+	}
 	if err != nil {
 		return busy(err)
 	}
@@ -225,4 +229,11 @@ func runPostChecks(list []any) bool {
 		}
 	}
 	return resent
+}
+
+// 2.3.4 (re-review L2): Tally keeps the voucher with that id in a form FinCom's entry request does not read whole: the check
+// cannot read it by itself; a person looks in Tally
+func postCheckShapeWords(name, mid, date string, err error) string {
+	return fmt.Sprintf("In %s, Tally's voucher id %s of %s is kept in a form FinCom does not read by itself (%s): a person must look in Tally; use Mark posted if it is this entry, post again only if it is not",
+		name, mid, ddmmyyyy(date), cutRunes(err.Error(), 200))
 }

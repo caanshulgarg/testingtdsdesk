@@ -98,10 +98,12 @@ with sync_playwright() as p:
     pg.goto("http://localhost:8279/"); pg.wait_for_timeout(2500)
     pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
     E = lambda js, *a: pg.evaluate(js, *a)
+    # FinCom 2.3.5, the simpler Tally page: the rest of a computer's card (and of the page) is under More; open them all
+    more = lambda: (pg.evaluate("() => document.querySelectorAll('#app [data-more-toggle][aria-expanded=\"false\"]').forEach(b => b.click())"), pg.wait_for_timeout(500))
     txt = lambda sel: pg.inner_text(sel).replace("\n", " ").strip() if pg.locator(sel).count() else ""
     def tally_page(prefs, links, role, me, balerts=None, devs=None, local=None, stops=None):
         E(SETUP, [devs or DEVS, prefs, links, MEMBERS, role, me, balerts or [], local, stops or []]); pg.wait_for_timeout(500)
-        pg.locator('#side button[aria-label="Tally"]').first.click(); pg.wait_for_timeout(1500)
+        pg.locator('#side button[aria-label="Tally"]').first.click(); pg.wait_for_timeout(1500); more()
     # ---- 1. the Tally page, as the owner
     tally_page([{"device_id": DM, "bridge_id": BM, "changes_only": True}], [{"user_id": RAVI, "device_id": DR, "bridge_id": BR}, {"user_id": MEENA, "device_id": DM, "bridge_id": BM}], "owner", OWNER)
     lines = pg.locator("#app [data-computers] [data-computer]")

@@ -47,7 +47,12 @@ with sync_playwright() as p:
     # 1. nothing heard from yet: one card, one button
     E(SETUP, []); pg.wait_for_timeout(1500)
     card = "#app [data-bridge-card]"
-    ok(pg.locator(card).count() == 1, "1. one FinCom Bridge card")
+    # 2.3.5: the three steps lead, step 1 with the download; the install card (fingerprint, link, PowerShell, the help when
+    # Windows blocks it) is under the page's More
+    GD = '#app [data-tally-guide] [data-guide-step="install"] [data-bridge-download]'
+    ok(pg.locator(card).count() == 0 and pg.locator(GD).count() == 1 and pg.inner_text(GD) == "Download FinCom Bridge 2.1.1", "1. the steps: Install FinCom Bridge, with its download")
+    pg.click("#app [data-bridge-details]"); pg.wait_for_timeout(500)
+    ok(pg.locator(card).count() == 1, "1. one FinCom Bridge card, under More")
     ok(pg.locator(card + " a.btn, " + card + " button").count() == 1 and pg.inner_text(card + " [data-bridge-download]") == "Download FinCom Bridge 2.1.1",
        "1. with one button: Download FinCom Bridge 2.1.1")
     ok(pg.inner_text(card + " [data-bridge-sha]") == "ab" * 32 and pg.locator(card + " [data-bridge-link]").count() == 1 and "Invoke-WebRequest" in pg.inner_text(card + " [data-bridge-ps]"),
@@ -55,17 +60,19 @@ with sync_playwright() as p:
     t = pg.inner_text("#app")
     ok(not [x for x in OLD if x in t], "2. nothing of the older bridges on the page (%s)" % [x for x in OLD if x in t])
     ok("without an administrator" in pg.inner_text(card), "4. it says: just for you, without an administrator")
-    # 5. FinCom Bridge heard from: one line, the rest under Details
+    # 5. FinCom Bridge heard from: one line, the rest under More
     E(SETUP, NWS_NEW); pg.wait_for_timeout(1200)
+    pg.click("#app [data-bridge-details]"); pg.wait_for_timeout(500)   # fold the page's More again
     ln = pg.inner_text("#app [data-bridge-lines]")
-    ok(pg.locator("#app [data-bridge-line]").count() == 1 and all(x in ln for x in ("NWS144", "anshul", "FinCom Bridge 2.1.1", "Online · Tally open", "ZZ TEST, Testing AAD")),
-       "5. one line: NWS144 · anshul · FinCom Bridge 2.1.1 · Online · Tally open · the companies (%s)" % ln.replace("\n", " "))
-    ok(pg.locator(card).count() == 0 and pg.locator("#app [data-bridges]").count() == 0 and pg.locator("#app [data-bridge-download-again]").count() == 1,
-       "5. no card and no table: the download folded away, the details behind a link")
+    ok(pg.locator("#app [data-bridge-line]").count() == 1 and all(x in ln for x in ("NWS144", "anshul", "FinCom Bridge 2.1.1", "Connected", "Tally open: ZZ TEST, Testing AAD")),
+       "5. one line: NWS144 · anshul · FinCom Bridge 2.1.1 · Connected · Tally open: the companies (%s)" % ln.replace("\n", " "))
+    ok(pg.locator(card).count() == 0 and pg.locator("#app [data-bridges]").count() == 0 and pg.locator("#app [data-bridge-details]").count() == 1,
+       "5. no card and no table: the download and the details behind More")
     t = pg.inner_text("#app")
     ok(not [x for x in OLD if x in t], "2. nothing of the older bridges (%s)" % [x for x in OLD if x in t])
     pg.click("#app [data-bridge-details]"); pg.wait_for_timeout(500)
-    ok(pg.locator("#app [data-bridges] tbody tr").count() == 1 and "FinCom Bridge on this computer" in pg.inner_text("#app [data-bridge-more]"), "5. Details: every bridge heard from, and this computer's connection")
+    ok(pg.locator("#app [data-bridges] tbody tr").count() == 1 and "FinCom Bridge on this computer" in pg.inner_text("#app [data-bridge-more]") and pg.locator(card).count() == 1,
+       "5. More: every bridge heard from, this computer's connection, and the download again")
     # offline: the line says what to do
     E("() => { TCloud.pane.devices[0].info.bridges['go-3fa9c1d2e4b7'].at = new Date(Date.now() - 3600000).toISOString(); render(); }"); pg.wait_for_timeout(500)
     st = pg.inner_text("#app [data-bridge-line]")
@@ -73,16 +80,18 @@ with sync_playwright() as p:
     # 1.15.0 still main beside a 2.1.0 test install, and a computer with only 1.15.0
     E(SETUP, NWS_BOTH); pg.wait_for_timeout(1200)
     lines = pg.locator("#app [data-bridge-line]")
-    l1 = pg.inner_text('#app [data-bridge-line="go-3fa9c1d2e4b7"]'); l2 = pg.inner_text('#app [data-bridge-line="v1"]')
-    ok(lines.count() == 2 and "FinCom Bridge 2.1.0" in l1 and "reads only" in l1 and "Older bridge" in l2 and "TALLYSRV" in l2 and "Install FinCom Bridge below" in l2,
+    # 2.3.5: the card names the computer and the bridge; its status line says the problem and the one fix
+    l1 = pg.inner_text('#app [data-computer]:has([data-bridge-line="go-3fa9c1d2e4b7"])'); l2 = pg.inner_text('#app [data-computer]:has([data-bridge-line="v1"])')
+    ok(lines.count() == 2 and "FinCom Bridge 2.1.0" in l1 and "reads only" in l1 and "Older bridge" in l2 and "TALLYSRV" in l2 and "Needs FinCom Bridge" in l2 and "Install it on TALLYSRV" in l2,
        "a line a computer: NWS144's FinCom Bridge reads only; TALLYSRV has an older bridge: install FinCom Bridge (%s | %s)" % (l1.replace("\n", " "), l2.replace("\n", " ")))
-    ok(pg.locator(card).count() == 1, "the card is shown while a computer has only an older bridge")
+    ok(pg.locator('#app [data-bridge-line="v1"] [data-bridge-download]').count() == 1, "a computer with only an older bridge: its line has the download")
     t = pg.inner_text("#app")
     ok(not [x for x in OLD if x in t], "2. the older bridges are named only 'Older bridge' (%s)" % [x for x in OLD if x in t])
     pg.click('#app [data-bridge-lines] [data-make-main="go-3fa9c1d2e4b7"]'); pg.wait_for_timeout(400)
     pg.click('.cbx button[data-cbx="yes"]'); pg.wait_for_timeout(800)
     ok(["tally_bridge_make_main", {"p_device": "d-1", "p_bridge": "go-3fa9c1d2e4b7"}] in E("window.__calls"), "Make this the main bridge (asked first), from the line")
-    # Windows blocks it: the help, folded under the card
+    # Windows blocks it: the help, folded under the card (under the page's More)
+    if not pg.locator(card).count(): pg.click("#app [data-bridge-details]"); pg.wait_for_timeout(500)
     pg.click(card + " details summary"); pg.wait_for_timeout(300)
     h = pg.inner_text("#app [data-install-help]")
     ok(all(x in h for x in ("Windows protected your PC", "More info", "Run anyway", "install.log")), "the help when Windows blocks the download or the setup, under the card")
