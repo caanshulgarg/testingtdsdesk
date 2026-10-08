@@ -5,6 +5,9 @@
 #   quick: install, open the company, the port and the company list (flow.ps1, then flowv.ps1 c1-c2)
 #   full:  also a posting from the bridge, create / alter / cancel / delete by keys with the add-on, Alt+2, the entry
 #          request for one entry, the Tally version string the bridge reads (flowv.ps1 c3-c7)
+# 2.4.0's combined gate: mode gate240 (or a comma list of modes) runs one job per mode and release; the setup committed at
+# bridge_ref for its own BridgeVersion is installed (from_source=no), checked against its .sha256; each job's results under
+# spike-results/versions/<run>-<release>-<mode>/, all of them in spike-results/versions/<run>-summary.txt.
 # A push to tally-versions runs the mode in .github/tally-spike/versions-mode.txt. Results are committed back to
 # tally-versions under spike-results/versions/<run>-<release>/ (full: captures also under bridge-go/testdata/real-tally-<release>/).
 # A check the harness could not do (a timeout, no window, keys that made no entry) is HARNESS, never PASS.
@@ -21,8 +24,17 @@ on:
       mode:
         description: 'quick (install and port), full (every check) share (next-push: the full line against the stored entry, per kind typed on the screen; no bridge) or big (the add-on''s own share of a save on a 100,000-entry company) or hang (the hang of run 37729166801 isolated, each probe in a fresh Tally) or hang2 (the share company, then each entry asked in a fresh Tally) or hang3 (the share session, the published requests after every step) or hang4 (the harness''s malformed filter against the correct one) or bank (the bank-date probe: does any event an add-on can hook fire when a bank date is set; bankv.ps1, a probe variant of the add-on in the harness only) or bankb (next-bankdate: bank dates set in Bank Reconciliation with the bridge built from source and stubr.py as the cloud; FinCom''s copy ends with Tally''s bank dates; bankv.ps1; 3.0 and 7.1 only) or renum (next-renumber: an insert and a delete with renumbering on, the bridge built from source with stubr.py as the cloud; FinCom ends with Tally''s numbers; 3.0 and 7.1 only) or ledlist (next-masterhook: the bridge''s FinComLedgers chunks and FinComLedgerChanges, request XML from the ref''s source, on about 2,000 / 5,000 / 20,000 ledgers; ledv.ps1; 3.0 and 7.1) or mhook (next-masterhook: Stock Item, Godown and Pay Head created / altered / deleted on the screen with the ref''s add-on and with no TDL, Tally''s stored master against what was typed; mhookv.ps1, ocrw.ps1) or s235 (bridge 2.3.5 built from source: FinCom''s read stop from the beat answer with a create / alter / delete on the screen, the lift, a bridge restart, a real failure that counts, the Tally-not-open notification once a day; s235v.ps1, stub235.py, proxy235.py; 3.0 and 7.1 only)'
         default: quick
+      # 2.4.0's combined gate (the coordinator, 08-Oct-2026): mode gate240 = every mode below in one run, one job per mode and
+      # release (s235, tds240, renum, bankb, selfck, mhook, ledlist, upg), on all five releases unless versions says; a comma
+      # list of modes (e.g. s235,upg) runs those. New modes: tds240 (a TDS payment typed on the screen: TDS details carried,
+      # an exempt line not given a worked-out rate; parse.js of the ref), selfck (the nightly self-check forced: Tally's
+      # list compared, the missing fetched, the words of migration 65's tally_selfcheck_words), upg (2.4.0 installed over a
+      # running 2.3.3 with held lines and recorder state: everything carried, held lines asked once)
+      mhook_types:
+        description: 'mhook: the master types to run (comma list of godown, stockitem, payhead; empty: all three). The gate runs only the types the proof helper reports proven'
+        default: ''
       from_source:
-        description: 'yes: build the bridge from bridge_ref''s source even when a setup is committed there (a branch whose committed setup is an older release)'
+        description: 'yes: build the bridge from bridge_ref''s source even when a setup of its version is committed there. no (the gate): install the setup committed at the ref for its BridgeVersion (assets-test/bridge-go/FinComBridge-Setup-<version>.exe, checked against its .sha256); a ref with no setup of its own version is built from source'
         default: 'no'
       versions:
         description: 'Releases to run, comma separated (e.g. 3.0,7.1); empty: the mode''s own list'
@@ -39,6 +51,7 @@ jobs:
       sha: ${{ steps.sha.outputs.sha }}
       mode: ${{ steps.mode.outputs.mode }}
       versions: ${{ steps.mode.outputs.versions }}
+      matrix: ${{ steps.mode.outputs.matrix }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -46,12 +59,22 @@ jobs:
       - id: mode
         run: |
           m="${{ inputs.mode }}"; [ -n "$m" ] || m=$(head -1 harness/.github/tally-spike/versions-mode.txt 2>/dev/null | tr -d '[:space:]')
-          case "$m" in full|mhook|ledlist|share|big|hang|hang2|hang3|hang4|bank|bankb|renum|s235) ;; *) m=quick ;; esac
-          echo "mode=$m" | tee -a "$GITHUB_OUTPUT"
-          # renum (next-renumber): the oldest and the newest release only
-          v="${{ inputs.versions }}"
-          if [ -n "$v" ]; then echo "versions=[\"$(echo "$v" | tr -d '[:space:]' | sed 's/,/","/g')\"]"
-          elif [ "$m" = ledlist ] || [ "$m" = renum ] || [ "$m" = s235 ] || [ "$m" = bankb ]; then echo 'versions=["3.0","7.1"]'; else echo 'versions=["3.0","4.1","5.1","6.2","7.1"]'; fi | tee -a "$GITHUB_OUTPUT"
+          [ "$m" = gate240 ] && m="s235,tds240,renum,bankb,selfck,mhook,ledlist,upg"
+          known="full mhook ledlist share big hang hang2 hang3 hang4 bank bankb renum s235 tds240 selfck upg quick"
+          v="${{ inputs.versions }}"; v=$(echo "$v" | tr -d '[:space:]')
+          modes=""; for x in $(echo "$m" | tr ',' ' '); do case " $known " in *" $x "*) modes="$modes $x" ;; *) echo "::warning::unknown mode $x: quick"; modes="$modes quick" ;; esac; done
+          [ -n "$modes" ] || modes=quick
+          first=$(echo $modes | awk '{print $1}'); echo "mode=$first" | tee -a "$GITHUB_OUTPUT"
+          inc=""; all=""
+          for x in $modes; do
+            # a mode's own releases when none are given: ledlist / renum / s235 / bankb were 3.0 and 7.1; the gate gives versions
+            if [ -n "$v" ]; then vs="$v"; elif echo "$m" | grep -q ','; then vs="3.0,4.1,5.1,6.2,7.1"; else case $x in ledlist|renum|s235|bankb) vs="3.0,7.1" ;; *) vs="3.0,4.1,5.1,6.2,7.1" ;; esac; fi
+            case $x in hang2|mhook) t=220; c=190 ;; ledlist|share|big|hang|hang3|bank|bankb|renum|s235|tds240|selfck|upg) t=130; c=105 ;; *) t=75; c=40 ;; esac
+            for r in $(echo "$vs" | tr ',' ' '); do inc="$inc{\"version\":\"$r\",\"mode\":\"$x\",\"tmo\":$t,\"ctmo\":$c},"; all="$all\"$r\","; done
+          done
+          echo "matrix={\"include\":[${inc%,}]}" | tee -a "$GITHUB_OUTPUT"
+          echo "versions=[${all%,}]" | tee -a "$GITHUB_OUTPUT"
+          echo "modes=$(echo $modes | tr ' ' ',')" | tee -a "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.bridge_ref || 'tax-accuracy' }}
@@ -62,16 +85,14 @@ jobs:
       - name: Committed setup at the ref
         id: committed
         run: |
-          f=$(ls assets-test/bridge-go/FinComBridge-Setup-*.exe 2>/dev/null | head -1 || true)
-          # renum: the ref's own code, never a setup committed at it (next-renumber still carries 2.3.3's)
-          if [ "${{ steps.mode.outputs.mode }}" = renum ]; then f=""; fi
-          # s235: the ref's own code (bridge 2.3.5 branches)
-          if [ "${{ steps.mode.outputs.mode }}" = s235 ]; then f=""; fi
-          # bankb: the ref's own code (branch next-bankdate)
-          if [ "${{ steps.mode.outputs.mode }}" = bankb ]; then f=""; fi
-          # from_source=yes: the ref's own code (a branch whose committed setup is the release before it)
-          if [ "${{ inputs.from_source }}" = yes ]; then f=""; fi
-          if [ -z "$f" ]; then echo "no committed setup at the ref: building from source"; echo "use=no" >> "$GITHUB_OUTPUT"; exit 0; fi
+          # the setup committed at the ref for ITS OWN version (BridgeVersion in bridge-go/util.go), checked against its
+          # .sha256: the exact file that ships. A ref with no setup of its own version (a branch carrying an older release's
+          # setup) is built from source; from_source=yes builds from source anyway
+          ver=$(grep -oP 'var BridgeVersion = "\K[0-9.]+' bridge-go/util.go || true)
+          f=$(ls assets-test/bridge-go/FinComBridge-Setup-$ver.exe 2>/dev/null | head -1 || true)
+          echo "the ref's BridgeVersion: $ver; committed setups: $(ls assets-test/bridge-go/FinComBridge-Setup-*.exe 2>/dev/null | tr '\n' ' ')"
+          if [ "${{ inputs.from_source }}" = yes ]; then echo "from_source=yes: building from source"; f=""; fi
+          if [ -z "$ver" ] || [ -z "$f" ]; then echo "no committed setup of version $ver at the ref (or from_source=yes): building from source"; echo "use=no" >> "$GITHUB_OUTPUT"; exit 0; fi
           [ -f "$f.sha256" ] || { echo "::error::$f has no $f.sha256 next to it"; exit 1; }
           want=$(awk '{print tolower($1); exit}' "$f.sha256"); got=$(sha256sum "$f" | awk '{print $1}')
           echo "committed setup $f: SHA-256 $got (expected $want)"
@@ -80,7 +101,6 @@ jobs:
           echo "setup origin: COMMITTED $f SHA-256 $got" | tee bridge-go/dist/setup-origin.txt
           echo "use=yes" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-go@v5
-        if: steps.committed.outputs.use != 'yes'
         with:
           go-version-file: bridge-go/go.mod
           cache-dependency-path: bridge-go/go.sum
@@ -96,6 +116,47 @@ jobs:
           cp ../bridge-source.txt dist/
           f=$(ls dist/FinComBridge-Setup-*.exe | head -1)
           echo "setup origin: BUILT from source $f SHA-256 $(sha256sum "$f" | awk '{print $1}')" | tee dist/setup-origin.txt
+      # the ref's own ledger requests (ledlist: written by a throwaway go test from the ref's source, never committed) and
+      # entry request (tds240 / selfck / upg time and judge with it); a ref without a function leaves that file out
+      - name: The bridge's own requests at the ref
+        continue-on-error: true
+        working-directory: bridge-go
+        run: |
+          mkdir -p dist/ledreq dist/requests
+          one() {
+            printf 'package main\n\nimport (\n\t"os"\n\t"testing"\n)\n\nfunc TestFCSpikeReq(t *testing.T) {\n\tif err := os.WriteFile(os.Getenv("FC_REQ_OUT"), []byte(%s), 0o644); err != nil {\n\t\tt.Fatal(err)\n\t}\n}\n' "$2" > zz_fcspike_req_test.go
+            if FC_REQ_OUT="$PWD/dist/$1" go test -run '^TestFCSpikeReq$' -count=1 . > "dist/$1.log" 2>&1; then echo "$1: $(head -c 200 dist/$1)"; else echo "$1: not at this ref ($(grep -m1 -E 'undefined|error' dist/$1.log))"; rm -f "dist/$1"; fi
+            rm -f zz_fcspike_req_test.go "dist/$1.log"
+          }
+          one ledreq/ledlist-chunk.xml 'ledgerChunkRequest("@@CO@@", 111111, 222222)'
+          one ledreq/ledlist-tail.xml 'ledgerChunkRequest("@@CO@@", 111111, 0)'
+          one ledreq/ledgroups.xml 'groupListRequest("@@CO@@")'
+          one ledreq/ledchanges.xml 'ledgerChangesRequest("@@CO@@", 111111, 222222)'
+          one requests/entry-object.xml 'voucherObjectRequest("FinCom Spike Co", "99999")'
+          echo "Written by a go test at $(git rev-parse HEAD) (the gate's ref): ledgerChunkRequest, groupListRequest, ledgerChangesRequest" > dist/ledreq/SOURCE.txt
+          ls -la dist/ledreq dist/requests
+      # tds240: the cloud's own parser at the ref (parse.js with server/_shared); selfck: migration 65 at the ref (its
+      # tally_selfcheck_words gives the words the stub answers)
+      - name: Cloud parser and migration 65 at the ref
+        run: |
+          mkdir -p bridge-go/dist/cloud/tally-cloud bridge-go/dist/cloud/_shared
+          cp server/tally-cloud/parse.js bridge-go/dist/cloud/tally-cloud/
+          cp server/_shared/*.js bridge-go/dist/cloud/_shared/ 2>/dev/null || true
+          echo '{"type":"module"}' > bridge-go/dist/cloud/package.json
+          cp server/tally-cloud/migration-65-selfchecks.sql bridge-go/dist/cloud/ 2>/dev/null || echo "no migration 65 at the ref"
+          sha256sum bridge-go/dist/cloud/tally-cloud/parse.js bridge-go/dist/cloud/*.sql 2>/dev/null || true
+      # upg: the published 2.3.3 (commit 91faf7f3, setup SHA-256 8280206b...e5e5) and its add-on, the install the gate's
+      # setup goes over
+      - name: Bridge 2.3.3 (upg)
+        if: contains(steps.mode.outputs.modes, 'upg')
+        run: |
+          git fetch -q --depth 1 origin 91faf7f3b04932e65624b8bff5072c7ffa62b8f9
+          mkdir -p bridge-go/dist/old233
+          git show FETCH_HEAD:assets-test/bridge-go/FinComBridge-Setup-2.3.3.exe > bridge-go/dist/old233/FinComBridge-Setup-2.3.3.exe
+          git show FETCH_HEAD:bridge-go/addon/FinComRecorder.tdl > bridge-go/dist/old233/FinComRecorder.tdl
+          got=$(sha256sum bridge-go/dist/old233/FinComBridge-Setup-2.3.3.exe | awk '{print $1}')
+          [ "$got" = 8280206b1500742b892d41a658fdff809aa7eba219913611d929b7f8e9bee5e5 ] || { echo "::error::2.3.3 setup SHA-256 $got"; exit 1; }
+          echo "2.3.3 setup SHA-256 $got"
       - uses: actions/upload-artifact@v4
         with:
           name: bridge-dist
@@ -104,18 +165,19 @@ jobs:
 
   tally:
     needs: build
+    name: tally ${{ matrix.version }} ${{ matrix.mode }}
     strategy:
       fail-fast: false
-      matrix:
-        version: ${{ fromJSON(needs.build.outputs.versions) }}
+      matrix: ${{ fromJSON(needs.build.outputs.matrix) }}
     runs-on: windows-latest
-    timeout-minutes: ${{ (needs.build.outputs.mode == 'hang2' || needs.build.outputs.mode == 'mhook') && 220 || ((needs.build.outputs.mode == 'ledlist' || needs.build.outputs.mode == 'share' || needs.build.outputs.mode == 'big' || needs.build.outputs.mode == 'hang' || needs.build.outputs.mode == 'hang3' || needs.build.outputs.mode == 'bank' || needs.build.outputs.mode == 'bankb' || needs.build.outputs.mode == 'renum' || needs.build.outputs.mode == 's235') && 130 || 75) }}
+    timeout-minutes: ${{ matrix.tmo }}
     env:
       TALLY_REL: ${{ matrix.version }}
-      VMODE: ${{ needs.build.outputs.mode }}
-      RES: ${{ github.workspace }}\spike-results\versions\${{ github.run_id }}-${{ matrix.version }}
-      SHOTS: ${{ github.workspace }}\spike-results\versions\${{ github.run_id }}-${{ matrix.version }}
-      LOG: ${{ github.workspace }}\spike-results\versions\${{ github.run_id }}-${{ matrix.version }}\log.txt
+      VMODE: ${{ matrix.mode }}
+      MH_TYPES: ${{ inputs.mhook_types }}
+      RES: ${{ github.workspace }}\spike-results\versions\${{ github.run_id }}-${{ matrix.version }}-${{ matrix.mode }}
+      SHOTS: ${{ github.workspace }}\spike-results\versions\${{ github.run_id }}-${{ matrix.version }}-${{ matrix.mode }}
+      LOG: ${{ github.workspace }}\spike-results\versions\${{ github.run_id }}-${{ matrix.version }}-${{ matrix.mode }}\log.txt
       BRIDGE_SHA: ${{ needs.build.outputs.sha }}
     defaults:
       run:
@@ -151,7 +213,7 @@ jobs:
           & .github/tally-spike/flow.ps1 *>&1 | Tee-Object -FilePath $env:LOG -Append; exit 0
       - name: 4 Checks (flowv.ps1)
         id: checks
-        timeout-minutes: ${{ (needs.build.outputs.mode == 'hang2' || needs.build.outputs.mode == 'mhook') && 190 || ((needs.build.outputs.mode == 'ledlist' || needs.build.outputs.mode == 'share' || needs.build.outputs.mode == 'big' || needs.build.outputs.mode == 'hang' || needs.build.outputs.mode == 'hang3' || needs.build.outputs.mode == 'bank' || needs.build.outputs.mode == 'bankb' || needs.build.outputs.mode == 'renum' || needs.build.outputs.mode == 's235') && 105 || 40) }}
+        timeout-minutes: ${{ matrix.ctmo }}
         env:
           BRIDGE_DIST: ${{ github.workspace }}\bridge-dist
         run: |
@@ -165,6 +227,9 @@ jobs:
           if ($env:VMODE -eq 'renum') { $want += @('r1 insert with renumbering on', 'r2 delete with renumbering on') }
           if ($env:VMODE -eq 'bankb') { $want += @('b1 bank dates set in Bank Reconciliation reach FinCom') }
           if ($env:VMODE -eq 's235') { $want += @('s1 stop: three lines held, nothing asked', 's2 lift: bodies and the delete with its GUID', 's3 restart: the held delete keeps its GUID', 's4 a real failure still counts', 's5 Tally not open: one notification a day') }
+          if ($env:VMODE -eq 'tds240') { $want += @('t1 TDS typed on the screen: the TDS details carried to FinCom', 't2 TDS rate: worked out only where Tally stores 0, never on an exempt line') }
+          if ($env:VMODE -eq 'selfck') { $want += @('n1 nightly check: Tally''s changes compared, the missing fetched', 'n2 nightly check: the words recorded', 'n3 nightly check: once a night') }
+          if ($env:VMODE -eq 'upg') { $want += @('u1 2.4.0 installed over 2.3.3: the version and the settings carried', 'u2 the recorder state carried: nothing sent twice, nothing lost', 'u3 held lines from 2.3.3: each asked once and ended', 'u4 a new save after the upgrade arrives with its body') }
           if ($env:VMODE -eq 'full') { $want += @('c3 posting from the bridge', 'c4a create by keys', 'c4b alter by keys', 'c6 entry request', 'c5 Alt+2 duplicate', 'c4c cancel by keys', 'c4d delete by keys', 'c7 version string the bridge reads') }
           $have = Get-Content $r
           foreach ($c in $want) {
@@ -181,8 +246,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: tally-${{ matrix.version }}-${{ github.run_id }}
-          path: spike-results/versions/${{ github.run_id }}-${{ matrix.version }}/
+          name: tally-${{ matrix.version }}-${{ matrix.mode }}-${{ github.run_id }}
+          path: spike-results/versions/${{ github.run_id }}-${{ matrix.version }}-${{ matrix.mode }}/
 
   # one commit for all five releases (five jobs pushing at once lost four of them in run 37417702347)
   collect:
@@ -198,16 +263,21 @@ jobs:
       - name: Commit results back to tally-versions
         run: |
           for d in got/tally-*-${{ github.run_id }}; do
-            v=$(basename "$d"); v=${v#tally-}; v=${v%-${{ github.run_id }}}
-            mkdir -p "spike-results/versions/${{ github.run_id }}-$v"; cp -r "$d"/. "spike-results/versions/${{ github.run_id }}-$v/"
-            if [ "${{ needs.build.outputs.mode }}" = full ] && [ -d "$d/versions/captures" ]; then
+            v=$(basename "$d"); v=${v#tally-}; v=${v%-${{ github.run_id }}}; md=${v#*-}; v=${v%%-*}
+            mkdir -p "spike-results/versions/${{ github.run_id }}-$v-$md"; cp -r "$d"/. "spike-results/versions/${{ github.run_id }}-$v-$md/"
+            if [ "$md" = full ] && [ -d "$d/versions/captures" ]; then
               td="bridge-go/testdata/real-tally-$v"; mkdir -p "$td"; cp -r "$d/versions/captures"/. "$td/"
               cp "$d/versions/results.txt" "$td/results.txt"
               echo "run ${{ github.run_id }}, TallyPrime $v, bridge ${{ needs.build.outputs.sha }}, $(date -u +%FT%TZ)" > "$td/SOURCE.txt"
             fi
           done
+          # every check line of every job, one file (the gate's summary): spike-results/versions/<run>-summary.txt
+          for r in spike-results/versions/${{ github.run_id }}-*/versions/results.txt; do
+            j=$(echo "$r" | sed -E 's#.*/[0-9]+-([^/]+)/versions/results.txt#\1#'); grep -E '^(PASS|FAIL|HARNESS|NOT REACHABLE|MEASURE)' "$r" | sed "s#^#[$j] #"
+          done > "spike-results/versions/${{ github.run_id }}-summary.txt" || true
+          echo "PASS $(grep -c '\] PASS' spike-results/versions/${{ github.run_id }}-summary.txt) FAIL $(grep -c '\] FAIL' spike-results/versions/${{ github.run_id }}-summary.txt) HARNESS $(grep -c '\] HARNESS' spike-results/versions/${{ github.run_id }}-summary.txt)"
           git config user.name "tally-versions"; git config user.email "tally-versions@users.noreply.github.com"
           git add spike-results/versions; [ -d bridge-go/testdata ] && git add bridge-go/testdata
-          git commit -q -m "tally versions [skip ci]: results ${{ github.run_id }} ${{ needs.build.outputs.mode }} (bridge ${{ needs.build.outputs.sha }})" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+          git commit -q -m "tally versions [skip ci]: results ${{ github.run_id }} ${{ inputs.mode || needs.build.outputs.mode }} (bridge ${{ needs.build.outputs.sha }})" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
           Claude-Session: https://claude.ai/code/session_01LprHoXx2ACgDW2AjxNH8wN" || exit 0
           for i in 1 2 3 4 5; do git pull -q --rebase origin tally-versions && git push -q origin HEAD:refs/heads/tally-versions && break; sleep 10; done

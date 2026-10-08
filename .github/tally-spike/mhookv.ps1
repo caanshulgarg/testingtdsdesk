@@ -22,6 +22,16 @@ $script:TdsPost = { param([string]$x) Post $x '' 30 }
 $script:TdsCo = $co1
 $mhCap = Join-Path $out 'captures'; New-Item -ItemType Directory -Force $mhCap | Out-Null
 $mhTmp = Join-Path $env:RUNNER_TEMP 'mhshots'; New-Item -ItemType Directory -Force $mhTmp | Out-Null
+# 2.4.0's gate (input mhook_types, env MH_TYPES): only the master types the proof helper reports proven, as a case pattern
+# (godown: G1-G5 and D1; stockitem: S1-S7 and D2; payhead: P1-P6 and D3)
+$mhTypeRe = @{ godown = 'G\d|D1'; stockitem = 'S\d|D2'; payhead = 'P\d|D3' }
+if (-not $env:MH_ONLY -and $env:MH_TYPES) {
+  $mt = @("$env:MH_TYPES".ToLower() -split '[,\s]+' | Where-Object { $_ } | ForEach-Object { $_ -replace '[^a-z]', '' })
+  $bad = @($mt | Where-Object { -not $mhTypeRe.ContainsKey($_) })
+  if ($bad.Count) { Add-Content -Path $resultsFile -Value "HARNESS mhook: unknown master type(s) in mhook_types: $($bad -join ', ') (known: godown, stockitem, payhead)" -Encoding UTF8 }
+  $env:MH_ONLY = '^(' + (@($mt | Where-Object { $mhTypeRe.ContainsKey($_) } | ForEach-Object { $mhTypeRe[$_] }) -join '|') + ')'
+  Info "mhook: the gate's master types $($mt -join ', '): cases matching $env:MH_ONLY"
+}
 $mhOnly = if ($env:MH_ONLY) { $env:MH_ONLY } elseif (Test-Path (Join-Path $PSScriptRoot 'mhook-only.txt')) { "$(Get-Content (Join-Path $PSScriptRoot 'mhook-only.txt') -TotalCount 1)".Trim() } else { '' }
 $script:mhTdl = @($tdl)
 function MhIni {

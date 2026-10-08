@@ -11,7 +11,12 @@
 # at about 2,000, 5,000 and 20,000 ledgers (the ledgers made by XML import first, 1,000 an import). Each request capped
 # at 30 s (a timeout is reported, Tally started afresh). Lists are walked with foreach.
 Say '---- ledlist: the bridge''s ledger list and ledger changes requests on 2,000 / 5,000 / 20,000 ledgers'
+# 2.4.0's gate: the requests written from the GATE's ref by the build (bridge-dist\ledreq) when all four are there; else
+# the committed ledreq/ (next-masterhook adc07d1f)
 $lq = Join-Path $PSScriptRoot 'ledreq'
+$lqRef = if ($env:BRIDGE_DIST) { Join-Path $env:BRIDGE_DIST 'ledreq' } else { '' }
+if ($lqRef -and @('ledlist-chunk.xml', 'ledlist-tail.xml', 'ledgroups.xml', 'ledchanges.xml' | Where-Object { Test-Path (Join-Path $lqRef $_) }).Count -eq 4) { $lq = $lqRef }
+Info "ledlist: the requests from $lq ($(Get-Content (Join-Path $lq 'SOURCE.txt') -TotalCount 1 -ErrorAction SilentlyContinue))"
 $tplChunk = Get-Content (Join-Path $lq 'ledlist-chunk.xml') -Raw; $tplTail = Get-Content (Join-Path $lq 'ledlist-tail.xml') -Raw
 $tplGroups = Get-Content (Join-Path $lq 'ledgroups.xml') -Raw; $tplCh = Get-Content (Join-Path $lq 'ledchanges.xml') -Raw
 function LE([string]$s) { [Security.SecurityElement]::Escape($s) }
