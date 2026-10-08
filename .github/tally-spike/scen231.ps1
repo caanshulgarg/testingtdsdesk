@@ -210,7 +210,7 @@ function S231Retry {
   Write-Host "R1: Tally 9000 resumed at $($tFree.ToString('HH:mm:ss'))"
   Shot 'r1-resumed'
   $g = $nv.guid; $pred = { $_.guid -eq $g -and $_.xml }.GetNewClosure()
-  $hit = @(WaitLine $m0 $pred 420)
+  $hit = (WaitLine $m0 $pred 420)
   $untilP = (Get-Date).AddSeconds(240); while ((Get-Date) -lt $untilP -and -not @(StubReqs | Where-Object { $_.kind -eq 'posts_update' -and $_.body.id -eq 'r1-job-1' -and $_.body.status -eq 'done' }).Count) { Start-Sleep 5 }
   $tArr = if ($hit.Count) { $hit[0].at } else { '' }
   $log = @(Get-Content $B[1].log | Select-Object -Skip $logBefore)
@@ -286,7 +286,7 @@ function S231TdsKeys {
   $s = [pscustomobject]@{ id = 'S5'; key = 's5-payment-tds-keys'; label = 'TDS entered on the screen'; kind = 'tds'; day = '2-8-2026'; date = '20260802' }
   if (-not $nv) { Result 'S5 TDS entered on the screen' $false "masters made by keys: $($made -join ', ') (deductee type '$dt', TDS ledger nature '$nat'); no journal saved: see the s5k-* screenshots" $true; return }
   $s231.ent['S5K'] = [ordered]@{ id = 'S5K'; guid = $nv.guid; mid = $nv.mid; lines = 0 }
-  $g = $nv.guid; $hit = @(WaitLine $m0 ({ $_.guid -eq $g -and $_.xml }.GetNewClosure()) 120)
+  $g = $nv.guid; $hit = (WaitLine $m0 ({ $_.guid -eq $g -and $_.xml }.GetNewClosure()) 120)
   $s231.ent['S5'] = $s231.ent['S5K']
   $a = S231Ask $s
   $db = S231DayBook ([pscustomobject]@{ id = 'S5'; key = 's5-payment-tds-keys'; date = '20260802' })
@@ -551,7 +551,7 @@ function S231TdsScreen {
   Add-Content -Path $resultsFile -Encoding UTF8 -Value ("INFO S5 screen: OCR {0}; TDS row amount {1}; sub-screens after the TDS ledger: {2}; screenshots tds-*" -f $(if ($script:ocrOk) { 'read the screens' } else { 'UNAVAILABLE' }), $(if ($byTally) { "put there by Tally (2,000 seen before Enter) $pct" } else { "not filled by Tally: 2000 typed $pct" }), $(if ($sub.Count) { $sub -join ',' } else { 'none' }))
   if (-not $nv) { Result 'S5 payment with TDS entered on the screen' $false "no entry saved in Tally (see the tds-s5-* screenshots and tds-screen-log.txt)" $true; return $null }
   $s231.ent['S5'] = [ordered]@{ id = 'S5'; guid = $nv.guid; mid = $nv.mid; lines = 0 }
-  $g = $nv.guid; $hit = @(WaitLine $m0 ({ $_.guid -eq $g -and $_.xml }.GetNewClosure()) 150)
+  $g = $nv.guid; $hit = (WaitLine $m0 ({ $_.guid -eq $g -and $_.xml }.GetNewClosure()) 150)
   $s231.ent['S5'].lines = $hit.Count
   $null = S231Ask $s5
   return $s5
