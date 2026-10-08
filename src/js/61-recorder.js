@@ -242,11 +242,59 @@ const Rec = {
     return this.sorted().filter(r => (r.state === "received" || r.state === "held") && r.received_at && now - Date.parse(r.received_at) > 120000).map(r => {
       const d = this.devOf(r.device_id), pc = r.pc || (d && ((d.info || {}).computer || d.name)) || "the Tally computer";
       let why = r.held_why || "";
-      if (!why && d){ const ds = devState(d, now); why = ds.bridge === "offline" || ds.bridge === "none" ? pc + " is offline" : ds.tally === "closed" ? "Tally is closed on " + pc : ""; }
-      else if (d && r.state === "received"){ const ds = devState(d, now); if (ds.bridge === "offline" || ds.bridge === "none") why = pc + " is offline"; else if (ds.tally === "closed") why = "Tally is closed on " + pc; }
+      if (!why && d){ const ds = devState(d, now); why = ds.bridge === "offline" || ds.bridge === "none" ? pc + " is offline" : ds.tally === "closed" ? "Tally not open on " + pc : ""; }
+      else if (d && r.state === "received"){ const ds = devState(d, now); if (ds.bridge === "offline" || ds.bridge === "none") why = pc + " is offline"; else if (ds.tally === "closed") why = "Tally not open on " + pc; }
       return {r, why: why || "not yet entered in the books"};
     });
   },
+  // FinCom 2.3.5 (the owner: "in tally sync there is a yellow field coming all the time.. there should be clear flow"):
+  // the lines waiting over 2 minutes (waiting(), above) in two kinds. "Being fetched": FinCom or the bridge is still at
+  // it (received; the queue; no entry body yet, the next day read applies it; FinCom's own posting coming back;
+  // AlertHub.oursHeld) - said quietly. "Needs you": nothing happens until a person acts, grouped by company and day with
+  // ONE plain sentence and ONE action: the bridge gave up ("upload that day's Day Book") -> upload the Day Book for that
+  // day; a ledger FinCom does not have yet -> add it (Ledgers to add), then Apply now; a locked month or any other
+  // reason -> Apply now (tally_recorder_release_held, as the list's own button). The cloud's words are not changed.
+  needKind(r){
+    const why = String((r && r.held_why) || "");
+    if (/Day Book|could not tell which entry/i.test(why)) return "daybook";
+    if (!r || r.state !== "held") return "";
+    if (/^unknown ledger/i.test(why)) return "ledger";
+    if (typeof AlertHub === "object" && AlertHub.oursHeld && AlertHub.oursHeld(r)) return "";
+    if (/next day read|waiting for the entry|held until FinCom Bridge sends|^unknown entry|queued|^applied when|^replaced by/i.test(why)) return "";
+    return /^month locked/i.test(why) ? "locked" : "other";
+  },
+  // {needs: [{key, kind, cid, company, day (yyyy-mm-dd), lines, text}], fetching: [{r, why}]}
+  flow(){
+    const needs = new Map(), fetching = [];
+    this.waiting().forEach(w => {
+      const r = w.r, kind = this.needKind(r);
+      if (!kind){ fetching.push(w); return; }
+      const company = r.company || (((S.companies || {})[r.client_id] || {}).name) || "a company";
+      const day = /^\d{4}-\d{2}-\d{2}/.test(String(r.vch_date || "")) ? String(r.vch_date).slice(0, 10) : istDay(r.received_at) || "";
+      const key = kind + "|" + company + "|" + day + (kind === "other" ? "|" + String(r.held_why || "") : "");
+      if (!needs.has(key)) needs.set(key, {key, kind, cid: r.client_id || "", company, day, lines: []});
+      needs.get(key).lines.push(r);
+    });
+    const n = (k) => k + (k === 1 ? " entry" : " entries"), out = [...needs.values()].sort((a, b) => a.company.localeCompare(b.company) || b.day.localeCompare(a.day));
+    out.forEach(g => {
+      const k = g.lines.length, d = g.day ? fmtDate(g.day) : "", head = g.company + (d ? " · " + d : "") + ": ";
+      g.text = head + (g.kind === "daybook" ? n(k) + " could not be read from Tally \u2014 upload the Day Book for " + (d || "that day")
+        : g.kind === "ledger" ? n(k) + (k === 1 ? " names" : " name") + " a ledger FinCom does not have yet \u2014 add the ledger (Ledgers to add), then Apply now"
+        : g.kind === "locked" ? n(k) + (k === 1 ? " falls" : " fall") + " in a month locked in FinCom (" + String(g.lines[0].held_why || "") + ") \u2014 unlock the month, or Apply now"
+        : n(k) + " not yet entered in the books (" + String(g.lines[0].held_why || "") + ") \u2014 Apply now once it is settled");
+    });
+    return {needs: out, fetching};
+  },
+  // the Day Book upload for one day: Books -> From Tally with that day (Rec.uploadDays does it from a day to today)
+  async uploadDay(cid, day){
+    if (!cid || !day) return;
+    S.dbFrom = day; S.dbTo = day;
+    if (S.view !== "company" || S.coId !== cid) await openCompany(cid);
+    S.dbFrom = day; S.dbTo = day;
+    goClient("books:import");
+  },
+  // Apply now on every line of a group, one after another (the list's own Apply now, line by line)
+  async releaseAll(lines){ for (const r of [].concat(lines || [])) if (r.state === "held") await this.release(r); },
   async release(r){
     const a = this.act;
     a.msg = {busy: true, id: r.id}; render();

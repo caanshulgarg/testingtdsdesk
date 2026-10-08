@@ -97,6 +97,7 @@ with sync_playwright() as p:
     pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
     E = lambda js, *a: pg.evaluate(js, *a)
     txt = lambda sel: pg.inner_text(sel).replace("\n", " ").strip() if pg.locator(sel).count() else ""
+    tc = lambda sel: (pg.text_content(sel) or "").replace("\n", " ").strip() if pg.locator(sel).count() else ""   # 2.3.5: the lines under "Which entries" are folded
     cid = E(SETUP, ["owner", DEVS, LINES]); pg.wait_for_timeout(300)
     E("() => { navHome('tally'); S.tallyTab = 'activity'; render(); }"); pg.wait_for_timeout(1500)
     asked = [a for a in E("window.__asked") if a.startswith("tally_recorder_lines")]
@@ -114,8 +115,8 @@ with sync_playwright() as p:
     ok(not re.search(r"(?i)day read", page), "never 'day read' on the page")
     ok(pg.locator('#app [data-sync-line="205"] [data-sync-state].tag.no').count() == 1, "a replaced line greyed as a duplicate is")
     # the strip: a received line with no reason of its own (the PC online, Tally open) says what it means
-    w = txt('#app [data-sync-waiting-line="213"]')
-    ok("not yet entered in the books" in w and "applied" not in w, "the strip: 'not yet entered in the books' when there is no other reason (%s)" % w)
+    w = tc('#app [data-sync-fetching-line="213"]')   # 2.3.5: a received line is "being fetched" (quiet)
+    ok("not yet entered in the books" in w and "applied" not in w, "being fetched: 'not yet entered in the books' when there is no other reason (%s)" % w)
     # an owner's Apply now answers in the same words
     pg.click('#app [data-sync-line="202"] [data-sync-release]'); pg.wait_for_timeout(800)
     m = txt("#app [data-sync-msg]")

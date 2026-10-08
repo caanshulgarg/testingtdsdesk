@@ -3,7 +3,7 @@
 // The parts come from tallyStatus() in src/js/49-tally-cloud.js; the history from tallyHistory() (24 hours, kept by the
 // cloud from each computer's heartbeats).
 import ListTable from "./ListTable.jsx";
-const BRIDGE = { online: ["ok", "● Online"], reconnecting: ["warn", "◐ Reconnecting…"], offline: ["bad", "○ Offline"], none: ["bad", "○ Not set up"] };
+const BRIDGE = { online: ["ok", "● Connected"], reconnecting: ["warn", "◐ Reconnecting…"], offline: ["bad", "○ Offline"], none: ["bad", "○ Not set up"] };
 const TALLY = { open: ["ok", "● Open"], busy: ["warn", "◐ Busy"], closed: ["bad", "○ Not open"] };
 const COMPANY = { linked: ["ok", "● Linked"], unlinked: ["warn", "○ Not linked"] };
 const SAY = {

@@ -9,7 +9,7 @@ words and offers nothing to press:
     bridge's entry) are never shown, on the page or in the bell;
   - a 2.3.0 bridge that stopped reading by itself is said in plain words (it reads again once 2.3.1 is on it), with no
     Resume button for anyone (the computer key's member included);
-  - the owner's stop from FinCom is as before: Stopped from FinCom, and the owner's Resume reading.
+  - the owner's stop from FinCom is as before: Reading stopped from FinCom, and the owner's Resume reading.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tally_entry_fetch_off.py"""
 import os, re, sys, threading, functools, http.server, datetime, copy
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -57,11 +57,13 @@ with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1440, "height": 950}); pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.goto("http://localhost:8361/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
     E = lambda js, *a: pg.evaluate(js, *a)
+    # FinCom 2.3.5, the simpler Tally page: the rest of a computer's card (and of the page) is under More; open them all
+    more = lambda: (pg.evaluate("() => document.querySelectorAll('#app [data-more-toggle][aria-expanded=\"false\"]').forEach(b => b.click())"), pg.wait_for_timeout(500))
     def scene(devs, role, mine=False):
         E(SETUP, [{"devs": devs, "alerts": [], "gap": None}, role])
         if mine:  # the computer key is this member's own (2.3.0's self-Resume was offered to its maker)
             E("() => { const me = TCloud.me(); [window.__w.devs, TLight.st.devs, TCloud.pane.devices].forEach(l => (l || []).forEach(d => { d.created_by = me; })); }")
-        E("() => navHome('tally')"); pg.wait_for_timeout(1500)
+        E("() => navHome('tally')"); pg.wait_for_timeout(1500); more()
         E("() => { if (typeof AlertHub === 'object') AlertHub.refresh(true); render(); }"); pg.wait_for_timeout(900)
     readText = lambda: E("() => { const e = document.querySelector('#app [data-computer=\"%s\"] [data-read-text]'); return e ? e.innerText.trim() : null; }" % D1)
     resumes = lambda: pg.locator('#app [data-computer="%s"] [data-read-resume]' % D1).count()
@@ -88,7 +90,8 @@ with sync_playwright() as p:
       window.__w.devs = window.__w.devs.map(strip); TLight.st.devs = TLight.st.devs.map(strip); TCloud.pane.devices = TCloud.pane.devices.map(strip);
       AlertHub.refresh(true); render(); }""")
     pg.wait_for_timeout(1500)
-    ok(readText() == "Reading", "back to normal: Reading (%s)" % readText())
+    # 2.3.5: plain reading has no words of its own on the line ("Connected · Tally open …"); the card says reading
+    ok(readText() is None and pg.get_attribute('#app [data-computer="%s"]' % D1, "data-read-state") == "reading", "back to normal: reading (%s)" % readText())
     bl = E(BELL) or {"items": []}
     ok(not [x for x in bl["items"] if x["key"] == "pc:" + D1], "and the bell's alert cleared itself (%s)" % [x["text"][:50] for x in bl["items"]])
     E(CLOSE)
@@ -106,7 +109,7 @@ with sync_playwright() as p:
     # ---- 5. the owner's stop from FinCom: as before
     scene([devOff(fincom=True)], "owner")
     t = readText() or ""
-    ok(t.startswith("Stopped from FinCom") and resumes() == 1, "FinCom's stop: Stopped from FinCom and the owner's Resume reading (%s, %d)" % (t, resumes()))
+    ok(t.startswith("Reading stopped from FinCom") and resumes() == 1, "FinCom's stop: Reading stopped from FinCom and the owner's Resume reading (%s, %d)" % (t, resumes()))
     ok(not errors, "no page errors " + str(errors[:2]))
     br.close()
 srv.shutdown()

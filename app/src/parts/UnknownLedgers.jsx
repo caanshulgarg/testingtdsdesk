@@ -5,15 +5,21 @@
 // list or bridge 2.3.1." On the Tally page's Sync activity (the firm, or the client picked) and a client's Books page.
 // Nothing when there are none, or before migration 56 runs.
 // byBook: the client's own books are asked for (Rec.unkBooks), not the firm's list filtered (the Books page)
+// Clear (08-Oct-2026): the banner has a Clear; cleared (by this person: its entries, AlertClear in src/js/63-alerts.js)
+// it is not shown again, until another entry names an unknown ledger.
+import { ClearBtn } from "./Bell.jsx";
 export default function UnknownLedgers({ cid, where, names, byBook }) {
   if (typeof Rec !== "object" || !Rec.unkLines || typeof TCloud !== "object" || !TCloud.on()) return null;
   const books = byBook && cid ? Rec.unkBooks(cid) : null;
   const lines = Rec.unkLines(cid || "", books && books.length ? books : null);
   if (!lines.length) return null;
+  const clr = typeof AlertClear === "object" ? AlertClear.item("unk:" + (cid || "firm"), lines.map((x) => "unk:" + x.key), lines.map((x) => x.text).join(" ")) : null;
+  if (clr && AlertClear.cleared(clr)) return null;
   const n = new Set(lines.map((x) => x.key.split(":").slice(0, 2).join(":"))).size;
   const coName = (id) => (S.companies && S.companies[id] && S.companies[id].name) || "";
   return <div className="bk-alert warn" role="status" data-unknown-ledgers={where || ""} style={{ margin: "0 0 8px" }}>
     <b>{n === 1 ? "1 entry uses a ledger FinCom does not have yet" : n + " entries use a ledger FinCom does not have yet"}</b>
     {lines.map((x) => <div key={x.key} data-unknown-ledger="">{x.text}{names && !cid && coName(x.cid) ? <span className="nr">{" (" + coName(x.cid) + ")"}</span> : null}</div>)}
+    <ClearBtn x={clr} />
   </div>;
 }

@@ -43,9 +43,11 @@ with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1440, "height": 950}); pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.goto("http://localhost:8367/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
     E = lambda js, *a: pg.evaluate(js, *a)
+    # FinCom 2.3.5, the simpler Tally page: the rest of a computer's card (and of the page) is under More; open them all
+    more = lambda: (pg.evaluate("() => document.querySelectorAll('#app [data-more-toggle][aria-expanded=\"false\"]').forEach(b => b.click())"), pg.wait_for_timeout(500))
     def scene(devs, role):
         E(SETUP, [{"devs": devs, "alerts": [], "gap": None}, role])
-        E("() => navHome('tally')"); pg.wait_for_timeout(1500)
+        E("() => navHome('tally')"); pg.wait_for_timeout(1500); more()
         E("() => { if (typeof AlertHub === 'object') AlertHub.refresh(true); render(); }"); pg.wait_for_timeout(900)
     lines = lambda: E("() => [...document.querySelectorAll('#app [data-computer=\"%s\"] [data-slow-company]')].map(e => [e.getAttribute('data-slow-company'), e.innerText.trim()])" % D1)
     # ---- 1. a 2.3.2 bridge that stopped asking for one company: the line on the computer's card, in plain words

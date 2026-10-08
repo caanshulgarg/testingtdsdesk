@@ -618,6 +618,15 @@ ol.setup{margin:6px 0 0 18px;padding:0;line-height:1.6}
 ol.setup li{margin:6px 0}
 ol.setup li.done{color:var(--ok)}
 ol.setup li div{color:var(--ink);font-weight:400;margin-top:2px}
+/* FinCom 2.3.5, the simpler Tally page: one card a computer, the three steps until the first company is linked */
+.tcard{border:1px solid var(--rule);border-radius:8px;padding:10px 14px;margin:0 0 10px;background:var(--sheet)}
+.tcard:last-of-type{margin-bottom:4px}
+.tguide-steps{list-style:none;margin:8px 0 0;padding:0}
+.tguide-steps li{display:flex;gap:10px;align-items:flex-start;margin:8px 0}
+.tguide-steps li .note{margin-top:2px;line-height:1.6}
+.tguide-mark{flex:none;width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:600;font-size:13px;border:1px solid var(--rule);color:var(--ink-2,var(--ink))}
+.tguide-steps li.now .tguide-mark{border-color:var(--st-attention);color:var(--st-attention)}
+.tguide-steps li.done .tguide-mark{background:var(--st-done-soft);border-color:var(--st-done);color:var(--st-done)}
 .bdiag{margin-top:14px;padding:12px 14px;border:1px solid var(--rule);border-radius:8px;background:var(--sheet)}
 .bd-f{padding:8px 10px;border-radius:6px;margin:6px 0;font-size:14px}
 .bd-f.ok{background:var(--ok-soft);color:var(--ok)}
@@ -1329,6 +1338,21 @@ table.lt tfoot td.lt-count b{color:var(--ink)}
 .alert-line .al-dot{margin-top:0}
 .al-line-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .alert-line .btn{flex:none}
+.alert-line .linkbtn{flex:none}
+/* Clear (08-Oct-2026): on every notification, the bell's Clear all, and the Undo after it */
+.al-clear{min-height:28px;padding:0 6px;color:var(--muted)}
+.al-clear:hover{color:var(--ink)}
+.al-acts .al-clear{margin-left:auto}
+.al-snack{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:120;display:flex;gap:8px;align-items:center;background:var(--ink);color:var(--paper);border-radius:8px;padding:8px 10px 8px 14px;font-size:14px;box-shadow:0 6px 20px rgb(var(--shade) / .25);max-width:calc(100vw - 32px);white-space:nowrap}
+.al-snack .linkbtn{color:var(--brand-tint);min-height:28px;font-weight:600}
+/* a phone: the bell's list across the screen (16 px each side), whatever the bell's place in the top bar; the Undo above
+   the bottom bar */
+/* a phone: the alert line's words on their own full-width line (never cut to a few letters), its buttons on a row below */
+@media (max-width:640px){.alert-line{flex-wrap:wrap;height:auto;white-space:normal;overflow:visible;padding:8px 12px;row-gap:6px;column-gap:10px}
+  .alert-line .al-dot{align-self:flex-start;margin-top:4px}
+  .al-line-text{flex:1 1 calc(100% - 20px);overflow:visible;text-overflow:clip;white-space:normal;overflow-wrap:break-word}
+  .tally-line{max-width:100%}.tally-line .tag{white-space:normal;max-width:100%;overflow-wrap:anywhere}}
+@media (max-width:640px){.alerts-panel{position:fixed;left:16px;right:16px;top:64px;width:auto;max-height:calc(100vh - 190px)}.al-acts{flex-wrap:wrap}.al-snack{bottom:112px}}
 /* round 3, part 2: the Tally sign says which computer; on a phone the dot and the computer's name */
 .tsign .tsign-long{max-width:440px;overflow:hidden;text-overflow:ellipsis}
 .tsign .tsign-short{display:none}
