@@ -76,6 +76,23 @@ foreach ($c in $clients) {
   Start-Sleep 2
 }
 
+Write-Host "--- AppContainer client (as $Who)"
+$acdir = "$root\ac"; New-Item -ItemType Directory -Force $acdir | Out-Null
+icacls $acdir /grant '*S-1-15-2-1:(OI)(CI)M' '*S-1-15-2-2:(OI)(CI)M' | Out-Null
+icacls $Bin /grant '*S-1-15-2-1:(OI)(CI)RX' '*S-1-15-2-2:(OI)(CI)RX' | Out-Null
+Write-Host "-- appcontainer, no loopback exemption"
+Run-As "$Bin\diag.exe" "acrun `"$acdir`"" 'ac-noexempt' | Write-Host
+$acsid = (Select-String -Path "$root\ac-noexempt.out" -Pattern 'AppContainer SID (S-1-15-2-[0-9-]+)').Matches | Select-Object -First 1 | ForEach-Object { $_.Groups[1].Value }
+Write-Host "loopback exemption for $acsid"
+CheckNetIsolation.exe LoopbackExempt -a "-p=$acsid" | Write-Host
+Remove-Item "$acdir\acfetch.txt" -ErrorAction SilentlyContinue
+Write-Host "-- appcontainer, loopback exempt"
+Run-As "$Bin\diag.exe" "acrun `"$acdir`"" 'ac-exempt' | Write-Host
+Remove-Item "$acdir\acfetch.txt" -ErrorAction SilentlyContinue
+Write-Host "-- LPAC, loopback exempt"
+Run-As "$Bin\diag.exe" "acrun `"$acdir`" lpac" 'ac-lpac' | Write-Host
+CheckNetIsolation.exe LoopbackExempt -d "-p=$acsid" | Out-Null
+
 Write-Host "=== results ($Who)"
 Get-Content "$root\results.txt" -ErrorAction SilentlyContinue
 Write-Host "=== bridge log ($Who)"

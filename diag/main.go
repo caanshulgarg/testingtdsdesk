@@ -435,6 +435,10 @@ func main() {
 	switch os.Args[1] {
 	case "serve":
 		serve()
+	case "acrun":
+		acRun(os.Args[2], len(os.Args) > 3 && os.Args[3] == "lpac")
+	case "fetch":
+		fetch(os.Args[2])
 	case "self":
 		emit(pj(inspect(os.Getpid(), nil, nil)))
 	case "inspect":
