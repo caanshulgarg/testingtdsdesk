@@ -291,6 +291,9 @@ type liveState struct {
 	// "voucher object by MasterID" (7 days, sync\recorder-sent\*.fast.txt), and those this version ended: a line an earlier
 	// bridge ended with the Day Book words is asked once more, never twice
 	fastAsked map[string]bool
+	// 2.3.4 re-review 2 (N-M1): the ":resolved" ids THIS version sent, with or without a body (a cancel / delete proven by
+	// its GUID goes with none): a line resolved here is done, never ended once more with the Day Book words
+	mine map[string]bool
 	// fix 3 (the owner's spike run 37347773182): what this bridge saw of its OWN Tally's open companies (recorder_owntally.go)
 	own       map[string]*liveOwnSt // company GUID (or "name:" + its name key) -> the times it was open in the own Tally
 	ownAt     time.Time             // the last complete look at the own Tally's company list (kept on disk)
@@ -392,6 +395,10 @@ func liveFresh() {
 	for _, id := range liveLoadIds(liveFastSuffix) {
 		live.fastAsked[id] = true
 	}
+	live.mine = map[string]bool{}
+	for _, id := range liveLoadIds(liveMineSuffix) {
+		live.mine[id] = true
+	}
 	liveOwnLoad()
 }
 
@@ -427,7 +434,7 @@ func liveLoadSent() []string {
 func liveLoadIds(suffix string) []string {
 	var ids []string
 	days := 7
-	if suffix == liveEndedSuffix || suffix == liveFastSuffix {
+	if suffix == liveEndedSuffix || suffix == liveFastSuffix || suffix == liveMineSuffix {
 		days = liveFastKeepDays
 	}
 	cut := nowFn().AddDate(0, 0, -days).Format("20060102")
@@ -483,6 +490,9 @@ func liveEndedNote(ids ...string) {
 
 // next-fastfetch: the file suffix of the held line ids given their one fresh ask with the fast request (or ended by it)
 const liveFastSuffix = ".fast.txt"
+
+// 2.3.4 re-review 2 (N-M1): the file suffix of the ":resolved" ids this version sent (kept as long as the ended ones)
+const liveMineSuffix = ".mine.txt"
 
 // 2.3.4: how long the ended and fresh-ask ids are kept (FinCom lists a slow-ended line 30 days)
 const liveFastKeepDays = 31
@@ -2603,7 +2613,7 @@ func liveUploadStep() (int, bool) {
 		return 0, false
 	}
 	sentIDs := make([]string, 0, len(group))
-	var bodied, items, ledAgain, ended []string
+	var bodied, items, ledAgain, ended, mine []string
 	gone := map[*change]bool{}
 	var held []*change
 	for _, c := range group {
@@ -2616,6 +2626,13 @@ func liveUploadStep() (int, bool) {
 			live.sent[a] = true
 			delete(live.queued, a)
 			sentIDs = append(sentIDs, a)
+		}
+		if strings.HasSuffix(c.lineId, ":resolved") {
+			if live.mine == nil {
+				live.mine = map[string]bool{}
+			}
+			mine = append(mine, c.lineId) // 2.3.4 re-review 2 (N-M1): resolved by this version, body or not
+			live.mine[c.lineId] = true
 		}
 		if c.xml != "" && !c.isLedger() && strings.HasSuffix(c.lineId, ":resolved") {
 			items = append(items, c.lineId) // 2.3.1 review H1: a resolution sent by this version
@@ -2677,6 +2694,7 @@ func liveUploadStep() (int, bool) {
 	liveSaveIds(ledAgain, liveLedgerSuffix)
 	liveSaveIds(ended, liveEndedSuffix)
 	liveSaveIds(ended, liveFastSuffix)
+	liveSaveIds(mine, liveMineSuffix)
 	liveSaveOffsets()
 	liveHeldAdd(held)
 	liveGuidAnswers(group, arr(r.json["results"])) // 2.3.0: what FinCom's record said of a delete / cancel sent without a GUID

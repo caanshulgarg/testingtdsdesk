@@ -918,7 +918,8 @@ func liveResolveTurn() {
 			// 2.3.4 (re-review M1): its ask went but nothing came of it (an answer that could not be read, another error, a
 			// posting stopping it, no entry): it ends now with the Day Book words, never dropped without its ":resolved"
 			done = live.fastAsked[id] || live.queued[rid]
-			endNow = live.fastAsked[id] && !live.queued[rid] && !live.bodied[rid]
+			// 2.3.4 re-review 2 (N-M1): nor a line this version resolved with no body (a cancel / delete proven by its GUID)
+			endNow = live.fastAsked[id] && !live.queued[rid] && !live.bodied[rid] && !live.mine[rid]
 		}
 		waiting := live.queued[rid]
 		ownOpen := !h.Refetch || liveOwnOpenNow(h.CGUID, h.Company)
