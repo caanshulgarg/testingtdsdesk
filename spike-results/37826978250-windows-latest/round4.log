@@ -1,0 +1,839 @@
+[18:58:41] ---- the bridge built from the ref
+bridge source: 0db2a2473677560b16dfc7a261c4306a079210d1 2.4.0 as ONE combined release (the owner's decision of 08-Oct-2026: 2.3.4 and 2.3.5 not published, bridges go 2.3.3 -> 2.4.0): notes, test sheet and decision line
+setup origin: BUILT from source dist/FinComBridge-Setup-2.4.0.exe SHA-256 536521a3bf60af8e8d49b722126a37b8d9f06d28ddcd0821ff86f8fbaf254083
+setup: FinComBridge-Setup-2.4.0.exe 3689357 bytes SHA256 536521A3BF60AF8E8D49B722126A37B8D9F06D28DDCD0821FF86F8FBAF254083
+[18:58:41] ---- the second Windows user (not an administrator)
+user 2: fcuser2 S-1-5-21-1643835476-1616584234-1346609752-1003; administrators: runnervmfi6oq\runneradmin
+user 2's profile: C:\Users\fcuser2
+ SESSIONNAME               USERNAME                 ID  STATE   TYPE        DEVICE 
+ services                                            0  Disc                        
+ rdp-tcp#0                 fcuser2                   1  Active                      
+>console                   runneradmin               2  Active                      
+ 31c5ce94259d4006a9e4                            65536  Listen                      
+ rdp-tcp                                         65537  Listen                      
+
+[18:59:05] user 2's own Windows session by Remote Desktop: True (session 1)
+[shot] r4-03-rdp-session (1024x768)
+task fcu2 registered for fcuser2 (interactive)
+  [as fcuser2] who=runnervmfi6oq\fcuser2 session=1
+  [as fcuser2] no Tally window in session 1; keys '{ENTER}' to the window in front
+  [as fcuser2] shot u2-desktop
+[18:59:34] ---- the stub cloud
+[18:59:37] ---- user 1's Tally (9000) with the add-on; a copy of the program for user 2 first (its own tally.ini and port)
+  still running from the Tally folder: tallyscheduler 3704
+  robocopy:    Bytes :  177.74 m  177.74 m         0         0       512         0
+  robocopy:    Times :   0:00:00   0:00:00                       0:00:00   0:00:00
+  robocopy: 
+  robocopy: 
+  robocopy:    Speed :           2,389,535,858 Bytes/sec.
+  robocopy:    Speed :             136,730.344 MegaBytes/min.
+  robocopy:    Ended : Thursday, October 8, 2026 6:59:40 PM
+  robocopy: 
+[18:59:40] copy for user 2: robocopy 9, tally.exe there: True
+Tally :9000 answers: True
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[keys] 't' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-00-tally1 (1024x768)
+[ledger Spike Income :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[ledger Salesify Marketing LLP (bill-by-bill) :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[19:00:12] ---- check 8's masters on user 1's Tally: unit, two stock items (GST 18%), Sales/Purchase, CGST/SGST 9%, customer, supplier
+[unit Nos :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[stock item Spike Widget (GST 18%) :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[stock item Spike Gadget (GST 18%) :9000] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[stock items :9000] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>2</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>2</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>1</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[check 8 ledgers :9000] <RESPONSE><CREATED>6</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[stock items :9000] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>8</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>2</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>1</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[19:00:12] ---- 2.3.1 scenarios: the masters (stock items with HSN and GST rate, GST, TDS, cost centre, bank and party ledgers)
+  scen231: 7 master sets, 14 entries -> D:\a\testingtdsdesk\testingtdsdesk\spike-results\37826978250-windows-latest\round4\scen231
+[masters-1-items :9000] 33 ms, 269 bytes: <RESPONSE><CREATED>4</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[masters-2-costs :9000] 20 ms, 269 bytes: <RESPONSE><CREATED>3</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[masters-4-ledgers :9000] 72 ms, 270 bytes: <RESPONSE><CREATED>14</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[masters-6-bulk :9000] 1788 ms, 271 bytes: <RESPONSE><CREATED>400</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[S4 the bill (New Ref S231-BILL-1, a journal) :9000] 41 ms, 269 bytes: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>2</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[ledger master S231 Buyer :9000] 10 ms, 17392 bytes: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>425</LEDGER><COSTCATEGORY>1</COSTCATEGORY><COSTCENTRE>2</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>6</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>1</CURRENCY><UNIT>1</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIF...
+[shot] r4-s231-00-masters (1024x768)
+[19:00:22] ---- fast234 setup: the large company 'FinCom Big Co' (40000 entries) beside 'FinCom Spike Co' in Tally 9000, then both from the SMB share \\localhost\fast234share
+[19:00:22] ---- slow232 setup: a large company 'FinCom Big Co' in Tally 9000 beside 'FinCom Spike Co' (up to 40000 entries, 90 min), before the bridges start
+[slow232] company folders before: 100000
+[slow232] tally.ini: [Tally] | Data = D:\a\_temp\TallyData | Config = C:\Program Files\TallyPrime | LangPath = C:\Program Files\TallyPrime\lang | Client Server = Both | ServerPort = 9000 | Enable ODBC Server = Yes | Ignore TCP Timeout = Yes | User TDL = Yes | Default Companies = No
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[keys] 't' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F3}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-s232-01a-company-list (1024x768)
+[keys] 'Create Company' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-s232-01b-typed (1024x768)
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-s232-01-create-company (1024x768)
+[keys] 'FinCom Big Co' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-s232-02-name (1024x768)
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-s232-03-ctrl-a (1024x768)
+[keys] '^a' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-s232-04-company (1024x768)
+[slow232] a new company folder: 100001
+[slow232 import] is 'FinCom Big Co' open: 1 sent, created 1, errors 0, 0.0 s
+[slow232] company 'FinCom Big Co' open in Tally 9000: True
+[slow232 import] masters 0: 1000 sent, created 1000, errors 0, 4.3 s
+[slow232 import] masters 1000: 1000 sent, created 1000, errors 0, 4.4 s
+[slow232 import] masters 2000: 1000 sent, created 1000, errors 0, 4.5 s
+[slow232 import] masters 3000: 1000 sent, created 1000, errors 0, 4.2 s
+[slow232 import] masters 4000: 1000 sent, created 1000, errors 0, 4.3 s
+[slow232 import] masters 5000: 1000 sent, created 1000, errors 0, 4.3 s
+[slow232 import] masters 6000: 7 sent, created 7, errors 0, 0.0 s
+[slow232 import] entries 0: 1000 sent, created 1000, errors 0, 19.4 s
+[slow232 import] entries 1000: 1000 sent, created 1000, errors 0, 20.6 s
+[slow232 import] entries 2000: 1000 sent, created 1000, errors 0, 19.6 s
+[slow232 import] entries 3000: 1000 sent, created 1000, errors 0, 19.3 s
+[slow232 import] entries 4000: 1000 sent, created 1000, errors 0, 19.7 s
+[slow232 import] entries 5000: 1000 sent, created 1000, errors 0, 19.5 s
+[slow232 import] entries 6000: 1000 sent, created 1000, errors 0, 19.7 s
+[slow232 import] entries 7000: 1000 sent, created 1000, errors 0, 19.3 s
+[slow232 import] entries 8000: 1000 sent, created 1000, errors 0, 19.5 s
+[slow232 import] entries 9000: 1000 sent, created 1000, errors 0, 20.3 s
+[slow232 import] entries 10000: 1000 sent, created 1000, errors 0, 19.2 s
+[slow232 import] entries 11000: 1000 sent, created 1000, errors 0, 19.8 s
+[slow232 import] entries 12000: 1000 sent, created 1000, errors 0, 19.5 s
+[slow232 import] entries 13000: 1000 sent, created 1000, errors 0, 19.2 s
+[slow232 import] entries 14000: 1000 sent, created 1000, errors 0, 20.0 s
+[slow232 import] entries 15000: 1000 sent, created 1000, errors 0, 19.3 s
+[slow232 import] entries 16000: 1000 sent, created 1000, errors 0, 19.6 s
+[slow232 import] entries 17000: 1000 sent, created 1000, errors 0, 19.8 s
+[slow232 import] entries 18000: 1000 sent, created 1000, errors 0, 19.8 s
+[slow232 import] entries 19000: 1000 sent, created 1000, errors 0, 20.9 s
+[slow232 import] entries 20000: 1000 sent, created 1000, errors 0, 20.8 s
+[slow232 import] entries 21000: 1000 sent, created 1000, errors 0, 21.2 s
+[slow232 import] entries 22000: 1000 sent, created 1000, errors 0, 22.4 s
+[slow232 import] entries 23000: 1000 sent, created 1000, errors 0, 20.5 s
+[slow232 import] entries 24000: 1000 sent, created 1000, errors 0, 20.6 s
+[slow232 import] entries 25000: 1000 sent, created 1000, errors 0, 19.3 s
+[slow232 import] entries 26000: 1000 sent, created 1000, errors 0, 19.2 s
+[slow232 import] entries 27000: 1000 sent, created 1000, errors 0, 19.2 s
+[slow232 import] entries 28000: 1000 sent, created 1000, errors 0, 20.2 s
+[slow232 import] entries 29000: 1000 sent, created 1000, errors 0, 19.8 s
+[slow232 import] entries 30000: 1000 sent, created 1000, errors 0, 20.3 s
+[slow232 import] entries 31000: 1000 sent, created 1000, errors 0, 20.3 s
+[slow232 import] entries 32000: 1000 sent, created 1000, errors 0, 19.5 s
+[slow232 import] entries 33000: 1000 sent, created 1000, errors 0, 19.4 s
+[slow232 import] entries 34000: 1000 sent, created 1000, errors 0, 20.6 s
+[slow232 import] entries 35000: 1000 sent, created 1000, errors 0, 20.1 s
+[slow232 import] entries 36000: 1000 sent, created 1000, errors 0, 20.6 s
+[slow232 import] entries 37000: 1000 sent, created 1000, errors 0, 19.6 s
+[slow232 import] entries 38000: 1000 sent, created 1000, errors 0, 20.8 s
+[slow232 import] entries 39000: 1000 sent, created 1000, errors 0, 20.4 s
+[slow232] company folders after: 100000, 100001; 'FinCom Spike Co' 100000, 'FinCom Big Co' 100001
+[slow232] tally.ini: [Tally] | Data = D:\a\_temp\TallyData | Config = C:\Program Files\TallyPrime | LangPath = C:\Program Files\TallyPrime\lang | Client Server = Both | ServerPort = 9000 | Enable ODBC Server = Yes | Ignore TCP Timeout = Yes | User TDL = Yes | Default Companies = Yes | Load = 100000 | Load = 100001 | TDL = C:\fcspike\FinComRecorder.tdl
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[keys] 't' -> Tally :9000 'TallyPrime:9000'
+[slow232 import] is 'FinCom Spike Co' open: 1 sent, created 1, errors 0, 0.0 s
+[slow232] company 'FinCom Spike Co' open in Tally 9000: True
+[slow232 import] is 'FinCom Big Co' open: 1 sent, created 0, errors 0, 0.0 s <RESPONSE> <CREATED>0</CREATED> <ALTERED>1</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+[slow232] company 'FinCom Big Co' open in Tally 9000: True
+[shot] r4-s232-05-both-loaded (1024x768)
+[ledger Spike Income :9000] <RESPONSE><CREATED>0</CREATED><ALTERED>1</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[slow232] the proxy 127.0.0.2:9000 -> Tally: <RESPONSE>TallyPrime Server is Running</RESPONSE> 
+  net share: fast234share was shared successfully.
+  net share: 
+[slow232] tally.ini: [Tally] | Data = \\localhost\fast234share | Config = C:\Program Files\TallyPrime | LangPath = C:\Program Files\TallyPrime\lang | Client Server = Both | ServerPort = 9000 | Enable ODBC Server = Yes | Ignore TCP Timeout = Yes | User TDL = Yes | Default Companies = Yes | Load = 100000 | Load = 100001 | TDL = C:\fcspike\FinComRecorder.tdl
+[keys] 'a' -> Tally :9000 'TallyPrime:9000'
+[keys] 't' -> Tally :9000 'TallyPrime:9000'
+[slow232 import] is 'FinCom Spike Co' open: 1 sent, created 0, errors 0, 0.2 s <RESPONSE> <CREATED>0</CREATED> <ALTERED>1</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+[slow232] company 'FinCom Spike Co' open in Tally 9000: True
+[slow232 import] is 'FinCom Big Co' open: 1 sent, created 0, errors 0, 0.1 s <RESPONSE> <CREATED>0</CREATED> <ALTERED>1</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+[slow232] company 'FinCom Big Co' open in Tally 9000: True
+[shot] r4-f234-both-on-share (1024x768)
+[slow232 import] option B masters 0: 1000 sent, created 997, errors 0, 35.4 s
+[slow232 import] option B masters 1000: 1000 sent, created 1000, errors 0, 35.6 s
+[slow232 import] option B masters 2000: 1000 sent, created 1000, errors 0, 35.5 s
+[slow232 import] option B masters 3000: 5 sent, created 5, errors 0, 0.3 s
+[slow232 import] option B calibration 1000: 1 sent, created 1, errors 0, 4.9 s
+[optB] the bridge's entry request for MasterID 3 of 'FinCom Spike Co': 3770 ms, 26453289 bytes
+[optB] the bridge's entry request for MasterID 3 of 'FinCom Spike Co': 3704 ms, 26453289 bytes
+[companies :9000] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>1</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[19:18:34] ---- user 2's own Tally (9001), run as fcuser2: a company made by keys, then started again with it and the add-on
+  [as fcuser2] pid=992 session=1 user=runnervmfi6oq\fcuser2
+Tally :9001 (pid 992) answers: True; owner: fcuser2; session 1 (runner's own: 2)
+  [as fcuser2] keys 'a' -> Tally pid 992 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys 't' -> Tally pid 992 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01-tally2-start
+  [as fcuser2] keys '{ENTER}' -> Tally pid 992 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01b-tally2-create-company
+  [as fcuser2] keys 'FinCom Spike U2' -> Tally pid 992 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys '^a' -> Tally pid 992 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01c-tally2-ctrl-a
+[companies :9001] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+  [as fcuser2] keys '^a' -> Tally pid 992 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01d-tally2-company
+user 2's company made: True, folder 100000
+  [as fcuser2] pid=2412 session=1 user=runnervmfi6oq\fcuser2
+  [as fcuser2] keys 'a' -> Tally pid 2412 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] keys 't' -> Tally pid 2412 'TallyPrime:9001' session 1 foreground=True
+  [as fcuser2] shot 01e-tally2-gateway
+[ledger Spike Income :9001] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[companies :9001] <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>1</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[ledger Spike Party :9001] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[journal :9001 :9001] <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>1</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+== user 2's own Tally with its company and the add-on: True
+[19:20:11] ---- the bridges, each installed by its own Windows user with the real setup, just for me; the settings seeded first
+setup as runneradmin (just for me) ended with 0
+  install.log 1: 2026-10-08 19:20:12  Install (just for this user, no service): FinCom Bridge 2.4.0 for runnervmfi6oq\runneradmin (S-1-5-21-1643835476-1616584234-1346609752-500), sole mode, folder C:\Users\runneradmin\AppData\Local\TDS Desk Bridge
+  install.log 1: 2026-10-08 19:20:15  Install: the add-on FinComRecorder.tdl written in C:\ProgramData\FinCom\addon
+  install.log 1: 2026-10-08 19:20:15  Install: the add-on FinComRecorderAnyCompany.tdl written in C:\ProgramData\FinCom\addon
+  install.log 1: 2026-10-08 19:20:15  Install: the recorder folder C:\ProgramData\FinCom\recorder and the add-on folder C:\ProgramData\FinCom\addon are ready (just for this user)
+  install.log 1: 2026-10-08 19:20:15  Install: starts when runnervmfi6oq\runneradmin signs in to Windows (HKCU Run)
+  install.log 1: 2026-10-08 19:20:16  Install: done; the bridge answers on 127.0.0.1:9100
+  install.log 1: 2026-10-08 19:20:16  Setup: FinComBridge.exe install: done, the bridge answers
+  install.log 1: 2026-10-08 19:20:16  Setup: Finished: installed and running (sole mode)
+seed as fcuser2: runnervmfi6oq\fcuser2 session 1 C:\Users\fcuser2\AppData\Local
+  [as fcuser2] exit=0 user=runnervmfi6oq\fcuser2 session=1
+setup as fcuser2 (just for me) ended: exit=0 user=runnervmfi6oq\fcuser2 session=1
+  install.log 2: 2026-10-08 19:20:19  Install (just for this user, no service): FinCom Bridge 2.4.0 for runnervmfi6oq\fcuser2 (S-1-5-21-1643835476-1616584234-1346609752-1003), sole mode, folder C:\Users\fcuser2\AppData\Local\TDS Desk Bridge
+  install.log 2: 2026-10-08 19:20:23  Install: the add-on FinComRecorder.tdl was not written in C:\ProgramData\FinCom\addon: remove C:\ProgramData\FinCom\addon\FinComRecorder.tdl: Access is denied.
+  install.log 2: 2026-10-08 19:20:23  Install: the add-on FinComRecorderAnyCompany.tdl was not written in C:\ProgramData\FinCom\addon: remove C:\ProgramData\FinCom\addon\FinComRecorderAnyCompany.tdl: Access is denied.
+  install.log 2: 2026-10-08 19:20:23  Install: the recorder folder C:\ProgramData\FinCom\recorder and the add-on folder C:\ProgramData\FinCom\addon are ready (just for this user)
+  install.log 2: 2026-10-08 19:20:23  Install: starts when runnervmfi6oq\fcuser2 signs in to Windows (HKCU Run)
+  install.log 2: 2026-10-08 19:20:24  Install: done; the bridge answers on 127.0.0.1:9101
+  install.log 2: 2026-10-08 19:20:24  Setup: FinComBridge.exe install: done, the bridge answers
+  install.log 2: 2026-10-08 19:20:24  Setup: Finished: installed and running (sole mode)
+bridge 1: user runneradmin, port 9100, id go-126a4d773945, key 24 chars, Owner runnervmfi6oq\runneradmin, OwnerSid S-1-5-21-1643835476-1616584234-1346609752-500
+bridge 2: user fcuser2, port 9101, id go-ed9f330b3f34, key 24 chars, Owner runnervmfi6oq\fcuser2, OwnerSid S-1-5-21-1643835476-1616584234-1346609752-1003
+[shot] r4-02-bridges (1024x768)
+[19:20:34] ---- 6a: both bridges run at once, on their own ports, as their own users
+  process 9424 as runneradmin in session 2: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" user --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json"
+  process 9740 as runneradmin in session 2: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" tray --quiet --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json"
+  process 1212 as runneradmin in session 2: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" worker --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json" --home "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge" --parent 9424
+  process 6200 as fcuser2 in session 1: "C:\Users\fcuser2\AppData\Local\FinCom Bridge\FinComBridge.exe" user --config "C:\Users\fcuser2\AppData\Local\TDS Desk Bridge\tds-bridge.config.json"
+  process 1968 as fcuser2 in session 1: "C:\Users\fcuser2\AppData\Local\FinCom Bridge\FinComBridge.exe" worker --config "C:\Users\fcuser2\AppData\Local\TDS Desk Bridge\tds-bridge.config.json" --home "C:\Users\fcuser2\AppData\Local\TDS Desk Bridge" --parent 6200
+  process 2868 as fcuser2 in session 1: "C:\Users\fcuser2\AppData\Local\FinCom Bridge\FinComBridge.exe" tray
+  listening 127.0.0.1:9101 pid 1968 user fcuser2
+  listening 127.0.0.1:9100 pid 1212 user runneradmin
+  Tally pid 1580 session 2 owner runneradmin
+  Tally pid 2412 session 1 owner fcuser2
+######## PASS 6a two bridges at once: bridge 1 runneradmin on 127.0.0.1:9100 (pid 1212, session 2, go-126a4d773945); bridge 2 fcuser2 on 127.0.0.1:9101 (pid 1968, session 1, go-ed9f330b3f34); both listening at 19:20:35
+[19:20:35] ---- 6b: the /ping proof: HMAC-SHA256(bridge key, nonce || bridge id || port), only to the bridge's own Windows user
+runneradmin -> own bridge, no Origin: {"bridge":"FinCom Tally Bridge","bridgeId":"go-126a4d773945","impl":"go","loopSec":0,"ok":true,"pid":1212,"port":9100,"runMode":"user","testMode":false,"version":"2.4.0","yours":true}
+runneradmin -> own bridge: {"bridge":"FinCom Tally Bridge","bridgeId":"go-126a4d773945","impl":"go","loopSec":0,"ok":true,"pairProof":"cb183c9e46c81bf4bfd73fe3c724254fa4c77036722228692362de2ade19cad4","pid":1212,"port":9100,"proof":"3931d90389ffd3b29bfe98769d85ffd7b377bbc56f681db7d5ce1781fd8e1221","runMode":"user","testMode":false,"version":"2.4.0","yours":true}
+runneradmin -> user 2's bridge: {"bridge":"FinCom Tally Bridge","impl":"go","loopSec":0,"ok":true,"pid":1968,"runMode":"user","testMode":false,"version":"2.4.0","yours":false}
+as fcuser2 (): {"ownStatus":401,"other":{"bridge":"FinCom Tally Bridge","impl":"go","loopSec":0,"ok":true,"pid":1212,"runMode":"user","testMode":false,"version":"2.4.0","yours":false},"session":1,"own":{"bridge":"FinCom Tally Bridge","bridgeId":"go-ed9f330b3f34","impl":"go","loopSec":0,"ok":true,"pairProof":"86467dcdac2ab19843ac4d6af7563e05b92cdf04bc3118b2c62bf73c934077f5","pid":1968,"port":9101,"proof":"93d840c2455e08217b436b0acfaaf8e60bdea79ad1b97bb0db43c99432e38db5","runMode":"user","testMode":false,"version":"2.4.0","yours":true},"otherStatus":403,"who":"runnervmfi6oq\\fcuser2"}
+  ok   bridge 1 proves itself to runneradmin: yours=True bridgeId=go-126a4d773945 port=9100 proof=3931d90389ffd3b29bfe98769d85ffd7b377bbc56f681db7d5ce1781fd8e1221
+  ok   bridge 1 proof checked against user 2 identity fails: HMAC(key2, nonce||go-ed9f330b3f34||9101)=4d2f0ae73b15d159e8cea1cd6b04c0e2ec398af03ae2028e1d3ba4f7caa0b027
+  ok   bridge 2 proves itself to fcuser2: yours=True bridgeId=go-ed9f330b3f34 port=9101 proof=93d840c2455e08217b436b0acfaaf8e60bdea79ad1b97bb0db43c99432e38db5
+  ok   bridge 2 proof checked against user 1 identity fails: HMAC(key1, nonce||go-126a4d773945||9100)=811ce8b05f6c772fbb60172859d63444127c2745e476f6e211466e113bca0116
+  ok   bridge 2 gives runneradmin no proof: yours=False proof= bridgeId=
+  ok   bridge 1 gives fcuser2 no proof: yours=False proof=
+  ok   other users refused 403 beyond /ping: runneradmin: own /status 401, other 403; fcuser2: own /status 401, other 403
+######## PASS 6b /ping proof: bridge 1 proves itself to runneradmin: ok; bridge 1 proof checked against user 2 identity fails: ok; bridge 2 proves itself to fcuser2: ok; bridge 2 proof checked against user 1 identity fails: ok; bridge 2 gives runneradmin no proof: ok; bridge 1 gives fcuser2 no proof: ok; other users refused 403 beyond /ping: ok
+  bridge1 log: 2026-10-08 19:20:15  FinCom Bridge 2.4.0: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+  bridge1 log: 2026-10-08 19:20:15  FinCom Bridge 2.4.0 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+  bridge1 log: 2026-10-08 19:20:15  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+  bridge1 log: 2026-10-08 19:20:15  Recorder: 50 held line(s) kept by an earlier bridge are asked once with the fast request (whatever their earlier tries): answered, each goes to FinCom with Tally's body; else it ends with the Day Book words
+  bridge1 log: 2026-10-08 19:20:15  Recorder: re-scan of the add-on's files for 2.4.0: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+  bridge1 log: 2026-10-08 19:20:16  Check:  - 
+  bridge1 log: 2026-10-08 19:20:18  Tray icon: set to show next to the clock always (Windows 11)
+  bridge1 log: 2026-10-08 19:20:19  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+  bridge1 log: 2026-10-08 19:20:19  Company FinCom Big Co: its Tally GUID 689c023b-372e-4728-8e94-4e6dd8094bfa is held from now on
+  bridge1 log: 2026-10-08 19:20:19  Company FinCom Spike Co: its Tally GUID cbf50a03-7958-431e-b951-b6336c25817e is held from now on
+  bridge1 log: 2026-10-08 19:20:19  Company FinCom Big Co: its starting point is recorded: ALTVCHID=40000, ALTMSTID=6217 (reading is prospective only: the bridge follows what changes after this)
+  bridge1 log: 2026-10-08 19:20:19  Company FinCom Big Co: change numbers read with form a: ALTVCHID=40000, ALTMSTID=6217
+  bridge1 log: 2026-10-08 19:20:19  Light check of FinCom Big Co: starting point recorded (ALTVCHID=40000, ALTMSTID=6217)
+  bridge1 log: 2026-10-08 19:20:19  Bank dates: FinCom Big Co: following Tally's voucher counter from ALTVCHID=40000 (a move the add-on's lines do not explain is a bank date set, or another change Tally makes without a voucher form)
+  bridge1 log: 2026-10-08 19:20:19  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=3, ALTMSTID=3650 (reading is prospective only: the bridge follows what changes after this)
+  bridge1 log: 2026-10-08 19:20:19  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=3, ALTMSTID=3650
+  bridge1 log: 2026-10-08 19:20:19  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=3, ALTMSTID=3650)
+  bridge1 log: 2026-10-08 19:20:19  Bank dates: FinCom Spike Co: following Tally's voucher counter from ALTVCHID=3 (a move the add-on's lines do not explain is a bank date set, or another change Tally makes without a voucher form)
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-011 of 01-Apr-2026 (MasterID 900012, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-012 of 01-Apr-2026 (MasterID 900013, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-013 of 01-Apr-2026 (MasterID 900014, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-014 of 01-Apr-2026 (MasterID 900015, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-015 of 01-Apr-2026 (MasterID 900016, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-016 of 01-Apr-2026 (MasterID 900017, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-017 of 01-Apr-2026 (MasterID 900018, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-018 of 01-Apr-2026 (MasterID 900019, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-019 of 01-Apr-2026 (MasterID 900020, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-020 of 01-Apr-2026 (MasterID 900021, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-021 of 01-Apr-2026 (MasterID 900022, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-022 of 01-Apr-2026 (MasterID 900023, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-023 of 01-Apr-2026 (MasterID 900024, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-024 of 01-Apr-2026 (MasterID 900025, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-025 of 01-Apr-2026 (MasterID 900026, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-026 of 01-Apr-2026 (MasterID 900027, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-027 of 01-Apr-2026 (MasterID 900028, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-028 of 01-Apr-2026 (MasterID 900029, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-029 of 01-Apr-2026 (MasterID 900030, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-030 of 01-Apr-2026 (MasterID 900031, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-031 of 01-Apr-2026 (MasterID 900032, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-032 of 01-Apr-2026 (MasterID 900033, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-033 of 01-Apr-2026 (MasterID 900034, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-034 of 01-Apr-2026 (MasterID 900035, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-035 of 01-Apr-2026 (MasterID 900036, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-036 of 01-Apr-2026 (MasterID 900037, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-037 of 01-Apr-2026 (MasterID 900038, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-038 of 01-Apr-2026 (MasterID 900039, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-039 of 01-Apr-2026 (MasterID 900040, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-040 of 01-Apr-2026 (MasterID 900041, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-041 of 01-Apr-2026 (MasterID 900042, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-042 of 01-Apr-2026 (MasterID 900043, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-043 of 01-Apr-2026 (MasterID 900044, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-044 of 01-Apr-2026 (MasterID 900045, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-045 of 01-Apr-2026 (MasterID 900046, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-046 of 01-Apr-2026 (MasterID 900047, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-047 of 01-Apr-2026 (MasterID 900048, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-048 of 01-Apr-2026 (MasterID 900049, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-049 of 01-Apr-2026 (MasterID 900050, line b233old0…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-000 of 01-Apr-2026 (MasterID 900001, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:20  Recorder: entry fetch of FinCom Big Co: answered in 47 ms
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-000 of 01-Apr-2026 (MasterID 900001, line b233old0…): still held: Tally gave no voucher with MasterID 900001 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-001 of 01-Apr-2026 (MasterID 900002, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:20  Recorder: entry fetch of FinCom Big Co: answered in 33 ms
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-001 of 01-Apr-2026 (MasterID 900002, line b233old0…): still held: Tally gave no voucher with MasterID 900002 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:20  Recorder: Journal OLD-002 of 01-Apr-2026 (MasterID 900003, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:21  Recorder: entry fetch of FinCom Big Co: answered in 44 ms
+  bridge1 log: 2026-10-08 19:20:21  Recorder: Journal OLD-002 of 01-Apr-2026 (MasterID 900003, line b233old0…): still held: Tally gave no voucher with MasterID 900003 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:21  Recorder: Journal OLD-003 of 01-Apr-2026 (MasterID 900004, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:21  Recorder: entry fetch of FinCom Big Co: answered in 37 ms
+  bridge1 log: 2026-10-08 19:20:21  Recorder: Journal OLD-003 of 01-Apr-2026 (MasterID 900004, line b233old0…): still held: Tally gave no voucher with MasterID 900004 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:21  Recorder: Journal OLD-004 of 01-Apr-2026 (MasterID 900005, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:22  Recorder: entry fetch of FinCom Big Co: answered in 40 ms
+  bridge1 log: 2026-10-08 19:20:22  Recorder: Journal OLD-004 of 01-Apr-2026 (MasterID 900005, line b233old0…): still held: Tally gave no voucher with MasterID 900005 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:22  Recorder: Journal OLD-005 of 01-Apr-2026 (MasterID 900006, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:22  Recorder: Journal OLD-005 of 01-Apr-2026 (MasterID 900006, line b233old0…): still held: Tally gave no voucher with MasterID 900006 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:22  Recorder: Journal OLD-006 of 01-Apr-2026 (MasterID 900007, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:22  Recorder: entry fetch of FinCom Big Co: answered in 56 ms
+  bridge1 log: 2026-10-08 19:20:22  Recorder: Journal OLD-006 of 01-Apr-2026 (MasterID 900007, line b233old0…): still held: Tally gave no voucher with MasterID 900007 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:22  Recorder: Journal OLD-007 of 01-Apr-2026 (MasterID 900008, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:23  Recorder: Journal OLD-007 of 01-Apr-2026 (MasterID 900008, line b233old0…): still held: Tally gave no voucher with MasterID 900008 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:23  Recorder: Journal OLD-009 of 01-Apr-2026 (MasterID 900010, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:23  Refused a request from a program of another Windows user (/tray/idle): not your FinCom Bridge
+  bridge1 log: 2026-10-08 19:20:23  Refused a request from a program of another Windows user (/tray/status): not your FinCom Bridge
+  bridge1 log: 2026-10-08 19:20:23  Recorder: entry fetch of FinCom Big Co: answered in 51 ms
+  bridge1 log: 2026-10-08 19:20:23  Recorder: Journal OLD-009 of 01-Apr-2026 (MasterID 900010, line b233old0…): still held: Tally gave no voucher with MasterID 900010 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:23  Recorder: Journal OLD-010 of 01-Apr-2026 (MasterID 900011, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:23  Recorder: entry fetch of FinCom Big Co: answered in 59 ms
+  bridge1 log: 2026-10-08 19:20:23  Recorder: Journal OLD-010 of 01-Apr-2026 (MasterID 900011, line b233old0…): still held: Tally gave no voucher with MasterID 900011 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:23  Recorder: Journal OLD-000 of 01-Apr-2026 (MasterID 900001, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:23  Recorder: Journal OLD-001 of 01-Apr-2026 (MasterID 900002, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:23  Recorder: Journal OLD-002 of 01-Apr-2026 (MasterID 900003, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:24  Recorder: Journal OLD-003 of 01-Apr-2026 (MasterID 900004, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:24  Recorder: Journal OLD-004 of 01-Apr-2026 (MasterID 900005, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:24  Recorder: Journal OLD-005 of 01-Apr-2026 (MasterID 900006, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:24  Recorder: Journal OLD-006 of 01-Apr-2026 (MasterID 900007, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:24  Recorder: Journal OLD-007 of 01-Apr-2026 (MasterID 900008, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:24  Recorder: Journal OLD-009 of 01-Apr-2026 (MasterID 900010, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:24  Recorder: Journal OLD-010 of 01-Apr-2026 (MasterID 900011, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:24  Recorder: held lines: 0 from FinCom, 10 asked, 0 resolved, 50 still held (50 in the list)
+  bridge1 log: 2026-10-08 19:20:24  Recorder: Journal OLD-008 of 01-Apr-2026 (MasterID 900009, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:24  Recorder: Journal OLD-008 of 01-Apr-2026 (MasterID 900009, line b233old0…): still held: Tally gave no voucher with MasterID 900009 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:24  Recorder: Journal OLD-011 of 01-Apr-2026 (MasterID 900012, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:24  Recorder: entry fetch of FinCom Big Co: answered in 34 ms
+  bridge1 log: 2026-10-08 19:20:24  Recorder: Journal OLD-011 of 01-Apr-2026 (MasterID 900012, line b233old0…): still held: Tally gave no voucher with MasterID 900012 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:24  Recorder: Journal OLD-012 of 01-Apr-2026 (MasterID 900013, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:25  Recorder: entry fetch of FinCom Big Co: answered in 45 ms
+  bridge1 log: 2026-10-08 19:20:25  Recorder: Journal OLD-012 of 01-Apr-2026 (MasterID 900013, line b233old0…): still held: Tally gave no voucher with MasterID 900013 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:25  Recorder: Journal OLD-014 of 01-Apr-2026 (MasterID 900015, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:25  Recorder: entry fetch of FinCom Big Co: answered in 58 ms
+  bridge1 log: 2026-10-08 19:20:25  Recorder: Journal OLD-014 of 01-Apr-2026 (MasterID 900015, line b233old0…): still held: Tally gave no voucher with MasterID 900015 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:25  Recorder: Journal OLD-015 of 01-Apr-2026 (MasterID 900016, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:25  Recorder: Journal OLD-015 of 01-Apr-2026 (MasterID 900016, line b233old0…): still held: Tally gave no voucher with MasterID 900016 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:25  Recorder: Journal OLD-016 of 01-Apr-2026 (MasterID 900017, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:26  Recorder: entry fetch of FinCom Big Co: answered in 43 ms
+  bridge1 log: 2026-10-08 19:20:26  Recorder: Journal OLD-016 of 01-Apr-2026 (MasterID 900017, line b233old0…): still held: Tally gave no voucher with MasterID 900017 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:26  Recorder: Journal OLD-017 of 01-Apr-2026 (MasterID 900018, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:26  Recorder: entry fetch of FinCom Big Co: answered in 55 ms
+  bridge1 log: 2026-10-08 19:20:26  Recorder: Journal OLD-017 of 01-Apr-2026 (MasterID 900018, line b233old0…): still held: Tally gave no voucher with MasterID 900018 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:26  Recorder: Journal OLD-019 of 01-Apr-2026 (MasterID 900020, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:27  Recorder: Journal OLD-019 of 01-Apr-2026 (MasterID 900020, line b233old0…): still held: Tally gave no voucher with MasterID 900020 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:27  Recorder: Journal OLD-020 of 01-Apr-2026 (MasterID 900021, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:27  Recorder: Journal OLD-020 of 01-Apr-2026 (MasterID 900021, line b233old0…): still held: Tally gave no voucher with MasterID 900021 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:27  Recorder: Journal OLD-021 of 01-Apr-2026 (MasterID 900022, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:27  Recorder: Journal OLD-021 of 01-Apr-2026 (MasterID 900022, line b233old0…): still held: Tally gave no voucher with MasterID 900022 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:27  Recorder: Journal OLD-008 of 01-Apr-2026 (MasterID 900009, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:27  Recorder: Journal OLD-011 of 01-Apr-2026 (MasterID 900012, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:27  Recorder: Journal OLD-012 of 01-Apr-2026 (MasterID 900013, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:27  Recorder: Journal OLD-014 of 01-Apr-2026 (MasterID 900015, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:27  Recorder: Journal OLD-015 of 01-Apr-2026 (MasterID 900016, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:27  Recorder: Journal OLD-016 of 01-Apr-2026 (MasterID 900017, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:27  Recorder: Journal OLD-017 of 01-Apr-2026 (MasterID 900018, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:27  Recorder: Journal OLD-019 of 01-Apr-2026 (MasterID 900020, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:27  Recorder: Journal OLD-020 of 01-Apr-2026 (MasterID 900021, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:27  Recorder: Journal OLD-021 of 01-Apr-2026 (MasterID 900022, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:27  Recorder: held lines: 0 from FinCom, 10 asked, 0 resolved, 40 still held (40 in the list)
+  bridge1 log: 2026-10-08 19:20:27  Recorder: Journal OLD-013 of 01-Apr-2026 (MasterID 900014, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:28  Recorder: Journal OLD-013 of 01-Apr-2026 (MasterID 900014, line b233old0…): still held: Tally gave no voucher with MasterID 900014 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:28  Recorder: Journal OLD-022 of 01-Apr-2026 (MasterID 900023, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:28  Recorder: Journal OLD-022 of 01-Apr-2026 (MasterID 900023, line b233old0…): still held: Tally gave no voucher with MasterID 900023 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:28  Recorder: Journal OLD-024 of 01-Apr-2026 (MasterID 900025, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:29  Recorder: Journal OLD-024 of 01-Apr-2026 (MasterID 900025, line b233old0…): still held: Tally gave no voucher with MasterID 900025 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:29  Recorder: Journal OLD-025 of 01-Apr-2026 (MasterID 900026, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:29  Recorder: entry fetch of FinCom Big Co: answered in 57 ms
+  bridge1 log: 2026-10-08 19:20:29  Recorder: Journal OLD-025 of 01-Apr-2026 (MasterID 900026, line b233old0…): still held: Tally gave no voucher with MasterID 900026 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:29  Recorder: Journal OLD-026 of 01-Apr-2026 (MasterID 900027, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:29  Recorder: entry fetch of FinCom Big Co: answered in 32 ms
+  bridge1 log: 2026-10-08 19:20:29  Recorder: Journal OLD-026 of 01-Apr-2026 (MasterID 900027, line b233old0…): still held: Tally gave no voucher with MasterID 900027 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:29  Recorder: Journal OLD-027 of 01-Apr-2026 (MasterID 900028, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:30  Recorder: Journal OLD-027 of 01-Apr-2026 (MasterID 900028, line b233old0…): still held: Tally gave no voucher with MasterID 900028 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:30  Recorder: Journal OLD-029 of 01-Apr-2026 (MasterID 900030, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:30  Recorder: Journal OLD-029 of 01-Apr-2026 (MasterID 900030, line b233old0…): still held: Tally gave no voucher with MasterID 900030 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:30  Recorder: Journal OLD-030 of 01-Apr-2026 (MasterID 900031, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:31  Recorder: entry fetch of FinCom Big Co: answered in 50 ms
+  bridge1 log: 2026-10-08 19:20:31  Recorder: Journal OLD-030 of 01-Apr-2026 (MasterID 900031, line b233old0…): still held: Tally gave no voucher with MasterID 900031 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:31  Recorder: Journal OLD-031 of 01-Apr-2026 (MasterID 900032, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:31  Recorder: Journal OLD-031 of 01-Apr-2026 (MasterID 900032, line b233old0…): still held: Tally gave no voucher with MasterID 900032 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:31  Recorder: Journal OLD-032 of 01-Apr-2026 (MasterID 900033, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:31  Recorder: Journal OLD-032 of 01-Apr-2026 (MasterID 900033, line b233old0…): still held: Tally gave no voucher with MasterID 900033 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:31  Recorder: Journal OLD-013 of 01-Apr-2026 (MasterID 900014, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:31  Recorder: Journal OLD-022 of 01-Apr-2026 (MasterID 900023, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:31  Recorder: Journal OLD-024 of 01-Apr-2026 (MasterID 900025, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:31  Recorder: Journal OLD-025 of 01-Apr-2026 (MasterID 900026, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:31  Recorder: Journal OLD-026 of 01-Apr-2026 (MasterID 900027, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:31  Recorder: Journal OLD-027 of 01-Apr-2026 (MasterID 900028, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:31  Recorder: Journal OLD-029 of 01-Apr-2026 (MasterID 900030, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:31  Recorder: Journal OLD-030 of 01-Apr-2026 (MasterID 900031, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:31  Recorder: Journal OLD-031 of 01-Apr-2026 (MasterID 900032, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:31  Recorder: Journal OLD-032 of 01-Apr-2026 (MasterID 900033, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:31  Recorder: held lines: 0 from FinCom, 10 asked, 0 resolved, 30 still held (30 in the list)
+  bridge1 log: 2026-10-08 19:20:31  Recorder: Journal OLD-018 of 01-Apr-2026 (MasterID 900019, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:32  Recorder: Journal OLD-018 of 01-Apr-2026 (MasterID 900019, line b233old0…): still held: Tally gave no voucher with MasterID 900019 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:32  Recorder: Journal OLD-034 of 01-Apr-2026 (MasterID 900035, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:32  Recorder: entry fetch of FinCom Big Co: answered in 46 ms
+  bridge1 log: 2026-10-08 19:20:32  Recorder: Journal OLD-034 of 01-Apr-2026 (MasterID 900035, line b233old0…): still held: Tally gave no voucher with MasterID 900035 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:32  Recorder: Journal OLD-035 of 01-Apr-2026 (MasterID 900036, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:33  Recorder: Journal OLD-035 of 01-Apr-2026 (MasterID 900036, line b233old0…): still held: Tally gave no voucher with MasterID 900036 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:33  Recorder: Journal OLD-036 of 01-Apr-2026 (MasterID 900037, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:33  Recorder: entry fetch of FinCom Big Co: answered in 52 ms
+  bridge1 log: 2026-10-08 19:20:33  Recorder: Journal OLD-036 of 01-Apr-2026 (MasterID 900037, line b233old0…): still held: Tally gave no voucher with MasterID 900037 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:33  Recorder: Journal OLD-037 of 01-Apr-2026 (MasterID 900038, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:33  Recorder: Journal OLD-037 of 01-Apr-2026 (MasterID 900038, line b233old0…): still held: Tally gave no voucher with MasterID 900038 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:33  Recorder: Journal OLD-039 of 01-Apr-2026 (MasterID 900040, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:34  Recorder: Journal OLD-039 of 01-Apr-2026 (MasterID 900040, line b233old0…): still held: Tally gave no voucher with MasterID 900040 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:34  Recorder: Journal OLD-040 of 01-Apr-2026 (MasterID 900041, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:34  Recorder: Journal OLD-040 of 01-Apr-2026 (MasterID 900041, line b233old0…): still held: Tally gave no voucher with MasterID 900041 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:34  Recorder: Journal OLD-041 of 01-Apr-2026 (MasterID 900042, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:34  Recorder: entry fetch of FinCom Big Co: answered in 38 ms
+  bridge1 log: 2026-10-08 19:20:34  Recorder: Journal OLD-041 of 01-Apr-2026 (MasterID 900042, line b233old0…): still held: Tally gave no voucher with MasterID 900042 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:34  Recorder: Journal OLD-042 of 01-Apr-2026 (MasterID 900043, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:35  Recorder: entry fetch of FinCom Big Co: answered in 41 ms
+  bridge1 log: 2026-10-08 19:20:35  Recorder: Journal OLD-042 of 01-Apr-2026 (MasterID 900043, line b233old0…): still held: Tally gave no voucher with MasterID 900043 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:35  Recorder: Journal OLD-044 of 01-Apr-2026 (MasterID 900045, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:35  Recorder: entry fetch of FinCom Big Co: answered in 39 ms
+  bridge1 log: 2026-10-08 19:20:35  Recorder: Journal OLD-044 of 01-Apr-2026 (MasterID 900045, line b233old0…): still held: Tally gave no voucher with MasterID 900045 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:35  Recorder: Journal OLD-018 of 01-Apr-2026 (MasterID 900019, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:35  Recorder: Journal OLD-034 of 01-Apr-2026 (MasterID 900035, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:35  Recorder: Journal OLD-035 of 01-Apr-2026 (MasterID 900036, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:35  Recorder: Journal OLD-036 of 01-Apr-2026 (MasterID 900037, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:35  Recorder: Journal OLD-037 of 01-Apr-2026 (MasterID 900038, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:35  Recorder: Journal OLD-039 of 01-Apr-2026 (MasterID 900040, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:35  Recorder: Journal OLD-040 of 01-Apr-2026 (MasterID 900041, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:35  Recorder: Journal OLD-041 of 01-Apr-2026 (MasterID 900042, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:35  Recorder: Journal OLD-042 of 01-Apr-2026 (MasterID 900043, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:35  Recorder: Journal OLD-044 of 01-Apr-2026 (MasterID 900045, line b233old0…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge1 log: 2026-10-08 19:20:35  Recorder: held lines: 0 from FinCom, 10 asked, 0 resolved, 20 still held (20 in the list)
+  bridge1 log: 2026-10-08 19:20:35  Recorder: Journal OLD-023 of 01-Apr-2026 (MasterID 900024, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:36  Recorder: entry fetch of FinCom Big Co: answered in 53 ms
+  bridge1 log: 2026-10-08 19:20:36  Recorder: Journal OLD-023 of 01-Apr-2026 (MasterID 900024, line b233old0…): still held: Tally gave no voucher with MasterID 900024 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:36  Recorder: Journal OLD-045 of 01-Apr-2026 (MasterID 900046, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:36  Recorder: Journal OLD-045 of 01-Apr-2026 (MasterID 900046, line b233old0…): still held: Tally gave no voucher with MasterID 900046 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:36  Recorder: Journal OLD-046 of 01-Apr-2026 (MasterID 900047, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:36  Recorder: entry fetch of FinCom Big Co: answered in 54 ms
+  bridge1 log: 2026-10-08 19:20:36  Recorder: Journal OLD-046 of 01-Apr-2026 (MasterID 900047, line b233old0…): still held: Tally gave no voucher with MasterID 900047 on 01-Apr-2026
+  bridge1 log: 2026-10-08 19:20:36  Recorder: Journal OLD-047 of 01-Apr-2026 (MasterID 900048, line b233old0…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge1 log: 2026-10-08 19:20:36  Refused a request from a program of another Windows user (/status): not your FinCom Bridge
+  bridge2 log: 2026-10-08 19:20:23  FinCom Bridge 2.4.0: started just for runnervmfi6oq\fcuser2 (no service); it keeps the bridge and its icon running
+  bridge2 log: 2026-10-08 19:20:23  Port 9100 is taken (another Windows user's FinCom Bridge, or another program); this bridge uses port 9101 and remembers it
+  bridge2 log: 2026-10-08 19:20:23  FinCom Bridge 2.4.0 (Go) started on 127.0.0.1:9101: the only bridge on this computer; working for runnervmfi6oq\fcuser2, Windows session 1; runs just for this Windows user (starts at sign-in, no service)
+  bridge2 log: 2026-10-08 19:20:23  Tally is open on port 9001; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+  bridge2 log: 2026-10-08 19:20:23  Recorder: re-scan of the add-on's files for 2.4.0: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+  bridge2 log: 2026-10-08 19:20:23  Check:  - 
+  bridge2 log: 2026-10-08 19:20:26  Tray icon: set to show next to the clock always (Windows 11)
+  bridge2 log: 2026-10-08 19:20:26  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+  bridge2 log: 2026-10-08 19:20:26  Company FinCom Spike U2: its Tally GUID 2ba8875f-3d06-4dec-bf55-4eb58ebaa8b8 is held from now on
+  bridge2 log: 2026-10-08 19:20:26  Company FinCom Spike U2: its starting point is recorded: ALTVCHID=1, ALTMSTID=209 (reading is prospective only: the bridge follows what changes after this)
+  bridge2 log: 2026-10-08 19:20:26  Company FinCom Spike U2: change numbers read with form a: ALTVCHID=1, ALTMSTID=209
+  bridge2 log: 2026-10-08 19:20:26  Light check of FinCom Spike U2: starting point recorded (ALTVCHID=1, ALTMSTID=209)
+  bridge2 log: 2026-10-08 19:20:26  Bank dates: FinCom Spike U2: following Tally's voucher counter from ALTVCHID=1 (a move the add-on's lines do not explain is a bank date set, or another change Tally makes without a voucher form)
+  bridge2 log: 2026-10-08 19:20:35  Refused a request from a program of another Windows user (/status): not your FinCom Bridge (the program asking has no Windows user)
+[19:21:07] ---- fast234: the fast entry request on real Tally, two companies from an SMB share, a held backlog
+[slow232 import] option B gate: 1 sent, created 1, errors 0, 6.2 s
+  Tally :9000 voucher mid=1 aid=1 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000004 no=2 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000002 no=2 cancelled=False
+[slow232] option B gate: its lines written to C:\ProgramData\FinCom\recorder\cbf50a03-7958-431e-b951-b6336c25817e-8-Oct-26.txt (MasterID 4, GUID cbf50a03-7958-431e-b951-b6336c25817e-00000004, number '2')
+[slow232 import] small 1: 1 sent, created 1, errors 0, 0.3 s
+  Tally :9000 voucher mid=1 aid=1 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000005 no=3 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000004 no=2 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000002 no=2 cancelled=False
+[slow232] small 1: its lines written to C:\ProgramData\FinCom\recorder\cbf50a03-7958-431e-b951-b6336c25817e-8-Oct-26.txt (MasterID 5, GUID cbf50a03-7958-431e-b951-b6336c25817e-00000005, number '3')
+[slow232 import] big 1: 1 sent, created 1, errors 0, 0.2 s
+[slow232] big 1: its lines written to C:\ProgramData\FinCom\recorder\689c023b-372e-4728-8e94-4e6dd8094bfa-8-Oct-26.txt (MasterID 40001, GUID 689c023b-372e-4728-8e94-4e6dd8094bfa-00009c41, number '8001')
+[slow232 import] small 2: 1 sent, created 1, errors 0, 0.3 s
+  Tally :9000 voucher mid=1 aid=1 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000005 no=3 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000006 no=4 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000004 no=2 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000002 no=2 cancelled=False
+[slow232] small 2: its lines written to C:\ProgramData\FinCom\recorder\cbf50a03-7958-431e-b951-b6336c25817e-8-Oct-26.txt (MasterID 6, GUID cbf50a03-7958-431e-b951-b6336c25817e-00000006, number '4')
+[slow232 import] big 2: 1 sent, created 1, errors 0, 0.2 s
+[slow232] big 2: its lines written to C:\ProgramData\FinCom\recorder\689c023b-372e-4728-8e94-4e6dd8094bfa-8-Oct-26.txt (MasterID 40002, GUID 689c023b-372e-4728-8e94-4e6dd8094bfa-00009c42, number '8002')
+[slow232 import] small 3: 1 sent, created 1, errors 0, 0.2 s
+  Tally :9000 voucher mid=1 aid=1 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000005 no=3 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000006 no=4 cancelled=False
+  Tally :9000 voucher mid=7 aid=7 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000007 no=5 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000004 no=2 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000002 no=2 cancelled=False
+[slow232] small 3: its lines written to C:\ProgramData\FinCom\recorder\cbf50a03-7958-431e-b951-b6336c25817e-8-Oct-26.txt (MasterID 7, GUID cbf50a03-7958-431e-b951-b6336c25817e-00000007, number '5')
+[slow232 import] big 3: 1 sent, created 1, errors 0, 0.2 s
+[slow232] big 3: its lines written to C:\ProgramData\FinCom\recorder\689c023b-372e-4728-8e94-4e6dd8094bfa-8-Oct-26.txt (MasterID 40003, GUID 689c023b-372e-4728-8e94-4e6dd8094bfa-00009c43, number '8003')
+[slow232 import] held f234held01: 1 sent, created 1, errors 0, 0.2 s
+[slow232 import] held f234held02: 1 sent, created 1, errors 0, 0.2 s
+[slow232 import] held f234held03: 1 sent, created 1, errors 0, 0.2 s
+[slow232 import] held f234held04: 1 sent, created 1, errors 0, 0.2 s
+[slow232 import] held f234held05: 1 sent, created 1, errors 0, 0.2 s
+[slow232 import] held f234held06: 1 sent, created 1, errors 0, 0.2 s
+[slow232 import] held f234held07: 1 sent, created 1, errors 0, 0.2 s
+[slow232 import] held f234held08: 1 sent, created 1, errors 0, 0.2 s
+[slow232 import] held f234held09: 1 sent, created 1, errors 0, 0.2 s
+[slow232 import] held f234held10: 1 sent, created 1, errors 0, 0.2 s
+[slow232 import] held f234end01: 1 sent, created 1, errors 0, 0.2 s
+[slow232 import] held f234end02: 1 sent, created 1, errors 0, 0.2 s
+[slow232 import] held f234end03: 1 sent, created 1, errors 0, 0.2 s
+[slow232 import] held f234end04: 1 sent, created 1, errors 0, 0.2 s
+[slow232 import] held f234end05: 1 sent, created 1, errors 0, 0.2 s
+[slow232 import] held f234end06: 1 sent, created 1, errors 0, 0.2 s
+[slow232 import] held f234end07: 1 sent, created 1, errors 0, 0.2 s
+[slow232 import] held f234end08: 1 sent, created 1, errors 0, 0.2 s
+[slow232 import] held f234end09: 1 sent, created 1, errors 0, 0.2 s
+[slow232 import] held f234end10: 1 sent, created 1, errors 0, 0.2 s
+######## PASS fast234 (1) each new save in both companies in the stub with its body; each entry request answered in under 2 s: saves: FinCom Spike Co/5 body after 0.9 s; FinCom Big Co/40001 body after 0 s; FinCom Spike Co/6 body after 0 s; FinCom Big Co/40002 body after 0 s; FinCom Spike Co/7 body after 0.6 s; FinCom Big Co/40003 body after 0 s; FinComVoucherObject requests at the proxy: 77, ms 46,32,43,35,36,31,54,37,49,57,55,31,44,57,43,41,53,57,42,44,32,32,43,54,31,31,42,48,42,40,56,46,30,51,43,31,55,38,40,39,44,37,54,54,34,31,56,53,59,43,3836,169,239,57,55,46,47,40,65,41,51,40,40,62,52,54,52,58,50,50,59,65,42,64,64,51,65; 2 s or more: 0
+######## PASS fast234 (2) every seeded held line resolved with its body, asked once by FinComVoucherObject (the ended ones once more): 10 held + 10 ended by 2.3.3; resolved with body: 20; missing: none; asked more than once: none; never asked by the new request: none
+######## PASS fast234 (3) no FinComVoucherByMaster seen at the proxy: 0 FinComVoucherByMaster; 0 FinComVoucherByNumber (lines with no MasterID only); 77 FinComVoucherObject; 162 requests of bridge 1 in all
+######## PASS fast234 (4) no request while a previous one is unanswered at Tally: 162 requests of bridge 1 at the proxy; overlaps: none
+######## PASS fast234 (5) no company marked slow: the bridge's log lines on a stopped entry fetch: none; marks in recorder-slow.json: 0
+  Tally :9000 voucher mid=1 aid=1 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000005 no=3 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000006 no=4 cancelled=False
+  Tally :9000 voucher mid=7 aid=7 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000007 no=5 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000004 no=2 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000002 no=2 cancelled=False
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F3}' -> Tally :9000 'TallyPrime:9000'
+[keys] 'FinCom Spike Co' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-f234-6-company (1024x768)
+[keys] '%g' -> Tally :9000 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{F2}' -> Tally :9000 'TallyPrime:9000'
+[keys] '1-4-2026{ENTER}' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-f234-6-daybook (1024x768)
+[keys] '{END}' -> Tally :9000 'TallyPrime:9000'
+[keys] '%d' -> Tally :9000 'TallyPrime:9000'
+[keys] 'y' -> Tally :9000 'TallyPrime:9000'
+[shot] r4-f234-6-deleted (1024x768)
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+[keys] '{ESC}' -> Tally :9000 'TallyPrime:9000'
+  Tally :9000 voucher mid=1 aid=1 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000005 no=3 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000006 no=4 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000004 no=2 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000002 no=2 cancelled=False
+######## PASS fast234 (6) an entry deleted on the screen: its line proven deleted here (Tally answered "Could not find Voucher"): Tally deleted mid 7 guid cbf50a03-7958-431e-b951-b6336c25817e-00000007 no 5; stub 19:23:35 recorder_lines event=deleted guid=cbf50a03-7958-431e-b951-b6336c25817e-00000007 mid=7 aid= vch=Journal/5/20260401 user=runnervmfi6oq\runneradmin bridge=go-126a4d773945 port=9100 company=FinCom Spike Co body=none; FinComVoucherObject for mid 7 at the proxy: 2 (42,33 ms); Tally's answer 'Could not find Voucher': 2 ('<ERRORMSG>Could not find Voucher:ID:7!</ERRORMSG>'); bridge log: 2026-10-08 19:23:35  Recorder: FinCom Spike Co: delete of mid 7: not in this Tally (asked by MasterID): proven deleted here | 2026-10-08 19:23:35  Recorder: FinCom Spike Co: delete of mid 7: GUID from the bridge's record: cbf50a03-7958-431e-b951-b6336c25817e-00000007; the GUID its MasterID makes agrees
+[19:23:51] ---- backlog233: 50 old held lines, a large company over 2 s and a small one in the same Tally, then new saves
+[slow232 import] small 1: 1 sent, created 1, errors 0, 0.3 s
+  Tally :9000 voucher mid=1 aid=1 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000005 no=3 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000006 no=4 cancelled=False
+  Tally :9000 voucher mid=9 aid=10 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000009 no=6 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000004 no=2 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000002 no=2 cancelled=False
+[slow232] small 1: its lines written to C:\ProgramData\FinCom\recorder\cbf50a03-7958-431e-b951-b6336c25817e-8-Oct-26.txt (MasterID 9, GUID cbf50a03-7958-431e-b951-b6336c25817e-00000009, number '6')
+[slow232 import] new 1: 1 sent, created 1, errors 0, 0.2 s
+[slow232] new 1: its lines written to C:\ProgramData\FinCom\recorder\689c023b-372e-4728-8e94-4e6dd8094bfa-8-Oct-26.txt (MasterID 40024, GUID 689c023b-372e-4728-8e94-4e6dd8094bfa-00009c58, number '8024')
+######## PASS backlog233 (1) the new save in the stub within 10 s, at least held: after 1.6 s (its import took 0.3 s before its lines were written): stub 19:23:53 recorder_lines event=created guid=689c023b-372e-4728-8e94-4e6dd8094bfa-00009c58 mid=40024 aid=40024 vch=Journal/8024/20260401 user=runnervmfi6oq\runneradmin bridge=go-126a4d773945 port=9100 company=FinCom Big Co body=yes(906 chars)
+######## PASS backlog233 fast234: the old held lines (20 tries / final / refetch) each asked once by FinComVoucherObject and ended: 30 such lines; their ends: b233old001: Tally did not give this entry when asked again; upload that day's Day Book to settle it | b233old002: Tally did not give this entry when asked again; upload that day's Day Book to settle it | b233old003: Tally did not give this entry when asked again; upload that day's Day Book to settle it; not so: none
+######## PASS backlog233 (2) no more than one request per old held line: 50 old lines; 50 asked once, 0 never asked; asked more than once: none; 50 of them ended (their :resolved line in the stub)
+######## PASS backlog233 (3) no request while a previous one is unanswered at Tally: 172 requests of bridge 1 at the proxy; overlaps: none
+[slow232 import] after 1: 1 sent, created 1, errors 0, 0.2 s
+[slow232] after 1: its lines written to C:\ProgramData\FinCom\recorder\689c023b-372e-4728-8e94-4e6dd8094bfa-8-Oct-26.txt (MasterID 40025, GUID 689c023b-372e-4728-8e94-4e6dd8094bfa-00009c59, number '8025')
+######## PASS backlog233 (4) 2.3.4: the large company is not marked; its new save comes with its body by FinComVoucherObject: marked: no; the save after the backlog: stub 19:23:55 recorder_lines event=created guid=689c023b-372e-4728-8e94-4e6dd8094bfa-00009c59 mid=40025 aid=40025 vch=Journal/8025/20260401 user=runnervmfi6oq\runneradmin bridge=go-126a4d773945 port=9100 company=FinCom Big Co body=yes(908 chars); FinComVoucherObject for it at the proxy: 1 (41 ms)
+[slow232 import] small end: 1 sent, created 1, errors 0, 0.2 s
+  Tally :9000 voucher mid=1 aid=1 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000005 no=3 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000006 no=4 cancelled=False
+  Tally :9000 voucher mid=9 aid=10 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000009 no=6 cancelled=False
+  Tally :9000 voucher mid=10 aid=11 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000a no=7 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000004 no=2 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000002 no=2 cancelled=False
+[slow232] small end: its lines written to C:\ProgramData\FinCom\recorder\cbf50a03-7958-431e-b951-b6336c25817e-8-Oct-26.txt (MasterID 10, GUID cbf50a03-7958-431e-b951-b6336c25817e-0000000a, number '7')
+######## PASS backlog233 (5) a small fast company's entry arrives with its body: during the backlog: stub 19:23:52 recorder_lines event=created guid=cbf50a03-7958-431e-b951-b6336c25817e-00000009 mid=9 aid=10 vch=Journal/6/20260401 user=runnervmfi6oq\runneradmin bridge=go-126a4d773945 port=9100 company=FinCom Spike Co body=yes(907 chars); at the end: stub 19:23:57 recorder_lines event=created guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000a mid=10 aid=11 vch=Journal/7/20260401 user=runnervmfi6oq\runneradmin bridge=go-126a4d773945 port=9100 company=FinCom Spike Co body=yes(917 chars)
+[19:24:02] ---- backlog233 (6)-(7): the small company answering in 1.5-1.8 s (a proxy delay): held lines asked while a new save comes; a burst of 8 saves
+[slow232 import] healthy 1: 1 sent, created 1, errors 0, 0.2 s
+  Tally :9000 voucher mid=1 aid=1 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000005 no=3 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000006 no=4 cancelled=False
+  Tally :9000 voucher mid=9 aid=10 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000009 no=6 cancelled=False
+  Tally :9000 voucher mid=10 aid=11 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000a no=7 cancelled=False
+  Tally :9000 voucher mid=11 aid=12 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000b no=8 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000004 no=2 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000002 no=2 cancelled=False
+[slow232] healthy 1: its lines written to C:\ProgramData\FinCom\recorder\cbf50a03-7958-431e-b951-b6336c25817e-8-Oct-26.txt (MasterID 11, GUID cbf50a03-7958-431e-b951-b6336c25817e-0000000b, number '8')
+######## PASS backlog233 (6) a save while held lines are asked at 1.5 s each: in the stub within 10 s: after 3.1 s: stub 19:24:26 recorder_lines event=created guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000b mid=11 aid=12 vch=Journal/8/20260401 user=runnervmfi6oq\runneradmin bridge=go-126a4d773945 port=9100 company=FinCom Spike Co body=yes(910 chars); held lines asked before the save 2, after it 7 (proxy ms: 1557, 1527, 1539, 1563, 1527, 1539, 1538, 1537, 1539, 1550; the delay is the proxy's, Tally answered at once)
+[slow232 import] burst 1: 1 sent, created 1, errors 0, 1.2 s
+  Tally :9000 voucher mid=1 aid=1 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000005 no=3 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000006 no=4 cancelled=False
+  Tally :9000 voucher mid=9 aid=10 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000009 no=6 cancelled=False
+  Tally :9000 voucher mid=10 aid=11 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000a no=7 cancelled=False
+  Tally :9000 voucher mid=11 aid=12 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000b no=8 cancelled=False
+  Tally :9000 voucher mid=12 aid=13 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000c no=9 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000004 no=2 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000002 no=2 cancelled=False
+[slow232] burst 1: its lines written to C:\ProgramData\FinCom\recorder\cbf50a03-7958-431e-b951-b6336c25817e-8-Oct-26.txt (MasterID 12, GUID cbf50a03-7958-431e-b951-b6336c25817e-0000000c, number '9')
+[slow232 import] burst 2: 1 sent, created 1, errors 0, 0.4 s
+  Tally :9000 voucher mid=1 aid=1 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000005 no=3 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000006 no=4 cancelled=False
+  Tally :9000 voucher mid=9 aid=10 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000009 no=6 cancelled=False
+  Tally :9000 voucher mid=10 aid=11 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000a no=7 cancelled=False
+  Tally :9000 voucher mid=11 aid=12 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000b no=8 cancelled=False
+  Tally :9000 voucher mid=12 aid=13 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000c no=9 cancelled=False
+  Tally :9000 voucher mid=13 aid=14 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000d no=10 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000004 no=2 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000002 no=2 cancelled=False
+[slow232] burst 2: its lines written to C:\ProgramData\FinCom\recorder\cbf50a03-7958-431e-b951-b6336c25817e-8-Oct-26.txt (MasterID 13, GUID cbf50a03-7958-431e-b951-b6336c25817e-0000000d, number '10')
+[slow232 import] burst 3: 1 sent, created 1, errors 0, 0.3 s
+  Tally :9000 voucher mid=1 aid=1 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000005 no=3 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000006 no=4 cancelled=False
+  Tally :9000 voucher mid=9 aid=10 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000009 no=6 cancelled=False
+  Tally :9000 voucher mid=10 aid=11 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000a no=7 cancelled=False
+  Tally :9000 voucher mid=11 aid=12 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000b no=8 cancelled=False
+  Tally :9000 voucher mid=12 aid=13 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000c no=9 cancelled=False
+  Tally :9000 voucher mid=13 aid=14 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000d no=10 cancelled=False
+  Tally :9000 voucher mid=14 aid=15 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000e no=11 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000004 no=2 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000002 no=2 cancelled=False
+[slow232] burst 3: its lines written to C:\ProgramData\FinCom\recorder\cbf50a03-7958-431e-b951-b6336c25817e-8-Oct-26.txt (MasterID 14, GUID cbf50a03-7958-431e-b951-b6336c25817e-0000000e, number '11')
+[slow232 import] burst 4: 1 sent, created 1, errors 0, 0.2 s
+  Tally :9000 voucher mid=1 aid=1 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000005 no=3 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000006 no=4 cancelled=False
+  Tally :9000 voucher mid=9 aid=10 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000009 no=6 cancelled=False
+  Tally :9000 voucher mid=10 aid=11 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000a no=7 cancelled=False
+  Tally :9000 voucher mid=11 aid=12 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000b no=8 cancelled=False
+  Tally :9000 voucher mid=12 aid=13 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000c no=9 cancelled=False
+  Tally :9000 voucher mid=13 aid=14 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000d no=10 cancelled=False
+  Tally :9000 voucher mid=14 aid=15 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000e no=11 cancelled=False
+  Tally :9000 voucher mid=15 aid=16 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000f no=12 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000004 no=2 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000002 no=2 cancelled=False
+[slow232] burst 4: its lines written to C:\ProgramData\FinCom\recorder\cbf50a03-7958-431e-b951-b6336c25817e-8-Oct-26.txt (MasterID 15, GUID cbf50a03-7958-431e-b951-b6336c25817e-0000000f, number '12')
+[slow232 import] burst 5: 1 sent, created 1, errors 0, 0.2 s
+  Tally :9000 voucher mid=1 aid=1 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000005 no=3 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000006 no=4 cancelled=False
+  Tally :9000 voucher mid=9 aid=10 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000009 no=6 cancelled=False
+  Tally :9000 voucher mid=10 aid=11 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000a no=7 cancelled=False
+  Tally :9000 voucher mid=11 aid=12 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000b no=8 cancelled=False
+  Tally :9000 voucher mid=12 aid=13 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000c no=9 cancelled=False
+  Tally :9000 voucher mid=13 aid=14 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000d no=10 cancelled=False
+  Tally :9000 voucher mid=14 aid=15 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000e no=11 cancelled=False
+  Tally :9000 voucher mid=15 aid=16 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000f no=12 cancelled=False
+  Tally :9000 voucher mid=16 aid=17 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000010 no=13 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000004 no=2 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000002 no=2 cancelled=False
+[slow232] burst 5: its lines written to C:\ProgramData\FinCom\recorder\cbf50a03-7958-431e-b951-b6336c25817e-8-Oct-26.txt (MasterID 16, GUID cbf50a03-7958-431e-b951-b6336c25817e-00000010, number '13')
+[slow232 import] burst 6: 1 sent, created 1, errors 0, 0.2 s
+  Tally :9000 voucher mid=1 aid=1 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000005 no=3 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000006 no=4 cancelled=False
+  Tally :9000 voucher mid=9 aid=10 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000009 no=6 cancelled=False
+  Tally :9000 voucher mid=10 aid=11 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000a no=7 cancelled=False
+  Tally :9000 voucher mid=11 aid=12 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000b no=8 cancelled=False
+  Tally :9000 voucher mid=12 aid=13 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000c no=9 cancelled=False
+  Tally :9000 voucher mid=13 aid=14 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000d no=10 cancelled=False
+  Tally :9000 voucher mid=14 aid=15 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000e no=11 cancelled=False
+  Tally :9000 voucher mid=15 aid=16 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000f no=12 cancelled=False
+  Tally :9000 voucher mid=16 aid=17 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000010 no=13 cancelled=False
+  Tally :9000 voucher mid=17 aid=18 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000011 no=14 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000004 no=2 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000002 no=2 cancelled=False
+[slow232] burst 6: its lines written to C:\ProgramData\FinCom\recorder\cbf50a03-7958-431e-b951-b6336c25817e-8-Oct-26.txt (MasterID 17, GUID cbf50a03-7958-431e-b951-b6336c25817e-00000011, number '14')
+[slow232 import] burst 7: 1 sent, created 1, errors 0, 0.2 s
+  Tally :9000 voucher mid=1 aid=1 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000005 no=3 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000006 no=4 cancelled=False
+  Tally :9000 voucher mid=9 aid=10 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000009 no=6 cancelled=False
+  Tally :9000 voucher mid=10 aid=11 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000a no=7 cancelled=False
+  Tally :9000 voucher mid=11 aid=12 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000b no=8 cancelled=False
+  Tally :9000 voucher mid=12 aid=13 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000c no=9 cancelled=False
+  Tally :9000 voucher mid=13 aid=14 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000d no=10 cancelled=False
+  Tally :9000 voucher mid=14 aid=15 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000e no=11 cancelled=False
+  Tally :9000 voucher mid=15 aid=16 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000f no=12 cancelled=False
+  Tally :9000 voucher mid=16 aid=17 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000010 no=13 cancelled=False
+  Tally :9000 voucher mid=17 aid=18 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000011 no=14 cancelled=False
+  Tally :9000 voucher mid=18 aid=19 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000012 no=15 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000004 no=2 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000002 no=2 cancelled=False
+[slow232] burst 7: its lines written to C:\ProgramData\FinCom\recorder\cbf50a03-7958-431e-b951-b6336c25817e-8-Oct-26.txt (MasterID 18, GUID cbf50a03-7958-431e-b951-b6336c25817e-00000012, number '15')
+[slow232 import] burst 8: 1 sent, created 1, errors 0, 0.2 s
+  Tally :9000 voucher mid=1 aid=1 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000005 no=3 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000006 no=4 cancelled=False
+  Tally :9000 voucher mid=9 aid=10 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000009 no=6 cancelled=False
+  Tally :9000 voucher mid=10 aid=11 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000a no=7 cancelled=False
+  Tally :9000 voucher mid=11 aid=12 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000b no=8 cancelled=False
+  Tally :9000 voucher mid=12 aid=13 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000c no=9 cancelled=False
+  Tally :9000 voucher mid=13 aid=14 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000d no=10 cancelled=False
+  Tally :9000 voucher mid=14 aid=15 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000e no=11 cancelled=False
+  Tally :9000 voucher mid=15 aid=16 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000f no=12 cancelled=False
+  Tally :9000 voucher mid=16 aid=17 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000010 no=13 cancelled=False
+  Tally :9000 voucher mid=17 aid=18 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000011 no=14 cancelled=False
+  Tally :9000 voucher mid=18 aid=19 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000012 no=15 cancelled=False
+  Tally :9000 voucher mid=19 aid=20 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000013 no=16 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000004 no=2 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000002 no=2 cancelled=False
+[slow232] burst 8: its lines written to C:\ProgramData\FinCom\recorder\cbf50a03-7958-431e-b951-b6336c25817e-8-Oct-26.txt (MasterID 19, GUID cbf50a03-7958-431e-b951-b6336c25817e-00000013, number '16')
+######## PASS backlog233 (7) a burst of 8 saves at 1.8 s each: each in the stub within 10 s, each with its body in the end: late or missing: none; with their body: 8 of 8; the first lines: 12 at 19:24:53; 13 at 19:24:58; 14 at 19:24:58; 15 at 19:24:58; 16 at 19:24:58; 17 at 19:24:58; 18 at 19:24:58; 19 at 19:24:58
+[19:25:15] ---- backlog233 (8): a burst of 8 changed ledgers and a voucher, each request 1.8 s (a proxy delay)
+[slow232 import] ledger burst: 8 sent, created 8, errors 0, 0.4 s
+[slow232 import] ledger burst voucher: 1 sent, created 1, errors 0, 0.2 s
+Test-Path: D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\slow232.ps1:225
+Line |
+ 225 |  function S2BridgeLog { if (Test-Path $B[1].log) { @(Get-Content $B[1] …
+     |                             ~~~~~~~~~~~~~~~~~~~
+     | Value cannot be null. (Parameter 'The provided Path argument was null or an empty collection.')
+
+  Tally :9000 voucher mid=1 aid=1 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000005 no=3 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000006 no=4 cancelled=False
+  Tally :9000 voucher mid=9 aid=10 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000009 no=6 cancelled=False
+  Tally :9000 voucher mid=10 aid=11 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000a no=7 cancelled=False
+  Tally :9000 voucher mid=11 aid=12 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000b no=8 cancelled=False
+  Tally :9000 voucher mid=12 aid=13 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000c no=9 cancelled=False
+  Tally :9000 voucher mid=13 aid=14 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000d no=10 cancelled=False
+  Tally :9000 voucher mid=14 aid=15 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000e no=11 cancelled=False
+  Tally :9000 voucher mid=15 aid=16 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000f no=12 cancelled=False
+  Tally :9000 voucher mid=16 aid=17 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000010 no=13 cancelled=False
+  Tally :9000 voucher mid=17 aid=18 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000011 no=14 cancelled=False
+  Tally :9000 voucher mid=18 aid=19 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000012 no=15 cancelled=False
+  Tally :9000 voucher mid=19 aid=20 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000013 no=16 cancelled=False
+  Tally :9000 voucher mid=20 aid=21 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000014 no=17 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000004 no=2 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000002 no=2 cancelled=False
+[slow232] ledger burst voucher: its lines written to C:\ProgramData\FinCom\recorder\cbf50a03-7958-431e-b951-b6336c25817e-8-Oct-26.txt (MasterID 20, GUID cbf50a03-7958-431e-b951-b6336c25817e-00000014, number '17')
+######## PASS backlog233 (8) a burst of 8 changed ledgers and a voucher at 1.8 s each: every line in the stub within 10 s: late or missing: none; arrivals (s after the lines were written): 3644=4.9 3645=4.9 3646=4.9 3647=4.9 3648=4.9 3649=4.9 3650=4.9 3651=4.9 20=4.9; ledger requests held 1.8 s by the proxy: 1
+Test-Path: D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\slow232.ps1:225
+Line |
+ 225 |  function S2BridgeLog { if (Test-Path $B[1].log) { @(Get-Content $B[1] …
+     |                             ~~~~~~~~~~~~~~~~~~~
+     | Value cannot be null. (Parameter 'The provided Path argument was null or an empty collection.')
+
+######## PASS backlog233 (8b) the ledgers sent without their details get them afterwards, with no action: 7 of 8 went up without their body (B233 Burst Ledger 2, B233 Burst Ledger 3, B233 Burst Ledger 4, B233 Burst Ledger 5, B233 Burst Ledger 6, B233 Burst Ledger 7, B233 Burst Ledger 8); each with its details 6.1 min after (8) at most: B233 Burst Ledger 1: a ledger_altered line with its body at 19:25:21 || B233 Burst Ledger 2: ledger_changes at 19:31:20 (GUID cbf50a03-7958-431e-b951-b6336c25817e-00000e3d, MasterID 3645, AlterID 3652, group 'Sundry Creditors', why counter) || B233 Burst Ledger 3: ledger_changes at 19:31:20 (GUID cbf50a03-7958-431e-b951-b6336c25817e-00000e3e, MasterID 3646, AlterID 3653, group 'Sundry Creditors', why counter) || B233 Burst Ledger 4: ledger_changes at 19:31:20 (GUID cbf50a03-7958-431e-b951-b6336c25817e-00000e3f, MasterID 3647, AlterID 3654, group 'Sundry Creditors', why counter) || B233 Burst Ledger 5: ledger_changes at 19:31:20 (GUID cbf50a03-7958-431e-b951-b6336c25817e-00000e40, MasterID 3648, AlterID 3655, group 'Sundry Creditors', why counter) || B233 Burst Ledger 6: ledger_changes at 19:31:20 (GUID cbf50a03-7958-431e-b951-b6336c25817e-00000e41, MasterID 3649, AlterID 3656, group 'Sundry Creditors', why counter) || B233 Burst Ledger 7: ledger_changes at 19:31:20 (GUID cbf50a03-7958-431e-b951-b6336c25817e-00000e42, MasterID 3650, AlterID 3657, group 'Sundry Creditors', why counter) || B233 Burst Ledger 8: ledger_changes at 19:31:20 (GUID cbf50a03-7958-431e-b951-b6336c25817e-00000e43, MasterID 3651, AlterID 3658, group 'Sundry Creditors', why counter); missing: none; the bridge's log: 
+######## PASS fast234 option B: an entry over 2 s at Tally is asked once more after 5 min, then ended; never a third ask: invoice of 1000 items, MasterID 4, saved 19:21:07; FinComVoucherObject asks at the proxy: 2 (19:21:15 3836 ms, 19:26:17 4036 ms); between the first and the second 301.8 s; held with the once-more words: 'waiting: Tally took longer than 2 s; FinCom asks once more at 19:26' at 19:21:17; ended (a :resolved line): 19:26:19 'Tally took longer than 2 s for this entry; upload that day's Day Book to settle it'
+######## PASS fast234 one request in flight over the whole run (the proxy never saw two of the bridge's requests at once): 228 requests of bridge 1 at the proxy, 19:15:57..19:31:20; arrived while another was open (the proxy's count): 0; by the times: none; most others open at once: 0
+[19:33:28] ---- what is kept: the bridges' logs, install logs, settings without their keys
+  Tally :9000 voucher mid=1 aid=1 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000001 no=1 cancelled=False
+  Tally :9000 voucher mid=5 aid=5 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000005 no=3 cancelled=False
+  Tally :9000 voucher mid=6 aid=6 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000006 no=4 cancelled=False
+  Tally :9000 voucher mid=9 aid=10 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000009 no=6 cancelled=False
+  Tally :9000 voucher mid=10 aid=11 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000a no=7 cancelled=False
+  Tally :9000 voucher mid=11 aid=12 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000b no=8 cancelled=False
+  Tally :9000 voucher mid=12 aid=13 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000c no=9 cancelled=False
+  Tally :9000 voucher mid=13 aid=14 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000d no=10 cancelled=False
+  Tally :9000 voucher mid=14 aid=15 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000e no=11 cancelled=False
+  Tally :9000 voucher mid=15 aid=16 guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000f no=12 cancelled=False
+  Tally :9000 voucher mid=16 aid=17 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000010 no=13 cancelled=False
+  Tally :9000 voucher mid=17 aid=18 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000011 no=14 cancelled=False
+  Tally :9000 voucher mid=18 aid=19 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000012 no=15 cancelled=False
+  Tally :9000 voucher mid=19 aid=20 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000013 no=16 cancelled=False
+  Tally :9000 voucher mid=20 aid=21 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000014 no=17 cancelled=False
+  Tally :9000 voucher mid=3 aid=3 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000003 no=1 cancelled=False
+  Tally :9000 voucher mid=4 aid=4 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000004 no=2 cancelled=False
+  Tally :9000 voucher mid=2 aid=2 guid=cbf50a03-7958-431e-b951-b6336c25817e-00000002 no=2 cancelled=False
+== results
+INFO setup origin: BUILT from source dist/FinComBridge-Setup-2.4.0.exe SHA-256 536521a3bf60af8e8d49b722126a37b8d9f06d28ddcd0821ff86f8fbaf254083; on this runner SHA-256 536521a3bf60af8e8d49b722126a37b8d9f06d28ddcd0821ff86f8fbaf254083
+INFO user 2 (fcuser2) works in a Windows session of their own (session 1, by a Remote Desktop connection to 127.0.0.2); runneradmin in session 2
+INFO S231 import masters-1-items: created 4, altered 0, errors 0
+INFO S231 import masters-2-costs: created 3, altered 0, errors 0
+INFO S231 import masters-4-ledgers: created 14, altered 0, errors 0
+INFO S231 import masters-6-bulk: created 400, altered 0, errors 0
+INFO S231 import S4 the bill (New Ref S231-BILL-1, a journal): created 1, altered 0, errors 0
+INFO slow232: the large company 'FinCom Big Co' holds 40000 entries made by XML (13.8 min), 3,000 ledgers, 3,000 items
+INFO fast234: Tally 9000's data folder is \\localhost\fast234share (an SMB share of D:\a\_temp\TallyData on this runner: SMB only, the client and the server on one machine, no network between them); 2 company folders seen through it; loaded: 100000, 100001; both companies open: True
+MEASURE fast234: the bridge's entry request for MasterID 100 of the large company (40000 entries, on the share) took 58 ms (53294 bytes before the bridge's strip)
+MEASURE fast234: the bridge's entry request for MasterID 20000 of the large company (40000 entries, on the share) took 40 ms (53312 bytes before the bridge's strip)
+MEASURE fast234: the bridge's entry request for MasterID 39990 of the large company (40000 entries, on the share) took 40 ms (53312 bytes before the bridge's strip)
+MEASURE fast234 option B: the bridge's entry request for a 1000-item invoice of 'FinCom Spike Co' (MasterID 3) took 3770, 3704 ms at Tally directly
+INFO fast234 option B: a 1000-item invoice will be saved in 'FinCom Spike Co' after the bridges start
+INFO fast234: the backlog233 checks run too (the large company's GUID '689c023b-372e-4728-8e94-4e6dd8094bfa')
+INFO fast234: 10 line ids seeded as ended by 2.3.3 in C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\sync\recorder-sent (20261008.ended.txt, their :resolved in 20261008.txt)
+INFO backlog233: of them, as an older bridge left them: 30 at 20 tries, final or refetch (b233old001, b233old002, b233old003, b233old006, b233old007, b233old008, b233old011, b233old012, b233old013, b233old016, b233old017, b233old018, b233old021, b233old022, b233old023, b233old026, b233old027, b233old028, b233old031, b233old032, b233old033, b233old036, b233old037, b233old038, b233old041, b233old042, b233old043, b233old046, b233old047, b233old048)
+INFO backlog233: 50 old held lines of 'FinCom Big Co' seeded into C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\sync\recorder-held.json before bridge 1 starts (MasterIDs 900001..900050, dated 20260401, saved yesterday, last asked 2 h ago)
+PASS 6a two bridges at once: bridge 1 runneradmin on 127.0.0.1:9100 (pid 1212, session 2, go-126a4d773945); bridge 2 fcuser2 on 127.0.0.1:9101 (pid 1968, session 1, go-ed9f330b3f34); both listening at 19:20:35
+INFO /ping with a nonce but no Origin (own bridge): proof not given
+PASS 6b /ping proof: bridge 1 proves itself to runneradmin: ok; bridge 1 proof checked against user 2 identity fails: ok; bridge 2 proves itself to fcuser2: ok; bridge 2 proof checked against user 1 identity fails: ok; bridge 2 gives runneradmin no proof: ok; bridge 1 gives fcuser2 no proof: ok; other users refused 403 beyond /ping: ok
+INFO slow232 option B gate (FinCom Spike Co): MasterID 4 (LASTVCHID), Tally's number '2', AlterID 4
+INFO fast234 option B: the 1000-item invoice saved in 'FinCom Spike Co' at 19:21:07, MasterID 4
+INFO slow232 small 1 (FinCom Spike Co): MasterID 5 (LASTVCHID), Tally's number '3', AlterID 5
+INFO fast234 big 1 (FinCom Big Co): MasterID 40001 (LASTVCHID), Tally's number '8001', AlterID 40001
+INFO slow232 small 2 (FinCom Spike Co): MasterID 6 (LASTVCHID), Tally's number '4', AlterID 6
+INFO fast234 big 2 (FinCom Big Co): MasterID 40002 (LASTVCHID), Tally's number '8002', AlterID 40002
+INFO slow232 small 3 (FinCom Spike Co): MasterID 7 (LASTVCHID), Tally's number '5', AlterID 7
+INFO fast234 big 3 (FinCom Big Co): MasterID 40003 (LASTVCHID), Tally's number '8003', AlterID 40003
+INFO fast234: 20 held lines listed to the bridge as FinCom's (the stub's heldLines), MasterIDs f234held01=40004 f234held02=40005 f234held03=40006 f234held04=40007 f234held05=40008 f234held06=40009 f234held07=40010 f234held08=40011 f234held09=40012 f234held10=40013 f234end01=40014 f234end02=40015 f234end03=40016 f234end04=40017 f234end05=40018 f234end06=40019 f234end07=40020 f234end08=40021 f234end09=40022 f234end10=40023
+PASS fast234 (1) each new save in both companies in the stub with its body; each entry request answered in under 2 s: saves: FinCom Spike Co/5 body after 0.9 s; FinCom Big Co/40001 body after 0 s; FinCom Spike Co/6 body after 0 s; FinCom Big Co/40002 body after 0 s; FinCom Spike Co/7 body after 0.6 s; FinCom Big Co/40003 body after 0 s; FinComVoucherObject requests at the proxy: 77, ms 46,32,43,35,36,31,54,37,49,57,55,31,44,57,43,41,53,57,42,44,32,32,43,54,31,31,42,48,42,40,56,46,30,51,43,31,55,38,40,39,44,37,54,54,34,31,56,53,59,43,3836,169,239,57,55,46,47,40,65,41,51,40,40,62,52,54,52,58,50,50,59,65,42,64,64,51,65; 2 s or more: 0
+PASS fast234 (2) every seeded held line resolved with its body, asked once by FinComVoucherObject (the ended ones once more): 10 held + 10 ended by 2.3.3; resolved with body: 20; missing: none; asked more than once: none; never asked by the new request: none
+PASS fast234 (3) no FinComVoucherByMaster seen at the proxy: 0 FinComVoucherByMaster; 0 FinComVoucherByNumber (lines with no MasterID only); 77 FinComVoucherObject; 162 requests of bridge 1 in all
+PASS fast234 (4) no request while a previous one is unanswered at Tally: 162 requests of bridge 1 at the proxy; overlaps: none
+INFO fast234 (5): 1 stop line(s) of 'FinCom Spike Co' in the log, 1 of them option B's invoice (asked over 2 s at the proxy)
+PASS fast234 (5) no company marked slow: the bridge's log lines on a stopped entry fetch: none; marks in recorder-slow.json: 0
+MEASURE fast234: FinComVoucherObject at Tally (proxy ms): median 46, worst 3836, n 77; the small company 3836,239,55,47; the large company (40000 entries) 46,32,43,35,36,31,54,37,49,57,55,31,44,57,43,41,53,57,42,44,32,32,43,54,31,31,42,48,42,40,56,46,30,51,43,31,55,38,40,39,44,37,54,54,34,31,56,53,59,43,169,57,46,40,65,41,51,40,40,62,52,54,52,58,50,50,59,65,42,64,64,51,65
+PASS fast234 (6) an entry deleted on the screen: its line proven deleted here (Tally answered "Could not find Voucher"): Tally deleted mid 7 guid cbf50a03-7958-431e-b951-b6336c25817e-00000007 no 5; stub 19:23:35 recorder_lines event=deleted guid=cbf50a03-7958-431e-b951-b6336c25817e-00000007 mid=7 aid= vch=Journal/5/20260401 user=runnervmfi6oq\runneradmin bridge=go-126a4d773945 port=9100 company=FinCom Spike Co body=none; FinComVoucherObject for mid 7 at the proxy: 2 (42,33 ms); Tally's answer 'Could not find Voucher': 2 ('<ERRORMSG>Could not find Voucher:ID:7!</ERRORMSG>'); bridge log: 2026-10-08 19:23:35  Recorder: FinCom Spike Co: delete of mid 7: not in this Tally (asked by MasterID): proven deleted here | 2026-10-08 19:23:35  Recorder: FinCom Spike Co: delete of mid 7: GUID from the bridge's record: cbf50a03-7958-431e-b951-b6336c25817e-00000007; the GUID its MasterID makes agrees
+INFO backlog233: the old lines' requests seen at the proxy before the new save: 50
+INFO slow232 small 1 (FinCom Spike Co): MasterID 9 (LASTVCHID), Tally's number '6', AlterID 10
+INFO fast234 new 1 (FinCom Big Co): MasterID 40024 (LASTVCHID), Tally's number '8024', AlterID 40024
+PASS backlog233 (1) the new save in the stub within 10 s, at least held: after 1.6 s (its import took 0.3 s before its lines were written): stub 19:23:53 recorder_lines event=created guid=689c023b-372e-4728-8e94-4e6dd8094bfa-00009c58 mid=40024 aid=40024 vch=Journal/8024/20260401 user=runnervmfi6oq\runneradmin bridge=go-126a4d773945 port=9100 company=FinCom Big Co body=yes(906 chars)
+MEASURE backlog233: the large company's entry requests at Tally (proxy ms, Tally's whole time): 46, 32, 43, 35, 36, 31, 54, 37, 49, 57, 55, 31, 44, 57, 43, 41, 53, 57, 42, 44, 32, 32, 43, 54, 31, 31, 42, 48, 42, 40, 56, 46, 30, 51, 43, 31, 55, 38, 40, 39, 44, 37, 54, 54, 34, 31, 56, 53, 59, 43, 169, 57, 46, 40, 65, 41, 51, 40, 40, 62, 52, 54, 52, 58, 50, 50, 59, 65, 42, 64, 64, 51, 65, 63
+PASS backlog233 fast234: the old held lines (20 tries / final / refetch) each asked once by FinComVoucherObject and ended: 30 such lines; their ends: b233old001: Tally did not give this entry when asked again; upload that day's Day Book to settle it | b233old002: Tally did not give this entry when asked again; upload that day's Day Book to settle it | b233old003: Tally did not give this entry when asked again; upload that day's Day Book to settle it; not so: none
+PASS backlog233 (2) no more than one request per old held line: 50 old lines; 50 asked once, 0 never asked; asked more than once: none; 50 of them ended (their :resolved line in the stub)
+PASS backlog233 (3) no request while a previous one is unanswered at Tally: 172 requests of bridge 1 at the proxy; overlaps: none
+INFO fast234 after 1 (FinCom Big Co): MasterID 40025 (LASTVCHID), Tally's number '8025', AlterID 40025
+PASS backlog233 (4) 2.3.4: the large company is not marked; its new save comes with its body by FinComVoucherObject: marked: no; the save after the backlog: stub 19:23:55 recorder_lines event=created guid=689c023b-372e-4728-8e94-4e6dd8094bfa-00009c59 mid=40025 aid=40025 vch=Journal/8025/20260401 user=runnervmfi6oq\runneradmin bridge=go-126a4d773945 port=9100 company=FinCom Big Co body=yes(908 chars); FinComVoucherObject for it at the proxy: 1 (41 ms)
+INFO slow232 small end (FinCom Spike Co): MasterID 10 (LASTVCHID), Tally's number '7', AlterID 11
+PASS backlog233 (5) a small fast company's entry arrives with its body: during the backlog: stub 19:23:52 recorder_lines event=created guid=cbf50a03-7958-431e-b951-b6336c25817e-00000009 mid=9 aid=10 vch=Journal/6/20260401 user=runnervmfi6oq\runneradmin bridge=go-126a4d773945 port=9100 company=FinCom Spike Co body=yes(907 chars); at the end: stub 19:23:57 recorder_lines event=created guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000a mid=10 aid=11 vch=Journal/7/20260401 user=runnervmfi6oq\runneradmin bridge=go-126a4d773945 port=9100 company=FinCom Spike Co body=yes(917 chars)
+INFO slow232 healthy 1 (FinCom Spike Co): MasterID 11 (LASTVCHID), Tally's number '8', AlterID 12
+PASS backlog233 (6) a save while held lines are asked at 1.5 s each: in the stub within 10 s: after 3.1 s: stub 19:24:26 recorder_lines event=created guid=cbf50a03-7958-431e-b951-b6336c25817e-0000000b mid=11 aid=12 vch=Journal/8/20260401 user=runnervmfi6oq\runneradmin bridge=go-126a4d773945 port=9100 company=FinCom Spike Co body=yes(910 chars); held lines asked before the save 2, after it 7 (proxy ms: 1557, 1527, 1539, 1563, 1527, 1539, 1538, 1537, 1539, 1550; the delay is the proxy's, Tally answered at once)
+INFO slow232 burst 1 (FinCom Spike Co): MasterID 12 (LASTVCHID), Tally's number '9', AlterID 13
+INFO slow232 burst 2 (FinCom Spike Co): MasterID 13 (LASTVCHID), Tally's number '10', AlterID 14
+INFO slow232 burst 3 (FinCom Spike Co): MasterID 14 (LASTVCHID), Tally's number '11', AlterID 15
+INFO slow232 burst 4 (FinCom Spike Co): MasterID 15 (LASTVCHID), Tally's number '12', AlterID 16
+INFO slow232 burst 5 (FinCom Spike Co): MasterID 16 (LASTVCHID), Tally's number '13', AlterID 17
+INFO slow232 burst 6 (FinCom Spike Co): MasterID 17 (LASTVCHID), Tally's number '14', AlterID 18
+INFO slow232 burst 7 (FinCom Spike Co): MasterID 18 (LASTVCHID), Tally's number '15', AlterID 19
+INFO slow232 burst 8 (FinCom Spike Co): MasterID 19 (LASTVCHID), Tally's number '16', AlterID 20
+PASS backlog233 (7) a burst of 8 saves at 1.8 s each: each in the stub within 10 s, each with its body in the end: late or missing: none; with their body: 8 of 8; the first lines: 12 at 19:24:53; 13 at 19:24:58; 14 at 19:24:58; 15 at 19:24:58; 16 at 19:24:58; 17 at 19:24:58; 18 at 19:24:58; 19 at 19:24:58
+INFO slow232 ledger burst voucher (FinCom Spike Co): MasterID 20 (LASTVCHID), Tally's number '17', AlterID 21
+PASS backlog233 (8) a burst of 8 changed ledgers and a voucher at 1.8 s each: every line in the stub within 10 s: late or missing: none; arrivals (s after the lines were written): 3644=4.9 3645=4.9 3646=4.9 3647=4.9 3648=4.9 3649=4.9 3650=4.9 3651=4.9 20=4.9; ledger requests held 1.8 s by the proxy: 1
+PASS backlog233 (8b) the ledgers sent without their details get them afterwards, with no action: 7 of 8 went up without their body (B233 Burst Ledger 2, B233 Burst Ledger 3, B233 Burst Ledger 4, B233 Burst Ledger 5, B233 Burst Ledger 6, B233 Burst Ledger 7, B233 Burst Ledger 8); each with its details 6.1 min after (8) at most: B233 Burst Ledger 1: a ledger_altered line with its body at 19:25:21 || B233 Burst Ledger 2: ledger_changes at 19:31:20 (GUID cbf50a03-7958-431e-b951-b6336c25817e-00000e3d, MasterID 3645, AlterID 3652, group 'Sundry Creditors', why counter) || B233 Burst Ledger 3: ledger_changes at 19:31:20 (GUID cbf50a03-7958-431e-b951-b6336c25817e-00000e3e, MasterID 3646, AlterID 3653, group 'Sundry Creditors', why counter) || B233 Burst Ledger 4: ledger_changes at 19:31:20 (GUID cbf50a03-7958-431e-b951-b6336c25817e-00000e3f, MasterID 3647, AlterID 3654, group 'Sundry Creditors', why counter) || B233 Burst Ledger 5: ledger_changes at 19:31:20 (GUID cbf50a03-7958-431e-b951-b6336c25817e-00000e40, MasterID 3648, AlterID 3655, group 'Sundry Creditors', why counter) || B233 Burst Ledger 6: ledger_changes at 19:31:20 (GUID cbf50a03-7958-431e-b951-b6336c25817e-00000e41, MasterID 3649, AlterID 3656, group 'Sundry Creditors', why counter) || B233 Burst Ledger 7: ledger_changes at 19:31:20 (GUID cbf50a03-7958-431e-b951-b6336c25817e-00000e42, MasterID 3650, AlterID 3657, group 'Sundry Creditors', why counter) || B233 Burst Ledger 8: ledger_changes at 19:31:20 (GUID cbf50a03-7958-431e-b951-b6336c25817e-00000e43, MasterID 3651, AlterID 3658, group 'Sundry Creditors', why counter); missing: none; the bridge's log: 
+PASS fast234 option B: an entry over 2 s at Tally is asked once more after 5 min, then ended; never a third ask: invoice of 1000 items, MasterID 4, saved 19:21:07; FinComVoucherObject asks at the proxy: 2 (19:21:15 3836 ms, 19:26:17 4036 ms); between the first and the second 301.8 s; held with the once-more words: 'waiting: Tally took longer than 2 s; FinCom asks once more at 19:26' at 19:21:17; ended (a :resolved line): 19:26:19 'Tally took longer than 2 s for this entry; upload that day's Day Book to settle it'
+PASS fast234 one request in flight over the whole run (the proxy never saw two of the bridge's requests at once): 228 requests of bridge 1 at the proxy, 19:15:57..19:31:20; arrived while another was open (the proxy's count): 0; by the times: none; most others open at once: 0
+== round 4 end
