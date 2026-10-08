@@ -64,7 +64,8 @@ type bankCand struct {
 	Next           string // after a stopped read: not asked again before this (RFC3339; BankAgainMin, 5 minutes)
 }
 
-func bankAgain() time.Duration { return time.Duration(keepNum("BankAgainMin", 5)) * time.Minute }
+// next-renumber's review rule (the owner's answer B), shared: one more ask RecorderStopRetrySec (5 minutes) later
+func bankAgain() time.Duration { return liveStopRetry() }
 
 // not waiting for its one more ask
 func (c bankCand) due(now time.Time) bool {
@@ -608,8 +609,9 @@ func bankTurn() int {
 type bankDone struct {
 	mid   string
 	alter int64
-	drop  bool // read (sent or not needed), gone from Tally, or given up
-	asked bool // the read reached Tally and was stopped or not answered
+	drop  bool   // read (sent or not needed), gone from Tally, or given up
+	asked bool   // the read reached Tally and was stopped or not answered
+	fail  string // an answer that cannot be read (the same would come again): dropped into the alert at once
 }
 
 func bankWork(company, guid string, todo []bankCand) int {
@@ -651,10 +653,17 @@ func bankWork(company, guid string, todo []bankCand) int {
 		case errors.Is(err, errFastShape):
 			done = append(done, bankDone{mid: c.Mid, alter: c.Alter, drop: true}) // a form FinCom does not read: the Day Book
 			continue
+		case errors.Is(err, errRetryWait) || errors.Is(err, errPreempted) || errors.Is(err, errReadStopped) || gaveWay(err):
+			// nothing reached Tally (the retry schedule, a posting first, FinCom's read stop): not an ask; this turn ends
+		case errors.Is(err, errRecorderStop) || tallyNoAnswer(err):
+			// as renumbering (the owner's answer B): stopped at 2 s or not answered: one more ask 5 minutes later, then the
+			// alert; the entry waits, nothing else does
+			done = append(done, bankDone{mid: c.Mid, alter: c.Alter, asked: true})
 		case err != nil:
-			// a 2 s stop or Tally not answering counts as an ask (the 2.3.4 rule: once more, never a third time); the retry
-			// schedule, a posting, Tally held: not an ask. This turn ends here
-			done = append(done, bankDone{mid: c.Mid, alter: c.Alter, asked: sent})
+			if _, perr := findCompanyPortBg(company, 0); perr != nil {
+				break // the company is no longer open: it waits, nothing dropped
+			}
+			done = append(done, bankDone{mid: c.Mid, alter: c.Alter, drop: true, fail: cutRunes(err.Error(), 120)})
 		}
 		if err != nil {
 			break
@@ -701,7 +710,11 @@ func bankWork(company, guid string, todo []bankCand) int {
 				c.Asks++
 				c.Next = nowFn().Add(bankAgain()).Format(time.RFC3339) // the 2.3.4 rule: one more ask, 5 minutes later
 			}
-			if d.drop || c.Asks >= 2 {
+			if d.fail != "" {
+				bankAlertLocked(st, 1, c.Day, false)
+				writeLog(fmt.Sprintf("Bank dates: %s: the entry with MasterID %s (%s) could not be read from Tally (%s); not asked again", company, c.Mid, liveDay(c.Day), d.fail))
+			}
+			if d.drop || c.Asks >= liveObjAsksMax {
 				if !d.drop {
 					bankAlertLocked(st, 1, c.Day, false)
 					writeLog(fmt.Sprintf("Bank dates: %s: the entry with MasterID %s (%s) did not come from Tally in time when asked again; not asked a third time", company, c.Mid, liveDay(c.Day)))
