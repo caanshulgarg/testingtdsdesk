@@ -195,7 +195,11 @@ func pushLinesFromXML(t *testing.T, x string, o pushEmu) []string {
 		}
 		costs(p, e)
 		for j, tx := range emuList(e, "TAXOBJECTALLOCATIONS.LIST", false) {
-			add(fmt.Sprintf("|%sT%d=tt=%s~%s~%s~ref=%s", p, j+1, text(tx, "TAXTYPE"), emuLP("cat", text(tx, "CATEGORY")), emuLP("pl", text(tx, "PARTYLEDGER")), text(tx, "REFTYPE")))
+			ex := text(tx, "EXEMPTED") // 2.4.0: the add-on writes $Exempted (Yes / No)
+			if ex == "" {
+				ex = "No"
+			}
+			add(fmt.Sprintf("|%sT%d=tt=%s~%s~%s~ref=%s~ex=%s", p, j+1, text(tx, "TAXTYPE"), emuLP("cat", text(tx, "CATEGORY")), emuLP("pl", text(tx, "PARTYLEDGER")), text(tx, "REFTYPE"), ex))
 			for k, s := range emuList(tx, "SUBCATEGORYALLOCATION.LIST", false) {
 				as, an := amt(s, "ASSESSABLEAMOUNT")
 				ts, tn := amt(s, "TAX")
@@ -1221,7 +1225,7 @@ func TestPushSignWhenNegIsBlind(t *testing.T) {
 	}
 	// a TDS sub-category: Tally's XML has the assessable amount and the tax as plain magnitudes (run 37591395905, all five
 	// releases), so the line's "(-)" is dropped, not read as a sign
-	tds := frame(strings.Replace(real, "|L1C1=cat=", "|L1C1=cat=|L1T1=tt=TDS~cat=~pl=~ref=|L1T1s1=sub=194C~duty=TDS~rate=1~ass=(-)800.00~assneg=No~tax=8.00~taxneg=No", 1))
+	tds := frame(strings.Replace(real, "|L1C1=cat=", "|L1C1=cat=|L1T1=tt=TDS~cat=~pl=~ref=~ex=No|L1T1s1=sub=194C~duty=TDS~rate=1~ass=(-)800.00~assneg=No~tax=8.00~taxneg=No", 1))
 	if x, err := build(tds); err != nil {
 		t.Fatalf("a TDS sub-category: %v", err)
 	} else if a, tx := tagValues(x, "ASSESSABLEAMOUNT"), tagValues(x, "TAX"); len(a) != 1 || a[0] != "800.00" || tx[0] != "8.00" {
@@ -1294,7 +1298,9 @@ func pd591FE1(t *testing.T, rel string) (payload, cguid string) {
 		case regexp.MustCompile(`^L\d+C\d+$`).MatchString(k):
 			recs = append(recs, k+"=cat="+emuEsc(sub(k, "cat")))
 		case regexp.MustCompile(`^L\d+T\d+$`).MatchString(k):
-			recs = append(recs, k+"=tt="+sub(k, "tt")+"~cat="+emuEsc(sub(k, "cat"))+"~pl="+emuEsc(sub(k, "pl"))+"~ref=")
+			// 2.4.0: the add-on writes the TDS list's $Exempted; FCPFullNR (this harness line) did not: Tally's own value for
+			// the same entry, from its Day Book export (EXEMPTED of the TDS list)
+			recs = append(recs, k+"=tt="+sub(k, "tt")+"~cat="+emuEsc(sub(k, "cat"))+"~pl="+emuEsc(sub(k, "pl"))+"~ref=~ex="+pd591Exempted(t, rel))
 		case regexp.MustCompile(`^L\d+T\d+s\d+$`).MatchString(k):
 			j, _ := strconv.Atoi(k[strings.LastIndex(k, "s")+1:])
 			sn := subNames[j-1]
@@ -1531,6 +1537,14 @@ func TestPushRealTallyRun677(t *testing.T) {
 			t.Fatalf("%s: %v", c.name, err)
 		}
 		x, err := pushEntryXML(e, pushGUID(cg, mid), 0)
+		if c.name == "p3-tds" {
+			// 2.4.0: this run's add-on wrote no exempt mark for the TDS line: the entry is not built from it (the fast
+			// request brings Tally's record)
+			if err == nil || !strings.Contains(err.Error(), "exempt") {
+				t.Fatalf("%s: a TDS line without its exempt mark: %v", c.name, err)
+			}
+			continue
+		}
 		if err != nil {
 			t.Fatalf("%s: refused: %v", c.name, err)
 		}
@@ -1759,4 +1773,18 @@ func pushOwnOpenSince(cg, name string, at time.Time) {
 	nowFn = func() time.Time { return at }
 	liveNoteOwnTally(map[string]string{liveOwnKey(cg, name): name}, true)
 	nowFn = old
+}
+
+// the TDS list's EXEMPTED in Tally's Day Book export of the pd591 entry (Yes on every release)
+func pd591Exempted(t *testing.T, rel string) string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join("testdata", "push233", "real", "pd591-"+rel+".tds-tally-daybook.xml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`(?s)<TAXOBJECTALLOCATIONS\.LIST>.*?<EXEMPTED>([^<]*)</EXEMPTED>`).FindStringSubmatch(string(b))
+	if m == nil {
+		t.Fatalf("%s: no EXEMPTED in Tally's export", rel)
+	}
+	return m[1]
 }

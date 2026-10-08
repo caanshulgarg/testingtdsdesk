@@ -693,6 +693,13 @@ func pushEntryXML(e *pushEntry, guid string, alter int64) (string, error) {
 			if rt["ref"] != "" {
 				pushTag(&b, "REFTYPE", "String", rt["ref"])
 			}
+			// 2.4.0 (review L2 of part 2): Tally's own exempt mark of the TDS line ($Exempted): an exempt line's rate is read as
+			// stored, never worked out (parse.js); a T record without it cannot say, so the entry is not built from the line
+			ex, ok := rt["ex"]
+			if !ok {
+				return "", errors.New("the TDS details of " + cutRunes(r["led"], 80) + " lack the exempt mark (an add-on before 2.4.0): whether the line is exempt is not known")
+			}
+			pushTag(&b, "EXEMPTED", "Logical", yes(ex))
 			for _, s := range subs {
 				rs := e.recs[s]
 				b.WriteString("<SUBCATEGORYALLOCATION.LIST>")

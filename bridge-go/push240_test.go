@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -294,4 +295,42 @@ func addHeldLedgers(t *testing.T, company string, leds [][2]string) {
 		gl = append(gl, []any{g, ""})
 	}
 	_ = saveFile(filepath.Join(dir, "group-list.json"), jsonText(gl))
+}
+
+// review L2 of 2.4.0 part 2 (parse.js keeps Tally's EXEMPTED: an exempt TDS line keeps its stored rate, never worked out):
+// the add-on writes the TDS list's EXEMPTED ($Exempted, a stored field of TAXOBJECTALLOCATIONS: the owner's option A) as
+// "ex" in each T record, and the bridge carries it into the entry; a T record without it (an add-on before this field)
+// cannot say whether the line is exempt: the line is not built (the fast request brings Tally's record)
+func TestPush240TDSExempt(t *testing.T) {
+	ent := func(ex string, has bool) *pushEntry {
+		e := newPushEntry()
+		for k, v := range map[string]string{"mid": "9", "aid": "0", "guid": "", "date": "2-Oct-26", "canc": "No", "opt": "No", "vtype": "Journal", "vno": "1", "party": "",
+			"view": "Accounting Voucher View", "ref": "", "refdt": "", "pgstin": "", "pos": "", "cgstin": "", "irn": "", "irnack": "", "irnackdt": "", "ewb": "", "narr": "",
+			"nL": "2", "nI": "0", "nO": "0", "nSO": "0", "nSI": "0", "nCE": "0"} {
+			e.scal[k] = v
+		}
+		e.recs["L1"] = map[string]string{"led": "Exp", "amt": "100.00", "neg": "No", "dp": "Yes", "party": "No", "hsn": ""}
+		e.recs["L2"] = map[string]string{"led": "Party", "amt": "100.00", "neg": "No", "dp": "No", "party": "No", "hsn": ""}
+		tr := map[string]string{"tt": "TDS", "cat": "Contract", "pl": "Party", "ref": "New Ref"}
+		if has {
+			tr["ex"] = ex
+		}
+		e.recs["L2T1"] = tr
+		e.recs["L2T1s1"] = map[string]string{"sub": "Income Tax", "duty": "TDS Payable", "rate": "0", "ass": "100.00", "assneg": "No", "tax": "2.00", "taxneg": "No"}
+		return e
+	}
+	x, err := pushEntryXML(ent("Yes", true), "g-00000009", 0)
+	if err != nil || !regexp.MustCompile(`<TAXOBJECTALLOCATIONS\.LIST>.*<EXEMPTED TYPE="Logical">Yes</EXEMPTED>`).MatchString(x) {
+		t.Fatalf("exempt Yes: %v %s", err, x)
+	}
+	if x, err = pushEntryXML(ent("No", true), "g-00000009", 0); err != nil || !strings.Contains(x, `<EXEMPTED TYPE="Logical">No</EXEMPTED>`) {
+		t.Fatalf("exempt No: %v %s", err, x)
+	}
+	if _, err = pushEntryXML(ent("", false), "g-00000009", 0); err == nil || !strings.Contains(err.Error(), "exempt") {
+		t.Fatalf("no exempt mark: %v", err)
+	}
+	b, _ := os.ReadFile(filepath.Join("addon", "FinComRecorder.tdl"))
+	if !strings.Contains(string(b), `"~ex=" + ($$String:$Exempted)`) {
+		t.Fatal("the add-on does not write the TDS list's Exempted")
+	}
 }
