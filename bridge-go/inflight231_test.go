@@ -208,8 +208,8 @@ func TestInflightBusyFiveMinutesTenEntries(t *testing.T) {
 	waitEarlierOver(t, f.port)
 	// 2.3.3 (the owner's rule: silence is not acceptable): while Tally was busy, the 10 lines went up held at once with
 	// their words; once Tally answers, each entry comes as "<line id>:resolved" with its body. 2.3.4 (the owner's
-	// decision of 08-Oct-2026, option (a)): the one entry whose fast request was stopped at the limit is ended with the
-	// Day Book words (never asked again); the 9 others were never asked while Tally was busy
+	// answer B, 08-Oct-2026): the one entry whose fast request was stopped at the limit is held with the once-more words
+	// and asked once more 5 minutes later; the 9 others were never asked while Tally was busy
 	held, ended := 0, 0
 	for _, s := range c.recSent() {
 		if str(s["xml"]) == "" && strings.HasPrefix(str(s["heldWhy"]), "waiting: ") {
@@ -219,8 +219,8 @@ func TestInflightBusyFiveMinutesTenEntries(t *testing.T) {
 			ended++
 		}
 	}
-	if held != 9 || ended != 1 {
-		t.Fatalf("held at once while Tally was busy: %d of 9, ended %d of 1 (%v)", held, ended, c.recSent())
+	if held != 10 || ended != 0 {
+		t.Fatalf("held at once while Tally was busy: %d of 10, ended %d of 0 (%v)", held, ended, c.recSent())
 	}
 	resolved := func() int {
 		n := 0
@@ -231,13 +231,13 @@ func TestInflightBusyFiveMinutesTenEntries(t *testing.T) {
 		}
 		return n
 	}
-	for sec := 305; sec <= 900 && resolved() < 9; sec += 5 {
+	for sec := 305; sec <= 900 && resolved() < 10; sec += 5 {
 		retryClock(base, sec)
 		liveUploadOnce()
 	}
 	after := f.n(vchObjectID) - 1
 	t.Logf("after Tally answered: %d entry fetch(es), one after another (most at once: %d)", after, b.most.Load())
-	if resolved() != 9 || after != 9 || b.most.Load() != 1 {
+	if resolved() != 10 || after != 10 || b.most.Load() != 1 {
 		t.Fatalf("after Tally answered: resolved %d, fetched %d, at once %d", resolved(), after, b.most.Load())
 	}
 }

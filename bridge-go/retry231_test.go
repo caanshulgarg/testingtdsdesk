@@ -90,12 +90,24 @@ func TestRetrySilentThreeMinutesThenAnswers(t *testing.T) {
 			t.Fatalf("the retry at %d s sent %d request(s) (want 1)", at, asks()-n+1)
 		}
 	}
-	// 2.3.3: each held line has had its one ask (one at each retry try: 0, 15 and 45 s) and ended; never asked again
-	for _, at := range []int{105, 225, 1800, 3599, 3600, 7 * 3600} {
+	// 2.3.3: each held line has had its one ask (one at each retry try: 0, 15 and 45 s); 2.3.4 (the owner's answer B,
+	// 08-Oct-2026): each was stopped, so each is asked once more 5 minutes after its stop, and then never again
+	for _, at := range []int{105, 225, 290} {
 		retryClock(base, at)
 		liveUploadOnce()
 		if asks() != 3 {
-			t.Fatalf("a held line was asked again at %d s (%d asks, want 3)", at, asks())
+			t.Fatalf("a held line was asked again before 5 minutes, at %d s (%d asks, want 3)", at, asks())
+		}
+	}
+	for at := 300; at <= 1800; at += 15 {
+		retryClock(base, at)
+		liveUploadOnce()
+	}
+	for _, at := range []int{1800, 3599, 3600, 7 * 3600} {
+		retryClock(base, at)
+		liveUploadOnce()
+		if asks() != 6 {
+			t.Fatalf("at %d s: %d asks (want 6: each line twice)", at, asks())
 		}
 	}
 	silent.Store(false) // Tally answers again: the next background request answered in time puts the schedule back
@@ -107,16 +119,16 @@ func TestRetrySilentThreeMinutesThenAnswers(t *testing.T) {
 	if retryHeld() || retryWords() != "" {
 		t.Fatalf("not back to normal after an answer in time: %q", retryWords())
 	}
-	if asks() != 3 {
+	if asks() != 6 {
 		t.Fatalf("asked again after the end: %d", asks())
 	}
 	for _, mid := range mids {
-		// 2.3.4 (option (a)): a stop of the fast request ends it with the stop's words; no answer at all, as before
+		// 2.3.4 (answer B): a second stop of the fast request ends it with the stop's words; no answer at all, as before
 		if s := r222cSentID(c, "nws-"+mid+":resolved"); len(s) != 1 || str(s[0]["xml"]) != "" || (str(s[0]["heldWhy"]) != liveHeldSlowGiveUp && str(s[0]["heldWhy"]) != liveStopEndWords()) {
 			t.Fatalf("held line %s did not end with the Day Book words: %v", mid, s)
 		}
 	}
-	if logLines("trying again by itself at") != 3 { // three stops (one per held line)
+	if logLines("trying again by itself at") != 6 { // six stops (two per held line)
 		t.Fatalf("one log line per retry: %d\n%s", logLines("trying again by itself at"), readText(logFile()))
 	}
 	if logLines(" off: ") != 0 || logLines("Reading from Tally stopped") != 0 || readStop() != nil {
