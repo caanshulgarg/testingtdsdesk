@@ -1,0 +1,6 @@
+2026-10-08 18:58:19  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=6; now ALTVCHID=8, ALTMSTID=210
+2026-10-08 18:58:19  Bank dates: FinCom Spike Co: Tally's voucher counter moved with no add-on line for 2 entries (a bank date set in Bank Reconciliation, or another change Tally makes without a voucher form); each is read again from Tally
+2026-10-08 18:58:19  Recorder: entry fetch of FinCom Spike Co: answered in 9 ms
+2026-10-08 18:58:19  Recorder: Contra 1 of 02-Oct-2026 (MasterID 3, line 62c72c00…): taken: Tally's GUID e6e895b1-1d13-4480-a0fc-138eb5043691-00000003, AlterID 7
+2026-10-08 18:58:19  Recorder: entry fetch of FinCom Spike Co: answered in 8 ms
+2026-10-08 18:58:19  Recorder: Contra 2 of 02-Oct-2026 (MasterID 4, line 2a35c9e3…): taken: Tally's GUID e6e895b1-1d13-4480-a0fc-138eb5043691-00000004, AlterID 8
