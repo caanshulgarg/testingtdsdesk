@@ -1731,12 +1731,21 @@ func fetchVouchersByMasterIn(tc *TC, company string, port int, date string, mids
 		return nil, errors.New("Tally's answer could not be read: " + cut(flat(raw), 120))
 	}
 	out := map[string]string{}
-	for _, m := range reVchBlock.FindAllString(raw, -1) {
+	blocks := reVchBlock.FindAllString(raw, -1)
+	if len(blocks) == 0 && strings.Contains(raw, "<MASTERID") {
+		// 2.3.4 (re-review L5): Tally answered with a voucher the bridge cannot read: never taken as "no such voucher" (a
+		// delete check would take the entry as gone); held, as an answer it cannot read
+		return nil, fastShapeError{"an answer FinCom cannot read"}
+	}
+	for _, m := range blocks {
 		// next-fastfetch (the owner, 08-Oct-2026): Tally sends the whole voucher; only the approved fields are kept, here,
 		// before anything is logged, stored or sent. 2.3.4 review L2: one whose lines cannot be kept whole is held
 		c := cleanXML(m)
 		v, why := fastStripWhy(c)
-		if why != "" && tagNum(c, "MASTERID") != "" {
+		if why == "" && v == "" {
+			why = "an answer FinCom cannot read" // 2.3.4 (re-review L5): never taken as "no such voucher"
+		}
+		if why != "" && (tagNum(c, "MASTERID") != "" || strings.Contains(c, "<MASTERID")) {
 			return nil, fastShapeError{why}
 		}
 		if id := tagNum(v, "MASTERID"); id != "" && v != "" {

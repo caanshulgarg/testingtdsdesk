@@ -275,6 +275,10 @@ func liveResolveGuid(h heldLine, sent *bool) (c *change, why string, answered, f
 		return nil, "", false, false, err
 	}
 	got, err := fetchVouchersByMasterIn(tc, h.Company, port, h.Date, []string{h.MID}, liveBodySec())
+	if errors.Is(err, errFastShape) {
+		// 2.3.4 (re-review L2): the same answer would come again: held for good with the words, not asked every turn
+		return nil, map[bool]string{true: liveCancelHeldWords, false: liveDeleteHeldWords}[h.Ev == "cancelled"] + " (" + cutRunes(err.Error(), 160) + ")", true, true, nil
+	}
 	if err != nil {
 		return nil, "", false, false, err
 	}

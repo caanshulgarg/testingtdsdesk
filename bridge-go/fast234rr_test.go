@@ -77,3 +77,59 @@ func TestFast234RRHeldListStopEndsAtOnce(t *testing.T) {
 		t.Fatal("marked")
 	}
 }
+
+const rrVoucherMode = `<ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales</LEDGERNAME><AMOUNT>300.00</AMOUNT><INVENTORYALLOCATIONS.LIST><STOCKITEMNAME>Item T03</STOCKITEMNAME><AMOUNT>300.00</AMOUNT></INVENTORYALLOCATIONS.LIST></ALLLEDGERENTRIES.LIST>`
+
+// --- L2: a held cancel whose voucher Tally keeps in a form the strip cannot keep whole: held for good with words (not
+// "asked again" every turn); one request
+func TestFast234RRGuidCheckShapeIsFinal(t *testing.T) {
+	_, f, _ := r222bBridge(t, `,"RecorderResolveSec":0`)
+	v := r222Vch(f, 25793, "Sales", "SV-9", "20261005", 54593)
+	v.extra, v.cancelled = rrVoucherMode, true
+	now := nowFn().Format(time.RFC3339)
+	item := M{"company": nwsCo, "companyGuid": nwsGUID, "type": "Sales", "no": "SV-9", "date": "20261005", "masterId": "25793", "savedAt": now, "added": now,
+		"last": "", "tries": 0, "event": "cancelled", "why": "waiting", "final": false, "v234": true}
+	if err := saveFile(liveHeldFile(), jsonText(M{"items": M{"cancel-shape": item}})); err != nil {
+		t.Fatal(err)
+	}
+	fastRestart()
+	base := nowFn()
+	for _, sec := range []int{0, 60, 3600, 7200, 86400} {
+		retryClock(base, sec)
+		fastTurns(2)
+	}
+	if n := f.n(vchObjectID); n != 1 {
+		t.Fatalf("asked %d times (want once, then held for good): %v", n, f.ids())
+	}
+}
+
+// --- L2: the posting check meets such a voucher: a person must look (never "Tally is busy")
+func TestFast234RRPostCheckShapeWords(t *testing.T) {
+	err := error(fastShapeError{"its lines in ALLLEDGERENTRIES.INVENTORYALLOCATIONS, which FinCom's entry request does not read"})
+	if w := postCheckShapeWords("ZZ", "25793", "20261005", err); !strings.Contains(w, "a person must look in Tally") || strings.Contains(w, "busy") {
+		t.Fatalf("words: %s", w)
+	}
+}
+
+// --- L5: an answer whose voucher block cannot be read at all (the strip makes nothing of it) is never taken as "Tally
+// has no such voucher" (a delete check would take the entry as gone): an error that holds
+func TestFast234RRUnreadableBlockNotGone(t *testing.T) {
+	_, f, _ := r222bBridge(t, "")
+	f.mu.Lock()
+	f.behave = func(w http.ResponseWriter, r *http.Request, id, body string) bool {
+		if id == vchObjectID {
+			fmt.Fprint(w, `<ENVELOPE><BODY><DATA><TALLYMESSAGE><VOUCHER REMOTEID="unterminated><MASTERID>25794</MASTERID><DATE>20261005</DATE></VOUCHER></TALLYMESSAGE></DATA></BODY></ENVELOPE>`)
+			return true
+		}
+		return false
+	}
+	f.mu.Unlock()
+	port, err := findCompanyPortBg(nwsCo, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := fetchVouchersByMasterIn(recorderTC(nil), nwsCo, port, "20261005", []string{"25794"}, 5)
+	if err == nil || len(got) != 0 {
+		t.Fatalf("taken as not there: %v %v", got, err)
+	}
+}
