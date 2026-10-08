@@ -1,0 +1,288 @@
+[11:23:50.630] push-design on TallyPrime 7.1: reps 5, heavy 3000 ledgers / 3000 items / up to 30000 vouchers (40 min), postings 1
+[11:23:51.579] system clock step after timeBeginPeriod(1): 0.424 ms (min 0.0039, max 4.6407)
+[11:23:51.611] two files written 2 ms apart: NTFS write times 20.003 ms apart
+[11:23:51.631] light company folder: D:\a\_temp\TallyData\100000
+[11:23:54.656] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-setup-light-started (1024x768)
+[11:24:24.349] Tally started (setup-light) in 29.7 s; company open: True
+[11:24:24.363] company GUID 2a070fd4-7326-4623-b1bb-216043e061df
+[11:24:26.390] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[11:24:27.728] import light masters: 60 sent, created 59, errors 0, 281.7 ms
+[11:24:27.871] import template s5 (all fields): 1 sent, created 1, errors 0, 104.5 ms
+[11:24:28.135] import template s50 (all fields): 1 sent, created 1, errors 0, 260.1 ms
+[11:24:28.163] import template rc (all fields): 1 sent, created 1, errors 0, 26 ms
+[11:24:28.168] templates: s5 all fields; s50 all fields; rc all fields
+[11:24:28.219]   template Receipt 1 20261001 mid 4 aid 4 2a070fd4-7326-4623-b1bb-216043e061df-00000004
+[11:24:28.220]   template Sales 1 20261002 mid 2 aid 2 2a070fd4-7326-4623-b1bb-216043e061df-00000002
+[11:24:28.221]   template Sales 2 20261031 mid 3 aid 3 2a070fd4-7326-4623-b1bb-216043e061df-00000003
+[11:24:28.412] company feature fields (by name): ISBATCHWISEON=No, PREVISMULTIGODOWNON=No, PREVISTRACKINGON=No, ISPAYROLLON=No, PREVISSALESORDERSON=No, PREVISPURCORDERSON=No, ISEXCISEMFGRTRADERON=No, ISPAYROLLSTATON=No, ISCOSTTRACKINGON=No, NOTIFYOFEXPIRY=No, ISTRACKVOUCHERSON=No, RESETTRACKEDCHANGES=No
+[11:24:28.433] import company features by XML: 1 sent, created 0, errors 0, 16.4 ms
+[11:24:28.447] after the XML alter: ISBATCHWISEON=Yes, PREVISMULTIGODOWNON=Yes, PREVISTRACKINGON=Yes, ISPAYROLLON=Yes, PREVISSALESORDERSON=Yes, PREVISPURCORDERSON=Yes, ISEXCISEMFGRTRADERON=No, ISPAYROLLSTATON=No, ISCOSTTRACKINGON=No, NOTIFYOFEXPIRY=No, ISTRACKVOUCHERSON=No, RESETTRACKEDCHANGES=No
+[keys] '{F11}'
+[shot] p-f11-0 (1024x768)
+[keys] '{UP}'
+[keys] '{UP}'
+[keys] '{UP}'
+[shot] p-f11-1-top (1024x768)
+[keys] 'y'
+[shot] p-f11-2-show-more (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d01 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d02 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d03 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d04 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d05 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d06 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d07 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d08 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d09 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d10 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d11 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d12 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d13 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d14 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d15 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d16 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d17 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d18 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d19 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d20 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d21 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d22 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d23 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d24 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d25 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d26 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d27 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d28 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d29 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d30 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d31 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d32 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d33 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d34 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d35 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d36 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d37 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d38 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d39 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d40 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d41 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d42 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d43 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d44 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d45 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d46 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d47 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d48 (1024x768)
+[keys] '^a'
+[shot] p-f11-accepted (1024x768)
+[11:25:52.421] after F11 (show more features only): ISBATCHWISEON=Yes, PREVISMULTIGODOWNON=Yes, PREVISTRACKINGON=Yes, ISPAYROLLON=Yes, PREVISSALESORDERSON=Yes, PREVISPURCORDERSON=Yes, ISEXCISEMFGRTRADERON=No, ISPAYROLLSTATON=No, ISCOSTTRACKINGON=No, NOTIFYOFEXPIRY=No, ISTRACKVOUCHERSON=No, RESETTRACKEDCHANGES=No
+[11:25:52.451] voucher types: Attendance, Contra, Credit Note, Debit Note, Delivery Note, Job Work In Order, Job Work Out Order, Journal, Material In, Material Out, Memorandum, Payment, Payroll, Physical Stock, Purchase, Purchase Order, Receipt, Receipt Note, Rejections In, Rejections Out, Reversing Journal, Sales, Sales Order, Stock Journal
+[11:25:52.468] voucher type fields: active ISACTIVE; manufacturing ASMFGJRNL
+[11:25:52.527] import voucher types active, manufacturing journal: 9 sent, created 1, errors 0, 55.2 ms
+[11:25:53.802] import type masters (godowns, batch items, employees, pay heads, supplier): 258 sent, created 258, errors 0, 1257.6 ms
+[11:25:53.815] import attendance type: 1 sent, created 0, errors 0, 10.2 ms; Tally: Unit &apos;Days&apos; does not exist!
+[11:25:53.828] import attendance type: 1 sent, created 0, errors 0, 10.6 ms; Tally: Unit &apos;Days&apos; does not exist!
+[11:25:53.843] import attendance type: 1 sent, created 0, errors 0, 12.8 ms; Tally: Unit &apos;Days&apos; does not exist!
+[11:25:53.853] import attendance type: 1 sent, created 0, errors 0, 9.1 ms; Tally: Unit &apos;Days&apos; does not exist!
+[11:25:53.863] import attendance type: 1 sent, created 0, errors 0, 8.9 ms; Tally: Unit &apos;Days&apos; does not exist!
+[11:25:53.877] import attendance type: 1 sent, created 0, errors 0, 11.7 ms; Tally: Unit &apos;Days&apos; does not exist!
+[11:25:53.886] import attendance type: 1 sent, created 0, errors 0, 8 ms; Tally: Unit &apos;Days&apos; does not exist!
+[11:25:53.895] import attendance type: 1 sent, created 0, errors 0, 8.3 ms; Tally: Unit &apos;Days&apos; does not exist!
+[11:25:53.905] import attendance type: 1 sent, created 0, errors 0, 8.4 ms; Tally: Unit &apos;Days&apos; does not exist!
+[11:25:53.918] import attendance type: 1 sent, created 0, errors 0, 11.4 ms; Tally: Unit &apos;Days&apos; does not exist!
+[11:25:53.930] import attendance type: 1 sent, created 0, errors 0, 10.7 ms; Tally: Unit &apos;Days&apos; does not exist!
+[11:25:53.942] import attendance type: 1 sent, created 0, errors 0, 10.4 ms; Tally: Unit &apos;Days&apos; does not exist!
+[11:25:54.320] import template payroll50 (form 1 of 5): 1 sent, created 0, errors 0, 21.2 ms
+[11:25:54.341] import template payroll50 (form 2 of 5): 1 sent, created 0, errors 0, 19.5 ms
+[11:25:54.368] import template payroll50 (form 3 of 5): 1 sent, created 0, errors 0, 25.4 ms
+[11:25:54.395] import template payroll50 (form 4 of 5): 1 sent, created 0, errors 0, 26 ms
+[11:25:54.434] import template payroll50 (form 5 of 5): 1 sent, created 1, errors 0, 37.2 ms
+[11:25:54.471] import template payroll200 (form 1 of 5): 1 sent, created 0, errors 0, 33.7 ms
+[11:25:54.506] import template payroll200 (form 2 of 5): 1 sent, created 0, errors 0, 32.8 ms
+[11:25:54.559] import template payroll200 (form 3 of 5): 1 sent, created 0, errors 0, 50.3 ms
+[11:25:54.598] import template payroll200 (form 4 of 5): 1 sent, created 0, errors 0, 36.3 ms
+[11:25:54.658] import template payroll200 (form 5 of 5): 1 sent, created 1, errors 0, 59.2 ms
+[11:25:54.695] import template attendance (form 1 of 1): 1 sent, created 0, errors 0, 34.9 ms
+[11:25:54.782] import template stockjournal (form 1 of 1): 1 sent, created 1, errors 0, 85.9 ms
+[11:25:54.820] import template mfgjournal (form 1 of 1): 1 sent, created 1, errors 0, 35.5 ms
+[11:25:54.860] import template salesorder (form 1 of 3): 1 sent, created 0, errors 0, 38 ms; Tally: Bad Order Number in Voucher!
+[11:25:54.897] import template salesorder (form 2 of 3): 1 sent, created 0, errors 0, 35.5 ms; Tally: Bad Order Number in Voucher!
+[11:25:54.931] import template salesorder (form 3 of 3): 1 sent, created 0, errors 0, 32.2 ms; Tally: Bad Order Number in Voucher!
+[11:25:54.973] import template purchaseorder (form 1 of 3): 1 sent, created 0, errors 0, 40.2 ms; Tally: Bad Order Number in Voucher!
+[11:25:55.009] import template purchaseorder (form 2 of 3): 1 sent, created 0, errors 0, 35.1 ms; Tally: Bad Order Number in Voucher!
+[11:25:55.051] import template purchaseorder (form 3 of 3): 1 sent, created 0, errors 0, 40.5 ms; Tally: Bad Order Number in Voucher!
+[11:25:55.138] import template deliverynote (form 1 of 1): 1 sent, created 1, errors 0, 85 ms
+[11:25:55.224] import template receiptnote (form 1 of 1): 1 sent, created 1, errors 0, 84.3 ms
+[11:25:55.258] import template physicalstock (form 1 of 1): 1 sent, created 1, errors 0, 32.7 ms
+[11:25:55.605] import template salesbatch (form 1 of 1): 1 sent, created 1, errors 0, 345.3 ms
+[11:25:56.101] TDL $$MachineName => '' 
+[11:25:56.104] TDL $$CmpUserName => 'TALLY User' 
+[11:25:56.108] TDL $$SysInfo:WindowsUser => 'runneradmin' 
+[11:25:56.112] TDL $$SysInfo:WindowsUserName => '' 
+[11:25:56.116] TDL $$SysInfo:UserName => '' 
+[11:25:56.119] TDL $$SysInfo:LoginUser => '' 
+[11:25:56.123] TDL $$SysInfo:SystemName => 'runnervmfi6oq' 
+[11:25:56.127] TDL $$SysInfo:ComputerName => '' 
+[11:25:56.131] TDL $$SysInfo:MachineName => '' 
+[11:25:56.137] TDL $$SysInfo:IPAddress => '10.1.0.106,172.29.192.1' 
+[11:25:56.140] TDL $$SysInfo:ApplicationPath => 'C:\Program Files\TallyPrime' 
+[11:25:56.144] TDL $$SysInfo:TempPath => '' 
+[11:25:56.183] fast234 (fast234r) on TallyPrime 7.1: today's request 2927 chars, 61 fields
+[11:25:56.304] import M2 invoice with a direct Sales line: 1 sent, created 0, errors 0, 47.8 ms
+[11:25:56.352] import M2 invoice (no IRN): 1 sent, created 0, errors 0, 45.1 ms
+[shot] tds-001-gw0 (1024x768)
+[11:26:18] [tds] screen tds-001-gw0 : EDU c prime K: Company Y: Data Gatewayof Tally Find details entered in masters and transactions. Z: Exchange CURRENT OATE Wednesday, I-Apr-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co (Schedule Backup) 31-OctQ6 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Fl: Help 5c057 Date to ru Company 313b- adcc— acep 7537- adcc— acep .337. b—6e9...
+[keys] 'v'
+[shot] tds-002-pr-vouchers (1024x768)
+[11:26:21] [tds] screen tds-002-pr-vouchers : EDU c prime K: Company Y: Data Accounting Voucher Creati Pa ment No. 1 - Account Cument balance: Particulars Narration: Unity Quit Find details entered in masters and transactions. Z: Exchange inCom Spike (Alt+F) O: Import E: Export M: Share p: print upr-26 Wednesday Amount Fl: Help 5c057 Date Company to ru Contra F5: Payment Receipt Journal Purchase FIO: E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure 313b- adcc— acep 7537- adcc— acep .337. b—6e9 ening '29bc3 ing j _id" : 7537- Mode A Accept Q Search D: De...
+[keys] '^{F4}'
+[shot] tds-003-pr-payroll (1024x768)
+[11:26:26] [tds] screen tds-003-pr-payroll : a Find details entered in masters and transactions. (Alt+F) EDU c prime K: Company Y: Data Payroll Voucher Creation Pa roll - Account. CurBal: 0.00 Cr Particulars Narration: Unity Quit Z: Exchange A Accept Q Search M: Share FinCom Spike Co O: Import E: Export List of Ledger Accounts Cash HDFC Bank p: print x Create D: Delete , cancel vch Fl: Help Date Company F4: Contra Payment Receipt Journal Sales Purchase Vouctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated Unused Vch No. Configure 5c057 to ru 313b- adcc— acep 7537- adcc— acep .337. b—6e9 ening '29bc3 ing j ...
+[keys] '{F2}'
+[shot] tds-004-pr-date-box (1024x768)
+[11:26:29] [tds] screen tds-004-pr-date-box : a Find details entered in masters and transactions. (Alt+F) EDU c prime K: Company Y: Data Change Voucher Date Unity Quit Z: Exchange A Accept Q Search O: Import E: Export M: Share p: print Fl: Help FinCom Spike Co Voucher Date 24-2026 5c057 to ru 313b- adcc— acep 7537- adcc— acep .337. b—6e9 ening '29bc3 ing j _id" : 7537- Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 11:26 AM 10/8/2026
+[keys] '1-11-2026{ENTER}'
+[shot] tds-005-pr-date (1024x768)
+[11:26:32] [tds] screen tds-005-pr-date : EDU c prime K: Company Y: Data Payroll Voucher Creation Pa roll - Account. CurBal: 0.00 Cr Particulars Narration: Unity Quit Find details entered in masters and transactions. Z: Exchange FinCom Spike Co (Alt+F) O: Import E: Export M: Share p: print 1-Nov-26 Sunday Amount Fl: Help Date Company F4: Contra Payment Receipt Journal Sales Purchase Vouctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated Unused Vch No. El 2: Configure 5c057 to ru 313b- adcc— acep 7537- adcc— acep .337. b—6e9 ening '29bc3 ing j _id" : 7537- Mode A Accept Q Search D: Delete X: Cancel Vch Wi...
+[shot] tds-006-pr-first-field (1024x768)
+[11:26:33] [tds] screen tds-006-pr-first-field : EDU c prime K: Company Y: Data Payroll Voucher Creation Pa roll - Account. CurBal: 0.00 Cr Particulars Narration: Unity Quit Find details entered in masters and transactions. Z: Exchange FinCom Spike Co (Alt+F) O: Import E: Export M: Share p: print 1-Nov-26 Sunday Amount Fl: Help Date Company F4: Contra Payment Receipt Journal Sales Purchase Vouctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated Unused Vch No. El 2: Configure 5c057 to ru 313b- adcc— acep 7537- adcc— acep .337. b—6e9 ening '29bc3 ing j _id" : 7537- Mode A Accept Q Search D: Delete X: Cancel Vch Wi...
+[keys] 'PD Salary Payable{ENTER}'
+[shot] tds-007-pr-account (1024x768)
+[11:26:40] [tds] screen tds-007-pr-account : EDU c prime K: Company Y: Data Payroll Voucher Creation Pa roll - Account: D CurBal: 0.00 Cr Particulars Narration: Unity Q: Quit Find details entered In masters and transactions FinCom Spike Co Z: Exchange A: Accept Q Search O: Import E: Export M: Share List of Ledger Accounts HDFC Bank p: print x Create Error Oops! Spelling Error Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated • Unused = vch No. 5c057 to ru 313b- adcc— acep 7537- adcc— acep .33...
+[keys] 'PD Emp 001{ENTER}'
+[shot] tds-008-pr-emp-PDEmp001 (1024x768)
+[11:26:44] [tds] screen tds-008-pr-emp-PDEmp001 : EDU c prime K: Company Y: Data Payroll Voucher Creation Pa roll - Account: D CurBal: 0.00 Cr Particulars Narration: Unity Q: Quit Find details entered In masters and transactions FinCom Spike Co Z: Exchange A: Accept Q Search O: Import E: Export M: Share List of Ledger Accounts HDFC Bank p: print x Create Error Oops! Spelling Error Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated • Unused = vch No. 5c057 to ru 313b- adcc— acep 7537- adcc— acep .33...
+[keys] 'PD Basic{ENTER}'
+[shot] tds-009-pr-ph-PDEmp001-PDBasic (1024x768)
+[11:26:48] [tds] screen tds-009-pr-ph-PDEmp001-PDBasic : EDU c prime K: Company Y: Data Payroll Voucher Creation Pa roll - Account: D CurBal: 0.00 Cr Particulars Narration: Unity Q: Quit Find details entered In masters and transactions FinCom Spike Co Z: Exchange A: Accept Q Search O: Import E: Export M: Share List of Ledger Accounts HDFC Bank p: print x Create Error Oops! Spelling Error Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated • Unused = vch No. 5c057 to ru 313b- adcc— acep 7537- adcc— acep .33...
+[keys] '1000{ENTER}'
+[shot] tds-010-pr-amt-PDEmp001-PDBasic (1024x768)
+[11:26:52] [tds] screen tds-010-pr-amt-PDEmp001-PDBasic : EDU c prime K: Company Y: Data Payroll Voucher Creation Pa roll - Account: D CurBal: 0.00 Cr Particulars Narration: Unity Q: Quit Find details entered In masters and transactions FinCom Spike Co Z: Exchange A: Accept Q Search O: Import E: Export M: Share List of Ledger Accounts HDFC Bank p: print x Create Error Oops! Spelling Error Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated • Unused = vch No. 5c057 to ru 313b- adcc— acep 7537- adcc— acep .33...
+[shot] tds-011-pr-after-PDEmp001-PDBasic (1024x768)
+[11:26:53] [tds] screen tds-011-pr-after-PDEmp001-PDBasic : EDU c prime K: Company Y: Data Payroll Voucher Creation Pa roll - Account: D CurBal: 0.00 Cr Particulars Narration: Unity Q: Quit Find details entered In masters and transactions FinCom Spike Co Z: Exchange A: Accept Q Search O: Import E: Export M: Share List of Ledger Accounts HDFC Bank p: print x Create Error Oops! Spelling Error Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated • Unused = vch No. 5c057 to ru 313b- adcc— acep 7537- adcc— acep .33...
+[keys] 'PD HRA{ENTER}'
+[shot] tds-012-pr-ph-PDEmp001-PDHRA (1024x768)
+[11:26:56] [tds] screen tds-012-pr-ph-PDEmp001-PDHRA : EDU c prime K: Company Y: Data Payroll Voucher Creation Pa roll - Account: D CurBal: 0.00 Cr Particulars Narration: Unity Q: Quit Find details entered In masters and transactions FinCom Spike Co Z: Exchange A: Accept Q Search O: Import E: Export M: Share List of Ledger Accounts HDFC Bank p: print x Create Error Oops! Spelling Error Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated • Unused = vch No. 5c057 to ru 313b- adcc— acep 7537- adcc— acep .33...
+[keys] '400{ENTER}'
+[shot] tds-013-pr-amt-PDEmp001-PDHRA (1024x768)
+[11:26:59] [tds] screen tds-013-pr-amt-PDEmp001-PDHRA : EDU c prime K: Company Y: Data Payroll Voucher Creation Pa roll - Account: D CurBal: 0.00 Cr Particulars Narration: Unity Q: Quit Find details entered In masters and transactions FinCom Spike Co Z: Exchange A: Accept Q Search O: Import E: Export M: Share List of Ledger Accounts HDFC Bank p: print x Create Error Oops! Spelling Error Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated • Unused = vch No. 5c057 to ru 313b- adcc— acep 7537- adcc— acep .33...
+[shot] tds-014-pr-after-PDEmp001-PDHRA (1024x768)
+[11:27:00] [tds] screen tds-014-pr-after-PDEmp001-PDHRA : EDU c prime K: Company Y: Data Payroll Voucher Creation Pa roll - Account: D CurBal: 0.00 Cr Particulars Narration: Unity Q: Quit Find details entered In masters and transactions FinCom Spike Co Z: Exchange A: Accept Q Search O: Import E: Export M: Share List of Ledger Accounts HDFC Bank p: print x Create Error Oops! Spelling Error Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated • Unused = vch No. 5c057 to ru 313b- adcc— acep 7537- adcc— acep .33...
+[keys] '{ENTER}'
+[shot] tds-015-pr-emp-done-PDEmp001 (1024x768)
+[11:27:03] [tds] screen tds-015-pr-emp-done-PDEmp001 : a Find details entered in masters and transactions. (Alt+F) EDU c prime K: Company Y: Data Payroll Voucher Creation Pa roll - Account: D_ CurBal: 0.00 Cr Particulars Narration: Unity Quit Z: Exchange A Accept Q Search M: Share FinCom Spike Co O: Import E: Export List of Ledger Accounts HDFC Bank p: print x Create D: Delete , cancel vch Fl: Help Date Company F4: Contra Payment Receipt Journal Sales Purchase Vouctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated Unused Vch No. Configure 5c057 to ru 313b- adcc— acep 7537- adcc— acep .337. b—6e9 ening '29bc3 ing j _i...
+[keys] 'PD Emp 002{ENTER}'
+[shot] tds-016-pr-emp-PDEmp002 (1024x768)
+[11:27:07] [tds] screen tds-016-pr-emp-PDEmp002 : EDU c prime K: Company Y: Data Payroll Voucher Creation Pa roll - Account: D CurBal: 0.00 Cr Particulars Narration: Unity Q: Quit Find details entered In masters and transactions FinCom Spike Co Z: Exchange A: Accept Q Search O: Import E: Export M: Share List of Ledger Accounts HDFC Bank p: print x Create Error Oops! Spelling Error Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated • Unused = vch No. 5c057 to ru 313b- adcc— acep 7537- adcc— acep .33...
+[keys] 'PD Basic{ENTER}'
+[shot] tds-017-pr-ph-PDEmp002-PDBasic (1024x768)
+[11:27:11] [tds] screen tds-017-pr-ph-PDEmp002-PDBasic : EDU c prime K: Company Y: Data Payroll Voucher Creation Pa roll - Account: D CurBal: 0.00 Cr Particulars Narration: Unity Q: Quit Find details entered In masters and transactions FinCom Spike Co Z: Exchange A: Accept Q Search O: Import E: Export M: Share List of Ledger Accounts HDFC Bank p: print x Create Error Oops! Spelling Error Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated • Unused = vch No. 5c057 to ru 313b- adcc— acep 7537- adcc— acep .33...
+[keys] '1000{ENTER}'
+[shot] tds-018-pr-amt-PDEmp002-PDBasic (1024x768)
+[11:27:14] [tds] screen tds-018-pr-amt-PDEmp002-PDBasic : EDU c prime K: Company Y: Data Payroll Voucher Creation Pa roll - Account: D CurBal: 0.00 Cr Particulars Narration: Unity Q: Quit Find details entered In masters and transactions FinCom Spike Co Z: Exchange A: Accept Q Search O: Import E: Export M: Share List of Ledger Accounts HDFC Bank p: print x Create Error Oops! Spelling Error Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated • Unused = vch No. 5c057 to ru 313b- adcc— acep 7537- adcc— acep .33...
+[shot] tds-019-pr-after-PDEmp002-PDBasic (1024x768)
+[11:27:15] [tds] screen tds-019-pr-after-PDEmp002-PDBasic : EDU c prime K: Company Y: Data Payroll Voucher Creation Pa roll - Account: D CurBal: 0.00 Cr Particulars Narration: Unity Q: Quit Find details entered In masters and transactions FinCom Spike Co Z: Exchange A: Accept Q Search O: Import E: Export M: Share List of Ledger Accounts HDFC Bank p: print x Create Error Oops! Spelling Error Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated • Unused = vch No. 5c057 to ru 313b- adcc— acep 7537- adcc— acep .33...
+[keys] 'PD HRA{ENTER}'
+[shot] tds-020-pr-ph-PDEmp002-PDHRA (1024x768)
+[11:27:18] [tds] screen tds-020-pr-ph-PDEmp002-PDHRA : EDU c prime K: Company Y: Data Payroll Voucher Creation Pa roll - Account: D CurBal: 0.00 Cr Particulars Narration: Unity Q: Quit Find details entered In masters and transactions FinCom Spike Co Z: Exchange A: Accept Q Search O: Import E: Export M: Share List of Ledger Accounts HDFC Bank p: print x Create Error Oops! Spelling Error Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated • Unused = vch No. 5c057 to ru 313b- adcc— acep 7537- adcc— acep .33...
+[keys] '400{ENTER}'
+[shot] tds-021-pr-amt-PDEmp002-PDHRA (1024x768)
+[11:27:21] [tds] screen tds-021-pr-amt-PDEmp002-PDHRA : EDU c prime K: Company Y: Data Payroll Voucher Creation Pa roll - Account: D CurBal: 0.00 Cr Particulars Narration: Unity Q: Quit Find details entered In masters and transactions FinCom Spike Co Z: Exchange A: Accept Q Search O: Import E: Export M: Share List of Ledger Accounts HDFC Bank p: print x Create Error Oops! Spelling Error Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated • Unused = vch No. 5c057 to ru 313b- adcc— acep 7537- adcc— acep .33...
+[shot] tds-022-pr-after-PDEmp002-PDHRA (1024x768)
+[11:27:22] [tds] screen tds-022-pr-after-PDEmp002-PDHRA : EDU c prime K: Company Y: Data Payroll Voucher Creation Pa roll - Account: D CurBal: 0.00 Cr Particulars Narration: Unity Q: Quit Find details entered In masters and transactions FinCom Spike Co Z: Exchange A: Accept Q Search O: Import E: Export M: Share List of Ledger Accounts HDFC Bank p: print x Create Error Oops! Spelling Error Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated • Unused = vch No. 5c057 to ru 313b- adcc— acep 7537- adcc— acep .33...
+[keys] '{ENTER}'
+[shot] tds-023-pr-emp-done-PDEmp002 (1024x768)
+[11:27:26] [tds] screen tds-023-pr-emp-done-PDEmp002 : a Find details entered in masters and transactions. (Alt+F) EDU c prime K: Company Y: Data Payroll Voucher Creation Pa roll - Account: D_ CurBal: 0.00 Cr Particulars Narration: Unity Quit Z: Exchange A Accept Q Search M: Share FinCom Spike Co O: Import E: Export List of Ledger Accounts HDFC Bank p: print x Create D: Delete , cancel vch Fl: Help Date Company F4: Contra Payment Receipt Journal Sales Purchase Vouctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated Unused Vch No. Configure 5c057 to ru 313b- adcc— acep 7537- adcc— acep .337. b—6e9 ening '29bc3 ing j _i...
+[keys] '{ENTER}'
+[shot] tds-024-pr-emps-done (1024x768)
+[11:27:29] [tds] screen tds-024-pr-emps-done : a Find details entered in masters and transactions. (Alt+F) EDU c prime K: Company Y: Data Payroll Voucher Creation Pa roll - Account: HDFC Bank CurBal: 1,190.OODr Particulars Z: Exchange A Accept Q Search E: Export FinCom Spike Co O: Import List of Employees PD Emp 001 PD Emp 002 PD Emp 003 PD Emp 004 PD Emp 005 PD Emp 006 PD Emp 007 PD Emp 008 PD Emp 009 PD Emp 010 PD Emp 011 PD Emp 012 PD Emp 013 PD Emp 014 PD Emp 015 PD Emp 016 PD Emp 017 PD Emp 018 PD Emp 019 PD Emp 020 M: Share Ch Narration: Unity Quit p: print x Create Group Group Group Group Group Group Group Group Group Group Group Gr...
+[shot] tds-025-pr-before-narr (1024x768)
+[11:27:30] [tds] screen tds-025-pr-before-narr : a Find details entered in masters and transactions. (Alt+F) EDU c prime K: Company Y: Data Payroll Voucher Creation Pa roll - Account: HDFC Bank CurBal: 1,190.OODr Particulars Z: Exchange A Accept Q Search E: Export FinCom Spike Co O: Import List of Employees PD Emp 001 PD Emp 002 PD Emp 003 PD Emp 004 PD Emp 005 PD Emp 006 PD Emp 007 PD Emp 008 PD Emp 009 PD Emp 010 PD Emp 011 PD Emp 012 PD Emp 013 PD Emp 014 PD Emp 015 PD Emp 016 PD Emp 017 PD Emp 018 PD Emp 019 PD Emp 020 M: Share Ch Narration: Unity Quit p: print x Create Group Group Group Group Group Group Group Group Group Group Group Gr...
+[keys] 'fast234r payroll typed on the screen{ENTER}'
+[shot] tds-026-pr-narr (1024x768)
+[11:27:33] [tds] screen tds-026-pr-narr : EDU c prime K: Company Y: Data Payroll Voucher Creation Pa roll - Account: HDFC Bank CurBal: 1,190.OODr Particulars Ch Narration: Unity Q: Quit Find details entered In masters and transactions FinCom Spike Co Z: Exchange A: Accept Q Search O: Import E: Export M: Share List of Employees PD Emp 001 PD Emp 002 PD Emp 003 PD Emp 004 PD Emp 005 PD Emp 006 PD Emp 007 PD Emp 008 PD Emp 009 PD Emp 010 PD Emp 011 PD Emp 012 PD Emp 013 PD Emp 014 PD Emp 015 PD Emp 016 PD Emp 017 PD Emp 018 PD Emp 019 PD Emp 020 p: Delete Cancel Vch p: print x Create Group Group Group Group Group Group Group Group Group ...
+[shot] tds-027-pr-accept-q1 (1024x768)
+[11:27:34] [tds] screen tds-027-pr-accept-q1 : EDU c prime K: Company Y: Data Payroll Voucher Creation Pa roll - Account: HDFC Bank CurBal: 1,190.OODr Particulars Ch Narration: Unity Q: Quit Find details entered In masters and transactions FinCom Spike Co Z: Exchange A: Accept Q Search O: Import E: Export M: Share List of Employees PD Emp 001 PD Emp 002 PD Emp 003 PD Emp 004 PD Emp 005 PD Emp 006 PD Emp 007 PD Emp 008 PD Emp 009 PD Emp 010 PD Emp 011 PD Emp 012 PD Emp 013 PD Emp 014 PD Emp 015 PD Emp 016 PD Emp 017 PD Emp 018 PD Emp 019 PD Emp 020 p: Delete Cancel Vch p: print x Create Group Group Group Group Group Group Group Group Group ...
+[keys] '^a'
+[shot] tds-028-pr-ctrl-a1 (1024x768)
+[11:27:39] [tds] screen tds-028-pr-ctrl-a1 : EDU c prime K: Company Y: Data Payroll Voucher Creation Pa roll - Account: HDFC Bank CurBal: 1,190.OODr Particulars Ch Narration: Unity Q: Quit Find details entered In masters and transactions Z: Exchange FinCom Spike Co O: Import E: Export M: Share List of Employees PD Emp 001 PD Emp 002 PD Emp 003 PD Emp 004 PD Emp 005 PD Emp 006 PD Emp 007 PD Emp 008 PD Emp 009 PD Emp 010 PD Emp 011 PD Emp 012 PD Emp 013 PD Emp 014 PD Emp 015 PD Emp 016 PD Emp 017 PD Emp 018 PD Emp 019 PD Emp 020 p: Delete Cancel Vch p: print x Create Group Group Group Group Group Group Group Group Group Group Group Group G...
+[shot] tds-029-pr-accept-q2 (1024x768)
+[11:27:39] [tds] screen tds-029-pr-accept-q2 : EDU c prime K: Company Y: Data Payroll Voucher Creation Pa roll - Account: HDFC Bank CurBal: 1,190.OODr Particulars Ch Narration: Unity Q: Quit Find details entered In masters and transactions Z: Exchange FinCom Spike Co O: Import E: Export M: Share List of Employees PD Emp 001 PD Emp 002 PD Emp 003 PD Emp 004 PD Emp 005 PD Emp 006 PD Emp 007 PD Emp 008 PD Emp 009 PD Emp 010 PD Emp 011 PD Emp 012 PD Emp 013 PD Emp 014 PD Emp 015 PD Emp 016 PD Emp 017 PD Emp 018 PD Emp 019 PD Emp 020 p: Delete Cancel Vch p: print x Create Group Group Group Group Group Group Group Group Group Group Group Group G...
+[keys] '^a'
+[shot] tds-030-pr-ctrl-a2 (1024x768)
+[11:27:44] [tds] screen tds-030-pr-ctrl-a2 : EDU c prime K: Company Y: Data Payroll Voucher Creation Pa roll - Account: HDFC Bank CurBal: 1,190.OODr Particulars Ch Narration: Unity Q: Quit Find details entered In masters and transactions Z: Exchange FinCom Spike Co O: Import E: Export M: Share List of Employees PD Emp 001 PD Emp 002 PD Emp 003 PD Emp 004 PD Emp 005 PD Emp 006 PD Emp 007 PD Emp 008 PD Emp 009 PD Emp 010 PD Emp 011 PD Emp 012 PD Emp 013 PD Emp 014 PD Emp 015 PD Emp 016 PD Emp 017 PD Emp 018 PD Emp 019 PD Emp 020 p: Delete Cancel Vch p: print x Create Group Group Group Group Group Group Group Group Group Group Group Group G...
+[shot] tds-031-pr-accept-q3 (1024x768)
+[11:27:45] [tds] screen tds-031-pr-accept-q3 : EDU c prime K: Company Y: Data Payroll Voucher Creation Pa roll - Account: HDFC Bank CurBal: 1,190.OODr Particulars Ch Narration: Unity Q: Quit Find details entered In masters and transactions Z: Exchange FinCom Spike Co O: Import E: Export M: Share List of Employees PD Emp 001 PD Emp 002 PD Emp 003 PD Emp 004 PD Emp 005 PD Emp 006 PD Emp 007 PD Emp 008 PD Emp 009 PD Emp 010 PD Emp 011 PD Emp 012 PD Emp 013 PD Emp 014 PD Emp 015 PD Emp 016 PD Emp 017 PD Emp 018 PD Emp 019 PD Emp 020 p: Delete Cancel Vch p: print x Create Group Group Group Group Group Group Group Group Group Group Group Group G...
+[keys] '^a'
+[shot] tds-032-pr-ctrl-a3 (1024x768)
+[11:27:49] [tds] screen tds-032-pr-ctrl-a3 : EDU c prime K: Company Y: Data Payroll Voucher Creation Pa roll - Account: HDFC Bank CurBal: 1,190.OODr Particulars Ch Narration: Unity Q: Quit Find details entered In masters and transactions Z: Exchange FinCom Spike Co O: Import E: Export M: Share List of Employees PD Emp 001 PD Emp 002 PD Emp 003 PD Emp 004 PD Emp 005 PD Emp 006 PD Emp 007 PD Emp 008 PD Emp 009 PD Emp 010 PD Emp 011 PD Emp 012 PD Emp 013 PD Emp 014 PD Emp 015 PD Emp 016 PD Emp 017 PD Emp 018 PD Emp 019 PD Emp 020 p: Delete Cancel Vch p: print x Create Group Group Group Group Group Group Group Group Group Group Group Group G...
+[shot] tds-033-gw0 (1024x768)
+[11:27:50] [tds] screen tds-033-gw0 : EDU c prime K: Company Y: Data Payroll Voucher Creation Pa roll - Account: HDFC Bank CurBal: 1,190.OODr Particulars Ch Narration: Unity Q: Quit Find details entered In masters and transactions Z: Exchange FinCom Spike Co O: Import E: Export M: Share List of Employees PD Emp 001 PD Emp 002 PD Emp 003 PD Emp 004 PD Emp 005 PD Emp 006 PD Emp 007 PD Emp 008 PD Emp 009 PD Emp 010 PD Emp 011 PD Emp 012 PD Emp 013 PD Emp 014 PD Emp 015 PD Emp 016 PD Emp 017 PD Emp 018 PD Emp 019 PD Emp 020 p: Delete Cancel Vch p: print x Create Group Group Group Group Group Group Group Group Group Group Group Group G...
+[keys] '{ESC}'
+[shot] tds-034-gw1 (1024x768)
+[11:27:53] [tds] screen tds-034-gw1 : a Find details entered in masters and transactions. (Alt+F) EDU c prime K: Company Y: Data Payroll Voucher Creation Pa roll - Account: HDFC Bank CurBal: 1,190.OODr Particulars Z: Exchange A Accept Q Search E: Export FinCom Spike Co O: Import List of Employees PD Emp 001 PD Emp 002 PD Emp 003 PD Emp 004 PD Emp 005 PD Emp 006 PD Emp 007 PD Emp 008 PD Emp 009 PD Emp 010 PD Emp 011 PD Emp 012 PD Emp 013 PD Emp 014 PD Emp 015 PD Emp 016 PD Emp 017 PD Emp 018 PD Emp 019 PD Emp 020 M: Share Ch Narration: Unity Quit p: print x Create Group Group Group Group Group Group Group Group Group Group Group Gr...
+[keys] '{ESC}'
+[shot] tds-035-gw2 (1024x768)
+[11:27:57] [tds] screen tds-035-gw2 : a Find details entered in masters and transactions. (Alt+F) EDU c prime K: Company Y: Data Payroll Voucher Creation Pa roll - Account: HDFC Bank CurBal: 1,190.OODr Particulars Z: Exchange A Accept Q Search E: Export FinCom Spike Co O: Import List of Employees PD Emp 001 PD Emp 002 PD Emp 003 PD Emp 004 PD Emp 005 PD Emp 006 PD Emp 007 PD Emp 008 PD Emp 009 PD Emp 010 PD Emp 011 PD Emp 012 PD Emp 013 PD Emp 014 PD Emp 015 PD Emp 016 PD Emp 017 PD Emp 018 PD Emp 019 PD Emp 020 M: Share Ch Narration: Unity Quit p: print x Create Group Group Group Group Group Group Group Group Group Group Group Gr...
+[keys] '{ESC}'
+[shot] tds-036-gw3 (1024x768)
+[11:28:00] [tds] screen tds-036-gw3 : EDU c prime K: Company Y: Data Payroll Voucher Creation Pa roll - Account: HDFC Bank CurBal: 1,190.OODr Particulars Ch Narration: Unity Q: Quit Find details entered In masters and transactions FinCom Spike Co Z: Exchange A: Accept Q Search O: Import E: Export M: Share p: print 1-Nov-26 Sunday Amount Quit o Yes or No Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated • Unused = vch No. 5c057 to ru 313b- adcc— acep 7537- adcc— acep .337. b—6e9 ening '...
+[keys] 'y'
+[shot] tds-037-gw4 (1024x768)
+[11:28:03] [tds] screen tds-037-gw4 : EDU c prime K: Company Y: Data Gatewayof Tally Find details entered in masters and transactions. Z: Exchange CURRENT OATE Sunday, I-Nov-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co * (e) Data exceptions exist (e) (Schedule Backup) Q Search 31-MarQ7 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Fl: Help 5c057 Date to ru Company 313b- a...
+[11:28:03.681] HARNESS: fast234r stopped: Cannot process command because of one or more missing mandatory parameters: Name. at <ScriptBlock>, D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\push\fast234r.ps1: line 75
+at <ScriptBlock>, D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\push\pushm.ps1: line 321
+at <ScriptBlock>, D:\a\_temp\518ff835-4c27-4a6f-8a1e-32929f5611e0.ps1: line 2
+at <ScriptBlock>, <No file>: line 1
+[11:28:06.685] done (fast234 fast234r)
