@@ -1,0 +1,178 @@
+[08:40:05] ---- c1 install and open the company (TallyPrime 3.0)
+  INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 11457160 bytes, 2026-10-08, FileVersion 1.1.3.0, ProductVersion 1.1.3.0, ProductName TallyPrime
+  INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-00-started (1024x768)
+[companies] 8 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[header] 7 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS><PRODMAJORVER>1</PRODMAJORVER><PRODMINORVER>1</PRODMINORVER><PRODMAJORREL>3</PRODMAJORREL><PRODMINORREL>0</PRODMINORREL><PRODTYPE>5</PRODTYPE></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</...
+  INFO Tally's own release in its answer header: PRODMAJORREL 3 PRODMINORREL 0 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+######## PASS c1 install and open the company: installed tally.exe 11457160 bytes, 2026-10-08, FileVersion 1.1.3.0, ProductVersion 1.1.3.0, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+######## PASS c2 port and company list: port 9000 answered 10.2 s after start, GET 19 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 8 ms, 'FinCom Spike Co' in it: True
+[08:40:38] ---- hang4: the malformed filter of the harness against the correct one, each in a fresh Tally
+[08:40:38] ---- hang: the hanging request of run 37729166801, one thing varied at a time, each probe in a fresh Tally
+[hang4 masters] 25 ms: <RESPONSE><CREATED>5</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+[hang4 invoices] 359 ms: <RESPONSE><CREATED>23</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>24</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED></RESPONSE>
+  INFO hang4: 23 invoices by XML: <CREATED>23</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>24</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>
+  voucher mid=1 aid=1 Journal/1/20260401 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000001 cancelled=False
+  voucher mid=2 aid=2 Sales/1/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000002 cancelled=False
+  voucher mid=3 aid=3 Sales/2/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000003 cancelled=False
+  voucher mid=4 aid=4 Sales/3/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000004 cancelled=False
+  voucher mid=5 aid=5 Sales/4/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000005 cancelled=False
+  voucher mid=6 aid=6 Sales/5/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000006 cancelled=False
+  voucher mid=7 aid=7 Sales/6/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000007 cancelled=False
+  voucher mid=8 aid=8 Sales/7/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000008 cancelled=False
+  voucher mid=9 aid=9 Sales/8/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000009 cancelled=False
+  voucher mid=10 aid=10 Sales/9/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-0000000a cancelled=False
+  voucher mid=11 aid=11 Sales/10/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-0000000b cancelled=False
+  voucher mid=12 aid=12 Sales/11/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-0000000c cancelled=False
+  voucher mid=13 aid=13 Sales/12/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-0000000d cancelled=False
+  voucher mid=14 aid=14 Sales/13/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-0000000e cancelled=False
+  voucher mid=15 aid=15 Sales/14/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-0000000f cancelled=False
+  voucher mid=16 aid=16 Sales/15/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000010 cancelled=False
+  voucher mid=17 aid=17 Sales/16/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000011 cancelled=False
+  voucher mid=18 aid=18 Sales/17/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000012 cancelled=False
+  voucher mid=19 aid=19 Sales/18/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000013 cancelled=False
+  voucher mid=20 aid=20 Sales/19/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000014 cancelled=False
+  voucher mid=21 aid=21 Sales/20/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000015 cancelled=False
+  voucher mid=22 aid=22 Sales/21/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000016 cancelled=False
+  voucher mid=23 aid=23 Sales/22/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000017 cancelled=False
+  voucher mid=24 aid=24 Sales/23/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000018 cancelled=False
+  INFO hang4: 24 entries, MasterIDs 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24
+[08:40:42] hang: data kept as 'h4'
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-hang-on-xml-233-envelope-correct-one-id-started (1024x768)
+######## ANSWERED hang on-xml-233-envelope-correct-one-id: GST on (ISGSTON 'Yes'), xml (XML import, MasterID 2, 1), 233-envelope-correct-one-id: answered in 26 ms, 15415 chars, the entry in it; Tally answers after it: True; 60 s later: True ; started again: , the entry listed: 
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-hang-on-xml-233-envelope-list-3-started (1024x768)
+######## ANSWERED hang on-xml-233-envelope-list-3: GST on (ISGSTON 'Yes'), xml (XML import, MasterID 2, 1), 233-envelope-list-3: answered in 19 ms, 1511 chars, the entry not in it; Tally answers after it: True; 60 s later: True ; started again: , the entry listed: 
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-hang-on-xml-233-envelope-list-10-started (1024x768)
+######## ANSWERED hang on-xml-233-envelope-list-10: GST on (ISGSTON 'Yes'), xml (XML import, MasterID 2, 1), 233-envelope-list-10: answered in 23 ms, 1511 chars, the entry not in it; Tally answers after it: True; 60 s later: True ; started again: , the entry listed: 
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-hang-on-xml-233-envelope-list-24-started (1024x768)
+[] failed after 60005 ms: The request was canceled due to the configured HttpClient.Timeout of 60 seconds elapsing.
+[] failed after 30003 ms: The request was canceled due to the configured HttpClient.Timeout of 30 seconds elapsing.
+[shot] v-hang-on-xml-233-envelope-list-24-hung (1024x768)
+[] failed after 30010 ms: The request was canceled due to the configured HttpClient.Timeout of 30 seconds elapsing.
+[shot] v-hang-on-xml-233-envelope-list-24-later (1024x768)
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-hang-on-xml-233-envelope-list-24-again-started (1024x768)
+  voucher mid=1 aid=1 Journal/1/20260401 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000001 cancelled=False
+  voucher mid=2 aid=2 Sales/1/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000002 cancelled=False
+  voucher mid=3 aid=3 Sales/2/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000003 cancelled=False
+  voucher mid=4 aid=4 Sales/3/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000004 cancelled=False
+  voucher mid=5 aid=5 Sales/4/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000005 cancelled=False
+  voucher mid=6 aid=6 Sales/5/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000006 cancelled=False
+  voucher mid=7 aid=7 Sales/6/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000007 cancelled=False
+  voucher mid=8 aid=8 Sales/7/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000008 cancelled=False
+  voucher mid=9 aid=9 Sales/8/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000009 cancelled=False
+  voucher mid=10 aid=10 Sales/9/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-0000000a cancelled=False
+  voucher mid=11 aid=11 Sales/10/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-0000000b cancelled=False
+  voucher mid=12 aid=12 Sales/11/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-0000000c cancelled=False
+  voucher mid=13 aid=13 Sales/12/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-0000000d cancelled=False
+  voucher mid=14 aid=14 Sales/13/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-0000000e cancelled=False
+  voucher mid=15 aid=15 Sales/14/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-0000000f cancelled=False
+  voucher mid=16 aid=16 Sales/15/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000010 cancelled=False
+  voucher mid=17 aid=17 Sales/16/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000011 cancelled=False
+  voucher mid=18 aid=18 Sales/17/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000012 cancelled=False
+  voucher mid=19 aid=19 Sales/18/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000013 cancelled=False
+  voucher mid=20 aid=20 Sales/19/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000014 cancelled=False
+  voucher mid=21 aid=21 Sales/20/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000015 cancelled=False
+  voucher mid=22 aid=22 Sales/21/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000016 cancelled=False
+  voucher mid=23 aid=23 Sales/22/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000017 cancelled=False
+  voucher mid=24 aid=24 Sales/23/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000018 cancelled=False
+[shot] v-hang-on-xml-233-envelope-list-24-again (1024x768)
+######## HANG hang on-xml-233-envelope-list-24: GST on (ISGSTON 'Yes'), xml (XML import, MasterID 2, 1), 233-envelope-list-24: NO ANSWER in 60005 ms, 0 chars, the entry not in it; Tally answers after it: False; 60 s later: False 0.0 s cpu in the 90 s after; started again: True, the entry listed: True
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-hang-on-xml-233-envelope-run-37734533866-started (1024x768)
+[] failed after 60002 ms: The request was canceled due to the configured HttpClient.Timeout of 60 seconds elapsing.
+[] failed after 30003 ms: The request was canceled due to the configured HttpClient.Timeout of 30 seconds elapsing.
+[shot] v-hang-on-xml-233-envelope-run-37734533866-hung (1024x768)
+[] failed after 30004 ms: The request was canceled due to the configured HttpClient.Timeout of 30 seconds elapsing.
+[shot] v-hang-on-xml-233-envelope-run-37734533866-later (1024x768)
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-hang-on-xml-233-envelope-run-37734533866-again-started (1024x768)
+  voucher mid=1 aid=1 Journal/1/20260401 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000001 cancelled=False
+  voucher mid=2 aid=2 Sales/1/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000002 cancelled=False
+  voucher mid=3 aid=3 Sales/2/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000003 cancelled=False
+  voucher mid=4 aid=4 Sales/3/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000004 cancelled=False
+  voucher mid=5 aid=5 Sales/4/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000005 cancelled=False
+  voucher mid=6 aid=6 Sales/5/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000006 cancelled=False
+  voucher mid=7 aid=7 Sales/6/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000007 cancelled=False
+  voucher mid=8 aid=8 Sales/7/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000008 cancelled=False
+  voucher mid=9 aid=9 Sales/8/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000009 cancelled=False
+  voucher mid=10 aid=10 Sales/9/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-0000000a cancelled=False
+  voucher mid=11 aid=11 Sales/10/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-0000000b cancelled=False
+  voucher mid=12 aid=12 Sales/11/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-0000000c cancelled=False
+  voucher mid=13 aid=13 Sales/12/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-0000000d cancelled=False
+  voucher mid=14 aid=14 Sales/13/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-0000000e cancelled=False
+  voucher mid=15 aid=15 Sales/14/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-0000000f cancelled=False
+  voucher mid=16 aid=16 Sales/15/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000010 cancelled=False
+  voucher mid=17 aid=17 Sales/16/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000011 cancelled=False
+  voucher mid=18 aid=18 Sales/17/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000012 cancelled=False
+  voucher mid=19 aid=19 Sales/18/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000013 cancelled=False
+  voucher mid=20 aid=20 Sales/19/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000014 cancelled=False
+  voucher mid=21 aid=21 Sales/20/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000015 cancelled=False
+  voucher mid=22 aid=22 Sales/21/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000016 cancelled=False
+  voucher mid=23 aid=23 Sales/22/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000017 cancelled=False
+  voucher mid=24 aid=24 Sales/23/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000018 cancelled=False
+[shot] v-hang-on-xml-233-envelope-run-37734533866-again (1024x768)
+######## HANG hang on-xml-233-envelope-run-37734533866: GST on (ISGSTON 'Yes'), xml (XML import, MasterID 2, 1), 233-envelope-run-37734533866: NO ANSWER in 60002 ms, 0 chars, the entry not in it; Tally answers after it: False; 60 s later: False 0.0 s cpu in the 90 s after; started again: True, the entry listed: True
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-hang-on-xml-233-envelope-run-37729166801-started (1024x768)
+[] failed after 60004 ms: The request was canceled due to the configured HttpClient.Timeout of 60 seconds elapsing.
+[] failed after 30001 ms: The request was canceled due to the configured HttpClient.Timeout of 30 seconds elapsing.
+[shot] v-hang-on-xml-233-envelope-run-37729166801-hung (1024x768)
+[] failed after 30004 ms: The request was canceled due to the configured HttpClient.Timeout of 30 seconds elapsing.
+[shot] v-hang-on-xml-233-envelope-run-37729166801-later (1024x768)
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-hang-on-xml-233-envelope-run-37729166801-again-started (1024x768)
+  voucher mid=1 aid=1 Journal/1/20260401 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000001 cancelled=False
+  voucher mid=2 aid=2 Sales/1/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000002 cancelled=False
+  voucher mid=3 aid=3 Sales/2/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000003 cancelled=False
+  voucher mid=4 aid=4 Sales/3/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000004 cancelled=False
+  voucher mid=5 aid=5 Sales/4/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000005 cancelled=False
+  voucher mid=6 aid=6 Sales/5/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000006 cancelled=False
+  voucher mid=7 aid=7 Sales/6/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000007 cancelled=False
+  voucher mid=8 aid=8 Sales/7/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000008 cancelled=False
+  voucher mid=9 aid=9 Sales/8/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000009 cancelled=False
+  voucher mid=10 aid=10 Sales/9/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-0000000a cancelled=False
+  voucher mid=11 aid=11 Sales/10/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-0000000b cancelled=False
+  voucher mid=12 aid=12 Sales/11/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-0000000c cancelled=False
+  voucher mid=13 aid=13 Sales/12/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-0000000d cancelled=False
+  voucher mid=14 aid=14 Sales/13/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-0000000e cancelled=False
+  voucher mid=15 aid=15 Sales/14/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-0000000f cancelled=False
+  voucher mid=16 aid=16 Sales/15/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000010 cancelled=False
+  voucher mid=17 aid=17 Sales/16/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000011 cancelled=False
+  voucher mid=18 aid=18 Sales/17/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000012 cancelled=False
+  voucher mid=19 aid=19 Sales/18/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000013 cancelled=False
+  voucher mid=20 aid=20 Sales/19/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000014 cancelled=False
+  voucher mid=21 aid=21 Sales/20/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000015 cancelled=False
+  voucher mid=22 aid=22 Sales/21/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000016 cancelled=False
+  voucher mid=23 aid=23 Sales/22/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000017 cancelled=False
+  voucher mid=24 aid=24 Sales/23/20261002 guid=fad3897a-9dee-4f67-b904-8a372747432b-00000018 cancelled=False
+[shot] v-hang-on-xml-233-envelope-run-37729166801-again (1024x768)
+######## HANG hang on-xml-233-envelope-run-37729166801: GST on (ISGSTON 'Yes'), xml (XML import, MasterID 2, 1), 233-envelope-run-37729166801: NO ANSWER in 60004 ms, 0 chars, the entry not in it; Tally answers after it: False; 60 s later: False 0.0 s cpu in the 90 s after; started again: True, the entry listed: True
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-hang-on-xml-hanging-collection-run-37729166801-started (1024x768)
+[] failed after 60001 ms: The request was canceled due to the configured HttpClient.Timeout of 60 seconds elapsing.
+[] failed after 30001 ms: The request was canceled due to the configured HttpClient.Timeout of 30 seconds elapsing.
+[shot] v-hang-on-xml-hanging-collection-run-37729166801-hung (1024x768)
+######## HANG hang on-xml-hanging-collection-run-37729166801: GST on (ISGSTON 'Yes'), xml (XML import, MasterID 2, 1), hanging-collection-run-37729166801: NO ANSWER in 60001 ms, 0 chars, the entry not in it; Tally answers after it: False; 60 s later: False ; started again: , the entry listed: 
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-hang-on-xml-hanging-collection-correct-one-id-started (1024x768)
+######## ANSWERED hang on-xml-hanging-collection-correct-one-id: GST on (ISGSTON 'Yes'), xml (XML import, MasterID 2, 1), hanging-collection-correct-one-id: answered in 25 ms, 14494 chars, the entry in it; Tally answers after it: True; 60 s later: True ; started again: , the entry listed: 
+  INFO hang4: probes with no answer or Tally not answering after: on-xml-233-envelope-list-24, on-xml-233-envelope-run-37734533866, on-xml-233-envelope-run-37729166801, on-xml-hanging-collection-run-37729166801
+[08:58:11] done (hang4)
