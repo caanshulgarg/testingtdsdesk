@@ -67,11 +67,12 @@ show the current state. Clearing notifications never changes them.
    (`NIN_BALLOONUSERCLICK`, recorded as `clicked`) or closes it (`NIN_BALLOONTIMEOUT`, recorded as `closed`). Windows
    sends that same message when a balloon times out unread, so the two cannot be told apart. Rule 2 already covers that
    case. A balloon taken away by the program (`NIN_BALLOONHIDE`) is not a dismissal.
-4. **Clear notifications** (tray menu) marks every current one cleared (`cleared`): every problem there now, whether
-   shown or still waiting its 2-3 minutes, and the balloon on screen. It takes the balloon off the screen and says how
-   many were cleared ("2 notifications cleared: they are not shown again for the same problems. A new problem still
-   shows once. The icon keeps showing the bridge's state."). The list Windows keeps in its notification centre belongs
-   to Windows. The person clears it there.
+4. **Clear notifications** (tray menu) marks every current notification that was shown cleared (`cleared`): the
+   problems there now whose notification was shown, and the balloon on screen. It takes the balloon off the screen and
+   says how many were cleared ("2 notifications cleared: they are not shown again for the same problems. A new problem
+   still shows once. The icon keeps showing the bridge's state."). A problem still waiting its 2-3 minutes has not been
+   seen, so it is left alone and still shows once when due (review Low, 08-Oct). The list Windows keeps in its
+   notification centre belongs to Windows. The person clears it there.
 5. **The file** is per Windows user: `%LOCALAPPDATA%\FinCom Bridge\notifications-cleared.json`. The icon runs as the
    signed-in user, so each user has their own. It is written whole, like the bridge's other state files (`saveFile`: a
    temporary file, then one rename, tried again a few times). Entries older than 90 days are left out on reading and
@@ -80,6 +81,17 @@ show the current state. Clearing notifications never changes them.
    cannot be written, the gate remembers in memory until the icon starts again, and says so once in the log.
 6. Each notification shown and each clearing is a line in the bridge's log ("Notification shown: ...",
    "Notifications cleared from the tray menu: n (...)").
+
+### Known limits (review, 08-Oct: kept by design)
+
+- **The same problem later the same day is silent.** If Tally is closed at 10:00, opened again, and closed again at
+  16:00, that is the same problem (kind, day, computer), so nothing shows at 16:00. The icon turns red and its tooltip
+  says "Tally not open". This is the owner's "never more than once per problem". The next day is a new problem.
+- **Two tray icons of the same Windows user: the last writer wins.** Each icon reads the file when it starts and writes
+  its whole list. This can happen when the same user is signed in twice (fast user switching, or a remote session
+  beside the console), or briefly while an icon starts again after an update. One icon's later write can then drop
+  what the other recorded since. At worst, a problem shows once more in the other session. Nothing is hidden, and the
+  file stays whole (one rename).
 
 Entry example:
 
@@ -95,7 +107,7 @@ Entry example:
 fingerprint shows, whether another kind, company, day or computer. The 90-day expiry. A corrupt file (garbage, half
 written, an array, bad entries beside good, empty, a BOM, a folder in its place) gives the safe default without a
 crash. Once per problem with no nagging, across 50 on/off cycles and a restart. Each of the five problems goes from
-`trayProblems` through the gate. Clear notifications counts and words. Replies are one per click and not recorded. The
+`trayProblems` through the gate. Clear notifications counts and words (only what was shown; a problem still waiting shows when due). Replies are one per click and not recorded. The
 source check that every balloon goes through the gate. `bridge-go/notices_windows_test.go`, run in the Windows job of
 `bridge-windows.yml`, covers Windows' click, close and hide messages through the real window procedure, and checks that
 the file is under this user's `%LOCALAPPDATA%`.
