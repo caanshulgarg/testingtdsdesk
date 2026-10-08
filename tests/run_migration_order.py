@@ -20,8 +20,8 @@ ORDERS = {"staging": BASE + [("34 (first, as on staging)", os.path.join("..", ".
 # both orders. 61 (privileges, run on staging 06-Oct-2026; branch perms-61) before 62 when that file is in the tree; 62 the TDS
 # rate worked out; 63 (outbox) and 67 (renumbering) both replace tally_recorder_line with ONE combined text: staging's order
 # runs them 63 -> 67, a fresh database's 67 -> 63, and the two must end with identical function texts (the check below)
-NEXT240 = {"staging": [(62, "migration-62-tds-rate-worked-out.sql"), (63, "migration-63-recorder-repeat.sql")],
-           "fresh": [(62, "migration-62-tds-rate-worked-out.sql"), (63, "migration-63-recorder-repeat.sql")]}
+NEXT240 = {"staging": [(62, "migration-62-tds-rate-worked-out.sql"), (63, "migration-63-recorder-repeat.sql"), (64, "migration-64-pages-live.sql")],
+           "fresh": [(62, "migration-62-tds-rate-worked-out.sql"), (63, "migration-63-recorder-repeat.sql"), (64, "migration-64-pages-live.sql")]}
 for _k, _o in ORDERS.items():
     if os.path.exists(os.path.join(SQLDIR, "migration-61-privileges.sql")) and (61, "migration-61-privileges.sql") not in _o: _o.append((61, "migration-61-privileges.sql"))
     _o.extend(NEXT240[_k])
