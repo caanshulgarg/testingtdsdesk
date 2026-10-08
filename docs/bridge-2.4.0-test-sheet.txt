@@ -1,0 +1,76 @@
+FINCOM 2.4.0 - TEST SHEET (NWS144, staging)
+
+File:        FinComBridge-Setup-2.4.0.exe
+Fingerprint: (filled in when the setup is built)
+Link:        https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.4.0.exe
+
+What 2.4.0 changes (the full notes: docs/bridge-2.4.0-notes.md; next-inflight and next-reask are not in it):
+1. Each Windows user's own recorder file (|w= on every line).
+2. TDS details: the whole TDS list (the owner's decision of 07-Oct-2026; FinComVoucherByNumber changed, nothing added).
+3. Nothing lost between the bridge and FinCom; a repeat is not stored twice (migration 63).
+4. Look up, the ledgers and Sync activity refresh by themselves (migration 64).
+5. The nightly self-check, existing requests only (migration 65).
+6. Master hooks: Pay Head, Stock Item and Godown (Unit and Employee left out; migration 66).
+7. Renumbered entries take Tally's new number (the owner: "renumbering yes"; migration 67).
+FinCom's cloud: migrations 62 to 67 (add-only; the owner runs them, after 2.3.5's 68 and 70), and tally-ingest.
+
+Migration files (md5):
+   migration-62-tds-rate-worked-out.sql    bcdfd7b72b1d69b429e6b15a5e9652c6
+   migration-63-recorder-repeat.sql        ff8011351b8856025710b68bad0b690c
+   migration-64-pages-live.sql             0a91d37ab313331399dffdaf677de9e6
+   migration-65-selfchecks.sql             eabe7dda1e8a12a11e0d9fa71ab46b7f
+   migration-66-recorder-masters.sql       fea953435146ec8bdc3e77c5808e1714
+   migration-67-recorder-renumbered.sql    78676805ebdaf9b24e41bc2708ed0a90
+
+Before you start: you are signed in to FinCom as the owner, TallyPrime 7.1 is open on NWS144, GARG SHEKHAR & COMPANY
+and IX DESIGNS open in the Tally of the Windows user whose bridge you check. In every entry you make for this sheet,
+start the narration with TRIAL. Write down the time (IST) of each check.
+
+CHECK 1 - THE VERSION AND THE ADD-ON
+   Install FinComBridge-Setup-2.4.0.exe and compare its fingerprint with the one above. In Tally load the new add-on
+   (C:\ProgramData\FinCom\addon\FinComRecorder.tdl; F1 > TDL & Add-On > reload).
+   You should see: the tray says FinCom Bridge 2.4.0; FinCom's Tally page shows version 2.4.0 for your computer.
+
+CHECK 2 - EACH WINDOWS USER'S OWN FILE
+   In GARG SHEKHAR make a Journal of Rs 1, narration "TRIAL 240 user 1".
+   You should see: in C:\ProgramData\FinCom\recorder a file named <company GUID>-<today>-<your Windows user>.txt with
+   the save's lines, each with |w=<your Windows user>; the entry in FinCom's books within a few seconds. A second
+   Windows user's saves go to that user's file and that user's bridge.
+
+CHECK 3 - TDS ON A PAYMENT
+   In IX DESIGNS make a Journal with TDS entered on Tally's screen (a contractor's bill, 2%), narration "TRIAL 240 tds".
+   You should see: in FinCom the entry's TDS details with the nature of payment, the party, the section, the assessable
+   amount, the tax and the rate (marked "worked out" where Tally stores 0, once migration 62 has run).
+
+CHECK 4 - NOTHING LOST ON A RESTART
+   Make a Journal of Rs 1, narration "TRIAL 240 outbox", and right away right-click the FinCom icon > Restart.
+   You should see: the entry in FinCom's books once, never twice.
+
+CHECK 5 - PAGES REFRESH BY THEMSELVES (after migration 64)
+   Open Look up on one ledger in FinCom. In Tally make a Journal of Rs 1 on that ledger, narration "TRIAL 240 live".
+   You should see: within a few seconds Look up shows the entry without reloading the page.
+
+CHECK 6 - THE NIGHTLY SELF-CHECK (after migration 65)
+   Leave Tally open with both companies overnight (no one using the computer after 22:00).
+   You should see: next morning, on FinCom's Tally page, the card of NWS144 has a line per company with last night's
+   check in plain words (green: every change in FinCom; red: what is missing).
+
+CHECK 7 - A STOCK ITEM, A PAY HEAD AND A GODOWN (after migration 66)
+   In IX DESIGNS alter a Stock Item's name (add " TRIAL"), then alter it back. Do the same for a Godown and a Pay Head.
+   You should see: Sync activity lists them as master changes; nothing in the books changes. Altering a Unit sends
+   nothing (left out).
+
+CHECK 8 - RENUMBERING (after migration 67)
+   In GARG SHEKHAR make three Receipts of Rs 1 (narrations "TRIAL 240 r1", "r2", "r3"). Delete the first.
+   You should see: FinCom's books show the other two with Tally's new numbers ("renumbered in Tally" in Sync activity).
+
+How to send the log lines: right-click the FinCom icon near the clock > Show log. On NWS144 each Windows user has their
+own FinCom icon and their own log: send the log of the Windows user named in the check.
+
+HOW TO ROLL BACK (go back to 2.3.5)
+   1. Right-click the FinCom icon near the clock > "Roll back to the previous version".
+   2. A question names the version it goes back to (2.3.5). Answer Yes.
+   3. The icon goes away for a few seconds and comes back.
+   4. In Tally load the add-on of 2.3.5 again if the per-user files are not wanted.
+   You should see: within a minute, FinCom's Tally page shows version 2.3.5 for your line. Automatic updates stay off on
+   this computer until FinCom turns them on again.

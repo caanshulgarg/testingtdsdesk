@@ -99,10 +99,9 @@ const AlertHub = {
   // a line waiting because of FinCom's side: no body, the add-on's placeholder GUID ("<company GUID>-00000000"), no GUID,
   // FinCom's own posting coming back, or the queue; then FinCom fetches the details itself and nothing is to be done
   oursHeld(l){
-    const why = String(l.held_why || "");
-    if (/^month locked/i.test(why)) return false;
-    return l.state === "queued" || l.state === "received" || l.state === "failed" && /queue|timeout|server/i.test(why) ||
-      /no entry body|waiting for the entry's details|no GUID|placeholder|FinCom (posting|id) /i.test(why) || /-0{8}$/.test(String(l.object_guid || ""));
+    // review of f0f1531f: the one classifier (Rec.needKind, src/js/61): "ours" = being fetched, settles by itself; the
+    // page and the bell can never disagree. A line a person must settle is never "nothing to do"
+    return typeof Rec === "object" && Rec.needKind ? !Rec.needKind(l) : false;
   },
   // "1 entry", "3 entries"
   n(k){ return k + (k === 1 ? " entry" : " entries"); },
@@ -203,7 +202,9 @@ const AlertHub = {
           out.push(Object.assign(base, {sev: "warn", text: who + ": " + (hd.length === b.other.length ? this.heldSay(hd, true) + "."
               : (b.other.length === 1 ? "1 change" : b.other.length + " changes") + " from Tally " + (b.other.length === 1 ? "is" : "are") + " waiting, not yet in the books" + (locked.length === b.other.length ? " (the month is locked)." : ".")),
             // FinCom 2.3.5: lines the bridge gave up on say the one thing to do (Sync activity's "Needs you" has each day's button)
-            fix: locked.length === b.other.length ? "Apply them on Sync activity, or unlock the month." : b.other.every(l => typeof Rec === "object" && Rec.needKind && Rec.needKind(l) === "daybook")
+            fix: locked.length === b.other.length ? "Apply them on Sync activity, or unlock the month." : b.other.every(l => Rec.needKind(l) === "readstop")
+              ? "Needs you: reading from Tally is stopped from FinCom on that computer; an owner resumes it on the Tally page."
+              : b.other.every(l => ["daybook", "dupid"].includes(Rec.needKind(l)))
               ? "Needs you: upload the Day Book for " + [...new Set(b.other.map(l => this.heldDay(l)).filter(Boolean))].sort().map(d => fmtDate(tallyDate(d))).join(", ") + " (Sync activity has each day's button)."
               : hd.length === b.other.length ? "See them on Sync activity." : "See why on Sync activity.", act: {label: "Sync activity", run: () => Rec.openActivity(b.cid)}}));
         } else if (b.off.length){
@@ -211,6 +212,12 @@ const AlertHub = {
             fix: recFix}));
         }
       });
+      // ---- 2.4.0 review MEDIUM (next-renumber): entries Tally may have renumbered that FinCom Bridge could not read again
+      // (Rec.renumberNeeds: one a company, from every computer's beat): Needs you, the Day Book from that day
+      if (Rec.renumberNeeds) Rec.renumberNeeds().forEach(g => out.push({key: "renumber:" + g.company, sev: "warn", cid: g.cid, selfClear: true, details: g.pc,
+        text: g.text.replace(/ \u2014 upload the Day Book from .*$/, "."),
+        fix: "Needs you: upload the Day Book from " + fmtDate(g.day) + " so FinCom has Tally's numbers.",
+        ...(g.cid ? {act: {label: "Upload the Day Book from " + fmtDate(g.day), run: () => Rec.uploadFrom(g.cid, g.day)}} : {})}));
       // ---- one problem a computer: not answering, tried again by itself, silent today
       const devs = ((typeof TLight === "object" && TLight.st.devs) || []).filter(d => d && !d.revoked);
       const silent = Rec.silentOf();
@@ -306,7 +313,8 @@ const AlertHub = {
 // <this browser>: AlertClear.device(), a random id kept in this browser (localStorage "fincom:device-id"). The credit's
 // episode is this browser's too: another computer that saw it go low at another time shows it once more (never fewer).
 // (the review of 08-Oct, M1: every fingerprint names an occurrence, so a cleared notification can come back as a new one)
-// line:<id>:need|wait: AlertHub.lineAtom ("need" when a person must act: Rec.needKind), the same in every place, so a
+// line:<id>:need|wait: AlertHub.lineAtom ("need" when a person must act: Rec.needKind, THE one shared classifier of
+// Sync activity, the books' banner and the bell, src/js/61), the same in every place, so a
 // line cleared in the bell is cleared on the books' banner and in Sync activity too.
 // Where it is kept: signed in to the firm account, in FinCom's cloud (migration 68: app_alert_dismissals, the person's own
 // rows, through alert_dismiss / alert_dismiss_undo / alert_dismissals_list), with a copy in this browser so a reload hides

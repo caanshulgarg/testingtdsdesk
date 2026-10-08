@@ -158,7 +158,7 @@ func TestFast234StripCaptures(t *testing.T) {
 			}
 			s := fastStripVoucher(cleanXML(vs[0]))
 			for _, p := range fastLeafPaths(s) {
-				if !ok[p] {
+				if !fastPathOK(ok, p) {
 					t.Errorf("%s %s: %s kept (not an approved field)", d, tgt, p)
 				}
 			}
@@ -187,7 +187,7 @@ func TestFast234StripCaptures(t *testing.T) {
 			}
 			sb := fastStripCollection(cleanXML(bn[0]))
 			for _, p := range fastLeafPaths(sb) {
-				if !ok[p] {
+				if !fastPathOK(ok, p) {
 					t.Errorf("%s %s by number: %s kept (not an approved field)", d, tgt, p)
 				}
 			}
@@ -245,13 +245,14 @@ func TestFast234StripDropsEverythingElse(t *testing.T) {
 	if got := fastStripVoucher(both); got != "" {
 		t.Fatalf("both lists: %s", got)
 	}
-	// the approved paths are exactly today's fetch
+	// the approved paths are exactly today's fetch (release-240: and the TDS list and its sub-list whole, the owner's
+	// decision of 07-Oct-2026, next-tds: kept by the strip, not in the FETCHLIST)
 	var ps []string
 	for p := range fastApprovedPaths() {
 		ps = append(ps, p)
 	}
 	sort.Strings(ps)
-	if len(ps) != 61 {
+	if len(ps) != 61+2 || strings.Join(liveFetchWild(), ", ") != strings.TrimPrefix(tdsWildAdded, ", ") {
 		t.Fatalf("%d approved paths: %v", len(ps), ps)
 	}
 }
@@ -271,7 +272,7 @@ func testFetchOf(request string) string {
 // --- 2.3.4: the version, the allow-list's decision line naming FinComVoucherObject with the owner's words of 08-Oct-2026,
 // the notes and the test sheet
 func TestFast234VersionAndDecisionLine(t *testing.T) {
-	if BridgeVersion != "2.3.5" {
+	if BridgeVersion != "2.4.0" {
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))

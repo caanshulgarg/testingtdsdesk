@@ -17,8 +17,8 @@ revoked; `begin; ... commit;`; safe to run twice) and is shown to the owner befo
 
 ## The two valid orders (both end with the same function texts: `tests/run_migration_order.py` asserts it)
 
-- staging: 32 → 33 → 35 → 34 (first) → 36b → 37 → 36 → 38 → 39 (applied 03-Oct, **except 39's tally_ingest_day part**: both forms are still 38's) → 40 → 41 (run 03-Oct, evening; its 8-argument `tally_ingest_day` superseded 39's) → 42 → 43 (run 04-Oct) → 44 (run 04-Oct) → 45 (run 04-Oct) → **46** → **47** → **48** (run by the owner) → **49** → **50** (run by the owner) → 51 → 52 → 53 → 54 → 55 → 56 (live on staging) → 57 → 58 → 59 → 60 → 68 → 70
-- a fresh database: 32 → 33 → 35 → 34 (reviewed) → 36 → 36b → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 51 → 52 → 53 → 54 → 55 → 56 → 57 → 58 → 59 → 60 → 68 → 70
+- staging: 32 → 33 → 35 → 34 (first) → 36b → 37 → 36 → 38 → 39 (applied 03-Oct, **except 39's tally_ingest_day part**: both forms are still 38's) → 40 → 41 (run 03-Oct, evening; its 8-argument `tally_ingest_day` superseded 39's) → 42 → 43 (run 04-Oct) → 44 (run 04-Oct) → 45 (run 04-Oct) → **46** → **47** → **48** (run by the owner) → **49** → **50** (run by the owner) → 51 → 52 → 53 → 54 → 55 → 56 (live on staging) → 57 → 58 → 59 → 60 → 68 → 70 → 62 → 63 → 64 → 65 → 66 → 67 (2.4.0, not run)
+- a fresh database: 32 → 33 → 35 → 34 (reviewed) → 36 → 36b → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46 → 47 → 48 → 49 → 50 → 51 → 52 → 53 → 54 → 55 → 56 → 57 → 58 → 59 → 60 → 68 → 70 → 62 → 67 → 63 → 64 → 65 → 66
 
 | # | File | What it adds |
 |---|---|---|
@@ -42,6 +42,12 @@ revoked; `begin; ... commit;`; safe to run twice) and is shown to the owner befo
 | 48 | `migration-48-day-cache-once.sql` | round 20 part c, "the database fix" (docs/cloud-recorder-plan.md 1); **contains "delete from"** (44's `tally_ingest_entries` text, which replaces a re-sent entry's lines and bills): posted whole for the owner to run in the SQL Editor. `tally_ingest_entries(book, vouchers, lines, p_rebuild boolean)` (44's text; false: the days touched are answered, not rebuilt); the 3-argument form stays and calls it with true; `tally_recorder_line` = 47's text, inside `tally_recorder_apply` (the transaction-local `fincom.day_rebuild_once`) it calls the 4-argument form with false and returns the days; `tally_recorder_apply` rebuilds the collected days ONCE after the loop (before a ledger line, which reads the balances, the days so far first). The owner's condition (identical trial balance and md5 of the whole `tally_ledger_day`, old against new, for a single entry, 500 lines on one day and a send over 30 days) is `tests/run_migration48.py` |
 | 68 | `migration-68-alert-dismissals.sql` (08-Oct-2026, "clear notifications"; branch `next-alerts-clear`; **run on staging by the owner**, md5 184e7959…; never edited) | the notifications a person cleared: `app_alert_dismissals` (firm_id, user_id, alert_key, fingerprint, words, batch, cleared_at, undone_at; row security: a person reads and adds only their own rows in their own firm; no update or delete for authenticated); `alert_dismiss(p_items jsonb)` (one batch a Clear; the same key + fingerprint not added twice; at most 500), `alert_dismiss_undo(p_batch uuid)` (stamps undone_at on that Clear's own rows: kept, never removed), `alert_dismissals_list()` (own, not undone, newest first). Needs only members and my_firm(): independent of 61-67 and 69 (other branches), runs after 60 in either order. Add-only, one transaction, `lock_timeout` 10 s, no "delete from", safe twice. Tested by `run_migration68.py` and `run_migration_order.py`. Until it runs, the app keeps the cleared notifications in each browser (no error shown). |
 | 70 | `migration-70-alert-dismissals-tighten.sql` (08-Oct-2026, the review of next-alerts-clear: M2, L(a); NOT yet run on staging) | after 68: INSERT on `app_alert_dismissals` revoked from authenticated (the only way in is `alert_dismiss`, security definer, with its caps; SELECT and the policies kept); CHECK constraints `app_alert_dismissals_key_len` / `_fp_len` (<= 2000) and `_words_len` (<= 500), added NOT VALID then VALIDATEd; `alert_dismissals_list()` lists up to 20000 rows (68: 5000). Add-only (a revoke, three constraints, one function's text), one transaction, `lock_timeout` 10 s, no "delete from", safe twice. Tested by `run_migration70.py` and `run_migration_order.py`. |
+| 62 | `migration-62-tds-rate-worked-out.sql` (FinCom 2.4.0, branch `next-tds`; NOT run) | `tally_tds_lines.rate_worked_out` and `tally_ingest_details` (57's text, lines marked "62"): the TDS rate worked out where Tally stores 0, marked so (the owner's decision of 07-Oct-2026, option A) |
+| 63 | `migration-63-recorder-repeat.sql` (FinCom 2.4.0, branch `next-outbox`; NOT run) | `tally_recorder_line`: the ONE combined text with 67 (lines marked "63": a repeat of a line FinCom has answered 'duplicate', already: true; lines marked "67"); index `tally_recorder_lines_line` (book_id, line_id), not unique |
+| 64 | `migration-64-pages-live.sql` (FinCom 2.4.0, branch `next-realtime`; NOT run) | `tally_book_changes` (RLS) written by statement triggers (`tally_book_changed`) on the copy's five tables; the Realtime publication gets it and three small tables |
+| 65 | `migration-65-selfchecks.sql` (FinCom 2.4.0, branch `next-selfcheck`; NOT run) | `tally_selfchecks` (RLS) and `tally_selfcheck_compare` / `_copy` / `_record` / `_words`: the nightly self-check's records |
+| 66 | `migration-66-recorder-masters.sql` (FinCom 2.4.0, branch `next-masterhook`; NOT run) | `tally_recorder_masters` and `tally_recorder_masters_save`: the add-on's Pay Head, Stock Item and Godown lines (heads only) |
+| 67 | `migration-67-recorder-renumbered.sql` (FinCom 2.4.0, branch `next-renumber`; NOT run) | `tally_recorder_line`: the SAME combined text as 63 (lines marked "67": a renumbered entry applied with Tally's number); 63's index if missing |
 
 Run on staging (corrected 04-Oct-2026, evening):
 - 43 by the owner on 04-Oct-2026 (the seven function bodies checked against this file by md5 of prosrc: identical).
@@ -255,3 +261,140 @@ add-on's placeholder GUID is held as a GUID-less one (R3-L1: twice it broke the 
 applied for its GUID is applied and cancelled again, below a delete 'stale' as before (R3-L2); a GUID-less delete with no
 date promises no Day Book (R3-L3). The owner's "nothing to remove" (08:05) is 57's (`tally_ingest_delete`), not repeated.
 Tested by `run_migration60.py` (on 56 -> 57 -> 58) and `run_migration_order.py` (56 -> 57 -> 58 -> 59 -> 60 in both orders).
+
+Next bridge release after 2.3.1 (07-Oct-2026, the owner's decision, option A: "Work out the rate as tax divided by
+assessable amount where Tally stores 0, and mark it as worked out"): `migration-62-tds-rate-worked-out.sql` runs after 57
+(staging, where 58, 59, 60 and 61 have run: ... -> 57 -> 58 -> 59 -> 60 -> 61 -> 62; a fresh database the same; it needs
+only 57 and touches nothing of 58 .. 61; add-only, one transaction, `lock_timeout` 10 s, no "delete from", safe twice; NOT
+yet run on staging). One column, `tally_tds_lines.rate_worked_out` (boolean, default false: the rate is Tally's own), and
+one function replaced, `tally_ingest_details` (57's text with the lines marked "62" changed; granted to nobody): a TDS row
+keeps parse.js's `rateWorkedOut` (Tally 7.1 stores TAXRATE 0 on an entry keyed on its screen; the reader works the rate
+out from the Income Tax sub-category's tax and assessable amount). `tally_tds_details(book)` is not replaced (its columns
+would change); the mark is read from `tally_tds_lines`, which the firm's members read. tally-ingest needs no change (it
+passes each TDS detail's fields on as they are); a cloud without 62 stores the worked-out rate without the mark. Tested by
+`run_migration62.py` (on the real S5 capture of run 37492981527) and `run_migration_order.py` (62 in both orders, after 61,
+privileges, when that file is in the tree). Numbers taken on other branches: 61 privileges (perms-61), 63 outbox, 64
+realtime, 65 selfcheck, 66 masterhook.
+
+Next release (07-Oct-2026, branch next-outbox; NOT run anywhere): `migration-63-recorder-repeat.sql` runs after 60 (and 61, 62 of other branches; independent of them) in both
+orders (... -> 59 -> 60 -> 63; add-only, one transaction, `lock_timeout` 10 s, no "delete from", safe twice). FinCom ignores
+a repeat of a recorder line: `tally_recorder_line` (60's text, the lines marked "63" added; granted to nobody) answers a NEW
+arrival whose book, computer and line id (and "again" marker, when the bridge sends one) match a row already there
+'duplicate' with already: true and the first row's state, never storing or applying it again; a 'failed' row and an
+unmarked ":resolved" line whose last row is held (2.3.1's deliberate resend) are not repeats. One index (book_id, line_id),
+not unique (the rows since 44 hold repeats, and a ":resolved" line is resent on purpose). Tested on pg_stand only:
+tests/run_migration63.py, tests/run_recorder_repeat_server.py, tests/run_migration_order.py.
+
+Next release (07-Oct-2026, branch next-realtime; NOT run anywhere): `migration-64-pages-live.sql` runs after 60 in both
+orders (... -> 59 -> 60 -> 64; independent of 61, 62 and 63 of other branches; add-only, one transaction, `lock_timeout`
+10 s, no "delete from", safe twice). Look up, the ledgers and Sync activity refresh by themselves: tally_book_changes (one
+row per book; RLS, the firm reads; never deleted), written once per transaction by statement triggers on the copy's five
+tables (tally_book_changed, never failing the write), and the supabase_realtime publication gets tally_book_changes,
+tally_sync_cursor, tally_month_locks and tally_tieouts. The copy's own tables are NOT published: tally_lines has no replica
+identity (its deletes would fail), Realtime sends DELETE events' keys to every firm, and a day read is thousands of rows.
+Tested on pg_stand only: tests/run_migration64.py, tests/run_migration_order.py; the pages: tests/run_pages_live.py.
+
+Next release (07-Oct-2026, item e: the nightly self-check; `docs/selfcheck-requests-for-approval.md`):
+`migration-65-selfchecks.sql` runs after 60 in both orders (fresh and staging: ... -> 58 -> 59 -> 60 -> 65), and after 61
+(privileges, run on staging), 62 (TDS), 63 (outbox) and 64 (realtime) where they ran: it touches none of their objects. It
+needs 32's `tally_vouchers.deleted_at`, 33's `tally_ledgers.merged_into`, 44's `tally_ledger_day_rebuild` counting and 47's
+`tally_service_or_owner()`; add-only, one transaction, `lock_timeout` 10 s, no "delete from", nothing dropped, safe twice;
+NOT yet run on staging; md5 eabe7dda1e8a12a11e0d9fa71ab46b7f. One new table, `tally_selfchecks` (one row per nightly check,
+never updated; RLS: the firm's members read; written by tally-ingest only; anon nothing, authenticated select only, its
+sequence closed to both), and four new functions, none replacing another: `tally_selfcheck_compare` (which of Tally's
+listed entries the copy lacks), `tally_selfcheck_copy` (the copy's own trial balance against openings and entries),
+`tally_selfcheck_words` and `tally_selfcheck_record`; security definer, search_path public, pg_temp, the service role only.
+Without it tally-ingest's kind `selfcheck` answers 503 notReady and the bridge does not ask again that night; the Tally
+page shows no line. Tested by `run_migration65.py` (on 32 -> ... -> 60) and `run_migration_order.py` (65 in both orders).
+
+Branch next-masterhook (07-Oct-2026, the add-on's master forms): `migration-66-recorder-masters.sql` (number assigned by the
+coordinator; 61-65 belong to other branches) runs after 44 in any order relative to 61-65 (add-only, one transaction,
+`lock_timeout` 10 s, no "delete from", safe twice; NOT run anywhere: written only). One new table `tally_recorder_masters`
+(heads only: master_type, name, parent, object_guid, master_id, alter_id, saved_at, pc, tally_user, bridge; unique
+(book_id, line_id); RLS: the firm reads its own rows; nobody writes directly) and one new function
+`tally_recorder_masters_save(p_firm, p_book, p_device, p_lines)` (service role only) that keeps master_created /
+master_altered lines ('kept' / 'duplicate'). tally-ingest's recorder_lines sends those lines there; a cloud without 66
+answers them 'failed' with words and handles the rest of the call as before. Tested by `run_migration66.py` and
+`run_recorder_masters_server.py` (through tally-ingest under Deno).
+
+next-renumber (08-Oct-2026, the owner's "renumbering yes"; a later release than 2.3.4): `migration-67-recorder-renumbered.sql`
+runs after 60 in both orders (... -> 58 -> 59 -> 60 -> 67; add-only, one transaction, `lock_timeout` 10 s, no "delete from",
+safe twice; NOT run on staging or production). One function replaced, `tally_recorder_line` (60's text, the lines marked "67"
+changed; granted to nobody): an altered line WITH Tally's entry at exactly the AlterID the copy holds, numbered otherwise than
+the copy, is applied (Tally renumbered the entry after an insert or delete: its AlterID does not move, tally-versions P9r),
+instead of 'duplicate'; its words "renumbered in Tally: <type> <old> is <type> <new> now (the same AlterID n)". The numbers 61
+to 66 and 69 are taken on other branches (61 perms-61, 62 next-tds, 63 next-outbox, 64 next-realtime, 65 next-selfcheck, 66
+next-masterhook, 69 next-push); 63 and 69 replace `tally_recorder_line` too, so whichever of 63, 67, 69 lands later carries the
+others' marked lines. Tested by `run_migration67.py` (on ... -> 58 -> 60) and `run_migration_order.py` (60 -> 67 in both orders).
+
+FinCom Bridge 2.4.0 (release-240, 08-Oct-2026; NOT run anywhere): the next release's migrations run after 2.3.5's 68 and 70 (independent
+of them): staging ... -> 60 -> 68 -> 70 -> 62 -> 63 -> 64 -> 65 -> 66 -> 67, a fresh database ... -> 60 -> 68 -> 70 -> 62 -> 67 -> 63 -> 64 ->
+65 -> 66 (61, privileges, before 62 wherever its file is in the tree). **63 and 67 each replace `tally_recorder_line`: both files
+carry ONE combined, add-only text** (60's text with the lines marked "63", a repeat of a line FinCom has answered 'duplicate'
+with already: true, AND the lines marked "67", a renumbered entry applied), and each makes 63's index
+`tally_recorder_lines_line` if it is not there; so whichever of the two runs last leaves the same function, in either order,
+and neither one's behaviour is lost. `run_migration_order.py` runs them 63 -> 67 (staging) and 67 -> 63 (fresh) and requires
+identical function texts; `run_migration63.py` and `run_migration67.py` check their own marked lines and that the other file
+carries the same text. 69 (next-push, not in 2.4.0 yet) is to carry the same combined text with its lines marked "69" when it
+is merged.
+
+2.4.0 part 2 review (08-Oct-2026), next-outbox (63 still NOT run anywhere, so changed in place; add-only, safe twice):
+- **M2, order with 67 and 69.** 63 (this branch), 67 (next-renumber) and 69 (next-push) each replace `tally_recorder_line`
+  on 60's text. 63 now STOPS where the installed line carries "-- 67" or "-- 69" (raises "migration 63 is written on 60's
+  tally_recorder_line, and migration 67 / 69 has run here ... (nothing changed)", the transaction rolled back, the index not
+  made); 69 stops likewise where 63 has run. The release runs ONE combined definition (made by release-240's integrator),
+  never two of these files over each other. Tested: run_migration63.py section 8.
+- **M1 (the bridge).** A group FinCom answers 200 is no longer marked sent whole: a line answered 'failed' (a lock
+  timeout, a deadlock, a line tally-ingest could not read) or left without a result stays on the PC (its offsets held) and
+  goes again after RecorderRetrySec x 2^n (30 minutes at most), RecorderFailedTries times (default 12, about 3.5 hours);
+  then it is given up, said in the log ("answered failed N times ... not sent again"); FinCom's record keeps its failed
+  row where it stored one (Sync activity). The other lines of the group are marked sent. A resend is stored once (63's repeat check: a failed
+  row is no repeat, so the resend is applied; an applied one is answered "already have"). A cloud answer {queued: n}
+  with no results at all (before round 20) is taken as before. Tests: outbox_failed_test.go.
+- **L2.** failed.txt (no day in its name) read past a line not yet confirmed no longer keeps every sent id for ever
+  (keepFrom "00000000"): the day that first happened is kept with the file's offset (`keep` in recorder-offsets.json)
+  and the sent ids are kept from that day on. Test: TestOutboxFailedTxtKeepsFromItsDay.
+- **L5.** run_migration63.py and run_recorder_repeat_server.py are in tests/ci/tests.txt (the latter on its own
+  PostgreSQL port, 55463; run_enqueue_held_id.py has 55461).
+- **Notes (L1, L3, L4).** Deploy order: run 63 BEFORE the tally-ingest of this branch (it reads `already` / `was` from 63's
+  answers; on a cloud without 63 a repeat is stored again, as before) and before the 2.4.0 bridge goes out (the bridge
+  resends every line not confirmed; without 63 such a resend is a second row). A line resent after a 'failed' answer
+  reaches FinCom AFTER the lines that followed it in its group (the order of one book's lines is kept only among the
+  lines that went together); FinCom's per-entry AlterID rules decide a late alter as for any line. The repeat check's
+  index is not unique, and the look-up runs under the book's lock (tally_recorder_apply and the drain); its cost on
+  staging's tally_recorder_lines is to be measured in the 2.4.0 gate (not measured here).
+
+2.4.0 part 2 review (08-Oct-2026), next-masterhook (66 still NOT run anywhere, so changed in place; add-only, safe twice):
+- **M1.** A Pay Head is a ledger in FinCom: its delete goes as `ledger_deleted` again (the ledger path: tally_recorder_line
+  applies it to the ledger holding the line's GUID, as before the hook), never `master_deleted`; a Stock Item's or a
+  Godown's delete goes as `master_deleted` with its type. Test: TestMasterHookDeleteKnownType (a Pay Head's delete).
+- **L1.** `revoke all on public.tally_recorder_masters from anon` and on its id sequence from anon and authenticated
+  (Supabase's default privileges grant every new table in public to anon). Test: run_migration66.py section 5.
+- **L2 (the bridge, the rule of next-outbox's M1).** A line FinCom answers 'failed' (a master line on a cloud without 66,
+  a lock timeout, a deadlock) or leaves without a result is not marked sent: it goes again after RecorderRetrySec x 2^n
+  (30 minutes at most), RecorderFailedTries times (default 12); the other lines of the group are marked sent. The code is
+  next-outbox's, the same text. Test: TestMasterHookFailedNotMarkedSent.
+- **L3.** tally-ingest keeps only the types the add-on hooks (Pay Head, Stock Item, Godown); a Unit or Employee line is
+  'failed', "unknown master type", not kept. Stale comments put right. Test: run_recorder_masters_server.py.
+- **L4.** 66 is in run_migration_order.py (after 60, both orders, twice) and in tests/ci/tests.txt with
+  run_recorder_masters_server.py and run_ledger_delete_guid.py; run_migration66.py has its own port (30666; 62's test
+  has 30620).
+- Deploy order: run 66 before the tally-ingest of this branch and before the 2.4.0 bridge goes out (without 66 every
+  master line is answered 'failed' and, with L2, sent again up to RecorderFailedTries times, then given up).
+
+2.4.0 part 2 review (08-Oct-2026), on 62 (still NOT run on staging, so changed in place; add-only and safe twice as
+before): **M1** the TDS details as the firm's members read them now carry the mark: `tally_tds_details_marked(book)`, a new
+function (57's `tally_tds_details` with two columns more, `rate_worked_out` and `exempt`; security definer, `search_path =
+public, pg_temp`; members and the service role, not anon); 57's `tally_tds_details` is left as it is. The TDS tab lists
+the lines under "TDS on Tally's entries" with the rate in words: "2% · rate worked out: Tally stored 0 (TDS ÷ assessable
+amount)", "0% · exempt in Tally: no rate worked out", or Tally's own rate alone (`TDS.tallyRateWords`;
+`tests/run_tds_rate_words.py`). **L2** Tally's EXEMPTED Yes on a TDS line is kept: a second column,
+`tally_tds_lines.exempt` (default false), and parse.js never works a rate out on such a line (it keeps Tally's stored rate
+and marks `exempt: true`). The real S5 capture of run 37492981527 is such a line (EXEMPTED Yes, TAXRATE 0, tax 2,000 on
+1,00,000): it now reads rate 0, exempt, not worked out; the working out is tested on the same capture with EXEMPTED set to
+No. **L1, deploy order:** run 62 on staging BEFORE deploying the tally-ingest that carries this parse.js (a tally-ingest
+deployed first would store each line through 57's text, without either mark, until 62 runs; the lines it stored keep
+rate_worked_out and exempt false until their entry is read again). **L3, timing:** the cost of the wildcard TDS fetch
+(ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.*, .SUBCATEGORYALLOCATION.*) on FinComVoucherByNumber and the time 62's
+`tally_ingest_details` adds per entry are NOT measured here; both are to be measured in the 2.4.0 gate (real Tally, and
+staging after 62), the allow-list rows staying "not yet measured" until then.

@@ -91,7 +91,12 @@ const (
 		// UNIQUEREFERENCENUMBER, as Tally's own export of the entry carries them)
 		// the TDS section as Tally keeps it on the entry: the bill-wise detail's section (a stored field TallyPrime 7.1
 		// writes on every bill allocation; the owner asked for the section, 06-Oct-2026)
-		"ALLLEDGERENTRIES.BILLALLOCATIONS.TDSDEDUCTEESECTIONNUMBER"
+		"ALLLEDGERENTRIES.BILLALLOCATIONS.TDSDEDUCTEESECTIONNUMBER" +
+		// the owner's decision of 07-Oct-2026 (option A; tdswild_test.go): every field of the TDS list and its sub-list.
+		// The real TallyPrime 7.1 run 37492981527 (S5, TDS entered on Tally's screen) gave the named TDS fields above as
+		// empty TAXOBJECTALLOCATIONS.LISTs, while these two items returned the whole block (nature, party, the Income Tax
+		// sub-category's rate, assessable amount and tax). One entry per request, read only, nothing else added
+		", ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.*, ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.SUBCATEGORYALLOCATION.*"
 )
 
 // one change, whichever source it came from
@@ -158,7 +163,31 @@ type change struct {
 	// queuedAt: when it was queued (the bridge's own clock, for the 4 s safety net)
 	fresh, freshSlow, dueNow bool
 	freshTries               int
-	queuedAt                 time.Time
+	// 2.3.4 (the owner's answer B, 08-Oct-2026): its fast request was stopped at the limit: asked once more after
+	// RecorderStopRetrySec (5 minutes), never sooner
+	stopWait bool
+	queuedAt time.Time
+	// next-outbox: every place in the add-on's files this change was read from (a pair's two halves may sit in two daily
+	// files; a line taken in with another of the same save adds its own): each file's offset kept waits for all of them
+	holds []liveAt
+	// next-outbox: a deliberate resend of a ":resolved" line ("items": FinCom asked again after an older bridge's
+	// resolution; "ledger": after a ledger FinCom waited for came in); "" on every other send. FinCom answers a repeat of
+	// the same line id and marker "already have" (migration 63), never stores it twice
+	again string
+	// next-masterhook: a master form's line (master_created / master_altered): the master's type ("Stock Item" ...)
+	masterType string
+	// 2.4.0 part 2 review M1: FinCom answered 200 but 'failed' for this line (a lock timeout, a deadlock) or gave no result
+	// for it: not marked sent; sent again from retryAt (RecorderRetrySec doubling, 30 minutes at most), failN times so far,
+	// RecorderFailedTries at most (FinCom's repeat check, migration 63, keeps a resend from being stored twice)
+	failN   int
+	retryAt time.Time
+	failWhy string
+}
+
+// a place in the add-on's files: the file and the byte offset a line starts at
+type liveAt struct {
+	file  string
+	start int64
 }
 
 // the fields migration 56 keeps for a body that did not ask them (2.3.0's request): the party GSTIN, place of supply,
@@ -216,6 +245,9 @@ type liveFileSt struct {
 	off int64  // read up to here (this run)
 	gen int    // the file's generation (a file shorter than what was read is a new one)
 	enc string // "utf16" or "utf8"
+	// 2.4.0 part 2 review L2: a file without a day in its name (failed.txt) read past a line not yet confirmed: the day
+	// (yyyymmdd) that first happened, kept on disk; the sent ids are kept from that day on (not from "00000000", for ever)
+	keep string
 }
 
 type livePending struct {
@@ -302,6 +334,9 @@ type liveState struct {
 	ownBlind  bool                  // review H1: a look was stopped or backed off since the last complete look (kept on disk)
 	ownWant   bool                  // a line waits for a look at the own Tally
 	ownAskAt  time.Time             // when the reader last asked the own Tally's company list
+	// next-outbox: the day (yyyymmdd) of the oldest daily file read past a line not yet confirmed ("": none): the sent ids
+	// are rotated after 7 days, but never from that day on (kept in sync\recorder-offsets.json)
+	keepFrom string
 }
 
 var (
@@ -344,9 +379,10 @@ func liveFresh() {
 	live.touched, live.logged, live.gapSet, live.lastPost = map[string]map[string]bool{}, map[string]bool{}, false, time.Time{}
 	live.created, live.scanned = map[string][2]string{}, false
 	o := readObjFile(liveOffsetsFile())
+	live.keepFrom = str(o["keepFrom"])
 	for k, v := range obj(o["files"]) {
 		e := obj(v)
-		live.files[k] = &liveFileSt{off: toI64(e["off"]), gen: toInt(e["gen"]), enc: str(e["enc"])}
+		live.files[k] = &liveFileSt{off: toI64(e["off"]), gen: toInt(e["gen"]), enc: str(e["enc"]), keep: str(e["keep"])}
 	}
 	for k, v := range obj(o["alterid"]) {
 		e := obj(v)
@@ -405,10 +441,21 @@ func liveFresh() {
 func liveOffsetsFile() string { return sp("recorder-offsets.json") }
 func liveSentDir() string     { return filepath.Join(syncDir(), "recorder-sent") }
 
-// the sent ids of the last 7 days (sync\recorder-sent\<yyyymmdd>.txt, the bridge's own folder); older files removed
+// the oldest day whose sent ids are kept: 7 days back, but (next-outbox) never past the day of a file read past a line
+// not yet confirmed (live.keepFrom, under live.mu)
+func liveSentCut() string {
+	cut := nowFn().AddDate(0, 0, -7).Format("20060102")
+	if live.keepFrom != "" && live.keepFrom < cut {
+		cut = live.keepFrom
+	}
+	return cut
+}
+
+// the sent ids of the last 7 days (sync\recorder-sent\<yyyymmdd>.txt, the bridge's own folder); older files removed, and
+// (next-outbox) only once every line before them is confirmed
 func liveLoadSent() []string {
 	var ids []string
-	cut := nowFn().AddDate(0, 0, -7).Format("20060102")
+	cut := liveSentCut()
 	m, _ := filepath.Glob(filepath.Join(liveSentDir(), "*.txt"))
 	for _, f := range m {
 		day := strings.TrimSuffix(filepath.Base(f), ".txt")
@@ -438,6 +485,9 @@ func liveLoadIds(suffix string) []string {
 		days = liveFastKeepDays
 	}
 	cut := nowFn().AddDate(0, 0, -days).Format("20060102")
+	if c := liveSentCut(); c < cut {
+		cut = c // next-outbox: never past a file still read past a line not yet confirmed
+	}
 	m, _ := filepath.Glob(filepath.Join(liveSentDir(), "*"+suffix))
 	for _, f := range m {
 		day := strings.TrimSuffix(filepath.Base(f), suffix)
@@ -531,7 +581,7 @@ func liveSaveOffsets() {
 		live.mu.Unlock()
 		return
 	}
-	files := M{}
+	files, keepFrom := M{}, ""
 	for name, st := range live.files {
 		off := st.off
 		for _, p := range live.pending {
@@ -540,11 +590,33 @@ func liveSaveOffsets() {
 			}
 		}
 		for _, c := range live.queue {
-			if c.file == name && c.start < off {
-				off = c.start
+			for _, h := range c.liveHolds() {
+				if h.file == name && h.start < off {
+					off = h.start
+				}
 			}
 		}
-		files[name] = M{"off": off, "gen": st.gen, "enc": st.enc}
+		e := M{"off": off, "gen": st.gen, "enc": st.enc}
+		// next-outbox: a file read past a line not yet confirmed: the sent ids from its day on are kept (a restart reads it
+		// again from that line, and every line after it that went must be known as sent). 2.4.0 part 2 review L2: a file
+		// without a day in its name (failed.txt): from the day it was first read past such a line (kept with the file's
+		// offset), no longer "00000000" (every sent id kept for ever); every line after the held one went that day or later
+		if off < st.off {
+			d := liveFileDay(name)
+			if d == "" {
+				if st.keep == "" {
+					st.keep = nowFn().Format("20060102")
+				}
+				d = st.keep
+				e["keep"] = d
+			}
+			if keepFrom == "" || d < keepFrom {
+				keepFrom = d
+			}
+		} else {
+			st.keep = ""
+		}
+		files[name] = e
 	}
 	bs := M{}
 	for k, st := range live.b {
@@ -572,8 +644,13 @@ func liveSaveOffsets() {
 		cs[k] = e
 	}
 	path := liveOffsetsFile()
+	live.keepFrom = keepFrom
 	live.mu.Unlock()
-	if err := saveFile(path, jsonText(M{"files": files, "alterid": bs, "slices": cs, "at": nowS()})); err != nil {
+	o := M{"files": files, "alterid": bs, "slices": cs, "at": nowS()}
+	if keepFrom != "" {
+		o["keepFrom"] = keepFrom
+	}
+	if err := saveFile(path, jsonText(o)); err != nil {
 		writeLog("Recorder: " + path + " could not be written: " + err.Error())
 	}
 }
@@ -645,8 +722,8 @@ func applyRecorderSource(j M) {
 }
 
 // --- source A: the daily files
-// 2.2.2: on real TallyPrime 7.1 the add-on's @@FCRDay gives "5-Oct-26": <GUID>-5-Oct-26.txt (d-Mon-yy) is read too
-var reLiveFile = regexp.MustCompile(`^(.+)-(\d{8}|\d{4}-\d{2}-\d{2}|\d{1,2}-[A-Za-z]{3}-\d{2})\.txt$`)
+// 2.2.2: on real TallyPrime 7.1 the add-on's @@FCRDay gives "5-Oct-26": <GUID>-5-Oct-26.txt (d-Mon-yy) is read too;
+// next-userfile: <GUID>-<day>-<Windows user>.txt (userfile.go reLiveFileUser)
 
 // the add-on's files to read, oldest first: (review M8) every .txt with a "-" in its name (the date part in any form:
 // a line is taken only when its company GUID starts the name, so the trial's <GUID>.txt gives nothing), dated by its
@@ -678,11 +755,16 @@ func liveFiles() []string {
 		if !strings.Contains(strings.TrimSuffix(n, ".txt"), "-") {
 			continue
 		}
+		// next-userfile: another Windows user's own file is never opened by a bridge that runs for one user (userfile.go)
+		if !liveFileMine(n) {
+			continue
+		}
 		day := fi.ModTime().Format("20060102")
 		if d := liveFileDay(n); d != "" {
 			day = d
 		}
-		if day > to || day < oldest || (day < from && !liveUnread(n, fi.Size())) {
+		// next-outbox: a file read before and not read to its end (a line in it not yet confirmed) is read whatever its age
+		if day > to || (day < oldest && !liveHeldBack(n, fi.Size())) || (day < from && !liveUnread(n, fi.Size())) {
 			continue
 		}
 		out = append(out, df{day, f})
@@ -707,6 +789,26 @@ func liveUnread(name string, size int64) bool {
 	liveFresh()
 	st := live.files[name]
 	return st == nil || size > st.off
+}
+
+// next-outbox: a file the reader has read before whose offset kept is below its size (a line in it not yet confirmed)
+func liveHeldBack(name string, size int64) bool {
+	live.mu.Lock()
+	defer live.mu.Unlock()
+	liveFresh()
+	st := live.files[name]
+	return st != nil && size > st.off
+}
+
+// the places a change holds in the add-on's files (a change made by the bridge itself holds none)
+func (c *change) liveHolds() []liveAt {
+	if len(c.holds) > 0 {
+		return c.holds
+	}
+	if c.file != "" {
+		return []liveAt{{c.file, c.start}}
+	}
+	return nil
 }
 
 // one turn of the reader (the 1 s watch): the new complete lines of each daily file; the changes found
@@ -1004,6 +1106,13 @@ func liveTake(file string, gen int, ll liveLogicalLine, posting bool, held map[s
 	// a line is taken only when this bridge's OWN Tally had its company open when it was written (recorder_owntally.go).
 	// Else it is passed over, never sent (the Day Book upload stays the fallback for the owner's own entries); written
 	// after the last look at the own Tally: it waits for the next look
+	// next-userfile: a line that names another Windows user (w=) is never taken by a bridge running for one user
+	// (userfile.go; DOMAIN\user compared whole, 2.4.0 review LOW). 2.4.0 review MEDIUM: a line naming this bridge's own
+	// user is still taken only when its company is open in the bridge's own Tally (the cached look), as every other line
+	if me := liveOwnWinUser(); me != "" && strings.TrimSpace(l.W) != "" && !liveUserSame(l.W, liveWinUserFn()) {
+		liveOtherUser(l)
+		return 0
+	}
 	switch liveOwnVerdict(l) {
 	case liveOwnWait:
 		return -2
@@ -1026,7 +1135,7 @@ func liveTake(file string, gen int, ll liveLogicalLine, posting bool, held map[s
 		if livePair[p.l.Ev] == l.Ev {
 			delete(live.pending, pk)
 			m, ev := liveMerge(p.l, l)
-			return liveEmit(m, ev, file, gen, p.start, ll.start, ll.end, posting)
+			return liveEmitFrom(m, ev, file, gen, p.file, p.start, ll.start, ll.end, posting)
 		}
 		delete(live.pending, pk)
 		n += liveFlush(p, posting)
@@ -1072,12 +1181,21 @@ func liveSingle(l recLine) (recLine, string) {
 		}
 		return l, "imported"
 	case "after_delete":
+		// open question 1: a master its add-on's form lines named (masterhook.go); review M1 of 2.4.0 part 2: not a Pay Head,
+		// a ledger in FinCom: its delete stays ledger_deleted (applied by FinCom to the ledger holding its GUID, as before)
+		if t := liveMTOf(l.GUID); master && t != "" && t != "Pay Head" {
+			return l, "master_deleted"
+		}
 		if master {
 			return l, "ledger_deleted"
 		}
 		return l, "deleted"
 	case "after_cancel":
 		return l, "cancelled"
+	}
+	// next-masterhook: a master form's second line on its own (masterhook.go)
+	if strings.HasSuffix(l.Ev, "_accept_post") && liveMasterType(l.Ev) != "" {
+		return l, liveMasterEvent(liveIsNew(l))
 	}
 	return l, "" // before_*, start/end_import, write_failed, anything else: dropped
 }
@@ -1196,6 +1314,10 @@ func liveMerge(pre, post recLine) (recLine, string) {
 		}
 		return m, "ledger_altered"
 	}
+	// next-masterhook: a master form's pair (masterhook.go)
+	if liveMasterPre(pre.Ev) {
+		return m, liveMasterEvent(fresh)
+	}
 	if strings.EqualFold(pre.Obj, "Master") {
 		if fresh {
 			return m, "ledger_created"
@@ -1229,9 +1351,12 @@ func liveFlush(p *livePending, posting bool) int {
 		if l.Ev == "ledger_accept_pre" {
 			ev = "ledger_" + ev
 		}
+		if liveMasterPre(l.Ev) {
+			ev = liveMasterEvent(liveIsNew(l)) // next-masterhook
+		}
 		return liveEmit(l, ev, file, gen, p.start, p.start, p.end, posting)
 	}
-	if l.Ev == "voucher_accept_pre" || l.Ev == "ledger_accept_pre" {
+	if l.Ev == "voucher_accept_pre" || l.Ev == "ledger_accept_pre" || liveMasterPre(l.Ev) {
 		liveSayOnce("unsaved|"+l.CGUID+"|"+l.VType+"|"+l.VNo+"|"+l.T0, fmt.Sprintf("Recorder: %s of %s opened in a form and not saved (no GUID, no second line): nothing to send",
 			or(strings.TrimSpace(l.VType+" "+l.VNo), or(strings.TrimSpace(l.Name), "an entry")), liveDay(normDate(l.VDate))))
 	}
@@ -1274,6 +1399,12 @@ func liveTime(s string) time.Time {
 
 // one change queued (under live.mu): its line id; nothing when it was sent before or is queued already
 func liveEmit(l recLine, ev, file string, gen int, start, lineStart, end int64, posting bool) int {
+	return liveEmitFrom(l, ev, file, gen, file, start, lineStart, end, posting)
+}
+
+// liveEmit with the file start lies in (next-outbox: a pair's first half may be in the day before's file; both files'
+// offsets wait for the change)
+func liveEmitFrom(l recLine, ev, file string, gen int, startFile string, start, lineStart, end int64, posting bool) int {
 	if ev == "" {
 		return 0
 	}
@@ -1285,7 +1416,19 @@ func liveEmit(l recLine, ev, file string, gen int, start, lineStart, end int64, 
 		alterId: onlyDigits(l.AID), vchType: cutRunes(strings.TrimSpace(l.VType), 200), vchNo: cutRunes(strings.TrimSpace(l.VNo), 200), vchDate: normDate(l.VDate),
 		name: strings.TrimSpace(l.Name), parent: strings.TrimSpace(l.Parent), narr: l.Narr, user: cutRunes(strings.TrimSpace(l.User), 200), source: "addon", lineId: id,
 		file: file, start: start, saveMs: -1, readAt: nowFn(), during: posting, lineAlter: toI64(onlyDigits(l.PreAID))}
+	c.holds = []liveAt{{startFile, start}}
+	if startFile != file {
+		c.holds = append(c.holds, liveAt{file, lineStart})
+	}
 	c.companyGuid = liveGUID(c.companyGuid)
+	if c.isMaster() {
+		c.masterType = liveMasterType(l.Ev) // next-masterhook: heads only (masterhook.go)
+		if c.masterType == "" {
+			c.masterType = liveMTOf(l.GUID) // a delete: the type its form lines named
+		} else {
+			liveMTNote(l.GUID, c.masterType)
+		}
+	}
 	if r := []rune(c.narr); len(r) > liveNarrMax {
 		c.narr = string(r[:liveNarrMax]) // review Low 11
 	}
@@ -1296,7 +1439,7 @@ func liveEmit(l recLine, ev, file string, gen int, start, lineStart, end int64, 
 		liveSayOnce("notlinked|"+c.key(), "Recorder: "+c.company+" is not linked to a FinCom client: its lines are skipped, nothing of them is asked of Tally (asked again in an hour)")
 		return 0
 	}
-	if !c.isLedger() {
+	if !c.isLedger() && !c.isMaster() {
 		if m := reLiveFid.FindStringSubmatch(c.narr); m != nil {
 			c.fid = m[1]
 		}
@@ -1313,7 +1456,7 @@ func liveEmit(l recLine, ev, file string, gen int, start, lineStart, end int64, 
 	// 2.2.2 (the owner's rule): the line's GUID and AlterID are not trusted. A voucher whose body is asked of Tally takes
 	// Tally's GUID, MasterID and AlterID (none until then); a line whose GUID is not its MasterID in hex keeps its GUID
 	// only as lineGuid (idsMismatch), never as the entry's
-	if !c.isLedger() {
+	if !c.isLedger() && !c.isMaster() {
 		c.idsMismatch = liveIdsMismatch(c.guid, c.companyGuid, c.masterId)
 		if c.idsMismatch {
 			c.lineGuid = c.guid
@@ -1358,7 +1501,7 @@ func liveEmit(l recLine, ev, file string, gen int, start, lineStart, end int64, 
 		c.guid = ""
 		// a voucher only: the rule is proven for vouchers (NWS144); a new ledger's GUID stays empty until Tally gives it
 		// (its body fetch), never built (2.2.1 review)
-		if mid := toI64(c.masterId); mid > 0 && c.companyGuid != "" && !c.isLedger() {
+		if mid := toI64(c.masterId); mid > 0 && c.companyGuid != "" && !c.isLedger() && !c.isMaster() {
 			c.guid = fmt.Sprintf("%s-%08x", c.companyGuid, mid)
 		}
 	}
@@ -1423,6 +1566,7 @@ func liveSameSave(c *change) bool {
 			}
 		}
 		q.also = append(q.also, c.lineId)
+		q.holds = append(q.holds, c.holds...) // next-outbox: c's place waits for q's send too
 		live.queued[c.lineId] = true
 		liveDecide(c, "goes with line "+cut(q.lineId, 8)+"… (the other line of the same save)")
 		return true
@@ -1722,6 +1866,55 @@ func fetchVouchersByMaster(tc *TC, company string, port int, date string, mids [
 	return fetchVouchersByMasterIn(tc, company, port, date, mids, liveBodySec())
 }
 
+// Tally's whole answer for a MasterID it does not have (testdata/fast234/notfound, 3.0 .. 7.1)
+func fastNotFound(mid string) string {
+	return "<ERRORMSG>Could not find Voucher:ID:" + mid + "!</ERRORMSG>"
+}
+
+// 2.3.4 (re-review 2 L-d; the owner's answer of 08-Oct-2026: "Delete fix: yes. The leading-zero refusal and the company
+// check close real ways a delete could be proven wrongly"): a delete whose MasterID Tally did not find is proven gone only
+// when Tally, asked a second time, gives exactly the same "Could not find Voucher" answer, with the company open in this
+// Tally (the GUID held for it) right before and right after that ask; else not proven now (asked again later). Entry
+// fetches are not asked twice (a delete only)
+func fastProveGone(tc *TC, company string, port int, mid string, sec int) error {
+	if err := fastCompanyOpen(tc, company, port, sec); err != nil {
+		return err
+	}
+	x := voucherObjectRequest(company, mid)
+	if x == "" {
+		return errors.New("not asked: MasterID " + mid + " is not one Tally gives")
+	}
+	raw, err := invokeTally(tc, port, x, sec)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(raw) != fastNotFound(mid) {
+		return errors.New("Tally's answer for MasterID " + mid + " was not 'Could not find' when asked again (not proven now)")
+	}
+	return fastCompanyOpen(tc, company, port, sec)
+}
+
+// 2.3.4 (re-review 2 L-d): the company is open in the Tally on this port now, with the GUID this bridge holds for it (a
+// company of that name with another GUID, or none held yet: not proven)
+func fastCompanyOpen(tc *TC, company string, port, sec int) error {
+	raw, err := invokeTally(tc, port, companiesRequest(), minI(maxI(sec, 2), 8))
+	if err != nil {
+		return err
+	}
+	want := heldGUID(company)
+	for _, c := range xmlDoc(raw).All("COMPANY") {
+		if companyKey(nameOf(c)) != companyKey(company) {
+			continue
+		}
+		g := strings.TrimSpace(html.UnescapeString(nt(c, "GUID")))
+		if want != "" && strings.EqualFold(g, want) {
+			return nil
+		}
+		return errors.New("the company " + company + " is open in this Tally with another GUID (" + cutRunes(g, 60) + "); not proven now")
+	}
+	return errors.New("the company " + company + " is not open in this Tally (not proven now)")
+}
+
 func fetchVouchersByMasterIn(tc *TC, company string, port int, date string, mids []string, sec int) (map[string]string, error) {
 	x := ""
 	if len(mids) == 1 {
@@ -1741,8 +1934,8 @@ func fetchVouchersByMasterIn(tc *TC, company string, port int, date string, mids
 	// not have (a deleted voucher, an id never used) Tally answers a bare <ERRORMSG>Could not find Voucher:ID:n!</ERRORMSG>,
 	// no envelope. Exactly that, for the MasterID asked and nothing else, is "no such voucher"; any other answer without an
 	// envelope stays one that could not be read
-	if strings.TrimSpace(raw) == "<ERRORMSG>Could not find Voucher:ID:"+mids[0]+"!</ERRORMSG>" {
-		return map[string]string{}, nil
+	if strings.TrimSpace(raw) == fastNotFound(mids[0]) {
+		return map[string]string{}, nil // a delete is proven by it only with fastProveGone (re-review 2 L-d)
 	}
 	if !strings.Contains(raw, "<ENVELOPE") {
 		return nil, errors.New("Tally's answer could not be read: " + cut(flat(raw), 120))
@@ -1882,18 +2075,10 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 			liveHeldAs(c, slowWords, true)
 		}
 	}
-	// 2.3.4 (option (a)): a line whose fast request was stopped at 2 s: held, ended with the Day Book words
-	stopEnd := func(cs []*change) {
-		w := liveStopEndWords()
-		for _, c := range cs {
-			if c.isLedger() {
-				continue
-			}
-			live.mu.Lock()
-			c.slowEnded = true
-			live.mu.Unlock()
-			liveHeldAs(c, w, true)
-		}
+	// 2.3.4 (the owner's answer B, 08-Oct-2026: "one more ask"): a line whose fast request was stopped at 2 s goes up held
+	// with the once-more words and is asked ONE more time by the held list after 5 minutes; a second stop ends it
+	stopOnce := func(cs []*change) {
+		liveHeldStopOnce(cs)
 	}
 	if slowMarked(company, need[0].companyGuid) {
 		slowHold(need)
@@ -2007,9 +2192,10 @@ byDay:
 				break byDay
 			}
 			if errors.Is(err, errRecorderStop) {
-				// 2.3.4 (the owner's decision of 08-Oct-2026, option (a)): the fast request for this entry took more than 2 s
-				// (the stop itself unchanged): its line goes up held, ended with the Day Book words, never asked again; the
-				// company is not marked (slowNote) and its other entries go on being fetched
+				// 2.3.4 (the owner's decisions of 08-Oct-2026, option (a) and answer B): the fast request for this entry took
+				// more than 2 s (the stop itself unchanged): its line goes up held ("FinCom asks once more at HH:MM") and is
+				// asked once more 5 minutes later, a second stop ending it with the Day Book words; the company is not marked
+				// (slowNote) and its other entries go on being fetched
 				// a cancel / delete check (it asks Tally whether the entry is still there, no entry is fetched): as before, held
 				// with the words of a Tally it could not ask, and asked again by the held list; the same whether the stop or no
 				// answer at all came first (TestCancelGUIDTallySilentFallsBack: one outcome, never the timing's)
@@ -2024,7 +2210,7 @@ byDay:
 				if len(gf) > 0 {
 					liveHeldNow(gf, liveStopWhat(), true, true, false)
 				}
-				stopEnd(en)
+				stopOnce(en)
 				continue
 			}
 			if gaveWay(err) {
@@ -2065,9 +2251,23 @@ byDay:
 				why, kind string
 			}
 			var missing []miss
+			// 2.3.4 (re-review 2 L-d): a delete Tally did not find: proven only by fastProveGone (asked again, the company
+			// checked around it); not proven now: held as one this Tally could not be asked about (asked again by itself)
+			unproven := map[*change]string{}
+			for _, c := range part {
+				if c.guidFetch && c.event == "deleted" && got[c.masterId] == "" {
+					if perr := fastProveGone(tc, company, port, c.masterId, left()); perr != nil {
+						unproven[c] = perr.Error()
+					}
+				}
+			}
 			live.mu.Lock()
 			for _, c := range part {
 				x := got[c.masterId]
+				if why, ok := unproven[c]; ok {
+					liveGuidUnproven(c, why)
+					continue
+				}
 				if c.guidFetch && c.event == "deleted" {
 					liveDeleteAnswer(c, got) // review H1: still in this Tally: held; not there: proven deleted here
 					continue
@@ -2256,7 +2456,9 @@ func (c *change) wire() M {
 	}
 	m := M{"line_id": c.lineId, "event": c.event, "object_guid": c.guid, "master_id": c.masterId, "alter_id": alter, "vch_type": c.vchType, "vch_no": c.vchNo,
 		"vch_date": c.vchDate, "saved_at": c.at, "pc": liveComputerFn(), "user": c.user, "company_guid": c.companyGuid, "ledgers": ls, "narration": narr,
-		"fid": fid, "xml": c.xml, "source": c.source}
+		"fid": fid, "xml": c.xml, "source": c.source,
+		// next-outbox: always there (FinCom knows by it that this bridge marks its deliberate resends): "" on a first send
+		"again": c.again}
 	if c.event == "cancelled" && alter == nil && c.vchCounter > 0 {
 		m["vch_counter"] = c.vchCounter // re-review M-B: FinCom cancels again only a body at or below it
 	}
@@ -2271,8 +2473,11 @@ func (c *change) wire() M {
 	if c.saveMs >= 0 {
 		m["save_ms"] = c.saveMs
 	}
-	if c.isLedger() {
+	if c.isLedger() || c.isMaster() {
 		m["name"], m["parent"] = c.name, c.parent
+	}
+	if c.isMaster() {
+		m["master_type"] = c.masterType // next-masterhook: heads only
 	}
 	// 2.2.2: the line's GUID that is not its MasterID's, for information only (never the entry's: the cloud must not mark
 	// the line duplicate on it); why the line goes without its entry
@@ -2309,6 +2514,17 @@ func liveRecorderLinesBody(company, guid string, group []*change) M {
 	return M{"kind": "recorder_lines", "company": company, "company_guid": guid, "lines": lines}
 }
 
+// next-outbox: the results FinCom answered "already have" (a repeat of a line it holds: migration 63)
+func liveAlreadyCount(res []any) int {
+	n := 0
+	for _, x := range res {
+		if truthy(obj(x)["already"]) {
+			n++
+		}
+	}
+	return n
+}
+
 // one step of the uploader: one group sent (its number of lines), or 0
 func liveUploadOnce() int {
 	liveUpMu.Lock()
@@ -2332,6 +2548,10 @@ func liveUploadOnce() int {
 	if !first {
 		liveResolveTurn()
 	}
+	// next-renumber: the entries Tally renumbered after an insert or a delete (renumber.go), when no save waits
+	if !liveQueueReady() {
+		n += renumTurn()
+	}
 	return n
 }
 
@@ -2345,7 +2565,7 @@ func liveQueueReady() bool {
 		if b, had := live.back[c.key()]; had && now.Before(b.until) {
 			continue
 		}
-		if strings.HasSuffix(c.lineId, ":resolved") {
+		if strings.HasSuffix(c.lineId, ":resolved") || c.source == "renumber" {
 			continue
 		}
 		if liveYoung(c) {
@@ -2472,6 +2692,9 @@ func liveUploadStep() (int, bool) {
 			young[c.key()] = true
 			continue
 		}
+		if now.Before(c.retryAt) {
+			continue // 2.4.0 part 2 review M1: answered failed, sent again after its wait
+		}
 		key, head = c.key(), c
 		break
 	}
@@ -2510,7 +2733,7 @@ func liveUploadStep() (int, bool) {
 	var group []*change
 	size := 600
 	for _, c := range live.queue {
-		if c.key() != key {
+		if c.key() != key || now.Before(c.retryAt) {
 			continue
 		}
 		s := len(jsonText(c.wire())) + 1
@@ -2639,8 +2862,49 @@ func liveUploadStep() (int, bool) {
 		}
 		return 0, false
 	}
+	// next-outbox: lines FinCom had already (sent before a restart, its answer lost): marked sent like the rest
+	if n := liveAlreadyCount(arr(r.json["results"])); n > 0 {
+		writeLog(fmt.Sprintf("Recorder: %d line(s) of %s FinCom had already (sent before, its answer not kept here): marked sent, not stored again", n, company))
+	}
+	// 2.4.0 part 2 review M1: a line FinCom answered 'failed' (a lock timeout, a deadlock), or left without a result, is
+	// not marked sent: it stays on the PC and goes again after its wait, RecorderFailedTries times at most; the other lines
+	// of the group are marked sent
+	res := map[string]M{}
+	for _, x := range arr(r.json["results"]) {
+		if id := str(obj(x)["line_id"]); id != "" {
+			res[id] = obj(x)
+		}
+	}
+	maxTries := keepNum("RecorderFailedTries", 12)
+	var keep, giveUp []*change
+	// an answer {queued: n} with no results at all (a cloud before round 20 answered so): every line queued, as before
+	if r.json["results"] != nil || r.json["queued"] == nil {
+		g2 := group[:0:0]
+		for _, c := range group {
+			x, had := res[c.lineId]
+			if st := str(x["state"]); had && st != "" && st != "failed" {
+				g2 = append(g2, c)
+				continue
+			}
+			c.failN++
+			c.failWhy = "no result for the line"
+			if had {
+				c.failWhy = or(str(x["why"]), "failed")
+			}
+			if c.failN >= maxTries {
+				giveUp = append(giveUp, c)
+				g2 = append(g2, c)
+				continue
+			}
+			w := math.Min(1800, float64(keepNum("RecorderRetrySec", 30))*math.Pow(2, float64(c.failN)))
+			c.retryAt = nowFn().Add(time.Duration(w) * time.Second)
+			keep = append(keep, c)
+		}
+		group = g2
+	}
 	sentIDs := make([]string, 0, len(group))
 	var bodied, items, ledAgain, ended, mine []string
+	var signs []*renumJob // next-renumber: an insert's or a delete's line FinCom took (renumber.go)
 	gone := map[*change]bool{}
 	var held []*change
 	for _, c := range group {
@@ -2679,6 +2943,9 @@ func liveUploadStep() (int, bool) {
 		if c.event == "created" && !c.isLedger() && c.vchNo != "" {
 			live.created[c.saveKey()] = [2]string{c.lineId, c.guid}
 		}
+		if j := renumSignOf(c); j != nil {
+			signs = append(signs, j)
+		}
 		// 2.2.1: sent held (no body, no GUID): resolved later (recorder_resolve.go). 2.2.2: every voucher of the add-on
 		// sent without its entry, not only a new one with a number
 		if c.slowEnded {
@@ -2711,6 +2978,9 @@ func liveUploadStep() (int, bool) {
 	delete(live.back, key)
 	cs.sent += len(group)
 	cs.lastError, cs.last = "", nowS()
+	if len(keep) > 0 {
+		cs.lastError = fmt.Sprintf("%d line(s) answered failed by FinCom (%s); sent again", len(keep), cutRunes(keep[0].failWhy, 120))
+	}
 	if posting {
 		live.gapSet, live.gap = true, gap
 	}
@@ -2725,6 +2995,15 @@ func liveUploadStep() (int, bool) {
 	liveSaveOffsets()
 	liveHeldAdd(held)
 	liveGuidAnswers(group, arr(r.json["results"])) // 2.3.0: what FinCom's record said of a delete / cancel sent without a GUID
+	renumNote(signs)
+	for _, c := range keep {
+		writeLog(fmt.Sprintf("Recorder: line %s of %s: FinCom answered %s (try %d of %d); kept here and sent again at %s, nothing is lost",
+			cutRunes(c.lineId, 40), company, cutRunes(c.failWhy, 160), c.failN, maxTries, c.retryAt.Format("15:04:05")))
+	}
+	for _, c := range giveUp {
+		writeLog(fmt.Sprintf("Recorder: line %s of %s: FinCom answered failed %d times (%s); not sent again: FinCom's record keeps it as failed (Sync activity)",
+			cutRunes(c.lineId, 40), company, c.failN, cutRunes(c.failWhy, 160)))
+	}
 	return len(group), false
 }
 
@@ -2897,9 +3176,8 @@ func recorderLiveLoop() {
 }
 
 // the day a daily file's name gives (yyyymmdd; "" when its name carries none): yyyymmdd, yyyy-mm-dd or d-Mon-yy
+// (next-userfile: with or without the Windows user after it, userfile.go)
 func liveFileDay(name string) string {
-	if g := reLiveFile.FindStringSubmatch(name); g != nil {
-		return normDate(g[2])
-	}
-	return ""
+	d, _ := liveFileDayUser(name)
+	return d
 }

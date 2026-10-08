@@ -32,8 +32,11 @@ time.. there should be clear flow".
   owner-only rules are unchanged.
 - **Sync activity has one clear flow**: the permanent yellow "N lines waiting over 2 minutes" box is gone. "Needs you"
   (yellow, the only yellow) lists only lines nothing settles until a person acts, one sentence per company and day with
-  ONE action (Upload the Day Book for that day, or Apply now). Lines FinCom or the bridge is still fetching show quietly
-  as "being fetched". Nothing waiting shows nothing.
+  ONE action, by what will actually happen to the line: Upload the Day Book for that day; a FinCom id on another Tally
+  entry (check for a double posting, then the Day Book); Resume reading (owner); Open the Tally page; Open From Tally;
+  Open Tie-out; or Apply now. Lines FinCom or the bridge is still fetching (and that settle by themselves) show quietly
+  as "being fetched". Nothing waiting shows nothing. The page and the bell use the same classifier, so they never
+  disagree.
 - **One vocabulary** on every Tally page, the Books held banner, the bell and the Post page ("Connected", "Tally not
   open on ...", "Reading paused on ...", "Reading stopped from FinCom").
 
@@ -69,13 +72,16 @@ line without it, and the refused-request change must not hide a real Tally failu
    ended or 7-day-old held delete never goes bare (tested: `hs235NoBareDelete`).
 2. **Plain words while reading is stopped.** A line held because FinCom's read stop refused its fetch says "waiting:
    reading from Tally is stopped from FinCom; asked again when it is resumed" (by MasterID, by type and number, and a
-   delete). The lines sent after the resume carry none of it.
+   delete). The lines sent after the resume carry none of it. Such a line is asked at the first turn after the resume
+   (one at a time, after postings and live saves), and while the stop is on a held line is kept past its 7 days (said in
+   the log), never dropped silently.
 3. **A refused request is not a try, and only that.** Only the stop's own refusal with nothing of the ask sent to Tally
    is not counted. A 2 s stop, a closed connection, an empty answer, or a by-number refusal after its MasterID ask
    reached Tally still count as tries (tested), so a real Tally failure is never hidden from the try count.
 
-2.3.4's rule (the owner's decision of 08-Oct-2026, option (a)) is unchanged: a fast request for one entry that takes over
-2 s ends that line held with the Day Book words.
+2.3.4's rule (the owner's answer B of 08-Oct-2026, "one more ask") is unchanged: a fast request for one entry stopped at
+2 s holds the line ("FinCom asks once more at HH:MM"), it is asked ONE more time 5 minutes later, and a second stop ends
+it with the Day Book words. That stopped ask counts as one of its two asks (a real Tally failure, never hidden).
 
 ## Tally requests
 

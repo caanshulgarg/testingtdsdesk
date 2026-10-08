@@ -38,11 +38,25 @@ var liveFetchApproved0810 = []string{"PARTYGSTIN", "PLACEOFSUPPLY", "CMPGSTIN", 
 	"ALLLEDGERENTRIES.TAXOBJECTALLOCATIONS.SUBCATEGORYALLOCATION.ASSESSABLEAMOUNT", "ALLINVENTORYENTRIES.RATEDETAILS.GSTRATEVALUATIONTYPE"}
 
 // the approved fields, in today's order (liveFetchField, the FETCH of FinComVoucherByMaster at 2.3.3): the request's
-// FETCHLIST and the fields the strip keeps
+// FETCHLIST and the fields the strip keeps. release-240 (next-tds, the owner's decision of 07-Oct-2026, option A): the
+// whole TDS list and its sub-list ("LIST.*", liveFetchWild) are kept by the strip, but are not written into the object
+// export's FETCHLIST: Tally ignores that list and sends the whole voucher anyway, and the request's bytes stay the ones
+// measured and proven on real TallyPrime 3.0-7.1 (shape ce0e72f74e72, TestFast234ApprovedFields0810)
 func liveFetchFields() []string {
 	var o []string
 	for _, f := range strings.Split(liveFetchField, ",") {
-		if f = strings.TrimSpace(f); f != "" {
+		if f = strings.TrimSpace(f); f != "" && !strings.HasSuffix(f, ".*") {
+			o = append(o, f)
+		}
+	}
+	return o
+}
+
+// the "LIST.*" items of liveFetchField (every field directly in that list)
+func liveFetchWild() []string {
+	var o []string
+	for _, f := range strings.Split(liveFetchField, ",") {
+		if f = strings.TrimSpace(f); strings.HasSuffix(f, ".*") {
 			o = append(o, f)
 		}
 	}
@@ -54,7 +68,19 @@ func fastApprovedPaths() map[string]bool {
 	for _, f := range liveFetchFields() {
 		m[f] = true
 	}
+	for _, f := range liveFetchWild() {
+		m[f] = true
+	}
 	return m
+}
+
+// a field's path is approved: named, or directly in a list approved whole ("LIST.*")
+func fastPathOK(ok map[string]bool, p string) bool {
+	if ok[p] {
+		return true
+	}
+	i := strings.LastIndex(p, ".")
+	return i > 0 && ok[p[:i]+".*"]
 }
 
 // the request: one voucher by its MasterID (a number, 1 to 18 digits, no leading zero: Tally's MasterIDs have none, and
@@ -356,7 +382,7 @@ func fastStrip(v string, hold bool) (string, string) {
 			p = prefix + "." + seg
 		}
 		if !e.hasKids {
-			if lost == "" && fastLineNames[seg] && strings.TrimSpace(e.text) != "" && !ok0[p] {
+			if lost == "" && fastLineNames[seg] && strings.TrimSpace(e.text) != "" && !fastPathOK(ok0, p) {
 				lost = strings.TrimSuffix(p, "."+seg)
 			}
 			return
@@ -447,7 +473,7 @@ func fastEmit(b *strings.Builder, e *fastEl, name, prefix string, ok map[string]
 		}
 		return any
 	}
-	if !ok[p] {
+	if !fastPathOK(ok, p) {
 		return false
 	}
 	b.WriteString("<" + name + ">" + e.text + "</" + name + ">")

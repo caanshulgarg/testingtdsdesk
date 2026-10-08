@@ -1,6 +1,7 @@
 """python3 run_migration_order.py - the order the cloud migrations run in on a fresh database (03-Oct-2026, round 4 items
 1-3; docs/MIGRATION-ORDER.md): BOTH valid orders, each applied TWICE on its own database: staging's (32 -> 33 -> 35 -> 34 as FIRST run there, commit 2105b2d
--> 36b -> 37 -> 36 -> 38 -> 39 -> 40 -> 41 -> 42 -> 43 -> 44 -> 45 -> 46 -> 47 -> 48 -> 49 -> 50 -> 51 -> 52 -> 53 -> 54 -> 55 -> 56 -> 57 -> 58 -> 59 -> 60 -> 68 -> 70) and a fresh database's (32 -> 33 -> 35 -> 34 reviewed -> 36 -> 36b -> 37 -> 38 -> 39 -> 40 -> 41 -> 42 -> 43 -> 44 -> 45 -> 46 -> 47 -> 48 -> 49 -> 50 -> 51 -> 52 -> 53 -> 54 -> 55 -> 56 -> 57 -> 58 -> 59 -> 60 -> 68 -> 70); the function texts
+-> 36b -> 37 -> 36 -> 38 -> 39 -> 40 -> 41 -> 42 -> 43 -> 44 -> 45 -> 46 -> 47 -> 48 -> 49 -> 50 -> 51 -> 52 -> 53 -> 54 -> 55 -> 56 -> 57 -> 58 -> 59 -> 60 -> 68 -> 70, then
+2.4.0's NEXT240: 62 -> 63 -> 64 -> 65 -> 66 -> 67) and a fresh database's (32 -> 33 -> 35 -> 34 reviewed -> 36 -> 36b -> 37 -> 38 -> 39 -> 40 -> 41 -> 42 -> 43 -> 44 -> 45 -> 46 -> 47 -> 48 -> 49 -> 50 -> 51 -> 52 -> 53 -> 54 -> 55 -> 56 -> 57 -> 58 -> 59 -> 60 -> 68 -> 70, then 62 -> 67 -> 63 -> 64 -> 65 -> 66); the function texts
 the two orders end with are compared and must be identical (round 9), on a throwaway PostgreSQL (pg_stand)
 with the tables as on staging (run_migration33's schema, tally_devices, tally_bills) and made-up rows; never on staging.
 Checks: every file runs, twice, and deletes nothing; after the run the release functions are migration-34's
@@ -16,6 +17,15 @@ BASE = [(32, "migration-32-sync-safety.sql"), (33, "migration-33-ledger-lists.sq
 # the two valid orders (docs/MIGRATION-ORDER.md): staging's (the FIRST 34, commit 2105b2d, then 36b and 37 run on 03-Oct, then 36 and 38) and a fresh database's
 ORDERS = {"staging": BASE + [("34 (first, as on staging)", os.path.join("..", "..", "tests", "fixtures", "migration-34-as-run-on-staging.sql")), ("36b", "migration-36b-post-acceptance.sql"), (37, "migration-37-follow-ups.sql"), (36, "migration-36-ledger-rename.sql"), (38, "migration-38-post-followups.sql"), (39, "migration-39-rename-map-empty-day.sql"), (40, "migration-40-states-carried.sql"), (41, "migration-41-day-counts.sql"), (42, "migration-42-empty-day-second-read.sql"), (43, "migration-43-posting-reply.sql"), (44, "migration-44-recorder.sql"), (45, "migration-45-bulk-posting.sql"), (46, "migration-46-trial-tools.sql"), (47, "migration-47-recorder-queue-alerts.sql"), (48, "migration-48-day-cache-once.sql"), (49, "migration-49-post-row-flags.sql"), (50, "migration-50-recorder-held.sql"), (51, "migration-51-recorder-ids-mismatch.sql"), (52, "migration-52-recorder-duplicate-needs-same-entry.sql"), (53, "migration-53-recorder-placeholder-settled.sql"), (54, "migration-54-post-target-bridge.sql"), (55, "migration-55-settle-and-lease.sql"), (56, "migration-56-keep-fields.sql"), (57, "migration-57-entry-details.sql"), (58, "migration-58-lows.sql"), (59, "migration-59-ledger-aliases.sql"), (60, "migration-60-recorder-lows.sql"), (68, "migration-68-alert-dismissals.sql"), (70, "migration-70-alert-dismissals-tighten.sql")],
           "fresh": BASE + [(34, "migration-34-ledger-safety.sql"), (36, "migration-36-ledger-rename.sql"), ("36b", "migration-36b-post-acceptance.sql"), (37, "migration-37-follow-ups.sql"), (38, "migration-38-post-followups.sql"), (39, "migration-39-rename-map-empty-day.sql"), (40, "migration-40-states-carried.sql"), (41, "migration-41-day-counts.sql"), (42, "migration-42-empty-day-second-read.sql"), (43, "migration-43-posting-reply.sql"), (44, "migration-44-recorder.sql"), (45, "migration-45-bulk-posting.sql"), (46, "migration-46-trial-tools.sql"), (47, "migration-47-recorder-queue-alerts.sql"), (48, "migration-48-day-cache-once.sql"), (49, "migration-49-post-row-flags.sql"), (50, "migration-50-recorder-held.sql"), (51, "migration-51-recorder-ids-mismatch.sql"), (52, "migration-52-recorder-duplicate-needs-same-entry.sql"), (53, "migration-53-recorder-placeholder-settled.sql"), (54, "migration-54-post-target-bridge.sql"), (55, "migration-55-settle-and-lease.sql"), (56, "migration-56-keep-fields.sql"), (57, "migration-57-entry-details.sql"), (58, "migration-58-lows.sql"), (59, "migration-59-ledger-aliases.sql"), (60, "migration-60-recorder-lows.sql"), (68, "migration-68-alert-dismissals.sql"), (70, "migration-70-alert-dismissals-tighten.sql")]}
+# release-240 (FinCom Bridge 2.4.0): the next release's migrations run after 2.3.5's (... -> 60 -> 68 -> 70; independent of them) in
+# both orders. 61 (privileges, run on staging 06-Oct-2026; branch perms-61) before 62 when that file is in the tree; 62 the TDS
+# rate worked out; 63 (outbox) and 67 (renumbering) both replace tally_recorder_line with ONE combined text: staging's order
+# runs them 63 -> 67, a fresh database's 67 -> 63, and the two must end with identical function texts (the check below)
+NEXT240 = {"staging": [(62, "migration-62-tds-rate-worked-out.sql"), (63, "migration-63-recorder-repeat.sql"), (64, "migration-64-pages-live.sql"), (65, "migration-65-selfchecks.sql"), (66, "migration-66-recorder-masters.sql"), (67, "migration-67-recorder-renumbered.sql")],
+           "fresh": [(62, "migration-62-tds-rate-worked-out.sql"), (67, "migration-67-recorder-renumbered.sql"), (63, "migration-63-recorder-repeat.sql"), (64, "migration-64-pages-live.sql"), (65, "migration-65-selfchecks.sql"), (66, "migration-66-recorder-masters.sql")]}
+for _k, _o in ORDERS.items():
+    if os.path.exists(os.path.join(SQLDIR, "migration-61-privileges.sql")) and (61, "migration-61-privileges.sql") not in _o: _o.append((61, "migration-61-privileges.sql"))
+    _o.extend(NEXT240[_k])
 READERS = ["tally_tb", "tally_period", "tally_mis", "tally_gst_summary", "tally_ledger", "tally_balances_on", "tally_ledger_hold_reason", "tally_ledgers_a_guard", "tally_ledger_round_seen", "tally_ledger_rename", "tally_ledger_carry", "tally_post_ids_sync", "tally_ingest_day", "tally_ledger_carry_choices", "tally_ledger_rename_confirm", "tally_post_result_taken", "tally_post_result_confirmed", "tally_post_job_accepted", "tally_post_result_accepted", "tally_post_job_settle", "tally_post_id_accept_reply", "tally_device_post_settings", "tally_post_id_accept",
            "tally_ingest_entries", "tally_ingest_delete", "tally_ledger_day_rebuild", "tally_month_locked", "tally_voucher_version_lines", "tally_recorder_line", "tally_recorder_apply", "tally_month_lock", "tally_month_unlock", "tally_recorder_release_held", "tally_tieout_save", "tally_start_point", "tally_fincom_id", "tally_control_kept", "tally_ledger_marks_frozen",
            "tally_recorder_gap_check", "tally_post_window_save", "tally_post_xml_for", "tally_post_live_for", "tally_recorder_short_held", "tally_recorder_short_retry", "tally_device_trial_tools",
@@ -37,7 +47,15 @@ READERS = ["tally_tb", "tally_period", "tally_mis", "tally_gst_summary", "tally_
            # 06-Oct-2026 (migration 56: a recorder line keeps the fields its request does not fetch; the repair, not run)
            "tally_ingest_entries/5", "tally_recorder_keep_vouchers", "tally_recorder_keep_lines", "tally_recorder_blanked", "tally_recorder_restore_fields", "tally_recorder_restore_fields/2", "tally_unknown_ledger_entries", "tally_recorder_pair_lines",
            # 06-Oct-2026 (migration 57, bridge 2.3.1 part A: the entry's details, written by the entry path for both paths)
-           "tally_ingest_details", "tally_tds_details"]
+           "tally_ingest_details", "tally_tds_details",
+           # 07-Oct-2026 (migration 65: the nightly self-check)
+           "tally_selfcheck_compare", "tally_selfcheck_copy", "tally_selfcheck_words", "tally_selfcheck_record",
+           # 07-Oct-2026 (migration 66, next-masterhook: the add-on's master lines kept, heads only; review L4 of 2.4.0 part 2;
+           # 66 runs in NEXT240 above)
+           "tally_recorder_masters_save",
+           # 08-Oct-2026 (migration 62, review M1 of 2.4.0 part 2: the TDS details with the rate-worked-out and exempt marks)
+           "tally_tds_details_marked"]
+
 texts = {}
 fails = []
 def ok(c, w):
@@ -189,6 +207,10 @@ def run_order(label, ORDER):
            and db.one("select has_function_privilege('anon', 'public.alert_dismiss_undo(uuid)', 'execute')::text") == "false"
            and "undone_at = now()" in fdef("alert_dismiss_undo"),
            "68 + 70: app_alert_dismissals (a person's cleared notifications), row security on, no insert or delete from the browser (70), its length checks (70); alert_dismiss / _undo (stamps undone_at) / alert_dismissals_list up to 20000 (70) (in force in this order)")
+        ok("already have this line" in fdef("tally_recorder_line") and "renumbered in Tally" in fdef("tally_recorder_line")
+           and db.one("select count(*) from pg_indexes where indexname = 'tally_recorder_lines_line'") == "1"
+           and db.one("select has_function_privilege('service_role', 'public.tally_recorder_line(uuid, uuid, jsonb, bigint)', 'execute')") == "f",
+           "63 + 67 (release-240, one combined tally_recorder_line, whichever ran last): a repeat of a line FinCom has answered 'duplicate' (63) and a renumbered entry applied (67); 63's index; granted to nobody (in force in this order)")
         ok("tally_ledger_carry_choices" in fdef("tally_ledger_rename") and db.one("select count(*) from information_schema.columns where table_name = 'tally_ledgers' and column_name = 'needs_confirm'") == "1", "39: the rename carries the choices; tally_ledgers.needs_confirm")
         ok(db.one("select string_agg(confdeltype::text, '') from pg_constraint where conrelid = 'public.tally_post_marks'::regclass and contype = 'f'") == "rr", "38: tally_post_marks' foreign keys restrict (no cascade)")
         for fn in ("tally_tb", "tally_period", "tally_balances_on"): ok("d.merged_into is null" in fdef(fn), "%s hides the twins" % fn)

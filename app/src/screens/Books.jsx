@@ -11,7 +11,7 @@ import Gst from "./Gst.jsx";
 import FromTally from "./books/FromTally.jsx";
 import Ledgers from "./books/Ledgers.jsx";
 import MisTab from "./books/Mis.jsx";
-import { ServerMis, ServerTds, ServerGst } from "./books/ServerReports.jsx";
+import { ServerMis, ServerTds, ServerGst, TallyTdsLines } from "./books/ServerReports.jsx";
 import Accounts from "./books/Accounts.jsx";
 import Reports from "./books/Reports.jsx";
 import Lookup from "./books/Lookup.jsx";
@@ -163,9 +163,10 @@ function lastEntryDate(b) {
 }
 
 // how up to date the books are, on every tab but From Tally, and Update now (a job for the bridge: nobody waits on Tally)
-function FreshLine({ b }) {
+// unknown: false on the ledgers page, whose Needs you lists those ledgers one line each (Ledgers.jsx)
+function FreshLine({ b, unknown = true }) {
   const m = b.meta || {};
-  if (!(b.vouchers || []).length || !m.to) return <><HeldBooks cid={S.coId} where="books" /><UnknownLedgers cid={S.coId} where="books" byBook /></>;
+  if (!(b.vouchers || []).length || !m.to) return <><HeldBooks cid={S.coId} where="books" />{unknown && <UnknownLedgers cid={S.coId} where="books" byBook />}</>;
   // build 197: from any computer: on the Tally computer through its bridge, elsewhere through the cloud
   const can = (typeof Bridge === "object" && Bridge.on() && Bridge.up()) || (typeof TCloud === "object" && S.coId && TCloud.has(S.coId));
   // one sentence on every page (booksFresh, src/js/49): the last entry, how far it was checked with Tally, days not read
@@ -173,7 +174,7 @@ function FreshLine({ b }) {
   // 2.1.3: "Books as of 15:34 · Update now" first: Tally cannot send its changes, so old figures are never shown as now
   return <>
     <HeldBooks cid={S.coId} where="books" />
-    <UnknownLedgers cid={S.coId} where="books" byBook />
+    {unknown && <UnknownLedgers cid={S.coId} where="books" byBook />}
     {asOf && <p className="note" style={{ margin: "0 0 4px" }} data-books-asof-line=""><BooksAsOf cid={S.coId} /></p>}
     <p className="note" style={{ margin: "0 0 10px" }} data-fresh="">{f.text}
     {b.openMs != null && <span className="nr" data-opentime>{" Opened in " + (b.openMs / 1000).toFixed(1) + " s" + (b.readyMs != null ? ", every entry in " + (b.readyMs / 1000).toFixed(1) + " s" : "") + "."}</span>}
@@ -230,11 +231,11 @@ function BooksPage() {
   if (tab === "import") body = <FromTally b={b} />;
   else if (tab === "tieout") body = <Tieout b={b} />;
   else if (srv && tab === "gst") body = <><ServerGst b={b} />{n ? <Gst /> : null}</>;
-  else if (srv && tab === "tds") body = <><ServerTds b={b} />{n ? <Tds b={b} /> : null}</>;
+  else if (srv && tab === "tds") body = <><ServerTds b={b} /><TallyTdsLines b={b} />{n ? <Tds b={b} /> : null}</>;
   else if (!n && tab === "gst") body = <Gst />;
-  else if (!n && tab === "tds") body = <Tds b={b} />;
+  else if (!n && tab === "tds") body = <><TallyTdsLines b={b} /><Tds b={b} /></>;
   else if (!n) body = b.busy ? null : <EmptyTab tab={tab} />;
-  else if (tab === "tds") body = <Tds b={b} />;
+  else if (tab === "tds") body = <><TallyTdsLines b={b} /><Tds b={b} /></>;
   else if (tab === "gst" || !["ledgers", "audit", "mis", "fs"].includes(tab)) body = <Gst />;
   else if (tab === "ledgers") body = <Ledgers b={b} />;
   else if (tab === "audit") body = <AuditTab b={b} />;
@@ -244,7 +245,7 @@ function BooksPage() {
     <nav className="sbar" aria-label="Books">{tabs.map(([id, label, c]) =>
       <button key={id} aria-selected={tab === id} onClick={() => booksTabGo(id)}>{label}{c != null && <> <span className="sbar-n">{c}</span></>}</button>)}</nav>
     <SyncNote cid={co.id} tab={tab} /><JobsNote cid={co.id} /><GstDriftNote b={b} />
-    {tab !== "import" && <FreshLine b={b} />}
+    {tab !== "import" && <FreshLine b={b} unknown={tab !== "ledgers" || !n} />}
     {busy}
     {body}
   </>;

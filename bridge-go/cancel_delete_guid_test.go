@@ -99,8 +99,10 @@ func TestCancelGUIDFromTally(t *testing.T) {
 			realLine("after_delete", "", v.master, "", "Receipt", "1", addonDate(td)))
 		liveReadOnce()
 		uploadAll(t)
-		if f.n(vchObjectID) != n1+1 {
-			t.Fatalf("a delete asks this Tally once by MasterID whether it is still there: %v", f.ids())
+		// 2.3.4 (re-review 2 L-d): Tally's "Could not find Voucher" proves the delete only when asked twice with the company
+		// open (its GUID) before and after the second ask
+		if f.n(vchObjectID) != n1+2 {
+			t.Fatalf("a delete asks this Tally by MasterID whether it is still there (twice, the company checked around the second): %v", f.ids())
 		}
 		got = sentEvent(c, "deleted")
 		if len(got) != 1 || str(got[0]["object_guid"]) != v.guid {
@@ -143,8 +145,8 @@ func TestDeleteGUIDFromBridgeRecordAfterRestart(t *testing.T) {
 			realLine("after_delete", "", v.master, "", "Receipt", "2", addonDate(td)))
 		liveReadOnce()
 		uploadAll(t)
-		if f.n(vchObjectID) != n1+1 {
-			t.Fatalf("a delete asks this Tally once by MasterID whether it is still there (review H1): %v", f.ids())
+		if f.n(vchObjectID) != n1+2 {
+			t.Fatalf("a delete asks this Tally by MasterID whether it is still there (review H1; twice, 2.3.4 L-d): %v", f.ids())
 		}
 		got := sentEvent(c, "deleted")
 		if len(got) != 1 || str(got[0]["object_guid"]) != v.guid || str(got[0]["heldWhy"]) != "" || str(got[0]["master_id"]) != v.master {
@@ -188,9 +190,9 @@ func TestDeleteGUIDUnknownHeldWithWords(t *testing.T) {
 			realLine("after_delete", "", "41", "", "Receipt", "10", addonDate(td)))
 		liveReadOnce()
 		uploadAll(t)
-		// 2.3.1: one request per MasterID (40 and 41), each asked once
-		if f.n(vchObjectID) != n0+2 || f.n(vchByNumberID) != 0 {
-			t.Fatalf("the deletes are asked of this Tally once each, by MasterID only: %v", f.ids())
+		// 2.3.1: one request per MasterID (40 and 41); 2.3.4 (re-review 2 L-d): each asked twice, the company checked around the second
+		if f.n(vchObjectID) != n0+4 || f.n(vchByNumberID) != 0 {
+			t.Fatalf("the deletes are asked of this Tally twice each, by MasterID only: %v", f.ids())
 		}
 		var del []M
 		for _, l := range answers {

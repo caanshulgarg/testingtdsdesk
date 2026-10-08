@@ -187,6 +187,24 @@ run_parse_fast234.mjs                 120
 run_parse_fast234_kinds.mjs           120
 run_migration57.py                    120
 run_parta_server.py                   120
+run_parse_tds.mjs                     120
+run_migration62.py                    120
+# next release, item e: the nightly self-check (migration 65, tally-ingest's kind selfcheck, the Tally page's line)
+run_migration65.py                    120
+run_selfcheck_server.py               120
+run_tally_selfcheck_ui.py             120  TDSDESK_SITE=../app/dist-test
+run_renumber_list.py                  120
+run_renumber_needs.py                 120  TDSDESK_SITE=../app/dist-test
+run_migration67.py                    120
+# FinCom 2.4.0 (release-240): the branches' cloud and page tests that were not listed (each passes locally without tests/data)
+run_migration63.py                    120
+run_recorder_repeat_server.py         180
+run_migration64.py                    120
+run_pages_live.py                     120  TDSDESK_SITE=../app/dist-test
+run_migration66.py                    120
+run_recorder_masters_server.py        180
+run_ledger_delete_guid.py             120
+run_tds_rate_words.py                 120  TDSDESK_SITE=../app/dist-test
 run_sentry_scrub.mjs                  120
 run_sentry_cloud.mjs                  180
 run_sentry_ui.py                      180  TDSDESK_SITE=../app/dist-test

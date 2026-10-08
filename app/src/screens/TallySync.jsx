@@ -6,6 +6,7 @@ import Msg from "../parts/Msg.jsx";
 import ListTable from "../parts/ListTable.jsx";
 import UnknownLedgers from "../parts/UnknownLedgers.jsx";
 import { ClearBtn } from "../parts/Bell.jsx";
+import NeedAction from "../parts/NeedAction.jsx";
 
 const FILTERS = [["all", "All"], ["waiting", "Waiting"], ["held", "Held"], ["mismatch", "Mismatch"], ["today", "Today"]];
 // round 20 (d.4): "queued": the cloud queued the line (over 50 at once); its drain fills the state later
@@ -34,12 +35,10 @@ function SyncFlow({ flow, canApply, busy }) {
       <b>Needs you</b>
       {needs.map(({ g, clr }) => <div key={g.key} data-needs-group={g.key} style={{ margin: "6px 0 0" }}>
         <span data-needs-text="">{g.text}</span>{" "}
-        {g.kind === "daybook" ? (canApply && g.cid && <button className="btn small" data-needs-daybook="" onClick={() => Rec.uploadDay(g.cid, g.day)}>{"Upload the Day Book for " + (g.day ? fmtDate(g.day) : "that day")}</button>)
-          : canApply && <button className="btn small" data-needs-apply="" disabled={busy} title={busy ? "Applying the lines already asked for" : undefined} onClick={() => Rec.releaseAll(g.lines)}>Apply now</button>}
-        {!canApply && <span className="note">{" (a member of the firm who may write does this)"}</span>}
+        <NeedAction g={g} canApply={canApply} busy={busy} />
         {" "}<ClearBtn x={clr} />
-        <details style={{ margin: "2px 0 0" }}><summary className="note" style={{ cursor: "pointer" }}>Which entries</summary>
-          {g.lines.map((r) => <div key={r.id} className="note" data-sync-needs-line={String(r.id)}>{Rec.entry(r) + (r.pc ? " from " + r.pc : "") + ", received " + tallyHm(r.received_at) + (r.held_why ? ": " + r.held_why : "")}</div>)}</details>
+        {g.lines.length > 0 && <details style={{ margin: "2px 0 0" }}><summary className="note" style={{ cursor: "pointer" }}>Which entries</summary>
+          {g.lines.map((r) => <div key={r.id} className="note" data-sync-needs-line={String(r.id)}>{Rec.entry(r) + (r.pc ? " from " + r.pc : "") + ", received " + tallyHm(r.received_at) + (r.held_why ? ": " + r.held_why : "")}</div>)}</details>}
       </div>)}
     </div>}
     {fetching.length > 0 && <div className="note" data-sync-fetching="" style={{ margin: "0 0 8px" }}>

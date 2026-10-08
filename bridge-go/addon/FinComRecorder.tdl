@@ -56,11 +56,23 @@
 ;; any date form still works; the beat names the files it read. After loading, check once that
 ;; C:\ProgramData\FinCom\recorder\ shows a new file ending in today's yyyymmdd (docs/recorder-live-sheet.txt).
 
+;; Next (branch next-userfile; the owner's item b): every Windows user's Tally on a computer writes into the one
+;; recorder folder, so each line now goes to that Windows user's OWN daily file
+;;     C:\ProgramData\FinCom\recorder\<company GUID>-<yyyymmdd>-<Windows user>.txt
+;; and carries "|w=<Windows user>" right after tw (an older bridge reads it as part of tw, which it does not need, and the
+;; line still ends "|t1=...|src=live"). The Windows user is Tally's own $$SysInfo:WindowsUser, proven on a real
+;; TallyPrime 7.1 (tally-real-spike run 37563133547: "runneradmin", the runner's Windows user, both through the XML port
+;; and inside an add-on; a $$SysInfo parameter a release does not know gives "" there, not an error). When Tally gives
+;; no user, the file is the shared <company GUID>-<yyyymmdd>.txt as before, and the bridge goes by its 2.3.0 rule.
+;; Proven end to end in run 37580509870 (two Windows users, each with their own Tally, this add-on and this bridge): each
+;; Tally wrote only <GUID>-7-Oct-26-<its user>.txt with w=<its user> on every line; each bridge read and sent only its own.
+
 ;; ---------------------------------------------------------------- the gate: a company is current
 [System: Formula]
     FCRIsLive   : NOT $$IsEmpty:##SVCurrentCompany
     FCRFolder   : "C:\ProgramData\FinCom\recorder\"
     FCRDay      : $$String:$$MachineDate:"UniversalDate"
+    FCRWinUser  : $$SysInfo:WindowsUser
 
 ;; ---------------------------------------------------------------- system events (the trial's)
 ;; Syntax: <label> : <event> : <condition> : <action> : <action parameters>
@@ -88,6 +100,40 @@
     On : Form Accept : Yes          : Form Accept
     On : Form Accept : @@FCRIsLive : Call : FCRLiveLog : "ledger_accept_post"
 
+;; ---------------------------------------------------------------- next-masterhook: the master forms (heads only)
+;; The owner's item c. Each block stands alone: one master's hook is shipped or left out by its own block (a form name a
+;; Tally release does not know makes Tally ignore the WHOLE add-on, with a warning screen). Only masters proven on a real
+;; TallyPrime 7.1 to save normally with the hook on are here (tally-real-spike runs 37563133547 and 37580509870):
+;;   Pay Head (a ledger in Tally): saved, AlterID up (probe); renamed on the screen with this add-on: saved, both lines.
+;;   Stock Item: the same.
+;;   Godown (7.1 shows "Location"; the form is "Godown"): alias typed, saved, AlterID 648 -> 655, both lines.
+;;   Ctrl+A to a still screen with the hook 27-106 ms; with no add-on 77-109 ms (probe): no delay added.
+;; Left out (not proven):
+;;   Unit: with any On : Form Accept line on its form, an unchanged Unit is not saved again, and a Unit whose symbol was
+;;     changed on the screen was NOT saved (only the first line came; AlterID unchanged; run 37580509870), though a changed
+;;     formal name saved in the probe. A Unit made new on the screen saved. Not shipped until a Unit saves normally.
+;;   Employee: no form name tried fires on Tally's "Employee Alteration" (Employee, Cost Centre, Employee Master,
+;;     Employees, Payroll Employee: probe run 37563133547).
+;; Deletes: Before / After Delete Object (the System Events above) already fire for these masters (obj=Master, name, GUID,
+;; MasterID, parent; probe run 37563133547). The line names no master type: the bridge sends the delete of a master these
+;; forms' lines named as master_deleted with its type (masterhook.go), any other as ledger_deleted, which FinCom applies only
+;; to the ledger holding the line's GUID.
+
+[#Form: Pay Head]
+    On : Form Accept : @@FCRIsLive : Call : FCRLiveLog : "payhead_accept_pre"
+    On : Form Accept : Yes          : Form Accept
+    On : Form Accept : @@FCRIsLive : Call : FCRLiveLog : "payhead_accept_post"
+
+[#Form: Stock Item]
+    On : Form Accept : @@FCRIsLive : Call : FCRLiveLog : "stockitem_accept_pre"
+    On : Form Accept : Yes          : Form Accept
+    On : Form Accept : @@FCRIsLive : Call : FCRLiveLog : "stockitem_accept_post"
+
+[#Form: Godown]
+    On : Form Accept : @@FCRIsLive : Call : FCRLiveLog : "godown_accept_pre"
+    On : Form Accept : Yes          : Form Accept
+    On : Form Accept : @@FCRIsLive : Call : FCRLiveLog : "godown_accept_post"
+
 ;; ---------------------------------------------------------------- the one writer (heads only)
 [Function: FCRLiveLog]
     Parameter : pEvent : String
@@ -108,8 +154,12 @@
     03 : IF     : $$IsEmpty:##vGuid
     04 :    SET : vGuid : "noguid"
     05 : END IF
-    ;; the daily file: <company GUID>-<yyyymmdd>.txt
-    06 : SET    : vFile : @@FCRFolder + ##vGuid + "-" + @@FCRDay + ".txt"
+    ;; the daily file: <company GUID>-<yyyymmdd>-<Windows user>.txt (next-userfile), or <company GUID>-<yyyymmdd>.txt
+    ;; when Tally gives no Windows user
+    06 : SET    : vFile : @@FCRFolder + ##vGuid + "-" + @@FCRDay + "-" + @@FCRWinUser + ".txt"
+    06a: IF     : $$IsEmpty:@@FCRWinUser
+    06b:    SET : vFile : @@FCRFolder + ##vGuid + "-" + @@FCRDay + ".txt"
+    06c: END IF
 
     ;; object type: Voucher if it has a voucher type, Master if it has a name, else None
     07 : SET    : vObj  : "None"
@@ -123,7 +173,7 @@
     ;; the line (heads only: the bridge asks Tally for the body)
     14 : SET    : vLine : "FCR1|ev=" + ##pEvent + "|t0=" + ##vT0
     15 : SET    : vTW   : ($$String:$$MachineDate) + " " + ($$String:$$MachineTime)
-    16 : SET    : vLine : ##vLine + "|tw=" + ##vTW
+    16 : SET    : vLine : ##vLine + "|tw=" + ##vTW + "|w=" + @@FCRWinUser
     17 : SET    : vLine : ##vLine + "|cguid=" + ##vGuid + "|cname=" + ##SVCurrentCompany
     18 : SET    : vLine : ##vLine + "|user=" + ($$String:$$CmpUserName) + "|obj=" + ##vObj
     19 : SET    : vLine : ##vLine + "|guid=" + ($$String:$Guid) + "|mid=" + ($$String:$MasterID)

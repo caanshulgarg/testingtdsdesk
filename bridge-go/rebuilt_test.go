@@ -525,7 +525,9 @@ type standCloud struct {
 	beatReply M        // added to the heartbeat's answer (readStop, readResume, release)
 	takeJobs  []M      // round 7: jobs posts_take hands out, one per call
 	posts     []M      // round 7: every posts_update body
-	dayPosts  []M      // round 10: every "days" body (per day: day, n, empty / readFailed)
+	// next-outbox: how posts_update is answered (nil: 200 {ok})
+	postsReply func(b M) (int, M)
+	dayPosts   []M // round 10: every "days" body (per day: day, n, empty / readFailed)
 	// 2.2.0: recorder_lines: the bodies answered 200 with results (recBodies) and every body as sent (recRaw); recReply
 	// answers instead (nil: results, every line applied); recDelay: how long each answer takes
 	recBodies []M
@@ -543,6 +545,13 @@ type standCloud struct {
 	// 2.3.1 (masters): every ledger_changes body, and how it is answered (nil: 200 {ok, added})
 	ledChanges []M
 	ledChReply func(b M) (int, M)
+	// the nightly self-check (selfcheck.go): every selfcheck body, and how it is answered (nil: compare finds nothing
+	// missing, record answers ok)
+	selfchecks []M
+	scReply    func(b M) (int, M)
+	// next-renumber: every renumber_list body, and how it is answered (nil: 200 {ok, entries: []})
+	renumAsks  []M
+	renumReply func(b M) (int, M)
 }
 
 func newStandCloud(t *testing.T) *standCloud {
@@ -605,6 +614,14 @@ func newStandCloud(t *testing.T) *standCloud {
 			}
 		case "posts_update":
 			c.posts = append(c.posts, o)
+			if c.postsReply != nil {
+				code, ans := c.postsReply(o)
+				if code != 200 {
+					w.WriteHeader(code)
+				}
+				_, _ = w.Write([]byte(jsonText(ans)))
+				return
+			}
 		case "ledger_list":
 			c.ledList = append(c.ledList, o)
 			out["added"], out["renamed"], out["deleted"] = len(arr(o["ledgers"])), len(arr(o["renamed"])), 0
@@ -620,6 +637,32 @@ func newStandCloud(t *testing.T) *standCloud {
 				return
 			}
 			out["added"], out["updated"] = len(arr(o["ledgers"])), 0
+		case "selfcheck":
+			c.selfchecks = append(c.selfchecks, o)
+			if c.scReply != nil {
+				code, ans := c.scReply(o)
+				if code != 200 {
+					w.WriteHeader(code)
+				}
+				_, _ = w.Write([]byte(jsonText(ans)))
+				return
+			}
+			if str(o["step"]) == "compare" {
+				out["missing"], out["received"] = []any{}, toI64(o["altvchid"])
+			} else {
+				out["result"], out["words"] = "ok", "checked (stand)"
+			}
+		case "renumber_list":
+			c.renumAsks = append(c.renumAsks, o)
+			if c.renumReply != nil {
+				code, ans := c.renumReply(o)
+				if code != 200 {
+					w.WriteHeader(code)
+				}
+				_, _ = w.Write([]byte(jsonText(ans)))
+				return
+			}
+			out["entries"] = []any{}
 		case "recorder_lines":
 			c.recRaw = append(c.recRaw, string(b))
 			if c.recDelay > 0 {

@@ -63,7 +63,7 @@ const strs = (code) => (code.replace(/\/\/[^\n]*/g, "").match(/"[^"]*"/g) || [])
 const block = goSrc.slice(goSrc.indexOf("\tliveFetchField222 = "), goSrc.indexOf("\n)", goSrc.indexOf("\tliveFetchField222 = ")));
 const f222 = strs(block.slice(0, block.indexOf("\tliveFetchField = ")));
 const FETCH = f222 + strs(block.slice(block.indexOf("\tliveFetchField = ") + "\tliveFetchField = liveFetchField222".length));
-ok(FETCH.startsWith("GUID, MASTERID, ALTERID, DATE") && FETCH.includes("ALLINVENTORYENTRIES.STOCKITEMNAME") && FETCH.split(", ").length === 61, // 58, and the bank allocation's DATE, NAME and UTR after the real 7.1 run
+ok(FETCH.startsWith("GUID, MASTERID, ALTERID, DATE") && FETCH.includes("ALLINVENTORYENTRIES.STOCKITEMNAME") && FETCH.split(", ").length === 63, // 58, the bank allocation's DATE, NAME and UTR after the real 7.1 run, and the TDS list and its sub-list whole (the owner, 07-Oct-2026)
   "the fetch read from recorder_live.go: " + FETCH.split(", ").length + " fields");
 function cut(voucher, fetch) {
   const want = new Set(fetch.split(", "));
@@ -78,7 +78,7 @@ function cut(voucher, fetch) {
   }
   const emit = (n, p0) => {
     const p = (p0 ? p0 + "." : "") + n.name.replace(/\.LIST$/, "");
-    if (!n.kids.length && !/\.LIST$/.test(n.name)) return want.has(p) ? (n.self ? n.open : n.open + n.text + "</" + n.name + ">") : "";
+    if (!n.kids.length && !/\.LIST$/.test(n.name)) return want.has(p) || (p0 && want.has(p0 + ".*")) ? (n.self ? n.open : n.open + n.text + "</" + n.name + ">") : "";
     const inner = n.kids.map((k) => emit(k, p)).join("");
     return inner ? n.open + inner + "</" + n.name + ">" : "";
   };

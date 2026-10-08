@@ -357,14 +357,25 @@ func TestBacklog233SlowMarkedWithOnlyEntryRequests(t *testing.T) {
 		}
 	}
 	f.mu.Unlock()
-	// every line of it is in the cloud: held, ended with the Day Book words, each entry asked once
+	// every line of it is in the cloud, held: at once with the once-more words, and (the owner's answer B) asked once
+	// more 5 minutes later and ended with the Day Book words; each entry asked twice at most
+	lines := 0
 	for _, s := range c.recSent() {
-		if str(s["xml"]) != "" || str(s["heldWhy"]) != liveStopEndWords() {
+		w := str(s["heldWhy"])
+		if !strings.HasSuffix(str(s["line_id"]), ":resolved") {
+			lines++
+		}
+		if str(s["xml"]) != "" || !(strings.HasPrefix(w, "waiting: ") || strings.HasSuffix(w, "upload that day's Day Book to settle it")) {
 			t.Fatalf("a line: %v", s)
 		}
 	}
-	if n := f.n(vchObjectID); n != 16 || len(c.recSent()) != 16 {
-		t.Fatalf("16 entries: %d asks, %d lines", n, len(c.recSent()))
+	for k := 0; k < 16; k++ {
+		if n := objAsksOf(f, int64(26100+k)); n > 2 {
+			t.Fatalf("entry %d: %d asks", 26100+k, n)
+		}
+	}
+	if lines != 16 {
+		t.Fatalf("16 entries: %d lines", lines)
 	}
 }
 
@@ -431,7 +442,7 @@ func TestBacklog233BeatWaiting(t *testing.T) {
 // --- the version, the allow-list's decision line (no request added or changed: TestAllowListUnchanged keeps the table's
 // hash) and the notes with their test sheet
 func TestBacklog233VersionAndDecisionLine(t *testing.T) {
-	if BridgeVersion != "2.3.5" {
+	if BridgeVersion != "2.4.0" {
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	al := readText("../docs/tally-allowlist.md")
@@ -519,13 +530,43 @@ func TestBacklog233OldLinesAskedOnceOneAtATime(t *testing.T) {
 		retryDue()
 		liveReadOnce()
 		liveUploadOnce()
+		asked := map[string]int{}
+		for _, m := range backlog233Asked(f) {
+			asked[m]++
+		}
+		all := 0
+		for _, id := range ids {
+			if asked[strings.TrimPrefix(id, "old-")] > 0 {
+				all++
+			}
+		}
+		if all == len(ids) && saved {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	// the owner's answer B (08-Oct-2026): each was stopped; none ends at its first stop, each is asked once more 5 minutes on
+	for _, id := range ids {
+		if s := r222cSentID(c, id+":resolved"); len(s) != 0 {
+			t.Errorf("old held line %s ended at its first stop: %v", id, s)
+		}
+	}
+	perFirst := map[string]int{}
+	for _, m := range backlog233Asked(f) {
+		perFirst[m]++
+	}
+	retryClock(time.Now(), 360)
+	t.Cleanup(func() { nowFn = time.Now })
+	for start3 := time.Now(); time.Since(start3) < 40*time.Second; {
+		retryDue()
+		liveUploadOnce()
 		ended := 0
 		for _, id := range ids {
 			if len(r222cSentID(c, id+":resolved")) > 0 {
 				ended++
 			}
 		}
-		if ended == len(ids) && saved {
+		if ended == len(ids) {
 			break
 		}
 		time.Sleep(20 * time.Millisecond)
@@ -539,11 +580,11 @@ func TestBacklog233OldLinesAskedOnceOneAtATime(t *testing.T) {
 	}
 	for _, id := range ids {
 		mid := strings.TrimPrefix(id, "old-")
-		if per[mid] > 1 {
-			t.Errorf("old held line %s: %d requests (at most one)", mid, per[mid])
+		if perFirst[mid] != 1 || per[mid] != 2 {
+			t.Errorf("old held line %s: %d requests in the first turn, %d in all (want 1 and 2)", mid, perFirst[mid], per[mid])
 		}
 		s := r222cSentID(c, id+":resolved")
-		if len(s) != 1 || str(s[0]["xml"]) != "" || str(s[0]["heldWhy"]) != liveStopEndWords() { // 2.3.4 (option (a)): the stop words
+		if len(s) != 1 || str(s[0]["xml"]) != "" || str(s[0]["heldWhy"]) != liveStopEndWords() { // 2.3.4 (answer B): stopped twice: the stop words
 			t.Errorf("old held line %s did not end with the Day Book words: %v", mid, s)
 		}
 	}

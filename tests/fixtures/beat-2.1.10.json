@@ -1,6 +1,6 @@
 {
   "allowlist": {
-    "hash": "1868570194cb3f536f02aa5cf646620547012000be7f5d68a6c7efcdc5562e86",
+    "hash": "9637918f31adcc340317881fb83853fe63297c78ed7d36531473a98c0547473c",
     "measured": false
   },
   "autoUpdate": true,
@@ -65,6 +65,7 @@
   "recorderSourceC": {},
   "recorderState": {},
   "recorderWaitWords": "",
+  "renumberAlerts": [],
   "reqs": {
     "day": "2026-10-04",
     "last": {
@@ -96,6 +97,6 @@
   "tallyState": "open",
   "trialTools": false,
   "updating": false,
-  "version": "2.3.5",
+  "version": "2.4.0",
   "windowsUser": ""
 }

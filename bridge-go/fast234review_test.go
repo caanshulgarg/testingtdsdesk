@@ -24,7 +24,7 @@ func fastOnlyApproved(t *testing.T, what, x string) {
 	}
 	ok := fastApprovedPaths()
 	for _, p := range fastLeafPaths(x) {
-		if !ok[p] {
+		if !fastPathOK(ok, p) {
 			t.Fatalf("%s: a field outside the approved list left: %s\n%s", what, p, x)
 		}
 	}
@@ -296,7 +296,7 @@ func TestFast234KindsStrip(t *testing.T) {
 			}
 		} else {
 			for _, p := range fastLeafPaths(s) {
-				if !ok[p] {
+				if !fastPathOK(ok, p) {
 					t.Errorf("%s: %s kept", f, p)
 				}
 			}

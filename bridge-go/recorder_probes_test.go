@@ -359,8 +359,8 @@ func TestBodyFetchOffAfterSlowAnswer(t *testing.T) {
 	if logLines("off: Tally took") != 0 || logLines("(FinComVoucherObject, try 1); trying again by itself at") != 1 {
 		t.Fatalf("the log: %s", readText(logFile()))
 	}
-	// 2.3.4 (the owner's decision of 08-Oct-2026, option (a)): the line goes up held at once, ended with the Day Book words
-	if st := obj(beatBody(true, "open", "", nil, nil, nil)["recorderBodyFetch"]); len(st) != 0 || len(c.recSent()) != 1 || str(c.recSent()[0]["heldWhy"]) != "Tally took longer than 2 s for this entry; upload that day's Day Book to settle it" {
+	// 2.3.4 (the owner's answer B, 08-Oct-2026): the line goes up held at once, asked once more 5 minutes later
+	if st := obj(beatBody(true, "open", "", nil, nil, nil)["recorderBodyFetch"]); len(st) != 0 || len(c.recSent()) != 1 || !strings.HasPrefix(str(c.recSent()[0]["heldWhy"]), "waiting: Tally took longer than 2 s; FinCom asks once more at ") {
 		t.Fatalf("the beat: %v; sent %v", st, c.recSent())
 	}
 	// Tally answers in time at the next try: both lines go with their body
@@ -371,7 +371,7 @@ func TestBodyFetchOffAfterSlowAnswer(t *testing.T) {
 	liveReadOnce()
 	retryDue()
 	uploadAll(t)
-	// the second line with its body; the first stays ended (2.3.4, option (a): not asked again)
+	// the second line with its body; the first waits for its one more ask (2.3.4, answer B: 5 minutes on)
 	s := c.recSent()
 	if len(s) != 2 || str(s[1]["xml"]) == "" || strings.HasSuffix(str(s[1]["line_id"]), ":resolved") {
 		for _, x := range s {

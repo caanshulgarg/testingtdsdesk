@@ -248,20 +248,38 @@ const Rec = {
     });
   },
   // FinCom 2.3.5 (the owner: "in tally sync there is a yellow field coming all the time.. there should be clear flow"):
-  // the lines waiting over 2 minutes (waiting(), above) in two kinds. "Being fetched": FinCom or the bridge is still at
-  // it (received; the queue; no entry body yet, the next day read applies it; FinCom's own posting coming back;
-  // AlertHub.oursHeld) - said quietly. "Needs you": nothing happens until a person acts, grouped by company and day with
-  // ONE plain sentence and ONE action: the bridge gave up ("upload that day's Day Book") -> upload the Day Book for that
-  // day; a ledger FinCom does not have yet -> add it (Ledgers to add), then Apply now; a locked month or any other
-  // reason -> Apply now (tally_recorder_release_held, as the list's own button). The cloud's words are not changed.
+  // the lines waiting over 2 minutes (waiting(), above) by what will actually happen to them - THE one classifier, used by
+  // Sync activity, the books' held banner and the bell (AlertHub.oursHeld), so they never disagree (review of f0f1531f).
+  //   "" = being fetched: FinCom Bridge or the cloud settles it by itself (said quietly);
+  //   any other kind = Needs you: nothing happens until a person acts, with ONE action:
+  //     daybook  - upload that day's Day Book (the bridge gave up; no entry GUID; a Day Book of the day incomplete...)
+  //     dupid    - FinCom's id is on a second Tally entry: check Tally for a double posting, then upload that day's Day Book
+  //     readstop - reading is stopped from FinCom on that computer: an owner resumes it (Resume reading)
+  //     baseline - the company's starting point is not recorded: the Tally page (the computer's More, Baselines)
+  //     masters  - a ledger line with no GUID: read the ledgers from Tally (Books -> From Tally)
+  //     locked   - the month is locked in FinCom: unlock it in Tie-out (then it applies)
+  //     other    - any other held reason: Apply now (tally_recorder_release_held), once it is settled
+  // Every reason the bridge (bridge-go) and the cloud (server/tally-cloud, migration 60) write is in
+  // tests/run_tally_page_simple.py (KINDS), each with its kind. The cloud's words are not changed.
+  FETCHED: [/waiting for the entry's details/i, /^waiting: /i, /FinCom asks again at/i, /matches no posting of this firm/i,
+    /held until FinCom Bridge( [\d.]+)? sends/i, /next (ledger list|day read|full line)/i, /^unknown (entry|ledger)\b/i, /^applied when |^replaced by /i,
+    /could not be asked whether it was (deleted|cancelled) here/i, /^the entry was not read from Tally/i, /queue/i, /not read from Tally in time/i],
   needKind(r){
-    const why = String((r && r.held_why) || "");
-    if (/Day Book|could not tell which entry/i.test(why)) return "daybook";
-    if (!r || r.state !== "held") return "";
-    if (/^unknown ledger/i.test(why)) return "ledger";
-    if (typeof AlertHub === "object" && AlertHub.oursHeld && AlertHub.oursHeld(r)) return "";
-    if (/next day read|waiting for the entry|held until FinCom Bridge sends|^unknown entry|queued|^applied when|^replaced by/i.test(why)) return "";
-    return /^month locked/i.test(why) ? "locked" : "other";
+    if (!r) return "";
+    const why = String(r.held_why || "").trim(), st = String(r.state || "");
+    if (st === "received" || st === "queued") return "";
+    if (st === "failed") return /queue|timeout|server/i.test(why) ? "" : "other";
+    if (st !== "held") return "";
+    if (/reading from Tally is stopped|stopped from FinCom/i.test(why)) return "readstop";
+    if (/starting point/i.test(why)) return "baseline";
+    if (/^FinCom id .* is matched to another Tally entry/i.test(why)) return "dupid";
+    if (/no MasterID or no date/i.test(why)) return "daybook";
+    if (this.FETCHED.some(x => x.test(why))) return "";
+    if (/Day Book|could not tell which entry|cannot tell which entry|cannot be asked for its entry/i.test(why)) return "daybook";
+    if (/^no GUID on the line/i.test(why)) return "masters";
+    if (/^month locked/i.test(why)) return "locked";
+    if (!why && /-0{8}$/.test(String(r.object_guid || ""))) return "";     // the add-on's placeholder, no words yet: the bridge asks for it
+    return "other";
   },
   // {needs: [{key, kind, cid, company, day (yyyy-mm-dd), lines, text}], fetching: [{r, why}]}
   flow(){
@@ -271,19 +289,58 @@ const Rec = {
       if (!kind){ fetching.push(w); return; }
       const company = r.company || (((S.companies || {})[r.client_id] || {}).name) || "a company";
       const day = /^\d{4}-\d{2}-\d{2}/.test(String(r.vch_date || "")) ? String(r.vch_date).slice(0, 10) : istDay(r.received_at) || "";
-      const key = kind + "|" + company + "|" + day + (kind === "other" ? "|" + String(r.held_why || "") : "");
-      if (!needs.has(key)) needs.set(key, {key, kind, cid: r.client_id || "", company, day, lines: []});
+      const dev = this.devOf(r.device_id), pc = r.pc || (dev && ((dev.info || {}).computer || dev.name)) || "the Tally computer";
+      const key = kind + "|" + company + "|" + (kind === "readstop" ? pc : kind === "masters" || kind === "baseline" ? "" : day) + (kind === "other" ? "|" + String(r.held_why || "") : "");
+      if (!needs.has(key)) needs.set(key, {key, kind, cid: r.client_id || "", company, day: kind === "readstop" || kind === "masters" || kind === "baseline" ? "" : day, pc, deviceId: r.device_id || "", lines: []});
       needs.get(key).lines.push(r);
     });
     const n = (k) => k + (k === 1 ? " entry" : " entries"), out = [...needs.values()].sort((a, b) => a.company.localeCompare(b.company) || b.day.localeCompare(a.day));
     out.forEach(g => {
       const k = g.lines.length, d = g.day ? fmtDate(g.day) : "", head = g.company + (d ? " · " + d : "") + ": ";
+      const w = String(g.lines[0].held_why || ""), m = /^FinCom id (\S+)/.exec(w);
       g.text = head + (g.kind === "daybook" ? n(k) + " could not be read from Tally \u2014 upload the Day Book for " + (d || "that day")
-        : g.kind === "ledger" ? n(k) + (k === 1 ? " names" : " name") + " a ledger FinCom does not have yet \u2014 add the ledger (Ledgers to add), then Apply now"
-        : g.kind === "locked" ? n(k) + (k === 1 ? " falls" : " fall") + " in a month locked in FinCom (" + String(g.lines[0].held_why || "") + ") \u2014 unlock the month, or Apply now"
-        : n(k) + " not yet entered in the books (" + String(g.lines[0].held_why || "") + ") \u2014 Apply now once it is settled");
+        : g.kind === "dupid" ? n(k) + " carry FinCom id " + (m ? m[1] : "") + ", which is on another Tally entry already \u2014 check Tally for a double posting, then upload the Day Book for " + (d || "that day")
+        : g.kind === "readstop" ? n(k) + " waiting: reading from Tally is stopped on " + g.pc + " \u2014 " + (this.role() === "owner" ? "Resume reading" : "an owner of the firm resumes it on the Tally page")
+        : g.kind === "baseline" ? n(k) + " waiting: the company's starting point is not recorded \u2014 see the Tally page (the computer's More)"
+        : g.kind === "masters" ? n(k) + " of a ledger with no GUID \u2014 read the ledgers again: Books \u2192 From Tally"
+        : g.kind === "locked" ? n(k) + (k === 1 ? " falls" : " fall") + " in a month locked in FinCom (" + w + ") \u2014 unlock the month in Tie-out; " + (k === 1 ? "it applies" : "they apply") + " then"
+        : n(k) + " not yet entered in the books (" + (w || "held") + ") \u2014 Apply now once it is settled");
     });
-    return {needs: out, fetching};
+    // 2.4.0 review MEDIUM (next-renumber): the bridges' renumbering alerts are "Needs you" too (kind renumber), first
+    const rn = this.renumberNeeds().filter(g => !S.syncClient || g.cid === S.syncClient);
+    return {needs: rn.concat(out), fetching};
+  },
+  // 2.4.0 review MEDIUM (next-renumber): an entry inserted or deleted in Tally makes Tally renumber the later entries of
+  // that voucher type with no line for them; FinCom Bridge reads them again, and says the ones it could not
+  // (renumber.go: below the starting point, Tally too slow twice, an answer it cannot read, more than 500, or not
+  // listable by MasterID) on its beat (info.beat.renumberAlerts, kept by tally-ingest; the last 7 days). One item a
+  // company, the earliest date of every computer's alerts: [{key, kind: "renumber", cid, company, day, n, more, text}];
+  // its one action: Upload the Day Book from that day (Rec.uploadFrom)
+  renumberNeeds(){
+    const tl = (typeof TLight === "object" && TLight.st) || {}, by = new Map();
+    (tl.devs || []).filter(d => d && !d.revoked).forEach(d => {
+      [].concat((((d.info || {}).beat) || {}).renumberAlerts || []).forEach(a => {
+        const f = String((a && a.from) || "");
+        if (!a || !a.company || !/^\d{8}$/.test(f)) return;
+        const day = f.slice(0, 4) + "-" + f.slice(4, 6) + "-" + f.slice(6, 8), k = norm(a.company);
+        const co = (tl.cos || []).find(c => c.client_id && norm(c.company) === k)
+          || Object.values(S.companies || {}).map(c => ({client_id: c.id, company: c.tallyName || c.name})).find(c => !(S.companies[c.client_id] || {}).deleted && norm(c.company) === k);
+        if (!by.has(k)) by.set(k, {key: "renumber|" + a.company, kind: "renumber", cid: co ? co.client_id : "", company: a.company, day, n: 0, more: false, pc: this.pcOf(d), deviceId: d.id, lines: []});
+        const g = by.get(k);
+        if (day < g.day) g.day = day;
+        g.n += Math.max(0, Number(a.n) || 0); g.more = g.more || a.more === true;
+      });
+    });
+    return [...by.values()].sort((a, b) => a.company.localeCompare(b.company)).map(g => Object.assign(g, {
+      text: g.company + " \u00b7 " + fmtDate(g.day) + ": " + (g.more ? "more than " : "") + g.n + (g.n === 1 && !g.more ? " entry" : " entries") +
+        " may have been renumbered in Tally (an entry was inserted or deleted there) and could not be read again \u2014 upload the Day Book from " + fmtDate(g.day)}));
+  },
+  // the Day Book upload from a day to today: Books -> From Tally
+  async uploadFrom(cid, day){
+    if (!cid || !day) return;
+    if (S.view !== "company" || S.coId !== cid) await openCompany(cid);
+    S.dbFrom = day; S.dbTo = this.ymdLocal(Date.now());
+    goClient("books:import");
   },
   // the Day Book upload for one day: Books -> From Tally with that day (Rec.uploadDays does it from a day to today)
   async uploadDay(cid, day){
@@ -293,6 +350,10 @@ const Rec = {
     S.dbFrom = day; S.dbTo = day;
     goClient("books:import");
   },
+  // a client's Tie-out (unlocking a month), its From Tally (the ledgers), the Tally page, Resume reading on one computer
+  async openClientTab(cid, tab){ if (!cid) return; if (S.view !== "company" || S.coId !== cid) await openCompany(cid); goClient(tab); },
+  openTallyPage(){ S.tallyTab = "computers"; navHome("tally"); },
+  resumeOn(g){ if (typeof TCloud === "object" && g && g.deviceId) TCloud.readResume({device: {id: g.deviceId}, computer: g.pc}); },
   // Apply now on every line of a group, one after another (the list's own Apply now, line by line)
   async releaseAll(lines){ for (const r of [].concat(lines || [])) if (r.state === "held") await this.release(r); },
   async release(r){

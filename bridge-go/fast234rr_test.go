@@ -49,7 +49,7 @@ func TestFast234RROlderLineUnreadableAnswerEnds(t *testing.T) {
 
 // --- M4 (option (a) in the held list): a line held at once and not asked yet (fresh, two asks allowed), its fast request
 // stopped at the limit: ended at its first stop with the Day Book words; exactly one request for it
-func TestFast234RRHeldListStopEndsAtOnce(t *testing.T) {
+func TestFast234RRHeldListStopAsksOnceMore(t *testing.T) {
 	_, f, c := slow232Bridge(t)
 	r222Vch(f, 25791, "Journal", "", "20261005", 54591)
 	stopSlowMids(f, 700*time.Millisecond, 25791)
@@ -64,12 +64,13 @@ func TestFast234RRHeldListStopEndsAtOnce(t *testing.T) {
 	for i, sec := range []int{0, 20, 60, 600, 3600, 86400} {
 		retryClock(base, sec)
 		fastTurns(2)
-		if n := f.n(vchObjectID); n > 1 {
-			t.Fatalf("turn %d: %d requests for it (want 1)", i, n)
+		if n := f.n(vchObjectID); n > 2 {
+			t.Fatalf("turn %d: %d requests for it (want 2 at most)", i, n)
 		}
 	}
-	if n := f.n(vchObjectID); n != 1 {
-		t.Fatalf("%d requests (want 1)", n)
+	// the owner's answer B (08-Oct-2026): its first stop leaves it one more ask, 5 minutes on; the second ends it
+	if n := f.n(vchObjectID); n != 2 {
+		t.Fatalf("%d requests (want 2)", n)
 	}
 	if s := r222cSentID(c, "fresh-slow:resolved"); len(s) != 1 || str(s[0]["heldWhy"]) != liveStopEndWords() {
 		t.Fatalf("not ended with the stop words: %v", s)
@@ -244,3 +245,79 @@ func fast234OldGuidProvenOnce(t *testing.T, ev string) {
 
 func TestFast234RROldDeleteProvenOnce(t *testing.T) { fast234OldGuidProvenOnce(t, "deleted") }
 func TestFast234RROldCancelProvenOnce(t *testing.T) { fast234OldGuidProvenOnce(t, "cancelled") }
+
+// re-review 2 L-d and the owner's answer 1 (08-Oct-2026): Tally's "Could not find Voucher:ID:n" proves "no such voucher"
+// only while the company asked is open in this Tally with its held GUID, checked right before and right after a second
+// ask giving the same answer; a company closed (or another of that name) before or after: not proven, asked later
+func TestFast234RRNotFoundNeedsCompanyOpen(t *testing.T) {
+	_, f, _ := r222bBridge(t, "")
+	port, err := findCompanyPortBg(nwsCo, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	held := heldGUID(nwsCo)
+	if held == "" {
+		t.Fatal("no GUID held for the company")
+	}
+	nf := "<ERRORMSG>Could not find Voucher:ID:25795!</ERRORMSG>"
+	coList := func(name, guid string) string {
+		return `<ENVELOPE><BODY><DATA><COLLECTION><COMPANY NAME="` + name + `"><NAME>` + name + `</NAME><GUID>` + guid + `</GUID></COMPANY></COLLECTION></DATA></BODY></ENVELOPE>`
+	}
+	for _, tc := range []struct {
+		name  string
+		objs  []string // the object export's answers in turn
+		lists []string // the company list's answers in turn ("" the stand's own)
+		gone  bool
+	}{
+		{"open before and after", []string{nf, nf}, []string{"", ""}, true},
+		{"closed (another company open)", []string{nf, nf}, []string{coList("FinCom Other Co", "other-guid"), ""}, false},
+		{"closed after the second ask", []string{nf, nf}, []string{"", coList("FinCom Other Co", "other-guid")}, false},
+		{"another company of that name", []string{nf, nf}, []string{coList(nwsCo, "co-guid-other"), coList(nwsCo, "co-guid-other")}, false},
+		{"no company open", []string{nf, nf}, []string{`<ENVELOPE><BODY><DATA><COLLECTION></COLLECTION></DATA></BODY></ENVELOPE>`, ""}, false},
+		{"the second ask finds it", []string{nf, ""}, []string{"", ""}, false},
+	} {
+		var objN, listN int
+		f.mu.Lock()
+		f.behave = func(w http.ResponseWriter, r *http.Request, id, body string) bool {
+			switch id {
+			case vchObjectID:
+				a := tc.objs[minI(objN, len(tc.objs)-1)]
+				objN++
+				if a == "" {
+					return false // the stand's own answer (its voucher 25795)
+				}
+				fmt.Fprint(w, a)
+				return true
+			case "TDSDeskCompanies":
+				a := tc.lists[minI(listN, len(tc.lists)-1)]
+				listN++
+				if a == "" {
+					return false
+				}
+				fmt.Fprint(w, a)
+				return true
+			}
+			return false
+		}
+		f.mu.Unlock()
+		r222Vch(f, 25795, "Journal", "", "20261005", 54595)
+		// the first ask (the delete check's own) answered "Could not find"; the proof asks once more
+		got, err := fetchVouchersByMasterIn(recorderTC(nil), nwsCo, port, "20261005", []string{"25795"}, 5)
+		if err != nil || len(got) != 0 {
+			t.Fatalf("%s: the first answer: %v %v", tc.name, got, err)
+		}
+		perr := fastProveGone(recorderTC(nil), nwsCo, port, "25795", 5)
+		if tc.gone && perr != nil {
+			t.Fatalf("%s: not proven gone: %v", tc.name, perr)
+		}
+		if !tc.gone && perr == nil {
+			t.Fatalf("%s: proven gone", tc.name)
+		}
+		if tc.gone && (objN != 2 || listN != 2) {
+			t.Fatalf("%s: %d object asks, %d company lists (want 2 and 2)", tc.name, objN, listN)
+		}
+	}
+	if s := heldGUID(nwsCo); s != held {
+		t.Fatalf("the held GUID changed: %s -> %s", held, s)
+	}
+}
