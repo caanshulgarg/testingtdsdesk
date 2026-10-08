@@ -34,20 +34,26 @@ function AllV($filter = '') {
 function OReq($mid) { $tplOBJ.Replace('@@CO@@', (X $co)).Replace('987654321', "$mid") }
 # one voucher: the three requests, each a warm-up (kept) and $n timed reps
 function Ask3($case, $t, $kind, $n = 1, [bool]$keep = $true) {
+  if ($t.mid -notmatch '^\d+$' -or $t.date -notmatch '^\d{8}$') { Say "L ${case} ${kind}: no MasterID or date in Tally's list ($($t.type) $($t.vno)): not asked"; return }
   $forms = [ordered]@{ object = (OReq $t.mid); bymaster = (ReqBM $t.date $t.mid) }
   if ($t.vno -and $t.type) { $forms['bynumber'] = ReqBN $t.date $t.type $t.vno }
   $line = @()
   foreach ($f in $forms.Keys) {
     $ms = @()
     for ($r = 0; $r -le $n; $r++) {
-      $x = Post $forms[$f] '' 180; $t0 = $script:lastMs
+      $x = Post $forms[$f] '' 60; $t0 = $script:lastMs
       $hit = $x -match "<MASTERID[^>]*>\s*$($t.mid)\s*<"
       $err = [regex]::Match($x, '<LINEERROR>[^<]*|<ERRORMSG>[^<]*|Unknown Request[^<]*|Could not[^<]*|<ERROR>[^<]*').Value
       [pscustomobject]@{ rel = $rel; case = $case; kind = $kind; type = $t.type; vno = $t.vno; date = $t.date; mid = $t.mid; form = $f; rep = $r; ms = $t0; bytes = $x.Length
         vouchers_in_answer = ([regex]::Matches($x, '<VOUCHER[ >]')).Count; has_target = $hit; err = $(if (-not $x) { 'NO ANSWER' } else { $err }) } | Export-Csv $lcsv -Append -NoTypeInformation -Encoding UTF8
       if ($r -eq 0 -and $keep) { SaveCap "l-$case-$kind-$f.xml" $x }
       if ($r -ge 1) { $ms += $t0 }
-      if (-not $x) { break }
+      if (-not $x) {
+        # run 37730488503: no answer: Tally started again when it no longer answers the company list (each later ask
+        # would wait its whole limit)
+        if (-not ((Post $listCo '' 20) -match '<COMPANY')) { Say "L ${case} ${kind} ${f}: Tally does not answer after it: started again"; Shot "l-hung-$kind-$f"; Start-T $light @() "l-again-$kind-$f" | Out-Null }
+        break
+      }
     }
     $s = @($ms | Sort-Object); if ($s.Count) { $line += "$f median $($s[[int][math]::Floor(($s.Count - 1) / 2)]) worst $($s[-1])" }
   }
@@ -145,7 +151,8 @@ try {
   $all = AllV
   $del = @($all | Where-Object { $_.narr -eq 'fast234l to be deleted' })[0]
   if ($del) {
-    $r = Imp 'Vouchers' @('<VOUCHER DATE="' + $lD + '" TAGNAME="Voucher Number" TAGVALUE="DEL-1" VCHTYPE="Journal" ACTION="Delete"><DATE>' + $lD + '</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><VOUCHERNUMBER>DEL-1</VOUCHERNUMBER></VOUCHER>') 'delete DEL-1'
+    # (run 37730488503: by its number it stayed; by its GUID, as an Alter by REMOTEID works)
+    $r = Imp 'Vouchers' @('<VOUCHER REMOTEID="' + $del.guid + '" VCHTYPE="Journal" ACTION="Delete"><DATE>' + $lD + '</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><VOUCHERNUMBER>' + $del.vno + '</VOUCHERNUMBER></VOUCHER>') 'delete DEL-1'
     Say "deleted DEL-1 (MasterID $($del.mid)): still in Tally $([bool](ById (AllV) $del.mid))"
   }
   Stop-T
@@ -155,6 +162,9 @@ try {
   Set-Content (Join-Path $cap 'l-vouchers.json') ($all | ConvertTo-Json -Depth 3) -Encoding UTF8
   Say "the company holds $($all.Count) vouchers: $(($all | ForEach-Object { "$($_.type) $($_.vno) ($($_.mid))" }) -join ', ')"
   # every voucher of the small company, each kind named by its narration or type
+  # (run 37730488503: Tally's list began with an empty row, no MasterID: asked as such, the by-MasterID and by-number
+  # requests with nothing in them hung Tally for the rest of the run; such rows are skipped now)
+  $all = @($all | Where-Object { $_.mid -match '^\d+$' })
   foreach ($v in $all) {
     $kind = (("$($v.type)-$($v.vno)" -replace '[^\w-]', '_').ToLower())
     $n = if ($v.vno -like 'BIG*') { 5 } else { 1 }
