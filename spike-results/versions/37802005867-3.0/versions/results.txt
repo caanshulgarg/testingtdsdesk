@@ -1,3 +1,0 @@
-INFO TallyPrime 3.0, mode mhook
-HARNESS c1 install and open the company: no result: the harness stopped or timed out (checks step: skipped)
-HARNESS c2 port and company list: no result: the harness stopped or timed out (checks step: skipped)

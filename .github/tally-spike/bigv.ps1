@@ -109,7 +109,7 @@ function BigSave($label, $stampFile, $day = '1-4-2026') {
 }
 function BigWarmPayroll($label) {
   KeysTo '%g' 3; KeysTo 'Day Book' 2; KeysTo '{ENTER}' 6; KeysTo '{F2}' 3; KeysTo '31-10-2026{ENTER}' 8 "big-$label-daybook"
-  KeysTo '{END}' 3; KeysTo '%2' 6 "big-$label-dup"; KeysTo '^a' 5 "big-$label-answer"; KeysTo '^a' 8 "big-$label-saved"; KeysTo '{ESC}' 2; KeysTo '{ESC}' 2
+  KeysTo '{END}' 3; KeysTo '%2' 6 "big-$label-dup"; KeysTo '^a' 5 "big-$label-answer"; KeysTo '^a' 8 "big-$label-saved"; KeysTo '{ESC}' 2   # one Esc: the Day Book closed (run 37795537503: a second Esc at the Gateway quit Tally, and the restarted Tally stopped at Activate License)
 }
 $tAdd = @(); for ($i = 1; $i -le 5; $i++) { $tAdd += BigSave "addon$i" '' }
 $tAddP = @(); if ($prc) { BigWarmPayroll 'addon-pr-warm'; for ($i = 1; $i -le 5; $i++) { $tAddP += BigSave "addon-pr$i" '' '31-10-2026' } }
