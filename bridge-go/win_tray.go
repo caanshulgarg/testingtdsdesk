@@ -3,9 +3,10 @@
 // The tray icon, in the signed-in owner's session (the service starts it; installed just for one user, its supervisor
 // does): green when the bridge reaches Tally and FinCom, red when not; its tooltip says the mode first ("Test mode: reading
 // only, not posting" or "Main bridge: reading and posting"). Its menu: Open FinCom, Test connection, Show log, Switch to
-// main bridge (test mode), Status, Connect FinCom, Pause, Restart, Check for updates, Send install log, Quit; and Windows
-// notifications for "Bridge offline" and "Tally not open". On Windows 11 it keeps itself shown next to the clock. It
-// also tells the service how long the keyboard and mouse have been idle and whether Tally is in front (a service cannot
+// main bridge (test mode), Status, Connect FinCom, Pause, Restart, Check for updates, Clear notifications, Send install
+// log, Quit; and Windows notifications for "Bridge offline", "Tally not open" and the like, each through the gate in
+// notices.go (2.3.5): once per problem, never again once dismissed or cleared. On Windows 11 it keeps itself shown next
+// to the clock. It also tells the service how long the keyboard and mouse have been idle and whether Tally is in front (a service cannot
 // see that), and hands over bridge 1.15.0's computer key, which only this Windows user can open.
 package main
 
@@ -168,13 +169,12 @@ type tray struct {
 	red       uintptr
 	st        M
 	reachable bool
-	since     map[string]time.Time
-	told      map[string]bool
 	started   time.Time
 	tallySeen bool
+	gate      *noticeGate // every balloon goes through it (notices.go)
 }
 
-var tr = &tray{since: map[string]time.Time{}, told: map[string]bool{}, started: time.Now()}
+var tr = &tray{started: time.Now()}
 var taskbarCreated uintptr
 
 // --- talking to the service
@@ -222,21 +222,30 @@ func (t *tray) balloon(title, text string, warn bool) {
 	}
 	pShellNotifyIcon.Call(nimModify, uintptr(unsafe.Pointer(&t.nid)))
 }
-func notify(title, text string) { tr.balloon(title, text, true) }
 
-// once, until the condition clears; and only after it has lasted a while
-func (t *tray) warnIf(cond bool, key string, after time.Duration, title, text string) {
-	if !cond {
-		delete(t.since, key)
-		t.told[key] = false
-		return
-	}
-	if _, ok := t.since[key]; !ok {
-		t.since[key] = time.Now()
-	}
-	if !t.told[key] && time.Since(t.since[key]) >= after {
-		t.told[key] = true
-		t.balloon(title, text, true)
+// the balloon on screen taken away ("Clear notifications"): an empty text with NIF_INFO
+func (t *tray) hideBalloon() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.nid.UFlags = nifInfo
+	t.nid.SzInfo, t.nid.SzInfoTitle = [256]uint16{}, [64]uint16{}
+	pShellNotifyIcon.Call(nimModify, uintptr(unsafe.Pointer(&t.nid)))
+}
+
+// 2.3.5: the gate every balloon goes through, on this Windows user's file of notifications shown and cleared
+func (t *tray) openGate() {
+	t.gate = newNoticeGate(openNoticeStore(noticeFile(), time.Now), computerName(), time.Now,
+		func(title, text string, warn bool) { t.balloon(title, text, warn) }, t.hideBalloon)
+}
+
+// the answer to the person's own click in the menu: once per click
+func (t *tray) reply(title, text string, warn bool) { t.gate.Reply(title, text, warn) }
+
+// the problems of this look at the bridge, each through the gate
+func (t *tray) check(st M) {
+	for _, p := range trayProblems(trayFacts{St: st, StartFailed: startFailedText(), Up: time.Since(t.started), TallySeen: t.tallySeen,
+		OfficeHours: officeHours(), RestartsBy: restartsBy()}) {
+		t.gate.Check(p)
 	}
 }
 
@@ -252,32 +261,26 @@ func (t *tray) poll() {
 			// 2.3.0: the bridge found no free port (9100..9199) and stopped: its one message, shown once
 			msg := startFailedText()
 			t.setIcon(false, cutRunes(msg, 127))
-			t.warnIf(true, "nostart", 0, "FinCom Bridge could not start", msg)
+			t.check(nil)
 		} else if st == nil {
 			t.setIcon(false, trayTip(nil))
-			t.warnIf(time.Since(t.started) > 30*time.Second, "down", 30*time.Second, "FinCom Bridge is not running",
-				"The bridge on this computer has stopped. "+restartsBy()+"; if this stays, choose Restart from this icon.")
+			t.check(nil)
 			// switched to main (or installed again): the install's record names other settings, on another port; the icon
 			// starts again from them
 			if c := installedConfig(); !trayConfigGiven && c != "" && exists(c) && !strings.EqualFold(c, ConfigPath) {
 				restartTray()
 			}
 		} else {
-			t.warnIf(false, "down", 0, "", "")
 			if str(st["version"]) != BridgeVersion && !truthy(obj(st["update"])["applying"]) {
 				restartTray() // the bridge was updated: the icon starts again from the new program
 			}
-			tally, online, cloud, pausedNow := truthy(st["tallyOpen"]), truthy(st["online"]), truthy(st["cloudConnected"]), truthy(st["paused"])
+			tally, online, pausedNow := truthy(st["tallyOpen"]), truthy(st["online"]), truthy(st["paused"])
 			if tally {
 				t.tallySeen = true
 			}
 			t.setIcon(tally && online && !pausedNow, trayTip(st))
-			// the owner's condition (Fix 2c): FinCom refused this computer key the bridge's id: its words, once
-			t.warnIf(str(st["cloudRefused"]) != "", "idrefused", 0, "FinCom Bridge", str(st["cloudRefused"]))
-			t.warnIf(cloud && !online && !pausedNow, "offline", 2*time.Minute, "Bridge offline",
-				"This computer cannot reach FinCom. Changes from Tally wait here and go as soon as FinCom can be reached.")
-			t.warnIf(!tally && !pausedNow && time.Since(t.started) > 2*time.Minute && (t.tallySeen || officeHours()), "tally", 3*time.Minute, "Tally not open",
-				"Open TallyPrime with your company, so FinCom stays up to date and postings reach Tally.")
+			// down, FinCom refused this computer's id (Fix 2c), offline, Tally not open: trayProblems (notices.go)
+			t.check(st)
 			// bridge 1.15.0's computer key, protected for this Windows user: handed to the service, which cannot open it
 			if truthy(st["needKey"]) && time.Since(keyTried) > 10*time.Minute {
 				keyTried = time.Now()
@@ -477,6 +480,7 @@ func (t *tray) menu() {
 		add(8, "Compare with bridge 1.15.0", mfString)
 	}
 	add(14, "Send install log to FinCom", mfString)
+	add(25, "Clear notifications", mfString) // 2.3.5: every current one cleared, never shown again for the same problem
 	pAppendMenu.Call(m, mfSeparator, 0, 0)
 	add(9, "Quit (hide this icon)", mfString)
 	var pt struct{ x, y int32 }
@@ -518,9 +522,9 @@ func (t *tray) command(id int, st M) {
 		on := !(st != nil && truthy(st["paused"]))
 		trayCall("POST", "/tray/pause", M{"on": on})
 		if on {
-			t.balloon("Background reading paused", "Opening a client in FinCom and the nightly catch-up do not read Tally until you choose Resume. Postings and Update now still work.", false)
+			t.reply("Background reading paused", "Opening a client in FinCom and the nightly catch-up do not read Tally until you choose Resume. Postings and Update now still work.", false)
 		} else {
-			t.balloon("FinCom Bridge", "Background reading resumed.", false)
+			t.reply("FinCom Bridge", "Background reading resumed.", false)
 		}
 	case 17:
 		r := trayCall("POST", "/tray/resume-reading", M{})
@@ -532,20 +536,20 @@ func (t *tray) command(id int, st M) {
 			msgBox("FinCom Bridge", "Reading was stopped from FinCom: resume it in FinCom (Resume reading for this computer).", mbIconInfo)
 			return
 		}
-		t.balloon("FinCom Bridge", "Reading from Tally resumed.", false)
+		t.reply("FinCom Bridge", "Reading from Tally resumed.", false)
 	case 4:
 		if trayCall("POST", "/tray/restart", M{}) == nil {
 			if perUserInstall() {
 				// the supervisor gone too (ended in the Task Manager): started again here, as at sign-in
 				exe, _ := os.Executable()
 				_ = exec.Command(exe, "user").Start()
-				t.balloon("FinCom Bridge", "Starting the bridge; it is back in a few seconds.", false)
+				t.reply("FinCom Bridge", "Starting the bridge; it is back in a few seconds.", false)
 				return
 			}
 			msgBox("FinCom Bridge", "The bridge is not answering. Windows starts it again by itself within a minute; if not, restart the computer.", mbIconWarning)
 			return
 		}
-		t.balloon("FinCom Bridge", "Starting again; it is back in a few seconds.", false)
+		t.reply("FinCom Bridge", "Starting again; it is back in a few seconds.", false)
 	case 5:
 		f := ""
 		if st != nil {
@@ -557,18 +561,18 @@ func (t *tray) command(id int, st M) {
 		}
 		shellOpen("notepad.exe", `"`+f+`"`)
 	case 6:
-		t.balloon("FinCom Bridge", "Checking for updates...", false)
+		t.reply("FinCom Bridge", "Checking for updates...", false)
 		r := trayCall("POST", "/tray/update", M{})
 		if r == nil {
-			t.balloon("FinCom Bridge", "The bridge is not answering.", true)
+			t.reply("FinCom Bridge", "The bridge is not answering.", true)
 			return
 		}
-		t.balloon("FinCom Bridge updates", str(r["message"]), false)
+		t.reply("FinCom Bridge updates", str(r["message"]), false)
 	case 8:
 		exe, _ := os.Executable()
 		shellOpen("cmd.exe", `/k ""`+exe+`" compare"`)
 	case 11:
-		t.balloon("FinCom Bridge", "Testing the connection: the bridge, Tally and FinCom (up to half a minute)...", false)
+		t.reply("FinCom Bridge", "Testing the connection: the bridge, Tally and FinCom (up to half a minute)...", false)
 		loadConfigRO()
 		port := toInt(cfg("Port"))
 		ping := pingLocal(port, 10*time.Second)
@@ -593,7 +597,7 @@ func (t *tray) command(id int, st M) {
 			msgBox("FinCom Bridge - Measure Tally", why, mbIconWarning)
 			return
 		}
-		t.balloon("FinCom Bridge", "Measuring "+str(r["company"])+" for FinCom support: one request at a time, a few minutes. The report opens when it is done.", false)
+		t.reply("FinCom Bridge", "Measuring "+str(r["company"])+" for FinCom support: one request at a time, a few minutes. The report opens when it is done.", false)
 		for i := 0; i < 900; i++ {
 			time.Sleep(2 * time.Second)
 			s := trayCall("GET", "/tray/measure", nil)
@@ -634,7 +638,7 @@ func (t *tray) command(id int, st M) {
 			msgBox("FinCom Bridge - Test reading from Tally", str(r["error"]), mbIconWarning)
 			return
 		}
-		t.balloon("FinCom Bridge", "Testing reading from Tally: "+str(r["company"])+", "+str(r["day"])+": three requests, one at a time, up to a few minutes. The result opens when it is done.", false)
+		t.reply("FinCom Bridge", "Testing reading from Tally: "+str(r["company"])+", "+str(r["day"])+": three requests, one at a time, up to a few minutes. The result opens when it is done.", false)
 		var s M
 		for i := 0; i < 450; i++ {
 			time.Sleep(2 * time.Second)
@@ -706,7 +710,7 @@ func (t *tray) command(id int, st M) {
 			msgBox(title, why, mbIconWarning)
 			return
 		}
-		t.balloon("FinCom Bridge", "Test fetching an entry: "+company+", "+typ+" "+no+": four requests, one at a time. The result opens when it is done.", false)
+		t.reply("FinCom Bridge", "Test fetching an entry: "+company+", "+typ+" "+no+": four requests, one at a time. The result opens when it is done.", false)
 		for i := 0; i < 450; i++ {
 			time.Sleep(2 * time.Second)
 			s := trayCall("GET", "/tray/fetchtest", nil)
@@ -809,7 +813,7 @@ func (t *tray) command(id int, st M) {
 			msgBox(title, why, mbIconWarning)
 			return
 		}
-		t.balloon("FinCom Bridge", "Time saving on "+company+": 100 TRIAL journals, one at a time. The result opens when it is done.", false)
+		t.reply("FinCom Bridge", "Time saving on "+company+": 100 TRIAL journals, one at a time. The result opens when it is done.", false)
 		for i := 0; i < 900; i++ {
 			time.Sleep(2 * time.Second)
 			s := trayCall("GET", "/tray/recorder-bench", nil)
@@ -836,7 +840,7 @@ func (t *tray) command(id int, st M) {
 		case r["ok"] != true:
 			msgBox("FinCom Bridge", str(r["error"]), mbIconWarning)
 		default:
-			t.balloon("FinCom Bridge", "Becoming the main bridge: bridge 1.15.0 is stopped and FinCom Bridge starts again on its own. The icon is back in about a minute.", false)
+			t.reply("FinCom Bridge", "Becoming the main bridge: bridge 1.15.0 is stopped and FinCom Bridge starts again on its own. The icon is back in about a minute.", false)
 		}
 	case 23:
 		// 2.2.0: the kept previous program put back (update.go rollBackBridge); the question names the version
@@ -861,7 +865,7 @@ func (t *tray) command(id int, st M) {
 			msgBox(title, why, mbIconWarning)
 			return
 		}
-		t.balloon("FinCom Bridge", "Rolling back to "+or(str(pv["version"]), "the previous version")+"; the bridge is back in a few seconds.", false)
+		t.reply("FinCom Bridge", "Rolling back to "+or(str(pv["version"]), "the previous version")+"; the bridge is back in a few seconds.", false)
 	case 14:
 		// sendlog shows its own message (sent, with the reference; or what to do)
 		exe, _ := os.Executable()
@@ -870,6 +874,8 @@ func (t *tray) command(id int, st M) {
 		if err := c.Start(); err != nil {
 			msgBox("FinCom Bridge", "The install log could not be sent: "+err.Error(), mbIconWarning)
 		}
+	case 25:
+		msgBox("FinCom Bridge - Clear notifications", clearedWords(t.gate.ClearAll()), mbIconInfo)
 	case 9:
 		trayCall("POST", "/tray/quit", M{"session": ownSession()})
 		if trayQuitEv != 0 {
@@ -891,6 +897,12 @@ func wndProc(hwnd, msg, wp, lp uintptr) uintptr {
 			tr.menu()
 		case wmLButtonDbl:
 			go msgBox("FinCom Bridge", tr.statusText(), mbIconInfo)
+		case ninBalloonTimeout, ninBalloonUserClick:
+			// closed with X or clicked: the gate records the problem shown as dismissed (2.3.5); off this thread, so
+			// the window never waits on the gate while it shows a balloon
+			if g := tr.gate; g != nil {
+				go g.BalloonEvent(lp & 0xffff)
+			}
 		}
 		return 0
 	case msg == wmShowStatus:
@@ -991,6 +1003,7 @@ func runTray(args []string) int {
 	hwnd, _, _ := pCreateWindowEx.Call(0, uintptr(unsafe.Pointer(u16(trayClass))), uintptr(unsafe.Pointer(u16("FinCom Bridge"))), 0, 0, 0, 0, 0, 0, 0, hinst, 0)
 	taskbarCreated, _, _ = pRegisterWindowMessage.Call(uintptr(unsafe.Pointer(u16("TaskbarCreated"))))
 	tr.hwnd, tr.green, tr.red = hwnd, iconFrom(icoGreen), iconFrom(icoRed)
+	tr.openGate()
 	tr.nid = notifyIconData{HWnd: hwnd, UID: 1, UFlags: nifIcon | nifTip | nifMessage, UCallbackMessage: wmTray, HIcon: tr.red}
 	tr.nid.CbSize = uint32(unsafe.Sizeof(tr.nid))
 	copyU16(tr.nid.SzTip[:], "FinCom Bridge: starting")

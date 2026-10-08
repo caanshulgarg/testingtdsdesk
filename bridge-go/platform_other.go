@@ -61,7 +61,6 @@ func isWindowsService() bool         { return false }
 func runTray(args []string) int      { println("The tray icon is for Windows."); return 1 }
 func installCmd(args []string) int   { println("Installing is for Windows."); return 1 }
 func uninstallCmd(args []string) int { println("Removing is for Windows."); return 1 }
-func notify(title, text string)      {}
 func applyUpdate(exe string, b []byte) error {
 	return os.WriteFile(exe+".new", b, 0o755)
 }
