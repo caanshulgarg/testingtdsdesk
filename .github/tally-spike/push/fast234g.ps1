@@ -1,4 +1,6 @@
 # fast234g.ps1 - MEASUREMENT ONLY (push-design, branch tally-versions), dot-sourced by pushm.ps1 when PD_MODE is fast234g,
+# (run 37735320482: the screen invoice was not made: an Enter after the date put the party into the dispatch details;
+# the keys now follow the push helper's ShareInvoice exactly: the party right after the date)
 # right after Tally is installed and flow.ps1 made "FinCom Spike Co" (nothing else of pushm.ps1 runs).
 # The coordinator, 08-Oct-2026: the push helper's run 37729166801 hung TallyPrime on all five releases with a Voucher
 # collection over the year (2026-27) fetching IRN, IRNACKNO, IRNACKDATE and EWAYBILLDETAILS.BILLNUMBER, filtered by
@@ -59,7 +61,6 @@ function ScreenInvoice($tag, $narr) {
   $null = TK 'Item Invoice{ENTER}' 2 "$tag-item-mode"
   $null = TK '{F2}' 1.5 "$tag-date-box" 'Date'
   $null = TK ((SK $gDay) + '{ENTER}') 2 "$tag-date"
-  $null = TK '{ENTER}' 1.5 "$tag-ref"
   $null = TK ((SK 'Template Party') + '{ENTER}') 2.5 "$tag-party"
   GSubs "$tag-party"
   $null = TK ((SK 'Sales') + '{ENTER}') 2 "$tag-ledger"
