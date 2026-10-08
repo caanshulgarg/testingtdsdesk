@@ -19,7 +19,7 @@ on:
         description: 'Branch, tag or commit of the bridge (bridge-go/); tax-accuracy is the published 2.3.0'
         default: tax-accuracy
       mode:
-        description: 'quick (install and port), full (every check) share (next-push: the full line against the stored entry, per kind typed on the screen; no bridge) or big (the add-on''s own share of a save on a 100,000-entry company) or hang (the hang of run 37729166801 isolated, each probe in a fresh Tally) or hang2 (the share company, then each entry asked in a fresh Tally)'
+        description: 'quick (install and port), full (every check) share (next-push: the full line against the stored entry, per kind typed on the screen; no bridge) or big (the add-on''s own share of a save on a 100,000-entry company) or hang (the hang of run 37729166801 isolated, each probe in a fresh Tally) or hang2 (the share company, then each entry asked in a fresh Tally) or hang3 (the share session, the published requests after every step)'
         default: quick
 permissions:
   contents: write
@@ -39,7 +39,7 @@ jobs:
       - id: mode
         run: |
           m="${{ inputs.mode }}"; [ -n "$m" ] || m=$(head -1 harness/.github/tally-spike/versions-mode.txt 2>/dev/null | tr -d '[:space:]')
-          case "$m" in full|share|big|hang|hang2) ;; *) m=quick ;; esac
+          case "$m" in full|share|big|hang|hang2|hang3) ;; *) m=quick ;; esac
           echo "mode=$m" | tee -a "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
         with:
@@ -90,7 +90,7 @@ jobs:
       matrix:
         version: ['3.0', '4.1', '5.1', '6.2', '7.1']
     runs-on: windows-latest
-    timeout-minutes: ${{ needs.build.outputs.mode == 'hang2' && 220 || ((needs.build.outputs.mode == 'share' || needs.build.outputs.mode == 'big' || needs.build.outputs.mode == 'hang') && 130 || 75) }}
+    timeout-minutes: ${{ needs.build.outputs.mode == 'hang2' && 220 || ((needs.build.outputs.mode == 'share' || needs.build.outputs.mode == 'big' || needs.build.outputs.mode == 'hang' || needs.build.outputs.mode == 'hang3') && 130 || 75) }}
     env:
       TALLY_REL: ${{ matrix.version }}
       VMODE: ${{ needs.build.outputs.mode }}
@@ -132,7 +132,7 @@ jobs:
           & .github/tally-spike/flow.ps1 *>&1 | Tee-Object -FilePath $env:LOG -Append; exit 0
       - name: 4 Checks (flowv.ps1)
         id: checks
-        timeout-minutes: ${{ needs.build.outputs.mode == 'hang2' && 190 || ((needs.build.outputs.mode == 'share' || needs.build.outputs.mode == 'big' || needs.build.outputs.mode == 'hang') && 105 || 40) }}
+        timeout-minutes: ${{ needs.build.outputs.mode == 'hang2' && 190 || ((needs.build.outputs.mode == 'share' || needs.build.outputs.mode == 'big' || needs.build.outputs.mode == 'hang' || needs.build.outputs.mode == 'hang3') && 105 || 40) }}
         env:
           BRIDGE_DIST: ${{ github.workspace }}\bridge-dist
         run: |

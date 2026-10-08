@@ -68,6 +68,7 @@ foreach ($ph in @(@('Share Basic', 1000), @('Share HRA', 500))) {
 $px += '<ALLLEDGERENTRIES.LIST><LEDGERNAME>Share Salary Payable</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>7500.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>'
 $prv = Imp 'Vouchers' $px 'share payroll template'
 Info "share payroll masters and template: $(([regex]::Match("$pr", '<CREATED>\d+</CREATED>').Value)) / $(([regex]::Match("$prv", '<CREATED>\d+</CREATED>.*?<ERRORS>\d+</ERRORS>', 'Singleline').Value) -replace '\s+', ' ')"
+if ($script:hangStep) { & $script:hangStep 'masters' }   # hang3v.ps1
 
 # ---- the screens
 # a bill-wise screen, if it is up: the bill typed ($bill = @(type, name)) or Tally's own default taken (Ctrl+A)
@@ -210,6 +211,7 @@ function ShareCase($id, $what, [scriptblock]$do, $alterOf = $null) {
     Add-Content -Path $resultsFile -Value "HARNESS share ${id}: the keys made no entry ($what); see the tds-*-$id-* screenshots" -Encoding UTF8
   }
   $script:summary += [pscustomobject]$o
+  if ($script:hangStep) { & $script:hangStep $id }   # hang3v.ps1: the requests after each case
   return $v
 }
 
