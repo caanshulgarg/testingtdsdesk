@@ -184,6 +184,21 @@ func TestFast234RRNotFoundAnswer(t *testing.T) {
 			t.Fatalf("%q taken as no such voucher: %v", a, got)
 		}
 	}
+	// re-review 2 (L-b): a MasterID with leading zeros is never asked, so "Could not find Voucher:ID:007" can never prove
+	// MasterID 7 (or 007) gone; Tally's MasterIDs have none
+	for _, mid := range []string{"007", "0777", "00"} {
+		if voucherObjectRequest(nwsCo, mid) != "" {
+			t.Fatalf("%q: a request was made", mid)
+		}
+		answer = "<ERRORMSG>Could not find Voucher:ID:" + mid + "!</ERRORMSG>"
+		if got, err := ask(mid); err == nil {
+			t.Fatalf("%q: taken as no such voucher: %v", mid, got)
+		}
+	}
+	answer = "<ERRORMSG>Could not find Voucher:ID:007!</ERRORMSG>"
+	if got, err := ask("7"); err == nil {
+		t.Fatalf("ID:007 taken as no such voucher for 7: %v", got)
+	}
 }
 
 // 2.3.4 re-review 2, N-M1 (the reviewer's probe, made permanent): an older bridge's held cancel / delete that the one fast
