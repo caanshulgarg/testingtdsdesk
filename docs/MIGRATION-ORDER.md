@@ -380,7 +380,9 @@ is merged.
   a lock timeout, a deadlock) or leaves without a result is not marked sent: it goes again after RecorderRetrySec x 2^n
   (30 minutes at most), never given up: from RecorderFailedTries (12) on it is sent every 30 minutes and the beat carries
   it per company (recorderState stuck / stuckSince / stuckDay; tally-ingest's part and FinCom's Needs you are on
-  next-outbox and next-outbox-app); the other lines of the group are marked sent. The code is next-outbox's, the same text. Test: TestMasterHookFailedNotMarkedSent.
+  next-outbox and next-outbox-app); the other lines of the group are marked sent. Its tries, first failure and next try are kept with the offsets
+  (sync\recorder-offsets.json "fails"), so a restart keeps its count, its 30-minute cap and its Needs you entry. The code
+  is next-outbox's, the same text (without next-outbox's keepFrom). Test: TestMasterHookFailedNotMarkedSent.
 - **L3.** tally-ingest keeps only the types the add-on hooks (Pay Head, Stock Item, Godown); a Unit or Employee line is
   'failed', "unknown master type", not kept. Stale comments put right. Test: run_recorder_masters_server.py.
 - **L4.** 66 is in run_migration_order.py (after 60, both orders, twice) and in tests/ci/tests.txt with
