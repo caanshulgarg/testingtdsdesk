@@ -324,6 +324,9 @@ func liveStopWhat() string {
 
 // "waiting: <what>; FinCom asks again at HH:MM": the retry schedule's next try, else the next ask's time
 func liveWaitWords(what string) string {
+	if what == liveReadStopWhat {
+		return "waiting: " + what + "; asked again when it is resumed" // 2.3.5: no time: FinCom's resume decides
+	}
 	next := retryNext()
 	if now := nowFn(); next.IsZero() || next.Before(now) {
 		next = now.Add(liveFreshSpacing())
@@ -423,6 +426,8 @@ func liveFetchByNumber(cs []*change, sp int64, spOK bool) {
 	deadline := time.Now().Add(time.Duration(liveBodySec()) * time.Second)
 	yield := func() bool { return postingGoing() || importsInFlight.Load() > 0 }
 	tc := recorderTC(nil)
+	var reached bool // 2.3.5: whether this ask's request reached Tally
+	tc.sentOut = &reached
 	port, err := findCompanyPortBg(company, 0)
 	if err != nil {
 		if yield() {
@@ -452,7 +457,12 @@ func liveFetchByNumber(cs []*change, sp int64, spOK bool) {
 		}
 		left := maxI(2, int(time.Until(deadline).Seconds()+0.999))
 		liveDecide(c, "asking Tally by type and number (a new entry: no MasterID on its line)")
+		reached = false
 		x, why, kind, err := liveOneByNumber(tc, company, port, liveWantOf(c, sp, spOK), left)
+		if liveStopRefused(err, reached) {
+			liveHeldNow([]*change{c}, liveReadStopWhat, false, false, true) // 2.3.5: FinCom's read stop: nothing sent, not counted
+			continue
+		}
 		if errors.Is(err, errSlowCompany) {
 			slowHold(c)
 			continue

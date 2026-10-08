@@ -1816,6 +1816,8 @@ func liveFetchBodies(need []*change, sp int64, spOK bool) {
 	// head: it goes up held at once with plain words and joins the held list, due at the next try; its body goes later as
 	// "<line id>:resolved"
 	tc := recorderTC(nil)
+	var reached bool // 2.3.5: whether this ask's request reached Tally
+	tc.sentOut = &reached
 	failed := func(cs []*change, why string) {
 		live.mu.Lock()
 		for _, c := range cs {
@@ -1936,6 +1938,7 @@ byDay:
 			for _, c := range part {
 				liveDecide(c, "asking Tally by MasterID")
 			}
+			reached = false
 			got, err := fetchVouchersByMasterIn(tc, company, port, d, mids, left())
 			if errors.Is(err, errSlowCompany) {
 				rest := append(append([]*change{}, part...), cs...)
@@ -1952,6 +1955,16 @@ byDay:
 					rest = append(rest, byDate[d2]...)
 				}
 				liveHeldNow(rest, "Tally busy", false, false, true)
+				break byDay
+			}
+			if liveStopRefused(err, reached) {
+				// 2.3.5: FinCom's read stop refused it, nothing sent: held now with the stop's words, not counted as an ask;
+				// asked when reading is resumed
+				rest := append(append([]*change{}, part...), cs...)
+				for _, d2 := range dates[di+1:] {
+					rest = append(rest, byDate[d2]...)
+				}
+				liveHeldNow(rest, liveReadStopWhat, false, false, true)
 				break byDay
 			}
 			if errors.Is(err, errRecorderStop) {
@@ -2042,6 +2055,7 @@ byDay:
 				w := liveWantOf(c, sp, spOK)
 				w.mid = ""
 				liveDecide(c, "asking Tally by type and number ("+cutRunes(m.why, 120)+")")
+				reached = false
 				x, why, kind, err := liveOneByNumber(tc, c.company, port, w, left())
 				if errors.Is(err, errSlowCompany) {
 					slowHold([]*change{c})
@@ -2049,6 +2063,10 @@ byDay:
 				}
 				if errors.Is(err, errRetryWait) {
 					liveHeldNow([]*change{c}, "Tally busy", false, false, true) // 2.3.3: held now, due at the next try
+					continue
+				}
+				if liveStopRefused(err, reached) {
+					liveHeldNow([]*change{c}, liveReadStopWhat, false, true, false) // 2.3.5: the stop's words; its MasterID ask reached Tally: counted
 					continue
 				}
 				if errors.Is(err, errRecorderStop) || tallyNoAnswer(err) || passing(err) {
@@ -2297,6 +2315,15 @@ func liveOverdue(cs []*change) bool {
 
 // the words of a line held because the entries saved before it are being read (review M2)
 const liveBehindWhat = "Tally busy (reading the entries saved before it)"
+
+// 2.3.5: a line held because FinCom's read stop refused its request ("waiting: <this>; asked again when it is resumed")
+const liveReadStopWhat = "reading from Tally is stopped from FinCom"
+
+// 2.3.5: the read stop's own refusal, with nothing of this ask sent to Tally (reached: tc.sentOut): not a try. Any other
+// failure (a 2 s stop, no answer, a closed connection, an empty answer), or a refusal after a request reached Tally, counts
+func liveStopRefused(err error, reached bool) bool {
+	return !reached && errors.Is(err, errReadStopped)
+}
 
 // a ledger line that goes without its body after the 4 s (the safety net, review M2)
 const liveLedgerLateWhy = "the ledger was not read from Tally in time; FinCom takes it from the next ledger list"

@@ -245,7 +245,10 @@ func liveGuidHold(c *change, words string) {
 // review H1 (under live.mu): this bridge's Tally could not be asked (why): held, never sent unproven. The owner's
 // addition: when only the moment was wrong (Tally busy, the 2 s stop, the fetch off for now, no answer, no starting point
 // yet), the line joins the held list (recorder_resolve.go) and is asked again by itself (liveResolveGuid); sent with the
-// GUID only when the proof then succeeds. retry false: nothing to ask Tally by (no MasterID or date): held for good
+// GUID only when the proof then succeeds. retry false: nothing to ask Tally by (no MasterID or date): held for good.
+// 2.3.5: a line asked again keeps its own GUID (guidKeep, alterKeep: the held list's keepGuid, kept over a restart): a
+// delete proven gone here later goes with it, as one proven at once does; it is still only a name to look for and a
+// GUID to send once proven (liveDeleteAnswer, liveGuidFallback), never a proof
 func liveGuidUnproven(c *change, why string) { liveGuidUnprovenAs(c, why, true) }
 
 func liveGuidUnprovenAs(c *change, why string, retry bool) {
@@ -253,9 +256,11 @@ func liveGuidUnprovenAs(c *change, why string, retry bool) {
 	if c.event == "cancelled" {
 		w = liveCancelUnprovenWords
 	}
+	keep, alter := c.guidKeep, c.alterKeep
 	liveGuidHold(c, w+" ("+cutRunes(why, 160)+")"+fmt.Sprintf(liveUnprovenWordsEndTail, c.guidVerb()))
 	if retry {
 		c.heldFinal, c.guidRetry = false, true
+		c.guidKeep, c.alterKeep = keep, alter
 	}
 }
 
