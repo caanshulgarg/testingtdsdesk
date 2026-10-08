@@ -1,0 +1,280 @@
+[11:46:58.027] push-design on TallyPrime 3.0: reps 5, heavy 3000 ledgers / 3000 items / up to 30000 vouchers (40 min), postings 1
+[11:46:59.779] system clock step after timeBeginPeriod(1): 0.77 ms (min 0.0037, max 11.3324)
+[11:46:59.807] two files written 2 ms apart: NTFS write times 5.0008 ms apart
+[11:46:59.827] light company folder: D:\a\_temp\TallyData\100000
+[11:47:02.864] tally.ini: Data D:\a\_temp\TallyData; TDL: none
+[keys] 'a'
+[keys] 't'
+[shot] p-setup-light-started (1024x768)
+[11:47:30.989] Tally started (setup-light) in 28.1 s; company open: True
+[11:47:31.000] company GUID 965c7018-7d87-42a0-89b7-3e83f065677f
+[11:47:33.281] proxy 127.0.0.2:9000 -> Tally: True (<RESPONSE>TallyPrime Server is Running</RESPONSE> )
+[11:47:34.543] import light masters: 60 sent, created 59, errors 0, 225.2 ms
+[11:47:34.709] import template s5 (all fields): 1 sent, created 1, errors 0, 90.2 ms
+[11:47:34.969] import template s50 (all fields): 1 sent, created 1, errors 0, 255.3 ms
+[11:47:34.995] import template rc (all fields): 1 sent, created 1, errors 0, 23.4 ms
+[11:47:35.001] templates: rc all fields; s50 all fields; s5 all fields
+[11:47:35.051]   template Receipt 1 20261001 mid 4 aid 4 965c7018-7d87-42a0-89b7-3e83f065677f-00000004
+[11:47:35.053]   template Sales 1 20261002 mid 2 aid 2 965c7018-7d87-42a0-89b7-3e83f065677f-00000002
+[11:47:35.054]   template Sales 2 20261031 mid 3 aid 3 965c7018-7d87-42a0-89b7-3e83f065677f-00000003
+[11:47:35.491] company feature fields (by name): ISBATCHWISEON=No, PREVISMULTIGODOWNON=No, PREVISTRACKINGON=No, ISPAYROLLON=No, PREVISSALESORDERSON=No, PREVISPURCORDERSON=No, ISEXCISEMFGRTRADERON=No, ISPAYROLLSTATON=No, ISCOSTTRACKINGON=No, NOTIFYOFEXPIRY=No, ISTRACKVOUCHERSON=No, RESETTRACKEDCHANGES=No
+[11:47:35.507] import company features by XML: 1 sent, created 0, errors 0, 12.6 ms
+[11:47:35.519] after the XML alter: ISBATCHWISEON=Yes, PREVISMULTIGODOWNON=Yes, PREVISTRACKINGON=Yes, ISPAYROLLON=Yes, PREVISSALESORDERSON=Yes, PREVISPURCORDERSON=Yes, ISEXCISEMFGRTRADERON=No, ISPAYROLLSTATON=No, ISCOSTTRACKINGON=No, NOTIFYOFEXPIRY=No, ISTRACKVOUCHERSON=No, RESETTRACKEDCHANGES=No
+[keys] '{F11}'
+[shot] p-f11-0 (1024x768)
+[keys] '{UP}'
+[keys] '{UP}'
+[keys] '{UP}'
+[shot] p-f11-1-top (1024x768)
+[keys] 'y'
+[shot] p-f11-2-show-more (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d01 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d02 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d03 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d04 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d05 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d06 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d07 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d08 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d09 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d10 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d11 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d12 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d13 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d14 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d15 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d16 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d17 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d18 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d19 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d20 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d21 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d22 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d23 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d24 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d25 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d26 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d27 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d28 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d29 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d30 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d31 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d32 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d33 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d34 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d35 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d36 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d37 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d38 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d39 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d40 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d41 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d42 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d43 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d44 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d45 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d46 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d47 (1024x768)
+[keys] '{DOWN}'
+[shot] p-f11-d48 (1024x768)
+[keys] '^a'
+[shot] p-f11-accepted (1024x768)
+[11:48:59.631] after F11 (show more features only): ISBATCHWISEON=Yes, PREVISMULTIGODOWNON=Yes, PREVISTRACKINGON=Yes, ISPAYROLLON=Yes, PREVISSALESORDERSON=Yes, PREVISPURCORDERSON=Yes, ISEXCISEMFGRTRADERON=No, ISPAYROLLSTATON=No, ISCOSTTRACKINGON=No, NOTIFYOFEXPIRY=No, ISTRACKVOUCHERSON=No, RESETTRACKEDCHANGES=No
+[11:48:59.649] voucher types: Attendance, Contra, Credit Note, Debit Note, Delivery Note, Job Work In Order, Job Work Out Order, Journal, Material In, Material Out, Memorandum, Payment, Payroll, Physical Stock, Purchase, Purchase Order, Receipt, Receipt Note, Rejections In, Rejections Out, Reversing Journal, Sales, Sales Order, Stock Journal
+[11:48:59.660] voucher type fields: active ISACTIVE; manufacturing ASMFGJRNL
+[11:48:59.696] import voucher types active, manufacturing journal: 9 sent, created 1, errors 0, 34.1 ms
+[11:49:00.576] import type masters (godowns, batch items, employees, pay heads, supplier): 258 sent, created 258, errors 0, 859.3 ms
+[11:49:00.584] import attendance type: 1 sent, created 0, errors 1, 4 ms; Tally: Unit &apos;Days&apos; does not exist!
+[11:49:00.589] import attendance type: 1 sent, created 0, errors 1, 3.6 ms; Tally: Unit &apos;Days&apos; does not exist!
+[11:49:00.594] import attendance type: 1 sent, created 0, errors 1, 3.7 ms; Tally: Unit &apos;Days&apos; does not exist!
+[11:49:00.598] import attendance type: 1 sent, created 0, errors 1, 3.3 ms; Tally: Unit &apos;Days&apos; does not exist!
+[11:49:00.602] import attendance type: 1 sent, created 0, errors 1, 3.3 ms; Tally: Unit &apos;Days&apos; does not exist!
+[11:49:00.610] import attendance type: 1 sent, created 0, errors 1, 6.8 ms; Tally: Unit &apos;Days&apos; does not exist!
+[11:49:00.614] import attendance type: 1 sent, created 0, errors 1, 3.2 ms; Tally: Unit &apos;Days&apos; does not exist!
+[11:49:00.619] import attendance type: 1 sent, created 0, errors 1, 3.3 ms; Tally: Unit &apos;Days&apos; does not exist!
+[11:49:00.623] import attendance type: 1 sent, created 0, errors 1, 3.2 ms; Tally: Unit &apos;Days&apos; does not exist!
+[11:49:00.628] import attendance type: 1 sent, created 0, errors 1, 3.7 ms; Tally: Unit &apos;Days&apos; does not exist!
+[11:49:00.632] import attendance type: 1 sent, created 0, errors 1, 3.6 ms; Tally: Unit &apos;Days&apos; does not exist!
+[11:49:00.637] import attendance type: 1 sent, created 0, errors 1, 3.4 ms; Tally: Unit &apos;Days&apos; does not exist!
+[11:49:00.809] import template payroll50 (form 1 of 5): 1 sent, created 0, errors 1, 9.3 ms; Tally: No Entries in Voucher!
+[11:49:00.819] import template payroll50 (form 2 of 5): 1 sent, created 0, errors 1, 7.8 ms; Tally: No Entries in Voucher!
+[11:49:00.829] import template payroll50 (form 3 of 5): 1 sent, created 0, errors 1, 9.8 ms; Tally: Voucher totals do not match! Dr: 75,000.00 Dr Cr:  Diff: 75,000.00 Dr
+[11:49:00.838] import template payroll50 (form 4 of 5): 1 sent, created 0, errors 1, 7.7 ms; Tally: No Entries in Voucher!
+[11:49:00.862] import template payroll50 (form 5 of 5): 1 sent, created 1, errors 0, 22.6 ms
+[11:49:00.881] import template payroll200 (form 1 of 5): 1 sent, created 0, errors 1, 16 ms; Tally: No Entries in Voucher!
+[11:49:00.898] import template payroll200 (form 2 of 5): 1 sent, created 0, errors 1, 15.4 ms; Tally: No Entries in Voucher!
+[11:49:00.924] import template payroll200 (form 3 of 5): 1 sent, created 0, errors 1, 25.4 ms; Tally: Voucher totals do not match! Dr: 3,00,000.00 Dr Cr:  Diff: 3,00,000.00 Dr
+[11:49:00.942] import template payroll200 (form 4 of 5): 1 sent, created 0, errors 1, 16.4 ms; Tally: No Entries in Voucher!
+[11:49:00.982] import template payroll200 (form 5 of 5): 1 sent, created 1, errors 0, 37.9 ms
+[11:49:00.993] import template attendance (form 1 of 1): 1 sent, created 0, errors 1, 8.5 ms; Tally: No Entries in Voucher!
+[11:49:01.071] import template stockjournal (form 1 of 1): 1 sent, created 1, errors 0, 76.6 ms
+[11:49:01.112] import template mfgjournal (form 1 of 1): 1 sent, created 1, errors 0, 39.2 ms
+[11:49:01.129] import template salesorder (form 1 of 3): 1 sent, created 0, errors 1, 14.9 ms; Tally: Bad Order Number in Voucher!
+[11:49:01.144] import template salesorder (form 2 of 3): 1 sent, created 0, errors 1, 13.7 ms; Tally: Bad Order Number in Voucher!
+[11:49:01.159] import template salesorder (form 3 of 3): 1 sent, created 0, errors 1, 14 ms; Tally: Bad Order Number in Voucher!
+[11:49:01.181] import template purchaseorder (form 1 of 3): 1 sent, created 0, errors 1, 19.8 ms; Tally: Bad Order Number in Voucher!
+[11:49:01.202] import template purchaseorder (form 2 of 3): 1 sent, created 0, errors 1, 19.7 ms; Tally: Bad Order Number in Voucher!
+[11:49:01.218] import template purchaseorder (form 3 of 3): 1 sent, created 0, errors 1, 15 ms; Tally: Bad Order Number in Voucher!
+[11:49:01.270] import template deliverynote (form 1 of 1): 1 sent, created 1, errors 0, 50.2 ms
+[11:49:01.324] import template receiptnote (form 1 of 1): 1 sent, created 1, errors 0, 53.1 ms
+[11:49:01.348] import template physicalstock (form 1 of 1): 1 sent, created 1, errors 0, 22.2 ms
+[11:49:01.599] import template salesbatch (form 1 of 1): 1 sent, created 1, errors 0, 249.5 ms
+[11:49:01.971] TDL $$MachineName => '' 
+[11:49:01.974] TDL $$CmpUserName => 'TALLY User' 
+[11:49:01.977] TDL $$SysInfo:WindowsUser => 'runneradmin' 
+[11:49:01.980] TDL $$SysInfo:WindowsUserName => '' 
+[11:49:01.982] TDL $$SysInfo:UserName => '' 
+[11:49:01.985] TDL $$SysInfo:LoginUser => '' 
+[11:49:01.987] TDL $$SysInfo:SystemName => 'runnervmfi6oq' 
+[11:49:01.990] TDL $$SysInfo:ComputerName => '' 
+[11:49:01.992] TDL $$SysInfo:MachineName => '' 
+[11:49:01.997] TDL $$SysInfo:IPAddress => '10.1.0.139,192.168.192.1' 
+[11:49:02.000] TDL $$SysInfo:ApplicationPath => 'C:\Program Files\TallyPrime' 
+[11:49:02.003] TDL $$SysInfo:TempPath => '' 
+[11:49:02.039] fast234 (fast234r) on TallyPrime 3.0: today's request 2927 chars, 61 fields
+[11:49:02.145] import M2 invoice with a direct Sales line: 1 sent, created 1, errors 0, 60.1 ms
+[shot] tds-001-gw0 (1024x768)
+[11:49:11] [tds] screen tds-001-gw0 : TallyPrime MANAGE EDU K: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Y: Data Z: Exchange CURRENT OATE Wednesday, I-Apr-2026 O: Import E: Export M: E-mail p: pnnt x Fl: Help Date Company Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports Quit Unity o e32fO to ru ecd8— dad—3 acepa ' , "orc a9b—7 dad—3 acepa .337.0 -7d51 ning bec ing j _id" : 1-01" 7a9b- Mode Q 31-Oct-26 Search Windows Server 2025 Datacenter...
+[keys] 'v'
+[shot] tds-002-pr-vouchers (1024x768)
+[11:49:16] [tds] screen tds-002-pr-vouchers : x Y: Data 70 TallyPrime MANAGE EDU K: Company Accounting Voucher Creation Pa ment No. 1 Z: Exchange A Accept Q Search O: Import E: Export M: E-mail FinCom • ke Co p: print upr-26 Wednesday Amount • Account Current balance: Particulars Narration: Unity Quit Fl: Help Q: Date Company Ed: Contra F-5: Payment Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat o e32fO to ru ecd8— dad—3 acepa ' , "orc a9b—7 dad—3 acepa .337.0 -7d51 ning bec ing j _id" : 1-01" 7a9b- D: Delete x: Cancel Vch Adjustment El 2: Configure Mod...
+[keys] '^{F4}'
+[shot] tds-003-pr-payroll (1024x768)
+[11:49:20] [tds] screen tds-003-pr-payroll : x Y: Data 70 TallyPrime MANAGE EDU K: Company Payroll Voucher Creation Pa roll Z: Exchange A Accept Q Search FinCom Spike Co O: Import E: Export List of Led er Accounts Cash HDFC Bank M: E-mail p: pnnt x Create • Account CurBal: 0.00 Cr Particulars Narration: Unity Quit Fl: Help Date Company F4: Contra F5: Payment Receipt Journal Sales Purchase Fl 0: 0åHVouctg•s F Autofill Change Mode More Details O: Related Reports L: Optional post -Dated o e32fO to ru ecd8— dad—3 acepa ' , "orc a9b—7 dad—3 acepa .337.0 -7d51 ning bec ing j _id" : 1-01" 7a9b- D: Delete , cancel vch Configure Mode Windows Serv...
+[keys] '{F2}'
+[shot] tds-004-pr-date-box (1024x768)
+[11:49:23] [tds] screen tds-004-pr-date-box : TallyPrime MANAGE EDU K: Company Change Voucher Date Unity Quit Y: Data Z: Exchange A Accept Q Search O: Import E: Export M: E-mail p: pnnt x Fl: Help FinCom Spike Co Voucher Date 24-2026 o e32fO to ru ecd8— dad—3 acepa ' , "orc a9b—7 dad—3 acepa .337.0 -7d51 ning bec ing j _id" : 1-01" 7a9b- Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 11:49 AM 10/8/2026
+[keys] '1-11-2026{ENTER}'
+[shot] tds-005-pr-date (1024x768)
+[11:49:26] [tds] screen tds-005-pr-date : x Y: Data 70 TallyPrime MANAGE EDU K: Company Payroll Voucher Creation Pa roll Z: Exchange A Accept Q Search O: Import E: Export M: E-mail FinCom Spike Co p: pnnt x 1-Nov-26 Sunday Amount • Account CurBal: 0.00 Cr Particulars Narration: Unity Quit Fl: Help Date Company F4: Contra F5: Payment Receipt Journal Sales Purchase Fl 0: 0åHVouctg•s F Autofill Change Mode More Details O: Related Reports L: Optional post -Dated o e32fO to ru ecd8— dad—3 acepa ' , "orc a9b—7 dad—3 acepa .337.0 -7d51 ning bec ing j _id" : 1-01" 7a9b- D: Delete X: Cancel Vch F12: Configure Mode Windows Server 2025 Datacente...
+[shot] tds-006-pr-first-field (1024x768)
+[11:49:27] [tds] screen tds-006-pr-first-field : x Y: Data 70 TallyPrime MANAGE EDU K: Company Payroll Voucher Creation Pa roll Z: Exchange A Accept Q Search O: Import E: Export M: E-mail FinCom Spike Co p: pnnt x 1-Nov-26 Sunday Amount • Account CurBal: 0.00 Cr Particulars Narration: Unity Quit Fl: Help Date Company F4: Contra F5: Payment Receipt Journal Sales Purchase Fl 0: 0åHVouctg•s F Autofill Change Mode More Details O: Related Reports L: Optional post -Dated o e32fO to ru ecd8— dad—3 acepa ' , "orc a9b—7 dad—3 acepa .337.0 -7d51 ning bec ing j _id" : 1-01" 7a9b- D: Delete X: Cancel Vch F12: Configure Mode Windows Server 2025 Datacente...
+[keys] 'HDFC Bank{ENTER}'
+[shot] tds-007-pr-account (1024x768)
+[11:49:31] [tds] screen tds-007-pr-account : x Y: Data 70 TallyPrime MANAGE EDU K: Company Payroll Voucher Creation Pa roll Z: Exchange A Accept Q Search O: Import List of Em lovees PD Emp 001 PD Emp 002 PD Emp 003 PD Emp 004 PD Emp 005 PD Emp 006 PD Emp 007 PD Emp 008 PD Emp 009 PD Emp 010 PD Emp 011 PD Emp 012 PD Emp 013 PD Emp 014 PD Emp 015 PD Emp 016 PD Emp 017 PD Emp 018 PD Emp 019 PD Emp 020 PD Emp 021 PD Emp 022 PD Emp 023 PD Emp 024 PD Emp 025 PD Emp 026 PD Emp 027 PD Emp 028 PD Emp 029 PD Emp 030 E: Export M: E-mail FinCom Spike Co p: pnnt x Create • Account : HDFC Bank CurBal: 1,190.OODr Particulars Narration: Unity Quit Fl: H...
+[keys] 'PD Emp 001{ENTER}'
+[shot] tds-008-pr-emp-PDEmp001 (1024x768)
+[11:49:35] [tds] screen tds-008-pr-emp-PDEmp001 : x Y: Data 70 TallyPrime MANAGE EDU K: Company Payroll Voucher Creation Pa roll Z: Exchange A Accept Q Search FinCom Spike Co O: Import E: Export List of Pa Heads PD Basic PD HRA M: E-mail p: pnnt x Create • Account : HDFC Bank CurBal: 1,190.OODr Particulars PD Emp 001 Narration: Unity Quit Fl: Help Date Company F4: Contra F5: Payment Receipt Journal Sales Purchase Fl 0: 0åHVouctg•s F Autofill Change Mode More Details O: Related Reports L: Optional post -Dated o e32fO to ru ecd8— dad—3 acepa ' , "orc a9b—7 dad—3 acepa .337.0 -7d51 ning bec ing j _id" : 1-01" 7a9b- D: Delete , cancel vch Configu...
+[keys] 'PD Basic{ENTER}'
+[shot] tds-009-pr-ph-PDEmp001-PDBasic (1024x768)
+[11:49:38] [tds] screen tds-009-pr-ph-PDEmp001-PDBasic : x Y: Data 70 TallyPrime MANAGE EDU K: Company Payroll Voucher Creation Pa roll Z: Exchange Cur Bal: A Accept Q Search O: Import E: Export M: E-mail FinCom Spike Co 2,000.00 Dr p: pnnt x 1-Nov-26 Sunday Amount • Account : HDFC Bank CurBal: 1,190.OODr Particulars PD Emp 001 PD Basic Narration: Unity Quit Fl: Help Date Company F4: Contra F5: Payment Receipt Journal Sales Purchase Fl 0: 0åHVouctg•s F Autofill Change Mode More Details O: Related Reports L: Optional post -Dated o e32fO to ru ecd8— dad—3 acepa ' , "orc a9b—7 dad—3 acepa .337.0 -7d51 ning bec ing j _id" : 1-01" 7a9b- D: Delete X: Canc...
+[keys] '1000{ENTER}'
+[shot] tds-010-pr-amt-PDEmp001-PDBasic (1024x768)
+[11:49:42] [tds] screen tds-010-pr-amt-PDEmp001-PDBasic : x Y: Data 70 TallyPrime MANAGE EDU K: Company Payroll Voucher Creation Pa roll Z: Exchange 1,000.00 [Ü cur Bal: A Accept Q Search O: Import E: Export M: E-mail • Account : HDFC Bank CurBal: 190.00 Dr Particulars PD Emp 001 PD Basic Narration: Unity Quit FinCom Spike Co 3,000.00 Dr p: pnnt x 1-Nov-26 Sunday Amount 1,000.00 Dr 1,000.00 Cr = Fl: Help Date Company F4: Contra F5: Payment Receipt Journal Sales Purchase Fl 0: 0åHVouctg•s F Autofill Change Mode More Details O: Related Reports L: Optional post -Dated o e32fO to ru ecd8— dad—3 acepa ' , "orc a9b—7 dad—3 acepa .337.0 -7d51 ning bec ing j...
+[shot] tds-011-pr-after-PDEmp001-PDBasic (1024x768)
+[11:49:42] [tds] screen tds-011-pr-after-PDEmp001-PDBasic : x Y: Data 70 TallyPrime MANAGE EDU K: Company Payroll Voucher Creation Pa roll Z: Exchange 1,000.00 [Ü cur Bal: A Accept Q Search O: Import E: Export M: E-mail • Account : HDFC Bank CurBal: 190.00 Dr Particulars PD Emp 001 PD Basic Narration: Unity Quit FinCom Spike Co 3,000.00 Dr p: pnnt x 1-Nov-26 Sunday Amount 1,000.00 Dr 1,000.00 Cr = Fl: Help Date Company F4: Contra F5: Payment Receipt Journal Sales Purchase Fl 0: 0åHVouctg•s F Autofill Change Mode More Details O: Related Reports L: Optional post -Dated o e32fO to ru ecd8— dad—3 acepa ' , "orc a9b—7 dad—3 acepa .337.0 -7d51 ning bec ing j...
+[keys] 'PD HRA{ENTER}'
+[shot] tds-012-pr-ph-PDEmp001-PDHRA (1024x768)
+[11:49:46] [tds] screen tds-012-pr-ph-PDEmp001-PDHRA : x Y: Data 70 TallyPrime MANAGE EDU K: Company Payroll Voucher Creation Pa roll 1 Z: Exchange Dr/Cr A Accept Q Search O: Import E: Export M: E-mail • Account : HDFC Bank CurBal: 190.00 Dr Particulars PD Emp 001 PD Basic Narration: Unity Quit FinCom Spike Co .00 Dr p: pnnt x 1-Nov-26 Sunday Amount 1,000.00 Dr 1,000.00 Cr = Fl: Help Date Company F4: Contra F5: Payment Receipt Journal Sales Purchase Fl 0: 0åHVouctg•s F Autofill Change Mode More Details O: Related Reports L: Optional post -Dated o e32fO to ru ecd8— dad—3 acepa ' , "orc a9b—7 dad—3 acepa .337.0 -7d51 ning bec ing j _id" : 1-01" 7a9b...
+[keys] '400{ENTER}'
+[shot] tds-013-pr-amt-PDEmp001-PDHRA (1024x768)
+[11:49:49] [tds] screen tds-013-pr-amt-PDEmp001-PDHRA : x Y: Data 70 TallyPrime MANAGE EDU K: Company Payroll Voucher Creation Pa roll Z: Exchange 1,000.00 Dr CurBal: A Accept Q Search FinCom Spike Co 3,000.00 O: Import E: Export List of Pa Heads • End of List PD Basic PD HRA M: E-mail p: pnnt x Create • Account : HDFC Bank CurBal: 190.00 Dr Particulars PD Emp 001 PD Basic Narration: Unity Quit Fl: Help Date Company F4: Contra F5: Payment Receipt Journal Sales Purchase Fl 0: 0åHVouctg•s F Autofill Change Mode More Details O: Related Reports L: Optional post -Dated o e32fO to ru ecd8— dad—3 acepa ' , "orc a9b—7 dad—3 acepa .337.0 -7d51 ning bec ing ...
+[shot] tds-014-pr-after-PDEmp001-PDHRA (1024x768)
+[11:49:50] [tds] screen tds-014-pr-after-PDEmp001-PDHRA : x Y: Data 70 TallyPrime MANAGE EDU K: Company Payroll Voucher Creation Pa roll Z: Exchange 1,000.00 Dr CurBal: A Accept Q Search FinCom Spike Co 3,000.00 O: Import E: Export List of Pa Heads • End of List PD Basic PD HRA M: E-mail p: pnnt x Create • Account : HDFC Bank CurBal: 190.00 Dr Particulars PD Emp 001 PD Basic Narration: Unity Quit Fl: Help Date Company F4: Contra F5: Payment Receipt Journal Sales Purchase Fl 0: 0åHVouctg•s F Autofill Change Mode More Details O: Related Reports L: Optional post -Dated o e32fO to ru ecd8— dad—3 acepa ' , "orc a9b—7 dad—3 acepa .337.0 -7d51 ning bec ing ...
+[keys] '{ENTER}'
+[shot] tds-015-pr-emp-done-PDEmp001 (1024x768)
+[11:49:54] [tds] screen tds-015-pr-emp-done-PDEmp001 : x Y: Data 70 TallyPrime MANAGE EDU K: Company Payroll Voucher Creation Pa roll Z: Exchange 1,000.00 Dr CurBal: A Accept Q Search FinCom Spike Co 3,000.00 O: Import List of Em lovees • End of List PD Emp 001 PD Emp 002 PD Emp 003 PD Emp 004 PD Emp 005 PD Emp 006 PD Emp 007 PD Emp 008 PD Emp 009 PD Emp 010 PD Emp 011 PD Emp 012 PD Emp 013 PD Emp 014 PD Emp 015 PD Emp 016 PD Emp 017 PD Emp 018 PD Emp 019 PD Emp 020 PD Emp 021 PD Emp 022 PD Emp 023 PD Emp 024 PD Emp 025 PD Emp 026 PD Emp 027 PD Emp 028 PD Emp 029 E: Export M: E-mail p: pnnt x Create • Account : HDFC Bank CurBal: 190.00 Dr Particul...
+[keys] 'PD Emp 002{ENTER}'
+[shot] tds-016-pr-emp-PDEmp002 (1024x768)
+[11:49:57] [tds] screen tds-016-pr-emp-PDEmp002 : x TallyPrime MANAGE EDU K: Company Payroll Voucher Creation 70 Pa roll • Account : HDFC Bank CurBal: 190.00 Dr Particulars PD Emp 001 PD Basic PD Emp 002 Narration: Unity Quit Y: Data Z: Exchange 1,000.00 Dr CurBal: A Accept Q Search O: Import E: Export List of Pa Heads PD Basic PD HRA M: E-mail FinCom Spike Co 3,000.00 Dr p: pnnt x Create Fl: Help Date Company F4: Contra F5: Payment Receipt Journal Sales Purchase Fl 0: 0åHVouctg•s F Autofill Change Mode More Details O: Related Reports L: Optional post -Dated o e32fO to ru ecd8— dad—3 acepa ' , "orc a9b—7 dad—3 acepa .337.0 -7d51 ning bec ing ...
+[keys] 'PD Basic{ENTER}'
+[shot] tds-017-pr-ph-PDEmp002-PDBasic (1024x768)
+[11:50:01] [tds] screen tds-017-pr-ph-PDEmp002-PDBasic : x TallyPrime MANAGE EDU K: Company Payroll Voucher Creation 70 Pa roll • Account : HDFC Bank CurBal: 190.00 Dr Particulars PD Emp 001 PD Basic PD Emp 002 PD Basic Narration: Unity Quit Y: Data Z: Exchange 1,000.00 Dr CurBal: Cur Bal: A Accept Q Search O: Import E: Export M: E-mail FinCom Spike Co 3,000.00 Dr 2,000.00 Dr p: pnnt x 1-Nov-26 Sunday Amount 1,000.00 Dr 1,000.00 Cr = Fl: Help Date Company F4: Contra F5: Payment Receipt Journal Sales Purchase Fl 0: 0åHVouctg•s F Autofill Change Mode More Details O: Related Reports L: Optional post -Dated o e32fO to ru ecd8— dad—3 acepa ' , "orc a9b—7...
+[keys] '1000{ENTER}'
+[shot] tds-018-pr-amt-PDEmp002-PDBasic (1024x768)
+[11:50:04] [tds] screen tds-018-pr-amt-PDEmp002-PDBasic : x TallyPrime MANAGE EDU K: Company Payroll Voucher Creation 70 Pa roll • Account : HDFC Bank CurBal: 810.00 Cr Particulars PD Emp 001 PD Basic PD Emp 002 PD Basic Narration: Unity Quit Y: Data Z: Exchange 1,000.00 Dr CurBal: 1,000.00 [Ü cur Bal: A Accept Q Search O: Import E: Export M: E-mail FinCom Spike Co 3,000.00 Dr 3,000.00 Dr p: pnnt x 1-Nov-26 Sunday Amount 1,000.00 Dr 1,000.00 Dr 2,000.00 Cr Fl: Help Date Company F4: Contra F5: Payment Receipt Journal Sales Purchase Fl 0: 0åHVouctg•s F Autofill Change Mode More Details O: Related Reports L: Optional post -Dated o e32fO to ru ecd8— dad—...
+[shot] tds-019-pr-after-PDEmp002-PDBasic (1024x768)
+[11:50:05] [tds] screen tds-019-pr-after-PDEmp002-PDBasic : x TallyPrime MANAGE EDU K: Company Payroll Voucher Creation 70 Pa roll • Account : HDFC Bank CurBal: 810.00 Cr Particulars PD Emp 001 PD Basic PD Emp 002 PD Basic Narration: Unity Quit Y: Data Z: Exchange 1,000.00 Dr CurBal: 1,000.00 [Ü cur Bal: A Accept Q Search O: Import E: Export M: E-mail FinCom Spike Co 3,000.00 Dr 3,000.00 Dr p: pnnt x 1-Nov-26 Sunday Amount 1,000.00 Dr 1,000.00 Dr 2,000.00 Cr Fl: Help Date Company F4: Contra F5: Payment Receipt Journal Sales Purchase Fl 0: 0åHVouctg•s F Autofill Change Mode More Details O: Related Reports L: Optional post -Dated o e32fO to ru ecd8— dad—...
+[keys] 'PD HRA{ENTER}'
+[shot] tds-020-pr-ph-PDEmp002-PDHRA (1024x768)
+[11:50:08] [tds] screen tds-020-pr-ph-PDEmp002-PDHRA : x TallyPrime MANAGE EDU K: Company Payroll Voucher Creation 70 Pa roll • Account : HDFC Bank CurBal: 810.00 Cr Particulars PD Emp 001 PD Basic PD Emp 002 PD Basic Narration: Unity Quit Y: Data Z: Exchange O: Import E: Export M: E-mail FinCom Spike Co 00.00 Dr .00 Dr 1,000.00 Dr 1 A Accept Dr/Cr p: pnnt x 1-Nov-26 Sunday Amount 1,000.00 Dr 1,000.00 Dr 2,000.00 Cr Fl: Help Date Company F4: Contra F5: Payment Receipt Journal Sales Purchase Fl 0: 0åHVouctg•s F Autofill Change Mode More Details O: Related Reports L: Optional post -Dated o e32fO to ru ecd8— dad—3 acepa ' , "orc a9b—7 dad—3 acepa .33...
+[keys] '400{ENTER}'
+[shot] tds-021-pr-amt-PDEmp002-PDHRA (1024x768)
+[11:50:12] [tds] screen tds-021-pr-amt-PDEmp002-PDHRA : x TallyPrime MANAGE EDU K: Company Payroll Voucher Creation 70 Pa roll • Account : HDFC Bank CurBal: 810.00 Cr Particulars PD Emp 001 PD Basic PD Emp 002 PD Basic Narration: Unity Quit Y: Data Z: Exchange 1,000.00 Dr CurBal: 1,000.00 Dr CurBal: A Accept Q Search O: Import E: Export List of Pa Heads • End of List PD Basic PD HRA M: E-mail FinCom Spike Co 3,000.00 Dr 3,000.00 p: pnnt x Create Fl: Help Date Company F4: Contra F5: Payment Receipt Journal Sales Purchase Fl 0: 0åHVouctg•s F Autofill Change Mode More Details O: Related Reports L: Optional post -Dated o e32fO to ru ecd8— dad—3 acepa '...
+[shot] tds-022-pr-after-PDEmp002-PDHRA (1024x768)
+[11:50:13] [tds] screen tds-022-pr-after-PDEmp002-PDHRA : x TallyPrime MANAGE EDU K: Company Payroll Voucher Creation 70 Pa roll • Account : HDFC Bank CurBal: 810.00 Cr Particulars PD Emp 001 PD Basic PD Emp 002 PD Basic Narration: Unity Quit Y: Data Z: Exchange 1,000.00 Dr CurBal: 1,000.00 Dr CurBal: A Accept Q Search O: Import E: Export List of Pa Heads • End of List PD Basic PD HRA M: E-mail FinCom Spike Co 3,000.00 Dr 3,000.00 p: pnnt x Create Fl: Help Date Company F4: Contra F5: Payment Receipt Journal Sales Purchase Fl 0: 0åHVouctg•s F Autofill Change Mode More Details O: Related Reports L: Optional post -Dated o e32fO to ru ecd8— dad—3 acepa '...
+[keys] '{ENTER}'
+[shot] tds-023-pr-emp-done-PDEmp002 (1024x768)
+[11:50:16] [tds] screen tds-023-pr-emp-done-PDEmp002 : x TallyPrime MANAGE EDU K: Company Payroll Voucher Creation 70 Pa roll • Account : HDFC Bank CurBal: 810.00 Cr Particulars PD Emp 001 PD Basic PD Emp 002 PD Basic Narration: Unity Quit Y: Data Z: Exchange 1,000.00 Dr CurBal: 1,000.00 Dr CurBal: A Accept Q Search FinCom Spike Co 3,000.00 Dr 3,000.00 O: Import List of Em lovees • End of List PD Emp 001 PD Emp 002 PD Emp 003 PD Emp 004 PD Emp 005 PD Emp 006 PD Emp 007 PD Emp 008 PD Emp 009 PD Emp 010 PD Emp 011 PD Emp 012 PD Emp 013 PD Emp 014 PD Emp 015 PD Emp 016 PD Emp 017 PD Emp 018 PD Emp 019 PD Emp 020 PD Emp 021 PD Emp 022 PD Emp 023 PD Em...
+[keys] '{ENTER}'
+[shot] tds-024-pr-emps-done (1024x768)
+[11:50:19] [tds] screen tds-024-pr-emps-done : x Y: Data 70 TallyPrime MANAGE EDU K: Company Payroll Voucher Creation Pa roll Z: Exchange 1,000.00 Dr CurBal: 1,000.00 Dr CurBal: A Accept Q Search O: Import E: Export M: E-mail FinCom Spike Co 3,000.00 Dr 3,000.00 Dr p: pnnt x 1-Nov-26 Sunday Amount • Account : HDFC Bank CurBal: 810.00 Cr Particulars PD Emp 001 PD Basic PD Emp 002 PD Basic Narration: Unity Quit Fl: Help Date Company F4: Contra F5: Payment Receipt Journal Sales 1,000.00 Dr 1,000.00 Dr 2,000.00 Cr = Purchase Fl 0: 0åHVouctg•s F Autofill Change Mode More Details O: Related Reports L: Optional post -Dated o e32fO to ru ecd8— dad...
+[shot] tds-025-pr-before-narr (1024x768)
+[11:50:20] [tds] screen tds-025-pr-before-narr : x Y: Data 70 TallyPrime MANAGE EDU K: Company Payroll Voucher Creation Pa roll Z: Exchange 1,000.00 Dr CurBal: 1,000.00 Dr CurBal: A Accept Q Search O: Import E: Export M: E-mail FinCom Spike Co 3,000.00 Dr 3,000.00 Dr p: pnnt x 1-Nov-26 Sunday Amount • Account : HDFC Bank CurBal: 810.00 Cr Particulars PD Emp 001 PD Basic PD Emp 002 PD Basic Narration: Unity Quit Fl: Help Date Company F4: Contra F5: Payment Receipt Journal Sales 1,000.00 Dr 1,000.00 Dr 2,000.00 Cr = Purchase Fl 0: 0åHVouctg•s F Autofill Change Mode More Details O: Related Reports L: Optional post -Dated o e32fO to ru ecd8— dad...
+[keys] 'fast234r payroll typed on the screen{ENTER}'
+[shot] tds-026-pr-narr (1024x768)
+[11:50:24] [tds] screen tds-026-pr-narr : x TallyPrime MANAGE EDU K: Company Bank Allocations Quit Y: Data Z: Exchange O: Import E: Export M: E-mail p: pnnt Fl: Help x Transacion Type E-Fund Transfer A/c No. Bank Name: Inst No. Accept FinCom Spike Co Bank Allocations for: HDFC Bank For: 2,000.00 IFS Code Inst Date Amount 2,000.00 1-Nov-26 o e32fO to ru ecd8— dad—3 acepa ' , "orc a9b—7 dad—3 acepa .337.0 -7d51 ning bec ing j _id" : 1-01" 7a9b- Unity Q Search Configure Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 11:50 AM 10/8/2026
+[shot] tds-027-pr-accept-q1 (1024x768)
+[11:50:25] [tds] screen tds-027-pr-accept-q1 : x TallyPrime MANAGE EDU K: Company Bank Allocations Quit Y: Data Z: Exchange O: Import E: Export M: E-mail p: pnnt Fl: Help x Transacion Type E-Fund Transfer A/c No. Bank Name: Inst No. Accept FinCom Spike Co Bank Allocations for: HDFC Bank For: 2,000.00 IFS Code Inst Date Amount 2,000.00 1-Nov-26 o e32fO to ru ecd8— dad—3 acepa ' , "orc a9b—7 dad—3 acepa .337.0 -7d51 ning bec ing j _id" : 1-01" 7a9b- Unity Q Search Configure Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 11:50 AM 10/8/2026
+[keys] '^a'
+[shot] tds-028-pr-ctrl-a1 (1024x768)
+[11:50:29] [tds] screen tds-028-pr-ctrl-a1 : x TallyPrime MANAGE EDU K: Company Payroll Voucher Creation 70 Pa roll • Account : HDFC Bank CurBal: 810.00 Cr Particulars PD Emp 001 PD Basic PD Emp 002 PD Basic Y: Data Z: Exchange 1,000.00 Dr CurBal: 1,000.00 Dr CurBal: Accept Q Search O: Import E: Export M: E-mail FinCom Spike Co 3,000.00 Dr 3,000.00 Dr p: pnnt x 1-Nov-26 Sunday Amount 1,000.00 Dr 1,000.00 Dr 2,000.00 Cr Fl: Help Date Company F4: Contra F5: Payment Receipt Journal Sales Purchase Fl 0: 0åHVouctg•s F Autofill Change Mode More Details O: Related Reports L: Optional post -Dated o e32fO to ru ecd8— dad—3 acepa ' , "orc a9b—7 da...
+[shot] tds-029-pr-accept-q2 (1024x768)
+[11:50:30] [tds] screen tds-029-pr-accept-q2 : x TallyPrime MANAGE EDU K: Company Payroll Voucher Creation 70 Pa roll • Account : HDFC Bank CurBal: 810.00 Cr Particulars PD Emp 001 PD Basic PD Emp 002 PD Basic Y: Data Z: Exchange 1,000.00 Dr CurBal: 1,000.00 Dr CurBal: Accept Q Search O: Import E: Export M: E-mail FinCom Spike Co 3,000.00 Dr 3,000.00 Dr p: pnnt x 1-Nov-26 Sunday Amount 1,000.00 Dr 1,000.00 Dr 2,000.00 Cr Fl: Help Date Company F4: Contra F5: Payment Receipt Journal Sales Purchase Fl 0: 0åHVouctg•s F Autofill Change Mode More Details O: Related Reports L: Optional post -Dated o e32fO to ru ecd8— dad—3 acepa ' , "orc a9b—7 da...
+[keys] '^a'
+[shot] tds-030-pr-ctrl-a2 (1024x768)
+[11:50:34] [tds] screen tds-030-pr-ctrl-a2 : x Y: Data 70 TallyPrime MANAGE EDU K: Company Payroll Voucher Creation Pa roll No. 4 Z: Exchange A Accept Q Search FinCom Spike Co O: Import E: Export List of Led er Accounts Cash HDFC Bank M: E-mail p: pnnt x Create • Account CurBal: 0.00 Cr Particulars Narration: Unity Quit Fl: Help Date Company F4: Contra F5: Payment Receipt Journal Sales Purchase Fl 0: 0åHVouctg•s F Autofill Change Mode More Details O: Related Reports L: Optional post -Dated o e32fO to ru ecd8— dad—3 acepa ' , "orc a9b—7 dad—3 acepa .337.0 -7d51 ning bec ing j _id" : 1-01" 7a9b- D: Delete , cancel vch Configure Mode Window...
+[shot] tds-031-pr-accept-q3 (1024x768)
+[11:50:35] [tds] screen tds-031-pr-accept-q3 : x Y: Data 70 TallyPrime MANAGE EDU K: Company Payroll Voucher Creation Pa roll No. 4 Z: Exchange A Accept Q Search FinCom Spike Co O: Import E: Export List of Led er Accounts Cash HDFC Bank M: E-mail p: pnnt x Create • Account CurBal: 0.00 Cr Particulars Narration: Unity Quit Fl: Help Date Company F4: Contra F5: Payment Receipt Journal Sales Purchase Fl 0: 0åHVouctg•s F Autofill Change Mode More Details O: Related Reports L: Optional post -Dated o e32fO to ru ecd8— dad—3 acepa ' , "orc a9b—7 dad—3 acepa .337.0 -7d51 ning bec ing j _id" : 1-01" 7a9b- D: Delete , cancel vch Configure Mode Window...
+[keys] '^a'
+[shot] tds-032-pr-ctrl-a3 (1024x768)
+[11:50:40] [tds] screen tds-032-pr-ctrl-a3 : x Y: Data 70 TallyPrime MANAGE EDU K: Company Payroll Voucher Creation Pa roll No. 4 Z: Exchange Cur Bal: A Accept Q Search O: Import E: Export M: E-mail FinCom Spike Co 3,000.00 Dr p: pnnt x 1-Nov-26 Sunday Amount • Account : Cash CurBal: 0.00 Cr Particulars PD Emp 001 PD Basic Narration: Unity Quit Fl: Help Date Company F4: Contra F5: Payment Receipt Journal Sales Purchase Fl 0: 0åHVouctg•s F Autofill Change Mode More Details O: Related Reports L: Optional post -Dated o e32fO to ru ecd8— dad—3 acepa ' , "orc a9b—7 dad—3 acepa .337.0 -7d51 ning bec ing j _id" : 1-01" 7a9b- D: Delete X: Cancel...
+[shot] tds-033-gw0 (1024x768)
+[11:50:40] [tds] screen tds-033-gw0 : x Y: Data 70 TallyPrime MANAGE EDU K: Company Payroll Voucher Creation Pa roll No. 4 Z: Exchange Cur Bal: A Accept Q Search O: Import E: Export M: E-mail FinCom Spike Co 3,000.00 Dr p: pnnt x 1-Nov-26 Sunday Amount • Account : Cash CurBal: 0.00 Cr Particulars PD Emp 001 PD Basic Narration: Unity Quit Fl: Help Date Company F4: Contra F5: Payment Receipt Journal Sales Purchase Fl 0: 0åHVouctg•s F Autofill Change Mode More Details O: Related Reports L: Optional post -Dated o e32fO to ru ecd8— dad—3 acepa ' , "orc a9b—7 dad—3 acepa .337.0 -7d51 ning bec ing j _id" : 1-01" 7a9b- D: Delete X: Cancel...
+[keys] '{ESC}'
+[shot] tds-034-gw1 (1024x768)
+[11:50:44] [tds] screen tds-034-gw1 : Y: Data 70 TallyPrime MANAGE EDU K: Company Payroll Voucher Creation Pa roll No. 4 Z: Exchange Cur Bal: A: Accept Q Search O: Import E: Export M: E-mail • Account : Cash CurBal: 0.00 Cr Particulars PD Emp 001 PD Basic Narration: Unity Q: Quit FinCom Spike Co 3,000.00 Dr p: print x 1-Nov-26 Sunday Amount Quit o Yes or No D: Delete X: Cancel Vch x Fl: Help F2: Date F3: Company F4: Contra F5: Payment F6: Receipt F7: Journal F8: Sales F9: Purchase F: Autofill H: Change Mode l: More Details O: Related Reports k: Optional T: post -Dated Fl 2: Configure o e32fO to ru ecd8— dad—3 acepa ' , "orc a9b—7 ...
+[keys] 'y'
+[shot] tds-035-gw2 (1024x768)
+[11:50:47] [tds] screen tds-035-gw2 : TallyPrime MANAGE EDU K: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Y: Data Z: Exchange O: Import E: Export M: E-mail p: pnnt x Fl: Help Date Company o e32fO to ru ecd8— dad—3 acepa ' , "orc a9b—7 dad—3 acepa .337.0 -7d51 ning bec ing j _id" : 1-01" 7a9b- Mode Q CURRENT OATE Sunday, I-Nov-2026 31-Mar-27 Search Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports Quit Unity Windows Server 2025 Datacenter Bu...
+[11:50:47.694] 1-Nov-2026 holds: Sales 4 (13) 'fast234r sales with a direct Sales line'; Payroll 3 (14) ''
+[11:50:47.828] R m2-sales-direct-line: Sales 4 MasterID 13: object 25.3 ms 193780 chars; bymaster 50.2 ms 121724 chars; bynumber 46.3 ms 121724 chars
+[11:50:47.914] R payroll-screen: Payroll 3 MasterID 14: object 8.9 ms 45952 chars; bymaster 34.6 ms 15750 chars; bynumber 37.7 ms 15750 chars
+[11:50:50.920] done (fast234 fast234r)
