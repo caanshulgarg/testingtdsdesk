@@ -242,7 +242,8 @@ function P3Check($label, $s, $m0, $p0, [switch]$tds, $ev = 'created') {
   if (-not $s.v) { Result "push233 $label" $false 'Tally has no new entry after the save (see the p233 screenshots)' $true; return }
   $cg = P3CGuid; $rule = '{0}-{1:x8}' -f $cg, [int64]$s.v.mid
   $g = $s.v.guid
-  $hit = @(WaitLine $m0 ({ $_.guid -eq $g -and $_.xml -and $_.ev -eq $ev }.GetNewClosure()) 120)
+  # (WaitLine gives its list as one object: @(WaitLine ...) was a one-item list holding it, whatever came)
+  $hit = WaitLine $m0 ({ $_.guid -eq $g -and $_.xml -and $_.ev -eq $ev }.GetNewClosure()) 120
   $l = $hit | Select-Object -Last 1
   $raw = @((StubReqs) | Select-Object -Skip $m0 | Where-Object kind -eq 'recorder_lines' | ForEach-Object { @($_.body.lines) } | Where-Object { $_.object_guid -eq $g -and $_.event -eq $ev }) | Select-Object -Last 1
   $sum = 0.0; $nl = 0
@@ -308,7 +309,7 @@ function Push233 {
   DayBookAt $P233.tpl.godown.dmy 'p233-delete-daybook'; KeysTo 9000 '{END}' 1; KeysTo 9000 '%d' 3 'p233-delete-q'; KeysTo 9000 'y' 3 'p233-deleted'; KeysTo 9000 '{ESC}' 1
   Start-Sleep 5
   $new = @(P3RecLines | Select-Object -Skip $before.Count)
-  $hc = @(WaitLine $m6 { $_.ev -in 'cancelled', 'deleted' } 120)
+  $hc = WaitLine $m6 { $_.ev -in 'cancelled', 'deleted' } 120
   Result 'push233 P6 cancel and delete: heads only' (@($new | Where-Object { $_ -like 'FCR1|ev=voucher_full|*' }).Count -eq 0 -and @($new | Where-Object { $_ -match '^FCR1\|ev=after_(cancel|delete)\|' }).Count -ge 1) ("the add-on wrote: {0}; the stub: {1}" -f (P3Kinds $new), (($hc | ForEach-Object { Ev $_ }) -join ' | '))
 
   # P7 (item 1): details set after the save. Run 37688178377's keys made nothing (Alt+E is Tally's Export menu; this company
