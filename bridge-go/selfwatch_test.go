@@ -28,7 +28,16 @@ func readsRefused(t *testing.T, f *standTally) {
 	if _, err := getDayBookXML(fin, zz, today(), today(), f.port); err == nil {
 		t.Fatal("the day book was read while stopped")
 	}
-	if got := f.ids()[n0:]; len(got) != 0 {
+	// the requests a posting needs go on while reading is stopped (readStopExempt: the company list and its info, the
+	// light check, the import and its checks); a background look may send them at any moment (CI run 37811208196 saw
+	// TDSDeskCompanyInfo from one), so only the others count
+	var got []string
+	for _, id := range f.ids()[n0:] {
+		if !readStopExempt(id) {
+			got = append(got, id)
+		}
+	}
+	if len(got) != 0 {
 		t.Fatalf("sent while reading is stopped: %v", got)
 	}
 }
