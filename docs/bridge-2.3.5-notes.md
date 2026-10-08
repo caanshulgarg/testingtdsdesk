@@ -69,7 +69,9 @@ line without it, and the refused-request change must not hide a real Tally failu
    ended or 7-day-old held delete never goes bare (tested: `hs235NoBareDelete`).
 2. **Plain words while reading is stopped.** A line held because FinCom's read stop refused its fetch says "waiting:
    reading from Tally is stopped from FinCom; asked again when it is resumed" (by MasterID, by type and number, and a
-   delete). The lines sent after the resume carry none of it.
+   delete). The lines sent after the resume carry none of it. Such a line is asked at the first turn after the resume
+   (one at a time, after postings and live saves), and while the stop is on a held line is kept past its 7 days (said in
+   the log), never dropped silently.
 3. **A refused request is not a try, and only that.** Only the stop's own refusal with nothing of the ask sent to Tally
    is not counted. A 2 s stop, a closed connection, an empty answer, or a by-number refusal after its MasterID ask
    reached Tally still count as tries (tested), so a real Tally failure is never hidden from the try count.
