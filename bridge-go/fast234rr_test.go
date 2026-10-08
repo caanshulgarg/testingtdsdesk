@@ -184,4 +184,63 @@ func TestFast234RRNotFoundAnswer(t *testing.T) {
 			t.Fatalf("%q taken as no such voucher: %v", a, got)
 		}
 	}
+	// re-review 2 (L-b): a MasterID with leading zeros is never asked, so "Could not find Voucher:ID:007" can never prove
+	// MasterID 7 (or 007) gone; Tally's MasterIDs have none
+	for _, mid := range []string{"007", "0777", "00"} {
+		if voucherObjectRequest(nwsCo, mid) != "" {
+			t.Fatalf("%q: a request was made", mid)
+		}
+		answer = "<ERRORMSG>Could not find Voucher:ID:" + mid + "!</ERRORMSG>"
+		if got, err := ask(mid); err == nil {
+			t.Fatalf("%q: taken as no such voucher: %v", mid, got)
+		}
+	}
+	answer = "<ERRORMSG>Could not find Voucher:ID:007!</ERRORMSG>"
+	if got, err := ask("7"); err == nil {
+		t.Fatalf("ID:007 taken as no such voucher for 7: %v", got)
+	}
 }
+
+// 2.3.4 re-review 2, N-M1 (the reviewer's probe, made permanent): an older bridge's held cancel / delete that the one fast
+// ask PROVES (its ":resolved" sent with Tally's GUID, no body) is done: exactly one ":resolved" over many turns, never a
+// second one ended with the Day Book words because no body went with the first
+func fast234OldGuidProvenOnce(t *testing.T, ev string) {
+	_, f, c := r222bBridge(t, "")
+	if ev == "cancelled" {
+		v := r222Vch(f, 25795, "Journal", "", "20261005", 54595)
+		v.cancelled = true
+	}
+	yest := nowFn().Add(-20 * time.Hour).Format(time.RFC3339)
+	item := M{"company": nwsCo, "companyGuid": nwsGUID, "type": "Journal", "no": "", "date": "20261005", "masterId": "25795", "savedAt": yest, "added": yest,
+		"last": yest, "tries": 3, "event": ev, "why": "not proven", "final": false, "triesVersion": "2.3.2"}
+	if err := saveFile(liveHeldFile(), jsonText(M{"items": M{"old-" + ev: item}})); err != nil {
+		t.Fatal(err)
+	}
+	fastRestart()
+	base := nowFn()
+	for _, sec := range []int{0, 20, 60, 600, 3600} {
+		retryClock(base, sec)
+		fastTurns(2)
+	}
+	// a restart of the bridge (the ids it sent read back from its files) changes nothing
+	fastRestart()
+	for _, sec := range []int{4000, 7200} {
+		retryClock(base, sec)
+		fastTurns(2)
+	}
+	s := r222cSentID(c, "old-"+ev+":resolved")
+	for i, x := range s {
+		t.Logf("%s resolved #%d: guid=%q heldWhy=%q", ev, i, str(x["object_guid"]), str(x["heldWhy"]))
+	}
+	if len(s) != 1 {
+		t.Fatalf("%d :resolved rows sent (want 1)", len(s))
+	}
+	// the proven one: a cancel with Tally's GUID; a delete proven gone here (its GUID left to FinCom's record when the
+	// bridge has none), never the Day Book ending of a line whose ask came to nothing
+	if strings.Contains(str(s[0]["heldWhy"]), "did not give this entry") || (ev == "cancelled" && (str(s[0]["heldWhy"]) != "" || str(s[0]["object_guid"]) == "")) {
+		t.Fatalf("the one :resolved is not the proven one: guid=%q heldWhy=%q", str(s[0]["object_guid"]), str(s[0]["heldWhy"]))
+	}
+}
+
+func TestFast234RROldDeleteProvenOnce(t *testing.T) { fast234OldGuidProvenOnce(t, "deleted") }
+func TestFast234RROldCancelProvenOnce(t *testing.T) { fast234OldGuidProvenOnce(t, "cancelled") }

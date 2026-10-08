@@ -30,9 +30,9 @@ ONCE = "Tally did not give this entry when asked again; upload that day's Day Bo
 WAIT = "waiting: Tally took longer than 2 s; FinCom asks again at 10:42"
 def ago(days): return time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(time.time() - days * 86400))
 n = [0]
-def row(lid, days, why, bridge=GA["id"], state="held", body=None, mid="25689"):
+def row(lid, days, why, bridge=GA["id"], state="held", body=None, mid="25689", event="created"):
     n[0] += 1
-    return {"id": n[0], "line_id": lid, "company": "GARG SHEKHAR & COMPANY", "company_guid": "cg-1", "event": "created", "master_id": mid, "alter_id": None,
+    return {"id": n[0], "line_id": lid, "company": "GARG SHEKHAR & COMPANY", "company_guid": "cg-1", "event": event, "master_id": mid, "alter_id": None,
             "vch_type": "Journal", "vch_no": "", "vch_date": "2026-10-06", "book_id": BOOK, "firm_id": FIRM, "device_id": DA, "bridge": bridge, "state": state,
             "held_why": why, "object_guid": None, "body": body, "payload": None, "received_at": ago(days)}
 FULL = {"vouchers": [{"guid": "cg-1-00006461"}]}
@@ -66,6 +66,11 @@ FS.T["tally_recorder_lines"] = [
 for i in range(450):
     FS.T["tally_recorder_lines"].append(row("D%03d" % i, 29 - (i % 20) * 0.05, WAIT, mid=str(30000 + i)))
     FS.T["tally_recorder_lines"].append(row("D%03d:resolved" % i, 28.9 - (i % 20) * 0.05, ONCE, mid=str(30000 + i)))
+# 2.3.4 re-review 2 (L-a): 900 held cancels and deletes with the slow words, older than the slow-ended lines: never
+# listed (the list is of created / altered / imported lines) and never taking the slots of the lines that are
+for i in range(450):
+    for ev in ("cancelled", "deleted"):
+        FS.T["tally_recorder_lines"].append(row("X%s%03d" % (ev[0], i), 29.5 - (i % 20) * 0.01, SLOW, mid=str(40000 + i), event=ev))
 FS.HONOR_LIMIT[0] = True
 FS.T["tally_month_locks"] = []
 FS.start()
@@ -88,6 +93,7 @@ try:
     ok(c == 200, "the beat answered (%s)" % c)
     ok({"S1", "S2", "S3"} <= set(hl), "heldLines: the slow-ended lines of 7 to 30 days ago (S1 its own slow words; S2 its :resolved timed out; S3 29 days, its :resolved with the slow words) (%s)" % hl)
     ok(not {"N1", "N2", "N3", "N4", "N5", "N6"} & set(hl), "heldLines: not another rule's words (N1), not older than 30 days (N2), not asked once more already (N3), not resolved (N4), not another bridge's (N5), not older than 7 days without the slow rule (N6) (%s)" % hl)
+    ok(not [x for x in hl + rf if str(x).startswith("X")], "no cancel or delete listed (%s)" % [x for x in hl + rf if str(x).startswith("X")][:5])
     ok("R1" in hl and hl.index("R1") < min(hl.index(x) for x in ("S1", "S2", "S3") if x in hl), "heldLines: the last 7 days' line (R1) as before, listed before the older ones (%s)" % hl)
     ok({"S1", "S2", "S3"} <= set(rf) and not {"N1", "N2", "N3", "N4", "N5", "N6"} & set(rf), "refetch: the same slow-ended lines (no body), the same exclusions (%s)" % rf)
     s3 = next((x for x in r.get("heldLines") or [] if x.get("line_id") == "S3"), {})

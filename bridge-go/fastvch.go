@@ -57,9 +57,10 @@ func fastApprovedPaths() map[string]bool {
 	return m
 }
 
-// the request: one voucher by its MasterID (a number, 1 to 18 digits); "" for anything else
+// the request: one voucher by its MasterID (a number, 1 to 18 digits, no leading zero: Tally's MasterIDs have none, and
+// "Could not find Voucher:ID:007" must never prove MasterID 7 gone, re-review 2 L-b); "" for anything else
 func voucherObjectRequest(company, mid string) string {
-	if mid == "" || len(mid) > 18 || onlyDigits(mid) != mid || strings.TrimLeft(mid, "0") == "" {
+	if mid == "" || len(mid) > 18 || onlyDigits(mid) != mid || mid[0] == '0' {
 		return ""
 	}
 	var fl strings.Builder
