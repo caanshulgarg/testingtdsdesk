@@ -984,6 +984,13 @@ func TestPushAddon(t *testing.T) {
 			t.Errorf("the add-on does not write %s as its own record", k)
 		}
 	}
+	// an empty date writes its record empty (tally-versions run 37719717293, every release: "$$String" of an empty
+	// ReferenceDate / IRNAckDate failed in the form and left the record absent, so every line lacked refdt and irnackdt)
+	for _, k := range []string{"refdt", "irnackdt"} {
+		if !regexp.MustCompile(`(?m)SET : vRec : "\|`+k+`="\s*$`).MatchString(tdl) {
+			t.Errorf("the add-on writes no empty %s record for an entry without that date", k)
+		}
+	}
 	// an entry with no e-way bill still gets its (empty) ewb record: absent means failed, never "none"
 	if !regexp.MustCompile(`(?m)SET : vRec : "\|ewb="\s*$`).MatchString(tdl) {
 		t.Error("the add-on writes no empty ewb record for an entry without an e-way bill")
