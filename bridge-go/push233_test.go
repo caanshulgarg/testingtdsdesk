@@ -1109,6 +1109,9 @@ func TestPushRealLinesFromFiveReleases(t *testing.T) {
 			nowFn = func() time.Time { return at }
 			t.Cleanup(func() { nowFn = time.Now })
 			noteStartPoint("FinCom Spike Co", cg, 1, 1)
+			// 2.4.0: the first receipt's form names no party; Tally stores Cash (the derived party, pushparty.go) told from
+			// the ledger and group lists the keep's round holds (as that company's Tally lists them)
+			holdLedgerLists(t, "FinCom Spike Co", [][2]string{{"Spike Income", "Indirect Incomes"}, {"Cash", "Cash-in-Hand"}})
 			// the old add-on's lines lack the reference / GST / e-invoice head fields (two records that failed in the form;
 			// TestPushHeadFieldsRequired: such a line is refused): put back as Tally stored these receipts (empty)
 			appendBytes(t, filepath.Join(rec, cg+"-7-Oct-26-runneradmin.txt"), rawWithHead(t, b))
@@ -1133,7 +1136,8 @@ func TestPushRealLinesFromFiveReleases(t *testing.T) {
 					sum += p
 				}
 				mid, _ := strconv.ParseInt(str(l["master_id"]), 10, 64)
-				if sum != 0 || str(l["object_guid"]) != fmt.Sprintf("%s-%08x", cg, mid) || len(tagValues(x, "LEDGERNAME")) != 2 || !strings.Contains(x, `<AMOUNT TYPE="Amount">-`) {
+				if sum != 0 || str(l["object_guid"]) != fmt.Sprintf("%s-%08x", cg, mid) || len(tagValues(x, "LEDGERNAME")) != 2 || !strings.Contains(x, `<AMOUNT TYPE="Amount">-`) ||
+					tagValue(x, "PARTYLEDGERNAME") != "Cash" {
 					t.Fatalf("%s: a full entry: total %d, guid %s mid %s:\n%s", rel, sum, str(l["object_guid"]), str(l["master_id"]), x)
 				}
 			}
