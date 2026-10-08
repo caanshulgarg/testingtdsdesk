@@ -480,9 +480,11 @@ func TestHeldStop235RealFailuresStillCount(t *testing.T) {
 				t.Fatalf("held with the wrong words: %q", w)
 			}
 			if tc.name == "2 s stop" {
-				// 2.3.4 option (a): ended at once with the Day Book words, never asked again (more than counted)
-				if _, had := slowHeldItem(t, str(m["line_id"])); had || !strings.Contains(str(m["heldWhy"]), "Day Book") {
-					t.Fatalf("a 2 s stop did not end the line: %v (in the held list: %v)", m, had)
+				// 2.3.4, the owner's answer B (08-Oct-2026, merged from next-fastfetch; option (a) before): held with "FinCom asks
+				// once more", the stopped ask counted as one of its two fast asks (liveObjAsksMax), its one more ask due
+				hd, had := slowHeldItem(t, str(m["line_id"]))
+				if !had || !strings.Contains(str(m["heldWhy"]), "FinCom asks once more") || hd.ObjAsks != 1 || !hd.StopWait {
+					t.Fatalf("a 2 s stop was not counted as a fast ask: %v (in the held list: %v, %+v)", m, had, hd)
 				}
 				return
 			}

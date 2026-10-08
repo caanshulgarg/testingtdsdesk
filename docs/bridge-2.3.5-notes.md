@@ -74,8 +74,9 @@ line without it, and the refused-request change must not hide a real Tally failu
    is not counted. A 2 s stop, a closed connection, an empty answer, or a by-number refusal after its MasterID ask
    reached Tally still count as tries (tested), so a real Tally failure is never hidden from the try count.
 
-2.3.4's rule (the owner's decision of 08-Oct-2026, option (a)) is unchanged: a fast request for one entry that takes over
-2 s ends that line held with the Day Book words.
+2.3.4's rule (the owner's answer B of 08-Oct-2026, "one more ask") is unchanged: a fast request for one entry stopped at
+2 s holds the line ("FinCom asks once more at HH:MM"), it is asked ONE more time 5 minutes later, and a second stop ends
+it with the Day Book words. That stopped ask counts as one of its two asks (a real Tally failure, never hidden).
 
 ## Tally requests
 
