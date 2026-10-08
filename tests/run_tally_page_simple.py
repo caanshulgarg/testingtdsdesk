@@ -82,6 +82,60 @@ SYNC = """(lines) => { let c = Object.values(S.companies).find(x => x.name === "
   const now = Date.now(), ago = m => new Date(now - m * 60000).toISOString();
   window.__lines = JSON.parse(JSON.stringify(lines), (k, v) => typeof v === "string" && v.startsWith("ago:") ? ago(Number(v.slice(4))) : v).map(l => Object.assign(l, {client_id: c.id}));
   Rec.act = {}; S.syncClient = ""; S.syncFilter = "all"; S.view = "home"; S.tallyTab = "activity"; navHome("tally"); return c.id; }"""
+# review of f0f1531f: every reason the bridge (bridge-go) and the cloud (server/tally-cloud, migration 60 and before) can
+# give a waiting line -> what will actually happen. "" = being fetched (settles by itself); any other kind = Needs you,
+# with its one action. Sync activity and the bell (AlertHub.oursHeld) use the one classifier (Rec.needKind)
+KINDS = [
+    # the cloud (tally_recorder_ingest, migration 60)
+    ("held", "waiting for the entry's details from FinCom Bridge (it asks Tally again on its next run); or upload this day's Day Book", ""),
+    ("held", "no entry body on the line: waiting for the entry's details from FinCom Bridge (it asks Tally again on its next run); or upload this day's Day Book", ""),
+    ("held", "FinCom posting 77 matched; no entry body (its posted XML could not be read): waiting for the entry's details from FinCom Bridge (it asks Tally again on its next run); or upload this day's Day Book", ""),
+    ("held", "FinCom posting 77 matched; changed in Tally after posting: the next full line or Day Book upload applies it", ""),
+    ("held", "FinCom id 4521 matches no posting of this firm", ""),
+    ("held", "FinCom id 4521 is matched to another Tally entry (GUID abcd-1) already: held, never a second entry", "dupid"),
+    ("held", "no entry GUID on the line (only the add-on's placeholder): FinCom cannot tell which entry was deleted, so this line is never applied by itself; uploading the Day Book for 07-Oct-2026 brings that day up to date", "daybook"),
+    ("held", "no entry GUID on the line (only the add-on's placeholder): FinCom cannot tell which entry was cancelled, so this line is never applied by itself; no date on the line either: it stays held, and nothing in FinCom's books changes for it", "daybook"),
+    ("held", "no entry GUID on the line: FinCom cannot tell which entry was deleted, so this line is never applied by itself; uploading the Day Book for 07-Oct-2026 brings that day up to date", "daybook"),
+    ("held", "no GUID on the line: held, never a new row", "masters"),
+    ("held", "the add-on named entry Sales 5 of 07-Oct-2026, but GUID g-1 is Sales 9 of 06-Oct-2026 in the copy; held until FinCom Bridge sends this entry as Tally gives it", ""),
+    ("held", "the add-on's ids did not belong together (GUID g-2 is another entry's); held until FinCom Bridge 2.2.2 sends the entry as Tally gives it", ""),
+    ("held", "the Day Book for 07-Oct-2026 stored after this change was not complete (40 of 42 entries); the entry is not in FinCom's copy, and this line is applied by itself once a complete Day Book for that day is uploaded", "daybook"),
+    ("held", "the entry is not in FinCom's copy yet; it is applied by itself once a complete Day Book for 07-Oct-2026 is uploaded", "daybook"),
+    ("held", "month locked: 2026-04", "locked"),
+    ("held", "a rename is applied by the bridge (tally_ledger_rename), not by a release: the next ledger list makes it", ""),
+    ("held", "a ledger change without its AlterID: the next ledger list applies it", ""),
+    ("held", "a ledger named ABC is in the copy already: a merge is left to the next ledger list", ""),
+    ("held", "ledger lines applied by the next ledger list", ""),
+    ("held", "unknown ledger: not in the copy, so nothing to mark deleted; the next ledger list from FinCom Bridge brings the ledgers up to date", ""),
+    ("held", "unknown ledger: not in the copy", ""),
+    ("held", "unknown entry: not in the copy (the next day read decides)", ""),
+    ("held", "rename not made: duplicate key", "other"),
+    ("held", "not renamed", "other"),
+    # FinCom Bridge (its heldWhy, carried as held_why)
+    ("held", "waiting: Tally busy; FinCom asks again at 14:05", ""),
+    ("held", "waiting: Tally took longer than 2 s; FinCom asks again at 14:05", ""),
+    ("held", "waiting: Tally busy (reading the entries saved before it); FinCom asks again at 14:05", ""),
+    ("held", "waiting: FinCom is posting to Tally; FinCom asks again at 14:05", ""),
+    ("held", "waiting: Tally has not shown this new entry yet; FinCom asks again at 14:05", ""),
+    ("held", "this computer's Tally could not be asked whether it was deleted here (waiting: Tally busy; FinCom asks again at 14:05); not sent as a deletion: held", ""),
+    ("held", "this computer's Tally could not be asked whether it was cancelled here (the line has no MasterID or no date); not sent as a cancellation: held", "daybook"),
+    ("held", "Tally did not give this entry after 20 tries; upload that day's Day Book to settle it", "daybook"),
+    ("held", "Tally did not give this entry when asked again; upload that day's Day Book to settle it", "daybook"),
+    ("held", "Tally did not answer in time for this entry when asked again; upload that day's Day Book to settle it", "daybook"),
+    ("held", "the entry is larger than FinCom takes in one line; upload that day's Day Book to settle it", "daybook"),
+    ("held", "deleted in Tally; FinCom could not tell which entry: upload that day's Day Book to settle it", "daybook"),
+    ("held", "the line has no date, so Tally cannot be asked for its entry", "daybook"),
+    ("held", "the line has no MasterID, so Tally cannot be asked for its entry", "daybook"),
+    ("held", "the entry was not read from Tally: Tally busy", ""),
+    ("held", "the entry was not read from Tally: reading from Tally is stopped on this computer (Tally hangs on the bank ledger)", "readstop"),
+    ("held", "waiting: reading from Tally is stopped from FinCom (bank ledger); FinCom asks again at 14:05", "readstop"),
+    ("held", "the company's starting point is not recorded yet, so its entries are not taken from Tally", "baseline"),
+    ("held", "this computer's Tally could not be asked whether it was deleted here (no starting point recorded for this company); not sent as a deletion: held", "baseline"),
+    ("held", "the ledger was not read from Tally in time; FinCom takes it from the next ledger list", ""),
+    ("held", "not found by its type and number (asked 3 times)", "other"),
+    ("held", None, "other"),
+    ("received", None, ""), ("queued", None, ""),
+]
 OWNER_HOOKS = ["data-read-stop", "data-read-resume", "data-read-stop-all", "data-read-resume-all", "data-release-hold", "data-release-unhold", "data-release-rollback",
     "data-release-rollback-clear", "data-release-withdraw", "data-trial-tools-switch", "data-recorder-source-pick", "data-ps-edit", "data-changes-only-switch",
     "data-make-main", "data-release-identity", "data-member-link-pick", "data-baseline-clear"]
@@ -189,6 +243,44 @@ def main():
         found = [h for h in OWNER_HOOKS if pg.locator("#app [%s]" % h).count()]
         ok(not found, "staff: no owner button (%s)" % found)
         shot("staff-more-open")
+        # ---- 5b. the one classifier: every reason -> kind; the bell agrees (AlertHub.oursHeld == being fetched)
+        got = E("(rows) => rows.map(([st, why]) => { const l = {state: st, held_why: why, object_guid: 'g-1', event: 'created'}; return [Rec.needKind(l), AlertHub.oursHeld(l)]; })", [[k[0], k[1]] for k in KINDS])
+        bad = [(k[1], k[2], g[0]) for k, g in zip(KINDS, got) if g[0] != k[2]]
+        ok(not bad, "every held reason -> the right kind (%d rows; wrong: %s)" % (len(KINDS), bad))
+        dis = [k[1] for k, g in zip(KINDS, got) if g[1] != (g[0] == "")]
+        ok(not dis, "the bell and the page never disagree (%s)" % dis)
+        # each Needs-you kind on the page: one sentence, ONE action, the right one
+        mk = lambda i, why, day="2026-10-07": rline(i, "GARG SHEKHAR", day, why=why)
+        scene(DEVS, LINKED)
+        E(SYNC, [mk(31, "FinCom id 4521 is matched to another Tally entry (GUID abcd-1) already: held, never a second entry"),
+                 mk(32, "the entry was not read from Tally: reading from Tally is stopped on this computer (Tally hangs on the bank ledger)", "2026-10-06"),
+                 mk(33, "month locked: 2026-04", "2026-04-12"), mk(34, "no GUID on the line: held, never a new row", "2026-10-05"),
+                 mk(35, "the company's starting point is not recorded yet, so its entries are not taken from Tally", "2026-10-04"),
+                 mk(36, "waiting: Tally busy; FinCom asks again at 14:05", "2026-10-03")]); pg.wait_for_timeout(1800)
+        G = lambda k: '#app [data-sync-needs] [data-needs-group^="%s|"]' % k
+        acts = E("() => [...document.querySelectorAll('#app [data-sync-needs] [data-needs-group]')].map(g => [g.getAttribute('data-needs-group').split('|')[0], [...g.querySelectorAll('button')].map(b => b.getAttribute('data-needs-act') + ':' + b.innerText.trim())])")
+        ok(sorted(a[0] for a in acts) == ["baseline", "dupid", "locked", "masters", "readstop"] and all(len(a[1]) == 1 for a in acts), "each kind its group, ONE action each (%s)" % acts)
+        A = dict(acts)
+        ok(A.get("dupid") == ["daybook:Upload the Day Book for 07-Oct-2026"] and "double posting" in txt(G("dupid") + " [data-needs-text]"), "FinCom id on two entries: check Tally for a double posting, then the Day Book (%s)" % txt(G("dupid")))
+        ok(A.get("readstop") == ["resume:Resume reading"] and "stopped" in txt(G("readstop") + " [data-needs-text]"), "reading stopped: the owner's Resume reading, not Apply now (%s)" % A.get("readstop"))
+        ok(A.get("locked") == ["tieout:Open Tie-out"], "a locked month: Open Tie-out (unlock it there) (%s)" % A.get("locked"))
+        ok(A.get("masters") == ["masters:Open From Tally"], "a ledger line with no GUID: read the ledgers from Tally (%s)" % A.get("masters"))
+        ok(A.get("baseline") == ["tally:Open the Tally page"], "no starting point: the Tally page (%s)" % A.get("baseline"))
+        ok(E("() => [...document.querySelectorAll('#app [data-sync-fetching-line]')].map(e => e.getAttribute('data-sync-fetching-line'))") == ["36"], "waiting: Tally busy: being fetched")
+        E("() => { window.__calls = []; }"); pg.click(G("readstop") + " button"); pg.wait_for_timeout(500)
+        ok([c for c in E("window.__calls") if c[0] == "tally_read_resume" and c[1].get("p_device") == D1], "Resume reading asks tally_read_resume for that computer (%s)" % E("window.__calls"))
+        scene(DEVS, LINKED, role="member")
+        E(SYNC, [mk(32, "the entry was not read from Tally: reading from Tally is stopped on this computer (x)")]); pg.wait_for_timeout(1800)
+        ok(pg.locator(G("readstop") + " button").count() == 0 and "owner" in txt(G("readstop")), "staff: no Resume, the words say an owner resumes it (%s)" % txt(G("readstop")))
+        # ---- 5c. a reads-only bridge says Tally's state too; the guide leaves a way to connect another computer
+        ro = dev(6, "RO-PC", "tally", tally="closed", opened=()); ro["main_bridge"] = "go-other"
+        scene([ro], LINKED)
+        l6 = line(ro["id"])
+        ok("reads only" in l6 and "Tally not open" in l6, "a reads-only bridge: Tally not open said too (%s)" % l6)
+        scene([OK_DEV], LINKED)
+        ok(pg.locator("#app [data-tally-guide]").count() == 0 and pg.locator("#app [data-guide-again]").count() == 1, "linked: the guide folds to 'Connect another computer'")
+        pg.click("#app [data-guide-again]"); pg.wait_for_timeout(500)
+        ok(pg.locator("#app [data-tally-guide]").count() == 1 and pg.locator('#app [data-tally-guide] [data-guide-step="install"] [data-bridge-download]').count() == 1, "Connect another computer: the steps again, with the download")
         # ---- 6. Sync activity: one clear flow. Only ended lines -> "Needs you", one group per company and day, each with
         # the Day Book upload; no "waiting" box
         scene(DEVS, LINKED)
