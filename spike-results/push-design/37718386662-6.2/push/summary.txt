@@ -1,0 +1,141 @@
+[02:37:22.566] push-design on TallyPrime 6.2: reps 5, heavy 3000 ledgers / 3000 items / up to 30000 vouchers (40 min), postings 1
+[02:37:23.481] system clock step after timeBeginPeriod(1): 0.405 ms (min 0.0039, max 4.2915)
+[02:37:23.499] two files written 2 ms apart: NTFS write times 6.4052 ms apart
+[02:37:23.519] light company folder: D:\a\_temp\TallyData\100000
+[02:37:23.560] fast234 (fast234m) on TallyPrime 6.2: today's request 2927 chars, 61 fields
+[02:37:54.745] Tally started (setup) in 28.1 s; companies open: FinCom Spike Co -> True
+[02:37:54.965] import light masters 0: 60 sent, created 59, errors 0, 182.3 ms
+[02:37:56.862] import base masters 0: 600 sent, created 600, errors 0, 1797 ms
+[02:38:11.580] import vouchers 0-999: 1000 sent, created 1000, errors 0, 14511 ms
+[02:38:26.479] import vouchers 1000-1999: 1000 sent, created 1000, errors 0, 14814.4 ms
+[02:38:41.609] import vouchers 2000-2999: 1000 sent, created 1000, errors 0, 15040.2 ms
+[02:38:56.807] import vouchers 3000-3999: 1000 sent, created 1000, errors 0, 15120.8 ms
+[02:38:56.861] import target sales M4000: 1 sent, created 1, errors 0, 50.4 ms
+[02:38:56.882] import target receipt M4000: 1 sent, created 1, errors 0, 20 ms
+[02:38:57.344] target sales-M4000: MasterID 4002, date 20261001, Sales 1601
+[02:38:57.346] target receipt-M4000: MasterID 4003, date 20261001, Receipt 1601
+[02:39:28.352] Tally started (m-4000) in 28 s; companies open: FinCom Spike Co -> True
+[02:39:29.182] sizes m 4000: 4003 vouchers (MasterID up to 4003); Tally 470 MB
+[02:39:34.787] MEASURE m4000 sales-M4000 (4003 vouchers, MasterID 4002): bymaster median 498.5 worst 520.7; object median 18.9 worst 19.4 ms
+[02:39:40.592] MEASURE m4000 receipt-M4000 (4003 vouchers, MasterID 4003): bymaster median 543.3 worst 550.5; object median 12.3 worst 13.3 ms
+[02:39:56.586] import vouchers 4000-4999: 1000 sent, created 1000, errors 0, 15906.1 ms
+[02:40:12.763] import vouchers 5000-5999: 1000 sent, created 1000, errors 0, 16100.1 ms
+[02:40:28.879] import vouchers 6000-6999: 1000 sent, created 1000, errors 0, 16039.2 ms
+[02:40:45.292] import vouchers 7000-7999: 1000 sent, created 1000, errors 0, 16327.5 ms
+[02:41:01.586] import vouchers 8000-8999: 1000 sent, created 1000, errors 0, 16215.8 ms
+[02:41:19.238] import vouchers 9000-9999: 1000 sent, created 1000, errors 0, 17571.6 ms
+[02:41:36.602] import vouchers 10000-10999: 1000 sent, created 1000, errors 0, 17284.4 ms
+[02:41:53.209] import vouchers 11000-11999: 1000 sent, created 1000, errors 0, 16474 ms
+[02:42:09.220] import vouchers 12000-12999: 1000 sent, created 1000, errors 0, 15934.2 ms
+[02:42:26.163] import vouchers 13000-13999: 1000 sent, created 1000, errors 0, 16852.6 ms
+[02:42:42.631] import vouchers 14000-14999: 1000 sent, created 1000, errors 0, 16391.9 ms
+[02:42:58.993] import vouchers 15000-15999: 1000 sent, created 1000, errors 0, 16278.3 ms
+[02:43:15.503] import vouchers 16000-16999: 1000 sent, created 1000, errors 0, 16432.7 ms
+[02:43:32.119] import vouchers 17000-17999: 1000 sent, created 1000, errors 0, 16532.7 ms
+[02:43:49.025] import vouchers 18000-18999: 1000 sent, created 1000, errors 0, 16830.2 ms
+[02:44:05.084] import vouchers 19000-19999: 1000 sent, created 1000, errors 0, 15968.6 ms
+[02:44:22.186] import vouchers 20000-20999: 1000 sent, created 1000, errors 0, 17025.3 ms
+[02:44:39.100] import vouchers 21000-21999: 1000 sent, created 1000, errors 0, 16825.7 ms
+[02:44:56.408] import vouchers 22000-22999: 1000 sent, created 1000, errors 0, 17231.9 ms
+[02:45:12.790] import vouchers 23000-23999: 1000 sent, created 1000, errors 0, 16307.8 ms
+[02:45:29.695] import vouchers 24000-24999: 1000 sent, created 1000, errors 0, 16825.7 ms
+[02:45:29.758] import target sales M25000: 1 sent, created 1, errors 0, 61.4 ms
+[02:45:29.785] import target receipt M25000: 1 sent, created 1, errors 0, 25.7 ms
+[02:45:32.801] target sales-M25000: MasterID 25004, date 20261001, Sales 10002
+[02:45:32.802] target receipt-M25000: MasterID 25005, date 20261001, Receipt 10002
+[02:46:03.821] Tally started (m-25000) in 28 s; companies open: FinCom Spike Co -> True
+[02:46:10.720] sizes m 25000: 25005 vouchers (MasterID up to 25005); Tally 769 MB
+[02:46:34.015] MEASURE m25000 sales-M25000 (25005 vouchers, MasterID 25004): bymaster median 3551.1 worst 3761.9; object median 19.2 worst 21 ms
+[02:46:59.757] MEASURE m25000 receipt-M25000 (25005 vouchers, MasterID 25005): bymaster median 3838.7 worst 4106.9; object median 11.4 worst 12.1 ms
+[02:47:17.432] import vouchers 25000-25999: 1000 sent, created 1000, errors 0, 17592.9 ms
+[02:47:36.435] import vouchers 26000-26999: 1000 sent, created 1000, errors 0, 18906 ms
+[02:47:54.743] import vouchers 27000-27999: 1000 sent, created 1000, errors 0, 18224.6 ms
+[02:48:12.445] import vouchers 28000-28999: 1000 sent, created 1000, errors 0, 17625.9 ms
+[02:48:29.938] import vouchers 29000-29999: 1000 sent, created 1000, errors 0, 17412.8 ms
+[02:48:47.874] import vouchers 30000-30999: 1000 sent, created 1000, errors 0, 17823.6 ms
+[02:49:04.851] import vouchers 31000-31999: 1000 sent, created 1000, errors 0, 16892.4 ms
+[02:49:21.901] import vouchers 32000-32999: 1000 sent, created 1000, errors 0, 16968.9 ms
+[02:49:38.662] import vouchers 33000-33999: 1000 sent, created 1000, errors 0, 16680.4 ms
+[02:49:55.921] import vouchers 34000-34999: 1000 sent, created 1000, errors 0, 17181.4 ms
+[02:50:13.640] import vouchers 35000-35999: 1000 sent, created 1000, errors 0, 17640.5 ms
+[02:50:33.854] import vouchers 36000-36999: 1000 sent, created 1000, errors 0, 20124.3 ms
+[02:50:53.443] import vouchers 37000-37999: 1000 sent, created 1000, errors 0, 19468.8 ms
+[02:51:11.026] import vouchers 38000-38999: 1000 sent, created 1000, errors 0, 17507 ms
+[02:51:27.689] import vouchers 39000-39999: 1000 sent, created 1000, errors 0, 16572.8 ms
+[02:51:27.745] import target sales M40000: 1 sent, created 1, errors 0, 54.7 ms
+[02:51:27.768] import target receipt M40000: 1 sent, created 1, errors 0, 21.9 ms
+[02:51:34.011] target sales-M40000: MasterID 40006, date 20261001, Sales 16003
+[02:51:34.012] target receipt-M40000: MasterID 40007, date 20261001, Receipt 16003
+[02:52:09.301] Tally started (m-40000) in 32.3 s; companies open: FinCom Spike Co -> True
+[02:52:21.467] sizes m 40000: 40007 vouchers (MasterID up to 40007); Tally 860 MB
+[02:53:00.156] MEASURE m40000 sales-M40000 (40007 vouchers, MasterID 40006): bymaster median 6173.8 worst 6710.6; object median 18.4 worst 20.9 ms
+[02:53:40.648] MEASURE m40000 receipt-M40000 (40007 vouchers, MasterID 40007): bymaster median 6321.9 worst 6379.1; object median 10.8 worst 24 ms
+[02:53:57.768] import vouchers 40000-40999: 1000 sent, created 1000, errors 0, 17043.6 ms
+[02:54:15.172] import vouchers 41000-41999: 1000 sent, created 1000, errors 0, 17329.1 ms
+[02:54:33.171] import vouchers 42000-42999: 1000 sent, created 1000, errors 0, 17919.7 ms
+[02:54:50.618] import vouchers 43000-43999: 1000 sent, created 1000, errors 0, 17372.8 ms
+[02:55:08.702] import vouchers 44000-44999: 1000 sent, created 1000, errors 0, 18006.2 ms
+[02:55:27.036] import vouchers 45000-45999: 1000 sent, created 1000, errors 0, 18256.2 ms
+[02:55:44.421] import vouchers 46000-46999: 1000 sent, created 1000, errors 0, 17306.6 ms
+[02:56:01.899] import vouchers 47000-47999: 1000 sent, created 1000, errors 0, 17404 ms
+[02:56:19.126] import vouchers 48000-48999: 1000 sent, created 1000, errors 0, 17153.7 ms
+[02:56:36.420] import vouchers 49000-49999: 1000 sent, created 1000, errors 0, 17218.1 ms
+[02:56:53.592] import vouchers 50000-50999: 1000 sent, created 1000, errors 0, 17096.5 ms
+[02:57:10.977] import vouchers 51000-51999: 1000 sent, created 1000, errors 0, 17307.9 ms
+[02:57:28.205] import vouchers 52000-52999: 1000 sent, created 1000, errors 0, 17150.3 ms
+[02:57:45.664] import vouchers 53000-53999: 1000 sent, created 1000, errors 0, 17382.7 ms
+[02:58:02.721] import vouchers 54000-54999: 1000 sent, created 1000, errors 0, 16982.7 ms
+[02:58:19.894] import vouchers 55000-55999: 1000 sent, created 1000, errors 0, 17088.4 ms
+[02:58:37.173] import vouchers 56000-56999: 1000 sent, created 1000, errors 0, 17150 ms
+[02:58:54.455] import vouchers 57000-57999: 1000 sent, created 1000, errors 0, 17208 ms
+[02:59:11.943] import vouchers 58000-58999: 1000 sent, created 1000, errors 0, 17413.5 ms
+[02:59:29.130] import vouchers 59000-59999: 1000 sent, created 1000, errors 0, 17109.8 ms
+[02:59:47.341] import vouchers 60000-60999: 1000 sent, created 1000, errors 0, 18134.6 ms
+[03:00:05.434] import vouchers 61000-61999: 1000 sent, created 1000, errors 0, 18017.2 ms
+[03:00:22.958] import vouchers 62000-62999: 1000 sent, created 1000, errors 0, 17447.8 ms
+[03:00:40.302] import vouchers 63000-63999: 1000 sent, created 1000, errors 0, 17269.1 ms
+[03:00:57.764] import vouchers 64000-64999: 1000 sent, created 1000, errors 0, 17385.3 ms
+[03:01:16.276] import vouchers 65000-65999: 1000 sent, created 1000, errors 0, 18437.8 ms
+[03:01:34.260] import vouchers 66000-66999: 1000 sent, created 1000, errors 0, 17904.5 ms
+[03:01:52.273] import vouchers 67000-67999: 1000 sent, created 1000, errors 0, 17934.9 ms
+[03:02:09.704] import vouchers 68000-68999: 1000 sent, created 1000, errors 0, 17354.6 ms
+[03:02:27.288] import vouchers 69000-69999: 1000 sent, created 1000, errors 0, 17511.3 ms
+[03:02:44.595] import vouchers 70000-70999: 1000 sent, created 1000, errors 0, 17203.3 ms
+[03:03:01.884] import vouchers 71000-71999: 1000 sent, created 1000, errors 0, 17175.9 ms
+[03:03:19.471] import vouchers 72000-72999: 1000 sent, created 1000, errors 0, 17511.9 ms
+[03:03:37.097] import vouchers 73000-73999: 1000 sent, created 1000, errors 0, 17549 ms
+[03:03:54.446] import vouchers 74000-74999: 1000 sent, created 1000, errors 0, 17275.1 ms
+[03:04:11.772] import vouchers 75000-75999: 1000 sent, created 1000, errors 0, 17249.3 ms
+[03:04:29.216] import vouchers 76000-76999: 1000 sent, created 1000, errors 0, 17358.4 ms
+[03:04:46.725] import vouchers 77000-77999: 1000 sent, created 1000, errors 0, 17436.1 ms
+[03:05:04.492] import vouchers 78000-78999: 1000 sent, created 1000, errors 0, 17691.3 ms
+[03:05:22.295] import vouchers 79000-79999: 1000 sent, created 1000, errors 0, 17727.7 ms
+[03:05:39.806] import vouchers 80000-80999: 1000 sent, created 1000, errors 0, 17435.9 ms
+[03:05:57.739] import vouchers 81000-81999: 1000 sent, created 1000, errors 0, 17857.2 ms
+[03:06:15.306] import vouchers 82000-82999: 1000 sent, created 1000, errors 0, 17481.8 ms
+[03:06:32.858] import vouchers 83000-83999: 1000 sent, created 1000, errors 0, 17477.5 ms
+[03:06:50.464] import vouchers 84000-84999: 1000 sent, created 1000, errors 0, 17532.6 ms
+[03:07:08.194] import vouchers 85000-85999: 1000 sent, created 1000, errors 0, 17654.1 ms
+[03:07:25.856] import vouchers 86000-86999: 1000 sent, created 1000, errors 0, 17588.2 ms
+[03:07:43.960] import vouchers 87000-87999: 1000 sent, created 1000, errors 0, 18027.4 ms
+[03:08:01.590] import vouchers 88000-88999: 1000 sent, created 1000, errors 0, 17555.8 ms
+[03:08:19.017] import vouchers 89000-89999: 1000 sent, created 1000, errors 0, 17353.7 ms
+[03:08:36.639] import vouchers 90000-90999: 1000 sent, created 1000, errors 0, 17549.4 ms
+[03:08:54.391] import vouchers 91000-91999: 1000 sent, created 1000, errors 0, 17678.4 ms
+[03:09:11.958] import vouchers 92000-92999: 1000 sent, created 1000, errors 0, 17493.9 ms
+[03:09:29.499] import vouchers 93000-93999: 1000 sent, created 1000, errors 0, 17466.6 ms
+[03:09:46.809] import vouchers 94000-94999: 1000 sent, created 1000, errors 0, 17238.5 ms
+[03:10:04.294] import vouchers 95000-95999: 1000 sent, created 1000, errors 0, 17412.4 ms
+[03:10:21.936] import vouchers 96000-96999: 1000 sent, created 1000, errors 0, 17568.2 ms
+[03:10:39.716] import vouchers 97000-97999: 1000 sent, created 1000, errors 0, 17707.2 ms
+[03:10:57.362] import vouchers 98000-98999: 1000 sent, created 1000, errors 0, 17573.8 ms
+[03:11:14.859] import vouchers 99000-99999: 1000 sent, created 1000, errors 0, 17422 ms
+[03:11:14.922] import target sales M100000: 1 sent, created 1, errors 0, 61.7 ms
+[03:11:14.947] import target receipt M100000: 1 sent, created 1, errors 0, 23.3 ms
+[03:11:31.166] target sales-M100000: MasterID 100008, date 20261001, Sales 40004
+[03:11:31.168] target receipt-M100000: MasterID 100009, date 20261001, Receipt 40004
+[03:12:02.195] Tally started (m-100000) in 28 s; companies open: FinCom Spike Co -> True
+[03:12:42.803] sizes m 100000: 100009 vouchers (MasterID up to 100009); Tally 1194 MB
+[03:14:14.004] MEASURE m100000 sales-M100000 (100009 vouchers, MasterID 100008): bymaster median 15401 worst 15961.1; object median 18.9 worst 19.1 ms
+[03:15:54.855] MEASURE m100000 receipt-M100000 (100009 vouchers, MasterID 100009): bymaster median 16329.5 worst 16772.6; object median 11.3 worst 12.2 ms
+[03:15:57.963] done (fast234 fast234m)
