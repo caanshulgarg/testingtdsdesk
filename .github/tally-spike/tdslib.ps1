@@ -8,6 +8,17 @@
 $script:tdsN = 0
 $script:tdsLog = @()
 function TdsSay($m) { $l = "[$(Get-Date -Format HH:mm:ss)] [tds] $m"; Write-Host $l; $script:tdsLog += $l }
+# a MasterID for a request: digits only (1 to 18) or the step stops loudly before anything reaches Tally (runs 37729166801 /
+# 37734533866: a whole list piped as one object made the filter '$MasterID = 1 2 3 ...', which hung Tally on every release)
+function TdsMid($mid) {
+  $s = "$mid".Trim()
+  if ($s -notmatch '^\d{1,18}$') {
+    $m = "HARNESS GUARD: a MasterID that is not digits only was refused before it reached Tally: '" + $(if ($s.Length -gt 80) { $s.Substring(0, 80) + '...' } else { $s }) + "'"
+    Write-Host "::error::$m"; if ($resultsFile) { Add-Content -Path $resultsFile -Value "HARNESS $m" -Encoding UTF8 }
+    throw $m
+  }
+  return $s
+}
 # text for SendKeys: + ^ % ~ ( ) { } [ ] are special
 function SK([string]$s) { ($s.ToCharArray() | ForEach-Object { if ('+^%~(){}[]'.Contains([string]$_)) { "{$_}" } else { [string]$_ } }) -join '' }
 function TdsScreen([string]$name) {

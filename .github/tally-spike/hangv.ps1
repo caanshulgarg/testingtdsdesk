@@ -47,14 +47,15 @@ function GstNow { [regex]::Match((Post ('<ENVELOPE><HEADER><VERSION>1</VERSION><
 $hRest = 'GUID, MASTERID, ALTERID, VOUCHERNUMBER, '
 $h4 = 'IRN, IRNACKNO, IRNACKDATE, EWAYBILLDETAILS.BILLNUMBER, '
 function HReq($mid, [string]$four = $h4, $from = '20260401', $to = '20270331', [bool]$filter = $true) {
+  if ($filter) { $mid = TdsMid $mid }
   $fetch = $hRest + $four + 'ALLLEDGERENTRIES.LEDGERNAME'
   $flt = if ($filter) { '<FILTERS>ShareEF</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="ShareEF">$MasterID = ' + $mid + '</SYSTEM>' } else { '</COLLECTION>' }
   '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>ShareE</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY><SVFROMDATE>' + $from + '</SVFROMDATE><SVTODATE>' + $to + '</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="ShareE" ISMODIFY="No"><TYPE>Voucher</TYPE><FETCH>' + $fetch + '</FETCH>' + $flt + '</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>'
 }
 $tBM = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'push\fast234-bymaster.xml')).Trim()
 $tOB = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'push\fast234-object.xml')).Trim()
-function Req233($mid, $date) { $tBM.Replace('@@CO@@', (SE $co1)).Replace('20991231', $date).Replace('987654321', "$mid") }
-function Req234($mid) { $tOB.Replace('@@CO@@', (SE $co1)).Replace('987654321', "$mid") }
+function Req233($mid, $date) { $mid = TdsMid $mid; $tBM.Replace('@@CO@@', (SE $co1)).Replace('20991231', $date).Replace('987654321', "$mid") }
+function Req234($mid) { $mid = TdsMid $mid; $tOB.Replace('@@CO@@', (SE $co1)).Replace('987654321', "$mid") }
 
 # ---- one probe
 $script:hHung = @(); $script:hObs = 0

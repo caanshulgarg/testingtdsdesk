@@ -183,7 +183,7 @@ $summary = @()
 function ShareStored($mid) {
   Post ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>ShareStored</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY><SVFROMDATE>20260401</SVFROMDATE><SVTODATE>20270331</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="ShareStored" ISMODIFY="No"><TYPE>Voucher</TYPE>' +
     '<FETCH>GUID, MASTERID, ALTERID, VOUCHERTYPENAME, VOUCHERNUMBER, DATE, PARTYLEDGERNAME, ISINVOICE, PERSISTEDVIEW, ALLLEDGERENTRIES.LEDGERNAME, ALLLEDGERENTRIES.ISDEEMEDPOSITIVE, ALLLEDGERENTRIES.ISPARTYLEDGER, ALLLEDGERENTRIES.AMOUNT, ALLLEDGERENTRIES.BILLALLOCATIONS.NAME, ALLLEDGERENTRIES.BILLALLOCATIONS.BILLTYPE, ALLLEDGERENTRIES.BILLALLOCATIONS.AMOUNT, ALLLEDGERENTRIES.BILLALLOCATIONS.BILLCREDITPERIOD, ALLLEDGERENTRIES.BILLALLOCATIONS.TDSDEDUCTEESECTIONNUMBER, LEDGERENTRIES.LEDGERNAME, LEDGERENTRIES.ISPARTYLEDGER, LEDGERENTRIES.AMOUNT, LEDGERENTRIES.BILLALLOCATIONS.NAME, LEDGERENTRIES.BILLALLOCATIONS.BILLTYPE, LEDGERENTRIES.BILLALLOCATIONS.AMOUNT, LEDGERENTRIES.BILLALLOCATIONS.BILLCREDITPERIOD</FETCH>' +
-    '<FILTERS>ShareF</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="ShareF">$MasterID = ' + [int64]$mid + '</SYSTEM></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') ''
+    '<FILTERS>ShareF</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="ShareF">$MasterID = ' + (TdsMid $mid) + '</SYSTEM></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') ''
 }
 # one case: $do types it; $alterOf: the MasterID it alters (else a new entry is looked for)
 function ShareCase($id, $what, [scriptblock]$do, $alterOf = $null) {
@@ -317,7 +317,7 @@ try {
   Info ("P9r the Receipt voucher type's numbering sub-method: '{0}' -> '{1}' (tried: {2})" -f $sm0, $sm1, ($tried -join '; '))
   if (-not $sm1 -or $sm1 -eq $sm0) { Result 'P9r renumbering on' 'HARNESS' ("Tally kept the sub-method '{0}' for every value tried ({1}); see p9r-vouchertype-*.xml" -f $sm0, ($tried -join '; ')) }
   $altv = { [int64]('0' + [regex]::Match((Post ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>ShareAlt</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="ShareAlt" ISMODIFY="No"><TYPE>Company</TYPE><FETCH>NAME, ALTVCHID</FETCH><FILTERS>ShareAltF</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="ShareAltF">$Name = "' + $co1 + '"</SYSTEM></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') ''), '<ALTVCHID[^>]*>\s*(\d+)').Groups[1].Value) }
-  $objNo = { param($mid) $a = Post ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Object</TYPE><SUBTYPE>Voucher</SUBTYPE><ID TYPE="Name">ID:' + $mid + '</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY></STATICVARIABLES><FETCHLIST><FETCH>VOUCHERNUMBER</FETCH><FETCH>ALTERID</FETCH><FETCH>MASTERID</FETCH></FETCHLIST></DESC></BODY></ENVELOPE>') ''; (& $tg $a 'VOUCHERNUMBER') }
+  $objNo = { param($mid) $mid = TdsMid $mid; $a = Post ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Object</TYPE><SUBTYPE>Voucher</SUBTYPE><ID TYPE="Name">ID:' + $mid + '</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY></STATICVARIABLES><FETCHLIST><FETCH>VOUCHERNUMBER</FETCH><FETCH>ALTERID</FETCH><FETCH>MASTERID</FETCH></FETCHLIST></DESC></BODY></ENVELOPE>') ''; (& $tg $a 'VOUCHERNUMBER') }
   foreach ($step in @(if ($sm1 -and $sm1 -ne $sm0) { 'insert', 'delete' })) {
     $r0 = & $vlist (& $coll 'ShareR' $rf '$VoucherTypeName = "Receipt"'); $l0 = (& $recLines).Count; $a0 = & $altv
     ShareDayBookLast "P9r-$step" 'Receipt'; $null = TK '{HOME}' 1.5 "P9r-$step-first"
@@ -356,7 +356,7 @@ try {
   # EWAYBILLDETAILS.BILLNUMBER filtered by this MasterID hung Tally past 60 s, and Tally did not recover; the bridge's own
   # entry request, dated to the entry's day, fetches the same fields: that one is used, byte for byte)
   $bmT = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'push\fast234-bymaster.xml')).Trim()
-  $e7 = { if ($eid) { $a = Post ($bmT.Replace('@@CO@@', (SE $co1)).Replace('20991231', '20261002').Replace('987654321', "$($eid.mid)")) ''; Add-Content (Join-Path $cap 'p7a-answers.xml') $a -Encoding UTF8; @(& $vlist $a)[0] } }
+  $e7 = { if ($eid) { $a = Post ($bmT.Replace('@@CO@@', (SE $co1)).Replace('20991231', '20261002').Replace('987654321', (TdsMid $eid.mid))) ''; Add-Content (Join-Path $cap 'p7a-answers.xml') $a -Encoding UTF8; @(& $vlist $a)[0] } }
   $e0 = & $e7
   $l0 = (& $recLines).Count
   $irn = '<IRN>IRN-SHARE-0001</IRN><IRNACKNO>ACK-SHARE-1</IRNACKNO><IRNACKDATE>20261002</IRNACKDATE><EWAYBILLDETAILS.LIST><BILLDATE>20261002</BILLDATE><BILLNUMBER>381101234299</BILLNUMBER><DOCUMENTTYPE>Tax Invoice</DOCUMENTTYPE></EWAYBILLDETAILS.LIST>'

@@ -26,8 +26,9 @@ $lists = [ordered]@{
   'run-37734533866'   = '1 2 3 4 5 6 22 24 23 8 9 10 11 12 13 14 15 16 17 18 19 20 21 25'
   'run-37729166801'   = '1 2 3 4 5 6 23 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 24'
 }
-foreach ($k in $lists.Keys) { HProbe 'h4' $e "233-envelope-$k" ((Req233 'MIDS' $e.date).Replace('$MasterID = MIDS', '$MasterID = ' + $lists[$k])) }
-HProbe 'h4' $e 'hanging-collection-run-37729166801' (HReq $lists['run-37729166801'])
+foreach ($k in $lists.Keys) { HProbe 'h4' $e "233-envelope-$k" ($tBM.Replace('@@CO@@', (SE $co1)).Replace('20991231', $e.date).Replace('$MasterID = 987654321', '$MasterID = ' + $lists[$k])) }
+# (the malformed lists are built here on purpose, past the guard TdsMid that Req233 / HReq apply)
+HProbe 'h4' $e 'hanging-collection-run-37729166801' ((HReq '987654321').Replace('$MasterID = 987654321', '$MasterID = ' + $lists['run-37729166801']))
 HProbe 'h4' $e 'hanging-collection-correct-one-id' (HReq "$($first.mid)")
 Info "hang4: probes with no answer or Tally not answering after: $(if ($script:hHung.Count) { $script:hHung -join ', ' } else { 'none' })"
 HStop
