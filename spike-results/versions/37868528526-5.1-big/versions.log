@@ -1,0 +1,649 @@
+[01:23:35] ---- c1 install and open the company (TallyPrime 5.1)
+  INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 15643264 bytes, 2026-10-09, FileVersion 1.1.5.1, ProductVersion 1.1.5.1, ProductName TallyPrime
+  INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-00-started (1024x768)
+[companies] 7 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[header] 6 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS><PRODMAJORVER>1</PRODMAJORVER><PRODMINORVER>1</PRODMINORVER><PRODMAJORREL>5</PRODMAJORREL><PRODMINORREL>1</PRODMINORREL><PRODTYPE>5</PRODTYPE></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</...
+  INFO Tally's own release in its answer header: PRODMAJORREL 5 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+######## PASS c1 install and open the company: installed tally.exe 15643264 bytes, 2026-10-09, FileVersion 1.1.5.1, ProductVersion 1.1.5.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+######## PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 18 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 7 ms, 'FinCom Spike Co' in it: True
+[01:24:08] ---- big: the add-on's own share of a save on a large company
+  INFO big: 6006 masters and 100000 entries made by XML in 30.3 min
+[big import] big cost centres on: altered 1; <RESPONSE> <CREATED>0</CREATED> <ALTERED>1</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  INFO big payroll 200: 204 masters, 1 entry (31-10-2026)
+  INFO big set: receipt 1, sales 5 items 1, sales 50 items 1 entry made (1-11, 2-11, 1-12-2026)
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-4-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon1-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon1-dup (1024x768)
+[shot] v-big-addon1-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-4-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon2-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon2-dup (1024x768)
+[shot] v-big-addon2-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-4-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon3-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon3-dup (1024x768)
+[shot] v-big-addon3-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-4-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon4-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon4-dup (1024x768)
+[shot] v-big-addon4-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-4-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon5-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon5-dup (1024x768)
+[shot] v-big-addon5-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-receipt-warm-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-receipt-warm-dup (1024x768)
+[shot] v-big-addon-receipt-warm-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-receipt1-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-receipt1-dup (1024x768)
+[shot] v-big-addon-receipt1-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-receipt2-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-receipt2-dup (1024x768)
+[shot] v-big-addon-receipt2-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-receipt3-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-receipt3-dup (1024x768)
+[shot] v-big-addon-receipt3-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-receipt4-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-receipt4-dup (1024x768)
+[shot] v-big-addon-receipt4-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-receipt5-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-receipt5-dup (1024x768)
+[shot] v-big-addon-receipt5-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-sales5-warm-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-sales5-warm-dup (1024x768)
+[shot] v-big-addon-sales5-warm-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-sales51-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-sales51-dup (1024x768)
+[shot] v-big-addon-sales51-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-sales52-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-sales52-dup (1024x768)
+[shot] v-big-addon-sales52-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-sales53-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-sales53-dup (1024x768)
+[shot] v-big-addon-sales53-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-sales54-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-sales54-dup (1024x768)
+[shot] v-big-addon-sales54-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-sales55-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-sales55-dup (1024x768)
+[shot] v-big-addon-sales55-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-sales50-warm-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-sales50-warm-dup (1024x768)
+[shot] v-big-addon-sales50-warm-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-sales501-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-sales501-dup (1024x768)
+[shot] v-big-addon-sales501-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-sales502-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-sales502-dup (1024x768)
+[shot] v-big-addon-sales502-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-sales503-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-sales503-dup (1024x768)
+[shot] v-big-addon-sales503-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-sales504-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-sales504-dup (1024x768)
+[shot] v-big-addon-sales504-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-sales505-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-sales505-dup (1024x768)
+[shot] v-big-addon-sales505-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '31-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-pr-warm-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-pr-warm-dup (1024x768)
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-pr-warm-answer (1024x768)
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-pr-warm-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '31-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-pr1-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-pr1-dup (1024x768)
+[shot] v-big-addon-pr1-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '31-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-pr2-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-pr2-dup (1024x768)
+[shot] v-big-addon-pr2-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '31-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-pr3-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-pr3-dup (1024x768)
+[shot] v-big-addon-pr3-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '31-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-pr4-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-pr4-dup (1024x768)
+[shot] v-big-addon-pr4-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '31-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-pr5-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-addon-pr5-dup (1024x768)
+[shot] v-big-addon-pr5-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-started (1024x768)
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-4-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp1-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp1-dup (1024x768)
+[shot] v-big-stamp1-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-4-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp2-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp2-dup (1024x768)
+[shot] v-big-stamp2-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-4-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp3-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp3-dup (1024x768)
+[shot] v-big-stamp3-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-4-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp4-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp4-dup (1024x768)
+[shot] v-big-stamp4-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-4-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp5-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp5-dup (1024x768)
+[shot] v-big-stamp5-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-receipt-warm-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-receipt-warm-dup (1024x768)
+[shot] v-big-stamp-receipt-warm-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-receipt1-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-receipt1-dup (1024x768)
+[shot] v-big-stamp-receipt1-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-receipt2-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-receipt2-dup (1024x768)
+[shot] v-big-stamp-receipt2-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-receipt3-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-receipt3-dup (1024x768)
+[shot] v-big-stamp-receipt3-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-receipt4-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-receipt4-dup (1024x768)
+[shot] v-big-stamp-receipt4-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-receipt5-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-receipt5-dup (1024x768)
+[shot] v-big-stamp-receipt5-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-sales5-warm-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-sales5-warm-dup (1024x768)
+[shot] v-big-stamp-sales5-warm-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-sales51-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-sales51-dup (1024x768)
+[shot] v-big-stamp-sales51-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-sales52-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-sales52-dup (1024x768)
+[shot] v-big-stamp-sales52-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-sales53-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-sales53-dup (1024x768)
+[shot] v-big-stamp-sales53-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-sales54-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-sales54-dup (1024x768)
+[shot] v-big-stamp-sales54-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-sales55-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-sales55-dup (1024x768)
+[shot] v-big-stamp-sales55-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-sales50-warm-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-sales50-warm-dup (1024x768)
+[shot] v-big-stamp-sales50-warm-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-sales501-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-sales501-dup (1024x768)
+[shot] v-big-stamp-sales501-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-sales502-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-sales502-dup (1024x768)
+[shot] v-big-stamp-sales502-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-sales503-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-sales503-dup (1024x768)
+[shot] v-big-stamp-sales503-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-sales504-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-sales504-dup (1024x768)
+[shot] v-big-stamp-sales504-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-sales505-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-sales505-dup (1024x768)
+[shot] v-big-stamp-sales505-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '31-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-pr1-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-pr1-dup (1024x768)
+[shot] v-big-stamp-pr1-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '31-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-pr2-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-pr2-dup (1024x768)
+[shot] v-big-stamp-pr2-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '31-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-pr3-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-pr3-dup (1024x768)
+[shot] v-big-stamp-pr3-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '31-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-pr4-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-pr4-dup (1024x768)
+[shot] v-big-stamp-pr4-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '31-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-pr5-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-big-stamp-pr5-dup (1024x768)
+[shot] v-big-stamp-pr5-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'

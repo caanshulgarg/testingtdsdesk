@@ -1,0 +1,28 @@
+INFO TallyPrime 7.1, mode big, runner GitHub Actions 1000006171, 2026-10-09T01:24:19
+INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 18405568 bytes, 2026-10-09, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime
+INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+INFO Tally's own release in its answer header: PRODMAJORREL 7 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+PASS c1 install and open the company: installed tally.exe 18405568 bytes, 2026-10-09, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+PASS c2 port and company list: port 9000 answered 11.7 s after start, GET 1539 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 7 ms, 'FinCom Spike Co' in it: True
+INFO big: 6006 masters and 100000 entries made by XML in 35.1 min
+INFO big payroll 200: 204 masters, 1 entry (31-10-2026)
+INFO big set: receipt 1, sales 5 items 1, sales 50 items 1 entry made (1-11, 2-11, 1-12-2026)
+MEASURE big: 100000 entries; Ctrl+A to a new line in a file: with the add-on (its full line) 985, 818, 842, 874, 852 ms, median 852; without it (a stamp-only TDL right after Tally's own Form Accept) 882, 823, 833, 849, 851 ms, median 849; the add-on's own share: 3 ms; within 0.25 s
+MEASURE big set receipt: 100000 entries; Ctrl+A to a new line in a file: with the add-on (its full line) 250, 256, 239, 247, 255 ms, median 250; without it (a stamp-only TDL right after Tally's own Form Accept) 257, 237, 230, 256, 253 ms, median 253; the add-on's own share: -3 ms; within 0.25 s
+MEASURE big set sales 5 items: 100000 entries; Ctrl+A to a new line in a file: with the add-on (its full line) 833, 848, 841, 848, 825 ms, median 841; without it (a stamp-only TDL right after Tally's own Form Accept) 831, 840, 840, 811, 824 ms, median 831; the add-on's own share: 10 ms; within 0.25 s
+MEASURE big set sales 50 items: 100000 entries; Ctrl+A to a new line in a file: with the add-on (its full line) 1698, 1725, 1707, 1744, 1726 ms, median 1725; without it (a stamp-only TDL right after Tally's own Form Accept) 1703, 1689, 1702, 1689, 1679 ms, median 1689; the add-on's own share: 36 ms; within 0.25 s
+MEASURE big payroll 200: 100000 entries; Ctrl+A to a new line in a file: with the add-on (its full line) 2746, 2743, 2743, 2741, 2781 ms, median 2743; without it (a stamp-only TDL right after Tally's own Form Accept) 2655, 2658, 2696, 2656, 2694 ms, median 2658; the add-on's own share: 85 ms; within 0.25 s
+INFO installer: Tally's download page lists TallyPrime setups for: Rel_2.1, REL_TP_1.0.0, Rel.2.0.1, Rel.2.0, Rel.3.0_Gold, Rel.3.0.1, Rel.3.0, Rel.4.0, Rel.4.1, Rel.5.0, Rel.5.1, Rel.6.1, Rel.7.0, Rel.7.1_gold, Rel.TP_1.1.1, Rel.TP_1.1.2, Rel.TP_1.1.3, Rel.TP_1.1.4, Rel.TP_1.1, Rel.TP_2.0, Rel6.0, Rel6.2, TallyPrime_Beta
+INFO installer: AVAILABLE 72090376 bytes, Last-Modified Thu, 25 Jun 2026 10:18:19 GMT: https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_Gold/TP/Full/setup.exe (43440848 bytes)
+INFO installer: AVAILABLE other release 3.0.1: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0.1/TP/Full/setup.exe (43476688 bytes)
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0/TP/Full/setup.exe (43465936 bytes)
+INFO installer: AVAILABLE other release 4.0: https://tallymirror.tallysolutions.com/download_centre/Rel.4.0/TP/Full/setup.exe (44497616 bytes)
+INFO installer: AVAILABLE other release 4.1: https://tallymirror.tallysolutions.com/download_centre/Rel.4.1/TP/Full/setup.exe (44673232 bytes)
+INFO installer: AVAILABLE other release 5.0: https://tallymirror.tallysolutions.com/download_centre/Rel.5.0/TP/Full/setup.exe (45592784 bytes)
+INFO installer: AVAILABLE other release 5.1: https://tallymirror.tallysolutions.com/download_centre/Rel.5.1/TP/Full/setup.exe (45651144 bytes)
+INFO installer: AVAILABLE other release 6.1: https://tallymirror.tallysolutions.com/download_centre/Rel.6.1/TP/Full/setup.exe (46460616 bytes)
+INFO installer: AVAILABLE other release 7.0: https://tallymirror.tallysolutions.com/download_centre/Rel.7.0/TP/Full/setup.exe (70912776 bytes)
+INFO installer: AVAILABLE other release 6.0: https://tallymirror.tallysolutions.com/download_centre/Rel6.0/TP/Full/setup.exe (46324936 bytes)
+INFO installer: AVAILABLE other release 6.2: https://tallymirror.tallysolutions.com/download_centre/Rel6.2/TP/Full/setup.exe (47408904 bytes)
+INFO installer: DOWNLOADED Rel.7.1 from https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe : 72090376 bytes in 1 s, SHA-256 B849B1FB5A93D03C8FABDAEC4447FDCFDF27A5D6C93E3C207BBB320263AB663F, signature Valid CN=Tally Solutions Pvt Ltd, O=Tally Solutions Pvt Ltd, L=Bengaluru, S=Karnataka, C=IN, file version 1.1.7.1 product 1.1.7.1
