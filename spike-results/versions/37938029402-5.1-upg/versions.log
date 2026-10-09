@@ -1,0 +1,378 @@
+[13:47:55] ---- c1 install and open the company (TallyPrime 5.1)
+  INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 15643264 bytes, 2026-10-09, FileVersion 1.1.5.1, ProductVersion 1.1.5.1, ProductName TallyPrime
+  INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-00-started (1024x768)
+[companies] 7 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[header] 7 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS><PRODMAJORVER>1</PRODMAJORVER><PRODMINORVER>1</PRODMINORVER><PRODMAJORREL>5</PRODMAJORREL><PRODMINORREL>1</PRODMINORREL><PRODTYPE>5</PRODTYPE></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</...
+  INFO Tally's own release in its answer header: PRODMAJORREL 5 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+######## PASS c1 install and open the company: installed tally.exe 15643264 bytes, 2026-10-09, FileVersion 1.1.5.1, ProductVersion 1.1.5.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+######## PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 19 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 7 ms, 'FinCom Spike Co' in it: True
+[13:48:28] ---- the stub cloud and the bridge
+[ledger Spike Income] 14 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[renum journal] 32 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>2</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO setup origin: BUILT from source dist/FinComBridge-Setup-2.4.1.exe SHA-256 35ed468d5a9fac868eaabf09054b37e909767652c12857e8ee0c80065734f5d7; bridge source: 0f436f6c906283396e6940167fde920d52acfdc1 Add-on 2.4.1: the measured data-folder formula in place of FCRDataPath; the data id trims trailing backslashes
+[13:48:31] ---- upg seed: ten Journals by XML, the sync folder as 2.3.3 left it on NWS144
+[VAll] 2 vouchers: 1/1/Journal/20260401/spike TDSDesk:test-1, 2/2/Journal/20261001/renum before the bridge
+[upg journal 1] 14 ms: <RESPONSE><LINEERROR/><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+  INFO upg journal 1: Tally answered <CREATED>0</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>
+[upg journal 2] 14 ms: <RESPONSE><LINEERROR/><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+  INFO upg journal 2: Tally answered <CREATED>0</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>
+[upg journal 3] 13 ms: <RESPONSE><LINEERROR/><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+  INFO upg journal 3: Tally answered <CREATED>0</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>
+[upg journal 4] 13 ms: <RESPONSE><LINEERROR/><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+  INFO upg journal 4: Tally answered <CREATED>0</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>
+[upg journal 5] 13 ms: <RESPONSE><LINEERROR/><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+  INFO upg journal 5: Tally answered <CREATED>0</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>
+[upg journal 6] 13 ms: <RESPONSE><LINEERROR/><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+  INFO upg journal 6: Tally answered <CREATED>0</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>
+[upg journal 7] 13 ms: <RESPONSE><LINEERROR/><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+  INFO upg journal 7: Tally answered <CREATED>0</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>
+[upg journal 8] 13 ms: <RESPONSE><LINEERROR/><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+  INFO upg journal 8: Tally answered <CREATED>0</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>
+[upg journal 9] 15 ms: <RESPONSE><LINEERROR/><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+  INFO upg journal 9: Tally answered <CREATED>0</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>
+[upg journal 10] 13 ms: <RESPONSE><LINEERROR/><CREATED>0</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+  INFO upg journal 10: Tally answered <CREATED>0</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>
+[VAll] 2 vouchers: 1/1/Journal/20260401/spike TDSDesk:test-1, 2/2/Journal/20261001/renum before the bridge
+[companies] 3 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>24</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>1</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FB...
+  INFO upg: seeded 50 held lines (50 old: plain / 20 tries / final / refetch, MasterIDs 900001..900050; 10 of Tally's own Journals by XML, MasterIDs ) and 10 ids 2.3.3 ended, company GUID 'c8d27f93-111c-45e4-8c12-1b6c2635901f'
+[13:48:34] proxy 127.0.0.2:9000 -> Tally: True (HTTP 200, pid 6088)
+bridge setup ended with 0
+  INFO bridge on 127.0.0.1:9100, version 2.4.0, allowImport True, readOnly '', testMode False
+  bridge log: 2026-10-09 13:48:41  FinCom Bridge 2.4.0: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+  bridge log: 2026-10-09 13:48:41  FinCom Bridge 2.4.0 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+  bridge log: 2026-10-09 13:48:41  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 19:00)
+  bridge log: 2026-10-09 13:48:41  Recorder: 50 held line(s) kept by an earlier bridge are asked once with the fast request (whatever their earlier tries): answered, each goes to FinCom with Tally's body; else it ends with the Day Book words
+  bridge log: 2026-10-09 13:48:41  Recorder: re-scan of the add-on's files for 2.4.0: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+  bridge log: 2026-10-09 13:48:41  Check:  - 
+  bridge log: 2026-10-09 13:48:44  Tray icon: set to show next to the clock always (Windows 11)
+  bridge log: 2026-10-09 13:48:44  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+  bridge log: 2026-10-09 13:48:44  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+  bridge log: 2026-10-09 13:48:45  Company FinCom Spike Co: its Tally GUID c8d27f93-111c-45e4-8c12-1b6c2635901f is held from now on
+  bridge log: 2026-10-09 13:48:45  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=2, ALTMSTID=209 (reading is prospective only: the bridge follows what changes after this)
+  bridge log: 2026-10-09 13:48:45  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=2, ALTMSTID=209
+  bridge log: 2026-10-09 13:48:45  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=2, ALTMSTID=209)
+  bridge log: 2026-10-09 13:48:45  Bank dates: FinCom Spike Co: following Tally's voucher counter from ALTVCHID=2 (a move the add-on's lines do not explain is a bank date set, or another change Tally makes without a voucher form)
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-011 of 01-Oct-2026 (MasterID 900012, line upgold01…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-012 of 01-Oct-2026 (MasterID 900013, line upgold01…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-013 of 01-Oct-2026 (MasterID 900014, line upgold01…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-014 of 01-Oct-2026 (MasterID 900015, line upgold01…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-015 of 01-Oct-2026 (MasterID 900016, line upgold01…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-016 of 01-Oct-2026 (MasterID 900017, line upgold01…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-017 of 01-Oct-2026 (MasterID 900018, line upgold01…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-018 of 01-Oct-2026 (MasterID 900019, line upgold01…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-019 of 01-Oct-2026 (MasterID 900020, line upgold01…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-020 of 01-Oct-2026 (MasterID 900021, line upgold02…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-021 of 01-Oct-2026 (MasterID 900022, line upgold02…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-022 of 01-Oct-2026 (MasterID 900023, line upgold02…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-023 of 01-Oct-2026 (MasterID 900024, line upgold02…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-024 of 01-Oct-2026 (MasterID 900025, line upgold02…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-025 of 01-Oct-2026 (MasterID 900026, line upgold02…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-026 of 01-Oct-2026 (MasterID 900027, line upgold02…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-027 of 01-Oct-2026 (MasterID 900028, line upgold02…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-028 of 01-Oct-2026 (MasterID 900029, line upgold02…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-029 of 01-Oct-2026 (MasterID 900030, line upgold02…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-030 of 01-Oct-2026 (MasterID 900031, line upgold03…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-031 of 01-Oct-2026 (MasterID 900032, line upgold03…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-032 of 01-Oct-2026 (MasterID 900033, line upgold03…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-033 of 01-Oct-2026 (MasterID 900034, line upgold03…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-034 of 01-Oct-2026 (MasterID 900035, line upgold03…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-035 of 01-Oct-2026 (MasterID 900036, line upgold03…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-036 of 01-Oct-2026 (MasterID 900037, line upgold03…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-037 of 01-Oct-2026 (MasterID 900038, line upgold03…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-038 of 01-Oct-2026 (MasterID 900039, line upgold03…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-039 of 01-Oct-2026 (MasterID 900040, line upgold03…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-040 of 01-Oct-2026 (MasterID 900041, line upgold04…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-041 of 01-Oct-2026 (MasterID 900042, line upgold04…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-042 of 01-Oct-2026 (MasterID 900043, line upgold04…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-043 of 01-Oct-2026 (MasterID 900044, line upgold04…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-044 of 01-Oct-2026 (MasterID 900045, line upgold04…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-045 of 01-Oct-2026 (MasterID 900046, line upgold04…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-046 of 01-Oct-2026 (MasterID 900047, line upgold04…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-047 of 01-Oct-2026 (MasterID 900048, line upgold04…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-048 of 01-Oct-2026 (MasterID 900049, line upgold04…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-049 of 01-Oct-2026 (MasterID 900050, line upgold04…): not asked this turn: 10 held lines asked already; asked in a later turn
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-000 of 01-Oct-2026 (MasterID 900001, line upgold00…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:45  Recorder: entry fetch of FinCom Spike Co: answered in 21 ms
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-000 of 01-Oct-2026 (MasterID 900001, line upgold00…): still held: Tally gave no voucher with MasterID 900001 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:45  Recorder: Journal OLD-001 of 01-Oct-2026 (MasterID 900002, line upgold00…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:46  Recorder: entry fetch of FinCom Spike Co: answered in 13 ms
+  bridge log: 2026-10-09 13:48:46  Recorder: Journal OLD-001 of 01-Oct-2026 (MasterID 900002, line upgold00…): still held: Tally gave no voucher with MasterID 900002 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:46  Recorder: Journal OLD-002 of 01-Oct-2026 (MasterID 900003, line upgold00…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:46  Recorder: entry fetch of FinCom Spike Co: answered in 3 ms
+  bridge log: 2026-10-09 13:48:46  Recorder: Journal OLD-002 of 01-Oct-2026 (MasterID 900003, line upgold00…): still held: Tally gave no voucher with MasterID 900003 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:46  Recorder: Journal OLD-003 of 01-Oct-2026 (MasterID 900004, line upgold00…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:46  Recorder: Journal OLD-003 of 01-Oct-2026 (MasterID 900004, line upgold00…): still held: Tally gave no voucher with MasterID 900004 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:46  Recorder: Journal OLD-004 of 01-Oct-2026 (MasterID 900005, line upgold00…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:47  Recorder: entry fetch of FinCom Spike Co: answered in 23 ms
+  bridge log: 2026-10-09 13:48:47  Recorder: Journal OLD-004 of 01-Oct-2026 (MasterID 900005, line upgold00…): still held: Tally gave no voucher with MasterID 900005 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:47  Recorder: Journal OLD-005 of 01-Oct-2026 (MasterID 900006, line upgold00…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:47  Recorder: entry fetch of FinCom Spike Co: answered in 22 ms
+  bridge log: 2026-10-09 13:48:47  Recorder: Journal OLD-005 of 01-Oct-2026 (MasterID 900006, line upgold00…): still held: Tally gave no voucher with MasterID 900006 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:47  Recorder: Journal OLD-006 of 01-Oct-2026 (MasterID 900007, line upgold00…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:47  Recorder: Journal OLD-006 of 01-Oct-2026 (MasterID 900007, line upgold00…): still held: Tally gave no voucher with MasterID 900007 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:47  Recorder: Journal OLD-007 of 01-Oct-2026 (MasterID 900008, line upgold00…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:48  Recorder: Journal OLD-007 of 01-Oct-2026 (MasterID 900008, line upgold00…): still held: Tally gave no voucher with MasterID 900008 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:48  Recorder: Journal OLD-009 of 01-Oct-2026 (MasterID 900010, line upgold00…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:48  Recorder: Journal OLD-009 of 01-Oct-2026 (MasterID 900010, line upgold00…): still held: Tally gave no voucher with MasterID 900010 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:48  Recorder: Journal OLD-010 of 01-Oct-2026 (MasterID 900011, line upgold01…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:48  Recorder: Journal OLD-010 of 01-Oct-2026 (MasterID 900011, line upgold01…): still held: Tally gave no voucher with MasterID 900011 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:48  Recorder: Journal OLD-000 of 01-Oct-2026 (MasterID 900001, line upgold00…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:48  Recorder: Journal OLD-001 of 01-Oct-2026 (MasterID 900002, line upgold00…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:48  Recorder: Journal OLD-002 of 01-Oct-2026 (MasterID 900003, line upgold00…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:48  Recorder: Journal OLD-003 of 01-Oct-2026 (MasterID 900004, line upgold00…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:48  Recorder: Journal OLD-004 of 01-Oct-2026 (MasterID 900005, line upgold00…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:48  Recorder: Journal OLD-005 of 01-Oct-2026 (MasterID 900006, line upgold00…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:48  Recorder: Journal OLD-006 of 01-Oct-2026 (MasterID 900007, line upgold00…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:48  Recorder: Journal OLD-007 of 01-Oct-2026 (MasterID 900008, line upgold00…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:48  Recorder: Journal OLD-009 of 01-Oct-2026 (MasterID 900010, line upgold00…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:48  Recorder: Journal OLD-010 of 01-Oct-2026 (MasterID 900011, line upgold01…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:48  Recorder: held lines: 0 from FinCom, 10 asked, 0 resolved, 50 still held (50 in the list)
+  bridge log: 2026-10-09 13:48:49  Recorder: Journal OLD-008 of 01-Oct-2026 (MasterID 900009, line upgold00…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:49  Recorder: entry fetch of FinCom Spike Co: answered in 14 ms
+  bridge log: 2026-10-09 13:48:49  Recorder: Journal OLD-008 of 01-Oct-2026 (MasterID 900009, line upgold00…): still held: Tally gave no voucher with MasterID 900009 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:49  Recorder: Journal OLD-011 of 01-Oct-2026 (MasterID 900012, line upgold01…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:49  Recorder: Journal OLD-011 of 01-Oct-2026 (MasterID 900012, line upgold01…): still held: Tally gave no voucher with MasterID 900012 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:49  Recorder: Journal OLD-012 of 01-Oct-2026 (MasterID 900013, line upgold01…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:50  Recorder: Journal OLD-012 of 01-Oct-2026 (MasterID 900013, line upgold01…): still held: Tally gave no voucher with MasterID 900013 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:50  Recorder: Journal OLD-014 of 01-Oct-2026 (MasterID 900015, line upgold01…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:50  Recorder: Journal OLD-014 of 01-Oct-2026 (MasterID 900015, line upgold01…): still held: Tally gave no voucher with MasterID 900015 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:50  Recorder: Journal OLD-015 of 01-Oct-2026 (MasterID 900016, line upgold01…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:50  Recorder: Journal OLD-015 of 01-Oct-2026 (MasterID 900016, line upgold01…): still held: Tally gave no voucher with MasterID 900016 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:50  Recorder: Journal OLD-016 of 01-Oct-2026 (MasterID 900017, line upgold01…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:50  Recorder: Journal OLD-016 of 01-Oct-2026 (MasterID 900017, line upgold01…): still held: Tally gave no voucher with MasterID 900017 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:50  Recorder: Journal OLD-017 of 01-Oct-2026 (MasterID 900018, line upgold01…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:51  Recorder: entry fetch of FinCom Spike Co: answered in 24 ms
+  bridge log: 2026-10-09 13:48:51  Recorder: Journal OLD-017 of 01-Oct-2026 (MasterID 900018, line upgold01…): still held: Tally gave no voucher with MasterID 900018 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:51  Recorder: Journal OLD-019 of 01-Oct-2026 (MasterID 900020, line upgold01…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:51  Recorder: entry fetch of FinCom Spike Co: answered in 15 ms
+  bridge log: 2026-10-09 13:48:51  Recorder: Journal OLD-019 of 01-Oct-2026 (MasterID 900020, line upgold01…): still held: Tally gave no voucher with MasterID 900020 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:51  Recorder: Journal OLD-020 of 01-Oct-2026 (MasterID 900021, line upgold02…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:51  Recorder: Journal OLD-020 of 01-Oct-2026 (MasterID 900021, line upgold02…): still held: Tally gave no voucher with MasterID 900021 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:51  Recorder: Journal OLD-021 of 01-Oct-2026 (MasterID 900022, line upgold02…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:52  Recorder: Journal OLD-021 of 01-Oct-2026 (MasterID 900022, line upgold02…): still held: Tally gave no voucher with MasterID 900022 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:52  Recorder: Journal OLD-008 of 01-Oct-2026 (MasterID 900009, line upgold00…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:52  Recorder: Journal OLD-011 of 01-Oct-2026 (MasterID 900012, line upgold01…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:52  Recorder: Journal OLD-012 of 01-Oct-2026 (MasterID 900013, line upgold01…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:52  Recorder: Journal OLD-014 of 01-Oct-2026 (MasterID 900015, line upgold01…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:52  Recorder: Journal OLD-015 of 01-Oct-2026 (MasterID 900016, line upgold01…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:52  Recorder: Journal OLD-016 of 01-Oct-2026 (MasterID 900017, line upgold01…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:52  Recorder: Journal OLD-017 of 01-Oct-2026 (MasterID 900018, line upgold01…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:52  Recorder: Journal OLD-019 of 01-Oct-2026 (MasterID 900020, line upgold01…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:52  Recorder: Journal OLD-020 of 01-Oct-2026 (MasterID 900021, line upgold02…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:52  Recorder: Journal OLD-021 of 01-Oct-2026 (MasterID 900022, line upgold02…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:52  Recorder: held lines: 0 from FinCom, 10 asked, 0 resolved, 40 still held (40 in the list)
+  bridge log: 2026-10-09 13:48:52  Recorder: Journal OLD-013 of 01-Oct-2026 (MasterID 900014, line upgold01…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:52  Recorder: Journal OLD-013 of 01-Oct-2026 (MasterID 900014, line upgold01…): still held: Tally gave no voucher with MasterID 900014 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:52  Recorder: Journal OLD-022 of 01-Oct-2026 (MasterID 900023, line upgold02…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:53  Recorder: Journal OLD-022 of 01-Oct-2026 (MasterID 900023, line upgold02…): still held: Tally gave no voucher with MasterID 900023 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:53  Recorder: Journal OLD-024 of 01-Oct-2026 (MasterID 900025, line upgold02…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:53  Recorder: Journal OLD-024 of 01-Oct-2026 (MasterID 900025, line upgold02…): still held: Tally gave no voucher with MasterID 900025 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:53  Recorder: Journal OLD-025 of 01-Oct-2026 (MasterID 900026, line upgold02…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:53  Recorder: Journal OLD-025 of 01-Oct-2026 (MasterID 900026, line upgold02…): still held: Tally gave no voucher with MasterID 900026 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:53  Recorder: Journal OLD-026 of 01-Oct-2026 (MasterID 900027, line upgold02…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:54  Recorder: Journal OLD-026 of 01-Oct-2026 (MasterID 900027, line upgold02…): still held: Tally gave no voucher with MasterID 900027 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:54  Recorder: Journal OLD-027 of 01-Oct-2026 (MasterID 900028, line upgold02…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:54  Recorder: Journal OLD-027 of 01-Oct-2026 (MasterID 900028, line upgold02…): still held: Tally gave no voucher with MasterID 900028 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:54  Recorder: Journal OLD-029 of 01-Oct-2026 (MasterID 900030, line upgold02…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:54  Recorder: entry fetch of FinCom Spike Co: answered in 12 ms
+  bridge log: 2026-10-09 13:48:54  Recorder: Journal OLD-029 of 01-Oct-2026 (MasterID 900030, line upgold02…): still held: Tally gave no voucher with MasterID 900030 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:54  Recorder: Journal OLD-030 of 01-Oct-2026 (MasterID 900031, line upgold03…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:55  Recorder: Journal OLD-030 of 01-Oct-2026 (MasterID 900031, line upgold03…): still held: Tally gave no voucher with MasterID 900031 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:55  Recorder: Journal OLD-031 of 01-Oct-2026 (MasterID 900032, line upgold03…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:55  Recorder: Journal OLD-031 of 01-Oct-2026 (MasterID 900032, line upgold03…): still held: Tally gave no voucher with MasterID 900032 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:55  Recorder: Journal OLD-032 of 01-Oct-2026 (MasterID 900033, line upgold03…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:55  Recorder: entry fetch of FinCom Spike Co: answered in 20 ms
+  bridge log: 2026-10-09 13:48:55  Recorder: Journal OLD-032 of 01-Oct-2026 (MasterID 900033, line upgold03…): still held: Tally gave no voucher with MasterID 900033 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:55  Recorder: Journal OLD-013 of 01-Oct-2026 (MasterID 900014, line upgold01…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:55  Recorder: Journal OLD-022 of 01-Oct-2026 (MasterID 900023, line upgold02…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:55  Recorder: Journal OLD-024 of 01-Oct-2026 (MasterID 900025, line upgold02…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:55  Recorder: Journal OLD-025 of 01-Oct-2026 (MasterID 900026, line upgold02…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:55  Recorder: Journal OLD-026 of 01-Oct-2026 (MasterID 900027, line upgold02…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:55  Recorder: Journal OLD-027 of 01-Oct-2026 (MasterID 900028, line upgold02…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:55  Recorder: Journal OLD-029 of 01-Oct-2026 (MasterID 900030, line upgold02…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:55  Recorder: Journal OLD-030 of 01-Oct-2026 (MasterID 900031, line upgold03…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:55  Recorder: Journal OLD-031 of 01-Oct-2026 (MasterID 900032, line upgold03…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:55  Recorder: Journal OLD-032 of 01-Oct-2026 (MasterID 900033, line upgold03…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:55  Recorder: held lines: 0 from FinCom, 10 asked, 0 resolved, 30 still held (30 in the list)
+  bridge log: 2026-10-09 13:48:55  Recorder: Journal OLD-018 of 01-Oct-2026 (MasterID 900019, line upgold01…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:56  Recorder: Journal OLD-018 of 01-Oct-2026 (MasterID 900019, line upgold01…): still held: Tally gave no voucher with MasterID 900019 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:56  Recorder: Journal OLD-034 of 01-Oct-2026 (MasterID 900035, line upgold03…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:56  Recorder: Journal OLD-034 of 01-Oct-2026 (MasterID 900035, line upgold03…): still held: Tally gave no voucher with MasterID 900035 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:56  Recorder: Journal OLD-035 of 01-Oct-2026 (MasterID 900036, line upgold03…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:56  Recorder: Journal OLD-035 of 01-Oct-2026 (MasterID 900036, line upgold03…): still held: Tally gave no voucher with MasterID 900036 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:56  Recorder: Journal OLD-036 of 01-Oct-2026 (MasterID 900037, line upgold03…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:57  Recorder: Journal OLD-036 of 01-Oct-2026 (MasterID 900037, line upgold03…): still held: Tally gave no voucher with MasterID 900037 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:57  Recorder: Journal OLD-037 of 01-Oct-2026 (MasterID 900038, line upgold03…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:57  Recorder: Journal OLD-037 of 01-Oct-2026 (MasterID 900038, line upgold03…): still held: Tally gave no voucher with MasterID 900038 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:57  Recorder: Journal OLD-039 of 01-Oct-2026 (MasterID 900040, line upgold03…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:57  Recorder: entry fetch of FinCom Spike Co: answered in 16 ms
+  bridge log: 2026-10-09 13:48:57  Recorder: Journal OLD-039 of 01-Oct-2026 (MasterID 900040, line upgold03…): still held: Tally gave no voucher with MasterID 900040 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:57  Recorder: Journal OLD-040 of 01-Oct-2026 (MasterID 900041, line upgold04…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:58  Recorder: Journal OLD-040 of 01-Oct-2026 (MasterID 900041, line upgold04…): still held: Tally gave no voucher with MasterID 900041 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:58  Recorder: Journal OLD-041 of 01-Oct-2026 (MasterID 900042, line upgold04…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:58  Recorder: Journal OLD-041 of 01-Oct-2026 (MasterID 900042, line upgold04…): still held: Tally gave no voucher with MasterID 900042 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:58  Recorder: Journal OLD-042 of 01-Oct-2026 (MasterID 900043, line upgold04…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:58  Recorder: Journal OLD-042 of 01-Oct-2026 (MasterID 900043, line upgold04…): still held: Tally gave no voucher with MasterID 900043 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:58  Recorder: Journal OLD-044 of 01-Oct-2026 (MasterID 900045, line upgold04…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:59  Recorder: Journal OLD-044 of 01-Oct-2026 (MasterID 900045, line upgold04…): still held: Tally gave no voucher with MasterID 900045 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:59  Recorder: Journal OLD-018 of 01-Oct-2026 (MasterID 900019, line upgold01…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:59  Recorder: Journal OLD-034 of 01-Oct-2026 (MasterID 900035, line upgold03…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:59  Recorder: Journal OLD-035 of 01-Oct-2026 (MasterID 900036, line upgold03…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:59  Recorder: Journal OLD-036 of 01-Oct-2026 (MasterID 900037, line upgold03…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:59  Recorder: Journal OLD-037 of 01-Oct-2026 (MasterID 900038, line upgold03…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:59  Recorder: Journal OLD-039 of 01-Oct-2026 (MasterID 900040, line upgold03…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:59  Recorder: Journal OLD-040 of 01-Oct-2026 (MasterID 900041, line upgold04…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:59  Recorder: Journal OLD-041 of 01-Oct-2026 (MasterID 900042, line upgold04…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:59  Recorder: Journal OLD-042 of 01-Oct-2026 (MasterID 900043, line upgold04…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:59  Recorder: Journal OLD-044 of 01-Oct-2026 (MasterID 900045, line upgold04…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:48:59  Recorder: held lines: 0 from FinCom, 10 asked, 0 resolved, 20 still held (20 in the list)
+  bridge log: 2026-10-09 13:48:59  Recorder: Journal OLD-023 of 01-Oct-2026 (MasterID 900024, line upgold02…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:59  Recorder: Journal OLD-023 of 01-Oct-2026 (MasterID 900024, line upgold02…): still held: Tally gave no voucher with MasterID 900024 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:59  Recorder: Journal OLD-045 of 01-Oct-2026 (MasterID 900046, line upgold04…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:48:59  Recorder: Journal OLD-045 of 01-Oct-2026 (MasterID 900046, line upgold04…): still held: Tally gave no voucher with MasterID 900046 on 01-Oct-2026
+  bridge log: 2026-10-09 13:48:59  Recorder: Journal OLD-046 of 01-Oct-2026 (MasterID 900047, line upgold04…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:49:00  Recorder: Journal OLD-046 of 01-Oct-2026 (MasterID 900047, line upgold04…): still held: Tally gave no voucher with MasterID 900047 on 01-Oct-2026
+  bridge log: 2026-10-09 13:49:00  Recorder: Journal OLD-047 of 01-Oct-2026 (MasterID 900048, line upgold04…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:49:00  Recorder: entry fetch of FinCom Spike Co: answered in 26 ms
+  bridge log: 2026-10-09 13:49:00  Recorder: Journal OLD-047 of 01-Oct-2026 (MasterID 900048, line upgold04…): still held: Tally gave no voucher with MasterID 900048 on 01-Oct-2026
+  bridge log: 2026-10-09 13:49:00  Recorder: Journal OLD-049 of 01-Oct-2026 (MasterID 900050, line upgold04…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:49:00  Recorder: Journal OLD-049 of 01-Oct-2026 (MasterID 900050, line upgold04…): still held: Tally gave no voucher with MasterID 900050 on 01-Oct-2026
+  bridge log: 2026-10-09 13:49:00  Recorder: Journal OLD-023 of 01-Oct-2026 (MasterID 900024, line upgold02…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:49:00  Recorder: Journal OLD-045 of 01-Oct-2026 (MasterID 900046, line upgold04…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:49:00  Recorder: Journal OLD-046 of 01-Oct-2026 (MasterID 900047, line upgold04…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:49:00  Recorder: Journal OLD-047 of 01-Oct-2026 (MasterID 900048, line upgold04…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:49:00  Recorder: Journal OLD-049 of 01-Oct-2026 (MasterID 900050, line upgold04…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:49:00  Recorder: held lines: 0 from FinCom, 5 asked, 0 resolved, 10 still held (10 in the list)
+  bridge log: 2026-10-09 13:49:00  Recorder: Journal OLD-028 of 01-Oct-2026 (MasterID 900029, line upgold02…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:49:01  Recorder: Journal OLD-028 of 01-Oct-2026 (MasterID 900029, line upgold02…): still held: Tally gave no voucher with MasterID 900029 on 01-Oct-2026
+  bridge log: 2026-10-09 13:49:01  Recorder: Journal OLD-028 of 01-Oct-2026 (MasterID 900029, line upgold02…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:49:01  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 5 still held (5 in the list)
+  bridge log: 2026-10-09 13:49:01  Recorder: Journal OLD-033 of 01-Oct-2026 (MasterID 900034, line upgold03…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:49:01  Recorder: Journal OLD-033 of 01-Oct-2026 (MasterID 900034, line upgold03…): still held: Tally gave no voucher with MasterID 900034 on 01-Oct-2026
+  bridge log: 2026-10-09 13:49:01  Recorder: Journal OLD-033 of 01-Oct-2026 (MasterID 900034, line upgold03…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:49:01  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 4 still held (4 in the list)
+  bridge log: 2026-10-09 13:49:01  Recorder: Journal OLD-038 of 01-Oct-2026 (MasterID 900039, line upgold03…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:49:01  Recorder: Journal OLD-038 of 01-Oct-2026 (MasterID 900039, line upgold03…): still held: Tally gave no voucher with MasterID 900039 on 01-Oct-2026
+  bridge log: 2026-10-09 13:49:01  Recorder: Journal OLD-038 of 01-Oct-2026 (MasterID 900039, line upgold03…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:49:01  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 3 still held (3 in the list)
+  bridge log: 2026-10-09 13:49:01  Recorder: Journal OLD-043 of 01-Oct-2026 (MasterID 900044, line upgold04…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:49:02  Recorder: Journal OLD-043 of 01-Oct-2026 (MasterID 900044, line upgold04…): still held: Tally gave no voucher with MasterID 900044 on 01-Oct-2026
+  bridge log: 2026-10-09 13:49:02  Recorder: Journal OLD-043 of 01-Oct-2026 (MasterID 900044, line upgold04…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:49:02  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 2 still held (2 in the list)
+  bridge log: 2026-10-09 13:49:02  Recorder: Journal OLD-048 of 01-Oct-2026 (MasterID 900049, line upgold04…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+  bridge log: 2026-10-09 13:49:02  Recorder: entry fetch of FinCom Spike Co: answered in 18 ms
+  bridge log: 2026-10-09 13:49:02  Recorder: Journal OLD-048 of 01-Oct-2026 (MasterID 900049, line upgold04…): still held: Tally gave no voucher with MasterID 900049 on 01-Oct-2026
+  bridge log: 2026-10-09 13:49:02  Recorder: Journal OLD-048 of 01-Oct-2026 (MasterID 900049, line upgold04…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+  bridge log: 2026-10-09 13:49:02  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 1 still held (1 in the list)
+  INFO add-on: recorder files after start: none
+[13:49:27] ---- upg: 2.4.0 over a running 2.3.3
+  INFO upg: the bridge before the upgrade: version 2.4.0 (expected 2.4.0), port 9100
+  INFO upg: 2.4.0 recorded the starting point: True
+[shot] tds-001-gw0 (1024x768)
+[13:49:31] [tds] screen tds-001-gw0 : TallyPrime MANAGE bl EDU 5: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Unity Y: Data Z: Exchange CURRENT OATE Wednesday, I-Apr-2026 upr-26 Search O: Import E: Export M: Share p: print Fl: Help Date Company Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit to ru on_id cc67- oc93b rches cc67- oc93b .337. id" : " ening latio 8b941 ing j ce_co 08086 efe57 obNam Mode Q Windows Server 2025 Data...
+[VAll] 2 vouchers: 1/1/Journal/20260401/spike TDSDesk:test-1, 2/2/Journal/20261001/renum before the bridge
+[keys] 'v' -> Tally 'TallyPrime:9000'
+[shot] v-upg-s0-vouchers (1024x768)
+[keys] '{F6}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] 'Cash{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] 'Spike Income{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '701{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] v-upg-s0-saved (1024x768)
+[shot] tds-002-gw0 (1024x768)
+[13:50:05] [tds] screen tds-002-gw0 : TallyPrime MANAGE bl EDU 5: Company Y: Data Z: Exchange A Accept Search O: Import E: Export M: Share Accounting Voucher Creation Recei t No. 2 Account Current balance: Particulars Narration: Quit FinCom • ke Co p: print x 2-Oct-26 Friday Amount Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment to ru on_id cc67- oc93b rches cc67- oc93b .337. id" : " ening latio 8b941 ing j ce_co 08086 efe57 obNam Unity D: Delete x: Cancel Vch Q El 2: Configure Mode Wind...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-003-gw1 (1024x768)
+[13:50:09] [tds] screen tds-003-gw1 : TallyPrime MANAGE bl EDU 5: Company Y: Data Q Z: Exchange A: Accept Search O: Import E: Export M: Share Accounting Voucher Creation Recei t No. 2 Account Current balance: Particulars Narration: Q: Quit FinCom p: print x 2-Oct-26 Friday Amount Quit o Yes or No Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated J: Stat ¯ Adjustment to ru on_id cc67- oc93b rches cc67- oc93b .337. id" : " ening latio 8b941 ing j ce_co 08086 efe57 obNam Unity D: Delete X...
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[shot] tds-004-gw2 (1024x768)
+[13:50:13] [tds] screen tds-004-gw2 : TallyPrime MANAGE bl EDU 5: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Unity * (e) Data exceptions exist Y: Data Z: Exchange CURRENT OATE Friday, 2-Oct-2026 2-Oct-26 Search O: Import E: Export M: Share p: print Fl: Help Date Company Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit to ru on_id cc67- oc93b rches cc67- oc93b .337. id" : " ening latio 8b941 ing j ce_co 08086 efe57 obNam Mode...
+[VAll] 3 vouchers: 1/1/Journal/20260401/spike TDSDesk:test-1, 2/2/Journal/20261001/renum before the bridge, 3/3/Receipt/20261002/
+  INFO upg: S0 (mid 3, c8d27f93-111c-45e4-8c12-1b6c2635901f-00000003) under 2.3.3: in the stub with its body at 13:50:00
+[shot] tds-005-gw0 (1024x768)
+[13:50:15] [tds] screen tds-005-gw0 : TallyPrime MANAGE bl EDU 5: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Unity * (e) Data exceptions exist Y: Data Z: Exchange CURRENT OATE Friday, 2-Oct-2026 2-Oct-26 Search O: Import E: Export M: Share p: print Fl: Help Date Company Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit to ru on_id cc67- oc93b rches cc67- oc93b .337. id" : " ening latio 8b941 ing j ce_co 08086 efe57 obNam Mode...
+[VAll] 3 vouchers: 1/1/Journal/20260401/spike TDSDesk:test-1, 2/2/Journal/20261001/renum before the bridge, 3/3/Receipt/20261002/
+[keys] 'v' -> Tally 'TallyPrime:9000'
+[shot] v-upg-s1-vouchers (1024x768)
+[keys] '{F6}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] 'Cash{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] 'Spike Income{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '702{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] v-upg-s1-saved (1024x768)
+[shot] tds-006-gw0 (1024x768)
+[13:50:50] [tds] screen tds-006-gw0 : TallyPrime MANAGE bl EDU 5: Company Y: Data Z: Exchange A Accept Search O: Import E: Export M: Share Accounting Voucher Creation Recei t Account Current balance: Particulars Narration: Quit FinCom • ke Co p: print x 2-Oct-26 Friday Amount Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment to ru on_id cc67- oc93b rches cc67- oc93b .337. id" : " ening latio 8b941 ing j ce_co 08086 efe57 obNam Unity D: Delete x: Cancel Vch Q El 2: Configure Mode Windows Se...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-007-gw1 (1024x768)
+[13:50:53] [tds] screen tds-007-gw1 : TallyPrime MANAGE bl EDU 5: Company Y: Data Q Z: Exchange A: Accept Search O: Import E: Export M: Share Accounting Voucher Creation Recei t Account Current balance: Particulars Narration: Q: Quit FinCom p: print x 2-Oct-26 Friday Amount Quit o Yes or No Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated J: Stat ¯ Adjustment to ru on_id cc67- oc93b rches cc67- oc93b .337. id" : " ening latio 8b941 ing j ce_co 08086 efe57 obNam Unity D: Delete X: Canc...
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[shot] tds-008-gw2 (1024x768)
+[13:50:57] [tds] screen tds-008-gw2 : TallyPrime MANAGE bl EDU 5: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Unity * (e) Data exceptions exist Y: Data Z: Exchange CURRENT OATE Friday, 2-Oct-2026 2-Oct-26 Search O: Import E: Export M: Share p: print Fl: Help Date Company Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit to ru on_id cc67- oc93b rches cc67- oc93b .337. id" : " ening latio 8b941 ing j ce_co 08086 efe57 obNam Mode...
+[VAll] 4 vouchers: 1/1/Journal/20260401/spike TDSDesk:test-1, 2/2/Journal/20261001/renum before the bridge, 3/3/Receipt/20261002/, 4/4/Receipt/20261002/
+  INFO upg: 0 lines held by 2.3.3 at the upgrade; running FinComBridge-Setup-2.4.1.exe (setup origin: BUILT from source dist/FinComBridge-Setup-2.4.1.exe SHA-256 35ed468d5a9fac868eaabf09054b37e909767652c12857e8ee0c80065734f5d7) over it
+  INFO upg: the new setup ended with 0
+######## PASS u1 2.4.1 installed over 2.4.0: the version and the settings carried: before: 2.4.0 on port 9100; the setup FinComBridge-Setup-2.4.1.exe ended 0; after: version 2.4.1 on port 9100; settings changed: none (port, key, cloud, Tally ports and host kept)
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-upg-addon240-started (1024x768)
+[13:51:57] proxy 127.0.0.2:9000 -> Tally: True (HTTP 200, pid 4884)
+[13:51:57] Tally started again (addon240, add-on C:\fcspike\FinComRecorder.tdl): pid 2800, port up True, proxy True
+[shot] tds-009-gw0 (1024x768)
+[13:51:58] [tds] screen tds-009-gw0 : TallyPrime MANAGE bl EDU 5: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Unity * (e) Data exceptions exist Y: Data Z: Exchange CURRENT OATE Friday, 2-Oct-2026 2-Oct-26 Search O: Import E: Export M: Share p: print Fl: Help Date Company Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit to ru on_id cc67- oc93b rches cc67- oc93b .337. id" : " ening latio 8b941 ing j ce_co 08086 efe57 obNam Mode...
+[VAll] 4 vouchers: 1/1/Journal/20260401/spike TDSDesk:test-1, 2/2/Journal/20261001/renum before the bridge, 3/3/Receipt/20261002/, 4/4/Receipt/20261002/
+[keys] 'v' -> Tally 'TallyPrime:9000'
+[shot] v-upg-s2-vouchers (1024x768)
+[keys] '{F6}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] 'Cash{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] 'Spike Income{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '703{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] v-upg-s2-saved (1024x768)
+[shot] tds-010-gw0 (1024x768)
+[13:52:33] [tds] screen tds-010-gw0 : TallyPrime MANAGE bl EDU 5: Company Y: Data Z: Exchange A Accept Search O: Import E: Export M: Share Accounting Voucher Creation Recei t No. 4 Account Current balance: Particulars Narration: Quit FinCom • ke Co p: print x 2-Oct-26 Friday Amount Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment to ru on_id cc67- oc93b rches cc67- oc93b .337. id" : " ening latio 8b941 ing j ce_co 08086 efe57 obNam Unity D: Delete x: Cancel Vch Q El 2: Configure Mode Wind...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-011-gw1 (1024x768)
+[13:52:36] [tds] screen tds-011-gw1 : TallyPrime MANAGE bl EDU 5: Company Y: Data Q Z: Exchange A: Accept Search O: Import E: Export M: Share Accounting Voucher Creation Recei t No. 4 Account Current balance: Particulars Narration: Q: Quit FinCom p: print x 2-Oct-26 Friday Amount Quit o Yes or No Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated J: Stat ¯ Adjustment to ru on_id cc67- oc93b rches cc67- oc93b .337. id" : " ening latio 8b941 ing j ce_co 08086 efe57 obNam Unity D: Delete X...
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[shot] tds-012-gw2 (1024x768)
+[13:52:40] [tds] screen tds-012-gw2 : TallyPrime MANAGE bl EDU 5: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Unity * (e) Data exceptions exist Y: Data Z: Exchange CURRENT OATE Friday, 2-Oct-2026 2-Oct-26 Search O: Import E: Export M: Share p: print Fl: Help Date Company Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit to ru on_id cc67- oc93b rches cc67- oc93b .337. id" : " ening latio 8b941 ing j ce_co 08086 efe57 obNam Mode...
+[VAll] 5 vouchers: 1/1/Journal/20260401/spike TDSDesk:test-1, 2/2/Journal/20261001/renum before the bridge, 3/3/Receipt/20261002/, 4/4/Receipt/20261002/, 5/5/Receipt/20261002/
+######## FAIL u2 the recorder state carried: nothing sent twice, nothing lost: start-point.json the same after the upgrade: True; S0 (2.3.3's, mid 3) sent again by 2.4.0: 1; the ids 2.3.3 ended sent again: 0; S1 (saved just before the upgrade, mid 4): lines 1, with its body 1 (stub 13:50:45 recorder line event=created guid=c8d27f93-111c-45e4-8c12-1b6c2635901f-00000004 mid=4 aid=4 vch=Receipt/2/20261002 body=yes(876 chars))
+######## PASS u3 held lines from 2.4.0: each asked once in all and ended: 50 seeded lines (final 10, plain 20, refetch 10, tries20 10); held by 2.4.0 at the upgrade: 0; asked again by 2.4.1 though 2.4.0 had ended them: 0; each asked once in all and ended: 50; not so: none; lost: none
+######## PASS u4 a new save after the upgrade arrives with its body: S2 mid 5 guid c8d27f93-111c-45e4-8c12-1b6c2635901f-00000005: stub 13:52:28 recorder line event=created guid=c8d27f93-111c-45e4-8c12-1b6c2635901f-00000005 mid=5 aid=5 vch=Receipt/3/20261002 body=yes(876 chars) data_id 24a82933860657e3; the add-on's files written after the upgrade: c8d27f93-111c-45e4-8c12-1b6c2635901f-9-Oct-26-runneradmin.txt
+  bridge log: 2026-10-09 13:50:00  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line 8cc16cf7…): asking Tally by MasterID
+  bridge log: 2026-10-09 13:50:00  Recorder: entry fetch of FinCom Spike Co: answered in 19 ms
+  bridge log: 2026-10-09 13:50:00  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line 8cc16cf7…): taken: Tally's GUID c8d27f93-111c-45e4-8c12-1b6c2635901f-00000003, AlterID 3
+  bridge log: 2026-10-09 13:50:00  Renumbering: made Receipt 1 of 02-Oct-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
+  bridge log: 2026-10-09 13:50:45  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 4, line 5b6feab7…): asking Tally by MasterID
+  bridge log: 2026-10-09 13:50:45  Recorder: entry fetch of FinCom Spike Co: answered in 33 ms
+  bridge log: 2026-10-09 13:50:45  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 4, line 5b6feab7…): taken: Tally's GUID c8d27f93-111c-45e4-8c12-1b6c2635901f-00000004, AlterID 4
+  bridge log: 2026-10-09 13:50:45  Renumbering: made Receipt 2 of 02-Oct-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
+  bridge log: 2026-10-09 13:50:58  Stopping: asked to (setup or uninstall)
+  bridge log: 2026-10-09 13:51:05  FinCom Bridge 2.4.1: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+  bridge log: 2026-10-09 13:51:05  FinCom Bridge 2.4.1 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+  bridge log: 2026-10-09 13:51:05  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 19:00)
+  bridge log: 2026-10-09 13:51:05  Recorder: re-scan of the add-on's files for 2.4.1: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+  bridge log: 2026-10-09 13:51:05  Check:  - 
+  bridge log: 2026-10-09 13:51:08  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+  bridge log: 2026-10-09 13:51:08  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+  bridge log: 2026-10-09 13:51:08  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=4, ALTMSTID=209
+  bridge log: 2026-10-09 13:51:08  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=2; now ALTVCHID=4, ALTMSTID=209
+  bridge log: 2026-10-09 13:51:08  Bank dates: FinCom Spike Co: Tally's voucher counter moved with no add-on line for 2 entries (a bank date set in Bank Reconciliation, or another change Tally makes without a voucher form); each is read again from Tally
+  bridge log: 2026-10-09 13:51:09  Recorder: entry fetch of FinCom Spike Co: answered in 27 ms
+  bridge log: 2026-10-09 13:51:09  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line 27a40370…): taken: Tally's GUID c8d27f93-111c-45e4-8c12-1b6c2635901f-00000003, AlterID 3
+  bridge log: 2026-10-09 13:51:09  Recorder: entry fetch of FinCom Spike Co: answered in 10 ms
+  bridge log: 2026-10-09 13:51:09  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 4, line a488a3e4…): taken: Tally's GUID c8d27f93-111c-45e4-8c12-1b6c2635901f-00000004, AlterID 4
+  bridge log: 2026-10-09 13:52:27  Recorder: Receipt 3 of 02-Oct-2026 (MasterID 5, line a4ed888e…): asking Tally by MasterID
+  bridge log: 2026-10-09 13:52:28  Recorder: entry fetch of FinCom Spike Co: answered in 19 ms
+  bridge log: 2026-10-09 13:52:28  Recorder: Receipt 3 of 02-Oct-2026 (MasterID 5, line a4ed888e…): taken: Tally's GUID c8d27f93-111c-45e4-8c12-1b6c2635901f-00000005, AlterID 5
+  bridge log: 2026-10-09 13:52:28  Renumbering: made Receipt 3 of 02-Oct-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it

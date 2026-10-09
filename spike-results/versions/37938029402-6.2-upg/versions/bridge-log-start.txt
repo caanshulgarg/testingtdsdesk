@@ -1,0 +1,227 @@
+2026-10-09 13:48:17  FinCom Bridge 2.4.0: started just for runnervmfi6oq\runneradmin (no service); it keeps the bridge and its icon running
+2026-10-09 13:48:17  FinCom Bridge 2.4.0 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+2026-10-09 13:48:17  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 19:00)
+2026-10-09 13:48:17  Recorder: 50 held line(s) kept by an earlier bridge are asked once with the fast request (whatever their earlier tries): answered, each goes to FinCom with Tally's body; else it ends with the Day Book words
+2026-10-09 13:48:17  Recorder: re-scan of the add-on's files for 2.4.0: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+2026-10-09 13:48:17  Check:  - 
+2026-10-09 13:48:20  Tray icon: set to show next to the clock always (Windows 11)
+2026-10-09 13:48:20  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+2026-10-09 13:48:20  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+2026-10-09 13:48:20  Company FinCom Spike Co: its Tally GUID 60a31207-7a4a-4dcf-a488-cf004d1da503 is held from now on
+2026-10-09 13:48:20  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=2, ALTMSTID=211 (reading is prospective only: the bridge follows what changes after this)
+2026-10-09 13:48:20  Recorder: Journal OLD-011 of 01-Oct-2026 (MasterID 900012, line upgold01…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-012 of 01-Oct-2026 (MasterID 900013, line upgold01…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=2, ALTMSTID=211
+2026-10-09 13:48:20  Recorder: Journal OLD-013 of 01-Oct-2026 (MasterID 900014, line upgold01…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=2, ALTMSTID=211)
+2026-10-09 13:48:20  Recorder: Journal OLD-014 of 01-Oct-2026 (MasterID 900015, line upgold01…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-015 of 01-Oct-2026 (MasterID 900016, line upgold01…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Bank dates: FinCom Spike Co: following Tally's voucher counter from ALTVCHID=2 (a move the add-on's lines do not explain is a bank date set, or another change Tally makes without a voucher form)
+2026-10-09 13:48:20  Recorder: Journal OLD-016 of 01-Oct-2026 (MasterID 900017, line upgold01…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-017 of 01-Oct-2026 (MasterID 900018, line upgold01…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-018 of 01-Oct-2026 (MasterID 900019, line upgold01…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-019 of 01-Oct-2026 (MasterID 900020, line upgold01…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-020 of 01-Oct-2026 (MasterID 900021, line upgold02…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-021 of 01-Oct-2026 (MasterID 900022, line upgold02…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-022 of 01-Oct-2026 (MasterID 900023, line upgold02…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-023 of 01-Oct-2026 (MasterID 900024, line upgold02…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-024 of 01-Oct-2026 (MasterID 900025, line upgold02…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-025 of 01-Oct-2026 (MasterID 900026, line upgold02…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-026 of 01-Oct-2026 (MasterID 900027, line upgold02…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-027 of 01-Oct-2026 (MasterID 900028, line upgold02…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-028 of 01-Oct-2026 (MasterID 900029, line upgold02…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-029 of 01-Oct-2026 (MasterID 900030, line upgold02…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-030 of 01-Oct-2026 (MasterID 900031, line upgold03…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-031 of 01-Oct-2026 (MasterID 900032, line upgold03…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-032 of 01-Oct-2026 (MasterID 900033, line upgold03…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-033 of 01-Oct-2026 (MasterID 900034, line upgold03…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-034 of 01-Oct-2026 (MasterID 900035, line upgold03…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-035 of 01-Oct-2026 (MasterID 900036, line upgold03…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-036 of 01-Oct-2026 (MasterID 900037, line upgold03…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-037 of 01-Oct-2026 (MasterID 900038, line upgold03…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-038 of 01-Oct-2026 (MasterID 900039, line upgold03…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-039 of 01-Oct-2026 (MasterID 900040, line upgold03…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-040 of 01-Oct-2026 (MasterID 900041, line upgold04…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-041 of 01-Oct-2026 (MasterID 900042, line upgold04…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-042 of 01-Oct-2026 (MasterID 900043, line upgold04…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-043 of 01-Oct-2026 (MasterID 900044, line upgold04…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-044 of 01-Oct-2026 (MasterID 900045, line upgold04…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-045 of 01-Oct-2026 (MasterID 900046, line upgold04…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-046 of 01-Oct-2026 (MasterID 900047, line upgold04…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-047 of 01-Oct-2026 (MasterID 900048, line upgold04…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-048 of 01-Oct-2026 (MasterID 900049, line upgold04…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-049 of 01-Oct-2026 (MasterID 900050, line upgold04…): not asked this turn: 10 held lines asked already; asked in a later turn
+2026-10-09 13:48:20  Recorder: Journal OLD-000 of 01-Oct-2026 (MasterID 900001, line upgold00…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:21  Recorder: entry fetch of FinCom Spike Co: answered in 4 ms
+2026-10-09 13:48:21  Recorder: Journal OLD-000 of 01-Oct-2026 (MasterID 900001, line upgold00…): still held: Tally gave no voucher with MasterID 900001 on 01-Oct-2026
+2026-10-09 13:48:21  Recorder: Journal OLD-001 of 01-Oct-2026 (MasterID 900002, line upgold00…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:21  Recorder: entry fetch of FinCom Spike Co: answered in 13 ms
+2026-10-09 13:48:21  Recorder: Journal OLD-001 of 01-Oct-2026 (MasterID 900002, line upgold00…): still held: Tally gave no voucher with MasterID 900002 on 01-Oct-2026
+2026-10-09 13:48:21  Recorder: Journal OLD-002 of 01-Oct-2026 (MasterID 900003, line upgold00…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:21  Recorder: entry fetch of FinCom Spike Co: answered in 24 ms
+2026-10-09 13:48:21  Recorder: Journal OLD-002 of 01-Oct-2026 (MasterID 900003, line upgold00…): still held: Tally gave no voucher with MasterID 900003 on 01-Oct-2026
+2026-10-09 13:48:21  Recorder: Journal OLD-003 of 01-Oct-2026 (MasterID 900004, line upgold00…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:22  Recorder: entry fetch of FinCom Spike Co: answered in 14 ms
+2026-10-09 13:48:22  Recorder: Journal OLD-003 of 01-Oct-2026 (MasterID 900004, line upgold00…): still held: Tally gave no voucher with MasterID 900004 on 01-Oct-2026
+2026-10-09 13:48:22  Recorder: Journal OLD-004 of 01-Oct-2026 (MasterID 900005, line upgold00…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:22  Recorder: entry fetch of FinCom Spike Co: answered in 22 ms
+2026-10-09 13:48:22  Recorder: Journal OLD-004 of 01-Oct-2026 (MasterID 900005, line upgold00…): still held: Tally gave no voucher with MasterID 900005 on 01-Oct-2026
+2026-10-09 13:48:22  Recorder: Journal OLD-005 of 01-Oct-2026 (MasterID 900006, line upgold00…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:22  Recorder: entry fetch of FinCom Spike Co: answered in 3 ms
+2026-10-09 13:48:22  Recorder: Journal OLD-005 of 01-Oct-2026 (MasterID 900006, line upgold00…): still held: Tally gave no voucher with MasterID 900006 on 01-Oct-2026
+2026-10-09 13:48:22  Recorder: Journal OLD-006 of 01-Oct-2026 (MasterID 900007, line upgold00…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:23  Recorder: entry fetch of FinCom Spike Co: answered in 21 ms
+2026-10-09 13:48:23  Recorder: Journal OLD-006 of 01-Oct-2026 (MasterID 900007, line upgold00…): still held: Tally gave no voucher with MasterID 900007 on 01-Oct-2026
+2026-10-09 13:48:23  Recorder: Journal OLD-007 of 01-Oct-2026 (MasterID 900008, line upgold00…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:23  Recorder: entry fetch of FinCom Spike Co: answered in 23 ms
+2026-10-09 13:48:23  Recorder: Journal OLD-007 of 01-Oct-2026 (MasterID 900008, line upgold00…): still held: Tally gave no voucher with MasterID 900008 on 01-Oct-2026
+2026-10-09 13:48:23  Recorder: Journal OLD-009 of 01-Oct-2026 (MasterID 900010, line upgold00…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:24  Recorder: Journal OLD-009 of 01-Oct-2026 (MasterID 900010, line upgold00…): still held: Tally gave no voucher with MasterID 900010 on 01-Oct-2026
+2026-10-09 13:48:24  Recorder: Journal OLD-010 of 01-Oct-2026 (MasterID 900011, line upgold01…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:24  Recorder: Journal OLD-010 of 01-Oct-2026 (MasterID 900011, line upgold01…): still held: Tally gave no voucher with MasterID 900011 on 01-Oct-2026
+2026-10-09 13:48:24  Recorder: Journal OLD-000 of 01-Oct-2026 (MasterID 900001, line upgold00…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:24  Recorder: Journal OLD-001 of 01-Oct-2026 (MasterID 900002, line upgold00…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:24  Recorder: Journal OLD-002 of 01-Oct-2026 (MasterID 900003, line upgold00…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:24  Recorder: Journal OLD-003 of 01-Oct-2026 (MasterID 900004, line upgold00…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:24  Recorder: Journal OLD-004 of 01-Oct-2026 (MasterID 900005, line upgold00…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:24  Recorder: Journal OLD-005 of 01-Oct-2026 (MasterID 900006, line upgold00…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:24  Recorder: Journal OLD-006 of 01-Oct-2026 (MasterID 900007, line upgold00…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:24  Recorder: Journal OLD-007 of 01-Oct-2026 (MasterID 900008, line upgold00…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:24  Recorder: Journal OLD-009 of 01-Oct-2026 (MasterID 900010, line upgold00…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:24  Recorder: Journal OLD-010 of 01-Oct-2026 (MasterID 900011, line upgold01…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:24  Recorder: held lines: 0 from FinCom, 10 asked, 0 resolved, 50 still held (50 in the list)
+2026-10-09 13:48:24  Recorder: Journal OLD-008 of 01-Oct-2026 (MasterID 900009, line upgold00…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:24  Recorder: Journal OLD-008 of 01-Oct-2026 (MasterID 900009, line upgold00…): still held: Tally gave no voucher with MasterID 900009 on 01-Oct-2026
+2026-10-09 13:48:24  Recorder: Journal OLD-011 of 01-Oct-2026 (MasterID 900012, line upgold01…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:25  Recorder: Journal OLD-011 of 01-Oct-2026 (MasterID 900012, line upgold01…): still held: Tally gave no voucher with MasterID 900012 on 01-Oct-2026
+2026-10-09 13:48:25  Recorder: Journal OLD-012 of 01-Oct-2026 (MasterID 900013, line upgold01…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:25  Recorder: Journal OLD-012 of 01-Oct-2026 (MasterID 900013, line upgold01…): still held: Tally gave no voucher with MasterID 900013 on 01-Oct-2026
+2026-10-09 13:48:25  Recorder: Journal OLD-014 of 01-Oct-2026 (MasterID 900015, line upgold01…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:25  Recorder: Journal OLD-014 of 01-Oct-2026 (MasterID 900015, line upgold01…): still held: Tally gave no voucher with MasterID 900015 on 01-Oct-2026
+2026-10-09 13:48:25  Recorder: Journal OLD-015 of 01-Oct-2026 (MasterID 900016, line upgold01…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:26  Recorder: entry fetch of FinCom Spike Co: answered in 28 ms
+2026-10-09 13:48:26  Recorder: Journal OLD-015 of 01-Oct-2026 (MasterID 900016, line upgold01…): still held: Tally gave no voucher with MasterID 900016 on 01-Oct-2026
+2026-10-09 13:48:26  Recorder: Journal OLD-016 of 01-Oct-2026 (MasterID 900017, line upgold01…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:26  Recorder: Journal OLD-016 of 01-Oct-2026 (MasterID 900017, line upgold01…): still held: Tally gave no voucher with MasterID 900017 on 01-Oct-2026
+2026-10-09 13:48:26  Recorder: Journal OLD-017 of 01-Oct-2026 (MasterID 900018, line upgold01…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:26  Recorder: entry fetch of FinCom Spike Co: answered in 15 ms
+2026-10-09 13:48:26  Recorder: Journal OLD-017 of 01-Oct-2026 (MasterID 900018, line upgold01…): still held: Tally gave no voucher with MasterID 900018 on 01-Oct-2026
+2026-10-09 13:48:26  Recorder: Journal OLD-019 of 01-Oct-2026 (MasterID 900020, line upgold01…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:27  Recorder: Journal OLD-019 of 01-Oct-2026 (MasterID 900020, line upgold01…): still held: Tally gave no voucher with MasterID 900020 on 01-Oct-2026
+2026-10-09 13:48:27  Recorder: Journal OLD-020 of 01-Oct-2026 (MasterID 900021, line upgold02…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:27  Recorder: Journal OLD-020 of 01-Oct-2026 (MasterID 900021, line upgold02…): still held: Tally gave no voucher with MasterID 900021 on 01-Oct-2026
+2026-10-09 13:48:27  Recorder: Journal OLD-021 of 01-Oct-2026 (MasterID 900022, line upgold02…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:27  Recorder: Journal OLD-021 of 01-Oct-2026 (MasterID 900022, line upgold02…): still held: Tally gave no voucher with MasterID 900022 on 01-Oct-2026
+2026-10-09 13:48:27  Recorder: Journal OLD-008 of 01-Oct-2026 (MasterID 900009, line upgold00…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:27  Recorder: Journal OLD-011 of 01-Oct-2026 (MasterID 900012, line upgold01…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:27  Recorder: Journal OLD-012 of 01-Oct-2026 (MasterID 900013, line upgold01…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:27  Recorder: Journal OLD-014 of 01-Oct-2026 (MasterID 900015, line upgold01…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:27  Recorder: Journal OLD-015 of 01-Oct-2026 (MasterID 900016, line upgold01…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:27  Recorder: Journal OLD-016 of 01-Oct-2026 (MasterID 900017, line upgold01…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:27  Recorder: Journal OLD-017 of 01-Oct-2026 (MasterID 900018, line upgold01…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:27  Recorder: Journal OLD-019 of 01-Oct-2026 (MasterID 900020, line upgold01…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:27  Recorder: Journal OLD-020 of 01-Oct-2026 (MasterID 900021, line upgold02…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:27  Recorder: Journal OLD-021 of 01-Oct-2026 (MasterID 900022, line upgold02…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:27  Recorder: held lines: 0 from FinCom, 10 asked, 0 resolved, 40 still held (40 in the list)
+2026-10-09 13:48:27  Recorder: Journal OLD-013 of 01-Oct-2026 (MasterID 900014, line upgold01…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:28  Recorder: Journal OLD-013 of 01-Oct-2026 (MasterID 900014, line upgold01…): still held: Tally gave no voucher with MasterID 900014 on 01-Oct-2026
+2026-10-09 13:48:28  Recorder: Journal OLD-022 of 01-Oct-2026 (MasterID 900023, line upgold02…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:28  Recorder: Journal OLD-022 of 01-Oct-2026 (MasterID 900023, line upgold02…): still held: Tally gave no voucher with MasterID 900023 on 01-Oct-2026
+2026-10-09 13:48:28  Recorder: Journal OLD-024 of 01-Oct-2026 (MasterID 900025, line upgold02…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:28  Recorder: Journal OLD-024 of 01-Oct-2026 (MasterID 900025, line upgold02…): still held: Tally gave no voucher with MasterID 900025 on 01-Oct-2026
+2026-10-09 13:48:28  Recorder: Journal OLD-025 of 01-Oct-2026 (MasterID 900026, line upgold02…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:29  Recorder: Journal OLD-025 of 01-Oct-2026 (MasterID 900026, line upgold02…): still held: Tally gave no voucher with MasterID 900026 on 01-Oct-2026
+2026-10-09 13:48:29  Recorder: Journal OLD-026 of 01-Oct-2026 (MasterID 900027, line upgold02…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:29  Recorder: Journal OLD-026 of 01-Oct-2026 (MasterID 900027, line upgold02…): still held: Tally gave no voucher with MasterID 900027 on 01-Oct-2026
+2026-10-09 13:48:29  Recorder: Journal OLD-027 of 01-Oct-2026 (MasterID 900028, line upgold02…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:29  Recorder: entry fetch of FinCom Spike Co: answered in 12 ms
+2026-10-09 13:48:29  Recorder: Journal OLD-027 of 01-Oct-2026 (MasterID 900028, line upgold02…): still held: Tally gave no voucher with MasterID 900028 on 01-Oct-2026
+2026-10-09 13:48:29  Recorder: Journal OLD-029 of 01-Oct-2026 (MasterID 900030, line upgold02…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:30  Recorder: Journal OLD-029 of 01-Oct-2026 (MasterID 900030, line upgold02…): still held: Tally gave no voucher with MasterID 900030 on 01-Oct-2026
+2026-10-09 13:48:30  Recorder: Journal OLD-030 of 01-Oct-2026 (MasterID 900031, line upgold03…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:30  Recorder: Journal OLD-030 of 01-Oct-2026 (MasterID 900031, line upgold03…): still held: Tally gave no voucher with MasterID 900031 on 01-Oct-2026
+2026-10-09 13:48:30  Recorder: Journal OLD-031 of 01-Oct-2026 (MasterID 900032, line upgold03…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:30  Recorder: Journal OLD-031 of 01-Oct-2026 (MasterID 900032, line upgold03…): still held: Tally gave no voucher with MasterID 900032 on 01-Oct-2026
+2026-10-09 13:48:30  Recorder: Journal OLD-032 of 01-Oct-2026 (MasterID 900033, line upgold03…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:31  Recorder: Journal OLD-032 of 01-Oct-2026 (MasterID 900033, line upgold03…): still held: Tally gave no voucher with MasterID 900033 on 01-Oct-2026
+2026-10-09 13:48:31  Recorder: Journal OLD-013 of 01-Oct-2026 (MasterID 900014, line upgold01…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:31  Recorder: Journal OLD-022 of 01-Oct-2026 (MasterID 900023, line upgold02…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:31  Recorder: Journal OLD-024 of 01-Oct-2026 (MasterID 900025, line upgold02…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:31  Recorder: Journal OLD-025 of 01-Oct-2026 (MasterID 900026, line upgold02…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:31  Recorder: Journal OLD-026 of 01-Oct-2026 (MasterID 900027, line upgold02…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:31  Recorder: Journal OLD-027 of 01-Oct-2026 (MasterID 900028, line upgold02…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:31  Recorder: Journal OLD-029 of 01-Oct-2026 (MasterID 900030, line upgold02…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:31  Recorder: Journal OLD-030 of 01-Oct-2026 (MasterID 900031, line upgold03…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:31  Recorder: Journal OLD-031 of 01-Oct-2026 (MasterID 900032, line upgold03…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:31  Recorder: Journal OLD-032 of 01-Oct-2026 (MasterID 900033, line upgold03…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:31  Recorder: held lines: 0 from FinCom, 10 asked, 0 resolved, 30 still held (30 in the list)
+2026-10-09 13:48:31  Recorder: Journal OLD-018 of 01-Oct-2026 (MasterID 900019, line upgold01…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:31  Recorder: Journal OLD-018 of 01-Oct-2026 (MasterID 900019, line upgold01…): still held: Tally gave no voucher with MasterID 900019 on 01-Oct-2026
+2026-10-09 13:48:31  Recorder: Journal OLD-034 of 01-Oct-2026 (MasterID 900035, line upgold03…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:31  Recorder: Journal OLD-034 of 01-Oct-2026 (MasterID 900035, line upgold03…): still held: Tally gave no voucher with MasterID 900035 on 01-Oct-2026
+2026-10-09 13:48:31  Recorder: Journal OLD-035 of 01-Oct-2026 (MasterID 900036, line upgold03…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:32  Recorder: Journal OLD-035 of 01-Oct-2026 (MasterID 900036, line upgold03…): still held: Tally gave no voucher with MasterID 900036 on 01-Oct-2026
+2026-10-09 13:48:32  Recorder: Journal OLD-036 of 01-Oct-2026 (MasterID 900037, line upgold03…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:32  Recorder: entry fetch of FinCom Spike Co: answered in 20 ms
+2026-10-09 13:48:32  Recorder: Journal OLD-036 of 01-Oct-2026 (MasterID 900037, line upgold03…): still held: Tally gave no voucher with MasterID 900037 on 01-Oct-2026
+2026-10-09 13:48:32  Recorder: Journal OLD-037 of 01-Oct-2026 (MasterID 900038, line upgold03…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:32  Recorder: entry fetch of FinCom Spike Co: answered in 16 ms
+2026-10-09 13:48:32  Recorder: Journal OLD-037 of 01-Oct-2026 (MasterID 900038, line upgold03…): still held: Tally gave no voucher with MasterID 900038 on 01-Oct-2026
+2026-10-09 13:48:32  Recorder: Journal OLD-039 of 01-Oct-2026 (MasterID 900040, line upgold03…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:33  Recorder: Journal OLD-039 of 01-Oct-2026 (MasterID 900040, line upgold03…): still held: Tally gave no voucher with MasterID 900040 on 01-Oct-2026
+2026-10-09 13:48:33  Recorder: Journal OLD-040 of 01-Oct-2026 (MasterID 900041, line upgold04…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:33  Recorder: Journal OLD-040 of 01-Oct-2026 (MasterID 900041, line upgold04…): still held: Tally gave no voucher with MasterID 900041 on 01-Oct-2026
+2026-10-09 13:48:33  Recorder: Journal OLD-041 of 01-Oct-2026 (MasterID 900042, line upgold04…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:33  Recorder: Journal OLD-041 of 01-Oct-2026 (MasterID 900042, line upgold04…): still held: Tally gave no voucher with MasterID 900042 on 01-Oct-2026
+2026-10-09 13:48:33  Recorder: Journal OLD-042 of 01-Oct-2026 (MasterID 900043, line upgold04…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:34  Recorder: Journal OLD-042 of 01-Oct-2026 (MasterID 900043, line upgold04…): still held: Tally gave no voucher with MasterID 900043 on 01-Oct-2026
+2026-10-09 13:48:34  Recorder: Journal OLD-044 of 01-Oct-2026 (MasterID 900045, line upgold04…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:34  Recorder: Journal OLD-044 of 01-Oct-2026 (MasterID 900045, line upgold04…): still held: Tally gave no voucher with MasterID 900045 on 01-Oct-2026
+2026-10-09 13:48:34  Recorder: Journal OLD-018 of 01-Oct-2026 (MasterID 900019, line upgold01…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:34  Recorder: Journal OLD-034 of 01-Oct-2026 (MasterID 900035, line upgold03…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:34  Recorder: Journal OLD-035 of 01-Oct-2026 (MasterID 900036, line upgold03…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:34  Recorder: Journal OLD-036 of 01-Oct-2026 (MasterID 900037, line upgold03…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:34  Recorder: Journal OLD-037 of 01-Oct-2026 (MasterID 900038, line upgold03…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:34  Recorder: Journal OLD-039 of 01-Oct-2026 (MasterID 900040, line upgold03…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:34  Recorder: Journal OLD-040 of 01-Oct-2026 (MasterID 900041, line upgold04…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:34  Recorder: Journal OLD-041 of 01-Oct-2026 (MasterID 900042, line upgold04…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:34  Recorder: Journal OLD-042 of 01-Oct-2026 (MasterID 900043, line upgold04…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:34  Recorder: Journal OLD-044 of 01-Oct-2026 (MasterID 900045, line upgold04…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:34  Recorder: held lines: 0 from FinCom, 10 asked, 0 resolved, 20 still held (20 in the list)
+2026-10-09 13:48:34  Recorder: Journal OLD-023 of 01-Oct-2026 (MasterID 900024, line upgold02…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:34  Recorder: Journal OLD-023 of 01-Oct-2026 (MasterID 900024, line upgold02…): still held: Tally gave no voucher with MasterID 900024 on 01-Oct-2026
+2026-10-09 13:48:34  Recorder: Journal OLD-045 of 01-Oct-2026 (MasterID 900046, line upgold04…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:35  Recorder: Journal OLD-045 of 01-Oct-2026 (MasterID 900046, line upgold04…): still held: Tally gave no voucher with MasterID 900046 on 01-Oct-2026
+2026-10-09 13:48:35  Recorder: Journal OLD-046 of 01-Oct-2026 (MasterID 900047, line upgold04…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:35  Recorder: Journal OLD-046 of 01-Oct-2026 (MasterID 900047, line upgold04…): still held: Tally gave no voucher with MasterID 900047 on 01-Oct-2026
+2026-10-09 13:48:35  Recorder: Journal OLD-047 of 01-Oct-2026 (MasterID 900048, line upgold04…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:35  Recorder: Journal OLD-047 of 01-Oct-2026 (MasterID 900048, line upgold04…): still held: Tally gave no voucher with MasterID 900048 on 01-Oct-2026
+2026-10-09 13:48:35  Recorder: Journal OLD-049 of 01-Oct-2026 (MasterID 900050, line upgold04…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:36  Recorder: Journal OLD-049 of 01-Oct-2026 (MasterID 900050, line upgold04…): still held: Tally gave no voucher with MasterID 900050 on 01-Oct-2026
+2026-10-09 13:48:36  Recorder: Journal OLD-023 of 01-Oct-2026 (MasterID 900024, line upgold02…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:36  Recorder: Journal OLD-045 of 01-Oct-2026 (MasterID 900046, line upgold04…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:36  Recorder: Journal OLD-046 of 01-Oct-2026 (MasterID 900047, line upgold04…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:36  Recorder: Journal OLD-047 of 01-Oct-2026 (MasterID 900048, line upgold04…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:36  Recorder: Journal OLD-049 of 01-Oct-2026 (MasterID 900050, line upgold04…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:36  Recorder: held lines: 0 from FinCom, 5 asked, 0 resolved, 10 still held (10 in the list)
+2026-10-09 13:48:36  Recorder: Journal OLD-028 of 01-Oct-2026 (MasterID 900029, line upgold02…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:36  Recorder: Journal OLD-028 of 01-Oct-2026 (MasterID 900029, line upgold02…): still held: Tally gave no voucher with MasterID 900029 on 01-Oct-2026
+2026-10-09 13:48:36  Recorder: Journal OLD-028 of 01-Oct-2026 (MasterID 900029, line upgold02…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:36  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 5 still held (5 in the list)
+2026-10-09 13:48:36  Recorder: Journal OLD-033 of 01-Oct-2026 (MasterID 900034, line upgold03…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:36  Recorder: Journal OLD-033 of 01-Oct-2026 (MasterID 900034, line upgold03…): still held: Tally gave no voucher with MasterID 900034 on 01-Oct-2026
+2026-10-09 13:48:36  Recorder: Journal OLD-033 of 01-Oct-2026 (MasterID 900034, line upgold03…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:36  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 4 still held (4 in the list)
+2026-10-09 13:48:36  Recorder: Journal OLD-038 of 01-Oct-2026 (MasterID 900039, line upgold03…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:37  Recorder: entry fetch of FinCom Spike Co: answered in 18 ms
+2026-10-09 13:48:37  Recorder: Journal OLD-038 of 01-Oct-2026 (MasterID 900039, line upgold03…): still held: Tally gave no voucher with MasterID 900039 on 01-Oct-2026
+2026-10-09 13:48:37  Recorder: Journal OLD-038 of 01-Oct-2026 (MasterID 900039, line upgold03…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:37  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 3 still held (3 in the list)
+2026-10-09 13:48:37  Recorder: Journal OLD-043 of 01-Oct-2026 (MasterID 900044, line upgold04…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:37  Recorder: Journal OLD-043 of 01-Oct-2026 (MasterID 900044, line upgold04…): still held: Tally gave no voucher with MasterID 900044 on 01-Oct-2026
+2026-10-09 13:48:37  Recorder: Journal OLD-043 of 01-Oct-2026 (MasterID 900044, line upgold04…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:37  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 2 still held (2 in the list)
+2026-10-09 13:48:37  Recorder: Journal OLD-048 of 01-Oct-2026 (MasterID 900049, line upgold04…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 13:48:37  Recorder: Journal OLD-048 of 01-Oct-2026 (MasterID 900049, line upgold04…): still held: Tally gave no voucher with MasterID 900049 on 01-Oct-2026
+2026-10-09 13:48:37  Recorder: Journal OLD-048 of 01-Oct-2026 (MasterID 900049, line upgold04…): held: Tally did not give this entry when asked again; upload that day's Day Book to settle it (ended: not asked of Tally again)
+2026-10-09 13:48:37  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 1 still held (1 in the list)

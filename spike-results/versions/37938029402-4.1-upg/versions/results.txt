@@ -1,0 +1,44 @@
+INFO TallyPrime 4.1, mode upg, runner GitHub Actions 1000006450, 2026-10-09T13:47:35
+INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 15413896 bytes, 2026-10-09, FileVersion 1.1.4.1, ProductVersion 1.1.4.1, ProductName TallyPrime
+INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+INFO Tally's own release in its answer header: PRODMAJORREL 4 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+PASS c1 install and open the company: installed tally.exe 15413896 bytes, 2026-10-09, FileVersion 1.1.4.1, ProductVersion 1.1.4.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+PASS c2 port and company list: port 9000 answered 10.2 s after start, GET 18 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 6 ms, 'FinCom Spike Co' in it: True
+INFO setup origin: BUILT from source dist/FinComBridge-Setup-2.4.1.exe SHA-256 35ed468d5a9fac868eaabf09054b37e909767652c12857e8ee0c80065734f5d7; bridge source: 0f436f6c906283396e6940167fde920d52acfdc1 Add-on 2.4.1: the measured data-folder formula in place of FCRDataPath; the data id trims trailing backslashes
+INFO upg journal 1: Tally answered <CREATED>0</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>
+INFO upg journal 2: Tally answered <CREATED>0</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>
+INFO upg journal 3: Tally answered <CREATED>0</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>
+INFO upg journal 4: Tally answered <CREATED>0</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>
+INFO upg journal 5: Tally answered <CREATED>0</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>
+INFO upg journal 6: Tally answered <CREATED>0</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>
+INFO upg journal 7: Tally answered <CREATED>0</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>
+INFO upg journal 8: Tally answered <CREATED>0</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>
+INFO upg journal 9: Tally answered <CREATED>0</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>
+INFO upg journal 10: Tally answered <CREATED>0</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>
+INFO upg: seeded 50 held lines (50 old: plain / 20 tries / final / refetch, MasterIDs 900001..900050; 10 of Tally's own Journals by XML, MasterIDs ) and 10 ids 2.3.3 ended, company GUID '709b4daf-62cf-4157-9e1d-11d937260a00'
+INFO bridge on 127.0.0.1:9100, version 2.4.0, allowImport True, readOnly '', testMode False
+INFO add-on: recorder files after start: none
+INFO upg: the bridge before the upgrade: version 2.4.0 (expected 2.4.0), port 9100
+INFO upg: 2.4.0 recorded the starting point: True
+INFO upg: S0 (mid 3, 709b4daf-62cf-4157-9e1d-11d937260a00-00000003) under 2.3.3: in the stub with its body at 13:49:47
+INFO upg: 0 lines held by 2.3.3 at the upgrade; running FinComBridge-Setup-2.4.1.exe (setup origin: BUILT from source dist/FinComBridge-Setup-2.4.1.exe SHA-256 35ed468d5a9fac868eaabf09054b37e909767652c12857e8ee0c80065734f5d7) over it
+INFO upg: the new setup ended with 0
+PASS u1 2.4.1 installed over 2.4.0: the version and the settings carried: before: 2.4.0 on port 9100; the setup FinComBridge-Setup-2.4.1.exe ended 0; after: version 2.4.1 on port 9100; settings changed: none (port, key, cloud, Tally ports and host kept)
+FAIL u2 the recorder state carried: nothing sent twice, nothing lost: start-point.json the same after the upgrade: True; S0 (2.3.3's, mid 3) sent again by 2.4.0: 1; the ids 2.3.3 ended sent again: 0; S1 (saved just before the upgrade, mid 4): lines 1, with its body 1 (stub 13:50:31 recorder line event=created guid=709b4daf-62cf-4157-9e1d-11d937260a00-00000004 mid=4 aid=4 vch=Receipt/2/20261002 body=yes(876 chars))
+PASS u3 held lines from 2.4.0: each asked once in all and ended: 50 seeded lines (final 10, plain 20, refetch 10, tries20 10); held by 2.4.0 at the upgrade: 0; asked again by 2.4.1 though 2.4.0 had ended them: 0; each asked once in all and ended: 50; not so: none; lost: none
+PASS u4 a new save after the upgrade arrives with its body: S2 mid 5 guid 709b4daf-62cf-4157-9e1d-11d937260a00-00000005: stub 13:52:10 recorder line event=created guid=709b4daf-62cf-4157-9e1d-11d937260a00-00000005 mid=5 aid=5 vch=Receipt/3/20261002 body=yes(876 chars) data_id 24a82933860657e3; the add-on's files written after the upgrade: 709b4daf-62cf-4157-9e1d-11d937260a00-9-Oct-26-runneradmin.txt
+INFO installer: Tally's download page lists TallyPrime setups for: Rel_2.1, REL_TP_1.0.0, Rel.2.0.1, Rel.2.0, Rel.3.0_Gold, Rel.3.0.1, Rel.3.0, Rel.4.0, Rel.4.1, Rel.5.0, Rel.5.1, Rel.6.1, Rel.7.0, Rel.7.1_gold, Rel.TP_1.1.1, Rel.TP_1.1.2, Rel.TP_1.1.3, Rel.TP_1.1.4, Rel.TP_1.1, Rel.TP_2.0, Rel6.0, Rel6.2, TallyPrime_Beta
+INFO installer: NO(403) -1 bytes, Last-Modified : https://tallymirror.tallysolutions.com/download_centre/Rel.4.1_gold/TP/Full/setup.exe
+INFO installer: AVAILABLE 44673232 bytes, Last-Modified Tue, 12 Mar 2024 09:23:50 GMT: https://tallymirror.tallysolutions.com/download_centre/Rel.4.1/TP/Full/setup.exe
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_Gold/TP/Full/setup.exe (43440848 bytes)
+INFO installer: AVAILABLE other release 3.0.1: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0.1/TP/Full/setup.exe (43476688 bytes)
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0/TP/Full/setup.exe (43465936 bytes)
+INFO installer: AVAILABLE other release 4.0: https://tallymirror.tallysolutions.com/download_centre/Rel.4.0/TP/Full/setup.exe (44497616 bytes)
+INFO installer: AVAILABLE other release 5.0: https://tallymirror.tallysolutions.com/download_centre/Rel.5.0/TP/Full/setup.exe (45592784 bytes)
+INFO installer: AVAILABLE other release 5.1: https://tallymirror.tallysolutions.com/download_centre/Rel.5.1/TP/Full/setup.exe (45651144 bytes)
+INFO installer: AVAILABLE other release 6.1: https://tallymirror.tallysolutions.com/download_centre/Rel.6.1/TP/Full/setup.exe (46460616 bytes)
+INFO installer: AVAILABLE other release 7.0: https://tallymirror.tallysolutions.com/download_centre/Rel.7.0/TP/Full/setup.exe (70912776 bytes)
+INFO installer: AVAILABLE other release 7.1: https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe (72090376 bytes)
+INFO installer: AVAILABLE other release 6.0: https://tallymirror.tallysolutions.com/download_centre/Rel6.0/TP/Full/setup.exe (46324936 bytes)
+INFO installer: AVAILABLE other release 6.2: https://tallymirror.tallysolutions.com/download_centre/Rel6.2/TP/Full/setup.exe (47408904 bytes)
+INFO installer: DOWNLOADED Rel.4.1 from https://tallymirror.tallysolutions.com/download_centre/Rel.4.1/TP/Full/setup.exe : 44673232 bytes in 1 s, SHA-256 8520B7C0A97BA364E10DE9CEA0AED2E609A7568A0516C89E332F50C781052055, signature Valid CN=Tally Solutions Pvt Ltd, O=Tally Solutions Pvt Ltd, L=Bengaluru, S=Karnataka, C=IN, file version 1.1.4.1 product 1.1.4.1
