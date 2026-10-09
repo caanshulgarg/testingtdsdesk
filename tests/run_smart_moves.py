@@ -304,6 +304,12 @@ with sync_playwright() as p:
         nr = pg.locator("#app [data-not-read]")
         ok(nr.count() == 1 and "Books in FinCom end 31-Mar-2026" in nr.inner_text() and "Read 2026-27 from Tally →" in nr.inner_text() and "Show 2025-26" in nr.inner_text(), "the one books-end line (%s)" % (nr.inner_text().replace("\n", " ") if nr.count() else ""))
         once("Look up")
+        # the answer under the books-end line keeps its own words only, not the books' coverage again
+        E("(l) => { const x = LK.st(); x.kind = 'ledger'; x.led = l; LK.run('auto'); }", E("FC.ledgers()[0]")); W(1200)
+        note = E("(() => { const n = document.querySelector('#app [data-lk-note]'); return n ? n.innerText : ''; })()")
+        ok(pg.locator("#app [data-not-read]").count() == 1 and note and "The books read here cover" not in note and "entries outside that are not shown" not in note and re.search(r"Opening (balance not known|from)", note),
+           "the answer's note says only what is its own, not the coverage again (%r)" % note)
+        once("Look up, answered")
         led = E("FC.ledgers().find(l => /bank/i.test(l) && (S.books.vouchers || []).filter(v => v.ent.some(e => e.l === l)).length > 20)") or E("FC.ledgers()[0]")
         E("(l) => { LK.st().led = l; LK.st().kind = 'ledger'; render(); }", led); W(200)
         pg.click("#app [data-not-read-show]"); W(1200)

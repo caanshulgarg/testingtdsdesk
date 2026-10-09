@@ -114,7 +114,11 @@ function Body({ r, x }) {
   </>;
 }
 
-function Result({ r, x }) {
+// the answer's note; with the books-end line on the page (cut), without its sentence on how far the books go, which that
+// line already says (a warning is shown once, the owner's rule)
+const COVER = /\s*The books read here cover [^;]*; entries outside that are not shown\.(\s*Choose FinCom’s copy for the whole period\.)?/;
+function Result({ r, x, cut }) {
+  const note = cut ? String(LK.noteOf(r) || "").replace(COVER, "").trim() : LK.noteOf(r);
   return <section className="dash-card lk-res" style={{ marginTop: 12 }}>
     <div className="lk-head"><h3>{(r.title || "") + " "}{r.src === "cloud" ? <span className="tag stamp" data-src="copy">from FinCom's copy</span> : <span className="tag ok">from the books</span>}{" "}
       {r.src === "cloud" && <button className="linkbtn" onClick={() => lkAct("fresh")}>Work it out again</button>}</h3>
@@ -125,7 +129,7 @@ function Result({ r, x }) {
     <HeldBooks cid={S.coId} where="answer" led={LK.heldLed(r)[0]} to={LK.heldLed(r)[1]} />
     {r.empty ? <div className="bk-none" data-copy-none="">{r.none + "."}</div> : <>
     {/* the answer's own note stays in view: it says whether the books are in step with Tally (the owner's finding of 05-Oct-2026) */}
-    {LK.noteOf(r) && <p className="note" data-lk-note="">{LK.noteOf(r)}</p>}
+    {note && <p className="note" data-lk-note="">{note}</p>}
     {["ledger", "find"].includes(r.kind) && <div className="row lk-opts" style={{ gap: 14, alignItems: "center", margin: "0 0 8px" }}>
       <label className="chk"><input type="checkbox" data-lk-narr="" checked={!!x.narr} onChange={(ev) => { x.narr = ev.target.checked; render(); }} /> Show narration</label></div>}
     <Body r={r} x={x} /></>}
@@ -186,6 +190,6 @@ export default function Lookup({ b }) {
     {needBooks && <NoBooks what="Look up" />}
     {x.busy && <BusyCard title="Working it out…" detail={x.busy} done={0} total={0} />}
     {LK.fr().busy && <BusyCard title="Bringing the books up to date…" detail={LK.fr().busy} done={0} total={0} />}
-    {x.res && <Result r={x.res} x={x} />}
+    {x.res && <Result r={x.res} x={x} cut={!!notRead} />}
   </>;
 }
