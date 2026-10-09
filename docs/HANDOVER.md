@@ -147,3 +147,10 @@ After install: watch NWS144 for a working day (timeouts, retries, longest wait f
 - Owner rule (07-Oct): no field or request is added to anything sent to Tally without his approval, even read-only. 13 fields in 2.3.1/2.3.2 await his decision (see the audit message); BANKALLOCATIONS.NAME approved.
 - Owner rules for held lines (2.3.3): asked again at most once; slow-company lines never asked; every save in FinCom within 10 s; one request in flight per Tally.
 - Next priority: full entry at save (branch next-push). Pending owner decision: the fast request "voucher object by MasterID" (17-22 ms at any size, run why22).
+
+## 09-Oct: 2.4.0 published (15:00 IST)
+- One combined release (2.3.3 -> 2.4.0). Published to staging review 09-Oct 15:00 IST: main b53d0a41 from tax-accuracy 3bf7b6d9; setup 00ab8042…16dc, program 7bc063e7…c2a9. CI 37904634974 and Windows CI 37904634951 green; real-Tally gate 37904664319 (32/32), 37904667057 (25/25), 37904670015 (20/20) on the committed setup.
+- Migrations 62, 63, 64, 65, 66, 67 run on staging in that order (md5 in the test sheet), functions read back and matched.
+- tally-ingest version 42: index.ts deployed with whole-line `//` comments stripped (repo e65d5107…6383fb5, deployed 2f254a42…b99f3250; details in docs/bridge-2.4.0-notes.md); the other files exact. Rollback copy: v41.
+- Publish needs `npm ci` in the publish worktree: app/package.json now has @sentry/browser, which the shared /home/user/testingtdsdesk/app/node_modules lacks.
+- Install by hand on NWS144 as for 2.3.3 (owner first, then Ranjeet); steps in docs/bridge-2.4.0-test-sheet.txt.
