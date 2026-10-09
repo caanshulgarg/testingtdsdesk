@@ -184,11 +184,12 @@ const LedCheck = {
     c.savedAt = new Date().toISOString(); c.savedBy = whoAmI(); c.strict = true;
     return done.length;
   },
-  // a ledger counts in returns only when confirmed, once the check is saved (request of 02-Oct-2026): an unconfirmed
+  // a ledger counts in returns only when confirmed (request of 02-Oct-2026; release-240 review H1, the owner's condition:
+  // pending suggestions count in NO figure until confirmed, whether or not the check's switch was set): an unconfirmed
   // tax-like ledger reads as "other tax", in no return and not part of any taxable value
   PENDING: Object.freeze({kind: "tax_other", pending: true}),
   held(b){
-    if (!(b && b.ledCheck && b.ledCheck.strict)) return null;
+    if (!(b && b.map)) return null;
     const k = (b.mapV || 0) + "|" + Object.keys(b.map || {}).length;
     if (this._held && this._held.b === b && this._held.k === k) return this._held.set;
     const set = new Set(Object.entries(b.map || {}).filter(([n, m]) => !m.ok && LedMaster.taxLike(n, m, (b.ledInfo || {})[n])).map(([n]) => n));
@@ -337,7 +338,8 @@ const LedPage = {
       return {key: "unk:" + n, n, text: "'" + n + "' is used by " + rs.length + (rs.length === 1 ? " entry" : " entries") + " (" + rs.slice(0, 3).map(one).join(", ") + (rs.length > 3 ? ", …" : "") + "), but FinCom does not have this ledger yet. The entries are in the books; its group comes with the next ledger list."}; });
   },
   // a confirmed ledger now used differently: kept as confirmed, with its use now (the warning goes)
-  keepUse(b, n){ const it = ((b.ledCheck || {}).items || {})[n]; if (it){ it.okSig = LedCheck.sig(LedCheck.usage(b, [n])[n]); it.okAt = new Date().toISOString(); it.okBy = whoAmI(); } render(); },
+  // release-240 review M5: saved at once, as fine() (its own confirm step, not a draft)
+  keepUse(b, n){ const it = ((b.ledCheck || {}).items || {})[n]; if (it) Drafts.direct(() => { it.okSig = LedCheck.sig(LedCheck.usage(b, [n])[n]); it.okAt = new Date().toISOString(); it.okBy = whoAmI(); saveBooks(); }, {bypass: true}); render(); },
   // "2 min ago", "3 h ago", "on 07-Oct-2026 10:05"
   ago(at){
     const t = Date.parse(String(at || "")); if (!t) return "";

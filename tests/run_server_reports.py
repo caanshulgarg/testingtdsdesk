@@ -98,11 +98,12 @@ try:
         with sync_playwright() as p:
             br = p.chromium.launch(); pg = br.new_page(); pg.goto("http://localhost:8170/index.html"); pg.wait_for_function("typeof MIS === 'object'", timeout=60000)
             b = pg.evaluate("""(bk) => { S.books = Object.assign({map: {}}, bk); TallyRead.balances(S.books, {ledgers: Object.entries(bk.tb.led).map(([name, x]) => ({name, parent: x.parent, open: String(x.open), close: ""}))}, "20250401", "20260331");
-              S.books.map = Books.mapLedgers(bk.vouchers, {}); const pl = MIS.pl('20250401', '20260331'), s = MIS.sales('20250401', '20260331');
+              S.books.map = Books.mapLedgers(bk.vouchers, {}); Object.values(S.books.map).forEach(m => { if (m.kind) m.ok = true; }); const pl = MIS.pl('20250401', '20260331'), s = MIS.sales('20250401', '20260331');
               return {pbt: pl.pbt, gross: pl.gross, heads: Object.fromEntries(Object.entries(pl.heads).map(([k, h]) => [k, {t: h.t, m: h.m}])), sales: s.total, rows: s.rows.map(r => [r.party, r.t])}; }""", books)
             # GST: the database's output tax against the browser's GSTR-1, month by month, with the same ledger settings
             gb = pg.evaluate("""(bk) => { const c = newCompany({name: "Z", gstin: "09AANFG3202D1ZR"}); S.companies[c.id] = c; S.coId = c.id; S.books = Object.assign({map: {}, cid: c.id}, bk);
-              S.books.map = Books.mapLedgers(bk.vouchers, {}); const out = {};
+              // release-240 review H1: the browser counts a tax ledger only once confirmed; the database is given the same ledgers, confirmed
+              S.books.map = Books.mapLedgers(bk.vouchers, {}); Object.values(S.books.map).forEach(m => { if (m.kind) m.ok = true; }); const out = {};
               // GSTR-1 lists a credit note's tax as a positive figure in its own table; the tax for the month nets it off
               GSTR.months().forEach(ym => { out[ym] = r2(GSTR.outward(ym, '').reduce((t, x) => t + (/^CDN/.test(x.kind) ? -1 : 1) * ((x.cgst || 0) + (x.sgst || 0) + (x.igst || 0)), 0)); });
               return {map: S.books.map, out}; }""", books)

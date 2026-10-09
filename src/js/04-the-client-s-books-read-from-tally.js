@@ -256,8 +256,8 @@ const Books = {
   },
   ledgerOf(name){
     const b = S.books, m = (b && b.map && b.map[name]) || {};
-    // once a client's ledger check is saved, a tax ledger not confirmed counts in no return (src/js/57)
-    if (b && b.ledCheck && b.ledCheck.strict && !m.ok && typeof LedCheck === "object"){ const h = LedCheck.held(b); if (h && h.has(name)) return LedCheck.PENDING; }
+    // a tax ledger not confirmed counts in no return (src/js/57; release-240 review H1: whether or not the check is saved)
+    if (b && !m.ok && typeof LedCheck === "object"){ const h = LedCheck.held(b); if (h && h.has(name)) return LedCheck.PENDING; }
     return m;
   },
   // the purchase and sales side of a voucher, ready for GST and TDS
