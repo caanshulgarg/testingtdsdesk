@@ -1,0 +1,26 @@
+2026-10-09 08:45:21  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line d5de13d8…): asking Tally by MasterID
+2026-10-09 08:45:21  Recorder: entry fetch of FinCom Spike Co: answered in 6 ms
+2026-10-09 08:45:21  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line d5de13d8…): taken: Tally's GUID 7e5e99ed-6459-4209-bcb4-d484131eea2b-00000003, AlterID 3
+2026-10-09 08:45:21  Renumbering: made Receipt 1 of 02-Oct-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
+2026-10-09 08:48:08  Restarting: asked from the tray icon
+2026-10-09 08:48:10  FinCom Bridge 2.4.0 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+2026-10-09 08:48:10  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 19:00)
+2026-10-09 08:48:10  Check:  - 
+2026-10-09 08:48:13  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+2026-10-09 08:48:13  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=6, ALTMSTID=209
+2026-10-09 08:48:13  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=2; now ALTVCHID=6, ALTMSTID=209
+2026-10-09 08:48:13  Bank dates: FinCom Spike Co: Tally's voucher counter moved with no add-on line for 4 entries (a bank date set in Bank Reconciliation, or another change Tally makes without a voucher form); each is read again from Tally
+2026-10-09 08:48:13  Nightly check of FinCom Spike Co: 3 entries missing from FinCom's copy asked of Tally (one a request)
+2026-10-09 08:48:14  Recorder: entry fetch of FinCom Spike Co: answered in 6 ms
+2026-10-09 08:48:14  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line 696bda6f…): taken: Tally's GUID 7e5e99ed-6459-4209-bcb4-d484131eea2b-00000003, AlterID 3
+2026-10-09 08:48:14  Recorder: An entry of 02-Oct-2026 (MasterID 4, line c121b5de…): asking Tally by MasterID
+2026-10-09 08:48:14  Recorder: entry fetch of FinCom Spike Co: answered in 5 ms
+2026-10-09 08:48:14  Recorder: Journal 3 of 02-Oct-2026 (MasterID 4, line c121b5de…): taken: Tally's GUID 7e5e99ed-6459-4209-bcb4-d484131eea2b-00000004, AlterID 4
+2026-10-09 08:48:14  Recorder: An entry of 02-Oct-2026 (MasterID 5, line 184b4645…): asking Tally by MasterID
+2026-10-09 08:48:14  Recorder: Journal 4 of 02-Oct-2026 (MasterID 5, line 184b4645…): taken: Tally's GUID 7e5e99ed-6459-4209-bcb4-d484131eea2b-00000005, AlterID 5
+2026-10-09 08:48:14  Recorder: An entry of 02-Oct-2026 (MasterID 6, line abb6c3fe…): asking Tally by MasterID
+2026-10-09 08:48:15  Recorder: Journal 5 of 02-Oct-2026 (MasterID 6, line abb6c3fe…): taken: Tally's GUID 7e5e99ed-6459-4209-bcb4-d484131eea2b-00000006, AlterID 6
+2026-10-09 08:48:15  Recorder: Journal 3 of 02-Oct-2026 (MasterID 4, line 043e457f…): taken: Tally's GUID 7e5e99ed-6459-4209-bcb4-d484131eea2b-00000004, AlterID 4
+2026-10-09 08:48:15  Recorder: Journal 4 of 02-Oct-2026 (MasterID 5, line 6594b7ea…): taken: Tally's GUID 7e5e99ed-6459-4209-bcb4-d484131eea2b-00000005, AlterID 5
+2026-10-09 08:48:16  Nightly check of FinCom Spike Co: Checked on the night of 09-Oct-2026 at 14:18 IST: 3 entries missing from FinCom; all 3 fetched from Tally.
+2026-10-09 08:48:16  Recorder: Journal 5 of 02-Oct-2026 (MasterID 6, line c29dcb37…): taken: Tally's GUID 7e5e99ed-6459-4209-bcb4-d484131eea2b-00000006, AlterID 6
