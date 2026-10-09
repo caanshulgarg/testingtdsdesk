@@ -172,7 +172,7 @@ try {
   $g1 = $s1.guid; $s1All = @($lines | Where-Object { $_.guid -eq $g1 -and $_.ev -eq 'created' })
   $s1Body = @($s1All | Where-Object { $_.xml })
   $ok2 = $spSame -and -not $s0Again.Count -and -not $endAgain.Count -and $s1Body.Count -eq 1
-  URes $CU2 $(if ($ok2) { 'PASS' } else { 'FAIL' }) ("start-point.json the same after the upgrade: {0}{1}; S0 (2.3.3's, mid {2}) sent again by 2.4.0: {3}; the ids 2.3.3 ended sent again: {4}; S1 (saved just before the upgrade, mid {5}): lines {6}, with its body {7} ({8})" -f `
+  URes $CU2 $(if ($ok2) { 'PASS' } else { 'FAIL' }) ("start-point.json the same after the upgrade: {0}{1}; S0 ($($upgFrom)'s, mid {2}) sent again by $($verNew): {3}; the ids $($upgFrom) ended sent again: {4}; S1 (saved just before the upgrade, mid {5}): lines {6}, with its body {7} ({8})" -f `
       $spSame, $(if (-not $spSame) { " (before '$(("$sp0" -replace '\s+', ' ').Substring(0, [math]::Min(200, "$sp0".Length)))' after '$(("$sp1" -replace '\s+', ' ').Substring(0, [math]::Min(200, "$sp1".Length)))')" }), $s0.mid, $s0Again.Count, $endAgain.Count, $s1.mid, $s1All.Count, $s1Body.Count, (($s1All | ForEach-Object { Ev $_ }) -join ' | '))
   # u3: each line still held at the upgrade asked once by 2.4.0 and ended; the real Journals with Tally's entry
   $res = foreach ($n in $held0Ids) {
