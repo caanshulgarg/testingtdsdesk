@@ -42,4 +42,54 @@ and belong to 2.4.2.
 
 The Lows go to the next release. The open findings of next-241 (SR-M1, SR-M2, SR2-M1, SR2-M2) are 2.4.2's.
 
-Range: 7c13c777..751c1795
+## Re-review (10-Oct-2026), the upgrade fix, range 751c1795..dc54ac4d
+
+**The failure.** The real-Tally upgrade check (run 37981697177, upg u2): the first start of 2.4.1 over 2.4.0's
+bankdate.json (no addonN, addon or listed) read and sent again, once, an entry 2.4.0's add-on line had already sent.
+
+**The fix** (0404e68c, 7e84f5e0: bridge-go/bankdate.go +30/-1 and bridge-go/bankdate241older_test.go). A saved company
+without the addonN key is marked older. At its first light check or nightly turn its counter becomes Tally's counter now
+(never below the starting point), the line count is cleared, pending entries are kept, and one log line is written.
+Only those two files changed outside docs/. The revert of 5eaafd2f is exact: assets-test/ and the release log are as at
+7c13c777.
+
+**Checked.**
+- **No request added or changed.** bankFromOlder asks nothing of Tally or the cloud. The allow-list table and its hash
+  are unchanged (TestAllowListUnchanged; release-check step 4). One-in-flight, recorderTC's deadline, the 2-second rule
+  and own-Tally-only (ownPortErr runs before the state is touched) are unchanged.
+- **Prospective only.** The counter is clamped to the starting point. Pending entries and the self-check's own mark are
+  not moved.
+- **The state file.** It is still the fixed name sp("bankdate.json") in the bridge's own folder and is never taken as a
+  path. The new code only checks whether a key exists. The MasterID limits (digits only, at most 20,000 a company) are
+  unchanged. readJSONFile has no size limit (as before; the file is the bridge's own). A damaged file reads as empty,
+  which is safe: everything starts from Tally's counter.
+- **Logging.** The new line gives the company name and a counter (ALTVCHID), as the other bank-route lines do. No
+  narration, amounts, GUIDs or secrets.
+- **No AI**, no secrets, no cloud or app change.
+- go vet (Linux, Windows) clean. go test ./... passes (939 s). The two new tests and all 28 TestBankDate* and
+  TestSelfCheck* tests pass. release-check.sh: steps 1-4 pass (step 4: allow-list sha256 3dd32c7ff3379136, as expected); it stops at step 5 only because the review notes name 751c1795 (the files after it: bankdate.go and bankdate241older_test.go).
+
+**Findings at dc54ac4d: 0 High, 1 Medium (correctness, no security effect), 1 Low.** (see below: M1 and L1 now closed)
+- **M1 (see the code note; bankdate.go:181-191).** The older mark is not saved. A save before the company's first check
+  in 2.4.1, then a restart, loses it, and the u2 re-read and re-send comes back (reproduced with a probe test). There is
+  no security effect, and no request is made that is not on the allow-list.
+- **SR3-L1 (bankdate.go:353).** With the self-check off, a bank date set in the upgrade stretch is never sent and
+  nothing says so. This goes against "nothing silently dropped" in a narrow window. Suggest a log line naming it when
+  selfCheckOn() is false.
+
+**M1/SR3-L1 fixed in 897f393b** (tax-accuracy fb38cf5a; delta dc54ac4d..fb38cf5a: bankdate.go and its test only).
+- **The older mark is kept on disk.** It is written as `"older": true`, without the line count, by every bankSave
+  caller. The write is atomic (temporary file and rename). The mark is cleared only by the company's own first check
+  (bankFromOlder) and is never written for a company 2.4.1 made.
+- **The new field.** It is only compared with `true`; there is no new path or parse surface.
+- **The new log line.** It gives the company name only.
+- **Checks.**
+  - The M1 probe was re-run and passes.
+  - go vet clean on Linux and on Windows.
+  - go test ./... passes (952 s).
+  - 30 of 30 TestBankDate* and TestSelfCheck* tests pass.
+  - release-check.sh steps 1-4 pass (allow-list sha256 3dd32c7ff3379136, unchanged); it stops at step 5 only for the
+    notes' range.
+- **Status.** M1 closed; SR3-L1 closed. No new security finding.
+
+Range: 7c13c777..fb38cf5a
