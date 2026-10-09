@@ -47,7 +47,8 @@ CHECK = """() => { const t = [document.getElementById('cobar'), document.getElem
     const own = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim().length > 1);
     if (!own) continue;
     const cs = getComputedStyle(el), r = el.getBoundingClientRect();
-    if (!r.width || !r.height || cs.visibility === 'hidden' || +cs.opacity === 0) continue;
+    // nothing to read on the screen: no box, hidden, or a screen reader's text (1px, clipped on purpose)
+    if (r.width <= 2 || r.height <= 2 || cs.visibility === 'hidden' || +cs.opacity === 0) continue;
     if ((cs.overflowX === 'hidden' || cs.overflowX === 'clip') && cs.textOverflow !== 'ellipsis' && el.scrollWidth > el.clientWidth + 2 && el.tagName !== 'SELECT')
       cut.push((el.tagName + '.' + (el.className || '')).slice(0, 40) + ' "' + el.textContent.trim().slice(0, 30) + '"');
     if (el.closest('[disabled], [aria-disabled="true"], .is-test-strip')) continue;

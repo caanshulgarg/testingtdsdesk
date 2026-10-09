@@ -74,7 +74,8 @@
   --tone-slate: #64748B; --tone-slate-ink: #334155;
   --tint: 13%;
   /* status, brighter but the same meaning everywhere: green done or filed, blue ready, amber attention, red error */
-  --ok-soft: #D1FAE5; --warn-soft: #FEF3C7; --bad-soft: #FFE4E6; --info-soft: #E0F2FE;
+  /* green keeps FinCom's own tint: its words (#15803D) need it for 4.5:1 */
+  --ok-soft: #DCFCE7; --warn-soft: #FEF3C7; --bad-soft: #FFE4E6; --info-soft: #E0F2FE;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {

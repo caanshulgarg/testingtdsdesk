@@ -54,7 +54,15 @@ span[data-arc="badge"][data-kind="warn"] { --badge-background: var(--warn-soft);
 span[data-arc="badge"][data-kind="bad"] { --badge-background: var(--bad-soft); }
 
 /* ---------- tables (parts/ListTable.jsx on Arc's table style): FinCom's rows stay dense ---------- */
-table.lt.lt { min-width: 0; font-size: 13.5px; }
+table.lt.lt { font-size: 13.5px; border-collapse: separate; border-spacing: 0; }
+table.lt.lt th, table.lt.lt td { background-color: var(--surface); transition: background-color var(--duration-fast) var(--ease-standard); }
+table.lt.lt thead th { border-bottom: 1px solid var(--border); white-space: nowrap; text-align: left; }
+table.lt.lt tbody td { border-bottom: 1px solid var(--border-subtle); color: var(--foreground); }
+table.lt.lt [data-numeric] { text-align: right; font-variant-numeric: tabular-nums; }
+table.lt.lt [data-sorted] { background-color: var(--surface-muted); }
+table.lt.lt th[data-sorted] { color: var(--foreground); }
+@media (hover: hover) and (pointer: fine) { table.lt.lt tbody tr:hover td { background-color: color-mix(in oklab, var(--foreground) 3%, var(--surface)); } }
+table.lt.cards td { background-color: transparent; border-bottom: 0; }
 table.lt.lt th { height: auto; padding: 8px 10px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
 table.lt.lt th[data-sortable] { padding: 0; }
 table.lt.lt td { height: auto; padding: 7px 10px; vertical-align: top; overflow-wrap: normal; }
@@ -65,7 +73,7 @@ table.lt.lt td.n, table.lt.lt th.n { text-align: right; }
 /* ---------- empty states (parts/EmptyNote.jsx, NoBooks: Arc's EmptyState) ---------- */
 .arc-empty { border: 1px dashed var(--border-strong); border-radius: var(--radius-panel); background: var(--surface); }
 .arc-empty > section { padding: 22px 16px; }
-.arc-empty > section h3 { margin-top: 12px; font-size: 15px; font-weight: 600; }
+.arc-empty > section h3 { max-width: 40rem; margin: 12px auto 0; font-size: 14.5px; font-weight: 500; color: var(--text-secondary); }
 .arc-empty > section p { max-width: 34rem; }
 .arc-empty > section p:has(> span:empty) { display: none; }
 .arc-empty-words { color: var(--muted); font-size: 13.5px; max-width: 40rem; }

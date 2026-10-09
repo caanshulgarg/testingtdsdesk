@@ -17,9 +17,10 @@
 //   (the tick box), filter: the column's filter button (ColFunnel), td(row) → more attributes for the cell, title,
 //   w: its width in % for a table laid out fixed}.
 //
-// Drawn in Arc's table style (src/arc/registry/components/sortable-data-table: its header, rows, sorted-column tint and
-// sort button), on the same table as before, so every list keeps its rows, cells and attributes; an empty list is
-// Arc's empty state (EmptyNote).
+// Drawn in Arc's table style (src/arc/registry/components/sortable-data-table: its sort button, and its header, rules,
+// sorted-column tint and row hover redrawn on table.lt in styles/arc-look.css, because its own phone layout would undo
+// FinCom's phone cards, src/js/53-phone.js), on the same table as before, so every list keeps its rows, cells and
+// attributes; an empty list is Arc's empty state (EmptyNote).
 import { Children, Fragment, cloneElement, isValidElement } from "react";
 import Loading from "./Loading.jsx";
 import EmptyNote from "./EmptyNote.jsx";
@@ -119,7 +120,7 @@ export default function ListTable({ name, cols, rows, rowKey, rowProps, prep, un
   const all = sortVia ? rows : sortRows(name, cs, rows), shown = limit ? all.slice(0, limit) : all;
   return <>
     <Wrap>
-      <table className={className + " lt " + arc.table} data-list={name} style={style} id={id}>
+      <table className={className + " lt"} data-list={name} style={style} id={id}>
         {cs.some((c) => c.w) && <colgroup>{cs.map((c) => <col key={c.k} style={c.w ? { width: c.w + "%" } : undefined} />)}</colgroup>}
         <thead><tr>{cs.map((c) => <Head key={c.k} name={name} c={c} s={sortVia ? sortVia.state : s} via={sortVia && sortVia.by} />)}</tr></thead>
         <tbody>{shown.map((r, i) => {
@@ -187,7 +188,7 @@ export function ListRows({ name, head, children, unit = ["entry", "entries"], of
   const sumCols = order.filter((c) => c.sum !== false && (c.sum || c.role === "amount"));
   return <>
     <ListWrap>
-      <table className={className + " lt " + arc.table} data-list={name} id={id}>
+      <table className={className + " lt"} data-list={name} id={id}>
         <thead><tr>{order.map((c) => <Head key={c.k} name={name} c={{ ...c, v: c.sort === false || ["pick", "row", "act"].includes(c.role) ? null : () => 0 }} s={s} />)}</tr></thead>
         <tbody>
           {loose.map((r, i) => cloneElement(r.tr, { key: "loose" + i }))}

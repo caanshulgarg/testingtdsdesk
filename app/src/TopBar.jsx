@@ -182,7 +182,9 @@ function TallyPanel({ open }) {
   const close = () => { if (S.tallyPanel) doAct("tallyPanelClose"); };
   return <Drawer open={open} onOpenChange={(o) => { if (!o) close(); }} modal={false}>
     <DrawerContent className="tallypanel" title="Tally connection" closeLabel="Close" aria-describedby={undefined}
-      onInteractOutside={(ev) => { if (ev.target && ev.target.closest && ev.target.closest(".tsign-wrap")) ev.preventDefault(); }}>
+      onInteractOutside={(ev) => { if (ev.target && ev.target.closest && ev.target.closest(".tsign-wrap")) ev.preventDefault(); }}
+      // Esc stays with the app's own key handler (src/js), which closes the panel first, as before
+      onEscapeKeyDown={(ev) => ev.preventDefault()}>
       {open && <><div className="tp-body">
         <TallyDetail s={tallySign(co)} />
         <p><TallyPill co={co} /></p>{co && typeof tallyLine === "function" && tallyLine(co) && <p data-panel-tally-line=""><TallyLine co={co} /></p>}<p className="note">{tallyStatus(co).say}</p>

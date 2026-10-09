@@ -9,7 +9,7 @@
 body { background: var(--background); font-size: 14px; line-height: 1.5; letter-spacing: -.006em; -webkit-font-smoothing: antialiased; }
 h1, h2, h3, .pane h2 { font-family: var(--font-display); letter-spacing: var(--tracking-display); }
 .note { color: var(--text-muted); }
-a { color: var(--accent); text-underline-offset: 2px; }
+a { text-underline-offset: 2px; }
 .linkbtn { color: var(--accent); }
 
 /* ---------- the sidebar ---------- */
@@ -140,7 +140,8 @@ header.top { background: linear-gradient(100deg, color-mix(in oklab, var(--tone-
 
 /* "Getting ready": done steps green with a check, the next step in the brand colour */
 .onb-list > li.done { background: color-mix(in oklab, var(--tone-emerald) 9%, var(--surface)); border-color: color-mix(in oklab, var(--tone-emerald) 30%, var(--border)); }
-.onb-list > li.done .onb-n { background: var(--tone-emerald); border-color: var(--tone-emerald); color: var(--surface); }
+/* the check on FinCom's green (--ok), white on it at 5:1 */
+.onb-list > li.done .onb-n { background: var(--ok); border-color: var(--ok); color: var(--surface); }
 .onb-list > li:not(.done):not(.onb-list > li:not(.done) ~ li) { border-color: var(--tone-indigo); background: color-mix(in oklab, var(--tone-indigo) 8%, var(--surface));
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--tone-indigo) 14%, transparent); }
 .onb-list > li:not(.done):not(.onb-list > li:not(.done) ~ li) .onb-n { background: var(--tone-indigo); border-color: var(--tone-indigo); color: var(--surface); }
