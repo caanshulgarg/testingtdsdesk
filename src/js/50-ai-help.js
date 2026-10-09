@@ -256,7 +256,7 @@ function aihFix(l, f, v){
 function aihReply(id, v){ const n = AIH.st().notices.find(z => z.id === id); if (n){ n.reply = v; n.editedBy = AIH.who(); saveBooks(); } }
 function aihAct(a){
   if (a === "review" || a === "reviewAgain") AIH.reviewLedgers(a === "reviewAgain");
-  else if (a === "auditReview"){ S.booksTab = "ledgers"; S.lmView = "ai"; render(); AIH.reviewLedgers(false); }
+  else if (a === "auditReview"){ S.booksTab = "audit"; S.auditAi = true; render(); AIH.reviewLedgers(false); }   // 2.4.1: on the Audit tab (the ledgers page has no AI)
   else if (a === "pair2b") AIH.pair2b();
 }
 // Accept / Reject is its own confirm step (review 18): saved at once, not kept as a draft of the page (src/js/60)

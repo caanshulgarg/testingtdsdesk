@@ -239,14 +239,27 @@ const Books = {
       if (keep && keep.byHand){ map[name] = Object.assign({n}, keep); return; }
       map[name] = Object.assign({n}, this.guess(name), keep && keep.byHand ? keep : {});
     });
+    // FinCom 2.4.1 (Cause A, 01-Oct-2026: 17 confirms wiped on one refresh): a ledger a person confirmed or set by hand
+    // that no entry uses (yet) is kept, with n:0. It was dropped here, LedMaster.refresh put it back as a guess, and the
+    // save wiped the confirm. No figure moves: no entry uses it
+    Object.keys(saved || {}).forEach(name => {
+      const keep = saved[name];
+      if (!seen.has(name) && keep && (keep.byHand || keep.ok)) map[name] = Object.assign({}, keep, {n: 0});
+    });
     return map;
+  },
+  // the TDS or TCS section in a ledger's name: "194C", "206C1H"; and (2.4.1) the letter after a space, "TDS 194 T" is
+  // 194T, not 194 - but not the A of "194 A/C", nor a word ("194 TDS PAYABLE" is 194)
+  secIn(u){
+    const m = String(u || "").toUpperCase().match(/\b(19[2-9])(?:([A-Z]{1,2})|\s([A-Z]{1,2})(?![\w\/]))?\b|\b(206C)([A-Z]{0,2})\b/);
+    return !m ? "" : m[4] ? m[4] + (m[5] || "") : m[1] + (m[2] || m[3] || "");
   },
   guess(name){
     const u = name.toUpperCase();
-    const sec = u.match(/\b(19[2-9][A-Z]{0,2}|206C[A-Z]?)\b/);
+    const sec = this.secIn(u);
     if (/TDS|TCS/.test(u) && sec){
       const rate = (u.match(/(\d+(?:\.\d+)?)\s*%/) || [])[1];
-      return {kind: /RECEIVABLE/.test(u) ? "tds_receivable" : "tds_payable", section: sec[1], rate: rate ? num(rate) : null};
+      return {kind: /RECEIVABLE/.test(u) ? "tds_receivable" : "tds_payable", section: sec, rate: rate ? num(rate) : null};
     }
     const gst = u.match(/\b(\d{2})?\s*(CGST|SGST|UTGST|IGST|CESS)\s*(INPUT|OUTPUT)?\b/);
     if (gst && /INPUT|OUTPUT/.test(u)) return {kind: "gst", reg: gst[1] || "", tax: gst[2] === "UTGST" ? "SGST" : gst[2], side: gst[3] === "INPUT" ? "input" : "output"};
