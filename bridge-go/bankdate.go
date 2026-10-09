@@ -111,6 +111,9 @@ type bankCo struct {
 	addonN int              // the add-on's voucher lines read since Seen moved
 	addon  map[string]int64 // MasterID -> the AlterID its add-on line's read took (0: not read yet)
 	listed map[string]bool  // MasterIDs the last list named (their late add-on lines are not counted again)
+	// 2.4.1 (the real-Tally gate 37981697177, upg u2): the saved state has no add-on line count (a bridge older than 2.4.1
+	// wrote it): its counter is not trusted against this run's lines; Tally's counter of now is taken (bankFromOlder)
+	older bool
 }
 
 var bank = struct {
@@ -142,6 +145,9 @@ func bankFresh() {
 		}
 		st := &bankCo{Company: str(e["company"]), CGUID: str(e["cguid"]), Seen: toI64(e["seen"]), Route: or(str(e["route"]), "small"), Why: str(e["why"]),
 			ListMs: toI64(e["listMs"]), Night: str(e["night"]), ReadAt: str(e["readAt"]), addon: map[string]int64{}, listed: map[string]bool{}}
+		if _, has := e["addonN"]; !has {
+			st.older = true
+		}
 		if n := toI64(e["addonN"]); n > 0 && n < 1<<31 {
 			st.addonN = int(n)
 		}
@@ -330,6 +336,24 @@ func bankState(company, guid string, v, sp int64) (*bankCo, bool) {
 	return st, true
 }
 
+// under bank.mu: 2.4.1 (the real-Tally gate 37981697177, upg from 2.4.0, u2): a company whose saved state has no add-on line
+// count (2.4.0 or older kept it in memory only) takes Tally's counter of now as the route's starting point, as 2.4.0 did
+// at its own first check (bankState), instead of counting the whole move since that bridge's last processed counter as
+// entries with no add-on line (which read again and sent again the entries its add-on lines had sent). A bank date set in
+// that stretch is not listed by this route; the nightly self-check (selfcheck.go, its own mark) finds it. Said once
+func bankFromOlder(st *bankCo, v, sp int64) bool {
+	if !st.older {
+		return false
+	}
+	st.older = false
+	st.Seen, st.addonN, st.addon, st.listed = v, 0, map[string]int64{}, map[string]bool{}
+	if st.Seen < sp {
+		st.Seen = sp
+	}
+	writeLog(fmt.Sprintf("Bank dates: %s: state from an older bridge, counter taken as the starting point (ALTVCHID=%d)", st.Company, st.Seen))
+	return true
+}
+
 // under bank.mu: whether the move from Seen to v is explained by the add-on's lines (and FinCom's posting windows); when
 // it is, Seen moves on
 func bankExplained(st *bankCo, v int64, ws [][2]int64) bool {
@@ -368,7 +392,7 @@ func bankAfterLightCheck(company string, port int) {
 	if made {
 		writeLog(fmt.Sprintf("Bank dates: %s: following Tally's voucher counter from ALTVCHID=%d (a move the add-on's lines do not explain is a bank date set, or another change Tally makes without a voucher form)", company, st.Seen))
 	}
-	if made || bankExplained(st, v, ws) {
+	if made || bankFromOlder(st, v, sp) || bankExplained(st, v, ws) {
 		bankSave()
 		bank.mu.Unlock()
 		return
@@ -546,6 +570,10 @@ func bankNightTurn() {
 		bank.mu.Unlock()
 		cws := bankWindows(c.Company, c.CGUID)
 		bank.mu.Lock()
+		if bankFromOlder(c, cv, csp) {
+			bankSave()
+			continue
+		}
 		if bankExplained(c, cv, cws) {
 			c.Night = night // nothing tonight
 			bankSave()
