@@ -70,6 +70,11 @@ try {
   $copy0 = Invoke-RestMethod 'http://127.0.0.1:8787/copy' -TimeoutSec 10
   Info ("selfck: the Receipt by keys {0} (mid {1}, AlterID {2}) in FinCom's copy: {3}; the journals by XML {4}; FinCom's copy now holds {5} entries" -f $k.guid, $k.mid, $k.aid, $kin, (($xv | ForEach-Object { "mid $($_.mid) AlterID $($_.aid)" }) -join ', '), @($copy0.PSObject.Properties).Count)
   # the night forced: the window from a minute ago, the bridge restarted from the tray; no keys from here on
+  # Tally past the bridge's settle time first (keep.go keepHold: no nightly check while Tally is under KeepSettleMin, 3 min,
+  # old). Run 37870251713 (5.1) forced the night 3 min after Tally started: the check waited 10 minutes ('Tally has just
+  # opened') and the bank-date read took the journals meanwhile, so the check had nothing missing to find
+  $tst = @(Get-Process tally -ErrorAction SilentlyContinue | ForEach-Object { $_.StartTime } | Sort-Object)
+  if ($tst.Count) { $age = ((Get-Date) - $tst[-1]).TotalSeconds; Info ("selfck: the newest Tally process started {0:N0} s ago" -f $age); if ($age -lt 300) { Start-Sleep -Seconds ([int](300 - $age)) } }
   $cf = "$h1\tds-bridge.config.json"; $cj = Get-Content $cf -Raw | ConvertFrom-Json
   $now = Get-Date
   $cj | Add-Member -NotePropertyName SelfCheckFrom -NotePropertyValue $now.AddMinutes(-1).ToString('HH:mm') -Force
