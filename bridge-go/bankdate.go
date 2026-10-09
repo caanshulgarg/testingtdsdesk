@@ -105,7 +105,9 @@ type bankCo struct {
 	Night          string // the night (its window's start, yyyymmdd) the nightly list went
 	ReadAt         string // release-240: when Tally's list was last read (RFC3339); the nightly route's 3-day notice
 	Cands          []bankCand
-	// this run only
+	// 2.4.1 (the coordinator's item from the real-Tally dry run 37938029402): kept in bankdate.json WITH Seen (one write),
+	// no longer this run only: a restart before the next light check forgot the add-on's lines and read again (and sent
+	// again) the entries they explained
 	addonN int              // the add-on's voucher lines read since Seen moved
 	addon  map[string]int64 // MasterID -> the AlterID its add-on line's read took (0: not read yet)
 	listed map[string]bool  // MasterIDs the last list named (their late add-on lines are not counted again)
@@ -140,6 +142,19 @@ func bankFresh() {
 		}
 		st := &bankCo{Company: str(e["company"]), CGUID: str(e["cguid"]), Seen: toI64(e["seen"]), Route: or(str(e["route"]), "small"), Why: str(e["why"]),
 			ListMs: toI64(e["listMs"]), Night: str(e["night"]), ReadAt: str(e["readAt"]), addon: map[string]int64{}, listed: map[string]bool{}}
+		if n := toI64(e["addonN"]); n > 0 && n < 1<<31 {
+			st.addonN = int(n)
+		}
+		for mid, a := range obj(e["addon"]) {
+			if onlyDigits(mid) == mid && mid != "" && len(st.addon) < 20000 {
+				st.addon[mid] = toI64(a)
+			}
+		}
+		for _, mid := range arr(e["listed"]) {
+			if m := str(mid); m != "" && onlyDigits(m) == m && len(st.listed) < 20000 {
+				st.listed[m] = true
+			}
+		}
 		for _, x := range arr(e["cands"]) {
 			c := obj(x)
 			st.Cands = append(st.Cands, bankCand{Mid: str(c["mid"]), GUID: str(c["guid"]), Day: str(c["day"]), Alter: toI64(c["alter"]), Asks: toInt(c["asks"]), Night: c["night"] == true, Next: str(c["next"])})
@@ -161,7 +176,16 @@ func bankSave() {
 		for _, c := range st.Cands {
 			l = append(l, M{"mid": c.Mid, "guid": c.GUID, "day": c.Day, "alter": c.Alter, "asks": c.Asks, "night": c.Night, "next": c.Next})
 		}
-		cs[k] = M{"company": st.Company, "cguid": st.CGUID, "seen": st.Seen, "route": st.Route, "why": st.Why, "listMs": st.ListMs, "night": st.Night, "readAt": st.ReadAt, "cands": l}
+		ad, ls := M{}, []any{}
+		for mid, a := range st.addon {
+			ad[mid] = a
+		}
+		for mid := range st.listed {
+			ls = append(ls, mid)
+		}
+		sort.Slice(ls, func(i, j int) bool { return str(ls[i]) < str(ls[j]) })
+		cs[k] = M{"company": st.Company, "cguid": st.CGUID, "seen": st.Seen, "route": st.Route, "why": st.Why, "listMs": st.ListMs, "night": st.Night, "readAt": st.ReadAt, "cands": l,
+			"addonN": st.addonN, "addon": ad, "listed": ls}
 	}
 	a := M{}
 	for k, e := range bank.alerts {
@@ -211,6 +235,7 @@ func bankNoteAddon(c *change) {
 			st.addon[mid] = 0
 		}
 	}
+	bankSave() // 2.4.1: the count kept with the counter (a restart must not forget it)
 }
 
 // the add-on's line took Tally's entry at this AlterID
@@ -227,6 +252,7 @@ func bankNoteTaken(c *change) {
 	bankFresh()
 	if st := bank.cos[bankKey(c.company, c.companyGuid)]; st != nil && a > st.addon[mid] && len(st.addon) < 20000 {
 		st.addon[mid] = a
+		bankSave() // 2.4.1: kept with the counter
 	}
 }
 
