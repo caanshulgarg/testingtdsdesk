@@ -586,7 +586,7 @@ function gstParts(b){
   return {parts, ftype, regs, noBooks};
 }
 // one part of the GST tab, as the old pages draw it
-function gstPartGo(id){ S.gstPart = id; render(); }
+function gstPartGo(id){ S.gstPart = id; S.gstView = "return"; S.gstSub = ""; render(); }
 function gstSetYm(ym){ S.gstYm = ym; S.books.reco = null; render(); }
 function gstSetReg(reg){ S.gstReg = reg; S.books.reco = null; render(); }
 

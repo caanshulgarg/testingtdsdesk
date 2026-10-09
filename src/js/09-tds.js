@@ -17,6 +17,32 @@ const TDS = {
   formName(kind, fy){ return this.isNew(fy) && this.NEW_FORM[kind] ? "Form " + this.NEW_FORM[kind] : kind; },
   formNameLong(kind, fy){ return this.isNew(fy) && this.NEW_FORM[kind] ? "Form " + this.NEW_FORM[kind] + " (was " + kind + ")" : kind; },
   certName(fy){ return this.isNew(fy) ? "Form 130" : "Form 16"; },
+  // names only, for the return pages (redesign of 09-Oct-2026, app/src/screens/Books.jsx and TdsReturn.jsx): nothing here
+  // is used by a figure or a file. From tax year 2026-27 a form is shown as the Income Tax Department's own PDFs head it,
+  // "Form No. 140 (Earlier Form No. 26Q)": Form 140 (earlier 26Q); earlier years keep the old name alone
+  FORM_ABOUT: {"24Q": "Salary", "26Q": "Non-salary, residents", "27Q": "Non-residents", "27EQ": "TCS"},
+  formShort(kind, fy){ return this.isNew(fy) && this.NEW_FORM[kind] ? "Form " + this.NEW_FORM[kind] + " (earlier " + kind + ")" : kind; },
+  formLabel(kind, fy){ return this.formShort(kind, fy) + " \u00b7 " + (this.FORM_ABOUT[kind] || ""); },
+  // Protean's RPU and FVU 1.2 say "Tax Year" for the years of the Act of 2025
+  yearWord(fy){ return this.isNew(fy) ? "Tax Year" : "Financial Year"; },
+  // a section as the return pages show it: from tax year 2026-27 the new provision of section 393 with the old section
+  // beside it, "393(1) Sl. 6(i) [old 194C]", taken only from the mapping FinCom already holds (RULE_DEFAULTS: ref and old);
+  // a section that mapping does not cover is shown under its old number alone. Earlier years: the old number alone.
+  secNew(section, fy){
+    const old = String(section || ""), k = this.sec(old);
+    if (!this.isNew(fy) || !k || typeof RULE_DEFAULTS === "undefined") return {old, ref: "", label: "", text: old};
+    const hits = RULE_DEFAULTS.filter(r => r.old && r.ref && /^39/.test(r.ref) && this.sec(r.old) === k);
+    if (!hits.length) return {old, ref: "", label: "", text: old};
+    // one old section can be several entries of the table (194J: professional, technical, director): the part they share
+    const refs = Array.from(new Set(hits.map(r => r.ref)));
+    let ref = refs[0];
+    refs.slice(1).forEach(x => { let i = 0; while (i < ref.length && ref[i] === x[i]) i++; ref = ref.slice(0, i); });
+    if (refs.length > 1) ref = ref.slice(0, ref.lastIndexOf(")") + 1);
+    const label = Array.from(new Set(hits.map(r => r.label))).slice(0, 3).join(" / ");
+    return {old, ref, label, text: ref + " [old " + old + "]"};
+  },
+  // what a section can be found by in a search: its old number and, from 2026-27, its new provision and table entry
+  secFind(section, fy){ const x = this.secNew(section, fy); return [x.old, x.ref, x.label].join(" "); },
   // TCS rates by date (old section 206C; section 394 of the Act of 2025 from 1 April 2026): [from, code, rate %]. The latest
   // row on or before the collection's date applies. From 1 April 2026: scrap and minerals 2%, overseas tour packages 2% flat
   TCS_RATES: [

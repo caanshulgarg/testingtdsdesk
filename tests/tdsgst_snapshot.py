@@ -99,7 +99,8 @@ def snapshot(site, port=8290, shots=None):
             for ym in months:
                 for part in parts:
                     key = "gst/%s/%s/%s" % (reg, ym, part)
-                    for sub in (["summary", "details", "diff", "file"] if part in ("r1", "r3b") else [""]):
+                    # every tab of the return (a part the GSTIN's filing type does not have opens the first, GSTR-1)
+                    for sub in ["summary", "details", "diff", "file"]:
                         pg.evaluate("([reg, ym, part, sub]) => { S.booksTab = 'gst'; S.gstReg = reg; S.gstSeen = ''; S.gstYm = ym; S.books.reco = null; S.gstView = 'return'; S.gstPart = part; S.gstSub = sub; S.gstSeen = reg + '|' + GSTSet.typeOf(ym, reg); render(); }", [reg, ym, part, sub])
                         take(key)
                     if part in ("r1", "r3b"):

@@ -1,6 +1,7 @@
 // GSTR-1 and GSTR-3B for the month and GSTIN chosen, worked out from the day book, and the checks before filing.
 // Was viewGstr1, viewGstr3b and viewGstChecks (src/js/18). The figures are GSTR.one() and GSTR.threeB() (src/js/12);
-// the customers' IMS rejections are CustIms.jsx; filing is Filing.jsx.
+// the customers' IMS rejections are CustIms.jsx; filing is Filing.jsx. Since 09-Oct-2026 each return is shown a tab at
+// a time (sub: summary, details, diff, file; Gst.jsx draws the tabs and the File tab's downloads); without sub, all of it.
 import FilterBar from "../../parts/FilterBar.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
 import { Filing } from "./Filing.jsx";
@@ -55,19 +56,23 @@ function Customers({ rows }) {
   </>;
 }
 
-export function Gstr1({ b }) {
+export function Gstr1({ b, sub }) {
+  const on = (k) => !sub || sub === k;
   const g = GSTR.one(S.gstYm || "", S.gstReg || "");
   const amend = S.gstReg && GSTAmend.filed(S.gstReg).length ? GSTAmend.pending(S.gstYm || "", S.gstReg).rows.filter((r) => r.act !== "skip") : [];
   const adv = GSTAdv.ready() ? GSTAdv.month(S.gstYm || "", S.gstReg || "") : null;
   const rows = g.b2b.concat(g.b2cl).concat(g.b2c).concat(g.cdnr).concat(g.exp).concat(g.nil);
   const ECO = { amazon: "Amazon", flipkart: "Flipkart", shopify: "Shopify" }, NAT = { 1: "Invoices for outward supply", 4: "Debit notes", 5: "Credit notes" };
   return <>
+    {on("summary") && <>
     <div className="dash-tiles"><Box label="B2B (4A)" s={GSTR.sum(g.b2b)} /><Box label="B2C large (5)" s={GSTR.sum(g.b2cl)} /><Box label="B2C small (7)" s={GSTR.sum(g.b2c)} /><Box label="Notes (9B)" s={GSTR.sum(g.cdnr)} /></div>
     <div className="dash-tiles"><Box label="Exports and SEZ (6)" s={GSTR.sum(g.exp)} /><Box label="Nil, exempt, non-GST (8)" s={GSTR.sum(g.nil)} /><Box label="Reverse charge (4B)" s={GSTR.sum(g.rcm)} /><Box label="All outward" s={g.total} /></div>
     {amend.length > 0 && <div className="dash-tiles"><div className="dtile warn"><span>Earlier months to amend</span><b>{amend.length}</b>
       <small><button className="linkbtn" onClick={() => gstPartGo("amend")}>See them</button>; they go into this month’s JSON</small></div></div>}
     {adv && (adv.at.length > 0 || adv.txpd.length > 0) && <div className="dash-tiles"><Box label="Advances received (11A)" s={adv.atSum} /><Box label="Advances adjusted (11B)" s={adv.txpdSum} />
       <div className="dtile"><span>Advances</span><b><button className="linkbtn" onClick={() => gstPartGo("adv")}>See them</button></b><small>in the JSON as at and txpd</small></div></div>}
+    </>}
+    {on("details") && <>
     <Customers rows={rows} />
     <section className="dash-card" style={{ marginTop: 12 }}><h3>HSN summary (12)</h3><div className="bk-tablewrap"><table className="bk-table" data-statement="">
       <thead><tr><th>HSN</th><th>Goods or services</th><th className="n">Rate</th><th className="n">Invoices</th><th className="n">Taxable</th><th className="n">IGST</th><th className="n">CGST</th><th className="n">SGST</th></tr></thead>
@@ -87,8 +92,12 @@ export function Gstr1({ b }) {
         <td className="n">{x.n}</td><td className="n">{x.cancelled}</td><td className="n">{x.n - x.cancelled}</td></tr>)}</tbody>
     </table></div>
       <p className="note">Cancelled vouchers are counted from Tally (marked cancelled there); a number missing from a series is not, so enter or cancel it in Tally first.</p></section>
+    </>}
+    {on("diff") && <>
     <Checks />
     <CustIms />
+    {sub && <p className="note" style={{ marginTop: 12 }}>The GSTR-1 as filed on the portal against this working, month by month: <button className="linkbtn" onClick={() => gstPartGo("filedcmp")}>Filed vs FinCom</button> · invoice by invoice: <button className="linkbtn" onClick={() => gstPartGo("recon")}>Filed vs books</button></p>}
+    </>}
   </>;
 }
 
@@ -118,19 +127,23 @@ function Unclaimed({ reg, ym }) {
   </table></div>;
 }
 
-export function Gstr3b({ b }) {
+export function Gstr3b({ b, sub }) {
+  const on = (k) => !sub || sub === k;
   const t = GSTR.threeB(S.gstYm || "", S.gstReg || ""), choice = ((b.itcBasis || {})[S.gstReg || ""]) || "2b";
   const ft = typeof GSTSet === "object" ? GSTSet.typeOf(S.gstYm || "", S.gstReg || "") : "monthly";
   const P = t.pay, months = GSTR.months(), first = months[0] === S.gstYm;
   const HD = [["igst", "Integrated tax"], ["cgst", "Central tax"], ["sgst", "State/UT tax"], ["cess", "Cess"]];
   const heldNote = t.basis === "2b" && (t.held.n || t.released.n || (t.cn2b && t.cn2b.n) || (t.rejBack && t.rejBack.n));
   const stateName = (pos) => (Object.keys(STATE_CODES).find((k) => STATE_CODES[k] === pos) || "").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+  if (sub === "file") return <Filing b={b} t={t} />;
+  if (sub === "diff") return <><Unclaimed reg={S.gstReg || ""} ym={S.gstYm || ""} /><Checks />
+    <p className="note" style={{ marginTop: 12 }}>Bills against 2B, one by one: <button className="linkbtn" onClick={() => gstPartGo("r2b")}>2B reconciliation</button> · credit held back: <button className="linkbtn" onClick={() => gstPartGo("follow")}>ITC follow-up</button> · the 3B as filed against this working: <button className="linkbtn" onClick={() => gstPartGo("filedcmp")}>Filed vs FinCom</button></p></>;
   return <>
     <div className="gf-ctl" style={{ marginBottom: 10 }}>
       <span className="note">Credit in table 4: <b>{choice === "2b" ? "as far as 2B shows it" : "as booked in Tally"}</b> · filing {typeof GSTSet === "object" ? GSTSet.typeLabel(ft).toLowerCase() : "monthly"} · <SetLink /></span>
       <span className="note">{t.basis === "2b" ? "This month’s 2B is here; bills not in it are held back." : t.basis === "no 2B" ? "No 2B for this month here, so the books are used; bring it in under 2B reconciliation." : "As booked."}</span>
     </div>
-    <div className="bk-tablewrap"><table className="bk-table" data-statement="">
+    {on("summary") && <div className="bk-tablewrap"><table className="bk-table" data-statement="">
       <thead><tr><th>3.1 Outward supplies and inward on reverse charge</th><th className="n">Taxable</th><th className="n">IGST</th><th className="n">CGST</th><th className="n">SGST</th></tr></thead>
       <tbody>
         <Row label="(a) Outward taxable supplies, other than zero rated, nil and exempt" x={t.sale} />
@@ -144,7 +157,8 @@ export function Gstr3b({ b }) {
         <Row label="(e) Non-GST outward supplies" x={t.nongst} />
         <Gap /><Row label="Net outward, taxable" x={t.net} bold />
       </tbody>
-    </table></div>
+    </table></div>}
+    {on("details") && <>
     <div className="bk-tablewrap" style={{ marginTop: 12 }}><table className="bk-table" data-statement="">
       <thead><tr><th>3.2 Of 3.1(a), inter-state supplies to unregistered persons, by place of supply</th><th className="n">Taxable</th><th className="n">IGST</th></tr></thead>
       <tbody>{t.unregPos.length ? t.unregPos.map((x) => <tr key={x.pos}><td>{x.pos + " " + stateName(x.pos)}</td><td className="n">{money(x.taxable)}</td><td className="n">{money(x.igst)}</td></tr>)
@@ -169,7 +183,7 @@ export function Gstr3b({ b }) {
         {t.ineligible ? <tr><td className="nr">Tax charged to cost in the books</td><td className="n">{money(t.ineligible)}</td><td colSpan={3}></td></tr> : null}
       </tbody>
     </table></div>
-    <Unclaimed reg={S.gstReg || ""} ym={S.gstYm || ""} />
+    {!sub && <Unclaimed reg={S.gstReg || ""} ym={S.gstYm || ""} />}
     <div className="bk-tablewrap" style={{ marginTop: 12 }}><table className="bk-table" data-statement="">
       <thead><tr><th>5 Exempt, nil and non-GST inward supplies</th><th className="n">Inter-state</th><th className="n">Intra-state</th></tr></thead>
       <tbody>
@@ -177,6 +191,8 @@ export function Gstr3b({ b }) {
         <tr><td>Non-GST supply</td><td className="n">{money(t.inw5.ngInter)}</td><td className="n">{money(t.inw5.ngIntra)}</td></tr>
       </tbody>
     </table></div>
+    </>}
+    {on("summary") && <>
     {/* 6.1: how the tax is paid, in the order the law sets, and the credit carried to next month */}
     <div className="bk-tablewrap" style={{ marginTop: 12 }}><table className="bk-table" data-statement="">
       <thead><tr><th>6.1 Payment of tax</th><th className="n">Tax payable</th><th className="n">Through IGST credit</th><th className="n">CGST credit</th><th className="n">SGST credit</th><th className="n">Cess credit</th><th className="n">In cash</th><th className="n">Reverse charge, in cash</th></tr></thead>
@@ -192,7 +208,8 @@ export function Gstr3b({ b }) {
       </tbody>
     </table></div>
     <p className="note">Worked out from the books. Credit is used as sections 49 and 49A and rule 88A require: IGST credit first against IGST, the rest against CGST and SGST; then CGST and SGST credit against their own tax and then IGST; CGST never against SGST. Reverse charge is paid in cash. Interest and late fee, and anything paid outside the books, are not included; check the ledgers on the portal before paying.</p>
-    <Checks />
-    <Filing b={b} t={t} />
+    </>}
+    {!sub && <><Checks />
+    <Filing b={b} t={t} /></>}
   </>;
 }

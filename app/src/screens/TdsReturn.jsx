@@ -4,6 +4,10 @@
 //
 // The figures come from the business logic: TDS.rows() (deductions read from the books), TDS.challans(),
 // TDS.challanUse(), Certs.issues(), TDS.interest(), TDS.lateFee(), TDS24Q.annexI()/annexII()/checks().
+// Redesign of 09-Oct-2026 (the owner's request, Computax and Winman as the pattern): a return opens on its Summary, then
+// Challans · Deductees · Entries · Errors to fix · File (the downloads and the FVU, moved from above the tabs). From tax
+// year 2026-27 a section is shown as the Act of 2025 numbers it with the old section beside it (TDS.secNew, src/js/09):
+// "393(1) Sl. 6(i) [old 194C]"; the section filter and the find box take either.
 // Filters are kept per tab in S.tdsFl, sorting in S.tdsSort; the row opened under a table in S.chOpen, S.tdsOpen,
 // S.q24Open. Changes go through tdsFilter, tdsSortBy, tdsToggle, tdsAlloc, challanAdd, … (src/js/27).
 import { useState } from "react";
@@ -14,6 +18,9 @@ const day = (d) => fmtDate(tallyDate(d));
 const NoPan = () => <span className="tag warn">no PAN</span>;
 const Pan = ({ pan }) => (Certs.validPan(pan) ? pan : <NoPan />);
 const Empty = ({ children }) => <div className="bk-none">{children}</div>;
+// a section: from 2026-27 the new provision with the old section beside it and the table entry under it; before, as it was
+export const Sec = ({ s, fy = S.tdsFy }) => { const x = TDS.secNew(s, fy); return x.ref ? <span className="rp-sec" data-sec={x.old}>{x.ref} [old {x.old}]<small>{x.label}</small></span> : <>{s}</>; };
+const secText = (s, fy = S.tdsFy) => TDS.secNew(s, fy).text;
 
 // the bar above a return's table: find, choices, how many shown, print, Excel
 function FilterBar({ tab, placeholder, table, title, excel, count, selects = [] }) {
@@ -23,7 +30,7 @@ function FilterBar({ tab, placeholder, table, title, excel, count, selects = [] 
       <input type="search" value={f.q || ""} placeholder={placeholder} aria-label={placeholder} style={{ width: 260, flex: "0 0 auto" }} data-fk={"tdsf-" + tab}
         onChange={(ev) => tdsFilter(tab, "q", ev.target.value, true)} />
       {selects.map((sel) => (
-        <select key={sel.key} style={{ width: "auto", flex: "0 0 auto" }} aria-label={sel.label || sel.key} value={f[sel.key] || ""} onChange={(ev) => tdsFilter(tab, sel.key, ev.target.value)}>
+        <select key={sel.key} style={{ width: "auto", flex: "0 1 auto", maxWidth: "100%" }} aria-label={sel.label || sel.key} value={f[sel.key] || ""} onChange={(ev) => tdsFilter(tab, sel.key, ev.target.value)}>
           {sel.options.map(([v, l], i) => <option key={i} value={v}>{l}</option>)}
         </select>))}
       <span className="note">{count || ""}</span>
@@ -36,7 +43,7 @@ function FilterBar({ tab, placeholder, table, title, excel, count, selects = [] 
 
 function Tabs({ tabs }) {
   return (
-    <nav className="sbar" aria-label="Return" style={{ marginTop: 4 }}>
+    <nav className="sbar rp-tabs" aria-label="Return" style={{ marginTop: 4 }}>
       {tabs.map(([id, l, n]) => <button key={id} aria-selected={S.tdsTab === id} onClick={() => tdsTabGo(id)}>{l}{n != null && <> <span className="sbar-n">{n}</span></>}</button>)}
     </nav>
   );
@@ -82,7 +89,7 @@ const chState = (c, use) => { const u = use[c.id] || 0, l = r2(num(c.tax) - u); 
 function Challans({ fy, q, ch, allRows, allCh, use, title }) {
   const f = (S.tdsFl || {}).challans || {}, qq = String(f.q || "").toLowerCase(), left = (c) => r2(num(c.tax) - (use[c.id] || 0));
   const shown = tdsSorted("challans", ch.filter((c) => {
-    if (qq && ![c.bsr, c.serial, c.section || ""].join(" ").toLowerCase().includes(qq)) return false;
+    if (qq && ![c.bsr, c.serial, c.section ? TDS.secFind(c.section, fy) : ""].join(" ").toLowerCase().includes(qq)) return false;
     if (f.state === "unused" && (use[c.id] || 0) > 0) return false;
     if (f.state === "part" && !((use[c.id] || 0) > 0 && left(c) > 0.5)) return false;
     if (f.state === "full" && Math.abs(left(c)) > 0.5) return false;
@@ -108,7 +115,7 @@ function Challans({ fy, q, ch, allRows, allCh, use, title }) {
       tail={<NewChallan />} prep={(c) => ({ mine: allRows.filter((r) => r.challan === c.id), l: left(c) })}
       after={(c, p) => S.chOpen === c.id && (p.mine.length ? <table className="bk-table" style={{ margin: 0 }} data-statement="">
           <thead><tr><th className="dt">Date</th><th>Deductee</th><th>PAN</th><th>Section</th><th className="n">Paid or credited</th><th className="n">TDS</th></tr></thead>
-          <tbody>{p.mine.map((r) => <tr key={r.id}><td>{day(r.date)}</td><td>{r.party}</td><td><Pan pan={r.pan} /></td><td>{r.section}</td><td className="n">{money(r.paid)}</td><td className="n">{money(r.tds)}</td></tr>)}</tbody>
+          <tbody>{p.mine.map((r) => <tr key={r.id}><td>{day(r.date)}</td><td>{r.party}</td><td><Pan pan={r.pan} /></td><td><Sec s={r.section} fy={fy} /></td><td className="n">{money(r.paid)}</td><td className="n">{money(r.tds)}</td></tr>)}</tbody>
         </table> : <p className="note" style={{ margin: 8 }}>No deduction is against this challan yet.</p>)}
       cols={[
         { k: "sl", role: "row", label: "Sl.", cls: "n", cell: (c, p, i) => i + 1 },
@@ -117,7 +124,7 @@ function Challans({ fy, q, ch, allRows, allCh, use, title }) {
         { k: "serial", role: "number", label: "Serial", v: (c) => String(c.serial || ""), cell: (c) => c.serial },
         { k: "tax", role: "amount", label: "Tax", cls: "n", v: (c) => num(c.tax), fmt: money, cell: (c) => money(c.tax) },
         { k: "state", role: "status", label: "Use", v: (c, p) => chState(c, use), cell: (c) => { const w = chState(c, use); return <span className={"tag " + (/more than/.test(w) ? "bad" : /Not used|Part/.test(w) ? "warn" : "ok")}>{w}</span>; } },
-        { k: "secs", label: "Sections", cell: (c, p) => Array.from(new Set(p.mine.map((r) => r.section))).join(", ") || c.section || "—" },
+        { k: "secs", label: "Sections", cell: (c, p) => Array.from(new Set(p.mine.map((r) => r.section))).map((x) => secText(x, fy)).join(", ") || c.section || "—" },
         { k: "int", label: "Interest", cls: "n", v: (c) => num(c.interest), sum: true, fmt: money, cell: (c) => money(c.interest) },
         { k: "used", label: "Used", cls: "n", v: (c) => use[c.id] || 0, sum: true, fmt: money, cell: (c) => money(use[c.id] || 0) },
         { k: "left", label: "Left", cls: "n", v: (c) => left(c), sum: true, fmt: money, td: (c, p) => ({ className: p.l < -0.5 ? "bad" : undefined }), cell: (c, p) => money(p.l) },
@@ -155,7 +162,7 @@ function Deductees({ rows, deductees, issueOf, pass, common, chOpts, title }) {
       empty="No deductee matches these filters. Use Clear filters above to see all."
       after={(p) => S.tdsOpen === p.key && <table className="bk-table" style={{ margin: 0 }} data-statement="">
           <thead><tr><th className="dt">Date</th><th>Voucher</th><th>Section</th><th className="n">Paid or credited</th><th className="n">Rate</th><th className="n">TDS</th><th>Challan</th></tr></thead>
-          <tbody>{p.rows.map((r) => <tr key={r.id}><td>{day(r.date)}</td><td>{r.voucher || ""}</td><td>{r.section}</td><td className="n">{money(r.paid)}</td>
+          <tbody>{p.rows.map((r) => <tr key={r.id}><td>{day(r.date)}</td><td>{r.voucher || ""}</td><td><Sec s={r.section} /></td><td className="n">{money(r.paid)}</td>
             <td className="n"><Rate r={r} issue={issueOf[r.id]} /></td><td className="n">{money(r.tds)}</td><td><ChallanPick r={r} chOpts={chOpts} /></td></tr>)}</tbody>
         </table>}
       cols={[
@@ -164,7 +171,7 @@ function Deductees({ rows, deductees, issueOf, pass, common, chOpts, title }) {
         { k: "tds", role: "amount", label: "TDS", cls: "n", v: (p) => p.tds, fmt: money, cell: (p) => <b>{money(p.tds)}</b> },
         { k: "pan", label: "PAN", v: (p) => p.pan || "", cell: (p) => <Pan pan={p.pan} /> },
         { k: "code", label: "Code", cell: (p) => (Certs.validPan(p.pan) ? (/^[A-Z]{3}C/.test(p.pan) ? "01 company" : "02 other") : "—") },
-        { k: "secs", label: "Sections", v: (p) => Array.from(p.secs).join(","), cell: (p) => Array.from(p.secs).join(", ") },
+        { k: "secs", label: "Sections", v: (p) => Array.from(p.secs).join(","), cell: (p) => Array.from(p.secs).map((x) => secText(x)).join(", ") },
         { k: "n", label: "Deductions", cls: "n", v: (p) => p.n, sum: true, fmt: String, cell: (p) => <button className="linkbtn" onClick={() => tdsToggle("tdsOpen", p.key)}>{p.n}</button> },
         { k: "unallocated", label: "Not against a challan", cls: "n", v: (p) => p.unallocated, sum: true, fmt: money, td: (p) => ({ className: p.unallocated ? "bad" : undefined }), cell: (p) => (p.unallocated ? money(p.unallocated) : "—") },
       ]} />
@@ -193,7 +200,7 @@ function Deductions({ fy, q, rows, issueOf, pass, common, chOpts, title }) {
         { k: "tds", role: "amount", label: "TDS", cls: "n", v: (r) => r.tds, fmt: money, cell: (r) => money(r.tds) },
         { k: "challan", role: "status", label: "Challan", v: (r) => (r.challan ? 1 : 0), cell: (r) => <ChallanPick r={r} chOpts={chOpts} /> },
         { k: "pan", label: "PAN", v: (r) => r.pan || "", cell: (r) => <Pan pan={r.pan} /> },
-        { k: "section", label: "Section", v: (r) => r.section || "", cell: (r) => r.section },
+        { k: "section", label: "Section", v: (r) => r.section || "", cell: (r) => <Sec s={r.section} fy={fy} /> },
         { k: "rate", label: "Rate", cls: "n", v: (r) => (r.rate == null ? "" : r.rate), cell: (r) => <Rate r={r} issue={issueOf[r.id]} why /> },
       ]} />
   </>;
@@ -208,7 +215,7 @@ function RateQuestions({ list }) {
       { k: "party", role: "party", label: "Deductee", v: (x) => x.row.party, cell: (x) => x.row.party },
       { k: "paid", role: "amount", label: "Paid", cls: "n", v: (x) => num(x.row.paid), fmt: money, cell: (x) => money(x.row.paid) },
       { k: "pan", label: "PAN", v: (x) => x.row.pan || "", cell: (x) => <Pan pan={x.row.pan} /> },
-      { k: "sec", label: "Section", v: (x) => x.row.section || "", cell: (x) => x.row.section },
+      { k: "sec", label: "Section", v: (x) => x.row.section || "", cell: (x) => <Sec s={x.row.section} fy={x.row.fy || S.tdsFy} /> },
       { k: "used", label: "Rate used", cls: "n", v: (x) => (x.row.rate == null ? "" : x.row.rate), cell: (x) => (x.row.rate == null ? "" : x.row.rate + "%") },
       { k: "exp", label: "Rate that applies", cls: "n", v: (x) => x.expected, cell: (x) => x.expected + "%" },
       { k: "why", label: "Why", cell: (x) => x.why },
@@ -216,14 +223,30 @@ function RateQuestions({ list }) {
     ]} />;
 }
 
+// the FVU's answer on the file (on the File tab since 09-Oct-2026; it was above the 26Q checks and the 27Q/27EQ checks)
+function FvuResult({ form }) {
+  const fr = S.fvuResult;
+  if (!fr || (form !== "26Q" && fr.form !== form)) return null;
+  const what = form === "26Q" ? fr.q : form;
+  return <section className={"bk-alert " + (fr.ok ? "" : "bad")}><b>{fr.ok ? "The FVU accepted the " + what + " file." : "The FVU found problems in the " + (what || "") + " file."}</b>
+    {form === "26Q" && fr.fvu && <p className="note">Upload file: {fr.fvu}</p>}
+    {fr.errors && <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, maxHeight: 220, overflow: "auto", margin: "8px 0 0" }}>{String(fr.errors).slice(0, 4000)}</pre>}
+    {form === "26Q" && !fr.errors && !fr.ok && fr.output && <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, maxHeight: 160, overflow: "auto" }}>{String(fr.output).slice(0, 2000)}</pre>}
+    <div className="row" style={{ marginTop: 8 }}><button className="linkbtn" onClick={() => doAct("fvuClose")}>Hide this</button></div></section>;
+}
+
+// the quarter by section (on the Summary since 09-Oct-2026; it was the last part of the checks)
+function BySection({ fy, q, form }) {
+  const sum = form === "26Q" ? TDS.summary(fy, q) : TDS.summary(fy, q, form), tcs = form === "27EQ";
+  return <section className="dash-card" style={{ marginTop: 12 }}><h3>By section</h3><div className="bk-tablewrap"><table className="bk-table" data-statement="">
+    <thead><tr><th>Section</th><th className="n">{tcs ? "Collections" : "Deductions"}</th><th className="n">{form === "26Q" ? "Paid or credited" : "Paid or received"}</th><th className="n">{tcs ? "TCS" : "TDS"}</th><th className="n">Not against a challan</th></tr></thead>
+    <tbody>{sum.map((s) => <tr key={s.section}><td><Sec s={s.section} fy={fy} /></td><td className="n">{s.count}</td><td className="n">{money(s.paid)}</td><td className="n">{money(s.tds)}</td><td className="n">{money(s.unallocated)}</td></tr>)}</tbody>
+  </table></div></section>;
+}
+
 function Checks26({ fy, q, int1A, fee, issues }) {
-  const total = r2(int1A.reduce((a, x) => a + x.amount, 0)), fr = S.fvuResult, sum = TDS.summary(fy, q);
+  const total = r2(int1A.reduce((a, x) => a + x.amount, 0));
   return <>
-    {fr && <section className={"bk-alert " + (fr.ok ? "" : "bad")}><b>{fr.ok ? "The FVU accepted the " + fr.q + " file." : "The FVU found problems in the " + (fr.q || "") + " file."}</b>
-      {fr.fvu && <p className="note">Upload file: {fr.fvu}</p>}
-      {fr.errors && <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, maxHeight: 220, overflow: "auto", margin: "8px 0 0" }}>{String(fr.errors).slice(0, 4000)}</pre>}
-      {!fr.errors && !fr.ok && fr.output && <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, maxHeight: 160, overflow: "auto" }}>{String(fr.output).slice(0, 2000)}</pre>}
-      <div className="row" style={{ marginTop: 8 }}><button className="linkbtn" onClick={() => doAct("fvuClose")}>Hide this</button></div></section>}
     <section className="dash-card" style={{ marginBottom: 12 }}><h3>Interest and late fee</h3>
       <div className="dash-row"><span>Interest under 201(1A), paid after the due date</span><b>{money(total)}</b></div>
       <div className="dash-row"><span>Late filing fee under 234E, if filed today</span><b>{money(fee && fee.days > 0 ? fee.fee : 0)}</b></div>
@@ -240,10 +263,6 @@ function Checks26({ fy, q, int1A, fee, issues }) {
         ]} /> : <p className="note">No deduction was paid late.</p>}
     </section>
     <section className="dash-card" style={{ marginBottom: 12 }}><h3>Rate questions</h3>{issues.length ? <RateQuestions list={issues} /> : <p className="note">Every deduction matches the rate that applies.</p>}</section>
-    <section className="dash-card"><h3>By section</h3><div className="bk-tablewrap"><table className="bk-table" data-statement="">
-      <thead><tr><th>Section</th><th className="n">Deductions</th><th className="n">Paid or credited</th><th className="n">TDS</th><th className="n">Not against a challan</th></tr></thead>
-      <tbody>{sum.map((s) => <tr key={s.section}><td>{s.section}</td><td className="n">{s.count}</td><td className="n">{money(s.paid)}</td><td className="n">{money(s.tds)}</td><td className="n">{money(s.unallocated)}</td></tr>)}</tbody>
-    </table></div></section>
   </>;
 }
 
@@ -260,12 +279,8 @@ function NrInfo({ party }) {
   </td></tr>;
 }
 function ChecksOther({ fy, q, form, other, rows }) {
-  const fr = S.fvuResult, sum = TDS.summary(fy, q, form);
   const parties = Array.from(new Set(rows.map((r) => r.party)));
   return <>
-    {fr && fr.form === form && <section className={"bk-alert " + (fr.ok ? "" : "bad")}><b>{fr.ok ? "The FVU accepted the " + form + " file." : "The FVU found problems in the " + form + " file."}</b>
-      {fr.errors && <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, maxHeight: 220, overflow: "auto", margin: "8px 0 0" }}>{String(fr.errors).slice(0, 4000)}</pre>}
-      <div className="row" style={{ marginTop: 8 }}><button className="linkbtn" onClick={() => doAct("fvuClose")}>Hide this</button></div></section>}
     <section className="dash-card" style={{ marginBottom: 12 }} data-checks={form}><h3>Before the file is made</h3>
       {other.length ? <ul>{other.map((x, i) => <li key={i}>{x.party ? <><b>{x.party}</b>: missing {x.missing.join(", ")}</> : x.why}</li>)}</ul>
         : <p className="note">Nothing is missing.</p>}
@@ -280,10 +295,6 @@ function ChecksOther({ fy, q, form, other, rows }) {
         <tbody>{Array.from(new Set(rows.map((r) => r.ledger))).map((l) => <tr key={l}><td>{l}</td><td>
           <select aria-label={"Collection code: " + l} value={TCS27EQ.codeOf(l)} onChange={(ev) => tdsTcsCode(l, ev.target.value)}>
             <option value="">Choose…</option>{TCS27EQ.CODES.map(([c, t]) => <option key={c} value={c}>{c} · {t}</option>)}</select></td></tr>)}</tbody></table></div></section>}
-    <section className="dash-card"><h3>By section</h3><div className="bk-tablewrap"><table className="bk-table" data-statement="">
-      <thead><tr><th>Section</th><th className="n">{form === "27EQ" ? "Collections" : "Deductions"}</th><th className="n">Paid or received</th><th className="n">{form === "27EQ" ? "TCS" : "TDS"}</th><th className="n">Not against a challan</th></tr></thead>
-      <tbody>{sum.map((s) => <tr key={s.section}><td>{s.section}</td><td className="n">{s.count}</td><td className="n">{money(s.paid)}</td><td className="n">{money(s.tds)}</td><td className="n">{money(s.unallocated)}</td></tr>)}</tbody>
-    </table></div></section>
   </>;
 }
 
@@ -293,7 +304,7 @@ export function Return26({ b, allRows, form = "26Q" }) {
   const issues = form === "26Q" ? Certs.issues(fy, q) : [], issueOf = {};
   issues.forEach((x) => { issueOf[x.row.id] = x; });
   const deductees = new Set(rows.map((r) => (r.pan && Certs.validPan(r.pan) ? r.pan : normName(r.party)))).size;
-  if (!["challans", "deductees", "deductions", "checks"].includes(S.tdsTab)) S.tdsTab = "challans";
+  if (!["summary", "challans", "deductees", "deductions", "checks", "file"].includes(S.tdsTab)) S.tdsTab = "summary";
   const tds = r2(rows.reduce((a, r) => a + r.tds, 0)), un = rows.filter((r) => !r.challan), chTax = r2(ch.reduce((a, c) => a + num(c.tax), 0));
   const int1A = form === "26Q" ? TDS.interest(fy, q) : [], fee = form === "26Q" ? TDS.lateFee(fy, q, (b.filedOn || {})[fy + q]) : null, noPan = rows.filter((r) => !Certs.validPan(r.pan)).length;
   const fname = TDS.formName(form, fy), draft = TDS.isNew(fy) && !NEW_FORMS_VALIDATED;
@@ -301,12 +312,12 @@ export function Return26({ b, allRows, form = "26Q" }) {
   const other = form === "27Q" ? TDS26Q.nrChecks(fy, q) : form === "27EQ" ? TCS27EQ.checks(fy, q) : [];
   const chOpts = ch.concat(allCh.filter((c) => !ch.includes(c) && TDS.fyOf(c.date) === fy));
   const secs = Array.from(new Set(rows.map((r) => r.section))).sort();
-  const common = [{ key: "section", label: "Section", options: [["", "Every section"]].concat(secs.map((x) => [x, x])) },
+  const common = [{ key: "section", label: "Section", options: [["", "Every section"]].concat(secs.map((x) => { const n = TDS.secNew(x, fy); return [x, n.ref ? n.text + " · " + n.label : x]; })) },
     { key: "pan", label: "PAN", options: [["", "PAN: any"], ["no", "No valid PAN"], ["yes", "Has a PAN"]] },
     { key: "challan", label: "Challan", options: [["", "Challan: any"], ["no", "Not against a challan"], ["yes", "Against a challan"]] }];
   const pass = (r, f) => {
     const qq = String(f.q || "").toLowerCase();
-    if (qq && ![r.party, r.pan, r.section, r.voucher, r.ledger].join(" ").toLowerCase().includes(qq)) return false;
+    if (qq && ![r.party, r.pan, TDS.secFind(r.section, fy), r.voucher, r.ledger].join(" ").toLowerCase().includes(qq)) return false;
     if (f.section && r.section !== f.section) return false;
     if (f.pan === "no" && Certs.validPan(r.pan)) return false;
     if (f.pan === "yes" && !Certs.validPan(r.pan)) return false;
@@ -319,25 +330,46 @@ export function Return26({ b, allRows, form = "26Q" }) {
   };
   const checksN = int1A.length || (fee && fee.days > 0) || issues.length || other.length ? int1A.length + issues.length + other.length + (fee && fee.days > 0 ? 1 : 0) : null;
   const common_ = { rows, issueOf, pass, common, chOpts, title };
+  const errN = un.length + noPan + issues.length + other.length + int1A.length + (fee && fee.days > 0 ? 1 : 0);
+  const unit = form === "27EQ" ? "collections" : "deductions";
   return <>
-    <div className="revfilter">
-      <button className="btn small" onClick={() => doAct("tdsAuto")}>Put them against challans</button>
-      <button className="btn small" onClick={() => doAct("tdsExcel")}>Download the {fname} working</button>
-      <button className="btn small" onClick={() => doAct("tdsTxt")}>Download the {fname} text file{draft ? " (draft)" : ""}</button>
-      <button className="btn small primary" disabled={!Bridge.on() || draft} title={draft ? "A draft is not sent to the FVU" : Bridge.on() ? undefined : "Needs FinCom Bridge"} onClick={() => doAct("tdsFvu")}>Check it with the FVU</button>
-    </div>
-    {draft && <section className="bk-alert" data-draft={TDS.formNo(form, fy)}><b>{fname} (was {form}): draft – not yet validated.</b> From 1 April 2026 the return is {fname} under the Income-tax Act, 2025, with new payment codes and file layout. FinCom’s file is not yet matched to Protean’s file format or run through their FVU: do not file it.</section>}
-    <div className="dash-tiles">
-      <Tile label={form === "27EQ" ? "TCS collected" : "TDS deducted"} value={money(tds)} sub={rows.length + (form === "27EQ" ? " collections, " + deductees + " buyers" : " deductions, " + deductees + " deductees")} />
-      <Tile label="Challans" value={money(chTax)} sub={ch.length + " challan" + (ch.length === 1 ? "" : "s")} />
-      <Tile label="Not against a challan" value={money(un.reduce((a, r) => a + r.tds, 0))} sub={un.length + " deductions"} warn={un.length > 0} />
-      <Tile label="To look at" value={issues.length + noPan + other.length} sub={noPan + " without PAN, " + (form === "26Q" ? issues.length + " rate questions" : other.length + " details missing")} warn={issues.length > 0 || noPan > 0 || other.length > 0} />
-    </div>
-    <Tabs tabs={[["challans", "Challans", ch.length], ["deductees", "Deductees", deductees], ["deductions", "Deductions", rows.length], ["checks", "Interest, late fee and checks", checksN]]} />
-    {S.tdsTab === "challans" ? <Challans fy={fy} q={q} ch={ch} allRows={allRows} allCh={allCh} use={use} title={title} />
+    <Tabs tabs={[["summary", "Summary"], ["challans", "Challans", ch.length], ["deductees", form === "27EQ" ? "Buyers" : "Deductees", deductees], ["deductions", "Entries", rows.length],
+      ["checks", "Errors to fix", errN || checksN || null], ["file", "File"]]} />
+    {draft && S.tdsTab !== "file" && <p className="note" style={{ margin: "6px 0 10px" }} data-draft-line={TDS.formNo(form, fy)}>{fname} (earlier {form}) is a draft: not yet validated. See File.</p>}
+    {S.tdsTab === "summary" ? <>
+      <div className="dash-tiles">
+        <Tile label={form === "27EQ" ? "TCS collected" : "TDS deducted"} value={money(tds)} sub={rows.length + (form === "27EQ" ? " collections, " + deductees + " buyers" : " deductions, " + deductees + " deductees")} />
+        <Tile label="Challans" value={money(chTax)} sub={ch.length + " challan" + (ch.length === 1 ? "" : "s")} />
+        <Tile label="Not against a challan" value={money(un.reduce((a, r) => a + r.tds, 0))} sub={un.length + " " + unit} warn={un.length > 0} />
+        <Tile label="To look at" value={issues.length + noPan + other.length} sub={noPan + " without PAN, " + (form === "26Q" ? issues.length + " rate questions" : other.length + " details missing")} warn={issues.length > 0 || noPan > 0 || other.length > 0} />
+      </div>
+      <BySection fy={fy} q={q} form={form} />
+      <div className="row" style={{ gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+        {errN > 0 && <button className="btn small" onClick={() => tdsTabGo("checks")}>Errors to fix ({errN})</button>}
+        <button className="btn small primary" onClick={() => tdsTabGo("file")}>Make the file</button></div>
+    </>
+      : S.tdsTab === "challans" ? <>
+        <div className="revfilter"><button className="btn small" onClick={() => doAct("tdsAuto")}>Put them against challans</button>
+          <span className="note">Sets each {form === "27EQ" ? "collection" : "deduction"} against a challan by section and date.</span></div>
+        <Challans fy={fy} q={q} ch={ch} allRows={allRows} allCh={allCh} use={use} title={title} /></>
       : S.tdsTab === "deductees" ? <Deductees deductees={deductees} {...common_} />
       : S.tdsTab === "deductions" ? <Deductions fy={fy} q={q} {...common_} />
-      : form === "26Q" ? <Checks26 fy={fy} q={q} int1A={int1A} fee={fee} issues={issues} /> : <ChecksOther fy={fy} q={q} form={form} other={other} rows={rows} />}
+      : S.tdsTab === "file" ? <>
+        {draft && <section className="bk-alert" data-draft={TDS.formNo(form, fy)}><b>{fname} (earlier {form}): draft – not yet validated.</b> From 1 April 2026 the return is {fname} under the Income-tax Act, 2025, with new payment codes and file layout. FinCom’s file is not yet matched to Protean’s file format or run through their FVU: do not file it.</section>}
+        <FvuResult form={form} />
+        <section className="dash-card" data-file={form}><h3>The file for {fname}, {q} {fy}</h3>
+          {un.length > 0 && <p className="note bad">{un.length} {unit} not against a challan: <button className="linkbtn" onClick={() => tdsTabGo("challans")}>put them against challans</button> first.</p>}
+          <ol className="note" style={{ margin: "0 0 10px 18px", padding: 0 }}><li>Download the working and check it.</li><li>Download the text file.</li><li>Check it with the FVU, then file it.</li></ol>
+          <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+            <button className="btn small" onClick={() => doAct("tdsExcel")}>Download the {fname} working</button>
+            <button className="btn small" onClick={() => doAct("tdsTxt")}>Download the {fname} text file{draft ? " (draft)" : ""}</button>
+            <button className="btn small primary" disabled={!Bridge.on() || draft} title={draft ? "A draft is not sent to the FVU" : Bridge.on() ? undefined : "Needs FinCom Bridge"} onClick={() => doAct("tdsFvu")}>Check it with the FVU</button>
+          </div></section></>
+      : <>
+        {(un.length > 0 || noPan > 0) && <section className="dash-card" style={{ marginBottom: 12 }} data-fix=""><h3>To fix before the file</h3>
+          {un.length > 0 && <div className="dash-row"><span>{un.length} {unit} not against a challan <button className="linkbtn" onClick={() => tdsTabGo("challans")}>Challans</button></span><b>{money(un.reduce((a, r) => a + r.tds, 0))}</b></div>}
+          {noPan > 0 && <div className="dash-row"><span>{noPan} without a valid PAN <button className="linkbtn" onClick={() => { tdsFilter("deductions", "pan", "no"); tdsTabGo("deductions"); }}>See them</button></span><b>{noPan}</b></div>}</section>}
+        {form === "26Q" ? <Checks26 fy={fy} q={q} int1A={int1A} fee={fee} issues={issues} /> : <ChecksOther fy={fy} q={q} form={form} other={other} rows={rows} />}</>}
   </>;
 }
 
@@ -369,8 +401,9 @@ function Employees({ fy, q, a1 }) {
 
 export function Return24({ b }) {
   const fy = S.tdsFy, q = S.tdsQ, has = (b.salary || []).length > 0;
-  const tabs = [["employees", "Employees"], ["challans", "Challans"]].concat(q === "Q4" ? [["annex2", "Annexure II, the year"]] : []).concat([["checks", "Checks"]]);
-  if (!tabs.some((t) => t[0] === S.tdsTab)) S.tdsTab = "employees";
+  const tabs = [["summary", "Summary"], ["employees", "Employees"], ["challans", "Challans"]].concat(q === "Q4" ? [["annex2", "Annexure II, the year"]] : []).concat([["checks", "Errors to fix"], ["file", "File"]]);
+  if (!tabs.some((t) => t[0] === S.tdsTab)) S.tdsTab = "summary";
+  const fname = TDS.formName("24Q", fy);
   const top = <div className="revfilter">
     <button className="btn small primary" onClick={() => doAct("salaryPick")}>Bring in the salary sheet</button>
     {has && <><button className="btn small" onClick={() => doAct("q24Excel")}>Download the 24Q working</button><button className="btn small" onClick={() => doAct("salaryClear")}>Remove the sheet</button></>}
@@ -397,14 +430,20 @@ export function Return24({ b }) {
   if (inBooks.length && Math.abs(booksTds - sheetTds) >= 1) checks.push({ what: "Salary TDS in the books differs from the salary sheet", n: inBooks.length,
     how: "Tally has " + money(booksTds) + " under section 192 this quarter; the sheet has " + money(sheetTds) + ".", who: Array.from(new Set(inBooks.map((r) => r.party))).slice(0, 3) });
   const use = S.tdsTab === "challans" ? TDS.challanUse() : null;
-  return <>{top}
-    <div className="dash-tiles" style={{ gridTemplateColumns: "repeat(3,minmax(0,1fr))" }}>
-      <Tile label="Employees this quarter" value={a1.length} sub={money(a1.reduce((s, e) => s + e.paid, 0)) + " paid"} />
-      <Tile label="TDS deducted" value={money(sheetTds)} sub={q + " " + fy} />
-      <Tile label="Before filing" value={checks.length} sub={checks.length ? checks[0].what : "nothing to fix"} warn={checks.length > 0} />
-    </div>
+  return <>
     <Tabs tabs={tabs.map(([id, l]) => [id, l, id === "employees" ? a1.length : id === "challans" ? ch.length : id === "checks" ? (checks.length || null) : null])} />
-    {S.tdsTab === "employees" ? <Employees fy={fy} q={q} a1={a1} />
+    {S.tdsTab === "summary" ? <>
+      <div className="dash-tiles" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
+        <Tile label="Employees this quarter" value={a1.length} sub={money(a1.reduce((s, e) => s + e.paid, 0)) + " paid"} />
+        <Tile label="TDS deducted" value={money(sheetTds)} sub={q + " " + fy} />
+        <Tile label="Before filing" value={checks.length} sub={checks.length ? checks[0].what : "nothing to fix"} warn={checks.length > 0} />
+      </div>
+      <div className="row" style={{ gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+        {checks.length > 0 && <button className="btn small" onClick={() => tdsTabGo("checks")}>Errors to fix ({checks.length})</button>}
+        <button className="btn small primary" onClick={() => tdsTabGo("file")}>The file and the salary sheet</button></div></>
+      : S.tdsTab === "file" ? <section className="dash-card" data-file="24Q"><h3>{fname}{TDS.isNew(fy) ? " (earlier 24Q)" : ""}, {q} {fy}</h3>
+        <p className="note">The working for the return comes from the salary sheet. Bring in a new sheet to replace it.</p>{top}</section>
+      : S.tdsTab === "employees" ? <Employees fy={fy} q={q} a1={a1} />
       : S.tdsTab === "challans" ? <>
         <p className="note">Challans deposited in {q}. Salary TDS is paid under section 192; add a challan under 26Q’s Challans tab if it is not here.</p>
         <ListTable name="q24Challans" id="q24ChTable" rows={ch} rowKey={(c) => c.id} unit={["challan", "challans"]}
@@ -414,7 +453,7 @@ export function Return24({ b }) {
             { k: "bsr", role: "number", label: "BSR code", v: (c) => String(c.bsr || ""), cell: (c) => c.bsr },
             { k: "serial", role: "number", label: "Serial", v: (c) => String(c.serial || ""), cell: (c) => c.serial },
             { k: "tax", role: "amount", label: "Tax", cls: "n", v: (c) => num(c.tax), fmt: money, cell: (c) => money(c.tax) },
-            { k: "sec", label: "Section", v: (c) => c.section || "", cell: (c) => c.section || "—" },
+            { k: "sec", label: "Section", v: (c) => c.section || "", cell: (c) => (c.section ? <Sec s={c.section} fy={fy} /> : "—") },
             { k: "int", label: "Interest", cls: "n", v: (c) => num(c.interest), sum: true, fmt: money, cell: (c) => money(c.interest) },
             { k: "used", label: "Used in 26Q", cls: "n", v: (c) => use[c.id] || 0, sum: true, fmt: money, cell: (c) => money(use[c.id] || 0) },
           ]} /></>
