@@ -941,18 +941,31 @@ function gst9cSet(key, v){
   saveBooks(); render();
 }
 // a Tally ledger's GST or TDS meaning, set on the Tally ledgers tab (app/src/screens/books/Ledgers.jsx): what (the
-// kind), tax, side, reg, gstRate, section, rate. A choice made here is the user's own: it counts as confirmed
-function lmSet(name, key, val){
-  const b = S.books, m = b.map[name] = b.map[name] || {n: 0};
-  if (key === "what") LedMaster.applyWhat(m, val || "none");
-  if (key === "tax" || key === "side" || key === "reg") m[key] = val;
-  if (key === "gstRate") m.gstRate = val ? num(val) : null;
-  if (key === "section") m.section = String(val).toUpperCase().replace(/\s+/g, "");
-  if (key === "rate") m.rate = val === "" ? null : num(val);
-  m.byHand = true; m.ok = true; m.okAt = new Date().toISOString(); m.okBy = whoAmI();
-  const it = ((b.ledCheck || {}).items || {})[name]; if (it) it.state = "confirmed";
-  LedMaster.tplLearn(b, [name]); try { LedMaster.applyPosting(b, CO(), "empty"); } catch (e){}
-  b.mapV = (b.mapV || 0) + 1; b.reco = null; saveBooks(); render();
+// kind), tax, side, reg, gstRate, section, rate. A choice made here is the user's own: it counts as confirmed.
+// FinCom 2.4.1 (Cause B): saved at once, its own confirm step, never a draft (it was a draft under the page's Save, so
+// the row said "✓ Confirmed" while nothing was saved). pre: the Editor's starting answer (the check's suggestion for a
+// ledger with none), written in the same step. What the ledger was before is kept for Undo (LedPage.undoRow)
+function lmSet(name, key, val, pre){
+  const b = S.books; if (!b) return;
+  Drafts.direct(() => {
+    b.map = b.map || {};
+    const ed = S.ledEditPrev && S.ledEditPrev.cid === b.cid && S.ledEditPrev.n === name ? S.ledEditPrev : null;
+    const was = ed ? ed.m : (b.map[name] ? LedPage.bare(b.map[name]) : null);
+    const m = b.map[name] = b.map[name] || {n: 0};
+    if (pre && !m.byHand && !m.what) pre(m);
+    if (key === "what") LedMaster.applyWhat(m, val || "none");
+    if (key === "tax" || key === "side" || key === "reg") m[key] = val;
+    if (key === "gstRate") m.gstRate = val ? num(val) : null;
+    if (key === "section") m.section = String(val).toUpperCase().replace(/\s+/g, "");
+    if (key === "rate") m.rate = val === "" ? null : num(val);
+    m.byHand = true; m.ok = true; m.okAt = new Date().toISOString(); m.okBy = whoAmI(); m.okHow = "change"; m.prev = was;
+    const it = ((b.ledCheck || {}).items || {})[name]; if (it) it.state = "confirmed";
+    LedMaster.tplLearn(b, [name]); try { LedMaster.applyPosting(b, CO(), "empty"); } catch (e){}
+    b.mapV = (b.mapV || 0) + 1; b.reco = null; if (typeof GSTR === "object") GSTR._carry = null; if (typeof GST2B === "object") GST2B._memo = null;
+    saveBooks();
+  }, {bypass: true});
+  S.ledUndo = {cid: b.cid, text: "Changed: " + name + ".", list: [[name, (b.map[name] || {}).prev === undefined ? null : b.map[name].prev]]};
+  render();
 }
 // a confirm button is its own confirm step (review 18): saved at once, not kept as a draft (src/js/60 Drafts.direct)
 function lmConfirmToggle(name){ const m = S.books.map[name]; if (m) Drafts.direct(() => { LedMaster.confirm(S.books, [name], !m.ok); S.books.reco = null; saveBooks(); render(); }, {bypass: true}); }

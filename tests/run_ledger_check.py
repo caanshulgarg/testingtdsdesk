@@ -34,8 +34,7 @@ with sync_playwright() as p:
     pg.wait_for_timeout(800)
     # FinCom 2.4.0: the check is worked out by itself on the ledgers page (no second list); Check again is under More
     ok(pg.locator("#app [data-ledpage]").count() == 1 and E("!!(S.books.ledCheck && S.books.ledCheck.ranAt)"), "the ledger check is worked out by itself on the Tally ledgers tab")
-    pg.click("#app [data-more-toggle=ledpage]"); pg.wait_for_timeout(300)
-    pg.click("#app [data-led-check-again]"); pg.wait_for_timeout(1500)
+    E("doAct('lcRun')"); pg.wait_for_timeout(1500)   # 2.4.1: no Check again button on the page; its action (lcRun) run directly
     got = E("(names) => Object.fromEntries(names.map(n => { const it = S.books.ledCheck.items[n]; const s = it ? LedCheck.pick(it) : {}; return [n, [s.what || '', s.side || '', s.tax || '', s.section || '', s.conf || '', (s.ev || []).map(e => e.src)]]; }))", list(WANT))
     for n, (w, side, tax) in WANT.items():
         g = got.get(n) or ["?"] * 6
@@ -52,7 +51,9 @@ with sync_playwright() as p:
     # 18. high confidence ticked to start with; the table shows the evidence with its source
     tk = E("(names) => names.filter(n => LedCheck.ticked(S.books.ledCheck.items[n]))", list(WANT))
     ok(set(tk) >= {"CGST 9 %", "SGST 9 %", "Professional Fee Non Gst", "Fee GST", "SB Cess @ .5%", "TDS ON RENT 94I", "RCM Payable"}, "18. high-confidence answers ticked to start with (%d of %d)" % (len(tk), len(WANT)))
-    ok(pg.locator("#app tr[data-key='CGST 9 %'] [data-led-why] .tag:has-text('Tally master')").count() == 1 and pg.locator("#app tr[data-key='CGST 9 %'] [data-led-why] .tag:has-text('Day book')").count() >= 1, "18. the screen shows each piece of evidence with its source (under the row's Why)")
+    # 2.4.1: the Why panel is gone from the page (the owner's decision); the evidence and its sources are kept with the check
+    ev = E("S.books.ledCheck.items['CGST 9 %'].s.ev.map(e => LedCheck.SRC[e.src])")
+    ok("Tally master" in ev and "Day book" in ev, "18. each piece of evidence is kept with its source (%s)" % ev)
     # 17. AI only for what is unclear: one call for the client, with names, groups, use and a few entries
     low = E("Object.entries(S.books.ledCheck.items).filter(([n, it]) => it.s.conf === 'low' && !(S.books.map[n] || {}).ok).map(([n]) => n)")
     E("""(low) => { S.firm.ai = {on: true}; S.engine = 'api'; window.__asked = [];
@@ -66,7 +67,7 @@ with sync_playwright() as p:
     else:
         ok(True, "17. nothing left unclear for AI")
     # 18. confirm the ticked: into the ledger master, with the source; nothing unconfirmed counts any more
-    pg.click("#app [data-led-confirm-sure]"); pg.wait_for_timeout(1200)   # 2.4.0: "Confirm the check's N sure answers" (under More)
+    E("doAct('lcConfirm')"); pg.wait_for_timeout(1200)   # 2.4.1: the page's "Confirm the check's N sure answers" is gone; its action run directly
     m = E("(names) => Object.fromEntries(names.map(n => [n, [!!(S.books.map[n] || {}).ok, (S.books.map[n] || {}).what, (S.books.map[n] || {}).side || '', (S.books.map[n] || {}).tax || '', (S.books.map[n] || {}).section || '', ((S.books.map[n] || {}).src || []).join()]]))", tk)
     ok(m["CGST 9 %"][:4] == [True, "gst", "output", "CGST"] and "master" in m["CGST 9 %"][5] and m["TDS ON RENT 94I"][:2] == [True, "tds_payable"] and m["TDS ON RENT 94I"][4] == "194I",
        "18. confirmed into the ledger master with the source of each answer (%s; %s)" % (m["CGST 9 %"], m["TDS ON RENT 94I"]))
@@ -84,8 +85,8 @@ with sync_playwright() as p:
     d = E("LedCheck.diff(S.books)")
     # 2.4.0: the check runs again by itself, so a new ledger is simply a row to confirm
     ok(pg.locator("#app [data-led-table] tr[data-key='NEW IGST 5%']").count() == 1 and any(x["n"] == "SGST 9 %" for x in d["changed"]), "18. later: a new ledger to confirm, and a confirmed one now used on purchases (warned) (%s)" % {"changed": [x["n"] for x in d["changed"]]})
-    w = pg.locator("#app [data-led-needs] tr[data-need=used][data-key='SGST 9 %']")
-    ok(w.count() == 1 and "Used differently" in w.inner_text() and w.locator("[data-led-keep]").count() == 1, "18. the warning is on the screen (Needs you, with Keep as confirmed)")
+    w = pg.locator("#app [data-led-check] tr[data-led-line=used][data-key='SGST 9 %']")
+    ok(w.count() == 1 and "used differently" in w.inner_text().lower() and w.locator("[data-led-keep]").count() == 1, "18. the warning is on the screen (Please check, with Keep as confirmed)")
     # the firm's confirmed answers are hints for its other clients
     h = E("""() => { const b2 = {cid: 'other-client', vouchers: [], map: {'TDS ON RENT 94I': {n: 0}}, ledInfo: {'TDS ON RENT 94I': {group: 'TDS', taxType: 'Others'}}, groups: {TDS: 'Duties & Taxes'}, under: {}};
       const it = LedCheck.suggest(b2, 'TDS ON RENT 94I', null, LedMaster.tplFor(b2, 'TDS ON RENT 94I')); return it.ev.filter(e => e.src === 'firm').map(e => e.say); }""")

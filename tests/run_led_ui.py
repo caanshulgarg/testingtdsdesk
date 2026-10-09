@@ -56,21 +56,18 @@ with sync_playwright() as p:
     # confirm one guess with the button, then the rest shown (2.4.0: Confirm all, a section at a time)
     first = pg.locator("#app [data-led-table] tbody tr:has([data-led-confirm])").first; nm = first.get_attribute("data-key"); first.locator("[data-led-confirm]").click(); pg.wait_for_timeout(400)
     ok(pg.evaluate("S.books.map[%s].ok" % json.dumps(nm)) is True, "Confirm button: " + nm)
-    for sec in ("gst", "tds"):
-        if pg.locator("#app [data-led-confirm-all=%s]" % sec).count(): pg.click("#app [data-led-confirm-all=%s]" % sec); pg.wait_for_timeout(500)
+    if pg.locator("#app [data-led-confirm-agree]").count(): pg.click("#app [data-led-confirm-agree]"); pg.wait_for_timeout(500)   # 2.4.1: where FinCom and its check agree
     while pg.locator("#app [data-led-table] tbody tr [data-led-confirm]").count():
         pg.locator("#app [data-led-table] tbody tr [data-led-confirm]").first.click(); pg.wait_for_timeout(300)
     ok(pg.evaluate("LedMaster.pending(S.books).length") == 0, "confirm the rest shown: none left")
     # other ledgers: add one as GST
-    pg.click("#app [data-more-toggle=ledpage]"); pg.wait_for_timeout(300)   # 2.4.0: other ledgers are under More
-    pg.click('nav[aria-label="Ledgers"] button:has-text("Other ledgers")'); pg.wait_for_timeout(500)
-    pg.fill('input[aria-label="Find a ledger"]', PLAIN); pg.wait_for_timeout(700)
+    pg.fill('input[aria-label="Find a ledger"]', PLAIN); pg.wait_for_timeout(700)   # 2.4.1: other ledgers are folded at the bottom (open while finding)
+    pg.click('#app details[data-led-other] [data-led-change=%s]' % json.dumps(PLAIN)); pg.wait_for_timeout(300)
     pg.select_option('select[aria-label="What %s is"]' % PLAIN, "gst_setoff"); pg.wait_for_timeout(400)
     ok(pg.evaluate("S.books.map[%s].what" % json.dumps(PLAIN)) == "gst_setoff", "an ordinary ledger added to the GST master")
     pg.fill('input[aria-label="Find a ledger"]', ""); pg.wait_for_timeout(500)
-    pg.evaluate("lmViewGo('')"); pg.wait_for_timeout(500)
-    pg.screenshot(path=OUT + "/led-gst.png", full_page=False)
-    pg.click('#app [data-confirm-foot="books:ledgers"] [data-cfm="save"]'); pg.wait_for_timeout(300)   # changes are kept with Save (review 18)
+    pg.evaluate("S.ledEdit = ''; render()"); pg.wait_for_timeout(500)
+    pg.screenshot(path=OUT + "/led-gst.png", full_page=False)   # 2.4.1: saved at once, no Save at the foot
     # now the JSON is made
     pg.evaluate("S.booksTab = 'gst'; S.gstPart = 'r1'; render();"); pg.wait_for_timeout(500)
     ok("still to be confirmed" not in pg.inner_text("#app"), "banner gone once all are confirmed")

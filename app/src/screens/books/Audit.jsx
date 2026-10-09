@@ -6,7 +6,7 @@
 // State: S.auditTab (find, rel, 3cd), S.auditRange, S.auditArea, S.auditSt (a status), S.auditOpen (a finding opened).
 import Legacy from "../../parts/Legacy.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
-import { AuditButton } from "../../parts/Ai.jsx";
+import { AuditButton, AiLedgers } from "../../parts/Ai.jsx";
 import { CatchUp } from "../../parts/Notes.jsx";
 import Confirm from "../../parts/Confirm.jsx";
 import { ListRows } from "../../parts/ListTable.jsx";
@@ -52,6 +52,9 @@ function Head({ b, run }) {
       <Act act="auditJe">Tally file of entries to pass ({Audit.jesToPass(run).length})</Act><Act act="auditFinal">Finalise this report</Act></div>}
     {fin && <div className="bk-alert" style={{ marginTop: 10 }}><b>The report for {d(run.from)} to {d(run.to)} is final</b>{", locked on " + fmtDate(fin.at.slice(0, 10)) + " (result code " + (fin.run.code || "") + "). Later runs track what gets put right, but the final report stays as it was. "}
       <Act act="auditFinalPdf" className="linkbtn">Download the final report</Act> · <Act act="auditUnlock" className="linkbtn">Unlock</Act></div>}
+    {/* FinCom 2.4.1: the AI review of the ledgers (TDS section, blocked credit) is here, opened by "AI review of ledgers";
+        it was the "AI: TDS and credit" tab of the Tally ledgers page, which has no AI now */}
+    {S.auditAi && <div data-audit-ai="" style={{ marginTop: 10 }}><div className="row" style={{ justifyContent: "flex-end" }}><button className="linkbtn" onClick={() => { S.auditAi = false; render(); }}>Close the AI review</button></div><AiLedgers b={b} /></div>}
   </section>;
 }
 

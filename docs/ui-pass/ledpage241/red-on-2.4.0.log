@@ -1,0 +1,49 @@
+  FAIL 0. Cause A: confirmed TDS ON CONTRACT 194C (used in entries) and 07 IGST INPUT PROVISIONAL (no entries), then the day book read again (ok): both still confirmed ([True, False])
+  FAIL 0. Cause A: ... and after a reload ([True, False])
+  FAIL 0. Cause B: Change (07 CGST INPUT to output) is in the browser's store after a reload with no Save (['input', False])
+  FAIL G. one main table
+  FAIL G. no Save at the foot, no draft section
+  FAIL G. gone: Confirm the check's sure answers, Check again, Ask AI, tabs
+  FAIL G. no check-differs / likely / AI tags, no posting or AI tab, no 'Checked …', no footnote
+  FAIL G. the columns: []
+  FAIL G. status line with Read again now: 'Ledgers from Tally: 70 · last updated 2 min ago · 5 need you'
+  FAIL G. one 'Other notices' fold
+  FAIL G. the GSTIN and PAN lines are in Other notices
+  FAIL G. the renamed-in-Tally confirm is in Other notices (owner)
+  FAIL G. the masters line is in Please check, with Read the ledgers again
+  FAIL F. 'TDS 194 T' is section 194T (guess 194, propose 194)
+  ok   F. 'TDS ON CONTRACT 194C' still 194C; 'TDS PAYABLE 194 A/C' not 194A (194); the check agrees (194T)
+  FAIL D. 'Confirm 16 ledgers that FinCom and its check agree on' ('')
+  FAIL D. Confirm all confirmed exactly those 16 (['07 CGST INPUT', '07 CGST OUTPUT', '07 IGST INPUT', '07 IGST OUTPUT', '07 RCM CGST PAYABLE', '07 RCM IGST PAYABLE', '07 RCM SGST PAYABLE', '07 SGST INPUT', '07 SGST OUTPUT', '09 CGST INPUT', '09 CGST OUTPUT', '09 SGST INPUT', '09 SGST OUTPUT', 'TDS ON CONTRACT 194C', 'TDS ON INTEREST 194A', 'TDS ON PROFESSIONAL 194J'])
+  ok   D. ... and no figure moved
+  ok   D. the button goes once nothing is left to confirm that way
+  FAIL E. one Undo for the batch
+  ok   E. Undo: every ledger is as before Confirm all
+  FAIL K. a confirmed GST ledger used in entries, with Change beside '✓ Confirmed' and Undo ()
+  FAIL A. a ledger used in entries to confirm () and one with no entries ()
+  FAIL A. Confirm on the rows: both confirmed
+  FAIL A. a confirmed row: '' and a separate Undo
+  ok   A. ✓ itself is not a button (not a hidden undo)
+Traceback (most recent call last):
+  File "/tmp/claude-0/-home-user-testingtdsdesk/fc6433d8-fb2a-5779-8c56-1198c4462f3b/scratchpad/wt-led241/tests/run_ledpage241.py", line 180, in <module>
+    side = E("(n) => S.books.map[n].side", ch); new_side = "output" if side == "input" else "input"
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/playwright/sync_api/_generated.py", line 8531, in evaluate
+    self._sync(
+  File "/usr/local/lib/python3.11/dist-packages/playwright/_impl/_sync_base.py", line 115, in _sync
+    return task.result()
+           ^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/playwright/_impl/_page.py", line 467, in evaluate
+    return await self._main_frame.evaluate(expression, arg)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/playwright/_impl/_frame.py", line 320, in evaluate
+    await self._channel.send(
+  File "/usr/local/lib/python3.11/dist-packages/playwright/_impl/_connection.py", line 69, in send
+    return await self._connection.wrap_api_call(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/playwright/_impl/_connection.py", line 559, in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+playwright._impl._errors.Error: Page.evaluate: TypeError: Cannot read properties of undefined (reading 'side')
+    at eval (eval at evaluate (:290:30), <anonymous>:1:23)
+    at UtilityScript.evaluate (<anonymous>:297:18)
+    at UtilityScript.<anonymous> (<anonymous>:1:44)

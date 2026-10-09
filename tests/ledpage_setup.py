@@ -78,6 +78,13 @@ OPEN = """async ([cloud]) => {
   S.lmView = ""; S.ledQ = ""; S.booksTab = "ledgers"; render(); }"""
 
 
+# FinCom 2.4.1: one ledger confirmed by hand that FinCom's check reads otherwise (07 CGST OUTPUT confirmed as SGST; the
+# check reads it as CGST, from Tally's duty head and its name), for the "Please check" section. Only data: works on any build
+DIFFERS = "07 CGST OUTPUT"
+SET_DIFFERS = """(n) => { const b = S.books, m = b.map[n]; m.tax = 'SGST'; m.byHand = true; m.ok = true; m.okBy = 'asha@firm.test';
+  m.okAt = '2026-10-01T10:38:00.000Z'; b.mapV = (b.mapV || 0) + 1; if (typeof LedPage === 'object') LedPage.ensure(b); render(); }"""
+
+
 def open_page(pg, role="owner", cloud=True):
     E = pg.evaluate
     cid = E(CLIENT, BOOKS); pg.wait_for_timeout(600)

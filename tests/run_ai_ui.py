@@ -60,8 +60,8 @@ with sync_playwright() as p:
     pg.uncheck('input[data-aihco="%s"]' % cid); pg.wait_for_timeout(300)
     pg.evaluate("S.view = 'company'; S.tab = 'books'; S.books = window.__bk; render()"); pg.wait_for_timeout(500)
     # ---------- 1 and 3: ledgers, TDS section and blocked credit
-    pg.evaluate("S.booksTab = 'ledgers'; S.lmView = 'ai'; render()"); pg.wait_for_timeout(500)
-    ok("AI: TDS section and blocked credit" in pg.inner_text("#app"), "Tally ledgers has the AI view")
+    pg.evaluate("S.booksTab = 'audit'; S.auditTab = 'find'; S.auditAi = true; render()"); pg.wait_for_timeout(500)   # 2.4.1: the AI view moved from the ledgers page to the Audit tab
+    ok("AI: TDS section and blocked credit" in pg.inner_text("#app"), "the Audit tab has the AI view of the ledgers")
     before = pg.evaluate("(() => { const r = Audit.run('20250401', '20260331', 'test'); return (r.findings.find(f => f.check === 'gstBlocked') || {count: 0}).count; })()")
     pg.click('button[data-aih="review"]'); until(pg, "() => " + "!S.books.busy && Object.keys((S.books.ai || {}).led || {}).length > 0")
     n_led = pg.evaluate("Object.keys(S.books.ai.led).length")

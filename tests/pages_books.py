@@ -26,11 +26,11 @@ with sync_playwright() as p:
     pg.evaluate("() => { S.books.tbCheck = {ok: false, n: 12, on: '20260331', list: Array.from({length: 12}, (_, i) => ['Ledger ' + i, -1000 * i, -900 * i, 100 * i])}; S.tbCheckOn = '2026-03-31'; render(); }"); grab("import-mismatch")
     pg.evaluate("() => { S.books.tbCheck = {ok: false, n: 0, list: [], on: '20270101', why: 'The trial balance is as on 01 Jan 2027, outside the books here.'}; render(); }"); grab("import-why")
     # Tally ledgers: each list, a search, a ledger's meaning changed, a TDS ledger, and what FinCom posts to
-    for v in ["pending", "gst", "tds", "done", "other", "post"]:
-        pg.evaluate("(v) => { S.booksTab = 'ledgers'; S.lmView = v; S.ledQ = ''; render(); }", v); grab("led-" + v)
-    pg.evaluate("() => { S.lmView = 'gst'; S.ledQ = 'igst'; render(); }"); grab("led-find")
+    # (2.4.1: one page, no views; "led-pending" is the page as it opens)
+    pg.evaluate("() => { S.booksTab = 'ledgers'; S.ledQ = ''; render(); }"); grab("led-pending")
+    pg.evaluate("() => { S.ledQ = 'igst'; render(); }"); grab("led-find")
     pg.evaluate("() => { const n = Object.keys(S.books.map).find(k => LedMaster.isGst(S.books.map[k].what)); if (n){ const m = S.books.map[n]; m.side = 'output'; m.byHand = true; m.ok = true; S.books.mapV = (S.books.mapV || 0) + 1; } S.ledQ = ''; render(); }"); grab("led-changed")
-    pg.evaluate("() => { const n = Object.keys(S.books.map).find(k => !LedMaster.taxLike(k, S.books.map[k], (S.books.ledInfo || {})[k])); if (n){ const m = S.books.map[n]; LedMaster.applyWhat(m, 'tds_payable'); m.section = '194J'; m.rate = 10; m.ok = true; } S.lmView = 'tds'; render(); }"); grab("led-tds")
+    pg.evaluate("() => { const n = Object.keys(S.books.map).find(k => !LedMaster.taxLike(k, S.books.map[k], (S.books.ledInfo || {})[k])); if (n){ const m = S.books.map[n]; LedMaster.applyWhat(m, 'tds_payable'); m.section = '194J'; m.rate = 10; m.ok = true; } render(); }"); grab("led-tds")
     # Audit: not run yet, run for the year, an area, a finding opened with a status and note, related parties, the 3CD draft
     pg.evaluate("() => { S.booksTab = 'audit'; S.auditTab = 'find'; S.books.audit = null; S.books.stale = {}; render(); }"); grab("audit-none")
     pg.evaluate("() => { const dr = Audit.defaultRange(S.books); Audit.run(dr.from, dr.to, 'by hand'); S.books.audit.last.at = '2026-01-10T10:00:00.000Z'; render(); }"); grab("audit-run", 800)
@@ -108,7 +108,7 @@ with sync_playwright() as p:
         notices: [{id: 'n1', kind: 'tds', name: 'notice.pdf', at: '2026-02-01T00:00:00Z', by: 'a@b.in', step: 'drafted', reply: 'Dear Sir, we reply.', fields: {form: '143(1)(a)', ref: 'CPC/123', date: '2026-01-20', reply_by: '2026-02-20', summary: 'A short deduction.', issues: [{point: 'Short deduction', period: 'Q2', amount: 1200}]}},
           {id: 'n2', kind: 'gst', name: 'asmt.pdf', at: '2026-02-02T00:00:00Z', by: 'a@b.in', step: 'read', fields: {form: 'ASMT-10', summary: 'Differences in 3B.', issues: []}},
           {id: 'n3', kind: 'gst', name: 'bad.jpg', at: '2026-02-03T00:00:00Z', by: 'a@b.in', step: 'failed', error: 'could not read'}],
-        log: [{at: '2026-02-01T10:00:00Z', by: 'a@b.in', what: 'AI read a notice', detail: '143(1)(a)'}]}; S.booksTab = 'ledgers'; S.lmView = 'ai'; render(); }"""); grab("ai-ledgers", 600)
+        log: [{at: '2026-02-01T10:00:00Z', by: 'a@b.in', what: 'AI read a notice', detail: '143(1)(a)'}]}; S.booksTab = 'audit'; S.auditTab = 'find'; S.auditAi = true; render(); }"""); grab("ai-ledgers", 600)
     pg.evaluate("() => { S.booksTab = 'audit'; S.auditTab = 'find'; render(); }"); grab("ai-audit")
     pg.evaluate("() => { S.booksTab = 'tds'; S.tdsView = 'notices'; render(); }"); grab("ai-notices-tds")
     pg.evaluate("() => { S.booksTab = 'gst'; S.gstPart = 'notices'; render(); }"); grab("ai-notices-gst")

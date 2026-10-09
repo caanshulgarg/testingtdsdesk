@@ -656,7 +656,18 @@ table.led-t tr[data-ok="1"] td{opacity:.85}
 .led-done{margin:4px 0 12px}
 .led-nottax{margin:0 0 12px}
 .led-more{margin:8px 0 0;padding-top:8px;border-top:1px solid var(--rule)}
+/* FinCom 2.4.1: the simple ledgers page */
+table.led-t th.n,table.led-t td.n{text-align:right;white-space:nowrap}
+.led-ex{font-size:13px;color:var(--ink-2,var(--ink))}
+.led-unknown{color:var(--st-attention);font-weight:600}
+.led-act-ok{flex-wrap:wrap;justify-content:flex-end}
+.led-undo{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;margin:0 0 12px;padding:8px 12px;border:1px solid var(--rule);border-radius:8px;background:var(--sheet);font-size:14px}
+.led-fold{margin:12px 0 0;padding-top:8px;border-top:1px solid var(--rule)}
+.led-fold>summary{cursor:pointer;font-size:14px;color:var(--ink-2,var(--ink));padding:4px 0}
+.led-fold[open]>summary{margin-bottom:6px}
 @media (max-width:640px){
+  table.led-t td.n{text-align:left}
+  .led-act-ok{justify-content:flex-start}
   .led-status{padding:8px 10px}
   table.led-t thead{display:none}
   table.led-t,table.led-t tbody,table.led-t tr,table.led-t td{display:block;width:100%}

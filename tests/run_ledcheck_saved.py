@@ -80,8 +80,8 @@ with sync_playwright() as p:
     ok(moved > 0 and diff(f0, fx), "b) the comparison would catch it: the %d pending suggestions taken as confirmed change %d figures, e.g. %s" % (moved, len(diff(f0, fx)), diff(f0, fx)[:3]))
     ok(not diff(f0, E(FIGS)), "(the books as they were)")
     # ---------- c) some answers confirmed through the check (its switch on), the rest pending
-    E("() => { S.ledMore = true; render(); }"); pg.wait_for_timeout(300)
-    pg.click("#app [data-led-confirm-sure]"); pg.wait_for_timeout(600)
+    # 2.4.1: the page has no "Confirm the check's sure answers" button any more; its action (lcConfirm) is run directly
+    E("() => doAct('lcConfirm')"); pg.wait_for_timeout(600)
     first = pg.locator("#app [data-led-table] tbody tr:has([data-led-confirm])").first; own = first.get_attribute("data-key")
     first.locator("[data-led-confirm]").click(); pg.wait_for_timeout(400)
     st = E("() => ({strict: !!S.books.ledCheck.strict, conf: Object.values(S.books.ledCheck.items).filter(it => it.state === 'confirmed').length, pend: Object.values(S.books.ledCheck.items).filter(it => it.state === 'pending').length})")
