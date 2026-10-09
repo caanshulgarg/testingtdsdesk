@@ -5022,13 +5022,13 @@ const Books = {
   },
   // the TDS or TCS section in a ledger's name: "194C", "206C1H"; and (2.4.1) the letter after a space, "TDS 194 T" is
   // 194T, not 194 - but not the A of "194 A/C", nor a word ("194 TDS PAYABLE" is 194)
-  // Review H4 of next-241: after a space only a REAL section suffix counts ("TDS 192 ON SALARY" is 192, not 192ON; "195
-  // TO", "194 OF" likewise); written on (194C, 194LBA) any letters as before. The owner's decision of 09-Oct-2026: the
-  // space form stays ("TDS 194 C" is 194C); after a dash the name reads as 2.3.3 did ("TDS 194-C" is 194: 2.3.3 read
-  // the section from \b(19[2-9][A-Z]{0,2})\b)
+  // Review H4 of next-241: after a space or a dash only a REAL section suffix counts ("TDS 192 ON SALARY" is 192, not
+  // 192ON; "195 TO", "194 OF" likewise; "194 Commission" 194); written on (194C, 194LBA) any letters as before. The owner's
+  // ruling of 09-Oct-2026, "TDS 194 C = 194C", covers the dash form too: "TDS 194-C" and "TDS 194 - C" are 194C (194 is
+  // dividends), as the ledger check (LedCheck.section) reads them, so the guess and the check agree
   SEC_SUF: "LBA|LBB|LBC|BA|BB|DA|EE|IA|IB|IC|LA|LB|LC|LD|A|B|C|D|E|G|H|I|J|K|M|N|O|P|Q|R|S|T",
   secIn(u){
-    const m = String(u || "").toUpperCase().match(new RegExp("\\b(19[2-9])(?:([A-Z]{1,3})\\b|\\s+(" + this.SEC_SUF + ")(?![\\w\\/])|\\b)|\\b(206C)([A-Z]{0,2})\\b"));
+    const m = String(u || "").toUpperCase().match(new RegExp("\\b(19[2-9])(?:([A-Z]{1,3})\\b|\\s*-?\\s*(" + this.SEC_SUF + ")(?![\\w\\/])|\\b)|\\b(206C)([A-Z]{0,2})\\b"));
     return !m ? "" : m[4] ? m[4] + (m[5] || "") : m[1] + (m[2] || m[3] || "");
   },
   guess(name){
