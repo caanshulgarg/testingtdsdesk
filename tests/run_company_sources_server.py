@@ -74,7 +74,7 @@ try:
         if isinstance(v, (dict, list)): return q(json.dumps(v)) + "::jsonb"
         return q(v)
     real = FS.rpc
-    PG = ("tally_recorder_apply", "tally_recorder_send", "tally_start_point", "tally_recorder_gap_check", "tally_company_sources_note", "tally_company_source_lines")
+    PG = ("tally_recorder_apply", "tally_recorder_send", "tally_start_point", "tally_recorder_gap_check", "tally_company_sources_note", "tally_company_source_lines", "tally_recorder_send_sourced")
     def rpc(name, a):
         if name in PG:
             FS.ARGS.setdefault(name, []).append(a)
@@ -129,14 +129,16 @@ try:
     print("== 1. the beats: ① chosen by itself, ② pending with one alert")
     c, r = beat(K1, G1, src(I1, P1))
     d = ds(r).get(CO) or {}
-    ok(c == 200 and d.get("chosenId") == I1 and d.get("chosen") is True, "1. NWS144 (①): chosen (%s %s)" % (c, r.get("dataSources")))
+    ok(c == 200 and d.get("chosenId") == I1 and d.get("chosen") is True and d.get("choice") == "chosen" and d.get("chosenIds") == [I1], "1. NWS144 (①): chosen (%s %s)" % (c, r.get("dataSources")))
+    ok(db.one("select start_device::text from tally_sync_cursor where book_id = %s" % q(BOOK)) == D1, "1. review M2: chosen by itself as the starting point's computer's location")
     sp = db.rows("select last_voucher_alterid::text as a, start_device::text as dev from tally_sync_cursor where book_id = %s" % q(BOOK))
     ok(sp and sp[0]["a"] == "54389" and sp[0]["dev"] == D1, "1. the starting point recorded from NWS144 (%s)" % sp)
     n_sp = len(FS.ARGS.get("tally_start_point", []))
     c, r = beat(K2, G2, src(I2, P2), start=70000, alt=70010)
     d = ds(r).get(CO) or {}
-    ok(c == 200 and d.get("chosenId") == I1 and d.get("chosen") is False, "1. PC-2 (②): not chosen (%s)" % r.get("dataSources"))
-    ok(len(FS.ARGS.get("tally_start_point", [])) == n_sp and (r.get("recorder") or {}).get(CO, {}).get("otherSource") is True, "1. no starting point or gap check from PC-2 (%s)" % r.get("recorder"))
+    ok(c == 200 and d.get("chosenId") == I1 and d.get("chosen") is False and d.get("choice") == "pending", "1. PC-2 (②): not chosen, pending (%s)" % r.get("dataSources"))
+    ok((r.get("recorder") or {}).get(CO, {}).get("pendingSource") is True and db.one("select start_device::text || ' ' || last_voucher_alterid from tally_sync_cursor where book_id = %s" % q(BOOK)) == D1 + " 54389",
+       "1. no gap check from PC-2, the starting point still NWS144's (%s)" % r.get("recorder"))
     ok(db.one("select choice from tally_company_sources where data_id = %s" % q(I2)) == "pending" and db.one("select count(*) from tally_alerts where kind = 'summary' and data->>'reason' = 'source'") == "1", "1. ② pending, ONE alert")
     beat(K2, G2, src(I2, P2), start=70000, alt=70010)
     ok(db.one("select count(*) from tally_alerts where kind = 'summary' and data->>'reason' = 'source'") == "1", "1. PC-2's next beat: still one alert")
@@ -155,7 +157,17 @@ try:
     st = res(r).get("p-1", ("", ""))
     ok(st[0] == "held" and "another data location" in st[1] and not vrow(CG + "-%08x" % 26400), "2. PC-2's line of ② with its entry: held, NOT applied (%s)" % (st,))
     c, r = rec([line("n-0", 26312, 54402, "S-192", "NWS144")], K1, G1)
-    ok(res(r).get("n-0", ("",))[0] == "applied", "2. a line without data_id (an older add-on): as before (%s)" % res(r))
+    ok(res(r).get("n-0", ("",))[0] == "applied", "2. a line without data_id (an older add-on), from the chosen location's computer: as before (%s)" % res(r))
+    kp = db.rows("select (body is not null)::text as b, payload->>'pending' as p from tally_recorder_lines where line_id = 'p-1'")
+    ok(kp and kp[0] == {"b": "true", "p": "true"}, "2. review H5: PC-2's pending line kept with its entry, marked pending (%s)" % kp)
+    c, r = rec([line("p-0", 26402, 70013, "S-402", "PC-2")], K2, G2)
+    st = res(r).get("p-0", ("", ""))
+    ok(st[0] == "held" and "Restart Tally so the 2.4.1 add-on loads" in st[1] and not vrow(CG + "-%08x" % 26402), "2. review H2: a line without data_id from a computer not chosen: held, plain words (%s)" % (st,))
+    c, r = rec([dict(other("o-2", I2, P2, "NWS144"), data_id="", data_path="")], K1, G1)
+    ok(res(r).get("o-2", ("",))[0] == "held", "2. review H2: the bridge's other_source line without a data id (stopped, no dp=): held (%s)" % res(r))
+    # review H3: a source of another company GUID than the book's is never noted
+    c, r = beat(K1, G1, [{"company": CO, "company_guid": "another-company-guid", "data_id": did("Z:\\other"), "path": "Z:\\other", "w": "anshul"}])
+    ok(db.one("select count(*) from tally_company_sources where data_id = %s" % q(did("Z:\\other"))) == "0" and (ds(r).get(CO) or {}).get("otherCompany") is True, "2. review H3: another company GUID: not noted (%s)" % r.get("dataSources"))
 
     print("== 3. the S-M1 tie: only for a company the computer named")
     c, r = beat(K3, G3, src(did("E:\\x"), "E:\\x", "ravi"), open_=False)
@@ -183,12 +195,15 @@ try:
     ok(sp and sp[0]["a"] == "70000" and sp[0]["dev"] == D2, "5. the starting point recorded afresh from PC-2 (%s)" % sp)
     c, r = beat(K1, G1, src(I1, P1))
     d = ds(r).get(CO) or {}
-    ok(d.get("chosen") is False and d.get("chosenId") == I2, "5. NWS144 told it is not (%s)" % r.get("dataSources"))
+    ok(d.get("chosen") is False and d.get("chosenId") == I2 and d.get("choice") == "other", "5. NWS144 told it is not ('other') (%s)" % r.get("dataSources"))
     c, r = rec([line("n-2", 26313, 54403, "S-193", "NWS144", I1)], K1, G1)
     st = res(r).get("n-2", ("", ""))
     ok(st[0] == "held" and "(\u2460, NWS144); FinCom reads \u2461" in st[1] and not vrow(CG + "-%08x" % 26313), "5. NWS144's line of ① now held, not applied (%s)" % (st,))
     c, r = rec([line("p-2", 26401, 70012, "2026-27/GST/298", "PC-2", I2)], K2, G2)
     ok(res(r).get("p-2", ("",))[0] == "applied" and vrow(CG + "-%08x" % 26401), "5. PC-2's line of ② applied (%s)" % res(r))
+    print("== 6. review H5: the same data (one folder under two paths)")
+    out = db.one("set fincom.uid = %s; set fincom.role = 'authenticated'; set role authenticated; select tally_company_source_same(%s)::text" % (q(OWNER), q(BOOK)))
+    ok('"ok": true' in (out or "") and vrow(CG + "-%08x" % 26400), "6. same data: PC-2's line kept pending before is applied now (%s)" % out)
 finally:
     if fn:
         fn.terminate()

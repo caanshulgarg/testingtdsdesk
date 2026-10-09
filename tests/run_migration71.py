@@ -60,7 +60,8 @@ ok(not bad, "0. add-only: no line with 'drop ', 'delete from' or 'truncate' (%d:
 ok("constraint" not in low, "0. no constraint added, changed or dropped on an existing table (tally_alerts.kind as migration 47 made it)")
 ok(not re.search(r"supabase\.co|\.supabase\.|project[_ ]ref|qbocskaiewaxqcvaunzc", low), "0. names no real database")
 FNS = sorted(set(re.findall(r"create or replace function public\.(\w+)\s*\(", text)))
-ok(FNS == ["tally_company_source_choose", "tally_company_source_lines", "tally_company_sources_note", "tally_company_sources_of", "tally_source_mark", "tally_source_marks"], "0. the functions (%s)" % FNS)
+ok(FNS == ["tally_company_source_choose", "tally_company_source_lines", "tally_company_source_release", "tally_company_source_same", "tally_company_sources_note", "tally_company_sources_of",
+           "tally_recorder_send_sourced", "tally_source_chosen_marks", "tally_source_clean", "tally_source_mark", "tally_source_marks"], "0. the functions (%s)" % FNS)
 
 db = pg_stand.start(int(os.environ.get("PG71_PORT") or 30710))
 def psql_text(sql):
@@ -101,7 +102,7 @@ try:
     for path in FILES:
         r = psql_text(open(path).read())
         if r.returncode: ok(False, "%s runs: %s" % (os.path.basename(path), r.stderr[-300:])); raise SystemExit("cannot go on")
-    db.sql("insert into tally_sync_cursor (book_id, firm_id, company_guid, last_voucher_alterid, start_at, start_guid) values (%s, %s, %s, 54389, '2026-10-05 07:09+05:30', %s)" % (q(B), q(F), q(CG), q(CG)))
+    db.sql("insert into tally_sync_cursor (book_id, firm_id, company_guid, last_voucher_alterid, start_at, start_guid, start_device) values (%s, %s, %s, 54389, '2026-10-05 07:09+05:30', %s, %s)" % (q(B), q(F), q(CG), q(CG), q(D1)))
     db.sql("insert into tally_recorder_lines (firm_id, client_id, book_id, device_id, line_id, event, state) values (%s, 'c1', %s, %s, 'before-71', 'created', 'applied')" % (q(F), q(B), q(D1)))
     db.sql("insert into tally_alerts (firm_id, client_id, book_id, kind, day, words) values (%s, 'c1', %s, 'gap', '2026-10-08', 'an older gap')" % (q(F), q(B)))
     c0 = counts()
@@ -180,8 +181,78 @@ try:
     of = as_user(OWNER, "select tally_company_sources_of(%s)::text;" % q(B))
     ok(isinstance(of, list) and [x["n"] for x in of][:2] == ["\u2460", "\u2461"] and of[1]["chosenBy"] == "Anshul", "4. sources_of: marks and who chose (%s)" % str(of)[:300])
     ok(as_user(OTHER, "select tally_company_sources_of(%s)::text;" % q(B)) == [], "4. sources_of: another firm sees nothing")
-    ro, rs = as_user(OTHER, "select count(*) from tally_company_sources;"), as_user(STAFF, "select count(*) from tally_company_sources;")
-    ok(ro in (0, [0], ["0"]) and rs in (len(s), [len(s)], [str(len(s))]), "1. the firm reads its own rows only (RLS): another firm %s, the staff %s of %d" % (ro, rs, len(s)))
+
+    print("== 6. the reviews of next-241: H3, M2, M3, SR-M2, SR-L1, H5, H2, L4")
+    B3, B4, B5 = "f79e4bc3-871d-4482-874d-000000000073", "f79e4bc3-871d-4482-874d-000000000074", "f79e4bc3-871d-4482-874d-000000000075"
+    for bk in (B3, B4, B5):
+        db.sql("insert into tally_books (book_id, firm_id, client_id, company, from_date, open_as_on) values (%s, %s, 'c1', 'GARG SHEKHAR & COMPANY', '2025-04-01', '2025-03-31')" % (q(bk), q(F)))
+    db.sql("insert into tally_sync_cursor (book_id, firm_id, company_guid, last_voucher_alterid, start_at, start_guid, start_device) values (%s, %s, %s, 100, now(), %s, %s), (%s, %s, %s, 100, now(), %s, %s)"
+           % (q(B4), q(F), q(CG), q(CG), q(D1), q(B5), q(F), q(CG), q(CG), q(D1)))
+    def note_b(bk, src_, dev=D1): return j("select tally_company_sources_note(%s, %s, %s, %s)::text" % (q(F), q(bk), q(dev), js(src_)))
+    def ch_of(bk): return {r["data_id"]: r["choice"] for r in db.rows("select data_id, choice from tally_company_sources where book_id = %s" % q(bk))}
+    def alerts_of(bk): return int(db.one("select count(*) from tally_alerts where book_id = %s and data->>'reason' = 'source'" % q(bk)))
+    # H3: another company GUID than the book's is never noted (nor chosen)
+    a = note_b(B4, [{"company_guid": "another-guid", "data_id": I1, "path": P1, "own": True}])
+    ok(ch_of(B4) == {} and a.get("ignored") and a["ignored"][0].get("otherCompany") is True, "6. H3: another company GUID: not noted, answered as another company (%s)" % a)
+    # M2: chosen by itself only as the starting point's computer's location
+    a = note_b(B4, [{"company_guid": CG, "data_id": I2, "path": P2, "own": True}], D2)
+    ok(ch_of(B4) == {I2: "pending"} and alerts_of(B4) == 1, "6. M2: another computer's own location first: pending, with the alert (%s, %d)" % (ch_of(B4), alerts_of(B4)))
+    a = note_b(B4, [{"company_guid": CG, "data_id": I1, "path": P1, "own": True}], D1)
+    ok(ch_of(B4) == {I2: "pending", I1: "chosen"} and a.get("chosenIds") == [I1] and alerts_of(B4) == 1, "6. M2: the starting point's computer: chosen by itself (%s)" % a)
+    # a book with no starting point yet: a lone location pending without an alert, chosen once its starting point is recorded
+    a = note_b(B3, [{"company_guid": CG, "data_id": I1, "path": P1, "own": True}], D1)
+    ok(ch_of(B3) == {I1: "pending"} and alerts_of(B3) == 0, "6. M2: no starting point yet: pending, no alert (%s)" % ch_of(B3))
+    j("select tally_start_point(%s, %s, %s, 500, 50, %s, 'go-1')::text" % (q(F), q(B3), q(CG), q(D1)))
+    note_b(B3, [{"company_guid": CG, "data_id": I1, "path": P1, "own": True}], D1)
+    ok(ch_of(B3) == {I1: "chosen"}, "6. M2: its starting point recorded from that computer: chosen by itself (%s)" % ch_of(B3))
+    # SR-M2: at most 20 locations a book
+    for i_ in range(25): note_b(B5, [{"company_guid": CG, "data_id": did("x%d" % i_), "path": "x%d" % i_}], D2)
+    ok(int(db.one("select count(*) from tally_company_sources where book_id = %s" % q(B5))) == 20, "6. SR-M2: at most 20 locations a book")
+    # SR-L1: control characters and bidi overrides stripped
+    note_b(B4, [{"company_guid": CG, "data_id": did("ctl"), "path": "D:\\x\u202e\u0007y", "w": "an\u200fshul", "computer": "PC\u00852"}], D2)
+    r6 = db.rows("select path, win_user, computer from tally_company_sources where data_id = %s" % q(did("ctl")))[0]
+    ok(r6 == {"path": "D:\\xy", "win_user": "anshul", "computer": "PC2"}, "6. SR-L1: control characters and bidi marks stripped (%s)" % r6)
+    # H5 / H2 / L4: tally_recorder_send_sourced sorts the lines out under the lock
+    def L5(lid, mid, alter, data_id=None, no=None):
+        g = CG + "-%08x" % mid
+        x = {"pc": "PC-2", "user": "T", "event": "created", "bridge": "go-2", "vch_no": no or str(mid), "ledgers": [], "line_id": lid, "alter_id": alter, "saved_at": "2026-10-06T05:00:00.000Z",
+             "vch_date": "2026-10-03", "vch_type": "Sales", "master_id": str(mid), "object_guid": g, "company_guid": CG, "company": "GARG SHEKHAR & COMPANY",
+             "vouchers": [{"guid": g, "alter": alter, "type": "Sales", "no": no or str(mid), "party": "Spike Customer", "narr": "", "cancel": False, "opt": False, "gstin": "", "pos": "", "ref": "", "refDate": "", "cmp": "", "fid": None, "day": "2026-10-03"}],
+             "lines": [[g, "Spike Customer", -118.0, "", None, []], [g, "Sales GST 18%", 118.0, "", None, []]]}
+        if data_id is not None: x["data_id"] = data_id
+        return x
+    def sent(bk, lines, dev=D2): return j("select tally_recorder_send_sourced(%s, %s, %s, %s, false)::text" % (q(F), q(bk), q(dev), js(lines)))
+    def vrow(bk, mid): return db.one("select count(*) from tally_vouchers where book_id = %s and guid = %s" % (q(bk), q(CG + "-%08x" % mid)))
+    r = sent(B4, [L5("p1", 900, 60001, I2), L5("c1", 901, 60002, I1, ), L5("n1", 902, 60003)], D2)
+    held = {h["i"]: h["result"] for h in r.get("held", [])}
+    ok(r.get("sentIdx") == [1] and held.get(0, {}).get("state") == "held" and held.get(2, {}).get("state") == "held", "6. H5/H2: the pending location's line and a line without data_id from a computer not chosen held, the chosen one's sent (%s)" % r)
+    ok(vrow(B4, 900) == "0" and vrow(B4, 901) == "1" and vrow(B4, 902) == "0", "6. ... nothing of the held ones in the books")
+    ok("Restart Tally so the 2.4.1 add-on loads" in held.get(2, {}).get("why", ""), "6. H2: the plain words (%s)" % held.get(2, {}).get("why"))
+    kept = db.rows("select (body is not null)::text as b, payload->>'pending' as p from tally_recorder_lines where line_id = 'p1'")[0]
+    ok(kept == {"b": "true", "p": "true"}, "6. H5: the pending location's line kept with its entry, marked pending (%s)" % kept)
+    r = sent(B4, [L5("n2", 903, 60004)], D1)
+    ok(r.get("sentIdx") == [0] and vrow(B4, 903) == "1", "6. H2: a line without data_id from the chosen location's computer: sent (%s)" % r)
+    # "These are the same data": the pending lines applied
+    db.sql("insert into members values ('%s', %s, 'Owner2', 'owner', true) on conflict do nothing" % ("33333333-3333-3333-3333-333333333333", q(F))) if False else None
+    sm = as_user(OWNER, "select tally_company_source_same(%s)::text;" % q(B4))
+    ok(isinstance(sm, dict) and sm.get("released") == 1 and vrow(B4, 900) == "1" and ch_of(B4).get(I2) == "chosen", "6. H5: same data: both chosen, the held line applied (%s %s %s)" % (sm, ch_of(B4),
+       db.rows("select line_id, state, held_why from tally_recorder_lines where line_id like 'p1%'")))
+    ok(db.one("select state from tally_recorder_lines where line_id = 'p1'") == "duplicate", "6. H5: the held row marked, kept")
+    ok(isinstance(as_user(STAFF, "select tally_company_source_same(%s)::text;" % q(B4)), dict) and "_error" in as_user(STAFF, "select tally_company_source_same(%s)::text;" % q(B4)), "6. same data: the owner only")
+    # "Use ①" with a pending line held: it stays held for good
+    r = sent(B5, [L5("q1", 950, 70001, did("x1"))], D2)
+    as_user(OWNER, "select tally_company_source_choose(%s, %s)::text;" % (q(B5), q(did("x0"))))
+    ok(vrow(B5, 950) == "0" and db.one("select state from tally_recorder_lines where line_id = 'q1'") == "held", "6. H5: Use ①: the other location's held line stays held")
+    # L4: chosen elsewhere between the note and the apply: the line is held at the apply
+    r = sent(B5, [L5("q2", 951, 70002, did("x1"))], D2)
+    ok(r.get("sentIdx") == [] and vrow(B5, 951) == "0", "6. L4: a line of a location not chosen at the apply: held (%s)" % r)
+    # M3: choosing the location FinCom reads already (alone): stamped, the starting point not cleared
+    db.sql("update tally_sync_cursor set cleared_at = null where book_id = %s" % q(B5))
+    r = as_user(OWNER, "select tally_company_source_choose(%s, %s)::text;" % (q(B5), q(did("x0"))))
+    ok(isinstance(r, dict) and r.get("already") is True and r.get("startCleared") is False and db.one("select cleared_at is null from tally_sync_cursor where book_id = %s" % q(B5)) == "t",
+       "6. M3: the already chosen location: who and when only, the starting point kept (%s)" % r)
+    ro, rs, nf = as_user(OTHER, "select count(*) from tally_company_sources;"), as_user(STAFF, "select count(*) from tally_company_sources;"), int(db.one("select count(*) from tally_company_sources where firm_id = %s" % q(F)))
+    ok(ro in (0, [0], ["0"]) and rs in (nf, [nf], [str(nf)]), "1. the firm reads its own rows only (RLS): another firm %s, the staff %s of %d" % (ro, rs, nf))
     after = counts()
     ok(all(after[k] >= before[k] for k in before), "5. nothing removed by the calls (%s -> %s)" % (before, after))
     r = psql_text(text)
