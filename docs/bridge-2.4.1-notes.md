@@ -155,13 +155,24 @@ starting day (<d>)" or "older than 3 days and not just asked", instead of "readi
   narration proves only when Tally's NARRATION is the same; the folders seen are kept in sync\recorder-data.json.
   **N2** a book's only location waiting for a choice gets its card ("Read <company> from ① (<computer> · <path>)?",
   Use ① after the same question); chosen, its held lines are applied at once. **N1** a line without a data id from a
-  computer of no chosen location is kept with its entry and applied once that computer proves a chosen location, or on
-  "These are the same data"; the computers of a location are a set (`tally_company_source_devices`); the words say
+  computer of no chosen location is kept with its entry and checked against that computer's own Tally once it proves a
+  chosen location, or on "These are the same data" (item 2 below); the computers of a location are a set (`tally_company_source_devices`); the words say
   "Update FinCom Bridge on <computer>" for a bridge before 2.4.1, "Restart Tally" for 2.4.1 with an older add-on.
   **Lows** "These are the same data" only while a location is pending, never choosing one set 'other', its words "both
   data folders are one folder" when both are on one computer; Use of the location read already sets the pending others
   'other'. The ledger names' dash form ("TDS 194-C", "TDS 194-I RENT") is 194 again, as 2.3.3 (the fixtures held no
   dash-form name, so run_ledger_pending's 0 differences could not show it; reverted to the owner's 194T decision only).
+- The coordinator's items 2 and 3 (09-Oct-2026). **Item 3**: this Tally's entry is never attached to a line of a data
+  folder not proven this bridge's own. A forked company (two folders of this user, none chosen) is not asked of this
+  Tally at all; any other unproven line is asked once (the only way to prove a folder), and when that does not prove it
+  the line goes without its entry, held for good, never asked again (the held list skips it, recorder-held.json keeps
+  its data id). Chosen later, its entry comes from the bridge whose own Tally proves that folder, or its Day Book.
+  **Item 2**: a computer's older lines without a data id are never applied from the entry kept with them. Once its
+  bridge proves a chosen location (or the owner says "the same data"), FinCom lists them in the beat (verifyLines,
+  `tally_company_source_verify_list`); the bridge asks its own Tally for each by its MasterID with the held list's
+  approved request (one a turn, spaced, the 2-second rule; no new request shape) and answers "<line id>:verified":
+  Tally's entry when it has the line's GUID, an AlterID not below the line's and the line's narration; else
+  verify_failed, and FinCom keeps the line held with the Day Book words.
 - The real-Tally dry run 37938029402 (u2): after a restart the bank route read and sent again entries the add-on's lines
   had explained. Its count of those lines is now kept in bankdate.json with the counter (one write). A re-send at the
   same AlterID changes nothing in the cloud (the same change already came: 'duplicate'; the same line again: 63's

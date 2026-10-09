@@ -13,7 +13,7 @@ What 2.4.1 changes (the full notes: docs/bridge-2.4.1-notes.md):
 6. The log says why an entry was not asked by its number.
 
 Migration file (md5):
-   migration-71-company-sources.sql         c45a1bbc7f8244c2acbc210b84f5260e
+   migration-71-company-sources.sql         9f77d6925610beffdd9f448b7e01af83
 
 Before you start: migration 71 has run on staging and tally-ingest is deployed after it; you are signed in to FinCom as
 the owner; TallyPrime 7.1 is open on NWS144 with GARG SHEKHAR & COMPANY. In every entry you make for this sheet, start the
