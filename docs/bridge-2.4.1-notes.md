@@ -111,6 +111,42 @@ M1). Skipped entirely for lines from another data id. The request is exactly as 
 When FinComVoucherByNumber is refused before it goes, the log says its own rule: "the date is before the company's
 starting day (<d>)" or "older than 3 days and not just asked", instead of "reading old entries is off (ReadDays)".
 
+## 7. The reviews of next-241 (0f436f6c): 5 High, 8 Medium and four Lows fixed
+
+- **H1, two copies never mix.** Whether a line is another location's is decided before anything is learned from it. The
+  bridge learns its own data id only from a line that proved itself: this Windows user's line whose entry came from its
+  own Tally by its MasterID under the line's own GUID, with an AlterID above the line's. A known own id is never replaced
+  without FinCom's choice. A line of a folder not proven the bridge's own is never asked by its number. ':resolved' lines
+  and the bridge's own reads carry the proven id only.
+- **H2, a line without dp=.** The bridge sends it as another location's when it stopped reading the company; FinCom holds
+  a line without a data id from a computer that is not a chosen location's: "Restart Tally so the 2.4.1 add-on loads".
+- **H3, the company by its GUID.** A location is noted only for the book's own company GUID; another GUID is another
+  company, never chosen by itself.
+- **H4, section suffixes.** After a space or a dash only a real suffix counts: "TDS 192 ON SALARY" is 192 (not 192ON).
+  run_ledger_pending still shows 0 differences.
+- **H5, one data folder under two paths** (D:\TallyData on the server, \\SERVER\TallyData or Z:\ on a client). A third
+  answer on the card, "These are the same data (both computers read it)"; FinCom keeps a set of chosen locations; until a
+  person chooses, a pending location's bridge is not stopped and its lines are held WITH their entry: "same data" applies
+  them, "Use ①" leaves them held for good.
+- **M1** the number fallback only for an older entry or no entry (another type, date or number: 2.4.0's hold); the
+  narration is Tally's. **M2** chosen by itself only as the location of the computer the starting point came from; every
+  other location pending, with the alert. **M3** the location FinCom reads already: its Use disabled; choosing it again
+  stamps who and when only. **M4** ledger and master lines of another location are never fetched. **M5** the ledger page's
+  "agree" compares the rate and the registration too. **M6** Change on "Other ledgers (not tax)" asks first for a
+  confirmed ledger used in entries. **SR-M2** at most 20 locations a book, marks once a call, the card's read bounded.
+- **SR-L1** control characters and bidi marks stripped from the path, the Windows user and the computer, on both sides,
+  lengths in characters. **L2** the "older entry" words: Needs you, the Day Book. **L4** the chosen location re-checked
+  where a line is applied (tally_recorder_send_sourced, under the lock the owner's choice takes). **L8** the bell's line
+  for held lines without "..", its action the Tally page. **L9** the dated "re-measured on 2026-10-09" line in
+  docs/tally-allowlist.md (rows, shapes and hash unchanged).
+
+Left for the next release (as the coordinator decided): the reviews' L1, L3, L5, L6, L7 and SR-L2 to SR-L5. Also known:
+a line queued for the database's drain (a burst of more than 50 full lines) is applied later by the drain, after the
+choice was checked at the send; a pending location's lines held before an owner's "Use ②" (that location chosen) stay
+held (the Day Book of the year brings the history).
+
+The owner's decision of 09-Oct-2026: staff may see the data folder path and the Windows user; only the owner chooses.
+
 ## Tally requests
 
 Nothing added, nothing changed: the allow-list table and its hash are unchanged (9637918f31ad…; TestAllowListUnchanged).

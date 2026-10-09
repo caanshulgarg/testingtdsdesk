@@ -1,7 +1,10 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -45,5 +48,44 @@ func TestRelease241VersionAndDecisionLine(t *testing.T) {
 		if !strings.Contains(sheet, w) {
 			t.Errorf("the 2.4.1 test sheet does not say %q", w)
 		}
+	}
+}
+
+// review L9 of next-241: release-check's step 4 passes: docs/tally-allowlist.md changed since the last release row, so its
+// newest "re-measured on" date is not before that row's date (as 2.3.5 did, rows, shapes and the table hash unchanged)
+func TestRelease241AllowListStep4(t *testing.T) {
+	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))
+	cl := readText(filepath.Join("..", "docs", "RELEASE-CHECKLIST.md"))
+	var last []string
+	on := false
+	for _, l := range strings.Split(cl, "\n") {
+		switch {
+		case strings.HasPrefix(l, "## Release log"):
+			on = true
+		case strings.HasPrefix(l, "## "):
+			on = false
+		case on && regexp.MustCompile(`^\|\s*[0-9]`).MatchString(l):
+			last = strings.Split(l, "|")
+		}
+	}
+	if len(last) < 4 {
+		t.Fatal("no release log row")
+	}
+	lastDate, lastHash := strings.Trim(strings.TrimSpace(last[2]), "`"), strings.Trim(strings.TrimSpace(last[3]), "`")
+	sum := sha256.Sum256([]byte(al))
+	if strings.HasPrefix(hex.EncodeToString(sum[:]), lastHash) {
+		return // unchanged since the last release
+	}
+	newest := ""
+	for _, m := range regexp.MustCompile(`(?i)re-measured on (\d{4}-\d{2}-\d{2})`).FindAllStringSubmatch(al, -1) {
+		if m[1] > newest {
+			newest = m[1]
+		}
+	}
+	if newest < lastDate {
+		t.Fatalf("the allow-list changed since %s (%s) but its newest 're-measured on' is %q", lastDate, lastHash, newest)
+	}
+	if !strings.Contains(al, "re-measured on "+newest) || !regexp.MustCompile(`re-measured on `+newest+`[^\n]*allowed for 2\.4\.1`).MatchString(al) {
+		t.Error("the dated line does not name 2.4.1")
 	}
 }

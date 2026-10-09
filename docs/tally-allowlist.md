@@ -32,6 +32,8 @@ First table: re-measured on 2026-10-06 on the stand (not real Tally); not yet me
 
 The owner's approval of 2026-10-08 (the 13 fields above, in the entry request): "13 fields: all approved. They are read only, inside requests already made, and needed for GST, TDS and bank accuracy." And of 2026-10-07: ALLLEDGERENTRIES.BANKALLOCATIONS.NAME approved. Every field of the entry request (bridge-go/recorder_live.go liveFetchField; next-fastfetch: the object export's FETCHLIST and the fields the bridge keeps) is now approved by the owner.
 
+(re-measured on 2026-10-09 for 2.4.1 (the review of next-241, L9): no request was measured again and none needed it (as for 2.3.4: real TallyPrime 3.0 to 7.1, no new times); the table's rows and request shapes are unchanged since 2.4.0 (its hash, TestAllowListUnchanged, unchanged); allowed for 2.4.1 by the owner's standing decision of 2026-10-06: no request on the list and no request shape changed)
+
 (2.4.1, 09-Oct-2026: no row changed and no request added; the table hash unchanged (9637918f31ad...; TestAllowListUnchanged, TestRelease241VersionAndDecisionLine); only the decision line above changed, to name 2.4.1, 2.4.0's decision kept in it as history ("as for 2.4.0: ..."))
 
 (2.4.0, 08-Oct-2026: one row changed, FinComVoucherByNumber (shape 2167477221dc, the owner's decision of 2026-10-07 above), and the table hash with it (9637918f31ad...; TestAllowListUnchanged, TestTDSWildAllowListShapes); FinComVoucherObject unchanged (ce0e72f74e72); no new times: the changed row is NOT measured again on real Tally or on ZZ BIG TEST ("not yet measured", as every row); FinComVoucherByNumber is the request for a new entry whose line has no MasterID)

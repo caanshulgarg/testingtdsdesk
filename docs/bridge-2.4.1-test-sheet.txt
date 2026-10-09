@@ -44,6 +44,12 @@ CHECK 4 - THE OWNER'S CHOICE
    who chose and when. A new Journal of Rs 1 in the ORIGINAL Tally ("TRIAL 241 after") reaches the books; a new entry in
    the COPY does not. Close the second Tally.
 
+CHECK 4b - ONE DATA FOLDER UNDER TWO PATHS
+   Open GARG SHEKHAR on a second computer from the server's shared folder (\\SERVER\TallyData or a mapped drive). Make a
+   Journal of Rs 1 there, narration "TRIAL 241 same".
+   You should see: the card shows the second path as another place; that computer's bridge goes on reading. Press "These
+   are the same data (both computers read it)": the Journal is in the books; later entries from either computer too.
+
 CHECK 5 - A STAFF MEMBER
    Sign in as a member who is not an owner and open the Tally page.
    You should see: the same card's words, no button.
