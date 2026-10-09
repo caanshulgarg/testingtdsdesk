@@ -1,0 +1,64 @@
+FINCOM 2.4.1 - TEST SHEET (NWS144, staging)
+
+File:        FinComBridge-Setup-2.4.1.exe (NOT built yet)
+Fingerprint: (written when it is built; compare with the .sha256 file next to the setup)
+
+What 2.4.1 changes (the full notes: docs/bridge-2.4.1-notes.md):
+1. The add-on writes the company's data folder on every line (|dp=), from one formula (FCRDataPath; its measured text is
+   dropped in before this sheet is used: until then dp= is empty and the bridge works as 2.4.0 for it).
+2. A save in another data location of a company is never read from Tally or put in the books; FinCom is told of it.
+3. FinCom's cloud keeps each company's data locations (migration 71) and the owner chooses which one is the books.
+4. The Tally page shows a card when a company is open in two places; Needs you and the bell say so.
+5. A save whose MasterID points at an older entry is found once by its type and number (Sales 297 of 09-Oct).
+6. The log says why an entry was not asked by its number.
+
+Migration file (md5):
+   migration-71-company-sources.sql         0091f6cc39077724a42563048b95d07e
+
+Before you start: migration 71 has run on staging and tally-ingest is deployed after it; you are signed in to FinCom as
+the owner; TallyPrime 7.1 is open on NWS144 with GARG SHEKHAR & COMPANY. In every entry you make for this sheet, start the
+narration with TRIAL. Write down the time (IST) of each check.
+
+CHECK 1 - THE VERSION AND THE ADD-ON
+   Install FinComBridge-Setup-2.4.1.exe and compare its fingerprint. In Tally load the new add-on
+   (C:\ProgramData\FinCom\addon\FinComRecorder.tdl; F1 > TDL & Add-On > reload).
+   You should see: the tray says FinCom Bridge 2.4.1; FinCom's Tally page shows version 2.4.1. In
+   C:\ProgramData\FinCom\recorder your file's new lines carry |dp=<the data folder of GARG SHEKHAR>|w=<your Windows user>.
+
+CHECK 2 - ONE DATA LOCATION: NOTHING CHANGES
+   In GARG SHEKHAR make a Journal of Rs 1, narration "TRIAL 241 one".
+   You should see: the entry in FinCom's books within a few seconds, as in 2.4.0; no card on the Tally page.
+
+CHECK 3 - THE SAME COMPANY FROM A SECOND DATA FOLDER
+   Copy GARG SHEKHAR's data folder to another folder. Open the copy in a second TallyPrime (the same Windows user, another
+   port, the same add-on). In the COPY make a Sales entry of Rs 1, narration "TRIAL 241 copy".
+   You should see: the entry is NOT in FinCom's books; Sync activity, Needs you: "saved in another data location of
+   GARG SHEKHAR & COMPANY (②, NWS144); FinCom reads ①. Choose on the Tally page."; ONE notification in the bell; on the
+   Tally page the card "GARG SHEKHAR & COMPANY is open in two places with different data: ① ... ② ... Which one is your
+   books? FinCom reads only that one." with Use ①, Use ②, Decide later. The log of the bridge says "a save in another data
+   location of the company ... is not read by this bridge".
+
+CHECK 4 - THE OWNER'S CHOICE
+   Press Decide later: the card folds. Reload the page and press Use ① (the original folder).
+   You should see: "FinCom now reads ①. Upload ①'s Day Book for the year (one month per file) so the history matches.",
+   who chose and when. A new Journal of Rs 1 in the ORIGINAL Tally ("TRIAL 241 after") reaches the books; a new entry in
+   the COPY does not. Close the second Tally.
+
+CHECK 5 - A STAFF MEMBER
+   Sign in as a member who is not an owner and open the Tally page.
+   You should see: the same card's words, no button.
+
+CHECK 6 - AN ENTRY WHOSE MASTERID IS AN OLDER ENTRY (the 09-Oct case)
+   Not made by hand: the bridge's tests cover it (fallback241_test.go). On NWS144, any line held with "Tally's voucher
+   with that MasterID is not a change after the starting point" from now on should come with "... asked by its type and
+   number: ..." in its words, or be in the books.
+
+How to send the log lines: right-click the FinCom icon near the clock > Show log.
+
+HOW TO ROLL BACK (go back to 2.4.0)
+   1. Right-click the FinCom icon near the clock > "Roll back to the previous version".
+   2. A question names the version it goes back to (2.4.0). Answer Yes.
+   3. The icon goes away for a few seconds and comes back.
+   4. In Tally the 2.4.1 add-on may stay loaded: 2.4.0 reads its dp= as part of tw.
+   You should see: within a minute, FinCom's Tally page shows version 2.4.0 for your line. Automatic updates stay off on
+   this computer until FinCom turns them on again.
