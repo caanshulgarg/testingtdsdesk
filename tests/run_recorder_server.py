@@ -159,6 +159,11 @@ try:
     lrow = (db.rows("select pc, tally_user, bridge, save_ms, payload::text as payload, vch_date from tally_recorder_lines where line_id = 'L1'") or [{}])[0]
     ok(lrow.get("pc") == "PC-A" and lrow.get("bridge") == GA["id"] and lrow.get("save_ms") == "8" and "xmlBytes" in lrow.get("payload", "") and "<VOUCHER" not in lrow.get("payload", "") and lrow.get("vch_date") == "2026-05-10",
        "the line kept with pc, bridge, save_ms; the payload bounded (the XML's size, not the XML) (%s)" % {k: lrow.get(k) for k in ("pc", "save_ms")})
+    # 2.4.1: the bridge's own clock when it read the line (received_at) kept in the payload; one more than 5 minutes ahead dropped
+    c, r = rec([line("L1r", "created", "v1r", 43, amt=10, received_at="2026-10-09T11:30:07+05:30"), line("L1f", "created", "v1f", 44, amt=10, received_at="2999-01-01T00:00:00Z")])
+    pr = json.loads((db.rows("select payload::text as p from tally_recorder_lines where line_id = 'L1r'") or [{}])[0].get("p") or "{}")
+    pf = json.loads((db.rows("select payload::text as p from tally_recorder_lines where line_id = 'L1f'") or [{}])[0].get("p") or "{}")
+    ok(pr.get("received_at") == "2026-10-09T06:00:07.000Z" and "received_at" not in pf, "2.4.1: received_at kept in the payload (%s), one in the future dropped (%s)" % (pr.get("received_at"), pf.get("received_at")))
     c, r = rec([line("L2", "altered", "v1", 42, amt=120)])
     ok(st(r) == {"L2": "applied"} and vrow("v1").get("alter_id") == "42" and db.one("select count(*) from tally_voucher_versions where tally_guid = 'v1'") == "2" and db.one("select lines::text from tally_voucher_versions where tally_guid = 'v1' and alter_id = 41").count("100") == 2,
        "altered: the version of AlterID 41 kept with its lines, a version for 42 (%s)" % st(r))
