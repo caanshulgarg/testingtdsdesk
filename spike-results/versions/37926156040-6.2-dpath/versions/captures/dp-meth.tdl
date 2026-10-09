@@ -1,0 +1,48 @@
+;; dpath probe meth (tally-versions mode dpath, harness only): after Tally's save and in the delete / cancel events
+[#Form: Voucher]
+    On : Form Accept : Yes : Call : FCDPWmeth : "accept_post"
+
+[System: Events]
+    FCDPEmetha : Before Delete Object : Yes : Call : FCDPWmeth : "before_delete"
+    FCDPEmethb : After Delete Object : Yes : Call : FCDPWmeth : "after_delete"
+    FCDPEmethc : Before Cancel Object : Yes : Call : FCDPWmeth : "before_cancel"
+    FCDPEmethd : After Cancel Object : Yes : Call : FCDPWmeth : "after_cancel"
+
+[Function: FCDPWmeth]
+    Parameter : pEv : String
+    Variable  : vV  : String
+    Variable  : vA  : String
+    Variable  : vB  : String
+    Variable  : vH  : String
+    Returns   : Logical
+    000 : SET : vA : $Guid:Company:##SVCurrentCompany
+    001 : SET : vH : "FCDP|f=meth|ev=" + ##pEv + "|cg=" + ##vA + "|mid=" + ($$String:$MasterID) + "|aid=" + ($$String:$AlterID)
+    002 : SET : vH : ##vH + "|vt=" + ($$String:$VoucherTypeName) + "|vno=" + ($$String:$VoucherNumber)
+    003 : OPEN FILE : "C:\fcspike\dpath\probe.txt" : Text : Write : Unicode
+    004 : IF : NOT $$LastResult
+    005 :    RETURN : Yes
+    006 : END IF
+    010 : SET : vV : $Path:Company:##SVCurrentCompany
+    011 : WRITE FILE LINE : ##vH + "|k=m_Path|v=" + ##vV + "|end"
+    012 : SET : vV : $DataPath:Company:##SVCurrentCompany
+    013 : WRITE FILE LINE : ##vH + "|k=m_DataPath|v=" + ##vV + "|end"
+    014 : SET : vV : $CompanyPath:Company:##SVCurrentCompany
+    015 : WRITE FILE LINE : ##vH + "|k=m_CompanyPath|v=" + ##vV + "|end"
+    016 : SET : vV : $Directory:Company:##SVCurrentCompany
+    017 : WRITE FILE LINE : ##vH + "|k=m_Directory|v=" + ##vV + "|end"
+    018 : SET : vV : $DataDirectory:Company:##SVCurrentCompany
+    019 : WRITE FILE LINE : ##vH + "|k=m_DataDirectory|v=" + ##vV + "|end"
+    020 : SET : vV : $Location:Company:##SVCurrentCompany
+    021 : WRITE FILE LINE : ##vH + "|k=m_Location|v=" + ##vV + "|end"
+    022 : SET : vV : $DataLocation:Company:##SVCurrentCompany
+    023 : WRITE FILE LINE : ##vH + "|k=m_DataLocation|v=" + ##vV + "|end"
+    024 : SET : vV : $Folder:Company:##SVCurrentCompany
+    025 : WRITE FILE LINE : ##vH + "|k=m_Folder|v=" + ##vV + "|end"
+    026 : SET : vV : $CompanyFolder:Company:##SVCurrentCompany
+    027 : WRITE FILE LINE : ##vH + "|k=m_CompanyFolder|v=" + ##vV + "|end"
+    028 : SET : vV : $LoadedPath:Company:##SVCurrentCompany
+    029 : WRITE FILE LINE : ##vH + "|k=m_LoadedPath|v=" + ##vV + "|end"
+    030 : SET : vV : $FullPath:Company:##SVCurrentCompany
+    031 : WRITE FILE LINE : ##vH + "|k=m_FullPath|v=" + ##vV + "|end"
+    032 : CLOSE TARGET FILE
+    033 : RETURN : Yes

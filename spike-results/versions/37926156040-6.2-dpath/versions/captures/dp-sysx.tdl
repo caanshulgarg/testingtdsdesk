@@ -1,0 +1,50 @@
+;; dpath probe sysx (tally-versions mode dpath, harness only): after Tally's save and in the delete / cancel events
+[#Form: Voucher]
+    On : Form Accept : Yes : Call : FCDPWsysx : "accept_post"
+
+[System: Events]
+    FCDPEsysxa : Before Delete Object : Yes : Call : FCDPWsysx : "before_delete"
+    FCDPEsysxb : After Delete Object : Yes : Call : FCDPWsysx : "after_delete"
+    FCDPEsysxc : Before Cancel Object : Yes : Call : FCDPWsysx : "before_cancel"
+    FCDPEsysxd : After Cancel Object : Yes : Call : FCDPWsysx : "after_cancel"
+
+[Function: FCDPWsysx]
+    Parameter : pEv : String
+    Variable  : vV  : String
+    Variable  : vA  : String
+    Variable  : vB  : String
+    Variable  : vH  : String
+    Returns   : Logical
+    000 : SET : vA : $Guid:Company:##SVCurrentCompany
+    001 : SET : vH : "FCDP|f=sysx|ev=" + ##pEv + "|cg=" + ##vA + "|mid=" + ($$String:$MasterID) + "|aid=" + ($$String:$AlterID)
+    002 : SET : vH : ##vH + "|vt=" + ($$String:$VoucherTypeName) + "|vno=" + ($$String:$VoucherNumber)
+    003 : OPEN FILE : "C:\fcspike\dpath\probe.txt" : Text : Write : Unicode
+    004 : IF : NOT $$LastResult
+    005 :    RETURN : Yes
+    006 : END IF
+    010 : SET : vV : $$SysInfo:CompanyPath
+    011 : WRITE FILE LINE : ##vH + "|k=sys_CompanyPath|v=" + ##vV + "|end"
+    012 : SET : vV : $$SysInfo:CompanyDataPath
+    013 : WRITE FILE LINE : ##vH + "|k=sys_CompanyDataPath|v=" + ##vV + "|end"
+    014 : SET : vV : $$SysInfo:DataDirectory
+    015 : WRITE FILE LINE : ##vH + "|k=sys_DataDirectory|v=" + ##vV + "|end"
+    016 : SET : vV : $$SysInfo:DataFolder
+    017 : WRITE FILE LINE : ##vH + "|k=sys_DataFolder|v=" + ##vV + "|end"
+    018 : SET : vV : $$SysInfo:DataDir
+    019 : WRITE FILE LINE : ##vH + "|k=sys_DataDir|v=" + ##vV + "|end"
+    020 : SET : vV : $$SysInfo:TallyDataPath
+    021 : WRITE FILE LINE : ##vH + "|k=sys_TallyDataPath|v=" + ##vV + "|end"
+    022 : SET : vV : $$SysInfo:DataLocation
+    023 : WRITE FILE LINE : ##vH + "|k=sys_DataLocation|v=" + ##vV + "|end"
+    024 : SET : vV : $$SysInfo:CurrentDataPath
+    025 : WRITE FILE LINE : ##vH + "|k=sys_CurrentDataPath|v=" + ##vV + "|end"
+    026 : SET : vV : $$SysInfo:CmpDataPath
+    027 : WRITE FILE LINE : ##vH + "|k=sys_CmpDataPath|v=" + ##vV + "|end"
+    028 : SET : vV : $$SysInfo:ApplicationPath
+    029 : WRITE FILE LINE : ##vH + "|k=sys_ApplicationPath|v=" + ##vV + "|end"
+    030 : SET : vV : $$SysInfo:ConfigPath
+    031 : WRITE FILE LINE : ##vH + "|k=sys_ConfigPath|v=" + ##vV + "|end"
+    032 : SET : vV : $$SysInfo:ExePath
+    033 : WRITE FILE LINE : ##vH + "|k=sys_ExePath|v=" + ##vV + "|end"
+    034 : CLOSE TARGET FILE
+    035 : RETURN : Yes

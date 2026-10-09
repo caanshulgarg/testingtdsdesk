@@ -1,0 +1,840 @@
+[12:01:03] ---- c1 install and open the company (TallyPrime 5.1)
+  INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 15643264 bytes, 2026-10-09, FileVersion 1.1.5.1, ProductVersion 1.1.5.1, ProductName TallyPrime
+  INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-00-started (1024x768)
+[companies] 8 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[header] 8 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS><PRODMAJORVER>1</PRODMAJORVER><PRODMINORVER>1</PRODMINORVER><PRODMAJORREL>5</PRODMAJORREL><PRODMINORREL>1</PRODMINORREL><PRODTYPE>5</PRODTYPE></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</...
+  INFO Tally's own release in its answer header: PRODMAJORREL 5 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+######## PASS c1 install and open the company: installed tally.exe 15643264 bytes, 2026-10-09, FileVersion 1.1.5.1, ProductVersion 1.1.5.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+######## PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 18 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 8 ms, 'FinCom Spike Co' in it: True
+[12:01:36] ---- dpath: the data folder of the loaded company inside the add-on's events
+  INFO dpath: company folder number 100000; folder 1 D:\a\_temp\TallyData\100000; folder 2 D:\a\_temp\TallyData2\100000 (a copy made with Tally closed)
+[dpath masters] 169 ms: <RESPONSE><CREATED>57</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO dpath masters: <CREATED>57</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>
+[dpath receipt] 33 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>2</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[dpath sales 50] 247 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>3</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO dpath timing entries: receipt (1-11-2026) made True; sales invoice of 50 items (1-12-2026) made True
+[company methods] 6 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>63</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>50</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>100</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>2</CURRENCY><UNIT>1</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE>...
+  INFO D0 company methods holding the data folder or the number 100000 (15761 chars exported): COMPANYNUMBER='100000'
+  INFO D1 candidates: sysdp=$$SysInfo:DataPath; svcp=##SVCurrentPath; dest=$Destination:Company:##SVCurrentCompany; cnum=$CompanyNumber:Company:##SVCurrentCompany; destnum=$Destination:Company:##SVCurrentCompany + \ + $CompanyNumber:Company:##SVCurrentCompany; sysdpnum=$$SysInfo:DataPath + \ + $CompanyNumber:Company:##SVCurrentCompany; svcpnum=##SVCurrentPath + \ + $CompanyNumber:Company:##SVCurrentCompany; sys_CompanyPath=$$SysInfo:CompanyPath; sys_CompanyDataPath=$$SysInfo:CompanyDataPath; sys_DataDirectory=$$SysInfo:DataDirectory; sys_DataFolder=$$SysInfo:DataFolder; sys_DataDir=$$SysInfo:DataDir; sys_TallyDataPath=$$SysInfo:TallyDataPath; sys_DataLocation=$$SysInfo:DataLocation; sys_CurrentDataPath=$$SysInfo:CurrentDataPath; sys_CmpDataPath=$$SysInfo:CmpDataPath; sys_ApplicationPath=$$SysInfo:ApplicationPath; sys_ConfigPath=$$SysInfo:ConfigPath; sys_ExePath=$$SysInfo:ExePath; m_Path=$Path:Company:##SVCurrentCompany; m_DataPath=$DataPath:Company:##SVCurrentCompany; m_CompanyPath=$CompanyPath:Company:##SVCurrentCompany; m_Directory=$Directory:Company:##SVCurrentCompany; m_DataDirectory=$DataDirectory:Company:##SVCurrentCompany; m_Location=$Location:Company:##SVCurrentCompany; m_DataLocation=$DataLocation:Company:##SVCurrentCompany; m_Folder=$Folder:Company:##SVCurrentCompany; m_CompanyFolder=$CompanyFolder:Company:##SVCurrentCompany; m_LoadedPath=$LoadedPath:Company:##SVCurrentCompany; m_FullPath=$FullPath:Company:##SVCurrentCompany
+  INFO dpath: folder 2 made: D:\a\_temp\TallyData2\100000 (16 files, 966 KB; folder 1 16 files)
+  INFO tally.ini: Data = D:\a\_temp\TallyData; TDL files: dp-cnum-pre.tdl, dp-dest-pre.tdl, dp-destnum-pre.tdl, dp-meth-pre.tdl, dp-svcp-pre.tdl, dp-svcpnum-pre.tdl, dp-sysdp-pre.tdl, dp-sysdpnum-pre.tdl, dp-sysx-pre.tdl, FinComRecorder.tdl, dp-cnum.tdl, dp-dest.tdl, dp-destnum.tdl, dp-meth.tdl, dp-svcp.tdl, dp-svcpnum.tdl, dp-sysdp.tdl, dp-sysdpnum.tdl, dp-sysx.tdl
+[shot] tds-001-P1-start-1 (1024x768)
+[12:02:18] [tds] screen tds-001-P1-start-1 : TallyPrime MANAGE EDU K: Company Startup Report Y: Data Z: Exchange O: Import E: Export M: Share Application Startup TallyPrime will start with the following settings. Click Configure to change these settings Country Accounting terminology Company Data path C. Configure A Accept Q Search India Others A. Accept p: print Fl: Help x 12:01 PM 10/9/2026
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] tds-002-P1-start-2 (1024x768)
+[12:02:36] [tds] screen tds-002-P1-start-2 : TallyPrime MANAGE {1' EDU 5: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Unity Y: Data Z: Exchange CURRENT OATE Tuesday, I-Dec-2026 O: Import E: Export M: Share p: print Fl: Help Date to ru tion_ 9486b Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Q I-Dec-26 Search Company 0905- 34008 Llec7b 0905- 34008 .337.0 b—OI ening relat 8dd79 ng jo ource 6—3db Llec7b , " jobN Mode Windows Server...
+[P1 companies] 4 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+  INFO P1: Tally started (pid 8424); 'FinCom Spike Co' loaded: True
+  INFO dpath P1/start: 0 probe line(s); events 
+[shot] tds-003-gw0 (1024x768)
+[12:02:38] [tds] screen tds-003-gw0 : TallyPrime MANAGE {1' EDU 5: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Unity Y: Data Z: Exchange CURRENT OATE Tuesday, I-Dec-2026 O: Import E: Export M: Share p: print Fl: Help Date to ru tion_ 9486b Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Q I-Dec-26 Search Company 0905- 34008 Llec7b 0905- 34008 .337.0 b—OI ening relat 8dd79 ng jo ource 6—3db Llec7b , " jobN Mode Windows Server...
+  voucher mid=1 aid=1 Journal/1/20260401 guid=16015229-4171-4f98-b1d8-903153f7a052-00000001 cancelled=False
+  voucher mid=2 aid=2 Receipt/1/20261101 guid=16015229-4171-4f98-b1d8-903153f7a052-00000002 cancelled=False
+  voucher mid=3 aid=3 Sales/1/20261201 guid=16015229-4171-4f98-b1d8-903153f7a052-00000003 cancelled=False
+[keys] 'v' -> Tally 'TallyPrime:9000'
+[shot] v-dp-P1-vouchers (1024x768)
+[keys] '{F6}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] 'Cash{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] 'Spike Income{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '700{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] v-dp-P1-created (1024x768)
+  voucher mid=1 aid=1 Journal/1/20260401 guid=16015229-4171-4f98-b1d8-903153f7a052-00000001 cancelled=False
+  voucher mid=4 aid=4 Receipt/2/20261002 guid=16015229-4171-4f98-b1d8-903153f7a052-00000004 cancelled=False
+  voucher mid=2 aid=2 Receipt/1/20261101 guid=16015229-4171-4f98-b1d8-903153f7a052-00000002 cancelled=False
+  voucher mid=3 aid=3 Sales/1/20261201 guid=16015229-4171-4f98-b1d8-903153f7a052-00000003 cancelled=False
+  INFO dpath P1/create: 60 probe line(s); events accept_post x30, accept_pre x30
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-P1-alt-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-P1-open (1024x768)
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '800{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] v-dp-P1-altered (1024x768)
+  voucher mid=1 aid=1 Journal/1/20260401 guid=16015229-4171-4f98-b1d8-903153f7a052-00000001 cancelled=False
+  voucher mid=4 aid=5 Receipt/2/20261002 guid=16015229-4171-4f98-b1d8-903153f7a052-00000004 cancelled=False
+  voucher mid=2 aid=2 Receipt/1/20261101 guid=16015229-4171-4f98-b1d8-903153f7a052-00000002 cancelled=False
+  voucher mid=3 aid=3 Sales/1/20261201 guid=16015229-4171-4f98-b1d8-903153f7a052-00000003 cancelled=False
+  INFO dpath P1/alter: 60 probe line(s); events accept_post x30, accept_pre x30
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-P1-dup-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '900{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] v-dp-P1-dup (1024x768)
+  voucher mid=1 aid=1 Journal/1/20260401 guid=16015229-4171-4f98-b1d8-903153f7a052-00000001 cancelled=False
+  voucher mid=4 aid=5 Receipt/2/20261002 guid=16015229-4171-4f98-b1d8-903153f7a052-00000004 cancelled=False
+  voucher mid=5 aid=6 Receipt/3/20261002 guid=16015229-4171-4f98-b1d8-903153f7a052-00000005 cancelled=False
+  voucher mid=2 aid=2 Receipt/1/20261101 guid=16015229-4171-4f98-b1d8-903153f7a052-00000002 cancelled=False
+  voucher mid=3 aid=3 Sales/1/20261201 guid=16015229-4171-4f98-b1d8-903153f7a052-00000003 cancelled=False
+  INFO dpath P1/dup: 60 probe line(s); events accept_post x30, accept_pre x30
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-P1-can-daybook (1024x768)
+[keys] '{HOME}' -> Tally 'TallyPrime:9000'
+[keys] '%x' -> Tally 'TallyPrime:9000'
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[shot] v-dp-P1-cancelled (1024x768)
+  voucher mid=1 aid=1 Journal/1/20260401 guid=16015229-4171-4f98-b1d8-903153f7a052-00000001 cancelled=False
+  voucher mid=4 aid=7 Receipt/2/20261002 guid=16015229-4171-4f98-b1d8-903153f7a052-00000004 cancelled=True
+  voucher mid=5 aid=6 Receipt/3/20261002 guid=16015229-4171-4f98-b1d8-903153f7a052-00000005 cancelled=False
+  voucher mid=2 aid=2 Receipt/1/20261101 guid=16015229-4171-4f98-b1d8-903153f7a052-00000002 cancelled=False
+  voucher mid=3 aid=3 Sales/1/20261201 guid=16015229-4171-4f98-b1d8-903153f7a052-00000003 cancelled=False
+  INFO dpath P1/cancel: 60 probe line(s); events after_cancel x30, before_cancel x30
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-P1-del-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%d' -> Tally 'TallyPrime:9000'
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[shot] v-dp-P1-deleted (1024x768)
+  voucher mid=1 aid=1 Journal/1/20260401 guid=16015229-4171-4f98-b1d8-903153f7a052-00000001 cancelled=False
+  voucher mid=4 aid=7 Receipt/2/20261002 guid=16015229-4171-4f98-b1d8-903153f7a052-00000004 cancelled=True
+  voucher mid=2 aid=2 Receipt/1/20261101 guid=16015229-4171-4f98-b1d8-903153f7a052-00000002 cancelled=False
+  voucher mid=3 aid=3 Sales/1/20261201 guid=16015229-4171-4f98-b1d8-903153f7a052-00000003 cancelled=False
+  INFO dpath P1/delete: 60 probe line(s); events after_delete x30, before_delete x30
+  INFO dpath P1 (D:\a\_temp\TallyData\100000, 2-10-2026): Tally up with the company True; created mid 4 guid 16015229-4171-4f98-b1d8-903153f7a052-00000004; altered AlterID 4 -> 5; Alt+2 created mid 5; cancelled mid 4; deleted mid 5
+[shot] tds-004-gw0 (1024x768)
+[12:05:53] [tds] screen tds-004-gw0 : TallyPrime MANAGE {l' EDU K: Company Y: Data Da Book • Day Book Z: Exchange A Add Vch Q Search FinCom • ke Co Vch Type Receipt DuÅicate Vch I Insert Vch O: Import Vch No. E: Export M: Share P: Print For 2-Oct-26 11 Date 2-Oct-26 Quit Particulars (cancelled) Enter: Alter Debit Amount Credit Amount Inwards Qty_ Outwards Qt Unity Space: Sekd Delete 2 x: Cancel Vch U: Restore Line Fl: Help F2: Date Company Voucher Type F 7: Show profit F8: Columnar FIO Basis of B: Values Change ¯ View Exception J: Reports Save View L: Apply F: — Filter F: Filter ¯ Details F 12: Configure to ru tion_ 9486b 0905- 34...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-005-gw1 (1024x768)
+[12:05:57] [tds] screen tds-005-gw1 : TallyPrime MANAGE {l' EDU K: Company Y: Data Da Book • Day Book Z: Exchange A Add Vch Q Search FinCom • ke Co Vch Type Receipt DuÅicate Vch I Insert Vch O: Import Vch No. E: Export M: Share P: Print For 2-Oct-26 11 Date 2-Oct-26 Quit Particulars (cancelled) Enter: Alter Debit Amount Credit Amount Inwards Qty_ Outwards Qt Unity Space: Sekd Delete 2 x: Cancel Vch U: Restore Line Fl: Help F2: Date Company Voucher Type F 7: Show profit F8: Columnar FIO Basis of B: Values Change ¯ View Exception J: Reports Save View L: Apply F: — Filter F: Filter ¯ Details F 12: Configure to ru tion_ 9486b 0905- 34...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-006-gw2 (1024x768)
+[12:06:00] [tds] screen tds-006-gw2 : TallyPrime MANAGE {l' EDU K: Company Y: Data Da Book • Day Book Z: Exchange A Add Vch Q Search FinCom • ke Co Vch Type Receipt DuÅicate Vch I Insert Vch O: Import Vch No. E: Export M: Share P: Print For 2-Oct-26 11 Date 2-Oct-26 Quit Particulars (cancelled) Enter: Alter Debit Amount Credit Amount Inwards Qty_ Outwards Qt Unity Space: Sekd Delete 2 x: Cancel Vch U: Restore Line Fl: Help F2: Date Company Voucher Type F 7: Show profit F8: Columnar FIO Basis of B: Values Change ¯ View Exception J: Reports Save View L: Apply F: — Filter F: Filter ¯ Details F 12: Configure to ru tion_ 9486b 0905- 34...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-007-gw3 (1024x768)
+[12:06:04] [tds] screen tds-007-gw3 : TallyPrime MANAGE {l' EDU K: Company Y: Data Da Book • Day Book Z: Exchange A Add Vch Q Search FinCom • ke Co Vch Type Receipt DuÅicate Vch I Insert Vch O: Import Vch No. E: Export M: Share P: Print For 2-Oct-26 11 Date 2-Oct-26 Quit Particulars (cancelled) Enter: Alter Debit Amount Credit Amount Inwards Qty_ Outwards Qt Unity Space: Sekd Delete 2 x: Cancel Vch U: Restore Line Fl: Help F2: Date Company Voucher Type F 7: Show profit F8: Columnar FIO Basis of B: Values Change ¯ View Exception J: Reports Save View L: Apply F: — Filter F: Filter ¯ Details F 12: Configure to ru tion_ 9486b 0905- 34...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-008-gw4 (1024x768)
+[12:06:08] [tds] screen tds-008-gw4 : TallyPrime MANAGE {1' EDU K: Company Accounting Voucher Creation Recei t No. 4 Account Current balance: Particulars Narration: Unity Quit Y: Data Z: Exchange A Accept Q Search O: Import E: Export M: Share FinCom • ke Co p: print x 2-Oct-26 Friday Amount D: Delete x: Cancel Vch Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure to ru tion_ 9486b 0905- 34008 Llec7b 0905- 34008 .337.0 b—OI ening relat 8dd79 ng jo ource 6—3db Llec7b , " jobN...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-009-gw5 (1024x768)
+[12:06:12] [tds] screen tds-009-gw5 : TallyPrime MANAGE {1' EDU K: Company Accounting Voucher Creation Recei t No. 4 Account Current balance: Particulars Narration: Unity Q: Quit Y: Data Z: Exchange A: Accept Q Search O: Import E: Export M: Share FinCom p: print x 2-Oct-26 Friday Amount Quit o Yes or No D: Delete X: Cancel Vch Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated J: Stat ¯ Adjustment F-12: Configure to ru tion_ 9486b 0905- 34008 Llec7b 0905- 34008 .337.0 b—OI ening relat 8...
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[shot] tds-010-gw6 (1024x768)
+[12:06:15] [tds] screen tds-010-gw6 : TallyPrime MANAGE {1' EDU 5: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Unity Y: Data Z: Exchange O: Import E: Export M: Share p: print Fl: Help Date to ru tion_ 9486b Q CURRENT OATE Friday, 2-Oct-2026 I-Dec-26 Search Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Company 0905- 34008 Llec7b 0905- 34008 .337.0 b—OI ening relat 8dd79 ng jo ource 6—3db Llec7b , " jobN Mode Windows Server ...
+  INFO tally.ini: Data = D:\a\_temp\TallyData2; TDL files: dp-cnum-pre.tdl, dp-dest-pre.tdl, dp-destnum-pre.tdl, dp-meth-pre.tdl, dp-svcp-pre.tdl, dp-svcpnum-pre.tdl, dp-sysdp-pre.tdl, dp-sysdpnum-pre.tdl, dp-sysx-pre.tdl, FinComRecorder.tdl, dp-cnum.tdl, dp-dest.tdl, dp-destnum.tdl, dp-meth.tdl, dp-svcp.tdl, dp-svcpnum.tdl, dp-sysdp.tdl, dp-sysdpnum.tdl, dp-sysx.tdl
+[shot] tds-011-P2-start-1 (1024x768)
+[12:06:34] [tds] screen tds-011-P2-start-1 : TallyPrime MANAGE EDU K: Company Startup Report Y: Data Z: Exchange O: Import E: Export M: Share Application Startup TallyPrime will start with the following settings. Click Configure to change these settings Country Accounting terminology Company Data path C. Configure A Accept Q Search India Others A. Accept p: print Fl: Help x 12:06 PM 10/9/2026
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] tds-012-P2-start-2 (1024x768)
+[12:06:51] [tds] screen tds-012-P2-start-2 : TallyPrime MANAGE {1' EDU 5: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Unity Y: Data Z: Exchange CURRENT OATE Tuesday, I-Dec-2026 O: Import E: Export M: Share p: print Fl: Help Date to ru tion_ 9486b Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Q I-Dec-26 Search Company 0905- 34008 Llec7b 0905- 34008 .337.0 b—OI ening relat 8dd79 ng jo ource 6—3db Llec7b , " jobN Mode Windows Server...
+[P2 companies] 4 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+  INFO P2: Tally started (pid 2528); 'FinCom Spike Co' loaded: True
+  INFO dpath P2/start: 0 probe line(s); events 
+[shot] tds-013-gw0 (1024x768)
+[12:06:54] [tds] screen tds-013-gw0 : TallyPrime MANAGE {1' EDU 5: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Unity Y: Data Z: Exchange CURRENT OATE Tuesday, I-Dec-2026 O: Import E: Export M: Share p: print Fl: Help Date to ru tion_ 9486b Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Q I-Dec-26 Search Company 0905- 34008 Llec7b 0905- 34008 .337.0 b—OI ening relat 8dd79 ng jo ource 6—3db Llec7b , " jobN Mode Windows Server...
+  voucher mid=1 aid=1 Journal/1/20260401 guid=16015229-4171-4f98-b1d8-903153f7a052-00000001 cancelled=False
+  voucher mid=2 aid=2 Receipt/1/20261101 guid=16015229-4171-4f98-b1d8-903153f7a052-00000002 cancelled=False
+  voucher mid=3 aid=3 Sales/1/20261201 guid=16015229-4171-4f98-b1d8-903153f7a052-00000003 cancelled=False
+[keys] 'v' -> Tally 'TallyPrime:9000'
+[shot] v-dp-P2-vouchers (1024x768)
+[keys] '{F6}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] 'Cash{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] 'Spike Income{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '700{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] v-dp-P2-created (1024x768)
+  voucher mid=1 aid=1 Journal/1/20260401 guid=16015229-4171-4f98-b1d8-903153f7a052-00000001 cancelled=False
+  voucher mid=4 aid=4 Receipt/2/20261001 guid=16015229-4171-4f98-b1d8-903153f7a052-00000004 cancelled=False
+  voucher mid=2 aid=2 Receipt/1/20261101 guid=16015229-4171-4f98-b1d8-903153f7a052-00000002 cancelled=False
+  voucher mid=3 aid=3 Sales/1/20261201 guid=16015229-4171-4f98-b1d8-903153f7a052-00000003 cancelled=False
+  INFO dpath P2/create: 60 probe line(s); events accept_post x30, accept_pre x30
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-P2-alt-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-P2-open (1024x768)
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '800{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] v-dp-P2-altered (1024x768)
+  voucher mid=1 aid=1 Journal/1/20260401 guid=16015229-4171-4f98-b1d8-903153f7a052-00000001 cancelled=False
+  voucher mid=4 aid=5 Receipt/2/20261001 guid=16015229-4171-4f98-b1d8-903153f7a052-00000004 cancelled=False
+  voucher mid=2 aid=2 Receipt/1/20261101 guid=16015229-4171-4f98-b1d8-903153f7a052-00000002 cancelled=False
+  voucher mid=3 aid=3 Sales/1/20261201 guid=16015229-4171-4f98-b1d8-903153f7a052-00000003 cancelled=False
+  INFO dpath P2/alter: 60 probe line(s); events accept_post x30, accept_pre x30
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-P2-dup-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '900{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] v-dp-P2-dup (1024x768)
+  voucher mid=1 aid=1 Journal/1/20260401 guid=16015229-4171-4f98-b1d8-903153f7a052-00000001 cancelled=False
+  voucher mid=4 aid=5 Receipt/2/20261001 guid=16015229-4171-4f98-b1d8-903153f7a052-00000004 cancelled=False
+  voucher mid=5 aid=6 Receipt/3/20261001 guid=16015229-4171-4f98-b1d8-903153f7a052-00000005 cancelled=False
+  voucher mid=2 aid=2 Receipt/1/20261101 guid=16015229-4171-4f98-b1d8-903153f7a052-00000002 cancelled=False
+  voucher mid=3 aid=3 Sales/1/20261201 guid=16015229-4171-4f98-b1d8-903153f7a052-00000003 cancelled=False
+  INFO dpath P2/dup: 60 probe line(s); events accept_post x30, accept_pre x30
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-P2-can-daybook (1024x768)
+[keys] '{HOME}' -> Tally 'TallyPrime:9000'
+[keys] '%x' -> Tally 'TallyPrime:9000'
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[shot] v-dp-P2-cancelled (1024x768)
+  voucher mid=1 aid=1 Journal/1/20260401 guid=16015229-4171-4f98-b1d8-903153f7a052-00000001 cancelled=False
+  voucher mid=4 aid=7 Receipt/2/20261001 guid=16015229-4171-4f98-b1d8-903153f7a052-00000004 cancelled=True
+  voucher mid=5 aid=6 Receipt/3/20261001 guid=16015229-4171-4f98-b1d8-903153f7a052-00000005 cancelled=False
+  voucher mid=2 aid=2 Receipt/1/20261101 guid=16015229-4171-4f98-b1d8-903153f7a052-00000002 cancelled=False
+  voucher mid=3 aid=3 Sales/1/20261201 guid=16015229-4171-4f98-b1d8-903153f7a052-00000003 cancelled=False
+  INFO dpath P2/cancel: 60 probe line(s); events after_cancel x30, before_cancel x30
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-P2-del-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%d' -> Tally 'TallyPrime:9000'
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[shot] v-dp-P2-deleted (1024x768)
+  voucher mid=1 aid=1 Journal/1/20260401 guid=16015229-4171-4f98-b1d8-903153f7a052-00000001 cancelled=False
+  voucher mid=4 aid=7 Receipt/2/20261001 guid=16015229-4171-4f98-b1d8-903153f7a052-00000004 cancelled=True
+  voucher mid=2 aid=2 Receipt/1/20261101 guid=16015229-4171-4f98-b1d8-903153f7a052-00000002 cancelled=False
+  voucher mid=3 aid=3 Sales/1/20261201 guid=16015229-4171-4f98-b1d8-903153f7a052-00000003 cancelled=False
+  INFO dpath P2/delete: 60 probe line(s); events after_delete x30, before_delete x30
+  INFO dpath P2 (D:\a\_temp\TallyData2\100000, 1-10-2026): Tally up with the company True; created mid 4 guid 16015229-4171-4f98-b1d8-903153f7a052-00000004; altered AlterID 4 -> 5; Alt+2 created mid 5; cancelled mid 4; deleted mid 5
+[shot] tds-014-gw0 (1024x768)
+[12:10:07] [tds] screen tds-014-gw0 : TallyPrime MANAGE {l' EDU K: Company Y: Data Da Book • Day Book Z: Exchange A Add Vch Q Search FinCom • ke Co Vch Type Receipt DuÅicate Vch I Insert Vch O: Import Vch No. E: Export M: Share P: Print For 10ct-26 11 Date I-Oct-26 Quit Particulars (cancelled) Enter: Alter Debit Amount Credit Amount Inwards Qty_ Outwards Qt Unity Space: Sekd Delete 2 x: Cancel Vch U: Restore Line Fl: Help F2: Date Company Voucher Type F 7: Show profit F8: Columnar FIO Basis of B: Values Change ¯ View Exception J: Reports Save View L: Apply F: — Filter F: Filter ¯ Details F 12: Configure to ru tion_ 9486b 0905- 340...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-015-gw1 (1024x768)
+[12:10:11] [tds] screen tds-015-gw1 : TallyPrime MANAGE {l' EDU K: Company Y: Data Da Book • Day Book Z: Exchange A Add Vch Q Search FinCom • ke Co Vch Type Receipt DuÅicate Vch I Insert Vch O: Import Vch No. E: Export M: Share P: Print For 10ct-26 11 Date I-Oct-26 Quit Particulars (cancelled) Enter: Alter Debit Amount Credit Amount Inwards Qty_ Outwards Qt Unity Space: Sekd Delete 2 x: Cancel Vch U: Restore Line Fl: Help F2: Date Company Voucher Type F 7: Show profit F8: Columnar FIO Basis of B: Values Change ¯ View Exception J: Reports Save View L: Apply F: — Filter F: Filter ¯ Details F 12: Configure to ru tion_ 9486b 0905- 340...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-016-gw2 (1024x768)
+[12:10:15] [tds] screen tds-016-gw2 : TallyPrime MANAGE {l' EDU K: Company Y: Data Da Book • Day Book Z: Exchange A Add Vch Q Search FinCom • ke Co Vch Type Receipt DuÅicate Vch I Insert Vch O: Import Vch No. E: Export M: Share P: Print For 10ct-26 11 Date I-Oct-26 Quit Particulars (cancelled) Enter: Alter Debit Amount Credit Amount Inwards Qty_ Outwards Qt Unity Space: Sekd Delete 2 x: Cancel Vch U: Restore Line Fl: Help F2: Date Company Voucher Type F 7: Show profit F8: Columnar FIO Basis of B: Values Change ¯ View Exception J: Reports Save View L: Apply F: — Filter F: Filter ¯ Details F 12: Configure to ru tion_ 9486b 0905- 340...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-017-gw3 (1024x768)
+[12:10:18] [tds] screen tds-017-gw3 : TallyPrime MANAGE {l' EDU K: Company Y: Data Da Book • Day Book Z: Exchange A Add Vch Q Search FinCom • ke Co Vch Type Receipt DuÅicate Vch I Insert Vch O: Import Vch No. E: Export M: Share P: Print For 10ct-26 11 Date I-Oct-26 Quit Particulars (cancelled) Enter: Alter Debit Amount Credit Amount Inwards Qty_ Outwards Qt Unity Space: Sekd Delete 2 x: Cancel Vch U: Restore Line Fl: Help F2: Date Company Voucher Type F 7: Show profit F8: Columnar FIO Basis of B: Values Change ¯ View Exception J: Reports Save View L: Apply F: — Filter F: Filter ¯ Details F 12: Configure to ru tion_ 9486b 0905- 340...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-018-gw4 (1024x768)
+[12:10:22] [tds] screen tds-018-gw4 : TallyPrime MANAGE {1' EDU K: Company Accounting Voucher Creation Recei t No. 4 Account Current balance: Particulars Narration: Unity Quit Y: Data Z: Exchange A Accept Q Search O: Import E: Export M: Share FinCom • ke Co p: print x 1 Oct-26 Thursday Amount D: Delete x: Cancel Vch Fl: Help Q: Date Company Ed: Contra Payment F-6: Receipt Journal Sales Purchase Fl O: OåuVooctgs E: Autofill Change Mode More Details O: Related ¯ Repons Optional post -Dated J: Stat Adjustment El 2: Configure to ru tion_ 9486b 0905- 34008 Llec7b 0905- 34008 .337.0 b—OI ening relat 8dd79 ng jo ource 6—3db Llec7b , " jo...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-019-gw5 (1024x768)
+[12:10:25] [tds] screen tds-019-gw5 : TallyPrime MANAGE {1' EDU K: Company Accounting Voucher Creation Recei t No. 4 Account Current balance: Particulars Narration: Unity Q: Quit Y: Data Z: Exchange FinCom A: Accept Q Search O: Import E: Export M: Share p: print x 1 Oct-26 Thursday Amount Quit o Yes or No D: Delete X: Cancel Vch Fl: Help F-2: Date F-3: Company F-4: Contra F-5: Payment F-6: Receipt F-7: Journal F-9: Purchase PIO: E: Autofill H: Change = Mode I: More - Details O: Related ¯ Repons L: Optional T: post = -Dated J: Stat ¯ Adjustment F-12: Configure to ru tion_ 9486b 0905- 34008 Llec7b 0905- 34008 .337.0 b—OI ening relat...
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[shot] tds-020-gw6 (1024x768)
+[12:10:29] [tds] screen tds-020-gw6 : TallyPrime MANAGE {1' EDU 5: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Unity Y: Data Z: Exchange CURRENT OATE Thursday, I-Oct-2026 O: Import E: Export M: Share p: print Fl: Help Date to ru tion_ 9486b Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Q I-Dec-26 Search Company 0905- 34008 Llec7b 0905- 34008 .337.0 b—OI ening relat 8dd79 ng jo ource 6—3db Llec7b , " jobN Mode Windows Serve...
+######## PASS d1 the data folder formula in the add-on's events: dest [$Destination:Company:##SVCurrentCompany]: every context (all 8), one value per folder, different between the folders, the number folder in it, equal to the folder Tally opened: True; all that pass: dest, svcpnum, destnum; after-the-save only: dest, svcpnum, destnum; P1 (D:\a\_temp\TallyData\100000, 2-10-2026): Tally up with the company True; created mid 4 guid 16015229-4171-4f98-b1d8-903153f7a052-00000004; altered AlterID 4 -> 5; Alt+2 created mid 5; cancelled mid 4; deleted mid 5 || P2 (D:\a\_temp\TallyData2\100000, 1-10-2026): Tally up with the company True; created mid 4 guid 16015229-4171-4f98-b1d8-903153f7a052-00000004; altered AlterID 4 -> 5; Alt+2 created mid 5; cancelled mid 4; deleted mid 5
+  INFO D3 the add-on with the field (dest): written True (C:\fcspike\dpath\FinComRecorder.tdl)
+  INFO tally.ini: Data = D:\a\_temp\TallyData2; TDL files: FinComRecorder.tdl
+[shot] tds-021-D3-current-start-1 (1024x768)
+[12:10:50] [tds] screen tds-021-D3-current-start-1 : TallyPrime MANAGE EDU K: Company Startup Report Y: Data Z: Exchange O: Import E: Export M: Share Application Startup TallyPrime will start with the following settings. Click Configure to change these settings Country Accounting terminology Company Data path C. Configure A Accept Q Search India Others A. Accept p: print Fl: Help x 12:10 PM 10/9/2026
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] tds-022-D3-current-start-2 (1024x768)
+[12:11:06] [tds] screen tds-022-D3-current-start-2 : TallyPrime MANAGE {1' EDU 5: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Unity Y: Data Z: Exchange CURRENT OATE Tuesday, I-Dec-2026 O: Import E: Export M: Share p: print Fl: Help Date to ru tion_ 9486b Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Q I-Dec-26 Search Company 0905- 34008 Llec7b 0905- 34008 .337.0 b—OI ening relat 8dd79 ng jo ource 6—3db Llec7b , " jobN Mode Windows Server...
+[D3-current companies] 4 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+  INFO D3-current: Tally started (pid 9748); 'FinCom Spike Co' loaded: True
+[shot] tds-023-gw0 (1024x768)
+[12:11:07] [tds] screen tds-023-gw0 : TallyPrime MANAGE {1' EDU 5: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Unity Y: Data Z: Exchange CURRENT OATE Tuesday, I-Dec-2026 O: Import E: Export M: Share p: print Fl: Help Date to ru tion_ 9486b Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Q I-Dec-26 Search Company 0905- 34008 Llec7b 0905- 34008 .337.0 b—OI ening relat 8dd79 ng jo ource 6—3db Llec7b , " jobN Mode Windows Server...
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current-receipt-warm-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current-receipt-warm-dup (1024x768)
+[shot] v-dp-current-receipt-warm-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current-receipt1-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current-receipt1-dup (1024x768)
+[shot] v-dp-current-receipt1-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current-receipt2-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current-receipt2-dup (1024x768)
+[shot] v-dp-current-receipt2-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current-receipt3-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current-receipt3-dup (1024x768)
+[shot] v-dp-current-receipt3-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current-receipt4-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current-receipt4-dup (1024x768)
+[shot] v-dp-current-receipt4-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current-receipt5-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current-receipt5-dup (1024x768)
+[shot] v-dp-current-receipt5-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current-sales50-warm-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current-sales50-warm-dup (1024x768)
+[shot] v-dp-current-sales50-warm-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current-sales501-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current-sales501-dup (1024x768)
+[shot] v-dp-current-sales501-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current-sales502-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current-sales502-dup (1024x768)
+[shot] v-dp-current-sales502-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current-sales503-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current-sales503-dup (1024x768)
+[shot] v-dp-current-sales503-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current-sales504-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current-sales504-dup (1024x768)
+[shot] v-dp-current-sales504-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current-sales505-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current-sales505-dup (1024x768)
+[shot] v-dp-current-sales505-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+  INFO tally.ini: Data = D:\a\_temp\TallyData2; TDL files: FinComRecorder.tdl
+[shot] tds-024-D3-field-start-1 (1024x768)
+[12:20:00] [tds] screen tds-024-D3-field-start-1 : TallyPrime MANAGE EDU K: Company Startup Report Y: Data Z: Exchange O: Import E: Export M: Share Application Startup TallyPrime will start with the following settings. Click Configure to change these settings Country Accounting terminology Company Data path C. Configure A Accept Q Search India Others A. Accept p: print Fl: Help x 12:19 PM 10/9/2026
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] tds-025-D3-field-start-2 (1024x768)
+[12:20:16] [tds] screen tds-025-D3-field-start-2 : TallyPrime MANAGE {1' EDU 5: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Unity Y: Data Z: Exchange CURRENT OATE Tuesday, I-Dec-2026 O: Import E: Export M: Share p: print Fl: Help Date to ru tion_ 9486b Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Q I-Dec-26 Search Company 0905- 34008 Llec7b 0905- 34008 .337.0 b—OI ening relat 8dd79 ng jo ource 6—3db Llec7b , " jobN Mode Windows Server...
+[D3-field companies] 4 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+  INFO D3-field: Tally started (pid 7652); 'FinCom Spike Co' loaded: True
+[shot] tds-026-gw0 (1024x768)
+[12:20:17] [tds] screen tds-026-gw0 : TallyPrime MANAGE {1' EDU 5: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Unity Y: Data Z: Exchange CURRENT OATE Tuesday, I-Dec-2026 O: Import E: Export M: Share p: print Fl: Help Date to ru tion_ 9486b Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Q I-Dec-26 Search Company 0905- 34008 Llec7b 0905- 34008 .337.0 b—OI ening relat 8dd79 ng jo ource 6—3db Llec7b , " jobN Mode Windows Server...
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field-receipt-warm-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field-receipt-warm-dup (1024x768)
+[shot] v-dp-field-receipt-warm-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field-receipt1-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field-receipt1-dup (1024x768)
+[shot] v-dp-field-receipt1-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field-receipt2-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field-receipt2-dup (1024x768)
+[shot] v-dp-field-receipt2-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field-receipt3-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field-receipt3-dup (1024x768)
+[shot] v-dp-field-receipt3-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field-receipt4-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field-receipt4-dup (1024x768)
+[shot] v-dp-field-receipt4-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field-receipt5-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field-receipt5-dup (1024x768)
+[shot] v-dp-field-receipt5-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field-sales50-warm-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field-sales50-warm-dup (1024x768)
+[shot] v-dp-field-sales50-warm-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field-sales501-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field-sales501-dup (1024x768)
+[shot] v-dp-field-sales501-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field-sales502-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field-sales502-dup (1024x768)
+[shot] v-dp-field-sales502-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field-sales503-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field-sales503-dup (1024x768)
+[shot] v-dp-field-sales503-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field-sales504-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field-sales504-dup (1024x768)
+[shot] v-dp-field-sales504-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field-sales505-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field-sales505-dup (1024x768)
+[shot] v-dp-field-sales505-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+  INFO tally.ini: Data = D:\a\_temp\TallyData2; TDL files: FinComRecorder.tdl
+[shot] tds-027-D3-current2-start-1 (1024x768)
+[12:29:07] [tds] screen tds-027-D3-current2-start-1 : TallyPrime MANAGE EDU K: Company Startup Report Y: Data Z: Exchange O: Import E: Export M: Share Application Startup TallyPrime will start with the following settings. Click Configure to change these settings Country Accounting terminology Company Data path C. Configure A Accept Q Search India Others A. Accept p: print Fl: Help x 12:29 PM 10/9/2026
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] tds-028-D3-current2-start-2 (1024x768)
+[12:29:23] [tds] screen tds-028-D3-current2-start-2 : TallyPrime MANAGE {1' EDU 5: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Unity Y: Data Z: Exchange CURRENT OATE Tuesday, I-Dec-2026 O: Import E: Export M: Share p: print Fl: Help Date to ru tion_ 9486b Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Q I-Dec-26 Search Company 0905- 34008 Llec7b 0905- 34008 .337.0 b—OI ening relat 8dd79 ng jo ource 6—3db Llec7b , " jobN Mode Windows Server...
+[D3-current2 companies] 3 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+  INFO D3-current2: Tally started (pid 1424); 'FinCom Spike Co' loaded: True
+[shot] tds-029-gw0 (1024x768)
+[12:29:24] [tds] screen tds-029-gw0 : TallyPrime MANAGE {1' EDU 5: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Unity Y: Data Z: Exchange CURRENT OATE Tuesday, I-Dec-2026 O: Import E: Export M: Share p: print Fl: Help Date to ru tion_ 9486b Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Q I-Dec-26 Search Company 0905- 34008 Llec7b 0905- 34008 .337.0 b—OI ening relat 8dd79 ng jo ource 6—3db Llec7b , " jobN Mode Windows Server...
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current2-receipt-warm-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current2-receipt-warm-dup (1024x768)
+[shot] v-dp-current2-receipt-warm-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current2-receipt1-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current2-receipt1-dup (1024x768)
+[shot] v-dp-current2-receipt1-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current2-receipt2-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current2-receipt2-dup (1024x768)
+[shot] v-dp-current2-receipt2-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current2-receipt3-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current2-receipt3-dup (1024x768)
+[shot] v-dp-current2-receipt3-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current2-receipt4-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current2-receipt4-dup (1024x768)
+[shot] v-dp-current2-receipt4-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current2-receipt5-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current2-receipt5-dup (1024x768)
+[shot] v-dp-current2-receipt5-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current2-sales50-warm-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current2-sales50-warm-dup (1024x768)
+[shot] v-dp-current2-sales50-warm-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current2-sales501-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current2-sales501-dup (1024x768)
+[shot] v-dp-current2-sales501-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current2-sales502-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current2-sales502-dup (1024x768)
+[shot] v-dp-current2-sales502-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current2-sales503-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current2-sales503-dup (1024x768)
+[shot] v-dp-current2-sales503-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current2-sales504-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current2-sales504-dup (1024x768)
+[shot] v-dp-current2-sales504-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current2-sales505-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-current2-sales505-dup (1024x768)
+[shot] v-dp-current2-sales505-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+  INFO tally.ini: Data = D:\a\_temp\TallyData2; TDL files: FinComRecorder.tdl
+[shot] tds-030-D3-field2-start-1 (1024x768)
+[12:38:14] [tds] screen tds-030-D3-field2-start-1 : TallyPrime MANAGE EDU K: Company Startup Report Y: Data Z: Exchange O: Import E: Export M: Share Application Startup TallyPrime will start with the following settings. Click Configure to change these settings Country Accounting terminology Company Data path C. Configure A Accept Q Search India Others A. Accept p: print Fl: Help x 12:38 PM 10/9/2026
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] tds-031-D3-field2-start-2 (1024x768)
+[12:38:30] [tds] screen tds-031-D3-field2-start-2 : TallyPrime MANAGE {1' EDU 5: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Unity Y: Data Z: Exchange CURRENT OATE Tuesday, I-Dec-2026 O: Import E: Export M: Share p: print Fl: Help Date to ru tion_ 9486b Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Q I-Dec-26 Search Company 0905- 34008 Llec7b 0905- 34008 .337.0 b—OI ening relat 8dd79 ng jo ource 6—3db Llec7b , " jobN Mode Windows Server...
+[D3-field2 companies] 4 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+  INFO D3-field2: Tally started (pid 6152); 'FinCom Spike Co' loaded: True
+[shot] tds-032-gw0 (1024x768)
+[12:38:31] [tds] screen tds-032-gw0 : TallyPrime MANAGE {1' EDU 5: Company Gatewa of Tall CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co Unity Y: Data Z: Exchange CURRENT OATE Tuesday, I-Dec-2026 O: Import E: Export M: Share p: print Fl: Help Date to ru tion_ 9486b Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Q I-Dec-26 Search Company 0905- 34008 Llec7b 0905- 34008 .337.0 b—OI ening relat 8dd79 ng jo ource 6—3db Llec7b , " jobN Mode Windows Server...
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field2-receipt-warm-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field2-receipt-warm-dup (1024x768)
+[shot] v-dp-field2-receipt-warm-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field2-receipt1-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field2-receipt1-dup (1024x768)
+[shot] v-dp-field2-receipt1-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field2-receipt2-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field2-receipt2-dup (1024x768)
+[shot] v-dp-field2-receipt2-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field2-receipt3-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field2-receipt3-dup (1024x768)
+[shot] v-dp-field2-receipt3-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field2-receipt4-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field2-receipt4-dup (1024x768)
+[shot] v-dp-field2-receipt4-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-11-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field2-receipt5-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field2-receipt5-dup (1024x768)
+[shot] v-dp-field2-receipt5-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field2-sales50-warm-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field2-sales50-warm-dup (1024x768)
+[shot] v-dp-field2-sales50-warm-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field2-sales501-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field2-sales501-dup (1024x768)
+[shot] v-dp-field2-sales501-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field2-sales502-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field2-sales502-dup (1024x768)
+[shot] v-dp-field2-sales502-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field2-sales503-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field2-sales503-dup (1024x768)
+[shot] v-dp-field2-sales503-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field2-sales504-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field2-sales504-dup (1024x768)
+[shot] v-dp-field2-sales504-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-12-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field2-sales505-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '%2' -> Tally 'TallyPrime:9000'
+[shot] v-dp-field2-sales505-dup (1024x768)
+[shot] v-dp-field2-sales505-saved (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+  INFO D3 the last voucher_accept_post line with the field: FCR1|ev=voucher_accept_post|t0=9-Oct-26 12:28|tw=9-Oct-26 12:28|w=runneradmin|cguid=16015229-4171-4f98-b1d8-903153f7a052|cname=FinCom Spike Co|dpath=D:\a\_temp\TallyData2\100000|user=TALLY User|obj=Voucher|guid=16015229-4171-4f98-b1d8-903153f7a052-0000001d|mid=30|aid=32|vtype=Sales|vno=13|vdate=1-Dec-26|name=|parent=|narr=dpath sales 50 items|t1=9-Oct-26 12:28|src=live
+######## PASS d2 the add-on with the field writes the folder: formula dest; the add-on's own line on folder 2 carries dpath='D:\a\_temp\TallyData2\100000' (the folder Tally opened: D:\a\_temp\TallyData2\100000; equal: True)
