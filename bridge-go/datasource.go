@@ -14,7 +14,7 @@
 //     line of a company whose own data id is not the chosen one (the bridge stops reading that company), is never asked of
 //     Tally and never sent as an entry: it goes as event "other_source" (the company, its GUID, the data id, the path, w=,
 //     the computer, the line's date, type and number, nothing of the entry: wire);
-//   - a line without dp= (an older add-on, or the add-on's placeholder formula) is as in 2.4.0.
+//   - a line without dp= (an older add-on, or an empty one) is as in 2.4.0.
 //
 // The heartbeat carries the own data ids (dataSources); every line the bridge reads from its own Tally carries the own data
 // id (data_id), so FinCom holds anything of a data id that is not the chosen one. Nothing here asks Tally anything.
@@ -45,9 +45,10 @@ var dataSt struct {
 
 func dataFile() string { return sp("recorder-data.json") }
 
-// the data id of a data folder ("" for none)
+// the data id of a data folder ("" for none): case-folded, trimmed of spaces and of trailing path separators (the same
+// folder written D:\x\100000 or D:\x\100000\ is one location; the coordinator's check of the measured formula)
 func dataIDOf(path string) string {
-	p := strings.ToLower(strings.TrimSpace(path))
+	p := strings.ToLower(strings.TrimRight(strings.TrimSpace(path), `\/ `))
 	if p == "" {
 		return ""
 	}
@@ -157,7 +158,7 @@ func dataStopped(cguid string) bool {
 func dataOther(cguid, dp string) bool {
 	id := dataIDOf(dp)
 	if id == "" {
-		return false // an older add-on, or the add-on's placeholder: as in 2.4.0
+		return false // an older add-on (no dp=), or an empty one: as in 2.4.0
 	}
 	r, stopped := dataReads(cguid)
 	return stopped || (r != "" && r != id)

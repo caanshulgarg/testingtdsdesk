@@ -34,7 +34,7 @@ func TestRelease241VersionAndDecisionLine(t *testing.T) {
 		t.Errorf("the entry requests' shapes: object %s, by number %s", shapeOf(allowListSamples()[vchObjectID]), shapeOf(allowListSamples()[vchByNumberID]))
 	}
 	notes := strings.Join(strings.Fields(readText(filepath.Join("..", "docs", "bridge-2.4.1-notes.md"))), " ")
-	for _, w := range []string{"2.4.1", "|dp=", "FCRDataPath", "other_source", "migration 71", "tally_company_source_choose", "Use ①", "Decide later",
+	for _, w := range []string{"2.4.1", "|dp=", "$Destination:Company:##SVCurrentCompany", "other_source", "migration 71", "tally_company_source_choose", "Use ①", "Decide later",
 		"FinComVoucherByNumber", "reverses 2.3.4's L5", "starting day", "received_at", "S-M1", "not a request", "No AI in the bridge", "NOT run"} {
 		if !strings.Contains(notes, w) {
 			t.Errorf("the 2.4.1 notes do not say %q", w)

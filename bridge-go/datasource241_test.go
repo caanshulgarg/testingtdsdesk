@@ -11,6 +11,7 @@ package main
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -214,16 +215,51 @@ func ufLineNWS(ev, tm, guid, mid, aid, typ, no, w string) string {
 	return strings.Replace(r222Line(ev, tm, guid, mid, aid, typ, no, "5-Oct-2026", "x"), "|cguid=", "|w="+w+"|cguid=", 1)
 }
 
-// the add-on: dp= from ONE named formula (its measured text is dropped in later), between tw and w
+// the add-on: dp= from the measured formula (real-Tally runs 37920699057 and 37926156040 on tally-versions, TallyPrime 3.0,
+// 4.1, 5.1, 6.2 and 7.1): $Destination:Company:##SVCurrentCompany, SET on its own into a String variable (never joined to
+// text in the same expression: "$Method:Company:<name> + ..." can be read as part of the company's name), then the variable
+// into the line, between tw and w
 func TestData241Addon(t *testing.T) {
 	tdl := readText("addon/" + liveAddonName)
-	for _, s := range []string{"FCRDataPath", `"|tw=" + ##vTW + "|dp=" + @@FCRDataPath + "|w=" + @@FCRWinUser`} {
-		if !strings.Contains(tdl, s) {
-			t.Errorf("the live add-on lacks %q", s)
+	lines := strings.Split(strings.ReplaceAll(tdl, "\r\n", "\n"), "\n")
+	idx := func(re string) int {
+		for i, l := range lines {
+			if regexp.MustCompile(re).MatchString(l) {
+				return i
+			}
+		}
+		return -1
+	}
+	v, set, dp, tw, w := idx(`^\s*Variable\s*:\s*vDP\s*:\s*String\s*$`), idx(`^\s*\w+\s*:\s*SET\s*:\s*vDP\s*:\s*\$Destination:Company:##SVCurrentCompany\s*$`),
+		idx(`^\s*\w+\s*:\s*SET\s*:\s*vLine\s*:\s*##vLine \+ "\|dp=" \+ ##vDP\s*$`), idx(`"\|tw=" \+ ##vTW\s*$`), idx(`##vLine \+ "\|w=" \+ @@FCRWinUser\s*$`)
+	if v < 0 || set < 0 || dp < 0 || tw < 0 || w < 0 || !(tw < set && set < dp && dp < w) {
+		t.Fatalf("the add-on's dp= is not the tested form between tw and w (Variable %d, SET vDP %d, dp= %d, tw %d, w %d)", v, set, dp, tw, w)
+	}
+	if regexp.MustCompile(`(?m)^[^;]*\$Destination:Company:##SVCurrentCompany\s*\+`).MatchString(tdl) || regexp.MustCompile(`(?m)^[^;]*\+\s*\$Destination`).MatchString(tdl) {
+		t.Error("$Destination joined to text in the same expression")
+	}
+	if regexp.MustCompile(`(?m)^[^;]*FCRDataPath\s*:\s*""`).MatchString(tdl) {
+		t.Error("the placeholder formula is still there")
+	}
+}
+
+// the measured values (TallyData\100000 and TallyData2\100000 on the runner): two folders, two ids; the same folder in
+// another letter case, with spaces around it or a trailing backslash: one id
+func TestData241IDMeasuredPaths(t *testing.T) {
+	a, b := dataIDOf(`D:\a\_temp\TallyData\100000`), dataIDOf(`D:\a\_temp\TallyData2\100000`)
+	if a == "" || a == b {
+		t.Fatalf("two data folders, one id: %s %s", a, b)
+	}
+	for _, p := range []string{`d:\A\_TEMP\tallydata\100000`, `  D:\a\_temp\TallyData\100000  `, `D:\a\_temp\TallyData\100000\`, ` D:\a\_temp\TallyData\100000\\ `} {
+		if dataIDOf(p) != a {
+			t.Errorf("%q: id %s, want %s", p, dataIDOf(p), a)
 		}
 	}
-	if strings.Count(tdl, "FCRDataPath  :") != 1 && strings.Count(tdl, "FCRDataPath :") != 1 {
-		t.Error("FCRDataPath is not ONE named formula")
+	// a real line as the 2.4.1 add-on writes it on TallyPrime 7.1 (run 37926156040's line with its measured folder)
+	l := "FCR1|ev=voucher_accept_post|t0=9-Oct-26 12:02|tw=9-Oct-26 12:02|dp=D:\\a\\_temp\\TallyData\\100000|w=runneradmin|cguid=e6d5e59b-febe-46d0-a568-93c87ab10996|cname=FinCom Spike Co|user=TALLY User|obj=Voucher|guid=e6d5e59b-febe-46d0-a568-93c87ab10996-00000000|mid=4|aid=0|vtype=Receipt|vno=2|vdate=2-Oct-26|name=|parent=|narr=|t1=9-Oct-26 12:02|src=live"
+	r, ok := parseRecorderLine(l)
+	if !ok || r.DP != `D:\a\_temp\TallyData\100000` || r.W != "runneradmin" || r.CName != "FinCom Spike Co" || dataIDOf(r.DP) != a {
+		t.Fatalf("the real line: %v %+v", ok, r)
 	}
 }
 

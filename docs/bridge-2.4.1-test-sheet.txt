@@ -4,8 +4,8 @@ File:        FinComBridge-Setup-2.4.1.exe (NOT built yet)
 Fingerprint: (written when it is built; compare with the .sha256 file next to the setup)
 
 What 2.4.1 changes (the full notes: docs/bridge-2.4.1-notes.md):
-1. The add-on writes the company's data folder on every line (|dp=), from one formula (FCRDataPath; its measured text is
-   dropped in before this sheet is used: until then dp= is empty and the bridge works as 2.4.0 for it).
+1. The add-on writes the company's data folder on every line (|dp=), $Destination:Company:##SVCurrentCompany (measured on
+   TallyPrime 3.0-7.1: the company folder with its number folder).
 2. A save in another data location of a company is never read from Tally or put in the books; FinCom is told of it.
 3. FinCom's cloud keeps each company's data locations (migration 71) and the owner chooses which one is the books.
 4. The Tally page shows a card when a company is open in two places; Needs you and the bell say so.

@@ -16,23 +16,27 @@ with that MasterID is not a change after the starting point", and Needs you sent
 | Replaces | 2.4.0 (kept on the computer, so the tray can roll back to it) |
 | FinCom app | changed: the Tally page's card for a company open in two places, the Needs-you words, the bell |
 | FinCom's cloud | migration 71 (add-only), NOT run on staging; tally-ingest changed (deploy it after 71) |
-| Add-on | changed: every line also carries the company's data folder (`\|dp=`), from ONE named formula (FCRDataPath) whose measured text is dropped in later |
+| Add-on | changed: every line also carries the company's data folder (`\|dp=`), `$Destination:Company:##SVCurrentCompany` as measured on TallyPrime 3.0-7.1 |
 | Tally requests | none added, none changed: the allow-list table and its hash are unchanged (see "Tally requests") |
 
 ## 1. The add-on writes the company's data folder (`|dp=`)
 
 Every line now carries `|dp=<the company's data folder>` right after `tw`, before `w=`
-(`FCR1|ev=|t0=|tw=|dp=|w=|cguid=...`). The text comes from ONE named formula in the add-on, `FCRDataPath`. A separate
-helper is measuring the exact TDL formula on real TallyPrime 3.0 to 7.1; until it is dropped in, `FCRDataPath` is an empty
-text, and the bridge reads a line with an empty `dp=` exactly as an older add-on's line (as in 2.4.0). So **until the
-measured formula is in, 2.4.1 behaves as 2.4.0 for the data folder** (items 2 and 3 have nothing to act on); items 5 and 6
-work at once. A 2.4.0 bridge reads `dp=` as part of `tw` (a time it needs only without `t0`); its `w=` stays whole. This is
-the add-on's own line, **not a request** to Tally.
+(`FCR1|ev=|t0=|tw=|dp=|w=|cguid=...`). The folder is `$Destination:Company:##SVCurrentCompany`, measured on real
+TallyPrime 3.0, 4.1, 5.1, 6.2 and 7.1 (tally-versions runs 37920699057 and 37926156040): in all eight event contexts
+(created and altered, pre and post; cancel and delete, pre and post) it gives the full company folder including its number
+folder (e.g. `D:\a\_temp\TallyData\100000`), two data folders give different values, and it adds no measurable save time.
+It is SET on its own into a String variable (`vDP`) and only then put into the line: never joined to text in the same
+expression, because `$Method:Company:<name>` followed by `+ "..."` can be read as part of the company's name (the tested
+form). (Until the measurement this was one placeholder formula, FCRDataPath; it is replaced by the measured form.) A line
+with an empty `dp=`, or none, is read as an older add-on's (as in 2.4.0). A 2.4.0 bridge reads `dp=` as part of `tw` (a
+time it needs only without `t0`); its `w=` stays whole. This is the add-on's own line, **not a request** to Tally.
 
 ## 2. The bridge: the data id, and a line of another data location never fetched or applied
 
-- The **data id** of a data folder: sha256 of its case-folded, trimmed path, the first 16 hex characters. The path itself
-  is kept for display only.
+- The **data id** of a data folder: sha256 of its case-folded, trimmed path (spaces and trailing backslashes trimmed, so
+  `D:\x\100000` and `D:\X\100000\` are one location; `...\TallyData\100000` and `...\TallyData2\100000` are two), the
+  first 16 hex characters. The path itself is kept for display only.
 - The bridge learns its **own** Tally's data id per company (company GUID) from its own add-on lines: lines whose `w=` is
   this Windows user, for a company open in its own Tally, the most recent `dp`. Kept in `sync\recorder-data.json`.
 - A line whose data id differs from the own data id for that company GUID (or from the one FinCom chose, item 3) is
@@ -115,7 +119,6 @@ request shape changed" (the add-on line change is not a request), with 2.4.0's d
 
 ## Not in 2.4.1
 
-- The measured `FCRDataPath` formula (dropped in when the helper's real-Tally measurement is done).
 - Migration 71 is not run on staging; nothing is deployed or published.
 
 No AI in the bridge or the add-on.

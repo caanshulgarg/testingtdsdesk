@@ -179,7 +179,7 @@ func TestLiveAddonFile(t *testing.T) {
 		// next-userfile: the Windows user's own file (06a-06c: the shared name when Tally gives no user) and w= after tw
 		s = regexp.MustCompile(`(?m)^    06[abc]:.*\n`).ReplaceAllString(s, "")
 		s = strings.ReplaceAll(s, `@@FCRFolder + ##vGuid + "-" + @@FCRDay + "-" + @@FCRWinUser + ".txt"`, `@@FCRFolder + ##vGuid + ".txt"`)
-		s = strings.ReplaceAll(s, `"|tw=" + ##vTW + "|dp=" + @@FCRDataPath + "|w=" + @@FCRWinUser`, `"|tw=" + ##vTW`) // 2.4.1: dp= (datasource.go)
+		s = regexp.MustCompile(`(?m)^    16[abc]:.*\n`).ReplaceAllString(s, "") // 2.4.1: dp= (its own SET) and w= after tw (datasource241_test.go)
 		s = strings.ReplaceAll(s, `"|tw=" + ##vTW + "|w=" + @@FCRWinUser`, `"|tw=" + ##vTW`)
 		s = strings.ReplaceAll(s, `@@FCRFolder + ##vGuid + "-" + @@FCRDay + ".txt"`, `@@FCRFolder + ##vGuid + ".txt"`)
 		s = strings.ReplaceAll(s, `"|t1=" + ##vT1 + "|src=live"`, `"|t1=" + ##vT1`)
