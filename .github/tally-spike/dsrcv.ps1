@@ -237,7 +237,9 @@ try {
     $cases = @(); $mD4 = Mark
     # Tally's own numbers (a manual type keeps the number given; read back all the same)
     $haveTwo = $vTwoA -and $vTwoB -and "$($vTwoA.vno)" -eq "$($vTwoB.vno)"
-    $list = @(@('ONE', $(if ($vOne) { "$($vOne.vno)" } else { 'D4-ONE' }), $vOne, 1)); if ($haveTwo) { $list += , @('TWO', "$($vTwoB.vno)", $vTwoB, 2) }; $list += , @('NONE', 'D4-NONE', $null, 0)
+    # (run 37938025821: @(@(...)) unrolled the first case into its four items; each case is one element: the comma operator)
+    $list = [System.Collections.Generic.List[object]]::new()
+    $list.Add(@('ONE', $(if ($vOne) { "$($vOne.vno)" } else { 'D4-ONE' }), $vOne, 1)); if ($haveTwo) { $list.Add(@('TWO', "$($vTwoB.vno)", $vTwoB, 2)) }; $list.Add(@('NONE', 'D4-NONE', $null, 0))
     if (-not $haveTwo) { Info "dsrc d4: no two vouchers with one number (Tally: '$($vTwoA.vno)' / '$($vTwoB.vno)'): case TWO not run" }
     foreach ($cs in $list) {
       $t0 = D4Lines $cs[1] $(if ($cs[2]) { $cs[2].aid } else { 0 })
