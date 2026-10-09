@@ -108,6 +108,24 @@ with sync_playwright() as p:
     g = E("() => [Books.guess('TDS 194 T').section, LedMaster.propose('TDS 194 T', {}, null, []).section, Books.guess('TDS ON CONTRACT 194C').section, Books.guess('TDS PAYABLE 194 A/C').section || '', LedCheck.section('TDS 194 T')]")
     ok(g[0] == "194T" and g[1] == "194T", "F. 'TDS 194 T' is section 194T (guess %s, propose %s)" % (g[0], g[1]))
     ok(g[2] == "194C" and g[3] != "194A" and g[4] == "194T", "F. 'TDS ON CONTRACT 194C' still 194C; 'TDS PAYABLE 194 A/C' not 194A (%s); the check agrees (%s)" % (g[3], g[4]))
+    # ---------- F2 (review H4 of next-241): a spaced suffix only when it is a real one: "TDS 192 ON SALARY" is 192 (not 192ON),
+    # "195 TO", "194 OF" likewise; the real suffixes are read (194 LBA, 194 IA, 194 T, 194 C, 194 J)
+    H4 = [("TDS 192 ON SALARY", "192"), ("TDS 195 TO NON RESIDENT", "195"), ("TDS 194 OF RENT", "194"), ("TDS 194 LBA", "194LBA"), ("TDS 194 IA PROPERTY", "194IA"),
+          ("TDS 194 T", "194T"), ("TDS 194 C CONTRACT", "194C"), ("TDS 194 J PROFESSIONAL", "194J"), ("TDS 194 EE", "194EE"), ("TDS 194-C", "194C"), ("TDS 192 - ON SALARY", "192"),
+          ("TDS PAYABLE 194 A/C", "194"), ("TDS 194 LB PAYABLE", "194LB"), ("TDS 194 IB", "194IB"), ("TDS 194 Q PURCHASE", "194Q"), ("TDS 194 R", "194R"), ("TDS 194 S", "194S"),
+          ("TDS 194 BA", "194BA"), ("TDS 194 BB", "194BB"), ("TDS 194 DA", "194DA"), ("TDS 194 G", "194G"), ("TDS 194 H", "194H"), ("TDS 194 I", "194I"), ("TDS 194 IC", "194IC"),
+          ("TDS 194 K", "194K"), ("TDS 194 LBB", "194LBB"), ("TDS 194 LBC", "194LBC"), ("TDS 194 LC", "194LC"), ("TDS 194 LD", "194LD"), ("TDS 194 M", "194M"), ("TDS 194 N", "194N"),
+          ("TDS 194 O", "194O"), ("TDS 194 P", "194P"), ("TDS 194 A", "194A"), ("TDS 194 B", "194B"), ("TDS 194 D", "194D"), ("TDS 194 E", "194E"), ("TDS 192 A", "192A")]
+    got = E("(xs) => xs.map(([n]) => [Books.guess(n).section || '', LedMaster.propose(n, {}, null, []).section || '', LedCheck.section(n) || ''])", H4)
+    bad = [(n, w, g) for (n, w), g in zip(H4, got) if not (g[0] == w and g[1] == w and g[2].replace(" ", "") in (w, ""))]
+    ok(not bad, "F2. spaced suffixes: only the real ones (guess, propose, the check) (wrong: %s)" % bad)
+    # ---------- M5: the check and FinCom agree only when the rate (both have one) and the registration agree too
+    sm = E("""() => [LedPage.same({what: 'gst', tax: 'CGST', side: 'input', rate: 9, reg: '07'}, {what: 'gst', tax: 'CGST', side: 'input', gstRate: 9, reg: '07'}),
+      LedPage.same({what: 'gst', tax: 'CGST', side: 'input', rate: 9, reg: '07'}, {what: 'gst', tax: 'CGST', side: 'input', gstRate: 18, reg: '07'}),
+      LedPage.same({what: 'gst', tax: 'CGST', side: 'input', rate: 9, reg: '07'}, {what: 'gst', tax: 'CGST', side: 'input', gstRate: 9, reg: '09'}),
+      LedPage.same({what: 'gst', tax: 'CGST', side: 'input'}, {what: 'gst', tax: 'CGST', side: 'input', gstRate: 9, reg: '07'}),
+      LedPage.same({what: 'tds_payable', section: '194C', rate: 2}, {what: 'tds_payable', section: '194C', rate: 1})]""")
+    ok(sm == [True, False, False, True, False], "M5. same: the rate (when both have one) and the registration compared (%s)" % sm)
     # ---------- D. Confirm all: only n > 0 where both agree
     want = E("""() => Object.entries(S.books.map).filter(([n, m]) => (LedMaster.isGst(m.what) || LedMaster.isTds(m.what)) && !m.ok && (m.n || 0) > 0 &&
       (() => { const it = (S.books.ledCheck.items || {})[n], s = it && it.s; return !!(s && s.what && s.conf !== 'low' && LedPage.same(s, m)); })()).map(([n]) => n).sort()""")
@@ -238,6 +256,15 @@ with sync_playwright() as p:
     if oth.count():
         oth.locator("summary").click(); pg.wait_for_timeout(300)
         on = oth.locator("table[data-led-table=other] tbody tr[data-key]").first.get_attribute("data-key")
+        # review M6 of next-241: Change on a confirmed other ledger used in entries asks first (changeRow), as in the main table
+        E("(n) => { const m = S.books.map[n]; window.__m6 = JSON.parse(JSON.stringify(m)); m.ok = true; m.n = Math.max(m.n || 0, 3); S.books.mapV = (S.books.mapV || 0) + 1; render(); }", on); pg.wait_for_timeout(400)
+        if not oth.get_attribute("open") is not None: oth.locator("summary").click(); pg.wait_for_timeout(300)
+        oth.locator("tr[data-key=%s] [data-led-change]" % json.dumps(on)).click(); pg.wait_for_timeout(400)
+        cq = pg.inner_text("#confirmBox .cbx") if pg.locator("#confirmBox .cbx").count() else ""
+        ok("Change a confirmed ledger?" in cq and "used in" in cq and "entries" in cq, "M6. Change on a confirmed other ledger used in entries asks first (%r)" % cq[:160])
+        if pg.locator("#confirmBox .cbx").count(): pg.click('#confirmBox [data-cbx="no"]'); pg.wait_for_timeout(300)
+        E("(n) => { S.books.map[n] = window.__m6; S.books.mapV = (S.books.mapV || 0) + 1; render(); }", on); pg.wait_for_timeout(400)
+        if oth.get_attribute("open") is None: oth.locator("summary").click(); pg.wait_for_timeout(300)
         oth.locator("tr[data-key=%s] [data-led-change]" % json.dumps(on)).click(); pg.wait_for_timeout(300)
         pg.select_option('select[aria-label="What %s is"]' % on, "tds_payable"); pg.wait_for_timeout(400)
         ok(E("(n) => [S.books.map[n].what, !!S.books.map[n].ok]", on) == ["tds_payable", True], "an other ledger marked as TDS payable via Change (%s), saved at once" % on)

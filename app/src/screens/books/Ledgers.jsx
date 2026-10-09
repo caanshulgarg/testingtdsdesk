@@ -178,7 +178,7 @@ function Others({ b, rows }) {
         <td><span className="led-name">{r.n}</span>{r.group && <div className="nr">{r.group}</div>}</td>
         <td>{S.ledEdit === r.n ? <Editor b={b} n={r.n} /> : <span className="led-says">{r.m && r.m.what ? LedMaster.label(r.m.what) : "Not tax"}</span>}</td>
         <td className="n">{r.used ? Number(r.used).toLocaleString("en-IN") : ""}</td>
-        <td className="ac">{S.ledEdit === r.n ? null : <button className="linkbtn" data-led-change={r.n} onClick={() => openEditor(b, r.n)}>Change</button>}</td></tr>)}</tbody></table>
+        <td className="ac">{S.ledEdit === r.n ? null : <button className="linkbtn" data-led-change={r.n} onClick={() => changeRow(b, r)}>Change</button>}</td></tr>)}</tbody></table>
     {rows.length > shown.length && <p className="note">{"The first " + shown.length + " are shown, the most used first; find the rest by name."}</p>}
   </details>;
 }

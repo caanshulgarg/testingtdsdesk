@@ -12,11 +12,15 @@ const LedCheck = {
   V: 1,
   SRC: {master: "Tally master", usage: "Day book", firm: "Your firm", name: "Name", ai: "AI"},
   // a TDS section from "194I", "194-I", or the short "94I" / "94 J" many ledgers carry
+  // review H4 of next-241: after a space or a dash only a real section suffix counts (Books.secIn's list): "192 ON SALARY"
+  // is 192
+  SUF: "LBA|LBB|LBC|BA|BB|DA|EE|IA|IB|IC|LA|LB|LC|LD|A|B|C|D|E|G|H|I|J|K|M|N|O|P|Q|R|S|T",
   section(s){
-    const u = String(s || "").toUpperCase(), m = u.match(/\b(19[2-9])\s*-?\s*([A-Z]{0,2})\b|\b206\s*-?\s*C\s*([A-Z]{0,2})\b/);
-    if (m) return m[1] ? m[1] + m[2] : "206C" + (m[3] || "");
-    const s2 = u.match(/(?:^|[^0-9])9\s*([2-9])\s*-?\s*([A-Z]{1,2})?\b/);
-    return s2 && (s2[2] || /9\s*[2-9]\b/.test(u)) ? "19" + s2[1] + (s2[2] || "") : "";
+    const u = String(s || "").toUpperCase(), suf = "(?:([A-Z]{1,3})\\b|\\s*-?\\s*(" + this.SUF + ")(?![\\w\\/])|\\b)";
+    const m = u.match(new RegExp("\\b(19[2-9])" + suf + "|\\b206\\s*-?\\s*C\\s*([A-Z]{0,2})\\b"));
+    if (m) return m[1] ? m[1] + (m[2] || m[3] || "") : "206C" + (m[4] || "");
+    const s2 = u.match(new RegExp("(?:^|[^0-9])9\\s*([2-9])" + suf));
+    return s2 && (s2[2] || s2[3] || /9\s*[2-9]\b/.test(u)) ? "19" + s2[1] + (s2[2] || s2[3] || "") : "";
   },
   secLabel(s){ return s ? s.replace(/^(19\d)([A-Z]+)$/, "$1-$2") : ""; },
   // the group chain of a ledger, from Tally's groups
@@ -270,7 +274,12 @@ const LedPage = {
     }
     return {n, m, it, ok, fromCheck, p, alt, kind, unclear, group: ((b.ledInfo || {})[n] || {}).group || (b.under || {})[n] || "", why: m.why || ""};
   },
-  same(cp, m){ return (cp.what || "") === (m.what || "") && (!LedMaster.isGst(cp.what) || ((cp.tax || "") === (m.tax || "") && (cp.side || "") === (m.side || ""))) && (!LedMaster.isTds(cp.what) || !cp.section || cp.section === (m.section || "")); },
+  // review M5 of next-241: the rate (when both have one) and the registration (when both have one) are compared too
+  same(cp, m){
+    const has = v => v !== null && v !== undefined && v !== "" && !Number.isNaN(Number(v)), mr = LedMaster.isGst(m.what) ? (has(m.gstRate) ? m.gstRate : m.rate) : m.rate;
+    return (cp.what || "") === (m.what || "") && (!LedMaster.isGst(cp.what) || ((cp.tax || "") === (m.tax || "") && (cp.side || "") === (m.side || ""))) && (!LedMaster.isTds(cp.what) || !cp.section || cp.section === (m.section || ""))
+      && (!has(cp.rate) || !has(mr) || num(cp.rate) === num(mr)) && (!cp.reg || !m.reg || String(cp.reg) === String(m.reg));
+  },
   // "CGST input · 9%", "IGST output, reverse charge", "Not a tax ledger"
   says(p){
     if (!p || !p.what) return "Not known yet";
