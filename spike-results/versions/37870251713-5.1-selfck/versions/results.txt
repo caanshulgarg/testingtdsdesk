@@ -1,0 +1,35 @@
+INFO TallyPrime 5.1, mode selfck, runner GitHub Actions 1000006179, 2026-10-09T01:44:31
+INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 15643264 bytes, 2026-10-09, FileVersion 1.1.5.1, ProductVersion 1.1.5.1, ProductName TallyPrime
+INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+INFO Tally's own release in its answer header: PRODMAJORREL 5 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+PASS c1 install and open the company: installed tally.exe 15643264 bytes, 2026-10-09, FileVersion 1.1.5.1, ProductVersion 1.1.5.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 18 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 7 ms, 'FinCom Spike Co' in it: True
+INFO selfck: PostgreSQL (postgresql-x64-17) with migration 65's tally_selfcheck_words (the ref's file, 5399 chars)
+INFO setup origin: BUILT from source dist/FinComBridge-Setup-2.4.0.exe SHA-256 03914c26998544ae583149d8a5e75fd1f2a05e9b72aeb80f9c459fbdc139028b; bridge source: f97e4d8a8e30dc4f5ede557058eb0c3ddb34dc8d release-240: merge origin/release-235 (5edbda08): FinComVoucherByNumber too only right after Tally's company list (next-fastfetch 188e9aa6, 2.3.4 L-d)
+INFO selfck: the window seeded 07:45-08:45 (the runner's clock 01:45)
+INFO bridge on 127.0.0.1:9100, version 2.4.0, allowImport True, readOnly '', testMode False
+INFO add-on: recorder files after start: none
+INFO selfck: the starting point recorded: True
+INFO selfck journal 1: Tally answered <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>4</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>
+INFO selfck journal 2: Tally answered <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>5</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>
+INFO selfck journal 3: Tally answered <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>6</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS>
+INFO selfck: the Receipt by keys e01cf0f2-3de1-4c0d-9269-c1dcb713099f-00000003 (mid 3, AlterID 3) in FinCom's copy: True; the journals by XML mid 4 AlterID 4, mid 5 AlterID 5, mid 6 AlterID 6; FinCom's copy now holds 1 entries
+INFO selfck: the window set 01:46-04:47 (the runner's clock 01:47, UTC); restart asked ({"ok":true,"restarting":true}); the bridge back: True version 2.4.0
+FAIL n1 nightly check: Tally's changes compared, the missing fetched: mark (after) 2, Tally's ALTVCHID 6; Tally's entries above the mark 4, listed by the bridge 4 (not listed: none; not Tally's: none); FinCom's copy lacked (the stub's compare) 0:  (the Receipt by keys among them: False); fetched into the copy with Tally's AlterID: 3 of 3 (lines with Tally's entry: 3); the record: listed 4, missing 0, fetched 0, still 0, deleted 0, stopped ''
+FAIL n2 nightly check: the words recorded: result 'ok'; words 'Checked on the night of 09-Oct-2026 at 07:27 IST: every entry that exists in Tally with a change number above 2 (changed since the starting point) is in FinCom (4 checked). Deletes made in Tally are not checked.' (expected to start: ^Checked on the night of \d\d-[A-Z][a-z]{2}-\d{4} at \d\d:\d\d IST: 0 entr(y|ies) missing from FinCom; all 0 fetched from Tally\.); the bridge's log: 2026-10-09 01:47:32  Nightly check of FinCom Spike Co: not now: Tally has just opened; letting it finish loading | 2026-10-09 01:57:32  Nightly check of FinCom Spike Co: Checked on the night of 09-Oct-2026 at 07:27 IST: every entry that exists in Tally with a change number above 2 (changed since the starting point) is in FinCom (4 checked). Deletes made in Tally are not checked.
+PASS n3 nightly check: once a night: records 1, compares 1 (at the record 1) after 4 more minutes; selfcheck.json: {"fincom spike co|e01cf0f2-3de1-4c0d-9269-c1dcb713099f":{"hist":[{"mark":6,"night":"20261009"}],"mark":6,"night":"20261009","since":"20261009","tries":0}}; bridge log: 2026-10-09 01:47:32  Nightly check of FinCom Spike Co: not now: Tally has just opened; letting it finish loading | 2026-10-09 01:57:32  Nightly check of FinCom Spike Co: Checked on the night of 09-Oct-2026 at 07:27 IST: every entry that exists in Tally with a change number above 2 (changed since the starting point) is in FinCom (4 checked). Deletes made in Tally are not checked.
+INFO installer: Tally's download page lists TallyPrime setups for: Rel_2.1, REL_TP_1.0.0, Rel.2.0.1, Rel.2.0, Rel.3.0_Gold, Rel.3.0.1, Rel.3.0, Rel.4.0, Rel.4.1, Rel.5.0, Rel.5.1, Rel.6.1, Rel.7.0, Rel.7.1_gold, Rel.TP_1.1.1, Rel.TP_1.1.2, Rel.TP_1.1.3, Rel.TP_1.1.4, Rel.TP_1.1, Rel.TP_2.0, Rel6.0, Rel6.2, TallyPrime_Beta
+INFO installer: NO(403) -1 bytes, Last-Modified : https://tallymirror.tallysolutions.com/download_centre/Rel.5.1_gold/TP/Full/setup.exe
+INFO installer: AVAILABLE 45651144 bytes, Last-Modified Sun, 01 Dec 2024 05:56:26 GMT: https://tallymirror.tallysolutions.com/download_centre/Rel.5.1/TP/Full/setup.exe
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_Gold/TP/Full/setup.exe (43440848 bytes)
+INFO installer: AVAILABLE other release 3.0.1: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0.1/TP/Full/setup.exe (43476688 bytes)
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0/TP/Full/setup.exe (43465936 bytes)
+INFO installer: AVAILABLE other release 4.0: https://tallymirror.tallysolutions.com/download_centre/Rel.4.0/TP/Full/setup.exe (44497616 bytes)
+INFO installer: AVAILABLE other release 4.1: https://tallymirror.tallysolutions.com/download_centre/Rel.4.1/TP/Full/setup.exe (44673232 bytes)
+INFO installer: AVAILABLE other release 5.0: https://tallymirror.tallysolutions.com/download_centre/Rel.5.0/TP/Full/setup.exe (45592784 bytes)
+INFO installer: AVAILABLE other release 6.1: https://tallymirror.tallysolutions.com/download_centre/Rel.6.1/TP/Full/setup.exe (46460616 bytes)
+INFO installer: AVAILABLE other release 7.0: https://tallymirror.tallysolutions.com/download_centre/Rel.7.0/TP/Full/setup.exe (70912776 bytes)
+INFO installer: AVAILABLE other release 7.1: https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe (72090376 bytes)
+INFO installer: AVAILABLE other release 6.0: https://tallymirror.tallysolutions.com/download_centre/Rel6.0/TP/Full/setup.exe (46324936 bytes)
+INFO installer: AVAILABLE other release 6.2: https://tallymirror.tallysolutions.com/download_centre/Rel6.2/TP/Full/setup.exe (47408904 bytes)
+INFO installer: DOWNLOADED Rel.5.1 from https://tallymirror.tallysolutions.com/download_centre/Rel.5.1/TP/Full/setup.exe : 45651144 bytes in 1 s, SHA-256 05EF11D4542CF420223D327C733C479105ECF7BBD660331F126CFD71A5CA367B, signature Valid CN=Tally Solutions Pvt Ltd, O=Tally Solutions Pvt Ltd, L=Bengaluru, S=Karnataka, C=IN, file version 1.1.5.1 product 1.1.5.1

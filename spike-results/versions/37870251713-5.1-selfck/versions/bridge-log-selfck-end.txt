@@ -1,0 +1,26 @@
+2026-10-09 01:46:39  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line 7147dd37…): asking Tally by MasterID
+2026-10-09 01:46:39  Recorder: entry fetch of FinCom Spike Co: answered in 7 ms
+2026-10-09 01:46:39  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line 7147dd37…): taken: Tally's GUID e01cf0f2-3de1-4c0d-9269-c1dcb713099f-00000003, AlterID 3
+2026-10-09 01:46:40  Renumbering: made Receipt 1 of 02-Oct-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
+2026-10-09 01:47:27  Restarting: asked from the tray icon
+2026-10-09 01:47:28  FinCom Bridge 2.4.0 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmfi6oq\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+2026-10-09 01:47:28  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 02:00)
+2026-10-09 01:47:29  Check:  - 
+2026-10-09 01:47:31  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+2026-10-09 01:47:32  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=6, ALTMSTID=209
+2026-10-09 01:47:32  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=2; now ALTVCHID=6, ALTMSTID=209
+2026-10-09 01:47:32  Bank dates: FinCom Spike Co: Tally's voucher counter moved with no add-on line for 4 entries (a bank date set in Bank Reconciliation, or another change Tally makes without a voucher form); each is read again from Tally
+2026-10-09 01:47:32  Nightly check of FinCom Spike Co: not now: Tally has just opened; letting it finish loading
+2026-10-09 01:47:32  Recorder: entry fetch of FinCom Spike Co: answered in 7 ms
+2026-10-09 01:47:32  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line b8f2d04a…): taken: Tally's GUID e01cf0f2-3de1-4c0d-9269-c1dcb713099f-00000003, AlterID 3
+2026-10-09 01:47:33  Recorder: Journal 3 of 02-Oct-2026 (MasterID 4, line ea270b77…): taken: Tally's GUID e01cf0f2-3de1-4c0d-9269-c1dcb713099f-00000004, AlterID 4
+2026-10-09 01:47:33  Recorder: Journal 4 of 02-Oct-2026 (MasterID 5, line 0c3ad834…): taken: Tally's GUID e01cf0f2-3de1-4c0d-9269-c1dcb713099f-00000005, AlterID 5
+2026-10-09 01:47:33  Recorder: Journal 5 of 02-Oct-2026 (MasterID 6, line 93a4ad33…): taken: Tally's GUID e01cf0f2-3de1-4c0d-9269-c1dcb713099f-00000006, AlterID 6
+2026-10-09 01:57:32  Nightly check of FinCom Spike Co: Checked on the night of 09-Oct-2026 at 07:27 IST: every entry that exists in Tally with a change number above 2 (changed since the starting point) is in FinCom (4 checked). Deletes made in Tally are not checked.
+2026-10-09 02:00:29  Nightly catch-up (02:00): Tally is open and nobody has used FinCom for 15 minutes
+2026-10-09 02:00:29  Keeping FinCom Spike Co in step: its day book from 20260401 is read at Update now (and the nightly run), a month a request
+2026-10-09 02:00:30  Keeping FinCom Spike Co: ledger list MasterID 1-2000, 6 ledger(s) (0.2s); saved
+2026-10-09 02:00:30  Keeping FinCom Spike Co: ledger list MasterID 2001-end, 0 ledger(s) (0.2s); saved
+2026-10-09 02:00:30  Keeping FinCom Spike Co: the ledger list read (6 ledgers, 28 groups, 3 request(s)): 6 new, 0 changed, 0 renamed, 0 gone
+2026-10-09 02:00:30  Keeping FinCom Spike Co: Reading old entries is off (prospective only); FinComCompany ALTVCHID=6 ALTMSTID=209
+2026-10-09 02:00:30  Nightly catch-up: done (5 request(s) to Tally); the bridge is idle again (next: the nightly catch-up at 02:00, or Update now)
