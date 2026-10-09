@@ -5011,14 +5011,27 @@ const Books = {
       if (keep && keep.byHand){ map[name] = Object.assign({n}, keep); return; }
       map[name] = Object.assign({n}, this.guess(name), keep && keep.byHand ? keep : {});
     });
+    // FinCom 2.4.1 (Cause A, 01-Oct-2026: 17 confirms wiped on one refresh): a ledger a person confirmed or set by hand
+    // that no entry uses (yet) is kept, with n:0. It was dropped here, LedMaster.refresh put it back as a guess, and the
+    // save wiped the confirm. No figure moves: no entry uses it
+    Object.keys(saved || {}).forEach(name => {
+      const keep = saved[name];
+      if (!seen.has(name) && keep && (keep.byHand || keep.ok)) map[name] = Object.assign({}, keep, {n: 0});
+    });
     return map;
+  },
+  // the TDS or TCS section in a ledger's name: "194C", "206C1H"; and (2.4.1) the letter after a space, "TDS 194 T" is
+  // 194T, not 194 - but not the A of "194 A/C", nor a word ("194 TDS PAYABLE" is 194)
+  secIn(u){
+    const m = String(u || "").toUpperCase().match(/\b(19[2-9])(?:([A-Z]{1,2})|\s([A-Z]{1,2})(?![\w\/]))?\b|\b(206C)([A-Z]{0,2})\b/);
+    return !m ? "" : m[4] ? m[4] + (m[5] || "") : m[1] + (m[2] || m[3] || "");
   },
   guess(name){
     const u = name.toUpperCase();
-    const sec = u.match(/\b(19[2-9][A-Z]{0,2}|206C[A-Z]?)\b/);
+    const sec = this.secIn(u);
     if (/TDS|TCS/.test(u) && sec){
       const rate = (u.match(/(\d+(?:\.\d+)?)\s*%/) || [])[1];
-      return {kind: /RECEIVABLE/.test(u) ? "tds_receivable" : "tds_payable", section: sec[1], rate: rate ? num(rate) : null};
+      return {kind: /RECEIVABLE/.test(u) ? "tds_receivable" : "tds_payable", section: sec, rate: rate ? num(rate) : null};
     }
     const gst = u.match(/\b(\d{2})?\s*(CGST|SGST|UTGST|IGST|CESS)\s*(INPUT|OUTPUT)?\b/);
     if (gst && /INPUT|OUTPUT/.test(u)) return {kind: "gst", reg: gst[1] || "", tax: gst[2] === "UTGST" ? "SGST" : gst[2], side: gst[3] === "INPUT" ? "input" : "output"};
@@ -5266,8 +5279,8 @@ const LedMaster = {
       const tcs = tt === "TCS" || /\bTCS\b|206C/.test(up);
       p.what = /IN?TE?REST\s+(ON|FOR)\s+(LATE\s+)?(TDS|TCS)|LATE\s*FEE|PENALTY|234E|201\s*\(?1A/.test(up) ? "tds_interest" : tcs ? (/RECEIVABLE|ADVANCE|PAID/.test(up) ? "tcs_receivable" : "tcs_payable") : (/RECEIVABLE|ADVANCE|REFUND|\bA\.?\s*Y\b|\bT\.?\s*Y\b/.test(up) ? "tds_receivable" : "tds_payable");
       if (tt) why.push("Tally: tax type " + info.taxType);
-      const sec = up.match(/\b(19[2-9][A-Z]{0,2}|206C[A-Z]{0,2})\b/);
-      if (sec){ p.section = sec[1]; why.push("section " + sec[1] + " in the name"); }
+      const sec = Books.secIn(up);
+      if (sec){ p.section = sec; why.push("section " + sec + " in the name"); }
       else if (/\b(393|389|394|392)\b/.test(up)){
         // a ledger named under the Income-tax Act, 2025: the section it replaces, from what it is for
         const NAT = [[/SALARY|PERQUISITE\s*.*SALARY/, "192"], [/NON\s*RESIDENT|\b394\b/, "195"], [/PERQUISITE|BENEFIT/, "194R"], [/CONTRACT/, "194C"], [/PROF|TECH|FEES/, "194J"],
@@ -7279,6 +7292,32 @@ const TDS = {
   formName(kind, fy){ return this.isNew(fy) && this.NEW_FORM[kind] ? "Form " + this.NEW_FORM[kind] : kind; },
   formNameLong(kind, fy){ return this.isNew(fy) && this.NEW_FORM[kind] ? "Form " + this.NEW_FORM[kind] + " (was " + kind + ")" : kind; },
   certName(fy){ return this.isNew(fy) ? "Form 130" : "Form 16"; },
+  // names only, for the return pages (redesign of 09-Oct-2026, app/src/screens/Books.jsx and TdsReturn.jsx): nothing here
+  // is used by a figure or a file. From tax year 2026-27 a form is shown as the Income Tax Department's own PDFs head it,
+  // "Form No. 140 (Earlier Form No. 26Q)": Form 140 (earlier 26Q); earlier years keep the old name alone
+  FORM_ABOUT: {"24Q": "Salary", "26Q": "Non-salary, residents", "27Q": "Non-residents", "27EQ": "TCS"},
+  formShort(kind, fy){ return this.isNew(fy) && this.NEW_FORM[kind] ? "Form " + this.NEW_FORM[kind] + " (earlier " + kind + ")" : kind; },
+  formLabel(kind, fy){ return this.formShort(kind, fy) + " \u00b7 " + (this.FORM_ABOUT[kind] || ""); },
+  // Protean's RPU and FVU 1.2 say "Tax Year" for the years of the Act of 2025
+  yearWord(fy){ return this.isNew(fy) ? "Tax Year" : "Financial Year"; },
+  // a section as the return pages show it: from tax year 2026-27 the new provision of section 393 with the old section
+  // beside it, "393(1) Sl. 6(i) [old 194C]", taken only from the mapping FinCom already holds (RULE_DEFAULTS: ref and old);
+  // a section that mapping does not cover is shown under its old number alone. Earlier years: the old number alone.
+  secNew(section, fy){
+    const old = String(section || ""), k = this.sec(old);
+    if (!this.isNew(fy) || !k || typeof RULE_DEFAULTS === "undefined") return {old, ref: "", label: "", text: old};
+    const hits = RULE_DEFAULTS.filter(r => r.old && r.ref && /^39/.test(r.ref) && this.sec(r.old) === k);
+    if (!hits.length) return {old, ref: "", label: "", text: old};
+    // one old section can be several entries of the table (194J: professional, technical, director): the part they share
+    const refs = Array.from(new Set(hits.map(r => r.ref)));
+    let ref = refs[0];
+    refs.slice(1).forEach(x => { let i = 0; while (i < ref.length && ref[i] === x[i]) i++; ref = ref.slice(0, i); });
+    if (refs.length > 1) ref = ref.slice(0, ref.lastIndexOf(")") + 1);
+    const label = Array.from(new Set(hits.map(r => r.label))).slice(0, 3).join(" / ");
+    return {old, ref, label, text: ref + " [old " + old + "]"};
+  },
+  // what a section can be found by in a search: its old number and, from 2026-27, its new provision and table entry
+  secFind(section, fy){ const x = this.secNew(section, fy); return [x.old, x.ref, x.label].join(" "); },
   // TCS rates by date (old section 206C; section 394 of the Act of 2025 from 1 April 2026): [from, code, rate %]. The latest
   // row on or before the collection's date applies. From 1 April 2026: scrap and minerals 2%, overseas tour packages 2% flat
   TCS_RATES: [
@@ -9741,7 +9780,7 @@ function gstParts(b){
   return {parts, ftype, regs, noBooks};
 }
 // one part of the GST tab, as the old pages draw it
-function gstPartGo(id){ S.gstPart = id; render(); }
+function gstPartGo(id){ S.gstPart = id; S.gstView = "return"; S.gstSub = ""; render(); }
 function gstSetYm(ym){ S.gstYm = ym; S.books.reco = null; render(); }
 function gstSetReg(reg){ S.gstReg = reg; S.books.reco = null; render(); }
 
@@ -13451,18 +13490,31 @@ function gst9cSet(key, v){
   saveBooks(); render();
 }
 // a Tally ledger's GST or TDS meaning, set on the Tally ledgers tab (app/src/screens/books/Ledgers.jsx): what (the
-// kind), tax, side, reg, gstRate, section, rate. A choice made here is the user's own: it counts as confirmed
-function lmSet(name, key, val){
-  const b = S.books, m = b.map[name] = b.map[name] || {n: 0};
-  if (key === "what") LedMaster.applyWhat(m, val || "none");
-  if (key === "tax" || key === "side" || key === "reg") m[key] = val;
-  if (key === "gstRate") m.gstRate = val ? num(val) : null;
-  if (key === "section") m.section = String(val).toUpperCase().replace(/\s+/g, "");
-  if (key === "rate") m.rate = val === "" ? null : num(val);
-  m.byHand = true; m.ok = true; m.okAt = new Date().toISOString(); m.okBy = whoAmI();
-  const it = ((b.ledCheck || {}).items || {})[name]; if (it) it.state = "confirmed";
-  LedMaster.tplLearn(b, [name]); try { LedMaster.applyPosting(b, CO(), "empty"); } catch (e){}
-  b.mapV = (b.mapV || 0) + 1; b.reco = null; saveBooks(); render();
+// kind), tax, side, reg, gstRate, section, rate. A choice made here is the user's own: it counts as confirmed.
+// FinCom 2.4.1 (Cause B): saved at once, its own confirm step, never a draft (it was a draft under the page's Save, so
+// the row said "✓ Confirmed" while nothing was saved). pre: the Editor's starting answer (the check's suggestion for a
+// ledger with none), written in the same step. What the ledger was before is kept for Undo (LedPage.undoRow)
+function lmSet(name, key, val, pre){
+  const b = S.books; if (!b) return;
+  Drafts.direct(() => {
+    b.map = b.map || {};
+    const ed = S.ledEditPrev && S.ledEditPrev.cid === b.cid && S.ledEditPrev.n === name ? S.ledEditPrev : null;
+    const was = ed ? ed.m : (b.map[name] ? LedPage.bare(b.map[name]) : null);
+    const m = b.map[name] = b.map[name] || {n: 0};
+    if (pre && !m.byHand && !m.what) pre(m);
+    if (key === "what") LedMaster.applyWhat(m, val || "none");
+    if (key === "tax" || key === "side" || key === "reg") m[key] = val;
+    if (key === "gstRate") m.gstRate = val ? num(val) : null;
+    if (key === "section") m.section = String(val).toUpperCase().replace(/\s+/g, "");
+    if (key === "rate") m.rate = val === "" ? null : num(val);
+    m.byHand = true; m.ok = true; m.okAt = new Date().toISOString(); m.okBy = whoAmI(); m.okHow = "change"; m.prev = was;
+    const it = ((b.ledCheck || {}).items || {})[name]; if (it) it.state = "confirmed";
+    LedMaster.tplLearn(b, [name]); try { LedMaster.applyPosting(b, CO(), "empty"); } catch (e){}
+    b.mapV = (b.mapV || 0) + 1; b.reco = null; if (typeof GSTR === "object") GSTR._carry = null; if (typeof GST2B === "object") GST2B._memo = null;
+    saveBooks();
+  }, {bypass: true});
+  S.ledUndo = {cid: b.cid, text: "Changed: " + name + ".", list: [[name, (b.map[name] || {}).prev === undefined ? null : b.map[name].prev]]};
+  render();
 }
 // a confirm button is its own confirm step (review 18): saved at once, not kept as a draft (src/js/60 Drafts.direct)
 function lmConfirmToggle(name){ const m = S.books.map[name]; if (m) Drafts.direct(() => { LedMaster.confirm(S.books, [name], !m.ok); S.books.reco = null; saveBooks(); render(); }, {bypass: true}); }
@@ -17850,15 +17902,30 @@ function printTable(id, title){
 // TDS & GST from the books (app/src/screens/Books.jsx): a tab of the books; in TDS, a year, a quarter's return
 // parts of the books with a sidebar entry of their own, outside "TDS & GST" (MIS, Accounts and Audit moved out: review item 7)
 const BOOKS_OWN_PAGES = ["reports", "lookup", "letters", "mis", "fs", "audit"];
-function booksTabGo(tab, gstPart){ S.booksTab = tab; if (gstPart) S.gstPart = gstPart; render(); }
+function booksTabGo(tab, gstPart){ S.booksTab = tab; if (gstPart){ S.gstPart = gstPart; S.gstView = "return"; S.gstSub = ""; } render(); }
 function tdsNav(view){ S.tdsView = view; render(); window.scrollTo(0, 0); }
 function tdsGo(fy, q, form){
   S.tdsFy = fy;
   if (q){ S.tdsQ = q; S.tdsForm = form || "26Q"; S.tdsView = "return"; S.tdsTab = ""; S.tdsOpen = ""; S.chOpen = ""; }
-  else S.tdsView = "year";
+  else { S.tdsView = "year"; S.tdsQ = ""; S.tdsPickForm = ""; }
   render(); window.scrollTo(0, 0);
 }
 function tdsSetFy(fy){ S.tdsFy = fy; if (S.tdsView === "return") S.tdsView = "year"; render(); }
+// the bar of year, quarter and form above the TDS pages (redesign of 09-Oct-2026): a quarter and a form chosen open that
+// return; either left at "every" shows the year's grid of forms and quarters
+function tdsPick(fy, q, form){
+  const was = S.tdsView === "return" ? S.tdsQ + "|" + S.tdsForm : "";
+  S.tdsFy = fy; S.tdsQ = q || ""; S.tdsPickForm = form || "";
+  if (q && form){ S.tdsForm = form; S.tdsView = "return"; if (was !== q + "|" + form){ S.tdsTab = ""; S.tdsOpen = ""; S.chOpen = ""; } }
+  else S.tdsView = "year";
+  render();
+}
+// the GST pages (redesign of 09-Oct-2026): the year's grid of returns and months, or one return and period with its tabs
+function gstOpen(ym, part, reg){ if (reg) S.gstReg = reg; if (ym && ym !== S.gstYm){ S.gstYm = ym; if (S.books) S.books.reco = null; }
+  S.gstSeen = (S.gstReg || "") + "|" + (typeof GSTSet === "object" ? GSTSet.typeOf(S.gstYm || "", S.gstReg || "") : "monthly");
+  S.gstPart = part; S.gstView = "return"; S.gstSub = ""; render(); window.scrollTo(0, 0); }
+function gstViewGo(v){ S.gstView = v; render(); }
+function gstSubGo(sub){ S.gstSub = sub; render(); }
 // the review table (app/src/screens/Review.jsx)
 function revPick(id, on){ S.revSel = S.revSel || new Set(); if (on) S.revSel.add(id); else S.revSel.delete(id); render(); }
 function revPickAll(on){ S.revSel = new Set(on ? revFiltered().map(r => r.e.id) : []); render(); }   // only the rows the filter shows
@@ -18971,6 +19038,9 @@ window.addEventListener("hashchange", () => { applyEntryHash(); render(); });
   const linked = /^#\//.test(location.hash) && typeof Route === "object" && !signInNeeded() ? await Route.apply(location.hash) : false;
   const last = lsGet("tdsdesk-test:last") || recentIds()[0];
   if (!linked && last && S.companies[last]) openCompany(last);
+  // the Tally redesign (09-Oct-2026): a firm page opened by its address (#/tally after a refresh) keeps the client open
+  // last time, so the Tally page can say "← Back to <client>" and the sidebar names it
+  else if (linked && S.view === "home" && !S.coId && last && S.companies[last]) S.coId = last;
   if (typeof Route === "object"){ Route.ready = true; Route.replaceNext = true; }
   S.sample = await samplePromise;
   if (S.sample){
@@ -19688,23 +19758,29 @@ const Help = {
     "tds:years": {t: "TDS \u2014 the years", what: "Every financial year in the books with its deductions, TDS, challans and what is still open.",
       steps: ["Click a year to open it.", "A red figure under \u201cNot against a challan\u201d or \u201cWithout PAN\u201d is work before the returns."], from: "Tally\u2019s TDS payable ledgers and the salary sheet.", watch: []},
     "tds:year": {t: "TDS \u2014 the year", what: "The year\u2019s four quarters with 26Q (other than salary) and 24Q (salary), and the due dates.",
-      steps: ["Click the amount in a quarter to open that return.", "Use \u201cCertificates and rate questions\u201d for lower-deduction certificates.", "Download the year\u2019s working for the file."],
+      steps: ["Choose the year, quarter and form in the bar above, or click a cell of the grid (grey not started, blue ready, red errors to fix, green filed) to open that return.", "Use \u201cCertificates and rate questions\u201d for lower-deduction certificates.", "Download the year\u2019s working for the file."],
       from: "Tally vouchers with TDS; the salary sheet for 24Q.", watch: ["Due: Q1 31 July, Q2 31 October, Q3 31 January, Q4 31 May."]},
     "tds:certs": {t: "Certificates and rate questions", what: "Lower or nil deduction certificates (section 197) and deductions made at a rate that does not match the law.",
       steps: ["Add each certificate: number, PAN, section, rate, limit and period.", "Deductions under a certificate stop being flagged as short.", "Correct the rest in Tally, or note why the rate is right."],
       from: "Tally deductions and the certificates typed here.", watch: ["A deductee without a valid PAN is deducted at 20% or the rate in force, whichever is higher (section 206AA).", "A certificate applies only up to its amount and within its period."]},
+    "tds:26Q:summary": {t: "26Q \u2014 Summary", what: "The quarter at a glance: TDS deducted, challans, what is not against a challan, what to look at, and the quarter by section. From tax year 2026-27 the return is Form 140 (earlier 26Q) and each section is shown under the Income-tax Act, 2025 with the old section beside it.",
+      steps: ["Open \u201cErrors to fix\u201d when it has a count.", "Then \u201cFile\u201d to make the return."], from: "Tally vouchers with TDS and the challans.", watch: []},
+    "tds:26Q:file": {t: "26Q \u2014 File", what: "The return\u2019s working (Excel), its text file and the FVU check.", steps: ["Download the working and check it.", "Download the text file.", "Check it with the FVU on the Tally computer, then file it."],
+      from: "The deductions and challans of the quarter.", watch: ["From tax year 2026-27 the file is a draft until FinCom\u2019s file is matched to Protean\u2019s format: do not file it."]},
+    "tds:24Q:summary": {t: "24Q \u2014 Summary", what: "The quarter\u2019s employees, salary TDS and what to fix before filing. From tax year 2026-27 the return is Form 138 (earlier 24Q).", steps: ["Open \u201cErrors to fix\u201d when it has a count."], from: "The salary sheet.", watch: []},
+    "tds:24Q:file": {t: "24Q \u2014 File", what: "The salary sheet and the return\u2019s working.", steps: ["Bring in the salary sheet, or a newer one.", "Download the 24Q working."], from: "The salary sheet.", watch: []},
     "tds:26Q:challans": {t: "26Q \u2014 Challans", what: "The TDS deposited for the quarter and which deductions each challan pays.",
       steps: ["Check each challan\u2019s date, BSR code and serial number against the counterfoil or OLTAS.", "Click \u201cPut them against challans\u201d to set deductions against challans by section and date.", "Look at \u201cNot against a challan\u201d \u2014 either the TDS is unpaid or a challan is missing from the books."],
       from: "Payments debiting the TDS payable ledgers in Tally.", watch: ["A challan paid late brings interest under section 201(1A); see the checks tab."]},
     "tds:26Q:deductees": {t: "26Q \u2014 Deductees", what: "Each deductee\u2019s payments and TDS for the quarter.", steps: ["Fill any missing or wrong PAN in Tally.", "Check the section chosen for each deductee."], from: "Tally deductions grouped by PAN, or by name where there is none.", watch: ["Without a valid PAN the return carries higher-rate flags and the deductee gets no credit."]},
     "tds:26Q:deductions": {t: "26Q \u2014 Deductions", what: "Every deduction line that goes into the return.", steps: ["Filter by section, deductee or challan.", "Check dates of payment or credit and the amounts."], from: "Each Tally voucher with TDS.", watch: []},
-    "tds:26Q:checks": {t: "26Q \u2014 Interest, late fee and checks", what: "Interest for late deduction or late payment, the late filing fee, and rate questions for the quarter.",
+    "tds:26Q:checks": {t: "26Q \u2014 Errors to fix: interest, late fee and checks", what: "Interest for late deduction or late payment, the late filing fee, and rate questions for the quarter.",
       steps: ["Read the interest under section 201(1A): 1% a month for late deduction, 1.5% a month for late payment.", "Read the late fee under section 234E: \u20b9200 a day, not more than the TDS.", "Pay these with the challan before filing, and settle the rate questions."],
       from: "Deduction and challan dates.", watch: []},
     "tds:24Q:employees": {t: "24Q \u2014 Employees", what: "Each employee\u2019s salary and TDS for the quarter, from the salary sheet.", steps: ["Bring in the payroll sheet you already prepare (Excel or CSV).", "Check each employee\u2019s PAN and TDS."], from: "The salary sheet; Tally only shows net pay.", watch: []},
     "tds:24Q:challans": {t: "24Q \u2014 Challans", what: "Challans for salary TDS in the quarter.", steps: ["Check each challan against the counterfoil."], from: "Tally\u2019s salary TDS payments.", watch: []},
     "tds:24Q:annex2": {t: "24Q \u2014 Annexure II", what: "The whole year\u2019s salary details per employee, filed with Q4.", steps: ["Check gross salary, exemptions, deductions and tax for each employee.", "Tie the TDS to what was deducted over the year."], from: "The salary sheet for the year.", watch: []},
-    "tds:24Q:checks": {t: "24Q \u2014 Checks", what: "What to fix before filing: missing PANs, TDS that differs from the books, and the like.", steps: ["Fix each item listed, in the sheet or in Tally."], from: "The salary sheet and the books.", watch: []}
+    "tds:24Q:checks": {t: "24Q \u2014 Errors to fix", what: "What to fix before filing: missing PANs, TDS that differs from the books, and the like.", steps: ["Fix each item listed, in the sheet or in Tally."], from: "The salary sheet and the books.", watch: []}
   },
   // review item 37: every screen's "?" opens its own topic. GST and TDS tabs have theirs above; the other screens of a
   // client use the guide's articles (GUIDE.A in src/js/40), as "page:<article>"
@@ -20887,7 +20963,7 @@ const GUIDE = {
       steps: ["Open Audit and press Run now (it also runs on its own: every day, week or month, or only when you run it).", "Go through Findings: each has the problem, the amount, a suggestion and the entry to pass where one is needed.", "Mark each one: Explained, Entry to pass, Entry passed or Not an issue.", "Download the Tally file of entries to pass, the report (PDF) or the Excel with annexures; Finalise this report locks it."],
       from: "The vouchers read from Tally, from the start of the year to the last date in the books.", watch: ["Findings are observations to confirm against documents, not conclusions."]},
     "lookup": {area: "Look up", t: "Look up", what: "Any ledger, group, trial balance, month-by-month figure, a party’s open bills, or entries, for any dates.",
-      steps: ["Press / anywhere in a client, or open Look up on the left.", "Ask in words: “HDFC bank for August”, “Raj Fabrics open bills”, “trial balance as on 31/03/2026”; or choose the kind and the period and press Show.", "Click a name in the result to go further; Print or PDF, or Excel."],
+      steps: ["Press / anywhere in a client, or open Look up on the left.", "Ask in words: “HDFC bank for August”, “Raj Fabrics open bills”, “trial balance as on 31-Mar-2026”; or choose the kind and the period and press Show.", "Click a name in the result to go further; Print or PDF, or Excel."],
       from: "Totals come from FinCom’s copy of the books. Tally is never asked for a balance: each figure says “Balance from FinCom's copy · books as of” the time the copy last read Tally.",
       watch: ["Without the books or the bridge, read the books from Tally first."]},
     "letters": {area: "Letters", t: "Confirmations and reminders", what: "Balance confirmation letters to customers, suppliers and loan parties, and reminders of dues, from the client’s books.",
@@ -22077,8 +22153,9 @@ const LK = {
   dateIn(s){
     const t = String(s).toLowerCase(), a = FC.anchor();
     let m;
-    // 31/03/2026, 31-03-2026, 2026-03-31, 31 mar 2026, mar 31 2026
+    // 31-Mar-2026, 31/03/2026, 31-03-2026, 2026-03-31, 31 mar 2026, mar 31 2026
     const one = x => {
+      x = x.replace(/^(\d{1,2})-([a-z]{3,9})-(\d{4})$/, "$1 $2 $3");   // 31-mar-2026, the app's own date format (round 4 of the UI pass)
       let q = x.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
       if (q){ const y = q[3].length === 2 ? "20" + q[3] : q[3]; return y + q[2].padStart(2, "0") + q[1].padStart(2, "0"); }
       q = x.match(/^(\d{4})-(\d{2})-(\d{2})$/); if (q) return q[1] + q[2] + q[3];
@@ -22091,7 +22168,7 @@ const LK = {
       }
       return "";
     };
-    const D = "(\\d{1,2}[\\/\\-.]\\d{1,2}[\\/\\-.]\\d{2,4}|\\d{4}-\\d{2}-\\d{2}|\\d{1,2}(?:st|nd|rd|th)?\\s+(?:of\\s+)?[a-z]+(?:,?\\s+\\d{4})?|[a-z]+\\s+\\d{1,2}(?:st|nd|rd|th)?(?:,?\\s+\\d{4})?)";
+    const D = "(\\d{1,2}-[a-z]{3,9}-\\d{4}|\\d{1,2}[\\/\\-.]\\d{1,2}[\\/\\-.]\\d{2,4}|\\d{4}-\\d{2}-\\d{2}|\\d{1,2}(?:st|nd|rd|th)?\\s+(?:of\\s+)?[a-z]+(?:,?\\s+\\d{4})?|[a-z]+\\s+\\d{1,2}(?:st|nd|rd|th)?(?:,?\\s+\\d{4})?)";
     if ((m = t.match(new RegExp("(?:from|between)\\s+" + D + "\\s+(?:to|and|till|until|-)\\s+" + D)))){ const f = one(m[1]), e = one(m[2]); if (f && e) return {from: f, to: e}; }
     if ((m = t.match(new RegExp("(?:as on|as at|on|till|upto|up to)\\s+" + D)))){ const d = one(m[1]); if (d) return {asOn: d, from: Audit.fyStart(d), to: d}; }
     if ((m = t.match(/\b(?:fy\s*)?(20\d{2})\s*[-\/]\s*(\d{2}|20\d{2})\b/))){ const y = num(m[1]); return {from: y + "0401", to: (y + 1) + "0331"}; }
@@ -25140,7 +25217,7 @@ function aihFix(l, f, v){
 function aihReply(id, v){ const n = AIH.st().notices.find(z => z.id === id); if (n){ n.reply = v; n.editedBy = AIH.who(); saveBooks(); } }
 function aihAct(a){
   if (a === "review" || a === "reviewAgain") AIH.reviewLedgers(a === "reviewAgain");
-  else if (a === "auditReview"){ S.booksTab = "ledgers"; S.lmView = "ai"; render(); AIH.reviewLedgers(false); }
+  else if (a === "auditReview"){ S.booksTab = "audit"; S.auditAi = true; render(); AIH.reviewLedgers(false); }   // 2.4.1: on the Audit tab (the ledgers page has no AI)
   else if (a === "pair2b") AIH.pair2b();
 }
 // Accept / Reject is its own confirm step (review 18): saved at once, not kept as a draft of the page (src/js/60)
@@ -25188,7 +25265,7 @@ const Route = {
     if (S.tab === "dash") return c + "dash";
     if (S.tab === "clientInbox") return c + "inbox";
     if (S.tab === "txn") return c + "txn/" + txnTab();
-    if (S.tab === "books") return c + "books/" + booksTab();
+    if (S.tab === "books") return c + "books/" + booksTab() + this.booksMore();
     if (isSetupTab(S.tab)) return c + "setup/" + S.tab;
     if (S.tab === "bank") return c + "bank";
     if (S.tab === "sales") return c + "sales";
@@ -25201,6 +25278,45 @@ const Route = {
     }
     return c + "dash";
   },
+  // the TDS and GST pages keep their year, quarter or month, form or return and tab in the address (09-Oct-2026), so Back
+  // and Refresh come back to the same return: #/c/<client>/books/tds/2026-27/Q1/26Q/challans, …/books/tds/2026-27 (the
+  // year's grid), …/books/tds/2026-27/certs, …/books/tds/all; #/c/<client>/books/gst/07/202603/r1/summary, …/gst/07/202603/year
+  booksMore(){
+    const t = booksTab(), e = (x) => encodeURIComponent(x || "");
+    if (t === "tds"){
+      const v = S.tdsView || "";
+      if (v === "years") return "/all";
+      if (v === "notices") return "/notices";
+      if (!S.tdsFy) return "";
+      if (v === "return") return "/" + e(S.tdsFy) + "/" + e(S.tdsQ) + "/" + e(S.tdsForm || "26Q") + (S.tdsTab ? "/" + e(S.tdsTab) : "");
+      if (v === "certs") return "/" + e(S.tdsFy) + "/certs";
+      return "/" + e(S.tdsFy) + (S.tdsQ ? "/" + e(S.tdsQ) : "");
+    }
+    if (t === "gst"){
+      if (!S.gstYm || !S.gstReg) return "";
+      if ((S.gstView || "year") === "year") return "/" + e(S.gstReg) + "/" + e(S.gstYm) + "/year";
+      return "/" + e(S.gstReg) + "/" + e(S.gstYm) + "/" + e(S.gstPart || "r1") + (S.gstSub ? "/" + e(S.gstSub) : "");
+    }
+    return "";
+  },
+  booksApply(tab, p){
+    if (tab === "tds"){
+      if (p[0] === "all"){ S.tdsView = "years"; return; }
+      if (p[0] === "notices"){ S.tdsView = "notices"; return; }
+      if (!/^\d{4}-\d{2}$/.test(p[0] || "")){ return; }
+      S.tdsFy = p[0];
+      if (p[1] === "certs"){ S.tdsView = "certs"; return; }
+      if (/^Q[1-4]$/.test(p[1] || "") && p[2]){ S.tdsQ = p[1]; S.tdsForm = p[2]; S.tdsPickForm = p[2]; S.tdsView = "return"; S.tdsTab = p[3] || ""; return; }
+      S.tdsQ = /^Q[1-4]$/.test(p[1] || "") ? p[1] : ""; S.tdsPickForm = ""; S.tdsView = "year";
+      return;
+    }
+    if (tab === "gst" && /^\d{2}$/.test(p[0] || "") && /^\d{6}$/.test(p[1] || "")){
+      S.gstReg = p[0]; if (S.gstYm !== p[1] && S.books) S.books.reco = null; S.gstYm = p[1];
+      S.gstSeen = p[0] + "|" + (typeof GSTSet === "object" ? GSTSet.typeOf(p[1], p[0]) : "monthly");
+      if (!p[2] || p[2] === "year") S.gstView = "year";
+      else { S.gstView = "return"; S.gstPart = p[2]; S.gstSub = p[3] || ""; }
+    }
+  },
   // after each drawing: the address follows the page; a new page is a new step in the browser's history
   pending: null,                    // a link opened before signing in: applied once signed in
   ready: false,                     // set once the page has started: until then the address is the one opened, not ours
@@ -25210,6 +25326,8 @@ const Route = {
     if (!this.ready || this.applying || typeof history === "undefined" || signInNeeded() || !S.firm) return;
     if (this.pending){ const p = this.pending; this.pending = null; this.apply(p); return; }
     const h = this.of();
+    // the Tally redesign (09-Oct-2026): the client's page last shown, for "← Back to <client>" on the Tally page
+    if (/^#\/c\//.test(h)) S.lastClientHash = h;
     if (h === location.hash){ this.replaceNext = false; return; }
     try {
       if (!/^#\//.test(location.hash) || this.replaceNext) history.replaceState(null, "", location.pathname + location.search + h);
@@ -25232,7 +25350,7 @@ const Route = {
         else if (what === "dash") S.tab = "dash";
         else if (what === "inbox") S.tab = "clientInbox";
         else if (what === "txn"){ S.tab = "txn"; if (arg) S.txnTab = arg; }
-        else if (what === "books"){ S.tab = "books"; if (arg) S.booksTab = arg; }
+        else if (what === "books"){ S.tab = "books"; if (arg) S.booksTab = arg; if (arg && p.length > 4) this.booksApply(arg, p.slice(4)); }
         else if (what === "setup" && isSetupTab(arg)) S.tab = arg;
         else if (what === "bank"){ S.tab = "bank"; if (!S.bank || S.bank.cid !== S.coId) loadBank(S.coId).then(() => render()); }
         else if (what === "sales") S.tab = "sales";
@@ -25255,6 +25373,18 @@ const Route = {
     }
   }
 };
+// the Tally redesign (09-Oct-2026, the owner: "if i go to tally page then return to that client is not possible"): the
+// Tally page keeps the open client; "← Back to <client>" opens that client's page last shown (a new step in the
+// browser's history, so Back returns to the Tally page), else its dashboard
+function backToClient(){
+  const cid = S.coId;
+  if (!cid || !S.companies[cid]) { navHome("clients"); return; }
+  const pre = "#/c/" + encodeURIComponent(cid) + "/", h = S.lastClientHash && S.lastClientHash.indexOf(pre) === 0 ? S.lastClientHash : pre + "dash";
+  if (typeof history !== "undefined" && Route.ready){ try { history.pushState(null, "", location.pathname + location.search + h); } catch (e){} }
+  Route.apply(h);
+}
+// from a client: the Tally page, focused on that client's computer and company (S.tallyFocus)
+function openTallyFor(cid){ S.tallyFocus = cid || S.coId || ""; S.tallyTab = "computers"; navHome("tally"); }
 if (typeof window !== "undefined"){
   window.addEventListener("popstate", () => { if (/^#\//.test(location.hash)) Route.apply(location.hash); });
   window.addEventListener("hashchange", () => { if (/^#\//.test(location.hash) && location.hash !== Route.of()) Route.apply(location.hash); });
@@ -26541,9 +26671,10 @@ const LedPage = {
   // Confirm on a row: the ledger confirmed as the row says (the master's answer, as its Confirm did); a ledger only the
   // check found goes into the master with the check's answer. A confirm is its own step: saved at once. The check's
   // "only confirmed ledgers count" switch is still set only by "Confirm the check's sure answers" (lcConfirm)
-  confirm(b, names){
+  confirm(b, names, how){
     const rows = [].concat(names || []).map(n => this.row(b, n)).filter(r => !r.ok && (r.fromCheck || (b.map && b.map[r.n])));
     if (!rows.length) return 0;
+    const was = this.before(b, rows.map(r => r.n));
     Drafts.direct(() => {
       b.map = b.map || {};
       rows.filter(r => r.fromCheck).forEach(r => { const p = r.p, m = b.map[r.n] = b.map[r.n] || {n: 0};
@@ -26554,11 +26685,118 @@ const LedPage = {
       const names2 = rows.map(r => r.n), u = LedCheck.usage(b, names2);
       LedMaster.confirm(b, names2, true);
       names2.forEach(n => { const it = ((b.ledCheck || {}).items || {})[n]; if (it){ it.okSig = LedCheck.sig(u[n]); it.okAt = new Date().toISOString(); it.okBy = whoAmI(); it.state = "confirmed"; } });
-      b.reco = null; saveBooks();
+      // 2.4.1: how it was confirmed, and what it was before (a row's Undo puts that back)
+      was.forEach(([n, prev]) => { const m = b.map[n]; if (m){ m.okHow = how || "row"; m.prev = prev; } });
+      this.dirty(b); saveBooks();
     }, {bypass: true});
+    S.ledUndo = {cid: b.cid, text: rows.length === 1 ? "Confirmed: " + rows[0].n + "." : rows.length + " ledgers confirmed.", list: was};
     render();
     return rows.length;
   },
+
+  // ---------- FinCom 2.4.1: the simple page (the owner's decisions of 09-Oct-2026) ----------
+  // "Keep today's figures": the returns read b.map (Books.ledgerOf) as before; nothing here moves a figure unless a person
+  // changes a ledger (Confirm keeps the answer as it is; Change and "Use the check's" change that one ledger)
+  taxW(w){ return LedMaster.isGst(w) || LedMaster.isTds(w); },
+  // the answer the returns read (b.map), in the shape of the check's
+  ans(m){ m = m || {}; return {what: m.what || "", side: m.side || "", tax: m.tax || "", rate: LedMaster.isGst(m.what) ? m.gstRate : m.rate, section: m.section || ""}; },
+  // FinCom's check's own answer (its rules, never AI's: no AI on this page), where it has one it is not unsure of
+  checkOf(b, n){ const it = ((b.ledCheck || {}).items || {})[n], s = it && it.s; return s && s.what && s.conf !== "low" ? s : null; },
+  // one entry that uses the ledger (the check's samples): type, number, date, amount
+  example(b, n){ const it = ((b.ledCheck || {}).items || {})[n], x = it && it.use && (it.use.samples || [])[0]; return x || null; },
+  exampleSay(x){ if (!x) return ""; const d = /^\d{8}$/.test(String(x.date || "")) ? fmtDate(tallyDate(x.date)) : fmtDate(String(x.date || "").slice(0, 10));
+    return [x.type, x.no].filter(Boolean).join(" ") + " · " + d + " · " + money(x.amt); },
+  // the main table: one row a GST or TDS ledger (what the map reads as GST or TDS, or a tax-like ledger it has no answer
+  // for), and a ledger only the check found that it reads as GST or TDS
+  line(b, n){
+    const m = (b.map || {})[n] || null, s = this.checkOf(b, n), info = (b.ledInfo || {})[n] || {};
+    return {n, m, has: !!m, ok: !!(m && m.ok), says: m && m.what ? this.says(this.ans(m)) : "Not known yet", check: s, checkSays: s ? this.says(s) : "",
+      agree: !!(m && m.what && s && this.same(s, m)), used: m ? (m.n || 0) : 0, ex: this.example(b, n), group: info.group || (b.under || {})[n] || ""};
+  },
+  main(b){
+    const c = this.ensure(b), info = b.ledInfo || {}, map = b.map || {}, names = new Set();
+    Object.entries(map).forEach(([n, m]) => { if (this.taxW(m.what) || (!m.what && LedMaster.taxLike(n, m, info[n]))) names.add(n); });
+    (c.names || []).forEach(n => { if (!map[n]){ const s = this.checkOf(b, n); if (s && this.taxW(s.what)) names.add(n); } });
+    return Array.from(names).sort((x, y) => x.localeCompare(y)).map(n => this.line(b, n));
+  },
+  // the other ledgers (not tax), most used first: one can be marked as tax with Change
+  others(b){
+    const main = new Set(this.main(b).map(r => r.n));
+    return Object.entries(b.map || {}).filter(([n]) => !main.has(n)).sort((x, y) => (y[1].n || 0) - (x[1].n || 0) || x[0].localeCompare(y[0])).map(([n]) => this.line(b, n));
+  },
+  // "Confirm all": the ledgers used in entries (n > 0), not confirmed, whose answer is the check's too
+  agreeing(b){ return this.main(b).filter(r => r.has && !r.ok && r.used > 0 && r.agree).map(r => r.n); },
+  // "Please check": a confirmed ledger the check reads otherwise; a confirmed name-guess no entry uses yet, which would
+  // count as tax once used (confirmed before 2.4.1 in a batch, not on its own row, and Tally's master does not say GST or
+  // TDS). "Keep mine" puts one away (m.kept) until the check reads it otherwise again
+  review(b){
+    const out = [], info = b.ledInfo || {};
+    Object.entries(b.map || {}).sort((x, y) => x[0].localeCompare(y[0])).forEach(([n, m]) => {
+      if (!m.ok) return;
+      const s = this.checkOf(b, n), mine = this.says(this.ans(m)), k = m.kept || {};
+      if (s && m.what && !this.same(s, m)){ const cs = this.says(s); if (k.check !== cs) out.push({n, kind: "differs", m, mine, check: s, checkSays: cs, ex: this.example(b, n)}); return; }
+      if (this.taxW(m.what) && !((m.n || 0) > 0) && !/^(row|change|check|agree)$/.test(m.okHow || "") && !/^(GST|TDS|TCS)$/i.test(String((info[n] || {}).taxType || "")) && !m.kept)
+        out.push({n, kind: "unused", m, mine, check: s, checkSays: s ? this.says(s) : "", ex: null});
+    });
+    return out;
+  },
+  // what each ledger was before a change (for Undo): a copy with its own history (prev), the last 5 steps kept, so an
+  // Undo puts back exactly what was there and a second Undo goes one step further back
+  bare(m){ const c = JSON.parse(JSON.stringify(m || {})); let x = c; for (let i = 0; i < 4 && x && x.prev; i++) x = x.prev; if (x && x.prev) delete x.prev; return c; },
+  before(b, names){ return [].concat(names).map(n => [n, b.map && b.map[n] ? this.bare(b.map[n]) : null]); },
+  dirty(b){ b.mapV = (b.mapV || 0) + 1; b.reco = null; if (typeof GSTR === "object") GSTR._carry = null; if (typeof GST2B === "object") GST2B._memo = null; },
+  // each its own step, saved at once (never a draft), with Undo
+  step(b, text, names, fn){
+    const was = this.before(b, names);
+    Drafts.direct(() => { b.map = b.map || {}; fn(was); this.dirty(b); saveBooks(); }, {bypass: true});
+    S.ledUndo = {cid: b.cid, text, list: was};
+    render();
+  },
+  confirmAgree(b){
+    const names = this.agreeing(b); if (!names.length) return 0;
+    this.confirm(b, names, "agree");
+    S.ledUndo = Object.assign({}, S.ledUndo, {text: names.length === 1 ? "1 ledger confirmed." : names.length + " ledgers confirmed."});
+    return names.length;
+  },
+  keepMine(b, n){
+    const m = (b.map || {})[n]; if (!m) return;
+    const s = this.checkOf(b, n), cs = s && !this.same(s, m) ? this.says(s) : "unused";
+    this.step(b, "Kept as you confirmed: " + n + ".", [n], (was) => { m.kept = {by: whoAmI(), at: new Date().toISOString(), check: cs}; m.prev = was[0][1]; });
+  },
+  useCheck(b, n){
+    const s = this.checkOf(b, n); if (!s) return;
+    this.step(b, "Changed to the check’s answer: " + n + ".", [n], (was) => {
+      const m = b.map[n] = b.map[n] || {n: 0};
+      LedMaster.applyWhat(m, s.what);
+      if (LedMaster.isGst(s.what)){ m.tax = s.tax || m.tax; m.side = s.side || m.side; if (s.rate) m.gstRate = s.rate; }
+      if (LedMaster.isTds(s.what)){ m.section = s.section || ""; if (s.rate) m.rate = s.rate; }
+      m.why = (s.ev || []).map(e => LedCheck.SRC[e.src] + ": " + e.say).join("; ");
+      LedMaster.confirm(b, [n], true); m.okHow = "check"; delete m.kept; m.prev = was[0][1];
+      const it = ((b.ledCheck || {}).items || {})[n]; if (it){ it.okSig = LedCheck.sig(LedCheck.usage(b, [n])[n]); it.okAt = m.okAt; it.okBy = m.okBy; }
+    });
+  },
+  // put ledgers back as they were (Undo); a ledger that was not in the map is taken out of it again
+  restore(b, list){
+    Drafts.direct(() => {
+      const items = (b.ledCheck || {}).items || {};
+      list.forEach(([n, prev]) => {
+        const used = ((b.map || {})[n] || {}).n || 0;
+        if (prev) b.map[n] = Object.assign(JSON.parse(JSON.stringify(prev)), {n: used}); else delete b.map[n];
+        if (items[n]) items[n].state = prev && prev.ok ? "confirmed" : "pending";
+      });
+      this.dirty(b); saveBooks();
+    }, {bypass: true});
+  },
+  // a confirmed row's own Undo: what it was before it was confirmed or changed (kept on the ledger); one confirmed before
+  // 2.4.1 is only not confirmed any more
+  undoRow(b, n){
+    const m = (b.map || {})[n]; if (!m) return;
+    const prev = m.prev !== undefined ? m.prev : Object.assign(this.bare(m), {ok: false, okAt: undefined, okBy: undefined, okHow: undefined, prev: undefined});
+    this.restore(b, [[n, prev]]);
+    if (S.ledUndo && (S.ledUndo.list || []).some(x => x[0] === n)) S.ledUndo = null;
+    render();
+  },
+  undoLast(b){ const u = S.ledUndo; if (!u || u.cid !== b.cid) return; S.ledUndo = null; this.restore(b, u.list || []); toast("Undone."); render(); },
   // two ledgers with one GSTIN; a PAN that is not the one inside the ledger's GSTIN. From the masters read and the
   // bridge's ledger list; "Fine as it is" (b.ledOk) puts one away
   conflicts(b, cid){
