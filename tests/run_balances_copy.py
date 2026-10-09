@@ -121,6 +121,8 @@ with sync_playwright() as p:
     E("async () => { const x = LK.st(); Object.assign(x, {kind: 'ledger', led: 'ICICI Bank', from: '20250401', to: '20260331', src: ''}); await LK.run('auto'); }"); pg.wait_for_timeout(400)
     r = E("({src: S.lk.res.src, open: S.lk.res.open, close: S.lk.res.close})")
     ok(r["src"] == "cloud" and r["open"] == 350458.92 and r["close"] == 276467.36 and LINE in app(), "1. Look up, a ledger: opening 3,50,458.92 Dr, closing 2,76,467.36 Dr, from the copy, with the line (%s)" % r)
+    # smart moves round 1 (09-Oct-2026): the source is under Look up's More
+    E("() => document.querySelectorAll('#app details[data-lk-more]').forEach(d => { d.open = true; })"); pg.wait_for_timeout(200)
     radio = pg.locator("#app .lk-src button").all_inner_texts()
     ok(radio[:1] == ["FinCom's copy"], "1. the choice of source reads \"FinCom's copy\" (%s)" % radio)
     # a group

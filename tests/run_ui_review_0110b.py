@@ -36,6 +36,8 @@ with sync_playwright() as p:
     ms = pg.evaluate("GSTR.months()")
     ok(ms[0] == "202504" and ms[-1] == "202607" and "202604" in ms and "202606" in ms and len(ms) == 16, "9. GST months: every month from Apr-2025 to Jul-2026, Apr-Jun 2026 included (%d)" % len(ms))
     ok(pg.evaluate("GSTR.label('202504')") == "Apr-2025", "9. months labelled Apr-2025")
+    # smart moves round 1 (owner, 09-Oct-2026): GST opens on the return due now (Sep-2026, not read yet); a month of the books is chosen first
+    pg.evaluate("() => { S.gstYm = '202606'; render(); }"); pg.wait_for_timeout(500)
     opts = pg.evaluate("Array.from(document.querySelectorAll('select[aria-label=\"Month\"] option')).map(o => o.textContent)")
     ok("Apr-2026" in opts and "Jun-2026" in opts, "9. the GST month list shows Apr-2026 to Jun-2026 (%s)" % opts[-4:])
     # 7. one count of ledgers to confirm
@@ -51,8 +53,10 @@ with sync_playwright() as p:
     ok(fr2.startswith("Books: last entry 01-Jul-2026"), "8. Reports says the same: " + fr2[:90])
     txt = pg.inner_text("#app")
     ok("Books up to" not in txt and "run to" not in txt, "8. no other wording of how fresh the books are")
-    # 11. Reports opens on the last year with sales; 5, 6: one basis, payables positive, advances apart
-    ok(pg.evaluate("RPT.range().fy") == "2025", "11. Reports opens on 2025-26, the last year with sales (2026-27 has one journal)")
+    # 11. Reports opens on the current year (the owner's choice of 09-Oct-2026, smart moves round 1; it was the last year with
+    # sales); 5, 6: one basis, payables positive, advances apart
+    ok(pg.evaluate("RPT.range().fy") == "2026" and pg.evaluate("RPT.range().notRead") is False, "11. Reports opens on 2026-27, the current year (the books reach it)")
+    pg.evaluate("() => RPT.pickFy('2025')"); pg.wait_for_timeout(500)
     sales = pg.evaluate("RPT.data().pl.heads.rev.t")
     ok(sales > 0, "11. sales for 2025-26 read: %s" % sales)
     pg.evaluate("S.rptFy = '2026'; render();"); pg.wait_for_timeout(500)

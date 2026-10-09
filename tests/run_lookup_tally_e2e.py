@@ -52,6 +52,8 @@ try:
         n0 = sum(1 for k, a, b in fake_tally.LOG if k == "TDSDeskNames")
         pg.evaluate("render()"); pg.wait_for_timeout(4000)
         ok(sum(1 for k, a, b in fake_tally.LOG if k == "TDSDeskNames") == n0, "build 194: opening Look up does not ask Tally for the ledger names")
+        # smart moves round 1: the ledger names are under Look up's More
+        pg.evaluate("() => document.querySelectorAll('details[data-lk-more]').forEach(d => { d.open = true; })")
         pg.click('.lk-names button.linkbtn') if pg.locator('.lk-names button.linkbtn').count() else pg.evaluate("LK.loadNames(true)")
         pg.wait_for_timeout(4000); pg.evaluate("render()"); pg.wait_for_timeout(500)
         names = pg.evaluate("FC.ledgers()")

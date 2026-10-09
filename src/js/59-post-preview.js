@@ -401,7 +401,7 @@ function postStatusFor(co){
   if (why) out.problem = p(why + " Confirm it in Client setup.", "Open Client setup", () => goSetupFor(why), "ledger");
   return out;
 }
-function goSetupFor(msg){ S.postStop = null; S.step = null; S.tab = /TDS/.test(msg) || /expense/.test(msg) ? "cotds" : "cotally"; render(); window.scrollTo(0, 0); }
+function goSetupFor(msg){ Smart.setReturn(); S.postStop = null; S.step = null; S.tab = /TDS/.test(msg) || /expense/.test(msg) ? "cotds" : "cotally"; render(); window.scrollTo(0, 0); }
 
 // ---------- a bill sent and not confirmed in Tally, checked with a fresh read of Tally (review of 02-Oct-2026, item 3)
 // FA/ELEC/013 (Fingate, 25,535.00, 01-Jul-2026) was offered to be posted again on the strength of a read of 15:34,
@@ -926,7 +926,7 @@ const PostOwner = {
 // one line on the page after a check or a posting ("Already in Tally (voucher no. …)"): S.postNote
 function postNote(cid, text, level){ S.postNote = {cid, text, level: level || "", at: Date.now()}; }
 
-function goChooseTallyCompany(){ S.step = null; S.arm = null; S.tab = "cotally"; render(); window.scrollTo(0, 0); }
+function goChooseTallyCompany(){ Smart.setReturn(); S.step = null; S.arm = null; S.tab = "cotally"; render(); window.scrollTo(0, 0); }
 function goTallyPage(){ closeSwitcher(); S.view = "home"; S.homeTab = "tally"; S.arm = null; render(); window.scrollTo(0, 0); }
 // the role of a bill's ledger line, as the table groups them
 const PV_ROLE = {party: "party", expense: "expense", gst: "gst", "rcm-in": "gst", "rcm-out": "gst", tds: "tds"};
@@ -1041,8 +1041,8 @@ async function postAllToTally(only){
   const co = CO();
   if (!co) return;
   S.postRefused = null;
-  const said = [], t0 = toast;
-  window.toast = m => { said.push(String(m)); return t0(m); };
+  const said = [], t0 = toast, from = typeof Smart === "object" ? Smart.here() : "";
+  window.toast = (m, o) => { said.push(String(m)); return t0(m, o); };
   try {
     if (!co.postTo) await autoPostTo(co);
     if (!co.postTo || postToProblem(co, "")){ postStopped(postToProblem(co, ""), co.id); render(); return; }
@@ -1060,6 +1060,7 @@ async function postAllToTally(only){
     rows.forEach(r => { if (r.e.postCheckFailed){ r.e.postCheckFailed = null; Store.saveEntry(co.id, r.e); } });
     S.billPost = null;
     await postBillsToTally(trial ? {ids: rows.map(r => r.id), trialOk: true} : {ids: rows.map(r => r.id)});
+    if (S.billPost && S.billPost.done && !S.billPost.notAllowed) postRunShow(co.id, S.billPost, from);
     // back with nothing on the page (a toast only: Tally not connected, no company open, no entry waiting): kept as a row
     if (!S.billPost && !S.postStop) postRefusedShow(co.id, {name: "Not sent", message: said[said.length - 1] || "The posting stopped before anything was sent."});
   } catch (err){
@@ -1069,6 +1070,25 @@ async function postAllToTally(only){
     if (S.billPost && S.billPost.busy) S.billPost = null;
     render();
   }
+}
+// smart moves round 1 (6): when a posting run ends, its result is shown: everything posted → the Posted tab ("6 posted ·
+// Stay here"); anything not posted → the Errors tab, the run's failed bills first, each with "Fix in bill →"
+// (PostStep, app/src/screens/Post.jsx). Only the tab shown changes; Back (or Stay here) shows the tab there was before.
+function postRunShow(cid, bp, from){
+  bp.cid = cid;
+  const bad = (bp.failed || []).length + (bp.checkFailed || 0), ok = bp.ok || 0;
+  if (!bad && !ok) return false;
+  S.postTabs = S.postTabs || {};
+  const was = S.postTabs[cid], tab = bad ? "errors" : "posted";
+  if (was === tab) return false;
+  const words = bad ? (ok ? ok + " posted, " : "") + bad + " not posted: the failed " + (bad === 1 ? "one is" : "ones are") + " first under Errors" : ok + " posted";
+  return Smart.go(() => { S.postTabs[cid] = tab; }, words, {kind: "post", from, label: bad ? "Show Errors →" : "Show Posted →", undo: () => { S.postTabs[cid] = was; }});
+}
+// a bill of the last run that Tally did not take: opened to be put right (the Errors tab's "Fix in bill →")
+function postFixBill(id){
+  const e = D().entries[id]; if (!e) return;
+  S.step = null; S.tab = "invoices"; S.reviewTable = false; S.drawerOpen = false; S.filter = e.status; S.selected = id;
+  render(); window.scrollTo(0, 0);
 }
 // the row on the Errors tab when a press of Post ended in neither a job nor a result line: {cid, at, name, why, what}
 function postRefusedShow(cid, err, what){

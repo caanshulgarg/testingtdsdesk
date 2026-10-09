@@ -442,8 +442,10 @@ function printView(title, html){
 }
 
 
+// the quick periods count from today in India (smart moves round 1, the owner's choice of 09-Oct-2026: MIS opens on this
+// financial year to date); when the books end earlier, the MIS page says so in one line with Read from Tally
 function misRangeQuick(k, b){
-  const t = Audit.today(), last = String((b.meta || {}).to || t), end = last < t ? last : t;
+  const t = typeof istToday === "function" ? istToday() : Audit.today(), end = t;
   const d = new Date(Audit.iso(end) + "T00:00:00"), ymd = x => x.getFullYear() + String(x.getMonth() + 1).padStart(2, "0") + String(x.getDate()).padStart(2, "0");
   if (k === "month") return {from: end.slice(0, 6) + "01", to: end};
   if (k === "lastmonth"){ const pm = new Date(d.getFullYear(), d.getMonth(), 0); return {from: ymd(pm).slice(0, 6) + "01", to: ymd(pm)}; }
@@ -587,7 +589,7 @@ function gstParts(b){
 }
 // one part of the GST tab, as the old pages draw it
 function gstPartGo(id){ S.gstPart = id; S.gstView = "return"; S.gstSub = ""; render(); }
-function gstSetYm(ym){ S.gstYm = ym; S.books.reco = null; render(); }
+function gstSetYm(ym){ S.gstYm = ym; Smart.keep("gst", {ym}); S.books.reco = null; render(); }
 function gstSetReg(reg){ S.gstReg = reg; S.books.reco = null; render(); }
 
 

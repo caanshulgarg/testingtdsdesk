@@ -9,6 +9,7 @@ import Msg from "../parts/Msg.jsx";
 import BillDetail from "./Bill.jsx";
 import { ChipBar } from "../parts/ChipBar.jsx";
 import UploadResult from "../parts/UploadResult.jsx";
+import QueueDone from "../parts/QueueDone.jsx";
 
 const needsLook = (r) => notReadYet(r.e) || (r.c.missing || []).length || r.c.flags.some((f) => f.lvl === "hi") || r.e.confirmType;
 const NO_TALLY = "Needs Tally open with this client's company and FinCom Bridge running (see the Tally sign at the top)";
@@ -82,6 +83,7 @@ export function ReviewTable() {
         <div className="bk-actions"><button className="btn small" onClick={() => doAct("revList")}>One at a time</button></div>
       </div>
       <UploadResult />
+      <QueueDone />
       {!rows.length && !all.length ? <div className="bk-none lt-empty" data-list-empty="">Nothing to review. Use <b>Upload bills</b> at the top right to add this client’s bills.</div> : <>
         <div className="revfilter">
           <input type="search" value={S.revQuery || ""} placeholder="Filter by supplier, bill no., GSTIN, ledger, payment type or amount" aria-label="Filter the bills"

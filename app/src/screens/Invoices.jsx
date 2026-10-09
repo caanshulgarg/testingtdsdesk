@@ -5,6 +5,7 @@ import DropZone from "../parts/DropZone.jsx";
 import ReadBadge from "../parts/ReadBadge.jsx";
 import BillDetail from "./Bill.jsx";
 import UploadResult from "../parts/UploadResult.jsx";
+import QueueDone from "../parts/QueueDone.jsx";
 
 function Tag({ e }) {
   if (S.reading[e.id]) return <span className="tag no">Reading…</span>;
@@ -37,6 +38,7 @@ export default function Invoices() {
   return <>
     <DocqPanel cid={S.coId} />
     <UploadResult />
+    {S.filter === "draft" && <QueueDone />}
     <div className="desk">
       <div>
         {drafts > 1 && <div className="row" style={{ margin: "8px 0 0" }}><button className="btn small" onClick={() => doAct("revTable")}>Review all {drafts} in a table</button></div>}

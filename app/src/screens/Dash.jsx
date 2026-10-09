@@ -37,7 +37,8 @@ export default function Dash() {
       <OnbCard co={co} />
       <form className="dash-ask" onSubmit={(ev) => { ev.preventDefault(); dashAsk(q); }}>
         <input type="search" id="dashAsk" value={q} onChange={(ev) => setQ(ev.target.value)} placeholder="Ask the books: a ledger for any dates, open bills, trial balance… (press /)" aria-label="Ask the books" />
-        <button className="btn primary" type="submit">Look up</button>
+        {/* the page's one primary: Getting ready's Next while a step is left (smart moves round 1), else Look up */}
+        <button className={"btn" + (!co.onbHide && ONB.steps(co).some((x) => !x.done) ? "" : " primary")} type="submit">Look up</button>
         <button className="btn" type="button" onClick={() => goClient("books:reports")}>Reports</button>
         <button className="btn" type="button" onClick={() => goClient("books:letters")}>Letters</button>
       </form>

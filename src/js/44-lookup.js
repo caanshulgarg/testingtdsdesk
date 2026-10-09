@@ -8,8 +8,9 @@ const FC = {
   d8(iso){ return String(iso || "").replace(/-/g, "").slice(0, 8); },
   iso(d){ return Audit.iso(d); },
   today(){ return Audit.today(); },
-  // the date the quick periods are counted from: today, or the last day in the books when they end earlier
-  anchor(){ const t = this.today(), to = String(((S.books || {}).meta || {}).to || ""); return to && to < t ? to : t; },
+  // the date the quick periods are counted from: today in India (smart moves round 1, the owner of 09-Oct-2026: "this
+  // month" is this month, not the books' last month; when the books end earlier, Look up says so in one line)
+  anchor(){ return typeof istToday === "function" ? istToday() : this.today(); },
   monthEnd(y, m){ return String(y) + String(m).padStart(2, "0") + String(new Date(y, m, 0).getDate()).padStart(2, "0"); },
   period(k, at){
     const a = at || this.anchor(), y = num(a.slice(0, 4)), m = num(a.slice(4, 6)), fs = Audit.fyStart(a), fy = num(fs.slice(0, 4));
@@ -77,7 +78,9 @@ const LK = {
   KINDS: [["ledger", "Ledger account"], ["group", "Group summary"], ["tb", "Trial balance on a date"], ["monthly", "Month by month"], ["bills", "Open bills of a party"], ["find", "Find entries"]],
   st(){
     const cid = S.coId;
-    if (!S.lk || S.lk.cid !== cid){ const p = FC.period("ytd"); S.lk = {cid, kind: "ledger", led: "", grp: "", from: p.from, to: p.to, asOn: p.to, q: "", typ: "", ask: "", res: null, open: {}}; }
+    // the dates last used for this client (kept in this browser), else this year so far: 1 April to today
+    if (!S.lk || S.lk.cid !== cid){ const k = Smart.recall("lookup", cid), p = k && /^\d{8}$/.test(k.from) && /^\d{8}$/.test(k.to) ? k : FC.period("ytd");
+      S.lk = {cid, kind: "ledger", led: "", grp: "", from: p.from, to: p.to, asOn: p.to, q: "", typ: "", ask: "", res: null, open: {}}; }
     return S.lk;
   },
   recentKey(){ return "tdsdesk:lkrecent:" + (S.coId || ""); },
@@ -280,7 +283,8 @@ const LK = {
       if (x.kind === "monthly") need(x.led || x.grp, "Choose a ledger or a group.");
       if (["ledger", "group", "monthly", "find"].includes(x.kind)) need(x.from && x.to && x.from <= x.to, "The dates are the wrong way round.");
     } catch (e){ if (e) throw e; return; }
-    x.open = {};
+    x.open = {}; x.early = false;
+    if (["ledger", "group", "monthly", "find"].includes(x.kind)) Smart.keep("lookup", {from: x.from, to: x.to});
     if (cloud){
       x.busy = "Working it out from FinCom\u2019s copy\u2026"; render();
       try {
@@ -555,6 +559,8 @@ function lkLed(l){
   Object.assign(x, {kind: "ledger", led: l, from: p.from, to: p.to, heard: ""}); if (S.booksTab !== "lookup") FC.go("lookup"); LK.run("auto");
 }
 function lkMonth(ym){ const x = LK.st(), y = num(ym.slice(0, 4)), m = num(ym.slice(4, 6)); Object.assign(x, {kind: x.led ? "ledger" : "group", from: ym + "01", to: FC.monthEnd(y, m)}); LK.run("auto"); }
+// the books end before the dates asked: their last year instead ("Show 2025-26")
+function lkShowFy(fyStart){ const x = LK.st(); x.from = fyStart; x.to = (num(fyStart.slice(0, 4)) + 1) + "0331"; x.asOn = x.to; LK.run("auto"); }
 function lkOpen(id){ const x = LK.st(); x.open[id] = !x.open[id]; render(); }
 // a question in plain words (also from the dashboard's question box)
 function lkAsk(q){

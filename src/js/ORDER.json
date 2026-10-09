@@ -61,5 +61,6 @@
  "58-ledgers.js",
  "60-choices.js",
  "61-recorder.js",
- "63-alerts.js"
+ "63-alerts.js",
+ "64-smart-moves.js"
 ]

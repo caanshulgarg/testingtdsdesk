@@ -695,7 +695,9 @@ async function openCompany(cid){
   closeSwitcher();
   const changed = S.coId !== cid;
   S.coId = cid; S.view = "company"; S.arm = null;
-  if (changed){ S.tab = "dash"; S.filter = "draft"; S.selected = null; S.partySel = null; S.step = null; }
+  if (changed){ S.tab = "dash"; S.filter = "draft"; S.selected = null; S.partySel = null; S.step = null;
+    // the periods of the books pages are the client's own (smart moves round 1): chosen again for this client when shown
+    S.tdsFy = ""; S.tdsQ = ""; S.tdsView = ""; S.tdsPickForm = ""; S.gstYm = ""; S.gstView = ""; S.gstPart = ""; S.gstSub = ""; S.misRange = null; S.rptFy = ""; }
   lsSet("tdsdesk:last", cid);
   const rec = recentIds().filter(x => x !== cid); rec.unshift(cid); lsSet("tdsdesk:recent", JSON.stringify(rec.slice(0, 10)));
   if (!D(cid).loaded){
@@ -1111,23 +1113,23 @@ const BOOKS_OWN_PAGES = ["reports", "lookup", "letters", "mis", "fs", "audit"];
 function booksTabGo(tab, gstPart){ S.booksTab = tab; if (gstPart){ S.gstPart = gstPart; S.gstView = "return"; S.gstSub = ""; } render(); }
 function tdsNav(view){ S.tdsView = view; render(); window.scrollTo(0, 0); }
 function tdsGo(fy, q, form){
-  S.tdsFy = fy;
+  S.tdsFy = fy; Smart.keep("tds", {fy, q: q || ""});
   if (q){ S.tdsQ = q; S.tdsForm = form || "26Q"; S.tdsView = "return"; S.tdsTab = ""; S.tdsOpen = ""; S.chOpen = ""; }
   else { S.tdsView = "year"; S.tdsQ = ""; S.tdsPickForm = ""; }
   render(); window.scrollTo(0, 0);
 }
-function tdsSetFy(fy){ S.tdsFy = fy; if (S.tdsView === "return") S.tdsView = "year"; render(); }
+function tdsSetFy(fy){ S.tdsFy = fy; Smart.keep("tds", {fy, q: ""}); if (S.tdsView === "return") S.tdsView = "year"; render(); }
 // the bar of year, quarter and form above the TDS pages (redesign of 09-Oct-2026): a quarter and a form chosen open that
 // return; either left at "every" shows the year's grid of forms and quarters
 function tdsPick(fy, q, form){
   const was = S.tdsView === "return" ? S.tdsQ + "|" + S.tdsForm : "";
-  S.tdsFy = fy; S.tdsQ = q || ""; S.tdsPickForm = form || "";
+  S.tdsFy = fy; S.tdsQ = q || ""; S.tdsPickForm = form || ""; Smart.keep("tds", {fy, q: q || ""});
   if (q && form){ S.tdsForm = form; S.tdsView = "return"; if (was !== q + "|" + form){ S.tdsTab = ""; S.tdsOpen = ""; S.chOpen = ""; } }
   else S.tdsView = "year";
   render();
 }
 // the GST pages (redesign of 09-Oct-2026): the year's grid of returns and months, or one return and period with its tabs
-function gstOpen(ym, part, reg){ if (reg) S.gstReg = reg; if (ym && ym !== S.gstYm){ S.gstYm = ym; if (S.books) S.books.reco = null; }
+function gstOpen(ym, part, reg){ if (reg) S.gstReg = reg; if (ym && ym !== S.gstYm){ S.gstYm = ym; Smart.keep("gst", {ym}); if (S.books) S.books.reco = null; }
   S.gstSeen = (S.gstReg || "") + "|" + (typeof GSTSet === "object" ? GSTSet.typeOf(S.gstYm || "", S.gstReg || "") : "monthly");
   S.gstPart = part; S.gstView = "return"; S.gstSub = ""; render(); window.scrollTo(0, 0); }
 function gstViewGo(v){ S.gstView = v; render(); }
@@ -1136,7 +1138,8 @@ function gstSubGo(sub){ S.gstSub = sub; render(); }
 function revPick(id, on){ S.revSel = S.revSel || new Set(); if (on) S.revSel.add(id); else S.revSel.delete(id); render(); }
 function revPickAll(on){ S.revSel = new Set(on ? revFiltered().map(r => r.e.id) : []); render(); }   // only the rows the filter shows
 function revOpen(id){ S.selected = id; S.drawerOpen = true; render(); }
-function revApproveOne(id){ const e = D().entries[id]; if (e){ approve(e); refreshStats(S.coId); if (e.status === "approved") toast("Approved."); render(); } }
+// one row of the review table: the table stays (smart moves 5: with Undo)
+function revApproveOne(id){ const e = D().entries[id]; if (e){ approve(e, {bulk: true}); refreshStats(S.coId); if (e.status === "approved") toast("Approved.", {actions: [{label: "Undo", run: () => { if (e.status === "approved" && !e.exportedAt){ undoApproval(e); S.reviewTable = true; S.selected = null; render(); } }}]}); render(); } }
 function revNature(id, v){ const e = D().entries[id]; if (e){ e.natureId = v; e.confirmType = false; Store.saveEntry(S.coId, e); render(); } }
 function revTds(id, on){
   const e = D().entries[id]; if (!e) return;
@@ -1319,9 +1322,15 @@ function doAct(act, t){
     case "revApprove": case "revApproveAll": {
       const rows = draftRows().filter(r => act === "revApprove" ? S.revSel.has(r.e.id) : (!(r.c.missing || []).length && !r.c.flags.some(f => f.lvl === "hi") && !r.e.confirmType));
       let ok = 0, held = 0;
-      rows.forEach(r => { const c = compute(r.e); if ((c.missing || []).length || notReadYet(r.e)){ held++; return; } approve(r.e); ok++; });
+      const heldIds = [];
+      rows.forEach(r => { const c = compute(r.e); if ((c.missing || []).length || notReadYet(r.e)){ held++; heldIds.push(r.e.id); return; } approve(r.e, {bulk: true}); ok++; });
       S.revSel = new Set();
-      toast(ok + " approved" + (held ? ", " + held + " still need details" : "") + ".");
+      // smart moves round 1 (8): "5 approved · Post 5 to Tally → · Show the 2 that need details" (buttons; nothing is posted by itself)
+      const waiting = Object.values(D().entries).filter(x => x.status === "approved" && !x.exportedAt).length;
+      toast(ok + " approved" + (held ? ", " + held + " still need details" : "") + ".", {actions: [
+        ok && waiting ? {label: "Post " + waiting + " to Tally →", run: () => goStep("post", "bills")} : null,
+        held ? {label: "Show the " + held + (held === 1 ? " that needs" : " that need") + " details", run: () => { S.reviewTable = true; S.revSel = new Set(heldIds); render();
+          setTimeout(() => { const el = document.querySelector('#app input[type="checkbox"]:checked:not([aria-label="Select all shown"])'); if (el && el.scrollIntoView) el.scrollIntoView({block: "center", behavior: Smart.reduced() ? "auto" : "smooth"}); }, 60); }} : null]});
       refreshStats(S.coId); render(); break;
     }
     case "revCheckTally": reviewCheckTally(draftRows().filter(r => S.revSel.has(r.e.id))); break;
@@ -1362,7 +1371,10 @@ function doAct(act, t){
       const email = em ? em.value.trim() : "", pass = pw ? pw.value : "";
       if (!email || !pass){ toast("Enter your email and password."); break; }
       Cloud.st.busy = "Signing in\u2026"; Cloud.st.error = ""; render();
-      Cloud.signIn(email, pass).then(() => { Cloud.st.busy = ""; S.cloudForm = null; S.signedOutWhy = ""; toast("Signed in as " + email + "."); setTimeout(() => { auditEvent("signin", navigator.userAgent.slice(0, 160)); setTimeout(loadLastSignIn, 1500); }, 3000); startCloudSync(); loadAccount(true).then(() => render()); render(); },
+      Cloud.signIn(email, pass).then(() => { Cloud.st.busy = ""; S.cloudForm = null; S.signedOutWhy = ""; toast("Signed in as " + email + "."); setTimeout(() => { auditEvent("signin", navigator.userAgent.slice(0, 160)); setTimeout(loadLastSignIn, 1500); }, 3000); startCloudSync();
+        // back where you left off (smart moves 7), once the firm's clients are known, if the page is still the one signed in on
+        render(); const at = Smart.here();
+        loadAccount(true).then(() => { render(); setTimeout(() => Smart.afterSignIn(at), 0); }); },
         err => { Cloud.st.busy = ""; Cloud.st.error = err.message; render(); });
       break;
     }
@@ -1391,7 +1403,7 @@ function doAct(act, t){
       if (docType() === "bank"){
         if (S.tab !== "bank" || curStep() !== "review") goStep("review", "bank");
         setTimeout(() => { const el = document.getElementById("bankIn"); if (el){ S.advanceAfterBank = true; el.click(); } }, 60);
-      } else { S.advanceAfterRead = true; pickMode = "company"; document.getElementById("fileIn").click(); }
+      } else { pickMode = "company"; document.getElementById("fileIn").click(); }   // Review opens at the end if this page is still open (afterBatch)
       break;
     }
     case "signOutNow": {
@@ -1780,7 +1792,7 @@ function doAct(act, t){
     case "txnClear": S.txnQ = ""; S.txnStatus = ""; S.txnF = S.txnF || {}; S.txnF[txnTab()] = {}; render(); break;
     case "tallyPanel": S.tallyPanel = !S.tallyPanel; S.firmMenu = false; render(); break;
     case "tallyPanelClose": S.tallyPanel = false; render(); break;
-    case "tallyGuide": S.tallyPanel = false; S.view = "home"; S.homeTab = "tally"; render(); window.scrollTo(0, 0); break;
+    case "tallyGuide": Smart.setReturn(); S.tallyPanel = false; S.view = "home"; S.homeTab = "tally"; render(); window.scrollTo(0, 0); break;
     case "firmMenu": S.firmMenu = !S.firmMenu; S.tallyPanel = false; render(); break;
     case "firmMenuClose": S.firmMenu = false; render(); break;
     case "docSendPending": if (S.coId) CloudDocs.sendPending(S.coId); break;
@@ -1874,7 +1886,7 @@ function doAct(act, t){
       S.billCheck = null; refreshStats(S.coId); toast(ids.length + " bills are waiting to be posted again."); render(); break;
     }
     case "bridgeDiag": Bridge.diagnose().then(() => Bridge.refresh()).then(() => render()); break;
-    case "goTcloud": S.settingsTab = "tcloud"; S.firmMenu = false; S.tallyPanel = false; closeSwitcher(); S.view = "home"; S.homeTab = "rules"; S.arm = null; render(); window.scrollTo(0, 0); break;
+    case "goTcloud": Smart.setReturn(); S.settingsTab = "tcloud"; S.firmMenu = false; S.tallyPanel = false; closeSwitcher(); S.view = "home"; S.homeTab = "rules"; S.arm = null; render(); window.scrollTo(0, 0); break;
     case "openSettings": S.settingsTab = S.settingsTab || null; S.firmMenu = false; S.tallyPanel = false; closeSwitcher(); S.view = "home"; S.homeTab = "rules"; S.arm = null; render(); window.scrollTo(0, 0); break;
     case "dlStandalone": downloadStandalone(); break;
     case "goReading": closeSwitcher(); S.view = "home"; S.homeTab = "rules"; S.settingsTab = "reading"; render(); { const r = document.getElementById("readingPane"); if (r && r.scrollIntoView) r.scrollIntoView(); } break;
@@ -1887,14 +1899,19 @@ function doAct(act, t){
     case "saveKey": case "removeKey": toast("Keys are no longer kept in the browser. Sign in to the firm account to use Claude."); break;
     case "pasteOpen": S.pasteOpen = true; render(); break;
     case "pasteClose": S.pasteOpen = false; render(); break;
-    case "notDup": if (e){ e.notDuplicate = true; if (e.status === "duplicate") e.status = "draft"; delete e.dupOf; Store.saveEntry(S.coId, e); S.filter = "draft"; refreshStats(S.coId); toast("Kept as a separate bill."); render(); } break;
+    case "notDup": if (e){ const was = e.status; e.notDuplicate = true; if (e.status === "duplicate") e.status = "draft"; delete e.dupOf; Store.saveEntry(S.coId, e); S.filter = "draft"; refreshStats(S.coId);
+      // the next duplicate held, if any (smart moves 5); else this bill, now in To review
+      if (was === "duplicate") billMoveOn(e, "Kept as a separate bill.", "duplicate"); else { toast("Kept as a separate bill."); render(); } } break;
     case "openOriginal": if (e && e.dupOf && D().entries[e.dupOf.entryId]){ const o = D().entries[e.dupOf.entryId]; S.filter = o.status; S.selected = o.id; render(); } break;
     case "clearJobs": { const keep = S.view === "company" ? (j => !(j.target === S.coId || j.cid === S.coId)) : (j => j.target !== "auto"); S.jobs = S.jobs.filter(j => keep(j) || ["waiting","checking","reading"].includes(j.status)); render(); } break;
     case "camera": pickMode = "company"; document.getElementById("camIn").click(); break;
     case "manual": { const n = newEntry("Manual entry"); D().entries[n.id] = n; S.selected = n.id; S.filter = "draft"; Store.saveEntry(S.coId, n); refreshStats(S.coId); render(); break; }
     case "approve": if (e) approve(e); break;
-    case "reject": if (e){ if (e.docPath){ CloudDocs.remove(e.docPath); delete e.docPath; } setStatus(e, "rejected", "Marked as no entry needed."); } break;
-    case "restore": if (e) setStatus(e, "draft"); break;
+    case "reject": if (e){ const was = e.status; if (e.docPath){ CloudDocs.remove(e.docPath); delete e.docPath; } setStatus(e, "rejected");
+      billMoveOn(e, "Marked as no entry needed.", was === "draft" ? "draft" : was, {label: "Undo", run: () => { if (e.status === "rejected"){ setStatus(e, "draft"); S.selected = e.id; render(); } }}); } break;
+    case "restore": if (e){ const was = e.status; setStatus(e, "draft");
+      // the next bill set aside, if any (smart moves 5); this one waits in To review
+      if (was === "rejected") billMoveOn(e, "Moved back to review.", "rejected"); } break;
     case "undo": if (e) undoApproval(e); break;
     case "delete": if (e) billDelete(e.id); break;
     case "addParty": { const id = "p-new-" + Date.now().toString(36); D().parties[id] = {id, name:"New supplier", pan:"", gstin:"", ledgerName:"", natureDefault:"", expenseLedger:"", ldcRate:"", ldcValidTo:"", ytd:{}}; S.partySel = id; Store.saveParty(S.coId, D().parties[id]); render(); break; }
@@ -2243,7 +2260,8 @@ window.addEventListener("hashchange", () => { applyEntryHash(); render(); });
   if (/^#\//.test(location.hash) && typeof Route === "object" && signInNeeded()) Route.pending = location.hash;
   const linked = /^#\//.test(location.hash) && typeof Route === "object" && !signInNeeded() ? await Route.apply(location.hash) : false;
   const last = lsGet("tdsdesk:last") || recentIds()[0];
-  if (!linked && last && S.companies[last]) openCompany(last);
+  // smart moves round 1 (7): the client's page last shown, not only its dashboard (Settings → Move on by itself)
+  if (!linked && last && S.companies[last]) Smart.resume(last);
   // the Tally redesign (09-Oct-2026): a firm page opened by its address (#/tally after a refresh) keeps the client open
   // last time, so the Tally page can say "← Back to <client>" and the sidebar names it
   else if (linked && S.view === "home" && !S.coId && last && S.companies[last]) S.coId = last;

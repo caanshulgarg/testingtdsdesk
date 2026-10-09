@@ -37,6 +37,10 @@ with sync_playwright() as p:
     pg.wait_for_timeout(600)
     ok("2026-27: returns by quarter" in app() and pg.inner_text("#app .tds-crumbs").startswith("TDS"), "one year: TDS opens on it, with the way back above")
     # 09-Oct-2026 (app-tdsgst): the year is a grid of forms × quarters; 24Q in Q1 is its own cell
+    # smart moves round 1 (the owner, 09-Oct-2026): the year opens on the quarter due now; every quarter is chosen for the grid
+    due = pg.evaluate("Smart.tdsDue()")
+    ok(pg.evaluate("S.tdsQ") == (due["q"] if due["fy"] == "2026-27" else pg.evaluate("S.tdsQ")), "the quarter due now is chosen (%s)" % pg.evaluate("S.tdsQ"))
+    pg.evaluate("() => tdsPick('2026-27', '', '')"); pg.wait_for_timeout(400)
     q1 = pg.inner_text('#app [data-cell="24Q|Q1"]')
     ok("7,500" in q1 and "2 employees" in q1, "Q1 24Q: ₹7,500 from two employees" + " [" + q1.replace("\n", " ") + "]")
     pg.click("#app .tds-crumbs button:has-text('TDS')"); pg.wait_for_timeout(400)

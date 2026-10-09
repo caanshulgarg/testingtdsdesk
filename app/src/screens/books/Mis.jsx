@@ -6,6 +6,7 @@
 //
 // State: S.misRange, S.misTab, S.misQ / S.misF / S.misCat (filters), S.misOpen (a party opened), S.misOpenHead,
 // S.misLed (a ledger's entries), S.misCf, S.misWeek, S.misCc (rows opened), S.misBudPct.
+import NotRead from "../../parts/NotRead.jsx";
 import { Fragment } from "react";
 import CommitBox from "../../parts/CommitBox.jsx";
 import { CatchUp } from "../../parts/Notes.jsx";
@@ -324,10 +325,17 @@ export default function Mis({ b }) {
   if (stale && !MIS._again) { MIS._again = true; setTimeout(() => { try { MIS.run(r0.from, r0.to, "worked out again (the books or FinCom changed since " + fmtDate(r0.at.slice(0, 10)) + ")"); saveBooks(); } finally { MIS._again = false; render(); } }, 0); }
   if (stale) return <div className="bk-none" data-mis-again="" style={{ marginTop: 12 }}>{"Working out again: the books or FinCom’s working changed since the run of " + fmtDate(r0.at.slice(0, 10)) + " (result code " + r0.code + ")."}</div>;
   const r = r0;
-  const rg = S.misRange || (r ? { from: Audit.iso(r.from), to: Audit.iso(r.to) } : ((x) => ({ from: Audit.iso(x.from), to: Audit.iso(x.to) }))(misRangeQuick("ytd", b)));
+  // the period: the one chosen (kept for the client), else this financial year to date (smart moves round 1)
+  if (!S.misRange) { const k = Smart.recall("mis"); S.misRange = k && k.from && k.to ? k : ((x) => ({ from: Audit.iso(x.from), to: Audit.iso(x.to) }))(misRangeQuick("ytd", b)); }
+  const rg = S.misRange;
+  // the books in FinCom end before the period starts: one line, not an empty page (nor an older run's figures)
+  const end = Smart.booksEndBefore(String(rg.from || "").replace(/-/g, ""));
+  const notRead = end && !(r && Audit.iso(r.from) === rg.from && Audit.iso(r.to) === rg.to) ? <NotRead end={end} what={"MIS " + Smart.fyLabelOf(rg.from.replace(/-/g, "")) + " to date"} read={Smart.fyLabelOf(rg.from.replace(/-/g, ""))} show={Smart.fyLabelOf(end)}
+    onShow={() => { S.misRange = { from: Audit.iso(Smart.fyStartOf(end)), to: Audit.iso(end) }; Smart.keep("mis", S.misRange); render(); }} /> : null;
   const tab = S.misTab || "summary";
   // the tabs first, at the top of the page (review of 01-Oct-2026), then the period
   const tabs = <nav className="sbar" aria-label="MIS">{TABS.map(([id, l]) => <button key={id} aria-selected={tab === id} onClick={() => misTabGo(id)}>{l}</button>)}</nav>;
+  if (notRead) return <>{tabs}<Head b={b} r={r} rg={rg} /><div style={{ marginTop: 12 }}>{notRead}</div></>;
   if (!r) return <>{tabs}<Head b={b} r={r} rg={rg} /><div className="bk-none" style={{ marginTop: 12 }}>Choose a period and press Run now.</div></>;
   const p2 = r.p2;
   let body;

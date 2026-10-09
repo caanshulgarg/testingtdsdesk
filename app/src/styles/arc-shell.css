@@ -162,6 +162,8 @@ nav.sbar .sbar-n.attn, nav.sbar button[role="tab"][data-state="active"] .sbar-n.
 /* Arc's list is one row as wide as its tabs; here the tabs wrap within the page */
 nav.sbar [role="tablist"] { width: auto; max-width: 100%; min-width: 0; flex-wrap: wrap; }
 
+/* smart moves round 1 (09-Oct-2026): Look up's tiles on a phone ("not known", "0.00 (movement)") fit their box */
+@media (max-width: 600px) { .lk-res .dtile b { font-size: clamp(15px, 4.6vw, 22px); white-space: normal; overflow-wrap: anywhere; } }
 /* ---------- the header's title never squeezes (a crowded top bar folded "Purchase" to a letter a line) ---------- */
 .tbar-title { flex: 1 0 auto; min-width: min(100%, max-content); }
 /* the title's block keeps its width; a crowded right side wraps under it instead of over it */

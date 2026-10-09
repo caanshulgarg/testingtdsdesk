@@ -408,11 +408,24 @@ function EntryList({ co, tab, canPost, empty, title }) {
   </section>;
 }
 
+// the bills the last posting run could not post, first on the Errors tab (smart moves round 1), each with "Fix in bill →"
+function RunFailed({ co }) {
+  const bp = S.billPost || {};
+  const list = bp.done && bp.cid === co.id ? (bp.failed || []).filter((f) => D().entries[f.id]) : [];
+  if (!list.length) return null;
+  return <section className="post-sec" data-run-failed=""><h3>{"Not posted in the last run (" + list.length + ")"}</h3><ul className="post-attn">
+    {list.map((f) => <li key={f.id} data-run-failed-row={f.id}>
+      <span className="why"><b>{[f.party, f.no].filter(Boolean).join(" ")}</b>{" — "}<span>{f.msg}</span></span>
+      {!f.unread && <span className="acts"><button className="btn small" data-fix-bill={f.id} onClick={() => postFixBill(f.id)}>Fix in bill →</button></span>}
+    </li>)}</ul></section>;
+}
+
 // Errors: the row of a press of Post that ended in neither a job nor a result, then the entries in statuses 6 to 9
 function Attention({ co, canPost }) {
   const pr = typeof postRefusedFor === "function" ? postRefusedFor(co.id) : null;
   const none = <p className="note" data-post-noerrors="">Nothing needs your attention.</p>;
   return <>
+    <RunFailed co={co} />
     {pr && <section className="post-sec" data-post-attention=""><ul className="post-attn">
       <li data-attn-row="" data-attn-kind="post-refused">
         <span className="why"><b>{"Post did not go through at " + tallyHm(pr.at) + " (" + pr.name + ")"}</b>{" — "}<span data-why="">{pr.why}</span>{" Nothing was sent to Tally. What to do: " + pr.what}</span>
