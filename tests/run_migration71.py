@@ -60,7 +60,7 @@ ok(not bad, "0. add-only: no line with 'drop ', 'delete from' or 'truncate' (%d:
 ok("constraint" not in low, "0. no constraint added, changed or dropped on an existing table (tally_alerts.kind as migration 47 made it)")
 ok(not re.search(r"supabase\.co|\.supabase\.|project[_ ]ref|qbocskaiewaxqcvaunzc", low), "0. names no real database")
 FNS = sorted(set(re.findall(r"create or replace function public\.(\w+)\s*\(", text)))
-ok(FNS == ["tally_company_source_choose", "tally_company_source_lines", "tally_company_source_release", "tally_company_source_same", "tally_company_sources_note", "tally_company_sources_of",
+ok(FNS == ["tally_company_source_choose", "tally_company_source_lines", "tally_company_source_release", "tally_company_source_same", "tally_company_source_verify_list", "tally_company_sources_note", "tally_company_sources_of",
            "tally_recorder_line", "tally_recorder_send_sourced", "tally_recorder_settle", "tally_source_chosen_marks", "tally_source_clean", "tally_source_mark", "tally_source_marks", "tally_source_reads", "tally_source_sort", "tally_source_words"], "0. the functions (%s)" % FNS)
 # the coordinator's follow-up: 71's tally_recorder_settle is 47's with the one sorting step; 47's other lines kept word for word
 _m47 = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "server", "tally-cloud", "migration-47-recorder-queue-alerts.sql")).read()
@@ -251,7 +251,7 @@ try:
     # "These are the same data": the pending lines applied
     db.sql("insert into members values ('%s', %s, 'Owner2', 'owner', true) on conflict do nothing" % ("33333333-3333-3333-3333-333333333333", q(F))) if False else None
     sm = as_user(OWNER, "select tally_company_source_same(%s)::text;" % q(B4))
-    ok(isinstance(sm, dict) and sm.get("released") == 2 and vrow(B4, 900) == "1" and vrow(B4, 902) == "1" and ch_of(B4).get(I2) == "chosen", "6. H5: same data: both chosen, the held line applied (and, N1, PC-2's line without data id) (%s %s %s)" % (sm, ch_of(B4),
+    ok(isinstance(sm, dict) and sm.get("released") == 1 and vrow(B4, 900) == "1" and vrow(B4, 902) == "0" and ch_of(B4).get(I2) == "chosen", "6. H5: same data: both chosen, the held line applied (PC-2's line without data id: to be verified, item 2) (%s %s %s)" % (sm, ch_of(B4),
        db.rows("select line_id, state, held_why from tally_recorder_lines where line_id like 'p1%'")))
     ok(db.one("select state from tally_recorder_lines where line_id = 'p1'") == "duplicate", "6. H5: the held row marked, kept")
     ok(isinstance(as_user(STAFF, "select tally_company_source_same(%s)::text;" % q(B4)), dict) and "_error" in as_user(STAFF, "select tally_company_source_same(%s)::text;" % q(B4)), "6. same data: the owner only")
@@ -325,7 +325,7 @@ try:
     ok(vrow(B8, 1300) == "0" and m1r["state"] == "held" and "FinCom reads ②" in (m1r["held_why"] or ""),
        "8. N3: after the owner chose ② and unlocked the month, Apply now and the Day Book release keep ①'s line held (%s %s)" % (str(rel)[:200], m1r))
     # N1: lines without data id from a computer of no chosen location: kept WITH their entry; the words by the bridge's version
-    r = sent(B9, [dict(L5("n3", 1310, 62100), pc="PC-3")], D3)
+    r = sent(B9, [dict(L5("n3", 1310, 62100), pc="PC-3"), dict(L5("n3b", 1314, 62104), pc="PC-3")], D3)
     r2 = sent(B9, [L5("n4", 1311, 62101)], D2)
     w3 = (r.get("held") or [{}])[0].get("result", {}).get("why", ""); w4 = (r2.get("held") or [{}])[0].get("result", {}).get("why", "")
     ok("Update FinCom Bridge on PC-3" in w3 and "Restart Tally" not in w3 and "Restart Tally so the 2.4.1 add-on loads" in w4,
@@ -333,7 +333,26 @@ try:
     kb = db.rows("select line_id, (body is not null)::text as b, payload->>'pending' as p from tally_recorder_lines where book_id = %s and line_id in ('n3', 'n4') order by line_id" % q(B9))
     ok([(x["b"], x["p"]) for x in kb] == [("true", "true"), ("true", "true")], "8. N1: kept with their entry (%s)" % kb)
     note_b(B9, [{"company_guid": CG, "data_id": I1, "path": P1, "own": True}], D3)
-    ok(vrow(B9, 1310) == "1" and vrow(B9, 1311) == "0", "8. N1: PC-3 proves the chosen location: its line applied, PC-2's still held")
+    vl = j("select tally_company_source_verify_list(%s, %s)::text" % (q(F), q(D3)))
+    vids = sorted(x.get("line_id") for x in (vl if isinstance(vl, list) else []))
+    v3 = [x for x in (vl if isinstance(vl, list) else []) if x.get("line_id") == "n3"]
+    ok(vrow(B9, 1310) == "0" and vrow(B9, 1314) == "0" and vids == ["n3", "n3b"] and v3 and v3[0].get("master_id") == "1310" and str(v3[0].get("alter_id")) == "62100"
+       and v3[0].get("guid") == CG + "-%08x" % 1310 and v3[0].get("vch_date") == "2026-10-03",
+       "8. item 2: PC-3 proves the chosen location: its older lines without data id NOT applied, listed for PC-3's bridge to verify against its Tally (%s)" % vl)
+    ok([x for x in j("select tally_company_source_verify_list(%s, %s)::text" % (q(F), q(D2))) if x.get("book_id") == B9] == [], "8. item 2: nothing of this book listed for PC-2 (it proved no chosen location of it)")
+    ok(isinstance(j("select tally_company_source_verify_list(%s, %s)::text" % (q(F), q(D2))), list) and "tally_company_source_verify_list" in text, "8. item 2: the list is the service role's")
+    # the bridge re-read the entry from its own Tally (FinComVoucherObject): the same GUID, an AlterID not below, the narration: applied
+    r = sent(B9, [dict(L5("n3:verified", 1310, 62100, I1), pc="PC-3", data_proven=True)], D3)
+    o3 = db.rows("select state, held_why, payload->>'pending' as p from tally_recorder_lines where book_id = %s and line_id = 'n3'" % q(B9))[0]
+    ok(vrow(B9, 1310) == "1" and o3["state"] == "replaced" and o3["p"] == "false", "8. item 2: the verified line applied (Tally's entry from the proven Tally), the held line replaced (%s %s)" % (r.get("sent"), o3))
+    # no match (saved while another folder was open): the bridge says so; held with the Day Book words, never applied
+    r = sent(B9, [{"line_id": "n3b:verified", "event": "created", "verify_failed": True, "data_id": I1, "data_proven": True, "pc": "PC-3", "company_guid": CG, "company": "GARG SHEKHAR & COMPANY",
+                   "heldWhy": "Tally's entry with that MasterID is not this line's (another narration)"}], D3)
+    o3b = db.rows("select state, held_why, payload->>'pending' as p, payload->>'verify' as v from tally_recorder_lines where book_id = %s and line_id = 'n3b'" % q(B9))[0]
+    ok(vrow(B9, 1314) == "0" and o3b["state"] == "held" and "Day Book" in (o3b["held_why"] or "") and o3b["p"] == "false"
+       and int(db.one("select count(*) from tally_recorder_lines where book_id = %s and line_id = 'n3b:verified'" % q(B9))) == 0
+       and j("select tally_company_source_verify_list(%s, %s)::text" % (q(F), q(D3))) == [],
+       "8. item 2: no match: never applied, held with the Day Book words, no longer listed (%s %s)" % (r, o3b))
     # N1: two computers of one data id are both its computers (the device column alone took turns)
     note_b(B9, [{"company_guid": CG, "data_id": I1, "path": P1, "own": True}], D4)
     r = sent(B9, [L5("n5", 1312, 62102)], D1)
@@ -347,8 +366,10 @@ try:
     note_b(B9, [{"company_guid": CG, "data_id": I2, "path": P2, "own": True}], D2)
     sm = as_user(OWNER, "select tally_company_source_same(%s)::text;" % q(B9))
     ch9 = ch_of(B9)
-    ok(isinstance(sm, dict) and sm.get("ok") is True and ch9[I2] == "chosen" and ch9[I1] == "chosen" and ch9[did("x-other")] == "other" and vrow(B9, 1311) == "1",
-       "8. same data: the pending one chosen, the 'other' one stays other, PC-2's line without data id applied (%s %s)" % (sm, ch9))
+    vl2 = j("select tally_company_source_verify_list(%s, %s)::text" % (q(F), q(D2)))
+    ok(isinstance(sm, dict) and sm.get("ok") is True and ch9[I2] == "chosen" and ch9[I1] == "chosen" and ch9[did("x-other")] == "other" and vrow(B9, 1311) == "0"
+       and [x.get("line_id") for x in (vl2 if isinstance(vl2, list) else []) if x.get("book_id") == B9] == ["n4"],
+       "8. same data: the pending one chosen, the 'other' one stays other; PC-2's line without data id listed for its bridge to verify, not applied (%s %s %s)" % (sm, ch9, vl2))
     # N2: a lone pending location (the starting point came from another computer): the owner's Use ① applies its held lines
     B10 = "f79e4bc3-871d-4482-874d-000000000080"
     db.sql("insert into tally_books (book_id, firm_id, client_id, company, from_date, open_as_on) values (%s, %s, 'c1', 'GARG SHEKHAR & COMPANY', '2025-04-01', '2025-03-31')" % (q(B10), q(F)))

@@ -61,7 +61,9 @@
 --       runs AFTER 63 and 67, and 63 / 67 / 47 run again after it need 71 run again) checks the location wherever a line
 --       is applied (Apply now, a month unlocked, a ledger arriving, a Day Book day), under the book's lock, which the
 --       owner's choice takes too. N1 tally_company_source_devices: the computers of a location (a set); a line without a
---       data id kept WITH its entry and applied once its computer proves a chosen location, or on "same data"; its words
+--       data id kept WITH its entry, never applied from it: once its computer proves a chosen location (or on "same data") it
+--       is listed for that computer's bridge to check against its own Tally (tally_company_source_verify_list; the
+--       coordinator's item 2) and applied only as the bridge's "<line id>:verified" line; its words
 --       "Update FinCom Bridge on <computer>" (a bridge before 2.4.1) or "Restart Tally" (2.4.1, an older add-on). N2 the
 --       owner's Use on a book's only location applies its held lines at once (nothing to mix). Low: "same data" only
 --       while a location is pending, and only those (never one set 'other'); Use of the location read already sets the
@@ -207,6 +209,13 @@ declare r tally_recorder_lines%rowtype; one jsonb; n integer := 0; alt text; mk 
 begin
   for r in select * from tally_recorder_lines l where l.book_id = p_book and l.event = 'other_source' and l.state = 'held' and l.body is not null
              and l.payload->>'dataId' = p_data_id and l.payload->>'pending' = 'true' and (p_device is null or l.device_id = p_device) order by l.id loop
+    -- the coordinator's item 2 (09-Oct-2026): a line without a data id is never applied from its kept entry: its computer's
+    -- bridge, once it proves a chosen location, re-reads it from its own Tally (tally_company_source_verify_list) and sends
+    -- "<line id>:verified" (tally_recorder_send_sourced); here it is only marked to be verified
+    if p_data_id = '' then
+      update tally_recorder_lines set payload = payload || jsonb_build_object('verify', true) where id = r.id and coalesce(payload->>'verify', '') <> 'true';
+      continue;
+    end if;
     alt := coalesce(r.body->>'alter_id', '');
     if p_above is not null and not (alt ~ '^[0-9]{1,15}$' and alt::bigint > p_above) then
       select tally_source_mark(m.n) into mk from tally_source_marks(p_book) m where m.data_id = p_data_id;
@@ -904,18 +913,73 @@ begin
   return jsonb_build_object('kept', kept, 'idx', idx, 'hold', hold, 'hidx', hidx);
 end $function$;
 
+-- the coordinator's item 2: the lines without a data id to verify, for one computer's bridge (the beat's verifyLines): held
+-- with their entry, marked to verify, of a book where this computer proved a chosen location; at most 20, oldest first. The
+-- bridge asks its own Tally for each by its MasterID (FinComVoucherObject, paced, the 2-second rule) and answers with
+-- "<line id>:verified": Tally's entry when it has the same GUID, an AlterID not below the line's and (when the line has one)
+-- the same narration; else verify_failed (held with the Day Book words). Service role only
+create or replace function public.tally_company_source_verify_list(p_firm uuid, p_device uuid)
+returns jsonb language plpgsql stable security definer set search_path = public, pg_temp as $function$
+begin
+  if auth.role() <> 'service_role' then raise exception 'not allowed' using errcode = '42501'; end if;
+  return coalesce((select jsonb_agg(jsonb_build_object('line_id', l.line_id, 'book_id', l.book_id, 'company', coalesce(l.body->>'company', l.company), 'company_guid', coalesce(l.body->>'company_guid', l.company_guid),
+            'event', l.body->>'event', 'master_id', l.body->>'master_id', 'vch_type', l.body->>'vch_type', 'vch_no', l.body->>'vch_no', 'vch_date', l.body->>'vch_date',
+            'guid', l.body->>'object_guid', 'alter_id', l.body->>'alter_id', 'narration', left(coalesce(l.body->>'narration', ''), 1000)) order by l.id)
+    from (select x.* from tally_recorder_lines x
+           where x.firm_id = p_firm and x.device_id = p_device and x.event = 'other_source' and x.state = 'held' and x.body is not null
+             and x.payload->>'verify' = 'true' and x.payload->>'pending' = 'true' and coalesce(x.payload->>'dataId', '') = ''
+             and exists (select 1 from tally_company_source_devices d join tally_company_sources s on s.book_id = d.book_id and s.data_id = d.data_id
+                          where d.book_id = x.book_id and d.device_id = p_device and s.choice = 'chosen')
+           order by x.id limit 20) l), '[]'::jsonb);
+end $function$;
+
 -- tally-ingest's one call for a request's recorder lines: sorted out under the book's source lock (tally_source_sort), the
 -- kept ones to tally_recorder_send, the others held. Answers {ok, sent (tally_recorder_send's answer, or null), sentIdx,
 -- held: [{i, result}]}
 create or replace function public.tally_recorder_send_sourced(p_firm uuid, p_book uuid, p_device uuid, p_lines jsonb, p_queue boolean)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
 declare so jsonb; sent jsonb; hl jsonb; hr jsonb := '[]'::jsonb; k integer;
+  x jsonb; i integer := 0; rest jsonb := '[]'::jsonb; ri jsonb := '[]'::jsonb; lid text; o tally_recorder_lines%rowtype; w text; one jsonb; ki integer;
 begin
   if auth.role() <> 'service_role' then raise exception 'not allowed' using errcode = '42501'; end if;
   if jsonb_typeof(p_lines) is distinct from 'array' or jsonb_array_length(p_lines) > 500 then return jsonb_build_object('ok', false, 'error', 'lines must be a list of at most 500'); end if;
   perform pg_advisory_xact_lock(hashtext('sources' || p_book::text));
-  so := tally_source_sort(p_book, p_device, p_lines);
+  -- the coordinator's item 2: a bridge's answer for a line to verify ("<line id>:verified"): no match (verify_failed): the held
+  -- line keeps its entry unused, held with the Day Book words; a match goes on as any line of the chosen location (below)
+  for x in select * from jsonb_array_elements(p_lines) loop
+    lid := coalesce(x->>'line_id', ''); o := null;
+    if lid like '%:verified' then
+      select * into o from tally_recorder_lines r where r.book_id = p_book and r.device_id is not distinct from p_device and r.line_id = left(lid, length(lid) - 9)
+         and r.event = 'other_source' and r.state = 'held' and r.payload->>'verify' = 'true' order by r.id desc limit 1;
+    end if;
+    if o.id is not null and coalesce(x->>'verify_failed', '') = 'true' then
+      w := format('saved on %s before its bridge proved its data location, and that Tally''s entry now is not this line''s (%s): upload that day''s Day Book to bring it in',
+                  coalesce(nullif(o.pc, ''), 'this computer'), left(coalesce(nullif(x->>'heldWhy', ''), 'no match'), 200));
+      update tally_recorder_lines set payload = payload || jsonb_build_object('verify', false, 'pending', false), held_why = w where id = o.id;
+      hr := hr || jsonb_build_array(jsonb_build_object('i', i, 'result', jsonb_build_object('id', o.id, 'line_id', lid, 'state', 'held', 'why', w)));
+    elsif lid like '%:verified' and coalesce(x->>'verify_failed', '') = 'true' then
+      hr := hr || jsonb_build_array(jsonb_build_object('i', i, 'result', jsonb_build_object('line_id', lid, 'state', 'failed', 'why', 'no line of this computer waits for this check')));
+    else
+      rest := rest || jsonb_build_array(x); ri := ri || to_jsonb(i);
+    end if;
+    i := i + 1;
+  end loop;
+  so := tally_source_sort(p_book, p_device, rest);
+  -- the indexes of the call's own lines
+  so := so || jsonb_build_object('idx', coalesce((select jsonb_agg(ri->((e.v)::int)) from jsonb_array_elements_text(so->'idx') with ordinality e(v, n)), '[]'::jsonb),
+                                 'hidx', coalesce((select jsonb_agg(ri->((e.v)::int)) from jsonb_array_elements_text(so->'hidx') with ordinality e(v, n)), '[]'::jsonb));
   if jsonb_array_length(so->'kept') > 0 then sent := tally_recorder_send(p_firm, p_book, p_device, so->'kept', p_queue); end if;
+  -- item 2: a verified line applied (or the copy holds it already): the held line it re-read is replaced
+  for ki in 0 .. jsonb_array_length(so->'kept') - 1 loop
+    lid := coalesce(so->'kept'->ki->>'line_id', ''); one := sent->'results'->ki;
+    if lid like '%:verified' and one is not null then
+      update tally_recorder_lines set state = case when one->>'state' in ('applied', 'duplicate') then 'replaced' else state end,
+             held_why = case when one->>'state' in ('applied', 'duplicate') then format('replaced by line %s (Tally''s entry re-read from this computer''s own Tally, %s)', coalesce(one->>'id', '?'), one->>'state')
+                             else format('re-read from this computer''s Tally as line %s (%s)', coalesce(one->>'id', '?'), coalesce(one->>'state', '?')) end,
+             payload = payload || jsonb_build_object('verify', false, 'pending', false)
+       where book_id = p_book and device_id is not distinct from p_device and line_id = left(lid, length(lid) - 9) and event = 'other_source' and state = 'held' and payload->>'verify' = 'true';
+    end if;
+  end loop;
   if jsonb_array_length(so->'hold') > 0 then
     hl := tally_company_source_lines(p_firm, p_book, p_device, so->'hold');
     for k in 0 .. jsonb_array_length(so->'hold') - 1 loop
@@ -1029,13 +1093,14 @@ revoke all on function public.tally_recorder_line(uuid, uuid, jsonb, bigint) fro
 revoke all on function public.tally_company_sources_note(uuid, uuid, uuid, jsonb) from public, anon, authenticated;
 revoke all on function public.tally_company_source_lines(uuid, uuid, uuid, jsonb) from public, anon, authenticated;
 revoke all on function public.tally_recorder_send_sourced(uuid, uuid, uuid, jsonb, boolean) from public, anon, authenticated;
+revoke all on function public.tally_company_source_verify_list(uuid, uuid) from public, anon, authenticated;
 revoke all on function public.tally_source_sort(uuid, uuid, jsonb) from public, anon, authenticated, service_role;
 revoke all on function public.tally_recorder_settle(bigint, jsonb) from public, anon, authenticated, service_role;
 revoke all on function public.tally_company_source_choose(uuid, text) from public, anon;
 revoke all on function public.tally_company_source_same(uuid) from public, anon;
 revoke all on function public.tally_company_sources_of(uuid) from public, anon;
 grant execute on function public.tally_company_sources_note(uuid, uuid, uuid, jsonb), public.tally_company_source_lines(uuid, uuid, uuid, jsonb),
-  public.tally_recorder_send_sourced(uuid, uuid, uuid, jsonb, boolean) to service_role;
+  public.tally_recorder_send_sourced(uuid, uuid, uuid, jsonb, boolean), public.tally_company_source_verify_list(uuid, uuid) to service_role;
 grant execute on function public.tally_company_source_choose(uuid, text), public.tally_company_source_same(uuid), public.tally_company_sources_of(uuid) to authenticated;
 
 commit;

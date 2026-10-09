@@ -443,6 +443,20 @@ async function heldLinesFor(dev: any, firm: string, bridge: string, version = ""
 // which the database applies once and marks the held line 'replaced' (migrations 50-52). An older bridge ignores the
 // field. Left out when none or on any error: the beat never fails for it
 const REFETCH_MAX = 20;
+// the coordinator's item 2 (migration 71): verifyLines, this computer's older lines without a data id (held with their entry
+// while it read no chosen location) now that it proved a chosen one: at most 20 [{line_id, company, company_guid, event,
+// master_id, vch_type, vch_no, vch_date, guid, alter_id, narration}]. A bridge of 2.4.1 or later asks its own Tally for each
+// by its MasterID (FinComVoucherObject, paced, the 2-second rule) and answers "<line id>:verified". Left out when none, for
+// an older bridge, or on any error (a cloud without 71 included): the beat never fails for it
+async function verifyLinesFor(dev: any, firm: string, version = "") {
+  try {
+    const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(String(version ?? "").trim());
+    if (!m || newer(m[1] + "." + m[2] + "." + m[3], "2.4.1") < 0) return null;
+    const { data, error } = await db.rpc("tally_company_source_verify_list", { p_firm: firm, p_device: dev.id });
+    if (error || !Array.isArray(data) || !data.length) return null;
+    return (data as any[]).slice(0, 20);
+  } catch (_e) { return null; }
+}
 async function refetchFor(dev: any, firm: string, bridge: string, version = "") {
   const out = await heldOwnLines(dev, firm, bridge, REFETCH_MAX, (r) => {
     const g = String(r?.object_guid ?? "").trim(), b = r?.body;
@@ -1564,6 +1578,9 @@ function cleanRecorderLine(x: any, me: { id: string }): { line?: Record<string, 
   // (or the beat's dataSources) notes its location as the bridge's own: an unproven one (a second Tally of the same user, a
   // copy) never gets chosen by itself
   if (dId && x?.data_proven === true) line.data_proven = true;
+  // the coordinator's item 2 (migration 71): the bridge's answer for a line to verify ("<line id>:verified") that did not
+  // match its own Tally's entry: kept as said (the database holds the line with the Day Book words, nothing applied)
+  if (x?.verify_failed === true) line.verify_failed = true;
   line.payload = { ...line, xmlBytes: xml.length || undefined };
   if (xml && ["created", "altered", "imported"].includes(event)) {
     if (xml.length > MAX_RECORDER_XML) return { bad: "the entry's XML is larger than FinCom takes (" + xml.length + " characters)" };
@@ -3077,9 +3094,10 @@ Deno.serve(sentry.wrap(async (req) => {
         const heldLines = await heldLinesFor(dev, firm, me.id, me.entry.version);
         // 06-Oct-2026: this bridge's own held lines without their entry's body or with a placeholder GUID, at most 20
         const refetch = await refetchFor(dev, firm, me.id, me.entry.version);
+        const verifyLines = await verifyLinesFor(dev, firm, me.entry.version);
         // bridge 2.3.1 (masters): the ledgers this bridge's held lines wait for, fetched by the bridge before the entry
         const ledgersWanted = await ledgersWantedFor(dev, firm, me.id);
-        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(heldLines ? { heldLines } : {}), ...(refetch ? { refetch } : {}), ...(ledgersWanted ? { ledgersWanted } : {}), ...(dsrc.answer.length ? { dataSources: dsrc.answer } : {}), ...(co ? { notMain: true, changesOnly: true, error: CHANGES_ONLY } : may ? {} : { notMain: true }), ...ctl.out });
+        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(heldLines ? { heldLines } : {}), ...(refetch ? { refetch } : {}), ...(verifyLines ? { verifyLines } : {}), ...(ledgersWanted ? { ledgersWanted } : {}), ...(dsrc.answer.length ? { dataSources: dsrc.answer } : {}), ...(co ? { notMain: true, changesOnly: true, error: CHANGES_ONLY } : may ? {} : { notMain: true }), ...ctl.out });
       }
       case "make_main": return await makeMain(dev, bridgeOf(dev, body, false).id);
       case "posts_take": {

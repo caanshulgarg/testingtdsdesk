@@ -74,7 +74,7 @@ try:
         if isinstance(v, (dict, list)): return q(json.dumps(v)) + "::jsonb"
         return q(v)
     real = FS.rpc
-    PG = ("tally_recorder_apply", "tally_recorder_send", "tally_start_point", "tally_recorder_gap_check", "tally_company_sources_note", "tally_company_source_lines", "tally_recorder_send_sourced")
+    PG = ("tally_recorder_apply", "tally_recorder_send", "tally_start_point", "tally_recorder_gap_check", "tally_company_sources_note", "tally_company_source_lines", "tally_recorder_send_sourced", "tally_company_source_verify_list")
     def rpc(name, a):
         if name in PG:
             FS.ARGS.setdefault(name, []).append(a)
@@ -233,6 +233,24 @@ try:
     c, r = rec2([line2("f-3", 502, 903, I4, True)])
     ch2 = {x["data_id"]: x["choice"] for x in db.rows("select data_id, choice from tally_company_sources where book_id = %s" % q(BOOK2))}
     ok(ch2.get(I4) == "chosen" and ch2.get(I3) == "pending", "7. a line the bridge proved (data_proven): its own, chosen as the starting point's computer's (%s)" % ch2)
+    vrow2 = lambda mid: db.one("select count(*) from tally_vouchers where book_id = %s and guid = %s and deleted_at is null" % (q(BOOK2), q(CG2 + "-%08x" % mid))) == "1"
+    print("== 8. the coordinator's item 2: a computer's older lines without a data id are verified against its own Tally")
+    G3b = dict(G3, user="anshul")
+    rec3 = lambda lines: call({"kind": "recorder_lines", "company": CO2, "company_guid": CG2, "version": "2.4.1", "bridge": G3b, "lines": lines}, K3)
+    b3 = dict(b2, bridge=G3b, computer="PC-3", windowsUser="anshul")
+    call(dict(b3, dataSources=[]), K3)     # PC-3 names the company (the S-M1 tie), proves nothing yet
+    old = dict(line2("v-1", 510, 910, None), pc="PC-3"); old.pop("data_id", None)
+    c, r = rec3([old])
+    ok(res(r).get("v-1", ("",))[0] == "held" and not vrow2(510), "8. PC-3's line without a data id (no chosen location proven there): held (%s)" % res(r))
+    c, r = call(dict(b3, dataSources=[{"company": CO2, "company_guid": CG2, "data_id": I4, "path": r"E:\\Fork B\\DATA", "w": "anshul"}]), K3)
+    vl = r.get("verifyLines") or []
+    ok([x.get("line_id") for x in vl] == ["v-1"] and vl[0].get("master_id") == "510" and not vrow2(510),
+       "8. PC-3 proves the chosen location: the line is listed in its beat to verify (verifyLines), not applied (%s)" % vl)
+    c, r = rec3([dict(line2("v-1:verified", 510, 910, I4, True), pc="PC-3")])
+    ok(res(r).get("v-1:verified", ("",))[0] == "applied" and vrow2(510) and lrow("v-1").get("state") == "replaced",
+       "8. its bridge's verified line (Tally's entry from its own Tally): applied, the held line replaced (%s %s)" % (res(r), lrow("v-1").get("state")))
+    c, r = call(dict(b3, dataSources=[{"company": CO2, "company_guid": CG2, "data_id": I4, "path": r"E:\\Fork B\\DATA", "w": "anshul"}]), K3)
+    ok(not r.get("verifyLines"), "8. listed no more (%s)" % r.get("verifyLines"))
 finally:
     if fn:
         fn.terminate()
