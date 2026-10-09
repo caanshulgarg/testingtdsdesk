@@ -287,6 +287,24 @@ func dataForkedLocked(k string) bool {
 	return true
 }
 
+// a company this Windows user wrote two or more folders for, FinCom having chosen none: forked (nothing of it is asked of
+// this Tally: the coordinator's item 3)
+func dataForked(cguid string) bool {
+	k := dataKey(cguid)
+	dataSt.mu.Lock()
+	defer dataSt.mu.Unlock()
+	dataFresh()
+	return dataForkedLocked(k)
+}
+
+// the coordinator's item 3 (09-Oct-2026): the words of a line of a data folder not proven this bridge's own Tally's: sent
+// without its entry, held for good (never asked of this Tally again); its entry comes from the bridge whose own Tally
+// proves that folder, or from that folder's Day Book
+func dataUnprovenWhy(c *change) string {
+	return "saved in a data folder of " + c.company + " (" + c.dataPath + ") this bridge has not proven its own Tally's: its entry is not taken from this Tally; " +
+		"FinCom takes it from the bridge whose Tally has that folder, or from that day's Day Book"
+}
+
 // the same narration: control characters and runs of white space as one space, trimmed; a cut line (liveNarrMax) by its
 // start
 func dataNarrSame(line, tally string) bool {

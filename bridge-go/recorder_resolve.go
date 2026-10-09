@@ -601,6 +601,14 @@ type heldLine struct {
 	// now, so the line is asked and sent once more (the same id), once (sync\recorder-sent\*.ledger.txt)
 	LedgerAgain bool
 	LineAlter   int64
+	// the coordinator's item 3 (2.4.1): the line's data id; a line of a folder not proven this bridge's own is never asked
+	DataID string
+	// the coordinator's item 2 (2.4.1): an older line without a data id FinCom asked to verify (verifyLines): the line's own
+	// GUID, AlterID and narration, which this Tally's entry must have
+	Verify bool
+	VGuid  string
+	VAlter int64
+	VNarr  string
 	// review H1 (the owner's addition): a delete's own GUID and AlterID, used only once this Tally shows it gone
 	KeepGuid, KeepAlter string
 	// 2.3.2 (issue 232, b): the asks of this line that were stopped at 2 s or not answered (2.3.3: kept in the file, no
@@ -659,7 +667,8 @@ func liveHeldLoad() (M, map[string]heldLine) {
 			LineGuid: str(e["lineGuid"]), LineFid: str(e["lineFid"]), Mismatch: truthy(e["idsMismatch"]), Final: truthy(e["final"]), LineAlter: toI64(e["lineAlter"]),
 			Cloud: truthy(e["fromFinCom"]), KeepGuid: str(e["keepGuid"]), KeepAlter: str(e["keepAlter"]), Refetch: truthy(e["refetch"]), TriesVer: str(e["triesVersion"]), Again: truthy(e["again"]), LedgerAgain: truthy(e["ledgerAgain"]), Slow: toInt(e["slow"]),
 			Fresh: truthy(e["fresh"]), FreshTries: toInt(e["freshTries"]), FreshSlow: truthy(e["freshSlow"]), Allow: toInt(e["allow"]), Asked: toInt(e["asked"]),
-			FastAgain: truthy(e["fastAgain"]), V234: truthy(e["v234"]), ObjAsks: toInt(e["objAsks"]), StopWait: truthy(e["stopWait"])}
+			FastAgain: truthy(e["fastAgain"]), V234: truthy(e["v234"]), ObjAsks: toInt(e["objAsks"]), StopWait: truthy(e["stopWait"]),
+			DataID: str(e["dataId"]), Verify: truthy(e["verify"]), VGuid: str(e["verifyGuid"]), VAlter: toI64(e["verifyAlter"]), VNarr: str(e["verifyNarr"])}
 	}
 	return all, items
 }
@@ -672,7 +681,7 @@ func liveHeldSave(all M, items map[string]heldLine) {
 			"idsMismatch": h.Mismatch, "final": h.Final, "lineAlter": h.LineAlter, "fromFinCom": h.Cloud,
 			"keepGuid": h.KeepGuid, "keepAlter": h.KeepAlter, "refetch": h.Refetch, "triesVersion": h.TriesVer, "again": h.Again, "ledgerAgain": h.LedgerAgain, "slow": h.Slow,
 			"fresh": h.Fresh, "freshTries": h.FreshTries, "freshSlow": h.FreshSlow, "allow": h.Allow, "asked": h.Asked, "fastAgain": h.FastAgain, "v234": h.V234,
-			"objAsks": h.ObjAsks, "stopWait": h.StopWait}
+			"objAsks": h.ObjAsks, "stopWait": h.StopWait, "dataId": h.DataID, "verify": h.Verify, "verifyGuid": h.VGuid, "verifyAlter": h.VAlter, "verifyNarr": h.VNarr}
 	}
 	all["items"] = o
 	if err := saveFile(liveHeldFile(), jsonText(all)); err != nil {
@@ -699,7 +708,7 @@ func liveHeldAdd(cs []*change) {
 		}
 		items[c.lineId] = heldLine{V234: true, ID: c.lineId, Company: c.company, CGUID: c.companyGuid, Type: c.vchType, No: c.vchNo, Date: c.vchDate, MID: mid,
 			At: c.at, Added: now, Last: now, Ev: c.event, Why: c.heldWhy, LineGuid: c.lineGuid, LineFid: c.lineFid, Mismatch: c.idsMismatch,
-			Final: c.heldFinal || (mid == "" && c.vchNo == ""), LineAlter: c.lineAlter, KeepGuid: c.guidKeep, KeepAlter: c.alterKeep}
+			Final: c.heldFinal || (mid == "" && c.vchNo == ""), LineAlter: c.lineAlter, KeepGuid: c.guidKeep, KeepAlter: c.alterKeep, DataID: c.dataId}
 		if c.slowHeld {
 			h := items[c.lineId]
 			h.Slow = 1 // 2.3.2 (b): the original fetch's stops: one timed-out try
@@ -1001,6 +1010,12 @@ func liveResolveTurn() {
 		if dataStopped(h.CGUID) {
 			continue // 2.4.1: FinCom reads the company from another data location: nothing of it is asked of this Tally
 		}
+		if h.DataID != "" && h.DataID != dataOwnID(h.CGUID) {
+			continue // the coordinator's item 3: a folder not proven this bridge's own: never asked of this Tally
+		}
+		if h.Verify && dataOwnID(h.CGUID) == "" {
+			continue // the coordinator's item 2: verified only against a Tally this bridge proved its own
+		}
 		if !h.V234 {
 			// 2.3.4: a line an older bridge kept (tries 20, final, refetch, any ask count): one ask with the fast request now
 			// (FastAgain: its one ask is this version's, whatever an older bridge sent or ended; Added now: not dropped as 7 days old)
@@ -1251,6 +1266,13 @@ func liveResolveTurn() {
 			liveSay(h.Type, h.No, h.Date, h.MID, h.ID, "proven in this Tally now: the "+map[bool]string{true: "cancel", false: "delete"}[h.Ev == "cancelled"]+" goes as "+gc.lineId)
 			continue
 		}
+		if h.Verify && answered && err == nil {
+			// the coordinator's item 2: the answer, matched or not, goes as "<line id>:verified"; asked no more
+			liveVerifyAnswer(h, x, why)
+			resolved++
+			got[len(got)-1].final, got[len(got)-1].ok = true, true
+			continue
+		}
 		if x == "" {
 			continue
 		}
@@ -1436,6 +1458,9 @@ func liveHeldEnd(h heldLine, words string) {
 // MasterID gave another real voucher, nothing is asked by number (final). answered: Tally answered a request (a try)
 func liveResolveOne(h heldLine, sent *bool) (x, why string, answered, final bool, err error) {
 	sp, spOK := startPointOf(h.Company)
+	if h.Verify {
+		sp, spOK = 0, true // item 2: an older line is checked against its own GUID, AlterID and narration (liveVerifyAnswer), not the starting point
+	}
 	tc := recorderTC(nil)
 	tc.sentOut = sent // re-review L1: whether the ask reached Tally
 	port, err := findCompanyPortBg(h.Company, 0)
@@ -1687,6 +1712,115 @@ func applyRefetch(j M) {
 	}
 	liveHeldCap(items)
 	liveHeldSave(all, items)
+}
+
+// --- the coordinator's item 2 (09-Oct-2026): the beat's verifyLines [{line_id, company, company_guid, event, master_id,
+// vch_type, vch_no, vch_date, guid, alter_id, narration}], at most 20: this computer's older lines without a data id that
+// FinCom held with their entry while it read no chosen location here; this bridge proved one since. Each is asked of THIS
+// Tally by its MasterID with the approved request of the held list (one a turn, spaced, the 2-second rule) and answered
+// once as "<line id>:verified" (liveVerifyAnswer). Only while this bridge has proven the company's data folder its own
+const verifyMax = 20
+
+func applyVerifyLines(j M) {
+	rows := arr(j["verifyLines"])
+	if len(rows) == 0 {
+		return
+	}
+	if len(rows) > verifyMax {
+		rows = rows[:verifyMax]
+	}
+	now := nowFn().Format(time.RFC3339)
+	var cs []heldLine
+	for _, r := range rows {
+		e := obj(r)
+		id := strings.TrimSpace(str(e["line_id"]))
+		ev := strings.TrimSpace(str(e["event"]))
+		if !reHeldID.MatchString(id) || len(id) > 70 || strings.Contains(id, ":") || (ev != "created" && ev != "altered" && ev != "imported") {
+			continue
+		}
+		co, cg := cutRunes(strings.TrimSpace(str(e["company"])), 200), cut(cleanGUID(str(e["company_guid"])), 100)
+		date, mid := normDate(str(e["vch_date"])), onlyDigits(str(e["master_id"]))
+		if co == "" || cg == "" || len(date) != 8 || !isTallyDate(date) || len(mid) > 18 || toI64(mid) <= 0 {
+			continue // nothing to ask Tally by (FinCom keeps it held)
+		}
+		if held := heldGUID(co); held == "" || !strings.EqualFold(held, cg) || dataOwnID(cg) == "" {
+			continue // not the company this bridge holds, or no data folder of it proven here
+		}
+		cs = append(cs, heldLine{V234: true, ID: id, Company: co, CGUID: cg, Type: cutRunes(strings.TrimSpace(str(e["vch_type"])), 200), No: cutRunes(strings.TrimSpace(str(e["vch_no"])), 200),
+			Date: date, MID: mid, At: now, Added: now, Ev: ev, Cloud: true, Refetch: true, Allow: 1, Verify: true,
+			VGuid: cut(cleanGUID(str(e["guid"])), 100), VAlter: toI64(onlyDigits(str(e["alter_id"]))), VNarr: cutRunes(str(e["narration"]), liveNarrMax)})
+	}
+	live.mu.Lock()
+	liveFresh()
+	var fresh []heldLine
+	for _, h := range cs {
+		if live.sent[h.ID+":verified"] || live.queued[h.ID+":verified"] {
+			continue // answered already
+		}
+		fresh = append(fresh, h)
+	}
+	live.mu.Unlock()
+	if len(fresh) == 0 {
+		return
+	}
+	heldMu.Lock()
+	defer heldMu.Unlock()
+	all, items := liveHeldLoad()
+	added := 0
+	for _, h := range fresh {
+		if _, had := items[h.ID]; had {
+			continue
+		}
+		items[h.ID] = h
+		added++
+	}
+	if added == 0 {
+		return
+	}
+	writeLog(fmt.Sprintf("Recorder: FinCom asks this bridge to check %d older line(s) without their data folder against this Tally (one a turn)", added))
+	liveHeldCap(items)
+	liveHeldSave(all, items)
+}
+
+// the answer for a line to verify: Tally's entry when it has the line's GUID (or the GUID its MasterID makes), an AlterID not
+// below the line's, and the line's narration (when it has one); else verify_failed, without the entry
+func liveVerifyAnswer(h heldLine, x, why string) {
+	want := h.VGuid
+	if want == "" || livePlaceholder(want) {
+		want = fmt.Sprintf("%s-%08x", h.CGUID, toI64(h.MID))
+	}
+	own := dataOwnID(h.CGUID)
+	switch {
+	case own == "":
+		why = "no data folder of the company is proven this bridge's own"
+	case x == "":
+		why = or(why, "Tally gave no voucher with that MasterID")
+	case !strings.EqualFold(tagValue(x, "GUID"), want):
+		why, x = "Tally's voucher with that MasterID has another GUID", ""
+	case toI64(tagNum(x, "ALTERID")) < h.VAlter:
+		why, x = "Tally's voucher with that MasterID is older than the line", ""
+	case !dataNarrSame(h.VNarr, tagValue(x, "NARRATION")):
+		why, x = "Tally's voucher with that MasterID has another narration", ""
+	}
+	rid := h.ID + ":verified"
+	c := &change{company: h.Company, companyGuid: h.CGUID, event: or(h.Ev, "created"), vchType: h.Type, vchNo: h.No, vchDate: h.Date, masterId: h.MID, source: "addon", lineId: rid,
+		at: h.At, saveMs: -1, readAt: nowFn(), dataId: own}
+	live.mu.Lock()
+	liveFresh()
+	if x != "" {
+		liveTakeBody(c, x)
+	} else {
+		c.verifyFailed, c.heldWhy, c.bodyTried, c.heldFinal = true, liveCapWhy(why), true, true
+	}
+	if !live.sent[rid] && !live.queued[rid] {
+		liveQueueAdd(c)
+	}
+	live.mu.Unlock()
+	if x != "" {
+		writeLog(fmt.Sprintf("Recorder: %s %s of %s in %s checked against this Tally: the same entry; sent as %s", h.Type, h.No, h.Date, h.Company, rid))
+	} else {
+		writeLog(fmt.Sprintf("Recorder: %s %s of %s in %s checked against this Tally: not the same entry (%s); FinCom keeps it held for the Day Book", h.Type, h.No, h.Date, h.Company, why))
+	}
 }
 
 // next-fastfetch: a held line's one fresh ask with the fast request reached Tally (noted and kept 7 days)

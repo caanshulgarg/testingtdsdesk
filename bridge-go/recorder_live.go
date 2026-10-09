@@ -192,6 +192,9 @@ type change struct {
 	addonGuid string
 	// the re-review of next-241, H1-r(b): the add-on's own narration on the line (a proof needs Tally's to be the same)
 	addonNarr string
+	// the coordinator's item 2: an older line without a data id FinCom asked this bridge to verify that does not match this
+	// Tally's entry (sent as "<line id>:verified" without the entry)
+	verifyFailed bool
 }
 
 // a place in the add-on's files: the file and the byte offset a line starts at
@@ -1544,6 +1547,11 @@ func liveEmitFrom(l recLine, ev, file string, gen int, startFile string, start, 
 		} else if c.fetchesIds() && c.masterId == "" && c.event != "created" {
 			c.heldWhy = "the line has no MasterID, so Tally cannot be asked for its entry"
 		}
+		// the coordinator's item 3: a forked company (two folders of this user, none chosen by FinCom): nothing is asked of
+		// this Tally; the line goes without its entry, held for good, with its data id
+		if c.dataId != "" && c.fetchesIds() && c.heldWhy == "" && dataForked(c.companyGuid) {
+			c.heldWhy, c.heldFinal, c.bodyTried = dataUnprovenWhy(c), true, true
+		}
 		switch {
 		case c.exempt:
 			liveDecide(c, "not asked: FinCom's own posting coming back (matched by FinCom id)")
@@ -1556,7 +1564,11 @@ func liveEmitFrom(l recLine, ev, file string, gen int, startFile string, start, 
 	// add-on's GUID) is asked of THIS bridge's Tally by its MasterID: a cancel takes Tally's GUID when Tally shows it
 	// cancelled; a delete goes on (its own GUID, the bridge's record, else FinCom's) only when Tally answers it is not
 	// there; else, or when Tally cannot be asked, it is held (recorder_guids.go)
-	if c.guidOwn() {
+	if c.guidOwn() && c.dataId != "" && dataForked(c.companyGuid) {
+		// the coordinator's item 3: a forked company's delete / cancel is not asked of this Tally either (held, no GUID)
+		c.guid, c.alterId = "", ""
+		liveGuidUnprovenAs(c, dataUnprovenWhy(c), false)
+	} else if c.guidOwn() {
 		if c.guid != "" && !livePlaceholder(c.guid) && c.event == "deleted" {
 			c.guidKeep, c.alterKeep = c.guid, c.alterId
 		}
@@ -2376,6 +2388,7 @@ byDay:
 			// 2.3.4 (re-review 2 L-d): a delete Tally did not find: proven only by fastProveGone (asked again, the company
 			// checked around it); not proven now: held as one this Tally could not be asked about (asked again by itself)
 			unproven := map[*change]string{}
+			var unprovenNow []*change // the coordinator's item 3
 			for _, c := range part {
 				if c.guidFetch && c.event == "deleted" && got[c.masterId] == "" {
 					if perr := fastProveGone(tc, company, port, c.masterId, left()); perr != nil {
@@ -2407,10 +2420,19 @@ byDay:
 					liveTakeGUID(c, x)
 					continue
 				}
+				// review H1 of next-241: Tally's own MasterID answer under the line's GUID proves the data folder. The
+				// coordinator's item 3: a line of a folder still not proven this bridge's own takes nothing of this Tally
+				dataProve(c, x)
+				if c.dataId != "" && c.dataId != dataOwnID(c.companyGuid) {
+					unprovenNow = append(unprovenNow, c)
+					continue
+				}
 				liveTakeBody(c, x)
-				dataProve(c, x) // review H1 of next-241: Tally's own MasterID answer under the line's GUID proves the data folder
 			}
 			live.mu.Unlock()
+			for _, c := range unprovenNow {
+				liveHeldAs(c, dataUnprovenWhy(c), true)
+			}
 			for _, m := range missing {
 				c := m.c
 				// 2.3.4 (the independent review, L5; docs/fast-request-form.md section 5): a line whose MasterID is its entry's
@@ -2431,6 +2453,11 @@ byDay:
 				// took the own Tally's Receipt 192 by its number)
 				if m.kind != wrongNoSave && c.dataId != "" && c.dataId != dataOwnID(c.companyGuid) {
 					byNo = false
+				}
+				// the coordinator's item 3: an unproven folder's line is never asked again (held for good, no body)
+				if c.dataId != "" && c.dataId != dataOwnID(c.companyGuid) {
+					liveHeldAs(c, dataUnprovenWhy(c)+" ("+cutRunes(m.why, 160)+")", true)
+					continue
 				}
 				if !byNo || c.vchNo == "" || !liveNumberText(c.vchNo) || !liveNumberText(c.vchType) {
 					liveHeldAs(c, m.why, m.kind != wrongRetry)
@@ -2651,6 +2678,9 @@ func (c *change) wire() M {
 	}
 	if c.heldWhy != "" && c.xml == "" {
 		m["heldWhy"] = liveCapWhy(c.heldWhy)
+	}
+	if c.verifyFailed {
+		m["verify_failed"] = true
 	}
 	// review H1: a cancel / delete this bridge's Tally does not show happened here: FinCom's cloud keeps it held and never
 	// looks in its own record for its GUID

@@ -10,7 +10,9 @@ package main
 //            with a narration proves only when Tally's NARRATION is the same.
 
 import (
+	"strings"
 	"testing"
+	"time"
 )
 
 // H1-r(a): the own line that proved itself goes with data_proven; the copy's line (not proven) goes without it
@@ -95,5 +97,122 @@ func TestData241rrSeenSurvivesRestart(t *testing.T) {
 	readAndUploadAll(t)
 	if dataOwnID(nwsGUID) != "" {
 		t.Fatalf("after a restart the second folder was forgotten and the first proven: %s", dataOwnID(nwsGUID))
+	}
+}
+
+// how many requests to this Tally named the MasterID
+func d241AskN(f *standTally, mid string) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	n := 0
+	for _, b := range f.bodies {
+		if strings.Contains(b, "ID:"+mid+"</ID>") || strings.Contains(b, mid+"</MASTERID>") {
+			n++
+		}
+	}
+	return n
+}
+
+// the coordinator's item 3: this Tally's entry is never attached to a line of a folder not proven this bridge's own. The
+// fork's line is asked once (the only way to prove a folder); Tally's narration differs: it goes WITHOUT a body, held for
+// good, never asked again (the held list, the turns after). The owner then chooses the fork's folder: still nothing of it is
+// asked of this Tally, no ":resolved" line with a body (its entry comes from the bridge whose own Tally proves that folder,
+// or from its Day Book)
+func TestData241rrUnprovenNeverTakesThisTally(t *testing.T) {
+	p, f, c := r222bBridge(t, "")
+	ufAs(t, "user", "anshul")
+	r222Vch(f, 26320, "Receipt", "194", "20261005", 54400)
+	liveAppend(t, p, d241Line("voucher_accept_post", "11:30", r222GUID(26320), "26320", "54395", "Receipt", "194", "5-Oct-2026", "Fork sale to Beta", d241Path2, "anshul"))
+	readAndUploadAll(t)
+	s := d241Sent(c, "194")
+	if len(s) != 1 || str(s[0]["xml"]) != "" || str(s[0]["data_id"]) != d241ID(d241Path2) {
+		t.Fatalf("the unproven fork's line took this Tally's entry: %v", s)
+	}
+	n0 := d241AskN(f, "26320")
+	for i := 0; i < 3; i++ {
+		laterBy(t, 11*time.Minute)
+		readAndUploadAll(t)
+	}
+	applyDataSources(d241rAnswer([]string{d241ID(d241Path2)}, "", "pending"))
+	for i := 0; i < 3; i++ {
+		laterBy(t, 11*time.Minute)
+		readAndUploadAll(t)
+	}
+	if n := d241AskN(f, "26320"); n != n0 {
+		t.Fatalf("the unproven line was asked of this Tally again (%d -> %d)", n0, n)
+	}
+	for _, x := range c.recSent() {
+		if strings.HasPrefix(str(x["line_id"]), str(s[0]["line_id"])) && str(x["xml"]) != "" {
+			t.Fatalf("this Tally's entry was sent for the fork's line: %v", x)
+		}
+	}
+}
+
+// forked (two folders of this user, none chosen): a line of either folder is not asked of this Tally at all
+func TestData241rrForkedNotAsked(t *testing.T) {
+	p, f, c := r222bBridge(t, "")
+	ufAs(t, "user", "anshul")
+	r222Vch(f, 26321, "Receipt", "195", "20261005", 54402)
+	liveAppend(t, p, d241Line("voucher_accept_post", "11:30", nwsGUID+"-00000000", "25743", "0", "Receipt", "192", "5-Oct-2026", "", d241Path2, "anshul"))
+	readAndUploadAll(t)
+	liveAppend(t, p, d241Line("voucher_accept_post", "11:40", r222GUID(26321), "26321", "54401", "Receipt", "195", "5-Oct-2026", "Receipt 195", d241Path1, "anshul"))
+	readAndUploadAll(t)
+	if d241AskN(f, "26321") != 0 {
+		t.Fatal("a line of a forked company (two folders, none chosen) was asked of this Tally")
+	}
+	if s := d241Sent(c, "195"); len(s) != 1 || str(s[0]["xml"]) != "" || str(s[0]["data_id"]) != d241ID(d241Path1) {
+		t.Fatalf("the forked line: %v", s)
+	}
+}
+
+// the coordinator's item 2: FinCom lists this computer's older lines without a data id (verifyLines) once its bridge proved
+// a chosen location. Each is asked of THIS (proven) Tally by its MasterID, one a turn: Tally's entry with the same GUID, an
+// AlterID not below the line's and the same narration goes as "<line id>:verified" with the entry; an entry that does not
+// match (the line was saved while another folder was open) goes as verify_failed, without the entry. Each asked once
+func TestData241rrVerifyOlderLines(t *testing.T) {
+	_, f, c := b230Bridge(t, `,"RecorderResolveSec":0`)
+	ufAs(t, "user", "anshul")
+	r222Vch(f, 26330, "Receipt", "201", "20261005", 54420) // narration "Receipt 201"
+	r222Vch(f, 26331, "Receipt", "202", "20261005", 54421) // narration "Receipt 202"
+	// this bridge proved the chosen folder
+	dataSt.mu.Lock()
+	dataFresh()
+	dataSt.own[dataKey(nwsGUID)] = dataOwnSt{ID: d241ID(d241Path1), Path: d241Path1, Company: nwsCo, CGUID: nwsGUID, W: "anshul"}
+	dataSave()
+	dataSt.mu.Unlock()
+	row := func(id, mid, no, alter, narr string) M {
+		return M{"line_id": id, "company": nwsCo, "company_guid": nwsGUID, "event": "created", "master_id": mid, "vch_type": "Receipt", "vch_no": no, "vch_date": "2026-10-05",
+			"guid": r222GUID(toI64(mid)), "alter_id": alter, "narration": narr}
+	}
+	applyVerifyLines(M{"verifyLines": []any{row("old-ok", "26330", "201", "54420", "Receipt 201"), row("old-bad", "26331", "202", "54421", "A sale in the other folder")}})
+	b230Turns(4)
+	ok, bad := r222cSentID(c, "old-ok:verified"), r222cSentID(c, "old-bad:verified")
+	if len(ok) != 1 || str(ok[0]["xml"]) == "" || str(ok[0]["object_guid"]) != r222GUID(26330) || str(ok[0]["data_id"]) != d241ID(d241Path1) || ok[0]["data_proven"] != true || ok[0]["verify_failed"] == true {
+		t.Fatalf("the matching line: %v", ok)
+	}
+	if len(bad) != 1 || str(bad[0]["xml"]) != "" || bad[0]["verify_failed"] != true {
+		t.Fatalf("the line that does not match: %v", bad)
+	}
+	if d241AskN(f, "26330") != 1 || d241AskN(f, "26331") != 1 {
+		t.Fatalf("asked %d and %d times (want once each)", d241AskN(f, "26330"), d241AskN(f, "26331"))
+	}
+	// listed again (FinCom has not taken the answers yet): nothing more is asked or sent
+	applyVerifyLines(M{"verifyLines": []any{row("old-ok", "26330", "201", "54420", "Receipt 201"), row("old-bad", "26331", "202", "54421", "A sale in the other folder")}})
+	b230Turns(3)
+	if d241AskN(f, "26330") != 1 || d241AskN(f, "26331") != 1 || len(r222cSentID(c, "old-ok:verified")) != 1 {
+		t.Fatal("asked or sent again")
+	}
+}
+
+// not proven here: nothing is asked
+func TestData241rrVerifyNeedsProof(t *testing.T) {
+	_, f, c := b230Bridge(t, `,"RecorderResolveSec":0`)
+	ufAs(t, "user", "anshul")
+	r222Vch(f, 26330, "Receipt", "201", "20261005", 54420)
+	applyVerifyLines(M{"verifyLines": []any{M{"line_id": "old-ok", "company": nwsCo, "company_guid": nwsGUID, "event": "created", "master_id": "26330", "vch_type": "Receipt",
+		"vch_no": "201", "vch_date": "2026-10-05", "guid": r222GUID(26330), "alter_id": "54420", "narration": "Receipt 201"}}})
+	b230Turns(3)
+	if d241AskN(f, "26330") != 0 || len(r222cSentID(c, "old-ok:verified")) != 0 {
+		t.Fatal("a line was verified by a bridge that proved no data folder")
 	}
 }

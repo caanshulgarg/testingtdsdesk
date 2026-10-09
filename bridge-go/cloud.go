@@ -733,6 +733,7 @@ func beatOnce() {
 		applyDataSources(r.json)    // 2.4.1: the data location FinCom reads for each company (datasource.go)
 		applyHeldLines(r.json)      // 2.2.2: the lines FinCom holds without their entry, asked of Tally again
 		applyRefetch(r.json)        // after 2.3.0: this bridge's own held lines FinCom asks for again (body missing, placeholder GUID)
+		applyVerifyLines(r.json)    // 2.4.1 (the coordinator's item 2): older lines without a data id, checked against this Tally
 		applyLedgersWanted(r.json)  // 2.3.1: the ledgers FinCom holds an entry for, asked of the own Tally by name (ledchanges.go)
 		// made the main bridge on FinCom's Tally page: this test bridge switches itself to main, once
 		if testMode() && truthy(r.json["makeMain"]) && makeMainSeen.CompareAndSwap(false, true) {
