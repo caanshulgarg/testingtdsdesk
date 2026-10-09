@@ -1,0 +1,30 @@
+;; dpath probe svcpnum (tally-versions mode dpath, harness only): after Tally's save and in the delete / cancel events
+[#Form: Voucher]
+    On : Form Accept : Yes : Call : FCDPWsvcpnum : "accept_post"
+
+[System: Events]
+    FCDPEsvcpnuma : Before Delete Object : Yes : Call : FCDPWsvcpnum : "before_delete"
+    FCDPEsvcpnumb : After Delete Object : Yes : Call : FCDPWsvcpnum : "after_delete"
+    FCDPEsvcpnumc : Before Cancel Object : Yes : Call : FCDPWsvcpnum : "before_cancel"
+    FCDPEsvcpnumd : After Cancel Object : Yes : Call : FCDPWsvcpnum : "after_cancel"
+
+[Function: FCDPWsvcpnum]
+    Parameter : pEv : String
+    Variable  : vV  : String
+    Variable  : vA  : String
+    Variable  : vB  : String
+    Variable  : vH  : String
+    Returns   : Logical
+    000 : SET : vA : $Guid:Company:##SVCurrentCompany
+    001 : SET : vH : "FCDP|f=svcpnum|ev=" + ##pEv + "|cg=" + ##vA + "|mid=" + ($$String:$MasterID) + "|aid=" + ($$String:$AlterID)
+    002 : SET : vH : ##vH + "|vt=" + ($$String:$VoucherTypeName) + "|vno=" + ($$String:$VoucherNumber)
+    003 : OPEN FILE : "C:\fcspike\dpath\probe.txt" : Text : Write : Unicode
+    004 : IF : NOT $$LastResult
+    005 :    RETURN : Yes
+    006 : END IF
+    010 : SET : vA : ##SVCurrentPath
+    011 : SET : vB : $CompanyNumber:Company:##SVCurrentCompany
+    012 : SET : vV : ##vA + "\" + ##vB
+    013 : WRITE FILE LINE : ##vH + "|k=svcpnum|v=" + ##vV + "|end"
+    014 : CLOSE TARGET FILE
+    015 : RETURN : Yes

@@ -1,0 +1,28 @@
+;; dpath probe x1 (tally-versions mode dpath, harness only): after Tally's save and in the delete / cancel events
+[#Form: Voucher]
+    On : Form Accept : Yes : Call : FCDPWx1 : "accept_post"
+
+[System: Events]
+    FCDPEx1a : Before Delete Object : Yes : Call : FCDPWx1 : "before_delete"
+    FCDPEx1b : After Delete Object : Yes : Call : FCDPWx1 : "after_delete"
+    FCDPEx1c : Before Cancel Object : Yes : Call : FCDPWx1 : "before_cancel"
+    FCDPEx1d : After Cancel Object : Yes : Call : FCDPWx1 : "after_cancel"
+
+[Function: FCDPWx1]
+    Parameter : pEv : String
+    Variable  : vV  : String
+    Variable  : vA  : String
+    Variable  : vB  : String
+    Variable  : vH  : String
+    Returns   : Logical
+    000 : SET : vA : $Guid:Company:##SVCurrentCompany
+    001 : SET : vH : "FCDP|f=x1|ev=" + ##pEv + "|cg=" + ##vA + "|mid=" + ($$String:$MasterID) + "|aid=" + ($$String:$AlterID)
+    002 : SET : vH : ##vH + "|vt=" + ($$String:$VoucherTypeName) + "|vno=" + ($$String:$VoucherNumber)
+    003 : OPEN FILE : "C:\fcspike\dpath\probe.txt" : Text : Write : Unicode
+    004 : IF : NOT $$LastResult
+    005 :    RETURN : Yes
+    006 : END IF
+    010 : SET : vV : $SEARCHMAXTERMLIMIT:Company:##SVCurrentCompany
+    011 : WRITE FILE LINE : ##vH + "|k=x_SEARCHMAXTERMLIMIT|v=" + ##vV + "|end"
+    012 : CLOSE TARGET FILE
+    013 : RETURN : Yes

@@ -1,0 +1,28 @@
+;; dpath probe sysdp (tally-versions mode dpath, harness only): after Tally's save and in the delete / cancel events
+[#Form: Voucher]
+    On : Form Accept : Yes : Call : FCDPWsysdp : "accept_post"
+
+[System: Events]
+    FCDPEsysdpa : Before Delete Object : Yes : Call : FCDPWsysdp : "before_delete"
+    FCDPEsysdpb : After Delete Object : Yes : Call : FCDPWsysdp : "after_delete"
+    FCDPEsysdpc : Before Cancel Object : Yes : Call : FCDPWsysdp : "before_cancel"
+    FCDPEsysdpd : After Cancel Object : Yes : Call : FCDPWsysdp : "after_cancel"
+
+[Function: FCDPWsysdp]
+    Parameter : pEv : String
+    Variable  : vV  : String
+    Variable  : vA  : String
+    Variable  : vB  : String
+    Variable  : vH  : String
+    Returns   : Logical
+    000 : SET : vA : $Guid:Company:##SVCurrentCompany
+    001 : SET : vH : "FCDP|f=sysdp|ev=" + ##pEv + "|cg=" + ##vA + "|mid=" + ($$String:$MasterID) + "|aid=" + ($$String:$AlterID)
+    002 : SET : vH : ##vH + "|vt=" + ($$String:$VoucherTypeName) + "|vno=" + ($$String:$VoucherNumber)
+    003 : OPEN FILE : "C:\fcspike\dpath\probe.txt" : Text : Write : Unicode
+    004 : IF : NOT $$LastResult
+    005 :    RETURN : Yes
+    006 : END IF
+    010 : SET : vV : $$SysInfo:DataPath
+    011 : WRITE FILE LINE : ##vH + "|k=sysdp|v=" + ##vV + "|end"
+    012 : CLOSE TARGET FILE
+    013 : RETURN : Yes

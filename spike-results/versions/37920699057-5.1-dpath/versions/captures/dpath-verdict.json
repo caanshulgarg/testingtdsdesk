@@ -1,0 +1,311 @@
+[
+  {
+    "k": "sysdp",
+    "e": "$$SysInfo:DataPath",
+    "all": false,
+    "post": false,
+    "differ": false,
+    "hasNum": false,
+    "eq": false,
+    "one": false
+  },
+  {
+    "k": "svcp",
+    "e": "##SVCurrentPath",
+    "all": true,
+    "post": true,
+    "differ": true,
+    "hasNum": false,
+    "eq": false,
+    "one": true
+  },
+  {
+    "k": "dest",
+    "e": "$Destination:Company:##SVCurrentCompany",
+    "all": true,
+    "post": true,
+    "differ": true,
+    "hasNum": true,
+    "eq": true,
+    "one": true
+  },
+  {
+    "k": "cnum",
+    "e": "$CompanyNumber:Company:##SVCurrentCompany",
+    "all": true,
+    "post": true,
+    "differ": false,
+    "hasNum": false,
+    "eq": false,
+    "one": true
+  },
+  {
+    "k": "destnum",
+    "e": [
+      "$Destination:Company:##SVCurrentCompany",
+      "$CompanyNumber:Company:##SVCurrentCompany"
+    ],
+    "all": true,
+    "post": true,
+    "differ": true,
+    "hasNum": true,
+    "eq": false,
+    "one": true
+  },
+  {
+    "k": "sysdpnum",
+    "e": [
+      "$$SysInfo:DataPath",
+      "$CompanyNumber:Company:##SVCurrentCompany"
+    ],
+    "all": true,
+    "post": true,
+    "differ": false,
+    "hasNum": true,
+    "eq": false,
+    "one": true
+  },
+  {
+    "k": "svcpnum",
+    "e": [
+      "##SVCurrentPath",
+      "$CompanyNumber:Company:##SVCurrentCompany"
+    ],
+    "all": true,
+    "post": true,
+    "differ": true,
+    "hasNum": true,
+    "eq": true,
+    "one": true
+  },
+  {
+    "k": "sys_CompanyPath",
+    "e": "$$SysInfo:CompanyPath",
+    "all": false,
+    "post": false,
+    "differ": false,
+    "hasNum": false,
+    "eq": false,
+    "one": false
+  },
+  {
+    "k": "sys_CompanyDataPath",
+    "e": "$$SysInfo:CompanyDataPath",
+    "all": false,
+    "post": false,
+    "differ": false,
+    "hasNum": false,
+    "eq": false,
+    "one": false
+  },
+  {
+    "k": "sys_DataDirectory",
+    "e": "$$SysInfo:DataDirectory",
+    "all": false,
+    "post": false,
+    "differ": false,
+    "hasNum": false,
+    "eq": false,
+    "one": false
+  },
+  {
+    "k": "sys_DataFolder",
+    "e": "$$SysInfo:DataFolder",
+    "all": false,
+    "post": false,
+    "differ": false,
+    "hasNum": false,
+    "eq": false,
+    "one": false
+  },
+  {
+    "k": "sys_DataDir",
+    "e": "$$SysInfo:DataDir",
+    "all": false,
+    "post": false,
+    "differ": false,
+    "hasNum": false,
+    "eq": false,
+    "one": false
+  },
+  {
+    "k": "sys_TallyDataPath",
+    "e": "$$SysInfo:TallyDataPath",
+    "all": false,
+    "post": false,
+    "differ": false,
+    "hasNum": false,
+    "eq": false,
+    "one": false
+  },
+  {
+    "k": "sys_DataLocation",
+    "e": "$$SysInfo:DataLocation",
+    "all": false,
+    "post": false,
+    "differ": false,
+    "hasNum": false,
+    "eq": false,
+    "one": false
+  },
+  {
+    "k": "sys_CurrentDataPath",
+    "e": "$$SysInfo:CurrentDataPath",
+    "all": false,
+    "post": false,
+    "differ": false,
+    "hasNum": false,
+    "eq": false,
+    "one": false
+  },
+  {
+    "k": "sys_CmpDataPath",
+    "e": "$$SysInfo:CmpDataPath",
+    "all": false,
+    "post": false,
+    "differ": false,
+    "hasNum": false,
+    "eq": false,
+    "one": false
+  },
+  {
+    "k": "sys_ApplicationPath",
+    "e": "$$SysInfo:ApplicationPath",
+    "all": true,
+    "post": true,
+    "differ": false,
+    "hasNum": false,
+    "eq": false,
+    "one": true
+  },
+  {
+    "k": "sys_ConfigPath",
+    "e": "$$SysInfo:ConfigPath",
+    "all": true,
+    "post": true,
+    "differ": false,
+    "hasNum": false,
+    "eq": false,
+    "one": true
+  },
+  {
+    "k": "sys_ExePath",
+    "e": "$$SysInfo:ExePath",
+    "all": true,
+    "post": true,
+    "differ": false,
+    "hasNum": false,
+    "eq": false,
+    "one": true
+  },
+  {
+    "k": "m_Path",
+    "e": "$Path:Company:##SVCurrentCompany",
+    "all": false,
+    "post": false,
+    "differ": false,
+    "hasNum": false,
+    "eq": false,
+    "one": false
+  },
+  {
+    "k": "m_DataPath",
+    "e": "$DataPath:Company:##SVCurrentCompany",
+    "all": false,
+    "post": false,
+    "differ": false,
+    "hasNum": false,
+    "eq": false,
+    "one": false
+  },
+  {
+    "k": "m_CompanyPath",
+    "e": "$CompanyPath:Company:##SVCurrentCompany",
+    "all": false,
+    "post": false,
+    "differ": false,
+    "hasNum": false,
+    "eq": false,
+    "one": false
+  },
+  {
+    "k": "m_Directory",
+    "e": "$Directory:Company:##SVCurrentCompany",
+    "all": false,
+    "post": false,
+    "differ": false,
+    "hasNum": false,
+    "eq": false,
+    "one": false
+  },
+  {
+    "k": "m_DataDirectory",
+    "e": "$DataDirectory:Company:##SVCurrentCompany",
+    "all": false,
+    "post": false,
+    "differ": false,
+    "hasNum": false,
+    "eq": false,
+    "one": false
+  },
+  {
+    "k": "m_Location",
+    "e": "$Location:Company:##SVCurrentCompany",
+    "all": false,
+    "post": false,
+    "differ": false,
+    "hasNum": false,
+    "eq": false,
+    "one": false
+  },
+  {
+    "k": "m_DataLocation",
+    "e": "$DataLocation:Company:##SVCurrentCompany",
+    "all": false,
+    "post": false,
+    "differ": false,
+    "hasNum": false,
+    "eq": false,
+    "one": false
+  },
+  {
+    "k": "m_Folder",
+    "e": "$Folder:Company:##SVCurrentCompany",
+    "all": false,
+    "post": false,
+    "differ": false,
+    "hasNum": false,
+    "eq": false,
+    "one": false
+  },
+  {
+    "k": "m_CompanyFolder",
+    "e": "$CompanyFolder:Company:##SVCurrentCompany",
+    "all": false,
+    "post": false,
+    "differ": false,
+    "hasNum": false,
+    "eq": false,
+    "one": false
+  },
+  {
+    "k": "m_LoadedPath",
+    "e": "$LoadedPath:Company:##SVCurrentCompany",
+    "all": false,
+    "post": false,
+    "differ": false,
+    "hasNum": false,
+    "eq": false,
+    "one": false
+  },
+  {
+    "k": "m_FullPath",
+    "e": "$FullPath:Company:##SVCurrentCompany",
+    "all": false,
+    "post": false,
+    "differ": false,
+    "hasNum": false,
+    "eq": false,
+    "one": false
+  }
+]
