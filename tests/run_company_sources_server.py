@@ -204,7 +204,7 @@ try:
     print("== 6. review H5: the same data (one folder under two paths); the re-review: only while a location is pending")
     beat(K2, G2, src(I2, P2), start=70000, alt=70014)     # PC-2's next beat, after its starting point was recorded afresh
     ok(vrow(CG + "-%08x" % 26400), "6. PC-2's line kept pending before ② was chosen: applied once ②'s starting point was recorded afresh (its AlterID 70011 above 70000)")
-    out = db.one("set fincom.uid = %s; set fincom.role = 'authenticated'; set role authenticated; select tally_company_source_same(%s)::text" % (q(OWNER), q(BOOK)))
+    out = db.one("set fincom.uid = %s; set fincom.role = 'authenticated'; set role authenticated; select tally_company_source_same(%s, array[]::text[])::text" % (q(OWNER), q(BOOK)))
     ok('"ok": false' in (out or "") and db.one("select choice from tally_company_sources where book_id = %s and data_id = %s" % (q(BOOK), q(I1))) == "other",
        "6. the re-review (Low): same data with nothing pending: refused, ① (other) not chosen (%s)" % out)
     print("== 7. the re-review H1-r(a): only a proven data id says 'own'")
@@ -251,6 +251,18 @@ try:
        "8. its bridge's verified line (Tally's entry from its own Tally): applied, the held line replaced (%s %s)" % (res(r), lrow("v-1").get("state")))
     c, r = call(dict(b3, dataSources=[{"company": CO2, "company_guid": CG2, "data_id": I4, "path": r"E:\\Fork B\\DATA", "w": "anshul"}]), K3)
     ok(not r.get("verifyLines"), "8. listed no more (%s)" % r.get("verifyLines"))
+    print("== 9. the security re-check SR2-M1: after a choice only a computer of the chosen location records the starting point")
+    db.sql("update tally_sync_cursor set cleared_at = now() + interval '1 second' where book_id = %s" % q(BOOK2))
+    cur0 = db.rows("select last_voucher_alterid::text as a, start_device::text as d from tally_sync_cursor where book_id = %s" % q(BOOK2))[0]
+    G2old = dict(G2, version="2.4.0")
+    c, r = call(dict(b2, bridge=G2old, version="2.4.0", computer="PC-2", dataSources=None, startPoint={CO2: {"altvchid": 99000, "altmstid": 90, "guid": CG2}},
+                     companies=[{"name": CO2, "open": True, "guid": CG2, "altvchid": 99100, "altmstid": 100}]), K2)
+    cur1 = db.rows("select last_voucher_alterid::text as a, start_device::text as d from tally_sync_cursor where book_id = %s" % q(BOOK2))[0]
+    ok(c == 200 and cur1 == cur0 and ((r.get("recorder") or {}).get(CO2) or {}).get("gap") is None,
+       "9. a 2.4.0 bridge's beat from the other copy (no data locations) after the choice: no starting point, no gap check (%s %s)" % (cur1, (r.get("recorder") or {}).get(CO2)))
+    c, r = call(dict(b2, startPoint={CO2: {"altvchid": 1200, "altmstid": 90, "guid": CG2}}, dataSources=[{"company": CO2, "company_guid": CG2, "data_id": I4, "path": r"E:\\Fork B\\DATA", "w": "anshul"}]), K1)
+    cur2 = db.rows("select last_voucher_alterid::text as a, start_device::text as d from tally_sync_cursor where book_id = %s" % q(BOOK2))[0]
+    ok(cur2 == {"a": "1200", "d": D1}, "9. the chosen location's computer (NWS144) records it (%s %s %s)" % (cur2, r.get("recorder"), r.get("dataSources")))
 finally:
     if fn:
         fn.terminate()

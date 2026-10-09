@@ -677,9 +677,9 @@ async function recorderGaps(dev: any, firm: string, bridge: string, changes: Bea
     // may record a book's first starting point (then it is chosen by itself, migration 71), but has no gap check
     if (src?.other.has(c.name)) { out[c.name] = { gap: null, missing: 0, otherSource: true }; continue; }
     let started = false;
-    // 2.4.1: the starting point asked once per 5 minutes per book, GUID AND data location (a newly chosen location records
+    // 2.4.1: the starting point asked once per 5 minutes per book, computer (SR2-M1), GUID AND data location (a newly chosen location records
     // it afresh at once after the owner's choice)
-    const sAlt = c.start ? c.start.altvchid : c.altvchid, sMst = c.start ? c.start.altmstid : c.altmstid, key = book + "|" + c.guid + "|" + (src?.ids.get(c.name) || "") + (src?.notChosen.has(c.name) ? "|pending" : "");
+    const sAlt = c.start ? c.start.altvchid : c.altvchid, sMst = c.start ? c.start.altmstid : c.altmstid, key = book + "|" + dev.id + "|" + c.guid + "|" + (src?.ids.get(c.name) || "") + (src?.notChosen.has(c.name) ? "|pending" : "");
     const sd = startDone.get(key);
     if (c.guid && sAlt !== null && !(sd && Date.now() - sd.t < 300000)) {
       try {
@@ -690,6 +690,8 @@ async function recorderGaps(dev: any, firm: string, bridge: string, changes: Bea
           if (startDone.size > 5000) startDone.clear();
           startDone.set(key, { other: d?.otherCompany === true, t: Date.now() }); started = d?.set === true;
           if (typeof d?.bookGuid === "string" && d.bookGuid) { if (bookGuid.size > 5000) bookGuid.clear(); bookGuid.set(book, d.bookGuid); }
+          // the security re-check SR2-M1 (migration 71): after a choice only a computer of the chosen location records it
+          if (d?.notChosenComputer === true && !src?.notChosen.has(c.name)) out[c.name] = { gap: null, missing: 0, notChosenComputer: true };
           if (started) console.log("tally-ingest beat: starting point recorded", c.name, JSON.stringify({ guid: c.guid, startVoucher: (data as any)?.startVoucher, startMaster: (data as any)?.startMaster }));
         }
       } catch (e) { beatFail("tally_start_point", c.name, e); }
@@ -704,6 +706,7 @@ async function recorderGaps(dev: any, firm: string, bridge: string, changes: Bea
       out[c.name] = { gap: null, missing: 0, needsBaseline: true, otherCompany: true };
       continue;
     }
+    if ((out[c.name] as any)?.notChosenComputer) continue;
     if (c.altvchid === null) { if (started) out[c.name] = { gap: null, missing: 0, startRecorded: true }; continue; }
     if (src?.notChosen.has(c.name)) { out[c.name] = { gap: null, missing: 0, pendingSource: true, ...(started ? { startRecorded: true } : {}) }; continue; }
     try {
