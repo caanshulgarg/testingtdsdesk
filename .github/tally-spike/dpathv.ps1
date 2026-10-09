@@ -19,7 +19,8 @@
 #       different between the folders, the company number folder in it, equal to the folder Tally opened
 #   D3  save time: the ref's add-on against the same file with the chosen formula written on each line ("|dpath=", after
 #       cname); 1 warm + 5 saves (Day Book, the last entry, Alt+2, Ctrl+A, timed to the add-on's voucher_accept_post
-#       line, bigv.ps1's method) of a receipt and of a 50-item sales invoice; arms: current, with the field, current again
+#       line, bigv.ps1's method) of a receipt and of a 50-item sales invoice; arms: current, with the field, current again,
+#       with the field again (run 37920699057: one arm each left a 50-item +86 ms on 5.1 inside a -42 ms current-vs-current spread)
 Say '---- dpath: the data folder of the loaded company inside the add-on''s events'
 . (Join-Path $PSScriptRoot 'tdslib.ps1')
 $script:TdsSend = { param([string]$k) KeysTo $k 0 }
@@ -343,8 +344,8 @@ function DpSave($label, $day) {
 }
 $sets = @(@('receipt', '1-11-2026', 'receipt'), @('sales50', '1-12-2026', 'sales invoice of 50 items'))
 $arms = [ordered]@{}; $armLine = @{}
-foreach ($arm in @(@('current', $tdl), @('field', $varTdl), @('current2', $tdl))) {
-  if ($arm[0] -eq 'field' -and -not ($ok1 -and $ok2)) { continue }
+foreach ($arm in @(@('current', $tdl), @('field', $varTdl), @('current2', $tdl), @('field2', $varTdl))) {
+  if ($arm[0] -like 'field*' -and -not ($ok1 -and $ok2)) { continue }
   DpIni $data2 $arm[1]; $null = DpStart "D3-$($arm[0])"; $null = TdsGateway "D3 $($arm[0])"
   $r = @{}
   foreach ($s in $sets) {
@@ -358,14 +359,15 @@ $fieldLine = "$($armLine['field'])"; $fv = [regex]::Match($fieldLine, '\|dpath=(
 Info "D3 the last voucher_accept_post line with the field: $(if ($fieldLine) { $fieldLine.Substring(0, [Math]::Min(500, $fieldLine.Length)) } else { '-' })"
 $med = { param($a) $s = @($a | Where-Object { $_ -ge 0 } | Sort-Object); if ($s.Count -ge 3) { $s[[int][math]::Floor(($s.Count - 1) / 2)] } else { -1 } }
 foreach ($s in $sets) {
-  $a = @(if ($arms.Contains('current')) { $arms['current'][$s[0]] }); $b = @(if ($arms.Contains('field')) { $arms['field'][$s[0]] }); $a2 = @(if ($arms.Contains('current2')) { $arms['current2'][$s[0]] })
-  $mA = & $med $a; $mB = & $med $b; $mA2 = & $med $a2
+  $a = @(if ($arms.Contains('current')) { $arms['current'][$s[0]] }); $b = @(if ($arms.Contains('field')) { $arms['field'][$s[0]] }); $a2 = @(if ($arms.Contains('current2')) { $arms['current2'][$s[0]] }); $b2 = @(if ($arms.Contains('field2')) { $arms['field2'][$s[0]] })
+  $mA = & $med $a; $mB = & $med $b; $mA2 = & $med $a2; $mB2 = & $med $b2
   $base = @(@($mA, $mA2) | Where-Object { $_ -ge 0 }); $mBase = if ($base.Count) { [int](($base | Measure-Object -Average).Average) } else { -1 }
-  $d = if ($mB -ge 0 -and $mBase -ge 0) { $mB - $mBase } else { $null }
+  $fld = @(@($mB, $mB2) | Where-Object { $_ -ge 0 }); $mFld = if ($fld.Count) { [int](($fld | Measure-Object -Average).Average) } else { -1 }
+  $d = if ($mFld -ge 0 -and $mBase -ge 0) { $mFld - $mBase } else { $null }
   $flag = if ($null -eq $d) { '' } elseif ($d -gt 50) { '; OVER 0.05 s' } else { '; within 0.05 s' }
   $st = if ($null -eq $d) { 'HARNESS' } else { 'MEASURE' }
-  Add-Content -Path $resultsFile -Encoding UTF8 -Value ("{0} d3 save time {1} ({2}): Ctrl+A to the add-on's voucher_accept_post line: current add-on {3} ms, median {4}; with the field '{5}' {6} ms, median {7}; current again {8} ms, median {9}; the field's share: {10} ms (against the mean of the two current medians, {11} ms; current vs current again: {12} ms){13}; the field written: '{14}'" -f `
-      $st, $s[2], $usePick.k, ($a -join ', '), $mA, $(if ($usePick.e -is [array]) { $usePick.e -join ' + \ + ' } else { $usePick.e }), ($b -join ', '), $mB, ($a2 -join ', '), $mA2, $(if ($null -ne $d) { $d } else { '-' }), $mBase, $(if ($mA -ge 0 -and $mA2 -ge 0) { $mA2 - $mA } else { '-' }), $flag, $fv)
+  Add-Content -Path $resultsFile -Encoding UTF8 -Value ("{0} d3 save time {1} ({2}): Ctrl+A to the add-on's voucher_accept_post line: current add-on {3} ms, median {4}; with the field '{5}' {6} ms, median {7}; current again {8} ms, median {9}; with the field again {15} ms, median {16}; the field's share: {10} ms (mean of the two field medians {17} ms against the mean of the two current medians {11} ms; current vs current again: {12} ms){13}; the field written: '{14}'" -f `
+      $st, $s[2], $usePick.k, ($a -join ', '), $mA, $(if ($usePick.e -is [array]) { $usePick.e -join ' + \ + ' } else { $usePick.e }), ($b -join ', '), $mB, ($a2 -join ', '), $mA2, $(if ($null -ne $d) { $d } else { '-' }), $mBase, $(if ($mA -ge 0 -and $mA2 -ge 0) { $mA2 - $mA } else { '-' }), $flag, $fv, ($b2 -join ', '), $mB2, $mFld)
 }
 $fe = (Norm $fv) -eq (Norm $f2)
 Result 'd2 the add-on with the field writes the folder' $(if (-not $fieldLine) { 'HARNESS' } elseif ($fe) { 'PASS' } else { 'FAIL' }) ("formula {0}; the add-on's own line on folder 2 carries dpath='{1}' (the folder Tally opened: {2}; equal: {3})" -f $usePick.k, $fv, $f2, $fe)
