@@ -105,7 +105,8 @@ with sync_playwright() as p:
     rl = txt("#app [data-post-result]")
     ok("1 in Tally (Tally's reply)" in rl and "not yet read back" not in rl and "failed" not in rl, "(a) the run line: '1 in Tally (Tally's reply)' (%s)" % rl)
     ok(E("postWord({ok: true, byReply: true, verified: false, vchId: '26303'})").replace("’", "'") == "Posted to Tally (Tally's reply)", "(a) postWord: 'Posted to Tally (Tally's reply)' (%s)" % E("postWord({ok: true, byReply: true, verified: false})"))
-    ok("b1" not in E("Array.from(document.querySelectorAll('#app [data-post-panel] [data-bill-row]')).map(r => r.getAttribute('data-bill-row'))") and E("postCounts(S.coId).attention") == 0,
+    # smart moves round 1 (09-Oct-2026): the run's end shows the Posted tab, so To post and Errors are looked at by name
+    ok(E("S.postTabs[S.coId]") == "posted" and "b1" not in E("Array.from(document.querySelectorAll('#app [data-post-panel=topost] [data-bill-row], #app [data-post-panel=errors] [data-bill-row]')).map(r => r.getAttribute('data-bill-row'))") and E("postCounts(S.coId).attention") == 0,
        "(a) A/1 not under To post or Errors; nothing needs attention (%s)" % E("postCounts(S.coId)"))
     E("() => { S.tab = 'invoices'; S.reviewTable = false; S.filter = 'approved'; S.selected = 'b1'; S.drawerOpen = true; render(); }"); pg.wait_for_timeout(600)
     stamp, line = txt("#app .stampmark"), txt("#app [data-posted-line]")
