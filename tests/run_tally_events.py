@@ -88,7 +88,7 @@ with sync_playwright() as p:
     ok(pl == "Connected · Tally open on NWS144 · last read 15:34 IST", "the Tally panel: %r" % pl)
     E("() => doAct('tallyPanelClose')"); pg.wait_for_timeout(300)
     # the Tally page: one line a client, each with Update now
-    E("() => navHome('tally')"); pg.wait_for_timeout(800)
+    E("() => { S.tallyMore = {page: true}; navHome('tally'); }"); pg.wait_for_timeout(800)  # the Tally redesign: the clients' lines are under the page's Details
     rows = pg.locator("#app [data-client-lines] [data-client-line]")
     first = pg.inner_text("#app [data-client-lines] [data-client-line]") if rows.count() else ""
     ok(rows.count() == 2 and "ZZ Test Client" in first and "Tally open on NWS144" in first, "the Tally page: one line a client, the open client first (%s)" % first.replace("\n", " "))

@@ -9,7 +9,7 @@ import { useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import Bell from "./parts/Bell.jsx";
 
-const HOME_TITLES = { clients: "Clients", today: "Today", inbox: "Inbox", tally: "Tally", rules: "Settings", help: "Help" };
+const HOME_TITLES = { clients: "Clients", today: "Today", inbox: "Inbox", tally: "Your Tally connection", rules: "Settings", help: "Help" };
 // one name for one thing (spec K1): each page is called what the sidebar calls it
 const BOOKS_TITLES = { reports: "Reports", lookup: "Look up", letters: "Letters", mis: "MIS", fs: "Accounts", audit: "Audit" };
 const DOC_NAMES = { bills: "Purchase", bank: "Bank", sales: "Sales" };

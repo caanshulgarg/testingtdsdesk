@@ -629,6 +629,28 @@ ol.setup li div{color:var(--ink);font-weight:400;margin-top:2px}
 .tguide-mark{flex:none;width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:600;font-size:13px;border:1px solid var(--rule);color:var(--ink-2,var(--ink))}
 .tguide-steps li.now .tguide-mark{border-color:var(--st-attention);color:var(--st-attention)}
 .tguide-steps li.done .tguide-mark{background:var(--st-done-soft);border-color:var(--st-done);color:var(--st-done)}
+/* The Tally redesign (09-Oct-2026): "Your Tally connection": Needs you (the ledgers page's look), one card a computer,
+   Details folded; the client's one Tally link line */
+.tneeds{margin:0 0 14px;padding:10px 14px;border-left:4px solid var(--st-attention);border-radius:6px;background:var(--st-attention-soft)}
+.tneeds h3{font-size:15px}
+.tneeds-list{list-style:none;margin:0;padding:0}
+.tneeds-list li{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 12px;padding:6px 0;border-top:1px solid rgba(0,0,0,.08)}
+.tneeds-list li:first-child{border-top:0}
+.tneeds-list li>span:first-child{flex:1 1 260px;min-width:0;overflow-wrap:anywhere}
+.tcard-facts{margin:4px 0 0;line-height:1.6;overflow-wrap:anywhere}
+.tcard-line{margin:4px 0 0;line-height:1.7;overflow-wrap:anywhere}
+.tcard-line:empty{display:none}
+.tcard-more{margin-top:8px;padding-top:6px;border-top:1px solid var(--rule-soft)}
+.tcard-sub{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-2,var(--ink));margin:8px 0 2px}
+.tcard-focus{border-color:var(--brand);box-shadow:0 0 0 2px var(--brand-tint)}
+.tback{font-size:14px}
+.tlink{margin:0 0 12px;padding:10px 14px;border:1px solid var(--rule);border-radius:8px;background:var(--sheet)}
+.tlink-line{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px}
+.tlink-line>span:first-child{flex:1 1 300px;min-width:0;overflow-wrap:anywhere}
+.tlink-steps{margin:6px 0 0 20px;padding:0;line-height:1.6}
+.tlink-needs{list-style:none;margin:8px 0 0;padding:0}
+.tlink-needs li{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 12px;padding:6px 0;border-top:1px solid var(--rule-soft)}
+.tlink-needs li>span:first-child{flex:1 1 260px;min-width:0;overflow-wrap:anywhere}
 /* FinCom 2.4.0, the simpler GST and TDS ledgers page (Books -> Tally ledgers): a status line, Needs you, two short tables */
 .ledpage{max-width:1100px}
 .led-status{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:0 0 12px;padding:10px 14px;border:1px solid var(--rule);border-radius:8px;background:var(--sheet)}

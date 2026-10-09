@@ -12,6 +12,7 @@ import Confirm, { ChoiceTag } from "../parts/Confirm.jsx";
 import Legacy from "../parts/Legacy.jsx";
 import { AiSettings } from "../parts/Ai.jsx";
 import { BridgeSettings, CloudBooks } from "./Tally.jsx";
+import TallyLink from "../parts/TallyLink.jsx";
 import { PlanCredit, FirmAccount, PeopleEtc, Platform } from "./Account.jsx";
 import { Rates, Reading, ClosedPeriods } from "./SettingsMore.jsx";
 import { BankSetup } from "../parts/BankSettings.jsx";
@@ -220,6 +221,7 @@ function PostTo({ co, open }) {
 function TallySetup() {
   const co = CO(), open = Bridge.up() && Bridge.st.open.length ? Bridge.st.open : null, auto = co.vchNumbering === "tally";
   return <>
+    <TallyLink co={co} where="setup" />
     <Card title="The company in Tally" note="Entries go into this company. The name must match Tally’s exactly.">
       <div className="grid">
         <CoText label="Company name in Tally" path="tallyName" />

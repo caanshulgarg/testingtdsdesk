@@ -51,16 +51,16 @@ export default function Side() {
             </button>
           </div>)}
       {/* on the firm's own pages, the firm's menu instead of a client's (review item 29) */}
-      {/* round 4 of the UI pass (09-Oct-2026): from the firm's pages, one click back to the client that is open (it was
-          only "change", which opens the client chooser) */}
-      {home && open && <Item icon="dash" label={"Back to " + open.name} title={"Back to " + open.name + ", where you left it"}
-        onClick={() => { S.firmMenu = false; S.tallyPanel = false; openCompany(open.id).then(() => { render(); window.scrollTo(0, 0); }); }} />}
       {home && <>
+        {/* one way back to the open client from a firm page (round 4 of the UI pass and the Tally redesign, 09-Oct-2026,
+            merged into one item on arc-ui): backToClient (src/js/52) opens the client's page last shown, else its dashboard */}
+        {open && <Item icon="dash" label={"\u2190 Back to " + open.name}
+          onClick={() => { S.firmMenu = false; S.tallyPanel = false; if (typeof backToClient === "function") backToClient(); else openCompany(open.id).then(() => { render(); window.scrollTo(0, 0); }); }} />}
         <div className="side-firm-label">Firm</div>
         <Item icon="clients" label="Clients" on={["clients", "today", "inbox"].includes(S.homeTab)} onClick={() => navHome("clients")} />
         <Item icon="clients" label="People" on={S.homeTab === "rules" && S.settingsTab === "account"} onClick={() => goSettings("account")} />
         <Item icon="reports" label="Plan and credit" on={S.homeTab === "rules" && S.settingsTab === "plan"} onClick={() => goSettings("plan")} />
-        <Item icon="books" label="Tally" on={S.homeTab === "tally"} onClick={() => navHome("tally")} />
+        <Item icon="books" label="Tally" on={S.homeTab === "tally"} onClick={() => { S.tallyFocus = ""; navHome("tally"); }} />
         <Item icon="setup" label="Settings" on={S.homeTab === "rules" && !["account", "plan"].includes(S.settingsTab)} onClick={() => goSettings(null)} />
       </>}
       {open && !home && (

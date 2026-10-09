@@ -14,6 +14,7 @@
 // removals, and the bridge's own update settings when this computer has one).
 import { useEffect, useState } from "react";
 import { JobsNote } from "../../parts/Notes.jsx";
+import TallyLink from "../../parts/TallyLink.jsx";
 const d = (x) => fmtDate(tallyDate(x));
 const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
 
@@ -71,8 +72,10 @@ function Status({ b, days }) {
   if (n && (m.parts || []).length && !(b.tb && Object.keys(b.tb.led || {}).length)) bits.push("opening balances not uploaded");
   const k = days.reduce((a, x) => a + x.days, 0);
   if (k) bits.push(k + (k === 1 ? " day needs" : " days need") + " a Day Book");
-  // Update now where it already was (the bridge here, or the firm's Tally computer through the cloud): nothing new is asked
-  const can = n > 0 && ((typeof Bridge === "object" && Bridge.on() && Bridge.up()) || (typeof TCloud === "object" && S.coId && TCloud.has(S.coId)));
+  // the Tally redesign (09-Oct-2026): Update now is on the client's Tally link line, above (one place, not two); without a
+  // link line (no Tally computer and no bridge here know this client) it stays here
+  const linked = typeof tallyLine === "function" && !!tallyLine(CO());
+  const can = !linked && n > 0 && ((typeof Bridge === "object" && Bridge.on() && Bridge.up()) || (typeof TCloud === "object" && S.coId && TCloud.has(S.coId)));
   return <p className="up-status" style={{ margin: "10px 0 12px" }}><b data-up-status="">{bits.join(" · ")}</b>
     {can && <>{" "}<button className="linkbtn" data-update-now="" onClick={() => doAct("keepNow")}>Update now</button></>}</p>;
 }
@@ -195,6 +198,7 @@ export default function FromTally({ b }) {
   const n = (b.vouchers || []).length, m = b.meta || {}, other = m.gstins ? notThisClient(m.gstins) : [];
   const days = needDays(b, S.coId);
   return <div className="up-page" data-upload-page="" style={{ maxWidth: 760 }}>
+    <div style={{ marginTop: 10 }}><TallyLink co={CO()} where="books" b={b} /></div>
     <Status b={b} days={days} />
     {other.length > 0 && <p className="bk-warn">The books here are for {other.join(", ")}, not this client’s PAN ({clientPan()}). Remove them with More → “Remove Tally data and all GST work”.</p>}
     <Upload b={b} />
