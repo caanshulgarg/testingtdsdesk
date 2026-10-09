@@ -6,12 +6,15 @@
 // The add-on now writes the company's data folder on every line ("|dp=<path>", recorderline.go). Here:
 //   - the data id of a folder: sha256 of its case-folded, trimmed path, the first 16 hex characters (dataIDOf); the path
 //     itself is kept for display only;
-//   - the bridge learns its OWN Tally's data id per company (company GUID) from its own add-on lines: w= this Windows user,
-//     the company open in its own Tally (liveTake has checked that), the most recent dp (dataLearn);
+//   - the bridge learns its OWN Tally's data id per company (company GUID) only from a line that proved itself (the review
+//     of next-241, H1): w= this Windows user, its entry asked of this bridge's own Tally by its MasterID and Tally's answer
+//     under the line's own GUID with an AlterID above the line's (dataProve). A known own id is never replaced without
+//     FinCom's choice (a second folder of the same user goes as another location's);
 //   - FinCom's beat answer names the chosen data id of each company (dataSources: tally_company_sources, migration 71):
 //     kept in sync\recorder-data.json with the own ids;
-//   - a line whose data id is not the one this bridge reads (the chosen one when FinCom named it, else the own one), or any
-//     line of a company whose own data id is not the chosen one (the bridge stops reading that company), is never asked of
+//   - a line whose data id is not the own one (or, with no own one proven, not among the chosen ones), or any line of a
+//     company whose own location FinCom decided is NOT read ('other': the bridge stops reading it; a pending one goes on,
+//     its lines held by FinCom in a form it can still apply), also one without dp= then (H2), is never asked of
 //     Tally and never sent as an entry: it goes as event "other_source" (the company, its GUID, the data id, the path, w=,
 //     the computer, the line's date, type and number, nothing of the entry: wire);
 //   - a line without dp= (an older add-on, or an empty one) is as in 2.4.0.
@@ -23,6 +26,7 @@ package main
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -32,23 +36,37 @@ type dataOwnSt struct {
 	ID, Path, Company, CGUID, W, At string
 }
 
+// FinCom's answer for a company: the data ids it reads (a set), and what it decided for the own one it was told of
 type dataChoiceSt struct {
-	ID, Company string
+	IDs         []string
+	Own, Choice string // the data id the beat named as this bridge's own, and FinCom's word for it: chosen | pending | other
+	Company     string
 }
 
 var dataSt struct {
 	mu     sync.Mutex
 	dir    string                  // the sync folder it belongs to ("" : not loaded)
-	own    map[string]dataOwnSt    // company GUID (lower case) -> this bridge's own data id
-	chosen map[string]dataChoiceSt // company GUID (lower case) -> the data id FinCom reads ("" : none named)
+	own    map[string]dataOwnSt    // company GUID (lower case) -> this bridge's own data id (proven)
+	chosen map[string]dataChoiceSt // company GUID (lower case) -> FinCom's answer
 }
 
 func dataFile() string { return sp("recorder-data.json") }
 
-// the data id of a data folder ("" for none): case-folded, trimmed of spaces and of trailing path separators (the same
-// folder written D:\x\100000 or D:\x\100000\ is one location; the coordinator's check of the measured formula)
+// review SR-L1 of next-241: control characters (C0, C1) and the bidi marks and overrides are no part of a path, a Windows
+// user or a computer's name (FinCom strips the same, and measures lengths in characters as cutRunes does)
+func dataClean(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r < 0x20 || (r >= 0x7f && r <= 0x9f) || r == 0x200e || r == 0x200f || (r >= 0x202a && r <= 0x202e) || (r >= 0x2066 && r <= 0x2069) {
+			return -1
+		}
+		return r
+	}, s)
+}
+
+// the data id of a data folder ("" for none): control characters dropped, case-folded, trimmed of spaces and of trailing
+// path separators (the same folder written D:\x\100000 or D:\x\100000\ is one location)
 func dataIDOf(path string) string {
-	p := strings.ToLower(strings.TrimRight(strings.TrimSpace(path), `\/ `))
+	p := strings.ToLower(strings.TrimRight(strings.TrimSpace(dataClean(path)), `\/ `))
 	if p == "" {
 		return ""
 	}
@@ -67,6 +85,8 @@ func dataResetState() {
 	dataSt.mu.Unlock()
 }
 
+func dataHexID(id string) bool { return len(id) == 16 && strings.Trim(id, "0123456789abcdef") == "" }
+
 // under dataSt.mu
 func dataFresh() {
 	d := syncDir()
@@ -78,15 +98,19 @@ func dataFresh() {
 	o := readObjFile(dataFile())
 	for k, v := range obj(o["own"]) {
 		e := obj(v)
-		if id := str(e["id"]); len(id) == 16 {
+		if id := str(e["id"]); dataHexID(id) {
 			dataSt.own[k] = dataOwnSt{ID: id, Path: str(e["path"]), Company: str(e["company"]), CGUID: str(e["cguid"]), W: str(e["w"]), At: str(e["at"])}
 		}
 	}
 	for k, v := range obj(o["chosen"]) {
 		e := obj(v)
-		if id := str(e["id"]); len(id) == 16 {
-			dataSt.chosen[k] = dataChoiceSt{ID: id, Company: str(e["company"])}
+		var ids []string
+		for _, x := range arr(e["ids"]) {
+			if id := str(x); dataHexID(id) {
+				ids = append(ids, id)
+			}
 		}
+		dataSt.chosen[k] = dataChoiceSt{IDs: ids, Own: str(e["own"]), Choice: str(e["choice"]), Company: str(e["company"])}
 	}
 }
 
@@ -97,74 +121,114 @@ func dataSave() {
 		own[k] = M{"id": v.ID, "path": v.Path, "company": v.Company, "cguid": v.CGUID, "w": v.W, "at": v.At}
 	}
 	for k, v := range dataSt.chosen {
-		ch[k] = M{"id": v.ID, "company": v.Company}
+		ids := []any{}
+		for _, x := range v.IDs {
+			ids = append(ids, x)
+		}
+		ch[k] = M{"ids": ids, "own": v.Own, "choice": v.Choice, "company": v.Company}
 	}
 	if err := saveFile(dataFile(), jsonText(M{"own": own, "chosen": ch})); err != nil {
 		writeLog("Recorder: " + dataFile() + " could not be written: " + err.Error())
 	}
 }
 
-// a line taken by liveTake (its company open in this bridge's own Tally): a line of this Windows user with a data folder
-// teaches the company's own data id (the most recent one)
-func dataLearn(l recLine) {
-	id, k := dataIDOf(l.DP), dataKey(l.CGUID)
-	if id == "" || k == "" || strings.TrimSpace(l.W) == "" || !liveUserSame(l.W, liveWinUserFn()) {
-		return
+func dataIn(ids []string, id string) bool {
+	for _, x := range ids {
+		if x == id {
+			return true
+		}
 	}
-	dataSt.mu.Lock()
-	defer dataSt.mu.Unlock()
-	dataFresh()
-	was := dataSt.own[k]
-	if was.ID == id && was.Path == strings.TrimSpace(l.DP) {
-		return
-	}
-	// the same Windows user with the company open in two Tallys (two data folders): once FinCom has chosen this bridge's own
-	// location, a line of the other folder does not take the own data id over (it goes as another location's)
-	if ch := dataSt.chosen[k].ID; ch != "" && was.ID == ch && id != ch {
-		return
-	}
-	dataSt.own[k] = dataOwnSt{ID: id, Path: cutRunes(strings.TrimSpace(l.DP), 260), Company: strings.TrimSpace(l.CName), CGUID: liveGUID(strings.TrimSpace(l.CGUID)),
-		W: strings.TrimSpace(l.W), At: nowFn().In(liveZone).Format("2006-01-02T15:04:05")}
-	dataSave()
-	if was.ID != "" {
-		writeLog("Recorder: " + strings.TrimSpace(l.CName) + ": this bridge's own Tally now has the company's data in " + strings.TrimSpace(l.DP) + " (was " + was.Path + ")")
-	}
+	return false
 }
 
-// the data id this bridge reads for a company: the chosen one when FinCom named it and this bridge's own is it (or its own
-// is not known), the own one when FinCom named none; stopped: FinCom reads another data id than this bridge's own
-func dataReads(cguid string) (id string, stopped bool) {
+// under dataSt.mu: FinCom decided this bridge's own location is not read ('other')
+func dataStoppedLocked(k string) bool {
+	own, ch := dataSt.own[k].ID, dataSt.chosen[k]
+	if own == "" {
+		return false
+	}
+	if ch.Own == own && ch.Choice != "" {
+		return ch.Choice == "other"
+	}
+	return len(ch.IDs) > 0 && !dataIn(ch.IDs, own) && ch.Choice != "pending"
+}
+
+// a company whose own data location FinCom decided is not read: this bridge stops reading it (nothing of it is asked of
+// Tally). A pending one (FinCom has not decided) is not stopped (review H5 of next-241)
+func dataStopped(cguid string) bool {
 	k := dataKey(cguid)
 	dataSt.mu.Lock()
 	defer dataSt.mu.Unlock()
 	dataFresh()
-	own, ch := dataSt.own[k].ID, dataSt.chosen[k].ID
-	switch {
-	case ch != "" && own != "" && own != ch:
-		return "", true
-	case ch != "":
-		return ch, false
-	}
-	return own, false
+	return dataStoppedLocked(k)
 }
 
-// a company whose own data id is not the one FinCom reads: this bridge stops reading it (nothing of it is asked of Tally)
-func dataStopped(cguid string) bool {
-	_, s := dataReads(cguid)
-	return s
-}
-
-// whether a line of this data folder is another source's for its company (never asked of Tally, never an entry)
+// whether a line of this data folder is another location's for its company (never asked of Tally, never an entry).
+// Decided BEFORE anything of the line is learned (review H1). A line without dp= (an add-on before 2.4.1): as in 2.4.0,
+// unless this bridge stopped reading the company (H2)
 func dataOther(cguid, dp string) bool {
-	id := dataIDOf(dp)
+	id, k := dataIDOf(dp), dataKey(cguid)
+	dataSt.mu.Lock()
+	defer dataSt.mu.Unlock()
+	dataFresh()
+	stopped := dataStoppedLocked(k)
 	if id == "" {
-		return false // an older add-on (no dp=), or an empty one: as in 2.4.0
+		return stopped
 	}
-	r, stopped := dataReads(cguid)
-	return stopped || (r != "" && r != id)
+	own, ch := dataSt.own[k].ID, dataSt.chosen[k]
+	switch {
+	case own != "" && id == own:
+		return stopped
+	case own != "":
+		// a known own id is replaced only by FinCom's choice: a location FinCom reads while the own one it is not
+		return !(dataIn(ch.IDs, id) && !dataIn(ch.IDs, own))
+	case len(ch.IDs) > 0:
+		return !dataIn(ch.IDs, id)
+	}
+	return false // nothing proven, nothing chosen: a candidate (its own fetch may prove it: dataProve)
 }
 
-// this bridge's own data id of a company ("" : not known)
+// under live.mu: the line's entry came from this bridge's own Tally by its MasterID, under the line's own GUID (or the
+// GUID its MasterID makes, for a new entry's placeholder) with an AlterID above the line's: the line's data folder is
+// this bridge's own (review H1). Only a line of this Windows user; a known own id only by FinCom's choice
+func dataProve(c *change, x string) {
+	if c.dataId == "" || strings.TrimSpace(c.winUser) == "" || !liveUserSame(c.winUser, liveWinUserFn()) || c.byNumber {
+		return
+	}
+	want := strings.TrimSpace(c.addonGuid)
+	if want == "" || livePlaceholder(want) {
+		if toI64(c.masterId) <= 0 || c.companyGuid == "" {
+			return
+		}
+		want = fmt.Sprintf("%s-%08x", c.companyGuid, toI64(c.masterId))
+	}
+	if !strings.EqualFold(tagValue(x, "GUID"), want) || toI64(tagNum(x, "ALTERID")) <= c.lineAlter {
+		return
+	}
+	k := dataKey(c.companyGuid)
+	dataSt.mu.Lock()
+	defer dataSt.mu.Unlock()
+	dataFresh()
+	was, ch := dataSt.own[k], dataSt.chosen[k]
+	if was.ID == c.dataId {
+		return
+	}
+	if was.ID != "" && !(dataIn(ch.IDs, c.dataId) && !dataIn(ch.IDs, was.ID)) {
+		return
+	}
+	if was.ID == "" && len(ch.IDs) > 0 && !dataIn(ch.IDs, c.dataId) {
+		return
+	}
+	dataSt.own[k] = dataOwnSt{ID: c.dataId, Path: c.dataPath, Company: c.company, CGUID: c.companyGuid, W: c.winUser, At: nowFn().In(liveZone).Format("2006-01-02T15:04:05")}
+	dataSave()
+	if was.ID != "" {
+		writeLog("Recorder: " + c.company + ": FinCom reads the company from " + c.dataPath + ", and this bridge's own Tally has it there now (was " + was.Path + ")")
+	} else {
+		writeLog("Recorder: " + c.company + ": this bridge's own Tally has the company's data in " + c.dataPath)
+	}
+}
+
+// this bridge's own (proven) data id of a company ("" : not known)
 func dataOwnID(cguid string) string {
 	dataSt.mu.Lock()
 	defer dataSt.mu.Unlock()
@@ -172,7 +236,7 @@ func dataOwnID(cguid string) string {
 	return dataSt.own[dataKey(cguid)].ID
 }
 
-// the heartbeat's dataSources: this bridge's own data id per company, at most 50
+// the heartbeat's dataSources: this bridge's own (proven) data id per company, at most 50
 func dataBeat() []any {
 	dataSt.mu.Lock()
 	defer dataSt.mu.Unlock()
@@ -193,8 +257,8 @@ func dataBeat() []any {
 	return out
 }
 
-// FinCom's beat answer: dataSources [{company, company_guid, chosenId, chosen}]: the chosen data id of each company named
-// (chosenId "" : none chosen). A company not named keeps what was known (an older cloud names none)
+// FinCom's beat answer: dataSources [{company, company_guid, dataId (the own one it was told of), chosenIds [...], choice
+// (chosen | pending | other), chosenId (the first chosen, for an older reader)}]. A company not named keeps what was known
 func applyDataSources(j M) {
 	list, had := j["dataSources"]
 	if !had || list == nil {
@@ -210,28 +274,35 @@ func applyDataSources(j M) {
 		if k == "" {
 			continue
 		}
-		id := strings.ToLower(strings.TrimSpace(str(e["chosenId"])))
-		if id != "" && (len(id) != 16 || strings.Trim(id, "0123456789abcdef") != "") {
+		var ids []string
+		for _, y := range arr(e["chosenIds"]) {
+			if id := strings.ToLower(strings.TrimSpace(str(y))); dataHexID(id) && !dataIn(ids, id) {
+				ids = append(ids, id)
+			}
+		}
+		if id := strings.ToLower(strings.TrimSpace(str(e["chosenId"]))); len(ids) == 0 && dataHexID(id) {
+			ids = append(ids, id)
+		}
+		own, choice := strings.ToLower(strings.TrimSpace(str(e["dataId"]))), str(e["choice"])
+		if choice == "" && own != "" && len(ids) > 0 {
+			choice = map[bool]string{true: "chosen", false: "other"}[dataIn(ids, own)]
+		}
+		if choice != "" && choice != "chosen" && choice != "pending" && choice != "other" {
 			continue
 		}
 		was := dataSt.chosen[k]
-		if id == "" {
-			if was.ID != "" {
-				delete(dataSt.chosen, k)
-				changed = true
-			}
+		now := dataChoiceSt{IDs: ids, Own: own, Choice: choice, Company: cutRunes(dataClean(str(e["company"])), 200)}
+		if strings.Join(was.IDs, ",") == strings.Join(now.IDs, ",") && was.Own == now.Own && was.Choice == now.Choice {
 			continue
 		}
-		if was.ID != id {
-			dataSt.chosen[k] = dataChoiceSt{ID: id, Company: cutRunes(str(e["company"]), 200)}
-			changed = true
-			own := dataSt.own[k]
-			switch {
-			case own.ID != "" && own.ID != id:
-				writeLog("Recorder: " + or(str(e["company"]), k) + ": FinCom reads the company from another data location; this bridge stops reading it (its saves go to FinCom as another data location's)")
-			case was.ID != "" && own.ID == id:
-				writeLog("Recorder: " + or(str(e["company"]), k) + ": FinCom reads this bridge's data location of the company again")
-			}
+		wasStopped := dataStoppedLocked(k)
+		dataSt.chosen[k] = now
+		changed = true
+		switch st := dataStoppedLocked(k); {
+		case st && !wasStopped:
+			writeLog("Recorder: " + or(now.Company, k) + ": FinCom reads the company from another data location; this bridge stops reading it (its saves go to FinCom as another data location's)")
+		case !st && wasStopped:
+			writeLog("Recorder: " + or(now.Company, k) + ": FinCom reads this bridge's data location of the company again")
 		}
 	}
 	if changed {

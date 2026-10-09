@@ -85,9 +85,10 @@ func d241Asked(f *standTally, mid string) bool {
 func TestData241TwoSourcesOtherNeverFetched(t *testing.T) {
 	p, f, c := r222bBridge(t, "")
 	ufAs(t, "user", "anshul")
-	liveAppend(t, p,
-		d241Line("voucher_accept_post", "11:30", r222GUID(26311), "26311", "54391", "Receipt", "191", "5-Oct-2026", "own", d241Path1, "anshul"),
-		d241Line("voucher_accept_post", "11:31", r222GUID(25743), "25743", "0", "Sales", "2026-27/GST/297", "5-Oct-2026", "SECRET-NARR", d241Path2, ""))
+	// the own line first: its entry from the own Tally proves the own folder (review H1 of next-241: learned only so)
+	liveAppend(t, p, d241Line("voucher_accept_post", "11:30", r222GUID(26311), "26311", "54391", "Receipt", "191", "5-Oct-2026", "own", d241Path1, "anshul"))
+	readAndUploadAll(t)
+	liveAppend(t, p, d241Line("voucher_accept_post", "11:31", r222GUID(25743), "25743", "0", "Sales", "2026-27/GST/297", "5-Oct-2026", "SECRET-NARR", d241Path2, ""))
 	readAndUploadAll(t)
 	own := d241Sent(c, "191")
 	if len(own) != 1 || str(own[0]["event"]) != "created" && str(own[0]["event"]) != "altered" || str(own[0]["data_id"]) != d241ID(d241Path1) || str(own[0]["xml"]) == "" {
@@ -128,9 +129,9 @@ func TestData241TwoSourcesOtherNeverFetched(t *testing.T) {
 func TestData241OtherUserOtherFolderService(t *testing.T) {
 	p, f, c := r222bBridge(t, "")
 	ufAs(t, "service", "anshul")
-	liveAppend(t, p,
-		d241Line("voucher_accept_post", "11:30", r222GUID(26311), "26311", "54391", "Receipt", "191", "5-Oct-2026", "own", d241Path1, "anshul"),
-		d241Line("voucher_accept_post", "11:31", r222GUID(26312), "26312", "54392", "Receipt", "192", "5-Oct-2026", "theirs", d241Path2, "Ranjeet"))
+	liveAppend(t, p, d241Line("voucher_accept_post", "11:30", r222GUID(26311), "26311", "54391", "Receipt", "191", "5-Oct-2026", "own", d241Path1, "anshul"))
+	readAndUploadAll(t)
+	liveAppend(t, p, d241Line("voucher_accept_post", "11:31", r222GUID(26312), "26312", "54392", "Receipt", "192", "5-Oct-2026", "theirs", d241Path2, "Ranjeet"))
 	readAndUploadAll(t)
 	if o := d241Sent(c, "192"); len(o) != 1 || str(o[0]["event"]) != "other_source" || str(o[0]["w"]) != "Ranjeet" {
 		t.Fatalf("another folder's line: %v", o)

@@ -37,6 +37,10 @@ func TestFallback241OlderEntryByNumber(t *testing.T) {
 	if len(s) != 1 || str(s[0]["event"]) != "created" || str(s[0]["object_guid"]) != own.guid || !strings.Contains(str(s[0]["xml"]), "<GUID>"+own.guid+"</GUID>") || str(s[0]["heldWhy"]) != "" {
 		t.Fatalf("Sales 297 by its number: %v", s)
 	}
+	// review M1 of next-241: the narration is the entry's own (Tally's), never the line's
+	if str(s[0]["narration"]) != "Sales 2026-27/GST/297" {
+		t.Fatalf("the narration sent: %q", str(s[0]["narration"]))
+	}
 	if f.n(vchByNumberID) != 1 {
 		t.Fatalf("asked by number %d times: %v", f.n(vchByNumberID), f.ids())
 	}
@@ -57,19 +61,34 @@ func TestFallback241NotFoundByNumber(t *testing.T) {
 	}
 }
 
-// the MasterID gives another type (a Payment): Tally's own Journal J-77 of the day is taken (2.3.4 L5 reversed here)
+// review M1 of next-241: the MasterID gives another type (a Payment): 2.4.0's hold, never asked by its number (the probe:
+// Sales 6 with MasterID 26500 was taken as 26501 after a renumbering)
 func TestFallback241OtherTypeByNumber(t *testing.T) {
 	p, f, c := fb241Bridge(t)
 	r222Vch(f, 25683, "Payment", "P-4", "20261005", 54502)
-	j := r222Vch(f, 25800, "Journal", "J-77", "20261005", 54520)
+	r222Vch(f, 25800, "Journal", "J-77", "20261005", 54520)
 	liveAppend(t, p, fb241Post("08:40", "25683", "Journal", "J-77"))
 	readAndUploadAll(t)
 	s := c.recSent()
-	if len(s) != 1 || str(s[0]["object_guid"]) != j.guid || str(s[0]["xml"]) == "" {
-		t.Fatalf("J-77 by its number: %v", s)
+	if len(s) != 1 || str(s[0]["xml"]) != "" || !strings.Contains(str(s[0]["heldWhy"]), "is a Payment of 05-Oct-2026, not this Journal") {
+		t.Fatalf("held: %v", s)
 	}
-	if f.n(vchObjectID) != 1 || f.n(vchByNumberID) != 1 {
+	if f.n(vchObjectID) != 1 || f.n(vchByNumberID) != 0 {
 		t.Fatalf("requests: %v", f.ids())
+	}
+}
+
+// the probe of M1: Sales 6 (MasterID 26500) renumbered in Tally; the voucher with MasterID 26500 is now Sales 7: held,
+// never Sales 6 = MasterID 26501 taken by its number
+func TestFallback241RenumberedNotTaken(t *testing.T) {
+	p, f, c := fb241Bridge(t)
+	r222Vch(f, 26500, "Sales", "7", "20261005", 54700)
+	r222Vch(f, 26501, "Sales", "6", "20261005", 54701)
+	liveAppend(t, p, fb241Post("09:00", "26500", "Sales", "6"))
+	readAndUploadAll(t)
+	s := c.recSent()
+	if len(s) != 1 || str(s[0]["xml"]) != "" || strings.Contains(jsonText(s[0]), r222GUID(26501)) || f.n(vchByNumberID) != 0 {
+		t.Fatalf("Sales 6 was taken as MasterID 26501: %v %v", s, f.ids())
 	}
 }
 
@@ -110,10 +129,10 @@ func TestFallback241WrongTypeNoneHeld(t *testing.T) {
 		t.Fatalf("taken: %v", s)
 	}
 	w := str(s[0]["heldWhy"])
-	if !strings.Contains(w, "is a Payment of 05-Oct-2026, not this Journal") || !strings.Contains(w, "Tally gave no Journal J-78 of 05-Oct-2026") {
+	if !strings.Contains(w, "is a Payment of 05-Oct-2026, not this Journal") {
 		t.Fatalf("the words: %q", w)
 	}
-	if f.n(vchByNumberID) != 1 {
+	if f.n(vchByNumberID) != 0 { // review M1: another type: never asked by its number
 		t.Fatalf("asked by number %d times", f.n(vchByNumberID))
 	}
 }

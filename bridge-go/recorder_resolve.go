@@ -246,10 +246,10 @@ func liveVoucherWrong(x, who string, w liveWant) (string, string) {
 
 // 2.4.1 (item 5): a MasterID answer the line is asked by its number for (once, on its first fetch): an older entry (below
 // the starting point), no entry with that MasterID, or an entry of another type, date or number than the line's
-var reLiveOtherEntry = regexp.MustCompile(`^Tally's voucher with MasterID \d+ is .*, not this `)
-
+// Review M1 of next-241: only an older entry or no entry; another type, date or number keeps 2.4.0's hold (a renumbering
+// gives the MasterID another number: Sales 6 with MasterID 26500 was taken as MasterID 26501)
 func liveFallbackWhy(why string) bool {
-	return strings.Contains(why, "not a change after the starting point") || strings.HasPrefix(why, "Tally gave no voucher with MasterID ") || reLiveOtherEntry.MatchString(why)
+	return strings.Contains(why, "not a change after the starting point") || strings.HasPrefix(why, "Tally gave no voucher with MasterID ")
 }
 
 // 2.4.1: the words for a line whose MasterID is an older entry in this Tally, once it was asked by its number too (the

@@ -188,6 +188,8 @@ type change struct {
 	// 2.4.1 (datasource.go): the data id and folder of the line's Tally (dp=), the line's Windows user (w=); an
 	// "other_source" line: the event it would have been (otherOf), never fetched, sent heads only
 	dataId, dataPath, winUser, otherOf string
+	// review H1 of next-241: the add-on's own GUID on the line (the proof of the own data folder compares Tally's with it)
+	addonGuid string
 }
 
 // a place in the add-on's files: the file and the byte offset a line starts at
@@ -1154,7 +1156,6 @@ func liveTake(file string, gen int, ll liveLogicalLine, posting bool, held map[s
 		liveNotHere(l)
 		return 0
 	}
-	dataLearn(l) // 2.4.1: a line of this Windows user teaches its company's own data id (datasource.go)
 	if live.qcount[liveGUID(l.CGUID)] >= liveQueueCap() {
 		liveSayOnce("cap|"+l.CGUID, fmt.Sprintf("Recorder: %s has %d changes waiting to be sent: the rest of its file is read once they go", strings.TrimSpace(l.CName), liveQueueCap()))
 		return -1
@@ -1457,13 +1458,16 @@ func liveEmitFrom(l recLine, ev, file string, gen int, startFile string, start, 
 		c.holds = append(c.holds, liveAt{file, lineStart})
 	}
 	c.companyGuid = liveGUID(c.companyGuid)
-	c.dataId, c.dataPath, c.winUser = dataIDOf(l.DP), cutRunes(strings.TrimSpace(l.DP), 260), cutRunes(strings.TrimSpace(l.W), 200)
+	c.dataId, c.dataPath, c.winUser = dataIDOf(l.DP), cutRunes(strings.TrimSpace(dataClean(l.DP)), 260), cutRunes(strings.TrimSpace(dataClean(l.W)), 200)
+	c.addonGuid = strings.TrimSpace(l.GUID)
 	// 2.4.1 (the owner's approval of 09-Oct-2026): a line of another data location of the company (its dp= not the one this
 	// bridge reads, or a company this bridge stopped reading): never asked of Tally, never an entry; sent heads only as
-	// "other_source" (datasource.go). Before anything of it is looked at: no FinCom id, no GUID, no body
-	if c.dataId != "" && !c.isLedger() && !c.isMaster() && dataOther(c.companyGuid, l.DP) {
+	// "other_source" (datasource.go). Before anything of it is looked at: no FinCom id, no GUID, no body. Review of
+	// next-241: decided before anything is learned from the line (H1); a ledger or master line too (M4); a line without dp=
+	// of a company this bridge stopped reading too (H2)
+	if dataOther(c.companyGuid, l.DP) {
 		c.otherOf, c.event = ev, "other_source"
-		c.guid, c.masterId, c.alterId, c.narr, c.name, c.parent, c.lineAlter = "", "", "", "", "", "", 0
+		c.guid, c.masterId, c.alterId, c.narr, c.name, c.parent, c.lineAlter, c.masterType = "", "", "", "", "", "", 0, ""
 		if t := liveTime(l.T1); !t.IsZero() {
 			c.at = t.Format(time.RFC3339)
 		} else if t := liveTime(l.T0); !t.IsZero() {
@@ -2400,6 +2404,7 @@ byDay:
 					continue
 				}
 				liveTakeBody(c, x)
+				dataProve(c, x) // review H1 of next-241: Tally's own MasterID answer under the line's GUID proves the data folder
 			}
 			live.mu.Unlock()
 			for _, m := range missing {
@@ -2418,6 +2423,11 @@ byDay:
 				// liveVoucherWrong with the MasterID cleared (liveOneByNumber). Only here, on the line's first fetch: the held list
 				// asks again by its MasterID alone (liveResolveOne). A line of another data location never comes here (datasource.go)
 				byNo := m.kind == wrongNoSave || ((c.event == "created" || c.event == "altered") && liveFallbackWhy(m.why))
+				// review H1 of next-241: never for a line of a data folder not proven this bridge's own (the copy's Receipt 192
+				// took the own Tally's Receipt 192 by its number)
+				if m.kind != wrongNoSave && c.dataId != "" && c.dataId != dataOwnID(c.companyGuid) {
+					byNo = false
+				}
 				if !byNo || c.vchNo == "" || !liveNumberText(c.vchNo) || !liveNumberText(c.vchType) {
 					liveHeldAs(c, m.why, m.kind != wrongRetry)
 					continue
@@ -2466,6 +2476,7 @@ byDay:
 					continue
 				}
 				live.mu.Lock()
+				c.narr = "" // review M1 of next-241: the entry's own narration (Tally's), never the line's
 				liveTakeBody(c, x)
 				if m.kind == wrongNoSave && !c.idsMismatch {
 					c.event = "created" // review H2: the save was not of the MasterID's voucher: a new entry, found by its number
@@ -2563,7 +2574,7 @@ func (c *change) wire() M {
 	if c.event == "other_source" {
 		// 2.4.1: heads only: nothing of the entry (no GUID, MasterID, AlterID, narration, ledgers or body)
 		m := M{"line_id": c.lineId, "event": "other_source", "of": c.otherOf, "company_guid": c.companyGuid, "vch_type": c.vchType, "vch_no": c.vchNo,
-			"vch_date": c.vchDate, "saved_at": c.at, "pc": liveComputerFn(), "user": c.user, "w": c.winUser, "data_id": c.dataId, "data_path": c.dataPath,
+			"vch_date": c.vchDate, "saved_at": c.at, "pc": dataClean(liveComputerFn()), "user": c.user, "w": c.winUser, "data_id": c.dataId, "data_path": c.dataPath,
 			"source": c.source, "again": c.again}
 		if !c.readAt.IsZero() {
 			m["received_at"] = c.readAt.In(liveZone).Format(time.RFC3339)
@@ -2590,7 +2601,7 @@ func (c *change) wire() M {
 		narr = liveNoTag(narr) // second review L-C: the cloud would take the id from the narration's tag
 	}
 	m := M{"line_id": c.lineId, "event": c.event, "object_guid": c.guid, "master_id": c.masterId, "alter_id": alter, "vch_type": c.vchType, "vch_no": c.vchNo,
-		"vch_date": c.vchDate, "saved_at": c.at, "pc": liveComputerFn(), "user": c.user, "company_guid": c.companyGuid, "ledgers": ls, "narration": narr,
+		"vch_date": c.vchDate, "saved_at": c.at, "pc": dataClean(liveComputerFn()), "user": c.user, "company_guid": c.companyGuid, "ledgers": ls, "narration": narr,
 		"fid": fid, "xml": c.xml, "source": c.source,
 		// next-outbox: always there (FinCom knows by it that this bridge marks its deliberate resends): "" on a first send
 		"again": c.again}

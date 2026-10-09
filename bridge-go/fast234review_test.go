@@ -181,10 +181,8 @@ func TestFast234UnreadShapeHeld(t *testing.T) {
 }
 
 // --- L5: a line WITH a MasterID whose voucher is another entry: held (the Day Book words), never asked by its type and
-// number (a scan of the company: 12-17 s at 100,000 vouchers). 2.4.1 (the owner's approval of 09-Oct-2026, item 5)
-// reverses L5 for a created or altered line whose MasterID gave an older entry, none, or another type, date or number:
-// asked ONCE by its type and number (on its first fetch only; the held list asks by MasterID alone), Tally's own J-77
-// taken (fallback241_test.go)
+// number (a scan of the company: 12-17 s at 100,000 vouchers). 2.4.1 (review M1 of next-241): kept so for another type, date or
+// number; only an older entry or no entry is asked by its number
 func TestFast234MasterIDLineNeverByNumber(t *testing.T) {
 	p, f, c := r222bBridge(t, `,"RecorderResolveSec":0`)
 	r222Vch(f, 25683, "Payment", "P-4", "20261005", 54502)
@@ -194,11 +192,11 @@ func TestFast234MasterIDLineNeverByNumber(t *testing.T) {
 		r222Line("voucher_accept_post", "08:40", nwsGUID+"-00000000", "25683", "0", "Journal", "J-77", "5-Oct-2026", "j77"))
 	readAndUploadAll(t)
 	fastTurns(3)
-	if f.n(vchByNumberID) != 1 {
-		t.Fatalf("asked by number %d times (want once): %v", f.n(vchByNumberID), f.ids())
+	if f.n(vchByNumberID) != 0 {
+		t.Fatalf("asked by number: %v", f.ids())
 	}
 	s := c.recSent()
-	if len(s) != 1 || !strings.Contains(str(s[0]["xml"]), "<VOUCHERNUMBER>J-77</VOUCHERNUMBER>") || str(s[0]["heldWhy"]) != "" {
+	if len(s) != 1 || str(s[0]["xml"]) != "" || !strings.Contains(str(s[0]["heldWhy"]), "is a Payment of 05-Oct-2026, not this Journal") {
 		t.Fatalf("sent: %v", s)
 	}
 }

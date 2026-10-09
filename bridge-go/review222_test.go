@@ -143,10 +143,9 @@ func TestR222UnnumberedJournalByMaster(t *testing.T) {
 	}
 }
 
-// --- 5. the MasterID gives another voucher (a Payment, not this Journal): 2.3.4 (the independent review, L5) held it for
-// good, never asked by its type, number and date. 2.4.1 (the owner's approval of 09-Oct-2026, item 5) reverses L5 for this
-// case only: asked ONCE by its type and number, Tally's own voucher J-77 (the one voucher of that type and number on that
-// day, above the starting point) is taken (fallback241_test.go)
+// --- 5. the MasterID gives another voucher (a Payment, not this Journal): 2.3.4 (the independent review, L5) held for
+// good, never asked by its type, number and date (a scan of the company); Tally's own voucher J-77 is not taken. 2.4.1
+// (review M1 of next-241): kept so, another type, date or number is never asked by its number
 func TestR222FallbackByNumber(t *testing.T) {
 	p, f, c := nwsBridge(t, "")
 	setCfg("RecorderBodySec", float64(20)) // the background read waits its turn behind the company lookup (about 4 s here)
@@ -157,10 +156,10 @@ func TestR222FallbackByNumber(t *testing.T) {
 		r222Line("voucher_accept_post", "08:40", nwsGUID+"-00000000", "25683", "0", "Journal", "J-77", "5-Oct-2026", "j77"))
 	readAndUploadAll(t)
 	sent := c.recSent()
-	if len(sent) != 1 || !strings.Contains(str(sent[0]["xml"]), "<VOUCHERNUMBER>J-77</VOUCHERNUMBER>") || str(sent[0]["heldWhy"]) != "" {
-		t.Fatalf("J-77 by its number: %v", sent)
+	if len(sent) != 1 || str(sent[0]["xml"]) != "" || !strings.Contains(str(sent[0]["heldWhy"]), "is a Payment of 05-Oct-2026, not this Journal") {
+		t.Fatalf("held: %v", sent)
 	}
-	if f.n(vchObjectID) != 1 || f.n(vchByNumberID) != 1 {
+	if f.n(vchObjectID) != 1 || f.n(vchByNumberID) != 0 {
 		t.Fatalf("requests: %v", f.ids())
 	}
 }
