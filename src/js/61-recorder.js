@@ -255,7 +255,8 @@ const Rec = {
   //     daybook  - upload that day's Day Book (the bridge gave up; no entry GUID; a Day Book of the day incomplete...)
   //     dupid    - FinCom's id is on a second Tally entry: check Tally for a double posting, then upload that day's Day Book
   //     readstop - reading is stopped from FinCom on that computer: an owner resumes it (Resume reading)
-  //     baseline - the company's starting point is not recorded: the Tally page (the computer's More, Baselines)
+  //     baseline - the company's starting point is not recorded: the Tally page (the computer's More, Baselines) (2.4.1:
+  //                ONLY these words; "Tally's voucher with that MasterID is not a change after the starting point" is daybook)
   //     masters  - a ledger line with no GUID: read the ledgers from Tally (Books -> From Tally)
   //     locked   - the month is locked in FinCom: unlock it in Tie-out (then it applies)
   //     other    - any other held reason: Apply now (tally_recorder_release_held), once it is settled
@@ -271,7 +272,11 @@ const Rec = {
     if (st === "failed") return /queue|timeout|server/i.test(why) ? "" : "other";
     if (st !== "held") return "";
     if (/reading from Tally is stopped|stopped from FinCom/i.test(why)) return "readstop";
-    if (/starting point/i.test(why)) return "baseline";
+    // Bridge 2.4.1's app-side fixes (from next-241 915b0104 and 8500700f): the MasterID that is not a change after the
+    // starting point, and the older entry, are the Day Book upload (they named the starting point, or fell to 'other' with
+    // Apply now); 'baseline' only for "starting point not recorded"
+    if (/is not a change after the starting point|is an older entry, not this save/i.test(why)) return "daybook";
+    if (/starting point is not recorded|no starting point recorded/i.test(why)) return "baseline";
     if (/^FinCom id .* is matched to another Tally entry/i.test(why)) return "dupid";
     if (/no MasterID or no date/i.test(why)) return "daybook";
     if (this.FETCHED.some(x => x.test(why))) return "";

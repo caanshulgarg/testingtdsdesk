@@ -132,6 +132,11 @@ KINDS = [
     ("held", "the company's starting point is not recorded yet, so its entries are not taken from Tally", "baseline"),
     ("held", "this computer's Tally could not be asked whether it was deleted here (no starting point recorded for this company); not sent as a deletion: held", "baseline"),
     ("held", "the ledger was not read from Tally in time; FinCom takes it from the next ledger list", ""),
+    # Bridge 2.4.1's app-side fixes (from next-241 915b0104 / 8500700f, the coordinator's note of 09-Oct-2026): 'baseline' only
+    # for "starting point not recorded"; the MasterID that is not a change after the starting point, and the older entry,
+    # are the Day Book upload ('daybook'), not 'other' with Apply now
+    ("held", "Tally's voucher with that MasterID is not a change after the starting point", "daybook"),
+    ("held", "the voucher with that MasterID in this Tally is an older entry, not this save", "daybook"),
     ("held", "not found by its type and number (asked 3 times)", "other"),
     ("held", None, "other"),
     ("received", None, ""), ("queued", None, ""),
