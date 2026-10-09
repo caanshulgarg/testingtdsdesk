@@ -191,7 +191,7 @@ def main():
             pg.wait_for_timeout(700)
         pg.click('#app [data-read-stop="%s"]' % D1); confirm("#readStopWhy", "month end")
         ok(["tally_read_stop", {"p_device": D1, "p_reason": "month end"}] in calls("tally_read_stop"), "3. Stop reading -> tally_read_stop")
-        pg.click('#app [data-needs-you] [data-read-resume="%s"]' % D4); pg.wait_for_timeout(700)
+        pg.click('#app [data-need-computer="%s"] [data-need-act="resume"]' % D4); pg.wait_for_timeout(700)
         ok(["tally_read_resume", {"p_device": D4}] in calls("tally_read_resume"), "3. Resume (Needs you) -> tally_read_resume")
         pg.click('#app [data-read-stop-all]'); confirm("#readStopWhy", "update")
         ok(["tally_read_stop", {"p_device": None, "p_reason": "update"}] in calls("tally_read_stop"), "3. Stop reading on all computers -> tally_read_stop(null)")

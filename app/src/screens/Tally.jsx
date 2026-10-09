@@ -8,6 +8,7 @@ import Msg from "../parts/Msg.jsx";
 import ListTable from "../parts/ListTable.jsx";
 import TallyPill from "../parts/TallyPill.jsx";
 import TallyLine from "../parts/TallyLine.jsx";
+import { AlertLine } from "../parts/Bell.jsx";
 import SyncActivity from "./TallySync.jsx";
 import { TallyStates, TallyHistory } from "../parts/TallyStates.jsx";
 import { PostLog } from "./Done.jsx";
@@ -397,15 +398,19 @@ function needOf(r, latest, owner, allStopped) {
   if (latest && vnum(latest) > vnum(r.version) && !(p.releases && !p.noControl)) return { kind: "version", text: "Install FinCom Bridge " + latest + " on " + pc, act: "download" };
   return null;
 }
-// the one button of a Needs you line or a card
-function NeedAct({ r, n, m }) {
+// the one button of a Needs you line or a card. In Needs you (top) the buttons carry data-need-act (the card keeps the
+// controls' own hooks: data-read-resume, data-make-main, data-baseline-clear, data-bridge-download), so each control
+// is found once; both call the same function
+function NeedAct({ r, n, m, top }) {
   if (!n) return null;
-  if (n.act === "download") return <DownloadBtn m={m} primary />;
-  if (n.act === "resume") return <button className="btn small primary" data-read-resume={r.device.id} onClick={() => TCloud.readResume(r)}>Resume</button>;
-  if (n.act === "makeMain") return <button className="btn small primary" data-make-main={r.id} onClick={() => TCloud.makeMain(r)}>Make this the main bridge</button>;
-  if (n.act === "baseline") return <button className="btn small primary" data-baseline-clear={n.book} onClick={() => TCloud.baselineClear(n.book, n.company)}>Clear it</button>;
-  if (n.act === "check") return <button className="btn small" data-check-again="" onClick={() => TCloud.refreshPane()}>Check again</button>;
-  if (n.act === "details") return <button className="btn small" data-open-details="" onClick={() => { S.tallyMore = Object.assign({}, S.tallyMore || {}, { [cardKey(r)]: true }); render(); }}>Details</button>;
+  const h = (k, v) => top ? { "data-need-act": n.act } : { [k]: v };
+  if (n.act === "download") { const s = setupOf(m);
+    return s ? <a className="btn small primary" {...h("data-bridge-download", "")} href={s.href} download={s.file}>{"Download FinCom Bridge " + s.version}</a> : <DownloadBtn m={m} primary />; }
+  if (n.act === "resume") return <button className="btn small primary" {...h("data-read-resume", r.device.id)} onClick={() => TCloud.readResume(r)}>{top ? "Resume" : "Resume reading"}</button>;
+  if (n.act === "makeMain") return <button className="btn small primary" {...h("data-make-main", r.id)} onClick={() => TCloud.makeMain(r)}>Make this the main bridge</button>;
+  if (n.act === "baseline") return <button className="btn small primary" data-need-act="baseline" onClick={() => TCloud.baselineClear(n.book, n.company)}>Clear it</button>;
+  if (n.act === "check") return <button className="btn small" {...h("data-check-again", "")} onClick={() => TCloud.refreshPane()}>Check again</button>;
+  if (n.act === "details") return <button className="btn small" {...h("data-open-details", "")} onClick={() => { S.tallyMore = Object.assign({}, S.tallyMore || {}, { [cardKey(r)]: true }); render(); }}>Details</button>;
   return n.say ? <span className="note">{n.say}</span> : null;
 }
 // the clients' lines that only that day's Day Book settles (Rec.needKind: daybook, dupid), one line a client
@@ -426,7 +431,7 @@ function NeedsYou({ cards, latest, m, sources = null }) {
   if (allStopped) items.push(<li key="all" data-need="stopped-all" data-stopped-all="">
     <span>{"Reading stopped on all computers" + (stopAll && stopAll.stopped_by ? " by " + who(stopAll.stopped_by) : "") + ": " + ((stopAll && stopAll.reason) || "no reason given")}</span>
     {owner ? <button className="btn small primary" data-read-resume-all="" onClick={() => TCloud.readResume(null)}>Resume</button> : <span className="note">An owner of the firm can resume it.</span>}</li>);
-  cards.forEach((r) => { const n = needOf(r, latest, owner, allStopped); if (n) items.push(<li key={cardKey(r)} data-need={n.kind} data-need-computer={r.device.id}><span>{n.text}</span><NeedAct r={r} n={n} m={m} /></li>); });
+  cards.forEach((r) => { const n = needOf(r, latest, owner, allStopped); if (n) items.push(<li key={cardKey(r)} data-need={n.kind} data-need-computer={r.device.id}><span>{n.text}</span><NeedAct r={r} n={n} m={m} top /></li>); });
   dayBookNeeds().forEach(({ co, n }) => items.push(<li key={"db:" + co.id} data-need="daybook" data-need-client={co.id}>
     <span>{n + (n === 1 ? " entry of " : " entries of ") + co.name + " need" + (n === 1 ? "s" : "") + " that day's Day Book"}</span>
     <button className="btn small primary" data-need-upload={co.id} onClick={() => Rec.openClientTab(co.id, "books:import")}>Upload</button></li>));
@@ -842,7 +847,7 @@ export default function TallyHome({ connectStep = null, sourcesSlot = null }) {
       <button key={id} data-tally-tab={id} aria-selected={tab === id} onClick={() => { S.tallyTab = id; if (id === "activity") Rec.act.at = 0; render(); }}>{label}</button>)}</nav>
     {tab === "activity" ? <SyncActivity />
       : tab === "sent" ? <PostLog />
-      : <>
+      : <><AlertLine />
         <NeedsYou cards={cards} latest={latest} m={m} sources={sourcesSlot} />
         <TallyGuide rows={rows} m={m} connectStep={connectStep} />
         <FocusLine f={f} cards={cards} />

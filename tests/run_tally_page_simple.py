@@ -193,14 +193,19 @@ def main():
         ok(all(pg.locator(card(d) + " [data-status-line]").count() == 1 for d in (D1, D2, D3, D4)), "each card: exactly one status line")
         ok(all("\n" not in line(d) for d in (D1, D2, D3, D4)), "each status line is one line of words (%s)" % [line(d) for d in (D1, D2, D3, D4)])
         l1 = line(D1)
-        ok(re.match(r"^Connected · Tally open: GARG SHEKHAR \(port 9005\) · last entry 2 min ago$", l1) is not None, "all well: %r" % l1)
+        # the Tally redesign (09-Oct-2026): the card says its state in a word, the companies it reads and the last entry
+        # (IST); the port moved to Details; the status line is empty when nothing needs doing
+        ok(l1 == "" and txt(card(D1) + " [data-bridge-state]") == "Connected" and txt(card(D1) + " [data-card-companies]") == "Reads GARG SHEKHAR"
+           and re.match(r"^Last entry received 2 min ago \(\d\d:\d\d IST\)$", txt(card(D1) + " [data-card-last]")) is not None and "9005" not in txt(card(D1)), "all well: %r %r" % (l1, txt(card(D1))))
         ok(pg.get_attribute(card(D1) + " [data-status-line]", "data-level") == "ok" and pg.locator(card(D1) + " [data-status-line] button").count() == 0, "all well: green, nothing to press")
         ok("NWS144" in txt(card(D1)) and "anshul" in txt(card(D1)), "the card names the computer and the Windows user")
         # problems: the problem and the one thing that fixes it
         l2, l3, l4 = line(D2), line(D3), line(D4)
-        ok(l2.startswith("Offline since ") and " IST" in l2 and "LAPTOP" in l2 and "sign in to Windows as ravi" in l2 and pg.get_attribute(card(D2) + " [data-status-line]", "data-level") == "bad", "offline: the problem and the fix (%s)" % l2)
-        ok(l3.startswith("Connected · Tally not open") and "Open TallyPrime and the company on FRONTDESK" in l3 and pg.get_attribute(card(D3) + " [data-status-line]", "data-level") == "warn", "Tally not open: the fix (%s)" % l3)
-        ok("Reading stopped from FinCom: Tally hangs on the bank ledger" in l4 and pg.locator(card(D4) + " [data-status-line] button").count() == 1 and txt(card(D4) + " [data-status-line] button") == "Resume reading",
+        ok(l2.startswith("LAPTOP (ravi) is not connected since ") and " IST" in l2 and "Sign in to Windows there as ravi" in l2 and pg.get_attribute(card(D2) + " [data-status-line]", "data-level") == "bad"
+           and txt(card(D2) + " [data-bridge-state]") == "Not connected", "offline: the problem and the fix (%s)" % l2)
+        ok(l3.startswith("Tally is not open on FRONTDESK (tally). Open TallyPrime and the company there") and pg.get_attribute(card(D3) + " [data-status-line]", "data-level") == "warn"
+           and txt(card(D3) + " [data-bridge-state]") == "Needs you", "Tally not open: the fix (%s)" % l3)
+        ok("Reading stopped on TALLYSRV (meena): Tally hangs on the bank ledger" in l4 and pg.locator(card(D4) + " [data-status-line] button").count() == 1 and txt(card(D4) + " [data-status-line] button") == "Resume reading",
            "stopped from FinCom: the owner's one action, Resume reading (%s)" % l4)
         ok(all(pg.locator(card(d) + " [data-status-line] button").count() <= 1 for d in (D1, D2, D3, D4)), "never more than one action on a line")
         ok(not re.search(r"(?<![\d-])\d{2}:\d{2}(?! IST)", pg.inner_text("#app [data-computers]")), "no bare 14:05: every time in IST")
@@ -232,12 +237,12 @@ def main():
         old = dev(5, "OLDPC", "tally"); old["info"]["bridges"] = {}; old["main_bridge"] = None
         scene([OK_DEV, old], LINKED)
         l5 = E("() => { const e = [...document.querySelectorAll('#app [data-computer]')].find(x => x.innerText.includes('OLDPC')); const s = e && e.querySelector('[data-status-line]'); return s ? s.innerText.trim() : ''; }")
-        ok(l5.startswith("Needs FinCom Bridge") and E("() => { const e = [...document.querySelectorAll('#app [data-computer]')].find(x => x.innerText.includes('OLDPC')); return e ? e.querySelectorAll('[data-status-line] [data-bridge-download]').length : -1; }") == 1,
+        ok(l5.startswith("Install FinCom Bridge 2.3.4 on OLDPC") and E("() => { const e = [...document.querySelectorAll('#app [data-computer]')].find(x => x.innerText.includes('OLDPC')); return e ? e.querySelectorAll('[data-status-line] [data-bridge-download]').length : -1; }") == 1,
            "an older bridge: Needs FinCom Bridge, with the download (%s)" % l5)
 
         # ---- 5. staff: the same lines, no owner button anywhere, More open or not
         scene(DEVS, LINKED, role="member")
-        ok(line(D1) == l1 and "Reading stopped from FinCom" in line(D4) and pg.locator(card(D4) + " [data-status-line] button").count() == 0 and "owner" in line(D4), "staff: the same lines; the stop names who can resume it (%s)" % line(D4))
+        ok(line(D1) == l1 and "Reading stopped on TALLYSRV" in line(D4) and pg.locator(card(D4) + " [data-status-line] button").count() == 0 and "owner" in line(D4), "staff: the same lines; the stop names who can resume it (%s)" % line(D4))
         open_all()
         ok(pg.locator("#app [data-page-more] [data-bridges]").count() == 1 and "Posting settings" in txt(card(D1)), "staff: More opens too")
         found = [h for h in OWNER_HOOKS if pg.locator("#app [%s]" % h).count()]
@@ -277,7 +282,8 @@ def main():
         ro = dev(6, "RO-PC", "tally", tally="closed", opened=()); ro["main_bridge"] = "go-other"
         scene([ro], LINKED)
         l6 = line(ro["id"])
-        ok("reads only" in l6 and "Tally not open" in l6, "a reads-only bridge: Tally not open said too (%s)" % l6)
+        open_all()
+        ok("Tally is not open on RO-PC" in l6 and "reads only" in txt(card(ro["id"]) + " [data-card-more]"), "a reads-only bridge: Tally not open said, 'reads only' under Details (%s)" % l6)
         scene([OK_DEV], LINKED)
         ok(pg.locator("#app [data-tally-guide]").count() == 0 and pg.locator("#app [data-guide-again]").count() == 1, "linked: the guide folds to 'Connect another computer'")
         pg.click("#app [data-guide-again]"); pg.wait_for_timeout(500)
