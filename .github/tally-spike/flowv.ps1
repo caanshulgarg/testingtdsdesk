@@ -6,7 +6,7 @@
 #         test, A..F, its answers captured), c7 the Tally version string the bridge reads (the read test's "Tally program")
 # One line per check in versions\results.txt: PASS / FAIL / HARNESS (the harness, not the bridge or Tally) with the times.
 $ErrorActionPreference = 'Continue'
-$rel = $env:TALLY_REL; $full = ($env:VMODE -eq 'full'); $share = ($env:VMODE -eq 'share'); $big = ($env:VMODE -eq 'big'); $hang = ($env:VMODE -eq 'hang'); $hang2 = ($env:VMODE -eq 'hang2'); $hang3 = ($env:VMODE -eq 'hang3'); $hang4 = ($env:VMODE -eq 'hang4'); $bank = ($env:VMODE -eq 'bank'); $bankb = ($env:VMODE -eq 'bankb'); $renum = ($env:VMODE -eq 'renum'); $s235 = ($env:VMODE -eq 's235'); $mhook = ($env:VMODE -eq 'mhook'); $ledlist = ($env:VMODE -eq 'ledlist'); $tds240 = ($env:VMODE -eq 'tds240'); $selfck = ($env:VMODE -eq 'selfck'); $upg = ($env:VMODE -eq 'upg')   # bankb: bankv.ps1's bridge part after the bridge's setup (next-bankdate; stubr.py as the cloud, the contras made before the bridge starts); s235: s235v.ps1 after the bridge's setup (bridge 2.3.5: FinCom's read stop and held lines, a real failure, the Tally-not-open notification; stub235.py as the cloud, proxy235.py between the bridge and Tally); renum: renumv.ps1 after the bridge's setup (stubr.py as the cloud; branch next-renumber); bank: bankv.ps1 (the bank-date probe); share / big / hang / hang2..4: sharev.ps1 / bigv.ps1 / hangv.ps1 / hang2v..hang4v.ps1 after c2 (no bridge)
+$rel = $env:TALLY_REL; $full = ($env:VMODE -eq 'full'); $share = ($env:VMODE -eq 'share'); $big = ($env:VMODE -eq 'big'); $hang = ($env:VMODE -eq 'hang'); $hang2 = ($env:VMODE -eq 'hang2'); $hang3 = ($env:VMODE -eq 'hang3'); $hang4 = ($env:VMODE -eq 'hang4'); $bank = ($env:VMODE -eq 'bank'); $bankb = ($env:VMODE -eq 'bankb'); $renum = ($env:VMODE -eq 'renum'); $s235 = ($env:VMODE -eq 's235'); $mhook = ($env:VMODE -eq 'mhook'); $ledlist = ($env:VMODE -eq 'ledlist'); $tds240 = ($env:VMODE -eq 'tds240'); $selfck = ($env:VMODE -eq 'selfck'); $upg = ($env:VMODE -eq 'upg'); $dpath = ($env:VMODE -eq 'dpath')   # dpath: dpathv.ps1 after c2 (no bridge; the data folder formula for 2.4.1's add-on);  bankb: bankv.ps1's bridge part after the bridge's setup (next-bankdate; stubr.py as the cloud, the contras made before the bridge starts); s235: s235v.ps1 after the bridge's setup (bridge 2.3.5: FinCom's read stop and held lines, a real failure, the Tally-not-open notification; stub235.py as the cloud, proxy235.py between the bridge and Tally); renum: renumv.ps1 after the bridge's setup (stubr.py as the cloud; branch next-renumber); bank: bankv.ps1 (the bank-date probe); share / big / hang / hang2..4: sharev.ps1 / bigv.ps1 / hangv.ps1 / hang2v..hang4v.ps1 after c2 (no bridge)
 $dir = $env:TALLY_DIR; $exe = $env:TALLY_EXE
 $data1 = "$env:RUNNER_TEMP\TallyData"; $rec = 'C:\ProgramData\FinCom\recorder'
 $co1 = 'FinCom Spike Co'
@@ -83,7 +83,7 @@ Remove-Item "$rec\*" -Force -ErrorAction SilentlyContinue
 # the upgrade (upgv.ps1)
 $tdl233 = "$fc\FinComRecorder233.tdl"
 if ($upg) { Copy-Item (Join-Path $env:BRIDGE_DIST 'old233\FinComRecorder.tdl') $tdl233 -Force -ErrorAction SilentlyContinue }
-Write-TallyIni $(if ($upg) { $tdl233 } elseif ($ledlist -or $mhook -or $full -or $renum -or $bankb -or $s235 -or $tds240 -or $selfck -or $share -or $big -or $hang -or $hang2 -or $hang3 -or $hang4 -or $bank) { $tdl } else { $null }) $(if ($folder) { $folder.Name } else { $null })
+Write-TallyIni $(if ($upg) { $tdl233 } elseif ($ledlist -or $mhook -or $dpath -or $full -or $renum -or $bankb -or $s235 -or $tds240 -or $selfck -or $share -or $big -or $hang -or $hang2 -or $hang3 -or $hang4 -or $bank) { $tdl } else { $null }) $(if ($folder) { $folder.Name } else { $null })
 $swStart = [Diagnostics.Stopwatch]::StartNew()
 $t1 = Start-Process -FilePath $exe -WorkingDirectory $dir -PassThru; $script:tpid = $t1.Id
 $portMs = -1; $getAns = ''
@@ -127,6 +127,10 @@ if ($bank) {
 }
 if ($big) {
   if ($c2ok) { . (Join-Path $PSScriptRoot 'bigv.ps1') } else { Add-Content -Path $resultsFile -Value 'HARNESS big: not run (c2: Tally or the company not up)' -Encoding UTF8 }
+  Get-Process tally -ErrorAction SilentlyContinue | Stop-Process -Force; return
+}
+if ($dpath) {
+  if ($c2ok) { . (Join-Path $PSScriptRoot 'dpathv.ps1') } else { Add-Content -Path $resultsFile -Value 'HARNESS dpath: not run (c2: Tally or the company not up)' -Encoding UTF8 }
   Get-Process tally -ErrorAction SilentlyContinue | Stop-Process -Force; return
 }
 if ($hang4) {

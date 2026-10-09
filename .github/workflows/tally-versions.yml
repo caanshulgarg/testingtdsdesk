@@ -22,7 +22,7 @@ on:
         description: 'Branch, tag or commit of the bridge (bridge-go/); tax-accuracy is the published 2.3.0'
         default: tax-accuracy
       mode:
-        description: 'quick (install and port), full (every check) share (next-push: the full line against the stored entry, per kind typed on the screen; no bridge) or big (the add-on''s own share of a save on a 100,000-entry company) or hang (the hang of run 37729166801 isolated, each probe in a fresh Tally) or hang2 (the share company, then each entry asked in a fresh Tally) or hang3 (the share session, the published requests after every step) or hang4 (the harness''s malformed filter against the correct one) or bank (the bank-date probe: does any event an add-on can hook fire when a bank date is set; bankv.ps1, a probe variant of the add-on in the harness only) or bankb (next-bankdate: bank dates set in Bank Reconciliation with the bridge built from source and stubr.py as the cloud; FinCom''s copy ends with Tally''s bank dates; bankv.ps1; 3.0 and 7.1 only) or renum (next-renumber: an insert and a delete with renumbering on, the bridge built from source with stubr.py as the cloud; FinCom ends with Tally''s numbers; 3.0 and 7.1 only) or ledlist (next-masterhook: the bridge''s FinComLedgers chunks and FinComLedgerChanges, request XML from the ref''s source, on about 2,000 / 5,000 / 20,000 ledgers; ledv.ps1; 3.0 and 7.1) or mhook (next-masterhook: Stock Item, Godown and Pay Head created / altered / deleted on the screen with the ref''s add-on and with no TDL, Tally''s stored master against what was typed; mhookv.ps1, ocrw.ps1) or s235 (bridge 2.3.5 built from source: FinCom''s read stop from the beat answer with a create / alter / delete on the screen, the lift, a bridge restart, a real failure that counts, the Tally-not-open notification once a day; s235v.ps1, stub235.py, proxy235.py; 3.0 and 7.1 only)'
+        description: 'quick (install and port), full (every check) share (next-push: the full line against the stored entry, per kind typed on the screen; no bridge) or big (the add-on''s own share of a save on a 100,000-entry company) or hang (the hang of run 37729166801 isolated, each probe in a fresh Tally) or hang2 (the share company, then each entry asked in a fresh Tally) or hang3 (the share session, the published requests after every step) or hang4 (the harness''s malformed filter against the correct one) or bank (the bank-date probe: does any event an add-on can hook fire when a bank date is set; bankv.ps1, a probe variant of the add-on in the harness only) or bankb (next-bankdate: bank dates set in Bank Reconciliation with the bridge built from source and stubr.py as the cloud; FinCom''s copy ends with Tally''s bank dates; bankv.ps1; 3.0 and 7.1 only) or renum (next-renumber: an insert and a delete with renumbering on, the bridge built from source with stubr.py as the cloud; FinCom ends with Tally''s numbers; 3.0 and 7.1 only) or ledlist (next-masterhook: the bridge''s FinComLedgers chunks and FinComLedgerChanges, request XML from the ref''s source, on about 2,000 / 5,000 / 20,000 ledgers; ledv.ps1; 3.0 and 7.1) or mhook (next-masterhook: Stock Item, Godown and Pay Head created / altered / deleted on the screen with the ref''s add-on and with no TDL, Tally''s stored master against what was typed; mhookv.ps1, ocrw.ps1) or dpath (2.4.1: the formula for the data folder the company was opened from, inside the add-on''s Form Accept / delete / cancel events, two data folders, and its save time; dpathv.ps1) or s235 (bridge 2.3.5 built from source: FinCom''s read stop from the beat answer with a create / alter / delete on the screen, the lift, a bridge restart, a real failure that counts, the Tally-not-open notification once a day; s235v.ps1, stub235.py, proxy235.py; 3.0 and 7.1 only)'
         default: quick
       # 2.4.0's combined gate (the coordinator, 08-Oct-2026): mode gate240 = every mode below in one run, one job per mode and
       # release (s235, tds240, renum, bankb, selfck, mhook, ledlist, upg), on all five releases unless versions says; a comma
@@ -60,7 +60,7 @@ jobs:
         run: |
           m="${{ inputs.mode }}"; [ -n "$m" ] || m=$(head -1 harness/.github/tally-spike/versions-mode.txt 2>/dev/null | tr -d '[:space:]')
           [ "$m" = gate240 ] && m="s235,tds240,renum,bankb,selfck,mhook,ledlist,upg"
-          known="full mhook ledlist share big hang hang2 hang3 hang4 bank bankb renum s235 tds240 selfck upg quick"
+          known="full mhook ledlist dpath share big hang hang2 hang3 hang4 bank bankb renum s235 tds240 selfck upg quick"
           v="${{ inputs.versions }}"; v=$(echo "$v" | tr -d '[:space:]')
           modes=""; for x in $(echo "$m" | tr ',' ' '); do case " $known " in *" $x "*) modes="$modes $x" ;; *) echo "::warning::unknown mode $x: quick"; modes="$modes quick" ;; esac; done
           [ -n "$modes" ] || modes=quick
@@ -69,7 +69,7 @@ jobs:
           for x in $modes; do
             # a mode's own releases when none are given: ledlist / renum / s235 / bankb were 3.0 and 7.1; the gate gives versions
             if [ -n "$v" ]; then vs="$v"; elif echo "$m" | grep -q ','; then vs="3.0,4.1,5.1,6.2,7.1"; else case $x in ledlist|renum|s235|bankb) vs="3.0,7.1" ;; *) vs="3.0,4.1,5.1,6.2,7.1" ;; esac; fi
-            case $x in hang2|mhook) t=220; c=190 ;; ledlist|share|big|hang|hang3|bank|bankb|renum|s235|tds240|selfck|upg) t=130; c=105 ;; *) t=75; c=40 ;; esac
+            case $x in hang2|mhook) t=220; c=190 ;; ledlist|share|big|hang|hang3|bank|bankb|renum|s235|tds240|selfck|upg|dpath) t=130; c=105 ;; *) t=75; c=40 ;; esac
             for r in $(echo "$vs" | tr ',' ' '); do inc="$inc{\"version\":\"$r\",\"mode\":\"$x\",\"tmo\":$t,\"ctmo\":$c},"; all="$all\"$r\","; done
           done
           echo "matrix={\"include\":[${inc%,}]}" | tee -a "$GITHUB_OUTPUT"
@@ -234,6 +234,7 @@ jobs:
           $r = Join-Path $dir 'results.txt'; if (-not (Test-Path $r)) { Set-Content $r "INFO TallyPrime $env:TALLY_REL, mode $env:VMODE" }
           $want = @('c1 install and open the company', 'c2 port and company list')
           if ($env:VMODE -eq 'renum') { $want += @('r1 insert with renumbering on', 'r2 delete with renumbering on') }
+          if ($env:VMODE -eq 'dpath') { $want += @('d1 the data folder formula in the add-on''s events', 'd2 the add-on with the field writes the folder') }
           if ($env:VMODE -eq 'bankb') { $want += @('b1 bank dates set in Bank Reconciliation reach FinCom') }
           if ($env:VMODE -eq 's235') { $want += @('s1 stop: three lines held, nothing asked', 's2 lift: bodies and the delete with its GUID', 's3 restart: the held delete keeps its GUID', 's4 a real failure still counts', 's5 Tally not open: one notification a day') }
           if ($env:VMODE -eq 'tds240') { $want += @('t1 TDS typed on the screen: the TDS details carried to FinCom', 't2 TDS rate: worked out only where Tally stores 0, never on an exempt line') }
