@@ -173,6 +173,12 @@ starting day (<d>)" or "older than 3 days and not just asked", instead of "readi
   approved request (one a turn, spaced, the 2-second rule; no new request shape) and answers "<line id>:verified":
   Tally's entry when it has the line's GUID, an AlterID not below the line's and the line's narration; else
   verify_failed, and FinCom keeps the line held with the Day Book words.
+- The security re-check (557834df). **SR2-M1** once the owner has chosen, only a computer of a chosen location (its bridge
+  proved it its own) records the starting point or has its gap checked; any other (a 2.4.0 bridge on the other copy
+  included) is answered notChosenComputer and changes nothing (71 replaces 46's `tally_start_point` and 47's
+  `tally_recorder_gap_check` with that check). **SR2-M2** "These are the same data" and Use of a book's only location send
+  the locations the card showed; FinCom refuses with "Something changed since this page loaded; look again" when the
+  book's locations changed meanwhile, nothing done.
 - The real-Tally dry run 37938029402 (u2): after a restart the bank route read and sent again entries the add-on's lines
   had explained. Its count of those lines is now kept in bankdate.json with the counter (one write). A re-send at the
   same AlterID changes nothing in the cloud (the same change already came: 'duplicate'; the same line again: 63's
