@@ -48,6 +48,7 @@ var dataSt struct {
 	dir    string                  // the sync folder it belongs to ("" : not loaded)
 	own    map[string]dataOwnSt    // company GUID (lower case) -> this bridge's own data id (proven)
 	chosen map[string]dataChoiceSt // company GUID (lower case) -> FinCom's answer
+	seen   map[string][]string     // company GUID (lower case) -> the data ids this Windows user's lines named (the re-review's H1-r(b))
 }
 
 func dataFile() string { return sp("recorder-data.json") }
@@ -94,8 +95,15 @@ func dataFresh() {
 		return
 	}
 	dataSt.dir = d
-	dataSt.own, dataSt.chosen = map[string]dataOwnSt{}, map[string]dataChoiceSt{}
+	dataSt.own, dataSt.chosen, dataSt.seen = map[string]dataOwnSt{}, map[string]dataChoiceSt{}, map[string][]string{}
 	o := readObjFile(dataFile())
+	for k, v := range obj(o["seen"]) {
+		for _, x := range arr(v) {
+			if id := str(x); dataHexID(id) && !dataIn(dataSt.seen[k], id) && len(dataSt.seen[k]) < dataSeenMax {
+				dataSt.seen[k] = append(dataSt.seen[k], id)
+			}
+		}
+	}
 	for k, v := range obj(o["own"]) {
 		e := obj(v)
 		if id := str(e["id"]); dataHexID(id) {
@@ -127,7 +135,15 @@ func dataSave() {
 		}
 		ch[k] = M{"ids": ids, "own": v.Own, "choice": v.Choice, "company": v.Company}
 	}
-	if err := saveFile(dataFile(), jsonText(M{"own": own, "chosen": ch})); err != nil {
+	seen := M{}
+	for k, v := range dataSt.seen {
+		ids := []any{}
+		for _, x := range v {
+			ids = append(ids, x)
+		}
+		seen[k] = ids
+	}
+	if err := saveFile(dataFile(), jsonText(M{"own": own, "chosen": ch, "seen": seen})); err != nil {
 		writeLog("Recorder: " + dataFile() + " could not be written: " + err.Error())
 	}
 }
@@ -205,10 +221,18 @@ func dataProve(c *change, x string) {
 	if !strings.EqualFold(tagValue(x, "GUID"), want) || toI64(tagNum(x, "ALTERID")) <= c.lineAlter {
 		return
 	}
+	// the re-review's H1-r(b): a line with a narration proves only when Tally's is the same (a forked copy's entry under the
+	// same MasterID and GUID is another entry)
+	if !dataNarrSame(c.addonNarr, tagValue(x, "NARRATION")) {
+		return
+	}
 	k := dataKey(c.companyGuid)
 	dataSt.mu.Lock()
 	defer dataSt.mu.Unlock()
 	dataFresh()
+	if dataForkedLocked(k) {
+		return
+	}
 	was, ch := dataSt.own[k], dataSt.chosen[k]
 	if was.ID == c.dataId {
 		return
@@ -226,6 +250,57 @@ func dataProve(c *change, x string) {
 	} else {
 		writeLog("Recorder: " + c.company + ": this bridge's own Tally has the company's data in " + c.dataPath)
 	}
+}
+
+// the re-review of next-241, H1-r(b): two forked copies of one company continue the same MasterID, GUID and number
+// sequences, so Tally's answer by MasterID cannot tell them apart. The data folders THIS Windows user's lines named for a
+// company are kept (recorder-data.json, at most dataSeenMax); while there are two or more and FinCom has chosen none of
+// them, nothing is proven (dataProve): every one goes as a candidate (FinCom keeps them pending, with the alert)
+const dataSeenMax = 20
+
+func dataSeenNote(cguid, id, w string) {
+	if id == "" || strings.TrimSpace(w) == "" || !liveUserSame(w, liveWinUserFn()) {
+		return
+	}
+	k := dataKey(cguid)
+	dataSt.mu.Lock()
+	defer dataSt.mu.Unlock()
+	dataFresh()
+	if k == "" || dataIn(dataSt.seen[k], id) || len(dataSt.seen[k]) >= dataSeenMax {
+		return
+	}
+	dataSt.seen[k] = append(dataSt.seen[k], id)
+	dataSave()
+}
+
+// under dataSt.mu: two or more folders of this user for the company, none of them chosen by FinCom
+func dataForkedLocked(k string) bool {
+	seen := dataSt.seen[k]
+	if len(seen) < 2 {
+		return false
+	}
+	for _, id := range seen {
+		if dataIn(dataSt.chosen[k].IDs, id) {
+			return false
+		}
+	}
+	return true
+}
+
+// the same narration: control characters and runs of white space as one space, trimmed; a cut line (liveNarrMax) by its
+// start
+func dataNarrSame(line, tally string) bool {
+	n := func(s string) string {
+		return strings.Join(strings.Fields(dataClean(strings.ReplaceAll(strings.ReplaceAll(s, "\r", " "), "\n", " "))), " ")
+	}
+	a, b := n(line), n(tally)
+	if a == "" {
+		return true
+	}
+	if len([]rune(line)) >= liveNarrMax {
+		return strings.HasPrefix(b, a[:len(a)/2])
+	}
+	return a == b
 }
 
 // this bridge's own (proven) data id of a company ("" : not known)

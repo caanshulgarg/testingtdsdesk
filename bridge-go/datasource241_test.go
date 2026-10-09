@@ -86,7 +86,7 @@ func TestData241TwoSourcesOtherNeverFetched(t *testing.T) {
 	p, f, c := r222bBridge(t, "")
 	ufAs(t, "user", "anshul")
 	// the own line first: its entry from the own Tally proves the own folder (review H1 of next-241: learned only so)
-	liveAppend(t, p, d241Line("voucher_accept_post", "11:30", r222GUID(26311), "26311", "54391", "Receipt", "191", "5-Oct-2026", "own", d241Path1, "anshul"))
+	liveAppend(t, p, d241Line("voucher_accept_post", "11:30", r222GUID(26311), "26311", "54391", "Receipt", "191", "5-Oct-2026", "Received from customer", d241Path1, "anshul"))
 	readAndUploadAll(t)
 	liveAppend(t, p, d241Line("voucher_accept_post", "11:31", r222GUID(25743), "25743", "0", "Sales", "2026-27/GST/297", "5-Oct-2026", "SECRET-NARR", d241Path2, ""))
 	readAndUploadAll(t)
@@ -129,9 +129,9 @@ func TestData241TwoSourcesOtherNeverFetched(t *testing.T) {
 func TestData241OtherUserOtherFolderService(t *testing.T) {
 	p, f, c := r222bBridge(t, "")
 	ufAs(t, "service", "anshul")
-	liveAppend(t, p, d241Line("voucher_accept_post", "11:30", r222GUID(26311), "26311", "54391", "Receipt", "191", "5-Oct-2026", "own", d241Path1, "anshul"))
+	liveAppend(t, p, d241Line("voucher_accept_post", "11:30", r222GUID(26311), "26311", "54391", "Receipt", "191", "5-Oct-2026", "Received from customer", d241Path1, "anshul"))
 	readAndUploadAll(t)
-	liveAppend(t, p, d241Line("voucher_accept_post", "11:31", r222GUID(26312), "26312", "54392", "Receipt", "192", "5-Oct-2026", "theirs", d241Path2, "Ranjeet"))
+	liveAppend(t, p, d241Line("voucher_accept_post", "11:31", r222GUID(26312), "26312", "54392", "Receipt", "192", "5-Oct-2026", "Received again", d241Path2, "Ranjeet"))
 	readAndUploadAll(t)
 	if o := d241Sent(c, "192"); len(o) != 1 || str(o[0]["event"]) != "other_source" || str(o[0]["w"]) != "Ranjeet" {
 		t.Fatalf("another folder's line: %v", o)
@@ -146,7 +146,7 @@ func TestData241OtherUserOtherFolderService(t *testing.T) {
 func TestData241ChosenElsewhereStopsReading(t *testing.T) {
 	p, f, c := r222bBridge(t, "")
 	ufAs(t, "user", "anshul")
-	liveAppend(t, p, d241Line("voucher_accept_post", "11:30", r222GUID(26311), "26311", "54391", "Receipt", "191", "5-Oct-2026", "own", d241Path1, "anshul"))
+	liveAppend(t, p, d241Line("voucher_accept_post", "11:30", r222GUID(26311), "26311", "54391", "Receipt", "191", "5-Oct-2026", "Received from customer", d241Path1, "anshul"))
 	readAndUploadAll(t)
 	if s := d241Sent(c, "191"); len(s) != 1 || str(s[0]["event"]) == "other_source" {
 		t.Fatalf("before a choice: %v", s)
@@ -155,7 +155,7 @@ func TestData241ChosenElsewhereStopsReading(t *testing.T) {
 	if !dataStopped(nwsGUID) {
 		t.Fatal("the company is not stopped here")
 	}
-	liveAppend(t, p, d241Line("voucher_accept_post", "11:40", r222GUID(26312), "26312", "54392", "Receipt", "192", "5-Oct-2026", "own after", d241Path1, "anshul"))
+	liveAppend(t, p, d241Line("voucher_accept_post", "11:40", r222GUID(26312), "26312", "54392", "Receipt", "192", "5-Oct-2026", "Received again", d241Path1, "anshul"))
 	readAndUploadAll(t)
 	if s := d241Sent(c, "192"); len(s) != 1 || str(s[0]["event"]) != "other_source" || str(s[0]["data_id"]) != d241ID(d241Path1) {
 		t.Fatalf("after FinCom chose the other folder: %v", s)
@@ -181,7 +181,7 @@ func TestData241ChosenBridgeApplies(t *testing.T) {
 	p, f, c := r222bBridge(t, "")
 	ufAs(t, "user", "Ranjeet")
 	applyDataSources(M{"dataSources": []any{M{"company": nwsCo, "company_guid": nwsGUID, "chosenId": d241ID(d241Path2), "chosen": true}}})
-	liveAppend(t, p, d241Line("voucher_accept_post", "11:30", r222GUID(26311), "26311", "54391", "Receipt", "191", "5-Oct-2026", "two", d241Path2, "Ranjeet"))
+	liveAppend(t, p, d241Line("voucher_accept_post", "11:30", r222GUID(26311), "26311", "54391", "Receipt", "191", "5-Oct-2026", "Received from customer", d241Path2, "Ranjeet"))
 	readAndUploadAll(t)
 	if s := d241Sent(c, "191"); len(s) != 1 || str(s[0]["event"]) == "other_source" || str(s[0]["data_id"]) != d241ID(d241Path2) || str(s[0]["xml"]) == "" {
 		t.Fatalf("the chosen folder's line: %v", s)
@@ -269,10 +269,10 @@ func TestData241IDMeasuredPaths(t *testing.T) {
 func TestData241SameUserSecondFolderKeepsChosen(t *testing.T) {
 	p, f, c := r222bBridge(t, "")
 	ufAs(t, "user", "anshul")
-	liveAppend(t, p, d241Line("voucher_accept_post", "11:30", r222GUID(26311), "26311", "54391", "Receipt", "191", "5-Oct-2026", "own", d241Path1, "anshul"))
+	liveAppend(t, p, d241Line("voucher_accept_post", "11:30", r222GUID(26311), "26311", "54391", "Receipt", "191", "5-Oct-2026", "Received from customer", d241Path1, "anshul"))
 	readAndUploadAll(t)
 	applyDataSources(M{"dataSources": []any{M{"company": nwsCo, "company_guid": nwsGUID, "chosenId": d241ID(d241Path1), "chosen": true}}})
-	liveAppend(t, p, d241Line("voucher_accept_post", "11:31", r222GUID(26312), "26312", "54392", "Receipt", "192", "5-Oct-2026", "copy", d241Path2, "anshul"))
+	liveAppend(t, p, d241Line("voucher_accept_post", "11:31", r222GUID(26312), "26312", "54392", "Receipt", "192", "5-Oct-2026", "Received again", d241Path2, "anshul"))
 	readAndUploadAll(t)
 	if s := d241Sent(c, "192"); len(s) != 1 || str(s[0]["event"]) != "other_source" || str(s[0]["data_id"]) != d241ID(d241Path2) {
 		t.Fatalf("the second folder's line: %v", s)

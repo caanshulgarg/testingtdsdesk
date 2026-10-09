@@ -43,7 +43,16 @@ func TestData241rCopyFirstNeverMixes(t *testing.T) {
 	if dataOwnID(nwsGUID) != "" {
 		t.Fatalf("an unproven folder became the own one: %s", dataOwnID(nwsGUID))
 	}
-	liveAppend(t, p, d241Line("voucher_accept_post", "11:40", r222GUID(26311), "26311", "54391", "Receipt", "191", "5-Oct-2026", "own", d241Path1, "anshul"))
+	liveAppend(t, p, d241Line("voucher_accept_post", "11:40", r222GUID(26311), "26311", "54391", "Receipt", "191", "5-Oct-2026", "Received from customer", d241Path1, "anshul"))
+	readAndUploadAll(t)
+	// the re-review's H1-r(b): two folders of this user and none chosen by FinCom: nothing proven (both candidates)
+	if dataOwnID(nwsGUID) != "" {
+		t.Fatalf("with two folders of this user and none chosen, a folder was proven: %q", dataOwnID(nwsGUID))
+	}
+	// the owner chose the own folder at FinCom: its next line proves it
+	applyDataSources(d241rAnswer([]string{d241ID(d241Path1)}, "", "pending"))
+	r222Vch(f, 26314, "Receipt", "194", "20261005", 54396)
+	liveAppend(t, p, d241Line("voucher_accept_post", "11:45", r222GUID(26314), "26314", "54394", "Receipt", "194", "5-Oct-2026", "Receipt 194", d241Path1, "anshul"))
 	readAndUploadAll(t)
 	if dataOwnID(nwsGUID) != d241ID(d241Path1) {
 		t.Fatalf("the own line did not prove the own data id: %q", dataOwnID(nwsGUID))
@@ -62,9 +71,9 @@ func TestData241rCopyFirstNeverMixes(t *testing.T) {
 func TestData241rOwnKnownNotReplaced(t *testing.T) {
 	p, f, c := r222bBridge(t, "")
 	ufAs(t, "user", "anshul")
-	liveAppend(t, p, d241Line("voucher_accept_post", "11:30", r222GUID(26311), "26311", "54391", "Receipt", "191", "5-Oct-2026", "own", d241Path1, "anshul"))
+	liveAppend(t, p, d241Line("voucher_accept_post", "11:30", r222GUID(26311), "26311", "54391", "Receipt", "191", "5-Oct-2026", "Received from customer", d241Path1, "anshul"))
 	readAndUploadAll(t)
-	liveAppend(t, p, d241Line("voucher_accept_post", "11:31", r222GUID(26312), "26312", "54392", "Receipt", "192", "5-Oct-2026", "copy", d241Path2, "anshul"))
+	liveAppend(t, p, d241Line("voucher_accept_post", "11:31", r222GUID(26312), "26312", "54392", "Receipt", "192", "5-Oct-2026", "Received again", d241Path2, "anshul"))
 	readAndUploadAll(t)
 	if s := d241Sent(c, "192"); len(s) != 1 || str(s[0]["event"]) != "other_source" || d241Asked(f, "26312") {
 		t.Fatalf("the second folder's line: %v", s)
@@ -74,7 +83,7 @@ func TestData241rOwnKnownNotReplaced(t *testing.T) {
 	}
 	// FinCom chose the second folder (the owner's choice): its line is read and then becomes the own one
 	applyDataSources(d241rAnswer([]string{d241ID(d241Path2)}, d241ID(d241Path1), "other"))
-	liveAppend(t, p, d241Line("voucher_accept_post", "11:40", r222GUID(26313), "26313", "54393", "Receipt", "193", "5-Oct-2026", "now", d241Path2, "anshul"))
+	liveAppend(t, p, d241Line("voucher_accept_post", "11:40", r222GUID(26313), "26313", "54393", "Receipt", "193", "5-Oct-2026", "Receipt 193", d241Path2, "anshul"))
 	r222Vch(f, 26313, "Receipt", "193", "20261005", 54393)
 	readAndUploadAll(t)
 	if s := d241Sent(c, "193"); len(s) != 1 || str(s[0]["event"]) == "other_source" || str(s[0]["xml"]) == "" || dataOwnID(nwsGUID) != d241ID(d241Path2) {
@@ -86,7 +95,7 @@ func TestData241rOwnKnownNotReplaced(t *testing.T) {
 func TestData241rNoDPWhenStopped(t *testing.T) {
 	p, f, c := r222bBridge(t, "")
 	ufAs(t, "user", "anshul")
-	liveAppend(t, p, d241Line("voucher_accept_post", "11:30", r222GUID(26311), "26311", "54391", "Receipt", "191", "5-Oct-2026", "own", d241Path1, "anshul"))
+	liveAppend(t, p, d241Line("voucher_accept_post", "11:30", r222GUID(26311), "26311", "54391", "Receipt", "191", "5-Oct-2026", "Received from customer", d241Path1, "anshul"))
 	readAndUploadAll(t)
 	applyDataSources(d241rAnswer([]string{d241ID(d241Path2)}, d241ID(d241Path1), "other"))
 	if !dataStopped(nwsGUID) {
@@ -103,13 +112,13 @@ func TestData241rNoDPWhenStopped(t *testing.T) {
 func TestData241rPendingNotStopped(t *testing.T) {
 	p, f, c := r222bBridge(t, "")
 	ufAs(t, "user", "Ranjeet")
-	liveAppend(t, p, d241Line("voucher_accept_post", "11:30", r222GUID(26311), "26311", "54391", "Receipt", "191", "5-Oct-2026", "two", d241Path2, "Ranjeet"))
+	liveAppend(t, p, d241Line("voucher_accept_post", "11:30", r222GUID(26311), "26311", "54391", "Receipt", "191", "5-Oct-2026", "Received from customer", d241Path2, "Ranjeet"))
 	readAndUploadAll(t)
 	applyDataSources(d241rAnswer([]string{d241ID(d241Path1)}, d241ID(d241Path2), "pending"))
 	if dataStopped(nwsGUID) {
 		t.Fatal("a pending location is stopped")
 	}
-	liveAppend(t, p, d241Line("voucher_accept_post", "11:31", r222GUID(26312), "26312", "54392", "Receipt", "192", "5-Oct-2026", "two b", d241Path2, "Ranjeet"))
+	liveAppend(t, p, d241Line("voucher_accept_post", "11:31", r222GUID(26312), "26312", "54392", "Receipt", "192", "5-Oct-2026", "Received again", d241Path2, "Ranjeet"))
 	readAndUploadAll(t)
 	if s := d241Sent(c, "192"); len(s) != 1 || str(s[0]["event"]) == "other_source" || str(s[0]["xml"]) == "" || str(s[0]["data_id"]) != d241ID(d241Path2) || !d241Asked(f, "26312") {
 		t.Fatalf("the pending location's line: %v", s)
@@ -120,7 +129,7 @@ func TestData241rPendingNotStopped(t *testing.T) {
 func TestData241rLedgerOtherSource(t *testing.T) {
 	p, f, c := r222bBridge(t, "")
 	ufAs(t, "user", "anshul")
-	liveAppend(t, p, d241Line("voucher_accept_post", "11:30", r222GUID(26311), "26311", "54391", "Receipt", "191", "5-Oct-2026", "own", d241Path1, "anshul"))
+	liveAppend(t, p, d241Line("voucher_accept_post", "11:30", r222GUID(26311), "26311", "54391", "Receipt", "191", "5-Oct-2026", "Received from customer", d241Path1, "anshul"))
 	readAndUploadAll(t)
 	n0 := len(f.ids())
 	l := strings.NewReplacer("ev=voucher_accept_post", "ev=ledger_accept_post", "|obj=Voucher|", "|obj=Master|", "|vtype=Receipt|", "|vtype=|", "|vno=L1|", "|vno=|", "|name=|", "|name=Copy Ledger|").

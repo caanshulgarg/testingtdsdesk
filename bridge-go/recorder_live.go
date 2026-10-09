@@ -190,6 +190,8 @@ type change struct {
 	dataId, dataPath, winUser, otherOf string
 	// review H1 of next-241: the add-on's own GUID on the line (the proof of the own data folder compares Tally's with it)
 	addonGuid string
+	// the re-review of next-241, H1-r(b): the add-on's own narration on the line (a proof needs Tally's to be the same)
+	addonNarr string
 }
 
 // a place in the add-on's files: the file and the byte offset a line starts at
@@ -1460,6 +1462,8 @@ func liveEmitFrom(l recLine, ev, file string, gen int, startFile string, start, 
 	c.companyGuid = liveGUID(c.companyGuid)
 	c.dataId, c.dataPath, c.winUser = dataIDOf(l.DP), cutRunes(strings.TrimSpace(dataClean(l.DP)), 260), cutRunes(strings.TrimSpace(dataClean(l.W)), 200)
 	c.addonGuid = strings.TrimSpace(l.GUID)
+	c.addonNarr = l.Narr
+	dataSeenNote(c.companyGuid, c.dataId, c.winUser) // the re-review's H1-r(b): the folders this Windows user wrote for the company
 	// 2.4.1 (the owner's approval of 09-Oct-2026): a line of another data location of the company (its dp= not the one this
 	// bridge reads, or a company this bridge stopped reading): never asked of Tally, never an entry; sent heads only as
 	// "other_source" (datasource.go). Before anything of it is looked at: no FinCom id, no GUID, no body. Review of
@@ -2617,6 +2621,11 @@ func (c *change) wire() M {
 		if id := dataOwnID(c.companyGuid); id != "" {
 			m["data_id"] = id
 		}
+	}
+	// the re-review of next-241, H1-r(a): the data id is the one this bridge proved its own Tally's: FinCom notes the location
+	// as this bridge's own only from such a line (an unproven folder is never chosen by itself)
+	if id := str(m["data_id"]); id != "" && id == dataOwnID(c.companyGuid) {
+		m["data_proven"] = true
 	}
 	// 2.3.1: FinCom passes the body's blanks as sent (the owner's "full", 06-Oct-2026); false on every other line (one shape)
 	m["full"] = c.full && c.xml != ""
