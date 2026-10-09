@@ -829,7 +829,7 @@ export function CloudBooks() {
 // is linked, one card a computer, the clients' Tally lines, then everything else under the page's More (the install
 // help with the download among it); then everything sent to Tally. #/tally/bridge-1.15: the hidden fallback.
 // connectStep: the mount point for the new connect flow (see TallyGuide)
-const TALLY_TABS = [["computers", "Connection"], ["activity", "Sync activity"], ["sent", "Everything sent"]];
+const TALLY_TABS = [["computers", "Computers"], ["activity", "Sync activity"], ["sent", "Everything sent"]];
 // sourcesSlot: the mount point for 2.4.1's two-data-locations card (SourceCards on next-241), drawn inside Needs you
 export default function TallyHome({ connectStep = null, sourcesSlot = null }) {
   const m = useSetup();
