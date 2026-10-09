@@ -93,6 +93,14 @@ with sync_playwright() as p:
     if ph.locator(BACK).count():
         ph.locator(BACK).click(); ph.wait_for_timeout(800)
         ok(ph.evaluate("() => S.view") == "company", "phone: it opens the client")
+    # 8 (phone). a tile's amount on one line (Reports with the books of tests/data, and the Dashboard's tiles)
+    ph.evaluate(U.SEED, U.books()); ph.wait_for_timeout(800)
+    for pgname in ["books:reports", "dash"]:
+        ph.evaluate("(t) => { S.view = 'company'; goClient(t); }", pgname); ph.wait_for_timeout(1500)
+        lines = ph.evaluate("""() => [...document.querySelectorAll('#app .dash-tiles .dtile b')].filter(b => b.offsetParent && /\\d/.test(b.innerText)).map(b => [b.innerText, +(b.getBoundingClientRect().height / parseFloat(getComputedStyle(b).fontSize)).toFixed(2)])""")
+        ok(all(n < 1.9 for _, n in lines), "phone, %s: each tile's amount on one line (%s)" % (pgname, lines[:4]))
+        wide = ph.evaluate("() => [...document.querySelectorAll('#app .dash-tiles .dtile b')].filter(b => b.offsetParent && b.scrollWidth > b.parentElement.clientWidth).map(b => b.innerText)")
+        ok(not wide, "phone, %s: no tile's amount is cut off (%s)" % (pgname, wide))
     br.close()
 
 ok(not errs, "no page errors (%s)" % errs[:2])

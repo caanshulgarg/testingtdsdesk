@@ -1092,6 +1092,8 @@ kbd{display:inline-block;min-width:22px;padding:2px 7px;border:1px solid var(--r
 .keys-t td{padding:6px 8px}
 @media (max-width:900px){.rpt-grid{grid-template-columns:1fr}.lk-askrow{flex-wrap:wrap}.lk-askrow .btn{flex:1}}
 @media (max-width:600px){.rpt-area .dash-tiles{grid-template-columns:1fr 1fr}.lk-form input[type=date]{width:100%}.lk-form .f{flex:1 1 140px}}
+/* round 4 of the UI pass: on a phone a tile's amount stays on one line (1,82,91,456.20 broke after "1,82,91,") */
+@media (max-width:600px){.dash-tiles .dtile b{white-space:nowrap;word-break:normal;font-size:clamp(13px,3.9vw,21px);font-variant-numeric:tabular-nums}}
 .fc-chart svg{height:112px}
 .fc-xl{display:flex;padding:3px 4px 0}.fc-xl span{flex:1;text-align:center;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden}
 .lk-form input[type=checkbox]{height:auto;width:auto}
