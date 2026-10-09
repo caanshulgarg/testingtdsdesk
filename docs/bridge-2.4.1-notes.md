@@ -146,6 +146,27 @@ starting day (<d>)" or "older than 3 days and not just asked", instead of "readi
   holds it. **Use ② while ② was pending**: once ②'s starting point is recorded afresh after the choice, its held lines
   saved above that starting point (AlterID) are applied, once; the older ones stay held with words for the Day Book.
 
+- The re-review (0f436f6c..d5582c55): **N3** the data location is checked again wherever a held line is applied (Apply
+  now, a month unlocked, a ledger arriving, the Day Book release): 71 replaces 63 / 67's combined `tally_recorder_line`
+  with that check (under the book's lock, which the owner's choice takes too). **H1-r(a)** the bridge marks a line whose
+  data id it proved its own Tally's (`data_proven`); tally-ingest notes a location as the bridge's own only from such a
+  line or the beat's dataSources. **H1-r(b)** while this Windows user has written two data folders for a company and
+  FinCom has chosen neither, the bridge proves nothing (both go as candidates: pending, with the alert); a line with a
+  narration proves only when Tally's NARRATION is the same; the folders seen are kept in sync\recorder-data.json.
+  **N2** a book's only location waiting for a choice gets its card ("Read <company> from ① (<computer> · <path>)?",
+  Use ① after the same question); chosen, its held lines are applied at once. **N1** a line without a data id from a
+  computer of no chosen location is kept with its entry and applied once that computer proves a chosen location, or on
+  "These are the same data"; the computers of a location are a set (`tally_company_source_devices`); the words say
+  "Update FinCom Bridge on <computer>" for a bridge before 2.4.1, "Restart Tally" for 2.4.1 with an older add-on.
+  **Lows** "These are the same data" only while a location is pending, never choosing one set 'other', its words "both
+  data folders are one folder" when both are on one computer; Use of the location read already sets the pending others
+  'other'. The ledger names' dash form ("TDS 194-C", "TDS 194-I RENT") is 194 again, as 2.3.3 (the fixtures held no
+  dash-form name, so run_ledger_pending's 0 differences could not show it; reverted to the owner's 194T decision only).
+- The real-Tally dry run 37938029402 (u2): after a restart the bank route read and sent again entries the add-on's lines
+  had explained. Its count of those lines is now kept in bankdate.json with the counter (one write). A re-send at the
+  same AlterID changes nothing in the cloud (the same change already came: 'duplicate'; the same line again: 63's
+  'duplicate', already) - tests/run_migration71.py section 8.
+
 Left for the next release (as the coordinator decided): the reviews' L1, L3, L5, L6, L7 and SR-L2 to SR-L5.
 
 The owner's decision of 09-Oct-2026: staff may see the data folder path and the Windows user; only the owner chooses.
