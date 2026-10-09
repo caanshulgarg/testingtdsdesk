@@ -1,0 +1,34 @@
+2026-10-09 20:30:01  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+2026-10-09 20:30:01  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+2026-10-09 20:30:01  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+2026-10-09 20:30:02  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+2026-10-09 20:30:02  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+2026-10-09 20:30:02  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+2026-10-09 20:30:03  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+2026-10-09 20:30:03  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+2026-10-09 20:30:03  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+2026-10-09 20:30:03  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+2026-10-09 20:30:04  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+2026-10-09 20:30:04  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+2026-10-09 20:30:04  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+2026-10-09 20:30:04  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+2026-10-09 20:30:05  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+2026-10-09 20:30:05  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+2026-10-09 20:30:05  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+2026-10-09 20:30:05  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+2026-10-09 20:30:06  Recorder: held lines: 0 from FinCom, 0 asked, 0 resolved, 3 still held (3 in the list)
+2026-10-09 20:30:06  Reading from Tally resumed from FinCom (it was stopped: Stopped by the owner from FinCom (harness s1))
+2026-10-09 20:30:06  Recorder: entry fetch of FinCom Spike Co: answered in 28 ms
+2026-10-09 20:30:06  Recorder: Receipt 1 of 31-Oct-2026 (MasterID 3, line 21eb200d…): taken: Tally's GUID f84413f0-e7ee-4ccc-b254-c8febf728d4b-00000003, AlterID 7
+2026-10-09 20:30:06  Recorder: Receipt 1 of 20261031 in FinCom Spike Co resolved: sent as altered with its GUID f84413f0-e7ee-4ccc-b254-c8febf728d4b-00000003 and body
+2026-10-09 20:30:07  Recorder: entry fetch of FinCom Spike Co: answered in 19 ms
+2026-10-09 20:30:07  Recorder: Receipt 4 of 02-Oct-2026 (MasterID 6, line e616761a…): taken: Tally's GUID f84413f0-e7ee-4ccc-b254-c8febf728d4b-00000006, AlterID 6
+2026-10-09 20:30:07  Recorder: Receipt 4 of 20261002 in FinCom Spike Co resolved: sent as created with its GUID f84413f0-e7ee-4ccc-b254-c8febf728d4b-00000006 and body
+2026-10-09 20:30:07  Recorder: Receipt 2 of 01-Nov-2026 (MasterID 4, line 3bc99a23…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 20:30:07  Recorder: entry fetch of FinCom Spike Co: answered in 15 ms
+2026-10-09 20:30:07  Recorder: entry fetch of FinCom Spike Co: answered in 14 ms
+2026-10-09 20:30:07  Recorder: FinCom Spike Co: delete of mid 4: not in this Tally (asked by MasterID): proven deleted here
+2026-10-09 20:30:07  Recorder: Receipt 2 of 01-Nov-2026 (MasterID 4, line 3bc99a23…): proven in this Tally now: the delete goes as 3bc99a23c222f10dff7ec75299f1bd2b:resolved
+2026-10-09 20:30:07  Recorder: held lines: 0 from FinCom, 3 asked, 3 resolved, 0 still held (3 in the list)
+2026-10-09 20:30:07  Recorder: FinCom Spike Co: delete of mid 4: GUID from the bridge's record: f84413f0-e7ee-4ccc-b254-c8febf728d4b-00000004; the GUID its MasterID makes agrees
+2026-10-09 20:30:07  Renumbering: made Receipt 4 of 02-Oct-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
