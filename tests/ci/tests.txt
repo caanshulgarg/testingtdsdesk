@@ -215,3 +215,4 @@ run_ledger_pending.py                 120  TDSDESK_SITE=../app/dist-test
 run_alerts_clear_keys.py              120  TDSDESK_SITE=../app/dist-test
 # release-240 security review S-M1: selfcheck and renumber_list answer a computer only for its own companies
 run_company_scope_server.py           120
+run_company_sources_server.py         180

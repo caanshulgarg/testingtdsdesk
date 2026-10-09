@@ -652,14 +652,19 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
     return [];
   }
 }
-async function recorderGaps(dev: any, firm: string, bridge: string, changes: BeatChange[]) {
+async function recorderGaps(dev: any, firm: string, bridge: string, changes: BeatChange[], src?: { notChosen: Set<string>; ids: Map<string, string> }) {
   const out: Record<string, unknown> = {};
   for (const c of changes.filter((c) => c.altvchid !== null || (c.start && c.guid)).slice(0, 20)) {
     let book: string | null = null;
     try { book = await bookForBeat(firm, c.name); } catch (e) { beatFail("tally_book_for", c.name, e); continue; }
     if (!book) continue;
+    // 2.4.1 (migration 71): this computer's data location of the company is not the chosen one: its numbers are another
+    // copy's, so no starting point and no gap check from it
+    if (src?.notChosen.has(c.name)) { out[c.name] = { gap: null, missing: 0, otherSource: true }; continue; }
     let started = false;
-    const sAlt = c.start ? c.start.altvchid : c.altvchid, sMst = c.start ? c.start.altmstid : c.altmstid, key = book + "|" + c.guid;
+    // 2.4.1: the starting point asked once per 5 minutes per book, GUID AND data location (a newly chosen location records
+    // it afresh at once after the owner's choice)
+    const sAlt = c.start ? c.start.altvchid : c.altvchid, sMst = c.start ? c.start.altmstid : c.altmstid, key = book + "|" + c.guid + "|" + (src?.ids.get(c.name) || "");
     const sd = startDone.get(key);
     if (c.guid && sAlt !== null && !(sd && Date.now() - sd.t < 300000)) {
       try {
@@ -1466,6 +1471,38 @@ function cleanMasterLine(x: any, me: { id: string }): { line?: Record<string, un
     pc: s(x?.pc, 60), user: s(x?.user, 60), company_guid: s(x?.company_guid, 100), bridge: me.id } };
 }
 const MAX_RECORDER_LINES = 500, MAX_RECORDER_XML = 2 * 1024 * 1024, QUEUE_OVER = 50;
+// --- FinCom Bridge 2.4.1 (the owner's approval of 09-Oct-2026, item 3; migration 71): one company open in two places with
+// different data. The bridge sends the data id of the Tally each line came from (data_id: sha256 of the case-folded,
+// trimmed data folder, 16 hex), a line of another data location as event 'other_source' (heads only), and its own data id
+// per company in the beat (dataSources). tally_company_sources keeps each location of a book; the first one a bridge says is
+// its own is chosen by itself, another pending with ONE alert; the owner chooses on the Tally page. Only the chosen
+// location's lines are applied: any other's are kept held ('other_source', never applied). Validated here: an id is 16 hex,
+// a path at most 260 characters, at most 50 sources a call; tied to companies the computer named (deviceNamed, S-M1)
+const DATA_ID_RE = /^[0-9a-f]{16}$/, MAX_SOURCES = 50, MAX_DATA_PATH = 260;
+function cleanDataId(v: unknown): string { const x = typeof v === "string" ? v.trim().toLowerCase() : ""; return DATA_ID_RE.test(x) ? x : ""; }
+// an ISO time the bridge sent (not more than 5 minutes ahead of now), else ""
+function bridgeTime(v: unknown): string {
+  const t = typeof v === "string" ? v.trim().slice(0, 40) : "";
+  if (!/^\d{4}-\d\d-\d\dT\d\d:\d\d(:\d\d(\.\d{1,9})?)?(Z|[+-]\d\d:\d\d)$/i.test(t)) return "";
+  const ms = Date.parse(t);
+  return isNaN(ms) || ms > Date.now() + 300000 ? "" : new Date(ms).toISOString();
+}
+const notReady71 = (e: any) => !!e && /tally_company_source|could not find|does not exist|schema cache/i.test(String(e.message || ""));
+// an 'other_source' line (the bridge's heads only): {line} for tally_company_source_lines, or {bad} with words
+function cleanOtherLine(x: any, me: { id: string }, company: string): { line?: Record<string, unknown>; bad?: string } {
+  const s = (v: unknown, n: number) => typeof v === "string" || typeof v === "number" ? String(v).trim().slice(0, n) : "";
+  const id = cleanDataId(x?.data_id);
+  if (!id) return { bad: "the line's data id is not 16 hex characters" };
+  const path = typeof x?.data_path === "string" ? x.data_path.trim() : "";
+  if (path.length > MAX_DATA_PATH) return { bad: "the line's data folder is longer than " + MAX_DATA_PATH + " characters" };
+  const lid = s(x?.line_id, 80);
+  if (!lid) return { bad: "the line has no line id" };
+  const d8 = s(x?.vch_date, 10).replace(/-/g, ""), at = Date.parse(s(x?.saved_at, 40));
+  const of = s(x?.of, 20);
+  return { line: { line_id: lid, of: RECORDER_EVENTS.has(of) ? of : "", company_guid: s(x?.company_guid, 100), company, vch_type: s(x?.vch_type, 60), vch_no: s(x?.vch_no, 60),
+    vch_date: isDay(d8) ? iso(d8) : null, saved_at: isNaN(at) ? null : new Date(at).toISOString(), received_at: bridgeTime(x?.received_at) || null, pc: s(x?.pc, 60),
+    user: s(x?.user, 60), w: s(x?.w, 200), data_id: id, data_path: path, bridge: me.id } };
+}
 const notReady44 = (e: any) => !!e && /tally_recorder_apply|tally_start_point|could not find|does not exist|schema cache/i.test(String(e.message || ""));
 function cleanRecorderLine(x: any, me: { id: string }): { line?: Record<string, unknown>; bad?: string } {
   const s = (v: unknown, n: number) => typeof v === "string" || typeof v === "number" ? String(v).trim().slice(0, n) : "";
@@ -1506,6 +1543,13 @@ function cleanRecorderLine(x: any, me: { id: string }): { line?: Record<string, 
   // a deliberate resend of a ":resolved" line): kept as sent (in the payload too); the database answers a repeat of the
   // same line id and marker "already have", never storing it twice. An older bridge sends no key: none is added
   if (typeof x?.again === "string") line.again = s(x.again, 20);
+  // 2.4.1 (the owner's approval of 09-Oct-2026): the bridge's own clock when it read the line (received_at) kept in the
+  // payload (tally-ingest dropped it before); the data id of the Tally the line came from (16 hex, migration 71)
+  const ra = bridgeTime(x?.received_at);
+  if (ra) line.received_at = ra;
+  const dId = cleanDataId(x?.data_id);
+  if (dId) line.data_id = dId;
+  else if (x?.data_id !== undefined && x?.data_id !== null && x?.data_id !== "") return { bad: "the line's data id is not 16 hex characters" };
   line.payload = { ...line, xmlBytes: xml.length || undefined };
   if (xml && ["created", "altered", "imported"].includes(event)) {
     if (xml.length > MAX_RECORDER_XML) return { bad: "the entry's XML is larger than FinCom takes (" + xml.length + " characters)" };
@@ -1857,7 +1901,14 @@ async function recorderLines(dev: any, firm: string, book: string, body: any) {
   const results: { line_id: string; state: string; why: string | null }[] = new Array(given.length);
   const send: Record<string, unknown>[] = [], at: number[] = [];
   const masters: Record<string, unknown>[] = [], mat: number[] = [];
+  const others: Record<string, unknown>[] = [], oat: number[] = [];     // 2.4.1: lines of a data location FinCom does not read
   given.forEach((x: any, i: number) => {
+    if (String(x?.event ?? "").trim() === "other_source") {
+      const o = cleanOtherLine(x, me, company);
+      if (o.bad) results[i] = { line_id: String(x?.line_id ?? "").slice(0, 80), state: "failed", why: o.bad };
+      else { others.push(o.line!); oat.push(i); }
+      return;
+    }
     if (MASTER_EVENTS.has(String(x?.event ?? "").trim())) {
       const m = cleanMasterLine(x, me);
       if (m.bad) results[i] = { line_id: String(x?.line_id ?? "").slice(0, 80), state: "failed", why: m.bad };
@@ -1868,6 +1919,9 @@ async function recorderLines(dev: any, firm: string, book: string, body: any) {
     if (c.bad) results[i] = { line_id: String(x?.line_id ?? "").slice(0, 80), state: "failed", why: c.bad };
     else { send.push({ ...c.line, company }); at.push(i); }
   });
+  // 2.4.1: a line naming a data location: tied to a company this computer named; any line of a location that is not the
+  // chosen one is kept held (never applied); the locations noted (migration 71)
+  if (others.length || send.some((l: any) => l.data_id)) await dataLocations(dev, firm, book, company, send, at, others, oat, results);
   if (masters.length) await keepMasters(firm, book, dev, masters, mat, results);
   if (send.length) await shortBodies(firm, book, send);
   if (send.length) await ledgerWait(book, send);     // bridge 2.3.1 (masters): an entry naming a ledger FinCom does not have waits for it
@@ -1908,6 +1962,80 @@ async function recorderLines(dev: any, firm: string, book: string, body: any) {
   out.already = results.filter((r: any) => r?.already === true).length;     // migration 63: of the duplicates, repeats of lines FinCom had
   if (out.held || out.failed) console.log("tally-ingest recorder_lines", book, JSON.stringify({ n: results.length, held: out.held, failed: out.failed, why: results.filter((r) => r && r.state !== "applied" && r.state !== "duplicate").slice(0, 3).map((r) => r.why) }));
   return reply(200, out);
+}
+// 2.4.1 (migration 71): the data locations of one recorder_lines call. The S-M1 tie (eed48720): only for a company this
+// computer named itself (deviceNamed), else every line naming a location is 'failed' with words, nothing stored. The
+// locations noted (a line the bridge read from its own Tally: its own; an 'other_source' line: not its own); a line whose
+// location is not the chosen one is moved to the held 'other_source' lines (heads only: never applied), kept by
+// tally_company_source_lines. A cloud without 71: 'other_source' lines 'failed' with words, the rest as before
+async function dataLocations(dev: any, firm: string, book: string, company: string, send: Record<string, any>[], at: number[], others: Record<string, any>[], oat: number[],
+                             results: { line_id: string; state: string; why: string | null }[]) {
+  const failAll = (why: string, entries: boolean) => {
+    others.forEach((o, k) => { results[oat[k]] = { line_id: String(o.line_id ?? ""), state: "failed", why }; });
+    others.length = 0; oat.length = 0;
+    if (!entries) return;
+    for (let k = send.length - 1; k >= 0; k--) if (send[k].data_id) { results[at[k]] = { line_id: String(send[k].line_id ?? ""), state: "failed", why }; send.splice(k, 1); at.splice(k, 1); }
+  };
+  if (!(await deviceNamed(dev, book, company))) return failAll("This computer has not named this Tally company in its own heartbeat; FinCom takes its data locations only for its own companies.", true);
+  const srcs = new Map<string, Record<string, unknown>>();
+  for (const l of send) if (l.data_id && !srcs.has(l.data_id)) srcs.set(l.data_id, { company_guid: l.company_guid, data_id: l.data_id, computer: l.pc, own: true, line_at: l.saved_at });
+  for (const o of others) if (!srcs.has(o.data_id)) srcs.set(o.data_id, { company_guid: o.company_guid, data_id: o.data_id, path: o.data_path, w: o.w, computer: o.pc, own: false, line_at: o.saved_at });
+  const { data, error } = await db.rpc("tally_company_sources_note", { p_firm: firm, p_book: book, p_device: dev.id, p_sources: [...srcs.values()].slice(0, MAX_SOURCES) });
+  if (error && notReady71(error)) { console.log("tally-ingest recorder_lines: no data locations in this cloud (migration 71)", book); return failAll("FinCom does not keep other data locations yet (migration 71)", false); }
+  if (error || (data as any)?.ok === false) throw dbFail("sources_note", error || (data as any)?.error, "The cloud could not check this company's data locations just now; send the lines again.");
+  const choice = new Map<string, string>(((data as any)?.sources || []).map((x: any) => [String(x?.data_id ?? ""), String(x?.choice ?? "")]));
+  for (let k = send.length - 1; k >= 0; k--) {
+    const l = send[k];
+    if (!l.data_id || choice.get(l.data_id) === "chosen") continue;
+    others.push({ line_id: l.line_id, of: l.event, company_guid: l.company_guid, company, vch_type: l.vch_type, vch_no: l.vch_no, vch_date: l.vch_date, saved_at: l.saved_at,
+      received_at: l.received_at ?? null, pc: l.pc, user: l.user, w: "", data_id: l.data_id, data_path: "", bridge: l.bridge });
+    oat.push(at[k]); send.splice(k, 1); at.splice(k, 1);
+  }
+  if (!others.length) return;
+  const r = await db.rpc("tally_company_source_lines", { p_firm: firm, p_book: book, p_device: dev.id, p_lines: others });
+  if (r.error || (r.data as any)?.ok === false) {
+    fail("source_lines", r.error || (r.data as any)?.error, "recorder_lines");
+    return failAll("FinCom could not keep this line of another data location just now; it is sent again", false);
+  }
+  ((r.data as any)?.results || []).forEach((x: any, k: number) => {
+    if (k < oat.length) results[oat[k]] = { line_id: String(x?.line_id ?? others[k].line_id ?? ""), state: String(x?.state || "failed"), why: x?.why ?? null,
+      ...(x?.already === true ? { already: true, was: String(x?.was || "") } : {}) } as any;
+  });
+  console.log("tally-ingest recorder_lines: " + others.length + " line(s) of another data location kept held", book);
+}
+// 2.4.1 (migration 71): the beat's dataSources [{company, company_guid, data_id, path, w}] (this bridge's own data location
+// per company, at most 50): noted for each company THIS beat names (open or in its list: the S-M1 tie), one call per book.
+// Answered per company {company, company_guid, dataId, chosenId, chosen}; notChosen: the companies whose own location is
+// not the chosen one (no starting point and no gap check from this computer for them: recorderGaps)
+async function beatSources(dev: any, firm: string, b: any, beat: any) {
+  const out = { answer: [] as Record<string, unknown>[], notChosen: new Set<string>(), ids: new Map<string, string>() };
+  const list = Array.isArray(b?.dataSources) ? b.dataSources.slice(0, MAX_SOURCES) : [];
+  if (!list.length) return out;
+  const k = (x: unknown) => String(x ?? "").trim().toLowerCase();
+  const named = new Set<string>([...(beat.open || []), ...(beat.companies || []).map((c: any) => c?.name)].map(k).filter(Boolean));
+  const byBook = new Map<string, { company: string; guid: string; id: string; path: string; w: string }[]>();
+  for (const x of list) {
+    const company = typeof x?.company === "string" ? x.company.trim().slice(0, 200) : "", id = cleanDataId(x?.data_id);
+    const path = typeof x?.path === "string" ? x.path.trim() : "";
+    if (!company || !id || path.length > MAX_DATA_PATH || !named.has(k(company))) continue;
+    let book: string | null = null;
+    try { book = await bookForBeat(firm, company); } catch (e) { beatFail("tally_book_for", company, e); continue; }
+    if (!book) continue;
+    if (!byBook.has(book)) byBook.set(book, []);
+    byBook.get(book)!.push({ company, guid: typeof x?.company_guid === "string" ? x.company_guid.trim().slice(0, 100) : "", id, path, w: typeof x?.w === "string" ? x.w.trim().slice(0, 200) : "" });
+  }
+  for (const [book, xs] of byBook) {
+    const { data, error } = await db.rpc("tally_company_sources_note", { p_firm: firm, p_book: book, p_device: dev.id,
+      p_sources: xs.map((x) => ({ company_guid: x.guid, data_id: x.id, path: x.path, w: x.w, computer: typeof b?.computer === "string" ? b.computer.slice(0, 60) : "", own: true })) });
+    if (error || (data as any)?.ok === false) { beatFail("tally_company_sources_note", xs[0].company, error || (data as any)?.error); if (notReady71(error)) break; continue; }
+    const chosenId = typeof (data as any)?.chosenId === "string" ? (data as any).chosenId : "";
+    for (const x of xs) {
+      out.answer.push({ company: x.company, company_guid: x.guid, dataId: x.id, chosenId, chosen: chosenId === x.id });
+      out.ids.set(x.company, x.id);
+      if (chosenId !== x.id) out.notChosen.add(x.company);
+    }
+  }
+  return out;
 }
 // next-masterhook (migration 66): the master lines of one call kept (heads only); a cloud without 66 answers them 'failed'
 // with words (the voucher and ledger lines of the call go on as before)
@@ -2892,7 +3020,9 @@ Deno.serve(sentry.wrap(async (req) => {
         // phase 2 (migration 44): a PC without the add-on - the change numbers compared with the recorder's lines. Round 19: read
         // from both shapes of the beat (companies[] first, else the top-level startPoint / changeNumbers of 2.1.9), the
         // starting point recorded first (tally_start_point, once)
-        const recorder = await recorderGaps(dev, firm, me.id, beatChanges(b));
+        // 2.4.1 (migration 71): this bridge's own data location per company, noted; the chosen one said back (dataSources)
+        const dsrc = await beatSources(dev, firm, b, beat);
+        const recorder = await recorderGaps(dev, firm, me.id, beatChanges(b), dsrc);
         // round 19 (migration 46): the owner's switch "Trial tools on this computer" (tally_devices.trial_tools); a cloud
         // without the column answers false
         const trialTools = (dev as any).trial_tools === true;
@@ -2905,7 +3035,7 @@ Deno.serve(sentry.wrap(async (req) => {
         const refetch = await refetchFor(dev, firm, me.id, me.entry.version);
         // bridge 2.3.1 (masters): the ledgers this bridge's held lines wait for, fetched by the bridge before the entry
         const ledgersWanted = await ledgersWantedFor(dev, firm, me.id);
-        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(heldLines ? { heldLines } : {}), ...(refetch ? { refetch } : {}), ...(ledgersWanted ? { ledgersWanted } : {}), ...(co ? { notMain: true, changesOnly: true, error: CHANGES_ONLY } : may ? {} : { notMain: true }), ...ctl.out });
+        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(heldLines ? { heldLines } : {}), ...(refetch ? { refetch } : {}), ...(ledgersWanted ? { ledgersWanted } : {}), ...(dsrc.answer.length ? { dataSources: dsrc.answer } : {}), ...(co ? { notMain: true, changesOnly: true, error: CHANGES_ONLY } : may ? {} : { notMain: true }), ...ctl.out });
       }
       case "make_main": return await makeMain(dev, bridgeOf(dev, body, false).id);
       case "posts_take": {
