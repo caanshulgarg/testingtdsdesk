@@ -2436,6 +2436,7 @@ byDay:
 					continue
 				}
 				live.mu.Lock()
+				c.narr = "" // review M1 of next-241: the entry's own narration (Tally's), never the line's
 				liveTakeBody(c, x)
 				if m.kind == wrongNoSave && !c.idsMismatch {
 					c.event = "created" // review H2: the save was not of the MasterID's voucher: a new entry, found by its number
