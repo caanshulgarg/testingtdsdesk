@@ -232,7 +232,7 @@ const AlertHub = {
         if (ds.bridge === "offline") return;   // the Tally sign says it (and the bell does not repeat it)
         // review H1 (bridge 2.3.1): the own Tally lists its companies too slowly (the bridge stops at 2 s): this computer's
         // changes wait, in the bridge's own plain words; gone by itself when the list answers in time again
-        const ownFp = AlertClear.ownwaitFp(d.id, !!beat.recorderWaitWords, beat.recorderWaitSince);
+        const ownFp = AlertClear.ownwaitFp(d.id, !!beat.recorderWaitWords, beat.recorderWaitSince, beat.recorderWaitStarts);
         if (beat.recorderWaitWords) out.push({key: "ownwait:" + d.id, fp: ownFp, sev: "warn", cid: "", selfClear: true, at: beat.at || "", details: label,
           text: String(beat.recorderWaitWords).replace(/\.?$/, "."), fix: "Nothing is lost: they go by themselves once Tally answers in time. Close any open window or report in Tally on that computer, or press Update now there."});
         const pcFp = kind => AlertClear.fp(["pc:" + d.id + ":" + kind]);
@@ -302,7 +302,7 @@ const AlertHub = {
 //   needs:<kind|company|day…>    Sync activity's "Needs you" group               line:<id>:need for each of its lines
 //   fetching:<client or all>     Sync activity's "being fetched" note            line:<id>:wait|need for each line
 //   unk:<client or firm>         "uses a ledger FinCom does not have yet"        unk:<the entry's key> for each entry
-//   ownwait:<computer>           the bell                                        ownwait:<computer>:<when the wait began: the beat's recorderWaitSince> (release-240 M2; a bridge before 2.4.0: when this browser first saw it)
+//   ownwait:<computer>           the bell                                        ownwait:<computer>:<reason>:<company>:<its start> for each of the beat's recorderWaitStarts (release-240 M2-r); else recorderWaitSince; a bridge before 2.4.0: when this browser first saw it
 //   pc:<computer>                the bell                                        pc:<computer>:retry:<IST day of the retry> | :stopped:<its time> |
 //                                                                                  :notanswering:<since> | :silent:<IST day>  (the computer + the kind)
 //   bridgeid:<id>                the bell (owners)                               bridgeid:<id>
@@ -334,8 +334,13 @@ const AlertClear = {
   // release-240 re-review M2: keyed on when the wait began as the bridge says it (the beat's recorderWaitSince, bridge
   // 2.4.0): the same in every browser, and a wait that ended and came back while this browser was closed is new. A bridge
   // before 2.4.0 does not say it: when this browser first saw the wait, as before
-  ownwaitFp(dev, on, since){ const s = /^\d{4}-\d\d-\d\dT/.test(String(since || "")) ? String(since) : "", t = this.episode("ownwait:" + dev, on && !s);
-    return on ? this.fp(["ownwait:" + dev + ":" + (s || t)]) : ""; },
+  // re-review M2-r: each reason's start (the beat's recorderWaitStarts: earlier, blind, queue per company) is one item of
+  // the fingerprint, as a book alert's lines are: a new reason, or a reason started again, is a new notification
+  ownwaitFp(dev, on, since, starts){
+    const iso = v => /^\d{4}-\d\d-\d\dT/.test(String(v || ""));
+    const items = [].concat(Array.isArray(starts) ? starts : []).filter(x => x && iso(x.since)).map(x => "ownwait:" + dev + ":" + String(x.reason || "") + ":" + String(x.company || "") + ":" + String(x.since));
+    const s = iso(since) ? String(since) : "", t = this.episode("ownwait:" + dev, on && !items.length && !s);
+    return on ? this.fp(items.length ? items : ["ownwait:" + dev + ":" + (s || t)]) : ""; },
   selftestFp(fails, on){ const f = [].concat(fails || []).slice().sort().join(","), t = this.episode("selftest", on); return on ? this.fp(["selftest:" + this.device() + ":" + f + ":" + t]) : ""; },
   // release-240 review M2(a): what the cloud keeps (migration 68/70): 2,000 characters a fingerprint, 500 a call. An item
   // longer than 200 characters is sent as its hash (h1:...; cleared() checks the item and its hash); a fingerprint still

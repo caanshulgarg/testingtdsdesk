@@ -181,6 +181,20 @@ try:
     c, r = call(BEAT)
     bt = ((F.T["tally_devices"][0].get("info") or {}).get("beat") or {})
     ok(c == 200 and "recorderWaitSince" not in bt, "M2. a beat without it: gone (%s)" % bt.get("recorderWaitSince"))
+    # release-240 re-review M2-r: each reason's start (recorderWaitStarts): reason from a fixed set, company at most 200
+    # characters, since an ISO time, at most 50; anything else dropped
+    ST = [{"reason": "queue", "company": "ZZ CO", "since": "2026-10-09T05:40:00Z", "x": "dropped"}, {"reason": "blind", "since": "2026-10-09T05:41:00Z"},
+          {"reason": "earlier", "since": "2026-10-09T05:42:00Z"}, {"reason": "other", "since": "2026-10-09T05:43:00Z"}, {"reason": "queue", "company": "C" * 201, "since": "2026-10-09T05:44:00Z"},
+          {"reason": "blind", "since": "ALPHA TRADERS"}, "not an object"] + [{"reason": "queue", "company": "CO %d" % i, "since": "2026-10-09T06:00:00Z"} for i in range(60)]
+    c, r = call(dict(BEAT, recorderWaitWords=WW, recorderWaitStarts=ST))
+    bt = ((F.T["tally_devices"][0].get("info") or {}).get("beat") or {})
+    got = bt.get("recorderWaitStarts") or []
+    ok(c == 200 and got[:3] == [{"reason": "queue", "company": "ZZ CO", "since": "2026-10-09T05:40:00Z"}, {"reason": "blind", "since": "2026-10-09T05:41:00Z"}, {"reason": "earlier", "since": "2026-10-09T05:42:00Z"}]
+       and len(got) == 50 and all(x["reason"] in ("queue", "blind", "earlier") and len(x.get("company", "")) <= 200 for x in got),
+       "M2-r. the beat keeps recorderWaitStarts: a fixed set of reasons, company at most 200, an ISO time, at most 50 (%d kept, first %s)" % (len(got), got[:3]))
+    c, r = call(BEAT)
+    bt = ((F.T["tally_devices"][0].get("info") or {}).get("beat") or {})
+    ok(c == 200 and "recorderWaitStarts" not in bt, "M2-r. a beat without them: gone")
     # bridge 2.3.1, the owner's last change: a request not answered in time, and when the bridge tries again by itself
     # (tallyRetry), kept on the beat and the bridge's entry for the Tally page; gone when it answers in time again
     TR = {"words": "Tally did not answer in time at 12:14; trying again by itself at 12:15", "at": "2026-10-06T12:14:50", "next": "2026-10-06T12:15:05", "tries": 1, "x": "dropped"}

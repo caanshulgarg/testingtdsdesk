@@ -108,6 +108,22 @@ with sync_playwright() as p:
     E("async () => { AlertClear.rowsNow(); await AlertClear.load(); }")
     w4 = E(DEV, ["2026-10-09T05:10:00Z", True])
     ok(w4 and w4["fp"] != w1["fp"] and w4["shown"], "b) ownwait: cleared, gone, back with the browser closed: shows again (%s)" % (w4 and w4["fp"]))
+    # ---------- M2-r: the bridge's start per reason (recorderWaitStarts), joined into the fingerprint
+    DEV2 = """(starts) => { const now = new Date().toISOString(), beat = {at: now, every: 30, tally: true, tallyState: "open", open: ["ZZ CO"],
+        recorderWaitWords: "3 changes of ZZ CO waiting to go to FinCom (oldest since 10:05)", recorderWaitSince: starts.map(x => x.since).sort()[0], recorderWaitStarts: starts};
+      TLight.st.devs = [{id: "d2", name: "Office", revoked: false, last_seen: now, info: {computer: "OFFICE", beat}}]; TLight.st.at = Date.now();
+      const x = AlertHub.all().find(i => i.key === "ownwait:d2"), shown = AlertHub.list().some(i => i.key === "ownwait:d2");
+      return x ? {fp: x.fp, shown} : null; }"""
+    Q1 = {"reason": "queue", "company": "ZZ CO", "since": "2026-10-09T05:00:30Z"}
+    r1 = E(DEV2, [Q1])
+    ok(r1 and r1["shown"] and "queue" in r1["fp"] and "2026-10-09T05:00:30Z" in r1["fp"], "M2-r. a company's lines waiting: shown, keyed on its queue's start (%s)" % (r1 and r1["fp"]))
+    E("async (fp) => { await AlertClear.clear([{key: 'ownwait:d2', fp, text: 'wait'}]); }", r1["fp"])
+    r2 = E(DEV2, [Q1])
+    ok(r2 and not r2["shown"] and r2["fp"] == r1["fp"], "M2-r. the backlog draining (the bridge keeps its queue's start): the same key, stays cleared")
+    r3 = E(DEV2, [Q1, {"reason": "blind", "since": "2026-10-09T06:00:00Z"}])
+    ok(r3 and r3["shown"], "M2-r. a stuck line still waiting, and a new blind look: a new key, shown (%s)" % (r3 and r3["fp"].replace(chr(10), " | ")))
+    r4 = E(DEV2, [{"reason": "queue", "company": "ZZ CO", "since": "2026-10-09T06:30:30Z"}])
+    ok(r4 and r4["shown"] and r4["fp"] != r1["fp"], "M2-r. the queue again after it dropped below the threshold: a new key, shown")
     ok(not errors, "no page errors %s" % errors[:3])
     br.close()
 srv.shutdown()

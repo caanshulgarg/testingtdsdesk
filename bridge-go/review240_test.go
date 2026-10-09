@@ -326,3 +326,104 @@ func TestBeatWaitSince(t *testing.T) {
 		t.Fatalf("the wait again: words %q since %q (the first one began %s)", b["recorderWaitWords"], s, first)
 	}
 }
+
+// --- M2-r (re-review): each reason the changes wait has its own start in the beat (recorderWaitStarts): an earlier
+// request ("earlier"), no complete look at the own Tally ("blind"), a company's lines waiting ("queue": from when its
+// oldest line first passed 30 s, kept on disk, reset only when that company's queue drops below the threshold)
+func waitStarts(t *testing.T) map[string]string {
+	t.Helper()
+	b := beatBody(true, "open", "", nil, nil, nil)
+	o := map[string]string{}
+	for _, x := range arr(b["recorderWaitStarts"]) {
+		e := obj(x)
+		o[str(e["reason"])+":"+str(e["company"])] = str(e["since"])
+	}
+	return o
+}
+
+func waitQueue(lines ...*change) {
+	live.mu.Lock()
+	liveFresh()
+	live.queue = lines
+	live.mu.Unlock()
+}
+
+func TestWaitStartsDrainingBacklog(t *testing.T) {
+	liveBridge(t, "")
+	t.Cleanup(func() { nowFn = time.Now; waitQueue() })
+	base := time.Now().Truncate(time.Second)
+	nowFn = func() time.Time { return base }
+	var q []*change
+	for i := 0; i < 5; i++ {
+		q = append(q, &change{company: "CO A", readAt: base.Add(time.Duration(-300+i*10) * time.Second)})
+	}
+	waitQueue(q...)
+	s0 := waitStarts(t)["queue:CO A"]
+	if s0 == "" {
+		t.Fatalf("no start for the waiting lines: %v", waitStarts(t))
+	}
+	// the backlog drains, one line every 30 s: the oldest queued moves on, the start does not
+	for i := 1; i < 5; i++ {
+		nowFn = func() time.Time { return base.Add(time.Duration(i*30) * time.Second) }
+		waitQueue(q[i:]...)
+		if s := waitStarts(t)["queue:CO A"]; s != s0 {
+			t.Fatalf("draining (%d left): the start moved from %s to %s", 5-i, s0, s)
+		}
+	}
+	// a restart while it waits: the same start (kept on disk)
+	waitForget()
+	if s := waitStarts(t)["queue:CO A"]; s != s0 {
+		t.Fatalf("after a restart: %s (was %s)", s, s0)
+	}
+	// empty: no start; lines over 30 s again later: a new, later start
+	nowFn = func() time.Time { return base.Add(10 * time.Minute) }
+	waitQueue()
+	if s := waitStarts(t)["queue:CO A"]; s != "" {
+		t.Fatalf("an empty queue keeps a start: %s", s)
+	}
+	waitQueue(&change{company: "CO A", readAt: base.Add(10*time.Minute - 40*time.Second)})
+	if s := waitStarts(t)["queue:CO A"]; s == "" || s <= s0 {
+		t.Fatalf("the queue again: %q (the first began %s)", s, s0)
+	}
+}
+
+// the queue below the threshold (its oldest line under 30 s) and over it again: a new start
+func TestWaitStartsQueueBelowThresholdResets(t *testing.T) {
+	liveBridge(t, "")
+	t.Cleanup(func() { nowFn = time.Now; waitQueue() })
+	base := time.Now().Truncate(time.Second)
+	nowFn = func() time.Time { return base }
+	waitQueue(&change{company: "CO A", readAt: base.Add(-60 * time.Second)})
+	s0 := waitStarts(t)["queue:CO A"]
+	nowFn = func() time.Time { return base.Add(2 * time.Minute) }
+	waitQueue(&change{company: "CO A", readAt: base.Add(2*time.Minute - 5*time.Second)})
+	if s := waitStarts(t)["queue:CO A"]; s != "" || s0 == "" {
+		t.Fatalf("below the threshold: %q (before %q)", s, s0)
+	}
+	nowFn = func() time.Time { return base.Add(3 * time.Minute) }
+	if s := waitStarts(t)["queue:CO A"]; s == "" || s == s0 {
+		t.Fatalf("over it again: %q (the first %q): want a new start", s, s0)
+	}
+}
+
+// a line FinCom keeps answering 'failed' stays queued (its start stays); a new blind look adds its own start
+func TestWaitStartsStuckLineThenBlind(t *testing.T) {
+	liveBridge(t, "")
+	t.Cleanup(func() { nowFn = time.Now; waitQueue() })
+	base := time.Now().Truncate(time.Second)
+	nowFn = func() time.Time { return base }
+	waitQueue(&change{company: "CO A", readAt: base.Add(-time.Hour), failN: 25})
+	s0 := waitStarts(t)
+	nowFn = func() time.Time { return base.Add(time.Hour) }
+	live.mu.Lock()
+	live.ownAt = base // the last complete look at the own Tally (this test's bridge seeds one far ahead)
+	live.mu.Unlock()
+	liveOwnBlindNow()
+	live.mu.Lock()
+	live.ownWaitAt = nowFn()
+	live.mu.Unlock()
+	s1 := waitStarts(t)
+	if s1["queue:CO A"] != s0["queue:CO A"] || s1["blind:"] != base.Add(time.Hour).UTC().Format(time.RFC3339) || len(s1) != 2 {
+		t.Fatalf("a stuck line, then a blind look: %v (before %v)", s1, s0)
+	}
+}

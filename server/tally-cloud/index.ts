@@ -795,6 +795,24 @@ function cleanTallyRetry(x: any) {
   const t = (v: unknown) => typeof v === "string" ? v.slice(0, 30) : "";
   return { words: x.words.slice(0, 200), at: t(x.at), next: t(x.next), tries: Math.max(0, Math.min(1e6, Math.floor(Number(x.tries) || 0))) };
 }
+// release-240 re-review M2-r: the beat's recorderWaitStarts, checked: a reason from a fixed set, a company of at most 200
+// characters (only for "queue"), an ISO time; at most 50
+const waitStartsOf = (b: any): { recorderWaitStarts?: { reason: string; company?: string; since: string }[] } => {
+  if (!Array.isArray(b?.recorderWaitStarts)) return {};
+  const out: { reason: string; company?: string; since: string }[] = [];
+  for (const x of b.recorderWaitStarts as unknown[]) {
+    if (out.length >= 50) break;
+    if (!x || typeof x !== "object") continue;
+    const e = x as Record<string, unknown>, reason = typeof e.reason === "string" ? e.reason : "", since = typeof e.since === "string" ? e.since : "";
+    if (!["earlier", "blind", "queue"].includes(reason) || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(Z|[+-]\d\d:\d\d)$/.test(since)) continue;
+    if (reason === "queue") {
+      const company = typeof e.company === "string" ? e.company : "";
+      if (!company || company.length > 200) continue;
+      out.push({ reason, company, since });
+    } else out.push({ reason, since });
+  }
+  return out.length ? { recorderWaitStarts: out } : {};
+};
 const tallyRetryOf = (b: any) => { const r = cleanTallyRetry(b?.tallyRetry); return r ? { tallyRetry: r } : {}; };
 // 2.4.0 review MEDIUM (next-renumber): entries Tally may have renumbered that the bridge did not read again
 // (renumberAlerts [{company, words, n, more, from, type, at}], the last 7 days, renumber.go): kept on the beat so FinCom
@@ -2784,6 +2802,9 @@ Deno.serve(sentry.wrap(async (req) => {
           ...(s(b.recorderWaitWords, 300) ? { recorderWaitWords: s(b.recorderWaitWords, 300) } : {}),
           // bridge 2.4.0 (release-240 re-review M2): when that wait began, an ISO time only (the "changes wait" notice is keyed on it)
           ...(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(Z|[+-]\d\d:\d\d)$/.test(s(b.recorderWaitSince, 40)) ? { recorderWaitSince: s(b.recorderWaitSince, 40) } : {}),
+          // release-240 re-review M2-r: each reason's start [{reason, company?, since}]: earlier | blind | queue, a company of
+          // at most 200 characters, an ISO time; at most 50; anything else dropped
+          ...waitStartsOf(b),
           // bridge 2.3.1 (the owner's last change): a request not answered in time, and when it tries again by itself
           ...tallyRetryOf(b),
           // 2.4.0 review MEDIUM (next-renumber): the renumbering alerts, for "Needs you"

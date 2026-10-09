@@ -919,49 +919,122 @@ func liveWaitWordsAll() string {
 	return cutRunes(strings.Join(ws, "; "), 300)
 }
 
-// release-240 re-review M2: when the wait recorderWaitWords tells of began (RFC3339; "" when nothing waits): the earliest
-// start of what it says (an earlier request still with Tally: when it was sent; no complete look at the own Tally: when
-// that began; lines waiting: the oldest one shown), the same for every browser, so a notice cleared stays cleared while
-// the same wait lasts and a new wait is a new notice
-func liveWaitSinceAll() string {
-	var t time.Time
-	pick := func(x time.Time) {
-		if !x.IsZero() && (t.IsZero() || x.Before(t)) {
-			t = x
+// release-240 re-review M2-r: each reason the changes wait has its own start, the same for every browser (the "changes
+// wait on one computer" notice joins them into its fingerprint, as a book alert joins its lines): an earlier request Tally
+// is still finishing ("earlier": when it was sent), no complete look at the own Tally ("blind": when that began, kept on
+// disk), a company's lines waiting ("queue": when its oldest line first passed RecorderWaitWordsSec, 30 s; kept on disk,
+// reset only when that company's queue drops below the threshold, so a draining backlog keeps its start and a line
+// FinCom keeps answering 'failed' does not hide a different wait). Read at each beat.
+var waitQ struct {
+	mu  sync.Mutex
+	dir string
+	m   map[string]time.Time // company -> its queue's start
+}
+
+func waitStartsFile() string { return sp("recorder-wait-starts.json") }
+
+// a restart: the starts read again from disk (the tests)
+func waitForget() {
+	waitQ.mu.Lock()
+	waitQ.m = nil
+	waitQ.mu.Unlock()
+}
+
+func liveWaitStarts() []any {
+	out := []any{}
+	add := func(reason, company string, at time.Time) {
+		if at.IsZero() || len(out) >= 50 {
+			return
 		}
+		e := M{"reason": reason, "since": at.UTC().Format(time.RFC3339)}
+		if company != "" {
+			e["company"] = cutRunes(company, 200)
+		}
+		out = append(out, e)
 	}
 	if earlierPageWords() != "" {
-		pick(earlierOldestAt())
+		add("earlier", "", earlierOldestAt())
 	}
 	if liveOwnWaitWords() != "" {
 		live.mu.Lock()
-		if !live.ownBlindAt.IsZero() {
-			pick(live.ownBlindAt)
-		} else {
-			pick(live.ownWaitAt)
+		at := live.ownBlindAt
+		if at.IsZero() {
+			at = live.ownWaitAt
 		}
 		live.mu.Unlock()
+		add("blind", "", at)
 	}
-	if liveQueueWaitWords() != "" {
-		live.mu.Lock()
-		after := time.Duration(keepNumZero("RecorderWaitWordsSec", 30)) * time.Second
-		oldest := map[string]time.Time{}
-		for _, c := range live.queue {
-			if o, had := oldest[c.company]; !had || c.readAt.Before(o) {
-				oldest[c.company] = c.readAt
+	// each company's lines: over the threshold now (its oldest line older than it), or not
+	live.mu.Lock()
+	liveFresh()
+	after := time.Duration(keepNumZero("RecorderWaitWordsSec", 30)) * time.Second
+	oldest := map[string]time.Time{}
+	for _, c := range live.queue {
+		if o, had := oldest[c.company]; !had || c.readAt.Before(o) {
+			oldest[c.company] = c.readAt
+		}
+	}
+	live.mu.Unlock()
+	now := nowFn()
+	waitQ.mu.Lock()
+	if d := syncDir(); waitQ.m == nil || waitQ.dir != d {
+		waitQ.dir, waitQ.m = d, map[string]time.Time{}
+		for k, v := range obj(readObjFile(waitStartsFile())["queue"]) {
+			if t, err := time.Parse(time.RFC3339, str(v)); err == nil {
+				waitQ.m[k] = t
 			}
 		}
-		for _, o := range oldest {
-			if nowFn().Sub(o) >= after {
-				pick(o)
-			}
+	}
+	changed := false
+	var cos []string
+	for co, o := range oldest {
+		if now.Sub(o) < after {
+			continue
 		}
-		live.mu.Unlock()
+		cos = append(cos, co)
+		if _, had := waitQ.m[co]; !had {
+			waitQ.m[co] = o.Add(after) // when its oldest line passed the threshold
+			changed = true
+		}
 	}
-	if t.IsZero() {
-		return ""
+	for co := range waitQ.m {
+		if o, had := oldest[co]; !had || now.Sub(o) < after {
+			delete(waitQ.m, co) // below the threshold (or empty): its next wait is a new one
+			changed = true
+		}
 	}
-	return t.UTC().Format(time.RFC3339)
+	sort.Strings(cos)
+	starts := map[string]time.Time{}
+	for _, co := range cos {
+		starts[co] = waitQ.m[co]
+	}
+	if changed {
+		o := M{}
+		for k, v := range waitQ.m {
+			o[k] = v.UTC().Format(time.RFC3339)
+		}
+		if err := saveFile(waitStartsFile(), jsonText(M{"queue": o})); err != nil {
+			writeLog("Recorder: " + waitStartsFile() + " could not be written: " + err.Error())
+		}
+	}
+	waitQ.mu.Unlock()
+	for _, co := range cos {
+		add("queue", co, starts[co])
+	}
+	return out
+}
+
+// release-240 re-review M2: the earliest of those starts (RFC3339; "" when nothing waits), kept for the beat's readers
+func liveWaitSinceAll() string { return waitSinceOf(liveWaitStarts()) }
+
+func waitSinceOf(starts []any) string {
+	first := ""
+	for _, x := range starts {
+		if s := str(obj(x)["since"]); first == "" || s < first {
+			first = s
+		}
+	}
+	return first
 }
 
 func beatMissedSince() time.Time { _, f := beatTimes(); return f }
@@ -971,6 +1044,7 @@ func beatMissedSince() time.Time { _, f := beatTimes(); return f }
 func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
 	au, rb := autoUpdateBeat()
 	tport, tdata := myTallyFor(ports)
+	waitStarts := liveWaitStarts()                                                                                  // release-240 re-review M2-r: each reason's start, and the earliest
 	return M{"windowsUser": ownerName(), "bridgePort": toInt(cfg("Port")), "tallyPort": tport, "dataFolder": tdata, // 2.3.0: one bridge per Windows user
 		"reqs": beatReqs(), "readStopped": readStopAny(), "kind": "beat", "tally": tally, "tallyState": tstate, "busySince": tsince, "every": beatEvery(), "open": open, "ports": ports, "companies": cos,
 		"updating": keepRunning(), "dailyAt": keepDailyAt(), "nightlyAt": keepDailyAt(), "lastRun": keepLastRun(), "paused": paused(), "notAnsweringSince": notAnsweringSince(),
@@ -994,7 +1068,7 @@ func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
 		// review M8: the add-on's file names read; review S4: whether automatic updates are on, and the last rollback
 		"recorderFiles": liveFilesSeen(), "autoUpdate": au, "rolledBack": rb,
 		// review H1 (2.3.1): why this computer's changes wait for a complete look at its own Tally, in plain words ("" when none)
-		"recorderWaitWords": liveWaitWordsAll(), "recorderWaitSince": liveWaitSinceAll(),
+		"recorderWaitWords": liveWaitWordsAll(), "recorderWaitSince": waitSinceOf(waitStarts), "recorderWaitStarts": waitStarts,
 		// next-renumber: entries Tally may have renumbered that the bridge did not read again, in plain words (renumber.go)
 		"renumberAlerts": renumBeat(),
 		// next-bankdate: bank dates set in Tally that may not have reached FinCom, in plain words (bankdate.go)
