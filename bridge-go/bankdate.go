@@ -327,6 +327,14 @@ func bankAfterLightCheck(company string, port int) {
 	if !ok {
 		return
 	}
+	// release-240 re-review (M6 remainder): only this bridge's own Windows user's Tally, with the company open there
+	// (ledOwnPort, as the self-check): the port the light check passed is not used unless it is that one; nothing is
+	// sent otherwise
+	own, err := ownPortErr("Bank dates", company, guid)
+	if err != nil {
+		return
+	}
+	port = own
 	ws := bankWindows(company, guid)
 	bank.mu.Lock()
 	bankFresh()

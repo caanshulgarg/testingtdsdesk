@@ -3,8 +3,10 @@ package main
 // release-240 final review (09-Oct-2026), bridge items, each written before its fix (red first).
 
 import (
+	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -233,6 +235,36 @@ func TestLimitsCapped(t *testing.T) {
 	setCfg("BankNightLimitMs", float64(1500))
 	if recorderLimitMs() != 300 || bankNightLimitMs() != 1500 {
 		t.Fatalf("lower limits set by hand: %d / %d", recorderLimitMs(), bankNightLimitMs())
+	}
+}
+
+// --- M6 remainder (re-review): the bank route's by-day list goes only to this bridge's own Tally. Two Tallys on the
+// computer, OnlyMySession off: the company is open only in the other Windows user's Tally (ravi's, session 2), never
+// seen in this bridge's own (anshul's); the light check found it there. The bank route sends that Tally nothing at all,
+// and nothing to the own Tally either
+func TestBankSmallListOwnTallyOnly(t *testing.T) {
+	_, theirs, _ := bankBridge(t, "")
+	mine := newStandTally(t)
+	dir := t.TempDir()
+	fake := filepath.Join(dir, "fake.json")
+	_ = os.WriteFile(fake, []byte(fmt.Sprintf(`{"mySession": 1, "users": {"1": "anshul", "2": "ravi"},
+		"processes": [{"pid": 10, "name": "tally", "session": 1, "path": "C:\\Tally\\tally.exe"}, {"pid": 20, "name": "tally", "session": 2, "path": "C:\\Tally\\tally.exe"}],
+		"listeners": [{"port": %d, "pid": 10}, {"port": %d, "pid": 20}]}`, mine.port, theirs.port)), 0o644)
+	t.Setenv("TDSBRIDGE_FAKE", fake)
+	setCfg("OnlyMySession", false)
+	_ = os.Remove(liveOwnTallyFile())
+	liveResetState() // the company never seen open in the own Tally
+	bankSet(theirs, "26311", "20261007")
+	if _, err := companyCheck(fin, nwsCo, theirs.port); err != nil { // the light check, on the Tally it found
+		t.Fatal(err)
+	}
+	n0, m0 := theirs.n(""), mine.n("")
+	bankAfterLightCheck(nwsCo, theirs.port)
+	if n := theirs.n(""); n != n0 {
+		t.Fatalf("the other user's Tally got %d request(s) from the bank route: %v", n-n0, theirs.ids()[n0:])
+	}
+	if n := mine.n("TDSDeskKeepList"); n != 0 || mine.n("") != m0 {
+		t.Fatalf("the own Tally (the company not open there) was asked: %v", mine.ids()[m0:])
 	}
 }
 
