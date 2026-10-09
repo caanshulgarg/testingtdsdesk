@@ -28,7 +28,7 @@ FILES = [os.path.join(SQLDIR, f) for f in ("migration-32-sync-safety.sql", "migr
                                            "migration-40-states-carried.sql", "migration-41-day-counts.sql", "migration-42-empty-day-second-read.sql", "migration-43-posting-reply.sql", "migration-44-recorder.sql", "migration-45-bulk-posting.sql",
                                            "migration-46-trial-tools.sql", "migration-47-recorder-queue-alerts.sql", "migration-48-day-cache-once.sql", "migration-49-post-row-flags.sql", "migration-50-recorder-held.sql", "migration-51-recorder-ids-mismatch.sql",
                                            "migration-52-recorder-duplicate-needs-same-entry.sql", "migration-53-recorder-placeholder-settled.sql", "migration-54-post-target-bridge.sql", "migration-55-settle-and-lease.sql", "migration-56-keep-fields.sql", "migration-57-entry-details.sql", "migration-58-lows.sql",
-                                           "migration-60-recorder-lows.sql", "migration-71-company-sources.sql")]
+                                           "migration-60-recorder-lows.sql", "migration-67-recorder-renumbered.sql", "migration-71-company-sources.sql")]
 fails = []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
@@ -201,9 +201,38 @@ try:
     ok(st[0] == "held" and "(\u2460, NWS144); FinCom reads \u2461" in st[1] and not vrow(CG + "-%08x" % 26313), "5. NWS144's line of ① now held, not applied (%s)" % (st,))
     c, r = rec([line("p-2", 26401, 70012, "2026-27/GST/298", "PC-2", I2)], K2, G2)
     ok(res(r).get("p-2", ("",))[0] == "applied" and vrow(CG + "-%08x" % 26401), "5. PC-2's line of ② applied (%s)" % res(r))
-    print("== 6. review H5: the same data (one folder under two paths)")
+    print("== 6. review H5: the same data (one folder under two paths); the re-review: only while a location is pending")
+    beat(K2, G2, src(I2, P2), start=70000, alt=70014)     # PC-2's next beat, after its starting point was recorded afresh
+    ok(vrow(CG + "-%08x" % 26400), "6. PC-2's line kept pending before ② was chosen: applied once ②'s starting point was recorded afresh (its AlterID 70011 above 70000)")
     out = db.one("set fincom.uid = %s; set fincom.role = 'authenticated'; set role authenticated; select tally_company_source_same(%s)::text" % (q(OWNER), q(BOOK)))
-    ok('"ok": true' in (out or "") and vrow(CG + "-%08x" % 26400), "6. same data: PC-2's line kept pending before is applied now (%s)" % out)
+    ok('"ok": false' in (out or "") and db.one("select choice from tally_company_sources where book_id = %s and data_id = %s" % (q(BOOK), q(I1))) == "other",
+       "6. the re-review (Low): same data with nothing pending: refused, ① (other) not chosen (%s)" % out)
+    print("== 7. the re-review H1-r(a): only a proven data id says 'own'")
+    CO2, CG2, BOOK2 = "GARG COPY TEST CO", "8d6fe9b3-7235-4cbb-b4cd-1124be599100", "11111111-1111-1111-1111-111111111172"
+    db.sql("insert into tally_books (book_id, firm_id, client_id, company, from_date, open_as_on) values (%s, %s, 'c1', %s, '2026-04-01', '2026-03-31')" % (q(BOOK2), q(FIRM), q(CO2)))
+    FS.T["tally_companies"].append({"firm_id": FIRM, "company": CO2, "client_id": "c1", "book_id": BOOK2})
+    b2 = {"kind": "beat", "version": "2.4.1", "bridge": G1, "computer": "NWS144", "windowsUser": "anshul", "tally": True, "tallyState": "open", "every": 30, "open": [CO2],
+          "companies": [{"name": CO2, "open": True, "guid": CG2, "altvchid": 900, "altmstid": 100}], "startPoint": {CO2: {"altvchid": 800, "altmstid": 90, "guid": CG2}}, "dataSources": []}
+    c, r = call(b2, K1)
+    ok(c == 200 and db.one("select start_device::text from tally_sync_cursor where book_id = %s" % q(BOOK2)) == D1, "7. the second company's starting point from NWS144 (%s)" % c)
+    I3, I4 = did(r"E:\Fork A\DATA"), did(r"E:\Fork B\DATA")
+    def line2(lid, mid, alter, data_id, proven=None):
+        x = dict(line(lid, mid, alter, "F-%d" % mid, "NWS144", data_id), company_guid=CG2, object_guid=CG2 + "-%08x" % mid)
+        x["xml"] = xml(CG2 + "-%08x" % mid, alter, 100, "F-%d" % mid)
+        if proven is not None: x["data_proven"] = proven
+        return x
+    rec2 = lambda lines: call({"kind": "recorder_lines", "company": CO2, "company_guid": CG2, "version": "2.4.1", "bridge": G1, "lines": lines}, K1)
+    c, r = rec2([line2("f-1", 500, 901, I3)])
+    ch2 = {x["data_id"]: x["choice"] for x in db.rows("select data_id, choice from tally_company_sources where book_id = %s" % q(BOOK2))}
+    ok(ch2 == {I3: "pending"}, "7. the copy's unproven line first: its folder NOT chosen by itself, pending (%s %s)" % (ch2, res(r)))
+    c, r = rec2([line2("f-2", 501, 902, I4)])
+    ch2 = {x["data_id"]: x["choice"] for x in db.rows("select data_id, choice from tally_company_sources where book_id = %s" % q(BOOK2))}
+    al2 = int(db.one("select count(*) from tally_alerts where book_id = %s and data->>'reason' = 'source'" % q(BOOK2)))
+    ok(ch2 == {I3: "pending", I4: "pending"} and al2 >= 1 and not vrow(CG2 + "-%08x" % 500) and not vrow(CG2 + "-%08x" % 501),
+       "7. the other folder's unproven line: both pending, with the alert, nothing applied (%s, %d alerts)" % (ch2, al2))
+    c, r = rec2([line2("f-3", 502, 903, I4, True)])
+    ch2 = {x["data_id"]: x["choice"] for x in db.rows("select data_id, choice from tally_company_sources where book_id = %s" % q(BOOK2))}
+    ok(ch2.get(I4) == "chosen" and ch2.get(I3) == "pending", "7. a line the bridge proved (data_proven): its own, chosen as the starting point's computer's (%s)" % ch2)
 finally:
     if fn:
         fn.terminate()

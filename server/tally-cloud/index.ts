@@ -1560,6 +1560,10 @@ function cleanRecorderLine(x: any, me: { id: string }): { line?: Record<string, 
   const dId = cleanDataId(x?.data_id);
   if (dId) line.data_id = dId;
   else if (x?.data_id !== undefined && x?.data_id !== null && x?.data_id !== "") return { bad: "the line's data id is not 16 hex characters" };
+  // the re-review of next-241, H1-r(a): the bridge marks a data id it proved its own Tally's (data_proven); only such a line
+  // (or the beat's dataSources) notes its location as the bridge's own: an unproven one (a second Tally of the same user, a
+  // copy) never gets chosen by itself
+  if (dId && x?.data_proven === true) line.data_proven = true;
   line.payload = { ...line, xmlBytes: xml.length || undefined };
   if (xml && ["created", "altered", "imported"].includes(event)) {
     if (xml.length > MAX_RECORDER_XML) return { bad: "the entry's XML is larger than FinCom takes (" + xml.length + " characters)" };
@@ -2011,7 +2015,12 @@ async function dataLocations(dev: any, firm: string, book: string, company: stri
   };
   if (!(await deviceNamed(dev, book, company))) return failAll("This computer has not named this Tally company in its own heartbeat; FinCom takes its data locations only for its own companies.");
   const srcs = new Map<string, Record<string, unknown>>();
-  for (const l of send) if (l.data_id && !srcs.has(l.data_id)) srcs.set(l.data_id, { company_guid: l.company_guid, data_id: l.data_id, computer: l.pc, own: true, line_at: l.saved_at });
+  for (const l of send) {
+    if (!l.data_id) continue;
+    const was = srcs.get(l.data_id);
+    if (!was) srcs.set(l.data_id, { company_guid: l.company_guid, data_id: l.data_id, computer: l.pc, own: l.data_proven === true, line_at: l.saved_at });
+    else if (l.data_proven === true) was.own = true; // H1-r(a): own only for a proven id
+  }
   for (const o of others) if (o.data_id && !srcs.has(o.data_id)) srcs.set(o.data_id, { company_guid: o.company_guid, data_id: o.data_id, path: o.data_path, w: o.w, computer: o.pc, own: false, line_at: o.saved_at });
   if (!srcs.size) return;
   // the locations noted; which lines are applied is decided where they are applied (tally_recorder_send_sourced)
