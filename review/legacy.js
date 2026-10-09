@@ -5022,8 +5022,13 @@ const Books = {
   },
   // the TDS or TCS section in a ledger's name: "194C", "206C1H"; and (2.4.1) the letter after a space, "TDS 194 T" is
   // 194T, not 194 - but not the A of "194 A/C", nor a word ("194 TDS PAYABLE" is 194)
+  // Review H4 of next-241: after a space only a REAL section suffix counts ("TDS 192 ON SALARY" is 192, not 192ON; "195
+  // TO", "194 OF" likewise); written on (194C, 194LBA) any letters as before. The owner's decision of 09-Oct-2026: the
+  // space form stays ("TDS 194 C" is 194C); after a dash the name reads as 2.3.3 did ("TDS 194-C" is 194: 2.3.3 read
+  // the section from \b(19[2-9][A-Z]{0,2})\b)
+  SEC_SUF: "LBA|LBB|LBC|BA|BB|DA|EE|IA|IB|IC|LA|LB|LC|LD|A|B|C|D|E|G|H|I|J|K|M|N|O|P|Q|R|S|T",
   secIn(u){
-    const m = String(u || "").toUpperCase().match(/\b(19[2-9])(?:([A-Z]{1,2})|\s([A-Z]{1,2})(?![\w\/]))?\b|\b(206C)([A-Z]{0,2})\b/);
+    const m = String(u || "").toUpperCase().match(new RegExp("\\b(19[2-9])(?:([A-Z]{1,3})\\b|\\s+(" + this.SEC_SUF + ")(?![\\w\\/])|\\b)|\\b(206C)([A-Z]{0,2})\\b"));
     return !m ? "" : m[4] ? m[4] + (m[5] || "") : m[1] + (m[2] || m[3] || "");
   },
   guess(name){
@@ -26394,11 +26399,15 @@ const LedCheck = {
   V: 1,
   SRC: {master: "Tally master", usage: "Day book", firm: "Your firm", name: "Name", ai: "AI"},
   // a TDS section from "194I", "194-I", or the short "94I" / "94 J" many ledgers carry
+  // review H4 of next-241: after a space or a dash only a real section suffix counts (Books.secIn's list): "192 ON SALARY"
+  // is 192
+  SUF: "LBA|LBB|LBC|BA|BB|DA|EE|IA|IB|IC|LA|LB|LC|LD|A|B|C|D|E|G|H|I|J|K|M|N|O|P|Q|R|S|T",
   section(s){
-    const u = String(s || "").toUpperCase(), m = u.match(/\b(19[2-9])\s*-?\s*([A-Z]{0,2})\b|\b206\s*-?\s*C\s*([A-Z]{0,2})\b/);
-    if (m) return m[1] ? m[1] + m[2] : "206C" + (m[3] || "");
-    const s2 = u.match(/(?:^|[^0-9])9\s*([2-9])\s*-?\s*([A-Z]{1,2})?\b/);
-    return s2 && (s2[2] || /9\s*[2-9]\b/.test(u)) ? "19" + s2[1] + (s2[2] || "") : "";
+    const u = String(s || "").toUpperCase(), suf = "(?:([A-Z]{1,3})\\b|\\s*-?\\s*(" + this.SUF + ")(?![\\w\\/])|\\b)";
+    const m = u.match(new RegExp("\\b(19[2-9])" + suf + "|\\b206\\s*-?\\s*C\\s*([A-Z]{0,2})\\b"));
+    if (m) return m[1] ? m[1] + (m[2] || m[3] || "") : "206C" + (m[4] || "");
+    const s2 = u.match(new RegExp("(?:^|[^0-9])9\\s*([2-9])" + suf));
+    return s2 && (s2[2] || s2[3] || /9\s*[2-9]\b/.test(u)) ? "19" + s2[1] + (s2[2] || s2[3] || "") : "";
   },
   secLabel(s){ return s ? s.replace(/^(19\d)([A-Z]+)$/, "$1-$2") : ""; },
   // the group chain of a ledger, from Tally's groups
@@ -26652,7 +26661,12 @@ const LedPage = {
     }
     return {n, m, it, ok, fromCheck, p, alt, kind, unclear, group: ((b.ledInfo || {})[n] || {}).group || (b.under || {})[n] || "", why: m.why || ""};
   },
-  same(cp, m){ return (cp.what || "") === (m.what || "") && (!LedMaster.isGst(cp.what) || ((cp.tax || "") === (m.tax || "") && (cp.side || "") === (m.side || ""))) && (!LedMaster.isTds(cp.what) || !cp.section || cp.section === (m.section || "")); },
+  // review M5 of next-241: the rate (when both have one) and the registration (when both have one) are compared too
+  same(cp, m){
+    const has = v => v !== null && v !== undefined && v !== "" && !Number.isNaN(Number(v)), mr = LedMaster.isGst(m.what) ? (has(m.gstRate) ? m.gstRate : m.rate) : m.rate;
+    return (cp.what || "") === (m.what || "") && (!LedMaster.isGst(cp.what) || ((cp.tax || "") === (m.tax || "") && (cp.side || "") === (m.side || ""))) && (!LedMaster.isTds(cp.what) || !cp.section || cp.section === (m.section || ""))
+      && (!has(cp.rate) || !has(mr) || num(cp.rate) === num(mr)) && (!cp.reg || !m.reg || String(cp.reg) === String(m.reg));
+  },
   // "CGST input · 9%", "IGST output, reverse charge", "Not a tax ledger"
   says(p){
     if (!p || !p.what) return "Not known yet";
@@ -29808,7 +29822,8 @@ const Rec = {
   //     daybook  - upload that day's Day Book (the bridge gave up; no entry GUID; a Day Book of the day incomplete...)
   //     dupid    - FinCom's id is on a second Tally entry: check Tally for a double posting, then upload that day's Day Book
   //     readstop - reading is stopped from FinCom on that computer: an owner resumes it (Resume reading)
-  //     baseline - the company's starting point is not recorded: the Tally page (the computer's More, Baselines)
+  //     baseline - the company's starting point is not recorded: the Tally page (the computer's More, Baselines) (2.4.1:
+  //                ONLY these words; "Tally's voucher with that MasterID is not a change after the starting point" is daybook)
   //     masters  - a ledger line with no GUID: read the ledgers from Tally (Books -> From Tally)
   //     locked   - the month is locked in FinCom: unlock it in Tie-out (then it applies)
   //     other    - any other held reason: Apply now (tally_recorder_release_held), once it is settled
@@ -29824,7 +29839,11 @@ const Rec = {
     if (st === "failed") return /queue|timeout|server/i.test(why) ? "" : "other";
     if (st !== "held") return "";
     if (/reading from Tally is stopped|stopped from FinCom/i.test(why)) return "readstop";
-    if (/starting point/i.test(why)) return "baseline";
+    // Bridge 2.4.1's app-side fixes (from next-241 915b0104 and 8500700f): the MasterID that is not a change after the
+    // starting point, and the older entry, are the Day Book upload (they named the starting point, or fell to 'other' with
+    // Apply now); 'baseline' only for "starting point not recorded"
+    if (/is not a change after the starting point|is an older entry, not this save/i.test(why)) return "daybook";
+    if (/starting point is not recorded|no starting point recorded/i.test(why)) return "baseline";
     if (/^FinCom id .* is matched to another Tally entry/i.test(why)) return "dupid";
     if (/no MasterID or no date/i.test(why)) return "daybook";
     if (this.FETCHED.some(x => x.test(why))) return "";
