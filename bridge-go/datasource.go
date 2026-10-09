@@ -117,6 +117,11 @@ func dataLearn(l recLine) {
 	if was.ID == id && was.Path == strings.TrimSpace(l.DP) {
 		return
 	}
+	// the same Windows user with the company open in two Tallys (two data folders): once FinCom has chosen this bridge's own
+	// location, a line of the other folder does not take the own data id over (it goes as another location's)
+	if ch := dataSt.chosen[k].ID; ch != "" && was.ID == ch && id != ch {
+		return
+	}
 	dataSt.own[k] = dataOwnSt{ID: id, Path: cutRunes(strings.TrimSpace(l.DP), 260), Company: strings.TrimSpace(l.CName), CGUID: liveGUID(strings.TrimSpace(l.CGUID)),
 		W: strings.TrimSpace(l.W), At: nowFn().In(liveZone).Format("2006-01-02T15:04:05")}
 	dataSave()

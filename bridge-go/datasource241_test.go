@@ -226,3 +226,24 @@ func TestData241Addon(t *testing.T) {
 		t.Error("FCRDataPath is not ONE named formula")
 	}
 }
+
+// the same Windows user with the company open in two Tallys (two data folders): once FinCom has chosen the own location,
+// a line of this user from the other folder does not take the own data id over: it goes as 'other_source', never fetched
+func TestData241SameUserSecondFolderKeepsChosen(t *testing.T) {
+	p, f, c := r222bBridge(t, "")
+	ufAs(t, "user", "anshul")
+	liveAppend(t, p, d241Line("voucher_accept_post", "11:30", r222GUID(26311), "26311", "54391", "Receipt", "191", "5-Oct-2026", "own", d241Path1, "anshul"))
+	readAndUploadAll(t)
+	applyDataSources(M{"dataSources": []any{M{"company": nwsCo, "company_guid": nwsGUID, "chosenId": d241ID(d241Path1), "chosen": true}}})
+	liveAppend(t, p, d241Line("voucher_accept_post", "11:31", r222GUID(26312), "26312", "54392", "Receipt", "192", "5-Oct-2026", "copy", d241Path2, "anshul"))
+	readAndUploadAll(t)
+	if s := d241Sent(c, "192"); len(s) != 1 || str(s[0]["event"]) != "other_source" || str(s[0]["data_id"]) != d241ID(d241Path2) {
+		t.Fatalf("the second folder's line: %v", s)
+	}
+	if d241Asked(f, "26312") {
+		t.Fatal("asked of Tally")
+	}
+	if dataOwnID(nwsGUID) != d241ID(d241Path1) || dataStopped(nwsGUID) {
+		t.Fatalf("the own data id moved to the second folder: %s", dataOwnID(nwsGUID))
+	}
+}

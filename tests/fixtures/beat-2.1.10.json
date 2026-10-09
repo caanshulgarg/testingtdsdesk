@@ -33,6 +33,7 @@
   "computer": "TEST-PC",
   "dailyAt": "19:00",
   "dataFolder": "",
+  "dataSources": [],
   "events": true,
   "every": 30,
   "kind": "beat",
