@@ -232,7 +232,8 @@ const AlertHub = {
         if (ds.bridge === "offline") return;   // the Tally sign says it (and the bell does not repeat it)
         // review H1 (bridge 2.3.1): the own Tally lists its companies too slowly (the bridge stops at 2 s): this computer's
         // changes wait, in the bridge's own plain words; gone by itself when the list answers in time again
-        if (beat.recorderWaitWords) out.push({key: "ownwait:" + d.id, fp: AlertClear.fp(["ownwait:" + d.id + ":" + istDay(Date.now())]), sev: "warn", cid: "", selfClear: true, at: beat.at || "", details: label,
+        const ownFp = AlertClear.ownwaitFp(d.id, !!beat.recorderWaitWords);
+        if (beat.recorderWaitWords) out.push({key: "ownwait:" + d.id, fp: ownFp, sev: "warn", cid: "", selfClear: true, at: beat.at || "", details: label,
           text: String(beat.recorderWaitWords).replace(/\.?$/, "."), fix: "Nothing is lost: they go by themselves once Tally answers in time. Close any open window or report in Tally on that computer, or press Update now there."});
         const pcFp = kind => AlertClear.fp(["pc:" + d.id + ":" + kind]);
         const base = {key: "pc:" + d.id, details: [label, old && old.reason, beat.notAnsweringSince && "not answering since " + fmtDateTime(beat.notAnsweringSince)].filter(Boolean).join(" · "), selfClear: true, at: beat.at || ""};
@@ -268,7 +269,8 @@ const AlertHub = {
         fix: kept ? "Clearing browser data would remove it. Sign in from Settings to keep it in the firm account." : "It will be lost when this page closes. Sign in from Settings to keep it.", selfClear: true});
     }
     const st = typeof selfTestSummary === "function" ? selfTestSummary() : {state: "none"};
-    if (st.state === "fail") out.push({key: "app:selftest", fp: AlertClear.fp(["selftest:" + AlertClear.device() + ":" + st.fails.slice().sort().join(",") + ":" + istDay(Date.now())]), sev: "warn", text: "Bill reading has a problem on this computer.", fix: "See the self-test in Settings.",
+    const stFp = AlertClear.selftestFp(st.state === "fail" ? st.fails : [], st.state === "fail");
+    if (st.state === "fail") out.push({key: "app:selftest", fp: stFp, sev: "warn", text: "Bill reading has a problem on this computer.", fix: "See the self-test in Settings.",
       details: st.fails.map(k => (k === "pdf" ? "PDF reading: " : "Photo OCR: ") + st.r[k].msg).join(" "), act: {label: "Self-test", run: () => doAct("goSelfTest")}, selfClear: true});
     const rank = {bad: 0, warn: 1, info: 2};
     return out.sort((x, y) => rank[x.sev] - rank[y.sev] || String(y.at || "").localeCompare(String(x.at || "")));
@@ -300,7 +302,7 @@ const AlertHub = {
 //   needs:<kind|company|day…>    Sync activity's "Needs you" group               line:<id>:need for each of its lines
 //   fetching:<client or all>     Sync activity's "being fetched" note            line:<id>:wait|need for each line
 //   unk:<client or firm>         "uses a ledger FinCom does not have yet"        unk:<the entry's key> for each entry
-//   ownwait:<computer>           the bell                                        ownwait:<computer>:<IST day> (the beat has no start time: another day is new)
+//   ownwait:<computer>           the bell                                        ownwait:<computer>:<when this browser first saw it> (release-240 M2: not the day; ended and back is new)
 //   pc:<computer>                the bell                                        pc:<computer>:retry:<IST day of the retry> | :stopped:<its time> |
 //                                                                                  :notanswering:<since> | :silent:<IST day>  (the computer + the kind)
 //   bridgeid:<id>                the bell (owners)                               bridgeid:<id>
@@ -309,7 +311,7 @@ const AlertHub = {
 //                                                                                  low (the episode; a top-up above the warning ends it)> (never the balance)
 //   app:store                    the bell                                        store:browser:<this browser>. "Your work is not being saved" (bad: the work is being
 //                                                                                  lost) has NO fingerprint: it cannot be cleared, and Clear all leaves it
-//   app:selftest                 the bell; the alert line                        selftest:<this browser>:<the failed checks>:<IST day>
+//   app:selftest                 the bell; the alert line                        selftest:<this browser>:<the failed checks>:<when it started failing> (release-240 M2)
 // <this browser>: AlertClear.device(), a random id kept in this browser (localStorage "fincom:device-id"). The credit's
 // episode is this browser's too: another computer that saw it go low at another time shows it once more (never fewer).
 // (the review of 08-Oct, M1: every fingerprint names an occurrence, so a cleared notification can come back as a new one)
@@ -327,6 +329,21 @@ const AlertClear = {
   inflight: {},        // lb -> the call sending it
   reset(){ this.st = {who: null, rows: [], at: 0, busy: false, none: false, ver: 0, set: null, setVer: -1}; },
   fp(items){ return [...new Set([].concat(items || []).filter(Boolean).map(String))].sort().join("\n"); },
+  // release-240 review M2(b): keyed on when the problem started in this browser (an episode), not the day: cleared, the
+  // same problem the next day stays cleared; ended and back, a new notification
+  ownwaitFp(dev, on){ const t = this.episode("ownwait:" + dev, on); return on ? this.fp(["ownwait:" + dev + ":" + t]) : ""; },
+  selftestFp(fails, on){ const f = [].concat(fails || []).slice().sort().join(","), t = this.episode("selftest", on); return on ? this.fp(["selftest:" + this.device() + ":" + f + ":" + t]) : ""; },
+  // release-240 review M2(a): what the cloud keeps (migration 68/70): 2,000 characters a fingerprint, 500 a call. An item
+  // longer than 200 characters is sent as its hash (h1:...; cleared() checks the item and its hash); a fingerprint still
+  // longer goes as several rows of the same notification (the items of all its rows count together)
+  hash(s){ let h1 = 0xdeadbeef, h2 = 0x41c6ce57; for (let i = 0; i < s.length; i++){ const c = s.charCodeAt(i); h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677); }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909); h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return "h1:" + (h2 >>> 0).toString(16).padStart(8, "0") + (h1 >>> 0).toString(16).padStart(8, "0"); },
+  short(a){ return a.length > 200 ? this.hash(a) : a; },
+  rowsFor(x){ const items = String(x.fp || "").split("\n").filter(Boolean).map(a => this.short(a)), out = []; let cur = [];
+    items.forEach(a => { if (cur.length && (cur.join("\n").length + 1 + a.length) > 1900){ out.push(cur); cur = []; } cur.push(a); });
+    if (cur.length) out.push(cur);
+    return out.map(c => ({key: String(x.key).slice(0, 2000), fp: c.join("\n"), words: String(x.text || "").slice(0, 500)})); },
   item(key, items, text){ return {key, fp: this.fp(items), text: String(text || "")}; },
   firmOn(){ try { return typeof Cloud === "object" && Cloud.on() && !!(Cloud.st && Cloud.st.firm); } catch (e){ return false; } },
   who(){ if (!this.firmOn()) return "local"; const s = (Cloud.sess && Cloud.sess()) || {}; return Cloud.st.firm + "|" + (s.user_id || s.email || Cloud.st.email || ""); },
@@ -383,10 +400,14 @@ const AlertClear = {
   },
   async send(rows){
     const st = this.st;
-    try {
-      const j = await this.rpc("alert_dismiss", {p_items: rows.map(r => ({key: r.key, fp: r.fp, words: r.words || ""}))});
-      rows.forEach(r => { r.pending = false; r.batch = String((j && j.batch) || ""); });
-    } catch (e){ if (this.missing(e)) st.none = true; }
+    // release-240 review M2(a): in calls of 500 or fewer (the cloud refuses more); a call that fails leaves its rows to send again
+    for (let i = 0; i < rows.length; i += 500){
+      const part = rows.slice(i, i + 500);
+      try {
+        const j = await this.rpc("alert_dismiss", {p_items: part.map(r => ({key: r.key, fp: r.fp, words: r.words || ""}))});
+        part.forEach(r => { r.pending = false; r.batch = String((j && j.batch) || ""); });
+      } catch (e){ if (this.missing(e)){ st.none = true; break; } }
+    }
     if (this.st === st) this.saveLocal();
   },
   atoms(){
@@ -395,14 +416,14 @@ const AlertClear = {
     if (st.setVer !== st.ver || !st.set){ st.set = new Set(); st.rows.forEach(r => String(r.fp || "").split("\n").forEach(a => { if (a) st.set.add(a); })); st.setVer = st.ver; }
     return st.set;
   },
-  cleared(x){ if (!x || !x.fp) return false; const a = this.atoms(); return String(x.fp).split("\n").every(t => a.has(t)); },
+  cleared(x){ if (!x || !x.fp) return false; const a = this.atoms(); return String(x.fp).split("\n").every(t => a.has(t) || (t.length > 200 && a.has(this.hash(t)))); },
   // Clear: one notification or many (Clear all); hidden at once, then kept (the cloud, or this browser)
   async clear(items){
     items = [].concat(items || []).filter(x => x && x.key && x.fp && !this.cleared(x));
     if (!items.length) return;
     this.rowsNow();
     const st = this.st, lb = "L" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-    const rows = items.map(x => ({key: x.key, fp: x.fp, words: String(x.text || "").slice(0, 500), lb, batch: "", pending: true, t: Date.now()}));
+    const rows = [].concat(...items.map(x => this.rowsFor(x))).map(r => Object.assign(r, {lb, batch: "", pending: true, t: Date.now()}));
     st.rows = rows.concat(st.rows); st.ver++; this.saveLocal();
     this.undo = {lb, n: items.length, until: Date.now() + 6000};
     clearTimeout(this.undoT); this.undoT = setTimeout(() => { if (this.undo && this.undo.lb === lb){ this.undo = null; if (typeof render === "function") render(); } }, 6100);
