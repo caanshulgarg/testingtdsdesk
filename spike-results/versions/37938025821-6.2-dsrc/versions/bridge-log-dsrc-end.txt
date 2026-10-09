@@ -1,0 +1,75 @@
+2026-10-09 13:55:39  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line e18cad7d…): asking Tally by MasterID
+2026-10-09 13:55:40  Recorder: entry fetch of FinCom Spike Co: answered in 10 ms
+2026-10-09 13:55:40  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line e18cad7d…): taken: Tally's GUID 59344660-9bde-4325-a6f1-f671716eae7c-00000003, AlterID 3
+2026-10-09 13:55:40  Renumbering: made Receipt 1 of 02-Oct-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
+2026-10-09 13:55:57  Recorder: D4 Manual D4-EARLY of 02-Oct-2026 (MasterID 2, line 6b8e9d8e…): asking Tally by MasterID
+2026-10-09 13:55:57  Recorder: entry fetch of FinCom Spike Co: answered in 20 ms
+2026-10-09 13:55:57  Recorder: D4 Manual D4-EARLY of 02-Oct-2026 (MasterID 2, line 6b8e9d8e…): asking Tally by type and number (the voucher with that MasterID in this Tally is an older entry, not this save)
+2026-10-09 13:55:58  Tally 9000: FinComVoucherByNumber refused before sending: the date is before the company's starting day (09-Oct-2026)
+2026-10-09 13:55:58  Recorder: D4 Manual D4-EARLY of 02-Oct-2026 (MasterID 2, line 6b8e9d8e…): held: the voucher with that MasterID in this Tally is an older entry, not this save; asked by its type and number: Reading entries from Tally is off on this computer (FinCom reads entries only as they change; history comes from the Day Book upload). (sent without its body and GUID; FinCom holds the line until it is resolved)
+2026-10-09 13:56:42  Recorder: D4 Manual N of 02-Oct-2026 (MasterID 2, line 89556c64…): asking Tally by MasterID
+2026-10-09 13:56:43  Recorder: entry fetch of FinCom Spike Co: answered in 28 ms
+2026-10-09 13:56:43  Recorder: D4 Manual N of 02-Oct-2026 (MasterID 2, line 89556c64…): asking Tally by type and number (the voucher with that MasterID in this Tally is an older entry, not this save)
+2026-10-09 13:56:43  Recorder: D4 Manual N of 02-Oct-2026 (MasterID 2, line 89556c64…): held: the voucher with that MasterID in this Tally is an older entry, not this save; Tally gave no D4 Manual N of 02-Oct-2026 (sent without its body and GUID; FinCom holds the line until it is resolved)
+2026-10-09 13:57:22  Recorder: D4 Manual 4 of 02-Oct-2026 (MasterID 2, line c41d3484…): asking Tally by MasterID
+2026-10-09 13:57:23  Recorder: D4 Manual 4 of 02-Oct-2026 (MasterID 2, line c41d3484…): asking Tally by type and number (the voucher with that MasterID in this Tally is an older entry, not this save)
+2026-10-09 13:57:23  Recorder: D4 Manual 4 of 02-Oct-2026 (MasterID 2, line c41d3484…): held: the voucher with that MasterID in this Tally is an older entry, not this save; Tally gave no D4 Manual 4 of 02-Oct-2026 (sent without its body and GUID; FinCom holds the line until it is resolved)
+2026-10-09 13:58:03  Recorder: D4 Manual of 02-Oct-2026 (MasterID 2, line bd824053…): asking Tally by MasterID
+2026-10-09 13:58:03  Recorder: entry fetch of FinCom Spike Co: answered in 9 ms
+2026-10-09 13:58:03  Recorder: D4 Manual of 02-Oct-2026 (MasterID 2, line bd824053…): held: Tally's voucher with that MasterID is not a change after the starting point (sent without its body and GUID; FinCom holds the line until it is resolved)
+2026-10-09 13:58:43  Recorder: D4 Manual of 02-Oct-2026 (MasterID 2, line 0b5219ca…): asking Tally by MasterID
+2026-10-09 13:58:43  Recorder: entry fetch of FinCom Spike Co: answered in 22 ms
+2026-10-09 13:58:43  Recorder: D4 Manual of 02-Oct-2026 (MasterID 2, line 0b5219ca…): held: Tally's voucher with that MasterID is not a change after the starting point (sent without its body and GUID; FinCom holds the line until it is resolved)
+2026-10-09 13:59:23  Recorder: D4 Manual D4-TWO of 02-Oct-2026 (MasterID 2, line 468b880e…): asking Tally by MasterID
+2026-10-09 13:59:23  Recorder: entry fetch of FinCom Spike Co: answered in 25 ms
+2026-10-09 13:59:23  Recorder: D4 Manual D4-TWO of 02-Oct-2026 (MasterID 2, line 468b880e…): asking Tally by type and number (the voucher with that MasterID in this Tally is an older entry, not this save)
+2026-10-09 13:59:23  Recorder: D4 Manual D4-TWO of 02-Oct-2026 (MasterID 2, line 468b880e…): held: the voucher with that MasterID in this Tally is an older entry, not this save; 2 entries with that type and number on that date (sent without its body and GUID; FinCom holds the line until it is resolved)
+2026-10-09 14:00:03  Recorder: D4 Manual D4-NONE of 02-Oct-2026 (MasterID 2, line f4531a0b…): asking Tally by MasterID
+2026-10-09 14:00:03  Recorder: entry fetch of FinCom Spike Co: answered in 19 ms
+2026-10-09 14:00:03  Recorder: D4 Manual D4-NONE of 02-Oct-2026 (MasterID 2, line f4531a0b…): asking Tally by type and number (the voucher with that MasterID in this Tally is an older entry, not this save)
+2026-10-09 14:00:03  Recorder: D4 Manual D4-NONE of 02-Oct-2026 (MasterID 2, line f4531a0b…): held: the voucher with that MasterID in this Tally is an older entry, not this save; Tally gave no D4 Manual D4-NONE of 02-Oct-2026 (sent without its body and GUID; FinCom holds the line until it is resolved)
+2026-10-09 14:02:29  Recorder: FinCom Spike Co: a save in another data location of the company (D:\a\_temp\TallyData2\100000) is not read by this bridge; FinCom is told of it (nothing of the entry is asked of Tally or sent)
+2026-10-09 14:02:29  Recorder: Receipt 1 of 02-Oct-2026 (MasterID none, line ab454dda…): not asked: saved in another data location of the company (D:\a\_temp\TallyData2\100000); sent to FinCom as such, without the entry
+2026-10-09 14:04:21  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=2; now ALTVCHID=7, ALTMSTID=213
+2026-10-09 14:05:42  Recorder: Receipt 2 of 02-Oct-2026 (MasterID none, line cfaba21d…): not asked: saved in another data location of the company (D:\a\_temp\TallyData2\100000); sent to FinCom as such, without the entry
+2026-10-09 14:05:58  Recorder: D4 Manual D4-EARLY of 02-Oct-2026 (MasterID 2, line 6b8e9d8e…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 14:05:58  Recorder: D4 Manual D4-EARLY of 02-Oct-2026 (MasterID 2, line 6b8e9d8e…): not asked this time: Company 'FinCom Spike Co' is open in more than one Tally (ports 9000, 9001). Choose your Tally in FinCom > Settings > Tally Bridge. (not counted as a try)
+2026-10-09 14:05:58  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 7 still held (7 in the list)
+2026-10-09 14:06:24  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 8, line b35e3f74…): held: the entry was not read from Tally: Company 'FinCom Spike Co' is open in more than one Tally (ports 9000, 9001). Choose your Tally in FinCom > Settings > Tally Bridge.
+2026-10-09 14:06:24  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (Company 'FinCom Spike Co' is open in more than one Tally (ports 9000, 9001). Choose your Tally in FinCom > Settings > Tally Bridge.); sent without it (FinCom holds the line until a body comes)
+2026-10-09 14:06:43  Recorder: D4 Manual N of 02-Oct-2026 (MasterID 2, line 89556c64…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 14:06:43  Recorder: D4 Manual N of 02-Oct-2026 (MasterID 2, line 89556c64…): not asked this time: Company 'FinCom Spike Co' is open in more than one Tally (ports 9000, 9001). Choose your Tally in FinCom > Settings > Tally Bridge. (not counted as a try)
+2026-10-09 14:06:43  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 8 still held (8 in the list)
+2026-10-09 14:07:23  Recorder: D4 Manual 4 of 02-Oct-2026 (MasterID 2, line c41d3484…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 14:07:23  Recorder: D4 Manual 4 of 02-Oct-2026 (MasterID 2, line c41d3484…): not asked this time: Company 'FinCom Spike Co' is open in more than one Tally (ports 9000, 9001). Choose your Tally in FinCom > Settings > Tally Bridge. (not counted as a try)
+2026-10-09 14:07:23  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 8 still held (8 in the list)
+2026-10-09 14:09:26  Recorder: D4 Manual D4-TWO of 02-Oct-2026 (MasterID 2, line 468b880e…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 14:09:28  Tally 9001: TDSDeskCompanies took 0.2s and failed: No connection could be made because the target machine actively refused it
+2026-10-09 14:09:28  Recorder: Tally took longer than 2 s to list its open companies (limit 2 s); this computer's changes of companies not seen open here yet wait until it answers in time; none is passed over or lost
+2026-10-09 14:09:29  Recorder: entry fetch of FinCom Spike Co: answered in 36 ms
+2026-10-09 14:09:29  Recorder: D4 Manual D4-TWO of 02-Oct-2026 (MasterID 2, line 468b880e…): held: Tally's voucher with that MasterID is not a change after the starting point (not asked again)
+2026-10-09 14:09:29  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 8 still held (8 in the list)
+2026-10-09 14:09:32  Recorder: FinCom Spike Co: FinCom reads the company from another data location; this bridge stops reading it (its saves go to FinCom as another data location's)
+2026-10-09 14:11:00  Recorder: FinCom Spike Co: this bridge's own Tally now has the company's data in D:\a\_temp\TallyData2\100000 (was D:\a\_temp\TallyData\100000)
+2026-10-09 14:11:01  Recorder: Receipt 3 of 02-Oct-2026 (MasterID 5, line 97419d35…): asking Tally by MasterID
+2026-10-09 14:11:01  Recorder: entry fetch of FinCom Spike Co: answered in 28 ms
+2026-10-09 14:11:01  Recorder: Receipt 3 of 02-Oct-2026 (MasterID 5, line 97419d35…): taken: Tally's GUID 59344660-9bde-4325-a6f1-f671716eae7c-00000005, AlterID 5
+2026-10-09 14:11:01  Recorder: D4 Manual D4-NONE of 02-Oct-2026 (MasterID 2, line f4531a0b…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 14:11:01  Recorder: entry fetch of FinCom Spike Co: answered in 20 ms
+2026-10-09 14:11:01  Recorder: D4 Manual D4-NONE of 02-Oct-2026 (MasterID 2, line f4531a0b…): held: Tally's voucher with that MasterID is not a change after the starting point (not asked again)
+2026-10-09 14:11:01  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 8 still held (8 in the list)
+2026-10-09 14:11:01  Renumbering: made Receipt 3 of 02-Oct-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
+2026-10-09 14:11:44  Recorder: Receipt 4 of 02-Oct-2026 (MasterID 6, line 95932367…): asking Tally by MasterID
+2026-10-09 14:11:44  Recorder: entry fetch of FinCom Spike Co: answered in 29 ms
+2026-10-09 14:11:44  Recorder: Receipt 4 of 02-Oct-2026 (MasterID 6, line 95932367…): taken: Tally's GUID 59344660-9bde-4325-a6f1-f671716eae7c-00000006, AlterID 6
+2026-10-09 14:11:44  Renumbering: made Receipt 4 of 02-Oct-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
+2026-10-09 14:13:22  Recorder: FinCom Spike Co: a save in another data location of the company (D:\a\_temp\TallyData\100000) is not read by this bridge; FinCom is told of it (nothing of the entry is asked of Tally or sent)
+2026-10-09 14:13:22  Recorder: Receipt 3 of 02-Oct-2026 (MasterID none, line 08286995…): not asked: saved in another data location of the company (D:\a\_temp\TallyData\100000); sent to FinCom as such, without the entry
+2026-10-09 14:15:45  Recorder: Receipt 5 of 02-Oct-2026 (MasterID 7, line ee11f5b2…): held: the entry was not read from Tally: Company 'FinCom Spike Co' is open in more than one Tally (ports 9000, 9001). Choose your Tally in FinCom > Settings > Tally Bridge.
+2026-10-09 14:15:45  Recorder: the body of 1 entry of FinCom Spike Co was not read from Tally (Company 'FinCom Spike Co' is open in more than one Tally (ports 9000, 9001). Choose your Tally in FinCom > Settings > Tally Bridge.); sent without it (FinCom holds the line until a body comes)
+2026-10-09 14:15:58  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 9 still held (9 in the list)
+2026-10-09 14:16:24  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 8, line b35e3f74…): asking Tally again (a held line, ask 1 of 1: one request; if it stops or fails the line ends with the Day Book words)
+2026-10-09 14:16:24  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 8, line b35e3f74…): not asked this time: Company 'FinCom Spike Co' is open in more than one Tally (ports 9000, 9001). Choose your Tally in FinCom > Settings > Tally Bridge. (not counted as a try)
+2026-10-09 14:16:24  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 9 still held (9 in the list)
+2026-10-09 14:16:43  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 9 still held (9 in the list)
+2026-10-09 14:17:23  Recorder: held lines: 0 from FinCom, 1 asked, 0 resolved, 9 still held (9 in the list)
