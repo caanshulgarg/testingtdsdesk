@@ -58,3 +58,52 @@
   :root:not([data-theme="light"]) { color-scheme: dark; }
 }
 :root[data-theme="dark"] { color-scheme: dark; }
+
+/* ---------- FinCom's bright accents (the owner, 09-Oct-2026: "some lively ui.. some bright colours") ----------
+   Beside the indigo brand, six accents. Each has a solid (icons, chart lines, thin rules; at least 3:1 on the page),
+   an ink (text, at least 4.5:1 on its own tint) and a tint (a soft background): bright colour as a tint with dark ink
+   on it, never bright text on white. Dark mode swaps in lighter solids and inks over deep tints. */
+:root, :root[data-theme="light"] {
+  --tone-indigo: #4F46E5; --tone-indigo-ink: #3730A3;
+  --tone-emerald: #059669; --tone-emerald-ink: #065F46;
+  --tone-amber: #D97706; --tone-amber-ink: #92400E;
+  --tone-rose: #E11D48; --tone-rose-ink: #9F1239;
+  --tone-sky: #0284C7; --tone-sky-ink: #075985;
+  --tone-violet: #7C3AED; --tone-violet-ink: #5B21B6;
+  --tone-teal: #0D9488; --tone-teal-ink: #115E59;
+  --tone-slate: #64748B; --tone-slate-ink: #334155;
+  --tint: 13%;
+  /* status, brighter but the same meaning everywhere: green done or filed, blue ready, amber attention, red error */
+  --ok-soft: #D1FAE5; --warn-soft: #FEF3C7; --bad-soft: #FFE4E6; --info-soft: #E0F2FE;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tone-indigo: #818CF8; --tone-indigo-ink: #C7D2FE;
+    --tone-emerald: #34D399; --tone-emerald-ink: #A7F3D0;
+    --tone-amber: #FBBF24; --tone-amber-ink: #FDE68A;
+    --tone-rose: #FB7185; --tone-rose-ink: #FECDD3;
+    --tone-sky: #38BDF8; --tone-sky-ink: #BAE6FD;
+    --tone-violet: #A78BFA; --tone-violet-ink: #DDD6FE;
+    --tone-teal: #2DD4BF; --tone-teal-ink: #99F6E4;
+    --tone-slate: #94A3B8; --tone-slate-ink: #E2E8F0;
+    --tint: 20%;
+    --ok-soft: #0F2E1C; --warn-soft: #2E2210; --bad-soft: #3A1717; --info-soft: #0C2A3D;
+  }
+}
+:root[data-theme="dark"] {
+  --tone-indigo: #818CF8; --tone-indigo-ink: #C7D2FE; --tone-emerald: #34D399; --tone-emerald-ink: #A7F3D0;
+  --tone-amber: #FBBF24; --tone-amber-ink: #FDE68A; --tone-rose: #FB7185; --tone-rose-ink: #FECDD3;
+  --tone-sky: #38BDF8; --tone-sky-ink: #BAE6FD; --tone-violet: #A78BFA; --tone-violet-ink: #DDD6FE;
+  --tone-teal: #2DD4BF; --tone-teal-ink: #99F6E4; --tone-slate: #94A3B8; --tone-slate-ink: #E2E8F0; --tint: 20%;
+  --ok-soft: #0F2E1C; --warn-soft: #2E2210; --bad-soft: #3A1717; --info-soft: #0C2A3D;
+}
+/* an element with data-tone="<name>" takes that accent as --tone / --tone-ink / --tone-tint */
+[data-tone="indigo"] { --tone: var(--tone-indigo); --tone-ink: var(--tone-indigo-ink); }
+[data-tone="emerald"] { --tone: var(--tone-emerald); --tone-ink: var(--tone-emerald-ink); }
+[data-tone="amber"] { --tone: var(--tone-amber); --tone-ink: var(--tone-amber-ink); }
+[data-tone="rose"] { --tone: var(--tone-rose); --tone-ink: var(--tone-rose-ink); }
+[data-tone="sky"] { --tone: var(--tone-sky); --tone-ink: var(--tone-sky-ink); }
+[data-tone="violet"] { --tone: var(--tone-violet); --tone-ink: var(--tone-violet-ink); }
+[data-tone="teal"] { --tone: var(--tone-teal); --tone-ink: var(--tone-teal-ink); }
+[data-tone="slate"] { --tone: var(--tone-slate); --tone-ink: var(--tone-slate-ink); }
+[data-tone] { --tone-tint: color-mix(in oklab, var(--tone) var(--tint), var(--surface)); }

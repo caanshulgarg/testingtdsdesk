@@ -10,7 +10,9 @@ import { createPortal } from "react-dom";
 import Bell from "./parts/Bell.jsx";
 // Arc UI (src/arc): the status tabs are Arc's Tabs, the Tally panel Arc's Drawer, the firm menu a dropdown menu in Arc's
 // style (Radix's menu, as Arc's DropdownMenu, whose trigger and items do not fit the firm button and its menu)
-import { Tabs, TabsList, TabsTrigger } from "@/registry/components/tabs/tabs";
+import { Tabs } from "@/registry/components/tabs/tabs";
+import * as TabsPrimitive from "@radix-ui/react-tabs";
+import tabs from "@/registry/components/tabs/tabs.module.css";
 import { Drawer, DrawerContent } from "@/registry/components/drawer/drawer";
 import * as Menu from "@radix-ui/react-dropdown-menu";
 import menu from "@/registry/components/dropdown-menu/dropdown-menu.module.css";
@@ -83,16 +85,17 @@ function ClientHeader() {
   const side = bills ? [["duplicate", "Duplicates"], ["deleted", "Deleted"]].concat(cnt("rejected") ? [["rejected", "No entry"]] : []) : [];
   const onSide = bills && S.tab === "invoices" && side.some(([id]) => id === S.filter);
   const goSide = (id) => { S.step = null; S.tab = "invoices"; S.filter = id; S.selected = null; S.drawerOpen = false; S.reviewTable = false; render(); window.scrollTo(0, 0); };
-  // Arc's Tabs: a tab is chosen by a click (or Enter / Space), as before; the arrow keys only move between them
+  // Arc's Tabs, its root with Radix's list and triggers in Arc's classes: no scroll arrows (more buttons in nav.sbar) and
+  // each tab's words first, as the tests read them; the chosen tab's pill is drawn in styles/arc-look.css. A tab is chosen by a click (or Enter / Space), as before; the arrow keys only move between them
   // (activationMode "manual"), so going along the tabs never opens a page on the way
   const cur = onSide ? S.filter : now || "";
   return <>{head}<nav className="sbar" aria-label="Status" data-bill-filters={bills ? "" : undefined}>
-    <Tabs value={cur} onValueChange={() => {}} activationMode="manual"><TabsList aria-label="Status">
+    <Tabs value={cur} onValueChange={() => {}} activationMode="manual"><TabsPrimitive.List aria-label="Status" className={tabs.list}>
     {[["review", "To review", n(c.review)], ["post", "Post to Tally", n(c.post)], ["done", "In Tally", n(c.done)]].map(([id, label, k]) =>
-      <TabsTrigger key={id} value={id} onClick={() => goStep(id)} data-step={id}>{label}{k !== "" && <> <span className="sbar-n" data-step-n="">{k}</span></>}
-        {id === "post" && c.postAttention > 0 && <> <span className="sbar-n attn" data-attn-n="" title={c.postAttention + " need" + (c.postAttention === 1 ? "s" : "") + " your attention"}>{c.postAttention}</span></>}</TabsTrigger>)}
-    {side.map(([id, label]) => <TabsTrigger key={id} value={id} onClick={() => goSide(id)}>{label} <span className="sbar-n">{cnt(id)}</span></TabsTrigger>)}
-    </TabsList></Tabs>
+      <TabsPrimitive.Trigger key={id} value={id} className={tabs.trigger} onClick={() => goStep(id)} data-step={id}>{label}{k !== "" && <> <span className="sbar-n" data-step-n="">{k}</span></>}
+        {id === "post" && c.postAttention > 0 && <> <span className="sbar-n attn" data-attn-n="" title={c.postAttention + " need" + (c.postAttention === 1 ? "s" : "") + " your attention"}>{c.postAttention}</span></>}</TabsPrimitive.Trigger>)}
+    {side.map(([id, label]) => <TabsPrimitive.Trigger key={id} value={id} className={tabs.trigger} onClick={() => goSide(id)}>{label} <span className="sbar-n">{cnt(id)}</span></TabsPrimitive.Trigger>)}
+    </TabsPrimitive.List></Tabs>
   </nav></>;
 }
 

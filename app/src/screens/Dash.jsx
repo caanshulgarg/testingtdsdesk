@@ -3,12 +3,15 @@
 // is still an old piece.
 import { useState } from "react";
 import { OnbCard } from "../parts/Notes.jsx";
+import { Inbox, ReceiptText, Send, Landmark } from "lucide-react";
 
 const money = (x) => "₹" + INR.format(r2(x || 0));
 const sumTotal = (list) => money(list.reduce((a, e) => a + num(e.x.total), 0));
 
-function Tile({ label, n, sub, go }) {
-  return <button className="dtile" onClick={() => goClient(go)}><span>{label}</span><b>{n}</b><small>{sub}</small></button>;
+// a figure in Arc's metric-card look, with its own accent and icon (styles/arc-shell.css)
+function Tile({ label, n, sub, go, tone, Icon }) {
+  return <button className="dtile" data-tone={tone} onClick={() => goClient(go)}><span>{label}</span><b>{n}</b><small>{sub}</small>
+    {Icon && <i className="dtile-chip" aria-hidden="true"><Icon width={16} height={16} strokeWidth={2} /></i>}</button>;
 }
 
 export default function Dash() {
@@ -29,28 +32,28 @@ export default function Dash() {
         <button className="btn" type="button" onClick={() => goClient("books:letters")}>Letters</button>
       </form>
       <div className="dash-tiles">
-        <Tile label="To read" n={docqCount(co.id)} sub="in the inbox" go="inbox" />
-        <Tile label="Bills to review" n={drafts.length} sub={drafts.length ? sumTotal(drafts) : "nothing waiting"} go="bills" />
-        <Tile label="Post to Tally" n={postCountFor(co.id)} sub={(approved.length ? sumTotal(approved) : "nothing ready") + (postAttentionFor(co.id) ? " · " + postAttentionFor(co.id) + " need attention" : "")} go="post" />
-        <Tile label="Bank lines to review" n={bc ? bc.review : "…"} sub={bc ? bc.ready + " ready to post" : "opening the bank"} go="bank" />
+        <Tile label="To read" n={docqCount(co.id)} sub="in the inbox" go="inbox" tone="violet" Icon={Inbox} />
+        <Tile tone="amber" Icon={ReceiptText} label="Bills to review" n={drafts.length} sub={drafts.length ? sumTotal(drafts) : "nothing waiting"} go="bills" />
+        <Tile tone="indigo" Icon={Send} label="Post to Tally" n={postCountFor(co.id)} sub={(approved.length ? sumTotal(approved) : "nothing ready") + (postAttentionFor(co.id) ? " · " + postAttentionFor(co.id) + " need attention" : "")} go="post" />
+        <Tile tone="sky" Icon={Landmark} label="Bank lines to review" n={bc ? bc.review : "…"} sub={bc ? bc.ready + " ready to post" : "opening the bank"} go="bank" />
       </div>
       {CloudDocs.on() && <p className="note" style={{ margin: "-6px 0 14px" }}>Documents are kept in the firm account, so anyone in the firm can open a bill from Transactions on any computer.
         {CloudDocs.queue.length > 0 && <> <b>{CloudDocs.queue.length} waiting to go up.</b></>}</p>}
       <div className="dash-cols">
-        <section className="dash-card"><h3>TDS this year</h3><div className="dash-big">{money(tds)}</div>
+        <section className="dash-card" data-tone="violet"><h3>TDS this year</h3><div className="dash-big">{money(tds)}</div>
           <p className="note">On bills approved here for {fyOf(null)}. Deductees over their limit show in red on the bills list.</p>
           <button className="btn small" onClick={() => goClient("post")}>Open Post to Tally</button></section>
-        <section className="dash-card"><h3>Bank</h3>
+        <section className="dash-card" data-tone="sky"><h3>Bank</h3>
           {stmt ? <><p><b>{stmt.bank || ""}</b> · {fmtDate(stmt.from)} to {fmtDate(stmt.to)}</p>
             <div className="dash-row"><span>Opening</span><b>{money(stmt.opening)}</b></div><div className="dash-row"><span>Closing</span><b>{money(stmt.closing)}</b></div>
             <p className="note">{off ? off + " lines do not fit the running balance." : "Every line fits the running balance."}</p></>
             : <p className="note">No statement uploaded yet.</p>}
           <button className="btn small" onClick={() => goClient("bank")}>Open bank</button></section>
-        <section className="dash-card"><h3>Sales</h3>
+        <section className="dash-card" data-tone="emerald"><h3>Sales</h3>
           {sales ? <><div className="dash-row"><span>Invoices</span><b>{sales.length}</b></div><div className="dash-row"><span>Posted</span><b>{sales.filter((x) => x.status === "posted").length}</b></div></>
             : <p className="note">Open Sales to see this client’s invoices.</p>}
           <button className="btn small" onClick={() => goClient("sales")}>Open sales</button></section>
-        <section className="dash-card"><h3>Posted lately</h3>
+        <section className="dash-card" data-tone="teal"><h3>Posted lately</h3>
           {recent.length ? <ul className="dash-list">{recent.map((e) => <li key={e.id}><b>{e.x.vendorName || e.fileName || ""}</b> · {money(e.x.total)}<span className="note">{fmtDate(String(e.exportedAt).slice(0, 10))}</span></li>)}</ul>
             : <p className="note">Nothing posted yet.</p>}</section>
       </div>

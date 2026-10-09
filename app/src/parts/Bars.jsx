@@ -1,12 +1,13 @@
 // A small chart of a few series over the same labels: series [{name, cls, values}], label (what it shows); nothing when
 // every value is nil. Was FC.bars (src/js/44), used on Reports, Look up and Letters. Drawn by Arc's charts
 // (src/arc/registry/components): months as a line chart (Arc's LineChart, one straight line a series: a smooth curve would dip below nil between months), anything else (the
-// ageing buckets) as one bar chart a series (Arc's BarChart, which draws one measure). The colours are FinCom's, by
-// the series' class (c1 the brand, c2 blue, c3 amber, c4 grey, c5 green), as before.
+// ageing buckets) as one bar chart a series (Arc's BarChart, which draws one measure). The colours go by the series'
+// class: c1 indigo (the brand), c2 sky, c3 amber, c4 violet, c5 emerald.
 import { LineChart } from "@/registry/components/line-chart/line-chart";
 import { BarChart } from "@/registry/components/bar-chart/bar-chart";
 
-const COLOUR = { c1: "var(--brand)", c2: "var(--info)", c3: "var(--warn)", c4: "var(--muted)", c5: "var(--ok)" };
+// a bright categorical palette (styles/arc-tokens.css accents; each at least 3:1 on the page, light and dark)
+const COLOUR = { c1: "var(--tone-indigo)", c2: "var(--tone-sky)", c3: "var(--tone-amber)", c4: "var(--tone-violet)", c5: "var(--tone-emerald)" };
 const MONTH = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/;
 const rupees = (v) => "₹" + INR.format(v);
 // the value axis in Indian units: 80K, 4L, 1.2Cr

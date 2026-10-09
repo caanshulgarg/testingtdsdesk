@@ -113,3 +113,50 @@ header.top { background: var(--surface); box-shadow: inset 0 -1px 0 var(--border
 /* ---------- the page's margins (Arc's page header and body share one inset) ---------- */
 @media (min-width: 601px) { .mainwrap .wrap, .mainwrap header.top .wrap, .mainwrap main.wrap { padding-left: 32px; padding-right: 32px; } }
 @media (max-width: 600px) { .mainwrap .wrap, .mainwrap header.top .wrap, .mainwrap main.wrap { padding-left: 16px; padding-right: 16px; } }
+
+/* ---------- colour (the owner, 09-Oct-2026: "some lively ui.. some bright colours"): the accents of arc-tokens.css ---------- */
+/* the sidebar: each area its own colour chip; the chosen one a soft brand pill with its chip filled */
+.side-chip { display: grid; place-items: center; flex: none; width: 26px; height: 26px; border-radius: 7px; font-style: normal;
+  background: var(--tone-tint); color: var(--tone); transition: background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard); }
+.side-link .side-chip .side-ic, .side-link:hover .side-chip .side-ic, .side-link[aria-current="page"] .side-chip .side-ic { color: inherit; }
+.side-link[aria-current="page"] .side-chip { background: var(--tone); color: var(--surface); }
+.side-av { background: linear-gradient(135deg, #4F46E5, #7C3AED); color: #FFFFFF; }
+.side-mark { background: linear-gradient(135deg, #4F46E5, #7C3AED); color: #FFFFFF; }
+@media (max-width: 600px) { .side .side-chip { width: 24px; height: 24px; } }
+
+/* the header: a soft band of the brand and two accents behind the title */
+header.top { background: linear-gradient(100deg, color-mix(in oklab, var(--tone-indigo) 10%, var(--surface)) 0%,
+  color-mix(in oklab, var(--tone-violet) 6%, var(--surface)) 45%, color-mix(in oklab, var(--tone-teal) 6%, var(--surface)) 100%); }
+
+/* the dashboard's figures: each its accent, a thin coloured top, a soft tint and an icon chip; a small lift on hover */
+.dtile[data-tone] { position: relative; border-top: 3px solid var(--tone); background: linear-gradient(180deg, var(--tone-tint) 0%, var(--surface) 72%);
+  transition: transform var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard); }
+.dtile[data-tone]:hover { transform: translateY(-1px); border-top-color: var(--tone); }
+.dtile-chip { position: absolute; top: 16px; right: 16px; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; font-style: normal;
+  background: color-mix(in oklab, var(--tone) calc(var(--tint) + 8%), var(--surface)); color: var(--tone-ink); }
+.dtile[data-tone] b { color: var(--foreground); }
+.dash-card[data-tone] { border-top: 3px solid var(--tone); }
+.dash-card[data-tone] h3::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 3px; background: var(--tone); vertical-align: 1px; }
+
+/* "Getting ready": done steps green with a check, the next step in the brand colour */
+.onb-list > li.done { background: color-mix(in oklab, var(--tone-emerald) 9%, var(--surface)); border-color: color-mix(in oklab, var(--tone-emerald) 30%, var(--border)); }
+.onb-list > li.done .onb-n { background: var(--tone-emerald); border-color: var(--tone-emerald); color: var(--surface); }
+.onb-list > li:not(.done):not(.onb-list > li:not(.done) ~ li) { border-color: var(--tone-indigo); background: color-mix(in oklab, var(--tone-indigo) 8%, var(--surface));
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--tone-indigo) 14%, transparent); }
+.onb-list > li:not(.done):not(.onb-list > li:not(.done) ~ li) .onb-n { background: var(--tone-indigo); border-color: var(--tone-indigo); color: var(--surface); }
+.onb-bar i { background: linear-gradient(90deg, var(--tone-indigo), var(--tone-violet)); }
+
+/* the status tabs: Arc's trigger, the chosen one a raised pill; counts in the brand, attention in amber */
+nav.sbar [role="tablist"] { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 4px; border: 1px solid var(--border); border-radius: calc(var(--radius-control) + 4px); background: var(--surface-muted); }
+nav.sbar button[role="tab"] { display: inline-flex; align-items: center; gap: 0; min-width: 0; min-height: 32px; }
+nav.sbar button[role="tab"][data-state="active"] { background: var(--surface); color: var(--accent); box-shadow: var(--shadow-resting); outline: 1px solid var(--border); }
+nav.sbar .sbar-n { background: color-mix(in oklab, var(--tone-slate) 16%, var(--surface)); color: var(--foreground); }
+nav.sbar button[role="tab"][data-state="active"] .sbar-n { background: var(--accent); color: var(--accent-foreground); }
+nav.sbar .sbar-n.attn, nav.sbar button[role="tab"][data-state="active"] .sbar-n.attn { background: var(--warn-soft); color: var(--warn); }
+
+/* the TDS and GST grids: the same status colours, a tint behind "ready" too */
+.rp-grid .rp-cell.st-ready { background: var(--info-soft); }
+.rp-grid .rp-cell { transition: transform var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard); }
+.rp-grid .rp-cell:not(.st-na):hover { transform: translateY(-1px); box-shadow: var(--shadow-raised); }
+/* Arc's list is one row as wide as its tabs; here the tabs wrap within the page */
+nav.sbar [role="tablist"] { width: auto; max-width: 100%; min-width: 0; flex-wrap: wrap; }

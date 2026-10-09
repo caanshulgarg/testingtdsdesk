@@ -9,6 +9,9 @@ import { ArrowLeftRight, BookOpen, ChartColumn, CircleHelp, Inbox, LayoutDashboa
 
 const ICONS = { dash: LayoutDashboard, bills: ReceiptText, bank: Landmark, sales: TrendingUp, inbox: Inbox, setup: SlidersHorizontal,
   txn: ArrowLeftRight, books: BookOpen, reports: ChartColumn, lookup: Search, audit: FileSearch, letters: Mail, help: CircleHelp, clients: Users };
+// each area its own colour (the owner, 09-Oct-2026: "some bright colours"), the accents of styles/arc-tokens.css
+const TONES = { dash: "indigo", bills: "amber", bank: "sky", sales: "emerald", inbox: "violet", setup: "slate", txn: "teal", books: "violet",
+  reports: "teal", lookup: "sky", audit: "rose", letters: "amber", help: "sky", clients: "indigo" };
 
 function Item({ icon, label, on, count, onClick, title }) {
   const Icon = ICONS[icon] || LayoutDashboard;
@@ -16,7 +19,7 @@ function Item({ icon, label, on, count, onClick, title }) {
     // a name a screen reader reads out (review item 34): the label, what it is for, and the count beside it
     <button className="side-link" aria-current={on ? "page" : undefined} onClick={onClick} title={title || label}
       aria-label={label + (title ? ": " + title : "") + (count ? ", " + count + " waiting" : "")}>
-      <Icon className="side-ic" width={17} height={17} strokeWidth={1.75} aria-hidden="true" />
+      <i className="side-chip" data-tone={TONES[icon] || "indigo"} aria-hidden="true"><Icon className="side-ic" width={15} height={15} strokeWidth={2} /></i>
       <span>{label}</span>
       {count ? <span className="side-count">{count}</span> : null}
     </button>

@@ -98,7 +98,7 @@ nav.sbar button[role="tab"][aria-selected="true"] { color: var(--brand); font-we
 nav.sbar button[role="tab"] .sbar-n { margin-left: 6px; }
 
 /* ---------- the Tally panel (Arc's Drawer) and the firm menu (Radix's menu in Arc's style) ---------- */
-.tallypanel[data-side] { top: 0; right: 0; width: min(380px, 100vw); border-radius: 0; z-index: 70; }
+.tallypanel[data-side] { width: min(380px, 100vw); z-index: 70; }
 .tallypanel .tp-body { padding: 0; }
 .tallypanel .tp-foot { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 0 0; border-top: 1px solid var(--border-subtle); margin-top: 12px; }
 .firmmenu[role="menu"] { position: relative; top: auto; right: auto; width: 300px; padding: 6px; z-index: 60; }
@@ -107,7 +107,8 @@ nav.sbar button[role="tab"] .sbar-n { margin-left: 6px; }
 .firmmenu button.fm-item[data-highlighted], .firmmenu button.fm-item:hover { background: var(--surface-muted); outline: none; }
 
 /* ---------- dialogs: Arc's (FirmSetup) and FinCom's own (the confirm box, the client switcher) in the same look ---------- */
-[role="dialog"].firmsetup-scrim { position: fixed; inset: auto; display: block; padding: 0; background: var(--surface); max-width: min(480px, calc(100vw - 32px)); }
+/* the firm's details dialog keeps its old class (the tests'), which also drew the old backdrop: Arc's dialog places it */
+[role="dialog"].firmsetup-scrim { display: block; padding: 0; width: min(calc(100vw - 32px), 480px); }
 #confirmBox { background: rgb(var(--shade) / .40); }
 #confirmBox .cbx, .sw { border: 1px solid var(--border); border-radius: var(--radius-surface); box-shadow: var(--shadow-floating); background: var(--surface-raised);
   animation: arc-fade var(--duration-fast) var(--ease-enter); }
