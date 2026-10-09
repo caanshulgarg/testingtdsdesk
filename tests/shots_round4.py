@@ -8,7 +8,16 @@ import os, re, sys, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
-import shots_ui_pass as U
+# shots_ui_pass's made-up client and pages, read from its source (importing it would start its own web server on a fixed port)
+import re, types, ast
+_src = open(os.path.join(HERE, "shots_ui_pass.py")).read()
+U = types.SimpleNamespace(SEED=re.search(r'SEED = """(.*?)"""', _src, re.S).group(1))
+_ns = {}; exec(re.search(r"(HOME = .*?\n\])\n", _src, re.S).group(1), _ns); U.PAGES = _ns["PAGES"]
+def _books():
+    try:
+        import gstfix; return list(gstfix.load())
+    except Exception: return None
+U.books = _books
 SITE = os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test"))
 OUT = sys.argv[1] if len(sys.argv) > 1 else "/tmp/shots4"
 os.makedirs(OUT, exist_ok=True)

@@ -12,7 +12,16 @@ import os, re, sys, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
-import shots_ui_pass as U
+# shots_ui_pass's made-up client and pages, read from its source (importing it would start its own web server on a fixed port)
+import re, types, ast
+_src = open(os.path.join(HERE, "shots_ui_pass.py")).read()
+U = types.SimpleNamespace(SEED=re.search(r'SEED = """(.*?)"""', _src, re.S).group(1))
+_ns = {}; exec(re.search(r"(HOME = .*?\n\])\n", _src, re.S).group(1), _ns); U.PAGES = _ns["PAGES"]
+def _books():
+    try:
+        import gstfix; return list(gstfix.load())
+    except Exception: return None
+U.books = _books
 H = functools.partial(http.server.SimpleHTTPRequestHandler, directory=os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test"))); H.log_message = lambda *a: None
 srv = http.server.ThreadingHTTPServer(("localhost", 8253), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
 fails, errs = [], []
@@ -99,7 +108,7 @@ with sync_playwright() as p:
         ph.evaluate("(t) => { S.view = 'company'; goClient(t); }", pgname); ph.wait_for_timeout(1500)
         lines = ph.evaluate("""() => [...document.querySelectorAll('#app .dash-tiles .dtile b')].filter(b => b.offsetParent && /\\d/.test(b.innerText)).map(b => [b.innerText, +(b.getBoundingClientRect().height / parseFloat(getComputedStyle(b).fontSize)).toFixed(2)])""")
         ok(all(n < 1.9 for _, n in lines), "phone, %s: each tile's amount on one line (%s)" % (pgname, lines[:4]))
-        wide = ph.evaluate("() => [...document.querySelectorAll('#app .dash-tiles .dtile b')].filter(b => b.offsetParent && b.scrollWidth > b.parentElement.clientWidth).map(b => b.innerText)")
+        wide = ph.evaluate("() => [...document.querySelectorAll('#app .dash-tiles .dtile b')].filter(b => b.offsetParent && b.getBoundingClientRect().right > b.parentElement.getBoundingClientRect().right - 8).map(b => b.innerText)")
         ok(not wide, "phone, %s: no tile's amount is cut off (%s)" % (pgname, wide))
     br.close()
 
