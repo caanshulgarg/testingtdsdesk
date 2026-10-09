@@ -56,16 +56,57 @@ func keepOn() bool {
 // what FinCom reads as the schedule: the nightly catch-up (the "continuous" copy of older bridges is gone)
 func keepSchedule() string { return "daily" }
 
-// the hour of the nightly catch-up (KeepDailyAt in the settings, shown in the tray): 02:00 unless set
+// the hour the night's work starts (KeepDailyAt in the settings, shown in the tray): 19:00, the end of office hours,
+// unless set by hand (release-240, the owner's decision of 2026-10-09: Tally is usually closed at night; was 02:00)
 func keepDailyAt() string {
 	v := cfgS("KeepDailyAt")
 	if re(`^([01]?\d|2[0-3]):[0-5]\d$`).MatchString(v) {
 		return v
 	}
-	return "02:00"
+	return "19:00"
 }
-func keepLastRun() string { return strings.TrimSpace(readText(sp("keep-lastrun.txt"))) }
-func lightFile() string   { return sp("keep-light.txt") }
+
+// office hours in the PC's time or in IST (officeHoursAt: KeepOfficeFrom..KeepOfficeTo, 09:00 to 19:00, Monday to Saturday)
+func nightOffice(t time.Time) bool { return officeHoursAt(t) || officeHoursAt(t.In(istZone)) }
+
+// the night's window (release-240, the owner's decision of 2026-10-09), shared by the nightly catch-up, the bank route's
+// nightly list and the nightly self-check: from KeepDailyAt (19:00) at the first moment outside office hours, up to the
+// next office start, Sundays included (no office hours on a Sunday); NightlyWindowMin caps it only when set by hand. The
+// night's key: the date of the evening it began (KeepDailyAt's day), given even when outside the window. A night whose
+// work did not run (Tally closed all evening) is not made up by day: the next evening's window runs it
+func nightWindow(now time.Time) (bool, string) {
+	var h, mi int
+	fmt.Sscanf(keepDailyAt(), "%d:%d", &h, &mi)
+	at := time.Date(now.Year(), now.Month(), now.Day(), h, mi, 0, 0, now.Location())
+	if now.Before(at) {
+		at = at.AddDate(0, 0, -1)
+	}
+	key := tallyDate(at)
+	if cfg("NightlyWindowMin") != nil && now.Sub(at) >= time.Duration(keepNum("NightlyWindowMin", 0))*time.Minute {
+		return false, key
+	}
+	if nightOffice(now) {
+		return false, key
+	}
+	// no office hours between the window's start (the first moment outside them from KeepDailyAt) and now; office hours
+	// start and end on a half hour in the PC's time and in IST
+	step := func(t time.Time) time.Time { return t.Truncate(30 * time.Minute).Add(30 * time.Minute) }
+	t := at
+	for t.Before(now) && nightOffice(t) {
+		t = step(t)
+	}
+	for ; t.Before(now); t = step(t) {
+		if nightOffice(t) {
+			return false, key
+		}
+	}
+	return true, key
+}
+
+// the night whose catch-up last finished (its key); the catch-up runs once a night
+func keepLastNight() string { return strings.TrimSpace(readText(sp("keep-lastnight.txt"))) }
+func keepLastRun() string   { return strings.TrimSpace(readText(sp("keep-lastrun.txt"))) }
+func lightFile() string     { return sp("keep-light.txt") }
 
 // Update now (pressed in FinCom, here or on another computer): kept in a file, so a restart does not lose it
 func requestKeepNow() {
@@ -1043,9 +1084,10 @@ func writeKeepLoad() {
 // --- a run of the copier, asked for by an event (events.go): light (a client opened in FinCom, or the entries just
 // posted), now (Update now), nightly (the nightly catch-up)
 type runReq struct {
-	kind string   // light | now | nightly | ledgers
-	only []string // these companies only; none: every company open in Tally
-	why  string   // for the log
+	night string   // a nightly run: the night's key (nightWindow)
+	kind  string   // light | now | nightly | ledgers
+	only  []string // these companies only; none: every company open in Tally
+	why   string   // for the log
 }
 
 func runRank(kind string) int {
@@ -1371,6 +1413,9 @@ func keepWorker(r runReq) {
 		writeLog(what + ": not finished (" + why + ")" + reqs())
 	default:
 		_ = saveFile(sp("keep-lastrun.txt"), today())
+		if r.kind == "nightly" && r.night != "" {
+			_ = saveFile(sp("keep-lastnight.txt"), r.night)
+		}
 		_ = saveFile(lightFile(), nowS())
 		_ = os.Remove(sp("keep-now.txt"))
 		writeLog(what + ": done" + reqs() + "; the bridge is idle again (next: the nightly catch-up at " + keepDailyAt() + ", or Update now)")

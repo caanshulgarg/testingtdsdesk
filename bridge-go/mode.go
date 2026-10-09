@@ -183,7 +183,7 @@ func trayStatus() M {
 		"cloudConnected": cloud, "online": online, "reconnecting": reconnecting, "tallyState": tstate, "busySince": tsince, "needKey": cfgS("CloudUrl") != "" && cloudKey() == "", "lastBeat": fmtTime(bOK), "beatFailed": fmtTime(bFail), "wake": wakeStatus(), "updating": keepRunning(),
 		"port": toInt(cfg("Port")), "fincomUrl": fincomURL(), "log": logFile(), "shadow": shadowStats, "update": updateInfo(), "owner": ownerName(),
 		"switching": switching.Load(), "bridgeId": "go-" + instanceID(), "posting": postingNow(), "readStopped": readStopAny(),
-		"trialTools": trialTools(), "cloudRefused": idRefused()} // round 21: the owner's switch in FinCom (the tray shows the trial items only while on)
+		"trialTools": trialTools(), "cloudRefused": idRefused(), "nightStale": bankStaleList(nowFn())} // round 21: the owner's switch in FinCom (the tray shows the trial items only while on)
 }
 
 // the way it runs, in words for the log and the tray

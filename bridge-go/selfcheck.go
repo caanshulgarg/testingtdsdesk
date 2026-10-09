@@ -11,7 +11,7 @@ package main
 // no Tally request is added or changed here. Tally's own balances need a new, computed request and wait for the owner
 // (the document above, section 8).
 //
-// The rules: after hours (SelfCheckFrom..SelfCheckTo, 22:00..06:00), once a night per company, Tally idle (no posting,
+// The rules: after hours (release-240: the night's window from 19:00 to the next office start, nightWindow; SelfCheckFrom..SelfCheckTo when set by hand), once a night per company, Tally idle (no posting,
 // no import, nobody at the computer for SelfCheckIdleSec, keepHold's reasons, the retry schedule not waiting), one company
 // at a time, a background request with the 2-second hard stop that gives way to a posting; never while reading is stopped
 // from FinCom (keepHold); a list stopped at 2 s is not asked again that night and is recorded with words for a Day Book
@@ -67,8 +67,15 @@ func scClock(k, def string) int {
 	return h*60 + m
 }
 
-// the night a moment belongs to (yyyymmdd of the evening it began) and whether it is inside the window
+// the night a moment belongs to (yyyymmdd of the evening it began) and whether it is inside the window. release-240, the
+// owner's decision of 2026-10-09: the night's window shared with the catch-up and the bank route (nightWindow: from
+// 19:00, the end of office hours, to the next office start); 22:00 to 06:00 only when SelfCheckFrom / SelfCheckTo are
+// set by hand
 func selfCheckNight(t time.Time) (string, bool) {
+	if cfgS("SelfCheckFrom") == "" && cfgS("SelfCheckTo") == "" {
+		in, key := nightWindow(t)
+		return key, in
+	}
 	from, to := scClock("SelfCheckFrom", "22:00"), scClock("SelfCheckTo", "06:00")
 	m := t.Hour()*60 + t.Minute()
 	in := false

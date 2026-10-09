@@ -16,7 +16,7 @@ C (2.4.0).
 5. The nightly self-check, existing requests only (migration 65).
 6. Master hooks: none shipped (Pay Head, Stock Item and Godown not proven on all five TallyPrime releases, run 37840646524; migration 66 stays, unused).
 7. Renumbered entries take Tally's new number (the owner: "renumbering yes"; migration 67).
-8. Bank dates set in Bank Reconciliation reach FinCom (the nightly list stops at 10 s, outside office hours only; every other request 2 s).
+8. Bank dates set in Bank Reconciliation reach FinCom (the nightly list stops at 10 s, outside office hours only; every other request 2 s; the night's work from 19:00).
 9. The simpler GST and TDS ledgers page and upload page.
 10. Sentry error reports, staging only, no business data.
 FinCom's cloud: migrations 68, 70 (2.3.5) and 62 to 67 (add-only; none run yet; the owner runs them), and tally-ingest.

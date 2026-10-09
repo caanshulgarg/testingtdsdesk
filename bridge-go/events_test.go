@@ -328,49 +328,60 @@ func TestBackoffSendsNothing(t *testing.T) {
 	}
 }
 
-// (d of the requirements) the nightly catch-up: only in its window, only when nobody has used FinCom for 15 minutes
+// (d of the requirements) the nightly catch-up: only in its window, only when nobody has used FinCom for 15 minutes.
+// release-240, the owner's decision of 2026-10-09: the window starts at 19:00 (the end of office hours), not 02:00 (Tally
+// is usually closed at night); once a night (the night's key, the evening it began), not again the next morning
 func TestNightlyWaitsForQuiet(t *testing.T) {
 	s := newStandIn(t, 0)
 	bridgeFor(t, s, "")
 	liveCopy(t)
-	day := time.Now()
-	at := func(h, m int) time.Time { return time.Date(day.Year(), day.Month(), day.Day(), h, m, 0, 0, time.Local) }
-	if keepDailyAt() != "02:00" {
-		t.Fatal("the nightly catch-up is at 02:00 unless set")
+	t.Cleanup(func() { nowFn = time.Now })
+	at := func(h, m int) time.Time { return istAt(2026, 10, 6, h, m) } // a Tuesday
+	if keepDailyAt() != "19:00" {
+		t.Fatal("the nightly catch-up is at 19:00 unless set")
 	}
-	if due, _ := nightlyDue(at(1, 59)); due {
-		t.Fatal("due before 02:00")
+	if due, _ := nightlyDue(at(18, 59)); due {
+		t.Fatal("due before 19:00")
 	}
 	if due, _ := nightlyDue(at(11, 0)); due {
 		t.Fatal("due on a working morning")
 	}
-	ownUseAt = at(1, 58)
-	nowFn = func() time.Time { return at(2, 5) }
+	ownUseAt = at(18, 58)
+	nowFn = func() time.Time { return at(19, 5) }
 	nightlyCheck()
 	if keepRunning() || s.count("") != 0 {
 		t.Fatal("started while FinCom was used 7 minutes ago")
 	}
-	noteCloudUse(at(2, 1).Format("2006-01-02T15:04:05"))
-	nowFn = func() time.Time { return at(2, 14) }
+	noteCloudUse(at(19, 1).Format(time.RFC3339)) // with its zone: the test is in IST whatever the PC's zone
+	nowFn = func() time.Time { return at(19, 14) }
 	nightlyCheck()
 	if keepRunning() || s.count("") != 0 {
 		t.Fatal("started 13 minutes after the cloud's last activity")
 	}
-	nowFn = func() time.Time { return at(2, 17) }
+	nowFn = func() time.Time { return at(19, 30) }
 	before := today() // the run notes the real date when it ends: the date before or after it (midnight between)
 	nightlyCheck()
 	waitIdle(t)
-	if s.count("") == 0 || logLines("Nightly catch-up (02:00)") != 1 {
-		t.Fatal("the catch-up did not run after 15 quiet minutes")
+	if s.count("") == 0 || logLines("Nightly catch-up (19:00)") != 1 {
+		t.Fatal("the catch-up did not run at 19:30 after 15 quiet minutes")
 	}
 	if lr := keepLastRun(); lr != before && lr != today() {
 		t.Fatal("the night's run is not recorded")
 	}
 	n := s.count("")
-	nowFn = func() time.Time { return at(3, 30) }
+	for _, x := range []time.Time{at(21, 0), istAt(2026, 10, 7, 2, 30), istAt(2026, 10, 7, 8, 0)} {
+		nowFn = func() time.Time { return x }
+		nightlyCheck()
+		waitIdle(t)
+		if s.count("") != n {
+			t.Fatalf("a second catch-up the same night (%s)", x.Format("Mon 15:04"))
+		}
+	}
+	// the next evening: the next night's run
+	nowFn = func() time.Time { return istAt(2026, 10, 7, 19, 30) }
 	nightlyCheck()
 	waitIdle(t)
-	if s.count("") != n {
-		t.Fatal("a second catch-up the same night")
+	if s.count("") == n {
+		t.Fatal("no catch-up the next evening")
 	}
 }

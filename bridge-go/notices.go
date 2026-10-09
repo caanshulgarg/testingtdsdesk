@@ -203,6 +203,7 @@ func (s *noticeStore) dismiss(ids map[string]string, how string) int {
 // one problem the tray checks on each look at the bridge (every 5 seconds)
 type trayProblem struct {
 	Kind, Company string
+	Day           string        // the problem's own day (release-240: the date since when); "" for today
 	Cond          bool          // the problem is there now
 	After         time.Duration // shown only once it has lasted this long
 	Title, Text   string
@@ -225,6 +226,9 @@ func newNoticeGate(store *noticeStore, computer string, now func() time.Time, sh
 }
 
 func (g *noticeGate) key(p trayProblem) problemKey {
+	if p.Day != "" {
+		return problemKey{Kind: p.Kind, Company: p.Company, Day: p.Day, Computer: g.computer}
+	}
 	return problemKey{Kind: p.Kind, Company: p.Company, Day: g.now().Format("2006-01-02"), Computer: g.computer}
 }
 
@@ -334,7 +338,17 @@ func trayProblems(f trayFacts) []trayProblem {
 			Text: "The bridge on this computer has stopped. " + f.RestartsBy + "; if this stays, choose Restart from this icon."}}
 	}
 	tally, online, cloud, paused := truthy(st["tallyOpen"]), truthy(st["online"]), truthy(st["cloudConnected"]), truthy(st["paused"])
-	return []trayProblem{
+	// release-240: a company's bank dates not read for 3 days, one problem each (its own kind, so each has its own while)
+	var stale []trayProblem
+	for _, x := range arr(st["nightStale"]) {
+		e := obj(x)
+		if e == nil || str(e["company"]) == "" {
+			continue
+		}
+		stale = append(stale, trayProblem{Kind: "bankstale|" + strings.ToLower(str(e["company"])), Company: str(e["company"]), Day: str(e["day"]), Cond: true,
+			Title: "Bank dates not read", Text: bankStaleWords(str(e["company"]), str(e["since"]))})
+	}
+	return append([]trayProblem{
 		{Kind: "down", Cond: false},
 		// the owner's condition (Fix 2c): FinCom refused this computer key the bridge's id: its words
 		{Kind: "idrefused", Cond: str(st["cloudRefused"]) != "", Title: "FinCom Bridge", Text: str(st["cloudRefused"])},
@@ -342,5 +356,5 @@ func trayProblems(f trayFacts) []trayProblem {
 			Text: "This computer cannot reach FinCom. Changes from Tally wait here and go as soon as FinCom can be reached."},
 		{Kind: "tally", Cond: !tally && !paused && f.Up > 2*time.Minute && (f.TallySeen || f.OfficeHours), After: 3 * time.Minute, Title: "Tally not open",
 			Text: "Open TallyPrime with your company, so FinCom stays up to date and postings reach Tally."},
-	}
+	}, stale...)
 }

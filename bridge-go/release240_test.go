@@ -45,7 +45,7 @@ func TestRelease240VersionAndDecisionLine(t *testing.T) {
 		"Its merge is reverted", "NOT in it", "One combined release", "from 2.3.3 straight to 2.4.0", "next-bankdate", "next-ledpage", "next-uploadpage", "next-sentry", "next-outbox-app",
 		"Ask for all fields of the TDS list and its sub-list on FinComVoucherByMaster, FinComVoucherByNumber and test forms A and C.",
 		"renumbering yes", "The 2-second stop itself is unchanged", "Unit and Employee are left out", "Not shipped in 2.4.0: the add-on hooks no master form", "run 37840646524",
-		"$$SysInfo:WindowsUser", "10 s for the nightly bank-date list, outside office hours only, by the owner's decision of 2026-10-09", "migrations 62, 63, 64, 65, 66 and 67", "ONE combined text", "NOT built", "No AI in the bridge"} {
+		"$$SysInfo:WindowsUser", "10 s for the nightly bank-date list, outside office hours only, by the owner's decision of 2026-10-09", "The night's work starts at 19:00 (the end of office hours), not 02:00, by the owner's decision of 2026-10-09", "migrations 62, 63, 64, 65, 66 and 67", "ONE combined text", "NOT built", "No AI in the bridge"} {
 		if !strings.Contains(notes, w) {
 			t.Errorf("the 2.4.0 notes do not say %q", w)
 		}

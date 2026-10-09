@@ -20,8 +20,8 @@
 //     altered line with Tally's entry (source "bankdate"), so FinCom stores the bank date.
 //   - "Small" is measured, never guessed: a list stopped at the 2 s rule, or answered slower than BankSmallMs (1,500 ms),
 //     moves the company to the nightly route (said once in the log). The stopped list is not asked again by day: no loop.
-//   - Large companies (the route "night"): one list a night, in the nightly catch-up's window (KeepDailyAt, for
-//     NightlyWindowMin) and outside office hours (KeepOfficeFrom .. KeepOfficeTo, never on a Sunday counted as office), not
+//   - Large companies (the route "night"): one list a night, in the night's window (nightWindow: from KeepDailyAt, 19:00,
+//     to the next office start; release-240, the owner's decision of 2026-10-09) and outside office hours (KeepOfficeFrom .. KeepOfficeTo, never on a Sunday counted as office), not
 //     while FinCom is in use (NightlyQuietMin), never while the tray's pause or FinCom's read stop is on, never during a
 //     posting; the list stopped at BankNightLimitMs (10,000 ms: 10 s for the nightly bank-date list, outside office hours
 //     only, by the owner's decision of 2026-10-09; never sent inside office hours in the PC's time or in IST, nor when
@@ -103,6 +103,7 @@ type bankCo struct {
 	Why            string
 	ListMs         int64  // the last list's time (-1: stopped)
 	Night          string // the night (its window's start, yyyymmdd) the nightly list went
+	ReadAt         string // release-240: when Tally's list was last read (RFC3339); the nightly route's 3-day notice
 	Cands          []bankCand
 	// this run only
 	addonN int              // the add-on's voucher lines read since Seen moved
@@ -138,7 +139,7 @@ func bankFresh() {
 			continue
 		}
 		st := &bankCo{Company: str(e["company"]), CGUID: str(e["cguid"]), Seen: toI64(e["seen"]), Route: or(str(e["route"]), "small"), Why: str(e["why"]),
-			ListMs: toI64(e["listMs"]), Night: str(e["night"]), addon: map[string]int64{}, listed: map[string]bool{}}
+			ListMs: toI64(e["listMs"]), Night: str(e["night"]), ReadAt: str(e["readAt"]), addon: map[string]int64{}, listed: map[string]bool{}}
 		for _, x := range arr(e["cands"]) {
 			c := obj(x)
 			st.Cands = append(st.Cands, bankCand{Mid: str(c["mid"]), GUID: str(c["guid"]), Day: str(c["day"]), Alter: toI64(c["alter"]), Asks: toInt(c["asks"]), Night: c["night"] == true, Next: str(c["next"])})
@@ -160,7 +161,7 @@ func bankSave() {
 		for _, c := range st.Cands {
 			l = append(l, M{"mid": c.Mid, "guid": c.GUID, "day": c.Day, "alter": c.Alter, "asks": c.Asks, "night": c.Night, "next": c.Next})
 		}
-		cs[k] = M{"company": st.Company, "cguid": st.CGUID, "seen": st.Seen, "route": st.Route, "why": st.Why, "listMs": st.ListMs, "night": st.Night, "cands": l}
+		cs[k] = M{"company": st.Company, "cguid": st.CGUID, "seen": st.Seen, "route": st.Route, "why": st.Why, "listMs": st.ListMs, "night": st.Night, "readAt": st.ReadAt, "cands": l}
 	}
 	a := M{}
 	for k, e := range bank.alerts {
@@ -363,6 +364,9 @@ func bankAfterLightCheck(company string, port int) {
 	switch {
 	case errors.Is(err, errRecorderStop):
 		st.Route, st.ListMs = "night", -1
+		if st.ReadAt == "" {
+			st.ReadAt = bankNowS()
+		}
 		st.Why = fmt.Sprintf("its list of changed entries took longer than %d ms", keepNum("RecorderLimitMs", 2000))
 		writeLog(fmt.Sprintf("Bank dates: %s goes to the nightly check (%s): bank dates set in Tally are read outside office hours, from %s", company, st.Why, keepDailyAt()))
 		bankSave()
@@ -373,7 +377,7 @@ func bankAfterLightCheck(company string, port int) {
 		}
 		return // Seen kept: the next check asks again
 	}
-	st.ListMs = ms
+	st.ListMs, st.ReadAt = ms, bankNowS()
 	n := bankTake(st, raw, after, v, sp, ws, false)
 	if ms > bankSmallMs() {
 		st.Route = "night"
@@ -451,18 +455,13 @@ func bankTake(st *bankCo, raw string, after, v, sp int64, ws [][2]int64, night b
 
 // --- 2. the nightly check (the recorder's loop, every quarter second; nothing is asked outside the night's window)
 
-// the night's window: from KeepDailyAt for NightlyWindowMin, outside office hours. The night's key: its start's date
+// the night's window (nightWindow, keep.go: from 19:00 outside office hours, release-240). The night's key: its start's date
 func bankNightNow(now time.Time) (bool, string) {
-	var h, mi int
-	fmt.Sscanf(keepDailyAt(), "%d:%d", &h, &mi)
-	at := time.Date(now.Year(), now.Month(), now.Day(), h, mi, 0, 0, now.Location())
-	if now.Before(at) {
-		at = at.AddDate(0, 0, -1)
-	}
-	if now.Sub(at) >= time.Duration(keepNum("NightlyWindowMin", 240))*time.Minute || officeHoursAt(now) || officeHoursAt(now.In(istZone)) {
+	in, night := nightWindow(now)
+	if !in {
 		return false, ""
 	}
-	return true, tallyDate(at)
+	return true, night
 }
 
 func officeHoursAt(now time.Time) bool {
@@ -564,7 +563,7 @@ func bankNightTurn() {
 	case err != nil:
 		return // asked again later tonight (the retry schedule, a posting, Tally closed)
 	}
-	st.Night, st.ListMs = night, ms
+	st.Night, st.ListMs, st.ReadAt = night, ms, bankNowS()
 	n := bankTake(st, raw, after, v, sp, ws, true)
 	writeLog(fmt.Sprintf("Bank dates: %s (nightly check, %d ms): %d entr%s changed in Tally with no add-on line; each is read again from Tally", company, ms, n, map[bool]string{true: "y", false: "ies"}[n == 1]))
 	bankSave()
@@ -846,6 +845,9 @@ func bankForceNight(company string) {
 	for _, st := range bank.cos {
 		if companyKey(st.Company) == companyKey(company) {
 			st.Route, st.Why = "night", "set so"
+			if st.ReadAt == "" {
+				st.ReadAt = bankNowS()
+			}
 		}
 	}
 	bankSave()
@@ -911,4 +913,39 @@ func vchReadGet(cguid, mid string) (vchReadE, bool) {
 		return vchReadE{}, false
 	}
 	return e, true
+}
+
+// --- release-240 (the owner's decision of 2026-10-09): a company on the nightly route whose bank dates were not read for
+// 3 days (Tally closed every evening) is told once per problem through the tray's notices gate (notices.go: its day is
+// the date since when, so it shows once whatever the days it lasts), and said once in the log
+
+func bankNowS() string { return nowFn().Format(time.RFC3339) }
+
+func bankStaleWords(company, since string) string {
+	return "Bank dates for " + company + " not read since " + since + ". Keep Tally open for a few minutes after 7 pm, or upload the Day Book."
+}
+
+// the companies not read for 3 days: [{company, since (dd-Mon-yyyy), day (yyyymmdd)}]
+func bankStaleList(now time.Time) []any {
+	bank.mu.Lock()
+	defer bank.mu.Unlock()
+	bankFresh()
+	var ks []string
+	for k := range bank.cos {
+		ks = append(ks, k)
+	}
+	sort.Strings(ks)
+	out := []any{}
+	for _, k := range ks {
+		st := bank.cos[k]
+		at, err := time.Parse(time.RFC3339, st.ReadAt)
+		if st.Route != "night" || err != nil || now.Sub(at) < 72*time.Hour {
+			continue
+		}
+		at = at.In(now.Location())
+		since := at.Format("02-Jan-2006")
+		bankSayOnce("stale|"+companyKey(st.Company)+"|"+at.Format("20060102"), "Bank dates: "+bankStaleWords(st.Company, since))
+		out = append(out, M{"company": st.Company, "since": since, "day": at.Format("20060102")})
+	}
+	return out
 }

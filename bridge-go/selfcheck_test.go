@@ -333,21 +333,36 @@ func TestSelfCheckLargeAndRewound(t *testing.T) {
 	}
 }
 
-// --- 6. when it may run: after hours only (22:00 to 06:00, the night of the evening it began), the switch, Tally idle, a
-// posting first
+// --- 6. when it may run: after hours only (release-240, the owner's decision of 2026-10-09: from 19:00, the end of office
+// hours, to the next office start, the night of the evening it began; 22:00 to 06:00 before, and still when
+// SelfCheckFrom / SelfCheckTo are set by hand), the switch, Tally idle, a posting first
 func TestSelfCheckWhen(t *testing.T) {
 	f, c := scBridge(t, "")
 	for _, tc := range []struct {
 		at    time.Time
 		night string
 		in    bool
-	}{{time.Date(2026, 10, 6, 21, 59, 0, 0, time.Local), "20261006", false}, {time.Date(2026, 10, 6, 22, 0, 0, 0, time.Local), "20261006", true},
-		{time.Date(2026, 10, 7, 5, 59, 0, 0, time.Local), "20261006", true}, {time.Date(2026, 10, 7, 6, 0, 0, 0, time.Local), "20261007", false},
-		{time.Date(2026, 10, 7, 14, 0, 0, 0, time.Local), "20261007", false}} {
+	}{{istAt(2026, 10, 6, 18, 59), "20261005", false}, {istAt(2026, 10, 6, 19, 0), "20261006", true}, {istAt(2026, 10, 6, 22, 0), "20261006", true},
+		{istAt(2026, 10, 7, 5, 59), "20261006", true}, {istAt(2026, 10, 7, 8, 59), "20261006", true}, {istAt(2026, 10, 7, 9, 0), "20261006", false},
+		{istAt(2026, 10, 7, 14, 0), "20261006", false}} {
 		if n, in := selfCheckNight(tc.at); n != tc.night || in != tc.in {
 			t.Fatalf("%v: %s %v", tc.at, n, in)
 		}
 	}
+	setCfg("SelfCheckFrom", "22:00")
+	setCfg("SelfCheckTo", "06:00")
+	for _, tc := range []struct {
+		at    time.Time
+		night string
+		in    bool
+	}{{time.Date(2026, 10, 6, 21, 59, 0, 0, time.Local), "20261006", false}, {time.Date(2026, 10, 6, 22, 0, 0, 0, time.Local), "20261006", true},
+		{time.Date(2026, 10, 7, 5, 59, 0, 0, time.Local), "20261006", true}, {time.Date(2026, 10, 7, 6, 0, 0, 0, time.Local), "20261007", false}} {
+		if n, in := selfCheckNight(tc.at); n != tc.night || in != tc.in {
+			t.Fatalf("set by hand, %v: %s %v", tc.at, n, in)
+		}
+	}
+	setCfg("SelfCheckFrom", "")
+	setCfg("SelfCheckTo", "")
 	f.add("20261006", "Party B", "2", "", "50.00")
 	led231Numbers(t, f)
 	n0 := scN(f)

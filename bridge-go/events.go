@@ -10,7 +10,7 @@
 //	e. (2.1.4) a bill's ledger chooser opened in FinCom with a list older than the last posting (POST /ledgers/refresh,
 //	   or the cloud's wake-up "ledgers"), or a posting with a new ledger: the ledger list read (ledgers.go), at most
 //	   once per company every few minutes (LedgersDebounceMin, 3)
-//	d. once a night at the hour set (KeepDailyAt, 02:00; shown in the tray): the full catch-up, only when Tally is open
+//	d. once a night from the hour set (KeepDailyAt, 19:00 since release-240, outside office hours; shown in the tray): the full catch-up, only when Tally is open
 //	   and nobody has used FinCom or posted for 15 minutes (FinCom's cloud says when it was last used; without that, the
 //	   last request to this bridge)
 //
@@ -252,22 +252,14 @@ func ledgersFromBeat(m M) {
 	}
 }
 
-// d. the nightly catch-up: due from the hour set for NightlyWindowMin (240) minutes, once a night
+// d. the nightly catch-up: due in the night's window (nightWindow: from 19:00 outside office hours, release-240), once
+// a night (the night's key, kept when its run finishes)
 func nightlyDue(now time.Time) (bool, string) {
-	var h, mi int
-	fmt.Sscanf(keepDailyAt(), "%d:%d", &h, &mi)
-	at := time.Date(now.Year(), now.Month(), now.Day(), h, mi, 0, 0, now.Location())
-	if now.Before(at) {
-		at = at.AddDate(0, 0, -1) // just after midnight, a window that started yesterday
-	}
-	if now.Sub(at) >= time.Duration(keepNum("NightlyWindowMin", 240))*time.Minute {
+	in, night := nightWindow(now)
+	if !in || keepLastNight() >= night {
 		return false, ""
 	}
-	night := tallyDate(at)
-	if keepLastRun() >= night {
-		return false, ""
-	}
-	if t, ok := parseTime(readText(sp("keep-tried.txt"))); ok && now.Sub(t) < 30*time.Minute && !t.Before(at) {
+	if t, ok := parseTime(readText(sp("keep-tried.txt"))); ok && now.Sub(t) < 30*time.Minute && !t.After(now) {
 		return false, ""
 	}
 	return true, night
@@ -307,7 +299,7 @@ func nightlyCheck() {
 		return
 	}
 	_ = saveFile(sp("keep-tried.txt"), now.Format("2006-01-02T15:04:05"))
-	startKeepRun(runReq{kind: "nightly", why: "nightly catch-up"})
+	startKeepRun(runReq{kind: "nightly", why: "nightly catch-up", night: night})
 }
 
 // "opened" from the heartbeat's answer (company -> when), the fallback for the wake-up channel
