@@ -23,7 +23,9 @@
 //   - Large companies (the route "night"): one list a night, in the nightly catch-up's window (KeepDailyAt, for
 //     NightlyWindowMin) and outside office hours (KeepOfficeFrom .. KeepOfficeTo, never on a Sunday counted as office), not
 //     while FinCom is in use (NightlyQuietMin), never while the tray's pause or FinCom's read stop is on, never during a
-//     posting; the list stopped at BankNightLimitMs (2,000 ms: the owner's 2-second rule; release-240); at most BankMax (500) entries a night (the
+//     posting; the list stopped at BankNightLimitMs (10,000 ms: 10 s for the nightly bank-date list, outside office hours
+//     only, by the owner's decision of 2026-10-09; never sent inside office hours in the PC's time or in IST, nor when
+//     its 10 s would reach them; every other request keeps the 2 s rule); at most BankMax (500) entries a night (the
 //     rest the next night), read one a turn every BankNightGapMs; a list stopped even then: one plain alert, not asked again
 //     that night.
 //   - Renumbering (renumber.go) and this route share what each read from Tally (vchReadPut / vchReadGet): an entry read by
@@ -52,10 +54,27 @@ func bankPerTurn() int   { return keepNum("BankPerTurn", 10) }
 func bankMax() int       { return keepNum("BankMax", 500) }
 func bankSmallMs() int64 { return int64(keepNum("BankSmallMs", 1500)) }
 
-// release-240 (the coordinator, 08-Oct-2026, pending the owner's answer): the owner's 2-second rule holds for the nightly list
-// too: 2,000 ms by default (was KeepNightTargetSec, 10 s); stopped then, one plain alert, not asked again that night
+// release-240, the owner's decision of 2026-10-09 ("You can take 10 sec"): 10 s for the nightly bank-date list, outside
+// office hours only. 10,000 ms by default (04ef3782 had 2,000 while the answer was pending); stopped then, one plain
+// alert, not asked again that night. Only this one request (bankNightTurn's list) has it: every other request keeps the
+// 2-second rule (RecorderLimitMs)
 func bankNightLimitMs() int {
-	return keepNum("BankNightLimitMs", 2000)
+	return keepNum("BankNightLimitMs", 10000)
+}
+
+// India's time (no daylight saving; a fixed zone needs no time-zone data on Windows)
+var istZone = time.FixedZone("IST", 5*3600+1800)
+
+// the nightly list is never sent inside office hours (officeHoursAt: 09:00 to 19:00, Monday to Saturday), whether in
+// the PC's own time or in IST, nor when its limit would reach into them
+func bankNightListInOfficeHours(now time.Time) bool {
+	end := now.Add(time.Duration(bankNightLimitMs()) * time.Millisecond)
+	for _, t := range []time.Time{now, end} {
+		if officeHoursAt(t) || officeHoursAt(t.In(istZone)) {
+			return true
+		}
+	}
+	return false
 }
 
 // one entry to read again
@@ -440,7 +459,7 @@ func bankNightNow(now time.Time) (bool, string) {
 	if now.Before(at) {
 		at = at.AddDate(0, 0, -1)
 	}
-	if now.Sub(at) >= time.Duration(keepNum("NightlyWindowMin", 240))*time.Minute || officeHoursAt(now) {
+	if now.Sub(at) >= time.Duration(keepNum("NightlyWindowMin", 240))*time.Minute || officeHoursAt(now) || officeHoursAt(now.In(istZone)) {
 		return false, ""
 	}
 	return true, tallyDate(at)
@@ -518,12 +537,19 @@ func bankNightTurn() {
 	port, err := findCompanyPortBg(company, 0)
 	var raw string
 	var ms int64
+	held := false
 	if err == nil {
-		raw, ms, err = bankList(company, port, after, bankNightLimitMs())
+		// the clock read again just before the list (finding the port takes time): never inside office hours
+		if held = bankNightListInOfficeHours(nowFn()); !held {
+			raw, ms, err = bankList(company, port, after, bankNightLimitMs())
+		}
 	}
 	bank.mu.Lock()
 	defer bank.mu.Unlock()
 	bank.busy = false
+	if held {
+		return // office hours (or its 10 s would reach them): asked the next night, nothing marked
+	}
 	bankFresh()
 	if st = bank.cos[bankKey(company, guid)]; st == nil || st.Seen != after {
 		return

@@ -444,12 +444,12 @@ func TestBankDateOnlyApprovedRequests(t *testing.T) {
 	}
 }
 
-// --- release-240 (the owner's 2-second rule, pending the owner's answer on 10 s for the nightly list): the nightly list
-// stops at 2 s by default; a large company's nightly list stopped then raises the one plain alert and is not asked again
-// that night
-func TestBankDateNightListStoppedAt2s(t *testing.T) {
-	if bankNightLimitMs() != 2000 {
-		t.Fatalf("BankNightLimitMs default %d ms, want 2000 (the 2-second rule)", bankNightLimitMs())
+// --- release-240, the owner's decision of 2026-10-09 ("You can take 10 sec"): 10 s for the nightly bank-date list,
+// outside office hours only. The nightly list stops at 10 s by default; a large company's nightly list stopped then
+// raises the one plain alert and is not asked again that night (kept from 04ef3782's 2 s version)
+func TestBankDateNightListStoppedAt10s(t *testing.T) {
+	if bankNightLimitMs() != 10000 {
+		t.Fatalf("BankNightLimitMs default %d ms, want 10000 (the owner's decision of 2026-10-09)", bankNightLimitMs())
 	}
 	_, f, c := bankBridge(t, `,"RecorderLimitMs":300,"RecorderStopCoolSec":0`)
 	_ = c
@@ -467,9 +467,9 @@ func TestBankDateNightListStoppedAt2s(t *testing.T) {
 	if bankRoute(nwsCo) != "night" {
 		t.Fatalf("route %q after the list stopped at the limit", bankRoute(nwsCo))
 	}
-	// at night Tally takes 2.5 s for the list: stopped at the default 2 s
+	// at night Tally takes 10.5 s for the list: stopped at the default 10 s
 	f.mu.Lock()
-	slowMs = 2500 * time.Millisecond
+	slowMs = 10500 * time.Millisecond
 	f.mu.Unlock()
 	night := time.Date(2026, 10, 6, 2, 30, 0, 0, liveZone)
 	nowFn = func() time.Time { return night }
@@ -480,7 +480,7 @@ func TestBankDateNightListStoppedAt2s(t *testing.T) {
 		t.Fatalf("lists %d (want the one nightly list)", n)
 	}
 	lg := readText(logFile())
-	if !strings.Contains(lg, "the nightly list of changed entries took longer than 2000 ms; not asked again tonight") ||
+	if !strings.Contains(lg, "the nightly list of changed entries took longer than 10000 ms; not asked again tonight") ||
 		!strings.Contains(lg, "may not have reached FinCom for "+nwsCo) {
 		t.Fatalf("no alert / no words for the stopped nightly list:\n%s", cutTail(lg, 2000))
 	}
@@ -493,5 +493,105 @@ func TestBankDateNightListStoppedAt2s(t *testing.T) {
 	bankNightTurn()
 	if n := len(bankLists(f)); n != 2 || len(bankAsked(f)) != 0 {
 		t.Fatalf("asked again the same night: %d lists, entries %v", n, bankAsked(f))
+	}
+}
+
+// --- the 10 s nightly list never goes inside office hours (09:00 to 19:00, Monday to Saturday), in the PC's time or in
+// IST, nor when its 10 s would reach into them. The night's window is opened all day here (KeepDailyAt 00:00, 24 h), so
+// only the office-hours guard can hold it back; 02:30 IST on a Tuesday is the control: it goes then
+func TestBankDateNightListNeverInOfficeHours(t *testing.T) {
+	_, f, _ := bankBridge(t, `,"KeepDailyAt":"00:00","NightlyWindowMin":1439`)
+	t.Cleanup(func() { nowFn = time.Now })
+	bankForceNight(nwsCo)
+	ist := time.FixedZone("IST", 5*3600+1800)
+	for i, at := range []time.Time{
+		time.Date(2026, 10, 5, 9, 0, 0, 0, ist),      // Monday 09:00
+		time.Date(2026, 10, 6, 12, 0, 0, 0, ist),     // Tuesday noon
+		time.Date(2026, 10, 7, 18, 59, 0, 0, ist),    // Wednesday 18:59
+		time.Date(2026, 10, 10, 10, 0, 0, 0, ist),    // Saturday 10:00
+		time.Date(2026, 10, 6, 8, 59, 55, 0, ist),    // 08:59:55: its 10 s would reach 09:00
+		time.Date(2026, 10, 6, 4, 0, 0, 0, time.UTC), // a PC on UTC: 04:00 there is 09:30 IST
+	} {
+		bankSet(f, "26311", fmt.Sprintf("2026100%d", i+1))
+		nowFn = func() time.Time { return at }
+		retryReset()
+		bankCheck(t, f)
+		for k := 0; k < 3; k++ {
+			bankNightTurn()
+			readAndUploadAll(t)
+		}
+		if n := len(bankLists(f)); n != 0 {
+			t.Fatalf("the nightly list was sent at %s (%d lists)", at.Format(time.RFC3339), n)
+		}
+	}
+	// the control: 02:30 IST on a Tuesday, outside office hours: the list goes
+	at := time.Date(2026, 10, 6, 2, 30, 0, 0, ist)
+	nowFn = func() time.Time { return at }
+	retryReset()
+	bankCheck(t, f)
+	bankNightTurn()
+	if n := len(bankLists(f)); n != 1 {
+		t.Fatalf("lists at 02:30 IST: %d (want 1)", n)
+	}
+}
+
+// --- the 10 s is for the nightly bank-date list only; every other request keeps the 2-second rule (RecorderLimitMs,
+// default 2,000 ms, nothing overridden here). Tally takes 2.5 s for the list and for each entry: by day the list is
+// stopped at 2 s (the company goes to the nightly route); at night the same 2.5 s list is answered (inside 10 s), but the
+// entry it names (FinComVoucherObject, 2.5 s) is stopped at 2 s and not sent; once Tally answers it quickly, at its one
+// more ask, it is read and sent
+func TestBankDateTenSecondsOnlyForNightList(t *testing.T) {
+	_, f, c := bankBridge(t, "")
+	t.Cleanup(func() { nowFn = time.Now })
+	if keepNum("RecorderLimitMs", 2000) != 2000 {
+		t.Fatalf("RecorderLimitMs %d (the test needs the default 2 s)", keepNum("RecorderLimitMs", 2000))
+	}
+	var entryMs time.Duration = 2500 * time.Millisecond
+	f.mu.Lock()
+	f.slow = func(id, body string) time.Duration {
+		switch id {
+		case "TDSDeskKeepList":
+			return 2500 * time.Millisecond
+		case vchObjectID:
+			return entryMs
+		}
+		return 0
+	}
+	f.mu.Unlock()
+	bankSet(f, "26311", "20261007")
+	bankCheck(t, f)
+	if bankRoute(nwsCo) != "night" || !strings.Contains(readText(logFile()), "took longer than 2000 ms") {
+		t.Fatalf("by day the 2.5 s list was not stopped at 2 s: route %q\n%s", bankRoute(nwsCo), cutTail(readText(logFile()), 2000))
+	}
+	night := time.Date(2026, 10, 6, 2, 30, 0, 0, liveZone)
+	nowFn = func() time.Time { return night }
+	retryReset()
+	bankCheck(t, f)
+	bankNightTurn()
+	if n := len(bankLists(f)); n != 2 {
+		t.Fatalf("lists %d (want the one nightly list)", n)
+	}
+	lg := readText(logFile())
+	if strings.Contains(lg, "the nightly list of changed entries took longer than") || !strings.Contains(lg, "(nightly check, ") {
+		t.Fatalf("the 2.5 s nightly list was stopped (it has 10 s):\n%s", cutTail(lg, 2000))
+	}
+	for i := 0; i < 3; i++ {
+		readAndUploadAll(t)
+		bankNightTurn()
+	}
+	if a := bankAsked(f); a["26311"] != 1 || len(bankSent(c)) != 0 {
+		t.Fatalf("the 2.5 s entry read at night: asked %v, sent %v (want asked once, stopped at 2 s, nothing sent)", a, bankSent(c))
+	}
+	f.mu.Lock()
+	entryMs = 0
+	f.mu.Unlock()
+	night = night.Add(6 * time.Minute)
+	retryReset()
+	for i := 0; i < 5; i++ {
+		readAndUploadAll(t)
+		bankNightTurn()
+	}
+	if a, s := bankAsked(f), bankSent(c); a["26311"] != 2 || len(s["26311"]) != 1 {
+		t.Fatalf("at its one more ask: asked %v, sent %v", a, s)
 	}
 }

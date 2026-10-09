@@ -118,8 +118,10 @@ same function and neither is lost; each stops (nothing changed) over a version w
 
 A bank date set in Tally's Bank Reconciliation (no voucher form, so no add-on line) now reaches FinCom: a small company
 by day (the undated list of changed entries, then each entry read again), a large one at night (once, outside office
-hours, at most 500 entries). **The nightly list stops at 2 seconds** (the owner's 2-second rule; pending the owner's
-answer on 10 s for that one list); stopped, one plain alert ("... bank dates set in Tally may not have reached FinCom;
+hours, at most 500 entries). **The nightly list stops at 10 seconds**: 10 s for the nightly bank-date list, outside office hours only, by the owner's decision of 2026-10-09 ("You can take
+10 sec"). It is never sent inside office hours (09:00 to 19:00, Monday to Saturday, in the PC's time or in IST), nor when
+its 10 s would reach them; every other request keeps the 2-second rule; a time limit only, no request shape changed (the
+allow-list table and its hash unchanged). Stopped, one plain alert ("... bank dates set in Tally may not have reached FinCom;
 upload the Day Book from ...") and not asked again that night. Only requests already on the list (TDSDeskKeepList,
 FinComVoucherObject).
 
