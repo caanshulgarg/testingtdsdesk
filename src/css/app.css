@@ -268,6 +268,9 @@ html{scroll-padding-bottom:150px}
 .queue-done{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:8px 0}
 .not-read{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:0 0 10px}
 .back-to{margin:0 0 10px}
+/* a warning is shown once (the owner's rule): where the "not read yet" line is on the page, the other notes that say the
+   books end earlier (the year note, "Books: last entry …", Look up's and Reports' freshness box) give way to it */
+#app:has([data-not-read]) :is(.lk-fresh, [data-fresh], [data-books-asof-line], [data-books-year-note]){display:none}
 .bk-setup{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 16px;border:1px solid var(--flag);background:var(--flag-soft);border-radius:10px}
 .bk-setup select{min-width:280px;height:34px;border:1px solid var(--rule);border-radius:6px;padding:0 8px;font:inherit}
 .bk-empty{border:1.5px dashed var(--rule);border-radius:12px;background:var(--sheet);padding:48px 24px;text-align:center;cursor:pointer}

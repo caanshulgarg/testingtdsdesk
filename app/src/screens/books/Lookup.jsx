@@ -160,7 +160,7 @@ export default function Lookup({ b }) {
   const can = LK.canTally(x), fromTally = can && LK.useTally(x, "auto"), rec = LK.recent();
   // smart moves round 1 (3): the dates run past the books in FinCom: one line, Read that year from Tally or show the last year read
   const asked = ["tb", "bills"].includes(x.kind) ? x.asOn : x.to, end = have ? Smart.booksEndBefore(asked) : "";
-  const notRead = end && <NotRead end={end} read={Smart.fyLabelOf(asked)} show={Smart.fyLabelOf(end) !== Smart.fyLabelOf(asked) ? Smart.fyLabelOf(end) : ""} onShow={() => lkShowFy(Smart.fyStartOf(end))} />;
+  const notRead = end && <NotRead end={end} read={Smart.fyLabelOf(asked)} show={Smart.fyLabelOf(end) !== Smart.fyLabelOf(asked) ? Smart.fyLabelOf(end) : ""} onShow={() => lkShowFy(Smart.fyStartOf(end))} bridge={live || (typeof TCloud === "object" && TCloud.has(S.coId))} />;
   return <>
     <section className="dash-card lk-ask"><h3>Ask the books</h3>
       <p className="note" style={{ margin: "0 0 10px" }}>Ask in plain words, or choose below. Answers come at once from FinCom’s copy of the books; Tally is never asked for a balance.</p>
