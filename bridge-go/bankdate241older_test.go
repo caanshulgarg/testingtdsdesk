@@ -166,4 +166,112 @@ func TestBankDate241FromOlderStateBankDateFoundBySelfCheck(t *testing.T) {
 	if got != 1 {
 		t.Fatalf("the bank-dated entry sent by the self-check: %d of %v", got, c.recSent())
 	}
+	if logHas("the nightly self-check is off") {
+		t.Fatalf("the self-check is on here: the off line must not be said")
+	}
+}
+
+// re-review M1: the older bridge's mark is kept on disk until the company's own first check has taken the counter: a save
+// of bankdate.json in between (another company's check, an add-on line, a taken entry) and a second restart do not lose
+// it (bankSave wrote "addonN":0 for every company, and the restart then counted the whole move as "no add-on line" again)
+func TestBankDate241OlderMarkSurvivesASave(t *testing.T) {
+	p, f, c := bankBridge(t, "")
+	for _, x := range [][2]string{{"26311", "191"}, {"26312", "192"}} {
+		mid, no := x[0], x[1]
+		f.mu.Lock()
+		for _, v := range f.vch {
+			if v.master == mid {
+				f.alter++
+				v.alter = f.alter
+				v.narr = "changed " + no
+			}
+		}
+		f.mu.Unlock()
+		g := r222GUID(toI64(mid))
+		liveAppend(t, p, r222Line("voucher_accept_pre", "07:21", g, mid, "54391", "Receipt", no, "5-Oct-2026", "altered"),
+			r222Line("voucher_accept_post", "07:21", g, mid, "54391", "Receipt", no, "5-Oct-2026", "altered"))
+	}
+	readAndUploadAll(t)
+	asked := bankAsked(f)
+	sent := len(c.recSent())
+	bankAsOlder(t)
+	bankRestart()
+	// the upgraded bridge saves bankdate.json before this company's first check (as another company's check does)
+	bank.mu.Lock()
+	bankFresh()
+	bankSave()
+	bank.mu.Unlock()
+	if st := bankSavedOne(t); st["older"] != true || st["addonN"] != nil || st["addon"] != nil || st["listed"] != nil {
+		t.Errorf("the mark was not kept by the save: %v", st)
+	}
+	bankRestart()
+	bankCheck(t, f)
+	for i := 0; i < 4; i++ {
+		readAndUploadAll(t)
+	}
+	if ls := bankLists(f); len(ls) != 0 {
+		t.Fatalf("after a save and a second restart the list was asked: %v", ls)
+	}
+	if a := bankAsked(f); a["26311"] != asked["26311"] || a["26312"] != asked["26312"] {
+		t.Fatalf("Tally was asked again: %v (before %v)", a, asked)
+	}
+	if s := bankSent(c); len(s) != 0 || len(c.recSent()) != sent {
+		t.Fatalf("lines were sent again: %v (%d -> %d)", s, sent, len(c.recSent()))
+	}
+	if st := bankSavedOne(t); st["older"] != nil || toI64(st["seen"]) != 54394 || st["addonN"] == nil {
+		t.Fatalf("the mark must clear only after the company's own check took the counter: %v", st)
+	}
+	// re-review L1: the nightly self-check is off here (the package's tests): said once with the Day Book words
+	if n := strings.Count(readText(logFile()), "Bank dates: "+nwsCo+": the nightly self-check is off; a bank date set during the upgrade will need that day's Day Book."); n != 1 {
+		t.Fatalf("the self-check-off line said %d times", n)
+	}
+	laterBy(t, 11*time.Minute)
+	bankSet(f, "26312", "20261014")
+	bankCheck(t, f)
+	for i := 0; i < 4; i++ {
+		readAndUploadAll(t)
+	}
+	if s := bankSent(c); len(s) != 1 || len(s["26312"]) != 1 || !strings.Contains(str(s["26312"][0]["xml"]), "20261014") {
+		t.Fatalf("a bank date after the upgrade: %v", s)
+	}
+}
+
+// re-review M1, several companies: one company is not opened on the upgrade day; the others' checks save bankdate.json
+// and the bridge restarts: the closed company keeps the older bridge's mark (and its counter) until its own first check
+func TestBankDate241OlderMarkKeptForAClosedCompany(t *testing.T) {
+	_, f, _ := bankBridge(t, "")
+	o := readObjFile(bankFile())
+	cs := obj(o["companies"])
+	cs["zz closed co|0f0f0f0f-0000-4000-8000-000000000001"] = M{"company": "ZZ CLOSED CO", "cguid": "0f0f0f0f-0000-4000-8000-000000000001", "seen": 777, "route": "small", "why": "", "listMs": 0, "night": "", "readAt": "", "cands": []any{}}
+	if err := saveFile(bankFile(), jsonText(o)); err != nil {
+		t.Fatal(err)
+	}
+	bankAsOlder(t)
+	bankRestart()
+	bankCheck(t, f) // the open company's first check: its mark cleared, the file saved
+	bankRestart()
+	cs = obj(readObjFile(bankFile())["companies"])
+	var open, closed M
+	for _, v := range cs {
+		e := obj(v)
+		if str(e["company"]) == "ZZ CLOSED CO" {
+			closed = e
+		} else {
+			open = e
+		}
+	}
+	if open == nil || open["older"] != nil || open["addonN"] == nil {
+		t.Fatalf("the open company after its check: %v", open)
+	}
+	if closed == nil || closed["older"] != true || closed["addonN"] != nil || toI64(closed["seen"]) != 777 {
+		t.Fatalf("the closed company lost the older bridge's mark: %v", closed)
+	}
+	bank.mu.Lock()
+	bankFresh()
+	st := bank.cos["zz closed co|0f0f0f0f-0000-4000-8000-000000000001"]
+	older := st != nil && st.older
+	bank.mu.Unlock()
+	if !older {
+		t.Fatalf("read back without the mark: %+v", st)
+	}
 }
